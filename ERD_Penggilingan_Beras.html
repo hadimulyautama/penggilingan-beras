@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>ERD — Sistem Manajemen Penggilingan Beras</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f172a; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+#toolbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 48px;
+  background: #1e293b; border-bottom: 1px solid #334155;
+  display: flex; align-items: center; padding: 0 16px; gap: 12px; z-index: 100;
+}
+#toolbar h1 { color: #e2e8f0; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.btn {
+  background: #334155; color: #e2e8f0; border: 1px solid #475569;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.btn:hover { background: #475569; }
+#search {
+  background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+  padding: 5px 10px; border-radius: 6px; font-size: 12px; width: 180px;
+}
+#zoom-info { color: #94a3b8; font-size: 12px; min-width: 60px; }
+.legend {
+  display: flex; gap: 10px; margin-left: auto; flex-wrap: wrap;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 5px;
+  color: #94a3b8; font-size: 11px; white-space: nowrap;
+}
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+#canvas-wrap {
+  position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+  overflow: hidden; cursor: grab;
+}
+#canvas-wrap.grabbing { cursor: grabbing; }
+#erd-svg { position: absolute; top: 0; left: 0; }
+
+/* Table styles */
+.tbl-header { font-size: 11px; font-weight: 700; }
+.tbl-field { font-size: 10px; }
+.tbl-pk { font-weight: 700; }
+.tbl-fk { font-style: italic; }
+.tbl-box { transition: filter 0.2s; cursor: pointer; }
+.tbl-box:hover { filter: brightness(1.15); }
+.tbl-box.highlighted { filter: brightness(1.3) drop-shadow(0 0 8px rgba(255,255,255,0.4)); }
+.tbl-box.dimmed { filter: brightness(0.4); }
+.rel-line { stroke-width: 1.5; fill: none; opacity: 0.5; }
+.rel-line.highlighted { opacity: 1; stroke-width: 2.5; }
+.rel-line.dimmed { opacity: 0.1; }
+#tooltip {
+  position: fixed; background: #1e293b; border: 1px solid #334155;
+  border-radius: 8px; padding: 10px 14px; color: #e2e8f0; font-size: 11px;
+  pointer-events: none; display: none; z-index: 200; max-width: 260px; line-height: 1.6;
+}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <h1>🌾 ERD — Sistem Penggilingan Beras</h1>
+  <button class="btn" onclick="resetView()">⟳ Reset</button>
+  <button class="btn" onclick="zoomIn()">+</button>
+  <button class="btn" onclick="zoomOut()">−</button>
+  <span id="zoom-info">100%</span>
+  <input type="text" id="search" placeholder="Cari tabel..." oninput="searchTable(this.value)">
+  <button class="btn" onclick="clearHighlight()">✕ Clear</button>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#1e40af"></div>Master Data</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#0e4f8a"></div>Gudang 1</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>Transfer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#92400e"></div>G2 Bahan</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6b21a8"></div>G2 Produksi</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#065f46"></div>Byproduct</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#166534"></div>Stok & Keluar</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#374151"></div>Sistem</div>
+  </div>
+</div>
+<div id="canvas-wrap">
+  <svg id="erd-svg" width="6000" height="5200"></svg>
+</div>
+<div id="tooltip"></div>
+
+<script>
+// ─── TABLE DEFINITIONS ───
+const GROUPS = {
+  master:   { color: '#1e40af', light: '#1e3a8a', text: '#bfdbfe', label: 'Master Data' },
+  gudang1:  { color: '#0e4f8a', light: '#0c4274', text: '#bae6fd', label: 'Gudang 1' },
+  transfer: { color: '#7c3aed', light: '#6d28d9', text: '#ddd6fe', label: 'Transfer' },
+  g2bahan:  { color: '#92400e', light: '#78350f', text: '#fed7aa', label: 'G2 Bahan Masuk' },
+  g2prod:   { color: '#6b21a8', light: '#581c87', text: '#e9d5ff', label: 'G2 Produksi' },
+  byproduct:{ color: '#065f46', light: '#064e3b', text: '#a7f3d0', label: 'Byproduct & Kemasan' },
+  stok:     { color: '#166534', light: '#14532d', text: '#bbf7d0', label: 'Stok & Keluar' },
+  sistem:   { color: '#374151', light: '#1f2937', text: '#d1d5db', label: 'Sistem' },
+};
+
+const TW = 220; // table width
+const TH = 28;  // header height
+const FH = 20;  // field height
+const PAD = 8;  // bottom padding
+
+function tableHeight(fields) { return TH + fields.length * FH + PAD; }
+
+const TABLES = [
+  // ─── MASTER DATA ───
+  { id:'users', group:'master', x:50, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama',t:'f'},{n:'role (admin/staff/operator)',t:'f'},
+      {n:'whatsapp_number',t:'f'},{n:'default_warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'access_level (full/operational)',t:'f'},{n:'wa_broadcast_opt_in',t:'f'}
+    ],
+    desc:'Semua pengguna sistem. Identifikasi via nomor WhatsApp.'
+  },
+  { id:'suppliers', group:'master', x:290, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama_supplier',t:'f'},{n:'no_telfon',t:'f'},
+      {n:'alamat',t:'f'},{n:'status (aktif/nonaktif)',t:'f'}
+    ],
+    desc:'Supplier gabah dan beras PK. Soft delete.'
+  },
+  { id:'packaging_suppliers', group:'master', x:530, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama',t:'f'},{n:'no_telfon',t:'f'},{n:'catatan',t:'f'}
+    ],
+    desc:'Supplier kemasan/karung — terpisah dari supplier gabah.'
+  },
+  { id:'warehouses', group:'master', x:770, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama_gudang',t:'f'},{n:'alamat',t:'f'},
+      {n:'kapasitas_tumpuk_ton',t:'f'},{n:'kapasitas_tumpuk_pk_ton',t:'f'}
+    ],
+    desc:'Gudang 1 (maks tumpuk 30t) dan Gudang 2 (maks tumpuk 60t).'
+  },
+  { id:'silos', group:'master', x:1010, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'nama_silo',t:'f'},{n:'kapasitas_ton',t:'f'},{n:'status',t:'f'}
+    ],
+    desc:'Silo A & B per gudang. G1: gabah kering. G2: kolam campuran.'
+  },
+  { id:'trucks', group:'master', x:1250, y:60,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_truk',t:'f'},{n:'no_polisi',t:'f'},
+      {n:'kapasitas_kg',t:'f'},{n:'status',t:'f'}
+    ],
+    desc:'Armada truk sendiri.'
+  },
+  { id:'rice_quality_standards', group:'master', x:50, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama_standard',t:'f'}
+    ],
+    desc:'5 standar: Sayur, Medium, Medium Super, Semi Premium, Premium.'
+  },
+  { id:'quality_standards_reference', group:'master', x:290, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'rice_quality_standard_id',t:'FK',ref:'rice_quality_standards'},
+      {n:'kadar_air_maks_persen',t:'f'},{n:'broken_maks_persen',t:'f'},
+      {n:'derajat_sosoh_min',t:'f'},{n:'derajat_putih_min',t:'f'},
+      {n:'tingkat_bening_min',t:'f'},{n:'berlaku_mulai',t:'f'},
+      {n:'updated_by',t:'FK',ref:'users'}
+    ],
+    desc:'Nilai acuan QC. HANYA ADMIN yang bisa ubah. Histori tersimpan.'
+  },
+  { id:'brands', group:'master', x:530, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'nama_brand',t:'f'},
+      {n:'tipe_brand (sendiri/pelanggan/polos)',t:'f'}
+    ],
+    desc:'Raja, Jempol, Melon, Lele, Pulenesia, dst + merk pelanggan.'
+  },
+  { id:'packaging_materials', group:'master', x:770, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'jenis_karung',t:'f'}
+    ],
+    desc:'biasa, laminasi, putih, bekas, polos.'
+  },
+  { id:'package_sizes', group:'master', x:1010, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'ukuran_kg (5/10/25/40/48/50)',t:'f'}
+    ],
+    desc:'Ukuran kemasan yang tersedia.'
+  },
+  { id:'product_skus', group:'master', x:1250, y:280,
+    fields:[
+      {n:'id',t:'PK'},{n:'brand_id',t:'FK',ref:'brands'},
+      {n:'packaging_material_id',t:'FK',ref:'packaging_materials'},
+      {n:'package_size_id',t:'FK',ref:'package_sizes'},
+      {n:'kode_sku',t:'f'},{n:'product_type',t:'f'},{n:'status_aktif',t:'f'}
+    ],
+    desc:'Kombinasi merk × karung × ukuran untuk semua produk.'
+  },
+  { id:'pk_quality_standards_reference', group:'master', x:50, y:480,
+    fields:[
+      {n:'id',t:'PK'},{n:'kondisi_pk (KS/KL/Campuran/Semi KS)',t:'f'},
+      {n:'kadar_air_maks_persen',t:'f'},{n:'broken_maks_persen',t:'f'},
+      {n:'susut_maks_persen',t:'f'},{n:'gabah_maks_persen',t:'f'},
+      {n:'berlaku_mulai',t:'f'},{n:'updated_by',t:'FK',ref:'users'}
+    ],
+    desc:'Standar kualitas PK masuk. Hanya Admin yang bisa ubah.'
+  },
+  { id:'pk_price_deduction_rules', group:'master', x:290, y:480,
+    fields:[
+      {n:'id',t:'PK'},{n:'parameter (kadar_air/broken/susut/gabah)',t:'f'},
+      {n:'kondisi_pk',t:'f'},{n:'per_poin_lebih_persen',t:'f'},
+      {n:'potongan_per_kg',t:'f'},{n:'potongan_maks_persen',t:'f'},
+      {n:'berlaku_mulai',t:'f'},{n:'updated_by',t:'FK',ref:'users'}
+    ],
+    desc:'Aturan potongan harga PK per parameter + histori berlaku.'
+  },
+  { id:'byproduct_price_history', group:'master', x:530, y:480,
+    fields:[
+      {n:'id',t:'PK'},{n:'jenis_produk (broken/menir/bekatul/reject)',t:'f'},
+      {n:'harga_per_kg',t:'f'},{n:'berlaku_mulai',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Harga proxy byproduct berkala untuk HPP dan penilaian stok.'
+  },
+
+  // ─── GUDANG 1 ───
+  { id:'purchase_batches', group:'gudang1', x:50, y:740,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_batch (GB-YYYYMMDD-NN)',t:'f'},
+      {n:'supplier_id',t:'FK',ref:'suppliers'},
+      {n:'berat_total_kg',t:'f'},{n:'no_polisi_truk',t:'f'},
+      {n:'kondisi_gabah (basah/kering)',t:'f'},
+      {n:'kadar_air_awal_persen',t:'f'},
+      {n:'tanggal_pembelian, waktu_pembelian',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'status_batch',t:'f'},
+      {n:'flag_unverified',t:'f'}
+    ],
+    desc:'1 truk = 1 batch. Maks 3 batch/hari. Basah/kering berbeda alur.'
+  },
+  { id:'purchase_batch_verifications', group:'gudang1', x:290, y:740,
+    fields:[
+      {n:'id',t:'PK'},{n:'purchase_batch_id',t:'FK',ref:'purchase_batches'},
+      {n:'harga_per_kg',t:'f'},{n:'total_biaya',t:'f'},
+      {n:'metode_harga (per_kg/total)',t:'f'},
+      {n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi',t:'f'},{n:'status_verifikasi',t:'f'}
+    ],
+    desc:'Verifikasi harga gabah oleh staff/admin.'
+  },
+  { id:'drying_lots', group:'gudang1', x:50, y:1020,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_lot (LOT-YYYYMMDD-NN)',t:'f'},
+      {n:'waktu_mulai_pengeringan',t:'f'},
+      {n:'waktu_selesai_pengeringan',t:'f'},
+      {n:'status (proses/selesai)',t:'f'},
+      {n:'created_by',t:'FK',ref:'users'}
+    ],
+    desc:'2-3 batch = 1 lot. Tidak boleh campur basah & kering.'
+  },
+  { id:'drying_lot_batches', group:'gudang1', x:290, y:1020,
+    fields:[
+      {n:'id',t:'PK'},{n:'drying_lot_id',t:'FK',ref:'drying_lots'},
+      {n:'purchase_batch_id',t:'FK',ref:'purchase_batches'}
+    ],
+    desc:'Junction many-to-many: lot ↔ batch.'
+  },
+  { id:'drying_moisture_logs', group:'gudang1', x:530, y:1020,
+    fields:[
+      {n:'id',t:'PK'},{n:'drying_lot_id',t:'FK',ref:'drying_lots'},
+      {n:'waktu_update',t:'f'},
+      {n:'kadar_air_indikator',t:'f'},{n:'kadar_air_tes_manual',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Log kadar air min. tiap 5 jam. Sistem notifikasi jika terlambat.'
+  },
+  { id:'silo_storage', group:'gudang1', x:50, y:1220,
+    fields:[
+      {n:'id',t:'PK'},{n:'silo_id',t:'FK',ref:'silos'},
+      {n:'drying_lot_id',t:'FK (nullable)',ref:'drying_lots'},
+      {n:'purchase_batch_id',t:'FK (nullable)',ref:'purchase_batches'},
+      {n:'tipe_masuk (dari_pengeringan/langsung_kering)',t:'f'},
+      {n:'tanggal_masuk, tanggal_keluar',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'status (terisi/kosong)',t:'f'}
+    ],
+    desc:'1 silo = 1 lot. Kosong saat milling selesai. Gabah kering bisa langsung masuk.'
+  },
+  { id:'milling_process', group:'gudang1', x:50, y:1480,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_proses (MIL-YYYYMMDD-NN)',t:'f'},
+      {n:'silo_storage_id',t:'FK',ref:'silo_storage'},
+      {n:'drying_lot_id',t:'FK',ref:'drying_lots'},
+      {n:'waktu_mulai, waktu_selesai',t:'f'},
+      {n:'berat_output_pk_kg',t:'f'},{n:'status',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'flag_unverified',t:'f'}
+    ],
+    desc:'Proses pecah kulit per silo. Silo kosong otomatis saat selesai.'
+  },
+  { id:'milling_progress_logs', group:'gudang1', x:290, y:1480,
+    fields:[
+      {n:'id',t:'PK'},{n:'milling_process_id',t:'FK',ref:'milling_process'},
+      {n:'waktu_update',t:'f'},{n:'berat_kumulatif_kg',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'Monitoring berat kumulatif PK. Ambil baris TERBARU, bukan SUM.'
+  },
+  { id:'milling_pk_routing', group:'gudang1', x:530, y:1480,
+    fields:[
+      {n:'id',t:'PK'},{n:'milling_process_id',t:'FK',ref:'milling_process'},
+      {n:'waktu_keluar',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'tujuan (tumpuk/siap_transfer)',t:'f'},
+      {n:'pk_stock_gudang1_id',t:'FK (nullable)',ref:'pk_stock_gudang1'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Tujuan PK per batch keluar dari mesin.'
+  },
+  { id:'milling_process_verifications', group:'gudang1', x:50, y:1740,
+    fields:[
+      {n:'id',t:'PK'},{n:'milling_process_id',t:'FK',ref:'milling_process'},
+      {n:'berat_output_verified_kg',t:'f'},
+      {n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi',t:'f'},{n:'status_verifikasi',t:'f'},{n:'catatan',t:'f'}
+    ],
+    desc:'Verifikasi berat output PK final oleh staff/admin.'
+  },
+  { id:'milling_qc_logs', group:'gudang1', x:290, y:1740,
+    fields:[
+      {n:'id',t:'PK'},{n:'milling_process_id',t:'FK',ref:'milling_process'},
+      {n:'waktu_qc',t:'f'},{n:'kadar_air_persen',t:'f'},
+      {n:'persentase_broken',t:'f'},{n:'persentase_susut',t:'f'},
+      {n:'kondisi_pk (KS/KL/Campuran/Semi KS)',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'QC hasil PK. Minimal 1x per lot.'
+  },
+  { id:'pk_stock_gudang1', group:'gudang1', x:50, y:2000,
+    fields:[
+      {n:'id',t:'PK'},{n:'milling_process_id',t:'FK',ref:'milling_process'},
+      {n:'berat_masuk_kg',t:'f'},{n:'berat_sisa_kg (computed)',t:'f'},
+      {n:'tanggal_masuk, waktu_masuk',t:'f'},{n:'tanggal_habis',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'Buffer tumpukan PK Gudang 1. Maks 30 ton. Dipisah per lot.'
+  },
+
+  // ─── TRANSFER ───
+  { id:'internal_transfers', group:'transfer', x:800, y:1480,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_transfer (TRF-YYYYMMDD-NN)',t:'f'},
+      {n:'source_type (langsung_dari_milling/dari_tumpukan)',t:'f'},
+      {n:'source_id',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'lokasi_tujuan (silo_a/silo_b/ditumpuk)',t:'f'},
+      {n:'status (dikirim/diverifikasi)',t:'f'},
+      {n:'hpp_per_kg (snapshot)',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},
+      {n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi',t:'f'}
+    ],
+    desc:'Dibuat staff/admin. HPP otomatis setelah milling diverifikasi.'
+  },
+
+  // ─── GUDANG 2 BAHAN ───
+  { id:'pk_purchase_batches', group:'g2bahan', x:1100, y:740,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_batch (PKB-YYYYMMDD-NN)',t:'f'},
+      {n:'supplier_id',t:'FK',ref:'suppliers'},
+      {n:'berat_total_kg',t:'f'},{n:'no_polisi_truk',t:'f'},
+      {n:'kondisi_pk, kadar_air_persen',t:'f'},
+      {n:'persentase_broken, persentase_susut',t:'f'},
+      {n:'persentase_gabah',t:'f'},
+      {n:'tanggal_pembelian',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'status, flag_unverified',t:'f'}
+    ],
+    desc:'PK dari supplier luar. QC sebelum masuk silo/tumpukan.'
+  },
+  { id:'pk_purchase_verifications', group:'g2bahan', x:1340, y:740,
+    fields:[
+      {n:'id',t:'PK'},{n:'pk_purchase_batch_id',t:'FK',ref:'pk_purchase_batches'},
+      {n:'harga_per_kg_awal',t:'f'},{n:'potongan_per_kg',t:'f'},
+      {n:'harga_per_kg_final',t:'f'},{n:'total_biaya',t:'f'},
+      {n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi, status_verifikasi',t:'f'}
+    ],
+    desc:'Verifikasi harga + keputusan potongan kualitas.'
+  },
+  { id:'pk_gudang2_intakes', group:'g2bahan', x:1100, y:1020,
+    fields:[
+      {n:'id',t:'PK'},{n:'sumber_tipe (beli_luar/transfer_internal)',t:'f'},
+      {n:'sumber_id',t:'f'},
+      {n:'tujuan (silo_a/silo_b/ditumpuk)',t:'f'},
+      {n:'silo_id',t:'FK (nullable)',ref:'silos'},
+      {n:'berat_kg',t:'f'},
+      {n:'hpp_per_kg (snapshot)',t:'f'},
+      {n:'flag_hpp_belum_tersedia',t:'f'},
+      {n:'tanggal_masuk, waktu_masuk',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Semua PK masuk G2: Silo A/B atau tumpukan. Tumpukan WAJIB ke silo dulu.'
+  },
+  { id:'pk_tumpukan_to_silo', group:'g2bahan', x:1340, y:1020,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_pindah (PTS-YYYYMMDD-NN)',t:'f'},
+      {n:'pk_gudang2_intake_id',t:'FK',ref:'pk_gudang2_intakes'},
+      {n:'silo_id',t:'FK',ref:'silos'},
+      {n:'berat_kg',t:'f'},{n:'tanggal, waktu',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Pindah tumpukan → silo. HANYA Operator Gudang 2.'
+  },
+  { id:'pk_rejections', group:'g2bahan', x:1100, y:1280,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_penolakan (REJ-YYYYMMDD-NN)',t:'f'},
+      {n:'supplier_id',t:'FK',ref:'suppliers'},
+      {n:'berat_kg',t:'f'},{n:'kondisi_pk',t:'f'},
+      {n:'kadar_air, broken, susut, gabah persen',t:'f'},
+      {n:'alasan_penolakan',t:'f'},
+      {n:'tanggal, waktu',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'PK ditolak sebelum masuk silo/tumpukan.'
+  },
+
+  // ─── GUDANG 2 PRODUKSI ───
+  { id:'polishing_process', group:'g2prod', x:1100, y:1540,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_proses (POL-YYYYMMDD-NN)',t:'f'},
+      {n:'waktu_mulai, waktu_selesai',t:'f'},
+      {n:'status (proses/selesai)',t:'f'},
+      {n:'created_by',t:'FK',ref:'users'},{n:'flag_unverified',t:'f'}
+    ],
+    desc:'Header penyosohan. Bahan WAJIB dari silo (bukan tumpukan).'
+  },
+  { id:'polishing_silo_usage', group:'g2prod', x:1340, y:1540,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'silo_id',t:'FK',ref:'silos'},
+      {n:'berat_awal_kg (otomatis)',t:'f'},
+      {n:'berat_akhir_kg (manual)',t:'f'},
+      {n:'berat_terpakai_kg (computed)',t:'f'}
+    ],
+    desc:'Snapshot berat silo awal (otomatis) dan akhir (manual).'
+  },
+  { id:'polishing_broken_intakes', group:'g2prod', x:1580, y:1540,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'byproduct_stock_id',t:'FK',ref:'byproduct_stock'},
+      {n:'berat_kg',t:'f'},{n:'waktu',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Broken dari byproduct_stock dicampur kembali ke proses.'
+  },
+  { id:'polishing_output_logs', group:'g2prod', x:1100, y:1800,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'rice_quality_standard_id',t:'FK',ref:'rice_quality_standards'},
+      {n:'product_sku_id',t:'FK',ref:'product_skus'},
+      {n:'jumlah_karung_kumulatif',t:'f'},
+      {n:'waktu_update',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Log kumulatif beras putih per standar+SKU. Ambil baris TERBARU.'
+  },
+  { id:'polishing_byproduct_logs', group:'g2prod', x:1340, y:1800,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'waktu_update',t:'f'},
+      {n:'broken_karung_putih_50kg',t:'f'},{n:'broken_karung_polos_25kg',t:'f'},
+      {n:'menir_karung',t:'f'},{n:'reject_karung',t:'f'},
+      {n:'bekatul_kumulatif_kg',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Log kumulatif byproduct. Update independen dari output beras.'
+  },
+  { id:'polishing_qc_logs', group:'g2prod', x:1580, y:1800,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'rice_quality_standard_id',t:'FK',ref:'rice_quality_standards'},
+      {n:'waktu_qc',t:'f'},{n:'kadar_air_persen',t:'f'},
+      {n:'broken_persen',t:'f'},{n:'derajat_sosoh',t:'f'},
+      {n:'derajat_putih',t:'f'},{n:'tingkat_bening',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'QC inline per standar. Semua parameter nullable.'
+  },
+  { id:'polishing_verifications', group:'g2prod', x:1100, y:2080,
+    fields:[
+      {n:'id',t:'PK'},{n:'polishing_process_id',t:'FK',ref:'polishing_process'},
+      {n:'detail_beras_putih_json',t:'f'},
+      {n:'broken_verified_kg',t:'f'},{n:'menir_verified_kg',t:'f'},
+      {n:'bekatul_verified_kg',t:'f'},{n:'reject_verified_kg',t:'f'},
+      {n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi, status_verifikasi',t:'f'},{n:'catatan',t:'f'}
+    ],
+    desc:'Verifikasi 1x semua output (beras putih + byproduct) oleh staff/admin.'
+  },
+  { id:'reject_reprocessing', group:'g2prod', x:1820, y:1540,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_proses (RRP-YYYYMMDD-NN)',t:'f'},
+      {n:'waktu_mulai, waktu_selesai',t:'f'},
+      {n:'status',t:'f'},{n:'created_by',t:'FK',ref:'users'},{n:'flag_unverified',t:'f'}
+    ],
+    desc:'Olah ulang reject → Beras B. Semua SKU kemasan tersedia.'
+  },
+  { id:'reject_reprocessing_intakes', group:'g2prod', x:1820, y:1760,
+    fields:[
+      {n:'id',t:'PK'},{n:'reject_reprocessing_id',t:'FK',ref:'reject_reprocessing'},
+      {n:'byproduct_stock_id',t:'FK',ref:'byproduct_stock'},
+      {n:'berat_kg',t:'f'},{n:'waktu',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Sumber reject dari byproduct_stock.'
+  },
+  { id:'reject_reprocessing_output_logs', group:'g2prod', x:1820, y:1960,
+    fields:[
+      {n:'id',t:'PK'},{n:'reject_reprocessing_id',t:'FK',ref:'reject_reprocessing'},
+      {n:'waktu_update',t:'f'},{n:'beras_b_kumulatif_kg',t:'f'},
+      {n:'reject_kumulatif_kg',t:'f'},{n:'bekatul_kumulatif_kg',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Progress Beras B kumulatif.'
+  },
+  { id:'reject_reprocessing_packaging_records', group:'g2prod', x:2060, y:1760,
+    fields:[
+      {n:'id',t:'PK'},{n:'reject_reprocessing_id',t:'FK',ref:'reject_reprocessing'},
+      {n:'product_sku_id',t:'FK',ref:'product_skus'},
+      {n:'jumlah_karung',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'waktu_checkpoint',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Kemasan Beras B per checkpoint.'
+  },
+  { id:'reject_reprocessing_verifications', group:'g2prod', x:2060, y:1960,
+    fields:[
+      {n:'id',t:'PK'},{n:'reject_reprocessing_id',t:'FK',ref:'reject_reprocessing'},
+      {n:'beras_b_verified_kg',t:'f'},{n:'reject_verified_kg',t:'f'},
+      {n:'bekatul_verified_kg',t:'f'},{n:'verified_by',t:'FK',ref:'users'},
+      {n:'waktu_verifikasi, status_verifikasi',t:'f'}
+    ],
+    desc:'Verifikasi hasil Beras B + byproduct.'
+  },
+
+  // ─── BYPRODUCT & KEMASAN ───
+  { id:'byproduct_stock', group:'byproduct', x:1100, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'jenis_produk (broken/menir/bekatul/reject)',t:'f'},
+      {n:'source_type',t:'f'},{n:'source_id',t:'f'},
+      {n:'berat_kg',t:'f'},{n:'berat_terpakai_kg (computed)',t:'f'},
+      {n:'berat_sisa_kg (computed)',t:'f'},{n:'tanggal_tersedia',t:'f'},
+      {n:'status',t:'f'}
+    ],
+    desc:'Stok byproduct curah. Implisit Gudang 2. Broken beli luar masuk sini dulu.'
+  },
+  { id:'byproduct_purchases', group:'byproduct', x:1340, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_pembelian (BYP-YYYYMMDD-NN)',t:'f'},
+      {n:'jenis_produk (broken)',t:'f'},{n:'supplier_id',t:'FK',ref:'suppliers'},
+      {n:'berat_kg',t:'f'},{n:'harga_per_kg, total_harga',t:'f'},
+      {n:'tanggal_masuk',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Beli broken dari luar. Otomatis masuk byproduct_stock sebagai curah.'
+  },
+  { id:'byproduct_packaging_records', group:'byproduct', x:1580, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'byproduct_stock_id',t:'FK',ref:'byproduct_stock'},
+      {n:'jenis_produk',t:'f'},{n:'product_sku_id',t:'FK',ref:'product_skus'},
+      {n:'jumlah_karung',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'tipe_input (manual/otomatis)',t:'f'},
+      {n:'source_process_id',t:'f'},{n:'waktu_kemas',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Kemasan byproduct. Bekatul otomatis 40kg/karung saat proses selesai.'
+  },
+  { id:'bekatul_curah_pool', group:'byproduct', x:1820, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'berat_kg (computed dari logs)',t:'f'},{n:'last_updated',t:'f'}
+    ],
+    desc:'Pool bekatul curah lintas proses. Otomatis kemas saat ≥ 40 kg.'
+  },
+  { id:'bekatul_curah_pool_logs', group:'byproduct', x:2060, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'tipe (masuk/keluar)',t:'f'},{n:'source_type',t:'f'},
+      {n:'source_process_id',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'saldo_setelah_kg',t:'f'},{n:'waktu',t:'f'}
+    ],
+    desc:'Audit trail pool curah bekatul.'
+  },
+  { id:'packaging_inventory', group:'byproduct', x:1100, y:2600,
+    fields:[
+      {n:'id',t:'PK'},{n:'packaging_material_id',t:'FK',ref:'packaging_materials'},
+      {n:'package_size_id',t:'FK',ref:'package_sizes'},
+      {n:'jumlah_lembar (computed)',t:'f'},
+      {n:'minimum_lembar (1.000 — notifikasi 1x)',t:'f'}
+    ],
+    desc:'Stok kemasan per jenis + ukuran.'
+  },
+  { id:'packaging_purchases', group:'byproduct', x:1340, y:2600,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_pembelian (PKP-YYYYMMDD-NN)',t:'f'},
+      {n:'packaging_material_id',t:'FK',ref:'packaging_materials'},
+      {n:'package_size_id',t:'FK',ref:'package_sizes'},
+      {n:'brand_packaging',t:'f'},
+      {n:'packaging_supplier_id',t:'FK',ref:'packaging_suppliers'},
+      {n:'jumlah_lembar',t:'f'},{n:'total_harga',t:'f'},
+      {n:'harga_per_lembar (computed)',t:'f'},
+      {n:'tanggal_masuk',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Input saat karung sudah tiba di gudang.'
+  },
+  { id:'packaging_losses', group:'byproduct', x:1580, y:2600,
+    fields:[
+      {n:'id',t:'PK'},{n:'packaging_material_id',t:'FK',ref:'packaging_materials'},
+      {n:'package_size_id',t:'FK',ref:'package_sizes'},
+      {n:'jumlah_lembar',t:'f'},{n:'alasan (rusak/hilang)',t:'f'},
+      {n:'tanggal',t:'f'},{n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'Kemasan rusak atau hilang.'
+  },
+
+  // ─── STOK & KELUAR ───
+  { id:'finished_goods_stock', group:'stok', x:50, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'product_sku_id',t:'FK',ref:'product_skus'},
+      {n:'rice_quality_standard_id',t:'FK (nullable)',ref:'rice_quality_standards'},
+      {n:'source_type (beras_putih/beras_b/byproduct/retur)',t:'f'},
+      {n:'source_id',t:'f'},
+      {n:'jumlah_karung',t:'f'},{n:'berat_total_kg',t:'f'},
+      {n:'hpp_per_kg',t:'f'},{n:'status',t:'f'},
+      {n:'warehouse_id',t:'FK',ref:'warehouses'}
+    ],
+    desc:'Ledger stok produk jadi. TIDAK termasuk PK langsung G1. Nullable untuk byproduct.'
+  },
+  { id:'outgoing_records', group:'stok', x:290, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_keluar (OUT-YYYYMMDD-NN)',t:'f'},
+      {n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'nama_pembeli (nullable=walk-in)',t:'f'},
+      {n:'metode (truk_sendiri/ekspedisi/sewa/pickup)',t:'f'},
+      {n:'no_polisi, nama_ekspedisi',t:'f'},
+      {n:'truck_id',t:'FK (nullable)',ref:'trucks'},
+      {n:'tanggal_keluar, waktu_keluar',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'catatan',t:'f'}
+    ],
+    desc:'Semua barang keluar dari KEDUA gudang. item_type membedakan jenis.'
+  },
+  { id:'outgoing_items', group:'stok', x:530, y:2340,
+    fields:[
+      {n:'id',t:'PK'},{n:'outgoing_record_id',t:'FK',ref:'outgoing_records'},
+      {n:'item_type (finished_goods/byproduct_curah/pk_langsung)',t:'f'},
+      {n:'item_id (FK ke tabel stok terkait)',t:'f'},
+      {n:'jumlah_karung',t:'f'},{n:'berat_kg',t:'f'},
+      {n:'harga_per_kg, total_harga',t:'f'}
+    ],
+    desc:'Detail item per transaksi keluar.'
+  },
+  { id:'customer_returns', group:'stok', x:50, y:2640,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_retur (RTR-YYYYMMDD-NN)',t:'f'},
+      {n:'outgoing_record_id',t:'FK',ref:'outgoing_records'},
+      {n:'tanggal_retur, waktu_retur',t:'f'},
+      {n:'alasan_retur',t:'f'},{n:'keterangan',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Retur dari pembeli. Baik→stok. Rusak→kerugian.'
+  },
+  { id:'customer_return_items', group:'stok', x:290, y:2640,
+    fields:[
+      {n:'id',t:'PK'},{n:'customer_return_id',t:'FK',ref:'customer_returns'},
+      {n:'outgoing_item_id',t:'FK',ref:'outgoing_items'},
+      {n:'jumlah_karung_diretur',t:'f'},{n:'berat_kg_diretur',t:'f'},
+      {n:'kondisi_retur (baik/rusak)',t:'f'}
+    ],
+    desc:'Detail item retur + kondisi.'
+  },
+
+  // ─── SISTEM ───
+  { id:'activity_logs', group:'sistem', x:50, y:2980,
+    fields:[
+      {n:'id',t:'PK'},{n:'table_name',t:'f'},{n:'record_id',t:'f'},
+      {n:'action (INSERT/UPDATE/DELETE)',t:'f'},
+      {n:'field_name',t:'f'},{n:'old_value',t:'f'},{n:'new_value',t:'f'},
+      {n:'changed_by',t:'FK',ref:'users'},{n:'waktu_perubahan',t:'f'},
+      {n:'alasan_perubahan',t:'f'}
+    ],
+    desc:'Audit trail SEMUA perubahan — transaksi DAN master data.'
+  },
+  { id:'notifications', group:'sistem', x:290, y:2980,
+    fields:[
+      {n:'id',t:'PK'},{n:'tipe',t:'f'},{n:'record_id, table_name',t:'f'},
+      {n:'target_role',t:'f'},{n:'pesan',t:'f'},
+      {n:'prioritas (🔴🟡🟢)',t:'f'},{n:'status',t:'f'},
+      {n:'eskalasi_target',t:'FK',ref:'users'},
+      {n:'eskalasi_jam (default 24)',t:'f'},
+      {n:'status_eskalasi, waktu_eskalasi',t:'f'},{n:'created_at',t:'f'}
+    ],
+    desc:'Notifikasi otomatis. Eskalasi 24 jam ke admin jika tidak direspons.'
+  },
+  { id:'machine_downtime_logs', group:'sistem', x:530, y:2980,
+    fields:[
+      {n:'id',t:'PK'},{n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'process_type',t:'f'},{n:'process_id',t:'f'},
+      {n:'waktu_mulai, waktu_selesai',t:'f'},
+      {n:'durasi_menit (computed)',t:'f'},
+      {n:'alasan (mesin_rusak/maintenance/listrik/lainnya)',t:'f'},
+      {n:'keterangan',t:'f'},{n:'input_by',t:'FK',ref:'users'}
+    ],
+    desc:'Pencatatan downtime mesin per gudang.'
+  },
+  { id:'wa_sessions', group:'sistem', x:770, y:2980,
+    fields:[
+      {n:'id',t:'PK'},{n:'user_id',t:'FK',ref:'users'},
+      {n:'nomor_wa',t:'f'},{n:'status',t:'f'},
+      {n:'context_json (proses aktif per tipe)',t:'f'},
+      {n:'last_action (info undo 15 menit)',t:'f'},
+      {n:'updated_at',t:'f'}
+    ],
+    desc:'Sesi percakapan per user dengan konteks proses aktif.'
+  },
+  { id:'wa_messages', group:'sistem', x:1010, y:2980,
+    fields:[
+      {n:'id',t:'PK'},{n:'wa_session_id',t:'FK',ref:'wa_sessions'},
+      {n:'arah (masuk/keluar)',t:'f'},{n:'tipe_pesan (teks/suara/gambar)',t:'f'},
+      {n:'isi_pesan',t:'f'},{n:'media_url, hasil_transkripsi',t:'f'},
+      {n:'parsed_result_json',t:'f'},
+      {n:'linked_table, linked_record_id',t:'f'},
+      {n:'can_undo, undo_deadline, status_undo',t:'f'},{n:'waktu',t:'f'}
+    ],
+    desc:'Log semua pesan WA dengan info undo 15 menit.'
+  },
+  { id:'stock_adjustments', group:'sistem', x:50, y:3300,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_adjustment (ADJ-YYYYMMDD-NN)',t:'f'},
+      {n:'tipe_stok',t:'f'},{n:'item_id',t:'f'},
+      {n:'jumlah_sebelum, jumlah_sesudah',t:'f'},
+      {n:'selisih (computed)',t:'f'},
+      {n:'alasan (stock_opname/selisih_timbang/salah_input/lainnya)',t:'f'},
+      {n:'keterangan',t:'f'},
+      {n:'input_by',t:'FK',ref:'users'},{n:'waktu_adjustment',t:'f'}
+    ],
+    desc:'Koreksi stok manual. item_type: pk_tumpukan_gudang1 & gudang2.'
+  },
+  { id:'stock_opname_sessions', group:'sistem', x:290, y:3300,
+    fields:[
+      {n:'id',t:'PK'},{n:'kode_opname (OPN-YYYYMMDD-NN)',t:'f'},
+      {n:'warehouse_id',t:'FK',ref:'warehouses'},
+      {n:'tanggal_opname',t:'f'},{n:'status (draft/selesai)',t:'f'},
+      {n:'cakupan (semua/pilihan)',t:'f'},
+      {n:'dilakukan_oleh',t:'FK',ref:'users'},
+      {n:'waktu_mulai, waktu_selesai',t:'f'},{n:'catatan',t:'f'}
+    ],
+    desc:'Stock opname formal. Selisih otomatis jadi stock_adjustment.'
+  },
+  { id:'stock_opname_items', group:'sistem', x:530, y:3300,
+    fields:[
+      {n:'id',t:'PK'},{n:'stock_opname_session_id',t:'FK',ref:'stock_opname_sessions'},
+      {n:'item_type',t:'f'},{n:'item_id',t:'f'},
+      {n:'jumlah_sistem (saat opname)',t:'f'},
+      {n:'jumlah_fisik (input manual)',t:'f'},
+      {n:'selisih (computed)',t:'f'},
+      {n:'status_item (sesuai/selisih)',t:'f'}
+    ],
+    desc:'Detail per item yang dihitung saat opname.'
+  },
+];
+
+// ─── RELATIONSHIPS ───
+const RELS = [
+  // Master
+  ['users','warehouses','default_warehouse_id'],
+  ['silos','warehouses','warehouse_id'],
+  ['quality_standards_reference','rice_quality_standards','rice_quality_standard_id'],
+  ['quality_standards_reference','users','updated_by'],
+  ['pk_quality_standards_reference','users','updated_by'],
+  ['pk_price_deduction_rules','users','updated_by'],
+  ['byproduct_price_history','users','input_by'],
+  ['product_skus','brands','brand_id'],
+  ['product_skus','packaging_materials','packaging_material_id'],
+  ['product_skus','package_sizes','package_size_id'],
+  // Gudang 1
+  ['purchase_batches','suppliers','supplier_id'],
+  ['purchase_batches','users','input_by'],
+  ['purchase_batch_verifications','purchase_batches','purchase_batch_id'],
+  ['purchase_batch_verifications','users','verified_by'],
+  ['drying_lots','users','created_by'],
+  ['drying_lot_batches','drying_lots','drying_lot_id'],
+  ['drying_lot_batches','purchase_batches','purchase_batch_id'],
+  ['drying_moisture_logs','drying_lots','drying_lot_id'],
+  ['drying_moisture_logs','users','input_by'],
+  ['silo_storage','silos','silo_id'],
+  ['silo_storage','drying_lots','drying_lot_id'],
+  ['silo_storage','purchase_batches','purchase_batch_id'],
+  ['silo_storage','users','input_by'],
+  ['milling_process','silo_storage','silo_storage_id'],
+  ['milling_process','drying_lots','drying_lot_id'],
+  ['milling_process','users','input_by'],
+  ['milling_progress_logs','milling_process','milling_process_id'],
+  ['milling_progress_logs','users','input_by'],
+  ['milling_pk_routing','milling_process','milling_process_id'],
+  ['milling_pk_routing','pk_stock_gudang1','pk_stock_gudang1_id'],
+  ['milling_pk_routing','users','input_by'],
+  ['milling_process_verifications','milling_process','milling_process_id'],
+  ['milling_process_verifications','users','verified_by'],
+  ['milling_qc_logs','milling_process','milling_process_id'],
+  ['milling_qc_logs','users','input_by'],
+  ['pk_stock_gudang1','milling_process','milling_process_id'],
+  ['pk_stock_gudang1','users','input_by'],
+  // Transfer
+  ['internal_transfers','users','input_by'],
+  // Gudang 2 Bahan
+  ['pk_purchase_batches','suppliers','supplier_id'],
+  ['pk_purchase_batches','users','input_by'],
+  ['pk_purchase_verifications','pk_purchase_batches','pk_purchase_batch_id'],
+  ['pk_purchase_verifications','users','verified_by'],
+  ['pk_gudang2_intakes','silos','silo_id'],
+  ['pk_gudang2_intakes','users','input_by'],
+  ['pk_tumpukan_to_silo','pk_gudang2_intakes','pk_gudang2_intake_id'],
+  ['pk_tumpukan_to_silo','silos','silo_id'],
+  ['pk_tumpukan_to_silo','users','input_by'],
+  ['pk_rejections','suppliers','supplier_id'],
+  ['pk_rejections','users','input_by'],
+  // Gudang 2 Produksi
+  ['polishing_process','users','created_by'],
+  ['polishing_silo_usage','polishing_process','polishing_process_id'],
+  ['polishing_silo_usage','silos','silo_id'],
+  ['polishing_broken_intakes','polishing_process','polishing_process_id'],
+  ['polishing_broken_intakes','byproduct_stock','byproduct_stock_id'],
+  ['polishing_broken_intakes','users','input_by'],
+  ['polishing_output_logs','polishing_process','polishing_process_id'],
+  ['polishing_output_logs','rice_quality_standards','rice_quality_standard_id'],
+  ['polishing_output_logs','product_skus','product_sku_id'],
+  ['polishing_output_logs','users','input_by'],
+  ['polishing_byproduct_logs','polishing_process','polishing_process_id'],
+  ['polishing_byproduct_logs','users','input_by'],
+  ['polishing_qc_logs','polishing_process','polishing_process_id'],
+  ['polishing_qc_logs','rice_quality_standards','rice_quality_standard_id'],
+  ['polishing_qc_logs','users','input_by'],
+  ['polishing_verifications','polishing_process','polishing_process_id'],
+  ['polishing_verifications','users','verified_by'],
+  ['reject_reprocessing','users','created_by'],
+  ['reject_reprocessing_intakes','reject_reprocessing','reject_reprocessing_id'],
+  ['reject_reprocessing_intakes','byproduct_stock','byproduct_stock_id'],
+  ['reject_reprocessing_intakes','users','input_by'],
+  ['reject_reprocessing_output_logs','reject_reprocessing','reject_reprocessing_id'],
+  ['reject_reprocessing_output_logs','users','input_by'],
+  ['reject_reprocessing_packaging_records','reject_reprocessing','reject_reprocessing_id'],
+  ['reject_reprocessing_packaging_records','product_skus','product_sku_id'],
+  ['reject_reprocessing_packaging_records','users','input_by'],
+  ['reject_reprocessing_verifications','reject_reprocessing','reject_reprocessing_id'],
+  ['reject_reprocessing_verifications','users','verified_by'],
+  // Byproduct
+  ['byproduct_purchases','suppliers','supplier_id'],
+  ['byproduct_purchases','users','input_by'],
+  ['byproduct_packaging_records','byproduct_stock','byproduct_stock_id'],
+  ['byproduct_packaging_records','product_skus','product_sku_id'],
+  ['byproduct_packaging_records','users','input_by'],
+  ['bekatul_curah_pool','warehouses','warehouse_id'],
+  ['bekatul_curah_pool_logs','warehouses','warehouse_id'],
+  ['packaging_inventory','packaging_materials','packaging_material_id'],
+  ['packaging_inventory','package_sizes','package_size_id'],
+  ['packaging_purchases','packaging_materials','packaging_material_id'],
+  ['packaging_purchases','package_sizes','package_size_id'],
+  ['packaging_purchases','packaging_suppliers','packaging_supplier_id'],
+  ['packaging_purchases','users','input_by'],
+  ['packaging_losses','packaging_materials','packaging_material_id'],
+  ['packaging_losses','package_sizes','package_size_id'],
+  ['packaging_losses','users','input_by'],
+  // Stok & Keluar
+  ['finished_goods_stock','product_skus','product_sku_id'],
+  ['finished_goods_stock','rice_quality_standards','rice_quality_standard_id'],
+  ['finished_goods_stock','warehouses','warehouse_id'],
+  ['outgoing_records','warehouses','warehouse_id'],
+  ['outgoing_records','trucks','truck_id'],
+  ['outgoing_records','users','input_by'],
+  ['outgoing_items','outgoing_records','outgoing_record_id'],
+  ['customer_returns','outgoing_records','outgoing_record_id'],
+  ['customer_returns','users','input_by'],
+  ['customer_return_items','customer_returns','customer_return_id'],
+  ['customer_return_items','outgoing_items','outgoing_item_id'],
+  // Sistem
+  ['activity_logs','users','changed_by'],
+  ['notifications','users','eskalasi_target'],
+  ['machine_downtime_logs','warehouses','warehouse_id'],
+  ['machine_downtime_logs','users','input_by'],
+  ['wa_sessions','users','user_id'],
+  ['wa_messages','wa_sessions','wa_session_id'],
+  ['stock_adjustments','users','input_by'],
+  ['stock_opname_sessions','warehouses','warehouse_id'],
+  ['stock_opname_sessions','users','dilakukan_oleh'],
+  ['stock_opname_items','stock_opname_sessions','stock_opname_session_id'],
+];
+
+// ─── VIEWS ───
+const VIEWS = [
+  { id:'v_lot_cost_summary', x:770, y:2980, label:'lot_cost_summary (VIEW)', color:'#0f766e',
+    desc:'HPP per lot: biaya gabah, output PK, rendemen, flag verifikasi.' },
+  { id:'v_daily_hpp', x:770, y:3100, label:'daily_rice_hpp_summary (VIEW)', color:'#0f766e',
+    desc:'HPP harian: agregasi semua proses selesai hari itu.' },
+  { id:'v_polishing_hpp', x:770, y:3220, label:'polishing_hpp_summary (VIEW)', color:'#0f766e',
+    desc:'HPP per proses penyosohan. Acuan resmi HPP.' },
+  { id:'v_pk_margin', x:1010, y:3100, label:'pk_sales_margin_summary (VIEW)', color:'#0f766e',
+    desc:'Margin penjualan PK langsung vs HPP per lot.' },
+  { id:'v_e2e_internal', x:1010, y:3220, label:'end_to_end_cost_summary_internal (VIEW)', color:'#0f766e',
+    desc:'HPP end-to-end jalur internal: gabah→PK→beras.' },
+  { id:'v_e2e_external', x:1250, y:3100, label:'external_pk_cost_summary (VIEW)', color:'#0f766e',
+    desc:'HPP jalur eksternal: PK beli luar→beras.' },
+  { id:'v_pk_vs_beras', x:1250, y:3220, label:'pk_vs_beras_hpp_comparison (VIEW)', color:'#0f766e',
+    desc:'Perbandingan HPP jual PK langsung vs proses jadi beras.' },
+  { id:'v_qc_history', x:1010, y:3340, label:'quality_standard_change_history (VIEW)', color:'#0f766e',
+    desc:'Histori perubahan standar QC — hanya parameter yang berubah.' },
+];
+
+// Build lookup
+const tableMap = {};
+TABLES.forEach(t => tableMap[t.id] = t);
+
+// ─── RENDER ───
+const svg = document.getElementById('erd-svg');
+const svgNS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs={}) {
+  const e = document.createElementNS(svgNS, tag);
+  for(const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  return e;
+}
+function txt(content, attrs={}) {
+  const t = el('text', attrs);
+  t.textContent = content;
+  return t;
+}
+function rect(attrs) { return el('rect', attrs); }
+
+// Draw group backgrounds
+const GROUP_BOUNDS = {};
+function computeBounds() {
+  TABLES.forEach(t => {
+    const g = t.group;
+    const h = tableHeight(t.fields);
+    if(!GROUP_BOUNDS[g]) GROUP_BOUNDS[g] = {x1:9999,y1:9999,x2:0,y2:0};
+    const b = GROUP_BOUNDS[g];
+    b.x1 = Math.min(b.x1, t.x - 15);
+    b.y1 = Math.min(b.y1, t.y - 35);
+    b.x2 = Math.max(b.x2, t.x + TW + 15);
+    b.y2 = Math.max(b.y2, t.y + h + 15);
+  });
+}
+computeBounds();
+
+// Group bg layer
+const bgLayer = el('g', {id:'bg-layer'});
+svg.appendChild(bgLayer);
+Object.entries(GROUP_BOUNDS).forEach(([g, b]) => {
+  const grp = GROUPS[g];
+  const r = rect({x:b.x1, y:b.y1, width:b.x2-b.x1, height:b.y2-b.y1,
+    rx:'12', fill:grp.color+'22', stroke:grp.color+'66', 'stroke-width':'1.5'});
+  bgLayer.appendChild(r);
+  const lbl = txt(grp.label, {x:b.x1+12, y:b.y1+18,
+    fill:grp.text, 'font-size':'12', 'font-weight':'700', opacity:'0.7'});
+  bgLayer.appendChild(lbl);
+});
+
+// Relationship lines layer
+const relLayer = el('g', {id:'rel-layer'});
+svg.appendChild(relLayer);
+
+function getTableCenter(id) {
+  const t = tableMap[id];
+  if(!t) return null;
+  return { x: t.x + TW/2, y: t.y + tableHeight(t.fields)/2 };
+}
+function getTableEdge(fromId, toId) {
+  const from = tableMap[fromId];
+  const to = tableMap[toId];
+  if(!from || !to) return null;
+  const fx = from.x + TW/2, fy = from.y + tableHeight(from.fields)/2;
+  const tx = to.x + TW/2, ty = to.y + tableHeight(to.fields)/2;
+  // Calculate edge point
+  let sx, sy, ex, ey;
+  if(fx < tx) { sx = from.x + TW; ex = to.x; }
+  else { sx = from.x; ex = to.x + TW; }
+  sy = fy; ey = ty;
+  return {sx, sy, ex, ey, fx, fy, tx, ty};
+}
+
+const relLines = {};
+RELS.forEach(([from, to, field], i) => {
+  const pts = getTableEdge(from, to);
+  if(!pts) return;
+  const {sx, sy, ex, ey} = pts;
+  const cp1x = sx + (ex-sx)*0.4;
+  const cp2x = sx + (ex-sx)*0.6;
+  const g = GROUPS[tableMap[from]?.group] || GROUPS.master;
+  const path = el('path', {
+    d:`M${sx},${sy} C${cp1x},${sy} ${cp2x},${ey} ${ex},${ey}`,
+    stroke: g.color, class:'rel-line',
+    'data-from':from, 'data-to':to, 'data-field':field
+  });
+  relLayer.appendChild(path);
+  if(!relLines[from]) relLines[from] = [];
+  if(!relLines[to]) relLines[to] = [];
+  relLines[from].push(path);
+  relLines[to].push(path);
+});
+
+// Tables layer
+const tblLayer = el('g', {id:'tbl-layer'});
+svg.appendChild(tblLayer);
+
+const tableEls = {};
+TABLES.forEach(t => {
+  const grp = GROUPS[t.group];
+  const h = tableHeight(t.fields);
+  const g = el('g', {class:'tbl-box', 'data-id':t.id, transform:`translate(${t.x},${t.y})`});
+
+  // Shadow
+  const shadow = rect({x:2, y:2, width:TW, height:h, rx:'8', fill:'#000', opacity:'0.3'});
+  g.appendChild(shadow);
+
+  // Body
+  const body = rect({x:0, y:0, width:TW, height:h, rx:'8', fill:'#1e293b', stroke:grp.color, 'stroke-width':'1.5'});
+  g.appendChild(body);
+
+  // Header
+  const hdr = rect({x:0, y:0, width:TW, height:TH, rx:'8', fill:grp.color});
+  const hdr2 = rect({x:0, y:TH/2, width:TW, height:TH/2, fill:grp.color}); // square bottom corners
+  g.appendChild(hdr);
+  g.appendChild(hdr2);
+
+  const hdrTxt = txt(t.id, {x:TW/2, y:TH/2+4, 'text-anchor':'middle',
+    fill:'#fff', 'font-size':'10', 'font-weight':'700', class:'tbl-header'});
+  g.appendChild(hdrTxt);
+
+  // Fields
+  t.fields.forEach((f, i) => {
+    const fy = TH + i*FH + 14;
+    let prefix = '';
+    let color = '#cbd5e1';
+    let weight = 'normal';
+    let style = 'normal';
+    if(f.t === 'PK') { prefix = '🔑 '; color = '#fbbf24'; weight = 'bold'; }
+    else if(f.t === 'FK' || f.t === 'FK (nullable)') { prefix = '→ '; color = '#93c5fd'; style = 'italic'; }
+    const ftxt = txt(prefix + f.n, {x:8, y:fy,
+      fill:color, 'font-size':'9', 'font-weight':weight,
+      'font-style':style, class:'tbl-field'});
+    // Truncate long field names
+    ftxt.setAttribute('textLength', TW-16);
+    ftxt.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+    g.appendChild(ftxt);
+  });
+
+  // Border line
+  const bline = el('line', {x1:8, y1:TH, x2:TW-8, y2:TH, stroke:grp.color, 'stroke-width':'0.5', opacity:'0.5'});
+  g.appendChild(bline);
+
+  // Events
+  g.addEventListener('click', () => highlightTable(t.id));
+  g.addEventListener('mouseenter', (e) => showTooltip(e, t));
+  g.addEventListener('mouseleave', hideTooltip);
+
+  tblLayer.appendChild(g);
+  tableEls[t.id] = g;
+});
+
+// Views layer
+const viewLayer = el('g', {id:'view-layer'});
+svg.appendChild(viewLayer);
+VIEWS.forEach(v => {
+  const vg = el('g', {transform:`translate(${v.x},${v.y})`});
+  const vr = rect({x:0, y:0, width:300, height:24, rx:'4',
+    fill:v.color+'33', stroke:v.color, 'stroke-width':'1', 'stroke-dasharray':'4,2'});
+  vg.appendChild(vr);
+  const vt = txt('⊞ '+v.label, {x:8, y:16, fill:'#5eead4', 'font-size':'9', 'font-weight':'600'});
+  vg.appendChild(vt);
+  vg.addEventListener('mouseenter', (e) => {
+    document.getElementById('tooltip').style.display = 'block';
+    document.getElementById('tooltip').innerHTML = `<strong>${v.label}</strong><br>${v.desc}`;
+  });
+  vg.addEventListener('mouseleave', hideTooltip);
+  vg.addEventListener('mousemove', moveTooltip);
+  viewLayer.appendChild(vg);
+});
+
+// ─── INTERACTIONS ───
+let highlighted = null;
+function highlightTable(id) {
+  if(highlighted === id) { clearHighlight(); return; }
+  highlighted = id;
+  // Dim all
+  Object.values(tableEls).forEach(e => { e.classList.remove('highlighted','dimmed'); e.classList.add('dimmed'); });
+  document.querySelectorAll('.rel-line').forEach(l => { l.classList.remove('highlighted','dimmed'); l.classList.add('dimmed'); });
+  // Highlight selected + related
+  tableEls[id]?.classList.remove('dimmed');
+  tableEls[id]?.classList.add('highlighted');
+  const connected = new Set([id]);
+  (relLines[id] || []).forEach(line => {
+    line.classList.remove('dimmed');
+    line.classList.add('highlighted');
+    const f = line.getAttribute('data-from');
+    const t = line.getAttribute('data-to');
+    connected.add(f); connected.add(t);
+  });
+  connected.forEach(tid => {
+    tableEls[tid]?.classList.remove('dimmed');
+  });
+}
+function clearHighlight() {
+  highlighted = null;
+  Object.values(tableEls).forEach(e => { e.classList.remove('highlighted','dimmed'); });
+  document.querySelectorAll('.rel-line').forEach(l => { l.classList.remove('highlighted','dimmed'); });
+}
+function searchTable(q) {
+  if(!q) { clearHighlight(); return; }
+  const q2 = q.toLowerCase();
+  Object.entries(tableEls).forEach(([id, el]) => {
+    if(id.toLowerCase().includes(q2)) {
+      el.classList.remove('dimmed'); el.classList.add('highlighted');
+    } else {
+      el.classList.add('dimmed'); el.classList.remove('highlighted');
+    }
+  });
+}
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+function showTooltip(e, t) {
+  const fields = t.fields.map(f => `${f.t==='PK'?'🔑':f.t.startsWith('FK')?'→':' '} ${f.n}`).join('<br>');
+  tooltip.innerHTML = `<strong>${t.id}</strong><br><em style="color:#94a3b8;font-size:10px">${t.desc||''}</em><hr style="border-color:#334155;margin:4px 0"><div style="font-size:10px;color:#94a3b8">${fields}</div>`;
+  tooltip.style.display = 'block';
+  moveTooltip(e);
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 15) + 'px';
+  tooltip.style.top = (e.clientY + 10) + 'px';
+}
+document.querySelectorAll('.tbl-box').forEach(el => {
+  el.addEventListener('mousemove', moveTooltip);
+});
+
+// ─── PAN & ZOOM ───
+let scale = 0.28, tx = 20, ty = 20, dragging = false, lastX, lastY;
+const wrap = document.getElementById('canvas-wrap');
+
+function applyTransform() {
+  svg.style.transform = `scale(${scale}) translate(${tx}px,${ty}px)`;
+  svg.style.transformOrigin = '0 0';
+  document.getElementById('zoom-info').textContent = Math.round(scale*100)+'%';
+}
+applyTransform();
+
+wrap.addEventListener('mousedown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  wrap.classList.add('grabbing');
+});
+window.addEventListener('mouseup', () => { dragging = false; wrap.classList.remove('grabbing'); });
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  tx += (e.clientX - lastX)/scale;
+  ty += (e.clientY - lastY)/scale;
+  lastX = e.clientX; lastY = e.clientY;
+  applyTransform();
+});
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const rect = wrap.getBoundingClientRect();
+  const mx = (e.clientX - rect.left)/scale - tx;
+  const my = (e.clientY - rect.top)/scale - ty;
+  scale *= delta;
+  scale = Math.max(0.1, Math.min(3, scale));
+  tx = (e.clientX - rect.left)/scale - mx;
+  ty = (e.clientY - rect.top)/scale - my;
+  applyTransform();
+}, {passive:false});
+
+function zoomIn() { scale = Math.min(3, scale*1.2); applyTransform(); }
+function zoomOut() { scale = Math.max(0.1, scale/1.2); applyTransform(); }
+function resetView() { scale=0.28; tx=20; ty=20; applyTransform(); clearHighlight(); }
+
+// Grid background
+const defs = el('defs');
+const pattern = el('pattern', {id:'grid', width:'50', height:'50', patternUnits:'userSpaceOnUse'});
+const path1 = el('path', {d:'M 50 0 L 0 0 0 50', fill:'none', stroke:'#1e293b', 'stroke-width':'0.5'});
+pattern.appendChild(path1);
+defs.appendChild(pattern);
+svg.insertBefore(defs, svg.firstChild);
+const gridrect = rect({width:'100%', height:'100%', fill:'url(#grid)'});
+svg.insertBefore(gridrect, svg.firstChild);
+</script>
+</body>
+</html>

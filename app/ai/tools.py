@@ -1,0 +1,627 @@
+"""Definisi tool-use Claude untuk ekstraksi data pembelian gabah."""
+from __future__ import annotations
+
+# Tool tunggal untuk Fase 1: mengekstrak data fisik pembelian gabah dari
+# kalimat bebas operator. Semua field opsional — jika tidak disebut, biarkan
+# null; backend/bot yang akan menanyakan kekurangannya satu per satu.
+CATAT_PEMBELIAN_GABAH = {
+    "name": "catat_pembelian_gabah",
+    "description": (
+        "Ekstrak data pembelian gabah dari pesan operator gudang penggilingan "
+        "beras berbahasa Indonesia (termasuk gaya santai/singkat). Satu truk = "
+        "satu batch. Jika sebuah data tidak disebutkan, JANGAN mengarang — "
+        "kembalikan null untuk field itu."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_pembelian_gabah": {
+                "type": "boolean",
+                "description": (
+                    "true jika pesan bermaksud mencatat pembelian atau kedatangan "
+                    "gabah masuk — dikenali dari MAKNA (ada penjual/supplier "
+                    "dan/atau berat gabah), TANPA harus ada kata persis 'gabah "
+                    "masuk'. Deteksi dari makna, bukan kata kunci. Contoh yang "
+                    "HARUS true: 'gabah masuk dari pak budi 8 ton', "
+                    "'beli gabah 8 ton dari catur', 'masuk 8ton dari hasan plat "
+                    "B1234XY', 'dari pak budi 8 ton basah', 'terima gabah 5 kwintal "
+                    "bu siti'. false untuk pertanyaan/laporan/sapaan."
+                ),
+            },
+            "nama_supplier": {
+                "type": ["string", "null"],
+                "description": "Nama supplier/penjual gabah. Contoh: 'Pak Budi'.",
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": (
+                    "Berat total gabah dalam KILOGRAM. Konversi ton ke kg "
+                    "(1 ton = 1000 kg). '8 ton' -> 8000. '8500 kg' -> 8500."
+                ),
+            },
+            "kondisi_gabah": {
+                "type": ["string", "null"],
+                "enum": ["basah", "kering", None],
+                "description": (
+                    "Kondisi gabah. Jika operator tidak menyebut, kembalikan "
+                    "null (backend memakai default 'basah')."
+                ),
+            },
+            "no_polisi_truk": {
+                "type": ["string", "null"],
+                "description": "Nomor polisi truk. Contoh: 'B 1234 XY'.",
+            },
+            "kadar_air_awal_persen": {
+                "type": ["number", "null"],
+                "description": "Kadar air awal dalam persen jika disebut. '13%' -> 13.",
+            },
+        },
+        "required": ["is_pembelian_gabah"],
+    },
+}
+
+SYSTEM_PROMPT = (
+    "Kamu adalah asisten pencatatan untuk usaha penggilingan beras. Tugasmu "
+    "mengekstrak data terstruktur dari pesan pengguna lapangan. Selalu panggil "
+    "tool yang tersedia. "
+    "Pengguna menulis dengan bahasa Indonesia sehari-hari: santai, singkat, "
+    "banyak singkatan dan typo, sering tanpa tanda baca. Pahami MAKSUD dari "
+    "makna kalimat, jangan mengandalkan kata kunci yang persis. Bersikaplah "
+    "MURAH HATI dalam mengenali maksud: kalau pesan masuk akal sebagai tugas "
+    "yang tool ini tangani, tandai boolean niatnya true. "
+    "Tetap jangan mengarang nilai data yang tidak disebutkan pengguna — untuk "
+    "field data gunakan null bila tidak ada. Pahami satuan Indonesia: ton, kg, "
+    "kwintal (1 kwintal = 100 kg); dan uang: juta/jt, ribu/rb, titik sebagai "
+    "pemisah ribuan."
+)
+
+
+# Tool tanya laporan pembelian gabah (Gudang 1 & Admin).
+TANYA_LAPORAN_GABAH = {
+    "name": "tanya_laporan_gabah",
+    "description": (
+        "Deteksi bila pengguna BERTANYA tentang ringkasan/laporan pembelian "
+        "gabah masuk (berapa banyak, berapa batch, dari supplier mana). "
+        "Contoh yang HARUS true: 'berapa gabah masuk hari ini', "
+        "'total gabah hari ini berapa', 'gabah masuk minggu ini', "
+        "'laporan pembelian gabah', 'hari ini beli gabah berapa ton'. "
+        "Bedakan dari perintah MENCATAT pembelian (itu bukan pertanyaan)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_laporan_gabah": {
+                "type": "boolean",
+                "description": (
+                    "true jika pesan adalah PERTANYAAN tentang laporan/ringkasan "
+                    "gabah masuk. false untuk perintah pencatatan atau hal lain."
+                ),
+            },
+            "periode": {
+                "type": ["string", "null"],
+                "enum": ["hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua", None],
+                "description": (
+                    "Rentang waktu yang ditanyakan. 'hari ini'->hari_ini, "
+                    "'kemarin'->kemarin, 'minggu ini'->minggu_ini, "
+                    "'bulan ini'->bulan_ini, 'total/semua/keseluruhan'->semua. "
+                    "Jika tidak disebut, kembalikan null (dianggap hari_ini)."
+                ),
+            },
+        },
+        "required": ["is_laporan_gabah"],
+    },
+}
+
+
+# Tool milling sisi staff/admin (Bot Admin): QC & verifikasi output PK.
+PROSES_MILLING_ADMIN = {
+    "name": "proses_milling_admin",
+    "description": (
+        "Deteksi & ekstrak aksi staff/admin untuk proses milling: input QC "
+        "hasil PK, atau verifikasi berat output PK final. Contoh QC: 'QC "
+        "MIL-... kadar air 13 broken 5 susut 2 kondisi KS'. Contoh verifikasi: "
+        "'verifikasi output MIL-... 14 ton', 'output PK MIL-... final 14000'. "
+        "Jika bukan tentang milling (mis. verifikasi HARGA gabah batch GB-...), "
+        "pilih 'bukan_milling_admin'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": ["qc_milling", "verifikasi_output", "bukan_milling_admin"],
+                "description": (
+                    "'qc_milling': input hasil QC PK (kadar air/broken/susut/"
+                    "kondisi). 'verifikasi_output': tetapkan berat output PK "
+                    "final sebuah proses MIL-. 'bukan_milling_admin': selain itu "
+                    "(termasuk verifikasi harga gabah batch GB-...)."
+                ),
+            },
+            "kode_proses": {
+                "type": ["string", "null"],
+                "description": "Kode proses milling MIL-YYYYMMDD-NN (huruf besar).",
+            },
+            "kadar_air": {
+                "type": ["number", "null"],
+                "description": "Kadar air PK (persen). '13%' -> 13.",
+            },
+            "broken_persen": {
+                "type": ["number", "null"],
+                "description": "Persentase broken/pecah. '5%' -> 5.",
+            },
+            "susut_persen": {
+                "type": ["number", "null"],
+                "description": "Persentase susut. '2%' -> 2.",
+            },
+            "kondisi": {
+                "type": ["string", "null"],
+                "enum": ["KS", "KL", None],
+                "description": "Kondisi PK: 'KS' atau 'KL' bila disebut.",
+            },
+            "berat_output_kg": {
+                "type": ["number", "null"],
+                "description": (
+                    "Untuk verifikasi_output: berat output PK final dalam KG. "
+                    "'14 ton' -> 14000."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
+
+
+# Tool proses milling / pecah kulit (Bot Gudang 1).
+PROSES_MILLING = {
+    "name": "proses_milling",
+    "description": (
+        "Deteksi & ekstrak perintah/pertanyaan terkait MILLING / PECAH KULIT / "
+        "GILING gabah menjadi beras PK di Gudang 1. Aksi: mulai giling dari "
+        "silo, catat progress berat PK, arahkan PK keluar (tumpuk di buffer / "
+        "siap transfer), tandai giling selesai, atau tanya laporan giling & "
+        "stok PK. Jika bukan tentang milling, pilih 'bukan_milling'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "mulai_milling",
+                    "progress_milling",
+                    "routing_pk",
+                    "selesai_milling",
+                    "laporan_milling",
+                    "stok_pk",
+                    "bukan_milling",
+                ],
+                "description": (
+                    "'mulai_milling': mulai giling isi silo (contoh: 'giling "
+                    "silo A', 'mulai milling silo B'). "
+                    "'progress_milling': catat berat PK kumulatif yang sudah "
+                    "keluar (contoh: 'progress giling MIL-... 5 ton', 'PK MIL-... "
+                    "sudah 5000 kg'). "
+                    "'routing_pk': arahkan PK yang keluar (contoh: 'tumpuk 3 ton "
+                    "PK dari MIL-...', 'siap transfer 2 ton dari MIL-...'). "
+                    "'selesai_milling': giling selesai (contoh: 'MIL-... "
+                    "selesai giling'). "
+                    "'laporan_milling': status/laporan giling. "
+                    "'stok_pk': tanya stok PK buffer Gudang 1. "
+                    "'bukan_milling': selain itu."
+                ),
+            },
+            "nama_silo": {
+                "type": ["string", "null"],
+                "enum": ["A", "B", None],
+                "description": "Silo sumber untuk mulai_milling: 'A' atau 'B'.",
+            },
+            "kode_proses": {
+                "type": ["string", "null"],
+                "description": "Kode proses milling MIL-YYYYMMDD-NN (huruf besar).",
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": (
+                    "Berat dalam KILOGRAM. Untuk progress_milling = berat "
+                    "kumulatif total PK. Untuk routing_pk = berat yang "
+                    "diarahkan. Konversi ton: '5 ton'->5000."
+                ),
+            },
+            "tujuan": {
+                "type": ["string", "null"],
+                "enum": ["tumpuk", "siap_transfer", None],
+                "description": (
+                    "Untuk routing_pk: 'tumpuk' (simpan di buffer) atau "
+                    "'siap_transfer' (siap dikirim ke Gudang 2)."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
+
+
+# Tool proses silo Gudang 1 (gabah kering).
+PROSES_SILO = {
+    "name": "proses_silo",
+    "description": (
+        "Deteksi & ekstrak perintah/pertanyaan terkait SILO gabah kering di "
+        "Gudang 1 (Silo A / Silo B) — tempat PENYIMPANAN gabah yang SUDAH "
+        "kering, BUKAN mesin pengering. PENTING: 'oven', 'dryer', 'mesin "
+        "pengering', 'pengering' itu proses pengeringan, BUKAN silo -> "
+        "'bukan_silo'. Silo hanya 'Silo A' atau 'Silo B'. Tiga aksi: "
+        "memasukkan gabah ke silo (dari lot pengeringan yang sudah selesai, "
+        "atau batch gabah kering langsung), mengeluarkan/mengosongkan silo, "
+        "atau menanyakan isi/status silo. Jika bukan tentang silo, pilih "
+        "'bukan_silo'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": ["masuk_silo", "keluar_silo", "laporan_silo", "bukan_silo"],
+                "description": (
+                    "'masuk_silo': masukkan gabah ke silo (contoh: 'masukkan "
+                    "LOT-... ke silo A', 'gabah GB-... masuk silo B langsung'). "
+                    "'keluar_silo': kosongkan silo (contoh: 'kosongkan silo A'). "
+                    "'laporan_silo': status / isi / KAPASITAS silo (contoh: "
+                    "'silo apa yang terisi', 'isi silo A apa', 'kapasitas silo "
+                    "berapa', 'kapasitas maksimal silo', 'silo muat berapa "
+                    "ton'). 'bukan_silo': selain itu."
+                ),
+            },
+            "nama_silo": {
+                "type": ["string", "null"],
+                "enum": ["A", "B", None],
+                "description": "Silo yang dimaksud: 'A' atau 'B'. 'silo a' -> 'A'.",
+            },
+            "kode_lot": {
+                "type": ["string", "null"],
+                "description": (
+                    "Kode lot pengeringan (LOT-YYYYMMDD-NN) bila gabah masuk "
+                    "silo BERASAL dari lot pengeringan. Huruf besar."
+                ),
+            },
+            "kode_batch": {
+                "type": ["string", "null"],
+                "description": (
+                    "Kode batch gabah (GB-YYYYMMDD-NN) bila gabah KERING masuk "
+                    "silo LANGSUNG tanpa pengeringan. Huruf besar."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
+
+
+# Tool telusur detail data (semua bot) — jawab atribut sebuah entitas.
+TANYA_DETAIL = {
+    "name": "tanya_detail",
+    "description": (
+        "Deteksi bila pengguna menanyakan ATRIBUT/DETAIL sebuah entitas tertentu "
+        "(bukan sekadar kodenya, dan bukan total agregat). Contoh yang HARUS "
+        "true: 'berapa harga gabah yang pertama masuk hari ini', 'berat gabah "
+        "dari budi berapa', 'kadar air lot terbaru berapa', 'status GB-... "
+        "gimana', 'gabah kedua sudah diverifikasi belum', 'rendemen MIL-... "
+        "berapa', 'gabah pertama dari siapa'. Entitas dirujuk lewat supplier, "
+        "hari, urutan (pertama/kedua), kondisi, 'terbaru', atau kode langsung."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_detail": {
+                "type": "boolean",
+                "description": (
+                    "true jika menanyakan atribut/detail satu entitas tertentu "
+                    "(harga, berat, kadar air, status, rendemen, supplier, "
+                    "kapan, sudah diverifikasi belum). false untuk minta KODE "
+                    "saja, total agregat, atau perintah aksi."
+                ),
+            },
+            "target": {
+                "type": ["string", "null"],
+                "enum": ["batch", "lot", "milling", None],
+                "description": (
+                    "Jenis entitas: 'batch' (gabah GB-), 'lot' (pengeringan "
+                    "LOT-), 'milling' (giling MIL-). null -> anggap batch."
+                ),
+            },
+            "kode": {
+                "type": ["string", "null"],
+                "description": "Kode langsung bila disebut (GB-/LOT-/MIL-...), huruf besar.",
+            },
+            "supplier_nama": {
+                "type": ["string", "null"],
+                "description": "Nama supplier bila disebut, mis. 'Pak Budi' -> 'Budi'.",
+            },
+            "periode": {
+                "type": ["string", "null"],
+                "enum": ["hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua", None],
+                "description": "Rentang waktu bila disebut.",
+            },
+            "urutan": {
+                "type": ["integer", "null"],
+                "description": "Urutan 1-based bila disebut. 'pertama'->1, 'kedua'->2.",
+            },
+            "kondisi": {
+                "type": ["string", "null"],
+                "enum": ["basah", "kering", None],
+                "description": "Kondisi gabah bila disebut (target batch).",
+            },
+            "terbaru": {
+                "type": "boolean",
+                "description": "true bila minta yang TERBARU/TERAKHIR.",
+            },
+        },
+        "required": ["is_detail"],
+    },
+}
+
+
+# Tool tanya pending / tugas verifikasi (semua bot).
+TANYA_PENDING = {
+    "name": "tanya_pending",
+    "description": (
+        "Deteksi bila pengguna BERTANYA tentang apa saja yang masih perlu "
+        "diverifikasi / di-acc / dikerjakan / tertunda / belum beres. Contoh "
+        "yang HARUS true: 'ada yang perlu diverifikasi?', 'apa saja yang belum "
+        "diverifikasi', 'ada tugas verifikasi?', 'masih ada yang belum di acc?', "
+        "'ada yang menunggu verifikasi', 'yang belum beres apa'. Bedakan dari "
+        "PERINTAH memverifikasi sesuatu (itu bukan pertanyaan)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_pending": {
+                "type": "boolean",
+                "description": (
+                    "true jika pengguna menanyakan daftar hal yang masih perlu "
+                    "diverifikasi/dikerjakan/tertunda. false untuk perintah aksi "
+                    "atau pertanyaan lain."
+                ),
+            }
+        },
+        "required": ["is_pending"],
+    },
+}
+
+
+# Tool cari kode batch/lot (kedua bot) — bantu pengguna yang tak hafal kode.
+CARI_KODE = {
+    "name": "cari_kode",
+    "description": (
+        "Deteksi bila pengguna BERTANYA/MENCARI kode batch gabah atau kode lot "
+        "pengeringan berdasarkan ciri (dari supplier siapa, hari apa, urutan ke "
+        "berapa, kondisi, atau yang terbaru) — karena mereka tidak hafal "
+        "kodenya. Contoh yang HARUS true: 'batch dari pak budi kodenya apa', "
+        "'kode gabah yang masuk pertama hari ini', 'gabah dari catur kemarin "
+        "kode berapa', 'kode lot terbaru', 'lot yang isinya gabah budi apa "
+        "kodenya', 'gabah kering hari ini kodenya'. "
+        "Bedakan dari pertanyaan JUMLAH/total (itu laporan, bukan cari kode)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_cari_kode": {
+                "type": "boolean",
+                "description": (
+                    "true jika pengguna ingin MENGETAHUI kode (identitas) sebuah "
+                    "batch/lot berdasarkan ciri. false untuk pertanyaan jumlah/"
+                    "total, perintah pencatatan, atau hal lain."
+                ),
+            },
+            "target": {
+                "type": ["string", "null"],
+                "enum": ["batch", "lot", None],
+                "description": (
+                    "'batch' jika mencari kode batch gabah (GB-...), 'lot' jika "
+                    "mencari kode lot pengeringan (LOT-...). null jika tak jelas "
+                    "(anggap batch)."
+                ),
+            },
+            "supplier_nama": {
+                "type": ["string", "null"],
+                "description": "Nama supplier bila disebut, mis. 'Pak Budi' -> 'Budi'.",
+            },
+            "periode": {
+                "type": ["string", "null"],
+                "enum": ["hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua", None],
+                "description": "Rentang waktu bila disebut ('hari ini','kemarin',...).",
+            },
+            "urutan": {
+                "type": ["integer", "null"],
+                "description": (
+                    "Urutan 1-based bila disebut. 'pertama'->1, 'kedua'->2, "
+                    "'ketiga'->3, 'terakhir'-> kosongkan & set terbaru=true."
+                ),
+            },
+            "kondisi": {
+                "type": ["string", "null"],
+                "enum": ["basah", "kering", None],
+                "description": "Kondisi gabah bila disebut (untuk target batch).",
+            },
+            "terbaru": {
+                "type": "boolean",
+                "description": "true bila pengguna minta yang TERBARU/TERAKHIR/BARUSAN.",
+            },
+        },
+        "required": ["is_cari_kode"],
+    },
+}
+
+
+# Tool proses pengeringan (Bot Gudang 1) — satu tool, banyak intent.
+PROSES_PENGERINGAN = {
+    "name": "proses_pengeringan",
+    "description": (
+        "Deteksi & ekstrak perintah/pertanyaan terkait PENGERINGAN gabah di "
+        "Gudang 1. Pengeringan dilakukan di MESIN PENGERING — pengguna "
+        "menyebutnya bermacam-macam: 'oven', 'dryer', 'mesin pengering', "
+        "'pengering', atau 'dikeringkan'; semua ini berarti proses pengeringan "
+        "(BUKAN silo). Empat aksi: membentuk lot pengeringan dari beberapa "
+        "batch (memasukkan gabah ke oven/dryer), mencatat log kadar air, "
+        "menandai pengeringan selesai (mengeluarkan dari oven/dryer), atau "
+        "bertanya laporan pengeringan. Jika pesan bukan tentang pengeringan "
+        "(mis. pembelian gabah, atau laporan pembelian), pilih "
+        "'bukan_pengeringan'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "bentuk_lot",
+                    "log_kadar_air",
+                    "log_pendinginan",
+                    "selesai_pengeringan",
+                    "laporan_pengeringan",
+                    "bukan_pengeringan",
+                ],
+                "description": (
+                    "'bentuk_lot': gabungkan batch gabah jadi 1 lot untuk "
+                    "dikeringkan / dimasukkan ke mesin pengering (contoh: "
+                    "'keringkan GB-... dan GB-...', 'buat lot pengeringan dari "
+                    "GB-...', 'masukkan gabah pertama dan kedua ke oven', "
+                    "'oven-kan GB-...', 'gabah GB-... masuk dryer', 'keringkan "
+                    "di mesin pengering'). "
+                    "'log_kadar_air': catat/laporkan kadar air gabah yang sedang "
+                    "dikeringkan — SELALU pilih ini bila ada angka kadar air, "
+                    "MESKIPUN kode lot tidak disebut (kode diisi dari konteks). "
+                    "Contoh: 'kadar air LOT-... 18%', 'kadar air gabah saat ini "
+                    "26%', 'kadar airnya 26 persen sekarang', 'update kadar air "
+                    "indikator 18 tes manual 17'. "
+                    "'log_pendinginan': catat proses PENDINGINAN — setelah "
+                    "pengeringan selesai, gabah tetap di dalam dryer dan hanya "
+                    "kena sirkulasi udara (bukan udara panas); tidak ada "
+                    "perpindahan/progress. Contoh: 'pendinginan LOT-...', "
+                    "'gabah didinginkan', 'mulai pendinginan', 'proses "
+                    "pendinginan', 'sirkulasi udara dingin LOT-...'. "
+                    "'selesai_pengeringan': tandai lot selesai DIKERINGKAN "
+                    "(fase pengeringan/pemanasan berakhir; berbeda dari "
+                    "pendinginan). Contoh: 'pengeringan LOT-... selesai', "
+                    "'gabah sudah kering', 'pemanasan selesai'. "
+                    "'laporan_pengeringan': pertanyaan status/laporan (contoh: "
+                    "'lot pengeringan apa yang jalan', 'kadar air LOT-... "
+                    "berapa'). "
+                    "'bukan_pengeringan': selain itu."
+                ),
+            },
+            "kode_batch_list": {
+                "type": ["array", "null"],
+                "items": {"type": "string"},
+                "description": (
+                    "Untuk bentuk_lot: daftar kode batch gabah eksplisit, format "
+                    "GB-YYYYMMDD-NN (huruf besar, tambahkan tanda '-'). "
+                    "Contoh 'gb 20260702 01' -> 'GB-20260702-01'."
+                ),
+            },
+            "batch_urutan_list": {
+                "type": ["array", "null"],
+                "items": {"type": "integer"},
+                "description": (
+                    "Untuk bentuk_lot bila pengguna merujuk batch dengan URUTAN, "
+                    "bukan kode. Angka 1-based urutan batch pembelian HARI INI. "
+                    "'pertama'->1, 'kedua'->2, 'ketiga'->3, 'keempat'->4, "
+                    "'batch 1'->1, 'gabah ke-3'->3. Contoh 'keringkan gabah "
+                    "pertama dan ketiga' -> [1, 3]. Kosongkan (null) bila "
+                    "pengguna menyebut kode GB-... eksplisit."
+                ),
+            },
+            "kode_lot": {
+                "type": ["string", "null"],
+                "description": (
+                    "Kode lot pengeringan, format LOT-YYYYMMDD-NN (huruf besar). "
+                    "Untuk log_kadar_air / selesai_pengeringan / "
+                    "laporan_pengeringan satu lot."
+                ),
+            },
+            "kadar_air_indikator": {
+                "type": ["number", "null"],
+                "description": (
+                    "Kadar air dari alat indikator (persen). '18%' -> 18. Bila "
+                    "hanya satu angka kadar air disebut, isikan ke sini."
+                ),
+            },
+            "kadar_air_tes_manual": {
+                "type": ["number", "null"],
+                "description": "Kadar air hasil tes manual (persen), bila disebut.",
+            },
+            "periode": {
+                "type": ["string", "null"],
+                "enum": ["hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua", None],
+                "description": "Periode untuk laporan_pengeringan bila disebut.",
+            },
+            "catatan": {
+                "type": ["string", "null"],
+                "description": (
+                    "Catatan bebas untuk log_pendinginan bila ada (mis. durasi "
+                    "'sirkulasi 2 jam'). Selain itu null."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
+
+
+# Tool verifikasi harga gabah (Bot Admin — staff/admin).
+VERIFIKASI_HARGA_GABAH = {
+    "name": "verifikasi_harga_gabah",
+    "description": (
+        "Ekstrak data verifikasi harga pembelian gabah dari pesan staff/admin. "
+        "Contoh: 'verifikasi GB-20260702-01 total 42 juta' atau "
+        "'verifikasi harga batch GB-20260702-01, harga 5.250 per kg'. "
+        "Jika sebuah data tidak disebut, kembalikan null."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_verifikasi_harga": {
+                "type": "boolean",
+                "description": (
+                    "true jika pesan bermaksud MENETAPKAN / MENYETUJUI / "
+                    "MENGONFIRMASI harga atau biaya sebuah batch gabah — dikenali "
+                    "dari adanya kode batch (GB-...) DAN/ATAU sebuah nilai harga, "
+                    "TANPA harus ada kata 'verifikasi'. Deteksi dari MAKNA, bukan "
+                    "kata kunci. Contoh yang HARUS true: 'verifikasi GB-...', "
+                    "'acc GB-... 42jt', 'GB-... harganya 5rb per kilo', "
+                    "'harga batch GB-... 42 juta', 'GB-20260702-01 deal 42jt', "
+                    "'setuju 5.250/kg buat GB-...', 'oke GB-... total 42 juta', "
+                    "'gabah GB-... 5250 sekilo'. false hanya untuk hal lain "
+                    "seperti pertanyaan stok, laporan, atau sapaan."
+                ),
+            },
+            "kode_batch": {
+                "type": ["string", "null"],
+                "description": (
+                    "Kode batch gabah yang diverifikasi, format GB-YYYYMMDD-NN. "
+                    "Normalkan ke huruf besar. Contoh: 'gb 20260702 01' -> "
+                    "'GB-20260702-01'."
+                ),
+            },
+            "metode_harga": {
+                "type": ["string", "null"],
+                "enum": ["total", "per_kg", None],
+                "description": (
+                    "'total' bila nilai adalah TOTAL biaya seluruh batch "
+                    "(kata kunci: total, semua). 'per_kg' bila nilai adalah "
+                    "harga PER KILOGRAM (kata kunci: per kg, /kg, perkilo). "
+                    "Jika tidak jelas, kembalikan null."
+                ),
+            },
+            "nilai_rupiah": {
+                "type": ["number", "null"],
+                "description": (
+                    "Nilai uang dalam RUPIAH (angka bulat). Konversi satuan "
+                    "Indonesia: '42 juta'/'42jt' -> 42000000; '5 ribu' -> 5000; "
+                    "'5.250' (titik = pemisah ribuan) -> 5250; "
+                    "'Rp 5.250' -> 5250."
+                ),
+            },
+        },
+        "required": ["is_verifikasi_harga"],
+    },
+}

@@ -1,0 +1,401 @@
+"""Laporan/ringkasan pembelian gabah untuk pertanyaan pengguna."""
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import now_local
+from app.models import (
+    DryingLot,
+    DryingLotBatch,
+    MillingProcess,
+    MillingProcessVerification,
+    MillingQcLog,
+    PurchaseBatch,
+    PurchaseBatchVerification,
+    Supplier,
+)
+
+_LABELS = {
+    "hari_ini": "hari ini",
+    "kemarin": "kemarin",
+    "minggu_ini": "minggu ini",
+    "bulan_ini": "bulan ini",
+    "semua": "keseluruhan",
+}
+
+
+def _range(periode: str) -> tuple[date | None, date | None]:
+    """Kembalikan (start, end) inklusif. (None, None) berarti semua data."""
+    today = now_local().date()
+    if periode == "hari_ini":
+        return today, today
+    if periode == "kemarin":
+        y = today - timedelta(days=1)
+        return y, y
+    if periode == "minggu_ini":
+        return today - timedelta(days=today.weekday()), today  # Senin s.d. hari ini
+    if periode == "bulan_ini":
+        return today.replace(day=1), today
+    return None, None  # semua
+
+
+def _fmt_kg(kg: float) -> str:
+    return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def laporan_pembelian_gabah(db: AsyncSession, periode: str | None) -> str:
+    """Teks laporan pembelian gabah untuk periode tertentu (default hari_ini)."""
+    periode = periode if periode in _LABELS else "hari_ini"
+    start, end = _range(periode)
+    label = _LABELS[periode]
+
+    stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
+        Supplier, PurchaseBatch.supplier_id == Supplier.id
+    )
+    if start is not None:
+        stmt = stmt.where(
+            PurchaseBatch.tanggal_pembelian >= start,
+            PurchaseBatch.tanggal_pembelian <= end,
+        )
+    stmt = stmt.order_by(PurchaseBatch.id)
+    rows = (await db.execute(stmt)).all()
+
+    if not rows:
+        return f"📊 Tidak ada pembelian gabah {label}."
+
+    total_kg = 0.0
+    basah_kg = 0.0
+    kering_kg = 0.0
+    unverified = 0
+    per_supplier: dict[str, list[float]] = {}  # nama -> [kg, count]
+    for batch, nama in rows:
+        kg = float(batch.berat_total_kg)
+        total_kg += kg
+        if batch.kondisi_gabah == "kering":
+            kering_kg += kg
+        else:
+            basah_kg += kg
+        if batch.flag_unverified:
+            unverified += 1
+        agg = per_supplier.setdefault(nama, [0.0, 0])
+        agg[0] += kg
+        agg[1] += 1
+
+    lines = [
+        f"📊 Pembelian gabah {label}:",
+        f"• Total: {_fmt_kg(total_kg)} dari {len(rows)} batch",
+        f"• Basah: {_fmt_kg(basah_kg)} | Kering: {_fmt_kg(kering_kg)}",
+    ]
+    lines.append("• Per supplier:")
+    for nama, (kg, cnt) in sorted(per_supplier.items(), key=lambda x: -x[1][0]):
+        lines.append(f"   - {nama}: {_fmt_kg(kg)} ({cnt} batch)")
+    if unverified:
+        lines.append(f"⚠️ {unverified} batch belum diverifikasi harganya.")
+    return "\n".join(lines)
+
+
+# ─────────────────────────── Detail / telusur ───────────────────────────
+def _rupiah(n: float | None) -> str:
+    if n is None:
+        return "-"
+    return "Rp " + f"{n:,.0f}".replace(",", ".")
+
+
+async def _resolve_batches(
+    db: AsyncSession, *, supplier, periode, urutan, kondisi, terbaru, kode
+):
+    if kode:
+        stmt = (
+            select(PurchaseBatch, Supplier.nama_supplier)
+            .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+            .where(PurchaseBatch.kode_batch == kode)
+        )
+        return (await db.execute(stmt)).all()
+    eff = _default_periode(periode, supplier=supplier, urutan=urutan, kondisi=kondisi)
+    start, end = _range(eff)
+    stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
+        Supplier, PurchaseBatch.supplier_id == Supplier.id
+    )
+    if start is not None:
+        stmt = stmt.where(
+            PurchaseBatch.tanggal_pembelian >= start,
+            PurchaseBatch.tanggal_pembelian <= end,
+        )
+    if supplier:
+        stmt = stmt.where(func.lower(Supplier.nama_supplier).like(f"%{supplier.lower()}%"))
+    if kondisi in ("basah", "kering"):
+        stmt = stmt.where(PurchaseBatch.kondisi_gabah == kondisi)
+    rows = (await db.execute(stmt.order_by(PurchaseBatch.kode_batch))).all()
+    if terbaru:
+        return rows[-1:]
+    if urutan:
+        return [rows[urutan - 1]] if 1 <= urutan <= len(rows) else []
+    return rows
+
+
+async def _batch_detail_card(db: AsyncSession, batch: PurchaseBatch, nama: str) -> str:
+    verif = (
+        await db.execute(
+            select(PurchaseBatchVerification).where(
+                PurchaseBatchVerification.purchase_batch_id == batch.id
+            )
+        )
+    ).scalars().first()
+    ka = f"{batch.kadar_air_awal_persen:g}%" if batch.kadar_air_awal_persen is not None else "-"
+    lines = [
+        f"🔎 {batch.kode_batch} — {nama}",
+        f"• Berat: {_fmt_kg(float(batch.berat_total_kg))} | Kondisi: {batch.kondisi_gabah}",
+        f"• Kadar air awal: {ka}",
+        f"• Status: {batch.status_batch}",
+    ]
+    if verif and not batch.flag_unverified:
+        lines.append(
+            f"• Harga: {_rupiah(float(verif.harga_per_kg))}/kg "
+            f"(total {_rupiah(float(verif.total_biaya))}) ✓"
+        )
+    else:
+        lines.append("• Harga: ⏳ belum diverifikasi")
+    return "\n".join(lines)
+
+
+async def _latest_kode(db: AsyncSession, model, kode_col) -> str | None:
+    return (
+        await db.execute(select(kode_col).order_by(model.id.desc()).limit(1))
+    ).scalar_one_or_none()
+
+
+async def detail_query(
+    db: AsyncSession,
+    *,
+    target: str | None,
+    kode: str | None = None,
+    supplier: str | None = None,
+    periode: str | None = None,
+    urutan: int | None = None,
+    kondisi: str | None = None,
+    terbaru: bool = False,
+    ctx_batch: str | None = None,
+    ctx_lot: str | None = None,
+    ctx_mil: str | None = None,
+) -> str:
+    from app.services.drying import laporan_pengeringan
+    from app.services.milling import laporan_milling
+
+    if kode:
+        if kode.startswith("LOT"):
+            return await laporan_pengeringan(db, kode)
+        if kode.startswith("MIL"):
+            return await laporan_milling(db, kode)
+        rows = await _resolve_batches(
+            db, supplier=None, periode=None, urutan=None, kondisi=None, terbaru=False, kode=kode
+        )
+        if not rows:
+            return f"🔎 Batch {kode} tidak ditemukan."
+        return await _batch_detail_card(db, *rows[0])
+
+    if target == "lot":
+        lk = None if terbaru else ctx_lot
+        lk = lk or await _latest_kode(db, DryingLot, DryingLot.kode_lot)
+        if not lk:
+            return "Belum ada lot pengeringan."
+        return await laporan_pengeringan(db, lk)
+
+    if target == "milling":
+        mk = None if terbaru else ctx_mil
+        mk = mk or await _latest_kode(db, MillingProcess, MillingProcess.kode_proses)
+        if not mk:
+            return "Belum ada proses giling."
+        return await laporan_milling(db, mk)
+
+    # target batch (default)
+    has_ref = any([supplier, urutan, kondisi, terbaru])
+    if not has_ref and ctx_batch:
+        rows = await _resolve_batches(
+            db, supplier=None, periode=None, urutan=None, kondisi=None, terbaru=False, kode=ctx_batch
+        )
+    else:
+        rows = await _resolve_batches(
+            db, supplier=supplier, periode=periode, urutan=urutan,
+            kondisi=kondisi, terbaru=terbaru, kode=None,
+        )
+    if not rows:
+        return "🔎 Tidak ada gabah yang cocok dengan kriteria itu."
+    cards = [await _batch_detail_card(db, b, nama) for b, nama in rows[:5]]
+    out = "\n\n".join(cards)
+    if len(rows) > 5:
+        out += f"\n\n…dan {len(rows) - 5} lagi."
+    return out
+
+
+# ─────────────────────────── Pending verifikasi ───────────────────────────
+async def pending_verifikasi(db: AsyncSession) -> str:
+    """Daftar yang masih perlu diverifikasi staff/admin."""
+    lines: list[str] = []
+
+    # 1. Harga gabah belum diverifikasi.
+    batches = (
+        await db.execute(
+            select(PurchaseBatch, Supplier.nama_supplier)
+            .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+            .where(PurchaseBatch.flag_unverified.is_(True))
+            .order_by(PurchaseBatch.kode_batch)
+        )
+    ).all()
+    if batches:
+        lines.append(f"💰 Harga gabah belum diverifikasi ({len(batches)}):")
+        for b, nama in batches[:10]:
+            lines.append(f"• {b.kode_batch} — {nama}, {_fmt_kg(float(b.berat_total_kg))}")
+
+    # 2. Output PK milling (selesai) belum diverifikasi.
+    verified_ids = select(MillingProcessVerification.milling_process_id)
+    mills = (
+        await db.execute(
+            select(MillingProcess)
+            .where(
+                MillingProcess.status == "selesai",
+                MillingProcess.id.not_in(verified_ids),
+            )
+            .order_by(MillingProcess.kode_proses)
+        )
+    ).scalars().all()
+    if mills:
+        lines.append(f"\n⚙️ Output PK belum diverifikasi ({len(mills)}):")
+        for m in mills[:10]:
+            lines.append(f"• {m.kode_proses}")
+
+    # 3. Milling (selesai) belum ada QC.
+    qc_ids = select(MillingQcLog.milling_process_id).distinct()
+    no_qc = (
+        await db.execute(
+            select(MillingProcess.kode_proses)
+            .where(
+                MillingProcess.status == "selesai",
+                MillingProcess.id.not_in(qc_ids),
+            )
+            .order_by(MillingProcess.kode_proses)
+        )
+    ).scalars().all()
+    if no_qc:
+        lines.append(f"\n🔬 Milling belum ada QC ({len(no_qc)}):")
+        for k in no_qc[:10]:
+            lines.append(f"• {k}")
+
+    if not lines:
+        return "✅ Tidak ada yang perlu diverifikasi. Semua beres."
+    return "📋 Perlu ditindaklanjuti:\n" + "\n".join(lines)
+
+
+# ─────────────────────────── Cari kode ───────────────────────────
+def _default_periode(periode: str | None, *, supplier: str | None, urutan: int | None,
+                     kondisi: str | None) -> str:
+    if periode in _LABELS:
+        return periode
+    if urutan or kondisi:
+        return "hari_ini"
+    if supplier:
+        return "semua"
+    return "hari_ini"
+
+
+async def _lot_supplier_names(db: AsyncSession, lot_id: int) -> list[str]:
+    stmt = (
+        select(Supplier.nama_supplier)
+        .select_from(DryingLotBatch)
+        .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+        .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+        .where(DryingLotBatch.drying_lot_id == lot_id)
+        .distinct()
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def cari_kode(
+    db: AsyncSession,
+    *,
+    target: str | None,
+    supplier: str | None = None,
+    periode: str | None = None,
+    urutan: int | None = None,
+    kondisi: str | None = None,
+    terbaru: bool = False,
+) -> str:
+    """Cari kode batch/lot berdasarkan ciri (supplier/hari/urutan/kondisi/terbaru)."""
+    eff = _default_periode(periode, supplier=supplier, urutan=urutan, kondisi=kondisi)
+    label = _LABELS[eff]
+    start, end = _range(eff)
+
+    if target == "lot":
+        stmt = select(DryingLot)
+        if start is not None:
+            stmt = stmt.where(
+                func.date(DryingLot.created_at) >= start,
+                func.date(DryingLot.created_at) <= end,
+            )
+        if supplier:
+            sub = (
+                select(DryingLotBatch.drying_lot_id)
+                .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+                .where(func.lower(Supplier.nama_supplier).like(f"%{supplier.lower()}%"))
+            )
+            stmt = stmt.where(DryingLot.id.in_(sub))
+        lots = list((await db.execute(stmt.order_by(DryingLot.kode_lot))).scalars().all())
+        ket = f"{label}" + (f", supplier {supplier}" if supplier else "")
+        if not lots:
+            return f"🔎 Tidak ada lot pengeringan yang cocok ({ket})."
+        if terbaru:
+            lots = lots[-1:]
+        elif urutan:
+            if not 1 <= urutan <= len(lots):
+                return f"🔎 Lot ke-{urutan} tidak ada (hanya {len(lots)} cocok, {ket})."
+            lots = [lots[urutan - 1]]
+        lines = [f"🔎 Kode lot ({ket}):"]
+        for lot in lots[:10]:
+            sups = ", ".join(await _lot_supplier_names(db, lot.id)) or "-"
+            lines.append(f"• {lot.kode_lot} — {lot.status}, dari {sups}")
+        if len(lots) > 10:
+            lines.append(f"…dan {len(lots) - 10} lot lain.")
+        return "\n".join(lines)
+
+    # target batch (default)
+    stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
+        Supplier, PurchaseBatch.supplier_id == Supplier.id
+    )
+    if start is not None:
+        stmt = stmt.where(
+            PurchaseBatch.tanggal_pembelian >= start,
+            PurchaseBatch.tanggal_pembelian <= end,
+        )
+    if supplier:
+        stmt = stmt.where(func.lower(Supplier.nama_supplier).like(f"%{supplier.lower()}%"))
+    if kondisi in ("basah", "kering"):
+        stmt = stmt.where(PurchaseBatch.kondisi_gabah == kondisi)
+    rows = (await db.execute(stmt.order_by(PurchaseBatch.kode_batch))).all()
+
+    ket_parts = [label]
+    if supplier:
+        ket_parts.append(f"supplier {supplier}")
+    if kondisi:
+        ket_parts.append(kondisi)
+    ket = ", ".join(ket_parts)
+    if not rows:
+        return f"🔎 Tidak ada batch yang cocok ({ket})."
+    if terbaru:
+        rows = rows[-1:]
+    elif urutan:
+        if not 1 <= urutan <= len(rows):
+            return f"🔎 Batch ke-{urutan} tidak ada (hanya {len(rows)} cocok, {ket})."
+        rows = [rows[urutan - 1]]
+    lines = [f"🔎 Kode batch ({ket}):"]
+    for batch, nama in rows[:10]:
+        flag = " · belum diverifikasi" if batch.flag_unverified else ""
+        lines.append(
+            f"• {batch.kode_batch} — {nama}, {_fmt_kg(float(batch.berat_total_kg))}, "
+            f"{batch.kondisi_gabah}{flag}"
+        )
+    if len(rows) > 10:
+        lines.append(f"…dan {len(rows) - 10} batch lain.")
+    return "\n".join(lines)

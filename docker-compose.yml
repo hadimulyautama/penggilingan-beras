@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: penggilingan_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: milluser
+      POSTGRES_PASSWORD: millpass
+      POSTGRES_DB: penggilingan
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U milluser -d penggilingan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
