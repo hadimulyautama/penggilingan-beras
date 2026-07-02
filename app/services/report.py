@@ -230,6 +230,42 @@ async def detail_query(
     return out
 
 
+# ─────────────────────────── Status berjalan ───────────────────────────
+async def status_gudang1(db: AsyncSession) -> str:
+    """Gabungan semua proses yang sedang berlangsung di Gudang 1."""
+    from app.services.drying import dryer_load_kg, laporan_pengeringan
+    from app.services.milling import laporan_milling
+    from app.services.transfer import laporan_pk_siap_transfer
+
+    # Milling berjalan?
+    mill_running = (
+        await db.execute(
+            select(func.count())
+            .select_from(MillingProcess)
+            .where(MillingProcess.status == "proses")
+        )
+    ).scalar_one()
+    # Gabah di dryer (dikeringkan/didinginkan)?
+    in_dryer = await dryer_load_kg(db)
+
+    if not mill_running and in_dryer <= 0:
+        return (
+            "📍 Gudang 1: tidak ada proses yang sedang berlangsung saat ini.\n"
+            "(Tidak ada pengeringan, pendinginan, maupun giling aktif.)"
+        )
+
+    parts = ["📍 Yang sedang berlangsung di Gudang 1:\n"]
+    if in_dryer > 0:
+        parts.append(await laporan_pengeringan(db))
+    if mill_running:
+        parts.append(await laporan_milling(db))
+    # Info tambahan PK menunggu transfer (bila ada).
+    trf = await laporan_pk_siap_transfer(db)
+    if "Tidak ada" not in trf:
+        parts.append(trf)
+    return "\n\n".join(parts)
+
+
 # ─────────────────────────── Pending verifikasi ───────────────────────────
 async def pending_verifikasi(db: AsyncSession) -> str:
     """Daftar yang masih perlu diverifikasi staff/admin."""

@@ -113,6 +113,55 @@ TANYA_LAPORAN_GABAH = {
 }
 
 
+# Tool transfer internal Gudang 1 -> Gudang 2 (PK siap transfer).
+PROSES_TRANSFER = {
+    "name": "proses_transfer",
+    "description": (
+        "Deteksi & ekstrak perintah/pertanyaan TRANSFER PK dari Gudang 1 ke "
+        "Gudang 2. PK yang ditandai 'siap transfer' saat milling dikirim ke "
+        "Gudang 2 oleh staff/admin. Aksi: buat transfer (kirim PK ke Gudang 2), "
+        "tanya PK yang siap transfer, atau tanya riwayat transfer. Jika bukan "
+        "tentang transfer antar gudang, pilih 'bukan_transfer'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "buat_transfer",
+                    "laporan_siap_transfer",
+                    "laporan_transfer",
+                    "bukan_transfer",
+                ],
+                "description": (
+                    "'buat_transfer': kirim PK siap-transfer ke Gudang 2 "
+                    "(contoh: 'transfer PK dari MIL-... ke silo A', 'kirim PK "
+                    "siap transfer ke tumpukan gudang 2', 'transfer ke silo B'). "
+                    "'laporan_siap_transfer': tanya PK yang menunggu transfer "
+                    "(contoh: 'ada PK siap transfer?', 'PK siap dikirim berapa'). "
+                    "'laporan_transfer': riwayat transfer (contoh: 'transfer hari "
+                    "ini', 'sudah transfer apa saja'). 'bukan_transfer': lainnya."
+                ),
+            },
+            "kode_proses": {
+                "type": ["string", "null"],
+                "description": "Kode proses milling sumber, MIL-YYYYMMDD-NN (huruf besar).",
+            },
+            "lokasi_tujuan": {
+                "type": ["string", "null"],
+                "enum": ["silo_a", "silo_b", "ditumpuk", None],
+                "description": (
+                    "Tujuan di Gudang 2: 'silo A'->silo_a, 'silo B'->silo_b, "
+                    "'tumpuk/ditumpuk/tumpukan'->ditumpuk."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
+
+
 # Tool milling sisi staff/admin (Bot Admin): QC & verifikasi output PK.
 PROSES_MILLING_ADMIN = {
     "name": "proses_milling_admin",
@@ -175,11 +224,16 @@ PROSES_MILLING_ADMIN = {
 PROSES_MILLING = {
     "name": "proses_milling",
     "description": (
-        "Deteksi & ekstrak perintah/pertanyaan terkait MILLING / PECAH KULIT / "
-        "GILING gabah menjadi beras PK di Gudang 1. Aksi: mulai giling dari "
-        "silo, catat progress berat PK, arahkan PK keluar (tumpuk di buffer / "
-        "siap transfer), tandai giling selesai, atau tanya laporan giling & "
-        "stok PK. Jika bukan tentang milling, pilih 'bukan_milling'."
+        "Deteksi & ekstrak perintah/pertanyaan terkait MILLING gabah menjadi "
+        "beras PK di Gudang 1. Operator menyebut proses ini bermacam-macam — "
+        "semua ARTINYA SAMA: 'milling', 'pecah kulit', 'giling', 'selep', "
+        "'selepan', 'husking', atau 'proses'. Aksi: mulai proses dari isi "
+        "silo, catat progress berat PK, arahkan PK keluar (tumpuk/siap "
+        "transfer), tandai selesai, atau tanya laporan giling & stok PK. "
+        "PENTING: 'mulai proses silo A' / 'mulai proses selep silo A' / 'selep "
+        "silo A' BERARTI mulai_milling memakai bahan di silo itu (BUKAN tanya "
+        "status silo). Jika benar-benar bukan tentang milling, pilih "
+        "'bukan_milling'."
     ),
     "input_schema": {
         "type": "object",
@@ -196,15 +250,22 @@ PROSES_MILLING = {
                     "bukan_milling",
                 ],
                 "description": (
-                    "'mulai_milling': mulai giling isi silo (contoh: 'giling "
-                    "silo A', 'mulai milling silo B'). "
+                    "'mulai_milling': mulai proses milling/selep/husking/giling "
+                    "memakai gabah yang ADA DI SILO (contoh: 'giling silo A', "
+                    "'mulai milling silo B', 'mulai proses silo A', 'mulai "
+                    "proses selep silo A', 'selep silo A', 'husking silo A', "
+                    "'mulai proses husking silo A', 'proses giling silo A', "
+                    "'selepan silo A'). "
                     "'progress_milling': catat berat PK kumulatif yang sudah "
                     "keluar (contoh: 'progress giling MIL-... 5 ton', 'PK MIL-... "
                     "sudah 5000 kg'). "
                     "'routing_pk': arahkan PK yang keluar (contoh: 'tumpuk 3 ton "
                     "PK dari MIL-...', 'siap transfer 2 ton dari MIL-...'). "
-                    "'selesai_milling': giling selesai (contoh: 'MIL-... "
-                    "selesai giling'). "
+                    "'selesai_milling': proses milling/selep/giling/husking "
+                    "SELESAI (contoh: 'MIL-... selesai giling', 'proses selep "
+                    "selesai', 'selep selesai', 'giling selesai', 'milling "
+                    "selesai', 'selesai giling', 'husking selesai', 'proses "
+                    "giling selesai'). Kode proses boleh tidak disebut. "
                     "'laporan_milling': status/laporan giling. "
                     "'stok_pk': tanya stok PK buffer Gudang 1. "
                     "'bukan_milling': selain itu."
@@ -247,13 +308,14 @@ PROSES_SILO = {
     "description": (
         "Deteksi & ekstrak perintah/pertanyaan terkait SILO gabah kering di "
         "Gudang 1 (Silo A / Silo B) — tempat PENYIMPANAN gabah yang SUDAH "
-        "kering, BUKAN mesin pengering. PENTING: 'oven', 'dryer', 'mesin "
-        "pengering', 'pengering' itu proses pengeringan, BUKAN silo -> "
-        "'bukan_silo'. Silo hanya 'Silo A' atau 'Silo B'. Tiga aksi: "
-        "memasukkan gabah ke silo (dari lot pengeringan yang sudah selesai, "
-        "atau batch gabah kering langsung), mengeluarkan/mengosongkan silo, "
-        "atau menanyakan isi/status silo. Jika bukan tentang silo, pilih "
-        "'bukan_silo'."
+        "kering. Tiga aksi silo: memasukkan gabah ke silo, mengeluarkan/"
+        "mengosongkan silo, atau menanyakan isi/status/kapasitas silo. "
+        "PENTING — pilih 'bukan_silo' bila pesan sebenarnya tentang: "
+        "(a) pengeringan ('oven', 'dryer', 'mesin pengering'); ATAU "
+        "(b) MEMULAI PROSES/MILLING dari isi silo — mis. 'mulai proses silo A', "
+        "'mulai proses selep silo A', 'selep silo A', 'giling silo A', "
+        "'husking silo A', 'proses silo A' (ini perintah milling, bukan silo). "
+        "Silo hanya soal simpan/keluarkan/status, bukan memproses isinya."
     ),
     "input_schema": {
         "type": "object",
@@ -356,6 +418,37 @@ TANYA_DETAIL = {
             },
         },
         "required": ["is_detail"],
+    },
+}
+
+
+# Tool tanya status umum "apa yang sedang berlangsung" (semua bot).
+TANYA_STATUS = {
+    "name": "tanya_status",
+    "description": (
+        "Deteksi bila pengguna menanyakan secara UMUM apa yang sedang "
+        "berlangsung / status kegiatan sekarang di gudang — mencakup "
+        "pengeringan, pendinginan, dan milling/giling/selep sekaligus. Contoh "
+        "yang HARUS true: 'proses apa yang sedang berlangsung', 'lagi proses "
+        "apa', 'ada kegiatan apa sekarang', 'status gudang 1 sekarang', "
+        "'sedang ngerjain apa', 'apa yang sedang jalan'. Bukan pertanyaan "
+        "spesifik satu proses tertentu."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_status": {
+                "type": "boolean",
+                "description": (
+                    "true HANYA jika menanyakan KEGIATAN/PROSES yang sedang "
+                    "AKTIF berlangsung sekarang ('lagi proses apa', 'ada "
+                    "kegiatan apa', 'sedang giling/mengeringkan apa'). "
+                    "false untuk pertanyaan JUMLAH/TOTAL ('berapa gabah masuk "
+                    "hari ini'), harga, stok, kode, atau laporan angka lainnya."
+                ),
+            }
+        },
+        "required": ["is_status"],
     },
 }
 
@@ -463,9 +556,11 @@ PROSES_PENGERINGAN = {
         "(BUKAN silo). Empat aksi: membentuk lot pengeringan dari beberapa "
         "batch (memasukkan gabah ke oven/dryer), mencatat log kadar air, "
         "menandai pengeringan selesai (mengeluarkan dari oven/dryer), atau "
-        "bertanya laporan pengeringan. Jika pesan bukan tentang pengeringan "
-        "(mis. pembelian gabah, atau laporan pembelian), pilih "
-        "'bukan_pengeringan'."
+        "bertanya laporan pengeringan. PENTING: kata 'selep', 'giling', "
+        "'milling', 'husking', 'pecah kulit' adalah proses MILLING (bukan "
+        "pengeringan) — mis. 'selep selesai' / 'giling selesai' -> "
+        "'bukan_pengeringan'. Jika pesan bukan tentang pengeringan (pembelian, "
+        "milling, atau laporan pembelian), pilih 'bukan_pengeringan'."
     ),
     "input_schema": {
         "type": "object",

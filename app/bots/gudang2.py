@@ -14,6 +14,8 @@ from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
+from app.bots.status_flow import maybe_answer_status
+from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import SessionLocal
 
 router = Router(name="gudang2")
@@ -55,6 +57,12 @@ async def handle_message(message: Message) -> None:
         )
         return
 
+    # Transfer G1->G2 (laporan / arahan)?
+    if await maybe_answer_transfer(message, text):
+        return
+    # Status proses berjalan?
+    if await maybe_answer_status(message, text):
+        return
     # Tugas tertunda?
     if await maybe_answer_pending(message, text):
         return

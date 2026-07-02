@@ -11,10 +11,12 @@ from app.ai.tools import (
     PROSES_MILLING_ADMIN,
     PROSES_PENGERINGAN,
     PROSES_SILO,
+    PROSES_TRANSFER,
     SYSTEM_PROMPT,
     TANYA_DETAIL,
     TANYA_LAPORAN_GABAH,
     TANYA_PENDING,
+    TANYA_STATUS,
     VERIFIKASI_HARGA_GABAH,
 )
 from app.config import settings
@@ -163,6 +165,24 @@ async def parse_milling(text: str) -> ParsedMilling:
 
 
 @dataclass
+class ParsedTransfer:
+    intent: str = "bukan_transfer"
+    kode_proses: str | None = None
+    lokasi_tujuan: str | None = None
+
+
+async def parse_transfer(text: str) -> ParsedTransfer:
+    """Klasifikasi & ekstraksi perintah transfer internal G1->G2."""
+    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_TRANSFER)
+    kode = data.get("kode_proses")
+    return ParsedTransfer(
+        intent=data.get("intent", "bukan_transfer"),
+        kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
+        lokasi_tujuan=data.get("lokasi_tujuan"),
+    )
+
+
+@dataclass
 class ParsedMillingAdmin:
     intent: str = "bukan_milling_admin"
     kode_proses: str | None = None
@@ -264,6 +284,12 @@ async def parse_pending(text: str) -> bool:
     """True bila pengguna menanyakan daftar tugas/verifikasi yang tertunda."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_PENDING)
     return bool(data.get("is_pending", False))
+
+
+async def parse_status(text: str) -> bool:
+    """True bila pengguna menanyakan status umum apa yang sedang berlangsung."""
+    data = await _invoke_tool([{"role": "user", "content": text}], TANYA_STATUS)
+    return bool(data.get("is_status", False))
 
 
 @dataclass

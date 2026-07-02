@@ -36,6 +36,19 @@ async def get_process_by_kode(db: AsyncSession, kode: str) -> MillingProcess | N
     ).scalars().first()
 
 
+async def sole_active_milling_kode(db: AsyncSession) -> str | None:
+    """Kode proses bila TEPAT ADA SATU milling yang sedang 'proses'; else None.
+
+    Memungkinkan 'giling selesai' / 'progress 5 ton' tanpa menyebut kode.
+    """
+    rows = (
+        await db.execute(
+            select(MillingProcess.kode_proses).where(MillingProcess.status == "proses")
+        )
+    ).scalars().all()
+    return rows[0] if len(rows) == 1 else None
+
+
 async def _storage_kg(db: AsyncSession, st: SiloStorage) -> float:
     if st.drying_lot_id:
         stmt = (

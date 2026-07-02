@@ -28,6 +28,8 @@ from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
+from app.bots.status_flow import maybe_answer_status
+from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import SessionLocal
 from app.services.drying import (
     DryingError,
@@ -51,6 +53,7 @@ from app.services.milling import (
     laporan_milling,
     log_progress,
     route_pk,
+    sole_active_milling_kode,
     start_milling,
     stok_pk_gudang1,
 )
@@ -263,6 +266,10 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
         if await _handle_silo(message, db, user, text, session):
             return
         if await _handle_milling(message, db, user, text, session):
+            return
+        if await maybe_answer_transfer(message, text):
+            return
+        if await maybe_answer_status(message, text):
             return
         if await maybe_answer_pending(message, text):
             return
@@ -528,8 +535,10 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
     ):
         return True
 
-    # Kode proses dari pesan atau konteks ("progress 5 ton", "selesai").
+    # Kode proses dari pesan, konteks, atau satu-satunya giling yang berjalan.
     kode = p.kode_proses or _mil_code(text) or session.ctx_mil
+    if not kode and p.intent in ("progress_milling", "routing_pk", "selesai_milling"):
+        kode = await sole_active_milling_kode(db)
     try:
         if p.intent == "mulai_milling":
             res = await start_milling(db, user=user, nama_silo=p.nama_silo or session.ctx_silo)

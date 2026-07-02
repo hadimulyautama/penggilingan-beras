@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.ai.nlp_parser import (
     ParsedVerification,
     parse_milling_admin,
+    parse_transfer,
     parse_verification,
 )
 from app.bots.common import (
@@ -29,12 +30,19 @@ from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
+from app.bots.status_flow import maybe_answer_status
 from app.database import SessionLocal
 from app.models import User, Warehouse
 from app.services.milling import (
     MillingError,
     log_qc_milling,
     verify_milling_output,
+)
+from app.services.transfer import (
+    TransferError,
+    create_internal_transfer,
+    laporan_pk_siap_transfer,
+    laporan_transfer,
 )
 from app.services.verification import (
     compute_price,
@@ -173,6 +181,63 @@ def _pct(v: float | None) -> str:
     return f"{v:g}%" if v is not None else "-"
 
 
+def _kg(kg: float) -> str:
+    return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def _handle_transfer(message: Message, db, user, text: str, session) -> bool:
+    """Buat transfer G1->G2 / laporan (staff/admin). True jika ditangani."""
+    try:
+        p = await parse_transfer(text)
+    except Exception:
+        log.exception("parse_transfer gagal")
+        return False
+    if p.intent == "bukan_transfer":
+        return False
+
+    try:
+        if p.intent == "buat_transfer":
+            kode = p.kode_proses or _extract_mil(text) or session.ctx_mil
+            if not kode:
+                await message.answer(
+                    "Sebutkan proses milling sumbernya, contoh:\n"
+                    "`transfer PK MIL-20260702-01 ke silo A`",
+                    parse_mode="Markdown",
+                )
+                return True
+            if p.lokasi_tujuan not in ("silo_a", "silo_b", "ditumpuk"):
+                await message.answer(
+                    "Ditransfer ke mana di Gudang 2 — *Silo A*, *Silo B*, atau "
+                    "*tumpukan*?",
+                    parse_mode="Markdown",
+                )
+                return True
+            r = await create_internal_transfer(
+                db, user=user, kode_proses=kode, lokasi_tujuan=p.lokasi_tujuan
+            )
+            session.ctx_mil = r.kode_proses
+            hpp = (
+                f"\n• HPP snapshot: {_rp(float(r.hpp_per_kg))}/kg"
+                if r.hpp_per_kg is not None
+                else "\n• HPP: belum tersedia (output milling belum diverifikasi)"
+            )
+            await message.answer(
+                f"✓ Transfer *{r.transfer.kode_transfer}*: "
+                f"{_kg(float(r.transfer.berat_kg))} PK dari {r.kode_proses} → "
+                f"{r.lokasi_label} Gudang 2.{hpp}",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "laporan_siap_transfer":
+            await message.answer(await laporan_pk_siap_transfer(db))
+        elif p.intent == "laporan_transfer":
+            await message.answer(await laporan_transfer(db))
+        else:
+            return False
+    except TransferError as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan transfer.")
+    return True
+
+
 async def _handle_milling_admin(message: Message, db, user, text: str, session) -> bool:
     """QC / verifikasi output milling (staff/admin). True jika ditangani."""
     try:
@@ -277,8 +342,16 @@ async def handle_message(message: Message) -> None:
             await _advance_verif(message, db, tg_id, session)
             return
 
+        # ── Transfer G1->G2 (buat / laporan) ──
+        if await _handle_transfer(message, db, user, text, session):
+            return
+
         # ── Aksi milling (QC / verifikasi output) — cek sebelum verifikasi harga ──
         if await _handle_milling_admin(message, db, user, text, session):
+            return
+
+        # ── Status proses berjalan ("proses apa yang sedang berlangsung") ──
+        if await maybe_answer_status(message, text):
             return
 
         # ── Pertanyaan tugas tertunda ("ada yang perlu diverifikasi?") ──

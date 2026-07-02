@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
-from app.models import DryingLot, MillingProcess, PurchaseBatch
+from app.models import DryingLot, InternalTransfer, MillingProcess, PurchaseBatch
 
 
 async def _next_sequence(db: AsyncSession, prefix: str, count_stmt) -> str:
@@ -54,3 +54,15 @@ async def next_milling_code(db: AsyncSession) -> str:
         .where(MillingProcess.created_at >= start)
     )
     return await _next_sequence(db, "MIL", stmt)
+
+
+async def next_transfer_code(db: AsyncSession) -> str:
+    """Kode transfer internal: TRF-YYYYMMDD-NN (reset per hari)."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(InternalTransfer)
+        .where(InternalTransfer.created_at >= start)
+    )
+    return await _next_sequence(db, "TRF", stmt)

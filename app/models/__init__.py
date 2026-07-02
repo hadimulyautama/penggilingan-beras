@@ -11,6 +11,7 @@ from app.models.gudang1 import (
     SiloStorage,
 )
 from app.models.system import ActivityLog, Notification
+from app.models.transfer import InternalTransfer
 from app.models.milling import (
     MillingPkRouting,
     MillingProcess,
@@ -43,6 +44,8 @@ __all__ = [
     "MillingQcLog",
     "MillingProcessVerification",
     "PkStockGudang1",
+    # transfer
+    "InternalTransfer",
     # system
     "ActivityLog",
     "Notification",
