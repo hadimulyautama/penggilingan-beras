@@ -156,6 +156,25 @@ class DryingCoolingLog(Base):
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
+class SiloMovingLog(Base):
+    """Log proses pemindahan gabah dari dryer ke silo (butuh waktu).
+
+    Sekadar catatan kondisional (mulai/selesai). State sesungguhnya (gabah di
+    silo, dryer kosong) ditangani oleh silo_storage.
+    """
+
+    __tablename__ = "silo_moving_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
+    silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
+    # mulai / selesai
+    tipe: Mapped[str] = mapped_column(String(10), nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    catatan: Mapped[str | None] = mapped_column(String(255))
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
 class SiloStorage(Base, TimestampMixin):
     """Penyimpanan gabah kering di silo. 1 silo = 1 lot sekaligus.
 

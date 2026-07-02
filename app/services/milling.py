@@ -14,7 +14,6 @@ from app.models import (
     MillingProcessVerification,
     MillingProgressLog,
     MillingQcLog,
-    PkStockGudang1,
     PurchaseBatch,
     Silo,
     SiloStorage,
@@ -195,23 +194,9 @@ async def route_pk(
             input_by=user.id,
         )
     )
+    # Catatan: stok buffer PK tidak lagi dibukukan terpisah di sini — ia
+    # diturunkan dari PK yang dihasilkan (progress) via _pk_breakdown.
     buffer_total = None
-    if tujuan == "tumpuk":
-        stock = (
-            await db.execute(
-                select(PkStockGudang1).where(PkStockGudang1.milling_process_id == proc.id)
-            )
-        ).scalars().first()
-        if stock is None:
-            stock = PkStockGudang1(
-                drying_lot_id=proc.drying_lot_id,
-                milling_process_id=proc.id,
-                berat_kg=0,
-                status="tersedia",
-            )
-            db.add(stock)
-        stock.berat_kg = float(stock.berat_kg) + berat
-
     await log_activity(
         db, table_name="milling_pk_routing", record_id=proc.id, action="INSERT",
         changed_by=user.id, new_value=f"{tujuan} {berat:.0f}kg dari {proc.kode_proses}",
@@ -219,15 +204,7 @@ async def route_pk(
     await db.commit()
 
     if tujuan == "tumpuk":
-        buffer_total = float(
-            (
-                await db.execute(
-                    select(func.coalesce(func.sum(PkStockGudang1.berat_kg), 0)).where(
-                        PkStockGudang1.status == "tersedia"
-                    )
-                )
-            ).scalar_one()
-        )
+        buffer_total = await _buffer_g1_total(db)
     return RouteResult(proc=proc, tujuan=tujuan, berat=berat, buffer_total=buffer_total)
 
 
@@ -236,6 +213,7 @@ async def route_pk(
 class FinishResult:
     proc: MillingProcess
     nama_silo: str | None
+    produced: float
     total_tumpuk: float
     total_transfer: float
 
@@ -282,28 +260,19 @@ async def finish_milling(db: AsyncSession, *, user, kode_proses: str | None) -> 
         if b:
             b.status_batch = "digiling"
 
-    tot_tumpuk, tot_transfer = await _routing_totals(db, proc.id)
+    bd = await _pk_breakdown(db, proc.id)
     await log_activity(
         db, table_name="milling_process", record_id=proc.id, action="UPDATE",
         changed_by=user.id, field_name="status", new_value="selesai",
     )
     await db.commit()
-    return FinishResult(proc=proc, nama_silo=nama_silo, total_tumpuk=tot_tumpuk, total_transfer=tot_transfer)
+    return FinishResult(
+        proc=proc, nama_silo=nama_silo, produced=bd.produced,
+        total_tumpuk=bd.ditumpuk, total_transfer=bd.siap_transfer,
+    )
 
 
 # ─────────────────────────── Laporan ───────────────────────────
-async def _routing_totals(db: AsyncSession, proc_id: int) -> tuple[float, float]:
-    rows = (
-        await db.execute(
-            select(MillingPkRouting.tujuan, func.sum(MillingPkRouting.berat_kg))
-            .where(MillingPkRouting.milling_process_id == proc_id)
-            .group_by(MillingPkRouting.tujuan)
-        )
-    ).all()
-    d = {t: float(s) for t, s in rows}
-    return d.get("tumpuk", 0.0), d.get("siap_transfer", 0.0)
-
-
 async def _latest_progress(db: AsyncSession, proc_id: int) -> float | None:
     v = (
         await db.execute(
@@ -314,6 +283,76 @@ async def _latest_progress(db: AsyncSession, proc_id: int) -> float | None:
         )
     ).scalar_one_or_none()
     return float(v) if v is not None else None
+
+
+async def _transfer_split(db: AsyncSession, proc_id: int) -> tuple[float, float]:
+    """(PK siap-transfer yang masih menunggu, PK yang sudah ditransfer)."""
+    rows = (
+        await db.execute(
+            select(
+                MillingPkRouting.status_transfer,
+                func.coalesce(func.sum(MillingPkRouting.berat_kg), 0),
+            )
+            .where(
+                MillingPkRouting.milling_process_id == proc_id,
+                MillingPkRouting.tujuan == "siap_transfer",
+            )
+            .group_by(MillingPkRouting.status_transfer)
+        )
+    ).all()
+    d = {s: float(v) for s, v in rows}
+    return d.get("menunggu", 0.0), d.get("ditransfer", 0.0)
+
+
+async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
+    """PK yang dihasilkan = progress kumulatif terakhir (hasil yang di-update
+    operator). Bila belum ada progress, pakai total routing (alur lama)."""
+    v = await _latest_progress(db, proc_id)
+    if v is not None:
+        return v
+    r = (
+        await db.execute(
+            select(func.coalesce(func.sum(MillingPkRouting.berat_kg), 0)).where(
+                MillingPkRouting.milling_process_id == proc_id
+            )
+        )
+    ).scalar_one()
+    return float(r)
+
+
+@dataclass
+class PkBreakdown:
+    produced: float       # total PK dihasilkan (hasil yang di-update operator)
+    ditumpuk: float       # tetap di buffer G1 (belum ditandai transfer)
+    siap_transfer: float  # ditandai siap kirim, belum dikirim
+    sudah_transfer: float  # sudah ditransfer ke Gudang 2
+    buffer_g1: float      # fisik masih di G1 = produced - sudah_transfer
+
+
+async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
+    """PK per proses diturunkan dari hasil produksi, bukan dari routing manual.
+
+    Default: seluruh PK yang dihasilkan dianggap ditumpuk di buffer G1, kecuali
+    bagian yang secara eksplisit ditandai 'siap transfer' / sudah ditransfer.
+    """
+    produced = await _produced_pk(db, proc_id)
+    pending, done = await _transfer_split(db, proc_id)
+    pending = min(pending, produced)
+    done = min(done, max(produced - pending, 0.0))
+    ditumpuk = max(produced - pending - done, 0.0)
+    buffer = max(produced - done, 0.0)
+    return PkBreakdown(produced, ditumpuk, pending, done, buffer)
+
+
+async def _buffer_g1_total(db: AsyncSession) -> float:
+    """Total PK yang masih fisik di buffer Gudang 1 (semua proses)."""
+    ids = (
+        await db.execute(select(MillingProcess.id))
+    ).scalars().all()
+    total = 0.0
+    for pid in ids:
+        total += (await _pk_breakdown(db, pid)).buffer_g1
+    return total
 
 
 def _kg(kg: float) -> str:
@@ -328,13 +367,15 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
             return f"Proses {kode_proses} tidak ditemukan."
         masuk = float(proc.berat_gabah_masuk_kg or 0)
         prog = await _latest_progress(db, proc.id)
-        tumpuk, transfer = await _routing_totals(db, proc.id)
+        bd = await _pk_breakdown(db, proc.id)
         lines = [
             f"⚙️ {proc.kode_proses} — status: {proc.status}",
             f"• Gabah masuk: {_kg(masuk)}",
-            f"• PK keluar (progress): {_kg(prog) if prog is not None else '-'}",
-            f"• Ditumpuk: {_kg(tumpuk)} | Siap transfer: {_kg(transfer)}",
+            f"• PK dihasilkan: {_kg(bd.produced)}",
+            f"• Ditumpuk (buffer G1): {_kg(bd.ditumpuk)} | Siap transfer: {_kg(bd.siap_transfer)}",
         ]
+        if bd.sudah_transfer > 0:
+            lines.append(f"• Sudah ditransfer: {_kg(bd.sudah_transfer)}")
         if prog is not None and masuk:
             lines.append(f"• Rendemen sementara: {prog / masuk * 100:.1f}%")
         return "\n".join(lines)
@@ -357,20 +398,30 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
 
 
 async def stok_pk_gudang1(db: AsyncSession) -> str:
-    rows = (
+    """Stok PK di buffer Gudang 1, diturunkan dari hasil produksi tiap proses.
+
+    PK yang dihasilkan (hasil yang di-update operator saat giling) otomatis
+    dihitung sebagai stok buffer, tanpa perlu langkah routing manual.
+    """
+    procs = (
         await db.execute(
-            select(MillingProcess.kode_proses, PkStockGudang1.berat_kg)
-            .join(MillingProcess, PkStockGudang1.milling_process_id == MillingProcess.id)
-            .where(PkStockGudang1.status == "tersedia", PkStockGudang1.berat_kg > 0)
-            .order_by(MillingProcess.kode_proses)
+            select(MillingProcess).order_by(MillingProcess.kode_proses)
         )
-    ).all()
-    if not rows:
+    ).scalars().all()
+    items: list[tuple[str, PkBreakdown]] = []
+    for proc in procs:
+        bd = await _pk_breakdown(db, proc.id)
+        if bd.buffer_g1 > 0:
+            items.append((proc.kode_proses, bd))
+    if not items:
         return "📦 Buffer PK Gudang 1 kosong."
-    total = sum(float(b) for _, b in rows)
+    total = sum(bd.buffer_g1 for _, bd in items)
     lines = [f"📦 Stok PK buffer Gudang 1: {_kg(total)} (maks {_kg(BUFFER_MAKS_KG)})"]
-    for kode, b in rows:
-        lines.append(f"• dari {kode}: {_kg(float(b))}")
+    for kode, bd in items:
+        detail = f"• dari {kode}: {_kg(bd.buffer_g1)}"
+        if bd.siap_transfer > 0:
+            detail += f" (termasuk siap transfer {_kg(bd.siap_transfer)})"
+        lines.append(detail)
     if total > BUFFER_MAKS_KG:
         lines.append("⚠️ Melebihi kapasitas buffer!")
     return "\n".join(lines)

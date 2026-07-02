@@ -314,23 +314,43 @@ PROSES_SILO = {
         "(a) pengeringan ('oven', 'dryer', 'mesin pengering'); ATAU "
         "(b) MEMULAI PROSES/MILLING dari isi silo — mis. 'mulai proses silo A', "
         "'mulai proses selep silo A', 'selep silo A', 'giling silo A', "
-        "'husking silo A', 'proses silo A' (ini perintah milling, bukan silo). "
-        "Silo hanya soal simpan/keluarkan/status, bukan memproses isinya."
+        "'husking silo A', 'proses silo A' (ini perintah milling, bukan silo); "
+        "ATAU (c) STOK/HASIL PK — mis. 'stok pk', 'berapa stok pk', 'stok beras "
+        "pk', 'pk yang ditumpuk' (ini soal buffer PK hasil giling, bukan silo). "
+        "Silo hanya soal simpan/keluarkan/status GABAH, bukan memproses isinya "
+        "dan bukan stok PK."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "intent": {
                 "type": "string",
-                "enum": ["masuk_silo", "keluar_silo", "laporan_silo", "bukan_silo"],
+                "enum": [
+                    "masuk_silo",
+                    "pindah_mulai",
+                    "pindah_selesai",
+                    "keluar_silo",
+                    "laporan_silo",
+                    "bukan_silo",
+                ],
                 "description": (
-                    "'masuk_silo': masukkan gabah ke silo (contoh: 'masukkan "
-                    "LOT-... ke silo A', 'gabah GB-... masuk silo B langsung'). "
+                    "'masuk_silo': perintah langsung memasukkan gabah ke silo "
+                    "(contoh: 'masukkan LOT-... ke silo A', 'gabah GB-... masuk "
+                    "silo B langsung'). "
+                    "'pindah_mulai': MEMBERITAHU proses pemindahan gabah dari "
+                    "dryer ke silo DIMULAI/sedang berlangsung — gabah BELUM di "
+                    "silo (contoh: 'mulai pindah ke silo A', 'sedang "
+                    "memindahkan ke silo B', 'proses pindah ke silo A dimulai'). "
+                    "'pindah_selesai': MEMBERITAHU pemindahan ke silo SELESAI — "
+                    "gabah kini sudah di silo (contoh: 'pemindahan ke silo A "
+                    "selesai', 'sudah dipindah ke silo A', 'selesai pindah ke "
+                    "silo B', 'gabah sudah masuk silo A'). "
                     "'keluar_silo': kosongkan silo (contoh: 'kosongkan silo A'). "
-                    "'laporan_silo': status / isi / KAPASITAS silo (contoh: "
-                    "'silo apa yang terisi', 'isi silo A apa', 'kapasitas silo "
-                    "berapa', 'kapasitas maksimal silo', 'silo muat berapa "
-                    "ton'). 'bukan_silo': selain itu."
+                    "'laporan_silo': status / isi / KAPASITAS silo, khusus GABAH "
+                    "(contoh: 'silo apa yang terisi', 'isi silo A apa', "
+                    "'kapasitas silo berapa', 'kapasitas maksimal silo', 'silo "
+                    "muat berapa ton'). JANGAN pakai laporan_silo untuk stok PK "
+                    "hasil giling — itu 'bukan_silo'. 'bukan_silo': selain itu."
                 ),
             },
             "nama_silo": {

@@ -12,6 +12,7 @@ from app.models import (
     DryingLotBatch,
     PurchaseBatch,
     Silo,
+    SiloMovingLog,
     SiloStorage,
     Supplier,
     Warehouse,
@@ -206,6 +207,95 @@ async def masuk_silo(
     )
     await db.commit()
     return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe)
+
+
+# ─────────────────── Log pemindahan dryer -> silo ───────────────────
+async def _lot_active_storage(db: AsyncSession, lot_id: int) -> SiloStorage | None:
+    return (
+        await db.execute(
+            select(SiloStorage).where(
+                SiloStorage.drying_lot_id == lot_id, SiloStorage.status == "terisi"
+            )
+        )
+    ).scalars().first()
+
+
+async def moving_started(
+    db: AsyncSession, *, user, nama_silo: str | None, kode_lot: str | None
+) -> tuple[str, str | None]:
+    """Catat log 'mulai pemindahan' ke silo. Gabah masih di dryer."""
+    if not kode_lot:
+        raise SiloError(
+            "Sebutkan lot-nya, contoh: `mulai pindah LOT-20260702-01 ke silo A`"
+        )
+    lot = (
+        await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
+    ).scalars().first()
+    if lot is None:
+        raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
+    silo = await get_g1_silo(db, nama_silo) if nama_silo else None
+    db.add(
+        SiloMovingLog(
+            drying_lot_id=lot.id,
+            silo_id=silo.id if silo else None,
+            tipe="mulai",
+            waktu=now_local(),
+            input_by=user.id,
+        )
+    )
+    await db.commit()
+    return lot.kode_lot, nama_silo
+
+
+@dataclass
+class MovingDoneResult:
+    kode_lot: str
+    nama_silo: str
+    kondisi: str  # "intake" (baru masuk) | "already" (sudah tercatat sebelumnya)
+    kg: float | None
+
+
+async def moving_finished(
+    db: AsyncSession, *, user, nama_silo: str | None, kode_lot: str | None
+) -> MovingDoneResult:
+    """Pemindahan ke silo selesai. Kondisional: intake bila belum, else log saja."""
+    if not kode_lot:
+        raise SiloError(
+            "Sebutkan lot-nya, contoh: `pemindahan LOT-20260702-01 ke silo A selesai`"
+        )
+    lot = (
+        await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
+    ).scalars().first()
+    if lot is None:
+        raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
+
+    existing = await _lot_active_storage(db, lot.id)
+    if existing:
+        # Sudah tercatat di silo -> cukup log 'selesai'.
+        silo = await db.get(Silo, existing.silo_id)
+        db.add(
+            SiloMovingLog(
+                drying_lot_id=lot.id, silo_id=existing.silo_id, tipe="selesai",
+                waktu=now_local(), input_by=user.id,
+            )
+        )
+        await db.commit()
+        nama = silo.nama_silo.replace("Silo ", "") if silo else "-"
+        return MovingDoneResult(kode_lot=lot.kode_lot, nama_silo=nama, kondisi="already", kg=None)
+
+    # Belum di silo -> lakukan intake (state: di silo + dryer kosong).
+    res = await masuk_silo(db, user=user, nama_silo=nama_silo, kode_lot=kode_lot, kode_batch=None)
+    silo = await get_g1_silo(db, res.nama_silo)
+    db.add(
+        SiloMovingLog(
+            drying_lot_id=lot.id, silo_id=silo.id if silo else None, tipe="selesai",
+            waktu=now_local(), input_by=user.id,
+        )
+    )
+    await db.commit()
+    return MovingDoneResult(
+        kode_lot=lot.kode_lot, nama_silo=res.nama_silo, kondisi="intake", kg=res.kg
+    )
 
 
 # ─────────────────────────── Keluar silo ───────────────────────────

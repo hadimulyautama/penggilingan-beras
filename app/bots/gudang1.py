@@ -62,6 +62,8 @@ from app.services.silo import (
     keluar_silo,
     laporan_silo,
     masuk_silo,
+    moving_finished,
+    moving_started,
 )
 
 router = Router(name="gudang1")
@@ -261,6 +263,9 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
         await message.answer(AI_ERROR_MSG)
         return
     if not parsed.is_pembelian_gabah:
+        # "selesai" ambigu (drying & milling bisa berbarengan) — tangani dulu.
+        if await _handle_bare_finish(message, db, user, text, session):
+            return
         if await _handle_pengeringan(message, db, user, text, session):
             return
         if await _handle_silo(message, db, user, text, session):
@@ -371,6 +376,91 @@ def _lot_code(text: str) -> str | None:
     return f"LOT-{m.group(1)}-{m.group(2)}" if m else None
 
 
+def _mentions_drying(text: str) -> bool:
+    """Teks jelas menyebut pengeringan (bukan milling)?"""
+    low = text.lower()
+    return any(w in low for w in ("kering", "oven", "dryer", "pengering", "jemur"))
+
+
+def _mentions_milling(text: str) -> bool:
+    """Teks jelas menyebut milling/giling?"""
+    low = text.lower()
+    return any(w in low for w in ("selep", "giling", "milling", "husking", "pecah kulit"))
+
+
+def _is_bare_finish(text: str) -> bool:
+    """'selesai/beres/kelar' tanpa kode & tanpa penanda domain (ambigu)."""
+    low = text.lower()
+    if not any(w in low for w in ("selesai", "beres", "kelar", "rampung")):
+        return False
+    if _lot_code(text) or _mil_code(text):
+        return False
+    return not (_mentions_drying(text) or _mentions_milling(text))
+
+
+async def _handle_bare_finish(message: Message, db, user, text: str, session) -> bool:
+    """Tangani 'selesai' ambigu: pengeringan & milling bisa berjalan bersamaan.
+
+    Pakai konteks terakhir; bila dua-duanya aktif tanpa konteks jelas, tanya.
+    """
+    if not _is_bare_finish(text):
+        return False
+    if not await _require_operator(message, user, session, text, "Menandai proses selesai"):
+        return True
+
+    lot = await sole_active_lot_kode(db)      # satu-satunya drying 'proses', else None
+    mill = await sole_active_milling_kode(db)  # satu-satunya milling 'proses', else None
+
+    target = None  # ("drying"|"milling", kode)
+    if lot and mill:
+        if session.ctx_last == "lot":
+            target = ("drying", lot)
+        elif session.ctx_last == "mil":
+            target = ("milling", mill)
+        else:
+            await message.answer(
+                "Yang mana yang selesai?\n"
+                f"• Pengeringan *{lot}*\n"
+                f"• Giling *{mill}*\n"
+                "Sebutkan, mis. `pengeringan selesai` / `giling selesai`.",
+                parse_mode="Markdown",
+            )
+            return True
+    elif lot:
+        target = ("drying", lot)
+    elif mill:
+        target = ("milling", mill)
+    else:
+        await message.answer(
+            "Tidak ada proses tunggal yang bisa diselesaikan. Sebutkan kodenya, "
+            "mis. `LOT-... selesai` atau `MIL-... selesai`."
+        )
+        return True
+
+    try:
+        if target[0] == "drying":
+            lotobj, dur = await finish_drying(db, user=user, kode_lot=target[1])
+            session.ctx_lot = lotobj.kode_lot
+            session.ctx_last = "lot"
+            await message.answer(
+                f"✓ {lotobj.kode_lot} selesai dikeringkan. Durasi {dur:.1f} jam.\n"
+                "Berikutnya: pendinginan (gabah tetap di dryer)."
+            )
+        else:
+            res = await finish_milling(db, user=user, kode_proses=target[1])
+            session.ctx_mil = res.proc.kode_proses
+            session.ctx_last = "mil"
+            silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
+            await message.answer(
+                f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
+                f"• Ditumpuk: {_fmt_berat(res.total_tumpuk)} | "
+                f"Siap transfer: {_fmt_berat(res.total_transfer)}"
+            )
+    except (DryingError, MillingError) as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan.")
+    return True
+
+
 async def _handle_pengeringan(message: Message, db, user, text: str, session) -> bool:
     """Tangani intent pengeringan. Kembalikan True jika sudah ditangani."""
     try:
@@ -407,6 +497,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 )
             res = await create_drying_lot(db, user=user, kode_batch_list=kodes)
             session.ctx_lot = res.lot.kode_lot
+            session.ctx_last = "lot"
             total = f"{res.total_kg:,.0f}".replace(",", ".")
             await message.answer(
                 f"✓ Lot *{res.lot.kode_lot}* dibentuk ({res.kondisi}).\n"
@@ -424,6 +515,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 tes_manual=p.kadar_air_tes_manual,
             )
             session.ctx_lot = res.lot.kode_lot
+            session.ctx_last = "lot"
             jeda = (
                 f" (jeda {res.jam_sejak_log_sebelumnya:.1f} jam dari log sebelumnya)"
                 if res.jam_sejak_log_sebelumnya is not None
@@ -438,6 +530,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 db, user=user, kode_lot=lot_kode, catatan=p.catatan
             )
             session.ctx_lot = lot.kode_lot
+            session.ctx_last = "lot"
             note = f" — {p.catatan}" if p.catatan else ""
             mulai = " (mulai)" if first else f" (log ke-{cnt})"
             await message.answer(
@@ -447,6 +540,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
         elif p.intent == "selesai_pengeringan":
             lot, dur = await finish_drying(db, user=user, kode_lot=lot_kode)
             session.ctx_lot = lot.kode_lot
+            session.ctx_last = "lot"
             await message.answer(
                 f"✓ {lot.kode_lot} selesai dikeringkan (pemanasan berhenti). "
                 f"Durasi {dur:.1f} jam.\nBerikutnya: pendinginan (gabah tetap di dryer)."
@@ -473,7 +567,12 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
     if p.intent == "bukan_silo":
         return False
 
-    _WRITE = {"masuk_silo": "Memasukkan gabah ke silo", "keluar_silo": "Mengosongkan silo"}
+    _WRITE = {
+        "masuk_silo": "Memasukkan gabah ke silo",
+        "pindah_mulai": "Mencatat mulai pemindahan ke silo",
+        "pindah_selesai": "Mencatat pemindahan ke silo selesai",
+        "keluar_silo": "Mengosongkan silo",
+    }
     if p.intent in _WRITE and not await _require_operator(
         message, user, session, text, _WRITE[p.intent]
     ):
@@ -493,6 +592,7 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
             session.ctx_silo = res.nama_silo
             if res.tipe == "dari_pengeringan":
                 session.ctx_lot = res.isi
+                session.ctx_last = "lot"
             asal = "dari pengeringan" if res.tipe == "dari_pengeringan" else "kering langsung"
             total = f"{res.kg:,.0f}".replace(",", ".")
             await message.answer(
@@ -500,6 +600,47 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                 f"• Berat: {total} kg",
                 parse_mode="Markdown",
             )
+        elif p.intent == "pindah_mulai":
+            kode_lot = (
+                p.kode_lot or _lot_code(text) or session.ctx_lot
+                or await sole_cooling_lot_kode(db)
+            )
+            lot_kode, silo = await moving_started(
+                db, user=user, nama_silo=nama_silo, kode_lot=kode_lot
+            )
+            session.ctx_lot = lot_kode
+            session.ctx_last = "lot"
+            tujuan = f" ke *Silo {silo}*" if silo else ""
+            await message.answer(
+                f"✓ Dicatat: mulai pindah {lot_kode}{tujuan}.\n"
+                "Gabah masih di dryer sampai pemindahan selesai.",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "pindah_selesai":
+            kode_lot = (
+                p.kode_lot or _lot_code(text) or session.ctx_lot
+                or await sole_cooling_lot_kode(db)
+            )
+            res = await moving_finished(
+                db, user=user, nama_silo=nama_silo, kode_lot=kode_lot
+            )
+            session.ctx_silo = res.nama_silo
+            session.ctx_lot = res.kode_lot
+            session.ctx_last = "lot"
+            if res.kondisi == "intake":
+                total = f"{res.kg:,.0f}".replace(",", ".") if res.kg else "-"
+                await message.answer(
+                    f"✓ {res.kode_lot} selesai dipindah ke *Silo {res.nama_silo}*.\n"
+                    f"• Tercatat di silo, dryer kini kosong.\n"
+                    f"• Berat: {total} kg",
+                    parse_mode="Markdown",
+                )
+            else:
+                await message.answer(
+                    f"✓ Dicatat: pemindahan {res.kode_lot} ke *Silo {res.nama_silo}* "
+                    "selesai (gabah sudah tercatat di silo sebelumnya).",
+                    parse_mode="Markdown",
+                )
         elif p.intent == "keluar_silo":
             nama = await keluar_silo(db, user=user, nama_silo=nama_silo)
             session.ctx_silo = nama
@@ -543,6 +684,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
         if p.intent == "mulai_milling":
             res = await start_milling(db, user=user, nama_silo=p.nama_silo or session.ctx_silo)
             session.ctx_mil = res.proc.kode_proses
+            session.ctx_last = "mil"
             await message.answer(
                 f"✓ Mulai giling *{res.proc.kode_proses}* dari Silo {res.nama_silo}.\n"
                 f"• Gabah masuk: {_fmt_berat(res.berat_masuk)}\n"
@@ -553,6 +695,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
         elif p.intent == "progress_milling":
             res = await log_progress(db, user=user, kode_proses=kode, berat_kumulatif=p.berat_kg)
             session.ctx_mil = res.proc.kode_proses
+            session.ctx_last = "mil"
             rend = f" · rendemen ~{res.rendemen_persen:.1f}%" if res.rendemen_persen else ""
             await message.answer(
                 f"✓ Progress {res.proc.kode_proses}: PK {_fmt_berat(res.berat_kumulatif)}{rend}."
@@ -560,6 +703,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
         elif p.intent == "routing_pk":
             res = await route_pk(db, user=user, kode_proses=kode, berat=p.berat_kg, tujuan=p.tujuan)
             session.ctx_mil = res.proc.kode_proses
+            session.ctx_last = "mil"
             if res.tujuan == "tumpuk":
                 extra = f"\nBuffer PK G1 kini: {_fmt_berat(res.buffer_total)}"
             else:
@@ -572,10 +716,12 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
         elif p.intent == "selesai_milling":
             res = await finish_milling(db, user=user, kode_proses=kode)
             session.ctx_mil = res.proc.kode_proses
+            session.ctx_last = "mil"
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
             await message.answer(
                 f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
-                f"• Ditumpuk: {_fmt_berat(res.total_tumpuk)} | "
+                f"• PK dihasilkan: {_fmt_berat(res.produced)}\n"
+                f"• Ditumpuk (buffer G1): {_fmt_berat(res.total_tumpuk)} | "
                 f"Siap transfer: {_fmt_berat(res.total_transfer)}\n"
                 "_QC & verifikasi output oleh staff/admin menyusul._",
                 parse_mode="Markdown",

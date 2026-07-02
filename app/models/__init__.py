@@ -8,6 +8,7 @@ from app.models.gudang1 import (
     DryingMoistureLog,
     PurchaseBatch,
     PurchaseBatchVerification,
+    SiloMovingLog,
     SiloStorage,
 )
 from app.models.system import ActivityLog, Notification
@@ -36,6 +37,7 @@ __all__ = [
     "DryingLotBatch",
     "DryingMoistureLog",
     "DryingCoolingLog",
+    "SiloMovingLog",
     "SiloStorage",
     # milling
     "MillingProcess",
