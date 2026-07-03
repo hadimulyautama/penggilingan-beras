@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import (
+    DryingLot,
     DryingLotBatch,
     MillingPkRouting,
     MillingProcess,
@@ -17,6 +18,7 @@ from app.models import (
     PurchaseBatch,
     Silo,
     SiloStorage,
+    Supplier,
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_milling_code
@@ -355,6 +357,35 @@ async def _buffer_g1_total(db: AsyncSession) -> float:
     return total
 
 
+async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> list[str]:
+    """Supplier asal bahan sebuah proses giling: lewat lot pengeringan (batch
+    gabungan) atau batch langsung."""
+    if proc.drying_lot_id:
+        rows = (
+            await db.execute(
+                select(Supplier.nama_supplier)
+                .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
+                .join(
+                    DryingLotBatch,
+                    DryingLotBatch.purchase_batch_id == PurchaseBatch.id,
+                )
+                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
+                .distinct()
+            )
+        ).scalars().all()
+        return list(rows)
+    if proc.purchase_batch_id:
+        nama = (
+            await db.execute(
+                select(Supplier.nama_supplier)
+                .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
+                .where(PurchaseBatch.id == proc.purchase_batch_id)
+            )
+        ).scalars().first()
+        return [nama] if nama else []
+    return []
+
+
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
@@ -368,8 +399,16 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
         masuk = float(proc.berat_gabah_masuk_kg or 0)
         prog = await _latest_progress(db, proc.id)
         bd = await _pk_breakdown(db, proc.id)
+        suppliers = await _milling_supplier_names(db, proc)
+        nama = ", ".join(suppliers) if suppliers else "-"
+        asal_lot = ""
+        if proc.drying_lot_id:
+            lot = await db.get(DryingLot, proc.drying_lot_id)
+            if lot:
+                asal_lot = f" (via {lot.kode_lot})"
         lines = [
-            f"⚙️ {proc.kode_proses} — status: {proc.status}",
+            f"⚙️ Giling {proc.kode_proses} — bahan dari {nama}{asal_lot}",
+            f"• Status: {proc.status}",
             f"• Gabah masuk: {_kg(masuk)}",
             f"• PK dihasilkan: {_kg(bd.produced)}",
             f"• Ditumpuk (buffer G1): {_kg(bd.ditumpuk)} | Siap transfer: {_kg(bd.siap_transfer)}",

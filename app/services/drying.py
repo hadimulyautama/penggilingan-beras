@@ -17,6 +17,7 @@ from app.models import (
     Notification,
     PurchaseBatch,
     SiloStorage,
+    Supplier,
     Warehouse,
 )
 from app.services.activity_log import log_activity
@@ -401,6 +402,20 @@ def _fmt_ka(log: DryingMoistureLog | None) -> str:
     return " / ".join(parts) if parts else "-"
 
 
+async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
+    """Nama supplier asal bahan sebuah lot pengeringan (lewat batch gabungan)."""
+    rows = (
+        await db.execute(
+            select(Supplier.nama_supplier)
+            .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
+            .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+            .where(DryingLotBatch.drying_lot_id == lot_id)
+            .distinct()
+        )
+    ).scalars().all()
+    return list(rows)
+
+
 async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> str:
     now = now_local()
     if kode_lot:
@@ -409,8 +424,11 @@ async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> 
             return f"Lot {kode_lot} tidak ditemukan."
         n = await _batch_count(db, lot.id)
         log = await _latest_log(db, lot.id)
+        sups = await _lot_suppliers(db, lot.id)
+        nama = ", ".join(sups) if sups else "-"
         lines = [
-            f"🌾 {lot.kode_lot} — status: {lot.status}",
+            f"🌾 Lot pengeringan {lot.kode_lot} — bahan dari {nama}",
+            f"• Status: {lot.status}",
             f"• Jumlah batch: {n}",
             f"• Kadar air terbaru: {_fmt_ka(log)}",
         ]

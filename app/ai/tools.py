@@ -266,7 +266,13 @@ PROSES_MILLING = {
                     "selesai', 'selep selesai', 'giling selesai', 'milling "
                     "selesai', 'selesai giling', 'husking selesai', 'proses "
                     "giling selesai'). Kode proses boleh tidak disebut. "
-                    "'laporan_milling': status/laporan giling. "
+                    "'laporan_milling': status/laporan giling yang SEDANG "
+                    "berjalan (contoh: 'giling apa yang jalan', 'status giling', "
+                    "'laporan milling'). Pertanyaan DETAIL sebuah proses tertentu "
+                    "atau proses TERAKHIR — mis. asal bahan/supplier ('proses pk "
+                    "terakhir dari bahan siapa', 'giling terakhir gabahnya dari "
+                    "siapa'), rendemen/hasil MIL-... — BUKAN laporan_milling, "
+                    "pilih 'bukan_milling' (ditangani modul detail). "
                     "'stok_pk': tanya stok PK buffer Gudang 1. "
                     "'bukan_milling': selain itu."
                 ),
@@ -316,9 +322,15 @@ PROSES_SILO = {
         "'mulai proses selep silo A', 'selep silo A', 'giling silo A', "
         "'husking silo A', 'proses silo A' (ini perintah milling, bukan silo); "
         "ATAU (c) STOK/HASIL PK — mis. 'stok pk', 'berapa stok pk', 'stok beras "
-        "pk', 'pk yang ditumpuk' (ini soal buffer PK hasil giling, bukan silo). "
-        "Silo hanya soal simpan/keluarkan/status GABAH, bukan memproses isinya "
-        "dan bukan stok PK."
+        "pk', 'pk yang ditumpuk' (ini soal buffer PK hasil giling, bukan silo); "
+        "ATAU (d) pertanyaan asal/detail gabah/lot/proses yang TIDAK menyebut "
+        "kata 'silo' sama sekali — mis. 'gabah terakhir dari siapa', 'proses "
+        "terakhir bahan dari siapa' (→ bukan_silo). ATURAN KUNCI: jika pesan "
+        "menyebut 'silo' / 'silo A' / 'silo B', pertanyaan tentang isi/asal/"
+        "pemilik/status silo SELALU 'laporan_silo' — TERMASUK 'bahan di silo A "
+        "punya siapa', 'isi silo B dari siapa', 'silo A punya siapa'. Exclusion "
+        "(d) hanya berlaku bila kata 'silo' TIDAK ada. Silo hanya soal simpan/"
+        "keluarkan/status GABAH di silo, bukan memproses isinya dan bukan stok PK."
     ),
     "input_schema": {
         "type": "object",
@@ -387,8 +399,10 @@ TANYA_DETAIL = {
         "true: 'berapa harga gabah yang pertama masuk hari ini', 'berat gabah "
         "dari budi berapa', 'kadar air lot terbaru berapa', 'status GB-... "
         "gimana', 'gabah kedua sudah diverifikasi belum', 'rendemen MIL-... "
-        "berapa', 'gabah pertama dari siapa'. Entitas dirujuk lewat supplier, "
-        "hari, urutan (pertama/kedua), kondisi, 'terbaru', atau kode langsung."
+        "berapa', 'gabah pertama dari siapa', 'proses pk/giling terakhir dari "
+        "bahan/supplier siapa saja', 'milling terakhir gabahnya dari siapa' "
+        "(target=milling, terbaru=true). Entitas dirujuk lewat supplier, hari, "
+        "urutan (pertama/kedua), kondisi, 'terbaru/terakhir', atau kode langsung."
     ),
     "input_schema": {
         "type": "object",
@@ -407,7 +421,10 @@ TANYA_DETAIL = {
                 "enum": ["batch", "lot", "milling", None],
                 "description": (
                     "Jenis entitas: 'batch' (gabah GB-), 'lot' (pengeringan "
-                    "LOT-), 'milling' (giling MIL-). null -> anggap batch."
+                    "LOT-), 'milling' (giling MIL-). PENTING: kata 'PK' / 'pecah "
+                    "kulit' / 'proses PK' / 'hasil giling' / 'selep' -> "
+                    "target='milling' (PK adalah OUTPUT milling, bukan lot "
+                    "pengeringan). null -> anggap batch."
                 ),
             },
             "kode": {
@@ -579,7 +596,10 @@ PROSES_PENGERINGAN = {
         "bertanya laporan pengeringan. PENTING: kata 'selep', 'giling', "
         "'milling', 'husking', 'pecah kulit' adalah proses MILLING (bukan "
         "pengeringan) — mis. 'selep selesai' / 'giling selesai' -> "
-        "'bukan_pengeringan'. Jika pesan bukan tentang pengeringan (pembelian, "
+        "'bukan_pengeringan'. JUGA 'bukan_pengeringan' untuk pertanyaan tentang "
+        "PK / hasil giling / 'proses PK' / 'stok PK' / asal-bahan sebuah milling "
+        "('proses pk terakhir dari bahan siapa', 'giling terakhir gabahnya dari "
+        "supplier siapa'). Jika pesan bukan tentang pengeringan (pembelian, "
         "milling, atau laporan pembelian), pilih 'bukan_pengeringan'."
     ),
     "input_schema": {
