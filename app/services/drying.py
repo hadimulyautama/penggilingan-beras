@@ -242,6 +242,15 @@ async def create_drying_lot(
         )
     kondisi = kondisi_set.pop()
 
+    # ATURAN: 1 dryer = maksimal 1 lot. Bila dryer sudah berisi lot 'proses',
+    # batch baru WAJIB digabung ke lot itu (bukan bikin lot baru).
+    occupied = await active_drying_lot(db)
+    if occupied is not None:
+        raise DryingError(
+            f"Dryer sudah berisi lot {occupied.kode_lot}. Gabungkan batch ke lot "
+            "itu, atau kosongkan dryer dulu (pindah ke silo)."
+        )
+
     # Batasan kapasitas mesin pengering (sumber daya).
     new_total = sum(float(b.berat_total_kg) for b in batches)
     dryer = await _g1_dryer(db)
