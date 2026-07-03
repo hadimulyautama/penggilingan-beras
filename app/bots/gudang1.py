@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import re
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
@@ -22,7 +22,9 @@ from app.bots.common import (
     UNDO_PHRASES,
     authenticate,
     get_session,
+    handle_shared_contact,
     reset_draft,
+    unregistered_reply,
 )
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
@@ -131,12 +133,13 @@ async def cmd_start(message: Message) -> None:
 
 
 async def _reject_unregistered(message: Message) -> None:
-    await message.answer(
-        "⛔ Nomor Telegram Anda belum terdaftar sebagai pengguna sistem.\n"
-        f"ID Telegram Anda: `{message.from_user.id}`\n"
-        "Minta admin mendaftarkan ID ini.",
-        parse_mode="Markdown",
-    )
+    await unregistered_reply(message)
+
+
+@router.message(F.contact)
+async def on_contact(message: Message) -> None:
+    """Aktivasi akun via kontak (untuk user yang didaftarkan pakai nomor HP)."""
+    await handle_shared_contact(message)
 
 
 @router.message()

@@ -33,6 +33,7 @@ def _parse_iso_date(v) -> date | None:
 from app.ai.tools import (
     CARI_KODE,
     CATAT_PEMBELIAN_GABAH,
+    KELOLA_USER,
     PROSES_MILLING,
     PROSES_MILLING_ADMIN,
     PROSES_PENGERINGAN,
@@ -334,6 +335,36 @@ async def parse_status(text: str) -> bool:
     """True bila pengguna menanyakan status umum apa yang sedang berlangsung."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_STATUS)
     return bool(data.get("is_status", False))
+
+
+@dataclass
+class ParsedUserAdmin:
+    intent: str = "bukan_user"
+    nama: str | None = None
+    role: str | None = None
+    gudang: int | None = None
+    telegram_id: int | None = None
+    no_hp: str | None = None
+    ref: str | None = None
+
+
+async def parse_user_admin(text: str) -> ParsedUserAdmin:
+    """Deteksi perintah admin mengelola pengguna."""
+    data = await _invoke_tool([{"role": "user", "content": text}], KELOLA_USER)
+    tid = data.get("telegram_id")
+    gud = data.get("gudang")
+    nama = data.get("nama")
+    hp = data.get("no_hp")
+    ref = data.get("ref")
+    return ParsedUserAdmin(
+        intent=data.get("intent", "bukan_user"),
+        nama=nama.strip() if isinstance(nama, str) and nama.strip() else None,
+        role=data.get("role"),
+        gudang=int(gud) if isinstance(gud, (int, float)) else None,
+        telegram_id=int(tid) if isinstance(tid, (int, float)) else None,
+        no_hp=hp.strip() if isinstance(hp, str) and hp.strip() else None,
+        ref=ref.strip() if isinstance(ref, str) and ref.strip() else None,
+    )
 
 
 @dataclass

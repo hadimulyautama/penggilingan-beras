@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import re
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from app.ai.nlp_parser import (
     ParsedVerification,
     parse_milling_admin,
     parse_transfer,
+    parse_user_admin,
     parse_verification,
 )
 from app.bots.common import (
@@ -24,7 +25,9 @@ from app.bots.common import (
     CONFIRM_WORDS,
     authenticate,
     get_session,
+    handle_shared_contact,
     reset_verif,
+    unregistered_reply,
 )
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
@@ -46,6 +49,12 @@ from app.services.transfer import (
     laporan_transfer,
 )
 from app.services.report import resolve_batch_kode_ref
+from app.services.user_admin import (
+    UserAdminError,
+    list_users,
+    register_user,
+    set_user_status,
+)
 from app.services.verification import (
     compute_price,
     get_batch_by_kode,
@@ -98,10 +107,13 @@ async def cmd_start(message: Message) -> None:
         "*Milling* (QC & output PK):\n"
         "• `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`\n"
         "• `verifikasi output MIL-20260702-01 14 ton`\n\n"
+        "*Kelola pengguna* (admin) — ketik natural:\n"
+        "• `daftarkan operator Budi id 12345678 gudang 1`\n"
+        "• `tambah staff Sari hp 081234567890`\n"
+        "• `daftar user` · `nonaktifkan Budi`\n"
+        "  (via HP: orangnya tekan tombol *Bagikan Nomor HP* untuk aktivasi)\n\n"
         "Perintah lain:\n"
-        "• `/whoami` — lihat identitas Anda\n"
-        "• `/daftar <telegram_id> <nama> <role>` — daftarkan pengguna baru\n"
-        "  role: operator | staff | admin",
+        "• `/whoami` — lihat identitas Anda",
         parse_mode="Markdown",
     )
 
@@ -169,6 +181,12 @@ async def cmd_daftar(message: Message) -> None:
         await message.answer(f"✓ {nama} terdaftar sebagai {role} (ID {tg_id}).")
 
 
+@router.message(F.contact)
+async def on_contact(message: Message) -> None:
+    """Aktivasi akun via kontak (untuk user yang didaftarkan pakai nomor HP)."""
+    await handle_shared_contact(message)
+
+
 def _merge_verif(cur: ParsedVerification, new: ParsedVerification) -> ParsedVerification:
     """Isi field yang masih kosong dari jawaban lanjutan staff."""
     return ParsedVerification(
@@ -185,6 +203,36 @@ def _pct(v: float | None) -> str:
 
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def _handle_user_admin(message: Message, db, user, text: str) -> bool:
+    """Kelola pengguna (admin): daftar/list/aktif/nonaktif. True jika ditangani."""
+    try:
+        p = await parse_user_admin(text)
+    except Exception:
+        log.exception("parse_user_admin gagal")
+        return False
+    if p.intent == "bukan_user":
+        return False
+    try:
+        if p.intent == "daftar_user":
+            teks = await register_user(
+                db, actor=user, nama=p.nama, role=p.role, gudang=p.gudang,
+                telegram_id=p.telegram_id, no_hp=p.no_hp,
+            )
+        elif p.intent == "list_user":
+            teks = await list_users(db)
+        elif p.intent == "aktifkan_user":
+            teks = await set_user_status(db, actor=user, ref=p.ref or p.nama, aktif=True)
+        elif p.intent == "nonaktifkan_user":
+            teks = await set_user_status(db, actor=user, ref=p.ref or p.nama, aktif=False)
+        else:
+            return False
+    except UserAdminError as e:
+        await message.answer(str(e.args[0]) if e.args else "Kesalahan kelola user.", parse_mode="Markdown")
+        return True
+    await message.answer(teks, parse_mode="Markdown")
+    return True
 
 
 async def _handle_transfer(message: Message, db, user, text: str, session) -> bool:
@@ -296,10 +344,7 @@ async def handle_message(message: Message) -> None:
     async with SessionLocal() as db:
         user = await authenticate(db, tg_id)
         if not user:
-            await message.answer(
-                f"⛔ Belum terdaftar. ID Telegram Anda: `{tg_id}`",
-                parse_mode="Markdown",
-            )
+            await unregistered_reply(message)
             return
         if user.role not in {"admin", "staff"}:
             await message.answer(
@@ -342,6 +387,10 @@ async def handle_message(message: Message) -> None:
                 return
             session.verif_draft = _merge_verif(session.verif_draft, new)
             await _advance_verif(message, db, tg_id, session)
+            return
+
+        # ── Kelola pengguna (daftar/list/aktif/nonaktif) ──
+        if await _handle_user_admin(message, db, user, text):
             return
 
         # ── Transfer G1->G2 (buat / laporan) ──

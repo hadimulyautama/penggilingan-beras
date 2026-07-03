@@ -4,10 +4,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from aiogram.types import (
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.nlp_parser import ParsedPurchase, ParsedVerification
+from app.database import SessionLocal
 from app.models import User
 
 # ── Kata kunci sederhana (hemat panggilan AI untuk hal yang pasti) ──
@@ -22,6 +29,61 @@ async def authenticate(db: AsyncSession, telegram_user_id: int) -> User | None:
         User.telegram_user_id == telegram_user_id, User.status == "aktif"
     )
     return (await db.execute(stmt)).scalars().first()
+
+
+def share_contact_keyboard() -> ReplyKeyboardMarkup:
+    """Tombol untuk membagikan nomor HP (aktivasi user pra-daftar via HP)."""
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Bagikan Nomor HP", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+async def unregistered_reply(message: Message) -> None:
+    """Balasan standar untuk pengirim yang belum terdaftar (+ tombol kontak)."""
+    await message.answer(
+        "⛔ Nomor Telegram Anda belum terdaftar.\n"
+        f"ID Telegram Anda: `{message.from_user.id}`\n\n"
+        "Kalau admin sudah mendaftarkan Anda pakai *nomor HP*, tekan tombol "
+        "*📱 Bagikan Nomor HP* di bawah untuk aktivasi otomatis. "
+        "Kalau belum, sebutkan ID di atas ke admin.",
+        parse_mode="Markdown",
+        reply_markup=share_contact_keyboard(),
+    )
+
+
+async def handle_shared_contact(message: Message) -> None:
+    """Tangani kontak yang dibagikan: cocokkan nomor HP -> aktifkan akun."""
+    from app.services.user_admin import link_by_contact
+
+    contact = message.contact
+    # Hanya boleh mengaktifkan kontak MILIK SENDIRI.
+    if contact is None or contact.user_id != message.from_user.id:
+        await message.answer(
+            "Mohon bagikan kontak *Anda sendiri* (tombol di bawah).",
+            parse_mode="Markdown",
+            reply_markup=share_contact_keyboard(),
+        )
+        return
+    async with SessionLocal() as db:
+        user = await link_by_contact(
+            db, telegram_id=message.from_user.id, phone=contact.phone_number,
+            nama=(contact.first_name or None),
+        )
+    if user is None:
+        await message.answer(
+            "Nomor HP Anda belum terdaftar oleh admin. "
+            f"Sebutkan ID ini ke admin: `{message.from_user.id}`",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return
+    await message.answer(
+        f"✅ Akun aktif! Selamat datang, *{user.nama}* ({user.role}).",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 @dataclass

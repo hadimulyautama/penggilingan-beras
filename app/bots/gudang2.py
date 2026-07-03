@@ -5,11 +5,15 @@ menyusul di fase berikutnya.
 """
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from app.bots.common import authenticate
+from app.bots.common import (
+    authenticate,
+    handle_shared_contact,
+    unregistered_reply,
+)
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
@@ -26,11 +30,7 @@ async def cmd_start(message: Message) -> None:
     async with SessionLocal() as db:
         user = await authenticate(db, message.from_user.id)
     if not user:
-        await message.answer(
-            "⛔ Belum terdaftar. ID Telegram Anda: "
-            f"`{message.from_user.id}`",
-            parse_mode="Markdown",
-        )
+        await unregistered_reply(message)
         return
     await message.answer(
         "🏭 *Bot Gudang 2 — Penyosohan*\n"
@@ -42,6 +42,12 @@ async def cmd_start(message: Message) -> None:
     )
 
 
+@router.message(F.contact)
+async def on_contact(message: Message) -> None:
+    """Aktivasi akun via kontak (untuk user yang didaftarkan pakai nomor HP)."""
+    await handle_shared_contact(message)
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -51,10 +57,7 @@ async def handle_message(message: Message) -> None:
     async with SessionLocal() as db:
         user = await authenticate(db, message.from_user.id)
     if not user:
-        await message.answer(
-            f"⛔ Belum terdaftar. ID Telegram Anda: `{message.from_user.id}`",
-            parse_mode="Markdown",
-        )
+        await unregistered_reply(message)
         return
 
     # Transfer G1->G2 (laporan / arahan)?

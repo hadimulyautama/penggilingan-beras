@@ -866,3 +866,68 @@ TANYA_JAM = {
         "required": ["is_tanya_jam"],
     },
 }
+
+
+# Tool manajemen pengguna (Bot Admin): daftar/list/aktifkan/nonaktifkan user.
+KELOLA_USER = {
+    "name": "kelola_user",
+    "description": (
+        "Deteksi & ekstrak perintah admin untuk MENGELOLA PENGGUNA sistem: "
+        "mendaftarkan pengguna baru, melihat daftar pengguna, mengaktifkan, "
+        "atau menonaktifkan. Contoh: 'daftarkan operator Budi id 12345678 "
+        "gudang 1', 'tambah staff Sari hp 081234567890', 'daftar user', "
+        "'nonaktifkan Budi', 'aktifkan Sari'. Jika bukan tentang pengelolaan "
+        "pengguna, pilih intent 'bukan_user'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "daftar_user",
+                    "list_user",
+                    "aktifkan_user",
+                    "nonaktifkan_user",
+                    "bukan_user",
+                ],
+                "description": (
+                    "'daftar_user': daftarkan pengguna BARU (ada nama + peran + "
+                    "id/hp). 'list_user': tampilkan semua pengguna ('daftar "
+                    "user', 'siapa saja usernya'). 'aktifkan_user' / "
+                    "'nonaktifkan_user': ubah status pengguna yang sudah ada. "
+                    "'bukan_user': selain itu."
+                ),
+            },
+            "nama": {
+                "type": ["string", "null"],
+                "description": "Nama pengguna. Contoh: 'Budi'.",
+            },
+            "role": {
+                "type": ["string", "null"],
+                "enum": ["operator", "staff", "admin", None],
+                "description": "Peran pengguna bila disebut.",
+            },
+            "gudang": {
+                "type": ["integer", "null"],
+                "enum": [1, 2, None],
+                "description": "Nomor gudang untuk operator: 1 (Selepan) atau 2 (Penyosohan).",
+            },
+            "telegram_id": {
+                "type": ["integer", "null"],
+                "description": "Telegram ID (angka) bila disebut ('id 12345678').",
+            },
+            "no_hp": {
+                "type": ["string", "null"],
+                "description": "Nomor HP bila disebut ('hp 081234567890', '0812...').",
+            },
+            "ref": {
+                "type": ["string", "null"],
+                "description": (
+                    "Untuk aktifkan/nonaktifkan: rujukan pengguna (nama atau ID)."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}
