@@ -167,15 +167,30 @@ docker compose -f docker-compose.prod.yml restart app
 docker compose -f docker-compose.prod.yml down        # stop semua (data aman di volume)
 ```
 
-**Backup database** (jadwalkan via cron kalau perlu):
+**Backup manual (sekali jalan):**
 ```bash
-docker exec penggilingan_db pg_dump -U milluser penggilingan \
-  | gzip > ~/backup-penggilingan-$(date +%F).sql.gz
+cd ~/penggilingan-beras
+./scripts/backup.sh
 ```
+Script mendump database ke `~/penggilingan-backups/penggilingan-<tanggal>.sql.gz`
+dan otomatis membuang backup lebih lama dari 14 hari (atur lewat
+`RETENTION_DAYS`).
 
-**Restore:**
+**Backup otomatis harian (cron)** — pasang sekali:
 ```bash
-gunzip -c ~/backup-penggilingan-YYYY-MM-DD.sql.gz \
+# jalan tiap hari jam 23:30 waktu server; log ke ~/penggilingan-backups/cron.log
+( crontab -l 2>/dev/null; \
+  echo "30 23 * * * $HOME/penggilingan-beras/scripts/backup.sh >> $HOME/penggilingan-backups/cron.log 2>&1" \
+) | crontab -
+
+crontab -l          # cek jadwal terpasang
+```
+> Server OCI pakai UTC secara default. Jam 23:30 UTC ≈ 06:30 WIB. Untuk pas di
+> jam WIB, set zona waktu server: `sudo timedatectl set-timezone Asia/Jakarta`.
+
+**Restore dari backup:**
+```bash
+gunzip -c ~/penggilingan-backups/penggilingan-YYYY-MM-DD_HHMM.sql.gz \
   | docker exec -i penggilingan_db psql -U milluser -d penggilingan
 ```
 
