@@ -1,0 +1,17 @@
+# Jangan ikutkan file ini ke image (lebih kecil, lebih aman).
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.DS_Store
+.env
+.claude
+*.docx
+*.html
+README.md
+DEPLOY.md
+docker-compose.yml
+docker-compose.prod.yml

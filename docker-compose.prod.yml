@@ -1,0 +1,38 @@
+# Deploy produksi: Postgres + aplikasi (FastAPI + 3 bot) dalam satu stack.
+# Bot pakai long-polling (keluar), jadi TIDAK ada port yang perlu dibuka
+# ke internet. Postgres pun hanya diakses internal oleh service `app`.
+#
+# Pakai:  docker compose -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: penggilingan_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: milluser
+      POSTGRES_PASSWORD: millpass
+      POSTGRES_DB: penggilingan
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U milluser -d penggilingan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: penggilingan_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # Token bot, ANTHROPIC_API_KEY, dll. dibaca dari .env.
+    env_file:
+      - .env
+    # Override host DB ke nama service `db` (bukan localhost) di jaringan compose.
+    environment:
+      DATABASE_URL: postgresql+asyncpg://milluser:millpass@db:5432/penggilingan
+
+volumes:
+  pgdata:
