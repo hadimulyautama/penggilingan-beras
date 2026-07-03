@@ -469,7 +469,10 @@ TANYA_STATUS = {
         "yang HARUS true: 'proses apa yang sedang berlangsung', 'lagi proses "
         "apa', 'ada kegiatan apa sekarang', 'status gudang 1 sekarang', "
         "'sedang ngerjain apa', 'apa yang sedang jalan'. Bukan pertanyaan "
-        "spesifik satu proses tertentu."
+        "spesifik satu proses tertentu. PENTING: pertanyaan tentang "
+        "VERIFIKASI / hal yang belum di-acc / tugas tertunda / yang perlu "
+        "dikerjakan (mis. 'apa ada yang perlu diverifikasi', 'ada yang belum "
+        "beres') BUKAN status → is_status=false (itu ditangani modul pending)."
     ),
     "input_schema": {
         "type": "object",
