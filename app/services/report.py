@@ -1,12 +1,31 @@
 """Laporan/ringkasan pembelian gabah untuk pertanyaan pengguna."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import now_local
+
+_HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+_BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt",
+          "Nov", "Des"]
+
+
+def _to_local(dt: datetime) -> datetime:
+    """Konversi timestamp (UTC) ke zona waktu aplikasi (mis. Asia/Jakarta)."""
+    return dt.astimezone(ZoneInfo(settings.app_timezone))
+
+
+def _fmt_waktu(dt: datetime | None) -> str:
+    """Format waktu ramah-manusia: 'Kamis, 03 Jul 2026 08:08'."""
+    if dt is None:
+        return "-"
+    d = _to_local(dt)
+    return f"{_HARI[d.weekday()]}, {d.day:02d} {_BULAN[d.month - 1]} {d.year} {d:%H:%M}"
 from app.models import (
     DryingLot,
     DryingLotBatch,
@@ -166,6 +185,7 @@ async def _batch_detail_card(db: AsyncSession, batch: PurchaseBatch, nama: str) 
     ka = f"{batch.kadar_air_awal_persen:g}%" if batch.kadar_air_awal_persen is not None else "-"
     lines = [
         f"🔎 {batch.kode_batch} — {nama}",
+        f"• Masuk: {_fmt_waktu(batch.waktu_pembelian)}",
         f"• Berat: {_fmt_kg(float(batch.berat_total_kg))} | Kondisi: {batch.kondisi_gabah}",
         f"• Kadar air awal: {ka}",
         f"• Status: {batch.status_batch}",
@@ -457,4 +477,57 @@ async def cari_kode(
         )
     if len(rows) > 10:
         lines.append(f"…dan {len(rows) - 10} batch lain.")
+    return "\n".join(lines)
+
+
+# ─────────────────── Analitik jam kedatangan gabah ───────────────────
+async def insight_jam_kedatangan(
+    db: AsyncSession, *, supplier: str | None = None, periode: str | None = None
+) -> str:
+    """Analisa pola jam kedatangan gabah (insight untuk pimpinan/operasional).
+
+    Default lintas seluruh waktu agar polanya bermakna.
+    """
+    eff = periode if periode in _LABELS else "semua"
+    start, end = _range(eff)
+    stmt = select(PurchaseBatch.waktu_pembelian).join(
+        Supplier, PurchaseBatch.supplier_id == Supplier.id
+    )
+    if start is not None:
+        stmt = stmt.where(
+            PurchaseBatch.tanggal_pembelian >= start,
+            PurchaseBatch.tanggal_pembelian <= end,
+        )
+    if supplier:
+        stmt = stmt.where(func.lower(Supplier.nama_supplier).like(f"%{supplier.lower()}%"))
+    waktu = [w for w in (await db.execute(stmt)).scalars().all() if w is not None]
+
+    ket = _LABELS[eff] + (f" · supplier {supplier}" if supplier else "")
+    if not waktu:
+        return f"📊 Belum ada data jam kedatangan ({ket})."
+
+    times = [_to_local(w) for w in waktu]
+    n = len(times)
+    mins = [t.hour * 60 + t.minute for t in times]  # menit sejak 00:00
+    earliest = min(times, key=lambda t: (t.hour, t.minute))
+    latest = max(times, key=lambda t: (t.hour, t.minute))
+    avg_m = sum(mins) / n
+    ah, am = int(avg_m // 60), int(avg_m % 60)
+
+    # Histogram per jam.
+    buckets: dict[int, int] = {}
+    for t in times:
+        buckets[t.hour] = buckets.get(t.hour, 0) + 1
+    busiest_h = max(buckets, key=lambda h: buckets[h])
+
+    lines = [
+        f"📊 Pola jam kedatangan gabah ({ket} · {n} batch):",
+        f"• Paling pagi {earliest:%H:%M} · paling siang {latest:%H:%M}",
+        f"• Rata-rata masuk ~{ah:02d}:{am:02d}",
+        f"• Jam tersibuk {busiest_h:02d}:00–{busiest_h + 1:02d}:00 ({buckets[busiest_h]} batch)",
+    ]
+    if n >= 2:
+        lines.append("• Sebaran per jam:")
+        for h in sorted(buckets):
+            lines.append(f"   {h:02d}:00  {'█' * buckets[h]} {buckets[h]}")
     return "\n".join(lines)

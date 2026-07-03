@@ -791,3 +791,46 @@ VERIFIKASI_HARGA_GABAH = {
         "required": ["is_verifikasi_harga"],
     },
 }
+
+
+# Tool tanya pola/analitik jam kedatangan gabah (insight).
+TANYA_JAM = {
+    "name": "tanya_jam_kedatangan",
+    "description": (
+        "Deteksi bila pengguna menanyakan POLA / ANALISA / KEBIASAAN JAM "
+        "kedatangan gabah (agregat banyak batch), bukan satu batch tertentu. "
+        "Contoh yang HARUS true: 'jam berapa biasanya gabah masuk', 'pola jam "
+        "kedatangan gabah', 'analisa jam gabah datang', 'rata-rata gabah masuk "
+        "jam berapa', 'gabah paling sering datang jam berapa', 'biasanya catur "
+        "kirim jam berapa'. "
+        "FALSE untuk: satu batch spesifik ('kapan gabah dari catur pertama "
+        "sampai', 'jam berapa gabah pertama datang' — itu detail satu batch); "
+        "JUMLAH/berapa banyak ('berapa gabah masuk hari ini' — itu laporan); "
+        "kode; harga; stok."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_tanya_jam": {
+                "type": "boolean",
+                "description": (
+                    "true hanya jika menanyakan POLA/ANALISA/rata-rata/kebiasaan "
+                    "JAM kedatangan gabah lintas banyak batch."
+                ),
+            },
+            "supplier_nama": {
+                "type": ["string", "null"],
+                "description": "Nama supplier bila difilter ('catur'). null bila semua.",
+            },
+            "periode": {
+                "type": ["string", "null"],
+                "enum": ["hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua", None],
+                "description": (
+                    "Rentang waktu bila disebut. null -> keseluruhan (pola "
+                    "paling bermakna dari seluruh riwayat)."
+                ),
+            },
+        },
+        "required": ["is_tanya_jam"],
+    },
+}

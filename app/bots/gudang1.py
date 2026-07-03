@@ -25,6 +25,7 @@ from app.bots.common import (
     reset_draft,
 )
 from app.bots.detail_flow import maybe_answer_detail
+from app.bots.jam_flow import maybe_answer_jam
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
@@ -277,6 +278,8 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
         if await maybe_answer_status(message, text):
             return
         if await maybe_answer_pending(message, text):
+            return
+        if await maybe_answer_jam(message, text):
             return
         if await maybe_answer_detail(message, text, session):
             return

@@ -27,6 +27,7 @@ from app.bots.common import (
     reset_verif,
 )
 from app.bots.detail_flow import maybe_answer_detail
+from app.bots.jam_flow import maybe_answer_jam
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
@@ -399,6 +400,10 @@ async def handle_message(message: Message) -> None:
 
         # ── Pertanyaan tugas tertunda ("ada yang perlu diverifikasi?") ──
         if await maybe_answer_pending(message, text):
+            return
+
+        # ── Pola jam kedatangan gabah ("jam berapa biasanya gabah masuk") ──
+        if await maybe_answer_jam(message, text):
             return
 
         # ── Detail/atribut entitas ("berapa harga gabah pertama") ──

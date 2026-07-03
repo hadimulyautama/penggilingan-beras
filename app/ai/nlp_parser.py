@@ -14,6 +14,7 @@ from app.ai.tools import (
     PROSES_TRANSFER,
     SYSTEM_PROMPT,
     TANYA_DETAIL,
+    TANYA_JAM,
     TANYA_LAPORAN_GABAH,
     TANYA_PENDING,
     TANYA_STATUS,
@@ -294,6 +295,24 @@ async def parse_status(text: str) -> bool:
     """True bila pengguna menanyakan status umum apa yang sedang berlangsung."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_STATUS)
     return bool(data.get("is_status", False))
+
+
+@dataclass
+class ParsedJam:
+    is_tanya_jam: bool = False
+    supplier_nama: str | None = None
+    periode: str | None = None
+
+
+async def parse_jam(text: str) -> ParsedJam:
+    """Deteksi pertanyaan pola/analitik jam kedatangan gabah."""
+    data = await _invoke_tool([{"role": "user", "content": text}], TANYA_JAM)
+    sup = data.get("supplier_nama")
+    return ParsedJam(
+        is_tanya_jam=bool(data.get("is_tanya_jam", False)),
+        supplier_nama=sup.strip() if isinstance(sup, str) and sup.strip() else None,
+        periode=data.get("periode"),
+    )
 
 
 @dataclass
