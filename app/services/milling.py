@@ -155,6 +155,10 @@ async def log_progress(
             input_by=user.id,
         )
     )
+    await log_activity(
+        db, table_name="milling_progress_logs", record_id=proc.id, action="INSERT",
+        changed_by=user.id, new_value=f"kumulatif {berat_kumulatif:.0f}kg",
+    )
     await db.commit()
     masuk = float(proc.berat_gabah_masuk_kg or 0)
     rendemen = (berat_kumulatif / masuk * 100) if masuk else None

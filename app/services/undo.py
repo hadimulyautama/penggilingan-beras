@@ -37,7 +37,7 @@ from app.services.activity_log import log_activity
 _UNDOABLE = {
     "drying_lots", "drying_moisture_logs", "drying_cooling_logs", "purchase_batches",
     "silo_storage", "milling_process", "milling_pk_routing", "milling_qc_logs",
-    "milling_process_verifications",
+    "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
 }
 
 
@@ -349,6 +349,31 @@ async def _undo_last_routing(db: AsyncSession, proc_id: int) -> str:
     return f"✓ Dibatalkan: arahan PK terakhir {proc.kode_proses if proc else ''}.".strip()
 
 
+async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
+    p = (
+        await db.execute(
+            select(MillingProgressLog)
+            .where(MillingProgressLog.milling_process_id == proc_id)
+            .order_by(MillingProgressLog.id.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if p is None:
+        raise UndoError("Tidak ada progress giling untuk dibatalkan.")
+    proc = await db.get(MillingProcess, proc_id)
+    await db.delete(p)
+    return f"✓ Dibatalkan: progress giling terakhir {proc.kode_proses if proc else ''}.".strip()
+
+
+async def _undo_moving_log(db: AsyncSession, log_id: int) -> str:
+    ml = await db.get(SiloMovingLog, log_id)
+    if ml is None:
+        raise UndoError("Catatan pemindahan sudah tidak ada.")
+    tipe = ml.tipe
+    await db.delete(ml)
+    return f"✓ Dibatalkan: catatan pemindahan ({tipe})."
+
+
 async def _undo_last_qc(db: AsyncSession, proc_id: int) -> str:
     q = (
         await db.execute(
@@ -400,6 +425,10 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_start_milling(db, rid)
     if t == "milling_process" and act == "UPDATE":
         return await _undo_finish_milling(db, rid)
+    if t == "milling_progress_logs" and act == "INSERT":
+        return await _undo_last_progress(db, rid)
+    if t == "silo_moving_logs" and act == "INSERT":
+        return await _undo_moving_log(db, rid)
     if t == "milling_pk_routing" and act == "INSERT":
         return await _undo_last_routing(db, rid)
     if t == "milling_qc_logs" and act == "INSERT":

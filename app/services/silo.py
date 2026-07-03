@@ -234,14 +234,18 @@ async def moving_started(
     if lot is None:
         raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
     silo = await get_g1_silo(db, nama_silo) if nama_silo else None
-    db.add(
-        SiloMovingLog(
-            drying_lot_id=lot.id,
-            silo_id=silo.id if silo else None,
-            tipe="mulai",
-            waktu=now_local(),
-            input_by=user.id,
-        )
+    ml = SiloMovingLog(
+        drying_lot_id=lot.id,
+        silo_id=silo.id if silo else None,
+        tipe="mulai",
+        waktu=now_local(),
+        input_by=user.id,
+    )
+    db.add(ml)
+    await db.flush()
+    await log_activity(
+        db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
+        changed_by=user.id, new_value=f"mulai pindah {lot.kode_lot}",
     )
     await db.commit()
     return lot.kode_lot, nama_silo
@@ -273,11 +277,15 @@ async def moving_finished(
     if existing:
         # Sudah tercatat di silo -> cukup log 'selesai'.
         silo = await db.get(Silo, existing.silo_id)
-        db.add(
-            SiloMovingLog(
-                drying_lot_id=lot.id, silo_id=existing.silo_id, tipe="selesai",
-                waktu=now_local(), input_by=user.id,
-            )
+        ml = SiloMovingLog(
+            drying_lot_id=lot.id, silo_id=existing.silo_id, tipe="selesai",
+            waktu=now_local(), input_by=user.id,
+        )
+        db.add(ml)
+        await db.flush()
+        await log_activity(
+            db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
+            changed_by=user.id, new_value=f"selesai pindah {lot.kode_lot}",
         )
         await db.commit()
         nama = silo.nama_silo.replace("Silo ", "") if silo else "-"
@@ -286,11 +294,15 @@ async def moving_finished(
     # Belum di silo -> lakukan intake (state: di silo + dryer kosong).
     res = await masuk_silo(db, user=user, nama_silo=nama_silo, kode_lot=kode_lot, kode_batch=None)
     silo = await get_g1_silo(db, res.nama_silo)
-    db.add(
-        SiloMovingLog(
-            drying_lot_id=lot.id, silo_id=silo.id if silo else None, tipe="selesai",
-            waktu=now_local(), input_by=user.id,
-        )
+    ml = SiloMovingLog(
+        drying_lot_id=lot.id, silo_id=silo.id if silo else None, tipe="selesai",
+        waktu=now_local(), input_by=user.id,
+    )
+    db.add(ml)
+    await db.flush()
+    await log_activity(
+        db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
+        changed_by=user.id, new_value=f"selesai pindah {lot.kode_lot} (intake)",
     )
     await db.commit()
     return MovingDoneResult(
