@@ -9,3 +9,6 @@ venv/
 
 # Setelan lokal Claude Code (per-mesin)
 .claude/settings.local.json
+
+# File kunci sementara MS Office
+~$*
