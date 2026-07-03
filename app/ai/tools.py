@@ -120,8 +120,12 @@ PROSES_TRANSFER = {
         "Deteksi & ekstrak perintah/pertanyaan TRANSFER PK dari Gudang 1 ke "
         "Gudang 2. PK yang ditandai 'siap transfer' saat milling dikirim ke "
         "Gudang 2 oleh staff/admin. Aksi: buat transfer (kirim PK ke Gudang 2), "
-        "tanya PK yang siap transfer, atau tanya riwayat transfer. Jika bukan "
-        "tentang transfer antar gudang, pilih 'bukan_transfer'."
+        "tanya PK yang siap transfer, atau tanya riwayat transfer. "
+        "PENTING — pilih 'bukan_transfer' bila pesan sebenarnya BUKAN soal "
+        "kirim/transfer PK antar gudang, mis.: menanyakan KODE batch/lot ('apa "
+        "saja kode batchnya', 'kodenya apa'), JUMLAH batch/gabah, verifikasi, "
+        "stok, atau status. Kata 'transfer'/'kirim ke gudang 2'/'PK siap "
+        "transfer' harus benar-benar ada; kalau tidak, 'bukan_transfer'."
     ),
     "input_schema": {
         "type": "object",
@@ -531,7 +535,11 @@ CARI_KODE = {
         "kodenya. Contoh yang HARUS true: 'batch dari pak budi kodenya apa', "
         "'kode gabah yang masuk pertama hari ini', 'gabah dari catur kemarin "
         "kode berapa', 'kode lot terbaru', 'lot yang isinya gabah budi apa "
-        "kodenya', 'gabah kering hari ini kodenya'. "
+        "kodenya', 'gabah kering hari ini kodenya'. JUGA true untuk permintaan "
+        "MENYEBUT SEMUA kode (jamak), termasuk bentuk singkat/lanjutan: 'apa "
+        "saja kode batchnya', 'kode batchnya apa saja', 'sebutkan kode-kode "
+        "batch', 'kodenya apa saja' (bila konteksnya batch/lot). Bila hanya "
+        "menyebut 'batch' -> target=batch; 'lot' -> target=lot. "
         "Bedakan dari pertanyaan JUMLAH/total (itu laporan, bukan cari kode)."
     ),
     "input_schema": {

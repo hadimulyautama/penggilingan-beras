@@ -11,8 +11,20 @@ from app.services.report import cari_kode
 
 log = logging.getLogger("bots.lookup")
 
+# Kata waktu eksplisit; bila salah satunya ada, periode diambil dari pesan
+# (bukan warisan konteks).
+_TIME_WORDS = (
+    "hari ini", "harini", "kemarin", "kmrn", "minggu", "bulan", "semua",
+    "keseluruhan", "total", "tadi", "tanggal", "kemaren",
+)
 
-async def maybe_answer_lookup(message: Message, text: str) -> bool:
+
+def _has_time_word(text: str) -> bool:
+    t = text.lower()
+    return any(w in t for w in _TIME_WORDS)
+
+
+async def maybe_answer_lookup(message: Message, text: str, session=None) -> bool:
     """Jika pesan mencari kode batch/lot, jawab & kembalikan True."""
     try:
         p = await parse_lookup(text)
@@ -21,15 +33,33 @@ async def maybe_answer_lookup(message: Message, text: str) -> bool:
         return False
     if not p.is_cari_kode:
         return False
+
+    # Warisi konteks percakapan sebelumnya untuk pertanyaan lanjutan singkat
+    # ("berapa batch hari ini" -> "apa saja kodenya").
+    target = p.target
+    periode = p.periode
+    if session is not None:
+        if not target:
+            target = session.ctx_topic
+        # Bila pesan tak menyebut waktu, pakai periode dari konteks (bukan
+        # tebakan default parser seperti 'semua').
+        if session.ctx_periode and not _has_time_word(text) and not p.terbaru:
+            periode = session.ctx_periode
+    target = target or "batch"
+
     async with SessionLocal() as db:
         teks = await cari_kode(
             db,
-            target=p.target or "batch",
+            target=target,
             supplier=p.supplier_nama,
-            periode=p.periode,
+            periode=periode,
             urutan=p.urutan,
             kondisi=p.kondisi,
             terbaru=p.terbaru,
         )
+    if session is not None:
+        session.ctx_topic = target
+        if periode:
+            session.ctx_periode = periode
     await message.answer(teks)
     return True

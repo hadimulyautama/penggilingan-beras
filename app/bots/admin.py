@@ -381,10 +381,10 @@ async def handle_message(message: Message) -> None:
 
         if not parsed.is_verifikasi_harga:
             # Mencari kode batch/lot ("batch dari budi kodenya apa")?
-            if await maybe_answer_lookup(message, text):
+            if await maybe_answer_lookup(message, text, session):
                 return
             # Pertanyaan laporan ("berapa gabah masuk hari ini")?
-            if await maybe_answer_report(message, text):
+            if await maybe_answer_report(message, text, session):
                 return
             await message.answer(
                 "Belum paham 🙏. Contoh yang bisa saya lakukan:\n"

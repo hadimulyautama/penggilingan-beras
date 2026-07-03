@@ -280,9 +280,9 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
             return
         if await maybe_answer_detail(message, text, session):
             return
-        if await maybe_answer_lookup(message, text):
+        if await maybe_answer_lookup(message, text, session):
             return
-        if await maybe_answer_report(message, text):
+        if await maybe_answer_report(message, text, session):
             return
         await message.answer(
             "Maaf, saya belum paham. Contoh:\n"

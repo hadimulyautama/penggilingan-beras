@@ -12,7 +12,7 @@ from app.services.report import laporan_pembelian_gabah
 log = logging.getLogger("bots.report")
 
 
-async def maybe_answer_report(message: Message, text: str) -> bool:
+async def maybe_answer_report(message: Message, text: str, session=None) -> bool:
     """Jika pesan adalah pertanyaan laporan gabah, jawab & kembalikan True.
 
     Kembalikan False bila bukan pertanyaan laporan (biar bot tampilkan fallback).
@@ -27,5 +27,9 @@ async def maybe_answer_report(message: Message, text: str) -> bool:
         return False
     async with SessionLocal() as db:
         teks = await laporan_pembelian_gabah(db, parsed.periode)
+    # Simpan konteks untuk pertanyaan lanjutan ("apa saja kodenya").
+    if session is not None:
+        session.ctx_topic = "batch"
+        session.ctx_periode = parsed.periode or "hari_ini"
     await message.answer(teks)  # teks polos (tanpa Markdown) — aman
     return True

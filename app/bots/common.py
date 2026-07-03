@@ -45,6 +45,10 @@ class UserSession:
     ctx_mil: str | None = None    # MIL-...
     ctx_silo: str | None = None   # A | B
     ctx_last: str | None = None   # jenis entitas terakhir: batch|lot|mil|silo
+    # Konteks tanya-jawab beruntun (mis. "berapa batch hari ini" -> "apa saja
+    # kodenya"): subjek & periode terakhir yang ditanyakan.
+    ctx_topic: str | None = None    # batch | lot
+    ctx_periode: str | None = None  # hari_ini | kemarin | minggu_ini | ...
     # Override akses: admin/staff mengerjakan aksi fisik operator (fallback).
     override_text: str | None = None   # perintah yang menunggu konfirmasi override
     override_active: bool = False      # True saat re-run setelah override disetujui
