@@ -15,6 +15,7 @@ from app.ai.nlp_parser import (
     parse_pengeringan,
     parse_purchase,
     parse_silo,
+    parse_undo,
 )
 from app.bots.common import (
     CANCEL_WORDS,
@@ -47,10 +48,10 @@ from app.services.drying import (
     sole_active_lot_kode,
     sole_cooling_lot_kode,
 )
+from app.services.undo import UndoError, undo_last
 from app.services.purchase import (
     DailyLimitReached,
     create_purchase_batch,
-    undo_purchase_batch,
 )
 from app.services.milling import (
     MillingError,
@@ -162,22 +163,15 @@ async def handle_message(message: Message) -> None:
 
         session = get_session(message.bot.id, tg_id)
 
-        # ── Undo batch tersimpan (dalam jendela 15 menit) ──
+        # ── Undo tindakan terakhir (kata kunci cepat) ──
         if any(p in lower for p in UNDO_PHRASES):
-            if session.last_batch_id:
-                ok = await undo_purchase_batch(db, batch_id=session.last_batch_id, user=user)
-                if ok:
-                    kode = session.last_batch_kode
-                    session.last_batch_id = None
-                    session.last_batch_kode = None
-                    await message.answer(f"✓ Input {kode} dibatalkan.")
-                else:
-                    await message.answer(
-                        "Tidak bisa dibatalkan — sudah lewat 15 menit atau sudah "
-                        "ada proses lanjutan."
-                    )
-            else:
-                await message.answer("Tidak ada input terbaru yang bisa dibatalkan.")
+            try:
+                msg = await undo_last(db, actor=user, actor_ids=[user.id], scope_label=None)
+                await message.answer(msg)
+            except UndoError as e:
+                await message.answer(str(e.args[0]) if e.args else "Tidak bisa di-undo.")
+            session.last_batch_id = None
+            session.last_batch_kode = None
             return
 
         # ── Konfirmasi override (admin/staff mengerjakan tugas operator) ──
@@ -298,6 +292,23 @@ async def _require_operator(message: Message, user, session, text: str, label: s
     return False
 
 
+async def _handle_undo(message: Message, db, user, text: str) -> bool:
+    """Operator membatalkan tindakan TERAKHIR miliknya sendiri. True jika ditangani."""
+    try:
+        p = await parse_undo(text)
+    except Exception:
+        log.exception("parse_undo gagal")
+        return False
+    if not p.is_undo:
+        return False
+    try:
+        msg = await undo_last(db, actor=user, actor_ids=[user.id], scope_label=None)
+        await message.answer(msg)
+    except UndoError as e:
+        await message.answer(str(e.args[0]) if e.args else "Tidak bisa di-undo.")
+    return True
+
+
 async def _process_fresh(message: Message, db, user, text: str, session) -> None:
     """Proses pesan baru: pembelian, pengeringan, silo, milling, atau tanya-data."""
     tg_id = message.from_user.id
@@ -308,6 +319,9 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
         await message.answer(AI_ERROR_MSG)
         return
     if not parsed.is_pembelian_gabah:
+        # Undo tindakan terakhir (frasa kaya: "batalkan lot terakhir").
+        if await _handle_undo(message, db, user, text):
+            return
         # "selesai" ambigu (drying & milling bisa berbarengan) — tangani dulu.
         if await _handle_bare_finish(message, db, user, text, session):
             return

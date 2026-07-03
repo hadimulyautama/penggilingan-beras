@@ -17,6 +17,7 @@ from app.ai.nlp_parser import (
     ParsedVerification,
     parse_milling_admin,
     parse_transfer,
+    parse_undo,
     parse_user_admin,
     parse_verification,
 )
@@ -49,6 +50,7 @@ from app.services.transfer import (
     laporan_transfer,
 )
 from app.services.report import resolve_batch_kode_ref
+from app.services.undo import UndoError, resolve_actor_ids, undo_last
 from app.services.user_admin import (
     UserAdminError,
     list_users,
@@ -203,6 +205,29 @@ def _pct(v: float | None) -> str:
 
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def _handle_undo_admin(message: Message, db, user, text: str) -> bool:
+    """Admin undo tindakan terakhir (bisa dibatasi per orang/role). True jika ditangani."""
+    try:
+        p = await parse_undo(text)
+    except Exception:
+        log.exception("parse_undo gagal")
+        return False
+    if not p.is_undo:
+        return False
+    if user.role != "admin":
+        await message.answer("⛔ Hanya admin yang bisa membatalkan input pengguna lain.")
+        return True
+    try:
+        ids, label = await resolve_actor_ids(
+            db, scope=p.scope, nama=p.nama, self_id=user.id
+        )
+        msg = await undo_last(db, actor=user, actor_ids=ids, scope_label=label)
+        await message.answer(msg)
+    except UndoError as e:
+        await message.answer(str(e.args[0]) if e.args else "Tidak bisa di-undo.")
+    return True
 
 
 async def _handle_user_admin(message: Message, db, user, text: str) -> bool:
@@ -387,6 +412,10 @@ async def handle_message(message: Message) -> None:
                 return
             session.verif_draft = _merge_verif(session.verif_draft, new)
             await _advance_verif(message, db, tg_id, session)
+            return
+
+        # ── Undo tindakan terakhir (bisa per orang/role) ──
+        if await _handle_undo_admin(message, db, user, text):
             return
 
         # ── Kelola pengguna (daftar/list/aktif/nonaktif) ──

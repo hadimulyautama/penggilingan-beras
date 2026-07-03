@@ -945,3 +945,47 @@ KELOLA_USER = {
         "required": ["intent"],
     },
 }
+
+
+# Tool undo tindakan terakhir (operator: milik sendiri; admin: bisa per orang).
+UNDO_TERAKHIR = {
+    "name": "undo_terakhir",
+    "description": (
+        "Deteksi permintaan MEMBATALKAN/UNDO tindakan/input TERAKHIR. Contoh: "
+        "'undo', 'batalkan tindakan terakhir', 'batalkan input terakhir', "
+        "'undo lot terakhir', 'salah, batalkan tadi', 'undo input terakhir "
+        "operator gudang 1', 'batalkan input terakhir si budi'. Jika bukan "
+        "permintaan undo, is_undo=false."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_undo": {
+                "type": "boolean",
+                "description": "true bila pengguna minta membatalkan tindakan terakhir.",
+            },
+            "scope": {
+                "type": ["string", "null"],
+                "enum": [
+                    "saya",
+                    "operator_gudang1",
+                    "operator_gudang2",
+                    "staff",
+                    "semua",
+                    None,
+                ],
+                "description": (
+                    "Cakupan 'oleh siapa' (khusus admin). 'operator gudang 1'->"
+                    "operator_gudang1, 'operator gudang 2'->operator_gudang2, "
+                    "'staff'->staff, 'semua/siapa saja'->semua. null / 'punya "
+                    "saya' -> saya."
+                ),
+            },
+            "nama": {
+                "type": ["string", "null"],
+                "description": "Nama orang spesifik bila disebut ('si budi'->'budi').",
+            },
+        },
+        "required": ["is_undo"],
+    },
+}

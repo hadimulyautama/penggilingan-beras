@@ -45,6 +45,7 @@ from app.ai.tools import (
     TANYA_LAPORAN_GABAH,
     TANYA_PENDING,
     TANYA_STATUS,
+    UNDO_TERAKHIR,
     VERIFIKASI_HARGA_GABAH,
 )
 from app.config import settings
@@ -337,6 +338,24 @@ async def parse_status(text: str) -> bool:
     """True bila pengguna menanyakan status umum apa yang sedang berlangsung."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_STATUS)
     return bool(data.get("is_status", False))
+
+
+@dataclass
+class ParsedUndo:
+    is_undo: bool = False
+    scope: str | None = None
+    nama: str | None = None
+
+
+async def parse_undo(text: str) -> ParsedUndo:
+    """Deteksi permintaan undo tindakan terakhir (+ cakupan siapa)."""
+    data = await _invoke_tool([{"role": "user", "content": text}], UNDO_TERAKHIR)
+    nama = data.get("nama")
+    return ParsedUndo(
+        is_undo=bool(data.get("is_undo", False)),
+        scope=data.get("scope"),
+        nama=nama.strip() if isinstance(nama, str) and nama.strip() else None,
+    )
 
 
 @dataclass
