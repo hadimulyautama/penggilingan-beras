@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     undo_window_minutes: int = 15
     max_purchase_batch_per_day: int = 3
 
+    # Admin awal (di-seed otomatis ke DB kosong saat startup).
+    # Kosongkan admin_telegram_id bila tidak ingin auto-seed user.
+    admin_telegram_id: int | None = None
+    admin_name: str = "Admin"
+
     # Pengeringan
     drying_late_hours: float = 5.0  # batas keterlambatan log kadar air
     drying_check_interval_seconds: int = 900  # frekuensi cek scheduler (15 mnt)

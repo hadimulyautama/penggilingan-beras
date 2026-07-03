@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from app.bots.registry import build_bots, run_polling
 from app.config import settings
 from app.services.scheduler import run_late_drying_scheduler
+from app.services.seed import seed_master
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("app")
@@ -17,6 +18,11 @@ log = logging.getLogger("app")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Pastikan data master ada (penting untuk DB kosong: staging / DB baru).
+    try:
+        await seed_master()
+    except Exception:
+        log.exception("Seed master gagal (lanjut jalan)")
     built = build_bots()
     app.state.bots = built
     bots = {name: bot for name, bot, _dp in built}
