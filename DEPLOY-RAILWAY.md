@@ -64,6 +64,25 @@ tidak perlu domain publik.
 Cukup `git push` ke `main`. Railway otomatis build & deploy versi baru;
 migrasi baru jalan otomatis via entrypoint.
 
+## Hapus data dummy (setelah fase pengembangan)
+
+Selama sebulan dev, data dummy menumpuk. Saat siap produksi, kosongkan **data
+transaksi** tapi pertahankan **data master** (users, gudang, silo, mesin
+pengering, supplier):
+
+1. Di proyek Railway → service **Postgres** → tab **Data** (query runner), atau
+   dari laptop: `railway connect Postgres` (buka psql).
+2. Tempel & jalankan isi file **`scripts/reset_data.sql`**.
+   - Ingin supplier ikut dikosongkan? Hapus `'suppliers'` dari daftar `keep` di
+     SQL itu.
+3. Selesai — skema tetap, tabel transaksi kosong, siap data asli.
+
+> Skema tidak dihapus, jadi **tidak perlu** migrasi ulang. `RESTART IDENTITY`
+> otomatis mereset penomoran id & kode harian (GB/LOT/MIL) dari 1 lagi.
+
+Alternatif paling bersih: saat go-live, tambah **Postgres baru** di Railway,
+arahkan `DATABASE_URL` ke situ — data dummy ditinggal di DB lama.
+
 ## Catatan
 
 - **Tidak perlu** klik "Generate Domain" — ini worker, bukan web publik.
