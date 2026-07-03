@@ -112,6 +112,9 @@ class UserSession:
     ctx_topic: str | None = None    # batch | lot
     ctx_periode: str | None = None  # hari_ini | kemarin | minggu_ini | ...
     ctx_tanggal: object | None = None  # datetime.date spesifik (bila ditanya)
+    # Konfirmasi gabung batch ke lot yang masih di dryer.
+    merge_lot: str | None = None
+    merge_kodes: list | None = None
     # Override akses: admin/staff mengerjakan aksi fisik operator (fallback).
     override_text: str | None = None   # perintah yang menunggu konfirmasi override
     override_active: bool = False      # True saat re-run setelah override disetujui

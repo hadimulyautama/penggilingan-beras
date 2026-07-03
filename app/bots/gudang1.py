@@ -36,6 +36,8 @@ from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import SessionLocal
 from app.services.drying import (
     DryingError,
+    active_drying_lot,
+    add_batches_to_lot,
     create_drying_lot,
     finish_drying,
     laporan_pengeringan,
@@ -198,6 +200,45 @@ async def handle_message(message: Message) -> None:
             # Bukan ya/batal: batalkan override, proses sebagai pesan baru.
             session.stage = "idle"
             session.override_text = None
+
+        # ── Konfirmasi gabung batch ke lot yang masih di dryer ──
+        if session.stage == "awaiting_merge":
+            if lower in CONFIRM_WORDS:
+                lot_kode = session.merge_lot
+                kodes = session.merge_kodes or []
+                session.stage = "idle"
+                session.merge_lot = None
+                session.merge_kodes = None
+                try:
+                    res = await add_batches_to_lot(
+                        db, user=user, kode_lot=lot_kode, kode_batch_list=kodes
+                    )
+                except DryingError as e:
+                    await message.answer(str(e.args[0]) if e.args else "Gagal menggabung.")
+                    return
+                session.ctx_lot = res.lot.kode_lot
+                session.ctx_last = "lot"
+                total = f"{res.total_kg:,.0f}".replace(",", ".")
+                await message.answer(
+                    f"✓ Digabung ke *{res.lot.kode_lot}*.\n"
+                    f"• Batch sekarang: {', '.join(res.batch_kodes)}\n"
+                    f"• Total: {total} kg",
+                    parse_mode="Markdown",
+                )
+                return
+            if lower in CANCEL_WORDS:
+                session.stage = "idle"
+                session.merge_lot = None
+                session.merge_kodes = None
+                await message.answer(
+                    "Baik, tidak digabung. Kosongkan dryer dulu (pindahkan ke silo) "
+                    "sebelum membentuk lot baru."
+                )
+                return
+            # Bukan ya/tidak: batalkan pending, proses sebagai pesan baru.
+            session.stage = "idle"
+            session.merge_lot = None
+            session.merge_kodes = None
 
         # ── Sedang menunggu konfirmasi ──
         if session.stage == "awaiting_confirmation" and session.draft:
@@ -505,6 +546,19 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 kodes = await resolve_batch_kodes(
                     db, kode_list=None, urutan_list=p.batch_urutan_list
                 )
+            # Dryer belum kosong? Tawarkan gabung ke lot yang sedang dikeringkan.
+            active = await active_drying_lot(db) if kodes else None
+            if active is not None:
+                session.merge_lot = active.kode_lot
+                session.merge_kodes = kodes
+                session.stage = "awaiting_merge"
+                await message.answer(
+                    f"⚠️ Dryer belum kosong — masih ada *{active.kode_lot}* di dalamnya.\n"
+                    f"Gabungkan {', '.join(kodes)} ke {active.kode_lot}? "
+                    "(*ya* untuk gabung / *tidak* untuk batal)",
+                    parse_mode="Markdown",
+                )
+                return True
             res = await create_drying_lot(db, user=user, kode_batch_list=kodes)
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"

@@ -296,6 +296,111 @@ async def create_drying_lot(
     )
 
 
+async def active_drying_lot(db: AsyncSession) -> DryingLot | None:
+    """Lot yang SEDANG dikeringkan di dryer (status 'proses'), bila ada.
+
+    Dipakai untuk fitur gabung: 1 dryer, jadi maksimal 1 lot 'proses'.
+    """
+    return (
+        await db.execute(
+            select(DryingLot).where(DryingLot.status == "proses").order_by(DryingLot.id.desc())
+        )
+    ).scalars().first()
+
+
+async def _lot_batches(db: AsyncSession, lot_id: int) -> list[PurchaseBatch]:
+    return list(
+        (
+            await db.execute(
+                select(PurchaseBatch)
+                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == lot_id)
+            )
+        ).scalars().all()
+    )
+
+
+async def add_batches_to_lot(
+    db: AsyncSession, *, user, kode_lot: str, kode_batch_list: list[str] | None
+) -> LotResult:
+    """Gabungkan batch tambahan ke lot pengeringan yang masih 'proses' di dryer."""
+    lot = await get_lot_by_kode(db, kode_lot)
+    if lot is None:
+        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status != "proses":
+        raise DryingError(f"Lot {kode_lot} sudah selesai — tidak bisa menambah batch.")
+
+    kodes = list(dict.fromkeys(kode_batch_list or []))
+    if not kodes:
+        raise DryingError("Sebutkan batch yang mau digabungkan ke lot.")
+
+    existing = await _lot_batches(db, lot.id)
+    existing_kondisi = existing[0].kondisi_gabah if existing else None
+
+    batches: list[PurchaseBatch] = []
+    missing: list[str] = []
+    for kode in kodes:
+        b = (
+            await db.execute(select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode))
+        ).scalars().first()
+        (batches if b else missing).append(b if b else kode)  # type: ignore[arg-type]
+    if missing:
+        raise DryingError("Batch tidak ditemukan: " + ", ".join(missing))
+
+    ids = [b.id for b in batches]
+    used = (
+        await db.execute(
+            select(DryingLotBatch.purchase_batch_id).where(
+                DryingLotBatch.purchase_batch_id.in_(ids)
+            )
+        )
+    ).scalars().all()
+    if used:
+        dup = [b.kode_batch for b in batches if b.id in set(used)]
+        raise DryingError("Sudah masuk lot: " + ", ".join(dup))
+
+    if len(existing) + len(batches) > 3:
+        raise DryingError(
+            f"Maksimal 3 batch per lot. {kode_lot} sudah {len(existing)} batch."
+        )
+
+    kondisi_baru = {b.kondisi_gabah for b in batches}
+    if len(kondisi_baru) > 1 or (existing_kondisi and kondisi_baru != {existing_kondisi}):
+        raise DryingError(
+            "❌ Tidak boleh mencampur gabah basah dan kering dalam satu lot."
+        )
+    kondisi = existing_kondisi or kondisi_baru.pop()
+
+    new_total = sum(float(b.berat_total_kg) for b in batches)
+    dryer = await _g1_dryer(db)
+    if dryer is not None:
+        load = await dryer_load_kg(db)  # sudah termasuk lot ini
+        cap = float(dryer.kapasitas_kg)
+        if load + new_total > cap:
+            sisa = max(cap - load, 0)
+            raise DryingError(
+                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton tidak cukup "
+                f"(sisa {sisa / 1000:g} ton, tambahan {new_total / 1000:g} ton)."
+            )
+
+    for b in batches:
+        db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=b.id))
+        b.status_batch = "dikeringkan"
+    await log_activity(
+        db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+        changed_by=user.id,
+        new_value=f"{kode_lot} +{len(batches)} batch ({new_total:.0f}kg)",
+    )
+    await db.commit()
+
+    all_batches = existing + batches
+    total_kg = sum(float(b.berat_total_kg) for b in all_batches)
+    return LotResult(
+        lot=lot, kondisi=kondisi, total_kg=total_kg,
+        batch_kodes=[b.kode_batch for b in all_batches],
+    )
+
+
 # ─────────────────────────── Log kadar air ───────────────────────────
 @dataclass
 class MoistureResult:
