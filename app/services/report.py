@@ -114,7 +114,9 @@ async def _resolve_batches(
             .where(PurchaseBatch.kode_batch == kode)
         )
         return (await db.execute(stmt)).all()
-    eff = _default_periode(periode, supplier=supplier, urutan=urutan, kondisi=kondisi)
+    eff = _default_periode(
+        periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
+    )
     start, end = _range(eff)
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
@@ -326,9 +328,11 @@ async def pending_verifikasi(db: AsyncSession) -> str:
 
 # ─────────────────────────── Cari kode ───────────────────────────
 def _default_periode(periode: str | None, *, supplier: str | None, urutan: int | None,
-                     kondisi: str | None) -> str:
+                     kondisi: str | None, terbaru: bool = False) -> str:
     if periode in _LABELS:
         return periode
+    if terbaru:
+        return "semua"  # 'paling terakhir/terbaru' -> cari lintas seluruh waktu
     if urutan or kondisi:
         return "hari_ini"
     if supplier:
@@ -359,7 +363,9 @@ async def cari_kode(
     terbaru: bool = False,
 ) -> str:
     """Cari kode batch/lot berdasarkan ciri (supplier/hari/urutan/kondisi/terbaru)."""
-    eff = _default_periode(periode, supplier=supplier, urutan=urutan, kondisi=kondisi)
+    eff = _default_periode(
+        periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
+    )
     label = _LABELS[eff]
     start, end = _range(eff)
 
