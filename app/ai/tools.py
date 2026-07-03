@@ -696,8 +696,22 @@ PROSES_PENGERINGAN = {
                     "bukan kode. Angka 1-based urutan batch pembelian HARI INI. "
                     "'pertama'->1, 'kedua'->2, 'ketiga'->3, 'keempat'->4, "
                     "'batch 1'->1, 'gabah ke-3'->3. Contoh 'keringkan gabah "
-                    "pertama dan ketiga' -> [1, 3]. Kosongkan (null) bila "
-                    "pengguna menyebut kode GB-... eksplisit."
+                    "pertama dan ketiga' -> [1, 3]. "
+                    "PENTING beda posisi kata: 'batch KEDUA'/'gabah kedua' (kata "
+                    "urut SETELAH kata batch) = urutan [2]; TAPI 'KEDUA batch'/"
+                    "'kedua-duanya'/'dua-duanya'/'semua batch' (bermakna SEMUA) "
+                    "BUKAN urutan — kosongkan ini dan pakai 'semua_batch'=true. "
+                    "Kosongkan (null) bila pakai kode GB-... atau semua_batch."
+                ),
+            },
+            "semua_batch": {
+                "type": "boolean",
+                "description": (
+                    "true bila pengguna bermaksud SEMUA batch (yang belum "
+                    "dilot) hari ini jadi satu lot — dipicu frasa seperti 'kedua "
+                    "batch', 'kedua-duanya', 'dua-duanya', 'ketiga batch', "
+                    "'semua batch', 'semua gabah hari ini'. Berbeda dari 'batch "
+                    "kedua' (itu urutan ke-2, semua_batch=false)."
                 ),
             },
             "kode_lot": {

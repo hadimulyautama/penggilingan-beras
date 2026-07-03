@@ -149,6 +149,7 @@ class ParsedPengeringan:
     intent: str = "bukan_pengeringan"
     kode_batch_list: list[str] | None = None
     batch_urutan_list: list[int] | None = None
+    semua_batch: bool = False
     kode_lot: str | None = None
     kadar_air_indikator: float | None = None
     kadar_air_tes_manual: float | None = None
@@ -175,6 +176,7 @@ async def parse_pengeringan(text: str) -> ParsedPengeringan:
         intent=data.get("intent", "bukan_pengeringan"),
         kode_batch_list=kodes,
         batch_urutan_list=urutan,
+        semua_batch=bool(data.get("semua_batch", False)),
         kode_lot=lot.upper().strip() if isinstance(lot, str) else None,
         kadar_air_indikator=data.get("kadar_air_indikator"),
         kadar_air_tes_manual=data.get("kadar_air_tes_manual"),

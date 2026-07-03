@@ -497,7 +497,11 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
     try:
         if p.intent == "bentuk_lot":
             kodes = p.kode_batch_list or _gb_list(text)
-            if not kodes and p.batch_urutan_list:
+            if not kodes and p.semua_batch:
+                kodes = await resolve_batch_kodes(
+                    db, kode_list=None, urutan_list=None, semua=True
+                )
+            elif not kodes and p.batch_urutan_list:
                 kodes = await resolve_batch_kodes(
                     db, kode_list=None, urutan_list=p.batch_urutan_list
                 )

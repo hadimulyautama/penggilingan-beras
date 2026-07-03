@@ -62,16 +62,34 @@ async def resolve_batch_kodes(
     *,
     kode_list: list[str] | None,
     urutan_list: list[int] | None,
+    semua: bool = False,
 ) -> list[str]:
     """Kembalikan daftar kode batch. Bila hanya urutan diberikan, petakan ke
 
     batch pembelian HARI INI berdasarkan nomor urut (pertama->01, ketiga->03).
+    Bila `semua`=True, ambil SEMUA batch hari ini yang belum masuk lot.
     """
     if kode_list:
         return kode_list
+    today = now_local().date()
+    if semua:
+        sudah_dilot = select(DryingLotBatch.purchase_batch_id)
+        stmt = (
+            select(PurchaseBatch.kode_batch)
+            .where(
+                PurchaseBatch.tanggal_pembelian == today,
+                PurchaseBatch.id.not_in(sudah_dilot),
+            )
+            .order_by(PurchaseBatch.kode_batch)
+        )
+        kodes = list((await db.execute(stmt)).scalars().all())
+        if not kodes:
+            raise DryingError(
+                "Tidak ada batch gabah hari ini yang belum masuk lot pengeringan."
+            )
+        return kodes
     if not urutan_list:
         return []
-    today = now_local().date()
     stmt = (
         select(PurchaseBatch.kode_batch)
         .where(PurchaseBatch.tanggal_pembelian == today)
