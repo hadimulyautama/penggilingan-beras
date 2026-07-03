@@ -1,6 +1,7 @@
 """Konfigurasi aplikasi — dibaca dari environment (.env)."""
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,22 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://milluser:millpass@localhost:5432/penggilingan"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_asyncpg(cls, v: str) -> str:
+        """Pastikan driver async. Railway/Heroku memberi 'postgres://' atau
+        'postgresql://' (driver sync); kita butuh 'postgresql+asyncpg://'.
+        Juga buang query 'sslmode' yang tidak dikenal asyncpg."""
+        if v.startswith("postgres://"):
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://"):
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        if v.startswith("postgresql+asyncpg://") and "sslmode=" in v:
+            # asyncpg pakai parameter 'ssl', bukan 'sslmode' (punya psycopg2).
+            import re
+            v = re.sub(r"[?&]sslmode=[^&]*", "", v)
+        return v
 
     # Telegram
     bot_gudang1_token: str = ""
