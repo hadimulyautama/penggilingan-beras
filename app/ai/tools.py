@@ -717,10 +717,12 @@ PROSES_PENGERINGAN = {
 VERIFIKASI_HARGA_GABAH = {
     "name": "verifikasi_harga_gabah",
     "description": (
-        "Ekstrak data verifikasi harga pembelian gabah dari pesan staff/admin. "
-        "Contoh: 'verifikasi GB-20260702-01 total 42 juta' atau "
-        "'verifikasi harga batch GB-20260702-01, harga 5.250 per kg'. "
-        "Jika sebuah data tidak disebut, kembalikan null."
+        "Ekstrak data verifikasi/penetapan harga pembelian gabah dari pesan "
+        "staff/admin. Batch bisa dirujuk lewat KODE (GB-...) ATAU secara "
+        "deskriptif (urutan 'pertama/kedua', supplier 'dari catur', 'yang "
+        "terakhir/terbaru'). Contoh: 'verifikasi GB-20260702-01 total 42 juta', "
+        "'gabah yang datang pertama harganya 7500 per kg', 'gabah dari catur "
+        "8.000 per kg'. Jika sebuah data tidak disebut, kembalikan null."
     ),
     "input_schema": {
         "type": "object",
@@ -728,16 +730,19 @@ VERIFIKASI_HARGA_GABAH = {
             "is_verifikasi_harga": {
                 "type": "boolean",
                 "description": (
-                    "true jika pesan bermaksud MENETAPKAN / MENYETUJUI / "
-                    "MENGONFIRMASI harga atau biaya sebuah batch gabah — dikenali "
-                    "dari adanya kode batch (GB-...) DAN/ATAU sebuah nilai harga, "
-                    "TANPA harus ada kata 'verifikasi'. Deteksi dari MAKNA, bukan "
-                    "kata kunci. Contoh yang HARUS true: 'verifikasi GB-...', "
-                    "'acc GB-... 42jt', 'GB-... harganya 5rb per kilo', "
-                    "'harga batch GB-... 42 juta', 'GB-20260702-01 deal 42jt', "
-                    "'setuju 5.250/kg buat GB-...', 'oke GB-... total 42 juta', "
-                    "'gabah GB-... 5250 sekilo'. false hanya untuk hal lain "
-                    "seperti pertanyaan stok, laporan, atau sapaan."
+                    "true jika pesan MENYATAKAN / MENETAPKAN / MENYETUJUI harga "
+                    "atau biaya sebuah batch gabah — dikenali dari adanya SEBUAH "
+                    "NILAI HARGA yang dinyatakan untuk sebuah batch (dirujuk lewat "
+                    "kode GB-... ATAU deskriptif: 'pertama', 'dari catur', "
+                    "'terakhir'), TANPA harus ada kata 'verifikasi'. Deteksi dari "
+                    "MAKNA. Contoh yang HARUS true: 'verifikasi GB-... 42jt', "
+                    "'GB-... 5rb per kilo', 'gabah yang datang pertama harganya "
+                    "7500 per kg', 'gabah dari catur 8.000/kg', 'batch kedua total "
+                    "42 juta', 'yang terakhir 5.250 sekilo'. "
+                    "false untuk PERTANYAAN (bukan penetapan): 'berapa harga gabah "
+                    "pertama', 'apa yang perlu diverifikasi', 'gabah mana yang "
+                    "belum diverifikasi' — ini bukan penetapan harga. Juga false "
+                    "untuk stok/laporan/sapaan."
                 ),
             },
             "kode_batch": {
@@ -745,8 +750,23 @@ VERIFIKASI_HARGA_GABAH = {
                 "description": (
                     "Kode batch gabah yang diverifikasi, format GB-YYYYMMDD-NN. "
                     "Normalkan ke huruf besar. Contoh: 'gb 20260702 01' -> "
-                    "'GB-20260702-01'."
+                    "'GB-20260702-01'. null bila batch dirujuk deskriptif."
                 ),
+            },
+            "urutan": {
+                "type": ["integer", "null"],
+                "description": (
+                    "Urutan batch (1-based) bila dirujuk begitu: 'pertama'->1, "
+                    "'kedua'->2, 'ketiga'->3. null bila tidak."
+                ),
+            },
+            "supplier_nama": {
+                "type": ["string", "null"],
+                "description": "Nama supplier bila batch dirujuk begitu ('dari catur'->'catur').",
+            },
+            "terbaru": {
+                "type": "boolean",
+                "description": "true bila batch dirujuk sebagai yang TERAKHIR/TERBARU.",
             },
             "metode_harga": {
                 "type": ["string", "null"],

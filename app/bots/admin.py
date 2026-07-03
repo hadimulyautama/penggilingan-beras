@@ -44,6 +44,7 @@ from app.services.transfer import (
     laporan_pk_siap_transfer,
     laporan_transfer,
 )
+from app.services.report import resolve_batch_kode_ref
 from app.services.verification import (
     compute_price,
     get_batch_by_kode,
@@ -350,6 +351,48 @@ async def handle_message(message: Message) -> None:
         if await _handle_milling_admin(message, db, user, text, session):
             return
 
+        # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena
+        #    "gabah pertama harganya 7500/kg" itu PERINTAH, bukan pertanyaan ──
+        try:
+            parsed = await parse_verification(text)
+        except Exception:
+            log.exception("parse_verification gagal")
+            await message.answer(AI_ERROR_MSG)
+            return
+        # Jaring pengaman: lengkapi kode bila terlewat. Paksa jadi verifikasi
+        # HANYA bila ada NILAI harga (perintah) — jangan untuk pertanyaan
+        # seperti "berapa harga GB-..." (itu biar ditangani modul detail).
+        kode_regex = _extract_kode(text)
+        if kode_regex:
+            parsed.kode_batch = parsed.kode_batch or kode_regex
+            if parsed.nilai_rupiah is not None:
+                parsed.is_verifikasi_harga = True
+
+        if parsed.is_verifikasi_harga:
+            # Resolusi rujukan batch: kode > deskriptif (urutan/supplier/
+            # terbaru) > konteks percakapan.
+            if not parsed.kode_batch:
+                if parsed.urutan or parsed.supplier_nama or parsed.terbaru:
+                    kodes = await resolve_batch_kode_ref(
+                        db, urutan=parsed.urutan, supplier=parsed.supplier_nama,
+                        terbaru=parsed.terbaru,
+                    )
+                    if len(kodes) == 1:
+                        parsed.kode_batch = kodes[0]
+                    elif len(kodes) > 1:
+                        await message.answer(
+                            "Batch mana yang dimaksud? " + ", ".join(kodes[:10])
+                            + "\nSebutkan kodenya, mis. `" + kodes[0] + " 7500 per kg`.",
+                            parse_mode="Markdown",
+                        )
+                        return
+                    # 0 -> biarkan _advance_verif menanyakan kode.
+                else:
+                    parsed.kode_batch = session.ctx_batch
+            session.verif_draft = parsed
+            await _advance_verif(message, db, tg_id, session)
+            return
+
         # ── Status proses berjalan ("proses apa yang sedang berlangsung") ──
         if await maybe_answer_status(message, text):
             return
@@ -362,43 +405,24 @@ async def handle_message(message: Message) -> None:
         if await maybe_answer_detail(message, text, session):
             return
 
-        # ── Pesan baru ──
-        try:
-            parsed = await parse_verification(text)
-        except Exception:
-            log.exception("parse_verification gagal")
-            await message.answer(AI_ERROR_MSG)
+        # ── Mencari kode batch/lot ("batch dari budi kodenya apa")? ──
+        if await maybe_answer_lookup(message, text, session):
             return
-        # Jaring pengaman: bila ada kode batch di pesan, perlakukan sebagai
-        # verifikasi walau Claude ragu — dan lengkapi kode bila terlewat.
-        kode_regex = _extract_kode(text)
-        if kode_regex:
-            parsed.is_verifikasi_harga = True
-            parsed.kode_batch = parsed.kode_batch or kode_regex
-        # Konteks: "verifikasi yang tadi 42jt" -> pakai batch terakhir.
-        if parsed.is_verifikasi_harga and not parsed.kode_batch:
-            parsed.kode_batch = session.ctx_batch
 
-        if not parsed.is_verifikasi_harga:
-            # Mencari kode batch/lot ("batch dari budi kodenya apa")?
-            if await maybe_answer_lookup(message, text, session):
-                return
-            # Pertanyaan laporan ("berapa gabah masuk hari ini")?
-            if await maybe_answer_report(message, text, session):
-                return
-            await message.answer(
-                "Belum paham 🙏. Contoh yang bisa saya lakukan:\n"
-                "• Cek tugas: `ada yang perlu diverifikasi?`\n"
-                "• Verifikasi harga: `verifikasi GB-20260702-01 total 42 juta`\n"
-                "• QC milling: `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`\n"
-                "• Verifikasi output: `verifikasi output MIL-20260702-01 14 ton`\n"
-                "• Cari kode: `batch dari budi kodenya apa`\n"
-                "Atau /start untuk bantuan.",
-                parse_mode="Markdown",
-            )
+        # ── Pertanyaan laporan ("berapa gabah masuk hari ini")? ──
+        if await maybe_answer_report(message, text, session):
             return
-        session.verif_draft = parsed
-        await _advance_verif(message, db, tg_id, session)
+
+        await message.answer(
+            "Belum paham 🙏. Contoh yang bisa saya lakukan:\n"
+            "• Cek tugas: `ada yang perlu diverifikasi?`\n"
+            "• Verifikasi harga: `verifikasi GB-20260702-01 total 42 juta`\n"
+            "• QC milling: `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`\n"
+            "• Verifikasi output: `verifikasi output MIL-20260702-01 14 ton`\n"
+            "• Cari kode: `batch dari budi kodenya apa`\n"
+            "Atau /start untuk bantuan.",
+            parse_mode="Markdown",
+        )
 
 
 async def _advance_verif(message: Message, db, tg_id: int, session) -> None:

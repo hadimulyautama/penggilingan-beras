@@ -101,6 +101,10 @@ class ParsedVerification:
     kode_batch: str | None = None
     metode_harga: str | None = None  # total | per_kg
     nilai_rupiah: float | None = None
+    # Rujukan deskriptif batch (bila kode tidak disebut).
+    urutan: int | None = None
+    supplier_nama: str | None = None
+    terbaru: bool = False
 
 
 @dataclass
@@ -327,9 +331,14 @@ async def parse_verification(text: str) -> ParsedVerification:
         [{"role": "user", "content": text}], VERIFIKASI_HARGA_GABAH
     )
     kode = data.get("kode_batch")
+    urut = data.get("urutan")
+    sup = data.get("supplier_nama")
     return ParsedVerification(
         is_verifikasi_harga=bool(data.get("is_verifikasi_harga", False)),
         kode_batch=kode.upper().strip() if isinstance(kode, str) else None,
         metode_harga=data.get("metode_harga"),
         nilai_rupiah=data.get("nilai_rupiah"),
+        urutan=int(urut) if isinstance(urut, (int, float)) else None,
+        supplier_nama=sup.strip() if isinstance(sup, str) and sup.strip() else None,
+        terbaru=bool(data.get("terbaru", False)),
     )

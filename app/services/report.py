@@ -138,6 +138,23 @@ async def _resolve_batches(
     return rows
 
 
+async def resolve_batch_kode_ref(
+    db: AsyncSession, *, urutan: int | None = None, supplier: str | None = None,
+    terbaru: bool = False,
+) -> list[str]:
+    """Kode batch yang cocok dengan rujukan deskriptif (urutan/supplier/terbaru).
+
+    Dipakai verifikasi harga saat operator menyebut 'gabah pertama' / 'dari
+    catur' / 'yang terakhir' alih-alih kode. Kembalikan daftar kode; 1 = pasti,
+    >1 = ambigu (handler menanyakan), 0 = tidak ketemu.
+    """
+    rows = await _resolve_batches(
+        db, supplier=supplier, periode=None, urutan=urutan,
+        kondisi=None, terbaru=terbaru, kode=None,
+    )
+    return [b.kode_batch for b, _ in rows]
+
+
 async def _batch_detail_card(db: AsyncSession, batch: PurchaseBatch, nama: str) -> str:
     verif = (
         await db.execute(
