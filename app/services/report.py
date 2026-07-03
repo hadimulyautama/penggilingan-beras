@@ -26,6 +26,11 @@ def _fmt_waktu(dt: datetime | None) -> str:
         return "-"
     d = _to_local(dt)
     return f"{_HARI[d.weekday()]}, {d.day:02d} {_BULAN[d.month - 1]} {d.year} {d:%H:%M}"
+
+
+def _fmt_tgl(d: date) -> str:
+    """Label tanggal: 'Senin, 03 Jul 2026'."""
+    return f"{_HARI[d.weekday()]}, {d.day:02d} {_BULAN[d.month - 1]} {d.year}"
 from app.models import (
     DryingLot,
     DryingLotBatch,
@@ -65,11 +70,17 @@ def _fmt_kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
 
-async def laporan_pembelian_gabah(db: AsyncSession, periode: str | None) -> str:
-    """Teks laporan pembelian gabah untuk periode tertentu (default hari_ini)."""
-    periode = periode if periode in _LABELS else "hari_ini"
-    start, end = _range(periode)
-    label = _LABELS[periode]
+async def laporan_pembelian_gabah(
+    db: AsyncSession, periode: str | None, tanggal: date | None = None
+) -> str:
+    """Teks laporan pembelian gabah untuk periode/tanggal (default hari_ini)."""
+    if tanggal is not None:
+        start = end = tanggal
+        label = _fmt_tgl(tanggal)
+    else:
+        periode = periode if periode in _LABELS else "hari_ini"
+        start, end = _range(periode)
+        label = _LABELS[periode]
 
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
@@ -124,7 +135,8 @@ def _rupiah(n: float | None) -> str:
 
 
 async def _resolve_batches(
-    db: AsyncSession, *, supplier, periode, urutan, kondisi, terbaru, kode
+    db: AsyncSession, *, supplier, periode, urutan, kondisi, terbaru, kode,
+    tanggal=None,
 ):
     if kode:
         stmt = (
@@ -133,10 +145,13 @@ async def _resolve_batches(
             .where(PurchaseBatch.kode_batch == kode)
         )
         return (await db.execute(stmt)).all()
-    eff = _default_periode(
-        periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
-    )
-    start, end = _range(eff)
+    if tanggal is not None:
+        start = end = tanggal
+    else:
+        eff = _default_periode(
+            periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
+        )
+        start, end = _range(eff)
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
     )
@@ -216,6 +231,7 @@ async def detail_query(
     urutan: int | None = None,
     kondisi: str | None = None,
     terbaru: bool = False,
+    tanggal: date | None = None,
     ctx_batch: str | None = None,
     ctx_lot: str | None = None,
     ctx_mil: str | None = None,
@@ -250,7 +266,7 @@ async def detail_query(
         return await laporan_milling(db, mk)
 
     # target batch (default)
-    has_ref = any([supplier, urutan, kondisi, terbaru])
+    has_ref = any([supplier, urutan, kondisi, terbaru, tanggal])
     if not has_ref and ctx_batch:
         rows = await _resolve_batches(
             db, supplier=None, periode=None, urutan=None, kondisi=None, terbaru=False, kode=ctx_batch
@@ -258,7 +274,7 @@ async def detail_query(
     else:
         rows = await _resolve_batches(
             db, supplier=supplier, periode=periode, urutan=urutan,
-            kondisi=kondisi, terbaru=terbaru, kode=None,
+            kondisi=kondisi, terbaru=terbaru, kode=None, tanggal=tanggal,
         )
     if not rows:
         return "🔎 Tidak ada gabah yang cocok dengan kriteria itu."
@@ -398,13 +414,18 @@ async def cari_kode(
     urutan: int | None = None,
     kondisi: str | None = None,
     terbaru: bool = False,
+    tanggal: date | None = None,
 ) -> str:
     """Cari kode batch/lot berdasarkan ciri (supplier/hari/urutan/kondisi/terbaru)."""
-    eff = _default_periode(
-        periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
-    )
-    label = _LABELS[eff]
-    start, end = _range(eff)
+    if tanggal is not None:
+        start = end = tanggal
+        label = _fmt_tgl(tanggal)
+    else:
+        eff = _default_periode(
+            periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
+        )
+        label = _LABELS[eff]
+        start, end = _range(eff)
 
     if target == "lot":
         stmt = select(DryingLot)
@@ -482,14 +503,21 @@ async def cari_kode(
 
 # ─────────────────── Analitik jam kedatangan gabah ───────────────────
 async def insight_jam_kedatangan(
-    db: AsyncSession, *, supplier: str | None = None, periode: str | None = None
+    db: AsyncSession, *, supplier: str | None = None, periode: str | None = None,
+    tanggal: date | None = None,
 ) -> str:
     """Analisa pola jam kedatangan gabah (insight untuk pimpinan/operasional).
 
-    Default lintas seluruh waktu agar polanya bermakna.
+    Default lintas seluruh waktu agar polanya bermakna. Bila `tanggal`
+    diberikan, batasi ke satu hari itu.
     """
-    eff = periode if periode in _LABELS else "semua"
-    start, end = _range(eff)
+    if tanggal is not None:
+        start = end = tanggal
+        ket_periode = _fmt_tgl(tanggal)
+    else:
+        eff = periode if periode in _LABELS else "semua"
+        start, end = _range(eff)
+        ket_periode = _LABELS[eff]
     stmt = select(PurchaseBatch.waktu_pembelian).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
     )
@@ -502,7 +530,7 @@ async def insight_jam_kedatangan(
         stmt = stmt.where(func.lower(Supplier.nama_supplier).like(f"%{supplier.lower()}%"))
     waktu = [w for w in (await db.execute(stmt)).scalars().all() if w is not None]
 
-    ket = _LABELS[eff] + (f" · supplier {supplier}" if supplier else "")
+    ket = ket_periode + (f" · supplier {supplier}" if supplier else "")
     if not waktu:
         return f"📊 Belum ada data jam kedatangan ({ket})."
 

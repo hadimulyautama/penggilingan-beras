@@ -23,7 +23,7 @@ async def maybe_answer_jam(message: Message, text: str) -> bool:
         return False
     async with SessionLocal() as db:
         teks = await insight_jam_kedatangan(
-            db, supplier=p.supplier_nama, periode=p.periode
+            db, supplier=p.supplier_nama, periode=p.periode, tanggal=p.tanggal
         )
     await message.answer(teks)
     return True

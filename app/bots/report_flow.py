@@ -26,10 +26,11 @@ async def maybe_answer_report(message: Message, text: str, session=None) -> bool
     if not parsed.is_laporan_gabah:
         return False
     async with SessionLocal() as db:
-        teks = await laporan_pembelian_gabah(db, parsed.periode)
+        teks = await laporan_pembelian_gabah(db, parsed.periode, parsed.tanggal)
     # Simpan konteks untuk pertanyaan lanjutan ("apa saja kodenya").
     if session is not None:
         session.ctx_topic = "batch"
         session.ctx_periode = parsed.periode or "hari_ini"
+        session.ctx_tanggal = parsed.tanggal
     await message.answer(teks)  # teks polos (tanpa Markdown) — aman
     return True

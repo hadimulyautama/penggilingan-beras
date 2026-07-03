@@ -2,8 +2,34 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+from datetime import date, timedelta
 
 from app.ai.claude_client import get_client
+from app.database import now_local
+
+_HARI_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+
+
+def _date_context() -> str:
+    """Tabel tanggal 14 hari terakhir agar Claude memetakan rujukan hari
+    (mis. 'kamis kemarin') lewat LOOKUP, bukan aritmetika (yang rawan salah)."""
+    today = now_local().date()
+    baris = []
+    for i in range(14):
+        d = today - timedelta(days=i)
+        tag = " (hari ini)" if i == 0 else (" (kemarin)" if i == 1 else "")
+        baris.append(f"{d:%Y-%m-%d} {_HARI_ID[d.weekday()]}{tag}")
+    return "\n".join(baris)
+
+
+def _parse_iso_date(v) -> date | None:
+    """Ubah 'YYYY-MM-DD' dari Claude menjadi objek date; None bila tak valid."""
+    if not isinstance(v, str) or not v.strip():
+        return None
+    try:
+        return date.fromisoformat(v.strip()[:10])
+    except ValueError:
+        return None
 from app.ai.tools import (
     CARI_KODE,
     CATAT_PEMBELIAN_GABAH,
@@ -46,10 +72,19 @@ class ParsedPurchase:
 async def _invoke_tool(messages: list[dict], tool: dict) -> dict:
     """Panggil Claude dengan forced tool-use dan kembalikan input tool (dict)."""
     client = get_client()
+    system = SYSTEM_PROMPT + (
+        "\n\nKonteks waktu — tanggal 14 hari terakhir (pakai LOOKUP tabel ini, "
+        "jangan menghitung manual):\n" + _date_context() + "\n\n"
+        "Untuk rujukan tanggal spesifik/relatif (mis. 'kemarin', 'senin "
+        "kemarin', 'kamis lalu', 'tanggal 1 juli', '2 hari lalu'), CARI di tabel "
+        "lalu isikan tanggal ABSOLUT format YYYY-MM-DD ke field 'tanggal' bila "
+        "tool menyediakannya. '[hari] kemarin'/'[hari] lalu' = baris PALING ATAS "
+        "(terbaru) dengan hari itu. Nama bulan: Januari=01 … Juli=07 … Des=12."
+    )
     resp = await client.messages.create(
         model=settings.claude_model,
         max_tokens=1024,
-        system=SYSTEM_PROMPT,
+        system=system,
         tools=[tool],
         tool_choice={"type": "tool", "name": tool["name"]},
         messages=messages,
@@ -253,6 +288,7 @@ class ParsedLookup:
     urutan: int | None = None
     kondisi: str | None = None
     terbaru: bool = False
+    tanggal: date | None = None
 
 
 async def parse_lookup(text: str) -> ParsedLookup:
@@ -267,6 +303,7 @@ async def parse_lookup(text: str) -> ParsedLookup:
         urutan=int(urutan) if isinstance(urutan, (int, float)) else None,
         kondisi=data.get("kondisi"),
         terbaru=bool(data.get("terbaru", False)),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -274,6 +311,7 @@ async def parse_lookup(text: str) -> ParsedLookup:
 class ParsedReport:
     is_laporan_gabah: bool = False
     periode: str | None = None
+    tanggal: date | None = None
 
 
 async def parse_report(text: str) -> ParsedReport:
@@ -282,6 +320,7 @@ async def parse_report(text: str) -> ParsedReport:
     return ParsedReport(
         is_laporan_gabah=bool(data.get("is_laporan_gabah", False)),
         periode=data.get("periode"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -302,6 +341,7 @@ class ParsedJam:
     is_tanya_jam: bool = False
     supplier_nama: str | None = None
     periode: str | None = None
+    tanggal: date | None = None
 
 
 async def parse_jam(text: str) -> ParsedJam:
@@ -312,6 +352,7 @@ async def parse_jam(text: str) -> ParsedJam:
         is_tanya_jam=bool(data.get("is_tanya_jam", False)),
         supplier_nama=sup.strip() if isinstance(sup, str) and sup.strip() else None,
         periode=data.get("periode"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -325,6 +366,7 @@ class ParsedDetail:
     urutan: int | None = None
     kondisi: str | None = None
     terbaru: bool = False
+    tanggal: date | None = None
 
 
 async def parse_detail(text: str) -> ParsedDetail:
@@ -341,6 +383,7 @@ async def parse_detail(text: str) -> ParsedDetail:
         urutan=int(urutan) if isinstance(urutan, (int, float)) else None,
         kondisi=data.get("kondisi"),
         terbaru=bool(data.get("terbaru", False)),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 

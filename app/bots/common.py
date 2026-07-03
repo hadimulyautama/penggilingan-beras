@@ -49,6 +49,7 @@ class UserSession:
     # kodenya"): subjek & periode terakhir yang ditanyakan.
     ctx_topic: str | None = None    # batch | lot
     ctx_periode: str | None = None  # hari_ini | kemarin | minggu_ini | ...
+    ctx_tanggal: object | None = None  # datetime.date spesifik (bila ditanya)
     # Override akses: admin/staff mengerjakan aksi fisik operator (fallback).
     override_text: str | None = None   # perintah yang menunggu konfirmasi override
     override_active: bool = False      # True saat re-run setelah override disetujui

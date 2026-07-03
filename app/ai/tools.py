@@ -107,6 +107,14 @@ TANYA_LAPORAN_GABAH = {
                     "Jika tidak disebut, kembalikan null (dianggap hari_ini)."
                 ),
             },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal SPESIFIK YYYY-MM-DD bila merujuk satu hari tertentu "
+                    "('senin kemarin', 'tanggal 1 juli') — hitung dari HARI INI. "
+                    "null bila tidak."
+                ),
+            },
         },
         "required": ["is_laporan_gabah"],
     },
@@ -457,6 +465,14 @@ TANYA_DETAIL = {
                 "type": "boolean",
                 "description": "true bila minta yang TERBARU/TERAKHIR.",
             },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal SPESIFIK YYYY-MM-DD bila entitas dirujuk pada satu "
+                    "hari tertentu ('gabah senin kemarin', 'batch tanggal 1 "
+                    "juli') — hitung dari HARI INI. null bila tidak."
+                ),
+            },
         },
         "required": ["is_detail"],
     },
@@ -586,6 +602,14 @@ CARI_KODE = {
             "terbaru": {
                 "type": "boolean",
                 "description": "true bila pengguna minta yang TERBARU/TERAKHIR/BARUSAN.",
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal SPESIFIK YYYY-MM-DD bila merujuk satu hari tertentu "
+                    "('senin kemarin', 'tanggal 1 juli') — hitung dari HARI INI. "
+                    "null bila tidak."
+                ),
             },
         },
         "required": ["is_cari_kode"],
@@ -828,6 +852,14 @@ TANYA_JAM = {
                 "description": (
                     "Rentang waktu bila disebut. null -> keseluruhan (pola "
                     "paling bermakna dari seluruh riwayat)."
+                ),
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal SPESIFIK format YYYY-MM-DD bila pengguna merujuk "
+                    "satu hari tertentu ('senin kemarin', 'tanggal 1 juli') — "
+                    "hitung dari konteks HARI INI. null bila tidak."
                 ),
             },
         },

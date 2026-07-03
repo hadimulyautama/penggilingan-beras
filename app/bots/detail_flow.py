@@ -73,6 +73,7 @@ async def maybe_answer_detail(message: Message, text: str, session=None) -> bool
             urutan=p.urutan,
             kondisi=p.kondisi,
             terbaru=p.terbaru,
+            tanggal=p.tanggal,
             ctx_batch=getattr(session, "ctx_batch", None),
             ctx_lot=getattr(session, "ctx_lot", None),
             ctx_mil=getattr(session, "ctx_mil", None),
