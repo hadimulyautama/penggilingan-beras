@@ -989,3 +989,31 @@ UNDO_TERAKHIR = {
         "required": ["is_undo"],
     },
 }
+
+
+# Tool analitik strategis (Bot Admin): scorecard supplier & tren HPP.
+TANYA_ANALITIK = {
+    "name": "tanya_analitik",
+    "description": (
+        "Deteksi pertanyaan ANALITIK STRATEGIS. Contoh: 'supplier mana paling "
+        "menguntungkan', 'scorecard supplier', 'peringkat pemasok', 'supplier "
+        "terbaik', 'tren HPP', 'biaya produksi PK per bulan', 'HPP naik atau "
+        "turun'. Bila bukan analitik strategis, pilih 'bukan_analitik'."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": ["supplier_scorecard", "hpp_tren", "bukan_analitik"],
+                "description": (
+                    "'supplier_scorecard': peringkat/analisa supplier "
+                    "(untung/harga/rendemen/kualitas). 'hpp_tren': tren biaya "
+                    "pokok PK per kg dari waktu ke waktu. 'bukan_analitik': "
+                    "pertanyaan operasional biasa / lainnya."
+                ),
+            }
+        },
+        "required": ["intent"],
+    },
+}

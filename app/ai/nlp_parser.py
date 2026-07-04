@@ -34,6 +34,7 @@ from app.ai.tools import (
     CARI_KODE,
     CATAT_PEMBELIAN_GABAH,
     KELOLA_USER,
+    TANYA_ANALITIK,
     PROSES_MILLING,
     PROSES_MILLING_ADMIN,
     PROSES_PENGERINGAN,
@@ -345,6 +346,12 @@ class ParsedUndo:
     is_undo: bool = False
     scope: str | None = None
     nama: str | None = None
+
+
+async def parse_analitik(text: str) -> str:
+    """Kembalikan intent analitik: supplier_scorecard | hpp_tren | bukan_analitik."""
+    data = await _invoke_tool([{"role": "user", "content": text}], TANYA_ANALITIK)
+    return data.get("intent", "bukan_analitik")
 
 
 async def parse_undo(text: str) -> ParsedUndo:

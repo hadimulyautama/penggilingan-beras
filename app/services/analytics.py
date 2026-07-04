@@ -1,0 +1,247 @@
+"""Lapisan analitik strategis — supplier scorecard & tren HPP.
+
+Catatan atribusi: satu proses milling memakai satu LOT (bisa banyak batch,
+mungkin beda supplier). Rendemen & biaya dialokasikan ke supplier secara
+PROPORSIONAL berdasarkan bobot (kg) tiap batch dalam lot.
+"""
+from __future__ import annotations
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import (
+    DryingLotBatch,
+    MillingProcess,
+    MillingProcessVerification,
+    MillingProgressLog,
+    MillingQcLog,
+    PurchaseBatch,
+    PurchaseBatchVerification,
+    Supplier,
+)
+
+_BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt",
+          "Nov", "Des"]
+
+
+def _rp(n: float | None) -> str:
+    return "Rp " + f"{n:,.0f}".replace(",", ".") if n is not None else "-"
+
+
+def _ton(kg: float) -> str:
+    return f"{kg / 1000:,.1f} ton".replace(",", ".")
+
+
+async def _proc_pk_output(db: AsyncSession, proc: MillingProcess) -> float | None:
+    """PK output sebuah proses: berat terverifikasi > progress terakhir."""
+    v = (
+        await db.execute(
+            select(MillingProcessVerification.berat_output_final_kg).where(
+                MillingProcessVerification.milling_process_id == proc.id
+            )
+        )
+    ).scalars().first()
+    if v:
+        return float(v)
+    p = (
+        await db.execute(
+            select(MillingProgressLog.berat_kumulatif_kg)
+            .where(MillingProgressLog.milling_process_id == proc.id)
+            .order_by(MillingProgressLog.waktu_update.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    return float(p) if p else None
+
+
+async def _proc_batches(db: AsyncSession, proc: MillingProcess):
+    """Daftar (batch, harga_per_kg|None) sumber sebuah proses."""
+    if proc.drying_lot_id:
+        rows = (
+            await db.execute(
+                select(PurchaseBatch, PurchaseBatchVerification.harga_per_kg)
+                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .join(
+                    PurchaseBatchVerification,
+                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
+                    isouter=True,
+                )
+                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
+            )
+        ).all()
+        return rows
+    if proc.purchase_batch_id:
+        row = (
+            await db.execute(
+                select(PurchaseBatch, PurchaseBatchVerification.harga_per_kg)
+                .join(
+                    PurchaseBatchVerification,
+                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
+                    isouter=True,
+                )
+                .where(PurchaseBatch.id == proc.purchase_batch_id)
+            )
+        ).all()
+        return row
+    return []
+
+
+async def supplier_scorecard(db: AsyncSession) -> str:
+    """Skor per supplier: pasok, harga, rendemen, kualitas, HPP/kg PK.
+
+    Diperingkat dari HPP/kg PK terendah (paling hemat = paling menguntungkan
+    pada harga jual PK yang sama).
+    """
+    # ── 1. Pengadaan per supplier (semua batch) ──
+    prow = (
+        await db.execute(
+            select(
+                Supplier.id, Supplier.nama_supplier,
+                func.count(PurchaseBatch.id),
+                func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0),
+                func.avg(PurchaseBatch.kadar_air_awal_persen),
+            )
+            .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
+            .group_by(Supplier.id, Supplier.nama_supplier)
+        )
+    ).all()
+    if not prow:
+        return "📊 Belum ada data pembelian untuk dianalisa."
+
+    agg: dict[int, dict] = {}
+    for sid, nama, nbatch, kg, ka in prow:
+        agg[sid] = {
+            "nama": nama, "n_batch": int(nbatch), "kg": float(kg),
+            "kadar_air": float(ka) if ka is not None else None,
+            "biaya_verif": 0.0, "kg_verif": 0.0,      # utk harga rata2
+            "pk_alloc": 0.0, "gabah_milled": 0.0, "cost_milled": 0.0,
+        }
+
+    # Harga rata-rata tertimbang (dari batch terverifikasi).
+    vrow = (
+        await db.execute(
+            select(
+                PurchaseBatch.supplier_id,
+                func.coalesce(func.sum(PurchaseBatch.berat_total_kg * PurchaseBatchVerification.harga_per_kg), 0),
+                func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0),
+            )
+            .join(PurchaseBatchVerification, PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id)
+            .where(PurchaseBatchVerification.harga_per_kg.isnot(None))
+            .group_by(PurchaseBatch.supplier_id)
+        )
+    ).all()
+    for sid, biaya, kgv in vrow:
+        if sid in agg:
+            agg[sid]["biaya_verif"] = float(biaya)
+            agg[sid]["kg_verif"] = float(kgv)
+
+    # ── 2. Rendemen & biaya termilling (alokasi proporsional) ──
+    procs = (
+        await db.execute(select(MillingProcess).where(MillingProcess.status == "selesai"))
+    ).scalars().all()
+    for proc in procs:
+        output = await _proc_pk_output(db, proc)
+        if not output:
+            continue
+        batches = await _proc_batches(db, proc)
+        total_kg = sum(float(b.berat_total_kg) for b, _ in batches)
+        if total_kg <= 0:
+            continue
+        for b, harga in batches:
+            sid = b.supplier_id
+            if sid not in agg:
+                continue
+            kg = float(b.berat_total_kg)
+            share = kg / total_kg
+            agg[sid]["pk_alloc"] += output * share
+            agg[sid]["gabah_milled"] += kg
+            if harga is not None:
+                agg[sid]["cost_milled"] += kg * float(harga)
+
+    # ── 3. Susun & peringkat ──
+    def hpp(a):
+        return a["cost_milled"] / a["pk_alloc"] if a["pk_alloc"] > 0 and a["cost_milled"] > 0 else None
+
+    rows = list(agg.values())
+    diproduksi = [a for a in rows if a["pk_alloc"] > 0]
+    belum = [a for a in rows if a["pk_alloc"] <= 0]
+    diproduksi.sort(key=lambda a: (hpp(a) is None, hpp(a) or 0))
+
+    lines = ["📊 *Supplier Scorecard* (keseluruhan)"]
+    medali = ["🥇", "🥈", "🥉"]
+    for i, a in enumerate(diproduksi):
+        tag = medali[i] if i < len(medali) else "•"
+        harga = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
+        rend = a["pk_alloc"] / a["gabah_milled"] * 100 if a["gabah_milled"] > 0 else None
+        ka = f"{a['kadar_air']:.0f}%" if a["kadar_air"] is not None else "-"
+        h = hpp(a)
+        lines.append(
+            f"\n{tag} *{a['nama']}* — HPP PK {_rp(h)}/kg"
+            + ("  ⭐ terhemat" if i == 0 and h is not None else "")
+        )
+        lines.append(
+            f"• Pasok {_ton(a['kg'])} ({a['n_batch']} batch) · harga ~{_rp(harga)}/kg"
+        )
+        lines.append(
+            f"• Rendemen PK {rend:.1f}% · kadar air masuk {ka}"
+            if rend is not None else f"• kadar air masuk {ka}"
+        )
+    if belum:
+        lines.append("\n_Belum ada produksi PK (hanya pengadaan):_")
+        for a in belum:
+            harga = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
+            lines.append(f"• {a['nama']}: {_ton(a['kg'])} ({a['n_batch']} batch) · ~{_rp(harga)}/kg")
+    lines.append(
+        "\n_Peringkat = HPP/kg PK terendah (harga + rendemen). Profit riil butuh "
+        "harga jual PK._"
+    )
+    return "\n".join(lines)
+
+
+async def hpp_trend(db: AsyncSession) -> str:
+    """Tren HPP per kg PK per bulan (rata-rata tertimbang output)."""
+    procs = (
+        await db.execute(
+            select(MillingProcess)
+            .where(MillingProcess.status == "selesai", MillingProcess.waktu_selesai.isnot(None))
+            .order_by(MillingProcess.waktu_selesai)
+        )
+    ).scalars().all()
+
+    per_bulan: dict[tuple[int, int], list[float]] = {}  # (thn,bln) -> [cost, output]
+    for proc in procs:
+        v = (
+            await db.execute(
+                select(MillingProcessVerification.berat_output_final_kg).where(
+                    MillingProcessVerification.milling_process_id == proc.id
+                )
+            )
+        ).scalars().first()
+        if not v:
+            continue
+        output = float(v)
+        batches = await _proc_batches(db, proc)
+        if any(h is None for _, h in batches) or not batches:
+            continue  # biaya belum lengkap
+        cost = sum(float(b.berat_total_kg) * float(h) for b, h in batches)
+        key = (proc.waktu_selesai.year, proc.waktu_selesai.month)
+        acc = per_bulan.setdefault(key, [0.0, 0.0])
+        acc[0] += cost
+        acc[1] += output
+
+    if not per_bulan:
+        return (
+            "📉 Belum ada data HPP. Butuh proses giling yang SELESAI dengan "
+            "output PK terverifikasi dan harga gabah terverifikasi."
+        )
+    lines = ["📉 *Tren HPP per kg PK* (per bulan):"]
+    prev = None
+    for (thn, bln) in sorted(per_bulan):
+        cost, out = per_bulan[(thn, bln)]
+        hpp = cost / out if out else 0
+        arah = ""
+        if prev is not None:
+            arah = " 🔺" if hpp > prev else (" 🔻" if hpp < prev else " ➡️")
+        lines.append(f"• {_BULAN[bln - 1]} {thn}: {_rp(hpp)}/kg (PK {_ton(out)}){arah}")
+        prev = hpp
+    return "\n".join(lines)

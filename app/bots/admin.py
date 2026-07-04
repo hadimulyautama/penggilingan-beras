@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from app.ai.nlp_parser import (
     ParsedVerification,
+    parse_analitik,
     parse_milling_admin,
     parse_transfer,
     parse_undo,
@@ -49,6 +50,7 @@ from app.services.transfer import (
     laporan_pk_siap_transfer,
     laporan_transfer,
 )
+from app.services.analytics import hpp_trend, supplier_scorecard
 from app.services.report import resolve_batch_kode_ref
 from app.services.undo import UndoError, resolve_actor_ids, undo_last
 from app.services.user_admin import (
@@ -205,6 +207,22 @@ def _pct(v: float | None) -> str:
 
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def _handle_analitik(message: Message, db, text: str) -> bool:
+    """Analitik strategis: supplier scorecard & tren HPP. True jika ditangani."""
+    try:
+        intent = await parse_analitik(text)
+    except Exception:
+        log.exception("parse_analitik gagal")
+        return False
+    if intent == "supplier_scorecard":
+        await message.answer(await supplier_scorecard(db), parse_mode="Markdown")
+        return True
+    if intent == "hpp_tren":
+        await message.answer(await hpp_trend(db), parse_mode="Markdown")
+        return True
+    return False
 
 
 async def _handle_undo_admin(message: Message, db, user, text: str) -> bool:
@@ -412,6 +430,10 @@ async def handle_message(message: Message) -> None:
                 return
             session.verif_draft = _merge_verif(session.verif_draft, new)
             await _advance_verif(message, db, tg_id, session)
+            return
+
+        # ── Analitik strategis (scorecard supplier / tren HPP) ──
+        if await _handle_analitik(message, db, text):
             return
 
         # ── Undo tindakan terakhir (bisa per orang/role) ──
