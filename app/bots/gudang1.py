@@ -102,15 +102,20 @@ def _missing_fields(d: ParsedPurchase) -> list[str]:
         missing.append("nama supplier")
     if not d.berat_kg:
         missing.append("berat gabah")
+    # Kondisi WAJIB dipastikan (menentukan proses & jenis PK KS/KL). Bila
+    # operator tak menyebut basah/kering, bot menanyakannya — bukan menebak.
+    if d.kondisi_gabah not in ("basah", "kering"):
+        missing.append("kondisi gabah")
     return missing
 
 
 def _summary(d: ParsedPurchase) -> str:
-    kondisi = d.kondisi_gabah or "basah"
+    jns = {"basah": "KS", "kering": "KL"}.get(d.kondisi_gabah or "")
+    kondisi = f"{d.kondisi_gabah}" + (f"  →  PK {jns}" if jns else "")
     lines = [
         "Oke, saya catat:",
         f"• Supplier: *{d.nama_supplier}*",
-        f"• Kondisi: {kondisi}" + ("  _(default)_" if not d.kondisi_gabah else ""),
+        f"• Kondisi: {kondisi}",
         f"• Berat: {_fmt_berat(d.berat_kg)}",
     ]
     if d.kadar_air_awal_persen is not None:
@@ -121,9 +126,17 @@ def _summary(d: ParsedPurchase) -> str:
 
 
 def _ask_missing(missing: list[str]) -> str:
+    if missing == ["kondisi gabah"]:
+        return (
+            "Gabah yang masuk ini *basah* atau *kering*?\n"
+            "_(menentukan proses & jenis PK: basah → KS, kering → KL)_"
+        )
     if len(missing) == 1:
         return f"Baik. {missing[0].capitalize()} berapa/siapa ya?"
-    return "Data belum lengkap. Mohon sebutkan: " + ", ".join(missing) + "."
+    labels = [
+        f"{m} (basah/kering)" if m == "kondisi gabah" else m for m in missing
+    ]
+    return "Data belum lengkap. Mohon sebutkan: " + ", ".join(labels) + "."
 
 
 @router.message(Command("start"))
@@ -383,7 +396,7 @@ async def _save(message: Message, db, user, session) -> None:
             user=user,
             nama_supplier=d.nama_supplier,
             berat_kg=float(d.berat_kg),
-            kondisi_gabah=d.kondisi_gabah or "basah",
+            kondisi_gabah=d.kondisi_gabah,
             no_polisi_truk=d.no_polisi_truk,
             kadar_air_awal_persen=d.kadar_air_awal_persen,
         )
@@ -407,7 +420,7 @@ async def _save(message: Message, db, user, session) -> None:
     if result.supplier_created:
         extra = f"\n_Supplier baru '{result.supplier.nama_supplier}' ditambahkan._"
     note_kering = ""
-    if (d.kondisi_gabah or "basah") == "kering":
+    if d.kondisi_gabah == "kering":
         note_kering = "\nℹ️ Gabah kering — penempatan silo/pengeringan dicatat di langkah berikutnya."
 
     await message.answer(

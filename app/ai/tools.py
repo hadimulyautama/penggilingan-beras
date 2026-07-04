@@ -43,8 +43,11 @@ CATAT_PEMBELIAN_GABAH = {
                 "type": ["string", "null"],
                 "enum": ["basah", "kering", None],
                 "description": (
-                    "Kondisi gabah. Jika operator tidak menyebut, kembalikan "
-                    "null (backend memakai default 'basah')."
+                    "Kondisi gabah: 'basah' atau 'kering'. Isi HANYA bila "
+                    "operator menyebut eksplisit (mis. 'gabah basah', 'masih "
+                    "basah', 'gabah kering', 'sudah kering'). Bila TIDAK "
+                    "disebut, WAJIB kembalikan null — JANGAN menebak; bot akan "
+                    "menanyakan langsung ke operator."
                 ),
             },
             "no_polisi_truk": {
