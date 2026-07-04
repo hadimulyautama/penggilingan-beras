@@ -27,6 +27,7 @@ from app.bots.common import (
     CONFIRM_WORDS,
     authenticate,
     can_see_financials,
+    can_transfer_pk,
     get_session,
     handle_shared_contact,
     reset_verif,
@@ -325,6 +326,14 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
 
     try:
         if p.intent == "buat_transfer":
+            if not can_transfer_pk(user):
+                await message.answer(
+                    "🔒 Pengiriman PK ke Gudang 2 hanya bisa dilakukan oleh "
+                    "*staff* (atau admin)."
+                    "\n_Laporan PK siap kirim/riwayat tetap bisa Anda lihat._",
+                    parse_mode="Markdown",
+                )
+                return True
             kode = p.kode_proses or _extract_mil(text) or session.ctx_mil
             if not kode:
                 await message.answer(

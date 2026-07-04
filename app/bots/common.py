@@ -37,6 +37,12 @@ def can_see_financials(user: User | None) -> bool:
     return bool(user) and user.role in ("admin", "staff")
 
 
+def can_transfer_pk(user: User | None) -> bool:
+    """Pengiriman PK Gudang 1 → Gudang 2 hanya oleh staff (pelaksana utama);
+    admin diizinkan sebagai override. Operator TIDAK boleh."""
+    return bool(user) and user.role in ("staff", "admin")
+
+
 def share_contact_keyboard() -> ReplyKeyboardMarkup:
     """Tombol untuk membagikan nomor HP (aktivasi user pra-daftar via HP)."""
     return ReplyKeyboardMarkup(
