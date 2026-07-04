@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
+from app.services.milling import pk_jenis
 
 _LOKASI = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
 
@@ -134,6 +135,7 @@ class TransferResult:
     kode_proses: str
     lokasi_label: str
     hpp_per_kg: float | None
+    jenis: str | None = None  # KS / KL
 
 
 async def create_internal_transfer(
@@ -163,6 +165,7 @@ async def create_internal_transfer(
     kirim = tersedia if berat is None else min(float(berat), tersedia)
 
     hpp = await hpp_per_kg_pk(db, proc)
+    jenis = await pk_jenis(db, proc)
     now = now_local()
     transfer = InternalTransfer(
         kode_transfer=await next_transfer_code(db),
@@ -186,7 +189,7 @@ async def create_internal_transfer(
     await db.refresh(transfer)
     return TransferResult(
         transfer=transfer, kode_proses=kode_proses,
-        lokasi_label=_LOKASI[lokasi_tujuan], hpp_per_kg=hpp,
+        lokasi_label=_LOKASI[lokasi_tujuan], hpp_per_kg=hpp, jenis=jenis,
     )
 
 
@@ -204,17 +207,21 @@ async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
     procs = (
         await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
     ).scalars().all()
-    items: list[tuple[str, float]] = []
+    items: list[tuple[str, str | None, float]] = []
     for p in procs:
         avail = await pending_transfer_kg(db, p.id)
         if avail > 0:
-            items.append((p.kode_proses, avail))
+            items.append((p.kode_proses, await pk_jenis(db, p), avail))
     if not items:
         return "🚚 Tidak ada PK siap kirim ke Gudang 2."
-    total = sum(a for _, a in items)
-    lines = [f"🚚 PK siap kirim ke Gudang 2: {_kg(total)}"]
-    for kode, a in items:
-        lines.append(f"• dari {kode}: {_kg(a)}")
+    total = sum(a for _, _, a in items)
+    sub: dict[str, float] = {}
+    for _, jenis, a in items:
+        sub[jenis or "?"] = sub.get(jenis or "?", 0.0) + a
+    ringkas = " · ".join(f"{j} {_kg(v)}" for j, v in sorted(sub.items()))
+    lines = [f"🚚 PK siap kirim ke Gudang 2: {_kg(total)}  ({ringkas})"]
+    for kode, jenis, a in items:
+        lines.append(f"• {jenis or '-'} dari {kode}: {_kg(a)}")
     return "\n".join(lines)
 
 
@@ -222,7 +229,7 @@ async def laporan_transfer(db: AsyncSession) -> str:
     """Riwayat transfer internal (terbaru dulu)."""
     rows = (
         await db.execute(
-            select(InternalTransfer, MillingProcess.kode_proses)
+            select(InternalTransfer, MillingProcess)
             .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
             .order_by(InternalTransfer.id.desc())
             .limit(10)
@@ -231,10 +238,12 @@ async def laporan_transfer(db: AsyncSession) -> str:
     if not rows:
         return "🚚 Belum ada transfer ke Gudang 2."
     lines = ["🚚 Transfer terakhir ke Gudang 2:"]
-    for t, kode in rows:
+    for t, proc in rows:
         hpp = f" · HPP {_rp(float(t.hpp_per_kg))}/kg" if t.hpp_per_kg is not None else ""
+        jenis = await pk_jenis(db, proc)
+        jlbl = f"{jenis} " if jenis else ""
         lines.append(
-            f"• {t.kode_transfer}: {_kg(float(t.berat_kg))} dari {kode} "
+            f"• {t.kode_transfer}: {jlbl}{_kg(float(t.berat_kg))} dari {proc.kode_proses} "
             f"→ {_LOKASI.get(t.lokasi_tujuan, t.lokasi_tujuan)}{hpp}"
         )
     return "\n".join(lines)

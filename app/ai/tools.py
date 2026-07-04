@@ -189,7 +189,7 @@ PROSES_MILLING_ADMIN = {
     "description": (
         "Deteksi & ekstrak aksi staff/admin untuk proses milling: input QC "
         "hasil PK, atau verifikasi berat output PK final. Contoh QC: 'QC "
-        "MIL-... kadar air 13 broken 5 susut 2 kondisi KS'. Contoh verifikasi: "
+        "MIL-... kadar air 13 broken 5 susut 2'. Contoh verifikasi: "
         "'verifikasi output MIL-... 14 ton', 'output PK MIL-... final 14000'. "
         "Jika bukan tentang milling (mis. verifikasi HARGA gabah batch GB-...), "
         "pilih 'bukan_milling_admin'."
@@ -226,7 +226,11 @@ PROSES_MILLING_ADMIN = {
             "kondisi": {
                 "type": ["string", "null"],
                 "enum": ["KS", "KL", None],
-                "description": "Kondisi PK: 'KS' atau 'KL' bila disebut.",
+                "description": (
+                    "Jenis PK 'KS'/'KL' bila disebut. CATATAN: biasanya null — "
+                    "jenis ditentukan otomatis dari gabah sumber (basah→KS, "
+                    "kering→KL), tidak perlu diketik."
+                ),
             },
             "berat_output_kg": {
                 "type": ["number", "null"],

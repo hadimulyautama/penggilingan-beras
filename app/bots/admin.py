@@ -118,7 +118,7 @@ async def cmd_start(message: Message) -> None:
         "• `verifikasi GB-20260702-01 total 42 juta`\n"
         "• `verifikasi harga GB-20260702-01 5.250 per kg`\n\n"
         "*Milling* (QC & output PK):\n"
-        "• `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`\n"
+        "• `QC MIL-20260702-01 kadar air 13 broken 5 susut 2`\n"
         "• `verifikasi output MIL-20260702-01 14 ton`\n\n"
         "*Kelola pengguna* (admin) — ketik natural:\n"
         "• `daftarkan operator Budi id 12345678 gudang 1`\n"
@@ -347,9 +347,10 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
                 if r.hpp_per_kg is not None
                 else "\n• HPP: belum tersedia (output milling belum diverifikasi)"
             )
+            jn = f" {r.jenis}" if r.jenis else ""
             await message.answer(
                 f"✓ Transfer *{r.transfer.kode_transfer}*: "
-                f"{_kg(float(r.transfer.berat_kg))} PK dari {r.kode_proses} → "
+                f"{_kg(float(r.transfer.berat_kg))} PK{jn} dari {r.kode_proses} → "
                 f"{r.lokasi_label} Gudang 2.\n"
                 f"• Sisa stok siap kirim {r.kode_proses}: {_kg(sisa)}{hpp}",
                 parse_mode="Markdown",
@@ -386,7 +387,7 @@ async def _handle_milling_admin(message: Message, db, user, text: str, session) 
             await message.answer(
                 f"✓ QC {r.proc.kode_proses} tercatat (QC ke-{r.qc_count}).\n"
                 f"• Kadar air: {_pct(r.kadar_air)} | Broken: {_pct(r.broken)} | "
-                f"Susut: {_pct(r.susut)} | Kondisi: {r.kondisi or '-'}"
+                f"Susut: {_pct(r.susut)} | Jenis PK: {r.kondisi or '-'} (otomatis)"
             )
         elif p.intent == "verifikasi_output":
             r = await verify_milling_output(
@@ -556,7 +557,7 @@ async def handle_message(message: Message) -> None:
             "Belum paham 🙏. Contoh yang bisa saya lakukan:\n"
             "• Cek tugas: `ada yang perlu diverifikasi?`\n"
             "• Verifikasi harga: `verifikasi GB-20260702-01 total 42 juta`\n"
-            "• QC milling: `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`\n"
+            "• QC milling: `QC MIL-20260702-01 kadar air 13 broken 5 susut 2`\n"
             "• Verifikasi output: `verifikasi output MIL-20260702-01 14 ton`\n"
             "• Cari kode: `batch dari budi kodenya apa`\n"
             "Atau /start untuk bantuan.",

@@ -513,9 +513,10 @@ async def _handle_bare_finish(message: Message, db, user, text: str, session) ->
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
+            jn = f" ({res.jenis})" if res.jenis else ""
             await message.answer(
                 f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
-                f"• PK dihasilkan: {_fmt_berat(res.produced)} — semua *siap kirim*.",
+                f"• PK dihasilkan: {_fmt_berat(res.produced)}{jn} — semua *siap kirim*.",
                 parse_mode="Markdown",
             )
     except (DryingError, MillingError) as e:
@@ -781,8 +782,10 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             rend = f" · rendemen ~{res.rendemen_persen:.1f}%" if res.rendemen_persen else ""
+            jn = f" *{res.jenis}*" if res.jenis else ""
             await message.answer(
-                f"✓ Hasil PK {res.proc.kode_proses}: {_fmt_berat(res.berat_kumulatif)}{rend}.\n"
+                f"✓ Hasil PK{jn} {res.proc.kode_proses}: "
+                f"{_fmt_berat(res.berat_kumulatif)}{rend}.\n"
                 "_Otomatis jadi stok siap kirim._",
                 parse_mode="Markdown",
             )
@@ -791,9 +794,10 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
+            jn = f" ({res.jenis})" if res.jenis else ""
             await message.answer(
                 f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
-                f"• PK dihasilkan: {_fmt_berat(res.produced)} — semua *siap kirim*.\n"
+                f"• PK dihasilkan: {_fmt_berat(res.produced)}{jn} — semua *siap kirim*.\n"
                 "_QC & verifikasi output oleh staff/admin menyusul._",
                 parse_mode="Markdown",
             )

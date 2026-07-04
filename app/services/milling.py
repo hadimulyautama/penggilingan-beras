@@ -130,6 +130,7 @@ class ProgressResult:
     proc: MillingProcess
     berat_kumulatif: float
     rendemen_persen: float | None
+    jenis: str | None = None  # KS (dari gabah basah) / KL (dari gabah kering)
 
 
 async def log_progress(
@@ -160,7 +161,10 @@ async def log_progress(
     await db.commit()
     masuk = float(proc.berat_gabah_masuk_kg or 0)
     rendemen = (berat_kumulatif / masuk * 100) if masuk else None
-    return ProgressResult(proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen)
+    jenis = await pk_jenis(db, proc)
+    return ProgressResult(
+        proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen, jenis=jenis,
+    )
 
 
 # ─────────────────────────── Selesai (auto-kosongkan silo) ───────────────────────────
@@ -170,6 +174,7 @@ class FinishResult:
     nama_silo: str | None
     produced: float
     siap_kirim: float
+    jenis: str | None = None  # KS / KL
 
 
 async def finish_milling(db: AsyncSession, *, user, kode_proses: str | None) -> FinishResult:
@@ -219,9 +224,11 @@ async def finish_milling(db: AsyncSession, *, user, kode_proses: str | None) -> 
         db, table_name="milling_process", record_id=proc.id, action="UPDATE",
         changed_by=user.id, field_name="status", new_value="selesai",
     )
+    jenis = await pk_jenis(db, proc)
     await db.commit()
     return FinishResult(
         proc=proc, nama_silo=nama_silo, produced=bd.produced, siap_kirim=bd.tersedia,
+        jenis=jenis,
     )
 
 
@@ -300,6 +307,30 @@ async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> lis
     return []
 
 
+async def _source_kondisi(db: AsyncSession, proc: MillingProcess) -> str | None:
+    """Kondisi gabah sumber proses: 'basah' / 'kering'. Satu lot tidak boleh
+    campur basah & kering, jadi cukup satu batch sumber."""
+    if proc.drying_lot_id:
+        return (
+            await db.execute(
+                select(PurchaseBatch.kondisi_gabah)
+                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
+                .limit(1)
+            )
+        ).scalars().first()
+    if proc.purchase_batch_id:
+        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
+        return b.kondisi_gabah if b else None
+    return None
+
+
+async def pk_jenis(db: AsyncSession, proc: MillingProcess) -> str | None:
+    """Jenis PK hasil Gudang 1: gabah basah → KS, gabah kering → KL."""
+    k = await _source_kondisi(db, proc)
+    return {"basah": "KS", "kering": "KL"}.get(k)
+
+
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
@@ -320,11 +351,14 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
             lot = await db.get(DryingLot, proc.drying_lot_id)
             if lot:
                 asal_lot = f" (via {lot.kode_lot})"
+        jenis = await pk_jenis(db, proc)
+        jenis_lbl = f" ({jenis})" if jenis else ""
         lines = [
             f"⚙️ Giling {proc.kode_proses} — bahan dari {nama}{asal_lot}",
             f"• Status: {proc.status}",
+            f"• Jenis PK: {jenis or '-'}",
             f"• Gabah masuk: {_kg(masuk)}",
-            f"• PK dihasilkan: {_kg(bd.produced)}",
+            f"• PK dihasilkan: {_kg(bd.produced)}{jenis_lbl}",
             f"• Siap kirim (stok): {_kg(bd.tersedia)}",
         ]
         if bd.transferred > 0:
@@ -344,8 +378,10 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
     for proc in procs:
         prog = await _latest_progress(db, proc.id)
         jam = (now - proc.waktu_mulai).total_seconds() / 3600
+        jenis = await pk_jenis(db, proc)
+        jlbl = f" {jenis}" if jenis else ""
         lines.append(
-            f"• {proc.kode_proses}: PK {_kg(prog) if prog is not None else '0 kg'} — {jam:.1f} jam"
+            f"• {proc.kode_proses}: PK{jlbl} {_kg(prog) if prog is not None else '0 kg'} — {jam:.1f} jam"
         )
     return "\n".join(lines)
 
@@ -357,17 +393,21 @@ async def stok_pk_gudang1(db: AsyncSession) -> str:
             select(MillingProcess).order_by(MillingProcess.kode_proses)
         )
     ).scalars().all()
-    items: list[tuple[str, PkBreakdown]] = []
+    items: list[tuple[str, str | None, PkBreakdown]] = []
     for proc in procs:
         bd = await _pk_breakdown(db, proc.id)
         if bd.tersedia > 0:
-            items.append((proc.kode_proses, bd))
+            items.append((proc.kode_proses, await pk_jenis(db, proc), bd))
     if not items:
         return "📦 Stok PK Gudang 1 kosong."
-    total = sum(bd.tersedia for _, bd in items)
-    lines = [f"📦 Stok PK siap kirim Gudang 1: {_kg(total)}"]
-    for kode, bd in items:
-        detail = f"• dari {kode}: {_kg(bd.tersedia)}"
+    total = sum(bd.tersedia for _, _, bd in items)
+    sub: dict[str, float] = {}
+    for _, jenis, bd in items:
+        sub[jenis or "?"] = sub.get(jenis or "?", 0.0) + bd.tersedia
+    ringkas = " · ".join(f"{j} {_kg(v)}" for j, v in sorted(sub.items()))
+    lines = [f"📦 Stok PK siap kirim Gudang 1: {_kg(total)}  ({ringkas})"]
+    for kode, jenis, bd in items:
+        detail = f"• {jenis or '-'} dari {kode}: {_kg(bd.tersedia)}"
         if bd.transferred > 0:
             detail += f" (dari {_kg(bd.produced)}, terkirim {_kg(bd.transferred)})"
         lines.append(detail)
@@ -402,10 +442,11 @@ async def log_qc_milling(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
-    if all(v is None for v in (kadar_air, broken, susut, kondisi)):
-        raise MillingError("Sebutkan hasil QC-nya (kadar air / broken / susut / kondisi).")
-    if kondisi is not None and kondisi not in ("KS", "KL"):
-        raise MillingError("Kondisi harus KS atau KL.")
+    if all(v is None for v in (kadar_air, broken, susut)):
+        raise MillingError("Sebutkan hasil QC-nya (kadar air / broken / susut).")
+    # Jenis PK (KS/KL) TIDAK diisi manual — ditentukan otomatis dari kondisi
+    # gabah sumber: basah → KS, kering → KL. Input manual diabaikan.
+    kondisi = await pk_jenis(db, proc) or kondisi
 
     db.add(
         MillingQcLog(
