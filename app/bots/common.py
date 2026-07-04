@@ -31,6 +31,12 @@ async def authenticate(db: AsyncSession, telegram_user_id: int) -> User | None:
     return (await db.execute(stmt)).scalars().first()
 
 
+def can_see_financials(user: User | None) -> bool:
+    """Hanya staff/admin boleh melihat data uang (harga gabah, nilai total
+    pembelian, HPP). Operator TIDAK boleh."""
+    return bool(user) and user.role in ("admin", "staff")
+
+
 def share_contact_keyboard() -> ReplyKeyboardMarkup:
     """Tombol untuk membagikan nomor HP (aktivasi user pra-daftar via HP)."""
     return ReplyKeyboardMarkup(

@@ -26,6 +26,7 @@ from app.bots.common import (
     CANCEL_WORDS,
     CONFIRM_WORDS,
     authenticate,
+    can_see_financials,
     get_session,
     handle_shared_contact,
     reset_verif,
@@ -218,13 +219,16 @@ def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
 
-async def _handle_analitik(message: Message, db, text: str) -> bool:
+async def _handle_analitik(message: Message, db, user, text: str) -> bool:
     """Analitik strategis: supplier scorecard & tren HPP. True jika ditangani."""
     try:
         p = await parse_analitik(text)
     except Exception:
         log.exception("parse_analitik gagal")
         return False
+    if p.intent != "bukan_analitik" and not can_see_financials(user):
+        await message.answer("🔒 Analitik biaya & HPP khusus staff/admin.")
+        return True
     if p.intent == "supplier_scorecard":
         await message.answer(await supplier_scorecard(db), parse_mode="Markdown")
         return True
@@ -342,11 +346,12 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
             )
             session.ctx_mil = r.kode_proses
             sisa = await pending_transfer_kg(db, r.transfer.milling_process_id)
-            hpp = (
-                f"\n• HPP snapshot: {_rp(float(r.hpp_per_kg))}/kg"
-                if r.hpp_per_kg is not None
-                else "\n• HPP: belum tersedia (output milling belum diverifikasi)"
-            )
+            if not can_see_financials(user):
+                hpp = ""
+            elif r.hpp_per_kg is not None:
+                hpp = f"\n• HPP snapshot: {_rp(float(r.hpp_per_kg))}/kg"
+            else:
+                hpp = "\n• HPP: belum tersedia (output milling belum diverifikasi)"
             jn = f" {r.jenis}" if r.jenis else ""
             await message.answer(
                 f"✓ Transfer *{r.transfer.kode_transfer}*: "
@@ -468,7 +473,7 @@ async def handle_message(message: Message) -> None:
             return
 
         # ── Analitik strategis (scorecard supplier / tren HPP) ──
-        if await _handle_analitik(message, db, text):
+        if await _handle_analitik(message, db, user, text):
             return
 
         # ── Undo tindakan terakhir (bisa per orang/role) ──
@@ -503,6 +508,10 @@ async def handle_message(message: Message) -> None:
             parsed.kode_batch = parsed.kode_batch or kode_regex
             if parsed.nilai_rupiah is not None:
                 parsed.is_verifikasi_harga = True
+
+        if parsed.is_verifikasi_harga and not can_see_financials(user):
+            await message.answer("🔒 Verifikasi & penetapan harga khusus staff/admin.")
+            return
 
         if parsed.is_verifikasi_harga:
             # Resolusi rujukan batch: kode > deskriptif (urutan/supplier/
@@ -542,7 +551,9 @@ async def handle_message(message: Message) -> None:
             return
 
         # ── Detail/atribut entitas ("berapa harga gabah pertama") ──
-        if await maybe_answer_detail(message, text, session):
+        if await maybe_answer_detail(
+            message, text, session, financial=can_see_financials(user)
+        ):
             return
 
         # ── Mencari kode batch/lot ("batch dari budi kodenya apa")? ──

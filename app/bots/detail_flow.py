@@ -42,11 +42,14 @@ def _is_ambiguous_last_process(text: str) -> bool:
     return True
 
 
-async def maybe_answer_detail(message: Message, text: str, session=None) -> bool:
+async def maybe_answer_detail(
+    message: Message, text: str, session=None, financial: bool = True
+) -> bool:
     """Jika pesan menanyakan detail entitas, jawab & kembalikan True.
 
     `session` (opsional) menyediakan konteks percakapan (ctx_batch/lot/mil)
     agar pertanyaan tanpa referensi ("berapa harganya") tetap terjawab.
+    `financial=False` menyembunyikan harga (untuk operator).
     """
     if _is_ambiguous_last_process(text):
         await message.answer(
@@ -77,6 +80,7 @@ async def maybe_answer_detail(message: Message, text: str, session=None) -> bool
             ctx_batch=getattr(session, "ctx_batch", None),
             ctx_lot=getattr(session, "ctx_lot", None),
             ctx_mil=getattr(session, "ctx_mil", None),
+            financial=financial,
         )
     await message.answer(teks)
     return True

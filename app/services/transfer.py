@@ -225,8 +225,8 @@ async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
     return "\n".join(lines)
 
 
-async def laporan_transfer(db: AsyncSession) -> str:
-    """Riwayat transfer internal (terbaru dulu)."""
+async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
+    """Riwayat transfer internal (terbaru dulu). HPP hanya untuk staff/admin."""
     rows = (
         await db.execute(
             select(InternalTransfer, MillingProcess)
@@ -239,7 +239,11 @@ async def laporan_transfer(db: AsyncSession) -> str:
         return "🚚 Belum ada transfer ke Gudang 2."
     lines = ["🚚 Transfer terakhir ke Gudang 2:"]
     for t, proc in rows:
-        hpp = f" · HPP {_rp(float(t.hpp_per_kg))}/kg" if t.hpp_per_kg is not None else ""
+        hpp = (
+            f" · HPP {_rp(float(t.hpp_per_kg))}/kg"
+            if financial and t.hpp_per_kg is not None
+            else ""
+        )
         jenis = await pk_jenis(db, proc)
         jlbl = f"{jenis} " if jenis else ""
         lines.append(

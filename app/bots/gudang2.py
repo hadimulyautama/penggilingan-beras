@@ -11,6 +11,7 @@ from aiogram.types import Message
 
 from app.bots.common import (
     authenticate,
+    can_see_financials,
     handle_shared_contact,
     unregistered_reply,
 )
@@ -60,8 +61,9 @@ async def handle_message(message: Message) -> None:
         await unregistered_reply(message)
         return
 
+    fin = can_see_financials(user)
     # Transfer G1->G2 (laporan / arahan)?
-    if await maybe_answer_transfer(message, text):
+    if await maybe_answer_transfer(message, text, financial=fin):
         return
     # Status proses berjalan?
     if await maybe_answer_status(message, text):
@@ -70,7 +72,7 @@ async def handle_message(message: Message) -> None:
     if await maybe_answer_pending(message, text):
         return
     # Detail/atribut entitas?
-    if await maybe_answer_detail(message, text):
+    if await maybe_answer_detail(message, text, financial=fin):
         return
     # Cari kode batch/lot?
     if await maybe_answer_lookup(message, text):

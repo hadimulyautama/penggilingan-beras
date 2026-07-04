@@ -22,6 +22,7 @@ from app.bots.common import (
     CONFIRM_WORDS,
     UNDO_PHRASES,
     authenticate,
+    can_see_financials,
     get_session,
     handle_shared_contact,
     reset_draft,
@@ -345,7 +346,8 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
             return
         if await _handle_milling(message, db, user, text, session):
             return
-        if await maybe_answer_transfer(message, text):
+        fin = can_see_financials(user)
+        if await maybe_answer_transfer(message, text, financial=fin):
             return
         if await maybe_answer_status(message, text):
             return
@@ -353,7 +355,7 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
             return
         if await maybe_answer_jam(message, text):
             return
-        if await maybe_answer_detail(message, text, session):
+        if await maybe_answer_detail(message, text, session, financial=fin):
             return
         if await maybe_answer_lookup(message, text, session):
             return

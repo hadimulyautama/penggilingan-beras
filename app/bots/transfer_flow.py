@@ -12,10 +12,13 @@ from app.services.transfer import laporan_pk_siap_transfer, laporan_transfer
 log = logging.getLogger("bots.transfer")
 
 
-async def maybe_answer_transfer(message: Message, text: str) -> bool:
+async def maybe_answer_transfer(
+    message: Message, text: str, financial: bool = True
+) -> bool:
     """Laporan PK siap-transfer / riwayat transfer (semua bot). True jika ditangani.
 
     Perintah MEMBUAT transfer diarahkan ke staff/admin (@hmuadmin_bot).
+    `financial=False` menyembunyikan HPP (untuk operator).
     """
     try:
         p = await parse_transfer(text)
@@ -35,7 +38,7 @@ async def maybe_answer_transfer(message: Message, text: str) -> bool:
         if p.intent == "laporan_siap_transfer":
             await message.answer(await laporan_pk_siap_transfer(db))
         elif p.intent == "laporan_transfer":
-            await message.answer(await laporan_transfer(db))
+            await message.answer(await laporan_transfer(db, financial=financial))
         else:
             return False
     return True

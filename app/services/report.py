@@ -189,7 +189,9 @@ async def resolve_batch_kode_ref(
     return [b.kode_batch for b, _ in rows]
 
 
-async def _batch_detail_card(db: AsyncSession, batch: PurchaseBatch, nama: str) -> str:
+async def _batch_detail_card(
+    db: AsyncSession, batch: PurchaseBatch, nama: str, financial: bool = True
+) -> str:
     verif = (
         await db.execute(
             select(PurchaseBatchVerification).where(
@@ -205,7 +207,9 @@ async def _batch_detail_card(db: AsyncSession, batch: PurchaseBatch, nama: str) 
         f"• Kadar air awal: {ka}",
         f"• Status: {batch.status_batch}",
     ]
-    if verif and not batch.flag_unverified:
+    if not financial:
+        lines.append("• Harga: 🔒 khusus staff/admin")
+    elif verif and not batch.flag_unverified:
         lines.append(
             f"• Harga: {_rupiah(float(verif.harga_per_kg))}/kg "
             f"(total {_rupiah(float(verif.total_biaya))}) ✓"
@@ -235,6 +239,7 @@ async def detail_query(
     ctx_batch: str | None = None,
     ctx_lot: str | None = None,
     ctx_mil: str | None = None,
+    financial: bool = True,
 ) -> str:
     from app.services.drying import laporan_pengeringan
     from app.services.milling import laporan_milling
@@ -249,7 +254,7 @@ async def detail_query(
         )
         if not rows:
             return f"🔎 Batch {kode} tidak ditemukan."
-        return await _batch_detail_card(db, *rows[0])
+        return await _batch_detail_card(db, *rows[0], financial=financial)
 
     if target == "lot":
         lk = None if terbaru else ctx_lot
@@ -278,7 +283,7 @@ async def detail_query(
         )
     if not rows:
         return "🔎 Tidak ada gabah yang cocok dengan kriteria itu."
-    cards = [await _batch_detail_card(db, b, nama) for b, nama in rows[:5]]
+    cards = [await _batch_detail_card(db, b, nama, financial) for b, nama in rows[:5]]
     out = "\n\n".join(cards)
     if len(rows) > 5:
         out += f"\n\n…dan {len(rows) - 5} lagi."
