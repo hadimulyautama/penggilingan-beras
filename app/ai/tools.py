@@ -67,6 +67,15 @@ CATAT_PEMBELIAN_GABAH = {
                     "dari tabel tanggal. Bila tak disebut, null = hari ini."
                 ),
             },
+            "jam": {
+                "type": ["string", "null"],
+                "description": (
+                    "JAM kejadian bila operator menyebut waktu spesifik (mis. "
+                    "'jam 14:00', 'jam 2 siang'->14:00, 'jam 8 pagi'->08:00, "
+                    "'setengah 5 sore'->16:30). Format 24-jam 'HH:MM'. Bila tak "
+                    "disebut, null = jam saat ini."
+                ),
+            },
         },
         "required": ["is_pembelian_gabah"],
     },
@@ -337,6 +346,15 @@ PROSES_MILLING = {
                     "dari tabel tanggal. Bila tak disebut, null = hari ini."
                 ),
             },
+            "jam": {
+                "type": ["string", "null"],
+                "description": (
+                    "JAM kejadian bila operator menyebut waktu spesifik (mis. "
+                    "'jam 14:00', 'jam 2 siang'->14:00, 'jam 8 pagi'->08:00, "
+                    "'setengah 5 sore'->16:30). Format 24-jam 'HH:MM'. Bila tak "
+                    "disebut, null = jam saat ini."
+                ),
+            },
         },
         "required": ["intent"],
     },
@@ -426,6 +444,15 @@ PROSES_SILO = {
                     "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
                     "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
                     "dari tabel tanggal. Bila tak disebut, null = hari ini."
+                ),
+            },
+            "jam": {
+                "type": ["string", "null"],
+                "description": (
+                    "JAM kejadian bila operator menyebut waktu spesifik (mis. "
+                    "'jam 14:00', 'jam 2 siang'->14:00, 'jam 8 pagi'->08:00, "
+                    "'setengah 5 sore'->16:30). Format 24-jam 'HH:MM'. Bila tak "
+                    "disebut, null = jam saat ini."
                 ),
             },
         },
@@ -784,6 +811,15 @@ PROSES_PENGERINGAN = {
                     "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
                     "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
                     "dari tabel tanggal. Bila tak disebut, null = hari ini."
+                ),
+            },
+            "jam": {
+                "type": ["string", "null"],
+                "description": (
+                    "JAM kejadian bila operator menyebut waktu spesifik (mis. "
+                    "'jam 14:00', 'jam 2 siang'->14:00, 'jam 8 pagi'->08:00, "
+                    "'setengah 5 sore'->16:30). Format 24-jam 'HH:MM'. Bila tak "
+                    "disebut, null = jam saat ini."
                 ),
             },
         },

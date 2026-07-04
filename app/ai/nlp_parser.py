@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from app.ai.claude_client import get_client
 from app.database import now_local
@@ -30,6 +30,21 @@ def _parse_iso_date(v) -> date | None:
         return date.fromisoformat(v.strip()[:10])
     except ValueError:
         return None
+
+
+def _parse_hhmm(v) -> time | None:
+    """Ubah 'HH:MM' (24 jam) dari Claude menjadi objek time; None bila tak valid."""
+    if not isinstance(v, str) or not v.strip():
+        return None
+    s = v.strip().replace(".", ":")
+    try:
+        return time.fromisoformat(s if len(s) > 5 else s[:5])
+    except ValueError:
+        try:
+            hh, mm = s.split(":")[:2]
+            return time(int(hh), int(mm))
+        except (ValueError, IndexError):
+            return None
 from app.ai.tools import (
     CARI_KODE,
     CATAT_PEMBELIAN_GABAH,
@@ -61,6 +76,7 @@ class ParsedPurchase:
     no_polisi_truk: str | None = None
     kadar_air_awal_persen: float | None = None
     tanggal: date | None = None
+    jam: time | None = None
 
     def merge(self, other: "ParsedPurchase") -> "ParsedPurchase":
         """Gabungkan hasil koreksi: nilai baru (non-None) menimpa nilai lama."""
@@ -109,6 +125,7 @@ async def _call_claude(messages: list[dict]) -> ParsedPurchase:
         no_polisi_truk=data.get("no_polisi_truk"),
         kadar_air_awal_persen=data.get("kadar_air_awal_persen"),
         tanggal=_parse_iso_date(data.get("tanggal")),
+        jam=_parse_hhmm(data.get("jam")),
     )
 
 
@@ -160,6 +177,7 @@ class ParsedPengeringan:
     periode: str | None = None
     catatan: str | None = None
     tanggal: date | None = None
+    jam: time | None = None
 
 
 async def parse_pengeringan(text: str) -> ParsedPengeringan:
@@ -188,6 +206,7 @@ async def parse_pengeringan(text: str) -> ParsedPengeringan:
         periode=data.get("periode"),
         catatan=data.get("catatan"),
         tanggal=_parse_iso_date(data.get("tanggal")),
+        jam=_parse_hhmm(data.get("jam")),
     )
 
 
@@ -199,6 +218,7 @@ class ParsedMilling:
     berat_kg: float | None = None
     tujuan: str | None = None
     tanggal: date | None = None
+    jam: time | None = None
 
 
 async def parse_milling(text: str) -> ParsedMilling:
@@ -212,6 +232,7 @@ async def parse_milling(text: str) -> ParsedMilling:
         berat_kg=data.get("berat_kg"),
         tujuan=data.get("tujuan"),
         tanggal=_parse_iso_date(data.get("tanggal")),
+        jam=_parse_hhmm(data.get("jam")),
     )
 
 
@@ -269,6 +290,7 @@ class ParsedSilo:
     kode_lot: str | None = None
     kode_batch: str | None = None
     tanggal: date | None = None
+    jam: time | None = None
 
 
 def _silo_letter(v) -> str | None:
@@ -291,6 +313,7 @@ async def parse_silo(text: str) -> ParsedSilo:
         kode_lot=lot.upper().strip() if isinstance(lot, str) else None,
         kode_batch=batch.upper().strip() if isinstance(batch, str) else None,
         tanggal=_parse_iso_date(data.get("tanggal")),
+        jam=_parse_hhmm(data.get("jam")),
     )
 
 

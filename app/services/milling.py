@@ -82,7 +82,7 @@ class StartResult:
 
 
 async def start_milling(
-    db: AsyncSession, *, user, nama_silo: str | None, tanggal=None
+    db: AsyncSession, *, user, nama_silo: str | None, tanggal=None, jam=None
 ) -> StartResult:
     if not nama_silo:
         raise MillingError("Sebutkan silo mana, contoh: `giling silo A`")
@@ -103,7 +103,7 @@ async def start_milling(
         raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
 
     berat = await _storage_kg(db, st)
-    now = input_time(tanggal)
+    now = input_time(tanggal, jam)
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
@@ -137,7 +137,7 @@ class ProgressResult:
 
 async def log_progress(
     db: AsyncSession, *, user, kode_proses: str | None, berat_kumulatif: float | None,
-    tanggal=None,
+    tanggal=None, jam=None,
 ) -> ProgressResult:
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `progress giling MIL-20260702-01 5 ton`")
@@ -152,7 +152,7 @@ async def log_progress(
     db.add(
         MillingProgressLog(
             milling_process_id=proc.id,
-            waktu_update=input_time(tanggal),
+            waktu_update=input_time(tanggal, jam),
             berat_kumulatif_kg=berat_kumulatif,
             input_by=user.id,
         )
@@ -181,7 +181,7 @@ class FinishResult:
 
 
 async def finish_milling(
-    db: AsyncSession, *, user, kode_proses: str | None, tanggal=None
+    db: AsyncSession, *, user, kode_proses: str | None, tanggal=None, jam=None
 ) -> FinishResult:
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `MIL-20260702-01 selesai`")
@@ -191,7 +191,7 @@ async def finish_milling(
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
 
-    now = input_time(tanggal)
+    now = input_time(tanggal, jam)
     if now < proc.waktu_mulai:
         raise MillingError(
             f"Tanggal selesai lebih awal dari mulai giling "

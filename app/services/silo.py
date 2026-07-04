@@ -108,7 +108,7 @@ async def masuk_silo(
     nama_silo: str | None,
     kode_lot: str | None,
     kode_batch: str | None,
-    tanggal=None,
+    tanggal=None, jam=None,
 ) -> MasukResult:
     if not nama_silo:
         raise SiloError("Sebutkan silo A atau B, contoh: `masukkan LOT-... ke silo A`")
@@ -116,7 +116,7 @@ async def masuk_silo(
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
     occupied = await _active_storage(db, silo.id)
-    now = input_time(tanggal)
+    now = input_time(tanggal, jam)
     digabung = False
 
     if kode_lot:
@@ -342,7 +342,7 @@ async def moving_finished(
 
 
 # ─────────────────────────── Keluar silo ───────────────────────────
-async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None, tanggal=None) -> str:
+async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None, tanggal=None, jam=None) -> str:
     if not nama_silo:
         raise SiloError("Sebutkan silo yang dikosongkan, contoh: `kosongkan silo A`")
     silo = await get_g1_silo(db, nama_silo)
@@ -351,7 +351,7 @@ async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None, tanggal=
     storage = await _active_storage(db, silo.id)
     if storage is None:
         raise SiloError(f"Silo {nama_silo} sudah kosong.")
-    keluar = input_time(tanggal)
+    keluar = input_time(tanggal, jam)
     if storage.tanggal_masuk and keluar < storage.tanggal_masuk:
         raise SiloError(
             f"Tanggal keluar lebih awal dari masuk silo "
@@ -374,17 +374,21 @@ async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None, tanggal=
 
 
 # ─────────────────────────── Laporan silo ───────────────────────────
-async def laporan_silo(db: AsyncSession) -> str:
+async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
+    """Status silo Gudang 1 (isi, supplier, kapasitas). `nama_silo` mem-filter
+    ke satu silo (mis. 'A') bila disebut."""
     wid = await _g1_warehouse_id(db)
-    silos = (
-        await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
-        )
-    ).scalars().all()
+    stmt = select(Silo).where(Silo.warehouse_id == wid)
+    if nama_silo:
+        stmt = stmt.where(func.upper(Silo.nama_silo).like(f"%{nama_silo.upper()}%"))
+    silos = (await db.execute(stmt.order_by(Silo.nama_silo))).scalars().all()
     if not silos:
+        if nama_silo:
+            return f"Silo {nama_silo} tidak ditemukan di Gudang 1."
         return "Belum ada silo di Gudang 1."
     now = now_local()
-    lines = ["🏗️ Status silo Gudang 1:"]
+    judul = f"🏗️ Status Silo {nama_silo}:" if nama_silo else "🏗️ Status silo Gudang 1:"
+    lines = [judul]
     for silo in silos:
         cap = (
             f"maks {float(silo.kapasitas_ton):g} ton"

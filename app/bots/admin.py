@@ -39,6 +39,7 @@ from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
+from app.bots.silo_flow import maybe_answer_silo_report
 from app.database import SessionLocal
 from app.models import User, Warehouse
 from app.services.milling import (
@@ -545,6 +546,10 @@ async def handle_message(message: Message) -> None:
                     parsed.kode_batch = session.ctx_batch
             session.verif_draft = parsed
             await _advance_verif(message, db, tg_id, session)
+            return
+
+        # ── Status/isi silo ("status silo A", "silo A gabah dari siapa") ──
+        if await maybe_answer_silo_report(message, text):
             return
 
         # ── Status proses berjalan ("proses apa yang sedang berlangsung") ──

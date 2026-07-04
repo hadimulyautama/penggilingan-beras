@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,13 +61,14 @@ async def create_purchase_batch(
     no_polisi_truk: str | None,
     kadar_air_awal_persen: float | None,
     tanggal: date | None = None,
+    jam: time | None = None,
 ) -> CreatedBatch:
     """Buat batch pembelian gabah + audit + notifikasi verifikasi harga.
 
-    `tanggal` opsional untuk backdate (isi mundur); default hari ini.
+    `tanggal`/`jam` opsional untuk backdate (isi mundur); default sekarang.
     Melempar DailyLimitReached jika sudah mencapai batas harian.
     """
-    now = input_time(tanggal)  # BackdateError bila di masa depan
+    now = input_time(tanggal, jam)  # BackdateError bila di masa depan
     if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
         raise DailyLimitReached(settings.max_purchase_batch_per_day)
 

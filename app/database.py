@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine, session factory, dan declarative Base."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import DateTime, func
@@ -28,22 +28,29 @@ class BackdateError(Exception):
     """Tanggal backdate tidak valid (mis. di masa depan)."""
 
 
-def input_time(tanggal: date | None) -> datetime:
-    """Timestamp untuk mencatat sebuah kejadian.
+def input_time(tanggal: date | None, jam: time | None = None) -> datetime:
+    """Timestamp untuk mencatat sebuah kejadian (mendukung backdate).
 
-    - `tanggal` None  → waktu sekarang (perilaku normal).
-    - `tanggal` diisi → tanggal itu dengan JAM saat ini (backdate/isi mundur).
+    - Tanpa `tanggal`/`jam`  → waktu sekarang (perilaku normal).
+    - `tanggal` saja         → tanggal itu dengan JAM saat ini.
+    - `jam` saja             → hari ini pada jam itu.
+    - keduanya               → tanggal & jam persis yang disebut.
 
-    Melempar BackdateError bila tanggal di masa depan.
+    Melempar BackdateError bila hasilnya di masa depan.
     """
     now = now_local()
-    if tanggal is None:
+    if tanggal is None and jam is None:
         return now
-    if tanggal > now.date():
+    d = tanggal or now.date()
+    t = jam or now.timetz()
+    dt = datetime.combine(d, t)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=now.tzinfo)
+    if dt > now:
         raise BackdateError(
-            f"Tanggal {tanggal:%d-%m-%Y} ada di masa depan — tidak bisa dicatat."
+            f"Waktu {dt:%d-%m-%Y %H:%M} ada di masa depan — tidak bisa dicatat."
         )
-    return now.replace(year=tanggal.year, month=tanggal.month, day=tanggal.day)
+    return dt
 
 
 class Base(DeclarativeBase):

@@ -122,8 +122,10 @@ def _summary(d: ParsedPurchase) -> str:
     if d.kadar_air_awal_persen is not None:
         lines.append(f"• Kadar air awal: {d.kadar_air_awal_persen:g}%")
     lines.append(f"• No. Polisi: {d.no_polisi_truk or '-'}")
-    if d.tanggal is not None:
-        lines.append(f"• 📅 Tanggal (mundur): *{d.tanggal:%d-%m-%Y}*")
+    if d.tanggal is not None or d.jam is not None:
+        tg = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else "hari ini"
+        jm = f" jam {d.jam:%H:%M}" if d.jam else ""
+        lines.append(f"• 📅 Dicatat untuk: *{tg}{jm}*")
     lines.append("\nKonfirmasi simpan? (ketik *ya* / *batal*)")
     return "\n".join(lines)
 
@@ -403,7 +405,7 @@ async def _save(message: Message, db, user, session) -> None:
             kondisi_gabah=d.kondisi_gabah,
             no_polisi_truk=d.no_polisi_truk,
             kadar_air_awal_persen=d.kadar_air_awal_persen,
-            tanggal=d.tanggal,
+            tanggal=d.tanggal, jam=d.jam,
         )
     except BackdateError as e:
         reset_draft(message.bot.id, message.from_user.id)
@@ -433,9 +435,12 @@ async def _save(message: Message, db, user, session) -> None:
     if d.kondisi_gabah == "kering":
         note_kering = "\nℹ️ Gabah kering — penempatan silo/pengeringan dicatat di langkah berikutnya."
 
-    tgl_note = (
-        f"\n📅 Dicatat mundur untuk *{d.tanggal:%d-%m-%Y}*." if d.tanggal else ""
-    )
+    if d.tanggal is not None or d.jam is not None:
+        _tg = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else f"{batch.waktu_pembelian:%d-%m-%Y}"
+        _jm = f" jam {d.jam:%H:%M}" if d.jam else ""
+        tgl_note = f"\n📅 Dicatat untuk *{_tg}{_jm}*."
+    else:
+        tgl_note = ""
     await message.answer(
         f"✓ Tersimpan. Kode batch: *{batch.kode_batch}*{tgl_note}\n"
         f"Menunggu verifikasi harga oleh staff/admin.{extra}{note_kering}\n\n"
@@ -602,7 +607,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 )
                 return True
             res = await create_drying_lot(
-                db, user=user, kode_batch_list=kodes, tanggal=p.tanggal
+                db, user=user, kode_batch_list=kodes, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"
@@ -621,7 +626,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 kode_lot=lot_kode,
                 indikator=p.kadar_air_indikator,
                 tes_manual=p.kadar_air_tes_manual,
-                tanggal=p.tanggal,
+                tanggal=p.tanggal, jam=p.jam,
             )
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"
@@ -636,7 +641,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             )
         elif p.intent == "log_pendinginan":
             lot, cnt, first = await log_cooling(
-                db, user=user, kode_lot=lot_kode, catatan=p.catatan, tanggal=p.tanggal
+                db, user=user, kode_lot=lot_kode, catatan=p.catatan, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_lot = lot.kode_lot
             session.ctx_last = "lot"
@@ -648,7 +653,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             )
         elif p.intent == "selesai_pengeringan":
             lot, dur = await finish_drying(
-                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal
+                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_lot = lot.kode_lot
             session.ctx_last = "lot"
@@ -699,7 +704,7 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                 kode_lot = session.ctx_lot
             res = await masuk_silo(
                 db, user=user, nama_silo=nama_silo, kode_lot=kode_lot,
-                kode_batch=kode_batch, tanggal=p.tanggal,
+                kode_batch=kode_batch, tanggal=p.tanggal, jam=p.jam,
             )
             session.ctx_silo = res.nama_silo
             session.ctx_lot = res.isi  # isi selalu kode lot (termasuk kering langsung)
@@ -761,12 +766,12 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                 )
         elif p.intent == "keluar_silo":
             nama = await keluar_silo(
-                db, user=user, nama_silo=nama_silo, tanggal=p.tanggal
+                db, user=user, nama_silo=nama_silo, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_silo = nama
             await message.answer(f"✓ Silo {nama} dikosongkan.")
         elif p.intent == "laporan_silo":
-            await message.answer(await laporan_silo(db))
+            await message.answer(await laporan_silo(db, p.nama_silo))
         else:
             return False
     except (SiloError, BackdateError) as e:
@@ -802,7 +807,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
     try:
         if p.intent == "mulai_milling":
             res = await start_milling(
-                db, user=user, nama_silo=p.nama_silo or session.ctx_silo, tanggal=p.tanggal
+                db, user=user, nama_silo=p.nama_silo or session.ctx_silo, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
@@ -815,7 +820,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             )
         elif p.intent == "progress_milling":
             res = await log_progress(
-                db, user=user, kode_proses=kode, berat_kumulatif=p.berat_kg, tanggal=p.tanggal
+                db, user=user, kode_proses=kode, berat_kumulatif=p.berat_kg, tanggal=p.tanggal, jam=p.jam
             )
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
@@ -828,7 +833,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
                 parse_mode="Markdown",
             )
         elif p.intent == "selesai_milling":
-            res = await finish_milling(db, user=user, kode_proses=kode, tanggal=p.tanggal)
+            res = await finish_milling(db, user=user, kode_proses=kode, tanggal=p.tanggal, jam=p.jam)
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
