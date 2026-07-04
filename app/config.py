@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     biaya_tenaga_milling_per_kg_pk: float = 25    # tenaga saat milling, per kg PK
     biaya_pengeringan_basah_per_kg: float = 100   # gabah basah dikeringkan
     biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan
-    biaya_listrik_milling_per_kg_gabah: float = 0  # listrik/mesin milling (isi nanti)
+    biaya_listrik_milling_per_kg_gabah: float = 20  # listrik/mesin saat milling
     # Rubber roll mesin pecah kulit: 1 set per N ton gabah, harga per set.
     rubber_roll_harga_per_set: float = 2_000_000
     rubber_roll_umur_ton: float = 100
