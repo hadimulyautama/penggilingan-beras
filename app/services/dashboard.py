@@ -1,8 +1,7 @@
 """Data terpadu untuk dashboard staff produksi (web + Telegram).
 
 Satu sumber data: `dashboard_data(db)` → dict terstruktur. Dirender jadi teks
-(bot) atau HTML (web). Menampilkan status operasional live, tugas verifikasi/QC,
-dan skor supplier.
+(bot) atau HTML (web). Menampilkan status operasional live & tugas verifikasi/QC.
 """
 from __future__ import annotations
 
@@ -22,7 +21,6 @@ from app.models import (
     SiloStorage,
     Supplier,
 )
-from app.services.analytics import supplier_scorecard_data
 from app.services.drying import _latest_log
 from app.services.milling import _pk_breakdown, _latest_progress, pk_jenis
 from app.services.silo import (
@@ -200,10 +198,6 @@ def _kg(kg: float | None) -> str:
     return f"{kg:,.0f} kg".replace(",", ".") if kg is not None else "-"
 
 
-def _rp(n: float | None) -> str:
-    return "Rp " + f"{n:,.0f}".replace(",", ".") if n is not None else "-"
-
-
 def render_dashboard_text(data: dict) -> str:
     """Render dashboard sebagai teks Telegram (Markdown)."""
     op = data["operasional"]
@@ -257,18 +251,6 @@ def render_dashboard_text(data: dict) -> str:
             lines.append(
                 f"• Verifikasi output: {len(vo)} → " + ", ".join(m["kode"] for m in vo[:8])
             )
-
-    sup = data["supplier"]["diproduksi"]
-    if sup:
-        lines.append("\n*🏅 Supplier teratas (HPP/kg PK terendah)*")
-        medali = ["🥇", "🥈", "🥉"]
-        for i, a in enumerate(sup):
-            tag = medali[i] if i < len(medali) else "•"
-            rend = f" · rendemen {a['rendemen']:.0f}%" if a["rendemen"] is not None else ""
-            lines.append(
-                f"{tag} {a['nama']} — HPP {_rp(a['hpp_pk'])}/kg{rend} "
-                f"· pasok {a['kg'] / 1000:.1f} ton"
-            )
     return "\n".join(lines)
 
 
@@ -276,10 +258,6 @@ def _esc(s) -> str:
     return (
         str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     )
-
-
-def _ton(kg: float | None) -> str:
-    return f"{kg / 1000:,.1f} ton".replace(",", ".") if kg else "-"
 
 
 def render_dashboard_html(data: dict) -> str:
@@ -365,21 +343,6 @@ def render_dashboard_html(data: dict) -> str:
     if not tugas_html:
         tugas_html = '<div class="ok">✅ Semua tugas beres — tidak ada yang menunggu.</div>'
 
-    # Supplier
-    sup_rows = ""
-    medali = ["🥇", "🥈", "🥉"]
-    for i, a in enumerate(data["supplier"]["diproduksi"]):
-        tag = medali[i] if i < len(medali) else "•"
-        rend = f"{a['rendemen']:.0f}%" if a["rendemen"] is not None else "-"
-        hpp = _rp(a["hpp_pk"]) + "/kg" if a["hpp_pk"] is not None else "-"
-        harga = _rp(a["harga_per_kg"]) + "/kg" if a["harga_per_kg"] is not None else "-"
-        sup_rows += (
-            f"<tr><td>{tag} {_esc(a['nama'])}</td><td>{hpp}</td><td>{rend}</td>"
-            f"<td>{harga}</td><td>{_ton(a['kg'])} · {a['n_batch']} batch</td></tr>"
-        )
-    if not sup_rows:
-        sup_rows = '<tr><td colspan="5" class="muted">Belum ada produksi PK.</td></tr>'
-
     return f"""<!DOCTYPE html>
 <html lang="id"><head>
 <meta charset="utf-8">
@@ -428,13 +391,7 @@ def render_dashboard_html(data: dict) -> str:
 
   <h2>Tugas verifikasi &amp; QC</h2>
   {tugas_html}
-
-  <h2>Skor supplier (HPP/kg PK terendah)</h2>
-  <table>
-    <tr><th>Supplier</th><th>HPP PK</th><th>Rendemen</th><th>Harga gabah</th><th>Pasok</th></tr>
-    {sup_rows}
-  </table>
-  <footer>Data internal — jangan dibagikan ke luar. Peringkat = HPP/kg PK terendah.</footer>
+  <footer>Data internal — jangan dibagikan ke luar.</footer>
 </main>
 </body></html>"""
 
@@ -443,7 +400,6 @@ async def dashboard_data(db: AsyncSession) -> dict:
     """Snapshot terstruktur untuk dashboard staff produksi."""
     now = now_local()
     today = now.date()
-    sc = await supplier_scorecard_data(db)
     return {
         "generated_at": now,
         "operasional": {
@@ -454,8 +410,4 @@ async def dashboard_data(db: AsyncSession) -> dict:
             "stok_pk": await _stok_pk(db),
         },
         "tugas": await _tugas(db),
-        "supplier": {
-            "diproduksi": sc["diproduksi"][:5],
-            "belum": sc["belum"][:5],
-        },
     }
