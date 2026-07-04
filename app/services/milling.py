@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import now_local
+from app.database import input_time, now_local
 from app.models import (
     DryingLot,
     DryingLotBatch,
@@ -81,7 +81,9 @@ class StartResult:
     berat_masuk: float
 
 
-async def start_milling(db: AsyncSession, *, user, nama_silo: str | None) -> StartResult:
+async def start_milling(
+    db: AsyncSession, *, user, nama_silo: str | None, tanggal=None
+) -> StartResult:
     if not nama_silo:
         raise MillingError("Sebutkan silo mana, contoh: `giling silo A`")
     silo = await get_g1_silo(db, nama_silo)
@@ -101,7 +103,7 @@ async def start_milling(db: AsyncSession, *, user, nama_silo: str | None) -> Sta
         raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
 
     berat = await _storage_kg(db, st)
-    now = now_local()
+    now = input_time(tanggal)
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
@@ -134,7 +136,8 @@ class ProgressResult:
 
 
 async def log_progress(
-    db: AsyncSession, *, user, kode_proses: str | None, berat_kumulatif: float | None
+    db: AsyncSession, *, user, kode_proses: str | None, berat_kumulatif: float | None,
+    tanggal=None,
 ) -> ProgressResult:
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `progress giling MIL-20260702-01 5 ton`")
@@ -149,7 +152,7 @@ async def log_progress(
     db.add(
         MillingProgressLog(
             milling_process_id=proc.id,
-            waktu_update=now_local(),
+            waktu_update=input_time(tanggal),
             berat_kumulatif_kg=berat_kumulatif,
             input_by=user.id,
         )
@@ -177,7 +180,9 @@ class FinishResult:
     jenis: str | None = None  # KS / KL
 
 
-async def finish_milling(db: AsyncSession, *, user, kode_proses: str | None) -> FinishResult:
+async def finish_milling(
+    db: AsyncSession, *, user, kode_proses: str | None, tanggal=None
+) -> FinishResult:
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `MIL-20260702-01 selesai`")
     proc = await get_process_by_kode(db, kode_proses)
@@ -186,7 +191,12 @@ async def finish_milling(db: AsyncSession, *, user, kode_proses: str | None) -> 
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
 
-    now = now_local()
+    now = input_time(tanggal)
+    if now < proc.waktu_mulai:
+        raise MillingError(
+            f"Tanggal selesai lebih awal dari mulai giling "
+            f"({proc.waktu_mulai:%d-%m-%Y %H:%M})."
+        )
     proc.status = "selesai"
     proc.waktu_selesai = now
 

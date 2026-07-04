@@ -60,6 +60,7 @@ class ParsedPurchase:
     kondisi_gabah: str | None = None
     no_polisi_truk: str | None = None
     kadar_air_awal_persen: float | None = None
+    tanggal: date | None = None
 
     def merge(self, other: "ParsedPurchase") -> "ParsedPurchase":
         """Gabungkan hasil koreksi: nilai baru (non-None) menimpa nilai lama."""
@@ -107,6 +108,7 @@ async def _call_claude(messages: list[dict]) -> ParsedPurchase:
         kondisi_gabah=data.get("kondisi_gabah"),
         no_polisi_truk=data.get("no_polisi_truk"),
         kadar_air_awal_persen=data.get("kadar_air_awal_persen"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -157,6 +159,7 @@ class ParsedPengeringan:
     kadar_air_tes_manual: float | None = None
     periode: str | None = None
     catatan: str | None = None
+    tanggal: date | None = None
 
 
 async def parse_pengeringan(text: str) -> ParsedPengeringan:
@@ -184,6 +187,7 @@ async def parse_pengeringan(text: str) -> ParsedPengeringan:
         kadar_air_tes_manual=data.get("kadar_air_tes_manual"),
         periode=data.get("periode"),
         catatan=data.get("catatan"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -194,6 +198,7 @@ class ParsedMilling:
     kode_proses: str | None = None
     berat_kg: float | None = None
     tujuan: str | None = None
+    tanggal: date | None = None
 
 
 async def parse_milling(text: str) -> ParsedMilling:
@@ -206,6 +211,7 @@ async def parse_milling(text: str) -> ParsedMilling:
         kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
         berat_kg=data.get("berat_kg"),
         tujuan=data.get("tujuan"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 
@@ -262,6 +268,7 @@ class ParsedSilo:
     nama_silo: str | None = None
     kode_lot: str | None = None
     kode_batch: str | None = None
+    tanggal: date | None = None
 
 
 def _silo_letter(v) -> str | None:
@@ -283,6 +290,7 @@ async def parse_silo(text: str) -> ParsedSilo:
         nama_silo=_silo_letter(data.get("nama_silo")),
         kode_lot=lot.upper().strip() if isinstance(lot, str) else None,
         kode_batch=batch.upper().strip() if isinstance(batch, str) else None,
+        tanggal=_parse_iso_date(data.get("tanggal")),
     )
 
 

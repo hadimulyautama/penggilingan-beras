@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import now_local
+from app.database import input_time, now_local
 from app.models import PurchaseBatch, Supplier, User
 from app.services.activity_log import log_activity
 from app.services.codegen import next_purchase_batch_code
@@ -35,11 +35,11 @@ async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier
     return supplier, True
 
 
-async def count_batches_today(db: AsyncSession) -> int:
+async def count_batches_on(db: AsyncSession, tgl: date) -> int:
     stmt = (
         select(func.count())
         .select_from(PurchaseBatch)
-        .where(PurchaseBatch.tanggal_pembelian == date.today())
+        .where(PurchaseBatch.tanggal_pembelian == tgl)
     )
     return (await db.execute(stmt)).scalar_one()
 
@@ -60,18 +60,20 @@ async def create_purchase_batch(
     kondisi_gabah: str,
     no_polisi_truk: str | None,
     kadar_air_awal_persen: float | None,
+    tanggal: date | None = None,
 ) -> CreatedBatch:
     """Buat batch pembelian gabah + audit + notifikasi verifikasi harga.
 
+    `tanggal` opsional untuk backdate (isi mundur); default hari ini.
     Melempar DailyLimitReached jika sudah mencapai batas harian.
     """
-    if await count_batches_today(db) >= settings.max_purchase_batch_per_day:
+    now = input_time(tanggal)  # BackdateError bila di masa depan
+    if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
         raise DailyLimitReached(settings.max_purchase_batch_per_day)
 
     supplier, created = await find_or_create_supplier(db, nama_supplier)
 
-    kode = await next_purchase_batch_code(db)
-    now = now_local()
+    kode = await next_purchase_batch_code(db, now.date())
     batch = PurchaseBatch(
         kode_batch=kode,
         supplier_id=supplier.id,

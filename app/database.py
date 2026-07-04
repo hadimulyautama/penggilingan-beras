@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine, session factory, dan declarative Base."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import DateTime, func
@@ -22,6 +22,28 @@ SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 def now_local() -> datetime:
     """Waktu sekarang di zona waktu aplikasi (default Asia/Jakarta)."""
     return datetime.now(ZoneInfo(settings.app_timezone))
+
+
+class BackdateError(Exception):
+    """Tanggal backdate tidak valid (mis. di masa depan)."""
+
+
+def input_time(tanggal: date | None) -> datetime:
+    """Timestamp untuk mencatat sebuah kejadian.
+
+    - `tanggal` None  → waktu sekarang (perilaku normal).
+    - `tanggal` diisi → tanggal itu dengan JAM saat ini (backdate/isi mundur).
+
+    Melempar BackdateError bila tanggal di masa depan.
+    """
+    now = now_local()
+    if tanggal is None:
+        return now
+    if tanggal > now.date():
+        raise BackdateError(
+            f"Tanggal {tanggal:%d-%m-%Y} ada di masa depan — tidak bisa dicatat."
+        )
+    return now.replace(year=tanggal.year, month=tanggal.month, day=tanggal.day)
 
 
 class Base(DeclarativeBase):

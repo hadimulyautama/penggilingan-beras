@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import now_local
+from app.database import input_time, now_local
 from app.models import (
     DryingLot,
     DryingLotBatch,
@@ -108,6 +108,7 @@ async def masuk_silo(
     nama_silo: str | None,
     kode_lot: str | None,
     kode_batch: str | None,
+    tanggal=None,
 ) -> MasukResult:
     if not nama_silo:
         raise SiloError("Sebutkan silo A atau B, contoh: `masukkan LOT-... ke silo A`")
@@ -115,7 +116,7 @@ async def masuk_silo(
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
     occupied = await _active_storage(db, silo.id)
-    now = now_local()
+    now = input_time(tanggal)
     digabung = False
 
     if kode_lot:
@@ -341,7 +342,7 @@ async def moving_finished(
 
 
 # ─────────────────────────── Keluar silo ───────────────────────────
-async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None) -> str:
+async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None, tanggal=None) -> str:
     if not nama_silo:
         raise SiloError("Sebutkan silo yang dikosongkan, contoh: `kosongkan silo A`")
     silo = await get_g1_silo(db, nama_silo)
@@ -350,8 +351,14 @@ async def keluar_silo(db: AsyncSession, *, user, nama_silo: str | None) -> str:
     storage = await _active_storage(db, silo.id)
     if storage is None:
         raise SiloError(f"Silo {nama_silo} sudah kosong.")
+    keluar = input_time(tanggal)
+    if storage.tanggal_masuk and keluar < storage.tanggal_masuk:
+        raise SiloError(
+            f"Tanggal keluar lebih awal dari masuk silo "
+            f"({storage.tanggal_masuk:%d-%m-%Y %H:%M})."
+        )
     storage.status = "kosong"
-    storage.tanggal_keluar = now_local()
+    storage.tanggal_keluar = keluar
     silo.status = "kosong"
     await log_activity(
         db,

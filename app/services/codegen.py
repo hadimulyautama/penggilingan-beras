@@ -13,23 +13,26 @@ from app.database import now_local
 from app.models import DryingLot, InternalTransfer, MillingProcess, PurchaseBatch
 
 
-async def _next_sequence(db: AsyncSession, prefix: str, count_stmt) -> str:
-    """Bentuk kode PREFIX-YYYYMMDD-NN dari jumlah baris hari ini + 1."""
-    today = date.today()
+async def _next_sequence(db: AsyncSession, prefix: str, count_stmt, tgl: date | None = None) -> str:
+    """Bentuk kode PREFIX-YYYYMMDD-NN dari jumlah baris hari itu + 1."""
+    tgl = tgl or date.today()
     used = (await db.execute(count_stmt)).scalar_one()
     seq = used + 1
-    return f"{prefix}-{today:%Y%m%d}-{seq:02d}"
+    return f"{prefix}-{tgl:%Y%m%d}-{seq:02d}"
 
 
-async def next_purchase_batch_code(db: AsyncSession) -> str:
-    """Kode batch pembelian gabah: GB-YYYYMMDD-NN (reset per hari)."""
-    today = date.today()
+async def next_purchase_batch_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode batch pembelian gabah: GB-YYYYMMDD-NN (reset per hari).
+
+    `tgl` untuk backdate: kode & urutan mengikuti tanggal kejadian.
+    """
+    tgl = tgl or date.today()
     stmt = (
         select(func.count())
         .select_from(PurchaseBatch)
-        .where(PurchaseBatch.tanggal_pembelian == today)
+        .where(PurchaseBatch.tanggal_pembelian == tgl)
     )
-    return await _next_sequence(db, "GB", stmt)
+    return await _next_sequence(db, "GB", stmt, tgl)
 
 
 async def next_drying_lot_code(db: AsyncSession) -> str:

@@ -8,7 +8,7 @@ from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import now_local
+from app.database import input_time, now_local
 from app.models import (
     Dryer,
     DryingCoolingLog,
@@ -160,7 +160,7 @@ async def dryer_load_kg(db: AsyncSession) -> float:
 
 
 async def log_cooling(
-    db: AsyncSession, *, user, kode_lot: str | None, catatan: str | None
+    db: AsyncSession, *, user, kode_lot: str | None, catatan: str | None, tanggal=None
 ) -> tuple[DryingLot, int, bool]:
     """Catat log pendinginan (gabah tetap di dryer). Kembalikan (lot, jumlah, first)."""
     if not kode_lot:
@@ -179,7 +179,7 @@ async def log_cooling(
     db.add(
         DryingCoolingLog(
             drying_lot_id=lot.id,
-            waktu=now_local(),
+            waktu=input_time(tanggal),
             catatan=catatan,
             input_by=user.id,
         )
@@ -202,7 +202,7 @@ class LotResult:
 
 
 async def create_drying_lot(
-    db: AsyncSession, *, user, kode_batch_list: list[str] | None
+    db: AsyncSession, *, user, kode_batch_list: list[str] | None, tanggal=None
 ) -> LotResult:
     """Bentuk 1 lot pengeringan dari beberapa batch. Validasi basah/kering."""
     kodes = list(dict.fromkeys(kode_batch_list or []))  # dedupe, jaga urutan
@@ -273,7 +273,7 @@ async def create_drying_lot(
                 f"lot ini {new_total / 1000:g} ton."
             )
 
-    now = now_local()
+    now = input_time(tanggal)
     kode_lot = await next_drying_lot_code(db)
     lot = DryingLot(
         kode_lot=kode_lot,
@@ -431,6 +431,7 @@ async def log_moisture(
     kode_lot: str | None,
     indikator: float | None,
     tes_manual: float | None,
+    tanggal=None,
 ) -> MoistureResult:
     if not kode_lot:
         raise DryingError("Sebutkan kode lot-nya, contoh: `kadar air LOT-20260702-01 18%`")
@@ -452,7 +453,7 @@ async def log_moisture(
         )
     ).scalar_one_or_none()
 
-    now = now_local()
+    now = input_time(tanggal)
     db.add(
         DryingMoistureLog(
             drying_lot_id=lot.id,
@@ -480,7 +481,9 @@ async def log_moisture(
 
 
 # ─────────────────────────── Selesai ───────────────────────────
-async def finish_drying(db: AsyncSession, *, user, kode_lot: str | None) -> tuple[DryingLot, float]:
+async def finish_drying(
+    db: AsyncSession, *, user, kode_lot: str | None, tanggal=None
+) -> tuple[DryingLot, float]:
     if not kode_lot:
         raise DryingError("Sebutkan kode lot yang selesai, contoh: `LOT-20260702-01 selesai`")
     lot = await get_lot_by_kode(db, kode_lot)
@@ -489,7 +492,12 @@ async def finish_drying(db: AsyncSession, *, user, kode_lot: str | None) -> tupl
     if lot.status == "selesai":
         raise DryingError(f"Lot {kode_lot} sudah ditandai selesai.")
 
-    now = now_local()
+    now = input_time(tanggal)
+    if now < lot.waktu_mulai_pengeringan:
+        raise DryingError(
+            f"Tanggal selesai lebih awal dari mulai pengeringan "
+            f"({lot.waktu_mulai_pengeringan:%d-%m-%Y %H:%M})."
+        )
     lot.status = "selesai"
     lot.waktu_selesai_pengeringan = now
     await _close_late_notifs(db, lot.id)

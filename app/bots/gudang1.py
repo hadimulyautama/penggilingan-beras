@@ -37,7 +37,7 @@ from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.transfer_flow import maybe_answer_transfer
-from app.database import SessionLocal
+from app.database import BackdateError, SessionLocal
 from app.services.drying import (
     DryingError,
     active_drying_lot,
@@ -122,6 +122,8 @@ def _summary(d: ParsedPurchase) -> str:
     if d.kadar_air_awal_persen is not None:
         lines.append(f"• Kadar air awal: {d.kadar_air_awal_persen:g}%")
     lines.append(f"• No. Polisi: {d.no_polisi_truk or '-'}")
+    if d.tanggal is not None:
+        lines.append(f"• 📅 Tanggal (mundur): *{d.tanggal:%d-%m-%Y}*")
     lines.append("\nKonfirmasi simpan? (ketik *ya* / *batal*)")
     return "\n".join(lines)
 
@@ -401,11 +403,17 @@ async def _save(message: Message, db, user, session) -> None:
             kondisi_gabah=d.kondisi_gabah,
             no_polisi_truk=d.no_polisi_truk,
             kadar_air_awal_persen=d.kadar_air_awal_persen,
+            tanggal=d.tanggal,
         )
+    except BackdateError as e:
+        reset_draft(message.bot.id, message.from_user.id)
+        await message.answer(f"⛔ {e.args[0] if e.args else 'Tanggal tidak valid.'}")
+        return
     except DailyLimitReached as e:
         reset_draft(message.bot.id, message.from_user.id)
+        tgl = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else "hari ini"
         await message.answer(
-            f"⛔ Sudah mencapai batas {e.args[0]} batch pembelian hari ini. "
+            f"⛔ Sudah mencapai batas {e.args[0]} batch pembelian ({tgl}). "
             "Hubungi staff/admin bila perlu pengecualian."
         )
         return
@@ -425,8 +433,11 @@ async def _save(message: Message, db, user, session) -> None:
     if d.kondisi_gabah == "kering":
         note_kering = "\nℹ️ Gabah kering — penempatan silo/pengeringan dicatat di langkah berikutnya."
 
+    tgl_note = (
+        f"\n📅 Dicatat mundur untuk *{d.tanggal:%d-%m-%Y}*." if d.tanggal else ""
+    )
     await message.answer(
-        f"✓ Tersimpan. Kode batch: *{batch.kode_batch}*\n"
+        f"✓ Tersimpan. Kode batch: *{batch.kode_batch}*{tgl_note}\n"
         f"Menunggu verifikasi harga oleh staff/admin.{extra}{note_kering}\n\n"
         "_Salah input? ketik `batalkan input` dalam 15 menit._",
         parse_mode="Markdown",
@@ -590,7 +601,9 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                     parse_mode="Markdown",
                 )
                 return True
-            res = await create_drying_lot(db, user=user, kode_batch_list=kodes)
+            res = await create_drying_lot(
+                db, user=user, kode_batch_list=kodes, tanggal=p.tanggal
+            )
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"
             total = f"{res.total_kg:,.0f}".replace(",", ".")
@@ -608,6 +621,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 kode_lot=lot_kode,
                 indikator=p.kadar_air_indikator,
                 tes_manual=p.kadar_air_tes_manual,
+                tanggal=p.tanggal,
             )
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"
@@ -622,7 +636,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             )
         elif p.intent == "log_pendinginan":
             lot, cnt, first = await log_cooling(
-                db, user=user, kode_lot=lot_kode, catatan=p.catatan
+                db, user=user, kode_lot=lot_kode, catatan=p.catatan, tanggal=p.tanggal
             )
             session.ctx_lot = lot.kode_lot
             session.ctx_last = "lot"
@@ -633,7 +647,9 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 "Gabah tetap di dryer (sirkulasi udara) sampai dipindah ke silo."
             )
         elif p.intent == "selesai_pengeringan":
-            lot, dur = await finish_drying(db, user=user, kode_lot=lot_kode)
+            lot, dur = await finish_drying(
+                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal
+            )
             session.ctx_lot = lot.kode_lot
             session.ctx_last = "lot"
             await message.answer(
@@ -646,7 +662,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             await message.answer(teks)
         else:
             return False
-    except DryingError as e:
+    except (DryingError, BackdateError) as e:
         await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan pengeringan.")
     return True
 
@@ -682,7 +698,8 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
             if not kode_lot and not kode_batch:
                 kode_lot = session.ctx_lot
             res = await masuk_silo(
-                db, user=user, nama_silo=nama_silo, kode_lot=kode_lot, kode_batch=kode_batch
+                db, user=user, nama_silo=nama_silo, kode_lot=kode_lot,
+                kode_batch=kode_batch, tanggal=p.tanggal,
             )
             session.ctx_silo = res.nama_silo
             session.ctx_lot = res.isi  # isi selalu kode lot (termasuk kering langsung)
@@ -743,14 +760,16 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                     parse_mode="Markdown",
                 )
         elif p.intent == "keluar_silo":
-            nama = await keluar_silo(db, user=user, nama_silo=nama_silo)
+            nama = await keluar_silo(
+                db, user=user, nama_silo=nama_silo, tanggal=p.tanggal
+            )
             session.ctx_silo = nama
             await message.answer(f"✓ Silo {nama} dikosongkan.")
         elif p.intent == "laporan_silo":
             await message.answer(await laporan_silo(db))
         else:
             return False
-    except SiloError as e:
+    except (SiloError, BackdateError) as e:
         await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan silo.")
     return True
 
@@ -782,7 +801,9 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
         kode = await sole_active_milling_kode(db)
     try:
         if p.intent == "mulai_milling":
-            res = await start_milling(db, user=user, nama_silo=p.nama_silo or session.ctx_silo)
+            res = await start_milling(
+                db, user=user, nama_silo=p.nama_silo or session.ctx_silo, tanggal=p.tanggal
+            )
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             await message.answer(
@@ -793,7 +814,9 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
                 parse_mode="Markdown",
             )
         elif p.intent == "progress_milling":
-            res = await log_progress(db, user=user, kode_proses=kode, berat_kumulatif=p.berat_kg)
+            res = await log_progress(
+                db, user=user, kode_proses=kode, berat_kumulatif=p.berat_kg, tanggal=p.tanggal
+            )
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             rend = f" · rendemen ~{res.rendemen_persen:.1f}%" if res.rendemen_persen else ""
@@ -805,7 +828,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
                 parse_mode="Markdown",
             )
         elif p.intent == "selesai_milling":
-            res = await finish_milling(db, user=user, kode_proses=kode)
+            res = await finish_milling(db, user=user, kode_proses=kode, tanggal=p.tanggal)
             session.ctx_mil = res.proc.kode_proses
             session.ctx_last = "mil"
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
@@ -833,6 +856,6 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             await message.answer(await stok_pk_gudang1(db))
         else:
             return False
-    except MillingError as e:
+    except (MillingError, BackdateError) as e:
         await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan milling.")
     return True

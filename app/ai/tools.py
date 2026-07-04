@@ -58,6 +58,15 @@ CATAT_PEMBELIAN_GABAH = {
                 "type": ["number", "null"],
                 "description": "Kadar air awal dalam persen jika disebut. '13%' -> 13.",
             },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal kejadian untuk BACKDATE/isi mundur, bila operator "
+                    "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
+                    "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
+                    "dari tabel tanggal. Bila tak disebut, null = hari ini."
+                ),
+            },
         },
         "required": ["is_pembelian_gabah"],
     },
@@ -319,6 +328,15 @@ PROSES_MILLING = {
                     "kumulatif total PK). Konversi ton: '5 ton'->5000."
                 ),
             },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal kejadian untuk BACKDATE/isi mundur, bila operator "
+                    "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
+                    "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
+                    "dari tabel tanggal. Bila tak disebut, null = hari ini."
+                ),
+            },
         },
         "required": ["intent"],
     },
@@ -399,6 +417,15 @@ PROSES_SILO = {
                 "description": (
                     "Kode batch gabah (GB-YYYYMMDD-NN) bila gabah KERING masuk "
                     "silo LANGSUNG tanpa pengeringan. Huruf besar."
+                ),
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal kejadian untuk BACKDATE/isi mundur, bila operator "
+                    "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
+                    "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
+                    "dari tabel tanggal. Bila tak disebut, null = hari ini."
                 ),
             },
         },
@@ -748,6 +775,15 @@ PROSES_PENGERINGAN = {
                 "description": (
                     "Catatan bebas untuk log_pendinginan bila ada (mis. durasi "
                     "'sirkulasi 2 jam'). Selain itu null."
+                ),
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal kejadian untuk BACKDATE/isi mundur, bila operator "
+                    "menyebut waktu LAMPAU eksplisit (mis. 'kemarin', 'senin "
+                    "lalu', 'tanggal 1 juli', '2 hari lalu'). Format YYYY-MM-DD "
+                    "dari tabel tanggal. Bila tak disebut, null = hari ini."
                 ),
             },
         },
