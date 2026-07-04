@@ -668,16 +668,22 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                 db, user=user, nama_silo=nama_silo, kode_lot=kode_lot, kode_batch=kode_batch
             )
             session.ctx_silo = res.nama_silo
-            if res.tipe == "dari_pengeringan":
-                session.ctx_lot = res.isi
-                session.ctx_last = "lot"
+            session.ctx_lot = res.isi  # isi selalu kode lot (termasuk kering langsung)
+            session.ctx_last = "lot"
             asal = "dari pengeringan" if res.tipe == "dari_pengeringan" else "kering langsung"
             total = f"{res.kg:,.0f}".replace(",", ".")
-            await message.answer(
-                f"✓ {res.isi} masuk *Silo {res.nama_silo}* ({asal}).\n"
-                f"• Berat: {total} kg",
-                parse_mode="Markdown",
-            )
+            if res.digabung:
+                await message.answer(
+                    f"✓ Digabung ke *{res.isi}* di Silo {res.nama_silo} (kering langsung).\n"
+                    f"• Total di silo kini: {total} kg",
+                    parse_mode="Markdown",
+                )
+            else:
+                await message.answer(
+                    f"✓ {res.isi} masuk *Silo {res.nama_silo}* ({asal}).\n"
+                    f"• Berat: {total} kg",
+                    parse_mode="Markdown",
+                )
         elif p.intent == "pindah_mulai":
             kode_lot = (
                 p.kode_lot or _lot_code(text) or session.ctx_lot

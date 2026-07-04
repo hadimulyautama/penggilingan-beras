@@ -248,7 +248,16 @@ async def _undo_masuk_silo(db: AsyncSession, silo_id: int) -> str:
     ).first()
     if milled:
         raise UndoError("Isi silo sudah digiling — tidak bisa dibatalkan.")
-    if st.drying_lot_id:
+    lot_to_delete = None
+    if st.tipe_masuk == "langsung_kering" and st.drying_lot_id:
+        # Lot ini DIBUAT oleh intake (gabah kering langsung) -> hapus juga.
+        await _revert_lot_batches(db, st.drying_lot_id, "baru")
+        await db.execute(
+            delete(DryingLotBatch).where(DryingLotBatch.drying_lot_id == st.drying_lot_id)
+        )
+        lot_to_delete = st.drying_lot_id
+    elif st.drying_lot_id:
+        # Lot dari pengeringan -> tetap ada, batch balik 'dikeringkan'.
         await _revert_lot_batches(db, st.drying_lot_id, "dikeringkan")
     elif st.purchase_batch_id:
         b = await db.get(PurchaseBatch, st.purchase_batch_id)
@@ -259,7 +268,46 @@ async def _undo_masuk_silo(db: AsyncSession, silo_id: int) -> str:
         silo.status = "kosong"
     nama = silo.nama_silo if silo else "silo"
     await db.delete(st)
+    if lot_to_delete is not None:
+        lot = await db.get(DryingLot, lot_to_delete)
+        if lot:
+            await db.delete(lot)
     return f"✓ Dibatalkan: gabah masuk {nama}."
+
+
+async def _undo_silo_merge(db: AsyncSession, silo_id: int) -> str:
+    """Undo penggabungan batch kering ke lot yang ada di silo: lepas batch terakhir."""
+    st = (
+        await db.execute(
+            select(SiloStorage)
+            .where(SiloStorage.silo_id == silo_id, SiloStorage.status == "terisi")
+            .order_by(SiloStorage.id.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if st is None or not st.drying_lot_id:
+        raise UndoError("Tidak ada penggabungan silo untuk dibatalkan.")
+    milled = (
+        await db.execute(select(MillingProcess.id).where(MillingProcess.silo_storage_id == st.id))
+    ).first()
+    if milled:
+        raise UndoError("Isi silo sudah digiling — tidak bisa dibatalkan.")
+    row = (
+        await db.execute(
+            select(DryingLotBatch)
+            .where(DryingLotBatch.drying_lot_id == st.drying_lot_id)
+            .order_by(DryingLotBatch.id.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if row is None:
+        raise UndoError("Tidak ada batch untuk dilepas.")
+    b = await db.get(PurchaseBatch, row.purchase_batch_id)
+    kode = b.kode_batch if b else "?"
+    if b:
+        b.status_batch = "baru"
+    await db.delete(row)
+    return f"✓ Dibatalkan: penggabungan {kode} ke lot di silo (kembali 'baru')."
 
 
 async def _undo_keluar_silo(db: AsyncSession, silo_id: int) -> str:
@@ -419,6 +467,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_purchase(db, rid)
     if t == "silo_storage" and act == "INSERT":
         return await _undo_masuk_silo(db, rid)
+    if t == "silo_storage" and act == "UPDATE" and log.field_name == "gabung":
+        return await _undo_silo_merge(db, rid)
     if t == "silo_storage" and act == "UPDATE":
         return await _undo_keluar_silo(db, rid)
     if t == "milling_process" and act == "INSERT":

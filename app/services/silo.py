@@ -18,6 +18,21 @@ from app.models import (
     Warehouse,
 )
 from app.services.activity_log import log_activity
+from app.services.codegen import next_drying_lot_code
+
+
+def _silo_cap_kg(silo) -> float | None:
+    return float(silo.kapasitas_ton) * 1000 if silo.kapasitas_ton is not None else None
+
+
+def _ensure_cap(silo, nama: str, existing_kg: float, new_kg: float) -> None:
+    cap = _silo_cap_kg(silo)
+    if cap is not None and existing_kg + new_kg > cap:
+        sisa = max(cap - existing_kg, 0)
+        raise SiloError(
+            f"❌ Kapasitas Silo {nama} {cap / 1000:g} ton tidak cukup "
+            f"(sisa {sisa / 1000:g} ton, tambahan {new_kg / 1000:g} ton)."
+        )
 
 
 class SiloError(Exception):
@@ -83,6 +98,7 @@ class MasukResult:
     isi: str
     kg: float
     tipe: str  # dari_pengeringan | langsung_kering
+    digabung: bool = False  # True bila batch kering digabung ke lot silo yang ada
 
 
 async def masuk_silo(
@@ -99,11 +115,13 @@ async def masuk_silo(
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
     occupied = await _active_storage(db, silo.id)
-    if occupied:
-        raise SiloError(f"Silo {nama_silo} sedang terisi — kosongkan dulu.")
-
     now = now_local()
+    digabung = False
+
     if kode_lot:
+        # ── Dari pengeringan: 1 silo = 1 lot. Silo harus kosong. ──
+        if occupied:
+            raise SiloError(f"Silo {nama_silo} sudah terisi — kosongkan dulu.")
         lot = (
             await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
         ).scalars().first()
@@ -121,17 +139,13 @@ async def masuk_silo(
         if dup:
             raise SiloError(f"Lot {kode_lot} sudah ada di silo.")
         kg = await _lot_kg(db, lot.id)
+        _ensure_cap(silo, nama_silo, 0, kg)
         db.add(
             SiloStorage(
-                silo_id=silo.id,
-                drying_lot_id=lot.id,
-                tipe_masuk="dari_pengeringan",
-                tanggal_masuk=now,
-                input_by=user.id,
-                status="terisi",
+                silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="dari_pengeringan",
+                tanggal_masuk=now, input_by=user.id, status="terisi",
             )
         )
-        # Batch di lot ikut berstatus di_silo.
         batch_ids = (
             await db.execute(
                 select(DryingLotBatch.purchase_batch_id).where(
@@ -146,6 +160,7 @@ async def masuk_silo(
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
+        # ── Gabah kering langsung: batch jadi lot di silo; boleh menumpuk. ──
         batch = (
             await db.execute(
                 select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode_batch)
@@ -160,36 +175,48 @@ async def masuk_silo(
             )
         in_lot = (
             await db.execute(
-                select(DryingLotBatch.id).where(
-                    DryingLotBatch.purchase_batch_id == batch.id
-                )
+                select(DryingLotBatch.id).where(DryingLotBatch.purchase_batch_id == batch.id)
             )
         ).first()
         if in_lot:
-            raise SiloError(f"Batch {kode_batch} sudah masuk lot pengeringan.")
-        dup = (
-            await db.execute(
-                select(SiloStorage.id).where(
-                    SiloStorage.purchase_batch_id == batch.id,
-                    SiloStorage.status == "terisi",
+            raise SiloError(f"Batch {kode_batch} sudah masuk lot.")
+        kg_new = float(batch.berat_total_kg)
+
+        if occupied and occupied.tipe_masuk == "dari_pengeringan":
+            raise SiloError(
+                f"Silo {nama_silo} berisi lot pengeringan — tidak bisa dicampur "
+                "gabah kering langsung. Pakai silo lain."
+            )
+
+        if occupied:
+            # Gabung ke lot kering-langsung yang sudah ada di silo ini.
+            lot = await db.get(DryingLot, occupied.drying_lot_id)
+            existing_kg = await _lot_kg(db, lot.id)
+            _ensure_cap(silo, nama_silo, existing_kg, kg_new)
+            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=batch.id))
+            batch.status_batch = "di_silo"
+            isi, tipe, digabung = lot.kode_lot, "langsung_kering", True
+            kg = existing_kg + kg_new
+        else:
+            # Bikin lot baru di silo (dryer_id NULL = tidak lewat pengering).
+            _ensure_cap(silo, nama_silo, 0, kg_new)
+            lot = DryingLot(
+                kode_lot=await next_drying_lot_code(db),
+                dryer_id=None, waktu_mulai_pengeringan=now,
+                waktu_selesai_pengeringan=now, status="selesai", created_by=user.id,
+            )
+            db.add(lot)
+            await db.flush()
+            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=batch.id))
+            db.add(
+                SiloStorage(
+                    silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="langsung_kering",
+                    tanggal_masuk=now, input_by=user.id, status="terisi",
                 )
             )
-        ).first()
-        if dup:
-            raise SiloError(f"Batch {kode_batch} sudah ada di silo.")
-        kg = float(batch.berat_total_kg)
-        db.add(
-            SiloStorage(
-                silo_id=silo.id,
-                purchase_batch_id=batch.id,
-                tipe_masuk="langsung_kering",
-                tanggal_masuk=now,
-                input_by=user.id,
-                status="terisi",
-            )
-        )
-        batch.status_batch = "di_silo"
-        isi, tipe = kode_batch, "langsung_kering"
+            batch.status_batch = "di_silo"
+            isi, tipe = lot.kode_lot, "langsung_kering"
+            kg = kg_new
     else:
         raise SiloError(
             "Sebutkan lot atau batch yang dimasukkan, contoh:\n"
@@ -197,16 +224,19 @@ async def masuk_silo(
         )
 
     silo.status = "terisi"
+    # Gabung ke lot silo dicatat sebagai UPDATE 'gabung' agar undo hanya
+    # melepas batch terakhir (bukan menghapus seluruh isi silo).
     await log_activity(
         db,
         table_name="silo_storage",
         record_id=silo.id,
-        action="INSERT",
+        action="UPDATE" if digabung else "INSERT",
+        field_name="gabung" if digabung else None,
         changed_by=user.id,
-        new_value=f"Silo {nama_silo} <- {isi} ({tipe}, {kg:.0f}kg)",
+        new_value=f"Silo {nama_silo} <- {isi} ({tipe}{'+gabung' if digabung else ''}, {kg:.0f}kg)",
     )
     await db.commit()
-    return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe)
+    return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe, digabung=digabung)
 
 
 # ─────────────────── Log pemindahan dryer -> silo ───────────────────
