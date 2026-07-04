@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     # sampai (kapasitas + toleransi). Mis. nominal 30 ton + 3 ton = 33 ton.
     dryer_toleransi_kg: int = 3000
 
+    # ── Biaya operasional (Rp), untuk HPP penuh. Semua bisa diubah via env. ──
+    biaya_bongkar_per_kg_gabah: float = 20        # tenaga bongkar gabah datang
+    biaya_operator_per_kg_gabah: float = 30       # operator, per kg gabah digiling
+    biaya_tenaga_milling_per_kg_pk: float = 25    # tenaga saat milling, per kg PK
+    biaya_pengeringan_basah_per_kg: float = 100   # gabah basah dikeringkan
+    biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan
+    biaya_listrik_milling_per_kg_gabah: float = 0  # listrik/mesin milling (isi nanti)
+    # Rubber roll mesin pecah kulit: 1 set per N ton gabah, harga per set.
+    rubber_roll_harga_per_set: float = 2_000_000
+    rubber_roll_umur_ton: float = 100
+
     @property
     def bot_tokens(self) -> dict[str, str]:
         """Peta nama bot -> token (hanya yang terisi)."""

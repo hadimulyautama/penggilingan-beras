@@ -996,23 +996,34 @@ TANYA_ANALITIK = {
     "name": "tanya_analitik",
     "description": (
         "Deteksi pertanyaan ANALITIK STRATEGIS. Contoh: 'supplier mana paling "
-        "menguntungkan', 'scorecard supplier', 'peringkat pemasok', 'supplier "
-        "terbaik', 'tren HPP', 'biaya produksi PK per bulan', 'HPP naik atau "
-        "turun'. Bila bukan analitik strategis, pilih 'bukan_analitik'."
+        "menguntungkan', 'scorecard supplier', 'peringkat pemasok', 'tren HPP', "
+        "'biaya produksi PK per bulan', 'rincian biaya produksi MIL-...', "
+        "'HPP MIL-... berapa'. Bila bukan analitik strategis, 'bukan_analitik'."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "intent": {
                 "type": "string",
-                "enum": ["supplier_scorecard", "hpp_tren", "bukan_analitik"],
+                "enum": [
+                    "supplier_scorecard",
+                    "hpp_tren",
+                    "rincian_biaya",
+                    "bukan_analitik",
+                ],
                 "description": (
                     "'supplier_scorecard': peringkat/analisa supplier "
                     "(untung/harga/rendemen/kualitas). 'hpp_tren': tren biaya "
-                    "pokok PK per kg dari waktu ke waktu. 'bukan_analitik': "
-                    "pertanyaan operasional biasa / lainnya."
+                    "pokok PK per kg dari waktu ke waktu. 'rincian_biaya': "
+                    "rincian biaya produksi & HPP satu proses giling (mis. "
+                    "'rincian biaya MIL-...', 'hpp MIL-... berapa', 'biaya "
+                    "produksi giling terakhir'). 'bukan_analitik': lainnya."
                 ),
-            }
+            },
+            "kode_proses": {
+                "type": ["string", "null"],
+                "description": "Kode proses MIL-YYYYMMDD-NN utk rincian_biaya (huruf besar).",
+            },
         },
         "required": ["intent"],
     },

@@ -50,7 +50,11 @@ from app.services.transfer import (
     laporan_pk_siap_transfer,
     laporan_transfer,
 )
-from app.services.analytics import hpp_trend, supplier_scorecard
+from app.services.analytics import (
+    biaya_produksi_detail,
+    hpp_trend,
+    supplier_scorecard,
+)
 from app.services.report import resolve_batch_kode_ref
 from app.services.undo import UndoError, resolve_actor_ids, undo_last
 from app.services.user_admin import (
@@ -212,15 +216,19 @@ def _kg(kg: float) -> str:
 async def _handle_analitik(message: Message, db, text: str) -> bool:
     """Analitik strategis: supplier scorecard & tren HPP. True jika ditangani."""
     try:
-        intent = await parse_analitik(text)
+        p = await parse_analitik(text)
     except Exception:
         log.exception("parse_analitik gagal")
         return False
-    if intent == "supplier_scorecard":
+    if p.intent == "supplier_scorecard":
         await message.answer(await supplier_scorecard(db), parse_mode="Markdown")
         return True
-    if intent == "hpp_tren":
+    if p.intent == "hpp_tren":
         await message.answer(await hpp_trend(db), parse_mode="Markdown")
+        return True
+    if p.intent == "rincian_biaya":
+        kode = p.kode_proses or _extract_kode(text)
+        await message.answer(await biaya_produksi_detail(db, kode), parse_mode="Markdown")
         return True
     return False
 

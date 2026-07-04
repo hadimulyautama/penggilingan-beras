@@ -348,10 +348,20 @@ class ParsedUndo:
     nama: str | None = None
 
 
-async def parse_analitik(text: str) -> str:
-    """Kembalikan intent analitik: supplier_scorecard | hpp_tren | bukan_analitik."""
+@dataclass
+class ParsedAnalitik:
+    intent: str = "bukan_analitik"
+    kode_proses: str | None = None
+
+
+async def parse_analitik(text: str) -> ParsedAnalitik:
+    """Intent analitik + kode proses (utk rincian_biaya)."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_ANALITIK)
-    return data.get("intent", "bukan_analitik")
+    kode = data.get("kode_proses")
+    return ParsedAnalitik(
+        intent=data.get("intent", "bukan_analitik"),
+        kode_proses=kode.upper().strip() if isinstance(kode, str) and kode.strip() else None,
+    )
 
 
 async def parse_undo(text: str) -> ParsedUndo:

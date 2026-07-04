@@ -19,6 +19,7 @@ from app.models import (
     PurchaseBatchVerification,
     Supplier,
 )
+from app.services.costing import production_cost
 
 _BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt",
           "Nov", "Des"]
@@ -114,7 +115,8 @@ async def supplier_scorecard(db: AsyncSession) -> str:
             "nama": nama, "n_batch": int(nbatch), "kg": float(kg),
             "kadar_air": float(ka) if ka is not None else None,
             "biaya_verif": 0.0, "kg_verif": 0.0,      # utk harga rata2
-            "pk_alloc": 0.0, "gabah_milled": 0.0, "cost_milled": 0.0,
+            "pk_alloc": 0.0, "gabah_milled": 0.0,     # utk rendemen (semua proses)
+            "cost_milled": 0.0, "pk_for_hpp": 0.0,    # utk HPP penuh (proses berbiaya)
         }
 
     # Harga rata-rata tertimbang (dari batch terverifikasi).
@@ -140,27 +142,29 @@ async def supplier_scorecard(db: AsyncSession) -> str:
         await db.execute(select(MillingProcess).where(MillingProcess.status == "selesai"))
     ).scalars().all()
     for proc in procs:
-        output = await _proc_pk_output(db, proc)
-        if not output:
+        bd = await production_cost(db, proc)
+        if bd is None:
             continue
+        output = bd.pk_output
         batches = await _proc_batches(db, proc)
         total_kg = sum(float(b.berat_total_kg) for b, _ in batches)
         if total_kg <= 0:
             continue
-        for b, harga in batches:
+        total_cost = bd.total_penuh  # None bila bahan baku belum verif
+        for b, _harga in batches:
             sid = b.supplier_id
             if sid not in agg:
                 continue
-            kg = float(b.berat_total_kg)
-            share = kg / total_kg
+            share = float(b.berat_total_kg) / total_kg
             agg[sid]["pk_alloc"] += output * share
-            agg[sid]["gabah_milled"] += kg
-            if harga is not None:
-                agg[sid]["cost_milled"] += kg * float(harga)
+            agg[sid]["gabah_milled"] += float(b.berat_total_kg)
+            if total_cost is not None:
+                agg[sid]["cost_milled"] += total_cost * share
+                agg[sid]["pk_for_hpp"] += output * share
 
-    # ── 3. Susun & peringkat ──
+    # ── 3. Susun & peringkat (HPP penuh: bahan baku + operasional) ──
     def hpp(a):
-        return a["cost_milled"] / a["pk_alloc"] if a["pk_alloc"] > 0 and a["cost_milled"] > 0 else None
+        return a["cost_milled"] / a["pk_for_hpp"] if a["pk_for_hpp"] > 0 else None
 
     rows = list(agg.values())
     diproduksi = [a for a in rows if a["pk_alloc"] > 0]
@@ -218,23 +222,21 @@ async def hpp_trend(db: AsyncSession) -> str:
             )
         ).scalars().first()
         if not v:
-            continue
-        output = float(v)
-        batches = await _proc_batches(db, proc)
-        if any(h is None for _, h in batches) or not batches:
-            continue  # biaya belum lengkap
-        cost = sum(float(b.berat_total_kg) * float(h) for b, h in batches)
+            continue  # output belum terverifikasi
+        bd = await production_cost(db, proc)
+        if bd is None or bd.total_penuh is None:
+            continue  # biaya bahan baku belum lengkap
         key = (proc.waktu_selesai.year, proc.waktu_selesai.month)
         acc = per_bulan.setdefault(key, [0.0, 0.0])
-        acc[0] += cost
-        acc[1] += output
+        acc[0] += bd.total_penuh
+        acc[1] += bd.pk_output
 
     if not per_bulan:
         return (
             "📉 Belum ada data HPP. Butuh proses giling yang SELESAI dengan "
             "output PK terverifikasi dan harga gabah terverifikasi."
         )
-    lines = ["📉 *Tren HPP per kg PK* (per bulan):"]
+    lines = ["📉 *Tren HPP penuh per kg PK* (per bulan):"]
     prev = None
     for (thn, bln) in sorted(per_bulan):
         cost, out = per_bulan[(thn, bln)]
@@ -244,4 +246,49 @@ async def hpp_trend(db: AsyncSession) -> str:
             arah = " 🔺" if hpp > prev else (" 🔻" if hpp < prev else " ➡️")
         lines.append(f"• {_BULAN[bln - 1]} {thn}: {_rp(hpp)}/kg (PK {_ton(out)}){arah}")
         prev = hpp
+    return "\n".join(lines)
+
+
+async def biaya_produksi_detail(db: AsyncSession, kode_proses: str | None = None) -> str:
+    """Rincian biaya produksi + HPP penuh sebuah proses (default: terakhir)."""
+    q = select(MillingProcess)
+    if kode_proses:
+        q = q.where(MillingProcess.kode_proses == kode_proses)
+    else:
+        q = q.where(MillingProcess.status == "selesai").order_by(MillingProcess.id.desc())
+    proc = (await db.execute(q.limit(1))).scalars().first()
+    if proc is None:
+        return "Proses giling tidak ditemukan." if kode_proses else "Belum ada proses giling selesai."
+    bd = await production_cost(db, proc)
+    if bd is None:
+        return f"{proc.kode_proses}: output PK belum ada — biaya belum bisa dihitung."
+
+    rend = bd.pk_output / bd.kg_gabah * 100 if bd.kg_gabah else 0
+    ker = f" ({bd.kondisi}{'/dikeringkan' if bd.dried else '/langsung silo'})" if bd.kondisi else ""
+    lines = [
+        f"💵 *Rincian biaya {proc.kode_proses}*",
+        f"Gabah {_ton(bd.kg_gabah)}{ker} → PK {_ton(bd.pk_output)} (rendemen {rend:.1f}%)",
+        f"• Bahan baku (gabah): {_rp(bd.bahan_baku)}",
+        f"• Bongkar: {_rp(bd.bongkar)}",
+        f"• Pengeringan: {_rp(bd.pengeringan)}",
+        f"• Operator: {_rp(bd.operator)}",
+        f"• Tenaga milling: {_rp(bd.tenaga_milling)}",
+        f"• Rubber roll: {_rp(bd.rubber_roll)}",
+    ]
+    if bd.listrik:
+        lines.append(f"• Listrik/mesin: {_rp(bd.listrik)}")
+    lines.append(f"• _Subtotal operasional: {_rp(bd.operasional)}_")
+    if bd.total_penuh is not None:
+        hpp_bahan = bd.bahan_baku / bd.pk_output if bd.pk_output else 0
+        hpp_op = bd.operasional / bd.pk_output if bd.pk_output else 0
+        lines.append(f"*Total: {_rp(bd.total_penuh)}*")
+        lines.append(
+            f"*HPP penuh: {_rp(bd.hpp_penuh)}/kg PK* "
+            f"(bahan baku {_rp(hpp_bahan)} + operasional {_rp(hpp_op)})"
+        )
+    else:
+        lines.append(
+            f"_Operasional {_rp(bd.operasional / bd.pk_output)}/kg PK. "
+            "Bahan baku belum diverifikasi → HPP penuh belum bisa dihitung._"
+        )
     return "\n".join(lines)
