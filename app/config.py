@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # Pengeringan
     drying_late_hours: float = 5.0  # batas keterlambatan log kadar air
     drying_check_interval_seconds: int = 900  # frekuensi cek scheduler (15 mnt)
+    # Toleransi/spare kapasitas dryer: boleh terisi melebihi kapasitas nominal
+    # sampai (kapasitas + toleransi). Mis. nominal 30 ton + 3 ton = 33 ton.
+    dryer_toleransi_kg: int = 3000
 
     @property
     def bot_tokens(self) -> dict[str, str]:

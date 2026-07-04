@@ -28,11 +28,11 @@ def upgrade() -> None:
     )
     op.add_column("drying_lots", sa.Column("dryer_id", sa.Integer, sa.ForeignKey("dryers.id")))
 
-    # Seed satu mesin pengering Gudang 1 (kapasitas 35 ton).
+    # Seed satu mesin pengering Gudang 1 (kapasitas nominal 30 ton).
     op.execute(
         """
         INSERT INTO dryers (warehouse_id, nama, kapasitas_kg, status)
-        SELECT id, 'Pengering 1', 35000, 'aktif'
+        SELECT id, 'Pengering 1', 30000, 'aktif'
         FROM warehouses
         WHERE nama_gudang LIKE 'Gudang 1%'
         LIMIT 1

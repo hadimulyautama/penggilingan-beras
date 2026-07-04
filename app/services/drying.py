@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import now_local
 from app.models import (
     Dryer,
@@ -261,10 +262,13 @@ async def create_drying_lot(
             )
         load = await dryer_load_kg(db)
         cap = float(dryer.kapasitas_kg)
-        if load + new_total > cap:
-            sisa = max(cap - load, 0)
+        # Batas efektif = kapasitas nominal + toleransi/spare (mis. 30 + 3 ton).
+        cap_efektif = cap + settings.dryer_toleransi_kg
+        if load + new_total > cap_efektif:
+            sisa = max(cap_efektif - load, 0)
             raise DryingError(
-                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton tidak cukup.\n"
+                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton "
+                f"(maks dgn toleransi {cap_efektif / 1000:g} ton) tidak cukup.\n"
                 f"Sedang dikeringkan: {load / 1000:g} ton (sisa {sisa / 1000:g} ton), "
                 f"lot ini {new_total / 1000:g} ton."
             )
@@ -385,10 +389,12 @@ async def add_batches_to_lot(
     if dryer is not None:
         load = await dryer_load_kg(db)  # sudah termasuk lot ini
         cap = float(dryer.kapasitas_kg)
-        if load + new_total > cap:
-            sisa = max(cap - load, 0)
+        cap_efektif = cap + settings.dryer_toleransi_kg
+        if load + new_total > cap_efektif:
+            sisa = max(cap_efektif - load, 0)
             raise DryingError(
-                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton tidak cukup "
+                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton "
+                f"(maks dgn toleransi {cap_efektif / 1000:g} ton) tidak cukup "
                 f"(sisa {sisa / 1000:g} ton, tambahan {new_total / 1000:g} ton)."
             )
 

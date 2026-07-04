@@ -70,7 +70,7 @@ async def seed_master() -> None:
                 db.add(
                     Dryer(
                         warehouse_id=g1.id, nama="Pengering 1",
-                        kapasitas_kg=35000, status="aktif",
+                        kapasitas_kg=30000, status="aktif",
                     )
                 )
                 created.append("mesin pengering G1")
