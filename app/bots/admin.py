@@ -51,6 +51,7 @@ from app.services.transfer import (
     laporan_transfer,
 )
 from app.services.analytics import (
+    analisa_musiman,
     biaya_produksi_detail,
     biaya_proses_ringkas,
     hpp_trend,
@@ -247,6 +248,9 @@ async def _handle_analitik(message: Message, db, text: str) -> bool:
         return True
     if p.intent == "produksi_bulanan":
         await message.answer(await rekap_produksi_bulanan(db), parse_mode="Markdown")
+        return True
+    if p.intent == "analisa_musiman":
+        await message.answer(await analisa_musiman(db), parse_mode="Markdown")
         return True
     return False
 

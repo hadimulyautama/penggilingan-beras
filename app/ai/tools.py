@@ -1012,6 +1012,7 @@ TANYA_ANALITIK = {
                     "simulasi_hpp",
                     "biaya_proses",
                     "produksi_bulanan",
+                    "analisa_musiman",
                     "bukan_analitik",
                 ],
                 "description": (
@@ -1027,7 +1028,9 @@ TANYA_ANALITIK = {
                     "per kg gabah basah'). 'produksi_bulanan': rekap produksi "
                     "PK per bulan & utilisasi kapasitas (mis. 'produksi bulanan', "
                     "'kapasitas produksi aktual vs teoritis', 'rekap produksi'). "
-                    "'bukan_analitik': lainnya."
+                    "'analisa_musiman': pola kualitas gabah per bulan/musim "
+                    "(mis. 'analisa musiman', 'bulan mana gabah paling bagus', "
+                    "'pola musiman kualitas gabah'). 'bukan_analitik': lainnya."
                 ),
             },
             "kode_proses": {

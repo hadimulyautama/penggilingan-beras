@@ -429,3 +429,61 @@ async def rekap_produksi_bulanan(db: AsyncSession) -> str:
         )
         lines.append(f"   Utilisasi kapasitas: *{util:.1f}%* ({_ton(gabah)} / {_ton(teoritis_gabah)})")
     return "\n".join(lines)
+
+
+async def analisa_musiman(db: AsyncSession) -> str:
+    """Pola musiman kualitas gabah masuk, dikelompokkan per bulan kalender.
+
+    Sinyal kualitas: kadar air awal (rendah=kering/bagus) + proporsi basah +
+    volume. Butuh data lintas beberapa bulan/tahun agar polanya valid.
+    """
+    from sqlalchemy import case, extract
+
+    rows = (
+        await db.execute(
+            select(
+                extract("month", PurchaseBatch.tanggal_pembelian),
+                func.count(PurchaseBatch.id),
+                func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0),
+                func.avg(PurchaseBatch.kadar_air_awal_persen),
+                func.coalesce(
+                    func.sum(
+                        case((PurchaseBatch.kondisi_gabah == "basah", PurchaseBatch.berat_total_kg), else_=0)
+                    ), 0,
+                ),
+                func.count(PurchaseBatch.kadar_air_awal_persen),
+            )
+            .group_by(extract("month", PurchaseBatch.tanggal_pembelian))
+            .order_by(extract("month", PurchaseBatch.tanggal_pembelian))
+        )
+    ).all()
+    if not rows:
+        return "🌾 Belum ada data pembelian untuk analisa musiman."
+
+    lines = [
+        "🌾 *Analisa Musiman Kualitas Gabah* (per bulan kalender)",
+        "_Kualitas: kadar air awal (rendah = lebih kering/bagus) & proporsi basah._",
+    ]
+    best = None  # (bulan, kadar_air) kadar air terendah
+    ada_ka = False
+    for bln, n, kg, ka, basah_kg, n_ka in rows:
+        b = int(bln)
+        pct_basah = float(basah_kg) / float(kg) * 100 if kg else 0
+        ka_txt = f"{float(ka):.1f}%" if ka is not None else "-"
+        if ka is not None:
+            ada_ka = True
+            if best is None or float(ka) < best[1]:
+                best = (b, float(ka))
+        lines.append(
+            f"\n• *{_BULAN[b - 1]}*: {int(n)} batch · {_ton(float(kg))} · "
+            f"{pct_basah:.0f}% basah · kadar air awal {ka_txt}"
+        )
+    if best is not None:
+        lines.append(f"\n🏆 Kadar air awal terendah: *{_BULAN[best[0] - 1]}* ({best[1]:.1f}%).")
+    if not ada_ka:
+        lines.append(
+            "\n⚠️ Kadar air awal belum banyak dicatat — catat saat pembelian "
+            "('gabah masuk ... kadar air 24%') agar analisa kualitas lebih tajam."
+        )
+    lines.append("_Pola musiman valid setelah terkumpul data ≥1 tahun._")
+    return "\n".join(lines)
