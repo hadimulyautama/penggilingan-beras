@@ -49,6 +49,7 @@ from app.services.transfer import (
     create_internal_transfer,
     laporan_pk_siap_transfer,
     laporan_transfer,
+    pending_transfer_kg,
 )
 from app.services.analytics import (
     analisa_musiman,
@@ -336,9 +337,11 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
                 )
                 return True
             r = await create_internal_transfer(
-                db, user=user, kode_proses=kode, lokasi_tujuan=p.lokasi_tujuan
+                db, user=user, kode_proses=kode, lokasi_tujuan=p.lokasi_tujuan,
+                berat=p.berat_kg,
             )
             session.ctx_mil = r.kode_proses
+            sisa = await pending_transfer_kg(db, r.transfer.milling_process_id)
             hpp = (
                 f"\n• HPP snapshot: {_rp(float(r.hpp_per_kg))}/kg"
                 if r.hpp_per_kg is not None
@@ -347,7 +350,8 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
             await message.answer(
                 f"✓ Transfer *{r.transfer.kode_transfer}*: "
                 f"{_kg(float(r.transfer.berat_kg))} PK dari {r.kode_proses} → "
-                f"{r.lokasi_label} Gudang 2.{hpp}",
+                f"{r.lokasi_label} Gudang 2.\n"
+                f"• Sisa stok siap kirim {r.kode_proses}: {_kg(sisa)}{hpp}",
                 parse_mode="Markdown",
             )
         elif p.intent == "laporan_siap_transfer":

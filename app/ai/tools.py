@@ -126,14 +126,15 @@ PROSES_TRANSFER = {
     "name": "proses_transfer",
     "description": (
         "Deteksi & ekstrak perintah/pertanyaan TRANSFER PK dari Gudang 1 ke "
-        "Gudang 2. PK yang ditandai 'siap transfer' saat milling dikirim ke "
-        "Gudang 2 oleh staff/admin. Aksi: buat transfer (kirim PK ke Gudang 2), "
-        "tanya PK yang siap transfer, atau tanya riwayat transfer. "
+        "Gudang 2. Semua PK hasil giling otomatis jadi stok siap kirim; transfer "
+        "mengirim sebagian/seluruh stok itu ke Gudang 2 dan mengurangi stok. "
+        "Aksi: buat transfer (kirim PK ke Gudang 2), tanya PK yang siap kirim "
+        "(stok), atau tanya riwayat transfer. "
         "PENTING — pilih 'bukan_transfer' bila pesan sebenarnya BUKAN soal "
         "kirim/transfer PK antar gudang, mis.: menanyakan KODE batch/lot ('apa "
         "saja kode batchnya', 'kodenya apa'), JUMLAH batch/gabah, verifikasi, "
-        "stok, atau status. Kata 'transfer'/'kirim ke gudang 2'/'PK siap "
-        "transfer' harus benar-benar ada; kalau tidak, 'bukan_transfer'."
+        "stok, atau status. Kata 'transfer'/'kirim ke gudang 2' harus "
+        "benar-benar ada; kalau tidak, 'bukan_transfer'."
     ),
     "input_schema": {
         "type": "object",
@@ -147,11 +148,11 @@ PROSES_TRANSFER = {
                     "bukan_transfer",
                 ],
                 "description": (
-                    "'buat_transfer': kirim PK siap-transfer ke Gudang 2 "
-                    "(contoh: 'transfer PK dari MIL-... ke silo A', 'kirim PK "
-                    "siap transfer ke tumpukan gudang 2', 'transfer ke silo B'). "
-                    "'laporan_siap_transfer': tanya PK yang menunggu transfer "
-                    "(contoh: 'ada PK siap transfer?', 'PK siap dikirim berapa'). "
+                    "'buat_transfer': kirim PK (stok siap kirim) ke Gudang 2 "
+                    "(contoh: 'transfer PK dari MIL-... ke silo A', 'kirim 3 ton "
+                    "PK ke tumpukan gudang 2', 'transfer ke silo B'). "
+                    "'laporan_siap_transfer': tanya PK stok yang siap kirim "
+                    "(contoh: 'ada PK siap kirim?', 'PK siap dikirim berapa'). "
                     "'laporan_transfer': riwayat transfer (contoh: 'transfer hari "
                     "ini', 'sudah transfer apa saja'). 'bukan_transfer': lainnya."
                 ),
@@ -166,6 +167,14 @@ PROSES_TRANSFER = {
                 "description": (
                     "Tujuan di Gudang 2: 'silo A'->silo_a, 'silo B'->silo_b, "
                     "'tumpuk/ditumpuk/tumpukan'->ditumpuk."
+                ),
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": (
+                    "Jumlah PK yang dikirim dalam kg (mis. '3 ton'->3000, "
+                    "'500 kg'->500). null bila tidak disebut = kirim SEMUA stok "
+                    "siap kirim dari proses itu."
                 ),
             },
         },
@@ -240,8 +249,8 @@ PROSES_MILLING = {
         "beras PK di Gudang 1. Operator menyebut proses ini bermacam-macam — "
         "semua ARTINYA SAMA: 'milling', 'pecah kulit', 'giling', 'selep', "
         "'selepan', 'husking', atau 'proses'. Aksi: mulai proses dari isi "
-        "silo, catat progress berat PK, arahkan PK keluar (tumpuk/siap "
-        "transfer), tandai selesai, atau tanya laporan giling & stok PK. "
+        "silo, catat HASIL berat PK (otomatis jadi stok siap kirim), tandai "
+        "selesai, atau tanya laporan giling & stok PK. "
         "PENTING: 'mulai proses silo A' / 'mulai proses selep silo A' / 'selep "
         "silo A' BERARTI mulai_milling memakai bahan di silo itu (BUKAN tanya "
         "status silo). Jika benar-benar bukan tentang milling, pilih "
@@ -255,7 +264,6 @@ PROSES_MILLING = {
                 "enum": [
                     "mulai_milling",
                     "progress_milling",
-                    "routing_pk",
                     "selesai_milling",
                     "laporan_milling",
                     "stok_pk",
@@ -268,11 +276,10 @@ PROSES_MILLING = {
                     "proses selep silo A', 'selep silo A', 'husking silo A', "
                     "'mulai proses husking silo A', 'proses giling silo A', "
                     "'selepan silo A'). "
-                    "'progress_milling': catat berat PK kumulatif yang sudah "
-                    "keluar (contoh: 'progress giling MIL-... 5 ton', 'PK MIL-... "
-                    "sudah 5000 kg'). "
-                    "'routing_pk': arahkan PK yang keluar (contoh: 'tumpuk 3 ton "
-                    "PK dari MIL-...', 'siap transfer 2 ton dari MIL-...'). "
+                    "'progress_milling': catat HASIL berat PK kumulatif yang "
+                    "sudah keluar — otomatis jadi stok siap kirim (contoh: "
+                    "'progress giling MIL-... 5 ton', 'hasil giling 5 ton', "
+                    "'PK MIL-... sudah 5000 kg'). "
                     "'selesai_milling': proses milling/selep/giling/husking "
                     "SELESAI (contoh: 'MIL-... selesai giling', 'proses selep "
                     "selesai', 'selep selesai', 'giling selesai', 'milling "
@@ -301,17 +308,8 @@ PROSES_MILLING = {
             "berat_kg": {
                 "type": ["number", "null"],
                 "description": (
-                    "Berat dalam KILOGRAM. Untuk progress_milling = berat "
-                    "kumulatif total PK. Untuk routing_pk = berat yang "
-                    "diarahkan. Konversi ton: '5 ton'->5000."
-                ),
-            },
-            "tujuan": {
-                "type": ["string", "null"],
-                "enum": ["tumpuk", "siap_transfer", None],
-                "description": (
-                    "Untuk routing_pk: 'tumpuk' (simpan di buffer) atau "
-                    "'siap_transfer' (siap dikirim ke Gudang 2)."
+                    "Berat PK dalam KILOGRAM untuk progress_milling (hasil "
+                    "kumulatif total PK). Konversi ton: '5 ton'->5000."
                 ),
             },
         },

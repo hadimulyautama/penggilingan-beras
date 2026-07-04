@@ -60,7 +60,6 @@ from app.services.milling import (
     finish_milling,
     laporan_milling,
     log_progress,
-    route_pk,
     sole_active_milling_kode,
     start_milling,
     stok_pk_gudang1,
@@ -352,7 +351,7 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
             "• Catat beli: `gabah masuk dari pak budi 8 ton plat B 1234 XY`\n"
             "• Keringkan: `keringkan GB-20260702-01 dan GB-20260702-02`\n"
             "• Silo: `masukkan LOT-20260702-01 ke silo A`\n"
-            "• Giling: `giling silo A` → `tumpuk 3 ton dari MIL-...` → `MIL-... selesai`\n"
+            "• Giling: `giling silo A` → `hasil PK 3 ton MIL-...` → `MIL-... selesai`\n"
             "• Tanya: `silo apa yang terisi` / `stok PK gudang 1`\n\n"
             "Verifikasi harga & QC dikerjakan Staff/Admin di `@hmuadmin_bot`.",
             parse_mode="Markdown",
@@ -516,8 +515,8 @@ async def _handle_bare_finish(message: Message, db, user, text: str, session) ->
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
             await message.answer(
                 f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
-                f"• Ditumpuk: {_fmt_berat(res.total_tumpuk)} | "
-                f"Siap transfer: {_fmt_berat(res.total_transfer)}"
+                f"• PK dihasilkan: {_fmt_berat(res.produced)} — semua *siap kirim*.",
+                parse_mode="Markdown",
             )
     except (DryingError, MillingError) as e:
         await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan.")
@@ -753,8 +752,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
 
     _WRITE = {
         "mulai_milling": "Memulai giling",
-        "progress_milling": "Mencatat progress giling",
-        "routing_pk": "Mengarahkan PK",
+        "progress_milling": "Mencatat hasil giling",
         "selesai_milling": "Menandai giling selesai",
     }
     if p.intent in _WRITE and not await _require_operator(
@@ -764,7 +762,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
 
     # Kode proses dari pesan, konteks, atau satu-satunya giling yang berjalan.
     kode = p.kode_proses or _mil_code(text) or session.ctx_mil
-    if not kode and p.intent in ("progress_milling", "routing_pk", "selesai_milling"):
+    if not kode and p.intent in ("progress_milling", "selesai_milling"):
         kode = await sole_active_milling_kode(db)
     try:
         if p.intent == "mulai_milling":
@@ -784,19 +782,8 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             session.ctx_last = "mil"
             rend = f" · rendemen ~{res.rendemen_persen:.1f}%" if res.rendemen_persen else ""
             await message.answer(
-                f"✓ Progress {res.proc.kode_proses}: PK {_fmt_berat(res.berat_kumulatif)}{rend}."
-            )
-        elif p.intent == "routing_pk":
-            res = await route_pk(db, user=user, kode_proses=kode, berat=p.berat_kg, tujuan=p.tujuan)
-            session.ctx_mil = res.proc.kode_proses
-            session.ctx_last = "mil"
-            if res.tujuan == "tumpuk":
-                extra = f"\nBuffer PK G1 kini: {_fmt_berat(res.buffer_total)}"
-            else:
-                extra = "\nDitandai *siap transfer* — staff/admin yang mengeksekusi transfer."
-            await message.answer(
-                f"✓ {_fmt_berat(res.berat)} PK dari {res.proc.kode_proses} → "
-                f"{res.tujuan.replace('_', ' ')}.{extra}",
+                f"✓ Hasil PK {res.proc.kode_proses}: {_fmt_berat(res.berat_kumulatif)}{rend}.\n"
+                "_Otomatis jadi stok siap kirim._",
                 parse_mode="Markdown",
             )
         elif p.intent == "selesai_milling":
@@ -806,9 +793,7 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
             silo = f" Silo {res.nama_silo} otomatis dikosongkan." if res.nama_silo else ""
             await message.answer(
                 f"✓ {res.proc.kode_proses} selesai giling.{silo}\n"
-                f"• PK dihasilkan: {_fmt_berat(res.produced)}\n"
-                f"• Ditumpuk (buffer G1): {_fmt_berat(res.total_tumpuk)} | "
-                f"Siap transfer: {_fmt_berat(res.total_transfer)}\n"
+                f"• PK dihasilkan: {_fmt_berat(res.produced)} — semua *siap kirim*.\n"
                 "_QC & verifikasi output oleh staff/admin menyusul._",
                 parse_mode="Markdown",
             )

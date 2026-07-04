@@ -214,6 +214,7 @@ class ParsedTransfer:
     intent: str = "bukan_transfer"
     kode_proses: str | None = None
     lokasi_tujuan: str | None = None
+    berat_kg: float | None = None
 
 
 async def parse_transfer(text: str) -> ParsedTransfer:
@@ -224,6 +225,7 @@ async def parse_transfer(text: str) -> ParsedTransfer:
         intent=data.get("intent", "bukan_transfer"),
         kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
         lokasi_tujuan=data.get("lokasi_tujuan"),
+        berat_kg=data.get("berat_kg"),
     )
 
 

@@ -18,7 +18,6 @@ from app.models import (
     DryingLotBatch,
     DryingMoistureLog,
     InternalTransfer,
-    MillingPkRouting,
     MillingProcess,
     MillingProcessVerification,
     MillingProgressLog,
@@ -36,7 +35,7 @@ from app.services.activity_log import log_activity
 # Tabel yang tindakannya bisa di-undo.
 _UNDOABLE = {
     "drying_lots", "drying_moisture_logs", "drying_cooling_logs", "purchase_batches",
-    "silo_storage", "milling_process", "milling_pk_routing", "milling_qc_logs",
+    "silo_storage", "milling_process", "internal_transfers", "milling_qc_logs",
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
 }
 
@@ -336,13 +335,13 @@ async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
         raise UndoError("Proses giling sudah tidak ada.")
     if proc.status == "selesai":
         raise UndoError(f"{proc.kode_proses} sudah selesai — tidak bisa dibatalkan.")
-    for M in (MillingProgressLog, MillingPkRouting, MillingQcLog):
+    for M in (MillingProgressLog, MillingQcLog):
         exists = (
             await db.execute(select(M.id).where(M.milling_process_id == proc_id))
         ).first()
         if exists:
             raise UndoError(
-                f"{proc.kode_proses} sudah ada progress/routing/QC — batalkan itu dulu."
+                f"{proc.kode_proses} sudah ada progress/QC — batalkan itu dulu."
             )
     kode = proc.kode_proses
     await db.delete(proc)
@@ -379,22 +378,24 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     return f"✓ Dibatalkan: selesai giling {proc.kode_proses} (kembali 'proses', silo terisi lagi)."
 
 
-async def _undo_last_routing(db: AsyncSession, proc_id: int) -> str:
-    r = (
-        await db.execute(
-            select(MillingPkRouting)
-            .where(MillingPkRouting.milling_process_id == proc_id)
-            .order_by(MillingPkRouting.id.desc())
-            .limit(1)
-        )
-    ).scalars().first()
-    if r is None:
-        raise UndoError("Tidak ada arahan PK untuk dibatalkan.")
-    if r.status_transfer == "ditransfer":
-        raise UndoError("PK sudah ditransfer — tidak bisa dibatalkan.")
-    proc = await db.get(MillingProcess, proc_id)
-    await db.delete(r)
-    return f"✓ Dibatalkan: arahan PK terakhir {proc.kode_proses if proc else ''}.".strip()
+async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
+    """Batalkan transfer PK ke Gudang 2 — stok siap kirim kembali bertambah."""
+    t = await db.get(InternalTransfer, transfer_id)
+    if t is None:
+        raise UndoError("Transfer sudah tidak ada.")
+    proc = await db.get(MillingProcess, t.milling_process_id)
+    kode = proc.kode_proses if proc else ""
+    berat = float(t.berat_kg)
+    label = _LOKASI_UNDO.get(t.lokasi_tujuan, t.lokasi_tujuan)
+    await db.delete(t)
+    kg = f"{berat:,.0f} kg".replace(",", ".")
+    return (
+        f"✓ Dibatalkan: transfer {t.kode_transfer} ({kg} PK dari {kode} → "
+        f"{label} Gudang 2). Stok siap kirim {kode} kembali bertambah."
+    ).strip()
+
+
+_LOKASI_UNDO = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
 
 
 async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
@@ -479,8 +480,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_last_progress(db, rid)
     if t == "silo_moving_logs" and act == "INSERT":
         return await _undo_moving_log(db, rid)
-    if t == "milling_pk_routing" and act == "INSERT":
-        return await _undo_last_routing(db, rid)
+    if t == "internal_transfers" and act == "INSERT":
+        return await _undo_transfer(db, rid)
     if t == "milling_qc_logs" and act == "INSERT":
         return await _undo_last_qc(db, rid)
     if t == "milling_process_verifications":

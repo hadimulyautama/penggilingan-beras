@@ -3,16 +3,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import (
     DryingLotBatch,
     InternalTransfer,
-    MillingPkRouting,
     MillingProcess,
     MillingProcessVerification,
+    MillingProgressLog,
     PurchaseBatch,
     PurchaseBatchVerification,
 )
@@ -99,17 +99,33 @@ async def hpp_per_kg_pk(db: AsyncSession, proc: MillingProcess) -> float | None:
     return cost / output if output else None
 
 
-async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
-    """Total PK 'siap transfer' yang belum ditransfer dari sebuah proses."""
-    stmt = (
-        select(func.coalesce(func.sum(MillingPkRouting.berat_kg), 0))
-        .where(
-            MillingPkRouting.milling_process_id == proc_id,
-            MillingPkRouting.tujuan == "siap_transfer",
-            MillingPkRouting.status_transfer == "menunggu",
+async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
+    v = (
+        await db.execute(
+            select(MillingProgressLog.berat_kumulatif_kg)
+            .where(MillingProgressLog.milling_process_id == proc_id)
+            .order_by(MillingProgressLog.waktu_update.desc())
+            .limit(1)
         )
-    )
-    return float((await db.execute(stmt)).scalar_one())
+    ).scalars().first()
+    return float(v) if v is not None else 0.0
+
+
+async def _transferred_pk(db: AsyncSession, proc_id: int) -> float:
+    r = (
+        await db.execute(
+            select(func.coalesce(func.sum(InternalTransfer.berat_kg), 0)).where(
+                InternalTransfer.milling_process_id == proc_id,
+                InternalTransfer.status == "terkirim",
+            )
+        )
+    ).scalar_one()
+    return float(r)
+
+
+async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
+    """PK siap kirim (stok) sebuah proses = hasil produksi − yang sudah dikirim."""
+    return max(await _produced_pk(db, proc_id) - await _transferred_pk(db, proc_id), 0.0)
 
 
 @dataclass
@@ -121,9 +137,13 @@ class TransferResult:
 
 
 async def create_internal_transfer(
-    db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str
+    db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str,
+    berat: float | None = None,
 ) -> TransferResult:
-    """Buat transfer semua PK siap-transfer dari sebuah milling ke Gudang 2."""
+    """Kirim PK dari sebuah milling ke Gudang 2. Mengurangi stok siap kirim.
+
+    `berat` opsional: bila tidak disebut, kirim SEMUA stok yang tersedia.
+    """
     if lokasi_tujuan not in _LOKASI:
         raise TransferError("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
     proc = (
@@ -134,12 +154,13 @@ async def create_internal_transfer(
     if proc is None:
         raise TransferError(f"Proses {kode_proses} tidak ditemukan.")
 
-    pending = await pending_transfer_kg(db, proc.id)
-    if pending <= 0:
+    tersedia = await pending_transfer_kg(db, proc.id)
+    if tersedia <= 0:
         raise TransferError(
-            f"Tidak ada PK siap transfer dari {kode_proses}. "
-            "Operator perlu menandai PK 'siap transfer' dulu saat milling."
+            f"Tidak ada stok PK dari {kode_proses} untuk dikirim "
+            "(hasil giling belum dicatat, atau semua sudah terkirim)."
         )
+    kirim = tersedia if berat is None else min(float(berat), tersedia)
 
     hpp = await hpp_per_kg_pk(db, proc)
     now = now_local()
@@ -147,7 +168,7 @@ async def create_internal_transfer(
         kode_transfer=await next_transfer_code(db),
         milling_process_id=proc.id,
         drying_lot_id=proc.drying_lot_id,
-        berat_kg=pending,
+        berat_kg=kirim,
         lokasi_tujuan=lokasi_tujuan,
         hpp_per_kg=hpp,
         waktu=now,
@@ -156,21 +177,10 @@ async def create_internal_transfer(
     )
     db.add(transfer)
     await db.flush()
-
-    # Tandai semua routing siap-transfer yang menunggu -> ditransfer.
-    await db.execute(
-        update(MillingPkRouting)
-        .where(
-            MillingPkRouting.milling_process_id == proc.id,
-            MillingPkRouting.tujuan == "siap_transfer",
-            MillingPkRouting.status_transfer == "menunggu",
-        )
-        .values(status_transfer="ditransfer")
-    )
     await log_activity(
         db, table_name="internal_transfers", record_id=transfer.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{transfer.kode_transfer} | {pending:.0f}kg -> {_LOKASI[lokasi_tujuan]} | hpp={hpp}",
+        new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> {_LOKASI[lokasi_tujuan]} | hpp={hpp}",
     )
     await db.commit()
     await db.refresh(transfer)
@@ -190,28 +200,21 @@ def _rp(n: float | None) -> str:
 
 
 async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
-    """PK yang menunggu untuk ditransfer, per proses milling."""
-    rows = (
-        await db.execute(
-            select(
-                MillingProcess.kode_proses,
-                func.sum(MillingPkRouting.berat_kg),
-            )
-            .join(MillingProcess, MillingProcess.id == MillingPkRouting.milling_process_id)
-            .where(
-                MillingPkRouting.tujuan == "siap_transfer",
-                MillingPkRouting.status_transfer == "menunggu",
-            )
-            .group_by(MillingProcess.kode_proses)
-            .order_by(MillingProcess.kode_proses)
-        )
-    ).all()
-    if not rows:
-        return "🚚 Tidak ada PK yang menunggu transfer."
-    total = sum(float(b) for _, b in rows)
-    lines = [f"🚚 PK siap transfer ke Gudang 2: {_kg(total)}"]
-    for kode, b in rows:
-        lines.append(f"• dari {kode}: {_kg(float(b))}")
+    """PK siap kirim ke Gudang 2 = hasil − yang sudah dikirim, per proses."""
+    procs = (
+        await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
+    ).scalars().all()
+    items: list[tuple[str, float]] = []
+    for p in procs:
+        avail = await pending_transfer_kg(db, p.id)
+        if avail > 0:
+            items.append((p.kode_proses, avail))
+    if not items:
+        return "🚚 Tidak ada PK siap kirim ke Gudang 2."
+    total = sum(a for _, a in items)
+    lines = [f"🚚 PK siap kirim ke Gudang 2: {_kg(total)}"]
+    for kode, a in items:
+        lines.append(f"• dari {kode}: {_kg(a)}")
     return "\n".join(lines)
 
 
