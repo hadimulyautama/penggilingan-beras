@@ -5,10 +5,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
 
 from app.bots.registry import build_bots, run_polling
 from app.config import settings
+from app.database import SessionLocal
+from app.services.dashboard import dashboard_data, render_dashboard_html
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 
@@ -61,3 +64,19 @@ async def health() -> dict:
         "model": settings.claude_model,
         "bots": list(settings.bot_tokens.keys()),
     }
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(token: str = Query("")) -> HTMLResponse:
+    """Dashboard produksi staff (web). Dilindungi token rahasia di URL.
+
+    Set env `DASHBOARD_TOKEN` lalu buka /dashboard?token=<token>. Berisi data
+    uang (HPP) — hanya bagikan link ke staff/admin.
+    """
+    if not settings.dashboard_token:
+        raise HTTPException(status_code=404, detail="Dashboard web tidak aktif.")
+    if token != settings.dashboard_token:
+        raise HTTPException(status_code=403, detail="Token tidak valid.")
+    async with SessionLocal() as db:
+        data = await dashboard_data(db)
+    return HTMLResponse(render_dashboard_html(data))

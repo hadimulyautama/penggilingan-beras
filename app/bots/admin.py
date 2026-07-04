@@ -63,6 +63,7 @@ from app.services.analytics import (
     simulasi_hpp,
     supplier_scorecard,
 )
+from app.services.dashboard import dashboard_data, render_dashboard_text
 from app.services.report import resolve_batch_kode_ref
 from app.services.undo import UndoError, resolve_actor_ids, undo_last
 from app.services.user_admin import (
@@ -144,6 +145,25 @@ async def cmd_whoami(message: Message) -> None:
     await message.answer(
         f"Nama: {user.nama}\nRole: {user.role}\nAkses: {user.access_level}",
     )
+
+
+async def _send_dashboard(message: Message, db, user) -> None:
+    """Kirim dashboard produksi (staff/admin). Berisi data uang (HPP)."""
+    if not can_see_financials(user):
+        await message.answer("🔒 Dashboard produksi khusus staff/admin.")
+        return
+    data = await dashboard_data(db)
+    await message.answer(render_dashboard_text(data), parse_mode="Markdown")
+
+
+@router.message(Command("dashboard"))
+async def cmd_dashboard(message: Message) -> None:
+    async with SessionLocal() as db:
+        user = await authenticate(db, message.from_user.id)
+        if not user:
+            await unregistered_reply(message)
+            return
+        await _send_dashboard(message, db, user)
 
 
 @router.message(Command("daftar"))
@@ -449,6 +469,11 @@ async def handle_message(message: Message) -> None:
             return
 
         session = get_session(message.bot.id, tg_id)
+
+        # ── Dashboard produksi (kata kunci) ──
+        if lower in ("dashboard", "dasbor", "dashboard produksi", "ringkasan produksi"):
+            await _send_dashboard(message, db, user)
+            return
 
         # ── Menunggu konfirmasi verifikasi ──
         if session.stage == "awaiting_verif_confirmation" and session.verif_draft:

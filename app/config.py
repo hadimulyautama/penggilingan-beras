@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     undo_window_minutes: int = 15
     max_purchase_batch_per_day: int = 3
 
+    # Token rahasia untuk buka dashboard web (/dashboard?token=...). Kosong =
+    # dashboard web dinonaktifkan (hanya versi Telegram yang jalan).
+    dashboard_token: str = ""
+
     # Admin awal (di-seed otomatis ke DB kosong saat startup).
     # Kosongkan admin_telegram_id bila tidak ingin auto-seed user.
     admin_telegram_id: int | None = None

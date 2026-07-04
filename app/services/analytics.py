@@ -88,11 +88,12 @@ async def _proc_batches(db: AsyncSession, proc: MillingProcess):
     return []
 
 
-async def supplier_scorecard(db: AsyncSession) -> str:
-    """Skor per supplier: pasok, harga, rendemen, kualitas, HPP/kg PK.
+async def supplier_scorecard_data(db: AsyncSession) -> dict:
+    """Data terstruktur scorecard supplier (dipakai teks bot & dashboard).
 
-    Diperingkat dari HPP/kg PK terendah (paling hemat = paling menguntungkan
-    pada harga jual PK yang sama).
+    Kembalikan {"diproduksi": [...], "belum": [...]}, tiap item punya field
+    turunan: harga_per_kg, rendemen (%), hpp_pk. `diproduksi` diperingkat dari
+    HPP/kg PK terendah.
     """
     # ── 1. Pengadaan per supplier (semua batch) ──
     prow = (
@@ -108,19 +109,18 @@ async def supplier_scorecard(db: AsyncSession) -> str:
         )
     ).all()
     if not prow:
-        return "📊 Belum ada data pembelian untuk dianalisa."
+        return {"diproduksi": [], "belum": []}
 
     agg: dict[int, dict] = {}
     for sid, nama, nbatch, kg, ka in prow:
         agg[sid] = {
             "nama": nama, "n_batch": int(nbatch), "kg": float(kg),
             "kadar_air": float(ka) if ka is not None else None,
-            "biaya_verif": 0.0, "kg_verif": 0.0,      # utk harga rata2
-            "pk_alloc": 0.0, "gabah_milled": 0.0,     # utk rendemen (semua proses)
-            "cost_milled": 0.0, "pk_for_hpp": 0.0,    # utk HPP penuh (proses berbiaya)
+            "biaya_verif": 0.0, "kg_verif": 0.0,
+            "pk_alloc": 0.0, "gabah_milled": 0.0,
+            "cost_milled": 0.0, "pk_for_hpp": 0.0,
         }
 
-    # Harga rata-rata tertimbang (dari batch terverifikasi).
     vrow = (
         await db.execute(
             select(
@@ -138,7 +138,6 @@ async def supplier_scorecard(db: AsyncSession) -> str:
             agg[sid]["biaya_verif"] = float(biaya)
             agg[sid]["kg_verif"] = float(kgv)
 
-    # ── 2. Rendemen & biaya termilling (alokasi proporsional) ──
     procs = (
         await db.execute(select(MillingProcess).where(MillingProcess.status == "selesai"))
     ).scalars().all()
@@ -151,7 +150,7 @@ async def supplier_scorecard(db: AsyncSession) -> str:
         total_kg = sum(float(b.berat_total_kg) for b, _ in batches)
         if total_kg <= 0:
             continue
-        total_cost = bd.total_penuh  # None bila bahan baku belum verif
+        total_cost = bd.total_penuh
         for b, _harga in batches:
             sid = b.supplier_id
             if sid not in agg:
@@ -163,39 +162,53 @@ async def supplier_scorecard(db: AsyncSession) -> str:
                 agg[sid]["cost_milled"] += total_cost * share
                 agg[sid]["pk_for_hpp"] += output * share
 
-    # ── 3. Susun & peringkat (HPP penuh: bahan baku + operasional) ──
-    def hpp(a):
-        return a["cost_milled"] / a["pk_for_hpp"] if a["pk_for_hpp"] > 0 else None
+    for a in agg.values():
+        a["harga_per_kg"] = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
+        a["rendemen"] = a["pk_alloc"] / a["gabah_milled"] * 100 if a["gabah_milled"] > 0 else None
+        a["hpp_pk"] = a["cost_milled"] / a["pk_for_hpp"] if a["pk_for_hpp"] > 0 else None
 
     rows = list(agg.values())
     diproduksi = [a for a in rows if a["pk_alloc"] > 0]
     belum = [a for a in rows if a["pk_alloc"] <= 0]
-    diproduksi.sort(key=lambda a: (hpp(a) is None, hpp(a) or 0))
+    diproduksi.sort(key=lambda a: (a["hpp_pk"] is None, a["hpp_pk"] or 0))
+    return {"diproduksi": diproduksi, "belum": belum}
+
+
+async def supplier_scorecard(db: AsyncSession) -> str:
+    """Skor per supplier: pasok, harga, rendemen, kualitas, HPP/kg PK.
+
+    Diperingkat dari HPP/kg PK terendah (paling hemat = paling menguntungkan
+    pada harga jual PK yang sama).
+    """
+    data = await supplier_scorecard_data(db)
+    diproduksi, belum = data["diproduksi"], data["belum"]
+    if not diproduksi and not belum:
+        return "📊 Belum ada data pembelian untuk dianalisa."
 
     lines = ["📊 *Supplier Scorecard* (keseluruhan)"]
     medali = ["🥇", "🥈", "🥉"]
     for i, a in enumerate(diproduksi):
         tag = medali[i] if i < len(medali) else "•"
-        harga = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
-        rend = a["pk_alloc"] / a["gabah_milled"] * 100 if a["gabah_milled"] > 0 else None
         ka = f"{a['kadar_air']:.0f}%" if a["kadar_air"] is not None else "-"
-        h = hpp(a)
+        h = a["hpp_pk"]
         lines.append(
             f"\n{tag} *{a['nama']}* — HPP PK {_rp(h)}/kg"
             + ("  ⭐ terhemat" if i == 0 and h is not None else "")
         )
         lines.append(
-            f"• Pasok {_ton(a['kg'])} ({a['n_batch']} batch) · harga ~{_rp(harga)}/kg"
+            f"• Pasok {_ton(a['kg'])} ({a['n_batch']} batch) · harga ~{_rp(a['harga_per_kg'])}/kg"
         )
         lines.append(
-            f"• Rendemen PK {rend:.1f}% · kadar air masuk {ka}"
-            if rend is not None else f"• kadar air masuk {ka}"
+            f"• Rendemen PK {a['rendemen']:.1f}% · kadar air masuk {ka}"
+            if a["rendemen"] is not None else f"• kadar air masuk {ka}"
         )
     if belum:
         lines.append("\n_Belum ada produksi PK (hanya pengadaan):_")
         for a in belum:
-            harga = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
-            lines.append(f"• {a['nama']}: {_ton(a['kg'])} ({a['n_batch']} batch) · ~{_rp(harga)}/kg")
+            lines.append(
+                f"• {a['nama']}: {_ton(a['kg'])} ({a['n_batch']} batch) "
+                f"· ~{_rp(a['harga_per_kg'])}/kg"
+            )
     lines.append(
         "\n_Peringkat = HPP/kg PK terendah (harga + rendemen). Profit riil butuh "
         "harga jual PK._"
