@@ -335,7 +335,7 @@ def simulasi_hpp(
         f"   (bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · pengeringan {_rp(dry)} · "
         f"operator {_rp(s.biaya_operator_per_kg_gabah)} · rubber {_rp(rubber)} · "
         f"listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} · tenaga giling {_rp(milling_labor)})",
-        f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah basah",
+        f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah",
         f"_(bahan baku {_rp(harga_gabah / rend)} + operasional {_rp(op / rend)} per kg PK)_",
     ])
 
