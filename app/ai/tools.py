@@ -1010,6 +1010,8 @@ TANYA_ANALITIK = {
                     "hpp_tren",
                     "rincian_biaya",
                     "simulasi_hpp",
+                    "biaya_proses",
+                    "produksi_bulanan",
                     "bukan_analitik",
                 ],
                 "description": (
@@ -1019,8 +1021,12 @@ TANYA_ANALITIK = {
                     "rincian biaya produksi & HPP satu proses giling (mis. "
                     "'rincian biaya MIL-...', 'hpp MIL-... berapa'). "
                     "'simulasi_hpp': hitung HPP dari asumsi harga gabah & "
-                    "rendemen (mis. 'simulasi hpp gabah 7800 rendemen 64', "
-                    "'kalau harga 7800 rendemen 65 berapa hpp'). "
+                    "rendemen (mis. 'simulasi hpp gabah 7800 rendemen 64'). "
+                    "'biaya_proses': biaya PROSES/operasional per kg gabah "
+                    "(mis. 'biaya proses per kg gabah', 'berapa ongkos proses "
+                    "per kg gabah basah'). 'produksi_bulanan': rekap produksi "
+                    "PK per bulan & utilisasi kapasitas (mis. 'produksi bulanan', "
+                    "'kapasitas produksi aktual vs teoritis', 'rekap produksi'). "
                     "'bukan_analitik': lainnya."
                 ),
             },

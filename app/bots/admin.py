@@ -52,7 +52,9 @@ from app.services.transfer import (
 )
 from app.services.analytics import (
     biaya_produksi_detail,
+    biaya_proses_ringkas,
     hpp_trend,
+    rekap_produksi_bulanan,
     simulasi_hpp,
     supplier_scorecard,
 )
@@ -239,6 +241,12 @@ async def _handle_analitik(message: Message, db, text: str) -> bool:
             ),
             parse_mode="Markdown",
         )
+        return True
+    if p.intent == "biaya_proses":
+        await message.answer(await biaya_proses_ringkas(db), parse_mode="Markdown")
+        return True
+    if p.intent == "produksi_bulanan":
+        await message.answer(await rekap_produksi_bulanan(db), parse_mode="Markdown")
         return True
     return False
 

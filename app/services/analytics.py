@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    Dryer,
     DryingLotBatch,
     MillingProcess,
     MillingProcessVerification,
@@ -337,3 +338,94 @@ def simulasi_hpp(
         f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah basah",
         f"_(bahan baku {_rp(harga_gabah / rend)} + operasional {_rp(op / rend)} per kg PK)_",
     ])
+
+
+async def _avg_rendemen(db: AsyncSession) -> float:
+    """Rendemen rata-rata dari proses selesai berbobot output. Fallback asумsi."""
+    from app.config import settings as s
+    procs = (
+        await db.execute(select(MillingProcess).where(MillingProcess.status == "selesai"))
+    ).scalars().all()
+    tot_pk = tot_gabah = 0.0
+    for p in procs:
+        out = await _proc_pk_output(db, p)
+        if out and p.berat_gabah_masuk_kg:
+            tot_pk += out
+            tot_gabah += float(p.berat_gabah_masuk_kg)
+    if tot_gabah > 0:
+        return tot_pk / tot_gabah
+    return s.rendemen_asumsi_persen / 100
+
+
+async def biaya_proses_ringkas(db: AsyncSession) -> str:
+    """Biaya PROSES (operasional, tanpa harga gabah) per kg gabah — tiap jalur."""
+    from app.config import settings as s
+    rend = await _avg_rendemen(db)
+    rubber = s.rubber_roll_harga_per_set / (s.rubber_roll_umur_ton * 1000)
+    tetap = (
+        s.biaya_bongkar_per_kg_gabah + s.biaya_operator_per_kg_gabah
+        + rubber + s.biaya_listrik_milling_per_kg_gabah
+    )  # per kg gabah, di luar pengeringan
+    milling = s.biaya_tenaga_milling_per_kg_pk * rend  # per kg gabah
+
+    def total(dry):
+        return tetap + dry + milling
+
+    return "\n".join([
+        f"🏭 *Biaya proses per kg gabah* (operasional, di luar harga beli)",
+        f"_Tenaga giling {_rp(s.biaya_tenaga_milling_per_kg_pk)}/kg PK "
+        f"≈ {_rp(milling)}/kg gabah @ rendemen {rend * 100:.0f}%_",
+        f"\n• Basah (dikeringkan): *{_rp(total(s.biaya_pengeringan_basah_per_kg))}/kg gabah*",
+        f"• Kering (tetap dikeringkan): *{_rp(total(s.biaya_pengeringan_kering_per_kg))}/kg*",
+        f"• Kering langsung silo (tanpa pengeringan): *{_rp(total(0))}/kg*",
+        f"\nKomponen tetap/kg gabah: bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · "
+        f"operator {_rp(s.biaya_operator_per_kg_gabah)} · rubber {_rp(rubber)} · "
+        f"listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} + pengeringan (sesuai jalur) "
+        f"+ giling {_rp(milling)}.",
+    ])
+
+
+async def rekap_produksi_bulanan(db: AsyncSession) -> str:
+    """Rekap produksi PK per bulan + utilisasi vs kapasitas teoritis dryer."""
+    from app.config import settings as s
+    dryer = (await db.execute(select(Dryer).limit(1))).scalars().first()
+    cap_kg = float(dryer.kapasitas_kg) if dryer else 30000
+    teoritis_gabah = cap_kg * s.kapasitas_siklus_dryer_per_hari * s.kapasitas_hari_kerja_per_bulan
+
+    procs = (
+        await db.execute(
+            select(MillingProcess)
+            .where(MillingProcess.status == "selesai", MillingProcess.waktu_selesai.isnot(None))
+            .order_by(MillingProcess.waktu_selesai)
+        )
+    ).scalars().all()
+    per_bulan: dict[tuple[int, int], list[float]] = {}  # -> [gabah, pk, n]
+    for p in procs:
+        out = await _proc_pk_output(db, p)
+        if not out:
+            continue
+        key = (p.waktu_selesai.year, p.waktu_selesai.month)
+        acc = per_bulan.setdefault(key, [0.0, 0.0, 0])
+        acc[0] += float(p.berat_gabah_masuk_kg or 0)
+        acc[1] += out
+        acc[2] += 1
+
+    lines = [
+        "📅 *Rekap Produksi Bulanan & Utilisasi*",
+        f"_Kapasitas teoritis: {cap_kg / 1000:g} t × {s.kapasitas_siklus_dryer_per_hari:g} "
+        f"siklus/hari × {s.kapasitas_hari_kerja_per_bulan} hari = "
+        f"{_ton(teoritis_gabah)} gabah/bulan (asumsi, bisa diubah)._",
+    ]
+    if not per_bulan:
+        lines.append("\nBelum ada produksi PK yang selesai.")
+        return "\n".join(lines)
+    for (thn, bln) in sorted(per_bulan):
+        gabah, pk, n = per_bulan[(thn, bln)]
+        rend = pk / gabah * 100 if gabah else 0
+        util = gabah / teoritis_gabah * 100 if teoritis_gabah else 0
+        lines.append(
+            f"\n• *{_BULAN[bln - 1]} {thn}*: PK {_ton(pk)} dari gabah {_ton(gabah)} "
+            f"(rendemen {rend:.1f}%, {n} proses)"
+        )
+        lines.append(f"   Utilisasi kapasitas: *{util:.1f}%* ({_ton(gabah)} / {_ton(teoritis_gabah)})")
+    return "\n".join(lines)

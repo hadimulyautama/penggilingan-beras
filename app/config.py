@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     rubber_roll_harga_per_set: float = 2_000_000
     rubber_roll_umur_ton: float = 100
 
+    # Asumsi kapasitas teoritis (utk analitik utilisasi). Bisa via env.
+    kapasitas_siklus_dryer_per_hari: float = 1     # ~1 siklus (sore-besok sore)
+    kapasitas_hari_kerja_per_bulan: int = 26
+    rendemen_asumsi_persen: float = 64             # dipakai bila belum ada data
+
     @property
     def bot_tokens(self) -> dict[str, str]:
         """Peta nama bot -> token (hanya yang terisi)."""
