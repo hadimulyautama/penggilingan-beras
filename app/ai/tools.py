@@ -1009,6 +1009,7 @@ TANYA_ANALITIK = {
                     "supplier_scorecard",
                     "hpp_tren",
                     "rincian_biaya",
+                    "simulasi_hpp",
                     "bukan_analitik",
                 ],
                 "description": (
@@ -1016,13 +1017,33 @@ TANYA_ANALITIK = {
                     "(untung/harga/rendemen/kualitas). 'hpp_tren': tren biaya "
                     "pokok PK per kg dari waktu ke waktu. 'rincian_biaya': "
                     "rincian biaya produksi & HPP satu proses giling (mis. "
-                    "'rincian biaya MIL-...', 'hpp MIL-... berapa', 'biaya "
-                    "produksi giling terakhir'). 'bukan_analitik': lainnya."
+                    "'rincian biaya MIL-...', 'hpp MIL-... berapa'). "
+                    "'simulasi_hpp': hitung HPP dari asumsi harga gabah & "
+                    "rendemen (mis. 'simulasi hpp gabah 7800 rendemen 64', "
+                    "'kalau harga 7800 rendemen 65 berapa hpp'). "
+                    "'bukan_analitik': lainnya."
                 ),
             },
             "kode_proses": {
                 "type": ["string", "null"],
                 "description": "Kode proses MIL-YYYYMMDD-NN utk rincian_biaya (huruf besar).",
+            },
+            "harga_gabah": {
+                "type": ["number", "null"],
+                "description": "Simulasi: harga beli gabah Rp/kg ('7800', '7.800').",
+            },
+            "rendemen": {
+                "type": ["number", "null"],
+                "description": "Simulasi: rendemen dalam PERSEN ('64', '65%'-> 65).",
+            },
+            "kondisi": {
+                "type": ["string", "null"],
+                "enum": ["basah", "kering", None],
+                "description": "Simulasi: kondisi gabah. null -> basah.",
+            },
+            "langsung_silo": {
+                "type": "boolean",
+                "description": "Simulasi: true bila gabah kering langsung ke silo (tanpa pengeringan).",
             },
         },
         "required": ["intent"],

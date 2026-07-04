@@ -292,3 +292,48 @@ async def biaya_produksi_detail(db: AsyncSession, kode_proses: str | None = None
             "Bahan baku belum diverifikasi → HPP penuh belum bisa dihitung._"
         )
     return "\n".join(lines)
+
+
+def simulasi_hpp(
+    harga_gabah: float | None, rendemen_persen: float | None, *,
+    kondisi: str = "basah", langsung_silo: bool = False,
+) -> str:
+    """What-if HPP dari harga gabah & rendemen (pakai tarif biaya terkini)."""
+    from app.config import settings as s
+
+    if not harga_gabah or not rendemen_persen:
+        return (
+            "Sebutkan harga gabah & rendemen, contoh:\n"
+            "`simulasi hpp gabah 7800 rendemen 64`"
+        )
+    rend = rendemen_persen / 100
+    if rend <= 0 or rend > 1:
+        return "Rendemen harus antara 1–100 persen."
+
+    if langsung_silo:
+        dry, jalur = 0.0, "kering · langsung silo (tanpa pengeringan)"
+    elif kondisi == "kering":
+        dry, jalur = s.biaya_pengeringan_kering_per_kg, "kering · tetap dikeringkan"
+    else:
+        dry, jalur = s.biaya_pengeringan_basah_per_kg, "basah · dikeringkan"
+
+    rubber = s.rubber_roll_harga_per_set / (s.rubber_roll_umur_ton * 1000)
+    per_gabah = (
+        s.biaya_bongkar_per_kg_gabah + dry + s.biaya_operator_per_kg_gabah
+        + rubber + s.biaya_listrik_milling_per_kg_gabah
+    )
+    milling_labor = s.biaya_tenaga_milling_per_kg_pk * rend  # per kg gabah
+    op = per_gabah + milling_labor
+    total_gabah = harga_gabah + op
+    hpp_pk = total_gabah / rend
+
+    return "\n".join([
+        f"🧮 *Simulasi HPP* — gabah {jalur}, rendemen {rendemen_persen:g}%",
+        f"• Harga gabah: {_rp(harga_gabah)}/kg",
+        f"• Biaya proses: {_rp(op)}/kg gabah",
+        f"   (bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · pengeringan {_rp(dry)} · "
+        f"operator {_rp(s.biaya_operator_per_kg_gabah)} · rubber {_rp(rubber)} · "
+        f"listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} · tenaga giling {_rp(milling_labor)})",
+        f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah basah",
+        f"_(bahan baku {_rp(harga_gabah / rend)} + operasional {_rp(op / rend)} per kg PK)_",
+    ])

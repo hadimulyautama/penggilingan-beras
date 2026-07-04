@@ -352,15 +352,23 @@ class ParsedUndo:
 class ParsedAnalitik:
     intent: str = "bukan_analitik"
     kode_proses: str | None = None
+    harga_gabah: float | None = None
+    rendemen: float | None = None
+    kondisi: str | None = None
+    langsung_silo: bool = False
 
 
 async def parse_analitik(text: str) -> ParsedAnalitik:
-    """Intent analitik + kode proses (utk rincian_biaya)."""
+    """Intent analitik + parameter (rincian_biaya & simulasi_hpp)."""
     data = await _invoke_tool([{"role": "user", "content": text}], TANYA_ANALITIK)
     kode = data.get("kode_proses")
     return ParsedAnalitik(
         intent=data.get("intent", "bukan_analitik"),
         kode_proses=kode.upper().strip() if isinstance(kode, str) and kode.strip() else None,
+        harga_gabah=data.get("harga_gabah"),
+        rendemen=data.get("rendemen"),
+        kondisi=data.get("kondisi"),
+        langsung_silo=bool(data.get("langsung_silo", False)),
     )
 
 

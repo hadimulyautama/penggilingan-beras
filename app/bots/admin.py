@@ -53,6 +53,7 @@ from app.services.transfer import (
 from app.services.analytics import (
     biaya_produksi_detail,
     hpp_trend,
+    simulasi_hpp,
     supplier_scorecard,
 )
 from app.services.report import resolve_batch_kode_ref
@@ -229,6 +230,15 @@ async def _handle_analitik(message: Message, db, text: str) -> bool:
     if p.intent == "rincian_biaya":
         kode = p.kode_proses or _extract_kode(text)
         await message.answer(await biaya_produksi_detail(db, kode), parse_mode="Markdown")
+        return True
+    if p.intent == "simulasi_hpp":
+        await message.answer(
+            simulasi_hpp(
+                p.harga_gabah, p.rendemen,
+                kondisi=p.kondisi or "basah", langsung_silo=p.langsung_silo,
+            ),
+            parse_mode="Markdown",
+        )
         return True
     return False
 
