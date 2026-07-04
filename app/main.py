@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
     built = build_bots()
     app.state.bots = built
     bots = {name: bot for name, bot, _dp in built}
+    from app.bots.notify import set_bots
+    set_bots(bots)
     poll_task = asyncio.create_task(run_polling(built))
     sched_task = asyncio.create_task(run_late_drying_scheduler(bots))
     log.info("Backend siap. Bot aktif: %s", list(settings.bot_tokens.keys()) or "(none)")

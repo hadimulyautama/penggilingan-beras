@@ -29,6 +29,8 @@ from app.bots.common import (
 )
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
+from app.bots.notify import notify_roles
+from app.services.analytics import biaya_produksi_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
@@ -810,6 +812,16 @@ async def _handle_milling(message: Message, db, user, text: str, session) -> boo
                 "_QC & verifikasi output oleh staff/admin menyusul._",
                 parse_mode="Markdown",
             )
+            # Laporan HPP otomatis ke admin/staff (angka sementara bila output
+            # PK belum diverifikasi).
+            try:
+                laporan = await biaya_produksi_detail(db, res.proc.kode_proses)
+                await notify_roles(
+                    f"✅ *{res.proc.kode_proses} selesai giling* — laporan HPP:\n\n"
+                    f"{laporan}\n\n_Angka sementara sampai output PK diverifikasi._"
+                )
+            except Exception:
+                log.exception("gagal kirim laporan HPP")
         elif p.intent == "laporan_milling":
             # Laporan: kode eksplisit saja; tanpa kode -> semua proses.
             await message.answer(await laporan_milling(db, p.kode_proses or _mil_code(text)))
