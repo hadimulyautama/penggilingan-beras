@@ -481,12 +481,23 @@ def _mentions_milling(text: str) -> bool:
     return any(w in low for w in ("selep", "giling", "milling", "husking", "pecah kulit"))
 
 
+def _mentions_moving(text: str) -> bool:
+    """Teks tentang pemindahan gabah dryer→silo (punya alur selesai sendiri)?"""
+    low = text.lower()
+    return any(w in low for w in ("pindah", "pemindahan"))
+
+
 def _is_bare_finish(text: str) -> bool:
-    """'selesai/beres/kelar' tanpa kode & tanpa penanda domain (ambigu)."""
+    """'selesai/beres/kelar' tanpa kode & tanpa penanda domain (ambigu).
+
+    Pemindahan (pindah dryer→silo) punya alur 'pindah_selesai' sendiri di
+    _handle_silo, jadi JANGAN ditangkap sebagai bare-finish."""
     low = text.lower()
     if not any(w in low for w in ("selesai", "beres", "kelar", "rampung")):
         return False
     if _lot_code(text) or _mil_code(text):
+        return False
+    if _mentions_moving(text):
         return False
     return not (_mentions_drying(text) or _mentions_milling(text))
 
@@ -736,7 +747,8 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
             tujuan = f" ke *Silo {silo}*" if silo else ""
             await message.answer(
                 f"✓ Dicatat: mulai pindah {lot_kode}{tujuan}.\n"
-                "Gabah masih di dryer sampai pemindahan selesai.",
+                "Gabah masih di dryer sampai pemindahan selesai.\n"
+                "_Bila sudah dipindah, ketik `pemindahan selesai`._",
                 parse_mode="Markdown",
             )
         elif p.intent == "pindah_selesai":

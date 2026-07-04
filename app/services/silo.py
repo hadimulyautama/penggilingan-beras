@@ -304,6 +304,26 @@ async def moving_finished(
     if lot is None:
         raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
 
+    # Bila silo tujuan tak disebut ("pemindahan selesai"), ambil dari log
+    # 'mulai pindah' sebelumnya.
+    if not nama_silo:
+        ml_mulai = (
+            await db.execute(
+                select(SiloMovingLog)
+                .where(
+                    SiloMovingLog.drying_lot_id == lot.id,
+                    SiloMovingLog.tipe == "mulai",
+                    SiloMovingLog.silo_id.is_not(None),
+                )
+                .order_by(SiloMovingLog.id.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+        if ml_mulai:
+            silo_mulai = await db.get(Silo, ml_mulai.silo_id)
+            if silo_mulai:
+                nama_silo = silo_mulai.nama_silo.replace("Silo ", "")
+
     existing = await _lot_active_storage(db, lot.id)
     if existing:
         # Sudah tercatat di silo -> cukup log 'selesai'.
