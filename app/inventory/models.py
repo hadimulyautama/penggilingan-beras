@@ -177,3 +177,47 @@ class ByproductPrice(Base, TimestampMixin):
     harga_per_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class OutgoingRecord(Base, TimestampMixin):
+    """Barang keluar / dikirim. Kode: OUT-YYYYMMDD-NN. Proses jual lengkap
+    (pelanggan/faktur/piutang) ada di modul Penjualan; di sini = dispatch fisik."""
+
+    __tablename__ = "outgoing_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
+    nama_pembeli: Mapped[str | None] = mapped_column(String(100))
+    # truk_sendiri / ekspedisi / sewa / pickup
+    metode: Mapped[str | None] = mapped_column(String(20))
+    no_polisi: Mapped[str | None] = mapped_column(String(20))
+    nama_ekspedisi: Mapped[str | None] = mapped_column(String(100))
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    catatan: Mapped[str | None] = mapped_column(String(200))
+
+
+class OutgoingItem(Base, TimestampMixin):
+    """Item barang keluar. item_type: finished_goods (karung) / byproduct_curah
+    (bekatul, kg) / pk_langsung (PK dari G1, kg→karung CEIL÷50). Harga OPSIONAL
+    (penetapan harga penuh di modul Penjualan)."""
+
+    __tablename__ = "outgoing_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    outgoing_record_id: Mapped[int] = mapped_column(
+        ForeignKey("outgoing_records.id"), nullable=False
+    )
+    item_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    product_sku_id: Mapped[int | None] = mapped_column(ForeignKey("product_skus.id"))
+    rice_quality_standard_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rice_quality_standards.id")
+    )
+    jenis_byproduct: Mapped[str | None] = mapped_column(String(20))
+    milling_process_id: Mapped[int | None] = mapped_column(ForeignKey("milling_process.id"))
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    harga_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    total_harga: Mapped[float | None] = mapped_column(Numeric(16, 2))

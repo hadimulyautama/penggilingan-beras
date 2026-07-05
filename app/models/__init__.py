@@ -35,6 +35,8 @@ from app.inventory.models import (
     ByproductPrice,
     ByproductStock,
     FinishedGoodsStock,
+    OutgoingItem,
+    OutgoingRecord,
     PackageSize,
     PackagingLoss,
     PackagingMaterial,
@@ -87,6 +89,8 @@ __all__ = [
     "FinishedGoodsStock",
     "ByproductStock",
     "ByproductPrice",
+    "OutgoingRecord",
+    "OutgoingItem",
     # transfer (bridge)
     "InternalTransfer",
     # system

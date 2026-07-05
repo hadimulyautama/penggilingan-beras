@@ -281,11 +281,26 @@ class PkBreakdown:
     tersedia: float     # siap kirim (stok) = produced - transferred
 
 
+async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
+    """PK yang sudah dijual langsung dari Gudang 1 (barang keluar pk_langsung)."""
+    from app.models import OutgoingItem
+    r = (
+        await db.execute(
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
+                OutgoingItem.item_type == "pk_langsung",
+                OutgoingItem.milling_process_id == proc_id,
+            )
+        )
+    ).scalar_one()
+    return float(r)
+
+
 async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
-    """Semua PK yang dihasilkan otomatis SIAP KIRIM. Stok = hasil - terkirim."""
+    """Stok PK siap kirim = hasil − dikirim (transfer) − dijual langsung."""
     produced = await _produced_pk(db, proc_id)
     transferred = await _transferred_pk(db, proc_id)
-    return PkBreakdown(produced, transferred, max(produced - transferred, 0.0))
+    sold = await _sold_pk_langsung(db, proc_id)
+    return PkBreakdown(produced, transferred, max(produced - transferred - sold, 0.0))
 
 
 async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> list[str]:

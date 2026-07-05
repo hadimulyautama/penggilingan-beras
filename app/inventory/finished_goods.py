@@ -18,6 +18,7 @@ from app.models import (
     ByproductPrice,
     ByproductStock,
     FinishedGoodsStock,
+    OutgoingItem,
     PolishingOutputLog,
     PolishingProcess,
     PolishingSiloUsage,
@@ -209,7 +210,7 @@ async def catat_bekatul(
 
 # ─────────────────────────── Stok ───────────────────────────
 async def hitung_stok_bekatul(db: AsyncSession) -> float:
-    """Stok bekatul curah (kg). Keluar (jual) menyusul di modul outgoing."""
+    """Stok bekatul curah (kg) = masuk − keluar (barang keluar byproduct_curah)."""
     masuk = (
         await db.execute(
             select(func.coalesce(func.sum(ByproductStock.berat_kg), 0)).where(
@@ -217,7 +218,46 @@ async def hitung_stok_bekatul(db: AsyncSession) -> float:
             )
         )
     ).scalar_one()
-    return float(masuk)
+    keluar = (
+        await db.execute(
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
+                OutgoingItem.item_type == "byproduct_curah",
+                OutgoingItem.jenis_byproduct == "bekatul",
+            )
+        )
+    ).scalar_one()
+    return float(masuk) - float(keluar)
+
+
+async def hitung_stok_finished_goods(
+    db: AsyncSession, sku_id: int, standard_id: int | None
+) -> dict:
+    """Stok barang jadi (karung, kg) per SKU+grade = masuk produksi − keluar."""
+    def _std(q):
+        if standard_id is None:
+            return q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
+        return q.where(FinishedGoodsStock.rice_quality_standard_id == standard_id)
+
+    mk, mkg = (
+        await db.execute(_std(
+            select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0),
+                   func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .where(FinishedGoodsStock.product_sku_id == sku_id)
+        ))
+    ).one()
+    oq = select(
+        func.coalesce(func.sum(OutgoingItem.jumlah_karung), 0),
+        func.coalesce(func.sum(OutgoingItem.berat_kg), 0),
+    ).where(
+        OutgoingItem.item_type == "finished_goods",
+        OutgoingItem.product_sku_id == sku_id,
+    )
+    if standard_id is None:
+        oq = oq.where(OutgoingItem.rice_quality_standard_id.is_(None))
+    else:
+        oq = oq.where(OutgoingItem.rice_quality_standard_id == standard_id)
+    ok, okg = (await db.execute(oq)).one()
+    return {"karung": int(mk) - int(ok), "kg": float(mkg) - float(okg)}
 
 
 # ─────────────────────────── HPP beras per proses ───────────────────────────
@@ -299,26 +339,30 @@ def _rp(n: float | None) -> str:
 
 
 async def laporan_stok_barang_jadi(db: AsyncSession) -> str:
-    rows = (
+    """Stok barang jadi NET (produksi − keluar) per kategori+grade + bekatul."""
+    combos = (
         await db.execute(
-            select(
-                ProductSku.kategori, RiceQualityStandard.nama,
-                func.sum(FinishedGoodsStock.jumlah_karung),
-                func.sum(FinishedGoodsStock.berat_total_kg),
-            )
-            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-            .join(RiceQualityStandard, RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id, isouter=True)
-            .group_by(ProductSku.kategori, RiceQualityStandard.nama)
+            select(FinishedGoodsStock.product_sku_id,
+                   FinishedGoodsStock.rice_quality_standard_id).distinct()
         )
     ).all()
+    agg: dict[tuple, list] = {}
+    for sku_id, std_id in combos:
+        sku = await db.get(ProductSku, sku_id)
+        std = await db.get(RiceQualityStandard, std_id) if std_id else None
+        net = await hitung_stok_finished_goods(db, sku_id, std_id)
+        key = (sku.kategori if sku else "-", std.nama if std else None)
+        a = agg.setdefault(key, [0, 0.0])
+        a[0] += net["karung"]
+        a[1] += net["kg"]
     lines = ["📦 Stok barang jadi:"]
-    if not rows:
+    if not agg:
         lines.append("• (kosong)")
-    for kategori, grade, karung, kg in rows:
+    for (kategori, grade), (karung, kg) in sorted(agg.items(), key=lambda x: str(x[0])):
         label = f"{kategori}" + (f" {grade}" if grade else "")
-        lines.append(f"• {label}: {int(karung or 0)} karung ({_kg(float(kg or 0))})")
+        lines.append(f"• {label}: {karung} karung ({_kg(kg)})")
     bekatul = await hitung_stok_bekatul(db)
-    if bekatul > 0:
+    if bekatul != 0:
         lines.append(f"• bekatul (curah): {_kg(bekatul)}")
     return "\n".join(lines)
 

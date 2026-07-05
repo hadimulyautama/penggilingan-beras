@@ -124,9 +124,28 @@ async def _transferred_pk(db: AsyncSession, proc_id: int) -> float:
     return float(r)
 
 
+async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
+    """PK yang sudah DIJUAL LANGSUNG dari Gudang 1 (barang keluar pk_langsung)."""
+    from app.models import OutgoingItem
+    r = (
+        await db.execute(
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
+                OutgoingItem.item_type == "pk_langsung",
+                OutgoingItem.milling_process_id == proc_id,
+            )
+        )
+    ).scalar_one()
+    return float(r)
+
+
 async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
-    """PK siap kirim (stok) sebuah proses = hasil produksi − yang sudah dikirim."""
-    return max(await _produced_pk(db, proc_id) - await _transferred_pk(db, proc_id), 0.0)
+    """PK tersedia (stok) = produksi − yang ditransfer − yang dijual langsung."""
+    return max(
+        await _produced_pk(db, proc_id)
+        - await _transferred_pk(db, proc_id)
+        - await _sold_pk_langsung(db, proc_id),
+        0.0,
+    )
 
 
 @dataclass

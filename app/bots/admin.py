@@ -47,7 +47,7 @@ from app.gudang2.service import (
     create_pk_purchase,
     verify_pk_purchase,
 )
-from app.inventory.nlp import parse_barang_jadi, parse_kemasan
+from app.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
 from app.inventory.packaging import (
     InventoryError,
     beli_kemasan,
@@ -57,6 +57,12 @@ from app.inventory.finished_goods import (
     laporan_hpp_beras,
     laporan_stok_barang_jadi,
     set_harga_byproduct,
+)
+from app.inventory.outgoing import (
+    jual_pk_langsung,
+    kirim_bekatul,
+    kirim_finished_goods,
+    laporan_barang_keluar,
 )
 from app.models import User, Warehouse
 from app.gudang1.services.milling import (
@@ -562,6 +568,54 @@ async def _handle_barang_jadi_admin(message: Message, db, user, text: str) -> bo
     return True
 
 
+async def _handle_keluar(message: Message, db, user, text: str) -> bool:
+    """Barang keluar / dikirim + jual PK langsung (staff/admin). True jika ditangani."""
+    try:
+        p = await parse_keluar(text)
+    except Exception:
+        log.exception("parse_keluar gagal")
+        return False
+    if p.intent == "bukan_keluar":
+        return False
+    try:
+        if p.intent == "kirim_barang_jadi":
+            r = await kirim_finished_goods(
+                db, user=user, kategori=p.kategori, grade=p.grade, brand_nama=p.brand,
+                material_kode=p.material, ukuran=p.ukuran_kg, jumlah_karung=p.jumlah_karung,
+                nama_pembeli=p.nama_pembeli, metode=p.metode, no_polisi=p.no_polisi,
+                nama_ekspedisi=p.nama_ekspedisi, harga_per_kg=p.harga_per_kg,
+                tanggal=p.tanggal, jam=p.jam,
+            )
+        elif p.intent == "kirim_bekatul":
+            r = await kirim_bekatul(
+                db, user=user, berat_kg=p.berat_kg, nama_pembeli=p.nama_pembeli,
+                metode=p.metode, no_polisi=p.no_polisi, nama_ekspedisi=p.nama_ekspedisi,
+                harga_per_kg=p.harga_per_kg, tanggal=p.tanggal, jam=p.jam,
+            )
+        elif p.intent == "jual_pk_langsung":
+            r = await jual_pk_langsung(
+                db, user=user, kode_mil=p.kode, berat_kg=p.berat_kg,
+                nama_pembeli=p.nama_pembeli, metode=p.metode, no_polisi=p.no_polisi,
+                nama_ekspedisi=p.nama_ekspedisi, harga_per_kg=p.harga_per_kg,
+                tanggal=p.tanggal, jam=p.jam,
+            )
+        elif p.intent == "laporan_keluar":
+            await message.answer(await laporan_barang_keluar(db))
+            return True
+        else:
+            return False
+        karung = f" ({r.jumlah_karung} karung)" if r.jumlah_karung else ""
+        warn = f"\n{r.warning}" if r.warning else ""
+        pembeli = f" → {p.nama_pembeli}" if p.nama_pembeli else ""
+        await message.answer(
+            f"✓ Barang keluar *{r.kode}*: {r.label} {_kg(r.berat_kg)}{karung}{pembeli}.{warn}",
+            parse_mode="Markdown",
+        )
+    except InventoryError as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan barang keluar.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -655,6 +709,10 @@ async def handle_message(message: Message) -> None:
 
         # ── Barang jadi: harga byproduct + HPP beras + stok (staff/admin) ──
         if await _handle_barang_jadi_admin(message, db, user, text):
+            return
+
+        # ── Barang keluar / dikirim + jual PK langsung (staff/admin) ──
+        if await _handle_keluar(message, db, user, text):
             return
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena

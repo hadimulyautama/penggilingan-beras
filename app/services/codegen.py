@@ -14,6 +14,7 @@ from app.models import (
     DryingLot,
     InternalTransfer,
     MillingProcess,
+    OutgoingRecord,
     PackagingPurchase,
     PkPurchaseBatch,
     PkTumpukanToSilo,
@@ -127,3 +128,14 @@ async def next_packaging_purchase_code(db: AsyncSession, tgl: date | None = None
         .where(PackagingPurchase.tanggal == tgl)
     )
     return await _next_sequence(db, "PKP", stmt, tgl)
+
+
+async def next_outgoing_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode barang keluar: OUT-YYYYMMDD-NN (reset per hari)."""
+    tgl = tgl or date.today()
+    stmt = (
+        select(func.count())
+        .select_from(OutgoingRecord)
+        .where(OutgoingRecord.tanggal == tgl)
+    )
+    return await _next_sequence(db, "OUT", stmt, tgl)

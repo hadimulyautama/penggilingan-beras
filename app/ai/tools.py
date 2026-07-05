@@ -1474,3 +1474,67 @@ PROSES_BARANG_JADI = {
         "required": ["intent"],
     },
 }
+
+
+# Tool barang keluar / dikirim (inventory sub-fase 3). Staff/admin.
+PROSES_KELUAR = {
+    "name": "proses_keluar",
+    "description": (
+        "Deteksi & ekstrak BARANG KELUAR / DIKIRIM: kirim barang jadi (beras/"
+        "broken/menir/reject kemasan), kirim bekatul curah, jual PK langsung dari "
+        "Gudang 1, atau tanya riwayat barang keluar. Kata kunci: kirim/keluar/jual/"
+        "muat/dikirim. Pilih 'bukan_keluar' bila bukan tentang barang keluar."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "kirim_barang_jadi", "kirim_bekatul", "jual_pk_langsung",
+                    "laporan_keluar", "bukan_keluar",
+                ],
+                "description": (
+                    "'kirim_barang_jadi': keluarkan barang jadi (contoh: 'kirim 50 "
+                    "karung premium Imbiss laminasi 25kg ke Toko Makmur pakai truk'). "
+                    "'kirim_bekatul': kirim bekatul curah (contoh: 'kirim bekatul 300 "
+                    "kg'). 'jual_pk_langsung': jual PK dari Gudang 1 (contoh: 'jual PK "
+                    "langsung 2 ton dari MIL-...'). 'laporan_keluar': riwayat barang "
+                    "keluar. 'bukan_keluar': selain itu."
+                ),
+            },
+            "kategori": {
+                "type": ["string", "null"],
+                "enum": ["beras_putih", "beras_b", "broken", "menir", "reject", None],
+                "description": "Kategori barang jadi. Grade beras → beras_putih.",
+            },
+            "grade": {
+                "type": ["string", "null"],
+                "enum": ["sayur", "medium", "medsuper", "premium", None],
+                "description": "Grade beras putih.",
+            },
+            "brand": {"type": ["string", "null"], "description": "Merk beras. null bila polos."},
+            "material": {
+                "type": ["string", "null"],
+                "enum": ["biasa", "laminasi", "putih", "polos", "bekas", None],
+                "description": "Jenis karung.",
+            },
+            "ukuran_kg": {"type": ["integer", "null"], "enum": [5, 10, 25, 48, 50, None], "description": "Ukuran karung."},
+            "jumlah_karung": {"type": ["integer", "null"], "description": "Jumlah karung (barang jadi)."},
+            "berat_kg": {"type": ["number", "null"], "description": "Berat kg (bekatul / PK langsung). Ton→kg."},
+            "kode": {"type": ["string", "null"], "description": "Kode MIL-YYYYMMDD-NN untuk jual PK langsung."},
+            "nama_pembeli": {"type": ["string", "null"], "description": "Nama pembeli/toko (opsional)."},
+            "metode": {
+                "type": ["string", "null"],
+                "enum": ["truk_sendiri", "ekspedisi", "sewa", "pickup", None],
+                "description": "Metode kirim: 'truk sendiri'→truk_sendiri, dll.",
+            },
+            "no_polisi": {"type": ["string", "null"], "description": "Nomor polisi kendaraan."},
+            "nama_ekspedisi": {"type": ["string", "null"], "description": "Nama ekspedisi bila via ekspedisi."},
+            "harga_per_kg": {"type": ["number", "null"], "description": "Harga/kg bila disebut (opsional)."},
+            "tanggal": {"type": ["string", "null"], "description": "YYYY-MM-DD backdate; null=hari ini."},
+            "jam": {"type": ["string", "null"], "description": "'HH:MM' bila disebut; null=sekarang."},
+        },
+        "required": ["intent"],
+    },
+}
