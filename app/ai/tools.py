@@ -1171,8 +1171,12 @@ PROSES_GUDANG2 = {
                     "ke silo/tumpukan (contoh: 'masukkan PKB-... ke silo B'). "
                     "'pindah_tumpukan': pindahkan PK dari tumpukan ke silo "
                     "(contoh: 'pindah tumpukan ke silo A', 'pindah 3 ton ke silo B'). "
-                    "'beli_pk_luar': catat pembelian PK dari luar (contoh: 'beli PK "
-                    "dari pak andi 5 ton'). 'verifikasi_pk_luar': QC + harga PK luar "
+                    "'beli_pk_luar': catat pembelian PK (beras pecah kulit) dari "
+                    "supplier luar (contoh: 'beli PK dari pak andi 5 ton', 'beli "
+                    "beras pk', 'beli beras pecah kulit 8 ton', 'beli PK'). Pilih ini "
+                    "untuk SEMUA niat membeli beras PK — meski supplier/berat belum "
+                    "disebut (nanti ditanyakan). PK = BERAS pecah kulit, BUKAN karung/"
+                    "kemasan. 'verifikasi_pk_luar': QC + harga PK luar "
                     "(contoh: 'QC PKB-... terima potongan 100kg harga 9500', 'tolak "
                     "PKB-...'). 'laporan_stok_g2': tanya stok PK/silo/tumpukan "
                     "GUDANG 2 SPESIFIK (contoh: 'stok silo A gudang 2', 'stok "
@@ -1377,10 +1381,12 @@ PROSES_KEMASAN = {
                 "type": "string",
                 "enum": ["beli_kemasan", "laporan_kemasan", "bukan_kemasan"],
                 "description": (
-                    "'beli_kemasan': catat pembelian karung (contoh: 'beli karung "
-                    "laminasi 25kg 2000 lembar harga 1500'). 'laporan_kemasan': "
-                    "tanya stok karung (contoh: 'stok kemasan', 'karung laminasi "
-                    "sisa berapa'). 'bukan_kemasan': selain itu."
+                    "'beli_kemasan': catat pembelian KARUNG/kemasan — pesan HARUS "
+                    "menyebut kata 'karung'/'kemasan' (contoh: 'beli karung laminasi "
+                    "25kg 2000 lembar harga 1500'). 'laporan_kemasan': tanya stok "
+                    "karung (contoh: 'stok kemasan', 'karung laminasi sisa berapa'). "
+                    "'bukan_kemasan': selain itu — TERMASUK 'beli PK'/'beli beras pk'/"
+                    "'beli beras pecah kulit' (itu BERAS, bukan karung → bukan_kemasan)."
                 ),
             },
             "material": {
