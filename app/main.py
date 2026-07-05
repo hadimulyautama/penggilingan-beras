@@ -14,6 +14,7 @@ from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
+from app.web.miniapp import router as miniapp_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("app")
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
+app.include_router(miniapp_router)
 
 
 @app.get("/health")
