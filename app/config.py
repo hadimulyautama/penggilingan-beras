@@ -34,12 +34,14 @@ class Settings(BaseSettings):
     bot_gudang2_token: str = ""
     bot_admin_token: str = ""
 
-    # Claude
+    # Claude — model dipilih per SURFACE:
     anthropic_api_key: str = ""
-    # Model NLP (parser forced-tool per pesan) — ringan & cepat.
-    claude_model: str = "claude-haiku-4-5-20251001"
-    # Model AGENT (loop reasoning multi-tool untuk pertanyaan bebas/analitik).
+    # BOT (percakapan): butuh paham nuansa → Sonnet (Haiku sering "tidak nyambung").
+    claude_model: str = "claude-sonnet-5"
+    # AGENT (loop reasoning multi-tool untuk pertanyaan bebas/analitik) → Sonnet.
     agent_model: str = "claude-sonnet-5"
+    # MINI APP (UI terstruktur, tugas AI ringan spt input cepat) → Haiku (murah).
+    miniapp_model: str = "claude-haiku-4-5"
     # Batas iterasi tool-loop agent (jaring anti-loop tak berujung).
     agent_max_iterations: int = 6
 
