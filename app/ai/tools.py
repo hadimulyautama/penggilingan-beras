@@ -1135,3 +1135,120 @@ TANYA_ANALITIK = {
         "required": ["intent"],
     },
 }
+
+
+# Tool Gudang 2 (Penyosohan): PK masuk, silo/tumpukan, pindah, beli PK luar + QC.
+PROSES_GUDANG2 = {
+    "name": "proses_gudang2",
+    "description": (
+        "Deteksi & ekstrak aksi/pertanyaan Gudang 2 (Penyosohan): terima kiriman "
+        "PK dari Gudang 1, masukkan PK ke silo/tumpukan, pindah tumpukan→silo, "
+        "beli PK dari luar, QC+verifikasi PK luar, atau tanya stok silo/tumpukan "
+        "Gudang 2. PENTING — pilih 'bukan_gudang2' bila pesan tentang GABAH "
+        "(beli/masuk/kadar air gabah), pengeringan, milling/PK Gudang 1, "
+        "verifikasi harga gabah, atau pertanyaan UMUM (mis. 'berapa gabah masuk "
+        "hari ini', 'stok pk gudang 1'). Hanya soal PK/silo/tumpukan GUDANG 2 "
+        "yang masuk sini."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "terima_transfer",
+                    "masukkan_pk",
+                    "pindah_tumpukan",
+                    "beli_pk_luar",
+                    "verifikasi_pk_luar",
+                    "laporan_stok_g2",
+                    "bukan_gudang2",
+                ],
+                "description": (
+                    "'terima_transfer': terima kiriman PK dari Gudang 1 (kode TRF-...) "
+                    "→ masuk stok G2 (contoh: 'terima TRF-... ke silo A'). "
+                    "'masukkan_pk': masukkan PK luar yang SUDAH di-QC (kode PKB-...) "
+                    "ke silo/tumpukan (contoh: 'masukkan PKB-... ke silo B'). "
+                    "'pindah_tumpukan': pindahkan PK dari tumpukan ke silo "
+                    "(contoh: 'pindah tumpukan ke silo A', 'pindah 3 ton ke silo B'). "
+                    "'beli_pk_luar': catat pembelian PK dari luar (contoh: 'beli PK "
+                    "dari pak andi 5 ton'). 'verifikasi_pk_luar': QC + harga PK luar "
+                    "(contoh: 'QC PKB-... terima potongan 100kg harga 9500', 'tolak "
+                    "PKB-...'). 'laporan_stok_g2': tanya stok PK/silo/tumpukan "
+                    "GUDANG 2 SPESIFIK (contoh: 'stok silo A gudang 2', 'stok "
+                    "tumpukan g2', 'stok PK gudang 2'). JANGAN untuk gabah atau "
+                    "stok PK Gudang 1. 'bukan_gudang2': selain itu (termasuk "
+                    "SEMUA soal gabah/pengeringan/milling G1)."
+                ),
+            },
+            "kode": {
+                "type": ["string", "null"],
+                "description": (
+                    "Kode rujukan: TRF-YYYYMMDD-NN (transfer G1) atau "
+                    "PKB-YYYYMMDD-NN (PK luar). Huruf besar."
+                ),
+            },
+            "nama_supplier": {
+                "type": ["string", "null"],
+                "description": "Nama supplier PK luar (untuk beli_pk_luar).",
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": "Berat dalam KG. Konversi ton→kg ('5 ton'->5000). "
+                "Untuk beli_pk_luar (berat beli) atau pindah_tumpukan (jumlah dipindah).",
+            },
+            "kadar_air": {
+                "type": ["number", "null"],
+                "description": "Kadar air PK (persen). '14%'->14.",
+            },
+            "broken_persen": {
+                "type": ["number", "null"],
+                "description": "Persentase broken PK saat QC. '5%'->5.",
+            },
+            "tujuan": {
+                "type": ["string", "null"],
+                "enum": ["silo_a", "silo_b", "ditumpuk", None],
+                "description": "Tujuan masuk: 'silo A'->silo_a, 'silo B'->silo_b, "
+                "'tumpuk/ditumpuk'->ditumpuk.",
+            },
+            "nama_silo": {
+                "type": ["string", "null"],
+                "enum": ["A", "B", None],
+                "description": "Silo tujuan untuk pindah_tumpukan: 'silo A'->A, 'silo B'->B.",
+            },
+            "keputusan": {
+                "type": ["string", "null"],
+                "enum": ["terima", "tolak", None],
+                "description": "Keputusan QC PK luar: 'terima' atau 'tolak'.",
+            },
+            "potongan_kg": {
+                "type": ["number", "null"],
+                "description": "Potongan berat PK luar dalam kg saat QC (bila ada).",
+            },
+            "harga_per_kg": {
+                "type": ["number", "null"],
+                "description": "Harga PK luar per kg (verifikasi). 'Rp 9.500/kg'->9500.",
+            },
+            "total_harga": {
+                "type": ["number", "null"],
+                "description": "Total harga PK luar bila disebut total (bukan per kg).",
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": (
+                    "Tanggal kejadian untuk BACKDATE bila operator menyebut waktu "
+                    "LAMPAU (mis. 'kemarin', 'tanggal 1 juli'). Format YYYY-MM-DD "
+                    "dari tabel tanggal. Bila tak disebut, null = hari ini."
+                ),
+            },
+            "jam": {
+                "type": ["string", "null"],
+                "description": (
+                    "Jam kejadian 'HH:MM' (24 jam) bila disebut ('jam 2 siang'->"
+                    "14:00). Bila tak disebut, null = jam sekarang."
+                ),
+            },
+        },
+        "required": ["intent"],
+    },
+}

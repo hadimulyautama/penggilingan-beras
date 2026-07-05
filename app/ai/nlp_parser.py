@@ -50,6 +50,7 @@ from app.ai.tools import (
     CATAT_PEMBELIAN_GABAH,
     KELOLA_USER,
     TANYA_ANALITIK,
+    PROSES_GUDANG2,
     PROSES_MILLING,
     PROSES_MILLING_ADMIN,
     PROSES_PENGERINGAN,
@@ -253,6 +254,46 @@ async def parse_transfer(text: str) -> ParsedTransfer:
         kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
         lokasi_tujuan=data.get("lokasi_tujuan"),
         berat_kg=data.get("berat_kg"),
+    )
+
+
+@dataclass
+class ParsedGudang2:
+    intent: str = "bukan_gudang2"
+    kode: str | None = None
+    nama_supplier: str | None = None
+    berat_kg: float | None = None
+    kadar_air: float | None = None
+    broken_persen: float | None = None
+    tujuan: str | None = None
+    nama_silo: str | None = None
+    keputusan: str | None = None
+    potongan_kg: float | None = None
+    harga_per_kg: float | None = None
+    total_harga: float | None = None
+    tanggal: date | None = None
+    jam: time | None = None
+
+
+async def parse_gudang2(text: str) -> ParsedGudang2:
+    """Klasifikasi & ekstraksi aksi Gudang 2 (penyosohan — PK masuk/silo/tumpukan)."""
+    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_GUDANG2)
+    kode = data.get("kode")
+    return ParsedGudang2(
+        intent=data.get("intent", "bukan_gudang2"),
+        kode=kode.upper().strip() if isinstance(kode, str) else None,
+        nama_supplier=data.get("nama_supplier"),
+        berat_kg=data.get("berat_kg"),
+        kadar_air=data.get("kadar_air"),
+        broken_persen=data.get("broken_persen"),
+        tujuan=data.get("tujuan"),
+        nama_silo=_silo_letter(data.get("nama_silo")),
+        keputusan=data.get("keputusan"),
+        potongan_kg=data.get("potongan_kg"),
+        harga_per_kg=data.get("harga_per_kg"),
+        total_harga=data.get("total_harga"),
+        tanggal=_parse_iso_date(data.get("tanggal")),
+        jam=_parse_hhmm(data.get("jam")),
     )
 
 

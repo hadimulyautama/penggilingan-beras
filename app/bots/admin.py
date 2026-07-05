@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.ai.nlp_parser import (
     ParsedVerification,
     parse_analitik,
+    parse_gudang2,
     parse_milling_admin,
     parse_transfer,
     parse_undo,
@@ -40,7 +41,12 @@ from app.bots.pending_flow import maybe_answer_pending
 from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.silo_flow import maybe_answer_silo_report
-from app.database import SessionLocal
+from app.database import BackdateError, SessionLocal
+from app.services.gudang2 import (
+    Gudang2Error,
+    create_pk_purchase,
+    verify_pk_purchase,
+)
 from app.models import User, Warehouse
 from app.services.milling import (
     MillingError,
@@ -444,6 +450,52 @@ async def _handle_milling_admin(message: Message, db, user, text: str, session) 
     return True
 
 
+async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
+    """Beli PK luar + QC/verifikasi PK luar (staff/admin). True jika ditangani."""
+    try:
+        p = await parse_gudang2(text)
+    except Exception:
+        log.exception("parse_gudang2 gagal")
+        return False
+    if p.intent not in ("beli_pk_luar", "verifikasi_pk_luar"):
+        return False
+    try:
+        if p.intent == "beli_pk_luar":
+            r = await create_pk_purchase(
+                db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
+                kadar_air=p.kadar_air, tanggal=p.tanggal, jam=p.jam,
+            )
+            extra = (
+                f"\n_Supplier baru '{r.supplier_nama}' ditambahkan._"
+                if r.supplier_created else ""
+            )
+            await message.answer(
+                f"✓ PK luar tercatat: *{r.batch.kode_batch}* "
+                f"({r.supplier_nama}, {_kg(float(r.batch.berat_total_kg))}).\n"
+                f"Menunggu QC + verifikasi harga.{extra}",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "verifikasi_pk_luar":
+            r = await verify_pk_purchase(
+                db, user=user, kode=p.kode, keputusan=p.keputusan,
+                kadar_air=p.kadar_air, broken=p.broken_persen,
+                potongan_kg=p.potongan_kg, harga_per_kg=p.harga_per_kg,
+                total=p.total_harga,
+            )
+            if r.keputusan == "tolak":
+                await message.answer(f"✓ PK luar {p.kode} *DITOLAK* saat QC.", parse_mode="Markdown")
+            else:
+                await message.answer(
+                    f"✓ PK luar {p.kode} *diterima*. Berat bersih "
+                    f"{_kg(r.berat_bersih_kg)} · HPP {_rp(r.hpp_per_kg)}/kg.\n"
+                    "_Masukkan ke silo/tumpukan lewat_ `@polesan_bot`.",
+                    parse_mode="Markdown",
+                )
+    except (Gudang2Error, BackdateError) as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -525,6 +577,10 @@ async def handle_message(message: Message) -> None:
 
         # ── Aksi milling (QC / verifikasi output) — cek sebelum verifikasi harga ──
         if await _handle_milling_admin(message, db, user, text, session):
+            return
+
+        # ── Gudang 2: beli PK luar + QC/verifikasi PK luar (staff/admin) ──
+        if await _handle_gudang2_admin(message, db, user, text):
             return
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena

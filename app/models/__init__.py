@@ -13,6 +13,12 @@ from app.models.gudang1 import (
 )
 from app.models.system import ActivityLog, Notification
 from app.models.transfer import InternalTransfer
+from app.models.gudang2 import (
+    PkGudang2Intake,
+    PkPurchaseBatch,
+    PkPurchaseVerification,
+    PkTumpukanToSilo,
+)
 from app.models.milling import (
     MillingPkRouting,
     MillingProcess,
@@ -48,6 +54,11 @@ __all__ = [
     "PkStockGudang1",
     # transfer
     "InternalTransfer",
+    # gudang2
+    "PkPurchaseBatch",
+    "PkPurchaseVerification",
+    "PkGudang2Intake",
+    "PkTumpukanToSilo",
     # system
     "ActivityLog",
     "Notification",

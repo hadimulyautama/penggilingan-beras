@@ -10,7 +10,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
-from app.models import DryingLot, InternalTransfer, MillingProcess, PurchaseBatch
+from app.models import (
+    DryingLot,
+    InternalTransfer,
+    MillingProcess,
+    PkPurchaseBatch,
+    PkTumpukanToSilo,
+    PurchaseBatch,
+)
 
 
 async def _next_sequence(db: AsyncSession, prefix: str, count_stmt, tgl: date | None = None) -> str:
@@ -69,3 +76,29 @@ async def next_transfer_code(db: AsyncSession) -> str:
         .where(InternalTransfer.created_at >= start)
     )
     return await _next_sequence(db, "TRF", stmt)
+
+
+async def next_pk_purchase_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode beli PK luar (Gudang 2): PKB-YYYYMMDD-NN (reset per hari).
+
+    `tgl` untuk backdate: kode & urutan mengikuti tanggal kejadian.
+    """
+    tgl = tgl or date.today()
+    stmt = (
+        select(func.count())
+        .select_from(PkPurchaseBatch)
+        .where(PkPurchaseBatch.tanggal_pembelian == tgl)
+    )
+    return await _next_sequence(db, "PKB", stmt, tgl)
+
+
+async def next_tumpukan_move_code(db: AsyncSession) -> str:
+    """Kode pindah tumpukan→silo (Gudang 2): PTS-YYYYMMDD-NN (reset per hari)."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(PkTumpukanToSilo)
+        .where(PkTumpukanToSilo.created_at >= start)
+    )
+    return await _next_sequence(db, "PTS", stmt)

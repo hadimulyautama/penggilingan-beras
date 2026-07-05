@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # dashboard web dinonaktifkan (hanya versi Telegram yang jalan).
     dashboard_token: str = ""
 
+    # Kapasitas tumpukan PK Gudang 2 (maks). Lewat batas → notifikasi.
+    g2_tumpukan_maks_kg: int = 60_000
+
     # Admin awal (di-seed otomatis ke DB kosong saat startup).
     # Kosongkan admin_telegram_id bila tidak ingin auto-seed user.
     admin_telegram_id: int | None = None
