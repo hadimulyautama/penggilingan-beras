@@ -480,15 +480,20 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
         if p.intent == "beli_pk_luar":
             r = await create_pk_purchase(
                 db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
-                kadar_air=p.kadar_air, tanggal=p.tanggal, jam=p.jam,
+                kadar_air=p.kadar_air, no_polisi=p.no_polisi,
+                tanggal=p.tanggal, jam=p.jam,
             )
             extra = (
                 f"\n_Supplier baru '{r.supplier_nama}' ditambahkan._"
                 if r.supplier_created else ""
             )
+            plat = (
+                f" · truk {r.batch.no_polisi_truk}"
+                if r.batch.no_polisi_truk else ""
+            )
             await message.answer(
                 f"✓ PK luar tercatat: *{r.batch.kode_batch}* "
-                f"({r.supplier_nama}, {_kg(float(r.batch.berat_total_kg))}).\n"
+                f"({r.supplier_nama}, {_kg(float(r.batch.berat_total_kg))}{plat}).\n"
                 f"Menunggu QC + verifikasi harga.{extra}",
                 parse_mode="Markdown",
             )
@@ -496,11 +501,18 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
             r = await verify_pk_purchase(
                 db, user=user, kode=p.kode, keputusan=p.keputusan,
                 kadar_air=p.kadar_air, broken=p.broken_persen,
+                penyusutan_persen=p.penyusutan_persen, butir_kuning=p.butir_kuning,
+                catatan_lab=p.catatan_lab, alasan_tolak=p.alasan_tolak,
                 potongan_kg=p.potongan_kg, harga_per_kg=p.harga_per_kg,
                 total=p.total_harga,
             )
             if r.keputusan == "tolak":
-                await message.answer(f"✓ PK luar {p.kode} *DITOLAK* saat QC.", parse_mode="Markdown")
+                sebab = f"\nAlasan: {p.alasan_tolak}." if p.alasan_tolak else ""
+                await message.answer(
+                    f"✓ PK luar {p.kode} *DITOLAK* saat QC — dikembalikan ke supplier "
+                    f"(ref {r.rejection_kode}).{sebab}",
+                    parse_mode="Markdown",
+                )
             else:
                 await message.answer(
                     f"✓ PK luar {p.kode} *diterima*. Berat bersih "

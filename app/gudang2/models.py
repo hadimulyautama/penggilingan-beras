@@ -49,11 +49,18 @@ class PkPurchaseVerification(Base, TimestampMixin):
     pk_purchase_batch_id: Mapped[int] = mapped_column(
         ForeignKey("pk_purchase_batches.id"), unique=True, nullable=False
     )
-    # QC
+    # QC (uji lab)
     kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
     broken_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    # % bekatul hasil uji lab (penyusutan saat disosoh)
+    penyusutan_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    # butir kuning: bersih / sedang / banyak
+    butir_kuning: Mapped[str | None] = mapped_column(String(10))
+    # deskripsi/catatan uji lab tambahan
+    catatan_lab: Mapped[str | None] = mapped_column(String(255))
     # terima / tolak
     keputusan: Mapped[str | None] = mapped_column(String(10))
+    alasan_tolak: Mapped[str | None] = mapped_column(String(255))
     potongan_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     potongan_alasan: Mapped[str | None] = mapped_column(String(120))
     # Harga
@@ -171,3 +178,25 @@ class PolishingOutputLog(Base):
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     waktu_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class PkRejection(Base, TimestampMixin):
+    """PK luar yang DITOLAK saat QC & dikembalikan ke supplier. Kode: REJ-YYYYMMDD-NN.
+
+    Register barang keluar (retur beli): PK tak pernah jadi stok. Plat truk
+    disalin dari batch agar jelas kendaraan yang membawa kembali.
+    """
+
+    __tablename__ = "pk_rejections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    pk_purchase_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("pk_purchase_batches.id"), unique=True, nullable=False
+    )
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
+    alasan: Mapped[str | None] = mapped_column(String(255))
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

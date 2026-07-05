@@ -22,6 +22,7 @@ from app.models import (
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,
+    PkRejection,
     PkTumpukanToSilo,
     PolishingSiloUsage,
     Silo,
@@ -29,7 +30,11 @@ from app.models import (
     Warehouse,
 )
 from app.services.activity_log import log_activity
-from app.services.codegen import next_pk_purchase_code, next_tumpukan_move_code
+from app.services.codegen import (
+    next_pk_purchase_code,
+    next_rejection_code,
+    next_tumpukan_move_code,
+)
 from app.services.notification import create_notification
 from app.gudang1.services.purchase import find_or_create_supplier
 
@@ -229,15 +234,26 @@ class PkVerifyResult:
     berat_bersih_kg: float
     total_biaya: float | None
     hpp_per_kg: float | None
+    rejection_kode: str | None = None
+
+
+_BUTIR_KUNING = {"bersih", "sedang", "banyak"}
 
 
 async def verify_pk_purchase(
     db: AsyncSession, *, user: User, kode: str, keputusan: str | None,
     kadar_air: float | None = None, broken: float | None = None,
+    penyusutan_persen: float | None = None, butir_kuning: str | None = None,
+    catatan_lab: str | None = None, alasan_tolak: str | None = None,
     potongan_kg: float | None = None, potongan_alasan: str | None = None,
     harga_per_kg: float | None = None, total: float | None = None,
 ) -> PkVerifyResult:
-    """QC + harga PK luar (staff/admin). keputusan: terima/tolak."""
+    """QC uji lab + harga PK luar (staff/admin). keputusan: terima/tolak.
+
+    Uji lab: kadar air, broken%, penyusutan (% bekatul lab), butir kuning
+    (bersih/sedang/banyak), catatan. Bila `tolak`: catat REJ- (dikembalikan
+    ke supplier) + notif; PK tidak pernah jadi stok.
+    """
     batch = (
         await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
     ).scalars().first()
@@ -246,6 +262,10 @@ async def verify_pk_purchase(
     keputusan = (keputusan or "terima").lower()
     if keputusan not in ("terima", "tolak"):
         raise Gudang2Error("Keputusan QC harus: terima atau tolak.")
+    if butir_kuning:
+        butir_kuning = butir_kuning.lower().strip()
+        if butir_kuning not in _BUTIR_KUNING:
+            raise Gudang2Error("Butir kuning harus: bersih, sedang, atau banyak.")
 
     berat_bersih = float(batch.berat_total_kg) - float(potongan_kg or 0)
     total_biaya = None
@@ -275,14 +295,19 @@ async def verify_pk_purchase(
         db.add(verif)
     verif.kadar_air = kadar_air
     verif.broken_persen = broken
+    verif.penyusutan_persen = penyusutan_persen
+    verif.butir_kuning = butir_kuning
+    verif.catatan_lab = catatan_lab
     verif.keputusan = keputusan
+    verif.alasan_tolak = alasan_tolak if keputusan == "tolak" else None
     verif.potongan_kg = potongan_kg
     verif.potongan_alasan = potongan_alasan
     verif.harga_per_kg = hpp
     verif.total_biaya = total_biaya
     verif.metode_harga = metode
     verif.verified_by = user.id
-    verif.waktu_verifikasi = input_time(None)
+    now = input_time(None)
+    verif.waktu_verifikasi = now
     verif.status_verifikasi = "terverifikasi"
 
     batch.flag_unverified = False
@@ -292,10 +317,37 @@ async def verify_pk_purchase(
         changed_by=user.id,
         new_value=f"{keputusan} | potongan={potongan_kg} | hpp={hpp}",
     )
+
+    rejection_kode = None
+    if keputusan == "tolak":
+        rej = PkRejection(
+            kode=await next_rejection_code(db, now.date()),
+            pk_purchase_batch_id=batch.id,
+            berat_kg=float(batch.berat_total_kg),
+            no_polisi_truk=batch.no_polisi_truk,
+            alasan=alasan_tolak,
+            tanggal=now.date(), waktu=now, created_by=user.id,
+        )
+        db.add(rej)
+        await db.flush()
+        rejection_kode = rej.kode
+        truk = f" (truk {batch.no_polisi_truk})" if batch.no_polisi_truk else ""
+        sebab = f" — {alasan_tolak}" if alasan_tolak else ""
+        await create_notification(
+            db, tipe="pk_ditolak",
+            pesan=(
+                f"⛔ PK {batch.kode_batch} ({float(batch.berat_total_kg):.0f} kg) DITOLAK "
+                f"& dikembalikan ke supplier{truk}. Ref {rej.kode}{sebab}."
+            ),
+            target_role="staff", prioritas="kuning",
+            table_name="pk_rejections", record_id=rej.id,
+        )
+
     await db.commit()
     await db.refresh(batch)
     return PkVerifyResult(batch=batch, keputusan=keputusan, berat_bersih_kg=berat_bersih,
-                          total_biaya=total_biaya, hpp_per_kg=hpp)
+                          total_biaya=total_biaya, hpp_per_kg=hpp,
+                          rejection_kode=rejection_kode)
 
 
 # ─────────────────────────── Intake ke silo/tumpukan ───────────────────────────

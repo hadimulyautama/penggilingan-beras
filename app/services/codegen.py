@@ -17,6 +17,7 @@ from app.models import (
     OutgoingRecord,
     PackagingPurchase,
     PkPurchaseBatch,
+    PkRejection,
     PkTumpukanToSilo,
     PolishingProcess,
     PurchaseBatch,
@@ -93,6 +94,17 @@ async def next_pk_purchase_code(db: AsyncSession, tgl: date | None = None) -> st
         .where(PkPurchaseBatch.tanggal_pembelian == tgl)
     )
     return await _next_sequence(db, "PKB", stmt, tgl)
+
+
+async def next_rejection_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode PK ditolak & dikembalikan (Gudang 2): REJ-YYYYMMDD-NN (reset per hari)."""
+    tgl = tgl or date.today()
+    stmt = (
+        select(func.count())
+        .select_from(PkRejection)
+        .where(PkRejection.tanggal == tgl)
+    )
+    return await _next_sequence(db, "REJ", stmt, tgl)
 
 
 async def next_tumpukan_move_code(db: AsyncSession) -> str:

@@ -1192,6 +1192,13 @@ PROSES_GUDANG2 = {
                 "type": ["string", "null"],
                 "description": "Nama supplier PK luar (untuk beli_pk_luar).",
             },
+            "no_polisi": {
+                "type": ["string", "null"],
+                "description": (
+                    "Nomor polisi truk pengirim PK luar bila disebut "
+                    "(mis. 'plat B 1234 XY'->'B 1234 XY'). Untuk beli_pk_luar."
+                ),
+            },
             "berat_kg": {
                 "type": ["number", "null"],
                 "description": "Berat dalam KG. Konversi ton→kg ('5 ton'->5000). "
@@ -1204,6 +1211,29 @@ PROSES_GUDANG2 = {
             "broken_persen": {
                 "type": ["number", "null"],
                 "description": "Persentase broken PK saat QC. '5%'->5.",
+            },
+            "penyusutan_persen": {
+                "type": ["number", "null"],
+                "description": (
+                    "Penyusutan/persentase bekatul hasil uji lab saat QC "
+                    "('penyusutan 8%', 'bekatul lab 8%')->8."
+                ),
+            },
+            "butir_kuning": {
+                "type": ["string", "null"],
+                "enum": ["bersih", "sedang", "banyak", None],
+                "description": (
+                    "Penilaian butir kuning uji lab: 'bersih'(sedikit/nihil), "
+                    "'sedang', atau 'banyak'."
+                ),
+            },
+            "catatan_lab": {
+                "type": ["string", "null"],
+                "description": "Deskripsi/catatan uji lab tambahan bila disebut.",
+            },
+            "alasan_tolak": {
+                "type": ["string", "null"],
+                "description": "Alasan penolakan PK bila keputusan=tolak (mis. 'kadar air terlalu tinggi').",
             },
             "tujuan": {
                 "type": ["string", "null"],

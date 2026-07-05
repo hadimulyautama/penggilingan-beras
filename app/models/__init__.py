@@ -25,6 +25,7 @@ from app.gudang2.models import (
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,
+    PkRejection,
     PkTumpukanToSilo,
     PolishingOutputLog,
     PolishingProcess,
@@ -73,6 +74,7 @@ __all__ = [
     # gudang2
     "PkPurchaseBatch",
     "PkPurchaseVerification",
+    "PkRejection",
     "PkGudang2Intake",
     "PkTumpukanToSilo",
     "PolishingProcess",
