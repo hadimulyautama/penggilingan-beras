@@ -13,6 +13,13 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from app.ai.nlp_parser import parse_gudang2
+from app.gudang2.nlp import parse_penyosohan
+from app.gudang2.polishing import (
+    catat_output,
+    laporan_penyosohan,
+    mulai_penyosohan,
+    selesai_penyosohan,
+)
 from app.bots.common import (
     authenticate,
     can_see_financials,
@@ -129,6 +136,63 @@ async def _handle_gudang2(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _handle_penyosohan(message: Message, db, user, text: str) -> bool:
+    """Aksi penyosohan Gudang 2. True jika ditangani."""
+    try:
+        p = await parse_penyosohan(text)
+    except Exception:
+        log.exception("parse_penyosohan gagal")
+        return False
+    if p.intent == "bukan_penyosohan":
+        return False
+    try:
+        if p.intent == "mulai_penyosohan":
+            r = await mulai_penyosohan(
+                db, user=user, nama_silos=p.nama_silo_list, tanggal=p.tanggal, jam=p.jam,
+            )
+            await message.answer(
+                f"✓ Mulai penyosohan *{r.proc.kode_proses}* dari Silo "
+                f"{'+'.join(r.silos)}.\n• Bahan: {_kg(r.berat_awal_total)}\n"
+                "Catat hasil berkala, mis. `hasil premium 5 ton`.",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "catat_output":
+            r = await catat_output(
+                db, user=user, kode=p.kode, jenis=p.jenis,
+                berat_kumulatif=p.berat_kg, tanggal=p.tanggal, jam=p.jam,
+            )
+            await message.answer(
+                f"✓ Hasil *{r.jenis}* {r.proc.kode_proses}: "
+                f"{_kg(r.berat_kumulatif)} _(kumulatif)_.",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "selesai_penyosohan":
+            r = await selesai_penyosohan(
+                db, user=user, kode=p.kode, nama_silo=p.nama_silo,
+                sisa_kg=p.berat_kg, tanggal=p.tanggal, jam=p.jam,
+            )
+            if r.selesai:
+                rend = f" · rendemen {r.rendemen:.1f}%" if r.rendemen is not None else ""
+                await message.answer(
+                    f"✓ *{r.proc.kode_proses} selesai.* PK terpakai "
+                    f"{_kg(r.pk_terpakai_total)} → beras {_kg(r.beras_total)}{rend}.\n"
+                    "_QC & verifikasi output oleh staff/admin menyusul._",
+                    parse_mode="Markdown",
+                )
+            else:
+                await message.answer(
+                    f"✓ Silo {r.silo} sisa dicatat (terpakai {_kg(r.terpakai_silo)}). "
+                    "Silo lain di proses ini belum ditandai selesai."
+                )
+        elif p.intent == "laporan_penyosohan":
+            await message.answer(await laporan_penyosohan(db, p.kode))
+        else:
+            return False
+    except (Gudang2Error, BackdateError) as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan penyosohan.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -143,6 +207,8 @@ async def handle_message(message: Message) -> None:
 
         fin = can_see_financials(user)
         # Aksi Gudang 2 (tulis) — cek dulu sebelum flow baca.
+        if await _handle_penyosohan(message, db, user, text):
+            return
         if await _handle_gudang2(message, db, user, text):
             return
         if await maybe_answer_transfer(message, text, financial=fin):

@@ -115,3 +115,59 @@ class PkTumpukanToSilo(Base, TimestampMixin):
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class PolishingProcess(Base, TimestampMixin):
+    """Proses penyosohan (PK silo → beras putih). Kode: POL-YYYYMMDD-NN.
+
+    Bahan WAJIB dari silo (bukan tumpukan). 1-2 hari = 1 proses.
+    """
+
+    __tablename__ = "polishing_process"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    waktu_mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    waktu_selesai: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # proses / selesai
+    status: Mapped[str] = mapped_column(String(20), default="proses")
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class PolishingSiloUsage(Base, TimestampMixin):
+    """Pemakaian silo per proses penyosohan.
+
+    berat_awal_kg: snapshot OTOMATIS saat proses mulai (stok silo saat itu).
+    berat_akhir_kg: input MANUAL operator saat selesai.
+    berat_terpakai_kg: computed = berat_awal − berat_akhir (diisi saat selesai).
+    """
+
+    __tablename__ = "polishing_silo_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    polishing_process_id: Mapped[int] = mapped_column(
+        ForeignKey("polishing_process.id"), nullable=False
+    )
+    silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
+    berat_awal_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    berat_akhir_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    berat_terpakai_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+
+
+class PolishingOutputLog(Base):
+    """Log hasil penyosohan (KUMULATIF — ambil baris TERBARU per jenis).
+
+    jenis: grade beras (sayur/medium/medsuper/premium/beras_b) ATAU hasil
+    samping (menir/broken/bekatul/reject). berat_kg = kumulatif total.
+    """
+
+    __tablename__ = "polishing_output_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    polishing_process_id: Mapped[int] = mapped_column(
+        ForeignKey("polishing_process.id"), nullable=False
+    )
+    jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    waktu_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

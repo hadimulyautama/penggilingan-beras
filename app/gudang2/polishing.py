@@ -1,0 +1,338 @@
+"""Proses penyosohan Gudang 2 (PK silo → beras putih + hasil samping).
+
+Acuan: MASTER_RULES_AND_LOGIC.md §12.
+- Bahan WAJIB dari silo (bukan tumpukan).
+- berat_awal silo = snapshot OTOMATIS saat mulai; berat_akhir = input MANUAL
+  saat selesai; terpakai = awal − akhir.
+- Log output KUMULATIF (ambil terbaru; tak boleh turun).
+- HPP per kg beras = biaya konversi (bahan/kemasan − nilai byproduct) — di modul
+  produk-jadi. Di sini fokus: run + konsumsi PK + output + rendemen.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import time
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import input_time
+from app.models import (
+    PolishingOutputLog,
+    PolishingProcess,
+    PolishingSiloUsage,
+    Silo,
+)
+from app.services.activity_log import log_activity
+from app.services.codegen import next_polishing_code
+from app.services.notification import create_notification
+from app.gudang2.service import Gudang2Error, get_g2_silo, hitung_stok_silo
+
+# Jenis output yang dikenal.
+GRADES = ["sayur", "medium", "medsuper", "premium", "beras_b"]
+BYPRODUCTS = ["menir", "broken", "bekatul", "reject"]
+_ALL_JENIS = set(GRADES) | set(BYPRODUCTS)
+
+
+# ─────────────────────────── Mulai ───────────────────────────
+@dataclass
+class MulaiPenyosohanResult:
+    proc: PolishingProcess
+    silos: list[str]
+    berat_awal_total: float
+
+
+async def mulai_penyosohan(
+    db: AsyncSession, *, user, nama_silos: list[str] | None, tanggal=None, jam=None,
+) -> MulaiPenyosohanResult:
+    """Mulai penyosohan dari satu/lebih silo Gudang 2 (snapshot berat awal)."""
+    letters = [s.upper() for s in (nama_silos or []) if s]
+    if not letters:
+        raise Gudang2Error("Sebutkan silo bahannya, contoh: `mulai penyosohan silo A`")
+
+    silos: list[Silo] = []
+    for letter in dict.fromkeys(letters):  # dedupe, jaga urutan
+        silo = await get_g2_silo(db, letter)
+        if silo is None:
+            raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
+        # V4: penyosohan hanya dari silo yang ADA isinya.
+        if await hitung_stok_silo(db, silo.id) <= 0:
+            raise Gudang2Error(
+                f"Silo {letter} kosong. Pindahkan PK dari tumpukan ke silo dulu."
+            )
+        # Silo tak boleh sedang dipakai proses lain yang belum selesai.
+        aktif = (
+            await db.execute(
+                select(PolishingSiloUsage.id)
+                .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+                .where(
+                    PolishingSiloUsage.silo_id == silo.id,
+                    PolishingProcess.status == "proses",
+                )
+            )
+        ).first()
+        if aktif:
+            raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
+        silos.append(silo)
+
+    now = input_time(tanggal, jam)
+    proc = PolishingProcess(
+        kode_proses=await next_polishing_code(db),
+        waktu_mulai=now, status="proses", created_by=user.id,
+    )
+    db.add(proc)
+    await db.flush()
+    total_awal = 0.0
+    for silo in silos:
+        awal = await hitung_stok_silo(db, silo.id)
+        total_awal += awal
+        db.add(PolishingSiloUsage(
+            polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
+        ))
+    await log_activity(
+        db, table_name="polishing_process", record_id=proc.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{proc.kode_proses} <- silo {'+'.join(letters)} ({total_awal:.0f}kg)",
+    )
+    await db.commit()
+    await db.refresh(proc)
+    return MulaiPenyosohanResult(
+        proc=proc, silos=[s.nama_silo.replace("Silo ", "") for s in silos],
+        berat_awal_total=total_awal,
+    )
+
+
+# ─────────────────────────── Output (kumulatif) ───────────────────────────
+async def _get_proc(db: AsyncSession, kode: str | None) -> PolishingProcess:
+    if not kode:
+        # Bila hanya satu proses 'proses' berjalan, pakai itu.
+        rows = (
+            await db.execute(
+                select(PolishingProcess).where(PolishingProcess.status == "proses")
+            )
+        ).scalars().all()
+        if len(rows) == 1:
+            return rows[0]
+        raise Gudang2Error("Sebutkan kode prosesnya, contoh: `hasil premium 2 ton POL-...`")
+    proc = (
+        await db.execute(
+            select(PolishingProcess).where(PolishingProcess.kode_proses == kode)
+        )
+    ).scalars().first()
+    if proc is None:
+        raise Gudang2Error(f"Proses {kode} tidak ditemukan.")
+    return proc
+
+
+async def _latest_output(db: AsyncSession, proc_id: int, jenis: str) -> float:
+    v = (
+        await db.execute(
+            select(PolishingOutputLog.berat_kg)
+            .where(
+                PolishingOutputLog.polishing_process_id == proc_id,
+                PolishingOutputLog.jenis == jenis,
+            )
+            .order_by(PolishingOutputLog.waktu_update.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    return float(v) if v is not None else 0.0
+
+
+@dataclass
+class OutputResult:
+    proc: PolishingProcess
+    jenis: str
+    berat_kumulatif: float
+
+
+async def catat_output(
+    db: AsyncSession, *, user, kode: str | None, jenis: str | None,
+    berat_kumulatif: float | None, tanggal=None, jam=None,
+) -> OutputResult:
+    """Catat hasil penyosohan (KUMULATIF total sejak awal, bukan tambahan)."""
+    if not jenis or jenis.lower() not in _ALL_JENIS:
+        raise Gudang2Error(
+            "Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + "."
+        )
+    jenis = jenis.lower()
+    if berat_kumulatif is None:
+        raise Gudang2Error("Sebutkan berat (kumulatif) hasilnya, mis. `premium 2 ton`.")
+    proc = await _get_proc(db, kode)
+    if proc.status == "selesai":
+        raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
+    last = await _latest_output(db, proc.id, jenis)
+    if float(berat_kumulatif) < last:
+        raise Gudang2Error(
+            f"Angka kumulatif {jenis} tak boleh turun (terakhir {last:.0f} kg, "
+            f"baru {float(berat_kumulatif):.0f} kg)."
+        )
+    db.add(PolishingOutputLog(
+        polishing_process_id=proc.id, jenis=jenis, berat_kg=berat_kumulatif,
+        waktu_update=input_time(tanggal, jam), input_by=user.id,
+    ))
+    await log_activity(
+        db, table_name="polishing_output_logs", record_id=proc.id, action="INSERT",
+        changed_by=user.id, new_value=f"{jenis} kumulatif {berat_kumulatif:.0f}kg",
+    )
+    await db.commit()
+    return OutputResult(proc=proc, jenis=jenis, berat_kumulatif=float(berat_kumulatif))
+
+
+# ─────────────────────────── Selesai + rendemen ───────────────────────────
+async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
+    """Output terbaru per jenis (kumulatif)."""
+    rows = (
+        await db.execute(
+            select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg,
+                   PolishingOutputLog.waktu_update)
+            .where(PolishingOutputLog.polishing_process_id == proc_id)
+            .order_by(PolishingOutputLog.jenis, PolishingOutputLog.waktu_update.desc())
+        )
+    ).all()
+    out: dict[str, float] = {}
+    for jenis, berat, _ in rows:
+        if jenis not in out:  # pertama per jenis = terbaru (order desc)
+            out[jenis] = float(berat)
+    return out
+
+
+@dataclass
+class SelesaiResult:
+    proc: PolishingProcess
+    selesai: bool
+    silo: str
+    terpakai_silo: float
+    pk_terpakai_total: float
+    beras_total: float
+    rendemen: float | None
+    outputs: dict = field(default_factory=dict)
+
+
+async def selesai_penyosohan(
+    db: AsyncSession, *, user, kode: str | None, nama_silo: str | None,
+    sisa_kg: float | None, tanggal=None, jam=None,
+) -> SelesaiResult:
+    """Tandai sisa 1 silo (berat akhir). Bila semua silo sudah, proses SELESAI +
+    hitung rendemen."""
+    proc = await _get_proc(db, kode)
+    if proc.status == "selesai":
+        raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
+    usages = (
+        await db.execute(
+            select(PolishingSiloUsage).where(
+                PolishingSiloUsage.polishing_process_id == proc.id
+            )
+        )
+    ).scalars().all()
+    # Pilih usage silo yang dimaksud.
+    target = None
+    if nama_silo:
+        silo = await get_g2_silo(db, nama_silo.upper())
+        target = next((u for u in usages if silo and u.silo_id == silo.id), None)
+    elif len(usages) == 1:
+        target = usages[0]
+    if target is None:
+        raise Gudang2Error("Sebutkan silo mana yang selesai (A/B) + sisa beratnya.")
+    if sisa_kg is None:
+        raise Gudang2Error("Sebutkan sisa berat di silo, mis. `sisa 500 kg`.")
+    if float(sisa_kg) > float(target.berat_awal_kg):
+        raise Gudang2Error(
+            f"Sisa ({float(sisa_kg):.0f} kg) melebihi berat awal silo "
+            f"({float(target.berat_awal_kg):.0f} kg)."
+        )
+    target.berat_akhir_kg = sisa_kg
+    target.berat_terpakai_kg = max(float(target.berat_awal_kg) - float(sisa_kg), 0.0)
+    silo_obj = await db.get(Silo, target.silo_id)
+    silo_letter = silo_obj.nama_silo.replace("Silo ", "") if silo_obj else "-"
+
+    semua_selesai = all(u.berat_akhir_kg is not None for u in usages)
+    pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
+    outputs = await _output_map(db, proc.id)
+    beras_total = sum(v for k, v in outputs.items() if k in GRADES)
+    rendemen = None
+
+    if semua_selesai:
+        proc.status = "selesai"
+        proc.waktu_selesai = input_time(tanggal, jam)
+        rendemen = (beras_total / pk_terpakai * 100) if pk_terpakai else None
+        await log_activity(
+            db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
+            changed_by=user.id, field_name="status", new_value="selesai",
+        )
+        await create_notification(
+            db, tipe="verifikasi_penyosohan",
+            pesan=(
+                f"🟡 Penyosohan {proc.kode_proses} selesai — perlu verifikasi output "
+                f"& konfirmasi byproduct. PK terpakai {pk_terpakai:.0f} kg, beras "
+                f"{beras_total:.0f} kg"
+                + (f" (rendemen {rendemen:.1f}%)" if rendemen is not None else "")
+            ),
+            target_role="staff", prioritas="kuning",
+            table_name="polishing_process", record_id=proc.id,
+        )
+    else:
+        await log_activity(
+            db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
+            changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
+        )
+    await db.commit()
+    await db.refresh(proc)
+    return SelesaiResult(
+        proc=proc, selesai=semua_selesai, silo=silo_letter,
+        terpakai_silo=float(target.berat_terpakai_kg or 0),
+        pk_terpakai_total=pk_terpakai, beras_total=beras_total,
+        rendemen=rendemen, outputs=outputs,
+    )
+
+
+# ─────────────────────────── Laporan ───────────────────────────
+def _kg(kg: float) -> str:
+    return f"{kg:,.0f} kg".replace(",", ".")
+
+
+async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
+    if kode:
+        proc = await _get_proc(db, kode)
+        usages = (
+            await db.execute(
+                select(PolishingSiloUsage).where(
+                    PolishingSiloUsage.polishing_process_id == proc.id
+                )
+            )
+        ).scalars().all()
+        terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
+        outputs = await _output_map(db, proc.id)
+        beras = sum(v for k, v in outputs.items() if k in GRADES)
+        lines = [f"⚙️ Penyosohan {proc.kode_proses} — {proc.status}"]
+        for u in usages:
+            silo = await db.get(Silo, u.silo_id)
+            nm = silo.nama_silo.replace("Silo ", "") if silo else "-"
+            if u.berat_akhir_kg is not None:
+                lines.append(
+                    f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))} → sisa "
+                    f"{_kg(float(u.berat_akhir_kg))} = terpakai {_kg(float(u.berat_terpakai_kg or 0))}"
+                )
+            else:
+                lines.append(f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))} (belum selesai)")
+        if outputs:
+            lines.append("• Hasil:")
+            for jenis in GRADES + BYPRODUCTS:
+                if jenis in outputs:
+                    lines.append(f"   - {jenis}: {_kg(outputs[jenis])}")
+        if terpakai and beras:
+            lines.append(f"• Rendemen: {beras / terpakai * 100:.1f}% (beras {_kg(beras)} / PK {_kg(terpakai)})")
+        return "\n".join(lines)
+
+    procs = (
+        await db.execute(
+            select(PolishingProcess).where(PolishingProcess.status == "proses")
+            .order_by(PolishingProcess.id)
+        )
+    ).scalars().all()
+    if not procs:
+        return "⚙️ Tidak ada penyosohan yang sedang berjalan."
+    lines = [f"⚙️ Penyosohan berjalan ({len(procs)}):"]
+    for p in procs:
+        lines.append(f"• {p.kode_proses}")
+    return "\n".join(lines)

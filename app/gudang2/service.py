@@ -23,6 +23,7 @@ from app.models import (
     PkPurchaseBatch,
     PkPurchaseVerification,
     PkTumpukanToSilo,
+    PolishingSiloUsage,
     Silo,
     User,
     Warehouse,
@@ -71,11 +72,7 @@ def is_operator_gudang2(user: User, g2_wid: int) -> bool:
 
 # ─────────────────────────── Formula stok ───────────────────────────
 async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
-    """Stok PK sebuah silo G2 = masuk langsung + masuk dari tumpukan − terpakai.
-
-    Komponen 'terpakai' (polishing_silo_usage) menyusul di G2-3; sampai itu ada,
-    stok = total yang masuk ke silo.
-    """
+    """Stok PK sebuah silo G2 = masuk langsung + masuk dari tumpukan − terpakai."""
     masuk_langsung = (
         await db.execute(
             select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
@@ -91,8 +88,16 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
             )
         )
     ).scalar_one()
-    # TODO(G2-3): kurangi Σ polishing_silo_usage.berat_terpakai_kg (proses selesai).
-    return float(masuk_langsung) + float(masuk_dari_tumpukan)
+    # Terpakai penyosohan (hanya proses yang berat_akhir-nya sudah diisi).
+    terpakai = (
+        await db.execute(
+            select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0)).where(
+                PolishingSiloUsage.silo_id == silo_id,
+                PolishingSiloUsage.berat_akhir_kg.isnot(None),
+            )
+        )
+    ).scalar_one()
+    return float(masuk_langsung) + float(masuk_dari_tumpukan) - float(terpakai)
 
 
 async def hitung_stok_tumpukan(db: AsyncSession) -> float:

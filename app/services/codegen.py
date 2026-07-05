@@ -16,6 +16,7 @@ from app.models import (
     MillingProcess,
     PkPurchaseBatch,
     PkTumpukanToSilo,
+    PolishingProcess,
     PurchaseBatch,
 )
 
@@ -102,3 +103,15 @@ async def next_tumpukan_move_code(db: AsyncSession) -> str:
         .where(PkTumpukanToSilo.created_at >= start)
     )
     return await _next_sequence(db, "PTS", stmt)
+
+
+async def next_polishing_code(db: AsyncSession) -> str:
+    """Kode proses penyosohan (Gudang 2): POL-YYYYMMDD-NN (reset per hari)."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(PolishingProcess)
+        .where(PolishingProcess.created_at >= start)
+    )
+    return await _next_sequence(db, "POL", stmt)

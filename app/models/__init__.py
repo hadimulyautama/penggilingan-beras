@@ -26,6 +26,9 @@ from app.gudang2.models import (
     PkPurchaseBatch,
     PkPurchaseVerification,
     PkTumpukanToSilo,
+    PolishingOutputLog,
+    PolishingProcess,
+    PolishingSiloUsage,
 )
 from app.models.system import ActivityLog, Notification
 from app.models.transfer import InternalTransfer
@@ -58,6 +61,9 @@ __all__ = [
     "PkPurchaseVerification",
     "PkGudang2Intake",
     "PkTumpukanToSilo",
+    "PolishingProcess",
+    "PolishingSiloUsage",
+    "PolishingOutputLog",
     # transfer (bridge)
     "InternalTransfer",
     # system

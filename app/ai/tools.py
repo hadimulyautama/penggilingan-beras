@@ -1252,3 +1252,82 @@ PROSES_GUDANG2 = {
         "required": ["intent"],
     },
 }
+
+
+# Tool penyosohan Gudang 2 (PK silo → beras putih + hasil samping).
+PROSES_PENYOSOHAN = {
+    "name": "proses_penyosohan",
+    "description": (
+        "Deteksi & ekstrak aksi penyosohan Gudang 2: mulai penyosohan dari silo, "
+        "catat hasil (grade beras / hasil samping, kumulatif), tandai sisa silo "
+        "(selesai), atau tanya laporan penyosohan. Pilih 'bukan_penyosohan' bila "
+        "bukan tentang penyosohan (mis. soal PK masuk/transfer/silo Gudang 2 → itu "
+        "urusan tool lain)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "mulai_penyosohan",
+                    "catat_output",
+                    "selesai_penyosohan",
+                    "laporan_penyosohan",
+                    "bukan_penyosohan",
+                ],
+                "description": (
+                    "'mulai_penyosohan': mulai proses dari 1+ silo (contoh: 'mulai "
+                    "penyosohan silo A', 'sosoh silo A dan B'). 'catat_output': catat "
+                    "hasil kumulatif (contoh: 'hasil premium 2 ton', 'menir 300 kg'). "
+                    "'selesai_penyosohan': tandai sisa PK di silo saat selesai "
+                    "(contoh: 'penyosohan selesai sisa 500 kg', 'silo A sisa 300 selesai'). "
+                    "'laporan_penyosohan': tanya proses/rendemen (contoh: 'laporan "
+                    "penyosohan', 'rendemen POL-...'). 'bukan_penyosohan': selain itu."
+                ),
+            },
+            "kode": {
+                "type": ["string", "null"],
+                "description": "Kode proses penyosohan POL-YYYYMMDD-NN (huruf besar).",
+            },
+            "nama_silo_list": {
+                "type": ["array", "null"],
+                "items": {"type": "string", "enum": ["A", "B"]},
+                "description": "Silo bahan untuk mulai_penyosohan (bisa >1): ['A'] / ['A','B'].",
+            },
+            "jenis": {
+                "type": ["string", "null"],
+                "enum": [
+                    "sayur", "medium", "medsuper", "premium", "beras_b",
+                    "menir", "broken", "bekatul", "reject", None,
+                ],
+                "description": (
+                    "Jenis hasil untuk catat_output: grade beras (sayur/medium/"
+                    "medsuper/premium/beras_b) atau samping (menir/broken/bekatul/"
+                    "reject). 'medium super'->medsuper, 'beras B'->beras_b."
+                ),
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": (
+                    "Berat KG. Konversi ton ('2 ton'->2000). Untuk catat_output = "
+                    "hasil KUMULATIF; untuk selesai_penyosohan = SISA PK di silo."
+                ),
+            },
+            "nama_silo": {
+                "type": ["string", "null"],
+                "enum": ["A", "B", None],
+                "description": "Silo tunggal untuk selesai_penyosohan (yang sisanya dicatat).",
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": "Tanggal kejadian YYYY-MM-DD utk backdate; null = hari ini.",
+            },
+            "jam": {
+                "type": ["string", "null"],
+                "description": "Jam 'HH:MM' bila disebut; null = jam sekarang.",
+            },
+        },
+        "required": ["intent"],
+    },
+}
