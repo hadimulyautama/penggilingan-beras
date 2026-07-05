@@ -36,7 +36,12 @@ class Settings(BaseSettings):
 
     # Claude
     anthropic_api_key: str = ""
+    # Model NLP (parser forced-tool per pesan) — ringan & cepat.
     claude_model: str = "claude-haiku-4-5-20251001"
+    # Model AGENT (loop reasoning multi-tool untuk pertanyaan bebas/analitik).
+    agent_model: str = "claude-sonnet-5"
+    # Batas iterasi tool-loop agent (jaring anti-loop tak berujung).
+    agent_max_iterations: int = 6
 
     # Aplikasi
     app_timezone: str = "Asia/Jakarta"

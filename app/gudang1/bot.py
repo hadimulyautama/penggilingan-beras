@@ -28,6 +28,7 @@ from app.bots.common import (
     reset_draft,
     unregistered_reply,
 )
+from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
 from app.bots.notify import notify_roles
@@ -288,6 +289,14 @@ async def handle_message(message: Message) -> None:
             await _prompt_next(message, tg_id, session)
             return
 
+        # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
+        if session.stage == "awaiting_agent_write":
+            async def _dispatch(cmd: str) -> bool:
+                return await _try_operator_commands(message, db, user, cmd, session)
+            if await agent_confirm_pending(message, lower, session, dispatch=_dispatch):
+                return
+            # bukan ya/batal → proses sebagai pesan baru di bawah.
+
         # ── Pesan baru ──
         await _process_fresh(message, db, user, text, session)
 
@@ -328,59 +337,63 @@ async def _handle_undo(message: Message, db, user, text: str) -> bool:
     return True
 
 
-async def _process_fresh(message: Message, db, user, text: str, session) -> None:
-    """Proses pesan baru: pembelian, pengeringan, silo, milling, atau tanya-data."""
+async def _try_operator_commands(message: Message, db, user, text: str, session) -> bool:
+    """Handler PERINTAH operator G1 (tulis): pembelian, pengeringan, silo, milling.
+
+    True bila ditangani (termasuk saat menampilkan error/prompt). Dipakai jalur
+    normal maupun saat menjalankan usulan tulis agent (butuh nilai balik bool)."""
     tg_id = message.from_user.id
     try:
         parsed = await parse_purchase(text)
     except Exception:
         log.exception("parse_purchase gagal")
         await message.answer(AI_ERROR_MSG)
+        return True
+    if parsed.is_pembelian_gabah:
+        # Pembelian gabah = aksi fisik operator.
+        if not await _require_operator(message, user, session, text, "Mencatat pembelian gabah"):
+            return True
+        session.draft = parsed
+        await _prompt_next(message, tg_id, session)
+        return True
+    # Undo tindakan terakhir (frasa kaya: "batalkan lot terakhir").
+    if await _handle_undo(message, db, user, text):
+        return True
+    # "selesai" ambigu (drying & milling bisa berbarengan) — tangani dulu.
+    if await _handle_bare_finish(message, db, user, text, session):
+        return True
+    if await _handle_pengeringan(message, db, user, text, session):
+        return True
+    if await _handle_silo(message, db, user, text, session):
+        return True
+    if await _handle_milling(message, db, user, text, session):
+        return True
+    return False
+
+
+async def _process_fresh(message: Message, db, user, text: str, session) -> None:
+    """Proses pesan baru: pembelian, pengeringan, silo, milling, atau tanya-data."""
+    if await _try_operator_commands(message, db, user, text, session):
         return
-    if not parsed.is_pembelian_gabah:
-        # Undo tindakan terakhir (frasa kaya: "batalkan lot terakhir").
-        if await _handle_undo(message, db, user, text):
-            return
-        # "selesai" ambigu (drying & milling bisa berbarengan) — tangani dulu.
-        if await _handle_bare_finish(message, db, user, text, session):
-            return
-        if await _handle_pengeringan(message, db, user, text, session):
-            return
-        if await _handle_silo(message, db, user, text, session):
-            return
-        if await _handle_milling(message, db, user, text, session):
-            return
-        fin = can_see_financials(user)
-        if await maybe_answer_transfer(message, text, financial=fin):
-            return
-        if await maybe_answer_status(message, text):
-            return
-        if await maybe_answer_pending(message, text):
-            return
-        if await maybe_answer_jam(message, text):
-            return
-        if await maybe_answer_detail(message, text, session, financial=fin):
-            return
-        if await maybe_answer_lookup(message, text, session):
-            return
-        if await maybe_answer_report(message, text, session):
-            return
-        await message.answer(
-            "Maaf, saya belum paham. Contoh:\n"
-            "• Catat beli: `gabah masuk dari pak budi 8 ton plat B 1234 XY`\n"
-            "• Keringkan: `keringkan GB-20260702-01 dan GB-20260702-02`\n"
-            "• Silo: `masukkan LOT-20260702-01 ke silo A`\n"
-            "• Giling: `giling silo A` → `hasil PK 3 ton MIL-...` → `MIL-... selesai`\n"
-            "• Tanya: `silo apa yang terisi` / `stok PK gudang 1`\n\n"
-            "Verifikasi harga & QC dikerjakan Staff/Admin di `@hmuadmin_bot`.",
-            parse_mode="Markdown",
-        )
+    fin = can_see_financials(user)
+    if await maybe_answer_transfer(message, text, financial=fin):
         return
-    # Pembelian gabah = aksi fisik operator.
-    if not await _require_operator(message, user, session, text, "Mencatat pembelian gabah"):
+    if await maybe_answer_status(message, text):
         return
-    session.draft = parsed
-    await _prompt_next(message, tg_id, session)
+    if await maybe_answer_pending(message, text):
+        return
+    if await maybe_answer_jam(message, text):
+        return
+    if await maybe_answer_detail(message, text, session, financial=fin):
+        return
+    if await maybe_answer_lookup(message, text, session):
+        return
+    if await maybe_answer_report(message, text, session):
+        return
+    # ── Jaring terakhir: agent (pertanyaan bebas / analitik / usulan tulis) ──
+    await maybe_answer_agent(
+        message, role=user.role, financial=fin, allow_write=True, session=session,
+    )
 
 
 async def _prompt_next(message: Message, tg_id: int, session) -> None:

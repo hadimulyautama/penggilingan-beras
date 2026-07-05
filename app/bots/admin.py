@@ -34,6 +34,7 @@ from app.bots.common import (
     reset_verif,
     unregistered_reply,
 )
+from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
 from app.bots.lookup_flow import maybe_answer_lookup
@@ -628,6 +629,30 @@ async def _handle_keluar(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _try_command_handlers(message, db, user, text: str, session) -> bool:
+    """Rangkaian handler PERINTAH deterministik (tulis). True bila salah satu
+    menangani. Dipakai jalur normal maupun saat menjalankan usulan agent."""
+    if await _handle_analitik(message, db, user, text):
+        return True
+    if await _handle_undo_admin(message, db, user, text):
+        return True
+    if await _handle_user_admin(message, db, user, text):
+        return True
+    if await _handle_transfer(message, db, user, text, session):
+        return True
+    if await _handle_milling_admin(message, db, user, text, session):
+        return True
+    if await _handle_gudang2_admin(message, db, user, text):
+        return True
+    if await _handle_kemasan(message, db, user, text):
+        return True
+    if await _handle_barang_jadi_admin(message, db, user, text):
+        return True
+    if await _handle_keluar(message, db, user, text):
+        return True
+    return False
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -691,40 +716,17 @@ async def handle_message(message: Message) -> None:
             await _advance_verif(message, db, tg_id, session)
             return
 
-        # ── Analitik strategis (scorecard supplier / tren HPP) ──
-        if await _handle_analitik(message, db, user, text):
-            return
+        # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
+        async def _dispatch(cmd: str) -> bool:
+            return await _try_command_handlers(message, db, user, cmd, session)
 
-        # ── Undo tindakan terakhir (bisa per orang/role) ──
-        if await _handle_undo_admin(message, db, user, text):
-            return
+        if session.stage == "awaiting_agent_write":
+            if await agent_confirm_pending(message, lower, session, dispatch=_dispatch):
+                return
+            # bukan ya/batal → lanjut proses sebagai pesan baru di bawah.
 
-        # ── Kelola pengguna (daftar/list/aktif/nonaktif) ──
-        if await _handle_user_admin(message, db, user, text):
-            return
-
-        # ── Transfer G1->G2 (buat / laporan) ──
-        if await _handle_transfer(message, db, user, text, session):
-            return
-
-        # ── Aksi milling (QC / verifikasi output) — cek sebelum verifikasi harga ──
-        if await _handle_milling_admin(message, db, user, text, session):
-            return
-
-        # ── Gudang 2: beli PK luar + QC/verifikasi PK luar (staff/admin) ──
-        if await _handle_gudang2_admin(message, db, user, text):
-            return
-
-        # ── Kemasan/karung: beli + stok (staff/admin) ──
-        if await _handle_kemasan(message, db, user, text):
-            return
-
-        # ── Barang jadi: harga byproduct + HPP beras + stok (staff/admin) ──
-        if await _handle_barang_jadi_admin(message, db, user, text):
-            return
-
-        # ── Barang keluar / dikirim + jual PK langsung (staff/admin) ──
-        if await _handle_keluar(message, db, user, text):
+        # ── Semua handler perintah deterministik (tulis) ──
+        if await _try_command_handlers(message, db, user, text, session):
             return
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena
@@ -803,15 +805,10 @@ async def handle_message(message: Message) -> None:
         if await maybe_answer_report(message, text, session):
             return
 
-        await message.answer(
-            "Belum paham 🙏. Contoh yang bisa saya lakukan:\n"
-            "• Cek tugas: `ada yang perlu diverifikasi?`\n"
-            "• Verifikasi harga: `verifikasi GB-20260702-01 total 42 juta`\n"
-            "• QC milling: `QC MIL-20260702-01 kadar air 13 broken 5 susut 2`\n"
-            "• Verifikasi output: `verifikasi output MIL-20260702-01 14 ton`\n"
-            "• Cari kode: `batch dari budi kodenya apa`\n"
-            "Atau /start untuk bantuan.",
-            parse_mode="Markdown",
+        # ── Jaring terakhir: agent (pertanyaan bebas / analitik / usulan tulis) ──
+        await maybe_answer_agent(
+            message, role=user.role, financial=can_see_financials(user),
+            allow_write=True, session=session,
         )
 
 

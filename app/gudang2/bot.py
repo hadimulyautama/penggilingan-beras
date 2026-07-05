@@ -30,9 +30,11 @@ from app.inventory.finished_goods import (
 from app.bots.common import (
     authenticate,
     can_see_financials,
+    get_session,
     handle_shared_contact,
     unregistered_reply,
 )
+from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
@@ -242,25 +244,45 @@ async def _handle_barang_jadi(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _try_g2_commands(message: Message, db, user, text: str) -> bool:
+    """Handler PERINTAH operator G2 (tulis): penyosohan, barang jadi, PK masuk.
+
+    True bila ditangani. Dipakai jalur normal & saat menjalankan usulan agent."""
+    if await _handle_penyosohan(message, db, user, text):
+        return True
+    if await _handle_barang_jadi(message, db, user, text):
+        return True
+    if await _handle_gudang2(message, db, user, text):
+        return True
+    return False
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
         await message.answer("Kirim pesan teks ya.")
         return
     text = message.text.strip()
+    lower = text.lower()
     async with SessionLocal() as db:
         user = await authenticate(db, message.from_user.id)
         if not user:
             await unregistered_reply(message)
             return
 
+        session = get_session(message.bot.id, message.from_user.id)
         fin = can_see_financials(user)
+
+        # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
+        if session.stage == "awaiting_agent_write":
+            async def _dispatch(cmd: str) -> bool:
+                return await _try_g2_commands(message, db, user, cmd)
+            if await agent_confirm_pending(message, lower, session, dispatch=_dispatch):
+                return
+            # bukan ya/batal → proses sebagai pesan baru di bawah.
+
         # Aksi Gudang 2 (tulis) — cek dulu sebelum flow baca.
-        if await _handle_penyosohan(message, db, user, text):
-            return
-        if await _handle_barang_jadi(message, db, user, text):
-            return
-        if await _handle_gudang2(message, db, user, text):
+        if await _try_g2_commands(message, db, user, text):
             return
         if await maybe_answer_transfer(message, text, financial=fin):
             return
@@ -276,10 +298,7 @@ async def handle_message(message: Message) -> None:
             return
         if await maybe_answer_report(message, text):
             return
-    await message.answer(
-        "Maaf, belum paham. Contoh:\n"
-        "• `terima TRF-... ke silo A`\n"
-        "• `pindah tumpukan ke silo B`\n"
-        "• `stok gudang 2`",
-        parse_mode="Markdown",
-    )
+        # ── Jaring terakhir: agent (pertanyaan bebas / analitik / usulan tulis) ──
+        await maybe_answer_agent(
+            message, role=user.role, financial=fin, allow_write=True, session=session,
+        )

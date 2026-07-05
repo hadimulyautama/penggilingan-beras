@@ -130,6 +130,9 @@ class UserSession:
     # Override akses: admin/staff mengerjakan aksi fisik operator (fallback).
     override_text: str | None = None   # perintah yang menunggu konfirmasi override
     override_active: bool = False      # True saat re-run setelah override disetujui
+    # Agent (pola agentic): perintah TULIS yang diusulkan agent & menunggu
+    # konfirmasi. stage 'awaiting_agent_write' saat aktif.
+    agent_command: str | None = None
 
 
 # Penyimpanan sesi in-memory, dikunci per (bot_id, telegram_user_id).
