@@ -34,8 +34,11 @@ from app.bots.common import (
     handle_shared_contact,
     unregistered_reply,
 )
+from app.ai.fast_route import fast_domain
 from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
+
+_G2_DOMAINS = {"penyosohan", "barang_jadi", "gudang2", "transfer_pk"}
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
 from app.bots.pending_flow import maybe_answer_pending
@@ -259,8 +262,8 @@ async def _try_g2_commands(message: Message, db, user, text: str) -> bool:
 
 
 async def _dispatch_g2(message: Message, db, user, text: str) -> bool:
-    """Router SATU-panggilan → handler domainnya saja; fallback ke cascade penuh."""
-    domain = await route_domain(text)
+    """Router: pre-router deterministik (0 LLM) lalu LLM; fallback cascade penuh."""
+    domain = fast_domain(text, valid=_G2_DOMAINS) or await route_domain(text)
     direct = {
         "penyosohan": lambda: _handle_penyosohan(message, db, user, text),
         "barang_jadi": lambda: _handle_barang_jadi(message, db, user, text),

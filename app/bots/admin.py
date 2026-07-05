@@ -34,8 +34,15 @@ from app.bots.common import (
     reset_verif,
     unregistered_reply,
 )
+from app.ai.fast_route import fast_domain
 from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
+
+# Domain yang relevan untuk Bot Admin (fast-path hanya kembalikan ini).
+_ADMIN_DOMAINS = {
+    "transfer_pk", "milling", "gudang2", "kemasan", "barang_jadi",
+    "barang_keluar", "kelola_user", "undo", "verifikasi_harga_gabah",
+}
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
 from app.bots.lookup_flow import maybe_answer_lookup
@@ -734,9 +741,9 @@ async def handle_message(message: Message) -> None:
                 return
             # bukan ya/batal → lanjut proses sebagai pesan baru di bawah.
 
-        # ── Router niat SATU-panggilan: klasifikasi → handler domainnya saja
-        #    (bukan mencoba semua parser). Fallback aman ke chain penuh. ──
-        domain = await route_domain(text)
+        # ── Router niat: pre-router deterministik (0 LLM) dulu, baru router LLM
+        #    bila ragu → handler domainnya saja. Fallback aman ke chain penuh. ──
+        domain = fast_domain(text, valid=_ADMIN_DOMAINS) or await route_domain(text)
         _CMD = {
             "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
             "milling": lambda: _handle_milling_admin(message, db, user, text, session),

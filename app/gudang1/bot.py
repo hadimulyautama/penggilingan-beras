@@ -28,8 +28,11 @@ from app.bots.common import (
     reset_draft,
     unregistered_reply,
 )
+from app.ai.fast_route import fast_domain
 from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
+
+_G1_DOMAINS = {"pembelian_gabah", "pengeringan", "silo_g1", "milling", "undo"}
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
 from app.bots.notify import notify_roles
@@ -377,7 +380,7 @@ async def _dispatch_operator(message: Message, db, user, text: str, session) -> 
 
     Memangkas 'coba semua parser' (mahal, apalagi dgn Sonnet) jadi ~1 klasifikasi
     + 1 handler. Bila router meleset/domain tak dipetakan → cascade penuh (aman)."""
-    domain = await route_domain(text)
+    domain = fast_domain(text, valid=_G1_DOMAINS) or await route_domain(text)
     direct = {
         "pengeringan": lambda: _handle_pengeringan(message, db, user, text, session),
         "silo_g1": lambda: _handle_silo(message, db, user, text, session),
