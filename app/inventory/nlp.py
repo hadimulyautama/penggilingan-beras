@@ -12,6 +12,7 @@ from app.ai.tools import PROSES_KEMASAN
 class ParsedKemasan:
     intent: str = "bukan_kemasan"
     material: str | None = None
+    brand: str | None = None
     ukuran_kg: int | None = None
     jumlah_lembar: int | None = None
     harga_per_lembar: float | None = None
@@ -25,9 +26,11 @@ async def parse_kemasan(text: str) -> ParsedKemasan:
     uk = data.get("ukuran_kg")
     jl = data.get("jumlah_lembar")
     mat = data.get("material")
+    br = data.get("brand")
     return ParsedKemasan(
         intent=data.get("intent", "bukan_kemasan"),
         material=mat.lower().strip() if isinstance(mat, str) else None,
+        brand=br.strip() if isinstance(br, str) and br.strip() else None,
         ukuran_kg=int(uk) if isinstance(uk, (int, float)) else None,
         jumlah_lembar=int(jl) if isinstance(jl, (int, float)) else None,
         harga_per_lembar=data.get("harga_per_lembar"),

@@ -542,7 +542,22 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
     return True
 
 
-async def _handle_kemasan(message: Message, db, user, text: str) -> bool:
+# Jenis karung beras yang WAJIB bermerk (kalau tak disebut, bot tanya).
+_KARUNG_MERK_WAJIB = {"biasa", "laminasi", "putih", "bekas"}
+
+
+async def _reply_beli_kemasan(message: Message, r) -> None:
+    jml = f"{r.purchase.jumlah_lembar:,}".replace(",", ".")
+    stok = f"{r.stok_baru:,}".replace(",", ".")
+    merk = f"{r.brand_nama} " if r.brand_nama else ""
+    await message.answer(
+        f"✓ Beli karung *{merk}{r.material_nama} {r.ukuran}kg* × {jml} lembar "
+        f"({r.purchase.kode}).\n• Stok kini: {stok} lembar",
+        parse_mode="Markdown",
+    )
+
+
+async def _handle_kemasan(message: Message, db, user, text: str, session) -> bool:
     """Beli karung + tanya stok kemasan (staff/admin). True jika ditangani."""
     try:
         p = await parse_kemasan(text)
@@ -553,18 +568,26 @@ async def _handle_kemasan(message: Message, db, user, text: str) -> bool:
         return False
     try:
         if p.intent == "beli_kemasan":
+            # Karung beras wajib bermerk — bila belum disebut, tanya dulu.
+            if p.material in _KARUNG_MERK_WAJIB and not p.brand and p.ukuran_kg and p.jumlah_lembar:
+                session.kemasan_draft = {
+                    "material": p.material, "ukuran": p.ukuran_kg,
+                    "jumlah": p.jumlah_lembar, "harga": p.harga_per_lembar,
+                    "tanggal": p.tanggal, "jam": p.jam,
+                }
+                session.stage = "awaiting_kemasan_brand"
+                await message.answer(
+                    "Merk karungnya apa? Sebut merk (mis. `LosPulen`) atau `polos` "
+                    "bila tanpa merk.",
+                    parse_mode="Markdown",
+                )
+                return True
             r = await beli_kemasan(
                 db, user=user, material_kode=p.material, ukuran=p.ukuran_kg,
-                jumlah=p.jumlah_lembar, harga_per_lembar=p.harga_per_lembar,
-                tanggal=p.tanggal, jam=p.jam,
+                jumlah=p.jumlah_lembar, brand_nama=p.brand,
+                harga_per_lembar=p.harga_per_lembar, tanggal=p.tanggal, jam=p.jam,
             )
-            jml = f"{r.purchase.jumlah_lembar:,}".replace(",", ".")
-            stok = f"{r.stok_baru:,}".replace(",", ".")
-            await message.answer(
-                f"✓ Beli karung *{r.material_nama} {r.ukuran}kg* × {jml} lembar "
-                f"({r.purchase.kode}).\n• Stok kini: {stok} lembar",
-                parse_mode="Markdown",
-            )
+            await _reply_beli_kemasan(message, r)
         elif p.intent == "laporan_kemasan":
             await message.answer(await laporan_stok_kemasan(db))
     except InventoryError as e:
@@ -660,7 +683,7 @@ async def _try_command_handlers(message, db, user, text: str, session) -> bool:
         return True
     if await _handle_gudang2_admin(message, db, user, text):
         return True
-    if await _handle_kemasan(message, db, user, text):
+    if await _handle_kemasan(message, db, user, text, session):
         return True
     if await _handle_barang_jadi_admin(message, db, user, text):
         return True
@@ -732,6 +755,25 @@ async def handle_message(message: Message) -> None:
             await _advance_verif(message, db, tg_id, session)
             return
 
+        # ── Menunggu MERK karung (beli karung tanpa merk) ──
+        if session.stage == "awaiting_kemasan_brand" and session.kemasan_draft:
+            d = session.kemasan_draft
+            session.stage = "idle"
+            session.kemasan_draft = None
+            if lower in CANCEL_WORDS:
+                await message.answer("Baik, pembelian karung dibatalkan.")
+                return
+            try:
+                r = await beli_kemasan(
+                    db, user=user, material_kode=d["material"], ukuran=d["ukuran"],
+                    jumlah=d["jumlah"], brand_nama=text.strip(),
+                    harga_per_lembar=d["harga"], tanggal=d["tanggal"], jam=d["jam"],
+                )
+                await _reply_beli_kemasan(message, r)
+            except (InventoryError, BackdateError) as e:
+                await message.answer(str(e.args[0]) if e.args else "Gagal simpan karung.")
+            return
+
         # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
         async def _dispatch(cmd: str) -> bool:
             return await _try_command_handlers(message, db, user, cmd, session)
@@ -748,7 +790,7 @@ async def handle_message(message: Message) -> None:
             "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
             "milling": lambda: _handle_milling_admin(message, db, user, text, session),
             "gudang2": lambda: _handle_gudang2_admin(message, db, user, text),
-            "kemasan": lambda: _handle_kemasan(message, db, user, text),
+            "kemasan": lambda: _handle_kemasan(message, db, user, text, session),
             "barang_jadi": lambda: _handle_barang_jadi_admin(message, db, user, text),
             "barang_keluar": lambda: _handle_keluar(message, db, user, text),
             "kelola_user": lambda: _handle_user_admin(message, db, user, text),

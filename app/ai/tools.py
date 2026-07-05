@@ -1393,8 +1393,18 @@ PROSES_KEMASAN = {
                 "type": ["string", "null"],
                 "enum": ["biasa", "laminasi", "putih", "polos", "bekas", "karung_pk", None],
                 "description": (
-                    "Jenis karung: 'biasa','laminasi','putih','polos','bekas', "
-                    "'karung PK'->karung_pk."
+                    "JENIS/bahan karung (BUKAN merk): 'biasa','laminasi','putih',"
+                    "'bekas','polos'(byproduct),'karung PK'->karung_pk. Contoh: "
+                    "'karung LosPulen laminasi'-> material=laminasi (LosPulen itu MERK)."
+                ),
+            },
+            "brand": {
+                "type": ["string", "null"],
+                "description": (
+                    "MERK karung bila disebut (mis. 'LosPulen','Imbiss','Raja') atau "
+                    "'polos' bila eksplisit tanpa merk. Ini BEDA dari jenis/material. "
+                    "Contoh: 'karung LosPulen laminasi 25kg'->brand='LosPulen'. Null "
+                    "bila merk tak disebut."
                 ),
             },
             "ukuran_kg": {

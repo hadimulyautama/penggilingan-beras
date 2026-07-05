@@ -295,7 +295,7 @@ async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
     beras_rows = (
         await db.execute(
             select(FinishedGoodsStock.jumlah_karung, ProductSku.packaging_material_id,
-                   ProductSku.package_size_id)
+                   ProductSku.package_size_id, ProductSku.brand_id)
             .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
             .where(
                 FinishedGoodsStock.source_id == proc.id,
@@ -304,8 +304,8 @@ async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
         )
     ).all()
     biaya_kemasan = 0.0
-    for jml, mat_id, size_id in beras_rows:
-        hk = await hpp_kemasan_wavg(db, mat_id, size_id)
+    for jml, mat_id, size_id, brand_id in beras_rows:
+        hk = await hpp_kemasan_wavg(db, mat_id, size_id, brand_id)
         if hk is not None:
             biaya_kemasan += hk * int(jml)
 

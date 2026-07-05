@@ -124,13 +124,21 @@ async def find_or_create_sku(
 
 
 # ─────────────────────────── Stok kemasan ───────────────────────────
-async def hitung_stok_kemasan(db: AsyncSession, material_id: int, size_id: int) -> int:
-    """Stok karung (lembar) = beli − hilang (− terpakai; menyusul sub-fase 2)."""
+async def hitung_stok_kemasan(
+    db: AsyncSession, material_id: int, size_id: int, brand_id: int | None = None
+) -> int:
+    """Stok karung (lembar) per (jenis, ukuran, MERK) = beli − hilang − terpakai.
+
+    `brand_id`=None → cocokkan baris tanpa merk (data lama / byproduct).
+    Terpakai = jumlah karung packing (SKU dgn merk+jenis+ukuran sama)."""
+    def _brand(col):
+        return col.is_(None) if brand_id is None else col == brand_id
     beli = (
         await db.execute(
             select(func.coalesce(func.sum(PackagingPurchase.jumlah_lembar), 0)).where(
                 PackagingPurchase.packaging_material_id == material_id,
                 PackagingPurchase.package_size_id == size_id,
+                _brand(PackagingPurchase.brand_id),
             )
         )
     ).scalar_one()
@@ -139,10 +147,10 @@ async def hitung_stok_kemasan(db: AsyncSession, material_id: int, size_id: int) 
             select(func.coalesce(func.sum(PackagingLoss.jumlah_lembar), 0)).where(
                 PackagingLoss.packaging_material_id == material_id,
                 PackagingLoss.package_size_id == size_id,
+                _brand(PackagingLoss.brand_id),
             )
         )
     ).scalar_one()
-    # Terpakai untuk packing barang jadi (karung dari SKU material+ukuran ini).
     terpakai = (
         await db.execute(
             select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0))
@@ -150,14 +158,17 @@ async def hitung_stok_kemasan(db: AsyncSession, material_id: int, size_id: int) 
             .where(
                 ProductSku.packaging_material_id == material_id,
                 ProductSku.package_size_id == size_id,
+                _brand(ProductSku.brand_id),
             )
         )
     ).scalar_one()
     return int(beli) - int(hilang) - int(terpakai)
 
 
-async def hpp_kemasan_wavg(db: AsyncSession, material_id: int, size_id: int) -> float | None:
-    """Harga rata-rata tertimbang per lembar (dari pembelian yang ada harganya)."""
+async def hpp_kemasan_wavg(
+    db: AsyncSession, material_id: int, size_id: int, brand_id: int | None = None
+) -> float | None:
+    """Harga rata-rata tertimbang per lembar (per jenis, ukuran, MERK)."""
     nilai, lembar = (
         await db.execute(
             select(
@@ -166,6 +177,7 @@ async def hpp_kemasan_wavg(db: AsyncSession, material_id: int, size_id: int) -> 
             ).where(
                 PackagingPurchase.packaging_material_id == material_id,
                 PackagingPurchase.package_size_id == size_id,
+                PackagingPurchase.brand_id.is_(None) if brand_id is None else PackagingPurchase.brand_id == brand_id,
                 PackagingPurchase.harga_per_lembar.isnot(None),
             )
         )
@@ -180,17 +192,24 @@ class BeliKemasanResult:
     material_nama: str
     ukuran: int
     stok_baru: int
+    brand_nama: str | None = None
+
+
+# Jenis karung BERAS yang WAJIB bermerk (merk atau 'polos'). karung_pk & polos
+# (karung byproduct) tidak memakai dimensi merk.
+_KARUNG_BERMERK = {"biasa", "laminasi", "putih", "bekas"}
 
 
 async def beli_kemasan(
     db: AsyncSession, *, user: User, material_kode: str | None, ukuran: int | None,
-    jumlah: int | None, harga_per_lembar: float | None = None, tanggal=None, jam=None,
+    jumlah: int | None, brand_nama: str | None = None,
+    harga_per_lembar: float | None = None, tanggal=None, jam=None,
 ) -> BeliKemasanResult:
-    """Catat pembelian karung (staff/admin)."""
+    """Catat pembelian karung (staff/admin). Karung beras WAJIB bermerk."""
     if not material_kode or not ukuran or not jumlah:
         raise InventoryError(
             "Sebutkan jenis karung, ukuran, dan jumlah. Contoh: "
-            "`beli karung laminasi 25kg 2000 lembar harga 1500`"
+            "`beli karung LosPulen laminasi 25kg 2000 lembar harga 1500`"
         )
     material = await get_material(db, material_kode)
     if material is None:
@@ -198,10 +217,23 @@ async def beli_kemasan(
     size = await get_size(db, ukuran)
     if size is None:
         raise InventoryError(f"Ukuran {ukuran}kg tidak terdaftar.")
+    brand_id = None
+    if brand_nama:
+        brand = await get_brand(db, brand_nama)
+        if brand is None:
+            raise InventoryError(
+                f"Merk '{brand_nama}' tidak ada. Pakai merk terdaftar atau 'polos'."
+            )
+        brand_id = brand.id
+    elif material_kode in _KARUNG_BERMERK:
+        raise InventoryError(
+            "Sebutkan merk karung (atau `polos`). Contoh: "
+            "`beli karung LosPulen laminasi 25kg 1000 lembar`"
+        )
     now = input_time(tanggal, jam)
     p = PackagingPurchase(
         kode=await next_packaging_purchase_code(db, now.date()),
-        packaging_material_id=material.id, package_size_id=size.id,
+        packaging_material_id=material.id, package_size_id=size.id, brand_id=brand_id,
         jumlah_lembar=int(jumlah), harga_per_lembar=harga_per_lembar,
         tanggal=now.date(), waktu=now, input_by=user.id,
     )
@@ -210,12 +242,13 @@ async def beli_kemasan(
     await log_activity(
         db, table_name="packaging_purchases", record_id=p.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{p.kode} | {material.kode} {ukuran}kg x{jumlah} @ {harga_per_lembar}",
+        new_value=f"{p.kode} | {brand_nama or '-'} {material.kode} {ukuran}kg x{jumlah} @ {harga_per_lembar}",
     )
     await db.commit()
     await db.refresh(p)
-    stok = await hitung_stok_kemasan(db, material.id, size.id)
-    return BeliKemasanResult(purchase=p, material_nama=material.nama, ukuran=ukuran, stok_baru=stok)
+    stok = await hitung_stok_kemasan(db, material.id, size.id, brand_id)
+    return BeliKemasanResult(purchase=p, material_nama=material.nama, ukuran=ukuran,
+                             stok_baru=stok, brand_nama=brand_nama)
 
 
 def kemasan_gudang(material_kode: str | None) -> str:
@@ -229,7 +262,9 @@ async def laporan_stok_kemasan(db: AsyncSession) -> str:
     (karung PK di Gudang 1, sisanya di Gudang 2) + warn di bawah minimum."""
     combos = (
         await db.execute(
-            select(PackagingPurchase.packaging_material_id, PackagingPurchase.package_size_id)
+            select(PackagingPurchase.packaging_material_id,
+                   PackagingPurchase.package_size_id,
+                   PackagingPurchase.brand_id)
             .distinct()
         )
     ).all()
@@ -237,13 +272,15 @@ async def laporan_stok_kemasan(db: AsyncSession) -> str:
         return "📦 Belum ada stok kemasan (belum ada pembelian karung)."
     minimum = settings.min_kemasan_lembar
     per_gudang: dict[str, list[str]] = {}
-    for mat_id, size_id in combos:
+    for mat_id, size_id, brand_id in combos:
         mat = await db.get(PackagingMaterial, mat_id)
         size = await db.get(PackageSize, size_id)
-        stok = await hitung_stok_kemasan(db, mat_id, size_id)
+        brand = await db.get(Brand, brand_id) if brand_id else None
+        stok = await hitung_stok_kemasan(db, mat_id, size_id, brand_id)
         warn = "  ⚠️ menipis" if stok <= minimum else ""
+        merk = f"{brand.nama} " if brand else ""
         baris = (
-            f"• {mat.nama if mat else '-'} {size.ukuran_kg if size else '-'}kg: "
+            f"• {merk}{mat.nama if mat else '-'} {size.ukuran_kg if size else '-'}kg: "
             f"{stok:,} lembar{warn}".replace(",", ".")
         )
         per_gudang.setdefault(kemasan_gudang(mat.kode if mat else None), []).append(baris)

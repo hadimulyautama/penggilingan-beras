@@ -97,6 +97,8 @@ class PackagingPurchase(Base, TimestampMixin):
     package_size_id: Mapped[int] = mapped_column(
         ForeignKey("package_sizes.id"), nullable=False
     )
+    # Merk karung (house/polos). NULL = data lama sebelum merk dilacak.
+    brand_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id"))
     jumlah_lembar: Mapped[int] = mapped_column(Integer, nullable=False)
     harga_per_lembar: Mapped[float | None] = mapped_column(Numeric(12, 2))
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
@@ -116,6 +118,7 @@ class PackagingLoss(Base, TimestampMixin):
     package_size_id: Mapped[int] = mapped_column(
         ForeignKey("package_sizes.id"), nullable=False
     )
+    brand_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id"))
     jumlah_lembar: Mapped[int] = mapped_column(Integer, nullable=False)
     alasan: Mapped[str | None] = mapped_column(String(120))
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
