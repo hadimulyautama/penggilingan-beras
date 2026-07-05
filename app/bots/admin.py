@@ -34,6 +34,7 @@ from app.bots.common import (
     reset_verif,
     unregistered_reply,
 )
+from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
@@ -733,9 +734,29 @@ async def handle_message(message: Message) -> None:
                 return
             # bukan ya/batal → lanjut proses sebagai pesan baru di bawah.
 
-        # ── Semua handler perintah deterministik (tulis) ──
-        if await _try_command_handlers(message, db, user, text, session):
-            return
+        # ── Router niat SATU-panggilan: klasifikasi → handler domainnya saja
+        #    (bukan mencoba semua parser). Fallback aman ke chain penuh. ──
+        domain = await route_domain(text)
+        _CMD = {
+            "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
+            "milling_qc": lambda: _handle_milling_admin(message, db, user, text, session),
+            "gudang2": lambda: _handle_gudang2_admin(message, db, user, text),
+            "kemasan": lambda: _handle_kemasan(message, db, user, text),
+            "barang_jadi": lambda: _handle_barang_jadi_admin(message, db, user, text),
+            "barang_keluar": lambda: _handle_keluar(message, db, user, text),
+            "kelola_user": lambda: _handle_user_admin(message, db, user, text),
+            "undo": lambda: _handle_undo_admin(message, db, user, text),
+        }
+        handler = _CMD.get(domain)
+        if handler is not None:
+            if await handler():
+                return
+            # Router pilih domain perintah tapi handler menolak (klasifikasi
+            # meleset) → coba chain penuh sekali sebagai jaring pengaman.
+            if await _try_command_handlers(message, db, user, text, session):
+                return
+        # domain 'lainnya'/'verifikasi_harga_gabah'/domain operator → lanjut ke
+        # blok verifikasi harga + jalur baca + agent di bawah.
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena
         #    "gabah pertama harganya 7500/kg" itu PERINTAH, bukan pertanyaan ──
