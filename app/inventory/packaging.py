@@ -218,8 +218,15 @@ async def beli_kemasan(
     return BeliKemasanResult(purchase=p, material_nama=material.nama, ukuran=ukuran, stok_baru=stok)
 
 
+def kemasan_gudang(material_kode: str | None) -> str:
+    """Lokasi fisik kemasan: karung PK selalu di GUDANG 1 (membungkus PK), semua
+    kemasan lain di GUDANG 2 (mengemas beras jadi)."""
+    return "Gudang 1" if (material_kode or "").lower() == "karung_pk" else "Gudang 2"
+
+
 async def laporan_stok_kemasan(db: AsyncSession) -> str:
-    """Stok semua kombinasi karung yang pernah dibeli (+ warn di bawah minimum)."""
+    """Stok kombinasi karung yang pernah dibeli, DIKELOMPOKKAN per gudang
+    (karung PK di Gudang 1, sisanya di Gudang 2) + warn di bawah minimum."""
     combos = (
         await db.execute(
             select(PackagingPurchase.packaging_material_id, PackagingPurchase.package_size_id)
@@ -228,12 +235,21 @@ async def laporan_stok_kemasan(db: AsyncSession) -> str:
     ).all()
     if not combos:
         return "📦 Belum ada stok kemasan (belum ada pembelian karung)."
-    lines = ["📦 Stok kemasan:"]
     minimum = settings.min_kemasan_lembar
+    per_gudang: dict[str, list[str]] = {}
     for mat_id, size_id in combos:
         mat = await db.get(PackagingMaterial, mat_id)
         size = await db.get(PackageSize, size_id)
         stok = await hitung_stok_kemasan(db, mat_id, size_id)
         warn = "  ⚠️ menipis" if stok <= minimum else ""
-        lines.append(f"• {mat.nama if mat else '-'} {size.ukuran_kg if size else '-'}kg: {stok:,} lembar{warn}".replace(",", "."))
+        baris = (
+            f"• {mat.nama if mat else '-'} {size.ukuran_kg if size else '-'}kg: "
+            f"{stok:,} lembar{warn}".replace(",", ".")
+        )
+        per_gudang.setdefault(kemasan_gudang(mat.kode if mat else None), []).append(baris)
+    lines = ["📦 Stok kemasan:"]
+    for gudang in ("Gudang 2", "Gudang 1"):
+        if gudang in per_gudang:
+            lines.append(f"\n🏬 {gudang}:")
+            lines.extend(per_gudang[gudang])
     return "\n".join(lines)
