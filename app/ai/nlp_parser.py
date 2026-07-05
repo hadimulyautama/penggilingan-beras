@@ -1,62 +1,20 @@
-"""Parser bahasa natural -> data pembelian gabah terstruktur (via Claude)."""
+"""Facade parser NLP: parser bersama/admin + re-export parser domain G1/G2.
+
+Konsumen tetap `from app.ai.nlp_parser import parse_X / ParsedX`. Definisi
+parser domain tinggal di app.gudang1.nlp / app.gudang2.nlp; infra di app.ai.base.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from datetime import date, datetime, time, timedelta
+from dataclasses import dataclass
+from datetime import date
 
-from app.ai.claude_client import get_client
-from app.database import now_local
-
-_HARI_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
-
-
-def _date_context() -> str:
-    """Tabel tanggal 14 hari terakhir agar Claude memetakan rujukan hari
-    (mis. 'kamis kemarin') lewat LOOKUP, bukan aritmetika (yang rawan salah)."""
-    today = now_local().date()
-    baris = []
-    for i in range(14):
-        d = today - timedelta(days=i)
-        tag = " (hari ini)" if i == 0 else (" (kemarin)" if i == 1 else "")
-        baris.append(f"{d:%Y-%m-%d} {_HARI_ID[d.weekday()]}{tag}")
-    return "\n".join(baris)
-
-
-def _parse_iso_date(v) -> date | None:
-    """Ubah 'YYYY-MM-DD' dari Claude menjadi objek date; None bila tak valid."""
-    if not isinstance(v, str) or not v.strip():
-        return None
-    try:
-        return date.fromisoformat(v.strip()[:10])
-    except ValueError:
-        return None
-
-
-def _parse_hhmm(v) -> time | None:
-    """Ubah 'HH:MM' (24 jam) dari Claude menjadi objek time; None bila tak valid."""
-    if not isinstance(v, str) or not v.strip():
-        return None
-    s = v.strip().replace(".", ":")
-    try:
-        return time.fromisoformat(s if len(s) > 5 else s[:5])
-    except ValueError:
-        try:
-            hh, mm = s.split(":")[:2]
-            return time(int(hh), int(mm))
-        except (ValueError, IndexError):
-            return None
+from app.ai.base import _invoke_tool, _parse_iso_date
 from app.ai.tools import (
     CARI_KODE,
-    CATAT_PEMBELIAN_GABAH,
     KELOLA_USER,
     TANYA_ANALITIK,
-    PROSES_GUDANG2,
-    PROSES_MILLING,
     PROSES_MILLING_ADMIN,
-    PROSES_PENGERINGAN,
-    PROSES_SILO,
     PROSES_TRANSFER,
-    SYSTEM_PROMPT,
     TANYA_DETAIL,
     TANYA_JAM,
     TANYA_LAPORAN_GABAH,
@@ -65,93 +23,20 @@ from app.ai.tools import (
     UNDO_TERAKHIR,
     VERIFIKASI_HARGA_GABAH,
 )
-from app.config import settings
 
-
-@dataclass
-class ParsedPurchase:
-    is_pembelian_gabah: bool = False
-    nama_supplier: str | None = None
-    berat_kg: float | None = None
-    kondisi_gabah: str | None = None
-    no_polisi_truk: str | None = None
-    kadar_air_awal_persen: float | None = None
-    tanggal: date | None = None
-    jam: time | None = None
-
-    def merge(self, other: "ParsedPurchase") -> "ParsedPurchase":
-        """Gabungkan hasil koreksi: nilai baru (non-None) menimpa nilai lama."""
-        data = asdict(self)
-        for k, v in asdict(other).items():
-            if k == "is_pembelian_gabah":
-                continue
-            if v is not None:
-                data[k] = v
-        return ParsedPurchase(**data)
-
-
-async def _invoke_tool(messages: list[dict], tool: dict) -> dict:
-    """Panggil Claude dengan forced tool-use dan kembalikan input tool (dict)."""
-    client = get_client()
-    system = SYSTEM_PROMPT + (
-        "\n\nKonteks waktu — tanggal 14 hari terakhir (pakai LOOKUP tabel ini, "
-        "jangan menghitung manual):\n" + _date_context() + "\n\n"
-        "Untuk rujukan tanggal spesifik/relatif (mis. 'kemarin', 'senin "
-        "kemarin', 'kamis lalu', 'tanggal 1 juli', '2 hari lalu'), CARI di tabel "
-        "lalu isikan tanggal ABSOLUT format YYYY-MM-DD ke field 'tanggal' bila "
-        "tool menyediakannya. '[hari] kemarin'/'[hari] lalu' = baris PALING ATAS "
-        "(terbaru) dengan hari itu. Nama bulan: Januari=01 … Juli=07 … Des=12."
-    )
-    resp = await client.messages.create(
-        model=settings.claude_model,
-        max_tokens=1024,
-        system=system,
-        tools=[tool],
-        tool_choice={"type": "tool", "name": tool["name"]},
-        messages=messages,
-    )
-    for block in resp.content:
-        if block.type == "tool_use" and block.name == tool["name"]:
-            return dict(block.input)
-    return {}
-
-
-async def _call_claude(messages: list[dict]) -> ParsedPurchase:
-    data = await _invoke_tool(messages, CATAT_PEMBELIAN_GABAH)
-    return ParsedPurchase(
-        is_pembelian_gabah=bool(data.get("is_pembelian_gabah", False)),
-        nama_supplier=data.get("nama_supplier"),
-        berat_kg=data.get("berat_kg"),
-        kondisi_gabah=data.get("kondisi_gabah"),
-        no_polisi_truk=data.get("no_polisi_truk"),
-        kadar_air_awal_persen=data.get("kadar_air_awal_persen"),
-        tanggal=_parse_iso_date(data.get("tanggal")),
-        jam=_parse_hhmm(data.get("jam")),
-    )
-
-
-async def parse_purchase(text: str) -> ParsedPurchase:
-    """Ekstrak data pembelian dari satu pesan operator."""
-    return await _call_claude([{"role": "user", "content": text}])
-
-
-async def apply_correction(current: ParsedPurchase, text: str) -> ParsedPurchase:
-    """Terapkan koreksi operator ke draft yang sudah ada.
-
-    Contoh: draft berat 8000, operator bilang 'eh salah 9 ton' -> 9000.
-    """
-    context = (
-        "Draft pembelian gabah saat ini:\n"
-        f"- supplier: {current.nama_supplier}\n"
-        f"- berat_kg: {current.berat_kg}\n"
-        f"- kondisi: {current.kondisi_gabah}\n"
-        f"- no_polisi: {current.no_polisi_truk}\n"
-        f"- kadar_air: {current.kadar_air_awal_persen}\n\n"
-        f"Operator mengoreksi: \"{text}\"\n"
-        "Kembalikan HANYA field yang berubah (sisanya null)."
-    )
-    correction = await _call_claude([{"role": "user", "content": context}])
-    return current.merge(correction)
+# Re-export parser domain (facade) — biar impor lama tetap jalan.
+from app.gudang1.nlp import (  # noqa: F401
+    ParsedMilling,
+    ParsedPengeringan,
+    ParsedPurchase,
+    ParsedSilo,
+    apply_correction,
+    parse_milling,
+    parse_pengeringan,
+    parse_purchase,
+    parse_silo,
+)
+from app.gudang2.nlp import ParsedGudang2, parse_gudang2  # noqa: F401
 
 
 @dataclass
@@ -166,74 +51,22 @@ class ParsedVerification:
     terbaru: bool = False
 
 
-@dataclass
-class ParsedPengeringan:
-    intent: str = "bukan_pengeringan"
-    kode_batch_list: list[str] | None = None
-    batch_urutan_list: list[int] | None = None
-    semua_batch: bool = False
-    kode_lot: str | None = None
-    kadar_air_indikator: float | None = None
-    kadar_air_tes_manual: float | None = None
-    periode: str | None = None
-    catatan: str | None = None
-    tanggal: date | None = None
-    jam: time | None = None
-
-
-async def parse_pengeringan(text: str) -> ParsedPengeringan:
-    """Klasifikasi & ekstraksi perintah pengeringan (Gudang 1)."""
-    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_PENGERINGAN)
-    kodes = data.get("kode_batch_list")
-    if isinstance(kodes, list):
-        kodes = [k.upper().strip() for k in kodes if isinstance(k, str) and k.strip()]
-    else:
-        kodes = None
-    urutan = data.get("batch_urutan_list")
-    if isinstance(urutan, list):
-        urutan = [int(u) for u in urutan if isinstance(u, (int, float))]
-        urutan = urutan or None
-    else:
-        urutan = None
-    lot = data.get("kode_lot")
-    return ParsedPengeringan(
-        intent=data.get("intent", "bukan_pengeringan"),
-        kode_batch_list=kodes,
-        batch_urutan_list=urutan,
-        semua_batch=bool(data.get("semua_batch", False)),
-        kode_lot=lot.upper().strip() if isinstance(lot, str) else None,
-        kadar_air_indikator=data.get("kadar_air_indikator"),
-        kadar_air_tes_manual=data.get("kadar_air_tes_manual"),
-        periode=data.get("periode"),
-        catatan=data.get("catatan"),
-        tanggal=_parse_iso_date(data.get("tanggal")),
-        jam=_parse_hhmm(data.get("jam")),
+async def parse_verification(text: str) -> ParsedVerification:
+    """Ekstrak data verifikasi harga gabah dari pesan staff/admin."""
+    data = await _invoke_tool(
+        [{"role": "user", "content": text}], VERIFIKASI_HARGA_GABAH
     )
-
-
-@dataclass
-class ParsedMilling:
-    intent: str = "bukan_milling"
-    nama_silo: str | None = None
-    kode_proses: str | None = None
-    berat_kg: float | None = None
-    tujuan: str | None = None
-    tanggal: date | None = None
-    jam: time | None = None
-
-
-async def parse_milling(text: str) -> ParsedMilling:
-    """Klasifikasi & ekstraksi perintah milling / pecah kulit (Gudang 1)."""
-    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_MILLING)
-    kode = data.get("kode_proses")
-    return ParsedMilling(
-        intent=data.get("intent", "bukan_milling"),
-        nama_silo=_silo_letter(data.get("nama_silo")),
-        kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
-        berat_kg=data.get("berat_kg"),
-        tujuan=data.get("tujuan"),
-        tanggal=_parse_iso_date(data.get("tanggal")),
-        jam=_parse_hhmm(data.get("jam")),
+    kode = data.get("kode_batch")
+    urut = data.get("urutan")
+    sup = data.get("supplier_nama")
+    return ParsedVerification(
+        is_verifikasi_harga=bool(data.get("is_verifikasi_harga", False)),
+        kode_batch=kode.upper().strip() if isinstance(kode, str) else None,
+        metode_harga=data.get("metode_harga"),
+        nilai_rupiah=data.get("nilai_rupiah"),
+        urutan=int(urut) if isinstance(urut, (int, float)) else None,
+        supplier_nama=sup.strip() if isinstance(sup, str) and sup.strip() else None,
+        terbaru=bool(data.get("terbaru", False)),
     )
 
 
@@ -246,7 +79,7 @@ class ParsedTransfer:
 
 
 async def parse_transfer(text: str) -> ParsedTransfer:
-    """Klasifikasi & ekstraksi perintah transfer internal G1->G2."""
+    """Klasifikasi & ekstraksi perintah transfer internal G1->G2 (bridge)."""
     data = await _invoke_tool([{"role": "user", "content": text}], PROSES_TRANSFER)
     kode = data.get("kode_proses")
     return ParsedTransfer(
@@ -254,46 +87,6 @@ async def parse_transfer(text: str) -> ParsedTransfer:
         kode_proses=kode.upper().strip() if isinstance(kode, str) else None,
         lokasi_tujuan=data.get("lokasi_tujuan"),
         berat_kg=data.get("berat_kg"),
-    )
-
-
-@dataclass
-class ParsedGudang2:
-    intent: str = "bukan_gudang2"
-    kode: str | None = None
-    nama_supplier: str | None = None
-    berat_kg: float | None = None
-    kadar_air: float | None = None
-    broken_persen: float | None = None
-    tujuan: str | None = None
-    nama_silo: str | None = None
-    keputusan: str | None = None
-    potongan_kg: float | None = None
-    harga_per_kg: float | None = None
-    total_harga: float | None = None
-    tanggal: date | None = None
-    jam: time | None = None
-
-
-async def parse_gudang2(text: str) -> ParsedGudang2:
-    """Klasifikasi & ekstraksi aksi Gudang 2 (penyosohan — PK masuk/silo/tumpukan)."""
-    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_GUDANG2)
-    kode = data.get("kode")
-    return ParsedGudang2(
-        intent=data.get("intent", "bukan_gudang2"),
-        kode=kode.upper().strip() if isinstance(kode, str) else None,
-        nama_supplier=data.get("nama_supplier"),
-        berat_kg=data.get("berat_kg"),
-        kadar_air=data.get("kadar_air"),
-        broken_persen=data.get("broken_persen"),
-        tujuan=data.get("tujuan"),
-        nama_silo=_silo_letter(data.get("nama_silo")),
-        keputusan=data.get("keputusan"),
-        potongan_kg=data.get("potongan_kg"),
-        harga_per_kg=data.get("harga_per_kg"),
-        total_harga=data.get("total_harga"),
-        tanggal=_parse_iso_date(data.get("tanggal")),
-        jam=_parse_hhmm(data.get("jam")),
     )
 
 
@@ -321,40 +114,6 @@ async def parse_milling_admin(text: str) -> ParsedMillingAdmin:
         susut_persen=data.get("susut_persen"),
         kondisi=kondisi.upper().strip() if isinstance(kondisi, str) else None,
         berat_output_kg=data.get("berat_output_kg"),
-    )
-
-
-@dataclass
-class ParsedSilo:
-    intent: str = "bukan_silo"
-    nama_silo: str | None = None
-    kode_lot: str | None = None
-    kode_batch: str | None = None
-    tanggal: date | None = None
-    jam: time | None = None
-
-
-def _silo_letter(v) -> str | None:
-    """Hanya terima 'A' atau 'B'; nilai lain (placeholder AI) -> None."""
-    if isinstance(v, str):
-        s = v.upper().strip()
-        if s in ("A", "B"):
-            return s
-    return None
-
-
-async def parse_silo(text: str) -> ParsedSilo:
-    """Klasifikasi & ekstraksi perintah silo Gudang 1."""
-    data = await _invoke_tool([{"role": "user", "content": text}], PROSES_SILO)
-    lot = data.get("kode_lot")
-    batch = data.get("kode_batch")
-    return ParsedSilo(
-        intent=data.get("intent", "bukan_silo"),
-        nama_silo=_silo_letter(data.get("nama_silo")),
-        kode_lot=lot.upper().strip() if isinstance(lot, str) else None,
-        kode_batch=batch.upper().strip() if isinstance(batch, str) else None,
-        tanggal=_parse_iso_date(data.get("tanggal")),
-        jam=_parse_hhmm(data.get("jam")),
     )
 
 
@@ -535,23 +294,4 @@ async def parse_detail(text: str) -> ParsedDetail:
         kondisi=data.get("kondisi"),
         terbaru=bool(data.get("terbaru", False)),
         tanggal=_parse_iso_date(data.get("tanggal")),
-    )
-
-
-async def parse_verification(text: str) -> ParsedVerification:
-    """Ekstrak data verifikasi harga gabah dari pesan staff/admin."""
-    data = await _invoke_tool(
-        [{"role": "user", "content": text}], VERIFIKASI_HARGA_GABAH
-    )
-    kode = data.get("kode_batch")
-    urut = data.get("urutan")
-    sup = data.get("supplier_nama")
-    return ParsedVerification(
-        is_verifikasi_harga=bool(data.get("is_verifikasi_harga", False)),
-        kode_batch=kode.upper().strip() if isinstance(kode, str) else None,
-        metode_harga=data.get("metode_harga"),
-        nilai_rupiah=data.get("nilai_rupiah"),
-        urutan=int(urut) if isinstance(urut, (int, float)) else None,
-        supplier_nama=sup.strip() if isinstance(sup, str) and sup.strip() else None,
-        terbaru=bool(data.get("terbaru", False)),
     )
