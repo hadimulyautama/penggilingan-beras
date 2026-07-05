@@ -30,7 +30,7 @@ from app.models import (
 from app.services.activity_log import log_activity
 from app.services.codegen import next_pk_purchase_code, next_tumpukan_move_code
 from app.services.notification import create_notification
-from app.services.purchase import find_or_create_supplier
+from app.gudang1.services.purchase import find_or_create_supplier
 
 _TUJUAN_SILO = {"silo_a": "A", "silo_b": "B"}
 

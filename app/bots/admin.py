@@ -42,13 +42,13 @@ from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.silo_flow import maybe_answer_silo_report
 from app.database import BackdateError, SessionLocal
-from app.services.gudang2 import (
+from app.gudang2.service import (
     Gudang2Error,
     create_pk_purchase,
     verify_pk_purchase,
 )
 from app.models import User, Warehouse
-from app.services.milling import (
+from app.gudang1.services.milling import (
     MillingError,
     log_qc_milling,
     verify_milling_output,

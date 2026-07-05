@@ -11,7 +11,7 @@ from aiogram.types import Message
 
 from app.ai.nlp_parser import parse_silo
 from app.database import SessionLocal
-from app.services.silo import laporan_silo
+from app.gudang1.services.silo import laporan_silo
 
 log = logging.getLogger("bots.silo")
 

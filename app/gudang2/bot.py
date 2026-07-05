@@ -27,7 +27,7 @@ from app.bots.silo_flow import maybe_answer_silo_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import BackdateError, SessionLocal
-from app.services.gudang2 import (
+from app.gudang2.service import (
     Gudang2Error,
     laporan_stok_gudang2,
     masukkan_pk_luar,

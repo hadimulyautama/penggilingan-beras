@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import SessionLocal
 from app.models import User
-from app.services.drying import check_late_drying
+from app.gudang1.services.drying import check_late_drying
 
 log = logging.getLogger("scheduler")
 

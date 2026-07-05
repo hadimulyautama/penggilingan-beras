@@ -7,7 +7,9 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.types import ErrorEvent
 
-from app.bots import admin, gudang1, gudang2
+from app.bots import admin
+from app.gudang1 import bot as gudang1
+from app.gudang2 import bot as gudang2
 from app.config import settings
 
 log = logging.getLogger("bots")

@@ -241,8 +241,8 @@ async def detail_query(
     ctx_mil: str | None = None,
     financial: bool = True,
 ) -> str:
-    from app.services.drying import laporan_pengeringan
-    from app.services.milling import laporan_milling
+    from app.gudang1.services.drying import laporan_pengeringan
+    from app.gudang1.services.milling import laporan_milling
 
     if kode:
         if kode.startswith("LOT"):
@@ -293,8 +293,8 @@ async def detail_query(
 # ─────────────────────────── Status berjalan ───────────────────────────
 async def status_gudang1(db: AsyncSession) -> str:
     """Gabungan semua proses yang sedang berlangsung di Gudang 1."""
-    from app.services.drying import dryer_load_kg, laporan_pengeringan
-    from app.services.milling import laporan_milling
+    from app.gudang1.services.drying import dryer_load_kg, laporan_pengeringan
+    from app.gudang1.services.milling import laporan_milling
     from app.services.transfer import laporan_pk_siap_transfer
 
     # Milling berjalan?

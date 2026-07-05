@@ -38,7 +38,7 @@ from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import BackdateError, SessionLocal
-from app.services.drying import (
+from app.gudang1.services.drying import (
     DryingError,
     active_drying_lot,
     add_batches_to_lot,
@@ -52,11 +52,11 @@ from app.services.drying import (
     sole_cooling_lot_kode,
 )
 from app.services.undo import UndoError, undo_last
-from app.services.purchase import (
+from app.gudang1.services.purchase import (
     DailyLimitReached,
     create_purchase_batch,
 )
-from app.services.milling import (
+from app.gudang1.services.milling import (
     MillingError,
     finish_milling,
     laporan_milling,
@@ -65,7 +65,7 @@ from app.services.milling import (
     start_milling,
     stok_pk_gudang1,
 )
-from app.services.silo import (
+from app.gudang1.services.silo import (
     SiloError,
     keluar_silo,
     laporan_silo,

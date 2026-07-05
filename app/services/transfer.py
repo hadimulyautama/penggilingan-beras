@@ -18,7 +18,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
-from app.services.milling import pk_jenis
+from app.gudang1.services.milling import pk_jenis
 
 _LOKASI = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
 

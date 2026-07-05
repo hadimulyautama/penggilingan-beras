@@ -21,9 +21,9 @@ from app.models import (
     SiloStorage,
     Supplier,
 )
-from app.services.drying import _latest_log
-from app.services.milling import _pk_breakdown, _latest_progress, pk_jenis
-from app.services.silo import (
+from app.gudang1.services.drying import _latest_log
+from app.gudang1.services.milling import _pk_breakdown, _latest_progress, pk_jenis
+from app.gudang1.services.silo import (
     _active_storage,
     _g1_warehouse_id,
     _lot_kg,
