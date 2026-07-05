@@ -739,7 +739,7 @@ async def handle_message(message: Message) -> None:
         domain = await route_domain(text)
         _CMD = {
             "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
-            "milling_qc": lambda: _handle_milling_admin(message, db, user, text, session),
+            "milling": lambda: _handle_milling_admin(message, db, user, text, session),
             "gudang2": lambda: _handle_gudang2_admin(message, db, user, text),
             "kemasan": lambda: _handle_kemasan(message, db, user, text),
             "barang_jadi": lambda: _handle_barang_jadi_admin(message, db, user, text),

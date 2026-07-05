@@ -34,6 +34,7 @@ from app.bots.common import (
     handle_shared_contact,
     unregistered_reply,
 )
+from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.lookup_flow import maybe_answer_lookup
@@ -257,6 +258,22 @@ async def _try_g2_commands(message: Message, db, user, text: str) -> bool:
     return False
 
 
+async def _dispatch_g2(message: Message, db, user, text: str) -> bool:
+    """Router SATU-panggilan → handler domainnya saja; fallback ke cascade penuh."""
+    domain = await route_domain(text)
+    direct = {
+        "penyosohan": lambda: _handle_penyosohan(message, db, user, text),
+        "barang_jadi": lambda: _handle_barang_jadi(message, db, user, text),
+        "gudang2": lambda: _handle_gudang2(message, db, user, text),
+        # 'terima TRF-..' & stok G2 ditangani _handle_gudang2 juga.
+        "transfer_pk": lambda: _handle_gudang2(message, db, user, text),
+    }
+    h = direct.get(domain)
+    if h is not None and await h():
+        return True
+    return await _try_g2_commands(message, db, user, text)
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -281,8 +298,8 @@ async def handle_message(message: Message) -> None:
                 return
             # bukan ya/batal → proses sebagai pesan baru di bawah.
 
-        # Aksi Gudang 2 (tulis) — cek dulu sebelum flow baca.
-        if await _try_g2_commands(message, db, user, text):
+        # Aksi Gudang 2 (tulis) — router SATU-panggilan → handler domainnya.
+        if await _dispatch_g2(message, db, user, text):
             return
         if await maybe_answer_transfer(message, text, financial=fin):
             return

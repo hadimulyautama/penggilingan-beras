@@ -28,6 +28,7 @@ from app.bots.common import (
     reset_draft,
     unregistered_reply,
 )
+from app.ai.router import route_domain
 from app.bots.agent_flow import agent_confirm_pending, maybe_answer_agent
 from app.bots.detail_flow import maybe_answer_detail
 from app.bots.jam_flow import maybe_answer_jam
@@ -371,9 +372,29 @@ async def _try_operator_commands(message: Message, db, user, text: str, session)
     return False
 
 
+async def _dispatch_operator(message: Message, db, user, text: str, session) -> bool:
+    """Router SATU-panggilan → handler domainnya saja; fallback ke cascade penuh.
+
+    Memangkas 'coba semua parser' (mahal, apalagi dgn Sonnet) jadi ~1 klasifikasi
+    + 1 handler. Bila router meleset/domain tak dipetakan → cascade penuh (aman)."""
+    domain = await route_domain(text)
+    direct = {
+        "pengeringan": lambda: _handle_pengeringan(message, db, user, text, session),
+        "silo_g1": lambda: _handle_silo(message, db, user, text, session),
+        "milling": lambda: _handle_milling(message, db, user, text, session),
+        "undo": lambda: _handle_undo(message, db, user, text),
+    }
+    h = direct.get(domain)
+    if h is not None and await h():
+        return True
+    # pembelian_gabah, 'selesai' ambigu, domain lain, atau handler menolak →
+    # cascade penuh (mencakup pembelian & bare-finish).
+    return await _try_operator_commands(message, db, user, text, session)
+
+
 async def _process_fresh(message: Message, db, user, text: str, session) -> None:
     """Proses pesan baru: pembelian, pengeringan, silo, milling, atau tanya-data."""
-    if await _try_operator_commands(message, db, user, text, session):
+    if await _dispatch_operator(message, db, user, text, session):
         return
     fin = can_see_financials(user)
     if await maybe_answer_transfer(message, text, financial=fin):

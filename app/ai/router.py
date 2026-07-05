@@ -16,7 +16,7 @@ from app.config import settings
 # bot lanjut ke jalur baca + agent.
 DOMAINS = [
     "verifikasi_harga_gabah",  # tetapkan/verifikasi harga gabah (GB-...)
-    "milling_qc",              # QC / verifikasi output milling (MIL-...)
+    "milling",                 # giling/hasil PK/selesai (operator) + QC/verif output (admin)
     "transfer_pk",             # kirim/terima PK Gudang 1 -> Gudang 2 (TRF-...)
     "gudang2",                 # beli PK luar, QC PK luar, stok/silo Gudang 2
     "penyosohan",              # mulai/hasil/selesai penyosohan (POL-...)
@@ -54,8 +54,12 @@ _ROUTE_TOOL = {
                     "TIDAK (itu penyosohan? bukan) — 'giling/hasil PK' Gudang 1 = "
                     "milling_qc hanya utk QC/verifikasi output; mulai giling & hasil "
                     "PK Gudang 1 tetap di operator (pembelian? tidak). Gunakan: "
-                    "'terima TRF-..'->transfer_pk; 'beli PK dari..'/'stok gudang 2'/"
-                    "'stok silo A'->gudang2; 'QC PKB-..'->gudang2; 'mulai penyosohan'/"
+                    "'giling silo A'/'hasil PK 3 ton'/'MIL-.. selesai'/'QC MIL-..'/"
+                    "'verifikasi output MIL-..'->milling; 'keringkan LOT/GB-..'/"
+                    "'selesai pengeringan'->pengeringan; 'masukkan LOT-.. ke silo A'/"
+                    "'pindah gabah ke silo B'->silo_g1; 'terima TRF-..'->transfer_pk; "
+                    "'beli PK dari..'/'stok gudang 2'/'stok silo A'/'masukkan PKB-.. ke "
+                    "silo'/'pindah tumpukan'/'QC PKB-..'->gudang2; 'mulai penyosohan'/"
                     "'hasil premium 5 ton'/'POL-.. selesai'->penyosohan; 'beli karung'"
                     "->kemasan; 'packing..'/'bekatul..'->barang_jadi; 'kirim..'/'jual "
                     "PK..'->barang_keluar; 'verifikasi GB-.. 7500'->verifikasi_harga_"
