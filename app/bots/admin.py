@@ -46,6 +46,7 @@ from app.database import BackdateError, SessionLocal
 from app.gudang2.service import (
     Gudang2Error,
     create_pk_purchase,
+    laporan_stok_gudang2,
     verify_pk_purchase,
 )
 from app.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
@@ -475,10 +476,17 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
     except Exception:
         log.exception("parse_gudang2 gagal")
         return False
-    if p.intent not in ("beli_pk_luar", "verifikasi_pk_luar"):
+    if p.intent not in ("beli_pk_luar", "verifikasi_pk_luar", "laporan_stok_g2"):
         return False
     try:
-        if p.intent == "beli_pk_luar":
+        if p.intent == "laporan_stok_g2":
+            # Pertanyaan stok = jawaban DETERMINISTIK (bukan agent/LLM).
+            await message.answer(
+                await laporan_stok_gudang2(
+                    db, p.nama_silo, financial=can_see_financials(user)
+                )
+            )
+        elif p.intent == "beli_pk_luar":
             r = await create_pk_purchase(
                 db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
                 kadar_air=p.kadar_air, no_polisi=p.no_polisi,
