@@ -47,6 +47,12 @@ from app.gudang2.service import (
     create_pk_purchase,
     verify_pk_purchase,
 )
+from app.inventory.nlp import parse_kemasan
+from app.inventory.packaging import (
+    InventoryError,
+    beli_kemasan,
+    laporan_stok_kemasan,
+)
 from app.models import User, Warehouse
 from app.gudang1.services.milling import (
     MillingError,
@@ -496,6 +502,36 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _handle_kemasan(message: Message, db, user, text: str) -> bool:
+    """Beli karung + tanya stok kemasan (staff/admin). True jika ditangani."""
+    try:
+        p = await parse_kemasan(text)
+    except Exception:
+        log.exception("parse_kemasan gagal")
+        return False
+    if p.intent == "bukan_kemasan":
+        return False
+    try:
+        if p.intent == "beli_kemasan":
+            r = await beli_kemasan(
+                db, user=user, material_kode=p.material, ukuran=p.ukuran_kg,
+                jumlah=p.jumlah_lembar, harga_per_lembar=p.harga_per_lembar,
+                tanggal=p.tanggal, jam=p.jam,
+            )
+            jml = f"{r.purchase.jumlah_lembar:,}".replace(",", ".")
+            stok = f"{r.stok_baru:,}".replace(",", ".")
+            await message.answer(
+                f"✓ Beli karung *{r.material_nama} {r.ukuran}kg* × {jml} lembar "
+                f"({r.purchase.kode}).\n• Stok kini: {stok} lembar",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "laporan_kemasan":
+            await message.answer(await laporan_stok_kemasan(db))
+    except InventoryError as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan kemasan.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -581,6 +617,10 @@ async def handle_message(message: Message) -> None:
 
         # ── Gudang 2: beli PK luar + QC/verifikasi PK luar (staff/admin) ──
         if await _handle_gudang2_admin(message, db, user, text):
+            return
+
+        # ── Kemasan/karung: beli + stok (staff/admin) ──
+        if await _handle_kemasan(message, db, user, text):
             return
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena

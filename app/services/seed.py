@@ -12,7 +12,16 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Dryer, Silo, User, Warehouse
+from app.models import (
+    Brand,
+    Dryer,
+    PackageSize,
+    PackagingMaterial,
+    RiceQualityStandard,
+    Silo,
+    User,
+    Warehouse,
+)
 
 log = logging.getLogger("app.seed")
 
@@ -95,6 +104,53 @@ async def seed_master() -> None:
                     )
                 )
                 created.append(f"admin '{settings.admin_name}'")
+
+        # ── Master inventory: standar mutu, merk, jenis karung, ukuran ──
+        _STANDARDS = [
+            ("sayur", "Sayur", 1), ("medium", "Medium", 2),
+            ("medsuper", "MedSuper", 3), ("premium", "Premium", 4),
+        ]
+        for kode, nama, urut in _STANDARDS:
+            ada = (
+                await db.execute(select(RiceQualityStandard).where(RiceQualityStandard.kode == kode))
+            ).scalars().first()
+            if not ada:
+                db.add(RiceQualityStandard(kode=kode, nama=nama, urutan=urut))
+                created.append(f"standar {nama}")
+
+        _BRANDS = [
+            ("Imbiss", "house"), ("LosPulen", "house"), ("Pulenesia", "house"),
+            ("Pulenisme", "house"), ("Raja", "house"), ("Lele", "house"),
+            ("Melon", "house"), ("Polos", "polos"),
+        ]
+        for nama, tipe in _BRANDS:
+            ada = (
+                await db.execute(select(Brand).where(Brand.nama == nama))
+            ).scalars().first()
+            if not ada:
+                db.add(Brand(nama=nama, tipe=tipe))
+                created.append(f"merk {nama}")
+
+        _MATERIALS = [
+            ("biasa", "Karung biasa"), ("laminasi", "Karung laminasi"),
+            ("putih", "Karung putih"), ("polos", "Karung polos"),
+            ("bekas", "Karung bekas"), ("karung_pk", "Karung PK (reusable)"),
+        ]
+        for kode, nama in _MATERIALS:
+            ada = (
+                await db.execute(select(PackagingMaterial).where(PackagingMaterial.kode == kode))
+            ).scalars().first()
+            if not ada:
+                db.add(PackagingMaterial(kode=kode, nama=nama))
+                created.append(f"karung {nama}")
+
+        for ukuran in (5, 10, 25, 48, 50):
+            ada = (
+                await db.execute(select(PackageSize).where(PackageSize.ukuran_kg == ukuran))
+            ).scalars().first()
+            if not ada:
+                db.add(PackageSize(ukuran_kg=ukuran))
+                created.append(f"ukuran {ukuran}kg")
 
         if created:
             await db.commit()

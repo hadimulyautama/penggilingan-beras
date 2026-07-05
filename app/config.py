@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Kapasitas tumpukan PK Gudang 2 (maks). Lewat batas → notifikasi.
     g2_tumpukan_maks_kg: int = 60_000
 
+    # Stok kemasan minimum (lembar) — di bawah ini beri notifikasi/warning.
+    min_kemasan_lembar: int = 1_000
+
     # Admin awal (di-seed otomatis ke DB kosong saat startup).
     # Kosongkan admin_telegram_id bila tidak ingin auto-seed user.
     admin_telegram_id: int | None = None

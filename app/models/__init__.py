@@ -30,6 +30,15 @@ from app.gudang2.models import (
     PolishingProcess,
     PolishingSiloUsage,
 )
+from app.inventory.models import (
+    Brand,
+    PackageSize,
+    PackagingLoss,
+    PackagingMaterial,
+    PackagingPurchase,
+    ProductSku,
+    RiceQualityStandard,
+)
 from app.models.system import ActivityLog, Notification
 from app.models.transfer import InternalTransfer
 
@@ -64,6 +73,14 @@ __all__ = [
     "PolishingProcess",
     "PolishingSiloUsage",
     "PolishingOutputLog",
+    # inventory (produk & kemasan)
+    "RiceQualityStandard",
+    "Brand",
+    "PackagingMaterial",
+    "PackageSize",
+    "ProductSku",
+    "PackagingPurchase",
+    "PackagingLoss",
     # transfer (bridge)
     "InternalTransfer",
     # system

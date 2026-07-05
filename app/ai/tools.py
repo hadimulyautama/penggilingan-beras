@@ -1331,3 +1331,58 @@ PROSES_PENYOSOHAN = {
         "required": ["intent"],
     },
 }
+
+
+# Tool kemasan (inventory): beli karung + tanya stok kemasan (staff/admin).
+PROSES_KEMASAN = {
+    "name": "proses_kemasan",
+    "description": (
+        "Deteksi & ekstrak aksi kemasan/karung: beli karung, atau tanya stok "
+        "kemasan. Pilih 'bukan_kemasan' bila bukan tentang karung/kemasan."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": ["beli_kemasan", "laporan_kemasan", "bukan_kemasan"],
+                "description": (
+                    "'beli_kemasan': catat pembelian karung (contoh: 'beli karung "
+                    "laminasi 25kg 2000 lembar harga 1500'). 'laporan_kemasan': "
+                    "tanya stok karung (contoh: 'stok kemasan', 'karung laminasi "
+                    "sisa berapa'). 'bukan_kemasan': selain itu."
+                ),
+            },
+            "material": {
+                "type": ["string", "null"],
+                "enum": ["biasa", "laminasi", "putih", "polos", "bekas", "karung_pk", None],
+                "description": (
+                    "Jenis karung: 'biasa','laminasi','putih','polos','bekas', "
+                    "'karung PK'->karung_pk."
+                ),
+            },
+            "ukuran_kg": {
+                "type": ["integer", "null"],
+                "enum": [5, 10, 25, 48, 50, None],
+                "description": "Ukuran karung dalam kg (5/10/25/48/50).",
+            },
+            "jumlah_lembar": {
+                "type": ["integer", "null"],
+                "description": "Jumlah karung dalam lembar. '2000 lembar'->2000.",
+            },
+            "harga_per_lembar": {
+                "type": ["number", "null"],
+                "description": "Harga per lembar karung. 'Rp 1.500'->1500.",
+            },
+            "tanggal": {
+                "type": ["string", "null"],
+                "description": "Tanggal YYYY-MM-DD utk backdate; null = hari ini.",
+            },
+            "jam": {
+                "type": ["string", "null"],
+                "description": "Jam 'HH:MM' bila disebut; null = jam sekarang.",
+            },
+        },
+        "required": ["intent"],
+    },
+}

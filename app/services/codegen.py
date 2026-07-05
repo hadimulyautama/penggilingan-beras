@@ -14,6 +14,7 @@ from app.models import (
     DryingLot,
     InternalTransfer,
     MillingProcess,
+    PackagingPurchase,
     PkPurchaseBatch,
     PkTumpukanToSilo,
     PolishingProcess,
@@ -115,3 +116,14 @@ async def next_polishing_code(db: AsyncSession) -> str:
         .where(PolishingProcess.created_at >= start)
     )
     return await _next_sequence(db, "POL", stmt)
+
+
+async def next_packaging_purchase_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode pembelian kemasan: PKP-YYYYMMDD-NN (reset per hari)."""
+    tgl = tgl or date.today()
+    stmt = (
+        select(func.count())
+        .select_from(PackagingPurchase)
+        .where(PackagingPurchase.tanggal == tgl)
+    )
+    return await _next_sequence(db, "PKP", stmt, tgl)
