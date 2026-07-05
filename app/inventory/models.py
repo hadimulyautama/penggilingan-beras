@@ -121,3 +121,59 @@ class PackagingLoss(Base, TimestampMixin):
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class FinishedGoodsStock(Base, TimestampMixin):
+    """Stok barang jadi (dikemas): beras putih (grade), Beras B, broken/menir/
+    reject kemasan. Masuk saat packing hasil produksi (atau retur kondisi baik).
+    """
+
+    __tablename__ = "finished_goods_stock"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_sku_id: Mapped[int] = mapped_column(
+        ForeignKey("product_skus.id"), nullable=False
+    )
+    # NULL untuk byproduct kemasan & Beras B (tak punya standar mutu).
+    rice_quality_standard_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rice_quality_standards.id")
+    )
+    # polishing / reject_reprocessing / retur
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_id: Mapped[int | None] = mapped_column(Integer)
+    jumlah_karung: Mapped[int] = mapped_column(Integer, nullable=False)
+    berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class ByproductStock(Base, TimestampMixin):
+    """Stok hasil samping CURAH (hanya bekatul). Dijual per kg."""
+
+    __tablename__ = "byproduct_stock"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jenis_produk: Mapped[str] = mapped_column(String(20), nullable=False)
+    # polishing / reject_reprocessing
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_id: Mapped[int | None] = mapped_column(Integer)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="tersedia")
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class ByproductPrice(Base, TimestampMixin):
+    """Harga acuan byproduct (bekatul/broken/menir/reject) — untuk kredit HPP &
+    penilaian stok. Baris terbaru per jenis = harga berlaku (histori terjaga)."""
+
+    __tablename__ = "byproduct_prices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    harga_per_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

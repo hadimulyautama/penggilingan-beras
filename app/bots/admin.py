@@ -47,11 +47,16 @@ from app.gudang2.service import (
     create_pk_purchase,
     verify_pk_purchase,
 )
-from app.inventory.nlp import parse_kemasan
+from app.inventory.nlp import parse_barang_jadi, parse_kemasan
 from app.inventory.packaging import (
     InventoryError,
     beli_kemasan,
     laporan_stok_kemasan,
+)
+from app.inventory.finished_goods import (
+    laporan_hpp_beras,
+    laporan_stok_barang_jadi,
+    set_harga_byproduct,
 )
 from app.models import User, Warehouse
 from app.gudang1.services.milling import (
@@ -532,6 +537,31 @@ async def _handle_kemasan(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _handle_barang_jadi_admin(message: Message, db, user, text: str) -> bool:
+    """Harga byproduct + HPP beras + stok barang jadi (staff/admin)."""
+    try:
+        p = await parse_barang_jadi(text)
+    except Exception:
+        log.exception("parse_barang_jadi gagal")
+        return False
+    if p.intent not in ("harga_byproduct", "laporan_hpp", "laporan_barang_jadi"):
+        return False
+    try:
+        if p.intent == "harga_byproduct":
+            j = await set_harga_byproduct(db, user=user, jenis=p.jenis_byproduct, harga=p.harga)
+            await message.answer(f"✓ Harga acuan *{j}* = {_rp(p.harga)}/kg tersimpan.", parse_mode="Markdown")
+        elif p.intent == "laporan_hpp":
+            if not can_see_financials(user):
+                await message.answer("🔒 HPP khusus staff/admin.")
+                return True
+            await message.answer(await laporan_hpp_beras(db, p.kode), parse_mode="Markdown")
+        elif p.intent == "laporan_barang_jadi":
+            await message.answer(await laporan_stok_barang_jadi(db))
+    except InventoryError as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -621,6 +651,10 @@ async def handle_message(message: Message) -> None:
 
         # ── Kemasan/karung: beli + stok (staff/admin) ──
         if await _handle_kemasan(message, db, user, text):
+            return
+
+        # ── Barang jadi: harga byproduct + HPP beras + stok (staff/admin) ──
+        if await _handle_barang_jadi_admin(message, db, user, text):
             return
 
         # ── Verifikasi/penetapan harga gabah — cek SEBELUM detail, karena

@@ -20,6 +20,13 @@ from app.gudang2.polishing import (
     mulai_penyosohan,
     selesai_penyosohan,
 )
+from app.inventory.nlp import parse_barang_jadi
+from app.inventory.packaging import InventoryError
+from app.inventory.finished_goods import (
+    catat_bekatul,
+    catat_packing,
+    laporan_stok_barang_jadi,
+)
 from app.bots.common import (
     authenticate,
     can_see_financials,
@@ -193,6 +200,48 @@ async def _handle_penyosohan(message: Message, db, user, text: str) -> bool:
     return True
 
 
+async def _handle_barang_jadi(message: Message, db, user, text: str) -> bool:
+    """Packing hasil penyosohan + bekatul + stok barang jadi (operator G2)."""
+    try:
+        p = await parse_barang_jadi(text)
+    except Exception:
+        log.exception("parse_barang_jadi gagal")
+        return False
+    if p.intent == "bukan_barang_jadi":
+        return False
+    try:
+        if p.intent == "packing":
+            r = await catat_packing(
+                db, user=user, kode_pol=p.kode, kategori=p.kategori, grade=p.grade,
+                brand_nama=p.brand, material_kode=p.material, ukuran=p.ukuran_kg,
+                jumlah_karung=p.jumlah_karung, tanggal=p.tanggal, jam=p.jam,
+            )
+            grade = f" {r.grade}" if r.grade else ""
+            warn = f"\n{r.warning}" if r.warning else ""
+            await message.answer(
+                f"✓ Packing {r.kategori}{grade}: {r.jumlah_karung} karung "
+                f"({_kg(r.berat_total_kg)}).{warn}"
+            )
+        elif p.intent == "catat_bekatul":
+            kg = await catat_bekatul(
+                db, user=user, kode_pol=p.kode, berat_kg=p.berat_kg,
+                tanggal=p.tanggal, jam=p.jam,
+            )
+            await message.answer(f"✓ Bekatul {_kg(kg)} tercatat (curah).")
+        elif p.intent == "laporan_barang_jadi":
+            await message.answer(await laporan_stok_barang_jadi(db))
+        elif p.intent in ("harga_byproduct", "laporan_hpp"):
+            await message.answer(
+                "ℹ️ Harga byproduct & HPP dikerjakan *Staff/Admin* di `@hmuadmin_bot`.",
+                parse_mode="Markdown",
+            )
+        else:
+            return False
+    except (InventoryError, BackdateError) as e:
+        await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan barang jadi.")
+    return True
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
     if not message.text:
@@ -208,6 +257,8 @@ async def handle_message(message: Message) -> None:
         fin = can_see_financials(user)
         # Aksi Gudang 2 (tulis) — cek dulu sebelum flow baca.
         if await _handle_penyosohan(message, db, user, text):
+            return
+        if await _handle_barang_jadi(message, db, user, text):
             return
         if await _handle_gudang2(message, db, user, text):
             return

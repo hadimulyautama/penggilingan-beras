@@ -1386,3 +1386,91 @@ PROSES_KEMASAN = {
         "required": ["intent"],
     },
 }
+
+
+# Tool barang jadi (inventory sub-fase 2): packing, bekatul, harga byproduct, HPP.
+PROSES_BARANG_JADI = {
+    "name": "proses_barang_jadi",
+    "description": (
+        "Deteksi & ekstrak aksi barang jadi hasil penyosohan: packing (beras "
+        "grade / broken / menir / reject ke karung), catat bekatul curah, set "
+        "harga acuan byproduct, tanya stok barang jadi, atau tanya HPP beras. "
+        "PENTING pilih 'bukan_barang_jadi' bila soal stok PK/silo/tumpukan "
+        "GUDANG 2, gabah, atau produksi lain (mis. 'stok gudang 2', 'stok silo "
+        "A') — itu BUKAN barang jadi."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "packing", "catat_bekatul", "harga_byproduct",
+                    "laporan_barang_jadi", "laporan_hpp", "bukan_barang_jadi",
+                ],
+                "description": (
+                    "'packing': kemas hasil ke karung (contoh: 'packing premium "
+                    "merk Imbiss laminasi 25kg 80 karung', 'packing broken putih "
+                    "50kg 10 karung'). 'catat_bekatul': catat bekatul curah "
+                    "(contoh: 'bekatul 400 kg'). 'harga_byproduct': set harga acuan "
+                    "(contoh: 'harga menir 3000 per kg'). 'laporan_barang_jadi': "
+                    "stok BARANG JADI saja (beras dikemas / broken/menir/reject "
+                    "kemasan) — BUKAN 'stok gudang 2'/'stok silo' (itu PK, "
+                    "bukan_barang_jadi). 'laporan_hpp': tanya HPP beras (contoh: "
+                    "'hpp beras POL-...'). 'bukan_barang_jadi': selain itu."
+                ),
+            },
+            "kode": {
+                "type": ["string", "null"],
+                "description": "Kode proses penyosohan POL-YYYYMMDD-NN (huruf besar).",
+            },
+            "kategori": {
+                "type": ["string", "null"],
+                "enum": ["beras_putih", "beras_b", "broken", "menir", "reject", None],
+                "description": (
+                    "Kategori produk untuk packing. Bila disebut GRADE beras "
+                    "(sayur/medium/medsuper/premium) → beras_putih. 'beras B'->beras_b."
+                ),
+            },
+            "grade": {
+                "type": ["string", "null"],
+                "enum": ["sayur", "medium", "medsuper", "premium", None],
+                "description": "Grade beras putih (untuk packing beras_putih).",
+            },
+            "brand": {
+                "type": ["string", "null"],
+                "description": "Merk (untuk packing beras). Contoh: 'Imbiss'. null bila polos.",
+            },
+            "material": {
+                "type": ["string", "null"],
+                "enum": ["biasa", "laminasi", "putih", "polos", "bekas", None],
+                "description": "Jenis karung.",
+            },
+            "ukuran_kg": {
+                "type": ["integer", "null"],
+                "enum": [5, 10, 25, 48, 50, None],
+                "description": "Ukuran karung (kg).",
+            },
+            "jumlah_karung": {
+                "type": ["integer", "null"],
+                "description": "Jumlah karung untuk packing.",
+            },
+            "berat_kg": {
+                "type": ["number", "null"],
+                "description": "Berat kg untuk catat_bekatul (curah).",
+            },
+            "jenis_byproduct": {
+                "type": ["string", "null"],
+                "enum": ["bekatul", "broken", "menir", "reject", None],
+                "description": "Jenis byproduct untuk harga_byproduct.",
+            },
+            "harga": {
+                "type": ["number", "null"],
+                "description": "Harga per kg (untuk harga_byproduct). 'Rp 3.000'->3000.",
+            },
+            "tanggal": {"type": ["string", "null"], "description": "YYYY-MM-DD backdate; null=hari ini."},
+            "jam": {"type": ["string", "null"], "description": "'HH:MM' bila disebut; null=sekarang."},
+        },
+        "required": ["intent"],
+    },
+}

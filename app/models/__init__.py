@@ -32,6 +32,9 @@ from app.gudang2.models import (
 )
 from app.inventory.models import (
     Brand,
+    ByproductPrice,
+    ByproductStock,
+    FinishedGoodsStock,
     PackageSize,
     PackagingLoss,
     PackagingMaterial,
@@ -81,6 +84,9 @@ __all__ = [
     "ProductSku",
     "PackagingPurchase",
     "PackagingLoss",
+    "FinishedGoodsStock",
+    "ByproductStock",
+    "ByproductPrice",
     # transfer (bridge)
     "InternalTransfer",
     # system

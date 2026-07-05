@@ -14,6 +14,7 @@ from app.config import settings
 from app.database import input_time
 from app.models import (
     Brand,
+    FinishedGoodsStock,
     PackageSize,
     PackagingLoss,
     PackagingMaterial,
@@ -141,7 +142,18 @@ async def hitung_stok_kemasan(db: AsyncSession, material_id: int, size_id: int) 
             )
         )
     ).scalar_one()
-    return int(beli) - int(hilang)
+    # Terpakai untuk packing barang jadi (karung dari SKU material+ukuran ini).
+    terpakai = (
+        await db.execute(
+            select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(
+                ProductSku.packaging_material_id == material_id,
+                ProductSku.package_size_id == size_id,
+            )
+        )
+    ).scalar_one()
+    return int(beli) - int(hilang) - int(terpakai)
 
 
 async def hpp_kemasan_wavg(db: AsyncSession, material_id: int, size_id: int) -> float | None:
