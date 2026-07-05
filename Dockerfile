@@ -20,5 +20,8 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # entrypoint: jalankan migrasi dulu, lalu start server.
+# Port dari $PORT (disuntik Railway/PaaS); default 8000 untuk lokal.
+# Bentuk shell agar ${PORT} ter-ekspansi. WAJIB 1 proses / 1 replica —
+# banyak proses = banyak polling = bentrok 409 Telegram.
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
