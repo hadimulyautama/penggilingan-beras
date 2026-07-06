@@ -46,16 +46,14 @@ from app.database import BackdateError, SessionLocal
 from app.gudang1.services.drying import (
     DryingError,
     active_drying_lot,
-    add_batches_to_lot,
-    create_drying_lot,
     finish_drying,
     laporan_pengeringan,
     log_cooling,
     log_moisture,
+    masuk_dryer,
     resolve_batch_kodes,
     sole_active_lot_kode,
     sole_cooling_lot_kode,
-    sole_dryer_lot_kode,
     start_drying,
 )
 from app.services.undo import UndoError, undo_last
@@ -223,45 +221,6 @@ async def handle_message(message: Message) -> None:
             session.stage = "idle"
             session.override_text = None
 
-        # ── Konfirmasi gabung batch ke lot yang masih di dryer ──
-        if session.stage == "awaiting_merge":
-            if lower in CONFIRM_WORDS:
-                lot_kode = session.merge_lot
-                kodes = session.merge_kodes or []
-                session.stage = "idle"
-                session.merge_lot = None
-                session.merge_kodes = None
-                try:
-                    res = await add_batches_to_lot(
-                        db, user=user, kode_lot=lot_kode, kode_batch_list=kodes
-                    )
-                except DryingError as e:
-                    await message.answer(str(e.args[0]) if e.args else "Gagal menggabung.")
-                    return
-                session.ctx_lot = res.lot.kode_lot
-                session.ctx_last = "lot"
-                total = f"{res.total_kg:,.0f}".replace(",", ".")
-                await message.answer(
-                    f"✓ Digabung ke *{res.lot.kode_lot}*.\n"
-                    f"• Batch sekarang: {', '.join(res.batch_kodes)}\n"
-                    f"• Total: {total} kg",
-                    parse_mode="Markdown",
-                )
-                return
-            if lower in CANCEL_WORDS:
-                session.stage = "idle"
-                session.merge_lot = None
-                session.merge_kodes = None
-                await message.answer(
-                    "Baik, tidak digabung. Kosongkan dryer dulu (pindahkan ke silo) "
-                    "sebelum membentuk lot baru."
-                )
-                return
-            # Bukan ya/tidak: batalkan pending, proses sebagai pesan baru.
-            session.stage = "idle"
-            session.merge_lot = None
-            session.merge_kodes = None
-
         # ── Sedang menunggu konfirmasi ──
         if session.stage == "awaiting_confirmation" and session.draft:
             if lower in CONFIRM_WORDS:
@@ -308,13 +267,12 @@ async def handle_message(message: Message) -> None:
             if any(w in lower for w in ("dryer", "pengering", "oven", "keringkan")):
                 session.stage = "idle"
                 session.kering_batch = None
-                lot_kode, note = await _auto_masuk_dryer(db, user, bk)
-                if lot_kode:
-                    session.ctx_lot = lot_kode
+                ok, note = await _auto_masuk_dryer(db, user, bk)
+                if ok:
                     session.ctx_last = "lot"
                     await message.answer(
-                        f"🌫️ {bk} masuk dryer ({note}).\n"
-                        f"⏸️ Ketik `mulai pengeringan {lot_kode}` saat dipanaskan.",
+                        f"🌫️ {bk} masuk dryer (menunggu).\n"
+                        "⏸️ Ketik `mulai pengeringan` — semua gabah di dryer jadi 1 lot.",
                         parse_mode="Markdown",
                     )
                 else:
@@ -535,21 +493,19 @@ async def _save(message: Message, db, user, session) -> None:
     )
 
     if d.kondisi_gabah == "basah":
-        # Gabah BASAH → OTOMATIS masuk dryer (belum mulai pengeringan).
-        lot_kode, note = await _auto_masuk_dryer(db, user, batch.kode_batch)
-        if lot_kode:
-            session.ctx_lot = lot_kode
-            session.ctx_last = "lot"
+        # Gabah BASAH → OTOMATIS masuk dryer (menunggu; lot dibentuk saat mulai).
+        ok, note = await _auto_masuk_dryer(db, user, batch.kode_batch)
+        if ok:
             await message.answer(
-                base + f"\n\n🌫️ *Otomatis masuk dryer* ({note}).\n"
-                f"⏸️ Belum mulai pengeringan — ketik `mulai pengeringan {lot_kode}` "
-                "saat pemanasan dijalankan.",
+                base + "\n\n🌫️ *Otomatis masuk dryer* (menunggu).\n"
+                "⏸️ Belum mulai pengeringan — ketik `mulai pengeringan` (semua "
+                "gabah di dryer jadi 1 lot).",
                 parse_mode="Markdown",
             )
         else:
             await message.answer(
                 base + f"\n\n⚠️ Belum bisa auto-masuk dryer: {note}.\n"
-                f"Masukkan manual: `keringkan {batch.kode_batch}`.",
+                f"Masukkan manual nanti: `keringkan {batch.kode_batch}`.",
                 parse_mode="Markdown",
             )
         return
@@ -564,22 +520,13 @@ async def _save(message: Message, db, user, session) -> None:
     )
 
 
-async def _auto_masuk_dryer(db, user, batch_kode: str) -> tuple[str | None, str]:
-    """Masukkan batch ke dryer otomatis: gabung ke lot 'di_dryer' sekondisi bila
-    ada, else buat lot baru. Kembalikan (kode_lot, catatan) atau (None, alasan)."""
+async def _auto_masuk_dryer(db, user, batch_kode: str) -> tuple[bool, str]:
+    """Masukkan 1 batch ke dryer (menunggu). (ok, alasan bila gagal)."""
     try:
-        active = await active_drying_lot(db)
-        if active is not None and active.status == "di_dryer":
-            res = await add_batches_to_lot(
-                db, user=user, kode_lot=active.kode_lot, kode_batch_list=[batch_kode]
-            )
-            return res.lot.kode_lot, f"digabung ke {res.lot.kode_lot}"
-        if active is not None:
-            return None, f"dryer masih dipakai {active.kode_lot}"
-        res = await create_drying_lot(db, user=user, kode_batch_list=[batch_kode])
-        return res.lot.kode_lot, f"lot baru {res.lot.kode_lot}"
+        await masuk_dryer(db, user=user, kode_batch_list=[batch_kode])
+        return True, ""
     except DryingError as e:
-        return None, str(e.args[0]) if e.args else "tak bisa masuk dryer otomatis"
+        return False, str(e.args[0]) if e.args else "tak bisa masuk dryer otomatis"
 
 
 # ─────────────────────────── Pengeringan ───────────────────────────
@@ -725,8 +672,6 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
     lot_kode = p.kode_lot or _lot_code(text) or session.ctx_lot
     if not lot_kode and p.intent in ("log_kadar_air", "selesai_pengeringan"):
         lot_kode = await sole_active_lot_kode(db)
-    if not lot_kode and p.intent == "mulai_pengeringan":
-        lot_kode = await sole_dryer_lot_kode(db)
     if not lot_kode and p.intent == "log_pendinginan":
         lot_kode = await sole_cooling_lot_kode(db)
     try:
@@ -740,41 +685,24 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 kodes = await resolve_batch_kodes(
                     db, kode_list=None, urutan_list=p.batch_urutan_list
                 )
-            # Dryer belum kosong? Tawarkan gabung ke lot yang sedang dikeringkan.
-            active = await active_drying_lot(db) if kodes else None
-            if active is not None:
-                session.merge_lot = active.kode_lot
-                session.merge_kodes = kodes
-                session.stage = "awaiting_merge"
-                await message.answer(
-                    f"⚠️ Dryer belum kosong — masih ada *{active.kode_lot}* di dalamnya.\n"
-                    f"Gabungkan {', '.join(kodes)} ke {active.kode_lot}? "
-                    "(*ya* untuk gabung / *tidak* untuk batal)",
-                    parse_mode="Markdown",
-                )
-                return True
-            res = await create_drying_lot(
-                db, user=user, kode_batch_list=kodes, tanggal=p.tanggal, jam=p.jam
+            res = await masuk_dryer(db, user=user, kode_batch_list=kodes)
+            session.ctx_last = "lot"
+            total = f"{res.total_kg:,.0f}".replace(",", ".")
+            await message.answer(
+                f"✓ Masuk dryer ({res.kondisi}): {', '.join(res.batch_kodes)}.\n"
+                f"• Total menunggu di dryer: {total} kg\n"
+                "⏸️ *Belum mulai pengeringan.* Ketik `mulai pengeringan` — semua "
+                "gabah di dryer jadi 1 lot saat dimulai.",
+                parse_mode="Markdown",
             )
+        elif p.intent == "mulai_pengeringan":
+            res = await start_drying(db, user=user, tanggal=p.tanggal, jam=p.jam)
             session.ctx_lot = res.lot.kode_lot
             session.ctx_last = "lot"
             total = f"{res.total_kg:,.0f}".replace(",", ".")
             await message.answer(
-                f"✓ Lot *{res.lot.kode_lot}* masuk dryer ({res.kondisi}).\n"
-                f"• Batch: {', '.join(res.batch_kodes)}\n"
-                f"• Total: {total} kg\n"
-                "⏸️ *Belum mulai pengeringan.* Ketik `mulai pengeringan "
-                f"{res.lot.kode_lot}` saat pemanasan dijalankan.",
-                parse_mode="Markdown",
-            )
-        elif p.intent == "mulai_pengeringan":
-            lot = await start_drying(
-                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal, jam=p.jam
-            )
-            session.ctx_lot = lot.kode_lot
-            session.ctx_last = "lot"
-            await message.answer(
-                f"🔥 Pengeringan *{lot.kode_lot}* dimulai.\n"
+                f"🔥 Pengeringan dimulai — lot *{res.lot.kode_lot}* "
+                f"({len(res.batch_kodes)} batch, {total} kg).\n"
                 "ℹ️ Update kadar air minimal tiap 5 jam. "
                 "Ketik `pengeringan selesai` bila sudah kering.",
                 parse_mode="Markdown",

@@ -144,20 +144,22 @@ async def _g1_dryer(db: AsyncSession) -> Dryer | None:
 # (drying selesai tapi belum dipindah ke silo). Silo = keluar dari dryer.
 def _in_dryer_where():
     belum_ke_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
-    # di_dryer (masuk, belum mulai) + proses (dikeringkan) + selesai (didinginkan).
-    return (DryingLot.status.in_(["di_dryer", "proses", "selesai"]), belum_ke_silo)
+    # Lot dalam dryer: proses (dikeringkan) atau selesai (didinginkan, belum silo).
+    return (DryingLot.status.in_(["proses", "selesai"]), belum_ke_silo)
 
 
 async def dryer_load_kg(db: AsyncSession) -> float:
-    """Total kg gabah yang masih di dalam dryer (dikeringkan + didinginkan)."""
-    stmt = (
-        select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0))
-        .select_from(DryingLot)
-        .join(DryingLotBatch, DryingLotBatch.drying_lot_id == DryingLot.id)
-        .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
-        .where(*_in_dryer_where())
-    )
-    return float((await db.execute(stmt)).scalar_one())
+    """Total kg gabah di dalam dryer = batch menunggu (loose) + lot aktif."""
+    lot_kg = (
+        await db.execute(
+            select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0))
+            .select_from(DryingLot)
+            .join(DryingLotBatch, DryingLotBatch.drying_lot_id == DryingLot.id)
+            .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+            .where(*_in_dryer_where())
+        )
+    ).scalar_one()
+    return float(lot_kg) + await loose_dryer_kg(db)
 
 
 async def _ensure_cooling_started(db, lot, now, user) -> bool:
@@ -239,144 +241,113 @@ async def log_cooling(
 # ─────────────────────────── Bentuk lot ───────────────────────────
 @dataclass
 class LotResult:
-    lot: DryingLot
+    lot: DryingLot | None  # None untuk masuk_dryer (lot belum dibentuk)
     kondisi: str
     total_kg: float
     batch_kodes: list[str] = field(default_factory=list)
 
 
-async def create_drying_lot(
-    db: AsyncSession, *, user, kode_batch_list: list[str] | None, tanggal=None, jam=None
+async def _loose_dryer_batches(db: AsyncSession) -> list[PurchaseBatch]:
+    """Batch yang MENUNGGU di dryer (status 'di_dryer', belum jadi lot)."""
+    in_lot = select(DryingLotBatch.purchase_batch_id)
+    return list(
+        (
+            await db.execute(
+                select(PurchaseBatch)
+                .where(
+                    PurchaseBatch.status_batch == "di_dryer",
+                    PurchaseBatch.id.not_in(in_lot),
+                )
+                .order_by(PurchaseBatch.id)
+            )
+        ).scalars().all()
+    )
+
+
+async def loose_dryer_kg(db: AsyncSession) -> float:
+    return sum(float(b.berat_total_kg) for b in await _loose_dryer_batches(db))
+
+
+async def masuk_dryer(
+    db: AsyncSession, *, user, kode_batch_list: list[str] | None
 ) -> LotResult:
-    """Bentuk 1 lot pengeringan dari beberapa batch. Validasi basah/kering."""
-    kodes = list(dict.fromkeys(kode_batch_list or []))  # dedupe, jaga urutan
+    """Masukkan batch ke dryer — MENUNGGU (belum jadi lot). Lot baru dibentuk
+    saat 'mulai pengeringan' dari SEMUA batch di dryer.
+
+    Validasi: tak campur basah/kering, kapasitas dryer, dryer tak sedang dipakai
+    lot yang mengering/didinginkan. Tanpa batas jumlah batch (ikut kapasitas)."""
+    kodes = list(dict.fromkeys(kode_batch_list or []))
     if not kodes:
         raise DryingError(
-            "Sebutkan kode batch yang mau dikeringkan, contoh:\n"
-            "`keringkan GB-20260702-01 dan GB-20260702-02`"
+            "Sebutkan kode batch, contoh: `keringkan GB-20260702-01 dan GB-...`"
         )
-    if len(kodes) > 3:
-        raise DryingError("Maksimal 3 batch per lot pengeringan.")
-
     batches: list[PurchaseBatch] = []
     missing: list[str] = []
     for kode in kodes:
-        stmt = select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode)
-        b = (await db.execute(stmt)).scalars().first()
+        b = (
+            await db.execute(select(PurchaseBatch).where(PurchaseBatch.kode_batch == kode))
+        ).scalars().first()
         (batches if b else missing).append(b if b else kode)  # type: ignore[arg-type]
     if missing:
         raise DryingError("Batch tidak ditemukan: " + ", ".join(missing))
 
-    # Cek batch yang sudah masuk lot lain.
-    ids = [b.id for b in batches]
-    used = (
-        await db.execute(
-            select(DryingLotBatch.purchase_batch_id).where(
-                DryingLotBatch.purchase_batch_id.in_(ids)
-            )
-        )
-    ).scalars().all()
-    if used:
-        dup = [b.kode_batch for b in batches if b.id in set(used)]
-        raise DryingError("Sudah masuk lot lain: " + ", ".join(dup))
-
-    kondisi_set = {b.kondisi_gabah for b in batches}
-    if len(kondisi_set) > 1:
-        raise DryingError(
-            "❌ Tidak boleh mencampur gabah basah dan kering dalam satu lot."
-        )
-    kondisi = kondisi_set.pop()
-
-    # ATURAN: 1 dryer = maksimal 1 lot. Bila dryer sudah berisi lot 'proses',
-    # batch baru WAJIB digabung ke lot itu (bukan bikin lot baru).
     occupied = await active_drying_lot(db)
     if occupied is not None:
         raise DryingError(
-            f"Dryer sudah berisi lot {occupied.kode_lot}. Gabungkan batch ke lot "
-            "itu, atau kosongkan dryer dulu (pindah ke silo)."
+            f"Dryer masih dipakai lot {occupied.kode_lot} — kosongkan ke silo dulu."
         )
+    for b in batches:
+        if b.status_batch == "di_dryer":
+            raise DryingError(f"{b.kode_batch} sudah di dryer.")
+        if b.status_batch in ("di_silo", "dikeringkan", "digiling"):
+            raise DryingError(f"{b.kode_batch} sudah diproses ({b.status_batch}).")
 
-    # Batasan kapasitas mesin pengering (sumber daya).
+    loose = await _loose_dryer_batches(db)
+    kondisi_all = {b.kondisi_gabah for b in batches} | {b.kondisi_gabah for b in loose}
+    if len(kondisi_all) > 1:
+        raise DryingError("❌ Tidak boleh mencampur gabah basah & kering di dryer.")
+
     new_total = sum(float(b.berat_total_kg) for b in batches)
     dryer = await _g1_dryer(db)
     if dryer is not None:
         if dryer.status != "aktif":
-            raise DryingError(
-                f"Mesin pengering sedang {dryer.status} — belum bisa mengeringkan."
-            )
-        load = await dryer_load_kg(db)
-        cap = float(dryer.kapasitas_kg)
-        # Batas efektif = kapasitas nominal + toleransi/spare (mis. 30 + 3 ton).
-        cap_efektif = cap + settings.dryer_toleransi_kg
+            raise DryingError(f"Mesin pengering sedang {dryer.status}.")
+        load = await loose_dryer_kg(db)
+        cap_efektif = float(dryer.kapasitas_kg) + settings.dryer_toleransi_kg
         if load + new_total > cap_efektif:
             sisa = max(cap_efektif - load, 0)
             raise DryingError(
-                f"❌ Kapasitas mesin pengering {cap / 1000:g} ton "
-                f"(maks dgn toleransi {cap_efektif / 1000:g} ton) tidak cukup.\n"
-                f"Sedang dikeringkan: {load / 1000:g} ton (sisa {sisa / 1000:g} ton), "
-                f"lot ini {new_total / 1000:g} ton."
+                f"❌ Kapasitas dryer tak cukup (sisa {sisa / 1000:g} ton, "
+                f"batch ini {new_total / 1000:g} ton)."
             )
 
-    now = input_time(tanggal, jam)
-    kode_lot = await next_drying_lot_code(db)
-    lot = DryingLot(
-        kode_lot=kode_lot,
-        dryer_id=dryer.id if dryer else None,
-        # Masuk dryer ≠ mulai pengeringan. Pengeringan dimulai lewat
-        # start_drying (operator G1) → status jadi 'proses' + waktu diisi.
-        waktu_mulai_pengeringan=None,
-        status="di_dryer",
-        created_by=user.id,
-    )
-    db.add(lot)
-    await db.flush()
-
-    total_kg = 0.0
     for b in batches:
-        db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=b.id))
-        b.status_batch = "dikeringkan"
-        total_kg += float(b.berat_total_kg)
-
+        b.status_batch = "di_dryer"
     await log_activity(
-        db,
-        table_name="drying_lots",
-        record_id=lot.id,
-        action="INSERT",
-        changed_by=user.id,
-        new_value=f"{kode_lot} | {kondisi} | {len(batches)} batch | {total_kg:.0f}kg",
+        db, table_name="purchase_batches", record_id=batches[0].id, action="UPDATE",
+        changed_by=user.id, field_name="status_batch",
+        new_value="masuk dryer: " + ", ".join(b.kode_batch for b in batches),
     )
     await db.commit()
-    await db.refresh(lot)
     return LotResult(
-        lot=lot,
-        kondisi=kondisi,
-        total_kg=total_kg,
+        lot=None, kondisi=kondisi_all.pop() if kondisi_all else batches[0].kondisi_gabah,
+        total_kg=await loose_dryer_kg(db),
         batch_kodes=[b.kode_batch for b in batches],
     )
 
 
 async def active_drying_lot(db: AsyncSession) -> DryingLot | None:
-    """Lot yang MENGISI dryer (belum ke silo): 'di_dryer' (masuk, belum mulai)
-    atau 'proses' (sedang dikeringkan). 1 dryer = maksimal 1 lot aktif.
-    """
+    """Lot yang MENGISI dryer (belum ke silo): sedang dikeringkan ('proses')
+    atau didinginkan ('selesai' belum ke silo). Selagi ada, dryer dianggap
+    dipakai — batch baru tak boleh masuk. Lot = 1 proses pengeringan."""
+    belum_ke_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
     return (
         await db.execute(
             select(DryingLot)
-            .where(DryingLot.status.in_(["di_dryer", "proses"]))
+            .where(DryingLot.status.in_(["proses", "selesai"]), belum_ke_silo)
             .order_by(DryingLot.id.desc())
         )
     ).scalars().first()
-
-
-async def sole_dryer_lot_kode(db: AsyncSession) -> str | None:
-    """Kode lot bila TEPAT ADA SATU lot 'di_dryer' (untuk 'mulai pengeringan'
-    tanpa menyebut kode)."""
-    rows = (
-        await db.execute(
-            select(DryingLot.kode_lot).where(DryingLot.status == "di_dryer")
-        )
-    ).scalars().all()
-    return rows[0] if len(rows) == 1 else None
 
 
 async def _lot_batches(db: AsyncSession, lot_id: int) -> list[PurchaseBatch]:
@@ -540,32 +511,44 @@ async def log_moisture(
 
 # ─────────────────────────── Selesai ───────────────────────────
 async def start_drying(
-    db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
-) -> DryingLot:
-    """MULAI pengeringan lot yang sudah di dryer ('di_dryer' → 'proses').
+    db: AsyncSession, *, user, tanggal=None, jam=None
+) -> LotResult:
+    """MULAI pengeringan: bentuk 1 LOT dari SEMUA batch yang menunggu di dryer,
+    lalu status 'proses'. Lot lahir di sini (bukan saat masuk dryer).
 
     Masuk dryer ≠ mulai pengeringan — ini input terpisah (operator G1 utama)."""
-    if not kode_lot:
+    loose = await _loose_dryer_batches(db)
+    if not loose:
         raise DryingError(
-            "Sebutkan lot yang mulai dikeringkan, contoh: `mulai pengeringan LOT-...`"
+            "Tidak ada gabah di dryer. Masukkan dulu, mis. `keringkan GB-...`."
         )
-    lot = await get_lot_by_kode(db, kode_lot)
-    if lot is None:
-        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
-    if lot.status == "proses":
-        raise DryingError(f"Lot {kode_lot} sudah mulai dikeringkan.")
-    if lot.status != "di_dryer":
-        raise DryingError(f"Lot {kode_lot} tidak sedang di dryer (status: {lot.status}).")
+    kondisi_set = {b.kondisi_gabah for b in loose}
+    if len(kondisi_set) > 1:
+        raise DryingError("❌ Ada campuran basah & kering di dryer — pisahkan dulu.")
+    kondisi = kondisi_set.pop()
     now = input_time(tanggal, jam)
-    lot.status = "proses"
-    lot.waktu_mulai_pengeringan = now
+    dryer = await _g1_dryer(db)
+    lot = DryingLot(
+        kode_lot=await next_drying_lot_code(db),
+        dryer_id=dryer.id if dryer else None,
+        waktu_mulai_pengeringan=now, status="proses", created_by=user.id,
+    )
+    db.add(lot)
+    await db.flush()
+    total = 0.0
+    for b in loose:
+        db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=b.id))
+        b.status_batch = "dikeringkan"
+        total += float(b.berat_total_kg)
     await log_activity(
-        db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
-        changed_by=user.id, field_name="status", new_value="proses (mulai pengeringan)",
+        db, table_name="drying_lots", record_id=lot.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"mulai pengeringan {lot.kode_lot} ({len(loose)} batch, {total:.0f}kg)",
     )
     await db.commit()
     await db.refresh(lot)
-    return lot
+    return LotResult(lot=lot, kondisi=kondisi, total_kg=total,
+                     batch_kodes=[b.kode_batch for b in loose])
 
 
 async def finish_drying(
@@ -682,7 +665,18 @@ async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> 
         )
     ).scalars().all()
     dryer = await _g1_dryer(db)
+    loose = await _loose_dryer_batches(db)
+    loose_line = ""
+    if loose:
+        lkg = sum(float(b.berat_total_kg) for b in loose)
+        loose_line = (
+            f"\n⏸️ Menunggu di dryer (belum mulai): {len(loose)} batch, "
+            f"{lkg/1000:g} ton — {', '.join(b.kode_batch for b in loose)}.\n"
+            "_Ketik `mulai pengeringan` untuk membentuk lot & memulai._"
+        )
     if not lots:
+        if loose:
+            return "🌾 Isi mesin pengering:" + loose_line
         base = "🌾 Tidak ada gabah di mesin pengering."
         if dryer:
             base += f"\nMesin kosong (kapasitas {float(dryer.kapasitas_kg)/1000:g} ton)."
@@ -706,7 +700,7 @@ async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> 
             since = lot.waktu_selesai_pengeringan or lot.waktu_mulai_pengeringan
             jam = _hours(now, since) if since else 0
             lines.append(f"• {lot.kode_lot} [pendinginan]: sudah {jam:.1f} jam")
-    return "\n".join(lines)
+    return "\n".join(lines) + loose_line
 
 
 # ─────────────────────── Cek keterlambatan (scheduler) ───────────────────────
