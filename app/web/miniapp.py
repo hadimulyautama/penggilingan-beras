@@ -110,8 +110,8 @@ async def dashboard(user: User = Depends(require_miniapp_user)) -> dict:
 
 # ─────────────────────── Aksi cepat: role helper ───────────────────────
 
-async def _is_g1_operator(user: User) -> bool:
-    """Admin selalu boleh; operator hanya bila gudang default = Gudang 1."""
+async def _is_wh_operator(user: User, like: str) -> bool:
+    """Admin selalu boleh; operator hanya bila gudang default cocok `like`."""
     if user.role == "admin":
         return True
     if user.role != "operator":
@@ -121,10 +121,20 @@ async def _is_g1_operator(user: User) -> bool:
     async with SessionLocal() as db:
         wid = (
             await db.execute(
-                select(Warehouse.id).where(Warehouse.nama_gudang.like("Gudang 1%"))
+                select(Warehouse.id).where(Warehouse.nama_gudang.like(like))
             )
         ).scalars().first()
     return wid is not None and user.default_warehouse_id == wid
+
+
+async def _is_g1_operator(user: User) -> bool:
+    """Admin selalu boleh; operator hanya bila gudang default = Gudang 1."""
+    return await _is_wh_operator(user, "Gudang 1%")
+
+
+async def _is_g2_operator(user: User) -> bool:
+    """Admin selalu boleh; operator hanya bila gudang default = Gudang 2."""
+    return await _is_wh_operator(user, "Gudang 2%")
 
 
 @router.get("/actions/menu")
@@ -132,11 +142,21 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
     fin = can_see_financials(user)
     g1 = await _is_g1_operator(user)
+    g2 = await _is_g2_operator(user)
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
     TUJUAN = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
               ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
+    SILO_BAHAN = [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"],
+                  ["AB", "Silo A + B"]]
+    JENIS_HASIL = [["", "— belum ditentukan —"],
+                   ["premium", "Beras Premium"], ["medsuper", "Beras Medium Super"],
+                   ["medium", "Beras Medium"], ["sayur", "Beras Sayur"],
+                   ["beras_b", "Beras B (olah ulang)"], ["menir", "Menir"],
+                   ["broken", "Broken"], ["bekatul", "Bekatul"], ["reject", "Reject"]]
+    TUJUAN_PK = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
+                 ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     actions: list[dict] = []
     if g1:
         actions += [
@@ -161,6 +181,37 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/miniapp/actions/milling-active"},
                  {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number"},
+             ]},
+        ]
+    if g2:
+        actions += [
+            {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
+             "post": "/miniapp/actions/masukkan-pk", "fields": [
+                 {"name": "kode_batch", "label": "PK diterima", "type": "remote",
+                  "source": "/miniapp/actions/pk-intake-pending"},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  "options": TUJUAN_PK},
+             ]},
+            {"id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
+             "post": "/miniapp/actions/mulai-penyosohan", "fields": [
+                 {"name": "silo", "label": "Silo bahan (wajib pilih)", "type": "select",
+                  "options": SILO_BAHAN},
+             ]},
+            {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
+             "post": "/miniapp/actions/hasil-penyosohan", "fields": [
+                 {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
+                  "source": "/miniapp/actions/polishing-active"},
+                 {"name": "jenis", "label": "Jenis hasil (wajib pilih)", "type": "select",
+                  "options": JENIS_HASIL},
+                 {"name": "berat_kumulatif", "label": "Berat kumulatif (kg)", "type": "number"},
+             ]},
+            {"id": "selesai_penyosohan", "label": "🏁 Selesai penyosohan (per silo)",
+             "post": "/miniapp/actions/selesai-penyosohan", "fields": [
+                 {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
+                  "source": "/miniapp/actions/polishing-active"},
+                 {"name": "silo", "label": "Silo yang selesai (wajib pilih)", "type": "select",
+                  "options": [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]},
+                 {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
              ]},
         ]
     if fin:
@@ -253,6 +304,42 @@ async def pk_transfer_list(user: User = Depends(require_miniapp_user)) -> list[d
                 out.append({"value": p.kode_proses,
                             "label": f"{p.kode_proses} · {jns or '-'} · {_rp(avail)} kg"})
     return out
+
+
+@router.get("/actions/polishing-active")
+async def polishing_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+    from app.models import PolishingProcess
+    async with SessionLocal() as db:
+        procs = (
+            await db.execute(
+                select(PolishingProcess.kode_proses).where(PolishingProcess.status == "proses")
+                .order_by(PolishingProcess.id.desc())
+            )
+        ).scalars().all()
+    return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/pk-intake-pending")
+async def pk_intake_pending(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """PK luar SUDAH diterima (QC) tapi belum dimasukkan ke silo/tumpukan."""
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import exists, select
+    from app.models import PkGudang2Intake, PkPurchaseBatch
+    async with SessionLocal() as db:
+        ada_intake = ~exists().where(
+            PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id)
+        rows = (
+            await db.execute(
+                select(PkPurchaseBatch).where(
+                    PkPurchaseBatch.status_batch == "diterima", ada_intake
+                ).order_by(PkPurchaseBatch.id.desc()).limit(30)
+            )
+        ).scalars().all()
+    return [{"value": b.kode_batch,
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+            for b in rows]
 
 
 # ─────────────────────── Aksi cepat: eksekusi (POST) ───────────────────────
@@ -422,6 +509,112 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(require_miniapp
     jns = (r.jenis + " ") if r.jenis else ""
     pesan = f"✓ Pemindahan PK *{r.transfer.kode_transfer}*: {jns}→ {r.lokasi_label}."
     await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+# ─────────────────────── Aksi cepat: Gudang 2 (operator) ───────────────────────
+
+class MasukkanPkReq(BaseModel):
+    kode_batch: str
+    tujuan: str  # silo_a / silo_b / ditumpuk
+
+
+@router.post("/actions/masukkan-pk")
+async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g2_operator(user))
+    if not (req.kode_batch or "").strip():
+        raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
+    if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
+        raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
+    from app.gudang2.service import masukkan_pk_luar, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch, tujuan=req.tujuan)
+        except Gudang2Error as e:
+            raise _err(e, "Gagal memasukkan PK.")
+    pesan = f"✓ PK *{req.kode_batch}* dimasukkan → {r.lokasi_label}."
+    await _chat_confirm(user, pesan, "gudang2")
+    return {"ok": True, "pesan": pesan}
+
+
+class MulaiPenyosohanReq(BaseModel):
+    silo: str  # A / B / AB
+
+
+@router.post("/actions/mulai-penyosohan")
+async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g2_operator(user))
+    silos = {"A": ["A"], "B": ["B"], "AB": ["A", "B"]}.get((req.silo or "").upper())
+    if not silos:
+        raise HTTPException(400, "Pilih silo bahan dulu: Silo A / Silo B / A+B.")
+    from app.gudang2.polishing import mulai_penyosohan, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await mulai_penyosohan(db, user=u, nama_silos=silos)
+        except Gudang2Error as e:
+            raise _err(e, "Gagal mulai penyosohan.")
+    pesan = (f"✓ Penyosohan *{r.proc.kode_proses}* mulai — silo "
+             f"{'+'.join(r.silos)} ({r.berat_awal_total:g} kg).")
+    await _chat_confirm(user, pesan, "gudang2")
+    return {"ok": True, "pesan": pesan}
+
+
+class HasilPenyosohanReq(BaseModel):
+    kode_proses: str
+    jenis: str
+    berat_kumulatif: float
+
+
+@router.post("/actions/hasil-penyosohan")
+async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g2_operator(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses penyosohan dulu.")
+    if not (req.jenis or "").strip():
+        raise HTTPException(400, "Pilih jenis hasil dulu.")
+    from app.gudang2.polishing import catat_output, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await catat_output(db, user=u, kode=req.kode_proses,
+                                   jenis=req.jenis, berat_kumulatif=req.berat_kumulatif)
+        except Gudang2Error as e:
+            raise _err(e, "Gagal catat hasil penyosohan.")
+    pesan = f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kumulatif:g} kg (kumulatif)."
+    await _chat_confirm(user, pesan, "gudang2")
+    return {"ok": True, "pesan": pesan}
+
+
+class SelesaiPenyosohanReq(BaseModel):
+    kode_proses: str
+    silo: str  # A / B
+    sisa: float
+
+
+@router.post("/actions/selesai-penyosohan")
+async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g2_operator(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses penyosohan dulu.")
+    if (req.silo or "").upper() not in ("A", "B"):
+        raise HTTPException(400, "Pilih silo yang selesai dulu: A atau B.")
+    from app.gudang2.polishing import selesai_penyosohan, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await selesai_penyosohan(db, user=u, kode=req.kode_proses,
+                                         nama_silo=req.silo.upper(), sisa_kg=req.sisa)
+        except Gudang2Error as e:
+            raise _err(e, "Gagal menandai selesai penyosohan.")
+    if r.selesai:
+        ekor = " — proses SELESAI" + (
+            f", rendemen {r.rendemen:.1f}%." if r.rendemen else ".")
+    else:
+        ekor = " (menunggu silo lain)."
+    pesan = f"✓ Silo {req.silo.upper()} selesai (sisa {req.sisa:g} kg){ekor}"
+    await _chat_confirm(user, pesan, "gudang2")
     return {"ok": True, "pesan": pesan}
 
 
