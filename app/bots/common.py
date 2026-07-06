@@ -137,6 +137,9 @@ class UserSession:
     # Simpan teks TERKUMPUL; tiap jawaban ditambahkan lalu di-parse ulang.
     kemasan_text: str | None = None  # stage 'awaiting_kemasan'
     pk_text: str | None = None       # stage 'awaiting_pk'
+    # Gabah KERING menunggu tujuan (dryer / silo A / silo B). stage
+    # 'awaiting_kering_tujuan'; simpan kode batch-nya.
+    kering_batch: str | None = None
 
 
 # Penyimpanan sesi in-memory, dikunci per (bot_id, telegram_user_id).

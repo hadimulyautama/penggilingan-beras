@@ -297,6 +297,53 @@ async def handle_message(message: Message) -> None:
             await _prompt_next(message, tg_id, session)
             return
 
+        # ── Gabah kering menunggu tujuan: dryer / silo A / silo B ──
+        if session.stage == "awaiting_kering_tujuan" and session.kering_batch:
+            bk = session.kering_batch
+            if lower in CANCEL_WORDS:
+                session.stage = "idle"
+                session.kering_batch = None
+                await message.answer("Baik. Gabah tersimpan, penempatan bisa nanti.")
+                return
+            if any(w in lower for w in ("dryer", "pengering", "oven", "keringkan")):
+                session.stage = "idle"
+                session.kering_batch = None
+                lot_kode, note = await _auto_masuk_dryer(db, user, bk)
+                if lot_kode:
+                    session.ctx_lot = lot_kode
+                    session.ctx_last = "lot"
+                    await message.answer(
+                        f"🌫️ {bk} masuk dryer ({note}).\n"
+                        f"⏸️ Ketik `mulai pengeringan {lot_kode}` saat dipanaskan.",
+                        parse_mode="Markdown",
+                    )
+                else:
+                    await message.answer(f"⚠️ Belum bisa masuk dryer: {note}.")
+                return
+            sm = re.search(r"silo\s*([ab])\b", lower) or re.search(r"^\s*([ab])\s*$", lower)
+            if sm:
+                session.stage = "idle"
+                session.kering_batch = None
+                try:
+                    res = await masuk_silo(
+                        db, user=user, nama_silo=sm.group(1).upper(),
+                        kode_lot=None, kode_batch=bk,
+                    )
+                    session.ctx_silo = res.nama_silo
+                    session.ctx_last = "lot"
+                    total = f"{res.kg:,.0f}".replace(",", ".")
+                    gab = " (digabung)" if res.digabung else ""
+                    await message.answer(
+                        f"✓ {bk} masuk *Silo {res.nama_silo}*{gab} (kering langsung).\n"
+                        f"• Berat: {total} kg",
+                        parse_mode="Markdown",
+                    )
+                except SiloError as e:
+                    await message.answer(str(e.args[0]) if e.args else "Gagal masukkan silo.")
+                return
+            await message.answer("Balas `dryer`, `silo A`, atau `silo B` ya.")
+            return
+
         # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
         if session.stage == "awaiting_agent_write":
             async def _dispatch(cmd: str) -> bool:
@@ -482,12 +529,57 @@ async def _save(message: Message, db, user, session) -> None:
         tgl_note = f"\n📅 Dicatat untuk *{_tg}{_jm}*."
     else:
         tgl_note = ""
-    await message.answer(
+    base = (
         f"✓ Tersimpan. Kode batch: *{batch.kode_batch}*{tgl_note}\n"
-        f"Menunggu verifikasi harga oleh staff/admin.{extra}{note_kering}\n\n"
-        "_Salah input? ketik `batalkan input` dalam 15 menit._",
+        f"Menunggu verifikasi harga oleh staff/admin.{extra}"
+    )
+
+    if d.kondisi_gabah == "basah":
+        # Gabah BASAH → OTOMATIS masuk dryer (belum mulai pengeringan).
+        lot_kode, note = await _auto_masuk_dryer(db, user, batch.kode_batch)
+        if lot_kode:
+            session.ctx_lot = lot_kode
+            session.ctx_last = "lot"
+            await message.answer(
+                base + f"\n\n🌫️ *Otomatis masuk dryer* ({note}).\n"
+                f"⏸️ Belum mulai pengeringan — ketik `mulai pengeringan {lot_kode}` "
+                "saat pemanasan dijalankan.",
+                parse_mode="Markdown",
+            )
+        else:
+            await message.answer(
+                base + f"\n\n⚠️ Belum bisa auto-masuk dryer: {note}.\n"
+                f"Masukkan manual: `keringkan {batch.kode_batch}`.",
+                parse_mode="Markdown",
+            )
+        return
+
+    # Gabah KERING → bot TANYA tujuan (dryer atau silo A/B).
+    session.stage = "awaiting_kering_tujuan"
+    session.kering_batch = batch.kode_batch
+    await message.answer(
+        base + "\n\n🌾 Gabah *kering*. Mau *masuk dryer* atau langsung ke "
+        "*Silo A / Silo B*?\n_(balas: `dryer` / `silo A` / `silo B`)_",
         parse_mode="Markdown",
     )
+
+
+async def _auto_masuk_dryer(db, user, batch_kode: str) -> tuple[str | None, str]:
+    """Masukkan batch ke dryer otomatis: gabung ke lot 'di_dryer' sekondisi bila
+    ada, else buat lot baru. Kembalikan (kode_lot, catatan) atau (None, alasan)."""
+    try:
+        active = await active_drying_lot(db)
+        if active is not None and active.status == "di_dryer":
+            res = await add_batches_to_lot(
+                db, user=user, kode_lot=active.kode_lot, kode_batch_list=[batch_kode]
+            )
+            return res.lot.kode_lot, f"digabung ke {res.lot.kode_lot}"
+        if active is not None:
+            return None, f"dryer masih dipakai {active.kode_lot}"
+        res = await create_drying_lot(db, user=user, kode_batch_list=[batch_kode])
+        return res.lot.kode_lot, f"lot baru {res.lot.kode_lot}"
+    except DryingError as e:
+        return None, str(e.args[0]) if e.args else "tak bisa masuk dryer otomatis"
 
 
 # ─────────────────────────── Pengeringan ───────────────────────────
