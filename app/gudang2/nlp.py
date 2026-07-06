@@ -14,6 +14,7 @@ class ParsedGudang2:
     kode: str | None = None
     nama_supplier: str | None = None
     no_polisi: str | None = None
+    jenis_pk: str | None = None
     berat_kg: float | None = None
     kadar_air: float | None = None
     broken_persen: float | None = None
@@ -40,6 +41,7 @@ async def parse_gudang2(text: str) -> ParsedGudang2:
         kode=kode.upper().strip() if isinstance(kode, str) else None,
         nama_supplier=data.get("nama_supplier"),
         no_polisi=data.get("no_polisi"),
+        jenis_pk=data.get("jenis_pk"),
         berat_kg=data.get("berat_kg"),
         kadar_air=data.get("kadar_air"),
         broken_persen=data.get("broken_persen"),

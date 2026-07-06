@@ -112,6 +112,8 @@ def _missing_fields(d: ParsedPurchase) -> list[str]:
     # operator tak menyebut basah/kering, bot menanyakannya — bukan menebak.
     if d.kondisi_gabah not in ("basah", "kering"):
         missing.append("kondisi gabah")
+    if not d.no_polisi_truk:
+        missing.append("plat truk")
     return missing
 
 

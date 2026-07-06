@@ -55,6 +55,7 @@ from app.gudang2.service import (
     Gudang2Error,
     create_pk_purchase,
     laporan_stok_gudang2,
+    norm_jenis_pk,
     verify_pk_purchase,
 )
 from app.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
@@ -477,7 +478,56 @@ async def _handle_milling_admin(message: Message, db, user, text: str, session) 
     return True
 
 
-async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
+_PK_REQ_LABEL = {
+    "nama_supplier": "supplier", "berat_kg": "berat",
+    "no_polisi": "plat truk", "jenis_pk": "jenis PK (KS/KL/Campuran/Semi KS)",
+}
+
+
+def _pk_missing(p) -> list[str]:
+    got = {
+        "nama_supplier": p.nama_supplier, "berat_kg": p.berat_kg,
+        "no_polisi": p.no_polisi, "jenis_pk": norm_jenis_pk(p.jenis_pk),
+    }
+    return [_PK_REQ_LABEL[f] for f in _PK_REQ_LABEL if not got[f]]
+
+
+async def _finish_or_ask_pk(message: Message, db, user, session, p, accumulated: str) -> None:
+    """Simpan PK luar bila lengkap; kalau belum, minta field yang kurang."""
+    missing = _pk_missing(p)
+    if missing:
+        session.pk_text = accumulated
+        session.stage = "awaiting_pk"
+        await message.answer(
+            "📝 Data PK belum lengkap. Sebutkan: *" + ", ".join(missing) + "*.\n"
+            "_Contoh lengkap: `beli PK dari CV Tani 8 ton KL plat B 1234 XY`._",
+            parse_mode="Markdown",
+        )
+        return
+    session.stage = "idle"
+    session.pk_text = None
+    r = await create_pk_purchase(
+        db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
+        jenis_pk=p.jenis_pk, kadar_air=p.kadar_air, no_polisi=p.no_polisi,
+        tanggal=p.tanggal, jam=p.jam,
+    )
+    extra = (
+        f"\n_Supplier baru '{r.supplier_nama}' ditambahkan._"
+        if r.supplier_created else ""
+    )
+    jl = _JENIS_PK_LABEL_ADMIN.get(r.batch.jenis_pk, r.batch.jenis_pk or "-")
+    await message.answer(
+        f"✓ PK luar tercatat: *{r.batch.kode_batch}* ({r.supplier_nama}, "
+        f"{jl} {_kg(float(r.batch.berat_total_kg))} · truk {r.batch.no_polisi_truk}).\n"
+        f"Menunggu QC + verifikasi harga.{extra}",
+        parse_mode="Markdown",
+    )
+
+
+_JENIS_PK_LABEL_ADMIN = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}
+
+
+async def _handle_gudang2_admin(message: Message, db, user, text: str, session) -> bool:
     """Beli PK luar + QC/verifikasi PK luar (staff/admin). True jika ditangani."""
     try:
         p = await parse_gudang2(text)
@@ -495,25 +545,7 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str) -> bool:
                 )
             )
         elif p.intent == "beli_pk_luar":
-            r = await create_pk_purchase(
-                db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
-                kadar_air=p.kadar_air, no_polisi=p.no_polisi,
-                tanggal=p.tanggal, jam=p.jam,
-            )
-            extra = (
-                f"\n_Supplier baru '{r.supplier_nama}' ditambahkan._"
-                if r.supplier_created else ""
-            )
-            plat = (
-                f" · truk {r.batch.no_polisi_truk}"
-                if r.batch.no_polisi_truk else ""
-            )
-            await message.answer(
-                f"✓ PK luar tercatat: *{r.batch.kode_batch}* "
-                f"({r.supplier_nama}, {_kg(float(r.batch.berat_total_kg))}{plat}).\n"
-                f"Menunggu QC + verifikasi harga.{extra}",
-                parse_mode="Markdown",
-            )
+            await _finish_or_ask_pk(message, db, user, session, p, text)
         elif p.intent == "verifikasi_pk_luar":
             r = await verify_pk_purchase(
                 db, user=user, kode=p.kode, keputusan=p.keputusan,
@@ -557,6 +589,41 @@ async def _reply_beli_kemasan(message: Message, r) -> None:
     )
 
 
+def _kemasan_missing(p) -> list[str]:
+    missing = []
+    if not p.material:
+        missing.append("jenis karung (biasa/laminasi/putih/bekas)")
+    if not p.ukuran_kg:
+        missing.append("ukuran (kg)")
+    if not p.jumlah_lembar:
+        missing.append("jumlah lembar")
+    if p.material and p.material in _KARUNG_MERK_WAJIB and not p.brand:
+        missing.append("merk (atau polos)")
+    return missing
+
+
+async def _finish_or_ask_kemasan(message: Message, db, user, session, p, accumulated: str) -> None:
+    """Simpan beli karung bila lengkap; kalau belum, minta field yang kurang."""
+    missing = _kemasan_missing(p)
+    if missing:
+        session.kemasan_text = accumulated
+        session.stage = "awaiting_kemasan"
+        await message.answer(
+            "📝 Data karung belum lengkap. Sebutkan: *" + ", ".join(missing) + "*.\n"
+            "_Contoh: `beli karung LosPulen laminasi 25kg 1000 lembar`._",
+            parse_mode="Markdown",
+        )
+        return
+    session.stage = "idle"
+    session.kemasan_text = None
+    r = await beli_kemasan(
+        db, user=user, material_kode=p.material, ukuran=p.ukuran_kg,
+        jumlah=p.jumlah_lembar, brand_nama=p.brand,
+        harga_per_lembar=p.harga_per_lembar, tanggal=p.tanggal, jam=p.jam,
+    )
+    await _reply_beli_kemasan(message, r)
+
+
 async def _handle_kemasan(message: Message, db, user, text: str, session) -> bool:
     """Beli karung + tanya stok kemasan (staff/admin). True jika ditangani."""
     try:
@@ -568,26 +635,7 @@ async def _handle_kemasan(message: Message, db, user, text: str, session) -> boo
         return False
     try:
         if p.intent == "beli_kemasan":
-            # Karung beras wajib bermerk — bila belum disebut, tanya dulu.
-            if p.material in _KARUNG_MERK_WAJIB and not p.brand and p.ukuran_kg and p.jumlah_lembar:
-                session.kemasan_draft = {
-                    "material": p.material, "ukuran": p.ukuran_kg,
-                    "jumlah": p.jumlah_lembar, "harga": p.harga_per_lembar,
-                    "tanggal": p.tanggal, "jam": p.jam,
-                }
-                session.stage = "awaiting_kemasan_brand"
-                await message.answer(
-                    "Merk karungnya apa? Sebut merk (mis. `LosPulen`) atau `polos` "
-                    "bila tanpa merk.",
-                    parse_mode="Markdown",
-                )
-                return True
-            r = await beli_kemasan(
-                db, user=user, material_kode=p.material, ukuran=p.ukuran_kg,
-                jumlah=p.jumlah_lembar, brand_nama=p.brand,
-                harga_per_lembar=p.harga_per_lembar, tanggal=p.tanggal, jam=p.jam,
-            )
-            await _reply_beli_kemasan(message, r)
+            await _finish_or_ask_kemasan(message, db, user, session, p, text)
         elif p.intent == "laporan_kemasan":
             await message.answer(await laporan_stok_kemasan(db))
     except InventoryError as e:
@@ -681,7 +729,7 @@ async def _try_command_handlers(message, db, user, text: str, session) -> bool:
         return True
     if await _handle_milling_admin(message, db, user, text, session):
         return True
-    if await _handle_gudang2_admin(message, db, user, text):
+    if await _handle_gudang2_admin(message, db, user, text, session):
         return True
     if await _handle_kemasan(message, db, user, text, session):
         return True
@@ -755,23 +803,44 @@ async def handle_message(message: Message) -> None:
             await _advance_verif(message, db, tg_id, session)
             return
 
-        # ── Menunggu MERK karung (beli karung tanpa merk) ──
-        if session.stage == "awaiting_kemasan_brand" and session.kemasan_draft:
-            d = session.kemasan_draft
-            session.stage = "idle"
-            session.kemasan_draft = None
+        # ── Melengkapi data beli KARUNG (kumpulkan field kurang) ──
+        if session.stage == "awaiting_kemasan" and session.kemasan_text:
             if lower in CANCEL_WORDS:
+                session.stage = "idle"
+                session.kemasan_text = None
                 await message.answer("Baik, pembelian karung dibatalkan.")
                 return
+            accumulated = (session.kemasan_text + " " + text).strip()
             try:
-                r = await beli_kemasan(
-                    db, user=user, material_kode=d["material"], ukuran=d["ukuran"],
-                    jumlah=d["jumlah"], brand_nama=text.strip(),
-                    harga_per_lembar=d["harga"], tanggal=d["tanggal"], jam=d["jam"],
-                )
-                await _reply_beli_kemasan(message, r)
+                p = await parse_kemasan(accumulated)
+                await _finish_or_ask_kemasan(message, db, user, session, p, accumulated)
             except (InventoryError, BackdateError) as e:
+                session.stage = "idle"
+                session.kemasan_text = None
                 await message.answer(str(e.args[0]) if e.args else "Gagal simpan karung.")
+            except Exception:
+                log.exception("parse_kemasan lanjutan gagal")
+                await message.answer(AI_ERROR_MSG)
+            return
+
+        # ── Melengkapi data beli PK luar (kumpulkan field kurang) ──
+        if session.stage == "awaiting_pk" and session.pk_text:
+            if lower in CANCEL_WORDS:
+                session.stage = "idle"
+                session.pk_text = None
+                await message.answer("Baik, pencatatan PK dibatalkan.")
+                return
+            accumulated = (session.pk_text + " " + text).strip()
+            try:
+                p = await parse_gudang2(accumulated)
+                await _finish_or_ask_pk(message, db, user, session, p, accumulated)
+            except (Gudang2Error, BackdateError) as e:
+                session.stage = "idle"
+                session.pk_text = None
+                await message.answer(str(e.args[0]) if e.args else "Gagal simpan PK.")
+            except Exception:
+                log.exception("parse_gudang2 lanjutan gagal")
+                await message.answer(AI_ERROR_MSG)
             return
 
         # ── Konfirmasi usulan tulis dari agent (pola agentic) ──
@@ -789,7 +858,7 @@ async def handle_message(message: Message) -> None:
         _CMD = {
             "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
             "milling": lambda: _handle_milling_admin(message, db, user, text, session),
-            "gudang2": lambda: _handle_gudang2_admin(message, db, user, text),
+            "gudang2": lambda: _handle_gudang2_admin(message, db, user, text, session),
             "kemasan": lambda: _handle_kemasan(message, db, user, text, session),
             "barang_jadi": lambda: _handle_barang_jadi_admin(message, db, user, text),
             "barang_keluar": lambda: _handle_keluar(message, db, user, text),

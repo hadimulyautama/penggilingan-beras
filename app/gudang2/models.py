@@ -24,6 +24,8 @@ class PkPurchaseBatch(Base, TimestampMixin):
     supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False)
     berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
+    # Jenis PK luar: ks / kl / campuran / semi_ks (lebih luas dari G1 yg cuma KS/KL).
+    jenis_pk: Mapped[str | None] = mapped_column(String(12))
     kadar_air_awal_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
     tanggal_pembelian: Mapped[date] = mapped_column(Date, nullable=False)
     waktu_pembelian: Mapped[datetime] = mapped_column(

@@ -179,14 +179,35 @@ class PkPurchaseResult:
     supplier_created: bool
 
 
+JENIS_PK_LUAR = {"ks", "kl", "campuran", "semi_ks"}
+_JENIS_PK_LABEL = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}
+
+
+def norm_jenis_pk(v: str | None) -> str | None:
+    """Normalisasi jenis PK luar → ks/kl/campuran/semi_ks; None bila tak dikenali."""
+    if not v:
+        return None
+    s = v.lower().strip().replace("-", " ").replace("_", " ")
+    if s in ("semi ks", "semi", "semiks"):
+        return "semi_ks"
+    if s in ("campuran", "campur", "mix", "mixed"):
+        return "campuran"
+    if s == "ks":
+        return "ks"
+    if s == "kl":
+        return "kl"
+    return None
+
+
 async def create_pk_purchase(
     db: AsyncSession, *, user: User, nama_supplier: str | None, berat_kg: float | None,
-    kadar_air: float | None = None, no_polisi: str | None = None,
-    tanggal: date | None = None, jam: time | None = None,
+    jenis_pk: str | None = None, kadar_air: float | None = None,
+    no_polisi: str | None = None, tanggal: date | None = None, jam: time | None = None,
 ) -> PkPurchaseResult:
     """Catat pembelian PK dari luar (Gudang 2). Menunggu QC + verifikasi harga.
 
     Master §2: input PK dari luar + QC = STAFF/ADMIN saja (bukan operator).
+    Wajib: supplier, berat, plat truk, jenis PK (ks/kl/campuran/semi_ks).
     """
     if user.role not in ("staff", "admin"):
         raise Gudang2Error(
@@ -196,12 +217,17 @@ async def create_pk_purchase(
         raise Gudang2Error("Sebutkan supplier PK-nya, contoh: `beli PK dari pak andi 5 ton`")
     if not berat_kg:
         raise Gudang2Error("Sebutkan berat PK-nya (mis. `5 ton`).")
+    if not no_polisi:
+        raise Gudang2Error("Sebutkan plat nomor truk pengirim PK.")
+    jenis = norm_jenis_pk(jenis_pk)
+    if jenis is None:
+        raise Gudang2Error("Sebutkan jenis PK: KS, KL, Campuran, atau Semi KS.")
     now = input_time(tanggal, jam)  # BackdateError bila di masa depan
     supplier, created = await find_or_create_supplier(db, nama_supplier)
     kode = await next_pk_purchase_code(db, now.date())
     batch = PkPurchaseBatch(
         kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat_kg,
-        no_polisi_truk=no_polisi, kadar_air_awal_persen=kadar_air,
+        no_polisi_truk=no_polisi, jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         status_batch="baru", flag_unverified=True,
     )

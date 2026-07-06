@@ -133,9 +133,10 @@ class UserSession:
     # Agent (pola agentic): perintah TULIS yang diusulkan agent & menunggu
     # konfirmasi. stage 'awaiting_agent_write' saat aktif.
     agent_command: str | None = None
-    # Beli karung menunggu MERK (stage 'awaiting_kemasan_brand'). Simpan draft
-    # (material/ukuran/jumlah/harga/tanggal/jam), merk diisi dari jawaban.
-    kemasan_draft: object | None = None
+    # Melengkapi data pembelian yang belum lengkap (bot tanya field kurang).
+    # Simpan teks TERKUMPUL; tiap jawaban ditambahkan lalu di-parse ulang.
+    kemasan_text: str | None = None  # stage 'awaiting_kemasan'
+    pk_text: str | None = None       # stage 'awaiting_pk'
 
 
 # Penyimpanan sesi in-memory, dikunci per (bot_id, telegram_user_id).

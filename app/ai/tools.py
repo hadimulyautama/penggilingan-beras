@@ -1208,6 +1208,14 @@ PROSES_GUDANG2 = {
                 "description": "Berat dalam KG. Konversi ton→kg ('5 ton'->5000). "
                 "Untuk beli_pk_luar (berat beli) atau pindah_tumpukan (jumlah dipindah).",
             },
+            "jenis_pk": {
+                "type": ["string", "null"],
+                "enum": ["ks", "kl", "campuran", "semi_ks", None],
+                "description": (
+                    "Jenis PK luar (untuk beli_pk_luar): 'KS'->ks, 'KL'->kl, "
+                    "'campuran'->campuran, 'semi KS'/'semi ks'->semi_ks."
+                ),
+            },
             "kadar_air": {
                 "type": ["number", "null"],
                 "description": "Kadar air PK (persen). '14%'->14.",
