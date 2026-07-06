@@ -158,7 +158,10 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     TUJUAN_PK = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
                  ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     actions: list[dict] = []
+    SILO_AB = [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]
     if g1:
+        # Urut sesuai alur kerja operator Gudang 1: terima → keringkan →
+        # dinginkan/pindah silo → giling.
         actions += [
             {"id": "gabah_masuk", "label": "🌾 Gabah masuk",
              "post": "/miniapp/actions/gabah-masuk", "fields": [
@@ -170,17 +173,45 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                   "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
                               ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
              ]},
+            {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
+             "post": "/miniapp/actions/mulai-pengeringan",
+             "hint": "Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer.",
+             "fields": []},
             {"id": "kadar_air", "label": "💧 Update kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
                  {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
                   "source": "/miniapp/actions/drying-active"},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
              ]},
-            {"id": "hasil_giling", "label": "⚙️ Update hasil giling",
+            {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
+             "post": "/miniapp/actions/selesai-pengeringan",
+             "hint": "Lot masuk fase pendinginan otomatis.", "fields": [
+                 {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
+                  "source": "/miniapp/actions/drying-active"},
+             ]},
+            {"id": "pindah_silo", "label": "🏗️ Pindah dryer → silo",
+             "post": "/miniapp/actions/pindah-silo",
+             "hint": "Pendinginan selesai otomatis saat dipindah.", "fields": [
+                 {"name": "kode_lot", "label": "Lot selesai dikeringkan", "type": "remote",
+                  "source": "/miniapp/actions/drying-done"},
+                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "select",
+                  "options": SILO_AB},
+             ]},
+            {"id": "mulai_giling", "label": "⚙️ Mulai giling",
+             "post": "/miniapp/actions/mulai-giling", "fields": [
+                 {"name": "silo", "label": "Silo yang digiling", "type": "remote",
+                  "source": "/miniapp/actions/silo-siap-giling"},
+             ]},
+            {"id": "hasil_giling", "label": "📈 Update hasil giling",
              "post": "/miniapp/actions/hasil-giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/miniapp/actions/milling-active"},
                  {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number"},
+             ]},
+            {"id": "selesai_giling", "label": "🏁 Selesai giling",
+             "post": "/miniapp/actions/selesai-giling", "fields": [
+                 {"name": "kode_proses", "label": "Proses giling", "type": "remote",
+                  "source": "/miniapp/actions/milling-active"},
              ]},
         ]
     if g2:
@@ -264,6 +295,60 @@ async def milling_active(user: User = Depends(require_miniapp_user)) -> list[dic
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/drying-done")
+async def drying_done(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Lot SELESAI dikeringkan (dari dryer) yang belum dipindah ke silo."""
+    _require(await _is_g1_operator(user))
+    from sqlalchemy import exists, select
+    from app.models import DryingLot, SiloStorage
+    async with SessionLocal() as db:
+        belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
+        lots = (
+            await db.execute(
+                select(DryingLot.kode_lot).where(
+                    DryingLot.status == "selesai",
+                    DryingLot.dryer_id.is_not(None),  # kering-langsung sudah di silo
+                    belum_silo,
+                ).order_by(DryingLot.id.desc())
+            )
+        ).scalars().all()
+    return [{"value": k, "label": k} for k in lots]
+
+
+@router.get("/actions/silo-siap-giling")
+async def silo_siap_giling(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Silo Gudang 1 yang ADA isinya & tak sedang digiling."""
+    _require(await _is_g1_operator(user))
+    from sqlalchemy import select
+    from app.models import MillingProcess, Silo
+    from app.gudang1.services.silo import _g1_warehouse_id, _silo_active_rows, _silo_content_kg
+    out: list[dict] = []
+    async with SessionLocal() as db:
+        wid = await _g1_warehouse_id(db)
+        silos = (
+            await db.execute(
+                select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+            )
+        ).scalars().all()
+        for s in silos:
+            rows = await _silo_active_rows(db, s.id)
+            if not rows:
+                continue
+            busy = (
+                await db.execute(
+                    select(MillingProcess.id).where(
+                        MillingProcess.silo_id == s.id, MillingProcess.status == "proses"
+                    )
+                )
+            ).first()
+            if busy:
+                continue
+            letter = s.nama_silo.replace("Silo ", "")
+            kg = await _silo_content_kg(db, s.id)
+            out.append({"value": letter, "label": f"Silo {letter} · {_rp(kg)} kg"})
+    return out
 
 
 @router.get("/actions/gabah-unverified")
@@ -450,6 +535,115 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_min
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update hasil giling.")
     pesan = f"✓ Hasil giling *{req.kode_proses}*: {req.berat_kumulatif:g} kg (kumulatif)."
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/mulai-pengeringan")
+async def act_mulai_pengeringan(user: User = Depends(require_miniapp_user)) -> dict:
+    """Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer, mulai proses."""
+    _require(await _is_g1_operator(user))
+    from app.gudang1.services.drying import start_drying, DryingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await start_drying(db, user=u)
+        except DryingError as e:
+            raise _err(e, "Gagal mulai pengeringan.")
+    pesan = (f"✓ Pengeringan *{r.lot.kode_lot}* mulai — {r.kondisi}, "
+             f"{len(r.batch_kodes)} batch ({r.total_kg:g} kg).")
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+class KodeLotReq(BaseModel):
+    kode_lot: str
+
+
+@router.post("/actions/selesai-pengeringan")
+async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_lot or "").strip():
+        raise HTTPException(400, "Pilih lot pengeringan dulu.")
+    from app.gudang1.services.drying import finish_drying, DryingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            lot, jam = await finish_drying(db, user=u, kode_lot=req.kode_lot)
+        except DryingError as e:
+            raise _err(e, "Gagal menyelesaikan pengeringan.")
+    pesan = (f"✓ Pengeringan *{req.kode_lot}* selesai ({jam:.0f} jam) → "
+             "fase pendinginan. Pindahkan ke silo saat sudah dingin.")
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+class PindahSiloReq(BaseModel):
+    kode_lot: str
+    silo: str  # A / B
+
+
+@router.post("/actions/pindah-silo")
+async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_lot or "").strip():
+        raise HTTPException(400, "Pilih lot yang mau dipindah dulu.")
+    if (req.silo or "").upper() not in ("A", "B"):
+        raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
+    from app.gudang1.services.silo import masuk_silo, SiloError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await masuk_silo(db, user=u, nama_silo=req.silo.upper(),
+                                 kode_lot=req.kode_lot, kode_batch=None)
+        except SiloError as e:
+            raise _err(e, "Gagal memindahkan ke silo.")
+    pesan = f"✓ Lot *{req.kode_lot}* dipindah → Silo {r.nama_silo} ({r.kg:g} kg). Pendinginan selesai."
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+class MulaiGilingReq(BaseModel):
+    silo: str  # A / B
+
+
+@router.post("/actions/mulai-giling")
+async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g1_operator(user))
+    if (req.silo or "").upper() not in ("A", "B"):
+        raise HTTPException(400, "Pilih silo yang digiling dulu.")
+    from app.gudang1.services.milling import start_milling, MillingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await start_milling(db, user=u, nama_silo=req.silo.upper())
+        except MillingError as e:
+            raise _err(e, "Gagal mulai giling.")
+    pesan = (f"✓ Giling *{r.proc.kode_proses}* mulai — Silo {r.nama_silo} "
+             f"({r.berat_masuk:g} kg gabah).")
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+class KodeProsesReq(BaseModel):
+    kode_proses: str
+
+
+@router.post("/actions/selesai-giling")
+async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses giling dulu.")
+    from app.gudang1.services.milling import finish_milling, MillingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await finish_milling(db, user=u, kode_proses=req.kode_proses)
+        except MillingError as e:
+            raise _err(e, "Gagal menyelesaikan giling.")
+    jns = (r.jenis + " ") if r.jenis else ""
+    pesan = (f"✓ Giling *{req.kode_proses}* selesai — PK {jns}{r.produced:g} kg "
+             f"(siap kirim {r.siap_kirim:g} kg).")
     await _chat_confirm(user, pesan, "gudang1")
     return {"ok": True, "pesan": pesan}
 
@@ -645,6 +839,7 @@ _HTML = """<!doctype html>
  #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;z-index:20}
  .sheet{background:var(--bg);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 24px;max-height:90vh;overflow:auto}
  .sheet h3{margin:0 0 12px;font-size:16px}
+ .sheet .hint{margin:-6px 0 12px;font-size:12px;color:var(--mut);line-height:1.4}
  .sheet label{font-size:12px;color:var(--mut);display:block;margin-top:6px}
  .sheet select,.sheet input{width:100%;padding:10px;margin:4px 0 6px;border:1px solid var(--bd);border-radius:9px;background:var(--card);color:var(--tx);font-size:16px}
  .row{display:flex;gap:10px;margin-top:12px} .row .btn{flex:1;text-align:center;padding:11px}
@@ -707,7 +902,8 @@ _HTML = """<!doctype html>
      }
    });
    const m=document.getElementById("modal");
-   m.innerHTML='<div class="sheet"><h3>'+esc(a.label)+'</h3>'+inner+
+   const hint=a.hint?'<p class="hint">'+esc(a.hint)+'</p>':'';
+   m.innerHTML='<div class="sheet"><h3>'+esc(a.label)+'</h3>'+hint+inner+
      '<div class="row"><button class="btn" onclick="closeModal()">Batal</button><button class="btn pri" id="ok">Simpan</button></div></div>';
    m.style.display="flex";
    a.fields.forEach(f=>{ if(f.type==="remote"){ getJSON(f.source).then(list=>{
