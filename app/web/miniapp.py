@@ -138,8 +138,9 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "berat", "label": "Berat (kg)", "type": "number"},
                  {"name": "kondisi", "label": "Kondisi gabah", "type": "select", "options": KONDISI},
                  {"name": "plat", "label": "Plat truk", "type": "text"},
-                 {"name": "tujuan", "label": "Tujuan (utk kering)", "type": "select",
-                  "options": [["dryer", "Dryer"], ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
+                              ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
              ]},
             {"id": "kadar_air", "label": "💧 Update kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
@@ -273,8 +274,11 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
         raise HTTPException(400, "Kondisi harus basah atau kering.")
     if not (req.plat or "").strip():
         raise HTTPException(400, "Plat truk wajib diisi.")
-    if req.kondisi == "kering" and req.tujuan not in ("dryer", "silo_a", "silo_b"):
-        raise HTTPException(400, "Untuk gabah kering, pilih tujuan: Dryer / Silo A / Silo B.")
+    # Tujuan WAJIB dipilih (tak boleh default/terlupa) — hindari salah tempat.
+    if req.tujuan not in ("dryer", "silo_a", "silo_b"):
+        raise HTTPException(400, "Pilih tujuan dulu: Dryer / Silo A / Silo B.")
+    if req.kondisi == "basah" and req.tujuan != "dryer":
+        raise HTTPException(400, "Gabah basah harus ke Dryer (tak bisa langsung ke silo).")
 
     from app.gudang1.services.purchase import create_purchase_batch
     from app.gudang1.services.drying import masuk_dryer, DryingError
@@ -294,10 +298,10 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
         # PENEMPATAN (agar tak nyangkut sebagai 'baru').
         tempat, warn = "", ""
         try:
-            if req.kondisi == "basah" or req.tujuan == "dryer":
+            if req.tujuan == "dryer":
                 await masuk_dryer(db, user=u, kode_batch_list=[kode])
                 tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
-            else:  # kering → silo
+            else:  # silo_a / silo_b (kering langsung)
                 silo = "A" if req.tujuan == "silo_a" else "B"
                 await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
                 tempat = f"🏗️ masuk Silo {silo} (kering menunggu — lot terbentuk saat digiling)"
