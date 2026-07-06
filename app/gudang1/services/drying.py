@@ -159,15 +159,57 @@ async def dryer_load_kg(db: AsyncSession) -> float:
     return float((await db.execute(stmt)).scalar_one())
 
 
+async def _ensure_cooling_started(db, lot, now, user) -> bool:
+    """Tandai fase pendinginan MULAI (idempoten). True bila baru dimulai.
+
+    Dipanggil otomatis saat pengeringan selesai — operator tak perlu input
+    'mulai pendinginan' terpisah. Tambah 1 log pendinginan otomatis bila belum
+    ada log sama sekali."""
+    if lot.waktu_mulai_pendinginan is not None:
+        return False
+    lot.waktu_mulai_pendinginan = now
+    cnt = (
+        await db.execute(
+            select(func.count()).select_from(DryingCoolingLog)
+            .where(DryingCoolingLog.drying_lot_id == lot.id)
+        )
+    ).scalar_one()
+    if cnt == 0:
+        db.add(DryingCoolingLog(
+            drying_lot_id=lot.id, waktu=now,
+            catatan="otomatis: mulai pendinginan (pengeringan selesai)",
+            input_by=user.id,
+        ))
+    return True
+
+
 async def log_cooling(
     db: AsyncSession, *, user, kode_lot: str | None, catatan: str | None, tanggal=None, jam=None
 ) -> tuple[DryingLot, int, bool]:
-    """Catat log pendinginan (gabah tetap di dryer). Kembalikan (lot, jumlah, first)."""
+    """Catat log pendinginan (gabah tetap di dryer). Kembalikan (lot, jumlah, first).
+
+    OTOMATIS: bila pengeringan belum ditandai selesai, tandai selesai dulu
+    (input 'pengeringan selesai' & 'mulai pendinginan' sering bersamaan/terlupa —
+    salah satu memicu keduanya)."""
     if not kode_lot:
         raise DryingError("Sebutkan kode lot, contoh: `pendinginan LOT-20260702-01`")
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+
+    now = input_time(tanggal, jam)
+    if lot.status != "selesai":
+        lot.status = "selesai"
+        if lot.waktu_selesai_pengeringan is None:
+            lot.waktu_selesai_pengeringan = now
+        await _close_late_notifs(db, lot.id)
+        await log_activity(
+            db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+            changed_by=user.id, field_name="status",
+            new_value="selesai (otomatis dari pendinginan)",
+        )
+    if lot.waktu_mulai_pendinginan is None:
+        lot.waktu_mulai_pendinginan = now
 
     prev = (
         await db.execute(
@@ -178,10 +220,7 @@ async def log_cooling(
     ).scalar_one()
     db.add(
         DryingCoolingLog(
-            drying_lot_id=lot.id,
-            waktu=input_time(tanggal, jam),
-            catatan=catatan,
-            input_by=user.id,
+            drying_lot_id=lot.id, waktu=now, catatan=catatan, input_by=user.id,
         )
     )
     await log_activity(
@@ -489,30 +528,27 @@ async def finish_drying(
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
-    if lot.status == "selesai":
-        raise DryingError(f"Lot {kode_lot} sudah ditandai selesai.")
 
     now = input_time(tanggal, jam)
-    if now < lot.waktu_mulai_pengeringan:
-        raise DryingError(
-            f"Tanggal selesai lebih awal dari mulai pengeringan "
-            f"({lot.waktu_mulai_pengeringan:%d-%m-%Y %H:%M})."
+    if lot.status != "selesai":
+        if lot.waktu_mulai_pengeringan and now < lot.waktu_mulai_pengeringan:
+            raise DryingError(
+                f"Tanggal selesai lebih awal dari mulai pengeringan "
+                f"({lot.waktu_mulai_pengeringan:%d-%m-%Y %H:%M})."
+            )
+        lot.status = "selesai"
+        lot.waktu_selesai_pengeringan = now
+        await _close_late_notifs(db, lot.id)
+        await log_activity(
+            db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+            changed_by=user.id, field_name="status", new_value="selesai",
         )
-    lot.status = "selesai"
-    lot.waktu_selesai_pengeringan = now
-    await _close_late_notifs(db, lot.id)
-    await log_activity(
-        db,
-        table_name="drying_lots",
-        record_id=lot.id,
-        action="UPDATE",
-        changed_by=user.id,
-        field_name="status",
-        new_value="selesai",
-    )
+    # OTOMATIS masuk fase pendinginan (idempoten — aman bila sudah dimulai).
+    await _ensure_cooling_started(db, lot, now, user)
     await db.commit()
     await db.refresh(lot)
-    return lot, _hours(now, lot.waktu_mulai_pengeringan)
+    mulai = lot.waktu_mulai_pengeringan or now
+    return lot, _hours(lot.waktu_selesai_pengeringan or now, mulai)
 
 
 # ─────────────────────────── Laporan ───────────────────────────

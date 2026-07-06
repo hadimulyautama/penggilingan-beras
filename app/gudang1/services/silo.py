@@ -158,6 +158,12 @@ async def masuk_silo(
             b = await db.get(PurchaseBatch, bid)
             if b:
                 b.status_batch = "di_silo"
+        # OTOMATIS: gabah pindah ke silo → fase pendinginan SELESAI (operator
+        # sering lupa input 'pendinginan selesai').
+        if lot.waktu_mulai_pendinginan is None:
+            lot.waktu_mulai_pendinginan = now
+        if lot.waktu_selesai_pendinginan is None:
+            lot.waktu_selesai_pendinginan = now
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
@@ -265,15 +271,21 @@ async def moving_started(
     if lot is None:
         raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
     silo = await get_g1_silo(db, nama_silo) if nama_silo else None
+    now = now_local()
     ml = SiloMovingLog(
         drying_lot_id=lot.id,
         silo_id=silo.id if silo else None,
         tipe="mulai",
-        waktu=now_local(),
+        waktu=now,
         input_by=user.id,
     )
     db.add(ml)
     await db.flush()
+    # OTOMATIS: mulai dipindah ke silo → fase pendinginan SELESAI.
+    if lot.waktu_mulai_pendinginan is None:
+        lot.waktu_mulai_pendinginan = now
+    if lot.waktu_selesai_pendinginan is None:
+        lot.waktu_selesai_pendinginan = now
     await log_activity(
         db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
         changed_by=user.id, new_value=f"mulai pindah {lot.kode_lot}",

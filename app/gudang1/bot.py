@@ -709,7 +709,10 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             session.ctx_last = "lot"
             await message.answer(
                 f"✓ {lot.kode_lot} selesai dikeringkan (pemanasan berhenti). "
-                f"Durasi {dur:.1f} jam.\nBerikutnya: pendinginan (gabah tetap di dryer)."
+                f"Durasi {dur:.1f} jam.\n"
+                "❄️ *Otomatis masuk fase pendinginan* (gabah tetap di dryer). "
+                "Saat dipindah ke silo, pendinginan otomatis ditandai selesai.",
+                parse_mode="Markdown",
             )
         elif p.intent == "laporan_pengeringan":
             # Laporan: pakai kode eksplisit; tanpa kode -> tampilkan semua.
@@ -768,9 +771,13 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
                     parse_mode="Markdown",
                 )
             else:
+                dingin = (
+                    "\n❄️ Pendinginan otomatis ditandai selesai."
+                    if res.tipe == "dari_pengeringan" else ""
+                )
                 await message.answer(
                     f"✓ {res.isi} masuk *Silo {res.nama_silo}* ({asal}).\n"
-                    f"• Berat: {total} kg",
+                    f"• Berat: {total} kg{dingin}",
                     parse_mode="Markdown",
                 )
         elif p.intent == "pindah_mulai":
@@ -786,8 +793,8 @@ async def _handle_silo(message: Message, db, user, text: str, session) -> bool:
             tujuan = f" ke *Silo {silo}*" if silo else ""
             await message.answer(
                 f"✓ Dicatat: mulai pindah {lot_kode}{tujuan}.\n"
-                "Gabah masih di dryer sampai pemindahan selesai.\n"
-                "_Bila sudah dipindah, ketik `pemindahan selesai`._",
+                "❄️ Pendinginan otomatis ditandai selesai.\n"
+                "_Bila sudah sampai di silo, ketik `pemindahan selesai`._",
                 parse_mode="Markdown",
             )
         elif p.intent == "pindah_selesai":

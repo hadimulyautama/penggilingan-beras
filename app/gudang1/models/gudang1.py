@@ -88,6 +88,14 @@ class DryingLot(Base, TimestampMixin):
     waktu_selesai_pengeringan: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    # Fase pendinginan (di dryer): mulai OTOMATIS saat pengeringan selesai,
+    # selesai OTOMATIS saat gabah dipindah ke silo.
+    waktu_mulai_pendinginan: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    waktu_selesai_pendinginan: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     # proses / selesai
     status: Mapped[str] = mapped_column(String(20), default="proses")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
