@@ -649,7 +649,8 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(require_minia
                                  kode_lot=req.kode_lot, kode_batch=None)
         except SiloError as e:
             raise _err(e, "Gagal memindahkan ke silo.")
-    pesan = f"✓ Lot *{req.kode_lot}* dipindah → Silo {r.nama_silo} ({r.kg:g} kg). Pendinginan selesai."
+    pesan = (f"✓ Lot *{req.kode_lot}* dipindah → Silo {r.nama_silo} ({r.kg:g} kg). "
+             "Dryer kosong, siap digiling.")
     await _chat_confirm(user, pesan, "gudang1")
     return {"ok": True, "pesan": pesan}
 
