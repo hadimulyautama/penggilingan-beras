@@ -185,14 +185,23 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "post": "/miniapp/actions/selesai-pengeringan",
-             "hint": "Lot masuk fase pendinginan otomatis.", "fields": [
+             "hint": "Lot masuk fase pendinginan otomatis (gabah tetap di dryer).",
+             "fields": [
                  {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
                   "source": "/miniapp/actions/drying-active"},
              ]},
+            {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
+             "post": "/miniapp/actions/selesai-pendinginan",
+             "hint": "Nyatakan gabah sudah dingin & dryer idle — gabah boleh tetap "
+                     "di dryer menunggu silo kosong. (Basis analisa downtime dryer.)",
+             "fields": [
+                 {"name": "kode_lot", "label": "Lot didinginkan", "type": "remote",
+                  "source": "/miniapp/actions/cooling-active"},
+             ]},
             {"id": "pindah_silo", "label": "🏗️ Pindah dryer → silo",
              "post": "/miniapp/actions/pindah-silo",
-             "hint": "Pendinginan selesai otomatis saat dipindah.", "fields": [
-                 {"name": "kode_lot", "label": "Lot selesai dikeringkan", "type": "remote",
+             "hint": "Hanya lot yang sudah dinyatakan selesai pendinginan.", "fields": [
+                 {"name": "kode_lot", "label": "Lot siap dipindah", "type": "remote",
                   "source": "/miniapp/actions/drying-done"},
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "select",
                   "options": SILO_AB},
@@ -297,9 +306,32 @@ async def milling_active(user: User = Depends(require_miniapp_user)) -> list[dic
     return [{"value": k, "label": k} for k in procs]
 
 
+@router.get("/actions/cooling-active")
+async def cooling_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Lot selesai dikeringkan, masih DIDINGINKAN (belum dinyatakan selesai
+    pendinginan) & masih di dryer."""
+    _require(await _is_g1_operator(user))
+    from sqlalchemy import exists, select
+    from app.models import DryingLot, SiloStorage
+    async with SessionLocal() as db:
+        belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
+        lots = (
+            await db.execute(
+                select(DryingLot.kode_lot).where(
+                    DryingLot.status == "selesai",
+                    DryingLot.dryer_id.is_not(None),
+                    DryingLot.waktu_selesai_pendinginan.is_(None),
+                    belum_silo,
+                ).order_by(DryingLot.id.desc())
+            )
+        ).scalars().all()
+    return [{"value": k, "label": k} for k in lots]
+
+
 @router.get("/actions/drying-done")
 async def drying_done(user: User = Depends(require_miniapp_user)) -> list[dict]:
-    """Lot SELESAI dikeringkan (dari dryer) yang belum dipindah ke silo."""
+    """Lot yang sudah SELESAI PENDINGINAN (dryer idle) tapi belum dipindah ke
+    silo — siap dipindah."""
     _require(await _is_g1_operator(user))
     from sqlalchemy import exists, select
     from app.models import DryingLot, SiloStorage
@@ -310,6 +342,7 @@ async def drying_done(user: User = Depends(require_miniapp_user)) -> list[dict]:
                 select(DryingLot.kode_lot).where(
                     DryingLot.status == "selesai",
                     DryingLot.dryer_id.is_not(None),  # kering-langsung sudah di silo
+                    DryingLot.waktu_selesai_pendinginan.is_not(None),
                     belum_silo,
                 ).order_by(DryingLot.id.desc())
             )
@@ -573,7 +606,25 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(require_
         except DryingError as e:
             raise _err(e, "Gagal menyelesaikan pengeringan.")
     pesan = (f"✓ Pengeringan *{req.kode_lot}* selesai ({jam:.0f} jam) → "
-             "fase pendinginan. Pindahkan ke silo saat sudah dingin.")
+             "fase pendinginan. Nyatakan pendinginan selesai saat sudah dingin.")
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/selesai-pendinginan")
+async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_lot or "").strip():
+        raise HTTPException(400, "Pilih lot yang didinginkan dulu.")
+    from app.gudang1.services.drying import finish_cooling, DryingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            lot, jam = await finish_cooling(db, user=u, kode_lot=req.kode_lot)
+        except DryingError as e:
+            raise _err(e, "Gagal menyatakan pendinginan selesai.")
+    pesan = (f"✓ Pendinginan *{req.kode_lot}* selesai ({jam:.0f} jam) — dryer idle. "
+             "Pindahkan ke silo saat ada silo kosong.")
     await _chat_confirm(user, pesan, "gudang1")
     return {"ok": True, "pesan": pesan}
 

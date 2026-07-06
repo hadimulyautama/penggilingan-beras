@@ -76,15 +76,21 @@ async def pemantau_nyangkut(
     add(fisik_g1, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
                     "Di dryer, belum mulai pengeringan", fh))
 
-    # 3. Lot selesai (didinginkan) belum dipindah ke silo.
+    # 3. Lot selesai dikeringkan (dryer_id NULL = kering-langsung, sudah di silo).
     belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
-    rows = (await db.execute(
+    rows = [l for l in (await db.execute(
         select(DryingLot).where(DryingLot.status == "selesai", belum_silo)
-    )).scalars().all()
+    )).scalars().all() if l.dryer_id is not None]
+    # 3a. Masih didinginkan — belum dinyatakan selesai pendinginan.
     add(fisik_g1, _fmt(
-        [(l.kode_lot, _hrs(now, l.waktu_selesai_pendinginan or l.waktu_selesai_pengeringan))
-         for l in rows if l.dryer_id is not None],  # dryer_id NULL = kering-langsung (di silo)
-        "Didinginkan, belum ke silo", fh))
+        [(l.kode_lot, _hrs(now, l.waktu_selesai_pengeringan))
+         for l in rows if l.waktu_selesai_pendinginan is None],
+        "Didinginkan, belum dinyatakan selesai", fh))
+    # 3b. Sudah dingin (dryer idle) tapi belum dipindah ke silo — downtime dryer.
+    add(fisik_g1, _fmt(
+        [(l.kode_lot, _hrs(now, l.waktu_selesai_pendinginan))
+         for l in rows if l.waktu_selesai_pendinginan is not None],
+        "Sudah dingin, belum ke silo", fh))
 
     # 4. Kering menunggu di silo (belum digiling).
     rows = (await db.execute(

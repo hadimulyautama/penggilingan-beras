@@ -47,6 +47,7 @@ from app.database import BackdateError, SessionLocal
 from app.gudang1.services.drying import (
     DryingError,
     active_drying_lot,
+    finish_cooling,
     finish_drying,
     laporan_pengeringan,
     log_cooling,
@@ -675,6 +676,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
         "log_kadar_air": "Mencatat kadar air",
         "log_pendinginan": "Mencatat pendinginan",
         "selesai_pengeringan": "Menandai pengeringan selesai",
+        "selesai_pendinginan": "Menandai pendinginan selesai",
     }
     if p.intent in _WRITE and not await _require_operator(
         message, user, session, text, _WRITE[p.intent]
@@ -685,7 +687,7 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
     lot_kode = p.kode_lot or _lot_code(text) or session.ctx_lot
     if not lot_kode and p.intent in ("log_kadar_air", "selesai_pengeringan"):
         lot_kode = await sole_active_lot_kode(db)
-    if not lot_kode and p.intent == "log_pendinginan":
+    if not lot_kode and p.intent in ("log_pendinginan", "selesai_pendinginan"):
         lot_kode = await sole_cooling_lot_kode(db)
     try:
         if p.intent == "bentuk_lot":
@@ -762,8 +764,20 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
                 f"✓ {lot.kode_lot} selesai dikeringkan (pemanasan berhenti). "
                 f"Durasi {dur:.1f} jam.\n"
                 "❄️ *Otomatis masuk fase pendinginan* (gabah tetap di dryer). "
-                "Saat dipindah ke silo, pendinginan otomatis ditandai selesai.",
+                "Nanti ketik `pendinginan selesai` saat sudah dingin.",
                 parse_mode="Markdown",
+            )
+        elif p.intent == "selesai_pendinginan":
+            lot, dur = await finish_cooling(
+                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal, jam=p.jam
+            )
+            session.ctx_lot = lot.kode_lot
+            session.ctx_last = "lot"
+            await message.answer(
+                f"✓ Pendinginan {lot.kode_lot} selesai (durasi {dur:.1f} jam). "
+                "Dryer sudah idle.\n"
+                f"🏗️ Pindahkan ke silo saat ada silo kosong "
+                f"(`pindah {lot.kode_lot} ke silo A/B`).",
             )
         elif p.intent == "laporan_pengeringan":
             # Laporan: pakai kode eksplisit; tanpa kode -> tampilkan semua.

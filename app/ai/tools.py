@@ -707,6 +707,7 @@ PROSES_PENGERINGAN = {
                     "log_kadar_air",
                     "log_pendinginan",
                     "selesai_pengeringan",
+                    "selesai_pendinginan",
                     "laporan_pengeringan",
                     "bukan_pengeringan",
                 ],
@@ -738,6 +739,11 @@ PROSES_PENGERINGAN = {
                     "(fase pengeringan/pemanasan berakhir; berbeda dari "
                     "pendinginan). Contoh: 'pengeringan LOT-... selesai', "
                     "'gabah sudah kering', 'pemanasan selesai'. "
+                    "'selesai_pendinginan': tandai fase PENDINGINAN selesai — "
+                    "gabah sudah dingin & dryer jadi idle, meski gabah bisa "
+                    "TETAP di dryer menunggu silo kosong (ini beda dari 'pindah "
+                    "ke silo'). Contoh: 'pendinginan LOT-... selesai', 'gabah "
+                    "sudah dingin', 'selesai didinginkan', 'pendinginan kelar'. "
                     "'laporan_pengeringan': pertanyaan status/laporan (contoh: "
                     "'lot pengeringan apa yang jalan', 'kadar air LOT-... "
                     "berapa'). "

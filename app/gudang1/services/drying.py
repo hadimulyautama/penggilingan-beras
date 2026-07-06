@@ -238,6 +238,52 @@ async def log_cooling(
     return lot, prev + 1, prev == 0
 
 
+async def finish_cooling(
+    db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
+) -> tuple[DryingLot, float]:
+    """Nyatakan pendinginan SELESAI. Ini keputusan OPERATOR — bukan efek samping
+    pemindahan ke silo. Gabah boleh TETAP di dryer setelah dingin (mis. kedua
+    silo belum kosong); dryer sudah idle sejak titik ini. Waktu inilah basis
+    analisa downtime dryer. Kembalikan (lot, durasi_pendinginan_jam)."""
+    if not kode_lot:
+        raise DryingError("Sebutkan kode lot, contoh: `pendinginan selesai LOT-20260702-01`")
+    lot = await get_lot_by_kode(db, kode_lot)
+    if lot is None:
+        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status == "di_dryer":
+        raise DryingError(
+            f"Lot {kode_lot} belum mulai dikeringkan. Ketik `mulai pengeringan {kode_lot}` dulu."
+        )
+    if lot.waktu_selesai_pendinginan is not None:
+        raise DryingError(f"Lot {kode_lot} sudah dinyatakan selesai pendinginan.")
+
+    now = input_time(tanggal, jam)
+    # Pastikan pengeringan selesai & pendinginan sudah mulai (idempoten).
+    if lot.status != "selesai":
+        lot.status = "selesai"
+        if lot.waktu_selesai_pengeringan is None:
+            lot.waktu_selesai_pengeringan = now
+        await _close_late_notifs(db, lot.id)
+    await _ensure_cooling_started(db, lot, lot.waktu_selesai_pengeringan or now, user)
+    if lot.waktu_mulai_pendinginan and now < lot.waktu_mulai_pendinginan:
+        raise DryingError(
+            f"Waktu selesai pendinginan lebih awal dari mulai pendinginan "
+            f"({lot.waktu_mulai_pendinginan:%d-%m-%Y %H:%M})."
+        )
+    lot.waktu_selesai_pendinginan = now
+    db.add(DryingCoolingLog(
+        drying_lot_id=lot.id, waktu=now, catatan="pendinginan selesai", input_by=user.id,
+    ))
+    await log_activity(
+        db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+        changed_by=user.id, field_name="waktu_selesai_pendinginan",
+        new_value="pendinginan selesai",
+    )
+    await db.commit()
+    await db.refresh(lot)
+    return lot, _hours(now, lot.waktu_mulai_pendinginan or now)
+
+
 # ─────────────────────────── Bentuk lot ───────────────────────────
 @dataclass
 class LotResult:

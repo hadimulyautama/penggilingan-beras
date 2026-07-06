@@ -157,6 +157,14 @@ async def masuk_silo(
             raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
         if lot.status != "selesai":
             raise SiloError(f"Lot {kode_lot} belum selesai dikeringkan.")
+        # Pendinginan SELESAI harus dinyatakan operator DULU (bukan dipicu oleh
+        # pemindahan ini) — supaya downtime dryer terukur: lot bisa selesai dingin
+        # sambil tetap di dryer menunggu silo kosong.
+        if lot.waktu_selesai_pendinginan is None:
+            raise SiloError(
+                f"Lot {kode_lot} belum dinyatakan selesai pendinginan. "
+                f"Nyatakan `pendinginan selesai {kode_lot}` dulu."
+            )
         dup = (
             await db.execute(
                 select(SiloStorage.id).where(
@@ -185,12 +193,8 @@ async def masuk_silo(
             b = await db.get(PurchaseBatch, bid)
             if b:
                 b.status_batch = "di_silo"
-        # OTOMATIS: gabah pindah ke silo → fase pendinginan SELESAI (operator
-        # sering lupa input 'pendinginan selesai').
-        if lot.waktu_mulai_pendinginan is None:
-            lot.waktu_mulai_pendinginan = now
-        if lot.waktu_selesai_pendinginan is None:
-            lot.waktu_selesai_pendinginan = now
+        # Pendinginan sudah dinyatakan selesai (dijaga di atas) — pindah ini
+        # murni perpindahan fisik dryer → silo, tidak menyentuh waktu pendinginan.
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
@@ -294,11 +298,8 @@ async def moving_started(
     )
     db.add(ml)
     await db.flush()
-    # OTOMATIS: mulai dipindah ke silo → fase pendinginan SELESAI.
-    if lot.waktu_mulai_pendinginan is None:
-        lot.waktu_mulai_pendinginan = now
-    if lot.waktu_selesai_pendinginan is None:
-        lot.waktu_selesai_pendinginan = now
+    # CATATAN: pendinginan selesai TIDAK diset di sini — itu keputusan operator
+    # terpisah (`pendinginan selesai LOT-...`) demi ukuran downtime dryer.
     await log_activity(
         db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
         changed_by=user.id, new_value=f"mulai pindah {lot.kode_lot}",
