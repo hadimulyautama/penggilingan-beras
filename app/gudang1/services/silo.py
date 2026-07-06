@@ -75,6 +75,33 @@ async def _lot_kg(db: AsyncSession, lot_id: int) -> float:
     return float((await db.execute(stmt)).scalar_one())
 
 
+async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]:
+    """Semua penyimpanan aktif (terisi) di silo — bisa >1 baris untuk kering
+    yang menunggu (tiap batch 1 baris, tanpa lot)."""
+    return list(
+        (
+            await db.execute(
+                select(SiloStorage).where(
+                    SiloStorage.silo_id == silo_id, SiloStorage.status == "terisi"
+                )
+            )
+        ).scalars().all()
+    )
+
+
+async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
+    if row.drying_lot_id:
+        return await _lot_kg(db, row.drying_lot_id)
+    if row.purchase_batch_id:
+        b = await db.get(PurchaseBatch, row.purchase_batch_id)
+        return float(b.berat_total_kg) if b else 0.0
+    return 0.0
+
+
+async def _silo_content_kg(db: AsyncSession, silo_id: int) -> float:
+    return sum([await _row_kg(db, r) for r in await _silo_active_rows(db, silo_id)])
+
+
 async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
     stmt = (
         select(Supplier.nama_supplier)
@@ -185,45 +212,31 @@ async def masuk_silo(
                 select(DryingLotBatch.id).where(DryingLotBatch.purchase_batch_id == batch.id)
             )
         ).first()
-        if in_lot:
-            raise SiloError(f"Batch {kode_batch} sudah masuk lot.")
+        if in_lot or batch.status_batch == "di_silo":
+            raise SiloError(f"Batch {kode_batch} sudah masuk lot/silo.")
         kg_new = float(batch.berat_total_kg)
 
-        if occupied and occupied.tipe_masuk == "dari_pengeringan":
+        # Model baru: kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
+        # Lot dibentuk saat 'giling silo X'. Boleh menumpuk sampai kapasitas silo.
+        rows = await _silo_active_rows(db, silo.id)
+        if any(r.tipe_masuk == "dari_pengeringan" for r in rows):
             raise SiloError(
                 f"Silo {nama_silo} berisi lot pengeringan — tidak bisa dicampur "
                 "gabah kering langsung. Pakai silo lain."
             )
-
-        if occupied:
-            # Gabung ke lot kering-langsung yang sudah ada di silo ini.
-            lot = await db.get(DryingLot, occupied.drying_lot_id)
-            existing_kg = await _lot_kg(db, lot.id)
-            _ensure_cap(silo, nama_silo, existing_kg, kg_new)
-            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=batch.id))
-            batch.status_batch = "di_silo"
-            isi, tipe, digabung = lot.kode_lot, "langsung_kering", True
-            kg = existing_kg + kg_new
-        else:
-            # Bikin lot baru di silo (dryer_id NULL = tidak lewat pengering).
-            _ensure_cap(silo, nama_silo, 0, kg_new)
-            lot = DryingLot(
-                kode_lot=await next_drying_lot_code(db),
-                dryer_id=None, waktu_mulai_pengeringan=now,
-                waktu_selesai_pengeringan=now, status="selesai", created_by=user.id,
+        existing_kg = await _silo_content_kg(db, silo.id)
+        _ensure_cap(silo, nama_silo, existing_kg, kg_new)
+        db.add(
+            SiloStorage(
+                silo_id=silo.id, purchase_batch_id=batch.id, drying_lot_id=None,
+                tipe_masuk="langsung_kering", tanggal_masuk=now,
+                input_by=user.id, status="terisi",
             )
-            db.add(lot)
-            await db.flush()
-            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=batch.id))
-            db.add(
-                SiloStorage(
-                    silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="langsung_kering",
-                    tanggal_masuk=now, input_by=user.id, status="terisi",
-                )
-            )
-            batch.status_batch = "di_silo"
-            isi, tipe = lot.kode_lot, "langsung_kering"
-            kg = kg_new
+        )
+        batch.status_batch = "di_silo"
+        digabung = bool(rows)  # sudah ada kering menunggu sebelumnya
+        isi, tipe = batch.kode_batch, "langsung_kering"
+        kg = existing_kg + kg_new
     else:
         raise SiloError(
             "Sebutkan lot atau batch yang dimasukkan, contoh:\n"
@@ -427,22 +440,31 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
             if silo.kapasitas_ton is not None
             else "kapasitas belum diatur"
         )
-        st = await _active_storage(db, silo.id)
-        if st is None:
+        rows = await _silo_active_rows(db, silo.id)
+        if not rows:
             lines.append(f"• {silo.nama_silo}: kosong ({cap})")
             continue
-        jam = (now - st.tanggal_masuk).total_seconds() / 3600
-        if st.drying_lot_id:
-            lot = await db.get(DryingLot, st.drying_lot_id)
-            kg = await _lot_kg(db, st.drying_lot_id)
-            sups = ", ".join(await _lot_suppliers(db, st.drying_lot_id)) or "-"
+        lot_row = next((r for r in rows if r.drying_lot_id), None)
+        if lot_row is not None:
+            jam = (now - lot_row.tanggal_masuk).total_seconds() / 3600
+            lot = await db.get(DryingLot, lot_row.drying_lot_id)
+            kg = await _lot_kg(db, lot_row.drying_lot_id)
+            sups = ", ".join(await _lot_suppliers(db, lot_row.drying_lot_id)) or "-"
             isi = f"{lot.kode_lot if lot else 'lot'} ({sups})"
+            lines.append(
+                f"• {silo.nama_silo}: terisi — {isi}, {_fmt_kg(kg)}, {jam:.0f} jam ({cap})"
+            )
         else:
-            b = await db.get(PurchaseBatch, st.purchase_batch_id)
-            sup = await db.get(Supplier, b.supplier_id) if b else None
-            kg = float(b.berat_total_kg) if b else 0
-            isi = f"{b.kode_batch if b else 'batch'} ({sup.nama_supplier if sup else '-'})"
-        lines.append(
-            f"• {silo.nama_silo}: terisi — {isi}, {_fmt_kg(kg)}, {jam:.0f} jam ({cap})"
-        )
+            # Kering MENUNGGU (belum jadi lot — lot dibentuk saat digiling).
+            kodes, total = [], 0.0
+            for r in rows:
+                b = await db.get(PurchaseBatch, r.purchase_batch_id)
+                if b:
+                    kodes.append(b.kode_batch)
+                    total += float(b.berat_total_kg)
+            lines.append(
+                f"• {silo.nama_silo}: kering menunggu — {len(kodes)} batch "
+                f"({', '.join(kodes)}), {_fmt_kg(total)} ({cap}).\n"
+                f"  _Ketik `giling {silo.nama_silo}` untuk membentuk lot & giling._"
+            )
     return "\n".join(lines)

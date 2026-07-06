@@ -290,10 +290,12 @@ async def handle_message(message: Message) -> None:
                     session.ctx_silo = res.nama_silo
                     session.ctx_last = "lot"
                     total = f"{res.kg:,.0f}".replace(",", ".")
-                    gab = " (digabung)" if res.digabung else ""
+                    gab = " (menumpuk)" if res.digabung else ""
                     await message.answer(
-                        f"✓ {bk} masuk *Silo {res.nama_silo}*{gab} (kering langsung).\n"
-                        f"• Berat: {total} kg",
+                        f"✓ {bk} masuk *Silo {res.nama_silo}*{gab} — kering menunggu.\n"
+                        f"• Berat: {total} kg\n"
+                        f"⏸️ Lot terbentuk saat digiling. Ketik `giling silo {res.nama_silo}` "
+                        "bila siap (semua kering di silo itu jadi 1 lot).",
                         parse_mode="Markdown",
                     )
                 except SiloError as e:

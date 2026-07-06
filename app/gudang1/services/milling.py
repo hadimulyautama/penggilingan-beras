@@ -21,8 +21,8 @@ from app.models import (
     Supplier,
 )
 from app.services.activity_log import log_activity
-from app.services.codegen import next_milling_code
-from app.gudang1.services.silo import get_g1_silo
+from app.services.codegen import next_drying_lot_code, next_milling_code
+from app.gudang1.services.silo import _silo_active_rows, get_g1_silo
 
 
 class MillingError(Exception):
@@ -89,8 +89,8 @@ async def start_milling(
     silo = await get_g1_silo(db, nama_silo)
     if silo is None:
         raise MillingError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
-    st = await _active_storage(db, silo.id)
-    if st is None:
+    rows = await _silo_active_rows(db, silo.id)
+    if not rows:
         raise MillingError(f"Silo {nama_silo} kosong — tidak ada yang bisa digiling.")
     active = (
         await db.execute(
@@ -102,8 +102,30 @@ async def start_milling(
     if active:
         raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
 
-    berat = await _storage_kg(db, st)
     now = input_time(tanggal, jam)
+    lot_row = next((r for r in rows if r.drying_lot_id), None)
+    if lot_row is not None:
+        st = lot_row  # dari pengeringan: lot sudah ada
+    else:
+        # KERING menunggu: bentuk 1 LOT dari SEMUA batch di silo saat giling dimulai.
+        loose = [r for r in rows if r.purchase_batch_id]
+        lot = DryingLot(
+            kode_lot=await next_drying_lot_code(db), dryer_id=None,
+            waktu_mulai_pengeringan=now, waktu_selesai_pengeringan=now,
+            status="selesai", created_by=user.id,
+        )
+        db.add(lot)
+        await db.flush()
+        for r in loose:
+            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=r.purchase_batch_id))
+        st = loose[0]  # konsolidasi: baris pertama jadi lot-row, sisanya ditutup
+        st.drying_lot_id = lot.id
+        st.purchase_batch_id = None
+        for r in loose[1:]:
+            r.status = "kosong"
+        await db.flush()
+
+    berat = await _storage_kg(db, st)
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
