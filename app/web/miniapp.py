@@ -885,7 +885,10 @@ _HTML = """<!doctype html>
  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:13px 15px;margin-bottom:11px}
  .ct{font-size:13px;font-weight:600;color:var(--mut);margin:0 0 7px;letter-spacing:.02em}
  .cb{white-space:pre-wrap;word-break:break-word;margin:0;font-size:14px}
- .act{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:11px 13px;margin-top:8px;font-size:14px;font-weight:500;color:var(--tx)}
+ .act{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px 13px;margin-bottom:9px;font-size:14px;font-weight:500;color:var(--tx)}
+ .tabs{display:flex;gap:5px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin:0 2px 14px}
+ .tab{flex:1;text-align:center;padding:9px 6px;border-radius:9px;font-size:14px;font-weight:600;color:var(--mut);border:none;background:transparent}
+ .tab.on{background:var(--ac);color:var(--acx)}
  .muted{color:var(--mut);text-align:center;padding:30px 0}
  .err{color:#d93025;text-align:center;padding:24px 0}
  #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;z-index:20}
@@ -902,6 +905,10 @@ _HTML = """<!doctype html>
    <div><div class="hi" id="hi">Memuat…</div><div class="role" id="ts"></div></div>
    <button class="btn" onclick="load()">↻ Segarkan</button>
  </div>
+ <div class="tabs" id="tabs" style="display:none">
+   <button class="tab on" id="tab_acts" onclick="showTab('acts')">⚡ Aksi Cepat</button>
+   <button class="tab" id="tab_dash" onclick="showTab('dash')">📊 Dashboard</button>
+ </div>
  <div id="app"><div class="muted">Memuat data…</div></div>
  <div id="modal" onclick="if(event.target.id==='modal')closeModal()"></div>
  <div id="toast"></div>
@@ -910,6 +917,8 @@ _HTML = """<!doctype html>
  if (tg){ tg.ready(); tg.expand(); }
  const H = {Authorization: "tma " + ((tg && tg.initData) || "")};
  let MENU = {};
+ let DATA = null;      // {sections, menu}
+ let TAB = "acts";     // acts | dash
  function esc(s){const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
  function val(id){const e=document.getElementById(id);return e?e.value:"";}
  function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",2600);}
@@ -923,18 +932,34 @@ _HTML = """<!doctype html>
      const d = await getJSON("/miniapp/dashboard");
      document.getElementById("hi").textContent="Halo, "+d.user.nama;
      document.getElementById("ts").innerHTML='<span class="pill">'+esc(d.user.role)+'</span>';
-     let html="";
      let menu=[]; try{ menu = await getJSON("/miniapp/actions/menu"); }catch(e){}
-     if(menu.length){
-       MENU={}; menu.forEach(a=>MENU[a.id]=a);
-       html += '<div class="card"><p class="ct">⚡ Aksi cepat</p>'+
-         menu.map(a=>'<button class="act" onclick="openAction(\\''+a.id+'\\')">'+esc(a.label)+'</button>').join('')+'</div>';
-     }
-     html += d.sections.map(s=>'<div class="card"><p class="ct">'+esc(s.icon+" "+s.title)+'</p><pre class="cb">'+esc(s.body)+'</pre></div>').join("");
-     app.innerHTML = html || '<div class="muted">Belum ada data.</div>';
+     MENU={}; menu.forEach(a=>MENU[a.id]=a);
+     DATA={sections:d.sections, menu:menu};
+     document.getElementById("tabs").style.display = menu.length ? "flex" : "none";
+     if(!menu.length) TAB="dash";   // tanpa aksi cepat -> langsung dashboard
+     render();
    }catch(err){
      document.getElementById("hi").textContent="Gagal masuk";
+     document.getElementById("tabs").style.display="none";
      app.innerHTML='<div class="err">'+esc(String(err))+'</div>';
+   }
+ }
+
+ function showTab(t){ TAB=t; render(); }
+
+ function render(){
+   const app=document.getElementById("app");
+   document.getElementById("tab_acts").classList.toggle("on", TAB==="acts");
+   document.getElementById("tab_dash").classList.toggle("on", TAB==="dash");
+   if(!DATA){ return; }
+   if(TAB==="acts"){
+     app.innerHTML = DATA.menu.length
+       ? DATA.menu.map(a=>'<button class="act" onclick="openAction(\\''+a.id+'\\')">'+esc(a.label)+'</button>').join('')
+       : '<div class="muted">Tidak ada aksi cepat untuk peran Anda.</div>';
+   }else{
+     app.innerHTML = DATA.sections.length
+       ? DATA.sections.map(s=>'<div class="card"><p class="ct">'+esc(s.icon+" "+s.title)+'</p><pre class="cb">'+esc(s.body)+'</pre></div>').join("")
+       : '<div class="muted">Belum ada data.</div>';
    }
  }
 
