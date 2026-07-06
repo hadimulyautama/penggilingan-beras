@@ -78,8 +78,12 @@ async def dashboard(user: User = Depends(require_miniapp_user)) -> dict:
     from app.inventory.finished_goods import laporan_stok_barang_jadi, hitung_stok_bekatul
     from app.inventory.packaging import laporan_stok_kemasan
 
+    from app.services.pemantau import pemantau_nyangkut
+
     sections: list[dict] = []
     async with SessionLocal() as db:
+        sections.append({"icon": "⚠️", "title": "Perlu tindakan (nyangkut)", "body": _clean(
+            await pemantau_nyangkut(db, financial=fin))})
         sections.append({"icon": "🌾", "title": "Gudang 1 — Selepan", "body": _clean(
             await status_gudang1(db) + "\n\n" + await laporan_pk_siap_transfer(db))})
         sections.append({"icon": "🏭", "title": "Gudang 2 — Penyosohan", "body": _clean(

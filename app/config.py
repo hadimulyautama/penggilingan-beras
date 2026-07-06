@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # Stok kemasan minimum (lembar) — di bawah ini beri notifikasi/warning.
     min_kemasan_lembar: int = 1_000
 
+    # Ambang "nyangkut" (jam) — item diam lebih lama dari ini disorot.
+    nyangkut_fisik_jam: float = 12    # langkah fisik tersendat (proses/pindah)
+    nyangkut_verif_jam: float = 24    # verifikasi/QC tertunda
+
     # Admin awal (di-seed otomatis ke DB kosong saat startup).
     # Kosongkan admin_telegram_id bila tidak ingin auto-seed user.
     admin_telegram_id: int | None = None

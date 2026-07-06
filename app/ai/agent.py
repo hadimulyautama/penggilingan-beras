@@ -82,6 +82,18 @@ _READ_TOOLS_UMUM = [
         ),
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "item_nyangkut",
+        "description": (
+            "Item yang NYANGKUT / mandek / terlupa lintas siklus: gabah belum "
+            "diproses, di dryer belum mulai pengeringan, didinginkan belum ke "
+            "silo, kering di silo belum digiling, giling/penyosohan berjalan "
+            "terlalu lama, PK diterima belum dimasukkan, plus verifikasi/QC "
+            "tertunda (staff). Pakai untuk 'apa yang nyangkut/mandek/tertunda/"
+            "perlu ditindak/mangkrak'."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 _READ_TOOLS_KEUANGAN = [
@@ -229,6 +241,10 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
         if name == "tugas_pending":
             from app.services.report import pending_verifikasi
             return await pending_verifikasi(db)
+
+        if name == "item_nyangkut":
+            from app.services.pemantau import pemantau_nyangkut
+            return await pemantau_nyangkut(db, financial=financial)
 
         if name == "laporan_keuangan":
             if not financial:
