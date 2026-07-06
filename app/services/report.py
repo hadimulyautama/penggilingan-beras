@@ -295,6 +295,8 @@ async def status_gudang1(db: AsyncSession) -> str:
     """Gabungan semua proses yang sedang berlangsung di Gudang 1."""
     from app.gudang1.services.drying import dryer_load_kg, laporan_pengeringan
     from app.gudang1.services.milling import laporan_milling
+    from app.gudang1.services.silo import laporan_silo
+    from app.models import SiloStorage
     from app.services.transfer import laporan_pk_siap_transfer
 
     # Milling berjalan?
@@ -305,18 +307,27 @@ async def status_gudang1(db: AsyncSession) -> str:
             .where(MillingProcess.status == "proses")
         )
     ).scalar_one()
-    # Gabah di dryer (dikeringkan/didinginkan)?
+    # Gabah di dryer (menunggu/dikeringkan/didinginkan)?
     in_dryer = await dryer_load_kg(db)
+    # Isi silo (lot hasil pengeringan ATAU kering menunggu)?
+    silo_isi = (
+        await db.execute(
+            select(func.count()).select_from(SiloStorage)
+            .where(SiloStorage.status == "terisi")
+        )
+    ).scalar_one()
 
-    if not mill_running and in_dryer <= 0:
+    if not mill_running and in_dryer <= 0 and not silo_isi:
         return (
-            "📍 Gudang 1: tidak ada proses yang sedang berlangsung saat ini.\n"
-            "(Tidak ada pengeringan, pendinginan, maupun giling aktif.)"
+            "📍 Gudang 1: tidak ada gabah/proses saat ini.\n"
+            "(Dryer & silo kosong, tak ada giling aktif.)"
         )
 
-    parts = ["📍 Yang sedang berlangsung di Gudang 1:\n"]
+    parts = ["📍 Status Gudang 1:\n"]
     if in_dryer > 0:
         parts.append(await laporan_pengeringan(db))
+    if silo_isi:
+        parts.append(await laporan_silo(db))
     if mill_running:
         parts.append(await laporan_milling(db))
     # Info tambahan PK menunggu transfer (bila ada).

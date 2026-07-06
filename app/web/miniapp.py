@@ -138,6 +138,8 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "berat", "label": "Berat (kg)", "type": "number"},
                  {"name": "kondisi", "label": "Kondisi gabah", "type": "select", "options": KONDISI},
                  {"name": "plat", "label": "Plat truk", "type": "text"},
+                 {"name": "tujuan", "label": "Tujuan (utk kering)", "type": "select",
+                  "options": [["dryer", "Dryer"], ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
              ]},
             {"id": "kadar_air", "label": "💧 Update kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
@@ -250,11 +252,18 @@ def _err(e: Exception, default: str) -> HTTPException:
     return HTTPException(400, str(e.args[0]) if e.args else default)
 
 
+async def _chat_confirm(user: User, text: str, bot_name: str = "gudang1") -> None:
+    """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort)."""
+    from app.bots.notify import notify_user
+    await notify_user(user.telegram_user_id, "📱 _(aksi cepat)_ " + text, bot_name)
+
+
 class GabahMasukReq(BaseModel):
     supplier: str
     berat: float
     kondisi: str
     plat: str | None = None
+    tujuan: str | None = None  # utk kering: dryer / silo_a / silo_b
 
 
 @router.post("/actions/gabah-masuk")
@@ -264,7 +273,12 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
         raise HTTPException(400, "Kondisi harus basah atau kering.")
     if not (req.plat or "").strip():
         raise HTTPException(400, "Plat truk wajib diisi.")
+    if req.kondisi == "kering" and req.tujuan not in ("dryer", "silo_a", "silo_b"):
+        raise HTTPException(400, "Untuk gabah kering, pilih tujuan: Dryer / Silo A / Silo B.")
+
     from app.gudang1.services.purchase import create_purchase_batch
+    from app.gudang1.services.drying import masuk_dryer, DryingError
+    from app.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -275,7 +289,24 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
             )
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal mencatat gabah.")
-    return {"ok": True, "pesan": f"Gabah tercatat: {r.batch.kode_batch}."}
+        kode = r.batch.kode_batch
+
+        # PENEMPATAN (agar tak nyangkut sebagai 'baru').
+        tempat, warn = "", ""
+        try:
+            if req.kondisi == "basah" or req.tujuan == "dryer":
+                await masuk_dryer(db, user=u, kode_batch_list=[kode])
+                tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
+            else:  # kering → silo
+                silo = "A" if req.tujuan == "silo_a" else "B"
+                await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
+                tempat = f"🏗️ masuk Silo {silo} (kering menunggu — lot terbentuk saat digiling)"
+        except (DryingError, SiloError) as e:
+            warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
+
+    pesan = f"✓ Gabah *{kode}* ({req.kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
 
 
 class KadarAirReq(BaseModel):
@@ -294,7 +325,9 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(require_miniapp_u
                                indikator=req.kadar_air, tes_manual=None)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update kadar air.")
-    return {"ok": True, "pesan": f"Kadar air {req.kode_lot}: {req.kadar_air:g}%."}
+    pesan = f"✓ Kadar air *{req.kode_lot}*: {req.kadar_air:g}%."
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
 
 
 class HasilGilingReq(BaseModel):
@@ -313,7 +346,9 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_min
                                berat_kumulatif=req.berat_kumulatif)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update hasil giling.")
-    return {"ok": True, "pesan": f"Hasil giling {req.kode_proses} diperbarui."}
+    pesan = f"✓ Hasil giling *{req.kode_proses}*: {req.berat_kumulatif:g} kg (kumulatif)."
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
 
 
 class VerifyGabahReq(BaseModel):
@@ -338,7 +373,9 @@ async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(require_min
                                      metode=req.metode, nilai_rupiah=req.nilai)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal verifikasi harga.")
-    return {"ok": True, "pesan": f"Harga {req.kode_batch} tersimpan."}
+    pesan = f"✓ Harga gabah *{req.kode_batch}* diverifikasi & tersimpan."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
 
 
 class TransferReq(BaseModel):
@@ -361,7 +398,9 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(require_miniapp
         except TransferError as e:
             raise _err(e, "Gagal pemindahan PK.")
     jns = (r.jenis + " ") if r.jenis else ""
-    return {"ok": True, "pesan": f"{r.transfer.kode_transfer}: {jns}→ {r.lokasi_label}."}
+    pesan = f"✓ Pemindahan PK *{r.transfer.kode_transfer}*: {jns}→ {r.lokasi_label}."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
 
 
 # ─────────────────────────── Halaman Mini App ───────────────────────────
