@@ -703,6 +703,7 @@ PROSES_PENGERINGAN = {
                 "type": "string",
                 "enum": [
                     "bentuk_lot",
+                    "mulai_pengeringan",
                     "log_kadar_air",
                     "log_pendinginan",
                     "selesai_pengeringan",
@@ -710,12 +711,16 @@ PROSES_PENGERINGAN = {
                     "bukan_pengeringan",
                 ],
                 "description": (
-                    "'bentuk_lot': gabungkan batch gabah jadi 1 lot untuk "
-                    "dikeringkan / dimasukkan ke mesin pengering (contoh: "
-                    "'keringkan GB-... dan GB-...', 'buat lot pengeringan dari "
-                    "GB-...', 'masukkan gabah pertama dan kedua ke oven', "
-                    "'oven-kan GB-...', 'gabah GB-... masuk dryer', 'keringkan "
-                    "di mesin pengering'). "
+                    "'bentuk_lot': masukkan batch gabah ke mesin pengering / "
+                    "bentuk 1 lot — BELUM mulai pemanasan (contoh: 'keringkan "
+                    "GB-... dan GB-...', 'buat lot dari GB-...', 'masukkan gabah "
+                    "pertama & kedua ke dryer', 'oven-kan GB-...', 'gabah GB-... "
+                    "masuk dryer'). Pakai bila menyebut batch GABAH (GB-...). "
+                    "'mulai_pengeringan': MULAI proses pengeringan/pemanasan lot "
+                    "yang SUDAH di dryer (contoh: 'mulai pengeringan LOT-...', "
+                    "'nyalakan dryer', 'panaskan LOT-...', 'mulai keringkan "
+                    "LOT-...', 'jalankan pengeringan LOT-...'). Pakai bila ada "
+                    "kata 'mulai/nyalakan/panaskan/jalankan' + lot (LOT-...). "
                     "'log_kadar_air': catat/laporkan kadar air gabah yang sedang "
                     "dikeringkan — SELALU pilih ini bila ada angka kadar air, "
                     "MESKIPUN kode lot tidak disebut (kode diisi dari konteks). "

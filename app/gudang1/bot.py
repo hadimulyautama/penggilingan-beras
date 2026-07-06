@@ -55,6 +55,8 @@ from app.gudang1.services.drying import (
     resolve_batch_kodes,
     sole_active_lot_kode,
     sole_cooling_lot_kode,
+    sole_dryer_lot_kode,
+    start_drying,
 )
 from app.services.undo import UndoError, undo_last
 from app.gudang1.services.purchase import (
@@ -616,7 +618,8 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
         return False
 
     _WRITE = {
-        "bentuk_lot": "Membentuk lot pengeringan",
+        "bentuk_lot": "Memasukkan gabah ke dryer",
+        "mulai_pengeringan": "Memulai pengeringan",
         "log_kadar_air": "Mencatat kadar air",
         "log_pendinginan": "Mencatat pendinginan",
         "selesai_pengeringan": "Menandai pengeringan selesai",
@@ -630,6 +633,8 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
     lot_kode = p.kode_lot or _lot_code(text) or session.ctx_lot
     if not lot_kode and p.intent in ("log_kadar_air", "selesai_pengeringan"):
         lot_kode = await sole_active_lot_kode(db)
+    if not lot_kode and p.intent == "mulai_pengeringan":
+        lot_kode = await sole_dryer_lot_kode(db)
     if not lot_kode and p.intent == "log_pendinginan":
         lot_kode = await sole_cooling_lot_kode(db)
     try:
@@ -663,10 +668,23 @@ async def _handle_pengeringan(message: Message, db, user, text: str, session) ->
             session.ctx_last = "lot"
             total = f"{res.total_kg:,.0f}".replace(",", ".")
             await message.answer(
-                f"✓ Lot *{res.lot.kode_lot}* dibentuk ({res.kondisi}).\n"
+                f"✓ Lot *{res.lot.kode_lot}* masuk dryer ({res.kondisi}).\n"
                 f"• Batch: {', '.join(res.batch_kodes)}\n"
                 f"• Total: {total} kg\n"
-                "ℹ️ Update kadar air minimal tiap 5 jam.",
+                "⏸️ *Belum mulai pengeringan.* Ketik `mulai pengeringan "
+                f"{res.lot.kode_lot}` saat pemanasan dijalankan.",
+                parse_mode="Markdown",
+            )
+        elif p.intent == "mulai_pengeringan":
+            lot = await start_drying(
+                db, user=user, kode_lot=lot_kode, tanggal=p.tanggal, jam=p.jam
+            )
+            session.ctx_lot = lot.kode_lot
+            session.ctx_last = "lot"
+            await message.answer(
+                f"🔥 Pengeringan *{lot.kode_lot}* dimulai.\n"
+                "ℹ️ Update kadar air minimal tiap 5 jam. "
+                "Ketik `pengeringan selesai` bila sudah kering.",
                 parse_mode="Markdown",
             )
         elif p.intent == "log_kadar_air":

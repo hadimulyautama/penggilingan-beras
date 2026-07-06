@@ -144,7 +144,8 @@ async def _g1_dryer(db: AsyncSession) -> Dryer | None:
 # (drying selesai tapi belum dipindah ke silo). Silo = keluar dari dryer.
 def _in_dryer_where():
     belum_ke_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
-    return (DryingLot.status.in_(["proses", "selesai"]), belum_ke_silo)
+    # di_dryer (masuk, belum mulai) + proses (dikeringkan) + selesai (didinginkan).
+    return (DryingLot.status.in_(["di_dryer", "proses", "selesai"]), belum_ke_silo)
 
 
 async def dryer_load_kg(db: AsyncSession) -> float:
@@ -196,6 +197,10 @@ async def log_cooling(
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status == "di_dryer":
+        raise DryingError(
+            f"Lot {kode_lot} belum mulai dikeringkan. Ketik `mulai pengeringan {kode_lot}` dulu."
+        )
 
     now = input_time(tanggal, jam)
     if lot.status != "selesai":
@@ -317,8 +322,10 @@ async def create_drying_lot(
     lot = DryingLot(
         kode_lot=kode_lot,
         dryer_id=dryer.id if dryer else None,
-        waktu_mulai_pengeringan=now,
-        status="proses",
+        # Masuk dryer ≠ mulai pengeringan. Pengeringan dimulai lewat
+        # start_drying (operator G1) → status jadi 'proses' + waktu diisi.
+        waktu_mulai_pengeringan=None,
+        status="di_dryer",
         created_by=user.id,
     )
     db.add(lot)
@@ -349,15 +356,27 @@ async def create_drying_lot(
 
 
 async def active_drying_lot(db: AsyncSession) -> DryingLot | None:
-    """Lot yang SEDANG dikeringkan di dryer (status 'proses'), bila ada.
-
-    Dipakai untuk fitur gabung: 1 dryer, jadi maksimal 1 lot 'proses'.
+    """Lot yang MENGISI dryer (belum ke silo): 'di_dryer' (masuk, belum mulai)
+    atau 'proses' (sedang dikeringkan). 1 dryer = maksimal 1 lot aktif.
     """
     return (
         await db.execute(
-            select(DryingLot).where(DryingLot.status == "proses").order_by(DryingLot.id.desc())
+            select(DryingLot)
+            .where(DryingLot.status.in_(["di_dryer", "proses"]))
+            .order_by(DryingLot.id.desc())
         )
     ).scalars().first()
+
+
+async def sole_dryer_lot_kode(db: AsyncSession) -> str | None:
+    """Kode lot bila TEPAT ADA SATU lot 'di_dryer' (untuk 'mulai pengeringan'
+    tanpa menyebut kode)."""
+    rows = (
+        await db.execute(
+            select(DryingLot.kode_lot).where(DryingLot.status == "di_dryer")
+        )
+    ).scalars().all()
+    return rows[0] if len(rows) == 1 else None
 
 
 async def _lot_batches(db: AsyncSession, lot_id: int) -> list[PurchaseBatch]:
@@ -379,7 +398,7 @@ async def add_batches_to_lot(
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
-    if lot.status != "proses":
+    if lot.status not in ("di_dryer", "proses"):
         raise DryingError(f"Lot {kode_lot} sudah selesai — tidak bisa menambah batch.")
 
     kodes = list(dict.fromkeys(kode_batch_list or []))
@@ -520,6 +539,35 @@ async def log_moisture(
 
 
 # ─────────────────────────── Selesai ───────────────────────────
+async def start_drying(
+    db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
+) -> DryingLot:
+    """MULAI pengeringan lot yang sudah di dryer ('di_dryer' → 'proses').
+
+    Masuk dryer ≠ mulai pengeringan — ini input terpisah (operator G1 utama)."""
+    if not kode_lot:
+        raise DryingError(
+            "Sebutkan lot yang mulai dikeringkan, contoh: `mulai pengeringan LOT-...`"
+        )
+    lot = await get_lot_by_kode(db, kode_lot)
+    if lot is None:
+        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status == "proses":
+        raise DryingError(f"Lot {kode_lot} sudah mulai dikeringkan.")
+    if lot.status != "di_dryer":
+        raise DryingError(f"Lot {kode_lot} tidak sedang di dryer (status: {lot.status}).")
+    now = input_time(tanggal, jam)
+    lot.status = "proses"
+    lot.waktu_mulai_pengeringan = now
+    await log_activity(
+        db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+        changed_by=user.id, field_name="status", new_value="proses (mulai pengeringan)",
+    )
+    await db.commit()
+    await db.refresh(lot)
+    return lot
+
+
 async def finish_drying(
     db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
 ) -> tuple[DryingLot, float]:
@@ -528,6 +576,10 @@ async def finish_drying(
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status == "di_dryer":
+        raise DryingError(
+            f"Lot {kode_lot} belum mulai dikeringkan. Ketik `mulai pengeringan {kode_lot}` dulu."
+        )
 
     now = input_time(tanggal, jam)
     if lot.status != "selesai":
