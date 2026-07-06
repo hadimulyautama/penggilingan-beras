@@ -126,7 +126,8 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
     fin = can_see_financials(user)
     g1 = await _is_g1_operator(user)
-    KONDISI = [["basah", "Basah (→ PK KS)"], ["kering", "Kering (→ PK KL)"]]
+    KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
+               ["kering", "Kering (→ PK KL)"]]
     TUJUAN = [["silo_a", "Silo A"], ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     METODE = [["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
     actions: list[dict] = []
@@ -271,7 +272,7 @@ class GabahMasukReq(BaseModel):
 async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(await _is_g1_operator(user))
     if req.kondisi not in ("basah", "kering"):
-        raise HTTPException(400, "Kondisi harus basah atau kering.")
+        raise HTTPException(400, "Pilih kondisi gabah dulu: Basah atau Kering.")
     if not (req.plat or "").strip():
         raise HTTPException(400, "Plat truk wajib diisi.")
     # Tujuan WAJIB dipilih (tak boleh default/terlupa) — hindari salah tempat.
