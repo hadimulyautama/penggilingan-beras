@@ -43,6 +43,28 @@ def can_transfer_pk(user: User | None) -> bool:
     return bool(user) and user.role in ("staff", "admin")
 
 
+async def user_wh_scope(db: AsyncSession, user: User | None) -> str:
+    """Lingkup akses gudang user:
+    - 'all'  : staff/admin (lihat & kerjakan semua)
+    - 'g1'   : operator Gudang 1 (hanya Gudang 1)
+    - 'g2'   : operator Gudang 2 (hanya Gudang 2)
+    - 'none' : operator tanpa gudang / lainnya.
+    Operator Gudang 1 & 2 dipisah tegas: tak boleh lintas gudang."""
+    if not user:
+        return "none"
+    if user.role in ("admin", "staff"):
+        return "all"
+    if user.role == "operator" and user.default_warehouse_id:
+        from app.models import Warehouse
+        wh = await db.get(Warehouse, user.default_warehouse_id)
+        nama = (wh.nama_gudang if wh else "") or ""
+        if nama.startswith("Gudang 1"):
+            return "g1"
+        if nama.startswith("Gudang 2"):
+            return "g2"
+    return "none"
+
+
 def share_contact_keyboard() -> ReplyKeyboardMarkup:
     """Tombol untuk membagikan nomor HP (aktivasi user pra-daftar via HP)."""
     return ReplyKeyboardMarkup(

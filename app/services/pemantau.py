@@ -40,13 +40,19 @@ def _fmt(items: list[tuple[str, float]], label: str, thr: float) -> str | None:
     return f"• {label} — {len(stale)} item (terlama {tua:.0f}j): {show}"
 
 
-async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
-    """Laporan item nyangkut. Operator lihat langkah fisik; staff/admin + verifikasi."""
+async def pemantau_nyangkut(
+    db: AsyncSession, *, financial: bool = True, scope: str = "all"
+) -> str:
+    """Laporan item nyangkut. `scope`: 'all'/'g1'/'g2' — operator hanya lihat
+    gudangnya. Verifikasi hanya untuk financial (staff/admin)."""
     now = now_local()
     fh = settings.nyangkut_fisik_jam
     vh = settings.nyangkut_verif_jam
-    fisik: list[str] = []
+    fisik_g1: list[str] = []
+    fisik_g2: list[str] = []
     verif: list[str] = []
+    g1 = scope in ("all", "g1")
+    g2 = scope in ("all", "g2")
 
     def add(bucket, line):
         if line:
@@ -57,7 +63,7 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
     rows = (await db.execute(
         select(PurchaseBatch).where(PurchaseBatch.status_batch == "baru")
     )).scalars().all()
-    add(fisik, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
+    add(fisik_g1, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
                     "Gabah belum diproses", fh))
 
     # 2. Menunggu di dryer (lepas), belum 'mulai pengeringan'.
@@ -67,7 +73,7 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
             PurchaseBatch.status_batch == "di_dryer", PurchaseBatch.id.not_in(in_lot)
         )
     )).scalars().all()
-    add(fisik, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
+    add(fisik_g1, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
                     "Di dryer, belum mulai pengeringan", fh))
 
     # 3. Lot selesai (didinginkan) belum dipindah ke silo.
@@ -75,7 +81,7 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
     rows = (await db.execute(
         select(DryingLot).where(DryingLot.status == "selesai", belum_silo)
     )).scalars().all()
-    add(fisik, _fmt(
+    add(fisik_g1, _fmt(
         [(l.kode_lot, _hrs(now, l.waktu_selesai_pendinginan or l.waktu_selesai_pengeringan))
          for l in rows if l.dryer_id is not None],  # dryer_id NULL = kering-langsung (di silo)
         "Didinginkan, belum ke silo", fh))
@@ -90,21 +96,21 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
             SiloStorage.purchase_batch_id.is_not(None),
         )
     )).all()
-    add(fisik, _fmt([(b.kode_batch, _hrs(now, s.tanggal_masuk)) for s, b in rows],
+    add(fisik_g1, _fmt([(b.kode_batch, _hrs(now, s.tanggal_masuk)) for s, b in rows],
                     "Kering di silo, belum digiling", fh))
 
     # 5. Milling berjalan lama (belum selesai).
     rows = (await db.execute(
         select(MillingProcess).where(MillingProcess.status == "proses")
     )).scalars().all()
-    add(fisik, _fmt([(m.kode_proses, _hrs(now, m.waktu_mulai)) for m in rows],
+    add(fisik_g1, _fmt([(m.kode_proses, _hrs(now, m.waktu_mulai)) for m in rows],
                     "Penggilingan berjalan lama", fh))
 
     # 6. Penyosohan berjalan lama.
     rows = (await db.execute(
         select(PolishingProcess).where(PolishingProcess.status == "proses")
     )).scalars().all()
-    add(fisik, _fmt([(p.kode_proses, _hrs(now, p.waktu_mulai)) for p in rows],
+    add(fisik_g2, _fmt([(p.kode_proses, _hrs(now, p.waktu_mulai)) for p in rows],
                     "Penyosohan berjalan lama", fh))
 
     # 7. PK luar diterima, belum dimasukkan silo/tumpuk.
@@ -114,7 +120,7 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
             PkPurchaseBatch.status_batch == "diterima", ada_intake
         )
     )).scalars().all()
-    add(fisik, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
+    add(fisik_g2, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
                     "PK diterima, belum dimasukkan", fh))
 
     # ── VERIFIKASI: tertunda (staff/admin) ──
@@ -151,6 +157,7 @@ async def pemantau_nyangkut(db: AsyncSession, *, financial: bool = True) -> str:
                         "PK luar belum di-QC", vh))
 
     parts: list[str] = []
+    fisik = (fisik_g1 if g1 else []) + (fisik_g2 if g2 else [])
     if fisik:
         parts.append("🔧 *Perlu diproses:*\n" + "\n".join(fisik))
     if financial and verif:

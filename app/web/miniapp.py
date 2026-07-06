@@ -72,27 +72,33 @@ async def _hpp_terkini(db) -> str:
 async def dashboard(user: User = Depends(require_miniapp_user)) -> dict:
     """Snapshot dashboard sesuai role. Keuangan (HPP/tugas) hanya staff/admin."""
     fin = can_see_financials(user)
+    from app.bots.common import user_wh_scope
     from app.services.report import status_gudang1, pending_verifikasi
     from app.services.transfer import laporan_pk_siap_transfer
     from app.gudang2.service import laporan_stok_gudang2
     from app.inventory.finished_goods import laporan_stok_barang_jadi, hitung_stok_bekatul
     from app.inventory.packaging import laporan_stok_kemasan
-
     from app.services.pemantau import pemantau_nyangkut
 
     sections: list[dict] = []
     async with SessionLocal() as db:
+        # Operator hanya lihat gudangnya; staff/admin lihat semua.
+        scope = await user_wh_scope(db, user)
+        see_g1 = scope in ("all", "g1")
+        see_g2 = scope in ("all", "g2")
         sections.append({"icon": "⚠️", "title": "Perlu tindakan (nyangkut)", "body": _clean(
-            await pemantau_nyangkut(db, financial=fin))})
-        sections.append({"icon": "🌾", "title": "Gudang 1 — Selepan", "body": _clean(
-            await status_gudang1(db) + "\n\n" + await laporan_pk_siap_transfer(db))})
-        sections.append({"icon": "🏭", "title": "Gudang 2 — Penyosohan", "body": _clean(
-            await laporan_stok_gudang2(db, financial=fin))})
-        bekatul = float(await hitung_stok_bekatul(db))
-        sections.append({"icon": "📦", "title": "Barang jadi & bekatul", "body": _clean(
-            await laporan_stok_barang_jadi(db) + f"\n\n🌾 Bekatul curah: {_rp(bekatul)} kg")})
-        sections.append({"icon": "🧺", "title": "Kemasan", "body": _clean(
-            await laporan_stok_kemasan(db))})
+            await pemantau_nyangkut(db, financial=fin, scope=scope))})
+        if see_g1:
+            sections.append({"icon": "🌾", "title": "Gudang 1 — Selepan", "body": _clean(
+                await status_gudang1(db) + "\n\n" + await laporan_pk_siap_transfer(db))})
+        if see_g2:
+            sections.append({"icon": "🏭", "title": "Gudang 2 — Penyosohan", "body": _clean(
+                await laporan_stok_gudang2(db, financial=fin))})
+            bekatul = float(await hitung_stok_bekatul(db))
+            sections.append({"icon": "📦", "title": "Barang jadi & bekatul", "body": _clean(
+                await laporan_stok_barang_jadi(db) + f"\n\n🌾 Bekatul curah: {_rp(bekatul)} kg")})
+            sections.append({"icon": "🧺", "title": "Kemasan", "body": _clean(
+                await laporan_stok_kemasan(db))})
         if fin:
             sections.append({"icon": "✅", "title": "Tugas verifikasi & QC", "body": _clean(
                 await pending_verifikasi(db))})

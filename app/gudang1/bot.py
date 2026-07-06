@@ -27,6 +27,7 @@ from app.bots.common import (
     handle_shared_contact,
     reset_draft,
     unregistered_reply,
+    user_wh_scope,
 )
 from app.ai.fast_route import fast_domain
 from app.ai.router import route_domain
@@ -185,6 +186,16 @@ async def handle_message(message: Message) -> None:
         user = await authenticate(db, tg_id)
         if not user:
             await _reject_unregistered(message)
+            return
+
+        # Operator Gudang 2 TIDAK boleh mengakses bot/informasi Gudang 1.
+        scope = await user_wh_scope(db, user)
+        if scope not in ("all", "g1"):
+            await message.answer(
+                "⛔ Bot ini khusus *Gudang 1* (Selepan). Anda operator *Gudang 2* "
+                "— gunakan `@polesan_bot`.",
+                parse_mode="Markdown",
+            )
             return
 
         session = get_session(message.bot.id, tg_id)
