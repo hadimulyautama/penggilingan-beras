@@ -128,8 +128,9 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     g1 = await _is_g1_operator(user)
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
-    TUJUAN = [["silo_a", "Silo A"], ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
-    METODE = [["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
+    TUJUAN = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
+              ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
+    METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
     actions: list[dict] = []
     if g1:
         actions += [
@@ -322,6 +323,8 @@ class KadarAirReq(BaseModel):
 @router.post("/actions/kadar-air")
 async def act_kadar_air(req: KadarAirReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(await _is_g1_operator(user))
+    if not (req.kode_lot or "").strip():
+        raise HTTPException(400, "Pilih lot pengeringan dulu.")
     from app.gudang1.services.drying import log_moisture
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -343,6 +346,8 @@ class HasilGilingReq(BaseModel):
 @router.post("/actions/hasil-giling")
 async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(await _is_g1_operator(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses giling dulu.")
     from app.gudang1.services.milling import log_progress
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -365,8 +370,10 @@ class VerifyGabahReq(BaseModel):
 @router.post("/actions/verify-gabah")
 async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(can_see_financials(user))
+    if not (req.kode_batch or "").strip():
+        raise HTTPException(400, "Pilih batch gabah dulu.")
     if req.metode not in ("per_kg", "total"):
-        raise HTTPException(400, "Metode harus per_kg atau total.")
+        raise HTTPException(400, "Pilih metode dulu: Total atau Per kg.")
     from app.services.verification import get_batch_by_kode, verify_gabah_price
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -392,6 +399,10 @@ class TransferReq(BaseModel):
 @router.post("/actions/transfer-pk")
 async def act_transfer_pk(req: TransferReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(can_transfer_pk(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses PK dulu.")
+    if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
+        raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
     from app.services.transfer import create_internal_transfer, TransferError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -500,7 +511,8 @@ _HTML = """<!doctype html>
    m.style.display="flex";
    a.fields.forEach(f=>{ if(f.type==="remote"){ getJSON(f.source).then(list=>{
        const s=document.getElementById("rem_"+f.name);
-       s.innerHTML = list.length? list.map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('') : '<option value="">(tidak ada pilihan)</option>';
+       const head='<option value="">'+(list.length?"— pilih —":"(tidak ada pilihan)")+'</option>';
+       s.innerHTML = head + list.map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('');
      }).catch(()=>{}); }});
    document.getElementById("ok").onclick=async()=>{
      const btn=document.getElementById("ok"); btn.disabled=true;
