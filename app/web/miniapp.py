@@ -498,9 +498,11 @@ _HTML = """<!doctype html>
    a.fields.forEach(f=>{
      inner+='<label>'+esc(f.label)+'</label>';
      if(f.type==="select"){
-       inner+='<select data-name="'+f.name+'">'+f.options.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('')+'</select>';
+       // Auto '— pilih —' bila belum diawali opsi kosong (paksa pilih, tanpa default).
+       const opts=(f.options.length && f.options[0][0]==="")?f.options:[["","— pilih —"]].concat(f.options);
+       inner+='<select data-name="'+f.name+'" data-choice="1" data-label="'+esc(f.label)+'">'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('')+'</select>';
      }else if(f.type==="remote"){
-       inner+='<select data-name="'+f.name+'" id="rem_'+f.name+'"><option>memuat…</option></select>';
+       inner+='<select data-name="'+f.name+'" data-choice="1" data-label="'+esc(f.label)+'" id="rem_'+f.name+'"><option>memuat…</option></select>';
      }else{
        inner+='<input data-name="'+f.name+'" type="'+(f.type==="number"?"number":"text")+'" inputmode="'+(f.type==="number"?"decimal":"text")+'">';
      }
@@ -517,6 +519,10 @@ _HTML = """<!doctype html>
    document.getElementById("ok").onclick=async()=>{
      const btn=document.getElementById("ok"); btn.disabled=true;
      try{
+       // Semua field pilihan WAJIB dipilih (tanpa default) — hindari salah input.
+       const miss=[];
+       m.querySelectorAll("select[data-choice]").forEach(el=>{ if(!el.value) miss.push(el.getAttribute("data-label")||el.getAttribute("data-name")); });
+       if(miss.length){ toast("Wajib dipilih: "+miss.join(", ")); btn.disabled=false; return; }
        const body={};
        m.querySelectorAll("[data-name]").forEach(el=>{ let v=el.value; if(el.type==="number") v=(v===""?null:parseFloat(v)); body[el.getAttribute("data-name")]=v; });
        const res=await post(a.post, body);
