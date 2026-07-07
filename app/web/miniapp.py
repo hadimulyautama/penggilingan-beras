@@ -254,7 +254,11 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
              ]},
         ]
+    BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
+             ["sedang", "Sedang"], ["banyak", "Banyak"]]
+    KEPUTUSAN = [["", "— belum ditentukan —"], ["terima", "Terima"], ["tolak", "Tolak"]]
     if fin:
+        # Tugas pokok staff (keuangan & QC lintas gudang).
         actions += [
             {"id": "verify_gabah", "label": "✅ Verifikasi harga gabah",
              "post": "/miniapp/actions/verify-gabah", "fields": [
@@ -262,6 +266,41 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                   "source": "/miniapp/actions/gabah-unverified"},
                  {"name": "metode", "label": "Metode", "type": "select", "options": METODE},
                  {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
+             ]},
+            {"id": "verify_output", "label": "⚙️ Verifikasi output giling",
+             "post": "/miniapp/actions/verify-output",
+             "hint": "Catat berat PK final → rendemen terhitung.", "fields": [
+                 {"name": "kode_proses", "label": "Proses giling selesai", "type": "remote",
+                  "source": "/miniapp/actions/milling-unverified"},
+                 {"name": "berat_output", "label": "Berat PK final (kg)", "type": "number"},
+             ]},
+            {"id": "qc_giling", "label": "🔬 QC hasil giling",
+             "post": "/miniapp/actions/qc-giling",
+             "hint": "Isi minimal salah satu: kadar air / broken / susut.", "fields": [
+                 {"name": "kode_proses", "label": "Proses giling", "type": "remote",
+                  "source": "/miniapp/actions/milling-noqc"},
+                 {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
+                 {"name": "broken", "label": "Broken (%)", "type": "number"},
+                 {"name": "susut", "label": "Susut (%)", "type": "number"},
+             ]},
+            {"id": "qc_pk_luar", "label": "🧪 QC & harga PK luar",
+             "post": "/miniapp/actions/qc-pk-luar",
+             "hint": "Uji lab + keputusan terima/tolak. Bila terima, isi metode & "
+                     "nilai harga. Bila tolak, isi alasan.", "fields": [
+                 {"name": "kode_batch", "label": "PK luar (menunggu QC)", "type": "remote",
+                  "source": "/miniapp/actions/pk-luar-qc"},
+                 {"name": "keputusan", "label": "Keputusan (wajib pilih)", "type": "select",
+                  "options": KEPUTUSAN},
+                 {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
+                 {"name": "broken", "label": "Broken (%)", "type": "number"},
+                 {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
+                 {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
+                  "options": BUTIR, "optional": True},
+                 {"name": "metode", "label": "Metode harga (bila terima)", "type": "select",
+                  "options": METODE, "optional": True},
+                 {"name": "nilai", "label": "Nilai harga (Rp, bila terima)", "type": "number"},
+                 {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
+                 {"name": "alasan_tolak", "label": "Alasan (bila tolak)", "type": "text"},
              ]},
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/miniapp/actions/transfer-pk", "fields": [
@@ -452,6 +491,66 @@ async def pk_intake_pending(user: User = Depends(require_miniapp_user)) -> list[
             await db.execute(
                 select(PkPurchaseBatch).where(
                     PkPurchaseBatch.status_batch == "diterima", ada_intake
+                ).order_by(PkPurchaseBatch.id.desc()).limit(30)
+            )
+        ).scalars().all()
+    return [{"value": b.kode_batch,
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+            for b in rows]
+
+
+@router.get("/actions/milling-unverified")
+async def milling_unverified(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Milling SELESAI yang output PK-nya belum diverifikasi (berat final)."""
+    _require(can_see_financials(user))
+    from sqlalchemy import exists, select
+    from app.models import MillingProcess, MillingProcessVerification
+    async with SessionLocal() as db:
+        sudah = exists().where(
+            (MillingProcessVerification.milling_process_id == MillingProcess.id)
+            & (MillingProcessVerification.berat_output_final_kg.is_not(None))
+        )
+        procs = (
+            await db.execute(
+                select(MillingProcess.kode_proses).where(
+                    MillingProcess.status == "selesai", ~sudah
+                ).order_by(MillingProcess.kode_proses.desc())
+            )
+        ).scalars().all()
+    return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/milling-noqc")
+async def milling_noqc(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Milling SELESAI yang belum ada catatan QC sama sekali."""
+    _require(can_see_financials(user))
+    from sqlalchemy import select
+    from app.models import MillingProcess, MillingQcLog
+    async with SessionLocal() as db:
+        qc_ids = select(MillingQcLog.milling_process_id).distinct()
+        procs = (
+            await db.execute(
+                select(MillingProcess.kode_proses).where(
+                    MillingProcess.status == "selesai",
+                    MillingProcess.id.not_in(qc_ids),
+                ).order_by(MillingProcess.kode_proses.desc())
+            )
+        ).scalars().all()
+    return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/pk-luar-qc")
+async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """PK luar yang masih menunggu uji lab / QC (belum diterima/ditolak)."""
+    _require(can_see_financials(user))
+    from sqlalchemy import select
+    from app.models import PkPurchaseBatch
+    async with SessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(PkPurchaseBatch).where(
+                    PkPurchaseBatch.flag_unverified.is_(True),
+                    PkPurchaseBatch.status_batch == "baru",
                 ).order_by(PkPurchaseBatch.id.desc()).limit(30)
             )
         ).scalars().all()
@@ -729,6 +828,118 @@ async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(require_min
     return {"ok": True, "pesan": pesan}
 
 
+class VerifyOutputReq(BaseModel):
+    kode_proses: str
+    berat_output: float | None = None
+
+
+@router.post("/actions/verify-output")
+async def act_verify_output(req: VerifyOutputReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(can_see_financials(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses giling dulu.")
+    if req.berat_output is None:
+        raise HTTPException(400, "Isi berat PK final dulu.")
+    from app.gudang1.services.milling import verify_milling_output, MillingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await verify_milling_output(db, user=u, kode_proses=req.kode_proses,
+                                            berat_output=req.berat_output)
+        except MillingError as e:
+            raise _err(e, "Gagal verifikasi output.")
+    rnd = f" (rendemen {r.rendemen_persen:.1f}%)" if r.rendemen_persen is not None else ""
+    pesan = f"✓ Output *{req.kode_proses}* diverifikasi: {r.berat_output:g} kg{rnd}."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+class QcGilingReq(BaseModel):
+    kode_proses: str
+    kadar_air: float | None = None
+    broken: float | None = None
+    susut: float | None = None
+
+
+@router.post("/actions/qc-giling")
+async def act_qc_giling(req: QcGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(can_see_financials(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses giling dulu.")
+    if all(v is None for v in (req.kadar_air, req.broken, req.susut)):
+        raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / susut.")
+    from app.gudang1.services.milling import log_qc_milling, MillingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await log_qc_milling(db, user=u, kode_proses=req.kode_proses,
+                                     kadar_air=req.kadar_air, broken=req.broken,
+                                     susut=req.susut, kondisi=None)
+        except MillingError as e:
+            raise _err(e, "Gagal mencatat QC.")
+    det = ", ".join(
+        f"{lbl} {v:g}%" for lbl, v in
+        (("KA", r.kadar_air), ("broken", r.broken), ("susut", r.susut)) if v is not None
+    )
+    jns = f" [{r.kondisi}]" if r.kondisi else ""
+    pesan = f"✓ QC *{req.kode_proses}*{jns}: {det}."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+class QcPkLuarReq(BaseModel):
+    kode_batch: str
+    keputusan: str
+    kadar_air: float | None = None
+    broken: float | None = None
+    penyusutan: float | None = None
+    butir_kuning: str | None = None
+    metode: str | None = None
+    nilai: float | None = None
+    catatan_lab: str | None = None
+    alasan_tolak: str | None = None
+
+
+@router.post("/actions/qc-pk-luar")
+async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(can_see_financials(user))
+    if not (req.kode_batch or "").strip():
+        raise HTTPException(400, "Pilih PK luar yang mau di-QC dulu.")
+    if req.keputusan not in ("terima", "tolak"):
+        raise HTTPException(400, "Pilih keputusan dulu: Terima atau Tolak.")
+    harga_per_kg = total = None
+    if req.keputusan == "terima":
+        if (req.metode or "") not in ("per_kg", "total") or req.nilai is None:
+            raise HTTPException(400, "Untuk Terima, pilih metode harga & isi nilainya.")
+        if req.metode == "total":
+            total = req.nilai
+        else:
+            harga_per_kg = req.nilai
+    from app.gudang2.service import verify_pk_purchase, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await verify_pk_purchase(
+                db, user=u, kode=req.kode_batch, keputusan=req.keputusan,
+                kadar_air=req.kadar_air, broken=req.broken,
+                penyusutan_persen=req.penyusutan,
+                butir_kuning=(req.butir_kuning or None),
+                catatan_lab=(req.catatan_lab or None),
+                alasan_tolak=(req.alasan_tolak or None),
+                harga_per_kg=harga_per_kg, total=total,
+            )
+        except Gudang2Error as e:
+            raise _err(e, "Gagal QC PK luar.")
+    if r.keputusan == "terima":
+        hpp = f" — HPP {_rp(r.hpp_per_kg)}/kg" if r.hpp_per_kg else ""
+        pesan = f"✓ PK *{req.kode_batch}* DITERIMA (bersih {r.berat_bersih_kg:g} kg){hpp}."
+    else:
+        ref = f" Ref {r.rejection_kode}." if r.rejection_kode else ""
+        pesan = f"⛔ PK *{req.kode_batch}* DITOLAK & dikembalikan.{ref}"
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
 class TransferReq(BaseModel):
     kode_proses: str
     tujuan: str
@@ -969,9 +1180,11 @@ _HTML = """<!doctype html>
    a.fields.forEach(f=>{
      inner+='<label>'+esc(f.label)+'</label>';
      if(f.type==="select"){
-       // Auto '— pilih —' bila belum diawali opsi kosong (paksa pilih, tanpa default).
+       // Auto '— pilih —' bila belum diawali opsi kosong. Field opsional TIDAK
+       // dipaksa (tanpa data-choice); field wajib dipaksa pilih (tanpa default).
        const opts=(f.options.length && f.options[0][0]==="")?f.options:[["","— pilih —"]].concat(f.options);
-       inner+='<select data-name="'+f.name+'" data-choice="1" data-label="'+esc(f.label)+'">'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('')+'</select>';
+       const dc=f.optional?"":' data-choice="1"';
+       inner+='<select data-name="'+f.name+'"'+dc+' data-label="'+esc(f.label)+'">'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('')+'</select>';
      }else if(f.type==="remote"){
        inner+='<select data-name="'+f.name+'" data-choice="1" data-label="'+esc(f.label)+'" id="rem_'+f.name+'"><option>memuat…</option></select>';
      }else{
