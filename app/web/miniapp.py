@@ -257,6 +257,8 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
              ["sedang", "Sedang"], ["banyak", "Banyak"]]
     KEPUTUSAN = [["", "— belum ditentukan —"], ["terima", "Terima"], ["tolak", "Tolak"]]
+    JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
+                ["campuran", "Campuran"], ["semi_ks", "Semi KS"]]
     if fin:
         # Tugas pokok staff (keuangan & QC lintas gudang).
         actions += [
@@ -282,6 +284,17 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "susut", "label": "Susut (%)", "type": "number"},
+             ]},
+            {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
+             "post": "/miniapp/actions/catat-pk-luar",
+             "hint": "Catat kedatangan PK dari supplier. Selanjutnya di-QC & "
+                     "dinilai harga.", "fields": [
+                 {"name": "supplier", "label": "Supplier", "type": "text"},
+                 {"name": "berat", "label": "Berat (kg)", "type": "number"},
+                 {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
+                  "options": JENIS_PK},
+                 {"name": "plat", "label": "Plat truk", "type": "text"},
+                 {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
              ]},
             {"id": "qc_pk_luar", "label": "🧪 QC & harga PK luar",
              "post": "/miniapp/actions/qc-pk-luar",
@@ -883,6 +896,45 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(require_miniapp_u
     )
     jns = f" [{r.kondisi}]" if r.kondisi else ""
     pesan = f"✓ QC *{req.kode_proses}*{jns}: {det}."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+class CatatPkLuarReq(BaseModel):
+    supplier: str
+    berat: float | None = None
+    jenis_pk: str
+    plat: str | None = None
+    kadar_air: float | None = None
+
+
+@router.post("/actions/catat-pk-luar")
+async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+    _require(can_see_financials(user))
+    if not (req.supplier or "").strip():
+        raise HTTPException(400, "Isi nama supplier dulu.")
+    if not req.berat:
+        raise HTTPException(400, "Isi berat PK (kg) dulu.")
+    if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
+        raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
+    if not (req.plat or "").strip():
+        raise HTTPException(400, "Isi plat truk pengirim dulu.")
+    from app.gudang2.service import create_pk_purchase, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await create_pk_purchase(
+                db, user=u, nama_supplier=req.supplier.strip(), berat_kg=req.berat,
+                jenis_pk=req.jenis_pk, kadar_air=req.kadar_air,
+                no_polisi=req.plat.strip(),
+            )
+        except Gudang2Error as e:
+            raise _err(e, "Gagal mencatat PK luar.")
+    jl = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}.get(
+        r.batch.jenis_pk, r.batch.jenis_pk or "-")
+    baru = " (supplier baru)" if r.supplier_created else ""
+    pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
+             f"{jl} {req.berat:g} kg, truk {r.batch.no_polisi_truk}. Menunggu QC & harga.")
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
 
