@@ -55,8 +55,9 @@ from app.gudang2.service import (
     Gudang2Error,
     create_pk_purchase,
     laporan_stok_gudang2,
+    log_pk_qc,
     norm_jenis_pk,
-    verify_pk_purchase,
+    verify_pk_price,
 )
 from app.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
 from app.inventory.packaging import (
@@ -547,28 +548,45 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str, session) 
         elif p.intent == "beli_pk_luar":
             await _finish_or_ask_pk(message, db, user, session, p, text)
         elif p.intent == "verifikasi_pk_luar":
-            r = await verify_pk_purchase(
-                db, user=user, kode=p.kode, keputusan=p.keputusan,
-                kadar_air=p.kadar_air, broken=p.broken_persen,
-                penyusutan_persen=p.penyusutan_persen, butir_kuning=p.butir_kuning,
-                catatan_lab=p.catatan_lab, alasan_tolak=p.alasan_tolak,
-                potongan_kg=p.potongan_kg, harga_per_kg=p.harga_per_kg,
-                total=p.total_harga,
-            )
-            if r.keputusan == "tolak":
-                sebab = f"\nAlasan: {p.alasan_tolak}." if p.alasan_tolak else ""
+            # PK masuk = pasti diterima. Intent ini mencatat KUALITAS &/atau HARGA
+            # (dua hal terpisah); penolakan sudah tak berlaku.
+            if (p.keputusan or "").lower() == "tolak":
                 await message.answer(
-                    f"✓ PK luar {p.kode} *DITOLAK* saat QC — dikembalikan ke supplier "
-                    f"(ref {r.rejection_kode}).{sebab}",
+                    "ℹ️ PK yang masuk selalu diterima — penolakan tak berlaku lagi. "
+                    "Catat *kualitas* dan/atau *harga*-nya saja.",
                     parse_mode="Markdown",
                 )
             else:
-                await message.answer(
-                    f"✓ PK luar {p.kode} *diterima*. Berat bersih "
-                    f"{_kg(r.berat_bersih_kg)} · HPP {_rp(r.hpp_per_kg)}/kg.\n"
-                    "_Masukkan ke silo/tumpukan lewat_ `@polesan_bot`.",
-                    parse_mode="Markdown",
-                )
+                did: list[str] = []
+                harga_res = None
+                if any(v is not None for v in (
+                    p.kadar_air, p.broken_persen, p.penyusutan_persen,
+                    p.butir_kuning, p.catatan_lab,
+                )):
+                    await log_pk_qc(
+                        db, user=user, kode=p.kode, kadar_air=p.kadar_air,
+                        broken=p.broken_persen, penyusutan_persen=p.penyusutan_persen,
+                        butir_kuning=p.butir_kuning, catatan_lab=p.catatan_lab,
+                    )
+                    did.append("kualitas")
+                if p.harga_per_kg is not None or p.total_harga is not None:
+                    metode = "total" if p.total_harga is not None else "per_kg"
+                    nilai = p.total_harga if p.total_harga is not None else p.harga_per_kg
+                    harga_res = await verify_pk_price(
+                        db, user=user, kode=p.kode, metode=metode, nilai=nilai,
+                        potongan_kg=p.potongan_kg,
+                    )
+                    did.append("harga")
+                if not did:
+                    await message.answer(
+                        "Sebutkan kualitas (kadar air/broken/…) dan/atau harga PK-nya."
+                    )
+                else:
+                    msg = f"✓ PK luar {p.kode}: {' & '.join(did)} tercatat."
+                    if harga_res is not None:
+                        msg += (f"\nBersih {_kg(harga_res.berat_bersih_kg)} · "
+                                f"HPP {_rp(harga_res.hpp_per_kg)}/kg.")
+                    await message.answer(msg, parse_mode="Markdown")
     except (Gudang2Error, BackdateError) as e:
         await message.answer(str(e.args[0]) if e.args else "Terjadi kesalahan.")
     return True

@@ -6,7 +6,7 @@ ditindak — lewat panel dashboard / Mini App & pertanyaan bot (agent).
 """
 from __future__ import annotations
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,6 +18,7 @@ from app.models import (
     MillingProcessVerification,
     PkGudang2Intake,
     PkPurchaseBatch,
+    PkPurchaseVerification,
     PolishingProcess,
     PurchaseBatch,
     SiloStorage,
@@ -152,15 +153,32 @@ async def pemantau_nyangkut(
             [(m.kode_proses, _hrs(now, m.waktu_selesai or m.waktu_mulai)) for m in rows],
             "Output giling belum di-QC", vh))
 
-        # 10. PK luar belum di-QC.
+        # 10a. PK luar (sudah masuk) belum diinput kualitasnya.
+        qc_ada = exists().where(
+            (PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
+            & or_(
+                PkPurchaseVerification.kadar_air.is_not(None),
+                PkPurchaseVerification.broken_persen.is_not(None),
+                PkPurchaseVerification.penyusutan_persen.is_not(None),
+                PkPurchaseVerification.butir_kuning.is_not(None),
+                PkPurchaseVerification.catatan_lab.is_not(None),
+            )
+        )
         rows = (await db.execute(
             select(PkPurchaseBatch).where(
-                PkPurchaseBatch.flag_unverified.is_(True),
-                PkPurchaseBatch.status_batch == "baru",
+                PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk")),
+                ~qc_ada,
             )
         )).scalars().all()
         add(verif, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
-                        "PK luar belum di-QC", vh))
+                        "PK luar belum diinput kualitas", vh))
+
+        # 10b. PK luar harga belum diverifikasi.
+        rows = (await db.execute(
+            select(PkPurchaseBatch).where(PkPurchaseBatch.flag_unverified.is_(True))
+        )).scalars().all()
+        add(verif, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
+                        "Harga PK luar belum diverifikasi", vh))
 
     parts: list[str] = []
     fisik = (fisik_g1 if g1 else []) + (fisik_g2 if g2 else [])

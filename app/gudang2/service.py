@@ -204,9 +204,11 @@ async def create_pk_purchase(
     jenis_pk: str | None = None, kadar_air: float | None = None,
     no_polisi: str | None = None, tanggal: date | None = None, jam: time | None = None,
 ) -> PkPurchaseResult:
-    """Catat pembelian PK dari luar (Gudang 2). Menunggu QC + verifikasi harga.
+    """Catat PK dari luar yang MASUK (Gudang 2). PK yang masuk = PASTI diterima
+    (tak ada penolakan). Selanjutnya: input KUALITAS (properti batch) & verifikasi
+    HARGA — dua langkah terpisah, kapan saja, oleh staff/admin (seperti gabah G1).
 
-    Master §2: input PK dari luar + QC = STAFF/ADMIN saja (bukan operator).
+    Master §2: input PK dari luar = STAFF/ADMIN saja (bukan operator).
     Wajib: supplier, berat, plat truk, jenis PK (ks/kl/campuran/semi_ks).
     """
     if user.role not in ("staff", "admin"):
@@ -229,7 +231,8 @@ async def create_pk_purchase(
         kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat_kg,
         no_polisi_truk=no_polisi, jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
-        status_batch="baru", flag_unverified=True,
+        # PK masuk = pasti diterima. flag_unverified = harga belum diverifikasi.
+        status_batch="diterima", flag_unverified=True,
     )
     db.add(batch)
     await db.flush()
@@ -241,8 +244,8 @@ async def create_pk_purchase(
     await create_notification(
         db, tipe="verifikasi_pk_luar",
         pesan=(
-            f"🟡 PK luar {kode} ({supplier.nama_supplier}, {berat_kg:.0f} kg) "
-            "menunggu QC + verifikasi harga."
+            f"🟡 PK luar {kode} ({supplier.nama_supplier}, {berat_kg:.0f} kg) MASUK "
+            "— menunggu input kualitas & verifikasi harga."
         ),
         target_role="staff", prioritas="kuning",
         table_name="pk_purchase_batches", record_id=batch.id,
@@ -254,126 +257,139 @@ async def create_pk_purchase(
 
 
 @dataclass
-class PkVerifyResult:
+class PkQcResult:
     batch: PkPurchaseBatch
-    keputusan: str
+    kadar_air: float | None
+    broken: float | None
+    penyusutan: float | None
+    butir_kuning: str | None
+
+
+@dataclass
+class PkPriceResult:
+    batch: PkPurchaseBatch
     berat_bersih_kg: float
     total_biaya: float | None
     hpp_per_kg: float | None
-    rejection_kode: str | None = None
 
 
 _BUTIR_KUNING = {"bersih", "sedang", "banyak"}
 
 
-async def verify_pk_purchase(
-    db: AsyncSession, *, user: User, kode: str, keputusan: str | None,
+async def _get_or_make_pk_verif(db: AsyncSession, batch_id: int) -> PkPurchaseVerification:
+    verif = (
+        await db.execute(
+            select(PkPurchaseVerification).where(
+                PkPurchaseVerification.pk_purchase_batch_id == batch_id
+            )
+        )
+    ).scalars().first()
+    if verif is None:
+        verif = PkPurchaseVerification(pk_purchase_batch_id=batch_id, keputusan="terima")
+        db.add(verif)
+    return verif
+
+
+async def log_pk_qc(
+    db: AsyncSession, *, user: User, kode: str,
     kadar_air: float | None = None, broken: float | None = None,
     penyusutan_persen: float | None = None, butir_kuning: str | None = None,
-    catatan_lab: str | None = None, alasan_tolak: str | None = None,
-    potongan_kg: float | None = None, potongan_alasan: str | None = None,
-    harga_per_kg: float | None = None, total: float | None = None,
-) -> PkVerifyResult:
-    """QC uji lab + harga PK luar (staff/admin). keputusan: terima/tolak.
-
-    Uji lab: kadar air, broken%, penyusutan (% bekatul lab), butir kuning
-    (bersih/sedang/banyak), catatan. Bila `tolak`: catat REJ- (dikembalikan
-    ke supplier) + notif; PK tidak pernah jadi stok.
-    """
+    catatan_lab: str | None = None,
+) -> PkQcResult:
+    """Input KUALITAS PK luar (uji lab) sebagai PROPERTI batch — bukan keputusan.
+    PK yang masuk sudah pasti diterima; ini hanya mencatat kualitasnya (kadar air,
+    broken%, penyusutan/bekatul lab%, butir kuning, catatan). Staff/admin, kapan
+    saja. Harga TIDAK disentuh di sini (langkah terpisah)."""
+    if user.role not in ("staff", "admin"):
+        raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
         await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
-    keputusan = (keputusan or "terima").lower()
-    if keputusan not in ("terima", "tolak"):
-        raise Gudang2Error("Keputusan QC harus: terima atau tolak.")
     if butir_kuning:
         butir_kuning = butir_kuning.lower().strip()
         if butir_kuning not in _BUTIR_KUNING:
             raise Gudang2Error("Butir kuning harus: bersih, sedang, atau banyak.")
+    if all(v is None for v in (kadar_air, broken, penyusutan_persen, butir_kuning, catatan_lab)):
+        raise Gudang2Error("Sebutkan hasil ujinya (kadar air / broken / penyusutan / butir kuning / catatan).")
 
-    berat_bersih = float(batch.berat_total_kg) - float(potongan_kg or 0)
-    total_biaya = None
-    hpp = None
-    metode = None
-    if keputusan == "terima":
-        if total is not None:
-            total_biaya = float(total)
-            hpp = total_biaya / berat_bersih if berat_bersih else None
-            metode = "total"
-        elif harga_per_kg is not None:
-            hpp = float(harga_per_kg)
-            total_biaya = hpp * berat_bersih
-            metode = "per_kg"
-        else:
-            raise Gudang2Error("Sebutkan harga PK (per kg atau total) untuk keputusan terima.")
-
-    verif = (
-        await db.execute(
-            select(PkPurchaseVerification).where(
-                PkPurchaseVerification.pk_purchase_batch_id == batch.id
-            )
-        )
-    ).scalars().first()
-    if verif is None:
-        verif = PkPurchaseVerification(pk_purchase_batch_id=batch.id)
-        db.add(verif)
+    verif = await _get_or_make_pk_verif(db, batch.id)
     verif.kadar_air = kadar_air
     verif.broken_persen = broken
     verif.penyusutan_persen = penyusutan_persen
     verif.butir_kuning = butir_kuning
     verif.catatan_lab = catatan_lab
-    verif.keputusan = keputusan
-    verif.alasan_tolak = alasan_tolak if keputusan == "tolak" else None
+    verif.keputusan = "terima"  # PK masuk selalu diterima
+    await log_activity(
+        db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
+        changed_by=user.id, field_name="qc",
+        new_value=f"ka={kadar_air} broken={broken} susut={penyusutan_persen} bk={butir_kuning}",
+    )
+    await db.commit()
+    await db.refresh(batch)
+    return PkQcResult(batch=batch, kadar_air=kadar_air, broken=broken,
+                      penyusutan=penyusutan_persen, butir_kuning=butir_kuning)
+
+
+async def verify_pk_price(
+    db: AsyncSession, *, user: User, kode: str,
+    metode: str | None = None, nilai: float | None = None,
+    potongan_kg: float | None = None, potongan_alasan: str | None = None,
+) -> PkPriceResult:
+    """Verifikasi HARGA PK luar — terpisah & tanpa terikat waktu (seperti harga
+    gabah G1). Staff/admin, kapan saja. Membereskan flag_unverified & mengisi
+    HPP; bila PK sudah terlanjur masuk silo/tumpuk, snapshot HPP intake diperbarui."""
+    if user.role not in ("staff", "admin"):
+        raise Gudang2Error("🔒 Verifikasi harga PK luar hanya oleh Staff/Admin.")
+    batch = (
+        await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
+    ).scalars().first()
+    if batch is None:
+        raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
+    if metode not in ("per_kg", "total") or nilai is None:
+        raise Gudang2Error("Sebutkan metode harga (per kg / total) & nilainya.")
+
+    berat_bersih = float(batch.berat_total_kg) - float(potongan_kg or 0)
+    if metode == "total":
+        total_biaya = float(nilai)
+        hpp = total_biaya / berat_bersih if berat_bersih else None
+    else:
+        hpp = float(nilai)
+        total_biaya = hpp * berat_bersih
+
+    verif = await _get_or_make_pk_verif(db, batch.id)
     verif.potongan_kg = potongan_kg
     verif.potongan_alasan = potongan_alasan
     verif.harga_per_kg = hpp
     verif.total_biaya = total_biaya
     verif.metode_harga = metode
     verif.verified_by = user.id
-    now = input_time(None)
-    verif.waktu_verifikasi = now
+    verif.waktu_verifikasi = input_time(None)
     verif.status_verifikasi = "terverifikasi"
-
     batch.flag_unverified = False
-    batch.status_batch = "diterima" if keputusan == "terima" else "ditolak"
+
+    # Backfill: bila PK sudah dimasukkan (intake) sebelum harga diverifikasi,
+    # perbarui snapshot HPP-nya agar nilai stok G2 ikut benar.
+    intakes = (
+        await db.execute(
+            select(PkGudang2Intake).where(
+                PkGudang2Intake.pk_purchase_batch_id == batch.id
+            )
+        )
+    ).scalars().all()
+    for it in intakes:
+        it.hpp_per_kg = hpp
+        it.flag_hpp_belum_tersedia = hpp is None
     await log_activity(
-        db, table_name="pk_purchase_verifications", record_id=batch.id, action="INSERT",
-        changed_by=user.id,
-        new_value=f"{keputusan} | potongan={potongan_kg} | hpp={hpp}",
+        db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
+        changed_by=user.id, field_name="harga",
+        new_value=f"metode={metode} potongan={potongan_kg} hpp={hpp}",
     )
-
-    rejection_kode = None
-    if keputusan == "tolak":
-        rej = PkRejection(
-            kode=await next_rejection_code(db, now.date()),
-            pk_purchase_batch_id=batch.id,
-            berat_kg=float(batch.berat_total_kg),
-            no_polisi_truk=batch.no_polisi_truk,
-            alasan=alasan_tolak,
-            tanggal=now.date(), waktu=now, created_by=user.id,
-        )
-        db.add(rej)
-        await db.flush()
-        rejection_kode = rej.kode
-        truk = f" (truk {batch.no_polisi_truk})" if batch.no_polisi_truk else ""
-        sebab = f" — {alasan_tolak}" if alasan_tolak else ""
-        await create_notification(
-            db, tipe="pk_ditolak",
-            pesan=(
-                f"⛔ PK {batch.kode_batch} ({float(batch.berat_total_kg):.0f} kg) DITOLAK "
-                f"& dikembalikan ke supplier{truk}. Ref {rej.kode}{sebab}."
-            ),
-            target_role="staff", prioritas="kuning",
-            table_name="pk_rejections", record_id=rej.id,
-        )
-
     await db.commit()
     await db.refresh(batch)
-    return PkVerifyResult(batch=batch, keputusan=keputusan, berat_bersih_kg=berat_bersih,
-                          total_biaya=total_biaya, hpp_per_kg=hpp,
-                          rejection_kode=rejection_kode)
+    return PkPriceResult(batch=batch, berat_bersih_kg=berat_bersih,
+                         total_biaya=total_biaya, hpp_per_kg=hpp)
 
 
 # ─────────────────────────── Intake ke silo/tumpukan ───────────────────────────
@@ -475,7 +491,11 @@ async def masukkan_pk_luar(
     db: AsyncSession, *, user: User, kode: str | None, tujuan: str | None = None,
     tanggal=None, jam=None,
 ) -> IntakeResult:
-    """Masukkan PK luar yang SUDAH diterima (QC terima) ke silo/tumpukan G2."""
+    """Masukkan PK luar (yang sudah MASUK/diterima) ke silo/tumpukan G2.
+
+    PK masuk = pasti diterima, jadi boleh langsung ditempatkan operator; input
+    kualitas & verifikasi harga jalan terpisah (HPP intake di-backfill saat harga
+    diverifikasi bila saat masuk belum ada)."""
     if not kode:
         raise Gudang2Error("Sebutkan kode PK luarnya, contoh: `masukkan PKL-... ke silo B`")
     batch = (
@@ -483,10 +503,6 @@ async def masukkan_pk_luar(
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
-    if batch.status_batch == "ditolak":
-        raise Gudang2Error(f"PK luar {kode} ditolak saat QC — tidak bisa dimasukkan.")
-    if batch.flag_unverified:
-        raise Gudang2Error(f"PK luar {kode} belum di-QC/verifikasi — proses itu dulu.")
     dup = (
         await db.execute(
             select(PkGudang2Intake.id).where(

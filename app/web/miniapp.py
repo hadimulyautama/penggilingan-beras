@@ -256,7 +256,6 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
         ]
     BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
              ["sedang", "Sedang"], ["banyak", "Banyak"]]
-    KEPUTUSAN = [["", "— belum ditentukan —"], ["terima", "Terima"], ["tolak", "Tolak"]]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
                 ["campuran", "Campuran"], ["semi_ks", "Semi KS"]]
     if fin:
@@ -296,24 +295,31 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "plat", "label": "Plat truk", "type": "text"},
                  {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
              ]},
-            {"id": "qc_pk_luar", "label": "🧪 QC & harga PK luar",
+            {"id": "qc_pk_luar", "label": "🔬 Input kualitas PK luar",
              "post": "/miniapp/actions/qc-pk-luar",
-             "hint": "Uji lab + keputusan terima/tolak. Bila terima, isi metode & "
-                     "nilai harga. Bila tolak, isi alasan.", "fields": [
-                 {"name": "kode_batch", "label": "PK luar (menunggu QC)", "type": "remote",
+             "hint": "PK yang masuk sudah pasti diterima — ini hanya mencatat "
+                     "kualitasnya sebagai properti batch. Isi minimal salah satu.",
+             "fields": [
+                 {"name": "kode_batch", "label": "PK luar (belum ada kualitas)", "type": "remote",
                   "source": "/miniapp/actions/pk-luar-qc"},
-                 {"name": "keputusan", "label": "Keputusan (wajib pilih)", "type": "select",
-                  "options": KEPUTUSAN},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
                  {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
                   "options": BUTIR, "optional": True},
-                 {"name": "metode", "label": "Metode harga (bila terima)", "type": "select",
-                  "options": METODE, "optional": True},
-                 {"name": "nilai", "label": "Nilai harga (Rp, bila terima)", "type": "number"},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
-                 {"name": "alasan_tolak", "label": "Alasan (bila tolak)", "type": "text"},
+             ]},
+            {"id": "harga_pk_luar", "label": "💰 Verifikasi harga PK luar",
+             "post": "/miniapp/actions/harga-pk-luar",
+             "hint": "Terpisah dari kualitas — kapan saja. Isi metode & nilai; "
+                     "potongan opsional.", "fields": [
+                 {"name": "kode_batch", "label": "PK luar (harga belum diverifikasi)",
+                  "type": "remote", "source": "/miniapp/actions/pk-luar-harga"},
+                 {"name": "metode", "label": "Metode harga (wajib pilih)", "type": "select",
+                  "options": METODE},
+                 {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
+                 {"name": "potongan_kg", "label": "Potongan (kg) — opsional", "type": "number"},
+                 {"name": "potongan_alasan", "label": "Alasan potongan — opsional", "type": "text"},
              ]},
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/miniapp/actions/transfer-pk", "fields": [
@@ -554,7 +560,37 @@ async def milling_noqc(user: User = Depends(require_miniapp_user)) -> list[dict]
 
 @router.get("/actions/pk-luar-qc")
 async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
-    """PK luar yang masih menunggu uji lab / QC (belum diterima/ditolak)."""
+    """PK luar (sudah masuk) yang BELUM diinput kualitasnya."""
+    _require(can_see_financials(user))
+    from sqlalchemy import exists, or_, select
+    from app.models import PkPurchaseBatch, PkPurchaseVerification
+    async with SessionLocal() as db:
+        qc_ada = exists().where(
+            (PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
+            & or_(
+                PkPurchaseVerification.kadar_air.is_not(None),
+                PkPurchaseVerification.broken_persen.is_not(None),
+                PkPurchaseVerification.penyusutan_persen.is_not(None),
+                PkPurchaseVerification.butir_kuning.is_not(None),
+                PkPurchaseVerification.catatan_lab.is_not(None),
+            )
+        )
+        rows = (
+            await db.execute(
+                select(PkPurchaseBatch).where(
+                    PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk")),
+                    ~qc_ada,
+                ).order_by(PkPurchaseBatch.id.desc()).limit(30)
+            )
+        ).scalars().all()
+    return [{"value": b.kode_batch,
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+            for b in rows]
+
+
+@router.get("/actions/pk-luar-harga")
+async def pk_luar_harga(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """PK luar yang HARGA-nya belum diverifikasi (flag_unverified)."""
     _require(can_see_financials(user))
     from sqlalchemy import select
     from app.models import PkPurchaseBatch
@@ -563,7 +599,6 @@ async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
             await db.execute(
                 select(PkPurchaseBatch).where(
                     PkPurchaseBatch.flag_unverified.is_(True),
-                    PkPurchaseBatch.status_batch == "baru",
                 ).order_by(PkPurchaseBatch.id.desc()).limit(30)
             )
         ).scalars().all()
@@ -934,60 +969,84 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_mi
         r.batch.jenis_pk, r.batch.jenis_pk or "-")
     baru = " (supplier baru)" if r.supplier_created else ""
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
-             f"{jl} {req.berat:g} kg, truk {r.batch.no_polisi_truk}. Menunggu QC & harga.")
+             f"{jl} {req.berat:g} kg, truk {r.batch.no_polisi_truk}. "
+             "Diterima — menunggu input kualitas & verifikasi harga.")
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
 
 
 class QcPkLuarReq(BaseModel):
     kode_batch: str
-    keputusan: str
     kadar_air: float | None = None
     broken: float | None = None
     penyusutan: float | None = None
     butir_kuning: str | None = None
-    metode: str | None = None
-    nilai: float | None = None
     catatan_lab: str | None = None
-    alasan_tolak: str | None = None
 
 
 @router.post("/actions/qc-pk-luar")
 async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+    """Input kualitas PK luar (properti batch) — bukan keputusan terima/tolak."""
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
-        raise HTTPException(400, "Pilih PK luar yang mau di-QC dulu.")
-    if req.keputusan not in ("terima", "tolak"):
-        raise HTTPException(400, "Pilih keputusan dulu: Terima atau Tolak.")
-    harga_per_kg = total = None
-    if req.keputusan == "terima":
-        if (req.metode or "") not in ("per_kg", "total") or req.nilai is None:
-            raise HTTPException(400, "Untuk Terima, pilih metode harga & isi nilainya.")
-        if req.metode == "total":
-            total = req.nilai
-        else:
-            harga_per_kg = req.nilai
-    from app.gudang2.service import verify_pk_purchase, Gudang2Error
+        raise HTTPException(400, "Pilih PK luar dulu.")
+    if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan)) \
+            and not (req.butir_kuning or req.catatan_lab):
+        raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / "
+                                 "penyusutan / butir kuning / catatan.")
+    from app.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await verify_pk_purchase(
-                db, user=u, kode=req.kode_batch, keputusan=req.keputusan,
-                kadar_air=req.kadar_air, broken=req.broken,
-                penyusutan_persen=req.penyusutan,
+            r = await log_pk_qc(
+                db, user=u, kode=req.kode_batch, kadar_air=req.kadar_air,
+                broken=req.broken, penyusutan_persen=req.penyusutan,
                 butir_kuning=(req.butir_kuning or None),
                 catatan_lab=(req.catatan_lab or None),
-                alasan_tolak=(req.alasan_tolak or None),
-                harga_per_kg=harga_per_kg, total=total,
             )
         except Gudang2Error as e:
-            raise _err(e, "Gagal QC PK luar.")
-    if r.keputusan == "terima":
-        hpp = f" — HPP {_rp(r.hpp_per_kg)}/kg" if r.hpp_per_kg else ""
-        pesan = f"✓ PK *{req.kode_batch}* DITERIMA (bersih {r.berat_bersih_kg:g} kg){hpp}."
-    else:
-        ref = f" Ref {r.rejection_kode}." if r.rejection_kode else ""
-        pesan = f"⛔ PK *{req.kode_batch}* DITOLAK & dikembalikan.{ref}"
+            raise _err(e, "Gagal input kualitas PK.")
+    det = ", ".join(
+        f"{lbl} {v:g}%" for lbl, v in
+        (("KA", r.kadar_air), ("broken", r.broken), ("susut", r.penyusutan)) if v is not None
+    )
+    bk = f" · butir kuning {r.butir_kuning}" if r.butir_kuning else ""
+    pesan = f"✓ Kualitas PK *{req.kode_batch}* tercatat: {det or '—'}{bk}."
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+class HargaPkLuarReq(BaseModel):
+    kode_batch: str
+    metode: str
+    nilai: float | None = None
+    potongan_kg: float | None = None
+    potongan_alasan: str | None = None
+
+
+@router.post("/actions/harga-pk-luar")
+async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+    """Verifikasi harga PK luar — terpisah dari kualitas, kapan saja."""
+    _require(can_see_financials(user))
+    if not (req.kode_batch or "").strip():
+        raise HTTPException(400, "Pilih PK luar dulu.")
+    if req.metode not in ("per_kg", "total"):
+        raise HTTPException(400, "Pilih metode harga dulu: Total atau Per kg.")
+    if req.nilai is None:
+        raise HTTPException(400, "Isi nilai harga dulu.")
+    from app.gudang2.service import verify_pk_price, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await verify_pk_price(
+                db, user=u, kode=req.kode_batch, metode=req.metode, nilai=req.nilai,
+                potongan_kg=req.potongan_kg,
+                potongan_alasan=(req.potongan_alasan or None),
+            )
+        except Gudang2Error as e:
+            raise _err(e, "Gagal verifikasi harga PK.")
+    hpp = f" · HPP {_rp(r.hpp_per_kg)}/kg" if r.hpp_per_kg else ""
+    pesan = f"✓ Harga PK *{req.kode_batch}* terverifikasi (bersih {r.berat_bersih_kg:g} kg){hpp}."
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
 
