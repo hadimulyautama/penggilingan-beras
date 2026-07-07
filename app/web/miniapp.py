@@ -329,7 +329,26 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                  {"name": "tujuan", "label": "Tujuan", "type": "select", "options": TUJUAN},
              ]},
         ]
+    # Tandai gudang tiap aksi → dipakai Mini App memisah tab G1/G2 (admin/staff).
+    for a in actions:
+        a["wh"] = _ACTION_WH.get(a["id"], "g1")
     return actions
+
+
+# Pemetaan aksi → gudang. Aksi keuangan/QC dikelompokkan ke gudang yang relevan:
+# harga & QC gabah/giling = G1; PK luar (catat/kualitas/harga) = G2; transfer PK
+# berasal dari proses G1 → G1.
+_ACTION_WH = {
+    # Gudang 1 (Selepan)
+    "gabah_masuk": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
+    "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
+    "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
+    "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
+    # Gudang 2 (Penyosohan)
+    "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
+    "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "qc_pk_luar": "g2",
+    "harga_pk_luar": "g2",
+}
 
 
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
@@ -1227,10 +1246,7 @@ _HTML = """<!doctype html>
    <div><div class="hi" id="hi">Memuat…</div><div class="role" id="ts"></div></div>
    <button class="btn" onclick="load()">↻ Segarkan</button>
  </div>
- <div class="tabs" id="tabs" style="display:none">
-   <button class="tab on" id="tab_acts" onclick="showTab('acts')">⚡ Aksi Cepat</button>
-   <button class="tab" id="tab_dash" onclick="showTab('dash')">📊 Dashboard</button>
- </div>
+ <div class="tabs" id="tabs" style="display:none"></div>
  <div id="app"><div class="muted">Memuat data…</div></div>
  <div id="modal" onclick="if(event.target.id==='modal')closeModal()"></div>
  <div id="toast"></div>
@@ -1240,7 +1256,7 @@ _HTML = """<!doctype html>
  const H = {Authorization: "tma " + ((tg && tg.initData) || "")};
  let MENU = {};
  let DATA = null;      // {sections, menu}
- let TAB = "acts";     // acts | dash
+ let TAB = "acts";     // acts | g1 | g2 | dash
  function esc(s){const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
  function val(id){const e=document.getElementById(id);return e?e.value:"";}
  function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",2600);}
@@ -1257,8 +1273,7 @@ _HTML = """<!doctype html>
      let menu=[]; try{ menu = await getJSON("/miniapp/actions/menu"); }catch(e){}
      MENU={}; menu.forEach(a=>MENU[a.id]=a);
      DATA={sections:d.sections, menu:menu};
-     document.getElementById("tabs").style.display = menu.length ? "flex" : "none";
-     if(!menu.length) TAB="dash";   // tanpa aksi cepat -> langsung dashboard
+     buildTabs();
      render();
    }catch(err){
      document.getElementById("hi").textContent="Gagal masuk";
@@ -1267,21 +1282,38 @@ _HTML = """<!doctype html>
    }
  }
 
+ // Susun tab dinamis. Admin/staff (punya aksi G1 & G2) → tab dipisah
+ // 'Aksi G1' & 'Aksi G2'; operator (satu gudang) → 'Aksi Cepat' tunggal.
+ function buildTabs(){
+   const menu=DATA.menu;
+   const hasG1=menu.some(a=>a.wh==="g1");
+   const hasG2=menu.some(a=>a.wh==="g2");
+   let btns=[];
+   if(hasG1 && hasG2){ btns.push(["g1","🌾 Aksi G1"]); btns.push(["g2","🏭 Aksi G2"]); }
+   else if(menu.length){ btns.push(["acts","⚡ Aksi Cepat"]); }
+   btns.push(["dash","📊 Dashboard"]);
+   const keys=btns.map(b=>b[0]);
+   if(!keys.includes(TAB)) TAB=keys[0];
+   const tabs=document.getElementById("tabs");
+   tabs.style.display = btns.length>1 ? "flex" : "none";
+   tabs.innerHTML = btns.map(b=>'<button class="tab" data-tab="'+b[0]+'" onclick="showTab(\\''+b[0]+'\\')">'+esc(b[1])+'</button>').join('');
+ }
+
  function showTab(t){ TAB=t; render(); }
 
  function render(){
    const app=document.getElementById("app");
-   document.getElementById("tab_acts").classList.toggle("on", TAB==="acts");
-   document.getElementById("tab_dash").classList.toggle("on", TAB==="dash");
+   document.querySelectorAll("#tabs .tab").forEach(b=>b.classList.toggle("on", b.dataset.tab===TAB));
    if(!DATA){ return; }
-   if(TAB==="acts"){
-     app.innerHTML = DATA.menu.length
-       ? DATA.menu.map(a=>'<button class="act" onclick="openAction(\\''+a.id+'\\')">'+esc(a.label)+'</button>').join('')
-       : '<div class="muted">Tidak ada aksi cepat untuk peran Anda.</div>';
-   }else{
+   if(TAB==="dash"){
      app.innerHTML = DATA.sections.length
        ? DATA.sections.map(s=>'<div class="card"><p class="ct">'+esc(s.icon+" "+s.title)+'</p><pre class="cb">'+esc(s.body)+'</pre></div>').join("")
        : '<div class="muted">Belum ada data.</div>';
+   }else{
+     const list = TAB==="acts" ? DATA.menu : DATA.menu.filter(a=>a.wh===TAB);
+     app.innerHTML = list.length
+       ? list.map(a=>'<button class="act" onclick="openAction(\\''+a.id+'\\')">'+esc(a.label)+'</button>').join('')
+       : '<div class="muted">Tidak ada aksi cepat untuk peran Anda.</div>';
    }
  }
 
