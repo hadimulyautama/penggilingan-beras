@@ -26,8 +26,7 @@ def _extract_init_data(authorization: str | None) -> str | None:
 async def require_miniapp_user(authorization: str | None = Header(default=None)) -> User:
     """Validasi initData → User aktif. 401 bila gagal, 403 bila belum terdaftar."""
     init_data = _extract_init_data(authorization)
-    tokens = list(settings.bot_tokens.values())
-    parsed = validate_init_data(init_data or "", tokens)
+    parsed = validate_init_data(init_data or "", settings.bot_tokens)
     if parsed is None:
         raise HTTPException(status_code=401, detail="initData Telegram tidak valid.")
     async with SessionLocal() as db:
@@ -44,4 +43,7 @@ async def require_miniapp_user(authorization: str | None = Header(default=None))
             status_code=403,
             detail="Akun Telegram Anda belum terdaftar/aktif. Hubungi admin.",
         )
+    # Bot ASAL Mini App dibuka → konfirmasi aksi cepat dikirim ke chat itu
+    # (bukan chat bot lain), agar feedback muncul di layar yang sedang dilihat.
+    user._miniapp_bot = parsed.bot_name
     return user

@@ -633,9 +633,18 @@ def _err(e: Exception, default: str) -> HTTPException:
 
 
 async def _chat_confirm(user: User, text: str, bot_name: str = "gudang1") -> None:
-    """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort)."""
+    """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort).
+
+    Header berisi penanda 'Aksi cepat' + nama pelaku + jam, agar jelas apa yang
+    terakhir dilakukan lewat tombol (bukan chat) dan tidak terlupa."""
     from app.bots.notify import notify_user
-    await notify_user(user.telegram_user_id, "📱 _(aksi cepat)_ " + text, bot_name)
+    from app.database import now_local
+    stamp = now_local().strftime("%d/%m %H:%M")
+    header = f"📱 *Aksi cepat* · {user.nama} · {stamp}"
+    # Kirim ke bot ASAL Mini App dibuka (chat yang sedang dilihat user); bila tak
+    # diketahui, pakai bot domain aksi. notify_user tetap fallback ke bot lain.
+    target = getattr(user, "_miniapp_bot", None) or bot_name
+    await notify_user(user.telegram_user_id, f"{header}\n{text}", target)
 
 
 class GabahMasukReq(BaseModel):

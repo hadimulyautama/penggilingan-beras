@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from urllib.parse import parse_qsl
 
 
+_SENTINEL = object()  # penanda 'tak ada token yang cocok' (beda dari nama None)
+
+
 @dataclass
 class InitData:
     """Hasil initData yang sudah tervalidasi."""
@@ -28,6 +31,7 @@ class InitData:
     username: str | None
     auth_date: int
     raw: dict  # seluruh field mentah (sudah terdekode)
+    bot_name: str | None = None  # bot ASAL Mini App dibuka (token yang cocok)
 
 
 def _valid_for_token(fields: dict, received_hash: str, bot_token: str) -> bool:
@@ -41,15 +45,22 @@ def _valid_for_token(fields: dict, received_hash: str, bot_token: str) -> bool:
 
 
 def validate_init_data(
-    init_data: str, bot_tokens: list[str], *, max_age_seconds: int = 86_400
+    init_data: str, bot_tokens: dict[str, str] | list[str], *,
+    max_age_seconds: int = 86_400,
 ) -> InitData | None:
     """Validasi `initData`. Kembalikan InitData bila sah, else None.
 
-    - Tanda tangan harus cocok untuk salah satu `bot_tokens`.
+    - Tanda tangan harus cocok untuk salah satu `bot_tokens` (dict nama→token
+      agar bisa tahu bot ASAL; list token juga diterima demi kompatibilitas).
     - `auth_date` tak boleh lebih tua dari `max_age_seconds` (anti-replay).
     """
     if not init_data or not bot_tokens:
         return None
+    # Normalisasi ke pasangan (nama, token).
+    pairs = (
+        list(bot_tokens.items()) if isinstance(bot_tokens, dict)
+        else [(None, t) for t in bot_tokens]
+    )
     try:
         fields = dict(parse_qsl(init_data, strict_parsing=True))
     except ValueError:
@@ -66,8 +77,12 @@ def validate_init_data(
     if max_age_seconds and (time.time() - auth_date) > max_age_seconds:
         return None
 
-    # Tanda tangan cocok untuk salah satu token bot?
-    if not any(_valid_for_token(fields, received_hash, t) for t in bot_tokens if t):
+    # Tanda tangan cocok untuk salah satu token bot? (sekaligus catat bot asal)
+    matched_bot = next(
+        (name for name, t in pairs if t and _valid_for_token(fields, received_hash, t)),
+        _SENTINEL,
+    )
+    if matched_bot is _SENTINEL:
         return None
 
     # Ekstrak user (field 'user' = JSON string).
@@ -87,4 +102,5 @@ def validate_init_data(
         username=user.get("username"),
         auth_date=auth_date,
         raw=fields,
+        bot_name=None if matched_bot is _SENTINEL else matched_bot,
     )

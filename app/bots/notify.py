@@ -24,16 +24,30 @@ def set_bots(bots: dict) -> None:
 
 async def notify_user(telegram_user_id: int | None, text: str, bot_name: str = "admin") -> bool:
     """Kirim `text` ke SATU user via bot tertentu (mis. konfirmasi aksi cepat
-    Mini App ke chat). True bila terkirim. Aman bila bot/tid tak ada."""
-    bot = _bots.get(bot_name) or next(iter(_bots.values()), None)
-    if bot is None or not telegram_user_id:
+    Mini App ke chat). True bila terkirim.
+
+    Tahan banting: coba bot yang diminta dulu, lalu bot lain sebagai fallback
+    (user mungkin belum pernah start bot tertentu → 403). Bila Markdown gagal
+    di-parse (400), ulangi sebagai teks biasa agar pesan tetap sampai."""
+    if not telegram_user_id or not _bots:
         return False
-    try:
-        await bot.send_message(telegram_user_id, text, parse_mode="Markdown")
-        return True
-    except Exception:
-        log.exception("Gagal kirim ke user %s via %s", telegram_user_id, bot_name)
-        return False
+    from aiogram.exceptions import TelegramBadRequest
+
+    names = [bot_name] + [n for n in _bots if n != bot_name]
+    for n in names:
+        bot = _bots.get(n)
+        if bot is None:
+            continue
+        for pm in ("Markdown", None):
+            try:
+                await bot.send_message(telegram_user_id, text, parse_mode=pm)
+                return True
+            except TelegramBadRequest:
+                continue  # kemungkinan Markdown invalid → coba teks biasa
+            except Exception:
+                break  # bot ini tak bisa menjangkau user (mis. 403) → bot lain
+    log.warning("Gagal kirim ke user %s (semua bot dicoba)", telegram_user_id)
+    return False
 
 
 async def notify_roles(text: str, roles: tuple[str, ...] = ("admin", "staff")) -> None:
