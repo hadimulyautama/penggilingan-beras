@@ -22,6 +22,9 @@ from app.models import (
     MillingProcessVerification,
     MillingProgressLog,
     MillingQcLog,
+    PkGudang2Intake,
+    PkPurchaseBatch,
+    PkPurchaseVerification,
     PurchaseBatch,
     PurchaseBatchVerification,
     Silo,
@@ -37,6 +40,14 @@ _UNDOABLE = {
     "drying_lots", "drying_moisture_logs", "drying_cooling_logs", "purchase_batches",
     "silo_storage", "milling_process", "internal_transfers", "milling_qc_logs",
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
+    "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
+}
+
+# Label ramah untuk pesan "belum bisa di-undo".
+_TABLE_LABEL = {
+    "polishing_process": "penyosohan", "polishing_output_logs": "hasil penyosohan",
+    "polishing_silo_usage": "penyosohan", "finished_goods": "stok barang jadi",
+    "packaging_stock": "stok kemasan", "beras_stock": "stok beras",
 }
 
 
@@ -452,6 +463,83 @@ async def _undo_verify_output(db: AsyncSession, proc_id: int) -> str:
     return "✓ Dibatalkan: verifikasi output milling."
 
 
+# ── PK luar (Gudang 2) ──
+async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
+    b = await db.get(PkPurchaseBatch, batch_id)
+    if b is None:
+        raise UndoError("PK luar sudah tidak ada.")
+    intake = (
+        await db.execute(
+            select(PkGudang2Intake.id).where(PkGudang2Intake.pk_purchase_batch_id == batch_id)
+        )
+    ).first()
+    if intake:
+        raise UndoError(
+            f"{b.kode_batch} sudah dimasukkan ke silo/tumpukan — batalkan pemasukannya dulu."
+        )
+    await db.execute(
+        delete(PkPurchaseVerification).where(
+            PkPurchaseVerification.pk_purchase_batch_id == batch_id
+        )
+    )
+    kode = b.kode_batch
+    await db.delete(b)
+    return f"✓ Dibatalkan: catat PK luar {kode}."
+
+
+async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None) -> str:
+    verif = (
+        await db.execute(
+            select(PkPurchaseVerification).where(
+                PkPurchaseVerification.pk_purchase_batch_id == batch_id
+            )
+        )
+    ).scalars().first()
+    b = await db.get(PkPurchaseBatch, batch_id)
+    if verif is None or b is None:
+        raise UndoError("Data PK luar sudah tidak ada.")
+    if field_name == "harga":
+        verif.harga_per_kg = None
+        verif.total_biaya = None
+        verif.metode_harga = None
+        verif.potongan_kg = None
+        verif.potongan_alasan = None
+        b.flag_unverified = True
+        # Balik snapshot HPP intake yang tadi di-backfill.
+        intakes = (
+            await db.execute(
+                select(PkGudang2Intake).where(
+                    PkGudang2Intake.pk_purchase_batch_id == batch_id
+                )
+            )
+        ).scalars().all()
+        for it in intakes:
+            it.hpp_per_kg = None
+            it.flag_hpp_belum_tersedia = True
+        return f"✓ Dibatalkan: verifikasi harga PK {b.kode_batch} (harga dikosongkan)."
+    # default: undo input kualitas
+    verif.kadar_air = None
+    verif.broken_persen = None
+    verif.penyusutan_persen = None
+    verif.butir_kuning = None
+    verif.catatan_lab = None
+    return f"✓ Dibatalkan: input kualitas PK {b.kode_batch}."
+
+
+async def _undo_pk_intake(db: AsyncSession, intake_id: int) -> str:
+    it = await db.get(PkGudang2Intake, intake_id)
+    if it is None:
+        raise UndoError("Pemasukan PK sudah tidak ada.")
+    lok = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}.get(
+        it.tujuan, it.tujuan)
+    b = await db.get(PkPurchaseBatch, it.pk_purchase_batch_id) if it.pk_purchase_batch_id else None
+    await db.delete(it)
+    if b:
+        b.status_batch = "diterima"  # kembali ke 'sudah masuk, belum ditempatkan'
+        return f"✓ Dibatalkan: PK {b.kode_batch} dimasukkan ke {lok}."
+    return f"✓ Dibatalkan: pemasukan PK ke {lok}."
+
+
 async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
     t, rid, act = log.table_name, log.record_id, log.action
     if t == "drying_lots" and act == "INSERT":
@@ -486,19 +574,29 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_last_qc(db, rid)
     if t == "milling_process_verifications":
         return await _undo_verify_output(db, rid)
+    if t == "pk_purchase_batches" and act == "INSERT":
+        return await _undo_pk_purchase(db, rid)
+    if t == "pk_purchase_verifications":
+        return await _undo_pk_verif(db, rid, log.field_name)
+    if t == "pk_gudang2_intakes" and act == "INSERT":
+        return await _undo_pk_intake(db, rid)
     raise UndoError(
-        f"Tindakan terakhir ({t}) belum bisa di-undo otomatis — fitur menyusul. "
-        "Untuk sekarang koreksi lewat admin."
+        f"Tindakan terakhir ({_TABLE_LABEL.get(t, t)}) belum bisa di-undo otomatis — "
+        "fitur menyusul. Untuk sekarang koreksi lewat admin."
     )
 
 
 async def undo_last(
     db: AsyncSession, *, actor, actor_ids: list[int] | None, scope_label: str | None,
 ) -> str:
-    """Batalkan tindakan (undoable) TERAKHIR dari actor_ids. None = semua user."""
+    """Batalkan tindakan TERAKHIR dari actor_ids. None = semua user.
+
+    Mengambil tindakan paling akhir (apa pun tabelnya, kecuali jejak 'undo'),
+    lalu membatalkannya. Bila tindakan terakhir itu memang belum didukung undo,
+    beri tahu jelas — JANGAN diam-diam membatalkan tindakan lama yang lain."""
     q = select(ActivityLog).where(
-        ActivityLog.table_name.in_(_UNDOABLE),
         ActivityLog.action.in_(["INSERT", "UPDATE"]),
+        ActivityLog.table_name != "undo",
     )
     if actor_ids is not None:
         if not actor_ids:
@@ -509,6 +607,11 @@ async def undo_last(
     if log is None:
         suffix = f" oleh {scope_label}" if scope_label else ""
         raise UndoError(f"Tidak ada input terakhir yang bisa dibatalkan{suffix}.")
+    if log.table_name not in _UNDOABLE:
+        raise UndoError(
+            f"Tindakan terakhir ({_TABLE_LABEL.get(log.table_name, log.table_name)}) "
+            "belum bisa dibatalkan otomatis — koreksi lewat admin."
+        )
 
     msg = await _undo_one(db, log)
     # Cegah double-undo: hapus entri yang diproses + catat jejak undo.
