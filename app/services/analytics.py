@@ -334,12 +334,22 @@ def simulasi_hpp(
     if rend <= 0 or rend > 1:
         return "Rendemen harus antara 1–100 persen (cek tonase bahan ≥ hasil)."
 
+    dry_flat = 0.0  # total biaya pengeringan flat (basah) untuk ditampilkan
     if langsung_silo:
         dry, jalur = 0.0, "kering · langsung silo (tanpa pengeringan)"
     elif kondisi == "kering":
         dry, jalur = s.biaya_pengeringan_kering_per_kg, "kering · tetap dikeringkan"
     else:
-        dry, jalur = s.biaya_pengeringan_basah_per_kg, "basah · dikeringkan"
+        # Basah: pengeringan FLAT per proses → per kg dibagi tonase bahan.
+        if not berat_bahan:
+            return (
+                "Untuk gabah *basah*, sebutkan tonase bahannya juga — biaya "
+                f"pengeringan {_rp(s.biaya_pengeringan_basah_per_proses)} FLAT per "
+                "proses dibagi tonase. Contoh:\n"
+                "`simulasi hpp bahan 10 ton hasil 6,4 ton harga 7800`"
+            )
+        dry_flat = s.biaya_pengeringan_basah_per_proses
+        dry, jalur = dry_flat / berat_bahan, "basah · dikeringkan (flat/proses)"
 
     rubber = s.rubber_roll_harga_per_set / (s.rubber_roll_umur_ton * 1000)
     per_gabah = (
@@ -351,16 +361,25 @@ def simulasi_hpp(
     total_gabah = harga_gabah + op
     hpp_pk = total_gabah / rend
 
-    return "\n".join([
+    dry_lbl = (
+        f"pengeringan {_rp(dry)}/kg ({_rp(dry_flat)} flat ÷ {berat_bahan:g} kg)"
+        if dry_flat else f"pengeringan {_rp(dry)}"
+    )
+    lines = [
         f"🧮 *Simulasi HPP* — gabah {jalur}, rendemen {rendemen_persen:g}%",
+    ]
+    if berat_bahan and berat_hasil:
+        lines.append(f"• Tonase: {berat_bahan:g} kg bahan → {berat_hasil:g} kg hasil")
+    lines += [
         f"• Harga gabah: {_rp(harga_gabah)}/kg",
         f"• Biaya proses: {_rp(op)}/kg gabah",
-        f"   (bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · pengeringan {_rp(dry)} · "
+        f"   (bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · {dry_lbl} · "
         f"operator {_rp(s.biaya_operator_per_kg_gabah)} · rubber {_rp(rubber)} · "
         f"listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} · tenaga giling {_rp(milling_labor)})",
         f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah",
         f"_(bahan baku {_rp(harga_gabah / rend)} + operasional {_rp(op / rend)} per kg PK)_",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 async def _avg_rendemen(db: AsyncSession) -> float:
@@ -398,7 +417,9 @@ async def biaya_proses_ringkas(db: AsyncSession) -> str:
         f"🏭 *Biaya proses per kg gabah* (operasional, di luar harga beli)",
         f"_Tenaga giling {_rp(s.biaya_tenaga_milling_per_kg_pk)}/kg PK "
         f"≈ {_rp(milling)}/kg gabah @ rendemen {rend * 100:.0f}%_",
-        f"\n• Basah (dikeringkan): *{_rp(total(s.biaya_pengeringan_basah_per_kg))}/kg gabah*",
+        f"\n• Basah (dikeringkan): *{_rp(total(0))}/kg gabah* "
+        f"+ pengeringan *{_rp(s.biaya_pengeringan_basah_per_proses)} FLAT/proses* "
+        f"(≈ {_rp(s.biaya_pengeringan_basah_per_proses / 10000)}/kg @ 10 ton)",
         f"• Kering (tetap dikeringkan): *{_rp(total(s.biaya_pengeringan_kering_per_kg))}/kg*",
         f"• Kering langsung silo (tanpa pengeringan): *{_rp(total(0))}/kg*",
         f"\nKomponen tetap/kg gabah: bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · "

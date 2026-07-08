@@ -139,13 +139,14 @@ async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdo
 
     # Gabah basah PASTI dikeringkan (tak bisa langsung silo/giling). Gabah
     # kering: dikeringkan hanya bila lewat dryer (else langsung silo = gratis).
+    # Basah: biaya pengeringan FLAT per proses. Kering (lewat dryer): per kg.
     if kondisi == "basah":
         dried = True
-        pengeringan_rate = settings.biaya_pengeringan_basah_per_kg
+        pengeringan_total = settings.biaya_pengeringan_basah_per_proses
     elif kondisi == "kering" and dried:
-        pengeringan_rate = settings.biaya_pengeringan_kering_per_kg
+        pengeringan_total = settings.biaya_pengeringan_kering_per_kg * kg
     else:
-        pengeringan_rate = 0.0
+        pengeringan_total = 0.0
 
     rubber_per_kg = (
         settings.rubber_roll_harga_per_set / (settings.rubber_roll_umur_ton * 1000)
@@ -155,7 +156,7 @@ async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdo
         kode_proses=proc.kode_proses,
         kg_gabah=kg, pk_output=pk, dried=dried, kondisi=kondisi, bahan_baku=bahan,
         bongkar=settings.biaya_bongkar_per_kg_gabah * kg,
-        pengeringan=pengeringan_rate * kg,
+        pengeringan=pengeringan_total,
         operator=settings.biaya_operator_per_kg_gabah * kg,
         tenaga_milling=settings.biaya_tenaga_milling_per_kg_pk * pk,
         rubber_roll=rubber_per_kg * kg,
