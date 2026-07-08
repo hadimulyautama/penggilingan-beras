@@ -204,7 +204,18 @@ async def create_internal_transfer(
         changed_by=user.id,
         new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> {_LOKASI[lokasi_tujuan]} | hpp={hpp}",
     )
-    await db.commit()
+    # PK LANGSUNG masuk stok Gudang 2 — staff/admin sudah menentukan tujuan saat
+    # kirim, jadi tak perlu langkah 'terima' terpisah oleh operator G2.
+    # (_add_intake menjalankan guard kapasitas tumpukan lalu commit.)
+    from app.gudang2.service import Gudang2Error, _add_intake
+    try:
+        await _add_intake(
+            db, user=user, sumber_tipe="transfer_internal", tujuan=lokasi_tujuan,
+            berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
+            internal_transfer_id=transfer.id,
+        )
+    except Gudang2Error as e:  # mis. tumpukan G2 penuh → batalkan transfer
+        raise TransferError(e.args[0] if e.args else "Gagal memasukkan PK ke Gudang 2.")
     await db.refresh(transfer)
     return TransferResult(
         transfer=transfer, kode_proses=kode_proses,

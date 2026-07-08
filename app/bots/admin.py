@@ -421,8 +421,9 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
             jn = f" {r.jenis}" if r.jenis else ""
             await message.answer(
                 f"✓ Transfer *{r.transfer.kode_transfer}*: "
-                f"{_kg(float(r.transfer.berat_kg))} PK{jn} dari {r.kode_proses} → "
-                f"{r.lokasi_label} Gudang 2.\n"
+                f"{_kg(float(r.transfer.berat_kg))} PK{jn} dari {r.kode_proses} "
+                f"*langsung masuk* {r.lokasi_label} Gudang 2 "
+                "_(operator G2 tak perlu menerima manual)_.\n"
                 f"• Sisa stok siap kirim {r.kode_proses}: {_kg(sisa)}{hpp}",
                 parse_mode="Markdown",
             )

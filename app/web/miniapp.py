@@ -1103,7 +1103,8 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(require_miniapp
         except TransferError as e:
             raise _err(e, "Gagal pemindahan PK.")
     jns = (r.jenis + " ") if r.jenis else ""
-    pesan = f"✓ Pemindahan PK *{r.transfer.kode_transfer}*: {jns}→ {r.lokasi_label}."
+    pesan = (f"✓ Pemindahan PK *{r.transfer.kode_transfer}*: {jns}langsung masuk "
+             f"{r.lokasi_label} Gudang 2. (Operator G2 tak perlu menerima manual.)")
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
 

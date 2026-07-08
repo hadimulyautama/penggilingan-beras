@@ -477,8 +477,14 @@ async def terima_transfer_g1(
         )
     ).first()
     if dup:
-        raise Gudang2Error(f"Transfer {kode_transfer} sudah diterima sebelumnya.")
-    # Tujuan default ikut lokasi_tujuan transfer bila operator tak menyebut.
+        # PK kiriman G1 kini LANGSUNG masuk stok saat dikirim (staff/admin sudah
+        # pilih tujuan) — langkah 'terima' manual tak diperlukan lagi.
+        raise Gudang2Error(
+            f"Transfer {kode_transfer} sudah otomatis masuk stok Gudang 2 saat "
+            "dikirim — tak perlu diterima manual."
+        )
+    # Transfer lama (sebelum auto-intake): terima manual. Tujuan default ikut
+    # lokasi_tujuan transfer bila operator tak menyebut.
     return await _add_intake(
         db, user=user, sumber_tipe="transfer_internal",
         tujuan=tujuan or trf.lokasi_tujuan, berat_kg=float(trf.berat_kg),
