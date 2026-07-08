@@ -80,9 +80,8 @@ class Settings(BaseSettings):
     biaya_bongkar_per_kg_gabah: float = 20        # tenaga bongkar gabah datang
     biaya_operator_per_kg_gabah: float = 30       # operator, per kg gabah digiling
     biaya_tenaga_milling_per_kg_pk: float = 25    # tenaga saat milling, per kg PK
-    # Gabah BASAH: biaya pengeringan FLAT per sekali proses (bukan per kg).
-    biaya_pengeringan_basah_per_proses: float = 1_000_000
-    biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan (per kg)
+    biaya_pengeringan_basah_per_kg: float = 100   # gabah basah dikeringkan
+    biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan
     biaya_listrik_milling_per_kg_gabah: float = 20  # listrik/mesin saat milling
     # Rubber roll mesin pecah kulit: 1 set per N ton gabah, harga per set.
     rubber_roll_harga_per_set: float = 2_000_000
