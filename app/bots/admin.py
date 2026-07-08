@@ -301,6 +301,7 @@ async def _handle_analitik(message: Message, db, user, text: str) -> bool:
             simulasi_hpp(
                 p.harga_gabah, p.rendemen,
                 kondisi=p.kondisi or "basah", langsung_silo=p.langsung_silo,
+                berat_bahan=p.berat_bahan, berat_hasil=p.berat_hasil,
             ),
             parse_mode="Markdown",
         )
@@ -873,6 +874,14 @@ async def handle_message(message: Message) -> None:
         # ── Router niat: pre-router deterministik (0 LLM) dulu, baru router LLM
         #    bila ragu → handler domainnya saja. Fallback aman ke chain penuh. ──
         domain = fast_domain(text, valid=_ADMIN_DOMAINS) or await route_domain(text)
+        # Analitik (simulasi HPP / rincian biaya / tren) sering memakai kata 'hpp'
+        # sehingga router mengira 'barang_jadi' (laporan HPP batch → minta kode).
+        # Beri analitik kesempatan LEBIH DULU untuk domain HPP-ambigu; parser balik
+        # 'bukan_analitik' → False bila memang bukan, jadi aman.
+        if domain in ("barang_jadi", "lainnya") and await _handle_analitik(
+            message, db, user, text
+        ):
+            return
         _CMD = {
             "transfer_pk": lambda: _handle_transfer(message, db, user, text, session),
             "milling": lambda: _handle_milling_admin(message, db, user, text, session),

@@ -187,6 +187,8 @@ class ParsedAnalitik:
     kode_proses: str | None = None
     harga_gabah: float | None = None
     rendemen: float | None = None
+    berat_bahan: float | None = None   # simulasi: tonase bahan (gabah) masuk
+    berat_hasil: float | None = None   # simulasi: tonase hasil (PK/beras)
     kondisi: str | None = None
     langsung_silo: bool = False
 
@@ -200,6 +202,8 @@ async def parse_analitik(text: str) -> ParsedAnalitik:
         kode_proses=kode.upper().strip() if isinstance(kode, str) and kode.strip() else None,
         harga_gabah=data.get("harga_gabah"),
         rendemen=data.get("rendemen"),
+        berat_bahan=data.get("berat_bahan"),
+        berat_hasil=data.get("berat_hasil"),
         kondisi=data.get("kondisi"),
         langsung_silo=bool(data.get("langsung_silo", False)),
     )

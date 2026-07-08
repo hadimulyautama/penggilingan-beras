@@ -311,18 +311,28 @@ async def biaya_produksi_detail(db: AsyncSession, kode_proses: str | None = None
 def simulasi_hpp(
     harga_gabah: float | None, rendemen_persen: float | None, *,
     kondisi: str = "basah", langsung_silo: bool = False,
+    berat_bahan: float | None = None, berat_hasil: float | None = None,
 ) -> str:
-    """What-if HPP dari harga gabah & rendemen (pakai tarif biaya terkini)."""
+    """What-if HPP dari harga gabah & rendemen (pakai tarif biaya terkini).
+
+    Rendemen bisa diberikan langsung (persen) ATAU dihitung dari tonase bahan &
+    hasil (berat_hasil / berat_bahan). Tak butuh batch/data nyata."""
     from app.config import settings as s
 
+    # Rendemen dari tonase bila tak disebut eksplisit.
+    if not rendemen_persen and berat_bahan and berat_hasil:
+        if berat_bahan <= 0:
+            return "Tonase bahan harus lebih dari 0."
+        rendemen_persen = berat_hasil / berat_bahan * 100
     if not harga_gabah or not rendemen_persen:
         return (
-            "Sebutkan harga gabah & rendemen, contoh:\n"
-            "`simulasi hpp gabah 7800 rendemen 64`"
+            "Sebutkan harga beli + rendemen ATAU tonase bahan & hasil, contoh:\n"
+            "`simulasi hpp gabah 7800 rendemen 64`\n"
+            "`simulasi hpp bahan 10 ton hasil 6,4 ton harga 7800`"
         )
     rend = rendemen_persen / 100
     if rend <= 0 or rend > 1:
-        return "Rendemen harus antara 1–100 persen."
+        return "Rendemen harus antara 1–100 persen (cek tonase bahan ≥ hasil)."
 
     if langsung_silo:
         dry, jalur = 0.0, "kering · langsung silo (tanpa pengeringan)"

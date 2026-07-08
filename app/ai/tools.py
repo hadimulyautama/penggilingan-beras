@@ -1110,8 +1110,13 @@ TANYA_ANALITIK = {
                     "pokok PK per kg dari waktu ke waktu. 'rincian_biaya': "
                     "rincian biaya produksi & HPP satu proses giling (mis. "
                     "'rincian biaya MIL-...', 'hpp MIL-... berapa'). "
-                    "'simulasi_hpp': hitung HPP dari asumsi harga gabah & "
-                    "rendemen (mis. 'simulasi hpp gabah 7800 rendemen 64'). "
+                    "'simulasi_hpp': hitung HPP what-if dari ANGKA yang diberikan "
+                    "user — TANPA butuh batch/data nyata. Terima dua bentuk: (a) "
+                    "harga gabah + rendemen%, mis. 'simulasi hpp gabah 7800 rendemen "
+                    "64'; atau (b) harga beli + TONASE bahan & hasil (rendemen "
+                    "dihitung otomatis), mis. 'simulasi hpp bahan 10 ton hasil 6.4 "
+                    "ton harga 7800', 'kalau beli gabah 8000 dari 5 ton jadi 3,2 ton "
+                    "beras hpp berapa'. JANGAN minta kode batch untuk ini. "
                     "'biaya_proses': biaya PROSES/operasional per kg gabah "
                     "(mis. 'biaya proses per kg gabah', 'berapa ongkos proses "
                     "per kg gabah basah'). 'produksi_bulanan': rekap produksi "
@@ -1132,7 +1137,24 @@ TANYA_ANALITIK = {
             },
             "rendemen": {
                 "type": ["number", "null"],
-                "description": "Simulasi: rendemen dalam PERSEN ('64', '65%'-> 65).",
+                "description": (
+                    "Simulasi: rendemen dalam PERSEN ('64', '65%'->65). Kosongkan "
+                    "bila user menyebut tonase bahan & hasil (dihitung otomatis)."
+                ),
+            },
+            "berat_bahan": {
+                "type": ["number", "null"],
+                "description": (
+                    "Simulasi: tonase BAHAN/gabah masuk dalam KG ('10 ton'->10000, "
+                    "'5 ton'->5000). Untuk menghitung rendemen dari tonase."
+                ),
+            },
+            "berat_hasil": {
+                "type": ["number", "null"],
+                "description": (
+                    "Simulasi: tonase HASIL (PK/beras) dalam KG ('6,4 ton'->6400). "
+                    "rendemen = berat_hasil / berat_bahan."
+                ),
             },
             "kondisi": {
                 "type": ["string", "null"],
