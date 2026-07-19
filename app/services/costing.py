@@ -156,7 +156,7 @@ async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdo
         kg_gabah=kg, pk_output=pk, dried=dried, kondisi=kondisi, bahan_baku=bahan,
         bongkar=settings.biaya_bongkar_per_kg_gabah * kg,
         pengeringan=pengeringan_rate * kg,
-        operator=settings.biaya_operator_per_kg_gabah * kg,
+        operator=settings.biaya_operator_per_proses,  # FLAT per proses milling
         tenaga_milling=settings.biaya_tenaga_milling_per_kg_pk * pk,
         rubber_roll=rubber_per_kg * kg,
         listrik=settings.biaya_listrik_milling_per_kg_gabah * kg,

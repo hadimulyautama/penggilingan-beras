@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hadimulya-website",
+      "runtimeExecutable": "/Users/wahidnurhani/Developer/hadimulya-website/.venv/bin/python",
+      "runtimeArgs": ["/Users/wahidnurhani/Developer/hadimulya-website/app.py"],
+      "port": 5000,
+      "autoPort": true
+    }
+  ]
+}

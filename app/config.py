@@ -78,7 +78,8 @@ class Settings(BaseSettings):
 
     # ── Biaya operasional (Rp), untuk HPP penuh. Semua bisa diubah via env. ──
     biaya_bongkar_per_kg_gabah: float = 20        # tenaga bongkar gabah datang
-    biaya_operator_per_kg_gabah: float = 30       # operator, per kg gabah digiling
+    # Operator: FLAT per sekali proses milling (bukan per kg).
+    biaya_operator_per_proses: float = 400_000
     biaya_tenaga_milling_per_kg_pk: float = 25    # tenaga saat milling, per kg PK
     biaya_pengeringan_basah_per_kg: float = 100   # gabah basah dikeringkan
     biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan
