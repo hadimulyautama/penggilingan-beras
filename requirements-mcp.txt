@@ -1,0 +1,12 @@
+# Dependensi MCP server (mcp_server.py) — TERPISAH dari requirements.txt aplikasi.
+# Dipasang di venv sendiri (.venv-mcp) agar tidak bentrok dengan versi terpin
+# fastapi/aiogram di aplikasi utama.
+#
+# Setup:
+#   python3 -m venv .venv-mcp
+#   .venv-mcp/bin/pip install -r requirements-mcp.txt
+mcp>=1.2
+sqlalchemy>=2.0
+pydantic>=2.11
+pydantic-settings>=2.0
+asyncpg>=0.29
