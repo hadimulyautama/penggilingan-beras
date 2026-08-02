@@ -5,7 +5,8 @@
 # Setup:
 #   python3 -m venv .venv-mcp
 #   .venv-mcp/bin/pip install -r requirements-mcp.txt
-mcp>=1.2
+# <2: mcp 2.0.0 menghapus 'mcp.server.fastmcp' (API yang dipakai server ini).
+mcp>=1.12,<2
 sqlalchemy>=2.0
 pydantic>=2.11
 pydantic-settings>=2.0
