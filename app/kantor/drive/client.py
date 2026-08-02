@@ -155,6 +155,24 @@ class DriveClient:
                 return f
         return None
 
+    def cari(self, kata: str, *, maks: int = 50) -> list[FileDrive]:
+        """Cari file/folder yg namanya MENGANDUNG `kata` di seluruh Shared Drive."""
+        aman = kata.replace("\\", "\\\\").replace("'", "\\'")
+        res = self._q(
+            q=f"name contains '{aman}' and trashed=false",
+            fields="files(id,name,mimeType,parents,md5Checksum,size)",
+            pageSize=min(max(maks, 1), 100),
+        )
+        out: list[FileDrive] = []
+        for f in res.get("files", []):
+            out.append(FileDrive(
+                id=f["id"], nama=f["name"], mime=f["mimeType"],
+                parents=tuple(f.get("parents", [])),
+                md5=f.get("md5Checksum"),
+                size=int(f["size"]) if f.get("size") else None,
+            ))
+        return out
+
     def unduh_teks(self, file_id: str, mime: str, *, maks: int = 6000) -> str:
         """Ekstrak teks isi dokumen (utk klasifikasi AI). '' bila tak didukung/gagal.
 

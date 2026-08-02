@@ -237,6 +237,87 @@ def buat_surat_tugas(
                              tempat=tempat, waktu=waktu, tanggal=d, no_pegawai=no_pegawai)
 
 
+# ═══════════════════════ Google Drive (baca-saja) ═══════════════════════
+# Tool arsip untuk agent: melihat isi folder & mencari file. TIDAK mengubah apa
+# pun (pindah/rename/hapus di-hold — perlu mekanisme persetujuan tersendiri).
+def _drive_client():
+    from app.kantor.drive import client as drv
+    if not drv.terkonfigurasi():
+        return None
+    return drv.DriveClient()
+
+
+def _fmt_isi(items) -> str:
+    if not items:
+        return "(kosong)"
+    baris = []
+    for f in sorted(items, key=lambda x: (not x.is_folder, x.nama.lower())):
+        if f.is_folder:
+            baris.append(f"📁 {f.nama}/")
+        else:
+            sz = f" · {f.size / 1024:.0f} KB" if f.size else ""
+            baris.append(f"📄 {f.nama}{sz}")
+    return "\n".join(baris)
+
+
+_DRIVE_OFF = "Google Drive belum terkonfigurasi di server MCP (env GDRIVE_OAUTH_* belum ada)."
+
+
+@mcp.tool()
+def daftar_transit() -> str:
+    """Daftar isi folder _TRANSIT (INBOX file baru) di Google Drive PT HMU.
+
+    Read-only. _TRANSIT adalah tempat file baru masuk sebelum diarsipkan ke
+    kategori yang benar. Pakai untuk 'apa saja file di inbox/transit'.
+    """
+    from app.kantor.drive import mapper, taksonomi as tx
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    for f in c.anak():
+        if f.is_folder and mapper.kode_kategori(f.nama) == tx.TRANSIT:
+            isi = c.anak(f.id)
+            return f"📥 {f.nama} — {len(isi)} item:\n{_fmt_isi(isi)}"
+    return "Folder _TRANSIT tidak ditemukan di root Shared Drive."
+
+
+@mcp.tool()
+def daftar_folder(kategori: str) -> str:
+    """Daftar isi sebuah folder kategori di Google Drive PT HMU (read-only).
+
+    Args:
+        kategori: kode kategori ('00'–'11' / '99') ATAU sebagian nama folder
+            (mis. 'SDM', 'Keuangan'). Kategori 00=Legalitas, 03=SDM, dst.
+    """
+    from app.kantor.drive import mapper
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    q = kategori.strip().lower()
+    for f in c.anak():
+        if not f.is_folder:
+            continue
+        if mapper.kode_kategori(f.nama) == kategori.strip() or q in f.nama.lower():
+            isi = c.anak(f.id)
+            return f"🗂️ {f.nama} — {len(isi)} item:\n{_fmt_isi(isi)}"
+    return f"Folder kategori '{kategori}' tidak ditemukan di root Shared Drive."
+
+
+@mcp.tool()
+def cari_file(kata: str) -> str:
+    """Cari file/folder di Google Drive PT HMU yang namanya mengandung `kata`.
+
+    Read-only. Kembalikan sampai 50 hasil teratas (nama + ukuran).
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    hasil = c.cari(kata, maks=50)
+    if not hasil:
+        return f"Tidak ada file yang namanya mengandung '{kata}'."
+    return f"🔎 {len(hasil)} hasil untuk '{kata}':\n{_fmt_isi(hasil)}"
+
+
 # ─────────────────────────── Entry point ───────────────────────────
 def _run_http() -> None:
     """Streamable-HTTP + gerbang token bearer (untuk agent remote spt Hermes)."""
