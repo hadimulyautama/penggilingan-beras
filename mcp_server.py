@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.config import settings
 from app.database import SessionLocal
@@ -33,7 +34,15 @@ from app.services.analytics import (
     simulasi_hpp as _simulasi_hpp,
 )
 
-mcp = FastMCP("penggilingan-beras")
+# Matikan proteksi DNS-rebinding FastMCP (default hanya izinkan host localhost →
+# menolak domain Railway dengan 421 "Invalid Host header"). Aman di sini karena
+# akses server-to-server sudah dijaga token bearer, bukan konteks browser.
+mcp = FastMCP(
+    "penggilingan-beras",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False
+    ),
+)
 
 
 # ─────────────────────────── Simulasi (murni) ───────────────────────────
