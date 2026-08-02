@@ -12,7 +12,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY requirements-mcp.txt .
-RUN pip install --no-cache-dir -r requirements-mcp.txt tzdata
+# Pasang deps MCP lalu PASTIKAN mcp.server.fastmcp benar-benar terpasang —
+# build gagal keras di sini bila tidak (hindari image yang crash saat deploy).
+RUN pip install --no-cache-dir -r requirements-mcp.txt tzdata \
+    && python -c "import mcp.server.fastmcp; print('mcp fastmcp OK')"
 
 # Kode: server MCP + modul aplikasi yang dibungkusnya (single source of truth).
 COPY app ./app
