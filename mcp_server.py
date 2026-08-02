@@ -170,6 +170,13 @@ def _run_http() -> None:
 
         async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
             if scope["type"] == "http":
+                # Healthcheck Railway (/health) TANPA token — bukan endpoint data.
+                if scope.get("path") == "/health":
+                    await send({"type": "http.response.start", "status": 200,
+                                "headers": [(b"content-type", b"application/json")]})
+                    await send({"type": "http.response.body",
+                                "body": b'{"status":"ok","service":"mcp"}'})
+                    return
                 headers = dict(scope.get("headers") or [])
                 auth = headers.get(b"authorization", b"").decode()
                 if auth != f"Bearer {token}":
