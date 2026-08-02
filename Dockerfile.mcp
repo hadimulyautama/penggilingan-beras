@@ -1,0 +1,23 @@
+# Image MCP server (read-only) — TERPISAH dari image aplikasi utama.
+# Deps 'mcp' butuh pydantic>=2.11 & starlette baru yang BENTROK dengan aiogram/
+# fastapi terpin di app utama, jadi image & dependensinya sendiri.
+# Tidak menjalankan bot Telegram (tanpa polling) → tak ada risiko 409.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MCP_TRANSPORT=http
+
+WORKDIR /app
+
+COPY requirements-mcp.txt .
+RUN pip install --no-cache-dir -r requirements-mcp.txt tzdata
+
+# Kode: server MCP + modul aplikasi yang dibungkusnya (single source of truth).
+COPY app ./app
+COPY mcp_server.py .
+
+# PORT disuntik Railway. MCP_AUTH_TOKEN & DATABASE_URL diset via env service.
+# Streamable-HTTP + gerbang token bearer (lihat mcp_server.py).
+CMD ["python", "mcp_server.py"]
