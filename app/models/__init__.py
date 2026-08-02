@@ -45,6 +45,15 @@ from app.inventory.models import (
     ProductSku,
     RiceQualityStandard,
 )
+from app.kantor.models import (
+    AksiPending,
+    Aset,
+    KantorAuditLog,
+    KartuPemeliharaan,
+    NomorDokumen,
+    SopChunk,
+    SopDokumen,
+)
 from app.models.system import ActivityLog, Notification
 from app.models.transfer import InternalTransfer
 
@@ -98,4 +107,12 @@ __all__ = [
     # system
     "ActivityLog",
     "Notification",
+    # kantor (asisten eksekutif)
+    "SopDokumen",
+    "SopChunk",
+    "AksiPending",
+    "KantorAuditLog",
+    "Aset",
+    "KartuPemeliharaan",
+    "NomorDokumen",
 ]

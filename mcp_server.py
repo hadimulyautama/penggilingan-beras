@@ -156,6 +156,87 @@ async def item_nyangkut() -> str:
         return await pemantau_nyangkut(db, financial=True, scope="all")
 
 
+# ═══════════════════════ Kantor AI (arsip/dokumen) ═══════════════════════
+# Dipanggil oleh agent (Hermes) untuk memandu arsip & mengelola dokumen.
+# Logika + guardrail ada di sini (deterministik) — bukan di kebebasan LLM.
+@mcp.tool()
+def panduan_arsip(nama_dokumen: str, isi_ringkas: str = "") -> str:
+    """Panduan menyimpan sebuah dokumen: folder DIGITAL + ordner FISIK (warna/
+    golongan/retensi) sesuai Pedoman Kearsipan PT HMU.
+
+    Args:
+        nama_dokumen: nama/judul dokumen (mis. 'Kontrak Kerja PKWT - Budi').
+        isi_ringkas: cuplikan isi (opsional) untuk klasifikasi lebih tepat.
+    """
+    from app.kantor import arsip_fisik as af
+    from app.kantor.drive import taksonomi as tx
+
+    tebak = tx.tebak_kategori(nama_dokumen, isi_ringkas)
+    if not tebak:
+        return ("Belum yakin dari nama saja — perlu lihat isi dokumen. "
+                "Kategori digital tersedia 00–11.")
+    p = af.panduan(tebak[0][0])
+    baris = [f"📄 {nama_dokumen}",
+             f"🗂️ Digital: folder {p.digital_kode} - {p.digital_nama}"]
+    if p.fisik:
+        f = p.fisik
+        baris.append(f"📁 Fisik: ordner {f.kode} {f.nama} (stiker {f.warna}) · "
+                     f"golongan {f.golongan} · simpan {f.retensi}")
+    if p.catatan:
+        baris.append(f"ℹ️ {p.catatan}")
+    return "\n".join(baris)
+
+
+@mcp.tool()
+def cek_nama_file(nama: str) -> str:
+    """Periksa nama file terhadap konvensi kearsipan + usulkan nama baku."""
+    from app.kantor.dokumen import konsistensi as kons
+    h = kons.validasi_nama_file(nama)
+    if h.ok and not h.nama_usulan:
+        return f"✅ '{nama}' sudah sesuai konvensi."
+    masalah = "; ".join(t.pesan for t in h.temuan) or "—"
+    usul = f"\nUsulan: {h.nama_usulan}" if h.nama_usulan else ""
+    return f"Nama: {nama}\nTemuan: {masalah}{usul}"
+
+
+@mcp.tool()
+async def terbitkan_nomor_surat(
+    kode: str, divisi: str, bulan: int, tahun: int,
+    perihal: str = "", pihak: str = "",
+) -> str:
+    """Terbitkan & catat nomor surat resmi (register anti-bentrok, reset tahunan).
+
+    Format: NNN/KODE/DIVISI/PT-HMU/BULAN(Romawi)/TAHUN.
+    Kode mis. CSR/SK/SPK/ST/SP/BA/SPPD/BAST/TTPH/PKL. Divisi mis. HR/KEU/OPS.
+    """
+    from app.kantor.dokumen import penomoran
+    async with SessionLocal() as db:
+        try:
+            row = await penomoran.terbitkan_nomor_surat(
+                db, kode=kode, divisi=divisi, bulan=bulan, tahun=tahun,
+                perihal=perihal or None, pihak=pihak or None,
+            )
+        except (ValueError, RuntimeError) as e:
+            return f"Gagal terbitkan nomor: {e}"
+    return f"✅ Nomor terbit: {row.nomor_lengkap}"
+
+
+@mcp.tool()
+def buat_surat_tugas(
+    nomor: str, nama: str, jabatan: str, tugas: str,
+    tempat: str, waktu: str, tanggal: str, no_pegawai: str = "-",
+) -> str:
+    """Susun naskah Surat Tugas berkop resmi PT HMU. `tanggal` = YYYY-MM-DD."""
+    from datetime import date
+    from app.kantor.dokumen import surat
+    try:
+        d = date.fromisoformat(tanggal)
+    except ValueError:
+        return "tanggal harus format YYYY-MM-DD."
+    return surat.surat_tugas(nomor=nomor, nama=nama, jabatan=jabatan, tugas=tugas,
+                             tempat=tempat, waktu=waktu, tanggal=d, no_pegawai=no_pegawai)
+
+
 # ─────────────────────────── Entry point ───────────────────────────
 def _run_http() -> None:
     """Streamable-HTTP + gerbang token bearer (untuk agent remote spt Hermes)."""

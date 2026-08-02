@@ -155,6 +155,9 @@ class UserSession:
     # Agent (pola agentic): perintah TULIS yang diusulkan agent & menunggu
     # konfirmasi. stage 'awaiting_agent_write' saat aktif.
     agent_command: str | None = None
+    # Kantor AI: aksi konsekuensial (dokumen/arsip) yang diusulkan & menunggu
+    # konfirmasi. stage 'awaiting_kantor' saat aktif. Isi: {jenis,params,ringkasan}.
+    kantor_pending: dict | None = None
     # Melengkapi data pembelian yang belum lengkap (bot tanya field kurang).
     # Simpan teks TERKUMPUL; tiap jawaban ditambahkan lalu di-parse ulang.
     kemasan_text: str | None = None  # stage 'awaiting_kemasan'

@@ -16,5 +16,11 @@ aiogram==3.15.0
 # ── AI ──
 anthropic==0.42.0
 
+# ── Google Drive (Kantor AI — arsip) ──
+google-api-python-client==2.198.0
+google-auth==2.56.2
+python-docx==1.2.0
+pypdf==6.14.2
+
 # ── Utils ──
 python-dotenv==1.0.1

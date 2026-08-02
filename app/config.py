@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     bot_gudang1_token: str = ""
     bot_gudang2_token: str = ""
     bot_admin_token: str = ""
+    bot_kantor_token: str = ""   # Bot "Kantor AI" (asisten eksekutif Direksi)
 
     # Claude — model dipilih per SURFACE:
     anthropic_api_key: str = ""
@@ -100,6 +101,7 @@ class Settings(BaseSettings):
             "gudang1": self.bot_gudang1_token,
             "gudang2": self.bot_gudang2_token,
             "admin": self.bot_admin_token,
+            "kantor": self.bot_kantor_token,
         }
         return {name: token for name, token in raw.items() if token.strip()}
 
