@@ -10,3 +10,5 @@ sqlalchemy>=2.0
 pydantic>=2.11
 pydantic-settings>=2.0
 asyncpg>=0.29
+uvicorn>=0.30
+starlette>=0.40
