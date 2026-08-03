@@ -529,11 +529,12 @@ async def jalankan_rename(file_id: str, nama_baru: str, token: str) -> str:
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
-def _token_dokumen(judul: str, isi: str) -> str:
+def _token_dokumen(judul: str, isi: str, extra: str = "") -> str:
     import hashlib
     import hmac as _hmac
     secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
-    return _hmac.new(secret, f"dok|{judul}|{isi}".encode("utf-8"), hashlib.sha256).hexdigest()[:10]
+    return _hmac.new(secret, f"dok|{judul}|{isi}|{extra}".encode("utf-8"),
+                     hashlib.sha256).hexdigest()[:10]
 
 
 def _transit_folder_id(c):
@@ -545,54 +546,66 @@ def _transit_folder_id(c):
 
 
 @mcp.tool()
-def usul_buat_dokumen(judul: str, isi: str, nomor: str = "", nama_file: str = "") -> str:
+def usul_buat_dokumen(
+    judul: str, isi: str, nomor: str = "", nama_file: str = "",
+    tembusan: str = "", tabel_json: str = "",
+) -> str:
     """USUL membuat dokumen resmi (.docx berkop PT HMU) → simpan ke _TRANSIT DRAFT.
 
     Untuk SEMUA jenis: Surat Tugas, Surat Keterangan Kerja, SK, Kontrak Kerja
-    PKWT/PKWTT, Surat Perjanjian, dll. Kamu (agent) menyusun `isi` = badan
-    dokumen LENGKAP & final sesuai jenis + kaidah; tool membungkus dgn kop resmi
-    + tanda tangan Direktur Utama + menyimpannya. TIDAK langsung dibuat.
-
-    Alur: (butuh nomor? panggil terbitkan_nomor_surat dulu) → susun isi →
-    panggil ini → tunjukkan pratinjau ke pengguna → HANYA setelah pengguna
-    setuju ('ya') panggil `jalankan_buat_dokumen` dgn token yang SAMA.
+    PKWT/PKWTT, Surat Perjanjian, dll. Kamu (agent) menyusun `isi`; tool
+    membungkus dgn kop resmi berwarna + tanda tangan Direktur Utama. TIDAK
+    langsung dibuat — butuh persetujuan pengguna (alur usul → 'ya' → jalankan).
 
     Args:
-        judul: judul dokumen (jadi judul di badan surat), mis. 'Surat Tugas'.
-        isi: badan dokumen (multi-baris), lengkap & final.
-        nomor: nomor surat resmi (opsional).
+        judul: judul dokumen (jadi judul berwarna di badan surat), mis. 'Surat Tugas'.
+        isi: badan dokumen (multi-baris). Markup: baris '[[C]]Teks' = sub-judul
+            tengah berwarna; baris '[[TABEL]]' = titik sisip tabel (isi via tabel_json).
+        nomor: nomor surat resmi (opsional; via terbitkan_nomor_surat).
         nama_file: nama file tanpa ekstensi (opsional; default = judul).
+        tembusan: daftar tembusan, pisah baris-baru atau ';' (opsional).
+        tabel_json: JSON list-of-rows utk tabel, mis.
+            '[["No","Nama","Jabatan"],["1","Budi","Sopir"]]' (baris-1 = header).
     """
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
     if _transit_folder_id(c) is None:
         return "Folder _TRANSIT tidak ditemukan — tak bisa menyimpan draft."
+    import json
+    try:
+        if tabel_json.strip():
+            json.loads(tabel_json)
+    except Exception as e:
+        return f"tabel_json bukan JSON valid: {e}"
     fn = f"[DRAFT] {(nama_file or judul).strip()}.docx"
     cuplik = "\n".join(isi.strip().splitlines()[:6])
-    tok = _token_dokumen(judul, isi)
+    tok = _token_dokumen(judul, isi, f"{tembusan}|{tabel_json}")
     return (
         "📋 USUL BUAT DOKUMEN (BELUM dibuat):\n"
         f"• Judul     : {judul}\n"
         f"• Nomor     : {nomor or '(tanpa nomor)'}\n"
         f"• Nama file : {fn}\n"
         f"• Lokasi    : _TRANSIT (status DRAFT)\n"
+        f"• Tabel     : {'ya' if tabel_json.strip() else 'tidak'} · "
+        f"Tembusan: {'ya' if tembusan.strip() else 'tidak'}\n"
         f"• Cuplikan isi:\n{cuplik}\n…\n"
         "Tunjukkan pratinjau ke pengguna. Setelah setuju ('ya'), panggil "
-        "jalankan_buat_dokumen dengan judul/isi/nomor/nama_file SAMA + "
-        f"token='{tok}'."
+        "jalankan_buat_dokumen dengan judul/isi/nomor/nama_file/tembusan/"
+        f"tabel_json SAMA + token='{tok}'."
     )
 
 
 @mcp.tool()
 async def jalankan_buat_dokumen(
-    judul: str, isi: str, nomor: str = "", nama_file: str = "", token: str = "",
+    judul: str, isi: str, nomor: str = "", nama_file: str = "",
+    tembusan: str = "", tabel_json: str = "", token: str = "",
 ) -> str:
     """Buat file .docx dokumen yang SUDAH disetujui pengguna (butuh token dari
-    usul_buat_dokumen). File berkop resmi disimpan ke _TRANSIT sebagai DRAFT.
-    HANYA panggil setelah pengguna setuju. Reversible (draft bisa dipindah/hapus).
+    usul_buat_dokumen; argumen judul/isi/tembusan/tabel_json harus SAMA). File
+    berkop resmi disimpan ke _TRANSIT sebagai DRAFT. HANYA setelah persetujuan.
     """
-    if token != _token_dokumen(judul, isi):
+    if token != _token_dokumen(judul, isi, f"{tembusan}|{tabel_json}"):
         return "❌ Token tidak cocok. Panggil usul_buat_dokumen dulu + minta persetujuan pengguna."
     c = _drive_client()
     if c is None:
@@ -600,10 +613,19 @@ async def jalankan_buat_dokumen(
     tid = _transit_folder_id(c)
     if tid is None:
         return "Folder _TRANSIT tidak ditemukan."
+    import json
     from app.kantor.dokumen import dok_docx
+    tbs = [x.strip() for x in tembusan.replace(";", "\n").splitlines() if x.strip()] or None
+    tbl = None
+    if tabel_json.strip():
+        try:
+            tbl = json.loads(tabel_json)
+        except Exception as e:
+            return f"tabel_json bukan JSON valid: {e}"
     fn = f"[DRAFT] {(nama_file or judul).strip()}.docx"
     try:
-        data = dok_docx.surat_docx(judul=judul, isi=isi, nomor=nomor)
+        data = dok_docx.surat_docx(judul=judul, isi=isi, nomor=nomor,
+                                   tembusan=tbs, tabel=tbl)
         c.buat_file(fn, data, _MIME_DOCX, tid)
     except Exception as e:
         await _audit_kantor("buat_dokumen", judul, {"error": str(e)[:150]}, "gagal")
@@ -611,6 +633,70 @@ async def jalankan_buat_dokumen(
     await _audit_kantor("buat_dokumen", fn, {"judul": judul, "nomor": nomor}, "sukses")
     return (f"✅ Dokumen dibuat: '{fn}' di folder _TRANSIT (status DRAFT). "
             "Silakan tinjau; bila sudah final, hapus penanda [DRAFT] agar ikut diarsipkan.")
+
+
+# ═══════════════ Google Drive — HAPUS (usul → konfirmasi; ke Sampah) ═══════════════
+# 'Hapus' berpagar = pindah ke Trash Drive (reversible ~30 hari). BUKAN permanen.
+def _token_hapus(file_id: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
+    return _hmac.new(secret, f"hapus|{file_id}".encode(), hashlib.sha256).hexdigest()[:10]
+
+
+@mcp.tool()
+def usul_hapus_file(nama: str) -> str:
+    """USUL menghapus file (→ Sampah Drive, reversible ~30 hari) — TIDAK langsung.
+
+    Aksi konsekuensial → WAJIB persetujuan pengguna. Alur: panggil ini → tunjukkan
+    file yang akan dihapus → HANYA setelah pengguna setuju ('ya') panggil
+    `jalankan_hapus` dgn token. File masuk Sampah (bisa dipulihkan), bukan hapus
+    permanen.
+
+    Args:
+        nama: nama file (persis) yang akan dihapus.
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    kand = [x for x in c.cari(nama, maks=25) if not x.is_folder and x.nama == nama]
+    if not kand:
+        kand = [x for x in c.cari(nama, maks=25) if not x.is_folder]
+    if not kand:
+        return f"File '{nama}' tidak ditemukan."
+    if len(kand) > 1:
+        return "Beberapa file cocok — sebut nama persis:\n" + "\n".join(f"• {f.nama}" for f in kand[:10])
+    f = kand[0]
+    tok = _token_hapus(f.id)
+    return (
+        "📋 USUL HAPUS (BELUM dihapus):\n"
+        f"• File : {f.nama}\n"
+        "⚠️ Akan dipindah ke SAMPAH Drive (bisa dipulihkan ~30 hari, lalu terhapus "
+        "otomatis). Minta persetujuan pengguna. Setelah setuju ('ya'), panggil:\n"
+        f"jalankan_hapus(file_id='{f.id}', token='{tok}')"
+    )
+
+
+@mcp.tool()
+async def jalankan_hapus(file_id: str, token: str) -> str:
+    """Hapus file yang SUDAH disetujui pengguna → ke Sampah Drive (reversible ~30
+    hari, bukan permanen). Butuh token dari usul_hapus_file. Dicatat di audit.
+    HANYA panggil setelah pengguna setuju secara eksplisit.
+    """
+    if token != _token_hapus(file_id):
+        return "❌ Token tidak cocok. Panggil usul_hapus_file dulu + minta persetujuan pengguna."
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    try:
+        nama = c._service().files().get(
+            fileId=file_id, fields="name", supportsAllDrives=True).execute()["name"]
+        c.buang_ke_sampah(file_id)
+    except Exception as e:
+        await _audit_kantor("hapus_drive", file_id, {"error": str(e)[:150]}, "gagal")
+        return f"Gagal menghapus: {e}"
+    await _audit_kantor("hapus_drive", file_id, {"nama": nama}, "sukses")
+    return f"✅ '{nama}' dipindah ke Sampah Drive (bisa dipulihkan ~30 hari). Tercatat di audit."
 
 
 # ─────────────────────────── Entry point ───────────────────────────

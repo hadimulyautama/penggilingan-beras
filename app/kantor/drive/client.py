@@ -237,6 +237,19 @@ class DriveClient:
                 kwargs["removeParents"] = ",".join(cur["parents"])
         self._service().files().update(**kwargs).execute()
 
+    def buang_ke_sampah(self, file_id: str) -> None:
+        """'Hapus' berpagar: pindah file ke Trash Drive (reversible ~30 hari).
+
+        BUKAN hapus permanen. File hilang dari folder tapi masih bisa dipulihkan
+        dari Sampah sampai Drive menghapusnya otomatis.
+        """
+        if self.dry_run:
+            log.info("[dry_run] buang ke sampah %s", file_id)
+            return
+        self._service().files().update(
+            fileId=file_id, body={"trashed": True}, **_SHARED
+        ).execute()
+
     def karantina(self, file_id: str, asal_id: str | None = None) -> str:
         """"Hapus" berpagar: pindah file ke `99 Arsip Lama`. TIDAK hapus permanen."""
         if self._karantina_id is None:
