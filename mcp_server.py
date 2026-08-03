@@ -318,29 +318,20 @@ def cari_file(kata: str) -> str:
     return f"🔎 {len(hasil)} hasil untuk '{kata}':\n{_fmt_isi(hasil)}"
 
 
-@mcp.tool()
-def buka_folder(path: str) -> str:
-    """Lihat isi folder mana pun di Drive PT HMU via PATH — BISA masuk subfolder
-    sedalam apa pun (read-only). Ini pelengkap daftar_folder yang hanya 1 level.
+def _resolve_folder(c, path):
+    """Navigasi path folder → (FileDrive folder | None, trail nama, err | None).
 
-    Args:
-        path: jalur folder dipisah '/', mis. '00', '00/KONTRAK',
-            '00/KONTRAK/DIOPUTRI AGROINDUSTRI',
-            '03/01 - Data & Identitas Karyawan/04 - Staff'. Segmen pertama boleh
-            kode kategori (00–11/99) atau sebagian nama; segmen berikutnya nama
-            subfolder (cocok sebagian, tak peka huruf besar/kecil).
+    Segmen pertama = kode kategori (00–11/99) atau sebagian nama root-folder;
+    berikutnya = nama subfolder (cocok sebagian, tak peka huruf).
     """
     from app.kantor.drive import mapper
-    c = _drive_client()
-    if c is None:
-        return _DRIVE_OFF
     segs = [s.strip() for s in path.replace("\\", "/").split("/") if s.strip()]
     if not segs:
-        return "Sebutkan path folder, mis. '00/KONTRAK'."
+        return None, [], "Path folder kosong."
     cur = next((f for f in c.anak() if f.is_folder and (
         mapper.kode_kategori(f.nama) == segs[0] or segs[0].lower() in f.nama.lower())), None)
     if cur is None:
-        return f"Folder '{segs[0]}' tidak ditemukan di root Shared Drive."
+        return None, [], f"Folder '{segs[0]}' tidak ditemukan di root Shared Drive."
     trail = [cur.nama]
     for seg in segs[1:]:
         subs = [x for x in c.anak(cur.id) if x.is_folder]
@@ -348,11 +339,30 @@ def buka_folder(path: str) -> str:
             or next((x for x in subs if seg.lower() in x.nama.lower()), None)
         if nxt is None:
             ada = ", ".join(x.nama for x in subs) or "(tak ada subfolder)"
-            return (f"Subfolder '{seg}' tak ada di '{' / '.join(trail)}'.\n"
-                    f"Subfolder tersedia: {ada}")
+            return None, trail, (f"Subfolder '{seg}' tak ada di '{' / '.join(trail)}'. "
+                                 f"Subfolder tersedia: {ada}")
         cur = nxt
         trail.append(cur.nama)
-    isi = c.anak(cur.id)
+    return cur, trail, None
+
+
+@mcp.tool()
+def buka_folder(path: str) -> str:
+    """Lihat isi folder mana pun di Drive PT HMU via PATH — BISA masuk subfolder
+    sedalam apa pun (read-only). Pelengkap daftar_folder yang hanya 1 level.
+
+    Args:
+        path: jalur folder dipisah '/', mis. '00', '00/KONTRAK',
+            '00/KONTRAK/DIOPUTRI AGROINDUSTRI',
+            '03/01 - Data & Identitas Karyawan/04 - Staff'.
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    folder, trail, err = _resolve_folder(c, path)
+    if err:
+        return err
+    isi = c.anak(folder.id)
     return f"📂 {' / '.join(trail)} — {len(isi)} item:\n{_fmt_isi(isi)}"
 
 
@@ -394,7 +404,6 @@ def usul_pindah_file(nama: str, tujuan: str) -> str:
         nama: nama file (atau sebagian) yang mau dipindah — harus cocok 1 file.
         tujuan: kode kategori tujuan ('00'–'11'/'99') atau sebagian nama folder.
     """
-    from app.kantor.drive import mapper
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
@@ -405,19 +414,15 @@ def usul_pindah_file(nama: str, tujuan: str) -> str:
         daftar = "\n".join(f"• {f.nama}" for f in kandidat[:10])
         return f"Ada {len(kandidat)} file cocok '{nama}' — sebutkan lebih spesifik:\n{daftar}"
     f = kandidat[0]
-    q = tujuan.strip().lower()
-    dest = next(
-        (r for r in c.anak() if r.is_folder and (
-            mapper.kode_kategori(r.nama) == tujuan.strip() or q in r.nama.lower())),
-        None,
-    )
+    # tujuan boleh PATH subfolder, mis. '05/Invoice/PT Rajawali' (bukan cuma root kategori)
+    dest, dtrail, derr = _resolve_folder(c, tujuan)
     if dest is None:
-        return f"Folder tujuan '{tujuan}' tidak ditemukan di root Shared Drive."
+        return f"Folder tujuan tidak ditemukan. {derr}"
     tok = _token_pindah(f.id, dest.id)
     return (
         "📋 USUL PINDAH (BELUM dijalankan):\n"
-        f"• File   : {f.nama}\n"
-        f"• Ke     : {dest.nama}\n"
+        f"• File : {f.nama}\n"
+        f"• Ke   : {' / '.join(dtrail)}\n"
         "⚠️ Ini mengubah Drive — minta persetujuan pengguna dulu. Setelah pengguna "
         "setuju ('ya'), panggil:\n"
         f"jalankan_pindah(file_id='{f.id}', tujuan_id='{dest.id}', token='{tok}')"
@@ -445,6 +450,81 @@ async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
         return f"Gagal memindah file: {e}"
     await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id}, "sukses")
     return "✅ File dipindah ke folder tujuan. (Reversible & tercatat di audit.)"
+
+
+# ═══════════════ Google Drive — BUAT FOLDER (usul → konfirmasi) ═══════════════
+# Folder baru WAJIB di dalam kategori inti (00–11/99) / subfolder — bukan di root.
+# Kedalaman maksimal 4 level (kategori/sub/sub/sub).
+_MAKS_LEVEL_FOLDER = 4
+
+
+def _token_folder(parent_id: str, nama: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
+    return _hmac.new(secret, f"folder|{parent_id}|{nama}".encode(),
+                     hashlib.sha256).hexdigest()[:10]
+
+
+@mcp.tool()
+def usul_buat_folder(path: str) -> str:
+    """USUL membuat folder BARU (mis. saat tak ada folder cocok untuk memindahkan
+    file). TIDAK langsung dibuat — butuh persetujuan pengguna.
+
+    ATURAN: folder baru WAJIB di dalam kategori inti (00–11/99) atau subfolder-nya
+    — TIDAK boleh di root Shared Drive. Kedalaman MAKSIMAL 4 level
+    (kategori/sub/sub/sub). Folder induk harus sudah ada.
+
+    Args:
+        path: lokasi folder baru, mis. '09/Company Profile' (buat di dalam kategori
+            09) atau '00/KONTRAK/PT Vendor Baru'. Segmen terakhir = nama folder
+            baru; segmen sebelumnya = induk (harus sudah ada).
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    segs = [s.strip() for s in path.replace("\\", "/").split("/") if s.strip()]
+    if len(segs) < 2:
+        return ("❌ Folder baru harus DI DALAM kategori inti (00–11/99) atau "
+                "subfolder-nya — tak boleh di root. Sertakan induknya, mis. "
+                "'09/Company Profile'.")
+    if len(segs) > _MAKS_LEVEL_FOLDER:
+        return f"❌ Terlalu dalam ({len(segs)} level). Maksimal {_MAKS_LEVEL_FOLDER} level."
+    nama_baru = segs[-1]
+    induk, itrail, ierr = _resolve_folder(c, "/".join(segs[:-1]))
+    if induk is None:
+        return f"Folder induk tak ditemukan. {ierr} (Buat induknya dulu / perbaiki path.)"
+    ada = c.cari_anak(nama_baru, induk.id)
+    if ada and ada.is_folder:
+        return f"Folder '{nama_baru}' sudah ada di '{' / '.join(itrail)}'. Tak perlu dibuat."
+    tok = _token_folder(induk.id, nama_baru)
+    return (
+        "📋 USUL BUAT FOLDER (BELUM dibuat):\n"
+        f"• Folder baru : {nama_baru}  (level {len(segs)})\n"
+        f"• Di dalam    : {' / '.join(itrail)}\n"
+        "Minta persetujuan pengguna. Setelah setuju ('ya'), panggil:\n"
+        f"jalankan_buat_folder(parent_id='{induk.id}', nama='{nama_baru}', token='{tok}')"
+    )
+
+
+@mcp.tool()
+async def jalankan_buat_folder(parent_id: str, nama: str, token: str) -> str:
+    """Buat folder yang SUDAH disetujui pengguna (butuh token dari usul_buat_folder).
+    Dicatat di audit. HANYA panggil setelah pengguna setuju secara eksplisit.
+    """
+    if token != _token_folder(parent_id, nama):
+        return "❌ Token tidak cocok. Panggil usul_buat_folder dulu + minta persetujuan."
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    try:
+        fid = c.pastikan_folder(nama, parent_id)
+    except Exception as e:
+        await _audit_kantor("buat_folder", parent_id, {"nama": nama, "error": str(e)[:150]}, "gagal")
+        return f"Gagal membuat folder: {e}"
+    await _audit_kantor("buat_folder", fid, {"nama": nama, "induk": parent_id}, "sukses")
+    return (f"✅ Folder '{nama}' dibuat. Sekarang file bisa dipindahkan ke situ "
+            "(usul_pindah_file dengan path folder ini).")
 
 
 # ═══════════════ Google Drive — BACA ISI + RENAME (usul → konfirmasi) ═══════════════
