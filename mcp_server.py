@@ -604,10 +604,13 @@ def baca_dokumen(nama: str) -> str:
 
 @mcp.tool()
 def usul_rename(nama_lama: str, nama_baru: str) -> str:
-    """USUL mengganti nama file agar jelas & sesuai isi + konvensi — TIDAK langsung.
+    """USUL mengganti nama FILE atau FOLDER agar jelas & sesuai konvensi — TIDAK
+    langsung. Untuk FOLDER: hanya nama berubah, isi tetap di dalam (aman &
+    reversible) — cocok merapikan nama subfolder (mis. 'LIABILITAS'→'Liabilitas',
+    'format'→'Format', beri prefix nomor '01 - Perpajakan').
 
-    Aksi ini MENGUBAH Drive → WAJIB persetujuan pengguna. Alur: baca isi
-    (baca_dokumen) → panggil ini dengan nama baru → tunjukkan ke pengguna →
+    Aksi ini MENGUBAH Drive → WAJIB persetujuan pengguna. Alur: (file ambigu →
+    baca_dokumen dulu) → panggil ini dengan nama baru → tunjukkan ke pengguna →
     HANYA setelah pengguna setuju ('ya'), panggil `jalankan_rename` dgn token.
 
     Konvensi nama: Title Case; DILARANG 'copy/copy of/final/fix/versi vN/(n)/
@@ -620,15 +623,17 @@ def usul_rename(nama_lama: str, nama_baru: str) -> str:
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    kand = [x for x in c.cari(nama_lama, maks=25) if not x.is_folder and x.nama == nama_lama]
+    kand = [x for x in c.cari(nama_lama, maks=25) if x.nama == nama_lama]
     if not kand:
-        return f"File '{nama_lama}' tidak ditemukan (butuh nama persis)."
+        return f"File/folder '{nama_lama}' tidak ditemukan (butuh nama persis)."
     if len(kand) > 1:
-        return f"Ada {len(kand)} file bernama '{nama_lama}' — tak bisa dipastikan yang mana."
+        jn = ", ".join(("folder" if x.is_folder else "file") for x in kand)
+        return f"Ada {len(kand)} item bernama '{nama_lama}' ({jn}) — tak bisa dipastikan yang mana."
     f = kand[0]
-    ext_lama = _os.path.splitext(f.nama)[1]
-    if ext_lama and not _os.path.splitext(nama_baru)[1]:
-        nama_baru = nama_baru + ext_lama  # jaga ekstensi
+    if not f.is_folder:  # jaga ekstensi hanya untuk FILE
+        ext_lama = _os.path.splitext(f.nama)[1]
+        if ext_lama and not _os.path.splitext(nama_baru)[1]:
+            nama_baru = nama_baru + ext_lama
     if nama_baru == f.nama:
         return "Nama baru sama dengan nama lama — tak perlu diubah."
     h = kons.validasi_nama_file(nama_baru)
@@ -637,9 +642,10 @@ def usul_rename(nama_lama: str, nama_baru: str) -> str:
         return "❌ Nama usulan melanggar aturan: " + "; ".join(err) + ". Perbaiki dulu."
     warn = [t.pesan for t in h.temuan if t.level == "warning"]
     wln = ("\n⚠️ Catatan: " + "; ".join(warn)) if warn else ""
+    jenis = "FOLDER" if f.is_folder else "FILE"
     tok = _token_rename(f.id, nama_baru)
     return (
-        "📋 USUL RENAME (BELUM dijalankan):\n"
+        f"📋 USUL RENAME {jenis} (BELUM dijalankan):\n"
         f"• Dari : {f.nama}\n"
         f"• Jadi : {nama_baru}{wln}\n"
         "Minta persetujuan pengguna dulu. Setelah setuju ('ya'), panggil:\n"
