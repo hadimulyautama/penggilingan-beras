@@ -318,6 +318,44 @@ def cari_file(kata: str) -> str:
     return f"🔎 {len(hasil)} hasil untuk '{kata}':\n{_fmt_isi(hasil)}"
 
 
+@mcp.tool()
+def buka_folder(path: str) -> str:
+    """Lihat isi folder mana pun di Drive PT HMU via PATH — BISA masuk subfolder
+    sedalam apa pun (read-only). Ini pelengkap daftar_folder yang hanya 1 level.
+
+    Args:
+        path: jalur folder dipisah '/', mis. '00', '00/KONTRAK',
+            '00/KONTRAK/DIOPUTRI AGROINDUSTRI',
+            '03/01 - Data & Identitas Karyawan/04 - Staff'. Segmen pertama boleh
+            kode kategori (00–11/99) atau sebagian nama; segmen berikutnya nama
+            subfolder (cocok sebagian, tak peka huruf besar/kecil).
+    """
+    from app.kantor.drive import mapper
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    segs = [s.strip() for s in path.replace("\\", "/").split("/") if s.strip()]
+    if not segs:
+        return "Sebutkan path folder, mis. '00/KONTRAK'."
+    cur = next((f for f in c.anak() if f.is_folder and (
+        mapper.kode_kategori(f.nama) == segs[0] or segs[0].lower() in f.nama.lower())), None)
+    if cur is None:
+        return f"Folder '{segs[0]}' tidak ditemukan di root Shared Drive."
+    trail = [cur.nama]
+    for seg in segs[1:]:
+        subs = [x for x in c.anak(cur.id) if x.is_folder]
+        nxt = next((x for x in subs if x.nama == seg), None) \
+            or next((x for x in subs if seg.lower() in x.nama.lower()), None)
+        if nxt is None:
+            ada = ", ".join(x.nama for x in subs) or "(tak ada subfolder)"
+            return (f"Subfolder '{seg}' tak ada di '{' / '.join(trail)}'.\n"
+                    f"Subfolder tersedia: {ada}")
+        cur = nxt
+        trail.append(cur.nama)
+    isi = c.anak(cur.id)
+    return f"📂 {' / '.join(trail)} — {len(isi)} item:\n{_fmt_isi(isi)}"
+
+
 # ═══════════════════ Google Drive — TULIS (usul → konfirmasi) ═══════════════════
 # Aksi konsekuensial (memindahkan file asli). Pola: usul_pindah_file (pratinjau +
 # token, TIDAK eksekusi) → jalankan_pindah (eksekusi hanya bila token cocok).
