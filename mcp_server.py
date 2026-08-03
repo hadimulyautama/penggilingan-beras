@@ -807,33 +807,42 @@ def _token_hapus(file_id: str) -> str:
 
 @mcp.tool()
 def usul_hapus_file(nama: str) -> str:
-    """USUL menghapus file (→ Sampah Drive, reversible ~30 hari) — TIDAK langsung.
+    """USUL menghapus FILE atau FOLDER (→ Sampah Drive, reversible ~30 hari) —
+    TIDAK langsung. Untuk FOLDER: folder BESERTA SELURUH ISINYA ikut ke Sampah
+    (bisa dipulihkan bersama). Bukan hapus permanen.
 
     Aksi konsekuensial → WAJIB persetujuan pengguna. Alur: panggil ini → tunjukkan
-    file yang akan dihapus → HANYA setelah pengguna setuju ('ya') panggil
-    `jalankan_hapus` dgn token. File masuk Sampah (bisa dipulihkan), bukan hapus
-    permanen.
+    yang akan dihapus (+ jumlah isi bila folder) → HANYA setelah pengguna setuju
+    ('ya') panggil `jalankan_hapus` dgn token.
 
     Args:
-        nama: nama file (persis) yang akan dihapus.
+        nama: nama file/folder (persis) yang akan dihapus.
     """
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    kand = [x for x in c.cari(nama, maks=25) if not x.is_folder and x.nama == nama]
+    semua = c.cari(nama, maks=25)
+    exact = [x for x in semua if x.nama == nama]
+    kand = exact or semua
     if not kand:
-        kand = [x for x in c.cari(nama, maks=25) if not x.is_folder]
-    if not kand:
-        return f"File '{nama}' tidak ditemukan."
+        return f"File/folder '{nama}' tidak ditemukan."
     if len(kand) > 1:
-        return "Beberapa file cocok — sebut nama persis:\n" + "\n".join(f"• {f.nama}" for f in kand[:10])
+        daftar = "\n".join(f"• {'📁' if x.is_folder else '📄'} {x.nama}" for x in kand[:10])
+        return f"Ada {len(kand)} item cocok '{nama}' — sebut nama persis:\n{daftar}"
     f = kand[0]
     tok = _token_hapus(f.id)
+    if f.is_folder:
+        n = len(c.anak(f.id))
+        label = f"📁 Folder : {f.nama}  (berisi {n} item)"
+        warn = (f"⚠️ Ini FOLDER — folder INI BESERTA {n} item di dalamnya akan ke "
+                "SAMPAH Drive (bisa dipulihkan ~30 hari).")
+    else:
+        label = f"📄 File : {f.nama}"
+        warn = "⚠️ Akan ke SAMPAH Drive (bisa dipulihkan ~30 hari, lalu terhapus otomatis)."
     return (
         "📋 USUL HAPUS (BELUM dihapus):\n"
-        f"• File : {f.nama}\n"
-        "⚠️ Akan dipindah ke SAMPAH Drive (bisa dipulihkan ~30 hari, lalu terhapus "
-        "otomatis). Minta persetujuan pengguna. Setelah setuju ('ya'), panggil:\n"
+        f"• {label}\n"
+        f"{warn} Minta persetujuan pengguna. Setelah setuju ('ya'), panggil:\n"
         f"jalankan_hapus(file_id='{f.id}', token='{tok}')"
     )
 
