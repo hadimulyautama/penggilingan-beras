@@ -522,6 +522,97 @@ async def jalankan_rename(file_id: str, nama_baru: str, token: str) -> str:
     return f"✅ Nama diubah: '{lama}' → '{nama_baru}'. (Reversible — nama lama tercatat di audit.)"
 
 
+# ═══════════ Google Drive — BUAT DOKUMEN (.docx berkop → _TRANSIT draft) ═══════════
+# Buat SEMUA jenis dokumen resmi (surat tugas/keterangan/SK/kontrak/perjanjian).
+# Agent menyusun `isi`; tool membungkus dgn kop resmi identik template + simpan
+# ke _TRANSIT sebagai DRAFT (sesuai aturan: file baru → transit + draft).
+_MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _token_dokumen(judul: str, isi: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
+    return _hmac.new(secret, f"dok|{judul}|{isi}".encode("utf-8"), hashlib.sha256).hexdigest()[:10]
+
+
+def _transit_folder_id(c):
+    from app.kantor.drive import mapper, taksonomi as tx
+    for f in c.anak():
+        if f.is_folder and mapper.kode_kategori(f.nama) == tx.TRANSIT:
+            return f.id
+    return None
+
+
+@mcp.tool()
+def usul_buat_dokumen(judul: str, isi: str, nomor: str = "", nama_file: str = "") -> str:
+    """USUL membuat dokumen resmi (.docx berkop PT HMU) → simpan ke _TRANSIT DRAFT.
+
+    Untuk SEMUA jenis: Surat Tugas, Surat Keterangan Kerja, SK, Kontrak Kerja
+    PKWT/PKWTT, Surat Perjanjian, dll. Kamu (agent) menyusun `isi` = badan
+    dokumen LENGKAP & final sesuai jenis + kaidah; tool membungkus dgn kop resmi
+    + tanda tangan Direktur Utama + menyimpannya. TIDAK langsung dibuat.
+
+    Alur: (butuh nomor? panggil terbitkan_nomor_surat dulu) → susun isi →
+    panggil ini → tunjukkan pratinjau ke pengguna → HANYA setelah pengguna
+    setuju ('ya') panggil `jalankan_buat_dokumen` dgn token yang SAMA.
+
+    Args:
+        judul: judul dokumen (jadi judul di badan surat), mis. 'Surat Tugas'.
+        isi: badan dokumen (multi-baris), lengkap & final.
+        nomor: nomor surat resmi (opsional).
+        nama_file: nama file tanpa ekstensi (opsional; default = judul).
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    if _transit_folder_id(c) is None:
+        return "Folder _TRANSIT tidak ditemukan — tak bisa menyimpan draft."
+    fn = f"[DRAFT] {(nama_file or judul).strip()}.docx"
+    cuplik = "\n".join(isi.strip().splitlines()[:6])
+    tok = _token_dokumen(judul, isi)
+    return (
+        "📋 USUL BUAT DOKUMEN (BELUM dibuat):\n"
+        f"• Judul     : {judul}\n"
+        f"• Nomor     : {nomor or '(tanpa nomor)'}\n"
+        f"• Nama file : {fn}\n"
+        f"• Lokasi    : _TRANSIT (status DRAFT)\n"
+        f"• Cuplikan isi:\n{cuplik}\n…\n"
+        "Tunjukkan pratinjau ke pengguna. Setelah setuju ('ya'), panggil "
+        "jalankan_buat_dokumen dengan judul/isi/nomor/nama_file SAMA + "
+        f"token='{tok}'."
+    )
+
+
+@mcp.tool()
+async def jalankan_buat_dokumen(
+    judul: str, isi: str, nomor: str = "", nama_file: str = "", token: str = "",
+) -> str:
+    """Buat file .docx dokumen yang SUDAH disetujui pengguna (butuh token dari
+    usul_buat_dokumen). File berkop resmi disimpan ke _TRANSIT sebagai DRAFT.
+    HANYA panggil setelah pengguna setuju. Reversible (draft bisa dipindah/hapus).
+    """
+    if token != _token_dokumen(judul, isi):
+        return "❌ Token tidak cocok. Panggil usul_buat_dokumen dulu + minta persetujuan pengguna."
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    tid = _transit_folder_id(c)
+    if tid is None:
+        return "Folder _TRANSIT tidak ditemukan."
+    from app.kantor.dokumen import dok_docx
+    fn = f"[DRAFT] {(nama_file or judul).strip()}.docx"
+    try:
+        data = dok_docx.surat_docx(judul=judul, isi=isi, nomor=nomor)
+        c.buat_file(fn, data, _MIME_DOCX, tid)
+    except Exception as e:
+        await _audit_kantor("buat_dokumen", judul, {"error": str(e)[:150]}, "gagal")
+        return f"Gagal membuat dokumen: {e}"
+    await _audit_kantor("buat_dokumen", fn, {"judul": judul, "nomor": nomor}, "sukses")
+    return (f"✅ Dokumen dibuat: '{fn}' di folder _TRANSIT (status DRAFT). "
+            "Silakan tinjau; bila sudah final, hapus penanda [DRAFT] agar ikut diarsipkan.")
+
+
 # ─────────────────────────── Entry point ───────────────────────────
 def _run_http() -> None:
     """Streamable-HTTP + gerbang token bearer (untuk agent remote spt Hermes)."""

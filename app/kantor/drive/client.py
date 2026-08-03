@@ -244,6 +244,22 @@ class DriveClient:
         self.pindah(file_id, self._karantina_id, asal_id)
         return self._karantina_id
 
+    def buat_file(self, nama: str, data: bytes, mime: str, parent_id: str) -> str:
+        """Unggah file baru (bytes) ke folder tujuan. Kembalikan id file baru."""
+        if self.dry_run:
+            log.info("[dry_run] buat file %r di %s (%d byte)", nama, parent_id, len(data))
+            return "(dry_run)"
+        import io as _io
+
+        from googleapiclient.http import MediaIoBaseUpload
+
+        media = MediaIoBaseUpload(_io.BytesIO(data), mimetype=mime, resumable=False)
+        meta = {"name": nama, "parents": [parent_id]}
+        f = self._service().files().create(
+            body=meta, media_body=media, fields="id", **_SHARED
+        ).execute()
+        return f["id"]
+
     # ─────────────────────────── uji koneksi ───────────────────────────
     def selftest(self) -> list[str]:
         """Uji sambungan: kembalikan nama folder tingkat atas Shared Drive.
