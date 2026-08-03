@@ -424,36 +424,42 @@ async def _audit_kantor(aksi: str, target: str, detail: dict, status: str) -> No
 
 @mcp.tool()
 def usul_pindah_file(nama: str, tujuan: str) -> str:
-    """USUL memindahkan file ke folder kategori lain — TIDAK langsung dieksekusi.
+    """USUL memindahkan FILE atau FOLDER ke folder lain — TIDAK langsung dieksekusi.
 
-    Aksi ini MENGUBAH Google Drive → WAJIB persetujuan pengguna. Alur: panggil
-    ini dulu untuk pratinjau + token, TUNJUKKAN ke pengguna, dan HANYA setelah
-    pengguna menyetujui secara eksplisit ('ya'), panggil `jalankan_pindah`.
-    JANGAN memanggil jalankan_pindah tanpa persetujuan pengguna.
+    Untuk FOLDER: SELURUH isinya otomatis ikut (tetap berada di dalam folder itu)
+    — aman & reversible. Aksi ini MENGUBAH Google Drive → WAJIB persetujuan
+    pengguna. Alur: panggil ini untuk pratinjau + token → TUNJUKKAN ke pengguna →
+    HANYA setelah pengguna setuju ('ya') panggil `jalankan_pindah`.
 
     Args:
-        nama: nama file (atau sebagian) yang mau dipindah — harus cocok 1 file.
-        tujuan: kode kategori tujuan ('00'–'11'/'99') atau sebagian nama folder.
+        nama: nama file/folder (persis lebih baik) yang mau dipindah.
+        tujuan: PATH folder tujuan, mis. '02', '02/01 - Perpajakan',
+            '05/Invoice/PT Rajawali'. Segmen-1 = kode kategori/nama root.
     """
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    kandidat = [f for f in c.cari(nama, maks=20) if not f.is_folder]
+    semua = c.cari(nama, maks=20)
+    exact = [x for x in semua if x.nama == nama]
+    kandidat = exact or semua
     if not kandidat:
-        return f"Tidak ada file yang namanya mengandung '{nama}'."
+        return f"Tidak ada file/folder yang namanya mengandung '{nama}'."
     if len(kandidat) > 1:
-        daftar = "\n".join(f"• {f.nama}" for f in kandidat[:10])
-        return f"Ada {len(kandidat)} file cocok '{nama}' — sebutkan lebih spesifik:\n{daftar}"
+        daftar = "\n".join(f"• {'📁' if x.is_folder else '📄'} {x.nama}" for x in kandidat[:10])
+        return f"Ada {len(kandidat)} item cocok '{nama}' — sebutkan nama persis:\n{daftar}"
     f = kandidat[0]
-    # tujuan boleh PATH subfolder, mis. '05/Invoice/PT Rajawali' (bukan cuma root kategori)
-    dest, dtrail, derr = _resolve_folder(c, tujuan)
+    dest, dtrail, derr = _resolve_folder(c, tujuan)  # tujuan boleh PATH subfolder
     if dest is None:
         return f"Folder tujuan tidak ditemukan. {derr}"
+    if f.is_folder and dest.id == f.id:
+        return "Folder tujuan sama dengan folder yang dipindah."
+    jenis = "FOLDER" if f.is_folder else "FILE"
+    ikut = "  (seluruh isinya ikut)" if f.is_folder else ""
     tok = _token_pindah(f.id, dest.id)
     return (
-        "📋 USUL PINDAH (BELUM dijalankan):\n"
-        f"• File : {f.nama}\n"
-        f"• Ke   : {' / '.join(dtrail)}\n"
+        f"📋 USUL PINDAH {jenis} (BELUM dijalankan):\n"
+        f"• {jenis.title()} : {f.nama}{ikut}\n"
+        f"• Ke     : {' / '.join(dtrail)}\n"
         "⚠️ Ini mengubah Drive — minta persetujuan pengguna dulu. Setelah pengguna "
         "setuju ('ya'), panggil:\n"
         f"jalankan_pindah(file_id='{f.id}', tujuan_id='{dest.id}', token='{tok}')"
@@ -480,7 +486,7 @@ async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
         await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id, "error": str(e)[:200]}, "gagal")
         return f"Gagal memindah file: {e}"
     await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id}, "sukses")
-    return "✅ File dipindah ke folder tujuan. (Reversible & tercatat di audit.)"
+    return "✅ Dipindah ke folder tujuan (folder → beserta isinya). Reversible & tercatat di audit."
 
 
 # ═══════════════ Google Drive — BUAT FOLDER (usul → konfirmasi) ═══════════════
