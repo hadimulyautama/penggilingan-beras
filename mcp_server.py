@@ -409,6 +409,119 @@ async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
     return "✅ File dipindah ke folder tujuan. (Reversible & tercatat di audit.)"
 
 
+# ═══════════════ Google Drive — BACA ISI + RENAME (usul → konfirmasi) ═══════════════
+# Rename berbasis ISI: agent baca dokumen, usulkan nama sesuai isi + konvensi
+# (Title Case, tanpa copy/final/fix/(n)/versi, pertahankan akronim & tanggal),
+# lalu setelah disetujui → jalankan. Reversible (nama lama dicatat di audit).
+def _token_rename(file_id: str, nama_baru: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
+    return _hmac.new(secret, f"rename|{file_id}|{nama_baru}".encode(), hashlib.sha256).hexdigest()[:10]
+
+
+@mcp.tool()
+def baca_dokumen(nama: str) -> str:
+    """Baca & kembalikan ISI teks sebuah dokumen di Drive PT HMU (read-only).
+
+    Untuk MEMAHAMI isi file — mis. sebelum mengusulkan nama baru yang sesuai isi.
+    Mendukung Google Docs/Sheets/Slides, docx, dan PDF. File gambar/scan → tak
+    terekstrak (namai dari konteks lain).
+
+    Args:
+        nama: nama file (persis lebih baik) yang mau dibaca.
+    """
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    kand = [x for x in c.cari(nama, maks=25) if not x.is_folder and x.nama == nama]
+    if not kand:
+        kand = [x for x in c.cari(nama, maks=25) if not x.is_folder]
+    if not kand:
+        return f"File '{nama}' tidak ditemukan."
+    if len(kand) > 1:
+        return "Beberapa file cocok — sebut nama persis:\n" + "\n".join(f"• {f.nama}" for f in kand[:10])
+    f = kand[0]
+    try:
+        mime = c._service().files().get(
+            fileId=f.id, fields="mimeType", supportsAllDrives=True).execute()["mimeType"]
+        teks = c.unduh_teks(f.id, mime, maks=3000)
+    except Exception as e:
+        return f"Gagal baca isi: {e}"
+    if not teks.strip():
+        return f"(Isi '{f.nama}' tak bisa diekstrak — kemungkinan gambar/scan.)"
+    return f"📄 {f.nama}:\n{teks}"
+
+
+@mcp.tool()
+def usul_rename(nama_lama: str, nama_baru: str) -> str:
+    """USUL mengganti nama file agar jelas & sesuai isi + konvensi — TIDAK langsung.
+
+    Aksi ini MENGUBAH Drive → WAJIB persetujuan pengguna. Alur: baca isi
+    (baca_dokumen) → panggil ini dengan nama baru → tunjukkan ke pengguna →
+    HANYA setelah pengguna setuju ('ya'), panggil `jalankan_rename` dgn token.
+
+    Konvensi nama: Title Case; DILARANG 'copy/copy of/final/fix/versi vN/(n)/
+    test'; tanpa spasi ganda; pertahankan akronim (PT, NPWP, SK, PKWT…) &
+    tanggal (YYYY-MM-DD). Nama HARUS mencerminkan ISI (jenis dokumen + pihak/
+    subjek + tanggal bila relevan). Ekstensi lama dipertahankan otomatis.
+    """
+    import os as _os
+    from app.kantor.dokumen import konsistensi as kons
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    kand = [x for x in c.cari(nama_lama, maks=25) if not x.is_folder and x.nama == nama_lama]
+    if not kand:
+        return f"File '{nama_lama}' tidak ditemukan (butuh nama persis)."
+    if len(kand) > 1:
+        return f"Ada {len(kand)} file bernama '{nama_lama}' — tak bisa dipastikan yang mana."
+    f = kand[0]
+    ext_lama = _os.path.splitext(f.nama)[1]
+    if ext_lama and not _os.path.splitext(nama_baru)[1]:
+        nama_baru = nama_baru + ext_lama  # jaga ekstensi
+    if nama_baru == f.nama:
+        return "Nama baru sama dengan nama lama — tak perlu diubah."
+    h = kons.validasi_nama_file(nama_baru)
+    err = [t.pesan for t in h.temuan if t.level == "error"]
+    if err:
+        return "❌ Nama usulan melanggar aturan: " + "; ".join(err) + ". Perbaiki dulu."
+    warn = [t.pesan for t in h.temuan if t.level == "warning"]
+    wln = ("\n⚠️ Catatan: " + "; ".join(warn)) if warn else ""
+    tok = _token_rename(f.id, nama_baru)
+    return (
+        "📋 USUL RENAME (BELUM dijalankan):\n"
+        f"• Dari : {f.nama}\n"
+        f"• Jadi : {nama_baru}{wln}\n"
+        "Minta persetujuan pengguna dulu. Setelah setuju ('ya'), panggil:\n"
+        f"jalankan_rename(file_id='{f.id}', nama_baru='{nama_baru}', token='{tok}')"
+    )
+
+
+@mcp.tool()
+async def jalankan_rename(file_id: str, nama_baru: str, token: str) -> str:
+    """Eksekusi rename yang SUDAH disetujui pengguna (butuh token dari usul_rename).
+
+    Reversible — nama lama disimpan di audit sehingga bisa dibalik. HANYA panggil
+    setelah pengguna menyetujui usulan secara eksplisit.
+    """
+    if token != _token_rename(file_id, nama_baru):
+        return ("❌ Token tidak cocok. Panggil usul_rename dulu, tunjukkan usulannya, "
+                "baru jalankan setelah pengguna setuju.")
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    try:
+        lama = c._service().files().get(
+            fileId=file_id, fields="name", supportsAllDrives=True).execute()["name"]
+        c.ganti_nama(file_id, nama_baru)
+    except Exception as e:
+        await _audit_kantor("rename_drive", file_id, {"jadi": nama_baru, "error": str(e)[:150]}, "gagal")
+        return f"Gagal rename: {e}"
+    await _audit_kantor("rename_drive", file_id, {"dari": lama, "jadi": nama_baru}, "sukses")
+    return f"✅ Nama diubah: '{lama}' → '{nama_baru}'. (Reversible — nama lama tercatat di audit.)"
+
+
 # ─────────────────────────── Entry point ───────────────────────────
 def _run_http() -> None:
     """Streamable-HTTP + gerbang token bearer (untuk agent remote spt Hermes)."""
