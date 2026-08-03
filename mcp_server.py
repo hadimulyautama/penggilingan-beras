@@ -318,6 +318,97 @@ def cari_file(kata: str) -> str:
     return f"🔎 {len(hasil)} hasil untuk '{kata}':\n{_fmt_isi(hasil)}"
 
 
+# ═══════════════════ Google Drive — TULIS (usul → konfirmasi) ═══════════════════
+# Aksi konsekuensial (memindahkan file asli). Pola: usul_pindah_file (pratinjau +
+# token, TIDAK eksekusi) → jalankan_pindah (eksekusi hanya bila token cocok).
+# Selalu REVERSIBLE (pindah, bukan hapus) & dicatat di kantor_audit_log.
+def _token_pindah(file_id: str, dest_id: str) -> str:
+    import hashlib
+    import hmac as _hmac
+    secret = os.environ.get("MCP_AUTH_TOKEN", "kantor").encode()
+    return _hmac.new(secret, f"{file_id}|{dest_id}".encode(), hashlib.sha256).hexdigest()[:10]
+
+
+async def _audit_kantor(aksi: str, target: str, detail: dict, status: str) -> None:
+    import json
+    try:
+        from app.kantor.models import KantorAuditLog
+        async with SessionLocal() as db:
+            db.add(KantorAuditLog(
+                peran="kantor", aksi=aksi, target=target,
+                detail=json.dumps(detail, ensure_ascii=False), status=status,
+            ))
+            await db.commit()
+    except Exception:
+        pass  # audit gagal tak boleh menggagalkan aksi utama
+
+
+@mcp.tool()
+def usul_pindah_file(nama: str, tujuan: str) -> str:
+    """USUL memindahkan file ke folder kategori lain — TIDAK langsung dieksekusi.
+
+    Aksi ini MENGUBAH Google Drive → WAJIB persetujuan pengguna. Alur: panggil
+    ini dulu untuk pratinjau + token, TUNJUKKAN ke pengguna, dan HANYA setelah
+    pengguna menyetujui secara eksplisit ('ya'), panggil `jalankan_pindah`.
+    JANGAN memanggil jalankan_pindah tanpa persetujuan pengguna.
+
+    Args:
+        nama: nama file (atau sebagian) yang mau dipindah — harus cocok 1 file.
+        tujuan: kode kategori tujuan ('00'–'11'/'99') atau sebagian nama folder.
+    """
+    from app.kantor.drive import mapper
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    kandidat = [f for f in c.cari(nama, maks=20) if not f.is_folder]
+    if not kandidat:
+        return f"Tidak ada file yang namanya mengandung '{nama}'."
+    if len(kandidat) > 1:
+        daftar = "\n".join(f"• {f.nama}" for f in kandidat[:10])
+        return f"Ada {len(kandidat)} file cocok '{nama}' — sebutkan lebih spesifik:\n{daftar}"
+    f = kandidat[0]
+    q = tujuan.strip().lower()
+    dest = next(
+        (r for r in c.anak() if r.is_folder and (
+            mapper.kode_kategori(r.nama) == tujuan.strip() or q in r.nama.lower())),
+        None,
+    )
+    if dest is None:
+        return f"Folder tujuan '{tujuan}' tidak ditemukan di root Shared Drive."
+    tok = _token_pindah(f.id, dest.id)
+    return (
+        "📋 USUL PINDAH (BELUM dijalankan):\n"
+        f"• File   : {f.nama}\n"
+        f"• Ke     : {dest.nama}\n"
+        "⚠️ Ini mengubah Drive — minta persetujuan pengguna dulu. Setelah pengguna "
+        "setuju ('ya'), panggil:\n"
+        f"jalankan_pindah(file_id='{f.id}', tujuan_id='{dest.id}', token='{tok}')"
+    )
+
+
+@mcp.tool()
+async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
+    """Eksekusi pemindahan file yang SUDAH disetujui pengguna.
+
+    Butuh `token` dari usul_pindah_file (mengikat aksi ke file+tujuan tertentu).
+    Reversible (pindah, bukan hapus) & dicatat di audit. HANYA panggil setelah
+    pengguna menyetujui usulan secara eksplisit.
+    """
+    if token != _token_pindah(file_id, tujuan_id):
+        return ("❌ Token tidak cocok. Panggil usul_pindah_file dulu, tunjukkan "
+                "usulannya ke pengguna, baru jalankan setelah disetujui.")
+    c = _drive_client()
+    if c is None:
+        return _DRIVE_OFF
+    try:
+        c.pindah(file_id, tujuan_id)
+    except Exception as e:
+        await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id, "error": str(e)[:200]}, "gagal")
+        return f"Gagal memindah file: {e}"
+    await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id}, "sukses")
+    return "✅ File dipindah ke folder tujuan. (Reversible & tercatat di audit.)"
+
+
 # ─────────────────────────── Entry point ───────────────────────────
 def _run_http() -> None:
     """Streamable-HTTP + gerbang token bearer (untuk agent remote spt Hermes)."""
