@@ -160,6 +160,37 @@ async def item_nyangkut() -> str:
 # Dipanggil oleh agent (Hermes) untuk memandu arsip & mengelola dokumen.
 # Logika + guardrail ada di sini (deterministik) — bukan di kebebasan LLM.
 @mcp.tool()
+def peta_arsip() -> str:
+    """Peta LENGKAP aturan kearsipan PT HMU dalam SATU panggilan: semua kategori
+    digital (00–11 + _TRANSIT + 99) beserta cakupan isinya, subfolder baku yang
+    diketahui, dan padanan ordner FISIK (warna/golongan/retensi).
+
+    Pakai untuk memahami keseluruhan aturan sekaligus (agar tak perlu tanya
+    panduan_arsip satu-per-satu). Untuk isi subfolder aktual di Drive, pakai
+    daftar_folder / buka_folder.
+    """
+    from app.kantor import arsip_fisik as af
+    from app.kantor.drive import taksonomi as tx
+    baris = ["📚 PETA ARSIP PT HADI MULYA UTAMA — aturan lengkap",
+             "(kategori digital + subfolder baku + ordner fisik)\n"]
+    for k in tx.KATEGORI:
+        baris.append(f"【{k.kode}】 {k.nama}")
+        baris.append(f"   • Cakupan: {k.isi}")
+        if k.subfolder:
+            baris.append(f"   • Subfolder baku: {', '.join(k.subfolder)}")
+        if k.kode not in (tx.TRANSIT, tx.ARSIP_LAMA):
+            p = af.panduan(k.kode)
+            if p.fisik:
+                fz = p.fisik
+                baris.append(f"   • Ordner fisik: {fz.kode} {fz.nama} (stiker "
+                             f"{fz.warna}) · {fz.golongan} · retensi {fz.retensi}")
+            if p.catatan:
+                baris.append(f"   • Catatan: {p.catatan}")
+        baris.append("")
+    return "\n".join(baris)
+
+
+@mcp.tool()
 def panduan_arsip(nama_dokumen: str, isi_ringkas: str = "") -> str:
     """Panduan menyimpan sebuah dokumen: folder DIGITAL + ordner FISIK (warna/
     golongan/retensi) sesuai Pedoman Kearsipan PT HMU.
