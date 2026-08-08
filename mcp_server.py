@@ -422,6 +422,37 @@ async def _audit_kantor(aksi: str, target: str, detail: dict, status: str) -> No
         pass  # audit gagal tak boleh menggagalkan aksi utama
 
 
+def _nama_drive(c, fid: str) -> str | None:
+    """Ambil nama tampilan file/folder dari id (untuk ringkasan persetujuan)."""
+    try:
+        return c._service().files().get(
+            fileId=fid, fields="name", supportsAllDrives=True).execute()["name"]
+    except Exception:
+        return None
+
+
+async def _ajukan(jenis: str, ringkasan: str, payload: dict) -> str:
+    """Ajukan aksi Drive ke PERSETUJUAN PEMILIK — TIDAK dieksekusi di sini.
+
+    Menulis baris AksiPending(pending); pemilik menyetujui via tombol Telegram
+    (poller di service bot). Menutup celah self-approve: agen tak bisa menekan
+    tombol, jadi hanya token saja tidak cukup untuk mengubah Drive.
+    """
+    from app.kantor import persetujuan as pst
+    try:
+        aid = await pst.buat_pending(jenis=jenis, ringkasan=ringkasan,
+                                     payload=payload, diminta_oleh="hermes/mcp")
+    except Exception as e:
+        return f"Gagal mengajukan aksi untuk persetujuan: {e}"
+    return (
+        f"⏳ Aksi DIAJUKAN untuk persetujuan pemilik (#{aid}) — BELUM dijalankan.\n"
+        f"• {ringkasan}\n"
+        "Pemilik akan menerima tombol ✅ Setujui / ❌ Tolak di Telegram. Sampaikan "
+        "ke pengguna: aksi menunggu persetujuan pemilik, dan HANYA berjalan setelah "
+        "tombol Setujui ditekan. Jangan mencoba menjalankannya dengan cara lain."
+    )
+
+
 @mcp.tool()
 def usul_pindah_file(nama: str, tujuan: str) -> str:
     """USUL memindahkan FILE atau FOLDER ke folder lain — TIDAK langsung dieksekusi.
@@ -468,11 +499,10 @@ def usul_pindah_file(nama: str, tujuan: str) -> str:
 
 @mcp.tool()
 async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
-    """Eksekusi pemindahan file yang SUDAH disetujui pengguna.
+    """AJUKAN pemindahan file untuk persetujuan pemilik — TIDAK langsung jalan.
 
-    Butuh `token` dari usul_pindah_file (mengikat aksi ke file+tujuan tertentu).
-    Reversible (pindah, bukan hapus) & dicatat di audit. HANYA panggil setelah
-    pengguna menyetujui usulan secara eksplisit.
+    Butuh `token` dari usul_pindah_file. Aksi tidak dieksekusi di sini; ia
+    diajukan ke pemilik lewat tombol Telegram. HANYA pemilik yang menjalankannya.
     """
     if token != _token_pindah(file_id, tujuan_id):
         return ("❌ Token tidak cocok. Panggil usul_pindah_file dulu, tunjukkan "
@@ -480,13 +510,12 @@ async def jalankan_pindah(file_id: str, tujuan_id: str, token: str) -> str:
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    try:
-        c.pindah(file_id, tujuan_id)
-    except Exception as e:
-        await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id, "error": str(e)[:200]}, "gagal")
-        return f"Gagal memindah file: {e}"
-    await _audit_kantor("pindah_drive", file_id, {"tujuan": tujuan_id}, "sukses")
-    return "✅ Dipindah ke folder tujuan (folder → beserta isinya). Reversible & tercatat di audit."
+    nama = _nama_drive(c, file_id) or file_id
+    tuju = _nama_drive(c, tujuan_id) or tujuan_id
+    return await _ajukan(
+        "drive_move", f"Pindah *{nama}* → folder *{tuju}*",
+        {"file_id": file_id, "tujuan_id": tujuan_id, "nama": nama, "tujuan_label": tuju},
+    )
 
 
 # ═══════════════ Google Drive — BUAT FOLDER (usul → konfirmasi) ═══════════════
@@ -661,10 +690,10 @@ def usul_rename(nama_lama: str, nama_baru: str) -> str:
 
 @mcp.tool()
 async def jalankan_rename(file_id: str, nama_baru: str, token: str) -> str:
-    """Eksekusi rename yang SUDAH disetujui pengguna (butuh token dari usul_rename).
+    """AJUKAN rename untuk persetujuan pemilik — TIDAK langsung jalan.
 
-    Reversible — nama lama disimpan di audit sehingga bisa dibalik. HANYA panggil
-    setelah pengguna menyetujui usulan secara eksplisit.
+    Butuh `token` dari usul_rename. Diajukan ke pemilik lewat tombol Telegram;
+    hanya pemilik yang menjalankannya. Reversible & dicatat di audit saat jalan.
     """
     if token != _token_rename(file_id, nama_baru):
         return ("❌ Token tidak cocok. Panggil usul_rename dulu, tunjukkan usulannya, "
@@ -672,15 +701,11 @@ async def jalankan_rename(file_id: str, nama_baru: str, token: str) -> str:
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    try:
-        lama = c._service().files().get(
-            fileId=file_id, fields="name", supportsAllDrives=True).execute()["name"]
-        c.ganti_nama(file_id, nama_baru)
-    except Exception as e:
-        await _audit_kantor("rename_drive", file_id, {"jadi": nama_baru, "error": str(e)[:150]}, "gagal")
-        return f"Gagal rename: {e}"
-    await _audit_kantor("rename_drive", file_id, {"dari": lama, "jadi": nama_baru}, "sukses")
-    return f"✅ Nama diubah: '{lama}' → '{nama_baru}'. (Reversible — nama lama tercatat di audit.)"
+    lama = _nama_drive(c, file_id) or file_id
+    return await _ajukan(
+        "drive_rename", f"Ubah nama: *{lama}* → *{nama_baru}*",
+        {"file_id": file_id, "nama_baru": nama_baru, "nama_lama": lama},
+    )
 
 
 # ═══════════ Google Drive — BUAT DOKUMEN (.docx berkop → _TRANSIT draft) ═══════════
@@ -849,24 +874,21 @@ def usul_hapus_file(nama: str) -> str:
 
 @mcp.tool()
 async def jalankan_hapus(file_id: str, token: str) -> str:
-    """Hapus file yang SUDAH disetujui pengguna → ke Sampah Drive (reversible ~30
-    hari, bukan permanen). Butuh token dari usul_hapus_file. Dicatat di audit.
-    HANYA panggil setelah pengguna setuju secara eksplisit.
+    """AJUKAN penghapusan (→ Sampah, reversible ~30 hari) untuk persetujuan pemilik.
+
+    TIDAK langsung jalan. Butuh token dari usul_hapus_file. Diajukan ke pemilik
+    lewat tombol Telegram; hanya pemilik yang menjalankannya. Dicatat di audit.
     """
     if token != _token_hapus(file_id):
         return "❌ Token tidak cocok. Panggil usul_hapus_file dulu + minta persetujuan pengguna."
     c = _drive_client()
     if c is None:
         return _DRIVE_OFF
-    try:
-        nama = c._service().files().get(
-            fileId=file_id, fields="name", supportsAllDrives=True).execute()["name"]
-        c.buang_ke_sampah(file_id)
-    except Exception as e:
-        await _audit_kantor("hapus_drive", file_id, {"error": str(e)[:150]}, "gagal")
-        return f"Gagal menghapus: {e}"
-    await _audit_kantor("hapus_drive", file_id, {"nama": nama}, "sukses")
-    return f"✅ '{nama}' dipindah ke Sampah Drive (bisa dipulihkan ~30 hari). Tercatat di audit."
+    nama = _nama_drive(c, file_id) or file_id
+    return await _ajukan(
+        "drive_delete", f"Hapus (ke Sampah) *{nama}*",
+        {"file_id": file_id, "nama": nama},
+    )
 
 
 # ─────────────────────────── Entry point ───────────────────────────

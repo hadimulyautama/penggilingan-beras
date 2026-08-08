@@ -13,7 +13,7 @@ from datetime import date
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
 from app.bots.common import (
     CANCEL_WORDS,
@@ -71,6 +71,43 @@ async def cmd_whoami(message: Message) -> None:
 @router.message(F.contact)
 async def on_contact(message: Message) -> None:
     await handle_shared_contact(message)
+
+
+@router.callback_query(F.data.startswith("kaksi:"))
+async def on_persetujuan(cb: CallbackQuery) -> None:
+    """Gerbang manusia: pemilik menekan ✅/❌ pada aksi Drive yang diajukan agen.
+
+    Hanya Direksi/Staff kantor yang boleh memutuskan. Eksekusi DETERMINISTIK
+    (tanpa LLM) lewat app.kantor.persetujuan — agen tak bisa menekan tombol ini.
+    """
+    from app.kantor import persetujuan as pst
+
+    try:
+        _, aksi, sid = cb.data.split(":", 2)
+        aksi_id = int(sid)
+    except Exception:
+        await cb.answer("Data tombol tak valid.")
+        return
+
+    async with SessionLocal() as db:
+        user = await authenticate(db, cb.from_user.id)
+    if not user or user.role not in {"admin", "staff"}:
+        await cb.answer("⛔ Hanya Direksi/Staff kantor yang boleh memutuskan.", show_alert=True)
+        return
+
+    if aksi == "ok":
+        ok, hasil = await pst.eksekusi_pending(aksi_id, diputus_oleh=user.id)
+        tanda = "✅ Disetujui & dijalankan" if ok else "⚠️ Gagal"
+    else:
+        ok, hasil = await pst.tolak_pending(aksi_id, diputus_oleh=user.id)
+        tanda = "❌ Ditolak" if ok else "⚠️"
+
+    asal = cb.message.text if cb.message else ""
+    try:
+        await cb.message.edit_text(f"{asal}\n\n— — —\n{tanda} oleh {user.nama}\n{hasil}")
+    except Exception:
+        pass
+    await cb.answer((hasil or "Selesai.")[:190], show_alert=not ok)
 
 
 async def _jalankan_aksi(aksi: dict, *, pembuat: str) -> str:

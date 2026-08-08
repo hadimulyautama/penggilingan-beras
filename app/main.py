@@ -12,6 +12,7 @@ from app.bots.registry import build_bots, run_polling
 from app.config import settings
 from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
+from app.services.persetujuan_poller import run_persetujuan_poller
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.miniapp import router as miniapp_router
@@ -34,13 +35,14 @@ async def lifespan(app: FastAPI):
     set_bots(bots)
     poll_task = asyncio.create_task(run_polling(built))
     sched_task = asyncio.create_task(run_late_drying_scheduler(bots))
+    pers_task = asyncio.create_task(run_persetujuan_poller(bots))
     log.info("Backend siap. Bot aktif: %s", list(settings.bot_tokens.keys()) or "(none)")
     try:
         yield
     finally:
         # Hentikan task latar dengan membatalkan, lalu tutup sesi bot.
         # Guard karena saat --reload polling bisa belum/selesai berjalan.
-        for task in (poll_task, sched_task):
+        for task in (poll_task, sched_task, pers_task):
             task.cancel()
             try:
                 await task
