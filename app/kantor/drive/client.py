@@ -167,6 +167,21 @@ class DriveClient:
             valueInputOption="USER_ENTERED", body={"values": nilai},
         ).execute()
 
+    def sheet_tambah_baris(self, spreadsheet_id: str, baris: list[list],
+                           *, sheet_nama: str | None = None) -> int:
+        """Tambah (append) baris DI BAWAH data yang ada. Tiap baris = list kolom →
+        otomatis terpecah ke kolom masing-masing. → jumlah baris ditambahkan."""
+        if self.dry_run:
+            log.info("[dry_run] append %s baris ke %s", len(baris), spreadsheet_id)
+            return len(baris)
+        rentang = f"'{sheet_nama}'!A1" if sheet_nama else "A1"
+        res = self._sheets().spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id, range=rentang,
+            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+            body={"values": baris},
+        ).execute()
+        return res.get("updates", {}).get("updatedRows", len(baris))
+
     # ─────────────────────────── Google Docs ───────────────────────────
     def docs_teks(self, document_id: str) -> str:
         """Ambil teks polos isi Google Doc."""

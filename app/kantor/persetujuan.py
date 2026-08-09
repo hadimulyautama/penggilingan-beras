@@ -41,6 +41,7 @@ _AUDIT_AKSI = {
     "drive_mkdir": "buat_folder",
     "drive_dokumen": "buat_dokumen",
     "sheet_buat": "buat_sheet",
+    "sheet_tambah": "tambah_baris_sheet",
     "sheet_update": "update_sheet",
     "docs_ganti": "edit_docs",
     "kalender_buat": "buat_acara",
@@ -108,6 +109,10 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         isi = json.loads(p["isi_json"]) if (p.get("isi_json") or "").strip() else None
         _sid, url = c.buat_spreadsheet(p["nama"], p["parent_id"], isi)
         return f"Google Sheet '{p['nama']}' dibuat di {p.get('path_label', '')}. {url}".strip()
+    if jenis == "sheet_tambah":
+        baris = json.loads(p["baris_json"])
+        n = c.sheet_tambah_baris(p["spreadsheet_id"], baris)
+        return f"{n} baris ditambahkan ke Sheet '{p.get('spreadsheet_nama', '')}'."
     if jenis == "sheet_update":
         c.sheet_tulis(p["spreadsheet_id"], p["sel"], [[p["nilai"]]])
         return f"Sel {p['sel']} di Sheet '{p.get('spreadsheet_nama', '')}' diisi '{p['nilai']}'."

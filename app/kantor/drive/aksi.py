@@ -20,7 +20,7 @@ from app.kantor.drive.operasi import DRIVE_OFF, _resolve_folder
 
 NAMA_TOOL = (
     "pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen",
-    "buat_sheet", "update_sheet", "edit_google_docs",
+    "buat_sheet", "update_sheet", "tambah_baris_sheet", "edit_google_docs",
     "buat_acara", "ubah_acara", "hapus_acara",
 )
 
@@ -225,6 +225,30 @@ def _resolve_sheet_baru(judul: str, folder: str, isi_json: str):
     return payload, ring, None
 
 
+def _resolve_tambah_baris(nama_sheet: str, baris_json: str):
+    """Tambah baris ke Sheet yang SUDAH ADA. `baris_json` = array-of-array
+    (baris → kolom); tiap elemen kolom masuk ke kolomnya sendiri."""
+    c = _client()
+    if c is None:
+        return None, None, DRIVE_OFF
+    f, err = _cari_by_mime(c, nama_sheet, _MIME_SHEET, "Google Sheet")
+    if err:
+        return None, None, err
+    import json
+    try:
+        data = json.loads(baris_json)
+    except Exception as e:  # noqa: BLE001
+        return None, None, f"baris_json bukan JSON valid: {e}"
+    if not isinstance(data, list) or not data or not all(isinstance(r, list) for r in data):
+        return None, None, ('baris_json harus array-of-array (baris → kolom), mis. '
+                            '[["Budi","Montir","08xx"]]. Tiap kolom = elemen terpisah.')
+    ncol = max(len(r) for r in data)
+    contoh = " | ".join(str(x) for x in data[0][:4])
+    ring = f"Tambah {len(data)} baris ({ncol} kolom) ke Sheet *{f.nama}* — mis. [{contoh}]"
+    payload = {"spreadsheet_id": f.id, "spreadsheet_nama": f.nama, "baris_json": baris_json}
+    return payload, ring, None
+
+
 def _resolve_update_sheet(nama_sheet: str, sel: str, nilai: str):
     c = _client()
     if c is None:
@@ -323,6 +347,9 @@ async def jalankan_usul(nama_tool: str, args: dict) -> str:
     if nama_tool == "buat_sheet":
         return await _ajukan(_resolve_sheet_baru, a.get("judul", ""),
                              a.get("folder", ""), a.get("isi_json", ""), jenis="sheet_buat")
+    if nama_tool == "tambah_baris_sheet":
+        return await _ajukan(_resolve_tambah_baris, a.get("nama_sheet", ""),
+                             a.get("baris_json", ""), jenis="sheet_tambah")
     if nama_tool == "update_sheet":
         return await _ajukan(_resolve_update_sheet, a.get("nama_sheet", ""),
                              a.get("sel", ""), a.get("nilai", ""), jenis="sheet_update")

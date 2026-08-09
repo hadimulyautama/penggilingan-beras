@@ -347,6 +347,27 @@ _TOOLS = [
         },
     },
     {
+        "name": "tambah_baris_sheet",
+        "description": (
+            "USULKAN menambah satu/lebih BARIS data ke Google Sheet yang sudah ada — "
+            "TIAP kolom terpecah otomatis ke kolomnya sendiri (bukan tumpuk di satu sel). "
+            "Pakai ini untuk 'tambahkan vendor/kontak/entri baru'. `baris_json` = JSON "
+            "array-of-array: tiap baris satu list, tiap KOLOM elemen terpisah. Cocokkan "
+            "urutan kolom dengan header sheet (baca_dokumen dulu bila perlu). PENTING: "
+            "nomor telepon/ID dengan angka 0 di depan → beri awalan tanda kutip satu ('),"
+            " mis. \"'082233633330\", agar nol depan tak hilang. AKSI KONSEKUENSIAL → "
+            "tombol pemilik; JANGAN mengaku sudah menambah."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_sheet": {"type": "string", "description": "Nama Google Sheet tujuan (persis lebih baik)."},
+                "baris_json": {"type": "string", "description": "JSON array-of-array, mis. '[[\"Teknisi\",\"Budi\",\"Montir dinamo\",\"\\'0812xxxx\"]]'. Satu inner-array = satu baris; tiap kolom elemen terpisah."},
+            },
+            "required": ["nama_sheet", "baris_json"],
+        },
+    },
+    {
         "name": "edit_google_docs",
         "description": (
             "USULKAN mengganti teks di sebuah Google Doc (cari & ganti semua kemunculan). "
@@ -587,7 +608,9 @@ def _system_stabil(*, role: str) -> str:
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
         "(buat_dokumen — untuk surat tugas/keterangan/SK/kontrak/perjanjian; kamu "
         "menyusun isinya), BUAT Google Sheet BARU dari nol (buat_sheet — bila diminta "
-        "sheet/tabel/database yang belum ada; bisa langsung diisi baris awal), EDIT sel "
+        "sheet/tabel/database yang belum ada; bisa langsung diisi baris awal), TAMBAH "
+        "BARIS data ke Sheet yang ada (tambah_baris_sheet — tiap kolom otomatis terpisah; "
+        "untuk 'tambahkan vendor/kontak/entri baru'), EDIT satu sel "
         "Google Sheet yang sudah ada (update_sheet), dan GANTI teks Google "
         "Doc (edit_google_docs). Untuk edit Sheet/Doc, BACA dulu isinya (baca_dokumen) "
         "agar sel A1 / teks yang dicari persis. Semua aksi ini KONSEKUENSIAL — tidak langsung jalan; sistem "
