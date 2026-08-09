@@ -116,8 +116,14 @@ async def on_persetujuan(cb: CallbackQuery) -> None:
         tanda = "❌ Ditolak" if ok else "⚠️"
 
     asal = cb.message.text if cb.message else ""
+    # Edit pesan tombol (buang tombol, tandai keputusan)…
     try:
-        await cb.message.edit_text(f"{asal}\n\n— — —\n{tanda} oleh {user.nama}\n{hasil}")
+        await cb.message.edit_text(f"{asal}\n\n— — —\n{tanda} oleh {user.nama}")
+    except Exception:
+        pass
+    # …DAN kirim laporan JELAS sebagai pesan baru di chat (bukan sekadar edit tombol).
+    try:
+        await cb.message.answer(f"{tanda}.\n{hasil}" if hasil else f"{tanda}.")
     except Exception:
         pass
     await cb.answer((hasil or "Selesai.")[:190], show_alert=not ok)
