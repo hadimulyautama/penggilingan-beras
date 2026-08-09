@@ -309,9 +309,29 @@ _TOOLS = [
         },
     },
     {
+        "name": "buat_sheet",
+        "description": (
+            "USULKAN membuat Google Sheet BARU dari nol (native, bisa langsung diisi "
+            "baris awal). Pakai bila pengguna minta sheet/tabel/database baru yang BELUM "
+            "ada. Default lokasi _TRANSIT (draft); sebut `folder` (path kategori, mis. "
+            "'07/Aset') bila ingin di tempat lain. AKSI KONSEKUENSIAL → diajukan ke pemilik "
+            "lewat tombol. JANGAN mengaku sudah membuat. (Untuk mengisi sheet yang SUDAH "
+            "ada, pakai update_sheet.)"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "judul": {"type": "string", "description": "Nama file Sheet baru, mis. 'Database Vendor Teknisi'."},
+                "folder": {"type": "string", "description": "Opsional: path folder tujuan (mis. '07/Aset'). Kosong = _TRANSIT."},
+                "isi_json": {"type": "string", "description": "Opsional: JSON array-of-array baris awal, mis. '[[\"Nama\",\"Nomor\"],[\"Budi\",\"08xx\"]]'. Baris pertama biasanya header."},
+            },
+            "required": ["judul"],
+        },
+    },
+    {
         "name": "update_sheet",
         "description": (
-            "USULKAN mengisi/mengubah sebuah SEL di Google Sheet. Sebelum memakai ini, "
+            "USULKAN mengisi/mengubah sebuah SEL di Google Sheet yang SUDAH ADA. Sebelum memakai ini, "
             "BACA dulu sheet-nya (baca_dokumen) untuk memastikan sel yang tepat "
             "(notasi A1, mis. 'Register!D5'). AKSI KONSEKUENSIAL → diajukan ke pemilik "
             "lewat tombol. JANGAN mengaku sudah mengubah."
@@ -566,7 +586,9 @@ def _system_stabil(*, role: str) -> str:
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
         "(buat_dokumen — untuk surat tugas/keterangan/SK/kontrak/perjanjian; kamu "
-        "menyusun isinya), EDIT sel Google Sheet (update_sheet), dan GANTI teks Google "
+        "menyusun isinya), BUAT Google Sheet BARU dari nol (buat_sheet — bila diminta "
+        "sheet/tabel/database yang belum ada; bisa langsung diisi baris awal), EDIT sel "
+        "Google Sheet yang sudah ada (update_sheet), dan GANTI teks Google "
         "Doc (edit_google_docs). Untuk edit Sheet/Doc, BACA dulu isinya (baca_dokumen) "
         "agar sel A1 / teks yang dicari persis. Semua aksi ini KONSEKUENSIAL — tidak langsung jalan; sistem "
         "mengajukannya ke pemilik lewat tombol persetujuan di Telegram. Setelah "

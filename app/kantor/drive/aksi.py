@@ -20,7 +20,8 @@ from app.kantor.drive.operasi import DRIVE_OFF, _resolve_folder
 
 NAMA_TOOL = (
     "pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen",
-    "update_sheet", "edit_google_docs", "buat_acara", "ubah_acara", "hapus_acara",
+    "buat_sheet", "update_sheet", "edit_google_docs",
+    "buat_acara", "ubah_acara", "hapus_acara",
 )
 
 _MAKS_LEVEL_FOLDER = 4
@@ -187,6 +188,43 @@ def _cari_by_mime(c, nama: str, mime: str, label: str):
     return kand[0], None
 
 
+def _resolve_sheet_baru(judul: str, folder: str, isi_json: str):
+    """Buat Google Sheet BARU. Tujuan: `folder` (path kategori) atau _TRANSIT (default).
+    `isi_json` opsional = array-of-array (baris → sel)."""
+    c = _client()
+    if c is None:
+        return None, None, DRIVE_OFF
+    if not (judul or "").strip():
+        return None, None, "Nama/judul Sheet wajib diisi."
+    if (folder or "").strip():
+        dest, trail, derr = _resolve_folder(c, folder)
+        if dest is None:
+            return None, None, f"Folder tujuan tak ditemukan. {derr}"
+        parent_id, label = dest.id, " / ".join(trail)
+    else:
+        from app.kantor.drive.operasi import transit_id
+        tid = transit_id(c)
+        if tid is None:
+            return None, None, "Folder _TRANSIT tak ditemukan — sebut folder tujuan lain."
+        parent_id, label = tid, "_TRANSIT"
+    n_baris = 0
+    if (isi_json or "").strip():
+        import json
+        try:
+            data = json.loads(isi_json)
+        except Exception as e:  # noqa: BLE001
+            return None, None, f"isi_json bukan JSON valid: {e}"
+        if not isinstance(data, list) or not all(isinstance(r, list) for r in data):
+            return None, None, ('isi_json harus array-of-array (baris → sel), mis. '
+                                '[["Nama","Nomor"],["Budi","08xx"]].')
+        n_baris = len(data)
+    ket = f" ({n_baris} baris awal)" if n_baris else " (kosong)"
+    ring = f"Buat Google Sheet baru *{judul}* di *{label}*{ket}"
+    payload = {"nama": judul.strip(), "parent_id": parent_id,
+               "path_label": label, "isi_json": isi_json or ""}
+    return payload, ring, None
+
+
 def _resolve_update_sheet(nama_sheet: str, sel: str, nilai: str):
     c = _client()
     if c is None:
@@ -282,6 +320,9 @@ async def jalankan_usul(nama_tool: str, args: dict) -> str:
         return await usul_dokumen(
             a.get("judul", ""), a.get("isi", ""), a.get("nomor", ""),
             a.get("nama_file", ""), a.get("tembusan", ""), a.get("tabel_json", ""))
+    if nama_tool == "buat_sheet":
+        return await _ajukan(_resolve_sheet_baru, a.get("judul", ""),
+                             a.get("folder", ""), a.get("isi_json", ""), jenis="sheet_buat")
     if nama_tool == "update_sheet":
         return await _ajukan(_resolve_update_sheet, a.get("nama_sheet", ""),
                              a.get("sel", ""), a.get("nilai", ""), jenis="sheet_update")

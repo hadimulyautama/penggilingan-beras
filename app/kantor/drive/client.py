@@ -29,6 +29,7 @@ _EXPORT = {
 }
 _DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _PDF = "application/pdf"
+_MIME_SHEET = "application/vnd.google-apps.spreadsheet"
 
 
 def _teks_docx(raw: bytes) -> str:
@@ -428,6 +429,23 @@ class DriveClient:
             self._karantina_id = self.pastikan_folder(_KARANTINA)
         self.pindah(file_id, self._karantina_id, asal_id)
         return self._karantina_id
+
+    def buat_spreadsheet(self, nama: str, parent_id: str,
+                         isi_awal: list[list] | None = None) -> tuple[str, str]:
+        """Buat Google Sheet BARU (native) di folder tujuan; opsional isi baris
+        awal mulai A1. → (spreadsheet_id, webViewLink)."""
+        if self.dry_run:
+            log.info("[dry_run] buat sheet %r di %s (isi=%s baris)",
+                     nama, parent_id, len(isi_awal or []))
+            return "(dry_run)", ""
+        meta = {"name": nama, "mimeType": _MIME_SHEET, "parents": [parent_id]}
+        f = self._service().files().create(
+            body=meta, fields="id,webViewLink", **_SHARED
+        ).execute()
+        sid = f["id"]
+        if isi_awal:
+            self.sheet_tulis(sid, "A1", isi_awal)
+        return sid, f.get("webViewLink", "")
 
     def buat_file(self, nama: str, data: bytes, mime: str, parent_id: str) -> str:
         """Unggah file baru (bytes) ke folder tujuan. Kembalikan id file baru."""
