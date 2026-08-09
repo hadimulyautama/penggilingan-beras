@@ -43,7 +43,14 @@ def _teks_pdf(raw: bytes) -> str:
     return "\n".join((pg.extract_text() or "") for pg in r.pages[:3])
 
 _TOKEN_URI = "https://oauth2.googleapis.com/token"
-_SCOPES = ["https://www.googleapis.com/auth/drive"]
+# drive = kelola file; spreadsheets = baca/edit Sheets; documents = baca/edit Docs.
+# Aman ditambah lebih dulu: operasi Drive tetap jalan dgn token lama (scope drive);
+# Sheets/Docs baru berfungsi setelah refresh token di-issue ulang dgn scope ini.
+_SCOPES = [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/documents",
+]
 _KARANTINA = "99 - Arsip Lama"  # nama folder kategori tujuan "hapus" (persis di Drive)
 
 # Parameter Shared Drive untuk operasi FILE (get/create/update). CATATAN:
@@ -89,20 +96,18 @@ class DriveClient:
         self.dry_run = dry_run
         self.root_id = os.getenv("GDRIVE_ROOT_FOLDER_ID", "")
         self._svc = None
+        self._svc_sheets = None
+        self._svc_docs = None
         self._karantina_id: str | None = None
 
     # ─────────────────────────── koneksi ───────────────────────────
-    def _service(self):
-        if self._svc is not None:
-            return self._svc
+    def _kredensial(self):
         if not terkonfigurasi():
             raise DriveTidakDikonfigurasi(
                 "Env GDRIVE_OAUTH_* / GDRIVE_ROOT_FOLDER_ID belum lengkap."
             )
         from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-
-        creds = Credentials(
+        return Credentials(
             token=None,
             refresh_token=os.environ["GDRIVE_OAUTH_REFRESH_TOKEN"],
             token_uri=_TOKEN_URI,
@@ -110,8 +115,72 @@ class DriveClient:
             client_secret=os.environ["GDRIVE_OAUTH_CLIENT_SECRET"],
             scopes=_SCOPES,
         )
-        self._svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+
+    def _service(self):
+        if self._svc is None:
+            from googleapiclient.discovery import build
+            self._svc = build("drive", "v3", credentials=self._kredensial(),
+                              cache_discovery=False)
         return self._svc
+
+    def _sheets(self):
+        if self._svc_sheets is None:
+            from googleapiclient.discovery import build
+            self._svc_sheets = build("sheets", "v4", credentials=self._kredensial(),
+                                     cache_discovery=False)
+        return self._svc_sheets
+
+    def _docs(self):
+        if self._svc_docs is None:
+            from googleapiclient.discovery import build
+            self._svc_docs = build("docs", "v1", credentials=self._kredensial(),
+                                   cache_discovery=False)
+        return self._svc_docs
+
+    # ─────────────────────────── Google Sheets ───────────────────────────
+    def sheet_baca(self, spreadsheet_id: str, rentang: str) -> list[list[str]]:
+        """Baca nilai sebuah rentang (mis. 'Sheet1!A1:D20'). → list baris."""
+        r = self._sheets().spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, range=rentang).execute()
+        return r.get("values", [])
+
+    def sheet_tulis(self, spreadsheet_id: str, rentang: str,
+                    nilai: list[list]) -> None:
+        """Tulis `nilai` (list baris) ke `rentang`. USER_ENTERED (hormati format)."""
+        if self.dry_run:
+            log.info("[dry_run] tulis sheet %s %s = %r", spreadsheet_id, rentang, nilai)
+            return
+        self._sheets().spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id, range=rentang,
+            valueInputOption="USER_ENTERED", body={"values": nilai},
+        ).execute()
+
+    # ─────────────────────────── Google Docs ───────────────────────────
+    def docs_teks(self, document_id: str) -> str:
+        """Ambil teks polos isi Google Doc."""
+        doc = self._docs().documents().get(documentId=document_id).execute()
+        keping: list[str] = []
+        for el in doc.get("body", {}).get("content", []):
+            for pe in el.get("paragraph", {}).get("elements", []):
+                t = pe.get("textRun", {}).get("content")
+                if t:
+                    keping.append(t)
+        return "".join(keping)
+
+    def docs_ganti_teks(self, document_id: str, cari: str, ganti: str) -> int:
+        """Ganti SEMUA kemunculan `cari` → `ganti` di Google Doc. → jumlah diganti."""
+        if self.dry_run:
+            log.info("[dry_run] docs ganti %s: %r→%r", document_id, cari, ganti)
+            return 0
+        res = self._docs().documents().batchUpdate(
+            documentId=document_id,
+            body={"requests": [{"replaceAllText": {
+                "containsText": {"text": cari, "matchCase": True},
+                "replaceText": ganti,
+            }}]},
+        ).execute()
+        rep = res.get("replies", [{}])
+        return rep[0].get("replaceAllText", {}).get("occurrencesChanged", 0) if rep else 0
 
     def _q(self, **params):
         """Query files().list dgn parameter Shared Drive terpasang.

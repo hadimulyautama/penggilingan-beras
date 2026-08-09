@@ -306,6 +306,41 @@ _TOOLS = [
             "required": ["judul", "isi"],
         },
     },
+    {
+        "name": "update_sheet",
+        "description": (
+            "USULKAN mengisi/mengubah sebuah SEL di Google Sheet. Sebelum memakai ini, "
+            "BACA dulu sheet-nya (baca_dokumen) untuk memastikan sel yang tepat "
+            "(notasi A1, mis. 'Register!D5'). AKSI KONSEKUENSIAL → diajukan ke pemilik "
+            "lewat tombol. JANGAN mengaku sudah mengubah."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_sheet": {"type": "string", "description": "Nama Google Sheet (persis lebih baik)."},
+                "sel": {"type": "string", "description": "Sel/rentang notasi A1, mis. 'Register!D5' atau 'D5'."},
+                "nilai": {"type": "string", "description": "Nilai baru untuk sel itu."},
+            },
+            "required": ["nama_sheet", "sel", "nilai"],
+        },
+    },
+    {
+        "name": "edit_google_docs",
+        "description": (
+            "USULKAN mengganti teks di sebuah Google Doc (cari & ganti semua kemunculan). "
+            "Sebelum memakai, BACA dulu dokumennya (baca_dokumen) agar teks 'cari' persis. "
+            "AKSI KONSEKUENSIAL → diajukan ke pemilik lewat tombol. JANGAN mengaku sudah mengubah."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_doc": {"type": "string", "description": "Nama Google Doc (persis lebih baik)."},
+                "cari": {"type": "string", "description": "Teks yang dicari (persis)."},
+                "ganti": {"type": "string", "description": "Teks pengganti."},
+            },
+            "required": ["nama_doc", "cari", "ganti"],
+        },
+    },
 ]
 
 
@@ -332,9 +367,11 @@ def _system_stabil(*, role: str) -> str:
         "folder satu per satu untuk itu.\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
-        "(buat_folder), dan BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
+        "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
         "(buat_dokumen — untuk surat tugas/keterangan/SK/kontrak/perjanjian; kamu "
-        "menyusun isinya). Semua aksi ini KONSEKUENSIAL — tidak langsung jalan; sistem "
+        "menyusun isinya), EDIT sel Google Sheet (update_sheet), dan GANTI teks Google "
+        "Doc (edit_google_docs). Untuk edit Sheet/Doc, BACA dulu isinya (baca_dokumen) "
+        "agar sel A1 / teks yang dicari persis. Semua aksi ini KONSEKUENSIAL — tidak langsung jalan; sistem "
         "mengajukannya ke pemilik lewat tombol persetujuan di Telegram. Setelah "
         "memanggil tool, sampaikan bahwa aksi MENUNGGU persetujuan pemilik — JANGAN "
         "mengaku sudah selesai. Bila nama target ambigu atau data dokumen kurang, "

@@ -18,9 +18,14 @@ from app.kantor import persetujuan as pst
 from app.kantor.drive import client as drv
 from app.kantor.drive.operasi import DRIVE_OFF, _resolve_folder
 
-NAMA_TOOL = ("pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen")
+NAMA_TOOL = (
+    "pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen",
+    "update_sheet", "edit_google_docs",
+)
 
 _MAKS_LEVEL_FOLDER = 4
+_MIME_SHEET = "application/vnd.google-apps.spreadsheet"
+_MIME_DOC = "application/vnd.google-apps.document"
 
 
 def _client():
@@ -169,6 +174,47 @@ async def usul_dokumen(judul: str, isi: str, nomor: str = "", nama_file: str = "
     return _diajukan(aid, ring)
 
 
+def _cari_by_mime(c, nama: str, mime: str, label: str):
+    """Cari 1 file Google-native (Sheet/Doc) bernama `nama`. → (item|None, err|None)."""
+    kand = [x for x in c.cari(nama, maks=25) if x.mime == mime]
+    exact = [x for x in kand if x.nama == nama]
+    kand = exact or kand
+    if not kand:
+        return None, f"{label} bernama '{nama}' tak ditemukan."
+    if len(kand) > 1:
+        return None, (f"Ada {len(kand)} {label} cocok '{nama}' — minta pengguna sebut "
+                      "nama PERSIS:\n" + "\n".join(f"• {x.nama}" for x in kand[:10]))
+    return kand[0], None
+
+
+def _resolve_update_sheet(nama_sheet: str, sel: str, nilai: str):
+    c = _client()
+    if c is None:
+        return None, None, DRIVE_OFF
+    f, err = _cari_by_mime(c, nama_sheet, _MIME_SHEET, "Google Sheet")
+    if err:
+        return None, None, err
+    if not (sel or "").strip():
+        return None, None, "Sel/rentang (notasi A1) wajib, mis. 'Register!D5'."
+    ring = f"Isi sel {sel} di Sheet *{f.nama}* → *{nilai}*"
+    payload = {"spreadsheet_id": f.id, "spreadsheet_nama": f.nama, "sel": sel, "nilai": nilai}
+    return payload, ring, None
+
+
+def _resolve_edit_docs(nama_doc: str, cari: str, ganti: str):
+    c = _client()
+    if c is None:
+        return None, None, DRIVE_OFF
+    f, err = _cari_by_mime(c, nama_doc, _MIME_DOC, "Google Doc")
+    if err:
+        return None, None, err
+    if not (cari or "").strip():
+        return None, None, "Teks yang dicari wajib diisi."
+    ring = f"Ganti teks di Doc *{f.nama}*: '{cari}' → '{ganti}'"
+    payload = {"document_id": f.id, "doc_nama": f.nama, "cari": cari, "ganti": ganti}
+    return payload, ring, None
+
+
 async def jalankan_usul(nama_tool: str, args: dict) -> str:
     """Dispatch tool TULIS → buat usulan yang menunggu tombol persetujuan pemilik."""
     a = args or {}
@@ -184,4 +230,10 @@ async def jalankan_usul(nama_tool: str, args: dict) -> str:
         return await usul_dokumen(
             a.get("judul", ""), a.get("isi", ""), a.get("nomor", ""),
             a.get("nama_file", ""), a.get("tembusan", ""), a.get("tabel_json", ""))
+    if nama_tool == "update_sheet":
+        return await _ajukan(_resolve_update_sheet, a.get("nama_sheet", ""),
+                             a.get("sel", ""), a.get("nilai", ""), jenis="sheet_update")
+    if nama_tool == "edit_google_docs":
+        return await _ajukan(_resolve_edit_docs, a.get("nama_doc", ""),
+                             a.get("cari", ""), a.get("ganti", ""), jenis="docs_ganti")
     return f"(aksi '{nama_tool}' tidak dikenal)"

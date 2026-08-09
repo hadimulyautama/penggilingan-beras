@@ -21,7 +21,11 @@ from __future__ import annotations
 import json
 import sys
 
-SCOPES = ["https://www.googleapis.com/auth/drive"]
+SCOPES = [
+    "https://www.googleapis.com/auth/drive",         # kelola file Drive
+    "https://www.googleapis.com/auth/spreadsheets",  # baca/edit Google Sheets
+    "https://www.googleapis.com/auth/documents",     # baca/edit Google Docs
+]
 
 
 def main(secret_path: str) -> None:

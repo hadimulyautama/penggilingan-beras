@@ -40,6 +40,8 @@ _AUDIT_AKSI = {
     "drive_delete": "hapus_drive",
     "drive_mkdir": "buat_folder",
     "drive_dokumen": "buat_dokumen",
+    "sheet_update": "update_sheet",
+    "docs_ganti": "edit_docs",
 }
 
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -97,6 +99,13 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         )
         c.buat_file(p["nama_file_final"], data, _MIME_DOCX, tid)
         return f"Dokumen '{p['nama_file_final']}' dibuat di _TRANSIT (status DRAFT)."
+    if jenis == "sheet_update":
+        c.sheet_tulis(p["spreadsheet_id"], p["sel"], [[p["nilai"]]])
+        return f"Sel {p['sel']} di Sheet '{p.get('spreadsheet_nama', '')}' diisi '{p['nilai']}'."
+    if jenis == "docs_ganti":
+        n = c.docs_ganti_teks(p["document_id"], p["cari"], p["ganti"])
+        return (f"{n} kemunculan '{p['cari']}' diganti '{p['ganti']}' "
+                f"di Doc '{p.get('doc_nama', '')}'.")
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 
