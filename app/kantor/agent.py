@@ -19,6 +19,7 @@ from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
 from app.kantor.dokumen import konsistensi
+from app.kantor.drive import aksi as drive_aksi
 from app.kantor.drive import operasi as drive_ops
 from app.kantor.drive import taksonomi as tx
 
@@ -189,6 +190,58 @@ _TOOLS = [
             "required": ["nama"],
         },
     },
+    {
+        "name": "pindah_item",
+        "description": (
+            "USULKAN memindahkan sebuah FILE **atau FOLDER** ke folder lain. Untuk "
+            "FOLDER, seluruh isinya ikut. AKSI KONSEKUENSIAL: tidak langsung jalan — "
+            "diajukan ke pemilik lewat tombol persetujuan di Telegram. JANGAN mengaku "
+            "sudah memindah. Bila nama ambigu (banyak yang cocok), TANYAKAN nama persis."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama": {"type": "string", "description": "Nama file/folder yang dipindah (persis lebih baik)."},
+                "tujuan": {
+                    "type": "string",
+                    "description": "PATH folder tujuan, mis. '02', '05/Invoice/PT Rajawali'.",
+                },
+            },
+            "required": ["nama", "tujuan"],
+        },
+    },
+    {
+        "name": "rename_item",
+        "description": (
+            "USULKAN mengganti nama sebuah FILE **atau FOLDER**. AKSI KONSEKUENSIAL: "
+            "diajukan ke pemilik lewat tombol persetujuan — tidak langsung jalan. "
+            "JANGAN mengaku sudah mengganti. Ambigu → tanyakan nama persis."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_lama": {"type": "string", "description": "Nama file/folder saat ini (persis lebih baik)."},
+                "nama_baru": {"type": "string", "description": "Nama baru yang diinginkan."},
+            },
+            "required": ["nama_lama", "nama_baru"],
+        },
+    },
+    {
+        "name": "hapus_item",
+        "description": (
+            "USULKAN menghapus sebuah FILE **atau FOLDER** (→ Sampah Drive, reversible "
+            "~30 hari). Untuk FOLDER, isinya ikut ke Sampah. AKSI KONSEKUENSIAL: "
+            "diajukan ke pemilik lewat tombol persetujuan — tidak langsung jalan. "
+            "JANGAN mengaku sudah menghapus. Ambigu → tanyakan nama persis."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama": {"type": "string", "description": "Nama file/folder yang dihapus (persis lebih baik)."},
+            },
+            "required": ["nama"],
+        },
+    },
 ]
 
 
@@ -204,7 +257,13 @@ def _system_prompt(*, role: str) -> str:
         "_TRANSIT (daftar_transit), buka folder/subfolder via path (buka_folder), "
         "lihat 1 kategori (daftar_folder), cari file (cari_file), dan baca isi "
         "dokumen (baca_dokumen). Pakai tool ini bila pengguna menanyakan isi folder, "
-        "mencari file, atau ingin tahu isi dokumen — jangan menebak.\n\n"
+        "mencari file, atau ingin tahu isi dokumen — jangan menebak.\n"
+        "Kamu juga BISA MENGUSULKAN aksi tulis Drive untuk FILE atau FOLDER: pindah "
+        "(pindah_item), ganti nama (rename_item), hapus→Sampah (hapus_item). Aksi ini "
+        "KONSEKUENSIAL — tidak langsung jalan; sistem mengajukannya ke pemilik lewat "
+        "tombol persetujuan di Telegram. Setelah memanggil tool, sampaikan ke pengguna "
+        "bahwa aksi MENUNGGU persetujuan pemilik — JANGAN mengaku sudah selesai. Bila "
+        "nama target ambigu, tanyakan nama persis dulu.\n\n"
         "Kategori arsip DIGITAL (kode → kategori):\n"
         f"{_daftar_kategori()}\n\n"
         "Aturan penting:\n"
@@ -322,7 +381,11 @@ async def run_kantor_agent(
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            if tu.name in drive_ops.NAMA_TOOL:
+            if tu.name in drive_aksi.NAMA_TOOL:
+                # Aksi tulis (pindah/rename/hapus file/folder) → ajukan ke gerbang
+                # tombol pemilik; kembalikan status "diajukan" ke agen untuk diteruskan.
+                out = await drive_aksi.jalankan_usul(tu.name, tu.input or {})
+            elif tu.name in drive_ops.NAMA_TOOL:
                 out = await asyncio.to_thread(drive_ops.jalankan, tu.name, tu.input or {})
             else:
                 out = _run_read_tool(tu.name, tu.input or {})
