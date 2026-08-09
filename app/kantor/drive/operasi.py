@@ -125,12 +125,33 @@ def baca_dokumen(nama: str) -> str:
     return f"📄 {f.nama}:\n{teks}"
 
 
+def audit_draft_nyasar() -> str:
+    """Pindai SELURUH pohon Drive (semua subfolder) → daftar file 'draft' yang
+    berada DI LUAR _TRANSIT. Satu panggilan (rekursif) — untuk audit menyeluruh.
+    """
+    c = _client()
+    if c is None:
+        return DRIVE_OFF
+    snap = mapper.snapshot(c)
+    nyasar = [e for e in snap.files
+              if "draft" in e.nama.lower() and e.kategori != tx.TRANSIT]
+    if not nyasar:
+        return ("✅ Tidak ada draft yang nyasar — tak ditemukan file berlabel 'draft' "
+                "di luar folder _TRANSIT.")
+    nyasar.sort(key=lambda e: e.jalur.lower())
+    baris = [f"📄 {e.nama}  —  di: {e.jalur or '(root)'}" for e in nyasar[:100]]
+    ket = f"\n(ditampilkan 100 dari {len(nyasar)})" if len(nyasar) > 100 else ""
+    return (f"⚠️ {len(nyasar)} draft NYASAR di luar _TRANSIT (seharusnya draft ada di "
+            f"_TRANSIT):\n" + "\n".join(baris) + ket)
+
+
 _DISPATCH = {
     "daftar_transit": lambda a: daftar_transit(),
     "daftar_folder": lambda a: daftar_folder(a.get("kategori", "")),
     "cari_file": lambda a: cari_file(a.get("kata", "")),
     "buka_folder": lambda a: buka_folder(a.get("path", "")),
     "baca_dokumen": lambda a: baca_dokumen(a.get("nama", "")),
+    "audit_draft_nyasar": lambda a: audit_draft_nyasar(),
 }
 
 NAMA_TOOL = tuple(_DISPATCH)

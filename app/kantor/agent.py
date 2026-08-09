@@ -191,6 +191,16 @@ _TOOLS = [
         },
     },
     {
+        "name": "audit_draft_nyasar",
+        "description": (
+            "Pindai SELURUH Google Drive (semua folder & subfolder, sekali jalan) dan "
+            "kembalikan daftar file 'draft' yang berada DI LUAR _TRANSIT. Pakai bila "
+            "pengguna minta AUDIT menyeluruh draft nyasar / cek ke seluruh subfolder — "
+            "JANGAN menelusuri folder satu per satu untuk ini."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "pindah_item",
         "description": (
             "USULKAN memindahkan sebuah FILE **atau FOLDER** ke folder lain. Untuk "
@@ -258,6 +268,9 @@ def _system_prompt(*, role: str) -> str:
         "lihat 1 kategori (daftar_folder), cari file (cari_file), dan baca isi "
         "dokumen (baca_dokumen). Pakai tool ini bila pengguna menanyakan isi folder, "
         "mencari file, atau ingin tahu isi dokumen — jangan menebak.\n"
+        "Untuk AUDIT menyeluruh (mis. 'cek draft nyasar di seluruh subfolder'), pakai "
+        "audit_draft_nyasar (sekali panggil, memindai seluruh Drive) — JANGAN membuka "
+        "folder satu per satu untuk itu.\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive untuk FILE atau FOLDER: pindah "
         "(pindah_item), ganti nama (rename_item), hapus→Sampah (hapus_item). Aksi ini "
         "KONSEKUENSIAL — tidak langsung jalan; sistem mengajukannya ke pemilik lewat "
