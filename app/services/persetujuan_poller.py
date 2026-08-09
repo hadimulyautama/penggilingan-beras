@@ -55,16 +55,19 @@ async def run_persetujuan_poller(bots: dict[str, Bot]) -> None:
                     .limit(10)
                 )).scalars().all()
                 for row in rows:
+                    # TEKS POLOS (bukan Markdown): ringkasan berisi nama file dengan
+                    # karakter khusus (_TRANSIT, [DRAFT], *) yang merusak parser Markdown
+                    # → tombol gagal terkirim. Polos = aman untuk nama file apa pun.
                     teks = (
-                        f"🔴 *Persetujuan aksi arsip* (#{row.id})\n\n"
-                        f"{row.ringkasan}\n\n"
-                        "Aksi ini *mengubah Google Drive*. Setujui hanya bila Anda yakin — "
+                        f"🔴 Persetujuan aksi arsip (#{row.id})\n\n"
+                        f"{row.ringkasan.replace('*', '')}\n\n"
+                        "Aksi ini MENGUBAH Google Drive. Setujui hanya bila Anda yakin — "
                         "semua reversible & tercatat di audit."
                     )
                     try:
                         await bot.send_message(
                             settings.admin_telegram_id, teks,
-                            parse_mode="Markdown", reply_markup=_keyboard(row.id),
+                            reply_markup=_keyboard(row.id),
                         )
                         row.status = pst.MENUNGGU  # cegah kirim ulang
                     except Exception:
