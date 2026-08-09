@@ -18,7 +18,9 @@ from app.kantor import persetujuan as pst
 from app.kantor.drive import client as drv
 from app.kantor.drive.operasi import DRIVE_OFF, _resolve_folder
 
-NAMA_TOOL = ("pindah_item", "rename_item", "hapus_item")
+NAMA_TOOL = ("pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen")
+
+_MAKS_LEVEL_FOLDER = 4
 
 
 def _client():
@@ -121,6 +123,52 @@ async def _ajukan(resolve, *args, jenis: str) -> str:
     return _diajukan(aid, ring)
 
 
+def _resolve_folder_baru(path: str):
+    """Validasi + resolve INDUK folder baru. Aturan: di dalam kategori (00–11/99),
+    maks 4 level, induk sudah ada, belum ada folder senama."""
+    c = _client()
+    if c is None:
+        return None, None, DRIVE_OFF
+    segs = [s.strip() for s in (path or "").replace("\\", "/").split("/") if s.strip()]
+    if len(segs) < 2:
+        return None, None, ("Folder baru harus DI DALAM kategori inti (00–11/99) atau "
+                            "subfolder-nya — sertakan induknya, mis. '09/Company Profile'.")
+    if len(segs) > _MAKS_LEVEL_FOLDER:
+        return None, None, f"Terlalu dalam ({len(segs)} level). Maksimal {_MAKS_LEVEL_FOLDER} level."
+    nama_baru = segs[-1]
+    induk, itrail, ierr = _resolve_folder(c, "/".join(segs[:-1]))
+    if induk is None:
+        return None, None, f"Folder induk tak ditemukan. {ierr}"
+    ada = c.cari_anak(nama_baru, induk.id)
+    if ada and ada.is_folder:
+        return None, None, f"Folder '{nama_baru}' sudah ada di '{' / '.join(itrail)}'."
+    ring = f"Buat folder baru *{nama_baru}* di *{' / '.join(itrail)}*"
+    payload = {"parent_id": induk.id, "nama": nama_baru, "path_label": " / ".join(itrail)}
+    return payload, ring, None
+
+
+async def usul_dokumen(judul: str, isi: str, nomor: str = "", nama_file: str = "",
+                       tembusan: str = "", tabel_json: str = "") -> str:
+    """Usulkan pembuatan .docx berkop → _TRANSIT (DRAFT). Validasi ringan, lalu gerbang."""
+    if not (judul or "").strip() or not (isi or "").strip():
+        return "Judul dan isi dokumen wajib diisi."
+    if (tabel_json or "").strip():
+        import json
+        try:
+            json.loads(tabel_json)
+        except Exception as e:  # noqa: BLE001
+            return f"tabel_json bukan JSON valid: {e}"
+    fn = f"[DRAFT] {(nama_file or judul).strip()}.docx"
+    ring = f"Buat dokumen *{judul}* → _TRANSIT sebagai *{fn}* (status DRAFT)"
+    payload = {
+        "judul": judul, "isi": isi, "nomor": nomor, "nama_file_final": fn,
+        "tembusan": tembusan, "tabel_json": tabel_json,
+    }
+    aid = await pst.buat_pending(
+        jenis="drive_dokumen", ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
+    return _diajukan(aid, ring)
+
+
 async def jalankan_usul(nama_tool: str, args: dict) -> str:
     """Dispatch tool TULIS → buat usulan yang menunggu tombol persetujuan pemilik."""
     a = args or {}
@@ -130,4 +178,10 @@ async def jalankan_usul(nama_tool: str, args: dict) -> str:
         return await _ajukan(_resolve_rename, a.get("nama_lama", ""), a.get("nama_baru", ""), jenis="drive_rename")
     if nama_tool == "hapus_item":
         return await _ajukan(_resolve_hapus, a.get("nama", ""), jenis="drive_delete")
+    if nama_tool == "buat_folder":
+        return await _ajukan(_resolve_folder_baru, a.get("path", ""), jenis="drive_mkdir")
+    if nama_tool == "buat_dokumen":
+        return await usul_dokumen(
+            a.get("judul", ""), a.get("isi", ""), a.get("nomor", ""),
+            a.get("nama_file", ""), a.get("tembusan", ""), a.get("tabel_json", ""))
     return f"(aksi '{nama_tool}' tidak dikenal)"

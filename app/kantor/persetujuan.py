@@ -38,7 +38,11 @@ _AUDIT_AKSI = {
     "drive_move": "pindah_drive",
     "drive_rename": "rename_drive",
     "drive_delete": "hapus_drive",
+    "drive_mkdir": "buat_folder",
+    "drive_dokumen": "buat_dokumen",
 }
+
+_MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 async def buat_pending(*, jenis: str, ringkasan: str, payload: dict,
@@ -72,6 +76,27 @@ def _lakukan(c, jenis: str, p: dict) -> str:
     if jenis == "drive_delete":
         c.buang_ke_sampah(p["file_id"])
         return f"'{p.get('nama', 'file')}' dipindah ke Sampah (pulih ~30 hari)."
+    if jenis == "drive_mkdir":
+        c.pastikan_folder(p["nama"], p["parent_id"])
+        return f"Folder '{p['nama']}' dibuat di {p.get('path_label', 'induk')}."
+    if jenis == "drive_dokumen":
+        import json
+
+        from app.kantor.dokumen import dok_docx
+        from app.kantor.drive.operasi import transit_id
+
+        tid = transit_id(c)
+        if tid is None:
+            raise RuntimeError("Folder _TRANSIT tidak ditemukan — tak bisa simpan draft.")
+        tbs = [x.strip() for x in (p.get("tembusan") or "").replace(";", "\n").splitlines()
+               if x.strip()] or None
+        tbl = json.loads(p["tabel_json"]) if (p.get("tabel_json") or "").strip() else None
+        data = dok_docx.surat_docx(
+            judul=p["judul"], isi=p["isi"], nomor=p.get("nomor", ""),
+            tembusan=tbs, tabel=tbl,
+        )
+        c.buat_file(p["nama_file_final"], data, _MIME_DOCX, tid)
+        return f"Dokumen '{p['nama_file_final']}' dibuat di _TRANSIT (status DRAFT)."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 

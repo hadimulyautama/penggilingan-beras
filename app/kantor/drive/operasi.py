@@ -56,15 +56,23 @@ def _resolve_folder(c, path: str):
     return cur, trail, None
 
 
+def transit_id(c) -> str | None:
+    """Id folder _TRANSIT di root Shared Drive (untuk simpan draft baru)."""
+    for f in c.anak():
+        if f.is_folder and mapper.kode_kategori(f.nama) == tx.TRANSIT:
+            return f.id
+    return None
+
+
 def daftar_transit() -> str:
     c = _client()
     if c is None:
         return DRIVE_OFF
-    for f in c.anak():
-        if f.is_folder and mapper.kode_kategori(f.nama) == tx.TRANSIT:
-            isi = c.anak(f.id)
-            return f"📥 {f.nama} — {len(isi)} item:\n{_fmt_isi(isi)}"
-    return "Folder _TRANSIT tidak ditemukan di root Shared Drive."
+    tid = transit_id(c)
+    if tid is None:
+        return "Folder _TRANSIT tidak ditemukan di root Shared Drive."
+    isi = c.anak(tid)
+    return f"📥 _TRANSIT — {len(isi)} item:\n{_fmt_isi(isi)}"
 
 
 def daftar_folder(kategori: str) -> str:

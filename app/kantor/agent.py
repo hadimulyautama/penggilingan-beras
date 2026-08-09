@@ -252,6 +252,57 @@ _TOOLS = [
             "required": ["nama"],
         },
     },
+    {
+        "name": "buat_folder",
+        "description": (
+            "USULKAN membuat FOLDER baru. ATURAN: harus di dalam kategori inti "
+            "(00–11/99) atau subfolder-nya (bukan di root), maksimal 4 level, induk "
+            "harus sudah ada. AKSI KONSEKUENSIAL → diajukan ke pemilik lewat tombol. "
+            "JANGAN mengaku sudah membuat."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Lokasi folder baru, mis. '09/Company Profile' atau "
+                                   "'00/KONTRAK/PT Vendor Baru'. Segmen terakhir = nama folder baru.",
+                }
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "buat_dokumen",
+        "description": (
+            "USULKAN membuat dokumen resmi .docx berkop PT HMU → disimpan ke _TRANSIT "
+            "sebagai DRAFT. Untuk SEMUA jenis (Surat Tugas, Surat Keterangan, SK, "
+            "Kontrak PKWT/PKWTT, Perjanjian, dll). Kamu menyusun `isi`; tool membungkus "
+            "dengan kop resmi + tanda tangan Direktur Utama. AKSI KONSEKUENSIAL → "
+            "diajukan ke pemilik lewat tombol. JANGAN mengaku sudah membuat. Bila data "
+            "dokumen belum lengkap, TANYAKAN dulu."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "judul": {"type": "string", "description": "Judul dokumen, mis. 'Surat Tugas'."},
+                "isi": {
+                    "type": "string",
+                    "description": "Badan dokumen (multi-baris). Markup: '[[C]]Teks' = sub-judul "
+                                   "tengah; '[[TABEL]]' = titik sisip tabel (via tabel_json).",
+                },
+                "nomor": {"type": "string", "description": "Nomor surat resmi (opsional)."},
+                "nama_file": {"type": "string", "description": "Nama file tanpa ekstensi (opsional; default=judul)."},
+                "tembusan": {"type": "string", "description": "Daftar tembusan, pisah baris-baru atau ';' (opsional)."},
+                "tabel_json": {
+                    "type": "string",
+                    "description": "JSON list-of-rows utk tabel, mis. '[[\"No\",\"Nama\"],[\"1\",\"Budi\"]]' "
+                                   "(baris-1=header). Opsional.",
+                },
+            },
+            "required": ["judul", "isi"],
+        },
+    },
 ]
 
 
@@ -271,12 +322,15 @@ def _system_prompt(*, role: str) -> str:
         "Untuk AUDIT menyeluruh (mis. 'cek draft nyasar di seluruh subfolder'), pakai "
         "audit_draft_nyasar (sekali panggil, memindai seluruh Drive) — JANGAN membuka "
         "folder satu per satu untuk itu.\n"
-        "Kamu juga BISA MENGUSULKAN aksi tulis Drive untuk FILE atau FOLDER: pindah "
-        "(pindah_item), ganti nama (rename_item), hapus→Sampah (hapus_item). Aksi ini "
-        "KONSEKUENSIAL — tidak langsung jalan; sistem mengajukannya ke pemilik lewat "
-        "tombol persetujuan di Telegram. Setelah memanggil tool, sampaikan ke pengguna "
-        "bahwa aksi MENUNGGU persetujuan pemilik — JANGAN mengaku sudah selesai. Bila "
-        "nama target ambigu, tanyakan nama persis dulu.\n\n"
+        "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
+        "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
+        "(buat_folder), dan BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
+        "(buat_dokumen — untuk surat tugas/keterangan/SK/kontrak/perjanjian; kamu "
+        "menyusun isinya). Semua aksi ini KONSEKUENSIAL — tidak langsung jalan; sistem "
+        "mengajukannya ke pemilik lewat tombol persetujuan di Telegram. Setelah "
+        "memanggil tool, sampaikan bahwa aksi MENUNGGU persetujuan pemilik — JANGAN "
+        "mengaku sudah selesai. Bila nama target ambigu atau data dokumen kurang, "
+        "TANYAKAN dulu.\n\n"
         "Kategori arsip DIGITAL (kode → kategori):\n"
         f"{_daftar_kategori()}\n\n"
         "Aturan penting:\n"
