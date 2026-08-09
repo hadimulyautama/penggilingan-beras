@@ -196,8 +196,77 @@ def lihat_agenda(dari: str, sampai: str = "", kalender: str = "primary") -> str:
     return f"📅 {len(acara)} acara ({dari} s/d {sampai or dari}):\n" + "\n".join(baris)
 
 
+_MIME_SHEET = "application/vnd.google-apps.spreadsheet"
+_MAKS_BACA_SHEET = 12000  # batas karakter output baca tab (hindari kepotong dini)
+
+
+def _cari_sheet(c, nama: str):
+    """Cari 1 Google Sheet bernama `nama` (exact diprioritaskan). → (item|None, err)."""
+    kand = [x for x in c.cari(nama, maks=25) if x.mime == _MIME_SHEET]
+    exact = [x for x in kand if x.nama == nama]
+    kand = exact or kand
+    if not kand:
+        return None, f"Google Sheet '{nama}' tak ditemukan."
+    if len(kand) > 1:
+        return None, ("Beberapa Sheet cocok — sebut nama PERSIS:\n"
+                      + "\n".join(f"• {x.nama}" for x in kand[:10]))
+    return kand[0], None
+
+
+def daftar_tab(nama_sheet: str) -> str:
+    """Daftar semua TAB (worksheet) dalam sebuah Spreadsheet + ukurannya."""
+    c = _client()
+    if c is None:
+        return DRIVE_OFF
+    f, err = _cari_sheet(c, nama_sheet)
+    if err:
+        return err
+    tabs = c.sheet_daftar_tab(f.id)
+    if not tabs:
+        return f"Sheet '{f.nama}' tak punya tab terbaca."
+    baris = [f"• {t['judul']}  ({t['baris']}×{t['kolom']})" for t in tabs]
+    return (f"📑 Sheet '{f.nama}' punya {len(tabs)} tab:\n" + "\n".join(baris)
+            + "\nBaca isi satu tab dengan baca_sheet(nama_sheet, tab).")
+
+
+def baca_sheet(nama_sheet: str, tab: str = "", rentang: str = "") -> str:
+    """Baca isi sebuah TAB Sheet (bukan cuma tab pertama; tanpa kepotong 3000).
+    `tab` kosong = tab pertama. `rentang` opsional (mis. 'A1:E40')."""
+    c = _client()
+    if c is None:
+        return DRIVE_OFF
+    f, err = _cari_sheet(c, nama_sheet)
+    if err:
+        return err
+    tabs = c.sheet_daftar_tab(f.id)
+    judul_tabs = [t["judul"] for t in tabs]
+    if tab:
+        cocok = [j for j in judul_tabs if j == tab] or [j for j in judul_tabs if tab.lower() in j.lower()]
+        if not cocok:
+            return (f"Tab '{tab}' tak ada di '{f.nama}'. Tab tersedia: "
+                    + ", ".join(judul_tabs))
+        nama_tab = cocok[0]
+    else:
+        nama_tab = judul_tabs[0] if judul_tabs else ""
+    rng = f"'{nama_tab}'!{rentang}" if rentang else f"'{nama_tab}'"
+    data = c.sheet_baca(f.id, rng)
+    if not data:
+        return f"(Tab '{nama_tab}' di '{f.nama}' kosong.)"
+    baris = [" | ".join(str(x) for x in r) for r in data]
+    teks = "\n".join(baris)
+    potong = ""
+    if len(teks) > _MAKS_BACA_SHEET:
+        teks = teks[:_MAKS_BACA_SHEET]
+        potong = (f"\n… (dipotong — tab besar; baca bagian tertentu dengan rentang, "
+                  f"mis. baca_sheet('{f.nama}','{nama_tab}','A18:Z40'))")
+    return f"📄 {f.nama} › tab '{nama_tab}' ({len(data)} baris):\n{teks}{potong}"
+
+
 _DISPATCH = {
     "daftar_transit": lambda a: daftar_transit(),
+    "daftar_tab_sheet": lambda a: daftar_tab(a.get("nama_sheet", "")),
+    "baca_sheet": lambda a: baca_sheet(
+        a.get("nama_sheet", ""), a.get("tab", ""), a.get("rentang", "")),
     "daftar_folder": lambda a: daftar_folder(a.get("kategori", "")),
     "cari_file": lambda a: cari_file(a.get("kata", "")),
     "buka_folder": lambda a: buka_folder(a.get("path", "")),

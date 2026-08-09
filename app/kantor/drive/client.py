@@ -150,6 +150,21 @@ class DriveClient:
         return self._svc_docs
 
     # ─────────────────────────── Google Sheets ───────────────────────────
+    def sheet_daftar_tab(self, spreadsheet_id: str) -> list[dict]:
+        """Daftar TAB (worksheet) dalam sebuah Spreadsheet. → list
+        {judul, baris, kolom}. Dipakai agar tab selain yang pertama bisa dibaca."""
+        meta = self._sheets().spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets.properties(title,gridProperties(rowCount,columnCount))",
+        ).execute()
+        out = []
+        for s in meta.get("sheets", []):
+            p = s.get("properties", {})
+            g = p.get("gridProperties", {})
+            out.append({"judul": p.get("title", ""),
+                        "baris": g.get("rowCount"), "kolom": g.get("columnCount")})
+        return out
+
     def sheet_baca(self, spreadsheet_id: str, rentang: str) -> list[list[str]]:
         """Baca nilai sebuah rentang (mis. 'Sheet1!A1:D20'). → list baris."""
         r = self._sheets().spreadsheets().values().get(

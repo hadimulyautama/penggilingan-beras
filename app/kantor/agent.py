@@ -185,7 +185,9 @@ _TOOLS = [
         "description": (
             "Baca ISI teks sebuah dokumen di Drive (read-only) — untuk memahami isi "
             "file. Mendukung Google Docs/Sheets/Slides, docx, PDF. Gambar/scan tak "
-            "terekstrak."
+            "terekstrak. CATATAN: untuk Google Sheet, ini hanya membaca tab PERTAMA dan "
+            "bisa terpotong. Untuk Sheet ber-banyak-tab atau isi besar, pakai "
+            "daftar_tab_sheet lalu baca_sheet (per-tab, tak kepotong dini)."
         ),
         "input_schema": {
             "type": "object",
@@ -193,6 +195,40 @@ _TOOLS = [
                 "nama": {"type": "string", "description": "Nama file (persis lebih baik) yang dibaca."}
             },
             "required": ["nama"],
+        },
+    },
+    {
+        "name": "daftar_tab_sheet",
+        "description": (
+            "Daftar semua TAB (worksheet) dalam sebuah Google Sheet + ukuran tiap tab. "
+            "Pakai LEBIH DULU sebelum baca_sheet bila belum tahu nama tab-nya, atau saat "
+            "pengguna menyebut data yang mungkin ada di tab lain (mis. Keamanan, Akses, "
+            "Perbankan, Offboarding)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_sheet": {"type": "string", "description": "Nama Google Sheet (persis lebih baik)."},
+            },
+            "required": ["nama_sheet"],
+        },
+    },
+    {
+        "name": "baca_sheet",
+        "description": (
+            "Baca isi sebuah TAB Google Sheet (read-only) — BUKAN cuma tab pertama, dan "
+            "tanpa terpotong 3000 karakter seperti baca_dokumen. Sebutkan `tab` (nama "
+            "worksheet, mis. 'Keamanan'); kosong = tab pertama. `rentang` opsional (mis. "
+            "'A18:Z60') untuk membaca sebagian saat tab sangat besar."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama_sheet": {"type": "string", "description": "Nama Google Sheet (persis lebih baik)."},
+                "tab": {"type": "string", "description": "Nama tab/worksheet yang dibaca (mis. 'Perbankan'). Kosong = tab pertama."},
+                "rentang": {"type": "string", "description": "Opsional, notasi A1 (mis. 'A18:Z60') untuk baca sebagian tab besar."},
+            },
+            "required": ["nama_sheet"],
         },
     },
     {
@@ -581,6 +617,11 @@ def _system_stabil(*, role: str) -> str:
         "lihat 1 kategori (daftar_folder), cari file (cari_file), dan baca isi "
         "dokumen (baca_dokumen). Pakai tool ini bila pengguna menanyakan isi folder, "
         "mencari file, atau ingin tahu isi dokumen — jangan menebak.\n"
+        "Untuk Google Sheet ber-banyak-TAB atau berdata besar: baca_dokumen HANYA "
+        "membaca tab pertama & bisa terpotong — pakai daftar_tab_sheet (lihat semua tab) "
+        "lalu baca_sheet(nama_sheet, tab[, rentang]) untuk membaca tab tertentu penuh. "
+        "Bila data yang dicari tak ada di tab pertama, CEK tab lain dulu sebelum bilang "
+        "tak ada.\n"
         "Untuk AUDIT menyeluruh (mis. 'cek draft nyasar di seluruh subfolder'), pakai "
         "audit_draft_nyasar (sekali panggil, memindai seluruh Drive) — JANGAN membuka "
         "folder satu per satu untuk itu.\n"
