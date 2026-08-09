@@ -10,6 +10,7 @@ butuh persetujuan.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -22,6 +23,8 @@ from app.kantor.dokumen import konsistensi
 from app.kantor.drive import aksi as drive_aksi
 from app.kantor.drive import operasi as drive_ops
 from app.kantor.drive import taksonomi as tx
+
+log = logging.getLogger("kantor.agent")
 
 
 @dataclass
@@ -306,7 +309,12 @@ _TOOLS = [
 ]
 
 
-def _system_prompt(*, role: str) -> str:
+def _system_stabil(*, role: str) -> str:
+    """Bagian system prompt yang STABIL (tanpa tanggal) → aman di-cache.
+
+    Rujukan tanggal (yang berubah harian) sengaja DIPISAH ke blok terpisah di
+    run_kantor_agent, di LUAR titik cache, agar prefix (tools + prompt ini) tak
+    pernah batal karena tanggal — menekan biaya kredit (prompt caching)."""
     return (
         "Kamu 'Kantor AI', asisten eksekutif PT Hadi Mulya Utama (penggilingan "
         "beras, Sragen). Tugasmu membantu urusan kantor: pembuatan surat resmi, "
@@ -339,8 +347,7 @@ def _system_prompt(*, role: str) -> str:
         "konfirmasi ke pengguna.\n"
         "- Bila data untuk membuat surat belum lengkap, TANYAKAN dulu.\n"
         "- Setiap file baru berstatus draft dan masuk folder _TRANSIT dulu "
-        "(aturan arsip perusahaan).\n\n"
-        "Rujukan tanggal (jangan menghitung sendiri):\n" + _date_context()
+        "(aturan arsip perusahaan)."
     )
 
 
@@ -422,7 +429,15 @@ async def run_kantor_agent(
     membuat bot 'ingat' obrolan lalu. Sudah dibatasi pemanggil (app/kantor/riwayat.py).
     """
     client = get_client()
-    system = _system_prompt(role=role)
+    # Prompt caching: cache tools + system STABIL (prefix identik tiap panggilan &
+    # tiap iterasi); blok tanggal (volatile harian) sengaja DI LUAR cache. Memotong
+    # biaya kredit pada bagian berulang TANPA menurunkan kualitas.
+    system = [
+        {"type": "text", "text": _system_stabil(role=role),
+         "cache_control": {"type": "ephemeral"}},
+        {"type": "text",
+         "text": "Rujukan tanggal (jangan menghitung sendiri):\n" + _date_context()},
+    ]
     messages: list[dict] = [*(riwayat or []), {"role": "user", "content": text}]
 
     for _ in range(settings.agent_max_iterations):
@@ -432,6 +447,12 @@ async def run_kantor_agent(
             system=system,
             tools=_TOOLS,
             messages=messages,
+        )
+        u = resp.usage
+        log.info(
+            "agen kantor token: in=%d cache_baca=%d cache_tulis=%d out=%d",
+            u.input_tokens, getattr(u, "cache_read_input_tokens", 0) or 0,
+            getattr(u, "cache_creation_input_tokens", 0) or 0, u.output_tokens,
         )
         tool_uses = [b for b in resp.content if b.type == "tool_use"]
         if not tool_uses:
