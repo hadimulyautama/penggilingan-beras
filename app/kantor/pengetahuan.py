@@ -4,23 +4,81 @@ Membuat bot benar-benar "menambah pengetahuan seiring waktu": fakta/SOP/keputusa
 yang disimpan bisa dicari lagi saat menjawab. Bukan model yang belajar — basis
 pengetahuan yang tumbuh.
 
-- cari_pengetahuan  : cari potongan pengetahuan relevan (read; retrieve.cari).
-- simpan_pengetahuan: simpan catatan/fakta baru → permanen (ingest.ingest_dokumen).
+- cari_pengetahuan  : cari potongan pengetahuan relevan (read).
+- simpan_pengetahuan: simpan catatan/fakta baru → permanen.
+
+Pencarian: SEMANTIK (Voyage AI embedding + cosine) bila VOYAGE_API_KEY terpasang —
+paham MAKNA, bukan cuma kecocokan kata. Bila Voyage tak ada/gagal → jatuh mulus ke
+pencarian keyword (retrieve.cari) sehingga tak pernah rusak.
 
 Penyimpanan internal & reversibel (bisa dinonaktifkan/hapus di DB), jadi TIDAK
 lewat gerbang tombol — beda dari aksi eksternal (Drive/email/kalender).
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
+
+from sqlalchemy import select
+
 from app.database import SessionLocal
+from app.kantor.knowledge import embed as emb
 from app.kantor.knowledge import ingest, retrieve
+from app.kantor.models import SopChunk, SopDokumen
+
+log = logging.getLogger(__name__)
 
 NAMA_TOOL = ("cari_pengetahuan", "simpan_pengetahuan")
+
+# Ambang cosine minimal agar sebuah cuplikan dianggap relevan (0..1).
+_AMBANG = 0.35
+
+
+async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]] | None:
+    """Cari via embedding. Kembalikan [(judul, isi), ...] top-k, atau None bila
+    tak ada chunk ber-embedding (biar pemanggil jatuh ke keyword)."""
+    qv = (await asyncio.to_thread(emb.embed, [query], input_type="query"))
+    if not qv:
+        return None
+    qv = qv[0]
+    async with SessionLocal() as db:
+        rows = (await db.execute(
+            select(SopChunk.isi, SopChunk.embedding, SopDokumen.judul)
+            .join(SopDokumen, SopChunk.dokumen_id == SopDokumen.id)
+            .where(SopDokumen.status == "aktif", SopChunk.embedding.isnot(None))
+        )).all()
+    if not rows:
+        return None  # belum ada embedding → pakai keyword
+    skor: list[tuple[float, str, str]] = []
+    for isi, emb_json, judul in rows:
+        try:
+            vec = json.loads(emb_json)
+        except (TypeError, ValueError):
+            continue
+        skor.append((emb.kemiripan(qv, vec), judul, isi))
+    skor.sort(key=lambda s: s[0], reverse=True)
+    top = [(judul, isi) for sk, judul, isi in skor[:k] if sk >= _AMBANG]
+    return top  # bisa [] bila tak ada yang cukup mirip
 
 
 async def cari(query: str, k: int = 5) -> str:
     if not (query or "").strip():
         return "Pertanyaan pencarian kosong."
+    # 1) Coba semantik (kalau Voyage terpasang).
+    if emb.terkonfigurasi():
+        try:
+            hasil = await _cari_semantik(query, k)
+            if hasil:
+                baris = [f"• ({j}) {i[:400]}" for j, i in hasil]
+                return f"🧠 {len(hasil)} pengetahuan relevan (semantik):\n" + "\n".join(baris)
+            if hasil is not None:
+                # ada embedding tapi tak ada yang cukup mirip → jangan paksa keyword
+                return (f"Tak ada pengetahuan tersimpan yang cukup mirip '{query}'. "
+                        "Kalau ini fakta penting, minta pengguna agar kamu simpan (simpan_pengetahuan).")
+        except Exception:  # noqa: BLE001 — embedding gagal → fallback keyword
+            log.warning("cari semantik gagal, fallback keyword", exc_info=True)
+    # 2) Fallback keyword.
     async with SessionLocal() as db:
         hits = await retrieve.cari(db, query, k=k)
     if not hits:
@@ -34,11 +92,25 @@ async def simpan(judul: str, isi: str) -> str:
     if not (judul or "").strip() or not (isi or "").strip():
         return "Judul dan isi pengetahuan wajib diisi."
     async with SessionLocal() as db:
-        _doc, berubah = await ingest.ingest_dokumen(
+        doc, berubah = await ingest.ingest_dokumen(
             db, judul=judul.strip(), teks=isi.strip(),
             kategori="catatan", ranah="umum", sumber="bot")
-    if not berubah:
-        return f"'{judul}' sudah tersimpan (isi sama, tak diubah)."
+        if not berubah:
+            return f"'{judul}' sudah tersimpan (isi sama, tak diubah)."
+        # Embed chunk-nya biar bisa dicari secara makna (kalau Voyage terpasang).
+        if emb.terkonfigurasi():
+            try:
+                chunks = (await db.execute(
+                    select(SopChunk).where(SopChunk.dokumen_id == doc.id)
+                )).scalars().all()
+                if chunks:
+                    vecs = await asyncio.to_thread(
+                        emb.embed, [c.isi for c in chunks], input_type="document")
+                    for c, v in zip(chunks, vecs):
+                        c.embedding = json.dumps(v)
+                    await db.commit()
+            except Exception:  # noqa: BLE001 — gagal embed → tetap tersimpan (keyword jalan)
+                log.warning("embed saat simpan gagal (tetap tersimpan)", exc_info=True)
     return f"✅ Pengetahuan disimpan: '{judul}'. Bisa kucari & pakai lagi kapan pun."
 
 
