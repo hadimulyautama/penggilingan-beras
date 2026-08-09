@@ -9,6 +9,7 @@ butuh persetujuan.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
 from app.kantor.dokumen import konsistensi
+from app.kantor.drive import operasi as drive_ops
 from app.kantor.drive import taksonomi as tx
 
 
@@ -115,6 +117,78 @@ _TOOLS = [
             "required": ["nama", "jabatan", "tugas", "tempat", "waktu"],
         },
     },
+    {
+        "name": "daftar_transit",
+        "description": (
+            "Lihat isi folder _TRANSIT (INBOX file baru) di Google Drive. Read-only. "
+            "Pakai bila pengguna tanya 'apa saja file di transit/inbox'."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "daftar_folder",
+        "description": (
+            "Lihat isi 1 folder kategori di Drive (read-only). Pakai untuk 'apa isi "
+            "folder Keuangan/SDM/kategori 03'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kategori": {
+                    "type": "string",
+                    "description": "Kode kategori '00'–'11'/'99' ATAU sebagian nama folder (mis. 'SDM').",
+                }
+            },
+            "required": ["kategori"],
+        },
+    },
+    {
+        "name": "buka_folder",
+        "description": (
+            "Lihat isi folder mana pun via PATH — BISA masuk subfolder sedalam apa "
+            "pun (read-only). Pakai bila pengguna menyebut subfolder, mis. "
+            "'00/KONTRAK', '03/01 - Data & Identitas Karyawan/04 - Staff'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Jalur folder dipisah '/'. Segmen-1 = kode/nama kategori root.",
+                }
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "cari_file",
+        "description": (
+            "Cari file/folder di Drive yang namanya mengandung kata tertentu "
+            "(read-only, sampai 50 hasil). Pakai untuk 'cari file X'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kata": {"type": "string", "description": "Kata/sebagian nama yang dicari."}
+            },
+            "required": ["kata"],
+        },
+    },
+    {
+        "name": "baca_dokumen",
+        "description": (
+            "Baca ISI teks sebuah dokumen di Drive (read-only) — untuk memahami isi "
+            "file. Mendukung Google Docs/Sheets/Slides, docx, PDF. Gambar/scan tak "
+            "terekstrak."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama": {"type": "string", "description": "Nama file (persis lebih baik) yang dibaca."}
+            },
+            "required": ["nama"],
+        },
+    },
 ]
 
 
@@ -126,6 +200,11 @@ def _system_prompt(*, role: str) -> str:
         f"Peran pengguna: {role}. "
         "Jawab RINGKAS, sopan, bahasa Indonesia. Jangan mengarang — pakai tool "
         "bila perlu data/aturan.\n\n"
+        "Kamu BISA menjelajah Google Drive perusahaan (read-only): lihat isi "
+        "_TRANSIT (daftar_transit), buka folder/subfolder via path (buka_folder), "
+        "lihat 1 kategori (daftar_folder), cari file (cari_file), dan baca isi "
+        "dokumen (baca_dokumen). Pakai tool ini bila pengguna menanyakan isi folder, "
+        "mencari file, atau ingin tahu isi dokumen — jangan menebak.\n\n"
         "Kategori arsip DIGITAL (kode → kategori):\n"
         f"{_daftar_kategori()}\n\n"
         "Aturan penting:\n"
@@ -238,11 +317,15 @@ async def run_kantor_agent(
             if tu.name == "siapkan_surat_tugas":
                 return _aksi_surat_tugas(tu.input or {})
 
-        # Eksekusi semua tool READ, umpankan hasilnya kembali.
+        # Eksekusi semua tool READ, umpankan hasilnya kembali. Tool Drive melakukan
+        # I/O jaringan → jalankan di thread agar tak memblok event loop.
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            out = _run_read_tool(tu.name, tu.input or {})
+            if tu.name in drive_ops.NAMA_TOOL:
+                out = await asyncio.to_thread(drive_ops.jalankan, tu.name, tu.input or {})
+            else:
+                out = _run_read_tool(tu.name, tu.input or {})
             results.append({
                 "type": "tool_result", "tool_use_id": tu.id, "content": out,
             })
