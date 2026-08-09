@@ -19,6 +19,7 @@ from app.ai.base import _date_context
 from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
+from app.kantor import pengetahuan
 from app.kantor import surel
 from app.kantor.dokumen import konsistensi
 from app.kantor.drive import aksi as drive_aksi
@@ -485,6 +486,39 @@ _TOOLS = [
             "required": ["ke", "subjek", "isi"],
         },
     },
+    {
+        "name": "cari_pengetahuan",
+        "description": (
+            "Cari 'otak perusahaan' — SOP, kebijakan, keputusan, fakta, catatan yang "
+            "PERNAH DISIMPAN (read-only). Pakai LEBIH DULU bila pengguna bertanya soal "
+            "aturan/prosedur/keputusan/data internal perusahaan, sebelum menjawab dari "
+            "dugaan. Kalau kosong, jawab apa adanya + tawarkan menyimpan bila itu fakta baru."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Pertanyaan/kata kunci yang dicari."},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "simpan_pengetahuan",
+        "description": (
+            "Simpan fakta/catatan/keputusan ke 'otak perusahaan' agar bisa dicari & "
+            "dipakai lagi nanti (bot makin paham seiring waktu). Pakai bila pengguna "
+            "minta 'ingat/catat …', atau saat muncul fakta durable yang layak disimpan "
+            "(mis. PIC pemasok, kebijakan, keputusan rapat). Judul ringkas & khas."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "judul": {"type": "string", "description": "Judul singkat & khas (mis. 'PIC Vendor PT Rajawali')."},
+                "isi": {"type": "string", "description": "Isi fakta/catatan lengkap yang disimpan."},
+            },
+            "required": ["judul", "isi"],
+        },
+    },
 ]
 
 
@@ -517,6 +551,10 @@ def _system_stabil(*, role: str) -> str:
         "Kamu juga mengelola EMAIL: baca_email (inbox terbaru), cari_email, baca_email_isi "
         "(pakai [uid] dari hasil baca/cari), dan MENGUSULKAN kirim_email (konsekuensial → "
         "tombol pemilik; jangan mengaku sudah terkirim).\n"
+        "Kamu punya OTAK PERUSAHAAN: cari_pengetahuan (cari SOP/keputusan/fakta tersimpan "
+        "— pakai lebih dulu untuk pertanyaan aturan/data internal) & simpan_pengetahuan "
+        "(catat fakta durable saat diminta 'ingat/catat' atau saat layak disimpan). "
+        "Ingatan permanen ada di sini, bukan di riwayat chat yang terbatas.\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
@@ -658,7 +696,9 @@ async def run_kantor_agent(
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            if tu.name in surel.NAMA_TULIS:
+            if tu.name in pengetahuan.NAMA_TOOL:
+                out = await pengetahuan.jalankan(tu.name, tu.input or {})
+            elif tu.name in surel.NAMA_TULIS:
                 out = await surel.jalankan_tulis(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_BACA:
                 out = await asyncio.to_thread(surel.jalankan_baca, tu.name, tu.input or {})
