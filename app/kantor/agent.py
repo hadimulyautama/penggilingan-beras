@@ -19,6 +19,7 @@ from app.ai.base import _date_context
 from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
+from app.kantor import surel
 from app.kantor.dokumen import konsistensi
 from app.kantor.drive import aksi as drive_aksi
 from app.kantor.drive import operasi as drive_ops
@@ -425,6 +426,65 @@ _TOOLS = [
             "required": ["event_id"],
         },
     },
+    {
+        "name": "baca_email",
+        "description": (
+            "Lihat email TERBARU di INBOX (read-only). Hasil menyertakan [uid] tiap "
+            "email — pakai uid untuk baca_email_isi. Pakai untuk 'ada email apa', 'cek "
+            "inbox'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "maks": {"type": "integer", "description": "Jumlah email terbaru (default 10)."},
+            },
+        },
+    },
+    {
+        "name": "cari_email",
+        "description": (
+            "Cari email di INBOX yang pengirim (FROM) atau subjek mengandung kata "
+            "tertentu (read-only). Hasil menyertakan [uid]."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kata": {"type": "string", "description": "Kata pada pengirim/subjek yang dicari."},
+                "maks": {"type": "integer", "description": "Batas hasil (default 10)."},
+            },
+            "required": ["kata"],
+        },
+    },
+    {
+        "name": "baca_email_isi",
+        "description": (
+            "Baca ISI teks satu email (read-only). Pakai uid dari baca_email/cari_email."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "uid": {"type": "string", "description": "uid email (dari [uid] di baca_email/cari_email)."},
+            },
+            "required": ["uid"],
+        },
+    },
+    {
+        "name": "kirim_email",
+        "description": (
+            "USULKAN mengirim email. AKSI KONSEKUENSIAL → diajukan ke pemilik lewat "
+            "tombol; JANGAN mengaku sudah terkirim. Susun isi yang rapi & sopan. Bila "
+            "penerima/maksud belum jelas, TANYAKAN dulu."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ke": {"type": "string", "description": "Alamat email penerima."},
+                "subjek": {"type": "string", "description": "Subjek email."},
+                "isi": {"type": "string", "description": "Isi/badan email (teks)."},
+            },
+            "required": ["ke", "subjek", "isi"],
+        },
+    },
 ]
 
 
@@ -454,6 +514,9 @@ def _system_stabil(*, role: str) -> str:
         "jadwal; hasilnya menyertakan [id] acara), lalu MENGUSULKAN buat_acara / "
         "ubah_acara / hapus_acara (konsekuensial, lewat tombol pemilik). Untuk ubah/hapus, "
         "ambil event_id dari lihat_agenda dulu. Waktu zona Asia/Jakarta.\n"
+        "Kamu juga mengelola EMAIL: baca_email (inbox terbaru), cari_email, baca_email_isi "
+        "(pakai [uid] dari hasil baca/cari), dan MENGUSULKAN kirim_email (konsekuensial → "
+        "tombol pemilik; jangan mengaku sudah terkirim).\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
@@ -595,7 +658,11 @@ async def run_kantor_agent(
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            if tu.name in drive_aksi.NAMA_TOOL:
+            if tu.name in surel.NAMA_TULIS:
+                out = await surel.jalankan_tulis(tu.name, tu.input or {})
+            elif tu.name in surel.NAMA_BACA:
+                out = await asyncio.to_thread(surel.jalankan_baca, tu.name, tu.input or {})
+            elif tu.name in drive_aksi.NAMA_TOOL:
                 # Aksi tulis (pindah/rename/hapus file/folder) → ajukan ke gerbang
                 # tombol pemilik; kembalikan status "diajukan" ke agen untuk diteruskan.
                 out = await drive_aksi.jalankan_usul(tu.name, tu.input or {})

@@ -45,6 +45,7 @@ _AUDIT_AKSI = {
     "kalender_buat": "buat_acara",
     "kalender_ubah": "ubah_acara",
     "kalender_hapus": "hapus_acara",
+    "email_kirim": "kirim_email",
 }
 
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -125,6 +126,10 @@ def _lakukan(c, jenis: str, p: dict) -> str:
     if jenis == "kalender_hapus":
         c.kalender_hapus(p["event_id"], cal_id=p.get("cal_id", "primary"))
         return f"Acara '{p.get('ringkasan_acara', p['event_id'])}' dihapus dari kalender."
+    if jenis == "email_kirim":
+        from app.kantor import surel
+        surel.kirim(p["ke"], p["subjek"], p["isi"])
+        return f"Email terkirim ke {p['ke']} — subjek: {p['subjek']}."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 
