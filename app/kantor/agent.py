@@ -341,6 +341,90 @@ _TOOLS = [
             "required": ["nama_doc", "cari", "ganti"],
         },
     },
+    {
+        "name": "daftar_kalender",
+        "description": (
+            "Lihat daftar kalender yang bisa dikelola (milik pemilik + yang dibagikan "
+            "akun lain). Pakai untuk tahu kalender apa saja & 'id'-nya sebelum lihat/buat/"
+            "ubah/hapus acara di kalender tertentu. Read-only."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "lihat_agenda",
+        "description": (
+            "Lihat acara Google Calendar dalam rentang tanggal (read-only). Hasil "
+            "menyertakan [id] tiap acara — pakai id itu untuk ubah_acara/hapus_acara. "
+            "Isi tanggal dari rujukan tanggal di system prompt."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dari": {"type": "string", "description": "Tanggal mulai ISO YYYY-MM-DD."},
+                "sampai": {"type": "string", "description": "Tanggal akhir ISO YYYY-MM-DD (kosong = sama dgn 'dari')."},
+                "kalender": {"type": "string", "description": "Target kalender: 'primary' (default) atau id/email dari daftar_kalender."},
+            },
+            "required": ["dari"],
+        },
+    },
+    {
+        "name": "buat_acara",
+        "description": (
+            "USULKAN membuat acara di Google Calendar. AKSI KONSEKUENSIAL → diajukan ke "
+            "pemilik lewat tombol. JANGAN mengaku sudah membuat. Bila waktu/detail belum "
+            "jelas, TANYAKAN dulu. Waktu memakai zona Asia/Jakarta."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "judul": {"type": "string", "description": "Judul/ringkasan acara."},
+                "mulai": {"type": "string", "description": "Waktu mulai 'YYYY-MM-DDTHH:MM:SS' (mis. '2026-08-11T09:00:00')."},
+                "selesai": {"type": "string", "description": "Waktu selesai 'YYYY-MM-DDTHH:MM:SS'."},
+                "deskripsi": {"type": "string", "description": "Catatan/deskripsi acara (opsional)."},
+                "lokasi": {"type": "string", "description": "Lokasi acara (opsional)."},
+                "kalender": {"type": "string", "description": "Target kalender: 'primary' (default) atau id/email."},
+            },
+            "required": ["judul", "mulai", "selesai"],
+        },
+    },
+    {
+        "name": "ubah_acara",
+        "description": (
+            "USULKAN mengubah acara yang ada (reschedule/ubah judul/lokasi). Ambil "
+            "event_id dari lihat_agenda dulu. Field yang kosong TIDAK diubah. AKSI "
+            "KONSEKUENSIAL → tombol pemilik. JANGAN mengaku sudah mengubah."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "ID acara (dari [id] di lihat_agenda)."},
+                "judul": {"type": "string", "description": "Judul baru (opsional)."},
+                "mulai": {"type": "string", "description": "Waktu mulai baru 'YYYY-MM-DDTHH:MM:SS' (opsional)."},
+                "selesai": {"type": "string", "description": "Waktu selesai baru (opsional)."},
+                "deskripsi": {"type": "string", "description": "Deskripsi baru (opsional)."},
+                "lokasi": {"type": "string", "description": "Lokasi baru (opsional)."},
+                "kalender": {"type": "string", "description": "Target kalender: 'primary' (default) atau id/email."},
+            },
+            "required": ["event_id"],
+        },
+    },
+    {
+        "name": "hapus_acara",
+        "description": (
+            "USULKAN menghapus acara dari Google Calendar. Ambil event_id dari "
+            "lihat_agenda dulu. AKSI KONSEKUENSIAL → tombol pemilik. JANGAN mengaku "
+            "sudah menghapus."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "ID acara (dari [id] di lihat_agenda)."},
+                "ringkasan_acara": {"type": "string", "description": "Judul acara (untuk konfirmasi jelas)."},
+                "kalender": {"type": "string", "description": "Target kalender: 'primary' (default) atau id/email."},
+            },
+            "required": ["event_id"],
+        },
+    },
 ]
 
 
@@ -365,6 +449,11 @@ def _system_stabil(*, role: str) -> str:
         "Untuk AUDIT menyeluruh (mis. 'cek draft nyasar di seluruh subfolder'), pakai "
         "audit_draft_nyasar (sekali panggil, memindai seluruh Drive) — JANGAN membuka "
         "folder satu per satu untuk itu.\n"
+        "Kamu MENGELOLA Google Calendar (bisa lebih dari 1 kalender — milik pemilik + "
+        "yang dibagikan): daftar_kalender (lihat kalender & id-nya), lihat_agenda (baca "
+        "jadwal; hasilnya menyertakan [id] acara), lalu MENGUSULKAN buat_acara / "
+        "ubah_acara / hapus_acara (konsekuensial, lewat tombol pemilik). Untuk ubah/hapus, "
+        "ambil event_id dari lihat_agenda dulu. Waktu zona Asia/Jakarta.\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "

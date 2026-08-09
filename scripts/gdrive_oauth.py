@@ -25,6 +25,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",         # kelola file Drive
     "https://www.googleapis.com/auth/spreadsheets",  # baca/edit Google Sheets
     "https://www.googleapis.com/auth/documents",     # baca/edit Google Docs
+    "https://www.googleapis.com/auth/calendar",      # baca/buat acara Google Calendar
 ]
 
 

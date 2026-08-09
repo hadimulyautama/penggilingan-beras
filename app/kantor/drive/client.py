@@ -50,6 +50,7 @@ _SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/calendar",
 ]
 _KARANTINA = "99 - Arsip Lama"  # nama folder kategori tujuan "hapus" (persis di Drive)
 
@@ -98,6 +99,7 @@ class DriveClient:
         self._svc = None
         self._svc_sheets = None
         self._svc_docs = None
+        self._svc_cal = None
         self._karantina_id: str | None = None
 
     # ─────────────────────────── koneksi ───────────────────────────
@@ -181,6 +183,98 @@ class DriveClient:
         ).execute()
         rep = res.get("replies", [{}])
         return rep[0].get("replaceAllText", {}).get("occurrencesChanged", 0) if rep else 0
+
+    # ─────────────────────────── Google Calendar ───────────────────────────
+    def _calendar(self):
+        if self._svc_cal is None:
+            from googleapiclient.discovery import build
+            self._svc_cal = build("calendar", "v3", credentials=self._kredensial(),
+                                  cache_discovery=False)
+        return self._svc_cal
+
+    def kalender_daftar(self) -> list[dict]:
+        """Daftar kalender yang bisa diakses (milik sendiri + yang dibagikan).
+        → list {id, nama, akses}. `id` dipakai sbg target operasi ('primary' = utama)."""
+        r = self._calendar().calendarList().list().execute()
+        out: list[dict] = []
+        for c in r.get("items", []):
+            out.append({
+                "id": c.get("id", ""),
+                "nama": c.get("summaryOverride") or c.get("summary", ""),
+                "akses": c.get("accessRole", ""),  # owner/writer/reader
+                "utama": bool(c.get("primary")),
+            })
+        return out
+
+    def kalender_acara(self, time_min: str, time_max: str, *,
+                       cal_id: str = "primary", maks: int = 20) -> list[dict]:
+        """Daftar acara sebuah kalender di rentang waktu (RFC3339). → list
+        {ringkasan, mulai, selesai, lokasi, id}. `cal_id` = 'primary' atau email kalender."""
+        r = self._calendar().events().list(
+            calendarId=cal_id, timeMin=time_min, timeMax=time_max,
+            singleEvents=True, orderBy="startTime", maxResults=maks,
+        ).execute()
+        out: list[dict] = []
+        for e in r.get("items", []):
+            s, en = e.get("start", {}), e.get("end", {})
+            out.append({
+                "ringkasan": e.get("summary", "(tanpa judul)"),
+                "mulai": s.get("dateTime") or s.get("date", ""),
+                "selesai": en.get("dateTime") or en.get("date", ""),
+                "lokasi": e.get("location", ""),
+                "id": e.get("id", ""),
+            })
+        return out
+
+    def kalender_buat(self, ringkasan: str, mulai: str, selesai: str, *,
+                      deskripsi: str = "", lokasi: str = "", cal_id: str = "primary",
+                      tz: str = "Asia/Jakarta") -> str:
+        """Buat acara di kalender `cal_id`. mulai/selesai = 'YYYY-MM-DDTHH:MM:SS'
+        (waktu lokal `tz`). → link acara (htmlLink)."""
+        if self.dry_run:
+            log.info("[dry_run] buat acara %r %s→%s @%s", ringkasan, mulai, selesai, cal_id)
+            return "(dry_run)"
+        body = {
+            "summary": ringkasan,
+            "start": {"dateTime": mulai, "timeZone": tz},
+            "end": {"dateTime": selesai, "timeZone": tz},
+        }
+        if deskripsi:
+            body["description"] = deskripsi
+        if lokasi:
+            body["location"] = lokasi
+        ev = self._calendar().events().insert(calendarId=cal_id, body=body).execute()
+        return ev.get("htmlLink", "(acara dibuat)")
+
+    def kalender_ubah(self, event_id: str, *, cal_id: str = "primary",
+                      ringkasan: str = "", mulai: str = "", selesai: str = "",
+                      deskripsi: str = "", lokasi: str = "",
+                      tz: str = "Asia/Jakarta") -> str:
+        """Ubah acara (hanya field non-kosong yang diubah). → link acara."""
+        if self.dry_run:
+            log.info("[dry_run] ubah acara %s @%s", event_id, cal_id)
+            return "(dry_run)"
+        patch: dict = {}
+        if ringkasan:
+            patch["summary"] = ringkasan
+        if mulai:
+            patch["start"] = {"dateTime": mulai, "timeZone": tz}
+        if selesai:
+            patch["end"] = {"dateTime": selesai, "timeZone": tz}
+        if deskripsi:
+            patch["description"] = deskripsi
+        if lokasi:
+            patch["location"] = lokasi
+        ev = self._calendar().events().patch(
+            calendarId=cal_id, eventId=event_id, body=patch).execute()
+        return ev.get("htmlLink", "(acara diubah)")
+
+    def kalender_hapus(self, event_id: str, *, cal_id: str = "primary") -> None:
+        """Hapus acara dari kalender."""
+        if self.dry_run:
+            log.info("[dry_run] hapus acara %s @%s", event_id, cal_id)
+            return
+        self._calendar().events().delete(calendarId=cal_id, eventId=event_id).execute()
 
     def _q(self, **params):
         """Query files().list dgn parameter Shared Drive terpasang.

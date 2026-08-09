@@ -42,6 +42,9 @@ _AUDIT_AKSI = {
     "drive_dokumen": "buat_dokumen",
     "sheet_update": "update_sheet",
     "docs_ganti": "edit_docs",
+    "kalender_buat": "buat_acara",
+    "kalender_ubah": "ubah_acara",
+    "kalender_hapus": "hapus_acara",
 }
 
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -106,6 +109,22 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         n = c.docs_ganti_teks(p["document_id"], p["cari"], p["ganti"])
         return (f"{n} kemunculan '{p['cari']}' diganti '{p['ganti']}' "
                 f"di Doc '{p.get('doc_nama', '')}'.")
+    if jenis == "kalender_buat":
+        link = c.kalender_buat(
+            p["judul"], p["mulai"], p["selesai"],
+            deskripsi=p.get("deskripsi", ""), lokasi=p.get("lokasi", ""),
+            cal_id=p.get("cal_id", "primary"))
+        return f"Acara '{p['judul']}' dibuat ({p['mulai']} → {p['selesai']}). {link}"
+    if jenis == "kalender_ubah":
+        link = c.kalender_ubah(
+            p["event_id"], cal_id=p.get("cal_id", "primary"),
+            ringkasan=p.get("judul", ""), mulai=p.get("mulai", ""),
+            selesai=p.get("selesai", ""), deskripsi=p.get("deskripsi", ""),
+            lokasi=p.get("lokasi", ""))
+        return f"Acara diubah. {link}"
+    if jenis == "kalender_hapus":
+        c.kalender_hapus(p["event_id"], cal_id=p.get("cal_id", "primary"))
+        return f"Acara '{p.get('ringkasan_acara', p['event_id'])}' dihapus dari kalender."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 

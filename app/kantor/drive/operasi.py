@@ -153,6 +153,49 @@ def audit_draft_nyasar() -> str:
             f"_TRANSIT):\n" + "\n".join(baris) + ket)
 
 
+def daftar_kalender() -> str:
+    """Daftar kalender yang bisa dikelola (milik sendiri + yang dibagikan)."""
+    c = _client()
+    if c is None:
+        return DRIVE_OFF
+    ks = c.kalender_daftar()
+    if not ks:
+        return "Tak ada kalender yang bisa diakses."
+    baris = []
+    for k in ks:
+        tag = " (utama)" if k["utama"] else ""
+        baris.append(f"• {k['nama']}{tag} — akses: {k['akses']} — id: {k['id']}")
+    return (f"🗓️ {len(ks)} kalender bisa dikelola:\n" + "\n".join(baris)
+            + "\n(pakai 'id' sebagai target kalender untuk lihat/buat/ubah/hapus acara)")
+
+
+def lihat_agenda(dari: str, sampai: str = "", kalender: str = "primary") -> str:
+    """Daftar acara Google Calendar dari `dari` s/d `sampai` (ISO YYYY-MM-DD) di
+    `kalender` ('primary' atau id/email kalender). `sampai` kosong = hari `dari`."""
+    import os
+    from datetime import date, datetime, time
+    from zoneinfo import ZoneInfo
+
+    c = _client()
+    if c is None:
+        return DRIVE_OFF
+    z = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Jakarta"))
+    try:
+        tmin = datetime.combine(date.fromisoformat(dari), time(0, 0), z).isoformat()
+        tmax = datetime.combine(date.fromisoformat(sampai or dari), time(23, 59, 59), z).isoformat()
+    except ValueError:
+        return "Tanggal tak valid — pakai format YYYY-MM-DD."
+    acara = c.kalender_acara(tmin, tmax, cal_id=kalender or "primary", maks=30)
+    if not acara:
+        return f"Tak ada acara antara {dari} dan {sampai or dari}."
+    baris = []
+    for a in acara:
+        lok = f"  @ {a['lokasi']}" if a["lokasi"] else ""
+        # id acara disertakan agar agen bisa ubah/hapus acara tsb.
+        baris.append(f"• [{a['id']}] {a['mulai']} — {a['ringkasan']}{lok}")
+    return f"📅 {len(acara)} acara ({dari} s/d {sampai or dari}):\n" + "\n".join(baris)
+
+
 _DISPATCH = {
     "daftar_transit": lambda a: daftar_transit(),
     "daftar_folder": lambda a: daftar_folder(a.get("kategori", "")),
@@ -160,6 +203,9 @@ _DISPATCH = {
     "buka_folder": lambda a: buka_folder(a.get("path", "")),
     "baca_dokumen": lambda a: baca_dokumen(a.get("nama", "")),
     "audit_draft_nyasar": lambda a: audit_draft_nyasar(),
+    "daftar_kalender": lambda a: daftar_kalender(),
+    "lihat_agenda": lambda a: lihat_agenda(
+        a.get("dari", ""), a.get("sampai", ""), a.get("kalender", "primary")),
 }
 
 NAMA_TOOL = tuple(_DISPATCH)

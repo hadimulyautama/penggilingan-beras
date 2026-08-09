@@ -2,7 +2,7 @@
 
 Menelusuri pohon folder dari root Shared Drive, mencatat tiap file/folder beserta
 KATEGORI tingkat-atas tempatnya berada (00–11 / 99 / _TRANSIT / None=nyasar di root).
-Dipakai organizer untuk mendeteksi file nyasar & salah tempat.
+Dipakai audit_draft_nyasar (operasi.py) untuk mendeteksi file nyasar.
 
 Batas aman (maks_folder/maks_file) mencegah penelusuran meledak pada Drive besar.
 """

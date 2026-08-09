@@ -1,8 +1,8 @@
-"""Integrasi Google Drive (Fase 1) — arsip manager penegak Pedoman Kearsipan.
+"""Integrasi Google Drive/Sheets/Docs/Calendar — dipakai agen bot Kantor.
 
-  - taksonomi.py : peta kategori baku 00-11/99/_TRANSIT (murni, siap dipakai)
-  - client.py    : (menyusul) Drive API service account — CRUD Shared Drive
-  - mapper.py    : (menyusul) snapshot struktur folder → DB
-  - organizer.py : (menyusul) klasifikasi file, deteksi nyasar, usul rapikan
-  - guardrail.py : (menyusul) delete→99, batasi scope, dry-run
+  - taksonomi.py : peta kategori baku arsip 00-11/99/_TRANSIT
+  - client.py    : koneksi + operasi Drive/Sheets/Docs/Calendar (OAuth refresh token)
+  - mapper.py    : snapshot rekursif struktur Drive (untuk audit menyeluruh)
+  - operasi.py   : operasi BACA tingkat-tinggi (jelajah/cari/baca/audit/agenda)
+  - aksi.py      : usulan TULIS (pindah/rename/hapus/buat/edit/acara) → gerbang persetujuan
 """

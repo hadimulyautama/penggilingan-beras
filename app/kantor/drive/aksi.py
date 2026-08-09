@@ -20,7 +20,7 @@ from app.kantor.drive.operasi import DRIVE_OFF, _resolve_folder
 
 NAMA_TOOL = (
     "pindah_item", "rename_item", "hapus_item", "buat_folder", "buat_dokumen",
-    "update_sheet", "edit_google_docs",
+    "update_sheet", "edit_google_docs", "buat_acara", "ubah_acara", "hapus_acara",
 )
 
 _MAKS_LEVEL_FOLDER = 4
@@ -215,6 +215,58 @@ def _resolve_edit_docs(nama_doc: str, cari: str, ganti: str):
     return payload, ring, None
 
 
+async def usul_buat_acara(judul: str, mulai: str, selesai: str,
+                          deskripsi: str = "", lokasi: str = "",
+                          kalender: str = "primary") -> str:
+    """Usulkan pembuatan acara Calendar. mulai/selesai = 'YYYY-MM-DDTHH:MM:SS'."""
+    if not (judul or "").strip() or not (mulai or "").strip() or not (selesai or "").strip():
+        return "Judul, waktu mulai, dan waktu selesai wajib diisi."
+    lok = f"  @ {lokasi}" if lokasi else ""
+    kal = "" if (kalender or "primary") == "primary" else f"  [kalender: {kalender}]"
+    ring = f"Buat acara *{judul}* — {mulai} s/d {selesai}{lok}{kal}"
+    payload = {"judul": judul, "mulai": mulai, "selesai": selesai,
+               "deskripsi": deskripsi, "lokasi": lokasi, "cal_id": kalender or "primary"}
+    aid = await pst.buat_pending(
+        jenis="kalender_buat", ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
+    return _diajukan(aid, ring)
+
+
+async def usul_ubah_acara(event_id: str, judul: str = "", mulai: str = "",
+                          selesai: str = "", deskripsi: str = "", lokasi: str = "",
+                          kalender: str = "primary") -> str:
+    """Usulkan perubahan acara Calendar (field kosong = tak diubah)."""
+    if not (event_id or "").strip():
+        return "event_id wajib — ambil dari lihat_agenda dulu."
+    ubah = [x for x in (
+        f"judul→'{judul}'" if judul else "",
+        f"mulai→{mulai}" if mulai else "",
+        f"selesai→{selesai}" if selesai else "",
+        f"lokasi→'{lokasi}'" if lokasi else "",
+        "deskripsi diperbarui" if deskripsi else "",
+    ) if x]
+    if not ubah:
+        return "Tak ada yang diubah — sebutkan minimal satu field (judul/mulai/selesai/lokasi/deskripsi)."
+    ring = f"Ubah acara (id {event_id}): " + ", ".join(ubah)
+    payload = {"event_id": event_id, "judul": judul, "mulai": mulai, "selesai": selesai,
+               "deskripsi": deskripsi, "lokasi": lokasi, "cal_id": kalender or "primary"}
+    aid = await pst.buat_pending(
+        jenis="kalender_ubah", ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
+    return _diajukan(aid, ring)
+
+
+async def usul_hapus_acara(event_id: str, ringkasan_acara: str = "",
+                           kalender: str = "primary") -> str:
+    """Usulkan penghapusan acara Calendar."""
+    if not (event_id or "").strip():
+        return "event_id wajib — ambil dari lihat_agenda dulu."
+    ring = f"Hapus acara *{ringkasan_acara or event_id}* (id {event_id})"
+    payload = {"event_id": event_id, "ringkasan_acara": ringkasan_acara,
+               "cal_id": kalender or "primary"}
+    aid = await pst.buat_pending(
+        jenis="kalender_hapus", ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
+    return _diajukan(aid, ring)
+
+
 async def jalankan_usul(nama_tool: str, args: dict) -> str:
     """Dispatch tool TULIS → buat usulan yang menunggu tombol persetujuan pemilik."""
     a = args or {}
@@ -236,4 +288,16 @@ async def jalankan_usul(nama_tool: str, args: dict) -> str:
     if nama_tool == "edit_google_docs":
         return await _ajukan(_resolve_edit_docs, a.get("nama_doc", ""),
                              a.get("cari", ""), a.get("ganti", ""), jenis="docs_ganti")
+    if nama_tool == "buat_acara":
+        return await usul_buat_acara(
+            a.get("judul", ""), a.get("mulai", ""), a.get("selesai", ""),
+            a.get("deskripsi", ""), a.get("lokasi", ""), a.get("kalender", "primary"))
+    if nama_tool == "ubah_acara":
+        return await usul_ubah_acara(
+            a.get("event_id", ""), a.get("judul", ""), a.get("mulai", ""),
+            a.get("selesai", ""), a.get("deskripsi", ""), a.get("lokasi", ""),
+            a.get("kalender", "primary"))
+    if nama_tool == "hapus_acara":
+        return await usul_hapus_acara(
+            a.get("event_id", ""), a.get("ringkasan_acara", ""), a.get("kalender", "primary"))
     return f"(aksi '{nama_tool}' tidak dikenal)"
