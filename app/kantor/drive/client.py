@@ -34,7 +34,16 @@ _PDF = "application/pdf"
 def _teks_docx(raw: bytes) -> str:
     from docx import Document
     doc = Document(io.BytesIO(raw))
-    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    baris = [p.text for p in doc.paragraphs if p.text.strip()]
+    # PENTING: banyak dokumen (daftar, nomor kontak, tabel data) menaruh isinya
+    # di TABEL, bukan paragraf. Tanpa ini teks kelihatan kosong → salah dikira
+    # "gambar/scan". Ekstrak tiap baris tabel jadi "sel | sel | sel".
+    for tabel in doc.tables:
+        for row in tabel.rows:
+            sel = list(dict.fromkeys(c.text.strip() for c in row.cells if c.text.strip()))
+            if sel:
+                baris.append(" | ".join(sel))
+    return "\n".join(baris)
 
 
 def _teks_pdf(raw: bytes) -> str:
