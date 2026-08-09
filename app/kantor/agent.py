@@ -208,11 +208,17 @@ def _aksi_surat_tugas(inp: dict) -> KantorReply:
 # ─────────────────────────── Loop agent ───────────────────────────
 
 
-async def run_kantor_agent(*, text: str, role: str, nama_user: str) -> KantorReply:
-    """Jalankan agent Kantor untuk satu permintaan. Aksi tulis → usulan (aksi)."""
+async def run_kantor_agent(
+    *, text: str, role: str, nama_user: str, riwayat: list[dict] | None = None
+) -> KantorReply:
+    """Jalankan agent Kantor untuk satu permintaan. Aksi tulis → usulan (aksi).
+
+    `riwayat`: giliran percakapan sebelumnya ({"role","content"}) untuk konteks —
+    membuat bot 'ingat' obrolan lalu. Sudah dibatasi pemanggil (app/kantor/riwayat.py).
+    """
     client = get_client()
     system = _system_prompt(role=role)
-    messages: list[dict] = [{"role": "user", "content": text}]
+    messages: list[dict] = [*(riwayat or []), {"role": "user", "content": text}]
 
     for _ in range(settings.agent_max_iterations):
         resp = await client.messages.create(

@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Date,
     DateTime,
     ForeignKey,
@@ -136,6 +137,26 @@ class KantorAuditLog(Base):
     aksi_pending_id: Mapped[int | None] = mapped_column(
         ForeignKey("kantor_aksi_pending.id", ondelete="SET NULL")
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ─────────────────────────── Ingatan percakapan ────────────────────────
+class KantorChatRiwayat(Base):
+    """Ingatan percakapan bot Kantor — satu giliran (user/assistant) per baris.
+
+    Dimuat TERBATAS (beberapa giliran terakhir) lalu disertakan ke agen agar
+    bot 'ingat' konteks obrolan sebelumnya — meniru keunggulan Hermes. Dibatasi
+    demi hemat token (konteks kecil = biaya kecil).
+    """
+
+    __tablename__ = "kantor_chat_riwayat"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    peran: Mapped[str] = mapped_column(String(12), nullable=False)  # 'user' / 'assistant'
+    isi: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

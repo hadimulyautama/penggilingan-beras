@@ -24,6 +24,7 @@ from app.bots.common import (
     unregistered_reply,
 )
 from app.database import SessionLocal
+from app.kantor import riwayat as riwayat_mod
 from app.kantor.agent import run_kantor_agent
 from app.kantor.dokumen import penomoran
 from app.kantor.dokumen import surat as surat_mod
@@ -66,6 +67,18 @@ async def cmd_whoami(message: Message) -> None:
         await message.answer(f"Belum terdaftar. ID: `{message.from_user.id}`", parse_mode="Markdown")
         return
     await message.answer(f"Nama: {user.nama}\nRole: {user.role}\nAkses: {user.access_level}")
+
+
+@router.message(Command("lupakan"))
+async def cmd_lupakan(message: Message) -> None:
+    """Hapus ingatan percakapan pengguna ini (mulai obrolan dari awal)."""
+    async with SessionLocal() as db:
+        user = await authenticate(db, message.from_user.id)
+    if not user or user.role not in {"admin", "staff"}:
+        await unregistered_reply(message)
+        return
+    n = await riwayat_mod.lupakan(message.from_user.id)
+    await message.answer(f"🧹 Ingatan percakapan dihapus ({n} baris). Kita mulai segar.")
 
 
 @router.message(F.contact)
@@ -193,12 +206,22 @@ async def handle_message(message: Message) -> None:
         session.stage = "idle"
         session.kantor_pending = None
 
+    # Ingatan percakapan: muat konteks lalu, jalankan agen, simpan giliran.
+    hist = await riwayat_mod.muat(tg_id)
     try:
-        reply = await run_kantor_agent(text=text, role=user.role, nama_user=user.nama)
+        reply = await run_kantor_agent(
+            text=text, role=user.role, nama_user=user.nama, riwayat=hist
+        )
     except Exception:
         log.exception("run_kantor_agent gagal")
         await message.answer("⚠️ Maaf, ada kendala saat memproses. Coba ulangi ya.")
         return
+
+    asisten_isi = (
+        f"(mengusulkan: {reply.aksi['ringkasan']})" if reply.aksi else (reply.text or "")
+    )
+    await riwayat_mod.simpan(tg_id, "user", text)
+    await riwayat_mod.simpan(tg_id, "assistant", asisten_isi)
 
     if reply.aksi:
         session.kantor_pending = reply.aksi
