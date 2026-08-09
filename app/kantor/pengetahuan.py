@@ -32,15 +32,17 @@ log = logging.getLogger(__name__)
 NAMA_TOOL = ("cari_pengetahuan", "simpan_pengetahuan")
 
 # Ambang cosine minimal agar sebuah cuplikan dianggap relevan (0..1).
-_AMBANG = 0.35
+# voyage-3.5-lite: senada ~0.49, beda topik ~0.33 → 0.40 memisah bersih.
+_AMBANG = 0.40
 
 
-async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]] | None:
-    """Cari via embedding. Kembalikan [(judul, isi), ...] top-k, atau None bila
-    tak ada chunk ber-embedding (biar pemanggil jatuh ke keyword)."""
-    qv = (await asyncio.to_thread(emb.embed, [query], input_type="query"))
+async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]]:
+    """Cari via embedding. Kembalikan [(judul, isi), ...] top-k yang cukup mirip;
+    [] bila belum ada embedding / tak ada yang lolos ambang (pemanggil lalu
+    memakai keyword sebagai jaring pengaman)."""
+    qv = await asyncio.to_thread(emb.embed, [query], input_type="query")
     if not qv:
-        return None
+        return []
     qv = qv[0]
     async with SessionLocal() as db:
         rows = (await db.execute(
@@ -48,8 +50,6 @@ async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]] | None:
             .join(SopDokumen, SopChunk.dokumen_id == SopDokumen.id)
             .where(SopDokumen.status == "aktif", SopChunk.embedding.isnot(None))
         )).all()
-    if not rows:
-        return None  # belum ada embedding → pakai keyword
     skor: list[tuple[float, str, str]] = []
     for isi, emb_json, judul in rows:
         try:
@@ -58,8 +58,7 @@ async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]] | None:
             continue
         skor.append((emb.kemiripan(qv, vec), judul, isi))
     skor.sort(key=lambda s: s[0], reverse=True)
-    top = [(judul, isi) for sk, judul, isi in skor[:k] if sk >= _AMBANG]
-    return top  # bisa [] bila tak ada yang cukup mirip
+    return [(judul, isi) for sk, judul, isi in skor[:k] if sk >= _AMBANG]
 
 
 async def cari(query: str, k: int = 5) -> str:
@@ -72,13 +71,9 @@ async def cari(query: str, k: int = 5) -> str:
             if hasil:
                 baris = [f"• ({j}) {i[:400]}" for j, i in hasil]
                 return f"🧠 {len(hasil)} pengetahuan relevan (semantik):\n" + "\n".join(baris)
-            if hasil is not None:
-                # ada embedding tapi tak ada yang cukup mirip → jangan paksa keyword
-                return (f"Tak ada pengetahuan tersimpan yang cukup mirip '{query}'. "
-                        "Kalau ini fakta penting, minta pengguna agar kamu simpan (simpan_pengetahuan).")
         except Exception:  # noqa: BLE001 — embedding gagal → fallback keyword
             log.warning("cari semantik gagal, fallback keyword", exc_info=True)
-    # 2) Fallback keyword.
+    # 2) Jaring pengaman keyword — jalan bila semantik mati/tak nemu/tak terpasang.
     async with SessionLocal() as db:
         hits = await retrieve.cari(db, query, k=k)
     if not hits:
