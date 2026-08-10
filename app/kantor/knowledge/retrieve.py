@@ -33,12 +33,14 @@ def _kata_kunci(q: str) -> list[str]:
 
 
 async def cari(
-    db: AsyncSession, query: str, *, ranah: str | None = None, k: int = 5
+    db: AsyncSession, query: str, *, ranah: str | None = None,
+    tanpa_ranah: set[str] | None = None, k: int = 5,
 ) -> list[Cuplikan]:
     """Kembalikan hingga `k` potongan paling relevan dengan `query`.
 
-    Bila `ranah` diisi, batasi ke dokumen ranah itu + 'umum'. Hasil kosong bila
-    tak ada kata kunci yang cocok.
+    Bila `ranah` diisi, batasi ke dokumen ranah itu + 'umum'. Bila `tanpa_ranah`
+    diisi, KECUALIKAN dokumen ber-ranah tsb (mis. {'rahasia'} untuk staff). Hasil
+    kosong bila tak ada kata kunci yang cocok.
     """
     kk = _kata_kunci(query)
     if not kk:
@@ -54,6 +56,8 @@ async def cari(
     )
     if ranah:
         stmt = stmt.where(or_(SopDokumen.ranah == ranah, SopDokumen.ranah == "umum"))
+    if tanpa_ranah:
+        stmt = stmt.where(SopDokumen.ranah.notin_(tuple(tanpa_ranah)))
     stmt = stmt.where(SopDokumen.status == "aktif").where(skor > 0)
     stmt = stmt.order_by(skor.desc(), SopChunk.id).limit(k)
 

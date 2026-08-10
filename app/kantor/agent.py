@@ -585,13 +585,16 @@ _TOOLS = [
             "Simpan fakta/catatan/keputusan ke 'otak perusahaan' agar bisa dicari & "
             "dipakai lagi nanti (bot makin paham seiring waktu). Pakai bila pengguna "
             "minta 'ingat/catat …', atau saat muncul fakta durable yang layak disimpan "
-            "(mis. PIC pemasok, kebijakan, keputusan rapat). Judul ringkas & khas."
+            "(mis. PIC pemasok, kebijakan, keputusan rapat). Judul ringkas & khas. "
+            "Set rahasia=true untuk data SENSITIF (mis. IT Accounts, perbankan, akses, "
+            "kredensial) — pengetahuan rahasia HANYA bisa dimunculkan admin, tak pernah staff."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "judul": {"type": "string", "description": "Judul singkat & khas (mis. 'PIC Vendor PT Rajawali')."},
                 "isi": {"type": "string", "description": "Isi fakta/catatan lengkap yang disimpan."},
+                "rahasia": {"type": "boolean", "description": "true bila data sensitif (perbankan/akses/kredensial/IT Accounts) → khusus admin. Default false."},
             },
             "required": ["judul", "isi"],
         },
@@ -641,9 +644,16 @@ def _system_stabil(*, role: str) -> str:
         "angka/target penting, struktur & jabatan, preferensi tetap pemilik — LANGSUNG "
         "simpan tanpa menunggu diminta, lalu beri tahu singkat (mis. '📝 kucatat: …'). "
         "JANGAN simpan hal sepele/sekali pakai: obrolan santai, pertanyaan, data yang "
-        "berubah tiap hari (stok, saldo, agenda harian), atau hal sensitif (password, "
-        "token). Kalau ragu apakah durable, cenderung SIMPAN — mudah dihapus nanti. "
-        "Hindari duplikat: bila mungkin sudah pernah tersimpan, cari_pengetahuan dulu.\n"
+        "berubah tiap hari (stok, saldo, agenda harian). JANGAN PERNAH menyimpan "
+        "kredensial mentah (password, PIN, token, kunci API). Kalau ragu apakah durable, "
+        "cenderung SIMPAN — mudah dihapus nanti. Hindari duplikat: bila mungkin sudah "
+        "pernah tersimpan, cari_pengetahuan dulu.\n"
+        "DATA SENSITIF (IT Accounts, perbankan, akses, data pribadi karyawan): boleh "
+        "disimpan TAPI set rahasia=true → hanya admin yang bisa memunculkannya, staff tak "
+        "pernah. Untuk data yang tinggal di Google Sheet (mis. IT Accounts), SHEET ADALAH "
+        "SUMBER KEBENARAN: bila ada perubahan, USULKAN update sheet-nya (update_sheet/"
+        "tambah_baris_sheet) lebih dulu, dan untuk nilai terkini baca langsung dari sheet "
+        "(baca_sheet) daripada mengandalkan salinan pengetahuan yang bisa usang.\n"
         "Kamu juga BISA MENGUSULKAN aksi tulis Drive: pindah FILE/FOLDER (pindah_item), "
         "ganti nama (rename_item), hapus→Sampah (hapus_item), buat FOLDER baru "
         "(buat_folder), BUAT DOKUMEN resmi .docx berkop → _TRANSIT draft "
@@ -790,7 +800,7 @@ async def run_kantor_agent(
         results = []
         for tu in tool_uses:
             if tu.name in pengetahuan.NAMA_TOOL:
-                out = await pengetahuan.jalankan(tu.name, tu.input or {})
+                out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
             elif tu.name in surel.NAMA_TULIS:
                 out = await surel.jalankan_tulis(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_BACA:

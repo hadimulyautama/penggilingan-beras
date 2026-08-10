@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import math
 import os
+import time
+import urllib.error
 import urllib.request
 
 _URL = "https://api.voyageai.com/v1/embeddings"
@@ -30,13 +32,22 @@ def embed(teks: list[str], *, input_type: str = "document") -> list[list[float]]
     if not teks:
         return []
     body = json.dumps({"input": teks, "model": _model(), "input_type": input_type}).encode()
-    req = urllib.request.Request(_URL, body, method="POST", headers={
-        "Authorization": f"Bearer {os.environ['VOYAGE_API_KEY']}",
-        "Content-Type": "application/json",
-    })
-    with urllib.request.urlopen(req) as r:
-        data = json.load(r)
-    return [d["embedding"] for d in data.get("data", [])]
+    for coba in range(5):
+        req = urllib.request.Request(_URL, body, method="POST", headers={
+            "Authorization": f"Bearer {os.environ['VOYAGE_API_KEY']}",
+            "Content-Type": "application/json",
+        })
+        try:
+            with urllib.request.urlopen(req) as r:
+                data = json.load(r)
+            return [d["embedding"] for d in data.get("data", [])]
+        except urllib.error.HTTPError as e:
+            # 429 (rate limit) / 5xx → tunggu & ulang (backoff 1,2,4,8 dtk)
+            if e.code in (429, 500, 502, 503, 529) and coba < 4:
+                time.sleep(2 ** coba)
+                continue
+            raise
+    return []
 
 
 def kemiripan(a: list[float], b: list[float]) -> float:

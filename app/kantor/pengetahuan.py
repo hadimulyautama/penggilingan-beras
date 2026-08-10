@@ -35,21 +35,30 @@ NAMA_TOOL = ("cari_pengetahuan", "simpan_pengetahuan")
 # voyage-3.5-lite: senada ~0.49, beda topik ~0.33 → 0.40 memisah bersih.
 _AMBANG = 0.40
 
+# ranah "rahasia" = pengetahuan sensitif (mis. IT Accounts, perbankan) → HANYA
+# boleh dimunculkan admin. Peran lain (staff) tak pernah menerimanya.
+_RANAH_RAHASIA = "rahasia"
 
-async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]]:
-    """Cari via embedding. Kembalikan [(judul, isi), ...] top-k yang cukup mirip;
-    [] bila belum ada embedding / tak ada yang lolos ambang (pemanggil lalu
-    memakai keyword sebagai jaring pengaman)."""
+
+def _boleh_rahasia(role: str | None) -> bool:
+    return (role or "").strip().lower() == "admin"
+
+
+async def _cari_semantik(query: str, k: int, larang: set[str]) -> list[tuple[str, str]]:
+    """Cari via embedding. `larang` = ranah yang DIKECUALIKAN (gating peran).
+    Kembalikan [(judul, isi), ...] top-k yang cukup mirip; [] bila belum ada
+    embedding / tak ada yang lolos ambang (pemanggil lalu memakai keyword)."""
     qv = await asyncio.to_thread(emb.embed, [query], input_type="query")
     if not qv:
         return []
     qv = qv[0]
     async with SessionLocal() as db:
-        rows = (await db.execute(
-            select(SopChunk.isi, SopChunk.embedding, SopDokumen.judul)
-            .join(SopDokumen, SopChunk.dokumen_id == SopDokumen.id)
-            .where(SopDokumen.status == "aktif", SopChunk.embedding.isnot(None))
-        )).all()
+        stmt = (select(SopChunk.isi, SopChunk.embedding, SopDokumen.judul)
+                .join(SopDokumen, SopChunk.dokumen_id == SopDokumen.id)
+                .where(SopDokumen.status == "aktif", SopChunk.embedding.isnot(None)))
+        if larang:
+            stmt = stmt.where(SopDokumen.ranah.notin_(tuple(larang)))
+        rows = (await db.execute(stmt)).all()
     skor: list[tuple[float, str, str]] = []
     for isi, emb_json, judul in rows:
         try:
@@ -61,13 +70,15 @@ async def _cari_semantik(query: str, k: int) -> list[tuple[str, str]]:
     return [(judul, isi) for sk, judul, isi in skor[:k] if sk >= _AMBANG]
 
 
-async def cari(query: str, k: int = 5) -> str:
+async def cari(query: str, k: int = 5, role: str = "staff") -> str:
     if not (query or "").strip():
         return "Pertanyaan pencarian kosong."
+    # Gating: non-admin tak boleh menerima ranah 'rahasia'.
+    larang = set() if _boleh_rahasia(role) else {_RANAH_RAHASIA}
     # 1) Coba semantik (kalau Voyage terpasang).
     if emb.terkonfigurasi():
         try:
-            hasil = await _cari_semantik(query, k)
+            hasil = await _cari_semantik(query, k, larang)
             if hasil:
                 baris = [f"• ({j}) {i[:400]}" for j, i in hasil]
                 return f"🧠 {len(hasil)} pengetahuan relevan (semantik):\n" + "\n".join(baris)
@@ -75,7 +86,7 @@ async def cari(query: str, k: int = 5) -> str:
             log.warning("cari semantik gagal, fallback keyword", exc_info=True)
     # 2) Jaring pengaman keyword — jalan bila semantik mati/tak nemu/tak terpasang.
     async with SessionLocal() as db:
-        hits = await retrieve.cari(db, query, k=k)
+        hits = await retrieve.cari(db, query, tanpa_ranah=(larang or None), k=k)
     if not hits:
         return (f"Tak ada pengetahuan tersimpan yang cocok '{query}'. "
                 "Kalau ini fakta penting, minta pengguna agar kamu simpan (simpan_pengetahuan).")
@@ -83,13 +94,14 @@ async def cari(query: str, k: int = 5) -> str:
     return f"🧠 {len(hits)} pengetahuan relevan:\n" + "\n".join(baris)
 
 
-async def simpan(judul: str, isi: str) -> str:
+async def simpan(judul: str, isi: str, rahasia: bool = False) -> str:
     if not (judul or "").strip() or not (isi or "").strip():
         return "Judul dan isi pengetahuan wajib diisi."
+    ranah = _RANAH_RAHASIA if rahasia else "umum"
     async with SessionLocal() as db:
         doc, berubah = await ingest.ingest_dokumen(
             db, judul=judul.strip(), teks=isi.strip(),
-            kategori="catatan", ranah="umum", sumber="bot")
+            kategori="catatan", ranah=ranah, sumber="bot")
         if not berubah:
             return f"'{judul}' sudah tersimpan (isi sama, tak diubah)."
         # Embed chunk-nya biar bisa dicari secara makna (kalau Voyage terpasang).
@@ -109,10 +121,10 @@ async def simpan(judul: str, isi: str) -> str:
     return f"✅ Pengetahuan disimpan: '{judul}'. Bisa kucari & pakai lagi kapan pun."
 
 
-async def jalankan(nama_tool: str, args: dict) -> str:
+async def jalankan(nama_tool: str, args: dict, role: str = "staff") -> str:
     a = args or {}
     if nama_tool == "cari_pengetahuan":
-        return await cari(a.get("query", "") or a.get("pertanyaan", ""))
+        return await cari(a.get("query", "") or a.get("pertanyaan", ""), role=role)
     if nama_tool == "simpan_pengetahuan":
-        return await simpan(a.get("judul", ""), a.get("isi", ""))
+        return await simpan(a.get("judul", ""), a.get("isi", ""), rahasia=bool(a.get("rahasia")))
     return f"(tool '{nama_tool}' tak dikenal)"
