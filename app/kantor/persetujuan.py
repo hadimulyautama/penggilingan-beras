@@ -144,11 +144,17 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         return f"Email terkirim ke {p['ke']} — subjek: {p['subjek']}."
     if jenis == "gajihub_setujui":
         from app.kantor import gajihub
-        gajihub.setujui(p["ids"], p.get("catatan", ""))
+        if p.get("kind") == "presensi":
+            gajihub.setujui_presensi(p["ids"])
+        else:
+            gajihub.setujui(p["ids"], p.get("catatan", ""))
         return f"Pengajuan ({p.get('ringkasan_item', '')}) DISETUJUI di GajiHub."
     if jenis == "gajihub_tolak":
         from app.kantor import gajihub
-        gajihub.tolak(p["ids"], p.get("catatan", ""))
+        if p.get("kind") == "presensi":
+            gajihub.tolak_presensi(p["ids"])
+        else:
+            gajihub.tolak(p["ids"], p.get("catatan", ""))
         return f"Pengajuan ({p.get('ringkasan_item', '')}) DITOLAK di GajiHub."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 

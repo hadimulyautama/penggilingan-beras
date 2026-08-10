@@ -641,7 +641,7 @@ _TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "id pengajuan (dari daftar pengajuan_gajihub)."},
+                "id": {"type": "string", "description": "id pengajuan PERSIS dari pengajuan_gajihub (bertanda, mis. 'presensi-123' untuk lembur/presensi, 'hr-45' untuk cuti)."},
                 "alasan": {"type": "string", "description": "Opsional: catatan persetujuan."},
             },
             "required": ["id"],
@@ -657,7 +657,7 @@ _TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "id pengajuan (dari daftar pengajuan_gajihub)."},
+                "id": {"type": "string", "description": "id pengajuan PERSIS dari pengajuan_gajihub (bertanda, mis. 'presensi-123' untuk lembur/presensi, 'hr-45' untuk cuti)."},
                 "alasan": {"type": "string", "description": "Alasan penolakan (disarankan)."},
             },
             "required": ["id"],
