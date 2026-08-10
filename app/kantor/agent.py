@@ -620,9 +620,10 @@ _TOOLS = [
     {
         "name": "pengajuan_gajihub",
         "description": (
-            "Ambil DAFTAR PENGAJUAN HR yang MENUNGGU persetujuan di GajiHub (lembur, cuti, "
-            "dll). Tiap baris berisi [id] jenis — karyawan. Pakai bila pengguna tanya 'ada "
-            "pengajuan lembur?' / 'apa yang perlu disetujui?'. Read-only. Khusus admin."
+            "Ambil DAFTAR approval PRESENSI/LEMBUR yang MENUNGGU persetujuan di GajiHub "
+            "(Mulai/Selesai Lembur & koreksi presensi). Tiap baris berisi [id] jenis — "
+            "karyawan · waktu. Pakai bila pengguna tanya 'ada pengajuan lembur?' / 'apa "
+            "yang perlu disetujui?'. Read-only. Khusus admin."
         ),
         "input_schema": {
             "type": "object",
@@ -641,7 +642,7 @@ _TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "id pengajuan PERSIS dari pengajuan_gajihub (bertanda, mis. 'presensi-123' untuk lembur/presensi, 'hr-45' untuk cuti)."},
+                "id": {"type": "string", "description": "id pengajuan PERSIS dari daftar pengajuan_gajihub (angka dalam kurung, mis. 4702)."},
                 "alasan": {"type": "string", "description": "Opsional: catatan persetujuan."},
             },
             "required": ["id"],
@@ -657,7 +658,7 @@ _TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "id pengajuan PERSIS dari pengajuan_gajihub (bertanda, mis. 'presensi-123' untuk lembur/presensi, 'hr-45' untuk cuti)."},
+                "id": {"type": "string", "description": "id pengajuan PERSIS dari daftar pengajuan_gajihub (angka dalam kurung, mis. 4702)."},
                 "alasan": {"type": "string", "description": "Alasan penolakan (disarankan)."},
             },
             "required": ["id"],
@@ -743,7 +744,8 @@ def _system_stabil(*, role: str) -> str:
         "(daftar karyawan aktif), payroll_gajihub (periode slip gaji), cuti_gajihub. "
         "Angka gaji BERSUMBER dari GajiHub — rangkum saja, jangan hitung ulang. Data ini "
         "SENSITIF (gaji/PII) → hanya berfungsi untuk admin; kalau staff bertanya, tolak halus.\n"
-        "PERSETUJUAN HR (lembur/cuti): pengajuan_gajihub menampilkan daftar yang MENUNGGU "
+        "PERSETUJUAN LEMBUR/PRESENSI: di GajiHub, lembur tercatat sebagai approval "
+        "presensi (Mulai/Selesai Lembur). pengajuan_gajihub menampilkan yang MENUNGGU "
         "(tiap baris ada [id]). Untuk memutus, USULKAN setujui_pengajuan(id) atau "
         "tolak_pengajuan(id, alasan) — KONSEKUENSIAL, lewat tombol ✅/❌ pemilik; jangan "
         "mengaku sudah diputus. Ambil id dari pengajuan_gajihub dulu.\n"

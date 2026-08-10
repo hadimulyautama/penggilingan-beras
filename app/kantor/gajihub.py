@@ -127,16 +127,13 @@ def cuti(nama: str = "") -> str:
     return f"🌴 Data cuti (GajiHub): {len(rows)} entri. (Format rincian menyusul.)"
 
 
-def _menunggu(r: dict) -> bool:
-    return not r.get("date_approved") and not r.get("date_declined")
-
-
 def _presensi_menunggu(dari: str = "", sampai: str = "") -> list[dict]:
-    """Log presensi berstatus 'Menunggu Persetujuan' (status id 1) — incl. Mulai/Selesai Lembur."""
+    """Log presensi berstatus 'Menunggu Persetujuan' (status id 1) — incl. Mulai/Selesai
+    Lembur. Default DIBATASI ke BULAN BERJALAN saja (dari tgl 1 s/d hari ini)."""
     hari = datetime.date.today()
     d = _get("/hr/attendanceLogs/approval/pagination", {
         "hr_attendance_log_status_id": 1,
-        "date_started": dari or (hari - datetime.timedelta(days=90)).isoformat(),
+        "date_started": dari or hari.replace(day=1).isoformat(),
         "date_ended": sampai or (hari + datetime.timedelta(days=1)).isoformat(),
         "page": 1, "per_page": 100,
     })
@@ -145,38 +142,23 @@ def _presensi_menunggu(dari: str = "", sampai: str = "") -> list[dict]:
 
 
 def daftar_pengajuan(hanya_menunggu: bool = True) -> str:
-    """Daftar pengajuan yang MENUNGGU: (a) HR approvals (lembur/cuti resmi) + (b) approval
-    PRESENSI (Mulai/Selesai Lembur, koreksi presensi). id ditandai jenisnya (hr-/presensi-)."""
+    """Daftar approval PRESENSI yang MENUNGGU — termasuk Mulai/Selesai Lembur & koreksi
+    presensi (lembur di GajiHub tercatat sebagai approval presensi)."""
     baris = []
-    # (a) HR approvals — lembur/cuti lewat modul pengajuan
     try:
-        d = _get("/hr/approvals/pagination", {"page": 1, "per_page": 100})
-        hr, _ = _rows(d)
-        if hanya_menunggu:
-            hr = [r for r in hr if _menunggu(r)]
-        for r in hr[:40]:
-            typ = _nm(r.get("hr_approval_type")) or "Pengajuan"
-            who = _nm(r.get("hr_employee"))
-            desc = (r.get("description") or "").strip()
-            baris.append(f"• [hr-{r.get('id')}] {typ} — {who}" + (f": {desc}" if desc else ""))
-    except Exception:  # noqa: BLE001
-        log.warning("ambil HR approvals gagal", exc_info=True)
-    # (b) approval PRESENSI — Mulai/Selesai Lembur & koreksi presensi
-    try:
-        for r in _presensi_menunggu()[:60]:
+        for r in _presensi_menunggu()[:80]:
             typ = _nm(r.get("hr_attendance_log_type")) or "Presensi"
             who = _nm(r.get("hr_employee"))
             when = r.get("datetime") or r.get("created_at") or ""
             lok = _nm(r.get("hr_attendance_location"))
-            baris.append(f"• [presensi-{r.get('id')}] {typ} — {who} · {when}"
+            baris.append(f"• [{r.get('id')}] {typ} — {who} · {when}"
                          + (f" · {lok}" if lok else ""))
     except Exception:  # noqa: BLE001
         log.warning("ambil approval presensi gagal", exc_info=True)
     if not baris:
-        return "Tak ada pengajuan yang menunggu persetujuan di GajiHub. 👍"
+        return "Tak ada pengajuan presensi/lembur yang menunggu persetujuan di GajiHub. 👍"
     return (f"📥 {len(baris)} pengajuan menunggu persetujuan (GajiHub):\n" + "\n".join(baris)
-            + "\nUntuk memutus, sebut id-nya: 'setujui [id]' / 'tolak [id] alasan …' "
-              "(mis. presensi-123 atau hr-45).")
+            + "\nUntuk memutus, sebut id-nya: 'setujui [id]' / 'tolak [id] alasan …'.")
 
 
 def _idlist(ids) -> list[int]:
@@ -189,16 +171,6 @@ def _idlist(ids) -> list[int]:
         except (TypeError, ValueError):
             continue
     return out
-
-
-def setujui(ids, catatan: str = "") -> dict:
-    return _patch("/hr/approvals/approve",
-                  {"ids": _idlist(ids), "description": catatan or "Disetujui via Kantor AI"})
-
-
-def tolak(ids, catatan: str = "") -> dict:
-    return _patch("/hr/approvals/decline",
-                  {"ids": _idlist(ids), "description": catatan or "Ditolak via Kantor AI"})
 
 
 def setujui_presensi(ids) -> dict:
@@ -215,45 +187,27 @@ def _diajukan(aid: int, ring: str) -> str:
             "Sampaikan: menunggu tombol ✅/❌ pemilik di Telegram; jangan mengaku sudah selesai.")
 
 
-def _urai_id(tagged) -> tuple[str, str]:
-    """'presensi-123' → ('presensi','123'); 'hr-45'/'45' → ('hr','45')."""
-    s = str(tagged or "").strip()
-    if s.lower().startswith("presensi-"):
-        return "presensi", s.split("-", 1)[1]
-    if s.lower().startswith("hr-"):
-        return "hr", s.split("-", 1)[1]
-    return "hr", s
-
-
-async def usul_keputusan(tagged_id, *, tolak: bool = False, alasan: str = "") -> str:
-    """Usulkan SETUJUI/TOLAK sebuah pengajuan (hr-* atau presensi-*) → gerbang tombol pemilik."""
-    if not str(tagged_id or "").strip():
-        return "Sebutkan id pengajuan (lihat dari pengajuan_gajihub, mis. presensi-123)."
-    kind, num = _urai_id(tagged_id)
+async def usul_keputusan(approval_id, *, tolak: bool = False, alasan: str = "") -> str:
+    """Usulkan SETUJUI/TOLAK approval presensi/lembur → gerbang tombol pemilik."""
+    num = str(approval_id or "").strip().replace("presensi-", "")
+    if not num:
+        return "Sebutkan id pengajuan (lihat dari pengajuan_gajihub)."
 
     def _detail():
-        if kind == "presensi":
-            for r in _presensi_menunggu():
-                if str(r.get("id")) == str(num):
-                    return (_nm(r.get("hr_attendance_log_type")) or "Presensi",
-                            _nm(r.get("hr_employee")),
-                            (r.get("datetime") or r.get("note") or "").strip())
-            return None
-        d = _get("/hr/approvals/pagination", {"page": 1, "per_page": 100})
-        for r in _rows(d)[0]:
-            if str(r.get("id")) == str(num) and _menunggu(r):
-                return (_nm(r.get("hr_approval_type")) or "Pengajuan",
-                        _nm(r.get("hr_employee")), (r.get("description") or "").strip())
+        for r in _presensi_menunggu():
+            if str(r.get("id")) == str(num):
+                return (_nm(r.get("hr_attendance_log_type")) or "Presensi",
+                        _nm(r.get("hr_employee")),
+                        (r.get("datetime") or r.get("note") or "").strip())
         return None
 
     info = await asyncio.to_thread(_detail)
     if info is None:
-        return f"Pengajuan {tagged_id} tak ditemukan / sudah diputus — cek lagi pengajuan_gajihub."
+        return f"Pengajuan #{num} tak ditemukan / sudah diputus — cek lagi pengajuan_gajihub."
     typ, who, desc = info
     aksi = "TOLAK" if tolak else "SETUJUI"
     ring = f"{aksi} {typ} *{who}*" + (f" — {desc}" if desc else "")
-    payload = {"kind": kind, "ids": str(num), "catatan": alasan,
-               "ringkasan_item": f"{typ} {who}"}
+    payload = {"ids": str(num), "catatan": alasan, "ringkasan_item": f"{typ} {who}"}
     aid = await pst.buat_pending(
         jenis=("gajihub_tolak" if tolak else "gajihub_setujui"),
         ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
