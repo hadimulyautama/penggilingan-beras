@@ -19,6 +19,7 @@ from app.ai.base import _date_context
 from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
+from app.kantor import gajihub
 from app.kantor import ocr
 from app.kantor import pengetahuan
 from app.kantor import surel
@@ -581,6 +582,42 @@ _TOOLS = [
         },
     },
     {
+        "name": "karyawan_gajihub",
+        "description": (
+            "Ambil DAFTAR KARYAWAN dari GajiHub (HR resmi) — nama, kode, status aktif. "
+            "Read-only. Pakai untuk pertanyaan 'siapa saja karyawan', 'berapa jumlah "
+            "pegawai aktif', cek nama. Data SENSITIF → hanya berfungsi untuk admin."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "termasuk_nonaktif": {"type": "boolean", "description": "true = ikut yang sudah nonaktif/resign. Default false (aktif saja)."},
+            },
+        },
+    },
+    {
+        "name": "payroll_gajihub",
+        "description": (
+            "Ambil REKAP SLIP GAJI / periode payroll dari GajiHub (read-only). Pakai untuk "
+            "'ada berapa periode gaji', 'rekap payroll'. Angka BERSUMBER dari GajiHub — "
+            "rangkum saja, jangan hitung ulang. Data SENSITIF → hanya admin."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "cuti_gajihub",
+        "description": (
+            "Ambil data CUTI karyawan dari GajiHub (read-only). Bisa saring dengan `nama`. "
+            "Pakai untuk 'data cuti si X'. Data SENSITIF → hanya admin."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama": {"type": "string", "description": "Opsional: saring untuk nama karyawan tertentu."},
+            },
+        },
+    },
+    {
         "name": "cari_pengetahuan",
         "description": (
             "Cari 'otak perusahaan' — SOP, kebijakan, keputusan, fakta, catatan yang "
@@ -656,6 +693,10 @@ def _system_stabil(*, role: str) -> str:
         "Kamu juga mengelola EMAIL: baca_email (inbox terbaru), cari_email, baca_email_isi "
         "(pakai [uid] dari hasil baca/cari), dan MENGUSULKAN kirim_email (konsekuensial → "
         "tombol pemilik; jangan mengaku sudah terkirim).\n"
+        "Kamu terhubung ke GajiHub (HR/payroll resmi, read-only): karyawan_gajihub "
+        "(daftar karyawan aktif), payroll_gajihub (periode slip gaji), cuti_gajihub. "
+        "Angka gaji BERSUMBER dari GajiHub — rangkum saja, jangan hitung ulang. Data ini "
+        "SENSITIF (gaji/PII) → hanya berfungsi untuk admin; kalau staff bertanya, tolak halus.\n"
         "Kamu punya OTAK PERUSAHAAN (ingatan PERMANEN — beda dari riwayat chat yang "
         "cuma 8 giliran terakhir): cari_pengetahuan (cari SOP/keputusan/fakta tersimpan "
         "— pakai LEBIH DULU untuk pertanyaan aturan/data internal) & simpan_pengetahuan.\n"
@@ -823,6 +864,8 @@ async def run_kantor_agent(
                 out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
             elif tu.name in ocr.NAMA_TOOL:
                 out = await ocr.jalankan(tu.name, tu.input or {})
+            elif tu.name in gajihub.NAMA_TOOL:
+                out = await asyncio.to_thread(gajihub.jalankan, tu.name, tu.input or {}, role)
             elif tu.name in surel.NAMA_TULIS:
                 out = await surel.jalankan_tulis(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_BACA:
