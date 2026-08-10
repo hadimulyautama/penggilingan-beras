@@ -48,6 +48,8 @@ _AUDIT_AKSI = {
     "kalender_ubah": "ubah_acara",
     "kalender_hapus": "hapus_acara",
     "email_kirim": "kirim_email",
+    "gajihub_setujui": "setujui_pengajuan_hr",
+    "gajihub_tolak": "tolak_pengajuan_hr",
 }
 
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -140,6 +142,14 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         from app.kantor import surel
         surel.kirim(p["ke"], p["subjek"], p["isi"])
         return f"Email terkirim ke {p['ke']} — subjek: {p['subjek']}."
+    if jenis == "gajihub_setujui":
+        from app.kantor import gajihub
+        gajihub.setujui(p["ids"], p.get("catatan", ""))
+        return f"Pengajuan ({p.get('ringkasan_item', '')}) DISETUJUI di GajiHub."
+    if jenis == "gajihub_tolak":
+        from app.kantor import gajihub
+        gajihub.tolak(p["ids"], p.get("catatan", ""))
+        return f"Pengajuan ({p.get('ringkasan_item', '')}) DITOLAK di GajiHub."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 

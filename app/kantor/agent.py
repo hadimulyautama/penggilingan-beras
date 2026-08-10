@@ -618,6 +618,52 @@ _TOOLS = [
         },
     },
     {
+        "name": "pengajuan_gajihub",
+        "description": (
+            "Ambil DAFTAR PENGAJUAN HR yang MENUNGGU persetujuan di GajiHub (lembur, cuti, "
+            "dll). Tiap baris berisi [id] jenis — karyawan. Pakai bila pengguna tanya 'ada "
+            "pengajuan lembur?' / 'apa yang perlu disetujui?'. Read-only. Khusus admin."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "semua": {"type": "boolean", "description": "true = tampilkan juga yang sudah diputus. Default false (menunggu saja)."},
+            },
+        },
+    },
+    {
+        "name": "setujui_pengajuan",
+        "description": (
+            "USULKAN MENYETUJUI sebuah pengajuan HR (lembur/cuti) di GajiHub berdasarkan "
+            "`id` (dari pengajuan_gajihub). AKSI KONSEKUENSIAL (mengubah data & payroll) → "
+            "diajukan ke pemilik lewat tombol ✅/❌. JANGAN mengaku sudah disetujui. Khusus admin."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "id pengajuan (dari daftar pengajuan_gajihub)."},
+                "alasan": {"type": "string", "description": "Opsional: catatan persetujuan."},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "tolak_pengajuan",
+        "description": (
+            "USULKAN MENOLAK sebuah pengajuan HR (lembur/cuti) di GajiHub berdasarkan `id`. "
+            "AKSI KONSEKUENSIAL → tombol ✅/❌ pemilik. Sertakan `alasan` bila ada. "
+            "JANGAN mengaku sudah ditolak. Khusus admin."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "id pengajuan (dari daftar pengajuan_gajihub)."},
+                "alasan": {"type": "string", "description": "Alasan penolakan (disarankan)."},
+            },
+            "required": ["id"],
+        },
+    },
+    {
         "name": "cari_pengetahuan",
         "description": (
             "Cari 'otak perusahaan' — SOP, kebijakan, keputusan, fakta, catatan yang "
@@ -697,6 +743,10 @@ def _system_stabil(*, role: str) -> str:
         "(daftar karyawan aktif), payroll_gajihub (periode slip gaji), cuti_gajihub. "
         "Angka gaji BERSUMBER dari GajiHub — rangkum saja, jangan hitung ulang. Data ini "
         "SENSITIF (gaji/PII) → hanya berfungsi untuk admin; kalau staff bertanya, tolak halus.\n"
+        "PERSETUJUAN HR (lembur/cuti): pengajuan_gajihub menampilkan daftar yang MENUNGGU "
+        "(tiap baris ada [id]). Untuk memutus, USULKAN setujui_pengajuan(id) atau "
+        "tolak_pengajuan(id, alasan) — KONSEKUENSIAL, lewat tombol ✅/❌ pemilik; jangan "
+        "mengaku sudah diputus. Ambil id dari pengajuan_gajihub dulu.\n"
         "Kamu punya OTAK PERUSAHAAN (ingatan PERMANEN — beda dari riwayat chat yang "
         "cuma 8 giliran terakhir): cari_pengetahuan (cari SOP/keputusan/fakta tersimpan "
         "— pakai LEBIH DULU untuk pertanyaan aturan/data internal) & simpan_pengetahuan.\n"
@@ -866,6 +916,8 @@ async def run_kantor_agent(
                 out = await ocr.jalankan(tu.name, tu.input or {})
             elif tu.name in gajihub.NAMA_TOOL:
                 out = await asyncio.to_thread(gajihub.jalankan, tu.name, tu.input or {}, role)
+            elif tu.name in gajihub.NAMA_USUL:
+                out = await gajihub.jalankan_usul(tu.name, tu.input or {}, role)
             elif tu.name in surel.NAMA_TULIS:
                 out = await surel.jalankan_tulis(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_BACA:

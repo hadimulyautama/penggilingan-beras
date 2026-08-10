@@ -11,6 +11,7 @@ Tidak ada tool tulis di sini (murni baca).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -18,11 +19,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from app.kantor import persetujuan as pst
+
 log = logging.getLogger(__name__)
 
 _BASE = os.getenv("GAJIHUB_BASE", "https://pthadimulyautama.api.kledo.com/api/v1")
 
-NAMA_TOOL = ("karyawan_gajihub", "payroll_gajihub", "cuti_gajihub")
+# tool BACA (read-only)
+NAMA_TOOL = ("karyawan_gajihub", "payroll_gajihub", "cuti_gajihub", "pengajuan_gajihub")
+# tool USUL (konsekuensial → lewat gerbang tombol pemilik)
+NAMA_USUL = ("setujui_pengajuan", "tolak_pengajuan")
 
 
 def terkonfigurasi() -> bool:
@@ -33,15 +39,34 @@ def _boleh(role: str | None) -> bool:
     return (role or "").strip().lower() == "admin"
 
 
+def _hdr():
+    return {"Authorization": "Bearer " + os.environ["GAJIHUB_API_KEY"],
+            "Accept": "application/json"}
+
+
 def _get(path: str, params: dict | None = None):
-    tok = os.environ["GAJIHUB_API_KEY"]
     url = _BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(
-        url, headers={"Authorization": "Bearer " + tok, "Accept": "application/json"})
+    req = urllib.request.Request(url, headers=_hdr())
     with urllib.request.urlopen(req, timeout=25) as r:
         return json.load(r)
+
+
+def _patch(path: str, body: dict):
+    h = _hdr()
+    h["Content-Type"] = "application/json"
+    req = urllib.request.Request(_BASE + path, data=json.dumps(body).encode(),
+                                 method="PATCH", headers=h)
+    with urllib.request.urlopen(req, timeout=25) as r:
+        return json.load(r)
+
+
+def _nm(v):
+    """Ambil nama dari field yang bisa dict {name} atau string."""
+    if isinstance(v, dict):
+        return v.get("name") or v.get("full_name") or v.get("employee_name") or ""
+    return str(v) if v not in (None, "") else ""
 
 
 def _rows(d):
@@ -101,6 +126,96 @@ def cuti(nama: str = "") -> str:
     return f"🌴 Data cuti (GajiHub): {len(rows)} entri. (Format rincian menyusul.)"
 
 
+def _menunggu(r: dict) -> bool:
+    return not r.get("date_approved") and not r.get("date_declined")
+
+
+def daftar_pengajuan(hanya_menunggu: bool = True) -> str:
+    """Daftar pengajuan HR (lembur/cuti/dll) — untuk disetujui/ditolak."""
+    d = _get("/hr/approvals/pagination", {"page": 1, "per_page": 100})
+    rows, _ = _rows(d)
+    if hanya_menunggu:
+        rows = [r for r in rows if _menunggu(r)]
+    if not rows:
+        return "Tak ada pengajuan yang menunggu persetujuan di GajiHub. 👍"
+    baris = []
+    for r in rows[:40]:
+        typ = _nm(r.get("hr_approval_type")) or "Pengajuan"
+        who = _nm(r.get("hr_employee"))
+        desc = (r.get("description") or "").strip()
+        baris.append(f"• [{r.get('id')}] {typ} — {who}" + (f": {desc}" if desc else ""))
+    return (f"📥 {len(rows)} pengajuan menunggu persetujuan (GajiHub):\n" + "\n".join(baris)
+            + "\nUntuk memutus: 'setujui pengajuan [id]' atau 'tolak pengajuan [id] alasan …'.")
+
+
+def _idlist(ids) -> list[int]:
+    """Normalisasi id (int / str / 'a,b' / list) → list int untuk field 'ids' (array)."""
+    seq = ids if isinstance(ids, (list, tuple)) else str(ids).split(",")
+    out = []
+    for x in seq:
+        try:
+            out.append(int(str(x).strip()))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def setujui(ids, catatan: str = "") -> dict:
+    return _patch("/hr/approvals/approve",
+                  {"ids": _idlist(ids), "description": catatan or "Disetujui via Kantor AI"})
+
+
+def tolak(ids, catatan: str = "") -> dict:
+    return _patch("/hr/approvals/decline",
+                  {"ids": _idlist(ids), "description": catatan or "Ditolak via Kantor AI"})
+
+
+def _diajukan(aid: int, ring: str) -> str:
+    return (f"⏳ Diajukan ke pemilik untuk PERSETUJUAN (#{aid}) — BELUM dijalankan.\n"
+            f"• {ring}\n"
+            "Sampaikan: menunggu tombol ✅/❌ pemilik di Telegram; jangan mengaku sudah selesai.")
+
+
+async def usul_keputusan(approval_id, *, tolak: bool = False, alasan: str = "") -> str:
+    """Usulkan SETUJUI/TOLAK sebuah pengajuan → lewat gerbang tombol pemilik."""
+    if not str(approval_id or "").strip():
+        return "Sebutkan id pengajuan (lihat dari pengajuan_gajihub)."
+
+    def _detail():
+        d = _get("/hr/approvals/pagination", {"page": 1, "per_page": 100})
+        rows, _ = _rows(d)
+        return next((r for r in rows if str(r.get("id")) == str(approval_id)), None)
+
+    r = await asyncio.to_thread(_detail)
+    if r is None:
+        return f"Pengajuan #{approval_id} tak ditemukan (mungkin sudah diputus)."
+    if not _menunggu(r):
+        return f"Pengajuan #{approval_id} sudah diputus sebelumnya — tak diproses ulang."
+    typ = _nm(r.get("hr_approval_type")) or "Pengajuan"
+    who = _nm(r.get("hr_employee"))
+    desc = (r.get("description") or "").strip()
+    aksi = "TOLAK" if tolak else "SETUJUI"
+    ring = f"{aksi} pengajuan {typ} *{who}*" + (f" — {desc}" if desc else "")
+    payload = {"ids": str(approval_id), "catatan": alasan, "ringkasan_item": f"{typ} {who}"}
+    aid = await pst.buat_pending(
+        jenis=("gajihub_tolak" if tolak else "gajihub_setujui"),
+        ringkasan=ring, payload=payload, diminta_oleh="bot-kantor")
+    return _diajukan(aid, ring)
+
+
+async def jalankan_usul(nama_tool: str, args: dict, role: str = "staff") -> str:
+    if not terkonfigurasi():
+        return "GajiHub belum terkonfigurasi di server ini."
+    if not _boleh(role):
+        return "Menyetujui/menolak pengajuan HR khusus admin."
+    a = args or {}
+    if nama_tool == "setujui_pengajuan":
+        return await usul_keputusan(a.get("id", ""), tolak=False, alasan=a.get("alasan", ""))
+    if nama_tool == "tolak_pengajuan":
+        return await usul_keputusan(a.get("id", ""), tolak=True, alasan=a.get("alasan", ""))
+    return f"(usul '{nama_tool}' tak dikenal)"
+
+
 def jalankan(nama_tool: str, args: dict, role: str = "staff") -> str:
     if not terkonfigurasi():
         return "GajiHub belum terkonfigurasi (GAJIHUB_API_KEY belum ada di server)."
@@ -114,6 +229,8 @@ def jalankan(nama_tool: str, args: dict, role: str = "staff") -> str:
             return rekap_gaji()
         if nama_tool == "cuti_gajihub":
             return cuti(a.get("nama", ""))
+        if nama_tool == "pengajuan_gajihub":
+            return daftar_pengajuan(hanya_menunggu=not bool(a.get("semua")))
     except urllib.error.HTTPError as e:  # noqa: BLE001
         log.warning("GajiHub HTTP %s pada %s", e.code, nama_tool)
         return f"GajiHub menolak permintaan (HTTP {e.code})."
