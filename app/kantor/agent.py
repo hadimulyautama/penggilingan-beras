@@ -19,6 +19,7 @@ from app.ai.base import _date_context
 from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
+from app.kantor import ocr
 from app.kantor import pengetahuan
 from app.kantor import surel
 from app.kantor.dokumen import konsistensi
@@ -193,6 +194,22 @@ _TOOLS = [
             "type": "object",
             "properties": {
                 "nama": {"type": "string", "description": "Nama file (persis lebih baik) yang dibaca."}
+            },
+            "required": ["nama"],
+        },
+    },
+    {
+        "name": "baca_gambar",
+        "description": (
+            "Baca teks dari FILE GAMBAR (.jpg/.png) atau PDF hasil SCAN via OCR "
+            "(pengenalan teks dari gambar). Pakai bila baca_dokumen mengembalikan "
+            "kosong / 'kemungkinan gambar/scan', atau saat file jelas berupa foto/"
+            "scan (mis. KTP, BPJS, surat berstempel yang di-scan). Read-only."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nama": {"type": "string", "description": "Nama file gambar/scan (persis lebih baik)."},
             },
             "required": ["nama"],
         },
@@ -625,6 +642,9 @@ def _system_stabil(*, role: str) -> str:
         "lalu baca_sheet(nama_sheet, tab[, rentang]) untuk membaca tab tertentu penuh. "
         "Bila data yang dicari tak ada di tab pertama, CEK tab lain dulu sebelum bilang "
         "tak ada.\n"
+        "Untuk FILE GAMBAR (.jpg/.png) atau PDF hasil SCAN (mis. KTP, BPJS, surat "
+        "berstempel): baca_dokumen tak bisa — pakai baca_gambar (OCR). Bila baca_dokumen "
+        "balik kosong/'gambar/scan', coba baca_gambar.\n"
         "Untuk AUDIT menyeluruh (mis. 'cek draft nyasar di seluruh subfolder'), pakai "
         "audit_draft_nyasar (sekali panggil, memindai seluruh Drive) — JANGAN membuka "
         "folder satu per satu untuk itu.\n"
@@ -801,6 +821,8 @@ async def run_kantor_agent(
         for tu in tool_uses:
             if tu.name in pengetahuan.NAMA_TOOL:
                 out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
+            elif tu.name in ocr.NAMA_TOOL:
+                out = await ocr.jalankan(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_TULIS:
                 out = await surel.jalankan_tulis(tu.name, tu.input or {})
             elif tu.name in surel.NAMA_BACA:

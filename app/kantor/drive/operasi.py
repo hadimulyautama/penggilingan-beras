@@ -129,7 +129,8 @@ def baca_dokumen(nama: str) -> str:
     except Exception as e:  # noqa: BLE001
         return f"Gagal baca isi: {e}"
     if not teks.strip():
-        return f"(Isi '{f.nama}' tak bisa diekstrak — kemungkinan gambar/scan.)"
+        return (f"(Isi '{f.nama}' tak bisa diekstrak sebagai teks — kemungkinan "
+                f"gambar/scan. Coba baca_gambar('{f.nama}') untuk OCR.)")
     return f"📄 {f.nama}:\n{teks}"
 
 
