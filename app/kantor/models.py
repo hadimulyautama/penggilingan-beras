@@ -245,3 +245,34 @@ class KartuPemeliharaan(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class AturanEmail(Base):
+    """Aturan pemilahan email yang DIAJARKAN pemilik — dicek DETERMINISTIK sebelum
+    klasifikasi model. Mis. 'email dari notaris@x.com selalu penting'. Membuat agen
+    'belajar dari koreksi': sekali diajari, selamanya konsisten."""
+
+    __tablename__ = "kantor_aturan_email"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # pencocokan: 'from' (substring alamat pengirim) | 'domain' | 'subjek'
+    jenis: Mapped[str] = mapped_column(String(12), default="from")
+    cocok: Mapped[str] = mapped_column(String(255), nullable=False)  # nilai (lowercase)
+    # 'rutin' (arsip diam) | 'penting' (lapor, jangan arsip)
+    verdikt: Mapped[str] = mapped_column(String(12), nullable=False)
+    catatan: Mapped[str | None] = mapped_column(String(255))  # instruksi asli pemilik
+    status: Mapped[str] = mapped_column(String(12), default="aktif")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Heartbeat(Base):
+    """Denyut hidup bot (SATU baris, id=1) — dipakai deteksi downtime saat startup."""
+
+    __tablename__ = "kantor_heartbeat"
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # selalu 1
+    last_alive: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

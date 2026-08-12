@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from io import BytesIO
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -26,6 +27,7 @@ from app.bots.common import (
 from app.database import SessionLocal
 from app.kantor import riwayat as riwayat_mod
 from app.kantor.agent import run_kantor_agent
+from app.kantor.triage import triage
 from app.kantor.dokumen import penomoran
 from app.kantor.dokumen import surat as surat_mod
 
@@ -164,15 +166,35 @@ async def _jalankan_aksi(aksi: dict, *, pembuat: str) -> str:
     return "Aksi tidak dikenal."
 
 
+async def _teks_dari_suara(message: Message) -> str | None:
+    """Unduh voice note → transkrip via Gemini. None (sudah dibalas) bila gagal."""
+    from app.kantor import suara
+    if not suara.terkonfigurasi():
+        await message.answer(
+            "🎤 Fitur suara belum aktif di server (GROQ_API_KEY belum diset). "
+            "Ketik saja dulu ya.")
+        return None
+    voice = message.voice or message.audio
+    await message.answer("🎤 Sebentar, aku dengarkan…")
+    try:
+        buf = BytesIO()
+        await message.bot.download(voice, destination=buf)
+        teks = (await suara.transkrip(
+            buf.getvalue(), getattr(voice, "mime_type", None) or "audio/ogg")).strip()
+    except Exception:  # noqa: BLE001
+        log.exception("transkrip voice gagal")
+        await message.answer("Maaf, gagal memproses suara. Coba lagi atau ketik ya.")
+        return None
+    if not teks:
+        await message.answer("Maaf, suaranya kurang jelas. Coba ulangi ya. 🎤")
+        return None
+    await message.answer(f'🎤 Kudengar: "{teks}"')
+    return teks
+
+
 @router.message()
 async def handle_message(message: Message) -> None:
-    if not message.text:
-        await message.answer("Kirim pesan teks ya.")
-        return
-
     tg_id = message.from_user.id
-    text = message.text.strip()
-    lower = text.lower()
 
     async with SessionLocal() as db:
         user = await authenticate(db, tg_id)
@@ -186,6 +208,18 @@ async def handle_message(message: Message) -> None:
             parse_mode="Markdown",
         )
         return
+
+    # Teks dari pesan ketik ATAU transkrip voice note.
+    if message.text:
+        text = message.text.strip()
+    elif message.voice or message.audio:
+        text = await _teks_dari_suara(message)
+        if not text:
+            return  # sudah dibalas di helper
+    else:
+        await message.answer("Kirim pesan teks atau voice note ya. 🎤")
+        return
+    lower = text.lower()
 
     session = get_session(message.bot.id, tg_id)
 
@@ -214,6 +248,16 @@ async def handle_message(message: Message) -> None:
 
     # Ingatan percakapan: muat konteks lalu, jalankan agen, simpan giliran.
     hist = await riwayat_mod.muat(tg_id)
+
+    # ── Lapis TRIAGE murah (Haiku): pesan sepele dijawab langsung, hemat Sonnet.
+    #    Konservatif — ragu/butuh data/tool → eskalasi ke agen di bawah.
+    ditangani, balasan_triage = await triage(text, nama_user=user.nama, riwayat=hist)
+    if ditangani:
+        await riwayat_mod.simpan(tg_id, "user", text)
+        await riwayat_mod.simpan(tg_id, "assistant", balasan_triage)
+        await message.answer(balasan_triage)
+        return
+
     try:
         reply = await run_kantor_agent(
             text=text, role=user.role, nama_user=user.nama, riwayat=hist

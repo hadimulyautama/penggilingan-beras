@@ -26,7 +26,13 @@ log = logging.getLogger("persetujuan.poller")
 _INTERVAL = 15  # detik
 
 
-def _keyboard(aksi_id: int) -> InlineKeyboardMarkup:
+def _keyboard(aksi_id: int, jenis: str = "") -> InlineKeyboardMarkup:
+    if jenis == "email_arsip":
+        # 'Tidak penting' = arsipkan (ok); 'Penting' = biarkan di inbox (no)
+        return InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🗑️ Tidak penting", callback_data=f"kaksi:ok:{aksi_id}"),
+            InlineKeyboardButton(text="📌 Penting", callback_data=f"kaksi:no:{aksi_id}"),
+        ]])
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Setujui", callback_data=f"kaksi:ok:{aksi_id}"),
         InlineKeyboardButton(text="❌ Tolak", callback_data=f"kaksi:no:{aksi_id}"),
@@ -58,16 +64,24 @@ async def run_persetujuan_poller(bots: dict[str, Bot]) -> None:
                     # TEKS POLOS (bukan Markdown): ringkasan berisi nama file dengan
                     # karakter khusus (_TRANSIT, [DRAFT], *) yang merusak parser Markdown
                     # → tombol gagal terkirim. Polos = aman untuk nama file apa pun.
-                    teks = (
-                        f"🔴 Persetujuan aksi arsip (#{row.id})\n\n"
-                        f"{row.ringkasan.replace('*', '')}\n\n"
-                        "Aksi ini MENGUBAH Google Drive. Setujui hanya bila Anda yakin — "
-                        "semua reversible & tercatat di audit."
-                    )
+                    if row.jenis == "email_arsip":
+                        teks = (
+                            f"🤔 Email ini penting atau tidak? (#{row.id})\n\n"
+                            f"{row.ringkasan.replace('*', '')}\n\n"
+                            "Tidak penting → kuarsipkan (keluar inbox, tetap tersimpan & "
+                            "bisa dicari). Penting → kubiarkan di inbox."
+                        )
+                    else:
+                        teks = (
+                            f"🔴 Perlu persetujuan (#{row.id})\n\n"
+                            f"{row.ringkasan.replace('*', '')}\n\n"
+                            "Aksi ini baru dijalankan SETELAH Anda setujui — semua tercatat "
+                            "di audit. Setujui hanya bila Anda yakin."
+                        )
                     try:
                         await bot.send_message(
                             settings.admin_telegram_id, teks,
-                            reply_markup=_keyboard(row.id),
+                            reply_markup=_keyboard(row.id, row.jenis),
                         )
                         row.status = pst.MENUNGGU  # cegah kirim ulang
                     except Exception:

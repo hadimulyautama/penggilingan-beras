@@ -50,6 +50,7 @@ _AUDIT_AKSI = {
     "email_kirim": "kirim_email",
     "gajihub_setujui": "setujui_pengajuan_hr",
     "gajihub_tolak": "tolak_pengajuan_hr",
+    "email_arsip": "arsip_email",
 }
 
 _MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -139,9 +140,13 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         c.kalender_hapus(p["event_id"], cal_id=p.get("cal_id", "primary"))
         return f"Acara '{p.get('ringkasan_acara', p['event_id'])}' dihapus dari kalender."
     if jenis == "email_kirim":
-        from app.kantor import surel
-        surel.kirim(p["ke"], p["subjek"], p["isi"])
-        return f"Email terkirim ke {p['ke']} — subjek: {p['subjek']}."
+        mb = p.get("mailbox")
+        if mb:  # backend Gmail (multi-mailbox)
+            from app.kantor import mail_gmail
+            return mail_gmail.kirim(mb, p.get("ke", ""), p.get("subjek", ""),
+                                    p.get("isi", ""), p.get("balas_ke_id", ""))
+        raise ValueError("email_kirim tanpa 'mailbox' — backend Zoho lama sudah dihapus; "
+                         "kirim email harus lewat Gmail (mail_gmail).")
     if jenis == "gajihub_setujui":
         from app.kantor import gajihub
         gajihub.setujui_presensi(p["ids"])
@@ -150,6 +155,10 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         from app.kantor import gajihub
         gajihub.tolak_presensi(p["ids"])
         return f"Pengajuan ({p.get('ringkasan_item', '')}) DITOLAK di GajiHub."
+    if jenis == "email_arsip":
+        from app.kantor import mail_gmail
+        mail_gmail.arsipkan(p["mailbox"], p["id"])
+        return f"Email diarsipkan ({p.get('ringkasan_item', '')}) — keluar inbox, tetap tersimpan."
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 
@@ -206,4 +215,4 @@ async def tolak_pending(aksi_id: int, *, diputus_oleh: int | None = None) -> tup
         row.diputus_oleh = diputus_oleh
         row.diputus_at = datetime.now(timezone.utc)
         await db.commit()
-        return True, "Ditolak. Tidak ada perubahan pada Drive."
+        return True, "Baik, tidak jadi — tidak ada perubahan."

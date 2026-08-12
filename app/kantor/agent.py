@@ -19,10 +19,11 @@ from app.ai.base import _date_context
 from app.ai.claude_client import get_client
 from app.config import settings
 from app.kantor import arsip_fisik
+from app.kantor import aturan
 from app.kantor import gajihub
+from app.kantor import mail_gmail
 from app.kantor import ocr
 from app.kantor import pengetahuan
-from app.kantor import surel
 from app.kantor.dokumen import konsistensi
 from app.kantor.drive import aksi as drive_aksi
 from app.kantor.drive import operasi as drive_ops
@@ -525,60 +526,171 @@ _TOOLS = [
     {
         "name": "baca_email",
         "description": (
-            "Lihat email TERBARU di INBOX (read-only). Hasil menyertakan [uid] tiap "
-            "email — pakai uid untuk baca_email_isi. Pakai untuk 'ada email apa', 'cek "
-            "inbox'."
+            "Lihat email TERBARU di sebuah mailbox (read-only, ADMIN). Kelola 3 mailbox: "
+            "finance@, admin@, wahidnurhani@. Hasil menyertakan [id] tiap email — pakai "
+            "untuk baca_email_isi/draft/arsip. 🔵 = belum dibaca. Bisa 'kueri' gaya "
+            "pencarian Gmail (mis. 'is:unread', 'from:bank')."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "maks": {"type": "integer", "description": "Jumlah email terbaru (default 10)."},
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani (atau alamat lengkapnya). WAJIB sebutkan yang mana."},
+                "kueri": {"type": "string", "description": "Opsional: filter gaya Gmail (mis. 'is:unread', 'from:xxx', 'subject:invoice'). Default inbox."},
+                "maks": {"type": "integer", "description": "Jumlah email (default 12)."},
             },
+            "required": ["mailbox"],
         },
     },
     {
         "name": "cari_email",
         "description": (
-            "Cari email di INBOX yang pengirim (FROM) atau subjek mengandung kata "
-            "tertentu (read-only). Hasil menyertakan [uid]."
+            "Cari email di sebuah mailbox (read-only, ADMIN). Memakai pencarian Gmail "
+            "penuh (pengirim, subjek, isi). Hasil menyertakan [id]."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "kata": {"type": "string", "description": "Kata pada pengirim/subjek yang dicari."},
-                "maks": {"type": "integer", "description": "Batas hasil (default 10)."},
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani."},
+                "kata": {"type": "string", "description": "Kata/kueri pencarian (Gmail search)."},
+                "maks": {"type": "integer", "description": "Batas hasil (default 12)."},
             },
-            "required": ["kata"],
+            "required": ["mailbox", "kata"],
         },
     },
     {
         "name": "baca_email_isi",
         "description": (
-            "Baca ISI teks satu email (read-only). Pakai uid dari baca_email/cari_email."
+            "Baca ISI lengkap satu email (read-only, ADMIN). Pakai id dari "
+            "baca_email/cari_email + mailbox-nya."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "uid": {"type": "string", "description": "uid email (dari [uid] di baca_email/cari_email)."},
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani."},
+                "uid": {"type": "string", "description": "id email (dari [id] di baca_email/cari_email)."},
             },
-            "required": ["uid"],
+            "required": ["mailbox", "uid"],
+        },
+    },
+    {
+        "name": "draft_email",
+        "description": (
+            "Buat DRAF balasan/email baru di mailbox (ADMIN). Tersimpan sebagai draft "
+            "Gmail untuk direview pemilik — TIDAK mengirim. Untuk membalas, isi "
+            "'balas_ke_id' (id email asal); ke/subjek terisi otomatis dari email itu."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox pengirim: finance / admin / wahidnurhani."},
+                "ke": {"type": "string", "description": "Penerima (opsional bila balas_ke_id diisi)."},
+                "subjek": {"type": "string", "description": "Subjek (opsional bila balas)."},
+                "isi": {"type": "string", "description": "Isi/badan email."},
+                "balas_ke_id": {"type": "string", "description": "id email yang dibalas (opsional)."},
+            },
+            "required": ["mailbox", "isi"],
         },
     },
     {
         "name": "kirim_email",
         "description": (
-            "USULKAN mengirim email. AKSI KONSEKUENSIAL → diajukan ke pemilik lewat "
-            "tombol; JANGAN mengaku sudah terkirim. Susun isi yang rapi & sopan. Bila "
-            "penerima/maksud belum jelas, TANYAKAN dulu."
+            "USULKAN mengirim email dari salah satu mailbox. AKSI KONSEKUENSIAL → "
+            "diajukan ke pemilik lewat tombol; JANGAN mengaku sudah terkirim. Susun isi "
+            "rapi & sopan. Bila penerima/maksud belum jelas, TANYAKAN dulu. Untuk balasan, "
+            "boleh isi balas_ke_id."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox pengirim: finance / admin / wahidnurhani. WAJIB."},
                 "ke": {"type": "string", "description": "Alamat email penerima."},
                 "subjek": {"type": "string", "description": "Subjek email."},
                 "isi": {"type": "string", "description": "Isi/badan email (teks)."},
+                "balas_ke_id": {"type": "string", "description": "Opsional: id email yang dibalas (subjek/penerima ikut otomatis)."},
             },
-            "required": ["ke", "subjek", "isi"],
+            "required": ["mailbox", "isi"],
+        },
+    },
+    {
+        "name": "atur_email",
+        "description": (
+            "SIMPAN aturan pemilahan email yang diajarkan pemilik (belajar dari koreksi, "
+            "permanen & deterministik). Pakai saat pemilik bilang mis. 'email dari X "
+            "selalu penting', 'laporan Y arsip saja', 'jangan arsip dari Z'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cocok": {"type": "string", "description": "Nilai yang dicocokkan: alamat/nama pengirim, domain, atau kata pada subjek."},
+                "jenis": {"type": "string", "enum": ["from", "domain", "subjek"], "description": "Cocokkan berdasar pengirim (from), domain, atau kata subjek."},
+                "verdikt": {"type": "string", "enum": ["rutin", "penting"], "description": "rutin = arsip otomatis (diam); penting = selalu dilaporkan, tak diarsip."},
+                "catatan": {"type": "string", "description": "Opsional: instruksi asli pemilik."},
+            },
+            "required": ["cocok", "verdikt"],
+        },
+    },
+    {
+        "name": "lihat_aturan_email",
+        "description": "Tampilkan daftar aturan pemilahan email yang sudah diajarkan.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "batalkan_arsip_email",
+        "description": (
+            "UNDO: kembalikan email yang baru diarsip OTOMATIS ke Inbox (3 hari terakhir). "
+            "Pakai saat pemilik bilang 'kembalikan email yang tadi diarsip'. ADMIN."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox: finance/admin/wahidnurhani@hadimulya.com/pribadi/alamat lengkap."},
+                "n": {"type": "integer", "description": "Berapa email terakhir dikembalikan (default 5)."},
+            },
+            "required": ["mailbox"],
+        },
+    },
+    {
+        "name": "arsip_email",
+        "description": (
+            "Arsipkan email (keluarkan dari Inbox; tetap ada & bisa dicari). Reversibel. "
+            "ADMIN. Pakai id + mailbox."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani."},
+                "uid": {"type": "string", "description": "id email."},
+            },
+            "required": ["mailbox", "uid"],
+        },
+    },
+    {
+        "name": "tandai_dibaca_email",
+        "description": "Tandai email sudah/belum dibaca (ADMIN). Reversibel. Pakai id + mailbox.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani."},
+                "uid": {"type": "string", "description": "id email."},
+                "dibaca": {"type": "boolean", "description": "true = tandai dibaca (default); false = tandai belum dibaca."},
+            },
+            "required": ["mailbox", "uid"],
+        },
+    },
+    {
+        "name": "label_email",
+        "description": (
+            "Tempel label ke email untuk merapikan (ADMIN). Label dibuat otomatis bila "
+            "belum ada. Reversibel. Pakai id + mailbox + nama label."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mailbox": {"type": "string", "description": "Mailbox: finance / admin / wahidnurhani."},
+                "uid": {"type": "string", "description": "id email."},
+                "label": {"type": "string", "description": "Nama label (mis. 'Bank', 'Perlu Tindak Lanjut')."},
+            },
+            "required": ["mailbox", "uid", "label"],
         },
     },
     {
@@ -737,9 +849,30 @@ def _system_stabil(*, role: str) -> str:
         "jadwal; hasilnya menyertakan [id] acara), lalu MENGUSULKAN buat_acara / "
         "ubah_acara / hapus_acara (konsekuensial, lewat tombol pemilik). Untuk ubah/hapus, "
         "ambil event_id dari lihat_agenda dulu. Waktu zona Asia/Jakarta.\n"
-        "Kamu juga mengelola EMAIL: baca_email (inbox terbaru), cari_email, baca_email_isi "
-        "(pakai [uid] dari hasil baca/cari), dan MENGUSULKAN kirim_email (konsekuensial → "
-        "tombol pemilik; jangan mengaku sudah terkirim).\n"
+        "Kamu PUNYA AKSES PENUH ke 5 mailbox berikut (via kredensial resmi yang sudah "
+        "terpasang) — JANGAN PERNAH menolak dengan alasan 'tidak punya akses'/'hanya "
+        "email kantor'; langsung panggil tool baca_email/cari_email dengan mailbox yang "
+        "diminta.\n"
+        "Kamu MENGELOLA 5 MAILBOX (khusus admin):\n"
+        "  KANTOR (Workspace): finance@hadimulya.com, admin@hadimulya.com, "
+        "wahidnurhani@hadimulya.com.\n"
+        "  PRIBADI (Gmail): wahidnurhani20@gmail.com (alias 'pribadi'), "
+        "wahidnurhani@gmail.com.\n"
+        "PENTING soal mailbox: 'email pribadi' = akun GMAIL pribadi. Kalau pengguna "
+        "bilang 'email pribadi' tanpa menyebut spesifik, cek KEDUA gmail pribadi "
+        "(wahidnurhani20@gmail.com DAN wahidnurhani@gmail.com) — JANGAN wahidnurhani@"
+        "hadimulya.com. 'wahidnurhani@' saja / 'email kantor saya' = wahidnurhani@"
+        "hadimulya.com. SELALU pakai ALAMAT LENGKAP di argumen mailbox untuk akun "
+        "'wahidnurhani' (jangan nama pendek, ambigu). JANGAN pernah mengarsipkan/"
+        "menyentuh email OTP, kode login, atau keamanan akun — selalu penting. "
+        "Baca/triage: "
+        "baca_email (inbox/terbaru; 'kueri' gaya Gmail spt 'is:unread'), cari_email, "
+        "baca_email_isi (pakai [id]). Merapikan (langsung, reversibel): arsip_email, "
+        "tandai_dibaca_email, label_email. Draf (aman, tak mengirim): draft_email — "
+        "tersimpan di Draft Gmail untuk direview; untuk membalas isi balas_ke_id. "
+        "MENGIRIM: MENGUSULKAN kirim_email (konsekuensial → tombol pemilik; JANGAN "
+        "mengaku sudah terkirim). TIDAK ADA hapus permanen email. Kalau staff (bukan "
+        "admin) menyentuh email, tolak halus — isi mailbox itu sensitif.\n"
         "Kamu terhubung ke GajiHub (HR/payroll resmi, read-only): karyawan_gajihub "
         "(daftar karyawan aktif), payroll_gajihub (periode slip gaji), cuti_gajihub. "
         "Angka gaji BERSUMBER dari GajiHub — rangkum saja, jangan hitung ulang. Data ini "
@@ -752,6 +885,12 @@ def _system_stabil(*, role: str) -> str:
         "Kamu punya OTAK PERUSAHAAN (ingatan PERMANEN — beda dari riwayat chat yang "
         "cuma 8 giliran terakhir): cari_pengetahuan (cari SOP/keputusan/fakta tersimpan "
         "— pakai LEBIH DULU untuk pertanyaan aturan/data internal) & simpan_pengetahuan.\n"
+        "BELAJAR DARI KOREKSI (LINTAS PERAN — HR, Arsip, Finance, Aset, email, dll): "
+        "setiap kali pemilik MENGOREKSI kamu atau menyatakan preferensi/kebijakan tetap, "
+        "SIMPAN agar konsisten selamanya. Koreksi soal PEMILAHAN EMAIL (mis. 'dari X "
+        "selalu penting', 'laporan Y arsip saja') → pakai tool atur_email. Koreksi/"
+        "kebijakan/preferensi peran LAIN → simpan_pengetahuan. Untuk membatalkan email "
+        "yang salah diarsip otomatis → batalkan_arsip_email.\n"
         "PROAKTIF menyimpan: begitu di obrolan muncul FAKTA DURABLE yang berguna dipakai "
         "lagi — keputusan rapat, kebijakan/aturan baru, PIC/kontak pemasok & klien, "
         "angka/target penting, struktur & jabatan, preferensi tetap pemilik — LANGSUNG "
@@ -920,10 +1059,14 @@ async def run_kantor_agent(
                 out = await asyncio.to_thread(gajihub.jalankan, tu.name, tu.input or {}, role)
             elif tu.name in gajihub.NAMA_USUL:
                 out = await gajihub.jalankan_usul(tu.name, tu.input or {}, role)
-            elif tu.name in surel.NAMA_TULIS:
-                out = await surel.jalankan_tulis(tu.name, tu.input or {})
-            elif tu.name in surel.NAMA_BACA:
-                out = await asyncio.to_thread(surel.jalankan_baca, tu.name, tu.input or {})
+            elif mail_gmail.terkonfigurasi() and tu.name in mail_gmail.NAMA_USUL:
+                # KIRIM email (Gmail) → gerbang tombol pemilik
+                out = await mail_gmail.usul_kirim(tu.input or {}, role)
+            elif tu.name in aturan.NAMA_TOOL:
+                out = await aturan.jalankan(tu.name, tu.input or {}, role)
+            elif mail_gmail.terkonfigurasi() and tu.name in mail_gmail.NAMA_TOOL:
+                # baca/cari/isi/draft/arsip/tandai/label/undo (Gmail, admin-only)
+                out = await asyncio.to_thread(mail_gmail.jalankan, tu.name, tu.input or {}, role)
             elif tu.name in drive_aksi.NAMA_TOOL:
                 # Aksi tulis (pindah/rename/hapus file/folder) → ajukan ke gerbang
                 # tombol pemilik; kembalikan status "diajukan" ke agen untuk diteruskan.
