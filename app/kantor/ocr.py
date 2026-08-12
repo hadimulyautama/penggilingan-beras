@@ -13,7 +13,7 @@ import asyncio
 import base64
 import logging
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 from app.kantor.drive import operasi as O
 
@@ -50,8 +50,8 @@ async def ocr_bytes(data: bytes, mime: str, nama: str = "") -> str:
     else:
         return ""
     try:
-        client = get_client()
-        r = await client.messages.create(
+        r = await guard.panggil(
+            pemanggil="ocr",
             model=settings.agent_model, max_tokens=8000,
             messages=[{"role": "user", "content": [blok, {"type": "text", "text": _PROMPT}]}],
         )

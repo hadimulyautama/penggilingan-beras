@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.ai.base import _date_context
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 from app.database import SessionLocal
 
@@ -271,13 +271,13 @@ async def run_agent(*, text: str, role: str, financial: bool, allow_write: bool)
     - `financial`: boleh melihat & menyebut data uang (staff/admin).
     - `allow_write`: boleh mengusulkan perintah tulis (butuh konfirmasi bot).
     """
-    client = get_client()
     tools = _tools_for(financial=financial, allow_write=allow_write)
     system = _system_prompt(role=role, financial=financial, allow_write=allow_write)
     messages: list[dict] = [{"role": "user", "content": text}]
 
     for _ in range(settings.agent_max_iterations):
-        resp = await client.messages.create(
+        resp = await guard.panggil(
+            pemanggil="agent_pabrik",
             model=settings.agent_model,
             max_tokens=1500,
             system=system,

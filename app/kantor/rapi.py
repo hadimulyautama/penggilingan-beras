@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 from app.kantor import mail_gmail, persetujuan as pst
 
@@ -57,9 +57,9 @@ _SYS = (
 
 
 async def _pilah(email: dict) -> dict:
-    client = get_client()
     isi = f"Dari: {email.get('from', '')}\nSubjek: {email.get('subject', '')}\n\n{email.get('snippet', '')}"
-    resp = await client.messages.create(
+    resp = await guard.panggil(
+        pemanggil="rapi",
         model=settings.miniapp_model,  # Haiku (murah)
         max_tokens=150,
         system=_SYS,

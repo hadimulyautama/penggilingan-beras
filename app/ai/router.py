@@ -9,7 +9,7 @@ jalur cadangan (chain lama / agent) → tak ada regresi kebenaran.
 """
 from __future__ import annotations
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 
 # Domain yang dikenal. 'lainnya' = bukan perintah (pertanyaan/analitik/bebas) →
@@ -79,8 +79,8 @@ async def route_domain(text: str, *, model: str | None = None) -> str:
     `model` default = settings.agent_model (Sonnet). Klasifikasi ringan seperti
     ini juga cocok untuk model kecil (Haiku) bila latency jadi prioritas.
     """
-    client = get_client()
-    resp = await client.messages.create(
+    resp = await guard.panggil(
+        pemanggil="router",
         model=model or settings.agent_model,
         max_tokens=120,
         tools=[_ROUTE_TOOL],

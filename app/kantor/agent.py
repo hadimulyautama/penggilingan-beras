@@ -16,11 +16,12 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app.ai.base import _date_context
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 from app.kantor import arsip_fisik
 from app.kantor import aturan
 from app.kantor import gajihub
+from app.kantor import kendali
 from app.kantor import mail_gmail
 from app.kantor import ocr
 from app.kantor import pengetahuan
@@ -813,6 +814,7 @@ _TOOLS = [
         },
     },
 ]
+_TOOLS.extend(kendali.TOOLS)
 
 
 def _system_stabil(*, role: str) -> str:
@@ -1010,7 +1012,6 @@ async def run_kantor_agent(
     `riwayat`: giliran percakapan sebelumnya ({"role","content"}) untuk konteks —
     membuat bot 'ingat' obrolan lalu. Sudah dibatasi pemanggil (app/kantor/riwayat.py).
     """
-    client = get_client()
     # Prompt caching: cache tools + system STABIL (prefix identik tiap panggilan &
     # tiap iterasi); blok tanggal (volatile harian) sengaja DI LUAR cache. Memotong
     # biaya kredit pada bagian berulang TANPA menurunkan kualitas.
@@ -1023,7 +1024,8 @@ async def run_kantor_agent(
     messages: list[dict] = [*(riwayat or []), {"role": "user", "content": text}]
 
     for _ in range(settings.agent_max_iterations):
-        resp = await client.messages.create(
+        resp = await guard.panggil(
+            pemanggil="agent_kantor",
             model=settings.agent_model,
             max_tokens=1500,
             system=system,
@@ -1053,6 +1055,8 @@ async def run_kantor_agent(
         for tu in tool_uses:
             if tu.name in pengetahuan.NAMA_TOOL:
                 out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
+            elif tu.name in kendali.NAMA_TOOL:
+                out = await kendali.jalankan(tu.name, tu.input or {}, role)
             elif tu.name in ocr.NAMA_TOOL:
                 out = await ocr.jalankan(tu.name, tu.input or {})
             elif tu.name in gajihub.NAMA_TOOL:

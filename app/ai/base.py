@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import date, time, timedelta
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.ai.tools import SYSTEM_PROMPT
 from app.config import settings
 from app.database import now_local
@@ -63,7 +63,6 @@ def _silo_letter(v) -> str | None:
 
 async def _invoke_tool(messages: list[dict], tool: dict) -> dict:
     """Panggil Claude dengan forced tool-use dan kembalikan input tool (dict)."""
-    client = get_client()
     system = SYSTEM_PROMPT + (
         "\n\nKonteks waktu — tanggal 14 hari terakhir (pakai LOOKUP tabel ini, "
         "jangan menghitung manual):\n" + _date_context() + "\n\n"
@@ -73,7 +72,8 @@ async def _invoke_tool(messages: list[dict], tool: dict) -> dict:
         "tool menyediakannya. '[hari] kemarin'/'[hari] lalu' = baris PALING ATAS "
         "(terbaru) dengan hari itu. Nama bulan: Januari=01 … Juli=07 … Des=12."
     )
-    resp = await client.messages.create(
+    resp = await guard.panggil(
+        pemanggil="base_tanggal",
         model=settings.claude_model,
         max_tokens=1024,
         system=system,

@@ -26,6 +26,8 @@ from app.bots.common import (
 )
 from app.database import SessionLocal
 from app.kantor import riwayat as riwayat_mod
+from app.ai import guard
+from app.kantor import kendali
 from app.kantor.agent import run_kantor_agent
 from app.kantor.triage import triage
 from app.kantor.dokumen import penomoran
@@ -246,6 +248,42 @@ async def handle_message(message: Message) -> None:
         session.stage = "idle"
         session.kantor_pending = None
 
+    # ── Konfirmasi kendali matikan/nyalakan AI (deterministik, TANPA LLM) ──
+    if session.stage == "awaiting_kendali" and session.kantor_pending in {"matikan", "nyalakan"}:
+        mode = session.kantor_pending
+        session.stage = "idle"
+        session.kantor_pending = None
+        if lower in CONFIRM_WORDS:
+            await kendali.set_mati(mode == "matikan")
+            await message.answer(
+                "🛑 Layanan AI dimatikan. Ketik 'nyalakan ai' bila ingin menyalakan lagi."
+                if mode == "matikan"
+                else "🟢 Layanan AI dinyalakan."
+            )
+            return
+        if lower in CANCEL_WORDS:
+            await message.answer("Baik, dibatalkan. 👍")
+            return
+        # Selain ya/batal → batalkan konfirmasi, proses sebagai pesan biasa di bawah.
+
+    # ── Kendali matikan/nyalakan AI — perintah PERSIS agar tak salah tafsir. Hanya
+    #    'matikan ai' / 'nyalakan ai' (huruf besar/kecil bebas), DIREKSI saja, dan
+    #    WAJIB dikonfirmasi. Deterministik → tetap jalan walau AI sedang mati.
+    if lower in {"matikan ai", "nyalakan ai"}:
+        if user.role != "admin":
+            await message.answer("Maaf, hanya Direksi yang boleh matikan/nyalakan layanan AI.")
+            return
+        mode = "matikan" if lower == "matikan ai" else "nyalakan"
+        session.stage = "awaiting_kendali"
+        session.kantor_pending = mode
+        aksi_txt = "MEMATIKAN" if mode == "matikan" else "MENYALAKAN"
+        await message.answer(
+            f"⚠️ Konfirmasi: yakin ingin *{aksi_txt}* layanan AI?\n"
+            f"Balas *ya* untuk lanjut, atau *batal*.",
+            parse_mode="Markdown",
+        )
+        return
+
     # Ingatan percakapan: muat konteks lalu, jalankan agen, simpan giliran.
     hist = await riwayat_mod.muat(tg_id)
 
@@ -262,6 +300,17 @@ async def handle_message(message: Message) -> None:
         reply = await run_kantor_agent(
             text=text, role=user.role, nama_user=user.nama, riwayat=hist
         )
+    except guard.LayananLLMMati:
+        await message.answer(
+            "🛠️ Layanan AI sedang dimatikan sementara untuk pemeliharaan. Coba lagi nanti ya."
+        )
+        return
+    except guard.BatasBiayaLLM:
+        await message.answer(
+            "⚠️ Layanan AI sedang mencapai batas pemakaian, jadi belum bisa memproses "
+            "untuk sementara. Akan pulih setelah batas direset atau dinaikkan."
+        )
+        return
     except Exception:
         log.exception("run_kantor_agent gagal")
         await message.answer("⚠️ Maaf, ada kendala saat memproses. Coba ulangi ya.")

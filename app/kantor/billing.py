@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 from app.kantor import persetujuan as pst
 
@@ -56,10 +56,10 @@ _SYS = (
 
 
 async def _ekstrak(email: dict) -> dict:
-    client = get_client()
     isi = (f"Dari: {email.get('from', '')}\nSubjek: {email.get('subject', '')}\n"
            f"Tanggal email: {email.get('date', '')}\n\n{email.get('body', '')}")
-    resp = await client.messages.create(
+    resp = await guard.panggil(
+        pemanggil="billing",
         model=settings.miniapp_model,  # Haiku (murah)
         max_tokens=300,
         system=_SYS,

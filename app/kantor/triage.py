@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from app.ai.claude_client import get_client
+from app.ai import guard
 from app.config import settings
 
 log = logging.getLogger("kantor.triage")
@@ -62,9 +62,9 @@ async def triage(text: str, *, nama_user: str = "",
     """Kembalikan (ditangani, balasan). ditangani=True → jawab langsung dgn balasan;
     False → panggil agen Sonnet seperti biasa."""
     try:
-        client = get_client()
         pesan = [*(riwayat or [])[-4:], {"role": "user", "content": text}]
-        resp = await client.messages.create(
+        resp = await guard.panggil(
+            pemanggil="triage",
             model=settings.miniapp_model,  # Haiku (murah)
             max_tokens=300,
             system=_SYS.format(nama=nama_user or "pengguna"),

@@ -276,3 +276,97 @@ class Heartbeat(Base):
     last_alive: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class KantorConfig(Base):
+    """Konfigurasi runtime key-value — bisa diubah TANPA deploy (Tahap 0).
+
+    Kunci yang dipakai pengaman biaya:
+      - 'kill_switch'          : 'on'/'off' → matikan semua panggilan LLM sementara.
+      - 'spend_cap_usd_bulan'  : angka (mis. '50') → hentikan LLM bila spend bulan
+                                 berjalan ≥ nilai ini. '0'/kosong = tanpa batas.
+    """
+
+    __tablename__ = "kantor_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kunci: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
+    nilai: Mapped[str | None] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class KantorLLMUsage(Base):
+    """Jejak pemakaian LLM per panggilan → dasar spend-cap & pantauan biaya.
+
+    Dicatat best-effort oleh app.ai.guard; kegagalan pencatatan tak boleh
+    menghambat panggilan utama.
+    """
+
+    __tablename__ = "kantor_llm_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model: Mapped[str] = mapped_column(String(60), nullable=False)
+    pemanggil: Mapped[str] = mapped_column(String(60), default="?")  # label call-site/agen
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    est_biaya_usd: Mapped[float] = mapped_column(Numeric(12, 6), default=0)
+    status: Mapped[str] = mapped_column(String(12), default="ok")  # ok / error / blocked
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True, nullable=False
+    )
+
+
+# ─────────────────────────── RBAC (Tahap 1) ────────────────────────────
+class KantorRole(Base):
+    """Katalog role RBAC — data-driven & extensible. Tambah role = tambah baris,
+    tanpa ubah kode. Mis. 'direksi', 'hr_manager', 'office_manager', 'legal_officer',
+    'staff_*', 'it_manager'."""
+
+    __tablename__ = "kantor_role"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    nama: Mapped[str] = mapped_column(String(120), nullable=False)
+    keterangan: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(12), default="aktif")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class KantorUserRole(Base):
+    """Penugasan role ke user (many-to-many → multi-hat). `atasan_user_id` = penyetuju
+    aksi berdampak untuk hat ini (rute persetujuan berjenjang). Nonaktifkan baris =
+    cabut akses seketika (deprovisioning)."""
+
+    __tablename__ = "kantor_user_role"
+    __table_args__ = (UniqueConstraint("user_id", "role_kode", name="uq_user_role"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role_kode: Mapped[str] = mapped_column(String(40), nullable=False)
+    atasan_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(12), default="aktif")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class KantorGrant(Base):
+    """Hak sebuah ROLE atas sebuah DOMAIN/sub-scope. Scope-checker = union grant dari
+    semua role aktif yang dipegang user. mode: none < read < write < owner."""
+
+    __tablename__ = "kantor_grant"
+    __table_args__ = (UniqueConstraint("role_kode", "domain", name="uq_role_domain"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_kode: Mapped[str] = mapped_column(String(40), nullable=False)
+    # hr, gaji, keuangan, pembayaran, arsip, legal, sengketa, folder_it,
+    # sekretaris, marketing, penjualan, operasional, email, kalender, knowledge, buat_dokumen
+    domain: Mapped[str] = mapped_column(String(40), nullable=False)
+    mode: Mapped[str] = mapped_column(String(10), default="none")  # none/read/write/owner
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
