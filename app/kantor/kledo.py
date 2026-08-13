@@ -27,7 +27,10 @@ log = logging.getLogger(__name__)
 _BASE = os.getenv("KLEDO_BASE", "https://pthadimulyautama.api.kledo.com/api/v1")
 
 # tool BACA (read-only). Belum ada tool tulis (tahap awal).
-NAMA_TOOL = ("tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo")
+NAMA_TOOL = ("tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo",
+             "labarugi_kledo", "aruskas_kledo", "umur_hutang_kledo", "umur_piutang_kledo",
+             "saldo_bank_kledo", "penjualan_kledo", "hutang_kontak_kledo",
+             "piutang_kontak_kledo")
 
 
 def terkonfigurasi() -> bool:
@@ -206,6 +209,223 @@ async def _neraca() -> str:
             f"• Total Modal  : {_rp(modal)}  (ekuitas)")
 
 
+# ── util laporan (report) ────────────────────────────────────────────────
+def _num(v) -> float:
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _periode(a: dict) -> tuple[str, str]:
+    """(date_from, date_to). Default: bulan berjalan (tgl 1 → hari ini)."""
+    from datetime import date
+    t = date.today()
+    dari = (a.get("dari") or t.replace(day=1).isoformat())
+    sampai = (a.get("sampai") or t.isoformat())
+    return dari, sampai
+
+
+async def _json(path: str, params: dict | None, judul: str):
+    """Ambil JSON Kledo → (data|None, err_str|None). Error jadi teks siap-tampil."""
+    try:
+        return await asyncio.to_thread(_get, path, params), None
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return None, "Kledo menolak (401) — cek KLEDO_API_KEY punya scope finance."
+        return None, f"Kledo error {e.code} saat {judul}."
+    except Exception as e:  # noqa: BLE001
+        log.warning("kledo %s gagal: %s", path, e)
+        return None, f"Gagal ambil {judul} dari Kledo."
+
+
+async def _labarugi(a: dict) -> str:
+    """Laba-Rugi (profitLoss). Angka RESMI dari objek `total` Kledo (tak dihitung ulang).
+    Bucket `total`: trading_income, cost_of_sales, gross_profit, expenses, net_profit."""
+    dari, sampai = _periode(a)
+    d, err = await _json("/reportings/profitLoss",
+                         {"date_from": dari, "date_to": sampai}, "laba-rugi")
+    if err:
+        return err
+    tot = (((d or {}).get("data") or {}).get("total")) or {}
+    if not tot:
+        return f"Tak ada data laba-rugi di Kledo untuk {dari} → {sampai}."
+    pend = _num(tot.get("trading_income"))
+    hpp = _num(tot.get("cost_of_sales"))
+    kotor = _num(tot.get("gross_profit"))
+    beban = _num(tot.get("expenses"))
+    bersih = _num(tot.get("net_profit"))
+    tag = "laba" if bersih >= 0 else "RUGI"
+    return (f"📈 Laba-Rugi Kledo ({dari} → {sampai}):\n"
+            f"• Pendapatan  : {_rp(pend)}\n"
+            f"• Beban Pokok : {_rp(hpp)}  (HPP)\n"
+            f"• Laba Kotor  : {_rp(kotor)}\n"
+            f"• Beban Usaha : {_rp(beban)}\n"
+            f"• Laba Bersih : {_rp(bersih)}  ({tag})")
+
+
+async def _aruskas(a: dict) -> str:
+    """Arus Kas (cashFlow): kas masuk/keluar/bersih + saldo awal→akhir + per aktivitas."""
+    dari, sampai = _periode(a)
+    d, err = await _json("/reportings/cashFlow",
+                         {"date_from": dari, "date_to": sampai}, "arus kas")
+    if err:
+        return err
+    data = (d or {}).get("data") or {}
+    groups = data.get("data") or []
+    tot = data.get("total") or {}
+    masuk = keluar = 0.0
+    baris = []
+    for g in groups:
+        for sub in (g.get("data") or []):
+            v = _num(sub.get("total"))
+            if v >= 0:
+                masuk += v
+            else:
+                keluar += v
+        baris.append(f"• {g.get('name', '-')}: {_rp(_num(g.get('total')))}")
+    bersih = _num(tot.get("net_cash_flows"))
+    awal = _num(tot.get("beginning_period"))
+    akhir = _num(tot.get("end_period"))
+    return (f"💵 Arus Kas Kledo ({dari} → {sampai}):\n"
+            f"• Kas masuk   : {_rp(masuk)}\n"
+            f"• Kas keluar  : {_rp(keluar)}\n"
+            f"• Arus bersih : {_rp(bersih)}\n"
+            f"• Saldo awal  : {_rp(awal)} → akhir {_rp(akhir)}\n"
+            "Per aktivitas:\n" + "\n".join(baris))
+
+
+async def _umur(path: str, judul: str, pihak: str) -> str:
+    """Umur hutang/piutang (agedPayable/agedReceivable).
+
+    Bentuk `due` per kontak: {'-2': belum jatuh tempo, '-1': TOTAL telat (=Σ 0..4),
+    '0'..'4': umur telat per bulan}. Jadi total = due['-2'] + due['-1'] (jangan
+    jumlahkan '-1' bersama 0..4 — nanti dobel)."""
+    from datetime import date
+    hari = date.today().isoformat()
+    d, err = await _json(path, {"date": hari, "per_page": 200}, judul.lower())
+    if err:
+        return err
+    items = _items(d)
+    if not items:
+        return f"✅ Tidak ada {judul.lower()} di Kledo per {hari}."
+    belum = sum(_num((i.get("due") or {}).get("-2")) for i in items)
+    telat = sum(_num((i.get("due") or {}).get("-1")) for i in items)
+    top = sorted((i for i in items if _num((i.get("due") or {}).get("-1")) > 0),
+                 key=lambda i: _num(i["due"].get("-1")), reverse=True)[:5]
+    baris = [f"• {i.get('name', '-')} · telat {_rp(_num(i['due'].get('-1')))}"
+             for i in top]
+    body = (f"\n{pihak} telat teratas:\n" + "\n".join(baris)) if baris \
+        else "\n(Tidak ada yang telat — semua belum jatuh tempo.)"
+    return (f"📅 {judul} Kledo per {hari}:\n"
+            f"• Belum jatuh tempo : {_rp(belum)}\n"
+            f"• Sudah jatuh tempo : {_rp(telat)}  (telat)\n"
+            f"• Total             : {_rp(belum + telat)}"
+            + body)
+
+
+async def _saldo_bank() -> str:
+    """Saldo kas & bank per rekening (/finance/bank/balances)."""
+    d, err = await _json("/finance/bank/balances", None, "saldo bank")
+    if err:
+        return err
+    items = _items(d)
+    if not items:
+        return "Tak ada data rekening kas/bank di Kledo."
+    items = sorted(items, key=lambda i: _num(i.get("balance")), reverse=True)
+    total = sum(_num(i.get("balance")) for i in items)
+    baris = []
+    for i in items:
+        code = i.get("ref_code")
+        tag = f"[{code}] " if code else ""
+        baris.append(f"• {tag}{i.get('name', '-')}: {_rp(_num(i.get('balance')))}")
+    return (f"🏦 Saldo Kas & Bank Kledo ({len(items)} rekening):\n"
+            + "\n".join(baris) + f"\nTotal: *{_rp(total)}*")
+
+
+async def _penjualan(a: dict) -> str:
+    """Penjualan per produk (salesPerProduct): total + top produk. Tanpa data sensitif
+    (harga pokok/margin tak ditampilkan) — cukup nama, qty, nilai."""
+    dari, sampai = _periode(a)
+    d, err = await _json("/reportings/salesPerProduct",
+                         {"date_from": dari, "date_to": sampai}, "penjualan")
+    if err:
+        return err
+    data = (d or {}).get("data") or {}
+    items = data.get("data") or []
+    ts = data.get("total_sales")
+    total = _num(ts.get("amount_after_tax")) if isinstance(ts, dict) else _num(ts)
+    if not items:
+        return f"Tak ada penjualan pada {dari} → {sampai} di Kledo."
+    items = sorted(items, key=lambda i: _num(i.get("amount_after_tax")),
+                   reverse=True)[:10]
+    baris = []
+    for i in items:
+        p = i.get("product_with_price") or {}
+        qty = f"{_num(i.get('qty_net')):,.0f}".replace(",", ".")
+        baris.append(f"• {p.get('name', '-')} · {qty} unit · "
+                     f"{_rp(_num(i.get('amount_after_tax')))}")
+    return (f"🛒 Penjualan per Produk Kledo ({dari} → {sampai}):\n"
+            f"Total penjualan: *{_rp(total)}*\nTop produk:\n" + "\n".join(baris))
+
+
+async def _kontak_saldo(a: dict, jenis: str) -> str:
+    """Hutang/piutang ke satu kontak. Tampilkan DUA angka bila beda: saldo buku besar
+    (finance/contacts payable/receivable) DAN umur (aged) — karakter data Kledo, tak
+    boleh pilih satu (mis. Mas Catur: ledger 300jt vs aged bila ada bagian belum-jt)."""
+    nama = (a.get("nama") or "").strip()
+    if not nama:
+        return ("Sebutkan nama kontak, mis. "
+                f"{'hutang' if jenis == 'hutang' else 'piutang'}_kontak_kledo "
+                "nama='Mas Catur'.")
+    field = "payable" if jenis == "hutang" else "receivable"
+    aged_path = "/reportings/agedPayable" if jenis == "hutang" \
+        else "/reportings/agedReceivable"
+    label = "Hutang ke" if jenis == "hutang" else "Piutang dari"
+    # 1) saldo buku besar per kontak
+    d, err = await _json("/finance/contacts", {"search": nama}, "kontak")
+    if err:
+        return err
+    kontak = _items(d)
+    ledger = None
+    nm_match = nama
+    if kontak:
+        k = kontak[0]
+        nm_match = k.get("name", nama)
+        ledger = _num(k.get(field))
+    # 2) umur (aged) — filter baris yang namanya cocok
+    from datetime import date
+    hari = date.today().isoformat()
+    d2, err2 = await _json(aged_path, {"date": hari, "per_page": 200}, "umur")
+    rows = []
+    if not err2:
+        low = nama.lower()
+        for i in _items(d2):
+            nm = (i.get("name") or "").lower()
+            comp = (str(i.get("company") or "")).lower()
+            if low in nm or (comp and low in comp):
+                rows.append(i)
+    belum = sum(_num(i["due"].get("-2")) for i in rows)
+    telat = sum(_num(i["due"].get("-1")) for i in rows)
+    aged_total = belum + telat
+    if ledger is None and not rows:
+        return f"Kontak '{nama}' tak ditemukan di Kledo."
+    out = [f"🔎 {label} \"{nm_match}\" (Kledo):"]
+    if ledger is not None:
+        out.append(f"• Buku besar ({field}) : {_rp(ledger)}")
+    if rows:
+        out.append(f"• Umur (aged) total    : {_rp(aged_total)}  "
+                   f"(belum jt {_rp(belum)} + telat {_rp(telat)})")
+    else:
+        out.append("• Umur (aged)          : tak ada faktur ber-jatuh-tempo")
+    if ledger is not None and rows and abs(ledger - aged_total) > 1:
+        out.append("⚠️ Dua angka beda (wajar di Kledo): 'buku besar' = saldo akun "
+                   "kontak; 'aged' = faktur ber-jatuh-tempo. Sampaikan KEDUANYA.")
+    if len(kontak) > 1:
+        out.append(f"(Ada {len(kontak)} kontak cocok; ditampilkan '{nm_match}'.)")
+    return "\n".join(out)
+
+
 async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
                    role: str = "staff") -> str:
     if not terkonfigurasi():
@@ -227,6 +447,22 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
                             _baris_akun, par)
     if nama_tool == "neraca_kledo":
         return await _neraca()
+    if nama_tool == "labarugi_kledo":
+        return await _labarugi(a)
+    if nama_tool == "aruskas_kledo":
+        return await _aruskas(a)
+    if nama_tool == "umur_hutang_kledo":
+        return await _umur("/reportings/agedPayable", "Umur Hutang", "Pemasok")
+    if nama_tool == "umur_piutang_kledo":
+        return await _umur("/reportings/agedReceivable", "Umur Piutang", "Pelanggan")
+    if nama_tool == "saldo_bank_kledo":
+        return await _saldo_bank()
+    if nama_tool == "penjualan_kledo":
+        return await _penjualan(a)
+    if nama_tool == "hutang_kontak_kledo":
+        return await _kontak_saldo(a, "hutang")
+    if nama_tool == "piutang_kontak_kledo":
+        return await _kontak_saldo(a, "piutang")
     return f"(tool Kledo '{nama_tool}' tak dikenal)"
 
 
@@ -255,4 +491,54 @@ TOOLS = [
         "hutang', 'total aset', 'posisi/kondisi keuangan', 'modal berapa'. Ini "
         "sumber RESMI total hutang (bukan sekadar tagihan invoice).",
      "input_schema": {"type": "object", "properties": {}}},
+    {"name": "labarugi_kledo", "description":
+        "LABA-RUGI (profit & loss) Kledo: pendapatan, HPP, laba kotor, beban usaha, "
+        "laba bersih. Default periode BULAN BERJALAN. READ-ONLY, Direksi saja. Pakai "
+        "untuk 'laba bulan ini', 'rugi/untung berapa', 'kinerja/omzet', 'laba-rugi'. "
+        "Angka RESMI dari Kledo.",
+     "input_schema": {"type": "object", "properties": {
+         "dari": {"type": "string", "description": "Tanggal mulai YYYY-MM-DD (opsional)."},
+         "sampai": {"type": "string", "description": "Tanggal akhir YYYY-MM-DD (opsional)."}}}},
+    {"name": "aruskas_kledo", "description":
+        "ARUS KAS (cash flow) Kledo: kas masuk, kas keluar, arus bersih, saldo awal→akhir, "
+        "rincian per aktivitas (operasional/investasi/pendanaan). Default BULAN BERJALAN. "
+        "READ-ONLY, Direksi saja. Pakai untuk 'arus kas', 'uang masuk keluar', 'cashflow'.",
+     "input_schema": {"type": "object", "properties": {
+         "dari": {"type": "string", "description": "Tanggal mulai YYYY-MM-DD (opsional)."},
+         "sampai": {"type": "string", "description": "Tanggal akhir YYYY-MM-DD (opsional)."}}}},
+    {"name": "umur_hutang_kledo", "description":
+        "UMUR HUTANG (aged payable) Kledo per hari ini: total belum jatuh tempo vs sudah "
+        "telat + pemasok telat teratas. READ-ONLY, Direksi saja. Pakai untuk 'hutang "
+        "telat', 'yang jatuh tempo', 'umur hutang', 'tunggakan ke pemasok'.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "umur_piutang_kledo", "description":
+        "UMUR PIUTANG (aged receivable) Kledo per hari ini: total belum jatuh tempo vs "
+        "telat + pelanggan telat teratas. READ-ONLY, Direksi saja. Pakai untuk 'piutang "
+        "telat', 'pelanggan nunggak', 'umur piutang', 'tagihan macet'.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "saldo_bank_kledo", "description":
+        "SALDO KAS & BANK Kledo per rekening + total. READ-ONLY, Direksi saja. Pakai "
+        "untuk 'saldo kas', 'uang di bank', 'saldo rekening', 'posisi kas'.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "penjualan_kledo", "description":
+        "PENJUALAN per produk Kledo: total + produk terlaris (nama, qty, nilai). Default "
+        "BULAN BERJALAN. READ-ONLY, Direksi saja. Pakai untuk 'produk terlaris', "
+        "'penjualan bulan ini', 'top produk', 'omzet per produk'.",
+     "input_schema": {"type": "object", "properties": {
+         "dari": {"type": "string", "description": "Tanggal mulai YYYY-MM-DD (opsional)."},
+         "sampai": {"type": "string", "description": "Tanggal akhir YYYY-MM-DD (opsional)."}}}},
+    {"name": "hutang_kontak_kledo", "description":
+        "HUTANG ke SATU pemasok/kontak (Kledo). Beri DUA angka bila beda: saldo buku besar "
+        "(payable) DAN umur (aged) — keduanya benar dari sudut berbeda, jangan pilih satu. "
+        "READ-ONLY, Direksi saja. Pakai untuk 'hutang ke <nama>', 'utang kita ke <nama>'.",
+     "input_schema": {"type": "object", "properties": {
+         "nama": {"type": "string", "description": "Nama pemasok/kontak (wajib)."}},
+         "required": ["nama"]}},
+    {"name": "piutang_kontak_kledo", "description":
+        "PIUTANG dari SATU pelanggan/kontak (Kledo). Beri DUA angka bila beda: saldo buku "
+        "besar (receivable) DAN umur (aged). READ-ONLY, Direksi saja. Pakai untuk 'piutang "
+        "dari <nama>', 'berapa <nama> masih ngutang'.",
+     "input_schema": {"type": "object", "properties": {
+         "nama": {"type": "string", "description": "Nama pelanggan/kontak (wajib)."}},
+         "required": ["nama"]}},
 ]

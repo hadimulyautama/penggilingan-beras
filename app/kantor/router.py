@@ -21,7 +21,8 @@ _KUNCI: dict[str, list[str]] = {
               "cari file", "rename", "pindah file", "sheet", "spreadsheet"],
     "keuangan": ["tagihan", "utang", "piutang", "faktur", "kledo", "invoice",
                  "akun", "keuangan", "pemasok", "supplier", "bayar", "arus kas",
-                 "laba", "rugi", "neraca"],
+                 "laba", "rugi", "neraca", "penjualan", "cashflow", "cash flow",
+                 "saldo", "kas", "omzet", "jatuh tempo", "terlaris"],
     "hr": ["karyawan", "cuti", "lembur", "presensi", "gaji", "payroll",
            "pengajuan", "gajihub", "absensi"],
     "sekretaris": ["kalender", "agenda", "jadwal", "acara", "rapat",
@@ -34,7 +35,10 @@ SHARED: set[str] = {"cari_pengetahuan", "simpan_pengetahuan", "status_biaya"}
 # domain → nama tool yang masuk bundelnya.
 DOMAIN_TOOLS: dict[str, set[str]] = {
     "produksi": {"simulasi_hpp", "tanya_produksi"},
-    "keuangan": {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo"},
+    "keuangan": {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo",
+                 "labarugi_kledo", "aruskas_kledo", "umur_hutang_kledo", "umur_piutang_kledo",
+                 "saldo_bank_kledo", "penjualan_kledo", "hutang_kontak_kledo",
+                 "piutang_kontak_kledo"},
     "email": {"baca_email", "cari_email", "baca_email_isi", "draft_email",
               "kirim_email", "atur_email", "lihat_aturan_email",
               "batalkan_arsip_email", "arsip_email", "tandai_dibaca_email",
