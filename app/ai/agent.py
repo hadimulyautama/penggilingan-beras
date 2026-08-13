@@ -83,6 +83,58 @@ _READ_TOOLS_UMUM = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "laporan_produksi_histori",
+        "description": (
+            "Histori/rekap PRODUKSI per tanggal atau rentang tanggal (s/d ~1 "
+            "bulan ke belakang) — untuk pertanyaan seperti 'hasil produksi 3 "
+            "hari lalu', 'PK masuk minggu ini', 'produksi sebulan terakhir', "
+            "'gabah & giling kemarin berapa'. Merangkum: gabah masuk (kg/batch/"
+            "supplier teratas), PK masuk beli-luar, output giling (PK), output "
+            "penyosohan (beras + hasil samping), dan barang keluar. TANPA harga/"
+            "HPP. Untuk KEADAAN SEKARANG (stok/proses berjalan) pakai tool "
+            "status/stok, bukan ini."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "periode": {
+                    "type": ["string", "null"],
+                    "enum": [
+                        "hari_ini", "kemarin", "minggu_ini", "bulan_ini", "semua",
+                        None,
+                    ],
+                    "description": (
+                        "Rentang siap-pakai. 'hari ini'->hari_ini, 'kemarin'->"
+                        "kemarin, 'minggu ini'->minggu_ini, 'bulan ini'->"
+                        "bulan_ini, 'sebulan terakhir/keseluruhan'->semua. "
+                        "Kosongkan bila memakai tanggal atau tgl_dari/tgl_sampai; "
+                        "bila semua kosong = 30 hari terakhir."
+                    ),
+                },
+                "tanggal": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Satu hari SPESIFIK format YYYY-MM-DD (mis. '3 hari lalu', "
+                        "'senin kemarin') — hitung dari HARI INI. null bila tidak."
+                    ),
+                },
+                "tgl_dari": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Awal rentang YYYY-MM-DD untuk rentang eksplisit "
+                        "(mis. 'dari 1 juli sampai 31 juli'). null bila tidak."
+                    ),
+                },
+                "tgl_sampai": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Akhir rentang YYYY-MM-DD (inklusif). null bila tidak."
+                    ),
+                },
+            },
+        },
+    },
+    {
         "name": "item_nyangkut",
         "description": (
             "Item yang NYANGKUT / mandek / terlupa lintas siklus: gabah belum "
@@ -245,6 +297,37 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
         if name == "item_nyangkut":
             from app.services.pemantau import pemantau_nyangkut
             return await pemantau_nyangkut(db, financial=financial)
+
+        if name == "laporan_produksi_histori":
+            from datetime import date as _date, timedelta
+            from app.database import now_local
+            from app.services.report import _range, laporan_produksi_histori
+
+            def _parse(s):
+                try:
+                    return _date.fromisoformat(str(s)[:10]) if s else None
+                except ValueError:
+                    return None
+
+            today = now_local().date()
+            d1 = _parse(args.get("tgl_dari"))
+            d2 = _parse(args.get("tgl_sampai"))
+            hari = _parse(args.get("tanggal"))
+            periode = args.get("periode")
+            if d1 or d2:
+                tgl_dari = d1 or d2
+                tgl_sampai = d2 or d1
+            elif hari:
+                tgl_dari = tgl_sampai = hari
+            elif periode in ("hari_ini", "kemarin", "minggu_ini", "bulan_ini"):
+                tgl_dari, tgl_sampai = _range(periode)
+            else:
+                # 'semua'/kosong → default histori 30 hari terakhir.
+                tgl_dari, tgl_sampai = today - timedelta(days=30), today
+            # Batasi rentang agar tak memindai terlalu jauh (histori ~sebulan).
+            if (tgl_sampai - tgl_dari).days > 366:
+                tgl_dari = tgl_sampai - timedelta(days=366)
+            return await laporan_produksi_histori(db, tgl_dari, tgl_sampai)
 
         if name == "laporan_keuangan":
             if not financial:

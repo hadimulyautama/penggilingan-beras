@@ -36,7 +36,13 @@ from app.models import (
     DryingLotBatch,
     MillingProcess,
     MillingProcessVerification,
+    MillingProgressLog,
     MillingQcLog,
+    OutgoingItem,
+    OutgoingRecord,
+    PkPurchaseBatch,
+    PolishingOutputLog,
+    PolishingProcess,
     PurchaseBatch,
     PurchaseBatchVerification,
     Supplier,
@@ -124,6 +130,171 @@ async def laporan_pembelian_gabah(
         lines.append(f"   - {nama}: {_fmt_kg(kg)} ({cnt} batch)")
     if unverified:
         lines.append(f"⚠️ {unverified} batch belum diverifikasi harganya.")
+    return "\n".join(lines)
+
+
+# ─────────────────── Histori produksi (READ-ONLY, tanpa uang) ───────────────
+# Jenis output penyosohan yang BUKAN beras (hasil samping) — sisanya = beras.
+_PENYOSOHAN_SAMPING = {"menir", "broken", "bekatul", "reject"}
+
+
+async def laporan_produksi_histori(
+    db: AsyncSession, tgl_dari: date, tgl_sampai: date
+) -> str:
+    """Ringkasan histori produksi atas rentang tanggal (inklusif).
+
+    Merangkum untuk operator (READ-ONLY, TANPA harga/HPP): gabah masuk,
+    PK masuk (beli luar), output giling (PK), output penyosohan (beras +
+    hasil samping), dan barang keluar. Cocok untuk 'produksi 3 hari lalu',
+    'hasil sebulan terakhir', dst.
+    """
+    if tgl_dari > tgl_sampai:
+        tgl_dari, tgl_sampai = tgl_sampai, tgl_dari
+    if tgl_dari == tgl_sampai:
+        label = _fmt_tgl(tgl_dari)
+    else:
+        label = f"{_fmt_tgl(tgl_dari)} s/d {_fmt_tgl(tgl_sampai)}"
+    lines = [f"📈 Histori produksi {label}:"]
+
+    # 1) Gabah masuk (Gudang 1) — dari pembelian gabah.
+    gabah = (
+        await db.execute(
+            select(PurchaseBatch.berat_total_kg, Supplier.nama_supplier)
+            .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+            .where(
+                PurchaseBatch.tanggal_pembelian >= tgl_dari,
+                PurchaseBatch.tanggal_pembelian <= tgl_sampai,
+            )
+        )
+    ).all()
+    if gabah:
+        total = sum(float(kg) for kg, _ in gabah)
+        per_sup: dict[str, float] = {}
+        for kg, nama in gabah:
+            per_sup[nama] = per_sup.get(nama, 0.0) + float(kg)
+        top_nama, top_kg = max(per_sup.items(), key=lambda x: x[1])
+        lines.append(
+            f"🌾 Gabah masuk: {_fmt_kg(total)} · {len(gabah)} batch · "
+            f"{len(per_sup)} supplier (teratas {top_nama} {_fmt_kg(top_kg)})"
+        )
+    else:
+        lines.append("🌾 Gabah masuk: tidak ada")
+
+    # 2) PK masuk Gudang 2 — pembelian PK dari luar.
+    pk = (
+        await db.execute(
+            select(PkPurchaseBatch.berat_total_kg, Supplier.nama_supplier)
+            .join(Supplier, PkPurchaseBatch.supplier_id == Supplier.id)
+            .where(
+                PkPurchaseBatch.tanggal_pembelian >= tgl_dari,
+                PkPurchaseBatch.tanggal_pembelian <= tgl_sampai,
+            )
+        )
+    ).all()
+    if pk:
+        total = sum(float(kg) for kg, _ in pk)
+        per_sup = {}
+        for kg, nama in pk:
+            per_sup[nama] = per_sup.get(nama, 0.0) + float(kg)
+        top_nama, top_kg = max(per_sup.items(), key=lambda x: x[1])
+        lines.append(
+            f"📦 PK masuk (beli luar): {_fmt_kg(total)} · {len(pk)} batch "
+            f"(teratas {top_nama} {_fmt_kg(top_kg)})"
+        )
+    else:
+        lines.append("📦 PK masuk (beli luar): tidak ada")
+
+    # 3) Output giling (Gudang 1) — PK dihasilkan; kumulatif terakhir per proses,
+    #    dikaitkan ke tanggal MULAI proses giling.
+    proc_mil = (
+        await db.execute(
+            select(MillingProcess.id).where(
+                func.date(MillingProcess.waktu_mulai) >= tgl_dari,
+                func.date(MillingProcess.waktu_mulai) <= tgl_sampai,
+            )
+        )
+    ).scalars().all()
+    giling_kg = 0.0
+    for pid in proc_mil:
+        v = (
+            await db.execute(
+                select(MillingProgressLog.berat_kumulatif_kg)
+                .where(MillingProgressLog.milling_process_id == pid)
+                .order_by(MillingProgressLog.waktu_update.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if v is not None:
+            giling_kg += float(v)
+    if proc_mil:
+        lines.append(
+            f"⚙️ Output giling (PK): {_fmt_kg(giling_kg)} · {len(proc_mil)} proses"
+        )
+    else:
+        lines.append("⚙️ Output giling (PK): tidak ada")
+
+    # 4) Output penyosohan (Gudang 2) — kumulatif terakhir per (proses, jenis),
+    #    dikaitkan ke tanggal MULAI proses penyosohan.
+    proc_pol = (
+        await db.execute(
+            select(PolishingProcess.id).where(
+                func.date(PolishingProcess.waktu_mulai) >= tgl_dari,
+                func.date(PolishingProcess.waktu_mulai) <= tgl_sampai,
+            )
+        )
+    ).scalars().all()
+    beras_kg = 0.0
+    samping_kg = 0.0
+    for pid in proc_pol:
+        logs = (
+            await db.execute(
+                select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
+                .where(PolishingOutputLog.polishing_process_id == pid)
+                .order_by(
+                    PolishingOutputLog.jenis,
+                    PolishingOutputLog.waktu_update.desc(),
+                )
+            )
+        ).all()
+        seen: set[str] = set()
+        for jenis, kg in logs:
+            if jenis in seen:  # ambil hanya baris terbaru per jenis (kumulatif)
+                continue
+            seen.add(jenis)
+            if jenis in _PENYOSOHAN_SAMPING:
+                samping_kg += float(kg)
+            else:
+                beras_kg += float(kg)
+    if proc_pol:
+        lines.append(
+            f"🏭 Output penyosohan: beras {_fmt_kg(beras_kg)} + samping "
+            f"{_fmt_kg(samping_kg)} · {len(proc_pol)} proses"
+        )
+    else:
+        lines.append("🏭 Output penyosohan: tidak ada")
+
+    # 5) Barang keluar / dikirim.
+    keluar = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(OutgoingItem.berat_kg), 0),
+                func.count(func.distinct(OutgoingRecord.id)),
+            )
+            .select_from(OutgoingRecord)
+            .join(OutgoingItem, OutgoingItem.outgoing_record_id == OutgoingRecord.id)
+            .where(
+                OutgoingRecord.tanggal >= tgl_dari,
+                OutgoingRecord.tanggal <= tgl_sampai,
+            )
+        )
+    ).one()
+    keluar_kg = float(keluar[0])
+    keluar_n = int(keluar[1])
+    if keluar_n:
+        lines.append(f"🚚 Barang keluar: {_fmt_kg(keluar_kg)} · {keluar_n} pengiriman")
+    else:
+        lines.append("🚚 Barang keluar: tidak ada")
+
     return "\n".join(lines)
 
 
