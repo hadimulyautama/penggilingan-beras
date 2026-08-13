@@ -22,6 +22,7 @@ from app.kantor import arsip_fisik
 from app.kantor import aturan
 from app.kantor import gajihub
 from app.kantor import kendali
+from app.kantor import rbac
 from app.kantor import mail_gmail
 from app.kantor import ocr
 from app.kantor import pengetahuan
@@ -1005,7 +1006,8 @@ def _aksi_surat_tugas(inp: dict) -> KantorReply:
 
 
 async def run_kantor_agent(
-    *, text: str, role: str, nama_user: str, riwayat: list[dict] | None = None
+    *, text: str, role: str, nama_user: str, riwayat: list[dict] | None = None,
+    user_id: int | None = None,
 ) -> KantorReply:
     """Jalankan agent Kantor untuk satu permintaan. Aksi tulis → usulan (aksi).
 
@@ -1053,7 +1055,10 @@ async def run_kantor_agent(
         messages.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in tool_uses:
-            if tu.name in pengetahuan.NAMA_TOOL:
+            _tolak = await rbac.cek_tool_akses(user_id, tu.name, tu.input or {})
+            if _tolak is not None:
+                out = _tolak
+            elif tu.name in pengetahuan.NAMA_TOOL:
                 out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
             elif tu.name in kendali.NAMA_TOOL:
                 out = await kendali.jalankan(tu.name, tu.input or {}, role)

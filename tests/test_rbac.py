@@ -79,3 +79,26 @@ def test_role_valid():
     assert role_valid("operator")
     assert not role_valid("raja")
     assert not role_valid("")
+
+
+def test_domain_mode_email():
+    from app.kantor.rbac import _domain_mode
+
+    assert _domain_mode("baca_email", {"mailbox": "finance@hadimulya.com"}) == ("keuangan", "read")
+    assert _domain_mode("kirim_email", {"mailbox": "finance@hadimulya.com"}) == ("keuangan", "write")
+    assert _domain_mode("baca_email", {"mailbox": "x@y.com"}) is None  # mailbox tak dikenal
+
+
+def test_domain_mode_gajihub():
+    from app.kantor.rbac import _domain_mode
+
+    assert _domain_mode("payroll_gajihub", {}) == ("gaji", "read")
+    assert _domain_mode("karyawan_gajihub", {}) == ("hr", "read")
+    assert _domain_mode("setujui_pengajuan", {}) == ("hr", "write")
+
+
+def test_domain_mode_tak_digate():
+    from app.kantor.rbac import _domain_mode
+
+    assert _domain_mode("cari_file", {}) is None
+    assert _domain_mode("status_biaya", {}) is None

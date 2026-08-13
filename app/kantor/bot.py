@@ -298,7 +298,8 @@ async def handle_message(message: Message) -> None:
 
     try:
         reply = await run_kantor_agent(
-            text=text, role=user.role, nama_user=user.nama, riwayat=hist
+            text=text, role=user.role, nama_user=user.nama, riwayat=hist,
+            user_id=user.id,
         )
     except guard.LayananLLMMati:
         await message.answer(

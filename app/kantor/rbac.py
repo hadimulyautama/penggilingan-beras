@@ -9,12 +9,17 @@ Enforcement WAJIB di sini (kode), tak pernah hanya di prompt.
 """
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 
 from app.database import SessionLocal
-from app.kantor.models import KantorGrant, KantorUserRole
+from app.kantor import rbac_map
+from app.kantor.models import KantorConfig, KantorGrant, KantorUserRole
 from app.kantor.rbac_seed import GRANTS as _SEED
 from app.kantor.rbac_seed import ROLES as _ROLES_KATALOG
+
+log = logging.getLogger("kantor.rbac")
 
 _TINGKAT = {"none": 0, "read": 1, "write": 2, "owner": 3}
 _KODE_ROLE = {k for k, _, _ in _ROLES_KATALOG}
@@ -124,3 +129,70 @@ async def cabut_role(user_id: int, role_kode: str) -> None:
 async def daftar_role_user(user_id: int) -> list[str]:
     """Role AKTIF yang dipegang user (untuk verifikasi/tampilan)."""
     return sorted(await roles_user(user_id))
+
+
+# ───────────────────── Enforcement (gate tiap tool) ─────────────────────
+class AksesDitolak(Exception):
+    """Aksi ditolak oleh RBAC."""
+
+
+def pesan_tolak(domain: str, mode: str) -> str:
+    return (f"⛔ Kamu tak punya akses ({mode}) ke area '{domain}'. "
+            f"Hubungi Direksi bila memang perlu.")
+
+
+# Tool sensitif → cara menentukan (domain, mode). Tool tak terdaftar = tak digate.
+_EMAIL_READ = {"baca_email", "cari_email", "baca_email_isi"}
+_EMAIL_WRITE = {"draft_email", "kirim_email", "arsip_email", "tandai_dibaca_email",
+                "label_email", "batalkan_arsip_email"}
+_GAJIHUB_READ = {"karyawan_gajihub", "cuti_gajihub", "pengajuan_gajihub"}
+_GAJIHUB_WRITE = {"setujui_pengajuan", "tolak_pengajuan"}
+
+
+def _domain_mode(name: str, args: dict) -> tuple[str, str] | None:
+    """(domain, mode) yang dibutuhkan tool ini, atau None bila tak digate."""
+    if name in _EMAIL_READ or name in _EMAIL_WRITE:
+        d = rbac_map.domain_mailbox(args.get("mailbox", ""))
+        if not d:
+            return None  # mailbox tak dikenal → tak digate di sini
+        return (d, "read" if name in _EMAIL_READ else "write")
+    if name == "payroll_gajihub":
+        return ("gaji", "read")
+    if name in _GAJIHUB_READ:
+        return ("hr", "read")
+    if name in _GAJIHUB_WRITE:
+        return ("hr", "write")
+    return None
+
+
+async def _mode_enforce() -> str:
+    """'off' | 'shadow' | 'on'. Default 'shadow' (cek+log, belum menolak)."""
+    try:
+        async with SessionLocal() as s:
+            nilai = (
+                await s.execute(
+                    select(KantorConfig.nilai).where(KantorConfig.kunci == "rbac_enforce")
+                )
+            ).scalar_one_or_none()
+        return (nilai or "shadow").strip().lower()
+    except Exception:
+        return "shadow"
+
+
+async def cek_tool_akses(user_id: int | None, name: str, args: dict) -> str | None:
+    """Gate satu pemanggilan tool. Return None bila boleh; pesan tolak (str) bila
+    enforce='on' & ditolak. Shadow: log saja lalu izinkan (None). Off: tak cek."""
+    flag = await _mode_enforce()
+    if flag == "off":
+        return None
+    dm = _domain_mode(name, args or {})
+    if dm is None:
+        return None
+    domain, mode = dm
+    if user_id is not None and await boleh_user(user_id, domain, mode):
+        return None
+    log.warning("RBAC deny [%s] user=%s tool=%s domain=%s mode=%s",
+                flag, user_id, name, domain, mode)
+    if flag == "on":
+        return pesan_tolak(domain, mode)
+    return None  # shadow → izinkan (hanya tercatat)
