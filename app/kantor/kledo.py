@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 _BASE = os.getenv("KLEDO_BASE", "https://pthadimulyautama.api.kledo.com/api/v1")
 
 # tool BACA (read-only). Belum ada tool tulis (tahap awal).
-NAMA_TOOL = ("tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo")
+NAMA_TOOL = ("tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo")
 
 
 def terkonfigurasi() -> bool:
@@ -171,6 +171,41 @@ async def _ringkas_transaksi(path: str, judul: str) -> str:
             f"(jatuh tempo terdekat dulu):\n" + "\n".join(baris) + sisa)
 
 
+async def _neraca() -> str:
+    """Ringkas Neraca (Balance Sheet) Kledo: total aset, HUTANG (liabilitas), modal.
+    Jawaban RESMI untuk 'total hutang', 'total aset', 'posisi keuangan'."""
+    from datetime import date
+    hari = date.today().isoformat()
+    try:
+        d = await asyncio.to_thread(_get, "/reportings/balanceSheet", {"date": hari})
+    except urllib.error.HTTPError as e:
+        return f"Kledo error {e.code} saat ambil neraca."
+    except Exception:  # noqa: BLE001
+        return "Gagal ambil neraca dari Kledo."
+    data = d.get("data", d)
+    period = data.get(hari) if isinstance(data, dict) else None
+    if not isinstance(period, dict):
+        period = next((v for v in data.values() if isinstance(v, dict)), {}) if isinstance(data, dict) else {}
+    aset = hutang = modal = 0.0
+    for bagian, isi in period.items():
+        if not isinstance(isi, dict):
+            continue
+        if "asset" in bagian.lower() or "aset" in (isi.get("name", "").lower()):
+            aset = float(isi.get("total") or 0)
+        for v in (isi.get("data") or {}).values():
+            if not (isinstance(v, dict) and v.get("total") is not None):
+                continue
+            nm = (v.get("name") or "").lower()
+            if "liabilit" in nm or "hutang" in nm:
+                hutang += float(v["total"])
+            elif "modal" in nm or "equity" in nm or "ekuitas" in nm:
+                modal += float(v["total"])
+    return (f"📊 Neraca Kledo per {hari}:\n"
+            f"• Total Aset   : {_rp(aset)}\n"
+            f"• Total Hutang : {_rp(hutang)}  (liabilitas)\n"
+            f"• Total Modal  : {_rp(modal)}  (ekuitas)")
+
+
 async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
                    role: str = "staff") -> str:
     if not terkonfigurasi():
@@ -190,6 +225,8 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
     if nama_tool == "akun_kledo":
         return await _ambil("/finance/accounts", "Daftar akun (chart of accounts)",
                             _baris_akun, par)
+    if nama_tool == "neraca_kledo":
+        return await _neraca()
     return f"(tool Kledo '{nama_tool}' tak dikenal)"
 
 
@@ -212,4 +249,10 @@ TOOLS = [
         "Lihat DAFTAR AKUN / chart of accounts Kledo. READ-ONLY, Direksi saja.",
      "input_schema": {"type": "object", "properties": {
          "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+    {"name": "neraca_kledo", "description":
+        "NERACA (Balance Sheet) Kledo — total ASET, HUTANG (liabilitas), MODAL "
+        "(ekuitas) resmi per hari ini. READ-ONLY, Direksi saja. Pakai untuk 'total "
+        "hutang', 'total aset', 'posisi/kondisi keuangan', 'modal berapa'. Ini "
+        "sumber RESMI total hutang (bukan sekadar tagihan invoice).",
+     "input_schema": {"type": "object", "properties": {}}},
 ]

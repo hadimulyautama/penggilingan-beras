@@ -34,7 +34,7 @@ SHARED: set[str] = {"cari_pengetahuan", "simpan_pengetahuan", "status_biaya"}
 # domain → nama tool yang masuk bundelnya.
 DOMAIN_TOOLS: dict[str, set[str]] = {
     "produksi": {"simulasi_hpp", "tanya_produksi"},
-    "keuangan": {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo"},
+    "keuangan": {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo"},
     "email": {"baca_email", "cari_email", "baca_email_isi", "draft_email",
               "kirim_email", "atur_email", "lihat_aturan_email",
               "batalkan_arsip_email", "arsip_email", "tandai_dibaca_email",

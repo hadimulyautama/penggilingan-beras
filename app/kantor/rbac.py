@@ -147,7 +147,7 @@ _EMAIL_WRITE = {"draft_email", "kirim_email", "arsip_email", "tandai_dibaca_emai
                 "label_email", "batalkan_arsip_email"}
 _GAJIHUB_READ = {"karyawan_gajihub", "cuti_gajihub", "pengajuan_gajihub"}
 _GAJIHUB_WRITE = {"setujui_pengajuan", "tolak_pengajuan"}
-_KLEDO_READ = {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo"}
+_KLEDO_READ = {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "neraca_kledo"}
 
 
 def _domain_mode(name: str, args: dict) -> tuple[str, str] | None:
