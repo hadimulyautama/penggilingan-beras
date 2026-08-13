@@ -85,27 +85,45 @@ def _rp(v) -> str:
 
 
 def _baris_transaksi(it: dict) -> str:
-    ref = _first(it, "ref_number", "reference", "number", "invoice_number")
-    pihak = _first(it, "contact_name", "customer_name", "vendor_name", "supplier_name")
-    if pihak == "-" and isinstance(it.get("contact"), dict):
-        pihak = it["contact"].get("name", "-")
-    nilai = _first(it, "grand_total", "amount", "total", "amount_due", default=None)
-    jatuh = _first(it, "due_date", "date_due", default="")
-    status = _first(it, "status_name", "status", default="")
-    sisa = _first(it, "due", "amount_due", "balance", default=None)
+    """Invoice/purchaseInvoice: #ref · pihak · total · sisa(LUNAS bila 0) · j.tempo."""
+    ref = _first(it, "ref_number", default="-")
+    c = it.get("contact")
+    pihak = c.get("name", "-") if isinstance(c, dict) else "-"
+    total = _first(it, "amount_after_tax", "amount", default=None)
+    due = it.get("due")
+    jatuh = _first(it, "due_date", default="")
     bagian = [f"#{ref}", pihak]
-    if nilai is not None:
-        bagian.append(_rp(nilai))
-    if sisa is not None and sisa != nilai:
-        bagian.append(f"sisa {_rp(sisa)}")
+    if total is not None:
+        bagian.append(_rp(total))
+    if due is not None:
+        bagian.append("LUNAS" if float(due or 0) == 0 else f"sisa {_rp(due)}")
     if jatuh:
-        bagian.append(f"jatuh tempo {jatuh}")
-    if status:
-        bagian.append(str(status))
+        bagian.append(f"j.tempo {jatuh}")
     return " · ".join(str(b) for b in bagian if b and b != "-")
 
 
-async def _ambil(path: str, judul: str, params: dict | None = None) -> str:
+def _baris_kontak(it: dict) -> str:
+    bagian = [it.get("name", "-")]
+    if it.get("company"):
+        bagian.append(str(it["company"]))
+    if it.get("receivable"):
+        bagian.append(f"piutang {_rp(it['receivable'])}")
+    if it.get("payable"):
+        bagian.append(f"utang {_rp(it['payable'])}")
+    return " · ".join(str(b) for b in bagian if b and b != "-")
+
+
+def _baris_akun(it: dict) -> str:
+    bagian = []
+    if it.get("ref_code"):
+        bagian.append(f"[{it['ref_code']}]")
+    bagian.append(it.get("name", "-"))
+    if it.get("balance") is not None:
+        bagian.append(_rp(it["balance"]))
+    return " · ".join(str(b) for b in bagian if b and b != "-")
+
+
+async def _ambil(path: str, judul: str, formatter, params: dict | None = None) -> str:
     try:
         d = await asyncio.to_thread(_get, path, params or {"per_page": 15})
     except urllib.error.HTTPError as e:
@@ -118,7 +136,7 @@ async def _ambil(path: str, judul: str, params: dict | None = None) -> str:
     items = _items(d)
     if not items:
         return f"Tak ada data {judul} di Kledo."
-    baris = [f"• {_baris_transaksi(it)}" for it in items[:15]]
+    baris = [f"• {formatter(it)}" for it in items[:15]]
     return f"📒 {judul} (Kledo, {len(items)} teratas):\n" + "\n".join(baris)
 
 
@@ -132,13 +150,17 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
     n = int(a.get("maks", 15) or 15)
     par = {"per_page": max(1, min(n, 50))}
     if nama_tool == "tagihan_kledo":
-        return await _ambil("/finance/purchaseInvoices", "Tagihan/utang (purchase invoices)", par)
+        return await _ambil("/finance/purchaseInvoices", "Tagihan/utang (purchase invoices)",
+                            _baris_transaksi, par)
     if nama_tool == "faktur_kledo":
-        return await _ambil("/finance/invoices", "Faktur/piutang (sales invoices)", par)
+        return await _ambil("/finance/invoices", "Faktur/piutang (sales invoices)",
+                            _baris_transaksi, par)
     if nama_tool == "kontak_kledo":
-        return await _ambil("/finance/contacts", "Kontak (pelanggan/pemasok)", par)
+        return await _ambil("/finance/contacts", "Kontak (pelanggan/pemasok)",
+                            _baris_kontak, par)
     if nama_tool == "akun_kledo":
-        return await _ambil("/finance/accounts", "Daftar akun (chart of accounts)", par)
+        return await _ambil("/finance/accounts", "Daftar akun (chart of accounts)",
+                            _baris_akun, par)
     return f"(tool Kledo '{nama_tool}' tak dikenal)"
 
 
