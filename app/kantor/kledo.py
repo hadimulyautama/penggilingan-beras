@@ -140,6 +140,37 @@ async def _ambil(path: str, judul: str, formatter, params: dict | None = None) -
     return f"📒 {judul} (Kledo, {len(items)} teratas):\n" + "\n".join(baris)
 
 
+async def _ringkas_transaksi(path: str, judul: str) -> str:
+    """Total 'due'>0 (belum lunas) di SEMUA halaman + daftar teratas (jatuh tempo
+    terdekat dulu). Menjawab 'berapa total tagihan/piutang belum dibayar'."""
+    def fetch(page: int):
+        return _get(path, {"per_page": 100, "page": page}).get("data", {})
+    try:
+        first = await asyncio.to_thread(fetch, 1)
+    except urllib.error.HTTPError as e:
+        return ("Kledo menolak (401) — cek scope KLEDO_API_KEY." if e.code == 401
+                else f"Kledo error {e.code}.")
+    except Exception:  # noqa: BLE001
+        return f"Gagal ambil {judul} dari Kledo."
+    last = int(first.get("last_page", 1) or 1)
+    total = 0.0
+    belum: list[dict] = []
+    for page in range(1, min(last, 80) + 1):
+        meta = first if page == 1 else await asyncio.to_thread(fetch, page)
+        for it in meta.get("data", []):
+            due = float(it.get("due") or 0)
+            if due > 0:
+                total += due
+                belum.append(it)
+    if not belum:
+        return f"✅ Tidak ada {judul} yang belum lunas — semua sudah dibayar."
+    belum.sort(key=lambda it: it.get("due_date") or "9999")
+    baris = [f"• {_baris_transaksi(it)}" for it in belum[:10]]
+    sisa = f"\n… +{len(belum) - 10} lagi" if len(belum) > 10 else ""
+    return (f"📒 {judul} — BELUM LUNAS: *{_rp(total)}* dari {len(belum)} transaksi "
+            f"(jatuh tempo terdekat dulu):\n" + "\n".join(baris) + sisa)
+
+
 async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
                    role: str = "staff") -> str:
     if not terkonfigurasi():
@@ -150,11 +181,9 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
     n = int(a.get("maks", 15) or 15)
     par = {"per_page": max(1, min(n, 50))}
     if nama_tool == "tagihan_kledo":
-        return await _ambil("/finance/purchaseInvoices", "Tagihan/utang (purchase invoices)",
-                            _baris_transaksi, par)
+        return await _ringkas_transaksi("/finance/purchaseInvoices", "Tagihan/utang ke pemasok")
     if nama_tool == "faktur_kledo":
-        return await _ambil("/finance/invoices", "Faktur/piutang (sales invoices)",
-                            _baris_transaksi, par)
+        return await _ringkas_transaksi("/finance/invoices", "Faktur/piutang dari pelanggan")
     if nama_tool == "kontak_kledo":
         return await _ambil("/finance/contacts", "Kontak (pelanggan/pemasok)",
                             _baris_kontak, par)
@@ -166,17 +195,15 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
 
 TOOLS = [
     {"name": "tagihan_kledo", "description":
-        "Lihat TAGIHAN/utang perusahaan dari Kledo (purchase invoices — yang harus "
-        "dibayar ke pemasok). READ-ONLY, Direksi saja. Pakai untuk 'utang berapa', "
-        "'tagihan jatuh tempo', 'yang harus dibayar'.",
-     "input_schema": {"type": "object", "properties": {
-         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+        "TAGIHAN/utang ke pemasok dari Kledo: beri TOTAL yang belum lunas + daftar "
+        "(jatuh tempo terdekat dulu). READ-ONLY, Direksi saja. Pakai untuk 'total "
+        "utang', 'berapa tagihan belum dibayar', 'yang jatuh tempo'.",
+     "input_schema": {"type": "object", "properties": {}}},
     {"name": "faktur_kledo", "description":
-        "Lihat FAKTUR/piutang dari Kledo (sales invoices — yang harus ditagih ke "
-        "pelanggan). READ-ONLY, Direksi saja. Pakai untuk 'piutang', 'faktur belum "
+        "FAKTUR/piutang dari pelanggan (Kledo): beri TOTAL yang belum tertagih + "
+        "daftar. READ-ONLY, Direksi saja. Pakai untuk 'total piutang', 'faktur belum "
         "dibayar pelanggan'.",
-     "input_schema": {"type": "object", "properties": {
-         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+     "input_schema": {"type": "object", "properties": {}}},
     {"name": "kontak_kledo", "description":
         "Lihat KONTAK Kledo (pelanggan & pemasok). READ-ONLY, Direksi saja.",
      "input_schema": {"type": "object", "properties": {
