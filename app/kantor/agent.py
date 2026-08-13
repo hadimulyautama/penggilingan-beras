@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from app.ai.base import _date_context
 from app.ai import guard
 from app.config import settings
+from app.services import analytics
 from app.kantor import arsip_fisik
 from app.kantor import aturan
 from app.kantor import gajihub
@@ -816,6 +817,31 @@ _TOOLS = [
     },
 ]
 _TOOLS.extend(kendali.TOOLS)
+_TOOLS.append({
+    "name": "simulasi_hpp",
+    "description": (
+        "Hitung HPP (Harga Pokok Produksi) beras SECARA RESMI memakai tarif biaya "
+        "pabrik terkini: bahan baku gabah + bongkar + pengeringan + operator (flat/tonase) "
+        "+ rubber roll + listrik + tenaga giling. WAJIB pakai tool ini untuk pertanyaan "
+        "'HPP'/'simulasi HPP' — JANGAN hitung manual (hasil manual pasti tak lengkap & "
+        "tak konsisten dengan sistem pabrik). Beri harga_gabah + tonase bahan & hasil "
+        "(atau rendemen). kondisi: 'basah' (dikeringkan, mahal) / 'kering' (tetap "
+        "dikeringkan, murah); langsung_silo=true bila gabah kering langsung silo (tanpa "
+        "pengeringan)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "harga_gabah": {"type": "number", "description": "Harga beli gabah, Rp/kg."},
+            "berat_bahan": {"type": "number", "description": "Tonase gabah masuk (kg) — WAJIB (biaya operator flat dibagi tonase)."},
+            "berat_hasil": {"type": "number", "description": "Tonase beras/PK hasil (kg). Untuk hitung rendemen."},
+            "rendemen_persen": {"type": "number", "description": "Rendemen (%). Alternatif berat_hasil bila tonase hasil tak ada."},
+            "kondisi": {"type": "string", "enum": ["basah", "kering"], "description": "Kondisi gabah masuk. Default basah."},
+            "langsung_silo": {"type": "boolean", "description": "true = gabah kering langsung silo (tanpa pengeringan)."},
+        },
+        "required": ["harga_gabah", "berat_bahan"],
+    },
+})
 
 
 def _system_stabil(*, role: str) -> str:
@@ -1064,6 +1090,14 @@ async def run_kantor_agent(
                     larang_domain=await rbac.knowledge_larang(user_id))
             elif tu.name in kendali.NAMA_TOOL:
                 out = await kendali.jalankan(tu.name, tu.input or {}, role)
+            elif tu.name == "simulasi_hpp":
+                a = tu.input or {}
+                out = analytics.simulasi_hpp(
+                    a.get("harga_gabah"), a.get("rendemen_persen"),
+                    kondisi=a.get("kondisi", "basah"),
+                    langsung_silo=bool(a.get("langsung_silo")),
+                    berat_bahan=a.get("berat_bahan"), berat_hasil=a.get("berat_hasil"),
+                )
             elif tu.name in ocr.NAMA_TOOL:
                 out = await ocr.jalankan(tu.name, tu.input or {})
             elif tu.name in gajihub.NAMA_TOOL:
