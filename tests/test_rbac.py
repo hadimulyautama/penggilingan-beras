@@ -102,3 +102,11 @@ def test_domain_mode_tak_digate():
 
     assert _domain_mode("cari_file", {}) is None
     assert _domain_mode("status_biaya", {}) is None
+
+
+def test_larang_knowledge():
+    from app.kantor.rbac import larang_knowledge
+
+    assert larang_knowledge(g(DIREKSI)) == set()  # '*' → tak ada dilarang
+    assert larang_knowledge(g(EKA)) == {"gaji", "keuangan", "folder_it"}
+    assert larang_knowledge(g(MUTHIA)) == {"keuangan", "folder_it", "sengketa", "legal"}

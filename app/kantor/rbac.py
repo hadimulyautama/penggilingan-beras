@@ -179,6 +179,25 @@ async def _mode_enforce() -> str:
         return "shadow"
 
 
+# Domain sensitif yang isinya bisa bocor lewat pencarian knowledge.
+_DOMAIN_SENSITIF_KNOWLEDGE = {"gaji", "sengketa", "folder_it", "keuangan", "hr", "legal"}
+
+
+def larang_knowledge(grants: dict[str, str]) -> set[str]:
+    """Domain sensitif yang TAK boleh muncul di hasil pencarian knowledge untuk
+    pemegang grant ini (yang tak punya izin baca domain tsb)."""
+    return {d for d in _DOMAIN_SENSITIF_KNOWLEDGE if not boleh(grants, d, "read")}
+
+
+async def knowledge_larang(user_id: int | None) -> set[str]:
+    """Set domain yang harus dikecualikan dari knowledge untuk user. HANYA aktif
+    saat enforce='on' (shadow/off → set kosong = tak menyaring)."""
+    if await _mode_enforce() != "on":
+        return set()
+    grants = await grants_user(user_id) if user_id is not None else {}
+    return larang_knowledge(grants)
+
+
 async def cek_tool_akses(user_id: int | None, name: str, args: dict) -> str | None:
     """Gate satu pemanggilan tool. Return None bila boleh; pesan tolak (str) bila
     enforce='on' & ditolak. Shadow: log saja lalu izinkan (None). Off: tak cek."""

@@ -70,11 +70,15 @@ async def _cari_semantik(query: str, k: int, larang: set[str]) -> list[tuple[str
     return [(judul, isi) for sk, judul, isi in skor[:k] if sk >= _AMBANG]
 
 
-async def cari(query: str, k: int = 5, role: str = "staff") -> str:
+async def cari(query: str, k: int = 5, role: str = "staff",
+               larang_domain: set[str] | None = None) -> str:
     if not (query or "").strip():
         return "Pertanyaan pencarian kosong."
-    # Gating: non-admin tak boleh menerima ranah 'rahasia'.
+    # Gating: non-admin tak boleh menerima ranah 'rahasia'; + domain sensitif yang
+    # user tak berhak baca (RBAC), diberikan pemanggil (agent) via larang_domain.
     larang = set() if _boleh_rahasia(role) else {_RANAH_RAHASIA}
+    if larang_domain:
+        larang |= larang_domain
     # 1) Coba semantik (kalau Voyage terpasang).
     if emb.terkonfigurasi():
         try:
@@ -94,10 +98,12 @@ async def cari(query: str, k: int = 5, role: str = "staff") -> str:
     return f"🧠 {len(hits)} pengetahuan relevan:\n" + "\n".join(baris)
 
 
-async def simpan(judul: str, isi: str, rahasia: bool = False) -> str:
+async def simpan(judul: str, isi: str, rahasia: bool = False,
+                 domain: str | None = None) -> str:
     if not (judul or "").strip() or not (isi or "").strip():
         return "Judul dan isi pengetahuan wajib diisi."
-    ranah = _RANAH_RAHASIA if rahasia else "umum"
+    # ranah = 'rahasia' (admin-only) | domain RBAC (mis. 'gaji','legal') | 'umum'.
+    ranah = _RANAH_RAHASIA if rahasia else (domain or "umum")
     async with SessionLocal() as db:
         doc, berubah = await ingest.ingest_dokumen(
             db, judul=judul.strip(), teks=isi.strip(),
@@ -121,10 +127,13 @@ async def simpan(judul: str, isi: str, rahasia: bool = False) -> str:
     return f"✅ Pengetahuan disimpan: '{judul}'. Bisa kucari & pakai lagi kapan pun."
 
 
-async def jalankan(nama_tool: str, args: dict, role: str = "staff") -> str:
+async def jalankan(nama_tool: str, args: dict, role: str = "staff",
+                   larang_domain: set[str] | None = None) -> str:
     a = args or {}
     if nama_tool == "cari_pengetahuan":
-        return await cari(a.get("query", "") or a.get("pertanyaan", ""), role=role)
+        return await cari(a.get("query", "") or a.get("pertanyaan", ""),
+                          role=role, larang_domain=larang_domain)
     if nama_tool == "simpan_pengetahuan":
-        return await simpan(a.get("judul", ""), a.get("isi", ""), rahasia=bool(a.get("rahasia")))
+        return await simpan(a.get("judul", ""), a.get("isi", ""),
+                            rahasia=bool(a.get("rahasia")), domain=a.get("domain"))
     return f"(tool '{nama_tool}' tak dikenal)"

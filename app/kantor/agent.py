@@ -1059,7 +1059,9 @@ async def run_kantor_agent(
             if _tolak is not None:
                 out = _tolak
             elif tu.name in pengetahuan.NAMA_TOOL:
-                out = await pengetahuan.jalankan(tu.name, tu.input or {}, role=role)
+                out = await pengetahuan.jalankan(
+                    tu.name, tu.input or {}, role=role,
+                    larang_domain=await rbac.knowledge_larang(user_id))
             elif tu.name in kendali.NAMA_TOOL:
                 out = await kendali.jalankan(tu.name, tu.input or {}, role)
             elif tu.name in ocr.NAMA_TOOL:
