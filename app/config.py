@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     miniapp_model: str = "claude-haiku-4-5"
     # Batas iterasi tool-loop agent (jaring anti-loop tak berujung).
     agent_max_iterations: int = 6
+    # Router domain agen Kantor: pangkas tool ke domain relevan (deterministik,
+    # 0 token). Default OFF (bundel penuh + prompt-cache utuh). Nilai utama: akurasi.
+    router_aktif: bool = False
 
     # Aplikasi
     app_timezone: str = "Asia/Jakarta"

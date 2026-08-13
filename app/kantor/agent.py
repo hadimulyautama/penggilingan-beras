@@ -25,6 +25,7 @@ from app.kantor import gajihub
 from app.kantor import kendali
 from app.kantor import produksi
 from app.kantor import rbac
+from app.kantor import router as domain_router
 from app.kantor import mail_gmail
 from app.kantor import ocr
 from app.kantor import pengetahuan
@@ -1053,13 +1054,19 @@ async def run_kantor_agent(
     ]
     messages: list[dict] = [*(riwayat or []), {"role": "user", "content": text}]
 
+    # Router domain (opsional, flag): pangkas tool ke domain relevan → agen lebih
+    # tajam. Deterministik (0 token). Default OFF = bundel penuh + prompt-cache utuh.
+    tools_aktif = _TOOLS
+    if settings.router_aktif:
+        tools_aktif = domain_router.bundel(domain_router.pilih_domain(text), _TOOLS)
+
     for _ in range(settings.agent_max_iterations):
         resp = await guard.panggil(
             pemanggil="agent_kantor",
             model=settings.agent_model,
             max_tokens=1500,
             system=system,
-            tools=_TOOLS,
+            tools=tools_aktif,
             messages=messages,
         )
         u = resp.usage
