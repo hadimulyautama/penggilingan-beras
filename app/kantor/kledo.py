@@ -1,0 +1,166 @@
+"""Integrasi Kledo (akuntansi/finance) — READ-ONLY, khusus ADMIN (domain keuangan).
+
+Sumber data keuangan RESMI via REST Kledo (host sama dgn GajiHub). Prinsip:
+bot MERANGKUM, tak menghitung ulang — angka tetap dari Kledo (anti tumpang-tindih,
+lihat memori no-redundancy-kledo). Tahap awal: READ-ONLY (tak ada tool tulis).
+
+Env:
+  KLEDO_API_KEY : Personal Access Token Kledo (scope finance). WAJIB untuk aktif.
+  KLEDO_BASE    : opsional, base URL (default host akun perusahaan).
+
+Endpoint /finance/* terkonfirmasi ada via probe (2026-08): accounts, invoices,
+purchaseInvoices, contacts, products, quotes. Nama field respons diverifikasi &
+dirapikan saat KLEDO_API_KEY sudah diset (probe balas 401 tanpa key finance).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+
+log = logging.getLogger(__name__)
+
+_BASE = os.getenv("KLEDO_BASE", "https://pthadimulyautama.api.kledo.com/api/v1")
+
+# tool BACA (read-only). Belum ada tool tulis (tahap awal).
+NAMA_TOOL = ("tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo")
+
+
+def terkonfigurasi() -> bool:
+    return bool(os.getenv("KLEDO_API_KEY"))
+
+
+async def _boleh(user_id: int | None, role: str | None) -> bool:
+    # Data keuangan sensitif → Direksi (admin) ATAU pemegang grant baca 'keuangan'
+    # (mis. Elfira, saat RBAC terisi). Selaras domain RBAC 'keuangan'.
+    if (role or "").strip().lower() == "admin":
+        return True
+    from app.kantor import rbac
+    grants = await rbac.grants_user(user_id) if user_id is not None else {}
+    return rbac.boleh(grants, "keuangan", "read")
+
+
+def _hdr() -> dict:
+    return {"Authorization": "Bearer " + os.environ["KLEDO_API_KEY"],
+            "Accept": "application/json"}
+
+
+def _get(path: str, params: dict | None = None):
+    url = _BASE + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers=_hdr())
+    with urllib.request.urlopen(req, timeout=25) as r:
+        return json.loads(r.read())
+
+
+def _items(d) -> list:
+    """Ambil list data dari respons Kledo (bentuk umum: {data:[...]} / {data:{data:[...]}})."""
+    if isinstance(d, dict):
+        data = d.get("data", d)
+        if isinstance(data, dict):
+            data = data.get("data", [])
+        if isinstance(data, list):
+            return data
+    return d if isinstance(d, list) else []
+
+
+def _first(it: dict, *keys, default="-"):
+    for k in keys:
+        v = it.get(k)
+        if v not in (None, "", []):
+            return v
+    return default
+
+
+def _rp(v) -> str:
+    try:
+        return f"Rp {float(v):,.0f}".replace(",", ".")
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _baris_transaksi(it: dict) -> str:
+    ref = _first(it, "ref_number", "reference", "number", "invoice_number")
+    pihak = _first(it, "contact_name", "customer_name", "vendor_name", "supplier_name")
+    if pihak == "-" and isinstance(it.get("contact"), dict):
+        pihak = it["contact"].get("name", "-")
+    nilai = _first(it, "grand_total", "amount", "total", "amount_due", default=None)
+    jatuh = _first(it, "due_date", "date_due", default="")
+    status = _first(it, "status_name", "status", default="")
+    sisa = _first(it, "due", "amount_due", "balance", default=None)
+    bagian = [f"#{ref}", pihak]
+    if nilai is not None:
+        bagian.append(_rp(nilai))
+    if sisa is not None and sisa != nilai:
+        bagian.append(f"sisa {_rp(sisa)}")
+    if jatuh:
+        bagian.append(f"jatuh tempo {jatuh}")
+    if status:
+        bagian.append(str(status))
+    return " · ".join(str(b) for b in bagian if b and b != "-")
+
+
+async def _ambil(path: str, judul: str, params: dict | None = None) -> str:
+    try:
+        d = await asyncio.to_thread(_get, path, params or {"per_page": 15})
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return ("Kledo menolak (401) — cek KLEDO_API_KEY punya scope finance.")
+        return f"Kledo error {e.code} saat {judul}."
+    except Exception as e:  # noqa: BLE001
+        log.warning("kledo %s gagal: %s", path, e)
+        return f"Gagal ambil {judul} dari Kledo."
+    items = _items(d)
+    if not items:
+        return f"Tak ada data {judul} di Kledo."
+    baris = [f"• {_baris_transaksi(it)}" for it in items[:15]]
+    return f"📒 {judul} (Kledo, {len(items)} teratas):\n" + "\n".join(baris)
+
+
+async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
+                   role: str = "staff") -> str:
+    if not terkonfigurasi():
+        return "Integrasi Kledo belum aktif — set KLEDO_API_KEY (PAT finance) dulu."
+    if not await _boleh(user_id, role):
+        return "Data keuangan Kledo hanya untuk Direksi / pemegang akses keuangan."
+    a = args or {}
+    n = int(a.get("maks", 15) or 15)
+    par = {"per_page": max(1, min(n, 50))}
+    if nama_tool == "tagihan_kledo":
+        return await _ambil("/finance/purchaseInvoices", "Tagihan/utang (purchase invoices)", par)
+    if nama_tool == "faktur_kledo":
+        return await _ambil("/finance/invoices", "Faktur/piutang (sales invoices)", par)
+    if nama_tool == "kontak_kledo":
+        return await _ambil("/finance/contacts", "Kontak (pelanggan/pemasok)", par)
+    if nama_tool == "akun_kledo":
+        return await _ambil("/finance/accounts", "Daftar akun (chart of accounts)", par)
+    return f"(tool Kledo '{nama_tool}' tak dikenal)"
+
+
+TOOLS = [
+    {"name": "tagihan_kledo", "description":
+        "Lihat TAGIHAN/utang perusahaan dari Kledo (purchase invoices — yang harus "
+        "dibayar ke pemasok). READ-ONLY, Direksi saja. Pakai untuk 'utang berapa', "
+        "'tagihan jatuh tempo', 'yang harus dibayar'.",
+     "input_schema": {"type": "object", "properties": {
+         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+    {"name": "faktur_kledo", "description":
+        "Lihat FAKTUR/piutang dari Kledo (sales invoices — yang harus ditagih ke "
+        "pelanggan). READ-ONLY, Direksi saja. Pakai untuk 'piutang', 'faktur belum "
+        "dibayar pelanggan'.",
+     "input_schema": {"type": "object", "properties": {
+         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+    {"name": "kontak_kledo", "description":
+        "Lihat KONTAK Kledo (pelanggan & pemasok). READ-ONLY, Direksi saja.",
+     "input_schema": {"type": "object", "properties": {
+         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+    {"name": "akun_kledo", "description":
+        "Lihat DAFTAR AKUN / chart of accounts Kledo. READ-ONLY, Direksi saja.",
+     "input_schema": {"type": "object", "properties": {
+         "maks": {"type": "integer", "description": "Jumlah maks (default 15)."}}}},
+]

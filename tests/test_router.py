@@ -11,6 +11,11 @@ def test_pilih_domain_email():
     assert "email" in router.pilih_domain("cek email finance masuk apa")
 
 
+def test_pilih_domain_keuangan():
+    assert "keuangan" in router.pilih_domain("berapa tagihan yang harus dibayar")
+    assert "keuangan" in router.pilih_domain("lihat faktur piutang di kledo")
+
+
 def test_pilih_domain_umum_fallback():
     assert router.pilih_domain("halo selamat pagi apa kabar") == {"umum"}
 
