@@ -12,7 +12,7 @@ import logging
 
 from app.ai import guard
 from app.config import settings
-from app.kantor import mail_gmail, persetujuan as pst
+from app.kantor import mail_gmail
 
 log = logging.getLogger("kantor.rapi")
 
@@ -37,22 +37,24 @@ _TOOL = [{
 }]
 
 _SYS = (
-    "Kamu pemilah email untuk merapikan inbox. Isi tool 'pilah_email'. "
-    "ATURAN MUTLAK: email berisi KODE OTP, verifikasi, login/sign-in, keamanan akun, "
-    "reset/ubah password, atau peringatan keamanan → SELALU 'penting'. JANGAN PERNAH "
-    "'rutin' untuk email seperti itu — jangan disentuh. "
-    "'rutin' (cukup dirapikan, TAK perlu dilaporkan) untuk email otomatis yang tak "
-    "butuh tindakan DAN bukan keamanan: promosi/iklan, newsletter, notifikasi sosial "
-    "media, no-reply informatif, NOTIFIKASI/pemberitahuan otomatis dari "
-    "bank/e-wallet/fintech (BRI, BCA, Mandiri, dll) — transaksi, mutasi, saldo, "
-    "e-statement, struk/receipt pembayaran yang sudah selesai, DAN laporan "
-    "harian/periodik otomatis dari aplikasi HR/absensi (mis. GajiHub: rekap "
-    "presensi/aktivitas harian) atau aplikasi lain. 'penting' untuk yang "
-    "butuh perhatian: TAGIHAN/invoice yang BELUM dibayar (ada jatuh tempo), email dari "
-    "ORANG (bukan sistem), pelanggan/mitra, karyawan/HR, hukum/kontrak/pemerintah, "
-    "ATAU keamanan/login/OTP. "
-    "'ragu' bila tak yakin. PRINSIP: sedikit saja ragu → 'ragu' (JANGAN 'rutin'). "
-    "Lebih baik bertanya daripada salah mengarsipkan."
+    "Kamu pemilah email untuk merapikan inbox. Isi tool 'pilah_email'. Pemilik HANYA "
+    "mau diberi tahu untuk email yang BENAR-BENAR PENTING (butuh tindakan/responnya); "
+    "sisanya rapikan DIAM-diam tanpa mengganggu. "
+    "ATURAN MUTLAK: KODE OTP, verifikasi, login/sign-in, keamanan akun, reset/ubah "
+    "password, peringatan keamanan → SELALU 'penting'. JANGAN disentuh. "
+    "'penting' (dilaporkan) HANYA bila email MENUNTUT TINDAKAN/RESPONS pemilik: "
+    "TAGIHAN/invoice BELUM dibayar (ada jatuh tempo), permintaan/pertanyaan/ajakan "
+    "langsung dari ORANG (pelanggan/mitra/karyawan/rekan) yang menunggu jawaban, "
+    "surat hukum/kontrak/pemerintah/pajak yang perlu ditindak, ATAU keamanan/OTP. "
+    "'rutin' (arsip DIAM, TAK dilaporkan) untuk yang TAK menuntut tindakan: promosi/"
+    "iklan, newsletter, notif media sosial, no-reply informatif, notifikasi/"
+    "pemberitahuan otomatis bank/e-wallet/fintech (mutasi/saldo/e-statement/struk/"
+    "receipt selesai), laporan periodik otomatis (GajiHub presensi dll), konfirmasi/"
+    "resi selesai, DAN email FYI/pemberitahuan/CC yang cuma memberi info tanpa minta "
+    "balasan — WALAU dari orang. "
+    "'ragu' hanya bila benar-benar tak bisa ditentukan. "
+    "PRINSIP: kalau tak jelas MENUNTUT tindakan pemilik → JANGAN 'penting'. Lebih baik "
+    "rapikan diam-diam daripada mengganggu dengan email tak penting."
 )
 
 
@@ -95,10 +97,8 @@ async def proses(mailbox: str, email: dict, aturan_list: list | None = None) -> 
             log.warning("auto-arsip gagal", exc_info=True)
             return "penting"
     if kat == "ragu":
-        ring = f"Dari {frm} — \"{subj}\"  (mailbox: {mailbox})"
-        await pst.buat_pending(
-            jenis="email_arsip", ringkasan=ring, diminta_oleh="bot-rapi",
-            payload={"mailbox": mailbox, "id": email["id"],
-                     "ringkasan_item": f"{frm} — {subj}"})
-        return "usul"
+        # Tak jelas → JANGAN ganggu Telegram & JANGAN arsip (aman): dibiarkan di inbox
+        # untuk ditinjau pemilik sendiri. (Dulu: kirim tombol penting/tidak — kini
+        # dihapus agar hanya email PENTING yang muncul di Telegram.)
+        return "diam"
     return "penting"
