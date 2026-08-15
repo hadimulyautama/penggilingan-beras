@@ -99,6 +99,7 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         tid = transit_id(c)
         if tid is None:
             raise RuntimeError("Folder _TRANSIT tidak ditemukan — tak bisa simpan draft.")
+        draft_id = c.pastikan_folder("04 - Draft", tid)  # draft → subfolder khusus
         tbs = [x.strip() for x in (p.get("tembusan") or "").replace(";", "\n").splitlines()
                if x.strip()] or None
         tbl = json.loads(p["tabel_json"]) if (p.get("tabel_json") or "").strip() else None
@@ -106,8 +107,8 @@ def _lakukan(c, jenis: str, p: dict) -> str:
             judul=p["judul"], isi=p["isi"], nomor=p.get("nomor", ""),
             tembusan=tbs, tabel=tbl,
         )
-        c.buat_file(p["nama_file_final"], data, _MIME_DOCX, tid)
-        return f"Dokumen '{p['nama_file_final']}' dibuat di _TRANSIT (status DRAFT)."
+        c.buat_file(p["nama_file_final"], data, _MIME_DOCX, draft_id)
+        return f"Dokumen '{p['nama_file_final']}' dibuat di _TRANSIT/04 - Draft (status DRAFT)."
     if jenis == "sheet_buat":
         isi = json.loads(p["isi_json"]) if (p.get("isi_json") or "").strip() else None
         _sid, url = c.buat_spreadsheet(p["nama"], p["parent_id"], isi)

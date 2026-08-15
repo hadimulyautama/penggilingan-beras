@@ -17,8 +17,11 @@ from app.config import settings
 
 log = logging.getLogger("kantor.invoice")
 
-# 08 - IT & Sistem / 03 - Lisensi & Langganan (rumah dokumen langganan software)
-LANGGANAN_FOLDER_ID = "1_IVqi1Nk56Jb8HywsSfTF3EHkiWUbyVJ"
+# Kategori FINAL yang disarankan untuk dokumen langganan (disposisi tetap manual).
+KATEGORI_LANGGANAN = "08 - IT & Sistem / 03 - Lisensi & Langganan"
+# Tahap staging di _TRANSIT (file berhenti di sini dulu; final = disposisi manual per SOP).
+STAGE_CETAK_ID = "1XlMGc72CW8tKgM36M-g2VYHHayx96vK_"   # 01 - Perlu Dicetak
+STAGE_FINAL_ID = "1Apex3m9QnH3bCnkq_9xLK9c4MFTStYJe"   # 03 - Siap Arsip Final
 _ID_BULAN = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep",
              "Okt", "Nov", "Des"]
 
@@ -44,6 +47,11 @@ _TOOL = [{
             "total": {"type": "string", "description": "Nominal total, mis. 'Rp 4.659.333'."},
             "lunas": {"type": "boolean", "description": "true bila tertulis sudah dibayar/lunas."},
             "siklus": {"type": "string", "enum": ["bulanan", "tahunan", "sekali", "tak jelas"]},
+            "perlu_fisik": {"type": "boolean",
+                            "description": "true bila dokumen BERNILAI HUKUM & perlu salinan "
+                                           "fisik: ada tanda tangan basah, materai, sertifikat, "
+                                           "kontrak/surat resmi ditandatangani. Invoice/nota/"
+                                           "kwitansi digital biasa (dokumen kerja) → false."},
             "keyakinan": {"type": "string", "enum": ["tinggi", "sedang", "rendah"]},
         },
         "required": ["jenis", "vendor", "keyakinan"],
@@ -55,7 +63,9 @@ _SYS = (
     "Utama. Isi tool 'ekstrak_invoice' dari isi dokumen. JUJUR & jangan mengarang: bila "
     "sebuah field tak ada di dokumen, kosongkan. 'tanggal' WAJIB format YYYY-MM-DD dari "
     "dokumen. 'langganan'=true hanya untuk langganan/lisensi berulang (software/SaaS/"
-    "hosting/domain/GPS). Bila dokumen jelas bukan invoice/tagihan → jenis='lainnya'."
+    "hosting/domain/GPS). 'perlu_fisik'=true HANYA untuk dokumen bernilai hukum (tanda "
+    "tangan basah/materai/sertifikat/kontrak resmi ditandatangani); invoice/nota/kwitansi "
+    "digital biasa → false. Bila dokumen jelas bukan invoice/tagihan → jenis='lainnya'."
 )
 
 
@@ -116,6 +126,7 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
     total = data.get("total", "")
     lunas = bool(data.get("lunas"))
     siklus = (data.get("siklus") or "").lower()
+    perlu_fisik = bool(data.get("perlu_fisik"))
     d, tgl_str = _tgl_id(data.get("tanggal", ""))
 
     invoice = jenis in ("invoice", "kwitansi")
@@ -123,12 +134,13 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
     svc_nama = cocok[0] if cocok else ""
     svc_idx = cocok[1] if cocok else -1
 
-    # (a) Arsip
-    if langganan:
-        folder = "08 - IT & Sistem / 03 - Lisensi & Langganan"
-        folder_id = LANGGANAN_FOLDER_ID
+    # (a) Arsip — berhenti di TAHAP staging _TRANSIT (bukan folder final).
+    # Disposisi final (ke kategori 00–11 + LOG) tetap MANUAL per SOP.
+    if perlu_fisik:
+        folder, folder_id = "01 - Perlu Dicetak", STAGE_CETAK_ID
     else:
-        folder, folder_id = "", ""  # kategori umum → tebak_kategori (increment lain)
+        folder, folder_id = "03 - Siap Arsip Final", STAGE_FINAL_ID
+    kategori_final = KATEGORI_LANGGANAN if langganan else ""
     status = "LUNAS" if lunas else "BELUM LUNAS"
     label = svc_nama or layanan or vendor or "Dokumen"
     bagian = [label]
@@ -157,9 +169,9 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
 
     return {
         "invoice": invoice, "langganan": langganan, "jenis": jenis,
-        "keyakinan": data.get("keyakinan", ""),
+        "keyakinan": data.get("keyakinan", ""), "perlu_fisik": perlu_fisik,
         "layanan_cocok": svc_nama, "layanan_idx": svc_idx, "vendor": vendor,
-        "folder": folder, "folder_id": folder_id,
+        "folder": folder, "folder_id": folder_id, "kategori_final": kategori_final,
         "nama_file": nama_usul, "it_updates": it_updates,
     }
 
@@ -208,7 +220,7 @@ async def usul_dari_file(file_id: str, mime: str, nama: str,
     sid = os.getenv("IT_ACCOUNTS_SHEET_ID", "1BxcGg1GitQmjTwbKRHmXUdiU2c2Z1yXt9TGK7kIOLY0")
     services = await asyncio.to_thread(c.sheet_baca, sid, "Services!A2:N300")
     u = susun_usulan(data, nama, services)
-    if not u["folder_id"]:  # Phase 1: hanya langganan (punya folder tujuan pasti)
+    if not u["langganan"]:  # Phase 1: hanya dokumen langganan
         return None
     sheet_updates = resolve_updates(services, u["layanan_idx"], u["it_updates"])
     from app.kantor import persetujuan as pst
@@ -230,7 +242,11 @@ def ringkas_usulan(u: dict) -> str:
              f"— {u.get('vendor') or '?'} (keyakinan {u.get('keyakinan')})"]
     baris.append("\n① ARSIP:")
     baris.append(f"   • Simpan sebagai: {u['nama_file']}")
-    baris.append(f"   • Ke folder: {u['folder'] or '(perlu tinjau kategori)'}")
+    baris.append(f"   • Ke TAHAP: {u['folder']}")
+    if u.get("perlu_fisik"):
+        baris.append("   • ⚠️ Perlu DICETAK (bernilai hukum/ttd) untuk arsip fisik")
+    if u.get("kategori_final"):
+        baris.append(f"   • Usul kategori final: {u['kategori_final']} (disposisi manual)")
     if u["layanan_cocok"] and u["it_updates"]:
         baris.append(f"\n② IT MANAGEMENT — perbarui '{u['layanan_cocok']}':")
         for field, nilai in u["it_updates"]:

@@ -10,7 +10,8 @@ _SVC = [
 _EKS_KLEDO = {
     "jenis": "invoice", "langganan": True, "vendor": "PT Kledo Berhati Nyaman",
     "layanan": "Kledo Elite", "no_invoice": "INV/VIII/70584", "tanggal": "2026-08-14",
-    "total": "Rp 4.659.333", "lunas": True, "siklus": "tahunan", "keyakinan": "tinggi",
+    "total": "Rp 4.659.333", "lunas": True, "siklus": "tahunan",
+    "perlu_fisik": False, "keyakinan": "tinggi",
 }
 
 
@@ -23,13 +24,24 @@ def test_cocok_layanan():
 def test_susun_usulan_langganan():
     u = invoice.susun_usulan(_EKS_KLEDO, "invoice-kledo.pdf", _SVC)
     assert u["langganan"] and u["layanan_cocok"] == "Kledo"
-    assert u["folder_id"] == invoice.LANGGANAN_FOLDER_ID
+    # perlu_fisik=False → berhenti di tahap '03 - Siap Arsip Final' (bukan folder final)
+    assert u["folder_id"] == invoice.STAGE_FINAL_ID
+    assert u["folder"] == "03 - Siap Arsip Final"
+    assert "Lisensi" in u["kategori_final"]  # usul kategori final (disposisi manual)
     assert u["nama_file"] == "Kledo - Invoice INV-VIII-70584 - 14 Agu 2026 - LUNAS.pdf"
     d = dict(u["it_updates"])
     assert d["biaya"] == "Rp 4.659.333/thn"
     assert d["siklus"] == "tahunan"
     assert d["renewal"] == "14 Agu 2027"  # tanggal + 1 tahun
     assert "INV/VIII/70584" in d["catatan_tambah"] and "LUNAS" in d["catatan_tambah"]
+
+
+def test_susun_usulan_perlu_fisik_ke_cetak():
+    e = dict(_EKS_KLEDO, perlu_fisik=True)
+    u = invoice.susun_usulan(e, "x.pdf", _SVC)
+    assert u["folder_id"] == invoice.STAGE_CETAK_ID
+    assert u["folder"] == "01 - Perlu Dicetak"
+    assert "DICETAK" in invoice.ringkas_usulan(u)
 
 
 def test_susun_usulan_belum_lunas():
