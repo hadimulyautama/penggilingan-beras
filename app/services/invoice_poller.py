@@ -1,8 +1,11 @@
-"""Poller AUTO-WATCH INVOICE (Phase 1) — pantau _TRANSIT → usul (arsip + update IT).
+"""Poller AUTO-WATCH INVOICE (Phase 1) — pantau '03 - Siap Arsip Final' → usul (arsip
+FINAL + update IT).
 
-Tiap ~30 menit: pindai folder _TRANSIT untuk PDF baru, ekstrak (Haiku; teks PDF via
-pypdf = gratis), dan bila LANGGANAN → ajukan gerbang gabungan (persetujuan_poller yang
-kirim ✅/❌). Read-only sampai pemilik menyetujui.
+Auto-arsip HANYA berlaku pada file di subfolder '03 - Siap Arsip Final' (file yang sudah
+dinyatakan SIAP oleh petugas — cetak/scan selesai). Tahap 00/01/02 dikelola manusia; bot
+tak menyentuhnya. Tiap ~30 menit: pindai '03' untuk PDF, ekstrak (Haiku; teks PDF via
+pypdf = gratis), bila LANGGANAN → ajukan gerbang gabungan (pindah ke kategori resmi +
+update IT), lewat persetujuan_poller (✅/❌). Read-only sampai pemilik menyetujui.
 
 PENGAMAN BIAYA: di balik flag `settings.invoice_auto` (default OFF); batas `_CAP` file per
 putaran; dedup via pending aktif (tak mengusulkan file yang sama dua kali). Lampiran email
@@ -42,22 +45,20 @@ async def _sudah_diusulkan(file_id: str) -> bool:
 
 async def _scan_sekali() -> int:
     from app.kantor.drive.client import DriveClient, terkonfigurasi
-    from app.kantor.drive.operasi import transit_id
     if not terkonfigurasi():
         return 0
     c = DriveClient()
-    tid = await asyncio.to_thread(transit_id, c)
-    if not tid:
-        log.warning("Folder _TRANSIT tak ditemukan — auto-watch dilewati.")
-        return 0
-    files = await asyncio.to_thread(c.anak, tid)
+    # Auto-arsip HANYA dari '03 - Siap Arsip Final' (file yang sudah dinyatakan siap
+    # oleh petugas). Tahap 00/01/02 = dikelola manusia (pilah/cetak/scan).
+    src = invoice.STAGE_FINAL_ID
+    files = await asyncio.to_thread(c.anak, src)
     kandidat = [f for f in files if f.mime == "application/pdf"][:_CAP]
     diusulkan = 0
     for f in kandidat:
         if await _sudah_diusulkan(f.id):
             continue
         try:
-            aid = await invoice.usul_dari_file(f.id, f.mime, f.nama, asal_id=tid)
+            aid = await invoice.usul_dari_file(f.id, f.mime, f.nama, asal_id=src)
         except Exception:  # noqa: BLE001
             log.warning("proses invoice gagal: %s", f.nama, exc_info=True)
             continue
@@ -75,7 +76,7 @@ async def run_invoice_poller(bots: dict[str, Bot]) -> None:
     if not terkonfigurasi():
         log.warning("Drive belum terkonfigurasi — auto-watch invoice NONAKTIF.")
         return
-    log.info("Auto-watch invoice AKTIF (_TRANSIT tiap %s menit, maks %s/putaran).",
+    log.info("Auto-watch invoice AKTIF ('03 - Siap Arsip Final' tiap %s menit, maks %s/putaran).",
              _INTERVAL // 60, _CAP)
     terakhir: datetime | None = None
     while True:

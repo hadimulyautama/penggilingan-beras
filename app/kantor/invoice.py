@@ -17,10 +17,11 @@ from app.config import settings
 
 log = logging.getLogger("kantor.invoice")
 
-# Kategori FINAL yang disarankan untuk dokumen langganan (disposisi tetap manual).
+# Tujuan FINAL dokumen langganan (kategori resmi 08/03).
 KATEGORI_LANGGANAN = "08 - IT & Sistem / 03 - Lisensi & Langganan"
-# Tahap staging di _TRANSIT (file berhenti di sini dulu; final = disposisi manual per SOP).
-STAGE_CETAK_ID = "1XlMGc72CW8tKgM36M-g2VYHHayx96vK_"   # 01 - Perlu Dicetak
+LANGGANAN_FOLDER_ID = "1_IVqi1Nk56Jb8HywsSfTF3EHkiWUbyVJ"
+# Auto-arsip HANYA memproses folder ini — file yang sudah dinyatakan SIAP oleh petugas
+# (tahap 00/01/02 = dikelola manusia: pilah, cetak, scan). Bot tak menyentuhnya.
 STAGE_FINAL_ID = "1Apex3m9QnH3bCnkq_9xLK9c4MFTStYJe"   # 03 - Siap Arsip Final
 _ID_BULAN = ["", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep",
              "Okt", "Nov", "Des"]
@@ -134,13 +135,9 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
     svc_nama = cocok[0] if cocok else ""
     svc_idx = cocok[1] if cocok else -1
 
-    # (a) Arsip — berhenti di TAHAP staging _TRANSIT (bukan folder final).
-    # Disposisi final (ke kategori 00–11 + LOG) tetap MANUAL per SOP.
-    if perlu_fisik:
-        folder, folder_id = "01 - Perlu Dicetak", STAGE_CETAK_ID
-    else:
-        folder, folder_id = "03 - Siap Arsip Final", STAGE_FINAL_ID
-    kategori_final = KATEGORI_LANGGANAN if langganan else ""
+    # (a) Arsip FINAL — auto-arsip hanya jalan dari '03 - Siap Arsip Final' (sudah divet
+    # petugas: cetak/scan selesai). Bot memindahkan file ke kategori resmi.
+    folder, folder_id = KATEGORI_LANGGANAN, LANGGANAN_FOLDER_ID
     status = "LUNAS" if lunas else "BELUM LUNAS"
     label = svc_nama or layanan or vendor or "Dokumen"
     bagian = [label]
@@ -171,7 +168,7 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
         "invoice": invoice, "langganan": langganan, "jenis": jenis,
         "keyakinan": data.get("keyakinan", ""), "perlu_fisik": perlu_fisik,
         "layanan_cocok": svc_nama, "layanan_idx": svc_idx, "vendor": vendor,
-        "folder": folder, "folder_id": folder_id, "kategori_final": kategori_final,
+        "folder": folder, "folder_id": folder_id,
         "nama_file": nama_usul, "it_updates": it_updates,
     }
 
@@ -240,13 +237,11 @@ def ringkas_usulan(u: dict) -> str:
                 f"keyakinan {u.get('keyakinan')}). Tak ada usulan otomatis.")
     baris = [f"📄 Terdeteksi {'LANGGANAN' if u['langganan'] else 'invoice'} "
              f"— {u.get('vendor') or '?'} (keyakinan {u.get('keyakinan')})"]
-    baris.append("\n① ARSIP:")
+    baris.append("\n① ARSIP (dari '03 - Siap Arsip Final' → kategori resmi):")
     baris.append(f"   • Simpan sebagai: {u['nama_file']}")
-    baris.append(f"   • Ke TAHAP: {u['folder']}")
+    baris.append(f"   • Ke: {u['folder']}")
     if u.get("perlu_fisik"):
-        baris.append("   • ⚠️ Perlu DICETAK (bernilai hukum/ttd) untuk arsip fisik")
-    if u.get("kategori_final"):
-        baris.append(f"   • Usul kategori final: {u['kategori_final']} (disposisi manual)")
+        baris.append("   • ⚠️ Bernilai hukum — pastikan salinan FISIK sudah diarsip")
     if u["layanan_cocok"] and u["it_updates"]:
         baris.append(f"\n② IT MANAGEMENT — perbarui '{u['layanan_cocok']}':")
         for field, nilai in u["it_updates"]:
