@@ -25,6 +25,10 @@ _KUNCI: dict[str, list[str]] = {
                  "saldo", "kas", "omzet", "jatuh tempo", "terlaris"],
     "hr": ["karyawan", "cuti", "lembur", "presensi", "gaji", "payroll",
            "pengajuan", "gajihub", "absensi"],
+    "it": ["langganan", "subscription", "renewal", "lisensi", "akun it", "it accounts",
+           "domain", "hosting", "railway", "kledo", "gajihub", "workspace", "software",
+           "server", "cloudflare", "squarespace", "perpanjang", "jatuh tempo langganan",
+           "2fa", "password", "kredensial", "pic layanan", "admin layanan"],
     "sekretaris": ["kalender", "agenda", "jadwal", "acara", "rapat",
                    "surat tugas", "meeting", "notula"],
 }
@@ -50,6 +54,7 @@ DOMAIN_TOOLS: dict[str, set[str]] = {
               "buat_sheet", "update_sheet", "tambah_baris_sheet", "edit_google_docs"},
     "hr": {"karyawan_gajihub", "payroll_gajihub", "cuti_gajihub",
            "pengajuan_gajihub", "setujui_pengajuan", "tolak_pengajuan"},
+    "it": {"register_it", "cek_jatuh_tempo_it", "info_layanan_it"},
     "sekretaris": {"siapkan_surat_tugas", "daftar_kalender", "lihat_agenda",
                    "buat_acara", "ubah_acara", "hapus_acara"},
 }

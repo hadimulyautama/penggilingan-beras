@@ -23,6 +23,7 @@ from app.kantor import arsip_fisik
 from app.kantor import aturan
 from app.kantor import gajihub
 from app.kantor import kendali
+from app.kantor import it_aset
 from app.kantor import kledo
 from app.kantor import produksi
 from app.kantor import rbac
@@ -822,6 +823,7 @@ _TOOLS = [
 _TOOLS.extend(kendali.TOOLS)
 _TOOLS.extend(produksi.TOOLS)
 _TOOLS.extend(kledo.TOOLS)
+_TOOLS.extend(it_aset.TOOLS)
 _TOOLS.append({
     "name": "simulasi_hpp",
     "description": (
@@ -1105,6 +1107,8 @@ async def run_kantor_agent(
                 out = await produksi.jalankan(tu.name, tu.input or {}, user_id, role)
             elif tu.name in kledo.NAMA_TOOL:
                 out = await kledo.jalankan(tu.name, tu.input or {}, user_id, role)
+            elif tu.name in it_aset.NAMA_TOOL:
+                out = await it_aset.jalankan(tu.name, tu.input or {}, user_id, role)
             elif tu.name == "simulasi_hpp":
                 a = tu.input or {}
                 out = analytics.simulasi_hpp(
