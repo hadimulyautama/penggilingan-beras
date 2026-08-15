@@ -824,6 +824,7 @@ _TOOLS.extend(kendali.TOOLS)
 _TOOLS.extend(produksi.TOOLS)
 _TOOLS.extend(kledo.TOOLS)
 _TOOLS.extend(it_aset.TOOLS)
+_TOOLS.extend(it_aset.TOOLS_USUL)
 _TOOLS.append({
     "name": "simulasi_hpp",
     "description": (
@@ -1109,6 +1110,8 @@ async def run_kantor_agent(
                 out = await kledo.jalankan(tu.name, tu.input or {}, user_id, role)
             elif tu.name in it_aset.NAMA_TOOL:
                 out = await it_aset.jalankan(tu.name, tu.input or {}, user_id, role)
+            elif tu.name in it_aset.NAMA_USUL:
+                out = await it_aset.usul(tu.name, tu.input or {}, user_id, role)
             elif tu.name == "simulasi_hpp":
                 a = tu.input or {}
                 out = analytics.simulasi_hpp(

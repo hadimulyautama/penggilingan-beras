@@ -1,4 +1,5 @@
 """Tes IT Accounts (murni, tanpa jaringan Drive)."""
+import asyncio
 from datetime import date, datetime, timezone, timedelta
 
 from app.kantor import it_aset
@@ -62,6 +63,57 @@ def test_fmt_info_tak_ditemukan():
 def test_rbac_gate_it_tools():
     for nama in it_aset.NAMA_TOOL:
         assert _domain_mode(nama, {}) == ("folder_it", "read")
+
+
+def test_perbarui_write_gate():
+    assert _domain_mode("perbarui_it", {}) == ("folder_it", "write")
+    assert it_aset.NAMA_USUL == {"perbarui_it"}
+
+
+def test_perbarui_field_tak_valid(monkeypatch):
+    monkeypatch.setattr(it_aset, "terkonfigurasi", lambda: True)
+    out = asyncio.run(it_aset.usul(
+        "perbarui_it", {"layanan": "Kledo", "field": "password", "nilai": "x"},
+        role="admin"))
+    assert "tak diizinkan" in out
+
+
+def test_perbarui_tak_ditemukan(monkeypatch):
+    monkeypatch.setattr(it_aset, "terkonfigurasi", lambda: True)
+    monkeypatch.setattr(it_aset, "_baca_tab", lambda rng: [["S1", "Kledo", "Fin"]])
+    out = asyncio.run(it_aset.usul(
+        "perbarui_it", {"layanan": "Zzz", "field": "renewal", "nilai": "1 Jan 2030"},
+        role="admin"))
+    assert "tak ditemukan" in out.lower()
+
+
+def test_perbarui_valid_buat_pending(monkeypatch):
+    monkeypatch.setattr(it_aset, "terkonfigurasi", lambda: True)
+    monkeypatch.setattr(it_aset, "_baca_tab", lambda rng: [
+        ["S1", "Kledo", "Fin", "-", "-", "U01", "-", "-", "Elite", "-",
+         "14 Agu 2027", "-", "aktif", "tahunan"]])
+    import app.kantor.persetujuan as pst
+    cap = {}
+
+    async def fake(**kw):
+        cap.update(kw)
+        return 77
+    monkeypatch.setattr(pst, "buat_pending", fake)
+    out = asyncio.run(it_aset.usul(
+        "perbarui_it", {"layanan": "Kledo", "field": "renewal", "nilai": "14 Agu 2028"},
+        role="admin"))
+    assert cap["jenis"] == "sheet_update"
+    assert cap["payload"]["sel"] == "Services!K2"
+    assert cap["payload"]["nilai"] == "14 Agu 2028"
+    assert "#77" in out and "PERSETUJUAN" in out
+
+
+def test_perbarui_tolak_non_direksi(monkeypatch):
+    monkeypatch.setattr(it_aset, "terkonfigurasi", lambda: True)
+    out = asyncio.run(it_aset.usul(
+        "perbarui_it", {"layanan": "Kledo", "field": "renewal", "nilai": "x"},
+        user_id=None, role="staff"))
+    assert "hanya untuk Direksi" in out
 
 
 def test_status_siklus_ditampilkan():

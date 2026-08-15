@@ -244,3 +244,98 @@ TOOLS = [
 ]
 
 NAMA_TOOL = {t["name"] for t in TOOLS}
+
+
+# ─────────────────────── TULIS (berpagar: usul → konfirmasi) ───────────────────────
+# field → (huruf kolom, indeks 0, label). Kolom login/kredensial SENGAJA tak diizinkan.
+_FIELD = {
+    "renewal": ("K", 10, "Tgl Renewal"), "tgl renewal": ("K", 10, "Tgl Renewal"),
+    "biaya": ("J", 9, "Biaya"), "status": ("M", 12, "Status"),
+    "siklus": ("N", 13, "Siklus"), "paket": ("I", 8, "Paket"),
+    "catatan": ("L", 11, "Catatan"),
+}
+
+
+async def _boleh_tulis(user_id: int | None, role: str | None) -> bool:
+    if (role or "").strip().lower() == "admin":
+        return True
+    from app.kantor import rbac
+    grants = await rbac.grants_user(user_id) if user_id is not None else {}
+    return rbac.boleh(grants, "folder_it", "write")
+
+
+def _cari_baris(rows: list[list], nama: str) -> tuple[int | None, list, str]:
+    """Cari baris layanan by nama (contains). → (baris_sheet|None, row, pesan_err)."""
+    kata = nama.lower().strip()
+    cocok = [(i, r) for i, r in enumerate(rows)
+             if kata and kata in _sel(r, 1).lower()]
+    if not cocok:
+        return None, [], f"Layanan '{nama}' tak ditemukan di database IT."
+    if len(cocok) > 1:
+        opsi = "\n".join(f"• {_sel(r, 1)}" for _, r in cocok[:10])
+        return None, [], f"Ada {len(cocok)} layanan cocok '{nama}' — sebut nama PERSIS:\n{opsi}"
+    i, r = cocok[0]
+    return i + 2, r, ""
+
+
+async def usul(nama_tool: str, args: dict, user_id: int | None = None,
+               role: str = "staff") -> str:
+    """Usulkan update 1 field layanan di sheet → GERBANG konfirmasi (jenis sheet_update)."""
+    if nama_tool != "perbarui_it":
+        return f"(tool tulis IT '{nama_tool}' tak dikenal)"
+    if not terkonfigurasi():
+        return "Google Drive belum terkonfigurasi — tak bisa memperbarui database IT."
+    if not await _boleh_tulis(user_id, role):
+        return "Ubah database IT hanya untuk Direksi / pemegang akses tulis IT (folder_it)."
+    a = args or {}
+    nama = str(a.get("layanan", "")).strip()
+    field = str(a.get("field", "")).strip().lower()
+    nilai = str(a.get("nilai", "")).strip()
+    if not nama or not field or not nilai:
+        return "Butuh: layanan, field (renewal/biaya/status/siklus/paket/catatan), nilai."
+    if field not in _FIELD:
+        return (f"Field '{field}' tak diizinkan. Pilih: "
+                f"{', '.join(sorted(set(v[2] for v in _FIELD.values())))} "
+                "(kolom login/kredensial tak bisa diubah lewat sini).")
+    import asyncio
+    try:
+        rows = await asyncio.to_thread(_baca_tab, "Services!A2:N300")
+    except Exception:  # noqa: BLE001
+        log.exception("baca Services gagal (usul)")
+        return "Gagal membaca database IT."
+    baris, row, err = _cari_baris(rows, nama)
+    if baris is None:
+        return err
+    kol, idx, label = _FIELD[field]
+    svc, lama = _sel(row, 1), _sel(row, idx)
+    ring = f"IT: perbarui *{svc}* — {label}: '{lama or '(kosong)'}' → '{nilai}'"
+    from app.kantor import persetujuan as pst
+    aid = await pst.buat_pending(
+        jenis="sheet_update", ringkasan=ring,
+        payload={"spreadsheet_id": _SHEET_ID, "sel": f"Services!{kol}{baris}",
+                 "nilai": nilai, "spreadsheet_nama": "IT Accounts (Database)"},
+        diminta_oleh="agen-it")
+    return (f"⏳ Diajukan untuk PERSETUJUAN (#{aid}) — BELUM ditulis.\n• {ring}\n"
+            "Sampaikan ke pengguna: menunggu tombol ✅ pemilik di Telegram; baru ditulis "
+            "setelah disetujui. Jangan mengaku sudah selesai.")
+
+
+TOOLS_USUL = [
+    {"name": "perbarui_it", "description":
+        "USULKAN perubahan 1 field layanan di database IT Accounts (tab Services) — untuk "
+        "saat pemilik bilang suatu layanan DIPERPANJANG/berubah (mis. 'Kledo diperpanjang "
+        "sampai 14 Agu 2028', 'domain sudah diperpanjang', 'biaya McEasy naik', 'Zoho "
+        "dipensiunkan'). Field yang boleh: renewal, biaya, status, siklus, paket, catatan "
+        "(kolom login/kredensial TAK bisa diubah). Untuk 'renewal' pakai format tanggal "
+        "'DD Mmm YYYY' (mis. '14 Agu 2028') agar radar bisa membacanya. BERPAGAR: sistem "
+        "akan minta pemilik menekan tombol Setujui dulu — JANGAN mengaku sudah tersimpan. "
+        "Direksi / pemegang akses tulis IT saja.",
+     "input_schema": {"type": "object", "properties": {
+         "layanan": {"type": "string", "description": "Nama layanan (mis. 'Kledo')."},
+         "field": {"type": "string", "description":
+                   "renewal | biaya | status | siklus | paket | catatan."},
+         "nilai": {"type": "string", "description": "Nilai baru."}},
+         "required": ["layanan", "field", "nilai"]}},
+]
+
+NAMA_USUL = {t["name"] for t in TOOLS_USUL}

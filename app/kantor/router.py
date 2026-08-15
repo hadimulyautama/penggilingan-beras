@@ -54,7 +54,7 @@ DOMAIN_TOOLS: dict[str, set[str]] = {
               "buat_sheet", "update_sheet", "tambah_baris_sheet", "edit_google_docs"},
     "hr": {"karyawan_gajihub", "payroll_gajihub", "cuti_gajihub",
            "pengajuan_gajihub", "setujui_pengajuan", "tolak_pengajuan"},
-    "it": {"register_it", "cek_jatuh_tempo_it", "info_layanan_it"},
+    "it": {"register_it", "cek_jatuh_tempo_it", "info_layanan_it", "perbarui_it"},
     "sekretaris": {"siapkan_surat_tugas", "daftar_kalender", "lihat_agenda",
                    "buat_acara", "ubah_acara", "hapus_acara"},
 }

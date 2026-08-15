@@ -152,6 +152,7 @@ _KLEDO_READ = {"tagihan_kledo", "faktur_kledo", "kontak_kledo", "akun_kledo", "n
                "saldo_bank_kledo", "penjualan_kledo", "hutang_kontak_kledo",
                "piutang_kontak_kledo"}
 _IT_READ = {"register_it", "cek_jatuh_tempo_it", "info_layanan_it"}
+_IT_WRITE = {"perbarui_it"}
 
 
 def _domain_mode(name: str, args: dict) -> tuple[str, str] | None:
@@ -171,6 +172,8 @@ def _domain_mode(name: str, args: dict) -> tuple[str, str] | None:
         return ("keuangan", "read")
     if name in _IT_READ:
         return ("folder_it", "read")
+    if name in _IT_WRITE:
+        return ("folder_it", "write")
     return None
 
 
