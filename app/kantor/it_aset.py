@@ -93,8 +93,13 @@ def _fmt_services(rows: list[list], filter_kata: str = "",
         if kata and kata not in svc.lower() and kata not in kat.lower():
             continue
         paket, biaya, renew, pic = _sel(r, 8), _sel(r, 9), _sel(r, 10), _sel(r, 5)
+        status, siklus = _sel(r, 12), _sel(r, 13)
         b = f"• {svc} [{kat}]"
+        if status and status.lower() != "aktif":
+            b += f" ⚠️{status}"
         detail = []
+        if siklus and siklus not in ("-", ""):
+            detail.append(f"siklus {siklus}")
         if paket and paket not in ("-", ""):
             detail.append(f"paket {paket}")
         if biaya and biaya not in ("-", ""):
@@ -154,8 +159,9 @@ def _fmt_info(nama: str, services: list[list], keamanan: list[list],
         return f"Layanan '{nama}' tak ditemukan di database IT."
     svc = _sel(srow, 1)
     baris = [f"🔧 {svc}"]
-    peta = [("Kategori", 2), ("Paket", 8), ("Biaya", 9), ("Tgl Renewal", 10),
-            ("PIC", 5), ("Admin", 7), ("Metode Login", 4), ("Catatan", 11)]
+    peta = [("Kategori", 2), ("Status", 12), ("Paket", 8), ("Biaya", 9),
+            ("Siklus", 13), ("Tgl Renewal", 10), ("PIC", 5), ("Admin", 7),
+            ("Metode Login", 4), ("Catatan", 11)]
     for label, i in peta:
         v = _sel(srow, i)
         if v and v != "-":
@@ -189,19 +195,19 @@ async def jalankan(nama_tool: str, args: dict, user_id: int | None = None,
     try:
         if nama_tool == "register_it":
             rows, users = await asyncio.gather(
-                asyncio.to_thread(_baca_tab, "Services!A2:L300"),
+                asyncio.to_thread(_baca_tab, "Services!A2:N300"),
                 asyncio.to_thread(_baca_tab, "Users!A2:C300"),
             )
             return _fmt_services(rows, str(a.get("filter", "")), _peta_user(users))
         if nama_tool == "cek_jatuh_tempo_it":
-            rows = await asyncio.to_thread(_baca_tab, "Services!A2:L300")
+            rows = await asyncio.to_thread(_baca_tab, "Services!A2:N300")
             return _fmt_jatuh_tempo(rows, int(a.get("hari", 45) or 45))
         if nama_tool == "info_layanan_it":
             nama = str(a.get("layanan", "")).strip()
             if not nama:
                 return "Sebutkan nama layanannya (mis. 'Railway', 'Kledo')."
             services, keamanan, akses, users = await asyncio.gather(
-                asyncio.to_thread(_baca_tab, "Services!A2:L300"),
+                asyncio.to_thread(_baca_tab, "Services!A2:N300"),
                 asyncio.to_thread(_baca_tab, "Keamanan!A2:I300"),
                 asyncio.to_thread(_baca_tab, "Akses!A2:H300"),
                 asyncio.to_thread(_baca_tab, "Users!A2:C300"),

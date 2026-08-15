@@ -62,3 +62,17 @@ def test_fmt_info_tak_ditemukan():
 def test_rbac_gate_it_tools():
     for nama in it_aset.NAMA_TOOL:
         assert _domain_mode(nama, {}) == ("folder_it", "read")
+
+
+def test_status_siklus_ditampilkan():
+    # baris 14 kolom: ...L Catatan, M Status, N Siklus
+    zoho = [["S9", "Zoho", "Email", "-", "-", "U01", "-", "-", "-", "-", "-", "-",
+             "dipensiunkan", "-"]]
+    out = it_aset._fmt_services(zoho, "", {})
+    assert "dipensiunkan" in out
+    kledo = [["S8", "Kledo", "Finance", "-", "-", "U01", "-", "-", "Elite", "-",
+              "14 Agu 2027", "-", "aktif", "tahunan"]]
+    out2 = it_aset._fmt_services(kledo, "", {})
+    assert "siklus tahunan" in out2 and "⚠️" not in out2  # aktif → tanpa penanda
+    info = it_aset._fmt_info("kledo", kledo, [], [], {})
+    assert "Status: aktif" in info and "Siklus: tahunan" in info
