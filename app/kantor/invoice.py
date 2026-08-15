@@ -121,6 +121,7 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
     invoice = jenis in ("invoice", "kwitansi")
     cocok = cocok_layanan(vendor, layanan, services) if services else None
     svc_nama = cocok[0] if cocok else ""
+    svc_idx = cocok[1] if cocok else -1
 
     # (a) Arsip
     if langganan:
@@ -157,10 +158,67 @@ def susun_usulan(data: dict, nama_file: str, services: list[list]) -> dict:
     return {
         "invoice": invoice, "langganan": langganan, "jenis": jenis,
         "keyakinan": data.get("keyakinan", ""),
-        "layanan_cocok": svc_nama, "vendor": vendor,
+        "layanan_cocok": svc_nama, "layanan_idx": svc_idx, "vendor": vendor,
         "folder": folder, "folder_id": folder_id,
         "nama_file": nama_usul, "it_updates": it_updates,
     }
+
+
+# field → kolom Services (untuk resolusi sel konkret saat menyusun payload gerbang).
+_COL = {"biaya": "J", "siklus": "N", "renewal": "K", "paket": "I", "status": "M"}
+
+
+def resolve_updates(services: list[list], idx: int,
+                    it_updates: list[tuple[str, str]]) -> list[list[str]]:
+    """it_updates (field,nilai) → [[range_sel, nilai], ...] konkret. `catatan_tambah`
+    di-append ke catatan lama (kolom L) tanpa duplikat. Deterministik, mudah diuji."""
+    if idx < 0:
+        return []
+    row = idx + 2
+    lama_catatan = services[idx][11] if len(services[idx]) > 11 else ""
+    out: list[list[str]] = []
+    for field, nilai in it_updates:
+        if field == "catatan_tambah":
+            inti = nilai.strip(". ")
+            if inti and inti in (lama_catatan or ""):
+                continue
+            baru = (f"{lama_catatan} | {nilai}").strip(" |") if lama_catatan else nilai
+            out.append([f"Services!L{row}", baru])
+        elif field in _COL:
+            out.append([f"Services!{_COL[field]}{row}", nilai])
+    return out
+
+
+async def usul_dari_file(file_id: str, mime: str, nama: str,
+                         asal_id: str | None = None) -> int | None:
+    """Baca dokumen di Drive → ekstrak → bila LANGGANAN, ajukan gerbang gabungan
+    (arsip + update IT). → id pending, atau None bila dilewati (bukan invoice/tak yakin/
+    tak bisa dibaca). Phase 1: hanya dokumen langganan (folder 08/03)."""
+    import asyncio
+    import os
+
+    from app.kantor.drive.client import DriveClient
+    c = DriveClient()
+    teks = await asyncio.to_thread(c.unduh_teks, file_id, mime)
+    if not (teks or "").strip():
+        return None  # gambar/scan tanpa teks → lewati (OCR vision = increment lain)
+    data = await ekstrak(teks, nama)
+    if data.get("keyakinan") == "rendah":
+        return None
+    sid = os.getenv("IT_ACCOUNTS_SHEET_ID", "1BxcGg1GitQmjTwbKRHmXUdiU2c2Z1yXt9TGK7kIOLY0")
+    services = await asyncio.to_thread(c.sheet_baca, sid, "Services!A2:N300")
+    u = susun_usulan(data, nama, services)
+    if not u["folder_id"]:  # Phase 1: hanya langganan (punya folder tujuan pasti)
+        return None
+    sheet_updates = resolve_updates(services, u["layanan_idx"], u["it_updates"])
+    from app.kantor import persetujuan as pst
+    aid = await pst.buat_pending(
+        jenis="invoice_proses", ringkasan=ringkas_usulan(u),
+        payload={"file_id": file_id, "folder_id": u["folder_id"], "asal_id": asal_id,
+                 "nama_file": u["nama_file"], "folder_label": u["folder"],
+                 "sheet_id": sid, "sheet_updates": sheet_updates},
+        diminta_oleh="poller-invoice")
+    return aid
 
 
 def ringkas_usulan(u: dict) -> str:

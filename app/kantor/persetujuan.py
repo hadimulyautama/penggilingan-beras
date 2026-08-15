@@ -159,6 +159,20 @@ def _lakukan(c, jenis: str, p: dict) -> str:
         from app.kantor import mail_gmail
         mail_gmail.arsipkan(p["mailbox"], p["id"])
         return f"Email diarsipkan ({p.get('ringkasan_item', '')}) — keluar inbox, tetap tersimpan."
+    if jenis == "invoice_proses":
+        # Gabungan: (a) arsipkan file (pindah + rename), (b) perbarui field IT di sheet.
+        fid = p["file_id"]
+        if p.get("folder_id"):
+            c.pindah(fid, p["folder_id"], p.get("asal_id"))
+        if p.get("nama_file"):
+            c.ganti_nama(fid, p["nama_file"])
+        n = 0
+        for rng, nilai in (p.get("sheet_updates") or []):
+            c.sheet_tulis(p["sheet_id"], rng, [[nilai]])
+            n += 1
+        fld = p.get("folder_label") or "folder tujuan"
+        ekor = f"; {n} field IT diperbarui." if n else "."
+        return f"Invoice diproses: '{p.get('nama_file', 'file')}' diarsipkan ke {fld}{ekor}"
     raise ValueError(f"jenis aksi tak dikenal: {jenis}")
 
 

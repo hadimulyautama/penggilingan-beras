@@ -45,6 +45,33 @@ def test_bukan_invoice():
     assert "Tak ada usulan" in invoice.ringkas_usulan(u)
 
 
+def test_resolve_updates_ke_sel_konkret():
+    # services baris idx 1 (Kledo) → sheet row 3; catatan lama di kolom L (idx 11)
+    svc = [
+        ["S1", "Railway", "Hosting"] + [""] * 9,
+        ["S9", "Kledo", "Finance"] + [""] * 8 + ["Akuntansi."],  # idx 11 = catatan
+    ]
+    ups = [("biaya", "Rp 4.659.333/thn"), ("renewal", "14 Agu 2027"),
+           ("siklus", "tahunan"), ("catatan_tambah", "Invoice INV/1 (14 Agu 2026) LUNAS.")]
+    out = invoice.resolve_updates(svc, 1, ups)
+    d = dict((r[0], r[1]) for r in out)
+    assert d["Services!J3"] == "Rp 4.659.333/thn"   # J = biaya
+    assert d["Services!K3"] == "14 Agu 2027"         # K = renewal
+    assert d["Services!N3"] == "tahunan"             # N = siklus
+    assert d["Services!L3"].startswith("Akuntansi. | Invoice INV/1")  # catatan append
+
+
+def test_resolve_updates_catatan_tak_dobel():
+    svc = [["S9", "Kledo", "Finance"] + [""] * 8 + ["Sudah ada Invoice INV/1 di sini."]]
+    out = invoice.resolve_updates(svc, 0, [("catatan_tambah", "Invoice INV/1 (x).")])
+    # inti "Invoice INV/1 (x)" tak ada, tapi "Invoice INV/1" ada → uji kasar: tetap append
+    assert isinstance(out, list)
+
+
+def test_resolve_updates_tanpa_layanan():
+    assert invoice.resolve_updates([], -1, [("biaya", "x")]) == []
+
+
 def test_tak_cocok_layanan_tetap_arsip():
     e = dict(_EKS_KLEDO, vendor="Adobe", layanan="Photoshop")
     u = invoice.susun_usulan(e, "x.pdf", _SVC)

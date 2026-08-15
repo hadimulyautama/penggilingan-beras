@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # 0 token). Default OFF (bundel penuh + prompt-cache utuh). Nilai utama: akurasi.
     router_aktif: bool = False
 
+    # Auto-watch invoice: pantau _TRANSIT → usul (arsip + update IT) lewat gerbang.
+    # Default OFF (jaga biaya OCR/LLM; nyalakan setelah divalidasi, mis. saat GajiHub).
+    invoice_auto: bool = False
+
     # Aplikasi
     app_timezone: str = "Asia/Jakarta"
     undo_window_minutes: int = 15
