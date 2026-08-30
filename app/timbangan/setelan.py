@@ -112,6 +112,86 @@ DAFTAR: tuple[Definisi, ...] = (
 PETA: dict[str, Definisi] = {d.kunci: d for d in DAFTAR}
 
 
+# ── Sakelar ───────────────────────────────────────────────────────────────
+#
+# Berbeda dari DAFTAR di atas yang berisi angka, ini pilihan hidup/mati.
+# Sengaja dipisahkan, bukan disimpan sebagai angka 1/0, supaya tidak pernah
+# tersasar ke kotak isian angka di halaman Pengaturan.
+
+@dataclass(frozen=True)
+class Sakelar:
+    kunci: str
+    nama: str
+    arti: str
+    peringatan: str = ""
+
+
+MODE_UJI_COBA = "mode_uji_coba"
+
+SAKELAR: tuple[Sakelar, ...] = (
+    Sakelar(
+        kunci=MODE_UJI_COBA,
+        nama="Mode uji coba",
+        arti="Mengizinkan Admin MENGHAPUS catatan timbang secara permanen.",
+        peringatan=(
+            "Matikan setelah pos timbang dipakai sungguhan. Selama menyala, "
+            "catatan bisa hilang untuk selamanya — di luar fase uji coba, yang "
+            "keliru cukup dibatalkan beralasan dan tetap tersimpan."
+        ),
+    ),
+)
+
+PETA_SAKELAR: dict[str, Sakelar] = {s.kunci: s for s in SAKELAR}
+
+
+async def sakelar(db: AsyncSession, kunci: str) -> bool:
+    """Baca satu sakelar. Tidak ada barisnya berarti MATI."""
+    baris = (await db.execute(
+        select(TimbanganConfig).where(TimbanganConfig.kunci == kunci)
+    )).scalars().first()
+    return bool(baris) and baris.nilai.strip().lower() in ("1", "ya", "true", "on")
+
+
+async def semua_sakelar(db: AsyncSession) -> dict[str, bool]:
+    tersimpan = {
+        b.kunci: b.nilai.strip().lower()
+        for b in (await db.execute(select(TimbanganConfig))).scalars()
+    }
+    return {
+        s.kunci: tersimpan.get(s.kunci, "") in ("1", "ya", "true", "on")
+        for s in SAKELAR
+    }
+
+
+async def setel_sakelar(
+    db: AsyncSession, *, akun: TimbanganAkun, kunci: str, nyala: bool
+) -> bool:
+    s = PETA_SAKELAR.get(kunci)
+    if s is None:
+        raise SetelanError(f"Sakelar '{kunci}' tidak dikenal.")
+
+    baris = (await db.execute(
+        select(TimbanganConfig).where(TimbanganConfig.kunci == kunci)
+    )).scalars().first()
+    sebelum = baris.nilai if baris else "0"
+    nilai = "1" if nyala else "0"
+
+    if baris is None:
+        baris = TimbanganConfig(kunci=kunci, nilai=nilai)
+        db.add(baris)
+    else:
+        baris.nilai = nilai
+    baris.diubah_oleh_id = akun.id
+
+    from app.timbangan.service import catat_audit
+    await catat_audit(
+        db, akun=akun, aksi="UBAH_SAKELAR", entitas="config", entitas_id=kunci,
+        ringkasan=f"{s.nama}: {'dinyalakan' if nyala else 'dimatikan'}",
+        sebelum={kunci: sebelum}, sesudah={kunci: nilai},
+    )
+    return nyala
+
+
 def _baca(teks: str) -> float:
     """Terima '20000', '20.000', dan '0,5' — sama seperti isian lain."""
     bersih = str(teks or "").strip().replace(" ", "")

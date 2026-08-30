@@ -160,8 +160,13 @@ Lalu periksa dengan mata:
 
 - `/timbangan/` menampilkan tiga pilihan: Barang masuk, Pengiriman, Jasa timbang
 - `/timbangan/aturan` menampilkan 11 komoditas beserta tara dan batasnya
-- Buat satu transaksi uji, lalu **batalkan** — jangan hapus. Modul ini memang
-  tidak punya cara menghapus.
+- Buat satu transaksi uji, lalu **batalkan** — bukan dihapus.
+
+**Selama fase uji coba**, Admin dapat menyalakan **Mode uji coba** di halaman
+Pengaturan untuk menghapus catatan percobaan secara permanen. **Matikan
+sakelar itu begitu pos timbang dipakai sungguhan** — di luar fase percobaan,
+yang keliru cukup dibatalkan beralasan dan tetap tersimpan, karena riwayat
+timbangan adalah bukti.
 
 ---
 

@@ -255,6 +255,26 @@
         </form>
       </details>
     {% endif %}
+    {% if mode_uji_coba and akun.is_admin %}
+      <details class="kartu" style="border-color:var(--bahaya)">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px;
+                        color:var(--bahaya)">
+          Hapus permanen (mode uji coba)
+        </summary>
+        <div class="bantu" style="margin-top:10px;line-height:1.55">
+          Catatan ini akan <b>hilang untuk selamanya</b>, beserta lembar
+          pemeriksaan dan riwayat cetaknya. Yang tertinggal hanya satu baris di
+          jejak audit berisi salinan isinya.<br><br>
+          Di luar fase uji coba, yang keliru cukup <b>dibatalkan beralasan</b> —
+          datanya tetap tersimpan, karena riwayat timbangan adalah bukti.
+        </div>
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/hapus"
+              style="margin-top:12px">
+          <button type="submit" class="tbl bahaya blok"
+                  data-sibuk="Menghapus…">Hapus permanen</button>
+        </form>
+      </details>
+    {% endif %}
   </div>
 
 {% endblock %}

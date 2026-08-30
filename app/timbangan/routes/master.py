@@ -119,6 +119,8 @@ async def pengaturan(
     return render(
         request, "pengaturan.html",
         jumlah=jumlah,
+        sakelar=setelan.SAKELAR,
+        sakelar_nyala=await setelan.semua_sakelar(db),
         alat=await _parameter_alat(db),
         bukti=_parameter_bukti(),
         sesi=_parameter_sesi(),
@@ -152,6 +154,29 @@ async def simpan_pengaturan(
     except setelan.SetelanError as e:
         return redirect("/pengaturan", err=str(e))
     return redirect("/pengaturan", ok=pesan)
+
+
+@router.post("/pengaturan/sakelar")
+async def setel_sakelar(
+    request: Request,
+    kunci: str = Form(...),
+    nyala: str = Form("0"),
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Nyalakan atau matikan satu sakelar. Admin saja."""
+    try:
+        hidup = await setelan.setel_sakelar(
+            db, akun=akun, kunci=kunci, nyala=nyala in ("1", "ya", "on", "true")
+        )
+        await db.commit()
+    except setelan.SetelanError as e:
+        return redirect("/pengaturan", err=str(e))
+    nama = setelan.PETA_SAKELAR[kunci].nama
+    return redirect(
+        "/pengaturan",
+        ok=f"{nama} {'dinyalakan' if hidup else 'dimatikan'}.",
+    )
 
 
 @router.get("/aturan")

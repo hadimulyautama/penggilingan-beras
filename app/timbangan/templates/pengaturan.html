@@ -126,6 +126,39 @@
     </div>
   </div>
 
+  {# ── Sakelar: hanya Admin, dan sengaja diberi bingkai mencolok ── #}
+  {% if akun.is_admin %}
+    {% for s in sakelar %}
+      {% set nyala = sakelar_nyala.get(s.kunci) %}
+      <div class="kartu" style="{{ 'border-color:var(--bahaya)' if nyala }}">
+        <div class="kartu__judul">
+          {{ s.nama }}
+          {% if nyala %}
+            <span class="lencana lencana--bahaya">Menyala</span>
+          {% else %}
+            <span class="lencana lencana--netral">Mati</span>
+          {% endif %}
+        </div>
+        <div class="bantu" style="line-height:1.55">{{ s.arti }}</div>
+        {% if s.peringatan %}
+          <div class="bantu" style="line-height:1.55;margin-top:8px;
+                      color:{{ 'var(--bahaya)' if nyala else 'var(--tinta-4)' }}">
+            {{ s.peringatan }}
+          </div>
+        {% endif %}
+        <form method="post" action="{{ PREFIX }}/pengaturan/sakelar"
+              style="margin-top:12px">
+          <input type="hidden" name="kunci" value="{{ s.kunci }}">
+          <input type="hidden" name="nyala" value="{{ '0' if nyala else '1' }}">
+          <button type="submit"
+                  class="tbl blok {{ 'bahaya' if nyala else 'halus' }}">
+            {{ 'Matikan sekarang' if nyala else 'Nyalakan' }}
+          </button>
+        </form>
+      </div>
+    {% endfor %}
+  {% endif %}
+
   {# ── Parameter alat & operasional ── #}
   <div class="kartu">
     <div class="kartu__judul">Alat &amp; batas operasional</div>
@@ -217,7 +250,8 @@
       — bukan disembunyikan, melainkan memang tidak pernah dibuat. Urusan
       pembelian dan pembayaran berada di Kledo.<br><br>
       <b>Menghapus data.</b> Transaksi keliru dibatalkan beralasan dan tetap
-      tersimpan. Tidak ada tombol hapus di mana pun.<br><br>
+      tersimpan. Satu-satunya pengecualian adalah <b>mode uji coba</b> di atas —
+      dan itu pun meninggalkan salinan isinya di jejak audit.<br><br>
       <b>Jejak audit.</b> Hanya bertambah. Koreksi menulis baris baru berisi
       nilai sebelum dan sesudah, tidak menimpa yang lama.
     </div>

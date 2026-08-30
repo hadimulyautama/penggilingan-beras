@@ -125,7 +125,7 @@ Aturan yang berlaku untuk semua bundel:
 
 Berlaku untuk modul mana pun, sekarang maupun yang ditambahkan nanti:
 
-- **Data tidak dihapus permanen.** Yang salah dibatalkan beralasan dan tetap tersimpan.
+- **Data tidak dihapus permanen.** Yang salah dibatalkan beralasan dan tetap tersimpan. Satu-satunya pengecualian: sakelar **mode uji coba** pada modul Timbangan, yang mengizinkan Admin menghapus catatan timbang selama fase percobaan. Mati secara bawaan, dan penghapusannya tetap menyalin isi transaksi ke jejak audit.
 - **Audit hanya bertambah.** Koreksi menulis baris baru berisi nilai sebelum dan sesudah.
 - **Hak akses di kode, bukan di tampilan.** Menyembunyikan menu bukan pengamanan.
 - **Tidak ada master tandingan.** Orang dan mitra punya satu sumber kebenaran.
