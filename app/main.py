@@ -13,6 +13,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
 from app.services.billing_poller import run_billing_poller
+from app.services.kledo_kontak_poller import run_kledo_kontak_poller
 from app.services.briefing_poller import run_briefing_poller
 from app.services.deadline_poller import run_deadline_poller
 from app.services.email_rapi_poller import run_email_rapi_poller
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     brief_task = asyncio.create_task(run_briefing_poller(bots))
     deadline_task = asyncio.create_task(run_deadline_poller(bots))
     billing_task = asyncio.create_task(run_billing_poller(bots))
+    kontak_task = asyncio.create_task(run_kledo_kontak_poller(bots))
     invoice_task = asyncio.create_task(run_invoice_poller(bots))
     hb_task = asyncio.create_task(run_heartbeat(bots))
     log.info("Backend siap. Bot aktif: %s", list(settings.bot_tokens.keys()) or "(none)")
@@ -55,7 +57,8 @@ async def lifespan(app: FastAPI):
         # Hentikan task latar dengan membatalkan, lalu tutup sesi bot.
         # Guard karena saat --reload polling bisa belum/selesai berjalan.
         for task in (poll_task, sched_task, pers_task, brief_task,
-                     deadline_task, billing_task, invoice_task, rapi_task, hb_task):
+                     deadline_task, billing_task, invoice_task, rapi_task,
+                     kontak_task, hb_task):
             task.cancel()
             try:
                 await task

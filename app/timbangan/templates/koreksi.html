@@ -34,9 +34,16 @@
       <div class="lbl">Supplier / pihak</div>
       <select class="fld" name="supplier_id">
         <option value="">— tidak diubah —</option>
-        {% for s in supplier %}
-          <option value="{{ s.id }}" {{ 'selected' if trx.supplier_id == s.id }}>
-            {{ s.nama_supplier }}</option>
+        {% for kelompok, daftar in [('Sering datang', supplier_pilihan[0]),
+                                    ('Lainnya', supplier_pilihan[1])] %}
+          {% if daftar %}
+            <optgroup label="{{ kelompok }}">
+              {% for s in daftar %}
+                <option value="{{ s.id }}" {{ 'selected' if trx.supplier_id == s.id }}>
+                  {{ s.nama_supplier }}</option>
+              {% endfor %}
+            </optgroup>
+          {% endif %}
         {% endfor %}
       </select>
     </div>

@@ -233,6 +233,33 @@ async def profil_supplier(
     return profil
 
 
+async def supplier_pilihan(
+    db: AsyncSession, *, hari: int = 120
+) -> tuple[list[Supplier], list[Supplier]]:
+    """Supplier dipecah dua: yang benar-benar dipakai belakangan, dan sisanya.
+
+    Daftar dari Kledo memuat seluruh vendor — termasuk pemasok karung dan
+    sablon yang tidak pernah lewat jembatan timbang. Petugas hanya berurusan
+    dengan belasan nama; menyuruhnya menggulir ratusan nama di ponsel, sambil
+    truk menunggu, adalah cara membuat orang salah pilih.
+    """
+    batas = sekarang().date() - timedelta(days=hari)
+    terpakai = set((await db.execute(
+        select(TimbanganTransaksi.supplier_id)
+        .where(
+            TimbanganTransaksi.supplier_id.is_not(None),
+            TimbanganTransaksi.tanggal >= batas,
+            TimbanganTransaksi.status_transaksi == TRX_AKTIF,
+        )
+        .distinct()
+    )).scalars())
+
+    semua = await daftar_supplier(db)
+    sering = [s for s in semua if s.id in terpakai]
+    lainnya = [s for s in semua if s.id not in terpakai]
+    return sering, lainnya
+
+
 async def daftar_supplier(
     db: AsyncSession, *, hanya_aktif: bool = True
 ) -> list[Supplier]:

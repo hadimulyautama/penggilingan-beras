@@ -22,7 +22,12 @@ from app import database
 from app.database import Base
 from app.models import Supplier
 from app.timbangan import service
-from app.timbangan.models import ROLE_ADMIN, ROLE_PETUGAS, TimbanganAkun
+from app.timbangan.models import (
+    ROLE_ADMIN,
+    ROLE_PENGAWAS,
+    ROLE_PETUGAS,
+    TimbanganAkun,
+)
 from app.timbangan.security import hash_sandi
 from app.timbangan.web import PREFIX, pasang
 
@@ -46,6 +51,8 @@ async def app_uji(monkeypatch):
         db.add_all([
             TimbanganAkun(username="budi", nama="Budi", role=ROLE_PETUGAS,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P1"),
+            TimbanganAkun(username="miftah", nama="Miftah", role=ROLE_PENGAWAS,
+                          password_hash=hash_sandi(SANDI), perangkat_kode="P9"),
             TimbanganAkun(username="wahid", nama="Wahid", role=ROLE_ADMIN,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P0"),
             Supplier(nama_supplier="H. Anton"),
@@ -577,3 +584,136 @@ async def test_perubahan_setelan_tercatat_di_audit(klien, app_uji):
         )).scalars().all()
     assert len(jejak) == 1
     assert "4" in jejak[0].nilai_sebelum and "8" in jejak[0].nilai_sesudah
+
+
+# ─────────────── Menambah pengguna: Admin saja ───────────────
+#
+# Peran menentukan siapa boleh mengoreksi timbangan dan menutup pemeriksaan.
+# Siapa pun yang bisa membuat akun, bisa memberi dirinya peran apa pun — jadi
+# pintu ini dijaga paling ketat. Pengawas sengaja ikut diuji: ia peran yang
+# paling dekat ke Admin, dan paling mungkin keliru diberi akses saat kode
+# disalin-tempel di kemudian hari.
+
+async def jumlah_akun(app_uji) -> int:
+    from sqlalchemy import func, select
+    from app import database
+
+    async with database.SessionLocal() as db:
+        return (await db.execute(select(func.count(TimbanganAkun.id)))).scalar_one()
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_bukan_admin_tidak_bisa_membuka_halaman_pengguna(klien, siapa):
+    await login(klien, siapa)
+    r = await klien.get(f"{PREFIX}/pengguna")
+    assert r.status_code == 403
+    assert "hanya untuk Admin" in r.text
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_bukan_admin_tidak_bisa_membuat_akun(klien, app_uji, siapa):
+    """Ditolak, DAN tidak ada akun yang benar-benar terbuat."""
+    sebelum = await jumlah_akun(app_uji)
+    await login(klien, siapa)
+
+    r = await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "penyusup", "nama": "Penyusup", "role": ROLE_ADMIN,
+        "sandi": "rahasia123", "perangkat_kode": "PX",
+    })
+    assert r.status_code == 403
+    assert await jumlah_akun(app_uji) == sebelum
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_bukan_admin_tidak_bisa_menonaktifkan_akun(klien, app_uji, siapa):
+    from sqlalchemy import select
+    from app import database
+
+    await login(klien, siapa)
+    r = await klien.post(f"{PREFIX}/pengguna/1/status")
+    assert r.status_code == 403
+
+    async with database.SessionLocal() as db:
+        korban = (await db.execute(
+            select(TimbanganAkun).where(TimbanganAkun.id == 1)
+        )).scalars().one()
+        assert korban.status == "aktif"      # tidak tersentuh
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_pengaturan_tidak_menawarkan_pintu_pengguna(klien, siapa):
+    """Bukan hanya ditolak saat dibuka — tautannya pun tidak ditampilkan."""
+    await login(klien, siapa)
+    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    assert "Pengguna &amp; perangkat" not in teks
+    assert f"{PREFIX}/pengguna" not in teks
+
+
+async def test_admin_bisa_membuat_akun(klien, app_uji):
+    """Sisi lain dari aturan yang sama — Admin memang harus bisa."""
+    sebelum = await jumlah_akun(app_uji)
+    await login(klien, "wahid")
+
+    r = await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "SARI", "nama": "Sari", "role": ROLE_PETUGAS,
+        "sandi": "rahasia123", "perangkat_kode": "p2",
+    })
+    assert "Akun Sari dibuat" in r.text
+    assert await jumlah_akun(app_uji) == sebelum + 1
+    # Nama pengguna dijadikan huruf kecil, kode perangkat huruf besar.
+    assert "sari" in r.text and "P2" in r.text
+
+
+async def test_admin_tidak_bisa_menonaktifkan_akun_sendiri(klien):
+    """Menutup pintu terakhir bagi diri sendiri harus dicegah."""
+    from sqlalchemy import select
+    from app import database
+
+    await login(klien, "wahid")
+    async with database.SessionLocal() as db:
+        aku = (await db.execute(
+            select(TimbanganAkun).where(TimbanganAkun.username == "wahid")
+        )).scalars().one()
+
+    r = await klien.post(f"{PREFIX}/pengguna/{aku.id}/status")
+    assert "tidak bisa menonaktifkan akun sendiri" in r.text
+
+
+# ─────────────── Daftar supplier: yang sering datang di atas ───────────────
+
+async def test_supplier_sering_datang_didahulukan(klien, app_uji):
+    """Daftar dari Kledo memuat ratusan vendor; petugas hanya butuh belasan.
+
+    Yang pernah dipakai belakangan harus muncul di kelompok atas, supaya
+    petugas tidak menggulir ratusan nama sambil truk menunggu.
+    """
+    from app import database
+    from app.models import Supplier
+
+    async with database.SessionLocal() as db:
+        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i}") for i in range(5)])
+        await db.commit()
+
+    await login(klien)
+    # H. Anton (id 1) dipakai pada transaksi ini.
+    await _selesaikan(klien, "GABAH_BASAH")
+
+    teks = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert 'label="Sering datang"' in teks and 'label="Lainnya"' in teks
+    sering = teks.split('label="Sering datang"')[1].split("</optgroup>")[0]
+    assert "H. Anton" in sering
+    assert "Vendor Karung 0" not in sering
+
+
+async def test_supplier_belum_pernah_dipakai_tetap_bisa_dipilih(klien, app_uji):
+    """Yang jarang datang tidak boleh hilang — hanya diturunkan urutannya."""
+    from app import database
+    from app.models import Supplier
+
+    async with database.SessionLocal() as db:
+        db.add(Supplier(nama_supplier="Pemasok Musiman"))
+        await db.commit()
+
+    await login(klien)
+    teks = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert "Pemasok Musiman" in teks

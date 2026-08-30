@@ -129,11 +129,13 @@ async def form_timbang_pertama(
         return redirect("/", err=str(e))
 
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
+    sering, lainnya = await service.supplier_pilihan(db)
     return render(
         request, "timbang1.html",
         aturan=aturan,
         kode=await service.kode_baru(db, akun),
-        supplier=await service.daftar_supplier(db),
+        supplier_sering=sering,
+        supplier_lainnya=lainnya,
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),

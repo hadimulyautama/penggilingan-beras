@@ -128,7 +128,7 @@ async def form_koreksi(
     return render(
         request, "koreksi.html",
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
-        supplier=await service.daftar_supplier(db),
+        supplier_pilihan=await service.supplier_pilihan(db),
         kembali=f"{PREFIX}/transaksi/{transaksi_id}",
     )
 

@@ -49,9 +49,20 @@
       <div class="lbl">{{ 'Supplier' if masuk else 'Tujuan / pembeli' }}</div>
       <select class="fld" name="supplier_id">
         <option value="">— pilih —</option>
-        {% for s in supplier %}
-          <option value="{{ s.id }}">{{ s.nama_supplier }}</option>
-        {% endfor %}
+        {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
+           menunggu, bukan sambil duduk santai. #}
+        {% if supplier_sering %}
+          <optgroup label="Sering datang">
+            {% for s in supplier_sering %}
+              <option value="{{ s.id }}">{{ s.nama_supplier }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+        <optgroup label="Lainnya">
+          {% for s in supplier_lainnya %}
+            <option value="{{ s.id }}">{{ s.nama_supplier }}</option>
+          {% endfor %}
+        </optgroup>
       </select>
       <div class="bantu">
         Belum terdaftar? Isi nama pada kolom di bawah.
