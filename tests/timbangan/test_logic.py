@@ -319,3 +319,22 @@ def test_tidak_ada_harga_di_hasil():
     kolom = " ".join(h.as_dict().keys()).lower()
     for kata in ("harga", "nilai", "rupiah", "biaya", "potongan", "refaksi"):
         assert kata not in kolom
+
+
+def test_beras_masuk_meniru_beras_pk():
+    """Keputusan Direksi 30 Agustus 2026: beras masuk mengikuti beras PK.
+
+    Dikunci uji agar tidak menyimpang diam-diam saat salah satunya direvisi —
+    kalau beras PK berubah dan beras masuk memang harus ikut, uji ini yang
+    mengingatkan.
+    """
+    import dataclasses
+
+    pk = L.JENIS_PETA["BERAS_PK"]
+    beras = L.JENIS_PETA["BERAS_MASUK"]
+    beda = [
+        f.name for f in dataclasses.fields(pk)
+        if f.name not in ("kode", "nama")
+        and getattr(pk, f.name) != getattr(beras, f.name)
+    ]
+    assert beda == [], f"beras masuk menyimpang dari beras PK pada: {beda}"

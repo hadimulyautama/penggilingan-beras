@@ -163,8 +163,9 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_arah=ARAH_KURANG_SAJA,
         rahasia=False, cetak_bukti=True,
     ),
-    # NEEDS CONFIRMATION: aturan beras masuk belum ditetapkan Direksi;
-    # sementara mengikuti beras PK. Lihat RANCANGAN.md bagian 12 butir 4.
+    # Beras masuk mengikuti aturan beras PK — ditetapkan Direksi 30 Agustus
+    # 2026. Keduanya sengaja identik di kedua belas kolomnya, termasuk nota
+    # yang diberikan kepada pengirim beserta angka selisihnya.
     AturanJenis(
         kode="BERAS_MASUK", nama="Beras", arah=MASUK, acuan=ACUAN_NOTA,
         sumber_tara=TARA_SAMPLING, tara_bawaan_kg=0.1,
