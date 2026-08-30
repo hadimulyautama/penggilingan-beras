@@ -33,6 +33,7 @@
 
   {% block bar %}
   <header class="bar">
+   <div class="bar__dalam">
     {% if kembali %}
       <a href="{{ kembali }}" aria-label="Kembali">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -50,6 +51,7 @@
         {{ akun.nama[:1]|upper }}
       </a>
     {% endif %}
+   </div>
   </header>
   {% endblock %}
 

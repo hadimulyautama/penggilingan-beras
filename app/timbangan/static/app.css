@@ -59,9 +59,9 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
 .bar {
   background: var(--tinta-2); color: #fff;
   padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top));
-  display: flex; align-items: center; gap: 12px;
   position: sticky; top: 0; z-index: 20;
 }
+.bar__dalam { display: flex; align-items: center; gap: 12px; width: 100%; }
 .bar__judul { font-family: var(--judul); font-size: 17px; font-weight: 700; }
 .bar__sub { font-size: 12px; color: #b5ad9e; }
 .bar__isi { flex-grow: 1; min-width: 0; }
@@ -148,8 +148,46 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
   .bawah a.aktif { background: var(--aksi-muda); }
   .bawah__tanda { transform: translate(11px, -9px); }
 
-  /* Konten bergeser; .bingkai tetap memusat di sisa ruangnya. */
+  /* Konten bergeser menghindari sidebar. */
   body { padding-left: var(--sidebar); }
+
+  /* Bingkai melebar penuh; yang dibatasi lebarnya adalah ISInya, bukan
+     rangkanya — supaya bilah atas membentang selebar area seperti kepala
+     aplikasi sungguhan, bukan kartu gelap yang mengambang di tengah. */
+  .bingkai { max-width: none; }
+  .isi { padding: 22px 24px 40px; }
+  /* `width: 100%` WAJIB di sini: pada item flex, margin auto membatalkan
+     `align-self: stretch`, sehingga tanpa itu kolom isi menyusut mengikuti
+     isinya alih-alih memenuhi 820px. */
+  .isi, .bar__dalam { width: 100%; max-width: 820px; margin: 0 auto; }
+  .bingkai.lebar .isi, .bingkai.lebar .bar__dalam { max-width: 1180px; }
+
+  /* Bilah atas jadi TERANG. Identitas aplikasi sudah dipegang sidebar; dua
+     blok gelap bersebelahan membuat layar terasa berat, dan judul halaman
+     lebih mudah dibaca sebagai teks biasa daripada teks putih di atas gelap. */
+  .bar {
+    background: var(--putih); color: var(--tinta);
+    border-bottom: 1px solid var(--garis);
+    padding: 15px 24px;
+  }
+  .bar__judul { font-size: 19px; color: var(--tinta); }
+  .bar__sub { color: var(--tinta-4); font-size: 12.5px; }
+  .bar a { color: var(--tinta-3); }
+  .bar a:hover { color: var(--tinta); }
+  .bar__avatar {
+    background: var(--kertas-3); color: var(--tinta-2);
+    width: 32px; height: 32px; font-size: 12.5px;
+  }
+  .konteks, .tahap { padding-left: 24px; padding-right: 24px; }
+  .konteks > *, .tahap > * { max-width: none; }
+
+  /* Tombol tidak ikut melebar bersama halaman. Sasaran sentuh selebar layar
+     masuk akal di ponsel; di desktop ia justru berhenti terbaca sebagai
+     tombol. Dibatasi lalu dirapatkan ke kiri, sejajar isi di atasnya. */
+  .saring > .tbl { max-width: 190px; }
+  .bingkai.lebar .isi > .tbl.blok,
+  .bingkai.lebar .isi > form > .tbl.blok { max-width: 300px; }
+  .bingkai.lebar .aksi-baris { max-width: 520px; }
 }
 
 /* ── Konteks komoditas & tahap ───────────────────────────── */

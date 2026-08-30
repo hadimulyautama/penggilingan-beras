@@ -1065,6 +1065,29 @@ def test_navigasi_berubah_bentuk_lewat_css_saja():
     assert "padding-left: var(--sidebar)" in sidebar
 
 
+def test_rangka_desktop_terang_dan_sejajar():
+    """Bilah atas terang, dan lebarnya sama persis dengan kolom isi.
+
+    Dua hal yang mudah rusak: `.isi` memakai margin auto pada item flex, yang
+    MEMBATALKAN stretch — tanpa `width: 100%` kolomnya menyusut mengikuti isi
+    dan tidak lagi sejajar dengan bilah di atasnya.
+    """
+    import pathlib, re
+
+    css = (pathlib.Path(__file__).resolve().parents[2]
+           / "app/timbangan/static/app.css").read_text()
+    desktop = css.split("@media (min-width: 900px)")[1]
+
+    # Bar terang, bukan gelap seperti di ponsel.
+    assert "background: var(--putih)" in desktop
+
+    # Keduanya dibatasi pada lebar yang SAMA, dan keduanya width:100%.
+    aturan = re.search(r"\.isi, \.bar__dalam \{([^}]*)\}", desktop).group(1)
+    assert "width: 100%" in aturan
+    assert "max-width: 820px" in aturan
+    assert ".bingkai.lebar .isi, .bingkai.lebar .bar__dalam" in desktop
+
+
 async def test_kepala_sidebar_ada_di_markup(klien):
     """Tersembunyi di ponsel lewat CSS, bukan lewat cabang di template."""
     await login(klien)
