@@ -280,9 +280,28 @@
   tampilkanJumlah();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register(PREFIX + '/static/sw.js', { scope: PREFIX + '/' })
+    navigator.serviceWorker.register(PREFIX + '/sw.js', { scope: PREFIX + '/' })
       .catch(function () { /* tanpa service worker aplikasi tetap jalan */ });
   }
 
   window.timbangan = { antrekan: antrekan, kirimAntrean: kirimAntrean };
+
+  /* Baris tabel yang bisa dibuka.
+   *
+   * Tautan "Ubah" tetap ada supaya bisa dijangkau papan ketik dan pembaca
+   * layar; ini hanya memperlebar sasaran sentuh ke seluruh baris — di layar
+   * ponsel tombol sekecil itu sering meleset.
+   */
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) { return; }
+    var baris = e.target.closest('tr[data-buka]');
+    if (!baris) { return; }
+    // Jangan rebut klik yang memang punya tujuan sendiri.
+    if (e.target.closest('a, button, input, select, label')) { return; }
+    // Jangan pindah halaman saat orang sedang menyorot teks untuk disalin.
+    var sorot = window.getSelection && window.getSelection().toString();
+    if (sorot) { return; }
+    window.location.href = baris.getAttribute('data-buka');
+  });
+
 })();

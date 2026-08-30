@@ -111,11 +111,18 @@ async def test_sandi_salah_tidak_membocorkan_yang_mana(klien):
     assert "Nama pengguna atau kata sandi salah" in r.text
 
 
-async def test_petugas_tidak_bisa_membuka_halaman_pengawas(klien):
-    await login(klien)
-    r = await klien.get(f"{PREFIX}/laporan")
-    assert r.status_code == 403
-    assert "Pengawas" in r.text
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+@pytest.mark.parametrize(
+    "jalur", ["/laporan", "/monitoring", "/ekspor.csv", "/transaksi"]
+)
+async def test_ringkasan_dan_catatan_hanya_untuk_admin(klien, siapa, jalur):
+    """Keputusan Direksi: hanya Admin yang melihat rekapitulasi.
+
+    Berlaku untuk Pengawas juga, bukan hanya petugas — perannya tetap
+    memeriksa hasil timbang, bukan membaca seluruh riwayat perusahaan.
+    """
+    await login(klien, siapa)
+    assert (await klien.get(PREFIX + jalur)).status_code == 403
 
 
 async def test_petugas_tidak_bisa_membuka_halaman_admin(klien):
@@ -510,11 +517,13 @@ async def test_keluar_dari_pengaturan_benar_benar_mengakhiri_sesi(klien):
     assert "Kata sandi" in (await klien.get(f"{PREFIX}/")).text
 
 
-async def test_tautan_akun_lama_mengarah_ke_pengaturan(klien):
+async def test_akun_kini_halaman_tersendiri_bukan_pengalihan(klien):
+    """Dulu /akun hanya melempar ke Pengaturan; sekarang ia halamannya sendiri,
+    karena di sinilah setiap peran mengurus namanya dan sandinya."""
     await login(klien)
     r = await klien.get(f"{PREFIX}/akun")
-    assert str(r.url).endswith("/pengaturan")
-    assert "Akun ini" in r.text
+    assert str(r.url).endswith("/akun")
+    assert "Akun saya" in r.text
 
 
 # ─────────────────── Setelan operasional benar-benar berdampak ───────────────────
@@ -1093,3 +1102,309 @@ async def test_kepala_sidebar_ada_di_markup(klien):
     await login(klien)
     teks = (await klien.get(f"{PREFIX}/")).text
     assert 'class="bawah__kepala"' in teks
+
+
+# ─────────────── Mengubah pengguna ───────────────
+
+async def akun_oleh(app_uji, username: str):
+    from sqlalchemy import select
+    from app import database
+
+    async with database.SessionLocal() as db:
+        return (await db.execute(
+            select(TimbanganAkun).where(TimbanganAkun.username == username)
+        )).scalars().one()
+
+
+async def test_admin_bisa_mengubah_nama_peran_dan_perangkat(klien, app_uji):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi Santoso", "username": "budi",
+        "role": ROLE_PENGAWAS, "perangkat_kode": "p7", "sandi_baru": "",
+    })
+    assert "diubah" in r.text
+
+    baru = await akun_oleh(app_uji, "budi")
+    assert baru.nama == "Budi Santoso"
+    assert baru.role == ROLE_PENGAWAS
+    assert baru.perangkat_kode == "P7"          # dijadikan huruf besar
+
+
+async def test_sandi_kosong_berarti_tidak_diubah(klien, app_uji):
+    """Membetulkan ejaan nama tidak boleh diam-diam menghapus sandi orang."""
+    sebelum = (await akun_oleh(app_uji, "budi")).password_hash
+    await login(klien, "wahid")
+
+    budi = await akun_oleh(app_uji, "budi")
+    await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi B", "username": "budi", "role": ROLE_PETUGAS,
+        "perangkat_kode": "P1", "sandi_baru": "",
+    })
+    assert (await akun_oleh(app_uji, "budi")).password_hash == sebelum
+
+
+async def test_sandi_baru_benar_benar_dipakai_untuk_masuk(klien, app_uji):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "budi", "role": ROLE_PETUGAS,
+        "perangkat_kode": "P1", "sandi_baru": "sandibaru9",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+
+    gagal = await klien.post(f"{PREFIX}/masuk", data={
+        "username": "budi", "sandi": SANDI, "perangkat": "", "tujuan": ""})
+    assert "Nama pengguna atau kata sandi salah" in gagal.text
+
+    berhasil = await klien.post(f"{PREFIX}/masuk", data={
+        "username": "budi", "sandi": "sandibaru9", "perangkat": "", "tujuan": ""})
+    assert "Barang masuk" in berhasil.text
+
+
+async def test_sandi_tidak_pernah_masuk_jejak_audit(klien, app_uji):
+    from sqlalchemy import select
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "budi", "role": ROLE_PETUGAS,
+        "perangkat_kode": "P1", "sandi_baru": "rahasiabaru7",
+    })
+    async with database.SessionLocal() as db:
+        jejak = (await db.execute(
+            select(TimbanganAudit).where(TimbanganAudit.aksi == "UBAH_AKUN")
+        )).scalars().one()
+    semua = f"{jejak.ringkasan}{jejak.nilai_sebelum}{jejak.nilai_sesudah}"
+    assert "rahasiabaru7" not in semua
+    assert "diganti" in semua              # faktanya dicatat, isinya tidak
+
+
+async def test_nama_pengguna_kembar_ditolak(klien, app_uji):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "wahid", "role": ROLE_PETUGAS,
+        "perangkat_kode": "P1", "sandi_baru": "",
+    })
+    assert "sudah dipakai" in r.text
+    assert (await akun_oleh(app_uji, "budi")).username == "budi"
+
+
+async def test_admin_terakhir_tidak_bisa_menurunkan_perannya(klien, app_uji):
+    """Kalau bisa, tidak akan ada lagi yang mampu mengelola pengguna."""
+    wahid = await akun_oleh(app_uji, "wahid")
+    await login(klien, "wahid")
+
+    r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}", data={
+        "nama": "Wahid", "username": "wahid", "role": ROLE_PETUGAS,
+        "perangkat_kode": "P0", "sandi_baru": "",
+    })
+    assert "satu-satunya Admin" in r.text
+    assert (await akun_oleh(app_uji, "wahid")).role == ROLE_ADMIN
+
+
+async def test_boleh_turun_peran_setelah_ada_admin_lain(klien, app_uji):
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "admin2", "nama": "Admin Dua", "role": ROLE_ADMIN,
+        "sandi": "rahasia123", "perangkat_kode": "P8",
+    })
+    wahid = await akun_oleh(app_uji, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}", data={
+        "nama": "Wahid", "username": "wahid", "role": ROLE_PENGAWAS,
+        "perangkat_kode": "P0", "sandi_baru": "",
+    })
+    # Turun peran sendiri langsung mencabut akses ke halaman pengguna, jadi
+    # ia diantar ke Pengaturan beserta alasannya — bukan ke layar 403 kosong.
+    assert r.status_code == 200
+    assert "tidak lagi terbuka" in r.text
+    assert (await akun_oleh(app_uji, "wahid")).role == ROLE_PENGAWAS
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_bukan_admin_tidak_bisa_mengubah_akun(klien, app_uji, siapa):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, siapa)
+
+    assert (await klien.get(f"{PREFIX}/pengguna/{budi.id}")).status_code == 403
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Disusupi", "username": "budi", "role": ROLE_ADMIN,
+        "perangkat_kode": "", "sandi_baru": "",
+    })
+    assert r.status_code == 403
+    assert (await akun_oleh(app_uji, "budi")).nama == "Budi"
+
+
+async def test_daftar_pengguna_barisnya_menunjuk_halaman_ubah(klien, app_uji):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    r = await klien.get(f"{PREFIX}/pengguna")
+    assert f'data-buka="{PREFIX}/pengguna/{budi.id}"' in r.text
+
+
+async def test_halaman_ubah_menampilkan_nilai_sekarang(klien, app_uji):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    r = await klien.get(f"{PREFIX}/pengguna/{budi.id}")
+    assert r.status_code == 200
+    assert 'value="budi"' in r.text
+    assert "Nonaktifkan akun ini" in r.text
+
+
+async def test_admin_tidak_bisa_menonaktifkan_akunnya_sendiri(klien, app_uji):
+    wahid = await akun_oleh(app_uji, "wahid")
+    await login(klien, "wahid")
+    r = await klien.get(f"{PREFIX}/pengguna/{wahid.id}")
+    assert "Nonaktifkan akun ini" not in r.text     # tombolnya tidak ada…
+
+    r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}/status")   # …dan
+    assert "akun sendiri" in r.text                                # ditolak
+    assert (await akun_oleh(app_uji, "wahid")).status == "aktif"
+
+
+# ─────────────── Akun saya (semua peran) ───────────────
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah", "wahid"])
+async def test_semua_peran_bisa_membuka_akun_sendiri(klien, siapa):
+    await login(klien, siapa)
+    r = await klien.get(f"{PREFIX}/akun")
+    assert r.status_code == 200
+    assert "Ganti sandi" in r.text
+
+
+async def test_petugas_bisa_membetulkan_nama_dan_username_sendiri(klien, app_uji):
+    await login(klien, "budi")
+    r = await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Budi Santoso", "username": "budis",
+        "sandi_lama": "", "sandi_baru": "",
+    })
+    assert "diubah" in r.text
+    orang = await akun_oleh(app_uji, "budis")
+    assert orang.nama == "Budi Santoso"
+
+
+async def test_petugas_tidak_bisa_menaikkan_perannya_lewat_akun_sendiri(
+    klien, app_uji
+):
+    """Formulirnya memang tidak punya kolom peran — pastikan mengirimkannya
+    sendiri pun tidak berpengaruh."""
+    await login(klien, "budi")
+    await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Budi", "username": "budi", "sandi_lama": "", "sandi_baru": "",
+        "role": ROLE_ADMIN, "perangkat_kode": "P0",
+    })
+    orang = await akun_oleh(app_uji, "budi")
+    assert orang.role == ROLE_PETUGAS
+    assert orang.perangkat_kode == "P1"
+
+
+async def test_ganti_sandi_sendiri_menuntut_sandi_sekarang(klien, app_uji):
+    """Perangkat pos dipakai bergantian dan tetap masuk sepanjang shift."""
+    sebelum = (await akun_oleh(app_uji, "budi")).password_hash
+    await login(klien, "budi")
+
+    r = await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Budi", "username": "budi",
+        "sandi_lama": "", "sandi_baru": "sandibaru9",
+    })
+    assert "sandi Anda yang sekarang" in r.text
+
+    r = await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Budi", "username": "budi",
+        "sandi_lama": "salahsekali", "sandi_baru": "sandibaru9",
+    })
+    assert "tidak cocok" in r.text
+    assert (await akun_oleh(app_uji, "budi")).password_hash == sebelum
+
+    r = await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Budi", "username": "budi",
+        "sandi_lama": SANDI, "sandi_baru": "sandibaru9",
+    })
+    assert "diubah" in r.text
+    assert (await akun_oleh(app_uji, "budi")).password_hash != sebelum
+
+
+async def test_petugas_tidak_bisa_mengubah_akun_orang_lain_lewat_akun_saya(
+    klien, app_uji
+):
+    """Rutenya tidak menerima id sama sekali — yang diubah selalu diri sendiri."""
+    await login(klien, "budi")
+    await klien.post(f"{PREFIX}/akun", data={
+        "nama": "Bukan Miftah", "username": "budi",
+        "sandi_lama": "", "sandi_baru": "", "akun_id": "2",
+    })
+    assert (await akun_oleh(app_uji, "miftah")).nama == "Miftah"
+
+
+# ─────────────── Catatan orang lain ───────────────
+
+async def test_petugas_tetap_bisa_membuka_hasil_timbangannya_sendiri(klien):
+    """Justru ke halaman inilah ia dikembalikan selesai menimbang, dan dari
+    sini pula notanya dicetak — menutupnya akan mematikan alur kerja."""
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}")
+    assert r.status_code == 200
+    assert f"/transaksi/{trx_id}/cetak" in r.text
+
+
+@pytest.mark.parametrize("siapa", ["sari", "miftah"])
+async def test_catatan_orang_lain_tertutup_meski_nomornya_ditebak(
+    klien, app_uji, siapa
+):
+    """Menutup daftar saja tidak cukup: nomor transaksi di URL berurutan."""
+    from app import database
+    from app.timbangan.models import ROLE_PETUGAS, TimbanganAkun
+    from app.timbangan.security import hash_sandi
+
+    async with database.SessionLocal() as db:
+        db.add(TimbanganAkun(
+            username="sari", nama="Sari", role=ROLE_PETUGAS,
+            password_hash=hash_sandi(SANDI), perangkat_kode="P2",
+        ))
+        await db.commit()
+
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, siapa)
+    for jalur in (
+        f"/transaksi/{trx_id}",
+        f"/transaksi/{trx_id}/cetak",
+        f"/transaksi/{trx_id}/cetak/ncr",
+        f"/transaksi/{trx_id}/cetak/80mm",
+    ):
+        r = await klien.get(PREFIX + jalur)
+        assert r.status_code == 403, jalur
+        assert "bukan hasil timbangan Anda" in r.text
+
+
+async def test_admin_tetap_bisa_membuka_catatan_siapa_pun(klien):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    assert (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).status_code == 200
+    assert (await klien.get(f"{PREFIX}/transaksi")).status_code == 200
+
+
+async def test_beranda_petugas_hanya_memuat_timbangannya_sendiri(klien, app_uji):
+    """Kalau tidak, berandanya penuh tautan yang berujung 'akses ditolak'."""
+    await login(klien, "budi")
+    kode_budi = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "miftah")
+    beranda = (await klien.get(f"{PREFIX}/")).text
+    assert f"/transaksi/{kode_budi}" not in beranda
+    assert "Timbangan saya hari ini" in beranda
+
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "wahid")
+    assert f"/transaksi/{kode_budi}" in (await klien.get(f"{PREFIX}/")).text

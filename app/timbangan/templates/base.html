@@ -104,6 +104,7 @@
         Tiket
       </a>
 
+      {% if akun.is_admin %}
       <a href="{{ PREFIX }}/transaksi"
          class="{{ 'aktif' if halaman in ('daftar', 'rincian', 'koreksi') }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
@@ -112,8 +113,9 @@
           <path d="M8 17h5"/></svg>
         Catatan
       </a>
+      {% endif %}
 
-      {% if akun.is_pengawas %}
+      {% if akun.is_admin %}
         <a href="{{ PREFIX }}/laporan"
            class="{{ 'aktif' if halaman in ('laporan', 'monitoring') }}">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"

@@ -13,7 +13,12 @@ from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import butuh_akun, butuh_pengawas
+from app.timbangan.security import (
+    AksesDitolak,
+    butuh_admin,
+    butuh_akun,
+    butuh_pengawas,
+)
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -31,10 +36,27 @@ KATEGORI_HASIL = {
 }
 
 
-async def _ambil(db: AsyncSession, transaksi_id: int):
+async def _ambil(db: AsyncSession, transaksi_id: int, akun: TimbanganAkun):
+    """Ambil satu transaksi, sekaligus memastikan orang ini berhak melihatnya.
+
+    Daftar catatan sudah tertutup untuk selain Admin, tapi menutup daftar
+    saja tidak cukup: nomor transaksi di URL berurutan, jadi siapa pun bisa
+    menebaknya. Sebaliknya rincian TIDAK boleh ditutup rapat — petugas
+    dikembalikan ke halaman inilah begitu selesai menimbang, dan dari sini
+    pula notanya dicetak. Jalan tengahnya: pekerjaan sendiri, bukan
+    pekerjaan orang lain.
+    """
     baris = await service.ambil_transaksi(db, transaksi_id)
     if baris is None:
         raise service.LayananError("Transaksi tidak ditemukan.")
+    boleh = akun.is_admin or akun.id in (
+        baris.trx.timbang1_petugas_id, baris.trx.timbang2_petugas_id
+    )
+    if not boleh:
+        raise AksesDitolak(
+            "Catatan ini bukan hasil timbangan Anda. Hanya Admin yang bisa "
+            "membuka catatan orang lain."
+        )
     return baris
 
 
@@ -43,7 +65,7 @@ async def _ambil(db: AsyncSession, transaksi_id: int):
 @router.get("/transaksi")
 async def daftar(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_akun),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     q = request.query_params
@@ -85,9 +107,9 @@ async def rincian(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
     aturan = await service.aturan_untuk(db, b.trx.jenis_kode)
     boleh_ubah, sebab = service.boleh_mengubah(b.trx, akun)
@@ -119,9 +141,9 @@ async def form_koreksi(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
     boleh, sebab = service.boleh_mengubah(b.trx, akun)
     if not boleh:
@@ -154,9 +176,9 @@ async def simpan_koreksi(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
     if not (alasan or "").strip():
         return redirect(
@@ -219,7 +241,7 @@ async def batalkan(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
         await service.void_transaksi(
             db, akun=akun, trx=b.trx, alasan=alasan,
             ip=request.client.host if request.client else None,
@@ -288,9 +310,9 @@ async def pilih_cetak(
 ):
     """Dua ukuran bukti: struk 80 mm dan lembar setengah NCR."""
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
     return render(
         request, "cetak_pilih.html",
@@ -308,9 +330,9 @@ async def _riwayat_cetak(db: AsyncSession, transaksi_id: int):
     )).scalars())
 
 
-async def _bahan_cetak(db: AsyncSession, transaksi_id: int):
+async def _bahan_cetak(db: AsyncSession, transaksi_id: int, akun):
     """Data yang sama untuk kedua ukuran — hanya tata letaknya berbeda."""
-    b = await _ambil(db, transaksi_id)
+    b = await _ambil(db, transaksi_id, akun)
     aturan = await service.aturan_untuk(db, b.trx.jenis_kode)
     petugas = {}
     for pid in {b.trx.timbang1_petugas_id, b.trx.timbang2_petugas_id} - {None}:
@@ -320,8 +342,8 @@ async def _bahan_cetak(db: AsyncSession, transaksi_id: int):
     return b, aturan, petugas
 
 
-async def _pdf(db, transaksi_id, request, ncr: bool):
-    b, aturan, petugas = await _bahan_cetak(db, transaksi_id)
+async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
+    b, aturan, petugas = await _bahan_cetak(db, transaksi_id, akun)
     umum = dict(
         trx=b.trx, aturan=aturan,
         pihak=(b.supplier_nama or b.trx.pihak_nama or ""),
@@ -353,9 +375,9 @@ async def cetak_ncr_pdf(
     tercetak di kertas nota.
     """
     try:
-        trx, isi = await _pdf(db, transaksi_id, request, ncr=True)
+        trx, isi = await _pdf(db, transaksi_id, request, ncr=True, akun=akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
     return Response(
         isi, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{trx.kode}.pdf"'},
@@ -371,9 +393,9 @@ async def cetak_80mm_pdf(
 ):
     """Struk 80 mm sebagai PDF, tanpa kop-kaki browser."""
     try:
-        trx, isi = await _pdf(db, transaksi_id, request, ncr=False)
+        trx, isi = await _pdf(db, transaksi_id, request, ncr=False, akun=akun)
     except service.LayananError as e:
-        return redirect("/transaksi", err=str(e))
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
     return Response(
         isi, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{trx.kode}-80mm.pdf"'},
@@ -390,7 +412,7 @@ async def catat_cetak(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        b = await _ambil(db, transaksi_id)
+        b = await _ambil(db, transaksi_id, akun)
         await service.catat_cetak(
             db, akun=akun, trx=b.trx, alasan=alasan or None,
             format=format.upper(),

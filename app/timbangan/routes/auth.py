@@ -7,7 +7,7 @@ truk tidak menunggu orang mengetik kata sandi.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,7 @@ from app.timbangan.security import (
     butuh_akun,
     cek_sandi,
 )
-from app.timbangan.web import PREFIX, redirect, render
+from app.timbangan.web import BASE_DIR, PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
 
@@ -90,12 +90,6 @@ async def proses_masuk(
     return balasan
 
 
-@router.get("/akun")
-async def halaman_akun(akun: TimbanganAkun = Depends(butuh_akun)):
-    """Tautan lama — isinya kini jadi satu dengan halaman Pengaturan."""
-    return RedirectResponse(f"{PREFIX}/pengaturan", status_code=307)
-
-
 @router.post("/keluar")
 async def proses_keluar(
     request: Request,
@@ -116,3 +110,29 @@ async def proses_keluar(
 async def halaman_luring(request: Request):
     """Halaman cadangan yang dilayani service worker saat jaringan hilang."""
     return render(request, "luring.html")
+
+
+@router.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Service worker, dilayani dari akar modul — bukan dari /static/.
+
+    Peramban menolak service worker yang mengaku menaungi cakupan di ATAS
+    letaknya sendiri. Disajikan dari `/static/sw.js`, pendaftaran untuk
+    cakupan `/timbangan/` selalu gagal — diam-diam, hanya sebagai galat di
+    konsol — sehingga halaman cadangan luring tidak pernah benar-benar
+    aktif. Di pos timbang yang sinyalnya naik-turun, itu justru bagian yang
+    paling dibutuhkan.
+
+    Header `Service-Worker-Allowed` dipertahankan sebagai sabuk pengaman
+    kedua bila suatu saat berkasnya dipindah lagi.
+    """
+    return FileResponse(
+        BASE_DIR / "static" / "sw.js",
+        media_type="application/javascript",
+        headers={
+            "Service-Worker-Allowed": f"{PREFIX}/",
+            # Jangan di-cache: inilah berkas yang memutuskan versi cache
+            # lainnya. Kalau ia sendiri basi, pembaruan tidak pernah sampai.
+            "Cache-Control": "no-cache",
+        },
+    )

@@ -38,8 +38,21 @@
       Kode perangkat ikut menyusun nomor transaksi, sehingga dua perangkat yang
       sedang tanpa jaringan tidak membuat nomor yang sama. Ganti dengan masuk
       ulang memakai kode lain.
+      {% if not akun.is_admin %}
+        Peran dan kode perangkat hanya bisa diubah Admin.
+      {% endif %}
     </div>
   </div>
+
+  <a href="{{ PREFIX }}/akun" class="pilihan" style="margin-bottom:18px">
+    <div class="pilihan__isi">
+      <div class="pilihan__nama">Ubah akun saya</div>
+      <div class="pilihan__ket">
+        Nama lengkap, nama pengguna, dan sandi
+      </div>
+    </div>
+    <span class="lencana lencana--aman">Bisa diubah</span>
+  </a>
 
   {# ── Yang bisa diubah dari layar ── #}
   <div>
@@ -56,7 +69,7 @@
       <span class="lencana lencana--netral">Lihat saja</span>
     </a>
 
-    {% if akun.is_pengawas %}
+    {% if akun.is_admin %}
       <a href="{{ PREFIX }}/tara" class="pilihan" style="margin-bottom:8px">
         <div class="pilihan__isi">
           <div class="pilihan__nama">Tara standar</div>
@@ -80,7 +93,7 @@
       </a>
     {% endif %}
 
-    {% if akun.is_pengawas %}
+    {% if akun.is_admin %}
       <a href="{{ PREFIX }}/monitoring" class="pilihan" style="margin-bottom:8px">
         <div class="pilihan__isi">
           <div class="pilihan__nama">Status pemantauan pihak</div>

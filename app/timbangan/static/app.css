@@ -396,6 +396,7 @@ th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--tinta-3); font-weight: 700; background: var(--kertas-2); }
 td.angka, th.angka { text-align: right; font-family: var(--mono); }
 tbody tr:hover { background: var(--kertas-2); }
+tr[data-buka] { cursor: pointer; }
 
 /* ── Ringkasan angka ─────────────────────────────────────── */
 

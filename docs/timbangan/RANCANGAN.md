@@ -395,20 +395,39 @@ Tiga belas tabel `timbangan_*`, ditambah kolom `suppliers.kledo_contact_id` seba
 
 ## 10. Peran & Akses
 
-| Kemampuan | Staff | Supervisor | Admin |
+Direvisi **30 Agustus 2026** (keputusan #6 di §12): rekapitulasi menjadi
+wewenang Admin saja.
+
+| Kemampuan | Petugas | Pengawas | Admin |
 |---|:--:|:--:|:--:|
-| Input, lihat miliknya | ✅ | ✅ | ✅ |
-| Lihat semua transaksi | — | ✅ | ✅ |
+| Menimbang, membuka & mencetak **hasil sendiri** | ✅ | ✅ | ✅ |
+| Membuka catatan **orang lain** | — | — | ✅ |
+| Daftar catatan (menu Catatan) | — | — | ✅ |
+| Ringkasan, monitoring, ekspor | — | — | ✅ |
 | Koreksi < 24 jam (miliknya) | ✅ | ✅ | ✅ |
-| Koreksi terkunci, VOID | — | ✅ | ✅ |
+| Koreksi terkunci, VOID | — | ✅¹ | ✅ |
 | Tutup paksa pengiriman kurang | ✅ | ✅ | ✅ |
-| Tutup lembar pemeriksaan | — | ✅ | ✅ |
+| Tutup lembar pemeriksaan | — | ✅¹ | ✅ |
 | Catat sampling tara | ✅ | ✅ | ✅ |
-| Setujui tara standar | — | — | ✅ (Wahid) |
-| Monitoring & skor supplier | — | ✅ | ✅ |
+| Setujui tara standar | — | — | ✅ |
+| Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ | ✅ |
+| Ubah peran & kode perangkat siapa pun | — | — | ✅ |
 | Master jenis, pihak, kendaraan | lihat | lihat | ✅ |
-| Ekspor | — | ✅ | ✅ |
 | Pengguna & audit log | — | — | ✅ |
+
+¹ **Tinggal di kode, tapi tidak lagi terjangkau.** VOID dan penutupan
+pemeriksaan dilakukan dari halaman rincian, dan sejak rekapitulasi ditutup,
+Pengawas hanya bisa membuka rincian timbangannya sendiri. Praktisnya keduanya
+kini Admin. Rutenya sengaja tidak diubah supaya wewenang Pengawas bisa
+dipulihkan dengan satu keputusan, bukan dengan menulis ulang alurnya —
+**menunggu keputusan Direksi**: apakah pemeriksaan memang berpindah ke Admin,
+atau Pengawas dikembalikan haknya membuka catatan yang bertanda perlu
+diperiksa.
+
+**Menutup daftar saja tidak cukup.** Nomor transaksi di URL berurutan, jadi
+rincian ikut dijaga: yang bukan Admin hanya boleh membuka transaksi yang ia
+timbang sendiri. Beranda pun dipersempit dengan aturan yang sama, supaya tidak
+memajang tautan yang berujung "akses ditolak".
 
 Ditegakkan di kode pada setiap rute. Sandi scrypt bersalt; cookie HttpOnly + SameSite=Lax + Secure, HMAC-SHA256, berlaku sampai Keluar; login gagal tercatat; ekspor tercatat pelaku dan rentangnya.
 
@@ -495,6 +514,7 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 2 | **Label status** | Tetap **"PERLU PEMERIKSAAN"** | Sistem mencatat temuan; manusia yang menyimpulkan. Label tersimpan permanen dan terbawa ke ekspor, jadi tidak boleh menuduh |
 | 3 | **Baris selisih pada bukti pengiriman** | **Tidak dicetak** | Angka kontrol internal tidak ikut dibawa sopir. Bukti tetap dicetak untuk semua komoditas dan ditandatangani sopir sebagai saksi |
 | 4 | **Tara beras masuk** | **Meniru beras PK** | Hasil sampling, bawaan 0,1 kg per karung, berlaku 90 hari. Dikunci uji `test_tara_beras_masuk_meniru_beras_pk`. **Hanya taranya yang diputuskan** — ambang 0,05 kg/karung dan nota yang diberikan ke pengirim masih usulan penyusun dan boleh dibedakan dari PK kapan pun |
+| 6 | **Ringkasan & Catatan** | **Admin saja** | Berlaku untuk Pengawas juga. Selain Admin, Pengaturan hanya menyediakan akun sendiri: nama lengkap, nama pengguna, sandi. Peran dan kode perangkat tetap wewenang Admin, karena keduanya menentukan apa yang boleh dikerjakan dan nomor transaksi apa yang keluar dari perangkat. Akibat lanjutannya pada peran Pengawas dicatat di §10 dan masih menunggu keputusan |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi

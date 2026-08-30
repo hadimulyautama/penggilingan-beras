@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian %}
+
+{% block judul %}Ubah {{ orang.nama }}{% endblock %}
+{% block bar_judul %}Ubah pengguna{% endblock %}
+{% block bar_sub %}{{ orang.nama }} · {{ orang.role_label }}{% endblock %}
+
+{% block isi %}
+
+  {% if diri_sendiri %}
+    <div class="bantu">
+      Ini akun Anda sendiri. Peran boleh diturunkan hanya bila masih ada Admin
+      aktif lain — kalau tidak, tidak akan ada yang bisa mengelola pengguna.
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}"
+        style="display:flex;flex-direction:column;gap:14px">
+
+    {{ isian('nama', 'Nama lengkap', orang.nama, '', 'text', '', true, true) }}
+    {{ isian('username', 'Nama pengguna', orang.username, '', 'text',
+             'Huruf kecil tanpa spasi. Mengubahnya mengubah cara ia masuk.',
+             true, true, 'autocapitalize="none"') }}
+
+    <div class="grup">
+      <div class="lbl">Peran</div>
+      <select class="fld" name="role">
+        {% for r in ROLES %}
+          <option value="{{ r }}" {{ 'selected' if orang.role == r }}>
+            {{ ROLE_LABEL[r] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {{ isian('perangkat_kode', 'Kode perangkat', orang.perangkat_kode or '',
+             '', 'text',
+             'P1, P2, dan seterusnya. Ikut menyusun nomor transaksi, jadi dua '
+             'perangkat tidak boleh memakai kode yang sama.',
+             false, false, 'maxlength="8" autocapitalize="characters"') }}
+
+    <div class="kartu">
+      <div class="kartu__judul">Ganti sandi</div>
+      {{ isian('sandi_baru', 'Sandi baru', '', '', 'password',
+               'Kosongkan bila tidak ingin mengubahnya. Minimal 6 karakter.',
+               false, true, 'autocomplete="new-password"') }}
+      <div class="bantu" style="margin-top:8px">
+        Sandi lama tidak bisa dilihat siapa pun, termasuk Admin — yang
+        tersimpan hanya sidik acaknya. Jejak audit mencatat bahwa sandi
+        diganti, bukan sandinya.
+      </div>
+    </div>
+
+    <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
+      Simpan perubahan
+    </button>
+  </form>
+
+  <div class="kartu">
+    <div class="kartu__judul">Keterangan</div>
+    <div class="baris"><span>Status</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ orang.status }}</b></div>
+    <div class="baris"><span>Terakhir masuk</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ orang.terakhir_login|tgl_jam }}</b></div>
+    <div class="baris"><span>Dibuat</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ orang.created_at|tgl_jam }}</b></div>
+  </div>
+
+  {% if not diri_sendiri %}
+    <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}/status">
+      <button type="submit" class="tbl halus blok">
+        {{ 'Nonaktifkan akun ini' if orang.status == 'aktif' else 'Aktifkan akun ini' }}
+      </button>
+    </form>
+    <div class="bantu" style="text-align:center">
+      Akun tidak pernah dihapus — yang berhenti dipakai dinonaktifkan, supaya
+      transaksi lama tetap menunjuk orang yang benar.
+    </div>
+  {% endif %}
+
+  <a href="{{ PREFIX }}/pengguna" class="tbl halus blok">Kembali ke daftar</a>
+
+{% endblock %}

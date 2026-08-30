@@ -74,14 +74,19 @@
   </div>
 
   <div>
-    <div class="lbl" style="margin-bottom:8px">Hari ini</div>
+    <div class="lbl" style="margin-bottom:8px">
+      {{ 'Hari ini' if akun.is_admin else 'Timbangan saya hari ini' }}
+    </div>
     {% if hari_ini_daftar %}
       {% for b in hari_ini_daftar %}
         <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
       {% endfor %}
 
     {% else %}
-      <div class="kartu kosong">Belum ada penimbangan hari ini.</div>
+      <div class="kartu kosong">
+        {{ 'Belum ada penimbangan hari ini.' if akun.is_admin
+           else 'Anda belum menimbang apa pun hari ini.' }}
+      </div>
     {% endif %}
   </div>
 

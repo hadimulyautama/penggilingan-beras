@@ -32,6 +32,7 @@ from app.timbangan.models import (
     PEMERIKSAAN_SELESAI,
     ROLE_ADMIN,
     ROLE_PENGAWAS,
+    ROLES,
     TIKET_DITUTUP_PAKSA,
     TIKET_SELESAI,
     TIKET_TERBUKA,
@@ -901,6 +902,192 @@ async def kunci_transaksi(
     return trx
 
 
+# ═══════════════════════════ Akun ═══════════════════════════
+
+async def _admin_aktif_lain(db: AsyncSession, kecuali_id: int) -> int:
+    return (await db.execute(
+        select(func.count(TimbanganAkun.id)).where(
+            TimbanganAkun.role == ROLE_ADMIN,
+            TimbanganAkun.status == "aktif",
+            TimbanganAkun.id != kecuali_id,
+        )
+    )).scalar_one()
+
+
+async def _terapkan_ubah_akun(
+    db: AsyncSession,
+    *,
+    pelaku: TimbanganAkun,
+    orang: TimbanganAkun,
+    nama: str | None = None,
+    username: str | None = None,
+    role: str | None = None,
+    perangkat_kode: str | None = None,
+    sandi_baru: str | None = None,
+    ip: str | None = None,
+) -> list[str]:
+    """Ubah data satu akun. Mengembalikan daftar kolom yang benar-benar berubah.
+
+    Dua pagar yang tidak boleh dilepas, keduanya melindungi dari mengunci diri
+    sendiri di luar sistem:
+
+      · **Selalu tersisa satu Admin aktif.** Menurunkan peran atau
+        menonaktifkan Admin terakhir akan membuat tidak ada lagi yang bisa
+        mengelola pengguna — dan tidak ada jalan memperbaikinya dari dalam
+        aplikasi.
+      · **Sandi kosong berarti tidak diubah**, bukan dikosongkan. Kalau tidak,
+        Admin yang hanya ingin membetulkan ejaan nama akan tanpa sadar
+        menghapus sandi orang lain.
+
+    Sandi lama tidak pernah tersimpan maupun tercatat di audit — yang dicatat
+    hanya FAKTA bahwa sandi diganti.
+    """
+    from app.timbangan.security import hash_sandi
+
+    sebelum, sesudah, berubah = {}, {}, []
+
+    if username is not None:
+        bersih = username.strip().lower()
+        if not bersih:
+            raise LayananError("Nama pengguna tidak boleh kosong.")
+        if bersih != orang.username:
+            bentrok = (await db.execute(
+                select(TimbanganAkun).where(
+                    TimbanganAkun.username == bersih,
+                    TimbanganAkun.id != orang.id,
+                )
+            )).scalars().first()
+            if bentrok is not None:
+                raise LayananError(f"Nama pengguna '{bersih}' sudah dipakai.")
+            sebelum["username"], sesudah["username"] = orang.username, bersih
+            orang.username = bersih
+            berubah.append("nama pengguna")
+
+    if nama is not None and nama.strip() and nama.strip() != orang.nama:
+        sebelum["nama"], sesudah["nama"] = orang.nama, nama.strip()
+        orang.nama = nama.strip()
+        berubah.append("nama")
+
+    if role is not None and role != orang.role:
+        if role not in ROLES:
+            raise LayananError(f"Peran '{role}' tidak dikenal.")
+        if orang.role == ROLE_ADMIN and not await _admin_aktif_lain(db, orang.id):
+            raise LayananError(
+                "Ini satu-satunya Admin yang aktif. Angkat Admin lain lebih "
+                "dulu, kalau tidak tidak akan ada yang bisa mengelola pengguna."
+            )
+        sebelum["role"], sesudah["role"] = orang.role, role
+        orang.role = role
+        berubah.append("peran")
+
+    if perangkat_kode is not None:
+        kode = perangkat_kode.strip().upper()[:8] or None
+        if kode != orang.perangkat_kode:
+            sebelum["perangkat_kode"] = orang.perangkat_kode
+            sesudah["perangkat_kode"] = kode
+            orang.perangkat_kode = kode
+            berubah.append("kode perangkat")
+
+    # Kosong berarti "jangan diubah" — bukan "kosongkan".
+    if sandi_baru:
+        try:
+            orang.password_hash = hash_sandi(sandi_baru)
+        except ValueError as e:
+            raise LayananError(str(e)) from None
+        # Sandi tidak pernah masuk audit, baik yang lama maupun yang baru.
+        sesudah["sandi"] = "diganti"
+        berubah.append("sandi")
+
+    if not berubah:
+        return []
+
+    await catat_audit(
+        db, akun=pelaku, aksi="UBAH_AKUN", entitas="akun", entitas_id=orang.id,
+        ringkasan=f"{orang.username}: {', '.join(berubah)} diubah",
+        sebelum=sebelum or None, sesudah=sesudah or None, ip=ip,
+    )
+    await db.commit()
+    return berubah
+
+
+async def ubah_akun(
+    db: AsyncSession,
+    *,
+    admin: TimbanganAkun,
+    orang: TimbanganAkun,
+    **ubahan,
+) -> list[str]:
+    """Admin mengubah akun siapa pun, termasuk peran dan kode perangkat."""
+    if not admin.is_admin:
+        raise LayananError("Hanya Admin yang boleh mengubah akun orang lain.")
+    return await _terapkan_ubah_akun(db, pelaku=admin, orang=orang, **ubahan)
+
+
+async def ubah_profil(
+    db: AsyncSession,
+    *,
+    orang: TimbanganAkun,
+    nama: str | None = None,
+    username: str | None = None,
+    sandi_lama: str | None = None,
+    sandi_baru: str | None = None,
+    ip: str | None = None,
+) -> list[str]:
+    """Siapa pun membetulkan akunnya SENDIRI: nama, nama pengguna, sandi.
+
+    Yang sengaja TIDAK ada di sini: peran dan kode perangkat. Keduanya
+    menentukan apa yang boleh dilakukan orang ini dan nomor transaksi apa
+    yang keluar dari perangkatnya — itu keputusan Admin, bukan keputusan
+    pemakainya sendiri.
+
+    Mengganti sandi menuntut sandi yang sekarang. Perangkat di pos timbang
+    dipakai bergantian dan tetap masuk sepanjang shift; tanpa syarat ini,
+    siapa pun yang lewat di depan layar yang ditinggal terbuka bisa mengunci
+    pemiliknya keluar dari akunnya sendiri.
+    """
+    from app.timbangan.security import cek_sandi
+
+    if sandi_baru:
+        if not sandi_lama:
+            raise LayananError(
+                "Masukkan sandi Anda yang sekarang untuk menggantinya."
+            )
+        if not cek_sandi(sandi_lama, orang.password_hash):
+            raise LayananError("Sandi sekarang tidak cocok.")
+
+    return await _terapkan_ubah_akun(
+        db, pelaku=orang, orang=orang,
+        nama=nama, username=username, sandi_baru=sandi_baru, ip=ip,
+    )
+
+
+async def ubah_status_akun(
+    db: AsyncSession, *, admin: TimbanganAkun, orang: TimbanganAkun,
+    ip: str | None = None,
+) -> str:
+    """Aktifkan atau nonaktifkan satu akun."""
+    if not admin.is_admin:
+        raise LayananError("Hanya Admin yang boleh mengubah akun.")
+    if orang.id == admin.id:
+        raise LayananError("Anda tidak bisa menonaktifkan akun sendiri.")
+    if (orang.status == "aktif" and orang.role == ROLE_ADMIN
+            and not await _admin_aktif_lain(db, orang.id)):
+        raise LayananError(
+            "Ini satu-satunya Admin yang aktif — menonaktifkannya membuat "
+            "tidak ada lagi yang bisa mengelola pengguna."
+        )
+
+    lama = orang.status
+    orang.status = "nonaktif" if lama == "aktif" else "aktif"
+    await catat_audit(
+        db, akun=admin, aksi="UBAH_STATUS_AKUN", entitas="akun",
+        entitas_id=orang.id, ringkasan=f"{orang.username} → {orang.status}",
+        sebelum={"status": lama}, sesudah={"status": orang.status}, ip=ip,
+    )
+    await db.commit()
+    return orang.status
+
+
 # ═══════════════════════════ Pemeriksaan (SOP butir 6) ═══════════════════
 
 async def buka_pemeriksaan(
@@ -1063,6 +1250,10 @@ class FilterTransaksi:
     nomor_polisi: str | None = None
     cari: str | None = None
     sertakan_void: bool = False
+    #: Batasi ke transaksi yang ditimbang orang ini (timbang pertama ATAU
+    #: kedua). Dipakai untuk petugas, yang hanya berhak melihat hasil
+    #: pekerjaannya sendiri.
+    petugas_id: int | None = None
 
 
 def _terapkan_filter(q, f: FilterTransaksi):
@@ -1084,6 +1275,11 @@ def _terapkan_filter(q, f: FilterTransaksi):
         q = q.where(TimbanganTransaksi.status_tiket == f.status_tiket)
     if f.nomor_polisi:
         q = q.where(TimbanganTransaksi.nomor_polisi == normalisasi_nopol(f.nomor_polisi))
+    if f.petugas_id:
+        q = q.where(or_(
+            TimbanganTransaksi.timbang1_petugas_id == f.petugas_id,
+            TimbanganTransaksi.timbang2_petugas_id == f.petugas_id,
+        ))
     if f.cari:
         pola = f"%{f.cari.strip()}%"
         q = q.where(or_(

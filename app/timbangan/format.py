@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from app.config import settings
 
 BULAN = [
     "", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -52,9 +55,27 @@ def ton(nilai, digit: int = 2) -> str:
     return f"{angka(float(nilai) / 1000, digit)} ton"
 
 
+def lokal(nilai):
+    """Ubah waktu berzona ke zona perusahaan sebelum ditampilkan.
+
+    Postgres menyimpan kolom `timestamptz` dan mengembalikannya dalam UTC —
+    apa pun zona yang dipakai saat menulis. Tanpa langkah ini, layar
+    menampilkan jam UTC: timbangan pukul 22:15 WIB tertulis 15:14, dan
+    petugas akan menganggap catatannya salah. Kolom yang default-nya dibuat
+    server (`created_at`) paling terpengaruh, karena tidak lewat
+    `db.sekarang()` sama sekali.
+
+    Waktu tanpa zona dibiarkan apa adanya: itu sudah waktu setempat.
+    """
+    if isinstance(nilai, datetime) and nilai.tzinfo is not None:
+        return nilai.astimezone(ZoneInfo(settings.app_timezone))
+    return nilai
+
+
 def tgl(nilai: date | datetime | None, singkat: bool = False) -> str:
     if nilai is None:
         return "-"
+    nilai = lokal(nilai)
     nama = BULAN_SINGKAT if singkat else BULAN
     return f"{nilai.day} {nama[nilai.month]} {nilai.year}"
 
@@ -62,13 +83,14 @@ def tgl(nilai: date | datetime | None, singkat: bool = False) -> str:
 def tgl_jam(nilai: datetime | None) -> str:
     if nilai is None:
         return "-"
+    nilai = lokal(nilai)
     return f"{tgl(nilai, singkat=True)} {nilai:%H:%M}"
 
 
 def jam(nilai: datetime | None) -> str:
     """'14:35' — jam timbang, hal yang paling sering dilihat petugas."""
-    return f"{nilai:%H:%M}" if nilai else "-"
+    return f"{lokal(nilai):%H:%M}" if nilai else "-"
 
 
 def iso(nilai: date | datetime | None) -> str:
-    return nilai.strftime("%Y-%m-%d") if nilai else ""
+    return lokal(nilai).strftime("%Y-%m-%d") if nilai else ""

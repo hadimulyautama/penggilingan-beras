@@ -43,7 +43,7 @@
         </thead>
         <tbody>
           {% for p in baris %}
-            <tr>
+            <tr data-buka="{{ PREFIX }}/pengguna/{{ p.id }}">
               <td>{{ p.nama }}</td>
               <td>{{ p.username }}</td>
               <td>{{ p.role_label }}</td>
@@ -55,14 +55,8 @@
                   {{ p.status }}</span>
               </td>
               <td>
-                {% if p.id != akun.id %}
-                  <form method="post"
-                        action="{{ PREFIX }}/pengguna/{{ p.id }}/status">
-                    <button type="submit" class="tbl halus kecil">
-                      {{ 'Nonaktifkan' if p.status == 'aktif' else 'Aktifkan' }}
-                    </button>
-                  </form>
-                {% endif %}
+                <a href="{{ PREFIX }}/pengguna/{{ p.id }}"
+                   class="tbl halus kecil">Ubah</a>
               </td>
             </tr>
           {% endfor %}

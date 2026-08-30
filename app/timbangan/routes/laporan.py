@@ -15,10 +15,11 @@ from fastapi.responses import StreamingResponse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.timbangan import format as fmt
 from app.timbangan import service
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun
-from app.timbangan.security import butuh_pengawas
+from app.timbangan.security import butuh_admin
 from app.timbangan.web import PREFIX, render
 
 router = APIRouter(prefix=PREFIX)
@@ -37,7 +38,7 @@ def _rentang(q) -> tuple[date, date]:
 @router.get("/laporan")
 async def laporan(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     dari, sampai = _rentang(request.query_params)
@@ -59,7 +60,7 @@ async def laporan(
 @router.get("/monitoring")
 async def monitoring(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Skor & pola per pihak.
@@ -79,7 +80,7 @@ async def monitoring(
 @router.get("/ekspor.csv")
 async def ekspor(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Ekspor CSV — tanpa satu pun kolom harga, sama seperti seluruh modul."""
@@ -102,8 +103,10 @@ async def ekspor(
         tulis.writerow([
             t.kode, t.tanggal, t.arah, t.jenis_kode,
             b.supplier_nama or t.pihak_nama or "", t.nomor_polisi or "",
-            t.timbang1_kg, t.timbang1_waktu.strftime("%H:%M") if t.timbang1_waktu else "",
-            t.timbang2_kg or "", t.timbang2_waktu.strftime("%H:%M") if t.timbang2_waktu else "",
+            # Lewat fmt.jam, bukan strftime langsung: Postgres mengembalikan
+            # waktu dalam UTC, dan ekspor ini dibandingkan dengan nota cetak.
+            t.timbang1_kg, fmt.jam(t.timbang1_waktu) if t.timbang1_waktu else "",
+            t.timbang2_kg or "", fmt.jam(t.timbang2_waktu) if t.timbang2_waktu else "",
             t.netto_timbangan_kg or "", t.jumlah_karung, t.total_tara_kg,
             t.berat_barang_kg or "", t.berat_acuan_kg, t.selisih_kg,
             t.selisih_persen, t.status_kontrol or "", t.status_tiket,

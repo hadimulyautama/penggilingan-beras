@@ -22,7 +22,7 @@ from app.timbangan.models import (
     TimbanganTaraStandar,
 )
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import butuh_admin, butuh_akun, butuh_pengawas
+from app.timbangan.security import butuh_admin, butuh_akun
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -172,7 +172,7 @@ async def aturan(
 @router.get("/tara")
 async def daftar_tara(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     baris = list((await db.execute(
@@ -199,7 +199,7 @@ async def simpan_tara(
     supplier_id: str = Form(""),
     jenis_karung: str = Form(""),
     alasan: str = Form(""),
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -219,6 +219,49 @@ async def simpan_tara(
         "/tara",
         ok=f"Tara baru {baris.tara_per_karung_kg:.3f} kg/karung berlaku mulai hari ini.",
     )
+
+
+@router.get("/akun")
+async def akun_saya_form(
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+):
+    """Halaman akun sendiri — terbuka untuk semua peran, bukan Admin saja.
+
+    Petugas tidak perlu menunggu Admin hanya untuk membetulkan ejaan
+    namanya atau mengganti sandi yang terlanjur diketahui orang lain.
+    """
+    return render(
+        request, "akun_saya.html", orang=akun, kembali=f"{PREFIX}/pengaturan",
+    )
+
+
+@router.post("/akun")
+async def akun_saya_simpan(
+    request: Request,
+    nama: str = Form(""),
+    username: str = Form(""),
+    sandi_lama: str = Form(""),
+    sandi_baru: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    # Objek `akun` datang dari sesi DB milik pemeriksa cookie, yang sudah
+    # ditutup. Memuat ulang di sesi permintaan ini — kalau tidak, perubahan
+    # apa pun ikut hilang bersama sesi itu tanpa satu pun pesan galat.
+    orang = await db.get(TimbanganAkun, akun.id)
+    try:
+        berubah = await service.ubah_profil(
+            db, orang=orang, nama=nama, username=username,
+            sandi_lama=sandi_lama, sandi_baru=sandi_baru,
+            ip=request.client.host if request.client else None,
+        )
+    except service.LayananError as e:
+        return redirect("/akun", err=str(e))
+
+    if not berubah:
+        return redirect("/akun", ok="Tidak ada yang diubah.")
+    return redirect("/pengaturan", ok=f"{', '.join(berubah).capitalize()} diubah.")
 
 
 @router.get("/pengguna")
@@ -276,6 +319,64 @@ async def simpan_pengguna(
     return redirect("/pengguna", ok=f"Akun {baru.nama} dibuat.")
 
 
+@router.get("/pengguna/{akun_id}")
+async def ubah_pengguna_form(
+    akun_id: int,
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    orang = await db.get(TimbanganAkun, akun_id)
+    if orang is None:
+        return redirect("/pengguna", err="Akun tidak ditemukan.")
+    return render(
+        request, "pengguna_ubah.html",
+        orang=orang, diri_sendiri=orang.id == akun.id,
+        kembali=f"{PREFIX}/pengguna",
+    )
+
+
+@router.post("/pengguna/{akun_id}")
+async def ubah_pengguna(
+    akun_id: int,
+    request: Request,
+    nama: str = Form(""),
+    username: str = Form(""),
+    role: str = Form(""),
+    perangkat_kode: str = Form(""),
+    sandi_baru: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    orang = await db.get(TimbanganAkun, akun_id)
+    if orang is None:
+        return redirect("/pengguna", err="Akun tidak ditemukan.")
+    try:
+        berubah = await service.ubah_akun(
+            db, admin=akun, orang=orang,
+            nama=nama, username=username, role=role or None,
+            perangkat_kode=perangkat_kode, sandi_baru=sandi_baru or None,
+            ip=request.client.host if request.client else None,
+        )
+    except service.LayananError as e:
+        return redirect(f"/pengguna/{akun_id}", err=str(e))
+
+    if not berubah:
+        return redirect(f"/pengguna/{akun_id}", ok="Tidak ada yang diubah.")
+
+    pesan = f"{orang.nama}: {', '.join(berubah)} diubah."
+    # Menurunkan peran sendiri langsung mencabut akses ke halaman ini;
+    # mengalihkan ke sana hanya akan berakhir dengan layar "akses ditolak"
+    # tanpa penjelasan. Antar ke Pengaturan beserta alasannya.
+    if orang.id == akun.id and not orang.is_admin:
+        return redirect(
+            "/pengaturan",
+            ok=pesan + " Peran Anda kini bukan Admin, jadi pengelolaan "
+                       "pengguna tidak lagi terbuka.",
+        )
+    return redirect("/pengguna", ok=pesan)
+
+
 @router.post("/pengguna/{akun_id}/status")
 async def ubah_status_pengguna(
     akun_id: int,
@@ -286,13 +387,11 @@ async def ubah_status_pengguna(
     orang = await db.get(TimbanganAkun, akun_id)
     if orang is None:
         return redirect("/pengguna", err="Akun tidak ditemukan.")
-    if orang.id == akun.id:
-        return redirect("/pengguna", err="Anda tidak bisa menonaktifkan akun sendiri.")
-
-    orang.status = "nonaktif" if orang.status == "aktif" else "aktif"
-    await service.catat_audit(
-        db, akun=akun, aksi="UBAH_STATUS_AKUN", entitas="akun", entitas_id=orang.id,
-        ringkasan=f"{orang.username} → {orang.status}",
-    )
-    await db.commit()
-    return redirect("/pengguna", ok=f"{orang.nama} kini {orang.status}.")
+    try:
+        status = await service.ubah_status_akun(
+            db, admin=akun, orang=orang,
+            ip=request.client.host if request.client else None,
+        )
+    except service.LayananError as e:
+        return redirect("/pengguna", err=str(e))
+    return redirect("/pengguna", ok=f"{orang.nama} kini {status}.")
