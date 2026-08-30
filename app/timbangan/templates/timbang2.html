@@ -38,7 +38,8 @@
       style="display:flex;flex-direction:column;gap:14px">
 
   {{ berat('berat_kg',
-           'Berat truk kosong' if masuk else 'Berat truk bermuatan') }}
+           'Berat truk kosong' if masuk else 'Berat truk bermuatan',
+           trx.timbang2_kg|round(0)|int if trx.timbang2_kg else '') }}
 
   <div class="grup">
     <div class="lbl">Jam timbang</div>
@@ -61,9 +62,14 @@
       {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
                (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
                '', false) }}
+      {# Wajib untuk barang masuk: taranya dihitung per karung, jadi tanpa
+         angka ini selisihnya keliru. Tombol Simpan sementara memakai
+         formnovalidate supaya pagar ini tidak ikut menghalanginya. #}
       {{ isian('jumlah_karung', 'Jumlah karung',
                m.jumlah_karung if m and m.jumlah_karung else '', 'karung',
-               'text', '', false, false, 'inputmode="numeric"') }}
+               'text',
+               'Diisi setelah bongkar rampung.' if masuk else '',
+               masuk, false, 'inputmode="numeric"') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',
                '%.3f'|format(m.tara_per_karung_kg) if m and m.tara_per_karung_kg else '',
                'kg', 'text', '', false, false,
@@ -76,9 +82,22 @@
     <textarea class="fld" name="catatan" rows="2">{{ trx.catatan or '' }}</textarea>
   </div>
 
-  <button type="submit" class="tbl blok" data-sibuk="Menghitung…">
+  <button type="submit" name="aksi" value="selesai" class="tbl blok"
+          data-sibuk="Menghitung…">
     Selesaikan penimbangan
   </button>
+
+  {% if masuk %}
+    <button type="submit" name="aksi" value="sementara" formnovalidate
+            class="tbl halus blok" data-sibuk="Menyimpan…">
+      Simpan sementara
+    </button>
+    <div class="bantu" style="text-align:center;margin-top:-4px">
+      Angkanya tersimpan dan tiket tetap terbuka. Dipakai saat bongkar belum
+      rampung sehingga jumlah karung belum pasti — selisih baru dihitung
+      ketika penimbangan diselesaikan.
+    </div>
+  {% endif %}
 </form>
 
   {# Truk yang batal bongkar tetap meninggalkan jejak — tiketnya ditutup

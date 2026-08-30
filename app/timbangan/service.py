@@ -664,12 +664,27 @@ async def simpan_timbang_kedua(
     muatan: list[InputMuatan] | None = None,
     tara_lain_kg: float | None = None,
     catatan: str | None = None,
+    selesaikan: bool = True,
     ip: str | None = None,
 ) -> TimbanganTransaksi:
     """Timbang kedua → hitung, beri status, tutup tiket.
 
     Tanggal transaksi mengikuti timbang KEDUA: truk yang masuk menjelang
     tengah malam dan keluar setelahnya tercatat di hari ia selesai.
+
+    **`selesaikan=False` menyimpan tanpa menutup tiket.** Angka timbang kedua
+    sudah masuk dan aman dari HP mati atau shift berganti, tetapi tiketnya
+    tetap terbuka karena penimbangannya memang belum selesai — biasanya
+    jumlah karung baru diketahui setelah bongkar rampung. Yang ditunda bukan
+    penyimpanannya, melainkan perhitungannya: selisih tidak dihitung, status
+    kontrol tidak diberikan, dan lembar pemeriksaan tidak dibuka. Menghitung
+    selisih tanpa jumlah karung akan memberi angka yang salah sekaligus
+    meyakinkan — tara total nol membuat barang tampak berlebih.
+
+    **Barang masuk tidak bisa diselesaikan tanpa jumlah karung.** Seluruh
+    komoditas masuk bertara per karung, jadi tanpa angka itu berat barang dan
+    selisihnya keliru — dan statusnya tersimpan permanen serta terbawa ke
+    ekspor.
     """
     trx = await ambil_kode(db, kode)
     if trx is None:
@@ -699,6 +714,27 @@ async def simpan_timbang_kedua(
         trx.tara_lain_kg = float(tara_lain_kg)
     if muatan is not None:
         await _pasang_muatan(db, trx, muatan)
+
+    if not selesaikan:
+        await catat_audit(
+            db, akun=akun, aksi="SIMPAN_SEMENTARA", entitas="transaksi",
+            entitas_id=trx.kode,
+            ringkasan=f"{trx.timbang2_kg:.0f} kg disimpan, tiket tetap terbuka",
+            sesudah={"timbang2_kg": float(trx.timbang2_kg)},
+            perangkat=trx.perangkat_kode, ip=ip,
+        )
+        await db.commit()
+        await db.refresh(trx)
+        return trx
+
+    if trx.arah == logic.MASUK and not sum(
+        int(m.jumlah_karung or 0) for m in trx.muatan
+    ):
+        raise LayananError(
+            "Jumlah karung belum diisi. Barang masuk tidak bisa diselesaikan "
+            "tanpa angka itu — taranya dihitung per karung, jadi selisihnya "
+            "akan keliru. Pakai Simpan sementara sampai bongkar rampung."
+        )
 
     bermuatan, kosong = _bermuatan_dan_kosong(
         trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)

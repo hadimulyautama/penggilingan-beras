@@ -262,6 +262,7 @@ async def simpan_timbang_kedua(
     nomor_acuan: str = Form(""),
     waktu: str = Form(""),
     catatan: str = Form(""),
+    aksi: str = Form("selesai"),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
@@ -295,11 +296,18 @@ async def simpan_timbang_kedua(
             waktu_operator=_waktu_operator(waktu),
             muatan=muatan,
             catatan=catatan.strip() or None,
+            selesaikan=aksi != "sementara",
             ip=request.client.host if request.client else None,
         )
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/tiket/{transaksi_id}", err=str(e))
 
+    if aksi == "sementara":
+        return redirect(
+            f"/tiket/{transaksi_id}",
+            ok="Tersimpan. Tiket masih terbuka — selesaikan setelah jumlah "
+               "karung pasti.",
+        )
     return redirect(f"/transaksi/{trx.id}", ok="Timbangan selesai dan tersimpan.")
 
 

@@ -25,6 +25,8 @@ from app.timbangan import service
 from app.timbangan.models import (
     ROLE_ADMIN,
     ROLE_PETUGAS,
+    TIKET_SELESAI,
+    TIKET_TERBUKA,
     TimbanganAkun,
 )
 from app.timbangan.security import hash_sandi
@@ -1529,3 +1531,143 @@ async def test_masuk_tidak_bisa_mengambil_alih_kode_perangkat_orang_lain(
     })
     assert (await akun_oleh(app_uji, "budi")).perangkat_kode == "P1"
     assert (await akun_oleh(app_uji, "miftah")).perangkat_kode == "P9"
+
+
+# ─────────────── Barang masuk: jumlah karung sebelum diselesaikan ───────────
+
+async def _tiket_terbuka(klien, jenis: str, **beda) -> int:
+    """Timbang pertama saja — tiketnya sengaja dibiarkan terbuka."""
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    data = {
+        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "nomor_polisi": "AD 5 BB", "jumlah_karung": "",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "N-1",
+        "nama_sopir": "Slamet", "pihak_nama": "",
+    }
+    data.update(beda)
+    await klien.post(f"{PREFIX}/timbang/{jenis}", data=data)
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    return int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+
+
+async def trx_oleh_id(trx_id: int):
+    from app import database
+    from app.timbangan.models import TimbanganTransaksi
+
+    async with database.SessionLocal() as db:
+        return await db.get(TimbanganTransaksi, trx_id)
+
+
+async def test_barang_masuk_tidak_bisa_selesai_tanpa_jumlah_karung(klien):
+    """Seluruh komoditas masuk bertara per karung — tanpa angka itu selisihnya
+    keliru, dan statusnya tersimpan permanen serta terbawa ke ekspor."""
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "GABAH_BASAH")
+
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert "Jumlah karung belum diisi" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.status_tiket == TIKET_TERBUKA
+    assert trx.timbang2_kg is None
+
+
+async def test_simpan_sementara_menyimpan_angka_tanpa_menutup_tiket(klien):
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "GABAH_BASAH")
+
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "sementara",
+    })
+    assert "Tiket masih terbuka" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.timbang2_kg == 3570          # angkanya aman dari HP mati
+    assert trx.status_tiket == TIKET_TERBUKA
+    assert trx.status_kontrol is None       # belum dihitung — dan tidak boleh
+    assert not trx.selisih_kg
+
+
+async def test_simpan_sementara_lalu_diselesaikan_setelah_karung_pasti(klien):
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "sementara",
+    })
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "nomor_acuan": "N-1", "waktu": "", "catatan": "", "aksi": "selesai",
+    })
+    assert "selesai dan tersimpan" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.status_tiket == TIKET_SELESAI
+    assert trx.status_kontrol is not None
+
+
+async def test_angka_yang_disimpan_sementara_muncul_lagi_di_formulir(klien):
+    """Kalau tidak, petugas harus mengingat sendiri angka yang tadi diketik."""
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "sementara",
+    })
+    form = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert 'name="berat_kg"' in form
+    assert 'value="3570"' in form
+
+
+async def test_simpan_sementara_tercatat_di_audit(klien):
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "sementara",
+    })
+    async with database.SessionLocal() as db:
+        jejak = (await db.execute(
+            select(TimbanganAudit).where(
+                TimbanganAudit.aksi == "SIMPAN_SEMENTARA")
+        )).scalars().one()
+    assert "tiket tetap terbuka" in jejak.ringkasan
+
+
+async def test_pengiriman_tetap_bisa_selesai_tanpa_jumlah_karung(klien):
+    """Pagarnya khusus barang masuk — alur pengiriman tidak ikut berubah."""
+    await login(klien)
+    trx_id = await _tiket_terbuka(klien, "BERAS", berat_kg="4200")
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "13600", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert "selesai dan tersimpan" in r.text
+    assert (await trx_oleh_id(trx_id)).status_tiket == TIKET_SELESAI
+
+
+async def test_tombol_simpan_sementara_hanya_untuk_barang_masuk(klien):
+    await login(klien)
+    masuk = await _tiket_terbuka(klien, "GABAH_BASAH")
+    assert "Simpan sementara" in (await klien.get(f"{PREFIX}/tiket/{masuk}")).text
+
+    keluar = await _tiket_terbuka(klien, "BERAS", berat_kg="4200")
+    assert "Simpan sementara" not in (
+        await klien.get(f"{PREFIX}/tiket/{keluar}")).text

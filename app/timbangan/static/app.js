@@ -106,6 +106,21 @@
     var form = e.target;
     if (form.dataset.terkirim === '1') { e.preventDefault(); return; }
     form.dataset.terkirim = '1';
+
+    /* Tombol yang ditekan ikut menentukan APA yang dikerjakan — "Simpan
+     * sementara" dan "Selesaikan penimbangan" adalah tombol kirim yang sama
+     * formulirnya, dibedakan oleh name/value-nya. Menonaktifkannya di baris
+     * berikut membuat nilai itu hilang dari kiriman, sehingga "simpan
+     * sementara" diam-diam berubah menjadi "selesaikan". Salin dulu. */
+    var penekan = e.submitter;
+    if (penekan && penekan.name) {
+      var salinan = document.createElement('input');
+      salinan.type = 'hidden';
+      salinan.name = penekan.name;
+      salinan.value = penekan.value;
+      form.appendChild(salinan);
+    }
+
     form.querySelectorAll('button[type=submit]').forEach(function (t) {
       t.disabled = true;
       if (t.dataset.sibuk) { t.textContent = t.dataset.sibuk; }
