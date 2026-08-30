@@ -28,18 +28,23 @@ membuat skema versi sendiri.
 
 ## 2. Membuat service
 
+> **Config-as-code tidak bisa dipakai.** Sejak 2026-08-28 Railway menutupnya
+> untuk service yang belum pernah memakainya, dan seluruh fiturnya berakhir
+> 2026-12-01. Semua setelan di bawah diisi lewat dashboard.
+
 1. Buka project Railway yang sudah ada (berisi `app`, `mcp`, dan PostgreSQL).
 2. **New** → **GitHub Repo** → pilih repo yang sama (`penggilingan-beras`).
-3. Beri nama service: **`timbangan`**.
-4. **Settings** → **Config as code**: isi `railway.timbangan.json`.
-   Berkas itu sudah memuat `startCommand` dan healthcheck yang benar.
+   Railway membuat service dengan nama acak dan **belum men-deploy** — semua
+   setelan berikut diisi lebih dulu, baru tekan Deploy sekali di akhir.
+3. Klik nama servicenya, ganti jadi **`timbangan`**.
+4. **Settings** → **Deploy** → **Custom Start Command**:
 
-Bila Railway tidak menawarkan pilihan config-as-code, setel manual di
-**Settings** → **Deploy** → **Custom Start Command**:
+   ```bash
+   docker/entrypoint-timbangan.sh uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
+   ```
 
-```bash
-docker/entrypoint-timbangan.sh uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
-```
+5. **Settings** → **Deploy** → **Healthcheck Path**: `/health`
+6. **Settings** → **Networking** → **Generate Domain**
 
 ---
 
@@ -49,9 +54,14 @@ Wajib:
 
 | Variabel | Nilai | Catatan |
 |---|---|---|
-| `DATABASE_URL` | referensi ke service PostgreSQL | Pakai `${{Postgres.DATABASE_URL}}` agar ikut berubah sendiri |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Referensi, bukan salinan — ikut berubah sendiri bila database dipindah |
 | `TIMBANGAN_SECRET_KEY` | string acak panjang | **Wajib.** Tanpa ini, semua sesi login hangus setiap kali server restart |
 | `TIMBANGAN_ADMIN_PASSWORD` | sandi admin awal | Hanya dipakai sekali, saat tabel akun masih kosong |
+
+> **Jangan pakai "Suggested Variables".** Railway menawarkan variabel yang
+> ditemukannya di kode, termasuk `BOT_*_TOKEN`. Mengisinya akan membuat
+> instance bot keempat yang bentrok `409 Conflict` dengan service `app`.
+> Isi lewat **Raw Editor** agar isinya persis tiga baris di atas.
 
 Membuat kunci sesi:
 
