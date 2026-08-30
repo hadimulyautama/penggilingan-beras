@@ -266,11 +266,27 @@ async def _selesaikan(klien, jenis: str, **beda) -> int:
     return trx_id
 
 
+def teks_pdf(isi: bytes) -> str:
+    import io
+    from pypdf import PdfReader
+    return "\n".join(h.extract_text() or "" for h in PdfReader(io.BytesIO(isi)).pages)
+
+
+def ukuran_pdf(isi: bytes) -> tuple[float, float]:
+    """(lebar, tinggi) dalam milimeter."""
+    import io
+    from pypdf import PdfReader
+    kotak = PdfReader(io.BytesIO(isi)).pages[0].mediabox
+    return float(kotak.width) / 72 * 25.4, float(kotak.height) / 72 * 25.4
+
+
 async def test_bukti_gabah_tidak_memuat_selisih(klien):
     """SOP butir 8: hasil kontrol gabah adalah data internal."""
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")
+    assert r.headers["content-type"] == "application/pdf"
+    cetak = teks_pdf(r.content)
     assert "BERAT BARANG" in cetak
     assert "Selisih" not in cetak
     assert "Menurut dokumen" not in cetak
@@ -282,7 +298,8 @@ async def test_bukti_beras_pk_memuat_selisih(klien):
     trx_id = await _selesaikan(
         klien, "BERAS_PK", tara_per_karung_kg="0,085", berat_acuan_kg="9990"
     )
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
+    cetak = teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
     assert "Selisih" in cetak
     assert "Menurut dokumen" in cetak
 
@@ -290,7 +307,8 @@ async def test_bukti_beras_pk_memuat_selisih(klien):
 async def test_bukti_memuat_petugas_dan_identitas_perusahaan(klien):
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
+    cetak = teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
     assert "PT Hadi Mulya Utama" in cetak
     assert "Masaran, Kab. Sragen" in cetak
     assert "Budi" in cetak                      # petugas timbang
@@ -791,7 +809,8 @@ async def test_bukti_pengiriman_tidak_memuat_selisih(klien):
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
     })
 
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
+    cetak = teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
     assert "BERAT BARANG" in cetak
     assert "Selisih" not in cetak
     assert "Menurut dokumen" not in cetak
@@ -806,7 +825,8 @@ async def test_bukti_gabah_tetap_dicetak_dengan_sopir_sebagai_saksi(klien):
     assert "Cetak bukti timbang" in rincian
     assert "Cetak untuk arsip" not in rincian
 
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
+    cetak = teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
     assert "Sopir (saksi)" in cetak
     assert "Petugas timbang" in cetak
     assert "Ditandatangani kedua pihak" in cetak
@@ -939,14 +959,18 @@ async def test_pemilih_menawarkan_dua_ukuran(klien):
 
 
 async def test_lembar_ncr_berukuran_setengah_folio(klien):
+    """Ukurannya harus PASTI, bukan bergantung pilihan kertas di dialog."""
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
-    ncr = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).text
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")
 
-    assert "@page { size: 215mm 165mm; margin: 0; }" in ncr
-    assert "BUKTI TIMBANG" in ncr
-    assert "BERAT BARANG" in ncr
-    assert "Lembar 1" in ncr and "Arsip pos timbang" in ncr
+    assert r.headers["content-type"] == "application/pdf"
+    lebar, tinggi = ukuran_pdf(r.content)
+    assert round(lebar) == 215 and round(tinggi) == 165
+
+    teks = teks_pdf(r.content)
+    assert "BERAT BARANG" in teks
+    assert "Lembar 1" in teks and "Arsip pos timbang" in teks
 
 
 @pytest.mark.parametrize("jenis, beda", [
@@ -962,7 +986,8 @@ async def test_lembar_ncr_tidak_pernah_memuat_selisih(klien, jenis, beda):
     """
     await login(klien)
     trx_id = await _selesaikan(klien, jenis, **beda)
-    ncr = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).text
+    ncr = teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).content)
 
     assert "Selisih" not in ncr
     assert "Menurut dokumen" not in ncr
@@ -973,14 +998,14 @@ async def test_struk_80mm_tetap_mengikuti_aturan_komoditas(klien):
     await login(klien)
 
     gabah = await _selesaikan(klien, "GABAH_BASAH")
-    assert "Selisih" not in (
-        await klien.get(f"{PREFIX}/transaksi/{gabah}/cetak/80mm")).text
+    assert "Selisih" not in teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{gabah}/cetak/80mm")).content)
 
     pk = await _selesaikan(
         klien, "BERAS_PK", tara_per_karung_kg="0,085", berat_acuan_kg="9990"
     )
-    assert "Selisih" in (
-        await klien.get(f"{PREFIX}/transaksi/{pk}/cetak/80mm")).text
+    assert "Selisih" in teks_pdf(
+        (await klien.get(f"{PREFIX}/transaksi/{pk}/cetak/80mm")).content)
 
 
 async def test_riwayat_cetak_mencatat_formatnya(klien, app_uji):

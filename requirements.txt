@@ -22,6 +22,12 @@ google-auth==2.56.2
 python-docx==1.2.0
 pypdf==6.14.2
 
+# ── PDF (modul Timbangan: bukti timbang) ──
+# Digambar di server supaya ukurannya pasti dan tidak ada kop-kaki browser
+# (tanggal, jam, nomor halaman, URL) yang ikut tercetak di kertas nota.
+# Murni Python, tanpa pustaka sistem — aman untuk image slim.
+reportlab==5.0.1
+
 # ── Web (modul Timbangan: template & formulir) ──
 # jinja2          → Jinja2Templates
 # python-multipart→ parsing Form(...) pada setiap rute POST; tanpa ini
