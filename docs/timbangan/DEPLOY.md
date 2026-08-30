@@ -45,8 +45,17 @@ membuat skema versi sendiri.
 4. **Settings** → **Deploy** → **Custom Start Command**:
 
    ```bash
-   uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
+   sh -c "uvicorn app.timbangan.main:app --host 0.0.0.0 --port ${PORT:-8000}"
    ```
+
+   > **Pembungkus `sh -c` itu wajib, bukan gaya penulisan.** Start Command
+   > dijalankan sebagai daftar argumen, bukan lewat shell, sehingga `$PORT`
+   > tidak diperluas dan uvicorn menolaknya:
+   > `Invalid value for '--port': '$PORT' is not a valid integer`.
+   > Deploy akan lolos tahap Build dan Deploy, lalu gagal di Healthcheck —
+   > gejala yang menyesatkan karena tidak menyebut portnya sama sekali.
+   > `CMD` pada Dockerfile dibungkus dengan cara yang sama, untuk alasan yang
+   > sama.
 
 5. **Settings** → **Deploy** → **Healthcheck Path**: `/health`
 6. **Settings** → **Networking** → **Generate Domain**
@@ -177,4 +186,5 @@ dengan margin cetak 4 mm di kiri-kanan.
 | Tidak bisa masuk sama sekali | `TIMBANGAN_ADMIN_PASSWORD` kosong saat penyalaan pertama, sehingga tidak ada akun yang dibuat |
 | Nomor transaksi bentrok antar-perangkat | Dua akun memakai kode perangkat yang sama |
 | Service `timbangan` ikut menjalankan migrasi | Variabel `LAYANAN=timbangan` belum diset |
+| Build & Deploy hijau, tetapi Healthcheck gagal | Start Command tidak dibungkus `sh -c`, sehingga `$PORT` tidak diperluas. Periksa Deploy Logs |
 | Halaman "Tanpa jaringan" muncul terus | Service worker memegang versi lama — naikkan `VERSI` di `app/timbangan/web.py` dan `sw.js` |
