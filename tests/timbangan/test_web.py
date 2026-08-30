@@ -2055,3 +2055,68 @@ async def test_ekspor_menyebut_nama_berkasnya_di_header(klien):
     assert r.headers["content-disposition"] == (
         'attachment; filename="timbangan-20260801-20260830.csv"'
     )
+
+
+# ─────────────── Nomor polisi wajib ───────────────
+
+@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "BERAS"])
+async def test_masuk_dan_keluar_menolak_tanpa_nomor_polisi(klien, jenis):
+    """Keduanya melibatkan pihak luar, jadi catatannya harus bisa menunjuk
+    kendaraan tertentu bila kelak ada sengketa."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "  ",
+        "nama_sopir": "", "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "", "pihak_nama": "",
+    })
+    assert "Nomor polisi wajib diisi" in r.text
+    assert "0 transaksi" in (await klien.get(f"{PREFIX}/tiket")).text \
+        or "Tidak ada" in (await klien.get(f"{PREFIX}/tiket")).text
+
+
+@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "BERAS"])
+async def test_isiannya_ditandai_wajib_di_layar(klien, jenis):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    potongan = form[form.index('name="nomor_polisi"') - 300:
+                    form.index('name="nomor_polisi"') + 300]
+    assert "required" in potongan
+    assert "Nomor polisi (boleh kosong)" not in form
+
+
+@pytest.mark.parametrize("jenis,arah", [("BEBAS", "jasa timbang"),
+                                        ("TRANSFER", "transfer internal")])
+async def test_jasa_timbang_dan_transfer_tetap_boleh_tanpa_nomor_polisi(
+    klien, jenis, arah
+):
+    """Keduanya tidak selalu memakai kendaraan bernomor."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+        "kode": kode_dari(form), "berat_kg": "12850",
+        "cara_timbang": "SEKALI" if jenis == "BEBAS" else "DUA_KALI",
+        "supplier_id": "", "pihak_nama": "CV Sumber Rejeki",
+        "nomor_polisi": "", "nama_sopir": "", "jumlah_karung": "",
+        "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+    })
+    assert "Nomor polisi wajib" not in r.text, arah
+
+
+async def test_koreksi_tidak_bisa_mengosongkan_nomor_polisi(klien):
+    """Pada formulir koreksi, kolom kosong berarti "tidak diubah" — bukan
+    "kosongkan". Jadi nomor polisinya tidak mungkin hilang lewat jalan ini."""
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
+        "alasan": "Salah ketik", "timbang1_kg": "", "timbang2_kg": "",
+        "nomor_polisi": "", "nama_sopir": "", "supplier_id": "",
+        "jumlah_karung": "", "tara_per_karung_kg": "", "berat_acuan_kg": "",
+        "nomor_acuan": "", "catatan": "",
+    })
+    assert "wajib" not in r.text
+    assert (await trx_oleh_id(trx_id)).nomor_polisi == "AD 5 BB"

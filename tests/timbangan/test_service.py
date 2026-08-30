@@ -143,7 +143,7 @@ async def test_arah_keluar_membalik_urutan_angka(db, petugas, supplier):
 async def test_pengiriman_kurang_dari_surat_jalan_ditandai(db, petugas, supplier):
     data = InputTimbang(
         kode="TRX-20260830-P1-004", arah=logic.KELUAR, jenis_kode="BEKATUL",
-        berat_kg=6_200, supplier_id=supplier.id,
+        berat_kg=6_200, supplier_id=supplier.id, nomor_polisi="AD 8 KK",
         muatan=[InputMuatan(
             jenis_kode="BEKATUL", jumlah_karung=240,
             tara_per_karung_kg=0.05, berat_acuan_kg=12_000,
@@ -458,3 +458,37 @@ async def test_transaksi_void_tidak_ikut_terhitung(db, petugas, admin2, supplier
     assert await service.hitung_transaksi(
         db, service.FilterTransaksi(sertakan_void=True)
     ) == 1
+
+
+# ─────────────── Nomor polisi wajib ───────────────
+
+async def test_koreksi_menolak_mengosongkan_nomor_polisi(
+    db, petugas, supplier, jenis_tersemai
+):
+    """Rute koreksi memperlakukan kolom kosong sebagai "tidak diubah", jadi
+    pagar ini tidak terjangkau dari layar. Ia menjaga pintu lain: pemakaian
+    langsung layanan ini — antrean luring, perbaikan data, atau apa pun yang
+    ditulis kemudian.
+    """
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
+        kode="TRX-20260831-P1-001", arah=logic.MASUK, jenis_kode="GABAH_BASAH",
+        berat_kg=13_600, supplier_id=supplier.id, nomor_polisi="AD 5 BB",
+        muatan=[InputMuatan(jenis_kode="GABAH_BASAH", jumlah_karung=120,
+                            tara_per_karung_kg=0.25, berat_acuan_kg=10_000)],
+    ))
+    with pytest.raises(service.LayananError, match="Nomor polisi wajib"):
+        await service.koreksi_transaksi(
+            db, akun=petugas, trx=trx, alasan="Salah ketik",
+            perubahan={"nomor_polisi": "   "},
+        )
+    assert trx.nomor_polisi == "AD 5 BB"
+
+
+async def test_transfer_internal_boleh_tanpa_nomor_polisi(
+    db, petugas, jenis_tersemai
+):
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
+        kode="TRX-20260831-P1-002", arah=logic.TRANSFER, jenis_kode="TRANSFER",
+        berat_kg=13_600, pihak_nama="Gudang 1 → Gudang 2",
+    ))
+    assert trx.nomor_polisi is None

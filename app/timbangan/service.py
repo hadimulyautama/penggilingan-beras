@@ -564,6 +564,20 @@ async def ambil_kode(db: AsyncSession, kode: str) -> TimbanganTransaksi | None:
     )).scalars().first()
 
 
+#: Arah yang WAJIB menyebut nomor polisi. Keputusan Direksi 31 Agustus 2026.
+#: Barang masuk dan barang keluar selalu melibatkan pihak luar, sehingga
+#: catatannya harus bisa menunjuk kendaraan tertentu bila kelak ada sengketa.
+#: Jasa timbang dan transfer internal dibiarkan boleh kosong.
+ARAH_WAJIB_NOPOL = (logic.MASUK, logic.KELUAR)
+
+
+def _wajib_nopol(arah: str, nomor_polisi: str | None) -> None:
+    if arah in ARAH_WAJIB_NOPOL and not (nomor_polisi or "").strip():
+        raise LayananError(
+            "Nomor polisi wajib diisi untuk barang masuk dan barang keluar."
+        )
+
+
 async def simpan_timbang_pertama(
     db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None
 ) -> TimbanganTransaksi:
@@ -576,6 +590,7 @@ async def simpan_timbang_pertama(
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
 
     aturan = await aturan_untuk(db, data.jenis_kode)
+    _wajib_nopol(aturan.arah, data.nomor_polisi)
     kapasitas = (await setelan.semua(db))["kapasitas_jembatan_kg"]
     # Diperiksa SEKARANG, bukan nanti di timbang kedua. Salah ketik yang baru
     # ketahuan setelah truk selesai bongkar sudah terlambat untuk diperbaiki.
@@ -800,6 +815,11 @@ async def koreksi_transaksi(
         "timbang1_kg", "timbang2_kg", "timbang1_waktu", "timbang2_waktu",
         "tara_lain_kg", "catatan",
     }
+    # Diperiksa sebelum apa pun disentuh — koreksi tidak boleh menjadi jalan
+    # memutar untuk mengosongkan nomor polisi.
+    if "nomor_polisi" in perubahan:
+        _wajib_nopol(trx.arah, perubahan["nomor_polisi"])
+
     sebelum, sesudah = {}, {}
     for kolom, nilai in perubahan.items():
         if kolom not in dapat_diubah:

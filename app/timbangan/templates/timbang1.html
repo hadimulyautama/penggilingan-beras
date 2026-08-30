@@ -81,8 +81,11 @@
              'text', '', false, true) }}
   {% endif %}
 
+  {# Wajib untuk barang masuk dan barang keluar: keduanya melibatkan pihak
+     luar, jadi catatannya harus bisa menunjuk kendaraan tertentu bila kelak
+     ada sengketa. Jasa timbang dan transfer internal boleh kosong. #}
   {{ isian('nomor_polisi', 'Nomor polisi', '', '', 'text',
-           'Contoh: AD 1234 XY', false, true,
+           'Contoh: AD 1234 XY', masuk or (not bebas and not transfer), true,
            'autocapitalize="characters" autocomplete="off"') }}
   {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', false, true) }}
 

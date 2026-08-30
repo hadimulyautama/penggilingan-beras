@@ -25,8 +25,11 @@
       {{ berat('timbang2_kg', 'Timbang kedua', trx.timbang2_kg|angka, '', false) }}
     {% endif %}
 
+    {# Wajib pada arah yang memang mewajibkannya — koreksi tidak boleh jadi
+       jalan memutar untuk mengosongkannya. #}
     {{ isian('nomor_polisi', 'Nomor polisi', trx.nomor_polisi or '', '', 'text',
-             '', false, true, 'autocapitalize="characters"') }}
+             '', trx.arah in (MASUK, KELUAR), true,
+             'autocapitalize="characters"') }}
     {{ isian('nama_sopir', 'Nama sopir', trx.nama_sopir or '', '', 'text',
              '', false, true) }}
 
