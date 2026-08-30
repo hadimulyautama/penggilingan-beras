@@ -270,7 +270,7 @@ async def test_bukti_gabah_tidak_memuat_selisih(klien):
     """SOP butir 8: hasil kontrol gabah adalah data internal."""
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
     assert "BERAT BARANG" in cetak
     assert "Selisih" not in cetak
     assert "Menurut dokumen" not in cetak
@@ -282,7 +282,7 @@ async def test_bukti_beras_pk_memuat_selisih(klien):
     trx_id = await _selesaikan(
         klien, "BERAS_PK", tara_per_karung_kg="0,085", berat_acuan_kg="9990"
     )
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
     assert "Selisih" in cetak
     assert "Menurut dokumen" in cetak
 
@@ -290,7 +290,7 @@ async def test_bukti_beras_pk_memuat_selisih(klien):
 async def test_bukti_memuat_petugas_dan_identitas_perusahaan(klien):
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
     assert "PT Hadi Mulya Utama" in cetak
     assert "Masaran, Kab. Sragen" in cetak
     assert "Budi" in cetak                      # petugas timbang
@@ -791,7 +791,7 @@ async def test_bukti_pengiriman_tidak_memuat_selisih(klien):
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
     })
 
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
     assert "BERAT BARANG" in cetak
     assert "Selisih" not in cetak
     assert "Menurut dokumen" not in cetak
@@ -806,7 +806,7 @@ async def test_bukti_gabah_tetap_dicetak_dengan_sopir_sebagai_saksi(klien):
     assert "Cetak bukti timbang" in rincian
     assert "Cetak untuk arsip" not in rincian
 
-    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).text
     assert "Sopir (saksi)" in cetak
     assert "Petugas timbang" in cetak
     assert "Ditandatangani kedua pihak" in cetak
@@ -923,3 +923,98 @@ def test_penyaring_memakai_grid_yang_menyusut(berkas):
     assert "grid-template-columns:1fr 1fr" not in html, (
         f"{berkas} kembali memakai kolom yang tidak bisa menyusut"
     )
+
+
+# ─────────────── Dua ukuran bukti: 80 mm dan setengah NCR ───────────────
+
+async def test_pemilih_menawarkan_dua_ukuran(klien):
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+
+    assert "Struk 80 mm" in teks
+    assert "215 × 165 mm" in teks
+    assert f"/transaksi/{trx_id}/cetak/80mm" in teks
+    assert f"/transaksi/{trx_id}/cetak/ncr" in teks
+
+
+async def test_lembar_ncr_berukuran_setengah_folio(klien):
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    ncr = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).text
+
+    assert "@page { size: 215mm 165mm; margin: 0; }" in ncr
+    assert "BUKTI TIMBANG" in ncr
+    assert "BERAT BARANG" in ncr
+    assert "Lembar 1" in ncr and "Arsip pos timbang" in ncr
+
+
+@pytest.mark.parametrize("jenis, beda", [
+    ("GABAH_BASAH", {}),
+    ("BERAS_PK", {"tara_per_karung_kg": "0,085", "berat_acuan_kg": "9990"}),
+])
+async def test_lembar_ncr_tidak_pernah_memuat_selisih(klien, jenis, beda):
+    """Berlaku untuk SEMUA komoditas — termasuk beras PK.
+
+    Berbeda dari struk 80 mm, yang mengikuti aturan per komoditas. Lembar NCR
+    diperlakukan sebagai salinan untuk pihak luar, jadi hasil kontrol internal
+    tidak pernah ikut keluar.
+    """
+    await login(klien)
+    trx_id = await _selesaikan(klien, jenis, **beda)
+    ncr = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).text
+
+    assert "Selisih" not in ncr
+    assert "Menurut dokumen" not in ncr
+
+
+async def test_struk_80mm_tetap_mengikuti_aturan_komoditas(klien):
+    """Yang lama tidak berubah: PK tetap memuat selisih, gabah tidak."""
+    await login(klien)
+
+    gabah = await _selesaikan(klien, "GABAH_BASAH")
+    assert "Selisih" not in (
+        await klien.get(f"{PREFIX}/transaksi/{gabah}/cetak/80mm")).text
+
+    pk = await _selesaikan(
+        klien, "BERAS_PK", tara_per_karung_kg="0,085", berat_acuan_kg="9990"
+    )
+    assert "Selisih" in (
+        await klien.get(f"{PREFIX}/transaksi/{pk}/cetak/80mm")).text
+
+
+async def test_riwayat_cetak_mencatat_formatnya(klien, app_uji):
+    from sqlalchemy import select
+    from app import database
+    from app.timbangan.models import TimbanganCetak
+
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/cetak",
+                     data={"alasan": "", "format": "NCR"})
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/cetak",
+                     data={"alasan": "Kertas tersangkut", "format": "80MM"})
+
+    async with database.SessionLocal() as db:
+        baris = list((await db.execute(
+            select(TimbanganCetak).order_by(TimbanganCetak.urutan)
+        )).scalars())
+    assert [c.format for c in baris] == ["NCR", "80MM"]
+    assert [c.ulang for c in baris] == [False, True]
+
+
+async def test_format_asing_jatuh_ke_80mm(klien, app_uji):
+    """Nilai yang tidak dikenal tidak boleh tersimpan apa adanya."""
+    from sqlalchemy import select
+    from app import database
+    from app.timbangan.models import TimbanganCetak
+
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/cetak",
+                     data={"alasan": "", "format": "A4-PALSU"})
+
+    async with database.SessionLocal() as db:
+        c = (await db.execute(select(TimbanganCetak))).scalars().one()
+    assert c.format == "80MM"

@@ -157,10 +157,11 @@
 
 <div class="alat">
   <button onclick="window.print()">Cetak</button>
-  <a href="{{ PREFIX }}/transaksi/{{ trx.id }}">Kembali</a>
+  <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak">Kembali</a>
   <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak"
         style="margin-top:10px">
     <input type="hidden" name="alasan" value="">
+    <input type="hidden" name="format" value="80MM">
     <button type="submit" style="background:#fff;color:#333">
       Catat sudah dicetak
     </button>

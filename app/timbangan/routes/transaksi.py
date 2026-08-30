@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import logic, service
-from app.timbangan.db import get_db, hari_ini
+from app.timbangan.db import get_db, hari_ini, sekarang
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import butuh_akun, butuh_pengawas
@@ -278,29 +278,63 @@ async def selesaikan_pemeriksaan(
 # ═══════════════════════════ Cetak ═══════════════════════════
 
 @router.get("/transaksi/{transaksi_id}/cetak")
-async def halaman_cetak(
+async def pilih_cetak(
     transaksi_id: int,
     request: Request,
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
-    """Bukti timbang 80 mm.
-
-    Hasil kontrol gabah bersifat rahasia internal (SOP butir 8) — pada bukti
-    yang diberikan ke pengirim, angka selisih TIDAK ikut tercetak. Untuk beras
-    PK sebaliknya: Sistem Tara butir 9 mewajibkan notanya diberikan.
-    """
+    """Dua ukuran bukti: struk 80 mm dan lembar setengah NCR."""
     try:
         b = await _ambil(db, transaksi_id)
     except service.LayananError as e:
         return redirect("/transaksi", err=str(e))
 
+    return render(
+        request, "cetak_pilih.html",
+        b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
+        cetak=await _riwayat_cetak(db, b.trx.id),
+        kembali=f"{PREFIX}/transaksi/{transaksi_id}",
+    )
+
+
+async def _riwayat_cetak(db: AsyncSession, transaksi_id: int):
+    return list((await db.execute(
+        select(TimbanganCetak)
+        .where(TimbanganCetak.transaksi_id == transaksi_id)
+        .order_by(TimbanganCetak.urutan)
+    )).scalars())
+
+
+async def _bahan_cetak(db: AsyncSession, transaksi_id: int):
+    """Data yang sama untuk kedua ukuran — hanya tata letaknya berbeda."""
+    b = await _ambil(db, transaksi_id)
     aturan = await service.aturan_untuk(db, b.trx.jenis_kode)
     petugas = {}
     for pid in {b.trx.timbang1_petugas_id, b.trx.timbang2_petugas_id} - {None}:
         orang = await db.get(TimbanganAkun, pid)
         if orang:
             petugas[pid] = orang.nama
+    return b, aturan, petugas
+
+
+@router.get("/transaksi/{transaksi_id}/cetak/80mm")
+async def cetak_80mm(
+    transaksi_id: int,
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Struk thermal 80 mm.
+
+    Hasil kontrol gabah bersifat rahasia internal (SOP butir 8) — pada bukti
+    yang diberikan ke pengirim, angka selisih TIDAK ikut tercetak. Untuk beras
+    PK sebaliknya: Sistem Tara butir 9 mewajibkan notanya diberikan.
+    """
+    try:
+        b, aturan, petugas = await _bahan_cetak(db, transaksi_id)
+    except service.LayananError as e:
+        return redirect("/transaksi", err=str(e))
 
     return render(
         request, "cetak.html",
@@ -309,11 +343,37 @@ async def halaman_cetak(
     )
 
 
+@router.get("/transaksi/{transaksi_id}/cetak/ncr")
+async def cetak_ncr(
+    transaksi_id: int,
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lembar setengah NCR, 215 × 165 mm.
+
+    Angka selisih TIDAK PERNAH dicetak di sini, apa pun komoditasnya —
+    keputusan Direksi 30 Agustus 2026. Lembar ini diperlakukan sebagai salinan
+    untuk pihak luar, jadi hasil kontrol internal tidak ikut dibawa keluar.
+    Karena itu templatnya memang tidak punya jalan untuk menampilkannya.
+    """
+    try:
+        b, aturan, petugas = await _bahan_cetak(db, transaksi_id)
+    except service.LayananError as e:
+        return redirect("/transaksi", err=str(e))
+
+    return render(
+        request, "cetak_ncr.html",
+        b=b, aturan=aturan, petugas=petugas, dicetak=sekarang(),
+    )
+
+
 @router.post("/transaksi/{transaksi_id}/cetak")
 async def catat_cetak(
     transaksi_id: int,
     request: Request,
     alasan: str = Form(""),
+    format: str = Form("80MM"),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
@@ -321,8 +381,9 @@ async def catat_cetak(
         b = await _ambil(db, transaksi_id)
         await service.catat_cetak(
             db, akun=akun, trx=b.trx, alasan=alasan or None,
+            format=format.upper(),
             ip=request.client.host if request.client else None,
         )
     except service.LayananError as e:
-        return redirect(f"/transaksi/{transaksi_id}", err=str(e))
-    return redirect(f"/transaksi/{transaksi_id}/cetak")
+        return redirect(f"/transaksi/{transaksi_id}/cetak", err=str(e))
+    return redirect(f"/transaksi/{transaksi_id}/cetak", ok="Cetak tercatat.")

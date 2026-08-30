@@ -262,6 +262,35 @@
       "y": -1080,
       "w": 870,
       "h": 940
+    },
+    {
+      "file": "PilihCetak.dc.html",
+      "x": 0,
+      "y": 10760,
+      "w": 390,
+      "h": 844,
+      "title": "0g. Pilih ukuran cetak",
+      "page": "staff"
+    },
+    {
+      "file": "BuktiNCR-A.dc.html",
+      "x": 470,
+      "y": 10760,
+      "w": 813,
+      "h": 624,
+      "title": "0h. Bukti ½ NCR — versi A (dua kolom)",
+      "page": "staff",
+      "print": "fixed"
+    },
+    {
+      "file": "BuktiNCR-B.dc.html",
+      "x": 470,
+      "y": 11504,
+      "w": 813,
+      "h": 624,
+      "title": "0i. Bukti ½ NCR — versi B (gaya buku nota)",
+      "page": "staff",
+      "print": "fixed"
     }
   ],
   "annotations": [

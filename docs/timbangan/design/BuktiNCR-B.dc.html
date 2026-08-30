@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    .ncr2 { font-family: 'Manrope', Arial, sans-serif; color: #000; background: #fff; }
+    .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+    .lbl { font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase;
+      color: #555; font-weight: 700; }
+    .isian { border-bottom: 1px solid #000; padding-bottom: 3px; min-height: 17px; }
+    .isian .v { font-size: 13px; font-family: 'Space Mono', monospace; }
+    .isian .vt { font-size: 12.5px; }
+    table.tm { width: 100%; border-collapse: collapse; }
+    table.tm td { padding: 5px 8px; font-size: 12px; border-bottom: 1px solid #ddd; }
+    table.tm td.a { text-align: right; font-family: 'Space Mono', monospace;
+      font-size: 12.5px; white-space: nowrap; }
+    table.tm tr.total td { border-top: 1.5px solid #000; border-bottom: none;
+      padding-top: 8px; font-weight: 700; }
+  </style>
+</helmet>
+
+<div class="ncr2" style="width: 813px; height: 624px; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column">
+
+  <!-- Kepala: gaya buku nota, nomor menonjol di kanan -->
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8px">
+    <div>
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700">PT HADI MULYA UTAMA</div>
+      <div style="font-size: 10.5px; color: #444">Masaran, Kab. Sragen &nbsp;&middot;&nbsp; +62 851-7416-7950</div>
+    </div>
+    <div style="text-align: right; border: 1.5px solid #000; padding: 5px 12px">
+      <div class="lbl" style="color: #000">Nomor</div>
+      <div class="mono" style="font-size: 14px; font-weight: 700">TRX-20260830-P1-001</div>
+    </div>
+  </div>
+
+  <div style="text-align: center; border-top: 2.5px solid #000; border-bottom: 1px solid #000; padding: 6px 0; margin-bottom: 14px">
+    <span style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: .16em">BUKTI TIMBANG</span>
+  </div>
+
+  <!-- Identitas: bergaya isian, supaya bisa ditulis tangan bila alat mati -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr 150px; gap: 14px 22px">
+    <div><div class="lbl">Pengirim</div><div class="isian"><span class="vt">H. Anton</span></div></div>
+    <div><div class="lbl">Barang</div><div class="isian"><span class="vt">Gabah Basah</span></div></div>
+    <div><div class="lbl">Tanggal</div><div class="isian"><span class="v">30-08-2026</span></div></div>
+    <div><div class="lbl">Nomor polisi</div><div class="isian"><span class="v">AD 1234 XY</span></div></div>
+    <div><div class="lbl">Sopir</div><div class="isian"><span class="vt">Slamet</span></div></div>
+    <div><div class="lbl">Nota supplier</div><div class="isian"><span class="v">NOTA-01</span></div></div>
+  </div>
+
+  <!-- Angka: satu tabel, dibaca dari atas ke bawah seperti hitungan tangan -->
+  <div style="display: flex; gap: 24px; margin-top: 18px; flex-grow: 1">
+    <div style="flex-grow: 1">
+      <table class="tm">
+        <tr><td>Bruto &mdash; truk bermuatan <span class="mono" style="font-size: 10px; color: #777">08.39</span></td><td class="a">13.600 kg</td></tr>
+        <tr><td>Tara truk &mdash; setelah bongkar <span class="mono" style="font-size: 10px; color: #777">10.14</span></td><td class="a">3.570 kg</td></tr>
+        <tr><td>Netto timbangan</td><td class="a">10.030 kg</td></tr>
+        <tr><td>Tara karung &nbsp;<span style="color: #777">120 &times; 0,25 kg</span></td><td class="a">&minus; 30,00 kg</td></tr>
+        <tr class="total"><td style="font-size: 13px">BERAT BARANG</td><td class="a" style="font-size: 20px">10.000 kg</td></tr>
+      </table>
+
+      <div style="margin-top: 14px">
+        <div class="lbl">Catatan</div>
+        <div class="isian" style="min-height: 26px"><span style="font-size: 11px">Muatan basah sebagian, terpal terbuka di perjalanan.</span></div>
+      </div>
+    </div>
+
+    <!-- Tanda tangan di kanan, sejajar dengan angka -->
+    <div style="width: 250px; display: flex; flex-direction: column; justify-content: flex-end">
+      <div style="display: flex; gap: 18px">
+        <div style="flex: 1; text-align: center">
+          <div class="lbl">Petugas timbang</div>
+          <div style="height: 46px"></div>
+          <div style="border-top: 1px solid #000; padding-top: 4px; font-size: 11px">Budi</div>
+        </div>
+        <div style="flex: 1; text-align: center">
+          <div class="lbl">Sopir</div>
+          <div style="height: 46px"></div>
+          <div style="border-top: 1px solid #000; padding-top: 4px; font-size: 11px">Slamet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top: 1px solid #999; margin-top: 10px; padding-top: 6px; display: flex; justify-content: space-between; font-size: 9px; color: #666">
+    <span>Lembar 1 &mdash; Pengirim &nbsp;&middot;&nbsp; Lembar 2 &mdash; Arsip pos timbang</span>
+    <span class="mono">dicetak 30 Agu 2026 10.16</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

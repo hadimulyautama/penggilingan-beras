@@ -994,6 +994,7 @@ async def catat_cetak(
     akun: TimbanganAkun,
     trx: TimbanganTransaksi,
     alasan: str | None = None,
+    format: str = "80MM",
     ip: str | None = None,
 ) -> TimbanganCetak:
     """Catat satu kali cetak. Cetak kedua dan seterusnya wajib beralasan."""
@@ -1008,12 +1009,14 @@ async def catat_cetak(
 
     baris = TimbanganCetak(
         transaksi_id=trx.id, urutan=urutan, ulang=urutan > 1,
+        format=(format if format in ("80MM", "NCR") else "80MM"),
         alasan=(alasan or None), oleh_id=akun.id,
     )
     db.add(baris)
     await catat_audit(
         db, akun=akun, aksi="CETAK", entitas="transaksi", entitas_id=trx.kode,
-        ringkasan=f"cetak ke-{urutan}" + (f" — {alasan}" if alasan else ""), ip=ip,
+        ringkasan=f"cetak ke-{urutan} ({baris.format})"
+                  + (f" — {alasan}" if alasan else ""), ip=ip,
     )
     await db.commit()
     return baris

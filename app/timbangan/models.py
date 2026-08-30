@@ -484,6 +484,9 @@ class TimbanganCetak(Base):
         ForeignKey("timbangan_transaksi.id"), nullable=False, index=True
     )
     urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # 80MM / NCR — supaya bila kelak ada sengketa, tercatat lembar bentuk apa
+    # yang benar-benar diterima pengirim.
+    format: Mapped[str] = mapped_column(String(10), nullable=False, default="80MM")
     ulang: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     alasan: Mapped[str | None] = mapped_column(Text)
     oleh_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_akun.id"))
