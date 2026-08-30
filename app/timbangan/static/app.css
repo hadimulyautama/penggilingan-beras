@@ -138,7 +138,10 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
 
 /* ── Kolom isian ─────────────────────────────────────────── */
 
-.grup { display: flex; flex-direction: column; gap: 8px; }
+/* min-width:0 WAJIB. Tanpa ini, item grid/flex menolak menyusut di bawah
+   lebar isinya — dan tanggal "Aug 30, 2026" pada input date bawaan iOS
+   cukup lebar untuk mendorong kolom keluar dari kartunya. */
+.grup { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 
 .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--tinta-3); font-weight: 700; }
@@ -192,6 +195,21 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
   background: none; border: 0; cursor: pointer; padding: 4px 6px;
   color: var(--aksi); font-family: var(--teks); font-size: 13px;
   font-weight: 700;
+}
+
+/* Baris penyaring. Satu kolom di ponsel sempit, dua kolom begitu muat —
+   bukan dua kolom yang dipaksakan lalu meluber. minmax(0,1fr), bukan 1fr,
+   karena 1fr saja tidak mengizinkan kolomnya menyusut. */
+.saring { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.saring > .lebar-penuh { grid-column: 1 / -1; }
+@media (min-width: 480px) {
+  .saring { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Tanggal ditampilkan sesuai bahasa perangkat dan bisa jauh lebih panjang
+   daripada angka biasa; beri huruf yang lebih ringkas agar tetap muat. */
+.fld[type="date"], .fld[type="datetime-local"] {
+  font-size: 16px; padding: 0 10px;
 }
 
 .sat { position: relative; }

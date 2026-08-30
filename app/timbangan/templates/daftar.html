@@ -7,8 +7,7 @@
 {% block bar_sub %}{{ total }} transaksi{% endblock %}
 
 {% block isi %}
-  <form method="get" class="kartu"
-        style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <form method="get" class="kartu saring">
     <div class="grup">
       <div class="lbl">Dari</div>
       <input class="fld" type="date" name="dari" value="{{ f.dari|iso }}">
@@ -37,12 +36,12 @@
         {% endfor %}
       </select>
     </div>
-    <div class="grup" style="grid-column:1/-1">
+    <div class="grup lebar-penuh">
       <div class="lbl">Cari</div>
       <input class="fld teks" name="cari" value="{{ f.cari or '' }}"
              placeholder="Nomor polisi, kode, nama">
     </div>
-    <button type="submit" class="tbl" style="grid-column:1/-1">Terapkan</button>
+    <button type="submit" class="tbl lebar-penuh">Terapkan</button>
   </form>
 
   <div class="kartu" style="padding:0;overflow:hidden">

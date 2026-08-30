@@ -890,3 +890,36 @@ async def test_manifest_memuat_ikon_png_untuk_android(klien):
     assert any(i.get("purpose") == "maskable" for i in m["icons"])
     assert m["display"] == "standalone"
     assert m["start_url"].startswith(PREFIX)
+
+
+# ─────────────── Penyaring tanggal tidak boleh meluber ───────────────
+#
+# Pernah rusak di ponsel: kolom "SAMPAI" tembus keluar kartu. Penyebabnya
+# kolom grid `1fr` yang menolak menyusut di bawah lebar isinya, sementara
+# tanggal bawaan iOS ("Aug 30, 2026") jauh lebih lebar daripada angka biasa.
+
+def test_gaya_penyaring_mengizinkan_kolom_menyusut():
+    import pathlib
+
+    css = (pathlib.Path(__file__).resolve().parents[2]
+           / "app/timbangan/static/app.css").read_text()
+
+    # Tanpa min-width:0, item grid/flex tidak akan pernah menyusut.
+    grup = [b for b in css.splitlines() if b.startswith(".grup {")][0]
+    assert "min-width: 0" in grup
+
+    # minmax(0, 1fr) — bukan 1fr — barulah kolomnya boleh mengecil.
+    assert "minmax(0, 1fr)" in css
+    assert '.fld[type="date"]' in css
+
+
+@pytest.mark.parametrize("berkas", ["daftar.html", "laporan.html"])
+def test_penyaring_memakai_grid_yang_menyusut(berkas):
+    import pathlib
+
+    html = (pathlib.Path(__file__).resolve().parents[2]
+            / "app/timbangan/templates" / berkas).read_text()
+    assert "saring" in html, f"{berkas} tidak memakai kelas .saring"
+    assert "grid-template-columns:1fr 1fr" not in html, (
+        f"{berkas} kembali memakai kolom yang tidak bisa menyusut"
+    )

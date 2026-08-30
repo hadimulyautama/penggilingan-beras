@@ -7,16 +7,16 @@
 {% block bar_sub %}{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}{% endblock %}
 
 {% block isi %}
-  <form method="get" style="display:flex;gap:10px;align-items:flex-end">
-    <div class="grup" style="flex:1">
+  <form method="get" class="saring">
+    <div class="grup">
       <div class="lbl">Dari</div>
       <input class="fld" type="date" name="dari" value="{{ f.dari|iso }}">
     </div>
-    <div class="grup" style="flex:1">
+    <div class="grup">
       <div class="lbl">Sampai</div>
       <input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}">
     </div>
-    <button type="submit" class="tbl">Lihat</button>
+    <button type="submit" class="tbl lebar-penuh">Lihat</button>
   </form>
 
   <div class="petak">
