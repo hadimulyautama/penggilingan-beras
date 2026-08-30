@@ -1043,3 +1043,30 @@ async def test_format_asing_jatuh_ke_80mm(klien, app_uji):
     async with database.SessionLocal() as db:
         c = (await db.execute(select(TimbanganCetak))).scalars().one()
     assert c.format == "80MM"
+
+
+# ─────────────── Navigasi: bilah bawah di ponsel, sidebar di desktop ───────────────
+
+def test_navigasi_berubah_bentuk_lewat_css_saja():
+    """Satu markup, dua bentuk — bukan dua daftar tautan yang bisa menyimpang."""
+    import pathlib
+
+    akar = pathlib.Path(__file__).resolve().parents[2]
+    css = (akar / "app/timbangan/static/app.css").read_text()
+    html = (akar / "app/timbangan/templates/base.html").read_text()
+
+    # Hanya SATU elemen navigasi di markup.
+    assert html.count('<nav class="bawah">') == 1
+
+    # Di layar lebar ia jadi sidebar, dan isi halaman bergeser menghindarinya.
+    assert "@media (min-width: 900px)" in css
+    sidebar = css.split("@media (min-width: 900px)")[1]
+    assert "flex-direction: column" in sidebar
+    assert "padding-left: var(--sidebar)" in sidebar
+
+
+async def test_kepala_sidebar_ada_di_markup(klien):
+    """Tersembunyi di ponsel lewat CSS, bukan lewat cabang di template."""
+    await login(klien)
+    teks = (await klien.get(f"{PREFIX}/")).text
+    assert 'class="bawah__kepala"' in teks

@@ -78,6 +78,8 @@
    truk sedang menunggu di jembatan. #}
 {% if akun %}
   <nav class="bawah">
+    {# Hanya tampak saat bilah ini berubah jadi sidebar di layar lebar. #}
+    <div class="bawah__kepala">Pos Timbang</div>
     <div class="bawah__isi">
       <a href="{{ PREFIX }}/" class="{{ 'aktif' if halaman == 'beranda' }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
