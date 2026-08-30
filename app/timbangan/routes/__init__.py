@@ -10,8 +10,24 @@ from app.timbangan.routes import auth, laporan, master, pos, transaksi
 
 
 async def _muat_setelan(request: Request, db: AsyncSession = Depends(get_db)):
-    """Setelan yang berlaku, tersedia untuk setiap halaman modul ini."""
+    """Setelan & jumlah tiket terbuka, tersedia untuk setiap halaman."""
     await setelan.muat_ke_permintaan(request, db)
+
+    # Dipakai bilah navigasi bawah. Truk yang sedang menunggu adalah hal
+    # paling mendesak di pos timbang — angkanya harus terlihat dari mana pun,
+    # bukan hanya saat petugas kebetulan membuka beranda.
+    from sqlalchemy import func, select
+
+    from app.timbangan.models import TIKET_TERBUKA, TRX_AKTIF, TimbanganTransaksi
+    try:
+        request.state.jumlah_tiket = (await db.execute(
+            select(func.count(TimbanganTransaksi.id)).where(
+                TimbanganTransaksi.status_tiket == TIKET_TERBUKA,
+                TimbanganTransaksi.status_transaksi == TRX_AKTIF,
+            )
+        )).scalar_one()
+    except Exception:
+        request.state.jumlah_tiket = 0
 
 
 router = APIRouter(dependencies=[Depends(_muat_setelan)])

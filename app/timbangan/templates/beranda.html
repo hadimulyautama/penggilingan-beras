@@ -79,18 +79,12 @@
       {% for b in hari_ini_daftar %}
         <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
       {% endfor %}
-      <a href="{{ PREFIX }}/transaksi" class="tbl halus blok">Lihat semua catatan</a>
+
     {% else %}
       <div class="kartu kosong">Belum ada penimbangan hari ini.</div>
     {% endif %}
   </div>
 
-  <div class="aksi-baris">
-    {% if akun.is_pengawas %}
-      <a href="{{ PREFIX }}/laporan" class="tbl halus">Ringkasan</a>
-    {% endif %}
-    <a href="{{ PREFIX }}/aturan" class="tbl halus">Aturan</a>
-    <a href="{{ PREFIX }}/pengaturan" class="tbl halus">Pengaturan</a>
-  </div>
+  <a href="{{ PREFIX }}/aturan" class="tbl halus blok">Aturan komoditas</a>
 
 {% endblock %}

@@ -70,8 +70,45 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
   font-size: 13px; font-weight: 700; flex-shrink: 0;
 }
 
-.isi { flex-grow: 1; padding: 14px 16px 32px; display: flex;
+/* Ruang bawah disisakan untuk bilah navigasi yang menempel. */
+.isi { flex-grow: 1; padding: 14px 16px 96px; display: flex;
   flex-direction: column; gap: 14px; }
+
+/* ── Bilah navigasi bawah ────────────────────────────────────
+   Di pos timbang aplikasi dipegang satu tangan sambil truk menunggu, jadi
+   jalan pulang harus selalu ada dan terjangkau ibu jari — bukan lewat panah
+   kembali di pojok atas yang harus ditekan berulang kali. */
+
+.bawah {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; background: var(--putih);
+  border-top: 1px solid var(--garis);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.bawah__isi { display: flex; width: 100%; max-width: 560px; margin: 0 auto; }
+.bingkai.lebar ~ .bawah .bawah__isi { max-width: 1100px; }
+
+.bawah a {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; padding: 9px 4px 7px; color: var(--tinta-4);
+  font-size: 11px; font-weight: 700; letter-spacing: .01em;
+  /* Sasaran sentuh penuh tinggi bilah, bukan sekadar tulisannya. */
+  min-height: 54px; justify-content: center;
+}
+.bawah a:hover { color: var(--tinta-2); }
+.bawah a.aktif { color: var(--aksi); }
+.bawah a.aktif svg { stroke: var(--aksi); }
+.bawah svg { stroke: var(--tinta-4); }
+
+.bawah__tanda {
+  position: absolute; transform: translate(12px, -10px);
+  min-width: 17px; height: 17px; border-radius: 999px;
+  background: var(--bahaya); color: #fff;
+  font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+  padding: 0 4px;
+}
+
+@media print { .bawah { display: none !important; } }
 
 /* ── Konteks komoditas & tahap ───────────────────────────── */
 
@@ -120,6 +157,42 @@ textarea.fld { height: auto; min-height: 84px; padding: 12px 14px;
 select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a8478' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");
   background-repeat: no-repeat; background-position: right 14px center; }
+
+/* ── Pilihan dengan pengetikan ────────────────────────────────
+   180 nama supplier dalam satu dropdown mustahil dipakai sambil berdiri di
+   pos. Kolom ini menyaring daftar yang SUDAH ada di halaman — tidak memanggil
+   server, jadi tetap bekerja saat sinyal hilang. */
+
+.cari { position: relative; }
+.cari__hasil {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 40;
+  background: var(--putih); border: 1px solid var(--garis-2);
+  border-radius: 10px; overflow: hidden auto; max-height: 268px;
+  box-shadow: 0 10px 24px rgba(26, 23, 18, .12);
+}
+.cari__hasil:empty { display: none; }
+.cari__hasil button {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; border-bottom: 1px solid var(--garis);
+  padding: 13px 14px; font-family: var(--teks); font-size: 16px;
+  color: var(--tinta);
+}
+.cari__hasil button:last-child { border-bottom: 0; }
+.cari__hasil button:hover, .cari__hasil button.sorot { background: var(--aksi-muda); }
+.cari__hasil .kelompok {
+  padding: 7px 14px; font-size: 11px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--tinta-4); background: var(--kertas-2);
+}
+.cari__kosong { padding: 13px 14px; font-size: 14px; color: var(--tinta-4); }
+.cari__terpilih {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 6px; font-size: 13px; color: var(--tinta-3);
+}
+.cari__terpilih button {
+  background: none; border: 0; cursor: pointer; padding: 4px 6px;
+  color: var(--aksi); font-family: var(--teks); font-size: 13px;
+  font-weight: 700;
+}
 
 .sat { position: relative; }
 .sat > span {

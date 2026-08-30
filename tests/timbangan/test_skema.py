@@ -29,6 +29,7 @@ AKAR = pathlib.Path(__file__).resolve().parents[2]
 MIGRASI = (
     AKAR / "migrations" / "versions" / "0022_timbangan.py",
     AKAR / "migrations" / "versions" / "0023_timbangan_config.py",
+    AKAR / "migrations" / "versions" / "0024_timbangan_aturan_cetak.py",
 )
 
 # Kata yang tidak boleh muncul sebagai nama kolom di modul ini.
@@ -102,3 +103,44 @@ def test_jembatan_integrasi_disiapkan_kosong():
     kolom = Base.metadata.tables["timbangan_transaksi"].columns
     assert kolom["purchase_batch_id"].nullable
     assert kolom["pk_purchase_batch_id"].nullable
+
+
+def test_migrasi_revisi_aturan_benar_benar_mengubah_baris(kolom_migrasi):
+    """Penyemaian tidak pernah menimpa, jadi revisi aturan HARUS lewat migrasi.
+
+    Tanpa uji ini, mengubah `logic.py` saja akan terasa berhasil di laptop
+    (tabel masih kosong, jadi disemai dari kode) tetapi diam-diam tidak
+    berpengaruh di produksi yang barisnya sudah ada.
+    """
+    import importlib.util
+
+    berkas = AKAR / "migrations" / "versions" / "0024_timbangan_aturan_cetak.py"
+    spec = importlib.util.spec_from_file_location(berkas.stem, berkas)
+    modul = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modul)
+
+    mesin = sa.create_engine("sqlite://")
+    with mesin.begin() as conn:
+        conn.exec_driver_sql(
+            "create table timbangan_jenis "
+            "(kode text, arah text, rahasia boolean, cetak_bukti boolean)"
+        )
+        # Keadaan SEBELUM revisi, seperti yang tersemai di produksi.
+        conn.exec_driver_sql(
+            "insert into timbangan_jenis values "
+            "('GABAH_BASAH','MASUK',1,0), ('BEKATUL','KELUAR',0,1), "
+            "('BERAS_PK','MASUK',0,1)"
+        )
+        with Operations.context(MigrationContext.configure(conn)):
+            modul.upgrade()
+
+        hasil = dict(
+            (k, (bool(r), bool(c)))
+            for k, r, c in conn.exec_driver_sql(
+                "select kode, rahasia, cetak_bukti from timbangan_jenis"
+            ).all()
+        )
+
+    assert hasil["GABAH_BASAH"] == (True, True)    # bukti tetap dicetak
+    assert hasil["BEKATUL"] == (True, True)        # selisih tidak lagi tercetak
+    assert hasil["BERAS_PK"] == (False, True)      # PK tidak tersentuh

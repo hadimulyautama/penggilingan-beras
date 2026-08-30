@@ -142,6 +142,138 @@
       : '';
   });
 
+  // ── Pilihan panjang jadi kolom ketik ───────────────────────────────
+  //
+  // Daftar supplier ikut Kledo, jadi isinya ratusan nama. Menggulir daftar
+  // sepanjang itu di ponsel, sambil truk menunggu, adalah cara membuat orang
+  // salah pilih.
+  //
+  // Peningkatan bertahap: <select> tetap dirender server dan tetap menjadi
+  // pemegang nilai yang dikirim. Bila berkas ini gagal dimuat, petugas masih
+  // mendapat dropdown biasa yang berfungsi penuh — bukan layar mati.
+  //
+  // Penyaringan memakai daftar yang SUDAH ada di halaman; tidak ada panggilan
+  // ke server, jadi tetap bekerja tanpa sinyal.
+
+  function pasangPencarian(pilih) {
+    var opsi = [];
+    Array.prototype.forEach.call(pilih.querySelectorAll('option'), function (o) {
+      if (!o.value) { return; }
+      var induk = o.parentNode;
+      opsi.push({
+        nilai: o.value,
+        label: o.textContent.trim(),
+        kelompok: induk.tagName === 'OPTGROUP' ? induk.label : ''
+      });
+    });
+    if (opsi.length < 12) { return; }   // masih nyaman sebagai dropdown biasa
+
+    var bungkus = document.createElement('div');
+    bungkus.className = 'cari';
+    var kotak = document.createElement('input');
+    kotak.type = 'text';
+    kotak.className = 'fld teks';
+    kotak.setAttribute('autocomplete', 'off');
+    kotak.setAttribute('enterkeyhint', 'search');
+    kotak.placeholder = pilih.dataset.cari || 'Ketik untuk mencari…';
+    var hasil = document.createElement('div');
+    hasil.className = 'cari__hasil';
+    var terpilih = document.createElement('div');
+    terpilih.className = 'cari__terpilih';
+
+    bungkus.appendChild(kotak);
+    bungkus.appendChild(hasil);
+    pilih.parentNode.insertBefore(bungkus, pilih);
+    pilih.parentNode.insertBefore(terpilih, pilih.nextSibling);
+    pilih.style.display = 'none';
+
+    function tampilkanTerpilih() {
+      var v = pilih.value;
+      if (!v) { terpilih.textContent = ''; return; }
+      var ada = opsi.filter(function (o) { return o.nilai === v; })[0];
+      terpilih.innerHTML = '';
+      var teks = document.createElement('span');
+      teks.textContent = 'Terpilih: ' + (ada ? ada.label : v);
+      var hapus = document.createElement('button');
+      hapus.type = 'button';
+      hapus.textContent = 'Ganti';
+      hapus.addEventListener('click', function () {
+        pilih.value = '';
+        kotak.value = '';
+        tampilkanTerpilih();
+        kotak.focus();
+      });
+      terpilih.appendChild(teks);
+      terpilih.appendChild(hapus);
+    }
+
+    function cocok(o, kata) {
+      return o.label.toLowerCase().indexOf(kata) >= 0;
+    }
+
+    function gambar() {
+      var kata = kotak.value.trim().toLowerCase();
+      hasil.innerHTML = '';
+      if (!kata) { return; }
+
+      var ketemu = opsi.filter(function (o) { return cocok(o, kata); });
+      if (!ketemu.length) {
+        var kosong = document.createElement('div');
+        kosong.className = 'cari__kosong';
+        kosong.textContent = 'Tidak ada yang cocok dengan "' + kotak.value.trim() + '"';
+        hasil.appendChild(kosong);
+        return;
+      }
+
+      var kelompokTerakhir = null;
+      ketemu.slice(0, 25).forEach(function (o) {
+        if (o.kelompok && o.kelompok !== kelompokTerakhir) {
+          kelompokTerakhir = o.kelompok;
+          var judul = document.createElement('div');
+          judul.className = 'kelompok';
+          judul.textContent = o.kelompok;
+          hasil.appendChild(judul);
+        }
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = o.label;
+        b.addEventListener('click', function () {
+          pilih.value = o.nilai;
+          kotak.value = '';
+          hasil.innerHTML = '';
+          tampilkanTerpilih();
+        });
+        hasil.appendChild(b);
+      });
+      if (ketemu.length > 25) {
+        var sisa = document.createElement('div');
+        sisa.className = 'cari__kosong';
+        sisa.textContent = ketemu.length - 25 + ' lainnya — ketik lebih lengkap';
+        hasil.appendChild(sisa);
+      }
+    }
+
+    kotak.addEventListener('input', gambar);
+    kotak.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        // Jangan mengirim formulir hanya karena petugas menekan Enter di
+        // kolom cari; pilih hasil teratas bila ada.
+        e.preventDefault();
+        var pertama = hasil.querySelector('button');
+        if (pertama) { pertama.click(); }
+      } else if (e.key === 'Escape') {
+        hasil.innerHTML = '';
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!bungkus.contains(e.target)) { hasil.innerHTML = ''; }
+    });
+
+    tampilkanTerpilih();
+  }
+
+  document.querySelectorAll('select[data-cari]').forEach(pasangPencarian);
+
   // ── Mulai ──────────────────────────────────────────────────────────
 
   perbaruiStatusJaringan();

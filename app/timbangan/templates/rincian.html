@@ -24,6 +24,9 @@
       Menunggu timbang kedua.
       <a href="{{ PREFIX }}/tiket/{{ trx.id }}">Lanjutkan sekarang</a>.
     </div>
+    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl blok tanpa-cetak">
+      Timbang truk berikutnya
+    </a>
   {% else %}
     {{ kartu_hasil(trx) }}
   {% endif %}
@@ -200,13 +203,30 @@
     </div>
   {% endif %}
 
-  {# ── Aksi ── #}
+  {# ── Aksi ──
+     Urutannya mengikuti apa yang sebenarnya dilakukan petugas: cetak bila
+     perlu, lalu LANGSUNG truk berikutnya. Tanpa jalan pintas ini ia harus
+     mundur tiga layar untuk memulai penimbangan baru. #}
   <div class="tanpa-cetak" style="display:flex;flex-direction:column;gap:10px">
+    {# Urutannya mengikuti kenyataan di pos: cetak lebih dulu selagi sopir
+       masih di tempat untuk menandatangani sebagai saksi, baru truk
+       berikutnya. #}
     {% if trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}
       <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl blok">
         Cetak bukti timbang
         {% if cetak %}({{ cetak|length }}× tercetak){% endif %}
       </a>
+    {% endif %}
+
+    {% if trx.selesai %}
+      <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus blok">
+        Timbang berikutnya
+      </a>
+      {% if JUMLAH_TIKET %}
+        <a href="{{ PREFIX }}/tiket" class="tbl halus blok">
+          {{ JUMLAH_TIKET }} truk menunggu timbang kedua
+        </a>
+      {% endif %}
     {% endif %}
 
     {% if boleh_ubah and trx.status_transaksi != 'VOID' %}

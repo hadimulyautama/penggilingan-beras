@@ -62,6 +62,67 @@
   </main>
 </div>
 
+{# ── Bilah navigasi bawah ──────────────────────────────────────────────
+   Selalu ada dan terjangkau ibu jari. Tanpa ini, kembali ke beranda dari
+   halaman dalam berarti menekan panah kembali berkali-kali — mahal saat
+   truk sedang menunggu di jembatan. #}
+{% if akun %}
+  <nav class="bawah">
+    <div class="bawah__isi">
+      <a href="{{ PREFIX }}/" class="{{ 'aktif' if halaman == 'beranda' }}">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <path d="M9 22V12h6v10"/></svg>
+        Beranda
+      </a>
+
+      <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if halaman == 'tiket' }}">
+        <span style="position:relative;display:flex">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7h18v4a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z"/>
+            <path d="M13 7v13"/></svg>
+          {% if JUMLAH_TIKET %}
+            <span class="bawah__tanda">{{ JUMLAH_TIKET }}</span>
+          {% endif %}
+        </span>
+        Tiket
+      </a>
+
+      <a href="{{ PREFIX }}/transaksi"
+         class="{{ 'aktif' if halaman in ('daftar', 'rincian', 'koreksi') }}">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
+          <path d="M8 17h5"/></svg>
+        Catatan
+      </a>
+
+      {% if akun.is_pengawas %}
+        <a href="{{ PREFIX }}/laporan"
+           class="{{ 'aktif' if halaman in ('laporan', 'monitoring') }}">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
+            <path d="M22 20H2"/></svg>
+          Ringkasan
+        </a>
+      {% endif %}
+
+      <a href="{{ PREFIX }}/pengaturan"
+         class="{{ 'aktif' if halaman in ('pengaturan', 'aturan', 'tara', 'pengguna') }}">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M4 12a8 8 0 0 1 .5-2.8L2.8 7.5l2-3.4 2.2.9A8 8 0 0 1 9.6 3.6L10 1.3h4l.4 2.3a8 8 0 0 1 2.6 1.4l2.2-.9 2 3.4-1.7 1.7A8 8 0 0 1 20 12"/>
+          <path d="M20 12a8 8 0 0 1-.5 2.8l1.7 1.7-2 3.4-2.2-.9a8 8 0 0 1-2.6 1.4L14 22.7h-4l-.4-2.3a8 8 0 0 1-2.6-1.4l-2.2.9-2-3.4 1.7-1.7A8 8 0 0 1 4 12"/></svg>
+        Pengaturan
+      </a>
+    </div>
+  </nav>
+{% endif %}
+
 <script src="{{ PREFIX }}/static/app.js?v={{ VERSI }}" defer></script>
 {% block skrip %}{% endblock %}
 </body>

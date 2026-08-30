@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "2"
+VERSI = "4"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -126,6 +126,7 @@ def render(request: Request, nama: str, **konteks) -> HTMLResponse:
         "KELIPATAN_TERA": aktif.get(
             "kelipatan_tera_kg", tsettings.kelipatan_tera_kg
         ),
+        "JUMLAH_TIKET": getattr(request.state, "jumlah_tiket", 0),
     }
     dasar.update(konteks)
     return templates.TemplateResponse(request, nama, dasar)

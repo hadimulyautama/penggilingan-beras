@@ -506,7 +506,7 @@ Butir 1 dan 3 sebaiknya diputuskan sebelum aplikasi dipakai. Butir 2 dan 4 bisa 
 | 1 | Arsitektur & rancangan | ✅ dokumen ini |
 | 2 | Desain 27 layar | ✅ kanvas |
 | 3 | Draf SOP gabah kering & revisi pasal PK | ✅ menunggu tinjauan |
-| 4 | Skema DB + migrasi Alembic | ✅ 13 tabel, `0022_timbangan` + `0023_timbangan_config` |
+| 4 | Skema DB + migrasi Alembic | ✅ 13 tabel, `0022`–`0024` |
 | 5 | Logika bisnis per mode + uji tiga contoh resmi | ✅ `logic.py` |
 | 6 | Autentikasi, peran, sesi | ✅ sesi sampai Keluar |
 | 7 | Rute & template | ✅ 18 halaman |
@@ -517,7 +517,7 @@ Butir 1 dan 3 sebaiknya diputuskan sebelum aplikasi dipakai. Butir 2 dan 4 bisa 
 | 12 | Service Railway kedua (`timbangan`), entrypoint tanpa migrasi | ✅ berkas siap, lihat `DEPLOY.md` |
 | 13 | Uji di produksi bersama petugas | ⏸ menunggu deploy |
 
-Yang dijaga uji otomatis (142 uji): tiga contoh resmi, matriks aturan per
+Yang dijaga uji otomatis (170 uji): tiga contoh resmi, matriks aturan per
 komoditas, kesepadanan model ⇄ migrasi, idempotensi kiriman ulang, arah barang
 menentukan angka bermuatan, tanggal mengikuti timbang kedua, kerahasiaan
 selisih pada bukti gabah, dan **ketiadaan kolom maupun kata "harga" di seluruh

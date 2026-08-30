@@ -117,7 +117,8 @@ class TimbanganJenis(Base, TimestampMixin):
     ambang_arah: Mapped[str] = mapped_column(String(28), nullable=False)
     ambang_investigasi_nilai: Mapped[float | None] = mapped_column(KG_KECIL)
 
-    # Hasil kontrol rahasia (gabah) atau boleh dilihat pengirim (PK).
+    # Hasil kontrol rahasia (gabah & pengiriman) atau boleh dilihat
+    # pengirim (beras PK).
     rahasia: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     cetak_bukti: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     masa_berlaku_tara_hari: Mapped[int] = mapped_column(

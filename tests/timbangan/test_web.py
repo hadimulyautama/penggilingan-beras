@@ -717,3 +717,138 @@ async def test_supplier_belum_pernah_dipakai_tetap_bisa_dipilih(klien, app_uji):
     await login(klien)
     teks = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     assert "Pemasok Musiman" in teks
+
+
+# ─────────────── Jalan pulang selalu ada ───────────────
+
+@pytest.mark.parametrize("jalur", [
+    "/", "/tiket", "/transaksi", "/pengaturan", "/aturan",
+    "/pilih/MASUK", "/timbang/GABAH_BASAH",
+])
+async def test_bilah_bawah_ada_di_setiap_halaman(klien, jalur):
+    """Dari halaman mana pun, beranda cukup satu ketukan.
+
+    Sebelumnya petugas harus menekan panah kembali berkali-kali — mahal saat
+    truk sedang menunggu di jembatan.
+    """
+    await login(klien)
+    teks = (await klien.get(PREFIX + jalur)).text
+    assert 'class="bawah"' in teks
+    assert f'href="{PREFIX}/"' in teks
+
+
+async def test_halaman_masuk_tidak_memuat_bilah_bawah(klien):
+    """Belum masuk berarti belum ada ke mana pun untuk pergi."""
+    teks = (await klien.get(f"{PREFIX}/masuk")).text
+    assert 'class="bawah"' not in teks
+
+
+async def test_petugas_tidak_melihat_ringkasan_di_bilah(klien):
+    await login(klien)
+    teks = (await klien.get(f"{PREFIX}/")).text
+    assert f'href="{PREFIX}/laporan"' not in teks
+
+
+async def test_sesudah_menimbang_langsung_bisa_truk_berikutnya(klien):
+    """Aksi utama sesudah selesai adalah truk berikutnya, bukan menggali menu."""
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert f'href="{PREFIX}/pilih/MASUK"' in teks
+    assert "Timbang berikutnya" in teks
+
+
+async def test_tanda_tiket_terbuka_terlihat_dari_halaman_lain(klien):
+    """Truk yang menunggu adalah hal paling mendesak — harus terlihat di mana pun."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "nomor_polisi": "AD 3 CC", "jumlah_karung": "10",
+        "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
+        "nama_sopir": "", "pihak_nama": "",
+    })
+    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    assert 'class="bawah__tanda"' in teks
+
+
+async def test_bukti_pengiriman_tidak_memuat_selisih(klien):
+    """Keputusan Direksi: sopir menerima berat barang, bukan angka selisih."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/BEKATUL")).text
+    await klien.post(f"{PREFIX}/timbang/BEKATUL", data={
+        "kode": kode_dari(form), "berat_kg": "6200", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "nomor_polisi": "AD 8 KK", "jumlah_karung": "240",
+        "tara_per_karung_kg": "0.05", "berat_acuan_kg": "12000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-9",
+        "nama_sopir": "Slamet", "pihak_nama": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "18220", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    assert "BERAT BARANG" in cetak
+    assert "Selisih" not in cetak
+    assert "Menurut dokumen" not in cetak
+
+
+async def test_bukti_gabah_tetap_dicetak_dengan_sopir_sebagai_saksi(klien):
+    """Cetakan itu alat bukti: sopir menandatanganinya. Bukan arsip sampingan."""
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+
+    rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert "Cetak bukti timbang" in rincian
+    assert "Cetak untuk arsip" not in rincian
+
+    cetak = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    assert "Sopir (saksi)" in cetak
+    assert "Petugas timbang" in cetak
+    assert "Ditandatangani kedua pihak" in cetak
+    assert "Selisih" not in cetak        # tetap rahasia, hanya beratnya
+
+
+def test_semua_komoditas_dicetak_buktinya():
+    """Keputusan Direksi: semuanya perlu, karena sopir jadi saksi."""
+    from app.timbangan import logic
+    tanpa = [a.nama for a in logic.JENIS_AWAL if not a.cetak_bukti]
+    assert tanpa == []
+
+
+# ─────────────── Supplier: mengetik, bukan menggulir ───────────────
+
+async def test_supplier_ditandai_agar_bisa_dicari(klien, app_uji):
+    """Daftar ikut Kledo — ratusan nama. Kolomnya harus bisa diketik.
+
+    Yang diuji di sini adalah kontraknya: `<select>` tetap dirender server
+    (jadi tetap berfungsi bila JavaScript gagal dimuat) DAN diberi penanda
+    `data-cari` yang dipakai app.js untuk menaikkannya jadi kolom pencarian.
+    """
+    from app import database
+    from app.models import Supplier
+
+    async with database.SessionLocal() as db:
+        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i:03d}")
+                    for i in range(20)])
+        await db.commit()
+
+    await login(klien)
+    teks = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert 'name="supplier_id"' in teks
+    assert "data-cari=" in teks
+    # Seluruh pilihan tetap ada di halaman, supaya penyaringan bekerja
+    # tanpa memanggil server — penting saat sinyal hilang.
+    assert "Vendor Karung 019" in teks
+    assert "H. Anton" in teks
+
+
+async def test_kolom_koreksi_juga_bisa_dicari(klien):
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
+    assert "data-cari=" in teks

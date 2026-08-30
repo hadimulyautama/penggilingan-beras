@@ -118,7 +118,7 @@ keputusan yang harus lewat revisi SOP, bukan lewat kotak isian environment.
 ## 4. Urutan menyalakan pertama kali
 
 1. **Deploy service `app`** lebih dulu (menjalankan migrasi `0022_timbangan`
-   dan `0023_timbangan_config` yang membuat 13 tabel `timbangan_*`).
+   sampai `0024` — 13 tabel `timbangan_*` beserta revisi aturannya).
 2. Setel variabel lingkungan service `timbangan`, termasuk
    `TIMBANGAN_ADMIN_PASSWORD`.
 3. **Deploy service `timbangan`.** Saat menyala, ia menyemai master komoditas
@@ -181,7 +181,7 @@ dengan margin cetak 4 mm di kiri-kanan.
 
 | Gejala | Sebab yang paling mungkin |
 |---|---|
-| `relation "timbangan_transaksi" does not exist` | Service `app` belum di-deploy dengan migrasi `0022`/`0023` |
+| `relation "timbangan_transaksi" does not exist` | Service `app` belum di-deploy dengan migrasi `0022`–`0024` |
 | Semua orang ter-logout tiap deploy | `TIMBANGAN_SECRET_KEY` belum diset |
 | Tidak bisa masuk sama sekali | `TIMBANGAN_ADMIN_PASSWORD` kosong saat penyalaan pertama, sehingga tidak ada akun yang dibuat |
 | Nomor transaksi bentrok antar-perangkat | Dua akun memakai kode perangkat yang sama |

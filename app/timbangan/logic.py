@@ -130,14 +130,24 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.25,
         ambang_jenis=AMBANG_PER_TON, ambang_nilai=2.0,
         ambang_arah=ARAH_SIMETRIS, ambang_investigasi_nilai=5.0,
-        rahasia=True, cetak_bukti=False,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
+        # Batas PROPORSIONAL 0,5 kg per ton — ditegaskan Direksi 30 Agustus
+        # 2026 setelah ditimbang ulang terhadap alternatif 5 kg tetap.
+        #
+        # Konsekuensinya diukur, bukan dikira: simulasi 200.000 transaksi jujur
+        # memberi ~13% tetap ditandai perlu diperiksa. Penyebabnya bukan aturan
+        # ini, melainkan alat — pembacaan dibulatkan ke kelipatan 10 kg pada
+        # DUA kali penimbangan, sehingga netto punya galat bawaan. Batas 5 kg
+        # tetap menghasilkan angka yang praktis sama (~12%), jadi pilihan
+        # antara keduanya tidak menentukan. Yang menurunkannya secara berarti
+        # hanya menaikkan batas: 1,0 kg/ton → ~1%.
         kode="GABAH_KERING", nama="Gabah Kering", arah=MASUK, acuan=ACUAN_NOTA,
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.25,
         ambang_jenis=AMBANG_PER_TON, ambang_nilai=0.5,
         ambang_arah=ARAH_KURANG_SAJA,
-        rahasia=True, cetak_bukti=False,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="BERAS_PK", nama="Beras PK", arah=MASUK, acuan=ACUAN_NOTA,
@@ -167,35 +177,35 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.05,
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
         ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
-        rahasia=False, cetak_bukti=True,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="BROKEN", nama="Broken", arah=KELUAR, acuan=ACUAN_SURAT_JALAN,
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.07,
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
         ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
-        rahasia=False, cetak_bukti=True,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="MENIR", nama="Menir", arah=KELUAR, acuan=ACUAN_SURAT_JALAN,
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.05,
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
         ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
-        rahasia=False, cetak_bukti=True,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="BEKATUL", nama="Bekatul", arah=KELUAR, acuan=ACUAN_SURAT_JALAN,
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.05,
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
         ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
-        rahasia=False, cetak_bukti=True,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="REJECT", nama="Reject", arah=KELUAR, acuan=ACUAN_SURAT_JALAN,
         sumber_tara=TARA_TETAP, tara_tetap_kg=0.05,
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
         ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
-        rahasia=False, cetak_bukti=True,
+        rahasia=True, cetak_bukti=True,
     ),
     AturanJenis(
         kode="BEBAS", nama="Timbang Bebas", arah=BEBAS, acuan=ACUAN_TIDAK_ADA,

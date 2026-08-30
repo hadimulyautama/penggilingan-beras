@@ -32,7 +32,8 @@
 
     <div class="grup">
       <div class="lbl">Supplier / pihak</div>
-      <select class="fld" name="supplier_id">
+      <select class="fld" name="supplier_id"
+              data-cari="Ketik nama supplier…">
         <option value="">— tidak diubah —</option>
         {% for kelompok, daftar in [('Sering datang', supplier_pilihan[0]),
                                     ('Lainnya', supplier_pilihan[1])] %}

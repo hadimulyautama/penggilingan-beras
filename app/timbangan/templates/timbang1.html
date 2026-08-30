@@ -47,7 +47,8 @@
   {% else %}
     <div class="grup">
       <div class="lbl">{{ 'Supplier' if masuk else 'Tujuan / pembeli' }}</div>
-      <select class="fld" name="supplier_id">
+      <select class="fld" name="supplier_id"
+              data-cari="Ketik nama supplier…">
         <option value="">— pilih —</option>
         {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
            menunggu, bukan sambil duduk santai. #}

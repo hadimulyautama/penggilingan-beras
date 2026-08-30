@@ -3,9 +3,12 @@
    Dicetak lewat AirPrint/Mopria sebagai halaman HTML biasa — bukan ESC/POS —
    supaya satu printer jaringan bisa dipakai perangkat Android maupun iOS.
 
-   KERAHASIAAN: hasil kontrol gabah adalah data internal (SOP butir 8), jadi
-   angka selisih tidak ikut tercetak. Untuk beras PK sebaliknya — Sistem Tara
-   butir 9 mewajibkan notanya diberikan kepada pengirim. #}
+   KERAHASIAAN: angka selisih hanya tercetak untuk beras PK, karena Sistem
+   Tara butir 9 mewajibkan notanya diberikan kepada pengirim. Untuk gabah ia
+   data internal (SOP butir 8); untuk PENGIRIMAN ia sengaja ditahan atas
+   keputusan Direksi 30 Agustus 2026 — sopir menerima berat barangnya, dan
+   selisih kecil tidak menjadi bahan perdebatan di lokasi bongkar. Selisihnya
+   tetap tercatat di sistem. #}
 {% set trx = b.trx %}
 <!doctype html>
 <html lang="id">
@@ -133,7 +136,7 @@
     </div>
   </div>
   <div>
-    <div class="kecil">Sopir</div>
+    <div class="kecil">Sopir (saksi)</div>
     <div class="garis-ttd kecil">{{ trx.nama_sopir or '' }}</div>
   </div>
 </div>
@@ -145,7 +148,10 @@
   </div>
 {% endif %}
 
-<div class="kecil tengah" style="margin-top:8px">
+<div class="kecil tengah" style="margin-top:6px">
+  Ditandatangani kedua pihak sebagai bukti penimbangan.
+</div>
+<div class="kecil tengah" style="margin-top:6px">
   Dicetak {{ trx.tanggal|tgl(true) }} · {{ trx.kode }}
 </div>
 
