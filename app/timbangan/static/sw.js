@@ -5,13 +5,16 @@
  * timbangan basi di pos timbang lebih berbahaya daripada menampilkan
  * pesan "tidak ada jaringan".
  */
-var VERSI = 'timbangan-v4';
+var VERSI = 'timbangan-v5';
 var PREFIX = '/timbangan';
 
 var RANGKA = [
   PREFIX + '/static/app.css',
   PREFIX + '/static/app.js',
   PREFIX + '/static/ikon.svg',
+  PREFIX + '/static/ikon-180.png',
+  PREFIX + '/static/ikon-192.png',
+  PREFIX + '/static/ikon-512.png',
   PREFIX + '/static/manifest.json',
   PREFIX + '/luring'
 ];

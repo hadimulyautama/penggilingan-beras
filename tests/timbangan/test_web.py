@@ -852,3 +852,41 @@ async def test_kolom_koreksi_juga_bisa_dicari(klien):
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
     teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
     assert "data-cari=" in teks
+
+
+# ─────────────── Syarat pemasangan di layar depan ───────────────
+#
+# Safari iOS mengabaikan ikon SVG DAN ikon di dalam manifest. Tanpa
+# apple-touch-icon PNG, "Tambahkan ke Layar Utama" memakai potret halaman
+# sebagai ikon. Ini pernah terlewat sampai ditanyakan.
+
+async def test_halaman_memuat_apple_touch_icon_png(klien):
+    await login(klien)
+    teks = (await klien.get(f"{PREFIX}/")).text
+    assert 'rel="apple-touch-icon"' in teks
+    assert "ikon-180.png" in teks
+    assert 'name="apple-mobile-web-app-capable" content="yes"' in teks
+    assert 'name="apple-mobile-web-app-title"' in teks
+
+
+@pytest.mark.parametrize("berkas, tipe", [
+    ("ikon-180.png", "image/png"),
+    ("ikon-192.png", "image/png"),
+    ("ikon-512.png", "image/png"),
+    ("ikon.svg", "image/svg+xml"),
+    ("manifest.json", "application/json"),
+])
+async def test_berkas_ikon_benar_benar_terlayani(klien, berkas, tipe):
+    r = await klien.get(f"{PREFIX}/static/{berkas}")
+    assert r.status_code == 200
+    assert tipe in r.headers.get("content-type", "")
+
+
+async def test_manifest_memuat_ikon_png_untuk_android(klien):
+    """Chrome butuh 192 dan 512 PNG untuk menawarkan pemasangan."""
+    m = (await klien.get(f"{PREFIX}/static/manifest.json")).json()
+    ukuran = {i["sizes"] for i in m["icons"] if i["type"] == "image/png"}
+    assert {"192x192", "512x512"} <= ukuran
+    assert any(i.get("purpose") == "maskable" for i in m["icons"])
+    assert m["display"] == "standalone"
+    assert m["start_url"].startswith(PREFIX)

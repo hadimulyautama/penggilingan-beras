@@ -13,6 +13,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="manifest" href="{{ PREFIX }}/static/manifest.json">
 
+  {# Safari iOS MENGABAIKAN ikon SVG dan ikon di dalam manifest. Tanpa baris
+     PNG ini, "Tambahkan ke Layar Utama" memakai potret halaman sebagai ikon. #}
+  <link rel="apple-touch-icon" sizes="180x180"
+        href="{{ PREFIX }}/static/ikon-180.png?v={{ VERSI }}">
+  <link rel="icon" type="image/png" sizes="192x192"
+        href="{{ PREFIX }}/static/ikon-192.png?v={{ VERSI }}">
+  <link rel="icon" type="image/svg+xml"
+        href="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}">
+  <meta name="apple-mobile-web-app-title" content="Pos Timbang">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
