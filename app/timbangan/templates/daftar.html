@@ -101,8 +101,8 @@
   {% endif %}
 
   {% if akun.is_admin %}
-    {# Dibuka di luar aplikasi — lihat catatan yang sama di laporan.html. #}
-    <a class="tbl halus blok" target="_blank" rel="noopener" download
+    {# Lihat catatan yang sama di laporan.html. #}
+    <a class="tbl halus blok" data-unduh target="_blank" rel="noopener" download
        href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
       Unduh CSV</a>
   {% endif %}

@@ -2028,9 +2028,9 @@ async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
 
 
 async def test_unduh_csv_dibuka_di_jendela_terpisah(klien):
-    """Di PWA terpasang tidak ada bilah peramban: berkas yang dibuka di
-    jendela yang sama menggantikan halaman dan tidak menyisakan jalan
-    kembali."""
+    """Di PWA terpasang tidak ada bilah peramban. Menautkan langsung ke
+    berkas membuat iOS menggantikan seluruh layar dengan pratinjau yang hanya
+    menawarkan "Open in…" — aplikasi harus ditutup paksa."""
     await login(klien, "wahid")
     for jalur in ("/transaksi", "/laporan"):
         teks = (await klien.get(PREFIX + jalur)).text
@@ -2038,5 +2038,20 @@ async def test_unduh_csv_dibuka_di_jendela_terpisah(klien):
         # potongan tepat di depan alamatnya.
         potongan = teks[max(0, teks.index("ekspor.csv") - 200):
                         teks.index("ekspor.csv")]
+        # data-unduh: diambil di latar lalu diserahkan ke lembar Bagikan,
+        # supaya halaman tidak pernah ditinggalkan. target="_blank" hanya
+        # jalan terakhir bila JS tidak jalan.
+        assert "data-unduh" in potongan, jalur
         assert 'target="_blank"' in potongan, jalur
         assert "download" in potongan, jalur
+
+
+async def test_ekspor_menyebut_nama_berkasnya_di_header(klien):
+    """Nama berkas dibaca dari jawaban server oleh app.js — bukan disusun
+    ulang di sisi peramban, supaya hanya ada satu tempat yang menentukannya."""
+    await login(klien, "wahid")
+    r = await klien.get(f"{PREFIX}/ekspor.csv?dari=2026-08-01&sampai=2026-08-30")
+    assert r.status_code == 200
+    assert r.headers["content-disposition"] == (
+        'attachment; filename="timbangan-20260801-20260830.csv"'
+    )

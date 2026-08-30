@@ -319,4 +319,78 @@
     window.location.href = baris.getAttribute('data-buka');
   });
 
+
+  /* Unduhan tanpa meninggalkan halaman.
+   *
+   * Di aplikasi yang dipasang ke layar utama iOS tidak ada bilah peramban.
+   * Menautkan langsung ke berkas — bahkan dengan target="_blank" — membuat
+   * iOS menggantikan seluruh layar dengan pratinjau berkas yang hanya
+   * menawarkan "Open in…", tanpa satu pun jalan kembali; aplikasi harus
+   * ditutup paksa. Maka berkasnya diambil di latar lalu diserahkan ke lembar
+   * Bagikan, yang muncul sebagai lapisan di ATAS halaman: setelah ditutup,
+   * petugas kembali persis ke daftar yang tadi dilihatnya.
+   *
+   * Di peramban meja yang tidak punya lembar bagikan, jalannya kembali ke
+   * unduhan biasa lewat blob. Bila keduanya gagal, barulah tautannya
+   * dibuka apa adanya — lebih baik tersangkut daripada tidak dapat berkas.
+   */
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) { return; }
+    var tautan = e.target.closest('a[data-unduh]');
+    if (!tautan) { return; }
+    e.preventDefault();
+    unduhBerkas(tautan);
+  });
+
+  function unduhBerkas(tautan) {
+    if (tautan.dataset.sibuk === '1') { return; }
+    var semula = tautan.textContent;
+    tautan.dataset.sibuk = '1';
+    tautan.textContent = 'Menyiapkan…';
+
+    var selesai = function () {
+      tautan.dataset.sibuk = '';
+      tautan.textContent = semula;
+    };
+
+    fetch(tautan.href, { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('gagal ' + r.status); }
+        // Nama berkas diambil dari jawaban server, bukan disusun ulang di
+        // sini — supaya hanya ada satu tempat yang menentukannya.
+        var cd = r.headers.get('Content-Disposition') || '';
+        var cocok = cd.match(/filename="?([^"]+)"?/);
+        return r.blob().then(function (blob) {
+          return { blob: blob, nama: cocok ? cocok[1] : 'unduhan.csv' };
+        });
+      })
+      .then(function (hasil) {
+        var jenis = hasil.blob.type || 'text/csv';
+        var berkas;
+        try {
+          berkas = new File([hasil.blob], hasil.nama, { type: jenis });
+        } catch (err) { berkas = null; }
+
+        if (berkas && navigator.canShare &&
+            navigator.canShare({ files: [berkas] })) {
+          return navigator.share({ files: [berkas], title: hasil.nama });
+        }
+        var url = URL.createObjectURL(hasil.blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = hasil.nama;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+      })
+      .then(selesai)
+      .catch(function (err) {
+        selesai();
+        // Pengguna menutup lembar bagikan — bukan kegagalan.
+        if (err && err.name === 'AbortError') { return; }
+        window.location.href = tautan.href;
+      });
+  }
+
 })();
