@@ -494,7 +494,7 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 1 | **Ambang gabah kering** | Tetap **0,5 kg per ton** | Dipertimbangkan terhadap alternatif 5 kg tetap, lalu ditegaskan tetap proporsional. Konsekuensinya diukur: simulasi 200.000 transaksi jujur memberi **~13%** tetap ditandai perlu diperiksa. Penyebabnya alat, bukan aturan — pembacaan dibulatkan ke kelipatan 10 kg pada dua kali penimbangan. Batas 5 kg tetap menghasilkan angka yang praktis sama (~12%). Yang menurunkannya berarti hanya menaikkan batas: 1,0 kg/ton → ~1% |
 | 2 | **Label status** | Tetap **"PERLU PEMERIKSAAN"** | Sistem mencatat temuan; manusia yang menyimpulkan. Label tersimpan permanen dan terbawa ke ekspor, jadi tidak boleh menuduh |
 | 3 | **Baris selisih pada bukti pengiriman** | **Tidak dicetak** | Angka kontrol internal tidak ikut dibawa sopir. Bukti tetap dicetak untuk semua komoditas dan ditandatangani sopir sebagai saksi |
-| 4 | **Tara & ambang beras masuk** | **Meniru beras PK** | Identik pada kedua belas kolomnya, termasuk nota yang diberikan kepada pengirim beserta angka selisihnya. Dikunci uji `test_beras_masuk_meniru_beras_pk` |
+| 4 | **Tara beras masuk** | **Meniru beras PK** | Hasil sampling, bawaan 0,1 kg per karung, berlaku 90 hari. Dikunci uji `test_tara_beras_masuk_meniru_beras_pk`. **Hanya taranya yang diputuskan** — ambang 0,05 kg/karung dan nota yang diberikan ke pengirim masih usulan penyusun dan boleh dibedakan dari PK kapan pun |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi

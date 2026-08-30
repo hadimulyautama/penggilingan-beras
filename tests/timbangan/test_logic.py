@@ -321,20 +321,18 @@ def test_tidak_ada_harga_di_hasil():
         assert kata not in kolom
 
 
-def test_beras_masuk_meniru_beras_pk():
-    """Keputusan Direksi 30 Agustus 2026: beras masuk mengikuti beras PK.
+def test_tara_beras_masuk_meniru_beras_pk():
+    """Keputusan Direksi 30 Agustus 2026 — TARA-nya saja.
 
-    Dikunci uji agar tidak menyimpang diam-diam saat salah satunya direvisi —
-    kalau beras PK berubah dan beras masuk memang harus ikut, uji ini yang
-    mengingatkan.
+    Sengaja hanya mengunci kolom tara. Ambang dan kerahasiaan beras masuk
+    kebetulan juga sama dengan PK, tetapi itu belum pernah diputuskan, jadi
+    tidak boleh dikunci di sini: uji yang mengunci lebih dari yang diputuskan
+    akan menghalangi perubahan yang sebenarnya sah.
     """
-    import dataclasses
-
     pk = L.JENIS_PETA["BERAS_PK"]
     beras = L.JENIS_PETA["BERAS_MASUK"]
-    beda = [
-        f.name for f in dataclasses.fields(pk)
-        if f.name not in ("kode", "nama")
-        and getattr(pk, f.name) != getattr(beras, f.name)
-    ]
-    assert beda == [], f"beras masuk menyimpang dari beras PK pada: {beda}"
+    for kolom in ("sumber_tara", "tara_tetap_kg", "tara_bawaan_kg",
+                  "masa_berlaku_tara_hari"):
+        assert getattr(beras, kolom) == getattr(pk, kolom), kolom
+    assert beras.sumber_tara == L.TARA_SAMPLING
+    assert beras.tara_bawaan_kg == 0.1

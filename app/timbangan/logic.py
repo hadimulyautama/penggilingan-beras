@@ -163,9 +163,14 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_arah=ARAH_KURANG_SAJA,
         rahasia=False, cetak_bukti=True,
     ),
-    # Beras masuk mengikuti aturan beras PK — ditetapkan Direksi 30 Agustus
-    # 2026. Keduanya sengaja identik di kedua belas kolomnya, termasuk nota
-    # yang diberikan kepada pengirim beserta angka selisihnya.
+    # TARA beras masuk mengikuti beras PK — ditetapkan Direksi 30 Agustus 2026:
+    # hasil sampling, bawaan 0,1 kg per karung, berlaku 90 hari. Itu saja yang
+    # diputuskan.
+    #
+    # Kolom lain kebetulan juga sama dengan PK, tetapi bukan karena diputuskan
+    # demikian — melainkan karena belum ada alasan membedakannya. Ambang
+    # 0,05 kg/karung dan nota yang diberikan ke pengirim masih usulan penyusun
+    # dan boleh berbeda dari PK kapan pun tanpa melanggar keputusan apa pun.
     AturanJenis(
         kode="BERAS_MASUK", nama="Beras", arah=MASUK, acuan=ACUAN_NOTA,
         sumber_tara=TARA_SAMPLING, tara_bawaan_kg=0.1,
