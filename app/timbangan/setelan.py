@@ -167,8 +167,16 @@ async def muat_ke_permintaan(request, db: AsyncSession) -> dict[str, float]:
     database sendiri — dan supaya teks bantuan di layar (mis. "kapasitas
     jembatan 20.000 kg") selalu menyebut angka yang benar-benar dipakai
     menolak input, bukan angka saat proses dinyalakan.
+
+    Database yang sedang terganggu TIDAK boleh menjatuhkan halaman yang
+    sebenarnya tidak membutuhkannya — halaman masuk, misalnya. Bila kueri
+    gagal, kembali ke nilai bawaan; halaman yang memang perlu database akan
+    tetap gagal pada kueri miliknya sendiri, dan itu memang seharusnya.
     """
-    nilai = await semua(db)
+    try:
+        nilai = await semua(db)
+    except Exception:
+        nilai = {d.kunci: d.bawaan() for d in DAFTAR}
     request.state.setelan = nilai
     return nilai
 
