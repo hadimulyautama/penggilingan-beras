@@ -237,7 +237,7 @@ async def test_status_wajib_periksa_membuka_lembar_pemeriksaan(
 
 
 async def test_pemeriksaan_selesai_dengan_catatan_resolusi(
-    db, petugas, pengawas, supplier
+    db, petugas, admin2, supplier
 ):
     """Selesai berarti sudah ditelusuri dan tercatat — bukan berarti bersih."""
     data = masuk_gabah("TRX-20260830-P1-011", supplier.id, 13_600)
@@ -248,14 +248,14 @@ async def test_pemeriksaan_selesai_dengan_catatan_resolusi(
     lembar = await service.pemeriksaan_transaksi(db, trx.id)
 
     selesai = await service.selesaikan_pemeriksaan(
-        db, akun=pengawas, lembar=lembar,
+        db, akun=admin2, lembar=lembar,
         langkah={"langkah_ulang_timbang": "Ditimbang ulang, angka sama."},
         kategori_hasil="SUSUT_PERJALANAN",
         catatan_resolusi="Hujan di perjalanan, karung basah lalu menyusut.",
         dilaporkan_ke="Miftah",
     )
     assert selesai.status == PEMERIKSAAN_SELESAI
-    assert selesai.ditutup_oleh_id == pengawas.id
+    assert selesai.ditutup_oleh_id == admin2.id
 
 
 async def test_petugas_tidak_boleh_menutup_pemeriksaan(db, petugas, supplier):
@@ -265,14 +265,14 @@ async def test_petugas_tidak_boleh_menutup_pemeriksaan(db, petugas, supplier):
         db, akun=petugas, kode=data.kode, berat_kg=3_570
     )
     lembar = await service.pemeriksaan_transaksi(db, trx.id)
-    with pytest.raises(service.LayananError, match="Pengawas"):
+    with pytest.raises(service.LayananError, match="Admin"):
         await service.selesaikan_pemeriksaan(
             db, akun=petugas, lembar=lembar, langkah={},
             kategori_hasil="SELISIH_WAJAR", catatan_resolusi="aman",
         )
 
 
-async def test_resolusi_wajib_beralasan(db, petugas, pengawas, supplier):
+async def test_resolusi_wajib_beralasan(db, petugas, admin2, supplier):
     data = masuk_gabah("TRX-20260830-P1-013", supplier.id, 13_600)
     await service.simpan_timbang_pertama(db, akun=petugas, data=data)
     trx = await service.simpan_timbang_kedua(
@@ -281,7 +281,7 @@ async def test_resolusi_wajib_beralasan(db, petugas, pengawas, supplier):
     lembar = await service.pemeriksaan_transaksi(db, trx.id)
     with pytest.raises(service.LayananError, match="resolusi"):
         await service.selesaikan_pemeriksaan(
-            db, akun=pengawas, lembar=lembar, langkah={},
+            db, akun=admin2, lembar=lembar, langkah={},
             kategori_hasil="SELISIH_WAJAR", catatan_resolusi="   ",
         )
 
@@ -320,17 +320,17 @@ async def test_koreksi_menghitung_ulang_dan_meninggalkan_jejak(
     assert "10048" in jejak[0].nilai_sebelum.replace(".0", "")
 
 
-async def test_void_menyimpan_data_dan_menuntut_alasan(db, petugas, pengawas, supplier):
+async def test_void_menyimpan_data_dan_menuntut_alasan(db, petugas, admin2, supplier):
     data = masuk_gabah("TRX-20260830-P1-015", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
 
-    with pytest.raises(service.LayananError, match="Pengawas"):
+    with pytest.raises(service.LayananError, match="Admin"):
         await service.void_transaksi(db, akun=petugas, trx=trx, alasan="salah")
     with pytest.raises(service.LayananError, match="alasan"):
-        await service.void_transaksi(db, akun=pengawas, trx=trx, alasan="  ")
+        await service.void_transaksi(db, akun=admin2, trx=trx, alasan="  ")
 
     trx = await service.void_transaksi(
-        db, akun=pengawas, trx=trx, alasan="Truk salah masuk antrean"
+        db, akun=admin2, trx=trx, alasan="Truk salah masuk antrean"
     )
     assert trx.status_transaksi == TRX_VOID
     # Barisnya tetap ada — tidak pernah dihapus permanen.
@@ -364,15 +364,15 @@ async def test_timbang_kedua_ditolak_setelah_tutup_paksa(db, petugas, supplier):
 
 # ─────────────────── Tara standar ───────────────────
 
-async def test_sampling_baru_mengganti_bukan_menimpa(db, pengawas, supplier):
+async def test_sampling_baru_mengganti_bukan_menimpa(db, admin2, supplier):
     pertama = await service.simpan_tara_standar(
-        db, akun=pengawas, supplier_id=supplier.id, jenis_kode="BERAS_PK",
+        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
         jumlah_sampel=20, total_berat_kg=1.8,
     )
     assert pertama.tara_per_karung_kg == pytest.approx(0.09)
 
     kedua = await service.simpan_tara_standar(
-        db, akun=pengawas, supplier_id=supplier.id, jenis_kode="BERAS_PK",
+        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
         jumlah_sampel=20, total_berat_kg=2.0, alasan="Ganti jenis karung",
     )
     await db.refresh(pertama)
@@ -385,13 +385,13 @@ async def test_sampling_baru_mengganti_bukan_menimpa(db, pengawas, supplier):
     assert berlaku.id == kedua.id
 
 
-async def test_tara_khusus_pihak_menang_atas_tara_umum(db, pengawas, supplier):
+async def test_tara_khusus_pihak_menang_atas_tara_umum(db, admin2, supplier):
     await service.simpan_tara_standar(
-        db, akun=pengawas, supplier_id=None, jenis_kode="BERAS_PK",
+        db, akun=admin2, supplier_id=None, jenis_kode="BERAS_PK",
         jumlah_sampel=20, total_berat_kg=2.0,          # umum → 0,10
     )
     await service.simpan_tara_standar(
-        db, akun=pengawas, supplier_id=supplier.id, jenis_kode="BERAS_PK",
+        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
         jumlah_sampel=20, total_berat_kg=1.7,          # khusus → 0,085
     )
     aturan = await service.aturan_untuk(db, "BERAS_PK")
@@ -449,10 +449,10 @@ async def test_ringkasan_menghitung_tiket_dan_pemeriksaan(db, petugas, supplier)
     assert r.pemeriksaan_terbuka == 1
 
 
-async def test_transaksi_void_tidak_ikut_terhitung(db, petugas, pengawas, supplier):
+async def test_transaksi_void_tidak_ikut_terhitung(db, petugas, admin2, supplier):
     data = masuk_gabah("TRX-20260830-P1-021", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
-    await service.void_transaksi(db, akun=pengawas, trx=trx, alasan="salah antrean")
+    await service.void_transaksi(db, akun=admin2, trx=trx, alasan="salah antrean")
 
     assert await service.hitung_transaksi(db, service.FilterTransaksi()) == 0
     assert await service.hitung_transaksi(

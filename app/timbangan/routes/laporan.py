@@ -1,6 +1,6 @@
-"""Rute pengawas: ringkasan harian, monitoring pihak, dan ekspor.
+"""Rute rekapitulasi: ringkasan harian, monitoring pihak, dan ekspor.
 
-Semua halaman di sini butuh peran Pengawas atau Admin — bukan karena datanya
+Semua halaman di sini butuh peran Admin — bukan karena datanya
 rahasia dari petugas, tetapi karena menilai pola adalah pekerjaan yang berbeda
 dari menimbang, dan mencampurnya membuat kedua pekerjaan itu lebih buruk.
 """

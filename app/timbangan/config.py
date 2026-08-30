@@ -52,7 +52,7 @@ class TimbanganSettings:
     # saat container Railway di-deploy ulang (filesystem-nya sementara).
     maks_foto_byte: int = _i("TIMBANGAN_MAKS_FOTO_MB", 4) * 1024 * 1024
     # Jam sejak selesai sampai transaksi terkunci otomatis bagi petugas.
-    # Setelah terkunci, koreksi hanya oleh pengawas dan tetap tercatat di audit.
+    # Setelah terkunci, koreksi hanya oleh Admin dan tetap tercatat di audit.
     jam_kunci_otomatis: int = _i("TIMBANGAN_JAM_KUNCI", 24)
     # Tiket timbang pertama yang menganggur lebih lama dari ini ditandai untuk
     # ditutup paksa (truk tidak jadi bongkar, atau petugas lupa).

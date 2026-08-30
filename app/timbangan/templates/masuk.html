@@ -23,18 +23,6 @@
       <input class="fld teks" name="sandi" type="password" required
              autocomplete="current-password">
     </div>
-    <div class="grup">
-      <div class="lbl">Kode perangkat</div>
-      <input class="fld" name="perangkat" maxlength="8"
-             autocapitalize="characters" placeholder="P1"
-             value="{{ akun.perangkat_kode if akun else '' }}">
-      <div class="bantu">
-        Kode singkat untuk ponsel ini — P1, P2, dan seterusnya. Kode ini masuk
-        ke nomor transaksi supaya dua perangkat yang sedang tanpa jaringan
-        tidak membuat nomor yang sama.
-      </div>
-    </div>
-
     <button type="submit" class="tbl blok" data-sibuk="Memeriksa…">Masuk</button>
   </form>
 

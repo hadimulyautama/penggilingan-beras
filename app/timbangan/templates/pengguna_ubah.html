@@ -74,9 +74,34 @@
       </button>
     </form>
     <div class="bantu" style="text-align:center">
-      Akun tidak pernah dihapus — yang berhenti dipakai dinonaktifkan, supaya
-      transaksi lama tetap menunjuk orang yang benar.
+      Menonaktifkan menutup pintunya tanpa menyentuh catatan lama — inilah
+      yang dipakai untuk orang yang berhenti bekerja.
     </div>
+
+    <details class="kartu" style="margin-top:18px">
+      <summary style="cursor:pointer;font-weight:700;font-size:15px">
+        Hapus akun ini
+      </summary>
+      <div class="bantu" style="margin-top:10px">
+        Hanya bisa untuk akun yang <b>belum pernah dipakai bekerja</b> — salah
+        ketik saat membuat, akun percobaan, orang yang batal masuk. Begitu
+        seseorang pernah menimbang, namanya melekat pada catatan timbang dan
+        riwayat cetak; menghapusnya akan membuat dokumen itu menunjuk tidak
+        ada siapa-siapa. Untuk yang sudah bekerja, nonaktifkan.
+      </div>
+      <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}/hapus"
+            style="margin-top:12px">
+        {# Nama penggunanya ditaruh di teks bantu, bukan di label: label
+           dirender huruf besar semua, sedangkan nama pengguna selalu huruf
+           kecil dan harus diketik persis. #}
+        {{ isian('ketik_username', 'Nama pengguna', '', '', 'text',
+                 'Ketik persis: ' ~ orang.username, true, false,
+                 'autocapitalize="none" autocomplete="off"') }}
+        <button type="submit" class="tbl halus blok" style="margin-top:10px">
+          Hapus permanen
+        </button>
+      </form>
+    </details>
   {% endif %}
 
   <a href="{{ PREFIX }}/pengguna" class="tbl halus blok">Kembali ke daftar</a>

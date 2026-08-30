@@ -155,7 +155,7 @@
           {% endif %}
         </div>
 
-      {% elif akun.is_pengawas %}
+      {% elif akun.is_admin %}
         <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/periksa"
               style="display:flex;flex-direction:column;gap:12px;margin-top:6px">
           <div class="bantu">
@@ -197,7 +197,7 @@
         </form>
       {% else %}
         <div class="bantu">
-          Menunggu Pengawas menutup pemeriksaan ini.
+          Menunggu Admin menutup pemeriksaan ini.
         </div>
       {% endif %}
     </div>

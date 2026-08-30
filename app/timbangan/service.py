@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Supplier
@@ -31,7 +31,6 @@ from app.timbangan.models import (
     PEMERIKSAAN_DIBUKA,
     PEMERIKSAAN_SELESAI,
     ROLE_ADMIN,
-    ROLE_PENGAWAS,
     ROLES,
     TIKET_DITUTUP_PAKSA,
     TIKET_SELESAI,
@@ -407,19 +406,19 @@ def boleh_mengubah(
     """Input yang salah boleh dikoreksi — dengan jejak, bukan diam-diam."""
     if trx.status_transaksi == TRX_VOID:
         return False, "Transaksi sudah dibatalkan."
-    if akun.is_pengawas:
+    if akun.is_admin:
         return True, ""
     if terkunci_untuk_petugas(trx, jam_kunci):
         jam = jam_kunci if jam_kunci is not None else tsettings.jam_kunci_otomatis
         return False, (
             f"Transaksi terkunci setelah {jam:g} jam. "
-            "Minta Pengawas untuk mengoreksi."
+            "Minta Admin untuk mengoreksi."
         )
     return True, ""
 
 
 def boleh_membatalkan(akun: TimbanganAkun) -> bool:
-    return akun.role in (ROLE_PENGAWAS, ROLE_ADMIN)
+    return akun.is_admin
 
 
 # ═══════════════════════════ Simpan transaksi ═══════════════════════════
@@ -838,7 +837,7 @@ async def void_transaksi(
 ) -> TimbanganTransaksi:
     """Batalkan transaksi. Data TIDAK pernah dihapus — hanya ditandai."""
     if not boleh_membatalkan(akun):
-        raise LayananError("Hanya Pengawas atau Admin yang boleh membatalkan.")
+        raise LayananError("Hanya Admin yang boleh membatalkan.")
     if not (alasan or "").strip():
         raise LayananError("Pembatalan harus disertai alasan.")
     if trx.status_transaksi == TRX_VOID:
@@ -1061,6 +1060,100 @@ async def ubah_profil(
     )
 
 
+async def _tabel_yang_menunjuk_akun(db: AsyncSession, akun_id: int) -> list[str]:
+    """Nama kolom mana saja yang masih menunjuk akun ini. Audit dikecualikan.
+
+    Dibaca dari metadata, bukan dari daftar tabel yang ditulis tangan — supaya
+    tabel baru yang menyimpan "siapa yang mengerjakan" ikut terjaga sendiri
+    tanpa ada yang perlu ingat memperbarui fungsi ini.
+
+    Audit sengaja di luar hitungan: barisnya sudah menyimpan `akun_nama`
+    sebagai salinan, jadi jejaknya tetap terbaca meski penunjuknya dilepas.
+    """
+    from app.database import Base
+
+    dipakai = []
+    for tabel in Base.metadata.sorted_tables:
+        if tabel.name == "timbangan_audit":
+            continue
+        for kolom in tabel.columns:
+            if not any(
+                fk.target_fullname == "timbangan_akun.id"
+                for fk in kolom.foreign_keys
+            ):
+                continue
+            ada = (await db.execute(
+                select(literal(1)).select_from(tabel)
+                .where(kolom == akun_id).limit(1)
+            )).first()
+            if ada:
+                dipakai.append(f"{tabel.name}.{kolom.name}")
+    return dipakai
+
+
+async def hapus_akun(
+    db: AsyncSession,
+    *,
+    admin: TimbanganAkun,
+    orang: TimbanganAkun,
+    ip: str | None = None,
+) -> str:
+    """Hapus akun yang belum pernah dipakai. Mengembalikan namanya.
+
+    Menghapus akun BUKAN kebalikan dari membuatnya. Begitu seseorang pernah
+    menimbang, namanya melekat pada catatan timbang, lembar pemeriksaan, dan
+    riwayat cetak — dokumen yang gunanya justru menyebut siapa yang
+    mengerjakan. Menghapusnya berarti salah satu dari dua hal: catatan itu
+    ikut hilang, atau ia berubah menjadi menunjuk "tidak ada siapa-siapa".
+    Keduanya memalsukan catatan.
+
+    Maka yang bisa dihapus hanya akun yang belum meninggalkan jejak apa pun —
+    salah ketik saat membuat, akun percobaan, orang yang batal masuk kerja.
+    Selebihnya dinonaktifkan: pintunya tertutup, catatannya tetap benar.
+
+    Jejak audit miliknya tidak ikut dihapus. Penunjuk akunnya dilepas, tetapi
+    `akun_nama` sudah tersimpan sebagai salinan sejak baris itu ditulis,
+    sehingga "siapa" tetap terbaca. Audit hanya bertambah — termasuk ketika
+    yang dicatat adalah penghapusan ini sendiri.
+    """
+    from app.timbangan.models import TimbanganAudit
+
+    if not admin.is_admin:
+        raise LayananError("Hanya Admin yang boleh menghapus akun.")
+    if orang.id == admin.id:
+        raise LayananError("Tidak bisa menghapus akun sendiri.")
+    if orang.is_admin and not await _admin_aktif_lain(db, orang.id):
+        raise LayananError(
+            "Ini satu-satunya Admin yang aktif. Angkat Admin lain lebih dulu."
+        )
+
+    dipakai = await _tabel_yang_menunjuk_akun(db, orang.id)
+    if dipakai:
+        raise LayananError(
+            f"{orang.nama} sudah punya riwayat kerja, jadi akunnya tidak bisa "
+            "dihapus tanpa merusak catatan yang menyebut namanya. "
+            "Nonaktifkan saja — pintunya tertutup, catatannya tetap benar."
+        )
+
+    nama = orang.nama
+    await catat_audit(
+        db, akun=admin, aksi="HAPUS_AKUN", entitas="akun", entitas_id=orang.id,
+        ringkasan=f"{orang.username} ({nama}) dihapus — belum punya riwayat kerja",
+        sebelum={"username": orang.username, "nama": nama, "role": orang.role,
+                 "perangkat_kode": orang.perangkat_kode, "status": orang.status},
+        ip=ip,
+    )
+    # Lepaskan penunjuk di audit sebelum barisnya hilang; `akun_nama` tetap.
+    await db.execute(
+        update(TimbanganAudit)
+        .where(TimbanganAudit.akun_id == orang.id)
+        .values(akun_id=None)
+    )
+    await db.delete(orang)
+    await db.commit()
+    return nama
+
+
 async def ubah_status_akun(
     db: AsyncSession, *, admin: TimbanganAkun, orang: TimbanganAkun,
     ip: str | None = None,
@@ -1139,8 +1232,8 @@ async def selesaikan_pemeriksaan(
     Selesai TIDAK berarti bersih — ia berarti sudah ditelusuri dan hasilnya
     tercatat. Itulah gunanya `kategori_hasil` dan `catatan_resolusi`.
     """
-    if not akun.is_pengawas:
-        raise LayananError("Hanya Pengawas atau Admin yang boleh menutup pemeriksaan.")
+    if not akun.is_admin:
+        raise LayananError("Hanya Admin yang boleh menutup pemeriksaan.")
     if not (catatan_resolusi or "").strip():
         raise LayananError("Catatan resolusi wajib diisi.")
     if not kategori_hasil:

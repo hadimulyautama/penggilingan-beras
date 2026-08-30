@@ -16,7 +16,7 @@ import app.models  # noqa: F401
 from app.database import Base
 from app.models import Supplier
 from app.timbangan import service
-from app.timbangan.models import ROLE_ADMIN, ROLE_PENGAWAS, ROLE_PETUGAS, TimbanganAkun
+from app.timbangan.models import ROLE_ADMIN, ROLE_PETUGAS, TimbanganAkun
 
 
 @pytest_asyncio.fixture
@@ -52,8 +52,9 @@ async def petugas2(db):
 
 
 @pytest_asyncio.fixture
-async def pengawas(db):
-    return await _akun(db, "miftah", ROLE_PENGAWAS, "P9")
+async def admin2(db):
+    """Admin kedua — pembatalan dan penutupan pemeriksaan kini wewenang Admin."""
+    return await _akun(db, "miftah", ROLE_ADMIN, "P9")
 
 
 @pytest_asyncio.fixture

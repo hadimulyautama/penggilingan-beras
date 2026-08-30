@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, Request
 
 from app.timbangan.config import tsettings
-from app.timbangan.models import ROLE_ADMIN, ROLE_PENGAWAS, TimbanganAkun
+from app.timbangan.models import ROLE_ADMIN, TimbanganAkun
 
 log = logging.getLogger("timbangan.security")
 
@@ -162,15 +162,6 @@ async def butuh_akun(request: Request) -> TimbanganAkun:
     akun = await akun_opsional(request)
     if akun is None:
         raise ButuhLogin()
-    return akun
-
-
-async def butuh_pengawas(
-    akun: TimbanganAkun = Depends(butuh_akun),
-) -> TimbanganAkun:
-    """Pengawas atau Admin."""
-    if akun.role not in (ROLE_PENGAWAS, ROLE_ADMIN):
-        raise AksesDitolak("Halaman ini hanya untuk Pengawas dan Admin.")
     return akun
 
 

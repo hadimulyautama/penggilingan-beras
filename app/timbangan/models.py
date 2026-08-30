@@ -46,13 +46,15 @@ KG_KECIL = Numeric(9, 4, asdecimal=False)
 PCT = Numeric(9, 4, asdecimal=False)
 
 # ── Peran login ───────────────────────────────────────────────────────────
+# Hanya dua. Peran "Pengawas" dihapus 30 Agustus 2026: sejak rekapitulasi
+# menjadi wewenang Admin, ia tidak lagi punya kemampuan apa pun yang tidak
+# dimiliki petugas. Peran yang tidak berarti apa-apa lebih buruk daripada
+# tidak ada — ia terlihat seperti pengaman padahal bukan.
 ROLE_PETUGAS = "PETUGAS"
-ROLE_PENGAWAS = "PENGAWAS"
 ROLE_ADMIN = "ADMIN"
-ROLES = (ROLE_PETUGAS, ROLE_PENGAWAS, ROLE_ADMIN)
+ROLES = (ROLE_PETUGAS, ROLE_ADMIN)
 ROLE_LABEL = {
     ROLE_PETUGAS: "Petugas Timbang",
-    ROLE_PENGAWAS: "Pengawas",
     ROLE_ADMIN: "Admin",
 }
 
@@ -178,12 +180,6 @@ class TimbanganAkun(Base, TimestampMixin):
     @property
     def is_admin(self) -> bool:
         return self.role == ROLE_ADMIN
-
-    @property
-    def is_pengawas(self) -> bool:
-        """Pengawas & admin — boleh melihat SEMUA transaksi dan memeriksa."""
-        return self.role in (ROLE_PENGAWAS, ROLE_ADMIN)
-
 
 class TimbanganKendaraan(Base, TimestampMixin):
     """Master armada. Nomor polisi dinormalkan (huruf besar, tanpa spasi ganda)."""

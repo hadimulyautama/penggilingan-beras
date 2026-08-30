@@ -377,6 +377,36 @@ async def ubah_pengguna(
     return redirect("/pengguna", ok=pesan)
 
 
+@router.post("/pengguna/{akun_id}/hapus")
+async def hapus_pengguna(
+    akun_id: int,
+    request: Request,
+    ketik_username: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    orang = await db.get(TimbanganAkun, akun_id)
+    if orang is None:
+        return redirect("/pengguna", err="Akun tidak ditemukan.")
+
+    # Mengetik ulang nama penggunanya, bukan sekadar menekan tombol. Kotak
+    # dialog "yakin?" dijawab refleks; mengetik nama tidak bisa.
+    if ketik_username.strip().lower() != orang.username:
+        return redirect(
+            f"/pengguna/{akun_id}",
+            err="Untuk menghapus, ketik nama penggunanya persis: "
+                f"{orang.username}",
+        )
+    try:
+        nama = await service.hapus_akun(
+            db, admin=akun, orang=orang,
+            ip=request.client.host if request.client else None,
+        )
+    except service.LayananError as e:
+        return redirect(f"/pengguna/{akun_id}", err=str(e))
+    return redirect("/pengguna", ok=f"Akun {nama} dihapus.")
+
+
 @router.post("/pengguna/{akun_id}/status")
 async def ubah_status_pengguna(
     akun_id: int,

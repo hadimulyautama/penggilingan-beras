@@ -84,7 +84,7 @@ DAFTAR: tuple[Definisi, ...] = (
         kunci="jam_kunci_otomatis",
         nama="Transaksi terkunci setelah",
         satuan="jam",
-        arti="Setelah lewat, hanya Pengawas yang boleh mengoreksi.",
+        arti="Setelah lewat, hanya Admin yang boleh mengoreksi.",
         env="TIMBANGAN_JAM_KUNCI",
         bawaan=lambda: tsettings.jam_kunci_otomatis,
         minimum=1, maksimum=720,

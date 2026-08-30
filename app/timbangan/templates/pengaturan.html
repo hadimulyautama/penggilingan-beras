@@ -36,11 +36,9 @@
         {{ akun.terakhir_login|tgl_jam }}</b></div>
     <div class="bantu" style="margin-top:8px">
       Kode perangkat ikut menyusun nomor transaksi, sehingga dua perangkat yang
-      sedang tanpa jaringan tidak membuat nomor yang sama. Ganti dengan masuk
-      ulang memakai kode lain.
-      {% if not akun.is_admin %}
-        Peran dan kode perangkat hanya bisa diubah Admin.
-      {% endif %}
+      sedang tanpa jaringan tidak membuat nomor yang sama. Karena itu kodenya
+      melekat pada akun dan hanya Admin yang menetapkannya — begitu pula
+      peran.
     </div>
   </div>
 

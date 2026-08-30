@@ -43,7 +43,6 @@ async def proses_masuk(
     request: Request,
     username: str = Form(...),
     sandi: str = Form(...),
-    perangkat: str = Form(""),
     tujuan: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
@@ -66,11 +65,11 @@ async def proses_masuk(
             pesan_err="Akun ini sedang dinonaktifkan. Hubungi Admin.",
         )
 
-    # Kode perangkat ikut menyusun nomor transaksi, jadi tiap perangkat harus
-    # punya kode sendiri agar nomor tidak bentrok saat dibuat tanpa jaringan.
-    kode_perangkat = (perangkat or "").strip().upper()[:8]
-    if kode_perangkat:
-        akun.perangkat_kode = kode_perangkat
+    # Kode perangkat TIDAK lagi diisi di sini. Dulu layar masuk memintanya,
+    # dan siapa pun yang mengetik kode perangkat orang lain diam-diam
+    # memindahkan deret nomor transaksi ke dirinya — dua perangkat tanpa
+    # jaringan lalu bisa membuat nomor yang sama, persis yang hendak dicegah.
+    # Sekarang kodenya melekat pada akun dan hanya Admin yang menetapkannya.
     akun.terakhir_login = sekarang()
 
     await service.catat_audit(

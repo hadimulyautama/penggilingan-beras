@@ -13,12 +13,7 @@ from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import (
-    AksesDitolak,
-    butuh_admin,
-    butuh_akun,
-    butuh_pengawas,
-)
+from app.timbangan.security import AksesDitolak, butuh_admin, butuh_akun
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -237,7 +232,7 @@ async def batalkan(
     transaksi_id: int,
     request: Request,
     alasan: str = Form(...),
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -269,7 +264,7 @@ async def selesaikan_pemeriksaan(
     langkah_periksa_dokumen: str = Form(""),
     langkah_periksa_muatan: str = Form(""),
     langkah_lapor: str = Form(""),
-    akun: TimbanganAkun = Depends(butuh_pengawas),
+    akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
     lembar = await service.pemeriksaan_transaksi(db, transaksi_id)

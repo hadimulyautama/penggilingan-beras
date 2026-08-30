@@ -395,39 +395,46 @@ Tiga belas tabel `timbangan_*`, ditambah kolom `suppliers.kledo_contact_id` seba
 
 ## 10. Peran & Akses
 
-Direvisi **30 Agustus 2026** (keputusan #6 di §12): rekapitulasi menjadi
-wewenang Admin saja.
+Direvisi **30 Agustus 2026** (keputusan #6 dan #7 di §12). **Dua peran saja.**
 
-| Kemampuan | Petugas | Pengawas | Admin |
-|---|:--:|:--:|:--:|
-| Menimbang, membuka & mencetak **hasil sendiri** | ✅ | ✅ | ✅ |
-| Membuka catatan **orang lain** | — | — | ✅ |
-| Daftar catatan (menu Catatan) | — | — | ✅ |
-| Ringkasan, monitoring, ekspor | — | — | ✅ |
-| Koreksi < 24 jam (miliknya) | ✅ | ✅ | ✅ |
-| Koreksi terkunci, VOID | — | ✅¹ | ✅ |
-| Tutup paksa pengiriman kurang | ✅ | ✅ | ✅ |
-| Tutup lembar pemeriksaan | — | ✅¹ | ✅ |
-| Catat sampling tara | ✅ | ✅ | ✅ |
-| Setujui tara standar | — | — | ✅ |
-| Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ | ✅ |
-| Ubah peran & kode perangkat siapa pun | — | — | ✅ |
-| Master jenis, pihak, kendaraan | lihat | lihat | ✅ |
-| Pengguna & audit log | — | — | ✅ |
-
-¹ **Tinggal di kode, tapi tidak lagi terjangkau.** VOID dan penutupan
-pemeriksaan dilakukan dari halaman rincian, dan sejak rekapitulasi ditutup,
-Pengawas hanya bisa membuka rincian timbangannya sendiri. Praktisnya keduanya
-kini Admin. Rutenya sengaja tidak diubah supaya wewenang Pengawas bisa
-dipulihkan dengan satu keputusan, bukan dengan menulis ulang alurnya —
-**menunggu keputusan Direksi**: apakah pemeriksaan memang berpindah ke Admin,
-atau Pengawas dikembalikan haknya membuka catatan yang bertanda perlu
-diperiksa.
+| Kemampuan | Petugas | Admin |
+|---|:--:|:--:|
+| Menimbang, membuka & mencetak **hasil sendiri** | ✅ | ✅ |
+| Membuka catatan **orang lain** | — | ✅ |
+| Daftar catatan (menu Catatan) | — | ✅ |
+| Ringkasan, monitoring, ekspor | — | ✅ |
+| Koreksi < 24 jam (miliknya) | ✅ | ✅ |
+| Koreksi setelah terkunci, VOID | — | ✅ |
+| Tutup paksa pengiriman kurang | ✅ | ✅ |
+| Tutup lembar pemeriksaan | — | ✅ |
+| Catat sampling tara | ✅ | ✅ |
+| Setujui tara standar | — | ✅ |
+| Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ |
+| Ubah peran & kode perangkat siapa pun | — | ✅ |
+| Tambah, nonaktifkan, hapus pengguna | — | ✅ |
+| Master jenis, pihak, kendaraan | lihat | ✅ |
+| Audit log | — | ✅ |
 
 **Menutup daftar saja tidak cukup.** Nomor transaksi di URL berurutan, jadi
 rincian ikut dijaga: yang bukan Admin hanya boleh membuka transaksi yang ia
-timbang sendiri. Beranda pun dipersempit dengan aturan yang sama, supaya tidak
+timbang sendiri. Beranda dipersempit dengan aturan yang sama, supaya tidak
 memajang tautan yang berujung "akses ditolak".
+
+**Menghapus akun bukan kebalikan dari membuatnya.** Yang bisa dihapus hanya
+akun yang belum meninggalkan jejak kerja apa pun — salah ketik saat membuat,
+akun percobaan, orang yang batal masuk. Begitu seseorang pernah menimbang,
+namanya melekat pada catatan timbang, lembar pemeriksaan, dan riwayat cetak;
+menghapusnya berarti dokumen itu ikut hilang atau berubah menunjuk tidak ada
+siapa-siapa. Untuk yang sudah bekerja: nonaktifkan. Penjagaannya dibaca dari
+metadata, bukan daftar tabel yang ditulis tangan, sehingga tabel baru ikut
+terjaga sendiri. Jejak auditnya tidak ikut terhapus — penunjuk akunnya
+dilepas, `akun_nama` sudah tersimpan sebagai salinan sejak baris itu ditulis.
+
+**Kode perangkat melekat pada akun, tidak lagi diketik saat masuk.** Dulu
+layar masuk memintanya, dan siapa pun yang mengetik kode perangkat orang lain
+diam-diam memindahkan deret nomor transaksi ke dirinya — dua perangkat tanpa
+jaringan lalu bisa membuat nomor yang sama, persis yang hendak dicegah kode
+itu. Sekarang hanya Admin yang menetapkannya.
 
 Ditegakkan di kode pada setiap rute. Sandi scrypt bersalt; cookie HttpOnly + SameSite=Lax + Secure, HMAC-SHA256, berlaku sampai Keluar; login gagal tercatat; ekspor tercatat pelaku dan rentangnya.
 
@@ -514,7 +521,8 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 2 | **Label status** | Tetap **"PERLU PEMERIKSAAN"** | Sistem mencatat temuan; manusia yang menyimpulkan. Label tersimpan permanen dan terbawa ke ekspor, jadi tidak boleh menuduh |
 | 3 | **Baris selisih pada bukti pengiriman** | **Tidak dicetak** | Angka kontrol internal tidak ikut dibawa sopir. Bukti tetap dicetak untuk semua komoditas dan ditandatangani sopir sebagai saksi |
 | 4 | **Tara beras masuk** | **Meniru beras PK** | Hasil sampling, bawaan 0,1 kg per karung, berlaku 90 hari. Dikunci uji `test_tara_beras_masuk_meniru_beras_pk`. **Hanya taranya yang diputuskan** — ambang 0,05 kg/karung dan nota yang diberikan ke pengirim masih usulan penyusun dan boleh dibedakan dari PK kapan pun |
-| 6 | **Ringkasan & Catatan** | **Admin saja** | Berlaku untuk Pengawas juga. Selain Admin, Pengaturan hanya menyediakan akun sendiri: nama lengkap, nama pengguna, sandi. Peran dan kode perangkat tetap wewenang Admin, karena keduanya menentukan apa yang boleh dikerjakan dan nomor transaksi apa yang keluar dari perangkat. Akibat lanjutannya pada peran Pengawas dicatat di §10 dan masih menunggu keputusan |
+| 6 | **Ringkasan & Catatan** | **Admin saja** | Berlaku untuk Pengawas juga. Selain Admin, Pengaturan hanya menyediakan akun sendiri: nama lengkap, nama pengguna, sandi. Peran dan kode perangkat tetap wewenang Admin, karena keduanya menentukan apa yang boleh dikerjakan dan nomor transaksi apa yang keluar dari perangkat. Akibat lanjutannya pada peran Pengawas segera diputus di #7 |
+| 7 | **Peran Pengawas** | **Dihapus** — tinggal Admin dan Petugas | Sejak rekapitulasi menjadi wewenang Admin (#6), Pengawas tidak lagi punya satu pun kemampuan yang tidak dimiliki petugas. Peran yang tidak berarti apa-apa lebih buruk daripada tidak ada: ia terlihat seperti pengaman padahal bukan. Pembatalan (VOID) dan penutupan lembar pemeriksaan ikut menjadi wewenang Admin. Migrasi `0026` menurunkan akun berperan PENGAWAS menjadi PETUGAS — diturunkan, bukan dinaikkan, agar tidak ada yang diam-diam menerima wewenang penuh tanpa pernah diputuskan |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi

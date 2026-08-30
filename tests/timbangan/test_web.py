@@ -24,7 +24,6 @@ from app.models import Supplier
 from app.timbangan import service
 from app.timbangan.models import (
     ROLE_ADMIN,
-    ROLE_PENGAWAS,
     ROLE_PETUGAS,
     TimbanganAkun,
 )
@@ -51,7 +50,7 @@ async def app_uji(monkeypatch):
         db.add_all([
             TimbanganAkun(username="budi", nama="Budi", role=ROLE_PETUGAS,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P1"),
-            TimbanganAkun(username="miftah", nama="Miftah", role=ROLE_PENGAWAS,
+            TimbanganAkun(username="miftah", nama="Miftah", role=ROLE_PETUGAS,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P9"),
             TimbanganAkun(username="wahid", nama="Wahid", role=ROLE_ADMIN,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P0"),
@@ -118,8 +117,8 @@ async def test_sandi_salah_tidak_membocorkan_yang_mana(klien):
 async def test_ringkasan_dan_catatan_hanya_untuk_admin(klien, siapa, jalur):
     """Keputusan Direksi: hanya Admin yang melihat rekapitulasi.
 
-    Berlaku untuk Pengawas juga, bukan hanya petugas — perannya tetap
-    memeriksa hasil timbang, bukan membaca seluruh riwayat perusahaan.
+    Diuji dengan dua akun petugas yang berbeda, supaya yang dikunci adalah
+    perannya — bukan kebetulan satu nama pengguna tertentu.
     """
     await login(klien, siapa)
     assert (await klien.get(PREFIX + jalur)).status_code == 403
@@ -1122,13 +1121,13 @@ async def test_admin_bisa_mengubah_nama_peran_dan_perangkat(klien, app_uji):
 
     r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
         "nama": "Budi Santoso", "username": "budi",
-        "role": ROLE_PENGAWAS, "perangkat_kode": "p7", "sandi_baru": "",
+        "role": ROLE_ADMIN, "perangkat_kode": "p7", "sandi_baru": "",
     })
     assert "diubah" in r.text
 
     baru = await akun_oleh(app_uji, "budi")
     assert baru.nama == "Budi Santoso"
-    assert baru.role == ROLE_PENGAWAS
+    assert baru.role == ROLE_ADMIN
     assert baru.perangkat_kode == "P7"          # dijadikan huruf besar
 
 
@@ -1215,14 +1214,14 @@ async def test_boleh_turun_peran_setelah_ada_admin_lain(klien, app_uji):
     })
     wahid = await akun_oleh(app_uji, "wahid")
     r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}", data={
-        "nama": "Wahid", "username": "wahid", "role": ROLE_PENGAWAS,
+        "nama": "Wahid", "username": "wahid", "role": ROLE_PETUGAS,
         "perangkat_kode": "P0", "sandi_baru": "",
     })
     # Turun peran sendiri langsung mencabut akses ke halaman pengguna, jadi
     # ia diantar ke Pengaturan beserta alasannya — bukan ke layar 403 kosong.
     assert r.status_code == 200
     assert "tidak lagi terbuka" in r.text
-    assert (await akun_oleh(app_uji, "wahid")).role == ROLE_PENGAWAS
+    assert (await akun_oleh(app_uji, "wahid")).role == ROLE_PETUGAS
 
 
 @pytest.mark.parametrize("siapa", ["budi", "miftah"])
@@ -1408,3 +1407,125 @@ async def test_beranda_petugas_hanya_memuat_timbangannya_sendiri(klien, app_uji)
     await klien.post(f"{PREFIX}/keluar")
     await login(klien, "wahid")
     assert f"/transaksi/{kode_budi}" in (await klien.get(f"{PREFIX}/")).text
+
+
+# ─────────────── Menghapus pengguna ───────────────
+
+async def test_akun_belum_terpakai_bisa_dihapus(klien, app_uji):
+    from sqlalchemy import select
+
+    from app import database
+
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "salahketik", "nama": "Salah Ketik", "role": ROLE_PETUGAS,
+        "sandi": "rahasia123", "perangkat_kode": "P8",
+    })
+    orang = await akun_oleh(app_uji, "salahketik")
+
+    r = await klien.post(f"{PREFIX}/pengguna/{orang.id}/hapus",
+                         data={"ketik_username": "salahketik"})
+    assert "dihapus" in r.text
+
+    async with database.SessionLocal() as db:
+        sisa = (await db.execute(
+            select(TimbanganAkun).where(TimbanganAkun.username == "salahketik")
+        )).scalars().first()
+    assert sisa is None
+
+
+async def test_menghapus_menuntut_nama_penggunanya_diketik(klien, app_uji):
+    """Kotak "yakin?" dijawab refleks; mengetik nama tidak bisa."""
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "coba", "nama": "Coba", "role": ROLE_PETUGAS,
+        "sandi": "rahasia123", "perangkat_kode": "",
+    })
+    orang = await akun_oleh(app_uji, "coba")
+
+    for salah in ("", "cob", "Coba Salah"):
+        r = await klien.post(f"{PREFIX}/pengguna/{orang.id}/hapus",
+                             data={"ketik_username": salah})
+        assert "ketik nama penggunanya persis: coba" in r.text
+    assert await akun_oleh(app_uji, "coba") is not None
+
+
+async def test_akun_yang_sudah_menimbang_tidak_bisa_dihapus(klien, app_uji):
+    """Namanya melekat pada catatan timbang — menghapusnya memalsukan catatan."""
+    await login(klien, "budi")
+    await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}/hapus",
+                         data={"ketik_username": "budi"})
+    assert "riwayat kerja" in r.text
+    assert "Nonaktifkan saja" in r.text
+    assert await akun_oleh(app_uji, "budi") is not None
+
+
+async def test_jejak_audit_tetap_terbaca_setelah_akunnya_dihapus(klien, app_uji):
+    """Penunjuknya dilepas, tapi `akun_nama` sudah tersimpan sejak awal."""
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "sebentar", "nama": "Sebentar Saja", "role": ROLE_PETUGAS,
+        "sandi": "rahasia123", "perangkat_kode": "",
+    })
+    orang = await akun_oleh(app_uji, "sebentar")
+    orang_id = orang.id
+    await klien.post(f"{PREFIX}/pengguna/{orang_id}/hapus",
+                     data={"ketik_username": "sebentar"})
+
+    async with database.SessionLocal() as db:
+        jejak = list((await db.execute(
+            select(TimbanganAudit).where(TimbanganAudit.aksi == "HAPUS_AKUN")
+        )).scalars())
+    assert len(jejak) == 1
+    assert "sebentar" in jejak[0].ringkasan
+    assert jejak[0].akun_nama == "Wahid"          # pelakunya tetap tercatat
+
+
+async def test_admin_tidak_bisa_menghapus_akunnya_sendiri(klien, app_uji):
+    wahid = await akun_oleh(app_uji, "wahid")
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}/hapus",
+                         data={"ketik_username": "wahid"})
+    assert "akun sendiri" in r.text
+    assert await akun_oleh(app_uji, "wahid") is not None
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_bukan_admin_tidak_bisa_menghapus_akun(klien, app_uji, siapa):
+    budi = await akun_oleh(app_uji, "budi")
+    await login(klien, siapa)
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}/hapus",
+                         data={"ketik_username": "budi"})
+    assert r.status_code == 403
+    assert await akun_oleh(app_uji, "budi") is not None
+
+
+# ─────────────── Kode perangkat lepas dari layar masuk ───────────────
+
+async def test_layar_masuk_tidak_lagi_meminta_kode_perangkat(klien):
+    r = await klien.get(f"{PREFIX}/masuk")
+    assert 'name="perangkat"' not in r.text
+    assert "Kode perangkat" not in r.text
+
+
+async def test_masuk_tidak_bisa_mengambil_alih_kode_perangkat_orang_lain(
+    klien, app_uji
+):
+    """Dulu siapa pun bisa mengetik kode milik perangkat lain saat masuk, dan
+    deret nomor transaksi ikut berpindah — persis bentrokan yang hendak
+    dicegah kode itu."""
+    await klien.post(f"{PREFIX}/masuk", data={
+        "username": "budi", "sandi": SANDI, "perangkat": "P9", "tujuan": "",
+    })
+    assert (await akun_oleh(app_uji, "budi")).perangkat_kode == "P1"
+    assert (await akun_oleh(app_uji, "miftah")).perangkat_kode == "P9"

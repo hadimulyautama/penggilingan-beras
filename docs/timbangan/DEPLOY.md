@@ -94,7 +94,7 @@ dikembalikan ke bawaan.
 | ✎ `TIMBANGAN_KAPASITAS_KG` | `20000` | Kapasitas jembatan timbang. Angka di atas ini ditolak sebagai mustahil |
 | ✎ `TIMBANGAN_KELIPATAN_TERA_KG` | `10` | Kelipatan pembacaan alat; dipakai memperingatkan angka janggal |
 | `TIMBANGAN_SESI_HARI` | `180` | Batas atas umur sesi. Bukan pengusir harian — sesi berakhir saat petugas menekan Keluar |
-| ✎ `TIMBANGAN_JAM_KUNCI` | `24` | Jam sampai transaksi terkunci bagi petugas; pengawas tetap bisa mengoreksi |
+| ✎ `TIMBANGAN_JAM_KUNCI` | `24` | Jam sampai transaksi terkunci bagi petugas; Admin tetap bisa mengoreksi |
 | ✎ `TIMBANGAN_JAM_TIKET_MENGANGGUR` | `12` | Tiket terbuka yang lebih lama dari ini ditandai "Lama" |
 | ✎ `TIMBANGAN_MAKS_FOTO_MB` | `4` | Batas ukuran satu foto bukti |
 | `TIMBANGAN_ADMIN_USERNAME` | `admin` | Nama pengguna admin awal |
