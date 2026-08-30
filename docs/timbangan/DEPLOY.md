@@ -19,9 +19,14 @@ sedang melayani manajemen**, dan sebaliknya.
 | Replica | Service `timbangan` **boleh lebih dari satu** | Tidak memegang token bot Telegram, jadi tidak ada bentrok long-polling |
 | Database | `DATABASE_URL` **sama persis** dengan service `app` | Satu sumber kebenaran; tidak ada master tandingan |
 
-Service ini sengaja memakai `docker/entrypoint-timbangan.sh` yang **melewati
-migrasi**. Bila tabel `timbangan_*` belum ada, aplikasi akan gagal terang-terangan
-pada query pertama — itu yang diinginkan, jauh lebih baik daripada diam-diam
+Migrasi dilewati lewat variabel **`LAYANAN=timbangan`**, yang dibaca
+`docker/entrypoint.sh`. Bukan skrip terpisah: Railway mengganti `CMD` tetapi
+**tidak** mengganti `ENTRYPOINT`, jadi berkas itulah yang selalu berjalan
+lebih dulu di service mana pun. Tanpa variabel tersebut, service ini akan ikut
+menjalankan `alembic upgrade head`.
+
+Bila tabel `timbangan_*` belum ada, aplikasi akan gagal terang-terangan pada
+query pertama — itu yang diinginkan, jauh lebih baik daripada diam-diam
 membuat skema versi sendiri.
 
 ---
@@ -40,7 +45,7 @@ membuat skema versi sendiri.
 4. **Settings** → **Deploy** → **Custom Start Command**:
 
    ```bash
-   docker/entrypoint-timbangan.sh uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
+   uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
    ```
 
 5. **Settings** → **Deploy** → **Healthcheck Path**: `/health`
@@ -57,6 +62,7 @@ Wajib:
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Referensi, bukan salinan — ikut berubah sendiri bila database dipindah |
 | `TIMBANGAN_SECRET_KEY` | string acak panjang | **Wajib.** Tanpa ini, semua sesi login hangus setiap kali server restart |
 | `TIMBANGAN_ADMIN_PASSWORD` | sandi admin awal | Hanya dipakai sekali, saat tabel akun masih kosong |
+| `LAYANAN` | `timbangan` | **Wajib.** Tanpa ini service ikut menjalankan migrasi Alembic |
 
 > **Jangan pakai "Suggested Variables".** Railway menawarkan variabel yang
 > ditemukannya di kode, termasuk `BOT_*_TOKEN`. Mengisinya akan membuat
@@ -170,4 +176,5 @@ dengan margin cetak 4 mm di kiri-kanan.
 | Semua orang ter-logout tiap deploy | `TIMBANGAN_SECRET_KEY` belum diset |
 | Tidak bisa masuk sama sekali | `TIMBANGAN_ADMIN_PASSWORD` kosong saat penyalaan pertama, sehingga tidak ada akun yang dibuat |
 | Nomor transaksi bentrok antar-perangkat | Dua akun memakai kode perangkat yang sama |
+| Service `timbangan` ikut menjalankan migrasi | Variabel `LAYANAN=timbangan` belum diset |
 | Halaman "Tanpa jaringan" muncul terus | Service worker memegang versi lama — naikkan `VERSI` di `app/timbangan/web.py` dan `sw.js` |
