@@ -46,16 +46,22 @@ KG_KECIL = Numeric(9, 4, asdecimal=False)
 PCT = Numeric(9, 4, asdecimal=False)
 
 # ── Peran login ───────────────────────────────────────────────────────────
-# Hanya dua. Peran "Pengawas" dihapus 30 Agustus 2026: sejak rekapitulasi
-# menjadi wewenang Admin, ia tidak lagi punya kemampuan apa pun yang tidak
-# dimiliki petugas. Peran yang tidak berarti apa-apa lebih buruk daripada
-# tidak ada — ia terlihat seperti pengaman padahal bukan.
+# Tiga peran. "Pengawas" dihapus 30 Agustus 2026 karena tidak lagi punya
+# kemampuan apa pun yang tidak dimiliki petugas — peran yang tidak berarti
+# apa-apa lebih buruk daripada tidak ada, ia terlihat seperti pengaman
+# padahal bukan.
+#
+# Super Admin bukan "Admin yang lebih tinggi": satu-satunya bedanya adalah
+# wewenang MENGHAPUS data. Dipisahkan justru supaya pekerjaan sehari-hari
+# tidak dilakukan sambil memegang tombol yang tidak bisa dibatalkan.
 ROLE_PETUGAS = "PETUGAS"
 ROLE_ADMIN = "ADMIN"
-ROLES = (ROLE_PETUGAS, ROLE_ADMIN)
+ROLE_SUPERADMIN = "SUPERADMIN"
+ROLES = (ROLE_PETUGAS, ROLE_ADMIN, ROLE_SUPERADMIN)
 ROLE_LABEL = {
     ROLE_PETUGAS: "Petugas Timbang",
     ROLE_ADMIN: "Admin",
+    ROLE_SUPERADMIN: "Super Admin",
 }
 
 # ── Siklus hidup transaksi ────────────────────────────────────────────────
@@ -179,7 +185,13 @@ class TimbanganAkun(Base, TimestampMixin):
 
     @property
     def is_admin(self) -> bool:
-        return self.role == ROLE_ADMIN
+        """Admin DAN Super Admin — semua wewenang Admin dimiliki keduanya."""
+        return self.role in (ROLE_ADMIN, ROLE_SUPERADMIN)
+
+    @property
+    def is_super(self) -> bool:
+        """Hanya Super Admin. Bedanya satu: boleh menghapus data."""
+        return self.role == ROLE_SUPERADMIN
 
 class TimbanganKendaraan(Base, TimestampMixin):
     """Master armada. Nomor polisi dinormalkan (huruf besar, tanpa spasi ganda)."""

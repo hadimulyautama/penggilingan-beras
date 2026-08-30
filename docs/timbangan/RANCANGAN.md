@@ -395,25 +395,46 @@ Tiga belas tabel `timbangan_*`, ditambah kolom `suppliers.kledo_contact_id` seba
 
 ## 10. Peran & Akses
 
-Direvisi **30 Agustus 2026** (keputusan #6 dan #7 di §12). **Dua peran saja.**
+Direvisi **30 Agustus 2026** (keputusan #6, #7, dan #9 di §12). **Tiga peran.**
 
-| Kemampuan | Petugas | Admin |
-|---|:--:|:--:|
-| Menimbang, membuka & mencetak **hasil sendiri** | ✅ | ✅ |
-| Membuka catatan **orang lain** | — | ✅ |
-| Daftar catatan (menu Catatan) | — | ✅ |
-| Ringkasan, monitoring, ekspor | — | ✅ |
-| Koreksi < 24 jam (miliknya) | ✅ | ✅ |
-| Koreksi setelah terkunci, VOID | — | ✅ |
-| Tutup paksa pengiriman kurang | ✅ | ✅ |
-| Tutup lembar pemeriksaan | — | ✅ |
-| Catat sampling tara | ✅ | ✅ |
-| Setujui tara standar | — | ✅ |
-| Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ |
-| Ubah peran & kode perangkat siapa pun | — | ✅ |
-| Tambah, nonaktifkan, hapus pengguna | — | ✅ |
-| Master jenis, pihak, kendaraan | lihat | ✅ |
-| Audit log | — | ✅ |
+| Kemampuan | Petugas | Admin | Super Admin |
+|---|:--:|:--:|:--:|
+| Menimbang, membuka & mencetak **hasil sendiri** | ✅ | ✅ | ✅ |
+| Membuka catatan **orang lain** | — | ✅ | ✅ |
+| Daftar catatan (menu Catatan) | — | ✅ | ✅ |
+| Ringkasan, monitoring, ekspor | — | ✅ | ✅ |
+| Koreksi < 24 jam (miliknya) | ✅ | ✅ | ✅ |
+| Koreksi setelah terkunci, VOID | — | ✅ | ✅ |
+| Tutup paksa pengiriman kurang | ✅ | ✅ | ✅ |
+| Tutup lembar pemeriksaan | — | ✅ | ✅ |
+| Catat sampling tara | ✅ | ✅ | ✅ |
+| Setujui tara standar | — | ✅ | ✅ |
+| Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ | ✅ |
+| Ubah peran & kode perangkat siapa pun | — | ✅ | ✅ |
+| Tambah, nonaktifkan, hapus pengguna | — | ✅ | ✅ |
+| Master jenis, pihak, kendaraan | lihat | ✅ | ✅ |
+| Audit log | — | ✅ | ✅ |
+| **Hapus catatan timbang permanen** | — | — | ✅ |
+| **Angkat / ubah / hapus akun Super Admin** | — | —¹ | ✅ |
+
+¹ Kecuali selama **belum ada Super Admin aktif** — supaya yang pertama bisa
+dibuat, dan supaya masih ada jalan pulih bila satu-satunya hilang. Begitu ada
+satu yang aktif, pintunya tertutup: Admin tidak bisa mengangkat Super Admin
+baru, tidak bisa mengubah, menonaktifkan, maupun menghapus akun Super Admin.
+Tanpa pagar itu pemisahan perannya tidak berarti apa-apa — Admin mana pun
+tinggal mengangkat dirinya sendiri, atau menonaktifkan Super Admin yang ada
+lalu mengangkat dirinya. Dijaga di keempat pintunya: membuat akun, mengubah
+akun, mengubah status, dan menghapus akun.
+
+**Membatalkan ≠ menghapus.** Membatalkan (VOID) meninggalkan barisnya di
+catatan bertanda "Batal" beserta alasannya — truk yang batal bongkar memang
+pernah datang, dan menyembunyikan barisnya membuat catatan terlihat rapi
+dengan cara yang keliru. Ringkasan, ekspor, dan beranda tetap tidak
+menghitungnya. Menghapus meniadakan barisnya sama sekali; itulah sebabnya
+wewenangnya dipisahkan ke peran tersendiri, dikunci di balik nomor transaksi
+yang harus diketik ulang, menuntut alasan, dan tetap menuliskan salinan penuh
+angkanya ke jejak audit. Sebuah catatan boleh hilang dari daftar, tetapi
+tidak boleh hilang dari sejarah.
 
 **Menutup daftar saja tidak cukup.** Nomor transaksi di URL berurutan, jadi
 rincian ikut dijaga: yang bukan Admin hanya boleh membuka transaksi yang ia
@@ -524,6 +545,7 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 6 | **Ringkasan & Catatan** | **Admin saja** | Berlaku untuk Pengawas juga. Selain Admin, Pengaturan hanya menyediakan akun sendiri: nama lengkap, nama pengguna, sandi. Peran dan kode perangkat tetap wewenang Admin, karena keduanya menentukan apa yang boleh dikerjakan dan nomor transaksi apa yang keluar dari perangkat. Akibat lanjutannya pada peran Pengawas segera diputus di #7 |
 | 7 | **Peran Pengawas** | **Dihapus** — tinggal Admin dan Petugas | Sejak rekapitulasi menjadi wewenang Admin (#6), Pengawas tidak lagi punya satu pun kemampuan yang tidak dimiliki petugas. Peran yang tidak berarti apa-apa lebih buruk daripada tidak ada: ia terlihat seperti pengaman padahal bukan. Pembatalan (VOID) dan penutupan lembar pemeriksaan ikut menjadi wewenang Admin. Migrasi `0026` menurunkan akun berperan PENGAWAS menjadi PETUGAS — diturunkan, bukan dinaikkan, agar tidak ada yang diam-diam menerima wewenang penuh tanpa pernah diputuskan |
 | 8 | **Barang masuk: jumlah karung sebelum diselesaikan** | **Wajib** — dengan tombol **Simpan sementara** sebagai jalannya | Seluruh komoditas masuk bertara per karung, jadi tanpa angka itu berat barang dan selisihnya keliru — dan statusnya tersimpan permanen serta terbawa ke ekspor. Karena jumlah karung sering baru pasti setelah bongkar rampung, timbang kedua boleh disimpan lebih dulu: angkanya aman dari HP mati atau shift berganti, tiketnya tetap terbuka, dan yang ditunda adalah perhitungannya — selisih tidak dihitung, status kontrol tidak diberikan, lembar pemeriksaan tidak dibuka. Menghitung selisih tanpa jumlah karung akan memberi angka yang salah sekaligus meyakinkan: tara total nol membuat barang tampak berlebih. Alur pengiriman tidak ikut berubah |
+| 9 | **Peran Super Admin** | **Ada** — sama seperti Admin, tambah wewenang menghapus data | Dipisahkan justru supaya pekerjaan sehari-hari tidak dilakukan sambil memegang tombol yang tidak bisa dibatalkan. Sekaligus ditegaskan: transaksi yang dibatalkan **tetap tertera** di catatan timbang bertanda "Batal", dan tidak dihitung dalam ringkasan maupun ekspor. Rinciannya di §10 |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi

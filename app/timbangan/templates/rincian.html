@@ -250,8 +250,40 @@
           </div>
           <button type="submit" class="tbl bahaya">Batalkan</button>
           <div class="bantu">
-            Data tidak dihapus. Transaksi ditandai batal dan tetap dapat dilihat.
+            Data tidak dihapus. Transaksi ditandai batal, tetap tertera di
+            catatan, dan tidak dihitung dalam ringkasan.
           </div>
+        </form>
+      </details>
+    {% endif %}
+
+    {% if akun.is_super %}
+      {# Satu-satunya tindakan yang tidak meninggalkan barisnya. Karena itu
+         terbatas pada Super Admin, terkunci di balik nomor transaksi yang
+         harus diketik, dan tetap menuliskan salinan penuh ke jejak audit. #}
+      <details class="kartu">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px">
+          Hapus permanen
+        </summary>
+        <div class="bantu" style="margin-top:10px">
+          Berbeda dari membatalkan: barisnya hilang dari catatan sama sekali.
+          Jejak auditnya tetap ada beserta salinan penuh angkanya dan alasan
+          yang Anda tulis. Untuk truk yang batal bongkar, pakai
+          <b>Batalkan</b> — bukan ini.
+        </div>
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/hapus"
+              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="grup">
+            <div class="lbl">Alasan penghapusan</div>
+            <textarea class="fld" name="alasan" rows="2" required></textarea>
+          </div>
+          <div class="grup">
+            <div class="lbl">Nomor transaksi</div>
+            <input class="fld" name="ketik_kode" required autocomplete="off"
+                   autocapitalize="characters">
+            <div class="bantu">Ketik persis: {{ trx.kode }}</div>
+          </div>
+          <button type="submit" class="tbl bahaya">Hapus permanen</button>
         </form>
       </details>
     {% endif %}

@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, Request
 
 from app.timbangan.config import tsettings
-from app.timbangan.models import ROLE_ADMIN, TimbanganAkun
+from app.timbangan.models import TimbanganAkun
 
 log = logging.getLogger("timbangan.security")
 
@@ -166,7 +166,14 @@ async def butuh_akun(request: Request) -> TimbanganAkun:
 
 
 async def butuh_admin(akun: TimbanganAkun = Depends(butuh_akun)) -> TimbanganAkun:
-    """Admin / Management saja."""
-    if akun.role != ROLE_ADMIN:
+    """Admin maupun Super Admin."""
+    if not akun.is_admin:
         raise AksesDitolak("Halaman ini hanya untuk Admin.")
+    return akun
+
+
+async def butuh_super(akun: TimbanganAkun = Depends(butuh_akun)) -> TimbanganAkun:
+    """Super Admin saja — satu-satunya yang boleh menghapus data."""
+    if not akun.is_super:
+        raise AksesDitolak("Menghapus data hanya bisa dilakukan Super Admin.")
     return akun

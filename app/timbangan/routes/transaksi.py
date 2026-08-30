@@ -13,7 +13,12 @@ from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import AksesDitolak, butuh_admin, butuh_akun
+from app.timbangan.security import (
+    AksesDitolak,
+    butuh_admin,
+    butuh_akun,
+    butuh_super,
+)
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -65,6 +70,11 @@ async def daftar(
 ):
     q = request.query_params
     f = service.FilterTransaksi(
+        # Transaksi yang dibatalkan tetap tertera di catatan, bertanda
+        # "Batal". Truk yang batal bongkar memang pernah datang; menyembunyikan
+        # barisnya membuat catatan terlihat rapi dengan cara yang keliru.
+        # Ringkasan, ekspor, dan beranda tetap tidak menghitungnya.
+        sertakan_void=True,
         arah=q.get("arah") or None,
         jenis_kode=q.get("jenis") or None,
         status_kontrol=q.get("status") or None,
@@ -395,6 +405,35 @@ async def cetak_80mm_pdf(
         isi, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{trx.kode}-80mm.pdf"'},
     )
+
+
+@router.post("/transaksi/{transaksi_id}/hapus")
+async def hapus_transaksi(
+    transaksi_id: int,
+    request: Request,
+    alasan: str = Form(""),
+    ketik_kode: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_super),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hapus permanen. Hanya Super Admin; lihat `service.hapus_transaksi`."""
+    b = await _ambil(db, transaksi_id, akun)
+
+    # Nomor transaksinya diketik ulang, bukan sekadar tombol ditekan.
+    if ketik_kode.strip().upper() != b.trx.kode:
+        return redirect(
+            f"/transaksi/{transaksi_id}",
+            err="Untuk menghapus, ketik nomor transaksinya persis: "
+                f"{b.trx.kode}",
+        )
+    try:
+        kode = await service.hapus_transaksi(
+            db, akun=akun, trx=b.trx, alasan=alasan,
+            ip=request.client.host if request.client else None,
+        )
+    except service.LayananError as e:
+        return redirect(f"/transaksi/{transaksi_id}", err=str(e))
+    return redirect("/transaksi", ok=f"{kode} dihapus permanen.")
 
 
 @router.post("/transaksi/{transaksi_id}/cetak")

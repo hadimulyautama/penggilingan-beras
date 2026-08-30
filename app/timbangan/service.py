@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import func, literal, or_, select, update
+from sqlalchemy import delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Supplier
@@ -31,6 +31,7 @@ from app.timbangan.models import (
     PEMERIKSAAN_DIBUKA,
     PEMERIKSAAN_SELESAI,
     ROLE_ADMIN,
+    ROLE_SUPERADMIN,
     ROLES,
     TIKET_DITUTUP_PAKSA,
     TIKET_SELESAI,
@@ -939,10 +940,84 @@ async def kunci_transaksi(
 
 # ═══════════════════════════ Akun ═══════════════════════════
 
+async def hapus_transaksi(
+    db: AsyncSession,
+    *,
+    akun: TimbanganAkun,
+    trx: TimbanganTransaksi,
+    alasan: str,
+    ip: str | None = None,
+) -> str:
+    """Hapus catatan timbang seluruhnya. Hanya Super Admin.
+
+    **Ini bukan pembatalan.** Membatalkan (VOID) meninggalkan barisnya di
+    catatan beserta alasannya — truk yang batal bongkar tetap terlihat pernah
+    datang, dan itu memang yang benar. Menghapus meniadakan barisnya sama
+    sekali. Karena itu wewenangnya dipisahkan ke peran tersendiri: agar
+    pekerjaan sehari-hari tidak dilakukan sambil memegang tombol yang tidak
+    bisa dibatalkan.
+
+    Yang tetap tertinggal adalah jejak auditnya, berisi salinan penuh angka
+    yang dihapus beserta alasannya. Audit hanya bertambah — sebuah catatan
+    boleh hilang dari daftar, tetapi tidak boleh hilang dari sejarah.
+    """
+    from app.timbangan.models import TimbanganCetak, TimbanganPemeriksaan
+
+    if not akun.is_super:
+        raise LayananError("Menghapus catatan timbang hanya bisa Super Admin.")
+    if not (alasan or "").strip():
+        raise LayananError("Penghapusan harus disertai alasan.")
+
+    kode = trx.kode
+    await db.refresh(trx, ["muatan"])
+    salinan = {
+        "kode": kode, "tanggal": str(trx.tanggal), "arah": trx.arah,
+        "jenis_kode": trx.jenis_kode,
+        "pihak": trx.pihak_nama, "supplier_id": trx.supplier_id,
+        "nomor_polisi": trx.nomor_polisi, "nama_sopir": trx.nama_sopir,
+        "timbang1_kg": trx.timbang1_kg, "timbang2_kg": trx.timbang2_kg,
+        "netto_timbangan_kg": trx.netto_timbangan_kg,
+        "berat_barang_kg": trx.berat_barang_kg,
+        "berat_acuan_kg": trx.berat_acuan_kg,
+        "selisih_kg": trx.selisih_kg, "selisih_persen": trx.selisih_persen,
+        "status_kontrol": trx.status_kontrol,
+        "status_tiket": trx.status_tiket,
+        "status_transaksi": trx.status_transaksi,
+        "muatan": [
+            {"jenis_kode": m.jenis_kode, "jumlah_karung": m.jumlah_karung,
+             "tara_per_karung_kg": m.tara_per_karung_kg,
+             "berat_acuan_kg": m.berat_acuan_kg, "nomor_acuan": m.nomor_acuan}
+            for m in trx.muatan
+        ],
+    }
+    await catat_audit(
+        db, akun=akun, aksi="HAPUS_TRANSAKSI", entitas="transaksi",
+        entitas_id=kode,
+        ringkasan=f"{kode} dihapus permanen — {alasan.strip()}",
+        sebelum=salinan, sesudah={"alasan": alasan.strip()},
+        perangkat=trx.perangkat_kode, ip=ip,
+    )
+
+    # Muatan dan foto ikut terhapus lewat cascade relasinya; cetak dan
+    # pemeriksaan tidak punya relasi, jadi dihapus di sini. Menghapus muatan
+    # dua kali membuat ORM mengira ada baris yang hilang diam-diam.
+    for model in (TimbanganCetak, TimbanganPemeriksaan):
+        await db.execute(delete(model).where(model.transaksi_id == trx.id))
+    await db.delete(trx)
+    await db.commit()
+    return kode
+
+
 async def _admin_aktif_lain(db: AsyncSession, kecuali_id: int) -> int:
+    """Admin lain yang masih aktif — Super Admin ikut dihitung.
+
+    Yang dijaga adalah "masih ada yang bisa mengelola pengguna", dan Super
+    Admin bisa. Menghitungnya terpisah akan menolak penurunan peran yang
+    sebenarnya aman.
+    """
     return (await db.execute(
         select(func.count(TimbanganAkun.id)).where(
-            TimbanganAkun.role == ROLE_ADMIN,
+            TimbanganAkun.role.in_((ROLE_ADMIN, ROLE_SUPERADMIN)),
             TimbanganAkun.status == "aktif",
             TimbanganAkun.id != kecuali_id,
         )
@@ -1006,7 +1081,7 @@ async def _terapkan_ubah_akun(
     if role is not None and role != orang.role:
         if role not in ROLES:
             raise LayananError(f"Peran '{role}' tidak dikenal.")
-        if orang.role == ROLE_ADMIN and not await _admin_aktif_lain(db, orang.id):
+        if orang.is_admin and not await _admin_aktif_lain(db, orang.id):
             raise LayananError(
                 "Ini satu-satunya Admin yang aktif. Angkat Admin lain lebih "
                 "dulu, kalau tidak tidak akan ada yang bisa mengelola pengguna."
@@ -1045,6 +1120,56 @@ async def _terapkan_ubah_akun(
     return berubah
 
 
+async def _super_aktif_ada(db: AsyncSession, kecuali_id: int | None = None) -> bool:
+    q = select(func.count(TimbanganAkun.id)).where(
+        TimbanganAkun.role == ROLE_SUPERADMIN,
+        TimbanganAkun.status == "aktif",
+    )
+    if kecuali_id is not None:
+        q = q.where(TimbanganAkun.id != kecuali_id)
+    return bool((await db.execute(q)).scalar_one())
+
+
+async def _jaga_wewenang_super(
+    db: AsyncSession, *, admin: TimbanganAkun, orang: TimbanganAkun,
+    role_baru: str | None = None,
+) -> None:
+    """Admin biasa tidak boleh menyentuh Super Admin, apalagi menjadi satu.
+
+    Kalau boleh, pemisahan perannya tidak berarti apa-apa: Admin mana pun
+    tinggal mengangkat dirinya sendiri, atau menonaktifkan Super Admin yang
+    ada lalu mengangkat dirinya. Wewenang menghapus data akan kembali
+    melekat pada pekerjaan sehari-hari — persis yang hendak dihindari.
+
+    Satu pengecualian, untuk membuat yang PERTAMA dan untuk memulihkan bila
+    satu-satunya hilang: selama belum ada Super Admin aktif, Admin boleh
+    mengangkatnya. Begitu ada, pintunya tertutup dan hanya Super Admin yang
+    bisa membukanya lagi.
+    """
+    if admin.is_super:
+        return
+    if orang.is_super:
+        raise LayananError(
+            "Akun Super Admin hanya bisa diubah oleh Super Admin."
+        )
+    if role_baru == ROLE_SUPERADMIN and await _super_aktif_ada(db):
+        raise LayananError(
+            "Hanya Super Admin yang bisa mengangkat Super Admin baru."
+        )
+
+
+async def jaga_pemberian_peran(
+    db: AsyncSession, *, admin: TimbanganAkun, role: str
+) -> None:
+    """Dipakai saat MEMBUAT akun. Pagarnya sama dengan saat mengubah peran —
+    kalau tidak, Admin cukup membuat akun Super Admin baru dan masuk dengannya.
+    """
+    if role == ROLE_SUPERADMIN and not admin.is_super and await _super_aktif_ada(db):
+        raise LayananError("Hanya Super Admin yang bisa mengangkat Super Admin baru.")
+    if role not in ROLES:
+        raise LayananError(f"Peran '{role}' tidak dikenal.")
+
+
 async def ubah_akun(
     db: AsyncSession,
     *,
@@ -1055,6 +1180,9 @@ async def ubah_akun(
     """Admin mengubah akun siapa pun, termasuk peran dan kode perangkat."""
     if not admin.is_admin:
         raise LayananError("Hanya Admin yang boleh mengubah akun orang lain.")
+    await _jaga_wewenang_super(
+        db, admin=admin, orang=orang, role_baru=ubahan.get("role")
+    )
     return await _terapkan_ubah_akun(db, pelaku=admin, orang=orang, **ubahan)
 
 
@@ -1156,6 +1284,7 @@ async def hapus_akun(
 
     if not admin.is_admin:
         raise LayananError("Hanya Admin yang boleh menghapus akun.")
+    await _jaga_wewenang_super(db, admin=admin, orang=orang)
     if orang.id == admin.id:
         raise LayananError("Tidak bisa menghapus akun sendiri.")
     if orang.is_admin and not await _admin_aktif_lain(db, orang.id):
@@ -1197,9 +1326,10 @@ async def ubah_status_akun(
     """Aktifkan atau nonaktifkan satu akun."""
     if not admin.is_admin:
         raise LayananError("Hanya Admin yang boleh mengubah akun.")
+    await _jaga_wewenang_super(db, admin=admin, orang=orang)
     if orang.id == admin.id:
         raise LayananError("Anda tidak bisa menonaktifkan akun sendiri.")
-    if (orang.status == "aktif" and orang.role == ROLE_ADMIN
+    if (orang.status == "aktif" and orang.is_admin
             and not await _admin_aktif_lain(db, orang.id)):
         raise LayananError(
             "Ini satu-satunya Admin yang aktif — menonaktifkannya membuat "

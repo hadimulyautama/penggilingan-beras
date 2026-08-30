@@ -292,6 +292,11 @@ async def simpan_pengguna(
 ):
     from app.timbangan.security import hash_sandi
 
+    try:
+        await service.jaga_pemberian_peran(db, admin=akun, role=role)
+    except service.LayananError as e:
+        return redirect("/pengguna", err=str(e))
+
     bersih = username.strip().lower()
     ada = (await db.execute(
         select(TimbanganAkun).where(TimbanganAkun.username == bersih)

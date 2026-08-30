@@ -25,6 +25,7 @@ from app.timbangan import service
 from app.timbangan.models import (
     ROLE_ADMIN,
     ROLE_PETUGAS,
+    ROLE_SUPERADMIN,
     TIKET_SELESAI,
     TIKET_TERBUKA,
     TimbanganAkun,
@@ -1671,3 +1672,198 @@ async def test_tombol_simpan_sementara_hanya_untuk_barang_masuk(klien):
     keluar = await _tiket_terbuka(klien, "BERAS", berat_kg="4200")
     assert "Simpan sementara" not in (
         await klien.get(f"{PREFIX}/tiket/{keluar}")).text
+
+
+# ─────────────── Super Admin ───────────────
+
+async def _jadi_super(app_uji, username: str = "wahid"):
+    from app import database
+
+    async with database.SessionLocal() as db:
+        orang = await akun_oleh(app_uji, username)
+        orang = await db.get(TimbanganAkun, orang.id)
+        orang.role = ROLE_SUPERADMIN
+        await db.commit()
+
+
+async def test_transaksi_dibatalkan_tetap_tertera_di_catatan(klien, app_uji):
+    """Truk yang batal bongkar memang pernah datang."""
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
+                     data={"alasan": "Mutu ditolak"})
+    daftar = (await klien.get(f"{PREFIX}/transaksi")).text
+    assert f"/transaksi/{trx_id}" in daftar
+    assert "Batal" in daftar
+
+
+async def test_admin_biasa_tidak_bisa_menghapus_catatan(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert "Hapus permanen" not in rincian          # tombolnya tidak ada…
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/hapus", data={
+        "alasan": "coba", "ketik_kode": "TRX-20260830-P1-001"})
+    assert r.status_code == 403                     # …dan pintunya tertutup
+    assert await trx_oleh_id(trx_id) is not None
+
+
+async def test_super_admin_bisa_menghapus_catatan(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    kode = (await trx_oleh_id(trx_id)).kode
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/hapus", data={
+        "alasan": "Salah entri saat uji coba", "ketik_kode": kode})
+    assert "dihapus permanen" in r.text
+    assert await trx_oleh_id(trx_id) is None
+
+
+async def test_menghapus_catatan_menuntut_kode_dan_alasan(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    kode = (await trx_oleh_id(trx_id)).kode
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/hapus", data={
+        "alasan": "apa saja", "ketik_kode": "TRX-SALAH"})
+    assert "ketik nomor transaksinya persis" in r.text
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/hapus", data={
+        "alasan": "   ", "ketik_kode": kode})
+    assert "disertai alasan" in r.text
+    assert await trx_oleh_id(trx_id) is not None
+
+
+async def test_jejak_audit_menyimpan_salinan_penuh_catatan_yang_dihapus(
+    klien, app_uji
+):
+    """Sebuah catatan boleh hilang dari daftar, tidak dari sejarah."""
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    kode = (await trx_oleh_id(trx_id)).kode
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/hapus", data={
+        "alasan": "Salah entri saat uji coba", "ketik_kode": kode})
+
+    async with database.SessionLocal() as db:
+        jejak = (await db.execute(
+            select(TimbanganAudit).where(
+                TimbanganAudit.aksi == "HAPUS_TRANSAKSI")
+        )).scalars().one()
+    assert kode in jejak.ringkasan
+    assert "Salah entri saat uji coba" in jejak.ringkasan
+    assert '"timbang1_kg": 13600' in jejak.nilai_sebelum
+    assert '"jumlah_karung": 120' in jejak.nilai_sebelum
+
+
+async def test_super_admin_punya_semua_wewenang_admin(klien, app_uji):
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    for jalur in ("/transaksi", "/laporan", "/monitoring", "/pengguna",
+                  "/tara", "/aturan", "/pengaturan"):
+        assert (await klien.get(PREFIX + jalur)).status_code == 200, jalur
+
+
+# ── Pemisahan perannya tidak boleh bisa dilangkahi ──
+
+async def test_admin_bisa_mengangkat_super_admin_pertama(klien, app_uji):
+    """Harus ada jalan membuat yang pertama — dan memulihkan bila hilang."""
+    await login(klien, "wahid")
+    budi = await akun_oleh(app_uji, "budi")
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "budi", "role": ROLE_SUPERADMIN,
+        "perangkat_kode": "P1", "sandi_baru": "",
+    })
+    assert "diubah" in r.text
+    assert (await akun_oleh(app_uji, "budi")).role == ROLE_SUPERADMIN
+
+
+async def test_setelah_ada_super_admin_pintunya_tertutup_bagi_admin(
+    klien, app_uji
+):
+    """Kalau tidak, Admin mana pun tinggal mengangkat dirinya sendiri."""
+    await _jadi_super(app_uji, "miftah")
+    await login(klien, "wahid")
+    budi = await akun_oleh(app_uji, "budi")
+
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "budi", "role": ROLE_SUPERADMIN,
+        "perangkat_kode": "P1", "sandi_baru": "",
+    })
+    assert "Hanya Super Admin yang bisa mengangkat" in r.text
+    assert (await akun_oleh(app_uji, "budi")).role == ROLE_PETUGAS
+
+
+@pytest.mark.parametrize("jalur,data", [
+    ("", {"nama": "Diambil Alih", "username": "miftah",
+          "role": ROLE_ADMIN, "perangkat_kode": "", "sandi_baru": ""}),
+    ("/status", {}),
+    ("/hapus", {"ketik_username": "miftah"}),
+])
+async def test_admin_tidak_bisa_menyentuh_akun_super_admin(
+    klien, app_uji, jalur, data
+):
+    """Termasuk menonaktifkannya lalu mengangkat dirinya sendiri."""
+    await _jadi_super(app_uji, "miftah")
+    await login(klien, "wahid")
+    orang = await akun_oleh(app_uji, "miftah")
+
+    r = await klien.post(f"{PREFIX}/pengguna/{orang.id}{jalur}", data=data)
+    assert "hanya bisa diubah oleh Super Admin" in r.text
+
+    tetap = await akun_oleh(app_uji, "miftah")
+    assert tetap.role == ROLE_SUPERADMIN
+    assert tetap.status == "aktif"
+    assert tetap.nama == "Miftah"
+
+
+async def test_admin_tidak_bisa_membuat_super_admin_baru_lewat_pintu_lain(
+    klien, app_uji
+):
+    """Kalau bisa, cukup buat akun Super Admin baru lalu masuk dengannya."""
+    await _jadi_super(app_uji, "miftah")
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "pintubelakang", "nama": "Pintu Belakang",
+        "role": ROLE_SUPERADMIN, "sandi": "rahasia123", "perangkat_kode": "",
+    })
+    assert "Hanya Super Admin yang bisa mengangkat" in r.text
+
+    from sqlalchemy import select
+
+    from app import database
+    async with database.SessionLocal() as db:
+        assert (await db.execute(select(TimbanganAkun).where(
+            TimbanganAkun.username == "pintubelakang"))).scalars().first() is None
+
+
+async def test_peran_karangan_ditolak_saat_membuat_akun(klien, app_uji):
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna", data={
+        "username": "aneh", "nama": "Aneh", "role": "DEWA",
+        "sandi": "rahasia123", "perangkat_kode": "",
+    })
+    assert "tidak dikenal" in r.text
