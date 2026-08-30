@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #e6e0d4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+    .tajuk { font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; margin-bottom: 8px; }
+    .layar { width: 390px; background: #fbf9f4; border: 1px solid #dcd6c9; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 2px 12px rgba(26,23,18,.10); }
+    .lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .rinci { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; }
+    .rinci span { font-size: 12.5px; color: #5a5449; }
+    .rinci b { font-family: 'Space Mono', ui-monospace, monospace; font-size: 13.5px; }
+    .bulat { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    th { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: #5a5449;
+      text-align: left; padding: 8px 9px; background: #f6f2ea; font-weight: 700; }
+    td { padding: 9px; border-bottom: 1px solid #f2ece1; font-size: 12px; }
+  </style>
+</helmet>
+
+<div style="width: 870px; height: 940px; background: #e6e0d4; padding: 22px; box-sizing: border-box; display: flex; gap: 24px">
+
+  <!-- ============ 1 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">1 &middot; Tiket yang menyeberang hari</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="background: #3a352c; color: #fff; padding: 13px 16px">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">Detail Transaksi</div>
+        <div class="mono" style="font-size: 11.5px; color: #b5ad9e">TRX-20260823-P1-011</div>
+      </div>
+
+      <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 13px; flex-grow: 1">
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 13px 14px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div class="bulat" style="background: #2f6e7a; color: #fff">1</div>
+            <div style="flex-grow: 1">
+              <div style="font-size: 13.5px; font-weight: 700">Truk bermuatan</div>
+              <div style="font-size: 11.5px; color: #8a8478">23 Agu 2026 &middot; 16.40 &middot; Budi</div>
+            </div>
+            <b class="mono" style="font-size: 14px">13.200 kg</b>
+          </div>
+          <div style="border-left: 2px dashed #dcd6c9; margin-left: 12px; padding-left: 20px; font-size: 11.5px; color: #8a8478; line-height: 1.5">
+            Bongkar dilanjutkan besok pagi &mdash; tiket tetap terbuka semalam
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px">
+            <div class="bulat" style="background: #636964; color: #fff">2</div>
+            <div style="flex-grow: 1">
+              <div style="font-size: 13.5px; font-weight: 700">Truk kosong</div>
+              <div style="font-size: 11.5px; color: #8a8478">24 Agu 2026 &middot; 07.15 &middot; Rudi</div>
+            </div>
+            <b class="mono" style="font-size: 14px">3.480 kg</b>
+          </div>
+        </div>
+
+        <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 12px; padding: 13px 14px">
+          <div style="display: flex; justify-content: space-between; align-items: baseline">
+            <span style="font-size: 12.5px; color: #245863; font-weight: 700">Tanggal transaksi</span>
+            <b style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; color: #245863">24 Agustus 2026</b>
+          </div>
+          <div style="font-size: 11.5px; color: #4a6f78; line-height: 1.5; margin-top: 6px">
+            Mengikuti timbang kedua &mdash; saat transaksi benar-benar selesai dan angkanya lengkap.
+          </div>
+        </div>
+
+        <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 12px; padding: 12px 14px">
+          <div class="rinci"><span>Nomor transaksi</span><b>TRX-20260823-P1-011</b></div>
+          <div style="font-size: 11.5px; color: #8a8478; line-height: 1.5; margin-top: 4px">
+            Nomornya tetap bertanggal <b class="mono" style="color: #5a5449">23</b> &mdash; itu tanggal tiket dibuka, dan nomor tidak pernah berubah setelah tercetak. Wajar bila di rekap 24 Agustus muncul nomor bertanggal 23.
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 12px 14px">
+          <div class="rinci"><span>Netto kontrol</span><b>9.695 kg</b></div>
+          <div class="rinci"><span>Nota supplier</span><b>9.700 kg</b></div>
+          <div class="rinci" style="border-top: 1px solid #f2ece1; margin-top: 3px; padding-top: 7px">
+            <span style="font-weight: 700">Selisih</span><b style="color: #2f6e7a; font-weight: 700">&minus;5 kg</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">2 &middot; Bagaimana muncul di rekap</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="background: #3a352c; color: #fff; padding: 13px 16px">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">Rekap 24 Agustus</div>
+        <div style="font-size: 11.5px; color: #b5ad9e">Barang masuk &middot; gabah basah</div>
+      </div>
+
+      <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 13px; flex-grow: 1">
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; overflow: hidden">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead><tr><th>Kode</th><th>Supplier</th><th style="text-align: right">Netto</th></tr></thead>
+            <tbody>
+              <tr style="background: #f7fbfb">
+                <td class="mono" style="font-weight: 700">…823-P1-011
+                  <div style="font-size: 10px; color: #8a8478; font-family: 'Manrope', sans-serif">dibuka 23 Agu 16.40</div>
+                </td>
+                <td>Catur</td>
+                <td class="mono" style="text-align: right; font-weight: 700">9.695</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-weight: 700">…824-P1-001</td>
+                <td>Anton</td>
+                <td class="mono" style="text-align: right; font-weight: 700">10.120</td>
+              </tr>
+              <tr>
+                <td class="mono" style="font-weight: 700">…824-P1-002</td>
+                <td>Hasan</td>
+                <td class="mono" style="text-align: right; font-weight: 700">8.940</td>
+              </tr>
+              <tr style="border-top: 2px solid #e7e1d5">
+                <td colspan="2" style="font-weight: 700">Total 24 Agustus</td>
+                <td class="mono" style="text-align: right; font-weight: 700; font-size: 13.5px">28.755</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 11px; padding: 12px 13px; font-size: 12px; color: #5a5449; line-height: 1.55">
+          Baris pertama masuk rekap 24 Agustus meski nomornya bertanggal 23. Keterangan <b>dibuka 23 Agu 16.40</b> muncul di bawah kode supaya tidak dikira salah.
+        </div>
+
+        <div style="background: #fdf2df; border: 1px solid #f0d29a; border-radius: 11px; padding: 12px 13px">
+          <div style="font-size: 12.5px; font-weight: 700; color: #8a5a12; margin-bottom: 5px">Yang perlu disadari</div>
+          <div style="font-size: 12px; color: #6f4a10; line-height: 1.55">
+            Gabah itu <b>fisiknya masuk gudang tanggal 23</b> sore, tetapi tercatat sebagai transaksi tanggal 24. Saat mencocokkan stok gudang harian, selisih semalam ini yang biasanya jadi sumber bingung.
+          </div>
+        </div>
+
+        <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 11px; padding: 12px 13px">
+          <div style="font-size: 12.5px; font-weight: 700; color: #245863; margin-bottom: 5px">Sebagai gantinya</div>
+          <div style="font-size: 12px; color: #4a6f78; line-height: 1.55">
+            Tiket yang masih terbuka tidak pernah masuk rekap mana pun &mdash; angkanya memang belum lengkap. Tidak ada transaksi setengah jadi yang ikut dijumlahkan, dan angka rekap tidak pernah berubah setelah harinya lewat.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

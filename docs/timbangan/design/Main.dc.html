@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .fld { width: 100%; box-sizing: border-box; height: 52px; border: 1px solid #dcd6c9;
+      border-radius: 10px; background: #fff; padding: 0 14px; font-size: 19px;
+      color: #1a1712; font-family: 'Space Mono', ui-monospace, Menlo, monospace; }
+    .fld:focus { outline: 2px solid #2f6e7a; outline-offset: -1px; border-color: #2f6e7a; }
+    .fld.teks { font-family: inherit; font-size: 16px; }
+    .sat { position: absolute; right: 14px; top: 17px; font-size: 13px; color: #8a8478;
+      pointer-events: none; }
+    .kartu { background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px; }
+    .baris { display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 14px; padding: 5px 0; }
+    .baris b { font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 15px; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 1420px; background: #fbf9f4; display: flex; flex-direction: column; overflow: hidden">
+
+  <!-- Bar atas -->
+  <div style="background: #3a352c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -.01em">Input Timbangan</div>
+      <div style="font-size: 12px; color: #b5ad9e">Pos Timbang &middot; Budi</div>
+    </div>
+    <div style="width: 34px; height: 34px; border-radius: 50%; background: #4d4739; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">B</div>
+  </div>
+
+  <!-- Jenis timbang aktif -->
+  <div style="background: #f6f2ea; border-bottom: 1px solid #e0d8c8; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a352c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 7h14"></path><path d="M5 7l-3 7h6z"></path><path d="M19 7l-3 7h6z"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; color: #3a352c">Gabah Basah</div>
+      <div style="font-size: 12px; color: #726b5e">Tara 0,25 kg/karung &middot; batas 2 kg per ton nota</div>
+    </div>
+    <div style="font-size: 13px; color: #2f6e7a; font-weight: 600">Ganti</div>
+  </div>
+
+  <!-- Penunjuk tahap -->
+  <div style="background: #fff; border-bottom: 1px solid #e7e1d5; padding: 11px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="width: 24px; height: 24px; border-radius: 50%; background: #3a352c; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">1</div>
+      <div style="font-size: 13px; font-weight: 700; color: #3a352c">Truk bermuatan</div>
+    </div>
+    <div style="flex-grow: 1; height: 2px; background: #e7e1d5"></div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="width: 24px; height: 24px; border-radius: 50%; background: #f2ece1; color: #8a8478; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">2</div>
+      <div style="font-size: 13px; color: #5a5449">Setelah bongkar</div>
+    </div>
+  </div>
+
+  <!-- Isi form -->
+  <div style="flex-grow: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px">
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Tanggal</div>
+      <input class="fld" type="text" value="23-08-2026" readonly="readonly">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Supplier</div>
+      <div style="position: relative">
+        <input class="fld teks" type="text" value="Anton" readonly="readonly">
+        <svg style="position: absolute; right: 14px; top: 20px" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Nomor kendaraan</div>
+      <input class="fld" type="text" value="B 1234 XYZ" readonly="readonly">
+    </div>
+
+    <!-- Nota -->
+    <div style="display: flex; flex-direction: column; gap: 10px; background: #fff; border: 1px solid #e7e1d5; border-left: 3px solid #3a352c; border-radius: 12px; padding: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="lbl" style="color: #3a352c">Nota supplier</div>
+        <div style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #3a352c; background: #f6f2ea; border: 1px solid #e0d8c8; border-radius: 20px; padding: 3px 9px">DASAR TRANSAKSI</div>
+      </div>
+      <div style="font-size: 11.5px; color: #8a8478; line-height: 1.45; margin-top: -2px">Nota tulis tangan biasanya tanpa nomor. Yang wajib hanya beratnya &mdash; foto nota jadi buktinya.</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Nomor nota &mdash; bila ada</div>
+          <input class="fld teks" style="height: 48px; color: #a39c8e" type="text" value="" placeholder="sering kosong">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Berat nota</div>
+          <div style="position: relative">
+            <input class="fld" style="height: 48px; padding-right: 38px" type="text" inputmode="numeric" value="{{ nota }}" onInput="{{ ubahNota }}">
+            <span class="sat" style="top: 15px">kg</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timbangan -->
+    <div style="display: flex; flex-direction: column; gap: 12px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="lbl">Hasil timbangan</div>
+        <div style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #5a5449; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 20px; padding: 3px 9px">KONTROL INTERNAL</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Timbang 1 &mdash; truk bermuatan</div>
+        <div style="display: flex; gap: 10px; align-items: flex-end">
+          <div style="flex-grow: 1; position: relative">
+            <input class="fld" style="padding-right: 40px" type="text" inputmode="numeric" value="{{ masuk }}" onInput="{{ ubahMasuk }}">
+            <span class="sat">kg</span>
+          </div>
+          <div style="width: 96px; display: flex; flex-direction: column; gap: 6px">
+            <div class="lbl" style="font-size: 10px">Jam &middot; otomatis</div>
+            <input class="fld" style="height: 52px; font-size: 16px; text-align: center" type="text" value="09.14">
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <div class="lbl" style="font-size: 10px">Timbang kosong &mdash; setelah bongkar</div>
+        </div>
+        <div style="display: flex; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 9px; padding: 3px; gap: 3px">
+          <div style="flex-grow: 1; height: 34px; border-radius: 7px; background: #fff; border: 1px solid #dcd6c9; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; color: #1a1712">Isi sekarang</div>
+          <div style="flex-grow: 1; height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; color: #5a5449">Nanti, setelah bongkar</div>
+        </div>
+        <div style="position: relative">
+          <input class="fld" style="padding-right: 40px" type="text" inputmode="numeric" value="{{ kosong }}" onInput="{{ ubahKosong }}">
+          <span class="sat">kg</span>
+        </div>
+        <div style="font-size: 11.5px; color: #8a8478; line-height: 1.45">Pilih <b>nanti</b> bila truk belum dibongkar &mdash; tiket disimpan terbuka dan muncul di daftar menunggu timbang kedua.</div>
+      </div>
+
+      <div style="display: flex; gap: 10px; align-items: flex-end">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Jumlah karung</div>
+          <input class="fld" type="text" inputmode="numeric" value="{{ karung }}" onInput="{{ ubahKarung }}">
+        </div>
+        <div style="width: 148px; height: 52px; border-radius: 10px; background: #fbf9f4; border: 1px dashed #dcd6c9; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em">TARA OTOMATIS</div>
+          <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 16px; font-weight: 600; color: #3a352c">{{ taraTeks }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Foto -->
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Foto bukti &mdash; opsional</div>
+      <div style="display: flex; gap: 8px">
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a5449" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+          <span style="font-size: 11px; color: #3a352c; font-weight: 700">Nota</span>
+        </div>
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a5449" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+          <span style="font-size: 11px; color: #5a5449">Masuk</span>
+        </div>
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a5449" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+          <span style="font-size: 11px; color: #5a5449">Kosong</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="height: 8px"></div>
+  </div>
+
+  <!-- Panel hasil (menempel di bawah saat menggulir) -->
+  <div style="flex-shrink: 0; background: #fff; border-top: 1px solid #e7e1d5; box-shadow: 0 -6px 20px -12px rgba(26,23,18,.35); padding: 14px 16px 16px">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+      <div class="lbl">Hasil perhitungan</div>
+      <div style="font-size: 11px; color: #8a8478">batas {{ dasarTeks }}</div>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: stretch; margin-bottom: 10px">
+      <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 10px; padding: 10px 12px">
+        <div style="font-size: 10px; color: #5a5449; letter-spacing: .06em; font-weight: 700">NETTO KONTROL</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 27px; font-weight: 700; color: #1a1712; letter-spacing: -.02em; line-height: 1.15">{{ nettoTeks }}</div>
+        <div style="font-size: 11px; color: #8a8478">timbangan {{ nettoTimbangTeks }} &minus; tara {{ taraTeks }}</div>
+      </div>
+      <div style="width: 132px; background: {{ selisihBg }}; border: 1px solid {{ selisihLine }}; border-radius: 10px; padding: 10px 12px">
+        <div style="font-size: 10px; color: {{ selisihInk }}; letter-spacing: .06em; font-weight: 700">SELISIH</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 27px; font-weight: 700; color: {{ selisihInk }}; letter-spacing: -.02em; line-height: 1.15">{{ selisihTeks }}</div>
+        <div style="font-size: 11px; color: {{ selisihInk }}">batas {{ batasTeks }}</div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; background: {{ selisihBg }}; border: 1px solid {{ selisihLine }}; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px">
+      <div style="width: 10px; height: 10px; border-radius: 2px; background: {{ selisihInk }}"></div>
+      <div style="flex-grow: 1; font-size: 14px; font-weight: 700; color: {{ selisihInk }}; letter-spacing: .02em">{{ statusTeks }}</div>
+      <div style="font-size: 11px; color: {{ selisihInk }}">{{ statusCatatan }}</div>
+    </div>
+
+    <button style="width: 100%; height: 56px; border: 0; border-radius: 12px; background: #c25834; color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: .02em">SIMPAN TRANSAKSI</button>
+    <div style="text-align: center; font-size: 11px; color: #8a8478; margin-top: 8px">Ringkasan akan ditampilkan untuk dikonfirmasi sebelum tersimpan</div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"tara_per_karung":{"editor":"float","default":0.25,"min":0,"max":1,"step":0.005,"unit":"kg","section":"Aturan"},"ambang_per_ton":{"editor":"float","default":2,"min":0.1,"max":10,"step":0.1,"unit":"kg/ton","section":"Aturan"},"ambang_inv_per_ton":{"editor":"float","default":5,"min":0.1,"max":20,"step":0.1,"unit":"kg/ton","section":"Aturan"},"arah_ambang":{"editor":"enum","default":"simetris","options":["simetris","kurang saja"],"section":"Aturan"}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { masuk: '13.600', kosong: '3.570', karung: '120', nota: '10.048' };
+    this.ubahMasuk = (e) => this.setState({ masuk: e.target.value });
+    this.ubahKosong = (e) => this.setState({ kosong: e.target.value });
+    this.ubahKarung = (e) => this.setState({ karung: e.target.value });
+    this.ubahNota = (e) => this.setState({ nota: e.target.value });
+  }
+
+  angka(teks) {
+    var s = String(teks == null ? '' : teks).replace(/\s/g, '');
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    var n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+  }
+
+  format(n, digit) {
+    var d = digit || 0;
+    var neg = n < 0;
+    var s = Math.abs(n).toFixed(d);
+    var bagian = s.split('.');
+    bagian[0] = bagian[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return (neg ? '-' : '') + bagian.join(',');
+  }
+
+  renderVals() {
+    var taraSatuan = this.props.tara_per_karung != null ? this.props.tara_per_karung : 0.25;
+    var perTon = this.props.ambang_per_ton != null ? this.props.ambang_per_ton : 2;
+    var invPerTon = this.props.ambang_inv_per_ton != null ? this.props.ambang_inv_per_ton : 5;
+    var kurangSaja = this.props.arah_ambang === 'kurang saja';
+
+    var masuk = this.angka(this.state.masuk);
+    var kosong = this.angka(this.state.kosong);
+    var karung = Math.round(this.angka(this.state.karung));
+    var nota = this.angka(this.state.nota);
+
+    var nettoTimbang = masuk - kosong;
+    var tara = karung * taraSatuan;
+    var netto = nettoTimbang - tara;
+    var selisih = netto - nota;
+    var persen = nota ? (selisih / nota) * 100 : 0;
+    var abs = Math.abs(selisih);
+
+    // Ambang mengikuti bobot pembelian: sekian kg per ton berat nota.
+    var batas = (nota / 1000) * perTon;
+    var batasInv = (nota / 1000) * invPerTon;
+    // Sebagian komoditas hanya mempersoalkan KEKURANGAN; kelebihan dibiarkan.
+    var diukur = kurangSaja ? Math.max(0, -selisih) : abs;
+
+    var status = 'NORMAL', ink = '#2f6e7a', bg = '#e7f1f2', line = '#bcd8dd';
+    var catatan = 'dalam batas kewajaran';
+    if (diukur > batasInv) {
+      status = 'INVESTIGASI'; ink = '#a8492b'; bg = '#f9e9e4'; line = '#e9c3b4';
+      catatan = 'lapor penanggung jawab';
+    } else if (diukur > batas) {
+      status = 'PERLU PEMERIKSAAN'; ink = '#8a5a12'; bg = '#fdf2df'; line = '#f0d29a';
+      catatan = 'buka lembar pemeriksaan';
+    }
+    var batasTeks = (kurangSaja ? 'kurang maks ' : '\u00b1') + this.format(batas, 1) + ' kg';
+
+    return {
+      masuk: this.state.masuk, kosong: this.state.kosong,
+      karung: this.state.karung, nota: this.state.nota,
+      taraTeks: this.format(tara, tara % 1 ? 2 : 0) + ' kg',
+      nettoTimbangTeks: this.format(nettoTimbang) + ' kg',
+      nettoTeks: this.format(netto) + ' kg',
+      selisihTeks: (selisih > 0 ? '+' : '') + this.format(selisih),
+      persenTeks: (persen > 0 ? '+' : '') + this.format(persen, 2) + '%',
+      statusTeks: status, statusCatatan: catatan, batasTeks: batasTeks,
+      dasarTeks: this.format(perTon, 1) + ' kg per ton nota',
+      selisihInk: ink, selisihBg: bg, selisihLine: line,
+      ubahMasuk: this.ubahMasuk, ubahKosong: this.ubahKosong,
+      ubahKarung: this.ubahKarung, ubahNota: this.ubahNota
+    };
+  }
+}
+</script>
+</body>
+</html>

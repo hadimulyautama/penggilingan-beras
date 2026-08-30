@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block judul %}Tanpa jaringan{% endblock %}
+{% block bar_judul %}Tanpa jaringan{% endblock %}
+{% block bar_sub %}Pos Timbang{% endblock %}
+
+{% block isi %}
+  <div class="kartu kosong">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#8a8478"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/>
+      <path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M2 2l20 20"/></svg>
+    <div style="margin-top:14px">
+      Halaman ini butuh jaringan.<br>
+      Timbangan yang sudah Anda simpan tetap aman dan akan terkirim sendiri
+      begitu sinyal kembali.
+    </div>
+    <div class="antrean" data-antrean style="margin-top:10px"></div>
+  </div>
+  <button class="tbl blok" onclick="location.reload()">Coba lagi</button>
+{% endblock %}

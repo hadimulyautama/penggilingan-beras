@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #e6e0d4; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    a { color: #3a352c; } a:hover { color: #0f3d21; }
+    .kertas { font-family: 'Space Mono', ui-monospace, monospace; color: #000;
+      width: 302px; background: #fff; padding: 16px 15px; box-shadow: 0 2px 10px rgba(0,0,0,.18);
+      box-sizing: border-box; }
+    .brs { display: flex; justify-content: space-between; font-size: 12px; line-height: 1.75; }
+    .brs b { font-weight: 700; }
+    .sub { font-size: 10.5px; color: #333; line-height: 1.5; padding-left: 10px; }
+    .garis { border-top: 1px dashed #000; margin: 6px 0; }
+    .garis.tebal { border-top: 2px solid #000; }
+    .tengah { text-align: center; }
+    .tajuk { font-family: 'Manrope', -apple-system, sans-serif; font-size: 11px; letter-spacing: .07em;
+      text-transform: uppercase; color: #5a5449; font-weight: 700; margin-bottom: 9px; }
+    .ttd { display: flex; gap: 14px; margin-top: 26px; }
+    .ttd div { flex-grow: 1; text-align: center; border-top: 1px solid #000; padding-top: 4px;
+      font-size: 10px; }
+  </style>
+</helmet>
+
+<div style="width: 700px; height: 940px; background: #e6e0d4; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+
+  <div style="font-family: 'Manrope', -apple-system, sans-serif; background: #fff; border: 1px solid #dcd6c9; border-radius: 10px; padding: 13px 15px">
+    <div style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: #1a1712">Satu dokumen cetak: Bukti Timbang</div>
+    <div style="font-size: 12.5px; color: #5a5449; line-height: 1.55; margin-top: 4px">
+      Satu tata letak untuk semua, dicetak sebagai halaman 72 mm lewat dialog cetak bawaan sistem &mdash; sama di Android maupun iOS. Yang berubah hanya <b>isinya</b>, mengikuti komoditas. Kepala dokumen, nama petugas, nomor, tanggal, dan jam terisi otomatis. Gabah tidak pernah dicetak untuk supplier karena hasil kontrolnya bersifat internal.
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start">
+
+    <!-- ============ Varian A: Beras PK ============ -->
+    <div>
+      <div class="tajuk">Varian A &middot; Beras PK masuk</div>
+      <div class="kertas">
+        <div class="tengah" style="font-size: 13px; font-weight: 700; letter-spacing: .06em">PT HADI MULYA UTAMA</div>
+        <div class="tengah" style="font-size: 10.5px; line-height: 1.5">Masaran, Kab. Sragen<br>+62 851-7416-7950</div>
+
+        <div class="garis tebal"></div>
+        <div class="tengah" style="font-size: 13px; font-weight: 700; letter-spacing: .1em">BUKTI TIMBANG</div>
+        <div class="tengah" style="font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-top: 2px">BERAS PECAH KULIT</div>
+        <div class="garis tebal"></div>
+
+        <div class="brs"><span>No.</span><b>TRX-20260823-004</b></div>
+        <div class="brs"><span>Tanggal</span><b>23-08-2026</b></div>
+        <div class="brs"><span>Kendaraan</span><b>B 9021 KL</b></div>
+        <div style="font-size: 12px; line-height: 1.75">Supplier<br><b style="font-weight: 700">Hasan</b></div>
+
+        <div class="garis"></div>
+
+        <div class="brs"><span>Bruto &middot; 14.02</span><b>19.400 kg</b></div>
+        <div class="brs"><span>Tara truk &middot; 15.48</span><b>5.400 kg</b></div>
+        <div class="brs"><span>Netto timbangan</span><b>14.000 kg</b></div>
+        <div class="brs"><span>Jumlah karung</span><b>200</b></div>
+        <div class="brs"><span>Tara karung</span><b>17 kg</b></div>
+        <div class="sub">0,085 kg/karung &mdash; sampling 12-06-2026</div>
+
+        <div class="garis tebal"></div>
+        <div class="brs" style="font-size: 14px"><b>BERAT PK BERSIH</b><b>13.983 kg</b></div>
+        <div class="garis tebal"></div>
+
+        <div class="tengah" style="font-size: 10px; line-height: 1.55; margin-top: 6px">
+          Tara karung dari sampling aktual 30 karung.<br>
+          Supplier berhak meminta sampling ulang.<br>
+          Tidak ada potongan lain di luar tara karung.
+        </div>
+
+        <div class="brs" style="font-size: 10.5px; margin-top: 8px"><span>Petugas timbang</span><b>Budi</b></div>
+        <div class="brs" style="font-size: 10.5px"><span>Dicetak</span><b>23-08-2026 14.22</b></div>
+
+        <div class="ttd">
+          <div>Petugas timbang</div>
+          <div>Supir</div>
+        </div>
+      </div>
+      <div style="font-family: 'Manrope', -apple-system, sans-serif; width: 302px; font-size: 11px; color: #5a5449; line-height: 1.55; background: #f6f2ea; border: 1px solid #dcd6c9; border-radius: 8px; padding: 10px 12px; margin-top: 10px">
+        Memuat enam angka yang diwajibkan Sistem Tara butir 9: bruto, tara truk, netto timbangan, jumlah karung, tara karung, PK bersih. Diserahkan ke supplier karena inilah dasar pembayarannya. Kedua petugas timbang tercatat. Yang tertera sebagai <b>petugas timbang</b> adalah pelaku timbang terakhir &mdash; dialah yang menutup transaksi.
+      </div>
+    </div>
+
+    <!-- ============ Varian B: Pengiriman ============ -->
+    <div>
+      <div class="tajuk">Varian B &middot; Pengiriman keluar</div>
+      <div class="kertas">
+        <div class="tengah" style="font-size: 13px; font-weight: 700; letter-spacing: .06em">PT HADI MULYA UTAMA</div>
+        <div class="tengah" style="font-size: 10.5px; line-height: 1.5">Masaran, Kab. Sragen<br>+62 851-7416-7950</div>
+
+        <div class="garis tebal"></div>
+        <div class="tengah" style="font-size: 13px; font-weight: 700; letter-spacing: .1em">BUKTI TIMBANG</div>
+        <div class="tengah" style="font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-top: 2px">PENGIRIMAN &mdash; BEKATUL</div>
+        <div class="garis tebal"></div>
+
+        <div class="brs"><span>No.</span><b>TRX-20260823-006</b></div>
+        <div class="brs"><span>Tanggal</span><b>23-08-2026</b></div>
+        <div class="brs"><span>Kendaraan</span><b>B 7742 HK</b></div>
+        <div class="brs"><span>Surat jalan</span><b>SJ-0451</b></div>
+        <div style="font-size: 12px; line-height: 1.75">Tujuan<br><b style="font-weight: 700">Toko Beras Makmur &mdash; Solo</b></div>
+
+        <div class="garis"></div>
+
+        <div class="brs"><span>Timbang 1 &middot; 08.12</span><b>6.200 kg</b></div>
+        <div class="sub">truk kosong</div>
+        <div class="brs"><span>Timbang 2 &middot; 10.52</span><b>18.200 kg</b></div>
+        <div class="sub">truk bermuatan</div>
+        <div class="brs"><span>Jumlah karung</span><b>240</b></div>
+        <div class="brs"><span>Tara karung</span><b>12 kg</b></div>
+        <div class="sub">0,05 kg/karung</div>
+
+        <div class="garis tebal"></div>
+        <div class="brs" style="font-size: 14px"><b>NETTO MUATAN</b><b>11.988 kg</b></div>
+        <div class="garis tebal"></div>
+
+        <div class="brs"><span>Berat surat jalan</span><b>12.000 kg</b></div>
+
+        <div style="border: 1px dashed #000; padding: 6px 8px; margin-top: 8px">
+          <div class="brs" style="font-size: 12px"><b>Selisih</b><b>&minus;12 kg</b></div>
+          <div class="brs" style="font-size: 10.5px"><span>Batas wajar</span><span>&plusmn;16,8 kg</span></div>
+          <div class="tengah" style="font-size: 11px; font-weight: 700; letter-spacing: .06em; margin-top: 3px">NORMAL</div>
+        </div>
+
+        <div class="tengah" style="font-size: 10px; line-height: 1.55; margin-top: 8px">
+          Penjualan sesuai berat surat jalan.<br>
+          Angka timbang di atas adalah kontrol internal.
+        </div>
+
+        <div class="brs" style="font-size: 10.5px; margin-top: 8px"><span>Petugas timbang</span><b>Budi</b></div>
+
+        <div class="ttd">
+          <div>Petugas timbang</div>
+          <div>Supir</div>
+        </div>
+      </div>
+      <div style="font-family: 'Manrope', -apple-system, sans-serif; width: 302px; font-size: 11px; color: #6f4a10; line-height: 1.55; background: #fdf2df; border: 1px solid #e0b476; border-radius: 8px; padding: 10px 12px; margin-top: 10px">
+        Timbang 1 oleh Budi, timbang 2 oleh Rudi &mdash; yang tertera sebagai petugas timbang adalah Rudi. <b>Menunggu keputusan:</b> kotak selisih ini kontrol internal, ikut tercetak untuk supir atau hanya salinan arsip?
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"lebar_kertas":{"editor":"enum","default":"80mm","options":["80mm","58mm"],"section":"Kertas"}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

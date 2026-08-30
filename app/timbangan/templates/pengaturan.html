@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block judul %}Pengaturan{% endblock %}
+{% block bar_judul %}Pengaturan{% endblock %}
+{% block bar_sub %}{{ akun.nama }} · {{ akun.role_label }}{% endblock %}
+
+{% macro parameter(daftar) %}
+  {% for p in daftar %}
+    <div style="padding:9px 0{% if not loop.last %};border-bottom:1px solid var(--garis){% endif %}">
+      <div class="baris" style="padding:0">
+        <span>{{ p.nama }}</span>
+        <b style="font-family:var(--teks);font-size:14px;text-align:right">
+          {{ p.nilai }}</b>
+      </div>
+      <div class="bantu" style="margin-top:3px">{{ p.arti }}</div>
+      <div class="bantu" style="font-family:var(--mono);font-size:11px;
+                                margin-top:2px">{{ p.env }}</div>
+    </div>
+  {% endfor %}
+{% endmacro %}
+
+{% block isi %}
+
+  {# ── Akun ini ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Akun ini</div>
+    <div class="baris"><span>Nama</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ akun.nama }}</b></div>
+    <div class="baris"><span>Nama pengguna</span><b>{{ akun.username }}</b></div>
+    <div class="baris"><span>Peran</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ akun.role_label }}</b></div>
+    <div class="baris"><span>Kode perangkat</span>
+      <b>{{ akun.perangkat_kode or '—' }}</b></div>
+    <div class="baris"><span>Terakhir masuk</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ akun.terakhir_login|tgl_jam }}</b></div>
+    <div class="bantu" style="margin-top:8px">
+      Kode perangkat ikut menyusun nomor transaksi, sehingga dua perangkat yang
+      sedang tanpa jaringan tidak membuat nomor yang sama. Ganti dengan masuk
+      ulang memakai kode lain.
+    </div>
+  </div>
+
+  {# ── Yang bisa diubah dari layar ── #}
+  <div>
+    <div class="lbl" style="margin-bottom:8px">Diubah dari layar</div>
+
+    <a href="{{ PREFIX }}/aturan" class="pilihan" style="margin-bottom:8px">
+      <div class="pilihan__isi">
+        <div class="pilihan__nama">Aturan komoditas</div>
+        <div class="pilihan__ket">
+          {{ jumlah.komoditas }} komoditas aktif · tara, batas wajar, arah
+          toleransi, kerahasiaan hasil
+        </div>
+      </div>
+      <span class="lencana lencana--netral">Lihat saja</span>
+    </a>
+
+    {% if akun.is_pengawas %}
+      <a href="{{ PREFIX }}/tara" class="pilihan" style="margin-bottom:8px">
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Tara standar</div>
+          <div class="pilihan__ket">
+            {{ jumlah.tara }} sampling berlaku · per pihak × komoditas
+          </div>
+        </div>
+        <span class="lencana lencana--aman">Bisa diubah</span>
+      </a>
+    {% endif %}
+
+    {% if akun.is_admin %}
+      <a href="{{ PREFIX }}/pengguna" class="pilihan" style="margin-bottom:8px">
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Pengguna &amp; perangkat</div>
+          <div class="pilihan__ket">
+            {{ jumlah.akun }} akun aktif · nama, peran, sandi, kode perangkat
+          </div>
+        </div>
+        <span class="lencana lencana--aman">Bisa diubah</span>
+      </a>
+    {% endif %}
+
+    {% if akun.is_pengawas %}
+      <a href="{{ PREFIX }}/monitoring" class="pilihan" style="margin-bottom:8px">
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Status pemantauan pihak</div>
+          <div class="pilihan__ket">
+            {{ jumlah.supplier }} pihak terdaftar · aktif, pantau, investigasi
+          </div>
+        </div>
+        <span class="lencana lencana--aman">Bisa diubah</span>
+      </a>
+    {% endif %}
+  </div>
+
+  {# ── Aturan komoditas: apa saja yang bisa disetel di dalamnya ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Isi aturan tiap komoditas</div>
+    <div class="bantu" style="margin-bottom:10px">
+      Sebelas hal berikut disetel per komoditas dan disalin ke tiap transaksi
+      saat disimpan — merevisinya tidak pernah mengubah status transaksi lama.
+    </div>
+    {% for nama, arti in [
+        ('Arah barang', 'Masuk, keluar, atau bebas'),
+        ('Pembanding', 'Nota supplier, surat jalan, atau tanpa pembanding'),
+        ('Sumber tara', 'Tetap, hasil sampling, atau diisi manual'),
+        ('Tara tetap', 'Berat satu karung kosong, bila sudah pasti'),
+        ('Tara bawaan', 'Dipakai sampai ada sampling yang berlaku'),
+        ('Jenis batas', 'Per ton, per karung, tetap, atau tanpa batas'),
+        ('Nilai batas', 'Angka batas kewajaran selisih'),
+        ('Arah batas', 'Simetris, kurang saja, atau tidak boleh kurang'),
+        ('Batas investigasi', 'Ambang kedua yang lebih serius'),
+        ('Kerahasiaan hasil', 'Selisih dicetak untuk pengirim atau tidak'),
+        ('Masa berlaku sampling tara', 'Umur satu hasil sampling, dalam hari') ] %}
+      <div class="baris">
+        <span>{{ nama }}</span>
+        <b style="font-family:var(--teks);font-size:13px;color:var(--tinta-4);
+                  text-align:right;font-weight:500">{{ arti }}</b>
+      </div>
+    {% endfor %}
+    <div class="bantu" style="margin-top:10px">
+      Diubah langsung pada tabel <code>timbangan_jenis</code>, bukan lewat layar.
+      Mengubah batas berarti mengubah cara perusahaan menilai kejujuran
+      timbangan — itu keputusan yang harus lewat revisi SOP, bukan lewat kotak
+      isian di ponsel.
+    </div>
+  </div>
+
+  {# ── Parameter alat & operasional ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Alat &amp; batas operasional</div>
+    {% if akun.is_admin %}
+      <div class="bantu" style="margin-bottom:12px">
+        Berlaku seketika, tanpa menyalakan ulang service. Setiap perubahan
+        tercatat di jejak audit.
+      </div>
+    {% endif %}
+
+    {% for p in alat %}
+      <div style="padding:11px 0{% if not loop.last %};border-bottom:1px solid var(--garis){% endif %}">
+        <div class="baris" style="padding:0">
+          <span>{{ p.nama }}</span>
+          {% if not akun.is_admin %}
+            <b style="font-family:var(--teks);font-size:14px">{{ p.nilai }}</b>
+          {% endif %}
+        </div>
+        <div class="bantu" style="margin-top:3px">{{ p.arti }}</div>
+
+        {% if akun.is_admin %}
+          <form method="post" action="{{ PREFIX }}/pengaturan"
+                style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <input type="hidden" name="kunci" value="{{ p.kunci }}">
+            <div class="sat" style="flex-grow:1">
+              <input class="fld" name="nilai" value="{{ p.angka }}"
+                     inputmode="decimal" autocomplete="off" data-berat>
+              <span>{{ p.satuan }}</span>
+            </div>
+            <button type="submit" name="aksi" value="simpan"
+                    class="tbl kecil" style="height:52px">Simpan</button>
+          </form>
+          <div class="baris" style="padding:4px 0 0">
+            <span style="font-size:12px">
+              Batas wajar {{ p.batas }} · bawaan {{ p.bawaan }} {{ p.satuan }}
+            </span>
+            {% if p.asal == 'data' %}
+              <form method="post" action="{{ PREFIX }}/pengaturan">
+                <input type="hidden" name="kunci" value="{{ p.kunci }}">
+                <button type="submit" name="aksi" value="bawaan"
+                        class="tbl halus kecil">Kembalikan bawaan</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="bantu" style="font-family:var(--mono);font-size:11px;
+                                  margin-top:4px">
+          {{ p.env }}
+          {% if p.asal == 'data' %}· disetel dari layar{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="bantu" style="margin-top:10px">
+      {% if akun.is_admin %}
+        Nilai yang belum pernah disetel dari layar mengikuti environment; yang
+        sudah disetel menang atasnya sampai dikembalikan ke bawaan.
+      {% else %}
+        Hanya Admin yang dapat mengubah bagian ini.
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="kartu">
+    <div class="kartu__judul">Identitas pada bukti timbang</div>
+    {{ parameter(bukti) }}
+    <div class="bantu" style="margin-top:10px">
+      {{ sumber_label['environment'] }}.
+    </div>
+  </div>
+
+  {% if akun.is_admin %}
+    <div class="kartu">
+      <div class="kartu__judul">Sesi &amp; keamanan</div>
+      {{ parameter(sesi) }}
+      <div class="bantu" style="margin-top:10px">
+        {{ sumber_label['environment'] }}.
+      </div>
+    </div>
+  {% endif %}
+
+  {# ── Yang sengaja tidak bisa disetel ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Sengaja tidak dapat disetel</div>
+    <div class="bantu" style="line-height:1.6">
+      <b>Nilai uang dalam bentuk apa pun.</b> Modul ini mencatat berat, bukan
+      transaksi keuangan. Kolomnya tidak ada sama sekali di seluruh basis data
+      — bukan disembunyikan, melainkan memang tidak pernah dibuat. Urusan
+      pembelian dan pembayaran berada di Kledo.<br><br>
+      <b>Menghapus data.</b> Transaksi keliru dibatalkan beralasan dan tetap
+      tersimpan. Tidak ada tombol hapus di mana pun.<br><br>
+      <b>Jejak audit.</b> Hanya bertambah. Koreksi menulis baris baru berisi
+      nilai sebelum dan sesudah, tidak menimpa yang lama.
+    </div>
+  </div>
+
+  {# ── Keluar ── #}
+  <form method="post" action="{{ PREFIX }}/keluar">
+    <button type="submit" class="tbl bahaya blok">Keluar</button>
+  </form>
+  <div class="bantu" style="text-align:center">
+    Selama tidak menekan Keluar, perangkat ini tidak akan meminta sandi lagi.
+  </div>
+
+{% endblock %}

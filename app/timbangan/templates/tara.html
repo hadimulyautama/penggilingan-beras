@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian %}
+
+{% block lebar %}lebar{% endblock %}
+{% block judul %}Tara standar{% endblock %}
+{% block bar_judul %}Tara standar{% endblock %}
+{% block bar_sub %}Hasil sampling karung{% endblock %}
+
+{% block isi %}
+  <div class="bantu">
+    Sampling baru tidak menimpa yang lama — yang lama ditandai DIGANTI dan tetap
+    tersimpan, supaya transaksi lama selalu bisa dijelaskan dengan tara yang
+    benar-benar berlaku saat itu.
+  </div>
+
+  <details class="kartu">
+    <summary style="cursor:pointer;font-weight:700;font-size:15px">
+      Catat sampling baru
+    </summary>
+    <form method="post" action="{{ PREFIX }}/tara"
+          style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
+      <div class="grup">
+        <div class="lbl">Komoditas</div>
+        <select class="fld" name="jenis_kode" required>
+          {% for j in jenis %}
+            <option value="{{ j.kode }}">{{ j.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="grup">
+        <div class="lbl">Pihak</div>
+        <select class="fld" name="supplier_id">
+          <option value="">Berlaku umum</option>
+          {% for s in supplier %}
+            <option value="{{ s.id }}">{{ s.nama_supplier }}</option>
+          {% endfor %}
+        </select>
+        <div class="bantu">
+          Sampling khusus satu pihak menang atas sampling umum.
+        </div>
+      </div>
+      {{ isian('jumlah_sampel', 'Jumlah karung sampel', '', 'karung', 'text',
+               'Timbang beberapa karung kosong sekaligus', true, false,
+               'inputmode="numeric"') }}
+      {{ isian('total_berat_kg', 'Total berat sampel', '', 'kg', 'text',
+               'Sistem menghitung sendiri tara per karungnya', true, false,
+               'inputmode="decimal" data-berat') }}
+      {{ isian('jenis_karung', 'Jenis karung', '', '', 'text',
+               'Contoh: plastik tebal, goni', false, true) }}
+      {{ isian('alasan', 'Alasan sampling', '', '', 'text',
+               'Contoh: supplier ganti jenis karung', false, true) }}
+      <button type="submit" class="tbl blok">Simpan sampling</button>
+    </form>
+  </details>
+
+  <div class="kartu" style="padding:0;overflow:hidden">
+    <div class="gulung">
+      <table>
+        <thead>
+          <tr>
+            <th>Komoditas</th><th>Pihak</th><th class="angka">Sampel</th>
+            <th class="angka">Tara/karung</th><th>Berlaku</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in baris %}
+            <tr>
+              <td>{{ NAMA_JENIS.get(t.jenis_kode, t.jenis_kode) }}</td>
+              <td>{{ nama_pihak.get(t.supplier_id, 'Umum') }}</td>
+              <td class="angka">{{ t.jumlah_sampel }}</td>
+              <td class="angka">{{ t.tara_per_karung_kg|angka(3) }}</td>
+              <td>{{ t.berlaku_mulai|tgl(true) }} –
+                  {{ t.berlaku_sampai|tgl(true) if t.berlaku_sampai else '∞' }}</td>
+              <td>
+                <span class="lencana lencana--{{
+                  'aman' if t.status == 'BERLAKU' else 'netral' }}">
+                  {{ t.status|lower }}</span>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="kosong">
+              Belum ada sampling. Komoditas memakai tara bawaan aturannya.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

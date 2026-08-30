@@ -13,3 +13,7 @@ venv/
 
 # File kunci sementara MS Office
 ~$*
+
+# Kanvas desain hasil rakitan — 2,8 MB, dibangun ulang dari berkas *.dc.html
+# lewat skill design. Sumbernya yang dilacak, bukan hasil rakitannya.
+docs/timbangan/design/timbangan-pos-timbang.html

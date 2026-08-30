@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "macros.html" import baris_transaksi %}
+
+{% block lebar %}lebar{% endblock %}
+{% block judul %}Ringkasan{% endblock %}
+{% block bar_judul %}Ringkasan{% endblock %}
+{% block bar_sub %}{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}{% endblock %}
+
+{% block isi %}
+  <form method="get" style="display:flex;gap:10px;align-items:flex-end">
+    <div class="grup" style="flex:1">
+      <div class="lbl">Dari</div>
+      <input class="fld" type="date" name="dari" value="{{ f.dari|iso }}">
+    </div>
+    <div class="grup" style="flex:1">
+      <div class="lbl">Sampai</div>
+      <input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}">
+    </div>
+    <button type="submit" class="tbl">Lihat</button>
+  </form>
+
+  <div class="petak">
+    <div class="petak__sel">
+      <div class="petak__nilai">{{ ringkasan.jumlah }}</div>
+      <div class="petak__label">Transaksi</div>
+    </div>
+    <div class="petak__sel">
+      <div class="petak__nilai">{{ ringkasan.total_barang_kg|ton }}</div>
+      <div class="petak__label">Total barang</div>
+    </div>
+    <div class="petak__sel">
+      <div class="petak__nilai">{{ ringkasan.perlu_periksa }}</div>
+      <div class="petak__label">Perlu diperiksa</div>
+    </div>
+    <div class="petak__sel">
+      <div class="petak__nilai">{{ ringkasan.tiket_terbuka }}</div>
+      <div class="petak__label">Tiket terbuka</div>
+    </div>
+  </div>
+
+  {% if ringkasan.pemeriksaan_terbuka %}
+    <div class="pesan pesan--err">
+      {{ ringkasan.pemeriksaan_terbuka }} lembar pemeriksaan masih terbuka.
+    </div>
+  {% endif %}
+
+  {% if perlu_periksa %}
+    <div>
+      <div class="lbl" style="margin-bottom:8px">Menunggu ditelusuri</div>
+      {% for b in perlu_periksa %}
+        <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if tara_jatuh_tempo %}
+    <div class="kartu">
+      <div class="kartu__judul">Sampling tara segera kedaluwarsa</div>
+      {% for baris_tara, nama in tara_jatuh_tempo %}
+        <div class="baris">
+          <span>{{ NAMA_JENIS.get(baris_tara.jenis_kode, baris_tara.jenis_kode) }}
+            · {{ nama or 'umum' }}</span>
+          <b style="font-family:var(--teks);font-size:14px">
+            sampai {{ baris_tara.berlaku_sampai|tgl(true) }}</b>
+        </div>
+      {% endfor %}
+      <a href="{{ PREFIX }}/tara" class="tbl halus blok" style="margin-top:10px">
+        Perbarui sampling</a>
+    </div>
+  {% endif %}
+
+  <div class="aksi-baris">
+    <a href="{{ PREFIX }}/monitoring" class="tbl halus">Monitoring pihak</a>
+    <a href="{{ PREFIX }}/transaksi" class="tbl halus">Semua catatan</a>
+  </div>
+  <a class="tbl halus blok"
+     href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
+    Unduh CSV</a>
+{% endblock %}

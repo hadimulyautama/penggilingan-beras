@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .fld { width: 100%; box-sizing: border-box; height: 52px; border: 1px solid #dcd6c9;
+      border-radius: 10px; background: #fff; padding: 0 14px; font-size: 19px;
+      color: #1a1712; font-family: 'Space Mono', ui-monospace, Menlo, monospace; }
+    .fld.teks { font-family: inherit; font-size: 16px; }
+    .sat { position: absolute; right: 14px; top: 17px; font-size: 13px; color: #8a8478; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 1340px; background: #fbf9f4; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="background: #3a352c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">Input Timbangan</div>
+      <div style="font-size: 12px; color: #b5ad9e">Pos Timbang &middot; Budi</div>
+    </div>
+  </div>
+
+  <div style="background: #e7f1f2; border-bottom: 1px solid #bcd8dd; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#636964" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4z"></path><path d="M4 7l3-4h10l3 4"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; color: #245863">Beras Pecah Kulit</div>
+      <div style="font-size: 12px; color: #4a6f78">Timbangan kita = dasar pembayaran</div>
+    </div>
+    <div style="font-size: 13px; color: #636964; font-weight: 600">Ganti</div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px">
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Tanggal</div>
+        <input class="fld" style="height: 48px; font-size: 16px" type="text" value="23-08-2026" readonly="readonly">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Kendaraan</div>
+        <input class="fld" style="height: 48px; font-size: 16px" type="text" value="B 9021 KL" readonly="readonly">
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Supplier</div>
+      <div style="position: relative">
+        <input class="fld teks" type="text" value="Hasan" readonly="readonly">
+        <svg style="position: absolute; right: 14px; top: 20px" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+    <!-- Nota supplier: pembanding kontrol -->
+    <div style="display: flex; flex-direction: column; gap: 10px; background: #fff; border: 1px solid #e7e1d5; border-left: 3px solid #3a352c; border-radius: 12px; padding: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="lbl" style="color: #3a352c">Nota supplier</div>
+        <div style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #3a352c; background: #f6f2ea; border: 1px solid #e0d8c8; border-radius: 20px; padding: 3px 9px">PEMBANDING</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Nomor nota &mdash; bila ada</div>
+          <input class="fld teks" style="height: 48px; color: #a39c8e" type="text" value="" placeholder="sering kosong">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Berat nota</div>
+          <div style="position: relative">
+            <input class="fld" style="height: 48px; padding-right: 38px" type="text" inputmode="numeric" value="13.990">
+            <span class="sat" style="top: 15px">kg</span>
+          </div>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #8a8478; line-height: 1.45">Nomor boleh kosong &mdash; nota tulis tangan sering tanpa nomor. Pembayaran tetap memakai PK bersih hasil timbang kita; nota dipakai memeriksa kewajaran.</div>
+    </div>
+
+    <!-- Tara standar -->
+    <div style="background: #fff; border: 1px solid #e7e1d5; border-left: 3px solid #636964; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="lbl" style="color: #245863">Tara standar supplier</div>
+        <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #2f6e7a; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 20px; padding: 3px 9px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"></path></svg>
+          HASIL SAMPLING
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-end; gap: 16px">
+        <div>
+          <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -.02em">0,085</div>
+          <div style="font-size: 11px; color: #8a8478">kg per karung</div>
+        </div>
+        <div style="flex-grow: 1; font-size: 12px; color: #5a5449; line-height: 1.5">
+          Hasan &times; Beras PK &middot; karung PP 50 kg<br>
+          Sampling 30 karung &middot; 12 Jun 2026<br>
+          Berlaku sampai 10 Sep 2026
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #8a8478; border-top: 1px dashed #e7e1d5; padding-top: 9px; line-height: 1.45">Supplier yang belum disampling memakai bawaan <b>0,1 kg/karung</b> sampai samplingnya dilakukan.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div class="lbl">Hasil timbangan</div>
+        <div style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 20px; padding: 3px 9px">DASAR BAYAR</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Timbang 1 &mdash; truk bermuatan</div>
+        <div style="display: flex; gap: 10px; align-items: flex-end"><div style="flex-grow: 1; position: relative">
+          <input class="fld" style="padding-right: 40px" type="text" inputmode="numeric" value="19.400">
+          <span class="sat">kg</span>
+          </div>
+          <div style="width: 96px; display: flex; flex-direction: column; gap: 6px">
+            <div class="lbl" style="font-size: 10px">Jam &middot; otomatis</div>
+            <input class="fld" style="height: 52px; font-size: 16px; text-align: center" type="text" value="14.02">
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Timbang 2 &mdash; truk kosong</div>
+        <div style="display: flex; gap: 10px; align-items: flex-end"><div style="flex-grow: 1; position: relative">
+          <input class="fld" style="padding-right: 40px" type="text" inputmode="numeric" value="5.400">
+          <span class="sat">kg</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-end">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Jumlah karung dibongkar</div>
+          <input class="fld" type="text" inputmode="numeric" value="250">
+        </div>
+        <div style="width: 148px; height: 52px; border-radius: 10px; background: #fbf9f4; border: 1px dashed #dcd6c9; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em">TARA KARUNG</div>
+          <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 16px; font-weight: 600; color: #245863">17 kg</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Foto bukti &mdash; opsional</div>
+      <div style="display: flex; gap: 8px">
+        <div style="flex-grow: 1; height: 58px; border: 1px dashed #3a352c; border-radius: 10px; background: #f9f6f0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #3a352c; font-weight: 700">Nota</div>
+        <div style="flex-grow: 1; height: 58px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5a5449">Kosong</div>
+        <div style="flex-grow: 1; height: 58px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5a5449">Karung</div>
+      </div>
+    </div>
+    <div style="height: 6px"></div>
+  </div>
+
+  <div style="flex-shrink: 0; background: #fff; border-top: 1px solid #e7e1d5; box-shadow: 0 -6px 20px -12px rgba(26,23,18,.35); padding: 14px 16px 16px">
+    <div style="display: flex; gap: 10px; margin-bottom: 10px">
+      <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 10px; padding: 8px 11px">
+        <div style="font-size: 10px; color: #5a5449; letter-spacing: .05em; font-weight: 700">NETTO TIMBANGAN</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700">14.000 kg</div>
+      </div>
+      <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 10px; padding: 8px 11px">
+        <div style="font-size: 10px; color: #5a5449; letter-spacing: .05em; font-weight: 700">TARA KARUNG</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700">&minus;17 kg</div>
+      </div>
+    </div>
+
+    <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 10px; padding: 12px; margin-bottom: 12px">
+      <div style="font-size: 10px; color: #245863; letter-spacing: .06em; font-weight: 700">BERAT PK BERSIH &mdash; DASAR BAYAR</div>
+      <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-family: 'Space Grotesk', sans-serif; font-size: 32px; font-weight: 700; color: #245863; letter-spacing: -.025em; line-height: 1.15">13.983 kg</div>
+      <div style="font-size: 11.5px; color: #4a6f78; margin-top: 4px">Angka inilah yang dicantumkan pada nota timbang supplier</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px">
+      <div style="width: 10px; height: 10px; border-radius: 2px; background: #2f6e7a"></div>
+      <div style="flex-grow: 1">
+        <div style="font-size: 14px; font-weight: 700; color: #2f6e7a">NORMAL</div>
+        <div style="font-size: 11px; color: #2f6e7a; margin-top: 1px">kurang 7 kg dari nota &middot; batas 200 &times; 0,05 = 10 kg</div>
+      </div>
+    </div>
+
+    <button style="width: 100%; height: 56px; border: 0; border-radius: 12px; background: #c25834; color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">SIMPAN &amp; CETAK NOTA TIMBANG</button>
+    <div style="text-align: center; font-size: 11px; color: #8a8478; margin-top: 8px">Tidak ada potongan lain di luar tara karung</div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

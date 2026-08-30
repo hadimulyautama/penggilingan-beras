@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    th { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: #5a5449;
+      text-align: left; padding: 10px 14px; background: #f9f6f0; font-weight: 700;
+      border-bottom: 1px solid #e7e1d5; }
+    td { padding: 13px 14px; border-bottom: 1px solid #f2ece1; font-size: 13.5px; }
+    .mono { font-family: 'Space Mono', ui-monospace, Menlo, monospace; }
+    .pil { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+      letter-spacing: .04em; padding: 3px 9px; border-radius: 20px; }
+    .lbl { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #5a5449;
+      font-weight: 700; }
+    .fld { width: 100%; box-sizing: border-box; height: 44px; border: 1px solid #dcd6c9;
+      border-radius: 9px; background: #fff; padding: 0 13px; font-size: 16px;
+      font-family: 'Space Mono', ui-monospace, Menlo, monospace; color: #1a1712; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; background: #fbf9f4; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="background: #fff; border-bottom: 1px solid #e7e1d5; padding: 16px 26px; display: flex; align-items: center; gap: 16px; flex-shrink: 0">
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.015em">Tara Standar</div>
+      <div style="font-size: 12.5px; color: #8a8478; margin-top: 2px">Satu tara aktif per <b>pihak &times; komoditas</b> &middot; jenis karung tercatat, dan bila berganti wajib sampling ulang &middot; sampling minimal 30 karung &middot; berlaku 90 hari &middot; disetujui Wahid</div>
+    </div>
+    <div style="height: 38px; border-radius: 9px; padding: 0 15px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #fff; background: #c25834">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+      Sampling baru
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: auto; padding: 20px 26px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start">
+
+    <div style="display: flex; flex-direction: column; gap: 16px">
+      <div style="background: #fdf2df; border: 1px solid #f0d29a; border-radius: 12px; padding: 13px 16px; display: flex; align-items: center; gap: 11px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+        <div style="font-size: 13.5px; color: #6f4a10"><b style="color: #8a5a12">2 tara jatuh tempo</b> dalam 30 hari ke depan, dan <b style="color: #8a5a12">1 kombinasi belum punya tara</b> sama sekali &mdash; jadwalkan sampling sebelum transaksi berikutnya.</div>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; overflow: hidden">
+        <table style="width: 100%; border-collapse: collapse">
+          <thead>
+            <tr>
+              <th>Pihak</th><th>Komoditas</th><th>Jenis karung</th>
+              <th style="text-align: right">Sampel</th>
+              <th style="text-align: right">Tara / karung</th>
+              <th>Sampling</th><th>Berlaku sampai</th><th>Status</th><th>Disetujui</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-weight: 700">Hasan</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">BERAS PK</span></td>
+              <td>PP 50 kg</td>
+              <td class="mono" style="text-align: right">30</td>
+              <td class="mono" style="text-align: right; font-weight: 700; font-size: 15px">0,085 kg</td>
+              <td>12 Jun 2026</td>
+              <td>10 Sep 2026</td>
+              <td><span class="pil" style="color: #8a5a12; background: #fdf2df; border: 1px solid #f0d29a">16 HARI LAGI</span></td>
+              <td style="color: #5a5449">Wahid</td>
+            </tr>
+            <tr style="background: #f9f6f0">
+              <td style="color: #8a8478; padding-left: 26px; font-size: 12.5px">&#8627; Hasan</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">BEKATUL</span></td>
+              <td>Goni 25 kg</td>
+              <td class="mono" style="text-align: right">30</td>
+              <td class="mono" style="text-align: right; font-weight: 700; font-size: 15px">0,065 kg</td>
+              <td>12 Jun 2026</td>
+              <td>10 Sep 2026</td>
+              <td><span class="pil" style="color: #8a5a12; background: #fdf2df; border: 1px solid #f0d29a">16 HARI LAGI</span></td>
+              <td style="color: #5a5449">Wahid</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700">Catur</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">BERAS PK</span></td>
+              <td>PP 50 kg</td>
+              <td class="mono" style="text-align: right">35</td>
+              <td class="mono" style="text-align: right; font-weight: 700; font-size: 15px">0,078 kg</td>
+              <td>2 Agu 2026</td>
+              <td>31 Okt 2026</td>
+              <td><span class="pil" style="color: #2f6e7a; background: #e7f1f2; border: 1px solid #bcd8dd">BERLAKU</span></td>
+              <td style="color: #5a5449">Wahid</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700">Sutrisno</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">BERAS PK</span></td>
+              <td>Plastik tebal 60 kg</td>
+              <td class="mono" style="text-align: right">30</td>
+              <td class="mono" style="text-align: right; font-weight: 700; font-size: 15px">0,096 kg</td>
+              <td>14 Agu 2026</td>
+              <td>12 Nov 2026</td>
+              <td><span class="pil" style="color: #2f6e7a; background: #e7f1f2; border: 1px solid #bcd8dd">BERLAKU</span></td>
+              <td style="color: #5a5449">Wahid</td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700">CV Pakan Jaya</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">BEKATUL</span></td>
+              <td>PP 40 kg</td>
+              <td class="mono" style="text-align: right">30</td>
+              <td class="mono" style="text-align: right; font-weight: 700; font-size: 15px">0,071 kg</td>
+              <td>18 Agu 2026</td>
+              <td>16 Nov 2026</td>
+              <td><span class="pil" style="color: #2f6e7a; background: #e7f1f2; border: 1px solid #bcd8dd">BERLAKU</span></td>
+              <td style="color: #5a5449">Wahid</td>
+            </tr>
+            <tr style="background: #fdf8ee">
+              <td style="font-weight: 700">Bu Siti</td>
+              <td><span class="pil" style="color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd">MENIR</span></td>
+              <td colspan="6" style="color: #8a5a12; font-size: 12.5px">Belum disampling &mdash; sementara memakai tara bawaan <b>0,1 kg/karung</b></td>
+              <td><span class="pil" style="color: #8a5a12; background: #fdf2df; border: 1px solid #f0d29a">PAKAI BAWAAN</span></td>
+            </tr>
+            <tr style="background: #f9f6f0">
+              <td style="color: #8a8478">Hasan</td>
+              <td><span class="pil" style="color: #8a8478; background: #fbf9f4; border: 1px solid #e7e1d5">BERAS PK</span></td>
+              <td style="color: #8a8478">Goni 50 kg</td>
+              <td class="mono" style="text-align: right; color: #8a8478">30</td>
+              <td class="mono" style="text-align: right; color: #8a8478">0,112 kg</td>
+              <td style="color: #8a8478">3 Mar 2026</td>
+              <td style="color: #8a8478">1 Jun 2026</td>
+              <td><span class="pil" style="color: #5a5449; background: #fbf9f4; border: 1px solid #e7e1d5">DIGANTI</span></td>
+              <td style="color: #8a8478">Wahid</td>
+            </tr>
+            <tr style="background: #f9f6f0">
+              <td style="color: #8a8478">Bu Siti</td>
+              <td><span class="pil" style="color: #8a8478; background: #fbf9f4; border: 1px solid #e7e1d5">BERAS PK</span></td>
+              <td style="color: #8a8478">PP 50 kg</td>
+              <td class="mono" style="text-align: right; color: #8a8478">30</td>
+              <td class="mono" style="text-align: right; color: #8a8478">0,081 kg</td>
+              <td style="color: #8a8478">18 Feb 2026</td>
+              <td style="color: #8a8478">19 Mei 2026</td>
+              <td><span class="pil" style="color: #a8492b; background: #f9e9e4; border: 1px solid #e9c3b4">KEDALUWARSA</span></td>
+              <td style="color: #8a8478">Wahid</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 16px 18px">
+        <div style="font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #5a5449; font-weight: 700; margin-bottom: 12px">Riwayat tara &mdash; Hasan</div>
+        <div style="display: flex; gap: 0; align-items: stretch">
+          <div style="flex-grow: 1; border-left: 2px solid #e7e1d5; padding-left: 16px; display: flex; flex-direction: column; gap: 16px">
+            <div style="position: relative">
+              <div style="position: absolute; left: -22px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #2f6e7a; border: 2px solid #fff; box-shadow: 0 0 0 2px #bcd8dd"></div>
+              <div style="font-size: 13.5px; font-weight: 600">12 Jun 2026 &mdash; <span class="mono">0,085 kg</span> &middot; PP 50 kg</div>
+              <div style="font-size: 12.5px; color: #5a5449; margin-top: 2px">Sampling rutin 3 bulanan &middot; 30 karung, total 2,55 kg &middot; disetujui Wahid</div>
+            </div>
+            <div style="position: relative">
+              <div style="position: absolute; left: -22px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #8a8478; border: 2px solid #fff; box-shadow: 0 0 0 2px #e7e1d5"></div>
+              <div style="font-size: 13.5px; font-weight: 600; color: #5a5449">3 Mar 2026 &mdash; <span class="mono">0,112 kg</span> &middot; Goni 50 kg</div>
+              <div style="font-size: 12.5px; color: #8a8478; margin-top: 2px">Diganti karena supplier beralih ke karung PP &middot; 30 karung, total 3,36 kg</div>
+            </div>
+            <div style="position: relative">
+              <div style="position: absolute; left: -22px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #8a8478; border: 2px solid #fff; box-shadow: 0 0 0 2px #e7e1d5"></div>
+              <div style="font-size: 13.5px; font-weight: 600; color: #5a5449">9 Des 2025 &mdash; <span class="mono">0,108 kg</span> &middot; Goni 50 kg</div>
+              <div style="font-size: 12.5px; color: #8a8478; margin-top: 2px">Sampling ulang atas keberatan supplier &middot; 32 karung, total 3,46 kg</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form sampling -->
+    <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+      <div>
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -.01em">Sampling tara baru</div>
+        <div style="font-size: 12.5px; color: #8a8478; margin-top: 3px; line-height: 1.5">Timbang seluruh karung kosong sekaligus. Rata-rata dihitung sistem &mdash; jangan diketik manual.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl">Supplier</div>
+        <div style="position: relative">
+          <input class="fld" style="font-family: inherit; font-size: 15px" type="text" value="Hasan" readonly="readonly">
+          <svg style="position: absolute; right: 13px; top: 16px" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl">Komoditas</div>
+        <div style="position: relative">
+          <input class="fld" style="font-family: inherit; font-size: 15px" type="text" value="Beras Pecah Kulit" readonly="readonly">
+          <svg style="position: absolute; right: 13px; top: 16px" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+        </div>
+        <div style="font-size: 11px; color: #8a8478; line-height: 1.45">Berlaku untuk gabah? Tidak &mdash; gabah memakai tara tetap 0,25 kg. Sampling dipakai untuk PK, bekatul, menir, broken, dan reject.</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl">Jenis karung</div>
+        <input class="fld" style="font-family: inherit; font-size: 15px" type="text" value="PP 50 kg">
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl">Jumlah sampel</div>
+          <input class="fld" type="text" value="30">
+          <div style="font-size: 11px; color: #8a8478">minimal 30 karung</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl">Total berat sampel</div>
+          <input class="fld" type="text" value="2,55">
+          <div style="font-size: 11px; color: #8a8478">kg, semua ditimbang sekaligus</div>
+        </div>
+      </div>
+
+      <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 10px; padding: 13px 15px">
+        <div style="font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #245863; font-weight: 700">Tara standar dihitung</div>
+        <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 27px; font-weight: 700; color: #245863; letter-spacing: -.02em; margin-top: 4px">0,085 kg</div>
+        <div style="font-size: 11.5px; color: #4a6f78; margin-top: 2px">2,55 kg &divide; 30 karung &middot; berlaku sampai 10 Sep 2026</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl">Alasan sampling</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 7px">
+          <span class="pil" style="background: #3a352c; color: #fff; padding: 6px 12px; font-size: 12px">Rutin 3 bulan</span>
+          <span class="pil" style="background: #fff; color: #5a5449; border: 1px solid #dcd6c9; padding: 6px 12px; font-size: 12px">Supplier baru</span>
+          <span class="pil" style="background: #fff; color: #5a5449; border: 1px solid #dcd6c9; padding: 6px 12px; font-size: 12px">Ganti karung</span>
+          <span class="pil" style="background: #fff; color: #5a5449; border: 1px solid #dcd6c9; padding: 6px 12px; font-size: 12px">Keberatan supplier</span>
+        </div>
+      </div>
+
+      <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: #5a5449; line-height: 1.55">
+        Tara ini berlaku untuk <b style="color: #1a1712">Hasan &times; Beras PK</b> dan otomatis dipakai setiap Hasan mengirim PK &mdash; aktif setelah <b style="color: #1a1712">Wahid</b> menyetujui. Tara Hasan untuk komoditas lain tidak ikut berubah. Tara lama tidak dihapus &mdash; disimpan sebagai riwayat bila supplier mengajukan keberatan.
+      </div>
+
+      <button style="width: 100%; height: 50px; border: 0; border-radius: 11px; background: #c25834; color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700">Ajukan untuk disetujui</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

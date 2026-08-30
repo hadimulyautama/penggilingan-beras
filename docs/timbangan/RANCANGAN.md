@@ -1,0 +1,536 @@
+# Rancangan Sistem — Webapp Timbangan
+
+**PT Hadi Mulya Utama · Pos timbang: pencatatan, kontrol, dan monitoring**
+Versi rancangan 2.0 · 25 Agustus 2026
+
+Desain layar: <https://claude.ai/code/artifact/f5303cbe-3c5f-414d-a533-ad5a4f683770> — 28 layar, berkas sumber di `docs/timbangan/design/`.
+
+Rujukan:
+- **SOP Internal Kontrol Pembelian Gabah** — gabah basah *(dokumen resmi)*
+- **Sistem Tara & Pembelian Beras Pecah Kulit (PK)** *(dokumen resmi)*
+- **Gabah kering, barang keluar, jasa timbang** — arahan Direksi 25 Agustus 2026 *(belum tertulis; draf SOP gabah kering tersedia di `DRAF-SOP-Gabah-Kering.md`)*
+
+---
+
+## 1. Lingkup
+
+Modul ini **murni timbangan**. Tidak ada harga, nilai transaksi, atau perhitungan uang apa pun di dalamnya — semuanya milik pembelian dan keuangan (Kledo & modul pabrik).
+
+> **Operator pos timbang tidak boleh mengetahui harga.** Tidak ada satu pun kolom harga di seluruh layar, sehingga secara rancangan mustahil bocor dari sini.
+
+Yang dicatat: siapa, membawa apa, dengan kendaraan apa, berapa beratnya, jam berapa, dan apakah wajar dibandingkan dokumen yang dibawa.
+
+---
+
+## 2. Arsitektur & Stack
+
+Peta tingkat sistem — tiga modul, fondasi bersama, kepemilikan tabel, dan aturan operasional Railway — ada di [`docs/ARSITEKTUR.md`](../ARSITEKTUR.md). Bagian ini hanya bagian yang menyangkut modul timbangan.
+
+### 2.1 Dua service, satu database
+
+Modul ini berjalan sebagai **service Railway sendiri**, terpisah dari agen AI dan bot Telegram, tetapi memakai **repo, image, dan PostgreSQL yang sama**.
+
+```
+   HP petugas (Android / iOS)                  Printer 80 mm
+   ┌──────────────────────────┐                AirPrint · Mopria
+   │  PWA — layar utama       │                       ▲
+   │  ┌────────────────────┐  │   WiFi pos            │
+   │  │ Service worker     │  │───────────────────────┘
+   │  │ IndexedDB          │  │   halaman cetak 72 mm
+   │  │  · draf per ketikan│  │
+   │  │  · antrean kirim   │  │
+   │  │  · master lokal    │  │
+   │  └────────────────────┘  │
+   └───────────┬──────────────┘
+               │ HTTPS
+   ════════════▼═══════════════ RAILWAY ════════════════════
+   │                                                        │
+   │  Service: timbangan          Service: app  (sudah ada) │
+   │  ┌──────────────────┐        ┌───────────────────────┐ │
+   │  │ FastAPI          │        │ FastAPI + bot Telegram│ │
+   │  │ /timbangan/*     │        │ + poller · 1 replica  │ │
+   │  │ deploy bebas     │        │ pemilik migrasi       │ │
+   │  └────────┬─────────┘        └───────────┬───────────┘ │
+   │           └────────────┬─────────────────┘             │
+   │              Service: PostgreSQL                       │
+   │              timbangan_* · suppliers · users           │
+   ═════════════════════════════════════════════════════════
+```
+
+**Mengapa dipisah.** Bot Telegram memakai long-polling dan wajib satu replica; setiap deploy memutus polling dan menghentikan poller sesaat. Aplikasi timbangan yang sedang aktif dibangun akan sering di-deploy — bila menempel di proses yang sama, tiap perbaikan kecil ikut mengganggu bot dan notifikasi. Memisahkan service memutus ketergantungan itu, sekaligus mencegah bug di timbangan menjatuhkan agen.
+
+**Cara berbaginya:**
+
+| Hal | Aturan |
+|---|---|
+| Repo & image | Satu, dengan dua perintah start berbeda |
+| Database | Satu `DATABASE_URL`; tabel `timbangan_*`, `suppliers`, `users` dipakai bersama |
+| Migrasi Alembic | Satu riwayat, tetapi **hanya service `app` yang menjalankannya saat start** — bila keduanya menjalankan, deploy bersamaan akan berebut |
+| Integrasi agen | Agen membaca tabel yang sama lewat bundel tool `timbangan`; tidak ada panggilan HTTP antar-service |
+
+### 2.2 Stack
+
+| Lapisan | Pilihan |
+|---|---|
+| Backend | Python 3.11 + FastAPI |
+| Database | PostgreSQL di Railway + SQLAlchemy 2 async (asyncpg) + Alembic |
+| Tampilan | Jinja2 server-rendered, CSS & JS biasa — tanpa framework, tanpa build step |
+| Aplikasi di HP | PWA: service worker + IndexedDB, dipasang ke layar utama |
+| Autentikasi | scrypt (pustaka standar) + cookie bertanda tangan HMAC-SHA256 |
+| Grafik | SVG digambar sendiri, tanpa pustaka chart |
+| Cetak | Halaman HTML `@page 72mm` lewat dialog cetak sistem |
+| Ekspor | CSV (stdlib), XLSX (openpyxl), PDF (reportlab) |
+
+Tambahan pada `requirements.txt`: `jinja2`, `python-multipart`, `openpyxl`, `reportlab`.
+
+Tidak ada JavaScript framework. Alasannya bukan selera: tanpa build step, lapisan offline jauh lebih sederhana, halaman ringan di HP murah, dan seluruh sistem perusahaan tetap satu bahasa.
+
+### 2.3 Lapisan di dalam modul
+
+```
+routes/     HTTP, form, render          ← boleh tahu framework
+service/    query, penomoran, audit,    ← boleh tahu database
+            aturan kunci, agregasi
+logic.py    rumus, ambang, status,      ← tidak tahu apa pun
+            skor, deteksi pola             selain angka
+```
+
+`logic.py` tidak menyentuh database maupun FastAPI. Itu yang membuat tiga contoh resmi dapat diuji tanpa menyalakan apa pun, dan nanti dipakai ulang agen AI tanpa menyeret separuh aplikasi.
+
+### 2.4 Alur sinkronisasi
+
+```
+ketik → draf di IndexedDB (tiap ketikan)
+      → SIMPAN: transaksi sah + masuk antrean kirim
+      → sinkron latar: kirim satu per satu saat sinyal ada
+      → server menerima berdasarkan KODE transaksi
+```
+
+Karena kode transaksi dibuat perangkat, pengiriman ulang tidak pernah menghasilkan transaksi ganda: kode yang sudah ada diabaikan. Itulah yang membuat antrean kirim aman dicoba berkali-kali.
+
+### 2.5 Batas yang dijaga arsitektur
+
+- **Tidak ada kolom harga** di seluruh basis data modul ini — kerahasiaan harga bukan aturan yang bisa dilanggar, melainkan sesuatu yang tidak tersedia. Sama untuk potongan mutu.
+- **Audit hanya bertambah**, tidak pernah ditimpa.
+- **Hak akses ditegakkan di rute**, bukan dengan menyembunyikan menu.
+- **Master supplier & pengguna dipakai bersama** modul pabrik; `suppliers.kledo_contact_id` disiapkan untuk sinkronisasi Kledo.
+
+---
+
+## 3. Komoditas dan arah
+
+| Komoditas | Kode | Masuk | Keluar |
+|---|:--:|:--:|:--:|
+| Gabah basah | GB | ✅ | — |
+| Gabah kering | GK | ✅ | — |
+| Beras PK | PK | ✅ | — |
+| Beras | BS | ✅ | ✅ |
+| Broken | BR | ✅ | ✅ |
+| Menir | MN | — | ✅ |
+| Bekatul | BK | — | ✅ |
+| Reject | RJ | — | ✅ |
+| Timbang bebas (jasa) | — | ✅ | ✅ |
+
+Reject, bekatul, dan menir tidak pernah dibeli. Beras dan broken bergerak dua arah.
+
+---
+
+## 4. Alur di pos timbang
+
+### 4.1 Dua kali timbang
+
+```
+BARANG MASUK                          PENGIRIMAN
+1. truk bermuatan                     1. truk kosong
+   ↓ bongkar                             ↓ muat
+2. truk kosong                        2. truk bermuatan
+
+netto timbangan = bermuatan − kosong     (rumus sama, urutan terbalik)
+```
+
+Di antara keduanya, tiket **tersimpan terbuka**. Beberapa truk boleh menunggu bersamaan. Bila bongkar/muat selesai saat itu juga, kedua angka boleh diisi sekaligus.
+
+**Tenggat tiket terbuka:** 4 jam ditandai kuning di layar operator, 8 jam masuk daftar tindakan supervisor, lewat pergantian hari dikirim ke penanggung jawab.
+
+### 4.2 Jasa timbang boleh sekali
+
+Cara timbang dipilih **di awal** — Sekali atau Dua kali — supaya sistem bisa membedakan "memang cukup sekali" dari "lupa diisi". Mode sekali langsung berstatus selesai dan tidak pernah masuk daftar menunggu.
+
+Disertai keterangan **yang ditimbang**: truk bermuatan, truk kosong, atau lainnya. Tiketnya menulis **BERAT TERTIMBANG**, bukan netto muatan — dengan sekali timbang, berat barang memang tidak diketahui.
+
+### 4.3 Truk yang tidak jadi bongkar
+
+Ditolak QC, harga tidak sepakat, atau salah kirim → tombol **Tidak jadi bongkar**. Alasan wajib dipilih, catatan dan nama pemutus dicatat.
+
+**Truk tetap ditimbang saat keluar** meski pulang bermuatan. Selisih masuk − keluar adalah kontrolnya: mendekati nol berarti muatan utuh; selisih besar berarti ada yang diturunkan meski dinyatakan ditolak, dan wajib dijelaskan sebelum tiket ditutup.
+
+Barang diterima **0 kg** — tidak masuk tonase, tidak dihitung sebagai selisih, tetapi tetap tercatat sebagai kunjungan supplier.
+
+### 4.4 Tanggal transaksi
+
+**Mengikuti timbang kedua**, saat angkanya lengkap. Rekap harian, dashboard, monitoring, dan ekspor semuanya memakai tanggal itu.
+
+Nomor transaksi tetap bertanggal saat tiket **dibuka** dan tidak pernah berubah — jadi wajar bila rekap 24 Agustus memuat nomor bertanggal 23; keterangan *"dibuka 23 Agu 16.40"* ditampilkan di bawah kodenya.
+
+> **Konsekuensi untuk gudang:** barang yang masuk sore tanggal 23 tercatat sebagai transaksi tanggal 24. Saat mencocokkan stok harian, selisih semalam ini sumber bingung yang paling sering.
+>
+> **Imbalannya:** tiket terbuka tidak pernah masuk rekap mana pun, dan angka rekap tidak berubah lagi setelah harinya lewat.
+
+---
+
+## 5. Aturan per komoditas
+
+| Komoditas | Tara/karung | Pembanding | Batas wajar |
+|---|---|---|---|
+| Gabah basah | 0,25 kg tetap | Nota supplier | ±2 kg per ton nota · investigasi >5 kg/ton |
+| Gabah kering | 0,25 kg tetap | Nota supplier | Kurang maks 0,5 kg per ton · kelebihan bebas |
+| Beras PK | Sampling per pihak × komoditas, bawaan 0,1 kg | Nota supplier | Kurang maks 0,05 kg per karung |
+| Broken (masuk) | 0,07 kg tetap | Nota supplier | Kurang maks 0,05 kg per karung |
+| Beras (masuk) | *belum ditetapkan* — sementara mengikuti PK | Nota supplier | Kurang maks 0,05 kg per karung |
+| Barang keluar — beras, broken, menir, bekatul, reject | 0,05 kg tetap *(broken 0,07)* | Surat jalan | 0 s/d +0,07 kg per karung · **kurang tidak boleh** |
+| Timbang bebas | Manual, bawaan 0 | — | — |
+
+Aturan ini hidup di **master jenis timbang**, bukan di kode. Menambah komoditas atau mengubah ambang = mengisi satu baris.
+
+### 5.1 Rumus
+
+**Masuk — dibandingkan nota**
+
+```
+Netto timbangan = bermuatan − kosong
+Total tara      = jumlah karung × tara komoditas
+Netto kontrol   = netto timbangan − total tara
+Selisih         = netto kontrol − berat nota
+```
+
+**Keluar — dibandingkan surat jalan**
+
+```
+Berat barang = netto timbangan − (jumlah karung × tara)
+Selisih      = berat barang − berat surat jalan
+
+selisih < 0                    → KURANG, boleh ditutup paksa dengan alasan
+0 s/d +0,07 × jumlah karung    → NORMAL
+di atas itu                    → KELEBIHAN, perlu diperiksa
+```
+
+**Pengiriman beberapa komoditas** — jembatan hanya memberi satu netto, jadi kontrolnya di tingkat total:
+
+```
+Total berat barang = netto timbangan − Σ(karung ᵢ × tara ᵢ)
+Selisih            = total berat barang − Σ berat surat jalan
+Toleransi          = Σ karung ᵢ × 0,07
+```
+
+Sistem **tidak memecah berat per komoditas** — angka itu tidak terukur, dan mengarangnya membuat orang percaya pada angka palsu.
+
+### 5.2 Verifikasi terhadap contoh resmi
+
+| | SOP Gabah | Spesifikasi Direksi | Sistem Tara PK |
+|---|---|---|---|
+| Netto timbangan | 20.220 kg | 10.030 kg | 14.000 kg |
+| Karung × tara | 800 × 0,25 = 200 | 120 × 0,25 = 30 | 200 × 0,085 = 17 |
+| Hasil | **20.020 kg** | **10.000 kg** | **13.983 kg** |
+| Pembanding | Nota 20.000 | Nota 10.048 | Nota 13.990 |
+| Selisih | **+20 kg** | **−48 kg** | **−7 kg** |
+| Status | NORMAL | PERLU PEMERIKSAAN | NORMAL |
+
+Ketiganya jadi kasus uji otomatis.
+
+> **Kapasitas jembatan timbang 20 ton.** Angka di atas itu ditolak sebagai mustahil. Contoh PK pada rancangan v1.x memakai bruto 25,4 ton — mustahil di jembatan ini, sudah diperbaiki.
+
+---
+
+## 6. Tara standar supplier (komoditas bersampling)
+
+Satu tara aktif per **pihak × komoditas**. Jenis karung tercatat sebagai keterangan; bila berganti, wajib sampling ulang.
+
+```
+Tara standar   = total berat sampel ÷ jumlah sampel   (minimal 30 karung)
+Berlaku sampai = tanggal sampling + 90 hari
+```
+
+Pihak yang belum disampling memakai **tara bawaan 0,1 kg/karung** sampai samplingnya dilakukan — transaksi tidak diblokir, pekerjaan tetap jalan. Tara baru berlaku setelah disetujui **Wahid**. Riwayat sampling lama tidak pernah dihapus, sehingga keberatan pihak lawan bisa ditelusuri.
+
+---
+
+## 7. Ketahanan & integritas
+
+### 7.1 Tahan sinyal putus
+
+Pos timbang bersinyal lemah; angka yang hilang tidak bisa ditimbang ulang karena truk sudah pergi.
+
+| Lapis | Cara kerja |
+|---|---|
+| Draf | Tiap ketikan disimpan ke perangkat — aplikasi ditutup atau HP mati, angka tetap ada |
+| Simpan lokal | Transaksi sah begitu disimpan, tanpa menunggu jaringan |
+| Antrean kirim | Terkirim sendiri saat sinyal kembali; bertahan meski aplikasi ditutup |
+
+**Nomor transaksi tidak minta ke server:** `TRX-<tanggal>-<kode pos>-<urutan perangkat>`. Final sejak awal, sehingga bukti timbang boleh langsung dicetak; dua perangkat offline tidak bertabrakan. Master data (komoditas, tara, pihak, kendaraan) disimpan di perangkat agar form tetap menghitung tanpa jaringan.
+
+Yang gagal karena data kurang — misalnya kendaraan belum terdaftar — ditandai merah dan bisa diperbaiki **tanpa mengetik ulang angka timbang**.
+
+### 7.2 Penjaga salah ketik
+
+| Tingkat | Cara |
+|---|---|
+| Halus | Titik ribuan otomatis saat mengetik; garis riwayat *"kendaraan ini biasanya 12,0–14,2 ton"* |
+| Sedang | Peringatan di bawah kolom: di luar kebiasaan kendaraan, atau bukan kelipatan 10 kg. Boleh dilanjutkan |
+| Keras | Ditolak: melebihi 20 ton, kosong lebih berat dari bermuatan, netto negatif |
+
+Peringatan tidak muncul sebagai jendela yang menutup layar — itu akan dipencet refleks dalam seminggu. Yang menahan hanya layar konfirmasi: tombol simpan mati sampai dicentang *"saya sudah cek display"*, dan centang itu ikut tersimpan.
+
+Rentang kebiasaan lahir dari riwayat kendaraan itu sendiri; kendaraan baru tidak dibatasi sampai punya cukup riwayat.
+
+### 7.3 Jam
+
+**Jam sistem tersimpan permanen dan tidak bisa diubah.** Koreksi hanya *menambah* "jam menurut operator" beserta alasannya; keduanya tampil berdampingan.
+
+### 7.4 Sesi & perangkat
+
+Kata sandi diminta **sekali**, saat perangkat pertama dipakai. Sesudah itu aplikasi terbuka langsung di beranda setiap kali dibuka — termasuk tanpa sinyal, karena sesi tersimpan di perangkat dan tidak diminta ke server. Sesi hanya berakhir bila pengguna menekan **Keluar**, yang diletakkan di dalam menu.
+
+**Satu perangkat, satu orang.** Tiap petugas memakai perangkatnya sendiri, sehingga tidak ada layar ganti pengguna maupun PIN, dan nama yang menempel pada transaksi selalu benar tanpa tindakan tambahan. Bila perangkat sesekali dipinjam, jalannya satu: pemilik menekan Keluar, peminjam masuk dengan kata sandinya sendiri.
+
+Tiap perangkat mendapat kodenya sendiri (`P1`, `P2`, …) yang masuk ke nomor transaksi — syarat agar penomoran offline tidak pernah bertabrakan antar-perangkat.
+
+### 7.5 Petugas
+
+Terisi otomatis dari akun yang login. Karena timbang dilakukan dua kali dan bisa oleh orang berbeda, **keduanya tercatat** — T1 dan T2. Yang tertera sebagai *petugas timbang* pada bukti cetak adalah pelaku **timbang kedua**, karena dialah yang menutup transaksi.
+
+### 7.6 Penutupan pemeriksaan
+
+Status kontrol — NORMAL, PERLU PEMERIKSAAN, INVESTIGASI — **tidak pernah berubah**. Itu fakta tentang angkanya; mengubahnya berarti memalsukan riwayat.
+
+Yang punya penutup adalah tindak lanjutnya: **BELUM DIPERIKSA → SEDANG DIPERIKSA → TUNTAS**. Menutup wajib menyertakan kategori hasil dan catatan resolusi.
+
+| Kategori hasil |
+|---|
+| Susut perjalanan · Salah catat nota · Salah hitung karung · Salah input · Timbang ulang di asal · Penyebab tidak ditemukan |
+
+Kategori inilah yang membuat pemeriksaan menjadi data. Catatan bebas hanya bisa dibaca satu per satu; kategori memungkinkan melihat penyebab yang paling sering — per supplier maupun per kendaraan. *"Penyebab tidak ditemukan"* yang berulang pada satu supplier adalah temuan tersendiri.
+
+Dashboard dan daftar transaksi hanya menghitung yang **belum tuntas** sebagai perlu tindakan.
+
+### 7.7 Koreksi dan pembatalan
+
+| Peran | Boleh mengubah |
+|---|---|
+| Staff | Transaksi miliknya, selama belum 24 jam |
+| Supervisor & Admin | Semua, termasuk yang terkunci |
+
+Alasan wajib. Nilai lama tidak pernah ditimpa diam-diam: audit menyimpan sebelum, sesudah, alasan, pelaku, jam. Bila koreksi mengubah status, lembar pemeriksaan yang sudah ditutup dibuka kembali. Transaksi tidak pernah dihapus — hanya **VOID** beralasan, tetap tersimpan dan tampil tercoret.
+
+### 7.8 Cetak ulang
+
+Cetakan kedua dan seterusnya berkepala **CETAKAN ULANG** beserta nomor urut, pelaku, dan alasannya, sehingga tidak beredar sebagai dokumen kedua yang setara.
+
+### 7.9 Foto bukti
+
+Opsional pada transaksi normal; **wajib** saat selisih melewati ambang — di situlah bukti paling dibutuhkan dan truknya masih ada. Foto disimpan di database, bukan di disk: filesystem Railway sementara, bukti tidak boleh hilang.
+
+### 7.10 Identitas pihak & kendaraan
+
+Dipilih dari master dengan pencarian, bukan diketik bebas. Ketik `b12`, `1234`, atau `xyz` → menemukan kendaraan yang sama; penulisan dirapikan jadi `B 1234 XYZ`. Tanpa ini, `B1234XYZ` dan `B 1234 XYZ` jadi dua kendaraan dan analisis pola rusak diam-diam.
+
+---
+
+## 8. Kepatuhan SOP
+
+### 8.1 SOP Gabah — sesuai
+
+Dasar transaksi tetap nota; timbangan sebagai kontrol internal; tara 0,25 kg/karung; rumus identik; batas kewajaran dengan tindakan pemeriksaan; bahasa netral; kerahasiaan hasil kontrol. Langkah butir 6 dijadikan **lembar pemeriksaan wajib** yang harus ditutup, dengan **Miftah** sebagai penanggung jawab.
+
+### 8.2 Sistem Tara PK — sesuai, dua catatan
+
+Dasar pembayaran PK bersih; tera dua arah; tara dari sampling ≥30 karung per pihak; ganti karung → sampling ulang; verifikasi 90 hari; keberatan → sampling ulang; enam angka wajib pada nota timbang; perubahan disetujui pihak berwenang (**Wahid**).
+
+**Larangan potongan tetap ditegakkan lewat rancangan:** tidak ada satu pun kolom potongan di basis data, jadi secara teknis tidak bisa dilakukan.
+
+Dua hal berbeda dari dokumen — lihat `DRAF-REVISI-Sistem-Tara-PK.md`:
+1. **Refaksi kualitas** diatur di butir 5 & 8 tetapi tidak dipakai dalam praktik
+2. **Tara bawaan 0,1 kg** untuk pihak yang belum disampling — tidak diatur dokumen
+
+### 8.3 Di luar SOP — perlu pasal tambahan
+
+Ambang proporsional per ton, aturan barang keluar terhadap surat jalan, tutup paksa, jasa timbang, skor supplier, deteksi pola, kunci 24 jam, VOID, tenggat tiket terbuka.
+
+---
+
+## 9. Model Data
+
+Tiga belas tabel `timbangan_*`, ditambah kolom `suppliers.kledo_contact_id` sebagai jembatan sinkronisasi Kledo. Master `suppliers` dan `users` yang sudah ada dipakai ulang — tidak ada master tandingan.
+
+| Tabel | Isi |
+|---|---|
+| `timbangan_jenis` | Aturan per komoditas: arah, mode, sumber tara, nilai tara, jenis & nilai ambang, arah ambang, sifat rahasia, cetak bukti, masa berlaku tara |
+| `timbangan_transaksi` | Satu kedatangan truk: arah, jenis, cara timbang, dua angka timbang + jam sistem + jam operator + petugas masing-masing, hasil hitung, status, jejak perangkat & pengiriman |
+| `timbangan_muatan` | Baris muatan: jenis, nomor surat jalan/nota, jumlah karung, tara dipakai, berat acuan. Satu baris untuk masuk, beberapa untuk pengiriman |
+| `timbangan_tara_standar` | Sampling per pihak × komoditas: jumlah sampel, total berat, tara hasil, jenis karung, masa berlaku, alasan, penyetuju |
+| `timbangan_pemeriksaan` | Lembar SOP butir 6: enam langkah, catatan per langkah, penerima laporan, kategori hasil, catatan resolusi, status, penutup & waktunya |
+| `timbangan_cetak` | Riwayat cetak: urutan, asli/ulang, alasan, pelaku, waktu |
+| `timbangan_foto` | Bukti (BLOB), jenis, pengunggah |
+| `timbangan_akun` | Kredensial & peran login browser, tertaut ke `users` |
+| `timbangan_kendaraan` | Master armada, nomor polisi dinormalkan |
+| `timbangan_supplier_profil` | Atribut monitoring supplier, terpisah dari identitas agar aman ditimpa Kledo |
+| `timbangan_skor_supplier` | Cache skor & kategori |
+| `timbangan_audit` | Siapa, kapan, aksi apa, nilai sebelum-sesudah |
+| `timbangan_config` | Setelan operasional yang boleh diubah Admin dari layar; baris kosong berarti ikut environment |
+
+### 9.1 Keputusan pemodelan
+
+**a. Aturan hidup di data.** Menambah komoditas = satu baris master.
+**b. Salinan aturan di tiap transaksi.** Revisi SOP tidak mengubah masa lalu.
+**c. Muatan selalu berupa baris.** Masuk satu baris, keluar beberapa — satu bentuk data, bukan dua.
+**d. Tidak ada kolom harga maupun potongan.** Larangan ditegakkan oleh ketiadaan kolom.
+**e. Tara standar tidak pernah ditimpa.** Sampling baru = baris baru; yang lama DIGANTI atau KEDALUWARSA.
+**f. Angka timbangan mentah.** Sistem tidak membulatkan; pembulatan tera sudah dikerjakan alat.
+**g. Nomor transaksi dibentuk di perangkat.** Syarat agar bisa bekerja tanpa jaringan.
+
+### 9.2 Jembatan integrasi
+
+`purchase_batch_id` dan `pk_purchase_batch_id` disiapkan sejak awal, dibiarkan kosong. Saat integrasi diaktifkan: gabah menaut ke `purchase_batches` dengan **berat nota**; PK menaut ke `pk_purchase_batches` dengan **berat PK bersih**. Webapp tidak membuat pencatatan pembelian tandingan.
+
+---
+
+## 10. Peran & Akses
+
+| Kemampuan | Staff | Supervisor | Admin |
+|---|:--:|:--:|:--:|
+| Input, lihat miliknya | ✅ | ✅ | ✅ |
+| Lihat semua transaksi | — | ✅ | ✅ |
+| Koreksi < 24 jam (miliknya) | ✅ | ✅ | ✅ |
+| Koreksi terkunci, VOID | — | ✅ | ✅ |
+| Tutup paksa pengiriman kurang | ✅ | ✅ | ✅ |
+| Tutup lembar pemeriksaan | — | ✅ | ✅ |
+| Catat sampling tara | ✅ | ✅ | ✅ |
+| Setujui tara standar | — | — | ✅ (Wahid) |
+| Monitoring & skor supplier | — | ✅ | ✅ |
+| Master jenis, pihak, kendaraan | lihat | lihat | ✅ |
+| Ekspor | — | ✅ | ✅ |
+| Pengguna & audit log | — | — | ✅ |
+
+Ditegakkan di kode pada setiap rute. Sandi scrypt bersalt; cookie HttpOnly + SameSite=Lax + Secure, HMAC-SHA256, berlaku sampai Keluar; login gagal tercatat; ekspor tercatat pelaku dan rentangnya.
+
+---
+
+## 11. Antarmuka
+
+Mobile-first untuk staff, desktop untuk manajemen. Palet dan tipografi mengikuti design system situs perusahaan (`hadimulya-website/static/css/style.css`): warm white `#fbf9f4`, ink `#1a1712`, terracotta `#c25834`, ocean `#2f6e7a`, amber `#8a5a12`; Manrope, Space Grotesk, Space Mono untuk angka.
+
+Status selalu disertai teks, tidak pernah warna saja: **NORMAL** ocean · **PERLU PEMERIKSAAN** amber · **INVESTIGASI** terracotta · **VOID** abu-abu.
+
+Beranda: tiket menunggu di paling atas, sakelar arah, kisi komoditas berkode dua huruf — dua ketukan dari buka aplikasi sampai mengetik angka.
+
+**Satu dokumen cetak:** Bukti Timbang thermal 80 mm. Isinya menyesuaikan komoditas; gabah tidak pernah dicetak untuk supplier karena hasil kontrolnya internal.
+
+### 11.1 Perangkat: Android dan iOS
+
+Aplikasi ini **webapp yang dipasang ke layar utama** (PWA) — satu kode, berjalan di Android maupun iOS lewat browser, tanpa app store dan tanpa persetujuan Apple/Google. Pembaruan langsung sampai ke semua orang begitu di-deploy.
+
+| Kebutuhan | Android | iOS |
+|---|---|---|
+| Pasang ke layar utama | Chrome menawarkan sendiri | Safari → Bagikan → *Add to Home Screen* (manual, perlu diajarkan sekali) |
+| Buka layar penuh tanpa bilah browser | ✅ | ✅ |
+| Bekerja tanpa sinyal | ✅ | ✅ sejak iOS 11.3 |
+| Simpan draf & antrean kirim | ✅ | ✅ — dipakai harian, jadi tidak kena penghapusan otomatis Safari |
+| Sesi tetap masuk | ✅ | ✅ |
+| Foto dari kamera | ✅ | ✅ |
+| **Cetak ke printer thermal** | ✅ langsung lewat Bluetooth | ❌ **tidak bisa** — iOS tidak mengizinkan browser mengakses Bluetooth |
+
+**Cetak adalah satu-satunya perbedaan yang nyata.** Keputusan Direksi: **printer ber-AirPrint dan Mopria**, dicetak lewat dialog cetak bawaan sistem. Tidak ada relai, tidak ada perangkat tambahan yang harus dijaga tetap menyala.
+
+Konsekuensinya pada rancangan:
+
+| Hal | Akibat |
+|---|---|
+| Bukti timbang bukan perintah printer, melainkan **halaman cetak** | Ditata dengan CSS `@page { size: 72mm auto; margin: 0 }` — lebar cetak efektif kertas 80 mm |
+| Kertas thermal hanya hitam-putih | Tidak ada latar berwarna maupun abu-abu pada dokumen cetak; garis dan bingkai hitam penuh |
+| Huruf tidak boleh bergantung internet | Struk memakai monospace bawaan sistem, bukan font dari Google Fonts — agar cetakan sama persis saat pos sedang tanpa internet |
+| Menekan Cetak membuka dialog sistem | Satu ketukan lebih banyak daripada cetak langsung. Wajar, dan sekaligus memberi kesempatan memilih printer bila ada lebih dari satu |
+| Printer dan HP harus satu jaringan WiFi | Cetak tetap jalan meski **internet mati**, selama WiFi lokal di pos hidup — AirPrint dan Mopria bekerja di jaringan lokal |
+| HP yang sedang memakai data seluler | Tidak menemukan printer. Perangkat pos harus tersambung WiFi pos, bukan data seluler |
+
+### 11.2 Printer: spesifikasi pembelian
+
+**Peringatan utama: varian antarmuka menentukan segalanya.** Satu nomor model dijual dalam beberapa varian — USB saja, Bluetooth saja, atau jaringan. AirPrint dan Mopria **hanya ada pada varian jaringan** (Ethernet/WiFi). Model benar tapi varian salah membuat seluruh rencana cetak gagal di iPhone.
+
+**Kandidat:**
+
+| Model | Catatan |
+|---|---|
+| **Epson TM-m30III** *(utama)* | 80 mm, ringkas, auto-cutter, tersedia varian Ethernet + WiFi. Epson paling mudah dicari di Indonesia beserta sparepart dan servisnya |
+| **Epson TM-T88VII** | Kelas lebih berat dan cepat; berlebihan untuk satu pos kecuali volumenya tinggi |
+| **Star Micronics mC-Print3** | Alternatif bila Epson sulit didapat; dukungan AirPrint berbeda antar-varian, perlu diverifikasi lebih teliti |
+
+**Hindari:** printer thermal portabel murah yang hanya menyebut Bluetooth. Jenis inilah yang paling banyak beredar di marketplace, dan tidak satu pun bekerja dengan iPhone lewat jalur ini.
+
+**Cara memastikan sebelum membayar — lakukan di toko:**
+
+Minta penjual mencetak dari iPhone di tempat. Buka Safari → halaman apa saja → Bagikan → Cetak, dan lihat apakah printernya muncul tanpa memasang aplikasi apa pun. Muncul dan tercetak berarti cocok. Bila penjual menawarkan *"pakai aplikasi kami dulu"*, berarti tidak cocok. Tes lima menit ini menggantikan seluruh perdebatan spesifikasi — daftar dukungan AirPrint berbeda antar-batch dan antar-negara, jadi lembar spesifikasi saja tidak cukup.
+
+**Daftar periksa pembelian:**
+
+- [ ] Kertas **80 mm** dengan auto-cutter
+- [ ] Varian **Ethernet atau WiFi** — bukan USB atau Bluetooth saja
+- [ ] Spesifikasi mencantumkan **AirPrint** *dan* **Mopria**
+- [ ] **Lolos tes cetak dari iPhone di toko**
+- [ ] Dinamai `POS-TIMBANG` saat dipasang, agar tidak tertukar dengan printer kantor
+- [ ] Dua rol kertas cadangan disimpan di pos
+
+**Keterbatasan yang perlu diketahui staff:** bila kertas habis, pekerjaan cetak duduk di antrean printer dan operator bisa mengira tiket sudah keluar. Aplikasi tidak dapat mengetahuinya — riwayat cetak mencatat *permintaan* cetak, bukan bukti kertas benar-benar keluar. Untuk itulah tombol **Cetak ulang** beserta riwayat bernomornya ada.
+
+
+Seluruh 28 layar ada di kanvas desain — termasuk kondisi kosong, kondisi tanpa sinyal, dan kondisi salah ketik, bukan hanya kondisi ideal.
+
+---
+
+## 12. Yang Belum Diputuskan
+
+| # | Perkara | Sementara memakai | Perlu diputuskan |
+|---|---|---|---|
+| 1 | **Ambang gabah kering vs ketelitian alat** | 0,5 kg/ton | Pembulatan tera menghasilkan galat sampai ±10 kg. Pada muatan 10 ton batasnya 5 kg — di bawah ketelitian alat. Naikkan, beri pita ketelitian, atau biarkan? |
+| 2 | **Label gabah kering** | "INDIKASI TIDAK WAJAR" | Direksi menyebut "indikasi curang". Label tersimpan permanen dan terbawa ke ekspor |
+| 3 | **Baris selisih pada tiket pengiriman** | Ikut tercetak | Angka kontrol internal ikut dibawa supir, atau hanya salinan arsip? |
+| 4 | **Tara & ambang beras masuk** | Mengikuti PK | Broken sudah jelas 0,07; beras masuk belum ditetapkan |
+| 5 | **Unit printer** | Pilihan B ditetapkan; kandidat & daftar periksa ada di 11.2 | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer |
+
+Butir 1 dan 3 sebaiknya diputuskan sebelum aplikasi dipakai. Butir 2 dan 4 bisa diubah kapan saja lewat master.
+
+---
+
+## 13. Rencana Kerja
+
+| Tahap | Isi | Status |
+|---|---|---|
+| 1 | Arsitektur & rancangan | ✅ dokumen ini |
+| 2 | Desain 27 layar | ✅ kanvas |
+| 3 | Draf SOP gabah kering & revisi pasal PK | ✅ menunggu tinjauan |
+| 4 | Skema DB + migrasi Alembic | ✅ 13 tabel, `0022_timbangan` + `0023_timbangan_config` |
+| 5 | Logika bisnis per mode + uji tiga contoh resmi | ✅ `logic.py` |
+| 6 | Autentikasi, peran, sesi | ✅ sesi sampai Keluar |
+| 7 | Rute & template | ✅ 18 halaman |
+| 8 | Lapisan offline: penanda luring, antrean kirim, service worker | ✅ |
+| 9 | Halaman cetak thermal 72 mm (AirPrint/Mopria) | ✅ |
+| 10 | Ringkasan, monitoring, ekspor CSV | ✅ |
+| 11 | Penyemaian master komoditas & akun admin awal | ✅ saat service menyala |
+| 12 | Service Railway kedua (`timbangan`), entrypoint tanpa migrasi | ✅ berkas siap, lihat `DEPLOY.md` |
+| 13 | Uji di produksi bersama petugas | ⏸ menunggu deploy |
+
+Yang dijaga uji otomatis (142 uji): tiga contoh resmi, matriks aturan per
+komoditas, kesepadanan model ⇄ migrasi, idempotensi kiriman ulang, arah barang
+menentukan angka bermuatan, tanggal mengikuti timbang kedua, kerahasiaan
+selisih pada bukti gabah, dan **ketiadaan kolom maupun kata "harga" di seluruh
+modul** — dari tabel database sampai layar dan berkas ekspor.
+
+### Integrasi lanjutan
+
+1. **Kledo** — sinkronisasi kontak supplier lewat `kledo_contact_id`
+2. **Modul pabrik** — gabah ke `purchase_batches` (berat nota), PK ke `pk_purchase_batches` (PK bersih)
+3. **Agen AI** — bundel tool `timbangan` pada agen yang sudah ada: baca transaksi, tiket terbuka, skor, pola; usulan koreksi lewat gerbang persetujuan. Bukan bot baru
+4. **Notifikasi** — tiket menunggak, pemeriksaan belum ditutup, tara jatuh tempo, dikirim lewat poller Telegram yang sudah berjalan
+
+---
+
+*Dokumen ini acuan pembangunan. Empat butir pada bagian 12 masih menunggu
+keputusan Direksi; modul tetap berjalan dengan nilai bawaan sampai diputuskan.*

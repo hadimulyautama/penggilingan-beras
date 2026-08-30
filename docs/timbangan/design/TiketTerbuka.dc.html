@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .tiket { background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px;
+      display: flex; flex-direction: column; gap: 11px; }
+    .tiket.keluar { border-left: 3px solid #636964; }
+    .tiket.masuk { border-left: 3px solid #3a352c; }
+    .mono { font-family: 'Space Mono', ui-monospace, Menlo, monospace; }
+    .kecil { font-size: 11.5px; color: #8a8478; }
+    .tombol { height: 44px; border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; gap: 8px; font-size: 14.5px; font-weight: 700; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 900px; background: #fbf9f4; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="background: #3a352c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">Menunggu Timbang Kedua</div>
+      <div style="font-size: 12px; color: #b5ad9e">3 tiket terbuka</div>
+    </div>
+  </div>
+
+  <div style="background: #fdf2df; border-bottom: 1px solid #f0d29a; padding: 11px 16px; flex-shrink: 0; display: flex; gap: 10px; align-items: center">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+    <div style="font-size: 12.5px; color: #6f4a10; line-height: 1.45">Tiket tetap terbuka sampai truk ditimbang lagi. Boleh banyak truk sekaligus.</div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+
+    <div class="tiket keluar">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 20px; padding: 3px 9px">KELUAR</span>
+        <span class="mono" style="font-size: 12px; color: #8a8478">TRX-20260823-006</span>
+        <span style="flex-grow: 1"></span>
+        <span class="kecil">08.12 &middot; 2j 40m lalu</span>
+      </div>
+      <div>
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -.01em">B 7742 HK</div>
+        <div style="font-size: 13px; color: #5a5449; margin-top: 2px">Toko Beras Makmur &mdash; Solo &middot; SJ-0451</div>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #5a5449; letter-spacing: .05em; font-weight: 700">TARA TRUK</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">6.200 kg</div>
+        </div>
+        <div style="flex-grow: 1; background: #f9f6f0; border: 1px dashed #dcd6c9; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em; font-weight: 700">RENCANA</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; color: #5a5449">12.000 kg</div>
+        </div>
+      </div>
+      <div class="tombol" style="background: #636964; color: #fff">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 7h14"></path><path d="M5 7l-3 7h6z"></path><path d="M19 7l-3 7h6z"></path></svg>
+        TIMBANG SETELAH MUAT
+      </div>
+    </div>
+
+    <div class="tiket keluar">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #245863; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 20px; padding: 3px 9px">KELUAR</span>
+        <span class="mono" style="font-size: 12px; color: #8a8478">TRX-20260823-007</span>
+        <span style="flex-grow: 1"></span>
+        <span class="kecil">08.45 &middot; 2j 07m lalu</span>
+      </div>
+      <div>
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -.01em">AD 3390 BC</div>
+        <div style="font-size: 13px; color: #5a5449; margin-top: 2px">UD Sri Rejeki &mdash; Klaten &middot; SJ-0452</div>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #5a5449; letter-spacing: .05em; font-weight: 700">TARA TRUK</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">4.850 kg</div>
+        </div>
+        <div style="flex-grow: 1; background: #f9f6f0; border: 1px dashed #dcd6c9; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em; font-weight: 700">RENCANA</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; color: #5a5449">8.000 kg</div>
+        </div>
+      </div>
+      <div class="tombol" style="background: #636964; color: #fff">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 7h14"></path><path d="M5 7l-3 7h6z"></path><path d="M19 7l-3 7h6z"></path></svg>
+        TIMBANG SETELAH MUAT
+      </div>
+    </div>
+
+    <div class="tiket masuk">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span style="font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #3a352c; background: #f6f2ea; border: 1px solid #e0d8c8; border-radius: 20px; padding: 3px 9px">MASUK</span>
+        <span class="mono" style="font-size: 12px; color: #8a8478">TRX-20260823-005</span>
+        <span style="flex-grow: 1"></span>
+        <span class="kecil">10.05 &middot; 47m lalu</span>
+      </div>
+      <div>
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -.01em">B 1234 XYZ</div>
+        <div style="font-size: 13px; color: #5a5449; margin-top: 2px">Anton &middot; gabah basah &middot; nota NT-0918</div>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <div style="flex-grow: 1; background: #fbf9f4; border: 1px solid #e7e1d5; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #5a5449; letter-spacing: .05em; font-weight: 700">BRUTO MASUK</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">14.320 kg</div>
+        </div>
+        <div style="flex-grow: 1; background: #f9f6f0; border: 1px dashed #dcd6c9; border-radius: 9px; padding: 8px 11px">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em; font-weight: 700">NOTA</div>
+          <div class="mono" style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; color: #5a5449">9.980 kg</div>
+        </div>
+      </div>
+      <div class="tombol" style="background: #3a352c; color: #fff">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 7h14"></path><path d="M5 7l-3 7h6z"></path><path d="M19 7l-3 7h6z"></path></svg>
+        TIMBANG SETELAH BONGKAR
+      </div>
+    </div>
+
+    <div style="border-top: 1px dashed #dcd6c9; padding-top: 14px; font-size: 12px; color: #8a8478; line-height: 1.55">
+      Tiket yang terbuka lebih dari 12 jam ditandai kuning di dashboard supervisor, supaya tidak ada truk yang terlewat ditimbang kedua kalinya.
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

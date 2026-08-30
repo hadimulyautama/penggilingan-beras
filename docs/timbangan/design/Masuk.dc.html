@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #e6e0d4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+    .tajuk { font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; margin-bottom: 8px; }
+    .layar { width: 390px; background: #fbf9f4; border: 1px solid #dcd6c9; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 2px 12px rgba(26,23,18,.10); }
+    .lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .fld { height: 54px; border: 1px solid #dcd6c9; border-radius: 10px; background: #fff;
+      padding: 0 14px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 16px; }
+  </style>
+</helmet>
+
+<div style="width: 870px; height: 940px; background: #e6e0d4; padding: 22px; box-sizing: border-box; display: flex; gap: 24px">
+
+  <!-- ============ 1 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">1 &middot; Sekali saja, saat perangkat pertama dipakai</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+
+      <div style="background: #3a352c; color: #fff; padding: 44px 24px 34px; display: flex; flex-direction: column; align-items: center; gap: 12px">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M5 7h14"></path><path d="M5 7l-3 7h6z"></path><path d="M19 7l-3 7h6z"></path></svg>
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 21px; font-weight: 700; letter-spacing: -.015em">Timbangan</div>
+        <div style="font-size: 12.5px; color: #b5ad9e; text-align: center; line-height: 1.5">PT Hadi Mulya Utama<br>Pos Timbang</div>
+      </div>
+
+      <div style="padding: 22px 20px; display: flex; flex-direction: column; gap: 14px; flex-grow: 1">
+
+        <div style="display: flex; flex-direction: column; gap: 7px">
+          <div class="lbl">Nama pengguna</div>
+          <div class="fld"><span>budi</span></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px">
+          <div class="lbl">Kata sandi</div>
+          <div class="fld">
+            <span class="mono" style="letter-spacing: .18em">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: flex-start; gap: 11px; background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 11px; padding: 12px 13px">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #2f6e7a; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg>
+          </div>
+          <div style="font-size: 12.5px; color: #245863; line-height: 1.5">
+            <b>Ingat perangkat ini</b><br>
+            Tidak perlu masuk lagi setiap membuka aplikasi &mdash; sampai Anda menekan Keluar.
+          </div>
+        </div>
+
+        <div style="height: 56px; border-radius: 12px; background: #c25834; color: #fff; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">MASUK</div>
+
+        <div style="margin-top: auto; background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 10px; padding: 11px 12px; font-size: 11.5px; color: #5a5449; line-height: 1.55">
+          Perangkat ini terdaftar sebagai <b class="mono" style="color: #1a1712">P1</b> &mdash; tiap perangkat dapat kodenya sendiri, dan kode itu masuk ke setiap nomor transaksi yang dibuat dari sini. Dua perangkat yang sama-sama tanpa sinyal tidak akan bertabrakan nomornya.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">2 &middot; Seterusnya &mdash; langsung kerja</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+
+      <div style="background: #3a352c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px">
+        <div style="flex-grow: 1">
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">Pos Timbang</div>
+          <div style="font-size: 12px; color: #b5ad9e; margin-top: 1px">Budi &middot; 23 Agu 2026 &middot; 7 transaksi hari ini</div>
+        </div>
+        <div style="width: 34px; height: 34px; border-radius: 50%; background: #4d4739; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">B</div>
+      </div>
+
+      <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px; flex-grow: 1">
+
+        <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 11px; padding: 12px 13px; display: flex; gap: 10px; align-items: flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px"><path d="M4 12.5l5 5L20 6.5"></path></svg>
+          <div style="font-size: 12.5px; color: #245863; line-height: 1.5">
+            Aplikasi terbuka langsung di beranda. Tidak ada layar masuk, tidak ada kata sandi &mdash; termasuk saat tanpa sinyal, karena sesinya tersimpan di perangkat.
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+          <div class="lbl">Satu perangkat, satu orang</div>
+          <div style="font-size: 12.5px; color: #5a5449; line-height: 1.6">
+            Tiap petugas memakai perangkatnya sendiri, jadi tidak ada layar ganti pengguna dan tidak ada PIN. Nama yang menempel pada transaksi selalu benar tanpa tindakan tambahan siapa pun.
+          </div>
+          <div style="font-size: 12px; color: #8a8478; line-height: 1.55; border-top: 1px dashed #e7e1d5; padding-top: 10px">
+            Bila sesekali perangkat dipinjam &mdash; HP rekan mati, misalnya &mdash; jalannya tetap satu: pemilik menekan Keluar, peminjam masuk dengan kata sandinya sendiri.
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+          <div class="lbl">Nama selalu terlihat</div>
+          <div style="font-size: 12.5px; color: #5a5449; line-height: 1.6">
+            Di kepala layar dan di setiap ringkasan sebelum simpan. Bukan hiasan &mdash; nama itulah yang menempel permanen pada transaksi dan tercetak di bukti timbang.
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 11px; background: #fff; border: 1px solid #dcd6c9; border-radius: 11px; padding: 13px 14px; margin-top: auto">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a8492b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+          <div style="flex-grow: 1">
+            <div style="font-size: 14px; font-weight: 700; color: #a8492b">Keluar</div>
+            <div style="font-size: 11.5px; color: #8a8478">Di dalam menu &mdash; jarang dipakai, tidak perlu mudah tersentuh</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

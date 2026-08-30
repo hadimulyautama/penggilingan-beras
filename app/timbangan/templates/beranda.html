@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "macros.html" import baris_transaksi, lencana %}
+
+{% block judul %}Pos Timbang{% endblock %}
+{% block bar_judul %}Pos Timbang{% endblock %}
+{% block bar_sub %}{{ akun.nama }} · {{ akun.perangkat_kode or 'perangkat belum diberi kode' }}{% endblock %}
+
+{% block isi %}
+
+  {# Tiket terbuka lebih dulu: truk yang sedang menunggu adalah pekerjaan
+     yang paling mendesak, bukan transaksi baru. #}
+  {% if terbuka %}
+    <div>
+      <div class="lbl" style="margin-bottom:8px">
+        Menunggu timbang kedua ({{ terbuka|length }})
+      </div>
+      {% for b in terbuka %}
+        <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan"
+           style="margin-bottom:8px">
+          <div class="pilihan__isi">
+            <div class="pilihan__nama">{{ b.trx.nomor_polisi or b.trx.kode }}</div>
+            <div class="pilihan__ket">
+              {{ b.supplier_nama or b.trx.pihak_nama or '—' }} ·
+              {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
+              masuk {{ b.trx.timbang1_waktu|jam }}
+            </div>
+          </div>
+          {% if b.trx.id in menganggur %}
+            <span class="lencana lencana--hati">Lama</span>
+          {% else %}
+            <span class="lencana lencana--netral">Tahap 2</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div>
+    <div class="lbl" style="margin-bottom:8px">Mulai penimbangan</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+
+      <a href="{{ PREFIX }}/pilih/{{ MASUK }}" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Barang masuk</div>
+          <div class="pilihan__ket">Gabah, beras, beras PK, broken</div>
+        </div>
+      </a>
+
+      <a href="{{ PREFIX }}/pilih/{{ KELUAR }}" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Pengiriman</div>
+          <div class="pilihan__ket">Beras, menir, broken, bekatul, reject</div>
+        </div>
+      </a>
+
+      <a href="{{ PREFIX }}/pilih/{{ BEBAS }}" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 7h6z"/>
+          <path d="M19 7l-3 7h6z"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Jasa timbang</div>
+          <div class="pilihan__ket">Menimbang barang pihak lain</div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl" style="margin-bottom:8px">Hari ini</div>
+    {% if hari_ini_daftar %}
+      {% for b in hari_ini_daftar %}
+        <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
+      {% endfor %}
+      <a href="{{ PREFIX }}/transaksi" class="tbl halus blok">Lihat semua catatan</a>
+    {% else %}
+      <div class="kartu kosong">Belum ada penimbangan hari ini.</div>
+    {% endif %}
+  </div>
+
+  <div class="aksi-baris">
+    {% if akun.is_pengawas %}
+      <a href="{{ PREFIX }}/laporan" class="tbl halus">Ringkasan</a>
+    {% endif %}
+    <a href="{{ PREFIX }}/aturan" class="tbl halus">Aturan</a>
+    <a href="{{ PREFIX }}/pengaturan" class="tbl halus">Pengaturan</a>
+  </div>
+
+{% endblock %}

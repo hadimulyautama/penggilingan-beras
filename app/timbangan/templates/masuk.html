@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block judul %}Masuk{% endblock %}
+{% block bar %}{% endblock %}
+
+{% block isi %}
+  <div style="text-align:center;padding:36px 0 20px">
+    <img src="{{ PREFIX }}/static/ikon.svg" width="64" height="64" alt="">
+    <h1 style="font-size:22px;margin-top:14px">Pos Timbang</h1>
+    <div class="bantu" style="margin-top:4px">{{ PERUSAHAAN }}</div>
+  </div>
+
+  <form method="post" action="{{ PREFIX }}/masuk"
+        style="display:flex;flex-direction:column;gap:14px">
+    <input type="hidden" name="tujuan" value="{{ tujuan }}">
+
+    <div class="grup">
+      <div class="lbl">Nama pengguna</div>
+      <input class="fld teks" name="username" required autocomplete="username"
+             autocapitalize="none" autofocus>
+    </div>
+    <div class="grup">
+      <div class="lbl">Kata sandi</div>
+      <input class="fld teks" name="sandi" type="password" required
+             autocomplete="current-password">
+    </div>
+    <div class="grup">
+      <div class="lbl">Kode perangkat</div>
+      <input class="fld" name="perangkat" maxlength="8"
+             autocapitalize="characters" placeholder="P1"
+             value="{{ akun.perangkat_kode if akun else '' }}">
+      <div class="bantu">
+        Kode singkat untuk ponsel ini — P1, P2, dan seterusnya. Kode ini masuk
+        ke nomor transaksi supaya dua perangkat yang sedang tanpa jaringan
+        tidak membuat nomor yang sama.
+      </div>
+    </div>
+
+    <button type="submit" class="tbl blok" data-sibuk="Memeriksa…">Masuk</button>
+  </form>
+
+  <div class="bantu" style="text-align:center;margin-top:8px">
+    Sekali masuk, aplikasi ini tidak akan meminta sandi lagi di perangkat ini
+    sampai Anda menekan Keluar.
+  </div>
+{% endblock %}

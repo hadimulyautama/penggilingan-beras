@@ -61,6 +61,9 @@ class Supplier(Base, TimestampMixin):
     # aktif / nonaktif
     status: Mapped[str] = mapped_column(String(20), default="aktif")
     deleted_at: Mapped[datetime | None] = mapped_column()
+    # Jembatan ke kontak Kledo (sumber identitas supplier ke depan). Kosong =
+    # belum tersinkron / dibuat manual.
+    kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
 
 class Silo(Base, TimestampMixin):

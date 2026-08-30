@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian %}
+
+{% block lebar %}lebar{% endblock %}
+{% block judul %}Pengguna{% endblock %}
+{% block bar_judul %}Pengguna{% endblock %}
+{% block bar_sub %}{{ baris|length }} akun{% endblock %}
+
+{% block isi %}
+  <details class="kartu">
+    <summary style="cursor:pointer;font-weight:700;font-size:15px">
+      Tambah pengguna
+    </summary>
+    <form method="post" action="{{ PREFIX }}/pengguna"
+          style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
+      {{ isian('nama', 'Nama lengkap', '', '', 'text', '', true, true) }}
+      {{ isian('username', 'Nama pengguna', '', '', 'text',
+               'Huruf kecil tanpa spasi', true, true,
+               'autocapitalize="none"') }}
+      {{ isian('sandi', 'Kata sandi', '', '', 'password',
+               'Minimal 6 karakter', true, true) }}
+      <div class="grup">
+        <div class="lbl">Peran</div>
+        <select class="fld" name="role" required>
+          {% for r in ROLES %}
+            <option value="{{ r }}">{{ ROLE_LABEL[r] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {{ isian('perangkat_kode', 'Kode perangkat', '', '', 'text',
+               'P1, P2, dan seterusnya', false, false,
+               'maxlength="8" autocapitalize="characters"') }}
+      <button type="submit" class="tbl blok">Buat akun</button>
+    </form>
+  </details>
+
+  <div class="kartu" style="padding:0;overflow:hidden">
+    <div class="gulung">
+      <table>
+        <thead>
+          <tr><th>Nama</th><th>Pengguna</th><th>Peran</th><th>Perangkat</th>
+            <th>Terakhir masuk</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for p in baris %}
+            <tr>
+              <td>{{ p.nama }}</td>
+              <td>{{ p.username }}</td>
+              <td>{{ p.role_label }}</td>
+              <td>{{ p.perangkat_kode or '—' }}</td>
+              <td>{{ p.terakhir_login|tgl_jam }}</td>
+              <td>
+                <span class="lencana lencana--{{
+                  'aman' if p.status == 'aktif' else 'netral' }}">
+                  {{ p.status }}</span>
+              </td>
+              <td>
+                {% if p.id != akun.id %}
+                  <form method="post"
+                        action="{{ PREFIX }}/pengguna/{{ p.id }}/status">
+                    <button type="submit" class="tbl halus kecil">
+                      {{ 'Nonaktifkan' if p.status == 'aktif' else 'Aktifkan' }}
+                    </button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

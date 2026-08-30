@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% from "macros.html" import kartu_hasil, lencana, konteks_jenis %}
+
+{% set trx = b.trx %}
+
+{% block judul %}{{ trx.kode }}{% endblock %}
+{% block bar_judul %}{{ trx.nomor_polisi or trx.kode }}{% endblock %}
+{% block bar_sub %}{{ trx.tanggal|tgl(true) }} · {{ trx.kode }}{% endblock %}
+
+{% block konteks %}{{ konteks_jenis(aturan) }}{% endblock %}
+
+{% block isi %}
+
+  {% if trx.status_transaksi == 'VOID' %}
+    <div class="pesan pesan--err">
+      <b>Dibatalkan.</b> {{ trx.void_alasan }}
+    </div>
+  {% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}
+    <div class="pesan pesan--err">
+      <b>Tiket ditutup tanpa timbang kedua.</b> {{ trx.tutup_paksa_alasan }}
+    </div>
+  {% elif trx.status_tiket == TIKET_TERBUKA %}
+    <div class="pesan pesan--ok">
+      Menunggu timbang kedua.
+      <a href="{{ PREFIX }}/tiket/{{ trx.id }}">Lanjutkan sekarang</a>.
+    </div>
+  {% else %}
+    {{ kartu_hasil(trx) }}
+  {% endif %}
+
+  {# ── Rincian angka: urutannya sama dengan urutan hitungan ── #}
+  {% if trx.status_tiket == TIKET_SELESAI %}
+    <div class="kartu">
+      <div class="kartu__judul">Perhitungan</div>
+      <div class="baris">
+        <span>Truk bermuatan</span><b>{{ trx.berat_bermuatan_kg|kg }}</b>
+      </div>
+      {% if trx.berat_kosong_kg is not none %}
+        <div class="baris">
+          <span>Truk kosong</span><b>{{ trx.berat_kosong_kg|kg }}</b>
+        </div>
+      {% endif %}
+      <div class="baris">
+        <span>Netto timbangan</span><b>{{ trx.netto_timbangan_kg|kg }}</b>
+      </div>
+      {% if trx.jumlah_karung %}
+        <div class="baris">
+          <span>Tara {{ trx.jumlah_karung }} karung</span>
+          <b>−{{ trx.total_tara_kg|angka(2) }} kg</b>
+        </div>
+      {% endif %}
+      {% if trx.tara_lain_kg %}
+        <div class="baris">
+          <span>Tara lain</span><b>−{{ trx.tara_lain_kg|angka(2) }} kg</b>
+        </div>
+      {% endif %}
+      <div class="baris total">
+        <span>Berat barang</span><b>{{ trx.berat_barang_kg|kg }}</b>
+      </div>
+      {% if trx.status_kontrol != 'TANPA_KONTROL' %}
+        <div class="baris">
+          <span>Menurut dokumen</span><b>{{ trx.berat_acuan_kg|kg }}</b>
+        </div>
+        <div class="baris">
+          <span>Selisih</span><b>{{ trx.selisih_kg|kg_tanda }}
+            ({{ trx.selisih_persen|persen }})</b>
+        </div>
+        <div class="baris">
+          <span>Batas wajar</span>
+          <b>{% if trx.batas_bawah_kg is not none %}{{ trx.batas_bawah_kg|angka(2) }}{% else %}bebas{% endif %}
+             … {% if trx.batas_atas_kg is not none %}+{{ trx.batas_atas_kg|angka(2) }}{% else %}bebas{% endif %} kg</b>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# ── Identitas & jejak orang ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Keterangan</div>
+    <div class="baris">
+      <span>{{ 'Supplier' if trx.arah == MASUK else 'Pihak' }}</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ b.supplier_nama or trx.pihak_nama or '—' }}</b>
+    </div>
+    <div class="baris">
+      <span>Nomor polisi</span><b>{{ trx.nomor_polisi or '—' }}</b>
+    </div>
+    <div class="baris">
+      <span>Sopir</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ trx.nama_sopir or '—' }}</b>
+    </div>
+    {% for m in trx.muatan %}
+      <div class="baris">
+        <span>{{ NAMA_JENIS.get(m.jenis_kode, m.jenis_kode) }}</span>
+        <b>{{ m.berat_acuan_kg|kg }}</b>
+      </div>
+      <div class="baris">
+        <span>{{ 'Nota' if trx.arah == MASUK else 'Surat jalan' }}
+          {{ m.nomor_acuan or '(tanpa nomor)' }}</span>
+        <b>{{ m.jumlah_karung }} karung</b>
+      </div>
+    {% endfor %}
+    <div class="baris">
+      <span>Timbang 1</span>
+      <b>{{ trx.timbang1_kg|kg }} · {{ trx.timbang1_waktu|jam }}</b>
+    </div>
+    {% if trx.timbang2_kg is not none %}
+      <div class="baris">
+        <span>Timbang 2</span>
+        <b>{{ trx.timbang2_kg|kg }} · {{ trx.timbang2_waktu|jam }}</b>
+      </div>
+    {% endif %}
+    {% if trx.jumlah_revisi %}
+      <div class="baris">
+        <span>Dikoreksi</span><b>{{ trx.jumlah_revisi }}×</b>
+      </div>
+    {% endif %}
+    {% if trx.catatan %}
+      <div style="border-top:1px solid var(--garis);margin-top:6px;padding-top:10px">
+        <div class="lbl">Catatan</div>
+        <div style="font-size:14px;line-height:1.5;margin-top:4px">{{ trx.catatan }}</div>
+      </div>
+    {% endif %}
+  </div>
+
+  {# ── Lembar pemeriksaan SOP butir 6 ── #}
+  {% if pemeriksaan %}
+    <div class="kartu">
+      <div class="kartu__judul">
+        Pemeriksaan
+        {% if pemeriksaan.status == 'SELESAI' %}
+          <span class="lencana lencana--aman">Selesai</span>
+        {% else %}
+          <span class="lencana lencana--hati">Terbuka</span>
+        {% endif %}
+      </div>
+
+      {% if pemeriksaan.status == 'SELESAI' %}
+        <div class="baris">
+          <span>Hasil</span>
+          <b style="font-family:var(--teks);font-size:14px">
+            {{ kategori_hasil.get(pemeriksaan.kategori_hasil,
+                                  pemeriksaan.kategori_hasil) }}</b>
+        </div>
+        <div style="font-size:14px;line-height:1.55;margin-top:8px">
+          {{ pemeriksaan.catatan_resolusi }}
+        </div>
+        <div class="bantu" style="margin-top:8px">
+          Ditutup {{ pemeriksaan.ditutup_pada|tgl_jam }}
+          {% if pemeriksaan.dilaporkan_ke %}
+            · dilaporkan ke {{ pemeriksaan.dilaporkan_ke }}
+          {% endif %}
+        </div>
+
+      {% elif akun.is_pengawas %}
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/periksa"
+              style="display:flex;flex-direction:column;gap:12px;margin-top:6px">
+          <div class="bantu">
+            Enam langkah SOP butir 6. Isi yang dikerjakan; yang tidak relevan
+            boleh dikosongkan.
+          </div>
+          {% for nama, label in [
+              ('langkah_ulang_timbang', 'Timbang ulang'),
+              ('langkah_hitung_karung', 'Hitung ulang karung'),
+              ('langkah_periksa_tara', 'Periksa tara karung'),
+              ('langkah_periksa_dokumen', 'Periksa dokumen'),
+              ('langkah_periksa_muatan', 'Periksa muatan'),
+              ('langkah_lapor', 'Laporkan') ] %}
+            <div class="grup">
+              <div class="lbl">{{ label }}</div>
+              <input class="fld teks" name="{{ nama }}" type="text">
+            </div>
+          {% endfor %}
+
+          <div class="grup">
+            <div class="lbl">Dilaporkan kepada</div>
+            <input class="fld teks" name="dilaporkan_ke" type="text" value="Miftah">
+          </div>
+          <div class="grup">
+            <div class="lbl">Kategori hasil</div>
+            <select class="fld" name="kategori_hasil" required>
+              <option value="">— pilih —</option>
+              {% for kode, label in kategori_hasil.items() %}
+                <option value="{{ kode }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grup">
+            <div class="lbl">Catatan resolusi</div>
+            <textarea class="fld" name="catatan_resolusi" rows="3" required
+                      placeholder="Apa yang ditemukan dan apa kesimpulannya"></textarea>
+          </div>
+          <button type="submit" class="tbl blok">Tutup pemeriksaan</button>
+        </form>
+      {% else %}
+        <div class="bantu">
+          Menunggu Pengawas menutup pemeriksaan ini.
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {# ── Aksi ── #}
+  <div class="tanpa-cetak" style="display:flex;flex-direction:column;gap:10px">
+    {% if trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}
+      <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl blok">
+        Cetak bukti timbang
+        {% if cetak %}({{ cetak|length }}× tercetak){% endif %}
+      </a>
+    {% endif %}
+
+    {% if boleh_ubah and trx.status_transaksi != 'VOID' %}
+      <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
+        Koreksi
+      </a>
+    {% elif sebab_terkunci %}
+      <div class="bantu">{{ sebab_terkunci }}</div>
+    {% endif %}
+
+    {% if boleh_batal and trx.status_transaksi != 'VOID' %}
+      <details class="kartu">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px">
+          Batalkan transaksi
+        </summary>
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/batal"
+              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="grup">
+            <div class="lbl">Alasan pembatalan</div>
+            <textarea class="fld" name="alasan" rows="2" required></textarea>
+          </div>
+          <button type="submit" class="tbl bahaya">Batalkan</button>
+          <div class="bantu">
+            Data tidak dihapus. Transaksi ditandai batal dan tetap dapat dilihat.
+          </div>
+        </form>
+      </details>
+    {% endif %}
+  </div>
+
+{% endblock %}

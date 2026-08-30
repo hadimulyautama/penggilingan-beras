@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .lbl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .fld { width: 100%; box-sizing: border-box; height: 52px; border: 1px solid #dcd6c9;
+      border-radius: 10px; background: #fff; padding: 0 14px; font-size: 19px;
+      color: #1a1712; font-family: 'Space Mono', ui-monospace, Menlo, monospace; }
+    .fld.teks { font-family: inherit; font-size: 16px; }
+    .fld.kosong { color: #a39c8e; }
+    .fld.terisi { border-color: #bcd8dd; background: #fbfdfd; }
+    .sat { position: absolute; right: 14px; top: 17px; font-size: 13px; color: #8a8478; }
+    .wajib { color: #c25834; font-weight: 700; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 1280px; background: #fbf9f4; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="background: #3a352c; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+    <div style="flex-grow: 1">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700">Input Timbangan</div>
+      <div style="font-size: 12px; color: #b5ad9e">Gabah Basah &middot; belum ada isian</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px">
+
+    <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 10px; padding: 11px 13px; font-size: 12.5px; color: #245863; line-height: 1.5">
+      Beginilah layar saat pertama dibuka. Kolom berat <b>kosong</b>, bukan berisi 0 &mdash; angka 0 bisa ikut tersimpan tanpa sengaja.
+    </div>
+
+    <!-- Terisi otomatis -->
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <div class="lbl">Tanggal</div>
+        <div style="font-size: 10.5px; color: #2f6e7a; font-weight: 700">TERISI OTOMATIS</div>
+      </div>
+      <input class="fld terisi" style="height: 48px; font-size: 16px" type="text" value="23-08-2026" readonly="readonly">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div class="lbl">Supplier <span class="wajib">wajib</span></div>
+      <div style="position: relative">
+        <input class="fld teks kosong" type="text" value="" placeholder="Pilih supplier">
+        <svg style="position: absolute; right: 14px; top: 20px" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div class="lbl">Nomor kendaraan</div>
+      <input class="fld kosong" type="text" value="" placeholder="B 1234 XYZ">
+    </div>
+
+    <!-- Nota -->
+    <div style="display: flex; flex-direction: column; gap: 10px; background: #fff; border: 1px solid #e7e1d5; border-left: 3px solid #3a352c; border-radius: 12px; padding: 14px">
+      <div class="lbl" style="color: #3a352c">Nota supplier</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Nomor &mdash; bila ada</div>
+          <input class="fld teks kosong" style="height: 48px" type="text" value="" placeholder="sering kosong">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Berat nota <span class="wajib">wajib</span></div>
+          <div style="position: relative">
+            <input class="fld kosong" style="height: 48px; padding-right: 38px" type="text" inputmode="numeric" value="" placeholder="0">
+            <span class="sat" style="top: 15px">kg</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timbangan -->
+    <div style="display: flex; flex-direction: column; gap: 12px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 14px">
+      <div class="lbl">Hasil timbangan</div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div class="lbl" style="font-size: 10px">Timbang 1 &mdash; truk bermuatan <span class="wajib">wajib</span></div>
+        <div style="display: flex; gap: 10px; align-items: flex-end">
+          <div style="flex-grow: 1; position: relative">
+            <input class="fld kosong" style="padding-right: 40px" type="text" inputmode="numeric" value="" placeholder="0">
+            <span class="sat">kg</span>
+          </div>
+          <div style="width: 96px; display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Jam &middot; otomatis</div>
+          <input class="fld kosong" style="height: 52px; font-size: 16px; text-align: center" type="text" value="" placeholder="--.--">
+        </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <div class="lbl" style="font-size: 10px">Timbang 2 &mdash; truk kosong</div>
+          <div style="font-size: 10.5px; color: #8a8478">diisi setelah bongkar</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: flex-end">
+          <div style="flex-grow: 1; position: relative">
+            <input class="fld kosong" style="padding-right: 40px" type="text" inputmode="numeric" value="" placeholder="0">
+            <span class="sat">kg</span>
+          </div>
+          <div style="width: 96px; display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Jam &middot; otomatis</div>
+          <input class="fld kosong" style="height: 52px; font-size: 16px; text-align: center" type="text" value="" placeholder="--.--">
+        </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-end">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px">
+          <div class="lbl" style="font-size: 10px">Jumlah karung</div>
+          <input class="fld kosong" type="text" inputmode="numeric" value="" placeholder="0">
+        </div>
+        <div style="width: 148px; height: 52px; border-radius: 10px; background: #fbf9f4; border: 1px dashed #dcd6c9; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <div style="font-size: 10px; color: #8a8478; letter-spacing: .05em">TARA OTOMATIS</div>
+          <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 16px; font-weight: 600; color: #a39c8e">&mdash;</div>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #8a8478; line-height: 1.45">Tara 0,25 kg/karung diambil dari master komoditas. Jam terisi otomatis saat angka timbang dimasukkan. Nama petugas juga otomatis, diambil dari akun yang login.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div class="lbl">Foto bukti &mdash; opsional</div>
+      <div style="display: flex; gap: 8px">
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #3a352c; border-radius: 10px; background: #f9f6f0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #3a352c; font-weight: 700">Nota</div>
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5a5449">Masuk</div>
+        <div style="flex-grow: 1; height: 62px; border: 1px dashed #dcd6c9; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5a5449">Kosong</div>
+      </div>
+    </div>
+    <div style="height: 6px"></div>
+  </div>
+
+  <!-- Panel hasil saat belum ada isian -->
+  <div style="flex-shrink: 0; background: #fff; border-top: 1px solid #e7e1d5; padding: 14px 16px 16px">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+      <div class="lbl">Hasil perhitungan</div>
+      <div style="font-size: 11px; color: #8a8478">menunggu angka</div>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: stretch; margin-bottom: 10px">
+      <div style="flex-grow: 1; background: #fbf9f4; border: 1px dashed #dcd6c9; border-radius: 10px; padding: 10px 12px">
+        <div style="font-size: 10px; color: #8a8478; letter-spacing: .06em; font-weight: 700">NETTO KONTROL</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 27px; font-weight: 700; color: #c9c2b4; letter-spacing: -.02em; line-height: 1.15">&mdash;</div>
+      </div>
+      <div style="width: 132px; background: #fbf9f4; border: 1px dashed #dcd6c9; border-radius: 10px; padding: 10px 12px">
+        <div style="font-size: 10px; color: #8a8478; letter-spacing: .06em; font-weight: 700">SELISIH</div>
+        <div style="font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 27px; font-weight: 700; color: #c9c2b4; letter-spacing: -.02em; line-height: 1.15">&mdash;</div>
+      </div>
+    </div>
+
+    <div style="background: #fbf9f4; border: 1px dashed #dcd6c9; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 12.5px; color: #8a8478">
+      Status muncul setelah berat nota, timbang masuk, dan timbang kosong terisi.
+    </div>
+
+    <button style="width: 100%; height: 56px; border: 0; border-radius: 12px; background: #e0d8c8; color: #8a8478; font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: .02em">SIMPAN TRANSAKSI</button>
+    <div style="text-align: center; font-size: 11px; color: #8a8478; margin-top: 8px">Tombol aktif setelah kolom wajib terisi</div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian, berat, konteks_jenis %}
+
+{% set trx = b.trx %}
+{% set m = trx.muatan[0] if trx.muatan else None %}
+
+{% block judul %}Koreksi {{ trx.kode }}{% endblock %}
+{% block bar_judul %}Koreksi{% endblock %}
+{% block bar_sub %}{{ trx.kode }}{% endblock %}
+{% block konteks %}{{ konteks_jenis(aturan) }}{% endblock %}
+
+{% block isi %}
+  <div class="pesan pesan--ok">
+    Angka lama tidak hilang. Setiap koreksi menulis baris baru di jejak audit
+    berisi nilai sebelum dan sesudah.
+  </div>
+
+  <div class="bantu">Kosongkan kolom yang tidak perlu diubah.</div>
+
+  <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi"
+        style="display:flex;flex-direction:column;gap:14px">
+
+    {{ berat('timbang1_kg', 'Timbang pertama', trx.timbang1_kg|angka, '', false) }}
+    {% if trx.timbang2_kg is not none %}
+      {{ berat('timbang2_kg', 'Timbang kedua', trx.timbang2_kg|angka, '', false) }}
+    {% endif %}
+
+    {{ isian('nomor_polisi', 'Nomor polisi', trx.nomor_polisi or '', '', 'text',
+             '', false, true, 'autocapitalize="characters"') }}
+    {{ isian('nama_sopir', 'Nama sopir', trx.nama_sopir or '', '', 'text',
+             '', false, true) }}
+
+    <div class="grup">
+      <div class="lbl">Supplier / pihak</div>
+      <select class="fld" name="supplier_id">
+        <option value="">— tidak diubah —</option>
+        {% for s in supplier %}
+          <option value="{{ s.id }}" {{ 'selected' if trx.supplier_id == s.id }}>
+            {{ s.nama_supplier }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="kartu">
+      <div class="kartu__judul">Dokumen &amp; muatan</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        {{ isian('nomor_acuan', 'Nomor dokumen', m.nomor_acuan if m else '',
+                 '', 'text', '', false, true) }}
+        {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
+                 m.berat_acuan_kg|angka if m else '', '', false) }}
+        {{ isian('jumlah_karung', 'Jumlah karung',
+                 m.jumlah_karung if m else '', 'karung', 'text', '', false,
+                 false, 'inputmode="numeric"') }}
+        {{ isian('tara_per_karung_kg', 'Tara per karung',
+                 '%.3f'|format(m.tara_per_karung_kg) if m else '', 'kg',
+                 'text', '', false, false, 'inputmode="decimal" data-berat') }}
+      </div>
+    </div>
+
+    <div class="grup">
+      <div class="lbl">Alasan koreksi</div>
+      <textarea class="fld" name="alasan" rows="2" required
+                placeholder="Contoh: salah ketik berat nota"></textarea>
+    </div>
+
+    <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
+      Simpan koreksi
+    </button>
+  </form>
+{% endblock %}

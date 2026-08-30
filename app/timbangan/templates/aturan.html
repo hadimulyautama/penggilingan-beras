@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block judul %}Aturan komoditas{% endblock %}
+{% block bar_judul %}Aturan komoditas{% endblock %}
+{% block bar_sub %}Rujukan cepat{% endblock %}
+
+{% block isi %}
+  <div class="bantu">
+    Aturan di bawah ini disalin ke setiap transaksi saat disimpan. Merevisi
+    aturan tidak pernah mengubah status transaksi yang sudah tercatat.
+  </div>
+
+  {% for j in jenis %}
+    {% set a = peta.get(j.kode) %}
+    <div class="kartu">
+      <div class="kartu__judul">
+        {{ j.nama }}
+        <span class="lencana lencana--netral">{{ j.arah }}</span>
+        {% if a and not a.rahasia %}
+          <span class="lencana lencana--aman">Nota diberikan</span>
+        {% endif %}
+      </div>
+      {% if a %}
+        <div class="baris"><span>Tara per karung</span>
+          <b>{% if a.sumber_tara == 'MANUAL' %}manual{% else %}{{ a.tara_default()|angka(3) }} kg{% endif %}</b></div>
+        <div class="baris"><span>Sumber tara</span>
+          <b style="font-family:var(--teks);font-size:14px">{{ a.sumber_tara|lower }}</b></div>
+        <div class="baris"><span>Batas wajar</span>
+          <b style="font-family:var(--teks);font-size:14px">{{ ringkas_aturan(a) }}</b></div>
+        <div class="baris"><span>Pembanding</span>
+          <b style="font-family:var(--teks);font-size:14px">{{ a.acuan|lower|replace('_',' ') }}</b></div>
+        {% if a.sumber_tara == 'SAMPLING' %}
+          <div class="baris"><span>Sampling berlaku</span>
+            <b>{{ a.masa_berlaku_tara_hari }} hari</b></div>
+        {% endif %}
+      {% endif %}
+    </div>
+  {% endfor %}
+{% endblock %}

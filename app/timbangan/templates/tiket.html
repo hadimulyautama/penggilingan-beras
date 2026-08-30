@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block judul %}Tiket terbuka{% endblock %}
+{% block bar_judul %}Tiket terbuka{% endblock %}
+{% block bar_sub %}{{ terbuka|length }} truk menunggu timbang kedua{% endblock %}
+
+{% block isi %}
+  {% for b in terbuka %}
+    <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan">
+      <div class="pilihan__isi">
+        <div class="pilihan__nama">{{ b.trx.nomor_polisi or b.trx.kode }}</div>
+        <div class="pilihan__ket">
+          {{ b.supplier_nama or b.trx.pihak_nama or '—' }} ·
+          {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
+          masuk {{ b.trx.timbang1_waktu|tgl_jam }}
+        </div>
+      </div>
+      {% if b.trx.id in menganggur %}
+        <span class="lencana lencana--hati">Lama</span>
+      {% endif %}
+    </a>
+  {% else %}
+    <div class="kartu kosong">
+      Tidak ada truk yang sedang menunggu.<br>Semua penimbangan sudah tuntas.
+    </div>
+  {% endfor %}
+{% endblock %}

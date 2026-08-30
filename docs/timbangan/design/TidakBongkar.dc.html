@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #e6e0d4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+    .tajuk { font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; margin-bottom: 8px; }
+    .layar { width: 390px; background: #fbf9f4; border: 1px solid #dcd6c9; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 2px 12px rgba(26,23,18,.10); }
+    .lbl { font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+      color: #5a5449; font-weight: 700; }
+    .fld { height: 54px; border: 1px solid #dcd6c9; border-radius: 10px; background: #fff;
+      padding: 0 14px; display: flex; align-items: center; justify-content: space-between; }
+    .fld .nilai { font-family: 'Space Mono', ui-monospace, monospace; font-size: 20px; }
+    .rinci { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; }
+    .rinci span { font-size: 12.5px; color: #5a5449; }
+    .rinci b { font-family: 'Space Mono', ui-monospace, monospace; font-size: 13.5px; }
+    .chip { border: 1px solid #dcd6c9; border-radius: 20px; padding: 7px 13px; font-size: 12.5px;
+      background: #fff; }
+    .chip.aktif { background: #a8492b; border-color: #a8492b; color: #fff; font-weight: 700; }
+  </style>
+</helmet>
+
+<div style="width: 1290px; height: 1020px; background: #e6e0d4; padding: 22px; box-sizing: border-box; display: flex; gap: 24px">
+
+  <!-- ============ 1 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">1 &middot; Jalan keluar dari tiket terbuka</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="background: #3a352c; color: #fff; padding: 13px 16px">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">Timbang Setelah Bongkar</div>
+        <div class="mono" style="font-size: 11.5px; color: #b5ad9e">TRX-20260823-P1-009 &middot; B 4471 MN</div>
+      </div>
+
+      <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 13px; flex-grow: 1">
+
+        <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 12px; padding: 12px 14px">
+          <div class="rinci"><span>Supplier</span><b style="font-family: inherit; font-weight: 600">Sutrisno</b></div>
+          <div class="rinci"><span>Komoditas</span><b style="font-family: inherit; font-weight: 600">Gabah Basah</b></div>
+          <div class="rinci"><span>Timbang 1 &middot; 07.40</span><b>13.600 kg</b></div>
+          <div class="rinci"><span>Nota supplier</span><b>10.048 kg</b></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px">
+          <div class="lbl">Timbang 2 &mdash; truk kosong</div>
+          <div class="fld"><span class="nilai" style="color: #a39c8e">0</span><span style="font-size: 13px; color: #8a8478">kg</span></div>
+        </div>
+
+        <div style="height: 52px; border-radius: 11px; background: #c25834; color: #fff; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700">TUTUP TIKET</div>
+
+        <div style="display: flex; align-items: center; gap: 11px; margin: 4px 0">
+          <div style="flex-grow: 1; height: 1px; background: #dcd6c9"></div>
+          <span style="font-size: 11.5px; color: #8a8478">atau</span>
+          <div style="flex-grow: 1; height: 1px; background: #dcd6c9"></div>
+        </div>
+
+        <div style="height: 52px; border: 1px solid #e9c3b4; border-radius: 11px; background: #fdf7f5; color: #a8492b; display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 14.5px; font-weight: 700">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a8492b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l6-6M15 15L9 9"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          Tidak jadi bongkar
+        </div>
+
+        <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 10px; padding: 11px 12px; font-size: 12px; color: #5a5449; line-height: 1.5">
+          Gabah ditolak QC, harga tidak sepakat, atau salah kirim &mdash; truk pulang bermuatan. Tanpa jalan keluar ini, tiketnya menggantung terbuka selamanya dan besok muncul sebagai truk yang seolah masih menunggu.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">2 &middot; Tetap ditimbang saat keluar</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="background: #a8492b; color: #fff; padding: 13px 16px">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">Tidak Jadi Bongkar</div>
+        <div class="mono" style="font-size: 11.5px; color: #f4d9cd">TRX-20260823-P1-009 &middot; Sutrisno</div>
+      </div>
+
+      <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 13px; flex-grow: 1">
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div class="lbl">Alasan</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 7px">
+            <span class="chip aktif">Kadar air terlalu tinggi</span>
+            <span class="chip">Mutu tidak sesuai</span>
+            <span class="chip">Harga tidak sepakat</span>
+            <span class="chip">Salah kirim</span>
+            <span class="chip">Lainnya</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px">
+          <div class="lbl">Catatan</div>
+          <div style="min-height: 58px; border: 1px solid #dcd6c9; border-radius: 10px; background: #fff; padding: 11px 13px; font-size: 13px; line-height: 1.45">Kadar air 28%, di atas batas terima. Supplier setuju membawa pulang.</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px">
+          <div class="lbl">Diputuskan oleh</div>
+          <div class="fld" style="height: 48px"><span style="font-size: 15px; font-weight: 600">Miftah</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8a8478" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 7px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 13px 14px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <div class="lbl">Timbang 2 &mdash; truk keluar</div>
+            <span style="font-size: 10px; font-weight: 700; letter-spacing: .05em; color: #a8492b; background: #f9e9e4; border: 1px solid #e9c3b4; border-radius: 20px; padding: 3px 9px">MASIH BERMUATAN</span>
+          </div>
+          <div class="fld"><span class="nilai" style="font-weight: 700">13.590</span><span style="font-size: 13px; color: #8a8478">kg</span></div>
+          <div style="font-size: 11.5px; color: #8a8478; line-height: 1.5">Truk tetap ditimbang meski pulang bermuatan. Inilah bukti bahwa muatannya benar-benar dibawa kembali, bukan diturunkan diam-diam.</div>
+        </div>
+
+        <div style="height: 52px; border-radius: 11px; background: #a8492b; color: #fff; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700">SIMPAN PENOLAKAN</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3 ============ -->
+  <div style="display: flex; flex-direction: column">
+    <div class="tajuk">3 &middot; Selisih masuk-keluar jadi kontrolnya</div>
+    <div class="layar" style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="background: #3a352c; color: #fff; padding: 13px 16px">
+        <div style="font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">Hasil</div>
+      </div>
+
+      <div style="padding: 15px 16px; display: flex; flex-direction: column; gap: 13px; flex-grow: 1">
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 10px 14px">
+          <div class="rinci"><span>Timbang 1 &middot; masuk 07.40</span><b>13.600 kg</b></div>
+          <div class="rinci"><span>Timbang 2 &middot; keluar 08.05</span><b>13.590 kg</b></div>
+          <div class="rinci" style="border-top: 1px solid #f2ece1; margin-top: 4px; padding-top: 8px">
+            <span style="font-weight: 700; color: #1a1712">Selisih masuk &minus; keluar</span>
+            <b style="font-size: 15px; color: #2f6e7a">10 kg</b>
+          </div>
+        </div>
+
+        <div style="background: #e7f1f2; border: 1px solid #bcd8dd; border-radius: 11px; padding: 12px 13px; display: flex; gap: 10px; align-items: flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px"><path d="M4 12.5l5 5L20 6.5"></path></svg>
+          <div style="font-size: 12.5px; color: #245863; line-height: 1.5">
+            <b>Muatan utuh.</b> Selisih 10 kg masih dalam batas pembulatan tera &mdash; tidak ada yang diturunkan.
+          </div>
+        </div>
+
+        <div style="background: #fff; border: 1px solid #e7e1d5; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+          <div class="rinci" style="padding: 0"><span>Barang diterima</span><b style="font-size: 16px; font-weight: 700">0 kg</b></div>
+          <div style="display: flex; align-items: center; gap: 9px">
+            <span style="font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #a8492b; background: #f9e9e4; border: 1px solid #e9c3b4; border-radius: 20px; padding: 3px 9px">DITOLAK &mdash; TIDAK BONGKAR</span>
+          </div>
+          <div style="font-size: 11.5px; color: #8a8478; line-height: 1.5">Tidak masuk tonase pembelian dan tidak dihitung sebagai selisih terhadap nota. Tetap tercatat sebagai kunjungan supplier &mdash; berguna saat menilai pola.</div>
+        </div>
+
+        <div style="border-top: 1px dashed #dcd6c9; padding-top: 13px; display: flex; flex-direction: column; gap: 9px">
+          <div class="lbl" style="color: #a8492b">Bila selisihnya besar</div>
+          <div style="background: #fff; border: 1px solid #e9c3b4; border-radius: 11px; padding: 10px 13px">
+            <div class="rinci"><span>Timbang 2 &middot; keluar</span><b>11.200 kg</b></div>
+            <div class="rinci" style="border-top: 1px solid #f2ece1; margin-top: 4px; padding-top: 8px">
+              <span style="font-weight: 700">Selisih masuk &minus; keluar</span>
+              <b style="font-size: 15px; color: #a8492b">2.400 kg</b>
+            </div>
+          </div>
+          <div style="background: #f9e9e4; border: 1px solid #e9c3b4; border-radius: 10px; padding: 11px 12px; font-size: 12.5px; color: #8a3b22; line-height: 1.5">
+            <b style="color: #a8492b">2.400 kg turun di lokasi.</b> Transaksi ditandai perlu diperiksa: barang dinyatakan ditolak tetapi truk keluar lebih ringan. Wajib dijelaskan sebelum ditutup.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian, berat, tahap, konteks_jenis %}
+
+{% set trx = b.trx %}
+{% set masuk = trx.arah == MASUK %}
+{% set m = trx.muatan[0] if trx.muatan else None %}
+
+{% block judul %}Timbang 2 · {{ trx.nomor_polisi or trx.kode }}{% endblock %}
+{% block bar_judul %}Timbang kedua{% endblock %}
+{% block bar_sub %}{{ trx.nomor_polisi or trx.kode }}{% endblock %}
+
+{% block konteks %}
+  {{ konteks_jenis(aturan) }}
+  {{ tahap(2,
+           'Truk bermuatan' if masuk else 'Truk kosong',
+           'Setelah bongkar' if masuk else 'Setelah muat') }}
+{% endblock %}
+
+{% block isi %}
+
+  <div class="kartu">
+    <div class="baris">
+      <span>Nomor transaksi</span><b>{{ trx.kode }}</b>
+    </div>
+    <div class="baris">
+      <span>{{ b.supplier_nama or trx.pihak_nama or 'Pihak' }}</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ trx.nama_sopir or '—' }}
+      </b>
+    </div>
+    <div class="baris">
+      <span>Timbang pertama</span>
+      <b>{{ trx.timbang1_kg|kg }} · {{ trx.timbang1_waktu|jam }}</b>
+    </div>
+  </div>
+
+<form method="post" action="{{ PREFIX }}/tiket/{{ trx.id }}"
+      style="display:flex;flex-direction:column;gap:14px">
+
+  {{ berat('berat_kg',
+           'Berat truk kosong' if masuk else 'Berat truk bermuatan') }}
+
+  <div class="grup">
+    <div class="lbl">Jam timbang</div>
+    <input class="fld" type="datetime-local" name="waktu"
+           value="{{ sekarang.strftime('%Y-%m-%dT%H:%M') }}">
+    <div class="bantu">
+      Tanggal transaksi mengikuti jam ini — bukan jam timbang pertama.
+    </div>
+  </div>
+
+  {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
+     yang tadi dikosongkan akhirnya diisi. #}
+  <div class="kartu">
+    <div class="kartu__judul">
+      {{ 'Nota supplier' if masuk else 'Surat jalan' }}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
+               '', false, true) }}
+      {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
+               (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
+               '', false) }}
+      {{ isian('jumlah_karung', 'Jumlah karung',
+               m.jumlah_karung if m and m.jumlah_karung else '', 'karung',
+               'text', '', false, false, 'inputmode="numeric"') }}
+      {{ isian('tara_per_karung_kg', 'Tara per karung',
+               '%.3f'|format(m.tara_per_karung_kg) if m and m.tara_per_karung_kg else '',
+               'kg', 'text', '', false, false,
+               'inputmode="decimal" data-berat') }}
+    </div>
+  </div>
+
+  <div class="grup">
+    <div class="lbl">Catatan</div>
+    <textarea class="fld" name="catatan" rows="2">{{ trx.catatan or '' }}</textarea>
+  </div>
+
+  <button type="submit" class="tbl blok" data-sibuk="Menghitung…">
+    Selesaikan penimbangan
+  </button>
+</form>
+
+  {# Truk yang batal bongkar tetap meninggalkan jejak — tiketnya ditutup
+     dengan alasan, bukan dihapus agar daftar terlihat rapi. #}
+  <details class="kartu tanpa-cetak">
+    <summary style="cursor:pointer;font-weight:700;font-size:14px">
+      Truk tidak jadi bongkar
+    </summary>
+    <form method="post" action="{{ PREFIX }}/tiket/{{ trx.id }}/tutup"
+          style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+      <div class="grup">
+        <div class="lbl">Alasan</div>
+        <textarea class="fld" name="alasan" rows="2" required
+                  placeholder="Mutu ditolak, truk kembali, dsb."></textarea>
+      </div>
+      <button type="submit" class="tbl halus">Tutup tiket ini</button>
+      <div class="bantu">
+        Tiket tetap tersimpan beserta alasannya dan tidak dihitung sebagai
+        transaksi.
+      </div>
+    </form>
+  </details>
+
+{% endblock %}

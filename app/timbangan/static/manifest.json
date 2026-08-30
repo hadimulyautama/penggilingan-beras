@@ -1,0 +1,15 @@
+{
+  "name": "Pos Timbang — PT Hadi Mulya Utama",
+  "short_name": "Pos Timbang",
+  "description": "Pencatatan dan kontrol timbangan armada",
+  "start_url": "/timbangan/",
+  "scope": "/timbangan/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf9f4",
+  "theme_color": "#3a352c",
+  "lang": "id",
+  "icons": [
+    { "src": "/timbangan/static/ikon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

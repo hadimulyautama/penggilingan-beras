@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #fbf9f4; color: #1a1712; -webkit-font-smoothing: antialiased; }
+    a { color: #2f6e7a; } a:hover { color: #3a352c; }
+    .brs { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0;
+      border-bottom: 1px solid #f2ece1; }
+    .brs span { font-size: 13.5px; color: #5a5449; }
+    .brs b { font-family: 'Space Mono', ui-monospace, Menlo, monospace; font-size: 15px; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; background: #fbf9f4; overflow: hidden">
+
+  <!-- Layar di belakang, diredupkan -->
+  <div style="position: absolute; inset: 0; background: #fbf9f4">
+    <div style="background: #3a352c; height: 64px"></div>
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+      <div style="height: 52px; background: #fff; border: 1px solid #e7e1d5; border-radius: 10px"></div>
+      <div style="height: 52px; background: #fff; border: 1px solid #e7e1d5; border-radius: 10px"></div>
+      <div style="height: 120px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px"></div>
+      <div style="height: 160px; background: #fff; border: 1px solid #e7e1d5; border-radius: 12px"></div>
+    </div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(26, 23, 18, .55)"></div>
+
+  <!-- Lembar konfirmasi -->
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 18px 18px 0 0; padding: 8px 18px 20px; box-shadow: 0 -12px 40px -16px rgba(0,0,0,.5)">
+    <div style="width: 42px; height: 4px; border-radius: 2px; background: #e7e1d5; margin: 6px auto 14px"></div>
+
+    <div style="font-family: 'Space Grotesk', sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -.015em; margin-bottom: 4px">Periksa sebelum disimpan</div>
+    <div style="font-size: 13px; color: #5a5449; line-height: 1.5; margin-bottom: 14px">Truk sudah tidak bisa ditimbang ulang setelah keluar. Pastikan angka sudah sesuai display timbangan.</div>
+
+    <div style="background: #f9f6f0; border: 1px solid #e7e1d5; border-radius: 12px; padding: 4px 14px 10px; margin-bottom: 14px">
+      <div class="brs"><span>Supplier</span><b style="font-family: inherit; font-weight: 600">Anton</b></div>
+      <div class="brs"><span>Kendaraan</span><b>B 1234 XYZ</b></div>
+      <div class="brs"><span>Nota NT-0912</span><b>10.048 kg</b></div>
+      <div class="brs"><span>Timbang masuk &middot; 09.14</span><b>13.600 kg</b></div>
+      <div class="brs"><span>Timbang kosong &middot; 11.20</span><b>3.570 kg</b></div>
+      <div class="brs"><span>120 karung &times; 0,25</span><b>30 kg</b></div>
+      <div class="brs" style="border-bottom: 0; padding-top: 12px">
+        <span style="font-weight: 700; color: #1a1712; font-size: 14px">Netto kontrol</span>
+        <b style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700">10.000 kg</b>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px; background: #fdf2df; border: 1px solid #f0d29a; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a5a12" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><path d="M12 9v5"></path><path d="M12 17.5v.01"></path><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+      <div style="flex-grow: 1">
+        <div style="font-size: 14px; font-weight: 700; color: #8a5a12">Selisih &minus;48 kg &middot; perlu pemeriksaan</div>
+        <div style="font-size: 12px; color: #6f4a10; line-height: 1.45; margin-top: 2px">Lembar pemeriksaan akan terbuka setelah disimpan. Ini prosedur kontrol, bukan tuduhan.</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 10px">
+      <button style="width: 116px; height: 54px; border: 1px solid #dcd6c9; border-radius: 12px; background: #fff; color: #1a1712; font-size: 15px; font-weight: 600; font-family: inherit">Kembali</button>
+      <button style="flex-grow: 1; height: 54px; border: 0; border-radius: 12px; background: #c25834; color: #fff; font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700">YA, SIMPAN</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
