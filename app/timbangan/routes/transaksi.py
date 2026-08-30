@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.timbangan import logic, service, setelan
+from app.timbangan import logic, service
 from app.timbangan.db import get_db, hari_ini, sekarang
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import butuh_admin, butuh_akun, butuh_pengawas
+from app.timbangan.security import butuh_akun, butuh_pengawas
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -102,7 +102,6 @@ async def rincian(
         cetak=cetak,
         boleh_ubah=boleh_ubah, sebab_terkunci=sebab,
         boleh_batal=service.boleh_membatalkan(akun),
-        mode_uji_coba=await setelan.sakelar(db, setelan.MODE_UJI_COBA),
         kategori_hasil=KATEGORI_HASIL,
         kembali=f"{PREFIX}/",
     )
@@ -229,25 +228,6 @@ async def batalkan(
         f"/transaksi/{transaksi_id}",
         ok="Transaksi dibatalkan. Datanya tetap tersimpan.",
     )
-
-
-@router.post("/transaksi/{transaksi_id}/hapus")
-async def hapus(
-    transaksi_id: int,
-    request: Request,
-    akun: TimbanganAkun = Depends(butuh_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Hapus permanen — hanya Admin, hanya selagi mode uji coba menyala."""
-    try:
-        b = await _ambil(db, transaksi_id)
-        kode = await service.hapus_transaksi(
-            db, akun=akun, trx=b.trx,
-            ip=request.client.host if request.client else None,
-        )
-    except service.LayananError as e:
-        return redirect(f"/transaksi/{transaksi_id}", err=str(e))
-    return redirect("/transaksi", ok=f"{kode} dihapus permanen.")
 
 
 # ═══════════════════════════ Pemeriksaan ═══════════════════════════
