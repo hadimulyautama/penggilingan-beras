@@ -46,7 +46,11 @@
       <div class="baris">
         <span>Netto timbangan</span><b>{{ trx.netto_timbangan_kg|kg }}</b>
       </div>
-      {% if trx.jumlah_karung %}
+      {# Untuk transfer internal tara sering memang nol — muatannya curah
+         atau karungnya tidak ditimbang. Barisnya "−0,00 kg" tidak
+         memberitahu apa pun. Pada barang masuk dan pengiriman barisnya tetap
+         ditampilkan meski nol, karena di sana tara nol justru patut dilihat. #}
+      {% if trx.jumlah_karung and (trx.arah != TRANSFER or trx.total_tara_kg) %}
         <div class="baris">
           <span>Tara {{ trx.jumlah_karung }} karung</span>
           <b>−{{ trx.total_tara_kg|angka(2) }} kg</b>
@@ -81,7 +85,8 @@
   <div class="kartu">
     <div class="kartu__judul">Keterangan</div>
     <div class="baris">
-      <span>{{ 'Supplier' if trx.arah == MASUK else 'Pihak' }}</span>
+      <span>{% if trx.arah == MASUK %}Supplier{% elif trx.arah == TRANSFER
+             %}Asal → tujuan{% else %}Pihak{% endif %}</span>
       <b style="font-family:var(--teks);font-size:14px">
         {{ b.supplier_nama or trx.pihak_nama or '—' }}</b>
     </div>
@@ -93,15 +98,24 @@
       <b style="font-family:var(--teks);font-size:14px">{{ trx.nama_sopir or '—' }}</b>
     </div>
     {% for m in trx.muatan %}
-      <div class="baris">
-        <span>{{ NAMA_JENIS.get(m.jenis_kode, m.jenis_kode) }}</span>
-        <b>{{ m.berat_acuan_kg|kg }}</b>
-      </div>
-      <div class="baris">
-        <span>{{ 'Nota' if trx.arah == MASUK else 'Surat jalan' }}
-          {{ m.nomor_acuan or '(tanpa nomor)' }}</span>
-        <b>{{ m.jumlah_karung }} karung</b>
-      </div>
+      {# Transfer internal tidak punya dokumen pembanding, jadi tidak ada
+         nomor maupun berat menurut dokumen yang bisa disebut. Menampilkan
+         "Surat jalan (tanpa nomor) — 0 kg" hanya membingungkan. #}
+      {% if trx.arah != TRANSFER %}
+        <div class="baris">
+          <span>{{ NAMA_JENIS.get(m.jenis_kode, m.jenis_kode) }}</span>
+          <b>{{ m.berat_acuan_kg|kg }}</b>
+        </div>
+        <div class="baris">
+          <span>{{ 'Nota' if trx.arah == MASUK else 'Surat jalan' }}
+            {{ m.nomor_acuan or '(tanpa nomor)' }}</span>
+          <b>{{ m.jumlah_karung }} karung</b>
+        </div>
+      {% elif m.jumlah_karung %}
+        <div class="baris">
+          <span>Muatan</span><b>{{ m.jumlah_karung }} karung</b>
+        </div>
+      {% endif %}
     {% endfor %}
     <div class="baris">
       <span>Timbang 1</span>

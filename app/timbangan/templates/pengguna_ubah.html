@@ -83,11 +83,19 @@
         Hapus akun ini
       </summary>
       <div class="bantu" style="margin-top:10px">
-        Hanya bisa untuk akun yang <b>belum pernah dipakai bekerja</b> — salah
-        ketik saat membuat, akun percobaan, orang yang batal masuk. Begitu
-        seseorang pernah menimbang, namanya melekat pada catatan timbang dan
-        riwayat cetak; menghapusnya akan membuat dokumen itu menunjuk tidak
-        ada siapa-siapa. Untuk yang sudah bekerja, nonaktifkan.
+        Catatan timbang <b>tidak ikut terhapus</b> — yang dilepas hanya nama
+        pada catatan itu. Angka, tanggal, selisih, dan statusnya utuh.
+        {% if akun.is_super %}
+          Untuk akun yang sudah pernah menimbang, namanya dikosongkan dari
+          catatan-catatan tersebut dan tidak bisa dikembalikan; yang masih
+          menyimpan siapa pelakunya hanya jejak audit. Bila orangnya sekadar
+          berhenti bekerja, <b>nonaktifkan</b> saja.
+        {% else %}
+          Sebagai Admin, Anda hanya bisa menghapus akun yang <b>belum pernah
+          dipakai bekerja</b> — salah ketik saat membuat, akun percobaan,
+          orang yang batal masuk. Yang sudah menimbang: nonaktifkan, atau
+          minta Super Admin bila namanya memang harus dikosongkan.
+        {% endif %}
       </div>
       <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}/hapus"
             style="margin-top:12px">

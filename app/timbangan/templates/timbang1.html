@@ -3,6 +3,9 @@
 
 {% set masuk = aturan.arah == MASUK %}
 {% set bebas = aturan.arah == BEBAS %}
+{% set transfer = aturan.arah == TRANSFER %}
+{# Datang bermuatan, ditimbang ulang setelah dibongkar. #}
+{% set bongkar = masuk or transfer %}
 
 {% block judul %}Timbang 1 · {{ aturan.nama }}{% endblock %}
 {% block bar_judul %}Timbang pertama{% endblock %}
@@ -12,8 +15,8 @@
   {{ konteks_jenis(aturan, PREFIX ~ '/pilih/' ~ aturan.arah) }}
   {% if not bebas %}
     {{ tahap(1,
-             'Truk bermuatan' if masuk else 'Truk kosong',
-             'Setelah bongkar' if masuk else 'Setelah muat') }}
+             'Truk bermuatan' if bongkar else 'Truk kosong',
+             'Setelah bongkar' if bongkar else 'Setelah muat') }}
   {% endif %}
 {% endblock %}
 
@@ -30,7 +33,7 @@
 
   {# ── Angka timbang: paling atas, karena itu yang dibaca dari alat ── #}
   {{ berat('berat_kg',
-           'Berat truk bermuatan' if masuk or bebas else 'Berat truk kosong',
+           'Berat truk bermuatan' if bongkar or bebas else 'Berat truk kosong',
            bantu='Kapasitas jembatan ' ~ (KAPASITAS_KG|kg)) }}
 
   <div class="grup">
@@ -44,6 +47,11 @@
   {% if bebas %}
     {{ isian('pihak_nama', 'Nama pemilik barang', '', '', 'text',
              'Boleh perorangan maupun perusahaan', true, true) }}
+  {% elif transfer %}
+    {# Tidak ada pihak lawan — yang perlu diketahui barangnya berpindah dari
+       mana ke mana. Ditulis bebas, tanpa master lokasi tersendiri. #}
+    {{ isian('pihak_nama', 'Asal → tujuan', '', '', 'text',
+             'Contoh: Gudang 1 → Gudang 2', true, true) }}
   {% else %}
     <div class="grup">
       <div class="lbl">{{ 'Supplier' if masuk else 'Tujuan / pembeli' }}</div>
@@ -79,7 +87,20 @@
   {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', false, true) }}
 
   {# ── Dokumen & muatan ── #}
-  {% if not bebas %}
+  {% if transfer %}
+    {# Tanpa dokumen pembanding: yang dicatat cukup muatannya, supaya berat
+       barang bisa dihitung bersih dari karung bila memang berkarung. #}
+    <div class="kartu">
+      <div class="kartu__judul">Muatan</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
+                 'Kosongkan bila muatannya curah', false, false,
+                 'inputmode="numeric"') }}
+        {{ isian('tara_per_karung_kg', 'Tara per karung', '', 'kg', 'text', '',
+                 false, false, 'inputmode="decimal" data-berat') }}
+      </div>
+    </div>
+  {% elif not bebas %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}

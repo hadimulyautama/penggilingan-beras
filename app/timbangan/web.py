@@ -96,6 +96,7 @@ templates.env.globals.update({
     "MASUK": logic.MASUK,
     "KELUAR": logic.KELUAR,
     "BEBAS": logic.BEBAS,
+    "TRANSFER": logic.TRANSFER,
     "TIKET_TERBUKA": TIKET_TERBUKA,
     "TIKET_SELESAI": TIKET_SELESAI,
     "TIKET_DITUTUP_PAKSA": TIKET_DITUTUP_PAKSA,

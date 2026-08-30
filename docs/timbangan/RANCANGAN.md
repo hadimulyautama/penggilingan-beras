@@ -426,6 +426,15 @@ tinggal mengangkat dirinya sendiri, atau menonaktifkan Super Admin yang ada
 lalu mengangkat dirinya. Dijaga di keempat pintunya: membuat akun, mengubah
 akun, mengubah status, dan menghapus akun.
 
+**Menghapus akun tidak pernah menghapus catatan timbang.** Yang dilepas hanya
+penunjuk namanya: baris yang tadinya menyebut orang itu berubah menjadi tidak
+menyebut siapa-siapa; angka, tanggal, selisih, dan statusnya utuh. Admin hanya
+boleh menghapus akun yang belum meninggalkan jejak kerja; **Super Admin** boleh
+menghapus akun yang sudah bekerja, dan nama pada catatan-catatan itu
+dikosongkan — tidak bisa dikembalikan. Setelah itu hanya jejak audit yang masih
+bisa menjawab siapa pelakunya, karena `akun_nama` sudah tersimpan sebagai
+salinan sejak baris itu ditulis.
+
 **Membatalkan ≠ menghapus.** Membatalkan (VOID) meninggalkan barisnya di
 catatan bertanda "Batal" beserta alasannya — truk yang batal bongkar memang
 pernah datang, dan menyembunyikan barisnya membuat catatan terlihat rapi
@@ -546,6 +555,8 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 7 | **Peran Pengawas** | **Dihapus** — tinggal Admin dan Petugas | Sejak rekapitulasi menjadi wewenang Admin (#6), Pengawas tidak lagi punya satu pun kemampuan yang tidak dimiliki petugas. Peran yang tidak berarti apa-apa lebih buruk daripada tidak ada: ia terlihat seperti pengaman padahal bukan. Pembatalan (VOID) dan penutupan lembar pemeriksaan ikut menjadi wewenang Admin. Migrasi `0026` menurunkan akun berperan PENGAWAS menjadi PETUGAS — diturunkan, bukan dinaikkan, agar tidak ada yang diam-diam menerima wewenang penuh tanpa pernah diputuskan |
 | 8 | **Barang masuk: jumlah karung sebelum diselesaikan** | **Wajib** — dengan tombol **Simpan sementara** sebagai jalannya | Seluruh komoditas masuk bertara per karung, jadi tanpa angka itu berat barang dan selisihnya keliru — dan statusnya tersimpan permanen serta terbawa ke ekspor. Karena jumlah karung sering baru pasti setelah bongkar rampung, timbang kedua boleh disimpan lebih dulu: angkanya aman dari HP mati atau shift berganti, tiketnya tetap terbuka, dan yang ditunda adalah perhitungannya — selisih tidak dihitung, status kontrol tidak diberikan, lembar pemeriksaan tidak dibuka. Menghitung selisih tanpa jumlah karung akan memberi angka yang salah sekaligus meyakinkan: tara total nol membuat barang tampak berlebih. Alur pengiriman tidak ikut berubah |
 | 9 | **Peran Super Admin** | **Ada** — sama seperti Admin, tambah wewenang menghapus data | Dipisahkan justru supaya pekerjaan sehari-hari tidak dilakukan sambil memegang tombol yang tidak bisa dibatalkan. Sekaligus ditegaskan: transaksi yang dibatalkan **tetap tertera** di catatan timbang bertanda "Batal", dan tidak dihitung dalam ringkasan maupun ekspor. Rinciannya di §10 |
+| 10 | **Transfer internal** | **Arah keempat**, satu jenis komoditas saja | Perpindahan barang di dalam perusahaan sendiri. Alurnya sama seperti barang masuk: armada datang bermuatan, ditimbang ulang setelah selesai dibongkar. Tidak dirinci per komoditas — cukup satu jenis "Transfer Internal"; isinya ditulis di catatan bila perlu. Asal dan tujuan ditulis bebas pada satu kolom (mis. "Gudang 1 → Gudang 2"), tanpa master lokasi tersendiri. **Tanpa dokumen pembanding dan tanpa status kontrol**: tidak ada pihak lawan yang perlu dikontrol, jadi yang dicatat cukup berapa yang berpindah. Kolom dokumen sengaja tidak ditampilkan — menyediakannya hanya mengundang angka yang tidak akan pernah dipakai |
+| 11 | **Menghapus akun yang sudah bekerja** | **Boleh, oleh Super Admin** — catatan tidak ikut terhapus, namanya saja dikosongkan | Rinciannya di §10 |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi

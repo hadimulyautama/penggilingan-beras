@@ -41,6 +41,11 @@ KELIPATAN_TERA_KG = 10.0
 MASUK = "MASUK"
 KELUAR = "KELUAR"
 BEBAS = "BEBAS"
+# Perpindahan barang di dalam perusahaan sendiri. Urutan timbangnya sama
+# seperti barang masuk — armada datang bermuatan, ditimbang ulang setelah
+# selesai dibongkar — tetapi tidak ada pihak lawan, jadi tidak ada dokumen
+# yang dibandingkan dan tidak ada status kontrol yang diberikan.
+TRANSFER = "TRANSFER"
 
 # Dari mana tara per karung berasal
 TARA_TETAP = "TETAP"          # angka pasti per komoditas (gabah 0,25)
@@ -69,7 +74,7 @@ PERLU_PEMERIKSAAN = "PERLU_PEMERIKSAAN"
 INVESTIGASI = "INVESTIGASI"
 KURANG = "KURANG"              # barang keluar: di bawah surat jalan
 KELEBIHAN = "KELEBIHAN"        # barang keluar: di atas batas wajar
-TANPA_KONTROL = "TANPA_KONTROL"  # jasa timbang
+TANPA_KONTROL = "TANPA_KONTROL"  # jasa timbang & transfer internal
 
 STATUS_LABEL = {
     NORMAL: "NORMAL",
@@ -77,7 +82,9 @@ STATUS_LABEL = {
     INVESTIGASI: "INVESTIGASI",
     KURANG: "KURANG DARI SURAT JALAN",
     KELEBIHAN: "KELEBIHAN MUATAN",
-    TANPA_KONTROL: "JASA TIMBANG",
+    # Dipakai jasa timbang MAUPUN transfer internal, jadi namanya
+    # menyebut sifatnya — bukan salah satu pemakainya.
+    TANPA_KONTROL: "TANPA KONTROL",
 }
 
 #: Status yang mewajibkan lembar pemeriksaan SOP dibuka.
@@ -216,6 +223,14 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
     AturanJenis(
         kode="BEBAS", nama="Timbang Bebas", arah=BEBAS, acuan=ACUAN_TIDAK_ADA,
         sumber_tara=TARA_MANUAL,
+        ambang_jenis=AMBANG_TIDAK_ADA,
+        rahasia=False, cetak_bukti=True,
+    ),
+    # Satu jenis saja, tidak dirinci per komoditas: keputusan Direksi
+    # 30 Agustus 2026. Isinya ditulis pada catatan bila perlu.
+    AturanJenis(
+        kode="TRANSFER", nama="Transfer Internal", arah=TRANSFER,
+        acuan=ACUAN_TIDAK_ADA, sumber_tara=TARA_MANUAL,
         ambang_jenis=AMBANG_TIDAK_ADA,
         rahasia=False, cetak_bukti=True,
     ),
@@ -382,7 +397,9 @@ def _status(aturan: AturanJenis, selisih: float, batas: float,
             ) -> tuple[float | None, float | None, str, str]:
     """(batas bawah, batas atas, status, keterangan)."""
     if aturan.ambang_jenis == AMBANG_TIDAK_ADA or aturan.acuan == ACUAN_TIDAK_ADA:
-        return None, None, TANPA_KONTROL, "Jasa timbang — tidak ada pembanding."
+        return None, None, TANPA_KONTROL, (
+            "Tidak ada dokumen pembanding — yang dicatat beratnya saja."
+        )
 
     kurang = max(0.0, -selisih)
 

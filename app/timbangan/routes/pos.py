@@ -109,7 +109,7 @@ async def pilih_jenis(
     dan reject tidak pernah dibeli, jadi tidak pernah muncul di sisi masuk.
     """
     arah = arah.upper()
-    if arah not in (logic.MASUK, logic.KELUAR, logic.BEBAS):
+    if arah not in (logic.MASUK, logic.KELUAR, logic.BEBAS, logic.TRANSFER):
         return redirect("/", err="Arah barang tidak dikenal.")
 
     jenis = await service.daftar_jenis(db, arah=arah)

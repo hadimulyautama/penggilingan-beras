@@ -3,6 +3,8 @@
 
 {% set trx = b.trx %}
 {% set masuk = trx.arah == MASUK %}
+{% set transfer = trx.arah == TRANSFER %}
+{% set bongkar = masuk or transfer %}
 {% set m = trx.muatan[0] if trx.muatan else None %}
 
 {% block judul %}Timbang 2 · {{ trx.nomor_polisi or trx.kode }}{% endblock %}
@@ -12,8 +14,8 @@
 {% block konteks %}
   {{ konteks_jenis(aturan) }}
   {{ tahap(2,
-           'Truk bermuatan' if masuk else 'Truk kosong',
-           'Setelah bongkar' if masuk else 'Setelah muat') }}
+           'Truk bermuatan' if bongkar else 'Truk kosong',
+           'Setelah bongkar' if bongkar else 'Setelah muat') }}
 {% endblock %}
 
 {% block isi %}
@@ -38,7 +40,7 @@
       style="display:flex;flex-direction:column;gap:14px">
 
   {{ berat('berat_kg',
-           'Berat truk kosong' if masuk else 'Berat truk bermuatan',
+           'Berat truk kosong' if bongkar else 'Berat truk bermuatan',
            trx.timbang2_kg|round(0)|int if trx.timbang2_kg else '') }}
 
   <div class="grup">
@@ -54,14 +56,20 @@
      yang tadi dikosongkan akhirnya diisi. #}
   <div class="kartu">
     <div class="kartu__judul">
-      {{ 'Nota supplier' if masuk else 'Surat jalan' }}
+      {{ 'Muatan' if transfer else ('Nota supplier' if masuk else 'Surat jalan') }}
     </div>
     <div style="display:flex;flex-direction:column;gap:14px">
-      {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
-               '', false, true) }}
-      {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
-               (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
-               '', false) }}
+      {# Transfer internal tidak punya dokumen pembanding — keputusan Direksi:
+         cukup dicatat berapa yang berpindah, tanpa selisih dan tanpa status
+         kontrol. Menampilkan kolomnya hanya mengundang angka yang tidak
+         akan pernah dipakai. #}
+      {% if not transfer %}
+        {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
+                 '', false, true) }}
+        {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
+                 (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
+                 '', false) }}
+      {% endif %}
       {# Wajib untuk barang masuk: taranya dihitung per karung, jadi tanpa
          angka ini selisihnya keliru. Tombol Simpan sementara memakai
          formnovalidate supaya pagar ini tidak ikut menghalanginya. #}

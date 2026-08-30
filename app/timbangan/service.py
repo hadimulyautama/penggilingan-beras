@@ -477,7 +477,9 @@ def _bermuatan_dan_kosong(
 ) -> tuple[float | None, float | None]:
     """Mana dari kedua angka yang bermuatan, menurut arah barang.
 
-    Masuk: truk datang penuh, pulang kosong. Keluar: kebalikannya.
+    Masuk: truk datang penuh, pulang kosong. Transfer internal sama —
+    armada datang bermuatan dan ditimbang ulang setelah dibongkar. Hanya
+    keluar yang kebalikannya.
     """
     if arah == logic.KELUAR:
         return t2, t1
@@ -1224,6 +1226,24 @@ async def ubah_profil(
     )
 
 
+def _kolom_penunjuk_akun():
+    """Setiap kolom yang menunjuk `timbangan_akun.id`, kecuali milik audit.
+
+    Dibaca dari metadata, bukan dari daftar yang ditulis tangan — supaya
+    tabel baru yang menyimpan "siapa yang mengerjakan" ikut terjaga sendiri
+    tanpa ada yang perlu ingat memperbarui fungsi ini.
+    """
+    from app.database import Base
+
+    for tabel in Base.metadata.sorted_tables:
+        if tabel.name == "timbangan_audit":
+            continue
+        for kolom in tabel.columns:
+            if any(fk.target_fullname == "timbangan_akun.id"
+                   for fk in kolom.foreign_keys):
+                yield tabel, kolom
+
+
 async def _tabel_yang_menunjuk_akun(db: AsyncSession, akun_id: int) -> list[str]:
     """Nama kolom mana saja yang masih menunjuk akun ini. Audit dikecualikan.
 
@@ -1234,24 +1254,14 @@ async def _tabel_yang_menunjuk_akun(db: AsyncSession, akun_id: int) -> list[str]
     Audit sengaja di luar hitungan: barisnya sudah menyimpan `akun_nama`
     sebagai salinan, jadi jejaknya tetap terbaca meski penunjuknya dilepas.
     """
-    from app.database import Base
-
     dipakai = []
-    for tabel in Base.metadata.sorted_tables:
-        if tabel.name == "timbangan_audit":
-            continue
-        for kolom in tabel.columns:
-            if not any(
-                fk.target_fullname == "timbangan_akun.id"
-                for fk in kolom.foreign_keys
-            ):
-                continue
-            ada = (await db.execute(
-                select(literal(1)).select_from(tabel)
-                .where(kolom == akun_id).limit(1)
-            )).first()
-            if ada:
-                dipakai.append(f"{tabel.name}.{kolom.name}")
+    for tabel, kolom in _kolom_penunjuk_akun():
+        ada = (await db.execute(
+            select(literal(1)).select_from(tabel)
+            .where(kolom == akun_id).limit(1)
+        )).first()
+        if ada:
+            dipakai.append(f"{tabel.name}.{kolom.name}")
     return dipakai
 
 
@@ -1262,23 +1272,28 @@ async def hapus_akun(
     orang: TimbanganAkun,
     ip: str | None = None,
 ) -> str:
-    """Hapus akun yang belum pernah dipakai. Mengembalikan namanya.
+    """Hapus akun. Mengembalikan namanya.
 
-    Menghapus akun BUKAN kebalikan dari membuatnya. Begitu seseorang pernah
-    menimbang, namanya melekat pada catatan timbang, lembar pemeriksaan, dan
-    riwayat cetak — dokumen yang gunanya justru menyebut siapa yang
-    mengerjakan. Menghapusnya berarti salah satu dari dua hal: catatan itu
-    ikut hilang, atau ia berubah menjadi menunjuk "tidak ada siapa-siapa".
-    Keduanya memalsukan catatan.
+    **Catatan timbang tidak pernah ikut terhapus.** Yang dilepas hanya
+    penunjuk namanya: baris yang tadinya menyebut orang ini berubah menjadi
+    tidak menyebut siapa-siapa. Angka timbang, tanggal, selisih, status —
+    semuanya utuh.
 
-    Maka yang bisa dihapus hanya akun yang belum meninggalkan jejak apa pun —
-    salah ketik saat membuat, akun percobaan, orang yang batal masuk kerja.
-    Selebihnya dinonaktifkan: pintunya tertutup, catatannya tetap benar.
+    Karena itu wewenangnya dibagi dua:
 
-    Jejak audit miliknya tidak ikut dihapus. Penunjuk akunnya dilepas, tetapi
-    `akun_nama` sudah tersimpan sebagai salinan sejak baris itu ditulis,
-    sehingga "siapa" tetap terbaca. Audit hanya bertambah — termasuk ketika
-    yang dicatat adalah penghapusan ini sendiri.
+      · **Admin** hanya boleh menghapus akun yang belum meninggalkan jejak
+        kerja apa pun — salah ketik saat membuat, akun percobaan, orang yang
+        batal masuk. Untuk yang sudah bekerja: nonaktifkan, supaya catatannya
+        tetap menyebut orang yang benar.
+      · **Super Admin** boleh menghapus akun yang sudah bekerja, dan nama
+        pada catatan-catatan itu dikosongkan. Keputusan Direksi 30 Agustus
+        2026.
+
+    Jejak audit tidak ikut terhapus, baik miliknya maupun tentangnya.
+    Penunjuk akunnya dilepas, tetapi `akun_nama` sudah tersimpan sebagai
+    salinan sejak baris itu ditulis — sehingga "siapa" tetap terbaca di sana
+    meski akunnya tidak ada lagi. Itu pula satu-satunya tempat yang masih
+    bisa menjawab siapa yang menimbang catatan yang namanya dikosongkan.
     """
     from app.timbangan.models import TimbanganAudit
 
@@ -1293,22 +1308,37 @@ async def hapus_akun(
         )
 
     dipakai = await _tabel_yang_menunjuk_akun(db, orang.id)
-    if dipakai:
+    if dipakai and not admin.is_super:
         raise LayananError(
-            f"{orang.nama} sudah punya riwayat kerja, jadi akunnya tidak bisa "
-            "dihapus tanpa merusak catatan yang menyebut namanya. "
-            "Nonaktifkan saja — pintunya tertutup, catatannya tetap benar."
+            f"{orang.nama} sudah punya riwayat kerja. Menghapus akunnya akan "
+            "mengosongkan namanya dari catatan-catatan itu, dan itu hanya "
+            "bisa dilakukan Super Admin. Nonaktifkan saja — pintunya "
+            "tertutup, catatannya tetap menyebut orang yang benar."
         )
 
     nama = orang.nama
     await catat_audit(
         db, akun=admin, aksi="HAPUS_AKUN", entitas="akun", entitas_id=orang.id,
-        ringkasan=f"{orang.username} ({nama}) dihapus — belum punya riwayat kerja",
+        ringkasan=(
+            f"{orang.username} ({nama}) dihapus — "
+            + (f"nama dikosongkan dari {len(dipakai)} kolom catatan: "
+               + ", ".join(dipakai)
+               if dipakai else "belum punya riwayat kerja")
+        ),
         sebelum={"username": orang.username, "nama": nama, "role": orang.role,
                  "perangkat_kode": orang.perangkat_kode, "status": orang.status},
+        sesudah={"nama_dikosongkan_dari": dipakai} if dipakai else None,
         ip=ip,
     )
-    # Lepaskan penunjuk di audit sebelum barisnya hilang; `akun_nama` tetap.
+
+    # Kosongkan namanya dari catatan, JANGAN hapus catatannya. Semua kolom
+    # penunjuk akun memang boleh NULL — itu keputusan skema sejak awal,
+    # supaya catatan tidak pernah bergantung pada akun yang masih ada.
+    for tabel, kolom in _kolom_penunjuk_akun():
+        await db.execute(
+            tabel.update().where(kolom == orang.id).values({kolom.name: None})
+        )
+    # Penunjuk di audit ikut dilepas; `akun_nama` tetap menyimpan namanya.
     await db.execute(
         update(TimbanganAudit)
         .where(TimbanganAudit.akun_id == orang.id)

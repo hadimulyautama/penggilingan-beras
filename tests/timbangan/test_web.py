@@ -229,7 +229,9 @@ async def test_jasa_timbang_sekali_langsung_ada_hasil(klien):
         "waktu": "", "catatan": "", "nomor_acuan": "", "nama_sopir": "",
     })
     assert r.status_code == 200
-    assert "JASA TIMBANG" in r.text
+    # Statusnya dipakai jasa timbang maupun transfer internal, jadi labelnya
+    # menyebut sifatnya — bukan salah satu pemakainya.
+    assert "TANPA KONTROL" in r.text
     assert "12.850 kg" in r.text
 
 
@@ -465,7 +467,8 @@ async def test_pengaturan_mendaftar_parameter_beserta_nilainya(klien):
     assert "Tiket ditandai lama setelah" in teks and 'value="12"' in teks
     assert "Ukuran maksimum satu foto" in teks and 'value="4"' in teks
     assert TELEPON_UJI in teks
-    assert "11 komoditas aktif" in teks
+    from app.timbangan import logic
+    assert f"{len(logic.JENIS_AWAL)} komoditas aktif" in teks
 
 
 async def test_bukan_admin_melihat_nilai_terbaca_tanpa_kotak_isian(klien):
@@ -1867,3 +1870,173 @@ async def test_peran_karangan_ditolak_saat_membuat_akun(klien, app_uji):
         "sandi": "rahasia123", "perangkat_kode": "",
     })
     assert "tidak dikenal" in r.text
+
+
+async def test_super_admin_menghapus_akun_tanpa_menghapus_catatannya(
+    klien, app_uji
+):
+    """Keputusan Direksi: catatannya tetap, namanya saja yang dikosongkan."""
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    budi = await akun_oleh(app_uji, "budi")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}/hapus",
+                         data={"ketik_username": "budi"})
+    assert "dihapus" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx is not None                      # catatannya utuh…
+    assert trx.timbang1_kg == 13600
+    assert trx.status_kontrol is not None
+    assert trx.timbang1_petugas_id is None      # …namanya saja yang lepas
+    assert trx.timbang2_petugas_id is None
+
+
+async def test_jejak_audit_masih_menjawab_siapa_setelah_akunnya_dihapus(
+    klien, app_uji
+):
+    """Satu-satunya tempat yang masih bisa menyebut pelakunya."""
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien, "budi")
+    await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    budi = await akun_oleh(app_uji, "budi")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna/{budi.id}/hapus",
+                     data={"ketik_username": "budi"})
+
+    async with database.SessionLocal() as db:
+        timbang = (await db.execute(
+            select(TimbanganAudit).where(
+                TimbanganAudit.aksi == "SIMPAN_TIMBANG_2")
+        )).scalars().one()
+        hapus = (await db.execute(
+            select(TimbanganAudit).where(TimbanganAudit.aksi == "HAPUS_AKUN")
+        )).scalars().one()
+
+    assert timbang.akun_id is None
+    assert timbang.akun_nama == "Budi"                   # namanya tetap terbaca
+    assert "nama dikosongkan dari" in hapus.ringkasan
+    assert "timbangan_transaksi.timbang1_petugas_id" in hapus.ringkasan
+
+
+# ─────────────── Transfer internal ───────────────
+
+async def test_beranda_menawarkan_transfer_internal(klien):
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+    assert "Transfer internal" in beranda
+    # Satu jenis saja, jadi langsung ke formulirnya.
+    assert f"{PREFIX}/timbang/TRANSFER" in beranda
+
+
+async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
+    """Armada datang bermuatan dan ditimbang ulang setelah dibongkar —
+    urutannya sama seperti barang masuk."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
+    assert "Berat truk bermuatan" in form
+    assert "Asal → tujuan" in form
+
+    await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "",
+        "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
+        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+
+    form2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert "Berat truk kosong" in form2
+
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3600", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert "selesai dan tersimpan" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.status_tiket == TIKET_SELESAI
+    assert trx.berat_bermuatan_kg == 13600
+    assert trx.berat_kosong_kg == 3600
+    assert trx.netto_timbangan_kg == 10000
+    assert trx.pihak_nama == "Gudang 1 → Gudang 2"
+
+
+async def test_transfer_internal_tanpa_dokumen_pembanding(klien):
+    """Keputusan Direksi: cukup dicatat berapa yang berpindah.
+
+    Kolom dokumen tidak ditampilkan — menyediakannya hanya mengundang angka
+    yang tidak akan pernah dipakai.
+    """
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
+    assert "Nota supplier" not in form
+    assert "Surat jalan" not in form
+    assert 'name="jumlah_karung"' in form        # muatan tetap boleh dicatat
+
+    await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "",
+        "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
+        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    form2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert "Berat menurut dokumen" not in form2
+
+
+async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
+    """Pagar itu khusus barang masuk, yang taranya memang per karung."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
+    await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "",
+        "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
+        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3600", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert "Jumlah karung belum diisi" not in r.text
+    assert (await trx_oleh_id(trx_id)).status_tiket == TIKET_SELESAI
+    assert "Simpan sementara" not in (
+        await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
+
+
+async def test_unduh_csv_dibuka_di_jendela_terpisah(klien):
+    """Di PWA terpasang tidak ada bilah peramban: berkas yang dibuka di
+    jendela yang sama menggantikan halaman dan tidak menyisakan jalan
+    kembali."""
+    await login(klien, "wahid")
+    for jalur in ("/transaksi", "/laporan"):
+        teks = (await klien.get(PREFIX + jalur)).text
+        # Atribut tautannya ditulis sebelum href, jadi diperiksa dari
+        # potongan tepat di depan alamatnya.
+        potongan = teks[max(0, teks.index("ekspor.csv") - 200):
+                        teks.index("ekspor.csv")]
+        assert 'target="_blank"' in potongan, jalur
+        assert "download" in potongan, jalur

@@ -15,7 +15,7 @@ import app.gudang2.models  # noqa: F401
 import app.models  # noqa: F401
 from app.database import Base
 from app.models import Supplier
-from app.timbangan import service
+from app.timbangan import logic, service
 from app.timbangan.models import ROLE_ADMIN, ROLE_PETUGAS, TimbanganAkun
 
 
@@ -74,5 +74,5 @@ async def supplier(db):
 async def jenis_tersemai(db):
     """Master komoditas terisi dari aturan awal."""
     jumlah = await service.pastikan_jenis(db)
-    assert jumlah == 11
+    assert jumlah == len(logic.JENIS_AWAL)
     return jumlah
