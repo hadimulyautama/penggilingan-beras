@@ -5,11 +5,14 @@ from dataclasses import dataclass
 from datetime import date, time, timedelta
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import input_time, now_local
 from app.models import PurchaseBatch, Supplier, User
+from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
+from app.penggilingan.peta_jenis import intake_dari_jenis
 from app.services.activity_log import log_activity
 from app.services.codegen import next_purchase_batch_code
 from app.services.notification import create_notification
@@ -110,6 +113,91 @@ async def create_purchase_batch(
         prioritas="kuning",
         table_name="purchase_batches",
         record_id=batch.id,
+    )
+
+    await db.commit()
+    await db.refresh(batch)
+    return CreatedBatch(batch=batch, supplier=supplier, supplier_created=created)
+
+
+async def create_purchase_batch_dari_timbang(
+    db: AsyncSession,
+    *,
+    user: User,
+    timbangan_transaksi_id: int,
+    kadar_air_awal_persen: float | None = None,
+    kondisi_gabah: str | None = None,
+    tanggal: date | None = None,
+    jam: time | None = None,
+) -> CreatedBatch:
+    """Buat batch gabah DARI tiket TIMBANG (aplikasi terpisah, DB terintegrasi).
+
+    Operator hanya memilih tiket; SUPPLIER, BOBOT, NOPOL diturunkan dari timbang (tak
+    diinput ulang → cegah dobel). Bobot & `sumber_berat` ikut tiket: NOTA bila ada,
+    selain itu REAL timbang. `timbangan_transaksi_id` UNIQUE → satu tiket satu batch.
+    """
+    tiket = await ambil_tiket(db, timbangan_transaksi_id)
+    if tiket is None:
+        raise ValueError("Tiket timbang tidak ditemukan.")
+    if tiket.get("arah") != "MASUK":
+        raise ValueError("Tiket timbang bukan barang MASUK.")
+    # Bobot boleh belum ada (batch dibuat saat bongkar). Referensi bobot = tiket:
+    # nota bila ada, selain itu netto timbang. Kosong → status "menunggu bobot",
+    # diisi otomatis oleh sinkronisasi saat tiket punya bobot (nota/timbang-2).
+    b = tiket.get("berat_hpp_kg")
+    ada_bobot = b is not None and float(b) > 0
+    berat = float(b) if ada_bobot else None
+    sumber = tiket["sumber_berat"] if ada_bobot else "menunggu"
+
+    now = input_time(tanggal, jam)
+    if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
+        raise DailyLimitReached(settings.max_purchase_batch_per_day)
+
+    # Supplier: pakai yang tertaut di tiket bila ada; selain itu cari/buat dari nama pihak.
+    if tiket.get("supplier_id"):
+        supplier = await db.get(Supplier, tiket["supplier_id"])
+        created = False
+    else:
+        nama = tiket.get("nama_supplier") or tiket.get("pihak_nama") or "Tanpa Nama"
+        supplier, created = await find_or_create_supplier(db, nama)
+
+    _info = intake_dari_jenis(tiket.get("jenis_kode", ""))
+    kondisi = kondisi_gabah or (_info.kondisi if _info and _info.kondisi else "basah")
+    kode = await next_purchase_batch_code(db, now.date())
+    batch = PurchaseBatch(
+        kode_batch=kode,
+        supplier_id=supplier.id,
+        berat_total_kg=berat,  # None = menunggu bobot (disinkron dari tiket)
+        no_polisi_truk=tiket.get("nomor_polisi"),
+        kondisi_gabah=kondisi,
+        kadar_air_awal_persen=kadar_air_awal_persen,
+        tanggal_pembelian=now.date(),
+        waktu_pembelian=now,
+        input_by=user.id,
+        status_batch="baru",
+        flag_unverified=True,
+        timbangan_transaksi_id=timbangan_transaksi_id,
+        sumber_berat=sumber,
+    )
+    db.add(batch)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise ValueError("Tiket timbang ini sudah ditautkan ke batch lain.")
+
+    b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
+    await log_activity(
+        db, table_name="purchase_batches", record_id=batch.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{kode} | {supplier.nama_supplier} | {b_str} | timbang {tiket['kode']}",
+    )
+    await create_notification(
+        db, tipe="verifikasi_harga_gabah",
+        pesan=(f"🟡 Batch {kode} ({supplier.nama_supplier}, {b_str}, "
+               f"dari timbang {tiket['kode']}) menunggu verifikasi harga."),
+        target_role="staff", prioritas="kuning",
+        table_name="purchase_batches", record_id=batch.id,
     )
 
     await db.commit()

@@ -164,11 +164,12 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
         # dinginkan/pindah silo → giling.
         actions += [
             {"id": "gabah_masuk", "label": "🌾 Gabah masuk",
-             "post": "/miniapp/actions/gabah-masuk", "fields": [
-                 {"name": "supplier", "label": "Supplier", "type": "text"},
-                 {"name": "berat", "label": "Berat (kg)", "type": "number"},
-                 {"name": "kondisi", "label": "Kondisi gabah", "type": "select", "options": KONDISI},
-                 {"name": "plat", "label": "Plat truk", "type": "text"},
+             "post": "/miniapp/actions/gabah-masuk",
+             "hint": "Pilih tiket timbang yang masih aktif — supplier, bobot, & plat "
+                     "otomatis dari timbangan (tak perlu diketik ulang).",
+             "fields": [
+                 {"name": "timbangan_transaksi_id", "label": "Tiket timbang (gabah masuk)",
+                  "type": "remote", "source": "/miniapp/actions/timbang-masuk-aktif"},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
                   "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
                               ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
@@ -648,37 +649,63 @@ async def _chat_confirm(user: User, text: str, bot_name: str = "gudang1") -> Non
 
 
 class GabahMasukReq(BaseModel):
-    supplier: str
-    berat: float
-    kondisi: str
-    plat: str | None = None
-    tujuan: str | None = None  # utk kering: dryer / silo_a / silo_b
+    # Operator hanya memilih TIKET TIMBANG aktif — supplier/bobot/nopol dari timbang.
+    timbangan_transaksi_id: int
+    tujuan: str | None = None       # dryer / silo_a / silo_b
+    kondisi: str | None = None      # opsional; diturunkan dari jenis timbang bila kosong
+
+
+@router.get("/actions/timbang-masuk-aktif")
+async def timbang_masuk_aktif(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Daftar tiket timbang MASUK gabah yang masih AKTIF & belum tertaut batch."""
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    async with SessionLocal() as db:
+        tk = await tiket_masuk_aktif(db)
+    out = []
+    for t in tk:
+        if not str(t.get("jenis_kode", "")).startswith("GABAH"):
+            continue  # gabah saja (PK punya aksi sendiri)
+        nm = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        b = t.get("berat_hpp_kg")
+        bstr = f"{_rp(float(b))} kg ({t['sumber_berat']})" if b else "⚠️ bobot belum ada"
+        out.append({"value": t["id"],
+                    "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} · {bstr}"})
+    return out
 
 
 @router.post("/actions/gabah-masuk")
 async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(await _is_g1_operator(user))
-    if req.kondisi not in ("basah", "kering"):
-        raise HTTPException(400, "Pilih kondisi gabah dulu: Basah atau Kering.")
-    if not (req.plat or "").strip():
-        raise HTTPException(400, "Plat truk wajib diisi.")
-    # Tujuan WAJIB dipilih (tak boleh default/terlupa) — hindari salah tempat.
-    if req.tujuan not in ("dryer", "silo_a", "silo_b"):
-        raise HTTPException(400, "Pilih tujuan dulu: Dryer / Silo A / Silo B.")
-    if req.kondisi == "basah" and req.tujuan != "dryer":
-        raise HTTPException(400, "Gabah basah harus ke Dryer (tak bisa langsung ke silo).")
 
-    from app.penggilingan.gudang1.services.purchase import create_purchase_batch
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+    from app.penggilingan.gudang1.services.purchase import create_purchase_batch_dari_timbang
+    from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
     from app.penggilingan.gudang1.services.drying import masuk_dryer, DryingError
     from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
+        tiket = await ambil_tiket(db, req.timbangan_transaksi_id)
+        if tiket is None:
+            raise HTTPException(400, "Tiket timbang tak ditemukan.")
+        # Peta jenis → produksi langsung tahu kondisi & tujuan yang sah.
+        info = intake_dari_jenis(tiket.get("jenis_kode", ""))
+        if info is None or info.model != "gabah":
+            raise HTTPException(400, "Tiket ini bukan gabah masuk.")
+        kondisi = info.kondisi
+        if info.tujuan_wajib:            # gabah basah → Dryer otomatis (tak perlu pilih)
+            tujuan = info.tujuan_wajib
+        else:                           # gabah kering → operator pilih Silo/Dryer
+            tujuan = req.tujuan
+            if tujuan not in info.tujuan_pilihan:
+                raise HTTPException(400, "Pilih tujuan: Silo A / Silo B / Dryer.")
         try:
-            r = await create_purchase_batch(
-                db, user=u, nama_supplier=req.supplier, berat_kg=req.berat,
-                kondisi_gabah=req.kondisi, no_polisi_truk=req.plat.strip(),
-                kadar_air_awal_persen=None,
+            r = await create_purchase_batch_dari_timbang(
+                db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
+                kondisi_gabah=kondisi,
             )
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal mencatat gabah.")
         kode = r.batch.kode_batch
@@ -686,17 +713,17 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
         # PENEMPATAN (agar tak nyangkut sebagai 'baru').
         tempat, warn = "", ""
         try:
-            if req.tujuan == "dryer":
+            if tujuan == "dryer":
                 await masuk_dryer(db, user=u, kode_batch_list=[kode])
                 tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
             else:  # silo_a / silo_b (kering langsung)
-                silo = "A" if req.tujuan == "silo_a" else "B"
+                silo = "A" if tujuan == "silo_a" else "B"
                 await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
                 tempat = f"🏗️ masuk Silo {silo} (kering menunggu — lot terbentuk saat digiling)"
         except (DryingError, SiloError) as e:
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
-    pesan = f"✓ Gabah *{kode}* ({req.kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
+    pesan = f"✓ Gabah *{kode}* ({kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
     await _chat_confirm(user, pesan, "gudang1")
     return {"ok": True, "pesan": pesan}
 
