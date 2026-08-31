@@ -407,7 +407,7 @@ Direvisi **30 Agustus 2026** (keputusan #6, #7, dan #9 di §12). **Tiga peran.**
 | Koreksi setelah terkunci, VOID | — | ✅ | ✅ |
 | Tutup paksa pengiriman kurang | ✅ | ✅ | ✅ |
 | Tutup lembar pemeriksaan | — | ✅ | ✅ |
-| Catat sampling tara | ✅ | ✅ | ✅ |
+| Catat sampling tara | — | ✅ | ✅ |
 | Setujui tara standar | — | ✅ | ✅ |
 | Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ | ✅ |
 | Ubah peran & kode perangkat siapa pun | — | ✅ | ✅ |
