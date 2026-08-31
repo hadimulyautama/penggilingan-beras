@@ -111,7 +111,7 @@ async def stok_gudang1() -> str:
 @mcp.tool()
 async def stok_gudang2() -> str:
     """Stok PK Gudang 2 (Penyosohan): silo A/B (+ HPP rata-rata) + tumpukan."""
-    from app.gudang2.service import laporan_stok_gudang2
+    from app.penggilingan.gudang2.service import laporan_stok_gudang2
     async with SessionLocal() as db:
         return await laporan_stok_gudang2(db, financial=True)
 
@@ -119,7 +119,7 @@ async def stok_gudang2() -> str:
 @mcp.tool()
 async def stok_barang_jadi() -> str:
     """Stok barang jadi (beras per jenis) + bekatul curah."""
-    from app.inventory.finished_goods import hitung_stok_bekatul, laporan_stok_barang_jadi
+    from app.penggilingan.inventory.finished_goods import hitung_stok_bekatul, laporan_stok_barang_jadi
     async with SessionLocal() as db:
         bekatul = float(await hitung_stok_bekatul(db))
         return (await laporan_stok_barang_jadi(db)) + f"\n\n🌾 Bekatul curah: {bekatul:,.0f} kg"
@@ -128,7 +128,7 @@ async def stok_barang_jadi() -> str:
 @mcp.tool()
 async def stok_kemasan() -> str:
     """Stok kemasan (karung) per merk/jenis/ukuran."""
-    from app.inventory.packaging import laporan_stok_kemasan
+    from app.penggilingan.inventory.packaging import laporan_stok_kemasan
     async with SessionLocal() as db:
         return await laporan_stok_kemasan(db)
 

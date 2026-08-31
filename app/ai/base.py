@@ -1,7 +1,7 @@
 """Infrastruktur NLP bersama: forced tool-use Claude + helper tanggal/jam/silo.
 
 Dipakai oleh parser bersama (app.ai.nlp_parser) maupun parser domain
-(app.gudang1.nlp, app.gudang2.nlp). TIDAK mengimpor modul parser → bebas siklus.
+(app.penggilingan.gudang1.nlp, app.penggilingan.gudang2.nlp). TIDAK mengimpor modul parser → bebas siklus.
 """
 from __future__ import annotations
 

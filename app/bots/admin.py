@@ -51,7 +51,7 @@ from app.bots.report_flow import maybe_answer_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.silo_flow import maybe_answer_silo_report
 from app.database import BackdateError, SessionLocal
-from app.gudang2.service import (
+from app.penggilingan.gudang2.service import (
     Gudang2Error,
     create_pk_purchase,
     laporan_stok_gudang2,
@@ -59,25 +59,25 @@ from app.gudang2.service import (
     norm_jenis_pk,
     verify_pk_price,
 )
-from app.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
-from app.inventory.packaging import (
+from app.penggilingan.inventory.nlp import parse_barang_jadi, parse_kemasan, parse_keluar
+from app.penggilingan.inventory.packaging import (
     InventoryError,
     beli_kemasan,
     laporan_stok_kemasan,
 )
-from app.inventory.finished_goods import (
+from app.penggilingan.inventory.finished_goods import (
     laporan_hpp_beras,
     laporan_stok_barang_jadi,
     set_harga_byproduct,
 )
-from app.inventory.outgoing import (
+from app.penggilingan.inventory.outgoing import (
     jual_pk_langsung,
     kirim_bekatul,
     kirim_finished_goods,
     laporan_barang_keluar,
 )
 from app.models import User, Warehouse
-from app.gudang1.services.milling import (
+from app.penggilingan.gudang1.services.milling import (
     MillingError,
     log_qc_milling,
     verify_milling_output,

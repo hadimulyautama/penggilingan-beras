@@ -26,7 +26,7 @@ from app.models import (
 from app.services.activity_log import log_activity
 from app.services.codegen import next_polishing_code
 from app.services.notification import create_notification
-from app.gudang2.service import Gudang2Error, get_g2_silo, hitung_stok_silo
+from app.penggilingan.gudang2.service import Gudang2Error, get_g2_silo, hitung_stok_silo
 
 # Jenis output yang dikenal.
 GRADES = ["sayur", "medium", "medsuper", "premium", "beras_b"]

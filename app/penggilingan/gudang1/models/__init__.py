@@ -1,5 +1,5 @@
 """Model domain Gudang 1: pembelian, pengeringan, silo, milling."""
-from app.gudang1.models.gudang1 import (
+from app.penggilingan.gudang1.models.gudang1 import (
     DryingCoolingLog,
     DryingLot,
     DryingLotBatch,
@@ -9,7 +9,7 @@ from app.gudang1.models.gudang1 import (
     SiloMovingLog,
     SiloStorage,
 )
-from app.gudang1.models.milling import (
+from app.penggilingan.gudang1.models.milling import (
     MillingPkRouting,
     MillingProcess,
     MillingProcessVerification,

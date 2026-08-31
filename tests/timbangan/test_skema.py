@@ -19,8 +19,8 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
-import app.gudang1.models  # noqa: F401  (daftarkan purchase_batches)
-import app.gudang2.models  # noqa: F401  (daftarkan pk_purchase_batches)
+import app.penggilingan.gudang1.models  # noqa: F401  (daftarkan purchase_batches)
+import app.penggilingan.gudang2.models  # noqa: F401  (daftarkan pk_purchase_batches)
 import app.models  # noqa: F401  (daftarkan users & suppliers)
 from app.database import Base
 from app.timbangan import models as M  # noqa: F401

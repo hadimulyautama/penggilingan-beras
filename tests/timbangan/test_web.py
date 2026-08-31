@@ -15,8 +15,8 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-import app.gudang1.models  # noqa: F401
-import app.gudang2.models  # noqa: F401
+import app.penggilingan.gudang1.models  # noqa: F401
+import app.penggilingan.gudang2.models  # noqa: F401
 import app.models  # noqa: F401
 from app import database
 from app.database import Base

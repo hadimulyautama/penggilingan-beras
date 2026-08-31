@@ -12,14 +12,14 @@ from app.bots.registry import build_bots, run_polling
 from app.config import settings
 from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
-from app.services.billing_poller import run_billing_poller
-from app.services.kledo_kontak_poller import run_kledo_kontak_poller
-from app.services.briefing_poller import run_briefing_poller
-from app.services.deadline_poller import run_deadline_poller
-from app.services.email_rapi_poller import run_email_rapi_poller
-from app.services.invoice_poller import run_invoice_poller
+from app.kantor.proaktif.billing import run_billing_poller
+from app.kantor.proaktif.kledo_kontak import run_kledo_kontak_poller
+from app.kantor.proaktif.briefing import run_briefing_poller
+from app.kantor.proaktif.deadline import run_deadline_poller
+from app.kantor.proaktif.email_rapi import run_email_rapi_poller
+from app.kantor.proaktif.invoice import run_invoice_poller
 from app.services.heartbeat import run_heartbeat
-from app.services.persetujuan_poller import run_persetujuan_poller
+from app.kantor.proaktif.persetujuan import run_persetujuan_poller
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.miniapp import router as miniapp_router

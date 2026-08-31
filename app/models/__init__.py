@@ -1,11 +1,11 @@
 """Facade model: re-export semua model + Base agar Alembic & aplikasi menemukannya.
 
-Definisi model tinggal di paket domain (app.gudang1.models, app.gudang2.models)
+Definisi model tinggal di paket domain (app.penggilingan.gudang1.models, app.penggilingan.gudang2.models)
 dan master/system/transfer di sini. Konsumen tetap pakai `from app.models import X`.
 """
 from app.database import Base
 from app.models.master import Dryer, Silo, Supplier, User, Warehouse
-from app.gudang1.models import (
+from app.penggilingan.gudang1.models import (
     DryingCoolingLog,
     DryingLot,
     DryingLotBatch,
@@ -21,7 +21,7 @@ from app.gudang1.models import (
     SiloMovingLog,
     SiloStorage,
 )
-from app.gudang2.models import (
+from app.penggilingan.gudang2.models import (
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,
@@ -31,7 +31,7 @@ from app.gudang2.models import (
     PolishingProcess,
     PolishingSiloUsage,
 )
-from app.inventory.models import (
+from app.penggilingan.inventory.models import (
     Brand,
     ByproductPrice,
     ByproductStock,

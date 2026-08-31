@@ -244,11 +244,11 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
     async with SessionLocal() as db:
         if name == "ringkasan_stok":
             from app.services.transfer import laporan_pk_siap_transfer
-            from app.gudang2.service import laporan_stok_gudang2
-            from app.inventory.finished_goods import (
+            from app.penggilingan.gudang2.service import laporan_stok_gudang2
+            from app.penggilingan.inventory.finished_goods import (
                 laporan_stok_barang_jadi, hitung_stok_bekatul,
             )
-            from app.inventory.packaging import laporan_stok_kemasan
+            from app.penggilingan.inventory.packaging import laporan_stok_kemasan
             bagian = [
                 await laporan_pk_siap_transfer(db),
                 await laporan_stok_gudang2(db, financial=financial),
@@ -260,8 +260,8 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
 
         if name == "status_gudang1":
             from app.services.report import status_gudang1
-            from app.gudang1.services.silo import laporan_silo
-            from app.gudang1.services.milling import laporan_milling
+            from app.penggilingan.gudang1.services.silo import laporan_silo
+            from app.penggilingan.gudang1.services.milling import laporan_milling
             from app.services.transfer import laporan_pk_siap_transfer
             return "\n\n".join([
                 await status_gudang1(db),
@@ -271,23 +271,23 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
             ])
 
         if name == "status_gudang2":
-            from app.gudang2.service import laporan_stok_gudang2
-            from app.gudang2.polishing import laporan_penyosohan
+            from app.penggilingan.gudang2.service import laporan_stok_gudang2
+            from app.penggilingan.gudang2.polishing import laporan_penyosohan
             return "\n\n".join([
                 await laporan_stok_gudang2(db, financial=financial),
                 await laporan_penyosohan(db),
             ])
 
         if name == "stok_barang_jadi":
-            from app.inventory.finished_goods import laporan_stok_barang_jadi
-            from app.inventory.outgoing import laporan_barang_keluar
+            from app.penggilingan.inventory.finished_goods import laporan_stok_barang_jadi
+            from app.penggilingan.inventory.outgoing import laporan_barang_keluar
             return "\n\n".join([
                 await laporan_stok_barang_jadi(db),
                 await laporan_barang_keluar(db),
             ])
 
         if name == "stok_kemasan":
-            from app.inventory.packaging import laporan_stok_kemasan
+            from app.penggilingan.inventory.packaging import laporan_stok_kemasan
             return await laporan_stok_kemasan(db)
 
         if name == "tugas_pending":
@@ -332,7 +332,7 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
         if name == "laporan_keuangan":
             if not financial:
                 return "🔒 Data keuangan hanya untuk staff/admin."
-            from app.inventory.finished_goods import laporan_hpp_beras
+            from app.penggilingan.inventory.finished_goods import laporan_hpp_beras
             from app.services.transfer import laporan_transfer
             from app.services.report import laporan_pembelian_gabah
             periode = args.get("periode") or "hari_ini"

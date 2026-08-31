@@ -53,8 +53,8 @@ def _clean(s: str) -> str:
 async def _hpp_terkini(db) -> str:
     from sqlalchemy import select
     from app.models import PolishingProcess
-    from app.inventory.finished_goods import laporan_hpp_beras
-    from app.inventory.packaging import InventoryError
+    from app.penggilingan.inventory.finished_goods import laporan_hpp_beras
+    from app.penggilingan.inventory.packaging import InventoryError
     kode = (
         await db.execute(
             select(PolishingProcess.kode_proses).order_by(PolishingProcess.id.desc()).limit(1)
@@ -75,9 +75,9 @@ async def dashboard(user: User = Depends(require_miniapp_user)) -> dict:
     from app.bots.common import user_wh_scope
     from app.services.report import status_gudang1, pending_verifikasi
     from app.services.transfer import laporan_pk_siap_transfer
-    from app.gudang2.service import laporan_stok_gudang2
-    from app.inventory.finished_goods import laporan_stok_barang_jadi, hitung_stok_bekatul
-    from app.inventory.packaging import laporan_stok_kemasan
+    from app.penggilingan.gudang2.service import laporan_stok_gudang2
+    from app.penggilingan.inventory.finished_goods import laporan_stok_barang_jadi, hitung_stok_bekatul
+    from app.penggilingan.inventory.packaging import laporan_stok_kemasan
     from app.services.pemantau import pemantau_nyangkut
 
     sections: list[dict] = []
@@ -433,7 +433,7 @@ async def silo_siap_giling(user: User = Depends(require_miniapp_user)) -> list[d
     _require(await _is_g1_operator(user))
     from sqlalchemy import select
     from app.models import MillingProcess, Silo
-    from app.gudang1.services.silo import _g1_warehouse_id, _silo_active_rows, _silo_content_kg
+    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_active_rows, _silo_content_kg
     out: list[dict] = []
     async with SessionLocal() as db:
         wid = await _g1_warehouse_id(db)
@@ -486,7 +486,7 @@ async def pk_transfer_list(user: User = Depends(require_miniapp_user)) -> list[d
     from sqlalchemy import select
     from app.models import MillingProcess
     from app.services.transfer import pending_transfer_kg
-    from app.gudang1.services.milling import pk_jenis
+    from app.penggilingan.gudang1.services.milling import pk_jenis
     out: list[dict] = []
     async with SessionLocal() as db:
         procs = (
@@ -668,9 +668,9 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
     if req.kondisi == "basah" and req.tujuan != "dryer":
         raise HTTPException(400, "Gabah basah harus ke Dryer (tak bisa langsung ke silo).")
 
-    from app.gudang1.services.purchase import create_purchase_batch
-    from app.gudang1.services.drying import masuk_dryer, DryingError
-    from app.gudang1.services.silo import masuk_silo, SiloError
+    from app.penggilingan.gudang1.services.purchase import create_purchase_batch
+    from app.penggilingan.gudang1.services.drying import masuk_dryer, DryingError
+    from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -711,7 +711,7 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(require_miniapp_u
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot pengeringan dulu.")
-    from app.gudang1.services.drying import log_moisture
+    from app.penggilingan.gudang1.services.drying import log_moisture
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -734,7 +734,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_min
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
-    from app.gudang1.services.milling import log_progress
+    from app.penggilingan.gudang1.services.milling import log_progress
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -751,7 +751,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_min
 async def act_mulai_pengeringan(user: User = Depends(require_miniapp_user)) -> dict:
     """Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer, mulai proses."""
     _require(await _is_g1_operator(user))
-    from app.gudang1.services.drying import start_drying, DryingError
+    from app.penggilingan.gudang1.services.drying import start_drying, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -773,7 +773,7 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(require_
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot pengeringan dulu.")
-    from app.gudang1.services.drying import finish_drying, DryingError
+    from app.penggilingan.gudang1.services.drying import finish_drying, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -791,7 +791,7 @@ async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(require_
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot yang didinginkan dulu.")
-    from app.gudang1.services.drying import finish_cooling, DryingError
+    from app.penggilingan.gudang1.services.drying import finish_cooling, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -816,7 +816,7 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(require_minia
         raise HTTPException(400, "Pilih lot yang mau dipindah dulu.")
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
-    from app.gudang1.services.silo import masuk_silo, SiloError
+    from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -839,7 +839,7 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(require_min
     _require(await _is_g1_operator(user))
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo yang digiling dulu.")
-    from app.gudang1.services.milling import start_milling, MillingError
+    from app.penggilingan.gudang1.services.milling import start_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -861,7 +861,7 @@ async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(require_mi
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
-    from app.gudang1.services.milling import finish_milling, MillingError
+    from app.penggilingan.gudang1.services.milling import finish_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -916,7 +916,7 @@ async def act_verify_output(req: VerifyOutputReq, user: User = Depends(require_m
         raise HTTPException(400, "Pilih proses giling dulu.")
     if req.berat_output is None:
         raise HTTPException(400, "Isi berat PK final dulu.")
-    from app.gudang1.services.milling import verify_milling_output, MillingError
+    from app.penggilingan.gudang1.services.milling import verify_milling_output, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -944,7 +944,7 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(require_miniapp_u
         raise HTTPException(400, "Pilih proses giling dulu.")
     if all(v is None for v in (req.kadar_air, req.broken, req.susut)):
         raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / susut.")
-    from app.gudang1.services.milling import log_qc_milling, MillingError
+    from app.penggilingan.gudang1.services.milling import log_qc_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -982,7 +982,7 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_mi
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
     if not (req.plat or "").strip():
         raise HTTPException(400, "Isi plat truk pengirim dulu.")
-    from app.gudang2.service import create_pk_purchase, Gudang2Error
+    from app.penggilingan.gudang2.service import create_pk_purchase, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1022,7 +1022,7 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(require_miniapp_
             and not (req.butir_kuning or req.catatan_lab):
         raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / "
                                  "penyusutan / butir kuning / catatan.")
-    from app.gudang2.service import log_pk_qc, Gudang2Error
+    from app.penggilingan.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1062,7 +1062,7 @@ async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(require_mi
         raise HTTPException(400, "Pilih metode harga dulu: Total atau Per kg.")
     if req.nilai is None:
         raise HTTPException(400, "Isi nilai harga dulu.")
-    from app.gudang2.service import verify_pk_price, Gudang2Error
+    from app.penggilingan.gudang2.service import verify_pk_price, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1123,7 +1123,7 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(require_minia
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
     if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
         raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
-    from app.gudang2.service import masukkan_pk_luar, Gudang2Error
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1145,7 +1145,7 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(req
     silos = {"A": ["A"], "B": ["B"], "AB": ["A", "B"]}.get((req.silo or "").upper())
     if not silos:
         raise HTTPException(400, "Pilih silo bahan dulu: Silo A / Silo B / A+B.")
-    from app.gudang2.polishing import mulai_penyosohan, Gudang2Error
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1171,7 +1171,7 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(req
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
     if not (req.jenis or "").strip():
         raise HTTPException(400, "Pilih jenis hasil dulu.")
-    from app.gudang2.polishing import catat_output, Gudang2Error
+    from app.penggilingan.gudang2.polishing import catat_output, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -1197,7 +1197,7 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo yang selesai dulu: A atau B.")
-    from app.gudang2.polishing import selesai_penyosohan, Gudang2Error
+    from app.penggilingan.gudang2.polishing import selesai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:

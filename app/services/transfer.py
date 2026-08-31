@@ -18,7 +18,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
-from app.gudang1.services.milling import pk_jenis
+from app.penggilingan.gudang1.services.milling import pk_jenis
 
 _LOKASI = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
 
@@ -207,7 +207,7 @@ async def create_internal_transfer(
     # PK LANGSUNG masuk stok Gudang 2 — staff/admin sudah menentukan tujuan saat
     # kirim, jadi tak perlu langkah 'terima' terpisah oleh operator G2.
     # (_add_intake menjalankan guard kapasitas tumpukan lalu commit.)
-    from app.gudang2.service import Gudang2Error, _add_intake
+    from app.penggilingan.gudang2.service import Gudang2Error, _add_intake
     try:
         await _add_intake(
             db, user=user, sumber_tipe="transfer_internal", tujuan=lokasi_tujuan,

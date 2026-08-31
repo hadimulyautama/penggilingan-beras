@@ -10,8 +10,8 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-import app.gudang1.models  # noqa: F401
-import app.gudang2.models  # noqa: F401
+import app.penggilingan.gudang1.models  # noqa: F401
+import app.penggilingan.gudang2.models  # noqa: F401
 import app.models  # noqa: F401
 from app.database import Base
 from app.models import Supplier

@@ -17,8 +17,8 @@ from app.models import MillingProcess, OutgoingItem, OutgoingRecord
 from app.services.activity_log import log_activity
 from app.services.codegen import next_outgoing_code
 from app.services.transfer import pending_transfer_kg
-from app.inventory.packaging import InventoryError, find_or_create_sku, get_standard
-from app.inventory.finished_goods import (
+from app.penggilingan.inventory.packaging import InventoryError, find_or_create_sku, get_standard
+from app.penggilingan.inventory.finished_goods import (
     hitung_stok_bekatul,
     hitung_stok_finished_goods,
 )

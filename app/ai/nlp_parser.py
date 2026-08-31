@@ -1,7 +1,7 @@
 """Facade parser NLP: parser bersama/admin + re-export parser domain G1/G2.
 
 Konsumen tetap `from app.ai.nlp_parser import parse_X / ParsedX`. Definisi
-parser domain tinggal di app.gudang1.nlp / app.gudang2.nlp; infra di app.ai.base.
+parser domain tinggal di app.penggilingan.gudang1.nlp / app.penggilingan.gudang2.nlp; infra di app.ai.base.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from app.ai.tools import (
 )
 
 # Re-export parser domain (facade) — biar impor lama tetap jalan.
-from app.gudang1.nlp import (  # noqa: F401
+from app.penggilingan.gudang1.nlp import (  # noqa: F401
     ParsedMilling,
     ParsedPengeringan,
     ParsedPurchase,
@@ -36,7 +36,7 @@ from app.gudang1.nlp import (  # noqa: F401
     parse_purchase,
     parse_silo,
 )
-from app.gudang2.nlp import ParsedGudang2, parse_gudang2  # noqa: F401
+from app.penggilingan.gudang2.nlp import ParsedGudang2, parse_gudang2  # noqa: F401
 
 
 @dataclass

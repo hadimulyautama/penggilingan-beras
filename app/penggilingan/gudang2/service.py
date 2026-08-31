@@ -36,7 +36,7 @@ from app.services.codegen import (
     next_tumpukan_move_code,
 )
 from app.services.notification import create_notification
-from app.gudang1.services.purchase import find_or_create_supplier
+from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
 
 _TUJUAN_SILO = {"silo_a": "A", "silo_b": "B"}
 

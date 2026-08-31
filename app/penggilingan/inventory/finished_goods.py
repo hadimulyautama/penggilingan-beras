@@ -26,9 +26,9 @@ from app.models import (
     RiceQualityStandard,
 )
 from app.services.activity_log import log_activity
-from app.gudang2.polishing import BYPRODUCTS, GRADES
-from app.gudang2.service import _g2_warehouse_id, hitung_hpp_wavg_silo
-from app.inventory.packaging import (
+from app.penggilingan.gudang2.polishing import BYPRODUCTS, GRADES
+from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_hpp_wavg_silo
+from app.penggilingan.inventory.packaging import (
     InventoryError,
     find_or_create_sku,
     get_material,

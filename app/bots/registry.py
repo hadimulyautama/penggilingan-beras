@@ -8,8 +8,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import ErrorEvent
 
 from app.bots import admin
-from app.gudang1 import bot as gudang1
-from app.gudang2 import bot as gudang2
+from app.penggilingan.gudang1 import bot as gudang1
+from app.penggilingan.gudang2 import bot as gudang2
 from app.kantor import bot as kantor
 from app.config import settings
 

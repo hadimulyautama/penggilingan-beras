@@ -22,7 +22,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_drying_lot_code, next_milling_code
-from app.gudang1.services.silo import _silo_active_rows, get_g1_silo
+from app.penggilingan.gudang1.services.silo import _silo_active_rows, get_g1_silo
 
 
 class MillingError(Exception):

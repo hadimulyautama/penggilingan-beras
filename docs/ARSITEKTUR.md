@@ -1,7 +1,7 @@
 # Arsitektur Sistem — PT Hadi Mulya Utama
 
 **Peta tingkat sistem: tiga modul di atas satu fondasi**
-Versi 1.0 · 25 Agustus 2026
+Versi 1.1 · 31 Agustus 2026
 
 Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama, dan aturan yang menjaga agar penambahan modul berikutnya tidak merusak yang sudah ada. Rancangan rinci tiap modul ada di dokumennya sendiri.
 
@@ -11,9 +11,44 @@ Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama
 
 | Modul | Untuk siapa | Isi | Di kode |
 |---|---|---|---|
-| **Produksi penggilingan** | Operator gudang & staff | Gabah masuk, pengeringan, silo, milling, penyosohan, barang jadi, kemasan, barang keluar | `app/gudang1`, `app/gudang2`, `app/inventory`, `app/services` |
-| **AI Agent asisten** | Direksi & manajer | Arsip Drive, Gmail, Kledo, GajiHub, IT aset, pengetahuan, persetujuan | `app/kantor`, `app/ai` |
-| **Timbangan** | Petugas pos timbang | Catat timbang, kontrol terhadap nota & surat jalan, monitoring | `app/timbangan` |
+| **Produksi penggilingan** | Operator gudang & staff | Gabah masuk, pengeringan, silo, milling, penyosohan, barang jadi, kemasan, barang keluar | `app/penggilingan/` |
+| **AI Agent asisten** | Direksi & manajer | Arsip Drive, Gmail, Kledo, GajiHub, IT aset, pengetahuan, persetujuan, lapisan proaktif | `app/kantor/` |
+| **Timbangan** | Petugas pos timbang | Catat timbang, kontrol terhadap nota & surat jalan, monitoring | `app/timbangan/` |
+
+### Membaca susunan berkasnya
+
+Dirapikan **31 Agustus 2026** supaya pertanyaan "folder ini milik sistem yang
+mana" bisa dijawab dari susunannya sendiri, tanpa membaca isinya:
+
+```
+app/
+  config.py  database.py  main.py  seed.py     ← fondasi
+  models/                                       ← fasad model bersama
+  ai/                                           ← lapisan agentik bersama
+  bots/  services/  web/                        ← kerangka bersama + layanan penggilingan
+  penggilingan/   gudang1  gudang2  inventory
+  kantor/         …  proaktif/
+  timbangan/
+```
+
+Dua hal yang **sengaja tidak** ikut dikelompokkan, dan alasannya penting:
+
+- **`app/ai/` bukan milik penggilingan.** Ia dipakai `bots`, ketiga domain
+  penggilingan, **dan** `kantor`. Menurunkannya ke `penggilingan/` akan
+  membuat tata letaknya berbohong.
+- **`app/bots/`, `app/services/`, dan `app/web/` bercampur.** Sebagian besar
+  isinya melayani penggilingan, tetapi `bots/common`, `bots/notify`,
+  `services/scheduler`, dan `services/heartbeat` dipakai lintas modul.
+  Memisahkannya butuh pembongkaran per berkas, bukan pemindahan folder —
+  dan inti penggilingan hampir tidak punya uji, jadi pemindahan sebesar itu
+  tidak bisa dibuktikan benar. Ditunda sampai ada uji yang menjaganya.
+
+Yang sudah dibereskan: tujuh berkas `*_poller.py` — briefing pagi, notifier
+email, radar tenggat, tagihan, invoice, kontak Kledo, persetujuan — pindah
+dari `app/services/` ke `app/kantor/proaktif/`. Semuanya mengimpor
+`app.kantor.*` dan tak satu pun modul penggilingan memakainya: pemiliknya
+tidak pernah ambigu, hanya letaknya yang keliru. Folder kosong `app/schemas/`
+dihapus.
 
 Modul adalah **bidang kerja**, bukan proses. Satu modul boleh berjalan di service mana pun; yang membuatnya modul adalah batas tanggung jawab dan batas tabelnya.
 

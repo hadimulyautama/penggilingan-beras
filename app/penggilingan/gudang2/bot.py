@@ -13,16 +13,16 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from app.ai.nlp_parser import parse_gudang2
-from app.gudang2.nlp import parse_penyosohan
-from app.gudang2.polishing import (
+from app.penggilingan.gudang2.nlp import parse_penyosohan
+from app.penggilingan.gudang2.polishing import (
     catat_output,
     laporan_penyosohan,
     mulai_penyosohan,
     selesai_penyosohan,
 )
-from app.inventory.nlp import parse_barang_jadi
-from app.inventory.packaging import InventoryError
-from app.inventory.finished_goods import (
+from app.penggilingan.inventory.nlp import parse_barang_jadi
+from app.penggilingan.inventory.packaging import InventoryError
+from app.penggilingan.inventory.finished_goods import (
     catat_bekatul,
     catat_packing,
     laporan_stok_barang_jadi,
@@ -48,7 +48,7 @@ from app.bots.silo_flow import maybe_answer_silo_report
 from app.bots.status_flow import maybe_answer_status
 from app.bots.transfer_flow import maybe_answer_transfer
 from app.database import BackdateError, SessionLocal
-from app.gudang2.service import (
+from app.penggilingan.gudang2.service import (
     Gudang2Error,
     laporan_stok_gudang2,
     masukkan_pk_luar,

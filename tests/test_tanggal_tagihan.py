@@ -2,7 +2,7 @@
 from datetime import date
 
 from app.kantor import billing
-from app.services import deadline_poller as dp
+from app.kantor.proaktif import deadline as dp
 
 
 def test_parse_tgl_indonesia():
