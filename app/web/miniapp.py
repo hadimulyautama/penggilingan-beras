@@ -287,13 +287,13 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
              ]},
             {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/miniapp/actions/catat-pk-luar",
-             "hint": "Catat kedatangan PK dari supplier. Selanjutnya di-QC & "
-                     "dinilai harga.", "fields": [
-                 {"name": "supplier", "label": "Supplier", "type": "text"},
-                 {"name": "berat", "label": "Berat (kg)", "type": "number"},
+             "hint": "Pilih tiket timbang PK yang masih aktif — supplier, bobot & plat "
+                     "otomatis dari timbangan. Selanjutnya di-QC & dinilai harga.",
+             "fields": [
+                 {"name": "timbangan_transaksi_id", "label": "Tiket timbang (PK masuk)",
+                  "type": "remote", "source": "/miniapp/actions/timbang-pk-aktif"},
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
-                 {"name": "plat", "label": "Plat truk", "type": "text"},
                  {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
              ]},
             {"id": "qc_pk_luar", "label": "🔬 Input kualitas PK luar",
@@ -991,40 +991,55 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(require_miniapp_u
 
 
 class CatatPkLuarReq(BaseModel):
-    supplier: str
-    berat: float | None = None
+    # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
+    timbangan_transaksi_id: int
     jenis_pk: str
-    plat: str | None = None
     kadar_air: float | None = None
+
+
+@router.get("/actions/timbang-pk-aktif")
+async def timbang_pk_aktif(user: User = Depends(require_miniapp_user)) -> list[dict]:
+    """Daftar tiket timbang PK (BERAS_PK) MASUK yang masih AKTIF & belum tertaut."""
+    _require(can_see_financials(user))
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.peta_jenis import is_pk
+    async with SessionLocal() as db:
+        tk = await tiket_masuk_aktif(db)
+    out = []
+    for t in tk:
+        if not is_pk(t.get("jenis_kode", "")):
+            continue
+        nm = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        b = t.get("berat_hpp_kg")
+        bstr = f"{_rp(float(b))} kg ({t['sumber_berat']})" if b else "⚠️ bobot belum ada"
+        out.append({"value": t["id"],
+                    "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} · {bstr}"})
+    return out
 
 
 @router.post("/actions/catat-pk-luar")
 async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
     _require(can_see_financials(user))
-    if not (req.supplier or "").strip():
-        raise HTTPException(400, "Isi nama supplier dulu.")
-    if not req.berat:
-        raise HTTPException(400, "Isi berat PK (kg) dulu.")
     if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
-    if not (req.plat or "").strip():
-        raise HTTPException(400, "Isi plat truk pengirim dulu.")
-    from app.penggilingan.gudang2.service import create_pk_purchase, Gudang2Error
+    from app.penggilingan.gudang2.service import create_pk_purchase_dari_timbang, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await create_pk_purchase(
-                db, user=u, nama_supplier=req.supplier.strip(), berat_kg=req.berat,
+            r = await create_pk_purchase_dari_timbang(
+                db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
                 jenis_pk=req.jenis_pk, kadar_air=req.kadar_air,
-                no_polisi=req.plat.strip(),
             )
         except Gudang2Error as e:
             raise _err(e, "Gagal mencatat PK luar.")
+        berat = r.batch.berat_total_kg
+        nopol = r.batch.no_polisi_truk or "-"
     jl = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}.get(
         r.batch.jenis_pk, r.batch.jenis_pk or "-")
     baru = " (supplier baru)" if r.supplier_created else ""
+    bstr = f"{float(berat):g} kg" if berat is not None else "menunggu bobot"
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
-             f"{jl} {req.berat:g} kg, truk {r.batch.no_polisi_truk}. "
+             f"{jl} {bstr}, truk {nopol}. "
              "Diterima — menunggu input kualitas & verifikasi harga.")
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
