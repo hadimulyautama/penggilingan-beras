@@ -1,7 +1,7 @@
 # Arsitektur Sistem — PT Hadi Mulya Utama
 
 **Peta tingkat sistem: tiga modul di atas satu fondasi**
-Versi 1.2 · 31 Agustus 2026
+Versi 1.3 · 31 Agustus 2026
 
 Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama, dan aturan yang menjaga agar penambahan modul berikutnya tidak merusak yang sudah ada. Rancangan rinci tiap modul ada di dokumennya sendiri.
 
@@ -33,6 +33,45 @@ Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama
 > audit. Migrasi timbangan berikutnya ditulis di repo sebelah, dengan tabel
 > versi `alembic_version_timbangan` yang terpisah dari `alembic_version`
 > milik repo ini.
+
+### Tiga sistem, dua repo — dan itu keputusan
+
+Timbangan berdiri di repo sendiri; **Kantor AI tetap serumah dengan
+penggilingan.** Perbedaannya bukan soal kerapian melainkan soal arah
+ketergantungan, dan ini perlu dicatat supaya tidak dibongkar orang berikutnya
+yang mengira ini kelalaian.
+
+Timbangan hanya **menyentuh** fondasi: ia mengimpor `config`, `database`, dan
+`models`, dan tidak ada satu pun modul lain yang mengimpornya. Ia bisa pergi.
+
+Kantor **dilingkari** fondasi — fondasinya sendiri yang bergantung padanya:
+
+| Arah | Buktinya |
+|---|---|
+| `ai` → `kantor` | `app/ai/guard.py`, guard biaya LLM yang **setiap** panggilan LLM lewati termasuk milik bot penggilingan, membaca & menulis `kantor_config` dan `kantor_llm_usage` |
+| `models` → `kantor` | Fasad model bersama mendaftarkan 8 tabel Kantor agar Alembic melihatnya |
+| `bots` → `kantor` | `registry.py` memasang router bot Kantor — satu proses bot melayani keduanya |
+| `kantor` → `ai`, `services` | Kantor memakai `ai.guard`, `ai.agent`, `services.dashboard`, `services.analytics` |
+
+Itu lingkaran `ai → kantor → ai`. Selama ada, mengeluarkan Kantor berarti
+memutus fondasi yang dipakai penggilingan sendiri.
+
+Sebagian lingkaran itu memang disengaja: Kantor AI dirancang berdiri **di
+atas** mesin penggilingan — memakai agennya, datanya, dan botnya — sesuai
+prinsip *"fungsi baru menambah kemampuan pada bot dan agen yang ada, bukan bot
+baru"*. Timbangan tidak pernah begitu.
+
+**Satu simpul yang salah tempat, dan itu bukan rancangan.** Guard biaya LLM
+adalah urusan fondasi — ia melindungi setiap modul yang memanggil LLM,
+termasuk penggilingan — tetapi tabelnya (`kantor_config`, `kantor_llm_usage`)
+milik Kantor. Kalau kelak Kantor hendak dipisah, inilah simpul pertama yang
+harus dilepas: pindahkan kedua tabel itu ke fondasi. Namanya tidak perlu
+berubah, jadi tidak butuh migrasi.
+
+Bila pemisahan itu benar-benar dikerjakan kelak, jalannya sudah setengah
+terbuka: service **`mcp`** sudah menyajikan data penggilingan secara read-only
+untuk agen, sehingga Kantor yang terpisah bisa membacanya lewat sana alih-alih
+lewat impor.
 
 ### Membaca susunan berkasnya
 
