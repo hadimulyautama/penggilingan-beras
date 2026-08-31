@@ -79,15 +79,29 @@
       </a>
     {% endif %}
 
-    {% if akun.is_admin %}
+    {% if akun.is_super or boleh_kelola_pengguna %}
       <a href="{{ PREFIX }}/pengguna" class="pilihan" style="margin-bottom:8px">
         <div class="pilihan__isi">
           <div class="pilihan__nama">Pengguna &amp; perangkat</div>
           <div class="pilihan__ket">
             {{ jumlah.akun }} akun aktif · nama, peran, sandi, kode perangkat
+            {%- if not akun.is_super %} · terbuka hanya sampai ada Super Admin
+              aktif{% endif %}
           </div>
         </div>
         <span class="lencana lencana--aman">Bisa diubah</span>
+      </a>
+    {% endif %}
+
+    {% if akun.is_super %}
+      <a href="{{ PREFIX }}/audit" class="pilihan" style="margin-bottom:8px">
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Jejak audit</div>
+          <div class="pilihan__ket">
+            Siapa mengerjakan apa, kapan, dan angka sebelum diubah
+          </div>
+        </div>
+        <span class="lencana lencana--netral">Lihat saja</span>
       </a>
     {% endif %}
 
@@ -140,10 +154,15 @@
   {# ── Parameter alat & operasional ── #}
   <div class="kartu">
     <div class="kartu__judul">Alat &amp; batas operasional</div>
-    {% if akun.is_admin %}
+    {% if akun.is_super %}
       <div class="bantu" style="margin-bottom:12px">
         Berlaku seketika, tanpa menyalakan ulang service. Setiap perubahan
         tercatat di jejak audit.
+      </div>
+    {% else %}
+      <div class="bantu" style="margin-bottom:12px">
+        Angka yang sedang berlaku. Mengubahnya wewenang Super Admin — salah
+        ketik di sini menolak setiap truk yang datang.
       </div>
     {% endif %}
 
@@ -151,13 +170,13 @@
       <div style="padding:11px 0{% if not loop.last %};border-bottom:1px solid var(--garis){% endif %}">
         <div class="baris" style="padding:0">
           <span>{{ p.nama }}</span>
-          {% if not akun.is_admin %}
+          {% if not akun.is_super %}
             <b style="font-family:var(--teks);font-size:14px">{{ p.nilai }}</b>
           {% endif %}
         </div>
         <div class="bantu" style="margin-top:3px">{{ p.arti }}</div>
 
-        {% if akun.is_admin %}
+        {% if akun.is_super %}
           <form method="post" action="{{ PREFIX }}/pengaturan"
                 style="display:flex;gap:8px;align-items:center;margin-top:8px">
             <input type="hidden" name="kunci" value="{{ p.kunci }}">

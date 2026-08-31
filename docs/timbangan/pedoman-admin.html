@@ -424,6 +424,7 @@
           <li><a href="#aturan">Aturan komoditas</a></li>
           <li><a href="#monitoring">Monitoring pihak</a></li>
           <li><a href="#cetak">Mencetak &amp; mengekspor</a></li>
+          <li><a href="#audit">Jejak audit</a></li>
           <li><a href="#gejala">Kalau terjadi…</a></li>
           <li><a href="#batas">Yang belum ada</a></li>
         </ol>
@@ -474,10 +475,12 @@
                   <td class="tidak">—</td><td class="ya">✓</td><td class="ya">✓</td></tr>
               <tr><td>Mencatat sampling &amp; menyetujui tara standar</td>
                   <td class="tidak">—</td><td class="ya">✓</td><td class="ya">✓</td></tr>
-              <tr><td>Tambah, ubah, nonaktifkan pengguna</td>
-                  <td class="tidak">—</td><td class="ya">✓</td><td class="ya">✓</td></tr>
-              <tr><td>Mengubah pengaturan operasional</td>
-                  <td class="tidak">—</td><td class="ya">✓</td><td class="ya">✓</td></tr>
+              <tr><td><strong>Tambah, ubah, nonaktifkan pengguna</strong></td>
+                  <td class="tidak">—</td><td class="tidak">—*</td><td class="ya">✓</td></tr>
+              <tr><td><strong>Mengubah pengaturan operasional</strong></td>
+                  <td class="tidak">—</td><td class="tidak">—</td><td class="ya">✓</td></tr>
+              <tr><td><strong>Membaca jejak audit</strong></td>
+                  <td class="tidak">—</td><td class="tidak">—</td><td class="ya">✓</td></tr>
               <tr><td><strong>Menghapus catatan timbang permanen</strong></td>
                   <td class="tidak">—</td><td class="tidak">—</td><td class="ya">✓</td></tr>
               <tr><td><strong>Menghapus akun yang sudah pernah bekerja</strong></td>
@@ -489,13 +492,18 @@
         </div>
 
         <div class="nota">
-          <p class="nota__judul">Super Admin pertama</p>
+          <p class="nota__judul">* Super Admin pertama</p>
           <p>
-            Selama belum ada Super Admin yang aktif, Admin boleh mengangkatnya
-            — supaya yang pertama bisa dibuat, dan supaya masih ada jalan pulih
-            bila satu-satunya hilang. Begitu ada satu yang aktif, pintunya
-            tertutup: Admin tidak lagi bisa mengangkat, mengubah,
-            menonaktifkan, maupun menghapus akun Super Admin.
+            Selama belum ada Super Admin yang aktif, halaman Pengguna terbuka
+            bagi Admin — supaya yang pertama bisa dibuat, dan supaya masih ada
+            jalan pulih bila satu-satunya hilang. Begitu ada satu yang aktif,
+            pintunya tertutup di belakangnya: Admin tidak lagi bisa membuka
+            halaman Pengguna sama sekali.
+          </p>
+          <p>
+            Karena itu, setelah mengangkat Super Admin pertama Anda akan
+            diantar ke halaman Pengaturan beserta penjelasannya — bukan
+            kembali ke daftar pengguna yang barusan tertutup.
           </p>
         </div>
 
@@ -510,8 +518,14 @@
 
       <!-- ─────────────────────────────────────────────────────── -->
       <section id="pengguna">
-        <p class="jalur">Pengaturan › Pengguna &amp; perangkat</p>
+        <p class="jalur">Pengaturan › Pengguna &amp; perangkat · Super Admin</p>
         <h2>Pengguna &amp; perangkat</h2>
+
+        <p>
+          Seluruh halaman ini wewenang <strong>Super Admin</strong>. Admin
+          hanya bisa membukanya selama belum ada Super Admin yang aktif —
+          lihat catatan di bagian sebelumnya.
+        </p>
 
         <h3>Menambah petugas baru</h3>
         <ol class="langkah">
@@ -797,12 +811,15 @@
 
       <!-- ─────────────────────────────────────────────────────── -->
       <section id="pengaturan">
-        <p class="jalur">Pengaturan</p>
+        <p class="jalur">Pengaturan · Super Admin</p>
         <h2>Pengaturan operasional</h2>
 
         <p>
-          Lima angka ini bisa Anda ubah sendiri dari layar, tanpa bantuan siapa
-          pun. Setiap perubahan menulis jejak audit.
+          Lima angka ini menentukan angka mana yang ditolak sistem sebagai
+          mustahil, jadi <strong>hanya Super Admin</strong> yang boleh
+          mengubahnya. Admin tetap melihat nilai yang sedang berlaku — ia perlu
+          tahu batasnya — tanpa kotak isian. Setiap perubahan berlaku seketika
+          dan menulis jejak audit.
         </p>
 
         <div class="gulung">
@@ -983,6 +1000,43 @@
       </section>
 
       <!-- ─────────────────────────────────────────────────────── -->
+      <section id="audit">
+        <p class="jalur">Pengaturan › Jejak audit · Super Admin</p>
+        <h2>Jejak audit</h2>
+
+        <p>
+          Setiap masuk, penimbangan, koreksi, pembatalan, penghapusan,
+          pencetakan, dan perubahan setelan menulis satu baris di sini —
+          lengkap dengan siapa, kapan, dari perangkat mana, dan angka sebelum
+          maupun sesudahnya. Bawaannya menampilkan 7 hari terakhir; audit
+          bertambah jauh lebih cepat daripada transaksi.
+        </p>
+
+        <p>Bisa disaring per tanggal, jenis aksi, pelaku, atau pencarian bebas
+          (nomor transaksi, nama, isi ringkasan). Klik ringkasan sebuah baris
+          untuk membuka angka sebelum dan sesudahnya.</p>
+
+        <div class="nota">
+          <p class="nota__judul">Hanya bertambah</p>
+          <p>
+            Tidak ada baris yang bisa diubah atau dihapus dari sini, termasuk
+            oleh Anda — halamannya memang tidak punya tombol untuk itu. Sandi
+            tidak pernah masuk ke sini; yang tercatat hanya fakta bahwa sandi
+            diganti.
+          </p>
+        </div>
+
+        <p>
+          Halaman ini tertutup bagi Admin, dan alasannya bukan kerahasiaan.
+          Inilah satu-satunya tempat yang masih menyebut siapa pelaku pada
+          catatan yang namanya sudah dikosongkan, dan satu-satunya salinan
+          penuh catatan yang sudah dihapus permanen. Ia mengawasi wewenang
+          menghapus — maka yang membacanya sebaiknya bukan orang yang sama
+          dengan yang memakainya sehari-hari.
+        </p>
+      </section>
+
+      <!-- ─────────────────────────────────────────────────────── -->
       <section id="gejala">
         <p class="jalur">Rujukan cepat</p>
         <h2>Kalau terjadi…</h2>
@@ -1053,15 +1107,13 @@
           Supaya Anda tidak mencarinya di layar dan mengira salah lihat:
         </p>
         <ul>
-          <li><strong>Jejak audit belum punya halaman.</strong> Setiap masuk,
-            simpan, koreksi, pembatalan, penghapusan, dan perubahan pengaturan
-            sudah tercatat lengkap di database — tetapi belum ada layar untuk
-            membacanya. Untuk sekarang, meminta isinya perlu bantuan teknis.</li>
           <li><strong>Tidak ada kolom harga di mana pun</strong>, dan itu
             memang disengaja, bukan belum dikerjakan.</li>
           <li><strong>Tidak ada penghapusan massal.</strong> Catatan dihapus
             satu per satu, dengan alasan dan nomor transaksi yang diketik
             ulang.</li>
+          <li><strong>Jejak audit tidak bisa diekspor</strong> dari layar.
+            Isinya dibaca di halaman Jejak audit, disaring di sana.</li>
         </ul>
       </section>
 

@@ -94,3 +94,33 @@ def jam(nilai: datetime | None) -> str:
 
 def iso(nilai: date | datetime | None) -> str:
     return lokal(nilai).strftime("%Y-%m-%d") if nilai else ""
+
+
+def audit_nilai(teks: str | None) -> list[tuple[str, str]]:
+    """JSON yang tersimpan di jejak audit → pasangan (label, nilai).
+
+    Nilai sebelum/sesudah disimpan sebagai JSON karena bentuknya berbeda-beda
+    per aksi. Yang membaca halaman audit bukan pemrogram, jadi kurung kurawal
+    dan tanda kutipnya diurai di sini. Teks yang tidak bisa diurai ditampilkan
+    apa adanya — lebih baik terbaca janggal daripada hilang.
+    """
+    import json
+
+    if not teks:
+        return []
+    try:
+        data = json.loads(teks)
+    except (TypeError, ValueError):
+        return [("", teks)]
+    if not isinstance(data, dict):
+        return [("", str(data))]
+
+    hasil: list[tuple[str, str]] = []
+    for kunci, nilai in data.items():
+        if isinstance(nilai, (list, dict)):
+            nilai = json.dumps(nilai, ensure_ascii=False)
+        hasil.append((
+            str(kunci).replace("_", " "),
+            "—" if nilai is None or nilai == "" else str(nilai),
+        ))
+    return hasil

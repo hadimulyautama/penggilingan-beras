@@ -454,8 +454,9 @@ async def test_tara_prasetel_bertahan_melintasi_dua_tahap(klien):
 
 # ─────────────────── Halaman pengaturan ───────────────────
 
-async def test_pengaturan_mendaftar_parameter_beserta_nilainya(klien):
+async def test_pengaturan_mendaftar_parameter_beserta_nilainya(klien, app_uji):
     """Katalog harus menyebut nilai yang benar-benar berlaku, bukan contoh."""
+    await _jadi_super(app_uji)
     await login(klien, "wahid")
     teks = (await klien.get(f"{PREFIX}/pengaturan")).text
 
@@ -533,12 +534,13 @@ async def test_akun_kini_halaman_tersendiri_bukan_pengalihan(klien):
 
 # ─────────────────── Setelan operasional benar-benar berdampak ───────────────────
 
-async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien):
+async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien, app_uji):
     """Bukti bahwa setelan dipakai, bukan sekadar tersimpan.
 
     Kapasitas diturunkan ke 12 ton; truk 13,6 ton yang tadinya sah kini
     ditolak — tanpa menyalakan ulang service.
     """
+    await _jadi_super(app_uji)
     await login(klien, "wahid")
 
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
@@ -578,7 +580,8 @@ async def test_setelan_di_luar_batas_wajar_ditolak(klien):
         assert "kini" not in r.text, f"{nilai!r} seharusnya ditolak"
 
 
-async def test_kembalikan_bawaan_menghapus_setelan(klien):
+async def test_kembalikan_bawaan_menghapus_setelan(klien, app_uji):
+    await _jadi_super(app_uji)
     await login(klien, "wahid")
     await klien.post(f"{PREFIX}/pengaturan", data={
         "kunci": "jam_kunci_otomatis", "nilai": "48", "aksi": "simpan",
@@ -606,6 +609,7 @@ async def test_perubahan_setelan_tercatat_di_audit(klien, app_uji):
     from app import database
     from app.timbangan.models import TimbanganAudit
 
+    await _jadi_super(app_uji)
     await login(klien, "wahid")
     await klien.post(f"{PREFIX}/pengaturan", data={
         "kunci": "maks_foto_mb", "nilai": "8", "aksi": "simpan",
@@ -639,7 +643,7 @@ async def test_bukan_admin_tidak_bisa_membuka_halaman_pengguna(klien, siapa):
     await login(klien, siapa)
     r = await klien.get(f"{PREFIX}/pengguna")
     assert r.status_code == 403
-    assert "hanya untuk Admin" in r.text
+    assert "hanya untuk Super Admin" in r.text
 
 
 @pytest.mark.parametrize("siapa", ["budi", "miftah"])
@@ -1807,16 +1811,21 @@ async def test_admin_bisa_mengangkat_super_admin_pertama(klien, app_uji):
 async def test_setelah_ada_super_admin_pintunya_tertutup_bagi_admin(
     klien, app_uji
 ):
-    """Kalau tidak, Admin mana pun tinggal mengangkat dirinya sendiri."""
+    """Kalau tidak, Admin mana pun tinggal mengangkat dirinya sendiri.
+
+    Sejak pengelolaan pengguna menjadi wewenang Super Admin, Admin bahkan
+    tidak sampai ke formulirnya — ditolak di pintu, bukan di isian.
+    """
     await _jadi_super(app_uji, "miftah")
     await login(klien, "wahid")
     budi = await akun_oleh(app_uji, "budi")
 
+    assert (await klien.get(f"{PREFIX}/pengguna")).status_code == 403
     r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
         "nama": "Budi", "username": "budi", "role": ROLE_SUPERADMIN,
         "perangkat_kode": "P1", "sandi_baru": "",
     })
-    assert "Hanya Super Admin yang bisa mengangkat" in r.text
+    assert r.status_code == 403
     assert (await akun_oleh(app_uji, "budi")).role == ROLE_PETUGAS
 
 
@@ -1835,7 +1844,7 @@ async def test_admin_tidak_bisa_menyentuh_akun_super_admin(
     orang = await akun_oleh(app_uji, "miftah")
 
     r = await klien.post(f"{PREFIX}/pengguna/{orang.id}{jalur}", data=data)
-    assert "hanya bisa diubah oleh Super Admin" in r.text
+    assert r.status_code == 403
 
     tetap = await akun_oleh(app_uji, "miftah")
     assert tetap.role == ROLE_SUPERADMIN
@@ -1853,7 +1862,7 @@ async def test_admin_tidak_bisa_membuat_super_admin_baru_lewat_pintu_lain(
         "username": "pintubelakang", "nama": "Pintu Belakang",
         "role": ROLE_SUPERADMIN, "sandi": "rahasia123", "perangkat_kode": "",
     })
-    assert "Hanya Super Admin yang bisa mengangkat" in r.text
+    assert r.status_code == 403
 
     from sqlalchemy import select
 
@@ -2120,3 +2129,153 @@ async def test_koreksi_tidak_bisa_mengosongkan_nomor_polisi(klien):
     })
     assert "wajib" not in r.text
     assert (await trx_oleh_id(trx_id)).nomor_polisi == "AD 5 BB"
+
+
+# ─────────────── Jejak audit ───────────────
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah", "wahid"])
+async def test_jejak_audit_tertutup_bagi_selain_super_admin(klien, siapa):
+    """Termasuk bagi Admin. Halaman ini mengawasi wewenang menghapus, jadi
+    yang membacanya jangan sama dengan yang memakainya sehari-hari."""
+    await login(klien, siapa)
+    r = await klien.get(f"{PREFIX}/audit")
+    assert r.status_code == 403
+    assert "hanya untuk Super Admin" in r.text
+
+
+async def test_super_admin_melihat_jejak_penimbangan(klien, app_uji):
+    await login(klien, "budi")
+    await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    teks = (await klien.get(f"{PREFIX}/audit")).text
+    assert "SIMPAN_TIMBANG_1" in teks
+    assert "SIMPAN_TIMBANG_2" in teks
+    assert "Budi" in teks                       # pelakunya tertera
+
+
+async def test_jejak_audit_bisa_disaring(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
+                     data={"alasan": "Mutu ditolak"})
+
+    # Hanya isi tabelnya yang diperiksa: daftar saringannya sendiri memuat
+    # setiap nama aksi, jadi mencari di seluruh halaman selalu ketemu.
+    async def isi_tabel(query: str) -> str:
+        teks = (await klien.get(f"{PREFIX}/audit?{query}")).text
+        return teks[teks.index("<tbody>"):teks.index("</tbody>")]
+
+    hanya_void = await isi_tabel("aksi=VOID")
+    assert "VOID" in hanya_void
+    assert "SIMPAN_TIMBANG_1" not in hanya_void
+
+    budi = await akun_oleh(app_uji, "budi")
+    punya_budi = await isi_tabel(f"oleh={budi.id}")
+    assert "SIMPAN_TIMBANG_1" in punya_budi
+    assert "VOID" not in punya_budi              # itu pekerjaan Wahid
+
+    kode = (await trx_oleh_id(trx_id)).kode
+    assert kode in await isi_tabel(f"cari={kode}")
+
+
+async def test_jejak_audit_menyebut_nama_pemilik_akun_yang_sudah_dihapus(
+    klien, app_uji
+):
+    """Inilah satu-satunya tempat yang masih bisa menjawab siapa pelakunya."""
+    await login(klien, "budi")
+    await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    budi = await akun_oleh(app_uji, "budi")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/pengguna/{budi.id}/hapus",
+                     data={"ketik_username": "budi"})
+
+    teks = (await klien.get(f"{PREFIX}/audit")).text
+    assert "Budi" in teks
+    assert "akun dihapus" in teks
+
+
+async def test_jejak_audit_menampilkan_angka_sebelum_diubah(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
+        "alasan": "Salah baca timbangan", "timbang1_kg": "13500",
+        "timbang2_kg": "", "nomor_polisi": "", "nama_sopir": "",
+        "supplier_id": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "catatan": "",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    teks = (await klien.get(f"{PREFIX}/audit?aksi=KOREKSI")).text
+    assert "13600" in teks and "13500" in teks   # sebelum dan sesudah
+    assert "timbang1 kg" in teks                 # kuncinya dibaca manusia
+
+
+async def test_jejak_audit_tidak_punya_pintu_ubah_atau_hapus(klien, app_uji):
+    """Hanya bertambah. Tidak ada rute yang bisa menyentuhnya."""
+    from fastapi.routing import APIRoute
+
+    await _jadi_super(app_uji)
+    jalur = [r.path for r in app_uji.routes
+             if isinstance(r, APIRoute) and "audit" in r.path]
+    assert jalur == [f"{PREFIX}/audit"]
+    for r in app_uji.routes:
+        if isinstance(r, APIRoute) and "audit" in r.path:
+            assert r.methods == {"GET"}
+
+
+# ─────────────── Pengguna & setelan: Super Admin saja ───────────────
+
+@pytest.mark.parametrize("jalur,metode", [
+    ("/pengguna", "get"), ("/pengguna", "post"), ("/pengaturan", "post"),
+])
+async def test_admin_biasa_tidak_lagi_mengelola_pengguna_dan_setelan(
+    klien, app_uji, jalur, metode
+):
+    await _jadi_super(app_uji, "miftah")
+    await login(klien, "wahid")
+    r = await getattr(klien, metode)(
+        PREFIX + jalur,
+        **({"data": {"kunci": "maks_foto_mb", "nilai": "8", "aksi": "simpan",
+                     "username": "x", "nama": "X", "role": ROLE_PETUGAS,
+                     "sandi": "rahasia123", "perangkat_kode": ""}}
+           if metode == "post" else {}),
+    )
+    assert r.status_code == 403
+
+
+async def test_setelan_terbaca_admin_tapi_tanpa_kotak_isian(klien, app_uji):
+    """Admin tetap perlu tahu batas yang berlaku — hanya tidak mengubahnya."""
+    await _jadi_super(app_uji, "miftah")
+    await login(klien, "wahid")
+    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    assert "20.000" in teks
+    assert "wewenang Super Admin" in teks
+    assert 'name="kunci"' not in teks            # formulirnya tidak ada
+
+
+async def test_admin_diantar_ke_pengaturan_setelah_mengangkat_super_pertama(
+    klien, app_uji
+):
+    """Pintunya menutup di belakangnya — jangan sampai berakhir di layar
+    "akses ditolak" seolah perubahannya gagal."""
+    await login(klien, "wahid")
+    budi = await akun_oleh(app_uji, "budi")
+    r = await klien.post(f"{PREFIX}/pengguna/{budi.id}", data={
+        "nama": "Budi", "username": "budi", "role": ROLE_SUPERADMIN,
+        "perangkat_kode": "P1", "sandi_baru": "",
+    })
+    assert r.status_code == 200
+    assert "tertutup bagi Anda" in r.text
+    assert (await akun_oleh(app_uji, "budi")).role == ROLE_SUPERADMIN

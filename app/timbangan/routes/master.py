@@ -6,6 +6,8 @@ keputusan yang harus lewat revisi SOP, bukan lewat kotak isian di ponsel.
 """
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +16,7 @@ from app.models import Supplier
 from app.timbangan import format as fmt
 from app.timbangan import service, setelan
 from app.timbangan.config import tsettings
-from app.timbangan.db import get_db
+from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import (
     TimbanganAkun,
     TimbanganJenis,
@@ -22,7 +24,13 @@ from app.timbangan.models import (
     TimbanganTaraStandar,
 )
 from app.timbangan.routes.pos import _angka
-from app.timbangan.security import butuh_admin, butuh_akun
+from app.timbangan.security import (
+    ada_super_aktif,
+    butuh_admin,
+    butuh_akun,
+    butuh_super,
+    butuh_super_atau_pertama,
+)
 from app.timbangan.web import PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -119,6 +127,9 @@ async def pengaturan(
     return render(
         request, "pengaturan.html",
         jumlah=jumlah,
+        # Pintu darurat pembuatan Super Admin pertama — tertutup sendiri
+        # begitu ada satu yang aktif. Lihat `security.butuh_super_atau_pertama`.
+        boleh_kelola_pengguna=akun.is_admin and not await ada_super_aktif(db),
         alat=await _parameter_alat(db),
         bukti=_parameter_bukti(),
         sesi=_parameter_sesi(),
@@ -133,7 +144,7 @@ async def simpan_pengaturan(
     kunci: str = Form(...),
     nilai: str = Form(""),
     aksi: str = Form("simpan"),
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super),
     db: AsyncSession = Depends(get_db),
 ):
     """Setel satu parameter operasional, atau kembalikan ke bawaannya."""
@@ -221,6 +232,55 @@ async def simpan_tara(
     )
 
 
+@router.get("/audit")
+async def jejak_audit(
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_super),
+    db: AsyncSession = Depends(get_db),
+):
+    """Jejak audit — Super Admin saja.
+
+    Ditutup lebih rapat daripada halaman Admin lainnya bukan karena isinya
+    lebih rahasia, melainkan karena inilah satu-satunya tempat yang masih
+    menyebut siapa pelaku pada catatan yang namanya sudah dikosongkan, dan
+    satu-satunya salinan penuh catatan yang sudah dihapus permanen. Ia
+    mengawasi wewenang menghapus — maka yang membacanya jangan sama dengan
+    yang memakainya sehari-hari.
+    """
+    q = request.query_params
+    f = service.FilterAudit(
+        aksi=q.get("aksi") or None,
+        cari=q.get("cari") or None,
+        akun_id=int(q["oleh"]) if (q.get("oleh") or "").isdigit() else None,
+    )
+    # Bawaan 7 hari, bukan 30 seperti Catatan: audit bertambah jauh lebih
+    # cepat daripada transaksi — satu penimbangan saja menulis beberapa baris.
+    try:
+        f.dari = date.fromisoformat(q["dari"]) if q.get("dari") else \
+            hari_ini() - timedelta(days=7)
+        f.sampai = date.fromisoformat(q["sampai"]) if q.get("sampai") else hari_ini()
+    except ValueError:
+        f.dari, f.sampai = hari_ini() - timedelta(days=7), hari_ini()
+
+    halaman = max(1, int(q.get("hal", 1) or 1))
+    per_halaman = 50
+    semua_akun = await service.daftar_akun(db)
+    return render(
+        request, "audit.html",
+        f=f, halaman=halaman, per_halaman=per_halaman,
+        total=await service.hitung_audit(db, f),
+        baris=await service.daftar_audit(
+            db, f, batas=per_halaman, offset=(halaman - 1) * per_halaman
+        ),
+        aksi_ada=await service.daftar_aksi_audit(db),
+        orang=semua_akun,
+        # `entitas_id` untuk akun berisi nomor id — tidak berarti apa-apa bagi
+        # yang membacanya. Dipetakan ke namanya di sini, sekali saja.
+        nama_akun={str(o.id): o.nama for o in semua_akun},
+        kembali=f"{PREFIX}/pengaturan",
+    )
+
+
 @router.get("/akun")
 async def akun_saya_form(
     request: Request,
@@ -264,10 +324,27 @@ async def akun_saya_simpan(
     return redirect("/pengaturan", ok=f"{', '.join(berubah).capitalize()} diubah.")
 
 
+async def _pulang_kelola(db: AsyncSession, akun: TimbanganAkun, pesan: str):
+    """Ke mana kembali setelah mengelola pengguna.
+
+    Mengangkat Super Admin PERTAMA menutup pintu ini bagi yang mengangkatnya —
+    itu memang tujuannya. Tetapi mengalihkannya kembali ke daftar pengguna
+    hanya akan berakhir di layar "akses ditolak" tanpa penjelasan, seolah
+    perubahannya gagal padahal justru berhasil.
+    """
+    if not akun.is_super and await ada_super_aktif(db):
+        return redirect(
+            "/pengaturan",
+            ok=pesan + " Pengelolaan pengguna kini tertutup bagi Anda — "
+                       "sudah ada Super Admin yang aktif.",
+        )
+    return redirect("/pengguna", ok=pesan)
+
+
 @router.get("/pengguna")
 async def daftar_pengguna(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     return render(
@@ -287,7 +364,7 @@ async def simpan_pengguna(
     role: str = Form(...),
     sandi: str = Form(...),
     perangkat_kode: str = Form(""),
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     from app.timbangan.security import hash_sandi
@@ -321,14 +398,14 @@ async def simpan_pengguna(
         ringkasan=f"{baru.username} sebagai {baru.role}",
     )
     await db.commit()
-    return redirect("/pengguna", ok=f"Akun {baru.nama} dibuat.")
+    return await _pulang_kelola(db, akun, f"Akun {baru.nama} dibuat.")
 
 
 @router.get("/pengguna/{akun_id}")
 async def ubah_pengguna_form(
     akun_id: int,
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     orang = await db.get(TimbanganAkun, akun_id)
@@ -350,7 +427,7 @@ async def ubah_pengguna(
     role: str = Form(""),
     perangkat_kode: str = Form(""),
     sandi_baru: str = Form(""),
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     orang = await db.get(TimbanganAkun, akun_id)
@@ -379,7 +456,7 @@ async def ubah_pengguna(
             ok=pesan + " Peran Anda kini bukan Admin, jadi pengelolaan "
                        "pengguna tidak lagi terbuka.",
         )
-    return redirect("/pengguna", ok=pesan)
+    return await _pulang_kelola(db, akun, pesan)
 
 
 @router.post("/pengguna/{akun_id}/hapus")
@@ -387,7 +464,7 @@ async def hapus_pengguna(
     akun_id: int,
     request: Request,
     ketik_username: str = Form(""),
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     orang = await db.get(TimbanganAkun, akun_id)
@@ -409,14 +486,14 @@ async def hapus_pengguna(
         )
     except service.LayananError as e:
         return redirect(f"/pengguna/{akun_id}", err=str(e))
-    return redirect("/pengguna", ok=f"Akun {nama} dihapus.")
+    return await _pulang_kelola(db, akun, f"Akun {nama} dihapus.")
 
 
 @router.post("/pengguna/{akun_id}/status")
 async def ubah_status_pengguna(
     akun_id: int,
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
     orang = await db.get(TimbanganAkun, akun_id)
@@ -429,4 +506,4 @@ async def ubah_status_pengguna(
         )
     except service.LayananError as e:
         return redirect("/pengguna", err=str(e))
-    return redirect("/pengguna", ok=f"{orang.nama} kini {status}.")
+    return await _pulang_kelola(db, akun, f"{orang.nama} kini {status}.")

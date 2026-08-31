@@ -82,6 +82,7 @@ templates.env.filters.update({
     "angka": fmt.angka, "kg": fmt.kg, "kg_tanda": fmt.kg_tanda,
     "persen": fmt.persen, "ton": fmt.ton, "tgl": fmt.tgl,
     "tgl_jam": fmt.tgl_jam, "iso": fmt.iso, "jam": fmt.jam,
+    "audit_nilai": fmt.audit_nilai,
 })
 templates.env.globals.update({
     "PREFIX": PREFIX,

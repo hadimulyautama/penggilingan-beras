@@ -15,8 +15,11 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, Request
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan.config import tsettings
+from app.timbangan.db import get_db
 from app.timbangan.models import TimbanganAkun
 
 log = logging.getLogger("timbangan.security")
@@ -173,7 +176,41 @@ async def butuh_admin(akun: TimbanganAkun = Depends(butuh_akun)) -> TimbanganAku
 
 
 async def butuh_super(akun: TimbanganAkun = Depends(butuh_akun)) -> TimbanganAkun:
-    """Super Admin saja — satu-satunya yang boleh menghapus data."""
+    """Super Admin saja."""
     if not akun.is_super:
-        raise AksesDitolak("Menghapus data hanya bisa dilakukan Super Admin.")
+        raise AksesDitolak("Halaman ini hanya untuk Super Admin.")
     return akun
+
+
+async def ada_super_aktif(db: AsyncSession) -> bool:
+    from app.timbangan.models import ROLE_SUPERADMIN
+
+    return bool((await db.execute(
+        select(func.count(TimbanganAkun.id)).where(
+            TimbanganAkun.role == ROLE_SUPERADMIN,
+            TimbanganAkun.status == "aktif",
+        )
+    )).scalar_one())
+
+
+async def butuh_super_atau_pertama(
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+) -> TimbanganAkun:
+    """Super Admin — atau Admin, SELAMA belum ada Super Admin yang aktif.
+
+    Pengelolaan pengguna adalah wewenang Super Admin. Tetapi mengunci
+    halamannya rapat-rapat akan membuat Super Admin PERTAMA tidak mungkin
+    dibuat: yang berhak membuatnya hanya bisa dibuat di halaman ini. Pintu
+    yang sama juga satu-satunya jalan pulih bila satu-satunya akun Super
+    Admin hilang atau terkunci.
+
+    Pintunya menutup sendiri begitu ada satu Super Admin aktif, dan tidak
+    bisa dibuka lagi oleh Admin — karena Admin tidak boleh menonaktifkan
+    maupun menghapus akun Super Admin.
+    """
+    if akun.is_super:
+        return akun
+    if akun.is_admin and not await ada_super_aktif(db):
+        return akun
+    raise AksesDitolak("Pengelolaan pengguna hanya untuk Super Admin.")

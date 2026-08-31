@@ -16,11 +16,14 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from zoneinfo import ZoneInfo
+
+from app.config import settings
 from app.models import Supplier
 from app.timbangan import logic, setelan
 from app.timbangan.config import tsettings
@@ -562,6 +565,93 @@ async def ambil_kode(db: AsyncSession, kode: str) -> TimbanganTransaksi | None:
     return (await db.execute(
         select(TimbanganTransaksi).where(TimbanganTransaksi.kode == kode)
     )).scalars().first()
+
+
+# ═══════════════════════════ Jejak audit ═══════════════════════════
+
+@dataclass
+class FilterAudit:
+    """Saringan halaman jejak audit."""
+
+    dari: date | None = None
+    sampai: date | None = None
+    aksi: str | None = None
+    akun_id: int | None = None
+    cari: str | None = None
+
+
+def _batas_hari(f: FilterAudit) -> tuple[datetime | None, datetime | None]:
+    """Tanggal → rentang waktu berzona.
+
+    `waktu` adalah cap waktu, bukan tanggal. Membandingkannya langsung dengan
+    tanggal akan memotong hari di tengah menurut UTC — baris pukul 07.00 WIB
+    akan tampil pada hari sebelumnya.
+    """
+    zona = ZoneInfo(settings.app_timezone)
+    awal = datetime.combine(f.dari, time.min, tzinfo=zona) if f.dari else None
+    akhir = (
+        datetime.combine(f.sampai, time.max, tzinfo=zona) if f.sampai else None
+    )
+    return awal, akhir
+
+
+def _terapkan_filter_audit(q, f: FilterAudit):
+    awal, akhir = _batas_hari(f)
+    if awal is not None:
+        q = q.where(TimbanganAudit.waktu >= awal)
+    if akhir is not None:
+        q = q.where(TimbanganAudit.waktu <= akhir)
+    if f.aksi:
+        q = q.where(TimbanganAudit.aksi == f.aksi)
+    if f.akun_id:
+        q = q.where(TimbanganAudit.akun_id == f.akun_id)
+    if f.cari:
+        pola = f"%{f.cari.strip()}%"
+        q = q.where(or_(
+            TimbanganAudit.entitas_id.ilike(pola),
+            TimbanganAudit.ringkasan.ilike(pola),
+            TimbanganAudit.akun_nama.ilike(pola),
+        ))
+    return q
+
+
+async def daftar_audit(
+    db: AsyncSession, f: FilterAudit, *, batas: int = 50, offset: int = 0
+) -> list[TimbanganAudit]:
+    """Baris audit terbaru lebih dulu."""
+    q = _terapkan_filter_audit(select(TimbanganAudit), f)
+    q = q.order_by(TimbanganAudit.waktu.desc(), TimbanganAudit.id.desc())
+    return list((await db.execute(q.limit(batas).offset(offset))).scalars())
+
+
+async def hitung_audit(db: AsyncSession, f: FilterAudit) -> int:
+    q = _terapkan_filter_audit(
+        select(func.count(TimbanganAudit.id)).select_from(TimbanganAudit), f
+    )
+    return (await db.execute(q)).scalar_one()
+
+
+async def daftar_akun(db: AsyncSession) -> list[TimbanganAkun]:
+    """Semua akun, termasuk yang nonaktif — dipakai menyaring jejak audit.
+
+    Yang nonaktif justru sering yang dicari: orang yang sudah berhenti tetapi
+    pekerjaannya masih perlu ditelusuri.
+    """
+    return list((await db.execute(
+        select(TimbanganAkun).order_by(TimbanganAkun.nama)
+    )).scalars())
+
+
+async def daftar_aksi_audit(db: AsyncSession) -> list[str]:
+    """Jenis aksi yang benar-benar pernah tercatat.
+
+    Dibaca dari data, bukan daftar yang ditulis tangan — aksi baru yang
+    ditambahkan kelak ikut muncul di saringan tanpa ada yang perlu ingat
+    memperbaruinya di sini.
+    """
+    return sorted(
+        (await db.execute(select(TimbanganAudit.aksi).distinct())).scalars()
+    )
 
 
 #: Arah yang WAJIB menyebut nomor polisi. Keputusan Direksi 31 Agustus 2026.

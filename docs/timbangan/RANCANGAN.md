@@ -410,10 +410,11 @@ Direvisi **30 Agustus 2026** (keputusan #6, #7, dan #9 di §12). **Tiga peran.**
 | Catat sampling tara | — | ✅ | ✅ |
 | Setujui tara standar | — | ✅ | ✅ |
 | Ubah **akun sendiri** — nama, nama pengguna, sandi | ✅ | ✅ | ✅ |
-| Ubah peran & kode perangkat siapa pun | — | ✅ | ✅ |
-| Tambah, nonaktifkan, hapus pengguna | — | ✅ | ✅ |
+| Ubah peran & kode perangkat siapa pun | — | — | ✅ |
+| Tambah, nonaktifkan, hapus pengguna | — | —¹ | ✅ |
 | Master jenis, pihak, kendaraan | lihat | ✅ | ✅ |
-| Audit log | — | ✅ | ✅ |
+| Ubah setelan operasional (5 parameter) | — | — | ✅ |
+| **Baca jejak audit** | — | — | ✅ |
 | **Hapus catatan timbang permanen** | — | — | ✅ |
 | **Angkat / ubah / hapus akun Super Admin** | — | —¹ | ✅ |
 
@@ -425,6 +426,19 @@ Tanpa pagar itu pemisahan perannya tidak berarti apa-apa — Admin mana pun
 tinggal mengangkat dirinya sendiri, atau menonaktifkan Super Admin yang ada
 lalu mengangkat dirinya. Dijaga di keempat pintunya: membuat akun, mengubah
 akun, mengubah status, dan menghapus akun.
+
+Sejak **31 Agustus 2026** seluruh halaman Pengguna ikut tertutup bagi Admin
+(keputusan #13), sehingga pintu daruratnya menjadi satu-satunya jalan
+membuat Super Admin pertama. Setelah berhasil, pelakunya diantar ke
+Pengaturan beserta penjelasan — bukan ke daftar pengguna yang baru saja
+tertutup di belakangnya, yang hanya akan terbaca seolah perubahannya gagal.
+
+**Jejak audit hanya untuk Super Admin.** Bukan karena isinya lebih rahasia,
+melainkan karena inilah satu-satunya tempat yang masih menyebut siapa pelaku
+pada catatan yang namanya sudah dikosongkan, dan satu-satunya salinan penuh
+catatan yang sudah dihapus permanen. Ia mengawasi wewenang menghapus — maka
+yang membacanya jangan sama dengan yang memakainya sehari-hari. Halamannya
+hanya menerima GET; tidak ada rute yang bisa mengubah atau menghapus barisnya.
 
 **Menghapus akun tidak pernah menghapus catatan timbang.** Yang dilepas hanya
 penunjuk namanya: baris yang tadinya menyebut orang itu berubah menjadi tidak
@@ -558,6 +572,8 @@ Seluruh perkara yang dulu menggantung sudah diputus pada **30 Agustus 2026**.
 | 10 | **Transfer internal** | **Arah keempat**, satu jenis komoditas saja | Perpindahan barang di dalam perusahaan sendiri. Alurnya sama seperti barang masuk: armada datang bermuatan, ditimbang ulang setelah selesai dibongkar. Tidak dirinci per komoditas — cukup satu jenis "Transfer Internal"; isinya ditulis di catatan bila perlu. Asal dan tujuan ditulis bebas pada satu kolom (mis. "Gudang 1 → Gudang 2"), tanpa master lokasi tersendiri. **Tanpa dokumen pembanding dan tanpa status kontrol**: tidak ada pihak lawan yang perlu dikontrol, jadi yang dicatat cukup berapa yang berpindah. Kolom dokumen sengaja tidak ditampilkan — menyediakannya hanya mengundang angka yang tidak akan pernah dipakai |
 | 11 | **Menghapus akun yang sudah bekerja** | **Boleh, oleh Super Admin** — catatan tidak ikut terhapus, namanya saja dikosongkan | Rinciannya di §10 |
 | 12 | **Nomor polisi** | **Wajib** untuk barang masuk dan barang keluar | Keduanya melibatkan pihak luar, jadi catatannya harus bisa menunjuk kendaraan tertentu bila kelak ada sengketa. Jasa timbang dan transfer internal dibiarkan boleh kosong — tidak selalu memakai kendaraan bernomor. Dijaga di layar (`required`) dan di layanan, termasuk pada koreksi |
+| 13 | **Pengelolaan pengguna & setelan operasional** | **Super Admin saja** | Menambah, mengubah, dan menonaktifkan pengguna serta mengubah lima parameter operasional dipindahkan dari Admin ke Super Admin. Admin tetap melihat nilai setelan yang berlaku — ia perlu tahu batasnya — tetapi tidak mengubahnya. Pengecualian pintu darurat tetap berlaku untuk membuat Super Admin pertama dan memulihkan bila satu-satunya hilang |
+| 14 | **Halaman jejak audit** | **Ada, Super Admin saja** | Sebelumnya jejak tercatat lengkap tetapi tidak punya layar. Sekarang bisa disaring per tanggal, aksi, pelaku, dan pencarian bebas; nilai sebelum/sesudah diurai menjadi baris yang terbaca, bukan JSON mentah. Alasannya di §10 |
 | 5 | **Unit printer** | Pilihan B — printer jaringan 80 mm | Tinggal pembelian: lolos tes cetak dari iPhone di toko, lalu pastikan WiFi pos menjangkau printer. Kandidat & daftar periksa di 11.2 |
 
 Aturan komoditas hidup di tabel `timbangan_jenis` dan disalin ke tiap transaksi
