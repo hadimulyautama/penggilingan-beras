@@ -383,6 +383,52 @@
   a { color: var(--accent); }
   a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+
+  /* ── Di atas kertas ───────────────────────────────────────────────
+   *
+   * Berlaku untuk PDF yang dibagikan maupun untuk siapa pun yang menekan
+   * cetak dari peramban. Paletnya dikunci terang: menyalin latar gelap ke
+   * kertas menghabiskan tinta dan menghasilkan teks yang justru sulit
+   * dibaca. Kartu tindakan dan tabel dijaga tidak terpotong antar-halaman —
+   * "Tidak bisa dikembalikan" yang terpisah dari nama tindakannya adalah
+   * kalimat yang berbahaya.
+   */
+  @media print {
+    :root {
+      --ground: #ffffff;  --raised: #ffffff;  --panel: #f6f2ea;
+      --panel-2: #f2ece1; --ink: #1a1712;     --ink-2: #3a352c;
+      --muted: #4a4539;   --faint: #6f6a5e;   --rule: #d8d2c5;
+      --rule-2: #c9c2b3;  --accent: #24606c;  --accent-soft: #e7f1f2;
+      --aman: #2f6742;    --aman-soft: #e8f2ea;
+      --hati: #7a5a12;    --hati-soft: #fdf2df;
+      --bahaya: #97401f;  --bahaya-soft: #f9e9e4;
+    }
+    @page { margin: 16mm 14mm; }
+
+    body { font-size: 10.5pt; line-height: 1.5; }
+    .lembar { max-width: none; padding: 0; }
+    .kepala { padding: 0 0 14px; }
+    h1 { font-size: 24pt; }
+    .kepala__ket { font-size: 11pt; }
+
+    /* Daftar isi hanya berguna bila bisa diklik. */
+    .indeks { display: none; }
+    .badan { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .isi { max-width: none; padding-top: 20px; gap: 26px; }
+
+    h2 { font-size: 15pt; break-after: avoid; }
+    h3 { font-size: 11.5pt; break-after: avoid; margin-top: 16px; }
+    p, li { orphans: 3; widows: 3; }
+
+    .tindakan, .nota, .gulung, .gejala { break-inside: avoid; }
+    section { break-inside: auto; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+
+    a { color: var(--ink); text-decoration: none; }
+    footer { break-inside: avoid; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
