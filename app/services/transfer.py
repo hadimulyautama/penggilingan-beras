@@ -78,7 +78,7 @@ async def _gabah_cost(db: AsyncSession, proc: MillingProcess) -> float | None:
         ).scalars().first()
         if v is None or v.harga_per_kg is None:
             return None
-        return float(b.berat_total_kg) * float(v.harga_per_kg)
+        return float(b.berat_total_kg or 0) * float(v.harga_per_kg)
     return None
 
 

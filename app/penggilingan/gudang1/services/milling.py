@@ -59,7 +59,7 @@ async def _storage_kg(db: AsyncSession, st: SiloStorage) -> float:
         return float((await db.execute(stmt)).scalar_one())
     if st.purchase_batch_id:
         b = await db.get(PurchaseBatch, st.purchase_batch_id)
-        return float(b.berat_total_kg) if b else 0.0
+        return float(b.berat_total_kg or 0) if b else 0.0
     return 0.0
 
 

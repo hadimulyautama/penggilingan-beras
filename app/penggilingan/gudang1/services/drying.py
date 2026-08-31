@@ -311,7 +311,7 @@ async def _loose_dryer_batches(db: AsyncSession) -> list[PurchaseBatch]:
 
 
 async def loose_dryer_kg(db: AsyncSession) -> float:
-    return sum(float(b.berat_total_kg) for b in await _loose_dryer_batches(db))
+    return sum(float(b.berat_total_kg or 0) for b in await _loose_dryer_batches(db))
 
 
 async def masuk_dryer(
@@ -353,7 +353,7 @@ async def masuk_dryer(
     if len(kondisi_all) > 1:
         raise DryingError("❌ Tidak boleh mencampur gabah basah & kering di dryer.")
 
-    new_total = sum(float(b.berat_total_kg) for b in batches)
+    new_total = sum(float(b.berat_total_kg or 0) for b in batches)
     dryer = await _g1_dryer(db)
     if dryer is not None:
         if dryer.status != "aktif":
@@ -459,7 +459,7 @@ async def add_batches_to_lot(
         )
     kondisi = existing_kondisi or kondisi_baru.pop()
 
-    new_total = sum(float(b.berat_total_kg) for b in batches)
+    new_total = sum(float(b.berat_total_kg or 0) for b in batches)
     dryer = await _g1_dryer(db)
     if dryer is not None:
         load = await dryer_load_kg(db)  # sudah termasuk lot ini
@@ -484,7 +484,7 @@ async def add_batches_to_lot(
     await db.commit()
 
     all_batches = existing + batches
-    total_kg = sum(float(b.berat_total_kg) for b in all_batches)
+    total_kg = sum(float(b.berat_total_kg or 0) for b in all_batches)
     return LotResult(
         lot=lot, kondisi=kondisi, total_kg=total_kg,
         batch_kodes=[b.kode_batch for b in all_batches],
@@ -585,7 +585,7 @@ async def start_drying(
     for b in loose:
         db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=b.id))
         b.status_batch = "dikeringkan"
-        total += float(b.berat_total_kg)
+        total += float(b.berat_total_kg or 0)
     await log_activity(
         db, table_name="drying_lots", record_id=lot.id, action="INSERT",
         changed_by=user.id,
@@ -714,7 +714,7 @@ async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> 
     loose = await _loose_dryer_batches(db)
     loose_line = ""
     if loose:
-        lkg = sum(float(b.berat_total_kg) for b in loose)
+        lkg = sum(float(b.berat_total_kg or 0) for b in loose)
         loose_line = (
             f"\n⏸️ Menunggu di dryer (belum mulai): {len(loose)} batch, "
             f"{lkg/1000:g} ton — {', '.join(b.kode_batch for b in loose)}.\n"

@@ -423,7 +423,7 @@ async def verify_pk_price(
     if metode not in ("per_kg", "total") or nilai is None:
         raise Gudang2Error("Sebutkan metode harga (per kg / total) & nilainya.")
 
-    berat_bersih = float(batch.berat_total_kg) - float(potongan_kg or 0)
+    berat_bersih = float(batch.berat_total_kg or 0) - float(potongan_kg or 0)
     if metode == "total":
         total_biaya = float(nilai)
         hpp = total_biaya / berat_bersih if berat_bersih else None
@@ -598,7 +598,7 @@ async def masukkan_pk_luar(
             )
         )
     ).scalars().first()
-    berat = float(batch.berat_total_kg) - float(verif.potongan_kg or 0 if verif else 0)
+    berat = float(batch.berat_total_kg or 0) - float(verif.potongan_kg or 0 if verif else 0)
     hpp = float(verif.harga_per_kg) if verif and verif.harga_per_kg is not None else None
     res = await _add_intake(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,

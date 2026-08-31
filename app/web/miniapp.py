@@ -477,7 +477,7 @@ async def gabah_unverified(user: User = Depends(require_miniapp_user)) -> list[d
             )
         ).all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {s} · {_rp(float(b.berat_total_kg))} kg"}
+             "label": f"{b.kode_batch} · {s} · {_rp(float(b.berat_total_kg or 0))} kg"}
             for b, s in rows]
 
 
@@ -534,7 +534,7 @@ async def pk_intake_pending(user: User = Depends(require_miniapp_user)) -> list[
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
             for b in rows]
 
 
@@ -604,7 +604,7 @@ async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
             for b in rows]
 
 
@@ -623,7 +623,7 @@ async def pk_luar_harga(user: User = Depends(require_miniapp_user)) -> list[dict
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg))} kg"}
+             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
             for b in rows]
 
 

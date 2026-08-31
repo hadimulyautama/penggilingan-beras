@@ -108,7 +108,7 @@ async def laporan_pembelian_gabah(
     unverified = 0
     per_supplier: dict[str, list[float]] = {}  # nama -> [kg, count]
     for batch, nama in rows:
-        kg = float(batch.berat_total_kg)
+        kg = float(batch.berat_total_kg or 0)
         total_kg += kg
         if batch.kondisi_gabah == "kering":
             kering_kg += kg
@@ -374,7 +374,7 @@ async def _batch_detail_card(
     lines = [
         f"🔎 {batch.kode_batch} — {nama}",
         f"• Masuk: {_fmt_waktu(batch.waktu_pembelian)}",
-        f"• Berat: {_fmt_kg(float(batch.berat_total_kg))} | Kondisi: {batch.kondisi_gabah}",
+        f"• Berat: {_fmt_kg(float(batch.berat_total_kg or 0))} | Kondisi: {batch.kondisi_gabah}",
         f"• Kadar air awal: {ka}",
         f"• Status: {batch.status_batch}",
     ]
@@ -525,7 +525,7 @@ async def pending_verifikasi(db: AsyncSession) -> str:
     if batches:
         lines.append(f"💰 Harga gabah belum diverifikasi ({len(batches)}):")
         for b, nama in batches[:10]:
-            lines.append(f"• {b.kode_batch} — {nama}, {_fmt_kg(float(b.berat_total_kg))}")
+            lines.append(f"• {b.kode_batch} — {nama}, {_fmt_kg(float(b.berat_total_kg or 0))}")
 
     # 2. Output PK milling (selesai) belum diverifikasi.
     verified_ids = select(MillingProcessVerification.milling_process_id)
@@ -680,7 +680,7 @@ async def cari_kode(
     for batch, nama in rows[:10]:
         flag = " · belum diverifikasi" if batch.flag_unverified else ""
         lines.append(
-            f"• {batch.kode_batch} — {nama}, {_fmt_kg(float(batch.berat_total_kg))}, "
+            f"• {batch.kode_batch} — {nama}, {_fmt_kg(float(batch.berat_total_kg or 0))}, "
             f"{batch.kondisi_gabah}{flag}"
         )
     if len(rows) > 10:
