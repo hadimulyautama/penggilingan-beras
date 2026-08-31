@@ -262,6 +262,10 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
     if fin:
         # Tugas pokok staff (keuangan & QC lintas gudang).
         actions += [
+            {"id": "rekonsiliasi_timbang", "label": "🔎 Rekonsiliasi timbang ↔ intake",
+             "post": "/miniapp/actions/rekonsiliasi-timbang",
+             "hint": "Tiket timbang yang belum jadi batch, selisih nota vs timbang, "
+                     "batch menunggu bobot.", "fields": []},
             {"id": "verify_gabah", "label": "✅ Verifikasi harga gabah",
              "post": "/miniapp/actions/verify-gabah", "fields": [
                  {"name": "kode_batch", "label": "Batch gabah", "type": "remote",
@@ -345,6 +349,7 @@ _ACTION_WH = {
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
+    "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
     "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "qc_pk_luar": "g2",
@@ -1015,6 +1020,16 @@ async def timbang_pk_aktif(user: User = Depends(require_miniapp_user)) -> list[d
         out.append({"value": t["id"],
                     "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} · {bstr}"})
     return out
+
+
+@router.post("/actions/rekonsiliasi-timbang")
+async def act_rekonsiliasi_timbang(user: User = Depends(require_miniapp_user)) -> dict:
+    """Laporan rekonsiliasi timbangan ↔ intake (staff/admin)."""
+    _require(can_see_financials(user))
+    from app.penggilingan.gudang1.services.rekonsiliasi import rekonsiliasi, format_rekonsiliasi
+    async with SessionLocal() as db:
+        d = await rekonsiliasi(db)
+    return {"ok": True, "pesan": format_rekonsiliasi(d)}
 
 
 @router.post("/actions/catat-pk-luar")
