@@ -1,7 +1,7 @@
 # Arsitektur Sistem — PT Hadi Mulya Utama
 
 **Peta tingkat sistem: tiga modul di atas satu fondasi**
-Versi 1.1 · 31 Agustus 2026
+Versi 1.2 · 31 Agustus 2026
 
 Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama, dan aturan yang menjaga agar penambahan modul berikutnya tidak merusak yang sudah ada. Rancangan rinci tiap modul ada di dokumennya sendiri.
 
@@ -13,7 +13,26 @@ Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama
 |---|---|---|---|
 | **Produksi penggilingan** | Operator gudang & staff | Gabah masuk, pengeringan, silo, milling, penyosohan, barang jadi, kemasan, barang keluar | `app/penggilingan/` |
 | **AI Agent asisten** | Direksi & manajer | Arsip Drive, Gmail, Kledo, GajiHub, IT aset, pengetahuan, persetujuan, lapisan proaktif | `app/kantor/` |
-| **Timbangan** | Petugas pos timbang | Catat timbang, kontrol terhadap nota & surat jalan, monitoring | `app/timbangan/` |
+| **Timbangan** | Petugas pos timbang | Catat timbang, kontrol terhadap nota & surat jalan, monitoring | **repo terpisah:** [`hadimulyautama/timbangan`](https://github.com/hadimulyautama/timbangan) |
+
+> **Timbangan pindah repo pada 31 Agustus 2026.** Alasannya kemandirian
+> rilis: satu push ke repo ini dulu mendeploy ulang ketiga service, sehingga
+> perbaikan kecil di pos timbang harus menunggu — dan ikut memicu — rilis
+> penggilingan dan Kantor AI. Databasenya **tetap satu**; yang dipisah
+> kodenya, bukan datanya.
+>
+> Empat foreign key masih menyeberang: `timbangan_akun.user_id` → `users`,
+> `timbangan_transaksi.supplier_id` → `suppliers`, `.purchase_batch_id` →
+> `purchase_batches`, `.pk_purchase_batch_id` → `pk_purchase_batches`.
+> Keempat tabel itu milik repo ini. **Mengubah bentuknya bisa merusak pos
+> timbang, dan tidak ada lagi satu rangkaian uji yang menangkapnya** —
+> kontraknya ditulis di `app/models.py` repo sebelah.
+>
+> Migrasi `0022`–`0026` di repo ini adalah riwayat yang sudah diterapkan dan
+> **tetap tinggal** — riwayat migrasi hanya bertambah, sama seperti jejak
+> audit. Migrasi timbangan berikutnya ditulis di repo sebelah, dengan tabel
+> versi `alembic_version_timbangan` yang terpisah dari `alembic_version`
+> milik repo ini.
 
 ### Membaca susunan berkasnya
 
@@ -28,7 +47,6 @@ app/
   bots/  services/  web/                        ← kerangka bersama + layanan penggilingan
   penggilingan/   gudang1  gudang2  inventory
   kantor/         …  proaktif/
-  timbangan/
 ```
 
 Dua hal yang **sengaja tidak** ikut dikelompokkan, dan alasannya penting:
