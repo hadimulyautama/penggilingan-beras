@@ -174,6 +174,19 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                   "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
                               ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
              ]},
+            {"id": "gabah_masuk_manual", "label": "✍️ Gabah masuk (MANUAL, tanpa timbang)",
+             "post": "/miniapp/actions/gabah-masuk-manual",
+             "hint": "Pengecualian: pakai HANYA bila jembatan timbang tak dipakai. "
+                     "Ditandai 'manual' & muncul di rekonsiliasi.",
+             "fields": [
+                 {"name": "supplier", "label": "Supplier", "type": "text"},
+                 {"name": "berat", "label": "Berat (kg)", "type": "number"},
+                 {"name": "kondisi", "label": "Kondisi gabah", "type": "select", "options": KONDISI},
+                 {"name": "plat", "label": "Plat truk", "type": "text"},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
+                              ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
+             ]},
             {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
              "post": "/miniapp/actions/mulai-pengeringan",
              "hint": "Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer.",
@@ -300,6 +313,18 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
                   "options": JENIS_PK},
                  {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
              ]},
+            {"id": "catat_pk_luar_manual", "label": "✍️ Catat PK luar (MANUAL, tanpa timbang)",
+             "post": "/miniapp/actions/catat-pk-luar-manual",
+             "hint": "Pengecualian: pakai HANYA bila jembatan timbang tak dipakai. "
+                     "Ditandai 'manual' & muncul di rekonsiliasi.",
+             "fields": [
+                 {"name": "supplier", "label": "Supplier", "type": "text"},
+                 {"name": "berat", "label": "Berat (kg)", "type": "number"},
+                 {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
+                  "options": JENIS_PK},
+                 {"name": "plat", "label": "Plat truk", "type": "text"},
+                 {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
+             ]},
             {"id": "qc_pk_luar", "label": "🔬 Input kualitas PK luar",
              "post": "/miniapp/actions/qc-pk-luar",
              "hint": "PK yang masuk sudah pasti diterima — ini hanya mencatat "
@@ -345,14 +370,14 @@ async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]
 # berasal dari proses G1 → G1.
 _ACTION_WH = {
     # Gudang 1 (Selepan)
-    "gabah_masuk": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
+    "gabah_masuk": "g1", "gabah_masuk_manual": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
-    "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "qc_pk_luar": "g2",
+    "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "catat_pk_luar_manual": "g2", "qc_pk_luar": "g2",
     "harga_pk_luar": "g2",
 }
 
@@ -733,6 +758,66 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_minia
     return {"ok": True, "pesan": pesan}
 
 
+class GabahMasukManualReq(BaseModel):
+    # Pengecualian: dipakai HANYA bila jembatan timbang tak dipakai.
+    supplier: str
+    berat: float
+    kondisi: str                    # basah / kering
+    plat: str | None = None
+    tujuan: str | None = None       # dryer / silo_a / silo_b
+
+
+@router.post("/actions/gabah-masuk-manual")
+async def act_gabah_masuk_manual(req: GabahMasukManualReq,
+                                 user: User = Depends(require_miniapp_user)) -> dict:
+    """Gabah masuk MANUAL (tanpa timbang). Batch ditandai sumber_berat='manual'
+    (default fungsi lama) → tampil di rekonsiliasi. Fallback saat timbang tak dipakai."""
+    _require(await _is_g1_operator(user))
+    if not (req.supplier or "").strip():
+        raise HTTPException(400, "Isi nama supplier.")
+    if float(req.berat or 0) <= 0:
+        raise HTTPException(400, "Isi berat (kg) lebih dari 0.")
+    if req.kondisi not in ("basah", "kering"):
+        raise HTTPException(400, "Pilih kondisi: Basah / Kering.")
+    if not (req.plat or "").strip():
+        raise HTTPException(400, "Isi plat truk.")
+    tujuan = "dryer" if req.kondisi == "basah" else req.tujuan   # basah wajib dryer
+    if tujuan not in ("dryer", "silo_a", "silo_b"):
+        raise HTTPException(400, "Pilih tujuan: Dryer / Silo A / Silo B.")
+
+    from app.penggilingan.gudang1.services.purchase import create_purchase_batch
+    from app.penggilingan.gudang1.services.drying import masuk_dryer, DryingError
+    from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await create_purchase_batch(
+                db, user=u, nama_supplier=req.supplier.strip(), berat_kg=float(req.berat),
+                kondisi_gabah=req.kondisi, no_polisi_truk=req.plat.strip(),
+                kadar_air_awal_persen=None,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise _err(e, "Gagal mencatat gabah.")
+        kode = r.batch.kode_batch
+        tempat, warn = "", ""
+        try:
+            if tujuan == "dryer":
+                await masuk_dryer(db, user=u, kode_batch_list=[kode])
+                tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
+            else:
+                silo = "A" if tujuan == "silo_a" else "B"
+                await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
+                tempat = f"🏗️ masuk Silo {silo} (kering menunggu — lot terbentuk saat digiling)"
+        except (DryingError, SiloError) as e:
+            warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
+
+    pesan = (f"✓ Gabah *{kode}* ({req.kondisi}, ✍️ MANUAL tanpa timbang) tercatat"
+             + (f".\n{tempat}." if tempat else ".") + warn
+             + "\n⚠️ Tercatat sebagai batch *manual* — muncul di Rekonsiliasi.")
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
+
 class KadarAirReq(BaseModel):
     kode_lot: str
     kadar_air: float
@@ -1056,6 +1141,50 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_mi
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
              f"{jl} {bstr}, truk {nopol}. "
              "Diterima — menunggu input kualitas & verifikasi harga.")
+    await _chat_confirm(user, pesan, "admin")
+    return {"ok": True, "pesan": pesan}
+
+
+class CatatPkLuarManualReq(BaseModel):
+    # Pengecualian: dipakai HANYA bila jembatan timbang tak dipakai.
+    supplier: str
+    berat: float
+    jenis_pk: str
+    plat: str | None = None
+    kadar_air: float | None = None
+
+
+@router.post("/actions/catat-pk-luar-manual")
+async def act_catat_pk_luar_manual(req: CatatPkLuarManualReq,
+                                   user: User = Depends(require_miniapp_user)) -> dict:
+    """PK luar MANUAL (tanpa timbang). Batch ditandai sumber_berat='manual'
+    (default fungsi lama) → tampil di rekonsiliasi. Fallback saat timbang tak dipakai."""
+    _require(can_see_financials(user))
+    if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
+        raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
+    if not (req.supplier or "").strip():
+        raise HTTPException(400, "Isi nama supplier.")
+    if float(req.berat or 0) <= 0:
+        raise HTTPException(400, "Isi berat (kg) lebih dari 0.")
+    if not (req.plat or "").strip():
+        raise HTTPException(400, "Isi plat truk.")
+    from app.penggilingan.gudang2.service import create_pk_purchase, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await create_pk_purchase(
+                db, user=u, nama_supplier=req.supplier.strip(), berat_kg=float(req.berat),
+                jenis_pk=req.jenis_pk, kadar_air=req.kadar_air, no_polisi=req.plat.strip(),
+            )
+        except Gudang2Error as e:
+            raise _err(e, "Gagal mencatat PK luar.")
+    jl = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}.get(
+        r.batch.jenis_pk, r.batch.jenis_pk or "-")
+    baru = " (supplier baru)" if r.supplier_created else ""
+    pesan = (f"✓ PK luar *{r.batch.kode_batch}* (✍️ MANUAL tanpa timbang) — {r.supplier_nama}{baru}, "
+             f"{jl} {float(req.berat):g} kg, truk {req.plat.strip()}. "
+             "Menunggu QC & verifikasi harga.\n"
+             "⚠️ Tercatat sebagai batch *manual* — muncul di Rekonsiliasi.")
     await _chat_confirm(user, pesan, "admin")
     return {"ok": True, "pesan": pesan}
 
