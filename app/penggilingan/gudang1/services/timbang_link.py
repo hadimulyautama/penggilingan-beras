@@ -90,3 +90,36 @@ async def sinkron_bobot_menunggu(db: AsyncSession) -> int:
         total += res.rowcount or 0
     await db.commit()
     return total
+
+
+# RE-SINKRON saat tiket DIREVISI (mis. petugas timbang mengoreksi bobot setelah batch
+# dibuat & tersinkron). AMAN hanya bila batch BELUM diverifikasi harga (flag_unverified
+# → tak ada nilai finansial beku) DAN (gabah) belum digiling (rendemen giling memakai
+# snapshot bobot sendiri, jadi tak terpengaruh). Batch yang SUDAH terverifikasi / digiling
+# TIDAK diubah otomatis — dilaporkan di rekonsiliasi ("bobot tiket berubah") untuk ditinjau.
+_SQL_RESINKRON = """
+    UPDATE {tbl} b SET
+        berat_total_kg = COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg),
+        sumber_berat   = CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0
+                              THEN 'nota' ELSE 'timbangan' END
+      FROM timbangan_transaksi t
+     WHERE b.timbangan_transaksi_id = t.id
+       AND b.sumber_berat IN ('nota', 'timbangan')     -- sudah pernah sinkron dari timbang
+       AND b.flag_unverified = true                     -- belum ada harga → tak ada nilai beku
+       {extra}
+       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
+       AND b.berat_total_kg IS DISTINCT FROM
+           COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg)
+"""
+
+
+async def resinkron_bobot_berubah(db: AsyncSession) -> int:
+    """Perbarui bobot batch yang tiketnya DIREVISI — hanya batch belum-verifikasi
+    & (gabah) belum-giling. → jumlah baris diperbarui. Idempoten (IS DISTINCT FROM)."""
+    total = 0
+    for tbl, extra in (("purchase_batches", "AND b.status_batch <> 'digiling'"),
+                       ("pk_purchase_batches", "")):
+        res = await db.execute(text(_SQL_RESINKRON.format(tbl=tbl, extra=extra)))
+        total += res.rowcount or 0
+    await db.commit()
+    return total

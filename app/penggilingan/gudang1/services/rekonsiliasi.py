@@ -56,6 +56,34 @@ _SQL_MENUNGGU = text("""
     SELECT kode_batch, 'pk' j FROM pk_purchase_batches WHERE sumber_berat='menunggu'
 """)
 
+# Batch tertaut yang bobot tersimpannya BEDA dari tiket SAAT INI (tiket direvisi)
+# TAPI sudah terverifikasi harga / (gabah) sudah digiling → TIDAK di-auto-resync
+# (nilai finansial/rendemen beku). Perlu ditinjau manual.
+_SQL_REVISI = text("""
+    SELECT kode_batch, nama, jenis, tersimpan, tiket_now, status, terverifikasi FROM (
+      SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
+             b.berat_total_kg AS tersimpan,
+             COALESCE(NULLIF(t.berat_acuan_kg,0), t.netto_timbangan_kg) AS tiket_now,
+             b.status_batch AS status, (NOT b.flag_unverified) AS terverifikasi
+        FROM purchase_batches b
+        JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
+        LEFT JOIN suppliers s ON s.id = b.supplier_id
+       WHERE b.sumber_berat IN ('nota','timbangan')
+      UNION ALL
+      SELECT b.kode_batch, COALESCE(s.nama_supplier,'?'), 'pk',
+             b.berat_total_kg, COALESCE(NULLIF(t.berat_acuan_kg,0), t.netto_timbangan_kg),
+             b.status_batch, (NOT b.flag_unverified)
+        FROM pk_purchase_batches b
+        JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
+        LEFT JOIN suppliers s ON s.id = b.supplier_id
+       WHERE b.sumber_berat IN ('nota','timbangan')
+    ) x
+    WHERE tiket_now IS NOT NULL
+      AND tersimpan IS DISTINCT FROM tiket_now
+      AND (terverifikasi = true OR status = 'digiling')
+    ORDER BY ABS(COALESCE(tersimpan,0) - tiket_now) DESC
+""")
+
 _SQL_MANUAL = text("""
     SELECT count(*) FROM (
       SELECT id FROM purchase_batches WHERE sumber_berat='manual'
@@ -67,9 +95,10 @@ _SQL_MANUAL = text("""
 async def rekonsiliasi(db: AsyncSession) -> dict:
     belum = [dict(r._mapping) for r in (await db.execute(_SQL_BELUM_TERTAUT)).all()]
     selisih = [dict(r._mapping) for r in (await db.execute(_SQL_SELISIH)).all()]
+    revisi = [dict(r._mapping) for r in (await db.execute(_SQL_REVISI)).all()]
     menunggu = [dict(r._mapping) for r in (await db.execute(_SQL_MENUNGGU)).all()]
     n_manual = (await db.execute(_SQL_MANUAL)).scalar_one()
-    return {"belum_tertaut": belum, "selisih": selisih,
+    return {"belum_tertaut": belum, "selisih": selisih, "revisi": revisi,
             "menunggu": menunggu, "jumlah_manual": int(n_manual or 0)}
 
 
@@ -92,9 +121,15 @@ def format_rekonsiliasi(d: dict) -> str:
         baris.append(f"   • {x['kode_batch']} ({x['nama']}): nota {_kg(x['nota'])} vs timbang "
                      f"{_kg(x['timbang'])} → selisih {_kg(x['selisih_kg'])} kg "
                      f"({float(x.get('selisih_persen') or 0):.1f}%){rps}")
-    baris.append(f"\n③ Batch menunggu bobot: {len(d['menunggu'])}"
+    rev = d.get("revisi", [])
+    baris.append(f"\n③ Bobot tiket BERUBAH setelah verifikasi/giling (perlu tinjau): {len(rev)}")
+    for x in rev[:10]:
+        tag = "terverifikasi" if x.get("terverifikasi") else str(x.get("status") or "")
+        baris.append(f"   • {x['kode_batch']} ({x['nama']}): tersimpan {_kg(x['tersimpan'])} kg "
+                     f"→ tiket kini {_kg(x['tiket_now'])} kg [{tag}] — tak diubah otomatis")
+    baris.append(f"\n④ Batch menunggu bobot: {len(d['menunggu'])}"
                  + (" — " + ", ".join(m['kode_batch'] for m in d['menunggu'][:10]) if d['menunggu'] else ""))
-    baris.append(f"④ Batch manual (tanpa timbang): {d['jumlah_manual']}")
-    if not belum and not sel and not d["menunggu"]:
+    baris.append(f"⑤ Batch manual (tanpa timbang): {d['jumlah_manual']}")
+    if not belum and not sel and not rev and not d["menunggu"]:
         baris.append("\n✅ Bersih — semua timbang tertaut & tak ada selisih.")
     return "\n".join(baris)

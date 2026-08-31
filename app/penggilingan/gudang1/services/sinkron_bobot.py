@@ -11,7 +11,10 @@ import asyncio
 import logging
 
 from app.database import SessionLocal
-from app.penggilingan.gudang1.services.timbang_link import sinkron_bobot_menunggu
+from app.penggilingan.gudang1.services.timbang_link import (
+    resinkron_bobot_berubah,
+    sinkron_bobot_menunggu,
+)
 
 log = logging.getLogger("sinkron.bobot")
 
@@ -27,5 +30,9 @@ async def run_sinkron_bobot_poller(bots=None) -> None:
                 n = await sinkron_bobot_menunggu(db)
             if n:
                 log.info("Sinkron bobot: %s batch terisi dari tiket timbang.", n)
+            async with SessionLocal() as db:
+                m = await resinkron_bobot_berubah(db)
+            if m:
+                log.info("Re-sinkron bobot (tiket direvisi): %s batch diperbarui.", m)
         except Exception:  # noqa: BLE001
             log.exception("Loop sinkron bobot gagal (lanjut)")
