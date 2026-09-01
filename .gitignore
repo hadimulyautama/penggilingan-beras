@@ -21,3 +21,10 @@ docs/timbangan/design/timbangan-pos-timbang.html
 # PDF pedoman dibuat ulang dari HTML-nya, bukan disimpan di git
 docs/timbangan/*.pdf
 graphify-out/
+
+# Repo-repo terpisah (scaffolding pemisahan Kantor/Produksi/core) — dikelola sbg repo sendiri
+/core/
+/kantor/
+/produksi/
+/timbangan/
+/website/
