@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
 
 from app.config import settings
+from hmu_core import Base, TimestampMixin  # noqa: F401 — Base & skema master bersama (paket core)
 
 engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
 
@@ -53,22 +54,9 @@ def input_time(tanggal: date | None, jam: time | None = None) -> datetime:
     return dt
 
 
-class Base(DeclarativeBase):
-    """Base untuk semua model."""
-
-
-class TimestampMixin:
-    """Kolom created_at / updated_at otomatis (prinsip: timestamp selalu otomatis)."""
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
+# Base & TimestampMixin kini dari paket bersama `hmu_core` (di-import di atas).
+# Semua sistem memakai SATU Base yang sama → relasi lintas-modul tetap resolve,
+# dan tabel master dikelola oleh chain migrasi core (alembic_version_core).
 
 
 async def get_session() -> AsyncSession:
