@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     rubber_roll_harga_per_set: float = 2_000_000
     rubber_roll_umur_ton: float = 100
 
+    # ── Biaya PENYOSOHAN (PK → beras putih). Basis: kg PK yang disosoh. Crew
+    #    penyosohan TERPISAH dari crew milling. Semua masuk HPP beras. ──
+    biaya_penyosohan_per_kg_pk: float = 100          # sosoh, per kg PK (Rp1jt/10 ton)
+    biaya_tenaga_penyosohan_per_kg_pk: float = 50    # tenaga crew sosoh, per kg PK
+    biaya_transport_penyosohan_per_kg_pk: float = 50  # transport inbound, per kg PK (Rp500rb/10 ton)
+    biaya_operator_penyosohan: float = 300_000       # FLAT per proses penyosohan
+    # Marketing = BEBAN PENJUALAN, BUKAN HPP. Untuk laporan margin/harga jual,
+    # jangan dimasukkan ke hitung_hpp_beras.
+    biaya_marketing_per_kg_beras: float = 50
+
     # Asumsi kapasitas teoritis (utk analitik utilisasi). Bisa via env.
     kapasitas_siklus_dryer_per_hari: float = 1     # ~1 siklus (sore-besok sore)
     kapasitas_hari_kerja_per_bulan: int = 26
