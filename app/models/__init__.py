@@ -4,7 +4,14 @@ Definisi model tinggal di paket domain (app.penggilingan.gudang1.models, app.pen
 dan master/system/transfer di sini. Konsumen tetap pakai `from app.models import X`.
 """
 from app.database import Base
-from app.models.master import Dryer, Silo, Supplier, User, Warehouse
+from app.models.master import (
+    Dryer,
+    Pelanggan,
+    Silo,
+    Supplier,
+    User,
+    Warehouse,
+)
 from app.penggilingan.gudang1.models import (
     DryingCoolingLog,
     DryingLot,
@@ -63,6 +70,7 @@ __all__ = [
     # master
     "Warehouse",
     "User",
+    "Pelanggan",
     "Supplier",
     "Silo",
     "Dryer",

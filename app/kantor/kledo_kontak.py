@@ -1,9 +1,9 @@
-"""Sinkronisasi kontak vendor Kledo → master `suppliers`.
+"""Sinkronisasi kontak Kledo → master `suppliers` dan `pelanggan`.
 
 Kledo adalah sumber kebenaran identitas mitra (lihat memori no-redundancy-kledo).
-Modul ini menyalin kontak **vendor** ke `suppliers` supaya pos timbang dan
-sistem penggilingan memakai daftar yang sama — bukan daftar tandingan yang
-diketik ulang.
+Modul ini menyalin kontak **vendor** ke `suppliers` dan kontak **pelanggan**
+ke `pelanggan`, supaya pos timbang dan sistem penggilingan memakai daftar yang
+sama — bukan daftar tandingan yang diketik ulang.
 
 **Yang disebut "vendor" adalah `type_id = 1`.** Ini tidak bisa ditebak dari
 isinya dan pernah nyaris salah: `type_id = 4` justru berisi PLN, Pertamina, dan
@@ -21,6 +21,20 @@ Aturan yang dijaga:
   · **Menaut lebih dulu, membuat kemudian.** Pencocokan lewat
     `kledo_contact_id`, lalu nama persis. Nama yang ambigu tidak ditebak.
   · **Idempoten.** Dijalankan berapa kali pun hasilnya sama.
+
+**Pelanggan adalah `type_id = 3`**, diperiksa pada data sungguhan 2026-09-01:
+301 dari 601 kontak, dan salah satunya "Walk-in Customer" — kontak bawaan
+Kledo yang hanya ada pada tipe pelanggan. Sisanya memang pembeli beras: Toko
+beras handoko, Angkringan Depan, dr. H. Nurhadi.
+
+24 kontak bertipe vendor SEKALIGUS pelanggan, dan itu memang wajar: orang yang
+menjual gabah pagi bisa membeli beras sore. Keduanya disalin ke tabel
+masing-masing, karena yang menentukan adalah perannya pada transaksi itu.
+
+Satu jebakan API yang sudah dibuktikan: parameter `type_ids[]` pada
+`/finance/contacts` **diabaikan** — permintaan bertipe apa pun tetap
+mengembalikan seluruh 601 kontak. Penyaringan karena itu dikerjakan di sini,
+bukan diserahkan ke server.
 """
 from __future__ import annotations
 
@@ -35,12 +49,13 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Supplier
+from app.models import Pelanggan, Supplier
 
 log = logging.getLogger(__name__)
 
-#: Jenis kontak Kledo yang berarti vendor/pemasok. Lihat penjelasan di atas.
+#: Jenis kontak Kledo. Keduanya diperiksa pada data sungguhan; lihat di atas.
 TIPE_VENDOR = 1
+TIPE_PELANGGAN = 3
 
 _BASE = os.getenv("KLEDO_BASE", "https://pthadimulyautama.api.kledo.com/api/v1")
 _PER_HAL = 100
@@ -69,8 +84,12 @@ def _isi(d: dict) -> tuple[list[dict], int]:
     return list(data or []), 0
 
 
-async def ambil_vendor() -> list[dict]:
-    """Seluruh kontak bertipe vendor dari Kledo."""
+async def ambil_kontak(tipe: int) -> list[dict]:
+    """Seluruh kontak Kledo bertipe ini.
+
+    Seluruh halaman diambil lalu disaring di sini — `type_ids[]` di API-nya
+    tidak berpengaruh sama sekali.
+    """
     semua: list[dict] = []
     for hal in range(1, _MAKS_HAL + 1):
         d = await asyncio.to_thread(
@@ -84,9 +103,41 @@ async def ambil_vendor() -> list[dict]:
             break
     return [
         k for k in semua
-        if TIPE_VENDOR in (k.get("type_ids") or [k.get("type_id")])
+        if tipe in (k.get("type_ids") or [k.get("type_id")])
         and not k.get("is_archive")
     ]
+
+
+async def ambil_vendor() -> list[dict]:
+    """Kontak vendor. Dipertahankan sebagai nama sendiri karena dipakai uji."""
+    return await ambil_kontak(TIPE_VENDOR)
+
+
+async def ambil_pelanggan() -> list[dict]:
+    return await ambil_kontak(TIPE_PELANGGAN)
+
+
+@dataclass(frozen=True)
+class JenisKontak:
+    """Satu macam kontak Kledo beserta tabel tujuannya.
+
+    Sinkronisasi vendor dan pelanggan berbagi SATU fungsi. Menyalin fungsinya
+    akan menghasilkan dua salinan yang lambat laun berbeda — dan perbedaan
+    diam-diam pada penautan identitas adalah jenis kesalahan yang paling sulit
+    disadari.
+    """
+
+    tipe: int
+    model: type
+    kolom_nama: str
+    sebutan: str
+
+    async def ambil(self) -> list[dict]:
+        return await ambil_kontak(self.tipe)
+
+
+VENDOR = JenisKontak(TIPE_VENDOR, Supplier, "nama_supplier", "vendor")
+PELANGGAN = JenisKontak(TIPE_PELANGGAN, Pelanggan, "nama_pelanggan", "pelanggan")
 
 
 def _nama(k: dict) -> str:
@@ -114,33 +165,41 @@ class HasilSinkron:
         return ", ".join(bagian)
 
 
-async def sinkron(db: AsyncSession, *, terapkan: bool = True) -> HasilSinkron:
-    """Salin kontak vendor Kledo ke `suppliers`.
+async def sinkron(
+    db: AsyncSession, jenis: JenisKontak = VENDOR, *, terapkan: bool = True
+) -> HasilSinkron:
+    """Salin kontak Kledo bertipe ini ke tabel masternya.
 
     `terapkan=False` menghitung tanpa menyentuh database — dipakai untuk
     melihat dampaknya lebih dulu.
     """
     hasil = HasilSinkron()
-    vendor = await ambil_vendor()
-    if not vendor:
-        log.warning("Kledo tidak mengembalikan kontak vendor — sinkron dibatalkan")
+    kontak = await jenis.ambil()
+    if not kontak:
+        log.warning(
+            "Kledo tidak mengembalikan kontak %s — sinkron dibatalkan",
+            jenis.sebutan,
+        )
         return hasil
 
-    lokal = list((await db.execute(select(Supplier))).scalars())
+    def _nama_baris(baris) -> str:
+        return getattr(baris, jenis.kolom_nama)
+
+    lokal = list((await db.execute(select(jenis.model))).scalars())
     per_kledo = {s.kledo_contact_id: s for s in lokal if s.kledo_contact_id}
 
     # Nama yang muncul lebih dari sekali di sisi lokal tidak boleh ditebak.
     hitung_nama: dict[str, int] = {}
     for s in lokal:
-        hitung_nama[_kunci(s.nama_supplier)] = hitung_nama.get(
-            _kunci(s.nama_supplier), 0
-        ) + 1
+        kunci = _kunci(_nama_baris(s))
+        hitung_nama[kunci] = hitung_nama.get(kunci, 0) + 1
     per_nama = {
-        _kunci(s.nama_supplier): s for s in lokal
-        if s.kledo_contact_id is None and hitung_nama[_kunci(s.nama_supplier)] == 1
+        _kunci(_nama_baris(s)): s for s in lokal
+        if s.kledo_contact_id is None
+        and hitung_nama[_kunci(_nama_baris(s))] == 1
     }
 
-    for k in vendor:
+    for k in kontak:
         nama = _nama(k)
         if not nama:
             hasil.dilewati += 1
@@ -158,17 +217,18 @@ async def sinkron(db: AsyncSession, *, terapkan: bool = True) -> HasilSinkron:
                 hasil.ditaut += 1
         if s is None:
             if terapkan:
-                db.add(Supplier(
-                    nama_supplier=nama, kledo_contact_id=kid,
-                    no_telfon=(k.get("phone") or None),
-                    alamat=(k.get("address") or None),
-                ))
+                db.add(jenis.model(**{
+                    jenis.kolom_nama: nama,
+                    "kledo_contact_id": kid,
+                    "no_telfon": (k.get("phone") or None),
+                    "alamat": (k.get("address") or None),
+                }))
             hasil.dibuat += 1
             continue
 
         # Kledo memegang kebenaran identitas; salin bila memang berbeda.
         baru = {
-            "nama_supplier": nama,
+            jenis.kolom_nama: nama,
             "no_telfon": (k.get("phone") or None),
             "alamat": (k.get("address") or None),
         }
@@ -187,10 +247,21 @@ async def sinkron(db: AsyncSession, *, terapkan: bool = True) -> HasilSinkron:
     # Nama lokal yang kembar sengaja tidak ditebak — dilaporkan supaya
     # manusia yang memutuskan. "Agus" cocok dengan belasan kontak Kledo.
     hasil.ambigu = sorted(
-        s.nama_supplier for s in lokal
-        if s.kledo_contact_id is None and hitung_nama[_kunci(s.nama_supplier)] > 1
+        _nama_baris(s) for s in lokal
+        if s.kledo_contact_id is None
+        and hitung_nama[_kunci(_nama_baris(s))] > 1
     )
 
     if terapkan:
         await db.commit()
     return hasil
+
+
+async def sinkron_semua(
+    db: AsyncSession, *, terapkan: bool = True
+) -> dict[str, HasilSinkron]:
+    """Vendor dan pelanggan sekaligus, dalam satu kali tarik per jenis."""
+    return {
+        j.sebutan: await sinkron(db, j, terapkan=terapkan)
+        for j in (VENDOR, PELANGGAN)
+    }

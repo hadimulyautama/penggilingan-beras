@@ -41,6 +41,9 @@ CONTOH = [
     kontak(88, "Ahmad Wahid Nurhani", tipe=(2,)),       # karyawan
     kontak(99, "Walk-in Customer", tipe=(3,)),          # pelanggan
     kontak(66, "Vendor Lama", tipe=(1,), is_archive=1),  # diarsipkan
+    # Vendor SEKALIGUS pelanggan. Bukan kasus buatan: 24 kontak sungguhan
+    # memang begitu — menjual gabah pagi, membeli beras sore.
+    kontak(310, "Toko Beras Handoko", tipe=(1, 3)),
 ]
 
 
@@ -57,11 +60,17 @@ async def db():
 
 @pytest.fixture
 def kledo(monkeypatch):
-    """Ganti panggilan jaringan dengan contoh tetap."""
-    async def palsu():
+    """Ganti panggilan jaringan dengan contoh tetap.
+
+    Ditambal pada `ambil_kontak`, bukan `ambil_vendor`: sejak sinkronisasi
+    vendor dan pelanggan berbagi satu kode, di situlah satu-satunya tempat
+    jaringan benar-benar disentuh. Menambal pembungkusnya akan meloloskan
+    panggilan sungguhan lewat jalur pelanggan tanpa gejala.
+    """
+    async def palsu(tipe: int):
         return [k for k in CONTOH
-                if kledo_kontak.TIPE_VENDOR in k["type_ids"] and not k["is_archive"]]
-    monkeypatch.setattr(kledo_kontak, "ambil_vendor", palsu)
+                if tipe in k["type_ids"] and not k["is_archive"]]
+    monkeypatch.setattr(kledo_kontak, "ambil_kontak", palsu)
 
 
 async def nama_supplier(db) -> list[str]:
@@ -75,8 +84,9 @@ async def nama_supplier(db) -> list[str]:
 async def test_hanya_vendor_yang_disalin(db, kledo):
     """PLN, karyawan, dan pelanggan tidak boleh masuk daftar pos timbang."""
     hasil = await kledo_kontak.sinkron(db)
-    assert hasil.dibuat == 3
-    assert await nama_supplier(db) == ["Catur", "Umar Arifuddin", "Widiyanto"]
+    assert hasil.dibuat == 4
+    assert await nama_supplier(db) == [
+        "Catur", "Toko Beras Handoko", "Umar Arifuddin", "Widiyanto"]
 
 
 async def test_kontak_diarsipkan_dilewati(db, kledo):
@@ -101,7 +111,7 @@ async def test_supplier_lama_ditaut_bukan_diduplikasi(db, kledo):
 
     hasil = await kledo_kontak.sinkron(db)
     assert hasil.ditaut == 1
-    assert hasil.dibuat == 2
+    assert hasil.dibuat == 3
 
     baris = list((await db.execute(
         select(Supplier).where(Supplier.nama_supplier == "Catur")
@@ -158,22 +168,22 @@ async def test_kledo_kosong_tidak_mengosongkan_data_lokal(db, kledo):
 async def test_dijalankan_berulang_hasilnya_sama(db, kledo):
     pertama = await kledo_kontak.sinkron(db)
     kedua = await kledo_kontak.sinkron(db)
-    assert pertama.dibuat == 3
+    assert pertama.dibuat == 4
     assert (kedua.dibuat, kedua.ditaut, kedua.diperbarui) == (0, 0, 0)
-    assert len(await nama_supplier(db)) == 3
+    assert len(await nama_supplier(db)) == 4
 
 
 async def test_mode_hitung_saja_tidak_menyentuh_database(db, kledo):
     hasil = await kledo_kontak.sinkron(db, terapkan=False)
-    assert hasil.dibuat == 3
+    assert hasil.dibuat == 4
     assert await nama_supplier(db) == []
 
 
 async def test_kledo_kosong_tidak_merusak_apa_pun(db, monkeypatch):
     """Gangguan Kledo tidak boleh berakhir dengan master supplier terhapus."""
-    async def kosong():
+    async def kosong(tipe: int):
         return []
-    monkeypatch.setattr(kledo_kontak, "ambil_vendor", kosong)
+    monkeypatch.setattr(kledo_kontak, "ambil_kontak", kosong)
 
     db.add(Supplier(nama_supplier="Catur", kledo_contact_id=572))
     await db.commit()
@@ -181,3 +191,54 @@ async def test_kledo_kosong_tidak_merusak_apa_pun(db, monkeypatch):
     hasil = await kledo_kontak.sinkron(db)
     assert hasil.dibuat == 0
     assert await nama_supplier(db) == ["Catur"]
+
+
+# ─────────────── Pelanggan ───────────────
+
+async def nama_pelanggan(db) -> list[str]:
+    from app.models import Pelanggan
+
+    return sorted(
+        p.nama_pelanggan for p in (await db.execute(select(Pelanggan))).scalars()
+    )
+
+
+async def test_pelanggan_disalin_dari_tipe_tiga(db, kledo):
+    """Tipe 3 diperiksa pada data sungguhan: 301 dari 601 kontak, dan hanya di
+    sanalah "Walk-in Customer" — kontak pelanggan bawaan Kledo — muncul."""
+    hasil = await kledo_kontak.sinkron(db, kledo_kontak.PELANGGAN)
+    assert hasil.dibuat > 0
+    nama = await nama_pelanggan(db)
+    assert nama
+    # Vendor tidak boleh ikut masuk ke tabel pelanggan.
+    from app.models import Supplier
+    assert (await db.execute(select(Supplier))).scalars().all() == []
+
+
+async def test_kontak_bertipe_ganda_masuk_ke_kedua_tabel(db, kledo):
+    """24 kontak sungguhan bertipe vendor SEKALIGUS pelanggan. Itu wajar:
+    orang yang menjual gabah pagi bisa membeli beras sore. Perannya ditentukan
+    transaksinya, bukan kontaknya."""
+    ganda = [k["name"] for k in CONTOH
+             if {1, 3} <= set(k["type_ids"]) and not k["is_archive"]]
+    if not ganda:
+        pytest.skip("contoh tidak memuat kontak bertipe ganda")
+
+    await kledo_kontak.sinkron_semua(db)
+    for nama in ganda:
+        assert nama in await nama_supplier(db)
+        assert nama in await nama_pelanggan(db)
+
+
+async def test_sinkron_semua_mengerjakan_keduanya(db, kledo):
+    hasil = await kledo_kontak.sinkron_semua(db)
+    assert set(hasil) == {"vendor", "pelanggan"}
+    assert await nama_supplier(db) and await nama_pelanggan(db)
+
+
+async def test_pelanggan_dijalankan_berulang_hasilnya_sama(db, kledo):
+    await kledo_kontak.sinkron(db, kledo_kontak.PELANGGAN)
+    pertama = await nama_pelanggan(db)
+    kedua_kali = await kledo_kontak.sinkron(db, kledo_kontak.PELANGGAN)
+    assert kedua_kali.dibuat == 0
+    assert await nama_pelanggan(db) == pertama

@@ -66,6 +66,32 @@ class Supplier(Base, TimestampMixin):
     kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
 
+class Pelanggan(Base, TimestampMixin):
+    """Pembeli beras dan hasil samping. Soft delete via deleted_at.
+
+    Sengaja tabel TERSENDIRI, bukan kolom tipe pada `suppliers`. Di Kledo satu
+    kontak boleh sekaligus vendor dan pelanggan — 24 kontak memang begitu —
+    tetapi bagi pos timbang yang menentukan adalah perannya PADA TRANSAKSI
+    ITU: orang yang menjual gabah pagi dan membeli beras sore memang supplier
+    di satu catatan dan pelanggan di catatan lain. Menggabungkannya justru
+    akan memaksa setiap layar bertanya "sedang berperan sebagai apa".
+
+    Rekap "berapa total dengan X" tetap urusan Kledo, bukan sistem ini.
+    """
+
+    __tablename__ = "pelanggan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nama_pelanggan: Mapped[str] = mapped_column(String(150), nullable=False)
+    no_telfon: Mapped[str | None] = mapped_column(String(30))
+    alamat: Mapped[str | None] = mapped_column(Text)
+    # aktif / nonaktif
+    status: Mapped[str] = mapped_column(String(20), default="aktif")
+    deleted_at: Mapped[datetime | None] = mapped_column()
+    #: Jembatan ke kontak Kledo — sumber identitas pelanggan.
+    kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+
+
 class Silo(Base, TimestampMixin):
     """Silo A & B per gudang. G1: khusus gabah kering. G2: kolam campuran PK."""
 
