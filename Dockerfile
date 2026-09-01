@@ -12,7 +12,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt tzdata
 
-# Kode aplikasi + migrasi.
+# Kode aplikasi + migrasi. hmu_core = skema master bersama (vendored sementara dari
+# repo core; nanti diganti submodule saat app pindah ke produksi/). Paket top-level
+# → importable via cwd /app tanpa perlu pip install.
+COPY hmu_core ./hmu_core
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini .
