@@ -94,7 +94,7 @@ async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
         return await _lot_kg(db, row.drying_lot_id)
     if row.purchase_batch_id:
         b = await db.get(PurchaseBatch, row.purchase_batch_id)
-        return float(b.berat_total_kg) if b else 0.0
+        return float(b.berat_total_kg or 0) if b else 0.0
     return 0.0
 
 
@@ -218,7 +218,7 @@ async def masuk_silo(
         ).first()
         if in_lot or batch.status_batch == "di_silo":
             raise SiloError(f"Batch {kode_batch} sudah masuk lot/silo.")
-        kg_new = float(batch.berat_total_kg)
+        kg_new = float(batch.berat_total_kg or 0)
 
         # Model baru: kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
         # Lot dibentuk saat 'giling silo X'. Boleh menumpuk sampai kapasitas silo.
@@ -462,7 +462,7 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
                 b = await db.get(PurchaseBatch, r.purchase_batch_id)
                 if b:
                     kodes.append(b.kode_batch)
-                    total += float(b.berat_total_kg)
+                    total += float(b.berat_total_kg or 0)
             lines.append(
                 f"• {silo.nama_silo}: kering menunggu — {len(kodes)} batch "
                 f"({', '.join(kodes)}), {_fmt_kg(total)} ({cap}).\n"

@@ -61,7 +61,7 @@ async def verify_gabah_price(
     nilai_rupiah: float,
 ) -> VerificationResult:
     """Simpan/replace verifikasi harga, hapus flag unverified, catat audit."""
-    berat = float(batch.berat_total_kg)
+    berat = float(batch.berat_total_kg or 0)
     total, per_kg = compute_price(berat, metode, nilai_rupiah)
 
     # Upsert purchase_batch_verifications (unik per batch).

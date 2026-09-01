@@ -8,16 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import (
-    DryingLotBatch,
     InternalTransfer,
     MillingProcess,
     MillingProcessVerification,
     MillingProgressLog,
-    PurchaseBatch,
-    PurchaseBatchVerification,
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
+from app.services.costing import production_cost
 from app.penggilingan.gudang1.services.milling import pk_jenis
 
 _LOKASI = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
@@ -27,63 +25,13 @@ class TransferError(Exception):
     """Kesalahan transfer dengan pesan siap-tampil (args[0])."""
 
 
-async def _gabah_cost(db: AsyncSession, proc: MillingProcess) -> float | None:
-    """Total biaya gabah sumber milling. None bila ada yang belum diverifikasi."""
-    if proc.drying_lot_id:
-        # Semua batch dalam lot harus terverifikasi.
-        unver = (
-            await db.execute(
-                select(func.count())
-                .select_from(DryingLotBatch)
-                .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
-                .where(
-                    DryingLotBatch.drying_lot_id == proc.drying_lot_id,
-                    PurchaseBatch.flag_unverified.is_(True),
-                )
-            )
-        ).scalar_one()
-        if unver:
-            return None
-        total = (
-            await db.execute(
-                select(
-                    func.coalesce(
-                        func.sum(
-                            PurchaseBatch.berat_total_kg
-                            * PurchaseBatchVerification.harga_per_kg
-                        ),
-                        0,
-                    )
-                )
-                .select_from(DryingLotBatch)
-                .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
-                .join(
-                    PurchaseBatchVerification,
-                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
-                )
-                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
-            )
-        ).scalar_one()
-        return float(total)
-    if proc.purchase_batch_id:
-        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
-        if b is None or b.flag_unverified:
-            return None
-        v = (
-            await db.execute(
-                select(PurchaseBatchVerification).where(
-                    PurchaseBatchVerification.purchase_batch_id == b.id
-                )
-            )
-        ).scalars().first()
-        if v is None or v.harga_per_kg is None:
-            return None
-        return float(b.berat_total_kg) * float(v.harga_per_kg)
-    return None
-
-
 async def hpp_per_kg_pk(db: AsyncSession, proc: MillingProcess) -> float | None:
-    """HPP per kg PK = biaya gabah / output PK terverifikasi. None bila belum lengkap."""
+    """HPP per kg PK (hasil giling) = biaya PRODUKSI PENUH ÷ output PK terverifikasi.
+
+    Biaya penuh = bahan gabah + biaya giling (bongkar/pengeringan/operator/tenaga/listrik/
+    rubber), via production_cost().total_penuh. Menempel ke PK saat masuk silo → mengalir
+    lewat wavg silo ke HPP beras. None bila belum lengkap (gabah belum diverifikasi / output
+    belum ada). CATATAN: PK BELI LUAR tak melewati fungsi ini — HPP-nya = harga beli."""
     verif = (
         await db.execute(
             select(MillingProcessVerification).where(
@@ -93,11 +41,11 @@ async def hpp_per_kg_pk(db: AsyncSession, proc: MillingProcess) -> float | None:
     ).scalars().first()
     if verif is None or not verif.berat_output_final_kg:
         return None
-    cost = await _gabah_cost(db, proc)
-    if cost is None:
+    bd = await production_cost(db, proc)
+    if bd is None or bd.total_penuh is None:  # bahan_baku None → gabah belum diverifikasi
         return None
     output = float(verif.berat_output_final_kg)
-    return cost / output if output else None
+    return bd.total_penuh / output if output else None
 
 
 async def _produced_pk(db: AsyncSession, proc_id: int) -> float:

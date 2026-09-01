@@ -104,7 +104,7 @@ async def _silo_status(db: AsyncSession) -> list[dict]:
                 sup = await db.get(Supplier, b.supplier_id) if b else None
                 item["isi"] = b.kode_batch if b else "batch"
                 item["suppliers"] = [sup.nama_supplier] if sup else []
-                item["kg"] = float(b.berat_total_kg) if b else 0.0
+                item["kg"] = float(b.berat_total_kg or 0) if b else 0.0
         out.append(item)
     return out
 
@@ -156,7 +156,7 @@ async def _tugas(db: AsyncSession) -> dict:
         )
     ).all()
     verifikasi_harga = [
-        {"kode": b.kode_batch, "supplier": nama, "kg": float(b.berat_total_kg)}
+        {"kode": b.kode_batch, "supplier": nama, "kg": float(b.berat_total_kg or 0)}
         for b, nama in vh_rows
     ]
 

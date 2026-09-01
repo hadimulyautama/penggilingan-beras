@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date, time
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -26,6 +27,7 @@ from app.models import (
     PkTumpukanToSilo,
     PolishingSiloUsage,
     Silo,
+    Supplier,
     User,
     Warehouse,
 )
@@ -37,6 +39,8 @@ from app.services.codegen import (
 )
 from app.services.notification import create_notification
 from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
+from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
+from app.penggilingan.peta_jenis import intake_dari_jenis
 
 _TUJUAN_SILO = {"silo_a": "A", "silo_b": "B"}
 
@@ -256,6 +260,75 @@ async def create_pk_purchase(
                             supplier_created=created)
 
 
+async def create_pk_purchase_dari_timbang(
+    db: AsyncSession, *, user: User, timbangan_transaksi_id: int, jenis_pk: str | None,
+    kadar_air: float | None = None, tanggal: date | None = None, jam: time | None = None,
+) -> PkPurchaseResult:
+    """Catat PK luar MASUK DARI tiket TIMBANG (jenis BERAS_PK). Supplier/bobot/nopol dari
+    timbang — hanya pilih tiket + jenis PK (timbang tak membedakan ks/kl/dst). STAFF/ADMIN
+    saja. Bobot boleh belum ada ('menunggu') → disinkron dari tiket. Referensi bobot = tiket.
+    """
+    if user.role not in ("staff", "admin"):
+        raise Gudang2Error("🔒 Input PK dari luar hanya bisa oleh Staff/Admin.")
+    jenis = norm_jenis_pk(jenis_pk)
+    if jenis is None:
+        raise Gudang2Error("Pilih jenis PK: KS, KL, Campuran, atau Semi KS.")
+    tiket = await ambil_tiket(db, timbangan_transaksi_id)
+    if tiket is None:
+        raise Gudang2Error("Tiket timbang tidak ditemukan.")
+    if tiket.get("arah") != "MASUK":
+        raise Gudang2Error("Tiket timbang bukan barang MASUK.")
+    info = intake_dari_jenis(tiket.get("jenis_kode", ""))
+    if info is None or info.model != "pk":
+        raise Gudang2Error("Tiket ini bukan PK masuk.")
+
+    b = tiket.get("berat_hpp_kg")
+    ada_bobot = b is not None and float(b) > 0
+    berat = float(b) if ada_bobot else None
+    sumber = tiket["sumber_berat"] if ada_bobot else "menunggu"
+
+    now = input_time(tanggal, jam)
+    if tiket.get("supplier_id"):
+        supplier = await db.get(Supplier, tiket["supplier_id"])
+        created = False
+    else:
+        nama = tiket.get("nama_supplier") or tiket.get("pihak_nama") or "Tanpa Nama"
+        supplier, created = await find_or_create_supplier(db, nama)
+
+    kode = await next_pk_purchase_code(db, now.date())
+    batch = PkPurchaseBatch(
+        kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat,
+        no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
+        tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
+        status_batch="diterima", flag_unverified=True,
+        timbangan_transaksi_id=timbangan_transaksi_id, sumber_berat=sumber,
+    )
+    db.add(batch)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise Gudang2Error("Tiket timbang ini sudah ditautkan ke batch lain.")
+
+    b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
+    await log_activity(
+        db, table_name="pk_purchase_batches", record_id=batch.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{kode} | {supplier.nama_supplier} | {b_str} PK {jenis} | timbang {tiket['kode']}",
+    )
+    await create_notification(
+        db, tipe="verifikasi_pk_luar",
+        pesan=(f"🟡 PK luar {kode} ({supplier.nama_supplier}, {b_str}, {jenis}, "
+               f"dari timbang {tiket['kode']}) MASUK — menunggu QC & verifikasi harga."),
+        target_role="staff", prioritas="kuning",
+        table_name="pk_purchase_batches", record_id=batch.id,
+    )
+    await db.commit()
+    await db.refresh(batch)
+    return PkPurchaseResult(batch=batch, supplier_nama=supplier.nama_supplier,
+                            supplier_created=created)
+
+
 @dataclass
 class PkQcResult:
     batch: PkPurchaseBatch
@@ -350,7 +423,7 @@ async def verify_pk_price(
     if metode not in ("per_kg", "total") or nilai is None:
         raise Gudang2Error("Sebutkan metode harga (per kg / total) & nilainya.")
 
-    berat_bersih = float(batch.berat_total_kg) - float(potongan_kg or 0)
+    berat_bersih = float(batch.berat_total_kg or 0) - float(potongan_kg or 0)
     if metode == "total":
         total_biaya = float(nilai)
         hpp = total_biaya / berat_bersih if berat_bersih else None
@@ -525,7 +598,7 @@ async def masukkan_pk_luar(
             )
         )
     ).scalars().first()
-    berat = float(batch.berat_total_kg) - float(verif.potongan_kg or 0 if verif else 0)
+    berat = float(batch.berat_total_kg or 0) - float(verif.potongan_kg or 0 if verif else 0)
     hpp = float(verif.harga_per_kg) if verif and verif.harga_per_kg is not None else None
     res = await _add_intake(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,

@@ -30,7 +30,8 @@ class PurchaseBatch(Base, TimestampMixin):
     supplier_id: Mapped[int] = mapped_column(
         ForeignKey("suppliers.id"), nullable=False
     )
-    berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Kosong = "menunggu bobot" (referensi bobot ada di tiket timbang; disinkron otomatis).
+    berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
     # basah / kering
     kondisi_gabah: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -43,6 +44,14 @@ class PurchaseBatch(Base, TimestampMixin):
     # baru / dikeringkan / di_silo / digiling / selesai
     status_batch: Mapped[str] = mapped_column(String(20), default="baru")
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
+    # ── Tautan ke timbangan (shared DB). 1 tiket timbang = maks 1 batch. ──
+    # berat_total_kg/supplier/no_polisi diturunkan dari transaksi timbang; operator
+    # tak input lagi. sumber_berat: 'nota' (berat_acuan_kg) | 'timbangan' (netto real)
+    # | 'manual' (tanpa jembatan). HPP: pakai nota bila ada, selain itu real.
+    # Tabel timbangan_transaksi dimiliki repo timbangan (shared DB) — TAK ada di metadata
+    # app ini, jadi FK cukup di level DB (migrasi 0027). Di ORM: kolom Integer + unique.
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
+    sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PurchaseBatchVerification | None"] = relationship(

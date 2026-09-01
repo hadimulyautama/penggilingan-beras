@@ -521,7 +521,7 @@ async def _finish_or_ask_pk(message: Message, db, user, session, p, accumulated:
     jl = _JENIS_PK_LABEL_ADMIN.get(r.batch.jenis_pk, r.batch.jenis_pk or "-")
     await message.answer(
         f"✓ PK luar tercatat: *{r.batch.kode_batch}* ({r.supplier_nama}, "
-        f"{jl} {_kg(float(r.batch.berat_total_kg))} · truk {r.batch.no_polisi_truk}).\n"
+        f"{jl} {_kg(float(r.batch.berat_total_kg or 0))} · truk {r.batch.no_polisi_truk}).\n"
         f"Menunggu QC + verifikasi harga.{extra}",
         parse_mode="Markdown",
     )
@@ -1013,7 +1013,7 @@ async def _advance_verif(message: Message, db, tg_id: int, session) -> None:
         return
 
     # Lengkap → ringkasan + konfirmasi.
-    berat = float(batch.berat_total_kg)
+    berat = float(batch.berat_total_kg or 0)
     total, per_kg = compute_price(berat, d.metode_harga, d.nilai_rupiah)
     session.stage = "awaiting_verif_confirmation"
     warn = ""

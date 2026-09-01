@@ -22,7 +22,8 @@ class PkPurchaseBatch(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False)
-    berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Kosong = "menunggu bobot" (referensi bobot = tiket timbang; disinkron otomatis).
+    berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
     # Jenis PK luar: ks / kl / campuran / semi_ks (lebih luas dari G1 yg cuma KS/KL).
     jenis_pk: Mapped[str | None] = mapped_column(String(12))
@@ -35,6 +36,9 @@ class PkPurchaseBatch(Base, TimestampMixin):
     # baru / diterima / ditolak / di_silo / disosoh
     status_batch: Mapped[str] = mapped_column(String(20), default="baru")
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Tautan ke timbangan (shared DB) — FK di level DB saja (migrasi 0027). Lihat PurchaseBatch.
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
+    sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PkPurchaseVerification | None"] = relationship(

@@ -18,6 +18,7 @@ from app.kantor.proaktif.briefing import run_briefing_poller
 from app.kantor.proaktif.deadline import run_deadline_poller
 from app.kantor.proaktif.email_rapi import run_email_rapi_poller
 from app.kantor.proaktif.invoice import run_invoice_poller
+from app.penggilingan.gudang1.services.sinkron_bobot import run_sinkron_bobot_poller
 from app.services.heartbeat import run_heartbeat
 from app.kantor.proaktif.persetujuan import run_persetujuan_poller
 from app.services.scheduler import run_late_drying_scheduler
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
     billing_task = asyncio.create_task(run_billing_poller(bots))
     kontak_task = asyncio.create_task(run_kledo_kontak_poller(bots))
     invoice_task = asyncio.create_task(run_invoice_poller(bots))
+    sinkron_task = asyncio.create_task(run_sinkron_bobot_poller(bots))
     hb_task = asyncio.create_task(run_heartbeat(bots))
     log.info("Backend siap. Bot aktif: %s", list(settings.bot_tokens.keys()) or "(none)")
     try:
@@ -58,7 +60,7 @@ async def lifespan(app: FastAPI):
         # Guard karena saat --reload polling bisa belum/selesai berjalan.
         for task in (poll_task, sched_task, pers_task, brief_task,
                      deadline_task, billing_task, invoice_task, rapi_task,
-                     kontak_task, hb_task):
+                     kontak_task, sinkron_task, hb_task):
             task.cancel()
             try:
                 await task

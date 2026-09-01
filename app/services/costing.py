@@ -122,9 +122,13 @@ async def _sumber_info(db: AsyncSession, proc: MillingProcess):
                 )
             )
         ).scalars().first()
-        bahan = float(b.berat_total_kg) * float(v) if v else None
+        # Batch "menunggu bobot" (belum ada bobot dari timbang) → belum bisa dihitung HPP.
+        if b.berat_total_kg is None:
+            return 0.0, False, b.kondisi_gabah, None
+        berat = float(b.berat_total_kg)
+        bahan = berat * float(v) if v else None
         # Milling langsung dari batch (tanpa lot pengeringan) = tak dikeringkan.
-        return float(b.berat_total_kg), False, b.kondisi_gabah, bahan
+        return berat, False, b.kondisi_gabah, bahan
     return float(proc.berat_gabah_masuk_kg or 0), False, None, None
 
 

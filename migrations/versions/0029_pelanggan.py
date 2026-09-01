@@ -8,16 +8,8 @@ adalah perannya pada transaksi itu.
 Bentuknya sengaja sama persis dengan `suppliers` supaya sinkronisasi keduanya
 memakai satu kode yang sama, bukan dua salinan yang lambat laun berbeda.
 
-**Catatan penggabungan.** Di cabang `feat/timbangan-intake-integrasi` berkas
-ini menunjuk `0028_batch_bobot_nullable`, karena di sana 0027 dan 0028 memang
-ada. Di `main` keduanya belum ada, jadi di sini ia menunjuk `0026`. Saat
-cabang itu digabungkan nanti, git akan menandai konflik pada baris
-`down_revision` — dan itu memang yang diinginkan: penyelesaiannya cukup
-memilih `0028`, sehingga rangkaiannya kembali lurus 0026 → 0027 → 0028 → 0029
-tanpa perlu revisi penggabungan Alembic.
-
 Revision ID: 0027_pelanggan
-Revises: 0026_timbangan_hapus_pengawas
+Revises: 0028_batch_bobot_nullable
 """
 from typing import Sequence, Union
 
@@ -25,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0029_pelanggan"
-down_revision: Union[str, None] = "0026_timbangan_hapus_pengawas"
+down_revision: Union[str, None] = "0028_batch_bobot_nullable"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -2,9 +2,10 @@
 harga byproduct, HPP beras putih per proses.
 
 Acuan: LOGIKA_PRODUK_JADI_INVENTORY.md + MASTER_RULES_AND_LOGIC.md §14-16.
-HPP beras (sama rata semua grade) = (biaya PK silo + biaya kemasan − nilai
-byproduct) ÷ total beras. Broken internal GRATIS; broken beli-luar & Beras B
-menyusul (sub-fase terpisah).
+HPP beras (sama rata semua grade) = (biaya PK silo + biaya penyosohan + biaya
+kemasan − nilai byproduct) ÷ total beras. Biaya penyosohan = konversi PK→beras
+(sosoh + tenaga + transport per kg PK + operator flat/proses). Marketing = beban
+penjualan, DI LUAR HPP. Broken internal GRATIS; broken beli-luar & Beras B menyusul.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import input_time, now_local
 from app.models import (
     ByproductPrice,
@@ -266,9 +268,22 @@ class HppBeras:
     hpp_per_kg: float | None
     biaya_pk: float
     biaya_kemasan: float
+    biaya_penyosohan: float
     nilai_byproduct: float
     total_beras_kg: float
     lengkap: bool
+
+
+def biaya_penyosohan_proses(total_pk_kg: float) -> float:
+    """Biaya konversi PENYOSOHAN 1 proses (masuk HPP beras). Basis: kg PK disosoh.
+    = (sosoh + tenaga + transport) per kg PK × kg PK + operator FLAT per proses."""
+    s = settings
+    rate_per_kg_pk = (
+        s.biaya_penyosohan_per_kg_pk
+        + s.biaya_tenaga_penyosohan_per_kg_pk
+        + s.biaya_transport_penyosohan_per_kg_pk
+    )
+    return rate_per_kg_pk * float(total_pk_kg or 0) + s.biaya_operator_penyosohan
 
 
 async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
@@ -280,16 +295,21 @@ async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
         )
     ).scalars().all()
     biaya_pk = 0.0
+    total_pk = 0.0
     lengkap = True
     for u in usages:
         terpakai = float(u.berat_terpakai_kg or 0)
         if terpakai <= 0:
             continue
+        total_pk += terpakai  # PK disosoh → dasar biaya penyosohan (terlepas HPP silo)
         wavg = await hitung_hpp_wavg_silo(db, u.silo_id)
         if wavg is None:
             lengkap = False  # HPP PK silo belum tersedia (upstream belum verif)
             continue
         biaya_pk += wavg * terpakai
+
+    # Biaya konversi penyosohan (sosoh + tenaga + transport per kg PK + operator flat).
+    biaya_penyosohan = biaya_penyosohan_proses(total_pk)
 
     # Biaya kemasan beras (weighted-avg harga/lembar × jumlah karung).
     beras_rows = (
@@ -322,10 +342,11 @@ async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
     total_beras = sum(v for k, v in outputs.items() if k in GRADES)
     hpp = None
     if total_beras > 0 and lengkap:
-        hpp = (biaya_pk + biaya_kemasan - nilai_byproduct) / total_beras
+        hpp = (biaya_pk + biaya_kemasan + biaya_penyosohan - nilai_byproduct) / total_beras
     return HppBeras(
         hpp_per_kg=hpp, biaya_pk=biaya_pk, biaya_kemasan=biaya_kemasan,
-        nilai_byproduct=nilai_byproduct, total_beras_kg=total_beras, lengkap=lengkap,
+        biaya_penyosohan=biaya_penyosohan, nilai_byproduct=nilai_byproduct,
+        total_beras_kg=total_beras, lengkap=lengkap,
     )
 
 
@@ -371,6 +392,7 @@ async def laporan_hpp_beras(db: AsyncSession, kode_pol: str | None) -> str:
     h = await hitung_hpp_beras(db, kode_pol)
     lines = ["🧮 HPP beras putih (per proses):"]
     lines.append(f"• Biaya PK (silo): {_rp(h.biaya_pk)}")
+    lines.append(f"• Biaya penyosohan: {_rp(h.biaya_penyosohan)}")
     lines.append(f"• Biaya kemasan: {_rp(h.biaya_kemasan)}")
     lines.append(f"• (−) Nilai byproduct: {_rp(h.nilai_byproduct)}")
     lines.append(f"• Total beras: {_kg(h.total_beras_kg)}")

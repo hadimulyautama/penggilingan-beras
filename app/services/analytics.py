@@ -147,7 +147,7 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
             continue
         output = bd.pk_output
         batches = await _proc_batches(db, proc)
-        total_kg = sum(float(b.berat_total_kg) for b, _ in batches)
+        total_kg = sum(float(b.berat_total_kg or 0) for b, _ in batches)
         if total_kg <= 0:
             continue
         total_cost = bd.total_penuh
@@ -155,9 +155,9 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
             sid = b.supplier_id
             if sid not in agg:
                 continue
-            share = float(b.berat_total_kg) / total_kg
+            share = float(b.berat_total_kg or 0) / total_kg
             agg[sid]["pk_alloc"] += output * share
-            agg[sid]["gabah_milled"] += float(b.berat_total_kg)
+            agg[sid]["gabah_milled"] += float(b.berat_total_kg or 0)
             if total_cost is not None:
                 agg[sid]["cost_milled"] += total_cost * share
                 agg[sid]["pk_for_hpp"] += output * share
