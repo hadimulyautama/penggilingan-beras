@@ -20,3 +20,4 @@ docs/timbangan/design/timbangan-pos-timbang.html
 
 # PDF pedoman dibuat ulang dari HTML-nya, bukan disimpan di git
 docs/timbangan/*.pdf
+graphify-out/
