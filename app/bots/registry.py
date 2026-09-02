@@ -1,4 +1,7 @@
-"""Registry 3 Telegram bot -> satu backend. Setiap bot punya Dispatcher sendiri."""
+"""Registry bot pabrik -> satu backend. Setiap bot punya Dispatcher sendiri.
+
+Bot Kantor sudah pindah ke service sendiri — jangan didaftarkan lagi di sini.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +13,6 @@ from aiogram.types import ErrorEvent
 from app.bots import admin
 from app.penggilingan.gudang1 import bot as gudang1
 from app.penggilingan.gudang2 import bot as gudang2
-from app.kantor import bot as kantor
 from app.config import settings
 
 log = logging.getLogger("bots")
@@ -20,7 +22,6 @@ _ROUTERS = {
     "gudang1": gudang1.router,
     "gudang2": gudang2.router,
     "admin": admin.router,
-    "kantor": kantor.router,
 }
 
 

@@ -17,12 +17,10 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-import app.penggilingan.gudang1.models  # noqa: F401
-import app.penggilingan.gudang2.models  # noqa: F401
-import app.models  # noqa: F401
+import app.kantor.models  # noqa: F401  — daftarkan tabel kantor_* ke metadata
 from app.database import Base
 from app.kantor import kledo_kontak
-from app.models import Supplier
+from hmu_core import Supplier
 
 
 def kontak(kid: int, nama: str, tipe=(1,), **beda) -> dict:
@@ -196,7 +194,7 @@ async def test_kledo_kosong_tidak_merusak_apa_pun(db, monkeypatch):
 # ─────────────── Pelanggan ───────────────
 
 async def nama_pelanggan(db) -> list[str]:
-    from app.models import Pelanggan
+    from hmu_core import Pelanggan
 
     return sorted(
         p.nama_pelanggan for p in (await db.execute(select(Pelanggan))).scalars()
@@ -211,7 +209,7 @@ async def test_pelanggan_disalin_dari_tipe_tiga(db, kledo):
     nama = await nama_pelanggan(db)
     assert nama
     # Vendor tidak boleh ikut masuk ke tabel pelanggan.
-    from app.models import Supplier
+    from hmu_core import Supplier
     assert (await db.execute(select(Supplier))).scalars().all() == []
 
 
