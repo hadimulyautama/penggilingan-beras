@@ -118,6 +118,26 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
 
     b.menunggu += await _tiket_belum_ditaut(db)
 
+    # Di dryer gabah punya DUA keadaan: masih satu-dua batch yang menunggu,
+    # dan sudah menjadi lot. Yang pertama menunggu operator menyalakan mesin —
+    # kalau tak ditampilkan, gabah bisa bermalam di dryer tanpa dipanaskan dan
+    # tak ada satu layar pun yang menyebutnya.
+    from app.penggilingan.gudang1.services.drying import _loose_dryer_batches
+
+    menunggu_dryer = await _loose_dryer_batches(db)
+    if menunggu_dryer:
+        total = sum(float(x.berat_total_kg or 0) for x in menunggu_dryer)
+        kondisi = {x.kondisi_gabah for x in menunggu_dryer}
+        b.menunggu.append(Baris(
+            kode=", ".join(x.kode_batch for x in menunggu_dryer[:3])
+                 + ("…" if len(menunggu_dryer) > 3 else ""),
+            isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}"
+                + (f" · {'/'.join(sorted(kondisi))}" if kondisi else ""),
+            keadaan="belum jadi lot — nyalakan pengeringan",
+            aksi="mulai_pengeringan",
+            sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
+        ))
+
     for lot in await _lot(db, pendinginan_selesai=True):
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
