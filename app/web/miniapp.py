@@ -15,18 +15,15 @@ from pydantic import BaseModel
 from app.bots.common import can_see_financials, can_transfer_pk
 from app.database import SessionLocal
 from app.models import User
+from app.web.aksi_umum import galat as _err
+from app.web.aksi_umum import kabar_chat as _chat_confirm
+from app.web.aksi_umum import rp as _rp
+from app.web.aksi_umum import wajib as _require
 from app.web.deps import pengguna_aksi
 
 router = APIRouter(prefix="/miniapp", tags=["miniapp"])
 
 
-def _require(cond: bool, msg: str = "Aksi ini tidak tersedia untuk peran Anda.") -> None:
-    if not cond:
-        raise HTTPException(status_code=403, detail=msg)
-
-
-def _rp(n: float) -> str:
-    return f"{n:,.0f}".replace(",", ".")
 
 
 # ─────────────────────────── Identitas ───────────────────────────
@@ -359,6 +356,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "tujuan", "label": "Tujuan", "type": "select", "options": TUJUAN},
              ]},
         ]
+
+    # Aksi inventory tinggal di modulnya sendiri, tetapi menunya tetap SATU
+    # daftar dari satu tempat: perangkat tidak perlu tahu bahwa ia dirakit
+    # dari beberapa berkas.
+    from app.web import aksi_inventory
+    actions += aksi_inventory.spesifikasi(g2=g2, fin=fin)
+
     # Tandai gudang tiap aksi → dipakai Mini App memisah tab G1/G2 (admin/staff).
     for a in actions:
         a["wh"] = _ACTION_WH.get(a["id"], "g1")
@@ -379,6 +383,13 @@ _ACTION_WH = {
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
     "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "catat_pk_luar_manual": "g2", "qc_pk_luar": "g2",
     "harga_pk_luar": "g2",
+    # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
+    # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
+    # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
+    "catat_packing": "g2", "catat_bekatul": "g2", "beli_kemasan": "g2",
+    "kirim_barang_jadi": "g2", "kirim_bekatul": "g2", "harga_byproduct": "g2",
+    # Kecuali PK: ia dijual mentah dari Gudang 1, sebelum disosoh.
+    "jual_pk": "g1",
 }
 
 
@@ -658,25 +669,6 @@ async def pk_luar_harga(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 # ─────────────────────── Aksi cepat: eksekusi (POST) ───────────────────────
-
-def _err(e: Exception, default: str) -> HTTPException:
-    return HTTPException(400, str(e.args[0]) if e.args else default)
-
-
-async def _chat_confirm(user: User, text: str, bot_name: str = "gudang1") -> None:
-    """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort).
-
-    Header berisi penanda 'Aksi cepat' + nama pelaku + jam, agar jelas apa yang
-    terakhir dilakukan lewat tombol (bukan chat) dan tidak terlupa."""
-    from app.bots.notify import notify_user
-    from app.database import now_local
-    stamp = now_local().strftime("%d/%m %H:%M")
-    header = f"📱 *Aksi cepat* · {user.nama} · {stamp}"
-    # Kirim ke bot ASAL Mini App dibuka (chat yang sedang dilihat user); bila tak
-    # diketahui, pakai bot domain aksi. notify_user tetap fallback ke bot lain.
-    target = getattr(user, "_miniapp_bot", None) or bot_name
-    await notify_user(user.telegram_user_id, f"{header}\n{text}", target)
-
 
 class GabahMasukReq(BaseModel):
     # Operator hanya memilih TIKET TIMBANG aktif — supplier/bobot/nopol dari timbang.

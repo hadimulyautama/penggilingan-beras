@@ -24,6 +24,7 @@ from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
+from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.miniapp import router as miniapp_router
 from app.web.pengguna import router as pengguna_router
 from app.web.security import (
@@ -83,6 +84,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
 app.include_router(miniapp_router)
+app.include_router(aksi_inventory_router)
 app.include_router(internal_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
