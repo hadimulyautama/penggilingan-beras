@@ -8,8 +8,8 @@ venv/
 *.egg-info/
 .pytest_cache/
 
-# Setelan lokal Claude Code (per-mesin)
-.claude/settings.local.json
+# Setelan Claude Code milik WORKSPACE (folder induk), bukan repo ini
+.claude/
 
 # File kunci sementara MS Office
 ~$*
