@@ -1,15 +1,63 @@
-# Pemisahan Kantor ↔ Produksi — status & langkah cutover
+# Pemisahan Kantor ↔ Produksi — SELESAI (2026-09-02)
 
-Status: **siap cutover, BELUM dieksekusi.** Produksi live masih menjalankan
-Kantor di proses yang sama. Repo `kantor/` sudah lengkap & teruji lokal.
+Kantor AI berjalan di **repo & service Railway sendiri**. Dokumen ini jadi catatan
+apa yang dilakukan dan apa yang masih tersisa.
 
-Konteks risiko (2026-09-02): sistem **produksi belum dipakai sungguhan** — masih
-uji coba & pencarian formula, jadi kodenya boleh diaduk dan deploy-nya tak perlu
-upacara. Yang benar-benar hidup dan harus dijaga adalah **Kantor** (email, Drive,
-Kledo, approval, briefing). Urutan langkah 4 tetap dipatuhi karena alasannya
-Telegram (satu token = satu long-polling), bukan alasan produksi.
+- Repo: **github.com/hadimulyautama/kantor** (privat) · service Railway **`kantor`**
+- Produksi: repo `penggilingan-beras` · service `penggilingan-beras`
+- SATU Postgres bersama, TIGA chain migrasi: `alembic_version` (produksi) ·
+  `alembic_version_core` (master) · `alembic_version_kantor` (Kantor)
+
+## Hasil akhir yang diverifikasi
+
+| Bukti | Hasil |
+|---|---|
+| `/health` produksi | `bots: ["gudang1","gudang2","admin"]` — Kantor tak ada lagi |
+| `/internal/produksi/*` | tanpa token → 403 · token salah → 403 · token benar → data |
+| `/internal/produksi/tanya` | dijawab agen pabrik (uji: "stok beras jadi") |
+| Log service kantor | `Bot aktif: ['kantor'] · poller: ya` + 7 poller + heartbeat |
+| Telegram | `Connection established` — polling eksklusif di service kantor |
+| Alembic kantor di DB live | `mengadopsi skema: stamp 0001_baseline_kantor` (0 tabel disentuh) |
+| Tes | produksi 16 · kantor 97 |
+
+## Yang MASIH tersisa
+
+1. **`app/kantor/` di repo produksi = SALINAN BEKU.** Ditahan hanya karena
+   `mcp_server.py` (service `mcp`) membungkus tool arsip/Drive/dokumen dari sana.
+   Untuk menghapusnya, server MCP harus dipecah dulu: tool pabrik tetap di
+   produksi, tool Kantor pindah ke repo kantor. **Butuh keputusan pemilik** —
+   akibatnya agen Hermes/Cowork menunjuk dua endpoint MCP, bukan satu.
+   Sampai itu terjadi: **kembangkan Kantor HANYA di repo kantor.**
+2. **Service `mcp` menandai deploy gagal** tiap push (instance yang berjalan
+   sehat, HTTP 200). Sudah begitu sebelum pemisahan ini; belum ditelusuri.
+3. **Produksi tak punya deteksi downtime sendiri** — heartbeat ikut Kantor
+   (memakai bot Kantor + tabel `kantor_heartbeat`). Bila perlu, tambahkan poller
+   di Kantor yang mem-ping `/health` produksi.
+4. **Fase B** (produksi jadi webapp tanpa bot, seperti timbangan) belum mulai.
+   Tak terhalang: `/internal/*` menempel di FastAPI yang nanti jadi webapp itu.
+
+## Catatan operasional
+
+- **Satu token bot = satu proses.** `BOT_KANTOR_TOKEN` kini HANYA di service
+  `kantor` (sudah dihapus dari produksi). Jangan pernah diisi di dua tempat.
+- **`POLLER_AKTIF`** di service kantor: isi `false` bila suatu saat perlu
+  menjalankan instance kedua untuk uji tanpa memproses email/invoice dua kali.
+- **Migrasi tabel `kantor_*`** dibuat di repo kantor. Chain produksi kini
+  menyaringnya lewat `include_object` — autogenerate produksi tak akan lagi
+  mengusulkan DROP/ALTER tabel Kantor.
+- **Drift `timbangan_*`**: `alembic check` di produksi melaporkan selisih untuk
+  tabel `timbangan_*` (chain produksi membuatnya, aplikasi timbangan pakai SQL
+  mentah tanpa model ORM). Pra-ada; jangan autogenerate-apply tanpa disaring.
+- **Rollback** (bila perlu): kembalikan `BOT_KANTOR_TOKEN` ke service produksi,
+  deploy commit sebelum `7c60932`, lalu matikan service kantor. Data aman —
+  Kantor tak pernah mengubah skema, hanya dicap.
+
+---
+
+# Lampiran — rincian pekerjaan
 
 ## Yang sudah selesai
+
 
 **Sisi produksi (branch `feat/pisah-kantor`, belum di-merge/deploy)**
 
