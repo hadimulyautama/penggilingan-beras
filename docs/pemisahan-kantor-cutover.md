@@ -3,6 +3,12 @@
 Status: **siap cutover, BELUM dieksekusi.** Produksi live masih menjalankan
 Kantor di proses yang sama. Repo `kantor/` sudah lengkap & teruji lokal.
 
+Konteks risiko (2026-09-02): sistem **produksi belum dipakai sungguhan** — masih
+uji coba & pencarian formula, jadi kodenya boleh diaduk dan deploy-nya tak perlu
+upacara. Yang benar-benar hidup dan harus dijaga adalah **Kantor** (email, Drive,
+Kledo, approval, briefing). Urutan langkah 4 tetap dipatuhi karena alasannya
+Telegram (satu token = satu long-polling), bukan alasan produksi.
+
 ## Yang sudah selesai
 
 **Sisi produksi (branch `feat/pisah-kantor`, belum di-merge/deploy)**
@@ -48,9 +54,11 @@ Kantor "stok beras berapa" → harus dijawab data pabrik.
 
 1. **Repo GitHub** — buat `hadimulyautama/kantor` (privat), `git push -u`.
    Submodule `core` sudah ter-pin; pastikan Railway boleh akses repo core.
-2. **Stamp Alembic** — pada DB LIVE, dari `kantor/`:
-   `DATABASE_URL=<live> alembic stamp 0001_baseline_kantor`
-   (membuat `alembic_version_kantor`; TIDAK menyentuh tabel/chain lain).
+2. ~~Stamp Alembic manual~~ — **tidak perlu lagi.** `kantor/migrations/env.py`
+   mengadopsi skema lama sendiri: melihat tabel `kantor_*` sudah ada tapi
+   `alembic_version_kantor` belum → baseline dicap, bukan dijalankan. Sudah
+   diuji di Postgres bersih untuk ketiga jalur (kosong / sudah ter-chain /
+   tabel-ada-tanpa-chain).
 3. **Service Railway baru** `kantor` — env dari `.env.example`; `DATABASE_URL`
    sama dengan produksi; `PRODUKSI_API_URL/TOKEN` = URL publik + token produksi.
    `numReplicas: 1`. **Jangan isi BOT_KANTOR_TOKEN dulu.**
