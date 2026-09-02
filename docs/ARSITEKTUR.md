@@ -1,7 +1,7 @@
 # Arsitektur Sistem — PT Hadi Mulya Utama
 
-**Peta tingkat sistem: tiga modul di atas satu fondasi**
-Versi 1.3 · 31 Agustus 2026
+**Peta tingkat sistem: tiga sistem, tiga repo, satu database**
+Versi 1.4 · 2 September 2026
 
 Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama, dan aturan yang menjaga agar penambahan modul berikutnya tidak merusak yang sudah ada. Rancangan rinci tiap modul ada di dokumennya sendiri.
 
@@ -12,7 +12,7 @@ Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama
 | Modul | Untuk siapa | Isi | Di kode |
 |---|---|---|---|
 | **Produksi penggilingan** | Operator gudang & staff | Gabah masuk, pengeringan, silo, milling, penyosohan, barang jadi, kemasan, barang keluar | `app/penggilingan/` |
-| **AI Agent asisten** | Direksi & manajer | Arsip Drive, Gmail, Kledo, GajiHub, IT aset, pengetahuan, persetujuan, lapisan proaktif | `app/kantor/` |
+| **Kantor AI (agen asisten)** | Direksi & manajer | Arsip Drive, Gmail, Kledo, GajiHub, IT aset, pengetahuan, persetujuan, lapisan proaktif | **repo terpisah:** [`hadimulyautama/kantor`](https://github.com/hadimulyautama/kantor) |
 | **Timbangan** | Petugas pos timbang | Catat timbang, kontrol terhadap nota & surat jalan, monitoring | **repo terpisah:** [`hadimulyautama/timbangan`](https://github.com/hadimulyautama/timbangan) |
 
 > **Timbangan pindah repo pada 31 Agustus 2026.** Alasannya kemandirian
@@ -34,78 +34,64 @@ Dokumen ini menjelaskan bagaimana ketiga modul berdiri, apa yang dipakai bersama
 > versi `alembic_version_timbangan` yang terpisah dari `alembic_version`
 > milik repo ini.
 
-### Tiga sistem, dua repo — dan itu keputusan
+### Tiga sistem, tiga repo — dan bagaimana yang terakhir dilepas
 
-Timbangan berdiri di repo sendiri; **Kantor AI tetap serumah dengan
-penggilingan.** Perbedaannya bukan soal kerapian melainkan soal arah
-ketergantungan, dan ini perlu dicatat supaya tidak dibongkar orang berikutnya
-yang mengira ini kelalaian.
+**Kantor AI pindah repo pada 2 September 2026**, menyusul timbangan. Ketiganya
+kini berdiri sendiri, dengan **satu database** yang sama.
 
-Timbangan hanya **menyentuh** fondasi: ia mengimpor `config`, `database`, dan
-`models`, dan tidak ada satu pun modul lain yang mengimpornya. Ia bisa pergi.
+Timbangan dulu mudah pergi: ia hanya **menyentuh** fondasi — mengimpor `config`,
+`database`, `models`, dan tak satu pun modul lain mengimpornya.
 
-Kantor **dilingkari** fondasi — fondasinya sendiri yang bergantung padanya:
+Kantor tidak begitu. Ia **dilingkari** fondasi: fondasinya sendiri bergantung
+padanya, dan lingkaran `ai → kantor → ai` itulah yang selama ini menahannya.
+Empat simpul dipotong, dan cara memotongnya perlu dicatat karena polanya bisa
+dipakai lagi:
 
-| Arah | Buktinya |
+| Simpul lama | Cara dipotong |
 |---|---|
-| `ai` → `kantor` | `app/ai/guard.py`, guard biaya LLM yang **setiap** panggilan LLM lewati termasuk milik bot penggilingan, membaca & menulis `kantor_config` dan `kantor_llm_usage` |
-| `models` → `kantor` | Fasad model bersama mendaftarkan 8 tabel Kantor agar Alembic melihatnya |
-| `bots` → `kantor` | `registry.py` memasang router bot Kantor — satu proses bot melayani keduanya |
-| `kantor` → `ai`, `services` | Kantor memakai `ai.guard`, `ai.agent`, `services.dashboard`, `services.analytics` |
+| `ai/guard.py` → `kantor.models` (tabel `kantor_config`, `kantor_llm_usage`) | Definisi kedua tabel pindah ke **`app/ai/models.py`** — guard biaya adalah urusan fondasi. Nama tabel tidak berubah, jadi tanpa migrasi apa pun. |
+| `models` (fasad) → `kantor.models` | Fasad tak lagi mendaftarkan tabel Kantor; chain migrasi Kantor yang memilikinya. |
+| `bots/registry` → `kantor.bot` | Router Kantor dicabut; token botnya pindah ke service sendiri. |
+| `kantor` → `ai.agent`, `services.analytics`, `services.dashboard` | Diganti **API internal** produksi (`/internal/produksi/*`) yang dipanggil `klien_produksi` di repo Kantor. |
 
-Itu lingkaran `ai → kantor → ai`. Selama ada, mengeluarkan Kantor berarti
-memutus fondasi yang dipakai penggilingan sendiri.
+Satu jerat tersembunyi ikut dilepas: `bots/common.py` mengimpor tipe dari
+`ai/nlp_parser`, yang menyeret NLP domain pabrik. Karena berkas itu memakai
+`from __future__ import annotations`, anotasinya tak pernah dievaluasi runtime —
+impornya cukup dipindah ke blok `TYPE_CHECKING`, dan Kantor bisa memakai helper
+generiknya tanpa menarik kode penggilingan.
 
-Sebagian lingkaran itu memang disengaja: Kantor AI dirancang berdiri **di
-atas** mesin penggilingan — memakai agennya, datanya, dan botnya — sesuai
-prinsip *"fungsi baru menambah kemampuan pada bot dan agen yang ada, bukan bot
-baru"*. Timbangan tidak pernah begitu.
+Service **`mcp`** — read-only tools untuk agen luar (Hermes/Cowork) — **dipensiunkan
+pada hari yang sama**: pemiliknya tak lagi memakai Hermes, dan lognya tak pernah
+mencatat satu pun permintaan nyata. Kodenya tinggal di riwayat git.
 
-**Satu simpul yang salah tempat, dan itu bukan rancangan.** Guard biaya LLM
-adalah urusan fondasi — ia melindungi setiap modul yang memanggil LLM,
-termasuk penggilingan — tetapi tabelnya (`kantor_config`, `kantor_llm_usage`)
-milik Kantor. Kalau kelak Kantor hendak dipisah, inilah simpul pertama yang
-harus dilepas: pindahkan kedua tabel itu ke fondasi. Namanya tidak perlu
-berubah, jadi tidak butuh migrasi.
-
-Bila pemisahan itu benar-benar dikerjakan kelak, jalannya sudah setengah
-terbuka: service **`mcp`** sudah menyajikan data penggilingan secara read-only
-untuk agen, sehingga Kantor yang terpisah bisa membacanya lewat sana alih-alih
-lewat impor.
+**Skema master pindah ke paket bersama `hmu_core`** (repo
+[`hadimulyautama/hmu-core`](https://github.com/hadimulyautama/hmu-core)): `Base`,
+`TimestampMixin`, dan enam model master (`users`, `warehouses`, `suppliers`,
+`pelanggan`, `silos`, `dryers`). Kantor memakainya sebagai submodule `core/`;
+repo ini menyalinnya (vendored) ke `hmu_core/`.
 
 ### Membaca susunan berkasnya
-
-Dirapikan **31 Agustus 2026** supaya pertanyaan "folder ini milik sistem yang
-mana" bisa dijawab dari susunannya sendiri, tanpa membaca isinya:
 
 ```
 app/
   config.py  database.py  main.py  seed.py     ← fondasi
-  models/                                       ← fasad model bersama
-  ai/                                           ← lapisan agentik bersama
-  bots/  services/  web/                        ← kerangka bersama + layanan penggilingan
+  models/                                       ← fasad model domain pabrik
+  ai/                                           ← lapisan agentik (agen, guard, tool pabrik)
+  bots/  services/  web/                        ← kerangka bot + layanan penggilingan
   penggilingan/   gudang1  gudang2  inventory
-  kantor/         …  proaktif/
+  web/internal.py                               ← API internal: satu-satunya pintu Kantor
+hmu_core/                                       ← salinan skema master (paket bersama)
 ```
 
-Dua hal yang **sengaja tidak** ikut dikelompokkan, dan alasannya penting:
+Setelah Kantor keluar, hampir semua isi repo ini melayani penggilingan. Dua
+catatan yang tersisa:
 
-- **`app/ai/` bukan milik penggilingan.** Ia dipakai `bots`, ketiga domain
-  penggilingan, **dan** `kantor`. Menurunkannya ke `penggilingan/` akan
-  membuat tata letaknya berbohong.
-- **`app/bots/`, `app/services/`, dan `app/web/` bercampur.** Sebagian besar
-  isinya melayani penggilingan, tetapi `bots/common`, `bots/notify`,
-  `services/scheduler`, dan `services/heartbeat` dipakai lintas modul.
-  Memisahkannya butuh pembongkaran per berkas, bukan pemindahan folder —
-  dan inti penggilingan hampir tidak punya uji, jadi pemindahan sebesar itu
-  tidak bisa dibuktikan benar. Ditunda sampai ada uji yang menjaganya.
-
-Yang sudah dibereskan: tujuh berkas `*_poller.py` — briefing pagi, notifier
-email, radar tenggat, tagihan, invoice, kontak Kledo, persetujuan — pindah
-dari `app/services/` ke `app/kantor/proaktif/`. Semuanya mengimpor
-`app.kantor.*` dan tak satu pun modul penggilingan memakainya: pemiliknya
-tidak pernah ambigu, hanya letaknya yang keliru. Folder kosong `app/schemas/`
-dihapus.
+- **`app/ai/` tetap bukan milik penggilingan sepenuhnya.** Isinya sekarang
+  terbelah jelas: `guard`, `models`, `claude_client`, `tanggal` adalah fondasi
+  (Kantor punya salinannya sendiri), sedangkan `agent`, `tools`, `nlp_parser`,
+  `base`, `router`, `fast_route` adalah tool & prompt PABRIK.
+- **`app/bots/` akan ikut hilang pada Fase B**, saat produksi berubah jadi
+  webapp tanpa bot. Kantor sudah tidak bergantung padanya.
 
 Modul adalah **bidang kerja**, bukan proses. Satu modul boleh berjalan di service mana pun; yang membuatnya modul adalah batas tanggung jawab dan batas tabelnya.
 
@@ -122,7 +108,7 @@ Satu-satunya hal yang benar-benar dipakai bersama, dan karenanya tidak boleh did
 | **Identitas mitra** | `suppliers` | Sumber tunggal supplier & pihak. `kledo_contact_id` disiapkan untuk sinkronisasi Kledo |
 | **Hak akses** | `kantor_role`, `kantor_user_role`, `kantor_grant` | Grant `domain → none/read/write/owner`, union antar-peran, ditegakkan di kode |
 | **Jejak audit** | `activity_logs`, `kantor_audit_log`, `timbangan_audit` | Hanya bertambah, tidak pernah ditimpa |
-| **Guard biaya LLM** | `kantor_config`, `kantor_llm_usage` via `app/ai/guard.py` | **Setiap** panggilan LLM lewat sini: kill-switch, batas bulanan, pencatatan token |
+| **Guard biaya LLM** | `kantor_config`, `kantor_llm_usage` via `app/ai/models.py` + `app/ai/guard.py` (kedua repo punya salinan guard-nya; tabelnya bersama) | **Setiap** panggilan LLM lewat sini: kill-switch, batas bulanan, pencatatan token |
 | **Notifikasi** | Bot Telegram + poller | Modul mengirim lewat bot yang sudah ada, tidak membuat bot baru |
 
 > **Prinsip:** fungsi baru menambah kemampuan pada bot dan agen yang ada — **bukan bot baru**. Tiap bot baru berarti token baru, proses baru, dan satu tempat lagi yang bisa mati diam-diam.
@@ -135,12 +121,18 @@ Tiap tabel dimiliki satu modul. Modul lain boleh **membaca**, tetapi hanya pemil
 
 | Modul | Tabel yang dimiliki |
 |---|---|
-| Master bersama | `users`, `suppliers`, `warehouses`, `silos`, `dryers` |
+| Master bersama (paket `hmu_core`) | `users`, `suppliers`, `warehouses`, `pelanggan`, `silos`, `dryers` |
 | Produksi | `purchase_batches`, `drying_*`, `silo_*`, `milling_*`, `pk_*`, `polishing_*`, `finished_goods_stocks`, `packaging_*`, `outgoing_*`, `internal_transfers`, `byproduct_*`, `brands`, `product_skus` |
-| Agen asisten | `sop_dokumen`, `sop_chunks`, `aksi_pending`, `kantor_audit_log`, `kantor_chat_riwayat`, `aset`, `kartu_pemeliharaan`, `nomor_dokumen`, `kantor_config`, `kantor_llm_usage`, `kantor_role`, `kantor_user_role`, `kantor_grant` |
+| Kantor AI (repo `kantor`) | 15 tabel `kantor_*`: `kantor_sop_dokumen`, `kantor_sop_chunk`, `kantor_aksi_pending`, `kantor_audit_log`, `kantor_chat_riwayat`, `kantor_aset`, `kantor_kartu_pemeliharaan`, `kantor_nomor_dokumen`, `kantor_aturan_email`, `kantor_heartbeat`, `kantor_config`, `kantor_llm_usage`, `kantor_role`, `kantor_user_role`, `kantor_grant` |
 | Timbangan | `timbangan_*` (13 tabel) |
 
-**Modul berbicara lewat database, bukan lewat HTTP.** Tidak ada service yang memanggil service lain. Akibatnya: satu service mati tidak menjatuhkan yang lain, dan memindahkan modul antar-service tidak mengubah kode sama sekali.
+**Modul berbicara lewat database — dengan satu pengecualian yang disengaja.**
+Timbangan dan produksi hanya bertemu di tabel. Tetapi Kantor perlu tiga hal yang
+tidak ada di tabel mana pun — jawaban agen pabrik, simulasi HPP, dan ringkasan
+operasional harian — dan menyalin logikanya berarti dua sumber kebenaran. Untuk
+itu, dan **hanya** itu, produksi membuka `/internal/produksi/{tanya,hpp,operasional}`:
+read-only, ber-token, dipanggil `klien_produksi` di repo Kantor. Bila produksi mati,
+Kantor tetap jalan — hanya fitur pabriknya yang menjawab "tak bisa dihubungi".
 
 Titik temu antar-modul dibuat eksplisit sebagai kolom jembatan, bukan sebagai sambungan diam-diam:
 
@@ -155,56 +147,71 @@ timbangan_akun.user_id                    → users
 
 ## 4. Topologi Railway
 
-### Sekarang
-
 ```
-   ┌────────────────────────┐   ┌────────────────┐   ┌──────────┐
-   │ Service: app           │   │ Service:       │   │ Service: │
-   │  FastAPI               │   │  timbangan     │   │  mcp     │
-   │  produksi + agen       │   │  FastAPI       │   │ read-only│
-   │  4 bot Telegram        │   │  PWA pos       │   │ tools    │
-   │  poller · 1 replica    │   │  deploy bebas  │   └────┬─────┘
-   │  PEMILIK MIGRASI       │   └───────┬────────┘        │
-   └───────────┬────────────┘           │                 │
-               └───────────────┬────────┴─────────────────┘
-                     Service: PostgreSQL
+   ┌──────────────────────┐  ┌──────────────────┐  ┌────────────────────┐
+   │ penggilingan-beras   │  │ kantor           │  │ timbangan          │
+   │  FastAPI + mini-app  │  │  bot Kantor      │  │  FastAPI PWA pos   │
+   │  3 bot pabrik        │  │  7 poller        │  │  deploy bebas      │
+   │  /internal/produksi/*│◄─┤  heartbeat       │  └─────────┬──────────┘
+   │  1 replica           │  │  1 replica       │            │
+   └──────────┬───────────┘  └────────┬─────────┘            │
+              └───────────────────────┴──────────────────────┘
+                          Service: PostgreSQL
 ```
 
-### Nanti, bila deploy mulai saling mengganggu
+Panah itu satu-satunya sambungan HTTP antar-service: Kantor membaca data pabrik
+lewat API internal, bukan lewat impor kode dan bukan lewat kueri langsung.
 
-```
-   ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────┐
-   │ produksi │  │ agen     │  │ timbangan │  │ mcp  │
-   └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──┬───┘
-        └─────────────┴──────────────┴───────────┘
-                    PostgreSQL
-```
+### Tiga chain migrasi di satu database
 
-Pemisahan agen dari produksi **murah**: tiap bot punya token sendiri, jadi cukup satu variabel lingkungan yang menentukan bot mana yang di-polling oleh proses itu. Kode tidak dipecah.
+Setiap repo memigrasi tabelnya sendiri, dibedakan oleh **version table**:
+
+| Chain | Tabel versi | Milik | Menyentuh |
+|---|---|---|---|
+| Produksi | `alembic_version` | repo ini | tabel pabrik & `timbangan_*` (riwayat lama) |
+| Master | `alembic_version_core` | repo `hmu-core` | 6 tabel master |
+| Kantor | `alembic_version_kantor` | repo `kantor` | 15 tabel `kantor_*` |
+
+Dua penjaga supaya ketiganya tidak saling injak:
+
+- `migrations/env.py` di repo ini **menyaring tabel `kantor_*`** lewat
+  `include_object` — tanpa itu, autogenerate produksi bisa mengusulkan DROP
+  tabel Kantor yang berisi data.
+- `env.py` di repo Kantor **mengadopsi skema lama otomatis**: bila tabel
+  `kantor_*` sudah ada tapi `alembic_version_kantor` belum, baseline-nya dicap
+  (stamp), bukan dijalankan.
 
 ### Aturan operasional
 
 | Hal | Aturan | Alasan |
 |---|---|---|
 | Replica | Service yang memegang bot Telegram **wajib 1 replica** | Long-polling ganda menghasilkan `409 Conflict` |
-| Migrasi Alembic | Satu riwayat, dijalankan **hanya oleh service `app`** saat start | Dua service yang bermigrasi bersamaan akan berebut skema |
-| Urutan deploy saat skema berubah | `app` dulu, lalu yang lain | Tabel harus ada sebelum dipakai |
-| Token bot | Jangan pernah dipakai dua proses sekaligus | Laptop + Railway dengan token sama = bentrok polling |
-
----
+| Token bot | Satu token = satu proses, selamanya | `BOT_KANTOR_TOKEN` kini HANYA di service `kantor`; mengisinya juga di produksi = bentrok polling |
+| Migrasi Alembic | Tiap service memigrasi chain-nya sendiri saat start | Version table terpisah membuatnya aman berjalan paralel |
+| Urutan pada DB kosong | `core` dulu, baru `kantor` | Tabel Kantor menaut ke `users` lewat foreign key |
+| Uji poller ganda | Nyalakan instance kedua dengan `POLLER_AKTIF=false` | Dua poller aktif = email & invoice diproses dua kali |
 
 ## 5. Agen adalah konfigurasi, bukan proses
 
-Satu loop agen, banyak bundel tool per domain. Menambah kemampuan berarti menambah **bundel tool**, bukan menambah agen atau bot.
+Satu loop agen per sistem, banyak bundel tool per domain. Menambah kemampuan
+berarti menambah **bundel tool**, bukan menambah agen atau bot.
 
 ```
-                    ┌── bundel produksi   (stok, HPP, milling, pengeringan)
-   satu loop agen ──┼── bundel kantor     (arsip, Gmail, Kledo, GajiHub, IT aset)
-   (app/ai/agent)   └── bundel timbangan  (rencana: transaksi, tiket terbuka,
-                                           skor supplier, pola, tara jatuh tempo)
+  repo ini           ┌── bundel produksi  (stok, HPP, milling, pengeringan)
+  app/ai/agent    ───┴── (rencana) bundel timbangan: transaksi, tiket terbuka,
+                          skor supplier, pola, tara jatuh tempo
+
+  repo kantor        ┌── arsip · Gmail · Kledo · GajiHub · IT aset · pengetahuan
+  app/kantor/agent ──┴── tool `tanya_produksi` → mendelegasikan ke agen di atas
+                          lewat /internal/produksi/tanya (bukan menyalin tool-nya)
 ```
 
-Aturan yang berlaku untuk semua bundel:
+Dua loop, bukan karena kemampuannya berbeda, melainkan karena prosesnya
+terpisah. Yang penting dijaga: **Kantor tidak pernah menyalin tool pabrik.**
+Pertanyaan produksi didelegasikan ke agen yang memilikinya, supaya tarif dan
+datanya cuma punya satu sumber.
+
+Aturan yang berlaku untuk semua bundel, di kedua repo:
 
 1. **Agen membaca, atau mengusulkan.** Aksi tulis tidak pernah dieksekusi agen — diusulkan, dikonfirmasi manusia, lalu dijalankan jalur deterministik yang teruji.
 2. **Setiap aksi konsekuensial butuh persetujuan.** Lewat `aksi_pending` dan gerbang konfirmasi.
@@ -230,21 +237,25 @@ Berlaku untuk modul mana pun, sekarang maupun yang ditambahkan nanti:
 
 | Modul | Dokumen |
 |---|---|
-| Timbangan | `docs/timbangan/RANCANGAN.md` · `docs/timbangan/DEPLOY.md` · desain layar pada kanvas · draf SOP gabah kering & revisi Sistem Tara PK |
+| Timbangan | `docs/` di repo timbangan: RANCANGAN, DEPLOY, desain layar, draf SOP gabah kering & revisi Sistem Tara PK |
 | Produksi | `Panduan-Penggilingan-Beras.pdf`, `Sistem_Manajemen_Penggilingan_Beras.docx`, `ERD_Penggilingan_Beras.html` |
-| Agen asisten | `docs/kantor/` |
+| Kantor AI | `docs/` di repo kantor: ARSITEKTUR, TATA-NASKAH-DINAS, SETUP-GOOGLE-DRIVE, PETA-SILANG-ARSIP |
 | Deploy | `RAILWAY.md`, `DEPLOY-RAILWAY.md` |
+| Pemisahan Kantor↔produksi | `docs/pemisahan-kantor-cutover.md` |
 
 ---
 
 ## 8. Arah ke depan
 
-1. **Timbangan dibangun** sebagai service kedua — ✅ selesai, menunggu deploy (`docs/timbangan/DEPLOY.md`)
-2. **Sinkronisasi Kledo** untuk kontak supplier lewat `kledo_contact_id`
-3. **Jembatan timbangan → produksi**: transaksi terkunci menaut ke batch pembelian, menghapus input ganda gabah masuk
-4. **Bundel tool `timbangan` pada agen**, agar Direksi bisa bertanya soal pos timbang lewat percakapan
-5. **Pemisahan service agen dari produksi**, bila deploy mulai saling mengganggu
-
----
+1. **Timbangan repo & service sendiri** — ✅ selesai 31 Agustus 2026
+2. **Skema master jadi paket bersama `hmu_core`** — ✅ selesai 2 September 2026
+3. **Kantor AI repo & service sendiri** — ✅ selesai 2 September 2026
+4. **Fase B: produksi jadi webapp tanpa bot.** Buang tiga bot pabrik, kembangkan
+   mini-app jadi webapp berdiri sendiri. Ganjalannya satu: mini-app sekarang
+   mempercayai identitas Telegram (`require_miniapp_user`); webapp tanpa bot
+   butuh login sendiri — pola yang sudah terbukti ada di timbangan.
+5. **Jembatan timbangan → produksi**: transaksi terkunci menaut ke batch
+   pembelian, menghapus input ganda gabah masuk
+6. **Sinkronisasi Kledo** untuk kontak supplier lewat `kledo_contact_id`
 
 *Dokumen ini peta, bukan aturan mati. Bila kenyataan berubah, dokumen ini yang diperbarui lebih dulu — sebelum kodenya menyimpang diam-diam.*
