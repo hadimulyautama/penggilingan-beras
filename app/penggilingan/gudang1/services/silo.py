@@ -26,13 +26,19 @@ def _silo_cap_kg(silo) -> float | None:
 
 
 def _ensure_cap(silo, nama: str, existing_kg: float, new_kg: float) -> None:
-    cap = _silo_cap_kg(silo)
-    if cap is not None and existing_kg + new_kg > cap:
-        sisa = max(cap - existing_kg, 0)
-        raise SiloError(
-            f"❌ Kapasitas Silo {nama} {cap / 1000:g} ton tidak cukup "
-            f"(sisa {sisa / 1000:g} ton, tambahan {new_kg / 1000:g} ton)."
-        )
+    """Tidak lagi menolak apa pun — silo tidak punya batas.
+
+    Keputusan Direksi 2 September 2026: silo tidak perlu berbatas. Angka
+    `kapasitas_ton` TETAP disimpan dan tetap ditampilkan di layar sebagai
+    keterangan ("terisi 9,7 dari 20 ton"), karena orang perlu tahu seberapa
+    penuh — tetapi ia tidak boleh lagi MENOLAK gabah yang sudah terlanjur
+    datang dan berdiri di halaman.
+
+    Fungsinya dipertahankan, bukan dihapus dari pemanggilnya: kalau suatu hari
+    batas itu dikembalikan, tempatnya sudah jelas ada di sini — dan pemanggil
+    tidak perlu dicari ulang satu per satu.
+    """
+    return None
 
 
 class SiloError(Exception):
