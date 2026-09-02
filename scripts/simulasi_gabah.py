@@ -5,12 +5,11 @@ truk masuk sampai gabah duduk di silo dan harganya diverifikasi Direksi. Yang
 dibuktikan bukan "fungsinya jalan", melainkan bahwa seorang operator yang hanya
 memegang peramban benar-benar bisa menyelesaikan pekerjaannya tanpa Telegram.
 
-Dua jalur masuk keduanya dijalani, karena keduanya dipakai di lapangan:
-
-  · **tertaut tiket timbang** — jalur harian. Supplier, bobot, dan plat datang
-    dari jembatan timbang; operator tidak mengetik satu angka pun;
-  · **manual** — pengecualian saat jembatan tak dipakai. Ditandai, dan muncul
-    di rekonsiliasi.
+Hanya ADA SATU jalur masuk, dan itu disengaja: seluruh gabah ditimbang dengan
+aplikasi timbang, partai kecil sekalipun — satu kode timbang, berapa pun kali
+ditimbang. Supplier, bobot, dan plat datang dari jembatan timbang; operator
+tidak mengetik satu angka pun. Simulasi ini ikut membuktikan bahwa jalur
+manual yang dulu ada memang sudah tidak bisa dilalui.
 
 Butuh Postgres kosong:
 
@@ -179,13 +178,19 @@ async def main() -> None:
         cek("tiket yang sama tak bisa dipakai dua kali", habis == [],
             f"{len(habis)} tersisa")
 
-        babak("4. Jalur manual — pengecualian saat jembatan tak dipakai")
+        babak("4. Tidak ada jalur lain — gabah tanpa tiket timbang mustahil")
+        # Direksi menegaskan 2 September 2026: SELURUH gabah masuk ditimbang
+        # dengan aplikasi timbang, partai kecil sekalipun (satu kode timbang,
+        # berapa pun kali ditimbang). Jalur manual dicabut, dan uji ini yang
+        # menjaganya tetap tercabut.
+        menu2 = {a["id"] for a in (await op.get("/miniapp/actions/menu")).json()}
+        cek("tak ada aksi gabah masuk manual", "gabah_masuk_manual" not in menu2)
         r = await op.post("/miniapp/actions/gabah-masuk-manual",
                           json={"supplier": "Petani Setempat", "berat": 1500,
                                 "kondisi": "basah", "plat": "AD 9 ZZ",
                                 "tujuan": "dryer"})
-        cek("gabah manual tercatat", r.status_code == 200, r.text[:120])
-        cek("ditandai manual", "MANUAL" in r.json().get("pesan", ""))
+        cek("alamatnya pun sudah tidak ada", r.status_code == 404,
+            f"HTTP {r.status_code}")
 
         babak("5. Pengeringan — satu lot dari semua yang menunggu di dryer")
         r = await op.post("/miniapp/actions/mulai-pengeringan", json={})
@@ -247,13 +252,13 @@ async def main() -> None:
         r = await dir_.get("/api/laporan/pembelian_gabah?periode=hari_ini")
         cek("Direksi boleh baca pembelian gabah", r.status_code == 200)
         if r.status_code == 200:
-            # 8.250 (nota) + 1.500 (manual) = 9.750 — BUKAN 8.240 (netto
+            # 8.250 (nota) — BUKAN 8.240 (netto
             # timbang). Aturannya: bobot efektif = nota bila ada, selain itu
             # netto real (`timbang_link._SQL_SINKRON`). Yang dibayar pabrik
             # adalah angka nota, dan simulasi ini menegaskannya justru karena
             # dugaan pertama saya keliru.
             cek("pembelian memakai bobot NOTA, bukan netto timbang",
-                "9.750" in r.json()["isi"],
+                "8.250" in r.json()["isi"],
                 r.json()["isi"].split("\n")[1].strip() if "\n" in r.json()["isi"] else "")
 
         babak("9. Tombol batal — apa yang akan hilang harus terbaca dulu")
