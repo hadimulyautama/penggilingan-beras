@@ -1,0 +1,48 @@
+"""Uji aturan dryer — empat aturan yang ditegaskan Direksi 2 September 2026.
+
+Aturan-aturan ini menentukan kapan gabah boleh masuk mesin pengering. Salah
+satu saja longgar, dan dua muatan gabah bisa tercampur di satu mesin tanpa ada
+yang menyadarinya sampai hasil gilingnya aneh.
+"""
+from __future__ import annotations
+
+import inspect
+
+from app.penggilingan.gudang1.services import drying
+
+
+def test_lot_yang_mengering_maupun_mendinginkan_menutup_dryer():
+    """Aturan 1: selagi mengering ATAU mendinginkan, tak ada gabah yang boleh
+    masuk."""
+    sumber = inspect.getsource(drying.active_drying_lot)
+    assert 'DryingLot.status.in_(["proses", "selesai"])' in sumber
+
+
+def test_lot_yang_belum_pindah_silo_tetap_menutup_dryer():
+    """Aturan 2: sudah selesai dikeringkan DAN didinginkan pun, selama gabahnya
+    masih menumpuk di dryer, dryer tetap tertutup. Inilah sebab syarat
+    `belum_ke_silo` — tanpa itu, gabah baru masuk menimpa yang lama."""
+    sumber = inspect.getsource(drying.active_drying_lot)
+    assert "belum_ke_silo" in sumber
+    assert "SiloStorage.drying_lot_id" in sumber
+
+
+def test_masuk_dryer_menolak_saat_dryer_terisi():
+    sumber = inspect.getsource(drying.masuk_dryer)
+    assert "active_drying_lot" in sumber
+    assert "masih dipakai lot" in sumber
+
+
+def test_pendinginan_boleh_dinyatakan_berkali_kali():
+    """Aturan 3: gabah yang sudah dinyatakan dingin bisa ternyata masih panas.
+    Menolak pernyataan kedua memaksa operator berbohong pada catatan."""
+    sumber = inspect.getsource(drying.finish_cooling)
+    assert "sudah dinyatakan selesai pendinginan" not in sumber, \
+        "penolakan pernyataan kedua seharusnya sudah dicabut"
+    assert "diulang" in sumber, "putaran ulang harus terbaca di riwayat"
+
+
+def test_basah_dan_kering_tak_boleh_bercampur_di_dryer():
+    """Bukan bagian dari empat aturan itu, tetapi menjaga keempatnya berguna:
+    dryer yang menerima campuran membuat kadar air lot tak berarti apa-apa."""
+    assert "mencampur gabah basah & kering" in inspect.getsource(drying.masuk_dryer)

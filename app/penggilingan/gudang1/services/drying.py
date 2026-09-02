@@ -254,8 +254,16 @@ async def finish_cooling(
         raise DryingError(
             f"Lot {kode_lot} belum mulai dikeringkan. Ketik `mulai pengeringan {kode_lot}` dulu."
         )
-    if lot.waktu_selesai_pendinginan is not None:
-        raise DryingError(f"Lot {kode_lot} sudah dinyatakan selesai pendinginan.")
+    # Pendinginan boleh dinyatakan selesai BERKALI-KALI — keputusan Direksi
+    # 2 September 2026. Gabah yang sudah dinyatakan dingin bisa ternyata masih
+    # panas, atau perlu didinginkan lagi setelah dicek; menolak pernyataan
+    # kedua memaksa operator berbohong pada catatan atau membiarkannya salah.
+    #
+    # Yang tersimpan di lot adalah pernyataan TERAKHIR, karena itulah saat
+    # dryer benar-benar menganggur — dan itu dasar analisa downtime. Riwayat
+    # tiap putaran tetap utuh di `drying_cooling_logs`, satu baris per
+    # pernyataan, jadi tidak ada yang hilang.
+    ulang = lot.waktu_selesai_pendinginan is not None
 
     now = input_time(tanggal, jam)
     # Pastikan pengeringan selesai & pendinginan sudah mulai (idempoten).
@@ -272,7 +280,8 @@ async def finish_cooling(
         )
     lot.waktu_selesai_pendinginan = now
     db.add(DryingCoolingLog(
-        drying_lot_id=lot.id, waktu=now, catatan="pendinginan selesai", input_by=user.id,
+        drying_lot_id=lot.id, waktu=now, input_by=user.id,
+        catatan="pendinginan selesai (diulang)" if ulang else "pendinginan selesai",
     ))
     await log_activity(
         db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
