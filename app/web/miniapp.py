@@ -360,8 +360,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # Aksi inventory tinggal di modulnya sendiri, tetapi menunya tetap SATU
     # daftar dari satu tempat: perangkat tidak perlu tahu bahwa ia dirakit
     # dari beberapa berkas.
-    from app.web import aksi_inventory
+    from app.web import aksi_inventory, aksi_undo
     actions += aksi_inventory.spesifikasi(g2=g2, fin=fin)
+    # Siapa pun yang boleh mencatat sesuatu boleh membatalkan catatannya
+    # sendiri — termasuk operator, yang justru paling sering salah ketik.
+    actions += aksi_undo.spesifikasi(boleh=g1 or g2 or fin)
 
     # Tandai gudang tiap aksi → dipakai Mini App memisah tab G1/G2 (admin/staff).
     for a in actions:
@@ -390,6 +393,9 @@ _ACTION_WH = {
     "kirim_barang_jadi": "g2", "kirim_bekatul": "g2", "harga_byproduct": "g2",
     # Kecuali PK: ia dijual mentah dari Gudang 1, sebelum disosoh.
     "jual_pk": "g1",
+    # Undo tidak milik gudang mana pun; ia ikut G1 karena di situlah
+    # tab pertama terbuka, dan aksinya sama isinya di kedua tab.
+    "undo": "g1",
 }
 
 

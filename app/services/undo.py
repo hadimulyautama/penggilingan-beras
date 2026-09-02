@@ -7,6 +7,8 @@ terakhir oleh siapa' (operator gudang 1/2, staff, nama, atau semua).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,12 +45,40 @@ _UNDOABLE = {
     "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
 }
 
-# Label ramah untuk pesan "belum bisa di-undo".
+#: Label ramah per tabel — untuk pesan "belum bisa di-undo" MAUPUN untuk
+#: memberitahu apa yang akan dibatalkan sebelum tombolnya ditekan.
+#:
+#: Mencakup tabel yang didukung dan yang tidak. Dulu hanya yang tidak
+#: didukung, karena satu-satunya tempat label dipakai adalah pesan penolakan;
+#: sejak ada pratinjau, yang didukung justru yang paling sering ditampilkan.
 _TABLE_LABEL = {
+    # Bisa dibatalkan
+    "drying_lots": "lot pengeringan",
+    "drying_moisture_logs": "catatan kadar air",
+    "drying_cooling_logs": "catatan pendinginan",
+    "purchase_batches": "gabah masuk",
+    "silo_storage": "isi silo",
+    "milling_process": "proses giling",
+    "internal_transfers": "pemindahan PK",
+    "milling_qc_logs": "QC giling",
+    "milling_process_verifications": "verifikasi output giling",
+    "milling_progress_logs": "hasil giling",
+    "silo_moving_logs": "pemindahan silo",
+    "pk_purchase_batches": "PK luar masuk",
+    "pk_purchase_verifications": "verifikasi harga PK luar",
+    "pk_gudang2_intakes": "PK masuk Gudang 2",
+    # Belum bisa dibatalkan
     "polishing_process": "penyosohan", "polishing_output_logs": "hasil penyosohan",
     "polishing_silo_usage": "penyosohan", "finished_goods": "stok barang jadi",
     "packaging_stock": "stok kemasan", "beras_stock": "stok beras",
+    "packaging_purchases": "pembelian karung",
+    "outgoing_records": "barang keluar",
+    "byproduct_prices": "harga hasil samping",
 }
+
+
+def label_tabel(nama: str) -> str:
+    return _TABLE_LABEL.get(nama, nama)
 
 
 class UndoError(Exception):
@@ -586,14 +616,14 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
     )
 
 
-async def undo_last(
-    db: AsyncSession, *, actor, actor_ids: list[int] | None, scope_label: str | None,
-) -> str:
-    """Batalkan tindakan TERAKHIR dari actor_ids. None = semua user.
+async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
+    """Tindakan terakhir yang akan dibatalkan — SATU kueri untuk dua pemakai.
 
-    Mengambil tindakan paling akhir (apa pun tabelnya, kecuali jejak 'undo'),
-    lalu membatalkannya. Bila tindakan terakhir itu memang belum didukung undo,
-    beri tahu jelas — JANGAN diam-diam membatalkan tindakan lama yang lain."""
+    Pratinjau dan pembatalan wajib menunjuk tindakan yang sama. Bila keduanya
+    menyusun kueri sendiri-sendiri, suatu saat salah satunya akan diubah dan
+    orang akan menekan tombol untuk membatalkan sesuatu yang lain dari yang
+    tertulis di layar.
+    """
     q = select(ActivityLog).where(
         ActivityLog.action.in_(["INSERT", "UPDATE"]),
         ActivityLog.table_name != "undo",
@@ -603,13 +633,63 @@ async def undo_last(
             raise UndoError("Tidak ada pengguna yang cocok untuk di-undo.")
         q = q.where(ActivityLog.changed_by.in_(actor_ids))
     q = q.order_by(ActivityLog.waktu_perubahan.desc(), ActivityLog.id.desc()).limit(1)
-    log = (await db.execute(q)).scalars().first()
+    return (await db.execute(q)).scalars().first()
+
+
+@dataclass
+class Pratinjau:
+    """Apa yang akan dibatalkan — dibaca sebelum ada yang berubah."""
+
+    tabel: str
+    label: str
+    ringkas: str
+    oleh: str
+    waktu: datetime
+    didukung: bool
+
+
+async def pratinjau_terakhir(
+    db: AsyncSession, *, actor_ids: list[int] | None
+) -> Pratinjau | None:
+    """Lihat tindakan terakhir tanpa menyentuhnya. None = tidak ada.
+
+    Jalur bot langsung membatalkan lalu memberi tahu apa yang barusan hilang.
+    Di layar itu tidak cukup: tombol yang tidak menyebutkan akibatnya akan
+    ditekan untuk mencoba-coba. Karena itu yang ditawarkan adalah kalimat
+    lengkapnya, dan yang ditekan orang adalah kalimat itu.
+    """
+    log = await _log_terakhir(db, actor_ids)
+    if log is None:
+        return None
+    nama = (await db.execute(
+        select(User.nama).where(User.id == log.changed_by)
+    )).scalars().first()
+    ringkas = (log.new_value or "").strip() or f"#{log.record_id}"
+    return Pratinjau(
+        tabel=log.table_name,
+        label=label_tabel(log.table_name),
+        ringkas=ringkas.split("|")[0].strip()[:60],
+        oleh=nama or "?",
+        waktu=log.waktu_perubahan,
+        didukung=log.table_name in _UNDOABLE,
+    )
+
+
+async def undo_last(
+    db: AsyncSession, *, actor, actor_ids: list[int] | None, scope_label: str | None,
+) -> str:
+    """Batalkan tindakan TERAKHIR dari actor_ids. None = semua user.
+
+    Mengambil tindakan paling akhir (apa pun tabelnya, kecuali jejak 'undo'),
+    lalu membatalkannya. Bila tindakan terakhir itu memang belum didukung undo,
+    beri tahu jelas — JANGAN diam-diam membatalkan tindakan lama yang lain."""
+    log = await _log_terakhir(db, actor_ids)
     if log is None:
         suffix = f" oleh {scope_label}" if scope_label else ""
         raise UndoError(f"Tidak ada input terakhir yang bisa dibatalkan{suffix}.")
     if log.table_name not in _UNDOABLE:
         raise UndoError(
-            f"Tindakan terakhir ({_TABLE_LABEL.get(log.table_name, log.table_name)}) "
+            f"Tindakan terakhir ({label_tabel(log.table_name)}) "
             "belum bisa dibatalkan otomatis — koreksi lewat admin."
         )
 
