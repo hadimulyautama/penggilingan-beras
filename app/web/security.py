@@ -30,6 +30,13 @@ log = logging.getLogger("web.security")
 
 NAMA_COOKIE = "produksi_sesi"
 
+#: Daftar nama pengguna yang PERNAH masuk di perangkat ini — bukan rahasia,
+#: bukan token. Gunanya menghapus pengetikan berulang di perangkat gudang:
+#: operator memilih namanya lalu hanya mengetik sandi. Isinya sengaja cuma
+#: nama pengguna, dan hanya dibaca server saat merender halaman masuk.
+COOKIE_PERANGKAT = "produksi_perangkat"
+MAKS_NAMA_PERANGKAT = 4
+
 # Parameter scrypt: seimbang antara aman & ringan untuk server kecil.
 _SCRYPT_N = 2 ** 14
 _SCRYPT_R = 8
@@ -200,6 +207,27 @@ async def butuh_admin(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
     if not akun.is_admin:
         raise AksesDitolak("Halaman ini hanya untuk Direksi.")
     return akun
+
+
+def baca_nama_perangkat(nilai: str | None) -> list[str]:
+    """Nama pengguna yang tercatat pernah masuk di perangkat ini."""
+    if not nilai:
+        return []
+    keluar: list[str] = []
+    for bagian in nilai.split(","):
+        nama = bagian.strip().lower()
+        # Saring ketat: isi cookie datang dari peramban, jadi tak pernah
+        # dipercaya sebagai apa pun selain kandidat nama pengguna.
+        if nama and nama.isascii() and nama.replace("_", "").replace("-", "").isalnum():
+            if nama not in keluar:
+                keluar.append(nama)
+    return keluar[:MAKS_NAMA_PERANGKAT]
+
+
+def tulis_nama_perangkat(nilai: str | None, username: str) -> str:
+    """Taruh `username` di depan daftar perangkat, buang duplikat."""
+    daftar = [username] + [n for n in baca_nama_perangkat(nilai) if n != username]
+    return ",".join(daftar[:MAKS_NAMA_PERANGKAT])
 
 
 async def ada_akun() -> bool:

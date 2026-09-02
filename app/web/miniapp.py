@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from app.bots.common import can_see_financials, can_transfer_pk
 from app.database import SessionLocal
 from app.models import User
-from app.web.deps import require_miniapp_user
+from app.web.deps import pengguna_aksi
 
 router = APIRouter(prefix="/miniapp", tags=["miniapp"])
 
@@ -32,7 +32,7 @@ def _rp(n: float) -> str:
 # ─────────────────────────── Identitas ───────────────────────────
 
 @router.get("/me")
-async def me(user: User = Depends(require_miniapp_user)) -> dict:
+async def me(user: User = Depends(pengguna_aksi)) -> dict:
     """Profil + izin user (menentukan tampilan front-end)."""
     return {
         "id": user.id, "nama": user.nama, "role": user.role,
@@ -69,7 +69,7 @@ async def _hpp_terkini(db) -> str:
 
 
 @router.get("/dashboard")
-async def dashboard(user: User = Depends(require_miniapp_user)) -> dict:
+async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
     """Snapshot dashboard sesuai role. Keuangan (HPP/tugas) hanya staff/admin."""
     fin = can_see_financials(user)
     from app.bots.common import user_wh_scope
@@ -138,7 +138,7 @@ async def _is_g2_operator(user: User) -> bool:
 
 
 @router.get("/actions/menu")
-async def actions_menu(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
     fin = can_see_financials(user)
     g1 = await _is_g1_operator(user)
@@ -385,7 +385,7 @@ _ACTION_WH = {
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
 
 @router.get("/actions/drying-active")
-async def drying_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def drying_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g1_operator(user))
     from sqlalchemy import select
     from app.models import DryingLot
@@ -400,7 +400,7 @@ async def drying_active(user: User = Depends(require_miniapp_user)) -> list[dict
 
 
 @router.get("/actions/milling-active")
-async def milling_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g1_operator(user))
     from sqlalchemy import select
     from app.models import MillingProcess
@@ -415,7 +415,7 @@ async def milling_active(user: User = Depends(require_miniapp_user)) -> list[dic
 
 
 @router.get("/actions/cooling-active")
-async def cooling_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def cooling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Lot selesai dikeringkan, masih DIDINGINKAN (belum dinyatakan selesai
     pendinginan) & masih di dryer."""
     _require(await _is_g1_operator(user))
@@ -437,7 +437,7 @@ async def cooling_active(user: User = Depends(require_miniapp_user)) -> list[dic
 
 
 @router.get("/actions/drying-done")
-async def drying_done(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def drying_done(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Lot yang sudah SELESAI PENDINGINAN (dryer idle) tapi belum dipindah ke
     silo — siap dipindah."""
     _require(await _is_g1_operator(user))
@@ -459,7 +459,7 @@ async def drying_done(user: User = Depends(require_miniapp_user)) -> list[dict]:
 
 
 @router.get("/actions/silo-siap-giling")
-async def silo_siap_giling(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 1 yang ADA isinya & tak sedang digiling."""
     _require(await _is_g1_operator(user))
     from sqlalchemy import select
@@ -493,7 +493,7 @@ async def silo_siap_giling(user: User = Depends(require_miniapp_user)) -> list[d
 
 
 @router.get("/actions/gabah-unverified")
-async def gabah_unverified(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def gabah_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(can_see_financials(user))
     from sqlalchemy import select
     from app.models import PurchaseBatch, Supplier
@@ -512,7 +512,7 @@ async def gabah_unverified(user: User = Depends(require_miniapp_user)) -> list[d
 
 
 @router.get("/actions/pk-transfer")
-async def pk_transfer_list(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(can_transfer_pk(user))
     from sqlalchemy import select
     from app.models import MillingProcess
@@ -533,7 +533,7 @@ async def pk_transfer_list(user: User = Depends(require_miniapp_user)) -> list[d
 
 
 @router.get("/actions/polishing-active")
-async def polishing_active(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
     from app.models import PolishingProcess
@@ -548,7 +548,7 @@ async def polishing_active(user: User = Depends(require_miniapp_user)) -> list[d
 
 
 @router.get("/actions/pk-intake-pending")
-async def pk_intake_pending(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """PK luar SUDAH diterima (QC) tapi belum dimasukkan ke silo/tumpukan."""
     _require(await _is_g2_operator(user))
     from sqlalchemy import exists, select
@@ -569,7 +569,7 @@ async def pk_intake_pending(user: User = Depends(require_miniapp_user)) -> list[
 
 
 @router.get("/actions/milling-unverified")
-async def milling_unverified(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def milling_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Milling SELESAI yang output PK-nya belum diverifikasi (berat final)."""
     _require(can_see_financials(user))
     from sqlalchemy import exists, select
@@ -590,7 +590,7 @@ async def milling_unverified(user: User = Depends(require_miniapp_user)) -> list
 
 
 @router.get("/actions/milling-noqc")
-async def milling_noqc(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Milling SELESAI yang belum ada catatan QC sama sekali."""
     _require(can_see_financials(user))
     from sqlalchemy import select
@@ -609,7 +609,7 @@ async def milling_noqc(user: User = Depends(require_miniapp_user)) -> list[dict]
 
 
 @router.get("/actions/pk-luar-qc")
-async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """PK luar (sudah masuk) yang BELUM diinput kualitasnya."""
     _require(can_see_financials(user))
     from sqlalchemy import exists, or_, select
@@ -639,7 +639,7 @@ async def pk_luar_qc(user: User = Depends(require_miniapp_user)) -> list[dict]:
 
 
 @router.get("/actions/pk-luar-harga")
-async def pk_luar_harga(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def pk_luar_harga(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """PK luar yang HARGA-nya belum diverifikasi (flag_unverified)."""
     _require(can_see_financials(user))
     from sqlalchemy import select
@@ -686,7 +686,7 @@ class GabahMasukReq(BaseModel):
 
 
 @router.get("/actions/timbang-masuk-aktif")
-async def timbang_masuk_aktif(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar tiket timbang MASUK gabah yang masih AKTIF & belum tertaut batch."""
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
@@ -705,7 +705,7 @@ async def timbang_masuk_aktif(user: User = Depends(require_miniapp_user)) -> lis
 
 
 @router.post("/actions/gabah-masuk")
-async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
 
     from app.penggilingan.peta_jenis import intake_dari_jenis
@@ -769,7 +769,7 @@ class GabahMasukManualReq(BaseModel):
 
 @router.post("/actions/gabah-masuk-manual")
 async def act_gabah_masuk_manual(req: GabahMasukManualReq,
-                                 user: User = Depends(require_miniapp_user)) -> dict:
+                                 user: User = Depends(pengguna_aksi)) -> dict:
     """Gabah masuk MANUAL (tanpa timbang). Batch ditandai sumber_berat='manual'
     (default fungsi lama) → tampil di rekonsiliasi. Fallback saat timbang tak dipakai."""
     _require(await _is_g1_operator(user))
@@ -824,7 +824,7 @@ class KadarAirReq(BaseModel):
 
 
 @router.post("/actions/kadar-air")
-async def act_kadar_air(req: KadarAirReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot pengeringan dulu.")
@@ -847,7 +847,7 @@ class HasilGilingReq(BaseModel):
 
 
 @router.post("/actions/hasil-giling")
-async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
@@ -865,7 +865,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(require_min
 
 
 @router.post("/actions/mulai-pengeringan")
-async def act_mulai_pengeringan(user: User = Depends(require_miniapp_user)) -> dict:
+async def act_mulai_pengeringan(user: User = Depends(pengguna_aksi)) -> dict:
     """Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer, mulai proses."""
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.drying import start_drying, DryingError
@@ -886,7 +886,7 @@ class KodeLotReq(BaseModel):
 
 
 @router.post("/actions/selesai-pengeringan")
-async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot pengeringan dulu.")
@@ -904,7 +904,7 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(require_
 
 
 @router.post("/actions/selesai-pendinginan")
-async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot yang didinginkan dulu.")
@@ -927,7 +927,7 @@ class PindahSiloReq(BaseModel):
 
 
 @router.post("/actions/pindah-silo")
-async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot yang mau dipindah dulu.")
@@ -952,7 +952,7 @@ class MulaiGilingReq(BaseModel):
 
 
 @router.post("/actions/mulai-giling")
-async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo yang digiling dulu.")
@@ -974,7 +974,7 @@ class KodeProsesReq(BaseModel):
 
 
 @router.post("/actions/selesai-giling")
-async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
@@ -999,7 +999,7 @@ class VerifyGabahReq(BaseModel):
 
 
 @router.post("/actions/verify-gabah")
-async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih batch gabah dulu.")
@@ -1027,7 +1027,7 @@ class VerifyOutputReq(BaseModel):
 
 
 @router.post("/actions/verify-output")
-async def act_verify_output(req: VerifyOutputReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_verify_output(req: VerifyOutputReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_see_financials(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
@@ -1055,7 +1055,7 @@ class QcGilingReq(BaseModel):
 
 
 @router.post("/actions/qc-giling")
-async def act_qc_giling(req: QcGilingReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_see_financials(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
@@ -1088,7 +1088,7 @@ class CatatPkLuarReq(BaseModel):
 
 
 @router.get("/actions/timbang-pk-aktif")
-async def timbang_pk_aktif(user: User = Depends(require_miniapp_user)) -> list[dict]:
+async def timbang_pk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar tiket timbang PK (BERAS_PK) MASUK yang masih AKTIF & belum tertaut."""
     _require(can_see_financials(user))
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
@@ -1108,7 +1108,7 @@ async def timbang_pk_aktif(user: User = Depends(require_miniapp_user)) -> list[d
 
 
 @router.post("/actions/rekonsiliasi-timbang")
-async def act_rekonsiliasi_timbang(user: User = Depends(require_miniapp_user)) -> dict:
+async def act_rekonsiliasi_timbang(user: User = Depends(pengguna_aksi)) -> dict:
     """Laporan rekonsiliasi timbangan ↔ intake (staff/admin)."""
     _require(can_see_financials(user))
     from app.penggilingan.gudang1.services.rekonsiliasi import rekonsiliasi, format_rekonsiliasi
@@ -1118,7 +1118,7 @@ async def act_rekonsiliasi_timbang(user: User = Depends(require_miniapp_user)) -
 
 
 @router.post("/actions/catat-pk-luar")
-async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_see_financials(user))
     if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
@@ -1156,7 +1156,7 @@ class CatatPkLuarManualReq(BaseModel):
 
 @router.post("/actions/catat-pk-luar-manual")
 async def act_catat_pk_luar_manual(req: CatatPkLuarManualReq,
-                                   user: User = Depends(require_miniapp_user)) -> dict:
+                                   user: User = Depends(pengguna_aksi)) -> dict:
     """PK luar MANUAL (tanpa timbang). Batch ditandai sumber_berat='manual'
     (default fungsi lama) → tampil di rekonsiliasi. Fallback saat timbang tak dipakai."""
     _require(can_see_financials(user))
@@ -1199,7 +1199,7 @@ class QcPkLuarReq(BaseModel):
 
 
 @router.post("/actions/qc-pk-luar")
-async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
     """Input kualitas PK luar (properti batch) — bukan keputusan terima/tolak."""
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
@@ -1239,7 +1239,7 @@ class HargaPkLuarReq(BaseModel):
 
 
 @router.post("/actions/harga-pk-luar")
-async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
     """Verifikasi harga PK luar — terpisah dari kualitas, kapan saja."""
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
@@ -1272,7 +1272,7 @@ class TransferReq(BaseModel):
 
 
 @router.post("/actions/transfer-pk")
-async def act_transfer_pk(req: TransferReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_transfer_pk(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses PK dulu.")
@@ -1303,7 +1303,7 @@ class MasukkanPkReq(BaseModel):
 
 
 @router.post("/actions/masukkan-pk")
-async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g2_operator(user))
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
@@ -1326,7 +1326,7 @@ class MulaiPenyosohanReq(BaseModel):
 
 
 @router.post("/actions/mulai-penyosohan")
-async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g2_operator(user))
     silos = {"A": ["A"], "B": ["B"], "AB": ["A", "B"]}.get((req.silo or "").upper())
     if not silos:
@@ -1351,7 +1351,7 @@ class HasilPenyosohanReq(BaseModel):
 
 
 @router.post("/actions/hasil-penyosohan")
-async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g2_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
@@ -1377,7 +1377,7 @@ class SelesaiPenyosohanReq(BaseModel):
 
 
 @router.post("/actions/selesai-penyosohan")
-async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends(require_miniapp_user)) -> dict:
+async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g2_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")

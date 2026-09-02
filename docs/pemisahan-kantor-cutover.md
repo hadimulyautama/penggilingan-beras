@@ -33,8 +33,8 @@ apa yang dilakukan dan apa yang masih tersisa.
 3. **Produksi tak punya deteksi downtime sendiri** — heartbeat ikut Kantor
    (memakai bot Kantor + tabel `kantor_heartbeat`). Bila perlu, tambahkan poller
    di Kantor yang mem-ping `/health` produksi.
-4. **Fase B** (produksi jadi webapp tanpa bot, seperti timbangan) belum mulai.
-   Tak terhalang: `/internal/*` menempel di FastAPI yang nanti jadi webapp itu.
+4. **Fase B** sedang berjalan — B1 (masuk dengan akun sendiri) dan sebagian B2
+   (layar pencatatan di peramban) sudah live; bot pabrik belum dimatikan.
 
 ## Catatan operasional
 

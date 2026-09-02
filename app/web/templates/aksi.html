@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block judul %}Catat pekerjaan{% endblock %}
+{% block isi %}
+
+<div class="tab" id="tab" style="display:none"></div>
+<div id="layar"><div class="bantu" style="padding:24px 0;text-align:center">Memuat…</div></div>
+
+<div class="lembar" id="lembar"></div>
+<div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">
+  {% if akun.sesi_pendek %}Tercatat atas nama {{ akun.nama }} — tekan Ganti bila bukan Anda
+  {% else %}Tercatat atas nama {{ akun.nama }}{% endif %}
+</div>
+<script src="/static/aksi.js" defer></script>
+{% endblock %}

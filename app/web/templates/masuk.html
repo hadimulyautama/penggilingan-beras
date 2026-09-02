@@ -1,25 +1,57 @@
 {% extends "base.html" %}
-{% block judul %}Masuk — Penggilingan Beras{% endblock %}
+{% block judul %}Masuk{% endblock %}
 {% block isi %}
-<div class="kartu">
-  <h1>Penggilingan Beras</h1>
-  <p class="mut">Masuk untuk mencatat pekerjaan gudang.</p>
 
-  {% if pesan_err %}<div class="pesan err">{{ pesan_err }}</div>{% endif %}
-
-  <form method="post" action="/masuk" autocomplete="on">
-    <input type="hidden" name="tujuan" value="{{ tujuan }}">
-    <label for="username">Nama pengguna</label>
-    <input id="username" name="username" autocapitalize="none" autocorrect="off"
-           autocomplete="username" required autofocus>
-    <label for="sandi">Kata sandi</label>
-    <input id="sandi" name="sandi" type="password" autocomplete="current-password" required>
-    <div style="margin-top:18px"><button type="submit">Masuk</button></div>
-  </form>
-
-  <p class="mut" style="margin-top:16px">
-    Belum punya akun, atau lupa sandi? Minta Direksi membuatkan — sandi awalnya
-    dibacakan sekali, lalu Anda ganti sendiri.
-  </p>
+<div style="display:flex;align-items:center;gap:12px;margin:32px 0 26px">
+  <div class="tindakan__ikon" style="width:44px;height:44px;border:1px solid var(--garis)">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M9.5 20v-5.5h5V20"/>
+    </svg>
+  </div>
+  <div>
+    <h1 style="margin:0">Pos Produksi</h1>
+    <div class="bar__sub">PT Hadi Mulya Utama</div>
+  </div>
 </div>
+
+{% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
+
+{% if riwayat %}
+  <div style="margin-bottom:18px">
+    <span class="lbl">Pernah masuk di perangkat ini</span>
+    <div class="cip">
+      {% for n in riwayat %}<a class="cip__satu" href="/masuk?u={{ n }}{% if tujuan %}&next={{ tujuan }}{% endif %}">{{ n }}</a>{% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+<form method="post" action="/masuk" class="grup" autocomplete="on">
+  <input type="hidden" name="tujuan" value="{{ tujuan }}">
+  <div>
+    <label class="lbl" for="username">Nama pengguna</label>
+    <input class="fld" id="username" name="username" value="{{ username or '' }}"
+           autocapitalize="none" autocorrect="off" spellcheck="false"
+           autocomplete="username" required {% if not username %}autofocus{% endif %}>
+  </div>
+  <div>
+    <label class="lbl" for="sandi">Kata sandi</label>
+    <div class="fld-sandi">
+      <input class="fld" id="sandi" name="sandi" type="password"
+             autocomplete="current-password" required {% if username %}autofocus{% endif %}>
+      <button class="fld-sandi__lihat" type="button" data-lihat="sandi"
+              aria-label="Tampilkan kata sandi">lihat</button>
+    </div>
+  </div>
+  <button class="btn btn--utama" type="submit">Masuk</button>
+</form>
+
+<p class="bantu" style="margin-top:22px">
+  Belum punya akun, atau lupa sandi? Minta Direksi membuatkan — sandi awalnya
+  dibacakan sekali, lalu Anda ganti sendiri.
+</p>
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">Sesi menempel pada nama yang masuk — catatan Anda tercatat atas nama Anda</div>
 {% endblock %}

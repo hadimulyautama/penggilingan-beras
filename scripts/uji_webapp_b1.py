@@ -73,6 +73,7 @@ async def main():
         r = await c.post("/masuk", data={"username": "admin", "sandi": "salah", "tujuan": ""})
         cek("ditolak & tak ada cookie", r.status_code == 200 and "produksi_sesi" not in r.cookies)
         cek("pesan tak membocorkan mana yang salah", "Nama pengguna atau kata sandi salah" in r.text)
+        cek("nama pengguna tak ikut hilang", 'value="admin"' in r.text)
 
         print("\n5. Masuk benar → dipaksa ganti sandi")
         r = await c.post("/masuk", data={"username": "admin", "sandi": "sandiawal123", "tujuan": ""})
@@ -80,19 +81,31 @@ async def main():
         cek("cookie sesi terpasang", "produksi_sesi" in r.cookies)
         cek("cookie httponly", "httponly" in r.headers.get("set-cookie", "").lower())
 
-        print("\n6. Ganti sandi")
-        r = await c.post("/ganti-sandi", data={"sandi_lama": "salah", "sandi_baru": "sandibaru1", "ulangi": "sandibaru1"})
-        cek("sandi lama salah ditolak", "Kata sandi lama salah" in r.text)
-        r = await c.post("/ganti-sandi", data={"sandi_lama": "sandiawal123", "sandi_baru": "abc", "ulangi": "abc"})
+        print("\n6. Ganti sandi (paksa: sandi lama TIDAK diminta)")
+        r = await c.get("/ganti-sandi")
+        cek("kolom sandi lama tak ada saat dipaksa", 'name="sandi_lama"' not in r.text)
+        r = await c.post("/ganti-sandi", data={"sandi_baru": "abc", "ulangi": "abc"})
         cek("sandi terlalu pendek ditolak", "minimal 6" in r.text)
-        r = await c.post("/ganti-sandi", data={"sandi_lama": "sandiawal123", "sandi_baru": "sandibaru1", "ulangi": "beda"})
+        r = await c.post("/ganti-sandi", data={"sandi_baru": "sandibaru1", "ulangi": "beda"})
         cek("ulangan tak sama ditolak", "tidak sama" in r.text)
-        r = await c.post("/ganti-sandi", data={"sandi_lama": "sandiawal123", "sandi_baru": "sandibaru1", "ulangi": "sandibaru1"})
-        cek("berhasil diganti", "berhasil diganti" in r.text)
+        r = await c.post("/ganti-sandi", data={"sandi_baru": "sandiawal123", "ulangi": "sandiawal123"})
+        cek("sandi baru sama dgn lama ditolak", "harus berbeda" in r.text)
+        r = await c.post("/ganti-sandi", data={"sandi_baru": "sandibaru1", "ulangi": "sandibaru1"})
+        cek("berhasil → kembali ke beranda", r.status_code == 303 and r.headers["location"] == "/?pesan=sandi-diganti", r.headers.get("location"))
+        r = await c.get("/?pesan=sandi-diganti")
+        cek("beranda mengabarkan", "Kata sandi berhasil diganti" in r.text)
+        r = await c.get("/?pesan=Akun+diblokir+hubungi+0812")
+        cek("teks bebas dari URL tak ditampilkan", "diblokir" not in r.text)
+
+        print("\n6b. Sandi lama tetap diminta bila TIDAK dipaksa")
+        r = await c.get("/ganti-sandi")
+        cek("kolom sandi lama muncul kembali", 'name="sandi_lama"' in r.text)
+        r = await c.post("/ganti-sandi", data={"sandi_lama": "salah", "sandi_baru": "sandibaru2", "ulangi": "sandibaru2"})
+        cek("sandi lama salah ditolak", "Kata sandi lama salah" in r.text)
 
         print("\n7. Beranda & kelola pengguna (admin)")
         r = await c.get("/")
-        cek("beranda terbuka", r.status_code == 200 and "Selamat datang" in r.text)
+        cek("beranda terbuka", r.status_code == 200 and "Keadaan pabrik" in r.text)
         r = await c.get("/pengguna")
         cek("halaman pengguna terbuka", r.status_code == 200 and "Buatkan akun" in r.text)
         cek("operator muncul sbg calon", "Operator Uji" in r.text)
@@ -102,7 +115,7 @@ async def main():
             op = (await db.execute(select(User).where(User.telegram_user_id == 999002))).scalars().first()
             op_id = op.id
         r = await c.post("/pengguna/buat", data={"user_id": op_id, "username": "rusdi"})
-        cek("akun dibuat & sandi awal ditampilkan", "Sandi awal:" in r.text)
+        cek("akun dibuat & sandi awal terpampang sekali", "bacakan sekarang" in r.text and "masuk sebagai" in r.text)
         async with SessionLocal() as db:
             ak = (await db.execute(select(ProduksiAkun).where(ProduksiAkun.username == "rusdi"))).scalars().first()
         cek("operator → perangkat gudang", ak.mode_perangkat == "bersama", ak.mode_perangkat)
@@ -112,7 +125,10 @@ async def main():
 
         print("\n9. Keluar")
         r = await c.post("/keluar")
-        cek("dialihkan ke /masuk", r.status_code == 303 and r.headers["location"] == "/masuk")
+        cek("kembali ke masuk dgn nama terisi", r.status_code == 303
+            and r.headers["location"] == "/masuk?u=admin", r.headers.get("location"))
+        r = await c.get("/masuk")
+        cek("perangkat mengingat nama yang pernah masuk", 'href="/masuk?u=admin"' in r.text)
         c.cookies.clear()
         r = await c.get("/")
         cek("sesi habis → ke halaman masuk", r.status_code == 303 and r.headers["location"] == "/masuk")
@@ -133,6 +149,28 @@ async def main():
         cek("beranda operator menyebut perangkat gudang", "perangkat gudang" in r.text)
         setc = r.headers.get("set-cookie", "")
         cek("sesi pendek diperpanjang tiap permintaan", "produksi_sesi" in setc, "cookie diperbarui" if setc else "TIDAK diperbarui")
+
+        print("\n11. Endpoint aksi menerima sesi webapp (tanpa Telegram)")
+        r = await c.get("/miniapp/dashboard")
+        cek("dashboard aksi terbuka dgn sesi", r.status_code == 200, str(r.status_code))
+        r = await c.get("/miniapp/actions/menu")
+        cek("menu aksi terbuka dgn sesi", r.status_code == 200, str(r.status_code))
+        # Penolakannya boleh saja terjadi — operator uji ini belum ditugaskan ke
+        # gudang mana pun, jadi 403 "bukan peran Anda" itu benar. Yang dibuktikan
+        # di sini: penolakannya BUKAN soal identitas (401 / belum terdaftar),
+        # artinya sesi webapp memang diterima endpoint aksi.
+        r = await c.post("/miniapp/actions/mulai-pengeringan", json={})
+        alasan = (r.json().get("detail") or "") if r.headers.get("content-type", "").startswith("application/json") else ""
+        cek("aksi tulis lolos gerbang identitas",
+            r.status_code != 401 and "belum terdaftar" not in alasan and "initData" not in alasan,
+            f"HTTP {r.status_code} · {alasan[:60]}")
+
+    print("\n12. Endpoint aksi menolak yang tak punya sesi")
+    async with httpx.AsyncClient(transport=tr, base_url="http://uji", follow_redirects=False) as c:
+        r = await c.get("/miniapp/actions/menu")
+        cek("tanpa sesi & tanpa initData ditolak", r.status_code in (401, 403), f"HTTP {r.status_code}")
+        r = await c.get("/aksi")
+        cek("halaman aksi mengalihkan ke masuk", r.status_code == 303 and "/masuk" in r.headers.get("location", ""))
 
     print(f"\n{sum(OK)}/{len(OK)} pemeriksaan lulus")
     sys.exit(0 if all(OK) else 1)

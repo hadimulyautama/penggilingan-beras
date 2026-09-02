@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.bots.registry import build_bots, run_polling
 from app.config import settings
@@ -34,7 +35,7 @@ from app.web.security import (
     umur_sesi_detik,
 )
 from app.web.seed_akun import seed_akun_awal
-from app.web.tampilan import render
+from app.web.tampilan import BASE_DIR, render
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("app")
@@ -85,6 +86,7 @@ app.include_router(miniapp_router)
 app.include_router(internal_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 # ── Sesi & penjaga halaman ──
@@ -118,11 +120,46 @@ async def _akses_ditolak(request: Request, exc: AksesDitolak):
 
 @app.get("/", response_class=HTMLResponse)
 async def beranda(request: Request):
-    """Pintu masuk webapp. Belum masuk → halaman masuk."""
+    """Pintu masuk webapp: keadaan pabrik hari ini + pintu ke halaman lain.
+
+    Angkanya diambil dari `dashboard_data` — bagian `operasional` saja, yang
+    murni jumlah dan tak memuat data uang, sehingga aman dilihat operator.
+    """
     akun = await akun_opsional(request)
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
-    return render(request, "beranda.html")
+
+    from sqlalchemy import func, select
+
+    from app.models import ProduksiAkun
+
+    o, jml_akun = {}, 0
+    try:
+        async with SessionLocal() as db:
+            o = (await dashboard_data(db)).get("operasional", {}) or {}
+            jml_akun = (await db.execute(select(func.count(ProduksiAkun.id)))).scalar_one()
+    except Exception:
+        log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
+
+    # Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak
+    # pernah ditampilkan, supaya halaman ini tak bisa dipakai menitipkan
+    # kalimat palsu lewat tautan.
+    _PESAN = {"sandi-diganti": "Kata sandi berhasil diganti."}
+
+    gabah = o.get("gabah_hari_ini", {}) or {}
+    silo = o.get("silo", []) or []
+    return render(
+        request, "beranda.html",
+        gabah_kg=gabah.get("total_kg", 0) or 0,
+        gabah_batch=gabah.get("batch", 0) or 0,
+        pengeringan=len(o.get("pengeringan", []) or []),
+        silo_terisi=sum(1 for s in silo if s.get("terisi")),
+        silo_total=len(silo),
+        giling=len(o.get("giling", []) or []),
+        stok_pk=(o.get("stok_pk", {}) or {}).get("total", 0) or 0,
+        jml_akun=jml_akun,
+        pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
+    )
 
 
 @app.get("/health")
@@ -132,6 +169,16 @@ async def health() -> dict:
         "model": settings.claude_model,
         "bots": list(settings.bot_tokens.keys()),
     }
+
+
+@app.get("/aksi", response_class=HTMLResponse)
+async def halaman_aksi(request: Request):
+    """Layar pencatatan. Daftar aksi & bentuk formulirnya datang dari server
+    (`/miniapp/actions/menu`), jadi menambah aksi tak perlu layar baru."""
+    from app.web.security import butuh_akun
+
+    await butuh_akun(request)
+    return render(request, "aksi.html", kembali="/")
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

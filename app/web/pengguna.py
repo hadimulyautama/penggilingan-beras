@@ -27,7 +27,24 @@ router = APIRouter(tags=["webapp"])
 _MODE = ("pribadi", "bersama")
 
 
-async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None) -> dict:
+def _saran_username(nama: str) -> str:
+    """Tebakan nama pengguna dari nama orang: kata pertama, huruf kecil.
+
+    Direksi tetap boleh menggantinya. Gunanya menghapus satu keputusan kecil
+    yang tak ada nilainya — dan mencegah kebun binatang nama pengguna yang
+    formatnya berbeda-beda tergantung siapa yang sedang membuatkan akun.
+    """
+    kata = ["".join(c for c in k.lower() if c.isalnum()) for k in nama.split()]
+    kata = [k for k in kata if k]
+    # Lewati inisial: "M. Yusuf" harus jadi "yusuf", bukan "m".
+    for k in kata:
+        if len(k) >= 3:
+            return k[:20]
+    return "".join(kata)[:20]
+
+
+async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
+                sandi_awal: dict | None = None) -> dict:
     """Daftar akun + orang di `users` yang belum punya akun."""
     async with SessionLocal() as db:
         akun_list = (await db.execute(
@@ -41,8 +58,10 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None) -> di
             )).scalars().all()
             if u.id not in sudah
         ]
-    return {"akun_list": akun_list, "belum": belum,
-            "pesan_ok": pesan_ok, "pesan_err": pesan_err}
+    return {"akun_list": akun_list, "kembali": "/",
+            "belum": [{"id": u.id, "nama": u.nama, "role": u.role,
+                       "saran": _saran_username(u.nama)} for u in belum],
+            "pesan_ok": pesan_ok, "pesan_err": pesan_err, "sandi_awal": sandi_awal}
 
 
 @router.get("/pengguna")
@@ -79,10 +98,12 @@ async def buat_akun(
         ))
         await db.commit()
         nama = orang.nama
+    # Sandi awal ditampilkan sebagai blok tersendiri, bukan diselipkan dalam
+    # kalimat: ini satu-satunya kesempatan membacanya, dan yang membacanya
+    # sedang berdiri di depan orangnya.
     return render(request, "pengguna.html", **await _muat(
-        pesan_ok=f"Akun '{uname}' untuk {nama} dibuat. Sandi awal: {sandi} — "
-                 f"bacakan sekali kepada yang bersangkutan; ia wajib menggantinya "
-                 f"saat pertama masuk. Sandi ini tidak akan ditampilkan lagi."))
+        sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
+                    "judul": "Akun dibuat"}))
 
 
 @router.post("/pengguna/reset")
@@ -94,11 +115,11 @@ async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butu
             return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
         akun.password_hash = hash_sandi(sandi)
         akun.harus_ganti_sandi = True
-        uname = akun.username
+        uname, nama = akun.username, akun.nama
         await db.commit()
     return render(request, "pengguna.html", **await _muat(
-        pesan_ok=f"Sandi '{uname}' disetel ulang. Sandi baru: {sandi} — "
-                 f"wajib diganti saat ia masuk."))
+        sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
+                    "judul": "Sandi disetel ulang"}))
 
 
 @router.post("/pengguna/status")

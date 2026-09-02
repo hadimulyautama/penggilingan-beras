@@ -1,28 +1,41 @@
 {% extends "base.html" %}
 {% block judul %}Ganti kata sandi{% endblock %}
 {% block isi %}
-<div class="kartu">
-  <h1>Ganti kata sandi</h1>
+
+<div>
+  <h1>{% if wajib %}Buat kata sandi Anda{% else %}Ganti kata sandi{% endif %}</h1>
   {% if wajib %}
-    <p class="mut">Sandi Anda sekarang masih sandi awal dari Direksi. Ganti
-    dulu supaya hanya Anda yang tahu.</p>
-  {% endif %}
-
-  {% if pesan_err %}<div class="pesan err">{{ pesan_err }}</div>{% endif %}
-  {% if pesan_ok %}<div class="pesan ok">{{ pesan_ok }}</div>{% endif %}
-
-  <form method="post" action="/ganti-sandi">
-    <label for="lama">Kata sandi sekarang</label>
-    <input id="lama" name="sandi_lama" type="password" autocomplete="current-password" required autofocus>
-    <label for="baru">Kata sandi baru <span class="mut">(minimal 6 karakter)</span></label>
-    <input id="baru" name="sandi_baru" type="password" autocomplete="new-password" required>
-    <label for="ulangi">Ulangi kata sandi baru</label>
-    <input id="ulangi" name="ulangi" type="password" autocomplete="new-password" required>
-    <div style="margin-top:18px"><button type="submit">Simpan</button></div>
-  </form>
-
-  {% if not wajib %}
-    <p style="margin-top:16px"><a href="/">← Kembali</a></p>
+    <p class="bantu">Sandi yang Anda pakai barusan dibuatkan Direksi. Ganti
+    sekarang supaya hanya Anda yang tahu.</p>
   {% endif %}
 </div>
+
+{% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
+
+<form method="post" action="/ganti-sandi" class="grup">
+  {% if not wajib %}
+    <div>
+      <label class="lbl" for="lama">Kata sandi sekarang</label>
+      <input class="fld" id="lama" name="sandi_lama" type="password"
+             autocomplete="current-password" required autofocus>
+    </div>
+  {% endif %}
+  <div>
+    <label class="lbl" for="baru">Kata sandi baru — minimal 6 karakter</label>
+    <div class="fld-sandi">
+      <input class="fld" id="baru" name="sandi_baru" type="password" minlength="6"
+             autocomplete="new-password" required {% if wajib %}autofocus{% endif %}>
+      <button class="fld-sandi__lihat" type="button" data-lihat="baru"
+              aria-label="Tampilkan kata sandi">lihat</button>
+    </div>
+  </div>
+  <div>
+    <label class="lbl" for="ulangi">Ulangi kata sandi baru</label>
+    <input class="fld" id="ulangi" name="ulangi" type="password" minlength="6"
+           autocomplete="new-password" required>
+  </div>
+  <button class="btn btn--utama" type="submit">Simpan</button>
+</form>
+
+{% if not wajib %}<p style="margin-top:6px"><a href="/">← Kembali</a></p>{% endif %}
 {% endblock %}

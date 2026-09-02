@@ -1,10 +1,18 @@
-"""Dependency FastAPI untuk Mini App: autentikasi via Telegram initData → User.
+"""Siapa yang memanggil endpoint aksi — dua jalur, satu hasil.
 
-Konvensi header (standar Mini App): `Authorization: tma <initDataRaw>`.
+Endpoint aksi (`app/web/miniapp.py`) ditulis untuk Mini App Telegram dan
+mengenali pemakainya dari `initData` yang ditandatangani token bot. Fase B
+menambahkan jalur kedua: sesi cookie webapp.
+
+Keduanya sengaja hidup berdampingan selama masa peralihan — operator boleh
+memakai layar mana pun tanpa dipaksa pindah dalam semalam, dan keduanya
+menulis lewat service yang sama sehingga tak ada dua sumber kebenaran.
+Ketika bot pabrik akhirnya dimatikan, jalur Telegram di bawah ini yang
+dihapus, bukan endpoint-nya.
 """
 from __future__ import annotations
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
 from sqlalchemy import select
 
 from app.config import settings
@@ -21,6 +29,18 @@ def _extract_init_data(authorization: str | None) -> str | None:
     if len(parts) == 2 and parts[0].lower() == "tma":
         return parts[1].strip()
     return None
+
+
+async def pengguna_aksi(
+    request: Request, authorization: str | None = Header(default=None)
+) -> User:
+    """Pemakai endpoint aksi: sesi webapp lebih dulu, initData sebagai cadangan."""
+    from app.web.security import akun_opsional
+
+    akun = await akun_opsional(request)
+    if akun is not None and akun.user is not None:
+        return akun.user
+    return await require_miniapp_user(authorization)
 
 
 async def require_miniapp_user(authorization: str | None = Header(default=None)) -> User:
