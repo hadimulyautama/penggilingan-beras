@@ -64,11 +64,11 @@ async def _bagian_agenda() -> str:
 
 
 async def _bagian_operasional() -> str:
-    from app.services.dashboard import dashboard_data
+    # Data pabrik datang dari service PRODUKSI lewat API internal (Kantor tak
+    # lagi mengimpor app.services.dashboard).
+    from app.kantor import klien_produksi
     try:
-        async with SessionLocal() as db:
-            d = await dashboard_data(db)
-        o = d.get("operasional", {}) or {}
+        o = await klien_produksi.operasional()
         g = o.get("gabah_hari_ini", {}) or {}
         silo = o.get("silo", []) or []
         terisi = sum(1 for s in silo if s.get("terisi"))

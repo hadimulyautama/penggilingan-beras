@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Pelanggan, Supplier
+from hmu_core import Pelanggan, Supplier  # master bersama (bukan model domain produksi)
 
 log = logging.getLogger(__name__)
 

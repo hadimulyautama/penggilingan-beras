@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from aiogram.types import (
     KeyboardButton,
@@ -13,9 +14,16 @@ from aiogram.types import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.nlp_parser import ParsedPurchase, ParsedVerification
 from app.database import SessionLocal
-from app.models import User
+from hmu_core import User  # master langsung dari core (mengimpor app.models menyeret domain)
+
+if TYPE_CHECKING:
+    # Hanya untuk anotasi tipe (UserSession.draft / verif_draft). Karena file ini
+    # memakai `from __future__ import annotations`, anotasi = string & tak pernah
+    # dievaluasi runtime — jadi impor ini AMAN di-lazy. Efeknya: `import
+    # app.bots.common` TIDAK lagi menyeret nlp_parser → domain produksi, sehingga
+    # Kantor bisa memakai helper generik tanpa menarik kode penggilingan.
+    from app.ai.nlp_parser import ParsedPurchase, ParsedVerification
 
 # ── Kata kunci sederhana (hemat panggilan AI untuk hal yang pasti) ──
 CONFIRM_WORDS = {"ya", "iya", "y", "betul", "benar", "simpan", "ok", "oke", "sip", "gas", "yoi", "yup"}
@@ -55,7 +63,7 @@ async def user_wh_scope(db: AsyncSession, user: User | None) -> str:
     if user.role in ("admin", "staff"):
         return "all"
     if user.role == "operator" and user.default_warehouse_id:
-        from app.models import Warehouse
+        from hmu_core import Warehouse
         wh = await db.get(Warehouse, user.default_warehouse_id)
         nama = (wh.nama_gudang if wh else "") or ""
         if nama.startswith("Gudang 1"):
