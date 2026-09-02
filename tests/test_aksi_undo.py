@@ -117,3 +117,24 @@ def test_aksi_undo_terdaftar_di_router_dan_dipetakan_ke_gudang():
     assert a["post"] in terdaftar
     assert a["fields"][0]["source"] in terdaftar
     assert a["id"] in miniapp._ACTION_WH
+
+
+def test_setiap_tabel_yang_menulis_jejak_punya_label_manusia():
+    """Pratinjau menampilkan tindakan terakhir APA PUN tabelnya — termasuk yang
+    belum bisa dibatalkan, supaya orang tahu kenapa tombolnya tidak menolong.
+
+    Karena itu label tidak cukup hanya untuk tabel yang didukung. Tanpa ini,
+    layar pernah berbunyi "purchase_batch_verifications · total=8400000" —
+    kalimat yang tidak menolong siapa pun yang membacanya.
+    """
+    import pathlib
+    import re
+
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app"
+    menulis = set()
+    for berkas in akar.rglob("*.py"):
+        menulis |= set(re.findall(r'table_name="([a-z_]+)"', berkas.read_text()))
+    menulis.discard("undo")   # jejak undo sendiri tak pernah jadi sasaran undo
+
+    tanpa = sorted(t for t in menulis if svc.label_tabel(t) == t)
+    assert not tanpa, f"tabel tanpa label manusia: {tanpa}"

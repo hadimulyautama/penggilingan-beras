@@ -74,6 +74,10 @@ _TABLE_LABEL = {
     "packaging_purchases": "pembelian karung",
     "outgoing_records": "barang keluar",
     "byproduct_prices": "harga hasil samping",
+    "purchase_batch_verifications": "verifikasi harga gabah",
+    "finished_goods_stock": "stok barang jadi",
+    "byproduct_stock": "stok hasil samping",
+    "pk_tumpukan_to_silo": "PK tumpukan ke silo",
 }
 
 
