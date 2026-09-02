@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block judul %}Ganti kata sandi{% endblock %}
+{% block isi %}
+<div class="kartu">
+  <h1>Ganti kata sandi</h1>
+  {% if wajib %}
+    <p class="mut">Sandi Anda sekarang masih sandi awal dari Direksi. Ganti
+    dulu supaya hanya Anda yang tahu.</p>
+  {% endif %}
+
+  {% if pesan_err %}<div class="pesan err">{{ pesan_err }}</div>{% endif %}
+  {% if pesan_ok %}<div class="pesan ok">{{ pesan_ok }}</div>{% endif %}
+
+  <form method="post" action="/ganti-sandi">
+    <label for="lama">Kata sandi sekarang</label>
+    <input id="lama" name="sandi_lama" type="password" autocomplete="current-password" required autofocus>
+    <label for="baru">Kata sandi baru <span class="mut">(minimal 6 karakter)</span></label>
+    <input id="baru" name="sandi_baru" type="password" autocomplete="new-password" required>
+    <label for="ulangi">Ulangi kata sandi baru</label>
+    <input id="ulangi" name="ulangi" type="password" autocomplete="new-password" required>
+    <div style="margin-top:18px"><button type="submit">Simpan</button></div>
+  </form>
+
+  {% if not wajib %}
+    <p style="margin-top:16px"><a href="/">← Kembali</a></p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -52,6 +52,7 @@ from app.penggilingan.inventory.models import (
     ProductSku,
     RiceQualityStandard,
 )
+from app.models.akun import ProduksiAkun
 from app.models.system import ActivityLog, Notification
 from app.models.transfer import InternalTransfer
 
@@ -106,4 +107,6 @@ __all__ = [
     # system
     "ActivityLog",
     "Notification",
+    # akun webapp (kredensial; peran tetap di users)
+    "ProduksiAkun",
 ]

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block judul %}Masuk — Penggilingan Beras{% endblock %}
+{% block isi %}
+<div class="kartu">
+  <h1>Penggilingan Beras</h1>
+  <p class="mut">Masuk untuk mencatat pekerjaan gudang.</p>
+
+  {% if pesan_err %}<div class="pesan err">{{ pesan_err }}</div>{% endif %}
+
+  <form method="post" action="/masuk" autocomplete="on">
+    <input type="hidden" name="tujuan" value="{{ tujuan }}">
+    <label for="username">Nama pengguna</label>
+    <input id="username" name="username" autocapitalize="none" autocorrect="off"
+           autocomplete="username" required autofocus>
+    <label for="sandi">Kata sandi</label>
+    <input id="sandi" name="sandi" type="password" autocomplete="current-password" required>
+    <div style="margin-top:18px"><button type="submit">Masuk</button></div>
+  </form>
+
+  <p class="mut" style="margin-top:16px">
+    Belum punya akun, atau lupa sandi? Minta Direksi membuatkan — sandi awalnya
+    dibacakan sekali, lalu Anda ganti sendiri.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block judul %}Kelola pengguna{% endblock %}
+{% block isi %}
+
+{% if pesan_err %}<div class="pesan err">{{ pesan_err }}</div>{% endif %}
+{% if pesan_ok %}<div class="pesan ok">{{ pesan_ok }}</div>{% endif %}
+
+<div class="kartu">
+  <h2>Buatkan akun</h2>
+  {% if belum %}
+    <p class="mut">Orang di daftar pengguna yang belum punya akun webapp.
+    Sandi awal dibuatkan sistem dan ditampilkan sekali saja.</p>
+    <form method="post" action="/pengguna/buat">
+      <label for="user_id">Orangnya</label>
+      <select id="user_id" name="user_id" required>
+        {% for u in belum %}
+          <option value="{{ u.id }}">{{ u.nama }} — {{ u.role }}</option>
+        {% endfor %}
+      </select>
+      <label for="username">Nama pengguna untuk masuk</label>
+      <input id="username" name="username" autocapitalize="none" autocorrect="off"
+             placeholder="mis. rusdi" required>
+      <div style="margin-top:16px"><button type="submit">Buatkan akun</button></div>
+    </form>
+  {% else %}
+    <p class="mut">Semua orang yang aktif sudah punya akun.</p>
+  {% endif %}
+</div>
+
+<div class="kartu">
+  <h2>Akun yang ada</h2>
+  {% if not akun_list %}
+    <p class="mut">Belum ada akun.</p>
+  {% endif %}
+  {% for a in akun_list %}
+    <div class="baris">
+      <div style="min-width:0">
+        <b>{{ a.nama }}</b>
+        <div class="mut">
+          {{ a.username }} · {{ a.peran }}
+          {% if a.status != "aktif" %}<span class="tandai">nonaktif</span>{% endif %}
+          {% if a.harus_ganti_sandi %}<span class="tandai">sandi awal</span>{% endif %}
+          <span class="tandai">{{ "perangkat gudang" if a.mode_perangkat == "bersama" else "perangkat sendiri" }}</span>
+        </div>
+      </div>
+      <div class="aksi">
+        <form class="sebaris" method="post" action="/pengguna/reset">
+          <input type="hidden" name="akun_id" value="{{ a.id }}">
+          <button class="samar kecil" type="submit">Setel ulang sandi</button>
+        </form>
+        <form class="sebaris" method="post" action="/pengguna/mode">
+          <input type="hidden" name="akun_id" value="{{ a.id }}">
+          <input type="hidden" name="mode" value="{{ "pribadi" if a.mode_perangkat == "bersama" else "bersama" }}">
+          <button class="samar kecil" type="submit">
+            Jadikan {{ "perangkat sendiri" if a.mode_perangkat == "bersama" else "perangkat gudang" }}
+          </button>
+        </form>
+        <form class="sebaris" method="post" action="/pengguna/status">
+          <input type="hidden" name="akun_id" value="{{ a.id }}">
+          <button class="samar kecil" type="submit">{{ "Aktifkan" if a.status != "aktif" else "Nonaktifkan" }}</button>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+  <p class="mut" style="margin-top:14px">
+    Akun tidak pernah dihapus, hanya dinonaktifkan — catatan lama menunjuk ke
+    orangnya, dan harus tetap bisa dikenali bertahun-tahun kemudian.
+  </p>
+</div>
+{% endblock %}

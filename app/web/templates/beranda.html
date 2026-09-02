@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block judul %}Beranda — Penggilingan Beras{% endblock %}
+{% block isi %}
+<div class="kartu">
+  <h1>Selamat datang, {{ akun.nama }}</h1>
+  <p class="mut">
+    Anda masuk sebagai <b>{{ akun.peran }}</b>{% if akun.sesi_pendek %},
+    di perangkat gudang — sesi berakhir sendiri bila ditinggal menganggur,
+    jadi tekan <b>Ganti pengguna</b> saat selesai{% endif %}.
+  </p>
+</div>
+
+<div class="kartu">
+  <h2>Yang bisa dibuka</h2>
+  <div class="baris">
+    <div><b>Ganti kata sandi</b><div class="mut">Ubah sandi Anda sendiri.</div></div>
+    <div class="aksi"><a href="/ganti-sandi"><button class="samar kecil" type="button">Buka</button></a></div>
+  </div>
+  {% if akun.is_admin %}
+  <div class="baris">
+    <div><b>Kelola pengguna</b><div class="mut">Buatkan akun, setel ulang sandi, atur jenis perangkat.</div></div>
+    <div class="aksi"><a href="/pengguna"><button class="samar kecil" type="button">Buka</button></a></div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="kartu">
+  <h2>Belum di sini</h2>
+  <p class="mut">
+    Layar pencatatan gudah — gabah masuk, pengeringan, silo, giling, penyosohan —
+    masih dijalankan lewat Telegram sampai tahap berikutnya (B2) memindahkannya
+    ke sini. Halaman ini baru pintu masuknya.
+  </p>
+</div>
+{% endblock %}

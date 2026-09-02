@@ -61,6 +61,23 @@ class Settings(BaseSettings):
     # dashboard web dinonaktifkan (hanya versi Telegram yang jalan).
     dashboard_token: str = ""
 
+    # ── Webapp produksi (Fase B) ──
+    # Kunci penanda-tangan cookie sesi. WAJIB diisi di produksi — bila kosong,
+    # dipakai kunci acak per proses dan semua sesi hangus tiap kali restart.
+    secret_key: str = ""
+    # Umur sesi untuk perangkat PRIBADI (HP sendiri): panjang, supaya membuka
+    # aplikasi lagi tak pernah meminta sandi.
+    sesi_hari: int = 30
+    # Umur sesi untuk akun bermode 'bersama' (perangkat dipakai bergantian):
+    # pendek, supaya pekerjaan tak tercatat atas nama pemakai sebelumnya.
+    sesi_bersama_menit: int = 45
+    # Akun webapp PERTAMA. Diisi sekali saat menyiapkan sistem: bila belum ada
+    # akun sama sekali, dibuatkan akun untuk user ber-ADMIN_TELEGRAM_ID dengan
+    # sandi ini, dan pemiliknya WAJIB menggantinya saat pertama masuk.
+    # Kosongkan lagi setelah akun jadi.
+    admin_username: str = "admin"
+    admin_sandi_awal: str = ""
+
     # ── Seam Kantor ↔ Produksi (dua repo/service, satu DB) ──
     # Sisi PRODUKSI: token API internal (/internal/produksi/*). Kosong = API mati.
     internal_api_token: str = ""
