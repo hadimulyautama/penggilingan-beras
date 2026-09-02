@@ -19,6 +19,64 @@
 </div>
 {% endif %}
 
+{# Dua langkah, sengaja tidak disatukan: mendaftarkan ORANG menetapkan
+   perannya, membuatkan AKUN menyerahkan sandi yang harus dibacakan di depan
+   orangnya. Disatukan, sandi awal muncul saat Direksi masih mengetik nama —
+   jauh sebelum orangnya berdiri di sana. #}
+<div class="kartu">
+  <h2>Daftarkan orang baru</h2>
+  <p class="bantu" style="margin-bottom:14px">
+    Untuk orang yang belum ada di daftar pengguna sama sekali. Setelah ini,
+    buatkan akunnya di kotak berikutnya.
+  </p>
+  <form method="post" action="/pengguna/orang-baru" class="grup">
+    <div>
+      <label class="lbl" for="nama">Nama lengkap</label>
+      <input class="fld" id="nama" name="nama" required autocomplete="off"
+             placeholder="Nama seperti dipanggil sehari-hari">
+    </div>
+    <div>
+      <label class="lbl" for="peran">Peran</label>
+      <select class="fld" id="peran" name="peran" required>
+        {% for kode, nama, arti in PERAN %}
+          <option value="{{ kode }}" data-arti="{{ arti }}">{{ nama }}</option>
+        {% endfor %}
+      </select>
+      <p class="bantu" style="margin-top:6px" id="arti-peran">{{ PERAN[0][2] }}</p>
+    </div>
+    <div id="grup-gudang">
+      <label class="lbl" for="gudang">Gudang</label>
+      <select class="fld" id="gudang" name="gudang">
+        <option value="1">Gudang 1 — Selepan</option>
+        <option value="2">Gudang 2 — Penyosohan</option>
+      </select>
+      <p class="bantu" style="margin-top:6px">
+        Menentukan aksi mana yang muncul di layar pencatatannya.
+      </p>
+    </div>
+    <button class="btn btn--utama" type="submit">Daftarkan</button>
+  </form>
+</div>
+
+<script>
+/* Gudang hanya berlaku untuk operator. Staff dan Direksi bekerja di keduanya,
+   dan menampilkan pilihan yang tak berpengaruh membuat orang mengira ia
+   berpengaruh. */
+(function () {
+  var peran = document.getElementById("peran");
+  var grup = document.getElementById("grup-gudang");
+  var arti = document.getElementById("arti-peran");
+  if (!peran) { return; }
+  function sesuaikan() {
+    var p = peran.options[peran.selectedIndex];
+    grup.style.display = peran.value === "operator" ? "" : "none";
+    arti.textContent = p.dataset.arti || "";
+  }
+  peran.addEventListener("change", sesuaikan);
+  sesuaikan();
+})();
+</script>
+
 <div class="kartu">
   <h2>Buatkan akun</h2>
   {% if belum %}

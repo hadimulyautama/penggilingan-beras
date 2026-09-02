@@ -25,6 +25,15 @@ from hmu_core import User
 router = APIRouter(tags=["webapp"])
 
 _MODE = ("pribadi", "bersama")
+#: Peran yang boleh dipilih. Sengaja sama persis dengan `users.role` di master
+#: — menambah tingkat baru di sini tanpa menambahnya di sana akan membuat orang
+#: terdaftar dengan peran yang tak dikenali pemeriksa hak akses mana pun.
+PERAN = (
+    ("operator", "Operator", "Mencatat pekerjaan di gudangnya. Tidak melihat angka uang."),
+    ("staff", "Staff", "Seluruh pencatatan, verifikasi harga, dan laporan uang."),
+    ("admin", "Admin (Direksi)", "Semua di atas, ditambah mengelola orang dan akun."),
+)
+
 
 
 def _saran_username(nama: str) -> str:
@@ -58,7 +67,7 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
             )).scalars().all()
             if u.id not in sudah
         ]
-    return {"akun_list": akun_list, "kembali": "/",
+    return {"akun_list": akun_list, "kembali": "/", "PERAN": PERAN,
             "belum": [{"id": u.id, "nama": u.nama, "role": u.role,
                        "saran": _saran_username(u.nama)} for u in belum],
             "pesan_ok": pesan_ok, "pesan_err": pesan_err, "sandi_awal": sandi_awal}
@@ -149,4 +158,59 @@ async def ubah_mode(
         pesan = (f"Perangkat '{akun.username}' disetel ke "
                  f"{'milik gudang (sesi pendek)' if mode == 'bersama' else 'milik sendiri (sesi panjang)'}.")
         await db.commit()
+    return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
+
+
+
+@router.post("/pengguna/orang-baru")
+async def orang_baru(
+    request: Request,
+    nama: str = Form(...),
+    peran: str = Form(...),
+    gudang: str = Form(""),
+    akun=Depends(butuh_admin),
+):
+    """Daftarkan ORANG baru — bukan akunnya.
+
+    Dua langkah, dan sengaja tidak disatukan. Mendaftarkan orang menetapkan
+    perannya dan menempatkannya di gudang; membuatkan akun menyerahkan sandi
+    yang harus dibacakan di depan orangnya. Menyatukan keduanya berarti sandi
+    awal muncul di layar pada saat Direksi masih mengetik nama — jauh sebelum
+    orangnya berdiri di sana.
+
+    Nomor Telegram tidak diminta. Syarat itu milik bot, yang tak punya cara
+    lain mengenali penuturnya; orang yang masuk lewat layar ini dikenali dari
+    kredensialnya sendiri.
+    """
+    from app.services.user_admin import UserAdminError, register_user
+
+    nama = " ".join(nama.split())
+    if len(nama) < 3:
+        return render(request, "pengguna.html",
+                      **await _muat(pesan_err="Nama minimal 3 huruf."))
+    if peran not in {p[0] for p in PERAN}:
+        return render(request, "pengguna.html",
+                      **await _muat(pesan_err="Peran tidak dikenal."))
+
+    async with SessionLocal() as db:
+        # Nama kembar bukan kesalahan data, tetapi hampir selalu kesalahan
+        # ketik — dan dua "Budi" tanpa pembeda membuat daftar akun mustahil
+        # dipakai. Ditolak dengan menyebut yang sudah ada, supaya Direksi bisa
+        # memutuskan sendiri: salah ketik, atau memang dua orang.
+        kembar = (await db.execute(
+            select(User).where(User.nama == nama, User.status != "nonaktif")
+        )).scalars().first()
+        if kembar is not None:
+            return render(request, "pengguna.html", **await _muat(
+                pesan_err=f"'{nama}' sudah terdaftar sebagai "
+                          f"{kembar.role}. Bila ini orang lain, bedakan namanya."))
+        try:
+            pesan = await register_user(
+                db, actor=akun.user, nama=nama, role=peran,
+                gudang=int(gudang) if gudang in ("1", "2") else None,
+                telegram_id=None, no_hp=None, lewat_sandi=True,
+            )
+        except UserAdminError as e:
+            return render(request, "pengguna.html",
+                          **await _muat(pesan_err=str(e.args[0] if e.args else e)))
     return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
