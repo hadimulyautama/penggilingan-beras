@@ -135,7 +135,11 @@ async def main() -> None:
             VALUES ('TRX-SIM-001', CURRENT_DATE, 'MASUK', 'GABAH_BASAH',
                     'AD 1234 XY', 'Suparno', :sid,
                     12000, 3760, 8240, 8240, 8250, -10, -0.12,
-                    'NORMAL', 'TERBUKA')
+                    'NORMAL', 'TERBUKA'),
+                   ('TRX-SIM-002', CURRENT_DATE, 'MASUK', 'GABAH_KERING',
+                    'AD 5 BB', 'Slamet', :sid,
+                    9000, 2900, 6100, 6100, 6100, 0, 0,
+                    'NORMAL', 'SELESAI')
         """), {"sid": supplier.id})
         await db.commit()
         nama_supplier = supplier.nama_supplier
@@ -164,10 +168,16 @@ async def main() -> None:
 
         babak("3. Jalur harian — pilih tiket timbang, jangan ketik apa pun")
         tiket = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
-        cek("tiket timbang terbaca", len(tiket) == 1,
-            tiket[0]["label"] if tiket else "kosong")
+        cek("tiket timbang terbaca", len(tiket) == 2, f"{len(tiket)} tiket")
+        for t in tiket:
+            print("     ·", t["label"])
         if not tiket:
             return
+        # Tiket TERBUKA didahulukan: itu pekerjaan yang sedang berjalan,
+        # sedangkan yang tertutup adalah tambalan atas yang terlewat.
+        cek("tiket berjalan di urutan pertama", "SUSULAN" not in tiket[0]["label"])
+        cek("tiket yang sudah ditutup tetap bisa ditaut, bertanda susulan",
+            any("SUSULAN" in t["label"] for t in tiket))
         r = await op.post("/miniapp/actions/gabah-masuk",
                           json={"timbangan_transaksi_id": tiket[0]["value"],
                                 "tujuan": "dryer"})
@@ -175,8 +185,8 @@ async def main() -> None:
         print("     " + r.json().get("pesan", "").replace("\n", "\n     "))
 
         habis = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
-        cek("tiket yang sama tak bisa dipakai dua kali", habis == [],
-            f"{len(habis)} tersisa")
+        cek("tiket yang sama tak bisa dipakai dua kali", len(habis) == 1,
+            f"{len(habis)} tersisa (yang susulan)")
 
         babak("4. Tidak ada jalur lain — gabah tanpa tiket timbang mustahil")
         # Direksi menegaskan 2 September 2026: SELURUH gabah masuk ditimbang

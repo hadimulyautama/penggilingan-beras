@@ -13,7 +13,21 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Tiket MASUK yang masih TERBUKA & BELUM ditaut batch mana pun.
+# Tiket MASUK yang BELUM ditaut batch mana pun — apa pun status tiketnya.
+#
+# Dulu hanya yang berstatus TERBUKA. Itu cocok dengan alur normal: truk
+# ditimbang bermuatan, operator memilih tujuannya, truk membongkar ke tujuan
+# itu, lalu ditimbang lagi dan tiketnya tertutup. Pencatatan intake memang
+# terjadi di antara dua penimbangan itu.
+#
+# Tetapi bila operator terlambat — truk sudah pergi, tiket sudah tertutup —
+# tiketnya HILANG dari daftar, dan gabahnya tidak punya jalan masuk sama
+# sekali sejak jalur manual dicabut. Rekonsiliasi sudah lama melaporkan tiket
+# semacam itu sebagai "belum tertaut"; yang belum ada adalah cara
+# menyelesaikannya dari layar operator. Sekarang ada.
+#
+# Yang tertutup diberi tanda `susulan` supaya di layar terlihat bahwa ini
+# menambal yang terlewat, bukan pekerjaan yang sedang berjalan.
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, t.tanggal, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
@@ -22,12 +36,12 @@ _SQL_AKTIF = text("""
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
      WHERE t.arah = 'MASUK'
-       AND t.status_tiket = 'TERBUKA'
+       AND t.status_tiket IN ('TERBUKA', 'SELESAI')
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL)
-     ORDER BY t.tanggal DESC, t.id DESC
+     ORDER BY (t.status_tiket = 'TERBUKA') DESC, t.tanggal DESC, t.id DESC
 """)
 
 _SQL_SATU = text("""
@@ -47,6 +61,7 @@ def _row(r) -> dict:
     nota = d.get("berat_acuan_kg")
     real = d.get("netto_timbangan_kg")
     ada_nota = nota is not None and float(nota or 0) > 0
+    d["susulan"] = d.get("status_tiket") == "SELESAI"
     d["sumber_berat"] = "nota" if ada_nota else "timbangan"
     d["berat_hpp_kg"] = float(nota) if ada_nota else (float(real) if real is not None else None)
     return d

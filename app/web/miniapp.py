@@ -686,8 +686,10 @@ async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]
         nm = t.get("nama_supplier") or t.get("pihak_nama") or "?"
         b = t.get("berat_hpp_kg")
         bstr = f"{_rp(float(b))} kg ({t['sumber_berat']})" if b else "⚠️ bobot belum ada"
+        tanda = " · SUSULAN (tiket sudah ditutup)" if t.get("susulan") else ""
         out.append({"value": t["id"],
-                    "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} · {bstr}"})
+                    "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} "
+                             f"· {bstr}{tanda}"})
     return out
 
 

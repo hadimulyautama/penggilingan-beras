@@ -9,8 +9,6 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from app.ai.nlp_parser import (
-    ParsedPurchase,
-    apply_correction,
     parse_milling,
     parse_pengeringan,
     parse_purchase,
@@ -25,7 +23,6 @@ from app.bots.common import (
     can_see_financials,
     get_session,
     handle_shared_contact,
-    reset_draft,
     unregistered_reply,
     user_wh_scope,
 )
@@ -59,10 +56,6 @@ from app.penggilingan.gudang1.services.drying import (
     start_drying,
 )
 from app.services.undo import UndoError, undo_last
-from app.penggilingan.gudang1.services.purchase import (
-    DailyLimitReached,
-    create_purchase_batch,
-)
 from app.penggilingan.gudang1.services.milling import (
     MillingError,
     finish_milling,
@@ -102,55 +95,6 @@ def _fmt_berat(kg: float | None) -> str:
     if kg is None:
         return "-"
     return f"{kg:,.0f} kg".replace(",", ".")
-
-
-def _missing_fields(d: ParsedPurchase) -> list[str]:
-    missing = []
-    if not d.nama_supplier:
-        missing.append("nama supplier")
-    if not d.berat_kg:
-        missing.append("berat gabah")
-    # Kondisi WAJIB dipastikan (menentukan proses & jenis PK KS/KL). Bila
-    # operator tak menyebut basah/kering, bot menanyakannya — bukan menebak.
-    if d.kondisi_gabah not in ("basah", "kering"):
-        missing.append("kondisi gabah")
-    if not d.no_polisi_truk:
-        missing.append("plat truk")
-    return missing
-
-
-def _summary(d: ParsedPurchase) -> str:
-    jns = {"basah": "KS", "kering": "KL"}.get(d.kondisi_gabah or "")
-    kondisi = f"{d.kondisi_gabah}" + (f"  →  PK {jns}" if jns else "")
-    lines = [
-        "Oke, saya catat:",
-        f"• Supplier: *{d.nama_supplier}*",
-        f"• Kondisi: {kondisi}",
-        f"• Berat: {_fmt_berat(d.berat_kg)}",
-    ]
-    if d.kadar_air_awal_persen is not None:
-        lines.append(f"• Kadar air awal: {d.kadar_air_awal_persen:g}%")
-    lines.append(f"• No. Polisi: {d.no_polisi_truk or '-'}")
-    if d.tanggal is not None or d.jam is not None:
-        tg = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else "hari ini"
-        jm = f" jam {d.jam:%H:%M}" if d.jam else ""
-        lines.append(f"• 📅 Dicatat untuk: *{tg}{jm}*")
-    lines.append("\nKonfirmasi simpan? (ketik *ya* / *batal*)")
-    return "\n".join(lines)
-
-
-def _ask_missing(missing: list[str]) -> str:
-    if missing == ["kondisi gabah"]:
-        return (
-            "Gabah yang masuk ini *basah* atau *kering*?\n"
-            "_(menentukan proses & jenis PK: basah → KS, kering → KL)_"
-        )
-    if len(missing) == 1:
-        return f"Baik. {missing[0].capitalize()} berapa/siapa ya?"
-    labels = [
-        f"{m} (basah/kering)" if m == "kondisi gabah" else m for m in missing
-    ]
-    return "Data belum lengkap. Mohon sebutkan: " + ", ".join(labels) + "."
 
 
 @router.message(Command("start"))
@@ -234,38 +178,6 @@ async def handle_message(message: Message) -> None:
             session.override_text = None
 
         # ── Sedang menunggu konfirmasi ──
-        if session.stage == "awaiting_confirmation" and session.draft:
-            if lower in CONFIRM_WORDS:
-                await _save(message, db, user, session)
-                return
-            if lower in CANCEL_WORDS:
-                reset_draft(message.bot.id, tg_id)
-                await message.answer("Baik, dibatalkan. Tidak ada yang disimpan.")
-                return
-            # selain itu: anggap koreksi terhadap draft
-            try:
-                session.draft = await apply_correction(session.draft, text)
-            except Exception:
-                log.exception("apply_correction gagal")
-                await message.answer(AI_ERROR_MSG)
-                return
-            await _prompt_next(message, tg_id, session)
-            return
-
-        # ── Sedang melengkapi data yang kurang (jawaban atas _ask_missing) ──
-        if session.stage == "collecting" and session.draft:
-            if lower in CANCEL_WORDS:
-                reset_draft(message.bot.id, tg_id)
-                await message.answer("Baik, dibatalkan. Tidak ada yang disimpan.")
-                return
-            # Jawaban ini melengkapi field yang kurang, bukan pembelian baru.
-            try:
-                session.draft = await apply_correction(session.draft, text)
-            except Exception:
-                log.exception("apply_correction gagal")
-                await message.answer(AI_ERROR_MSG)
-                return
-            await _prompt_next(message, tg_id, session)
             return
 
         # ── Gabah kering menunggu tujuan: dryer / silo A / silo B ──
@@ -377,11 +289,23 @@ async def _try_operator_commands(message: Message, db, user, text: str, session)
         await message.answer(AI_ERROR_MSG)
         return True
     if parsed.is_pembelian_gabah:
-        # Pembelian gabah = aksi fisik operator.
-        if not await _require_operator(message, user, session, text, "Mencatat pembelian gabah"):
-            return True
-        session.draft = parsed
-        await _prompt_next(message, tg_id, session)
+        # DITUTUP 2 September 2026 (keputusan Direksi). Mencatat gabah masuk
+        # lewat percakapan berarti bobotnya diketik orang, bukan ditimbang —
+        # dan tidak ada gabah masuk yang tidak ditimbang, partai kecil
+        # sekalipun. Jalur ini sudah dicabut dari layar; membiarkannya hidup
+        # di chat hanya memindahkan lubangnya, tidak menutupnya.
+        #
+        # Yang dibalas BUKAN penolakan telanjang: orang yang mengetik kalimat
+        # ini sedang berdiri di depan truk, dan perlu tahu ke mana harus pergi.
+        await message.answer(
+            "Gabah masuk tidak lagi dicatat lewat chat.\n\n"
+            "Timbang truknya di aplikasi Timbangan seperti biasa, lalu buka "
+            "*Pos Produksi → Catat pekerjaan → Gabah masuk* dan pilih tiketnya. "
+            "Supplier, bobot, dan plat ikut sendiri dari tiket itu.\n\n"
+            "_Partai kecil juga begitu: satu kode timbang, berapa pun kali "
+            "ditimbang._",
+            parse_mode="Markdown",
+        )
         return True
     # Undo tindakan terakhir (frasa kaya: "batalkan lot terakhir").
     if await _handle_undo(message, db, user, text):
@@ -440,97 +364,6 @@ async def _process_fresh(message: Message, db, user, text: str, session) -> None
     # ── Jaring terakhir: agent (pertanyaan bebas / analitik / usulan tulis) ──
     await maybe_answer_agent(
         message, role=user.role, financial=fin, allow_write=True, session=session,
-    )
-
-
-async def _prompt_next(message: Message, tg_id: int, session) -> None:
-    """Minta data yang kurang, atau tampilkan ringkasan + minta konfirmasi."""
-    missing = _missing_fields(session.draft)
-    if missing:
-        session.stage = "collecting"
-        await message.answer(_ask_missing(missing))
-        return
-    session.stage = "awaiting_confirmation"
-    await message.answer(_summary(session.draft), parse_mode="Markdown")
-
-
-async def _save(message: Message, db, user, session) -> None:
-    d = session.draft
-    try:
-        result = await create_purchase_batch(
-            db,
-            user=user,
-            nama_supplier=d.nama_supplier,
-            berat_kg=float(d.berat_kg),
-            kondisi_gabah=d.kondisi_gabah,
-            no_polisi_truk=d.no_polisi_truk,
-            kadar_air_awal_persen=d.kadar_air_awal_persen,
-            tanggal=d.tanggal, jam=d.jam,
-        )
-    except BackdateError as e:
-        reset_draft(message.bot.id, message.from_user.id)
-        await message.answer(f"⛔ {e.args[0] if e.args else 'Tanggal tidak valid.'}")
-        return
-    except DailyLimitReached as e:
-        reset_draft(message.bot.id, message.from_user.id)
-        tgl = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else "hari ini"
-        await message.answer(
-            f"⛔ Sudah mencapai batas {e.args[0]} batch pembelian ({tgl}). "
-            "Hubungi staff/admin bila perlu pengecualian."
-        )
-        return
-
-    batch = result.batch
-    session.stage = "idle"
-    session.draft = None
-    session.last_batch_id = batch.id
-    session.last_batch_kode = batch.kode_batch
-    session.last_batch_time = batch.waktu_pembelian
-    session.ctx_batch = batch.kode_batch
-
-    extra = ""
-    if result.supplier_created:
-        extra = f"\n_Supplier baru '{result.supplier.nama_supplier}' ditambahkan._"
-    note_kering = ""
-    if d.kondisi_gabah == "kering":
-        note_kering = "\nℹ️ Gabah kering — penempatan silo/pengeringan dicatat di langkah berikutnya."
-
-    if d.tanggal is not None or d.jam is not None:
-        _tg = f"{d.tanggal:%d-%m-%Y}" if d.tanggal else f"{batch.waktu_pembelian:%d-%m-%Y}"
-        _jm = f" jam {d.jam:%H:%M}" if d.jam else ""
-        tgl_note = f"\n📅 Dicatat untuk *{_tg}{_jm}*."
-    else:
-        tgl_note = ""
-    base = (
-        f"✓ Tersimpan. Kode batch: *{batch.kode_batch}*{tgl_note}\n"
-        f"Menunggu verifikasi harga oleh staff/admin.{extra}"
-    )
-
-    if d.kondisi_gabah == "basah":
-        # Gabah BASAH → OTOMATIS masuk dryer (menunggu; lot dibentuk saat mulai).
-        ok, note = await _auto_masuk_dryer(db, user, batch.kode_batch)
-        if ok:
-            await message.answer(
-                base + "\n\n🌫️ *Otomatis masuk dryer* (menunggu).\n"
-                "⏸️ Belum mulai pengeringan — ketik `mulai pengeringan` (semua "
-                "gabah di dryer jadi 1 lot).",
-                parse_mode="Markdown",
-            )
-        else:
-            await message.answer(
-                base + f"\n\n⚠️ Belum bisa auto-masuk dryer: {note}.\n"
-                f"Masukkan manual nanti: `keringkan {batch.kode_batch}`.",
-                parse_mode="Markdown",
-            )
-        return
-
-    # Gabah KERING → bot TANYA tujuan (dryer atau silo A/B).
-    session.stage = "awaiting_kering_tujuan"
-    session.kering_batch = batch.kode_batch
-    await message.answer(
-        base + "\n\n🌾 Gabah *kering*. Mau *masuk dryer* atau langsung ke "
-        "*Silo A / Silo B*?\n_(balas: `dryer` / `silo A` / `silo B`)_",
-        parse_mode="Markdown",
     )
 
 
