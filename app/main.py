@@ -23,6 +23,7 @@ from app.services.heartbeat import run_heartbeat
 from app.kantor.proaktif.persetujuan import run_persetujuan_poller
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
+from app.web.internal import router as internal_router
 from app.web.miniapp import router as miniapp_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
 app.include_router(miniapp_router)
+app.include_router(internal_router)
 
 
 @app.get("/health")

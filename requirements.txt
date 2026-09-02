@@ -16,6 +16,11 @@ aiogram==3.15.0
 # ── AI ──
 anthropic==0.42.0
 
+# ── HTTP: klien API internal (Kantor → produksi), Kledo, GajiHub, Voyage ──
+# Ditulis eksplisit walau ikut terbawa `anthropic` — dependensi transitif
+# pernah hilang saat pin berubah dan bikin deploy gagal.
+httpx==0.28.1
+
 # ── Google Drive (Kantor AI — arsip) ──
 google-api-python-client==2.198.0
 google-auth==2.56.2

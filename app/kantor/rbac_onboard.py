@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.kantor import rbac
-from app.models.master import User
+from hmu_core import User  # master bersama (bukan model domain produksi)
 
 RENCANA: dict[str, tuple[str, list[str], str | None]] = {
     "wahid":     ("Ahmad Wahid Nurhani", ["direksi", "pegawai"], None),

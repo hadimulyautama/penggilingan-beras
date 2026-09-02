@@ -15,16 +15,16 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from app.ai.base import _date_context
+from app.ai.tanggal import _date_context
 from app.ai import guard
 from app.config import settings
-from app.services import analytics
 from app.kantor import arsip_fisik
 from app.kantor import aturan
 from app.kantor import gajihub
 from app.kantor import kendali
 from app.kantor import it_aset
 from app.kantor import kledo
+from app.kantor import klien_produksi
 from app.kantor import produksi
 from app.kantor import rbac
 from app.kantor import router as domain_router
@@ -1127,12 +1127,15 @@ async def run_kantor_agent(
                 out = await it_aset.usul(tu.name, tu.input or {}, user_id, role)
             elif tu.name == "simulasi_hpp":
                 a = tu.input or {}
-                out = analytics.simulasi_hpp(
-                    a.get("harga_gabah"), a.get("rendemen_persen"),
-                    kondisi=a.get("kondisi", "basah"),
-                    langsung_silo=bool(a.get("langsung_silo")),
-                    berat_bahan=a.get("berat_bahan"), berat_hasil=a.get("berat_hasil"),
-                )
+                try:
+                    out = await klien_produksi.simulasi_hpp(
+                        a.get("harga_gabah"), a.get("rendemen_persen"),
+                        kondisi=a.get("kondisi", "basah"),
+                        langsung_silo=bool(a.get("langsung_silo")),
+                        berat_bahan=a.get("berat_bahan"), berat_hasil=a.get("berat_hasil"),
+                    )
+                except klien_produksi.ProduksiTakTersedia as e:
+                    out = f"⚠️ {e}"
             elif tu.name in ocr.NAMA_TOOL:
                 out = await ocr.jalankan(tu.name, tu.input or {})
             elif tu.name in gajihub.NAMA_TOOL:

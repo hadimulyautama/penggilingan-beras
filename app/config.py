@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     # dashboard web dinonaktifkan (hanya versi Telegram yang jalan).
     dashboard_token: str = ""
 
+    # ── Seam Kantor ↔ Produksi (dua repo/service, satu DB) ──
+    # Sisi PRODUKSI: token API internal (/internal/produksi/*). Kosong = API mati.
+    internal_api_token: str = ""
+    # Sisi KANTOR: alamat + token service produksi yang dipanggil klien_produksi.
+    # Selama masih satu proses, isi produksi_api_url dengan http://127.0.0.1:8000.
+    produksi_api_url: str = ""
+    produksi_api_token: str = ""
+    produksi_api_timeout: float = 120.0   # agent pabrik bisa lama (loop multi-tool)
+
     # Kapasitas tumpukan PK Gudang 2 (maks). Lewat batas → notifikasi.
     g2_tumpukan_maks_kg: int = 60_000
 

@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 
 from app.ai.claude_client import get_client
 from app.database import SessionLocal
-from app.kantor.models import KantorConfig, KantorLLMUsage
+from app.ai.models import KantorConfig, KantorLLMUsage
 
 log = logging.getLogger("ai.guard")
 
