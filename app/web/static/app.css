@@ -402,3 +402,82 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   border-radius: 4px;
   padding: 0 4px;
 }
+
+/* ── Bilah navigasi bawah ─────────────────────────────────────────────
+   Di bawah, bukan di atas: layar dipegang satu tangan sambil berdiri, dan
+   bagian atas layar tak terjangkau ibu jari tanpa memindah pegangan. */
+.bilah {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--panel);
+  border-top: 1px solid var(--garis);
+}
+.bilah__tab {
+  position: relative;
+  flex: 1 1 0;
+  min-height: var(--sentuh);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  color: var(--redup-2);
+  text-decoration: none;
+}
+/* Penanda aktif ADA DUA: garis aksen dan warna. Warna saja gagal di gudang
+   yang terang, dan bagi orang yang tak membedakan biru dari abu-abu. */
+.bilah__tab--aktif { color: var(--aksi); }
+.bilah__tab--aktif::before {
+  content: "";
+  position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 26px; height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--aksi);
+}
+.bilah__ikon { position: relative; display: flex; }
+.bilah__nama {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: .05em;
+  text-transform: uppercase; font-weight: 500;
+}
+.bilah__tab--aktif .bilah__nama { font-weight: 600; }
+.bilah__lencana {
+  position: absolute; top: -3px; right: -9px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px;
+  background: var(--hati); color: var(--aksi-tinta);
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  line-height: 18px; text-align: center;
+}
+
+/* ── Baris pekerjaan berjalan ── */
+.jalan {
+  display: flex; align-items: center; gap: 13px;
+  background: var(--panel);
+  border: 1px solid var(--garis-2);
+  border-radius: 11px;
+  padding: 13px 15px;
+  min-height: 76px;
+  text-decoration: none;
+  color: var(--tinta);
+}
+/* Yang menunggu waktu tidak bisa ditekan — dan harus TERLIHAT tak bisa
+   ditekan, bukan hanya diam saat dicoba. */
+.jalan--diam { background: transparent; border-style: dashed; }
+.jalan__isi { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.jalan__kode { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+.jalan__ket { font-size: 14px; color: var(--tinta-2); line-height: 1.35; }
+.jalan__keadaan { font-family: var(--mono); font-size: 11px; color: var(--redup-2); letter-spacing: .04em; }
+
+/* ── Layar kosong ── */
+.kosong {
+  flex-grow: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; padding: 40px 24px; text-align: center;
+}
+.kosong h2 { margin: 0 0 6px; }
+.kosong .bantu { max-width: 300px; }

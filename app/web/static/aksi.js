@@ -231,4 +231,21 @@
   });
 
   muat();
+
+  /* Dibuka dari layar Berjalan: satu baris di sana menaut ke aksi yang
+     menutupnya. Menurunkan orang di daftar aksi lalu menyuruhnya mencari
+     sendiri akan membatalkan seluruh gunanya layar itu. */
+  (function () {
+    var tag = document.querySelector("script[data-buka]");
+    var id = tag && tag.dataset.buka;
+    if (!id) { return; }
+    var coba = 0;
+    var jam = setInterval(function () {
+      if (MENU[id]) { clearInterval(jam); bukaAksi(id); return; }
+      // Menu datang dari server; kalau setelah beberapa detik aksinya tetap
+      // tak ada, ia memang tak berlaku untuk peran ini — diamkan saja,
+      // daftar aksinya sudah tampil dan orang bisa memilih sendiri.
+      if (++coba > 40) { clearInterval(jam); }
+    }, 100);
+  })();
 })();

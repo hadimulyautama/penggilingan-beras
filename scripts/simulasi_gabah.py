@@ -284,6 +284,29 @@ async def main() -> None:
         cek("operator ditolak membatalkan kerja orang lain",
             r.status_code == 403, f"HTTP {r.status_code}")
 
+        babak("10. Bilah navigasi & layar Berjalan")
+        r = await op.get("/berjalan")
+        cek("layar Berjalan terbuka", r.status_code == 200, f"HTTP {r.status_code}")
+        cek("bilah tampil di layar bertab", 'class="bilah"' in r.text)
+        cek("tab Berjalan menyala", "bilah__tab--aktif" in r.text)
+        # Tiket susulan yang tersisa belum ditaut → satu hal menunggu operator.
+        cek("yang menunggu terdaftar", "Menunggu Anda" in r.text)
+        cek("barisnya menaut ke aksi yang menutupnya",
+            "/aksi?buka=gabah_masuk" in r.text)
+
+        r = await op.get("/masuk")
+        cek("bilah TIDAK muncul di halaman masuk", 'class="bilah"' not in r.text)
+
+        # Direksi berperan admin, dan `_is_wh_operator` memberi admin akses
+        # ke kedua gudang — jadi ia melihat pekerjaan fisik G1 juga.
+        r = await dir_.get("/berjalan")
+        cek("Direksi melihat tiket yang masih menggantung",
+            "TRX-SIM-002" in r.text, f"HTTP {r.status_code}")
+        # Dan yang SUDAH dikerjakan berhenti memanggil: batch yang harganya
+        # diverifikasi di babak 7 tidak lagi muncul sebagai menunggu.
+        cek("yang sudah diverifikasi berhenti memanggil",
+            "harga belum diverifikasi" not in r.text)
+
     print()
     if GAGAL:
         print(f"\033[31m{len(GAGAL)} pemeriksaan GAGAL:\033[0m")
