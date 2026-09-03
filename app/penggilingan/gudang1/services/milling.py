@@ -12,6 +12,7 @@ from app.models import (
     DryingLotBatch,
     InternalTransfer,
     MillingProcess,
+    MillingProcessSource,
     MillingProcessVerification,
     MillingProgressLog,
     MillingQcLog,
@@ -103,29 +104,26 @@ async def start_milling(
         raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
 
     now = input_time(tanggal, jam)
-    lot_row = next((r for r in rows if r.drying_lot_id), None)
-    if lot_row is not None:
-        st = lot_row  # dari pengeringan: lot sudah ada
-    else:
-        # KERING menunggu: bentuk 1 LOT dari SEMUA batch di silo saat giling dimulai.
-        loose = [r for r in rows if r.purchase_batch_id]
-        lot = DryingLot(
-            kode_lot=await next_drying_lot_code(db), dryer_id=None,
-            waktu_mulai_pengeringan=now, waktu_selesai_pengeringan=now,
-            status="selesai", created_by=user.id,
-        )
-        db.add(lot)
-        await db.flush()
-        for r in loose:
-            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=r.purchase_batch_id))
-        st = loose[0]  # konsolidasi: baris pertama jadi lot-row, sisanya ditutup
-        st.drying_lot_id = lot.id
-        st.purchase_batch_id = None
-        for r in loose[1:]:
-            r.status = "kosong"
-        await db.flush()
 
-    berat = await _storage_kg(db, st)
+    # SELURUH isi silo masuk ke satu proses giling — bukan satu baris saja.
+    #
+    # Dulu di sini dipilih SATU baris: kalau ada lot hasil pengeringan, itu
+    # yang diambil; kalau tidak, batch-batch lepas dikonsolidasi jadi lot baru.
+    # Selama satu silo hanya boleh berisi satu hal, keduanya cukup. Begitu silo
+    # boleh dicampur, cabang pertama diam-diam mengabaikan batch lepas yang ada
+    # di silo yang sama: gabahnya ikut tergiling, tetapi tidak ikut tercatat.
+    #
+    # `drying_lots` sekarang berarti satu PROSES PENGERINGAN, dan apa yang
+    # digiling bersama didaftar di `milling_process_sources`.
+    berat_per_baris: list[tuple[SiloStorage, float]] = []
+    for r in rows:
+        berat_per_baris.append((r, await _storage_kg(db, r)))
+    berat = sum(k for _, k in berat_per_baris)
+
+    # Penunjuk tunggal di `MillingProcess` tetap diisi supaya laporan, undo,
+    # dan rekonsiliasi yang membacanya tidak mati sekaligus. Yang dipilih:
+    # baris lot bila ada — itulah sumber terbesar dan paling berarti.
+    st = next((r for r in rows if r.drying_lot_id), rows[0])
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
@@ -138,6 +136,13 @@ async def start_milling(
         created_by=user.id,
     )
     db.add(proc)
+    await db.flush()
+    for r, kg in berat_per_baris:
+        db.add(MillingProcessSource(
+            milling_process_id=proc.id, silo_storage_id=r.id,
+            drying_lot_id=r.drying_lot_id, purchase_batch_id=r.purchase_batch_id,
+            berat_kg=kg,
+        ))
     await db.flush()
     await log_activity(
         db, table_name="milling_process", record_id=proc.id, action="INSERT",

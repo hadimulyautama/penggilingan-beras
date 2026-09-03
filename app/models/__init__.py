@@ -19,6 +19,7 @@ from app.penggilingan.gudang1.models import (
     DryingMoistureLog,
     MillingPkRouting,
     MillingProcess,
+    MillingProcessSource,
     MillingProcessVerification,
     MillingProgressLog,
     MillingQcLog,
