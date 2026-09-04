@@ -138,6 +138,25 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
         ))
 
+    # Gabah yang TERCATAT tetapi belum ditempatkan di mana pun.
+    #
+    # Terjadi saat penempatan otomatis gagal — dryer sedang dipakai, misalnya.
+    # Batch-nya tetap tersimpan (dan memang harus: gabahnya sudah turun dari
+    # truk), lalu berstatus 'baru' dan tidak berada di dryer, silo, maupun
+    # tumpukan. Tanpa baris ini, gabah itu berdiri di halaman tanpa ada satu
+    # layar pun yang menyebutnya.
+    for b_ in (await db.execute(
+        select(PurchaseBatch).where(PurchaseBatch.status_batch == "baru")
+        .order_by(PurchaseBatch.id.desc())
+    )).scalars().all():
+        b.menunggu.append(Baris(
+            kode=b_.kode_batch,
+            isi=f"{_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
+            keadaan="belum ditempatkan — dryer, silo, atau tumpukan",
+            aksi="pindah_tumpukan",
+            sejak=b_.created_at,
+        ))
+
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
     # dan itu keadaan yang paling ingin diketahui — bukan yang paling dalam
     # daftar. Kosong berarti tak ada baris sama sekali, seperti seharusnya.

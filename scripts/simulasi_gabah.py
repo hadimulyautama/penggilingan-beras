@@ -143,6 +143,7 @@ async def main() -> None:
         """), {"sid": supplier.id})
         await db.commit()
         nama_supplier = supplier.nama_supplier
+        supplier_id = supplier.id
     cek("pabrik & orang siap", g1 is not None, f"supplier: {nama_supplier}")
 
     transport = httpx.ASGITransport(app=app)
@@ -309,6 +310,19 @@ async def main() -> None:
             r.status_code == 403, f"HTTP {r.status_code}")
 
         babak("10. Bilah navigasi & layar Berjalan")
+        # Babak ini menyiapkan keadaannya sendiri: babak-babak sebelumnya
+        # sudah menutup semua pekerjaan, dan layar yang kosong tak bisa
+        # membuktikan apa pun tentang baris yang menagih.
+        async with SessionLocal() as db:
+            await db.execute(text("""
+                INSERT INTO timbangan_transaksi
+                  (kode, tanggal, arah, jenis_kode, nomor_polisi, supplier_id,
+                   timbang1_kg, netto_timbangan_kg, berat_acuan_kg, status_tiket)
+                VALUES ('TRX-SIM-003', CURRENT_DATE, 'MASUK', 'GABAH_KERING',
+                        'AD 7 CC', :sid, 5000, 2000, 2000, 'TERBUKA')
+            """), {"sid": supplier_id})
+            await db.commit()
+
         r = await op.get("/berjalan")
         cek("layar Berjalan terbuka", r.status_code == 200, f"HTTP {r.status_code}")
         cek("bilah tampil di layar bertab", 'class="bilah"' in r.text)
@@ -325,11 +339,15 @@ async def main() -> None:
         # ke kedua gudang — jadi ia melihat pekerjaan fisik G1 juga.
         r = await dir_.get("/berjalan")
         cek("Direksi melihat tiket yang masih menggantung",
-            "TRX-SIM-002" in r.text, f"HTTP {r.status_code}")
+            "TRX-SIM-003" in r.text, f"HTTP {r.status_code}")
         # Dan yang SUDAH dikerjakan berhenti memanggil: batch yang harganya
         # diverifikasi di babak 7 tidak lagi muncul sebagai menunggu.
+        # Batch dari babak 4b belum diverifikasi harganya, jadi ia MEMANG
+        # masih memanggil. Yang diuji: batch babak 3 yang sudah diverifikasi
+        # tidak ikut muncul lagi.
         cek("yang sudah diverifikasi berhenti memanggil",
-            "harga belum diverifikasi" not in r.text)
+            "GB-" in r.text and r.text.count("harga belum diverifikasi") <= 1,
+            f"{r.text.count('harga belum diverifikasi')} batch menunggu harga")
 
     print()
     if GAGAL:

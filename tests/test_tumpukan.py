@@ -43,19 +43,31 @@ def test_gabah_kering_punya_empat_tujuan():
 
 # ─────────────────────── Keluar dari tumpukan ───────────────────────
 
-def test_basah_hanya_boleh_keluar_ke_dryer():
-    assert tumpukan.TUJUAN_PINDAH["basah"] == ("dryer",)
+def test_basah_tak_pernah_boleh_ke_silo():
+    """Dari mana pun ia datang — baru turun dari truk atau sedang menumpuk —
+    gabah basah belum kering, dan silo Gudang 1 menampung gabah kering."""
+    assert set(tumpukan.TUJUAN_PINDAH["basah"]) == {"dryer", "tumpuk"}
 
 
-def test_kering_boleh_ke_dryer_maupun_silo():
-    assert set(tumpukan.TUJUAN_PINDAH["kering"]) == {"dryer", "silo_a", "silo_b"}
+def test_kering_boleh_ke_dryer_silo_maupun_tumpukan():
+    assert set(tumpukan.TUJUAN_PINDAH["kering"]) == {
+        "dryer", "silo_a", "silo_b", "tumpuk"}
+
+
+def test_satu_aksi_untuk_dua_keadaan_yang_menunggu_tempat():
+    """Gabah yang sedang menumpuk dan gabah yang penempatannya gagal butuh
+    tindakan yang sama. Dua aksi yang mirip hanya memaksa operator menebak
+    mana yang berlaku."""
+    assert set(tumpukan.MENUNGGU_TEMPAT) == {"baru", "ditumpuk"}
+    assert "status_batch.in_(MENUNGGU_TEMPAT)" in inspect.getsource(
+        tumpukan.menunggu_tempat)
 
 
 def test_pemindahan_tak_menyalin_aturan_dryer_dan_silo():
     """Aturan dryer dan aturan silo hidup di layanannya masing-masing.
     Menyalinnya ke sini berarti dua salinan yang suatu hari berbeda — dan yang
     di sini yang akan luput diperbarui."""
-    sumber = inspect.getsource(tumpukan.pindah)
+    sumber = inspect.getsource(tumpukan.tempatkan)
     assert "masuk_dryer" in sumber and "masuk_silo" in sumber
     assert "status ==" not in sumber, "jangan menegakkan ulang aturan dryer/silo"
 
@@ -91,3 +103,13 @@ def test_isi_tumpukan_muncul_sebagai_pekerjaan_yang_menunggu():
 
 def test_aksi_pindah_tumpukan_terdaftar_dan_dipetakan():
     assert "pindah_tumpukan" in miniapp._ACTION_WH
+
+
+def test_gabah_yang_gagal_ditempatkan_menagih_di_berjalan():
+    """Penempatan otomatis bisa gagal — dryer sedang dipakai, misalnya.
+    Batch-nya tetap tersimpan (gabahnya sudah turun dari truk) lalu berstatus
+    'baru'. Tanpa baris ini, gabah itu berdiri di halaman tanpa ada satu layar
+    pun yang menyebutnya."""
+    sumber = inspect.getsource(berjalan.untuk_gudang1)
+    assert 'status_batch == "baru"' in sumber
+    assert "belum ditempatkan" in sumber

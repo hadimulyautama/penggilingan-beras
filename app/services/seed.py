@@ -78,8 +78,13 @@ async def seed_master() -> None:
             if not d:
                 db.add(
                     Dryer(
+                        # 35 ton — angka mesin yang sebenarnya (Direksi,
+                        # 3 September 2026). Berbeda dari silo dan tumpukan
+                        # yang memang tak berbatas: dryer adalah mesin, dan
+                        # melebihinya bukan soal pencatatan melainkan soal
+                        # gabah yang tidak kering merata.
                         warehouse_id=g1.id, nama="Pengering 1",
-                        kapasitas_kg=30000, status="aktif",
+                        kapasitas_kg=35000, status="aktif",
                     )
                 )
                 created.append("mesin pengering G1")

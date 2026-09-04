@@ -29,11 +29,18 @@ from app.services.activity_log import log_activity
 #: Gudang 2 — satu kosakata untuk satu keadaan, di kedua gudang.
 DITUMPUK = "ditumpuk"
 
-#: Ke mana isi tumpukan boleh pindah, menurut kondisinya.
+#: Ke mana gabah boleh ditempatkan, menurut kondisinya. Sama untuk gabah yang
+#: belum di mana-mana maupun yang sedang menumpuk — tempat yang sah tidak
+#: bergantung pada dari mana ia datang, melainkan pada basah atau keringnya.
 TUJUAN_PINDAH = {
-    "basah": ("dryer",),
-    "kering": ("dryer", "silo_a", "silo_b"),
+    "basah": ("dryer", "tumpuk"),
+    "kering": ("dryer", "silo_a", "silo_b", "tumpuk"),
 }
+
+#: Status batch yang masih menunggu tempat. 'baru' = tercatat tetapi penempatan
+#: otomatisnya gagal (dryer sedang dipakai, misalnya) — gabahnya sudah turun
+#: dari truk, jadi batch-nya memang harus tetap tersimpan.
+MENUNGGU_TEMPAT = ("baru", "ditumpuk")
 
 
 class TumpukanError(Exception):
@@ -61,6 +68,20 @@ async def masuk_tumpukan(db: AsyncSession, *, user, kode_batch: str) -> Purchase
     return batch
 
 
+async def menunggu_tempat(db: AsyncSession) -> list[PurchaseBatch]:
+    """Gabah yang belum ada di dryer, silo, maupun sudah digiling.
+
+    Dua keadaan sekaligus: yang sedang menumpuk, dan yang tercatat tetapi
+    penempatan otomatisnya gagal. Keduanya butuh tindakan yang sama — ditaruh
+    di suatu tempat — jadi keduanya ditawarkan lewat satu aksi, bukan dua.
+    """
+    return list((await db.execute(
+        select(PurchaseBatch)
+        .where(PurchaseBatch.status_batch.in_(MENUNGGU_TEMPAT))
+        .order_by(PurchaseBatch.id.desc())
+    )).scalars().all())
+
+
 async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatch]:
     """Batch yang sedang menumpuk, terbaru dulu."""
     q = select(PurchaseBatch).where(PurchaseBatch.status_batch == DITUMPUK)
@@ -71,10 +92,10 @@ async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatc
     )).scalars().all())
 
 
-async def pindah(
+async def tempatkan(
     db: AsyncSession, *, user, kode_batch: str, tujuan: str
 ) -> tuple[PurchaseBatch, str]:
-    """Pindahkan satu batch dari tumpukan ke dryer atau silo.
+    """Tempatkan satu batch gabah: dryer, silo, atau tumpukan.
 
     Penempatannya diserahkan ke layanan yang memang memilikinya — `masuk_dryer`
     dan `masuk_silo` — bukan ditulis ulang di sini. Keduanya sudah menegakkan
@@ -89,20 +110,24 @@ async def pindah(
     )).scalars().first()
     if batch is None:
         raise TumpukanError(f"Batch {kode_batch} tidak ditemukan.")
-    if batch.status_batch != DITUMPUK:
+    if batch.status_batch not in MENUNGGU_TEMPAT:
         raise TumpukanError(
-            f"Batch {kode_batch} tidak sedang di tumpukan ({batch.status_batch})."
+            f"Batch {kode_batch} sudah ditempatkan ({batch.status_batch})."
         )
 
     sah = TUJUAN_PINDAH.get(batch.kondisi_gabah or "", ())
     if tujuan not in sah:
         if batch.kondisi_gabah == "basah":
             raise TumpukanError(
-                f"{kode_batch} gabah basah — dari tumpukan hanya boleh ke dryer."
+                f"{kode_batch} gabah basah — hanya boleh ke Dryer atau Tumpukan, "
+                "belum boleh ke silo."
             )
-        raise TumpukanError("Pilih tujuan: Dryer / Silo A / Silo B.")
+        raise TumpukanError("Pilih tujuan: Dryer / Silo A / Silo B / Tumpukan.")
 
     try:
+        if tujuan == "tumpuk":
+            await masuk_tumpukan(db, user=user, kode_batch=kode_batch)
+            return batch, f"tumpukan {batch.kondisi_gabah}"
         if tujuan == "dryer":
             await masuk_dryer(db, user=user, kode_batch_list=[kode_batch])
             tempat = "dryer"

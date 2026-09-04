@@ -235,14 +235,14 @@ async def masuk_silo(
             raise SiloError(f"Batch {kode_batch} sudah masuk lot/silo.")
         kg_new = float(batch.berat_total_kg or 0)
 
-        # Model baru: kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
-        # Lot dibentuk saat 'giling silo X'. Boleh menumpuk sampai kapasitas silo.
-        rows = await _silo_active_rows(db, silo.id)
-        if any(r.tipe_masuk == "dari_pengeringan" for r in rows):
-            raise SiloError(
-                f"Silo {nama_silo} berisi lot pengeringan — tidak bisa dicampur "
-                "gabah kering langsung. Pakai silo lain."
-            )
+        # Gabah kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
+        #
+        # Larangan mencampurnya dengan lot pengeringan sudah dicabut. Sebabnya
+        # dulu sah: selama isi silo dipakai sebagai identitas apa-yang-digiling,
+        # campuran membuat penggilingan mengambil sebagian saja. Sejak isi
+        # proses giling didaftar sendiri (`milling_process_sources`, migrasi
+        # 0031), seluruh isi silo ikut terhitung — dan larangan itu tinggal
+        # memaksa gabah menganggur di silo lain yang belum tentu ada.
         existing_kg = await _silo_content_kg(db, silo.id)
         _ensure_cap(silo, nama_silo, existing_kg, kg_new)
         db.add(
@@ -253,7 +253,9 @@ async def masuk_silo(
             )
         )
         batch.status_batch = "di_silo"
-        digabung = bool(rows)  # sudah ada kering menunggu sebelumnya
+        # "Digabung" kini berarti silo memang sudah berisi sesuatu — apa pun
+        # isinya, lot pengeringan maupun gabah kering yang datang lebih dulu.
+        digabung = existing_kg > 0
         isi, tipe = batch.kode_batch, "langsung_kering"
         kg = existing_kg + kg_new
     else:
