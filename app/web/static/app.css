@@ -437,6 +437,21 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   background: var(--panel);
   border-top: 1px solid var(--garis);
 }
+/* Warna bilah diteruskan ke bawah tepi bawahnya.
+   Di iOS standalone, `bottom: 0` kadang jatuh di tepi AREA AMAN, bukan tepi
+   fisik layar — dan yang tersisa di bawahnya adalah warna badan halaman,
+   terbaca sebagai bilah yang menggantung. Ini bukan menebak siapa yang benar:
+   apa pun yang dihitung iOS, di bawah bilah tetap warna bilah. Tak terlihat
+   pada peramban yang menghitungnya tepat, karena ia jatuh di luar layar. */
+.bilah::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: var(--panel);
+}
 .bilah__tab {
   position: relative;
   flex: 1 1 0;
