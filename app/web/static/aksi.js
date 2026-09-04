@@ -10,7 +10,6 @@
 
   var MENU = {};
   var DATA = null;
-  var TAB = "aksi";
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -64,7 +63,7 @@
       if (!d) return;
       var menu = [];
       try { menu = (await ambil("/miniapp/actions/menu")) || []; } catch (e) { menu = []; }
-      DATA = { sections: d.sections || [], menu: menu };
+      DATA = { menu: menu };
       MENU = {};
       menu.forEach(function (a) { MENU[a.id] = a; });
       gambar();
@@ -74,20 +73,20 @@
   }
 
   function gambar() {
-    var tab = $("tab");
-    var bagian = (DATA.sections || []).map(function (s) { return s.title; });
-    var daftar = [["aksi", "Aksi"]].concat(bagian.map(function (j, i) { return ["s" + i, j]; }));
-    tab.innerHTML = daftar.map(function (t) {
-      return '<button class="tab' + (TAB === t[0] ? " tab--aktif" : "") +
-        '" data-tab="' + t[0] + '">' + esc(t[1]) + "</button>";
-    }).join("");
-    tab.style.display = daftar.length > 1 ? "" : "none";
-    Array.prototype.forEach.call(tab.querySelectorAll("[data-tab]"), function (b) {
-      b.onclick = function () { TAB = b.dataset.tab; gambar(); };
-    });
-
+    /* Layar Catat hanya berisi AKSI.
+     *
+     * Dulu ada pita tab kecil di atasnya berisi panel informasi khusus Admin
+     * — "Tugas verifikasi & QC" dan "HPP beras terkini" — sisa zaman Mini App
+     * Telegram, waktu segalanya harus muat di satu layar. Keduanya kini punya
+     * rumahnya sendiri: yang menunggu tindakan ada di BERJALAN, angka HPP dan
+     * stok ada di LAPORAN. Menyimpannya di sini pula berarti dua tempat untuk
+     * satu hal, dan yang di sini tak pernah ikut diperbarui.
+     *
+     * Menyempilkannya sebagai pita kecil juga menyesatkan: ia terlihat seperti
+     * saringan atas daftar aksi, padahal isinya bukan aksi sama sekali.
+     */
     var layar = $("layar");
-    if (TAB === "aksi") {
+    {
       var aksi = DATA.menu || [];
       layar.innerHTML = aksi.length
         ? aksi.map(function (a) {
@@ -104,12 +103,6 @@
       Array.prototype.forEach.call(layar.querySelectorAll("[data-aksi]"), function (b) {
         b.onclick = function () { bukaAksi(b.dataset.aksi); };
       });
-    } else {
-      var s = (DATA.sections || [])[parseInt(TAB.slice(1), 10)];
-      layar.innerHTML = s
-        ? '<div class="kartu"><span class="lbl">' + esc(s.title) + "</span>" +
-          '<pre class="rincian">' + esc(s.body) + "</pre></div>"
-        : "";
     }
   }
 
