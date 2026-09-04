@@ -170,8 +170,26 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang (gabah masuk)",
                   "type": "remote", "source": "/miniapp/actions/timbang-masuk-aktif"},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  # Tujuan yang SAH ditentukan jenis gabahnya, dan server
+                  # memeriksanya lagi saat menyimpan: basah tak boleh ke silo,
+                  # dan gabah apa pun boleh ditumpuk bila belum ada tempat.
                   "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
-                              ["silo_a", "Silo A"], ["silo_b", "Silo B"]]},
+                              ["silo_a", "Silo A (gabah kering)"],
+                              ["silo_b", "Silo B (gabah kering)"],
+                              ["tumpuk", "Tumpukan"]]},
+             ]},
+            {"id": "pindah_tumpukan", "label": "📦 Pindahkan dari tumpukan",
+             "post": "/miniapp/actions/pindah-tumpukan",
+             "hint": "Tumpukan sebaiknya kosong — isinya menandakan pembelian "
+                     "yang berlebih. Gabah basah dari tumpukan hanya boleh ke "
+                     "dryer.",
+             "fields": [
+                 {"name": "kode_batch", "label": "Gabah di tumpukan", "type": "remote",
+                  "source": "/miniapp/actions/tumpukan"},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
+                              ["silo_a", "Silo A (gabah kering)"],
+                              ["silo_b", "Silo B (gabah kering)"]]},
              ]},
             {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
              "post": "/miniapp/actions/mulai-pengeringan",
@@ -366,7 +384,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
 # berasal dari proses G1 → G1.
 _ACTION_WH = {
     # Gudang 1 (Selepan)
-    "gabah_masuk": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
+    "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
@@ -389,6 +407,48 @@ _ACTION_WH = {
 
 
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
+
+@router.get("/actions/tumpukan")
+async def tumpukan_isi(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Gabah yang sedang menumpuk. Kosong = tak ada pembelian berlebih."""
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.tumpukan import isi
+    async with SessionLocal() as db:
+        batches = await isi(db)
+    return [{
+        "value": b.kode_batch,
+        "label": (f"{b.kode_batch} · {b.kondisi_gabah} · "
+                  f"{_rp(float(b.berat_total_kg or 0))} kg"),
+    } for b in batches]
+
+
+class PindahTumpukanReq(BaseModel):
+    kode_batch: str
+    tujuan: str
+
+
+@router.post("/actions/pindah-tumpukan")
+async def act_pindah_tumpukan(req: PindahTumpukanReq,
+                              user: User = Depends(pengguna_aksi)) -> dict:
+    """Pindahkan gabah dari tumpukan ke dryer atau silo.
+
+    Tujuan yang sah ditentukan kondisi gabahnya, dan diperiksa di layanan —
+    bukan di sini dan bukan di layar: gabah basah dari tumpukan hanya boleh
+    ke dryer, karena ia belum kering.
+    """
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.tumpukan import TumpukanError, pindah
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            batch, tempat = await pindah(
+                db, user=u, kode_batch=req.kode_batch, tujuan=req.tujuan)
+        except TumpukanError as e:
+            raise _err(e, "Gagal memindahkan dari tumpukan.")
+    pesan = f"✓ *{batch.kode_batch}* pindah dari tumpukan → {tempat}."
+    await _chat_confirm(user, pesan, "gudang1")
+    return {"ok": True, "pesan": pesan}
+
 
 @router.get("/actions/drying-active")
 async def drying_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
@@ -712,12 +772,18 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         if info is None or info.model != "gabah":
             raise HTTPException(400, "Tiket ini bukan gabah masuk.")
         kondisi = info.kondisi
-        if info.tujuan_wajib:            # gabah basah → Dryer otomatis (tak perlu pilih)
+        if info.tujuan_wajib:
             tujuan = info.tujuan_wajib
-        else:                           # gabah kering → operator pilih Silo/Dryer
+        else:
             tujuan = req.tujuan
             if tujuan not in info.tujuan_pilihan:
-                raise HTTPException(400, "Pilih tujuan: Silo A / Silo B / Dryer.")
+                # Pesannya menyebut yang SAH untuk gabah ini, bukan daftar
+                # umum: operator yang memilih Silo untuk gabah basah perlu
+                # tahu kenapa ditolak, bukan sekadar bahwa ia ditolak.
+                nama = {"dryer": "Dryer", "silo_a": "Silo A", "silo_b": "Silo B",
+                        "tumpuk": "Tumpukan"}
+                boleh = " / ".join(nama.get(t, t) for t in info.tujuan_pilihan)
+                raise HTTPException(400, f"Gabah {kondisi} hanya boleh ke: {boleh}.")
         try:
             r = await create_purchase_batch_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
@@ -732,7 +798,12 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         # PENEMPATAN (agar tak nyangkut sebagai 'baru').
         tempat, warn = "", ""
         try:
-            if tujuan == "dryer":
+            if tujuan == "tumpuk":
+                from app.penggilingan.gudang1.services.tumpukan import masuk_tumpukan
+                await masuk_tumpukan(db, user=u, kode_batch=kode)
+                tempat = (f"📦 ditumpuk (tumpukan {kondisi}) — muncul di Berjalan "
+                          "sampai dipindah")
+            elif tujuan == "dryer":
                 await masuk_dryer(db, user=u, kode_batch_list=[kode])
                 tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
             else:  # silo_a / silo_b (kering langsung)

@@ -15,6 +15,9 @@ from dataclasses import dataclass, field
 
 # Tujuan penempatan gabah (harus cocok dengan mini-app & service).
 DRYER, SILO_A, SILO_B = "dryer", "silo_a", "silo_b"
+# Tumpukan: dua, dan mana yang dipakai TIDAK disimpan — ia sudah ditentukan
+# kondisi gabahnya. Menyimpannya lagi berarti dua tempat yang bisa berbeda.
+TUMPUK = "tumpuk"
 
 
 @dataclass(frozen=True)
@@ -28,12 +31,19 @@ class IntakeJenis:
 
 # ── MASUK (intake) ──
 PETA_MASUK: dict[str, IntakeJenis] = {
-    # Gabah basah WAJIB ke Dryer dulu (tak boleh langsung silo).
+    # Gabah basah: dryer, atau ditumpuk bila dryer sedang penuh. TIDAK boleh
+    # langsung ke silo — silo Gudang 1 menampung gabah KERING.
+    #
+    # Dulu dipaksa ke dryer tanpa pilihan. Itu tidak sesuai kenyataan: dryer
+    # hanya menerima satu lot pada satu waktu, dan gabah yang datang saat dryer
+    # terisi harus mendarat di suatu tempat. Memaksanya ke dryer hanya membuat
+    # pencatatan gagal, bukan membuat gabahnya hilang.
     "GABAH_BASAH":  IntakeJenis("gabah", kondisi="basah",
-                                tujuan_wajib=DRYER, tujuan_pilihan=(DRYER,)),
-    # Gabah kering boleh LANGSUNG silo atau ke dryer bila masih perlu dikeringkan.
+                                tujuan_pilihan=(DRYER, TUMPUK)),
+    # Gabah kering boleh LANGSUNG silo, ke dryer bila masih perlu dikeringkan,
+    # atau ditumpuk.
     "GABAH_KERING": IntakeJenis("gabah", kondisi="kering",
-                                tujuan_pilihan=(SILO_A, SILO_B, DRYER)),
+                                tujuan_pilihan=(SILO_A, SILO_B, DRYER, TUMPUK)),
     # PK dari luar → gudang2. Subtipe (ks/kl/campuran/semi_ks) dipilih operator (timbang
     # tak membedakannya).
     "BERAS_PK":     IntakeJenis("pk"),

@@ -202,6 +202,30 @@ async def main() -> None:
         cek("alamatnya pun sudah tidak ada", r.status_code == 404,
             f"HTTP {r.status_code}")
 
+        babak("4b. Tumpukan — tanda pembelian berlebih, bukan tempat penyimpanan")
+        # Tiket susulan yang tersisa ditaruh di tumpukan: dryer sedang terisi.
+        sisa = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+        r = await op.post("/miniapp/actions/gabah-masuk",
+                          json={"timbangan_transaksi_id": sisa[0]["value"],
+                                "tujuan": "tumpuk"})
+        cek("gabah ditumpuk", r.status_code == 200, r.text[:100])
+        isi_tumpukan = (await op.get("/miniapp/actions/tumpukan")).json()
+        cek("isinya terbaca", len(isi_tumpukan) == 1,
+            isi_tumpukan[0]["label"] if isi_tumpukan else "kosong")
+
+        r = await op.get("/berjalan")
+        cek("tumpukan MENAGIH di layar Berjalan",
+            "menumpuk" in r.text and "pindah_tumpukan" in r.text)
+
+        # Gabah kering boleh ke silo; yang basah akan ditolak.
+        r = await op.post("/miniapp/actions/pindah-tumpukan",
+                          json={"kode_batch": isi_tumpukan[0]["value"],
+                                "tujuan": "silo_b"})
+        cek("gabah kering pindah dari tumpukan ke silo",
+            r.status_code == 200, r.text[:140])
+        cek("tumpukan kembali kosong",
+            (await op.get("/miniapp/actions/tumpukan")).json() == [])
+
         babak("5. Pengeringan — satu lot dari semua yang menunggu di dryer")
         r = await op.post("/miniapp/actions/mulai-pengeringan", json={})
         cek("lot terbentuk", r.status_code == 200, r.text[:120])

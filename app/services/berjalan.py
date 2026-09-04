@@ -138,6 +138,20 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
         ))
 
+    # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
+    # dan itu keadaan yang paling ingin diketahui — bukan yang paling dalam
+    # daftar. Kosong berarti tak ada baris sama sekali, seperti seharusnya.
+    from app.penggilingan.gudang1.services import tumpukan as tmp
+    for b_ in await tmp.isi(db):
+        wajib_dryer = b_.kondisi_gabah == "basah"
+        b.menunggu.append(Baris(
+            kode=b_.kode_batch,
+            isi=f"menumpuk · {_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
+            keadaan=("harus ke dryer — belum kering" if wajib_dryer
+                     else "pindahkan ke dryer atau silo"),
+            aksi="pindah_tumpukan", sejak=b_.created_at,
+        ))
+
     for lot in await _lot(db, pendinginan_selesai=True):
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
