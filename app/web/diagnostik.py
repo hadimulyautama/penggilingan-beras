@@ -11,10 +11,8 @@ difoto, lalu berkas ini dan barisnya di main.py DIHAPUS. Ia tidak menyentuh
 basis data dan tidak mengubah apa pun.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-
-from app.web.security import butuh_akun
 
 router = APIRouter()
 
@@ -48,7 +46,7 @@ HALAMAN = """<!doctype html>
 <body>
 <div class="atas"></div><div class="bawah"></div>
 <div class="kotak">
-  <div class="isi"><table id="t"></table></div>
+  <div class="isi"><h1 style="margin:0 0 10px;font-size:17px;color:#4fb3d9">Ukur tampilan</h1><table id="t"><tr><td>memuat…</td></tr></table></div>
   <div class="palang">INI TEPI BAWAH KERANGKA</div>
 </div>
 <script>
@@ -60,6 +58,7 @@ function sa(sisi) {
   d.remove();
   return v;
 }
+try {
 var k = document.querySelector(".kotak").getBoundingClientRect();
 var p = document.querySelector(".palang").getBoundingClientRect();
 var vv = window.visualViewport || {};
@@ -89,11 +88,25 @@ var baris = [
 document.getElementById("t").innerHTML = baris.map(function (b) {
   return "<tr><td>" + b[0] + "</td><td><b>" + b[1] + "</b></td></tr>";
 }).join("");
+} catch (e) {
+  /* Tanpa ini, satu galat kecil menghasilkan halaman kosong — dan halaman
+     kosong tidak memberi tahu apa-apa selain "coba lagi". */
+  document.getElementById("t").innerHTML =
+    "<tr><td>GALAT</td><td><b>" + String(e && e.message || e) + "</b></td></tr>";
+}
 </script>
 </body>
 </html>"""
 
 
 @router.get("/diagnostik-tampilan", response_class=HTMLResponse)
-async def diagnostik(request: Request, akun=Depends(butuh_akun)) -> HTMLResponse:
+async def diagnostik() -> HTMLResponse:
+    """Sengaja TANPA login.
+
+    Percobaan pertama memakai `butuh_akun`, dan hasilnya pemilik hanya melihat
+    halaman masuk — alamat yang dibuka dari pesan mendarat di peramban yang
+    belum punya sesi. Halaman ini tidak membaca basis data dan tidak
+    menampilkan apa pun milik perusahaan; yang diukurnya hanya layar orang
+    yang sedang membukanya sendiri.
+    """
     return HTMLResponse(HALAMAN)
