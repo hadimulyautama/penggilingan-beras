@@ -108,7 +108,22 @@
       s.textContent = lama.textContent;
       lama.parentNode.replaceChild(s, lama);
     });
+    angkatLembar();
     return true;
+  }
+
+  /* Lembar aksi/laporan ditulis DI DALAM `{% block isi %}`, jadi ia lahir di
+     dalam `.isi` — satu-satunya bagian yang menggulung. Di Safari, elemen
+     yang menggulung menjadi konteks penumpukan tersendiri, dan `z-index: 20`
+     milik lembar terkurung di dalamnya: bilah navigasi tergambar DI ATAS
+     lembar, menutupi tombol simpannya. Diangkat menjadi anak langsung
+     `.bingkai`, ia bersaing sederajat dengan bilah dan selalu menang —
+     tanpa bergantung pada tafsir peramban. `position: fixed` membuatnya
+     keluar dari aliran, jadi ia tidak menjadi item flex di sana. */
+  function angkatLembar() {
+    if (!bingkai) { return; }
+    var l = document.getElementById("lembar");
+    if (l && l.parentNode !== bingkai) { bingkai.appendChild(l); }
   }
 
   function lembarTerbuka() {
@@ -202,6 +217,7 @@
         }
       });
   }
+  angkatLembar();
   siapkan = siapkanTab;
   if (window.requestIdleCallback) {
     requestIdleCallback(siapkanTab, { timeout: 2500 });

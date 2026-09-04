@@ -172,8 +172,14 @@
           var nota = document.createElement("p");
           nota.className = "bantu";
           nota.style.marginTop = "6px";
-          nota.textContent = "Belum ada " + (f.label || "pilihan").toLowerCase() +
-            ". Aksi ini belum bisa dikerjakan sekarang.";
+          /* Kalimat bawaan menebak dari NAMA field, dan tebakan itu bisa
+             keliru berat: daftar "Mesin pengering" yang kosong berarti tak
+             ada gabah yang menunggu dinyalakan — BUKAN bahwa pabrik ini tak
+             punya mesin pengering. Server yang tahu artinya, jadi server yang
+             menyediakan kalimatnya lewat `kosong`. */
+          nota.textContent = f.kosong || ("Belum ada " +
+            (f.label || "pilihan").toLowerCase() +
+            ". Aksi ini belum bisa dikerjakan sekarang.");
           s.insertAdjacentElement("afterend", nota);
           var tbl = $("simpan");
           if (tbl) { tbl.disabled = true; tbl.textContent = "Belum bisa disimpan"; }

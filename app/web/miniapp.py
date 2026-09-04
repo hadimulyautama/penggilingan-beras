@@ -214,7 +214,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "kali ditimbang.",
              "fields": [
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang (gabah masuk)",
-                  "type": "remote", "source": "/miniapp/actions/timbang-masuk-aktif"},
+                  "type": "remote", "source": "/miniapp/actions/timbang-masuk-aktif",
+                  "kosong": "Tidak ada tiket timbang gabah yang aktif 7 hari terakhir. Gabah dicatat dari tiket timbang — bukan diketik manual."},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
                   # Gabungan basah & kering: jenis gabahnya baru diketahui dari
                   # tiket yang dipilih, jadi keduanya ditawarkan dan server
@@ -230,7 +231,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "belum boleh ke silo.",
              "fields": [
                  {"name": "kode_batch", "label": "Gabah yang menunggu tempat",
-                  "type": "remote", "source": "/miniapp/actions/tumpukan"},
+                  "type": "remote", "source": "/miniapp/actions/tumpukan",
+                  "kosong": "Tidak ada gabah yang menunggu tempat. Semua gabah masuk sudah berada di dryer atau silo."},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
                   "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
                                              if o not in TUJUAN_BASAH]},
@@ -241,12 +243,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "Gabah di mesin lain tidak ikut.",
              "fields": [
                  {"name": "dryer_id", "label": "Mesin pengering", "type": "remote",
-                  "source": "/miniapp/actions/dryer-menunggu"},
+                  "source": "/miniapp/actions/dryer-menunggu",
+                  "kosong": "Belum ada gabah yang menunggu di mesin pengering mana pun. Mesinnya ada — yang belum ada gabahnya. Catat gabah masuk lebih dulu."},
              ]},
             {"id": "kadar_air", "label": "💧 Update kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
                  {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
-                  "source": "/miniapp/actions/drying-active"},
+                  "source": "/miniapp/actions/drying-active",
+                  "kosong": "Tidak ada lot yang sedang dikeringkan."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
@@ -254,7 +258,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Lot masuk fase pendinginan otomatis (gabah tetap di dryer).",
              "fields": [
                  {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
-                  "source": "/miniapp/actions/drying-active"},
+                  "source": "/miniapp/actions/drying-active",
+                  "kosong": "Tidak ada lot yang sedang dikeringkan."},
              ]},
             {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
              "post": "/miniapp/actions/selesai-pendinginan",
@@ -262,31 +267,37 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "di dryer menunggu silo kosong. (Basis analisa downtime dryer.)",
              "fields": [
                  {"name": "kode_lot", "label": "Lot didinginkan", "type": "remote",
-                  "source": "/miniapp/actions/cooling-active"},
+                  "source": "/miniapp/actions/cooling-active",
+                  "kosong": "Tidak ada lot yang sedang didinginkan."},
              ]},
             {"id": "pindah_silo", "label": "🏗️ Pindah dryer → silo",
              "post": "/miniapp/actions/pindah-silo",
              "hint": "Hanya lot yang sudah dinyatakan selesai pendinginan.", "fields": [
                  {"name": "kode_lot", "label": "Lot siap dipindah", "type": "remote",
-                  "source": "/miniapp/actions/drying-done"},
+                  "source": "/miniapp/actions/drying-done",
+                  "kosong": "Tidak ada lot yang sudah selesai didinginkan. Selesaikan pendinginan dulu sebelum memindahkannya ke silo."},
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)",
-                  "type": "remote", "source": "/miniapp/actions/silo-g1"},
+                  "type": "remote", "source": "/miniapp/actions/silo-g1",
+                  "kosong": "Tidak ada silo gabah kering. Tambahkan silo di Pengaturan → Alat."},
              ]},
             {"id": "mulai_giling", "label": "⚙️ Mulai giling",
              "post": "/miniapp/actions/mulai-giling", "fields": [
                  {"name": "silo", "label": "Silo yang digiling", "type": "remote",
-                  "source": "/miniapp/actions/silo-siap-giling"},
+                  "source": "/miniapp/actions/silo-siap-giling",
+                  "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
              ]},
             {"id": "hasil_giling", "label": "📈 Update hasil giling",
              "post": "/miniapp/actions/hasil-giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
-                  "source": "/miniapp/actions/milling-active"},
+                  "source": "/miniapp/actions/milling-active",
+                  "kosong": "Tidak ada proses giling yang sedang berjalan."},
                  {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number"},
              ]},
             {"id": "selesai_giling", "label": "🏁 Selesai giling",
              "post": "/miniapp/actions/selesai-giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
-                  "source": "/miniapp/actions/milling-active"},
+                  "source": "/miniapp/actions/milling-active",
+                  "kosong": "Tidak ada proses giling yang sedang berjalan."},
              ]},
         ]
     if g2:
@@ -294,7 +305,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
              "post": "/miniapp/actions/masukkan-pk", "fields": [
                  {"name": "kode_batch", "label": "PK diterima", "type": "remote",
-                  "source": "/miniapp/actions/pk-intake-pending"},
+                  "source": "/miniapp/actions/pk-intake-pending",
+                  "kosong": "Tidak ada PK masuk yang menunggu."},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
                   "options": TUJUAN_PK},
              ]},
@@ -306,7 +318,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
              "post": "/miniapp/actions/hasil-penyosohan", "fields": [
                  {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
-                  "source": "/miniapp/actions/polishing-active"},
+                  "source": "/miniapp/actions/polishing-active",
+                  "kosong": "Tidak ada penyosohan yang sedang berjalan."},
                  {"name": "jenis", "label": "Jenis hasil (wajib pilih)", "type": "select",
                   "options": JENIS_HASIL},
                  {"name": "berat_kumulatif", "label": "Berat kumulatif (kg)", "type": "number"},
@@ -314,7 +327,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "selesai_penyosohan", "label": "🏁 Selesai penyosohan (per silo)",
              "post": "/miniapp/actions/selesai-penyosohan", "fields": [
                  {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
-                  "source": "/miniapp/actions/polishing-active"},
+                  "source": "/miniapp/actions/polishing-active",
+                  "kosong": "Tidak ada penyosohan yang sedang berjalan."},
                  {"name": "silo", "label": "Silo yang selesai (wajib pilih)", "type": "select",
                   "options": [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]},
                  {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
@@ -334,7 +348,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "verify_gabah", "label": "✅ Verifikasi harga gabah",
              "post": "/miniapp/actions/verify-gabah", "fields": [
                  {"name": "kode_batch", "label": "Batch gabah", "type": "remote",
-                  "source": "/miniapp/actions/gabah-unverified"},
+                  "source": "/miniapp/actions/gabah-unverified",
+                  "kosong": "Tidak ada gabah masuk yang menunggu verifikasi."},
                  {"name": "metode", "label": "Metode", "type": "select", "options": METODE},
                  {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
              ]},
@@ -342,14 +357,16 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "post": "/miniapp/actions/verify-output",
              "hint": "Catat berat PK final → rendemen terhitung.", "fields": [
                  {"name": "kode_proses", "label": "Proses giling selesai", "type": "remote",
-                  "source": "/miniapp/actions/milling-unverified"},
+                  "source": "/miniapp/actions/milling-unverified",
+                  "kosong": "Tidak ada hasil giling yang menunggu verifikasi."},
                  {"name": "berat_output", "label": "Berat PK final (kg)", "type": "number"},
              ]},
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/miniapp/actions/qc-giling",
              "hint": "Isi minimal salah satu: kadar air / broken / susut.", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
-                  "source": "/miniapp/actions/milling-noqc"},
+                  "source": "/miniapp/actions/milling-noqc",
+                  "kosong": "Tidak ada hasil giling yang belum dinilai mutunya."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "susut", "label": "Susut (%)", "type": "number"},
@@ -360,7 +377,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "otomatis dari timbangan. Selanjutnya di-QC & dinilai harga.",
              "fields": [
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang (PK masuk)",
-                  "type": "remote", "source": "/miniapp/actions/timbang-pk-aktif"},
+                  "type": "remote", "source": "/miniapp/actions/timbang-pk-aktif",
+                  "kosong": "Tidak ada tiket timbang PK yang aktif."},
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
                  {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
@@ -371,7 +389,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "kualitasnya sebagai properti batch. Isi minimal salah satu.",
              "fields": [
                  {"name": "kode_batch", "label": "PK luar (belum ada kualitas)", "type": "remote",
-                  "source": "/miniapp/actions/pk-luar-qc"},
+                  "source": "/miniapp/actions/pk-luar-qc",
+                  "kosong": "Tidak ada PK luar yang menunggu penilaian mutu."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
@@ -384,7 +403,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Terpisah dari kualitas — kapan saja. Isi metode & nilai; "
                      "potongan opsional.", "fields": [
                  {"name": "kode_batch", "label": "PK luar (harga belum diverifikasi)",
-                  "type": "remote", "source": "/miniapp/actions/pk-luar-harga"},
+                  "type": "remote", "source": "/miniapp/actions/pk-luar-harga",
+                  "kosong": "Tidak ada PK luar yang menunggu penetapan harga."},
                  {"name": "metode", "label": "Metode harga (wajib pilih)", "type": "select",
                   "options": METODE},
                  {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
@@ -394,7 +414,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/miniapp/actions/transfer-pk", "fields": [
                  {"name": "kode_proses", "label": "PK dari proses", "type": "remote",
-                  "source": "/miniapp/actions/pk-transfer"},
+                  "source": "/miniapp/actions/pk-transfer",
+                  "kosong": "Tidak ada PK yang siap dipindah."},
                  {"name": "berat", "label": "Berat kg (kosong = semua)", "type": "number"},
                  {"name": "tujuan", "label": "Tujuan", "type": "select", "options": TUJUAN},
              ]},
