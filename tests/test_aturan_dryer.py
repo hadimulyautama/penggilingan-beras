@@ -69,3 +69,39 @@ def test_silo_campuran_diperingatkan_bukan_ditolak():
 
     assert "digabung = await _silo_content_kg" in inspect.getsource(silo.masuk_silo)
     assert "isinya kini tercampur" in inspect.getsource(miniapp.act_pindah_silo)
+
+
+# ─────────────── Tiap dryer berjalan sendiri-sendiri ───────────────
+
+def test_keterisian_ditanyakan_per_mesin():
+    """Aturan 1 & 2 kini berlaku per mesin. Menanyakan 'apakah dryer terpakai'
+    tanpa menyebut mesinnya akan menutup seluruh pabrik gara-gara satu mesin
+    sibuk."""
+    sumber = inspect.getsource(drying.active_drying_lot)
+    assert "dryer_id" in sumber
+    assert "DryingLot.dryer_id == dryer_id" in sumber
+
+
+def test_gabah_menunggu_disaring_per_mesin():
+    """Tanpa saringan ini, 'mulai pengeringan' menyapu gabah dari SEMUA mesin
+    ke dalam satu lot — gabah yang tidak pernah bertemu di mesin yang sama."""
+    assert "PurchaseBatch.dryer_id == dryer_id" in inspect.getsource(
+        drying._loose_dryer_batches)
+
+
+def test_masuk_dan_mulai_keduanya_menyebut_mesin():
+    for fungsi in (drying.masuk_dryer, drying.start_drying):
+        assert "pilih_dryer" in inspect.getsource(fungsi)
+
+
+def test_satu_mesin_tak_perlu_dipilih():
+    """Menyuruh orang memilih dari daftar berisi satu pilihan bukan ketelitian,
+    melainkan pekerjaan tambahan tanpa isi."""
+    sumber = inspect.getsource(drying.pilih_dryer)
+    assert "if len(mesin) == 1" in sumber
+
+
+def test_mesin_batch_dilepas_saat_lot_terbentuk():
+    """Setelah lot ada, mesinnya tersimpan di lot. Dua tempat yang menyebut
+    hal yang sama cepat atau lambat berbeda."""
+    assert "b.dryer_id = None" in inspect.getsource(drying.start_drying)

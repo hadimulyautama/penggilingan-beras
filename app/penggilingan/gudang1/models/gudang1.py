@@ -43,6 +43,14 @@ class PurchaseBatch(Base, TimestampMixin):
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # baru / dikeringkan / di_silo / digiling / selesai
     status_batch: Mapped[str] = mapped_column(String(20), default="baru")
+    #: Mesin tempat gabah ini MENUNGGU, sebelum lotnya terbentuk.
+    #:
+    #: Berarti hanya pada satu keadaan singkat: sejak masuk mesin sampai
+    #: "mulai pengeringan" membentuk lot. Setelah itu yang menyimpan mesinnya
+    #: adalah `DryingLot.dryer_id` dan kolom ini dikosongkan lagi — supaya
+    #: tidak ada dua tempat yang menyebut mesin untuk gabah yang sama, lalu
+    #: suatu hari berbeda.
+    dryer_id: Mapped[int | None] = mapped_column(ForeignKey("dryers.id"), index=True)
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
     # ── Tautan ke timbangan (shared DB). 1 tiket timbang = maks 1 batch. ──
     # berat_total_kg/supplier/no_polisi diturunkan dari transaksi timbang; operator
