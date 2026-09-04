@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block judul %}Laporan{% endblock %}
+{% block isi %}
+
+<div>
+  <span class="lbl">Laporan</span>
+  <p class="bantu" style="margin:0 0 12px">
+    Dibuat saat dibuka — angkanya keadaan sekarang, bukan salinan semalam.
+  </p>
+
+  <div class="grup" style="gap:8px">
+    {% for l in daftar %}
+      <button class="tindakan" type="button"
+              data-laporan="{{ l.kode }}"{% if l.berperiode %} data-berperiode="1"{% endif %}>
+        <div class="tindakan__ikon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/>
+          </svg>
+        </div>
+        <div class="tindakan__isi">
+          <div class="tindakan__nama">{{ l.nama }}</div>
+          <div class="tindakan__ket">{{ l.arti }}</div>
+        </div>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+             stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    {% endfor %}
+  </div>
+</div>
+
+{# Satu lembar untuk semua laporan — isinya diganti, bukan halamannya. Laporan
+   dibaca sambil membandingkan dengan yang lain, dan berpindah halaman bolak-balik
+   membuat orang kehilangan tempatnya. #}
+<div class="lembar" id="lembar" style="display:none">
+  <div class="lembar__isi" role="dialog" aria-modal="true" aria-labelledby="lap-judul">
+    <div class="lembar__kepala">
+      <h2 id="lap-judul">Laporan</h2>
+      <button class="btn btn--kecil" type="button" id="tutup">Tutup</button>
+    </div>
+    <div class="grup" id="periode-grup" style="display:none;margin-bottom:12px">
+      <label class="lbl" for="periode">Periode</label>
+      <select class="fld" id="periode">
+        {% for kode, nama in periode %}
+          <option value="{{ kode }}"{% if kode == 'bulan_ini' %} selected{% endif %}>{{ nama }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <pre class="laporan" id="lap-isi">Memuat…</pre>
+  </div>
+</div>
+
+<script>
+/* Laporan datang sebagai teks — dibuat untuk dibaca, bukan diurai. Server
+   sudah menerjemahkan penanda tebal/miring jadi HTML dan meng-escape isinya
+   lebih dulu, jadi yang perlu dilakukan di sini hanya menaruhnya. */
+(function () {
+  "use strict";
+  var lembar = document.getElementById("lembar");
+  var judul = document.getElementById("lap-judul");
+  var isi = document.getElementById("lap-isi");
+  var grupPeriode = document.getElementById("periode-grup");
+  var periode = document.getElementById("periode");
+  var kodeAktif = null;
+
+  function muat() {
+    if (!kodeAktif) { return; }
+    isi.textContent = "Memuat…";
+    fetch("/api/laporan/" + encodeURIComponent(kodeAktif) +
+          "?periode=" + encodeURIComponent(periode.value), { credentials: "same-origin" })
+      .then(function (r) {
+        if (r.status === 403) { throw new Error("Laporan ini tidak untuk peran Anda."); }
+        if (!r.ok) { throw new Error("Gagal memuat (" + r.status + ")."); }
+        return r.json();
+      })
+      .then(function (d) { judul.textContent = d.nama; isi.innerHTML = d.isi; })
+      .catch(function (e) { isi.textContent = String(e.message || e); });
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-laporan]") : null;
+    if (!t) { return; }
+    kodeAktif = t.dataset.laporan;
+    judul.textContent = t.querySelector(".tindakan__nama").textContent;
+    grupPeriode.style.display = t.dataset.berperiode ? "" : "none";
+    lembar.style.display = "flex";
+    document.body.style.overflow = "hidden";
+    muat();
+  });
+
+  periode.addEventListener("change", muat);
+
+  function tutup() {
+    lembar.style.display = "none";
+    document.body.style.overflow = "";
+    kodeAktif = null;
+  }
+  document.getElementById("tutup").onclick = tutup;
+  lembar.addEventListener("click", function (e) { if (e.target === lembar) tutup(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && lembar.style.display === "flex") tutup();
+  });
+})();
+</script>
+
+{% endblock %}

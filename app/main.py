@@ -24,6 +24,13 @@ from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
+from app.bots.common import can_see_financials
+from app.web.nav import jumlah_menunggu
+from app.web.aksi_inventory import router as aksi_inventory_router
+from app.web.aksi_undo import router as aksi_undo_router
+from app.web.laporan import router as laporan_router
+from app.web.layar_berjalan import router as berjalan_router
+from app.web.pengaturan import router as pengaturan_router
 from app.web.miniapp import router as miniapp_router
 from app.web.pengguna import router as pengguna_router
 from app.web.security import (
@@ -83,6 +90,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
 app.include_router(miniapp_router)
+app.include_router(aksi_inventory_router)
+app.include_router(aksi_undo_router)
+app.include_router(laporan_router)
+app.include_router(berjalan_router)
+app.include_router(pengaturan_router)
 app.include_router(internal_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
@@ -158,6 +170,10 @@ async def beranda(request: Request):
         giling=len(o.get("giling", []) or []),
         stok_pk=(o.get("stok_pk", {}) or {}).get("total", 0) or 0,
         jml_akun=jml_akun,
+        MENUNGGU=await jumlah_menunggu(akun.user),
+        # Menentukan kalimat di kartu Laporan, bukan hak aksesnya — yang itu
+        # diputuskan ulang di `laporan.py` untuk tiap laporan yang diminta.
+        boleh_uang=bool(akun.user and can_see_financials(akun.user)),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 
@@ -177,8 +193,13 @@ async def halaman_aksi(request: Request):
     (`/miniapp/actions/menu`), jadi menambah aksi tak perlu layar baru."""
     from app.web.security import butuh_akun
 
-    await butuh_akun(request)
-    return render(request, "aksi.html", kembali="/")
+    akun = await butuh_akun(request)
+    # `buka` datang dari layar Berjalan: menekan satu baris di sana harus
+    # membuka formulir yang menutupnya, bukan menurunkan orang di daftar aksi
+    # lalu menyuruhnya mencari sendiri.
+    return render(request, "aksi.html", kembali="/",
+                  buka=request.query_params.get("buka") or "",
+                  MENUNGGU=await jumlah_menunggu(akun.user))
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

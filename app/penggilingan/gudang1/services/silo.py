@@ -26,13 +26,19 @@ def _silo_cap_kg(silo) -> float | None:
 
 
 def _ensure_cap(silo, nama: str, existing_kg: float, new_kg: float) -> None:
-    cap = _silo_cap_kg(silo)
-    if cap is not None and existing_kg + new_kg > cap:
-        sisa = max(cap - existing_kg, 0)
-        raise SiloError(
-            f"❌ Kapasitas Silo {nama} {cap / 1000:g} ton tidak cukup "
-            f"(sisa {sisa / 1000:g} ton, tambahan {new_kg / 1000:g} ton)."
-        )
+    """Tidak lagi menolak apa pun — silo tidak punya batas.
+
+    Keputusan Direksi 2 September 2026: silo tidak perlu berbatas. Angka
+    `kapasitas_ton` TETAP disimpan dan tetap ditampilkan di layar sebagai
+    keterangan ("terisi 9,7 dari 20 ton"), karena orang perlu tahu seberapa
+    penuh — tetapi ia tidak boleh lagi MENOLAK gabah yang sudah terlanjur
+    datang dan berdiri di halaman.
+
+    Fungsinya dipertahankan, bukan dihapus dari pemanggilnya: kalau suatu hari
+    batas itu dikembalikan, tempatnya sudah jelas ada di sini — dan pemanggil
+    tidak perlu dicari ulang satu per satu.
+    """
+    return None
 
 
 class SiloError(Exception):
@@ -48,6 +54,26 @@ async def _g1_warehouse_id(db: AsyncSession) -> int:
     if wid is None:
         raise SiloError("Data gudang 1 belum ada.")
     return wid
+
+
+async def silos_g1(db: AsyncSession) -> list[Silo]:
+    """Semua silo gabah kering Gudang 1, urut nama.
+
+    Jumlahnya BUKAN dua. Ia ditentukan baris yang ada di tabel, dan Direksi
+    boleh menambahnya — jadi tak ada satu pun tempat yang boleh menyebut
+    "A dan B" sebagai kebenaran.
+    """
+    wid = await _g1_warehouse_id(db)
+    return list((await db.execute(
+        select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+    )).scalars().all())
+
+
+async def silo_g1_by_id(db: AsyncSession, silo_id: int) -> Silo | None:
+    wid = await _g1_warehouse_id(db)
+    return (await db.execute(
+        select(Silo).where(Silo.id == silo_id, Silo.warehouse_id == wid)
+    )).scalars().first()
 
 
 async def get_g1_silo(db: AsyncSession, letter: str) -> Silo | None:
@@ -142,14 +168,23 @@ async def masuk_silo(
     silo = await get_g1_silo(db, nama_silo)
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
-    occupied = await _active_storage(db, silo.id)
     now = input_time(tanggal, jam)
     digabung = False
 
     if kode_lot:
-        # ── Dari pengeringan: 1 silo = 1 lot. Silo harus kosong. ──
-        if occupied:
-            raise SiloError(f"Silo {nama_silo} sudah terisi — kosongkan dulu.")
+        # ── Dari pengeringan: silo BOLEH sudah berisi. ──
+        #
+        # Dulu "1 silo = 1 lot, silo harus kosong". Aturan itu punya sebab yang
+        # sah: selama isi silo dipakai sebagai identitas apa-yang-digiling,
+        # silo campuran membuat penggilingan mengambil sebagian saja. Sebab itu
+        # hilang sejak isi proses giling didaftar sendiri di
+        # `milling_process_sources` (migrasi 0031).
+        #
+        # Dan aturan itu punya harga yang nyata: dryer tidak boleh menerima
+        # gabah baru selama lotnya belum pindah ke silo. Silo yang wajib kosong
+        # berarti dryer macet setiap kali kedua silo terisi — dan kemacetan
+        # itulah yang melahirkan tumpukan gabah, hal yang justru ingin
+        # dihindari.
         lot = (
             await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
         ).scalars().first()
@@ -195,6 +230,10 @@ async def masuk_silo(
                 b.status_batch = "di_silo"
         # Pendinginan sudah dinyatakan selesai (dijaga di atas) — pindah ini
         # murni perpindahan fisik dryer → silo, tidak menyentuh waktu pendinginan.
+        # Silo yang sudah berisi TETAP menerima — tetapi itu tidak ideal, dan
+        # penandanya dibawa keluar supaya layar bisa memperingatkan. Idealnya
+        # silo tujuan sudah kosong karena satu proses milling baru selesai.
+        digabung = await _silo_content_kg(db, silo.id) > 0
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
@@ -220,14 +259,14 @@ async def masuk_silo(
             raise SiloError(f"Batch {kode_batch} sudah masuk lot/silo.")
         kg_new = float(batch.berat_total_kg or 0)
 
-        # Model baru: kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
-        # Lot dibentuk saat 'giling silo X'. Boleh menumpuk sampai kapasitas silo.
-        rows = await _silo_active_rows(db, silo.id)
-        if any(r.tipe_masuk == "dari_pengeringan" for r in rows):
-            raise SiloError(
-                f"Silo {nama_silo} berisi lot pengeringan — tidak bisa dicampur "
-                "gabah kering langsung. Pakai silo lain."
-            )
+        # Gabah kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
+        #
+        # Larangan mencampurnya dengan lot pengeringan sudah dicabut. Sebabnya
+        # dulu sah: selama isi silo dipakai sebagai identitas apa-yang-digiling,
+        # campuran membuat penggilingan mengambil sebagian saja. Sejak isi
+        # proses giling didaftar sendiri (`milling_process_sources`, migrasi
+        # 0031), seluruh isi silo ikut terhitung — dan larangan itu tinggal
+        # memaksa gabah menganggur di silo lain yang belum tentu ada.
         existing_kg = await _silo_content_kg(db, silo.id)
         _ensure_cap(silo, nama_silo, existing_kg, kg_new)
         db.add(
@@ -238,7 +277,9 @@ async def masuk_silo(
             )
         )
         batch.status_batch = "di_silo"
-        digabung = bool(rows)  # sudah ada kering menunggu sebelumnya
+        # "Digabung" kini berarti silo memang sudah berisi sesuatu — apa pun
+        # isinya, lot pengeringan maupun gabah kering yang datang lebih dulu.
+        digabung = existing_kg > 0
         isi, tipe = batch.kode_batch, "langsung_kering"
         kg = existing_kg + kg_new
     else:

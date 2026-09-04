@@ -3,7 +3,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -110,3 +118,42 @@ class PkStockGudang1(Base, TimestampMixin):
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     # tersedia / habis
     status: Mapped[str] = mapped_column(String(20), default="tersedia")
+
+
+class MillingProcessSource(Base):
+    """Isi satu proses giling — satu baris per sumber yang ikut digiling.
+
+    Memisahkan dua arti yang dulu dipaksa jadi satu tabel: `DryingLot` berarti
+    satu PROSES PENGERINGAN (dryer, kadar air, pendinginan), sedangkan proses
+    giling berarti APA YANG DIGILING BERSAMA. Selama satu silo hanya boleh
+    berisi satu hal, keduanya kebetulan sama; begitu silo boleh dicampur,
+    penunjuk tunggal di `MillingProcess` akan memilih salah satu dan
+    mengabaikan sisanya — gabahnya tergiling, tetapi tidak tercatat.
+
+    `berat_kg` disalin saat giling dimulai, bukan dihitung ulang belakangan:
+    isi silo berubah setelah itu, dan berapa yang MASUK ke mesin tidak boleh
+    ikut berubah bersamanya.
+    """
+
+    __tablename__ = "milling_process_sources"
+    # Satu baris silo tidak boleh masuk dua kali ke proses yang sama —
+    # kalau bisa, beratnya terhitung ganda dan HPP-nya ikut salah.
+    __table_args__ = (
+        UniqueConstraint("milling_process_id", "silo_storage_id",
+                         name="uq_mps_proses_silo"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    milling_process_id: Mapped[int] = mapped_column(
+        ForeignKey("milling_process.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    silo_storage_id: Mapped[int] = mapped_column(
+        ForeignKey("silo_storage.id"), nullable=False
+    )
+    #: Tepat satu dari dua ini terisi — sama seperti di `SiloStorage`.
+    drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
+    purchase_batch_id: Mapped[int | None] = mapped_column(ForeignKey("purchase_batches.id"))
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

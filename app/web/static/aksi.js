@@ -129,8 +129,12 @@
           }).join("") + "</select>";
       }
       if (f.type === "remote") {
+        // `optional` ada karena sebagian pilihan memang tak berlaku untuk
+        // semua isian: merk hanya milik beras, mutu hanya milik beras putih.
+        // Memaksanya wajib akan membuat orang mengarang jawaban.
         return l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
-          '" data-wajib="1" data-label="' + esc(f.label) + '"><option>memuat…</option></select>';
+          '"' + (f.optional ? "" : ' data-wajib="1"') +
+          ' data-label="' + esc(f.label) + '"><option>memuat…</option></select>';
       }
       var angka = f.type === "number";
       return l + '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
@@ -162,7 +166,10 @@
           }).join("");
         // Kalau daftarnya kosong, aksi ini memang belum bisa dikerjakan.
         // Katakan sekarang — bukan setelah orang menekan Simpan dan ditolak.
-        if (!daftar.length) {
+        // Pilihan yang boleh dikosongkan tak boleh menghentikan aksi ketika
+        // daftarnya kebetulan kosong — belum ada merk bukan alasan bekatul
+        // tidak bisa dicatat.
+        if (!daftar.length && !f.optional) {
           s.disabled = true;
           var nota = document.createElement("p");
           nota.className = "bantu";
@@ -224,4 +231,21 @@
   });
 
   muat();
+
+  /* Dibuka dari layar Berjalan: satu baris di sana menaut ke aksi yang
+     menutupnya. Menurunkan orang di daftar aksi lalu menyuruhnya mencari
+     sendiri akan membatalkan seluruh gunanya layar itu. */
+  (function () {
+    var tag = document.querySelector("script[data-buka]");
+    var id = tag && tag.dataset.buka;
+    if (!id) { return; }
+    var coba = 0;
+    var jam = setInterval(function () {
+      if (MENU[id]) { clearInterval(jam); bukaAksi(id); return; }
+      // Menu datang dari server; kalau setelah beberapa detik aksinya tetap
+      // tak ada, ia memang tak berlaku untuk peran ini — diamkan saja,
+      // daftar aksinya sudah tampil dan orang bisa memilih sendiri.
+      if (++coba > 40) { clearInterval(jam); }
+    }, 100);
+  })();
 })();

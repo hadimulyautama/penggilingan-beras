@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, Warehouse
 
-_ROLES = {"operator", "staff", "admin"}
+#: Tangga peran sejak 3 September 2026. "staff" tidak lagi ditawarkan,
+#: tetapi baris lama yang menyebutnya tetap sah dibaca — lihat
+#: `bots.common.PERAN_UANG`.
+_ROLES = {"operator", "admin", "superadmin"}
 
 
 class UserAdminError(Exception):
@@ -36,7 +39,8 @@ def norm_phone(s: str | None) -> str | None:
 
 
 def _role_label(role: str) -> str:
-    return {"operator": "Operator", "staff": "Staff", "admin": "Admin"}.get(role, role)
+    return {"operator": "Operator", "admin": "Direksi",
+            "superadmin": "Super Admin", "staff": "Staff (lama)"}.get(role, role)
 
 
 async def _warehouse_for_gudang(db: AsyncSession, gudang: int | None) -> Warehouse | None:
@@ -52,8 +56,19 @@ async def _warehouse_for_gudang(db: AsyncSession, gudang: int | None) -> Warehou
 async def register_user(
     db: AsyncSession, *, actor, nama: str | None, role: str | None,
     gudang: int | None, telegram_id: int | None, no_hp: str | None,
+    lewat_sandi: bool = False,
 ) -> str:
-    """Daftarkan pengguna baru. Kembalikan pesan konfirmasi siap-tampil."""
+    """Daftarkan pengguna baru. Kembalikan pesan konfirmasi siap-tampil.
+
+    `lewat_sandi` menandai orang yang akan masuk lewat **webapp**, dengan nama
+    pengguna dan sandi — bukan lewat Telegram.
+
+    Kenapa itu mengubah aturannya: syarat "sebutkan Telegram ID atau nomor HP"
+    lahir dari keterbatasan bot, yang tidak punya cara lain mengenali siapa
+    yang sedang bicara. Webapp punya — kredensialnya sendiri. Memaksa Telegram
+    ID untuk orang yang tak akan pernah memakai Telegram justru melanggengkan
+    ikatan yang sedang dilepas Fase B, dan mendorong orang mengarang angka.
+    """
     if not actor or actor.role != "admin":
         raise UserAdminError("⛔ Hanya admin yang bisa mendaftarkan pengguna.")
     if not nama:
@@ -62,7 +77,7 @@ async def register_user(
     if role not in _ROLES:
         raise UserAdminError("Peran harus: *operator*, *staff*, atau *admin*.")
     phone = norm_phone(no_hp)
-    if not telegram_id and not phone:
+    if not telegram_id and not phone and not lewat_sandi:
         raise UserAdminError(
             "Sebutkan *Telegram ID* atau *nomor HP*-nya.\n"
             "Contoh: `daftarkan operator Budi id 12345678 gudang 1`\n"
@@ -83,7 +98,12 @@ async def register_user(
             raise UserAdminError(f"Nomor HP {phone} sudah terdaftar atas nama {dup.nama}.")
 
     wh = await _warehouse_for_gudang(db, gudang) if role == "operator" else None
-    status = "aktif" if telegram_id else "pending"
+    # "pending" berarti menunggu orangnya membuktikan diri lewat Telegram.
+    # Yang masuk lewat sandi tidak punya penantian itu — ia aktif begitu
+    # kredensialnya dibuatkan, dan tanpa kredensial ia tak bisa masuk sama
+    # sekali. Menandainya "pending" hanya akan membuatnya tak muncul di daftar
+    # orang yang belum punya akun, sehingga akunnya tak pernah bisa dibuat.
+    status = "aktif" if (telegram_id or lewat_sandi) else "pending"
     db.add(
         User(
             nama=nama,
@@ -98,6 +118,9 @@ async def register_user(
     await db.commit()
 
     tempat = f" {wh.nama_gudang}" if wh else ""
+    if status == "aktif" and lewat_sandi and not telegram_id:
+        return (f"{nama} terdaftar sebagai {_role_label(role)}{tempat}. "
+                "Sekarang buatkan akunnya di daftar di bawah.")
     if status == "aktif":
         return f"✓ {nama} terdaftar sebagai *{_role_label(role)}*{tempat} — langsung aktif (ID {telegram_id})."
     return (

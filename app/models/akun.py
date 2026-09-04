@@ -73,12 +73,24 @@ class ProduksiAkun(Base, TimestampMixin):
 
     @property
     def is_admin(self) -> bool:
-        return self.peran == "admin"
+        """Direksi ke atas. Superadmin selalu termasuk — ia di ATAS Direksi,
+        dan tangga yang tidak menurun ke bawah bukan tangga."""
+        return self.peran in ("admin", "superadmin")
+
+    @property
+    def is_super(self) -> bool:
+        return self.peran == "superadmin"
 
     @property
     def is_staff(self) -> bool:
-        """Staff kantor & Direksi — boleh melihat data uang."""
-        return self.peran in ("admin", "staff")
+        """Boleh melihat data uang.
+
+        "staff" dipertahankan sebagai peran LAMA: sejak 3 September 2026
+        tangganya superadmin / admin / operator, tetapi baris lama di `users`
+        mungkin masih menyebut staff, dan orangnya tidak boleh kehilangan
+        akses gara-gara namanya berganti.
+        """
+        return self.peran in ("superadmin", "admin", "staff")
 
     @property
     def sesi_pendek(self) -> bool:

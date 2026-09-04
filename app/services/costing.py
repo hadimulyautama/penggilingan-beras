@@ -79,57 +79,57 @@ async def _pk_output(db: AsyncSession, proc: MillingProcess) -> float | None:
 
 
 async def _sumber_info(db: AsyncSession, proc: MillingProcess):
-    """(kg_gabah, dried, kondisi, bahan_baku|None) sumber sebuah proses."""
-    if proc.drying_lot_id:
-        lot = await db.get(DryingLot, proc.drying_lot_id)
-        dried = lot is not None and lot.dryer_id is not None
-        rows = (
-            await db.execute(
-                select(
-                    PurchaseBatch.kondisi_gabah,
-                    func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0),
-                    func.count(PurchaseBatch.id),
-                    func.count(PurchaseBatchVerification.id),
-                    func.coalesce(
-                        func.sum(PurchaseBatch.berat_total_kg * PurchaseBatchVerification.harga_per_kg),
-                        0,
-                    ),
-                )
-                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-                .join(
-                    PurchaseBatchVerification,
-                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
-                    isouter=True,
-                )
-                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
-                .group_by(PurchaseBatch.kondisi_gabah)
-            )
-        ).all()
-        kg = sum(float(r[1]) for r in rows)
-        kondisi = rows[0][0] if rows else None
-        n_batch = sum(int(r[2]) for r in rows)
-        n_verif = sum(int(r[3]) for r in rows)
-        bahan = sum(float(r[4]) for r in rows) if n_verif == n_batch and n_batch else None
-        return kg, dried, kondisi, bahan
-    if proc.purchase_batch_id:
-        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
-        if b is None:
-            return 0.0, False, None, None
-        v = (
-            await db.execute(
-                select(PurchaseBatchVerification.harga_per_kg).where(
-                    PurchaseBatchVerification.purchase_batch_id == b.id
-                )
-            )
-        ).scalars().first()
-        # Batch "menunggu bobot" (belum ada bobot dari timbang) → belum bisa dihitung HPP.
+    """(kg_gabah, dried, kondisi, bahan_baku|None, biaya_pengeringan) sumber proses.
+
+    Isinya dibaca dari `milling.sumber_batch` — satu tempat untuk pertanyaan
+    "apa isi proses ini", dipakai HPP maupun analitik.
+
+    Biaya pengeringan dijumlahkan PER BATCH, bukan satu tarif dikali total.
+    Satu silo bisa berisi gabah yang lewat dryer dan gabah kering yang langsung
+    masuk; menagihkan satu tarif untuk keduanya salah ke dua arah sekaligus —
+    yang kering ikut membayar pengeringan yang tak pernah terjadi, dan
+    rata-ratanya menyembunyikan keduanya.
+    """
+    from app.penggilingan.gudang1.services.milling import sumber_batch
+
+    sumber = await sumber_batch(db, proc)
+    if not sumber:
+        return float(proc.berat_gabah_masuk_kg or 0), False, None, None, 0.0
+
+    kg = 0.0
+    bahan = 0.0
+    semua_berharga = True
+    pengeringan = 0.0
+    kondisi_ada: set[str] = set()
+    dried = False
+
+    for b, harga, lewat_dryer in sumber:
+        # Batch "menunggu bobot" (belum ada bobot dari timbang) tak bisa
+        # dihitung — ia diabaikan di sini, dan rekonsiliasi yang menagihnya.
         if b.berat_total_kg is None:
-            return 0.0, False, b.kondisi_gabah, None
+            semua_berharga = False
+            continue
         berat = float(b.berat_total_kg)
-        bahan = berat * float(v) if v else None
-        # Milling langsung dari batch (tanpa lot pengeringan) = tak dikeringkan.
-        return berat, False, b.kondisi_gabah, bahan
-    return float(proc.berat_gabah_masuk_kg or 0), False, None, None
+        kg += berat
+        if b.kondisi_gabah:
+            kondisi_ada.add(b.kondisi_gabah)
+        if harga is None:
+            semua_berharga = False
+        else:
+            bahan += berat * harga
+
+        # Gabah basah PASTI dikeringkan — ia tak bisa langsung ke silo.
+        # Gabah kering hanya dikenai biaya bila memang lewat dryer.
+        if b.kondisi_gabah == "basah":
+            dried = True
+            pengeringan += settings.biaya_pengeringan_basah_per_kg * berat
+        elif lewat_dryer:
+            dried = True
+            pengeringan += settings.biaya_pengeringan_kering_per_kg * berat
+
+    kondisi = (kondisi_ada.pop() if len(kondisi_ada) == 1
+               else ("campuran" if kondisi_ada else None))
+    return kg, dried, kondisi, (bahan if semua_berharga and kg else None), pengeringan
 
 
 async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdown | None:
@@ -137,19 +137,9 @@ async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdo
     pk = await _pk_output(db, proc)
     if not pk:
         return None
-    kg, dried, kondisi, bahan = await _sumber_info(db, proc)
+    kg, dried, kondisi, bahan, pengeringan = await _sumber_info(db, proc)
     if not kg:
         kg = float(proc.berat_gabah_masuk_kg or 0)
-
-    # Gabah basah PASTI dikeringkan (tak bisa langsung silo/giling). Gabah
-    # kering: dikeringkan hanya bila lewat dryer (else langsung silo = gratis).
-    if kondisi == "basah":
-        dried = True
-        pengeringan_rate = settings.biaya_pengeringan_basah_per_kg
-    elif kondisi == "kering" and dried:
-        pengeringan_rate = settings.biaya_pengeringan_kering_per_kg
-    else:
-        pengeringan_rate = 0.0
 
     rubber_per_kg = (
         settings.rubber_roll_harga_per_set / (settings.rubber_roll_umur_ton * 1000)
@@ -159,7 +149,7 @@ async def production_cost(db: AsyncSession, proc: MillingProcess) -> CostBreakdo
         kode_proses=proc.kode_proses,
         kg_gabah=kg, pk_output=pk, dried=dried, kondisi=kondisi, bahan_baku=bahan,
         bongkar=settings.biaya_bongkar_per_kg_gabah * kg,
-        pengeringan=pengeringan_rate * kg,
+        pengeringan=pengeringan,
         operator=settings.biaya_operator_per_proses,  # FLAT per proses milling
         tenaga_milling=settings.biaya_tenaga_milling_per_kg_pk * pk,
         rubber_roll=rubber_per_kg * kg,

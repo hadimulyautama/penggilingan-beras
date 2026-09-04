@@ -1,6 +1,12 @@
-"""Registry bot pabrik -> satu backend. Setiap bot punya Dispatcher sendiri.
+"""Registry bot -> satu backend. Setiap bot punya Dispatcher sendiri.
 
 Bot Kantor sudah pindah ke service sendiri — jangan didaftarkan lagi di sini.
+
+**Bot operator (gudang1 & gudang2) DIHAPUS 3 September 2026.** Operator
+mencatat pekerjaannya lewat Pos Produksi di peramban, dan Telegram tak lagi
+punya peran bagi mereka: perangkat gudang dipakai bergantian, sedangkan akun
+Telegram menempel pada orang — dua hal yang tidak pernah benar-benar cocok.
+Yang tersisa hanya bot admin, untuk staff & Direksi.
 """
 from __future__ import annotations
 
@@ -11,16 +17,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import ErrorEvent
 
 from app.bots import admin
-from app.penggilingan.gudang1 import bot as gudang1
-from app.penggilingan.gudang2 import bot as gudang2
 from app.config import settings
 
 log = logging.getLogger("bots")
 
 # Peta nama bot -> router handler-nya.
 _ROUTERS = {
-    "gudang1": gudang1.router,
-    "gudang2": gudang2.router,
     "admin": admin.router,
 }
 

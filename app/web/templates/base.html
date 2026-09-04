@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ VERSI }}">
 </head>
 <body>
 <div class="bingkai">
@@ -46,12 +46,52 @@
 </main>
 
 {% block kaki %}{% endblock %}
+
+{# Hanya di empat layar bertab. Halaman masuk, ganti sandi, dan kelola
+   pengguna sengaja tanpa bilah: dua yang pertama belum/tidak punya tujuan
+   yang boleh dituju, yang ketiga dicapai dari beranda dan bukan pekerjaan
+   harian. #}
+{% if akun and layar in TAB_KUNCI %}
+<nav class="bilah" aria-label="Navigasi utama">
+  {% for kunci, alamat, nama in TAB %}
+    <a class="bilah__tab{{ ' bilah__tab--aktif' if layar == kunci }}"
+       href="{{ alamat }}"{{ ' aria-current=page'|safe if layar == kunci }}>
+      <span class="bilah__ikon">
+        {% if kunci == 'beranda' %}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M9.5 20v-5.5h5V20"/></svg>
+        {% elif kunci == 'aksi' %}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20h16"/><path d="M6 17V8l6-4 6 4v9"/><path d="M10 17v-4h4v4"/></svg>
+        {% elif kunci == 'berjalan' %}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8.2"/><path d="M12 7.6V12l3 2"/></svg>
+        {% else %}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/></svg>
+        {% endif %}
+        {# Lencana muncul HANYA bila angkanya di atas nol. Lencana bertuliskan
+           "0" adalah kebisingan yang mengajari orang mengabaikan lencana. #}
+        {% if kunci == 'berjalan' and MENUNGGU %}
+          <span class="bilah__lencana"
+                aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
+        {% endif %}
+      </span>
+      <span class="bilah__nama">{{ nama }}</span>
+    </a>
+  {% endfor %}
+</nav>
+{% endif %}
 </div>
 
 <script>
 /* "lihat" pada kotak sandi. Mengetik sandi di gudang, sambil berdiri, dengan
    layar yang mungkin kena matahari — tanpa cara memeriksa apa yang terketik,
-   orang menyerah setelah dua kali salah dan memanggil Direksi. */
+   orang menyerah setelah dua kali salah dan memanggil Super Admin. */
 document.querySelectorAll("[data-lihat]").forEach(function (tbl) {
   tbl.addEventListener("click", function () {
     var kotak = document.getElementById(tbl.dataset.lihat);

@@ -53,7 +53,6 @@ from app.bots.silo_flow import maybe_answer_silo_report
 from app.database import BackdateError, SessionLocal
 from app.penggilingan.gudang2.service import (
     Gudang2Error,
-    create_pk_purchase,
     laporan_stok_gudang2,
     log_pk_qc,
     norm_jenis_pk,
@@ -487,46 +486,6 @@ _PK_REQ_LABEL = {
 }
 
 
-def _pk_missing(p) -> list[str]:
-    got = {
-        "nama_supplier": p.nama_supplier, "berat_kg": p.berat_kg,
-        "no_polisi": p.no_polisi, "jenis_pk": norm_jenis_pk(p.jenis_pk),
-    }
-    return [_PK_REQ_LABEL[f] for f in _PK_REQ_LABEL if not got[f]]
-
-
-async def _finish_or_ask_pk(message: Message, db, user, session, p, accumulated: str) -> None:
-    """Simpan PK luar bila lengkap; kalau belum, minta field yang kurang."""
-    missing = _pk_missing(p)
-    if missing:
-        session.pk_text = accumulated
-        session.stage = "awaiting_pk"
-        await message.answer(
-            "📝 Data PK belum lengkap. Sebutkan: *" + ", ".join(missing) + "*.\n"
-            "_Contoh lengkap: `beli PK dari CV Tani 8 ton KL plat B 1234 XY`._",
-            parse_mode="Markdown",
-        )
-        return
-    session.stage = "idle"
-    session.pk_text = None
-    r = await create_pk_purchase(
-        db, user=user, nama_supplier=p.nama_supplier, berat_kg=p.berat_kg,
-        jenis_pk=p.jenis_pk, kadar_air=p.kadar_air, no_polisi=p.no_polisi,
-        tanggal=p.tanggal, jam=p.jam,
-    )
-    extra = (
-        f"\n_Supplier baru '{r.supplier_nama}' ditambahkan._"
-        if r.supplier_created else ""
-    )
-    jl = _JENIS_PK_LABEL_ADMIN.get(r.batch.jenis_pk, r.batch.jenis_pk or "-")
-    await message.answer(
-        f"✓ PK luar tercatat: *{r.batch.kode_batch}* ({r.supplier_nama}, "
-        f"{jl} {_kg(float(r.batch.berat_total_kg or 0))} · truk {r.batch.no_polisi_truk}).\n"
-        f"Menunggu QC + verifikasi harga.{extra}",
-        parse_mode="Markdown",
-    )
-
-
 _JENIS_PK_LABEL_ADMIN = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}
 
 
@@ -548,7 +507,21 @@ async def _handle_gudang2_admin(message: Message, db, user, text: str, session) 
                 )
             )
         elif p.intent == "beli_pk_luar":
-            await _finish_or_ask_pk(message, db, user, session, p, text)
+            # DITUTUP 3 September 2026 (keputusan Direksi). PK masuk tidak
+            # boleh dicatat manual — ia tetap lewat proses timbang, sama
+            # seperti gabah. Mencatatnya lewat percakapan berarti bobotnya
+            # diketik orang, bukan ditimbang.
+            #
+            # Balasannya menunjuk jalan, bukan sekadar menolak: yang mengetik
+            # kalimat ini sedang berdiri di depan truk.
+            await message.answer(
+                "PK luar tidak lagi dicatat lewat chat.\n\n"
+                "Timbang truknya di aplikasi Timbangan seperti biasa, lalu buka "
+                "*Pos Produksi → Catat pekerjaan → Catat PK luar datang* dan "
+                "pilih tiketnya. Supplier, bobot, dan plat ikut sendiri dari "
+                "tiket itu.",
+                parse_mode="Markdown",
+            )
         elif p.intent == "verifikasi_pk_luar":
             # PK masuk = pasti diterima. Intent ini mencatat KUALITAS &/atau HARGA
             # (dua hal terpisah); penolakan sudah tak berlaku.
@@ -840,26 +813,6 @@ async def handle_message(message: Message) -> None:
                 await message.answer(str(e.args[0]) if e.args else "Gagal simpan karung.")
             except Exception:
                 log.exception("parse_kemasan lanjutan gagal")
-                await message.answer(AI_ERROR_MSG)
-            return
-
-        # ── Melengkapi data beli PK luar (kumpulkan field kurang) ──
-        if session.stage == "awaiting_pk" and session.pk_text:
-            if lower in CANCEL_WORDS:
-                session.stage = "idle"
-                session.pk_text = None
-                await message.answer("Baik, pencatatan PK dibatalkan.")
-                return
-            accumulated = (session.pk_text + " " + text).strip()
-            try:
-                p = await parse_gudang2(accumulated)
-                await _finish_or_ask_pk(message, db, user, session, p, accumulated)
-            except (Gudang2Error, BackdateError) as e:
-                session.stage = "idle"
-                session.pk_text = None
-                await message.answer(str(e.args[0]) if e.args else "Gagal simpan PK.")
-            except Exception:
-                log.exception("parse_gudang2 lanjutan gagal")
                 await message.answer(AI_ERROR_MSG)
             return
 

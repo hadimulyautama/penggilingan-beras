@@ -139,9 +139,11 @@ class Settings(BaseSettings):
     @property
     def bot_tokens(self) -> dict[str, str]:
         """Peta nama bot -> token (hanya yang terisi)."""
+        # Bot operator dihapus 3 September 2026. Tokennya sengaja TIDAK
+        # dipetakan lagi meski variabelnya mungkin masih ada di Railway:
+        # token yang terdaftar berarti bot yang menyala, dan bot operator
+        # yang menyala berarti jalur masuk yang sudah ditutup terbuka lagi.
         raw = {
-            "gudang1": self.bot_gudang1_token,
-            "gudang2": self.bot_gudang2_token,
             "admin": self.bot_admin_token,
         }
         return {name: token for name, token in raw.items() if token.strip()}

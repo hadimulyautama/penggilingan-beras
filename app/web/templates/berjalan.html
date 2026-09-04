@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block judul %}Berjalan{% endblock %}
+{% block isi %}
+
+{% if not menunggu and not berjalan %}
+  {# Keadaan yang paling sering dilihat menjelang tutup gudang. Layar kosong
+     tanpa kalimat adalah tempat aplikasi terlihat rusak, padahal justru
+     sedang benar. #}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></svg>
+    <div>
+      <h2>Tidak ada yang menunggu Anda</h2>
+      <p class="bantu">
+        Semua tiket sudah ditaut, tidak ada lot yang perlu dipindah, dan tidak
+        ada giling yang perlu ditutup.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% if menunggu %}
+  <div>
+    <span class="lbl">Menunggu Anda · {{ menunggu|length }}</span>
+    <p class="bantu" style="margin:-4px 0 10px">Tekan untuk membuka aksi yang menutupnya.</p>
+    <div class="grup" style="gap:8px">
+      {% for b in menunggu %}
+        <a class="jalan" href="/aksi?buka={{ b.aksi }}">
+          <div class="jalan__isi">
+            <div class="jalan__kode">{{ b.kode }}</div>
+            <div class="jalan__ket">{{ b.isi }}</div>
+            <div class="jalan__keadaan">
+              {{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
+            </div>
+          </div>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+               stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+{% if berjalan %}
+  <div>
+    <span class="lbl">Sedang berjalan</span>
+    <p class="bantu" style="margin:-4px 0 10px">
+      Menunggu waktu, bukan orang. Tidak ikut dihitung lencana.
+    </p>
+    <div class="grup" style="gap:8px">
+      {% for b in berjalan %}
+        <div class="jalan jalan--diam">
+          <div class="jalan__isi">
+            <div class="jalan__kode">{{ b.kode }}</div>
+            <div class="jalan__ket">{{ b.isi }}</div>
+            <div class="jalan__keadaan">
+              {{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

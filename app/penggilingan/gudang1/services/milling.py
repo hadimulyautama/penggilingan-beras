@@ -12,10 +12,12 @@ from app.models import (
     DryingLotBatch,
     InternalTransfer,
     MillingProcess,
+    MillingProcessSource,
     MillingProcessVerification,
     MillingProgressLog,
     MillingQcLog,
     PurchaseBatch,
+    PurchaseBatchVerification,
     Silo,
     SiloStorage,
     Supplier,
@@ -103,29 +105,26 @@ async def start_milling(
         raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
 
     now = input_time(tanggal, jam)
-    lot_row = next((r for r in rows if r.drying_lot_id), None)
-    if lot_row is not None:
-        st = lot_row  # dari pengeringan: lot sudah ada
-    else:
-        # KERING menunggu: bentuk 1 LOT dari SEMUA batch di silo saat giling dimulai.
-        loose = [r for r in rows if r.purchase_batch_id]
-        lot = DryingLot(
-            kode_lot=await next_drying_lot_code(db), dryer_id=None,
-            waktu_mulai_pengeringan=now, waktu_selesai_pengeringan=now,
-            status="selesai", created_by=user.id,
-        )
-        db.add(lot)
-        await db.flush()
-        for r in loose:
-            db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=r.purchase_batch_id))
-        st = loose[0]  # konsolidasi: baris pertama jadi lot-row, sisanya ditutup
-        st.drying_lot_id = lot.id
-        st.purchase_batch_id = None
-        for r in loose[1:]:
-            r.status = "kosong"
-        await db.flush()
 
-    berat = await _storage_kg(db, st)
+    # SELURUH isi silo masuk ke satu proses giling — bukan satu baris saja.
+    #
+    # Dulu di sini dipilih SATU baris: kalau ada lot hasil pengeringan, itu
+    # yang diambil; kalau tidak, batch-batch lepas dikonsolidasi jadi lot baru.
+    # Selama satu silo hanya boleh berisi satu hal, keduanya cukup. Begitu silo
+    # boleh dicampur, cabang pertama diam-diam mengabaikan batch lepas yang ada
+    # di silo yang sama: gabahnya ikut tergiling, tetapi tidak ikut tercatat.
+    #
+    # `drying_lots` sekarang berarti satu PROSES PENGERINGAN, dan apa yang
+    # digiling bersama didaftar di `milling_process_sources`.
+    berat_per_baris: list[tuple[SiloStorage, float]] = []
+    for r in rows:
+        berat_per_baris.append((r, await _storage_kg(db, r)))
+    berat = sum(k for _, k in berat_per_baris)
+
+    # Penunjuk tunggal di `MillingProcess` tetap diisi supaya laporan, undo,
+    # dan rekonsiliasi yang membacanya tidak mati sekaligus. Yang dipilih:
+    # baris lot bila ada — itulah sumber terbesar dan paling berarti.
+    st = next((r for r in rows if r.drying_lot_id), rows[0])
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
@@ -138,6 +137,13 @@ async def start_milling(
         created_by=user.id,
     )
     db.add(proc)
+    await db.flush()
+    for r, kg in berat_per_baris:
+        db.add(MillingProcessSource(
+            milling_process_id=proc.id, silo_storage_id=r.id,
+            drying_lot_id=r.drying_lot_id, purchase_batch_id=r.purchase_batch_id,
+            berat_kg=kg,
+        ))
     await db.flush()
     await log_activity(
         db, table_name="milling_process", record_id=proc.id, action="INSERT",
@@ -577,3 +583,65 @@ async def verify_milling_output(
     return VerifyOutputResult(
         proc=proc, berat_output=berat_output, rendemen_persen=rendemen, re_verified=re_verified
     )
+
+
+async def sumber_batch(
+    db: AsyncSession, proc: MillingProcess
+) -> list[tuple[PurchaseBatch, float | None, bool]]:
+    """Batch gabah yang benar-benar masuk sebuah proses giling.
+
+    Kembalian: (batch, harga_per_kg | None, lewat_dryer).
+
+    SATU tempat untuk pertanyaan "apa isi proses ini", dipakai HPP maupun
+    analitik. Dulu keduanya menjawabnya sendiri-sendiri dari penunjuk tunggal
+    di `MillingProcess`, dan jawaban itu hanya benar selama satu silo tak
+    boleh dicampur. Begitu boleh, keduanya akan menghitung sebagian isi saja —
+    dan pada HPP, "sebagian" berarti angka uang yang salah tanpa ada yang tahu.
+
+    `lewat_dryer` ditentukan per batch, bukan per proses: satu silo bisa berisi
+    gabah yang dikeringkan DAN gabah kering yang langsung masuk. Menagihkan
+    satu tarif pengeringan untuk keduanya salah ke dua arah sekaligus.
+    """
+    baris = list((await db.execute(
+        select(MillingProcessSource).where(
+            MillingProcessSource.milling_process_id == proc.id
+        )
+    )).scalars().all())
+
+    # Proses lama yang tak punya baris silo (sebelum penautan timbang) tidak
+    # ikut terisi migrasi. Penunjuk tunggalnya masih satu-satunya yang ada.
+    pasangan: list[tuple[int | None, int | None]] = (
+        [(b.drying_lot_id, b.purchase_batch_id) for b in baris] if baris
+        else [(proc.drying_lot_id, proc.purchase_batch_id)]
+    )
+
+    harga = dict((await db.execute(
+        select(PurchaseBatchVerification.purchase_batch_id,
+               PurchaseBatchVerification.harga_per_kg)
+    )).all())
+
+    hasil: list[tuple[PurchaseBatch, float | None, bool]] = []
+    terlihat: set[int] = set()
+    for lot_id, batch_id in pasangan:
+        if lot_id:
+            lot = await db.get(DryingLot, lot_id)
+            lewat = lot is not None and lot.dryer_id is not None
+            batches = (await db.execute(
+                select(PurchaseBatch)
+                .join(DryingLotBatch,
+                      DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == lot_id)
+            )).scalars().all()
+        elif batch_id:
+            lewat = False
+            b = await db.get(PurchaseBatch, batch_id)
+            batches = [b] if b else []
+        else:
+            continue
+        for b in batches:
+            if b.id in terlihat:      # satu batch tak boleh terhitung dua kali
+                continue
+            terlihat.add(b.id)
+            h = harga.get(b.id)
+            hasil.append((b, float(h) if h is not None else None, lewat))
+    return hasil

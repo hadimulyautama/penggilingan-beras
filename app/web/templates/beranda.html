@@ -45,44 +45,42 @@
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
          stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
   </a>
+
+  <a class="tindakan" href="/laporan" style="margin-top:8px">
+    <div class="tindakan__ikon">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/>
+      </svg>
+    </div>
+    <div class="tindakan__isi">
+      <div class="tindakan__nama">Laporan</div>
+      <div class="tindakan__ket">status gudang · stok · riwayat{% if boleh_uang %} · HPP &amp; biaya{% endif %}</div>
+    </div>
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
+         stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
 </div>
 
 <div>
-  <span class="lbl">Akun Anda</span>
-  <div class="grup" style="gap:8px">
-    <a class="tindakan" href="/ganti-sandi">
-      <div class="tindakan__ikon">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-             stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>
-        </svg>
+  <span class="lbl">Akun &amp; pengaturan</span>
+  <a class="tindakan" href="/pengaturan">
+    <div class="tindakan__ikon">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.88 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.88.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03z"/>
+      </svg>
+    </div>
+    <div class="tindakan__isi">
+      <div class="tindakan__nama">Pengaturan</div>
+      <div class="tindakan__ket">
+        nama &amp; sandi{% if akun.is_admin %} · {{ jml_akun }} akun · alat{% endif %}
       </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Ganti kata sandi</div>
-        <div class="tindakan__ket">{% if akun.harus_ganti_sandi %}masih sandi awal{% else %}ubah sandi Anda sendiri{% endif %}</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
-           stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-
-    {% if akun.is_admin %}
-    <a class="tindakan" href="/pengguna">
-      <div class="tindakan__ikon">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-             stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.2 2.5-5.2 5.5-5.2s5.5 2 5.5 5.2"/>
-          <path d="M16.5 11.2a3 3 0 1 0-1.6-5.5"/><path d="M18 20c0-2.4-.9-4.2-2.4-5.2"/>
-        </svg>
-      </div>
-      <div class="tindakan__isi">
-        <div class="tindakan__nama">Kelola pengguna</div>
-        <div class="tindakan__ket">{{ jml_akun }} akun · buat, setel ulang sandi, jenis perangkat</div>
-      </div>
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
-           stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-    </a>
-    {% endif %}
-  </div>
+    </div>
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
+         stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
 </div>
 
 {% endblock %}

@@ -14,5 +14,6 @@
   {% if akun.sesi_pendek %}Tercatat atas nama {{ akun.nama }} — tekan Ganti bila bukan Anda
   {% else %}Tercatat atas nama {{ akun.nama }}{% endif %}
 </div>
-<script src="/static/aksi.js" defer></script>
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}"></script>
 {% endblock %}

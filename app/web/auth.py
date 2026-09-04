@@ -90,7 +90,7 @@ async def proses_masuk(
         if akun is None or not cek_sandi(sandi, akun.password_hash):
             return gagal("Nama pengguna atau kata sandi salah.")
         if akun.status != "aktif":
-            return gagal("Akun ini sedang dinonaktifkan. Hubungi Direksi.")
+            return gagal("Akun ini sedang dinonaktifkan. Hubungi Super Admin.")
 
         akun.terakhir_login = now_local()
         wajib_ganti = akun.harus_ganti_sandi
@@ -140,7 +140,7 @@ async def proses_ganti_sandi(
         return render(request, "ganti_sandi.html", wajib=wajib,
                       kembali=None if wajib else "/", pesan_err=pesan)
 
-    # Saat sandi masih sandi awal dari Direksi, sandi lama TIDAK diminta:
+    # Saat sandi masih sandi awal dari Super Admin, sandi lama TIDAK diminta:
     # orangnya baru saja membuktikan dirinya beberapa detik lalu di halaman
     # masuk, dan memintanya mengetik ulang sandi yang justru sedang dibuang
     # hanya menambah satu kesempatan salah ketik.
