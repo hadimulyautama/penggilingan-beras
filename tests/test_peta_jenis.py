@@ -1,7 +1,7 @@
 """Tes peta jenis timbangan ↔ produksi (murni)."""
 from app.penggilingan.peta_jenis import (
     TUMPUK,
-    intake_dari_jenis, is_gabah, is_pk, DRYER, SILO_A, SILO_B, PETA_KELUAR,
+    intake_dari_jenis, is_gabah, is_pk, DRYER, SILO, PETA_KELUAR,
 )
 
 
@@ -19,15 +19,23 @@ def test_gabah_basah_boleh_dryer_atau_tumpukan():
 def test_gabah_basah_tetap_tak_boleh_langsung_ke_silo():
     """Pagar yang TIDAK ikut longgar saat tumpukan ditambahkan: silo Gudang 1
     menampung gabah kering."""
-    j = intake_dari_jenis("GABAH_BASAH")
-    assert SILO_A not in j.tujuan_pilihan and SILO_B not in j.tujuan_pilihan
+    assert SILO not in intake_dari_jenis("GABAH_BASAH").tujuan_pilihan
+
+
+def test_aturan_tak_menyebut_silo_mana():
+    """Jumlah silo urusan alat, bukan urusan mutu gabah. Menyebut "A dan B"
+    di aturan komoditas menanam anggapan "silonya dua" di tempat yang paling
+    salah untuk menyimpannya."""
+    for jenis in ("GABAH_BASAH", "GABAH_KERING"):
+        for t in intake_dari_jenis(jenis).tujuan_pilihan:
+            assert not t.startswith("silo_"), f"{jenis} masih menyebut {t}"
 
 
 def test_gabah_kering_pilihan():
     j = intake_dari_jenis("GABAH_KERING")
     assert j.model == "gabah" and j.kondisi == "kering"
     assert j.tujuan_wajib is None
-    assert set(j.tujuan_pilihan) == {SILO_A, SILO_B, DRYER, TUMPUK}
+    assert set(j.tujuan_pilihan) == {SILO, DRYER, TUMPUK}
 
 
 def test_pk():

@@ -56,6 +56,26 @@ async def _g1_warehouse_id(db: AsyncSession) -> int:
     return wid
 
 
+async def silos_g1(db: AsyncSession) -> list[Silo]:
+    """Semua silo gabah kering Gudang 1, urut nama.
+
+    Jumlahnya BUKAN dua. Ia ditentukan baris yang ada di tabel, dan Direksi
+    boleh menambahnya — jadi tak ada satu pun tempat yang boleh menyebut
+    "A dan B" sebagai kebenaran.
+    """
+    wid = await _g1_warehouse_id(db)
+    return list((await db.execute(
+        select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+    )).scalars().all())
+
+
+async def silo_g1_by_id(db: AsyncSession, silo_id: int) -> Silo | None:
+    wid = await _g1_warehouse_id(db)
+    return (await db.execute(
+        select(Silo).where(Silo.id == silo_id, Silo.warehouse_id == wid)
+    )).scalars().first()
+
+
 async def get_g1_silo(db: AsyncSession, letter: str) -> Silo | None:
     wid = await _g1_warehouse_id(db)
     stmt = select(Silo).where(

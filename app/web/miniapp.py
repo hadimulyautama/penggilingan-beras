@@ -153,10 +153,11 @@ async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
         for d in mesin:
             mati = "" if d.status == "aktif" else f" ({d.status})"
             opsi.append([f"dryer:{d.id}", f"{d.nama}{mati}"])
-    if "silo_a" in sah:
-        opsi.append(["silo_a", "Silo A (gabah kering)"])
-    if "silo_b" in sah:
-        opsi.append(["silo_b", "Silo B (gabah kering)"])
+    if "silo" in sah:
+        from app.penggilingan.gudang1.services.silo import silos_g1
+        async with SessionLocal() as db:
+            for si in await silos_g1(db):
+                opsi.append([f"silo:{si.id}", f"{si.nama_silo} (gabah kering)"])
     if "tumpuk" in sah:
         opsi.append(["tumpuk", f"Tumpukan {kondisi}"])
     return opsi
@@ -169,9 +170,10 @@ def _urai_tujuan(nilai: str | None) -> tuple[str, int | None]:
     hanya menentukan mesin mana, dan itu bukan urusan aturan.
     """
     nilai = (nilai or "").strip()
-    if nilai.startswith("dryer:"):
-        ekor = nilai.split(":", 1)[1]
-        return "dryer", int(ekor) if ekor.isdigit() else None
+    for awalan in ("dryer:", "silo:"):
+        if nilai.startswith(awalan):
+            ekor = nilai.split(":", 1)[1]
+            return awalan[:-1], int(ekor) if ekor.isdigit() else None
     return nilai, None
 
 
@@ -196,7 +198,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     TUJUAN_PK = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
                  ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     actions: list[dict] = []
-    SILO_AB = [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]
     if g1:
         # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
         # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
@@ -268,8 +269,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Hanya lot yang sudah dinyatakan selesai pendinginan.", "fields": [
                  {"name": "kode_lot", "label": "Lot siap dipindah", "type": "remote",
                   "source": "/miniapp/actions/drying-done"},
-                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "select",
-                  "options": SILO_AB},
+                 {"name": "silo", "label": "Silo tujuan (wajib pilih)",
+                  "type": "remote", "source": "/miniapp/actions/silo-g1"},
              ]},
             {"id": "mulai_giling", "label": "⚙️ Mulai giling",
              "post": "/miniapp/actions/mulai-giling", "fields": [
@@ -443,6 +444,26 @@ _ACTION_WH = {
 
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
 
+@router.get("/actions/silo-g1")
+async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo gabah kering Gudang 1, beserta isinya sekarang.
+
+    Isinya ikut ditampilkan karena silo yang sudah berisi TETAP boleh
+    menerima — tetapi orang berhak tahu sebelum memilih, bukan diberi tahu
+    lewat peringatan sesudahnya.
+    """
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
+    out = []
+    async with SessionLocal() as db:
+        for si in await silos_g1(db):
+            kg = await _silo_content_kg(db, si.id)
+            isi = f"berisi {_rp(kg)} kg" if kg else "kosong"
+            out.append({"value": si.nama_silo.replace("Silo ", ""),
+                        "label": f"{si.nama_silo} · {isi}"})
+    return out
+
+
 @router.get("/actions/dryer-menunggu")
 async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Mesin pengering yang ADA gabahnya menunggu dinyalakan.
@@ -508,7 +529,8 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
             jenis, mesin_id = _urai_tujuan(req.tujuan)
             batch, tempat = await tempatkan(
                 db, user=u, kode_batch=req.kode_batch, tujuan=jenis,
-                dryer_id=mesin_id)
+                dryer_id=mesin_id if jenis == "dryer" else None,
+                silo_id=mesin_id if jenis == "silo" else None)
         except TumpukanError as e:
             raise _err(e, "Gagal menempatkan gabah.")
     pesan = f"✓ *{batch.kode_batch}* ditempatkan → {tempat}."
@@ -876,10 +898,16 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 nama_mesin = r_dryer.nama_dryer or "dryer"
                 tempat = (f"🌫️ masuk {nama_mesin} (menunggu — tekan "
                           "`Mulai pengeringan` saat dipanaskan)")
-            else:  # silo_a / silo_b (kering langsung)
-                silo = "A" if tujuan == "silo_a" else "B"
-                await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
-                tempat = f"🏗️ masuk Silo {silo} (kering menunggu — lot terbentuk saat digiling)"
+            else:  # silo (kering langsung)
+                from app.penggilingan.gudang1.services.silo import silo_g1_by_id
+                si = await silo_g1_by_id(db, mesin_id) if mesin_id else None
+                if si is None:
+                    raise HTTPException(400, "Pilih silo tujuannya dulu.")
+                await masuk_silo(db, user=u,
+                                 nama_silo=si.nama_silo.replace("Silo ", ""),
+                                 kode_lot=None, kode_batch=kode)
+                tempat = (f"🏗️ masuk {si.nama_silo} (kering menunggu — "
+                          "lot terbentuk saat digiling)")
         except (DryingError, SiloError) as e:
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
@@ -1009,8 +1037,8 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih lot yang mau dipindah dulu.")
-    if (req.silo or "").upper() not in ("A", "B"):
-        raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
+    if not (req.silo or "").strip():
+        raise HTTPException(400, "Pilih silo tujuannya dulu.")
     from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)

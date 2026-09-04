@@ -14,7 +14,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Tujuan penempatan gabah (harus cocok dengan mini-app & service).
-DRYER, SILO_A, SILO_B = "dryer", "silo_a", "silo_b"
+DRYER = "dryer"
+#: Silo gabah kering sebagai JENIS tujuan — silo mana disebut terpisah
+#: ("silo:<id>"). Dulu ada `SILO_A` dan `SILO_B`, dan itu menanam anggapan
+#: "silonya dua" ke dalam aturan komoditas — tempat yang paling salah untuk
+#: menyimpannya, sebab jumlah silo urusan alat, bukan urusan mutu gabah.
+SILO = "silo"
 # Tumpukan: dua, dan mana yang dipakai TIDAK disimpan — ia sudah ditentukan
 # kondisi gabahnya. Menyimpannya lagi berarti dua tempat yang bisa berbeda.
 TUMPUK = "tumpuk"
@@ -43,7 +48,7 @@ PETA_MASUK: dict[str, IntakeJenis] = {
     # Gabah kering boleh LANGSUNG silo, ke dryer bila masih perlu dikeringkan,
     # atau ditumpuk.
     "GABAH_KERING": IntakeJenis("gabah", kondisi="kering",
-                                tujuan_pilihan=(SILO_A, SILO_B, DRYER, TUMPUK)),
+                                tujuan_pilihan=(SILO, DRYER, TUMPUK)),
     # PK dari luar → gudang2. Subtipe (ks/kl/campuran/semi_ks) dipilih operator (timbang
     # tak membedakannya).
     "BERAS_PK":     IntakeJenis("pk"),

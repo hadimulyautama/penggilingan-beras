@@ -34,7 +34,7 @@ DITUMPUK = "ditumpuk"
 #: bergantung pada dari mana ia datang, melainkan pada basah atau keringnya.
 TUJUAN_PINDAH = {
     "basah": ("dryer", "tumpuk"),
-    "kering": ("dryer", "silo_a", "silo_b", "tumpuk"),
+    "kering": ("dryer", "silo", "tumpuk"),
 }
 
 #: Status batch yang masih menunggu tempat. 'baru' = tercatat tetapi penempatan
@@ -94,7 +94,7 @@ async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatc
 
 async def tempatkan(
     db: AsyncSession, *, user, kode_batch: str, tujuan: str,
-    dryer_id: int | None = None,
+    dryer_id: int | None = None, silo_id: int | None = None,
 ) -> tuple[PurchaseBatch, str]:
     """Tempatkan satu batch gabah: dryer, silo, atau tumpukan.
 
@@ -123,7 +123,7 @@ async def tempatkan(
                 f"{kode_batch} gabah basah — hanya boleh ke Dryer atau Tumpukan, "
                 "belum boleh ke silo."
             )
-        raise TumpukanError("Pilih tujuan: Dryer / Silo A / Silo B / Tumpukan.")
+        raise TumpukanError("Pilih tujuan: Dryer / Silo / Tumpukan.")
 
     try:
         if tujuan == "tumpuk":
@@ -134,10 +134,14 @@ async def tempatkan(
                                   dryer_id=dryer_id)
             tempat = r.nama_dryer or "dryer"
         else:
-            nama = "A" if tujuan == "silo_a" else "B"
+            from app.penggilingan.gudang1.services.silo import silo_g1_by_id
+            silo = await silo_g1_by_id(db, silo_id) if silo_id else None
+            if silo is None:
+                raise TumpukanError("Pilih silo tujuannya dulu.")
+            nama = silo.nama_silo.replace("Silo ", "")
             await masuk_silo(db, user=user, nama_silo=nama, kode_lot=None,
                              kode_batch=kode_batch)
-            tempat = f"Silo {nama}"
+            tempat = silo.nama_silo
     except (DryingError, SiloError) as e:
         raise TumpukanError(e.args[0] if e.args else "Gagal memindahkan.")
     return batch, tempat

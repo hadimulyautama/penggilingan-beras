@@ -36,9 +36,11 @@ def test_gabah_basah_tetap_tak_boleh_langsung_ke_silo():
     assert "silo_b" not in basah.tujuan_pilihan
 
 
-def test_gabah_kering_punya_empat_tujuan():
+def test_gabah_kering_punya_tiga_jenis_tujuan():
+    """Tiga JENIS — dryer, silo, tumpukan. Silo mana disebut terpisah, karena
+    jumlahnya bisa bertambah lewat Pengaturan."""
     kering = peta_jenis.intake_dari_jenis("GABAH_KERING")
-    assert set(kering.tujuan_pilihan) == {"silo_a", "silo_b", "dryer", "tumpuk"}
+    assert set(kering.tujuan_pilihan) == {"silo", "dryer", "tumpuk"}
 
 
 # ─────────────────────── Keluar dari tumpukan ───────────────────────
@@ -50,8 +52,7 @@ def test_basah_tak_pernah_boleh_ke_silo():
 
 
 def test_kering_boleh_ke_dryer_silo_maupun_tumpukan():
-    assert set(tumpukan.TUJUAN_PINDAH["kering"]) == {
-        "dryer", "silo_a", "silo_b", "tumpuk"}
+    assert set(tumpukan.TUJUAN_PINDAH["kering"]) == {"dryer", "silo", "tumpuk"}
 
 
 def test_satu_aksi_untuk_dua_keadaan_yang_menunggu_tempat():

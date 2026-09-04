@@ -38,6 +38,8 @@ SANDI = "skenario123"
 #: Tujuan dryer kini menyebut mesinnya: "dryer:<id>". Di pabrik uji hanya ada
 #: satu mesin, dan id-nya selalu 1 karena tabel dikosongkan tiap skenario.
 DRYER = "dryer:1"
+#: Silo pun menyebut nomornya; di pabrik uji Silo A id 1, Silo B id 2.
+SILO_A, SILO_B = "silo:1", "silo:2"
 _IZIN = ("127.0.0.1:55435", "localhost:55435")
 GAGAL: list[str] = []
 SKENARIO: list = []
@@ -191,7 +193,7 @@ async def s3(op, dir_, sid):
 
     isi = (await op.get("/miniapp/actions/tumpukan")).json()
     r = await op.post("/miniapp/actions/pindah-tumpukan",
-                      json={"kode_batch": isi[0]["value"], "tujuan": "silo_a"})
+                      json={"kode_batch": isi[0]["value"], "tujuan": SILO_A})
     cek("basah DITOLAK ke silo", r.status_code == 400 and "belum boleh ke silo" in r.text,
         r.text[:110])
 
@@ -207,7 +209,7 @@ async def s4(op, dir_, sid):
     await tiket(sid, "TRX-D1", "GABAH_KERING", netto=5000, nota=5000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "silo_b"})
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": SILO_B})
     cek("kering langsung ke Silo B", r.status_code == 200 and "Silo B" in r.text,
         r.text[:90])
     kosong = (await op.get("/miniapp/actions/drying-active")).json()
@@ -232,7 +234,7 @@ async def s5(op, dir_, sid):
     await tiket(sid, "TRX-E2", "GABAH_KERING", netto=4000, nota=4000)
     t2 = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": "silo_a"})
+                      json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": SILO_A})
     cek("silo yang sudah berisi MENERIMA tambahan",
         r.status_code == 200 and "Belum ditempatkan" not in r.text, r.text[:110])
 
@@ -250,7 +252,7 @@ async def s6(op, dir_, sid):
     cek("tiket tertutup tetap ditawarkan", len(t) == 1, f"{len(t)} tiket")
     cek("dan ditandai susulan", "SUSULAN" in t[0]["label"], t[0]["label"][:80])
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "silo_a"})
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": SILO_A})
     cek("bisa ditaut susulan", r.status_code == 200, r.text[:90])
 
 
@@ -308,7 +310,7 @@ async def s9(op, dir_, sid):
     await tiket(sid, "TRX-I2", "GABAH_KERING", netto=2000, nota=2000)
     t2 = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     await op.post("/miniapp/actions/gabah-masuk",
-                  json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": "silo_a"})
+                  json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": SILO_A})
 
     lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
     await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
@@ -322,6 +324,48 @@ async def s9(op, dir_, sid):
     r = await op.post("/miniapp/actions/mulai-giling", json={"silo": silo[0]["value"]})
     cek("campurannya jadi SATU proses giling (8 ton)",
         "8.000" in r.text or "8000" in r.text, r.text[:120])
+
+
+@skenario("Direksi menambah dryer & silo — dan gabah bisa diarahkan ke sana")
+async def s10(op, dir_, sid):
+    r = await op.get("/pengaturan/alat")
+    cek("operator TIDAK boleh membuka pengaturan alat",
+        r.status_code in (303, 403), f"HTTP {r.status_code}")
+
+    r = await dir_.post("/pengaturan/alat/dryer",
+                        data={"nama": "Pengering 2", "kapasitas_kg": 20000})
+    cek("Direksi menambah mesin kedua", r.status_code == 303)
+    r = await dir_.post("/pengaturan/alat/silo", data={"nama": "C"})
+    cek("dan silo ketiga", r.status_code == 303)
+
+    # Mesin & silo baru langsung tersedia sebagai tujuan — tanpa deploy ulang.
+    menu = (await op.get("/miniapp/actions/menu")).json()
+    aksi = [a for a in menu if a["id"] == "gabah_masuk"][0]
+    tujuan = [o[1] for o in
+              [f for f in aksi["fields"] if f["name"] == "tujuan"][0]["options"]]
+    cek("mesin baru muncul sebagai tujuan", "Pengering 2" in tujuan, str(tujuan))
+    cek("silo baru muncul sebagai tujuan",
+        any("Silo C" in t for t in tujuan), str(tujuan))
+
+    # Dua mesin: yang satu sibuk tidak menutup yang lain.
+    await tiket(sid, "TRX-J1", "GABAH_BASAH", netto=8000, nota=8000)
+    t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    r = await op.post("/miniapp/actions/gabah-masuk",
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
+    cek("gabah masuk mesin 1", "Belum ditempatkan" not in r.text, r.text[:100])
+    await op.post("/miniapp/actions/mulai-pengeringan", json={"dryer_id": 1})
+
+    await tiket(sid, "TRX-J2", "GABAH_BASAH", netto=5000, nota=5000)
+    t2 = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    r = await op.post("/miniapp/actions/gabah-masuk",
+                      json={"timbangan_transaksi_id": t2[0]["value"],
+                            "tujuan": "dryer:2"})
+    cek("mesin 1 sibuk TIDAK menutup mesin 2",
+        "Belum ditempatkan" not in r.text, r.text[:120])
+
+    pilih = (await op.get("/miniapp/actions/dryer-menunggu")).json()
+    cek("hanya mesin yang ada gabahnya ditawarkan", len(pilih) == 1,
+        pilih[0]["label"] if pilih else "kosong")
 
 
 async def main() -> None:

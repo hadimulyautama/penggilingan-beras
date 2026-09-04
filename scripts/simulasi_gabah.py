@@ -43,6 +43,8 @@ from app.web.security import hash_sandi
 from hmu_core import User
 
 SANDI = "simulasi123"
+#: Tujuan kini menyebut alatnya: "dryer:<id>", "silo:<id>".
+SILO_A, SILO_B = "silo:1", "silo:2"
 GAGAL: list[str] = []
 
 #: Simulasi ini MENGOSONGKAN seluruh tabel sebelum berjalan, supaya bisa
@@ -221,7 +223,7 @@ async def main() -> None:
         # Gabah kering boleh ke silo; yang basah akan ditolak.
         r = await op.post("/miniapp/actions/pindah-tumpukan",
                           json={"kode_batch": isi_tumpukan[0]["value"],
-                                "tujuan": "silo_b"})
+                                "tujuan": SILO_B})
         cek("gabah kering pindah dari tumpukan ke silo",
             r.status_code == 200, r.text[:140])
         cek("tumpukan kembali kosong",
