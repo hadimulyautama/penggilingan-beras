@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import input_time, now_local
@@ -332,32 +332,83 @@ async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
 
 
 async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> list[str]:
-    """Supplier asal bahan sebuah proses giling: lewat lot pengeringan (batch
-    gabungan) atau batch langsung."""
-    if proc.drying_lot_id:
-        rows = (
-            await db.execute(
-                select(Supplier.nama_supplier)
-                .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
-                .join(
-                    DryingLotBatch,
-                    DryingLotBatch.purchase_batch_id == PurchaseBatch.id,
-                )
-                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
-                .distinct()
+    """Supplier asal bahan sebuah proses giling — dari SELURUH isinya.
+
+    Dulu dibaca dari `proc.drying_lot_id`/`purchase_batch_id`, penunjuk tunggal
+    peninggalan masa ketika satu silo hanya boleh berisi satu hal. Sejak silo
+    boleh dicampur, penunjuk itu menyebut salah satu sumber dan mendiamkan
+    sisanya: silo berisi pengeringan DAN gabah kering langsung akan melaporkan
+    supplier yang pertama saja. Yang kedua hilang dari laporan tanpa jejak —
+    padahal gabahnya ikut tergiling dan ikut dibayar.
+
+    `sumber_batch` sudah menjawab pertanyaan yang sama untuk HPP; laporan
+    memakai sumber yang sama supaya keduanya tak mungkin berselisih.
+    """
+    nama: list[str] = []
+    for b, _harga, _lewat in await sumber_batch(db, proc):
+        sup = await db.get(Supplier, b.supplier_id)
+        if sup and sup.nama_supplier not in nama:
+            nama.append(sup.nama_supplier)
+    return nama
+
+
+async def asal_isi(db: AsyncSession, proc: MillingProcess) -> list[str]:
+    """Baris "asal-usul" satu lot giling: tiap sumber, tiap batch, tiap tiket.
+
+    Inilah yang menjawab "beras ini dari gabah siapa" tanpa membuka basis
+    data. Dikelompokkan per sumber karena itulah bentuk fisiknya: gabah yang
+    dikeringkan bersama tak bisa lagi dipisahkan di dalam silo.
+    """
+    baris = list((await db.execute(
+        select(MillingProcessSource)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+        .order_by(MillingProcessSource.id)
+    )).scalars().all())
+    if not baris:
+        return []
+
+    # Kode tiket timbang milik aplikasi Timbangan — dibaca lewat SQL mentah di
+    # basis data bersama. Kalau tabelnya tak ada (pemasangan tanpa timbangan),
+    # asal-usulnya tetap tampil, hanya tanpa nomor tiket.
+    async def kode_tiket(ids: list[int]) -> dict[int, str]:
+        if not ids:
+            return {}
+        try:
+            rows = (await db.execute(
+                text("SELECT id, kode FROM timbangan_transaksi WHERE id = ANY(:ids)"),
+                {"ids": ids},
+            )).all()
+            return {r[0]: r[1] for r in rows}
+        except Exception:
+            return {}
+
+    out: list[str] = []
+    for s_ in baris:
+        if s_.drying_lot_id:
+            lot = await db.get(DryingLot, s_.drying_lot_id)
+            judul = f"  ‣ {lot.kode_lot if lot else 'pengeringan'} · {_kg(float(s_.berat_kg))}"
+            batches = list((await db.execute(
+                select(PurchaseBatch)
+                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == s_.drying_lot_id)
+                .order_by(PurchaseBatch.id)
+            )).scalars().all())
+        else:
+            judul = f"  ‣ tanpa pengeringan · {_kg(float(s_.berat_kg))}"
+            b = await db.get(PurchaseBatch, s_.purchase_batch_id)
+            batches = [b] if b else []
+        out.append(judul)
+        tiket = await kode_tiket([b.timbangan_transaksi_id for b in batches
+                                 if b.timbangan_transaksi_id])
+        for b in batches:
+            sup = await db.get(Supplier, b.supplier_id)
+            tk = tiket.get(b.timbangan_transaksi_id or -1)
+            out.append(
+                f"     – {b.kode_batch} · {b.kondisi_gabah} "
+                f"{_kg(float(b.berat_total_kg or 0))} · {sup.nama_supplier if sup else '-'}"
+                + (f" · tiket {tk}" if tk else "")
             )
-        ).scalars().all()
-        return list(rows)
-    if proc.purchase_batch_id:
-        nama = (
-            await db.execute(
-                select(Supplier.nama_supplier)
-                .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
-                .where(PurchaseBatch.id == proc.purchase_batch_id)
-            )
-        ).scalars().first()
-        return [nama] if nama else []
-    return []
+    return out
 
 
 async def _source_kondisi(db: AsyncSession, proc: MillingProcess) -> str | None:
@@ -399,21 +450,20 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
         bd = await _pk_breakdown(db, proc.id)
         suppliers = await _milling_supplier_names(db, proc)
         nama = ", ".join(suppliers) if suppliers else "-"
-        asal_lot = ""
-        if proc.drying_lot_id:
-            lot = await db.get(DryingLot, proc.drying_lot_id)
-            if lot:
-                asal_lot = f" (via {lot.kode_lot})"
         jenis = await pk_jenis(db, proc)
         jenis_lbl = f" ({jenis})" if jenis else ""
         lines = [
-            f"⚙️ Giling {proc.kode_proses} — bahan dari {nama}{asal_lot}",
+            f"⚙️ Giling {proc.kode_proses} — bahan dari {nama}",
             f"• Status: {proc.status}",
             f"• Jenis PK: {jenis or '-'}",
             f"• Gabah masuk: {_kg(masuk)}",
             f"• PK dihasilkan: {_kg(bd.produced)}{jenis_lbl}",
             f"• Siap kirim (stok): {_kg(bd.tersedia)}",
         ]
+        asal = await asal_isi(db, proc)
+        if asal:
+            lines.append("• Asal gabah:")
+            lines += asal
         if bd.transferred > 0:
             lines.append(f"• Sudah dikirim: {_kg(bd.transferred)}")
         if prog is not None and masuk:

@@ -87,3 +87,48 @@ def test_isi_silo_campuran_tetap_terhitung_utuh():
     sumber = inspect.getsource(milling.start_milling)
     assert "for r in rows" in sumber and "rows[0]" in sumber
     assert "next((r for r in rows if r.drying_lot_id), rows[0])" in sumber
+
+
+def _badan(fn) -> str:
+    """Sumber fungsi TANPA docstring-nya.
+
+    Komentar dan docstring di berkas ini justru menyebut nama-nama lama untuk
+    menerangkan sejarahnya — memeriksa seluruh sumber berarti menghukum
+    penjelasan yang baik.
+    """
+    import ast, textwrap
+    pohon = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    fungsi = pohon.body[0]
+    if (fungsi.body and isinstance(fungsi.body[0], ast.Expr)
+            and isinstance(fungsi.body[0].value, ast.Constant)
+            and isinstance(fungsi.body[0].value.value, str)):
+        fungsi.body = fungsi.body[1:]
+    return ast.unparse(fungsi)
+
+
+def test_laporan_supplier_tak_membaca_penunjuk_tunggal():
+    """Laporan dulu menyebut supplier lewat `proc.drying_lot_id`.
+
+    Selama satu silo hanya berisi satu hal, itu benar. Begitu silo boleh
+    dicampur, penunjuk itu menyebut sumber pertama dan mendiamkan sisanya:
+    silo berisi pengeringan DAN gabah kering langsung melaporkan supplier yang
+    pertama saja. Yang kedua hilang dari laporan tanpa jejak — padahal
+    gabahnya ikut tergiling dan ikut dibayar.
+    """
+    badan = _badan(milling._milling_supplier_names)
+    assert "sumber_batch" in badan
+    assert "proc.drying_lot_id" not in badan
+    assert "proc.purchase_batch_id" not in badan
+
+
+def test_laporan_giling_menyebut_seluruh_asal():
+    """"Bahan dari X (via LOT-…)" hanya menyebut satu sumber. Lot yang isinya
+    campuran harus menyebut semuanya — itu satu-satunya cara beras PK bisa
+    dirunut balik ke gabah siapa."""
+    badan = _badan(milling.laporan_milling)
+    assert "asal_isi" in badan
+    assert "via {lot.kode_lot}" not in badan
+
+    asal = _badan(milling.asal_isi)
+    assert "MillingProcessSource" in asal
+    assert "kode_batch" in asal
