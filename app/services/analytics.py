@@ -57,35 +57,16 @@ async def _proc_pk_output(db: AsyncSession, proc: MillingProcess) -> float | Non
 
 
 async def _proc_batches(db: AsyncSession, proc: MillingProcess):
-    """Daftar (batch, harga_per_kg|None) sumber sebuah proses."""
-    if proc.drying_lot_id:
-        rows = (
-            await db.execute(
-                select(PurchaseBatch, PurchaseBatchVerification.harga_per_kg)
-                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-                .join(
-                    PurchaseBatchVerification,
-                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
-                    isouter=True,
-                )
-                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
-            )
-        ).all()
-        return rows
-    if proc.purchase_batch_id:
-        row = (
-            await db.execute(
-                select(PurchaseBatch, PurchaseBatchVerification.harga_per_kg)
-                .join(
-                    PurchaseBatchVerification,
-                    PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id,
-                    isouter=True,
-                )
-                .where(PurchaseBatch.id == proc.purchase_batch_id)
-            )
-        ).all()
-        return row
-    return []
+    """Daftar (batch, harga_per_kg|None) sumber sebuah proses.
+
+    Membaca `milling.sumber_batch` — penyelesai yang sama dengan HPP. Dulu
+    modul ini menjawabnya sendiri dari penunjuk tunggal `MillingProcess`, dan
+    dua jawaban untuk satu pertanyaan cepat atau lambat berbeda: rapor supplier
+    akan memuji atau menyalahkan orang berdasarkan gabah yang tidak seluruhnya.
+    """
+    from app.penggilingan.gudang1.services.milling import sumber_batch
+
+    return [(b, harga) for b, harga, _ in await sumber_batch(db, proc)]
 
 
 async def supplier_scorecard_data(db: AsyncSession) -> dict:

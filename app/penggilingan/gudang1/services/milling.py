@@ -17,6 +17,7 @@ from app.models import (
     MillingProgressLog,
     MillingQcLog,
     PurchaseBatch,
+    PurchaseBatchVerification,
     Silo,
     SiloStorage,
     Supplier,
@@ -582,3 +583,65 @@ async def verify_milling_output(
     return VerifyOutputResult(
         proc=proc, berat_output=berat_output, rendemen_persen=rendemen, re_verified=re_verified
     )
+
+
+async def sumber_batch(
+    db: AsyncSession, proc: MillingProcess
+) -> list[tuple[PurchaseBatch, float | None, bool]]:
+    """Batch gabah yang benar-benar masuk sebuah proses giling.
+
+    Kembalian: (batch, harga_per_kg | None, lewat_dryer).
+
+    SATU tempat untuk pertanyaan "apa isi proses ini", dipakai HPP maupun
+    analitik. Dulu keduanya menjawabnya sendiri-sendiri dari penunjuk tunggal
+    di `MillingProcess`, dan jawaban itu hanya benar selama satu silo tak
+    boleh dicampur. Begitu boleh, keduanya akan menghitung sebagian isi saja —
+    dan pada HPP, "sebagian" berarti angka uang yang salah tanpa ada yang tahu.
+
+    `lewat_dryer` ditentukan per batch, bukan per proses: satu silo bisa berisi
+    gabah yang dikeringkan DAN gabah kering yang langsung masuk. Menagihkan
+    satu tarif pengeringan untuk keduanya salah ke dua arah sekaligus.
+    """
+    baris = list((await db.execute(
+        select(MillingProcessSource).where(
+            MillingProcessSource.milling_process_id == proc.id
+        )
+    )).scalars().all())
+
+    # Proses lama yang tak punya baris silo (sebelum penautan timbang) tidak
+    # ikut terisi migrasi. Penunjuk tunggalnya masih satu-satunya yang ada.
+    pasangan: list[tuple[int | None, int | None]] = (
+        [(b.drying_lot_id, b.purchase_batch_id) for b in baris] if baris
+        else [(proc.drying_lot_id, proc.purchase_batch_id)]
+    )
+
+    harga = dict((await db.execute(
+        select(PurchaseBatchVerification.purchase_batch_id,
+               PurchaseBatchVerification.harga_per_kg)
+    )).all())
+
+    hasil: list[tuple[PurchaseBatch, float | None, bool]] = []
+    terlihat: set[int] = set()
+    for lot_id, batch_id in pasangan:
+        if lot_id:
+            lot = await db.get(DryingLot, lot_id)
+            lewat = lot is not None and lot.dryer_id is not None
+            batches = (await db.execute(
+                select(PurchaseBatch)
+                .join(DryingLotBatch,
+                      DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == lot_id)
+            )).scalars().all()
+        elif batch_id:
+            lewat = False
+            b = await db.get(PurchaseBatch, batch_id)
+            batches = [b] if b else []
+        else:
+            continue
+        for b in batches:
+            if b.id in terlihat:      # satu batch tak boleh terhitung dua kali
+                continue
+            terlihat.add(b.id)
+            h = harga.get(b.id)
+            hasil.append((b, float(h) if h is not None else None, lewat))
+    return hasil

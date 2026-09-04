@@ -148,14 +148,23 @@ async def masuk_silo(
     silo = await get_g1_silo(db, nama_silo)
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
-    occupied = await _active_storage(db, silo.id)
     now = input_time(tanggal, jam)
     digabung = False
 
     if kode_lot:
-        # ── Dari pengeringan: 1 silo = 1 lot. Silo harus kosong. ──
-        if occupied:
-            raise SiloError(f"Silo {nama_silo} sudah terisi — kosongkan dulu.")
+        # ── Dari pengeringan: silo BOLEH sudah berisi. ──
+        #
+        # Dulu "1 silo = 1 lot, silo harus kosong". Aturan itu punya sebab yang
+        # sah: selama isi silo dipakai sebagai identitas apa-yang-digiling,
+        # silo campuran membuat penggilingan mengambil sebagian saja. Sebab itu
+        # hilang sejak isi proses giling didaftar sendiri di
+        # `milling_process_sources` (migrasi 0031).
+        #
+        # Dan aturan itu punya harga yang nyata: dryer tidak boleh menerima
+        # gabah baru selama lotnya belum pindah ke silo. Silo yang wajib kosong
+        # berarti dryer macet setiap kali kedua silo terisi — dan kemacetan
+        # itulah yang melahirkan tumpukan gabah, hal yang justru ingin
+        # dihindari.
         lot = (
             await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
         ).scalars().first()
