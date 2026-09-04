@@ -47,7 +47,12 @@ async def next_purchase_batch_code(db: AsyncSession, tgl: date | None = None) ->
 
 
 async def next_drying_lot_code(db: AsyncSession) -> str:
-    """Kode lot pengeringan: LOT-YYYYMMDD-NN (reset per hari)."""
+    """Kode pengeringan: PGR-YYYYMMDD-NN (reset per hari).
+
+    Dulu berawalan LOT-, dari masa ketika satu tabel dipaksa berarti dua hal:
+    muatan yang dikeringkan bersama, DAN yang digiling bersama. Sejak silo
+    boleh dicampur, keduanya berpisah — dan pemilik memutuskan "lot" dipakai
+    HANYA untuk giling. Pengeringan punya namanya sendiri."""
     now = now_local()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     stmt = (
@@ -55,11 +60,14 @@ async def next_drying_lot_code(db: AsyncSession) -> str:
         .select_from(DryingLot)
         .where(DryingLot.created_at >= start)
     )
-    return await _next_sequence(db, "LOT", stmt)
+    return await _next_sequence(db, "PGR", stmt)
 
 
 async def next_milling_code(db: AsyncSession) -> str:
-    """Kode proses milling: MIL-YYYYMMDD-NN (reset per hari)."""
+    """Kode lot giling: LOT-YYYYMMDD-NN (reset per hari).
+
+    LOT- di sini, karena inilah lot yang sesungguhnya: terbentuk saat giling
+    dimulai, dari seluruh isi silo. Dulu MIL-."""
     now = now_local()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     stmt = (
@@ -67,7 +75,7 @@ async def next_milling_code(db: AsyncSession) -> str:
         .select_from(MillingProcess)
         .where(MillingProcess.created_at >= start)
     )
-    return await _next_sequence(db, "MIL", stmt)
+    return await _next_sequence(db, "LOT", stmt)
 
 
 async def next_transfer_code(db: AsyncSession) -> str:

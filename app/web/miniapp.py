@@ -252,8 +252,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
              "post": "/miniapp/actions/mulai-pengeringan",
-             "hint": "Bentuk 1 lot dari SEMUA gabah yang menunggu di mesin itu. "
-                     "Gabah di mesin lain tidak ikut.",
+             "hint": "Gabungkan SEMUA gabah yang menunggu di mesin itu menjadi 1 "
+                     "pengeringan (PGR-…). Gabah di mesin lain tidak ikut. "
+                     "Lot belum terbentuk di sini — lot lahir saat mulai giling.",
              "fields": [
                  {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote",
                   "source": "/miniapp/actions/dryer-menunggu",
@@ -261,18 +262,18 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "kadar_air", "label": "💧 Perbarui kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
-                 {"name": "kode_lot", "label": "Lot yang sedang dikeringkan", "type": "remote",
+                 {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
-                  "kosong": "Tidak ada lot yang sedang dikeringkan."},
+                  "kosong": "Tidak ada pengeringan yang sedang berjalan."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "post": "/miniapp/actions/selesai-pengeringan",
-             "hint": "Lot masuk fase pendinginan otomatis (gabah tetap di dryer).",
+             "hint": "Pengeringan masuk fase pendinginan otomatis (gabah tetap di mesin).",
              "fields": [
-                 {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
+                 {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
-                  "kosong": "Tidak ada lot yang sedang dikeringkan."},
+                  "kosong": "Tidak ada pengeringan yang sedang berjalan."},
              ]},
             {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
              "post": "/miniapp/actions/selesai-pendinginan",
@@ -280,22 +281,26 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "boleh tetap di dalamnya menunggu silo kosong. Dari sinilah "
                      "lama mesin menganggur dihitung.",
              "fields": [
-                 {"name": "kode_lot", "label": "Lot yang sedang didinginkan", "type": "remote",
+                 {"name": "kode_lot", "label": "Pengeringan yang sedang didinginkan", "type": "remote",
                   "source": "/miniapp/actions/cooling-active",
-                  "kosong": "Tidak ada lot yang sedang didinginkan."},
+                  "kosong": "Tidak ada pengeringan yang sedang didinginkan."},
              ]},
             {"id": "pindah_silo", "label": "🏗️ Pindah dari mesin pengering ke silo",
              "post": "/miniapp/actions/pindah-silo",
-             "hint": "Hanya lot yang sudah dinyatakan selesai pendinginan.", "fields": [
-                 {"name": "kode_lot", "label": "Lot yang sudah selesai didinginkan", "type": "remote",
+             "hint": "Hanya pengeringan yang sudah dinyatakan selesai pendinginan.", "fields": [
+                 {"name": "kode_lot", "label": "Pengeringan yang sudah selesai didinginkan", "type": "remote",
                   "source": "/miniapp/actions/drying-done",
-                  "kosong": "Tidak ada lot yang sudah selesai didinginkan. Selesaikan pendinginan dulu sebelum memindahkannya ke silo."},
+                  "kosong": "Tidak ada pengeringan yang sudah selesai didinginkan. Selesaikan pendinginan dulu sebelum memindahkannya ke silo."},
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)",
                   "type": "remote", "source": "/miniapp/actions/silo-g1",
                   "kosong": "Tidak ada silo gabah kering. Tambahkan silo di Pengaturan → Alat."},
              ]},
             {"id": "mulai_giling", "label": "⚙️ Mulai giling",
-             "post": "/miniapp/actions/mulai-giling", "fields": [
+             "post": "/miniapp/actions/mulai-giling",
+             "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo — boleh berisi "
+                     "beberapa pengeringan sekaligus, dan semuanya ikut. "
+                     "Di sinilah lot terbentuk.",
+             "fields": [
                  {"name": "silo", "label": "Silo berisi gabah kering", "type": "remote",
                   "source": "/miniapp/actions/silo-siap-giling",
                   "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
@@ -965,7 +970,7 @@ class KadarAirReq(BaseModel):
 async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
-        raise HTTPException(400, "Pilih lot pengeringan dulu.")
+        raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import log_moisture
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -1009,7 +1014,7 @@ class MulaiPengeringanReq(BaseModel):
 @router.post("/actions/mulai-pengeringan")
 async def act_mulai_pengeringan(req: MulaiPengeringanReq | None = None,
                                 user: User = Depends(pengguna_aksi)) -> dict:
-    """Bentuk 1 lot dari gabah yang menunggu di SATU mesin, mulai proses."""
+    """Gabungkan gabah yang menunggu di SATU mesin jadi 1 pengeringan."""
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.drying import start_drying, DryingError
     async with SessionLocal() as db:
@@ -1035,7 +1040,7 @@ class KodeLotReq(BaseModel):
 async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
-        raise HTTPException(400, "Pilih lot pengeringan dulu.")
+        raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_drying, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -1053,7 +1058,7 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna
 async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
-        raise HTTPException(400, "Pilih lot yang didinginkan dulu.")
+        raise HTTPException(400, "Pilih pengeringan yang didinginkan dulu.")
     from app.penggilingan.gudang1.services.drying import finish_cooling, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -1076,7 +1081,7 @@ class PindahSiloReq(BaseModel):
 async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
-        raise HTTPException(400, "Pilih lot yang mau dipindah dulu.")
+        raise HTTPException(400, "Pilih pengeringan yang mau dipindah dulu.")
     if not (req.silo or "").strip():
         raise HTTPException(400, "Pilih silo tujuannya dulu.")
     from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
@@ -1087,7 +1092,7 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
                                  kode_lot=req.kode_lot, kode_batch=None)
         except SiloError as e:
             raise _err(e, "Gagal memindahkan ke silo.")
-    pesan = (f"✓ Lot *{req.kode_lot}* dipindah → Silo {r.nama_silo} ({r.kg:g} kg). "
+    pesan = (f"✓ Pengeringan *{req.kode_lot}* dipindah → Silo {r.nama_silo} ({r.kg:g} kg). "
              "Dryer kosong, siap digiling.")
     if r.digabung:
         # Bukan penolakan: gabahnya harus keluar dari dryer, dan menahannya

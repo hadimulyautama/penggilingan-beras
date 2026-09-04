@@ -231,7 +231,7 @@ async def s4(op, dir_, sid):
     cek("dryer tak tersentuh", kosong == [])
 
 
-@skenario("Silo campuran — lot pengeringan + gabah kering, digiling seutuhnya")
+@skenario("Silo campuran — pengeringan + gabah kering, digiling seutuhnya")
 async def s5(op, dir_, sid):
     # Lot pengeringan → Silo A.
     await tiket(sid, "TRX-E1", "GABAH_BASAH", netto=10000, nota=10000)

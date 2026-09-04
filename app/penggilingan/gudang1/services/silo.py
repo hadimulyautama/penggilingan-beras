@@ -164,7 +164,7 @@ async def masuk_silo(
     tanggal=None, jam=None,
 ) -> MasukResult:
     if not nama_silo:
-        raise SiloError("Sebutkan silo A atau B, contoh: `masukkan LOT-... ke silo A`")
+        raise SiloError("Sebutkan silo A atau B, contoh: `masukkan PGR-... ke silo A`")
     silo = await get_g1_silo(db, nama_silo)
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
@@ -189,15 +189,15 @@ async def masuk_silo(
             await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
         ).scalars().first()
         if lot is None:
-            raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
+            raise SiloError(f"Pengeringan {kode_lot} tidak ditemukan.")
         if lot.status != "selesai":
-            raise SiloError(f"Lot {kode_lot} belum selesai dikeringkan.")
+            raise SiloError(f"Pengeringan {kode_lot} belum selesai.")
         # Pendinginan SELESAI harus dinyatakan operator DULU (bukan dipicu oleh
         # pemindahan ini) — supaya downtime dryer terukur: lot bisa selesai dingin
         # sambil tetap di dryer menunggu silo kosong.
         if lot.waktu_selesai_pendinginan is None:
             raise SiloError(
-                f"Lot {kode_lot} belum dinyatakan selesai pendinginan. "
+                f"Pengeringan {kode_lot} belum dinyatakan selesai pendinginan. "
                 f"Nyatakan `pendinginan selesai {kode_lot}` dulu."
             )
         dup = (
@@ -208,7 +208,7 @@ async def masuk_silo(
             )
         ).first()
         if dup:
-            raise SiloError(f"Lot {kode_lot} sudah ada di silo.")
+            raise SiloError(f"Pengeringan {kode_lot} sudah ada di silo.")
         kg = await _lot_kg(db, lot.id)
         _ensure_cap(silo, nama_silo, 0, kg)
         db.add(
@@ -256,7 +256,7 @@ async def masuk_silo(
             )
         ).first()
         if in_lot or batch.status_batch == "di_silo":
-            raise SiloError(f"Batch {kode_batch} sudah masuk lot/silo.")
+            raise SiloError(f"Batch {kode_batch} sudah masuk pengeringan atau silo.")
         kg_new = float(batch.berat_total_kg or 0)
 
         # Gabah kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
@@ -284,8 +284,8 @@ async def masuk_silo(
         kg = existing_kg + kg_new
     else:
         raise SiloError(
-            "Sebutkan lot atau batch yang dimasukkan, contoh:\n"
-            "`masukkan LOT-20260702-01 ke silo A`"
+            "Sebutkan pengeringan atau batch yang dimasukkan, contoh:\n"
+            "`masukkan PGR-20260702-01 ke silo A`"
         )
 
     silo.status = "terisi"
@@ -321,13 +321,13 @@ async def moving_started(
     """Catat log 'mulai pemindahan' ke silo. Gabah masih di dryer."""
     if not kode_lot:
         raise SiloError(
-            "Sebutkan lot-nya, contoh: `mulai pindah LOT-20260702-01 ke silo A`"
+            "Sebutkan pengeringannya, contoh: `mulai pindah PGR-20260702-01 ke silo A`"
         )
     lot = (
         await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
     ).scalars().first()
     if lot is None:
-        raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
+        raise SiloError(f"Pengeringan {kode_lot} tidak ditemukan.")
     silo = await get_g1_silo(db, nama_silo) if nama_silo else None
     now = now_local()
     ml = SiloMovingLog(
@@ -363,13 +363,13 @@ async def moving_finished(
     """Pemindahan ke silo selesai. Kondisional: intake bila belum, else log saja."""
     if not kode_lot:
         raise SiloError(
-            "Sebutkan lot-nya, contoh: `pemindahan LOT-20260702-01 ke silo A selesai`"
+            "Sebutkan pengeringannya, contoh: `pemindahan PGR-20260702-01 ke silo A selesai`"
         )
     lot = (
         await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
     ).scalars().first()
     if lot is None:
-        raise SiloError(f"Lot {kode_lot} tidak ditemukan.")
+        raise SiloError(f"Pengeringan {kode_lot} tidak ditemukan.")
 
     # Bila silo tujuan tak disebut ("pemindahan selesai"), ambil dari log
     # 'mulai pindah' sebelumnya.

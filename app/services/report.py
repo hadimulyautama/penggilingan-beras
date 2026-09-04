@@ -416,9 +416,21 @@ async def detail_query(
     from app.penggilingan.gudang1.services.milling import laporan_milling
 
     if kode:
-        if kode.startswith("LOT"):
+        # Dicari DI TABELNYA, bukan ditebak dari awalan kode.
+        #
+        # Awalan pernah berpindah arti: LOT- dulu berarti pengeringan,
+        # sekarang berarti giling. Menyalurkan berdasarkan huruf depan berarti
+        # kode lama dibawa ke laporan yang salah — diam-diam, dan hasilnya
+        # tetap tampak masuk akal. Tabel tidak pernah berpindah arti.
+        ada_pgr = (await db.execute(
+            select(DryingLot.id).where(DryingLot.kode_lot == kode).limit(1)
+        )).scalars().first()
+        if ada_pgr:
             return await laporan_pengeringan(db, kode)
-        if kode.startswith("MIL"):
+        ada_lot = (await db.execute(
+            select(MillingProcess.id).where(MillingProcess.kode_proses == kode).limit(1)
+        )).scalars().first()
+        if ada_lot:
             return await laporan_milling(db, kode)
         rows = await _resolve_batches(
             db, supplier=None, periode=None, urutan=None, kondisi=None, terbaru=False, kode=kode
@@ -431,7 +443,7 @@ async def detail_query(
         lk = None if terbaru else ctx_lot
         lk = lk or await _latest_kode(db, DryingLot, DryingLot.kode_lot)
         if not lk:
-            return "Belum ada lot pengeringan."
+            return "Belum ada pengeringan."
         return await laporan_pengeringan(db, lk)
 
     if target == "milling":
@@ -632,14 +644,14 @@ async def cari_kode(
         lots = list((await db.execute(stmt.order_by(DryingLot.kode_lot))).scalars().all())
         ket = f"{label}" + (f", supplier {supplier}" if supplier else "")
         if not lots:
-            return f"🔎 Tidak ada lot pengeringan yang cocok ({ket})."
+            return f"🔎 Tidak ada pengeringan yang cocok ({ket})."
         if terbaru:
             lots = lots[-1:]
         elif urutan:
             if not 1 <= urutan <= len(lots):
-                return f"🔎 Lot ke-{urutan} tidak ada (hanya {len(lots)} cocok, {ket})."
+                return f"🔎 Pengeringan ke-{urutan} tidak ada (hanya {len(lots)} cocok, {ket})."
             lots = [lots[urutan - 1]]
-        lines = [f"🔎 Kode lot ({ket}):"]
+        lines = [f"🔎 Kode pengeringan ({ket}):"]
         for lot in lots[:10]:
             sups = ", ".join(await _lot_supplier_names(db, lot.id)) or "-"
             lines.append(f"• {lot.kode_lot} — {lot.status}, dari {sups}")

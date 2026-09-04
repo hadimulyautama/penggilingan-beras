@@ -86,7 +86,7 @@ async def resolve_batch_kodes(
         kodes = list((await db.execute(stmt)).scalars().all())
         if not kodes:
             raise DryingError(
-                "Tidak ada batch gabah hari ini yang belum masuk lot pengeringan."
+                "Tidak ada batch gabah hari ini yang belum masuk pengeringan."
             )
         return kodes
     if not urutan_list:

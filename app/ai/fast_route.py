@@ -39,7 +39,7 @@ _RULES: list[tuple[re.Pattern, str]] = [
 ]
 
 # Kode yang perlu KONTEKS tambahan (jangan sembarang) → tangani khusus.
-_LOT = re.compile(r"\bLOT-\d", _I)
+_LOT = re.compile(r"\b(LOT|PGR|MIL)-\d", _I)   # giling, pengeringan, & kode lama
 _GB = re.compile(r"\bGB-\d", _I)
 _MENTIONS_SILO = re.compile(r"\bsilo\b", _I)
 _MENTIONS_KERING = re.compile(r"\bkering", _I)

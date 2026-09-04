@@ -156,7 +156,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                  + ("…" if len(menunggu_dryer) > 3 else ""),
             isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}"
                 + (f" · {'/'.join(sorted(kondisi))}" if kondisi else ""),
-            keadaan="belum jadi lot — nyalakan pengeringan",
+            keadaan="belum dikeringkan — nyalakan mesin pengering",
             aksi="mulai_pengeringan",
             sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
         ))

@@ -126,7 +126,8 @@ def _rp(n: float) -> str:
 
 # Jaring pengaman: kenali kode batch GB-YYYYMMDD-NN meski Claude ragu / meleset.
 _GB_RE = re.compile(r"GB[-\s]?(\d{8})[-\s]?(\d{2})", re.IGNORECASE)
-_MIL_RE = re.compile(r"MIL[-\s]?(\d{8})[-\s]?(\d{2})", re.IGNORECASE)
+# LOT- sejak istilahnya dibakukan; MIL- tetap dikenali demi kode lama.
+_MIL_RE = re.compile(r"(LOT|MIL)[-\s]?(\d{8})[-\s]?(\d{2})", re.IGNORECASE)
 
 
 def _extract_kode(text: str) -> str | None:
@@ -136,7 +137,7 @@ def _extract_kode(text: str) -> str | None:
 
 def _extract_mil(text: str) -> str | None:
     m = _MIL_RE.search(text)
-    return f"MIL-{m.group(1)}-{m.group(2)}" if m else None
+    return f"{m.group(1).upper()}-{m.group(2)}-{m.group(3)}" if m else None
 
 
 @router.message(Command("start"))
