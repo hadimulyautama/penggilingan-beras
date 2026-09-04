@@ -22,7 +22,7 @@ HALAMAN = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Ukur tampilan</title>
 <style>
   html, body { margin: 0; background: #0d1418; color: #dce7ec;

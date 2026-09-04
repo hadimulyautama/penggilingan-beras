@@ -6,7 +6,21 @@
 <title>{% block judul %}Pos Produksi{% endblock %} · PT Hadi Mulya Utama</title>
 <meta name="theme-color" content="#16212a">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+{# `black`, BUKAN `black-translucent`.
+
+   Diukur di perangkat pemilik (iOS 18.7, terpasang di layar utama):
+   jendela 793 pt sementara layar 852 pt, dan `env(safe-area-inset-*)`
+   melaporkan 0px. `black-translucent` menyuruh iOS menggambar isi sampai ke
+   bawah jam, tetapi jendelanya tetap disediakan setinggi layar dikurangi
+   bilah status. Isinya naik 59 pt dan 59 pt tersisa di bawah — pita kosong
+   yang tak bisa diisi CSS apa pun, karena ruang itu bukan milik halaman.
+   Dan karena insetnya nol, tak ada aturan yang bisa mendeteksinya.
+
+   `black` membuat iOS menaruh jendela DI BAWAH bilah status: tingginya
+   kembali penuh dan tepi bawahnya bertemu tepi bawah layar. Bilah statusnya
+   hitam, bukan sewarna panel — itu harga yang dibayar, dan jauh lebih murah
+   daripada 59 pt mati di setiap halaman. #}
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pos Produksi">
 <link rel="preconnect" href="https://fonts.googleapis.com">
