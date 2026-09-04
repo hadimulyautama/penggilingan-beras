@@ -109,7 +109,7 @@ html, body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.isi { padding: 15px 16px 28px; display: flex; flex-direction: column; gap: 18px; }
+.isi { padding: 15px 16px calc(84px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 18px; }
 /* Halaman TANPA bilah kepala — masuk, ganti sandi — tak punya apa pun yang
    menyisihkan ruang bilah status, jadi isinya sendiri yang menyisihkan.
    Pada halaman ber-kepala, `.isi` bukan anak pertama dan aturan ini diam. */
@@ -278,7 +278,7 @@ select.fld { appearance: none; }
 /* ── Kaki ── */
 .kaki {
   margin-top: auto;
-  padding: 16px;
+  padding: 16px 16px calc(84px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--garis-2);
   font-family: var(--mono);
   font-size: 10.5px;
@@ -417,9 +417,19 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
    Di bawah, bukan di atas: layar dipegang satu tangan sambil berdiri, dan
    bagian atas layar tak terjangkau ibu jari tanpa memindah pegangan. */
 .bilah {
-  position: sticky;
+  /* DIPAKU ke tepi bawah layar, bukan sticky.
+     Sticky hanya menempel selama pembungkusnya benar-benar setinggi layar —
+     dan begitu perhitungan tinggi meleset sedikit (bilah status, home
+     indicator, bilah alamat yang menyusut), ia berhenti menggantung di
+     tengah. Fixed tidak bergantung pada perhitungan itu sama sekali.
+     Dipusatkan karena bingkainya dibatasi 560px di layar lebar. */
+  position: fixed;
   bottom: 0;
-  margin-top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  z-index: 10;
   display: flex;
   align-items: stretch;
   gap: 4px;
