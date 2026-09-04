@@ -25,11 +25,17 @@ log = logging.getLogger("web.nav")
 
 #: (kunci layar, alamat, label). Label SELALU tertulis di layar — ikon saja
 #: adalah ujian ingatan bagi orang yang tidak setiap hari memegang aplikasi.
+#:
+#: Lima tab menyempitkan tiap sasaran jadi ~72px pada layar 390px. Masih di
+#: atas batas aman untuk ibu jari (tingginya tetap 56px), tetapi labelnya
+#: harus pendek: "Pengaturan" patah dua baris di lebar itu, dan label yang
+#: patah lebih buruk daripada label yang disingkat.
 TAB = (
-    ("beranda",  "/",         "Beranda"),
-    ("aksi",     "/aksi",     "Catat"),
-    ("berjalan", "/berjalan", "Berjalan"),
-    ("laporan",  "/laporan",  "Laporan"),
+    ("beranda",    "/",           "Beranda"),
+    ("aksi",       "/aksi",       "Catat"),
+    ("berjalan",   "/berjalan",   "Berjalan"),
+    ("laporan",    "/laporan",    "Laporan"),
+    ("pengaturan", "/pengaturan", "Atur"),
 )
 
 

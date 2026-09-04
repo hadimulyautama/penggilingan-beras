@@ -88,7 +88,7 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_admi
         mesin = await dryers_g1(db)
         silo = [(s, await _silo_content_kg(db, s.id)) for s in await silos_g1(db)]
     return render(
-        request, "alat.html", kembali="/pengaturan",
+        request, "alat.html", kembali="/pengaturan", layar="pengaturan",
         MENUNGGU=await jumlah_menunggu(akun.user),
         mesin=mesin, silo=silo, maks=MAKS_ALAT,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),

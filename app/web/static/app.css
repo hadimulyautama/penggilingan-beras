@@ -440,6 +440,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .bilah__tab {
   position: relative;
   flex: 1 1 0;
+  min-width: 0;
   min-height: var(--sentuh);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 3px;
@@ -460,8 +461,11 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .bilah__ikon { position: relative; display: flex; }
 .bilah__nama {
   font-family: var(--mono);
-  font-size: 10.5px; letter-spacing: .05em;
+  /* Diperkecil sejak tab jadi lima: pada layar 390px tiap tab tinggal ~72px,
+     dan label yang patah dua baris membuat bilahnya melompat tinggi. */
+  font-size: 9.5px; letter-spacing: .02em;
   text-transform: uppercase; font-weight: 500;
+  white-space: nowrap;
 }
 .bilah__tab--aktif .bilah__nama { font-weight: 600; }
 .bilah__lencana {
