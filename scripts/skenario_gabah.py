@@ -130,10 +130,12 @@ async def tiket(sid: int, kode: str, jenis: str, *, netto: float,
               (kode, tanggal, arah, jenis_kode, nomor_polisi, nama_sopir,
                supplier_id, timbang1_kg, timbang2_kg, netto_timbangan_kg,
                berat_barang_kg, berat_acuan_kg, selisih_kg, selisih_persen,
-               status_kontrol, status_tiket)
+               status_kontrol, status_tiket, timbang1_waktu)
             VALUES (:kode, CURRENT_DATE, 'MASUK', :jenis, 'AD 1 XX', 'Sopir',
                     :sid, :bruto, :tara, :netto, :netto, :nota, 0, 0,
-                    'NORMAL', :status)
+                    'NORMAL', :status,
+                    -- Truk ditimbang pukul 05:30; pencatatannya menyusul.
+                    CURRENT_DATE + TIME '05:30')
             RETURNING id
         """), {"kode": kode, "jenis": jenis, "sid": sid, "bruto": netto + 3000,
                "tara": 3000, "netto": netto, "nota": nota or 0, "status": status})
@@ -379,6 +381,24 @@ async def s10(op, dir_, sid):
     pilih = (await op.get("/miniapp/actions/dryer-menunggu")).json()
     cek("hanya mesin yang ada gabahnya ditawarkan", len(pilih) == 1,
         pilih[0]["label"] if pilih else "kosong")
+
+
+@skenario("Jam kedatangan mengikuti tiket timbang, bukan jam mengetik")
+async def s11(op, dir_, sid):
+    await tiket(sid, "TRX-K1", "GABAH_KERING", netto=4000, nota=4000)
+    t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    r = await op.post("/miniapp/actions/gabah-masuk",
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": SILO_A})
+    cek("gabah tercatat", r.status_code == 200, r.text[:90])
+
+    from sqlalchemy import select as _sel
+    from app.models import PurchaseBatch
+    async with SessionLocal() as db:
+        b = (await db.execute(_sel(PurchaseBatch)
+                              .order_by(PurchaseBatch.id.desc()))).scalars().first()
+    jam = b.waktu_pembelian.strftime("%H:%M") if b.waktu_pembelian else "?"
+    cek("batch memakai jam timbang (05:30), bukan jam sekarang",
+        jam == "05:30", f"tercatat {jam}")
 
 
 async def main() -> None:

@@ -149,7 +149,19 @@ async def create_purchase_batch_dari_timbang(
     berat = float(b) if ada_bobot else None
     sumber = tiket["sumber_berat"] if ada_bobot else "menunggu"
 
-    now = input_time(tanggal, jam)
+    # WAKTU KEDATANGAN DIAMBIL DARI TIKET, bukan dari saat operator mengetik.
+    #
+    # Truk ditimbang saat ia tiba; pencatatannya di produksi bisa menyusul
+    # sejam kemudian — atau berhari-hari, pada tiket susulan. Memakai jam
+    # ketik berarti laporan "jam kedatangan gabah" menggambarkan kebiasaan
+    # mengetik, bukan kebiasaan truk datang, dan atas dasar itulah giliran
+    # jaga diatur.
+    #
+    # `timbang1_waktu` = penimbangan pertama, yaitu truk masuk bermuatan.
+    # Bila tiket tak punya (data lama), barulah jatuh ke jam sekarang.
+    now = tiket.get("timbang1_waktu") or input_time(tanggal, jam)
+    if tanggal or jam:            # operator menyebut waktunya sendiri — itu menang
+        now = input_time(tanggal, jam)
     if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
         raise DailyLimitReached(settings.max_purchase_batch_per_day)
 

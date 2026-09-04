@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # menambal yang terlewat, bukan pekerjaan yang sedang berjalan.
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
-           t.tanggal, t.nomor_polisi, t.nama_sopir,
+           t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
            t.status_kontrol, t.status_tiket
@@ -62,7 +62,7 @@ _SQL_AKTIF = text("""
 
 _SQL_SATU = text("""
     SELECT t.id, t.kode, t.arah, t.jenis_kode, j.nama AS jenis_nama,
-           t.tanggal, t.nomor_polisi, t.nama_sopir,
+           t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
            t.status_kontrol, t.status_tiket

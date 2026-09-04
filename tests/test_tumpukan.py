@@ -143,3 +143,16 @@ def test_baris_berjalan_membawa_nilainya_ke_lembar_aksi():
     assert "&nilai=" in html
     js = (akar / "app/web/static/aksi.js").read_text()
     assert "isiDariBaris" in js
+
+
+def test_waktu_kedatangan_diambil_dari_tiket_bukan_saat_mengetik():
+    """Truk ditimbang saat ia tiba; pencatatannya bisa menyusul berhari-hari
+    pada tiket susulan. Memakai jam ketik membuat laporan "jam kedatangan
+    gabah" menggambarkan kebiasaan mengetik, bukan kebiasaan truk datang — dan
+    atas dasar itulah giliran jaga diatur."""
+    from app.penggilingan.gudang1.services import purchase
+
+    sumber = inspect.getsource(purchase.create_purchase_batch_dari_timbang)
+    assert 'tiket.get("timbang1_waktu")' in sumber
+    # Waktu yang disebut operator sendiri tetap menang atas tiket.
+    assert "if tanggal or jam:" in sumber
