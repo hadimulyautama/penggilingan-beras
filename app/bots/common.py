@@ -39,10 +39,16 @@ async def authenticate(db: AsyncSession, telegram_user_id: int) -> User | None:
     return (await db.execute(stmt)).scalars().first()
 
 
+#: Peran yang boleh melihat data uang. "staff" ada di sini sebagai peran LAMA:
+#: sejak 3 September 2026 tangganya superadmin / admin / operator, dan baris
+#: lama di `users` tidak boleh kehilangan akses gara-gara namanya berganti.
+PERAN_UANG = ("superadmin", "admin", "staff")
+
+
 def can_see_financials(user: User | None) -> bool:
-    """Hanya staff/admin boleh melihat data uang (harga gabah, nilai total
+    """Direksi ke atas boleh melihat data uang (harga gabah, nilai total
     pembelian, HPP). Operator TIDAK boleh."""
-    return bool(user) and user.role in ("admin", "staff")
+    return bool(user) and user.role in PERAN_UANG
 
 
 def can_transfer_pk(user: User | None) -> bool:

@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, Warehouse
 
-_ROLES = {"operator", "staff", "admin"}
+#: Tangga peran sejak 3 September 2026. "staff" tidak lagi ditawarkan,
+#: tetapi baris lama yang menyebutnya tetap sah dibaca — lihat
+#: `bots.common.PERAN_UANG`.
+_ROLES = {"operator", "admin", "superadmin"}
 
 
 class UserAdminError(Exception):
@@ -36,7 +39,8 @@ def norm_phone(s: str | None) -> str | None:
 
 
 def _role_label(role: str) -> str:
-    return {"operator": "Operator", "staff": "Staff", "admin": "Admin"}.get(role, role)
+    return {"operator": "Operator", "admin": "Direksi",
+            "superadmin": "Super Admin", "staff": "Staff (lama)"}.get(role, role)
 
 
 async def _warehouse_for_gudang(db: AsyncSession, gudang: int | None) -> Warehouse | None:

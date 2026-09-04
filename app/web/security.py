@@ -196,16 +196,16 @@ async def butuh_akun(request: Request) -> ProduksiAkun:
 
 
 async def butuh_staff(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
-    """Staff kantor & Direksi — batas yang sama dengan `can_see_financials`."""
+    """Admin ke atas — batas yang sama dengan `can_see_financials`."""
     if not akun.is_staff:
         raise AksesDitolak("Halaman ini hanya untuk staff kantor.")
     return akun
 
 
 async def butuh_admin(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
-    """Direksi saja."""
+    """Super Admin saja — tingkat tertinggi."""
     if not akun.is_admin:
-        raise AksesDitolak("Halaman ini hanya untuk Direksi.")
+        raise AksesDitolak("Halaman ini hanya untuk Super Admin.")
     return akun
 
 

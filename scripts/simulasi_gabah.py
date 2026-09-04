@@ -369,6 +369,48 @@ async def main() -> None:
         r = await dir_.get("/pengaturan")
         cek("Direksi melihat kelola pengguna", "Kelola pengguna" in r.text)
 
+        babak("12. Kelola pengguna — ubah peran, dan penjaga akun tertinggi")
+        akun_op = None
+        async with SessionLocal() as db:
+            from app.models import ProduksiAkun as PA
+            akun_op = (await db.execute(
+                select(PA).where(PA.username == "simoperator"))).scalars().first().id
+
+        r = await op.get(f"/pengguna/{akun_op}")
+        cek("operator tak boleh membuka kelola pengguna",
+            r.status_code in (303, 403), f"HTTP {r.status_code}")
+
+        r = await dir_.get(f"/pengguna/{akun_op}")
+        cek("Super Admin membuka halaman ubah akun", r.status_code == 200)
+        cek("tiga tingkat peran ditawarkan",
+            all(x in r.text for x in ("Operator", "Admin", "Super Admin")))
+
+        r = await dir_.post(f"/pengguna/{akun_op}",
+                            data={"nama": "Rusdi H", "username": "simoperator",
+                                  "peran": "superadmin", "mode": "pribadi"})
+        cek("peran operator dinaikkan jadi Admin", r.status_code == 303)
+        r = await op.get("/miniapp/actions/gabah-unverified")
+        cek("dan ia LANGSUNG boleh melihat data uang", r.status_code == 200,
+            f"HTTP {r.status_code}")
+
+        # Turunkan lagi; kini ada dua Direksi, jadi boleh.
+        r = await dir_.post(f"/pengguna/{akun_op}",
+                            data={"nama": "Rusdi H", "username": "simoperator",
+                                  "peran": "operator", "mode": "bersama"})
+        cek("dan bisa diturunkan lagi", r.status_code == 303)
+
+        # Direksi menurunkan DIRINYA SENDIRI saat ia satu-satunya — ditolak.
+        async with SessionLocal() as db:
+            from app.models import ProduksiAkun as PA
+            akun_dir = (await db.execute(
+                select(PA).where(PA.username == "simdireksi"))).scalars().first().id
+        r = await dir_.post(f"/pengguna/{akun_dir}",
+                            data={"nama": "SIM Direksi", "username": "simdireksi",
+                                  "peran": "operator", "mode": "pribadi"})
+        cek("akun tertinggi TERAKHIR tak bisa diturunkan",
+            "admin-terakhir" in str(r.headers.get("location", "")),
+            r.headers.get("location", ""))
+
     print()
     if GAGAL:
         print(f"\033[31m{len(GAGAL)} pemeriksaan GAGAL:\033[0m")

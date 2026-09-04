@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block judul %}{{ a.nama }}{% endblock %}
+{% block isi %}
+
+{% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
+{% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
+
+<div class="kartu">
+  <h2>{{ a.nama }}</h2>
+  <div class="cip" style="margin-bottom:14px">
+    <span class="lencana">{{ a.username }}</span>
+    <span class="lencana">{{ a.peran }}</span>
+    {% if a.harus_ganti_sandi %}<span class="lencana lencana--hati">belum ganti sandi</span>{% endif %}
+    {% if a.status != "aktif" %}<span class="lencana lencana--bahaya">nonaktif</span>{% endif %}
+  </div>
+
+  <form method="post" action="/pengguna/{{ a.id }}" class="grup">
+    <div>
+      <label class="lbl" for="nama">Nama</label>
+      <input class="fld" id="nama" name="nama" value="{{ a.nama }}" minlength="3" required>
+      <p class="bantu" style="margin-top:6px">
+        Tercantum pada setiap catatan yang pernah ia kerjakan, termasuk yang lampau.
+      </p>
+    </div>
+
+    <div>
+      <label class="lbl" for="username">Nama pengguna</label>
+      <input class="fld" id="username" name="username" value="{{ a.username }}"
+             minlength="3" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+    </div>
+
+    <div>
+      <label class="lbl" for="peran">Peran</label>
+      <select class="fld" id="peran" name="peran">
+        {% for kode, nama, arti in PERAN %}
+          <option value="{{ kode }}"{% if a.peran == kode %} selected{% endif %}>{{ nama }}</option>
+        {% endfor %}
+      </select>
+      <p class="bantu" style="margin-top:6px" id="arti-peran"></p>
+      {# Menurunkan akun tertinggi terakhir mengunci semua orang di luar pengelolaan
+         akun — termasuk yang menurunkannya. Diberi tahu SEBELUM ditekan. #}
+      {% if a.peran in ("admin", "superadmin") and jml_admin <= 1 %}
+        <p class="bantu" style="color:var(--hati);margin-top:6px">
+          Ini satu-satunya akun tingkat tertinggi yang aktif. Perannya tidak
+          bisa diturunkan sebelum ada yang lain — kalau tidak, tak ada yang
+          bisa mengelola akun lagi.
+        </p>
+      {% endif %}
+    </div>
+
+    <div>
+      <label class="lbl" for="mode">Jenis perangkat</label>
+      <select class="fld" id="mode" name="mode">
+        <option value="bersama"{% if a.mode_perangkat == "bersama" %} selected{% endif %}>
+          Perangkat gudang — sesi pendek, mati saat menganggur</option>
+        <option value="pribadi"{% if a.mode_perangkat == "pribadi" %} selected{% endif %}>
+          Perangkat sendiri — sesi panjang</option>
+      </select>
+    </div>
+
+    <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+  </form>
+</div>
+
+<div class="kartu">
+  <div class="lbl">Kata sandi</div>
+  <p class="bantu" style="margin-bottom:12px">
+    Sandi tidak bisa dibaca, hanya disetel ulang. Sandi baru dibuatkan sistem
+    dan dibacakan sekali kepada orangnya — Super Admin tidak ikut memegangnya.
+  </p>
+  <form method="post" action="/pengguna/reset"
+        onsubmit="return confirm('Setel ulang sandi {{ a.nama }}? Sandi lamanya langsung tidak berlaku.')">
+    <input type="hidden" name="akun_id" value="{{ a.id }}">
+    <button class="btn" type="submit">Setel ulang sandi</button>
+  </form>
+</div>
+
+<a href="/pengguna" class="btn">Kembali ke daftar</a>
+
+<script>
+/* Peran dipilih untuk orang lain; namanya saja tidak cukup untuk tahu apa
+   yang sedang diserahkan. */
+(function () {
+  var ARTI = {{ PERAN | map(attribute=0) | list | tojson }};
+  var TEKS = {{ PERAN | map(attribute=2) | list | tojson }};
+  var sel = document.getElementById("peran");
+  var ket = document.getElementById("arti-peran");
+  if (!sel || !ket) { return; }
+  function tampil() { ket.textContent = TEKS[ARTI.indexOf(sel.value)] || ""; }
+  sel.addEventListener("change", tampil);
+  tampil();
+})();
+</script>
+
+{% endblock %}

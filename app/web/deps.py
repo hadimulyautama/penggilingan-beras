@@ -13,7 +13,7 @@ sedangkan akun Telegram menempel pada orang. Selama kedua jalur hidup
 berdampingan, catatan bisa tertulis atas nama pemilik ponsel, bukan atas nama
 yang sedang bekerja.
 
-Staff dan Direksi masih memakai bot admin, jadi jalur initData tetap ada untuk
+Admin dan Super Admin masih memakai bot admin, jadi jalur initData tetap ada untuk
 mereka.
 """
 from __future__ import annotations

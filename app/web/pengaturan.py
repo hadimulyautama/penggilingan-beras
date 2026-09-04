@@ -6,8 +6,8 @@ keduanya berdampingan membuat yang sering dipakai harus melewati yang jarang.
 
 Tiga bagian, dan urutannya mengikuti seberapa sering dipakai:
   · **Akun saya** — nama & kata sandi, milik siapa pun yang sedang masuk;
-  · **Pengguna** — Direksi saja;
-  · **Alat** — dryer & silo, Direksi saja.
+  · **Pengguna** — Super Admin saja;
+  · **Alat** — dryer & silo, Super Admin saja.
 """
 from __future__ import annotations
 

@@ -37,6 +37,36 @@ def test_peran_di_layar_sama_dengan_peran_yang_dikenal_master():
     assert {k for k, _, _ in web.PERAN} == ua._ROLES
 
 
+def test_tangga_perannya_tiga_tingkat():
+    """Superadmin / Direksi / Operator (keputusan Direksi 3 September 2026).
+    "staff" tidak lagi ditawarkan."""
+    assert ua._ROLES == {"superadmin", "admin", "operator"}
+
+
+def test_peran_lama_staff_tetap_terbaca():
+    """Baris lama di `users` mungkin masih menyebut staff, dan orangnya tidak
+    boleh kehilangan akses uang gara-gara namanya berganti."""
+    from types import SimpleNamespace
+
+    from app.bots.common import can_see_financials
+
+    for peran in ("superadmin", "admin", "staff"):
+        assert can_see_financials(SimpleNamespace(role=peran)), peran
+    assert not can_see_financials(SimpleNamespace(role="operator"))
+
+
+def test_superadmin_termasuk_direksi():
+    """Tangga yang tidak menurun ke bawah bukan tangga: superadmin ada DI ATAS
+    Direksi, jadi apa pun yang terbuka bagi Direksi terbuka baginya."""
+    from types import SimpleNamespace
+
+    from app.models.akun import ProduksiAkun
+
+    a = ProduksiAkun(username="x", password_hash="y")
+    a.user = SimpleNamespace(role="superadmin", nama="Pemilik")
+    assert a.is_admin and a.is_super and a.is_staff
+
+
 def test_tiap_peran_dijelaskan_akibatnya_bukan_hanya_dinamai():
     """Direksi memilih peran untuk orang lain. Nama peran saja tidak cukup
     untuk tahu apa yang sedang diserahkan."""
@@ -59,5 +89,5 @@ async def test_peran_karangan_ditolak_walau_pendaftarnya_admin():
     from types import SimpleNamespace
     with pytest.raises(ua.UserAdminError):
         await ua.register_user(
-            None, actor=SimpleNamespace(role="admin"), nama="Budi", role="superadmin",
+            None, actor=SimpleNamespace(role="admin"), nama="Budi", role="mandor",
             gudang=None, telegram_id=None, no_hp=None, lewat_sandi=True)

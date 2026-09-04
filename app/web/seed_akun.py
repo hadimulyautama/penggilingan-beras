@@ -1,6 +1,6 @@
 """Akun webapp PERTAMA — jalan sekali saat sistem disiapkan.
 
-Masalah ayam-dan-telur: yang boleh membuat akun hanyalah Direksi, dan Direksi
+Masalah ayam-dan-telur: yang boleh membuat akun hanyalah Super Admin, dan ia
 sendiri baru bisa masuk kalau akunnya sudah ada. Dipecahkan lewat env, bukan
 lewat halaman pendaftaran terbuka: selama `ADMIN_SANDI_AWAL` terisi DAN belum
 ada satu akun pun, dibuatkan akun untuk pemilik `ADMIN_TELEGRAM_ID`.

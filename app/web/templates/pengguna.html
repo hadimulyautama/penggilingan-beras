@@ -21,7 +21,7 @@
 
 {# Dua langkah, sengaja tidak disatukan: mendaftarkan ORANG menetapkan
    perannya, membuatkan AKUN menyerahkan sandi yang harus dibacakan di depan
-   orangnya. Disatukan, sandi awal muncul saat Direksi masih mengetik nama —
+   orangnya. Disatukan, sandi awal muncul saat Super Admin masih mengetik nama —
    jauh sebelum orangnya berdiri di sana. #}
 <div class="kartu">
   <h2>Daftarkan orang baru</h2>
@@ -59,7 +59,7 @@
 </div>
 
 <script>
-/* Gudang hanya berlaku untuk operator. Staff dan Direksi bekerja di keduanya,
+/* Gudang hanya berlaku untuk operator. Admin dan Super Admin bekerja di keduanya,
    dan menampilkan pilihan yang tak berpengaruh membuat orang mengira ia
    berpengaruh. */
 (function () {
@@ -121,6 +121,7 @@
         </div>
       </div>
       <div class="baris__aksi">
+        <a class="btn btn--kecil" href="/pengguna/{{ a.id }}">Ubah</a>
         <form class="sebaris" method="post" action="/pengguna/reset"
               onsubmit="return confirm('Setel ulang sandi {{ a.nama }}? Sandi lamanya langsung tidak berlaku.')">
           <input type="hidden" name="akun_id" value="{{ a.id }}">
@@ -147,7 +148,7 @@
 </div>
 
 <script>
-/* Nama pengguna mengikuti orang yang dipilih, selama Direksi belum mengetik
+/* Nama pengguna mengikuti orang yang dipilih, selama Super Admin belum mengetik
    sendiri. Begitu diketik manual, jangan pernah ditimpa lagi. */
 (function () {
   var pilih = document.getElementById("user_id"), nama = document.getElementById("username");
