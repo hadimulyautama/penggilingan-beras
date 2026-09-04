@@ -59,9 +59,19 @@ html, body {
 }
 
 .bingkai {
+  /* DIPAKU ke keempat tepi layar, bukan diberi tinggi `100dvh`.
+     `dvh` ditafsirkan berbeda-beda oleh iOS — di layar standalone ia
+     sempat menghitung layar lebih PENDEK daripada yang sebenarnya, dan
+     sisanya muncul sebagai pita kosong di bawah bilah navigasi. `inset: 0`
+     tidak menghitung apa pun: ia menempel pada tepi yang benar-benar ada,
+     berapa pun tingginya, dan ikut berubah sendiri saat tingginya berubah.
+
+     `left/right: 0` bersama `max-width` dan `margin: 0 auto` tetap
+     memusatkannya di layar lebar. */
+  position: fixed;
+  inset: 0;
   max-width: 560px;
   margin: 0 auto;
-  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
