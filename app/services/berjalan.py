@@ -107,7 +107,11 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
         # yang boleh dipilih. Tanpa itu operator harus membuka tiketnya untuk
         # tahu, atau menebak — dan menebak di sini berarti gabah basah masuk
         # silo.
-        isi = f"gabah {info.kondisi} · {nama} · {t.get('nomor_polisi') or '-'}"
+        # Nama komoditas apa adanya dari proses timbang. Kodenya dipakai
+        # hanya bila tabel jenisnya tak punya barisnya — dan itu keadaan
+        # janggal yang memang harus terlihat, bukan disamarkan.
+        komoditas = t.get("jenis_nama") or t.get("jenis_kode") or "?"
+        isi = f"{komoditas} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
             isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
         baris.append(Baris(

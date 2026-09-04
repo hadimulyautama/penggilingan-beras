@@ -65,7 +65,13 @@ html, body {
   z-index: 5;
   background: var(--panel);
   border-bottom: 1px solid var(--garis);
-  padding: 11px 16px;
+  /* Ruang bilah status iOS.
+     `black-translucent` membuat isi halaman digambar SAMPAI KE BAWAH jam dan
+     sinyal — itu disengaja, supaya warna panel mengisi layar sampai tepi
+     atas. Tetapi ruangnya harus disisihkan sendiri; tanpa ini nama pemakai
+     dan tombol Keluar bertumpuk di atas jam. Bilah bawah sudah menyisihkan
+     `safe-area-inset-bottom` sejak awal — yang atas terlewat. */
+  padding: calc(11px + env(safe-area-inset-top)) 16px 11px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -104,6 +110,10 @@ html, body {
 }
 
 .isi { padding: 15px 16px 28px; display: flex; flex-direction: column; gap: 18px; }
+/* Halaman TANPA bilah kepala — masuk, ganti sandi — tak punya apa pun yang
+   menyisihkan ruang bilah status, jadi isinya sendiri yang menyisihkan.
+   Pada halaman ber-kepala, `.isi` bukan anak pertama dan aturan ini diam. */
+.bingkai > .isi:first-child { padding-top: calc(15px + env(safe-area-inset-top)); }
 
 /* ── Judul & label ── */
 .lbl {

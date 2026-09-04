@@ -87,6 +87,19 @@ async def siapkan() -> int:
         await _kosongkan(db)
     await seed_master()
     async with SessionLocal() as db:
+        # Tabel jenis milik aplikasi Timbangan — produksi hanya MEMBACA nama
+        # komoditasnya dari sini. Disemai secukupnya supaya tiket uji punya
+        # komoditas yang sungguhan, bukan kode telanjang.
+        await db.execute(text("""
+            INSERT INTO timbangan_jenis
+              (kode, nama, urutan, arah, acuan, sumber_tara, tara_tetap_kg,
+               tara_bawaan_kg, ambang_jenis, ambang_nilai, ambang_arah)
+            VALUES ('GABAH_BASAH','Gabah Basah',1,'MASUK','NOTA','TETAP',0,0,'TIDAK_ADA',0,'DUA_ARAH'),
+                   ('GABAH_KERING','Gabah Kering',2,'MASUK','NOTA','TETAP',0,0,'TIDAK_ADA',0,'DUA_ARAH')
+            ON CONFLICT (kode) DO NOTHING
+        """))
+        await db.commit()
+    async with SessionLocal() as db:
         g1 = (await db.execute(
             select(Warehouse).where(Warehouse.nama_gudang.like("Gudang 1%"))
         )).scalars().first()

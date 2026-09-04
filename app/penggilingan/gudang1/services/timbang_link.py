@@ -29,12 +29,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Yang tertutup diberi tanda `susulan` supaya di layar terlihat bahwa ini
 # menambal yang terlewat, bukan pekerjaan yang sedang berjalan.
 _SQL_AKTIF = text("""
-    SELECT t.id, t.kode, t.jenis_kode, t.tanggal, t.nomor_polisi, t.nama_sopir,
+    SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
+           t.tanggal, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      -- Nama komoditas DIBACA dari tabel jenis, bukan diterjemahkan dari
+      -- kodenya di sisi produksi. Tiket adalah kunci asing ke proses timbang,
+      -- dan proses timbang sudah memegang komoditas yang disandangnya —
+      -- menyusun ulang namanya di sini berarti dua sebutan untuk satu barang,
+      -- dan yang di sini yang akan basi saat namanya diubah di sana.
+      LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
      WHERE t.arah = 'MASUK'
        AND t.status_tiket IN ('TERBUKA', 'SELESAI')
        -- Yang sudah ditutup hanya ditawarkan selama beberapa hari.
@@ -54,12 +61,14 @@ _SQL_AKTIF = text("""
 """)
 
 _SQL_SATU = text("""
-    SELECT t.id, t.kode, t.arah, t.jenis_kode, t.tanggal, t.nomor_polisi, t.nama_sopir,
+    SELECT t.id, t.kode, t.arah, t.jenis_kode, j.nama AS jenis_nama,
+           t.tanggal, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
      WHERE t.id = :tid
 """)
 
