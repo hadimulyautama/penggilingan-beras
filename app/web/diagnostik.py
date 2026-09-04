@@ -31,6 +31,10 @@ HALAMAN = """<!doctype html>
      warna gelap yang tersisa di atas atau di bawah. */
   .atas, .bawah { position: fixed; left: 0; right: 0; height: 6px; background: #d9695a; }
   .atas { top: 0; } .bawah { bottom: 0; }
+  /* Di atas segalanya: kalau garis ini terlihat di tepi paling bawah,
+     halaman sampai ke bawah. Tak perlu menakar tangkapan layar. */
+  .bukti { position: fixed; left: 0; right: 0; bottom: 0; height: 14px;
+           background: #56b880; z-index: 999; }
   .kotak { position: fixed; inset: 0; border: 2px solid #4fb3d9; box-sizing: border-box;
            display: flex; flex-direction: column; }
   .isi { flex: 1 1 auto; overflow-y: auto; padding: 14px; }
@@ -44,19 +48,24 @@ HALAMAN = """<!doctype html>
 </style>
 </head>
 <body>
-<div class="atas"></div><div class="bawah"></div>
+<div class="atas"></div><div class="bawah"></div><div class="bukti"></div>
 <div class="kotak">
   <div class="isi"><h1 style="margin:0 0 10px;font-size:17px;color:#4fb3d9">Ukur tampilan</h1><table id="t"><tr><td>memuat…</td></tr></table></div>
   <div class="palang">INI TEPI BAWAH KERANGKA &nbsp;·&nbsp; <a href="/pengaturan" style="color:#8ba0ab">kembali</a></div>
 </div>
 <script>
 function sa(sisi) {
+  /* offsetHeight pada elemen yang DIRENTANGKAN kiri-kanan.
+     Versi pertama membaca getComputedStyle().height pada elemen tanpa lebar
+     dan selalu mendapat "0px" — angka palsu yang sempat membuat area aman
+     tampak nol padahal padding di halaman jelas terisi. */
   var d = document.createElement("div");
-  d.style.cssText = "position:fixed;height:env(safe-area-inset-" + sisi + ");";
+  d.style.cssText = "position:fixed;left:0;right:0;bottom:0;visibility:hidden;" +
+    "padding-top:env(safe-area-inset-" + sisi + ");height:0;box-sizing:content-box;";
   document.body.appendChild(d);
-  var v = getComputedStyle(d).height;
+  var v = d.offsetHeight;
   d.remove();
-  return v;
+  return v + "px";
 }
 try {
 var k = document.querySelector(".kotak").getBoundingClientRect();
@@ -81,6 +90,8 @@ var baris = [
   ["kerangka atas", Math.round(k.top)],
   ["kerangka tinggi", Math.round(k.height)],
   ["SISA DI BAWAH", Math.round(innerHeight - p.bottom)],
+  ["palang tinggi", Math.round(p.height)],
+  ["palang padding-bawah", getComputedStyle(document.querySelector(".palang")).paddingBottom],
   ["standalone", (matchMedia("(display-mode: standalone)").matches ||
                   navigator.standalone === true) ? "YA" : "tidak"],
   ["peramban", navigator.userAgent.slice(0, 70)],
