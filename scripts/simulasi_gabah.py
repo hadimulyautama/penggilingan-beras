@@ -349,6 +349,24 @@ async def main() -> None:
             "GB-" in r.text and r.text.count("harga belum diverifikasi") <= 1,
             f"{r.text.count('harga belum diverifikasi')} batch menunggu harga")
 
+        babak("11. Halaman Pengaturan")
+        r = await op.get("/pengaturan")
+        cek("operator boleh membuka pengaturan", r.status_code == 200)
+        cek("dan bisa mengganti namanya", 'action="/pengaturan/nama"' in r.text)
+        cek("tapi TIDAK melihat bagian Direksi", "Kelola pengguna" not in r.text)
+
+        r = await op.post("/pengaturan/nama", data={"nama": "Rusdi Hartono"})
+        cek("nama tersimpan", r.status_code == 303, f"HTTP {r.status_code}")
+        r = await op.get("/")
+        cek("nama baru tampil di kepala layar", "Rusdi Hartono" in r.text)
+
+        r = await op.post("/pengaturan/nama", data={"nama": "R"})
+        cek("nama satu huruf ditolak", "nama-pendek" in str(r.headers.get("location", "")),
+            r.headers.get("location", ""))
+
+        r = await dir_.get("/pengaturan")
+        cek("Direksi melihat kelola pengguna", "Kelola pengguna" in r.text)
+
     print()
     if GAGAL:
         print(f"\033[31m{len(GAGAL)} pemeriksaan GAGAL:\033[0m")
