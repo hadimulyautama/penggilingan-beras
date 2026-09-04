@@ -78,13 +78,20 @@ async def seed_master() -> None:
             if not d:
                 db.add(
                     Dryer(
-                        # 35 ton — angka mesin yang sebenarnya (Direksi,
-                        # 3 September 2026). Berbeda dari silo dan tumpukan
-                        # yang memang tak berbatas: dryer adalah mesin, dan
-                        # melebihinya bukan soal pencatatan melainkan soal
-                        # gabah yang tidak kering merata.
+                        # 30 ton di atas kertas, dengan toleransi 3 ton
+                        # (`settings.dryer_toleransi_kg`) — jadi yang benar-
+                        # benar ditolak adalah di atas 33 ton.
+                        #
+                        # Toleransinya bukan kelonggaran pencatatan melainkan
+                        # kenyataan mesin: muatan sedikit di atas angka kertas
+                        # masih kering merata, dan menolak truk yang sudah
+                        # berdiri di halaman karena selisih setengah ton hanya
+                        # memindahkan masalahnya ke tumpukan.
+                        #
+                        # Berbeda dari silo dan tumpukan yang memang tak
+                        # berbatas: dryer adalah mesin.
                         warehouse_id=g1.id, nama="Pengering 1",
-                        kapasitas_kg=35000, status="aktif",
+                        kapasitas_kg=30000, status="aktif",
                     )
                 )
                 created.append("mesin pengering G1")

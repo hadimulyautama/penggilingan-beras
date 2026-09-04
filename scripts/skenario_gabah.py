@@ -251,15 +251,39 @@ async def s6(op, dir_, sid):
     cek("bisa ditaut susulan", r.status_code == 200, r.text[:90])
 
 
-@skenario("Melebihi kapasitas dryer 35 ton — ditolak mesin, bukan diterima diam-diam")
+@skenario("Kapasitas dryer: 30 ton di kertas, toleransi 3 ton — dua sisinya diuji")
 async def s7(op, dir_, sid):
-    await tiket(sid, "TRX-G1", "GABAH_BASAH", netto=39000, nota=39000)
+    # 32 ton: di atas angka kertas, masih dalam toleransi. Truk yang sudah
+    # berdiri di halaman tidak ditolak karena selisih dua ton.
+    await tiket(sid, "TRX-G1", "GABAH_BASAH", netto=32000, nota=32000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
                       json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
-    cek("dryer menolak muatan di atas kapasitas",
-        "Kapasitas dryer" in r.text, r.text[:130])
-    cek("gabahnya tetap tercatat", r.status_code == 200, f"HTTP {r.status_code}")
+    cek("32 ton diterima — di atas kertas, dalam toleransi",
+        "Belum ditempatkan" not in r.text, r.text[:110])
+
+
+@skenario("Melebihi toleransi dryer — ditolak mesin, bukan diterima diam-diam")
+async def s8(op, dir_, sid):
+    # 34 ton: melewati 30 + 3. Ditolak.
+    await tiket(sid, "TRX-H1", "GABAH_BASAH", netto=34000, nota=34000)
+    t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    r = await op.post("/miniapp/actions/gabah-masuk",
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+    cek("34 ton ditolak dryer", "Kapasitas dryer" in r.text, r.text[:140])
+    cek("gabahnya tetap tercatat, tidak hilang", r.status_code == 200,
+        f"HTTP {r.status_code}")
+
+    r = await op.get("/berjalan")
+    cek("dan menagih sebagai belum ditempatkan",
+        "belum ditempatkan" in r.text.lower())
+
+    # Jalan keluarnya ada: tumpuk dulu, giling menyusul saat dryer longgar.
+    menunggu = (await op.get("/miniapp/actions/tumpukan")).json()
+    r = await op.post("/miniapp/actions/pindah-tumpukan",
+                      json={"kode_batch": menunggu[0]["value"], "tujuan": "tumpuk"})
+    cek("bisa ditumpuk sementara", r.status_code == 200, r.text[:100])
+
     r2 = await op.post("/miniapp/actions/gabah-masuk",
                        json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
     cek("tiket yang sama tak bisa dicatat dua kali", r2.status_code == 400,
