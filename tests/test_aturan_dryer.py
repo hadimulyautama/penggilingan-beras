@@ -105,3 +105,35 @@ def test_mesin_batch_dilepas_saat_lot_terbentuk():
     """Setelah lot ada, mesinnya tersimpan di lot. Dua tempat yang menyebut
     hal yang sama cepat atau lambat berbeda."""
     assert "b.dryer_id = None" in inspect.getsource(drying.start_drying)
+
+
+def test_tujuan_menyebut_mesin_dalam_satu_pilihan():
+    """Bukan "Dryer" lalu ditanya lagi mesin mana: itu dua ketukan untuk satu
+    keputusan, dan yang menekannya sedang berdiri memegang layar dengan satu
+    tangan."""
+    from app.web import miniapp
+
+    assert miniapp._urai_tujuan("dryer:3") == ("dryer", 3)
+    assert miniapp._urai_tujuan("silo_a") == ("silo_a", None)
+    assert miniapp._urai_tujuan("tumpuk") == ("tumpuk", None)
+    assert miniapp._urai_tujuan("") == ("", None)
+    # Bentuk aneh tidak boleh menembus sebagai mesin nomor sekian.
+    assert miniapp._urai_tujuan("dryer:abc") == ("dryer", None)
+
+
+def test_daftar_tujuan_dibangkitkan_bukan_ditulis_tetap():
+    """Mesin bisa bertambah lewat Pengaturan, dan daftar yang ditulis tetap
+    akan diam-diam ketinggalan."""
+    from app.web import miniapp
+
+    sumber = inspect.getsource(miniapp.actions_menu)
+    assert "_pilihan_tujuan_gabah" in sumber
+    assert '["dryer", "Dryer"]' not in sumber
+
+
+def test_mesin_tanpa_gabah_tak_ditawarkan_saat_mulai_pengeringan():
+    """Menawarkan mesin kosong hanya menghasilkan penolakan 'tidak ada gabah
+    di mesin itu' setelah orang memilihnya."""
+    from app.web import miniapp
+
+    assert "if not batches:" in inspect.getsource(miniapp.dryer_menunggu)

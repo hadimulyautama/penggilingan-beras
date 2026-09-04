@@ -336,6 +336,9 @@ class LotResult:
     kondisi: str
     total_kg: float
     batch_kodes: list[str] = field(default_factory=list)
+    #: Nama mesin yang dipakai — supaya pesan di layar menyebut mesin mana,
+    #: bukan "dryer" yang tak lagi tunggal.
+    nama_dryer: str | None = None
     #: Peringatan yang HARUS sampai ke layar, tetapi TIDAK menggagalkan aksi.
     #: Ada keadaan yang bukan salah dan bukan benar — hanya tidak ideal, dan
     #: orang yang menjalankannya perlu tahu bahwa ia sedang menyimpang.
@@ -434,6 +437,7 @@ async def masuk_dryer(
     return LotResult(
         lot=None, kondisi=kondisi_all.pop() if kondisi_all else batches[0].kondisi_gabah,
         total_kg=await loose_dryer_kg(db, dryer.id),
+        nama_dryer=dryer.nama,
         batch_kodes=[b.kode_batch for b in batches],
     )
 
@@ -679,7 +683,7 @@ async def start_drying(
         )
     return LotResult(lot=lot, kondisi=kondisi, total_kg=total,
                      batch_kodes=[b.kode_batch for b in loose],
-                     peringatan=peringatan)
+                     nama_dryer=dryer.nama, peringatan=peringatan)
 
 
 async def finish_drying(

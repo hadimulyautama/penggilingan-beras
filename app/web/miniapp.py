@@ -134,6 +134,47 @@ async def _is_g2_operator(user: User) -> bool:
     return await _is_wh_operator(user, "Gudang 2%")
 
 
+async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
+    """Daftar tujuan yang sah untuk gabah, mesinnya disebut satu per satu.
+
+    Mesin tidak digabung jadi satu pilihan "Dryer" lalu ditanya lagi mesin
+    mana: itu dua ketukan untuk satu keputusan, dan yang menekannya sedang
+    berdiri memegang layar dengan satu tangan.
+    """
+    from app.penggilingan.gudang1.services.drying import dryers_g1
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+
+    jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
+    sah = intake_dari_jenis(jenis).tujuan_pilihan
+    opsi: list[list[str]] = [["", "— belum ditentukan —"]]
+    if "dryer" in sah:
+        async with SessionLocal() as db:
+            mesin = await dryers_g1(db)
+        for d in mesin:
+            mati = "" if d.status == "aktif" else f" ({d.status})"
+            opsi.append([f"dryer:{d.id}", f"{d.nama}{mati}"])
+    if "silo_a" in sah:
+        opsi.append(["silo_a", "Silo A (gabah kering)"])
+    if "silo_b" in sah:
+        opsi.append(["silo_b", "Silo B (gabah kering)"])
+    if "tumpuk" in sah:
+        opsi.append(["tumpuk", f"Tumpukan {kondisi}"])
+    return opsi
+
+
+def _urai_tujuan(nilai: str | None) -> tuple[str, int | None]:
+    """Pisahkan jenis tujuan dari mesin yang disebut: 'dryer:3' → ('dryer', 3).
+
+    Jenisnya yang diadu dengan aturan komoditas (`peta_jenis`); nomor mesin
+    hanya menentukan mesin mana, dan itu bukan urusan aturan.
+    """
+    nilai = (nilai or "").strip()
+    if nilai.startswith("dryer:"):
+        ekor = nilai.split(":", 1)[1]
+        return "dryer", int(ekor) if ekor.isdigit() else None
+    return nilai, None
+
+
 @router.get("/actions/menu")
 async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
@@ -157,6 +198,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     actions: list[dict] = []
     SILO_AB = [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]
     if g1:
+        # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
+        # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
+        TUJUAN_BASAH = await _pilihan_tujuan_gabah("basah")
+        TUJUAN_KERING = await _pilihan_tujuan_gabah("kering")
         # Urut sesuai alur kerja operator Gudang 1: terima → keringkan →
         # dinginkan/pindah silo → giling.
         actions += [
@@ -170,13 +215,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang (gabah masuk)",
                   "type": "remote", "source": "/miniapp/actions/timbang-masuk-aktif"},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
-                  # Tujuan yang SAH ditentukan jenis gabahnya, dan server
-                  # memeriksanya lagi saat menyimpan: basah tak boleh ke silo,
-                  # dan gabah apa pun boleh ditumpuk bila belum ada tempat.
-                  "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
-                              ["silo_a", "Silo A (gabah kering)"],
-                              ["silo_b", "Silo B (gabah kering)"],
-                              ["tumpuk", "Tumpukan"]]},
+                  # Gabungan basah & kering: jenis gabahnya baru diketahui dari
+                  # tiket yang dipilih, jadi keduanya ditawarkan dan server
+                  # menolak yang tak sah untuk jenis itu — dengan menyebut
+                  # yang boleh, bukan sekadar bahwa ia ditolak.
+                  "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
+                                             if o not in TUJUAN_BASAH]},
              ]},
             {"id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
              "post": "/miniapp/actions/pindah-tumpukan",
@@ -187,15 +231,17 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kode_batch", "label": "Gabah yang menunggu tempat",
                   "type": "remote", "source": "/miniapp/actions/tumpukan"},
                  {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
-                  "options": [["", "— belum ditentukan —"], ["dryer", "Dryer"],
-                              ["silo_a", "Silo A (gabah kering)"],
-                              ["silo_b", "Silo B (gabah kering)"],
-                              ["tumpuk", "Tumpukan"]]},
+                  "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
+                                             if o not in TUJUAN_BASAH]},
              ]},
             {"id": "mulai_pengeringan", "label": "🔥 Mulai pengeringan",
              "post": "/miniapp/actions/mulai-pengeringan",
-             "hint": "Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer.",
-             "fields": []},
+             "hint": "Bentuk 1 lot dari SEMUA gabah yang menunggu di mesin itu. "
+                     "Gabah di mesin lain tidak ikut.",
+             "fields": [
+                 {"name": "dryer_id", "label": "Mesin pengering", "type": "remote",
+                  "source": "/miniapp/actions/dryer-menunggu"},
+             ]},
             {"id": "kadar_air", "label": "💧 Update kadar air",
              "post": "/miniapp/actions/kadar-air", "fields": [
                  {"name": "kode_lot", "label": "Lot pengeringan", "type": "remote",
@@ -397,6 +443,28 @@ _ACTION_WH = {
 
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
 
+@router.get("/actions/dryer-menunggu")
+async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Mesin pengering yang ADA gabahnya menunggu dinyalakan.
+
+    Bukan seluruh mesin: menawarkan mesin kosong hanya menghasilkan penolakan
+    "tidak ada gabah di mesin itu" setelah orang memilihnya.
+    """
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.drying import (
+        _loose_dryer_batches, dryers_g1)
+    out = []
+    async with SessionLocal() as db:
+        for d in await dryers_g1(db):
+            batches = await _loose_dryer_batches(db, d.id)
+            if not batches:
+                continue
+            kg = sum(float(b.berat_total_kg or 0) for b in batches)
+            out.append({"value": d.id,
+                        "label": f"{d.nama} · {len(batches)} batch · {_rp(kg)} kg"})
+    return out
+
+
 @router.get("/actions/tumpukan")
 async def gabah_menunggu_tempat(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Gabah yang belum ada di dryer maupun silo.
@@ -437,8 +505,10 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
+            jenis, mesin_id = _urai_tujuan(req.tujuan)
             batch, tempat = await tempatkan(
-                db, user=u, kode_batch=req.kode_batch, tujuan=req.tujuan)
+                db, user=u, kode_batch=req.kode_batch, tujuan=jenis,
+                dryer_id=mesin_id)
         except TumpukanError as e:
             raise _err(e, "Gagal menempatkan gabah.")
     pesan = f"✓ *{batch.kode_batch}* ditempatkan → {tempat}."
@@ -768,10 +838,11 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         if info is None or info.model != "gabah":
             raise HTTPException(400, "Tiket ini bukan gabah masuk.")
         kondisi = info.kondisi
+        mesin_id = None
         if info.tujuan_wajib:
             tujuan = info.tujuan_wajib
         else:
-            tujuan = req.tujuan
+            tujuan, mesin_id = _urai_tujuan(req.tujuan)
             if tujuan not in info.tujuan_pilihan:
                 # Pesannya menyebut yang SAH untuk gabah ini, bukan daftar
                 # umum: operator yang memilih Silo untuk gabah basah perlu
@@ -800,8 +871,11 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 tempat = (f"📦 ditumpuk (tumpukan {kondisi}) — muncul di Berjalan "
                           "sampai dipindah")
             elif tujuan == "dryer":
-                await masuk_dryer(db, user=u, kode_batch_list=[kode])
-                tempat = "🌫️ masuk dryer (menunggu — ketik `mulai pengeringan` saat dipanaskan)"
+                r_dryer = await masuk_dryer(db, user=u, kode_batch_list=[kode],
+                                            dryer_id=mesin_id)
+                nama_mesin = r_dryer.nama_dryer or "dryer"
+                tempat = (f"🌫️ masuk {nama_mesin} (menunggu — tekan "
+                          "`Mulai pengeringan` saat dipanaskan)")
             else:  # silo_a / silo_b (kering langsung)
                 silo = "A" if tujuan == "silo_a" else "B"
                 await masuk_silo(db, user=u, nama_silo=silo, kode_lot=None, kode_batch=kode)
@@ -860,15 +934,21 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
     return {"ok": True, "pesan": pesan}
 
 
+class MulaiPengeringanReq(BaseModel):
+    dryer_id: int | None = None
+
+
 @router.post("/actions/mulai-pengeringan")
-async def act_mulai_pengeringan(user: User = Depends(pengguna_aksi)) -> dict:
-    """Bentuk 1 lot dari SEMUA gabah yang menunggu di dryer, mulai proses."""
+async def act_mulai_pengeringan(req: MulaiPengeringanReq | None = None,
+                                user: User = Depends(pengguna_aksi)) -> dict:
+    """Bentuk 1 lot dari gabah yang menunggu di SATU mesin, mulai proses."""
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.drying import start_drying, DryingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await start_drying(db, user=u)
+            r = await start_drying(db, user=u,
+                                   dryer_id=(req.dryer_id if req else None))
         except DryingError as e:
             raise _err(e, "Gagal mulai pengeringan.")
     pesan = (f"✓ Pengeringan *{r.lot.kode_lot}* mulai — {r.kondisi}, "

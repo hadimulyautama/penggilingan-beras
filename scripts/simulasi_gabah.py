@@ -181,7 +181,7 @@ async def main() -> None:
             any("SUSULAN" in t["label"] for t in tiket))
         r = await op.post("/miniapp/actions/gabah-masuk",
                           json={"timbangan_transaksi_id": tiket[0]["value"],
-                                "tujuan": "dryer"})
+                                "tujuan": "dryer:1"})
         cek("gabah masuk tercatat", r.status_code == 200, r.text[:120])
         print("     " + r.json().get("pesan", "").replace("\n", "\n     "))
 
@@ -199,7 +199,7 @@ async def main() -> None:
         r = await op.post("/miniapp/actions/gabah-masuk-manual",
                           json={"supplier": "Petani Setempat", "berat": 1500,
                                 "kondisi": "basah", "plat": "AD 9 ZZ",
-                                "tujuan": "dryer"})
+                                "tujuan": "dryer:1"})
         cek("alamatnya pun sudah tidak ada", r.status_code == 404,
             f"HTTP {r.status_code}")
 

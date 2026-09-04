@@ -35,6 +35,9 @@ from app.web.security import hash_sandi
 from hmu_core import User
 
 SANDI = "skenario123"
+#: Tujuan dryer kini menyebut mesinnya: "dryer:<id>". Di pabrik uji hanya ada
+#: satu mesin, dan id-nya selalu 1 karena tabel dikosongkan tiap skenario.
+DRYER = "dryer:1"
 _IZIN = ("127.0.0.1:55435", "localhost:55435")
 GAGAL: list[str] = []
 SKENARIO: list = []
@@ -136,7 +139,7 @@ async def s1(op, dir_, sid):
     await tiket(sid, "TRX-A1", "GABAH_BASAH", netto=8000, nota=8050)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     cek("basah diterima ke dryer", r.status_code == 200, r.text[:90])
 
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
@@ -155,14 +158,14 @@ async def s2(op, dir_, sid):
     await tiket(sid, "TRX-B1", "GABAH_BASAH", netto=9000, nota=9000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     await op.post("/miniapp/actions/gabah-masuk",
-                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
 
     # Truk kedua datang. Dryer sedang berputar.
     await tiket(sid, "TRX-B2", "GABAH_BASAH", netto=7000, nota=7000)
     t2 = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": "dryer"})
+                      json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": DRYER})
     cek("dryer menolak muatan kedua", "Belum ditempatkan" in r.text, r.text[:120])
 
     cek("tapi gabahnya TETAP tercatat, tak hilang", r.status_code == 200)
@@ -193,7 +196,7 @@ async def s3(op, dir_, sid):
         r.text[:110])
 
     r = await op.post("/miniapp/actions/pindah-tumpukan",
-                      json={"kode_batch": isi[0]["value"], "tujuan": "dryer"})
+                      json={"kode_batch": isi[0]["value"], "tujuan": DRYER})
     cek("basah diterima ke dryer", r.status_code == 200, r.text[:90])
     cek("tumpukan kembali kosong",
         (await op.get("/miniapp/actions/tumpukan")).json() == [])
@@ -217,7 +220,7 @@ async def s5(op, dir_, sid):
     await tiket(sid, "TRX-E1", "GABAH_BASAH", netto=10000, nota=10000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     await op.post("/miniapp/actions/gabah-masuk",
-                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
     lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
     await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
@@ -258,7 +261,7 @@ async def s7(op, dir_, sid):
     await tiket(sid, "TRX-G1", "GABAH_BASAH", netto=32000, nota=32000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     cek("32 ton diterima — di atas kertas, dalam toleransi",
         "Belum ditempatkan" not in r.text, r.text[:110])
 
@@ -269,7 +272,7 @@ async def s8(op, dir_, sid):
     await tiket(sid, "TRX-H1", "GABAH_BASAH", netto=34000, nota=34000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     r = await op.post("/miniapp/actions/gabah-masuk",
-                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                      json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     cek("34 ton ditolak dryer", "Kapasitas dryer" in r.text, r.text[:140])
     cek("gabahnya tetap tercatat, tidak hilang", r.status_code == 200,
         f"HTTP {r.status_code}")
@@ -285,7 +288,7 @@ async def s8(op, dir_, sid):
     cek("bisa ditumpuk sementara", r.status_code == 200, r.text[:100])
 
     r2 = await op.post("/miniapp/actions/gabah-masuk",
-                       json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                       json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     cek("tiket yang sama tak bisa dicatat dua kali", r2.status_code == 400,
         f"HTTP {r2.status_code}")
 
@@ -296,7 +299,7 @@ async def s9(op, dir_, sid):
     await tiket(sid, "TRX-I1", "GABAH_BASAH", netto=6000, nota=6000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     await op.post("/miniapp/actions/gabah-masuk",
-                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     r = await op.post("/miniapp/actions/mulai-pengeringan", json={})
     cek("pengeringan 1 batch TETAP jalan", r.status_code == 200)
     cek("tapi diperingatkan", "Hanya 1 batch" in r.text, r.text[-110:])

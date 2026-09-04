@@ -93,7 +93,8 @@ async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatc
 
 
 async def tempatkan(
-    db: AsyncSession, *, user, kode_batch: str, tujuan: str
+    db: AsyncSession, *, user, kode_batch: str, tujuan: str,
+    dryer_id: int | None = None,
 ) -> tuple[PurchaseBatch, str]:
     """Tempatkan satu batch gabah: dryer, silo, atau tumpukan.
 
@@ -129,8 +130,9 @@ async def tempatkan(
             await masuk_tumpukan(db, user=user, kode_batch=kode_batch)
             return batch, f"tumpukan {batch.kondisi_gabah}"
         if tujuan == "dryer":
-            await masuk_dryer(db, user=user, kode_batch_list=[kode_batch])
-            tempat = "dryer"
+            r = await masuk_dryer(db, user=user, kode_batch_list=[kode_batch],
+                                  dryer_id=dryer_id)
+            tempat = r.nama_dryer or "dryer"
         else:
             nama = "A" if tujuan == "silo_a" else "B"
             await masuk_silo(db, user=user, nama_silo=nama, kode_lot=None,
