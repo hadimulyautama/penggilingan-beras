@@ -89,6 +89,10 @@ class Settings(BaseSettings):
 
     # Kapasitas tumpukan PK Gudang 2 (maks). Lewat batas → notifikasi.
     g2_tumpukan_maks_kg: int = 60_000
+    # Tumpukan PK Gudang 1 — hasil giling yang belum dikirim ke penyosohan.
+    # BATAS FISIK LANTAI, bukan kebijakan: itu sebabnya ia di sini dan bukan di
+    # halaman Pengaturan. Lantai tidak berubah menurut musim.
+    g1_pk_tumpukan_maks_kg: int = 80_000
 
     # Stok kemasan minimum (lembar) — di bawah ini beri notifikasi/warning.
     min_kemasan_lembar: int = 1_000

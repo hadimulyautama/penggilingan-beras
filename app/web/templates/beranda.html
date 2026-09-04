@@ -21,10 +21,15 @@
       <div class="petak__label">Silo terisi</div>
       <div class="petak__nilai">{{ silo_terisi }}<span class="petak__sat"> / {{ silo_total }}</span></div>
     </div>
-    <div class="petak__sel">
+    {# Batasnya ikut disebut. Angka telanjang tak memberi tahu apa pun sampai
+       orang hafal berapa muat lantainya — dan yang perlu bertindak justru yang
+       belum hafal. #}
+    <div class="petak__sel{% if stok_pk_maks and stok_pk > stok_pk_maks %} petak__sel--bahaya{% endif %}">
       <div class="petak__label">Stok PK</div>
       <div class="petak__nilai">{{ "{:,}".format(stok_pk|int).replace(",", ".") }}<span class="petak__sat"> kg</span></div>
-      <div class="petak__label" style="margin-top:2px">{{ giling }} giling berjalan</div>
+      <div class="petak__label" style="margin-top:2px">
+        {% if stok_pk_maks %}tumpukan maks {{ (stok_pk_maks / 1000)|int }} ton · {% endif %}{{ giling }} giling berjalan
+      </div>
     </div>
   </div>
 </div>

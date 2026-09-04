@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import input_time, now_local
 from app.models import (
     DryingLot,
@@ -161,6 +162,25 @@ class ProgressResult:
     berat_kumulatif: float
     rendemen_persen: float | None
     jenis: str | None = None  # KS (dari gabah basah) / KL (dari gabah kering)
+    peringatan: str | None = None
+
+
+async def stok_pk_g1(db: AsyncSession) -> float:
+    """PK yang MENUMPUK di Gudang 1 — belum dikirim, belum dijual.
+
+    Tidak disimpan sebagai keadaan tersendiri, dan itu disengaja. "Ditumpuk"
+    dan "langsung dibawa ke penyosohan" bukan dua jalan yang perlu dinyatakan
+    operator: yang membedakan keduanya hanya ADA TIDAKNYA transfer, dan itu
+    sudah tercatat. Menyuruh orang menyatakannya lagi berarti dua sumber untuk
+    satu fakta — dan yang salah selalu yang diketik manual, karena orang lupa
+    memperbaruinya setelah barangnya benar-benar pindah.
+    """
+    total = 0.0
+    for proc in (await db.execute(select(MillingProcess))).scalars().all():
+        bd = await _pk_breakdown(db, proc.id)
+        if bd.tersedia > 0:
+            total += bd.tersedia
+    return total
 
 
 async def log_progress(
@@ -193,8 +213,30 @@ async def log_progress(
     masuk = float(proc.berat_gabah_masuk_kg or 0)
     rendemen = (berat_kumulatif / masuk * 100) if masuk else None
     jenis = await pk_jenis(db, proc)
+
+    # Lantainya penuh — DIBERITAHU, bukan ditolak.
+    #
+    # PK ini sudah keluar dari mesin sebelum siapa pun mengetiknya. Menolak
+    # mencatatnya tidak membuatnya lenyap; ia hanya membuat catatan berbohong,
+    # dan justru menyembunyikan keadaan yang paling perlu dilihat. Beda dengan
+    # tumpukan Gudang 2 yang MENOLAK: di sana yang dijaga adalah keputusan
+    # penempatan, dan keputusan masih bisa dialihkan ke silo.
+    peringatan = None
+    stok = await stok_pk_g1(db)
+    cap = settings.g1_pk_tumpukan_maks_kg
+    if stok > cap:
+        peringatan = (
+            f"⚠️ Tumpukan PK Gudang 1 {stok / 1000:g} ton — melewati batas lantai "
+            f"{cap / 1000:g} ton. Kirim ke gudang penyosohan."
+        )
+    elif stok > cap * 0.9:
+        peringatan = (
+            f"⚠️ Tumpukan PK Gudang 1 {stok / 1000:g} ton dari {cap / 1000:g} ton "
+            f"— sisa {(cap - stok) / 1000:g} ton."
+        )
     return ProgressResult(
-        proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen, jenis=jenis,
+        proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen,
+        jenis=jenis, peringatan=peringatan,
     )
 
 

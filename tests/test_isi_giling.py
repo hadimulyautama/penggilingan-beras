@@ -132,3 +132,31 @@ def test_laporan_giling_menyebut_seluruh_asal():
     asal = _badan(milling.asal_isi)
     assert "MillingProcessSource" in asal
     assert "kode_batch" in asal
+
+
+def test_tumpukan_pk_gudang1_memperingatkan_bukan_menolak():
+    """PK yang sudah keluar dari mesin sudah ada secara fisik.
+
+    Menolak mencatatnya tidak membuatnya lenyap — ia hanya membuat catatan
+    berbohong, dan justru menyembunyikan keadaan yang paling perlu dilihat:
+    lantai penuh. Beda dengan tumpukan Gudang 2 yang MENOLAK, karena di sana
+    yang dijaga adalah keputusan penempatan, dan keputusan masih bisa
+    dialihkan ke silo.
+    """
+    badan = _badan(milling.log_progress)
+    assert "g1_pk_tumpukan_maks_kg" in badan
+    assert "peringatan" in badan
+    # Tak boleh ada penolakan yang dipicu batas lantai.
+    assert "raise MillingError" not in badan.split("stok_pk_g1")[-1]
+
+
+def test_stok_pk_gudang1_diturunkan_bukan_disimpan():
+    """"Ditumpuk" vs "langsung dibawa ke penyosohan" bukan dua keadaan yang
+    perlu dinyatakan operator: yang membedakannya hanya ada tidaknya transfer,
+    dan itu sudah tercatat. Dua sumber untuk satu fakta pasti berselisih, dan
+    yang salah selalu yang diketik manual."""
+    badan = _badan(milling.stok_pk_g1)
+    assert "_pk_breakdown" in badan
+    # Bukan dibaca dari tabel keadaan tersendiri.
+    assert "PkStockGudang1" not in badan
+    assert "MillingPkRouting" not in badan

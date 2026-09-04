@@ -998,11 +998,13 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            await log_progress(db, user=u, kode_proses=req.kode_proses,
-                               berat_kumulatif=req.berat_kumulatif)
+            r = await log_progress(db, user=u, kode_proses=req.kode_proses,
+                                   berat_kumulatif=req.berat_kumulatif)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update hasil giling.")
     pesan = f"✓ Hasil giling *{req.kode_proses}*: {req.berat_kumulatif:g} kg (kumulatif)."
+    if r.peringatan:
+        pesan += "\n" + r.peringatan
     await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 

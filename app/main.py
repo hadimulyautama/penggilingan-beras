@@ -193,6 +193,7 @@ async def beranda(request: Request):
         silo_total=len(silo),
         giling=len(o.get("giling", []) or []),
         stok_pk=(o.get("stok_pk", {}) or {}).get("total", 0) or 0,
+        stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
         jml_akun=jml_akun,
         MENUNGGU=await jumlah_menunggu(akun.user),
         # Menentukan kalimat di kartu Laporan, bukan hak aksesnya — yang itu

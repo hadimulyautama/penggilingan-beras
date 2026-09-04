@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import now_local
 from app.models import (
     DryingLot,
@@ -142,7 +143,8 @@ async def _stok_pk(db: AsyncSession) -> dict:
         total += bd.tersedia
         per_jenis[jenis] = per_jenis.get(jenis, 0.0) + bd.tersedia
         per_proses.append({"kode": proc.kode_proses, "jenis": jenis, "kg": bd.tersedia})
-    return {"total": total, "per_jenis": per_jenis, "per_proses": per_proses}
+    return {"total": total, "per_jenis": per_jenis, "per_proses": per_proses,
+            "maks": settings.g1_pk_tumpukan_maks_kg}
 
 
 async def _tugas(db: AsyncSession) -> dict:
