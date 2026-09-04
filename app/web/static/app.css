@@ -39,6 +39,16 @@
 * { box-sizing: border-box; }
 
 html, body {
+  /* HALAMAN TIDAK MENGGULUNG — yang menggulung hanya `.isi`.
+     Selama dokumennya sendiri yang menggulung, iOS menggeser elemen `fixed`
+     saat halaman ditarik melewati ujung (rubber-band) dan saat bilah alamat
+     menyusut. Bilah navigasi ikut naik-turun, dan tak ada nilai `bottom`
+     yang bisa memperbaikinya. Dengan pola ini bilahnya bukan `fixed` lagi
+     melainkan anak terakhir sebuah kotak setinggi layar — ia tak punya cara
+     untuk bergerak. */
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   margin: 0;
   background: var(--dasar);
   color: var(--tinta);
@@ -51,7 +61,7 @@ html, body {
 .bingkai {
   max-width: 560px;
   margin: 0 auto;
-  min-height: 100dvh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -60,8 +70,7 @@ html, body {
    Nama dicetak besar dengan sengaja. Di perangkat gudang, "ini akun
    siapa" harus terbaca tanpa dicari — bukan tersembunyi di menu. */
 .bar {
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 5;
   background: var(--panel);
   border-bottom: 1px solid var(--garis);
@@ -109,7 +118,15 @@ html, body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.isi { padding: 15px 16px calc(84px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 18px; }
+.isi {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Tarikan di ujung daftar berhenti di sini, tidak diteruskan ke halaman. */
+  overscroll-behavior: contain;
+  padding: 15px 16px 28px;
+  display: flex; flex-direction: column; gap: 18px;
+}
 /* Halaman TANPA bilah kepala — masuk, ganti sandi — tak punya apa pun yang
    menyisihkan ruang bilah status, jadi isinya sendiri yang menyisihkan.
    Pada halaman ber-kepala, `.isi` bukan anak pertama dan aturan ini diam. */
@@ -278,7 +295,7 @@ select.fld { appearance: none; }
 /* ── Kaki ── */
 .kaki {
   margin-top: auto;
-  padding: 16px 16px calc(84px + env(safe-area-inset-bottom));
+  padding: 16px 0 0;
   border-top: 1px solid var(--garis-2);
   font-family: var(--mono);
   font-size: 10.5px;
@@ -375,7 +392,9 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 
 /* ── Kabar singkat ── */
 .kabar {
-  display: none; position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  display: none; position: fixed; left: 50%; transform: translateX(-50%);
+  /* Di atas bilah navigasi, bukan tertutup olehnya. */
+  bottom: calc(78px + env(safe-area-inset-bottom));
   z-index: 30; max-width: calc(100% - 32px);
   background: var(--panel-2); color: var(--tinta);
   border: 1px solid var(--garis); border-radius: 10px;
@@ -417,40 +436,19 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
    Di bawah, bukan di atas: layar dipegang satu tangan sambil berdiri, dan
    bagian atas layar tak terjangkau ibu jari tanpa memindah pegangan. */
 .bilah {
-  /* DIPAKU ke tepi bawah layar, bukan sticky.
-     Sticky hanya menempel selama pembungkusnya benar-benar setinggi layar —
-     dan begitu perhitungan tinggi meleset sedikit (bilah status, home
-     indicator, bilah alamat yang menyusut), ia berhenti menggantung di
-     tengah. Fixed tidak bergantung pada perhitungan itu sama sekali.
-     Dipusatkan karena bingkainya dibatasi 560px di layar lebar. */
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 560px;
-  z-index: 10;
+  /* Anak TERAKHIR dari kotak setinggi layar — bukan `fixed`, bukan `sticky`.
+     Keduanya pernah dicoba dan keduanya bergoyang di iOS: yang menggulung
+     dulu adalah dokumennya, dan elemen yang mengambang di atas dokumen yang
+     menggulung akan ikut bergeser saat halaman ditarik melewati ujung.
+     Sekarang halamannya tak menggulung sama sekali, jadi bilah ini tak punya
+     cara untuk bergerak. */
+  flex-shrink: 0;
   display: flex;
   align-items: stretch;
   gap: 4px;
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
   background: var(--panel);
   border-top: 1px solid var(--garis);
-}
-/* Warna bilah diteruskan ke bawah tepi bawahnya.
-   Di iOS standalone, `bottom: 0` kadang jatuh di tepi AREA AMAN, bukan tepi
-   fisik layar — dan yang tersisa di bawahnya adalah warna badan halaman,
-   terbaca sebagai bilah yang menggantung. Ini bukan menebak siapa yang benar:
-   apa pun yang dihitung iOS, di bawah bilah tetap warna bilah. Tak terlihat
-   pada peramban yang menghitungnya tepat, karena ia jatuh di luar layar. */
-.bilah::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  height: 120px;
-  background: var(--panel);
 }
 .bilah__tab {
   position: relative;

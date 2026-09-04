@@ -41,11 +41,13 @@
 </header>
 {% endif %}
 
+{# Kaki DI DALAM `.isi`, bukan sesudahnya. `.isi` kini satu-satunya bagian
+   yang menggulung; apa pun yang berada di luarnya menjadi pita tetap yang
+   selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
 <main class="isi">
 {% block isi %}{% endblock %}
-</main>
-
 {% block kaki %}{% endblock %}
+</main>
 
 {# Hanya di empat layar bertab. Halaman masuk, ganti sandi, dan kelola
    pengguna sengaja tanpa bilah: dua yang pertama belum/tidak punya tujuan
