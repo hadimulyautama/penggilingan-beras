@@ -40,6 +40,13 @@
 {# Di <head>, bukan di kaki: skrip halaman Laporan berjalan sebaris dengan
    isinya dan memanggil PINDAH sebelum </body> sempat terbaca. #}
 <script src="/static/pindah.js?v={{ VERSI }}"></script>
+{# SEMENTARA — mengukur KERANGKA APLIKASI ITU SENDIRI, bukan halaman terpisah.
+
+   Halaman ukur yang berdiri sendiri melapor "sampai bawah", tetapi aplikasi
+   tetap menyisakan pita kosong. Berarti bedanya ada pada kerangka aplikasi
+   ini, bukan pada jendelanya — dan itu hanya bisa dilihat dari dalam sini.
+   Hapus begitu angkanya didapat. #}
+<script src="/static/ukur.js?v={{ VERSI }}" defer></script>
 </head>
 <body>
 <div class="bingkai">
