@@ -46,3 +46,26 @@ def test_basah_dan_kering_tak_boleh_bercampur_di_dryer():
     """Bukan bagian dari empat aturan itu, tetapi menjaga keempatnya berguna:
     dryer yang menerima campuran membuat kadar air lot tak berarti apa-apa."""
     assert "mencampur gabah basah & kering" in inspect.getsource(drying.masuk_dryer)
+
+
+def test_pengeringan_satu_batch_diperingatkan_bukan_ditolak():
+    """Dryer 30 ton yang dinyalakan untuk satu muatan kecil membakar bahan
+    bakar yang sama dengan yang penuh, dan biayanya dibagi ke gabah yang lebih
+    sedikit. Tetapi menahan gabah demi menunggu muatan kedua justru membuatnya
+    menginap — jadi peringatan, bukan penolakan."""
+    sumber = inspect.getsource(drying.start_drying)
+    assert "len(loose) < 2" in sumber
+    assert "peringatan" in sumber
+    assert "raise DryingError" not in sumber.split("peringatan = None")[1]
+
+
+def test_silo_campuran_diperingatkan_bukan_ditolak():
+    """Gabahnya harus keluar dari dryer, dan menahannya sampai silo kosong
+    memacetkan pengeringan berikutnya. Tetapi isinya jadi campuran, dan itu
+    harus terbaca sekarang — bukan diketahui belakangan saat angka giling
+    tidak seperti yang diingat orang."""
+    from app.penggilingan.gudang1.services import silo
+    from app.web import miniapp
+
+    assert "digabung = await _silo_content_kg" in inspect.getsource(silo.masuk_silo)
+    assert "isinya kini tercampur" in inspect.getsource(miniapp.act_pindah_silo)

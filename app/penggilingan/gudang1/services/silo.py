@@ -210,6 +210,10 @@ async def masuk_silo(
                 b.status_batch = "di_silo"
         # Pendinginan sudah dinyatakan selesai (dijaga di atas) — pindah ini
         # murni perpindahan fisik dryer → silo, tidak menyentuh waktu pendinginan.
+        # Silo yang sudah berisi TETAP menerima — tetapi itu tidak ideal, dan
+        # penandanya dibawa keluar supaya layar bisa memperingatkan. Idealnya
+        # silo tujuan sudah kosong karena satu proses milling baru selesai.
+        digabung = await _silo_content_kg(db, silo.id) > 0
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:

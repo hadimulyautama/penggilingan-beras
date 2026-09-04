@@ -300,6 +300,10 @@ class LotResult:
     kondisi: str
     total_kg: float
     batch_kodes: list[str] = field(default_factory=list)
+    #: Peringatan yang HARUS sampai ke layar, tetapi TIDAK menggagalkan aksi.
+    #: Ada keadaan yang bukan salah dan bukan benar — hanya tidak ideal, dan
+    #: orang yang menjalankannya perlu tahu bahwa ia sedang menyimpang.
+    peringatan: str | None = None
 
 
 async def _loose_dryer_batches(db: AsyncSession) -> list[PurchaseBatch]:
@@ -602,8 +606,22 @@ async def start_drying(
     )
     await db.commit()
     await db.refresh(lot)
+
+    # Satu batch saja BOLEH dikeringkan — tetapi tidak ideal, dan orang yang
+    # menjalankannya perlu tahu. Dryer 30 ton yang dinyalakan untuk satu muatan
+    # kecil membakar bahan bakar yang sama dengan yang penuh, dan biayanya
+    # dibagi ke gabah yang lebih sedikit. Peringatan, bukan penolakan: kadang
+    # memang tak ada muatan kedua yang menunggu, dan menahan gabah demi
+    # menunggu teman justru membuatnya menginap.
+    peringatan = None
+    if len(loose) < 2:
+        peringatan = (
+            f"⚠️ Hanya 1 batch ({total:.0f} kg) — pengeringan sebaiknya "
+            "menggabungkan minimal 2 batch. Tetap dijalankan."
+        )
     return LotResult(lot=lot, kondisi=kondisi, total_kg=total,
-                     batch_kodes=[b.kode_batch for b in loose])
+                     batch_kodes=[b.kode_batch for b in loose],
+                     peringatan=peringatan)
 
 
 async def finish_drying(

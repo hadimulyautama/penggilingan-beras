@@ -290,6 +290,37 @@ async def s8(op, dir_, sid):
         f"HTTP {r2.status_code}")
 
 
+@skenario("Peringatan: pengeringan satu batch, dan silo yang dicampur")
+async def s9(op, dir_, sid):
+    # Satu batch saja — boleh, tetapi diperingatkan.
+    await tiket(sid, "TRX-I1", "GABAH_BASAH", netto=6000, nota=6000)
+    t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    await op.post("/miniapp/actions/gabah-masuk",
+                  json={"timbangan_transaksi_id": t[0]["value"], "tujuan": "dryer"})
+    r = await op.post("/miniapp/actions/mulai-pengeringan", json={})
+    cek("pengeringan 1 batch TETAP jalan", r.status_code == 200)
+    cek("tapi diperingatkan", "Hanya 1 batch" in r.text, r.text[-110:])
+
+    # Isi Silo A lebih dulu dengan gabah kering, lalu pindahkan lot ke sana.
+    await tiket(sid, "TRX-I2", "GABAH_KERING", netto=2000, nota=2000)
+    t2 = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
+    await op.post("/miniapp/actions/gabah-masuk",
+                  json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": "silo_a"})
+
+    lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
+    await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
+    await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": lot})
+    r = await op.post("/miniapp/actions/pindah-silo",
+                      json={"kode_lot": lot, "silo": "A"})
+    cek("pindah ke silo berisi TETAP jalan", r.status_code == 200, r.text[:90])
+    cek("tapi diperingatkan tercampur", "tercampur" in r.text, r.text[-130:])
+
+    silo = (await op.get("/miniapp/actions/silo-siap-giling")).json()
+    r = await op.post("/miniapp/actions/mulai-giling", json={"silo": silo[0]["value"]})
+    cek("campurannya jadi SATU proses giling (8 ton)",
+        "8.000" in r.text or "8000" in r.text, r.text[:120])
+
+
 async def main() -> None:
     from app.main import app
 
