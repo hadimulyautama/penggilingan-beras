@@ -80,19 +80,4 @@
 </div>
 {% endif %}
 
-{# SEMENTARA — satu-satunya cara membuka halaman ukur DARI DALAM aplikasi
-   yang terpasang di layar utama: di sana tidak ada bilah alamat. Dibuka dari
-   Safari, angkanya menjelaskan layar yang salah. `data-utuh` mematikan
-   penukaran halaman supaya yang terukur benar-benar halaman itu sendiri.
-   Hapus bersama app/web/diagnostik.py. #}
-<div style="margin-top:26px">
-  <a class="tindakan" href="/diagnostik-tampilan" data-utuh>
-    <div class="tindakan__ikon">📐</div>
-    <div class="tindakan__isi">
-      <div class="tindakan__nama">Ukur tampilan</div>
-      <div class="tindakan__ket">sementara — untuk memburu pita kosong di bawah bilah</div>
-    </div>
-  </a>
-</div>
-
 {% endblock %}
