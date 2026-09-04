@@ -47,7 +47,7 @@ HALAMAN = """<!doctype html>
 <div class="atas"></div><div class="bawah"></div>
 <div class="kotak">
   <div class="isi"><h1 style="margin:0 0 10px;font-size:17px;color:#4fb3d9">Ukur tampilan</h1><table id="t"><tr><td>memuat…</td></tr></table></div>
-  <div class="palang">INI TEPI BAWAH KERANGKA</div>
+  <div class="palang">INI TEPI BAWAH KERANGKA &nbsp;·&nbsp; <a href="/pengaturan" style="color:#8ba0ab">kembali</a></div>
 </div>
 <script>
 function sa(sisi) {
