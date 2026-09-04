@@ -115,7 +115,7 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
 
     jam = now_local().strftime("%d/%m %H:%M")
     teks = f"↩️ Dibatalkan ({LINGKUP_LABEL.get(lingkup, lingkup).lower()}, {jam}):\n{pesan}"
-    await kabar_chat(user, teks, "gudang1")
+    await kabar_chat(user, teks)
     return {"ok": True, "pesan": pesan}
 
 

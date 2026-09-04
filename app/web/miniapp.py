@@ -442,7 +442,7 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
         except TumpukanError as e:
             raise _err(e, "Gagal menempatkan gabah.")
     pesan = f"✓ *{batch.kode_batch}* ditempatkan → {tempat}."
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -810,7 +810,7 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
     pesan = f"✓ Gabah *{kode}* ({kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -833,7 +833,7 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update kadar air.")
     pesan = f"✓ Kadar air *{req.kode_lot}*: {req.kadar_air:g}%."
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -856,7 +856,7 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update hasil giling.")
     pesan = f"✓ Hasil giling *{req.kode_proses}*: {req.berat_kumulatif:g} kg (kumulatif)."
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -875,7 +875,7 @@ async def act_mulai_pengeringan(user: User = Depends(pengguna_aksi)) -> dict:
              f"{len(r.batch_kodes)} batch ({r.total_kg:g} kg).")
     if r.peringatan:
         pesan += f"\n{r.peringatan}"
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -897,7 +897,7 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna
             raise _err(e, "Gagal menyelesaikan pengeringan.")
     pesan = (f"✓ Pengeringan *{req.kode_lot}* selesai ({jam:.0f} jam) → "
              "fase pendinginan. Nyatakan pendinginan selesai saat sudah dingin.")
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -915,7 +915,7 @@ async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna
             raise _err(e, "Gagal menyatakan pendinginan selesai.")
     pesan = (f"✓ Pendinginan *{req.kode_lot}* selesai ({jam:.0f} jam) — dryer idle. "
              "Pindahkan ke silo saat ada silo kosong.")
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -948,7 +948,7 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
         # belakangan saat angka giling tidak seperti yang diingat orang.
         pesan += ("\n⚠️ Silo sudah berisi sebelumnya — isinya kini tercampur. "
                   "Semuanya akan digiling sebagai SATU proses.")
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -970,7 +970,7 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
             raise _err(e, "Gagal mulai giling.")
     pesan = (f"✓ Giling *{r.proc.kode_proses}* mulai — Silo {r.nama_silo} "
              f"({r.berat_masuk:g} kg gabah).")
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -993,7 +993,7 @@ async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(pengguna_a
     jns = (r.jenis + " ") if r.jenis else ""
     pesan = (f"✓ Giling *{req.kode_proses}* selesai — PK {jns}{r.produced:g} kg "
              f"(siap kirim {r.siap_kirim:g} kg).")
-    await _chat_confirm(user, pesan, "gudang1")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -1278,7 +1278,7 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan PK.")
     pesan = f"✓ PK *{req.kode_batch}* dimasukkan → {r.lokasi_label}."
-    await _chat_confirm(user, pesan, "gudang2")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -1301,7 +1301,7 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
             raise _err(e, "Gagal mulai penyosohan.")
     pesan = (f"✓ Penyosohan *{r.proc.kode_proses}* mulai — silo "
              f"{'+'.join(r.silos)} ({r.berat_awal_total:g} kg).")
-    await _chat_confirm(user, pesan, "gudang2")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -1327,7 +1327,7 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
         except Gudang2Error as e:
             raise _err(e, "Gagal catat hasil penyosohan.")
     pesan = f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kumulatif:g} kg (kumulatif)."
-    await _chat_confirm(user, pesan, "gudang2")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -1358,7 +1358,7 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
     else:
         ekor = " (menunggu silo lain)."
     pesan = f"✓ Silo {req.silo.upper()} selesai (sisa {req.sisa:g} kg){ekor}"
-    await _chat_confirm(user, pesan, "gudang2")
+    await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 

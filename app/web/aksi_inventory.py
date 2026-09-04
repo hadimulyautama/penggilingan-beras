@@ -212,7 +212,7 @@ async def act_beli_kemasan(req: BeliKemasanReq,
     pesan = (f"✓ Beli karung *{merk}{r.material_nama} {r.ukuran}kg* × "
              f"{rp(r.purchase.jumlah_lembar)} lembar ({r.purchase.kode}).\n"
              f"• Stok kini: {rp(r.stok_baru)} lembar")
-    await kabar_chat(user, pesan, "admin")
+    await kabar_chat(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -252,7 +252,7 @@ async def act_catat_packing(req: PackingReq,
     warn = f"\n{r.warning}" if r.warning else ""
     pesan = (f"✓ Packing {KATEGORI_LABEL.get(r.kategori, r.kategori)}{grade}: "
              f"{r.jumlah_karung} karung ({kg(r.berat_total_kg)}).{warn}")
-    await kabar_chat(user, pesan, "gudang2")
+    await kabar_chat(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -276,7 +276,7 @@ async def act_catat_bekatul(req: BekatulReq,
         except bj.InventoryError as e:
             raise galat(e, "Gagal mencatat bekatul.")
     pesan = f"✓ Bekatul {kg(berat)} tercatat (curah)."
-    await kabar_chat(user, pesan, "gudang2")
+    await kabar_chat(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -299,7 +299,7 @@ async def act_harga_byproduct(req: HargaByproductReq,
         except bj.InventoryError as e:
             raise galat(e, "Gagal menyimpan harga.")
     pesan = f"✓ Harga {jenis} disetel Rp {rp(float(req.harga))}/kg."
-    await kabar_chat(user, pesan, "admin")
+    await kabar_chat(user, pesan)
     return {"ok": True, "pesan": pesan}
 
 
@@ -411,7 +411,7 @@ async def _pesan_keluar(user: User, r) -> str:
     karung = f" ({r.jumlah_karung} karung)" if r.jumlah_karung else ""
     warn = f"\n{r.warning}" if r.warning else ""
     pesan = f"✓ Keluar *{r.kode}*: {r.label} {kg(r.berat_kg)}{karung}.{warn}"
-    await kabar_chat(user, pesan, "admin")
+    await kabar_chat(user, pesan)
     return pesan
 
 

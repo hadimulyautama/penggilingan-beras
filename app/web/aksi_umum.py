@@ -40,16 +40,19 @@ def galat(e: Exception, default: str) -> HTTPException:
     return HTTPException(400, str(e.args[0]) if e.args else default)
 
 
-async def kabar_chat(user: User, text: str, bot_name: str = "gudang1") -> None:
+async def kabar_chat(user: User, text: str, bot_name: str = "admin") -> None:
     """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort).
 
     Header berisi penanda 'Aksi cepat' + nama pelaku + jam, agar jelas apa yang
     terakhir dilakukan lewat tombol (bukan chat) dan tidak terlupa.
 
-    Akan hilang sendiri ketika bot pabrik dimatikan (tahap B5): pemakai yang
-    masuk lewat peramban tidak punya `telegram_user_id`, dan `notify_user`
-    memang tidak melakukan apa-apa untuk mereka.
+    TIDAK dikirim untuk operator: bot gudang sudah dihapus 3 September 2026,
+    dan operator memang tak lagi punya chat yang menerimanya. Konfirmasinya
+    sudah tampil di layar tempat ia menekan tombol — itu cukup, dan lebih
+    dekat ke matanya daripada pesan di aplikasi lain.
     """
+    if getattr(user, "role", None) == "operator":
+        return
     from app.bots.notify import notify_user
     from app.database import now_local
     stamp = now_local().strftime("%d/%m %H:%M")

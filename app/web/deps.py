@@ -4,11 +4,17 @@ Endpoint aksi (`app/web/miniapp.py`) ditulis untuk Mini App Telegram dan
 mengenali pemakainya dari `initData` yang ditandatangani token bot. Fase B
 menambahkan jalur kedua: sesi cookie webapp.
 
-Keduanya sengaja hidup berdampingan selama masa peralihan — operator boleh
-memakai layar mana pun tanpa dipaksa pindah dalam semalam, dan keduanya
-menulis lewat service yang sama sehingga tak ada dua sumber kebenaran.
-Ketika bot pabrik akhirnya dimatikan, jalur Telegram di bawah ini yang
-dihapus, bukan endpoint-nya.
+Sejak 3 September 2026 jalur Telegram TERTUTUP BAGI OPERATOR. Bot gudang 1 dan
+gudang 2 dihapus, dan seandainya seorang operator masih memegang Mini App lama,
+ia ditolak di sini — bukan dibiarkan lewat pintu yang sudah dinyatakan tutup.
+
+Alasannya bukan sekadar merapikan: perangkat gudang dipakai bergantian,
+sedangkan akun Telegram menempel pada orang. Selama kedua jalur hidup
+berdampingan, catatan bisa tertulis atas nama pemilik ponsel, bukan atas nama
+yang sedang bekerja.
+
+Staff dan Direksi masih memakai bot admin, jadi jalur initData tetap ada untuk
+mereka.
 """
 from __future__ import annotations
 
@@ -34,13 +40,24 @@ def _extract_init_data(authorization: str | None) -> str | None:
 async def pengguna_aksi(
     request: Request, authorization: str | None = Header(default=None)
 ) -> User:
-    """Pemakai endpoint aksi: sesi webapp lebih dulu, initData sebagai cadangan."""
+    """Pemakai endpoint aksi: sesi webapp lebih dulu, initData untuk staff."""
     from app.web.security import akun_opsional
 
     akun = await akun_opsional(request)
     if akun is not None and akun.user is not None:
         return akun.user
-    return await require_miniapp_user(authorization)
+
+    pengguna = await require_miniapp_user(authorization)
+    if pengguna.role == "operator":
+        # Ditolak dengan menunjuk jalan, bukan sekadar ditutup: yang membuka
+        # Mini App lama tidak tahu bahwa jalurnya sudah dipensiunkan.
+        raise HTTPException(
+            status_code=403,
+            detail=("Operator mencatat lewat Pos Produksi di peramban, bukan "
+                    "lewat Telegram. Buka alamat Pos Produksi dan masuk "
+                    "dengan nama pengguna Anda."),
+        )
+    return pengguna
 
 
 async def require_miniapp_user(authorization: str | None = Header(default=None)) -> User:
