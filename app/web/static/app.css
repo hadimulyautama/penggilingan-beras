@@ -38,6 +38,14 @@
 
 * { box-sizing: border-box; }
 
+/* Warna KANVAS — yang dipakai iOS untuk mengecat apa pun DI LUAR jendela.
+   Kalau suatu saat jendelanya lagi-lagi lebih pendek daripada layar, sisa
+   itu tampil sewarna bilah dan terbaca sebagai bilah yang memanjang, bukan
+   sebagai lubang. Saat jendelanya benar — dan dengan `black` ia benar —
+   lapisan ini tak pernah terlihat sama sekali, tertutup penuh oleh badan
+   halaman. Murah, dan menghapus satu kelas kegagalan sekaligus. */
+html { background: var(--panel); }
+
 html, body {
   /* HALAMAN TIDAK MENGGULUNG — yang menggulung hanya `.isi`.
      Selama dokumennya sendiri yang menggulung, iOS menggeser elemen `fixed`

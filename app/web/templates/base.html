@@ -6,15 +6,30 @@
 <title>{% block judul %}Pos Produksi{% endblock %} · PT Hadi Mulya Utama</title>
 <meta name="theme-color" content="#16212a">
 <meta name="apple-mobile-web-app-capable" content="yes">
-{# `black-translucent` bersama manifest di bawah — itu pasangannya.
+{# `black`, BUKAN `black-translucent` — kali ini diukur, bukan ditebak.
 
-   Sendirian, meta ini menyebabkan pita kosong 59 pt: iOS menggambar isi
-   sampai ke bawah jam tetapi jendelanya tetap setinggi layar dikurangi bilah
-   status, jadi isinya naik dan sisanya jatuh di bawah. Sempat diganti ke
-   `black` untuk menghindarinya — lalu ternyata Pos Timbang memakai
-   `black-translucent` dan tidak bermasalah, karena ia punya manifest.
-   Manifestnya yang kurang, bukan metanya yang salah. #}
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+   Di perangkat pemilik (iOS 18.7, terpasang, standalone): jendela 793 pt di
+   layar 852 pt, `env(safe-area-inset-top)` = 59. Selisihnya PERSIS inset
+   atas. Itulah `black-translucent` yang rusak: jendelanya dibuat setinggi
+   layar dikurangi bilah status, tetapi diletakkan mulai dari paling atas —
+   jadi 59 pt tersisa di bawah, dan tak ada CSS yang bisa mengisinya karena
+   ruang itu di luar jendela.
+
+   Diuji lebih dulu bahwa penyebabnya bukan yang lain: `overflow:hidden`,
+   `theme-color`, dan `manifest` masing-masing dimatikan saat berjalan, dan
+   jendelanya tetap 793.
+
+   `black` menaruh jendela DI BAWAH bilah status: tepi bawahnya bertemu tepi
+   bawah layar, dan insetnya jadi bermakna (atas 0, bawah 34 untuk indikator
+   beranda). Pernah dicoba di versi 17 lalu dibatalkan karena Pos Timbang
+   tampak baik-baik saja dengan `black-translucent` — padahal Pos Timbang
+   berlatar TERANG: 59 pt matinya sewarna halamannya sendiri, jadi tak
+   terlihat. Dan saat itu `black` tak pernah diuji dengan adil, karena
+   pemasangan ulang terjadi setelah ia dikembalikan.
+
+   iOS mengunci nilai ini saat PEMASANGAN — mengubahnya menuntut hapus &
+   pasang ulang ikon. #}
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 {# MANIFEST — inilah yang selama ini hilang, dan ia yang menentukan tinggi
    jendela di iOS.
@@ -40,13 +55,7 @@
 {# Di <head>, bukan di kaki: skrip halaman Laporan berjalan sebaris dengan
    isinya dan memanggil PINDAH sebelum </body> sempat terbaca. #}
 <script src="/static/pindah.js?v={{ VERSI }}"></script>
-{# SEMENTARA — mengukur KERANGKA APLIKASI ITU SENDIRI, bukan halaman terpisah.
 
-   Halaman ukur yang berdiri sendiri melapor "sampai bawah", tetapi aplikasi
-   tetap menyisakan pita kosong. Berarti bedanya ada pada kerangka aplikasi
-   ini, bukan pada jendelanya — dan itu hanya bisa dilihat dari dalam sini.
-   Hapus begitu angkanya didapat. #}
-<script src="/static/ukur.js?v={{ VERSI }}" defer></script>
 </head>
 <body>
 <div class="bingkai">
