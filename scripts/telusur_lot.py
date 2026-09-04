@@ -34,23 +34,29 @@ from app.main import app
 T = "\033[1m"; N = "\033[0m"; H = "\033[32m"; M = "\033[31m"
 
 
-async def supplier_kedua() -> int:
-    """Supplier BERBEDA untuk gabah keringnya.
+async def supplier_lain(nama: list[str]) -> list[int]:
+    """Supplier BERBEDA untuk tiap batch.
 
     Kalau semua batch dari orang yang sama, laporan yang cuma membaca sumber
-    pertama tetap tampak benar — kelalaiannya bersembunyi. Dua nama membuatnya
-    tak bisa lagi.
+    pertama tetap tampak benar — kelalaiannya bersembunyi di balik satu nama.
+    Tiga nama membuat setiap kelalaian terlihat: yang hilang dari daftar
+    adalah orang yang gabahnya ikut tergiling dan ikut dibayar.
     """
     async with SessionLocal() as db:
-        s = Supplier(nama_supplier="Bu Sri")
-        db.add(s)
+        objek = [Supplier(nama_supplier=n) for n in nama]
+        db.add_all(objek)
         await db.commit()
-        return s.id
+        return [o.id for o in objek]
 
 
-async def bangun(op, sid, sid2) -> None:
-    """Dua basah lewat pengeringan, satu kering langsung — semuanya ke Silo A."""
-    for kode, kg in (("TRX-BASAH-1", 8000), ("TRX-BASAH-2", 9000)):
+async def bangun(op, sids) -> None:
+    """Dua basah lewat pengeringan, satu kering langsung — semuanya ke Silo A.
+
+    Tiap batch dari supplier yang BERBEDA, termasuk dua yang dikeringkan
+    bersama: begitu keduanya melebur jadi satu PGR, satu-satunya yang menjaga
+    nama mereka adalah daftar batch di dalamnya.
+    """
+    for (kode, kg), sid in zip((("TRX-BASAH-1", 8000), ("TRX-BASAH-2", 9000)), sids):
         await S.tiket(sid, kode, "GABAH_BASAH", netto=kg, nota=kg)
     for _ in range(2):
         t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
@@ -64,13 +70,29 @@ async def bangun(op, sid, sid2) -> None:
     await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": pgr})
     await op.post("/miniapp/actions/pindah-silo", json={"kode_lot": pgr, "silo": "A"})
 
-    await S.tiket(sid2, "TRX-KERING-1", "GABAH_KERING", netto=5000, nota=5000)
+    await S.tiket(sids[2], "TRX-KERING-1", "GABAH_KERING", netto=5000, nota=5000)
     t = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
     await op.post("/miniapp/actions/gabah-masuk",
                   json={"timbangan_transaksi_id": t[0]["value"], "tujuan": S.SILO_A})
 
     r = await op.post("/miniapp/actions/mulai-giling", json={"silo": "A"})
     print(f"    giling: {r.json().get('pesan', r.text)[:80]}")
+
+
+#: Tiga harga BERBEDA — satu per supplier. Harga tunggal membuat rata-rata
+#: tertimbang tak bisa dibedakan dari "satu harga dikali total", dan cacat
+#: semacam itu justru yang paling mahal: ia hanya muncul sebagai angka HPP
+#: yang sedikit meleset, tanpa ada yang salah di layar mana pun.
+HARGA = {"GB-20260904-01": 5200.0, "GB-20260904-02": 5000.0, "GB-20260904-03": 6100.0}
+
+
+async def beri_harga(dir_) -> None:
+    """Direksi memverifikasi harga tiap batch — masing-masing beda."""
+    daftar = (await dir_.get("/miniapp/actions/gabah-unverified")).json()
+    for opsi in daftar:
+        kode = opsi["value"]
+        await dir_.post("/miniapp/actions/verify-gabah", json={
+            "kode_batch": kode, "metode": "per_kg", "nilai": HARGA[kode]})
 
 
 async def telusur() -> None:
@@ -139,10 +161,32 @@ async def telusur() -> None:
         print(("  " + H + "✅ tiap batch menyebut tiket timbangnya" + N) if bertiket
               else ("  " + M + "❌ ada batch tanpa tiket" + N))
 
-        dua = sorted(nama) == ["Bu Sri", "H. Karyo"]
-        print(("  " + H + f"✅ laporan menyebut KEDUA supplier: {nama}" + N) if dua
-              else ("  " + M + f"❌ supplier hilang dari laporan: {nama}" + N))
-        return utuh and bertiket and dua
+        # ── Uang: rata-rata TERTIMBANG, bukan satu harga dikali total ──
+        from app.services.costing import _sumber_info
+        kg_c, _dried, kondisi, bahan, _pgr = await _sumber_info(db, proc)
+        harap = sum(HARGA[k] * b for k, b, _t, _s in ketemu)
+        polos = HARGA["GB-20260904-01"] * kg_c        # kalau harga pertama dipakai untuk semua
+        print(f"\n{T}Biaya bahan{N}")
+        for k, b, _t, sup in ketemu:
+            print(f"   {k} · {b:,.0f} kg × Rp{HARGA[k]:,.0f} = Rp{HARGA[k]*b:,.0f}  ({sup})")
+        print(f"   {T}dihitung sistem : Rp{(bahan or 0):,.0f}{N}")
+        print(f"   diharapkan      : Rp{harap:,.0f}")
+        print(f"   (satu harga × total: Rp{polos:,.0f} — inilah yang SALAH)")
+        tepat = bahan is not None and abs(bahan - harap) < 1
+        print(("  " + H + "✅ biaya bahan = jumlah per batch, bukan satu harga × total" + N)
+              if tepat else ("  " + M + "❌ biaya bahan meleset" + N))
+        print(f"  {H}✅{N} kondisi terbaca: {kondisi}")
+
+        DIHARAP = ["Bu Sri", "H. Karyo", "Pak Darto"]
+        lengkap = sorted(nama) == DIHARAP
+        print(("  " + H + f"✅ laporan menyebut KETIGA supplier: {nama}" + N) if lengkap
+              else ("  " + M + f"❌ supplier hilang: ada {nama}, seharusnya {DIHARAP}" + N))
+
+        # Dan tiap supplier harus terbaca di baris asal-usulnya, bukan cuma di judul.
+        di_asal = all(any(n in b for b in teks.splitlines()) for n in DIHARAP)
+        print(("  " + H + "✅ ketiganya tersebut di rincian asal, bukan cuma judul" + N)
+              if di_asal else ("  " + M + "❌ ada supplier yang tak muncul di rincian" + N))
+        return utuh and bertiket and lengkap and di_asal and tepat
 
 
 async def main() -> None:
@@ -154,8 +198,12 @@ async def main() -> None:
         await S.masuk(op, "sknoperator")
         print(f"{T}Membangun: 2 batch basah (pengeringan) + 1 batch kering "
               f"(langsung) → Silo A → giling{N}")
-        sid2 = await supplier_kedua()
-        await bangun(op, sid, sid2)
+        lain = await supplier_lain(["Bu Sri", "Pak Darto"])
+        await bangun(op, [sid, lain[0], lain[1]])
+        async with httpx.AsyncClient(transport=tr, base_url="http://uji",
+                                     follow_redirects=False) as dr:
+            await S.masuk(dr, "skndireksi")
+            await beri_harga(dr)
         ok = await telusur()
     raise SystemExit(0 if ok else 1)
 
