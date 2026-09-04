@@ -828,16 +828,20 @@ async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]
     async with SessionLocal() as db:
         tk = await tiket_masuk_aktif(db)
     out = []
+    from app.penggilingan.peta_jenis import intake_dari_jenis
     for t in tk:
-        if not str(t.get("jenis_kode", "")).startswith("GABAH"):
+        # Dibaca dari peta jenis, bukan ditebak dari awalan kodenya — lihat
+        # alasannya di `services.berjalan._tiket_belum_ditaut`.
+        info = intake_dari_jenis(t.get("jenis_kode", ""))
+        if info is None or info.model != "gabah":
             continue  # gabah saja (PK punya aksi sendiri)
         nm = t.get("nama_supplier") or t.get("pihak_nama") or "?"
         b = t.get("berat_hpp_kg")
         bstr = f"{_rp(float(b))} kg ({t['sumber_berat']})" if b else "⚠️ bobot belum ada"
         tanda = " · SUSULAN (tiket sudah ditutup)" if t.get("susulan") else ""
         out.append({"value": t["id"],
-                    "label": f"{t['kode']} · {nm} · {t.get('nomor_polisi') or '-'} "
-                             f"· {bstr}{tanda}"})
+                    "label": f"{t['kode']} · gabah {info.kondisi} · {nm} · "
+                             f"{t.get('nomor_polisi') or '-'} · {bstr}{tanda}"})
     return out
 
 

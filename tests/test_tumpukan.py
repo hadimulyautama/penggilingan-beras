@@ -114,3 +114,32 @@ def test_gabah_yang_gagal_ditempatkan_menagih_di_berjalan():
     sumber = inspect.getsource(berjalan.untuk_gudang1)
     assert 'status_batch == "baru"' in sumber
     assert "belum ditempatkan" in sumber
+
+
+def test_komoditas_tiket_dibaca_dari_peta_bukan_ditebak():
+    """Taksonomi jenis di Timbangan berbasis data dan bisa bertambah. Menebak
+    dari awalan kode berarti komoditas baru diam-diam dianggap gabah kering —
+    dan gabah basah yang salah dikenali akan ditawari masuk silo."""
+    from app.services import berjalan as brj
+    from app.web import miniapp as mn
+
+    for fungsi in (brj._tiket_belum_ditaut, mn.timbang_masuk_aktif):
+        sumber = inspect.getsource(fungsi)
+        assert "intake_dari_jenis" in sumber
+        assert 'startswith("GABAH")' not in sumber
+
+
+def test_baris_berjalan_membawa_nilainya_ke_lembar_aksi():
+    """Barisnya sudah menunjuk satu tiket. Menanyakannya lagi di dalam lembar
+    berarti orang memilih hal yang sama dua kali — dan kesempatan kedua itulah
+    tempat ia salah pilih."""
+    import pathlib
+
+    from app.services.berjalan import Baris
+
+    assert "nilai" in Baris.__dataclass_fields__
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    html = (akar / "app/web/templates/berjalan.html").read_text()
+    assert "&nilai=" in html
+    js = (akar / "app/web/static/aksi.js").read_text()
+    assert "isiDariBaris" in js

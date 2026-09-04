@@ -43,6 +43,13 @@ class Baris:
     #: Aksi yang menutup baris ini. None = tidak ada yang bisa dikerjakan
     #: sekarang; barisnya tampil tanpa panah dan tidak bisa ditekan.
     aksi: str | None = None
+    #: Yang menandai baris ini di dalam formulirnya — nomor tiket, kode lot,
+    #: kode batch. Dibawa serta supaya lembar aksinya sudah terisi.
+    #:
+    #: Tanpa ini, orang yang menekan sebuah baris ditanya lagi baris mana yang
+    #: ia maksud — padahal ia baru saja menunjuknya. Itu membatalkan seluruh
+    #: guna layar ini.
+    nilai: str | None = None
     sejak: datetime | None = None
 
 
@@ -82,17 +89,29 @@ def _kg(n) -> str:
 
 async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+
     baris = []
     for t in await tiket_masuk_aktif(db):
-        if not str(t.get("jenis_kode", "")).startswith("GABAH"):
-            continue                      # PK punya alurnya sendiri
+        # Komoditas tiket dibaca dari PETA JENIS, bukan ditebak dari awalan
+        # kodenya. Taksonomi jenis di Timbangan berbasis data dan bisa
+        # bertambah; menebak dari nama berarti komoditas baru diam-diam
+        # dianggap gabah kering — dan gabah basah yang salah dikenali akan
+        # ditawari masuk silo.
+        info = intake_dari_jenis(t.get("jenis_kode", ""))
+        if info is None or info.model != "gabah":
+            continue                      # PK & lainnya punya alurnya sendiri
         nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
         bobot = t.get("berat_hpp_kg")
-        isi = f"{nama} · {t.get('nomor_polisi') or '-'}"
+        # Basah atau kering disebut lebih dulu: itulah yang menentukan tujuan
+        # yang boleh dipilih. Tanpa itu operator harus membuka tiketnya untuk
+        # tahu, atau menebak — dan menebak di sini berarti gabah basah masuk
+        # silo.
+        isi = f"gabah {info.kondisi} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
-            isi += f" · {_kg(bobot)}"
+            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
         baris.append(Baris(
-            kode=t["kode"], isi=isi, aksi="gabah_masuk",
+            kode=t["kode"], isi=isi, aksi="gabah_masuk", nilai=str(t["id"]),
             keadaan=("tiket sudah ditutup — susulan" if t.get("susulan")
                      else "belum ditaut ke batch"),
         ))
@@ -153,7 +172,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             kode=b_.kode_batch,
             isi=f"{_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
             keadaan="belum ditempatkan — dryer, silo, atau tumpukan",
-            aksi="pindah_tumpukan",
+            aksi="pindah_tumpukan", nilai=b_.kode_batch,
             sejak=b_.created_at,
         ))
 
@@ -168,13 +187,14 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             isi=f"menumpuk · {_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
             keadaan=("harus ke dryer — belum kering" if wajib_dryer
                      else "pindahkan ke dryer atau silo"),
-            aksi="pindah_tumpukan", sejak=b_.created_at,
+            aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
         ))
 
     for lot in await _lot(db, pendinginan_selesai=True):
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
             keadaan="siap dipindah ke silo", aksi="pindah_silo",
+            nilai=lot.kode_lot,
             sejak=lot.waktu_selesai_pendinginan,
         ))
 
@@ -182,6 +202,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="pengeringan selesai, sedang didinginkan",
             keadaan="nyatakan pendinginan selesai", aksi="selesai_pendinginan",
+            nilai=lot.kode_lot,
             sejak=lot.waktu_selesai_pengeringan,
         ))
 
@@ -194,6 +215,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.berjalan.append(Baris(
             kode=lot.kode_lot, isi="sedang dikeringkan",
             keadaan="menunggu kadar air turun", aksi="kadar_air",
+            nilai=lot.kode_lot,
             sejak=lot.waktu_mulai_pengeringan,
         ))
 
@@ -204,6 +226,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.berjalan.append(Baris(
             kode=p.kode_proses, isi=f"digiling · {_kg(p.berat_gabah_masuk_kg)} gabah masuk",
             keadaan="catat hasil, tutup bila selesai", aksi="hasil_giling",
+            nilai=p.kode_proses,
             sejak=p.waktu_mulai,
         ))
     return b
@@ -222,6 +245,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         b.menunggu.append(Baris(
             kode=batch.kode_batch, isi=f"{nama} · {_kg(batch.berat_total_kg)}",
             keadaan="harga belum diverifikasi", aksi="verify_gabah",
+            nilai=batch.kode_batch,
             sejak=batch.created_at,
         ))
 
@@ -237,7 +261,8 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         if not ada_qc:
             b.menunggu.append(Baris(
                 kode=p.kode_proses, isi="giling selesai, mutu belum diperiksa",
-                keadaan="menunggu QC", aksi="qc_giling", sejak=p.waktu_selesai))
+                keadaan="menunggu QC", aksi="qc_giling", nilai=p.kode_proses,
+                sejak=p.waktu_selesai))
         ada_v = (await db.execute(
             select(MillingProcessVerification.id)
             .where(MillingProcessVerification.milling_process_id == p.id)
@@ -246,7 +271,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
             b.menunggu.append(Baris(
                 kode=p.kode_proses, isi="output giling belum diverifikasi",
                 keadaan="menunggu verifikasi output", aksi="verify_output",
-                sejak=p.waktu_selesai))
+                nilai=p.kode_proses, sejak=p.waktu_selesai))
     return b
 
 

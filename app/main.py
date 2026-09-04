@@ -199,6 +199,7 @@ async def halaman_aksi(request: Request):
     # lalu menyuruhnya mencari sendiri.
     return render(request, "aksi.html", kembali="/",
                   buka=request.query_params.get("buka") or "",
+                  nilai=request.query_params.get("nilai") or "",
                   MENUNGGU=await jumlah_menunggu(akun.user))
 
 

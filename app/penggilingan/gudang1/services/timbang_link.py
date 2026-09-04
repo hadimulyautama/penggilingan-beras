@@ -37,6 +37,15 @@ _SQL_AKTIF = text("""
       LEFT JOIN suppliers s ON s.id = t.supplier_id
      WHERE t.arah = 'MASUK'
        AND t.status_tiket IN ('TERBUKA', 'SELESAI')
+       -- Yang sudah ditutup hanya ditawarkan selama beberapa hari.
+       --
+       -- Tanpa batas ini, pabrik yang timbangannya sudah lama jalan sementara
+       -- produksi belum dipakai akan menampilkan SELURUH riwayat tiketnya —
+       -- dan pekerjaan hari ini terkubur di antara ratusan tiket lama.
+       -- Yang benar-benar tertinggal bukan urusan layar harian: ia sudah
+       -- dilaporkan rekonsiliasi sebagai "belum tertaut".
+       AND (t.status_tiket = 'TERBUKA'
+            OR t.tanggal >= CURRENT_DATE - CAST(:hari AS integer))
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
@@ -67,9 +76,20 @@ def _row(r) -> dict:
     return d
 
 
+#: Berapa hari ke belakang tiket yang SUDAH DITUTUP masih boleh disusulkan.
+#: Cukup panjang untuk menutupi akhir pekan dan libur, cukup pendek supaya
+#: daftar tetap bisa dibaca sambil berdiri.
+HARI_SUSULAN = 7
+
+
 async def tiket_masuk_aktif(db: AsyncSession, jenis_kode: str | None = None) -> list[dict]:
-    """Daftar tiket timbang MASUK aktif & belum tertaut (untuk dipilih operator)."""
-    rows = (await db.execute(_SQL_AKTIF)).all()
+    """Daftar tiket timbang MASUK yang belum tertaut, untuk dipilih operator.
+
+    Yang masih TERBUKA selalu masuk — itu pekerjaan yang sedang berjalan.
+    Yang sudah ditutup hanya beberapa hari ke belakang; selebihnya urusan
+    rekonsiliasi, bukan urusan layar harian.
+    """
+    rows = (await db.execute(_SQL_AKTIF, {"hari": HARI_SUSULAN})).all()
     out = [_row(r) for r in rows]
     if jenis_kode:
         out = [d for d in out if d["jenis_kode"] == jenis_kode]

@@ -241,11 +241,41 @@
     if (!id) { return; }
     var coba = 0;
     var jam = setInterval(function () {
-      if (MENU[id]) { clearInterval(jam); bukaAksi(id); return; }
+      if (MENU[id]) { clearInterval(jam); bukaAksi(id); isiDariBaris(); return; }
       // Menu datang dari server; kalau setelah beberapa detik aksinya tetap
       // tak ada, ia memang tak berlaku untuk peran ini — diamkan saja,
       // daftar aksinya sudah tampil dan orang bisa memilih sendiri.
       if (++coba > 40) { clearInterval(jam); }
     }, 100);
   })();
+
+  /* Isi lembar dari baris yang ditekan di layar Berjalan.
+   *
+   * Barisnya sudah menunjuk satu tiket, satu lot, satu batch — menanyakannya
+   * lagi di dalam lembar berarti orang memilih hal yang sama dua kali, dan
+   * kesempatan kedua itulah tempat ia salah pilih.
+   *
+   * Pilihan jarak jauh dimuat setelah lembarnya tampil, jadi nilainya
+   * dipasang berulang sampai daftarnya datang — lalu berhenti. */
+  function isiDariBaris() {
+    var tag = document.querySelector("script[data-nilai]");
+    var nilai = tag && tag.dataset.nilai;
+    if (!nilai) { return; }
+    var sisa = 40;
+    var jam = setInterval(function () {
+      var kena = false;
+      Array.prototype.forEach.call(
+        document.querySelectorAll("#lembar select[data-name]"), function (s) {
+          if (s.value) { return; }
+          for (var i = 0; i < s.options.length; i++) {
+            if (s.options[i].value === nilai) {
+              s.value = nilai;
+              kena = true;
+              return;
+            }
+          }
+        });
+      if (kena || --sisa <= 0) { clearInterval(jam); }
+    }, 100);
+  }
 })();
