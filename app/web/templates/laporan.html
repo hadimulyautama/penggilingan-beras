@@ -77,14 +77,16 @@
       .catch(function (e) { isi.textContent = String(e.message || e); });
   }
 
-  document.addEventListener("click", function (e) {
+  /* Lewat PINDAH, bukan langsung ke `document`: skrip halaman dijalankan
+     ulang tiap kali isinya ditukar, dan pendengar yang dipasang langsung
+     akan menumpuk sekali tiap perpindahan. */
+  PINDAH.pasang(document, "click", function (e) {
     var t = e.target.closest ? e.target.closest("[data-laporan]") : null;
     if (!t) { return; }
     kodeAktif = t.dataset.laporan;
     judul.textContent = t.querySelector(".tindakan__nama").textContent;
     grupPeriode.style.display = t.dataset.berperiode ? "" : "none";
     lembar.style.display = "flex";
-    document.body.style.overflow = "hidden";
     muat();
   });
 
@@ -92,12 +94,11 @@
 
   function tutup() {
     lembar.style.display = "none";
-    document.body.style.overflow = "";
     kodeAktif = null;
   }
   document.getElementById("tutup").onclick = tutup;
   lembar.addEventListener("click", function (e) { if (e.target === lembar) tutup(); });
-  document.addEventListener("keydown", function (e) {
+  PINDAH.pasang(document, "keydown", function (e) {
     if (e.key === "Escape" && lembar.style.display === "flex") tutup();
   });
 })();

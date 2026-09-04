@@ -46,6 +46,11 @@
     });
     var j = await r.json().catch(function () { return {}; });
     if (!r.ok) throw (j.detail || ("Gagal disimpan (HTTP " + r.status + ")"));
+    /* Sesuatu baru saja tercatat: halaman yang tersimpan di memori kini
+       menggambarkan keadaan SEBELUM catatan itu. Data yang telat sedikit
+       masih bisa diterima; halaman yang tidak memuat pekerjaan yang baru
+       saja dilakukan orangnya sendiri tidak. */
+    if (window.PINDAH) { window.PINDAH.lupakan(); }
     return j;
   }
 
@@ -219,7 +224,10 @@
   $("lembar").addEventListener("click", function (e) {
     if (e.target.id === "lembar") tutupLembar();
   });
-  document.addEventListener("keydown", function (e) {
+  /* Lewat PINDAH, bukan langsung ke `document`: skrip halaman dijalankan
+     ulang tiap kali isinya ditukar, dan pendengar yang dipasang langsung
+     akan menumpuk sekali tiap perpindahan. */
+  PINDAH.pasang(document, "keydown", function (e) {
     if (e.key === "Escape" && $("lembar").style.display === "flex") tutupLembar();
   });
 

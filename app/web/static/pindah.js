@@ -1,0 +1,218 @@
+/* Perpindahan halaman yang terasa seketika di jaringan yang jauh.
+ *
+ * Layanan ini berjalan di San Francisco; dari Indonesia satu perjalanan
+ * pulang-pergi memakan ~270 ms sebelum sebutir piksel digambar. Kerja
+ * servernya sendiri hanya ~20 ms — jadi yang dirasakan lambat itu jarak,
+ * bukan beban. Menulis ulang aplikasinya tidak memindahkan Samudra Pasifik.
+ *
+ * Yang bisa dilakukan adalah tidak menunggu jarak itu pada saat orang
+ * menekan. Halaman bertab disimpan di memori, ditampilkan seketika saat
+ * ditekan, lalu diperbarui diam-diam setelah jawaban server datang. Pemilik
+ * memilih pertukaran ini dengan sadar: "data agak lambat tidak apa-apa,
+ * paling tidak perpindahan halaman responsif."
+ *
+ * Simpanannya di MEMORI, bukan di cakram atau service worker — ia lenyap
+ * saat tab ditutup. Itu disengaja: halaman-halaman ini berisi angka milik
+ * perusahaan dan menempel pada sesi orang yang sedang masuk; ia tak boleh
+ * hidup lebih lama dari sesinya.
+ */
+(function () {
+  "use strict";
+
+  var simpan = {};        // alamat -> HTML utuh yang terakhir dilihat
+  var sedang = {};        // alamat -> janji yang sedang berjalan (jangan dobel)
+  var bingkai = null;
+  var siapkan = null;     // pemanas simpanan, dipasang saat DOM siap
+
+  /* Pendengar tingkat dokumen milik HALAMAN, bukan milik aplikasi.
+     Skrip halaman dijalankan ulang tiap kali isinya ditukar; kalau
+     pendengarnya dipasang langsung ke `document`, ia menumpuk sekali tiap
+     perpindahan sampai satu ketukan dijalankan lima kali. Yang dipasang
+     lewat sini dicabut lebih dulu pada perpindahan berikutnya.
+
+     INI DIDEFINISIKAN LEBIH DULU, sebelum apa pun yang menyentuh DOM, dan
+     berkasnya dimuat di <head>. Skrip halaman Laporan berjalan sebaris
+     dengan isinya — jauh sebelum </body> — jadi kalau PINDAH baru ada di
+     kaki halaman, layar Laporan mati sejak ketukan pertama. */
+  var terpasang = [];
+  window.PINDAH = {
+    pasang: function (sasaran, jenis, fn) {
+      sasaran.addEventListener(jenis, fn);
+      terpasang.push([sasaran, jenis, fn]);
+    },
+    /* Dipanggil sesudah sesuatu tercatat. Mengosongkan saja tidak cukup:
+       tanpa dipanaskan ulang, lima ketukan berikutnya kembali menunggu
+       laut — tepat sesudah orangnya menyelesaikan satu pekerjaan dan
+       hendak memeriksa hasilnya. */
+    lupakan: function () {
+      simpan = {};
+      if (siapkan) { setTimeout(siapkan, 250); }
+    }
+  };
+  function cabutSemua() {
+    terpasang.forEach(function (p) { p[0].removeEventListener(p[1], p[2]); });
+    terpasang = [];
+  }
+
+  if (!window.fetch || !window.history || !history.pushState) { return; }
+
+  function bolehDitangani(a) {
+    if (!a || !a.getAttribute) { return false; }
+    var h = a.getAttribute("href");
+    if (!h || h.charAt(0) === "#") { return false; }
+    if (a.target || a.hasAttribute("download") || a.hasAttribute("data-utuh")) { return false; }
+    return a.origin === location.origin;
+  }
+
+  /* ── Mengambil, dan hanya sekali untuk alamat yang sama ── */
+  function ambil(alamat) {
+    if (sedang[alamat]) { return sedang[alamat]; }
+    var janji = fetch(alamat, {
+      credentials: "same-origin",
+      headers: { "X-Pindah": "1" }
+    }).then(function (r) {
+      /* Dialihkan ke halaman masuk, atau ditolak: serahkan pada peramban.
+         Sesi yang habis harus terlihat sebagai sesi yang habis, bukan
+         sebagai halaman kosong. */
+      if (!r.ok || r.redirected) { return null; }
+      return r.text();
+    }).catch(function () {
+      return null;              // jaringan putus — biarkan peramban mencoba
+    }).then(function (teks) {
+      delete sedang[alamat];
+      if (teks) { simpan[alamat] = teks; }
+      return teks;
+    });
+    sedang[alamat] = janji;
+    return janji;
+  }
+
+  /* ── Memasang HTML yang sudah di tangan ── */
+  function pasang(teks, alamat) {
+    var doc = new DOMParser().parseFromString(teks, "text/html");
+    var baru = doc.querySelector(".bingkai");
+    if (!baru) { location.href = alamat; return false; }
+
+    cabutSemua();
+    document.title = doc.title || document.title;
+    bingkai.innerHTML = baru.innerHTML;
+
+    /* Skrip yang datang lewat innerHTML tidak dijalankan peramban —
+       harus dibuatkan ulang elemennya. Tanpa ini layar Catat dan Laporan
+       tampil utuh tetapi tak satu tombolnya hidup. */
+    Array.prototype.forEach.call(bingkai.querySelectorAll("script"), function (lama) {
+      var s = document.createElement("script");
+      Array.prototype.forEach.call(lama.attributes, function (at) {
+        s.setAttribute(at.name, at.value);
+      });
+      s.textContent = lama.textContent;
+      lama.parentNode.replaceChild(s, lama);
+    });
+    return true;
+  }
+
+  function lembarTerbuka() {
+    var l = document.getElementById("lembar");
+    return !!(l && l.style.display === "flex");
+  }
+
+  /* ── Perpindahan ── */
+  function pindah(alamat, dorong) {
+    var tersimpan = simpan[alamat];
+
+    if (tersimpan) {
+      // Sudah di tangan: tampilkan sekarang juga, tanpa menyeberangi laut.
+      if (!pasang(tersimpan, alamat)) { return; }
+      if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
+      // Lalu periksa diam-diam apakah sudah berubah.
+      delete simpan[alamat];
+      ambil(alamat).then(function (teks) {
+        /* Hanya menyegarkan kalau orangnya masih di halaman itu, isinya
+           memang berbeda, dan tak ada lembar terbuka. Menukar isi di bawah
+           jari orang yang sedang membaca laporan lebih buruk daripada angka
+           yang telat setengah detik. */
+        if (!teks || teks === tersimpan) { return; }
+        if (location.pathname + location.search !== alamat) { return; }
+        if (lembarTerbuka()) { return; }
+        pasang(teks, alamat);
+      });
+      return;
+    }
+
+    // Belum ada: tunggu, sambil menunjukkan bahwa sesuatu sedang berjalan.
+    bingkai.classList.add("menunggu");
+    ambil(alamat).then(function (teks) {
+      bingkai.classList.remove("menunggu");
+      if (!teks) { location.href = alamat; return; }
+      if (!pasang(teks, alamat)) { return; }
+      if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
+    });
+  }
+
+  /* ── Menangkap ketukan ── */
+  function mulai() {
+  bingkai = document.querySelector(".bingkai");
+  if (!bingkai) { return; }
+
+  document.addEventListener("click", function (e) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) { return; }
+    var a = e.target.closest ? e.target.closest("a") : null;
+    if (!bolehDitangani(a)) { return; }
+    var alamat = a.pathname + a.search;
+    if (alamat === location.pathname + location.search) { e.preventDefault(); return; }
+    e.preventDefault();
+
+    /* Tab yang ditekan menyala SEKARANG, bukan setelah halamannya datang.
+       Tanpa ini ketukan terasa tidak terdaftar dan orang menekan dua kali. */
+    var tab = a.classList.contains("bilah__tab") ? a : null;
+    if (tab) {
+      Array.prototype.forEach.call(
+        document.querySelectorAll(".bilah__tab"), function (t) {
+          t.classList.toggle("bilah__tab--aktif", t === tab);
+        });
+    }
+    pindah(alamat, true);
+  });
+
+  /* Mulai mengambil saat jari MENYENTUH, bukan saat diangkat. Jeda antara
+     sentuh dan angkat 80–150 ms — itu potongan gratis dari waktu tunggu. */
+  function dahului(e) {
+    var a = e.target.closest ? e.target.closest("a") : null;
+    if (!bolehDitangani(a)) { return; }
+    var alamat = a.pathname + a.search;
+    if (!simpan[alamat] && !sedang[alamat]) { ambil(alamat); }
+  }
+  document.addEventListener("touchstart", dahului, { passive: true });
+  document.addEventListener("mouseover", dahului);
+
+  window.addEventListener("popstate", function () {
+    pindah(location.pathname + location.search, false);
+  });
+
+  /* Empat tab lain diambil saat aplikasi sedang diam, supaya ketukan
+     pertama ke masing-masingnya pun sudah tidak menunggu. Halamannya kecil
+     dan servernya hanya butuh ~20 ms; yang mahal cuma jaraknya, dan jarak
+     itu dibayar di sini, bukan saat orang menunggu. */
+  function siapkanTab() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll(".bilah__tab"), function (t) {
+        var alamat = t.pathname + t.search;
+        if (alamat !== location.pathname + location.search && !simpan[alamat]) {
+          ambil(alamat);
+        }
+      });
+  }
+  siapkan = siapkanTab;
+  if (window.requestIdleCallback) {
+    requestIdleCallback(siapkanTab, { timeout: 2500 });
+  } else {
+    setTimeout(siapkanTab, 1200);
+  }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mulai);
+  } else {
+    mulai();
+  }
+})();
