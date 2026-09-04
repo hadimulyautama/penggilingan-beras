@@ -63,7 +63,7 @@ def _daftar() -> tuple[Laporan, ...]:
                 False, None, berperiode=True),
         Laporan("stok_kemasan", "Stok karung", "Sisa karung per jenis, ukuran, dan merk.",
                 False, kms.laporan_stok_kemasan),
-        Laporan("stok_barang_jadi", "Stok barang jadi", "Beras terpacking dan hasil samping.",
+        Laporan("stok_barang_jadi", "Stok barang jadi", "Beras yang sudah dikemas dan hasil samping.",
                 False, bj.laporan_stok_barang_jadi),
         Laporan("barang_keluar", "Barang keluar", "Pengiriman terakhir beserta pembelinya.",
                 False, keluar.laporan_barang_keluar),
