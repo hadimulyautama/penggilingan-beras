@@ -46,6 +46,16 @@ async def hitung(sql: str) -> int:
 async def main() -> None:
     S._pastikan_bukan_produksi()
     sid = await S.siapkan()
+    # Satu vendor "dari Kledo" dan satu pelanggan biasa, supaya penyaringannya
+    # bisa dibedakan dari penghapusan borongan.
+    async with SessionLocal() as db:
+        await db.execute(text(
+            "INSERT INTO suppliers (nama_supplier, status, kledo_contact_id) "
+            "VALUES ('Vendor Kledo', 'aktif', 12345)"))
+        await db.execute(text(
+            "INSERT INTO pelanggan (nama_pelanggan, status) VALUES ('Pembeli Uji', 'aktif')"))
+        await db.commit()
+
     async with SessionLocal() as db:
         u = User(nama="Uji Super", role="superadmin", status="aktif")
         db.add(u); await db.flush()
@@ -97,15 +107,24 @@ async def main() -> None:
         "SELECT count(*) FROM timbangan_transaksi WHERE purchase_batch_id IS NOT NULL")
     cek("tautan ke batch uji dilepas", tertaut == 0, f"{tertaut} masih tertaut")
     sup = await hitung("SELECT count(*) FROM suppliers")
-    cek("supplier bertahan (dipakai bersama Timbangan)", sup > 0, f"{sup} baris")
+    plg = await hitung("SELECT count(*) FROM pelanggan")
+    cek("SEMUA vendor bertahan", sup == 2, f"{sup} baris")
+    cek("SEMUA pelanggan bertahan", plg == 1, f"{plg} baris")
+    # Inti syarat pemilik: tak satu tiket pun boleh kehilangan nama pengirim.
+    yatim = await hitung(
+        "SELECT count(*) FROM timbangan_transaksi t LEFT JOIN suppliers s "
+        "ON s.id = t.supplier_id WHERE t.supplier_id IS NOT NULL AND s.id IS NULL")
+    kosong = await hitung(
+        "SELECT count(*) FROM timbangan_transaksi WHERE supplier_id IS NULL")
+    cek("tak ada tiket kehilangan nama pengirim", yatim == 0 and kosong == 0,
+        f"{yatim} menunjuk vendor hilang · {kosong} tanpa vendor")
     cek("jenis komoditas UTUH", await hitung("SELECT count(*) FROM timbangan_jenis")
         == jenis_sebelum)
     cek("produksi tak mengenal tabel timbangan",
         not [t for t in Base.metadata.tables if t.startswith("timbangan")])
 
     print(f"\n{T}Yang dipertahankan{N}")
-    for nama in ("users", "produksi_akun", "warehouses", "silos", "dryers",
-                 "suppliers"):
+    for nama in ("users", "produksi_akun", "warehouses", "silos", "dryers"):
         n = await hitung(f'SELECT count(*) FROM "{nama}"')
         cek(f"{nama} bertahan", n > 0, f"{n} baris")
 

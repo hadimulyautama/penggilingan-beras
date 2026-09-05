@@ -56,10 +56,19 @@ DIPERTAHANKAN = frozenset({
     #    yang sama. Ketiganya ketahuan hanya karena diuji sungguhan; tak satu
     #    pun terlihat "milik orang lain" dari nama atau dari kode produksi.
     #
-    # Supplier: `timbangan_supplier_profil.supplier_id` dan
-    # `timbangan_skor_supplier.supplier_id` WAJIB ISI. Menghapusnya merusak
-    # data Timbangan, bukan sekadar data uji.
-    "suppliers",
+    # Vendor & pelanggan: DIPERTAHANKAN SELURUHNYA, atas keputusan pemilik.
+    #
+    # Keduanya master BERSAMA yang disinkronkan dari Kledo, dan Timbangan
+    # sengaja tak membuat salinan sendiri: tiket hanya MENUNJUK ke sini dan
+    # tidak menyimpan nama pengirimnya. Menghapus satu vendor saja membuat
+    # tiket yang menunjuknya kehilangan nama — dan tiket adalah hal yang
+    # justru dijaga.
+    #
+    # Sempat dirancang penyaring "buang yang bukan dari Kledo dan tak lagi
+    # dipakai". Dibuang seluruhnya, bukan sekadar dimatikan: pada fitur yang
+    # menghapus data, cabang yang tak terpakai adalah jalan salah yang
+    # menunggu dipilih.
+    "suppliers", "pelanggan",
     # Konfigurasi & jejak pemakaian LLM: dipakai bersama layanan Kantor —
     # kill-switch dan BATAS BIAYA. Mengosongkannya bukan menghapus data uji,
     # melainkan mereset pengaman biaya kedua aplikasi. Namanya "kantor_*"
