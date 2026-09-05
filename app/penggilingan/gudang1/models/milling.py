@@ -54,24 +54,6 @@ class MillingProgressLog(Base):
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
-class MillingPkRouting(Base):
-    """Tujuan tiap batch PK keluar: tumpuk (buffer) atau siap_transfer."""
-
-    __tablename__ = "milling_pk_routing"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    milling_process_id: Mapped[int] = mapped_column(
-        ForeignKey("milling_process.id"), nullable=False
-    )
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    # tumpuk / siap_transfer
-    tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
-    # menunggu / ditransfer (khusus siap_transfer)
-    status_transfer: Mapped[str | None] = mapped_column(String(20))
-    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-
-
 class MillingQcLog(Base):
     """QC hasil PK oleh staff/admin (min. 1x per lot)."""
 
@@ -103,21 +85,6 @@ class MillingProcessVerification(Base, TimestampMixin):
     verified_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     waktu_verifikasi: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status_verifikasi: Mapped[str] = mapped_column(String(20), default="terverifikasi")
-
-
-class PkStockGudang1(Base, TimestampMixin):
-    """Stok PK di buffer tumpukan Gudang 1 (maks 30 ton, dipisah per lot)."""
-
-    __tablename__ = "pk_stock_gudang1"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
-    milling_process_id: Mapped[int] = mapped_column(
-        ForeignKey("milling_process.id"), nullable=False
-    )
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
-    # tersedia / habis
-    status: Mapped[str] = mapped_column(String(20), default="tersedia")
 
 
 class MillingProcessSource(Base):
