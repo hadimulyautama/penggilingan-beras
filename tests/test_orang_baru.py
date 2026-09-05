@@ -91,3 +91,38 @@ async def test_peran_karangan_ditolak_walau_pendaftarnya_admin():
         await ua.register_user(
             None, actor=SimpleNamespace(role="admin"), nama="Budi", role="mandor",
             gudang=None, telegram_id=None, no_hp=None, lewat_sandi=True)
+
+
+def test_superadmin_tak_boleh_tertinggal_di_gerbang_mana_pun():
+    """Tangga yang tidak menurun ke bawah bukan tangga.
+
+    `superadmin` ditambahkan di puncak saat peran dikonsolidasi, tetapi
+    delapan gerbang masih menyebut ("staff","admin") satu per satu — jadi
+    peran TERTINGGI bisa mengerjakan LEBIH SEDIKIT daripada admin di
+    bawahnya. Pengiriman PK Gudang 1 → Gudang 2 salah satunya, dan itu
+    langkah yang dipakai tiap hari.
+    """
+    import pathlib
+    akar = pathlib.Path(__file__).resolve().parent.parent / "app"
+    tersangka = []
+    for berkas in akar.rglob("*.py"):
+        isi = berkas.read_text()
+        for pola in ('("staff", "admin")', '("admin", "staff")'):
+            if pola in isi:
+                tersangka.append(f"{berkas.relative_to(akar)}: {pola}")
+    assert not tersangka, (
+        "Peran disebut satu per satu — pakai PERAN_STAF_KEATAS: " + "; ".join(tersangka)
+    )
+
+
+def test_can_transfer_pk_mencakup_superadmin():
+    from app.bots.common import PERAN_STAF_KEATAS, can_transfer_pk
+
+    class _U:
+        def __init__(self, role): self.role = role
+
+    assert "superadmin" in PERAN_STAF_KEATAS
+    for peran in ("superadmin", "admin", "staff"):
+        assert can_transfer_pk(_U(peran)), peran
+    assert not can_transfer_pk(_U("operator"))
+    assert not can_transfer_pk(None)

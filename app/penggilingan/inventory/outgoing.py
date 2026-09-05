@@ -12,6 +12,7 @@ from math import ceil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bots.common import PERAN_STAF_KEATAS
 from app.database import input_time
 from app.models import MillingProcess, OutgoingItem, OutgoingRecord
 from app.services.activity_log import log_activity
@@ -139,7 +140,7 @@ async def jual_pk_langsung(
     harga_per_kg: float | None = None, tanggal=None, jam=None,
 ) -> OutgoingResult:
     """Jual PK langsung dari Gudang 1 (HANYA staff/admin). Karung PK 50kg CEIL."""
-    if user.role not in ("staff", "admin"):
+    if user.role not in PERAN_STAF_KEATAS:
         raise InventoryError("Penjualan PK langsung hanya bisa oleh Staff atau Admin.")
     if not kode_mil or not berat_kg:
         raise InventoryError("Sebutkan proses PK (MIL-...) & beratnya. Contoh: `jual PK langsung 2 ton dari MIL-...`")

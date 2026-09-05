@@ -50,7 +50,7 @@ async def notify_user(telegram_user_id: int | None, text: str, bot_name: str = "
     return False
 
 
-async def notify_roles(text: str, roles: tuple[str, ...] = ("admin", "staff")) -> None:
+async def notify_roles(text: str, roles: tuple[str, ...] = ("superadmin", "admin", "staff")) -> None:
     """Kirim `text` (Markdown) ke semua user aktif dengan peran tsb via bot admin."""
     bot = _bots.get("admin")
     if bot is None:

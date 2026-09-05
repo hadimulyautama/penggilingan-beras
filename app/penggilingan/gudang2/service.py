@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.bots.common import PERAN_STAF_KEATAS
 from app.config import settings
 from app.database import input_time
 from app.models import (
@@ -215,7 +216,7 @@ async def create_pk_purchase(
     Master §2: input PK dari luar = STAFF/ADMIN saja (bukan operator).
     Wajib: supplier, berat, plat truk, jenis PK (ks/kl/campuran/semi_ks).
     """
-    if user.role not in ("staff", "admin"):
+    if user.role not in PERAN_STAF_KEATAS:
         raise Gudang2Error(
             "🔒 Input PK dari luar (+ QC) hanya bisa dilakukan oleh Staff/Admin."
         )
@@ -268,7 +269,7 @@ async def create_pk_purchase_dari_timbang(
     timbang — hanya pilih tiket + jenis PK (timbang tak membedakan ks/kl/dst). STAFF/ADMIN
     saja. Bobot boleh belum ada ('menunggu') → disinkron dari tiket. Referensi bobot = tiket.
     """
-    if user.role not in ("staff", "admin"):
+    if user.role not in PERAN_STAF_KEATAS:
         raise Gudang2Error("🔒 Input PK dari luar hanya bisa oleh Staff/Admin.")
     jenis = norm_jenis_pk(jenis_pk)
     if jenis is None:
@@ -373,7 +374,7 @@ async def log_pk_qc(
     PK yang masuk sudah pasti diterima; ini hanya mencatat kualitasnya (kadar air,
     broken%, penyusutan/bekatul lab%, butir kuning, catatan). Staff/admin, kapan
     saja. Harga TIDAK disentuh di sini (langkah terpisah)."""
-    if user.role not in ("staff", "admin"):
+    if user.role not in PERAN_STAF_KEATAS:
         raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
         await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
@@ -413,7 +414,7 @@ async def verify_pk_price(
     """Verifikasi HARGA PK luar — terpisah & tanpa terikat waktu (seperti harga
     gabah G1). Staff/admin, kapan saja. Membereskan flag_unverified & mengisi
     HPP; bila PK sudah terlanjur masuk silo/tumpuk, snapshot HPP intake diperbarui."""
-    if user.role not in ("staff", "admin"):
+    if user.role not in PERAN_STAF_KEATAS:
         raise Gudang2Error("🔒 Verifikasi harga PK luar hanya oleh Staff/Admin.")
     batch = (
         await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
