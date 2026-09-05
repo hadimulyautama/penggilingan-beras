@@ -160,3 +160,14 @@ def test_stok_pk_gudang1_diturunkan_bukan_disimpan():
     # Bukan dibaca dari tabel keadaan tersendiri.
     assert "PkStockGudang1" not in badan
     assert "MillingPkRouting" not in badan
+
+
+def test_tumpukan_pk_tak_hilang_saat_sisanya_kosong():
+    """Laporan Status Gudang 1 dulu berhenti lebih awal kalau dryer & silo
+    kosong dan tak ada giling berjalan — padahal PK bisa sedang menumpuk di
+    lantai. Akibatnya terbalik dari yang dibutuhkan: tumpukan menghilang dari
+    layar tepat ketika ia SATU-SATUNYA hal yang tersisa untuk dikerjakan."""
+    from app.services import report
+    badan = _badan(report.status_gudang1)
+    assert "stok_pk_g1" in badan
+    assert "pk_menumpuk <= 0" in badan

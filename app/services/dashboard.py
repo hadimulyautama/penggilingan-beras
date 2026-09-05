@@ -142,7 +142,15 @@ async def _stok_pk(db: AsyncSession) -> dict:
         jenis = await pk_jenis(db, proc) or "?"
         total += bd.tersedia
         per_jenis[jenis] = per_jenis.get(jenis, 0.0) + bd.tersedia
-        per_proses.append({"kode": proc.kode_proses, "jenis": jenis, "kg": bd.tersedia})
+        hari = None
+        if proc.waktu_selesai or proc.waktu_mulai:
+            sejak = proc.waktu_selesai or proc.waktu_mulai
+            hari = (now_local() - sejak).total_seconds() / 86400
+        per_proses.append({"kode": proc.kode_proses, "jenis": jenis,
+                           "kg": bd.tersedia, "hari": hari})
+    # Yang paling lama menumpuk disebut lebih dulu: itulah yang harus dikirim
+    # duluan, dan urutan daftar adalah cara termurah mengatakannya.
+    per_proses.sort(key=lambda p: (p["hari"] is None, -(p["hari"] or 0)))
     return {"total": total, "per_jenis": per_jenis, "per_proses": per_proses,
             "maks": settings.g1_pk_tumpukan_maks_kg}
 
@@ -234,10 +242,20 @@ def render_dashboard_text(data: dict) -> str:
         lines.append("• Giling: tidak ada yang berjalan")
     stok = op["stok_pk"]
     ringkas = " · ".join(f"{j} {_kg(v)}" for j, v in sorted(stok["per_jenis"].items()))
+    maks = stok.get("maks") or 0
     lines.append(
-        f"• Stok PK siap kirim: {_kg(stok['total'])}"
+        f"• PK menumpuk di Gudang 1: {_kg(stok['total'])}"
+        + (f" / maks {maks / 1000:g} ton" if maks else "")
         + (f" ({ringkas})" if ringkas else "")
     )
+    # Tumpukan yang cuma disebut jumlahnya tak bisa ditindaklanjuti: yang perlu
+    # diputuskan adalah LOT MANA yang dikirim duluan, dan jawabannya hampir
+    # selalu "yang paling lama menunggu".
+    for p in stok["per_proses"]:
+        umur = f" · menunggu {p['hari']:.0f} hari" if p["hari"] is not None else ""
+        lines.append(f"   ‣ {p['kode']} · {p['jenis']} {_kg(p['kg'])}{umur}")
+    if maks and stok["total"] > maks:
+        lines.append(f"   ⚠️ Melewati batas lantai {maks / 1000:g} ton — kirim ke penyosohan.")
 
     lines.append("\n*✅ Tugas staff*")
     vh, qc, vo = tg["verifikasi_harga"], tg["qc_output"], tg["verifikasi_output"]

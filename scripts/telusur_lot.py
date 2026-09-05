@@ -83,7 +83,14 @@ async def bangun(op, sids) -> None:
 #: tertimbang tak bisa dibedakan dari "satu harga dikali total", dan cacat
 #: semacam itu justru yang paling mahal: ia hanya muncul sebagai angka HPP
 #: yang sedikit meleset, tanpa ada yang salah di layar mana pun.
-HARGA = {"GB-20260904-01": 5200.0, "GB-20260904-02": 5000.0, "GB-20260904-03": 6100.0}
+#: Dikunci pada URUTAN batch (-01, -02, -03), bukan pada kode lengkapnya:
+#: kode batch memuat tanggal, dan skrip yang mengunci tanggal akan pecah
+#: sendiri esok harinya — sudah terjadi sekali.
+HARGA_URUT = {"01": 5200.0, "02": 5000.0, "03": 6100.0}
+
+
+def harga(kode: str) -> float:
+    return HARGA_URUT[kode.rsplit("-", 1)[1]]
 
 
 async def beri_harga(dir_) -> None:
@@ -92,7 +99,7 @@ async def beri_harga(dir_) -> None:
     for opsi in daftar:
         kode = opsi["value"]
         await dir_.post("/miniapp/actions/verify-gabah", json={
-            "kode_batch": kode, "metode": "per_kg", "nilai": HARGA[kode]})
+            "kode_batch": kode, "metode": "per_kg", "nilai": harga(kode)})
 
 
 async def telusur() -> None:
@@ -164,11 +171,11 @@ async def telusur() -> None:
         # ── Uang: rata-rata TERTIMBANG, bukan satu harga dikali total ──
         from app.services.costing import _sumber_info
         kg_c, _dried, kondisi, bahan, _pgr = await _sumber_info(db, proc)
-        harap = sum(HARGA[k] * b for k, b, _t, _s in ketemu)
-        polos = HARGA["GB-20260904-01"] * kg_c        # kalau harga pertama dipakai untuk semua
+        harap = sum(harga(k) * b for k, b, _t, _s in ketemu)
+        polos = harga(ketemu[0][0]) * kg_c   # kalau harga pertama dipakai untuk semua
         print(f"\n{T}Biaya bahan{N}")
         for k, b, _t, sup in ketemu:
-            print(f"   {k} · {b:,.0f} kg × Rp{HARGA[k]:,.0f} = Rp{HARGA[k]*b:,.0f}  ({sup})")
+            print(f"   {k} · {b:,.0f} kg × Rp{harga(k):,.0f} = Rp{harga(k)*b:,.0f}  ({sup})")
         print(f"   {T}dihitung sistem : Rp{(bahan or 0):,.0f}{N}")
         print(f"   diharapkan      : Rp{harap:,.0f}")
         print(f"   (satu harga × total: Rp{polos:,.0f} — inilah yang SALAH)")

@@ -500,10 +500,20 @@ async def status_gudang1(db: AsyncSession) -> str:
         )
     ).scalar_one()
 
-    if not mill_running and in_dryer <= 0 and not silo_isi:
+    # PK yang menumpuk di lantai ITU JUGA keadaan Gudang 1.
+    #
+    # Dulu tidak dihitung di sini, dan akibatnya persis terbalik dari yang
+    # dibutuhkan: begitu giling selesai dan silo kosong, laporan berkata
+    # "tidak ada proses saat ini" — padahal belasan ton PK sedang menunggu di
+    # lantai. Tumpukan itu menghilang dari layar tepat ketika ia satu-satunya
+    # hal yang tersisa untuk dikerjakan.
+    from app.penggilingan.gudang1.services.milling import stok_pk_g1
+    pk_menumpuk = await stok_pk_g1(db)
+
+    if not mill_running and in_dryer <= 0 and not silo_isi and pk_menumpuk <= 0:
         return (
             "📍 Gudang 1: tidak ada gabah/proses saat ini.\n"
-            "(Dryer & silo kosong, tak ada giling aktif.)"
+            "(Dryer & silo kosong, tak ada giling aktif, lantai PK kosong.)"
         )
 
     parts = ["📍 Status Gudang 1:\n"]

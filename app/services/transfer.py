@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import now_local
 from app.models import (
     InternalTransfer,
@@ -181,25 +182,50 @@ def _rp(n: float | None) -> str:
 
 
 async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
-    """PK siap kirim ke Gudang 2 = hasil − yang sudah dikirim, per proses."""
+    """PK yang menumpuk di Gudang 1 — dan karena itu juga yang siap dikirim.
+
+    Dua sebutan untuk satu tumpukan yang sama. "Menumpuk" adalah tempatnya,
+    "siap kirim" adalah apa yang bisa dilakukan padanya; keduanya tak pernah
+    berbeda isinya, karena PK meninggalkan lantai Gudang 1 tepat pada saat
+    transfernya dicatat.
+
+    Diurut yang PALING LAMA MENUNGGU lebih dulu. Tumpukan yang cuma disebut
+    jumlahnya tak bisa ditindaklanjuti: yang perlu diputuskan adalah lot mana
+    yang berangkat duluan, dan jawabannya hampir selalu yang paling lama
+    menunggu.
+    """
     procs = (
         await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
     ).scalars().all()
-    items: list[tuple[str, str | None, float]] = []
+    items: list[tuple[str, str | None, float, float | None]] = []
     for p in procs:
         avail = await pending_transfer_kg(db, p.id)
         if avail > 0:
-            items.append((p.kode_proses, await pk_jenis(db, p), avail))
+            sejak = p.waktu_selesai or p.waktu_mulai
+            hari = ((now_local() - sejak).total_seconds() / 86400) if sejak else None
+            items.append((p.kode_proses, await pk_jenis(db, p), avail, hari))
     if not items:
-        return "🚚 Tidak ada PK siap kirim ke Gudang 2."
-    total = sum(a for _, _, a in items)
+        return "🚚 Lantai PK Gudang 1 kosong — tidak ada yang menunggu dikirim."
+    items.sort(key=lambda it: (it[3] is None, -(it[3] or 0)))
+
+    total = sum(a for _, _, a, _ in items)
     sub: dict[str, float] = {}
-    for _, jenis, a in items:
+    for _, jenis, a, _ in items:
         sub[jenis or "?"] = sub.get(jenis or "?", 0.0) + a
     ringkas = " · ".join(f"{j} {_kg(v)}" for j, v in sorted(sub.items()))
-    lines = [f"🚚 PK siap kirim ke Gudang 2: {_kg(total)}  ({ringkas})"]
-    for kode, jenis, a in items:
-        lines.append(f"• {jenis or '-'} dari {kode}: {_kg(a)}")
+    cap = settings.g1_pk_tumpukan_maks_kg
+    lines = [
+        f"🚚 PK menumpuk di Gudang 1: {_kg(total)}"
+        + (f" / maks {cap / 1000:g} ton" if cap else "")
+        + f"  ({ringkas})"
+    ]
+    for kode, jenis, a, hari in items:
+        umur = f" · menunggu {hari:.0f} hari" if hari is not None else ""
+        lines.append(f"• {jenis or '-'} dari {kode}: {_kg(a)}{umur}")
+    if cap and total > cap:
+        lines.append(
+            f"⚠️ Melewati batas lantai {cap / 1000:g} ton — kirim ke gudang penyosohan."
+        )
     return "\n".join(lines)
 
 
