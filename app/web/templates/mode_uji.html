@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block judul %}Hapus data uji{% endblock %}
+{% block isi %}
+
+<div>
+  <span class="lbl">Mode uji</span>
+  <p class="bantu" style="margin:0 0 12px">
+    Menghapus seluruh catatan pekerjaan supaya pabrik bisa mulai dari bersih.
+    Tidak bisa dibatalkan.
+  </p>
+</div>
+
+<div class="kartu">
+  <p style="margin:0 0 6px"><b>Tiket timbang tidak ikut terhapus.</b></p>
+  <p class="bantu" style="margin:0">
+    Tiket milik aplikasi Timbangan. Penghapusan di sini hanya berjalan di atas
+    tabel milik Pos Produksi sendiri — dan tabel tiket bukan salah satunya,
+    jadi ia berada di luar jangkauan perintah ini.
+  </p>
+</div>
+
+{% if galat %}<div class="kartu" style="border-color:var(--bahaya)">
+  <p style="margin:0;color:var(--bahaya)">{{ galat }}</p>
+</div>{% endif %}
+
+{% if penghalang %}
+<div class="kartu" style="border-color:var(--bahaya)">
+  <p style="margin:0 0 6px;color:var(--bahaya)"><b>Ditahan — tautan wajib isi dari luar:</b></p>
+  {% for t in penghalang %}<div class="bantu">{{ t.dari }}.{{ t.kolom }} → {{ t.ke }}</div>{% endfor %}
+</div>
+{% endif %}
+
+{% if dilepas %}
+<div>
+  <span class="lbl">Tautan yang dilepas dulu</span>
+  <p class="bantu" style="margin:6px 0 0">
+    Baris di luar Pos Produksi yang menunjuk ke data uji. Tautannya dikosongkan
+    lebih dulu supaya penghapusan tak perlu merambat keluar — barisnya sendiri
+    tetap utuh. Untuk tiket timbang inilah hasil yang diinginkan: tiketnya
+    kembali bebas dan bisa dicatat ulang.
+  </p>
+  <div class="grup" style="gap:2px;margin-top:6px">
+    {% for t in dilepas %}
+      <div style="font-family:var(--mono);font-size:12.5px;color:var(--redup)">
+        {{ t.dari }}.{{ t.kolom }}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div>
+  <span class="lbl">Yang akan dihapus</span>
+  {% if baris %}
+    <div class="grup" style="gap:2px;margin-top:6px">
+      {% for nama, n in baris %}
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:12.5px">
+          <span style="color:var(--redup)">{{ nama }}</span>
+          <span>{{ "{:,}".format(n).replace(",", ".") }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="bantu" style="margin:6px 0 0">Sudah bersih — tidak ada catatan pekerjaan.</p>
+  {% endif %}
+</div>
+
+<div>
+  <span class="lbl">Yang dipertahankan</span>
+  <p class="bantu" style="margin:6px 0 0">
+    {{ dipertahankan|join(" · ") }}
+  </p>
+  <p class="bantu" style="margin:6px 0 0">
+    Akun sengaja dipertahankan: menghapusnya berarti mengunci diri sendiri di
+    luar aplikasi.
+  </p>
+</div>
+
+{% if baris %}
+<form method="post" action="/pengaturan/mode-uji" class="grup">
+  <label class="lbl" for="kalimat">Ketik <b>{{ kalimat }}</b> untuk melanjutkan</label>
+  <input class="fld" id="kalimat" name="kalimat" autocomplete="off"
+         autocapitalize="characters" placeholder="{{ kalimat }}">
+  <button class="btn btn--utama" type="submit" style="background:var(--bahaya)">
+    Hapus data uji
+  </button>
+</form>
+{% endif %}
+
+{% endblock %}

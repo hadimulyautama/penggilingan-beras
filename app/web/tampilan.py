@@ -20,9 +20,16 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "30"
+VERSI = "31"
 
 templates.env.globals["VERSI"] = VERSI
+
+from app.config import settings  # noqa: E402
+
+#: Pita "MODE UJI" di tiap layar. Orang yang tak tahu ia sedang menguji akan
+#: memperlakukan angka uji sebagai angka pabrik — dan itu kesalahan yang
+#: baru ketahuan berminggu-minggu kemudian.
+templates.env.globals["MODE_UJI"] = settings.mode_uji
 
 from app.web.nav import TAB          # noqa: E402  (butuh `templates` di atas)
 

@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # halaman Pengaturan. Lantai tidak berubah menurut musim.
     g1_pk_tumpukan_maks_kg: int = 80_000
 
+    # MODE UJI — menyalakan halaman "hapus data uji" (Super Admin saja).
+    # Dimatikan secara bawaan, dan mematikannya bukan sekadar menyembunyikan
+    # tombol: endpointnya ikut menolak. Setelah pabrik berjalan, biarkan mati.
+    mode_uji: bool = False
+
     # Stok kemasan minimum (lembar) — di bawah ini beri notifikasi/warning.
     min_kemasan_lembar: int = 1_000
 
