@@ -51,6 +51,19 @@ class Baris:
     #: guna layar ini.
     nilai: str | None = None
     sejak: datetime | None = None
+    #: Fase barang: di mana ia berada sekarang. Layar Catat mewarnai kartunya
+    #: menurut ini — "baru" (belum ditindak) · "dryer" · "silo" · "giling".
+    #: Warnanya berurut mengikuti perjalanan barangnya sendiri, jadi posisinya
+    #: terbaca sekilas tanpa membaca hurufnya.
+    fase: str = "baru"
+    #: Tindakan yang mungkin pada keadaan ini: (id aksi, nama, keterangan).
+    #:
+    #: Kosong berarti hanya ada satu, yaitu `aksi` — dan yang satu itu dibuka
+    #: langsung tanpa menanyakan apa pun. Sebuah lot yang sedang dikeringkan
+    #: punya dua (perbarui kadar air / selesai pengeringan); yang sedang
+    #: didinginkan cuma satu, dan menampilkan daftar berisi satu pilihan
+    #: adalah satu ketukan yang tak membawa keputusan apa pun.
+    pilihan: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -157,7 +170,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}"
                 + (f" · {'/'.join(sorted(kondisi))}" if kondisi else ""),
             keadaan="belum dikeringkan — nyalakan mesin pengering",
-            aksi="mulai_pengeringan",
+            aksi="mulai_pengeringan", fase="dryer",
             sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
         ))
 
@@ -176,7 +189,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             kode=b_.kode_batch,
             isi=f"{_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
             keadaan="belum ditempatkan — dryer, silo, atau tumpukan",
-            aksi="pindah_tumpukan", nilai=b_.kode_batch,
+            aksi="pindah_tumpukan", nilai=b_.kode_batch, fase="baru",
             sejak=b_.created_at,
         ))
 
@@ -192,21 +205,29 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             keadaan=("harus ke dryer — belum kering" if wajib_dryer
                      else "pindahkan ke dryer atau silo"),
             aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
+            fase="baru",
         ))
 
     for lot in await _lot(db, pendinginan_selesai=True):
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
             keadaan="siap dipindah ke silo", aksi="pindah_silo",
-            nilai=lot.kode_lot,
+            nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_selesai_pendinginan,
+            # Dingin boleh dinyatakan berkali-kali — gabah yang sudah
+            # dinyatakan dingin bisa ternyata masih panas setelah dicek.
+            pilihan=[
+                ("pindah_silo", "Pindah ke silo", "Kosongkan mesin pengering"),
+                ("selesai_pendinginan", "Dinginkan lagi",
+                 "Kalau setelah dicek ternyata masih panas"),
+            ],
         ))
 
     for lot in await _lot(db, pendinginan_selesai=False):
         b.menunggu.append(Baris(
             kode=lot.kode_lot, isi="pengeringan selesai, sedang didinginkan",
             keadaan="nyatakan pendinginan selesai", aksi="selesai_pendinginan",
-            nilai=lot.kode_lot,
+            nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_selesai_pengeringan,
         ))
 
@@ -219,8 +240,47 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.berjalan.append(Baris(
             kode=lot.kode_lot, isi="sedang dikeringkan",
             keadaan="menunggu kadar air turun", aksi="kadar_air",
-            nilai=lot.kode_lot,
+            nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_mulai_pengeringan,
+            pilihan=[
+                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru"),
+                ("selesai_pengeringan", "Selesai pengeringan",
+                 "Lot langsung masuk fase pendinginan"),
+            ],
+        ))
+
+    # Silo berisi gabah kering yang belum digiling.
+    #
+    # Sebelumnya TIDAK ADA baris untuk ini di layar mana pun: gabah yang sudah
+    # aman di silo tak lagi disebut sampai seseorang ingat menggilingnya.
+    # Diam-diam itu keadaan paling mahal — gabah kering yang menunggu tidak
+    # rusak, tetapi uang yang tertanam di dalamnya juga tidak bergerak.
+    from app.models import Silo
+    from app.penggilingan.gudang1.services.silo import (
+        _g1_warehouse_id, _silo_active_rows, _silo_content_kg)
+
+    wid = await _g1_warehouse_id(db)
+    for silo in (await db.execute(
+        select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+    )).scalars().all():
+        if not await _silo_active_rows(db, silo.id):
+            continue
+        sibuk = (await db.execute(
+            select(MillingProcess.id).where(
+                MillingProcess.silo_id == silo.id, MillingProcess.status == "proses")
+        )).first()
+        if sibuk:
+            continue
+        huruf = silo.nama_silo.replace("Silo ", "")
+        # Masuk `berjalan`, BUKAN `menunggu` — sengaja, dan ini soal lencana.
+        #
+        # Silo penuh memang menunggu orang, tetapi bisa menunggu berhari-hari
+        # tanpa ada yang salah: giling dijadwalkan, bukan didesak. Kalau ia
+        # ikut dihitung, lencana tak pernah kembali nol — dan lencana yang tak
+        # pernah nol mengajari orang mengabaikan lencana.
+        b.berjalan.append(Baris(
+            kode=silo.nama_silo, isi=f"gabah kering · {_kg(await _silo_content_kg(db, silo.id))}",
+            keadaan="siap digiling", aksi="mulai_giling", nilai=huruf, fase="silo",
         ))
 
     for p in (await db.execute(
@@ -230,8 +290,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.berjalan.append(Baris(
             kode=p.kode_proses, isi=f"digiling · {_kg(p.berat_gabah_masuk_kg)} gabah masuk",
             keadaan="catat hasil, tutup bila selesai", aksi="hasil_giling",
-            nilai=p.kode_proses,
+            nilai=p.kode_proses, fase="giling",
             sejak=p.waktu_mulai,
+            pilihan=[
+                ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru"),
+                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo"),
+            ],
         ))
     return b
 

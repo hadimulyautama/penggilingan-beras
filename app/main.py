@@ -223,13 +223,22 @@ async def halaman_aksi(request: Request):
     from app.web.security import butuh_akun
 
     akun = await butuh_akun(request)
-    # `buka` datang dari layar Berjalan: menekan satu baris di sana harus
-    # membuka formulir yang menutupnya, bukan menurunkan orang di daftar aksi
-    # lalu menyuruhnya mencari sendiri.
+    # `buka` datang dari layar Berjalan ATAU dari benda di layar ini sendiri:
+    # menekan satu baris harus membuka formulir yang menutupnya, bukan
+    # menurunkan orang di daftar aksi lalu menyuruhnya mencari sendiri.
+    #
+    # Bendanya diambil dari sumber yang SAMA dengan layar Berjalan. Dua daftar
+    # yang disusun terpisah akan berselisih cepat atau lambat, dan yang salah
+    # adalah yang lebih jarang dibuka orang.
+    from app.services import berjalan as svc
+
+    async with SessionLocal() as db:
+        b = await svc.untuk(db, akun.user)
     return render(request, "aksi.html", kembali="/",
                   buka=request.query_params.get("buka") or "",
                   nilai=request.query_params.get("nilai") or "",
-                  MENUNGGU=await jumlah_menunggu(akun.user))
+                  menunggu=b.menunggu, berjalan=b.berjalan, lama=svc._lama,
+                  MENUNGGU=b.jumlah_menunggu)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

@@ -2,7 +2,74 @@
 {% block judul %}Catat pekerjaan{% endblock %}
 {% block isi %}
 
-<div id="layar"><div class="bantu" style="padding:24px 0;text-align:center">Memuat…</div></div>
+{# ── BENDANYA DULU, TINDAKANNYA MENYUSUL ──
+   Dulu layar ini membuka daftar 11 aksi berjajar sama besar: "Gabah masuk"
+   yang dipakai tiap truk datang setampilan dengan "Pendinginan selesai" yang
+   sekali per lot. Operator harus membaca semuanya untuk menemukan satu, lalu
+   sering menemukan lembarnya kosong — "(belum ada)" — karena memang tak ada
+   yang bisa dikerjakan pada aksi itu.
+
+   Sekarang yang didaftar adalah apa yang ADA di gudang. Tindakan muncul dari
+   keadaan bendanya, dan yang keadaannya cuma punya satu tindakan langsung
+   membuka tindakan itu. #}
+{% set semua = menunggu + berjalan %}
+{% if semua %}
+<div>
+  <span class="lbl">Bisa dikerjakan sekarang · {{ semua|length }}</span>
+  <div class="grup" style="gap:9px">
+    {% for b in semua %}
+      {% if b.pilihan %}
+        {# Lebih dari satu tindakan: dibentangkan di tempat, bukan di lembar
+           melayang. `#lembar` sudah dimiliki aksi.js, dan dua pemilik untuk
+           satu elemen selalu berakhir buruk. #}
+        <details class="benda benda--{{ b.fase }}">
+          <summary>
+            <div class="benda__kode">{{ b.kode }}</div>
+            <div class="benda__isi">{{ b.isi }}</div>
+            <div class="benda__kaki">
+              <span class="keping">{{ FASE[b.fase] }}</span>
+              <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
+            </div>
+          </summary>
+          <div class="pilihan">
+            {% for id, nama, ket in b.pilihan %}
+              <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
+                 href="/aksi?buka={{ id }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
+                <span class="pilihan__nama">{{ nama }}</span>
+                <span class="pilihan__ket">{{ ket }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </details>
+      {% else %}
+        <a class="benda benda--{{ b.fase }}"
+           href="/aksi?buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
+          <div>
+            <div class="benda__kode">{{ b.kode }}</div>
+            <div class="benda__isi">{{ b.isi }}</div>
+            <div class="benda__kaki">
+              <span class="keping">{{ FASE[b.fase] }}</span>
+              <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
+            </div>
+          </div>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+               stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# Daftar lengkap tetap ada, tetapi tidak lagi memenuhi layar. Yang jarang
+   dipakai — beli karung, barang keluar, batalkan — hidup di sini. #}
+<details class="semua-aksi"{% if not semua %} open{% endif %}>
+  <summary>
+    <span>Catat pekerjaan lain</span>
+    <span class="bantu">seluruh daftar aksi</span>
+  </summary>
+  <div id="layar"><div class="bantu" style="padding:20px 0;text-align:center">Memuat…</div></div>
+</details>
 
 <div class="lembar" id="lembar"></div>
 <div class="kabar" id="kabar" role="status"></div>

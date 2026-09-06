@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "36"
+VERSI = "37"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -38,6 +38,17 @@ templates.env.globals["TAB_KUNCI"] = {k for k, _, _ in TAB}
 
 from app.web.lihat_sebagai import PILIHAN as _LIHAT_PILIHAN  # noqa: E402
 templates.env.globals["LIHAT_PILIHAN"] = _LIHAT_PILIHAN
+
+#: Nama fase barang di layar. Urutannya mengikuti perjalanan barang sendiri —
+#: menunggu orang, panas di mesin, tersimpan di silo, menghasilkan — dan
+#: warnanya di app.css mengikuti urutan yang sama, jadi posisinya terbaca
+#: sekilas tanpa membaca hurufnya.
+templates.env.globals["FASE"] = {
+    "baru": "Belum ada tindakan",
+    "dryer": "Di mesin pengering",
+    "silo": "Transit di silo kering",
+    "giling": "Proses giling",
+}
 
 
 def render(request: Request, nama: str, *, status_code: int = 200, **konteks):

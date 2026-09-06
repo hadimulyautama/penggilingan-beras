@@ -156,3 +156,35 @@ def test_waktu_kedatangan_diambil_dari_tiket_bukan_saat_mengetik():
     assert 'tiket.get("timbang1_waktu")' in sumber
     # Waktu yang disebut operator sendiri tetap menang atas tiket.
     assert "if tanggal or jam:" in sumber
+
+
+def test_silo_siap_giling_tak_dihitung_lencana():
+    """Silo penuh menunggu ORANG, tetapi bisa menunggu berhari-hari tanpa ada
+    yang salah — giling dijadwalkan, bukan didesak.
+
+    Kalau ia ikut dihitung `menunggu`, lencana tak pernah kembali nol, dan
+    lencana yang tak pernah nol mengajari orang mengabaikan lencana. Barisnya
+    tetap TAMPIL di layar Catat (yang menggabung menunggu + berjalan), hanya
+    tidak ikut menyalakan angka.
+    """
+    sumber = inspect.getsource(berjalan.untuk_gudang1)
+    # Potongan yang membuat baris silo — diperiksa sebagai satu blok, bukan
+    # seluruh fungsi: `b.menunggu.append` memang dipakai di tempat lain.
+    blok = sumber[sumber.index("huruf = silo.nama_silo"):]
+    blok = blok[:blok.index("))") + 2]
+    assert "b.berjalan.append" in blok
+    assert "b.menunggu.append" not in blok
+
+
+def test_benda_membawa_fase_dan_pilihan():
+    """Layar Catat mewarnai kartu menurut fase, dan membentangkan pilihan
+    hanya kalau memang lebih dari satu."""
+    b = berjalan.Baris("K", "isi", "keadaan")
+    assert b.fase == "baru" and b.pilihan == []
+
+    sumber = inspect.getsource(berjalan.untuk_gudang1)
+    for fase in ('fase="dryer"', 'fase="silo"', 'fase="giling"'):
+        assert fase in sumber, fase
+    # Lot yang sedang dikeringkan punya DUA tindakan; yang didinginkan satu.
+    assert '"kadar_air", "Perbarui kadar air"' in sumber
+    assert '"selesai_pengeringan", "Selesai pengeringan"' in sumber

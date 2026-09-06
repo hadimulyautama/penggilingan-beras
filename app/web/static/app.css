@@ -592,3 +592,90 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   border: 1px solid currentColor; border-radius: 999px;
   font: inherit; padding: 1px 9px;
 }
+
+/* ══ Layar Catat: bendanya dulu, tindakannya menyusul ══
+   Warna FASE. Urutannya mengikuti perjalanan barangnya sendiri, bukan selera:
+   menunggu orang (kuning) → panas di mesin (jingga) → tersimpan tenang di
+   silo (biru) → menghasilkan (hijau). Karena berurut, operator membaca
+   posisinya sekilas tanpa membaca hurufnya — berguna justru saat layar kena
+   matahari dan tulisan kecil susah dibaca.
+
+   MERAH TIDAK DIPAKAI di sini: `--bahaya` sudah berarti "gagal/ditolak" di
+   aplikasi ini, dan satu warna tak boleh berarti dua hal — justru saat ada
+   penolakan orang jadi ragu. */
+:root {
+  --fase-baru:   #d9a441;
+  --fase-dryer:  #e07a4f;
+  --fase-silo:   #4fb3d9;
+  --fase-giling: #56b880;
+}
+
+.benda {
+  --fase: var(--fase-baru);
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel); border: 1px solid var(--garis);
+  border-left: 3px solid var(--fase); border-radius: 12px;
+  padding: 13px 14px; min-height: var(--sentuh);
+  color: var(--tinta); text-decoration: none;
+}
+.benda > div:first-child { flex: 1; min-width: 0; }
+.benda--baru   { --fase: var(--fase-baru); }
+.benda--dryer  { --fase: var(--fase-dryer); }
+.benda--silo   { --fase: var(--fase-silo); }
+.benda--giling { --fase: var(--fase-giling); }
+.benda__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
+.benda__isi { color: var(--tinta-2); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
+.benda__kaki { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+/* Kepingan fase sewarna garis tepi: keduanya menguatkan satu keterangan,
+   bukan dua penanda berbeda yang harus dicocokkan. */
+.keping {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--fase);
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: rgba(255, 255, 255, .05);
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+}
+.benda__status {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em;
+  color: var(--redup-2); text-transform: uppercase;
+}
+
+/* Benda bercabang: dibentangkan DI TEMPAT. Lembar melayang sudah dimiliki
+   aksi.js, dan dua pemilik untuk satu elemen selalu berakhir buruk. */
+details.benda { display: block; padding: 0; }
+details.benda > summary {
+  list-style: none; cursor: pointer; padding: 13px 14px;
+  display: block; min-height: var(--sentuh);
+}
+details.benda > summary::-webkit-details-marker { display: none; }
+details.benda > summary::after {
+  content: ""; float: right; width: 9px; height: 9px; margin: 5px 3px 0 0;
+  border-right: 2px solid var(--redup-2); border-bottom: 2px solid var(--redup-2);
+  transform: rotate(45deg); transition: transform .15s ease;
+}
+details.benda[open] > summary::after { transform: rotate(-135deg); }
+.pilihan { display: grid; gap: 7px; padding: 0 14px 14px; }
+.pilihan__satu {
+  display: grid; gap: 2px; padding: 12px 13px; min-height: var(--sentuh);
+  background: var(--panel-2); border: 1px solid var(--garis);
+  border-radius: 10px; color: var(--tinta); text-decoration: none;
+}
+.pilihan__satu--utama {
+  background: var(--aksi); border-color: var(--aksi); color: var(--aksi-tinta);
+}
+.pilihan__nama { font-weight: 600; font-size: 14.5px; }
+.pilihan__ket { font-size: 12.5px; color: var(--redup); }
+.pilihan__satu--utama .pilihan__ket { color: rgba(8, 19, 26, .72); }
+
+/* Daftar lengkap 11 aksi — tetap ada, tak lagi memenuhi layar. */
+.semua-aksi { border-top: 1px solid var(--garis-2); padding-top: 14px; }
+.semua-aksi > summary {
+  list-style: none; cursor: pointer; min-height: var(--sentuh);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--garis); border-radius: 12px;
+  color: var(--aksi); font-size: 14.5px;
+}
+.semua-aksi > summary::-webkit-details-marker { display: none; }
+.semua-aksi > summary .bantu { font-size: 12px; }
+.semua-aksi[open] > summary { margin-bottom: 14px; }
