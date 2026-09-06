@@ -604,7 +604,11 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
    aplikasi ini, dan satu warna tak boleh berarti dua hal — justru saat ada
    penolakan orang jadi ragu. */
 :root {
-  --fase-baru:   #d9a441;
+  /* Putih, bukan kuning — pilihan pemilik, dan artinya jadi lebih tepat:
+     belum ada tindakan berarti barangnya BELUM MASUK proses mana pun, jadi
+     ia belum menyandang warna proses. Warna baru muncul begitu gabahnya
+     benar-benar berada di suatu tempat. */
+  --fase-baru:   #dce7ec;
   --fase-dryer:  #e07a4f;
   --fase-silo:   #4fb3d9;
   --fase-giling: #56b880;
