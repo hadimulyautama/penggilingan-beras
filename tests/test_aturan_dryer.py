@@ -56,7 +56,9 @@ def test_pengeringan_satu_batch_diperingatkan_bukan_ditolak():
     sumber = inspect.getsource(drying.start_drying)
     assert "len(loose) < 2" in sumber
     assert "peringatan" in sumber
-    assert "raise DryingError" not in sumber.split("peringatan = None")[1]
+    # Sesudah peringatan disusun, tak boleh ada penolakan — peringatan yang
+    # diikuti `raise` bukan peringatan, itu penolakan dengan kalimat sopan.
+    assert "raise DryingError" not in sumber.split("catatan: list[str] = []")[1]
 
 
 def test_silo_campuran_diperingatkan_bukan_ditolak():
@@ -247,3 +249,46 @@ def test_target_kadar_air_ada_setelannya():
     from app.config import settings
 
     assert settings.kadar_air_target_persen == 14
+
+
+def test_mode_dryer_dipilih_yang_paling_dekat():
+    """Aturan pemilik: mode yang dipakai adalah yang tonasenya PALING DEKAT
+    dengan muatan — 23 ton memakai 25T, bukan 20T. Yang dicari jarak
+    terdekat, bukan mode terbesar yang masih di bawahnya."""
+    from app.penggilingan.gudang1.services.drying import MODE_DRYER, mode_disarankan
+
+    assert MODE_DRYER == ("15T", "20T", "25T", "30T", "35T")
+    assert mode_disarankan(23_000) == "25T"      # contoh pemilik sendiri
+    assert mode_disarankan(22_000) == "20T"      # 22 lebih dekat ke 20
+    assert mode_disarankan(23_500) == "25T"
+    assert mode_disarankan(9_000) == "15T"       # di bawah mode terkecil
+    assert mode_disarankan(40_000) == "35T"      # di atas mode terbesar
+    assert mode_disarankan(0) == "15T"
+
+
+def test_mode_tak_cocok_diperingatkan_bukan_ditolak():
+    """Yang disimpan adalah pernyataan operator tentang setelan mesin yang
+    SUNGGUHAN. Menolaknya berarti memaksa ia menuliskan mode yang bukan
+    terpasang — dan catatan yang berbohong lebih buruk daripada catatan yang
+    menyimpan ketidakcocokan beserta alasannya."""
+    import inspect
+
+    from app.penggilingan.gudang1.services import drying
+
+    sumber = inspect.getsource(drying.start_drying)
+    blok = sumber[sumber.index("if lot.mode_dryer:"):]
+    assert "raise" not in blok.split("catatan.append")[0]
+    assert "mode terdekat" in blok
+
+
+def test_dua_peringatan_tak_saling_menghapus():
+    """Mode yang tak cocok dan muatan satu batch adalah dua hal berbeda.
+    Sebelumnya keduanya menulis ke variabel yang sama, jadi peringatan mode
+    lenyap tiap kali muatannya kebetulan satu batch."""
+    import inspect
+
+    from app.penggilingan.gudang1.services import drying
+
+    sumber = inspect.getsource(drying.start_drying)
+    assert sumber.count("catatan.append") == 2
+    assert 'peringatan = "\\n".join(catatan) or None' in sumber

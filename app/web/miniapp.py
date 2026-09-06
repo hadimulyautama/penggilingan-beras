@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.bots.common import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
+from app.penggilingan.gudang1.services.drying import MODE_DRYER
 from app.database import SessionLocal
 from app.models import User
 from app.web.aksi_umum import galat as _err
@@ -270,6 +271,15 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote",
                   "source": "/miniapp/actions/dryer-menunggu",
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
+                 {"name": "target_kadar_air", "label": "Target kadar air (%)",
+                  "type": "number"},
+                 # Mode disebutkan di LABEL mesinnya juga ("· pakai mode 25T"),
+                 # karena di situlah tonasenya diketahui. Menaruh saran di
+                 # tempat lain berarti operator harus mengingat angka dari
+                 # baris sebelumnya sambil memilih.
+                 {"name": "mode_dryer", "label": "Mode yang disetel di mesin",
+                  "type": "select",
+                  "options": [["", "— pilih —"]] + [[m, m] for m in MODE_DRYER]},
              ]},
             {"id": "kadar_air", "label": "💧 Perbarui kadar air",
              "post": "/miniapp/actions/kadar-air",
@@ -536,7 +546,7 @@ async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """
     _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.drying import (
-        _loose_dryer_batches, dryers_g1)
+        _loose_dryer_batches, dryers_g1, mode_disarankan)
     out = []
     async with SessionLocal() as db:
         for d in await dryers_g1(db):
@@ -544,8 +554,12 @@ async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if not batches:
                 continue
             kg = sum(float(b.berat_total_kg or 0) for b in batches)
+            # Mode yang seharusnya disebut DI SINI — di baris tempat tonasenya
+            # diketahui. Operator tak perlu menghitung 23 ton itu lebih dekat
+            # ke 25T atau 20T sambil berdiri di depan mesin.
             out.append({"value": d.id,
-                        "label": f"{d.nama} · {len(batches)} batch · {_rp(kg)} kg"})
+                        "label": (f"{d.nama} · {len(batches)} batch · {_rp(kg)} kg"
+                                  f" · pakai mode {mode_disarankan(kg)}")})
     return out
 
 
@@ -1064,6 +1078,12 @@ async def act_hasil_giling(req: HasilGilingReq, user: User = Depends(pengguna_ak
 
 class MulaiPengeringanReq(BaseModel):
     dryer_id: int | None = None
+    #: Sampai berapa muatan ini dikeringkan. Bisa berbeda antar muatan, jadi
+    #: ditanyakan tiap kali — bukan diambil diam-diam dari setelan aplikasi.
+    target_kadar_air: float | None = None
+    #: Mode yang DISETEL DI MESIN. Konfirmasi, bukan perintah: aplikasi ini
+    #: tidak tersambung ke dryer.
+    mode_dryer: str | None = None
 
 
 @router.post("/actions/mulai-pengeringan")
@@ -1075,12 +1095,23 @@ async def act_mulai_pengeringan(req: MulaiPengeringanReq | None = None,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await start_drying(db, user=u,
-                                   dryer_id=(req.dryer_id if req else None))
+            r = await start_drying(
+                db, user=u,
+                dryer_id=(req.dryer_id if req else None),
+                target_kadar_air=(req.target_kadar_air if req else None),
+                mode_dryer=(req.mode_dryer if req else None),
+            )
         except DryingError as e:
             raise _err(e, "Gagal mulai pengeringan.")
     pesan = (f"✓ Pengeringan *{r.lot.kode_lot}* mulai — {r.kondisi}, "
              f"{len(r.batch_kodes)} batch ({r.total_kg:g} kg).")
+    setelan = []
+    if r.lot.mode_dryer:
+        setelan.append(f"mode {r.lot.mode_dryer}")
+    if r.lot.target_kadar_air is not None:
+        setelan.append(f"target {float(r.lot.target_kadar_air):g}%")
+    if setelan:
+        pesan += "\n" + " · ".join(setelan) + "."
     if r.peringatan:
         pesan += f"\n{r.peringatan}"
     await _chat_confirm(user, pesan)

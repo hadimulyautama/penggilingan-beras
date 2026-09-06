@@ -665,8 +665,26 @@ async def log_moisture(
 
 
 # ─────────────────────────── Selesai ───────────────────────────
+#: Mode dryer menurut tonase. Angka mesin, bukan pilihan gaya — mesin ini
+#: memang punya lima setelan itu.
+MODE_DRYER = ("15T", "20T", "25T", "30T", "35T")
+
+
+def mode_disarankan(kg: float) -> str:
+    """Mode yang tonasenya PALING DEKAT dengan muatan.
+
+    23 ton → 25T, bukan 20T: yang dicari jarak terdekat, bukan yang di
+    bawahnya. Aturannya dari pemilik, dan dihitung di sini supaya operator
+    tak perlu menghitung sendiri sambil berdiri di depan mesin.
+    """
+    ton = (kg or 0) / 1000
+    return min(MODE_DRYER, key=lambda m: abs(int(m[:-1]) - ton))
+
+
 async def start_drying(
-    db: AsyncSession, *, user, dryer_id: int | None = None, tanggal=None, jam=None
+    db: AsyncSession, *, user, dryer_id: int | None = None,
+    target_kadar_air: float | None = None, mode_dryer: str | None = None,
+    tanggal=None, jam=None,
 ) -> LotResult:
     """MULAI pengeringan: bentuk 1 LOT dari SEMUA batch yang menunggu di dryer,
     lalu status 'proses'. Lot lahir di sini (bukan saat masuk dryer).
@@ -687,6 +705,8 @@ async def start_drying(
     lot = DryingLot(
         kode_lot=await next_drying_lot_code(db),
         dryer_id=dryer.id,
+        target_kadar_air=target_kadar_air,
+        mode_dryer=(mode_dryer or "").strip().upper() or None,
         waktu_mulai_pengeringan=now, status="proses", created_by=user.id,
     )
     db.add(lot)
@@ -713,12 +733,30 @@ async def start_drying(
     # dibagi ke gabah yang lebih sedikit. Peringatan, bukan penolakan: kadang
     # memang tak ada muatan kedua yang menunggu, dan menahan gabah demi
     # menunggu teman justru membuatnya menginap.
-    peringatan = None
+    # DAFTAR, bukan satu kalimat: mode yang tak cocok dan muatan satu batch
+    # adalah dua hal berbeda, dan yang belakangan tak boleh menghapus yang
+    # duluan. Sebelumnya keduanya menulis ke variabel yang sama, jadi
+    # peringatan mode lenyap tiap kali muatannya kebetulan satu batch.
+    catatan: list[str] = []
+
+    # Mode yang dipilih dibandingkan dengan yang seharusnya — DIPERINGATKAN,
+    # bukan ditolak. Yang disimpan adalah pernyataan operator tentang setelan
+    # mesin yang sungguhan; menolaknya berarti memaksa ia menuliskan mode yang
+    # BUKAN yang terpasang, dan catatan yang berbohong lebih buruk daripada
+    # catatan yang menyimpan ketidakcocokan beserta alasannya.
+    if lot.mode_dryer:
+        seharusnya = mode_disarankan(total)
+        if lot.mode_dryer != seharusnya:
+            catatan.append(
+                f"⚠️ Muatan {total / 1000:.1f} ton — mode terdekat {seharusnya}, "
+                f"bukan {lot.mode_dryer}. Periksa setelan di mesin."
+            )
     if len(loose) < 2:
-        peringatan = (
+        catatan.append(
             f"⚠️ Hanya 1 batch ({total:.0f} kg) — pengeringan sebaiknya "
             "menggabungkan minimal 2 batch. Tetap dijalankan."
         )
+    peringatan = "\n".join(catatan) or None
     return LotResult(lot=lot, kondisi=kondisi, total_kg=total,
                      batch_kodes=[b.kode_batch for b in loose],
                      nama_dryer=dryer.nama, peringatan=peringatan)

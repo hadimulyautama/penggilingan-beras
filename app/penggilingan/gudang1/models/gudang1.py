@@ -107,6 +107,14 @@ class DryingLot(Base, TimestampMixin):
     )
     # Fase pendinginan (di dryer): mulai OTOMATIS saat pengeringan selesai,
     # selesai OTOMATIS saat gabah dipindah ke silo.
+    #: Sampai berapa gabah ini dikeringkan — ditetapkan SEBELUM mesin
+    #: dinyalakan. Bisa berbeda antar muatan, jadi ia milik lot, bukan setelan
+    #: aplikasi. Yang di setelan hanya nilai bawaannya.
+    target_kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    #: Mode mesin yang dipakai: "15T".."35T". KONFIRMASI bahwa operator sudah
+    #: menyetelnya di mesin — aplikasi ini tidak tersambung ke dryer dan tidak
+    #: bisa menyetelnya sendiri.
+    mode_dryer: Mapped[str | None] = mapped_column(String(8))
     waktu_mulai_pendinginan: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )

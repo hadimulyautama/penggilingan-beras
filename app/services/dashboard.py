@@ -62,9 +62,14 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
     ).scalars().all()
     from app.models import DryingMoistureLog
 
-    target = float(settings.kadar_air_target_persen)
+    bawaan = float(settings.kadar_air_target_persen)
     out = []
     for lot in lots:
+        # Target milik LOT lebih dulu — operator menetapkannya sebelum mesin
+        # dinyalakan, dan itu yang sesungguhnya dituju muatan ini. Setelan
+        # aplikasi hanya nilai bawaan untuk lot lama yang belum punya.
+        target = (float(lot.target_kadar_air)
+                  if lot.target_kadar_air is not None else bawaan)
         log = await _latest_log(db, lot.id)
         tes = float(log.kadar_air_tes_manual) if log is not None and log.kadar_air_tes_manual is not None else None
         mesin = float(log.kadar_air_indikator) if log is not None and log.kadar_air_indikator is not None else None
