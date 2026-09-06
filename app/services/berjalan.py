@@ -237,8 +237,25 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         select(DryingLot).where(DryingLot.status == "proses")
         .order_by(DryingLot.id.desc())
     )).scalars().all():
+        # Kadar air terakhir disebut di kartunya sendiri — KEDUANYA.
+        #
+        # Operator yang hendak memutuskan "sudah cukup kering atau belum" tak
+        # perlu membuka laporan untuk melihat angka terakhir. Dan bacaan mesin
+        # ikut ditampilkan, bukan hanya rata-rata alat tes: keduanya mengukur
+        # hal yang sama dengan alat berbeda, dan yang menarik justru saat
+        # keduanya tidak sepakat.
+        from app.penggilingan.gudang1.services.drying import _latest_log
+
+        log = await _latest_log(db, lot.id)
+        ka = []
+        if log is not None and log.kadar_air_tes_manual is not None:
+            ka.append(f"alat tes {float(log.kadar_air_tes_manual):.1f}%")
+        if log is not None and log.kadar_air_indikator is not None:
+            ka.append(f"mesin {float(log.kadar_air_indikator):g}%")
         b.berjalan.append(Baris(
-            kode=lot.kode_lot, isi="sedang dikeringkan",
+            kode=lot.kode_lot,
+            isi="sedang dikeringkan" + (" · " + " · ".join(ka) if ka
+                                        else " · kadar air belum dicatat"),
             keadaan="menunggu kadar air turun", aksi="kadar_air",
             nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_mulai_pengeringan,

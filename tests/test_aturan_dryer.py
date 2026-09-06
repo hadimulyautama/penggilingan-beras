@@ -199,3 +199,24 @@ def test_hanya_titik_pertama_yang_wajib():
     blok = spec[spec.index('"name": "tes_1"'):spec.index('"name": "indikator"')]
     assert '"optional": True' not in blok.split('"name": "tes_2"')[0]   # titik 1 wajib
     assert blok.count('"optional": True') == 3                          # titik 2–4 tidak
+
+
+def test_kartu_pengeringan_menyebut_kedua_bacaan():
+    """Kartu di layar Catat menyebut alat tes DAN bacaan mesin.
+
+    Menampilkan rata-rata saja menghapus justru perbandingan yang berguna:
+    keduanya mengukur hal yang sama dengan alat berbeda, dan yang menarik
+    adalah saat keduanya tidak sepakat. Operator yang memutuskan "sudah cukup
+    kering atau belum" juga tak perlu membuka laporan untuk angka terakhir.
+    """
+    import inspect
+
+    from app.services import berjalan
+
+    sumber = inspect.getsource(berjalan.untuk_gudang1)
+    blok = sumber[sumber.index("_latest_log"):sumber.index('keadaan="menunggu kadar air turun"')]
+    assert "kadar_air_tes_manual" in blok
+    assert "kadar_air_indikator" in blok
+    assert "alat tes" in blok and "mesin" in blok
+    # Keadaan belum ada log pun harus terbaca, bukan kosong tanpa keterangan.
+    assert "kadar air belum dicatat" in blok
