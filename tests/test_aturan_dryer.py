@@ -220,3 +220,30 @@ def test_kartu_pengeringan_menyebut_kedua_bacaan():
     assert "alat tes" in blok and "mesin" in blok
     # Keadaan belum ada log pun harus terbaca, bukan kosong tanpa keterangan.
     assert "kadar air belum dicatat" in blok
+
+
+def test_kemajuan_pengeringan_dihitung_dari_bacaan_pertama():
+    """"1 lot" tak memberi tahu apa pun tentang sudah sejauh mana.
+
+    18% itu jauh atau dekat sepenuhnya tergantung mulai dari berapa — jadi
+    kemajuan diukur dari bacaan PERTAMA lot itu menuju target, bukan dari
+    angka terakhirnya saja.
+    """
+    import inspect
+
+    from app.services import dashboard
+
+    sumber = inspect.getsource(dashboard._pengeringan_berjalan)
+    assert "waktu_update.asc()" in sumber          # bacaan pertama, bukan terakhir
+    assert "kadar_air_target_persen" in sumber
+    assert "(awal - ka) / (awal - target)" in sumber
+    # Dua bacaan tetap terpisah, tidak diruntuhkan jadi satu.
+    assert '"tes": tes' in sumber and '"mesin": mesin' in sumber
+
+
+def test_target_kadar_air_ada_setelannya():
+    """Kemajuan hanya berarti kalau ada tujuannya — dan tujuan itu milik
+    pabrik, bukan angka yang dikarang di dalam kode tampilan."""
+    from app.config import settings
+
+    assert settings.kadar_air_target_persen == 14

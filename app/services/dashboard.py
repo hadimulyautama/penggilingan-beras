@@ -60,17 +60,45 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
             select(DryingLot).where(DryingLot.status == "proses").order_by(DryingLot.id)
         )
     ).scalars().all()
+    from app.models import DryingMoistureLog
+
+    target = float(settings.kadar_air_target_persen)
     out = []
     for lot in lots:
         log = await _latest_log(db, lot.id)
-        ka = None
-        if log is not None:
-            ka = log.kadar_air_tes_manual
-            if ka is None:
-                ka = log.kadar_air_indikator
+        tes = float(log.kadar_air_tes_manual) if log is not None and log.kadar_air_tes_manual is not None else None
+        mesin = float(log.kadar_air_indikator) if log is not None and log.kadar_air_indikator is not None else None
+        # `kadar_air` dipertahankan untuk pembaca lama (bot, ringkasan teks).
+        ka = tes if tes is not None else mesin
+
+        # Bacaan PERTAMA lot ini — titik tolak kemajuan. Tanpanya tak ada yang
+        # bisa disebut "sudah sejauh mana": 18% itu jauh atau dekat sepenuhnya
+        # tergantung mulai dari berapa.
+        awal_row = (await db.execute(
+            select(DryingMoistureLog.kadar_air_tes_manual,
+                   DryingMoistureLog.kadar_air_indikator)
+            .where(DryingMoistureLog.drying_lot_id == lot.id)
+            .order_by(DryingMoistureLog.waktu_update.asc()).limit(1)
+        )).first()
+        awal = None
+        if awal_row is not None:
+            awal = awal_row[0] if awal_row[0] is not None else awal_row[1]
+            awal = float(awal) if awal is not None else None
+
+        maju = None
+        if awal is not None and ka is not None and awal > target:
+            maju = max(0.0, min(1.0, (awal - ka) / (awal - target)))
+        elif ka is not None and ka <= target:
+            maju = 1.0
+
         out.append({
             "kode": lot.kode_lot,
-            "kadar_air": float(ka) if ka is not None else None,
+            "kadar_air": ka,
+            "tes": tes,
+            "mesin": mesin,
+            "awal": awal,
+            "target": target,
+            "maju": maju,
             "jam": _jam(now, lot.waktu_mulai_pengeringan),
             "suppliers": await _lot_suppliers(db, lot.id),
             "kg": await _lot_kg(db, lot.id),

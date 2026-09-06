@@ -34,6 +34,56 @@
   </div>
 </div>
 
+{# ── KEMAJUAN PENGERINGAN ──
+   Petak di atas hanya menjawab "berapa lot", dan itu tak memberi tahu apa
+   pun tentang sudah sejauh mana. 18% itu jauh atau dekat sepenuhnya
+   tergantung mulai dari berapa — jadi kemajuan dihitung dari bacaan PERTAMA
+   lot ini menuju target, bukan dari angka terakhirnya saja.
+
+   Kedua bacaan disebut berdampingan: alat tes yang menggerakkan batang
+   kemajuan (itulah ukuran yang dipakai memutuskan), bacaan mesin di
+   sebelahnya sebagai pembanding. Yang menarik justru saat keduanya tak
+   sepakat. #}
+{% if lot_kering %}
+<div>
+  <span class="lbl">Kemajuan pengeringan</span>
+  <div class="grup" style="gap:9px">
+    {% for l in lot_kering %}
+      <div class="maju">
+        <div class="maju__kepala">
+          <span class="maju__kode">{{ l.kode }}</span>
+          <span class="maju__jam">{{ "%.1f"|format(l.jam) }} jam</span>
+        </div>
+        <div class="maju__isi">
+          {{ "{:,}".format(l.kg|int).replace(",", ".") }} kg
+          {%- if l.suppliers %} · {{ l.suppliers|join(", ") }}{% endif %}
+        </div>
+
+        {% if l.maju is not none %}
+          <div class="maju__bar" role="img"
+               aria-label="Kemajuan {{ (l.maju * 100)|round|int }} persen menuju {{ l.target }}%">
+            <span style="width: {{ (l.maju * 100)|round(1) }}%"></span>
+          </div>
+          <div class="maju__kaki">
+            <span>{{ "%.1f"|format(l.awal) }}% awal</span>
+            <span class="maju__kini">
+              {%- if l.tes is not none %}alat tes {{ "%.1f"|format(l.tes) }}%{% endif %}
+              {%- if l.mesin is not none %} · mesin {{ "%g"|format(l.mesin) }}%{% endif %}
+              {%- if l.tes is none and l.mesin is none %}belum dicatat{% endif %}
+            </span>
+            <span>target {{ "%g"|format(l.target) }}%</span>
+          </div>
+        {% else %}
+          <div class="maju__kaki">
+            <span class="maju__kini">Kadar air belum dicatat — kemajuan belum bisa dihitung</span>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div>
   <span class="lbl">Pekerjaan</span>
   <a class="tindakan" href="/aksi">

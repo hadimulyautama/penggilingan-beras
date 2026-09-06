@@ -118,6 +118,11 @@ class Settings(BaseSettings):
     # sampai (kapasitas + toleransi). Mis. nominal 30 ton + 3 ton = 33 ton.
     dryer_toleransi_kg: int = 3000
 
+    # Kadar air yang dituju sebuah pengeringan. Dipakai HANYA untuk menghitung
+    # kemajuan di layar — bukan untuk menghentikan mesin sendiri: yang
+    # memutuskan gabah sudah cukup kering tetap orang yang memegang alat tes.
+    kadar_air_target_persen: float = 14
+
     # ── Biaya operasional (Rp), untuk HPP penuh. Semua bisa diubah via env. ──
     biaya_bongkar_per_kg_gabah: float = 20        # tenaga bongkar gabah datang
     # Operator: FLAT per sekali proses milling (bukan per kg).

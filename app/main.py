@@ -193,6 +193,9 @@ async def beranda(request: Request):
         gabah_kg=gabah.get("total_kg", 0) or 0,
         gabah_batch=gabah.get("batch", 0) or 0,
         pengeringan=len(o.get("pengeringan", []) or []),
+        # Daftarnya, bukan cuma cacahnya: "1 lot" tak memberi tahu apa pun
+        # tentang sudah sejauh mana ia kering.
+        lot_kering=o.get("pengeringan", []) or [],
         silo_terisi=sum(1 for s in silo if s.get("terisi")),
         silo_total=len(silo),
         giling=len(o.get("giling", []) or []),

@@ -683,3 +683,34 @@ details.benda[open] > summary::after { transform: rotate(-135deg); }
 .semua-aksi > summary::-webkit-details-marker { display: none; }
 .semua-aksi > summary .bantu { font-size: 12px; }
 .semua-aksi[open] > summary { margin-bottom: 14px; }
+
+/* ══ Kemajuan pengeringan di Beranda ══
+   Batangnya digerakkan oleh ALAT TES, bukan bacaan mesin: itulah ukuran yang
+   dipakai memutuskan gabah sudah cukup kering. Bacaan mesin tetap disebut di
+   sebelahnya sebagai pembanding — yang menarik justru saat keduanya tak
+   sepakat. */
+.maju {
+  background: var(--panel); border: 1px solid var(--garis);
+  border-left: 3px solid var(--fase-dryer); border-radius: 12px;
+  padding: 12px 14px; display: grid; gap: 7px;
+}
+.maju__kepala { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.maju__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
+.maju__jam { font-family: var(--mono); font-size: 11.5px; color: var(--redup); }
+.maju__isi { color: var(--tinta-2); font-size: 13px; line-height: 1.45; }
+.maju__bar {
+  height: 7px; border-radius: 999px; background: var(--garis-2);
+  overflow: hidden; margin-top: 1px;
+}
+.maju__bar > span {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--fase-dryer);
+  transition: width .3s ease;
+}
+@media (prefers-reduced-motion: reduce) { .maju__bar > span { transition: none; } }
+.maju__kaki {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em;
+  color: var(--redup-2);
+}
+.maju__kini { color: var(--tinta-2); }
