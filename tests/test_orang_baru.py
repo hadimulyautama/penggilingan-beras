@@ -138,10 +138,19 @@ def test_penjaga_akun_tertinggi_menghitung_superadmin():
     yang seluruh adminnya sudah dinaikkan. Ini bentuk cacat yang sama dengan
     `PERAN_STAF_KEATAS` dan `admin_keatas()` di Kantor.
     """
+    import ast
     import inspect
+    import textwrap
 
     from app.web import pengguna
 
-    badan = inspect.getsource(pengguna._jumlah_admin)
-    assert "x.is_admin" in badan
-    assert 'role == "admin"' not in badan.split('"""')[-1]
+    # Kode saja, tanpa komentar & docstring: keterangan di sana justru menyebut
+    # bentuk lamanya untuk menerangkan mengapa ia dibuang.
+    pohon = ast.parse(textwrap.dedent(inspect.getsource(pengguna._jumlah_admin)))
+    fungsi = pohon.body[0]
+    if (fungsi.body and isinstance(fungsi.body[0], ast.Expr)
+            and isinstance(fungsi.body[0].value, ast.Constant)):
+        fungsi.body = fungsi.body[1:]
+    kode = ast.unparse(fungsi)
+    assert "is_admin" in kode
+    assert "== 'admin'" not in kode and '== "admin"' not in kode
