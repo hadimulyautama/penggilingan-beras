@@ -32,6 +32,7 @@ from app.web.laporan import router as laporan_router
 from app.web.layar_berjalan import router as berjalan_router
 from app.web.pengaturan import router as pengaturan_router
 from app.web.mode_uji import router as mode_uji_router
+from app.web.lihat_sebagai import router as lihat_sebagai_router
 from app.web.miniapp import router as miniapp_router
 from app.web.pengguna import router as pengguna_router
 from app.web.security import (
@@ -97,6 +98,7 @@ app.include_router(laporan_router)
 app.include_router(berjalan_router)
 app.include_router(pengaturan_router)
 app.include_router(mode_uji_router)
+app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)

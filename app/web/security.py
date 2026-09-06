@@ -183,6 +183,28 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
         if akun is not None:
             # Peran ikut termuat (relasi lazy="joined") sebelum sesi ditutup.
             _ = akun.peran
+
+    # ── Melihat sebagai peran lain ──
+    #
+    # Ditimpa DI SINI, satu titik, sesudah sesi basis data ditutup: objeknya
+    # sudah lepas, jadi perubahan ini tak mungkin ikut tersimpan. Seluruh
+    # keputusan tampilan — tab, daftar aksi, laporan, pengaturan — bertanya
+    # pada peran yang sama, jadi semuanya ikut tanpa satu pun disentuh.
+    #
+    # Peran asli disimpan tersendiri: ia yang menentukan siapa boleh menyamar,
+    # dan ia pula yang harus tetap terbaca supaya orang bisa kembali.
+    from app.web.lihat_sebagai import NAMA_KUKI, peran_efektif
+
+    request.state.peran_asli = None
+    request.state.lihat_sebagai = None
+    if akun is not None and akun.user is not None:
+        asli = akun.user.role
+        request.state.peran_asli = asli
+        efektif = peran_efektif(asli, request.cookies.get(NAMA_KUKI))
+        if efektif != (asli or "").strip().lower():
+            akun.user.role = efektif
+            request.state.lihat_sebagai = efektif
+
     request.state.akun = akun
     return akun
 

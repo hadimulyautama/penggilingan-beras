@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from app.bots.common import can_see_financials, can_transfer_pk
+from app.bots.common import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
 from app.database import SessionLocal
 from app.models import User
 from app.web.aksi_umum import galat as _err
@@ -108,10 +108,21 @@ async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
 # ─────────────────────── Aksi cepat: role helper ───────────────────────
 
 async def _is_wh_operator(user: User, like: str) -> bool:
-    """Admin selalu boleh; operator hanya bila gudang default cocok `like`."""
-    if user.role == "admin":
+    """Admin KE ATAS selalu boleh; operator hanya bila gudang defaultnya cocok.
+
+    Dulu berbunyi `if user.role == "admin"` lalu menolak apa pun yang bukan
+    `"operator"` — sehingga SUPERADMIN jatuh ke penolakan dan kehilangan
+    SELURUH aksi gudang. Terlihat saat pemilik membandingkan tampilan: peran
+    tertinggi menampilkan 14 aksi, admin di bawahnya 30.
+
+    Ini kali keempat pola yang sama dalam dua hari (delapan gerbang produksi,
+    sembilan gerbang Kantor, penjaga akun tertinggi, dan di sini) — peran baru
+    ditambahkan di puncak, gerbang lama menyebut nama peran satu per satu.
+    """
+    peran = (user.role or "").strip().lower()
+    if peran in PERAN_ADMIN_KEATAS:
         return True
-    if user.role != "operator":
+    if peran != "operator":
         return False
     from sqlalchemy import select
     from app.models import Warehouse

@@ -60,6 +60,16 @@
 <body>
 <div class="bingkai">
 {% if MODE_UJI %}<div class="pita-uji">MODE UJI · DATA BOLEH DIHAPUS</div>{% endif %}
+{# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
+   yang sedang menyamar sebagai operator mungkin tak lagi melihat menu
+   itu, dan jalan pulang yang menuntut hak yang baru dilepas adalah
+   pintu yang terkunci dari dalam. #}
+{% if LIHAT_SEBAGAI %}
+<form method="post" action="/lihat-sebagai/selesai" class="pita-samar">
+  <span>MELIHAT SEBAGAI {{ LIHAT_SEBAGAI|upper }}</span>
+  <button type="submit">kembali</button>
+</form>
+{% endif %}
 
 {% if akun %}
 <header class="bar">

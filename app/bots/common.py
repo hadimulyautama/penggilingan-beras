@@ -49,6 +49,9 @@ async def authenticate(db: AsyncSession, telegram_user_id: int) -> User | None:
 #: Tangga yang tidak menurun ke bawah bukan tangga.
 PERAN_STAF_KEATAS = ("superadmin", "admin", "staff")
 
+#: Setara "admin ke atas" — untuk gerbang yang dulu menulis `== "admin"`.
+PERAN_ADMIN_KEATAS = ("superadmin", "admin")
+
 #: Boleh melihat angka uang. Kebetulan sama isinya — tetapi disebut terpisah
 #: supaya kalau suatu saat ada peran yang boleh bekerja tanpa melihat harga,
 #: yang berubah cukup satu.

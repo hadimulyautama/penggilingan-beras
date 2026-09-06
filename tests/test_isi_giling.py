@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import inspect
 
+from tests.bantu import kode_saja
+
 from app.models import MillingProcessSource
 from app.penggilingan.gudang1.services import milling, silo
 
@@ -89,23 +91,6 @@ def test_isi_silo_campuran_tetap_terhitung_utuh():
     assert "next((r for r in rows if r.drying_lot_id), rows[0])" in sumber
 
 
-def _badan(fn) -> str:
-    """Sumber fungsi TANPA docstring-nya.
-
-    Komentar dan docstring di berkas ini justru menyebut nama-nama lama untuk
-    menerangkan sejarahnya — memeriksa seluruh sumber berarti menghukum
-    penjelasan yang baik.
-    """
-    import ast, textwrap
-    pohon = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-    fungsi = pohon.body[0]
-    if (fungsi.body and isinstance(fungsi.body[0], ast.Expr)
-            and isinstance(fungsi.body[0].value, ast.Constant)
-            and isinstance(fungsi.body[0].value.value, str)):
-        fungsi.body = fungsi.body[1:]
-    return ast.unparse(fungsi)
-
-
 def test_laporan_supplier_tak_membaca_penunjuk_tunggal():
     """Laporan dulu menyebut supplier lewat `proc.drying_lot_id`.
 
@@ -115,7 +100,7 @@ def test_laporan_supplier_tak_membaca_penunjuk_tunggal():
     pertama saja. Yang kedua hilang dari laporan tanpa jejak — padahal
     gabahnya ikut tergiling dan ikut dibayar.
     """
-    badan = _badan(milling._milling_supplier_names)
+    badan = kode_saja(milling._milling_supplier_names)
     assert "sumber_batch" in badan
     assert "proc.drying_lot_id" not in badan
     assert "proc.purchase_batch_id" not in badan
@@ -125,11 +110,11 @@ def test_laporan_giling_menyebut_seluruh_asal():
     """"Bahan dari X (via LOT-…)" hanya menyebut satu sumber. Lot yang isinya
     campuran harus menyebut semuanya — itu satu-satunya cara beras PK bisa
     dirunut balik ke gabah siapa."""
-    badan = _badan(milling.laporan_milling)
+    badan = kode_saja(milling.laporan_milling)
     assert "asal_isi" in badan
     assert "via {lot.kode_lot}" not in badan
 
-    asal = _badan(milling.asal_isi)
+    asal = kode_saja(milling.asal_isi)
     assert "MillingProcessSource" in asal
     assert "kode_batch" in asal
 
@@ -143,7 +128,7 @@ def test_tumpukan_pk_gudang1_memperingatkan_bukan_menolak():
     yang dijaga adalah keputusan penempatan, dan keputusan masih bisa
     dialihkan ke silo.
     """
-    badan = _badan(milling.log_progress)
+    badan = kode_saja(milling.log_progress)
     assert "g1_pk_tumpukan_maks_kg" in badan
     assert "peringatan" in badan
     # Tak boleh ada penolakan yang dipicu batas lantai.
@@ -155,7 +140,7 @@ def test_stok_pk_gudang1_diturunkan_bukan_disimpan():
     perlu dinyatakan operator: yang membedakannya hanya ada tidaknya transfer,
     dan itu sudah tercatat. Dua sumber untuk satu fakta pasti berselisih, dan
     yang salah selalu yang diketik manual."""
-    badan = _badan(milling.stok_pk_g1)
+    badan = kode_saja(milling.stok_pk_g1)
     assert "_pk_breakdown" in badan
     # Bukan dibaca dari tabel keadaan tersendiri.
     assert "PkStockGudang1" not in badan
@@ -168,6 +153,6 @@ def test_tumpukan_pk_tak_hilang_saat_sisanya_kosong():
     lantai. Akibatnya terbalik dari yang dibutuhkan: tumpukan menghilang dari
     layar tepat ketika ia SATU-SATUNYA hal yang tersisa untuk dikerjakan."""
     from app.services import report
-    badan = _badan(report.status_gudang1)
+    badan = kode_saja(report.status_gudang1)
     assert "stok_pk_g1" in badan
     assert "pk_menumpuk <= 0" in badan

@@ -80,6 +80,25 @@
 </div>
 {% endif %}
 
+{% if PERAN_ASLI in ("admin", "superadmin") %}
+<div>
+  <span class="lbl">Lihat sebagai</span>
+  <p class="bantu" style="margin:6px 0 8px">
+    Menampilkan aplikasi persis seperti yang dilihat peran itu — untuk menguji,
+    tanpa membuat akun palsu. Hak Anda sendiri tidak berubah, dan peran yang
+    lebih tinggi dari peran Anda tidak bisa dipilih.
+  </p>
+  <form method="post" action="/lihat-sebagai" class="grup">
+    <select class="fld" name="peran">
+      {% for kode, nama in LIHAT_PILIHAN %}
+        <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Terapkan</button>
+  </form>
+</div>
+{% endif %}
+
 {% if MODE_UJI and akun.is_admin %}
 <div>
   <span class="lbl">Mode uji</span>

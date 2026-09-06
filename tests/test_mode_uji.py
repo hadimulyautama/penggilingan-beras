@@ -12,6 +12,8 @@ import inspect
 
 import pytest
 
+from tests.bantu import kode_saja
+
 from app.database import Base
 from app.web import mode_uji
 
@@ -40,35 +42,16 @@ def test_akun_dan_alat_dipertahankan():
         assert nama in mode_uji.DIPERTAHANKAN, nama
 
 
-def _kode(fn) -> str:
-    """Sumber fungsi TANPA komentar & docstring.
-
-    Komentar di berkas ini justru menyebut CASCADE untuk menerangkan mengapa
-    ia dibuang — memeriksa seluruh sumber berarti menghukum penjelasan yang
-    baik. `ast.unparse` membuang komentar; docstring dibuang tersendiri.
-    """
-    import ast
-    import textwrap
-
-    pohon = ast.parse(textwrap.dedent(inspect.getsource(fn)))
-    fungsi = pohon.body[0]
-    if (fungsi.body and isinstance(fungsi.body[0], ast.Expr)
-            and isinstance(fungsi.body[0].value, ast.Constant)
-            and isinstance(fungsi.body[0].value.value, str)):
-        fungsi.body = fungsi.body[1:]
-    return ast.unparse(fungsi)
-
-
 def test_tak_memakai_cascade():
     """CASCADE-lah yang dulu menyapu tiket. Ia tak boleh kembali."""
-    kode = _kode(mode_uji.hapus)
+    kode = kode_saja(mode_uji.hapus)
     assert "CASCADE" not in kode.upper()
     assert "DELETE FROM" in kode
 
 
 def test_urutan_hapus_dari_metadata_bukan_daftar_tangan():
     """Daftar yang ditulis tangan akan basi pada tabel berikutnya."""
-    assert "Base.metadata.sorted_tables" in _kode(mode_uji.hapus)
+    assert "Base.metadata.sorted_tables" in kode_saja(mode_uji.hapus)
 
 
 @pytest.mark.asyncio

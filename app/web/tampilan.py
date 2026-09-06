@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "34"
+VERSI = "35"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -36,6 +36,9 @@ from app.web.nav import TAB          # noqa: E402  (butuh `templates` di atas)
 templates.env.globals["TAB"] = TAB
 templates.env.globals["TAB_KUNCI"] = {k for k, _, _ in TAB}
 
+from app.web.lihat_sebagai import PILIHAN as _LIHAT_PILIHAN  # noqa: E402
+templates.env.globals["LIHAT_PILIHAN"] = _LIHAT_PILIHAN
+
 
 def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     """Render template dengan konteks bawaan (akun yang sedang masuk).
@@ -45,6 +48,8 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     mengirimnya berarti satu layar yang tabnya mati tanpa ada yang menyadari.
     """
     konteks.setdefault("akun", getattr(request.state, "akun", None))
+    konteks.setdefault("LIHAT_SEBAGAI", getattr(request.state, "lihat_sebagai", None))
+    konteks.setdefault("PERAN_ASLI", getattr(request.state, "peran_asli", None))
     konteks.setdefault("layar", nama.replace(".html", ""))
     konteks.setdefault("MENUNGGU", 0)
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)

@@ -573,3 +573,22 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
 }
 .pita-uji + .bar { padding-top: 11px; }
+
+/* Pita "melihat sebagai" — sewarna aksi, bukan peringatan: ini keadaan yang
+   sengaja dipilih, bukan sesuatu yang salah. Jalan pulangnya menempel di
+   pitanya sendiri. */
+.pita-samar {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--aksi); color: var(--aksi-tinta);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+  padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
+  margin: 0;
+}
+.pita-uji + .pita-samar { padding-top: 4px; }
+.pita-samar + .bar { padding-top: 11px; }
+.pita-samar button {
+  background: transparent; color: inherit; cursor: pointer;
+  border: 1px solid currentColor; border-radius: 999px;
+  font: inherit; padding: 1px 9px;
+}
