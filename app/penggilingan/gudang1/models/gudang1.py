@@ -157,8 +157,21 @@ class DryingMoistureLog(Base):
     waktu_update: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    #: Angka yang terbaca pada mesin dryer sendiri.
     kadar_air_indikator: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    #: RATA-RATA empat sampel alat tes di bawah. Dipertahankan sebagai kolom
+    #: tersendiri supaya setiap pembaca lama terus bekerja tanpa disentuh.
     kadar_air_tes_manual: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    #: Empat titik sampel dengan alat tes kadar air, MENTAH.
+    #:
+    #: Disimpan mentah karena rata-rata tak bisa dibongkar kembali, dan
+    #: sebaran keempat angka inilah yang memberi tahu apakah gabahnya kering
+    #: merata atau baru bagian atasnya. Satu titik saja bisa kebetulan
+    #: mengenai bagian paling basah — itu sebabnya diambil empat.
+    kadar_air_tes_1: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    kadar_air_tes_2: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    kadar_air_tes_3: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    kadar_air_tes_4: Mapped[float | None] = mapped_column(Numeric(5, 2))
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     drying_lot: Mapped[DryingLot] = relationship(back_populates="moisture_logs")

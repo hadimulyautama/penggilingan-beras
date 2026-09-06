@@ -272,11 +272,23 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
              ]},
             {"id": "kadar_air", "label": "💧 Perbarui kadar air",
-             "post": "/miniapp/actions/kadar-air", "fields": [
+             "post": "/miniapp/actions/kadar-air",
+             "hint": "Empat titik dengan alat tes — yang dipakai rata-ratanya. "
+                     "Satu titik saja bisa kebetulan mengenai bagian paling basah. "
+                     "Angka mesin dicatat terpisah, bukan dirata-ratakan bersamanya.",
+             "fields": [
                  {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
                   "kosong": "Tidak ada pengeringan yang sedang berjalan."},
-                 {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
+                 {"name": "tes_1", "label": "Alat tes — titik 1 (%)", "type": "number"},
+                 {"name": "tes_2", "label": "Alat tes — titik 2 (%)", "type": "number",
+                  "optional": True},
+                 {"name": "tes_3", "label": "Alat tes — titik 3 (%)", "type": "number",
+                  "optional": True},
+                 {"name": "tes_4", "label": "Alat tes — titik 4 (%)", "type": "number",
+                  "optional": True},
+                 {"name": "indikator", "label": "Terbaca di mesin dryer (%)",
+                  "type": "number", "optional": True},
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "post": "/miniapp/actions/selesai-pengeringan",
@@ -974,7 +986,20 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
 
 class KadarAirReq(BaseModel):
     kode_lot: str
-    kadar_air: float
+    #: Empat titik alat tes. Hanya titik 1 yang wajib — kalau alatnya rusak
+    #: atau muatannya kecil, memaksa empat angka berarti memaksa operator
+    #: mengarang tiga di antaranya, dan catatan karangan lebih buruk daripada
+    #: catatan yang kurang lengkap.
+    tes_1: float | None = None
+    tes_2: float | None = None
+    tes_3: float | None = None
+    tes_4: float | None = None
+    #: Yang terbaca di mesin. Tidak ikut dirata-ratakan.
+    indikator: float | None = None
+    #: Bentuk LAMA — satu angka. Dipertahankan supaya pemanggil lama (bot,
+    #: tautan tersimpan) tidak patah; diperlakukan sebagai bacaan mesin,
+    #: persis seperti dulu.
+    kadar_air: float | None = None
 
 
 @router.post("/actions/kadar-air")
@@ -983,14 +1008,31 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import log_moisture
+    sampel = [req.tes_1, req.tes_2, req.tes_3, req.tes_4]
+    indikator = req.indikator if req.indikator is not None else req.kadar_air
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            await log_moisture(db, user=u, kode_lot=req.kode_lot,
-                               indikator=req.kadar_air, tes_manual=None)
+            r = await log_moisture(db, user=u, kode_lot=req.kode_lot,
+                                   indikator=indikator, sampel=sampel)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update kadar air.")
-    pesan = f"✓ Kadar air *{req.kode_lot}*: {req.kadar_air:g}%."
+
+    bagian = []
+    if r.rata_tes is not None:
+        n = len([x for x in sampel if x is not None])
+        bagian.append(f"alat tes {r.rata_tes:.1f}% (rata-rata {n} titik)")
+    if r.indikator is not None:
+        bagian.append(f"mesin {r.indikator:g}%")
+    pesan = f"✓ Kadar air *{req.kode_lot}*: " + " · ".join(bagian) + "."
+    # Sebaran & selisih disebut hanya bila ADA artinya — angka tambahan yang
+    # selalu muncul cepat berubah jadi latar yang tak dibaca siapa pun.
+    if r.sebar is not None and r.sebar >= 1.5:
+        pesan += (f"\n⚠️ Sebaran {r.sebar:.1f}% antara titik terendah & tertinggi "
+                  f"— gabah belum kering merata.")
+    if r.selisih_mesin is not None and abs(r.selisih_mesin) >= 2:
+        pesan += (f"\n⚠️ Mesin membaca {r.selisih_mesin:+.1f}% dari alat tes "
+                  f"— periksa sensor dryer bila terus begini.")
     await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 

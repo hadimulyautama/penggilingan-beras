@@ -137,3 +137,65 @@ def test_mesin_tanpa_gabah_tak_ditawarkan_saat_mulai_pengeringan():
     from app.web import miniapp
 
     assert "if not batches:" in inspect.getsource(miniapp.dryer_menunggu)
+
+
+def test_kadar_air_dari_empat_sampel_bukan_satu_angka():
+    """Kadar air diukur dari EMPAT titik dengan alat tes, dan yang dipakai
+    rata-ratanya.
+
+    Satu titik bisa kebetulan mengenai bagian yang paling basah atau paling
+    kering, dan keputusan menghentikan pengeringan tak boleh bergantung pada
+    satu tusukan. Layar lama cuma meminta satu angka — padahal servisnya sejak
+    awal sudah membedakan bacaan mesin dari alat tes.
+    """
+    from app.penggilingan.gudang1.services import drying
+    from tests.bantu import kode_saja
+
+    kode = kode_saja(drying.log_moisture)
+    assert "sampel" in kode
+    assert "sum(isi) / len(isi)" in kode          # rata-rata, bukan satu angka
+    for n in range(1, 5):
+        assert f"kadar_air_tes_{n}" in kode       # mentahnya ikut disimpan
+
+
+def test_bacaan_mesin_tidak_dirata_ratakan_bersama_alat_tes():
+    """Keduanya mengukur hal yang sama dengan alat berbeda. Mencampurnya
+    menghapus justru perbandingan yang berguna: mesin yang sensornya melenceng
+    terlihat dari selisih yang tetap dari hari ke hari."""
+    from app.penggilingan.gudang1.services import drying
+    from tests.bantu import kode_saja
+
+    kode = kode_saja(drying.log_moisture)
+    # Baris yang menyusun daftar untuk dirata-ratakan — `ast.unparse`
+    # membuang tanda kurungnya, jadi yang dicari isinya, bukan bentuk persis.
+    baris = next(b for b in kode.splitlines() if b.strip().startswith("isi ="))
+    assert "sampel" in baris
+    assert "indikator" not in baris, "bacaan mesin ikut dirata-ratakan"
+    assert "sum(isi) / len(isi)" in kode
+
+
+def test_bentuk_lama_satu_angka_tak_patah():
+    """Bot dan tautan tersimpan masih mengirim `kadar_air` tunggal. Ia
+    diperlakukan sebagai bacaan mesin, persis seperti dulu."""
+    from app.web.miniapp import KadarAirReq
+
+    r = KadarAirReq(kode_lot="PGR-1", kadar_air=18)
+    assert r.kadar_air == 18 and r.tes_1 is None and r.indikator is None
+    # Bentuk baru: empat sampel, mesin terpisah.
+    b = KadarAirReq(kode_lot="PGR-1", tes_1=18.2, tes_2=18.6, indikator=18.5)
+    assert b.tes_1 == 18.2 and b.indikator == 18.5 and b.kadar_air is None
+
+
+def test_hanya_titik_pertama_yang_wajib():
+    """Alat tes bisa rusak, muatan bisa kecil. Memaksa empat angka berarti
+    memaksa operator mengarang tiga di antaranya — dan catatan karangan lebih
+    buruk daripada catatan yang kurang lengkap."""
+    import inspect
+
+    from app.web import miniapp
+
+    spec = inspect.getsource(miniapp.susun_aksi) if hasattr(miniapp, "susun_aksi") \
+        else inspect.getsource(miniapp)
+    blok = spec[spec.index('"name": "tes_1"'):spec.index('"name": "indikator"')]
+    assert '"optional": True' not in blok.split('"name": "tes_2"')[0]   # titik 1 wajib
+    assert blok.count('"optional": True') == 3                          # titik 2–4 tidak

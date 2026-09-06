@@ -568,6 +568,14 @@ class MoistureResult:
     lot: DryingLot
     jam_sejak_mulai: float
     jam_sejak_log_sebelumnya: float | None
+    #: Rata-rata sampel alat tes, dan sebarannya (terendah–tertinggi).
+    rata_tes: float | None = None
+    sebar: float | None = None
+    indikator: float | None = None
+    #: Selisih bacaan mesin terhadap rata-rata alat tes. Dryer yang sensornya
+    #: melenceng akan menunjukkan selisih yang konsisten dari hari ke hari —
+    #: dan itu hanya terlihat kalau keduanya dicatat berdampingan.
+    selisih_mesin: float | None = None
 
 
 async def log_moisture(
@@ -575,10 +583,24 @@ async def log_moisture(
     *,
     user,
     kode_lot: str | None,
-    indikator: float | None,
-    tes_manual: float | None,
+    indikator: float | None = None,
+    tes_manual: float | None = None,
+    sampel: list[float | None] | None = None,
     tanggal=None, jam=None,
 ) -> MoistureResult:
+    """Catat kadar air satu lot.
+
+    `sampel` adalah empat titik dengan alat tes kadar air; yang dipakai
+    sebagai angka tes adalah RATA-RATANYA. Satu titik saja bisa kebetulan
+    mengenai bagian yang paling basah atau paling kering, dan keputusan
+    menghentikan pengeringan tidak boleh bergantung pada satu tusukan.
+
+    `indikator` adalah angka yang terbaca pada mesin dryer sendiri. Ia TIDAK
+    dirata-ratakan bersama alat tes: keduanya mengukur hal yang sama dengan
+    alat berbeda, dan mencampurnya menghapus justru perbandingan yang berguna
+    — mesin yang sensornya melenceng terlihat dari selisih yang tetap.
+    """
+
     if not kode_lot:
         raise DryingError("Sebutkan kode lot-nya, contoh: `kadar air LOT-20260702-01 18%`")
     lot = await get_lot_by_kode(db, kode_lot)
@@ -586,8 +608,14 @@ async def log_moisture(
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
     if lot.status == "selesai":
         raise DryingError(f"Lot {kode_lot} sudah selesai — tidak bisa menambah log.")
+    isi = [x for x in (sampel or []) if x is not None]
+    if isi and tes_manual is None:
+        tes_manual = sum(isi) / len(isi)
     if indikator is None and tes_manual is None:
-        raise DryingError("Sebutkan angka kadar airnya, contoh: `kadar air LOT-... 18%`")
+        raise DryingError(
+            "Sebutkan angka kadar airnya — minimal satu sampel alat tes, "
+            "atau angka yang terbaca di mesin."
+        )
 
     # Log sebelumnya (untuk hitung jeda).
     prev = (
@@ -606,6 +634,10 @@ async def log_moisture(
             waktu_update=now,
             kadar_air_indikator=indikator,
             kadar_air_tes_manual=tes_manual,
+            kadar_air_tes_1=(sampel or [None] * 4)[0] if sampel else None,
+            kadar_air_tes_2=(sampel or [None] * 4)[1] if sampel and len(sampel) > 1 else None,
+            kadar_air_tes_3=(sampel or [None] * 4)[2] if sampel and len(sampel) > 2 else None,
+            kadar_air_tes_4=(sampel or [None] * 4)[3] if sampel and len(sampel) > 3 else None,
             input_by=user.id,
         )
     )
@@ -615,7 +647,8 @@ async def log_moisture(
         record_id=lot.id,
         action="INSERT",
         changed_by=user.id,
-        new_value=f"indikator={indikator} tes_manual={tes_manual}",
+        new_value=(f"indikator={indikator} tes_manual={tes_manual} "
+                   f"sampel={[float(x) for x in isi] if isi else '-'}"),
     )
     await _close_late_notifs(db, lot.id)
     await db.commit()
@@ -623,6 +656,11 @@ async def log_moisture(
         lot=lot,
         jam_sejak_mulai=_hours(now, lot.waktu_mulai_pengeringan),
         jam_sejak_log_sebelumnya=_hours(now, prev) if prev else None,
+        rata_tes=tes_manual,
+        sebar=(max(isi) - min(isi)) if len(isi) > 1 else None,
+        indikator=indikator,
+        selisih_mesin=((indikator - tes_manual)
+                       if indikator is not None and tes_manual is not None else None),
     )
 
 
