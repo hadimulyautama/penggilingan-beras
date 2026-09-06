@@ -193,17 +193,33 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
     #
     # Peran asli disimpan tersendiri: ia yang menentukan siapa boleh menyamar,
     # dan ia pula yang harus tetap terbaca supaya orang bisa kembali.
-    from app.web.lihat_sebagai import NAMA_KUKI, peran_efektif
+    from app.web.lihat_sebagai import GUDANG, NAMA_KUKI, peran_efektif, urai
 
     request.state.peran_asli = None
     request.state.lihat_sebagai = None
     if akun is not None and akun.user is not None:
         asli = akun.user.role
         request.state.peran_asli = asli
-        efektif = peran_efektif(asli, request.cookies.get(NAMA_KUKI))
+        diminta = request.cookies.get(NAMA_KUKI)
+        efektif = peran_efektif(asli, diminta)
         if efektif != (asli or "").strip().lower():
             akun.user.role = efektif
             request.state.lihat_sebagai = efektif
+            # Operator SELALU melekat pada satu gudang. Tanpa ini, samaran
+            # mewarisi gudang milik yang menyamar — dan akun admin biasanya
+            # tak punya gudang default sama sekali, sehingga layar Catat
+            # tampil KOSONG: "Tidak ada aksi untuk peran Anda".
+            _, gd = urai(diminta)
+            if efektif == "operator" and gd:
+                from sqlalchemy import select as _select
+                from app.models import Warehouse as _W
+                async with SessionLocal() as db2:
+                    wid = (await db2.execute(
+                        _select(_W.id).where(_W.nama_gudang.like(GUDANG[gd]))
+                    )).scalars().first()
+                if wid is not None:
+                    akun.user.default_warehouse_id = wid
+                    request.state.lihat_sebagai = f"operator {gd.upper()}"
 
     request.state.akun = akun
     return akun

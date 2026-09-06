@@ -62,3 +62,47 @@ def test_jalan_pulang_tak_menuntut_peran():
     from tests.bantu import kode_saja
 
     assert "boleh_menyamar" not in kode_saja(lihat_sebagai.selesai)
+
+
+def test_operator_selalu_menyebut_gudang():
+    """Operator tanpa gudang adalah orang yang tak berhak apa-apa.
+
+    Pemilik menemukannya di layar: akun admin tak punya gudang default (memang
+    tak perlu), jadi samaran "operator" mewarisi ketiadaan itu dan layar Catat
+    tampil KOSONG — "Tidak ada aksi untuk peran Anda". Bukan gambaran operator
+    mana pun yang sungguh ada di pabrik.
+    """
+    from app.web.lihat_sebagai import GUDANG, PILIHAN
+
+    kode = [k for k, _ in PILIHAN]
+    assert "operator" not in kode, "operator polos tak boleh bisa dipilih"
+    assert "operator:g1" in kode and "operator:g2" in kode
+    assert set(GUDANG) == {"g1", "g2"}
+
+
+def test_urai_memisahkan_gudang():
+    from app.web.lihat_sebagai import urai
+
+    assert urai("operator:g1") == ("operator", "g1")
+    assert urai("operator:g9") == ("operator", None)      # gudang ngawur diabaikan
+    assert urai("admin") == ("admin", None)
+    assert urai(None) == ("", None)
+
+
+def test_penjepitan_tetap_berlaku_dengan_gudang():
+    """Menempelkan gudang tak boleh jadi celah menaikkan peran."""
+    from app.web.lihat_sebagai import peran_efektif
+
+    assert peran_efektif("operator", "admin:g1") == "operator"
+    assert peran_efektif("admin", "superadmin:g1") == "admin"
+    assert peran_efektif("superadmin", "operator:g1") == "operator"
+
+
+def test_gudang_ikut_disamarkan():
+    """Tanpa menimpa gudang default, samarannya memakai gudang si penyamar —
+    dan admin biasanya tak punya."""
+    from app.web import security
+    from tests.bantu import kode_saja
+
+    kode = kode_saja(security.akun_opsional)
+    assert "default_warehouse_id" in kode

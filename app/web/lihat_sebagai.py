@@ -30,20 +30,39 @@ NAMA_KUKI = "produksi_lihat"
 TINGKAT = {"operator": 1, "staff": 2, "admin": 3, "superadmin": 4}
 
 #: Yang boleh dipilih di layar, dari tertinggi.
+#:
+#: Operator SELALU menyebut gudangnya. Operator tanpa gudang adalah orang yang
+#: tak berhak apa-apa — layar Catatnya kosong dengan "Tidak ada aksi untuk
+#: peran Anda", dan itu bukan gambaran operator mana pun yang sungguh ada.
+#: Pemilik menemukannya persis begitu: akun admin tak punya gudang default
+#: (memang tak perlu), jadi samarannya mewarisi ketiadaan itu.
 PILIHAN = (
     ("", "Peran saya sendiri"),
     ("admin", "Admin"),
-    ("operator", "Operator"),
+    ("operator:g1", "Operator Gudang 1 — Selepan"),
+    ("operator:g2", "Operator Gudang 2 — Penyosohan"),
 )
+
+#: Pola nama gudang untuk tiap kode.
+GUDANG = {"g1": "Gudang 1%", "g2": "Gudang 2%"}
 
 NAMA_PERAN = {"operator": "Operator", "staff": "Staff",
               "admin": "Admin", "superadmin": "Super Admin"}
 
 
+def urai(diminta: str | None) -> tuple[str, str | None]:
+    """Pisahkan "operator:g1" menjadi ("operator", "g1")."""
+    d = (diminta or "").strip().lower()
+    if ":" in d:
+        peran, _, gd = d.partition(":")
+        return peran, (gd if gd in GUDANG else None)
+    return d, None
+
+
 def peran_efektif(asli: str | None, diminta: str | None) -> str:
     """Peran yang dipakai tampilan — tak pernah lebih tinggi dari yang asli."""
     a = (asli or "").strip().lower()
-    d = (diminta or "").strip().lower()
+    d, _ = urai(diminta)
     if not d or d not in TINGKAT:
         return a
     if TINGKAT[d] > TINGKAT.get(a, 0):
@@ -67,6 +86,9 @@ async def pilih(request: Request, peran: str = Form(""), _=Depends(butuh_akun)):
     if not boleh_menyamar(asli):
         return balasan
     pilih_ = peran_efektif(asli, peran)
+    _, gudang = urai(peran)
+    if pilih_ == "operator" and gudang:
+        pilih_ = f"operator:{gudang}"
     if not peran or pilih_ == (asli or "").strip().lower():
         balasan.delete_cookie(NAMA_KUKI, path="/")
     else:
