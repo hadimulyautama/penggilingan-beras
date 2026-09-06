@@ -135,8 +135,16 @@
           ' data-label="' + esc(f.label) + '"><option>memuat…</option></select>';
       }
       var angka = f.type === "number";
+      // `wajib` OPT-IN, bukan kebalikan dari `optional`.
+      //
+      // Sebagian aksi sengaja meminta "isi minimal salah satu" — QC hasil
+      // giling menerima kadar air ATAU broken ATAU susut. Menjadikan semua
+      // kolom angka wajib secara diam-diam akan mematikan aksi-aksi itu, jadi
+      // yang benar-benar wajib disebut satu per satu di spesifikasinya.
       return l + '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
-        '" type="' + (angka ? "number" : "text") + '" inputmode="' + (angka ? "decimal" : "text") +
+        '"' + (f.wajib ? ' data-wajib="1"' : "") +
+        ' data-label="' + esc(f.label) + '"' +
+        ' type="' + (angka ? "number" : "text") + '" inputmode="' + (angka ? "decimal" : "text") +
         '" autocomplete="off">';
     }).join("");
 
@@ -193,10 +201,10 @@
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
       var kurang = [];
-      Array.prototype.forEach.call(lembar.querySelectorAll("select[data-wajib]"), function (el) {
-        if (!el.value) kurang.push(el.dataset.label || el.dataset.name);
+      Array.prototype.forEach.call(lembar.querySelectorAll("[data-wajib]"), function (el) {
+        if (!String(el.value).trim()) kurang.push(el.dataset.label || el.dataset.name);
       });
-      if (kurang.length) { kabar("Belum dipilih: " + kurang.join(", "), "err"); return; }
+      if (kurang.length) { kabar("Belum diisi: " + kurang.join(", "), "err"); return; }
 
       tbl.disabled = true;
       tbl.textContent = "Menyimpan…";

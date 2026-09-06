@@ -576,6 +576,9 @@ class MoistureResult:
     #: melenceng akan menunjukkan selisih yang konsisten dari hari ke hari —
     #: dan itu hanya terlihat kalau keduanya dicatat berdampingan.
     selisih_mesin: float | None = None
+    #: Terisi hanya bila target BERUBAH pada pencatatan ini.
+    target_lama: float | None = None
+    target_kini: float | None = None
 
 
 async def log_moisture(
@@ -586,6 +589,7 @@ async def log_moisture(
     indikator: float | None = None,
     tes_manual: float | None = None,
     sampel: list[float | None] | None = None,
+    target_baru: float | None = None,
     tanggal=None, jam=None,
 ) -> MoistureResult:
     """Catat kadar air satu lot.
@@ -608,6 +612,19 @@ async def log_moisture(
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
     if lot.status == "selesai":
         raise DryingError(f"Lot {kode_lot} sudah selesai — tidak bisa menambah log.")
+    # Target boleh berubah SEIRING pengeringan — gabah yang ternyata lebih
+    # basah dari dugaan, atau pembeli yang berubah maunya. Perubahannya
+    # dicatat di jurnal aktivitas: garis selesai yang bergeser tanpa jejak
+    # membuat "kenapa berhenti di 15%?" tak bisa dijawab bulan depan.
+    target_lama = float(lot.target_kadar_air) if lot.target_kadar_air is not None else None
+    if target_baru is not None and target_baru != target_lama:
+        lot.target_kadar_air = target_baru
+        await log_activity(
+            db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+            changed_by=user.id, field_name="target_kadar_air",
+            old_value=str(target_lama), new_value=str(target_baru),
+        )
+
     isi = [x for x in (sampel or []) if x is not None]
     if isi and tes_manual is None:
         tes_manual = sum(isi) / len(isi)
@@ -661,6 +678,10 @@ async def log_moisture(
         indikator=indikator,
         selisih_mesin=((indikator - tes_manual)
                        if indikator is not None and tes_manual is not None else None),
+        target_lama=(target_lama if (target_baru is not None
+                                     and target_baru != target_lama) else None),
+        target_kini=(float(lot.target_kadar_air)
+                     if lot.target_kadar_air is not None else None),
     )
 
 
@@ -696,6 +717,14 @@ async def start_drying(
         raise DryingError(
             f"Tidak ada gabah di {dryer.nama}. Masukkan dulu, "
             "mis. `keringkan GB-...`."
+        )
+    # Target WAJIB — keputusan pemilik. Pengeringan tanpa target adalah
+    # pengeringan yang tak punya garis selesai: kemajuannya tak bisa dihitung,
+    # dan "sudah cukup kering" jadi perasaan, bukan angka.
+    if target_kadar_air is None:
+        raise DryingError(
+            "Sebutkan target kadar airnya dulu — sampai berapa muatan ini "
+            "dikeringkan."
         )
     kondisi_set = {b.kondisi_gabah for b in loose}
     if len(kondisi_set) > 1:

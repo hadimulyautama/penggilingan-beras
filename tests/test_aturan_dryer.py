@@ -292,3 +292,42 @@ def test_dua_peringatan_tak_saling_menghapus():
     sumber = inspect.getsource(drying.start_drying)
     assert sumber.count("catatan.append") == 2
     assert 'peringatan = "\\n".join(catatan) or None' in sumber
+
+
+def test_target_wajib_saat_mulai_pengeringan():
+    """Pengeringan tanpa target adalah pengeringan yang tak punya garis
+    selesai: kemajuannya tak bisa dihitung, dan "sudah cukup kering" jadi
+    perasaan, bukan angka."""
+    from tests.bantu import kode_saja
+    from app.penggilingan.gudang1.services import drying
+
+    kode = kode_saja(drying.start_drying)
+    blok = kode[:kode.index("kondisi_set")]
+    assert "target_kadar_air is None" in blok
+    assert "raise DryingError" in blok
+
+
+def test_target_boleh_berubah_seiring_pengeringan():
+    """Gabah bisa ternyata lebih basah dari dugaan, atau pembeli berubah
+    maunya. Perubahannya DICATAT — garis selesai yang bergeser tanpa jejak
+    membuat "kenapa berhenti di 15%?" tak bisa dijawab bulan depan."""
+    from tests.bantu import kode_saja
+    from app.penggilingan.gudang1.services import drying
+
+    kode = kode_saja(drying.log_moisture)
+    assert "target_baru" in kode
+    assert "lot.target_kadar_air = target_baru" in kode
+    assert "field_name='target_kadar_air'" in kode or 'field_name="target_kadar_air"' in kode
+
+
+def test_wajib_opt_in_bukan_kebalikan_optional():
+    """Sebagian aksi sengaja meminta "isi minimal salah satu" — QC hasil
+    giling menerima kadar air ATAU broken ATAU susut. Menjadikan semua kolom
+    angka wajib secara diam-diam akan mematikan aksi-aksi itu."""
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parent.parent
+          / "app" / "web" / "static" / "aksi.js").read_text()
+    assert "f.wajib ?" in js                       # opt-in, bukan !f.optional
+    assert '[data-wajib]' in js                    # input ikut diperiksa, bukan select saja
+    assert "Belum diisi:" in js

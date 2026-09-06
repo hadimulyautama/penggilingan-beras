@@ -272,7 +272,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/miniapp/actions/dryer-menunggu",
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
                  {"name": "target_kadar_air", "label": "Target kadar air (%)",
-                  "type": "number"},
+                  "type": "number", "wajib": True},
                  # Mode disebutkan di LABEL mesinnya juga ("· pakai mode 25T"),
                  # karena di situlah tonasenya diketahui. Menaruh saran di
                  # tempat lain berarti operator harus mengingat angka dari
@@ -290,7 +290,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
                   "kosong": "Tidak ada pengeringan yang sedang berjalan."},
-                 {"name": "tes_1", "label": "Alat tes — titik 1 (%)", "type": "number"},
+                 {"name": "tes_1", "label": "Alat tes — titik 1 (%)", "type": "number",
+                  "wajib": True},
                  {"name": "tes_2", "label": "Alat tes — titik 2 (%)", "type": "number",
                   "optional": True},
                  {"name": "tes_3", "label": "Alat tes — titik 3 (%)", "type": "number",
@@ -298,6 +299,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "tes_4", "label": "Alat tes — titik 4 (%)", "type": "number",
                   "optional": True},
                  {"name": "indikator", "label": "Terbaca di mesin dryer (%)",
+                  "type": "number", "optional": True},
+                 # Target boleh berubah SEIRING pengeringan, dan diubah DI SINI
+                 # — di layar tempat operator menilai kembali. Menaruhnya di
+                 # aksi tersendiri berarti keputusan "sudah cukup atau belum"
+                 # dan angka yang mendasarinya terpisah dua ketukan.
+                 {"name": "target_baru", "label": "Ubah target kadar air (%) — kosongkan bila tetap",
                   "type": "number", "optional": True},
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
@@ -1010,6 +1017,8 @@ class KadarAirReq(BaseModel):
     tes_4: float | None = None
     #: Yang terbaca di mesin. Tidak ikut dirata-ratakan.
     indikator: float | None = None
+    #: Target boleh diubah sambil mencatat kadar air.
+    target_baru: float | None = None
     #: Bentuk LAMA — satu angka. Dipertahankan supaya pemanggil lama (bot,
     #: tautan tersimpan) tidak patah; diperlakukan sebagai bacaan mesin,
     #: persis seperti dulu.
@@ -1028,7 +1037,8 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
         u = await db.get(User, user.id)
         try:
             r = await log_moisture(db, user=u, kode_lot=req.kode_lot,
-                                   indikator=indikator, sampel=sampel)
+                                   indikator=indikator, sampel=sampel,
+                                   target_baru=req.target_baru)
         except Exception as e:  # noqa: BLE001
             raise _err(e, "Gagal update kadar air.")
 
@@ -1044,6 +1054,10 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
     if r.sebar is not None and r.sebar >= 1.5:
         pesan += (f"\n⚠️ Sebaran {r.sebar:.1f}% antara titik terendah & tertinggi "
                   f"— gabah belum kering merata.")
+    if r.target_lama is not None:
+        pesan += (f"\n↻ Target diubah {r.target_lama:g}% → {r.target_kini:g}%.")
+    elif r.target_kini is not None:
+        pesan += f" Target {r.target_kini:g}%."
     if r.selisih_mesin is not None and abs(r.selisih_mesin) >= 2:
         pesan += (f"\n⚠️ Mesin membaca {r.selisih_mesin:+.1f}% dari alat tes "
                   f"— periksa sensor dryer bila terus begini.")
