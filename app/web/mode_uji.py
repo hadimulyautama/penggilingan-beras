@@ -23,6 +23,17 @@ jalan ketiga.
 kecuali `MODE_UJI` dinyalakan di environment. Mematikannya bukan sekadar
 menyembunyikan tombol: endpointnya ikut menolak.
 
+Gerbangnya **Admin ke atas**, bukan Super Admin. Bukan pelonggaran asal:
+`superadmin` belum bisa dipakai di sini. Kantor — layanan lain di basis data
+yang sama — punya DELAPAN pemeriksaan `role == "admin"` yang persis (Gmail,
+GajiHub, IT aset, pengetahuan, keuangan), jadi menaikkan peran pemilik ke
+`superadmin` justru mematikan aksesnya di sana. Sampai Kantor ikut
+disesuaikan, `admin` adalah peran tertinggi yang benar-benar berlaku.
+
+Yang menjaga fitur ini tetap tiga lapis dan tak berkurang: `MODE_UJI` harus
+menyala di environment (padam secara bawaan), harus Admin ke atas, dan
+kalimatnya harus diketik persis.
+
 Yang DIPERTAHANKAN: akun & orang (supaya masih bisa masuk sesudahnya), alat
 (gudang, silo, mesin pengering), dan daftar acuan (merk, ukuran karung,
 standar mutu, jenis karung). Yang lain — seluruh catatan pekerjaan — dihapus.
@@ -137,16 +148,16 @@ async def _konteks(akun, **tambahan):
 @router.get("/pengaturan/mode-uji", response_class=HTMLResponse)
 async def halaman(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     _wajib_mode_uji()
-    if not akun.is_super:
-        raise HTTPException(403, "Hanya Super Admin.")
+    if not akun.is_admin:
+        raise HTTPException(403, "Hanya Admin ke atas.")
     return render(request, "mode_uji.html", **await _konteks(akun))
 
 
 @router.post("/pengaturan/mode-uji")
 async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     _wajib_mode_uji()
-    if not akun.is_super:
-        raise HTTPException(403, "Hanya Super Admin.")
+    if not akun.is_admin:
+        raise HTTPException(403, "Hanya Admin ke atas.")
     form = await request.form()
     if (form.get("kalimat") or "").strip() != KALIMAT:
         return render(request, "mode_uji.html",
