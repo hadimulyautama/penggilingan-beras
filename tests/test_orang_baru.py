@@ -126,3 +126,22 @@ def test_can_transfer_pk_mencakup_superadmin():
         assert can_transfer_pk(_U(peran)), peran
     assert not can_transfer_pk(_U("operator"))
     assert not can_transfer_pk(None)
+
+
+def test_penjaga_akun_tertinggi_menghitung_superadmin():
+    """Penjaga "jangan sampai tersisa nol akun tertinggi" harus menghitung
+    superadmin juga.
+
+    Menghitungnya harfiah (`role == "admin"`) membuatnya salah dua arah:
+    menolak admin TERAKHIR yang hendak naik ke superadmin — padahal tingkatnya
+    bertambah, bukan berkurang — dan menganggap nol akun tertinggi di pabrik
+    yang seluruh adminnya sudah dinaikkan. Ini bentuk cacat yang sama dengan
+    `PERAN_STAF_KEATAS` dan `admin_keatas()` di Kantor.
+    """
+    import inspect
+
+    from app.web import pengguna
+
+    badan = inspect.getsource(pengguna._jumlah_admin)
+    assert "x.is_admin" in badan
+    assert 'role == "admin"' not in badan.split('"""')[-1]

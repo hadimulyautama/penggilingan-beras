@@ -260,7 +260,13 @@ async def _jumlah_admin(db) -> int:
         select(ProduksiAkun).options(selectinload(ProduksiAkun.user))
         .where(ProduksiAkun.status == "aktif")
     )).scalars().all()
-    return sum(1 for x in baris if x.user is not None and x.user.role == "admin")
+    # `is_admin`, bukan `role == "admin"`: superadmin ADA DI ATAS admin, jadi
+    # ia jelas termasuk "tingkat tertinggi". Menghitungnya harfiah membuat
+    # penjaga ini salah dua arah sekaligus — menolak admin terakhir yang mau
+    # NAIK ke superadmin (padahal tingkatnya bertambah, bukan berkurang), dan
+    # menganggap nol akun tertinggi di pabrik yang seluruh adminnya sudah
+    # dinaikkan.
+    return sum(1 for x in baris if x.user is not None and x.is_admin)
 
 
 @router.post("/pengguna/{akun_id}")
