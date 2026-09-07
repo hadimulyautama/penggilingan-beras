@@ -220,6 +220,29 @@ a:hover { color: #7fcbe8; }
 .fld:focus { outline: none; border-color: var(--aksi); }
 select.fld { appearance: none; }
 
+/* ── Penyaring antrean ──
+   Muncul hanya saat antreannya panjang, jadi ia tak boleh menyita ruang
+   seperti bagian formulir: satu baris, sedikit lebih pendek dari isian
+   biasa, dan pemasoknya di sebelah kotak cari saat layarnya memungkinkan. */
+.saring { display: grid; gap: 8px; margin-bottom: 14px; }
+@media (min-width: 420px) {
+  .saring { grid-template-columns: 1fr auto; }
+  .saring__kabar { grid-column: 1 / -1; }
+}
+.cari {
+  width: 100%; min-height: var(--sentuh);
+  background: var(--panel); border: 1px solid var(--garis);
+  border-radius: 10px; padding: 10px 14px;
+  color: var(--tinta); font-family: var(--teks); font-size: 15px;
+}
+.cari::placeholder { color: var(--redup-2); }
+.cari:focus { outline: none; border-color: var(--aksi); }
+.fld--kecil { font-size: 14px; padding: 10px 14px; width: auto; }
+.saring__kabar {
+  color: var(--redup); font-size: 13px; line-height: 1.45;
+  padding: 11px 13px; border: 1px dashed var(--garis); border-radius: 10px;
+}
+
 /* ── Tombol ── */
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 9px;

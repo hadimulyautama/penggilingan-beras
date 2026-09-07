@@ -243,7 +243,12 @@ async def halaman_aksi(request: Request):
                   # tindakannya — kartu yang sama muncul di dua tempat adalah
                   # dua tempat di kepala orang, dan cepat atau lambat keduanya
                   # berbeda isi.
-                  menunggu=b.menunggu, berjalan=[], lama=svc._lama,
+                  menunggu=b.menunggu, berjalan=[],
+                  # Kerja MEJA dipisah: harga, mutu, verifikasi output.
+                  # Gabahnya mungkin sudah lama duduk di silo, jadi
+                  # mencampurnya dengan antrean gudang membuat barisnya
+                  # terbaca seperti tiket yang tertinggal.
+                  meja=b.meja, lama=svc._lama,
                   MENUNGGU=b.jumlah_menunggu)
 
 

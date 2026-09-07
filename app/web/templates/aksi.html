@@ -14,7 +14,42 @@
    keadaan bendanya, dan yang keadaannya cuma punya satu tindakan langsung
    membuka tindakan itu. #}
 {% set semua = menunggu + berjalan %}
+
+{# ── Cari & saring per pemasok ──
+   Muncul hanya kalau antreannya memang panjang. Di bawah lima baris,
+   seluruh daftarnya sudah terbaca sekaligus — kotak cari di atasnya cuma
+   menyita ruang untuk mencari yang sudah kelihatan.
+
+   Disaring di peramban, bukan lewat alamat: mengetik satu huruf tak boleh
+   memuat ulang halaman, dan yang sedang dicari orang bukan keadaan yang
+   perlu bisa ditautkan. #}
+{% if semua|length > 4 %}
+  {% set pemasok = semua|map(attribute="judul")|reject("none")|unique|sort %}
+  <div class="saring">
+    <input class="cari" id="cari-antri" type="search" autocomplete="off"
+           placeholder="Cari pemasok, kode tiket, atau plat…"
+           aria-label="Cari di antrean">
+    {% if pemasok|list|length > 1 %}
+      <select class="fld fld--kecil" id="saring-pemasok" aria-label="Saring per pemasok">
+        <option value="">Semua pemasok</option>
+        {% for nama in pemasok %}<option value="{{ nama }}">{{ nama }}</option>{% endfor %}
+      </select>
+    {% endif %}
+    <div class="saring__kabar" id="saring-kabar" role="status" hidden></div>
+  </div>
+{% endif %}
+
 {{ benda.blok("Bisa dikerjakan sekarang", semua) }}
+
+{# ── Kerja MEJA, bukan kerja gudang ──
+   Hanya terlihat oleh yang boleh melihat uang; operator tak pernah, dan
+   admin yang sedang memakai Mode operator pun tidak.
+
+   Dipisah karena ia memang pekerjaan lain: gabahnya bisa sudah dua hari
+   duduk di silo, dan barisnya menunggu KEPUTUSAN, bukan tangan. Dicampur
+   dengan antrean gudang, ia terbaca seperti tiket yang tertinggal — lalu
+   orang mencari gabah yang sebenarnya sudah lama ditempatkan. #}
+{{ benda.blok("Menunggu keputusan Anda", meja) }}
 
 {# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
 
@@ -26,7 +61,7 @@
 
    Katalog itu kini punya alamatnya sendiri di menu: /aksi-lain. Tak ada yang
    jadi tak terjangkau, dan antrean tetap berarti apa yang ia namai. #}
-{% if not semua %}
+{% if not semua and not meja %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -53,4 +88,49 @@
 </div>
 <script src="/static/aksi.js?v={{ VERSI }}" defer
         data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{# ── Penyaring antrean ──
+   Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan
+   mengganti seluruh isi bingkai — skrip yang dipasang sekali di luar akan
+   kehilangan elemennya begitu orang berpindah layar dan kembali. #}
+<script>
+(() => {
+  const kotak = document.getElementById('cari-antri');
+  if (!kotak) return;                       // antrean pendek: tak ada penyaring
+  const pilih = document.getElementById('saring-pemasok');
+  const kabar = document.getElementById('saring-kabar');
+  const kartu = [...document.querySelectorAll('[data-cari]')];
+
+  const saring = () => {
+    const q = kotak.value.trim().toLowerCase();
+    const sup = pilih ? pilih.value : '';
+    let tampil = 0;
+    for (const k of kartu) {
+      const cocok = (!q || k.dataset.cari.includes(q))
+                 && (!sup || k.dataset.sup === sup);
+      k.hidden = !cocok;
+      if (cocok) tampil++;
+    }
+    // Judul blok ikut menghitung ulang, dan blok yang habis tersaring
+    // disembunyikan seluruhnya — "Menunggu keputusan Anda · 3" di atas
+    // ruang kosong adalah keterangan yang berbohong.
+    for (const blok of document.querySelectorAll('[data-blok]')) {
+      const isi = [...blok.querySelectorAll('[data-cari]')].filter(k => !k.hidden);
+      const n = blok.querySelector('[data-jumlah]');
+      if (n) n.textContent = isi.length;
+      blok.hidden = isi.length === 0;
+    }
+    // Nol hasil harus berkata sesuatu. Layar yang mendadak kosong tanpa
+    // kalimat adalah tempat aplikasi terlihat rusak, padahal sedang benar.
+    const kosong = (q || sup) && tampil === 0;
+    kabar.hidden = !kosong;
+    if (kosong) kabar.textContent = 'Tak ada yang cocok. Kosongkan pencarian '
+                                  + 'untuk melihat seluruh antrean.';
+  };
+  kotak.addEventListener('input', saring);
+  if (pilih) pilih.addEventListener('change', saring);
+  kotak.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { kotak.value = ''; saring(); }
+  });
+})();
+</script>
 {% endblock %}

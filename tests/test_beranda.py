@@ -60,7 +60,12 @@ def test_beranda_menyebut_giling_dan_silo_bukan_pengeringan_saja():
     html = _beranda(berjalan=[_giling()], transit=[_silo()])
     assert "Giling" in html and "9.900" in html
     assert "Silo A" in html and "21.000" in html
-    assert "Sedang berjalan · 1" in html and "Transit · 1" in html
+    # Cacahnya kini elemen tersendiri supaya penyaring antrean bisa
+    # menghitungnya ulang, jadi teksnya tak lagi menyatu.
+    import re
+    judul = re.findall(r'class="lbl">([^<]+)·\s*<span data-jumlah>(\d+)<', html)
+    assert [(a.strip(), b) for a, b in judul] == [
+        ("Sedang berjalan", "1"), ("Transit", "1")]
 
 
 def test_kartu_beranda_bisa_dikerjakan_dari_situ():

@@ -127,10 +127,21 @@ class Berjalan:
     menunggu: list[Baris] = field(default_factory=list)
     berjalan: list[Baris] = field(default_factory=list)
     transit: list[Baris] = field(default_factory=list)
+    #: Kerja MEJA, bukan kerja gudang: harga yang belum diverifikasi, mutu
+    #: yang belum diperiksa, output giling yang belum dicocokkan. Hanya
+    #: terlihat oleh yang boleh melihat uang — operator tidak pernah, dan
+    #: admin yang sedang memakai Mode operator pun tidak.
+    #:
+    #: Dipisah dari `menunggu` karena ia bukan pekerjaan yang sama: gabahnya
+    #: mungkin sudah lama duduk di silo. Dicampur, barisnya terbaca seperti
+    #: tiket yang tertinggal — dan orang akan mencari gabah yang sebenarnya
+    #: sudah lama ditempatkan.
+    meja: list[Baris] = field(default_factory=list)
 
     @property
     def jumlah_menunggu(self) -> int:
-        return len(self.menunggu)
+        """Lencana. Kerja meja ikut dihitung — ia memang menunggu ORANG."""
+        return len(self.menunggu) + len(self.meja)
 
     @property
     def jumlah_berjalan(self) -> int:
@@ -191,8 +202,13 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
         baris.append(Baris(
             kode=t["kode"], isi=isi, aksi="gabah_masuk", nilai=str(t["id"]),
-            keadaan=("tiket sudah ditutup — susulan" if t.get("susulan")
-                     else "catat & tentukan tempatnya"),
+            # Tiket yang MUNCUL di antrean sudah berarti belum ditindak —
+            # kepingan fasenya mengatakannya. "Catat & tentukan tempatnya"
+            # di bawahnya cuma mengulang hal yang sama dengan kata lain,
+            # dan dua kalimat bermakna sama membuat orang mencari bedanya
+            # lalu menemukan tak ada. Yang susulan tetap bicara: itu
+            # keterangan yang sungguh menambah sesuatu.
+            keadaan=("tiket sudah ditutup — susulan" if t.get("susulan") else ""),
             # Pemasoknya yang jadi judul, bukan kata "Tiket timbang": yang
             # dicari mata saat menyusuri antrean adalah siapa, bukan jenis
             # kartunya — jenisnya sudah dikatakan oleh warnanya.
@@ -509,8 +525,33 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
     return b
 
 
+#: Di mana gabahnya BERADA saat harganya masih ditagih. Fase inilah yang
+#: mewarnai kartu dan mengisi kepingannya — dan sebelum ini tak pernah
+#: disetel sama sekali, jadi terpakai bawaannya, "Belum ada tindakan". Itu
+#: bohong: gabahnya bisa sudah dua hari di dalam mesin pengering. Kepingan
+#: yang berbohong lebih buruk daripada kepingan yang tak ada, karena ia
+#: dipercaya.
+_FASE_BATCH = {
+    "baru": "baru", "ditumpuk": "baru",
+    "di_dryer": "dryer", "dikeringkan": "dryer",
+    "di_silo": "silo", "digiling": "giling",
+}
+
+_DI_MANA = {
+    "baru": "belum ditempatkan", "ditumpuk": "menumpuk di lantai",
+    "di_dryer": "sudah di mesin pengering", "dikeringkan": "sedang dikeringkan",
+    "di_silo": "sudah di silo", "digiling": "sudah digiling",
+}
+
+
 async def untuk_staff(db: AsyncSession) -> Berjalan:
-    """Yang tertahan menunggu keputusan staff/Direksi — bukan pekerjaan fisik."""
+    """Yang tertahan menunggu keputusan staff/Direksi — bukan pekerjaan fisik.
+
+    Semuanya masuk `meja`. Barisnya menyebut DI MANA gabahnya sekarang,
+    karena pertanyaan pertama yang timbul saat melihat kode batch lama adalah
+    "ini yang mana, dan apa sudah dikerjakan?" — dan jawabannya tak boleh
+    menuntut orang membuka layar lain.
+    """
     b = Berjalan()
 
     for batch, nama in (await db.execute(
@@ -519,11 +560,17 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         .where(PurchaseBatch.flag_unverified.is_(True))
         .order_by(PurchaseBatch.id.desc())
     )).all():
-        b.menunggu.append(Baris(
+        di_mana = _DI_MANA.get(batch.status_batch or "", batch.status_batch or "")
+        b.meja.append(Baris(
             kode=batch.kode_batch, isi=f"{nama} · {_kg(batch.berat_total_kg)}",
             keadaan="harga belum diverifikasi", aksi="verify_gabah",
             nilai=batch.kode_batch,
             sejak=batch.created_at,
+            fase=_FASE_BATCH.get(batch.status_batch or "", "baru"),
+            judul=nama,
+            utama=(_kg(batch.berat_total_kg).removesuffix(" kg"), "kg"),
+            sub=f"{batch.kode_batch} · gabah {batch.kondisi_gabah}",
+            fakta=[("Gabahnya", di_mana)],
         ))
 
     selesai = (await db.execute(
@@ -536,19 +583,23 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
             .where(MillingQcLog.milling_process_id == p.id)
         )).scalar_one()
         if not ada_qc:
-            b.menunggu.append(Baris(
+            b.meja.append(Baris(
                 kode=p.kode_proses, isi="giling selesai, mutu belum diperiksa",
                 keadaan="menunggu QC", aksi="qc_giling", nilai=p.kode_proses,
-                sejak=p.waktu_selesai))
+                sejak=p.waktu_selesai, fase="giling",
+                judul="Mutu belum diperiksa",
+                sub=f"{p.kode_proses} · giling sudah ditutup"))
         ada_v = (await db.execute(
             select(MillingProcessVerification.id)
             .where(MillingProcessVerification.milling_process_id == p.id)
         )).scalars().first()
         if not ada_v:
-            b.menunggu.append(Baris(
+            b.meja.append(Baris(
                 kode=p.kode_proses, isi="output giling belum diverifikasi",
                 keadaan="menunggu verifikasi output", aksi="verify_output",
-                nilai=p.kode_proses, sejak=p.waktu_selesai))
+                nilai=p.kode_proses, sejak=p.waktu_selesai, fase="giling",
+                judul="Output belum diverifikasi",
+                sub=f"{p.kode_proses} · giling sudah ditutup"))
     return b
 
 
@@ -570,7 +621,7 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         b.transit += g.transit
     if can_see_financials(user):
         s = await untuk_staff(db)
-        b.menunggu += s.menunggu
+        b.meja += s.meja
         b.berjalan += s.berjalan
         # Staff & Direksi tak terikat satu gudang; keadaan fisik G1 tetap
         # perlu terlihat, tetapi sebagai kabar — bukan sebagai tugas mereka.
