@@ -7,8 +7,39 @@ yang menyadarinya sampai hasil gilingnya aneh.
 from __future__ import annotations
 
 import inspect
+import pathlib
 
 from app.penggilingan.gudang1.services import drying
+from tests.bantu import kode_saja
+
+
+def _aksi(miniapp, id_aksi: str) -> dict:
+    """Spesifikasi satu aksi, dibaca dari SUMBER `actions_menu`.
+
+    Memanggil fungsinya butuh basis data — dan yang diperiksa di sini bentuk
+    spesifikasinya, bukan isinya saat jalan."""
+    import ast
+    import textwrap
+
+    pohon = ast.parse(textwrap.dedent(inspect.getsource(miniapp.actions_menu)))
+    for simpul in ast.walk(pohon):
+        if not isinstance(simpul, ast.Dict):
+            continue
+        for k, v in zip(simpul.keys, simpul.values):
+            if (isinstance(k, ast.Constant) and k.value == "id"
+                    and isinstance(v, ast.Constant) and v.value == id_aksi):
+                # Hanya kunci bernilai tetap yang bisa dibaca tanpa dijalankan;
+                # `options` yang dibangkitkan memang tak diperiksa di sini.
+                keluar = {}
+                for kk, vv in zip(simpul.keys, simpul.values):
+                    if not isinstance(kk, ast.Constant):
+                        continue
+                    try:
+                        keluar[kk.value] = ast.literal_eval(vv)
+                    except ValueError:
+                        pass
+                return keluar
+    raise AssertionError(f"aksi {id_aksi} tidak ada di actions_menu")
 
 
 def test_lot_yang_mengering_maupun_mendinginkan_menutup_dryer():
@@ -69,8 +100,12 @@ def test_silo_campuran_diperingatkan_bukan_ditolak():
     from app.penggilingan.gudang1.services import silo
     from app.web import miniapp
 
-    assert "digabung = await _silo_content_kg" in inspect.getsource(silo.masuk_silo)
+    assert "digabung = bool(sebelum)" in inspect.getsource(silo.masuk_silo)
     assert "isinya kini tercampur" in inspect.getsource(miniapp.act_pindah_silo)
+    # Dan peringatannya menyebut ISI yang sudah ada, bukan sekadar bahwa silo
+    # "sudah berisi" — dua lot pengeringan yang menumpuk adalah keadaan lain
+    # daripada hasil pengeringan sendiri yang bertemu gabah beli kering.
+    assert "isi_sebelumnya" in inspect.getsource(miniapp.act_pindah_silo)
 
 
 # ─────────────── Tiap dryer berjalan sendiri-sendiri ───────────────
@@ -331,3 +366,278 @@ def test_wajib_opt_in_bukan_kebalikan_optional():
     assert "f.wajib ?" in js                       # opt-in, bukan !f.optional
     assert '[data-wajib]' in js                    # input ikut diperiksa, bukan select saja
     assert "Belum diisi:" in js
+
+
+# ──────────────────── Campur basah–kering: ditutup, bukan ditolak ───────────
+#
+# Aturan ini sudah ditegakkan di `masuk_dryer` sejak lama. Yang ditambahkan di
+# sini bukan aturannya, melainkan KAPAN ia terasa: pilihan yang mustahil harus
+# tertutup sebelum ditekan, bukan ditolak sesudahnya. Penolakan sesudah
+# ditekan tetap benar — tetapi saat itu batch-nya sudah tercatat dan harus
+# ditempatkan ulang dengan tangan.
+
+def test_isi_dryer_membaca_lot_maupun_batch_lepas():
+    """Gabah di dryer punya dua bentuk: batch lepas yang menunggu mesin
+    dinyalakan, dan lot yang sedang dikeringkan atau didinginkan. Membaca satu
+    saja berarti separuh keadaan terlihat kosong."""
+    sumber = kode_saja(drying.isi_dryer)
+    assert "active_drying_lot" in sumber
+    assert "_loose_dryer_batches" in sumber
+    assert "kondisi_gabah" in sumber
+
+
+def test_isi_dryer_tetap_menghalangi_setelah_pendinginan_selesai():
+    """Inti bahayanya: mesin yang pengeringan & pendinginannya sudah selesai
+    terasa 'sudah bebas', padahal gabahnya masih di dalam. `active_drying_lot`
+    memang mencakup lot berstatus 'selesai' yang belum ke silo — dan
+    `isi_dryer` harus ikut memakainya, bukan menyaring lot yang masih
+    berproses saja."""
+    sumber = kode_saja(drying.isi_dryer)
+    assert "status" not in sumber, \
+        "isi_dryer tidak boleh menyaring lot berdasarkan statusnya sendiri"
+
+
+def test_pilihan_tujuan_menyebut_isi_tiap_mesin():
+    """Operator harus bisa melihat isi mesin SEBELUM memilihnya."""
+    from app.web import miniapp
+
+    sumber = kode_saja(miniapp._pilihan_tujuan_gabah)
+    assert "isi_dryer" in sumber
+    assert "berisi gabah" in sumber
+
+
+def test_label_mesin_tak_bergantung_kondisi_gabah_yang_masuk():
+    """Daftar ini dibangun dua kali — untuk gabah basah dan untuk gabah kering
+    — lalu digabung dengan membuang yang kembar. Label yang menyebut kondisi
+    gabah yang MASUK akan berbeda di kedua daftar, dan mesin yang sama muncul
+    dua kali."""
+    from app.web import miniapp
+
+    sumber = kode_saja(miniapp._pilihan_tujuan_gabah)
+    kepala = sumber[:sumber.index("for d in mesin:")]
+    ekor = sumber[sumber.index("for d in mesin:"):]
+    # Variabel `kondisi` (kondisi gabah yang masuk) boleh dipakai untuk memilih
+    # jenis dan untuk label tumpukan, tetapi tidak untuk menamai mesin.
+    baris_mesin = [b for b in ekor.splitlines() if "dryer:" in b or "berisi" in b]
+    assert baris_mesin
+    for b in baris_mesin:
+        assert "{kondisi}" not in b, f"label mesin ikut kondisi gabah masuk: {b}"
+    assert "GABAH_BASAH" in kepala
+
+
+def test_gabah_masuk_menolak_campuran_sebelum_batch_dibuat():
+    """Penolakan sesudah batch tercatat menyisakan pekerjaan bersih-bersih.
+    Untuk hal yang sudah pasti salah, tolak lebih dulu."""
+    from app.web import miniapp
+
+    sumber = kode_saja(miniapp.act_gabah_masuk)
+    i_periksa = sumber.index("await isi_dryer")
+    # Yang dicari PANGGILANNYA, bukan barisan `import` di kepala fungsi —
+    # urutan import tak mengatakan apa-apa tentang urutan kejadian.
+    i_buat = sumber.index("await create_purchase_batch_dari_timbang")
+    assert i_periksa < i_buat, \
+        "pemeriksaan campuran harus mendahului pembuatan batch"
+    assert "tidak boleh dicampur" in sumber
+
+
+# ──────────────────── Silo: boleh campur, wajib terbaca ────────────────────
+#
+# Keputusan pemilik 6 September 2026: silo TETAP boleh menerima hasil
+# pengeringan sendiri bersama gabah yang dibeli sudah kering — menahannya
+# sampai ada silo kosong hanya memacetkan dryer. Syaratnya campuran itu
+# terbaca: diperingatkan saat terjadi, dan disebut komposisinya di laporan.
+
+def test_laporan_silo_menyebut_seluruh_isi_bukan_baris_pertama():
+    """Sebelum ini laporan mengambil baris lot yang PERTAMA ditemukan. Gabah
+    kering yang menumpuk di silo yang sama hilang dari laporan berikut
+    beratnya, dan yang membaca mengira silo itu berisi lot saja."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.laporan_silo)
+    assert "next((r for r in rows if r.drying_lot_id)" not in sumber, \
+        "laporan tak boleh berhenti di baris lot yang pertama"
+    assert "isi_silo" in sumber
+    assert "_tercampur" in sumber
+
+
+def test_laporan_silo_menandai_campuran():
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.laporan_silo)
+    assert "TERCAMPUR" in sumber
+
+
+def test_campuran_dinilai_dari_asal_bukan_jumlah_baris():
+    """Dua lot pengeringan yang menumpuk masih SATU asal. Yang menghapus batas
+    yang ingin dilihat pemilik adalah hasil pengeringan sendiri yang bertemu
+    gabah beli kering."""
+    from app.penggilingan.gudang1.services import silo
+
+    A = silo.IsiSilo("pengeringan", "PGR-1", 1000.0)
+    B = silo.IsiSilo("pengeringan", "PGR-2", 1000.0)
+    C = silo.IsiSilo("beli_kering", "GB-9", 1000.0)
+    assert silo._tercampur([A, B]) is False
+    assert silo._tercampur([A, C]) is True
+    assert silo._tercampur([C]) is False
+
+
+def test_isi_dibaca_sebelum_yang_baru_ditambahkan():
+    """Kalau dibaca sesudahnya, gabah yang baru masuk ikut terhitung dan
+    peringatannya menuduh dirinya sendiri."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    i_baca = sumber.index("sebelum = await isi_silo")
+    for tanda in ("baris = SiloStorage(", "status_batch = 'di_silo'"):
+        assert i_baca < sumber.index(tanda), f"isi dibaca setelah {tanda}"
+
+
+def test_kedua_arah_pencampuran_diperingatkan():
+    """Lot masuk ke silo yang sudah berisi gabah beli kering SUDAH
+    diperingatkan. Arah sebaliknya — gabah beli kering menyusul ke silo yang
+    berisi lot — sampai sekarang diam."""
+    from app.web import miniapp
+    from app.penggilingan.gudang1.services import tumpukan
+
+    assert "campur_asal" in kode_saja(miniapp.act_pindah_silo)
+    assert "campur_asal" in kode_saja(miniapp.act_gabah_masuk)
+    assert "campur_asal" in kode_saja(tumpukan.tempatkan)
+
+
+def test_peringatan_silo_bukan_penolakan():
+    """Gabahnya harus keluar dari dryer. Menolak berarti memacetkan pengeringan
+    berikutnya — dan kemacetan itulah yang melahirkan tumpukan di lantai."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    # Tak satu pun penolakan di sini boleh beralasan campuran. Penolakan yang
+    # ADA — lot tak ditemukan, belum selesai, kapasitas kurang — semuanya
+    # tentang hal lain.
+    tolakan = [b.strip() for b in sumber.splitlines() if "raise" in b]
+    assert tolakan, "masuk_silo memang punya penolakan lain"
+    for t in tolakan:
+        assert "campur" not in t.lower(), f"campuran berujung penolakan: {t}"
+
+
+def test_silo_kosong_tak_dilaporkan_sudah_berisi():
+    """`digabung` pernah dihitung SESUDAH baris barunya ditambahkan. Autoflush
+    menuliskannya lebih dulu, jadi silo yang kosong pun dilaporkan "sudah
+    berisi sebelumnya" — dan peringatan palsu melatih orang mengabaikan
+    peringatan yang sungguhan."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    assert "digabung = await _silo_content_kg" not in sumber, \
+        "isi silo tak boleh dihitung ulang setelah barisnya ditambahkan"
+    assert sumber.count("digabung = bool(sebelum)") == 2, \
+        "kedua cabang harus membaca keadaan SEBELUM penambahan"
+
+
+# ──────────── Gabah yang datang saat silo sedang digiling ────────────
+#
+# Keputusan pemilik 6 September 2026: gilingnya TETAP jalan, bahannya yang
+# bertambah. Bukan berhenti, bukan diulang, dan bukan pula diam-diam masuk.
+
+def test_gabah_masuk_saat_giling_jadi_sumber_tambahan():
+    """Kalau tidak didaftar, gabahnya tetap tergiling secara fisik sementara
+    `berat_gabah_masuk_kg` tinggal di angka lama — dan rendemen proses itu
+    terbaca melambung tanpa ada yang tahu sebabnya."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    assert "MillingProcessSource" in sumber
+    assert "berat_gabah_masuk_kg" in sumber
+    assert "kg_baris" in sumber, "yang ditambahkan berat BARIS BARU, bukan isi silo"
+
+
+def test_giling_berjalan_tidak_dihentikan_oleh_gabah_baru():
+    """Menolak gabah di sini berarti menghentikan mesin yang sedang jalan."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    i = sumber.index("MillingProcess.status == 'proses'")
+    ekor = sumber[i:sumber.index("return MasukResult")]
+    assert "raise" not in ekor, "giling berjalan tak boleh menolak gabah baru"
+
+
+def test_berat_baris_bukan_berat_seluruh_silo():
+    """`kg` pada cabang gabah kering berarti SELURUH isi silo sesudah
+    penggabungan. Memakainya sebagai berat sumber akan menghitung ulang gabah
+    yang sudah terdaftar sejak giling dimulai."""
+    from app.penggilingan.gudang1.services import silo
+
+    sumber = kode_saja(silo.masuk_silo)
+    assert "kg_baris = kg_new" in sumber
+    assert "kg = existing_kg + kg_new" in sumber
+
+
+def test_penambahan_bahan_diberitahukan_di_ketiga_jalan():
+    from app.web import miniapp
+    from app.penggilingan.gudang1.services import tumpukan
+
+    for fn in (miniapp.act_pindah_silo, miniapp.act_gabah_masuk, tumpukan.tempatkan):
+        assert "giling_berjalan" in kode_saja(fn), fn.__name__
+
+
+def test_silo_yang_digiling_tak_muncul_lagi_sebagai_siap_digiling():
+    """Bug yang sama di layar: silo yang sedang dikuras terbaca seolah menunggu
+    digiling, dan penggilingannya lenyap."""
+    from app.services import berjalan
+
+    sumber = kode_saja(berjalan.untuk_gudang1)
+    assert "sibuk" in sumber
+    i = sumber.index("sibuk")
+    assert "continue" in sumber[i:i + 400]
+
+
+# ──────────── Konfirmasi sebelum mesin dinyalakan ────────────
+
+def test_mulai_pengeringan_minta_konfirmasi():
+    """Satu-satunya aksi yang menyalakan MESIN — dan dua isiannya (target &
+    mode) sebenarnya disetel dengan tangan di panel dryer. Yang tersimpan di
+    sini cuma salinannya, dan salinan yang meleset baru ketahuan berjam-jam
+    kemudian."""
+    from app.web import miniapp
+
+    spec = _aksi(miniapp, "mulai_pengeringan")
+    k = spec.get("konfirmasi")
+    assert k, "mulai pengeringan harus dikonfirmasi"
+    assert "{target_kadar_air}" in k["teks"] and "{mode_dryer}" in k["teks"], \
+        "konfirmasi harus MENGULANG angkanya, bukan sekadar bertanya 'yakin?'"
+
+
+def test_konfirmasi_mengulang_jawaban_bukan_bertanya_yakin():
+    """'Yakin?' tidak menanyakan apa pun — ia melatih orang menekan Ya."""
+    from app.web import miniapp
+
+    k = _aksi(miniapp, "mulai_pengeringan")["konfirmasi"]
+    assert "yakin" not in k["teks"].lower()
+    assert "yakin" not in k.get("ya", "").lower()
+
+
+def test_konfirmasi_memakai_tulisan_pilihan_bukan_id():
+    """Lubang {dryer_id} diisi dari SELECT. Kalau yang dipakai nilainya, yang
+    terbaca 'Periksa panel 3' — dan angka id tidak mengonfirmasi apa pun."""
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    i = js.index("function terbaca()")
+    blok = js[i:i + 500]
+    assert "el.options[el.selectedIndex].text" in blok
+
+
+def test_konfirmasi_membaca_isi_sebelum_layar_diganti():
+    """Layar konfirmasi menimpa borangnya. Kalau isinya baru dibaca sesudah
+    ditekan Ya, yang dibaca adalah borang yang sudah tidak ada."""
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    i_baca = js.index("var isi = muatan(), v = terbaca();")
+    i_tanya = js.index("if (a.konfirmasi) { tanyaYakin(isi, v); return; }")
+    assert i_baca < i_tanya
+
+
+def test_kembali_tak_menghapus_isian():
+    """Memeriksa ulang tidak boleh berarti mengetik ulang."""
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    assert 'bukaAksi(id, v)' in js
+    assert "function bukaAksi(id, semula)" in js

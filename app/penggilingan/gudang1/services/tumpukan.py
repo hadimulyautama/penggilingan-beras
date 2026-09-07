@@ -95,8 +95,13 @@ async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatc
 async def tempatkan(
     db: AsyncSession, *, user, kode_batch: str, tujuan: str,
     dryer_id: int | None = None, silo_id: int | None = None,
-) -> tuple[PurchaseBatch, str]:
+) -> tuple[PurchaseBatch, str, str]:
     """Tempatkan satu batch gabah: dryer, silo, atau tumpukan.
+
+    Mengembalikan (batch, nama tempatnya, peringatan). Peringatan kosong pada
+    keadaan biasa; ia terisi saat penempatannya SAH tetapi tidak ideal —
+    silo yang isinya jadi campuran, misalnya. Itu bukan galat, jadi ia tak
+    boleh lewat sebagai pengecualian; tetapi ia juga tak boleh hilang.
 
     Penempatannya diserahkan ke layanan yang memang memilikinya — `masuk_dryer`
     dan `masuk_silo` — bukan ditulis ulang di sini. Keduanya sudah menegakkan
@@ -125,10 +130,11 @@ async def tempatkan(
             )
         raise TumpukanError("Pilih tujuan: Dryer / Silo / Tumpukan.")
 
+    peringatan = ""
     try:
         if tujuan == "tumpuk":
             await masuk_tumpukan(db, user=user, kode_batch=kode_batch)
-            return batch, f"tumpukan {batch.kondisi_gabah}"
+            return batch, f"tumpukan {batch.kondisi_gabah}", ""
         if tujuan == "dryer":
             r = await masuk_dryer(db, user=user, kode_batch_list=[kode_batch],
                                   dryer_id=dryer_id)
@@ -139,9 +145,28 @@ async def tempatkan(
             if silo is None:
                 raise TumpukanError("Pilih silo tujuannya dulu.")
             nama = silo.nama_silo.replace("Silo ", "")
-            await masuk_silo(db, user=user, nama_silo=nama, kode_lot=None,
-                             kode_batch=kode_batch)
+            r_silo = await masuk_silo(db, user=user, nama_silo=nama, kode_lot=None,
+                                      kode_batch=kode_batch)
             tempat = silo.nama_silo
+            # Silo BOLEH mencampur — tetapi campurannya harus terbaca saat
+            # terjadi, bukan ditemukan belakangan lewat laporan. Ini bukan
+            # penolakan: menahan gabah sampai ada silo kosong justru
+            # memacetkan pengeringan berikutnya.
+            if r_silo.campur_asal:
+                peringatan = (
+                    f"⚠️ {silo.nama_silo} berisi hasil pengeringan sendiri "
+                    f"({r_silo.isi_sebelumnya}) — kini tercampur dengan gabah "
+                    "beli kering, dan digiling sebagai SATU proses.")
+            elif r_silo.digabung:
+                peringatan = (f"⚠️ {silo.nama_silo} sudah berisi "
+                              f"{r_silo.isi_sebelumnya} — isinya kini tercampur.")
+            if r_silo.giling_berjalan:
+                peringatan += (
+                    ("\n" if peringatan else "")
+                    + f"⚠️ {silo.nama_silo} sedang digiling "
+                      f"({r_silo.giling_berjalan}) — gilingnya tetap jalan, dan "
+                      f"gabah ini masuk sebagai bahan tambahannya "
+                      f"(+{r_silo.kg_baris:,.0f} kg).".replace(",", "."))
     except (DryingError, SiloError) as e:
         raise TumpukanError(e.args[0] if e.args else "Gagal memindahkan.")
-    return batch, tempat
+    return batch, tempat, peringatan

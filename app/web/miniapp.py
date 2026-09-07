@@ -153,7 +153,7 @@ async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
     mana: itu dua ketukan untuk satu keputusan, dan yang menekannya sedang
     berdiri memegang layar dengan satu tangan.
     """
-    from app.penggilingan.gudang1.services.drying import dryers_g1
+    from app.penggilingan.gudang1.services.drying import dryers_g1, isi_dryer
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
@@ -162,9 +162,24 @@ async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:
     if "dryer" in sah:
         async with SessionLocal() as db:
             mesin = await dryers_g1(db)
+            # ISI mesin ikut disebut. Larangan mencampur gabah basah dengan
+            # gabah kering ditegakkan di `masuk_dryer`, tetapi penolakan di
+            # sana datang SESUDAH batch-nya tercatat. Yang menekan layar perlu
+            # melihat isinya sebelum memilih — dan isi itu tetap menghalangi
+            # walau pengeringan & pendinginannya sudah selesai, selama
+            # gabahnya belum keluar ke silo.
+            #
+            # Kalimatnya sengaja tidak bergantung pada kondisi gabah yang
+            # masuk: daftar ini dibangun dua kali (basah & kering) lalu
+            # digabung, dan label yang berbeda akan memunculkan mesin yang
+            # sama dua kali.
+            isi = {d.id: await isi_dryer(db, d.id) for d in mesin}
         for d in mesin:
             mati = "" if d.status == "aktif" else f" ({d.status})"
-            opsi.append([f"dryer:{d.id}", f"{d.nama}{mati}"])
+            ada = isi.get(d.id)
+            berisi = (f" — berisi gabah {ada[0]} {ada[1]:,.0f} kg".replace(",", ".")
+                      if ada else " — kosong")
+            opsi.append([f"dryer:{d.id}", f"{d.nama}{mati}{berisi}"])
     if "silo" in sah:
         from app.penggilingan.gudang1.services.silo import silos_g1
         async with SessionLocal() as db:
@@ -280,7 +295,27 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "mode_dryer", "label": "Mode yang disetel di mesin",
                   "type": "select",
                   "options": [["", "— pilih —"]] + [[m, m] for m in MODE_DRYER]},
-             ]},
+             ],
+             # Satu-satunya aksi yang menyalakan MESIN, dan satu-satunya yang
+             # dua isiannya tidak dikerjakan oleh aplikasi ini: target kadar
+             # air dan mode disetel di panel dryer, dengan tangan. Yang
+             # dicatat di sini hanya salinannya — dan salinan yang berbeda dari
+             # setelan aslinya adalah kebohongan yang baru ketahuan berjam-jam
+             # kemudian, saat gabahnya terlanjur kelewat kering atau masih
+             # basah.
+             #
+             # Teksnya mengulang ANGKA YANG BARU DIKETIK, bukan bertanya
+             # "yakin?". "Yakin?" tidak menanyakan apa pun; ia cuma melatih
+             # orang menekan Ya. Angka yang diulang bisa dibandingkan dengan
+             # panel mesin yang sedang berdiri di depannya.
+             "konfirmasi": {
+                 "judul": "Sudah disetel di mesinnya?",
+                 "teks": "Periksa panel {dryer_id} sekarang: mode {mode_dryer}, "
+                         "dikeringkan sampai {target_kadar_air}%. "
+                         "Aplikasi ini hanya mencatat — yang menentukan hasilnya "
+                         "adalah setelan di mesin.",
+                 "ya": "Sudah disetel — nyalakan",
+             }},
             {"id": "kadar_air", "label": "💧 Perbarui kadar air",
              "post": "/miniapp/actions/kadar-air",
              "hint": "Empat titik dengan alat tes — yang dipakai rata-ratanya. "
@@ -611,13 +646,15 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
         u = await db.get(User, user.id)
         try:
             jenis, mesin_id = _urai_tujuan(req.tujuan)
-            batch, tempat = await tempatkan(
+            batch, tempat, peringatan = await tempatkan(
                 db, user=u, kode_batch=req.kode_batch, tujuan=jenis,
                 dryer_id=mesin_id if jenis == "dryer" else None,
                 silo_id=mesin_id if jenis == "silo" else None)
         except TumpukanError as e:
             raise _err(e, "Gagal menempatkan gabah.")
     pesan = f"✓ *{batch.kode_batch}* ditempatkan → {tempat}."
+    if peringatan:
+        pesan += "\n" + peringatan
     await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 
@@ -962,6 +999,25 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                         "tumpuk": "Tumpukan"}
                 boleh = " / ".join(nama.get(t, t) for t in info.tujuan_pilihan)
                 raise HTTPException(400, f"Gabah {kondisi} hanya boleh ke: {boleh}.")
+        # PRA-PERIKSA sebelum batch dibuat.
+        #
+        # Penempatan berjalan SETELAH batch tercatat, dan penolakannya di sana
+        # hanya jadi peringatan: gabahnya sudah turun dari truk, jadi
+        # catatannya memang harus tetap ada. Tetapi menolak lebih awal untuk
+        # hal yang sudah pasti salah menghemat satu pembersihan manual — dan
+        # gabah kering yang dikirim ke mesin berisi gabah basah adalah hal
+        # yang sudah pasti salah, bukan kebetulan yang bisa jadi benar.
+        if tujuan == "dryer" and mesin_id:
+            from app.penggilingan.gudang1.services.drying import isi_dryer
+            ada = await isi_dryer(db, mesin_id)
+            if ada and ada[0] != kondisi:
+                raise HTTPException(
+                    400,
+                    f"❌ Mesin itu berisi gabah {ada[0]} ({ada[1]:,.0f} kg)"
+                    .replace(",", ".")
+                    + f" — gabah {kondisi} tidak boleh dicampur ke dalamnya. "
+                    "Kosongkan mesinnya ke silo dulu, atau pilih tujuan lain.",
+                )
         try:
             r = await create_purchase_batch_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
@@ -992,11 +1048,28 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 si = await silo_g1_by_id(db, mesin_id) if mesin_id else None
                 if si is None:
                     raise HTTPException(400, "Pilih silo tujuannya dulu.")
-                await masuk_silo(db, user=u,
-                                 nama_silo=si.nama_silo.replace("Silo ", ""),
-                                 kode_lot=None, kode_batch=kode)
+                r_silo = await masuk_silo(
+                    db, user=u, nama_silo=si.nama_silo.replace("Silo ", ""),
+                    kode_lot=None, kode_batch=kode)
                 tempat = (f"🏗️ masuk {si.nama_silo} (kering menunggu — "
                           "lot terbentuk saat digiling)")
+                # Arah sebaliknya dari `pindah_silo`, dan sampai sekarang
+                # DIAM: gabah beli kering menyusul masuk ke silo yang sudah
+                # berisi hasil pengeringan sendiri, tanpa satu kalimat pun.
+                if r_silo.campur_asal:
+                    warn += ("\n⚠️ Silo itu berisi hasil pengeringan sendiri "
+                             f"({r_silo.isi_sebelumnya}) — kini tercampur "
+                             "dengan gabah beli kering, dan digiling sebagai "
+                             "SATU proses.")
+                elif r_silo.digabung:
+                    warn += (f"\n⚠️ Silo itu sudah berisi {r_silo.isi_sebelumnya} "
+                             "— isinya kini tercampur.")
+                if r_silo.giling_berjalan:
+                    warn += (f"\n⚠️ {si.nama_silo} sedang digiling "
+                             f"({r_silo.giling_berjalan}) — gilingnya tetap "
+                             "jalan, dan gabah ini masuk sebagai bahan "
+                             f"tambahannya (+{r_silo.kg_baris:,.0f} kg)."
+                             .replace(",", "."))
         except (DryingError, SiloError) as e:
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
@@ -1199,8 +1272,18 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
         # sampai silo kosong justru memacetkan pengeringan berikutnya. Tetapi
         # isinya kini campuran, dan itu harus terbaca — bukan diketahui
         # belakangan saat angka giling tidak seperti yang diingat orang.
-        pesan += ("\n⚠️ Silo sudah berisi sebelumnya — isinya kini tercampur. "
-                  "Semuanya akan digiling sebagai SATU proses.")
+        pesan += (f"\n⚠️ Silo sudah berisi {r.isi_sebelumnya} — "
+                  "isinya kini tercampur. Semuanya digiling sebagai SATU proses.")
+    if r.campur_asal:
+        # Beda derajat, bukan beda jenis: dua lot pengeringan yang menumpuk
+        # masih satu asal, sedangkan hasil pengeringan sendiri yang bertemu
+        # gabah beli kering menghapus batas yang paling ingin dilihat pemilik.
+        pesan += ("\n⚠️ Hasil pengeringan sendiri kini satu silo dengan gabah "
+                  "yang DIBELI kering. Pastikan itu memang yang dikehendaki.")
+    if r.giling_berjalan:
+        pesan += (f"\n⚠️ Silo {r.nama_silo} sedang digiling ({r.giling_berjalan}) — "
+                  "gilingnya tetap jalan, dan gabah ini masuk sebagai bahan "
+                  f"tambahannya (+{r.kg_baris:,.0f} kg).".replace(",", "."))
     await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 

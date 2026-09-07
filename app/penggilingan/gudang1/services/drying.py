@@ -368,6 +368,34 @@ async def loose_dryer_kg(db: AsyncSession, dryer_id: int | None = None) -> float
                for b in await _loose_dryer_batches(db, dryer_id))
 
 
+async def isi_dryer(
+    db: AsyncSession, dryer_id: int
+) -> tuple[str, float] | None:
+    """Kondisi & berat gabah yang SEDANG ada di dalam satu mesin — None bila kosong.
+
+    Gabah di dryer punya dua bentuk: batch lepas yang menunggu mesin
+    dinyalakan, dan lot yang sedang dikeringkan atau didinginkan. Keduanya
+    sama-sama "ada gabah di dalam", dan larangan mencampur basah dengan kering
+    berlaku untuk keduanya — termasuk setelah pengeringan dan pendinginan
+    dinyatakan selesai, selama gabahnya belum keluar ke silo.
+
+    Dipakai untuk MENUTUP pilihan sebelum orang menekannya. Penolakan setelah
+    ditekan tetap ada di `masuk_dryer`, tetapi saat itu batch-nya sudah
+    terlanjur tercatat dan harus ditempatkan ulang dengan tangan.
+    """
+    lot = await active_drying_lot(db, dryer_id)
+    if lot is not None:
+        batches = await _lot_batches(db, lot.id)
+        if batches:
+            return (batches[0].kondisi_gabah,
+                    sum(float(b.berat_total_kg or 0) for b in batches))
+    loose = await _loose_dryer_batches(db, dryer_id)
+    if loose:
+        return (loose[0].kondisi_gabah,
+                sum(float(b.berat_total_kg or 0) for b in loose))
+    return None
+
+
 async def masuk_dryer(
     db: AsyncSession, *, user, kode_batch_list: list[str] | None,
     dryer_id: int | None = None,

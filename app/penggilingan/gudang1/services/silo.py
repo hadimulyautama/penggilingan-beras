@@ -10,6 +10,8 @@ from app.database import input_time, now_local
 from app.models import (
     DryingLot,
     DryingLotBatch,
+    MillingProcess,
+    MillingProcessSource,
     PurchaseBatch,
     Silo,
     SiloMovingLog,
@@ -140,6 +142,56 @@ async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
     return list((await db.execute(stmt)).scalars().all())
 
 
+@dataclass
+class IsiSilo:
+    """Satu baris isi silo."""
+    asal: str          # 'pengeringan' | 'beli_kering'
+    sebutan: str       # kode lot atau kode batch
+    kg: float
+    lot_id: int | None = None
+
+
+async def isi_silo(db: AsyncSession, silo_id: int) -> list[IsiSilo]:
+    """Rincian isi satu silo, satu baris penyimpanan satu entri.
+
+    `asal` hanya dua: 'pengeringan' (lot yang dikeringkan sendiri di sini) dan
+    'beli_kering' (gabah yang datang sudah kering). Pemisahan itulah yang
+    menentukan apakah silo tercampur — bukan berapa banyak barisnya, karena
+    dua lot pengeringan yang menumpuk masih satu asal.
+
+    Ada sampai laporan karena isi silo yang tercampur harus TERBACA. Sebelum
+    ini laporan hanya mengambil baris lot yang pertama ditemukan: gabah kering
+    yang menumpuk di silo yang sama hilang dari laporan berikut beratnya, dan
+    yang membaca mengira silo itu berisi lot saja.
+    """
+    rinci: list[IsiSilo] = []
+    for r in await _silo_active_rows(db, silo_id):
+        if r.drying_lot_id:
+            lot = await db.get(DryingLot, r.drying_lot_id)
+            rinci.append(IsiSilo("pengeringan", lot.kode_lot if lot else "lot",
+                                 await _lot_kg(db, r.drying_lot_id), r.drying_lot_id))
+        elif r.purchase_batch_id:
+            b = await db.get(PurchaseBatch, r.purchase_batch_id)
+            if b:
+                rinci.append(IsiSilo("beli_kering", b.kode_batch,
+                                     float(b.berat_total_kg or 0)))
+    return rinci
+
+
+def _tercampur(rinci: list[IsiSilo]) -> bool:
+    """Dua ASAL berbeda dalam satu silo."""
+    return len({x.asal for x in rinci}) > 1
+
+
+def _sebut_isi(rinci: list[IsiSilo]) -> str:
+    """Kalimat pendek untuk peringatan: apa yang sudah ada di dalam."""
+    nama = {"pengeringan": "hasil pengeringan sendiri", "beli_kering": "gabah beli kering"}
+    per: dict[str, float] = {}
+    for x in rinci:
+        per[x.asal] = per.get(x.asal, 0.0) + x.kg
+    return ", ".join(f"{nama.get(a, a)} {_fmt_kg(kg)}" for a, kg in per.items())
+
+
 def _fmt_kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
@@ -152,6 +204,21 @@ class MasukResult:
     kg: float
     tipe: str  # dari_pengeringan | langsung_kering
     digabung: bool = False  # True bila batch kering digabung ke lot silo yang ada
+    #: Apa yang SUDAH ada di silo sebelum ini masuk — supaya peringatan
+    #: menyebut isinya, bukan sekadar bahwa silo 'sudah berisi'. Silo yang
+    #: mencampur hasil pengeringan sendiri dengan gabah beli kering adalah
+    #: keadaan yang berbeda dari dua lot pengeringan yang menumpuk.
+    isi_sebelumnya: str = ""
+    #: True bila penggabungan ini mempertemukan DUA ASAL yang berbeda.
+    campur_asal: bool = False
+    #: Kode proses giling yang SEDANG BERJALAN di silo itu, bila ada. Gabah ini
+    #: sudah didaftar sebagai sumber tambahannya — tetapi orang harus tahu,
+    #: karena ia menambah bahan ke proses yang sedang jalan, bukan menyiapkan
+    #: proses berikutnya.
+    giling_berjalan: str | None = None
+    #: Berat baris yang BARU masuk. Berbeda dari `kg`, yang pada gabah kering
+    #: berarti seluruh isi silo sesudah penggabungan.
+    kg_baris: float = 0.0
 
 
 async def masuk_silo(
@@ -170,6 +237,11 @@ async def masuk_silo(
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
     now = input_time(tanggal, jam)
     digabung = False
+    campur_asal = False
+    # Dibaca SEBELUM apa pun ditambahkan — sesudahnya, yang baru masuk sudah
+    # ikut terhitung dan peringatannya jadi menuduh dirinya sendiri.
+    sebelum = await isi_silo(db, silo.id)
+    isi_sebelumnya = _sebut_isi(sebelum)
 
     if kode_lot:
         # ── Dari pengeringan: silo BOLEH sudah berisi. ──
@@ -210,13 +282,16 @@ async def masuk_silo(
         if dup:
             raise SiloError(f"Pengeringan {kode_lot} sudah ada di silo.")
         kg = await _lot_kg(db, lot.id)
-        _ensure_cap(silo, nama_silo, 0, kg)
-        db.add(
-            SiloStorage(
-                silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="dari_pengeringan",
-                tanggal_masuk=now, input_by=user.id, status="terisi",
-            )
+        # Isi yang sudah ada ikut disebut. `_ensure_cap` memang tidak menolak
+        # apa pun hari ini, tetapi memberinya angka 0 berarti menanam
+        # kebohongan yang baru terbaca pada hari batas itu dikembalikan.
+        _ensure_cap(silo, nama_silo, sum(x.kg for x in sebelum), kg)
+        baris = SiloStorage(
+            silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="dari_pengeringan",
+            tanggal_masuk=now, input_by=user.id, status="terisi",
         )
+        db.add(baris)
+        kg_baris = kg
         batch_ids = (
             await db.execute(
                 select(DryingLotBatch.purchase_batch_id).where(
@@ -233,7 +308,13 @@ async def masuk_silo(
         # Silo yang sudah berisi TETAP menerima — tetapi itu tidak ideal, dan
         # penandanya dibawa keluar supaya layar bisa memperingatkan. Idealnya
         # silo tujuan sudah kosong karena satu proses milling baru selesai.
-        digabung = await _silo_content_kg(db, silo.id) > 0
+        # Dibaca dari `sebelum`, BUKAN dihitung ulang di sini. Menghitung
+        # ulang sesudah `db.add` membuat baris yang baru saja ditambahkan ikut
+        # terhitung — autoflush menuliskannya lebih dulu — sehingga silo yang
+        # kosong pun dilaporkan "sudah berisi sebelumnya". Peringatan palsu
+        # melatih orang mengabaikan peringatan yang sungguhan.
+        digabung = bool(sebelum)
+        campur_asal = any(x.asal == "beli_kering" for x in sebelum)
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
@@ -269,17 +350,18 @@ async def masuk_silo(
         # memaksa gabah menganggur di silo lain yang belum tentu ada.
         existing_kg = await _silo_content_kg(db, silo.id)
         _ensure_cap(silo, nama_silo, existing_kg, kg_new)
-        db.add(
-            SiloStorage(
-                silo_id=silo.id, purchase_batch_id=batch.id, drying_lot_id=None,
-                tipe_masuk="langsung_kering", tanggal_masuk=now,
-                input_by=user.id, status="terisi",
-            )
+        baris = SiloStorage(
+            silo_id=silo.id, purchase_batch_id=batch.id, drying_lot_id=None,
+            tipe_masuk="langsung_kering", tanggal_masuk=now,
+            input_by=user.id, status="terisi",
         )
+        db.add(baris)
+        kg_baris = kg_new
         batch.status_batch = "di_silo"
         # "Digabung" kini berarti silo memang sudah berisi sesuatu — apa pun
         # isinya, lot pengeringan maupun gabah kering yang datang lebih dulu.
-        digabung = existing_kg > 0
+        digabung = bool(sebelum)
+        campur_asal = any(x.asal == "pengeringan" for x in sebelum)
         isi, tipe = batch.kode_batch, "langsung_kering"
         kg = existing_kg + kg_new
     else:
@@ -289,6 +371,39 @@ async def masuk_silo(
         )
 
     silo.status = "terisi"
+
+    # ── Gabah yang datang saat silo SEDANG DIGILING ──
+    #
+    # Gilingnya tidak berhenti dan tidak diulang — bahannya yang bertambah.
+    # Menolak gabah di sini akan menghentikan mesin yang sedang jalan; membiarkan
+    # gabahnya masuk tanpa dicatat lebih buruk lagi: ia tetap tergiling secara
+    # fisik, sementara `berat_gabah_masuk_kg` tinggal di angka lama — dan
+    # rendemen proses itu terbaca melambung tanpa ada yang tahu sebabnya.
+    #
+    # Maka ia didaftar sebagai SUMBER tambahan proses yang sedang berjalan,
+    # tepat seperti isi silo yang lain saat giling dimulai.
+    giling = (await db.execute(
+        select(MillingProcess).where(MillingProcess.silo_id == silo.id,
+                                     MillingProcess.status == "proses")
+    )).scalars().first()
+    giling_kode = None
+    if giling is not None:
+        await db.flush()          # baris barunya perlu id sebelum ditaut
+        db.add(MillingProcessSource(
+            milling_process_id=giling.id, silo_storage_id=baris.id,
+            drying_lot_id=baris.drying_lot_id,
+            purchase_batch_id=baris.purchase_batch_id, berat_kg=kg_baris,
+        ))
+        giling.berat_gabah_masuk_kg = (
+            float(giling.berat_gabah_masuk_kg or 0) + kg_baris)
+        giling_kode = giling.kode_proses
+        await log_activity(
+            db, table_name="milling_process", record_id=giling.id, action="UPDATE",
+            changed_by=user.id, field_name="berat_gabah_masuk_kg",
+            new_value=f"{giling.kode_proses} +{isi} ({kg_baris:.0f}kg) — "
+                      f"masuk saat giling berjalan",
+        )
+
     # Gabung ke lot silo dicatat sebagai UPDATE 'gabung' agar undo hanya
     # melepas batch terakhir (bukan menghapus seluruh isi silo).
     await log_activity(
@@ -301,7 +416,10 @@ async def masuk_silo(
         new_value=f"Silo {nama_silo} <- {isi} ({tipe}{'+gabung' if digabung else ''}, {kg:.0f}kg)",
     )
     await db.commit()
-    return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe, digabung=digabung)
+    return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe,
+                       digabung=digabung, isi_sebelumnya=isi_sebelumnya,
+                       campur_asal=campur_asal, giling_berjalan=giling_kode,
+                       kg_baris=kg_baris)
 
 
 # ─────────────────── Log pemindahan dryer -> silo ───────────────────
@@ -486,27 +604,36 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
         if not rows:
             lines.append(f"• {silo.nama_silo}: kosong ({cap})")
             continue
-        lot_row = next((r for r in rows if r.drying_lot_id), None)
-        if lot_row is not None:
-            jam = (now - lot_row.tanggal_masuk).total_seconds() / 3600
-            lot = await db.get(DryingLot, lot_row.drying_lot_id)
-            kg = await _lot_kg(db, lot_row.drying_lot_id)
-            sups = ", ".join(await _lot_suppliers(db, lot_row.drying_lot_id)) or "-"
-            isi = f"{lot.kode_lot if lot else 'lot'} ({sups})"
-            lines.append(
-                f"• {silo.nama_silo}: terisi — {isi}, {_fmt_kg(kg)}, {jam:.0f} jam ({cap})"
-            )
-        else:
-            # Kering MENUNGGU (belum jadi lot — lot dibentuk saat digiling).
-            kodes, total = [], 0.0
-            for r in rows:
-                b = await db.get(PurchaseBatch, r.purchase_batch_id)
-                if b:
-                    kodes.append(b.kode_batch)
-                    total += float(b.berat_total_kg or 0)
-            lines.append(
-                f"• {silo.nama_silo}: kering menunggu — {len(kodes)} batch "
-                f"({', '.join(kodes)}), {_fmt_kg(total)} ({cap}).\n"
-                f"  _Ketik `giling {silo.nama_silo}` untuk membentuk lot & giling._"
-            )
+
+        # SELURUH isi disebut, bukan baris pertama yang kebetulan ditemukan.
+        # Silo boleh menampung hasil pengeringan sendiri bersama gabah yang
+        # dibeli sudah kering — dan justru karena boleh, komposisinya harus
+        # terbaca di sini. Yang membaca laporan tidak berdiri di depan silo.
+        rinci = await isi_silo(db, silo.id)
+        total = sum(x.kg for x in rinci)
+        tua = min((r.tanggal_masuk for r in rows), default=now)
+        jam = (now - tua).total_seconds() / 3600
+
+        bagian: list[str] = []
+        for x in rinci:
+            if x.asal == "pengeringan":
+                sups = ", ".join(await _lot_suppliers(db, x.lot_id)) if x.lot_id else ""
+                bagian.append(x.sebutan + (f" ({sups})" if sups else "")
+                              + f" {_fmt_kg(x.kg)}")
+            else:
+                bagian.append(f"{x.sebutan} (beli kering) {_fmt_kg(x.kg)}")
+
+        tanda = " ⚠️ TERCAMPUR" if _tercampur(rinci) else ""
+        lines.append(
+            f"• {silo.nama_silo}: terisi{tanda} — {_fmt_kg(total)}, "
+            f"{jam:.0f} jam ({cap})"
+        )
+        for b in bagian:
+            lines.append(f"    – {b}")
+        if _tercampur(rinci):
+            lines.append("    _Hasil pengeringan sendiri & gabah beli kering "
+                         "dalam satu silo — digiling sebagai satu proses._")
+        if not any(x.asal == "pengeringan" for x in rinci):
+            lines.append(f"  _Ketik `giling {silo.nama_silo}` untuk membentuk "
+                         "lot & giling._")
     return "\n".join(lines)

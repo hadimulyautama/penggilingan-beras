@@ -111,7 +111,7 @@
     }
   }
 
-  function bukaAksi(id) {
+  function bukaAksi(id, semula) {
     var a = MENU[id];
     if (!a) return;
 
@@ -196,8 +196,74 @@
     });
 
     $("tutup").onclick = tutupLembar;
-    $("simpan").onclick = async function () {
-      var tbl = $("simpan");
+
+    // Nilai yang TERBACA orang, bukan yang dikirim ke server. Untuk pilihan,
+    // yang berarti adalah tulisan di layarnya ("Pengering 1"), bukan angka id
+    // di baliknya — dan konfirmasi yang menyebut id tidak mengonfirmasi apa
+    // pun.
+    function terbaca() {
+      var v = {};
+      Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
+        v[el.dataset.name] = (el.tagName === "SELECT" && el.selectedIndex >= 0)
+          ? el.options[el.selectedIndex].text : el.value;
+      });
+      return v;
+    }
+
+    // Konfirmasi DIISI dengan jawaban orangnya sendiri.
+    //
+    // "Yakin?" tidak menanyakan apa pun — ia hanya melatih orang menekan Ya.
+    // Yang berguna adalah mengulang angka yang baru saja ia ketik, supaya ia
+    // membandingkannya dengan panel mesin di depannya. Karena itu teksnya
+    // datang dari server dengan lubang {nama_field}, dan diisi di sini.
+    function isikan(teks, v) {
+      return String(teks).replace(/\{(\w+)\}/g, function (m, k) {
+        return (v[k] === undefined || v[k] === "") ? m : v[k];
+      });
+    }
+
+    // Isi yang DIKIRIM — dibaca sekali, sebelum layar apa pun diganti.
+    function muatan() {
+      var isi = {};
+      Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
+        var v = el.value;
+        if (el.type === "number") v = (v === "" ? null : parseFloat(v));
+        isi[el.dataset.name] = v;
+      });
+      return isi;
+    }
+
+    async function simpan(isi, v, tbl) {
+      if (tbl) { tbl.disabled = true; tbl.textContent = "Menyimpan…"; }
+      try {
+        var hasil = await kirim(a.post, isi);
+        tutupLembar();
+        kabar(hasil.pesan || "Tersimpan ✓", "ok");
+        muat();
+      } catch (e) {
+        kabar(String(e), "err");
+        // Borangnya dibuka ulang berisi jawaban yang sama: yang gagal biasanya
+        // satu isian, dan mengetik semuanya lagi adalah hukuman untuk kesalahan
+        // yang belum tentu miliknya.
+        bukaAksi(id, v);
+      }
+    }
+
+    function tanyaYakin(isi, v) {
+      var k = a.konfirmasi;
+      lembar.querySelector(".lembar__isi").innerHTML =
+        '<div class="lembar__kepala"><h2>' + esc(k.judul || "Sudah benar?") + "</h2>" +
+          '<button class="btn btn--kecil" id="kembali" type="button">Kembali</button></div>' +
+          '<p class="bantu" style="margin-bottom:18px">' + esc(isikan(k.teks || "", v)) + "</p>" +
+          '<button class="btn btn--utama" id="ya" type="button">' +
+            esc(k.ya || "Ya, lanjutkan") + "</button>";
+      // Kembali membuka ULANG borangnya — isian yang sudah diketik tidak
+      // boleh hilang hanya karena orang ingin memeriksanya sekali lagi.
+      $("kembali").onclick = function () { bukaAksi(id, v); };
+      $("ya").onclick = function () { simpan(isi, v, $("ya")); };
+    }
+
+    $("simpan").onclick = function () {
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
       var kurang = [];
@@ -206,25 +272,30 @@
       });
       if (kurang.length) { kabar("Belum diisi: " + kurang.join(", "), "err"); return; }
 
-      tbl.disabled = true;
-      tbl.textContent = "Menyimpan…";
-      try {
-        var isi = {};
-        Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
-          var v = el.value;
-          if (el.type === "number") v = (v === "" ? null : parseFloat(v));
-          isi[el.dataset.name] = v;
-        });
-        var hasil = await kirim(a.post, isi);
-        tutupLembar();
-        kabar(hasil.pesan || "Tersimpan ✓", "ok");
-        muat();
-      } catch (e) {
-        kabar(String(e), "err");
-        tbl.disabled = false;
-        tbl.textContent = "Simpan";
-      }
+      var isi = muatan(), v = terbaca();
+      // Ditanyakan SESUDAH isian lengkap: konfirmasi yang muncul sebelum
+      // angkanya ada tidak punya apa-apa untuk dibandingkan.
+      if (a.konfirmasi) { tanyaYakin(isi, v); return; }
+      simpan(isi, v, $("simpan"));
     };
+
+    // Isian yang sudah diketik dikembalikan saat orang menekan "Kembali"
+    // dari layar konfirmasi. Pilihan `remote` dipulihkan lewat tulisannya,
+    // karena daftarnya baru selesai dimuat sesudah ini.
+    if (semula) {
+      Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
+        var t = semula[el.dataset.name];
+        if (t === undefined || t === "") return;
+        if (el.tagName !== "SELECT") { el.value = t; return; }
+        var pasang = function () {
+          for (var i = 0; i < el.options.length; i++) {
+            if (el.options[i].text === t) { el.selectedIndex = i; return true; }
+          }
+          return false;
+        };
+        if (!pasang()) setTimeout(pasang, 400);
+      });
+    }
 
     var pertama = lembar.querySelector(".fld");
     if (pertama) pertama.focus();
