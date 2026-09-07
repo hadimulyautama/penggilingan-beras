@@ -251,7 +251,10 @@ def test_kartu_pengeringan_menyebut_kedua_bacaan():
     from app.services import berjalan
 
     sumber = inspect.getsource(berjalan.untuk_gudang1)
-    blok = sumber[sumber.index("_latest_log"):sumber.index('keadaan="menunggu kadar air turun"')]
+    # Batas blok mengikuti kalimatnya, bukan kata yang kebetulan ada di
+    # sekitarnya — sejak jeda ditambahkan, keadaannya tak lagi satu kalimat
+    # tetap.
+    blok = sumber[sumber.index("_latest_log"):sumber.index("menunggu kadar air turun")]
     assert "kadar_air_tes_manual" in blok
     assert "kadar_air_indikator" in blok
     assert "alat tes" in blok and "mesin" in blok

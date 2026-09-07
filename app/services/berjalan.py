@@ -252,18 +252,39 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             ka.append(f"alat tes {float(log.kadar_air_tes_manual):.1f}%")
         if log is not None and log.kadar_air_indikator is not None:
             ka.append(f"mesin {float(log.kadar_air_indikator):g}%")
+        # Yang sedang BERHENTI tidak boleh terbaca seperti yang sedang jalan:
+        # ia tak menunggu operator, ia menunggu montir — dan selama ia diam
+        # tak ada gabah yang bergerak.
+        from app.penggilingan.gudang1.services.jeda import jeda_terbuka, tertahan_detik
+
+        macet = await jeda_terbuka(db, "pengeringan", lot.id)
+        tertahan = await tertahan_detik(db, "pengeringan", lot.id)
+        tambahan = []
+        if tertahan >= 60:
+            tambahan.append(f"tertahan {tertahan / 3600:.1f} jam")
         b.berjalan.append(Baris(
             kode=lot.kode_lot,
-            isi="sedang dikeringkan" + (" · " + " · ".join(ka) if ka
-                                        else " · kadar air belum dicatat"),
-            keadaan="menunggu kadar air turun", aksi="kadar_air",
-            nilai=lot.kode_lot, fase="dryer",
+            isi=(f"⏸ berhenti — {macet.sebab}" if macet else "sedang dikeringkan")
+                + (" · " + " · ".join(ka) if ka else " · kadar air belum dicatat")
+                + ("".join(" · " + t for t in tambahan)),
+            keadaan=("menunggu dilanjutkan" if macet else "menunggu kadar air turun"),
+            aksi=("lanjutkan_proses" if macet else "kadar_air"),
+            nilai=(f"pengeringan:{lot.kode_lot}" if macet else lot.kode_lot),
+            fase="dryer",
             sejak=lot.waktu_mulai_pengeringan,
-            pilihan=[
+            pilihan=([
+                ("lanjutkan_proses", "Lanjutkan pengeringan",
+                 "Mesin jalan lagi — bisa nanti, bisa besok"),
                 ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru"),
                 ("selesai_pengeringan", "Selesai pengeringan",
                  "Lot langsung masuk fase pendinginan"),
-            ],
+            ] if macet else [
+                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru"),
+                ("hentikan_proses", "Hentikan sementara",
+                 "Mesin rusak, listrik padam, jam kerja habis"),
+                ("selesai_pengeringan", "Selesai pengeringan",
+                 "Lot langsung masuk fase pendinginan"),
+            ]),
         ))
 
     # Silo berisi gabah kering yang belum digiling.
@@ -304,15 +325,30 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         select(MillingProcess).where(MillingProcess.status == "proses")
         .order_by(MillingProcess.id.desc())
     )).scalars().all():
+        from app.penggilingan.gudang1.services.jeda import jeda_terbuka, tertahan_detik
+
+        macet = await jeda_terbuka(db, "giling", p.id)
+        tertahan = await tertahan_detik(db, "giling", p.id)
         b.berjalan.append(Baris(
-            kode=p.kode_proses, isi=f"digiling · {_kg(p.berat_gabah_masuk_kg)} gabah masuk",
-            keadaan="catat hasil, tutup bila selesai", aksi="hasil_giling",
-            nilai=p.kode_proses, fase="giling",
+            kode=p.kode_proses,
+            isi=(f"⏸ berhenti — {macet.sebab}" if macet else "digiling")
+                + f" · {_kg(p.berat_gabah_masuk_kg)} gabah masuk"
+                + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else ""),
+            keadaan=("menunggu dilanjutkan" if macet else "catat hasil, tutup bila selesai"),
+            aksi=("lanjutkan_proses" if macet else "hasil_giling"),
+            nilai=(f"giling:{p.kode_proses}" if macet else p.kode_proses),
+            fase="giling",
             sejak=p.waktu_mulai,
-            pilihan=[
-                ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru"),
+            pilihan=([
+                ("lanjutkan_proses", "Lanjutkan giling",
+                 "Mesin jalan lagi — bisa nanti, bisa besok"),
                 ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo"),
-            ],
+            ] if macet else [
+                ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru"),
+                ("hentikan_proses", "Hentikan sementara",
+                 "Mesin rusak, limbah penuh, jam kerja habis"),
+                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo"),
+            ]),
         ))
     return b
 

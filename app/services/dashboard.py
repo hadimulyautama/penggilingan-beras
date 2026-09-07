@@ -290,6 +290,15 @@ def render_dashboard_text(data: dict) -> str:
     if maks and stok["total"] > maks:
         lines.append(f"   ⚠️ Melewati batas lantai {maks / 1000:g} ton — kirim ke penyosohan.")
 
+    # Berapa lama pabrik berhenti hari ini — disebut hanya bila memang
+    # berhenti. Baris "0 jam" tiap hari akan berhenti dibaca justru pada hari
+    # angkanya berubah.
+    bh = op.get("berhenti") or {}
+    if bh.get("per_sebab"):
+        lines.append(f"• Pabrik berhenti: {bh['total_jam']:.1f} jam")
+        for s in bh["per_sebab"][:4]:
+            lines.append(f"   ‣ {s['sebab']} · {s['jam']:.1f} jam · {s['kali']}×")
+
     lines.append("\n*✅ Tugas staff*")
     vh, qc, vo = tg["verifikasi_harga"], tg["qc_output"], tg["verifikasi_output"]
     if not (vh or qc or vo):
@@ -449,6 +458,20 @@ def render_dashboard_html(data: dict) -> str:
 </body></html>"""
 
 
+async def _berhenti_hari_ini(db: AsyncSession, now) -> dict:
+    from datetime import time as _time
+
+    from app.penggilingan.gudang1.services.jeda import rekap_berhenti
+
+    pagi = datetime.combine(now.date(), _time.min, tzinfo=now.tzinfo)
+    rekap = await rekap_berhenti(db, sejak=pagi, sampai=now)
+    return {
+        "total_jam": sum(b.detik for b in rekap) / 3600,
+        "per_sebab": [{"sebab": b.sebab, "jam": b.detik / 3600, "kali": b.kali}
+                      for b in rekap],
+    }
+
+
 async def dashboard_data(db: AsyncSession) -> dict:
     """Snapshot terstruktur untuk dashboard staff produksi."""
     now = now_local()
@@ -461,6 +484,11 @@ async def dashboard_data(db: AsyncSession) -> dict:
             "silo": await _silo_status(db),
             "giling": await _giling_berjalan(db, now),
             "stok_pk": await _stok_pk(db),
+            # Berapa lama pabrik BERHENTI hari ini, dijumlah per sebab.
+            # Satu-satunya angka di dashboard ini yang bisa langsung
+            # diperbaiki besok — dan ia hanya ada karena tiap jeda mencatat
+            # sebabnya, bukan cuma mencatat bahwa berhenti.
+            "berhenti": await _berhenti_hari_ini(db, now),
         },
         "tugas": await _tugas(db),
     }

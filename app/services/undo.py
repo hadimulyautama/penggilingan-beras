@@ -68,6 +68,10 @@ _TABLE_LABEL = {
     "pk_purchase_verifications": "verifikasi harga PK luar",
     "pk_gudang2_intakes": "PK masuk Gudang 2",
     # Belum bisa dibatalkan
+    # Jeda tidak dibatalkan lewat undo: yang benar bukan menghapus catatan
+    # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya
+    # sendiri. Berhenti yang dihapus membuat jam berjalan ikut berbohong.
+    "jeda_proses": "proses berhenti sementara",
     "polishing_process": "penyosohan", "polishing_output_logs": "hasil penyosohan",
     "polishing_silo_usage": "penyosohan", "finished_goods": "stok barang jadi",
     "packaging_stock": "stok kemasan", "beras_stock": "stok beras",

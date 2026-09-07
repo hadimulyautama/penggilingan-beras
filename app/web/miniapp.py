@@ -14,6 +14,10 @@ from pydantic import BaseModel
 
 from app.bots.common import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
 from app.penggilingan.gudang1.services.drying import MODE_DRYER
+from app.penggilingan.gudang1.services.jeda import (
+    SEBAB as SEBAB_JEDA,
+    SEBAB_LAIN as SEBAB_LAIN_JEDA,
+)
 from app.database import SessionLocal
 from app.models import User
 from app.web.aksi_umum import galat as _err
@@ -393,6 +397,40 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/miniapp/actions/milling-active",
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
              ]},
+            # ── Berhenti sementara ──
+            # Prosesnya TIDAK ditutup: bahan, target, dan catatannya tetap.
+            # Tanpa aksi ini, operator yang mesinnya rusak hanya punya dua
+            # pilihan yang sama-sama merusak catatan — membiarkannya
+            # "berjalan" padahal mati, atau menutupnya lalu memulai proses
+            # baru, yang membuat satu muatan terhitung dua kali.
+            {"id": "hentikan_proses", "label": "⏸️ Hentikan sementara",
+             "post": "/miniapp/actions/hentikan-proses",
+             "hint": "Mesin rusak, listrik padam, jam kerja habis. Prosesnya tidak "
+                     "ditutup — bisa dilanjutkan nanti atau besok, dan jam "
+                     "tertahannya dihitung terpisah dari jam berjalan.",
+             "fields": [
+                 {"name": "proses", "label": "Proses yang sedang berjalan", "type": "remote",
+                  "source": "/miniapp/actions/proses-berjalan",
+                  "kosong": "Tidak ada pengeringan atau giling yang sedang berjalan."},
+                 {"name": "sebab", "label": "Sebab berhenti", "type": "select",
+                  "options": [["", "— pilih —"]]
+                             + [[s, s] for s in sorted(
+                                 set(SEBAB_JEDA["pengeringan"]) | set(SEBAB_JEDA["giling"]))]
+                             + [[SEBAB_LAIN_JEDA, "Lainnya — tulis sendiri"]]},
+                 # Daftar sebab tak akan pernah lengkap, dan daftar yang tak
+                 # lengkap memaksa orang memilih yang paling mirip — lalu
+                 # angkanya berbohong dengan rapi.
+                 {"name": "sebab_lain", "label": "Bila 'Lainnya': tulis sebabnya",
+                  "type": "text", "optional": True},
+             ]},
+            {"id": "lanjutkan_proses", "label": "▶️ Lanjutkan proses",
+             "post": "/miniapp/actions/lanjutkan-proses",
+             "hint": "Mesin jalan lagi. Lama tertahannya tercatat berikut sebabnya.",
+             "fields": [
+                 {"name": "proses", "label": "Proses yang sedang berhenti", "type": "remote",
+                  "source": "/miniapp/actions/proses-berhenti",
+                  "kosong": "Tidak ada proses yang sedang berhenti."},
+             ]},
         ]
     if g2:
         actions += [
@@ -538,6 +576,7 @@ _ACTION_WH = {
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
+    "hentikan_proses": "g1", "lanjutkan_proses": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
@@ -672,6 +711,63 @@ async def drying_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in lots]
+
+
+@router.get("/actions/proses-berjalan")
+async def proses_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pengeringan & giling yang sedang jalan DAN belum berhenti.
+
+    Digabung dalam satu daftar supaya operator tak perlu memilih jenis proses
+    lebih dulu: yang berdiri di depan mesin tahu mesin mana yang berhenti,
+    bukan istilah apa yang dipakai aplikasi untuknya.
+    """
+    _require(await _is_g1_operator(user))
+    from sqlalchemy import select
+    from app.models import DryingLot, MillingProcess
+    from app.penggilingan.gudang1.services.jeda import jeda_terbuka
+    keluar = []
+    async with SessionLocal() as db:
+        for lot in (await db.execute(
+            select(DryingLot).where(DryingLot.status == "proses")
+            .order_by(DryingLot.id.desc())
+        )).scalars().all():
+            if await jeda_terbuka(db, "pengeringan", lot.id) is None:
+                keluar.append({"value": f"pengeringan:{lot.kode_lot}",
+                               "label": f"{lot.kode_lot} · pengeringan"})
+        for p in (await db.execute(
+            select(MillingProcess).where(MillingProcess.status == "proses")
+            .order_by(MillingProcess.id.desc())
+        )).scalars().all():
+            if await jeda_terbuka(db, "giling", p.id) is None:
+                keluar.append({"value": f"giling:{p.kode_proses}",
+                               "label": f"{p.kode_proses} · giling"})
+    return keluar
+
+
+@router.get("/actions/proses-berhenti")
+async def proses_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Yang sedang berhenti, berikut sebab & sejak kapan."""
+    _require(await _is_g1_operator(user))
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.models import DryingLot, JedaProses, MillingProcess
+    keluar = []
+    async with SessionLocal() as db:
+        kini = now_local()
+        for j in (await db.execute(
+            select(JedaProses).where(JedaProses.selesai.is_(None))
+            .order_by(JedaProses.mulai)
+        )).scalars().all():
+            if j.jenis == "pengeringan":
+                o = await db.get(DryingLot, j.drying_lot_id)
+                kode = o.kode_lot if o else "?"
+            else:
+                o = await db.get(MillingProcess, j.milling_process_id)
+                kode = o.kode_proses if o else "?"
+            jam = (kini - j.mulai).total_seconds() / 3600
+            keluar.append({"value": f"{j.jenis}:{kode}",
+                           "label": f"{kode} · {j.sebab} · {jam:.1f} jam"})
+    return keluar
 
 
 @router.get("/actions/milling-active")
@@ -1284,6 +1380,66 @@ async def act_pindah_silo(req: PindahSiloReq, user: User = Depends(pengguna_aksi
         pesan += (f"\n⚠️ Silo {r.nama_silo} sedang digiling ({r.giling_berjalan}) — "
                   "gilingnya tetap jalan, dan gabah ini masuk sebagai bahan "
                   f"tambahannya (+{r.kg_baris:,.0f} kg).".replace(",", "."))
+    await _chat_confirm(user, pesan)
+    return {"ok": True, "pesan": pesan}
+
+
+class HentikanReq(BaseModel):
+    #: "pengeringan:PGR-…" atau "giling:LOT-…" — jenis dan kodenya sekaligus,
+    #: supaya operator tak perlu memilih jenis proses lebih dulu.
+    proses: str
+    sebab: str
+    sebab_lain: str | None = None
+
+
+class LanjutkanReq(BaseModel):
+    proses: str
+
+
+def _urai_proses(nilai: str) -> tuple[str, str]:
+    jenis, _, kode = (nilai or "").partition(":")
+    return jenis.strip(), kode.strip()
+
+
+@router.post("/actions/hentikan-proses")
+async def act_hentikan_proses(req: HentikanReq,
+                              user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.jeda import JedaError, hentikan
+    jenis, kode = _urai_proses(req.proses)
+    if not kode:
+        raise HTTPException(400, "Pilih proses yang mau dihentikan dulu.")
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await hentikan(db, user=u, jenis=jenis, kode=kode,
+                               sebab=req.sebab, sebab_lain=req.sebab_lain)
+        except JedaError as e:
+            raise _err(e, "Gagal menghentikan proses.")
+    pesan = (f"⏸ *{r.kode}* dihentikan sementara — {r.sebab}.\n"
+             f"Prosesnya tidak ditutup; bahan & catatannya tetap. "
+             f"Berhenti ke-{r.kali} untuk proses ini.")
+    await _chat_confirm(user, pesan)
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/lanjutkan-proses")
+async def act_lanjutkan_proses(req: LanjutkanReq,
+                               user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.jeda import JedaError, lanjutkan
+    jenis, kode = _urai_proses(req.proses)
+    if not kode:
+        raise HTTPException(400, "Pilih proses yang mau dilanjutkan dulu.")
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await lanjutkan(db, user=u, jenis=jenis, kode=kode)
+        except JedaError as e:
+            raise _err(e, "Gagal melanjutkan proses.")
+    jam = (r.tertahan_detik or 0) / 3600
+    pesan = (f"▶️ *{r.kode}* dilanjutkan — tertahan {jam:.1f} jam "
+             f"({r.sebab}).")
     await _chat_confirm(user, pesan)
     return {"ok": True, "pesan": pesan}
 

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -244,3 +245,34 @@ class SiloStorage(Base, TimestampMixin):
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # terisi / kosong
     status: Mapped[str] = mapped_column(String(20), default="terisi")
+
+
+class JedaProses(Base):
+    """Satu kali proses berhenti sementara, berikut sebabnya.
+
+    Tabel tersendiri, bukan kolom pada lot: satu proses bisa berhenti
+    berkali-kali dalam sehari, dan yang berguna justru JUMLAH PER SEBAB —
+    "mesin pendukung memakan dua jam sehari" adalah belanja, bukan keluhan.
+    Kolom pada lot hanya bisa menyimpan yang terakhir, dan yang terakhir
+    hampir tak pernah yang terbesar.
+
+    `selesai` kosong berarti prosesnya SEDANG berhenti sekarang.
+    """
+
+    __tablename__ = "jeda_proses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    #: 'pengeringan' | 'giling'. Tersirat dari kolom mana yang terisi, tetapi
+    #: disimpan supaya laporan mengelompokkan tanpa menebak.
+    jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
+    milling_process_id: Mapped[int | None] = mapped_column(
+        ForeignKey("milling_process.id")
+    )
+    sebab: Mapped[str] = mapped_column(String(120), nullable=False)
+    mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    selesai: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dicatat_oleh: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
