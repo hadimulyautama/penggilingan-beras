@@ -53,3 +53,22 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class SetelanPabrik(Base):
+    """Setelan yang berubah di lapangan — kunci & nilai.
+
+    Bukan satu kolom per setelan: setelan bertambah lebih sering daripada
+    migrasi ditulis, dan tabel yang menuntut migrasi tiap kali setelan
+    bertambah akan berhenti dipakai — lalu angkanya kembali ditanam di kode,
+    tempat yang hanya bisa diubah oleh yang menulis kodenya.
+    """
+
+    __tablename__ = "setelan_pabrik"
+
+    kunci: Mapped[str] = mapped_column(String(64), primary_key=True)
+    nilai: Mapped[str] = mapped_column(Text, nullable=False)
+    diubah_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

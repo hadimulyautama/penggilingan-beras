@@ -91,15 +91,31 @@
 </div>
 {% endif %}
 
-{# Daftar lengkap tetap ada, tetapi tidak lagi memenuhi layar. Yang jarang
-   dipakai — beli karung, barang keluar, batalkan — hidup di sini. #}
-<details class="semua-aksi"{% if not semua %} open{% endif %}>
-  <summary>
-    <span>Catat pekerjaan lain</span>
-    <span class="bantu">seluruh daftar aksi</span>
-  </summary>
-  <div id="layar"><div class="bantu" style="padding:20px 0;text-align:center">Memuat…</div></div>
-</details>
+{# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
+
+   Antrean adalah daftar BENDA — dan begitu tiap benda punya kartunya sendiri,
+   daftar kata kerja di bawahnya cuma menawarkan pintu kedua untuk pekerjaan
+   yang sudah punya pintu. Yang tersisa di daftar itu adalah aksi yang memang
+   tak berwujud benda (beli karung, barang keluar, harga, QC) — dan itu bukan
+   antrean, melainkan katalog.
+
+   Katalog itu kini punya alamatnya sendiri di menu: /aksi-lain. Tak ada yang
+   jadi tak terjangkau, dan antrean tetap berarti apa yang ia namai. #}
+{% if not semua %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></svg>
+    <div>
+      <h2>Tidak ada yang menunggu Anda</h2>
+      <p class="bantu">
+        Semua gabah sudah punya tempat. Yang sedang berjalan ada di
+        <a href="/berjalan">Sedang berjalan</a>; pekerjaan lain yang jarang
+        dipakai ada di <a href="/aksi-lain">Catat pekerjaan lain</a>.
+      </p>
+    </div>
+  </div>
+{% endif %}
 
 <div class="lembar" id="lembar"></div>
 <div class="kabar" id="kabar" role="status"></div>

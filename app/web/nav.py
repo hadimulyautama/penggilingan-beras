@@ -51,6 +51,8 @@ TAB = (
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None),
     ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None),
     ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None),
+    ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
+     "Harga, QC, barang keluar, batalkan", None),
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      "admin"),

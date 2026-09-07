@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block judul %}Pengaturan{% endblock %}
 {% block isi %}
+{% if err %}<div class="nota nota--buruk">{{ err }}</div>{% endif %}
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
@@ -96,6 +97,64 @@
     </select>
     <button class="btn" type="submit">Terapkan</button>
   </form>
+</div>
+{% endif %}
+
+{% if tuan %}
+{# ── Setelan kerja ──
+   Yang boleh ada di sini hanya hal yang memang berubah di lapangan, bukan
+   semua yang kebetulan berupa angka. Setelan yang tak pernah diubah cuma
+   menambah tempat untuk salah. #}
+<div>
+  <span class="lbl">Pengeringan</span>
+  <form class="kartu" method="post" action="/pengaturan/target-kadar-air">
+    <label class="lbl" for="target">Target kadar air bawaan (%)</label>
+    <input class="fld" id="target" name="nilai" type="number" step="0.1"
+           inputmode="decimal" value="{{ '%g'|format(target_bawaan) }}" required>
+    <p class="bantu">Hanya nilai awal borang. Yang menentukan tetap operator
+      saat menyalakan mesin — dan ia wajib mengisinya.</p>
+    <button class="btn btn--utama" type="submit">Simpan</button>
+  </form>
+</div>
+
+{% for jenis, nama in [('pengeringan', 'pengeringan'), ('giling', 'giling')] %}
+<div>
+  <span class="lbl">Sebab berhenti · {{ nama }}</span>
+  <div class="grup" style="gap:7px">
+    {% for s in sebab_jeda.get(jenis, []) %}
+      <div class="benda benda--dryer benda--diam">
+        <div style="flex:1">{{ s }}</div>
+        <form method="post" action="/pengaturan/sebab-jeda">
+          <input type="hidden" name="jenis" value="{{ jenis }}">
+          <input type="hidden" name="buang" value="{{ s }}">
+          <button class="btn btn--kecil btn--bahaya" type="submit"
+                  {{ 'disabled' if sebab_jeda.get(jenis, [])|length < 2 }}>Buang</button>
+        </form>
+      </div>
+    {% endfor %}
+    <form class="kartu" method="post" action="/pengaturan/sebab-jeda">
+      <input type="hidden" name="jenis" value="{{ jenis }}">
+      <label class="lbl" for="tambah-{{ jenis }}">Tambah sebab baru</label>
+      <input class="fld" id="tambah-{{ jenis }}" name="tambah" type="text"
+             placeholder="mis. Sabuk conveyor putus" maxlength="120">
+      <p class="bantu">Kotak “Lainnya — tulis sendiri” di borang jeda adalah
+        katupnya. Sebab yang berulang muncul di situ memang layak naik jadi
+        pilihan tetap; di sinilah tempat menaikkannya.</p>
+      <button class="btn" type="submit">Tambahkan</button>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<div>
+  <span class="lbl">Batas ubah catatan</span>
+  <div class="kartu">
+    <div class="benda__judul"><span>{{ JAM_BATAS }} jam</span></div>
+    <p class="bantu">Catatan yang lebih tua terkunci: tak bisa dibatalkan lagi.
+      Batas ini sengaja tak punya kotak isian — batas yang bisa dilonggarkan
+      oleh orang yang ingin melonggarkannya bukan batas. Mengubahnya perlu
+      keputusan Direksi, bukan satu ketukan di telepon.</p>
+  </div>
 </div>
 {% endif %}
 

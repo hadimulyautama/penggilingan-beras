@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block judul %}Catat pekerjaan lain{% endblock %}
+{% block isi %}
+
+{# ── Katalog, bukan antrean ──
+   Yang di sini adalah aksi yang tak berwujud benda di gudang: beli karung,
+   barang keluar, harga, QC, pembatalan. Ia tak pernah muncul sendiri di
+   Antrian tunggu karena memang tak ada bendanya yang bisa ditekan — dan
+   menaruhnya menggantung di bawah antrean membuat antrean berhenti berarti
+   apa yang ia namai. #}
+<p class="bantu" style="margin:0 0 12px">
+  Pekerjaan yang tak berwujud benda di gudang — harga, QC, barang keluar,
+  pembatalan. Yang sehari-hari ada di
+  <a href="/aksi">Antrian tunggu</a> dan <a href="/berjalan">Sedang berjalan</a>.
+</p>
+
+<div id="layar"><div class="bantu" style="padding:20px 0;text-align:center">Memuat…</div></div>
+
+<div class="lembar" id="lembar"></div>
+<div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+
+{% block kaki %}
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endblock %}

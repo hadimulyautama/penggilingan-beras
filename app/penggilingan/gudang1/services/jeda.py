@@ -35,7 +35,12 @@ class JedaError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
 
 
-#: Sebab yang ditawarkan. Urutannya: yang menghentikan MESIN lebih dulu, lalu
+#: Sebab BAWAAN. Yang dipakai layar & borang dibaca lewat
+#: `app.services.setelan.sebab_jeda`, karena daftarnya memang bertambah di
+#: lapangan — kotak "Lainnya, tulis sendiri" adalah katupnya, dan sebab yang
+#: berulang muncul di situ layak naik jadi pilihan tetap.
+#:
+#: Urutannya: yang menghentikan MESIN lebih dulu, lalu
 #: yang menghentikan PEKERJAAN. "Mesin giling rusak" dan "mesin pendukung
 #: rusak" sengaja dipisah — sebab yang ambigu tak bisa dipakai menghitung
 #: apa pun, dan "mesin rusak" saja jadi ambigu begitu ada mesin pendukung.

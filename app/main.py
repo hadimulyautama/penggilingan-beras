@@ -251,6 +251,26 @@ async def halaman_aksi(request: Request):
                   MENUNGGU=b.jumlah_menunggu)
 
 
+@app.get("/aksi-lain", response_class=HTMLResponse)
+async def halaman_aksi_lain(request: Request):
+    """Katalog aksi lengkap — yang tak berwujud benda di gudang.
+
+    Dulu ia menggantung di bawah antrean sebagai `<details>`. Antrean adalah
+    daftar BENDA; daftar kata kerja di bawahnya cuma menawarkan pintu kedua
+    untuk pekerjaan yang sudah punya pintu, dan membuat antrean berhenti
+    berarti apa yang ia namai.
+    """
+    from app.web.nav import jumlah_menunggu
+
+    akun = await akun_opsional(request)
+    if akun is None:
+        return RedirectResponse("/masuk", status_code=303)
+    return render(request, "aksi_lain.html", layar="aksi_lain",
+                  buka=request.query_params.get("buka") or "",
+                  nilai=request.query_params.get("nilai") or "",
+                  MENUNGGU=await jumlah_menunggu(akun.user))
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(token: str = Query("")) -> HTMLResponse:
     """Dashboard produksi staff (web). Dilindungi token rahasia di URL.

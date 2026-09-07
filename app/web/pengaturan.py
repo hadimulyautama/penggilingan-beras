@@ -11,9 +11,12 @@ Tiga bagian, dan urutannya mengikuti seberapa sering dipakai:
 """
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, Form, Request
 
 from app.database import SessionLocal
+from app.bots.common import PERAN_ADMIN_KEATAS
 from app.models import ProduksiAkun
 from app.web.security import butuh_admin, butuh_akun
 from app.web.tampilan import redirect, render
@@ -24,13 +27,76 @@ router = APIRouter(tags=["webapp"])
 
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    from app.services.setelan import sebab_jeda, target_kadar_air
+    from app.services.undo import BATAS_UNDO
     from app.web.nav import jumlah_menunggu
 
+    # Setelan kerja hanya ditampilkan kepada admin ke atas — operator mengurus
+    # data dirinya sendiri dan sandinya sendiri, tak lebih.
+    tuan = akun.peran in PERAN_ADMIN_KEATAS
+    async with SessionLocal() as db:
+        target = await target_kadar_air(db) if tuan else None
+        sebab = await sebab_jeda(db) if tuan else {}
     return render(
         request, "pengaturan.html",
         MENUNGGU=await jumlah_menunggu(akun.user),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
+        err=_PESAN.get(request.query_params.get("err", ""))
+            or request.query_params.get("err_teks", ""),
+        tuan=tuan, target_bawaan=target, sebab_jeda=sebab,
+        JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
+
+
+@router.post("/pengaturan/target-kadar-air")
+async def ubah_target_bawaan(request: Request, nilai: float = Form(...),
+                             akun: ProduksiAkun = Depends(butuh_admin)):
+    from app.services.setelan import set_target_kadar_air
+
+    async with SessionLocal() as db:
+        u = await db.get(User, akun.user.id)
+        try:
+            await set_target_kadar_air(db, nilai, user=u)
+        except ValueError as e:
+            return redirect(f"/pengaturan?err_teks={quote(str(e))}")
+    return redirect("/pengaturan?pesan=target-diubah")
+
+
+@router.post("/pengaturan/sebab-jeda")
+async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
+                          tambah: str = Form(""), buang: str = Form(""),
+                          akun: ProduksiAkun = Depends(butuh_admin)):
+    """Tambah atau buang satu sebab berhenti.
+
+    Satu tombol satu perubahan: borang yang mengirim seluruh daftar sekaligus
+    akan menimpa perubahan orang lain yang membuka layar yang sama semenit
+    lebih dulu.
+    """
+    from app.services.setelan import sebab_jeda, set_sebab_jeda
+
+    async with SessionLocal() as db:
+        u = await db.get(User, akun.user.id)
+        daftar = await sebab_jeda(db)
+        if jenis not in daftar:
+            return redirect("/pengaturan?err_teks=" + quote("Jenis proses tak dikenal."))
+        isi = list(daftar[jenis])
+        tambah, buang = tambah.strip(), buang.strip()
+        if tambah:
+            if tambah in isi:
+                return redirect("/pengaturan?err_teks=" + quote("Sebab itu sudah ada."))
+            isi.append(tambah[:120])
+        elif buang:
+            if buang not in isi:
+                return redirect("/pengaturan?err_teks=" + quote("Sebab itu sudah tak ada."))
+            isi.remove(buang)
+        else:
+            return redirect("/pengaturan")
+        daftar[jenis] = isi
+        try:
+            await set_sebab_jeda(db, daftar, user=u)
+        except ValueError as e:
+            return redirect(f"/pengaturan?err_teks={quote(str(e))}")
+    return redirect("/pengaturan?pesan=sebab-diubah")
 
 
 #: Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak pernah
@@ -38,6 +104,8 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
 #: lewat tautan.
 _PESAN = {
     "nama-diganti": "Nama Anda sudah diperbarui.",
+    "target-diubah": "Target kadar air bawaan sudah diperbarui.",
+    "sebab-diubah": "Daftar sebab berhenti sudah diperbarui.",
     "sandi-diganti": "Kata sandi berhasil diganti.",
     "alat-ditambah": "Alat baru ditambahkan.",
     "alat-diubah": "Alat diperbarui.",

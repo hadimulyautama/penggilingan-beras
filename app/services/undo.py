@@ -75,6 +75,9 @@ _TABLE_LABEL = {
     # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya
     # sendiri. Berhenti yang dihapus membuat jam berjalan ikut berbohong.
     "jeda_proses": "proses berhenti sementara",
+    # Setelan tidak dibatalkan lewat undo: yang benar adalah mengubahnya
+    # kembali di layar Pengaturan, dan itu meninggalkan jejaknya sendiri.
+    "setelan_pabrik": "setelan pabrik",
     "polishing_process": "penyosohan", "polishing_output_logs": "hasil penyosohan",
     "polishing_silo_usage": "penyosohan", "finished_goods": "stok barang jadi",
     "packaging_stock": "stok kemasan", "beras_stock": "stok beras",

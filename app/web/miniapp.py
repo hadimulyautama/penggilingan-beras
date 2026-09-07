@@ -14,10 +14,7 @@ from pydantic import BaseModel
 
 from app.bots.common import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
 from app.penggilingan.gudang1.services.drying import MODE_DRYER
-from app.penggilingan.gudang1.services.jeda import (
-    SEBAB as SEBAB_JEDA,
-    SEBAB_LAIN as SEBAB_LAIN_JEDA,
-)
+from app.penggilingan.gudang1.services.jeda import SEBAB_LAIN as SEBAB_LAIN_JEDA
 from app.database import SessionLocal
 from app.models import User
 from app.web.aksi_umum import galat as _err
@@ -232,6 +229,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     if g1:
         # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
         # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
+        # Setelan dibaca sekali per permintaan menu — daftar sebab dan
+        # target bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
+        # membekukannya akan menampilkan pilihan yang sudah dibuang.
+        from app.services.setelan import sebab_jeda, target_kadar_air
+
+        async with SessionLocal() as db:
+            SEBAB_AKTIF = await sebab_jeda(db)
+            TARGET_BAWAAN = await target_kadar_air(db)
         TUJUAN_BASAH = await _pilihan_tujuan_gabah("basah")
         TUJUAN_KERING = await _pilihan_tujuan_gabah("kering")
         # Urut sesuai alur kerja operator Gudang 1: terima → keringkan →
@@ -290,7 +295,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "dryer_id", "label": "Mesin yang ada gabahnya", "type": "remote",
                   "source": "/miniapp/actions/dryer-menunggu",
                   "kosong": "Tidak ada mesin pengering yang sedang berisi gabah. Mesinnya ada — isinya yang belum. Catat gabah masuk, lalu tempatkan ke mesin pengering."},
-                 {"name": "target_kadar_air", "label": "Target kadar air (%)",
+                 {"name": "target_kadar_air",
+                  "label": f"Target kadar air (%) — biasanya {TARGET_BAWAAN:g}",
                   "type": "number", "wajib": True},
                  # Mode disebutkan di LABEL mesinnya juga ("· pakai mode 25T"),
                  # karena di situlah tonasenya diketahui. Menaruh saran di
@@ -413,9 +419,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/miniapp/actions/proses-berjalan",
                   "kosong": "Tidak ada pengeringan atau giling yang sedang berjalan."},
                  {"name": "sebab", "label": "Sebab berhenti", "type": "select",
+                  # Dari setelan, bukan dari konstanta: daftar sebab memang
+                  # bertambah di lapangan, dan yang ditambahkan admin harus
+                  # langsung muncul di sini tanpa menunggu kode berubah.
                   "options": [["", "— pilih —"]]
                              + [[s, s] for s in sorted(
-                                 set(SEBAB_JEDA["pengeringan"]) | set(SEBAB_JEDA["giling"]))]
+                                 set(SEBAB_AKTIF["pengeringan"])
+                                 | set(SEBAB_AKTIF["giling"]))]
                              + [[SEBAB_LAIN_JEDA, "Lainnya — tulis sendiri"]]},
                  # Daftar sebab tak akan pernah lengkap, dan daftar yang tak
                  # lengkap memaksa orang memilih yang paling mirip — lalu
