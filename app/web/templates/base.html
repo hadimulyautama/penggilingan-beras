@@ -73,25 +73,33 @@
 
 {% if akun %}
 <header class="bar">
+  {# Tombol kembali menang atas menu: kalau halaman ini punya induk, yang
+     dicari orang lebih dulu adalah jalan pulang, bukan daftar tujuan lain. #}
   {% if kembali %}
     <a class="bar__balik" href="{{ kembali }}" aria-label="Kembali">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </a>
+  {% elif layar in TAB_KUNCI %}
+    <button class="bar__menu" type="button" id="buka-laci" aria-label="Buka menu"
+            aria-controls="laci" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.1" stroke-linecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
   {% else %}
     <div class="bar__avatar">{{ akun.nama[:2]|upper }}</div>
   {% endif %}
+  {# JUDUL LAYAR, bukan nama orang. Dengan tab, layar yang sedang dibuka
+     selalu terlihat di bilah bawah; laci menyembunyikannya, jadi judulnya
+     naik ke sini. Nama & perannya pindah ke kepala laci — ia dibaca sekali
+     saat masuk, bukan sepanjang hari. #}
   <div class="bar__isi">
-    <div class="bar__nama">{{ akun.nama }}</div>
+    <div class="bar__nama">{{ JUDUL.get(layar, akun.nama) }}</div>
     <div class="bar__sub">
-      {{ akun.peran }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
+      {{ akun.nama }} · {{ akun.peran }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
     </div>
   </div>
-  <form method="post" action="/keluar">
-    <button class="btn btn--kecil" type="submit">
-      {% if akun.sesi_pendek %}Ganti{% else %}Keluar{% endif %}
-    </button>
-  </form>
 </header>
 {% endif %}
 
@@ -103,54 +111,84 @@
 {% block kaki %}{% endblock %}
 </main>
 
-{# Hanya di empat layar bertab. Halaman masuk, ganti sandi, dan kelola
-   pengguna sengaja tanpa bilah: dua yang pertama belum/tidak punya tujuan
-   yang boleh dituju, yang ketiga dicapai dari beranda dan bukan pekerjaan
-   harian. #}
+{# ── Laci menu ──
+   Menggantikan bilah lima tab. Fiturnya bertambah terus, dan tab yang
+   dipaksa memuat semuanya berakhir jadi label sembilan piksel yang tak
+   terbaca di gudang.
+
+   Tidak muncul di halaman masuk & ganti sandi: belum/tidak ada tujuan yang
+   boleh dituju dari sana. #}
 {% if akun and layar in TAB_KUNCI %}
-<nav class="bilah" aria-label="Navigasi utama">
-  {% for kunci, alamat, nama in TAB %}
-    <a class="bilah__tab{{ ' bilah__tab--aktif' if layar == kunci }}"
-       href="{{ alamat }}"{{ ' aria-current=page'|safe if layar == kunci }}>
-      <span class="bilah__ikon">
-        {% if kunci == 'beranda' %}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M9.5 20v-5.5h5V20"/></svg>
-        {% elif kunci == 'aksi' %}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 20h16"/><path d="M6 17V8l6-4 6 4v9"/><path d="M10 17v-4h4v4"/></svg>
-        {% elif kunci == 'berjalan' %}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="8.2"/><path d="M12 7.6V12l3 2"/></svg>
-        {% elif kunci == 'laporan' %}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/></svg>
-        {% else %}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3.1"/>
-            <path d="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M5.1 12H2.9
-                     M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7L5.4 5.4"/></svg>
-        {% endif %}
-        {# Lencana muncul HANYA bila angkanya di atas nol. Lencana bertuliskan
-           "0" adalah kebisingan yang mengajari orang mengabaikan lencana. #}
-        {% if kunci == 'berjalan' and MENUNGGU %}
-          <span class="bilah__lencana"
-                aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
-        {% endif %}
-      </span>
-      <span class="bilah__nama">{{ nama }}</span>
-    </a>
-  {% endfor %}
-</nav>
+<div class="laci" id="laci" hidden>
+  <nav class="laci__isi" aria-label="Navigasi utama">
+    <div class="laci__kepala">
+      <div class="bar__avatar">{{ akun.nama[:2]|upper }}</div>
+      <div class="bar__isi">
+        <div class="bar__nama">{{ akun.nama }}</div>
+        <div class="bar__sub">
+          {{ akun.peran }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="laci__daftar">
+      {% for kunci, alamat, nama, ket in TAB %}
+        <a class="pintu{{ ' pintu--kini' if layar == kunci }}" href="{{ alamat }}"
+           {{ ' aria-current=page'|safe if layar == kunci }}>
+          <span class="pintu__ikon" aria-hidden="true">
+            {%- if kunci == 'beranda' %}⌂
+            {%- elif kunci == 'aksi' %}≡
+            {%- elif kunci == 'berjalan' %}◷
+            {%- elif kunci == 'laporan' %}▤
+            {%- else %}⚙{% endif -%}
+          </span>
+          <span class="pintu__isi">
+            <span class="pintu__nama">{{ nama }}</span>
+            <span class="pintu__ket">{{ ket }}</span>
+          </span>
+          {# Lencana muncul HANYA bila angkanya di atas nol. Lencana
+             bertuliskan "0" adalah kebisingan yang mengajari orang
+             mengabaikan lencana. #}
+          {% if kunci == 'aksi' and MENUNGGU %}
+            <span class="pintu__jml"
+                  aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+    <form method="post" action="/keluar" class="laci__kaki">
+      <button class="btn" type="submit">
+        {% if akun.sesi_pendek %}Ganti pengguna{% else %}Keluar{% endif %}
+      </button>
+    </form>
+  </nav>
+</div>
 {% endif %}
 </div>
 
 <script>
+/* ── Buka & tutup laci ──
+   Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan
+   mengganti seluruh isi bingkai — skrip yang dipasang sekali di luar akan
+   kehilangan elemennya pada perpindahan pertama. `pindah.js` menjalankan
+   ulang skrip yang datang bersama isi baru, jadi penautan ini ikut hidup
+   lagi setiap kali. */
+(function () {
+  var laci = document.getElementById("laci");
+  var tombol = document.getElementById("buka-laci");
+  if (!laci || !tombol) return;
+  function buka(ya) {
+    laci.hidden = !ya;
+    tombol.setAttribute("aria-expanded", ya ? "true" : "false");
+  }
+  tombol.addEventListener("click", function () { buka(laci.hidden); });
+  /* Menekan di luar panel menutupnya — yang membuka laci untuk melihat
+     isinya harus bisa keluar tanpa mencari tombol tutup. */
+  laci.addEventListener("click", function (e) { if (e.target === laci) buka(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !laci.hidden) buka(false);
+  });
+})();
+
 /* "lihat" pada kotak sandi. Mengetik sandi di gudang, sambil berdiri, dengan
    layar yang mungkin kena matahari — tanpa cara memeriksa apa yang terketik,
    orang menyerah setelah dua kali salah dan memanggil Super Admin. */

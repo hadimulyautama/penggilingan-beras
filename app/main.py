@@ -240,7 +240,12 @@ async def halaman_aksi(request: Request):
     return render(request, "aksi.html", kembali="/",
                   buka=request.query_params.get("buka") or "",
                   nilai=request.query_params.get("nilai") or "",
-                  menunggu=b.menunggu, berjalan=b.berjalan, lama=svc._lama,
+                  # Hanya yang BELUM PUNYA TEMPAT. Yang sudah berada di
+                  # mesin atau silo pindah ke layar Sedang berjalan berikut
+                  # tindakannya — kartu yang sama muncul di dua tempat adalah
+                  # dua tempat di kepala orang, dan cepat atau lambat keduanya
+                  # berbeda isi.
+                  menunggu=b.menunggu, berjalan=[], lama=svc._lama,
                   MENUNGGU=b.jumlah_menunggu)
 
 

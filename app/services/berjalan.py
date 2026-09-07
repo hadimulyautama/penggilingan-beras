@@ -65,15 +65,61 @@ class Baris:
     #: adalah satu ketukan yang tak membawa keputusan apa pun.
     pilihan: list[tuple[str, str, str]] = field(default_factory=list)
 
+    # ── Bentuk kartu yang bisa DIPINDAI ──
+    #
+    # `isi` yang berisi beberapa kalimat bertumpuk bukan keterangan melainkan
+    # dinding: ukurannya sama, warnanya sama, tebalnya sama, jadi mata tak
+    # punya tempat mendarat dan tak ada yang terbaca sampai orang berhenti
+    # mengeja. Kolom-kolom di bawah ini memberi tiap jenis keterangan
+    # bentuknya sendiri. Semuanya opsional — baris yang belum memakainya
+    # tetap tampil seperti dulu lewat `isi`.
+
+    #: Nama yang dibaca lebih dulu: pemasok, mesin, silo. Kosong = pakai kode.
+    judul: str | None = None
+    #: (angka, satuan) — satu-satunya angka di baris judul, rata kanan. Mata
+    #: memindai kolom kanan jauh lebih cepat daripada baris demi baris.
+    utama: tuple[str, str] | None = None
+    #: Baris kecil di bawah judul: kode, kondisi, plat.
+    sub: str | None = None
+    #: Pasangan label–nilai yang padat mendatar.
+    fakta: list[tuple[str, str]] = field(default_factory=list)
+    #: Rincian batch: (nama, berat, waktu). Menjorok dan lebih redup — ia
+    #: detail, bukan judul.
+    anak: list[tuple[str, str, str]] = field(default_factory=list)
+    #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
+    nota: str | None = None
+
 
 @dataclass
 class Berjalan:
+    """Tiga golongan, dan batasnya satu kalimat.
+
+    · `menunggu` — gabah yang BELUM PUNYA TEMPAT: tiket yang belum ditindak,
+      batch yang penempatannya gagal, gabah yang menumpuk di lantai. Inilah
+      daftar yang seharusnya kosong saat pulang; kalau masih berisi, ada gabah
+      yang bermalam tanpa tempat.
+
+    · `berjalan` — mesin yang sedang bekerja. Tak bisa dipercepat siapa pun.
+
+    · `transit` — gabah yang sudah punya tempat tetapi tak sedang diapa-apakan:
+      menunggu mesin dinyalakan, menunggu diangkut ke silo, menunggu digiling.
+      Bukan antrean karena tempatnya sudah ada; bukan pula berjalan karena tak
+      ada mesin yang menyala untuknya — menyebutnya berjalan akan membuat kata
+      itu berhenti berarti apa-apa.
+    """
+
     menunggu: list[Baris] = field(default_factory=list)
     berjalan: list[Baris] = field(default_factory=list)
+    transit: list[Baris] = field(default_factory=list)
 
     @property
     def jumlah_menunggu(self) -> int:
         return len(self.menunggu)
+
+    @property
+    def jumlah_berjalan(self) -> int:
+        """Isi layar Sedang berjalan — mesin menyala DAN gabah transit."""
+        return len(self.berjalan) + len(self.transit)
 
 
 def _lama(sejak: datetime | None) -> str:
@@ -130,7 +176,15 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
         baris.append(Baris(
             kode=t["kode"], isi=isi, aksi="gabah_masuk", nilai=str(t["id"]),
             keadaan=("tiket sudah ditutup — susulan" if t.get("susulan")
-                     else "belum ditaut ke batch"),
+                     else "catat & tentukan tempatnya"),
+            # Pemasoknya yang jadi judul, bukan kata "Tiket timbang": yang
+            # dicari mata saat menyusuri antrean adalah siapa, bukan jenis
+            # kartunya — jenisnya sudah dikatakan oleh warnanya.
+            judul=nama,
+            utama=(_kg(bobot).removesuffix(" kg"), "kg") if bobot else None,
+            sub=f"{t['kode']} · {komoditas}"
+                + (f" · {t.get('nomor_polisi')}" if t.get("nomor_polisi") else ""),
+            fakta=[("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [],
         ))
     return baris
 
@@ -164,14 +218,21 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
     if menunggu_dryer:
         total = sum(float(x.berat_total_kg or 0) for x in menunggu_dryer)
         kondisi = {x.kondisi_gabah for x in menunggu_dryer}
-        b.menunggu.append(Baris(
-            kode=", ".join(x.kode_batch for x in menunggu_dryer[:3])
-                 + ("…" if len(menunggu_dryer) > 3 else ""),
-            isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}"
-                + (f" · {'/'.join(sorted(kondisi))}" if kondisi else ""),
-            keadaan="belum dikeringkan — nyalakan mesin pengering",
+        from app.penggilingan.gudang1.services.drying import mode_disarankan
+
+        b.transit.append(Baris(
+            kode="",
+            isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}",
+            keadaan="nyalakan mesinnya",
             aksi="mulai_pengeringan", fase="dryer",
             sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
+            judul="Mesin pengering",
+            utama=(_kg(total).removesuffix(" kg"), "kg"),
+            sub=f"{len(menunggu_dryer)} batch"
+                + (f" · gabah {'/'.join(sorted(kondisi))}" if kondisi else ""),
+            fakta=[("Mode terdekat", mode_disarankan(total)),
+                   ("Target", "belum ditetapkan")],
+            anak=[(x.kode_batch, _kg(x.berat_total_kg), "") for x in menunggu_dryer],
         ))
 
     # Gabah yang TERCATAT tetapi belum ditempatkan di mana pun.
@@ -188,9 +249,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         b.menunggu.append(Baris(
             kode=b_.kode_batch,
             isi=f"{_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
-            keadaan="belum ditempatkan — dryer, silo, atau tumpukan",
+            keadaan="tentukan tempatnya",
             aksi="pindah_tumpukan", nilai=b_.kode_batch, fase="baru",
             sejak=b_.created_at,
+            judul=b_.kode_batch,
+            utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
+            sub=f"gabah {b_.kondisi_gabah} · belum punya tempat",
         ))
 
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
@@ -203,16 +267,23 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             kode=b_.kode_batch,
             isi=f"menumpuk · {_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
             keadaan=("harus ke dryer — belum kering" if wajib_dryer
-                     else "pindahkan ke dryer atau silo"),
+                     else "tentukan tempatnya"),
             aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
             fase="baru",
+            judul=b_.kode_batch,
+            utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
+            sub=f"menumpuk di lantai · gabah {b_.kondisi_gabah}",
+            nota=("Gabah basah tak boleh ke silo — harus dikeringkan dulu."
+                  if wajib_dryer else None),
         ))
 
     for lot in await _lot(db, pendinginan_selesai=True):
-        b.menunggu.append(Baris(
+        b.transit.append(Baris(
             kode=lot.kode_lot, isi="sudah dingin, dryer perlu dikosongkan",
-            keadaan="siap dipindah ke silo", aksi="pindah_silo",
+            keadaan="pindahkan ke silo", aksi="pindah_silo",
             nilai=lot.kode_lot, fase="dryer",
+            judul="Sudah dingin",
+            sub=f"{lot.kode_lot} · gabahnya masih di mesin",
             sejak=lot.waktu_selesai_pendinginan,
             # Dingin boleh dinyatakan berkali-kali — gabah yang sudah
             # dinyatakan dingin bisa ternyata masih panas setelah dicek.
@@ -224,11 +295,13 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         ))
 
     for lot in await _lot(db, pendinginan_selesai=False):
-        b.menunggu.append(Baris(
+        b.berjalan.append(Baris(
             kode=lot.kode_lot, isi="pengeringan selesai, sedang didinginkan",
-            keadaan="nyatakan pendinginan selesai", aksi="selesai_pendinginan",
+            keadaan="nyatakan bila sudah dingin", aksi="selesai_pendinginan",
             nilai=lot.kode_lot, fase="dryer",
             sejak=lot.waktu_selesai_pengeringan,
+            judul="Pendinginan",
+            sub=f"{lot.kode_lot} · gabah tetap di mesin",
         ))
 
     # Giling yang sudah ditutup tetapi belum di-QC / belum diverifikasi TIDAK
@@ -262,11 +335,35 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         tambahan = []
         if tertahan >= 60:
             tambahan.append(f"tertahan {tertahan / 3600:.1f} jam")
+        # Berat & isi lotnya, supaya kartunya menyebut punya siapa.
+        from app.penggilingan.gudang1.services.drying import _lot_batches
+
+        isi_lot = await _lot_batches(db, lot.id)
+        kg_lot = sum(float(x.berat_total_kg or 0) for x in isi_lot)
+        target = (f"{float(lot.target_kadar_air):g}%"
+                  if lot.target_kadar_air is not None else "—")
+        fakta = []
+        if log is not None and log.kadar_air_tes_manual is not None:
+            fakta.append(("Alat tes", f"{float(log.kadar_air_tes_manual):.1f}%"))
+        if log is not None and log.kadar_air_indikator is not None:
+            fakta.append(("Mesin", f"{float(log.kadar_air_indikator):g}%"))
+        fakta.append(("Target", target))
+        if lot.mode_dryer:
+            fakta.append(("Mode", lot.mode_dryer))
+        if tertahan >= 60:
+            fakta.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
         b.berjalan.append(Baris(
             kode=lot.kode_lot,
             isi=(f"⏸ berhenti — {macet.sebab}" if macet else "sedang dikeringkan")
                 + (" · " + " · ".join(ka) if ka else " · kadar air belum dicatat")
                 + ("".join(" · " + t for t in tambahan)),
+            judul=("Pengeringan dijeda" if macet else "Pengeringan"),
+            utama=(_kg(kg_lot).removesuffix(" kg"), "kg") if kg_lot else None,
+            sub=f"{lot.kode_lot} · {len(isi_lot)} batch",
+            fakta=fakta,
+            anak=[(f"{x.kode_batch}", _kg(x.berat_total_kg), "") for x in isi_lot],
+            nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
+                  if macet else None),
             keadaan=("menunggu dilanjutkan" if macet else "menunggu kadar air turun"),
             aksi=("lanjutkan_proses" if macet else "kadar_air"),
             nilai=(f"pengeringan:{lot.kode_lot}" if macet else lot.kode_lot),
@@ -316,9 +413,14 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         # tanpa ada yang salah: giling dijadwalkan, bukan didesak. Kalau ia
         # ikut dihitung, lencana tak pernah kembali nol — dan lencana yang tak
         # pernah nol mengajari orang mengabaikan lencana.
-        b.berjalan.append(Baris(
-            kode=silo.nama_silo, isi=f"gabah kering · {_kg(await _silo_content_kg(db, silo.id))}",
-            keadaan="siap digiling", aksi="mulai_giling", nilai=huruf, fase="silo",
+        kg_silo = await _silo_content_kg(db, silo.id)
+        b.transit.append(Baris(
+            kode=silo.nama_silo, isi=f"gabah kering · {_kg(kg_silo)}",
+            keadaan="mulai giling bila siap", aksi="mulai_giling",
+            nilai=huruf, fase="silo",
+            judul=silo.nama_silo,
+            utama=(_kg(kg_silo).removesuffix(" kg"), "kg"),
+            sub="gabah kering · menunggu giliran digiling",
         ))
 
     for p in (await db.execute(
@@ -329,11 +431,20 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
 
         macet = await jeda_terbuka(db, "giling", p.id)
         tertahan = await tertahan_detik(db, "giling", p.id)
+        fakta_g = [("Bahan", _kg(p.berat_gabah_masuk_kg))]
+        if tertahan >= 60:
+            fakta_g.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
         b.berjalan.append(Baris(
             kode=p.kode_proses,
             isi=(f"⏸ berhenti — {macet.sebab}" if macet else "digiling")
                 + f" · {_kg(p.berat_gabah_masuk_kg)} gabah masuk"
                 + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else ""),
+            judul=("Giling dijeda" if macet else "Giling"),
+            utama=(_kg(p.berat_gabah_masuk_kg).removesuffix(" kg"), "kg"),
+            sub=f"{p.kode_proses} · bahan masuk",
+            fakta=fakta_g,
+            nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
+                  if macet else None),
             keadaan=("menunggu dilanjutkan" if macet else "catat hasil, tutup bila selesai"),
             aksi=("lanjutkan_proses" if macet else "hasil_giling"),
             nilai=(f"giling:{p.kode_proses}" if macet else p.kode_proses),

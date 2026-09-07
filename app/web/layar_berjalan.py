@@ -23,7 +23,10 @@ async def halaman_berjalan(request: Request, akun=Depends(butuh_akun)):
         b = await svc.untuk(db, akun.user)
     return render(
         request, "berjalan.html",
-        menunggu=b.menunggu, berjalan=b.berjalan,
+        # Mesin yang menyala, dan gabah yang sudah punya tempat tetapi tak
+        # sedang diapa-apakan. Antrean tak ikut ke sini — ia punya layarnya
+        # sendiri.
+        berjalan=b.berjalan, transit=b.transit,
         MENUNGGU=b.jumlah_menunggu,
         lama=svc._lama,
     )

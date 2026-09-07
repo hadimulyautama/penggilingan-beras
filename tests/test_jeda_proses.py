@@ -116,3 +116,75 @@ def test_aksi_terdaftar_untuk_gudang1():
 
     assert miniapp._ACTION_WH.get("hentikan_proses") == "g1"
     assert miniapp._ACTION_WH.get("lanjutkan_proses") == "g1"
+
+
+# ──────────────── Tiga golongan: antrean, berjalan, transit ────────────────
+
+def test_antrean_hanya_yang_belum_punya_tempat():
+    """Batasnya satu kalimat: begitu gabahnya punya tempat, ia bukan antrean
+    lagi. Daftar itu jadi punya arti yang tajam — ia yang seharusnya kosong
+    saat pulang, karena isinya berarti ada gabah bermalam tanpa tempat."""
+    from app.services import berjalan
+
+    import re
+
+    sumber = inspect.getsource(berjalan.untuk_gudang1)
+
+    def golongan(penanda: str) -> str:
+        """Baris yang memuat `penanda` masuk golongan mana.
+
+        Dicari MUNDUR dari penandanya ke `b.<golongan>.append` terdekat —
+        penandanya sendiri berada di dalam panggilan itu, jadi memotong ke
+        depan justru melewatkan nama golongannya.
+        """
+        i = sumber.index(penanda)
+        cocok = list(re.finditer(r"b\.(menunggu|berjalan|transit)\.append", sumber[:i]))
+        assert cocok, penanda
+        return cocok[-1].group(1)
+
+    # Yang sudah punya tempat: menunggu dinyalakan, menunggu diangkut ke silo,
+    # menunggu digiling — semuanya `transit`, bukan `menunggu`.
+    assert golongan("batch di dryer") == "transit"
+    assert golongan("sudah dingin, dryer perlu dikosongkan") == "transit"
+    assert golongan("gabah kering · {_kg(kg_silo)}") == "transit"
+    # Yang belum punya tempat tetap antrean. Tiket datang sebagai satu
+    # daftar utuh dari `_tiket_belum_ditaut`, jadi yang diperiksa
+    # penggabungannya — bukan `append` seperti baris lain.
+    assert "b.menunggu += await _tiket_belum_ditaut(db)" in sumber
+    assert golongan("menumpuk · ") == "menunggu"
+    # Yang mesinnya bekerja tetap berjalan.
+    assert golongan("pengeringan selesai, sedang didinginkan") == "berjalan"
+
+
+def test_kartu_yang_sama_tak_muncul_di_dua_layar():
+    """Kartu yang sama di dua tempat adalah dua tempat di kepala orang, dan
+    cepat atau lambat keduanya berbeda isi."""
+    from app import main
+    from app.web import layar_berjalan
+
+    aksi = kode_saja(main.halaman_aksi)
+    assert "berjalan=[]" in aksi, "layar antrean tak boleh ikut memuat yang berjalan"
+    jalan = kode_saja(layar_berjalan.halaman_berjalan)
+    assert "transit=b.transit" in jalan
+    assert "menunggu=" not in jalan
+
+
+def test_kartu_punya_bentuk_yang_bisa_dipindai():
+    """Beberapa kalimat bertumpuk dengan ukuran, warna, dan tebal yang sama
+    bukan keterangan melainkan dinding."""
+    from app.services.berjalan import Baris
+
+    b = Baris(kode="x", isi="y", keadaan="z")
+    for kolom in ("judul", "utama", "sub", "fakta", "anak", "nota"):
+        assert hasattr(b, kolom), kolom
+
+
+def test_dua_layar_memakai_bentuk_kartu_yang_sama():
+    """Markup kartu yang ditulis dua kali sudah pernah berselisih di sini."""
+    import pathlib
+
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates"
+    for berkas in ("aksi.html", "berjalan.html"):
+        teks = (akar / berkas).read_text()
+        assert "benda__nilai" in teks and 'class="fakta"' in teks, berkas
+        assert "{% macro" in teks, f"{berkas}: kartunya harus satu makro"

@@ -1,6 +1,50 @@
 {% extends "base.html" %}
 {% block judul %}Catat pekerjaan{% endblock %}
 {% block isi %}
+{% macro isi_benda(b) -%}
+  {# Nama di kiri, ANGKA di kanan, satu baris. Angka besar di barisnya sendiri
+     memang mudah dilihat, tetapi ia menambah satu baris pada tiap kartu — dan
+     kartu yang tinggi berarti lebih sedikit benda yang muat di layar, padahal
+     justru melihat semuanya sekaligus yang dicari orang di sini. Pola buku
+     rekening: mata memindai kolom kanan jauh lebih cepat daripada baris demi
+     baris. #}
+  <div class="benda__judul">
+    <span>{{ b.judul or b.kode }}</span>
+    {% if b.utama %}
+      <span class="benda__nilai">{{ b.utama[0] }}<small>{{ b.utama[1] }}</small></span>
+    {% endif %}
+    {% if b.sub %}<span class="benda__sub">{{ b.sub }}</span>{% endif %}
+  </div>
+  {% if b.fakta %}
+    <dl class="fakta">
+      {% for label, nilai in b.fakta %}
+        <div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>
+      {% endfor %}
+    </dl>
+  {% endif %}
+  {% if b.anak %}
+    <div class="anak">
+      {% for nama, kg, jam in b.anak %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ nama }}</span>
+          <span class="anak__kg">{{ kg }}</span>
+          {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {# Baris lama dipakai hanya bila baris ini belum punya bentuk terstruktur —
+     supaya tak ada yang kehilangan keterangannya saat diport bertahap. #}
+  {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
+  {% if b.nota %}<div class="nota">{{ b.nota }}</div>{% endif %}
+  <div class="benda__kaki">
+    <span class="keping">{{ FASE[b.fase] }}</span>
+    {% if b.keadaan %}
+      <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
 
 {# ── BENDANYA DULU, TINDAKANNYA MENYUSUL ──
    Dulu layar ini membuka daftar 11 aksi berjajar sama besar: "Gabah masuk"
@@ -23,14 +67,7 @@
            melayang. `#lembar` sudah dimiliki aksi.js, dan dua pemilik untuk
            satu elemen selalu berakhir buruk. #}
         <details class="benda benda--{{ b.fase }}">
-          <summary>
-            <div class="benda__kode">{{ b.kode }}</div>
-            <div class="benda__isi">{{ b.isi }}</div>
-            <div class="benda__kaki">
-              <span class="keping">{{ FASE[b.fase] }}</span>
-              <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
-            </div>
-          </summary>
+          <summary>{{ isi_benda(b) }}</summary>
           <div class="pilihan">
             {% for id, nama, ket in b.pilihan %}
               <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
@@ -44,14 +81,7 @@
       {% else %}
         <a class="benda benda--{{ b.fase }}"
            href="/aksi?buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
-          <div>
-            <div class="benda__kode">{{ b.kode }}</div>
-            <div class="benda__isi">{{ b.isi }}</div>
-            <div class="benda__kaki">
-              <span class="keping">{{ FASE[b.fase] }}</span>
-              <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
-            </div>
-          </div>
+          <div>{{ isi_benda(b) }}</div>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
                stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
         </a>

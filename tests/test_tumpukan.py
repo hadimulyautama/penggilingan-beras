@@ -163,16 +163,16 @@ def test_silo_siap_giling_tak_dihitung_lencana():
     yang salah — giling dijadwalkan, bukan didesak.
 
     Kalau ia ikut dihitung `menunggu`, lencana tak pernah kembali nol, dan
-    lencana yang tak pernah nol mengajari orang mengabaikan lencana. Barisnya
-    tetap TAMPIL di layar Catat (yang menggabung menunggu + berjalan), hanya
-    tidak ikut menyalakan angka.
+    lencana yang tak pernah nol mengajari orang mengabaikan lencana. Ia kini
+    duduk di `transit`: gabahnya sudah punya tempat, jadi ia bukan antrean —
+    tetapi tak ada mesin yang menyala untuknya, jadi ia bukan pula berjalan.
     """
     sumber = inspect.getsource(berjalan.untuk_gudang1)
     # Potongan yang membuat baris silo — diperiksa sebagai satu blok, bukan
     # seluruh fungsi: `b.menunggu.append` memang dipakai di tempat lain.
     blok = sumber[sumber.index("huruf = silo.nama_silo"):]
     blok = blok[:blok.index("))") + 2]
-    assert "b.berjalan.append" in blok
+    assert "b.transit.append" in blok
     assert "b.menunggu.append" not in blok
 
 

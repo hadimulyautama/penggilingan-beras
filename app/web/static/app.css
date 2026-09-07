@@ -454,59 +454,83 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 /* ── Bilah navigasi bawah ─────────────────────────────────────────────
    Di bawah, bukan di atas: layar dipegang satu tangan sambil berdiri, dan
    bagian atas layar tak terjangkau ibu jari tanpa memindah pegangan. */
-.bilah {
-  /* Anak TERAKHIR dari kotak setinggi layar — bukan `fixed`, bukan `sticky`.
-     Keduanya pernah dicoba dan keduanya bergoyang di iOS: yang menggulung
-     dulu adalah dokumennya, dan elemen yang mengambang di atas dokumen yang
-     menggulung akan ikut bergeser saat halaman ditarik melewati ujung.
-     Sekarang halamannya tak menggulung sama sekali, jadi bilah ini tak punya
-     cara untuk bergerak. */
+/* ── Laci menu ──
+   Menggantikan bilah lima tab. Alasan bilah dulu ditaruh di BAWAH masih
+   benar — ibu jari menjangkau bagian bawah layar, bukan atas — dan yang
+   berubah bukan alasannya melainkan jumlah layarnya: enam tujuan pada layar
+   390px menyisakan ~60px per tab dengan label sembilan piksel, dan label
+   sembilan piksel tak terbaca di gudang yang kena matahari.
+
+   Harganya disebut apa adanya: tombolnya di sudut atas kiri, titik terjauh
+   dari ibu jari. Obatnya kelak bukan kembali ke tab melainkan menambah usap
+   dari tepi kiri — tombolnya tetap ada untuk yang tak tahu usapan itu. */
+.bar__menu {
   flex-shrink: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  background: var(--panel);
-  border-top: 1px solid var(--garis);
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--garis);
+  color: var(--tinta);
+  cursor: pointer;
 }
-.bilah__tab {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--sentuh);
+.bar__menu:hover { background: var(--garis-2); }
+
+.laci {
+  position: absolute; inset: 0; z-index: 40;
+  background: rgba(6, 11, 14, .78);
+}
+.laci[hidden] { display: none; }
+.laci__isi {
+  position: absolute; inset: 0 auto 0 0;
+  width: 84%; max-width: 310px;
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
-  color: var(--redup-2);
+  padding: calc(12px + env(safe-area-inset-top)) 12px
+           calc(12px + env(safe-area-inset-bottom));
+  background: var(--panel);
+  border-right: 1px solid var(--garis);
+  animation: laci-geser .16s ease-out;
+}
+@keyframes laci-geser {
+  from { transform: translateX(-14px); opacity: .6 }
+  to   { transform: none; opacity: 1 }
+}
+@media (prefers-reduced-motion: reduce) { .laci__isi { animation: none } }
+
+.laci__kepala {
+  display: flex; align-items: center; gap: 11px;
+  padding: 4px 6px 14px;
+  border-bottom: 1px solid var(--garis-2);
+  margin-bottom: 10px;
+}
+.laci__daftar { display: grid; gap: 3px; }
+.laci__kaki { margin-top: auto; padding-top: 14px; }
+.laci__kaki .btn { width: 100%; }
+
+.pintu {
+  display: grid; grid-template-columns: 26px 1fr auto;
+  align-items: center; gap: 11px;
+  min-height: var(--sentuh);
+  padding: 11px 10px;
+  border-radius: 10px;
+  color: var(--tinta-2);
   text-decoration: none;
 }
-/* Penanda aktif ADA DUA: garis aksen dan warna. Warna saja gagal di gudang
-   yang terang, dan bagi orang yang tak membedakan biru dari abu-abu. */
-.bilah__tab--aktif { color: var(--aksi); }
-.bilah__tab--aktif::before {
-  content: "";
-  position: absolute; top: 0; left: 50%;
-  transform: translateX(-50%);
-  width: 26px; height: 2px;
-  border-radius: 0 0 2px 2px;
-  background: var(--aksi);
-}
-.bilah__ikon { position: relative; display: flex; }
-.bilah__nama {
-  font-family: var(--mono);
-  /* Diperkecil sejak tab jadi lima: pada layar 390px tiap tab tinggal ~72px,
-     dan label yang patah dua baris membuat bilahnya melompat tinggi. */
-  font-size: 9.5px; letter-spacing: .02em;
-  text-transform: uppercase; font-weight: 500;
-  white-space: nowrap;
-}
-.bilah__tab--aktif .bilah__nama { font-weight: 600; }
-.bilah__lencana {
-  position: absolute; top: -3px; right: -9px;
-  min-width: 18px; height: 18px; padding: 0 5px;
-  border-radius: 9px;
-  background: var(--hati); color: var(--aksi-tinta);
-  font-family: var(--mono); font-size: 11px; font-weight: 600;
-  line-height: 18px; text-align: center;
+.pintu:hover { background: var(--panel-2); }
+/* Penanda layar yang sedang dibuka ADA DUA: latar dan warna ikon. Warna saja
+   gagal di gudang yang terang, dan bagi orang yang tak membedakan biru dari
+   abu-abu. */
+.pintu--kini { background: rgba(79, 179, 217, .10); color: var(--tinta); }
+.pintu--kini .pintu__ikon { color: var(--aksi); }
+.pintu__ikon { font-size: 16px; text-align: center; color: var(--redup-2); }
+.pintu__isi { display: grid; gap: 1px; min-width: 0; }
+.pintu__nama { font-size: 15px; font-weight: 500; }
+.pintu__ket { font-size: 11.5px; color: var(--redup-2); }
+.pintu__jml {
+  font-family: var(--mono); font-size: 11px;
+  min-width: 20px; padding: 2px 8px; text-align: center;
+  border-radius: 999px;
+  background: var(--aksi); color: var(--aksi-tinta);
 }
 
 /* ── Baris pekerjaan berjalan ── */
@@ -630,6 +654,64 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .benda__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
 .benda__isi { color: var(--tinta-2); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
 .benda__kaki { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+/* Kartu yang tak bisa ditekan: tak ada penunjuk, tak ada sorot. */
+.benda--diam { cursor: default; }
+
+/* ── Isi kartu yang bisa DIPINDAI, bukan dibaca ──
+   Beberapa kalimat bertumpuk dengan ukuran, warna, dan tebal yang sama bukan
+   keterangan melainkan dinding: mata tak punya tempat mendarat, jadi tak ada
+   yang terbaca sampai orang berhenti dan mengeja. Tiap jenis keterangan
+   diberi bentuknya sendiri, dan urutannya mengikuti apa yang dicari lebih
+   dulu — nama & angka, lalu fakta, lalu rincian, lalu satu nota berwarna. */
+.benda__judul {
+  display: grid; grid-template-columns: 1fr auto; gap: 3px 10px;
+  align-items: baseline;
+  font-size: 15px; font-weight: 600;
+}
+/* Angkanya di KANAN judul, bukan di baris sendiri: baris tambahan pada tiap
+   kartu berarti lebih sedikit benda yang muat di layar, padahal justru
+   melihat semuanya sekaligus yang dicari orang. Pola buku rekening — mata
+   memindai kolom kanan jauh lebih cepat daripada baris demi baris. */
+.benda__nilai {
+  font-size: 16.5px; font-weight: 600; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.benda__nilai small { font-size: 11.5px; font-weight: 500; color: var(--redup); margin-left: 3px; }
+.benda__sub {
+  grid-column: 1 / -1;
+  font-size: 11.5px; font-weight: 400; color: var(--redup);
+}
+
+.fakta { display: flex; flex-wrap: wrap; gap: 5px 14px; margin: 4px 0 0; }
+.fakta > div { display: grid; gap: 1px; }
+.fakta dt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--redup-2);
+}
+.fakta dd {
+  margin: 0; font-size: 13.5px; color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rincian batch: menjorok dan lebih redup — ia detail, bukan judul. */
+.anak {
+  display: grid; gap: 3px; margin-top: 7px;
+  padding-left: 10px; border-left: 1px solid var(--garis);
+}
+.anak__baris { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.anak__nama { font-family: var(--mono); font-size: 12px; color: var(--tinta-2); }
+.anak__kg { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.anak__jam {
+  grid-column: 1 / -1;
+  font-family: var(--mono); font-size: 10.5px; color: var(--redup-2);
+}
+
+/* Satu-satunya baris berwarna dalam kartu — untuk yang menuntut perhatian. */
+.nota {
+  margin-top: 7px; padding-left: 9px;
+  border-left: 2px solid var(--fase);
+  font-size: 12.5px; line-height: 1.45; color: var(--tinta-2);
+}
 
 /* Kepingan fase sewarna garis tepi: keduanya menguatkan satu keterangan,
    bukan dua penanda berbeda yang harus dicocokkan. */

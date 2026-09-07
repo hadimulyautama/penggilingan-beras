@@ -1,18 +1,25 @@
-"""Bilah navigasi bawah — empat tab, dan angka yang memanggil.
+"""Menu navigasi — laci yang dibuka dari ikon sandwich.
 
-**Di bawah, bukan di atas.** Layar dipegang satu tangan sambil berdiri, dan
-bagian atas layar 390px tak terjangkau ibu jari tanpa memindah pegangan.
-Aplikasi Timbangan di perusahaan yang sama sudah memakai pola ini, jadi orang
-yang memegang keduanya tidak perlu belajar dua kebiasaan.
+**Dulu bilah lima tab di bawah**, dan alasannya masih benar: ibu jari
+menjangkau bagian bawah layar, bukan bagian atas. Yang berubah adalah
+jumlah layarnya. Tab yang dipaksa memuat enam tujuan menyempitkan tiap
+sasaran jadi ~60px dengan label sembilan piksel — dan label sembilan
+piksel tak terbaca di gudang yang kena matahari.
+
+**Yang hilang bersama tab diganti; satu hal justru bertambah.** Dengan tab,
+layar yang sedang dibuka selalu terlihat — maka judul layar naik ke bilah
+atas, karena laci yang menyembunyikan posisi orang lebih buruk daripada tab
+yang sempit. Sebaliknya laci memberi ruang yang tak pernah ada di tab:
+KETERANGAN satu baris tiap tujuan, dan ANGKA yang lebih dari satu macam.
+
+**Harganya disebut apa adanya:** tombol di sudut atas kiri adalah titik
+terjauh dari ibu jari saat telepon dipegang satu tangan. Kalau kelak terasa
+mengganggu, obatnya bukan kembali ke tab melainkan menambah usap dari tepi
+kiri — tombolnya tetap ada untuk yang tak tahu usapan itu.
 
 **Lencananya menghitung yang MENUNGGU ORANG, bukan semua yang berjalan.** Lot
 yang sedang dikeringkan menunggu waktu; kalau ikut dihitung, lencananya tidak
 pernah nol — dan lencana yang tidak pernah nol mengajari orang mengabaikannya.
-
-**Bilah tidak muncul di mana-mana.** Tidak di halaman masuk (belum ada tujuan
-yang boleh dituju), dan tidak di dalam lembar aksi (lembar itu menutupi layar
-justru supaya satu tugas dikerjakan satu waktu; bilah di bawahnya adalah
-undangan meninggalkan formulir yang baru terisi separuh).
 """
 from __future__ import annotations
 
@@ -31,12 +38,16 @@ log = logging.getLogger("web.nav")
 #: harus pendek: "Pengaturan" patah dua baris di lebar itu, dan label yang
 #: patah lebih buruk daripada label yang disingkat.
 TAB = (
-    ("beranda",    "/",           "Beranda"),
-    ("aksi",       "/aksi",       "Catat"),
-    ("berjalan",   "/berjalan",   "Berjalan"),
-    ("laporan",    "/laporan",    "Laporan"),
-    ("pengaturan", "/pengaturan", "Atur"),
+    ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini"),
+    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda"),
+    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala"),
+    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini"),
+    ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat"),
 )
+
+#: Judul yang naik ke bilah atas. Diambil dari daftar yang sama supaya nama
+#: layar tak pernah berbeda antara menu dan judulnya.
+JUDUL = {k: nama for k, _, nama, _ in TAB}
 
 
 async def jumlah_menunggu(user: User | None) -> int:
