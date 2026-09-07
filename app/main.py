@@ -239,7 +239,7 @@ async def halaman_aksi(request: Request):
 
     async with SessionLocal() as db:
         b = await svc.untuk(db, akun.user)
-    return render(request, "aksi.html", kembali="/",
+    return render(request, "aksi.html",
                   buka=request.query_params.get("buka") or "",
                   nilai=request.query_params.get("nilai") or "",
                   # Hanya yang BELUM PUNYA TEMPAT. Yang sudah berada di

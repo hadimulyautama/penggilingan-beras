@@ -84,3 +84,59 @@ def test_yang_terkunci_dibedakan_sebelum_tulisannya_dibaca():
     assert ".audit--muda" in css and ".audit--tua" in css
     assert "'tua' if not c.muda else 'muda'" in html
     assert "terkunci" in html
+
+
+# ──────────────────────── Laci harus benar-benar bisa dibuka ────────────────
+
+def test_tombol_menu_ada_di_setiap_layar_menu():
+    """Panah "kembali" MENANG atas tombol menu di bilah — jadi layar yang
+    memakai keduanya kehilangan menunya. Dan panah "kembali ke beranda" pada
+    layar yang sederajat dengan beranda memang tak menjawab apa pun."""
+    import types
+
+    from app.web.nav import TAB
+    from app.web.tampilan import templates
+
+    akun = types.SimpleNamespace(nama="Pras", peran="superadmin", sesi_pendek=False)
+    for kunci, _, _, _, _ in TAB:
+        html = templates.get_template("base.html").render(
+            request=None, akun=akun, layar=kunci, MENUNGGU=1, MODE_UJI=False,
+            LIHAT_SEBAGAI=None, kembali=None)
+        assert 'id="buka-laci"' in html, kunci
+        assert 'id="laci"' in html, kunci
+
+
+def test_layar_menu_tak_memakai_panah_kembali():
+    """Diperiksa pada rutenya, bukan cuma pada templat: yang mematikan menu
+    adalah `kembali=` yang dikirim rute."""
+    import inspect
+
+    from app import main
+    from app.web import layar_audit, pengaturan
+
+    for fn in (main.halaman_aksi, pengaturan.halaman_pengaturan,
+               layar_audit.halaman_audit):
+        sumber = inspect.getsource(fn)
+        assert "kembali=" not in sumber, fn.__name__
+
+
+def test_skrip_laci_ikut_berpindah_halaman():
+    """`pindah.js` mengganti seluruh isi `.bingkai` dan menjalankan ulang
+    skrip yang datang bersamanya. Skrip di LUAR bingkai hanya terpasang sekali
+    — dan sesudah perpindahan pertama, tombolnya elemen baru tanpa penangan."""
+    import pathlib
+    import types
+
+    from app.web.tampilan import templates
+
+    akun = types.SimpleNamespace(nama="Pras", peran="operator", sesi_pendek=False)
+    html = templates.get_template("base.html").render(
+        request=None, akun=akun, layar="aksi", MENUNGGU=0, MODE_UJI=False,
+        LIHAT_SEBAGAI=None, kembali=None)
+    bingkai = html.split('<div class="bingkai">')[1].split("\n</div>\n\n<script>")[0]
+    assert "buka-laci" in bingkai and "addEventListener" in bingkai
+
+    # Dan `pindah.js` memang menjalankan ulang skrip di dalamnya.
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+    assert "replaceChild" in js and "script" in js

@@ -41,7 +41,7 @@ async def halaman_audit(
         # pernah ada.
         pratinjau = await undo_svc.pratinjau_terakhir(db, actor_ids=None)
     return render(
-        request, "audit.html", layar="audit", kembali="/pengaturan",
+        request, "audit.html", layar="audit",
         catatan=catatan, semua=semua, pratinjau=pratinjau,
         rentang=rentang, kelompok=kelompok, cari=cari,
         RENTANG=svc.RENTANG, KELOMPOK=svc.KELOMPOK,

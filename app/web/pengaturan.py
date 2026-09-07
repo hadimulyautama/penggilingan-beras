@@ -27,7 +27,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     from app.web.nav import jumlah_menunggu
 
     return render(
-        request, "pengaturan.html", kembali="/",
+        request, "pengaturan.html",
         MENUNGGU=await jumlah_menunggu(akun.user),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
