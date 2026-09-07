@@ -94,7 +94,29 @@ def babak(n: str) -> None:
     print(f"\n\033[1m{n}\033[0m")
 
 
-async def main() -> None:
+class Berhenti(Exception):
+    """Langkah yang menjadi tumpuan seluruh babak sesudahnya gagal.
+
+    Melanjutkan hanya akan menghasilkan deretan ❌ turunan yang menutupi
+    sebab aslinya — jadi simulasi berhenti. Tetapi berhenti BUKAN lulus:
+    ringkasannya tetap dicetak dan kode keluarnya tetap 1. Sebelum ini
+    tempatnya `return`, dan `return` melompati ringkasan — skrip mencetak ❌
+    lalu keluar dengan kode 0, kegagalan yang tak menghentikan siapa pun.
+    """
+
+
+def ringkas() -> None:
+    print()
+    if GAGAL:
+        print(f"\033[31m{len(GAGAL)} pemeriksaan GAGAL:\033[0m")
+        for g in GAGAL:
+            print("  · " + g)
+        sys.exit(1)
+    print("\033[32mSeluruh alur penerimaan gabah berjalan lewat layar, "
+          "tanpa Telegram.\033[0m")
+
+
+async def jalan() -> None:
     from app.main import app
 
     babak("0. Menyiapkan pabrik, orang, dan satu truk di jembatan timbang")
@@ -188,7 +210,7 @@ async def main() -> None:
         for t in tiket:
             print("     ·", t["label"])
         if not tiket:
-            return
+            raise Berhenti("tak ada tiket timbang — seluruh alur bermula dari sini")
         # Tiket TERBUKA didahulukan: itu pekerjaan yang sedang berjalan,
         # sedangkan yang tertutup adalah tambalan atas yang terlewat.
         cek("tiket berjalan di urutan pertama", "SUSULAN" not in tiket[0]["label"])
@@ -229,9 +251,16 @@ async def main() -> None:
         cek("isinya terbaca", len(isi_tumpukan) == 1,
             isi_tumpukan[0]["label"] if isi_tumpukan else "kosong")
 
-        r = await op.get("/berjalan")
-        cek("tumpukan MENAGIH di layar Berjalan",
+        # Tumpukan MENAGIH di antrean, bukan di layar Berjalan. Pemilik
+        # memutuskan "berjalan" hanya untuk proses yang mesinnya menyala;
+        # gabah yang menumpuk di lantai tidak sedang diapa-apakan, ia
+        # menunggu orang — dan itu antrean. Kedua sisinya diuji, karena yang
+        # berbahaya bukan "tak muncul di sana" melainkan "muncul di keduanya".
+        r = await op.get("/aksi")
+        cek("tumpukan MENAGIH di antrean tunggu",
             "menumpuk" in r.text and "pindah_tumpukan" in r.text)
+        r = await op.get("/berjalan")
+        cek("dan TIDAK ikut di layar Berjalan", "menumpuk" not in r.text)
 
         # Gabah kering boleh ke silo; yang basah akan ditolak.
         r = await op.post("/miniapp/actions/pindah-tumpukan",
@@ -243,13 +272,21 @@ async def main() -> None:
             (await op.get("/miniapp/actions/tumpukan")).json() == [])
 
         babak("5. Pengeringan — satu lot dari semua yang menunggu di dryer")
+        # Target kadar air WAJIB. Pengeringan tanpa garis selesai tak bisa
+        # diukur kemajuannya, dan "sudah cukup kering atau belum" akhirnya
+        # diputuskan dari ingatan orang yang kebetulan berdiri di situ.
         r = await op.post("/miniapp/actions/mulai-pengeringan", json={})
+        cek("mulai pengeringan TANPA target ditolak", r.status_code == 400,
+            f"HTTP {r.status_code}")
+        r = await op.post("/miniapp/actions/mulai-pengeringan",
+                          json={"target_kadar_air": 14})
         cek("lot terbentuk", r.status_code == 200, r.text[:120])
         lot = (await op.get("/miniapp/actions/drying-active")).json()
         cek("lot berjalan terlihat", len(lot) == 1,
             lot[0]["label"] if lot else "kosong")
         if not lot:
-            return
+            raise Berhenti("lot pengeringan tak terbentuk — babak 6 ke atas "
+                           "tak bisa diuji sama sekali")
         kode_lot = lot[0]["value"]
 
         r = await op.post("/miniapp/actions/kadar-air",
@@ -324,7 +361,7 @@ async def main() -> None:
         cek("operator ditolak membatalkan kerja orang lain",
             r.status_code == 403, f"HTTP {r.status_code}")
 
-        babak("10. Bilah navigasi & layar Berjalan")
+        babak("10. Laci navigasi & pemisahan antrean dari layar Berjalan")
         # Babak ini menyiapkan keadaannya sendiri: babak-babak sebelumnya
         # sudah menutup semua pekerjaan, dan layar yang kosong tak bisa
         # membuktikan apa pun tentang baris yang menagih.
@@ -340,28 +377,44 @@ async def main() -> None:
 
         r = await op.get("/berjalan")
         cek("layar Berjalan terbuka", r.status_code == 200, f"HTTP {r.status_code}")
-        cek("bilah tampil di layar bertab", 'class="bilah"' in r.text)
-        cek("tab Berjalan menyala", "bilah__tab--aktif" in r.text)
-        # Tiket susulan yang tersisa belum ditaut → satu hal menunggu operator.
-        cek("yang menunggu terdaftar", "Menunggu Anda" in r.text)
-        cek("barisnya menaut ke aksi yang menutupnya",
-            "/aksi?buka=gabah_masuk" in r.text)
+
+        # Navigasi kini LACI, bukan bilah tab di bawah. Bilah dibuang saat
+        # fiturnya bertambah: tujuh tab berjajar di layar selebar telapak
+        # tangan berarti tak satu pun bisa dibaca.
+        cek("tombol laci ada di bilah atas", 'id="buka-laci"' in r.text)
+        cek("laci memuat seluruh layar",
+            all(x in r.text for x in ("Antrian tunggu", "Sedang berjalan",
+                                      "Laporan", "Pengaturan")))
+        cek("layar yang sedang dibuka ditandai",
+            'pintu--kini' in r.text and 'aria-current=page' in r.text)
+        cek("dan judulnya terbaca di bilah", ">Sedang berjalan<" in r.text)
 
         r = await op.get("/masuk")
-        cek("bilah TIDAK muncul di halaman masuk", 'class="bilah"' not in r.text)
+        cek("laci TIDAK muncul di halaman masuk", 'id="buka-laci"' not in r.text)
+
+        # ── Antrean dan Berjalan tidak boleh berbagi kartu ──
+        #
+        # Tiket yang belum ditaut menunggu ORANG, jadi tempatnya antrean.
+        # Sebelum layarnya dipisah, baris ini diuji di /berjalan — dan kartu
+        # yang sama muncul di dua tempat adalah dua tempat di kepala orang,
+        # yang cepat atau lambat berbeda isi. Karena itu kedua sisinya diuji.
+        r = await op.get("/aksi")
+        cek("tiket yang menggantung terdaftar di antrean",
+            "TRX-SIM-003" in r.text, f"HTTP {r.status_code}")
+        cek("barisnya menaut ke aksi yang menutupnya",
+            "/aksi?buka=gabah_masuk" in r.text)
+        r = await op.get("/berjalan")
+        cek("dan TIDAK ikut di layar Berjalan", "TRX-SIM-003" not in r.text)
 
         # Direksi berperan admin, dan `_is_wh_operator` memberi admin akses
         # ke kedua gudang — jadi ia melihat pekerjaan fisik G1 juga.
-        r = await dir_.get("/berjalan")
-        cek("Direksi melihat tiket yang masih menggantung",
-            "TRX-SIM-003" in r.text, f"HTTP {r.status_code}")
+        r = await dir_.get("/aksi")
+        cek("Direksi juga melihat tiket yang menggantung", "TRX-SIM-003" in r.text)
         # Dan yang SUDAH dikerjakan berhenti memanggil: batch yang harganya
-        # diverifikasi di babak 7 tidak lagi muncul sebagai menunggu.
-        # Batch dari babak 4b belum diverifikasi harganya, jadi ia MEMANG
-        # masih memanggil. Yang diuji: batch babak 3 yang sudah diverifikasi
-        # tidak ikut muncul lagi.
+        # diverifikasi di babak 7 tidak lagi muncul. Batch satunya belum
+        # diverifikasi, jadi ia MEMANG masih memanggil — tepat satu.
         cek("yang sudah diverifikasi berhenti memanggil",
-            "GB-" in r.text and r.text.count("harga belum diverifikasi") <= 1,
+            r.text.count("harga belum diverifikasi") == 1,
             f"{r.text.count('harga belum diverifikasi')} batch menunggu harga")
 
         babak("11. Halaman Pengaturan")
@@ -424,14 +477,13 @@ async def main() -> None:
             "admin-terakhir" in str(r.headers.get("location", "")),
             r.headers.get("location", ""))
 
-    print()
-    if GAGAL:
-        print(f"\033[31m{len(GAGAL)} pemeriksaan GAGAL:\033[0m")
-        for g in GAGAL:
-            print("  · " + g)
-        sys.exit(1)
-    print("\033[32mSeluruh alur penerimaan gabah berjalan lewat layar, "
-          "tanpa Telegram.\033[0m")
+async def main() -> None:
+    try:
+        await jalan()
+    except Berhenti as e:
+        print(f"\n\033[33m⏹ Simulasi berhenti di tengah — {e}\033[0m")
+        GAGAL.append(f"simulasi tak sampai selesai — {e}")
+    ringkas()
 
 
 if __name__ == "__main__":
