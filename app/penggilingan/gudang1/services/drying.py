@@ -1018,3 +1018,38 @@ async def check_late_drying(
     if alerts:
         await db.commit()
     return alerts
+
+
+async def kadar_air_awal(db: AsyncSession, lot_id: int) -> float | None:
+    """Bacaan PERTAMA lot ini — titik tolak kemajuan.
+
+    Tanpanya tak ada yang bisa disebut "sudah sejauh mana": 18% itu jauh atau
+    dekat sepenuhnya tergantung mulai dari berapa.
+    """
+    row = (await db.execute(
+        select(DryingMoistureLog.kadar_air_tes_manual,
+               DryingMoistureLog.kadar_air_indikator)
+        .where(DryingMoistureLog.drying_lot_id == lot_id)
+        .order_by(DryingMoistureLog.waktu_update.asc()).limit(1)
+    )).first()
+    if row is None:
+        return None
+    nilai = row[0] if row[0] is not None else row[1]
+    return float(nilai) if nilai is not None else None
+
+
+def kemajuan(awal: float | None, kini: float | None, target: float) -> float | None:
+    """Sejauh mana lot bergerak dari bacaan pertamanya menuju target — 0..1.
+
+    Satu rumus dipakai bersama oleh dashboard dan layar Beranda. Dua salinan
+    rumus yang sama adalah dua angka yang cepat atau lambat berbeda, dan yang
+    berbeda diam-diam justru tak akan pernah ada yang menyadarinya.
+
+    None berarti belum bisa dihitung — belum ada bacaan, atau gabahnya sudah
+    lebih kering dari target sejak awal sehingga tak ada jarak untuk ditempuh.
+    """
+    if kini is not None and kini <= target:
+        return 1.0
+    if awal is None or kini is None or awal <= target:
+        return None
+    return max(0.0, min(1.0, (awal - kini) / (awal - target)))

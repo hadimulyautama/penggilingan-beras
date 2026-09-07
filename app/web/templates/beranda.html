@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block judul %}Beranda{% endblock %}
 {% block isi %}
+{% import "_benda.html" as benda with context %}
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
@@ -34,56 +35,28 @@
   </div>
 </div>
 
-{# ── KEMAJUAN PENGERINGAN ──
-   Petak di atas hanya menjawab "berapa lot", dan itu tak memberi tahu apa
-   pun tentang sudah sejauh mana. 18% itu jauh atau dekat sepenuhnya
-   tergantung mulai dari berapa — jadi kemajuan dihitung dari bacaan PERTAMA
-   lot ini menuju target, bukan dari angka terakhirnya saja.
+{# ── YANG SEDANG BERJALAN, VERSI PADAT ──
+   Dulu hanya pengeringan yang sampai ke sini, dan itu membuat Beranda
+   berbohong dengan cara paling halus: layar yang tampak lengkap padahal
+   giling dan silo tak pernah disebut sama sekali.
 
-   Kedua bacaan disebut berdampingan: alat tes yang menggerakkan batang
-   kemajuan (itulah ukuran yang dipakai memutuskan), bacaan mesin di
-   sebelahnya sebagai pembanding. Yang menarik justru saat keduanya tak
-   sepakat. #}
-{% if lot_kering %}
-<div>
-  <span class="lbl">Kemajuan pengeringan</span>
-  <div class="grup" style="gap:9px">
-    {% for l in lot_kering %}
-      <div class="maju">
-        <div class="maju__kepala">
-          <span class="maju__kode">{{ l.kode }}</span>
-          <span class="maju__jam">{{ "%.1f"|format(l.jam) }} jam</span>
-        </div>
-        <div class="maju__isi">
-          {{ "{:,}".format(l.kg|int).replace(",", ".") }} kg
-          {%- if l.suppliers %} · {{ l.suppliers|join(", ") }}{% endif %}
-        </div>
-
-        {% if l.maju is not none %}
-          <div class="maju__bar" role="img"
-               aria-label="Kemajuan {{ (l.maju * 100)|round|int }} persen menuju {{ l.target }}%">
-            <span style="width: {{ (l.maju * 100)|round(1) }}%"></span>
-          </div>
-          <div class="maju__kaki">
-            <span>{{ "%.1f"|format(l.awal) }}% awal</span>
-            <span class="maju__kini">
-              {%- if l.tes is not none %}alat tes {{ "%.1f"|format(l.tes) }}%{% endif %}
-              {%- if l.mesin is not none %} · mesin {{ "%g"|format(l.mesin) }}%{% endif %}
-              {%- if l.tes is none and l.mesin is none %}belum dicatat{% endif %}
-            </span>
-            <span>target {{ "%g"|format(l.target) }}%</span>
-          </div>
-        {% else %}
-          <div class="maju__kaki">
-            <span class="maju__kini">Kadar air belum dicatat — kemajuan belum bisa dihitung</span>
-          </div>
-        {% endif %}
-      </div>
-    {% endfor %}
+   Kini bendanya SAMA persis dengan layar Sedang berjalan — daftar yang sama
+   lewat macro yang sama, bukan disalin — hanya dipadatkan jadi satu baris:
+   nama, satu angka, satu keterangan. Ditekan, ia membuka lembar tindakan
+   yang sama pula; ringkas bukan berarti tak bisa dikerjakan dari sini. #}
+{{ benda.blok("Sedang berjalan", berjalan, rapat=True) }}
+{{ benda.blok("Transit", transit, rapat=True) }}
+{% if not berjalan and not transit %}
+  <div>
+    <span class="lbl">Sedang berjalan</span>
+    <div class="kosong-tipis">Tidak ada mesin yang menyala.</div>
   </div>
-</div>
 {% endif %}
 
+{# Laporan dan Pengaturan sudah ada di laci sejak bilah bawah diganti; dua
+   pintu ke tempat yang sama adalah dua tempat di kepala orang. Yang tersisa
+   satu, dan yang satu ini tinggal karena ia membawa jumlah — pintu laci tak
+   memberi tahu berapa yang menunggu tanpa dibuka dulu. #}
 <div>
   <span class="lbl">Pekerjaan</span>
   <a class="tindakan" href="/aksi">
@@ -94,45 +67,13 @@
       </svg>
     </div>
     <div class="tindakan__isi">
-      <div class="tindakan__nama">Catat pekerjaan</div>
-      <div class="tindakan__ket">gabah masuk · pengeringan · silo · giling · penyosohan</div>
-    </div>
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
-         stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-  </a>
-
-  <a class="tindakan" href="/laporan" style="margin-top:8px">
-    <div class="tindakan__ikon">
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 20V10"/><path d="M12 20V4"/><path d="M19 20v-7"/>
-      </svg>
-    </div>
-    <div class="tindakan__isi">
-      <div class="tindakan__nama">Laporan</div>
-      <div class="tindakan__ket">status gudang · stok · riwayat{% if boleh_uang %} · HPP &amp; biaya{% endif %}</div>
-    </div>
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
-         stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-  </a>
-</div>
-
-<div>
-  <span class="lbl">Akun &amp; pengaturan</span>
-  <a class="tindakan" href="/pengaturan">
-    <div class="tindakan__ikon">
-      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-           stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3.2"/>
-        <path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.88 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.88.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88V9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03z"/>
-      </svg>
-    </div>
-    <div class="tindakan__isi">
-      <div class="tindakan__nama">Pengaturan</div>
+      <div class="tindakan__nama">Antrian tunggu</div>
       <div class="tindakan__ket">
-        nama &amp; sandi{% if akun.is_admin %} · {{ jml_akun }} akun · alat{% endif %}
+        {%- if MENUNGGU %}{{ MENUNGGU }} menunggu ditindak
+        {%- else %}tak ada yang menunggu{% endif -%}
       </div>
     </div>
+    {% if MENUNGGU %}<span class="lencana">{{ MENUNGGU }}</span>{% endif %}
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
          stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
   </a>

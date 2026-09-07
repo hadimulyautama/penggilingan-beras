@@ -271,14 +271,23 @@ def test_kemajuan_pengeringan_dihitung_dari_bacaan_pertama():
     """
     import inspect
 
-    from app.services import dashboard
+    from app.penggilingan.gudang1.services import drying
+    from app.services import berjalan, dashboard
 
-    sumber = inspect.getsource(dashboard._pengeringan_berjalan)
-    assert "waktu_update.asc()" in sumber          # bacaan pertama, bukan terakhir
-    assert "kadar_air_target_persen" in sumber
-    assert "(awal - ka) / (awal - target)" in sumber
+    # Titik tolaknya bacaan PERTAMA, bukan terakhir.
+    assert "waktu_update.asc()" in inspect.getsource(drying.kadar_air_awal)
+    assert "(awal - kini) / (awal - target)" in inspect.getsource(drying.kemajuan)
+
+    # Rumusnya SATU. Dashboard dan layar Beranda memanggilnya, tidak menyalin —
+    # dua salinan rumus yang sama adalah dua angka yang cepat atau lambat
+    # berbeda, dan yang berbeda diam-diam tak akan ada yang menyadarinya.
+    dash = inspect.getsource(dashboard._pengeringan_berjalan)
+    assert "kadar_air_target_persen" in dash
+    assert "kemajuan(awal, ka, target)" in dash
+    assert "kemajuan(await kadar_air_awal(db, lot.id)" in inspect.getsource(
+        berjalan.untuk_gudang1)
     # Dua bacaan tetap terpisah, tidak diruntuhkan jadi satu.
-    assert '"tes": tes' in sumber and '"mesin": mesin' in sumber
+    assert '"tes": tes' in dash and '"mesin": mesin' in dash
 
 
 def test_target_kadar_air_ada_setelannya():

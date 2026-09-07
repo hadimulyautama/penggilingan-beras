@@ -657,6 +657,67 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 /* Kartu yang tak bisa ditekan: tak ada penunjuk, tak ada sorot. */
 .benda--diam { cursor: default; }
 
+/* ── Baris padat di Beranda ──
+   Bentuk paling ringkas yang masih menjawab tiga hal: apa, berapa, dan
+   sedang bagaimana. Satu baris ditambah satu keterangan — cukup untuk memuat
+   seluruh pabrik dalam satu layar tanpa menggulir, dan itulah gunanya
+   Beranda. Yang ingin melihat rinciannya membuka Sedang berjalan. */
+.padat {
+  --fase: var(--fase-baru);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--garis);
+  border-left: 3px solid var(--fase); border-radius: 11px;
+  padding: 10px 12px; min-height: var(--sentuh);
+  color: var(--tinta); text-decoration: none;
+}
+.padat > div:first-child { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.padat--baru   { --fase: var(--fase-baru); }
+.padat--dryer  { --fase: var(--fase-dryer); }
+.padat--silo   { --fase: var(--fase-silo); }
+.padat--giling { --fase: var(--fase-giling); }
+/* Tanpa pembungkus `div`, isinya jadi anak langsung kotak flex dan akan
+   berjajar mendatar. Yang tak bisa ditekan diberi susunannya sendiri. */
+.padat--diam { display: grid; gap: 5px; cursor: default; }
+.padat__atas {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline;
+}
+.padat__nama { font-size: 14px; font-weight: 600; }
+.padat__nilai {
+  font-size: 15px; font-weight: 600; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -.01em;
+}
+.padat__nilai small { font-size: 11px; font-weight: 500; color: var(--redup); }
+.padat__ket { font-size: 12px; color: var(--redup); line-height: 1.4; }
+/* Batangnya lebih tipis daripada di kartu penuh: di sini ia keterangan
+   sekilas, bukan alat ukur yang dibaca angkanya. */
+.padat .maju__bar { height: 5px; margin-top: 0; }
+/* Yang punya beberapa tindakan tetap `details`, jadi ia perlu perlakuan yang
+   sama dengan `.benda` versi lipat. */
+details.padat { display: block; padding: 0; position: relative; }
+details.padat > summary {
+  list-style: none; cursor: pointer; padding: 10px 30px 10px 12px;
+  display: grid; gap: 5px; min-height: var(--sentuh);
+}
+details.padat > summary::-webkit-details-marker { display: none; }
+/* Ditempatkan mutlak, bukan diapungkan: `summary`-nya kotak grid, dan apungan
+   tak berlaku pada anak grid — penunjuknya akan hilang tanpa jejak. */
+details.padat > summary::after {
+  content: ""; position: absolute; right: 13px; top: 17px;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--redup-2); border-bottom: 2px solid var(--redup-2);
+  transform: rotate(45deg); transition: transform .15s ease;
+}
+details.padat[open] > summary::after { transform: rotate(-135deg); }
+details.padat .pilihan { padding: 0 12px 12px; }
+
+/* Kosong di Beranda diucapkan dengan satu kalimat, bukan sepetak gambar:
+   Beranda bukan tempat merayakan yang kosong, ia tempat melihat yang ada. */
+.kosong-tipis {
+  background: var(--panel); border: 1px dashed var(--garis);
+  border-radius: 11px; padding: 13px 14px;
+  color: var(--redup); font-size: 13px;
+}
+
 /* ── Isi kartu yang bisa DIPINDAI, bukan dibaca ──
    Beberapa kalimat bertumpuk dengan ukuran, warna, dan tebal yang sama bukan
    keterangan melainkan dinding: mata tak punya tempat mendarat, jadi tak ada

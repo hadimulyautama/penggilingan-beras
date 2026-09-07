@@ -1,0 +1,108 @@
+{# ── Satu bentuk kartu, dua kepadatan ──
+   Beranda dan Sedang berjalan memuat benda yang SAMA. Kalau masing-masing
+   punya salinan markup-nya sendiri, cepat atau lambat keduanya berbeda isi —
+   dan yang berbeda diam-diam justru tak akan ada yang menyadarinya. Jadi
+   bentuknya satu di sini, dan yang berbeda hanya seberapa padat.
+
+   `penuh` dipakai di layar Sedang berjalan: semua fakta, rincian batch, nota.
+   `padat` dipakai di Beranda: nama, satu angka, satu keterangan, dan batang
+   kemajuan bila benda itu memang punya ukuran "sudah sejauh mana". #}
+
+{% macro penuh(b) -%}
+  <div class="benda__judul">
+    <span>{{ b.judul or b.kode }}</span>
+    {% if b.utama %}
+      <span class="benda__nilai">{{ b.utama[0] }}<small>{{ b.utama[1] }}</small></span>
+    {% endif %}
+    {% if b.sub %}<span class="benda__sub">{{ b.sub }}</span>{% endif %}
+  </div>
+  {% if b.fakta %}
+    <dl class="fakta">
+      {% for label, nilai in b.fakta %}
+        <div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>
+      {% endfor %}
+    </dl>
+  {% endif %}
+  {% if b.anak %}
+    <div class="anak">
+      {% for nama, kg, jam in b.anak %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ nama }}</span>
+          <span class="anak__kg">{{ kg }}</span>
+          {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
+  {% if b.nota %}<div class="nota">{{ b.nota }}</div>{% endif %}
+  <div class="benda__kaki">
+    <span class="keping">{{ FASE[b.fase] }}</span>
+    {% if b.keadaan %}
+      <span class="benda__status">{{ b.keadaan }}{% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}</span>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro padat(b) -%}
+  <div class="padat__atas">
+    <span class="padat__nama">{{ b.judul or b.kode }}</span>
+    {% if b.utama %}
+      <span class="padat__nilai">{{ b.utama[0] }}<small> {{ b.utama[1] }}</small></span>
+    {% endif %}
+  </div>
+  {# Batang kemajuan hanya untuk yang punya ukurannya. Memberi batang palsu
+     pada giling — yang tak punya garis selesai — lebih buruk daripada tak
+     memberi apa-apa: ia menjawab pertanyaan yang tak bisa dijawab. #}
+  {% if b.maju is not none %}
+    <div class="maju__bar" role="img"
+         aria-label="Kemajuan {{ (b.maju * 100)|round|int }} persen">
+      <span style="width: {{ (b.maju * 100)|round(1) }}%"></span>
+    </div>
+  {% endif %}
+  <div class="padat__ket">
+    {{- b.ringkas or b.sub or b.isi -}}
+    {% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
+  </div>
+{%- endmacro %}
+
+{# Satu daftar, dua kepadatan. Yang punya beberapa tindakan tetap membuka
+   lembar pilihan yang SAMA di kedua layar — ringkas bukan berarti tak bisa
+   dikerjakan dari sini. #}
+{% macro blok(judul, daftar, rapat=False) -%}
+  {% if daftar %}
+  {% set kelas = "padat" if rapat else "benda" %}
+  <div>
+    <span class="lbl">{{ judul }} · {{ daftar|length }}</span>
+    <div class="grup" style="gap:9px">
+      {% for b in daftar %}
+        {% if b.pilihan %}
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}">
+            <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <div class="pilihan">
+              {% for id, nama, ket in b.pilihan %}
+                <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
+                   href="/aksi?buka={{ id }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
+                  <span class="pilihan__nama">{{ nama }}</span>
+                  <span class="pilihan__ket">{{ ket }}</span>
+                </a>
+              {% endfor %}
+            </div>
+          </details>
+        {% elif b.aksi %}
+          <a class="{{ kelas }} {{ kelas }}--{{ b.fase }}"
+             href="/aksi?buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
+            <div>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</div>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+                 stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+        {% else %}
+          <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam">
+            {% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{%- endmacro %}

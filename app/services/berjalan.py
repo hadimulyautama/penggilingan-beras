@@ -89,6 +89,22 @@ class Baris:
     #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
     nota: str | None = None
 
+    # ── Bentuk PADAT, untuk Beranda ──
+    #
+    # Beranda memuat benda yang sama dengan layar Sedang berjalan — daftar
+    # yang sama, bukan salinannya — hanya dipadatkan jadi satu baris: nama,
+    # satu angka, satu keterangan. Gunanya Beranda adalah memuat seluruh
+    # pabrik dalam satu layar tanpa menggulir; kartu penuh membatalkan itu.
+
+    #: Satu kalimat pengganti `fakta` + `anak` di kartu padat. Kosong = pakai
+    #: `sub`, karena baris yang tak punya apa-apa untuk diringkas memang tak
+    #: perlu dipaksa punya.
+    ringkas: str | None = None
+    #: Sudah sejauh mana, 0..1 — hanya untuk yang punya ukuran "sejauh mana".
+    #: Pengeringan punya; giling dan silo tidak, dan memberi mereka batang
+    #: kemajuan palsu lebih buruk daripada tak memberi apa-apa.
+    maju: float | None = None
+
 
 @dataclass
 class Berjalan:
@@ -233,6 +249,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             fakta=[("Mode terdekat", mode_disarankan(total)),
                    ("Target", "belum ditetapkan")],
             anak=[(x.kode_batch, _kg(x.berat_total_kg), "") for x in menunggu_dryer],
+            ringkas=f"{len(menunggu_dryer)} batch menunggu mesin dinyalakan"
+                    f" · mode terdekat {mode_disarankan(total)}",
         ))
 
     # Gabah yang TERCATAT tetapi belum ditempatkan di mana pun.
@@ -284,6 +302,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             nilai=lot.kode_lot, fase="dryer",
             judul="Sudah dingin",
             sub=f"{lot.kode_lot} · gabahnya masih di mesin",
+            ringkas="gabahnya masih di mesin — pindahkan ke silo",
             sejak=lot.waktu_selesai_pendinginan,
             # Dingin boleh dinyatakan berkali-kali — gabah yang sudah
             # dinyatakan dingin bisa ternyata masih panas setelah dicek.
@@ -302,6 +321,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sejak=lot.waktu_selesai_pengeringan,
             judul="Pendinginan",
             sub=f"{lot.kode_lot} · gabah tetap di mesin",
+            ringkas="pengeringan selesai · menunggu dingin",
         ))
 
     # Giling yang sudah ditutup tetapi belum di-QC / belum diverifikasi TIDAK
@@ -340,8 +360,23 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
 
         isi_lot = await _lot_batches(db, lot.id)
         kg_lot = sum(float(x.berat_total_kg or 0) for x in isi_lot)
-        target = (f"{float(lot.target_kadar_air):g}%"
-                  if lot.target_kadar_air is not None else "—")
+        from app.penggilingan.gudang1.services.drying import kadar_air_awal, kemajuan
+        from app.services.setelan import target_kadar_air
+
+        target_n = (float(lot.target_kadar_air) if lot.target_kadar_air is not None
+                    else await target_kadar_air(db))
+        target = f"{target_n:g}%"
+        # Alat tes yang menggerakkan batang kemajuan — itulah ukuran yang
+        # dipakai memutuskan. Bacaan mesin cuma pembanding; kalau ia ikut
+        # menggerakkan batang, dryer yang sensornya melenceng akan menyeret
+        # kemajuan seluruh lot tanpa ada yang tahu.
+        kini = None
+        if log is not None:
+            if log.kadar_air_tes_manual is not None:
+                kini = float(log.kadar_air_tes_manual)
+            elif log.kadar_air_indikator is not None:
+                kini = float(log.kadar_air_indikator)
+        maju = kemajuan(await kadar_air_awal(db, lot.id), kini, target_n)
         fakta = []
         if log is not None and log.kadar_air_tes_manual is not None:
             fakta.append(("Alat tes", f"{float(log.kadar_air_tes_manual):.1f}%"))
@@ -364,6 +399,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             anak=[(f"{x.kode_batch}", _kg(x.berat_total_kg), "") for x in isi_lot],
             nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
                   if macet else None),
+            maju=maju,
+            ringkas=(f"⏸ {macet.sebab}"
+                     + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
+                     if macet else
+                     (" · ".join(ka) + f" → target {target}" if ka
+                      else "kadar air belum dicatat")),
             keadaan=("menunggu dilanjutkan" if macet else "menunggu kadar air turun"),
             aksi=("lanjutkan_proses" if macet else "kadar_air"),
             nilai=(f"pengeringan:{lot.kode_lot}" if macet else lot.kode_lot),
@@ -421,6 +462,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             judul=silo.nama_silo,
             utama=(_kg(kg_silo).removesuffix(" kg"), "kg"),
             sub="gabah kering · menunggu giliran digiling",
+            ringkas="gabah kering · menunggu giliran digiling",
         ))
 
     for p in (await db.execute(
@@ -445,6 +487,9 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             fakta=fakta_g,
             nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
                   if macet else None),
+            ringkas=(f"⏸ {macet.sebab}"
+                     + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
+                     if macet else f"{_kg(p.berat_gabah_masuk_kg)} bahan masuk"),
             keadaan=("menunggu dilanjutkan" if macet else "catat hasil, tutup bila selesai"),
             aksi=("lanjutkan_proses" if macet else "hasil_giling"),
             nilai=(f"giling:{p.kode_proses}" if macet else p.kode_proses),
@@ -518,6 +563,11 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         g = await untuk_gudang1(db)
         b.menunggu += g.menunggu
         b.berjalan += g.berjalan
+        # Transit ikut. Sebelumnya tidak, dan akibatnya blok Transit di layar
+        # Sedang berjalan selalu kosong: gabah yang menunggu di dryer dan silo
+        # dikeluarkan dari antrean tanpa pernah sampai ke tempat barunya —
+        # hilang dari kedua layar sekaligus.
+        b.transit += g.transit
     if can_see_financials(user):
         s = await untuk_staff(db)
         b.menunggu += s.menunggu
@@ -525,7 +575,9 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         # Staff & Direksi tak terikat satu gudang; keadaan fisik G1 tetap
         # perlu terlihat, tetapi sebagai kabar — bukan sebagai tugas mereka.
         if not await _is_g1_operator(user):
-            b.berjalan += (await untuk_gudang1(db)).berjalan
+            g1 = await untuk_gudang1(db)
+            b.berjalan += g1.berjalan
+            b.transit += g1.transit
     if await _is_g2_operator(user):
         pass    # Gudang 2 menyusul — lihat catatan di docs/RANCANGAN.md §11.
     return b

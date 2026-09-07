@@ -60,7 +60,6 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
             select(DryingLot).where(DryingLot.status == "proses").order_by(DryingLot.id)
         )
     ).scalars().all()
-    from app.models import DryingMoistureLog
 
     bawaan = float(settings.kadar_air_target_persen)
     out = []
@@ -76,25 +75,13 @@ async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
         # `kadar_air` dipertahankan untuk pembaca lama (bot, ringkasan teks).
         ka = tes if tes is not None else mesin
 
-        # Bacaan PERTAMA lot ini — titik tolak kemajuan. Tanpanya tak ada yang
-        # bisa disebut "sudah sejauh mana": 18% itu jauh atau dekat sepenuhnya
-        # tergantung mulai dari berapa.
-        awal_row = (await db.execute(
-            select(DryingMoistureLog.kadar_air_tes_manual,
-                   DryingMoistureLog.kadar_air_indikator)
-            .where(DryingMoistureLog.drying_lot_id == lot.id)
-            .order_by(DryingMoistureLog.waktu_update.asc()).limit(1)
-        )).first()
-        awal = None
-        if awal_row is not None:
-            awal = awal_row[0] if awal_row[0] is not None else awal_row[1]
-            awal = float(awal) if awal is not None else None
+        # Titik tolak dan rumusnya dipinjam dari layanan pengeringan — layar
+        # Beranda memakai yang sama persis, dan dua salinan rumus yang sama
+        # adalah dua angka yang cepat atau lambat berbeda.
+        from app.penggilingan.gudang1.services.drying import kadar_air_awal, kemajuan
 
-        maju = None
-        if awal is not None and ka is not None and awal > target:
-            maju = max(0.0, min(1.0, (awal - ka) / (awal - target)))
-        elif ka is not None and ka <= target:
-            maju = 1.0
+        awal = await kadar_air_awal(db, lot.id)
+        maju = kemajuan(awal, ka, target)
 
         out.append({
             "kode": lot.kode_lot,

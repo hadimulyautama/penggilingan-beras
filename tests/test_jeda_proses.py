@@ -184,7 +184,17 @@ def test_dua_layar_memakai_bentuk_kartu_yang_sama():
     import pathlib
 
     akar = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates"
-    for berkas in ("aksi.html", "berjalan.html"):
+
+    # Bentuknya tinggal satu berkas, dan di situlah markupnya berada.
+    makro = (akar / "_benda.html").read_text()
+    assert "{% macro" in makro
+    assert "benda__nilai" in makro and 'class="fakta"' in makro
+    assert "padat__nilai" in makro, "bentuk padat Beranda ikut di sini"
+
+    # Layar yang memakainya MENGIMPOR, tidak menyalin. Salinan itulah yang
+    # dulu berselisih, dan tesnya ada supaya tak lahir salinan berikutnya.
+    for berkas in ("aksi.html", "berjalan.html", "beranda.html"):
         teks = (akar / berkas).read_text()
-        assert "benda__nilai" in teks and 'class="fakta"' in teks, berkas
-        assert "{% macro" in teks, f"{berkas}: kartunya harus satu makro"
+        assert '"_benda.html"' in teks, berkas
+        assert "with context" in teks, f"{berkas}: `lama` datang dari rute"
+        assert "benda__nilai" not in teks, f"{berkas}: markup kartu disalin lagi"

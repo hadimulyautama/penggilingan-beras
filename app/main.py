@@ -24,8 +24,6 @@ from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
-from app.bots.common import can_see_financials
-from app.web.nav import jumlah_menunggu
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
@@ -171,15 +169,18 @@ async def beranda(request: Request):
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
 
-    from sqlalchemy import func, select
+    from app.services import berjalan as svc
 
-    from app.models import ProduksiAkun
-
-    o, jml_akun = {}, 0
+    # Benda yang berjalan diambil dari daftar yang SAMA dengan layar Sedang
+    # berjalan, bukan disusun ulang di sini. Beranda yang menghitung sendiri
+    # apa yang berjalan adalah Beranda yang cepat atau lambat menyebut angka
+    # yang berbeda dari layar sebelahnya — dan yang berbeda diam-diam justru
+    # tak akan ada yang menyadarinya.
+    o, jalan = {}, svc.Berjalan()
     try:
         async with SessionLocal() as db:
             o = (await dashboard_data(db)).get("operasional", {}) or {}
-            jml_akun = (await db.execute(select(func.count(ProduksiAkun.id)))).scalar_one()
+            jalan = await svc.untuk(db, akun.user)
     except Exception:
         log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
 
@@ -195,19 +196,14 @@ async def beranda(request: Request):
         gabah_kg=gabah.get("total_kg", 0) or 0,
         gabah_batch=gabah.get("batch", 0) or 0,
         pengeringan=len(o.get("pengeringan", []) or []),
-        # Daftarnya, bukan cuma cacahnya: "1 lot" tak memberi tahu apa pun
-        # tentang sudah sejauh mana ia kering.
-        lot_kering=o.get("pengeringan", []) or [],
         silo_terisi=sum(1 for s in silo if s.get("terisi")),
         silo_total=len(silo),
         giling=len(o.get("giling", []) or []),
         stok_pk=(o.get("stok_pk", {}) or {}).get("total", 0) or 0,
         stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
-        jml_akun=jml_akun,
-        MENUNGGU=await jumlah_menunggu(akun.user),
-        # Menentukan kalimat di kartu Laporan, bukan hak aksesnya — yang itu
-        # diputuskan ulang di `laporan.py` untuk tiap laporan yang diminta.
-        boleh_uang=bool(akun.user and can_see_financials(akun.user)),
+        berjalan=jalan.berjalan, transit=jalan.transit,
+        lama=svc._lama,
+        MENUNGGU=jalan.jumlah_menunggu,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 
