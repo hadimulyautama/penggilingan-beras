@@ -37,17 +37,29 @@ log = logging.getLogger("web.nav")
 #: atas batas aman untuk ibu jari (tingginya tetap 56px), tetapi labelnya
 #: harus pendek: "Pengaturan" patah dua baris di lebar itu, dan label yang
 #: patah lebih buruk daripada label yang disingkat.
+#: Kolom kelima: peran terendah yang boleh melihatnya. None = semua.
+#:
+#: List audit BUKAN milik operator. Ia memuat seluruh jejak pencatatan
+#: berikut tombol yang membatalkannya — dan orang yang bisa membatalkan
+#: catatannya sendiri membuat jejak itu tak ada gunanya sebagai jejak.
+#:
+#: Menyembunyikan pintunya di sini BUKAN penjagaan: alamatnya tetap bisa
+#: diketik, dan yang menjaga sungguhan adalah `butuh_admin` di rutenya.
+#: Yang dikerjakan di sini cuma menghindari menawarkan pintu yang akan
+#: ditolak.
 TAB = (
-    ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini"),
-    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda"),
-    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala"),
-    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini"),
-    ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat"),
+    ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None),
+    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None),
+    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None),
+    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
+    ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
+     "admin"),
+    ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None),
 )
 
 #: Judul yang naik ke bilah atas. Diambil dari daftar yang sama supaya nama
 #: layar tak pernah berbeda antara menu dan judulnya.
-JUDUL = {k: nama for k, _, nama, _ in TAB}
+JUDUL = {k: nama for k, _, nama, _, _ in TAB}
 
 
 async def jumlah_menunggu(user: User | None) -> int:

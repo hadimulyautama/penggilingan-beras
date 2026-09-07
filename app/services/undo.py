@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +51,9 @@ _UNDOABLE = {
 #: Mencakup tabel yang didukung dan yang tidak. Dulu hanya yang tidak
 #: didukung, karena satu-satunya tempat label dipakai adalah pesan penolakan;
 #: sejak ada pratinjau, yang didukung justru yang paling sering ditampilkan.
+#: Lewat ini, tindakan tak bisa dibatalkan lagi — lihat `undo_last`.
+BATAS_UNDO = timedelta(hours=48)
+
 _TABLE_LABEL = {
     # Bisa dibatalkan
     "drying_lots": "lot pengeringan",
@@ -695,6 +698,25 @@ async def undo_last(
     if log is None:
         suffix = f" oleh {scope_label}" if scope_label else ""
         raise UndoError(f"Tidak ada input terakhir yang bisa dibatalkan{suffix}.")
+    # ── Batas 48 jam ──
+    # Bukan aturan tampilan: angka hari kemarin sudah masuk laporan dan sudah
+    # dipakai orang lain memutuskan. Membiarkannya berubah berarti laporan
+    # yang sama bisa berbeda isinya tiap kali dibuka. Salah yang baru ketahuan
+    # setelah lewat diperbaiki dengan catatan koreksi baru — bukan dengan
+    # membatalkan yang lama.
+    #
+    # Dijaga DI SINI, bukan di layar: menyembunyikan tombol bukan penjagaan,
+    # dan jalur bot memakai fungsi yang sama.
+    from app.database import now_local
+
+    umur = now_local() - log.waktu_perubahan
+    if umur > BATAS_UNDO:
+        jam = umur.total_seconds() / 3600
+        raise UndoError(
+            f"Tindakan itu sudah {jam:.0f} jam lalu — lewat batas "
+            f"{BATAS_UNDO.total_seconds() / 3600:.0f} jam. "
+            "Perbaiki dengan catatan baru, bukan dengan membatalkan yang lama."
+        )
     if log.table_name not in _UNDOABLE:
         raise UndoError(
             f"Tindakan terakhir ({label_tabel(log.table_name)}) "

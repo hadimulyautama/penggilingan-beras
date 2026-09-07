@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "46"
+VERSI = "47"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -31,10 +31,14 @@ from app.config import settings  # noqa: E402
 #: baru ketahuan berminggu-minggu kemudian.
 templates.env.globals["MODE_UJI"] = settings.mode_uji
 
+from app.bots.common import PERAN_ADMIN_KEATAS  # noqa: E402
 from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)
 
 templates.env.globals["TAB"] = TAB
-templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _ in TAB}
+templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _, _ in TAB}
+# Peran yang boleh melihat tiap pintu — dipakai templat untuk menyaring
+# laci. Penjagaan sungguhannya tetap di rute masing-masing.
+templates.env.globals["PERAN_ADMIN_KEATAS"] = PERAN_ADMIN_KEATAS
 # Judul layar naik ke bilah atas — laci menyembunyikan posisi orang,
 # dan layar tanpa nama membuat orang menekan menu hanya untuk memastikan
 # ia sedang di mana.

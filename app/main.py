@@ -29,6 +29,7 @@ from app.web.nav import jumlah_menunggu
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
+from app.web.layar_audit import router as audit_router
 from app.web.layar_berjalan import router as berjalan_router
 from app.web.pengaturan import router as pengaturan_router
 from app.web.mode_uji import router as mode_uji_router
@@ -96,6 +97,7 @@ app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
 app.include_router(laporan_router)
 app.include_router(berjalan_router)
+app.include_router(audit_router)
 app.include_router(pengaturan_router)
 app.include_router(mode_uji_router)
 app.include_router(lihat_sebagai_router)

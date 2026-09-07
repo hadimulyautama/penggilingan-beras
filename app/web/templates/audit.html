@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block judul %}List audit{% endblock %}
+{% block isi %}
+
+{# ── Siapa mencatat apa, jam berapa ──
+   Laporan menjawab "berapa"; layar ini menjawab pertanyaan yang muncul
+   justru saat angkanya tidak masuk akal. #}
+
+{% if pesan %}<div class="nota nota--baik">{{ pesan }}</div>{% endif %}
+{% if err %}<div class="nota nota--buruk">{{ err }}</div>{% endif %}
+
+<form class="saring" method="get" action="/audit">
+  {# Saringan sebagai TAUTAN, bukan kotak pilih: satu ketukan, dan yang
+     sedang aktif terlihat tanpa dibuka. #}
+  <div class="pil-baris">
+    {% for kunci, nama, _ in RENTANG %}
+      <a class="pil{{ ' pil--on' if rentang == kunci }}"
+         href="/audit?rentang={{ kunci }}&kelompok={{ kelompok }}&cari={{ cari|urlencode }}">{{ nama }}</a>
+    {% endfor %}
+  </div>
+  <div class="pil-baris">
+    {% for kunci, nama, _ in KELOMPOK %}
+      <a class="pil{{ ' pil--on' if kelompok == kunci }}"
+         href="/audit?rentang={{ rentang }}&kelompok={{ kunci }}&cari={{ cari|urlencode }}">{{ nama }}</a>
+    {% endfor %}
+  </div>
+  <input type="hidden" name="rentang" value="{{ rentang }}">
+  <input type="hidden" name="kelompok" value="{{ kelompok }}">
+  <input class="fld" type="search" name="cari" value="{{ cari }}"
+         placeholder="Cari kode, pemasok, atau isi catatan…">
+</form>
+
+<div class="hitungan">
+  {{ catatan|length }} dari {{ semua }} catatan{% if rentang == '48j' %} ·
+  di dalam {{ JAM_BATAS }} jam, masih bisa dibatalkan{% endif %}
+</div>
+
+{# ── Membatalkan ──
+   Hanya catatan PALING AKHIR, dan hanya bila masih di dalam batas.
+   Membatalkan dari tengah berarti angka sesudahnya dihitung dari keadaan
+   yang tak pernah ada. #}
+{% if pratinjau %}
+  <div class="benda benda--baru benda--diam" style="margin-bottom:12px">
+    <div>
+      <div class="benda__judul">
+        <span>Catatan terakhir</span>
+        <span class="benda__sub">{{ pratinjau.label }} · oleh {{ pratinjau.oleh }}</span>
+      </div>
+      <div class="benda__isi">{{ pratinjau.ringkas }}</div>
+      {% if pratinjau.didukung %}
+        <form method="post" action="/audit/batalkan" style="margin-top:9px">
+          <input type="hidden" name="rentang" value="{{ rentang }}">
+          <input type="hidden" name="kelompok" value="{{ kelompok }}">
+          <input type="hidden" name="cari" value="{{ cari }}">
+          <button class="btn btn--bahaya" type="submit">Batalkan catatan ini</button>
+        </form>
+      {% else %}
+        <div class="nota">Jenis tindakan ini belum bisa dibatalkan otomatis.
+          Perbaiki dengan catatan baru.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="grup" style="gap:7px">
+  {% for c in catatan %}
+    <div class="audit audit--{{ 'tua' if not c.muda else 'muda' }}">
+      <div class="audit__atas">
+        <span class="audit__jenis">{{ c.label }}</span>
+        <span>#{{ c.id }} · {{ c.waktu.strftime('%d %b %H.%M') }}</span>
+      </div>
+      <div class="audit__teks">{{ c.ringkas }}</div>
+      <div class="audit__kaki">
+        <span>{{ c.oleh }}</span>
+        {% if not c.muda %}
+          <span class="kunci-tua">🔒 lewat {{ JAM_BATAS }} jam — terkunci</span>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    <div class="kosong">
+      <div>
+        <h2>Tak ada catatan yang cocok</h2>
+        <p class="bantu">Coba longgarkan saringannya, atau kosongkan pencarian.</p>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

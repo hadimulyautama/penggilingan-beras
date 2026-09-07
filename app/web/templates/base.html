@@ -131,7 +131,8 @@
       </div>
     </div>
     <div class="laci__daftar">
-      {% for kunci, alamat, nama, ket in TAB %}
+      {% for kunci, alamat, nama, ket, peran_min in TAB %}
+        {% if not peran_min or akun.peran in PERAN_ADMIN_KEATAS %}
         <a class="pintu{{ ' pintu--kini' if layar == kunci }}" href="{{ alamat }}"
            {{ ' aria-current=page'|safe if layar == kunci }}>
           <span class="pintu__ikon" aria-hidden="true">
@@ -153,6 +154,7 @@
                   aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
           {% endif %}
         </a>
+        {% endif %}
       {% endfor %}
     </div>
     <form method="post" action="/keluar" class="laci__kaki">

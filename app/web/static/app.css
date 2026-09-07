@@ -796,3 +796,50 @@ details.benda[open] > summary::after { transform: rotate(-135deg); }
   color: var(--redup-2);
 }
 .maju__kini { color: var(--tinta-2); }
+
+/* ── List audit ──
+   Nomor dan jamnya sekeras mungkin dibaca: itulah yang dicocokkan orang
+   dengan buku atau nota saat angka laporan tak masuk akal. */
+.saring { display: grid; gap: 7px; margin-bottom: 10px; }
+.pil-baris { display: flex; gap: 6px; flex-wrap: wrap; }
+.pil {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  min-height: 32px; display: inline-flex; align-items: center;
+  padding: 6px 11px; border-radius: 999px;
+  background: transparent; color: var(--redup);
+  border: 1px solid var(--garis); text-decoration: none;
+}
+.pil:hover { background: var(--panel); }
+.pil--on { background: var(--aksi); border-color: var(--aksi); color: var(--aksi-tinta); }
+.hitungan {
+  font-family: var(--mono); font-size: 11px; color: var(--redup-2);
+  margin-bottom: 10px;
+}
+
+.audit {
+  display: grid; gap: 5px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--garis);
+  border-left: 3px solid var(--garis); border-radius: 11px;
+}
+/* Yang masih bisa dibatalkan diberi tepi berwarna; yang terkunci tidak.
+   Perbedaannya harus terlihat sebelum tulisannya dibaca. */
+.audit--muda { border-left-color: var(--aksi); }
+.audit--tua { opacity: .72; }
+.audit__atas {
+  display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
+  font-family: var(--mono); font-size: 11px; color: var(--redup-2);
+}
+.audit__jenis { color: var(--tinta-2); letter-spacing: .05em; text-transform: uppercase; }
+.audit__teks { font-size: 13.5px; color: var(--tinta-2); line-height: 1.5; }
+.audit__kaki {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 10.5px; color: var(--redup-2);
+}
+.kunci-tua { color: var(--redup-2); }
+
+.btn--bahaya {
+  background: transparent; color: var(--bahaya); border-color: var(--bahaya);
+}
+.btn--bahaya:hover { background: rgba(217, 105, 90, .12); }
+.nota--baik { border-left-color: var(--aman); margin-bottom: 10px; }
+.nota--buruk { border-left-color: var(--bahaya); margin-bottom: 10px; }
