@@ -737,3 +737,65 @@ async def sumber_batch(
             h = harga.get(b.id)
             hasil.append((b, float(h) if h is not None else None, lewat))
     return hasil
+
+
+async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
+    """Samakan bahan giling YANG SEDANG BERJALAN dengan bobot batchnya sekarang.
+
+    `berat_gabah_masuk_kg` dan `milling_process_sources.berat_kg` diambil
+    sebagai cuplikan saat giling dimulai. Cuplikan itu benar pada detik itu —
+    tetapi begitu timbangan membetulkan berat sebuah tiket, ia jadi salinan
+    yang tak pernah dibaca ulang, dan salinan yang tak pernah dibaca ulang
+    adalah cara paling umum dua aplikasi mulai berbeda tanpa ada yang
+    menyadarinya.
+
+    Akibatnya bukan satu angka meleset: `berat_gabah_masuk_kg` adalah penyebut
+    rendemen. Bahan yang tercatat lebih kecil daripada yang sungguh masuk
+    membuat rendemen terbaca melambung — dan yang melihatnya akan mencari
+    sebabnya di mesin, bukan di catatan.
+
+    Hanya proses yang masih `proses`. Yang sudah ditutup TIDAK disentuh:
+    angkanya sudah masuk laporan dan sudah dipakai orang lain memutuskan,
+    persis alasan yang sama dengan batas 48 jam pada pembatalan. Selisih yang
+    baru ketahuan sesudah itu diperbaiki dengan catatan koreksi, bukan dengan
+    menulis ulang yang lama.
+
+    → daftar kode proses yang berubah (kosong = semuanya sudah cocok).
+    """
+    berubah: list[str] = []
+    procs = (await db.execute(
+        select(MillingProcess).where(MillingProcess.status == "proses")
+    )).scalars().all()
+    for proc in procs:
+        sumber = (await db.execute(
+            select(MillingProcessSource).where(
+                MillingProcessSource.milling_process_id == proc.id)
+        )).scalars().all()
+        if not sumber:
+            continue
+        total = 0.0
+        ada_geser = False
+        for src in sumber:
+            st = await db.get(SiloStorage, src.silo_storage_id)
+            if st is None:
+                total += float(src.berat_kg or 0)
+                continue
+            kg = await _storage_kg(db, st)
+            if float(src.berat_kg or 0) != kg:
+                src.berat_kg = kg
+                ada_geser = True
+            total += kg
+        if ada_geser or float(proc.berat_gabah_masuk_kg or 0) != total:
+            lama = float(proc.berat_gabah_masuk_kg or 0)
+            proc.berat_gabah_masuk_kg = total
+            await log_activity(
+                db, table_name="milling_process", record_id=proc.id,
+                action="UPDATE", changed_by=proc.created_by,
+                field_name="berat_gabah_masuk_kg",
+                old_value=f"{lama:.0f}", new_value=f"{total:.0f}",
+                alasan="bobot tiket direvisi di aplikasi timbangan",
+            )
+            berubah.append(proc.kode_proses)
+    if berubah:
+        await db.commit()
+    return berubah

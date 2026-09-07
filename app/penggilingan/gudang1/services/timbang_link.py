@@ -149,6 +149,16 @@ _SQL_RESINKRON = """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.sumber_berat IN ('nota', 'timbangan')     -- sudah pernah sinkron dari timbang
+       -- Satu-satunya yang MEMBEKUKAN bobot: harga sudah diverifikasi.
+       -- Sesudah itu ada angka rupiah yang berdiri di atas bobot ini, dan
+       -- mengubahnya diam-diam membuat nilai pembelian tak lagi cocok dengan
+       -- apa pun. Yang begitu diperbaiki lewat verifikasi ulang, bukan lewat
+       -- poller.
+       --
+       -- Status prosesnya TIDAK lagi membekukan. Dulu batch yang sedang
+       -- digiling dilewati, dan akibatnya persis kebalikan dari yang
+       -- diinginkan: justru muatan yang sedang dikerjakan itulah yang paling
+       -- sering direvisi notanya, dan revisinya tak pernah sampai.
        AND b.flag_unverified = true                     -- belum ada harga → tak ada nilai beku
        {extra}
        AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
@@ -158,9 +168,32 @@ _SQL_RESINKRON = """
 
 
 async def resinkron_bobot_berubah(db: AsyncSession) -> int:
-    """Perbarui bobot batch yang tiketnya DIREVISI — hanya batch belum-verifikasi
-    & (gabah) belum-giling. → jumlah baris diperbarui. Idempoten (IS DISTINCT FROM)."""
+    """Perbarui bobot batch yang tiketnya DIREVISI di aplikasi timbangan.
+
+    Berlaku pada batch yang masih DALAM PROSES — di dryer, di silo, dan pada
+    giling yang sedang berjalan. Timbangan yang menimbang, jadi timbangan pula
+    yang membetulkan; satu angka yang bisa berbeda di dua tempat membuat
+    pertanyaan "yang mana yang benar" tak punya jawaban lagi.
+
+    Dua hal membekukannya, dan keduanya berarti "sudah terlanjur dipakai":
+    harga yang sudah diverifikasi (ada rupiah berdiri di atasnya), dan gabah
+    yang sudah tergiling (beratnya kini riwayat, dan angkanya sudah masuk
+    laporan).
+
+    Idempoten (`IS DISTINCT FROM`), jadi aman dijalankan tiap tiga menit.
+    """
     total = 0
+    # Dua hal saja yang MEMBEKUKAN bobot, dan keduanya berarti "sudah
+    # terlanjur dipakai":
+    #   · harga sudah diverifikasi — ada angka rupiah berdiri di atasnya;
+    #   · gabahnya sudah TERGILING — beratnya kini riwayat, dan proses giling
+    #     yang sudah ditutup angkanya sudah masuk laporan (alasan yang sama
+    #     dengan batas 48 jam pada pembatalan).
+    #
+    # Yang TIDAK lagi membekukan: sedang di dryer, sedang di silo, dan sedang
+    # digiling. Dulu ketiganya ikut terhalang, dan akibatnya persis kebalikan
+    # dari yang diinginkan — justru muatan yang sedang dikerjakan itulah yang
+    # paling sering direvisi notanya, dan revisinya tak pernah sampai.
     for tbl, extra in (("purchase_batches", "AND b.status_batch <> 'digiling'"),
                        ("pk_purchase_batches", "")):
         res = await db.execute(text(_SQL_RESINKRON.format(tbl=tbl, extra=extra)))
