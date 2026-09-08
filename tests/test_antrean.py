@@ -89,7 +89,10 @@ def test_kepingan_fase_baris_meja_tidak_berbohong():
     assert _FASE_BATCH["di_dryer"] == "dryer"
     assert _FASE_BATCH["di_silo"] == "silo"
     assert _FASE_BATCH["digiling"] == "giling"
-    assert _FASE_BATCH["ditumpuk"] == "baru"
+    # Gabah yang menumpuk SUDAH ditindak — ia sengaja ditaruh di lantai. Fase
+    # "baru" akan membuat kepingannya berbunyi "Belum ada tindakan", persis
+    # kebohongan yang tes ini jaga.
+    assert _FASE_BATCH["ditumpuk"] == "tumpuk"
     # Dan barisnya menyebut di mana gabahnya, supaya tak perlu buka layar lain.
     assert set(_DI_MANA) == set(_FASE_BATCH)
     assert "fakta=[(\"Gabahnya\"" in sumber

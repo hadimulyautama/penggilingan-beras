@@ -584,7 +584,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             keadaan=("harus ke dryer — belum kering" if wajib_dryer
                      else "tentukan tempatnya"),
             aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
-            fase="baru",
+            fase="tumpuk",
             judul=nama_pemasok,
             utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
             sub=f"{b_.kode_batch} · gabah {b_.kondisi_gabah} · "
@@ -881,7 +881,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
 #: yang berbohong lebih buruk daripada kepingan yang tak ada, karena ia
 #: dipercaya.
 _FASE_BATCH = {
-    "baru": "baru", "ditumpuk": "baru",
+    "baru": "baru", "ditumpuk": "tumpuk",
     "di_dryer": "dryer", "dikeringkan": "dryer",
     "di_silo": "silo", "digiling": "giling",
 }

@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "98"
+VERSI = "99"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -53,6 +53,13 @@ templates.env.globals["LIHAT_PILIHAN"] = _LIHAT_PILIHAN
 #: sekilas tanpa membaca hurufnya.
 templates.env.globals["FASE"] = {
     "baru": "Belum ada tindakan",
+    # Gabah yang menumpuk SUDAH ditindak — ia sengaja ditaruh di lantai karena
+    # mesin dan silo tak siap menerimanya. Sebelum ini ia memakai fase "baru",
+    # jadi kepingannya berbunyi "Belum ada tindakan" tepat di bawah judul blok
+    # "Menumpuk di lantai" — dua kalimat yang saling membantah pada kartu yang
+    # sama. Kepingan yang berbohong lebih buruk daripada kepingan yang tak ada,
+    # karena ia dipercaya.
+    "tumpuk": "Menumpuk di lantai",
     "dryer": "Di mesin pengering",
     "silo": "Transit di silo kering",
     "giling": "Proses giling",
