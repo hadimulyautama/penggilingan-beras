@@ -273,6 +273,46 @@ async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
     return f"✓ Dibatalkan: input pembelian {kode}."
 
 
+async def _undo_penempatan(db: AsyncSession, batch_id: int) -> str:
+    """Batalkan PENEMPATAN gabah: masuk mesin pengering, atau ditumpuk.
+
+    Cabang ini pernah tidak ada, dan akibatnya tombol Batalkan di List audit
+    menolak dengan "belum bisa di-undo otomatis — fitur menyusul" untuk
+    tindakan yang paling sering dilakukan orang. Yang tercatat sebagai
+    `purchase_batches` INSERT adalah pembuatan batch-nya; penempatannya
+    tercatat sebagai UPDATE terpisah, dan itulah yang berdiri paling atas di
+    daftar sesudah gabah masuk.
+
+    Gabah dikembalikan ke keadaan "belum punya tempat" — ia muncul lagi di
+    antrean, dan tujuannya bisa dipilih ulang. Batch-nya sendiri TIDAK
+    dihapus: yang salah tempatnya, bukan kedatangannya, dan menghapus batch
+    berarti tiketnya ikut terlepas padahal truknya sungguh datang.
+    """
+    b = await db.get(PurchaseBatch, batch_id)
+    if b is None:
+        raise UndoError("Batch sudah tidak ada.")
+    if b.status_batch == "baru":
+        raise UndoError(f"{b.kode_batch} memang belum ditempatkan.")
+    if b.status_batch not in ("di_dryer", "ditumpuk"):
+        raise UndoError(
+            f"{b.kode_batch} sudah diproses ({b.status_batch}) — "
+            "batalkan dulu langkah sesudahnya."
+        )
+    in_lot = (await db.execute(
+        select(DryingLotBatch.id).where(DryingLotBatch.purchase_batch_id == batch_id)
+    )).first()
+    if in_lot:
+        raise UndoError(
+            f"{b.kode_batch} sudah masuk lot pengeringan — batalkan lotnya dulu."
+        )
+    semula = b.status_batch
+    b.status_batch = "baru"
+    b.dryer_id = None
+    dari = "mesin pengering" if semula == "di_dryer" else "tumpukan"
+    return (f"✓ Dibatalkan: {b.kode_batch} dikeluarkan dari {dari} — "
+            "kembali menunggu ditentukan tempatnya.")
+
+
 # ── Silo ──
 async def _revert_lot_batches(db: AsyncSession, lot_id: int, status: str) -> None:
     bids = (
@@ -598,6 +638,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_last_cooling(db, rid)
     if t == "purchase_batches" and act == "INSERT":
         return await _undo_purchase(db, rid)
+    if t == "purchase_batches" and act == "UPDATE":
+        return await _undo_penempatan(db, rid)
     if t == "silo_storage" and act == "INSERT":
         return await _undo_masuk_silo(db, rid)
     if t == "silo_storage" and act == "UPDATE" and log.field_name == "gabung":

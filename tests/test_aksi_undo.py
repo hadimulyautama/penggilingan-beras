@@ -138,3 +138,34 @@ def test_setiap_tabel_yang_menulis_jejak_punya_label_manusia():
 
     tanpa = sorted(t for t in menulis if svc.label_tabel(t) == t)
     assert not tanpa, f"tabel tanpa label manusia: {tanpa}"
+
+
+def test_penempatan_gabah_bisa_dibatalkan():
+    """Pemilik: "di list audit batalkan catatan gagal."
+
+    Bukan galat — aplikasinya menolak: "Tindakan terakhir (gabah masuk) belum
+    bisa di-undo otomatis — fitur menyusul." Yang tercatat sebagai
+    `purchase_batches` INSERT adalah pembuatan batch-nya, dan itu memang
+    didukung; PENEMPATANNYA (masuk mesin pengering / ditumpuk) tercatat
+    sebagai UPDATE terpisah, dan cabang itu tak pernah ada — padahal itulah
+    baris yang berdiri paling atas sesudah gabah masuk.
+    """
+    import inspect
+
+    from app.services import undo
+
+    sumber = inspect.getsource(undo.undo_last) + inspect.getsource(undo._pilih_undo) \
+        if hasattr(undo, "_pilih_undo") else inspect.getsource(undo)
+    assert 't == "purchase_batches" and act == "UPDATE"' in sumber
+    assert "_undo_penempatan" in sumber
+
+    fn = inspect.getsource(undo._undo_penempatan)
+    # Gabah dikembalikan ke "belum punya tempat" — batch-nya TIDAK dihapus.
+    # Yang salah tempatnya, bukan kedatangannya; menghapus batch berarti
+    # tiketnya ikut terlepas padahal truknya sungguh datang.
+    assert 'b.status_batch = "baru"' in fn and "b.dryer_id = None" in fn
+    assert "db.delete" not in fn
+    # Yang sudah melangkah lebih jauh ditolak dengan sebabnya, bukan diam-diam.
+    assert "sudah masuk lot pengeringan" in fn
+    assert "sudah diproses" in fn
+    assert "memang belum ditempatkan" in fn
