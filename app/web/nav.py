@@ -122,14 +122,15 @@ async def lencana(user: User | None) -> dict[str, int]:
     lencana yang tak pernah ada.
     """
     if user is None:
-        return {"MENUNGGU": 0, "KEPUTUSAN": 0}
+        return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0}
     try:
         from app.bots.common import can_see_financials
         from app.services import berjalan
         async with SessionLocal() as db:
             b = await berjalan.untuk(db, user)
         return {"MENUNGGU": b.jumlah_menunggu,
+                "BERJALAN": b.jumlah_berjalan,
                 "KEPUTUSAN": b.jumlah_keputusan if can_see_financials(user) else 0}
     except Exception:
         log.exception("Lencana gagal dihitung (laci tetap tampil)")
-        return {"MENUNGGU": 0, "KEPUTUSAN": 0}
+        return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0}

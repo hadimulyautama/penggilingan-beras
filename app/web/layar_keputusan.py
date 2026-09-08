@@ -36,5 +36,6 @@ async def halaman_keputusan(request: Request, akun=Depends(butuh_admin)):
         meja=b.meja, lama=svc._lama,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
-        MENUNGGU=b.jumlah_menunggu, KEPUTUSAN=b.jumlah_keputusan,
+        MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
+        KEPUTUSAN=b.jumlah_keputusan,
     )

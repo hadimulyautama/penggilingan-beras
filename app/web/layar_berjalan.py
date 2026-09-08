@@ -27,6 +27,7 @@ async def halaman_berjalan(request: Request, akun=Depends(butuh_akun)):
         # sedang diapa-apakan. Antrean tak ikut ke sini — ia punya layarnya
         # sendiri.
         berjalan=b.berjalan, transit=b.transit,
-        MENUNGGU=b.jumlah_menunggu, KEPUTUSAN=b.jumlah_keputusan,
+        MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
+        KEPUTUSAN=b.jumlah_keputusan,
         lama=svc._lama,
     )

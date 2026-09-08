@@ -233,7 +233,8 @@ async def beranda(request: Request):
         stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
-        MENUNGGU=jalan.jumlah_menunggu, KEPUTUSAN=jalan.jumlah_keputusan,
+        MENUNGGU=jalan.jumlah_menunggu, BERJALAN=jalan.jumlah_berjalan,
+        KEPUTUSAN=jalan.jumlah_keputusan,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 
@@ -274,7 +275,8 @@ async def halaman_aksi(request: Request):
                   # dua tempat di kepala orang, dan cepat atau lambat keduanya
                   # berbeda isi.
                   menunggu=b.menunggu, berjalan=[], lama=svc._lama,
-                  MENUNGGU=b.jumlah_menunggu, KEPUTUSAN=b.jumlah_keputusan)
+                  MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
+                  KEPUTUSAN=b.jumlah_keputusan)
 
 
 @app.get("/aksi-lain", response_class=HTMLResponse)

@@ -555,6 +555,12 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   border-radius: 999px;
   background: var(--aksi); color: var(--aksi-tinta);
 }
+/* Kabar, bukan tagihan: berapa yang sedang jalan. Ia bisa berisi seharian
+   tanpa ada yang salah, jadi ia tak boleh berteriak sekeras yang menagih. */
+.pintu__jml--kabar {
+  background: transparent; color: var(--redup);
+  border: 1px solid var(--garis);
+}
 
 /* ── Baris pekerjaan berjalan ── */
 .jalan {

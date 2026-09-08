@@ -187,6 +187,35 @@ def test_tiap_layar_membawa_kedua_lencana():
         for potongan in re.findall(r"render\(\s*request,.*?\n\s*\)", teks, re.S):
             if "MENUNGGU" not in potongan:
                 continue                       # layar tanpa laci (masuk, error)
-            if "KEPUTUSAN" not in potongan and "lencana(" not in potongan:
-                kurang.append(f"{berkas.name}: {potongan.splitlines()[0]}")
-    assert not kurang, "layar ini lupa lencana keputusan:\n  " + "\n  ".join(kurang)
+            if "lencana(" in potongan:
+                continue                       # ketiganya sekaligus dari sana
+            for lencana in ("BERJALAN", "KEPUTUSAN"):
+                if lencana not in potongan:
+                    kurang.append(f"{berkas.name}: {lencana} — "
+                                  f"{potongan.splitlines()[0].strip()}")
+    assert not kurang, "layar ini lupa lencananya:\n  " + "\n  ".join(kurang)
+
+
+def test_lencana_menagih_dan_lencana_mengabari_dibedakan():
+    """"Antrian tunggu" dan "Menunggu keputusan" berarti ada yang harus
+    dikerjakan; "Sedang berjalan" cuma menyebut berapa yang sedang jalan — ia
+    bisa berisi seharian tanpa ada yang salah. Kalau keduanya tampil sama,
+    yang menagih kehilangan artinya."""
+    base = (TPL / "base.html").read_text()
+    assert "BERJALAN" in base and "pintu__jml--kabar" in base
+    blok = base.split("kunci == 'berjalan' and BERJALAN")[1].split("{% elif")[0]
+    assert "pintu__jml--kabar" in blok
+    for kunci in ("aksi", "keputusan"):
+        b = base.split(f"kunci == '{kunci}' and ")[1].split("{% elif")[0]
+        assert "--kabar" not in b, kunci
+
+    css = (AKAR / "app/web/static/app.css").read_text()
+    kabar = css.split(".pintu__jml--kabar {")[1].split("}")[0]
+    assert "background: transparent" in kabar
+
+
+def test_jumlah_berjalan_menghitung_mesin_dan_transit():
+    """Yang tampil di layar Sedang berjalan ada dua blok, jadi lencananya
+    harus menghitung keduanya — bukan hanya yang mesinnya menyala."""
+    b = Berjalan(berjalan=[_tiket()], transit=[_tiket(), _tiket()])
+    assert b.jumlah_berjalan == 3

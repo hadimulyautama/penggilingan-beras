@@ -153,6 +153,14 @@
           {% if kunci == 'aksi' and MENUNGGU %}
             <span class="pintu__jml"
                   aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
+          {# Yang MENAGIH dan yang sekadar MENGABARI dibedakan warnanya.
+             "Antrian tunggu" dan "Menunggu keputusan" berarti ada yang harus
+             Anda kerjakan; "Sedang berjalan" cuma menyebut berapa yang sedang
+             jalan — ia bisa berisi seharian tanpa ada yang salah. Kalau
+             keduanya tampil sama, yang menagih kehilangan artinya. #}
+          {% elif kunci == 'berjalan' and BERJALAN %}
+            <span class="pintu__jml pintu__jml--kabar"
+                  aria-label="{{ BERJALAN }} sedang berjalan">{{ BERJALAN }}</span>
           {% elif kunci == 'keputusan' and KEPUTUSAN %}
             <span class="pintu__jml"
                   aria-label="{{ KEPUTUSAN }} menunggu keputusan Anda">{{ KEPUTUSAN }}</span>
