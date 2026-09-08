@@ -36,7 +36,7 @@ def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():
 
     bahan = kode_saja(stok._bahan)
     assert "kode_batch" in bahan and "nama_supplier" in bahan
-    assert "berat_kg" in bahan, "bobot bahan tak disebut"
+    assert "berat_total_kg" in bahan, "bobot bahan tak disebut"
     # Proses lama tanpa baris sumber tetap dijawab, lewat sumber yang sama
     # dengan HPP — dua jawaban untuk "apa isi proses ini" akan berselisih.
     assert "sumber_batch" in bahan
@@ -79,28 +79,35 @@ def test_yang_habis_tak_ikut_terdaftar():
     assert "if bd.tersedia <= 0" in inspect.getsource(stok.pk_gudang1)
 
 
-def test_bobot_bahan_adalah_yang_masuk_mesin_bukan_berat_kiriman():
-    """Baris bahan harus bisa DIJUMLAHKAN menjadi "Dari gabah" di atasnya.
+def test_bahan_didaftar_satu_baris_per_batch():
+    """Pemilik: "saya ingin benar-benar list" — berapa batch asalnya, dan tiap
+    batch berapa bobotnya.
 
-    Pernah tidak: barisnya memakai `purchase_batches.berat_total_kg` — berat
-    seluruh kiriman truk — sehingga satu batch berbunyi 8.250 kg di sebelah
-    "Dari gabah 8.000 kg", padahal hanya 4.000 dari batch itu yang masuk lot
-    ini; sisanya tertinggal di silo atau ikut giling lain. Angka yang tak bisa
-    dijumlahkan menjadi angka di atasnya akan dicurigai sebagai salah hitung,
-    dan orang berhenti percaya pada seluruh kartunya.
+    Sebelumnya bahan dari satu pengeringan digabung jadi SATU baris bernama dua
+    pemasok sekaligus. Hasilnya di layar: kepala berbunyi "BATCH ASAL · 1"
+    sementara barisnya berbunyi "2 batch", nama pemasoknya berdempet sampai
+    membungkus baris, dan bobot per batch — yang justru diminta — tak muncul.
+
+    Beratnya berat PEMBELIAN, dan itu bukan kelalaian: `drying_lot_batches`
+    tak punya kolom berat, jadi berapa kilo TIAP batch yang masuk silo setelah
+    dikeringkan memang tak pernah tercatat. Karena itu jumlahnya tidak akan
+    sama persis dengan "Bahan" — selisihnya susut pengeringan. Yang menjaga
+    orang dari salah menjumlahkan adalah KATA "dibeli" pada tiap barisnya.
     """
     from app.services import stok
 
     fn = kode_saja(stok._bahan)
-    assert "MillingProcessSource" in fn, "berat tak diambil dari sumber giling"
-    assert "_kg(s.berat_kg)" in fn, "berat baris bukan berat yang masuk mesin"
-    # `berat_total_kg` hanya boleh muncul di jalur proses LAMA yang memang tak
-    # punya baris sumber — dan di sana ia WAJIB diberi kata "dibeli".
-    assert fn.count("berat_total_kg") == 1
-    assert "dibeli" in fn, "berat pembelian tak diberi nama"
+    assert "dibeli {_kg(b.berat_total_kg)}" in fn, "berat pembelian tak diberi nama"
+    assert "berat_kg" not in fn.replace("berat_total_kg", ""), \
+        "berat muatan silo dipakai lagi sebagai berat batch"
+    # Satu batch tak boleh terdaftar dua kali walau muncul di dua sumber.
+    assert "terlihat" in fn and "b.id in terlihat" in fn
+    # Kode pengeringannya ikut disebut — itu mata rantai ke gabahnya.
+    assert "DryingLotBatch" in fn, "bahan lewat pengeringan tak ditelusuri"
 
-    # Dan penyebut di atasnya memang berasal dari tempat yang sama.
-    assert "berat_gabah_masuk_kg" in kode_saja(stok.pk_gudang1)
+    teks = TPL.read_text()
+    assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
+    assert "2 batch" not in teks, "baris gabungan kembali"
 
 
 def test_layar_memakai_kelas_pk_bukan_kondisi_gabah():

@@ -91,30 +91,47 @@ def _kg(n) -> str:
 
 
 async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:
-    """Bahan satu lot giling: berapa yang MASUK dari tiap sumber, dan dari siapa.
+    """Daftar batch gabah yang masuk sebuah lot giling — SATU BARIS PER BATCH.
 
-    Beratnya diambil dari `milling_process_sources.berat_kg` — berat yang
-    benar-benar masuk mesin — BUKAN dari `purchase_batches.berat_total_kg`.
-    Keduanya pernah tertukar di kartu ini, dan akibatnya kelihatan: satu batch
-    berbunyi 8.250 kg di sebelah "Dari gabah 8.000 kg", padahal 8.250 itu berat
-    seluruh kiriman truknya dan hanya 4.000 yang masuk lot ini. Sisanya bisa
-    tertinggal di silo atau ikut giling lain — batch memang boleh terbelah.
+    Beratnya berat PEMBELIAN, dan katanya "dibeli" supaya tak disangka berat
+    yang masuk mesin. Sebabnya ada di basis data: `drying_lot_batches` cuma
+    penghubung, tanpa kolom berat, jadi berapa kilo TIAP batch yang akhirnya
+    masuk silo setelah dikeringkan memang tidak pernah tercatat — yang tercatat
+    berat MUATANNYA. Membaginya rata akan terlihat rapi dan tidak benar.
 
-    Angka yang tak bisa dijumlahkan menjadi angka di atasnya akan dicurigai
-    sebagai salah hitung, dan orang berhenti percaya pada seluruh kartunya.
-    Sekarang jumlah baris-baris ini SAMA DENGAN "Dari gabah".
+    Karena itu jumlah baris-baris ini TIDAK akan sama persis dengan "Bahan" di
+    atasnya: selisihnya susut pengeringan, dan itu memang nyata. Lebih baik
+    selisih yang bisa dijelaskan daripada satu baris gabungan yang menyembunyikan
+    dari siapa saja gabahnya — pertanyaan pertama begitu ada keluhan mutu.
 
-    Proses lama sebelum penautan timbang tak punya baris sumber; untuk mereka
-    tak ada berat yang bisa dipertanggungjawabkan per batch, jadi yang disebut
-    berat pembeliannya — dengan kata "dibeli" supaya tak disangka berat masuk.
+    Sebelumnya bahan dari satu pengeringan digabung jadi satu baris bernama dua
+    pemasok sekaligus. Hasilnya: kepala berbunyi "BATCH ASAL · 1" sementara
+    barisnya berbunyi "2 batch", nama pemasoknya berdempet sampai membungkus
+    baris, dan bobot per batch — yang justru diminta — tak muncul sama sekali.
     """
-    from app.models import (MillingProcessSource, PurchaseBatch, Supplier)
-    from app.penggilingan.gudang1.models.gudang1 import DryingLot, DryingLotBatch
+    from app.models import MillingProcessSource, PurchaseBatch, Supplier
+    from app.penggilingan.gudang1.models.gudang1 import DryingLotBatch
     from app.penggilingan.gudang1.services.milling import sumber_batch
 
-    async def _nama(b) -> str:
+    async def _baris(b) -> tuple[str, str, str]:
+        """Nama pemasok SENDIRIAN di baris atas; kode-kodenya turun ke bawah.
+
+        Digabung ("Kelompok Tani Sumber Rejeki · GB-20260904-10") baris itu
+        membungkus di ponsel dan kodenya terlempar ke baris kedua sendirian —
+        yang dipindai mata justru namanya, dan nama yang terpotong oleh kode
+        membuat daftar ini berhenti bisa dibaca sekilas.
+        """
         sup = await db.get(Supplier, b.supplier_id)
-        return (sup.nama_supplier if sup else None) or "?"
+        nama = (sup.nama_supplier if sup else None) or "?"
+        k = (b.kondisi_gabah or "").strip().lower()
+        # Kode pengeringannya TIDAK ikut. Tiga kode dalam satu baris
+        # memaksanya membungkus sampai tiga baris di ponsel, dan dari ketiganya
+        # ia yang paling sedikit menjawab pertanyaan kartu ini — "gabah siapa,
+        # berapa". Jalur pengeringannya tetap terbaca dari laporan lot.
+        ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
+        if k in KELAS_PK:
+            ket += f" · {KELAS_PK[k]}"
+        return (nama, f"dibeli {_kg(b.berat_total_kg)}", ket)
 
     baris = (await db.execute(
         select(MillingProcessSource)
@@ -123,57 +140,34 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
 
     bahan: list[tuple[str, str, str]] = []
     kondisi: set[str] = set()
+    terlihat: set[int] = set()
+
+    async def _tambah(b) -> None:
+        if b is None or b.id in terlihat:
+            return                      # satu batch tak boleh terdaftar dua kali
+        terlihat.add(b.id)
+        k = (b.kondisi_gabah or "").strip().lower()
+        if k:
+            kondisi.add(k)
+        bahan.append(await _baris(b))
 
     if not baris:
+        # Proses lama sebelum penautan timbang: penunjuknya yang dipakai.
         for b, _harga, _lewat in await sumber_batch(db, proc):
-            k = (b.kondisi_gabah or "").strip().lower()
-            if k:
-                kondisi.add(k)
-            bahan.append((f"{await _nama(b)} · {b.kode_batch}",
-                          f"dibeli {_kg(b.berat_total_kg)}",
-                          f"masuk {_tgl(b.tanggal_pembelian)}"
-                          + (f" · {KELAS_PK[k]}" if k in KELAS_PK else "")))
-        return bahan, [k for k in ("basah", "kering") if k in kondisi]
+            await _tambah(b)
+    else:
+        for s in baris:
+            if s.drying_lot_id:
+                for b in (await db.execute(
+                    select(PurchaseBatch)
+                    .join(DryingLotBatch,
+                          DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                    .where(DryingLotBatch.drying_lot_id == s.drying_lot_id)
+                    .order_by(PurchaseBatch.id))).scalars().all():
+                    await _tambah(b)
+            elif s.purchase_batch_id:
+                await _tambah(await db.get(PurchaseBatch, s.purchase_batch_id))
 
-    for s in baris:
-        if s.drying_lot_id:
-            batches = (await db.execute(
-                select(PurchaseBatch)
-                .join(DryingLotBatch,
-                      DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-                .where(DryingLotBatch.drying_lot_id == s.drying_lot_id))).scalars().all()
-        elif s.purchase_batch_id:
-            b = await db.get(PurchaseBatch, s.purchase_batch_id)
-            batches = [b] if b else []
-        else:
-            batches = []
-        if not batches:
-            continue
-        for b in batches:
-            k = (b.kondisi_gabah or "").strip().lower()
-            if k:
-                kondisi.add(k)
-        k1 = (batches[0].kondisi_gabah or "").strip().lower()
-        if len(batches) == 1:
-            b = batches[0]
-            nama = f"{await _nama(b)} · {b.kode_batch}"
-            ket = (f"masuk {_tgl(b.tanggal_pembelian)}"
-                   + (f" · {KELAS_PK[k1]}" if k1 in KELAS_PK else ""))
-        else:
-            # Satu muatan silo yang berasal dari satu pengeringan bisa berisi
-            # beberapa batch, dan yang tercatat adalah berat MUATANNYA — bukan
-            # per batch. Membaginya rata akan terlihat rapi dan tidak benar.
-            lot = await db.get(DryingLot, s.drying_lot_id)
-            nama_sup: list[str] = []
-            for b in batches:
-                n = await _nama(b)
-                if n not in nama_sup:
-                    nama_sup.append(n)
-            ringkas = " & ".join(nama_sup[:2]) + (
-                f" +{len(nama_sup) - 2}" if len(nama_sup) > 2 else "")
-            nama = f"{ringkas} · {lot.kode_lot if lot else '?'}"
-            ket = f"{len(batches)} batch" + (f" · {KELAS_PK[k1]}" if k1 in KELAS_PK else "")
-        bahan.append((nama, _kg(s.berat_kg), ket))
     return bahan, [k for k in ("basah", "kering") if k in kondisi]
 
 
