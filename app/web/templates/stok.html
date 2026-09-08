@@ -33,7 +33,11 @@
 
   <div class="grup" style="gap:9px">
     {% for l in lot %}
-      <div class="padat padat--diam padat--giling">
+      {# Kartu yang PUNYA rincian jadi laci; yang tidak, tetap kotak biasa.
+         Laci yang terbuka ke ruang kosong mengajari orang berhenti membukanya. #}
+      {% set laci = l.bahan|length > 0 %}
+      <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
+      <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
         {# Tanggalnya menempel pada kodenya, seukuran kodenya. Sebagai baris
            sendiri ia memakan satu baris penuh untuk lima karakter, dan kartu
            yang barisnya banyak berhenti bisa dipindai sekilas. #}
@@ -62,21 +66,25 @@
           {% endif %}
           {% if l.bahan_kg %}
             <div>
-              <dt>Dari gabah</dt>
+              <dt>Bahan</dt>
               <dd>{{ kg(l.bahan_kg) }} kg</dd>
             </div>
           {% endif %}
-          {# Basah atau kering menentukan JENIS PK yang keluar — KS dari basah,
-             KL dari kering — dan itu berbeda barang di mata pembeli. Disebut
-             dengan kata biasa lebih dulu, kodenya mengikut: yang membaca layar
-             ini belum tentu hafal singkatannya. #}
+          {# Kondisi gabah saat DIBELI — dan ia menentukan kelas PK yang keluar:
+             yang datang basah lalu kami keringkan jadi KS, yang datang kering
+             jadi KL. Saat digiling keduanya sama-sama kering, jadi tanpa baris
+             ini tak ada lagi yang membedakan.
+
+             Lot yang bahannya dua-duanya disebut apa adanya — "basah + kering"
+             — bukan diringkas jadi "campuran". Satu kata yang meringkas dua
+             asal-usul terbaca seperti nama varietas, dan yang membacanya akan
+             mencari gabah bernama itu. #}
           {% if l.kondisi %}
             <div>
-              <dt>Bahan</dt>
+              <dt>Kondisi</dt>
               <dd>
-                Gabah {{ l.kondisi }}
-                {%- if l.kondisi == "basah" %} <small>· PK KS</small>
-                {%- elif l.kondisi == "kering" %} <small>· PK KL</small>{% endif -%}
+                {{ l.kondisi|join(" + ")|capitalize }}
+                <small>· PK {{ l.kondisi|map("replace", "basah", "KS")|map("replace", "kering", "KL")|join(" & ") }}</small>
               </dd>
             </div>
           {% endif %}
@@ -87,6 +95,15 @@
             </div>
           {% endif %}
         </dl>
+        {# Peringatan TIDAK ikut dilipat. Yang harus dibuka dulu untuk terbaca
+           bukan peringatan, ia catatan kaki. #}
+        {% if l.berjalan %}
+          <div class="nota nota--hati">
+            <span aria-hidden="true">⏸</span>
+            <span>Mesin masih giling — hasil &amp; rendemen belum final</span>
+          </div>
+        {% endif %}
+      </{{ "summary" if laci else "div" }}>
         {# Bahannya satu per satu, berikut bobotnya — inilah yang menjawab
            "dari siapa BERAPA", dan begitu ada keluhan mutu, pertanyaan itulah
            yang menentukan tumpukan mana harus ditahan. Namanya disebut DI SINI
@@ -114,13 +131,7 @@
             {% endfor %}
           </div>
         {% endif %}
-        {% if l.berjalan %}
-          <div class="nota nota--hati">
-            <span aria-hidden="true">⏸</span>
-            <span>Mesin masih giling — hasil &amp; rendemen belum final</span>
-          </div>
-        {% endif %}
-      </div>
+      </{{ "details" if laci else "div" }}>
     {% endfor %}
   </div>
 {% endif %}

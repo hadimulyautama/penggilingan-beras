@@ -1063,3 +1063,6 @@ button.pilihan__satu {
 .anak--kecil .anak__kg   { font-size: 10.5px; color: var(--redup); }
 .anak--kecil .anak__jam  { font-size: 9.5px; }
 .fakta dd small { font-size: 10.5px; font-weight: 500; color: var(--redup-2); }
+
+/* Rincian batch di dalam laci kartu Stok — sejajar dengan isi ringkasannya. */
+details.padat > .anak { margin: 0 12px 12px; }

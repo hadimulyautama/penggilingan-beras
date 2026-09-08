@@ -34,13 +34,20 @@ class LotPk:
     bahan_kg: float = 0.0
     #: Berapa persen gabah keluar jadi PK. None bila bahannya tak diketahui.
     rendemen: float | None = None
-    #: "basah" / "kering" / "campuran" — dari SELURUH batch sumbernya.
+    #: Kondisi BELI gabahnya: ["basah"], ["kering"], atau keduanya.
+    #:
+    #: Disimpan sebagai daftar, bukan diringkas jadi satu kata seperti
+    #: "campuran". "Gabah campuran" terbaca seperti nama varietas, padahal yang
+    #: dimaksud adalah dua asal-usul yang berbeda dalam satu lot: gabah yang
+    #: datang basah lalu kami keringkan sendiri (jadi PK KS) bercampur gabah
+    #: yang datang sudah kering (jadi PK KL). Saat digiling keduanya sama-sama
+    #: kering; yang membedakan adalah kelas PK yang keluar.
     #:
     #: Sengaja tidak memakai `pk_jenis`: ia membaca penunjuk TUNGGAL di
     #: `MillingProcess`, bentuk peninggalan masa ketika satu silo tak boleh
     #: dicampur. Begitu boleh, penunjuk itu menyebut salah satu sumber dan
-    #: mendiamkan sisanya — dan lot campuran akan mengaku basah saja.
-    kondisi: str | None = None
+    #: mendiamkan sisanya — dan lot bercampur akan mengaku basah saja.
+    kondisi: list[str] = field(default_factory=list)
     #: Rincian bahan: (pemasok · kode batch, berat, kapan gabahnya masuk).
     #: Bentuknya sama dengan rincian di kartu-kartu lain, supaya mata membaca
     #: keduanya dengan cara yang sama.
@@ -58,16 +65,98 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
 
+async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:
+    """Bahan satu lot giling: berapa yang MASUK dari tiap sumber, dan dari siapa.
+
+    Beratnya diambil dari `milling_process_sources.berat_kg` — berat yang
+    benar-benar masuk mesin — BUKAN dari `purchase_batches.berat_total_kg`.
+    Keduanya pernah tertukar di kartu ini, dan akibatnya kelihatan: satu batch
+    berbunyi 8.250 kg di sebelah "Dari gabah 8.000 kg", padahal 8.250 itu berat
+    seluruh kiriman truknya dan hanya 4.000 yang masuk lot ini. Sisanya bisa
+    tertinggal di silo atau ikut giling lain — batch memang boleh terbelah.
+
+    Angka yang tak bisa dijumlahkan menjadi angka di atasnya akan dicurigai
+    sebagai salah hitung, dan orang berhenti percaya pada seluruh kartunya.
+    Sekarang jumlah baris-baris ini SAMA DENGAN "Dari gabah".
+
+    Proses lama sebelum penautan timbang tak punya baris sumber; untuk mereka
+    tak ada berat yang bisa dipertanggungjawabkan per batch, jadi yang disebut
+    berat pembeliannya — dengan kata "dibeli" supaya tak disangka berat masuk.
+    """
+    from app.models import (MillingProcessSource, PurchaseBatch, Supplier)
+    from app.penggilingan.gudang1.models.gudang1 import DryingLot, DryingLotBatch
+    from app.penggilingan.gudang1.services.milling import sumber_batch
+
+    async def _nama(b) -> str:
+        sup = await db.get(Supplier, b.supplier_id)
+        return (sup.nama_supplier if sup else None) or "?"
+
+    baris = (await db.execute(
+        select(MillingProcessSource)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+        .order_by(MillingProcessSource.id))).scalars().all()
+
+    bahan: list[tuple[str, str, str]] = []
+    kondisi: set[str] = set()
+
+    if not baris:
+        for b, _harga, _lewat in await sumber_batch(db, proc):
+            k = (b.kondisi_gabah or "").strip().lower()
+            if k:
+                kondisi.add(k)
+            bahan.append((f"{await _nama(b)} · {b.kode_batch}",
+                          f"dibeli {_kg(b.berat_total_kg)}",
+                          f"masuk {_tgl(b.tanggal_pembelian)}" + (f" · {k}" if k else "")))
+        return bahan, [k for k in ("basah", "kering") if k in kondisi]
+
+    for s in baris:
+        if s.drying_lot_id:
+            batches = (await db.execute(
+                select(PurchaseBatch)
+                .join(DryingLotBatch,
+                      DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+                .where(DryingLotBatch.drying_lot_id == s.drying_lot_id))).scalars().all()
+        elif s.purchase_batch_id:
+            b = await db.get(PurchaseBatch, s.purchase_batch_id)
+            batches = [b] if b else []
+        else:
+            batches = []
+        if not batches:
+            continue
+        for b in batches:
+            k = (b.kondisi_gabah or "").strip().lower()
+            if k:
+                kondisi.add(k)
+        k1 = (batches[0].kondisi_gabah or "").strip().lower()
+        if len(batches) == 1:
+            b = batches[0]
+            nama = f"{await _nama(b)} · {b.kode_batch}"
+            ket = f"masuk {_tgl(b.tanggal_pembelian)}" + (f" · {k1}" if k1 else "")
+        else:
+            # Satu muatan silo yang berasal dari satu pengeringan bisa berisi
+            # beberapa batch, dan yang tercatat adalah berat MUATANNYA — bukan
+            # per batch. Membaginya rata akan terlihat rapi dan tidak benar.
+            lot = await db.get(DryingLot, s.drying_lot_id)
+            nama_sup: list[str] = []
+            for b in batches:
+                n = await _nama(b)
+                if n not in nama_sup:
+                    nama_sup.append(n)
+            ringkas = " & ".join(nama_sup[:2]) + (
+                f" +{len(nama_sup) - 2}" if len(nama_sup) > 2 else "")
+            nama = f"{ringkas} · {lot.kode_lot if lot else '?'}"
+            ket = f"{len(batches)} batch" + (f" · {k1}" if k1 else "")
+        bahan.append((nama, _kg(s.berat_kg), ket))
+    return bahan, [k for k in ("basah", "kering") if k in kondisi]
+
+
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
     Yang sudah habis terkirim tidak ditampilkan: stok adalah apa yang ADA, dan
     daftar yang memuat baris nol mengajari orang melewatkan barisnya.
     """
-    from app.models import Supplier
-    from app.penggilingan.gudang1.services.milling import (
-        _pk_breakdown, hitung_rendemen, sumber_batch,
-    )
+    from app.penggilingan.gudang1.services.milling import _pk_breakdown, hitung_rendemen
 
     keluar: list[LotPk] = []
     for proc in (await db.execute(
@@ -79,16 +168,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         # `sumber_batch` adalah SATU-SATUNYA jawaban "apa isi lot ini" — yang
         # sama dipakai HPP. Harga yang ikut dikembalikannya sengaja dibuang di
         # sini, bukan disaring di templat: layar ini dilihat operator juga.
-        bahan, kondisi = [], set()
-        for b, _harga, _lewat in await sumber_batch(db, proc):
-            sup = await db.get(Supplier, b.supplier_id)
-            nama = (sup.nama_supplier if sup else None) or "?"
-            k = (b.kondisi_gabah or "").strip().lower()
-            if k:
-                kondisi.add(k)
-            bahan.append((f"{nama} · {b.kode_batch}", _kg(b.berat_total_kg),
-                          f"masuk {_tgl(b.tanggal_pembelian)}"
-                          + (f" · {k}" if k else "")))
+        bahan, kondisi = await _bahan(db, proc)
         keluar.append(LotPk(
             kode=proc.kode_proses,
             tersedia=bd.tersedia,
@@ -99,8 +179,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             # memakai penyebut berbeda akan menyebut rendemen berbeda untuk
             # lot yang sama.
             rendemen=hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg),
-            kondisi=(kondisi.pop() if len(kondisi) == 1
-                     else ("campuran" if kondisi else None)),
+            kondisi=[k for k in ("basah", "kering") if k in kondisi],
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
