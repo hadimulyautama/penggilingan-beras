@@ -225,9 +225,19 @@ async def isi(akun: ProduksiAkun) -> list[str]:
             d = r.json() if r.status_code == 200 else []
             return d if isinstance(d, list) else []
 
-        async def tiket_bebas(jenis: str, n: int = 1) -> list[dict]:
+        async def tiket_bebas(jenis: str, n: int = 1, *,
+                              terbaru: bool = False) -> list[dict]:
+            """Yang TERTUA lebih dulu — kodenya urut waktu (TRX-UJI-001 …).
+
+            Tanpa diurutkan, siklus riwayat memakan tiket terbaru dan seluruh
+            riwayat terpencet ke dua-tiga hari terakhir, sementara tiket
+            tertua menganggur di antrean. Daftar dari server diurutkan untuk
+            MATA operator — yang berjalan didahulukan — dan urutan itu tak
+            ada hubungannya dengan urutan yang dibutuhkan di sini.
+            """
             semua = await daftar("timbang-masuk-aktif")
-            return [t for t in semua if jenis.lower() in t["label"].lower()][:n]
+            cocok = [t for t in semua if jenis.lower() in t["label"].lower()]
+            return sorted(cocok, key=lambda t: t["label"], reverse=terbaru)[:n]
 
         async def silo_tujuan() -> list[str]:
             menu = {a["id"]: a for a in await daftar("menu")}
@@ -300,7 +310,12 @@ async def isi(akun: ProduksiAkun) -> list[str]:
             await siklus_penuh(hari, ke)
 
         # ── Hari ini: keadaan yang sedang berlangsung ──
-        for t in await tiket_bebas("basah", 2):
+        #
+        # Memakai tiket TERBARU, kebalikan dari riwayat. Kalau tidak, mesin
+        # yang menyala hari ini berisi gabah bertanggal minggu lalu, dan
+        # "gabah masuk hari ini" di Beranda menghitung nol sementara layar
+        # sebelahnya menunjukkan pengeringan berjalan.
+        for t in await tiket_bebas("basah", 2, terbaru=True):
             await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
                                         "tujuan": "dryer:1"})
         await kirim("mulai-pengeringan", {"target_kadar_air": 14, "mode_dryer": "25T"})
@@ -313,7 +328,7 @@ async def isi(akun: ProduksiAkun) -> list[str]:
             langkah.append(f"✓ pengeringan berjalan — {lot[0]['value']}, 2 bacaan")
 
         silo = await silo_tujuan()
-        for t in await tiket_bebas("kering", 1):
+        for t in await tiket_bebas("kering", 1, terbaru=True):
             if silo:
                 await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
                                             "tujuan": silo[-1]})
@@ -336,7 +351,7 @@ async def isi(akun: ProduksiAkun) -> list[str]:
                     langkah.append("⏸ satu giling dihentikan sementara")
 
         # Satu muatan ditumpuk di lantai — tanda pembelian berlebih.
-        for t in await tiket_bebas("kering", 1):
+        for t in await tiket_bebas("kering", 1, terbaru=True):
             await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
                                         "tujuan": "tumpuk"})
             langkah.append("✓ satu muatan ditumpuk di lantai")
