@@ -51,7 +51,9 @@ from app.services.seed import seed_master                       # noqa: E402
 from app.web.security import hash_sandi                         # noqa: E402
 from hmu_core import User                                       # noqa: E402
 
-SANDI = "dummy123"
+#: Sandi akun uji. Tak ditulis di kode: yang menjalankan skrip
+#: menyebutkannya sendiri, dan masuk pertama kali wajib menggantinya.
+SANDI = os.environ.get("SANDI_UJI") or "dummy123"
 AWALAN = "(UJI) "
 
 #: Pemasok karangan. Namanya sengaja beragam panjangnya — kartu yang hanya
@@ -84,72 +86,6 @@ def babak(n: str) -> None:
     print(f"\n\033[1m{n}\033[0m")
 
 
-async def _orang_dan_pabrik() -> dict[str, int]:
-    """Akun & alat. Tanpa ini seluruh layar menolak dibuka."""
-    await seed_master()
-    async with SessionLocal() as db:
-        wid = (await db.execute(
-            select(Warehouse.id).where(Warehouse.nama_gudang.like("Gudang 1%"))
-        )).scalars().first()
-
-        sup_id: dict[str, int] = {}
-        for nama in PEMASOK:
-            penuh = AWALAN + nama
-            s = (await db.execute(
-                select(Supplier).where(Supplier.nama_supplier == penuh)
-            )).scalars().first()
-            if s is None:
-                await db.execute(text(
-                    "INSERT INTO suppliers (nama_supplier) VALUES (:n)"), {"n": penuh})
-                await db.commit()
-                s = (await db.execute(
-                    select(Supplier).where(Supplier.nama_supplier == penuh)
-                )).scalars().first()
-            sup_id[nama] = s.id
-
-        for uname, peran, nama in (("uji_operator", "operator", "Operator Uji"),
-                                   ("uji_admin", "superadmin", "Admin Uji")):
-            ada = (await db.execute(
-                select(ProduksiAkun).where(ProduksiAkun.username == uname)
-            )).scalars().first()
-            if ada is not None:
-                continue
-            u = User(nama=nama, role=peran, telegram_user_id=None,
-                     default_warehouse_id=wid if peran == "operator" else None)
-            db.add(u)
-            await db.flush()
-            db.add(ProduksiAkun(
-                # `peran` sengaja tak disebut: ia properti baca-saja yang
-                # mengambil dari `User.role`, supaya peran orang tak pernah
-                # bisa berbeda antara akunnya dan dirinya.
-                user_id=u.id, username=uname, password_hash=hash_sandi(SANDI),
-                mode_perangkat="pribadi", harus_ganti_sandi=False))
-        await db.commit()
-        return sup_id
-
-
-async def _tiket(sup_id: dict[str, int]) -> None:
-    """Tiket timbang datang dari APLIKASI LAIN, jadi inilah satu-satunya yang
-    disuntikkan langsung — tak ada layar di aplikasi ini yang membuatnya."""
-    async with SessionLocal() as db:
-        for i, (idx, jenis, plat, kg) in enumerate(TIKET, start=1):
-            kode = f"TRX-UJI-{i:03d}"
-            ada = (await db.execute(text(
-                "SELECT 1 FROM timbangan_transaksi WHERE kode = :k"), {"k": kode})).first()
-            if ada:
-                continue
-            await db.execute(text("""
-                INSERT INTO timbangan_transaksi
-                  (kode, tanggal, arah, jenis_kode, nomor_polisi, nama_sopir,
-                   supplier_id, timbang1_kg, timbang2_kg, netto_timbangan_kg,
-                   berat_barang_kg, berat_acuan_kg, status_kontrol, status_tiket)
-                VALUES (:k, CURRENT_DATE, 'MASUK', :j, :p, 'Sopir Uji', :s,
-                        :t1, :t2, :n, :n, :n, 'NORMAL', 'TERBUKA')
-            """), {"k": kode, "j": jenis, "p": plat,
-                   "s": sup_id[PEMASOK[idx]], "t1": kg + 4200, "t2": 4200, "n": kg})
-        await db.commit()
-
-
 async def main() -> None:
     """Siapkan orang & alat, lalu serahkan pengisiannya ke layanan yang sama
     dengan yang dipakai tombol "Kembalikan data uji" di layar Mode Uji.
@@ -158,17 +94,12 @@ async def main() -> None:
     yang dibuat dari laptop dan data yang dibuat dari layar akan berbeda —
     dan yang diuji orang jadi bukan yang dipakai orang.
     """
-    from sqlalchemy import select
-
     from app.services import data_uji
 
     babak("0. Orang & alat")
-    await _orang_dan_pabrik()
-    cek("akun & alat siap", True, f"uji_admin / uji_operator · sandi {SANDI}")
-
-    async with SessionLocal() as db:
-        akun = (await db.execute(select(ProduksiAkun).where(
-            ProduksiAkun.username == "uji_admin"))).scalars().first()
+    akun = await data_uji.siapkan_akun(SANDI)
+    cek("akun & alat siap", akun is not None,
+        "uji_admin / uji_operator · sandi dari SANDI_UJI")
 
     babak("1. Mengisi data uji")
     for baris in await data_uji.isi(akun):

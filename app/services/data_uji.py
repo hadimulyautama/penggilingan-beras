@@ -92,6 +92,48 @@ async def _tiket(db: AsyncSession, pemasok: dict[str, int]) -> int:
     return dibuat
 
 
+async def siapkan_akun(sandi: str) -> ProduksiAkun:
+    """Akun uji — dibuat kalau belum ada, dikembalikan kalau sudah.
+
+    Ada DI SINI, bukan di skripnya, karena `scripts/` tak ikut masuk ke dalam
+    image: yang menyiapkan basis data uji di Railway hanya bisa memanggil apa
+    yang ada di dalam `app/`. Satu tempat pula berarti akun yang dipakai
+    menguji dari laptop sama dengan yang dipakai menguji dari HP.
+
+    Sandinya diserahkan pemanggil — tak ada sandi yang tertulis di kode ini,
+    dan tak ada yang pernah ditulis ke log.
+    """
+    from app.models import Warehouse
+    from app.models.akun import mode_bawaan
+    from app.services.seed import seed_master
+    from app.web.security import hash_sandi
+    from hmu_core import User
+
+    await seed_master()
+    async with SessionLocal() as db:
+        wid = (await db.execute(select(Warehouse.id).where(
+            Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
+        for uname, peran, nama in (("uji_operator", "operator", "Operator Uji"),
+                                   ("uji_admin", "superadmin", "Admin Uji")):
+            ada = (await db.execute(select(ProduksiAkun).where(
+                ProduksiAkun.username == uname))).scalars().first()
+            if ada is not None:
+                continue
+            u = User(nama=nama, role=peran, telegram_user_id=None,
+                     default_warehouse_id=wid if peran == "operator" else None)
+            db.add(u)
+            await db.flush()
+            db.add(ProduksiAkun(
+                user_id=u.id, username=uname, password_hash=hash_sandi(sandi),
+                mode_perangkat=mode_bawaan(peran),
+                # Sandi yang diketik seseorang di baris perintah tak boleh
+                # menetap: masuk pertama kali WAJIB menggantinya.
+                harus_ganti_sandi=True))
+        await db.commit()
+        return (await db.execute(select(ProduksiAkun).where(
+            ProduksiAkun.username == "uji_admin"))).scalars().first()
+
+
 async def isi(akun: ProduksiAkun) -> list[str]:
     """Isi data uji atas nama `akun`. → catatan langkah, untuk ditampilkan.
 
