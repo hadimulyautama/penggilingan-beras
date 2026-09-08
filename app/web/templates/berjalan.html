@@ -27,7 +27,18 @@
   </div>
 {% endif %}
 
-{{ benda.blok("Sedang berjalan", berjalan) }}
-{{ benda.blok("Transit", transit) }}
+{{ benda.blok("Sedang berjalan", berjalan, alamat="/berjalan") }}
+{{ benda.blok("Transit", transit, alamat="/berjalan") }}
 
+{# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat
+   di layar lain berarti orang kehilangan tempatnya — dan yang ia tekan tadi
+   ada di layar ini, bukan di sana. #}
+<div class="lembar" id="lembar"></div>
+<div class="kabar" id="kabar" role="status"></div>
+
+{% endblock %}
+
+{% block kaki %}
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endblock %}

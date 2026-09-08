@@ -233,6 +233,10 @@ async def beranda(request: Request):
         stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
+        # Membuka lembar aksi DI LAYAR INI, bukan melemparkan orang ke
+        # antrean untuk menekan tombol yang tadi ia lihat di sini.
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
         MENUNGGU=jalan.jumlah_menunggu, BERJALAN=jalan.jumlah_berjalan,
         KEPUTUSAN=jalan.jumlah_keputusan,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),

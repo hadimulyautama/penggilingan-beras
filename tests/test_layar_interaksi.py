@@ -238,3 +238,38 @@ def test_halaman_tidak_boleh_disimpan_peramban():
     # Asetnya TIDAK ikut dimatikan — di situlah kecepatannya berasal.
     statis = inspect.getsource(main.StatisTerCache)
     assert "immutable" in statis and "no-store" not in statis
+
+
+def test_lembar_terbuka_di_layar_tempat_tombolnya_ditekan():
+    """Pemilik: aksi dari Beranda tak perlu memindahkan orang ke Sedang
+    berjalan — lembarnya muncul di Beranda saja.
+
+    Menekan tombol lalu mendarat di layar lain berarti orang kehilangan
+    tempatnya, dan yang baru saja ia lihat ada di layar yang ia tinggalkan.
+    """
+    tpl = AKAR / "app/web/templates"
+    for berkas, alamat in (("beranda.html", '"/"'),
+                           ("berjalan.html", '"/berjalan"'),
+                           ("keputusan.html", '"/keputusan"'),
+                           ("aksi.html", None)):
+        teks = (tpl / berkas).read_text()
+        if alamat:
+            assert f"alamat={alamat}" in teks, berkas
+            # Kerangka lembarnya harus ada, kalau tidak tautannya menganga.
+            assert 'id="lembar"' in teks and 'id="kabar"' in teks, berkas
+            assert "aksi.js" in teks and "data-buka=" in teks, berkas
+        # Tak satu pun lagi melempar ke antrean.
+        assert '"/aksi?buka=' not in teks, berkas
+
+    # Dan rutenya benar-benar meneruskan `buka`/`nilai`; tanpa itu lembarnya
+    # tak pernah terbuka meski tautannya benar.
+    import inspect
+
+    from app import main
+    from app.web import layar_berjalan, layar_keputusan
+
+    for fn in (main.beranda, main.halaman_aksi,
+               layar_berjalan.halaman_berjalan, layar_keputusan.halaman_keputusan):
+        sumber = inspect.getsource(fn)
+        assert 'query_params.get("buka")' in sumber, fn.__name__
+        assert 'query_params.get("nilai")' in sumber, fn.__name__

@@ -28,6 +28,7 @@ def _akun(peran: str = "operator"):
 def _beranda(**ubah):
     arg = dict(
         request=None, akun=_akun(), layar="beranda", MENUNGGU=0,
+        BERJALAN=0, KEPUTUSAN=0, buka="", nilai="", VERSI="uji",
         MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None, pesan_ok=None,
         gabah_kg=42000, gabah_batch=5, pengeringan=1, silo_terisi=1,
         silo_total=2, giling=1, stok_pk=8000, stok_pk_maks=30000,
@@ -72,11 +73,16 @@ def test_kartu_beranda_bisa_dikerjakan_dari_situ():
     """Ringkas bukan berarti tak bisa dikerjakan. Kartu yang cuma bisa dilihat
     memaksa orang membuka layar lain untuk menekan tombol yang sama."""
     html = _beranda(berjalan=[_giling()], transit=[_silo()])
-    # Yang punya beberapa tindakan membuka lembar pilihan yang sama.
-    assert "/aksi?buka=hasil_giling&nilai=GLG-01" in html
-    assert "/aksi?buka=selesai_giling&nilai=GLG-01" in html
-    # Yang cuma punya satu langsung membuka tindakan itu.
-    assert "/aksi?buka=mulai_giling&nilai=A" in html
+    # Lembarnya dibuka DI BERANDA. Menekan "Perbarui hasil giling" lalu
+    # mendarat di Antrian tunggu berarti orang kehilangan tempatnya — dan
+    # yang ia tekan tadi ada di layar ini, bukan di sana.
+    assert "/?buka=hasil_giling&nilai=GLG-01" in html
+    assert "/?buka=selesai_giling&nilai=GLG-01" in html
+    assert "/?buka=mulai_giling&nilai=A" in html
+    assert "/aksi?buka=" not in html
+    # Dan kerangka lembarnya memang ada di halaman ini.
+    assert 'id="lembar"' in html and 'id="kabar"' in html
+    assert "aksi.js" in html and 'data-buka=' in html
 
 
 def test_kartu_beranda_padat_bukan_kartu_penuh():
