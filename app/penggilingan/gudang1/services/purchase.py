@@ -19,7 +19,23 @@ from app.services.notification import create_notification
 
 
 class DailyLimitReached(Exception):
-    """Batas maksimal batch pembelian gabah per hari terlampaui."""
+    """Batas maksimal batch pembelian gabah per hari terlampaui.
+
+    Dulu dilempar dengan ANGKA batasnya sebagai satu-satunya argumen, dan
+    `galat()` menerjemahkan argumen pertama jadi pesan di layar — jadi
+    operator yang mencatat truk keempat hari itu melihat sebuah lembar galat
+    bertuliskan "3", tanpa satu kata pun. Angkanya tetap dibawa di `.batas`
+    untuk yang perlu menghitung; yang naik ke layar kalimat.
+    """
+
+    def __init__(self, batas: int):
+        self.batas = batas
+        super().__init__(
+            f"Sudah {batas} batch gabah tercatat hari ini — itu batas hariannya. "
+            "Tiketnya tetap menunggu di antrean dan bisa dicatat besok. "
+            "Bila batas ini memang terlalu rendah, ia disetel di server "
+            "(MAX_PURCHASE_BATCH_PER_DAY), bukan di layar."
+        )
 
 
 async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier, bool]:

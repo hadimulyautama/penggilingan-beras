@@ -37,6 +37,14 @@ def galat(e: Exception, default: str) -> HTTPException:
     manusia di `args[0]` — itulah yang naik ke layar. `default` hanya jaring
     pengaman untuk kesalahan yang tidak membawa pesan apa pun.
     """
-    return HTTPException(400, str(e.args[0]) if e.args else default)
+    # Hanya argumen yang benar-benar KALIMAT yang naik ke layar. Sebuah
+    # kesalahan yang membawa angka — batas harian dulu dilempar begitu —
+    # akan tampil sebagai lembar galat bertuliskan "3", dan angka telanjang
+    # tak memberi tahu apa pun tentang apa yang salah maupun apa yang harus
+    # dilakukan. Yang begitu jatuh ke kalimat bawaan.
+    pesan = e.args[0] if e.args else None
+    if isinstance(pesan, str) and pesan.strip():
+        return HTTPException(400, pesan)
+    return HTTPException(400, default)
 
 

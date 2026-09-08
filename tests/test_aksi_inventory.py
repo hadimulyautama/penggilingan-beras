@@ -141,3 +141,29 @@ def test_alamat_kirim_tiap_aksi_benar_benar_ada_di_router():
         for f in a["fields"]:
             if f["type"] == "remote":
                 assert f["source"] in terdaftar, f"{f['source']} tidak ada"
+
+
+def test_batas_harian_berbicara_bukan_menyebut_angka():
+    """Ditemukan saat mengisi data uji: mencatat truk keempat dalam sehari
+    memunculkan lembar galat bertuliskan "3" — angka batasnya, tanpa satu kata
+    pun. Operator tak bisa menyimpulkan apa pun dari itu, apalagi apa yang
+    harus ia lakukan."""
+    from app.penggilingan.gudang1.services.purchase import DailyLimitReached
+
+    e = DailyLimitReached(3)
+    assert e.batas == 3, "angkanya tetap terbawa untuk yang perlu menghitung"
+    pesan = str(e)
+    assert pesan != "3" and len(pesan) > 40
+    assert "batas hariannya" in pesan
+    assert "besok" in pesan, "harus menyebut apa yang bisa dilakukan sekarang"
+    assert "MAX_PURCHASE_BATCH_PER_DAY" in pesan, "dan di mana batasnya disetel"
+
+
+def test_galat_menolak_argumen_yang_bukan_kalimat():
+    """Penjaga umum, supaya kesalahan berikutnya yang membawa angka tak
+    mengulangi hal yang sama."""
+    from app.web.aksi_umum import galat
+
+    assert galat(ValueError(7), "Gagal mencatat gabah.").detail == "Gagal mencatat gabah."
+    assert galat(ValueError(""), "bawaan").detail == "bawaan"
+    assert galat(ValueError("Silo penuh."), "bawaan").detail == "Silo penuh."
