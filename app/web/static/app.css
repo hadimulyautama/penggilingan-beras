@@ -586,11 +586,12 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   border-radius: 999px;
   background: var(--aksi); color: var(--aksi-tinta);
 }
-/* Kabar, bukan tagihan: berapa yang sedang jalan. Ia bisa berisi seharian
-   tanpa ada yang salah, jadi ia tak boleh berteriak sekeras yang menagih. */
+/* Oranye — warna yang sama dengan mesin pengering di kartu, jadi lencananya
+   dan bendanya berkata hal yang sama. Dibedakan dari biru yang MENAGIH:
+   biru berarti ada yang harus Anda kerjakan, oranye berarti ada mesin yang
+   sedang menyala. */
 .pintu__jml--kabar {
-  background: transparent; color: var(--redup);
-  border: 1px solid var(--garis);
+  background: var(--fase-dryer); color: #1a0f08; font-weight: 600;
 }
 
 /* ── Baris pekerjaan berjalan ── */
@@ -844,6 +845,17 @@ details.padat .pilihan { padding: 0 12px 12px; }
   border-left: 2px solid var(--fase);
   font-size: 12.5px; line-height: 1.45; color: var(--tinta-2);
 }
+/* Yang MENAHAN pekerjaan: mesin belum dinyalakan, proses dijeda.
+   Digambar setipis keterangan biasa, kartu yang berhenti terbaca sama dengan
+   kartu yang berjalan — dan yang terbaca sama akan dilewati sama. Ini satu-
+   satunya blok berlatar di dalam kartu, jadi mata menemukannya lebih dulu. */
+.nota--hati {
+  margin-top: 9px; padding: 9px 11px; border-left: 3px solid var(--hati);
+  border-radius: 8px; background: rgba(217, 164, 65, .12);
+  color: var(--hati); font-size: 13px; font-weight: 500;
+  display: grid; grid-template-columns: 15px 1fr; gap: 8px; align-items: start;
+}
+.nota--hati > span:first-child { font-size: 13px; line-height: 1.35; }
 
 /* Kepingan fase sewarna garis tepi: keduanya menguatkan satu keterangan,
    bukan dua penanda berbeda yang harus dicocokkan. */

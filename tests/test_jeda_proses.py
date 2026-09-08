@@ -198,3 +198,50 @@ def test_dua_layar_memakai_bentuk_kartu_yang_sama():
         assert '"_benda.html"' in teks, berkas
         assert "with context" in teks, f"{berkas}: `lama` datang dari rute"
         assert "benda__nilai" not in teks, f"{berkas}: markup kartu disalin lagi"
+
+
+def test_yang_menahan_pekerjaan_berteriak():
+    """Pemilik: kartu di Sedang berjalan yang prosesnya belum mulai atau
+    dijeda, peringatannya harus lebih jelas.
+
+    Sebelumnya keduanya digambar setipis keterangan biasa — garis rambut
+    dengan tinta redup — jadi kartu yang BERHENTI terbaca sama dengan kartu
+    yang berjalan. Yang terbaca sama akan dilewati sama.
+    """
+    import pathlib
+
+    from app.services import berjalan as svc
+
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    sumber = inspect.getsource(svc.untuk_gudang1)
+
+    # Mesin yang belum dinyalakan — gabah yang bermalam tanpa dipanaskan
+    # tidak diam saja, ia menurun mutunya.
+    assert "Mesin belum dinyalakan — gabah sudah menunggu" in sumber
+    # Jeda menyebut SUDAH BERAPA LAMA. "Menunggu dilanjutkan" tak memberi
+    # tahu apakah itu lima menit atau sejak kemarin — dan justru itu yang
+    # menentukan apakah seseorang harus turun tangan sekarang.
+    assert 'f"Dijeda {_jam(tertahan)} — {macet.sebab}"' in sumber
+    assert sumber.count('nota_jenis="hati"') >= 1
+    assert 'nota_jenis="hati" if macet else None' in sumber
+
+    # Silo yang menunggu giliran TIDAK ikut berteriak: ia boleh menunggu
+    # berhari-hari tanpa ada yang salah.
+    blok = sumber[sumber.index("huruf = silo.nama_silo"):]
+    blok = blok[:blok.index("b.transit.append") + 600]
+    assert "nota_jenis" not in blok
+
+    css = (akar / "app/web/static/app.css").read_text()
+    hati = css.split(".nota--hati {")[1].split("}")[0]
+    assert "background:" in hati and "var(--hati)" in hati
+
+
+def test_lama_tertahan_selalu_berkata_sesuatu():
+    """Nol pun disebut — "baru saja" memberi tahu bahwa jamnya memang
+    dihitung, bukan bahwa ia tak diketahui."""
+    from app.services.berjalan import _jam
+
+    assert _jam(0) == "baru saja"
+    assert _jam(90) == "1 menit"
+    assert _jam(3700) == "1 jam 1 menit"
+    assert _jam(100000) == "1 hari 3 jam"

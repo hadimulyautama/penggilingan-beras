@@ -110,6 +110,12 @@ class Baris:
     anak: list[tuple[str, str, str]] = field(default_factory=list)
     #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
     nota: str | None = None
+    #: Seberapa keras nota itu bicara. "hati" untuk keadaan yang MENAHAN
+    #: pekerjaan — mesin yang belum dinyalakan, proses yang dijeda. Keduanya
+    #: sebelumnya digambar setipis keterangan biasa, jadi kartu yang berhenti
+    #: terbaca sama dengan kartu yang berjalan; dan yang terbaca sama akan
+    #: dilewati sama.
+    nota_jenis: str | None = None
     #: Yang TERBACA dari angka-angkanya, bukan dari keadaan prosesnya:
     #: gabah belum merata, sensor mesin melenceng. Terpisah dari `nota` karena
     #: keduanya bisa muncul bersamaan — lot yang dijeda pun bisa isinya belum
@@ -207,6 +213,20 @@ def _lama(sejak: datetime | None) -> str:
 
 def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
+
+
+def _jam(detik: float) -> str:
+    """Lama tertahan dalam kata. Nol pun disebut — "baru saja" memberi tahu
+    bahwa jamnya memang dihitung, bukan bahwa ia tak diketahui."""
+    detik = int(detik or 0)
+    if detik < 60:
+        return "baru saja"
+    jam, menit = detik // 3600, (detik % 3600) // 60
+    if jam >= 24:
+        return f"{jam // 24} hari {jam % 24} jam"
+    if jam:
+        return f"{jam} jam {menit} menit"
+    return f"{menit} menit"
 
 
 def _tgl(d) -> str:
@@ -434,6 +454,14 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             fakta=[("Mode terdekat", mode_disarankan(total)),
                    ("Target", "belum ditetapkan")],
             anak=await _asal(db, [x.id for x in isi_mesin]),
+            # Gabah yang bermalam di mesin tanpa dipanaskan tidak diam saja —
+            # ia menurun mutunya. Karena itu ini satu-satunya baris transit
+            # yang berteriak: yang lain (silo menunggu giliran) memang boleh
+            # menunggu berhari-hari tanpa ada yang salah.
+            nota=("Mesin belum dinyalakan — gabah sudah menunggu "
+                  + (_lama(min((x.created_at for x in isi_mesin if x.created_at),
+                               default=None)) or "sejak dicatat")),
+            nota_jenis="hati",
             pilihan=[("mulai_pengeringan", "Mulai pengeringan",
                       "Sebutkan target kadar air & mode yang disetel di mesin")],
             ringkas=f"{len(isi_mesin)} batch menunggu mesin dinyalakan"
@@ -611,8 +639,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 + (f" · {_pemasok_ringkas(asal_lot)}" if asal_lot else ""),
             fakta=fakta,
             anak=asal_lot,
-            nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
-                  if macet else None),
+            # Jam tertahan disebut di notanya sendiri: "menunggu dilanjutkan"
+            # tak memberi tahu apakah itu lima menit atau sejak kemarin, dan
+            # justru itulah yang menentukan apakah seseorang harus turun
+            # tangan sekarang.
+            nota=(f"Dijeda {_jam(tertahan)} — {macet.sebab}" if macet else None),
+            nota_jenis="hati" if macet else None,
             maju=maju,
             # Dulu hanya muncul di kabar sekejap sesudah menyimpan, lalu
             # hilang bersamanya. Padahal justru inilah yang menerangkan
@@ -740,8 +772,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 + (f" · {_pemasok_ringkas(asal_giling)}" if asal_giling else ""),
             anak=asal_giling,
             fakta=fakta_g,
-            nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
-                  if macet else None),
+            nota=(f"Dijeda {_jam(tertahan)} — {macet.sebab}" if macet else None),
+            nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"
                      + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
                      if macet else f"{_kg(p.berat_gabah_masuk_kg)} bahan masuk"),

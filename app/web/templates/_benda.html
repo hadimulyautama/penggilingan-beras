@@ -35,7 +35,15 @@
     </div>
   {% endif %}
   {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
-  {% if b.nota %}<div class="nota">{{ b.nota }}</div>{% endif %}
+  {% if b.nota %}
+    {% if b.nota_jenis == "hati" %}
+      <div class="nota nota--hati">
+        <span aria-hidden="true">⏸</span><span>{{ b.nota }}</span>
+      </div>
+    {% else %}
+      <div class="nota">{{ b.nota }}</div>
+    {% endif %}
+  {% endif %}
   {# Yang TERBACA dari angkanya, bukan dari keadaan prosesnya. Dipisah dari
      `nota` karena keduanya bisa muncul bersamaan — lot yang dijeda pun bisa
      isinya belum merata. #}

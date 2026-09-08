@@ -209,9 +209,15 @@ def test_lencana_menagih_dan_lencana_mengabari_dibedakan():
         b = base.split(f"kunci == '{kunci}' and ")[1].split("{% elif")[0]
         assert "--kabar" not in b, kunci
 
+    # Dibedakan WARNANYA, bukan ketebalannya: biru berarti ada yang harus
+    # Anda kerjakan, oranye berarti ada mesin yang sedang menyala — warna
+    # yang sama dengan mesin pengering di kartu, jadi lencana dan bendanya
+    # berkata hal yang sama.
     css = (AKAR / "app/web/static/app.css").read_text()
     kabar = css.split(".pintu__jml--kabar {")[1].split("}")[0]
-    assert "background: transparent" in kabar
+    assert "var(--fase-dryer)" in kabar
+    tagih = css.split(".pintu__jml {")[1].split("}")[0]
+    assert "var(--aksi)" in tagih
 
 
 def test_jumlah_berjalan_menghitung_mesin_dan_transit():
