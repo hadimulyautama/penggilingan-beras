@@ -34,27 +34,90 @@
   <div class="grup" style="gap:9px">
     {% for l in lot %}
       <div class="padat padat--diam padat--giling">
+        {# Tanggalnya menempel pada kodenya, seukuran kodenya. Sebagai baris
+           sendiri ia memakan satu baris penuh untuk lima karakter, dan kartu
+           yang barisnya banyak berhenti bisa dipindai sekilas. #}
         <div class="padat__atas">
-          <span class="padat__nama">{{ l.kode }}</span>
+          <span class="padat__nama">{{ l.kode }} · {{ l.tanggal }}</span>
           <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
         </div>
-        {# Aturan pemilik: tiap baris barang menyebut asal-usulnya — pemasok
-           dan kapan. Kode lot saja tak memberi tahu apa pun tentang gabah
-           siapa yang ada di tumpukan itu. #}
-        <span class="padat__ket">
-          {{- ringkas(l.pemasok) or "pemasok tak tercatat" }} · digiling {{ l.tanggal -}}
-        </span>
-        {# Berapa yang sudah pergi disebut juga: tanpa itu, "5.200 kg" terbaca
+        {# Hasil giling dan rendemen naik jadi angka, bukan keterangan.
+           Rendemen adalah satu-satunya angka di kartu ini yang menilai
+           PEKERJAANNYA, bukan sekadar melaporkan isinya — dan angka yang
+           menilai tak boleh digambar seredup angka yang melaporkan.
+
+           Berapa yang sudah pergi disebut juga: tanpa itu "800 kg" terbaca
            sebagai hasil gilingnya, dan rendemen yang dihitung orang di
            kepalanya jadi salah. #}
-        <span class="padat__ket">
-          dihasilkan {{ kg(l.dihasilkan) }} kg
-          {%- if l.dikirim %} · sudah dikirim {{ kg(l.dikirim) }} kg{% endif -%}
-        </span>
+        <dl class="fakta">
+          <div>
+            <dt>Hasil giling</dt>
+            <dd>{{ kg(l.dihasilkan) }} kg</dd>
+          </div>
+          {% if l.rendemen is not none %}
+            <div>
+              <dt>Rendemen</dt>
+              <dd class="sorot">{{ "%.1f"|format(l.rendemen)|replace(".", ",") }}%</dd>
+            </div>
+          {% endif %}
+          {% if l.bahan_kg %}
+            <div>
+              <dt>Dari gabah</dt>
+              <dd>{{ kg(l.bahan_kg) }} kg</dd>
+            </div>
+          {% endif %}
+          {# Basah atau kering menentukan JENIS PK yang keluar — KS dari basah,
+             KL dari kering — dan itu berbeda barang di mata pembeli. Disebut
+             dengan kata biasa lebih dulu, kodenya mengikut: yang membaca layar
+             ini belum tentu hafal singkatannya. #}
+          {% if l.kondisi %}
+            <div>
+              <dt>Bahan</dt>
+              <dd>
+                Gabah {{ l.kondisi }}
+                {%- if l.kondisi == "basah" %} <small>· PK KS</small>
+                {%- elif l.kondisi == "kering" %} <small>· PK KL</small>{% endif -%}
+              </dd>
+            </div>
+          {% endif %}
+          {% if l.dikirim %}
+            <div>
+              <dt>Sudah dikirim</dt>
+              <dd>{{ kg(l.dikirim) }} kg</dd>
+            </div>
+          {% endif %}
+        </dl>
+        {# Bahannya satu per satu, berikut bobotnya — inilah yang menjawab
+           "dari siapa BERAPA", dan begitu ada keluhan mutu, pertanyaan itulah
+           yang menentukan tumpukan mana harus ditahan. Namanya disebut DI SINI
+           saja: sebelumnya ia juga diringkas di baris atas, dan nama yang sama
+           muncul dua kali membuat orang mengira keduanya berbeda maksud.
+           Bentuknya sama dengan rincian di kartu lain, jadi tak ada yang perlu
+           dipelajari ulang. #}
+        {% if l.bahan %}
+          <div class="anak anak--kecil">
+            {# Diberi kepala sendiri, dan kepalanya menyebut BATCH — bukan
+               "gabah". "Dari gabah" di atas adalah berat yang benar-benar
+               masuk mesin (penyebut rendemen); baris-baris ini adalah batch
+               pembeliannya, yang bisa terbelah ke lebih dari satu giling.
+               Dua angka yang beda arti harus beda nama, kalau tidak orang
+               akan menjumlahkan yang satu dan mencocokkannya ke yang lain. #}
+            <div class="anak__kepala">
+              Batch asal · {{ l.bahan|length }}
+            </div>
+            {% for nama, berat, kapan in l.bahan %}
+              <div class="anak__baris">
+                <span class="anak__nama">{{ nama }}</span>
+                <span class="anak__kg">{{ berat }}</span>
+                <span class="anak__jam">{{ kapan }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
         {% if l.berjalan %}
           <div class="nota nota--hati">
             <span aria-hidden="true">⏸</span>
-            <span>Mesin masih giling — angkanya belum final</span>
+            <span>Mesin masih giling — hasil &amp; rendemen belum final</span>
           </div>
         {% endif %}
       </div>

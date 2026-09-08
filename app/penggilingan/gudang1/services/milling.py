@@ -165,6 +165,22 @@ class ProgressResult:
     peringatan: str | None = None
 
 
+def hitung_rendemen(hasil: float | None, masuk: float | None) -> float | None:
+    """Berapa persen gabah yang keluar jadi PK. None bila bahannya tak diketahui.
+
+    Rumusnya sepele; yang tidak sepele adalah PENYEBUTNYA selalu sama.
+    `berat_gabah_masuk_kg` adalah cuplikan berat bahan saat giling dimulai, dan
+    ia disinkronkan ulang ketika timbangan membetulkan tiketnya. Kalau ada
+    layar yang memakai penyebut lain — berat batch, isi silo — dua layar akan
+    menyebut rendemen berbeda untuk lot yang sama, dan yang melihatnya akan
+    mencari sebabnya di mesin, bukan di catatan.
+    """
+    masuk = float(masuk or 0)
+    if not masuk or hasil is None:
+        return None
+    return float(hasil) / masuk * 100
+
+
 async def stok_pk_g1(db: AsyncSession) -> float:
     """PK yang MENUMPUK di Gudang 1 — belum dikirim, belum dijual.
 
@@ -210,8 +226,7 @@ async def log_progress(
         changed_by=user.id, new_value=f"kumulatif {berat_kumulatif:.0f}kg",
     )
     await db.commit()
-    masuk = float(proc.berat_gabah_masuk_kg or 0)
-    rendemen = (berat_kumulatif / masuk * 100) if masuk else None
+    rendemen = hitung_rendemen(berat_kumulatif, proc.berat_gabah_masuk_kg)
     jenis = await pk_jenis(db, proc)
 
     # Lantainya penuh — DIBERITAHU, bukan ditolak.
@@ -508,8 +523,9 @@ async def laporan_milling(db: AsyncSession, kode_proses: str | None = None) -> s
             lines += asal
         if bd.transferred > 0:
             lines.append(f"• Sudah dikirim: {_kg(bd.transferred)}")
-        if prog is not None and masuk:
-            lines.append(f"• Rendemen sementara: {prog / masuk * 100:.1f}%")
+        r = hitung_rendemen(prog, proc.berat_gabah_masuk_kg)
+        if r is not None:
+            lines.append(f"• Rendemen sementara: {r:.1f}%")
         return "\n".join(lines)
 
     procs = (
@@ -670,8 +686,7 @@ async def verify_milling_output(
         new_value=f"{berat_output:.0f}",
     )
     await db.commit()
-    masuk = float(proc.berat_gabah_masuk_kg or 0)
-    rendemen = (berat_output / masuk * 100) if masuk else None
+    rendemen = hitung_rendemen(berat_output, proc.berat_gabah_masuk_kg)
     return VerifyOutputResult(
         proc=proc, berat_output=berat_output, rendemen_persen=rendemen, re_verified=re_verified
     )

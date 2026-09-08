@@ -26,5 +26,4 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         request, "stok.html", layar="stok",
         lot=lot,
         total=sum(l.tersedia for l in lot),
-        ringkas=svc._pemasok_ringkas,
     )
