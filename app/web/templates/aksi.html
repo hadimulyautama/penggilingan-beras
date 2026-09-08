@@ -39,7 +39,18 @@
   </div>
 {% endif %}
 
-{{ benda.blok("Bisa dikerjakan sekarang", semua) }}
+{# ── Yang MENUMPUK berdiri di bloknya sendiri, dan di atas ──
+   Tumpukan bukan sekadar salah satu antrean: isinya menandakan gabah yang
+   turun dari truk tanpa mesin atau silo yang siap menerimanya — pembelian
+   yang mendahului kapasitas. Dicampur ke satu daftar bersama pekerjaan biasa,
+   keadaan itu terbaca seperti pekerjaan biasa, dan yang paling ingin diketahui
+   justru tenggelam di tengah daftar. Blok kosong tidak digambar sama sekali,
+   jadi hari yang tak punya tumpukan tak melihat judulnya. #}
+{% set tumpuk = semua|selectattr("kelompok", "equalto", "tumpukan")|list %}
+{% set lain = semua|rejectattr("kelompok", "equalto", "tumpukan")|list %}
+
+{{ benda.blok("Menumpuk di lantai", tumpuk) }}
+{{ benda.blok("Bisa dikerjakan sekarang", lain) }}
 
 {# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
 

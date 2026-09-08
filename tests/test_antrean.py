@@ -312,3 +312,42 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     aksi_js = (AKAR / "app/web/static/aksi.js").read_text()
     assert "DATA.urutGrup" in aksi_js
     assert 'a.grup || "Lain-lain"' in aksi_js
+
+
+def test_tumpukan_punya_bloknya_sendiri_dan_berdiri_di_atas():
+    """Tumpukan bukan sekadar salah satu antrean: isinya menandakan gabah yang
+    turun dari truk tanpa mesin atau silo yang siap menerimanya — pembelian
+    yang mendahului kapasitas. Dicampur ke satu daftar bersama pekerjaan biasa,
+    keadaan itu terbaca seperti pekerjaan biasa dan tenggelam di tengah daftar.
+    """
+    import inspect
+
+    from app.services import berjalan as svc
+
+    # Penandanya dipasang pada baris tumpukan, bukan ditebak dari kata-katanya.
+    g1 = inspect.getsource(svc.untuk_gudang1)
+    assert 'kelompok="tumpukan"' in g1, "baris tumpukan tak ditandai"
+    assert g1.count('kelompok="tumpukan"') == 1
+
+    teks = (TPL / "aksi.html").read_text()
+    assert 'selectattr("kelompok", "equalto", "tumpukan")' in teks
+    assert 'rejectattr("kelompok", "equalto", "tumpukan")' in teks
+    # Urutannya bagian dari maksudnya.
+    assert teks.index('blok("Menumpuk di lantai"') < teks.index('blok("Bisa dikerjakan sekarang"')
+
+
+def test_tumpukan_tetap_dihitung_lencana_antrean():
+    """Barisnya tinggal di `menunggu`, bukan pindah ke daftar sendiri: gabah
+    yang menumpuk TETAP pekerjaan yang menunggu orang. Mengeluarkannya akan
+    mengecilkan lencana — dan lencana yang tak menghitung pekerjaan yang ada
+    mengajari orang bahwa gudangnya beres padahal belum."""
+    import inspect
+
+    from app.services import berjalan as svc
+
+    # Tak ada daftar keempat yang menampung tumpukan terpisah dari `menunggu`.
+    medan = {f.name for f in svc.Berjalan.__dataclass_fields__.values()}
+    assert medan == {"menunggu", "berjalan", "transit", "meja"}, medan
+    # Dan `jumlah_menunggu` memang membaca `menunggu` apa adanya.
+    assert "len(self.menunggu)" in inspect.getsource(
+        type(svc.Berjalan()).jumlah_menunggu.fget)

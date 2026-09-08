@@ -132,6 +132,15 @@ class Baris:
     # satu angka, satu keterangan. Gunanya Beranda adalah memuat seluruh
     # pabrik dalam satu layar tanpa menggulir; kartu penuh membatalkan itu.
 
+    #: Penanda blok di layar antrean. Kosong = blok utama.
+    #:
+    #: Barisnya tetap tinggal di `menunggu`, bukan dipindah ke daftar sendiri:
+    #: gabah yang menumpuk TETAP pekerjaan yang menunggu orang, dan
+    #: mengeluarkannya dari daftar itu akan mengecilkan lencana antrean —
+    #: lencana yang tak menghitung pekerjaan yang ada adalah lencana yang
+    #: mengajari orang bahwa gudangnya sudah beres padahal belum.
+    kelompok: str | None = None
+
     #: Satu kalimat pengganti `fakta` + `anak` di kartu padat. Kosong = pakai
     #: `sub`, karena baris yang tak punya apa-apa untuk diringkas memang tak
     #: perlu dipaksa punya.
@@ -582,6 +591,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 f"masuk {_tgl(b_.tanggal_pembelian)}",
             nota=("Gabah basah tak boleh ke silo — harus dikeringkan dulu."
                   if wajib_dryer else None),
+            kelompok="tumpukan",
             tombol=await _tujuan_gabah(
                 db, b_.kondisi_gabah, post="/miniapp/actions/pindah-tumpukan",
                 data={"kode_batch": b_.kode_batch}),
