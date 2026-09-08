@@ -174,26 +174,59 @@ def test_layar_keputusan_hanya_admin():
     assert kunci["keputusan"] == "admin"
 
 
-def test_tiap_layar_membawa_kedua_lencana():
+def test_tiap_layar_berlaci_membawa_ketiga_lencana():
     """Lencana yang hilang di sebagian layar lebih membingungkan daripada
     lencana yang tak pernah ada: orang menyimpulkan pekerjaannya habis
-    padahal ia cuma sedang berdiri di layar yang lupa menghitung."""
+    padahal ia cuma sedang berdiri di layar yang lupa menghitung.
+
+    Yang ditagih adalah SETIAP layar yang lacinya muncul — yaitu setiap
+    templat yang namanya ada di TAB. Versi lama tes ini hanya memeriksa
+    blok yang sudah menyebut salah satu lencana, jadi layar yang tak
+    membawa satu pun justru lolos tanpa diperiksa; begitulah List audit
+    tayang berminggu-minggu dengan laci kosong.
+    """
     import re
 
+    from app.web.nav import TAB
+
+    berlaci = {f"{kunci}.html" for kunci, *_ in TAB}
     akar = pathlib.Path(__file__).resolve().parents[1] / "app"
-    kurang = []
+    terlihat, kurang = set(), []
     for berkas in akar.rglob("*.py"):
         teks = berkas.read_text()
-        for potongan in re.findall(r"render\(\s*request,.*?\n\s*\)", teks, re.S):
-            if "MENUNGGU" not in potongan:
-                continue                       # layar tanpa laci (masuk, error)
+        for m in re.finditer(r'\brender(_laci)?\(\s*request,\s*"([^"]+)"', teks):
+            nama = m.group(2)
+            if nama not in berlaci:
+                continue
+            terlihat.add(nama)
+            if m.group(1):                     # render_laci → ketiganya sekaligus
+                continue
+            potongan = _panggilan(teks, m.end())
             if "lencana(" in potongan:
-                continue                       # ketiganya sekaligus dari sana
-            for lencana in ("BERJALAN", "KEPUTUSAN"):
-                if lencana not in potongan:
-                    kurang.append(f"{berkas.name}: {lencana} — "
-                                  f"{potongan.splitlines()[0].strip()}")
+                continue
+            hilang = [l for l in ("MENUNGGU", "BERJALAN", "KEPUTUSAN")
+                      if l not in potongan]
+            if hilang:
+                baris = teks[:m.start()].count("\n") + 1
+                kurang.append(f"{berkas.name}:{baris} {nama} — kurang "
+                              + ", ".join(hilang))
     assert not kurang, "layar ini lupa lencananya:\n  " + "\n  ".join(kurang)
+    # Setiap pintu laci harus benar-benar punya layar yang dirender; kalau
+    # tidak, tes di atas menjaga daftar kosong tanpa ada yang tahu.
+    assert terlihat == berlaci, f"tak ketemu rendernya: {berlaci - terlihat}"
+
+
+def _panggilan(teks: str, mulai: int) -> str:
+    """Potongan sumber dari `render(` sampai kurung penutupnya yang seimbang."""
+    dalam = 1
+    for i in range(mulai, len(teks)):
+        if teks[i] == "(":
+            dalam += 1
+        elif teks[i] == ")":
+            dalam -= 1
+            if not dalam:
+                return teks[mulai:i]
+    return teks[mulai:]
 
 
 def test_lencana_menagih_dan_lencana_mengabari_dibedakan():

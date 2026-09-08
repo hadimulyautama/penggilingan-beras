@@ -20,7 +20,7 @@ from app.database import SessionLocal
 from app.services import audit as svc
 from app.services import undo as undo_svc
 from app.web.security import butuh_admin
-from app.web.tampilan import render
+from app.web.tampilan import render_laci
 
 router = APIRouter(tags=["webapp"])
 
@@ -40,7 +40,7 @@ async def halaman_audit(
         # tengah berarti angka sesudahnya dihitung dari keadaan yang tak
         # pernah ada.
         pratinjau = await undo_svc.pratinjau_terakhir(db, actor_ids=None)
-    return render(
+    return await render_laci(
         request, "audit.html", layar="audit",
         catatan=catatan, semua=semua, pratinjau=pratinjau,
         rentang=rentang, kelompok=kelompok, cari=cari,

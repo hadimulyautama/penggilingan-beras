@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "79"
+VERSI = "80"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -72,6 +72,25 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     konteks.setdefault("layar", nama.replace(".html", ""))
     konteks.setdefault("MENUNGGU", 0)
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
+
+
+async def render_laci(request: Request, nama: str, **konteks):
+    """`render` untuk layar yang tak menyusun daftar `Berjalan` sendiri.
+
+    Laci itu satu benda di seluruh aplikasi. Kalau angkanya ada di Beranda
+    tapi hilang di List audit, yang dibaca orang bukan "layar ini tidak
+    menghitung" melainkan "pekerjaannya sudah habis" — dan lencana yang
+    kadang bohong lebih buruk daripada lencana yang tak pernah ada.
+
+    Layar yang SUDAH memegang `Berjalan` tetap mengirim angkanya sendiri:
+    memanggil ini di sana berarti menyusun ulang seluruh daftar dua kali
+    hanya demi tiga angka.
+    """
+    from app.web.nav import lencana
+
+    akun = getattr(request.state, "akun", None)
+    return render(request, nama,
+                  **{**await lencana(akun.user if akun else None), **konteks})
 
 
 def redirect(tujuan: str) -> RedirectResponse:
