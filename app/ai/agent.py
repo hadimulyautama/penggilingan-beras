@@ -1,21 +1,23 @@
-"""Agent loop (pola agentic) — menjawab pertanyaan bebas & analitik lintas-modul.
+"""Agent loop — menjawab pertanyaan bebas & analitik lintas-modul. BACA SAJA.
 
-Beda dgn parser forced-tool (app.ai.base) yang 1 pesan = 1 ekstraksi:
-di sini model (Sonnet) BOLEH memanggil banyak tool READ berturut-turut,
-lalu menyintesis jawaban. Untuk aksi TULIS, agent tidak mengeksekusi sendiri —
-ia MENGUSULKAN perintah (usulkan_perintah); bot menampilkannya & minta
-konfirmasi, lalu perintah dijalankan lewat jalur deterministik yang sudah teruji.
+Model (Sonnet) boleh memanggil banyak tool READ berturut-turut lalu
+menyintesis jawaban. Satu-satunya pemanggilnya kini `/internal/produksi/tanya`,
+yaitu Kantor AI: agen ini melayani Direksi & pengawas yang BERTANYA.
+
+Dulu ia juga bisa mengusulkan perintah tulis, yang lalu dikonfirmasi lewat bot
+Telegram produksi. Pemilik membubarkan seluruh jalur itu: operasional dan
+timbangan dicatat di aplikasinya masing-masing, dan satu-satunya bot yang
+tersisa adalah Kantor AI. Yang mencatat bukan yang menjawab.
 
 Keamanan:
-- Logika bisnis tetap di service; agent hanya MEMBACA (tool read) atau MENGUSULKAN.
-- Tool keuangan hanya diberikan bila `financial=True` (staff/admin). Operator
-  tak pernah menerima tool keuangan DAN laporan yang keluar tetap tanpa harga/HPP.
+- Logika bisnis tetap di service; agent hanya MEMBACA.
+- Tool keuangan hanya diberikan bila `financial=True` (Direksi ke atas).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.ai.base import _date_context
+from app.ai.tanggal import _date_context
 from app.ai import guard
 from app.config import settings
 from app.database import SessionLocal
@@ -28,8 +30,6 @@ class AgentReply:
     """Hasil satu giliran agent."""
 
     text: str | None = None            # jawaban final untuk ditampilkan
-    propose_command: str | None = None  # perintah TULIS yang perlu dikonfirmasi
-    propose_summary: str | None = None  # ringkasan manusiawi dari perintah itu
 
 
 # ─────────────────────────── Definisi tool ───────────────────────────
@@ -169,46 +169,14 @@ _READ_TOOLS_KEUANGAN = [
     },
 ]
 
-_WRITE_TOOL = {
-    "name": "usulkan_perintah",
-    "description": (
-        "Gunakan bila pengguna ingin MENCATAT/MENGUBAH data (transaksi), mis. "
-        "'catat packing 80 karung premium', 'beli karung 1000 lembar', "
-        "'kirim 50 karung ke Toko Makmur'. JANGAN dieksekusi langsung — ajukan "
-        "perintah tunggal yang JELAS & LENGKAP; sistem akan minta konfirmasi "
-        "pengguna sebelum menjalankannya lewat jalur baku. Ajukan SATU perintah "
-        "per usulan. Bila data kurang lengkap, JANGAN mengusulkan — tanyakan dulu."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "perintah": {
-                "type": "string",
-                "description": (
-                    "Perintah bahasa natural yang siap dijalankan sistem, mis. "
-                    "'catat packing 80 karung premium merk Imbiss laminasi 25 dari POL-...'"
-                ),
-            },
-            "ringkasan": {
-                "type": "string",
-                "description": "Ringkasan singkat manusiawi tentang efek perintah ini.",
-            },
-        },
-        "required": ["perintah", "ringkasan"],
-    },
-}
-
-
-def _tools_for(*, financial: bool, allow_write: bool) -> list[dict]:
+def _tools_for(*, financial: bool) -> list[dict]:
     tools = list(_READ_TOOLS_UMUM)
     if financial:
         tools += _READ_TOOLS_KEUANGAN
-    if allow_write:
-        tools.append(_WRITE_TOOL)
     return tools
 
 
-def _system_prompt(*, role: str, financial: bool, allow_write: bool) -> str:
+def _system_prompt(*, role: str, financial: bool) -> str:
     batas_uang = (
         "Kamu BOLEH menyebut harga/HPP/nilai uang."
         if financial
@@ -216,13 +184,12 @@ def _system_prompt(*, role: str, financial: bool, allow_write: bool) -> str:
         "operator dan tidak berhak atas data keuangan. Bila ditanya soal uang, "
         "tolak sopan dan arahkan ke staff/admin."
     )
-    tulis = (
-        "Bila pengguna ingin MENCATAT/MENGUBAH data, panggil 'usulkan_perintah' "
-        "(jangan mengaku sudah mencatat — kamu tidak mengeksekusi, hanya "
-        "mengusulkan; konfirmasi ada di tangan sistem)."
-        if allow_write
-        else "Kamu HANYA membaca & menjawab; tidak boleh mengusulkan perubahan data."
-    )
+    # Tak ada cabang "boleh menulis". Pencatatan hanya lewat Pos Produksi;
+    # agen ini menjawab, dan yang menjawab tidak boleh juga yang mencatat.
+    tulis = ("Kamu HANYA membaca & menjawab. Kamu TIDAK bisa mencatat atau "
+             "mengubah apa pun — jangan menawarkannya, dan jangan mengaku "
+             "sudah melakukannya. Bila pengguna ingin mencatat, arahkan ke "
+             "Pos Produksi.")
     return (
         "Kamu asisten operasional pabrik penggilingan beras (Gudang 1 = selepan/"
         "pecah kulit, Gudang 2 = penyosohan, lalu barang jadi & pengiriman). "
@@ -348,14 +315,19 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
 # ─────────────────────────── Loop agent ───────────────────────────
 
 
-async def run_agent(*, text: str, role: str, financial: bool, allow_write: bool) -> AgentReply:
-    """Jalankan agent (Sonnet) untuk satu pertanyaan bebas / permintaan.
+async def run_agent(*, text: str, role: str, financial: bool) -> AgentReply:
+    """Jalankan agent (Sonnet) untuk satu pertanyaan. BACA SAJA.
 
-    - `financial`: boleh melihat & menyebut data uang (staff/admin).
-    - `allow_write`: boleh mengusulkan perintah tulis (butuh konfirmasi bot).
+    `financial`: boleh melihat & menyebut data uang (Direksi ke atas).
+
+    Dulu ada `allow_write`: agen boleh mengusulkan perintah tulis yang lalu
+    dikonfirmasi lewat bot Telegram. Pemilik membubarkannya — operasional
+    dicatat di Pos Produksi, agen hanya untuk Direksi & pengawas yang bertanya.
+    Kemampuan itu tidak dimatikan lewat bendera, melainkan dibuang: bendera
+    yang mati cuma menunggu seseorang menyalakannya kembali.
     """
-    tools = _tools_for(financial=financial, allow_write=allow_write)
-    system = _system_prompt(role=role, financial=financial, allow_write=allow_write)
+    tools = _tools_for(financial=financial)
+    system = _system_prompt(role=role, financial=financial)
     messages: list[dict] = [{"role": "user", "content": text}]
 
     for _ in range(settings.agent_max_iterations):
@@ -371,14 +343,6 @@ async def run_agent(*, text: str, role: str, financial: bool, allow_write: bool)
         if not tool_uses:
             final = "".join(b.text for b in resp.content if b.type == "text").strip()
             return AgentReply(text=final or "Maaf, saya belum bisa menjawab itu.")
-
-        # Aksi tulis → hentikan loop, kembalikan usulan untuk dikonfirmasi bot.
-        for tu in tool_uses:
-            if tu.name == "usulkan_perintah":
-                return AgentReply(
-                    propose_command=(tu.input or {}).get("perintah"),
-                    propose_summary=(tu.input or {}).get("ringkasan"),
-                )
 
         # Eksekusi semua tool READ, umpankan hasilnya kembali.
         messages.append({"role": "assistant", "content": resp.content})

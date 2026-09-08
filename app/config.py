@@ -29,10 +29,11 @@ class Settings(BaseSettings):
             v = re.sub(r"[?&]sslmode=[^&]*", "", v)
         return v
 
-    # Telegram
-    bot_gudang1_token: str = ""
-    bot_gudang2_token: str = ""
-    bot_admin_token: str = ""
+    # Telegram — TIDAK ADA LAGI. Bot produksi dibubarkan; operasional dan
+    # timbangan dicatat di aplikasinya, dan satu-satunya bot yang tersisa
+    # adalah Kantor AI di service-nya sendiri. Variabel BOT_*_TOKEN mungkin
+    # masih menempel di Railway; tidak dibaca di sini adalah justru maksudnya,
+    # karena token yang dibaca berarti bot yang bisa menyala kembali.
 
     # Claude — model dipilih per SURFACE:
     anthropic_api_key: str = ""
@@ -148,18 +149,5 @@ class Settings(BaseSettings):
     kapasitas_siklus_dryer_per_hari: float = 1     # ~1 siklus (sore-besok sore)
     kapasitas_hari_kerja_per_bulan: int = 26
     rendemen_asumsi_persen: float = 64             # dipakai bila belum ada data
-
-    @property
-    def bot_tokens(self) -> dict[str, str]:
-        """Peta nama bot -> token (hanya yang terisi)."""
-        # Bot operator dihapus 3 September 2026. Tokennya sengaja TIDAK
-        # dipetakan lagi meski variabelnya mungkin masih ada di Railway:
-        # token yang terdaftar berarti bot yang menyala, dan bot operator
-        # yang menyala berarti jalur masuk yang sudah ditutup terbuka lagi.
-        raw = {
-            "admin": self.bot_admin_token,
-        }
-        return {name: token for name, token in raw.items() if token.strip()}
-
 
 settings = Settings()

@@ -12,7 +12,7 @@ from math import ceil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bots.common import PERAN_STAF_KEATAS
+from app.peran import PERAN_STAF_KEATAS
 from app.database import input_time
 from app.models import MillingProcess, OutgoingItem, OutgoingRecord
 from app.services.activity_log import log_activity

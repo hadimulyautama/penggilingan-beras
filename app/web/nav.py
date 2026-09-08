@@ -98,7 +98,7 @@ async def jumlah_keputusan(user: User | None) -> int:
     if user is None:
         return 0
     try:
-        from app.bots.common import can_see_financials
+        from app.peran import can_see_financials
         from app.services import berjalan
         if not can_see_financials(user):
             return 0
@@ -124,7 +124,7 @@ async def lencana(user: User | None) -> dict[str, int]:
     if user is None:
         return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0}
     try:
-        from app.bots.common import can_see_financials
+        from app.peran import can_see_financials
         from app.services import berjalan
         async with SessionLocal() as db:
             b = await berjalan.untuk(db, user)

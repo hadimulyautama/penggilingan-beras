@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.bots.common import can_see_financials
+from app.peran import can_see_financials
 from app.database import SessionLocal
 from app.models import User
 from app.penggilingan.inventory import finished_goods as bj

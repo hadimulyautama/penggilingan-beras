@@ -48,7 +48,7 @@ def test_peran_lama_staff_tetap_terbaca():
     boleh kehilangan akses uang gara-gara namanya berganti."""
     from types import SimpleNamespace
 
-    from app.bots.common import can_see_financials
+    from app.peran import can_see_financials
 
     for peran in ("superadmin", "admin", "staff"):
         assert can_see_financials(SimpleNamespace(role=peran)), peran
@@ -116,7 +116,7 @@ def test_superadmin_tak_boleh_tertinggal_di_gerbang_mana_pun():
 
 
 def test_can_transfer_pk_mencakup_superadmin():
-    from app.bots.common import PERAN_STAF_KEATAS, can_transfer_pk
+    from app.peran import PERAN_STAF_KEATAS, can_transfer_pk
 
     class _U:
         def __init__(self, role): self.role = role

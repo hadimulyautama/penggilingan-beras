@@ -22,7 +22,7 @@ from typing import Awaitable, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.bots.common import can_see_financials
+from app.peran import can_see_financials
 from app.database import SessionLocal, now_local
 from app.models import User
 from app.web.security import butuh_akun

@@ -8,7 +8,7 @@ ber-token, Kantor memanggilnya lewat `klien_produksi`.
 Keamanan:
   - Aktif hanya bila env `INTERNAL_API_TOKEN` diisi (kosong → 404, seperti /dashboard).
   - Setiap permintaan wajib membawa header `X-Internal-Token` yang sama persis.
-  - READ-ONLY: agent dipanggil dengan allow_write=False; tak ada endpoint tulis.
+  - READ-ONLY: agent memang tak punya kemampuan tulis; tak ada endpoint tulis.
   - Data uang (HPP/harga) hanya keluar bila pemanggil mengirim financial=true —
     keputusan hak akses tetap di sisi Kantor (RBAC-nya), sama seperti sebelum pisah.
 """
@@ -61,7 +61,7 @@ async def produksi_tanya(
     if not pertanyaan:
         raise HTTPException(status_code=422, detail="Pertanyaan kosong.")
     reply = await agen_produksi.run_agent(
-        text=pertanyaan, role=body.role, financial=body.financial, allow_write=False,
+        text=pertanyaan, role=body.role, financial=body.financial,
     )
     return {"teks": reply.text or ""}
 

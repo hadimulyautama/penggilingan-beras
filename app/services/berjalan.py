@@ -1142,7 +1142,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
 
 async def untuk(db: AsyncSession, user: User) -> Berjalan:
     """Gabungkan sesuai peran — server yang memutuskan, bukan layar."""
-    from app.bots.common import can_see_financials
+    from app.peran import can_see_financials
 
     from app.web.miniapp import _is_g1_operator, _is_g2_operator
 

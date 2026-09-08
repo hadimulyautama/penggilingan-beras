@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bots.common import PERAN_STAF_KEATAS
+from app.peran import PERAN_STAF_KEATAS
 from app.config import settings
 from app.database import input_time
 from app.models import (

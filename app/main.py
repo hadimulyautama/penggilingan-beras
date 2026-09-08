@@ -15,7 +15,6 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.bots.registry import build_bots, run_polling
 from app.config import settings
 from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
@@ -61,21 +60,15 @@ async def lifespan(app: FastAPI):
         await seed_akun_awal()
     except Exception:
         log.exception("Seed akun webapp gagal (lanjut jalan)")
-    built = build_bots()
-    app.state.bots = built
-    bots = {name: bot for name, bot, _dp in built}
-    from app.bots.notify import set_bots
-    set_bots(bots)
-    poll_task = asyncio.create_task(run_polling(built))
-    sched_task = asyncio.create_task(run_late_drying_scheduler(bots))
-    sinkron_task = asyncio.create_task(run_sinkron_bobot_poller(bots))
-    log.info("Backend siap. Bot aktif: %s", list(settings.bot_tokens.keys()) or "(none)")
+    sched_task = asyncio.create_task(run_late_drying_scheduler())
+    sinkron_task = asyncio.create_task(run_sinkron_bobot_poller())
+    log.info("Backend siap. Tanpa bot — pencatatan lewat Pos Produksi.")
     try:
         yield
     finally:
-        # Hentikan task latar dengan membatalkan, lalu tutup sesi bot.
-        # Guard karena saat --reload polling bisa belum/selesai berjalan.
-        for task in (poll_task, sched_task, sinkron_task):
+        # Hentikan task latar dengan membatalkan. Guard karena saat --reload
+        # task bisa belum/selesai berjalan.
+        for task in (sched_task, sinkron_task):
             task.cancel()
             try:
                 await task
@@ -83,11 +76,6 @@ async def lifespan(app: FastAPI):
                 pass
             except Exception:
                 log.exception("Error saat menghentikan task latar")
-        for _, bot, _dp in built:
-            try:
-                await bot.session.close()
-            except Exception:
-                pass
 
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
@@ -248,7 +236,6 @@ async def health() -> dict:
     return {
         "status": "ok",
         "model": settings.claude_model,
-        "bots": list(settings.bot_tokens.keys()),
     }
 
 

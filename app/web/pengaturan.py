@@ -16,7 +16,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, Form, Request
 
 from app.database import SessionLocal
-from app.bots.common import PERAN_ADMIN_KEATAS
+from app.peran import PERAN_ADMIN_KEATAS
 from app.models import ProduksiAkun
 from app.web.security import butuh_admin, butuh_akun
 from app.web.tampilan import redirect, render

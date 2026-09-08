@@ -21,7 +21,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.bots.common import can_see_financials
+from app.peran import can_see_financials
 from app.database import SessionLocal, now_local
 from app.models import User
 from app.services import undo as svc

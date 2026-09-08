@@ -1,18 +1,19 @@
-"""Router Mini App Telegram: identitas + dashboard + AKSI CEPAT role-aware.
+"""API aksi Pos Produksi: identitas, dashboard, dan katalog AKSI per peran.
 
-Tiap endpoint memakai `require_miniapp_user` → tahu SIAPA & role-nya (server-side).
-Data & aksi memakai Service yang sama dengan bot (satu sumber kebenaran). Menu
-aksi ditentukan SERVER per role: operator G1 (gabah masuk / kadar air / hasil
-giling), staff-admin (verifikasi harga / pemindahan PK). Operator tak dapat aksi
-keuangan.
+Prefiksnya masih `/miniapp` dari masa ketika layar pencatatan memang Mini App
+Telegram. Halaman itu sendiri sudah dibuang bersama botnya — yang memanggil
+endpoint ini sekarang Pos Produksi di peramban, dengan sesi webapp.
+
+Menu aksi ditentukan SERVER per peran, bukan disalin ke klien: menambah aksi
+tak perlu layar baru, dan peran yang tak berhak tak pernah menerima bentuk
+formulirnya.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from app.bots.common import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
+from app.peran import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
 from app.penggilingan.gudang1.services.drying import MODE_DRYER
 from app.penggilingan.gudang1.services.jeda import SEBAB_LAIN as SEBAB_LAIN_JEDA
 from app.database import SessionLocal
@@ -70,7 +71,7 @@ async def _hpp_terkini(db) -> str:
 async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
     """Snapshot dashboard sesuai role. Keuangan (HPP/tugas) hanya staff/admin."""
     fin = can_see_financials(user)
-    from app.bots.common import user_wh_scope
+    from app.peran import user_wh_scope
     from app.services.report import status_gudang1, pending_verifikasi
     from app.services.transfer import laporan_pk_siap_transfer
     from app.penggilingan.gudang2.service import laporan_stok_gudang2
@@ -1905,162 +1906,3 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
 
 # ─────────────────────────── Halaman Mini App ───────────────────────────
 
-_HTML = """<!doctype html>
-<html lang="id"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Penggilingan Beras</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
- :root{--bg:var(--tg-theme-bg-color,#f4f5f7);--card:var(--tg-theme-secondary-bg-color,#fff);
-   --tx:var(--tg-theme-text-color,#16181c);--mut:var(--tg-theme-hint-color,#8a8f98);
-   --ac:var(--tg-theme-button-color,#2c7be5);--acx:var(--tg-theme-button-text-color,#fff);--bd:rgba(128,128,128,.18)}
- *{box-sizing:border-box}
- body{margin:0;padding:14px;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
- .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 14px}
- .hi{font-size:18px;font-weight:600} .role{font-size:12px;color:var(--mut)}
- .pill{display:inline-block;padding:2px 9px;border-radius:999px;background:var(--ac);color:var(--acx);font-size:11px;font-weight:600;text-transform:capitalize}
- .btn{border:1px solid var(--bd);background:var(--card);color:var(--ac);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600}
- .btn.pri{background:var(--ac);color:var(--acx);border-color:var(--ac)}
- .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:13px 15px;margin-bottom:11px}
- .ct{font-size:13px;font-weight:600;color:var(--mut);margin:0 0 7px;letter-spacing:.02em}
- .cb{white-space:pre-wrap;word-break:break-word;margin:0;font-size:14px}
- .act{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px 13px;margin-bottom:9px;font-size:14px;font-weight:500;color:var(--tx)}
- .tabs{display:flex;gap:5px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:4px;margin:0 2px 14px}
- .tab{flex:1;text-align:center;padding:9px 6px;border-radius:9px;font-size:14px;font-weight:600;color:var(--mut);border:none;background:transparent}
- .tab.on{background:var(--ac);color:var(--acx)}
- .muted{color:var(--mut);text-align:center;padding:30px 0}
- .err{color:#d93025;text-align:center;padding:24px 0}
- #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;z-index:20}
- .sheet{background:var(--bg);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px 16px 24px;max-height:90vh;overflow:auto}
- .sheet h3{margin:0 0 12px;font-size:16px}
- .sheet .hint{margin:-6px 0 12px;font-size:12px;color:var(--mut);line-height:1.4}
- .sheet label{font-size:12px;color:var(--mut);display:block;margin-top:6px}
- .sheet select,.sheet input{width:100%;padding:10px;margin:4px 0 6px;border:1px solid var(--bd);border-radius:9px;background:var(--card);color:var(--tx);font-size:16px}
- .row{display:flex;gap:10px;margin-top:12px} .row .btn{flex:1;text-align:center;padding:11px}
- #toast{display:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#16181c;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;z-index:30;max-width:90%;text-align:center}
-</style></head>
-<body>
- <div class="top">
-   <div><div class="hi" id="hi">Memuat…</div><div class="role" id="ts"></div></div>
-   <button class="btn" onclick="load()">↻ Segarkan</button>
- </div>
- <div class="tabs" id="tabs" style="display:none"></div>
- <div id="app"><div class="muted">Memuat data…</div></div>
- <div id="modal" onclick="if(event.target.id==='modal')closeModal()"></div>
- <div id="toast"></div>
-<script>
- const tg = window.Telegram && window.Telegram.WebApp;
- if (tg){ tg.ready(); tg.expand(); }
- const H = {Authorization: "tma " + ((tg && tg.initData) || "")};
- let MENU = {};
- let DATA = null;      // {sections, menu}
- let TAB = "acts";     // acts | g1 | g2 | dash
- function esc(s){const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
- function val(id){const e=document.getElementById(id);return e?e.value:"";}
- function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",2600);}
- async function getJSON(u){const r=await fetch(u,{headers:H});if(!r.ok){const e=await r.json().catch(()=>({}));throw (e.detail||("HTTP "+r.status));}return r.json();}
- async function post(u,b){const r=await fetch(u,{method:"POST",headers:{...H,"Content-Type":"application/json"},body:JSON.stringify(b)});const j=await r.json().catch(()=>({}));if(!r.ok)throw (j.detail||("HTTP "+r.status));return j;}
- function closeModal(){document.getElementById("modal").style.display="none";}
-
- async function load(){
-   const app=document.getElementById("app");
-   try{
-     const d = await getJSON("/miniapp/dashboard");
-     document.getElementById("hi").textContent="Halo, "+d.user.nama;
-     document.getElementById("ts").innerHTML='<span class="pill">'+esc(d.user.role)+'</span>';
-     let menu=[]; try{ menu = await getJSON("/miniapp/actions/menu"); }catch(e){}
-     MENU={}; menu.forEach(a=>MENU[a.id]=a);
-     DATA={sections:d.sections, menu:menu};
-     buildTabs();
-     render();
-   }catch(err){
-     document.getElementById("hi").textContent="Gagal masuk";
-     document.getElementById("tabs").style.display="none";
-     app.innerHTML='<div class="err">'+esc(String(err))+'</div>';
-   }
- }
-
- // Susun tab dinamis. Admin/staff (punya aksi G1 & G2) → tab dipisah
- // 'Aksi G1' & 'Aksi G2'; operator (satu gudang) → 'Aksi Cepat' tunggal.
- function buildTabs(){
-   const menu=DATA.menu;
-   const hasG1=menu.some(a=>a.wh==="g1");
-   const hasG2=menu.some(a=>a.wh==="g2");
-   let btns=[];
-   if(hasG1 && hasG2){ btns.push(["g1","🌾 Aksi G1"]); btns.push(["g2","🏭 Aksi G2"]); }
-   else if(menu.length){ btns.push(["acts","⚡ Aksi Cepat"]); }
-   btns.push(["dash","📊 Dashboard"]);
-   const keys=btns.map(b=>b[0]);
-   if(!keys.includes(TAB)) TAB=keys[0];
-   const tabs=document.getElementById("tabs");
-   tabs.style.display = btns.length>1 ? "flex" : "none";
-   tabs.innerHTML = btns.map(b=>'<button class="tab" data-tab="'+b[0]+'" onclick="showTab(\\''+b[0]+'\\')">'+esc(b[1])+'</button>').join('');
- }
-
- function showTab(t){ TAB=t; render(); }
-
- function render(){
-   const app=document.getElementById("app");
-   document.querySelectorAll("#tabs .tab").forEach(b=>b.classList.toggle("on", b.dataset.tab===TAB));
-   if(!DATA){ return; }
-   if(TAB==="dash"){
-     app.innerHTML = DATA.sections.length
-       ? DATA.sections.map(s=>'<div class="card"><p class="ct">'+esc(s.icon+" "+s.title)+'</p><pre class="cb">'+esc(s.body)+'</pre></div>').join("")
-       : '<div class="muted">Belum ada data.</div>';
-   }else{
-     const list = TAB==="acts" ? DATA.menu : DATA.menu.filter(a=>a.wh===TAB);
-     app.innerHTML = list.length
-       ? list.map(a=>'<button class="act" onclick="openAction(\\''+a.id+'\\')">'+esc(a.label)+'</button>').join('')
-       : '<div class="muted">Tidak ada aksi cepat untuk peran Anda.</div>';
-   }
- }
-
- function openAction(id){
-   const a=MENU[id]; if(!a)return;
-   let inner="";
-   a.fields.forEach(f=>{
-     inner+='<label>'+esc(f.label)+'</label>';
-     if(f.type==="select"){
-       // Auto '— pilih —' bila belum diawali opsi kosong. Field opsional TIDAK
-       // dipaksa (tanpa data-choice); field wajib dipaksa pilih (tanpa default).
-       const opts=(f.options.length && f.options[0][0]==="")?f.options:[["","— pilih —"]].concat(f.options);
-       const dc=f.optional?"":' data-choice="1"';
-       inner+='<select data-name="'+f.name+'"'+dc+' data-label="'+esc(f.label)+'">'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('')+'</select>';
-     }else if(f.type==="remote"){
-       inner+='<select data-name="'+f.name+'" data-choice="1" data-label="'+esc(f.label)+'" id="rem_'+f.name+'"><option>memuat…</option></select>';
-     }else{
-       inner+='<input data-name="'+f.name+'" type="'+(f.type==="number"?"number":"text")+'" inputmode="'+(f.type==="number"?"decimal":"text")+'">';
-     }
-   });
-   const m=document.getElementById("modal");
-   const hint=a.hint?'<p class="hint">'+esc(a.hint)+'</p>':'';
-   m.innerHTML='<div class="sheet"><h3>'+esc(a.label)+'</h3>'+hint+inner+
-     '<div class="row"><button class="btn" onclick="closeModal()">Batal</button><button class="btn pri" id="ok">Simpan</button></div></div>';
-   m.style.display="flex";
-   a.fields.forEach(f=>{ if(f.type==="remote"){ getJSON(f.source).then(list=>{
-       const s=document.getElementById("rem_"+f.name);
-       const head='<option value="">'+(list.length?"— pilih —":"(tidak ada pilihan)")+'</option>';
-       s.innerHTML = head + list.map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('');
-     }).catch(()=>{}); }});
-   document.getElementById("ok").onclick=async()=>{
-     const btn=document.getElementById("ok"); btn.disabled=true;
-     try{
-       // Semua field pilihan WAJIB dipilih (tanpa default) — hindari salah input.
-       const miss=[];
-       m.querySelectorAll("select[data-choice]").forEach(el=>{ if(!el.value) miss.push(el.getAttribute("data-label")||el.getAttribute("data-name")); });
-       if(miss.length){ toast("Wajib dipilih: "+miss.join(", ")); btn.disabled=false; return; }
-       const body={};
-       m.querySelectorAll("[data-name]").forEach(el=>{ let v=el.value; if(el.type==="number") v=(v===""?null:parseFloat(v)); body[el.getAttribute("data-name")]=v; });
-       const res=await post(a.post, body);
-       closeModal(); toast(res.pesan||"Berhasil ✓"); load();
-     }catch(e){ toast(String(e)); btn.disabled=false; }
-   };
- }
- load();
-</script></body></html>"""
-
-
-@router.get("", response_class=HTMLResponse)
-async def launch() -> HTMLResponse:
-    """Halaman Mini App (dari tombol menu bot). Login otomatis via initData."""
-    return HTMLResponse(_HTML)
