@@ -161,7 +161,7 @@ class ProgressResult:
     proc: MillingProcess
     berat_kumulatif: float
     rendemen_persen: float | None
-    jenis: str | None = None  # KS (dari gabah basah) / KL (dari gabah kering)
+    jenis: str | None = None  # KS (dibeli basah) / KL (dibeli kering) / MIX (dua-duanya)
     peringatan: str | None = None
 
 
@@ -262,7 +262,7 @@ class FinishResult:
     nama_silo: str | None
     produced: float
     siap_kirim: float
-    jenis: str | None = None  # KS / KL
+    jenis: str | None = None  # KS / KL / MIX
 
 
 async def finish_milling(
@@ -468,28 +468,51 @@ async def asal_isi(db: AsyncSession, proc: MillingProcess) -> list[str]:
     return out
 
 
-async def _source_kondisi(db: AsyncSession, proc: MillingProcess) -> str | None:
-    """Kondisi gabah sumber proses: 'basah' / 'kering'. Satu lot tidak boleh
-    campur basah & kering, jadi cukup satu batch sumber."""
-    if proc.drying_lot_id:
-        return (
-            await db.execute(
-                select(PurchaseBatch.kondisi_gabah)
-                .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-                .where(DryingLotBatch.drying_lot_id == proc.drying_lot_id)
-                .limit(1)
-            )
-        ).scalars().first()
-    if proc.purchase_batch_id:
-        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
-        return b.kondisi_gabah if b else None
-    return None
+#: Kondisi gabah saat DIBELI → kelas PK yang keluar darinya.
+KELAS_PK = {"basah": "KS", "kering": "KL"}
+
+#: Lot yang bahannya dua-duanya. Bukan "campuran" — satu kata yang meringkas
+#: dua asal-usul terbaca seperti nama varietas, dan yang membacanya akan
+#: mencari gabah bernama itu.
+KELAS_PK_CAMPUR = "MIX"
+
+
+def kelas_pk(kondisi: list[str]) -> str | None:
+    """KS / KL / MIX dari daftar kondisi beli bahannya. None bila tak diketahui."""
+    kode = [KELAS_PK[k] for k in kondisi if k in KELAS_PK]
+    if not kode:
+        return None
+    return kode[0] if len(set(kode)) == 1 else KELAS_PK_CAMPUR
+
+
+async def _source_kondisi(db: AsyncSession, proc: MillingProcess) -> list[str]:
+    """Kondisi beli gabah sumber proses — dari SELURUH isinya.
+
+    Dulu dibaca dari `proc.drying_lot_id`/`purchase_batch_id`, penunjuk tunggal
+    peninggalan masa ketika satu silo hanya boleh berisi satu hal, dengan
+    catatan "satu lot tidak boleh campur basah & kering, jadi cukup satu batch
+    sumber". Catatan itu tidak lagi benar: silo Gudang 1 boleh berisi gabah
+    yang KAMI keringkan (dibeli basah) bersama gabah yang datang sudah kering.
+    Keduanya sama-sama kering saat digiling — yang membedakan adalah kelas PK
+    yang keluar, dan itu justru yang dijual.
+
+    Akibat bentuk lama: lot bercampur mengaku KS saja, diam-diam, dan PK KL di
+    dalamnya hilang dari laporan, dari transfer, dan dari catatan QC.
+
+    `sumber_batch` sudah menjawab pertanyaan "apa isi proses ini" untuk HPP;
+    di sini dipakai sumber yang sama supaya keduanya tak mungkin berselisih.
+    """
+    kondisi: list[str] = []
+    for b, _harga, _lewat in await sumber_batch(db, proc):
+        k = (b.kondisi_gabah or "").strip().lower()
+        if k and k not in kondisi:
+            kondisi.append(k)
+    return [k for k in ("basah", "kering") if k in kondisi]
 
 
 async def pk_jenis(db: AsyncSession, proc: MillingProcess) -> str | None:
-    """Jenis PK hasil Gudang 1: gabah basah → KS, gabah kering → KL."""
-    k = await _source_kondisi(db, proc)
-    return {"basah": "KS", "kering": "KL"}.get(k)
+    """Kelas PK hasil Gudang 1: KS (dari gabah basah), KL (kering), MIX (dua-duanya)."""
+    return kelas_pk(await _source_kondisi(db, proc))
 
 
 def _kg(kg: float) -> str:
@@ -605,8 +628,9 @@ async def log_qc_milling(
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
     if all(v is None for v in (kadar_air, broken, susut)):
         raise MillingError("Sebutkan hasil QC-nya (kadar air / broken / susut).")
-    # Jenis PK (KS/KL) TIDAK diisi manual — ditentukan otomatis dari kondisi
-    # gabah sumber: basah → KS, kering → KL. Input manual diabaikan.
+    # Jenis PK TIDAK diisi manual — ditentukan otomatis dari kondisi gabah
+    # SELURUH sumbernya: basah → KS, kering → KL, dua-duanya → MIX. Input
+    # manual diabaikan.
     kondisi = await pk_jenis(db, proc) or kondisi
 
     db.add(

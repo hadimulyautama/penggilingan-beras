@@ -177,18 +177,56 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
     assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 1
 
 
-def test_lama_menyebut_sejak_giling_ditutup():
+def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():
     """Stok yang diam berbulan-bulan adalah uang yang diam, dan tanggal giling
     saja tak mengatakannya — ia menuntut pembacanya menghitung sendiri sambil
     berdiri di gudang.
 
+    Satuannya HARI, bukan jam-menit seperti kartu antrean. Antrean bertanya
+    "apakah ini tertahan sekarang", dan di sana selisih dua jam berarti sesuatu.
+    Stok bertanya "sudah berapa lama uang ini diam" — pada pertanyaan itu jam
+    dan menit cuma kebisingan yang berubah tiap kali halaman dibuka.
+
     Dihitung sejak giling DITUTUP: sebelum itu PK-nya masih keluar dari mesin,
-    jadi "menumpuk" belum berarti apa-apa. Kata-katanya dipinjam dari `_lama`
-    yang dipakai seluruh kartu — dua cara menyebut lama akan membuat "3 jam" di
-    satu layar dan "3j" di layar lain.
+    jadi "menumpuk" belum berarti apa-apa.
     """
+    import datetime as dt
+
+    from app.database import now_local
     from app.services import stok
 
+    kini = now_local()
+    assert stok._hari(kini) == "0 hari"
+    assert stok._hari(kini - dt.timedelta(hours=23)) == "0 hari", "belum genap sehari"
+    assert stok._hari(kini - dt.timedelta(days=1)) == "1 hari"
+    assert stok._hari(kini - dt.timedelta(days=40)) == "40 hari"
+    assert stok._hari(None) == "", "tanpa waktu, jangan mengarang umur"
+
     fn = kode_saja(stok.pk_gudang1)
-    assert "_lama(proc.waktu_selesai or proc.waktu_mulai)" in fn
+    assert "_hari(proc.waktu_selesai or proc.waktu_mulai)" in fn
     assert "<dt>Lama</dt>" in TPL.read_text()
+
+
+def test_kelas_pk_dibaca_dari_seluruh_isi_lot():
+    """Bug yang diperbaiki: `pk_jenis` membaca penunjuk TUNGGAL di
+    `MillingProcess` — peninggalan masa ketika satu silo hanya boleh berisi satu
+    hal. Sejak silo boleh dicampur, penunjuk itu menyebut salah satu sumber dan
+    mendiamkan sisanya: lot berisi gabah basah DAN kering mengaku KS saja, dan
+    PK KL di dalamnya hilang dari laporan, transfer, dan catatan QC — diam-diam,
+    karena "KS" adalah jawaban yang masuk akal.
+    """
+    from app.penggilingan.gudang1.services import milling
+
+    fn = kode_saja(milling._source_kondisi)
+    assert "sumber_batch" in fn, "isi lot tak dibaca dari sumber bersama"
+    assert "drying_lot_id" not in fn, "penunjuk tunggal kembali dipakai"
+    assert "purchase_batch_id" not in fn, "penunjuk tunggal kembali dipakai"
+
+    assert milling.kelas_pk(["basah", "kering"]) == "MIX"
+    assert milling.kelas_pk(["basah"]) == "KS"
+    assert milling.kelas_pk([]) is None
+
+    # Petanya SATU tempat: layar Stok meminjamnya, tidak menyalinnya.
+    from app.services import stok
+    assert stok.kelas_pk is milling.kelas_pk
+    assert stok.KELAS_PK is milling.KELAS_PK

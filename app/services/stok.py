@@ -18,29 +18,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import now_local
 from app.models import MillingProcess
-from app.services.berjalan import _lama
-
-
-#: Kondisi gabah saat DIBELI → kelas PK yang keluar darinya.
-#:
-#: Pemilik memutuskan layar memakai kelas PK-nya saja: "basah"/"kering" adalah
-#: keadaan gabah kemarin, sedangkan yang dijual dan dibicarakan orang adalah
-#: KS dan KL. Dua kosakata untuk satu hal di kartu yang sama memaksa pembacanya
-#: menerjemahkan, dan yang menerjemahkan sesekali salah menerjemahkan.
-KELAS = {"basah": "KS", "kering": "KL"}
-
-#: Lebih dari satu kelas dalam satu lot. Bukan "campuran" — itu terbaca seperti
-#: nama varietas — melainkan penanda bahwa isinya memang dua kelas.
-KELAS_CAMPUR = "MIX"
-
-
-def kelas_pk(kondisi: list[str]) -> str | None:
-    """KS / KL / MIX dari daftar kondisi beli bahannya."""
-    kode = [KELAS[k] for k in kondisi if k in KELAS]
-    if not kode:
-        return None
-    return kode[0] if len(set(kode)) == 1 else KELAS_CAMPUR
+from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
 
 
 @dataclass
@@ -75,12 +55,18 @@ class LotPk:
     #: keduanya dengan cara yang sama.
     bahan: list[tuple[str, str, str]] = field(default_factory=list)
     tanggal: str | None = None
-    #: Sudah berapa lama PK ini menumpuk, dalam kata — "3 hari 4 jam".
+    #: Sudah berapa lama PK ini menumpuk — dalam HARI, mis. "0 hari", "12 hari".
     #:
     #: Dihitung sejak giling DITUTUP: sebelum itu PK-nya masih keluar dari
     #: mesin, jadi "menumpuk" belum berarti apa-apa. Untuk yang mesinnya masih
     #: menyala, dihitung sejak mulai — itu tetap menjawab "sudah sejak kapan
     #: barang ini ada di lantai", yang memang pertanyaannya.
+    #:
+    #: Satuannya HARI, bukan jam-menit seperti kartu antrean. Antrean bertanya
+    #: "apakah ini tertahan sekarang" — dan di sana selisih dua jam berarti
+    #: sesuatu. Stok bertanya "sudah berapa lama uang ini diam", dan pada
+    #: pertanyaan itu jam dan menit cuma kebisingan yang berubah tiap kali
+    #: halaman dibuka.
     lama: str = ""
     #: Masih menyala mesinnya. PK-nya sudah ada, tapi angkanya belum final.
     berjalan: bool = False
@@ -88,6 +74,16 @@ class LotPk:
 
 def _tgl(d) -> str:
     return d.strftime("%d/%m") if d else "?"
+
+
+def _hari(sejak) -> str:
+    """"0 hari", "1 hari", "12 hari". Kosong bila waktunya tak diketahui."""
+    if sejak is None:
+        return ""
+    detik = (now_local() - sejak).total_seconds()
+    if detik < 0:
+        return ""
+    return f"{int(detik // 86400)} hari"
 
 
 def _kg(n) -> str:
@@ -136,7 +132,7 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
             bahan.append((f"{await _nama(b)} · {b.kode_batch}",
                           f"dibeli {_kg(b.berat_total_kg)}",
                           f"masuk {_tgl(b.tanggal_pembelian)}"
-                          + (f" · {KELAS[k]}" if k in KELAS else "")))
+                          + (f" · {KELAS_PK[k]}" if k in KELAS_PK else "")))
         return bahan, [k for k in ("basah", "kering") if k in kondisi]
 
     for s in baris:
@@ -162,7 +158,7 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
             b = batches[0]
             nama = f"{await _nama(b)} · {b.kode_batch}"
             ket = (f"masuk {_tgl(b.tanggal_pembelian)}"
-                   + (f" · {KELAS[k1]}" if k1 in KELAS else ""))
+                   + (f" · {KELAS_PK[k1]}" if k1 in KELAS_PK else ""))
         else:
             # Satu muatan silo yang berasal dari satu pengeringan bisa berisi
             # beberapa batch, dan yang tercatat adalah berat MUATANNYA — bukan
@@ -176,7 +172,7 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
             ringkas = " & ".join(nama_sup[:2]) + (
                 f" +{len(nama_sup) - 2}" if len(nama_sup) > 2 else "")
             nama = f"{ringkas} · {lot.kode_lot if lot else '?'}"
-            ket = f"{len(batches)} batch" + (f" · {KELAS[k1]}" if k1 in KELAS else "")
+            ket = f"{len(batches)} batch" + (f" · {KELAS_PK[k1]}" if k1 in KELAS_PK else "")
         bahan.append((nama, _kg(s.berat_kg), ket))
     return bahan, [k for k in ("basah", "kering") if k in kondisi]
 
@@ -213,7 +209,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             kelas=kelas_pk(kondisi),
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
-            lama=_lama(proc.waktu_selesai or proc.waktu_mulai),
+            lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
         ))
     return keluar

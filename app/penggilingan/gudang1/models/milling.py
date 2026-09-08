@@ -68,7 +68,7 @@ class MillingQcLog(Base):
     kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
     broken_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
     susut_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
-    # KS / KL
+    # KS / KL / MIX
     kondisi: Mapped[str | None] = mapped_column(String(10))
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

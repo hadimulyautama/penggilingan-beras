@@ -103,7 +103,7 @@ class TransferResult:
     kode_proses: str
     lokasi_label: str
     hpp_per_kg: float | None
-    jenis: str | None = None  # KS / KL
+    jenis: str | None = None  # KS / KL / MIX
 
 
 async def create_internal_transfer(
