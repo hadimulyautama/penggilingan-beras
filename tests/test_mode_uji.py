@@ -71,3 +71,33 @@ async def test_mati_total_saat_mode_uji_padam():
         mode_uji._wajib_mode_uji()      # tidak melempar
     finally:
         settings.mode_uji = asli
+
+
+def test_setelan_pabrik_tidak_ikut_terhapus():
+    """Ia segolongan dengan alat: menggambarkan PABRIKNYA, bukan pekerjaannya.
+    Menghapusnya berarti diam-diam mengembalikan target kadar air dan daftar
+    sebab berhenti ke bawaan, tanpa satu layar pun menyebutkan itu terjadi."""
+    from app.web.mode_uji import DIPERTAHANKAN, _tabel_dihapus
+
+    assert "setelan_pabrik" in DIPERTAHANKAN
+    assert "setelan_pabrik" not in _tabel_dihapus()
+
+
+def test_nomor_urut_hanya_untuk_tabel_berkolom_id():
+    """`setelan_pabrik` berkunci `kunci`, bukan `id`. Penjaga
+    `pg_get_serial_sequence(...) IS NOT NULL` tak menolong — Postgres sudah
+    menyerah saat mencari kolomnya, dan seluruh penghapusan jatuh dengan
+    Internal Server Error SESUDAH DELETE-nya terlanjur berjalan."""
+    import inspect
+
+    from app.database import Base
+    from app.web import mode_uji
+
+    sumber = inspect.getsource(mode_uji.hapus)
+    assert 'berid = {t.name for t in Base.metadata.sorted_tables if "id" in t.columns}' in sumber
+    assert "for nama in [n for n in urut if n in berid]:" in sumber
+
+    # Dan memang ada tabel tanpa `id` di basis data ini — kalau tidak, tesnya
+    # menjaga sesuatu yang tak pernah terjadi.
+    tanpa_id = {t.name for t in Base.metadata.sorted_tables if "id" not in t.columns}
+    assert tanpa_id, "tak ada tabel tanpa id — penjaganya jadi tak berarti"

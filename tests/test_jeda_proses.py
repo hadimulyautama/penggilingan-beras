@@ -144,7 +144,7 @@ def test_antrean_hanya_yang_belum_punya_tempat():
 
     # Yang sudah punya tempat: menunggu dinyalakan, menunggu diangkut ke silo,
     # menunggu digiling — semuanya `transit`, bukan `menunggu`.
-    assert golongan("batch di dryer") == "transit"
+    assert golongan("batch di {mesin.nama}") == "transit"
     assert golongan("sudah dingin, dryer perlu dikosongkan") == "transit"
     assert golongan("gabah kering · {_kg(kg_silo)}") == "transit"
     # Yang belum punya tempat tetap antrean. Tiket datang sebagai satu

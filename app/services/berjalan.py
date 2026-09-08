@@ -350,30 +350,42 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
     # dan sudah menjadi lot. Yang pertama menunggu operator menyalakan mesin —
     # kalau tak ditampilkan, gabah bisa bermalam di dryer tanpa dipanaskan dan
     # tak ada satu layar pun yang menyebutnya.
-    from app.penggilingan.gudang1.services.drying import _loose_dryer_batches
+    from app.penggilingan.gudang1.services.drying import (
+        _loose_dryer_batches, dryers_g1, mode_disarankan)
 
-    menunggu_dryer = await _loose_dryer_batches(db)
-    if menunggu_dryer:
-        total = sum(float(x.berat_total_kg or 0) for x in menunggu_dryer)
-        kondisi = {x.kondisi_gabah for x in menunggu_dryer}
-        from app.penggilingan.gudang1.services.drying import mode_disarankan
-
+    # SATU KARTU PER MESIN, bukan satu kartu untuk semua.
+    #
+    # Sebelumnya batch yang menunggu diambil tanpa menyebut mesinnya, lalu
+    # dijumlahkan jadi satu kartu "Mesin pengering". Selama pabrik cuma punya
+    # satu mesin, hasilnya kebetulan benar. Begitu ada dua, kartunya
+    # menjumlahkan gabah dari mesin yang berbeda — bobot yang tak pernah ada
+    # di satu tempat, dan mode yang disarankan dari jumlah itu. Padahal
+    # `_loose_dryer_batches` sendiri sudah memperingatkannya di docstring-nya.
+    for mesin in await dryers_g1(db):
+        isi_mesin = await _loose_dryer_batches(db, mesin.id)
+        if not isi_mesin:
+            continue
+        total = sum(float(x.berat_total_kg or 0) for x in isi_mesin)
+        kondisi = {x.kondisi_gabah for x in isi_mesin}
         b.transit.append(Baris(
             kode="",
-            isi=f"{len(menunggu_dryer)} batch di dryer · {_kg(total)}",
+            isi=f"{len(isi_mesin)} batch di {mesin.nama} · {_kg(total)}",
             keadaan="nyalakan mesinnya",
             aksi="mulai_pengeringan", fase="dryer",
-            sejak=min((x.created_at for x in menunggu_dryer if x.created_at), default=None),
-            judul="Mesin pengering",
+            # Mesinnya ikut, jadi lembarnya tak menanyakan lagi mesin mana —
+            # kartunya sudah menunjuknya.
+            nilai=str(mesin.id),
+            sejak=min((x.created_at for x in isi_mesin if x.created_at), default=None),
+            judul=mesin.nama,
             utama=(_kg(total).removesuffix(" kg"), "kg"),
-            sub=f"{len(menunggu_dryer)} batch"
+            sub=f"{len(isi_mesin)} batch"
                 + (f" · gabah {'/'.join(sorted(kondisi))}" if kondisi else ""),
             fakta=[("Mode terdekat", mode_disarankan(total)),
                    ("Target", "belum ditetapkan")],
-            anak=[(x.kode_batch, _kg(x.berat_total_kg), "") for x in menunggu_dryer],
+            anak=[(x.kode_batch, _kg(x.berat_total_kg), "") for x in isi_mesin],
             pilihan=[("mulai_pengeringan", "Mulai pengeringan",
                       "Sebutkan target kadar air & mode yang disetel di mesin")],
-            ringkas=f"{len(menunggu_dryer)} batch menunggu mesin dinyalakan"
+            ringkas=f"{len(isi_mesin)} batch menunggu mesin dinyalakan"
                     f" · mode terdekat {mode_disarankan(total)}",
         ))
 

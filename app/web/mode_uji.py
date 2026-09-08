@@ -63,6 +63,12 @@ DIPERTAHANKAN = frozenset({
     "warehouses", "silos", "dryers",                # alat
     "brands", "package_sizes", "packaging_materials",
     "rice_quality_standards",                       # daftar acuan
+    # Setelan pabrik — target kadar air bawaan, daftar sebab berhenti. Ia
+    # segolongan dengan alat: menggambarkan PABRIKNYA, bukan pekerjaannya.
+    # Menghapusnya berarti diam-diam mengembalikan setelan yang sudah diubah
+    # admin ke nilai bawaan, dan tak ada satu layar pun yang menyebutkan itu
+    # terjadi.
+    "setelan_pabrik",
     # ── Tiga tabel di bawah ini DIPAKAI BERSAMA aplikasi lain di basis data
     #    yang sama. Ketiganya ketahuan hanya karena diuji sungguhan; tak satu
     #    pun terlihat "milik orang lain" dari nama atau dari kode produksi.
@@ -200,7 +206,16 @@ async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
             await db.execute(text(f'DELETE FROM "{nama}"'))
         # Nomor urut dikembalikan ke 1 supaya fase berikutnya benar-benar mulai
         # dari bersih, bukan melanjutkan nomor bekas percobaan.
-        for nama in urut:
+        #
+        # HANYA tabel yang benar-benar punya kolom `id`. Penjaga
+        # `pg_get_serial_sequence(...) IS NOT NULL` tidak cukup: Postgres
+        # sudah menyerah lebih dulu saat mencari kolomnya, jadi tabel
+        # berkunci lain — `setelan_pabrik` berkunci `kunci` — menjatuhkan
+        # seluruh penghapusan dengan Internal Server Error, sesudah DELETE-nya
+        # terlanjur berjalan. Daftarnya dibaca dari metadata, bukan ditulis
+        # tangan, supaya tabel berikutnya yang berkunci lain tak mengulanginya.
+        berid = {t.name for t in Base.metadata.sorted_tables if "id" in t.columns}
+        for nama in [n for n in urut if n in berid]:
             await db.execute(text(
                 "SELECT setval(pg_get_serial_sequence(:t, 'id'), 1, false) "
                 "WHERE pg_get_serial_sequence(:t, 'id') IS NOT NULL"
