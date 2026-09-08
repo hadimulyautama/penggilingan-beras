@@ -33,20 +33,43 @@ from app.models import ProduksiAkun, Supplier
 #: harus tahu dalam sekali lihat bahwa isinya bukan pekerjaan sungguhan.
 AWALAN = "(UJI) "
 
-PEMASOK = ["H. Karyo", "Bu Sri", "Pak Tarno", "H. Sulaiman Abdurrahman",
-           "Kelompok Tani Sumber Rejeki"]
+PEMASOK = [
+    "H. Karyo", "Bu Sri", "Pak Tarno", "H. Sulaiman Abdurrahman",
+    "Kelompok Tani Sumber Rejeki", "Mbah Wagimin", "Hj. Rohmah",
+    "Pak Darto", "CV Tani Makmur Sentosa", "Bu Painem",
+]
 
-#: (indeks pemasok, jenis, plat, kg). Bobotnya kisaran satu truk: 8–11 ton,
-#: dan panjang namanya sengaja beragam — kartu yang hanya pernah diuji dengan
-#: "Bu Sri" tak pernah ketahuan pecah pada nama panjang.
+#: Tiket timbang: (indeks pemasok, jenis, plat, kg, berapa hari yang lalu).
+#:
+#: Riwayat beberapa hari dibuat dengan sengaja. Layar Laporan dan List audit
+#: yang hanya berisi hari ini tak bisa dipakai menilai apa pun — yang ingin
+#: dilihat orang di sana justru perbandingan antar hari.
 TIKET = [
-    (0, "GABAH_BASAH",  "AD 1234 XY",  9_850),
-    (1, "GABAH_BASAH",  "AD 88 KK",   10_400),
-    (2, "GABAH_KERING", "AD 21 LM",    8_600),
-    (3, "GABAH_KERING", "AD 9 PP",    11_000),
-    (4, "GABAH_BASAH",  "AD 7 CC",     9_200),
-    (1, "GABAH_KERING", "AD 88 KK",    8_150),
-    (0, "GABAH_KERING", "AD 1234 XY", 10_700),
+    # ── 4 hari lalu ──
+    (0, "GABAH_BASAH",  "AD 1234 XY",  9_850, 4),
+    (1, "GABAH_BASAH",  "AD 88 KK",   10_400, 4),
+    (5, "GABAH_BASAH",  "AD 3 QQ",     8_900, 4),
+    # ── 3 hari lalu ──
+    (2, "GABAH_KERING", "AD 21 LM",    8_600, 3),
+    (6, "GABAH_KERING", "AD 45 RT",   10_150, 3),
+    (3, "GABAH_BASAH",  "AD 9 PP",    11_000, 3),
+    # ── 2 hari lalu ──
+    (4, "GABAH_BASAH",  "AD 7 CC",     9_200, 2),
+    (7, "GABAH_BASAH",  "AD 12 DD",   10_600, 2),
+    (8, "GABAH_KERING", "AD 77 SS",    9_400, 2),
+    # ── kemarin ──
+    (9, "GABAH_BASAH",  "AD 2 MM",     8_750, 1),
+    (0, "GABAH_KERING", "AD 1234 XY", 10_700, 1),
+    (1, "GABAH_BASAH",  "AD 88 KK",    9_980, 1),
+    # ── hari ini: sebagian ditindak, sebagian ditinggal di antrean ──
+    (2, "GABAH_BASAH",  "AD 21 LM",   10_250, 0),
+    (5, "GABAH_BASAH",  "AD 3 QQ",     9_600, 0),
+    (3, "GABAH_KERING", "AD 9 PP",    11_200, 0),
+    (6, "GABAH_KERING", "AD 45 RT",    8_300, 0),
+    (7, "GABAH_BASAH",  "AD 12 DD",    9_050, 0),
+    (8, "GABAH_KERING", "AD 77 SS",   10_900, 0),
+    (9, "GABAH_BASAH",  "AD 2 MM",     8_480, 0),
+    (4, "GABAH_KERING", "AD 7 CC",     9_770, 0),
 ]
 
 
@@ -69,11 +92,13 @@ async def _pemasok(db: AsyncSession) -> dict[str, int]:
 async def _tiket(db: AsyncSession, pemasok: dict[str, int]) -> int:
     """Tiket timbang, disuntikkan langsung — ia milik aplikasi Timbangan.
 
-    Yang sudah ada dilewati, jadi menekan tombolnya dua kali tak melipatgandakan
-    tiketnya. Yang sudah tertaut ke batch dibebaskan lagi oleh penghapusan.
+    `timbang1_waktu` yang mundur beberapa hari BUKAN hiasan: dari situlah
+    tanggal batch diambil (`purchase.create_purchase_batch_dari_timbang`),
+    jadi riwayat beberapa harinya terbentuk lewat jalur yang sama dengan
+    hari biasa — bukan dengan menambal tanggal sesudahnya.
     """
     dibuat = 0
-    for i, (idx, jenis, plat, kg) in enumerate(TIKET, start=1):
+    for i, (idx, jenis, plat, kg, lalu) in enumerate(TIKET, start=1):
         kode = f"TRX-UJI-{i:03d}"
         ada = (await db.execute(
             text("SELECT 1 FROM timbangan_transaksi WHERE kode = :k"), {"k": kode})).first()
@@ -83,13 +108,44 @@ async def _tiket(db: AsyncSession, pemasok: dict[str, int]) -> int:
             INSERT INTO timbangan_transaksi
               (kode, tanggal, arah, jenis_kode, nomor_polisi, nama_sopir,
                supplier_id, timbang1_kg, timbang2_kg, netto_timbangan_kg,
-               berat_barang_kg, berat_acuan_kg, status_kontrol, status_tiket)
-            VALUES (:k, CURRENT_DATE, 'MASUK', :j, :p, 'Sopir Uji', :s,
-                    :t1, :t2, :n, :n, :n, 'NORMAL', 'TERBUKA')
+               berat_barang_kg, berat_acuan_kg, status_kontrol, status_tiket,
+               timbang1_waktu, timbang2_waktu)
+            VALUES (:k, CURRENT_DATE - CAST(:lalu AS int), 'MASUK', :j, :p,
+                    'Sopir Uji', :s, :t1, :t2, :n, :n, :n, 'NORMAL', 'TERBUKA',
+                    now() - make_interval(days => CAST(:lalu AS int), hours => 3),
+                    now() - make_interval(days => CAST(:lalu AS int), hours => 2))
         """), {"k": kode, "j": jenis, "p": plat, "s": pemasok[PEMASOK[idx]],
-               "t1": kg + 4200, "t2": 4200, "n": kg})
+               "t1": kg + 4200, "t2": 4200, "n": kg, "lalu": lalu})
         dibuat += 1
     return dibuat
+
+
+async def _mundurkan(hari: int, kode_lot: str | None, kode_proses: str | None) -> None:
+    """Geser jam satu siklus yang sudah selesai ke belakang.
+
+    Bentuk datanya tetap dibuat aplikasi lewat jalurnya sendiri; yang digeser
+    hanya JAMNYA. Tanpa ini seluruh riwayat bertanggal hari ini, dan laporan
+    per hari — satu-satunya alasan riwayat itu dibuat — jadi tak menunjukkan
+    apa pun. Hanya dipakai pada siklus yang SUDAH ditutup: yang masih berjalan
+    dibiarkan apa adanya supaya "sudah berapa lama" tetap jujur.
+    """
+    async with SessionLocal() as db:
+        if kode_lot:
+            await db.execute(text("""
+                UPDATE drying_lots SET
+                    waktu_mulai_pengeringan = waktu_mulai_pengeringan - make_interval(days => CAST(:h AS int)),
+                    waktu_selesai_pengeringan = waktu_selesai_pengeringan - make_interval(days => CAST(:h AS int)),
+                    waktu_selesai_pendinginan = waktu_selesai_pendinginan - make_interval(days => CAST(:h AS int))
+                 WHERE kode_lot = :k
+            """), {"h": hari, "k": kode_lot})
+        if kode_proses:
+            await db.execute(text("""
+                UPDATE milling_process SET
+                    waktu_mulai = waktu_mulai - make_interval(days => CAST(:h AS int)),
+                    waktu_selesai = waktu_selesai - make_interval(days => CAST(:h AS int))
+                 WHERE kode_proses = :k
+            """), {"h": hari, "k": kode_proses})
+        await db.commit()
 
 
 async def siapkan_akun(sandi: str) -> ProduksiAkun:
@@ -152,64 +208,141 @@ async def isi(akun: ProduksiAkun) -> list[str]:
         pemasok = await _pemasok(db)
         n = await _tiket(db, pemasok)
         await db.commit()
-    langkah.append(f"{len(PEMASOK)} pemasok · {n} tiket timbang baru")
+    langkah.append(f"{len(PEMASOK)} pemasok · {n} tiket timbang")
 
     tr = httpx.ASGITransport(app=app)
     kuki = {NAMA_COOKIE: buat_token(akun)}
     async with httpx.AsyncClient(transport=tr, base_url="http://uji",
                                  cookies=kuki, follow_redirects=False) as c:
-        tiket = (await c.get("/miniapp/actions/timbang-masuk-aktif")).json()
-        if not isinstance(tiket, list):
-            langkah.append("⚠️ tiket tak terbaca — data uji tak jadi diisi")
-            return langkah
 
-        def pilih(jenis: str, n: int) -> list[dict]:
-            return [t for t in tiket if jenis.lower() in t["label"].lower()][:n]
+        async def kirim(alamat: str, muatan: dict) -> dict:
+            r = await c.post(f"/miniapp/actions/{alamat}", json=muatan)
+            return r.json() if r.headers.get("content-type", "").startswith(
+                "application/json") else {}
 
-        # Hanya sebagian tiket yang ditindak. Sisanya sengaja ditinggal di
-        # antrean, supaya layar antrean pun ada isinya untuk dicoba.
-        for t in pilih("basah", 2):
-            r = await c.post("/miniapp/actions/gabah-masuk",
-                             json={"timbangan_transaksi_id": t["value"],
-                                   "tujuan": "dryer:1"})
-            langkah.append(("✓ " if r.status_code == 200 else "✗ ")
-                           + f"gabah basah → mesin pengering ({t['label'][:26]})")
+        async def daftar(alamat: str) -> list:
+            r = await c.get(f"/miniapp/actions/{alamat}")
+            d = r.json() if r.status_code == 200 else []
+            return d if isinstance(d, list) else []
 
-        # Silonya diambil dari tujuan yang DITAWARKAN server, bukan ditebak
-        # nomornya: silo di Gudang 2 bernama sama dan bernomor lain, dan
-        # menebak akan menaruh gabah di gudang yang salah tanpa peringatan.
-        menu = {a["id"]: a for a in (await c.get("/miniapp/actions/menu")).json()}
-        silo = [o[0] for f in menu.get("gabah_masuk", {}).get("fields", [])
-                if f["name"] == "tujuan" for o in f.get("options", [])
-                if str(o[0]).startswith("silo:")]
-        for t in pilih("kering", 1):
-            if not silo:
-                break
-            r = await c.post("/miniapp/actions/gabah-masuk",
-                             json={"timbangan_transaksi_id": t["value"],
-                                   "tujuan": silo[0]})
-            langkah.append(("✓ " if r.status_code == 200 else "✗ ")
-                           + f"gabah kering → {silo[0]}")
+        async def tiket_bebas(jenis: str, n: int = 1) -> list[dict]:
+            semua = await daftar("timbang-masuk-aktif")
+            return [t for t in semua if jenis.lower() in t["label"].lower()][:n]
 
-        r = await c.post("/miniapp/actions/mulai-pengeringan",
-                         json={"target_kadar_air": 14, "mode_dryer": "20T"})
-        langkah.append(("✓ " if r.status_code == 200 else "✗ ") + "pengeringan mulai")
+        async def silo_tujuan() -> list[str]:
+            menu = {a["id"]: a for a in await daftar("menu")}
+            return [o[0] for f in menu.get("gabah_masuk", {}).get("fields", [])
+                    if f["name"] == "tujuan" for o in f.get("options", [])
+                    if str(o[0]).startswith("silo:")]
 
-        lot = (await c.get("/miniapp/actions/drying-active")).json()
-        if isinstance(lot, list) and lot:
+        async def siklus_penuh(hari: int, ke: int) -> None:
+            """Satu hari kerja yang SELESAI: masuk → kering → silo → giling →
+            QC → verifikasi. Inilah yang membuat Laporan punya isi."""
+            masuk = []
+            for t in await tiket_bebas("basah", 2):
+                await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
+                                            "tujuan": "dryer:1"})
+                masuk.append(t)
+            if not masuk:
+                return
+            r = await kirim("mulai-pengeringan",
+                            {"target_kadar_air": 14, "mode_dryer": "20T"})
+            lot = await daftar("drying-active")
+            if not lot:
+                return
+            kode_lot = lot[0]["value"]
+            for tes in (23.1, 19.4, 15.2, 13.8):
+                await kirim("kadar-air", {"kode_lot": kode_lot, "tes_1": tes,
+                                          "tes_2": tes + .2, "tes_3": tes - .1,
+                                          "tes_4": tes + .1, "indikator": tes - 1.1})
+            await kirim("selesai-pengeringan", {"kode_lot": kode_lot})
+            await kirim("selesai-pendinginan", {"kode_lot": kode_lot})
+            siap = await daftar("drying-done")
+            silo = await daftar("silo-g1")
+            if siap and silo:
+                await kirim("pindah-silo", {"kode_lot": siap[0]["value"],
+                                            "silo": silo[0]["value"]})
+            bisa = await daftar("silo-siap-giling")
+            kode_proses = None
+            if bisa:
+                await kirim("mulai-giling", {"silo": bisa[0]["value"]})
+                aktif = await daftar("milling-active")
+                if aktif:
+                    kode_proses = aktif[0]["value"]
+                    # Bobotnya dibaca dari basis data, BUKAN diurai dari
+                    # tulisan di kartu: label itu untuk mata orang, bentuknya
+                    # boleh berubah kapan saja, dan kode yang mengurainya akan
+                    # pecah pada perubahan yang tak ada hubungannya.
+                    async with SessionLocal() as db2:
+                        kg = float((await db2.execute(text(
+                            "SELECT berat_gabah_masuk_kg FROM milling_process "
+                            "WHERE kode_proses = :k"), {"k": kode_proses}
+                        )).scalar_one_or_none() or 18_000)
+                    await kirim("hasil-giling", {"kode_proses": kode_proses,
+                                                 "berat_kumulatif": round(kg * .63)})
+                    await kirim("selesai-giling", {"kode_proses": kode_proses})
+                    await kirim("qc-giling", {"kode_proses": kode_proses,
+                                              "kadar_air": 13.4, "broken": 8.5,
+                                              "susut": 1.2})
+                    await kirim("verify-output", {"kode_proses": kode_proses,
+                                                  "berat_output": round(kg * .63)})
+            # Harga diverifikasi untuk yang sudah selesai — supaya layar
+            # Menunggu keputusan hanya berisi yang hari ini, bukan tumpukan
+            # sisa berhari-hari yang tak pernah ada di pabrik sungguhan.
+            for b in await daftar("gabah-unverified"):
+                await kirim("verify-gabah", {"kode_batch": b["value"],
+                                             "metode": "per_kg", "nilai": 5_600 + ke * 50})
+            await _mundurkan(hari, kode_lot, kode_proses)
+            langkah.append(f"✓ siklus penuh {hari} hari lalu — {kode_lot}"
+                           + (f" → {kode_proses}" if kode_proses else ""))
+
+        for ke, hari in enumerate((4, 3, 2), start=1):
+            await siklus_penuh(hari, ke)
+
+        # ── Hari ini: keadaan yang sedang berlangsung ──
+        for t in await tiket_bebas("basah", 2):
+            await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
+                                        "tujuan": "dryer:1"})
+        await kirim("mulai-pengeringan", {"target_kadar_air": 14, "mode_dryer": "25T"})
+        lot = await daftar("drying-active")
+        if lot:
             for tes in (22.4, 19.8):
-                await c.post("/miniapp/actions/kadar-air",
-                             json={"kode_lot": lot[0]["value"], "tes_1": tes,
-                                   "tes_2": tes + .2, "tes_3": tes - .1,
-                                   "tes_4": tes + .1, "indikator": tes - 1.2})
-            langkah.append("✓ dua bacaan kadar air (22,4% → 19,8%)")
+                await kirim("kadar-air", {"kode_lot": lot[0]["value"], "tes_1": tes,
+                                          "tes_2": tes + .2, "tes_3": tes - .1,
+                                          "tes_4": tes + .1, "indikator": tes - 1.2})
+            langkah.append(f"✓ pengeringan berjalan — {lot[0]['value']}, 2 bacaan")
 
-        siap = (await c.get("/miniapp/actions/silo-siap-giling")).json()
-        if isinstance(siap, list) and siap:
-            r = await c.post("/miniapp/actions/mulai-giling",
-                             json={"silo": siap[0]["value"]})
-            langkah.append(("✓ " if r.status_code == 200 else "✗ ") + "giling mulai")
+        silo = await silo_tujuan()
+        for t in await tiket_bebas("kering", 1):
+            if silo:
+                await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
+                                            "tujuan": silo[-1]})
+        bisa = await daftar("silo-siap-giling")
+        if bisa:
+            await kirim("mulai-giling", {"silo": bisa[0]["value"]})
+            aktif = await daftar("milling-active")
+            if aktif:
+                await kirim("hasil-giling", {"kode_proses": aktif[0]["value"],
+                                             "berat_kumulatif": 4_200})
+                langkah.append(f"✓ giling berjalan — {aktif[0]['value']}")
+                # Satu proses DIHENTIKAN sementara: layar jeda pun ada isinya,
+                # dan jam tertahan mulai berjalan dari sekarang.
+                proses = await daftar("proses-berjalan")
+                target = next((p for p in proses
+                               if "giling" in str(p.get("value", "")).lower()), None)
+                if target:
+                    await kirim("hentikan-proses", {"proses": target["value"],
+                                                    "sebab": "Limbah produksi penuh"})
+                    langkah.append("⏸ satu giling dihentikan sementara")
 
-    langkah.append("Harga sengaja BELUM diverifikasi — "
-                   "layar Menunggu keputusan pun berisi.")
+        # Satu muatan ditumpuk di lantai — tanda pembelian berlebih.
+        for t in await tiket_bebas("kering", 1):
+            await kirim("gabah-masuk", {"timbangan_transaksi_id": t["value"],
+                                        "tujuan": "tumpuk"})
+            langkah.append("✓ satu muatan ditumpuk di lantai")
+
+        sisa = len(await daftar("timbang-masuk-aktif"))
+        belum = len(await daftar("gabah-unverified"))
+        langkah.append(f"{sisa} tiket ditinggal di antrean · "
+                       f"{belum} harga menunggu diverifikasi")
     return langkah
