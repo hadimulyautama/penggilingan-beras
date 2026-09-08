@@ -70,22 +70,24 @@
               <dd>{{ kg(l.bahan_kg) }} kg</dd>
             </div>
           {% endif %}
-          {# Kondisi gabah saat DIBELI — dan ia menentukan kelas PK yang keluar:
-             yang datang basah lalu kami keringkan jadi KS, yang datang kering
-             jadi KL. Saat digiling keduanya sama-sama kering, jadi tanpa baris
-             ini tak ada lagi yang membedakan.
-
-             Lot yang bahannya dua-duanya disebut apa adanya — "basah + kering"
-             — bukan diringkas jadi "campuran". Satu kata yang meringkas dua
-             asal-usul terbaca seperti nama varietas, dan yang membacanya akan
-             mencari gabah bernama itu. #}
-          {% if l.kondisi %}
+          {# Kelas PK yang keluar dari lot ini, dan HANYA itu. Kondisi beli
+             gabahnya — basah atau kering — adalah keadaan kemarin; yang dijual
+             dan dibicarakan orang adalah KS dan KL. Menyebut keduanya di kartu
+             yang sama memaksa pembacanya menerjemahkan, dan yang menerjemahkan
+             sesekali salah menerjemahkan. MIX = lot ini berisi dua-duanya. #}
+          {% if l.kelas %}
             <div>
               <dt>Kondisi</dt>
-              <dd>
-                {{ l.kondisi|join(" + ")|capitalize }}
-                <small>· PK {{ l.kondisi|map("replace", "basah", "KS")|map("replace", "kering", "KL")|join(" & ") }}</small>
-              </dd>
+              <dd>{{ l.kelas }}</dd>
+            </div>
+          {% endif %}
+          {# Sudah berapa lama ia menumpuk. Stok yang diam berbulan-bulan adalah
+             uang yang diam, dan tanggal giling saja tak mengatakannya — ia
+             menuntut pembacanya menghitung sendiri sambil berdiri di gudang. #}
+          {% if l.lama %}
+            <div>
+              <dt>Lama</dt>
+              <dd>{{ l.lama }}</dd>
             </div>
           {% endif %}
           {% if l.dikirim %}

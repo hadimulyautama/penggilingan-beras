@@ -10,6 +10,7 @@ Dua sifat yang dijaga, keduanya keputusan bukan selera:
 """
 import inspect
 import pathlib
+import re
 
 from tests.bantu import kode_saja
 
@@ -101,16 +102,29 @@ def test_bobot_bahan_adalah_yang_masuk_mesin_bukan_berat_kiriman():
     assert "berat_gabah_masuk_kg" in kode_saja(stok.pk_gudang1)
 
 
-def test_kondisi_gabah_tak_diringkas_jadi_satu_kata():
-    """"Gabah campuran" terbaca seperti nama varietas. Yang dimaksud adalah dua
-    asal-usul dalam satu lot: yang datang basah lalu dikeringkan sendiri (PK
-    KS) bercampur yang datang sudah kering (PK KL)."""
+def test_layar_memakai_kelas_pk_bukan_kondisi_gabah():
+    """Pemilik memutuskan layar memakai KS / KL / MIX saja.
+
+    "basah"/"kering" adalah keadaan gabah kemarin; yang dijual dan dibicarakan
+    orang adalah kelas PK-nya. Dua kosakata untuk satu hal di kartu yang sama
+    memaksa pembacanya menerjemahkan, dan yang menerjemahkan sesekali salah.
+    """
     from app.services import stok
 
-    assert "campuran" not in kode_saja(stok._bahan)
+    assert stok.kelas_pk(["basah"]) == "KS"
+    assert stok.kelas_pk(["kering"]) == "KL"
+    assert stok.kelas_pk(["basah", "kering"]) == "MIX"
+    assert stok.kelas_pk(["kering", "basah"]) == "MIX", "urutan tak boleh berpengaruh"
+    assert stok.kelas_pk([]) is None, "tanpa bahan, jangan mengarang kelas"
+
+    # Komentar templat dibuang dulu: ia MENJELASKAN mengapa kata-kata itu
+    # tak dipakai, dan tes yang menghukum penjelasan yang baik akan membuat
+    # orang menghapus penjelasannya, bukan memperbaiki layarnya.
     teks = TPL.read_text()
-    assert 'join(" + ")' in teks, "kondisi tak disebut apa adanya"
-    assert "l.kondisi" in teks
+    assert "l.kelas" in teks
+    tampil = re.sub(r"\{#.*?#\}", "", teks, flags=re.S).lower()
+    for kata in ("basah", "kering", "campuran"):
+        assert kata not in tampil, f"kata '{kata}' masih muncul di layar"
 
 
 def test_rendemen_memakai_penyebut_yang_sama_dengan_seluruh_aplikasi():
@@ -161,3 +175,20 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
     # sama, jadi yang dijaga adalah jumlahnya.
     assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 1
     assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 1
+
+
+def test_lama_menyebut_sejak_giling_ditutup():
+    """Stok yang diam berbulan-bulan adalah uang yang diam, dan tanggal giling
+    saja tak mengatakannya — ia menuntut pembacanya menghitung sendiri sambil
+    berdiri di gudang.
+
+    Dihitung sejak giling DITUTUP: sebelum itu PK-nya masih keluar dari mesin,
+    jadi "menumpuk" belum berarti apa-apa. Kata-katanya dipinjam dari `_lama`
+    yang dipakai seluruh kartu — dua cara menyebut lama akan membuat "3 jam" di
+    satu layar dan "3j" di layar lain.
+    """
+    from app.services import stok
+
+    fn = kode_saja(stok.pk_gudang1)
+    assert "_lama(proc.waktu_selesai or proc.waktu_mulai)" in fn
+    assert "<dt>Lama</dt>" in TPL.read_text()
