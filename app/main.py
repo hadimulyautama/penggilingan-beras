@@ -134,6 +134,34 @@ app.mount("/static", StatisTerCache(directory=str(BASE_DIR / "static")), name="s
 # ── Sesi & penjaga halaman ──
 
 @app.middleware("http")
+async def halaman_jangan_disimpan(request: Request, call_next):
+    """Halaman TIDAK boleh disimpan peramban. Asetnya boleh; halamannya jangan.
+
+    Aset bercap versi (`aksi.js?v=59`) sengaja disimpan setahun dan ditandai
+    `immutable` — alamat baru untuk isi baru, jadi salinan lama tak pernah
+    terpakai. Yang menentukan alamat mana yang diminta adalah HALAMANNYA.
+
+    Dan halamannya selama ini tak membawa `Cache-Control` sama sekali. Tanpa
+    itu peramban boleh menyimpannya menurut tebakannya sendiri — dan aplikasi
+    yang dipasang di layar depan iPhone memang menyimpannya. Akibatnya halaman
+    lama yang tersimpan tetap menunjuk `?v=58`, peramban dengan patuh
+    menyajikan berkas v58 dari simpanannya karena memang ditandai `immutable`,
+    dan pemakainya melihat aplikasi versi lama padahal servernya sudah lama
+    menyajikan yang baru. Menutup aplikasi pun tak menolong; hanya memasang
+    ulang yang menolong, dan tak ada yang terpikir melakukannya.
+
+    Isinya juga memang tak layak disimpan: tiap halaman menampilkan keadaan
+    pabrik pada detik itu dan berbeda untuk tiap orang.
+    """
+    balasan = await call_next(request)
+    jenis = balasan.headers.get("content-type", "")
+    if jenis.startswith("text/html"):
+        balasan.headers["Cache-Control"] = "no-store, must-revalidate"
+        balasan.headers["Pragma"] = "no-cache"
+    return balasan
+
+
+@app.middleware("http")
 async def perpanjang_sesi_pendek(request: Request, call_next):
     """Sesi perangkat gudang dihitung dari pemakaian TERAKHIR, bukan dari jam
     masuk: cookie-nya diperbarui setiap permintaan. Efeknya sesi mati sendiri

@@ -221,3 +221,20 @@ def test_konfirmasi_membaca_nama_bukan_kodenya():
     memastikan."""
     blok = AKSI.split("function terbaca()")[1].split("\n    }")[0]
     assert 'el.type === "hidden" ? $("t_" + el.dataset.name)' in blok
+
+
+def test_halaman_tidak_boleh_disimpan_peramban():
+    """Aset bercap versi disimpan setahun dan ditandai `immutable`. Yang
+    menentukan alamat mana yang diminta adalah HALAMANNYA — jadi halaman yang
+    ikut tersimpan membuat aplikasi membeku pada versi lama, dan menutup
+    aplikasi pun tak menolong."""
+    import inspect
+
+    from app import main
+
+    sumber = inspect.getsource(main.halaman_jangan_disimpan)
+    assert 'jenis.startswith("text/html")' in sumber
+    assert '"no-store' in sumber
+    # Asetnya TIDAK ikut dimatikan — di situlah kecepatannya berasal.
+    statis = inspect.getsource(main.StatisTerCache)
+    assert "immutable" in statis and "no-store" not in statis

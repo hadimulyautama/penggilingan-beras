@@ -25,7 +25,7 @@ from app.bots.common import can_see_financials
 from app.database import SessionLocal, now_local
 from app.models import User
 from app.services import undo as svc
-from app.web.aksi_umum import galat, kabar_chat, wajib
+from app.web.aksi_umum import galat, wajib
 from app.web.deps import pengguna_aksi
 
 router = APIRouter(prefix="/miniapp", tags=["miniapp"])
@@ -115,7 +115,6 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
 
     jam = now_local().strftime("%d/%m %H:%M")
     teks = f"↩️ Dibatalkan ({LINGKUP_LABEL.get(lingkup, lingkup).lower()}, {jam}):\n{pesan}"
-    await kabar_chat(user, teks)
     return {"ok": True, "pesan": pesan}
 
 

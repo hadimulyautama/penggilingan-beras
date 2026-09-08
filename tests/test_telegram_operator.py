@@ -68,11 +68,24 @@ async def _kosong():
     return None
 
 
-def test_konfirmasi_chat_dilewati_untuk_operator():
-    """Operator tak lagi punya chat yang menerimanya, dan konfirmasinya sudah
-    tampil di layar tempat ia menekan tombol."""
+def test_aksi_di_app_tidak_dikabarkan_ke_telegram():
+    """Pemilik: "apa yang dilakukan di app, tidak perlu ada feedback ke
+    telegram."
+
+    Dulu tiap aksi lewat layar ikut dikirim ke chat sebagai "Aksi cepat".
+    Operator sudah lama dilewati; yang tersisa admin ke atas — dan bagi
+    mereka pesan itu cuma menggandakan apa yang baru saja mereka lihat
+    sendiri di layar tempat mereka menekannya. Pemberitahuan yang cuma
+    mengulang mengajari orang mengabaikan pemberitahuan.
+    """
+    import pathlib
+
     from app.web import aksi_umum
 
-    sumber = inspect.getsource(aksi_umum.kabar_chat)
-    assert 'role", None) == "operator"' in sumber
-    assert sumber.index("return") < sumber.index("notify_user")
+    assert not hasattr(aksi_umum, "kabar_chat")
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app/web"
+    for berkas in ("miniapp.py", "aksi_inventory.py", "aksi_undo.py",
+                   "aksi_umum.py"):
+        teks = (akar / berkas).read_text()
+        assert "kabar_chat" not in teks, berkas
+        assert "notify_user" not in teks, f"{berkas}: aksi layar tak mengabari chat"

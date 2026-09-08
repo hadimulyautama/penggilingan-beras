@@ -40,24 +40,3 @@ def galat(e: Exception, default: str) -> HTTPException:
     return HTTPException(400, str(e.args[0]) if e.args else default)
 
 
-async def kabar_chat(user: User, text: str, bot_name: str = "admin") -> None:
-    """Kirim konfirmasi aksi cepat ke chat Telegram user (best-effort).
-
-    Header berisi penanda 'Aksi cepat' + nama pelaku + jam, agar jelas apa yang
-    terakhir dilakukan lewat tombol (bukan chat) dan tidak terlupa.
-
-    TIDAK dikirim untuk operator: bot gudang sudah dihapus 3 September 2026,
-    dan operator memang tak lagi punya chat yang menerimanya. Konfirmasinya
-    sudah tampil di layar tempat ia menekan tombol — itu cukup, dan lebih
-    dekat ke matanya daripada pesan di aplikasi lain.
-    """
-    if getattr(user, "role", None) == "operator":
-        return
-    from app.bots.notify import notify_user
-    from app.database import now_local
-    stamp = now_local().strftime("%d/%m %H:%M")
-    header = f"📱 *Aksi cepat* · {user.nama} · {stamp}"
-    # Kirim ke bot ASAL Mini App dibuka (chat yang sedang dilihat user); bila tak
-    # diketahui, pakai bot domain aksi. notify_user tetap fallback ke bot lain.
-    target = getattr(user, "_miniapp_bot", None) or bot_name
-    await notify_user(user.telegram_user_id, f"{header}\n{text}", target)
