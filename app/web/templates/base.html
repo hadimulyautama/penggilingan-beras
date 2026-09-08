@@ -189,7 +189,22 @@
   /* Menekan di luar panel menutupnya — yang membuka laci untuk melihat
      isinya harus bisa keluar tanpa mencari tombol tutup. */
   laci.addEventListener("click", function (e) { if (e.target === laci) buka(false); });
-  document.addEventListener("keydown", function (e) {
+  /* Menekan pintu MANA PUN menutupnya. Yang menuju layar lain memang
+     tertutup sendiri (isi bingkai ditukar, lacinya ikut tergambar ulang
+     dalam keadaan tertutup) — tetapi pintu layar yang SEDANG dibuka tidak:
+     perpindahan instan menolak tautan yang alamatnya sama persis dengan
+     alamat sekarang, jadi ketukannya tak menghasilkan apa pun dan lacinya
+     menggantung terbuka. Jalan buntu yang tak terlihat sebagai jalan buntu. */
+  Array.prototype.forEach.call(laci.querySelectorAll(".pintu"), function (a) {
+    a.addEventListener("click", function () { buka(false); });
+  });
+  /* Lewat PINDAH: `document` TIDAK ikut ditukar saat halaman berpindah,
+     jadi pendengar yang dipasang langsung padanya menumpuk sekali tiap
+     perpindahan — dan yang menumpuk memegang laci lama yang sudah dibuang. */
+  var pasang = (window.PINDAH && PINDAH.pasang)
+    ? PINDAH.pasang
+    : function (s, j, f) { s.addEventListener(j, f); };
+  pasang(document, "keydown", function (e) {
     if (e.key === "Escape" && !laci.hidden) buka(false);
   });
 })();

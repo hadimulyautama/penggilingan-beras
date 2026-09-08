@@ -238,8 +238,17 @@
       try {
         var hasil = await kirim(a.post, isi);
         tutupLembar();
-        kabar(hasil.pesan || "Tersimpan ✓", "ok");
+        var pesan = hasil.pesan || "Tersimpan ✓";
         muat();
+        /* Kartu yang barusan diselesaikan harus HILANG sekarang juga. Ia
+           digambar server, jadi `muat()` — yang cuma memuat ulang daftar
+           aksi — tak menyentuhnya sama sekali. Kabarnya ditampilkan sesudah
+           isinya ditukar, karena ia ikut tersapu bersama isi lama. */
+        if (window.PINDAH && PINDAH.segarkan) {
+          PINDAH.segarkan(function () { kabar(pesan, "ok"); });
+        } else {
+          kabar(pesan, "ok");
+        }
       } catch (e) {
         kabar(String(e), "err");
         // Borangnya dibuka ulang berisi jawaban yang sama: yang gagal biasanya
@@ -304,6 +313,31 @@
   function tutupLembar() {
     $("lembar").style.display = "none";
     document.body.style.overflow = "";
+    lupakanBuka();
+  }
+
+  /* ── Alamat harus mengatakan yang sebenarnya ──
+     Kartu di antrean menaut ke `?buka=…&nilai=…`, dan lembarnya terbuka
+     karena alamat itu. Begitu lembarnya ditutup — lewat Batal, Escape,
+     ketukan di luar, atau simpan yang berhasil — alamatnya tetap berkata
+     "lembar sedang terbuka", padahal tidak.
+
+     Akibatnya kartu yang sama MATI: perpindahan halaman instan menolak
+     tautan yang alamatnya sama persis dengan alamat sekarang (kalau tidak,
+     tiap ketukan pada tab yang sedang aktif akan memuat ulang halaman).
+     Jadi ketukan kedua tak menghasilkan apa pun, dan satu-satunya jalan
+     keluar adalah memuat ulang halaman — yang tak terpikir siapa pun.
+
+     Dibersihkan dengan `replaceState`, bukan `pushState`: menutup lembar
+     bukan langkah baru dalam riwayat. Tombol Kembali harus membawa orang ke
+     layar sebelumnya, bukan membuka lagi lembar yang baru saja ia tutup. */
+  function lupakanBuka() {
+    if (!window.history || !history.replaceState) { return; }
+    var u = new URL(location.href);
+    if (!u.searchParams.has("buka") && !u.searchParams.has("nilai")) { return; }
+    u.searchParams.delete("buka");
+    u.searchParams.delete("nilai");
+    history.replaceState(history.state, "", u.pathname + u.search + u.hash);
   }
 
   $("lembar").addEventListener("click", function (e) {

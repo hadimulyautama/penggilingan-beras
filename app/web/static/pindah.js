@@ -47,6 +47,28 @@
     lupakan: function () {
       simpan = {};
       if (siapkan) { setTimeout(siapkan, 250); }
+    },
+    /* ── Gambar ulang layar yang sedang dibuka ──
+       `lupakan` membuang simpanan, tetapi layar YANG SEDANG DILIHAT tidak
+       ikut berubah — kartunya digambar server, bukan oleh skrip aksi. Jadi
+       sesudah harga diverifikasi, kartunya tetap berdiri di layar sampai
+       orangnya pergi lalu kembali. Layar yang masih menagih pekerjaan yang
+       baru saja diselesaikan orang itu sendiri adalah cara tercepat membuat
+       orang berhenti mempercayainya.
+
+       `sesudah` dipanggil setelah isinya ditukar — di situlah tempat
+       menampilkan ulang kabar "Tersimpan ✓", karena kabarnya ikut tersapu
+       bersama isi lama. */
+    segarkan: function (sesudah) {
+      var alamat = location.pathname + location.search;
+      delete simpan[alamat];
+      if (!bingkai) { if (sesudah) { sesudah(); } return; }
+      ambil(alamat).then(function (teks) {
+        if (teks && location.pathname + location.search === alamat) {
+          pasang(teks, alamat);
+        }
+        if (sesudah) { sesudah(); }
+      });
     }
   };
   function cabutSemua() {

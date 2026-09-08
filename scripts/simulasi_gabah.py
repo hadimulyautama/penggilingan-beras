@@ -256,11 +256,15 @@ async def jalan() -> None:
         # gabah yang menumpuk di lantai tidak sedang diapa-apakan, ia
         # menunggu orang — dan itu antrean. Kedua sisinya diuji, karena yang
         # berbahaya bukan "tak muncul di sana" melainkan "muncul di keduanya".
+        # Dicari TAUTAN AKSINYA, bukan kata "menumpuk": kata itu juga muncul
+        # di komentar skrip laci ("pendengar ... menumpuk sekali tiap
+        # perpindahan"), dan pemeriksaan yang lulus-gagal karena prosa di
+        # tempat lain adalah pemeriksaan yang tak mengukur apa pun.
+        TAUT = "/aksi?buka=pindah_tumpukan"
         r = await op.get("/aksi")
-        cek("tumpukan MENAGIH di antrean tunggu",
-            "menumpuk" in r.text and "pindah_tumpukan" in r.text)
+        cek("tumpukan MENAGIH di antrean tunggu", TAUT in r.text)
         r = await op.get("/berjalan")
-        cek("dan TIDAK ikut di layar Berjalan", "menumpuk" not in r.text)
+        cek("dan TIDAK ikut di layar Berjalan", TAUT not in r.text)
 
         # Gabah kering boleh ke silo; yang basah akan ditolak.
         r = await op.post("/miniapp/actions/pindah-tumpukan",
