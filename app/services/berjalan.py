@@ -564,18 +564,28 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             nilai=(f"pengeringan:{lot.kode_lot}" if macet else lot.kode_lot),
             fase="dryer",
             sejak=lot.waktu_mulai_pengeringan,
+            # Tiap pilihan menyebut nilainya SENDIRI. Satu kartu memang satu
+            # proses, tetapi tiap aksi menamainya dengan bentuknya sendiri —
+            # kadar air memakai kode lot, hentikan/lanjutkan memakai
+            # "pengeringan:<kode>". Satu nilai untuk semuanya berarti salah
+            # satunya tak pernah cocok, dan lembarnya bertanya lagi proses
+            # mana yang dimaksud padahal kartunya sudah menunjuknya.
             pilihan=([
                 ("lanjutkan_proses", "Lanjutkan pengeringan",
-                 "Mesin jalan lagi — bisa nanti, bisa besok"),
-                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru"),
+                 "Mesin jalan lagi — bisa nanti, bisa besok",
+                 f"pengeringan:{lot.kode_lot}"),
+                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru",
+                 lot.kode_lot),
                 ("selesai_pengeringan", "Selesai pengeringan",
-                 "Lot langsung masuk fase pendinginan"),
+                 "Lot langsung masuk fase pendinginan", lot.kode_lot),
             ] if macet else [
-                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru"),
+                ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru",
+                 lot.kode_lot),
                 ("hentikan_proses", "Hentikan sementara",
-                 "Mesin rusak, listrik padam, jam kerja habis"),
+                 "Mesin rusak, listrik padam, jam kerja habis",
+                 f"pengeringan:{lot.kode_lot}"),
                 ("selesai_pengeringan", "Selesai pengeringan",
-                 "Lot langsung masuk fase pendinginan"),
+                 "Lot langsung masuk fase pendinginan", lot.kode_lot),
             ]),
         ))
 
@@ -653,13 +663,18 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sejak=p.waktu_mulai,
             pilihan=([
                 ("lanjutkan_proses", "Lanjutkan giling",
-                 "Mesin jalan lagi — bisa nanti, bisa besok"),
-                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo"),
+                 "Mesin jalan lagi — bisa nanti, bisa besok",
+                 f"giling:{p.kode_proses}"),
+                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo",
+                 p.kode_proses),
             ] if macet else [
-                ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru"),
+                ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru",
+                 p.kode_proses),
                 ("hentikan_proses", "Hentikan sementara",
-                 "Mesin rusak, limbah penuh, jam kerja habis"),
-                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo"),
+                 "Mesin rusak, limbah penuh, jam kerja habis",
+                 f"giling:{p.kode_proses}"),
+                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo",
+                 p.kode_proses),
             ]),
         ))
     return b

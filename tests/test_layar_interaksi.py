@@ -355,3 +355,30 @@ def test_ambang_peringatan_tidak_disalin():
             / "app/web/miniapp.py").read_text()
     assert "r.sebar >= AMBANG_SEBAR" in mini
     assert "abs(r.selisih_mesin) >= AMBANG_SELISIH_MESIN" in mini
+
+
+def test_tiap_tindakan_membawa_penunjuknya_sendiri():
+    """Pemilik: "ketika hentikan sementara kenapa harus masih memilih
+    prosesnya? kan satu kartu satu proses."
+
+    Memang satu kartu satu proses — tetapi tiap aksi MENAMAI proses itu
+    dengan bentuknya sendiri: kadar air memakai kode lot, hentikan/lanjutkan
+    memakai "pengeringan:<kode>". Satu nilai untuk semua pilihan berarti
+    salah satunya tak pernah cocok dengan daftar server, kuncinya terlepas,
+    dan lembarnya bertanya lagi proses mana yang dimaksud.
+    """
+    import inspect
+
+    from app.services import berjalan as svc
+
+    sumber = inspect.getsource(svc.untuk_gudang1)
+    assert 'f"pengeringan:{lot.kode_lot}"' in sumber
+    assert 'f"giling:{p.kode_proses}"' in sumber
+    # Dan yang BUKAN hentikan/lanjutkan tetap memakai kodenya polos.
+    rapat = " ".join(sumber.split())
+    assert '"Perbarui kadar air", "Catat hasil ukur terbaru", lot.kode_lot' in rapat
+    assert '"Tutup proses & kosongkan silo", p.kode_proses' in rapat
+
+    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    assert "{% set nl = p[3] if p|length > 3 else b.nilai %}" in makro
+    assert "{% if nl %}&nilai={{ nl|urlencode }}{% endif %}" in makro

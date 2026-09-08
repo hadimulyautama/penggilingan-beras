@@ -158,14 +158,16 @@ def test_data_uji_dibuat_lewat_endpoint_bukan_insert():
     from app.services import data_uji
 
     sumber = inspect.getsource(data_uji.isi)
-    assert "ASGITransport" in sumber, "memanggil aplikasinya sendiri, tanpa jaringan"
-    # Alamatnya dirangkai di satu tempat (`kirim`/`daftar`), jadi yang
-    # diperiksa nama aksinya — bukan alamat utuh yang kini tak pernah
-    # ditulis lengkap.
-    assert '/miniapp/actions/{alamat}' in sumber
-    for aksi in ("gabah-masuk", "mulai-pengeringan", "kadar-air", "mulai-giling",
-                 "selesai-giling", "qc-giling", "verify-gabah", "hentikan-proses"):
-        assert f'"{aksi}"' in sumber, aksi
+    # Pemilik: "data uji cukup tiket timbang saja. tidak usah ada proses yang
+    # sudah berjalan. dan tidak usah ada data di list audit."
+    #
+    # Tak ada satu aksi pun yang dijalankan — dan itulah yang membuat List
+    # audit tetap kosong: jejak hanya lahir dari aksi. Proses yang dijalankan
+    # skrip membuktikan skripnya jalan, bukan membuktikan layarnya bisa
+    # dipakai.
+    assert "ASGITransport" not in sumber
+    assert "/miniapp/actions" not in sumber
+    assert "_tiket(db, pemasok)" in sumber
     # Satu-satunya INSERT langsung: tiket timbang, milik aplikasi lain.
     insert = inspect.getsource(data_uji)
     assert insert.count("INSERT INTO") == 2, "hanya pemasok & tiket timbang"

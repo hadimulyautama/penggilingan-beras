@@ -128,9 +128,17 @@
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
             <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             <div class="pilihan">
-              {% for id, nama, ket in b.pilihan %}
+              {# Nilai penunjuk boleh berbeda PER TINDAKAN. Satu kartu memang
+                 satu proses, tetapi tiap aksi menyebut proses itu dengan
+                 bentuknya sendiri: "kadar air" memakai kode lot, "hentikan
+                 sementara" memakai "pengeringan:<kode>". Dulu barisnya hanya
+                 membawa satu nilai, jadi salah satunya tak pernah cocok — dan
+                 lembarnya bertanya lagi proses mana yang dimaksud. #}
+              {% for p in b.pilihan %}
+                {% set id, nama, ket = p[0], p[1], p[2] %}
+                {% set nl = p[3] if p|length > 3 else b.nilai %}
                 <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
-                   href="{{ alamat }}?buka={{ id }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
+                   href="{{ alamat }}?buka={{ id }}{% if nl %}&nilai={{ nl|urlencode }}{% endif %}">
                   <span class="pilihan__nama">{{ nama }}</span>
                   <span class="pilihan__ket">{{ ket }}</span>
                 </a>
