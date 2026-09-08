@@ -53,6 +53,11 @@ TAB = (
     ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None),
     ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
      "Harga, QC, barang keluar, batalkan", None),
+    # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
+    # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
+    # keputusannya. Sejak awal pekerjaan admin.
+    ("keputusan",  "/keputusan",  "Menunggu keputusan",
+     "Harga, mutu, verifikasi output", "admin"),
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      "admin"),
@@ -81,3 +86,50 @@ async def jumlah_menunggu(user: User | None) -> int:
     except Exception:
         log.exception("Jumlah pekerjaan menunggu gagal dihitung (bilah tetap tampil)")
         return 0
+
+
+async def jumlah_keputusan(user: User | None) -> int:
+    """Lencana layar Menunggu keputusan.
+
+    Terpisah dari lencana antrean: satu angka untuk dua daftar yang berbeda
+    isi akan menagih pekerjaan di layar yang tak memuatnya — dan orang yang
+    membuka layar lalu menemukannya kosong berhenti mempercayai lencana.
+    """
+    if user is None:
+        return 0
+    try:
+        from app.bots.common import can_see_financials
+        from app.services import berjalan
+        if not can_see_financials(user):
+            return 0
+        async with SessionLocal() as db:
+            return (await berjalan.untuk(db, user)).jumlah_keputusan
+    except Exception:
+        log.exception("Jumlah keputusan gagal dihitung (laci tetap tampil)")
+        return 0
+
+
+async def lencana(user: User | None) -> dict[str, int]:
+    """Kedua lencana laci dari SATU kueri.
+
+    Dipakai layar yang tak punya daftar `Berjalan` di tangannya. Yang sudah
+    punya memakai `b.jumlah_menunggu` / `b.jumlah_keputusan` langsung —
+    memanggil ini di sana berarti menyusun ulang seluruh daftar untuk kedua
+    kalinya hanya demi dua angka.
+
+    Satu fungsi untuk keduanya supaya layar baru tak bisa lupa salah satunya:
+    lencana yang hilang di sebagian layar lebih membingungkan daripada
+    lencana yang tak pernah ada.
+    """
+    if user is None:
+        return {"MENUNGGU": 0, "KEPUTUSAN": 0}
+    try:
+        from app.bots.common import can_see_financials
+        from app.services import berjalan
+        async with SessionLocal() as db:
+            b = await berjalan.untuk(db, user)
+        return {"MENUNGGU": b.jumlah_menunggu,
+                "KEPUTUSAN": b.jumlah_keputusan if can_see_financials(user) else 0}
+    except Exception:
+        log.exception("Lencana gagal dihitung (laci tetap tampil)")
+        return {"MENUNGGU": 0, "KEPUTUSAN": 0}

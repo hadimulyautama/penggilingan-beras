@@ -156,10 +156,10 @@ def ke_html(teks: str) -> str:
 
 @router.get("/laporan")
 async def halaman_laporan(request: Request, akun=Depends(butuh_akun)):
-    from app.web.nav import jumlah_menunggu
+    from app.web.nav import lencana
     return render(request, "laporan.html",
                   daftar=daftar_untuk(akun.user), periode=PERIODE,
-                  MENUNGGU=await jumlah_menunggu(akun.user))
+                  **await lencana(akun.user))
 
 
 @router.get("/api/laporan/{kode}")

@@ -38,12 +38,21 @@ def _meja(judul="Bu Sri", kode="GB-01", fase="silo"):
                  nilai=kode, fase=fase)
 
 
-def _render(menunggu, meja):
+def _render(menunggu, meja=()):
+    """Layar ANTREAN. `meja` sengaja tak diterimanya lagi — parameternya
+    tinggal supaya tesnya membaca seperti dulu."""
     return templates.get_template("aksi.html").render(
         request=None, akun=_akun("admin"), layar="aksi",
-        MENUNGGU=len(menunggu) + len(meja), MODE_UJI=False, LIHAT_SEBAGAI=None,
-        kembali=None, menunggu=menunggu, berjalan=[], meja=meja,
+        MENUNGGU=len(menunggu), KEPUTUSAN=len(meja), MODE_UJI=False,
+        LIHAT_SEBAGAI=None, kembali=None, menunggu=menunggu, berjalan=[],
         buka="", nilai="", lama=lambda t: "")
+
+
+def _render_keputusan(meja):
+    return templates.get_template("keputusan.html").render(
+        request=None, akun=_akun("admin"), layar="keputusan",
+        MENUNGGU=0, KEPUTUSAN=len(meja), MODE_UJI=False, LIHAT_SEBAGAI=None,
+        kembali=None, meja=meja, buka="", nilai="", lama=lambda t: "")
 
 
 def test_kerja_meja_hanya_untuk_yang_boleh_melihat_uang():
@@ -62,10 +71,12 @@ def test_kerja_meja_hanya_untuk_yang_boleh_melihat_uang():
     assert ".meja" not in g1
 
 
-def test_lencana_tetap_menghitung_kerja_meja():
-    """Ia memang menunggu ORANG — dipisah tempatnya, bukan diabaikan."""
+def test_lencana_antrean_tidak_menagih_kerja_meja():
+    """Satu angka untuk dua daftar yang berbeda isi akan menagih pekerjaan di
+    layar yang tak memuatnya — lalu orang berhenti mempercayai lencana."""
     b = Berjalan(menunggu=[_tiket()], meja=[_meja(), _meja()])
-    assert b.jumlah_menunggu == 3
+    assert b.jumlah_menunggu == 1
+    assert b.jumlah_keputusan == 2
 
 
 def test_kepingan_fase_baris_meja_tidak_berbohong():
@@ -84,17 +95,29 @@ def test_kepingan_fase_baris_meja_tidak_berbohong():
     assert "fakta=[(\"Gabahnya\"" in sumber
 
 
-def test_dua_blok_terpisah_di_layar():
+def test_kerja_meja_keluar_dari_antrean():
     """Dicampur, baris kerja meja terbaca seperti tiket yang tertinggal — lalu
     orang mencari gabah yang sebenarnya sudah lama ditempatkan."""
     def label(h):
         import re
         return [x.strip() for x in re.findall(r'class="lbl">([^<]+)·', h)]
 
-    assert label(_render([_tiket()], [_meja()])) == [
-        "Bisa dikerjakan sekarang", "Menunggu keputusan Anda"]
-    # Blok yang kosong tidak muncul sama sekali.
-    assert label(_render([_tiket()], [])) == ["Bisa dikerjakan sekarang"]
+    # Aturan pemilik: begitu gabah punya tempat, ia keluar dari ANTREAN.
+    # Gabah di baris kerja meja sudah lama punya tempat — sudah di mesin,
+    # sudah di silo, bahkan sudah digiling. Jadi ia tak boleh ada di sana
+    # sama sekali; blok tersendiri pun masih menyalahi aturannya.
+    assert label(_render([_tiket()])) == ["Bisa dikerjakan sekarang"]
+    assert "keputusan" not in (TPL / "aksi.html").read_text().lower()
+
+    # Tempatnya layar sendiri, dan lembar aksinya dibuka DI SITU — menekan
+    # "Verifikasi harga" lalu mendarat di layar lain berarti orang kehilangan
+    # tempatnya setiap kali ia menyelesaikan satu baris.
+    h = _render_keputusan([_meja()])
+    # Judul layar sudah berkata "Menunggu keputusan"; bloknya menyebut
+    # keputusan APA — dan yang kosong tak muncul.
+    assert label(h) == ["Harga belum diverifikasi"]
+    assert "/keputusan?buka=verify_gabah" in h
+    assert "/aksi?buka=" not in h
 
 
 def test_penyaring_muncul_hanya_saat_antreannya_panjang():
@@ -135,3 +158,35 @@ def test_tak_ada_dua_kalimat_bermakna_sama():
     # Waktunya tetap terbaca meski keadaannya kosong.
     makro = (TPL / "_benda.html").read_text()
     assert "{% if b.keadaan or lama(b.sejak) %}" in makro
+
+
+def test_layar_keputusan_hanya_admin():
+    """Sejak awal pekerjaan admin. Yang menjaga sungguhan adalah rutenya,
+    bukan pintu yang disembunyikan dari laci — alamatnya tetap bisa diketik."""
+    import inspect
+
+    from app.web import layar_keputusan
+    from app.web.nav import TAB
+
+    assert "Depends(butuh_admin)" in inspect.getsource(
+        layar_keputusan.halaman_keputusan)
+    kunci = {k: peran for k, _, _, _, peran in TAB}
+    assert kunci["keputusan"] == "admin"
+
+
+def test_tiap_layar_membawa_kedua_lencana():
+    """Lencana yang hilang di sebagian layar lebih membingungkan daripada
+    lencana yang tak pernah ada: orang menyimpulkan pekerjaannya habis
+    padahal ia cuma sedang berdiri di layar yang lupa menghitung."""
+    import re
+
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app"
+    kurang = []
+    for berkas in akar.rglob("*.py"):
+        teks = berkas.read_text()
+        for potongan in re.findall(r"render\(\s*request,.*?\n\s*\)", teks, re.S):
+            if "MENUNGGU" not in potongan:
+                continue                       # layar tanpa laci (masuk, error)
+            if "KEPUTUSAN" not in potongan and "lencana(" not in potongan:
+                kurang.append(f"{berkas.name}: {potongan.splitlines()[0]}")
+    assert not kurang, "layar ini lupa lencana keputusan:\n  " + "\n  ".join(kurang)

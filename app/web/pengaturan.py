@@ -29,7 +29,7 @@ router = APIRouter(tags=["webapp"])
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services.setelan import sebab_jeda, target_kadar_air
     from app.services.undo import BATAS_UNDO
-    from app.web.nav import jumlah_menunggu
+    from app.web.nav import lencana
 
     # Setelan kerja hanya ditampilkan kepada admin ke atas — operator mengurus
     # data dirinya sendiri dan sandinya sendiri, tak lebih.
@@ -39,7 +39,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         sebab = await sebab_jeda(db) if tuan else {}
     return render(
         request, "pengaturan.html",
-        MENUNGGU=await jumlah_menunggu(akun.user),
+        **await lencana(akun.user),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
@@ -150,14 +150,14 @@ MAKS_ALAT = 12
 async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_admin)):
     from app.penggilingan.gudang1.services.drying import dryers_g1
     from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
-    from app.web.nav import jumlah_menunggu
+    from app.web.nav import lencana
 
     async with SessionLocal() as db:
         mesin = await dryers_g1(db)
         silo = [(s, await _silo_content_kg(db, s.id)) for s in await silos_g1(db)]
     return render(
         request, "alat.html", kembali="/pengaturan", layar="pengaturan",
-        MENUNGGU=await jumlah_menunggu(akun.user),
+        **await lencana(akun.user),
         mesin=mesin, silo=silo, maks=MAKS_ALAT,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         pesan_err=_ERR.get(request.query_params.get("err", "")),

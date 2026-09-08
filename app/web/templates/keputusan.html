@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block judul %}Menunggu keputusan{% endblock %}
+{% block isi %}
+{% import "_benda.html" as benda with context %}
+
+{# Kosong di sini berarti sesuatu yang baik dan jarang: tak ada satu pun
+   pembelian yang harganya menggantung, tak ada giling yang mutunya belum
+   diperiksa. Itu keterangan, bukan kekurangan. #}
+{% if not meja %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></svg>
+    <div>
+      <h2>Tak ada yang menunggu keputusan</h2>
+      <p class="bantu">
+        Semua harga sudah diverifikasi, dan tak ada giling yang mutunya
+        belum diperiksa.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{# Judul layar sudah berkata "Menunggu keputusan"; blok bernama sama cuma
+   mengulangnya. Yang belum dikatakan adalah keputusan APA — dan ketiganya
+   pekerjaan yang berbeda, dikerjakan orang yang mungkin berbeda pula. #}
+{% for judul, aksi in [("Harga belum diverifikasi", "verify_gabah"),
+                       ("Mutu belum diperiksa", "qc_giling"),
+                       ("Output giling belum dicocokkan", "verify_output")] %}
+  {{ benda.blok(judul, meja|selectattr("aksi", "equalto", aksi)|list,
+                alamat="/keputusan") }}
+{% endfor %}
+
+<div class="lembar" id="lembar"></div>
+<div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">Tercatat atas nama {{ akun.nama }}</div>
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endblock %}

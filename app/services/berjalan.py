@@ -140,8 +140,14 @@ class Berjalan:
 
     @property
     def jumlah_menunggu(self) -> int:
-        """Lencana. Kerja meja ikut dihitung — ia memang menunggu ORANG."""
-        return len(self.menunggu) + len(self.meja)
+        """Lencana antrean. Kerja meja TIDAK ikut — ia punya layar & lencana
+        sendiri, dan menghitungnya di sini membuat lencana antrean menagih
+        pekerjaan yang tak ada di dalamnya."""
+        return len(self.menunggu)
+
+    @property
+    def jumlah_keputusan(self) -> int:
+        return len(self.meja)
 
     @property
     def jumlah_berjalan(self) -> int:
@@ -563,7 +569,8 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         di_mana = _DI_MANA.get(batch.status_batch or "", batch.status_batch or "")
         b.meja.append(Baris(
             kode=batch.kode_batch, isi=f"{nama} · {_kg(batch.berat_total_kg)}",
-            keadaan="harga belum diverifikasi", aksi="verify_gabah",
+            # Keadaannya kosong: judul bloknya sudah mengatakannya.
+            keadaan="", aksi="verify_gabah",
             nilai=batch.kode_batch,
             sejak=batch.created_at,
             fase=_FASE_BATCH.get(batch.status_batch or "", "baru"),
@@ -585,7 +592,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         if not ada_qc:
             b.meja.append(Baris(
                 kode=p.kode_proses, isi="giling selesai, mutu belum diperiksa",
-                keadaan="menunggu QC", aksi="qc_giling", nilai=p.kode_proses,
+                keadaan="", aksi="qc_giling", nilai=p.kode_proses,
                 sejak=p.waktu_selesai, fase="giling",
                 judul="Mutu belum diperiksa",
                 sub=f"{p.kode_proses} · giling sudah ditutup"))
@@ -596,7 +603,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         if not ada_v:
             b.meja.append(Baris(
                 kode=p.kode_proses, isi="output giling belum diverifikasi",
-                keadaan="menunggu verifikasi output", aksi="verify_output",
+                keadaan="", aksi="verify_output",
                 nilai=p.kode_proses, sejak=p.waktu_selesai, fase="giling",
                 judul="Output belum diverifikasi",
                 sub=f"{p.kode_proses} · giling sudah ditutup"))

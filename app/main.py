@@ -31,6 +31,7 @@ from app.web.layar_audit import router as audit_router
 from app.web.layar_berjalan import router as berjalan_router
 from app.web.pengaturan import router as pengaturan_router
 from app.web.mode_uji import router as mode_uji_router
+from app.web.layar_keputusan import router as keputusan_router
 from app.web.lihat_sebagai import router as lihat_sebagai_router
 from app.web.miniapp import router as miniapp_router
 from app.web.pengguna import router as pengguna_router
@@ -98,6 +99,7 @@ app.include_router(berjalan_router)
 app.include_router(audit_router)
 app.include_router(pengaturan_router)
 app.include_router(mode_uji_router)
+app.include_router(keputusan_router)
 app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
 app.include_router(auth_router)
@@ -203,7 +205,7 @@ async def beranda(request: Request):
         stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
-        MENUNGGU=jalan.jumlah_menunggu,
+        MENUNGGU=jalan.jumlah_menunggu, KEPUTUSAN=jalan.jumlah_keputusan,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 
@@ -243,13 +245,8 @@ async def halaman_aksi(request: Request):
                   # tindakannya — kartu yang sama muncul di dua tempat adalah
                   # dua tempat di kepala orang, dan cepat atau lambat keduanya
                   # berbeda isi.
-                  menunggu=b.menunggu, berjalan=[],
-                  # Kerja MEJA dipisah: harga, mutu, verifikasi output.
-                  # Gabahnya mungkin sudah lama duduk di silo, jadi
-                  # mencampurnya dengan antrean gudang membuat barisnya
-                  # terbaca seperti tiket yang tertinggal.
-                  meja=b.meja, lama=svc._lama,
-                  MENUNGGU=b.jumlah_menunggu)
+                  menunggu=b.menunggu, berjalan=[], lama=svc._lama,
+                  MENUNGGU=b.jumlah_menunggu, KEPUTUSAN=b.jumlah_keputusan)
 
 
 @app.get("/aksi-lain", response_class=HTMLResponse)
@@ -261,7 +258,7 @@ async def halaman_aksi_lain(request: Request):
     untuk pekerjaan yang sudah punya pintu, dan membuat antrean berhenti
     berarti apa yang ia namai.
     """
-    from app.web.nav import jumlah_menunggu
+    from app.web.nav import lencana
 
     akun = await akun_opsional(request)
     if akun is None:
@@ -269,7 +266,7 @@ async def halaman_aksi_lain(request: Request):
     return render(request, "aksi_lain.html", layar="aksi_lain",
                   buka=request.query_params.get("buka") or "",
                   nilai=request.query_params.get("nilai") or "",
-                  MENUNGGU=await jumlah_menunggu(akun.user))
+                  **await lencana(akun.user))
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

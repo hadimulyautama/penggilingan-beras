@@ -41,16 +41,6 @@
 
 {{ benda.blok("Bisa dikerjakan sekarang", semua) }}
 
-{# ── Kerja MEJA, bukan kerja gudang ──
-   Hanya terlihat oleh yang boleh melihat uang; operator tak pernah, dan
-   admin yang sedang memakai Mode operator pun tidak.
-
-   Dipisah karena ia memang pekerjaan lain: gabahnya bisa sudah dua hari
-   duduk di silo, dan barisnya menunggu KEPUTUSAN, bukan tangan. Dicampur
-   dengan antrean gudang, ia terbaca seperti tiket yang tertinggal — lalu
-   orang mencari gabah yang sebenarnya sudah lama ditempatkan. #}
-{{ benda.blok("Menunggu keputusan Anda", meja) }}
-
 {# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
 
    Antrean adalah daftar BENDA — dan begitu tiap benda punya kartunya sendiri,
@@ -61,7 +51,7 @@
 
    Katalog itu kini punya alamatnya sendiri di menu: /aksi-lain. Tak ada yang
    jadi tak terjangkau, dan antrean tetap berarti apa yang ia namai. #}
-{% if not semua and not meja %}
+{% if not semua %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -111,8 +101,8 @@
       if (cocok) tampil++;
     }
     // Judul blok ikut menghitung ulang, dan blok yang habis tersaring
-    // disembunyikan seluruhnya — "Menunggu keputusan Anda · 3" di atas
-    // ruang kosong adalah keterangan yang berbohong.
+    // disembunyikan seluruhnya — judul bertuliskan "· 3" di atas ruang
+    // kosong adalah keterangan yang berbohong.
     for (const blok of document.querySelectorAll('[data-blok]')) {
       const isi = [...blok.querySelectorAll('[data-cari]')].filter(k => !k.hidden);
       const n = blok.querySelector('[data-jumlah]');

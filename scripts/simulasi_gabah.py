@@ -410,12 +410,27 @@ async def jalan() -> None:
         # ke kedua gudang — jadi ia melihat pekerjaan fisik G1 juga.
         r = await dir_.get("/aksi")
         cek("Direksi juga melihat tiket yang menggantung", "TRX-SIM-003" in r.text)
-        # Dan yang SUDAH dikerjakan berhenti memanggil: batch yang harganya
-        # diverifikasi di babak 7 tidak lagi muncul. Batch satunya belum
-        # diverifikasi, jadi ia MEMANG masih memanggil — tepat satu.
+        # ── Kerja MEJA punya layarnya sendiri ──
+        #
+        # Aturan pemilik: begitu gabah punya tempat, ia keluar dari ANTREAN.
+        # Gabah yang harganya belum diverifikasi sudah lama punya tempat —
+        # sudah di mesin, di silo, bahkan sudah digiling. Yang belum selesai
+        # keputusannya, bukan gabahnya. Antrean tak boleh memuatnya.
+        cek("harga yang menggantung TIDAK di antrean",
+            "harga belum diverifikasi" not in r.text)
+        r = await dir_.get("/keputusan")
+        cek("layar Menunggu keputusan terbuka untuk Direksi",
+            r.status_code == 200, f"HTTP {r.status_code}")
+        # Batch yang harganya diverifikasi di babak 7 tidak lagi muncul; yang
+        # satunya belum, jadi ia MEMANG masih memanggil — tepat satu.
         cek("yang sudah diverifikasi berhenti memanggil",
-            r.text.count("harga belum diverifikasi") == 1,
-            f"{r.text.count('harga belum diverifikasi')} batch menunggu harga")
+            r.text.count("Harga belum diverifikasi") == 1,
+            f"{r.text.count('Harga belum diverifikasi')} blok harga")
+        # Dan operator tak boleh menyentuhnya sama sekali — ini sejak awal
+        # pekerjaan admin. Yang menjaga rutenya, bukan pintu yang disembunyikan.
+        r = await op.get("/keputusan")
+        cek("operator DITOLAK membuka layar keputusan",
+            r.status_code in (303, 403), f"HTTP {r.status_code}")
 
         babak("11. Halaman Pengaturan")
         r = await op.get("/pengaturan")

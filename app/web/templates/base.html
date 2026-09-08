@@ -139,6 +139,7 @@
             {%- if kunci == 'beranda' %}⌂
             {%- elif kunci == 'aksi' %}≡
             {%- elif kunci == 'berjalan' %}◷
+            {%- elif kunci == 'keputusan' %}✓
             {%- elif kunci == 'laporan' %}▤
             {%- else %}⚙{% endif -%}
           </span>
@@ -152,6 +153,9 @@
           {% if kunci == 'aksi' and MENUNGGU %}
             <span class="pintu__jml"
                   aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
+          {% elif kunci == 'keputusan' and KEPUTUSAN %}
+            <span class="pintu__jml"
+                  aria-label="{{ KEPUTUSAN }} menunggu keputusan Anda">{{ KEPUTUSAN }}</span>
           {% endif %}
         </a>
         {% endif %}
