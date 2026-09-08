@@ -433,18 +433,56 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .lembar__kepala h2 { margin: 0; }
 
 /* ── Kabar singkat ── */
+/* ── Kabar hasil ──
+   Selebar layar dengan tepian, bukan kolom sempit di tengah: kalimat hasil
+   di aplikasi ini menyebut kode, bobot, dan persentase sekaligus, dan kolom
+   sempit memecahnya jadi tujuh baris pendek yang harus dieja.
+
+   Warnanya menandai JENIS, bukan mewarnai seluruh tulisan. Tulisan tetap
+   tinta biasa supaya terbaca; yang berwarna hanya ikon dan garis tepinya —
+   dan peringatan di dalamnya punya warnanya sendiri, karena peringatan yang
+   diwarnai seperti keberhasilan berhenti terbaca sebagai peringatan. */
 .kabar {
-  display: none; position: fixed; left: 50%; transform: translateX(-50%);
-  /* Di atas bilah navigasi, bukan tertutup olehnya. */
-  bottom: calc(78px + env(safe-area-inset-bottom));
-  z-index: 30; max-width: calc(100% - 32px);
+  display: none; position: fixed;
+  left: 12px; right: 12px; bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 30; max-width: 560px; margin: 0 auto;
   background: var(--panel-2); color: var(--tinta);
-  border: 1px solid var(--garis); border-radius: 10px;
-  padding: 12px 16px; font-size: 14.5px; line-height: 1.45;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  border: 1px solid var(--garis); border-left: 3px solid var(--redup-2);
+  border-radius: 12px; padding: 13px 15px;
+  font-size: 14px; line-height: 1.5; text-align: left; cursor: pointer;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  animation: kabar-naik .18s ease-out;
 }
-.kabar--ok  { border-color: var(--aman); color: var(--aman); }
-.kabar--err { border-color: var(--bahaya); color: var(--bahaya); }
+@keyframes kabar-naik {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .kabar { animation: none; } }
+
+.kabar__utama, .kabar__nota {
+  display: grid; grid-template-columns: 16px 1fr; gap: 9px; align-items: start;
+}
+.kabar__ikon {
+  font-size: 12.5px; line-height: 1.65; text-align: center; color: var(--redup);
+}
+.kabar__teks { min-width: 0; word-break: break-word; }
+.kabar__teks b { font-family: var(--mono); font-weight: 600; font-size: 13px; }
+
+/* Peringatan dipisah garis: ia bukan lanjutan kalimat hasilnya, melainkan
+   hal lain yang kebetulan datang bersamaan. */
+.kabar__catatan {
+  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--garis);
+  display: grid; gap: 7px;
+}
+.kabar__nota { font-size: 13px; color: var(--tinta-2); }
+.kabar__nota--hati { color: var(--hati); }
+.kabar__nota--hati .kabar__ikon { color: var(--hati); }
+
+.kabar--ok  { border-left-color: var(--aman); }
+.kabar--ok .kabar__utama .kabar__ikon { color: var(--aman); }
+.kabar--err { border-left-color: var(--bahaya); }
+.kabar--err .kabar__utama .kabar__ikon,
+.kabar--err .kabar__utama .kabar__teks { color: var(--bahaya); }
 
 :focus-visible { outline: 2px solid var(--aksi); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
