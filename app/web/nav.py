@@ -58,6 +58,11 @@ TAB = (
     # keputusannya. Sejak awal pekerjaan admin.
     ("keputusan",  "/keputusan",  "Menunggu keputusan",
      "Harga, mutu, verifikasi output", "admin"),
+    # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
+    # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
+    # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
+    # berhak tahu berapa yang sudah terkumpul.
+    ("stok",       "/stok",       "Stok",           "PK Gudang 1 yang masih ada", None),
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      "admin"),

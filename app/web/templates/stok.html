@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block judul %}Stok{% endblock %}
+{% block isi %}
+
+{% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
+
+{% if not lot %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
+      <path d="M12 13v7"/></svg>
+    <div>
+      <h2>Tak ada PK tersisa di Gudang 1</h2>
+      <p class="bantu">
+        Semua hasil giling sudah dikirim ke Gudang 2 atau terjual — atau
+        belum ada giling yang menghasilkan.
+      </p>
+    </div>
+  </div>
+{% else %}
+  {# Jumlahnya di muka: yang membuka halaman ini paling sering ingin tahu
+     "cukup tidak untuk satu kiriman", dan itu satu angka. Rinciannya di
+     bawah, untuk yang bertanya "yang mana". #}
+  <div class="jumlah">
+    <span class="lbl">PK di Gudang 1</span>
+    <div class="jumlah__angka">{{ kg(total) }}<small>kg</small></div>
+    <div class="jumlah__ket">
+      {{ lot|length }} lot · dihitung saat dibuka, hasil giling dikurangi yang
+      sudah dikirim &amp; dijual
+    </div>
+  </div>
+
+  <div class="grup" style="gap:9px">
+    {% for l in lot %}
+      <div class="padat padat--diam padat--giling">
+        <div class="padat__atas">
+          <span class="padat__nama">{{ l.kode }}</span>
+          <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
+        </div>
+        {# Aturan pemilik: tiap baris barang menyebut asal-usulnya — pemasok
+           dan kapan. Kode lot saja tak memberi tahu apa pun tentang gabah
+           siapa yang ada di tumpukan itu. #}
+        <span class="padat__ket">
+          {{- ringkas(l.pemasok) or "pemasok tak tercatat" }} · digiling {{ l.tanggal -}}
+        </span>
+        {# Berapa yang sudah pergi disebut juga: tanpa itu, "5.200 kg" terbaca
+           sebagai hasil gilingnya, dan rendemen yang dihitung orang di
+           kepalanya jadi salah. #}
+        <span class="padat__ket">
+          dihasilkan {{ kg(l.dihasilkan) }} kg
+          {%- if l.dikirim %} · sudah dikirim {{ kg(l.dikirim) }} kg{% endif -%}
+        </span>
+        {% if l.berjalan %}
+          <div class="nota nota--hati">
+            <span aria-hidden="true">⏸</span>
+            <span>Mesin masih giling — angkanya belum final</span>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini</div>
+{% endblock %}

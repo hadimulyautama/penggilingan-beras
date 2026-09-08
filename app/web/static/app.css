@@ -1033,3 +1033,15 @@ button.pilihan__satu {
 .btn--bahaya:hover { background: rgba(217, 105, 90, .12); }
 .nota--baik { border-left-color: var(--aman); margin-bottom: 10px; }
 .nota--buruk { border-left-color: var(--bahaya); margin-bottom: 10px; }
+
+/* ── Jumlah seluruhnya di layar Stok ──
+   Sengaja TANPA kotak. Digambar sebagai kartu yang sama dengan lot di
+   bawahnya, mata membacanya sebagai lot ketiga — dan angka rangkuman yang
+   disalahbaca sebagai satu baris adalah angka yang dijumlahkan dua kali. */
+.jumlah { margin: 2px 0 20px; }
+.jumlah__angka {
+  font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.jumlah__angka small { font-size: 14px; font-weight: 500; color: var(--redup); margin-left: 3px; }
+.jumlah__ket { font-size: 12.5px; color: var(--redup); line-height: 1.5; margin-top: 4px; }
