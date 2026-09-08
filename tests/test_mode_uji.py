@@ -170,3 +170,30 @@ def test_data_uji_dibuat_lewat_endpoint_bukan_insert():
     insert = inspect.getsource(data_uji)
     assert insert.count("INSERT INTO") == 2, "hanya pemasok & tiket timbang"
     assert "INSERT INTO timbangan_transaksi" in insert
+
+
+def test_data_uji_menolak_jembatan_timbang_yang_dipakai():
+    """`timbangan_transaksi` milik aplikasi Timbangan, dan aplikasi itu
+    membaca basis data yang SAMA. Tiket karangan yang ditulis ke sana tidak
+    berhenti di layar Produksi — ia muncul di layar petugas timbang, di antara
+    tiket truk yang sungguh datang hari itu. Sekali ini terjadi, dan
+    pemiliknya yang menemukannya."""
+    import inspect
+
+    from app.services import data_uji
+    from app.web import mode_uji
+
+    assert hasattr(data_uji, "JembatanDipakai")
+    sumber = inspect.getsource(data_uji.isi)
+    assert "_jembatan_sungguhan(db)" in sumber
+    assert "raise JembatanDipakai(" in sumber
+    # Diperiksa SEBELUM satu baris pun ditulis.
+    assert sumber.index("_jembatan_sungguhan") < sumber.index("_pemasok(db)")
+
+    penjaga = inspect.getsource(data_uji._jembatan_sungguhan)
+    assert "kode NOT LIKE 'TRX-UJI-%'" in penjaga
+
+    # Dan tombolnya menyampaikan alasannya, bukan jatuh dengan galat 500.
+    tombol = inspect.getsource(mode_uji.ulangi)
+    assert "data_uji.JembatanDipakai" in tombol
+    assert "galat=str(e)" in tombol

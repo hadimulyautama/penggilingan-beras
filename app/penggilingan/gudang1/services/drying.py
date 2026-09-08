@@ -1053,3 +1053,42 @@ def kemajuan(awal: float | None, kini: float | None, target: float) -> float | N
     if awal is None or kini is None or awal <= target:
         return None
     return max(0.0, min(1.0, (awal - kini) / (awal - target)))
+
+
+#: Ambang yang membuat sebuah angka layak disebut. Ditaruh di sini, satu
+#: tempat, karena keduanya dipakai dua kali: saat mencatat (kabar hasil) dan
+#: saat menggambar kartu. Ambang yang disalin akan berselisih, dan yang
+#: berselisih membuat kartu berkata "merata" sementara catatannya berkata
+#: tidak.
+AMBANG_SEBAR = 1.5          # % antara titik terendah & tertinggi
+AMBANG_SELISIH_MESIN = 2.0  # % antara bacaan mesin & alat tes
+
+
+def peringatan_kadar_air(log) -> list[str]:
+    """Apa yang perlu diketahui dari SATU bacaan kadar air — kalimat siap baca.
+
+    Dulu keduanya hanya muncul di kabar sekejap sesudah menyimpan, lalu
+    hilang bersama kabarnya. Padahal justru inilah yang menerangkan mengapa
+    pengeringan tak kunjung turun: gabah yang belum merata, atau sensor mesin
+    yang melenceng. Dihitung ULANG dari bacaan tersimpan, bukan disalin dari
+    kalimat kabarnya, supaya kartu dan catatan tak pernah berbeda.
+    """
+    if log is None:
+        return []
+    titik = [float(x) for x in (log.kadar_air_tes_1, log.kadar_air_tes_2,
+                                log.kadar_air_tes_3, log.kadar_air_tes_4)
+             if x is not None]
+    keluar: list[str] = []
+    if len(titik) > 1:
+        sebar = max(titik) - min(titik)
+        if sebar >= AMBANG_SEBAR:
+            keluar.append(f"Sebaran {sebar:.1f}% antara titik terendah & "
+                          "tertinggi — gabah belum kering merata.")
+    tes = log.kadar_air_tes_manual
+    mesin = log.kadar_air_indikator
+    if tes is not None and mesin is not None:
+        selisih = float(mesin) - float(tes)
+        if abs(selisih) >= AMBANG_SELISIH_MESIN:
+            keluar.append(f"Mesin membaca {selisih:+.1f}% dari alat tes — "
+                          "periksa sensor dryer bila terus begini.")
+    return keluar

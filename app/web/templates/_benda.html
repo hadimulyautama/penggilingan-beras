@@ -36,6 +36,12 @@
   {% endif %}
   {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
   {% if b.nota %}<div class="nota">{{ b.nota }}</div>{% endif %}
+  {# Yang TERBACA dari angkanya, bukan dari keadaan prosesnya. Dipisah dari
+     `nota` karena keduanya bisa muncul bersamaan — lot yang dijeda pun bisa
+     isinya belum merata. #}
+  {% for c in b.catatan %}
+    <div class="catatan"><span aria-hidden="true">⚠</span><span>{{ c }}</span></div>
+  {% endfor %}
   <div class="benda__kaki">
     <span class="keping">{{ FASE[b.fase] }}</span>
     {% if b.keadaan or lama(b.sejak) %}

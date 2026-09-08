@@ -89,6 +89,28 @@ async def _pemasok(db: AsyncSession) -> dict[str, int]:
     return keluar
 
 
+class JembatanDipakai(Exception):
+    """Basis datanya melayani jembatan timbang yang sungguh dipakai."""
+
+
+async def _jembatan_sungguhan(db: AsyncSession) -> int:
+    """Berapa tiket timbang di sini yang BUKAN buatan pembuat data uji.
+
+    `timbangan_transaksi` milik aplikasi Timbangan, dan aplikasi itu membaca
+    basis data yang sama. Tiket karangan yang ditulis ke sini tidak berhenti
+    di layar Produksi — ia muncul di layar petugas timbang, di antara tiket
+    truk yang sungguh datang hari itu. Sekali ini terjadi, dan pemiliknya
+    yang menemukannya.
+
+    Jadi keberadaan tiket ORANG LAIN dipakai sebagai tanda: kalau jembatannya
+    sudah dipakai sungguhan, tak ada satu pun tiket karangan yang boleh lahir
+    di sini.
+    """
+    return (await db.execute(text(
+        "SELECT count(*) FROM timbangan_transaksi WHERE kode NOT LIKE 'TRX-UJI-%'"
+    ))).scalar_one()
+
+
 async def _tiket(db: AsyncSession, pemasok: dict[str, int]) -> int:
     """Tiket timbang, disuntikkan langsung — ia milik aplikasi Timbangan.
 
@@ -205,6 +227,16 @@ async def isi(akun: ProduksiAkun) -> list[str]:
 
     langkah: list[str] = []
     async with SessionLocal() as db:
+        dipakai = await _jembatan_sungguhan(db)
+        if dipakai:
+            raise JembatanDipakai(
+                f"Dibatalkan: basis data ini melayani jembatan timbang yang "
+                f"sedang dipakai — ada {dipakai} tiket timbang sungguhan di "
+                "dalamnya. Tiket karangan yang dibuat di sini akan muncul di "
+                "layar petugas timbang, di antara truk yang benar-benar "
+                "datang. Data uji hanya boleh diisi di basis data yang khusus "
+                "untuk menguji."
+            )
         pemasok = await _pemasok(db)
         n = await _tiket(db, pemasok)
         await db.commit()

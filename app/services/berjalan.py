@@ -110,6 +110,11 @@ class Baris:
     anak: list[tuple[str, str, str]] = field(default_factory=list)
     #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
     nota: str | None = None
+    #: Yang TERBACA dari angka-angkanya, bukan dari keadaan prosesnya:
+    #: gabah belum merata, sensor mesin melenceng. Terpisah dari `nota` karena
+    #: keduanya bisa muncul bersamaan — lot yang dijeda pun bisa isinya belum
+    #: merata — dan menggabungkannya membuat yang satu menutupi yang lain.
+    catatan: list[str] = field(default_factory=list)
     #: Tujuan yang bisa ditekan langsung, tanpa lembar melayang. Kalau berisi,
     #: `pilihan` tak dipakai — satu kartu satu cara dikerjakan.
     tombol: list[Tombol] = field(default_factory=list)
@@ -504,7 +509,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
 
         isi_lot = await _lot_batches(db, lot.id)
         kg_lot = sum(float(x.berat_total_kg or 0) for x in isi_lot)
-        from app.penggilingan.gudang1.services.drying import kadar_air_awal, kemajuan
+        from app.penggilingan.gudang1.services.drying import (
+            kadar_air_awal, kemajuan, peringatan_kadar_air)
         from app.services.setelan import target_kadar_air
 
         target_n = (float(lot.target_kadar_air) if lot.target_kadar_air is not None
@@ -544,6 +550,10 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             nota=(f"⏸ Dijeda — {macet.sebab}. Menunggu dilanjutkan."
                   if macet else None),
             maju=maju,
+            # Dulu hanya muncul di kabar sekejap sesudah menyimpan, lalu
+            # hilang bersamanya. Padahal justru inilah yang menerangkan
+            # mengapa kadar airnya tak kunjung turun.
+            catatan=peringatan_kadar_air(log),
             ringkas=(f"⏸ {macet.sebab}"
                      + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
                      if macet else

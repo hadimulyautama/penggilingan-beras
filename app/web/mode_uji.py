@@ -269,5 +269,10 @@ async def ulangi(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
         return render(request, "mode_uji.html", **await _konteks(akun, galat=tertahan))
 
     from app.services import data_uji
-    langkah = await data_uji.isi(akun)
+    try:
+        langkah = await data_uji.isi(akun)
+    except data_uji.JembatanDipakai as e:
+        # Penghapusannya sudah terlanjur berjalan — itu memang yang diminta
+        # tombolnya. Yang ditolak hanya PENGISIANNYA, dan alasannya disebut.
+        return render(request, "mode_uji.html", **await _konteks(akun, galat=str(e)))
     return render(request, "mode_uji.html", **await _konteks(akun, langkah=langkah))

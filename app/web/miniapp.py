@@ -1227,14 +1227,17 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
     pesan = f"✓ Kadar air *{req.kode_lot}*: " + " · ".join(bagian) + "."
     # Sebaran & selisih disebut hanya bila ADA artinya — angka tambahan yang
     # selalu muncul cepat berubah jadi latar yang tak dibaca siapa pun.
-    if r.sebar is not None and r.sebar >= 1.5:
+    from app.penggilingan.gudang1.services.drying import (
+        AMBANG_SEBAR, AMBANG_SELISIH_MESIN)
+
+    if r.sebar is not None and r.sebar >= AMBANG_SEBAR:
         pesan += (f"\n⚠️ Sebaran {r.sebar:.1f}% antara titik terendah & tertinggi "
                   f"— gabah belum kering merata.")
     if r.target_lama is not None:
         pesan += (f"\n↻ Target diubah {r.target_lama:g}% → {r.target_kini:g}%.")
     elif r.target_kini is not None:
         pesan += f" Target {r.target_kini:g}%."
-    if r.selisih_mesin is not None and abs(r.selisih_mesin) >= 2:
+    if r.selisih_mesin is not None and abs(r.selisih_mesin) >= AMBANG_SELISIH_MESIN:
         pesan += (f"\n⚠️ Mesin membaca {r.selisih_mesin:+.1f}% dari alat tes "
                   f"— periksa sensor dryer bila terus begini.")
     return {"ok": True, "pesan": pesan}

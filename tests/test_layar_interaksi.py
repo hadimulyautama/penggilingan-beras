@@ -309,3 +309,49 @@ def test_galat_tidak_hilang_lebih_cepat_dari_yang_lain():
     css = (AKAR / "app/web/static/app.css").read_text()
     assert "border-radius: 999px" in css.split(".kabar {")[1].split("}")[0]
     assert "border-radius: 12px" in css.split(".kabar--err {")[1].split("}")[0]
+
+
+def test_peringatan_kadar_air_menetap_di_kartu():
+    """Sebaran antar titik dan selisih mesin dulu hanya muncul di kabar
+    sekejap sesudah menyimpan, lalu hilang bersamanya — padahal justru
+    inilah yang menerangkan mengapa kadar airnya tak kunjung turun."""
+    import inspect
+    import types
+
+    from app.penggilingan.gudang1.services import drying
+    from app.services.berjalan import Baris
+
+    assert "catatan" in Baris.__dataclass_fields__
+    assert "peringatan_kadar_air(log)" in inspect.getsource(
+        __import__("app.services.berjalan", fromlist=["untuk_gudang1"]).untuk_gudang1)
+
+    log = types.SimpleNamespace(
+        kadar_air_tes_1=12.4, kadar_air_tes_2=22.9, kadar_air_tes_3=17.1,
+        kadar_air_tes_4=18.0, kadar_air_tes_manual=17.6, kadar_air_indikator=20)
+    pesan = drying.peringatan_kadar_air(log)
+    assert len(pesan) == 2
+    assert "Sebaran 10.5%" in pesan[0] and "belum kering merata" in pesan[0]
+    assert "+2.4%" in pesan[1] and "sensor dryer" in pesan[1]
+
+    # Yang merata & sensornya sepakat tak berkata apa-apa: angka tambahan
+    # yang selalu muncul cepat jadi latar yang tak dibaca siapa pun.
+    rapi = types.SimpleNamespace(
+        kadar_air_tes_1=15.1, kadar_air_tes_2=15.3, kadar_air_tes_3=15.0,
+        kadar_air_tes_4=15.2, kadar_air_tes_manual=15.15, kadar_air_indikator=15.2)
+    assert drying.peringatan_kadar_air(rapi) == []
+    assert drying.peringatan_kadar_air(None) == []
+
+
+def test_ambang_peringatan_tidak_disalin():
+    """Ambang yang disalin akan berselisih, dan yang berselisih membuat kartu
+    berkata "merata" sementara catatannya berkata tidak."""
+    import pathlib
+
+    from app.penggilingan.gudang1.services.drying import (
+        AMBANG_SEBAR, AMBANG_SELISIH_MESIN)
+
+    assert (AMBANG_SEBAR, AMBANG_SELISIH_MESIN) == (1.5, 2.0)
+    mini = (pathlib.Path(__file__).resolve().parents[1]
+            / "app/web/miniapp.py").read_text()
+    assert "r.sebar >= AMBANG_SEBAR" in mini
+    assert "abs(r.selisih_mesin) >= AMBANG_SELISIH_MESIN" in mini
