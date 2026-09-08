@@ -111,11 +111,55 @@
     }
   }
 
+  /* ── Yang sudah ditunjuk kartunya tak ditanyakan lagi ──
+     Orang menekan kartu GB-20260831-01, lalu lembarnya membuka daftar
+     tarik-turun dan memintanya memilih GB-20260831-01. Itu menyuruh orang
+     memilih hal yang sama dua kali — dan kesempatan kedua itulah tempat ia
+     salah pilih. Isiannya jadi KETERANGAN: teks biasa, tak bisa diubah,
+     nilainya tetap ikut terkirim. */
+  function nilaiBaris() {
+    var tag = document.querySelector("script[data-nilai]");
+    return (tag && tag.dataset.nilai) || "";
+  }
+
   function bukaAksi(id, semula) {
     var a = MENU[id];
     if (!a) return;
 
+    /* Yang dikunci hanya isian PENUNJUK — yang pertama bertipe pilihan.
+       Di seluruh spesifikasi, isian itulah yang menyebut benda yang sedang
+       dikerjakan; sisanya keputusan yang memang belum diambil. */
+    var terkunci = nilaiBaris();
+    var namaKunci = "";
+    if (terkunci) {
+      for (var i = 0; i < (a.fields || []).length; i++) {
+        var f0 = a.fields[i];
+        if (f0.type !== "select" && f0.type !== "remote") { continue; }
+        if (f0.type === "select") {
+          var ada = (f0.options || []).some(function (o) { return o[0] === terkunci; });
+          if (!ada) { break; }
+        }
+        namaKunci = f0.name;
+        break;
+      }
+    }
+
     var isi = (a.fields || []).map(function (f) {
+      if (f.name === namaKunci) {
+        var teks = terkunci;
+        if (f.type === "select") {
+          (f.options || []).forEach(function (o) {
+            if (o[0] === terkunci) { teks = o[1]; }
+          });
+        }
+        /* Tanpa label: label adalah pertanyaan, dan pertanyaan ini sudah
+           dijawab saat kartunya ditekan. Yang tersisa cuma keterangan
+           benda mana yang sedang dikerjakan — jadi borangnya terbaca mulai
+           dari keputusan pertama yang memang belum diambil. */
+        return '<p class="terkunci" id="t_' + esc(f.name) + '">' + esc(teks) + "</p>" +
+          '<input type="hidden" data-name="' + esc(f.name) + '"' +
+          ' data-label="' + esc(f.label) + '" value="' + esc(terkunci) + '">';
+      }
       var l = '<label class="lbl" for="f_' + esc(f.name) + '">' + esc(f.label) + "</label>";
       if (f.type === "select") {
         var opts = (f.options.length && f.options[0][0] === "")
@@ -165,6 +209,28 @@
       if (f.type !== "remote") return;
       ambil(f.source).then(function (daftar) {
         if (!daftar) return;
+        if (f.name === namaKunci) {
+          /* Nama bendanya baru diketahui sesudah daftarnya datang. Kalau
+             ternyata tak ada yang cocok, barisnya sudah basi — kuncinya
+             dilepas supaya orang bisa memilih sendiri, bukan mengirim nilai
+             yang akan ditolak. */
+          var cocok = null;
+          daftar.forEach(function (o) { if (o.value === terkunci) { cocok = o; } });
+          var kotak = $("t_" + f.name);
+          if (!kotak) { return; }
+          if (cocok) { kotak.textContent = cocok.label; return; }
+          kotak.outerHTML =
+            '<span class="lbl">' + esc(f.label) + "</span>" +
+            '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
+            '" data-wajib="1" data-label="' + esc(f.label) + '">' +
+            '<option value="">— pilih —</option>' + daftar.map(function (o) {
+              return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
+            }).join("") + "</select>";
+          var sembunyi = lembar.querySelector('input[type="hidden"][data-name="' +
+            f.name + '"]');
+          if (sembunyi) { sembunyi.remove(); }
+          return;
+        }
         var s = $("f_" + f.name);
         s.innerHTML = '<option value="">' + (daftar.length ? "— pilih —" : "(belum ada)") +
           "</option>" + daftar.map(function (o) {
@@ -204,8 +270,17 @@
     function terbaca() {
       var v = {};
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
-        v[el.dataset.name] = (el.tagName === "SELECT" && el.selectedIndex >= 0)
-          ? el.options[el.selectedIndex].text : el.value;
+        if (el.tagName === "SELECT" && el.selectedIndex >= 0) {
+          v[el.dataset.name] = el.options[el.selectedIndex].text;
+          return;
+        }
+        /* Isian terkunci menyimpan KODE-nya di kolom tersembunyi; yang harus
+           dibaca orang adalah nama yang tertulis di sebelahnya. Kalimat
+           konfirmasi yang menyebut "silo:2" alih-alih "Silo B" menuntut
+           orangnya menerjemahkan sendiri — persis saat ia sedang diminta
+           memastikan. */
+        var kotak = el.type === "hidden" ? $("t_" + el.dataset.name) : null;
+        v[el.dataset.name] = kotak ? kotak.textContent.trim() : el.value;
       });
       return v;
     }

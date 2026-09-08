@@ -184,3 +184,40 @@ def test_sorotan_hanya_kalau_memang_ada_rekomendasi():
     assert 'utama=(kondisi == "kering" and len(silo) == 1)' in sumber
     # Gabah basah cuma punya satu tujuan sungguhan: mesin pengering.
     assert 'utama=(kondisi == "basah" and not mati)' in sumber
+
+
+def test_yang_sudah_ditunjuk_kartunya_tak_ditanyakan_lagi():
+    """Pemilik: "saya kan sudah klik kartu yang saya maksud, untuk apa lagi
+    field pilih batch?"
+
+    Menyuruh orang memilih hal yang sama dua kali bukan cuma satu ketukan
+    terbuang — kesempatan kedua itulah tempat ia salah pilih.
+    """
+    assert "function nilaiBaris()" in AKSI
+    blok = AKSI.split("if (f.name === namaKunci) {")[1].split("\n      }")[0]
+    # Teks biasa, bukan kotak isian — dan TANPA label, karena label adalah
+    # pertanyaan dan pertanyaannya sudah dijawab saat kartunya ditekan.
+    assert '<p class="terkunci"' in blok
+    assert '<span class="lbl">' not in blok and "<label" not in blok
+    # Nilainya tetap ikut terkirim.
+    assert 'input type="hidden"' in blok and 'data-name="' in blok
+
+    # Yang dikunci hanya isian PENUNJUK — yang pertama bertipe pilihan.
+    pilih = AKSI.split("var namaKunci = \"\";")[1].split("var isi =")[0]
+    assert 'f0.type !== "select" && f0.type !== "remote"' in pilih
+
+
+def test_kunci_dilepas_kalau_barisnya_sudah_basi():
+    """Kalau nilai dari barisnya tak ada lagi di daftar server, mengirimnya
+    hanya akan ditolak. Kuncinya dilepas supaya orang bisa memilih sendiri."""
+    blok = AKSI.split("if (f.name === namaKunci) {", 2)[2].split("return;\n        }")[0]
+    assert "kotak.outerHTML" in blok and "<select" in blok
+    assert "sembunyi.remove()" in blok, "kolom tersembunyi ikut dibuang"
+
+
+def test_konfirmasi_membaca_nama_bukan_kodenya():
+    """Kalimat konfirmasi yang menyebut "silo:2" alih-alih "Silo B" menuntut
+    orangnya menerjemahkan sendiri — persis saat ia sedang diminta
+    memastikan."""
+    blok = AKSI.split("function terbaca()")[1].split("\n    }")[0]
+    assert 'el.type === "hidden" ? $("t_" + el.dataset.name)' in blok

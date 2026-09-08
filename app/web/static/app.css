@@ -866,6 +866,15 @@ button.pilihan__satu {
 }
 .pilihan__satu--mati .pilihan__ket { color: var(--hati); }
 .pilihan__satu--jalan { opacity: .6; cursor: progress; }
+
+/* ── Isian yang sudah ditunjuk kartunya ──
+   Bukan kolom isian, melainkan keterangan: orang sudah memilihnya saat
+   menekan kartu. Dibuat jelas TAK bisa diubah — kotak isian yang ternyata
+   mati lebih membingungkan daripada teks yang memang teks. */
+.terkunci {
+  margin: 0 0 4px; padding: 0 2px;
+  color: var(--tinta-2); font-size: 14px; line-height: 1.45;
+}
 .pilihan__satu--utama .pilihan__ket { color: rgba(8, 19, 26, .72); }
 
 /* Daftar lengkap 11 aksi — tetap ada, tak lagi memenuhi layar. */
