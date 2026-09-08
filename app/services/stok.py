@@ -93,16 +93,18 @@ def _kg(n) -> str:
 async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:
     """Daftar batch gabah yang masuk sebuah lot giling — SATU BARIS PER BATCH.
 
-    Beratnya berat PEMBELIAN, dan katanya "dibeli" supaya tak disangka berat
-    yang masuk mesin. Sebabnya ada di basis data: `drying_lot_batches` cuma
-    penghubung, tanpa kolom berat, jadi berapa kilo TIAP batch yang akhirnya
-    masuk silo setelah dikeringkan memang tidak pernah tercatat — yang tercatat
-    berat MUATANNYA. Membaginya rata akan terlihat rapi dan tidak benar.
+    Beratnya berat PEMBELIAN — berat saat gabahnya ditimbang masuk. Bukan
+    pilihan: `drying_lot_batches` cuma penghubung, tanpa kolom berat, jadi
+    berapa kilo TIAP batch yang akhirnya masuk silo setelah dikeringkan memang
+    tak pernah tercatat; yang tercatat berat MUATANNYA. Membaginya rata akan
+    terlihat rapi dan tidak benar.
 
-    Karena itu jumlah baris-baris ini TIDAK akan sama persis dengan "Bahan" di
-    atasnya: selisihnya susut pengeringan, dan itu memang nyata. Lebih baik
-    selisih yang bisa dijelaskan daripada satu baris gabungan yang menyembunyikan
-    dari siapa saja gabahnya — pertanyaan pertama begitu ada keluhan mutu.
+    Karena itu jumlah baris-baris ini TIDAK sama persis dengan "Bahan" di
+    atasnya: selisihnya susut pengeringan, dan itu memang nyata. Kata "dibeli"
+    dulu ditempel di tiap barisnya sebagai pagar terhadap salah-jumlah; pemilik
+    membuangnya karena membuat baris jadi ramai. Yang tersisa sebagai penjelas
+    adalah tanggal "masuk" di baris bawahnya — itu tanggal timbang, bukan
+    tanggal giling.
 
     Sebelumnya bahan dari satu pengeringan digabung jadi satu baris bernama dua
     pemasok sekaligus. Hasilnya: kepala berbunyi "BATCH ASAL · 1" sementara
@@ -131,7 +133,7 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
         ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
         if k in KELAS_PK:
             ket += f" · {KELAS_PK[k]}"
-        return (nama, f"dibeli {_kg(b.berat_total_kg)}", ket)
+        return (nama, _kg(b.berat_total_kg), ket)
 
     baris = (await db.execute(
         select(MillingProcessSource)

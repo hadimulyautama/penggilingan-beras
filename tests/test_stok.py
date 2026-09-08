@@ -91,13 +91,12 @@ def test_bahan_didaftar_satu_baris_per_batch():
     Beratnya berat PEMBELIAN, dan itu bukan kelalaian: `drying_lot_batches`
     tak punya kolom berat, jadi berapa kilo TIAP batch yang masuk silo setelah
     dikeringkan memang tak pernah tercatat. Karena itu jumlahnya tidak akan
-    sama persis dengan "Bahan" — selisihnya susut pengeringan. Yang menjaga
-    orang dari salah menjumlahkan adalah KATA "dibeli" pada tiap barisnya.
+    sama persis dengan "Bahan" — selisihnya susut pengeringan.
     """
     from app.services import stok
 
     fn = kode_saja(stok._bahan)
-    assert "dibeli {_kg(b.berat_total_kg)}" in fn, "berat pembelian tak diberi nama"
+    assert "_kg(b.berat_total_kg)" in fn, "bobot per batch tak disebut"
     assert "berat_kg" not in fn.replace("berat_total_kg", ""), \
         "berat muatan silo dipakai lagi sebagai berat batch"
     # Satu batch tak boleh terdaftar dua kali walau muncul di dua sumber.
