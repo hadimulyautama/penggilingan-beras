@@ -1066,3 +1066,12 @@ button.pilihan__satu {
 
 /* Rincian batch di dalam laci kartu Stok — sejajar dengan isi ringkasannya. */
 details.padat > .anak { margin: 0 12px 12px; }
+
+/* Baris judul kartu Stok memuat TIGA keping — kode lot, tanggal giling, dan
+   sudah berapa lama menumpuk — jadi hurufnya sedikit lebih kecil daripada nama
+   kartu lain. Pada 14px baris ini patah di ponsel sempit, dan judul yang patah
+   membuat kartunya berhenti bisa dipindai sekilas. */
+.padat__nama--kode { font-size: 13px; }
+/* Umurnya menempel pada kodenya, tetapi lebih redup: ia keterangan tentang
+   bendanya, bukan namanya. */
+.padat__umur { color: var(--redup); font-weight: 500; }

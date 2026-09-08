@@ -42,7 +42,10 @@
            sendiri ia memakan satu baris penuh untuk lima karakter, dan kartu
            yang barisnya banyak berhenti bisa dipindai sekilas. #}
         <div class="padat__atas">
-          <span class="padat__nama">{{ l.kode }} · {{ l.tanggal }}</span>
+          <span class="padat__nama padat__nama--kode">
+            {{- l.kode }} · {{ l.tanggal }}
+            {%- if l.lama %} · <span class="padat__umur">{{ l.lama }}</span>{% endif -%}
+          </span>
           <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
         </div>
         {# Hasil giling dan rendemen naik jadi angka, bukan keterangan.
@@ -55,7 +58,7 @@
            kepalanya jadi salah. #}
         <dl class="fakta">
           <div>
-            <dt>Hasil giling</dt>
+            <dt>Hasil</dt>
             <dd>{{ kg(l.dihasilkan) }} kg</dd>
           </div>
           {% if l.rendemen is not none %}
@@ -79,15 +82,6 @@
             <div>
               <dt>Kondisi</dt>
               <dd>{{ l.kelas }}</dd>
-            </div>
-          {% endif %}
-          {# Sudah berapa lama ia menumpuk. Stok yang diam berbulan-bulan adalah
-             uang yang diam, dan tanggal giling saja tak mengatakannya — ia
-             menuntut pembacanya menghitung sendiri sambil berdiri di gudang. #}
-          {% if l.lama %}
-            <div>
-              <dt>Lama</dt>
-              <dd>{{ l.lama }}</dd>
             </div>
           {% endif %}
           {% if l.dikirim %}

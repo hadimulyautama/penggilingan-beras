@@ -204,7 +204,12 @@ def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():
 
     fn = kode_saja(stok.pk_gudang1)
     assert "_hari(proc.waktu_selesai or proc.waktu_mulai)" in fn
-    assert "<dt>Lama</dt>" in TPL.read_text()
+    # Umurnya menempel pada kode lot di baris judul, bukan berdiri sebagai
+    # pasangan label–nilai sendiri: ia keterangan tentang bendanya, dan tiga
+    # keping dalam satu baris masih terbaca sekilas.
+    teks = TPL.read_text()
+    assert "padat__umur" in teks and "l.lama" in teks
+    assert "<dt>Lama</dt>" not in teks, "umur diulang dua kali di kartu"
 
 
 def test_kelas_pk_dibaca_dari_seluruh_isi_lot():
