@@ -148,7 +148,8 @@ def test_transit_sampai_ke_layarnya():
     from app.services import berjalan as svc
 
     sumber = inspect.getsource(svc.untuk)
-    assert sumber.count("b.transit += ") == 2, "operator DAN staff sama-sama perlu"
+    # Gudang 1 (operator), Gudang 1 (staff yang bukan operator), dan Gudang 2.
+    assert sumber.count("b.transit += ") == 3, "tiap gudang & tiap peran perlu"
 
 
 def test_tiap_kartu_menyebut_asal_usul_barangnya():

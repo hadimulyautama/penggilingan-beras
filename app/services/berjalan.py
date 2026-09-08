@@ -788,6 +788,148 @@ _DI_MANA = {
 }
 
 
+async def untuk_gudang2(db: AsyncSession) -> Berjalan:
+    """Pekerjaan Gudang 2: PK yang datang dari luar, dan penyosohan.
+
+    Sampai sekarang seluruh alur ini hanya bisa dijangkau lewat katalog
+    "Catat pekerjaan lain" — daftar kata kerja yang harus dibaca operator
+    untuk menemukan satu, persis keadaan yang sudah dibuang dari Gudang 1.
+    Operator Gudang 2 tak punya satu pun kartu, jadi tak ada satu layar pun
+    yang menyebut PK yang sedang menunggu ditempatkan atau penyosohan yang
+    sedang berputar.
+
+    Bendanya sama dengan Gudang 1 — barang yang ADA di gudang — jadi
+    golongannya pun mengikuti aturan yang sama: yang belum punya tempat
+    masuk `menunggu`, yang mesinnya menyala `berjalan`, yang sudah bertempat
+    tetapi diam `transit`, dan yang menunggu keputusan `meja`.
+    """
+    from app.penggilingan.gudang2.models import (
+        PkPurchaseBatch, PkPurchaseVerification, PolishingProcess)
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import (
+        _g2_warehouse_id, hitung_stok_silo)
+
+    b = Berjalan()
+
+    # ── PK luar yang sudah diterima tetapi belum masuk silo/tumpukan ──
+    #
+    # "Diterima" bukan "sudah punya tempat": PK yang masuk PASTI diterima,
+    # dan penempatannya langkah tersendiri. Yang menandai belum bertempat
+    # adalah tak adanya baris `pk_gudang2_intakes` — patokan yang sama dengan
+    # yang dipakai daftar pilihan aksinya sendiri, supaya kartu dan lembarnya
+    # tak pernah berbeda isi.
+    from app.models import PkGudang2Intake
+
+    belum_masuk = ~exists().where(
+        PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id)
+    for pk, nama in (await db.execute(
+        select(PkPurchaseBatch, Supplier.nama_supplier)
+        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        .where(PkPurchaseBatch.status_batch == "diterima", belum_masuk)
+        .order_by(PkPurchaseBatch.id.desc())
+    )).all():
+        b.menunggu.append(Baris(
+            kode=pk.kode_batch, isi=f"PK luar · {_kg(pk.berat_total_kg)}",
+            aksi="masukkan_pk", nilai=pk.kode_batch, fase="baru",
+            sejak=pk.created_at,
+            judul=nama or pk.kode_batch,
+            utama=(_kg(pk.berat_total_kg).removesuffix(" kg"), "kg"),
+            sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
+            keadaan="belum masuk silo maupun tumpukan",
+            pilihan=[("masukkan_pk", "Masukkan ke gudang",
+                      "Tentukan tumpukan atau silo tujuannya", pk.kode_batch)],
+        ))
+
+    # ── Penyosohan yang sedang berputar ──
+    for pr in (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.status == "proses")
+        .order_by(PolishingProcess.id.desc())
+    )).scalars().all():
+        b.berjalan.append(Baris(
+            kode=pr.kode_proses, isi="sedang disosoh",
+            keadaan="catat hasil, tutup bila selesai",
+            aksi="hasil_penyosohan", nilai=pr.kode_proses, fase="giling",
+            sejak=pr.waktu_mulai,
+            judul="Penyosohan", sub=f"{pr.kode_proses} · mesin sosoh menyala",
+            ringkas="mesin sosoh menyala",
+            pilihan=[
+                ("hasil_penyosohan", "Perbarui hasil penyosohan",
+                 "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
+                ("selesai_penyosohan", "Selesai penyosohan",
+                 "Tutup proses, per silo", pr.kode_proses),
+            ],
+        ))
+
+    # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
+    sedang = (await db.execute(
+        select(PolishingProcess.id).where(PolishingProcess.status == "proses")
+    )).first()
+    wid2 = await _g2_warehouse_id(db)
+    for silo in (await db.execute(
+        select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
+    )).scalars().all():
+        kg = await hitung_stok_silo(db, silo.id)
+        if not kg:
+            continue
+        huruf = silo.nama_silo.replace("Silo ", "")
+        b.transit.append(Baris(
+            kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
+            keadaan=("mesin sosoh sedang dipakai" if sedang
+                     else "mulai penyosohan bila siap"),
+            aksi=None if sedang else "mulai_penyosohan",
+            nilai=huruf, fase="silo",
+            judul=f"{silo.nama_silo} · Gudang 2",
+            utama=(_kg(kg).removesuffix(" kg"), "kg"),
+            sub="PK menunggu disosoh",
+            ringkas="PK menunggu disosoh",
+            pilihan=([] if sedang else [
+                ("mulai_penyosohan", "Mulai penyosohan",
+                 "Seluruh isi silo jadi satu proses", huruf)]),
+        ))
+
+    # ── Kerja meja: harga & mutu PK luar ──
+    for pk, nama in (await db.execute(
+        select(PkPurchaseBatch, Supplier.nama_supplier)
+        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        .where(PkPurchaseBatch.flag_unverified.is_(True))
+        .order_by(PkPurchaseBatch.id.desc())
+    )).all():
+        b.meja.append(Baris(
+            kode=pk.kode_batch, isi=f"{nama} · {_kg(pk.berat_total_kg)}",
+            keadaan="", aksi="harga_pk_luar", nilai=pk.kode_batch,
+            fase=("baru" if pk.status_batch == "baru" else "silo"),
+            sejak=pk.created_at,
+            judul=nama or pk.kode_batch,
+            utama=(_kg(pk.berat_total_kg).removesuffix(" kg"), "kg"),
+            sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
+            pilihan=[("harga_pk_luar", "Verifikasi harga PK luar",
+                      "Sesudah ini nilainya beku", pk.kode_batch)],
+        ))
+
+    sudah_qc = set((await db.execute(
+        select(PkPurchaseVerification.pk_purchase_batch_id)
+        .where(PkPurchaseVerification.kadar_air.is_not(None))
+    )).scalars().all())
+    for pk, nama in (await db.execute(
+        select(PkPurchaseBatch, Supplier.nama_supplier)
+        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        .order_by(PkPurchaseBatch.id.desc())
+    )).all():
+        if pk.id in sudah_qc:
+            continue
+        b.meja.append(Baris(
+            kode=pk.kode_batch, isi="mutu PK luar belum dicatat",
+            keadaan="", aksi="qc_pk_luar", nilai=pk.kode_batch, fase="silo",
+            sejak=pk.created_at,
+            judul="Mutu PK luar belum dicatat",
+            sub=f"{pk.kode_batch} · {nama or '?'} · "
+                f"masuk {_tgl(pk.tanggal_pembelian)}",
+            pilihan=[("qc_pk_luar", "Catat kualitas PK luar",
+                      "Kadar air & butir patah", pk.kode_batch)],
+        ))
+    return b
+
+
 async def untuk_staff(db: AsyncSession) -> Berjalan:
     """Yang tertahan menunggu keputusan staff/Direksi — bukan pekerjaan fisik.
 
@@ -897,6 +1039,13 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
             g1 = await untuk_gudang1(db)
             b.berjalan += g1.berjalan
             b.transit += g1.transit
-    if await _is_g2_operator(user):
-        pass    # Gudang 2 menyusul — lihat catatan di docs/RANCANGAN.md §11.
+    # Gudang 2 tak lagi "menyusul": PK luar dan penyosohan punya kartunya
+    # sendiri sekarang. Admin ke atas ikut melihatnya — mereka memegang kedua
+    # gudang, dan pekerjaan yang tak terlihat oleh siapa pun akan terlewat.
+    if await _is_g2_operator(user) or can_see_financials(user):
+        g2 = await untuk_gudang2(db)
+        b.menunggu += g2.menunggu
+        b.berjalan += g2.berjalan
+        b.transit += g2.transit
+        b.meja += g2.meja
     return b

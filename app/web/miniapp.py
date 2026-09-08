@@ -574,7 +574,67 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # Tandai gudang tiap aksi → dipakai Mini App memisah tab G1/G2 (admin/staff).
     for a in actions:
         a["wh"] = _ACTION_WH.get(a["id"], "g1")
+        a["grup"] = _GRUP_AKSI.get(a["id"], GRUP_LAIN)
+    # `undo` dibuang dari katalog HANYA bagi yang punya List audit — di sana
+    # ia lengkap dengan daftar apa yang akan hilang, dan dua pintu untuk satu
+    # pekerjaan berarti yang satu tak pernah ikut diperbarui.
+    #
+    # Operator TIDAK punya List audit (jejak lengkap berikut tombol
+    # pembatalnya bukan miliknya), jadi bagi mereka katalog inilah satu-
+    # satunya jalan. Membuangnya untuk semua orang berarti yang paling sering
+    # salah ketik justru kehilangan cara memperbaikinya — dan itu ketahuan
+    # hanya karena simulasi memeriksanya sebagai operator.
+    if fin:
+        actions = [a for a in actions if a["id"] != "undo"]
+    # Urutan kelompok dititipkan pada aksi pertama: menu inilah satu-satunya
+    # yang dikirim ke layar, dan menaruh urutannya di tempat lain berarti dua
+    # tempat yang harus sepakat.
+    if actions:
+        actions[0]["urut_grup"] = URUT_GRUP
     return actions
+
+
+#: Kelompok katalog. Daftar datar 30 kata kerja menuntut orang membacanya
+#: seluruhnya untuk menemukan satu — persis keadaan yang sudah dibuang dari
+#: layar antrean. Kelompoknya mengikuti PEKERJAAN, bukan tabel.
+GRUP_KARTU = "Biasanya dikerjakan dari kartu"
+GRUP_LAIN = "Lain-lain"
+
+_GRUP_AKSI = {
+    # Gudang 2 — kini punya kartunya sendiri, tetapi tetap dicantumkan
+    # supaya yang bendanya belum ada pun bisa dimulai dari sini.
+    "mulai_penyosohan": "Gudang 2 · penyosohan",
+    "hasil_penyosohan": "Gudang 2 · penyosohan",
+    "selesai_penyosohan": "Gudang 2 · penyosohan",
+    "transfer_pk": "Gudang 2 · penyosohan",
+    # PK yang datang dari luar, bukan hasil giling sendiri.
+    "catat_pk_luar": "PK dari luar",
+    "masukkan_pk": "PK dari luar",
+    "harga_pk_luar": "PK dari luar",
+    "qc_pk_luar": "PK dari luar",
+    # Yang keluar dari pabrik, dan yang bukan beras putih.
+    "catat_bekatul": "Hasil samping & barang jadi",
+    "kirim_bekatul": "Hasil samping & barang jadi",
+    "catat_packing": "Hasil samping & barang jadi",
+    "kirim_barang_jadi": "Hasil samping & barang jadi",
+    "harga_byproduct": "Hasil samping & barang jadi",
+    "jual_pk": "Hasil samping & barang jadi",
+    # Pembelian & pencocokan.
+    "beli_kemasan": "Pembelian & pencocokan",
+    "rekonsiliasi_timbang": "Pembelian & pencocokan",
+}
+for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
+           "selesai_pengeringan", "selesai_pendinginan", "pindah_silo",
+           "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
+           "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling"):
+    _GRUP_AKSI[_a] = GRUP_KARTU
+
+#: Urutan kelompok di layar — yang paling sering dipakai lebih dulu, dan yang
+#: sudah punya kartu paling akhir: ia di sini hanya sebagai jalan cadangan.
+URUT_GRUP = [
+    "Gudang 2 · penyosohan", "PK dari luar", "Hasil samping & barang jadi",
+    "Pembelian & pencocokan", GRUP_LAIN, GRUP_KARTU,
+]
 
 
 # Pemetaan aksi → gudang. Aksi keuangan/QC dikelompokkan ke gudang yang relevan:

@@ -202,7 +202,18 @@ async def jalan() -> None:
         cek("operator TIDAK melihat aksi uang",
             not ({"verify_gabah", "beli_kemasan", "jual_pk"} & ids),
             f"{len(ids)} aksi")
-        cek("tombol batal ada", "undo" in ids)
+        # Membatalkan punya RUMAHNYA SENDIRI di List audit, lengkap dengan
+        # daftar apa yang akan hilang. Katalog aksi tak lagi memuatnya: dua
+        # pintu untuk satu pekerjaan berarti yang satu tak pernah ikut
+        # diperbarui — dan yang di katalog justru yang tak menampilkan apa pun
+        # sebelum ditekan.
+        # Operator TIDAK punya List audit, jadi katalog inilah satu-satunya
+        # jalannya membatalkan — yang paling sering salah ketik tak boleh
+        # kehilangan cara memperbaikinya.
+        cek("operator tetap punya tombol batal", "undo" in ids)
+        r = await op.get("/audit")
+        cek("dan List audit memang bukan miliknya", r.status_code in (303, 403),
+            f"HTTP {r.status_code}")
 
         babak("3. Jalur harian — pilih tiket timbang, jangan ketik apa pun")
         tiket = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()

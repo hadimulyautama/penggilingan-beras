@@ -100,7 +100,10 @@
       if (!d) return;
       var menu = [];
       try { menu = (await ambil("/miniapp/actions/menu")) || []; } catch (e) { menu = []; }
-      DATA = { menu: menu };
+      /* Urutan kelompok ikut dari server bersama menunya — ditempelkan pada
+         aksi pertama, karena daftar itu memang satu-satunya yang dikirim.
+         Menaruhnya di layar berarti dua tempat yang harus sepakat. */
+      DATA = { menu: menu, urutGrup: (menu[0] && menu[0].urut_grup) || [] };
       MENU = {};
       menu.forEach(function (a) { MENU[a.id] = a; });
       gambar();
@@ -125,16 +128,36 @@
     var layar = $("layar");
     {
       var aksi = DATA.menu || [];
+      /* Dikelompokkan, bukan didaftar datar. Tiga puluh kata kerja berjajar
+         sama besar menuntut orang membaca semuanya untuk menemukan satu —
+         persis keadaan yang sudah dibuang dari layar antrean. Kelompok dan
+         urutannya datang dari SERVER: yang tahu pekerjaan mana milik siapa
+         adalah spesifikasi aksinya, bukan layar yang menggambarnya. */
+      var urut = DATA.urutGrup || [];
+      var per = {};
+      aksi.forEach(function (a) {
+        var g = a.grup || "Lain-lain";
+        (per[g] = per[g] || []).push(a);
+      });
+      var nama = urut.filter(function (g) { return per[g]; })
+        .concat(Object.keys(per).filter(function (g) { return urut.indexOf(g) < 0; }));
+
+      function kartuAksi(a) {
+        var b = belah(a.label);
+        return '<button class="tindakan" data-aksi="' + esc(a.id) + '">' +
+          (b.ikon ? '<span class="tindakan__ikon tindakan__ikon--emoji">' + esc(b.ikon) + "</span>" : "") +
+          '<span class="tindakan__isi"><span class="tindakan__nama">' + esc(b.teks) + "</span>" +
+          (a.hint ? '<span class="tindakan__ket">' + esc(a.hint) + "</span>" : "") +
+          "</span>" +
+          '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" ' +
+          'stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>';
+      }
+
       layar.innerHTML = aksi.length
-        ? aksi.map(function (a) {
-            var b = belah(a.label);
-            return '<button class="tindakan" data-aksi="' + esc(a.id) + '">' +
-              (b.ikon ? '<span class="tindakan__ikon tindakan__ikon--emoji">' + esc(b.ikon) + "</span>" : "") +
-              '<span class="tindakan__isi"><span class="tindakan__nama">' + esc(b.teks) + "</span>" +
-              (a.hint ? '<span class="tindakan__ket">' + esc(a.hint) + "</span>" : "") +
-              "</span>" +
-              '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" ' +
-              'stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>';
+        ? nama.map(function (g) {
+            return '<div><span class="lbl">' + esc(g) + " · " + per[g].length + "</span>" +
+              '<div class="grup" style="gap:8px">' +
+              per[g].map(kartuAksi).join("") + "</div></div>";
           }).join("")
         : '<div class="kartu"><p class="bantu">Tidak ada aksi untuk peran Anda.</p></div>';
       Array.prototype.forEach.call(layar.querySelectorAll("[data-aksi]"), function (b) {

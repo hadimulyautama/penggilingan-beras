@@ -219,3 +219,57 @@ def test_jumlah_berjalan_menghitung_mesin_dan_transit():
     harus menghitung keduanya — bukan hanya yang mesinnya menyala."""
     b = Berjalan(berjalan=[_tiket()], transit=[_tiket(), _tiket()])
     assert b.jumlah_berjalan == 3
+
+
+def test_gudang2_punya_kartunya_sendiri():
+    """Pemilik bertanya apa guna halaman "Catat pekerjaan lain". Sebabnya: 17
+    dari 32 aksi tak punya kartu sama sekali — termasuk SELURUH alur Gudang 2
+    dan PK dari luar. Operator Gudang 2 harus membaca daftar kata kerja untuk
+    menemukan satu, persis keadaan yang sudah dibuang dari Gudang 1."""
+    import inspect
+
+    from app.services import berjalan as svc
+
+    assert hasattr(svc, "untuk_gudang2")
+    fn = inspect.getsource(svc.untuk_gudang2)
+    for aksi in ("masukkan_pk", "harga_pk_luar", "qc_pk_luar",
+                 "mulai_penyosohan", "hasil_penyosohan", "selesai_penyosohan"):
+        assert aksi in fn, aksi
+    # Golongannya mengikuti aturan yang sama dengan Gudang 1.
+    assert "b.menunggu.append" in fn and "b.berjalan.append" in fn
+    assert "b.transit.append" in fn and "b.meja.append" in fn
+    # Patokan "belum bertempat" DIAMBIL dari yang sama dengan daftar pilihan
+    # aksinya sendiri — kalau disusun ulang, kartu dan lembarnya berbeda isi.
+    assert "PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id" in fn
+
+    untuk = inspect.getsource(svc.untuk)
+    assert "untuk_gudang2(db)" in untuk
+    assert "Gudang 2 menyusul" not in untuk, "Gudang 2 tak lagi ditunda"
+    assert "pass    #" not in untuk, "cabang Gudang 2 tak lagi kosong"
+
+
+def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
+    """Tiga puluh kata kerja berjajar sama besar menuntut orang membaca
+    semuanya untuk menemukan satu. Dan `undo` punya rumahnya sendiri di List
+    audit — dua pintu untuk satu pekerjaan berarti yang satu tak pernah ikut
+    diperbarui."""
+    import inspect
+
+    from app.web import miniapp
+
+    assert hasattr(miniapp, "_GRUP_AKSI") and hasattr(miniapp, "URUT_GRUP")
+    assert miniapp._GRUP_AKSI["mulai_penyosohan"] == "Gudang 2 · penyosohan"
+    assert miniapp._GRUP_AKSI["catat_pk_luar"] == "PK dari luar"
+    assert miniapp._GRUP_AKSI["gabah_masuk"] == miniapp.GRUP_KARTU
+
+    menu = inspect.getsource(miniapp.actions_menu)
+    assert 'a["grup"] = _GRUP_AKSI.get' in menu
+    # `undo` dibuang HANYA bagi yang punya List audit. Operator tak punya
+    # layar itu, jadi katalog inilah satu-satunya jalannya membatalkan —
+    # membuangnya untuk semua orang berarti yang paling sering salah ketik
+    # justru kehilangan cara memperbaikinya.
+    assert 'if fin:\n        actions = [a for a in actions if a["id"] != "undo"]' in menu
+
+    aksi_js = (AKAR / "app/web/static/aksi.js").read_text()
+    assert "DATA.urutGrup" in aksi_js
+    assert 'a.grup || "Lain-lain"' in aksi_js
