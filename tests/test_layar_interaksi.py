@@ -382,3 +382,20 @@ def test_tiap_tindakan_membawa_penunjuknya_sendiri():
     makro = (AKAR / "app/web/templates/_benda.html").read_text()
     assert "{% set nl = p[3] if p|length > 3 else b.nilai %}" in makro
     assert "{% if nl %}&nilai={{ nl|urlencode }}{% endif %}" in makro
+
+
+def test_kartu_tidak_menyusut_di_bawah_isinya():
+    """Panel "Catatan terakhir" di List audit pecah: judulnya melayang di atas
+    garis tepi dan tombolnya menimpa kartu di bawahnya.
+
+    `.isi` kotak flex kolom, jadi tiap kartu adalah anak flex — dan
+    `min-height` yang dipasang pada kartu MEMBATALKAN perlindungan bawaan
+    (`min-height: auto`) yang biasanya mencegah anak menyusut di bawah tinggi
+    isinya. Di halaman yang penuh, kartunya menyusut ke 56px dan
+    `align-items: center` melempar isinya ke luar, atas dan bawah.
+    """
+    css = (AKAR / "app/web/static/app.css").read_text()
+    for kelas in ("benda", "padat"):
+        blok = css.split(f".{kelas} {{")[1].split("}")[0]
+        assert "flex-shrink: 0" in blok, kelas
+        assert "min-height" in blok, f"{kelas}: min-height-nya yang membuat ini perlu"

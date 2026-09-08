@@ -20,31 +20,31 @@ export default defineRailway(() => {
     env: { DATABASE_URL: preserve(), LAYANAN: preserve(), TIMBANGAN_ADMIN_PASSWORD: preserve(), TIMBANGAN_SECRET_KEY: preserve() },
   });
   const penggilinganBeras = service("penggilingan-beras", {
-    source: github("hadimulyautama/penggilingan-beras", { checkSuites: false }),
-    // `builder` DOCKERFILE, bukan RAILPACK: image kita menjalankan
-    // docker/entrypoint.sh, dan di situlah `alembic upgrade head` dijalankan
-    // sebelum uvicorn menyala. Railpack tak tahu apa-apa tentang entrypoint
-    // itu — migrasi berhenti jalan tanpa satu pun galat muncul.
-    //
-    // Sampai sekarang nilai ini datang dari railway.json setiap kali deploy,
-    // jadi yang TERSIMPAN di Railway masih RAILPACK. Ditulis di sini supaya
-    // railway.json bisa dibuang tanpa diam-diam berpindah builder.
-    build: { buildEnvironment: "V3", builder: "DOCKERFILE", watchPatterns: ["app/**", "migrations/**", "docker/**", "Dockerfile", "requirements.txt"] },
-    // Empat setelan berikut juga warisan railway.json. Impor IaC tidak
-    // membacanya — ia hanya melihat yang tersimpan di Railway — jadi tanpa
-    // baris-baris ini, membuang railway.json berarti membuang pemeriksaan
-    // kesehatan dan kebijakan restart sekaligus.
+    // Lima setelan berikut masih datang dari railway.json setiap kali deploy,
+    // jadi yang TERSIMPAN di Railway masih kosong — impor IaC hanya melihat
+    // yang tersimpan. Ditulis di sini supaya railway.json bisa dibuang tanpa
+    // diam-diam kehilangan pemeriksaan kesehatan, kebijakan restart, dan —
+    // yang paling berbahaya — builder-nya: tanpa DOCKERFILE, build berpindah
+    // ke Railpack, dan Railpack tak tahu apa-apa tentang docker/entrypoint.sh
+    // tempat `alembic upgrade head` dijalankan.
     healthcheck: "/health",
     deploy: {
       healthcheckTimeout: 100,
       restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 10,
     },
+    source: github("hadimulyautama/penggilingan-beras", { checkSuites: false }),
+    build: { buildEnvironment: "V3", builder: "DOCKERFILE", watchPatterns: ["app/**", "migrations/**", "docker/**", "Dockerfile", "requirements.txt"] },
     replicas: { "asia-southeast1-eqsg3a": 1 },
     env: { ADMIN_NAME: preserve(), ADMIN_SANDI_AWAL: preserve(), ADMIN_TELEGRAM_ID: preserve(), AGENT_MODEL: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), BOT_ADMIN_TOKEN: preserve(), BOT_GUDANG1_TOKEN: preserve(), BOT_GUDANG2_TOKEN: preserve(), CLAUDE_MODEL: preserve(), DATABASE_URL: preserve(), GAJIHUB_API_KEY: preserve(), GDRIVE_OAUTH_CLIENT_ID: preserve(), GDRIVE_OAUTH_CLIENT_SECRET: preserve(), GDRIVE_OAUTH_REFRESH_TOKEN: preserve(), GDRIVE_ROOT_FOLDER_ID: preserve(), GMAIL_MAILBOXES: preserve(), GMAIL_OAUTH_CLIENT_ID: preserve(), GMAIL_OAUTH_CLIENT_SECRET: preserve(), GMAIL_PRIBADI2_EMAIL: preserve(), GMAIL_PRIBADI2_REFRESH_TOKEN: preserve(), GMAIL_PRIBADI_EMAIL: preserve(), GMAIL_PRIBADI_REFRESH_TOKEN: preserve(), GMAIL_SA_JSON: preserve(), INTERNAL_API_TOKEN: preserve(), KLEDO_API_KEY: preserve(), MINIAPP_MODEL: preserve(), MODE_UJI: preserve(), PRODUKSI_API_TOKEN: preserve(), PRODUKSI_API_URL: preserve(), SECRET_KEY: preserve(), VOYAGE_API_KEY: preserve() },
   });
+  const posProduksiUji = service("pos-produksi-uji", {
+    source: github("hadimulyautama/penggilingan-beras", { branch: "uji", checkSuites: false }),
+    replicas: { "sfo": 1 },
+    env: { ADMIN_NAME: preserve(), ADMIN_TELEGRAM_ID: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), BOT_ADMIN_TOKEN: preserve(), BOT_GUDANG1_TOKEN: preserve(), BOT_GUDANG2_TOKEN: preserve(), DATABASE_URL: preserve(), MODE_UJI: preserve(), SECRET_KEY: preserve() },
+  });
 
   return project("penggilingan-beras", {
-    resources: [kantor, timbangan, penggilinganBeras, Postgres, PostgresNPz3, postgresVolumeSCj8, postgresVolume],
+    resources: [kantor, timbangan, penggilinganBeras, posProduksiUji, Postgres, PostgresNPz3, postgresVolumeSCj8, postgresVolume],
   });
 });

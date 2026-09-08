@@ -700,6 +700,14 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 
 .benda {
   --fase: var(--fase-baru);
+  /* TIDAK boleh menyusut. `.isi` adalah kotak flex kolom, jadi tiap kartu
+     adalah anak flex — dan `min-height` yang dipasang di bawah justru
+     MEMBATALKAN perlindungan bawaan (`min-height: auto`) yang biasanya
+     mencegah anak menyusut di bawah tinggi isinya. Kartu yang ada di halaman
+     penuh lalu menyusut ke 56px membuang isinya ke luar kotak: judulnya
+     melayang di atas garis tepi, tombolnya menimpa kartu di bawahnya. Persis
+     itu yang terjadi pada panel "Catatan terakhir" di List audit. */
+  flex-shrink: 0;
   display: flex; align-items: center; gap: 12px;
   background: var(--panel); border: 1px solid var(--garis);
   border-left: 3px solid var(--fase); border-radius: 12px;
@@ -724,6 +732,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
    Beranda. Yang ingin melihat rinciannya membuka Sedang berjalan. */
 .padat {
   --fase: var(--fase-baru);
+  flex-shrink: 0;
   display: flex; align-items: center; gap: 10px;
   background: var(--panel); border: 1px solid var(--garis);
   border-left: 3px solid var(--fase); border-radius: 11px;
