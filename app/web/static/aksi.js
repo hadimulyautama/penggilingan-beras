@@ -350,6 +350,38 @@
     if (e.key === "Escape" && $("lembar").style.display === "flex") tutupLembar();
   });
 
+  /* ── Tombol tujuan di dalam kartu ──
+     Tanpa lembar sama sekali: kartunya dibentangkan, tujuannya ditekan,
+     selesai. Dipasang lewat PINDAH supaya tak menumpuk tiap perpindahan,
+     dan didelegasikan supaya kartu yang datang bersama layar yang digambar
+     ulang ikut hidup tanpa dipasangi ulang satu per satu. */
+  PINDAH.pasang(document, "click", async function (e) {
+    var t = e.target.closest ? e.target.closest("[data-kirim]") : null;
+    if (!t || t.disabled) { return; }
+    e.preventDefault();
+    var semula = t.innerHTML;
+    t.disabled = true;
+    t.classList.add("pilihan__satu--jalan");
+    try {
+      var hasil = await kirim(t.dataset.post, JSON.parse(t.dataset.kirim));
+      var pesan = hasil.pesan || "Tersimpan ✓";
+      muat();
+      if (window.PINDAH && PINDAH.segarkan) {
+        PINDAH.segarkan(function () { kabar(pesan, "ok"); });
+      } else {
+        kabar(pesan, "ok");
+      }
+    } catch (err) {
+      /* Tombolnya dihidupkan lagi: yang ditolak biasanya bisa diperbaiki
+         dengan memilih tujuan lain, dan kartu yang mati sesudah satu
+         penolakan memaksa orang memuat ulang halaman. */
+      t.disabled = false;
+      t.classList.remove("pilihan__satu--jalan");
+      t.innerHTML = semula;
+      kabar(String(err), "err");
+    }
+  });
+
   muat();
 
   /* Dibuka dari layar Berjalan: satu baris di sana menaut ke aksi yang

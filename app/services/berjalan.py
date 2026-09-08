@@ -36,6 +36,28 @@ from app.models import (
 
 
 @dataclass
+class Tombol:
+    """Satu tujuan yang bisa ditekan LANGSUNG dari kartunya.
+
+    Antrean adalah pekerjaan yang paling sering dilakukan — tiap truk yang
+    datang. Membentangkan kartu lalu menyuruh orang membuka lembar melayang
+    lalu memilih dari daftar tarik-turun adalah tiga ketukan dan satu layar
+    yang menutupi barisnya sendiri, untuk satu keputusan: gabah ini mau ke
+    mana. Tombolnya ditaruh di kartunya.
+    """
+
+    nama: str
+    ket: str
+    post: str
+    data: dict
+    utama: bool = False
+    #: Alasan ia tak bisa ditekan. Kosong = boleh. Yang tak boleh tetap
+    #: DITAMPILKAN berikut alasannya: tujuan yang hilang diam-diam membuat
+    #: orang mengira mesinnya tak ada, lalu mencarinya di layar lain.
+    mati: str = ""
+
+
+@dataclass
 class Baris:
     kode: str
     isi: str
@@ -88,6 +110,9 @@ class Baris:
     anak: list[tuple[str, str, str]] = field(default_factory=list)
     #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
     nota: str | None = None
+    #: Tujuan yang bisa ditekan langsung, tanpa lembar melayang. Kalau berisi,
+    #: `pilihan` tak dipakai — satu kartu satu cara dikerjakan.
+    tombol: list[Tombol] = field(default_factory=list)
 
     # ── Bentuk PADAT, untuk Beranda ──
     #
@@ -179,6 +204,71 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
 
+async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
+                        post: str, data: dict) -> list[Tombol]:
+    """Tujuan yang sah untuk gabah sekondisi ini — mesinnya disebut satu per satu.
+
+    Alasan sebuah tujuan dimatikan diambil dari ATURAN YANG SAMA yang menolak
+    di server (`masuk_dryer`): mesin tak aktif, mesin masih dipakai lot, dan
+    isinya beda kondisi. Kalau alasannya disusun ulang di sini, cepat atau
+    lambat layar melarang yang sebenarnya boleh — atau lebih buruk,
+    mempersilakan yang akan ditolak.
+
+    Kapasitas sengaja TIDAK diperiksa di sini: ia bergantung pada total muatan
+    dan pesan penolakannya sudah menyebut sisanya dengan tepat. Menebaknya di
+    layar hanya menambah tempat yang bisa salah.
+    """
+    from app.penggilingan.gudang1.services.drying import (
+        active_drying_lot, dryers_g1, isi_dryer)
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+
+    jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
+    info = intake_dari_jenis(jenis)
+    sah = info.tujuan_pilihan if info else ()
+    keluar: list[Tombol] = []
+
+    if "dryer" in sah:
+        for d in await dryers_g1(db):
+            isi = await isi_dryer(db, d.id)
+            lot = await active_drying_lot(db, d.id)
+            mati = ""
+            if d.status != "aktif":
+                mati = f"Mesin sedang {d.status}"
+            elif lot is not None:
+                mati = f"Masih dipakai lot {lot.kode_lot} — kosongkan ke silo dulu"
+            elif isi and isi[0] != kondisi:
+                mati = f"Berisi gabah {isi[0]} — tak boleh dicampur gabah {kondisi}"
+            ket = ("Mesin kosong" if not isi
+                   else f"Bergabung dengan {_kg(isi[1])} gabah {isi[0]}")
+            keluar.append(Tombol(
+                nama=f"Ke {d.nama}", ket=ket, post=post,
+                data=dict(data, tujuan=f"dryer:{d.id}"),
+                utama=(kondisi == "basah" and not mati), mati=mati))
+
+    if "silo" in sah:
+        from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
+        silo = await silos_g1(db)
+        # Disorot HANYA bila memang cuma ada satu. Dua tombol tersorot
+        # sekaligus bukan rekomendasi melainkan hiasan — dan sorotan yang
+        # muncul di mana-mana berhenti menandakan apa pun. Kalau silonya lebih
+        # dari satu, memang operator yang memutuskan; layar tak tahu mana yang
+        # lebih baik, dan berpura-pura tahu lebih buruk daripada diam.
+        for si in silo:
+            kg = await _silo_content_kg(db, si.id)
+            keluar.append(Tombol(
+                nama=f"Ke {si.nama_silo}", post=post,
+                ket=("Silo kosong" if not kg
+                     else f"Bergabung dengan {_kg(kg)} gabah kering"),
+                data=dict(data, tujuan=f"silo:{si.id}"),
+                utama=(kondisi == "kering" and len(silo) == 1)))
+
+    if "tumpuk" in sah:
+        keluar.append(Tombol(
+            nama="Ditumpuk di lantai", ket="Tempatnya ditentukan menyusul",
+            post=post, data=dict(data, tujuan="tumpuk")))
+    return keluar
+
+
 async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
     from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
     from app.penggilingan.peta_jenis import intake_dari_jenis
@@ -203,6 +293,7 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
         # hanya bila tabel jenisnya tak punya barisnya — dan itu keadaan
         # janggal yang memang harus terlihat, bukan disamarkan.
         komoditas = t.get("jenis_nama") or t.get("jenis_kode") or "?"
+        kondisi = info.kondisi or "basah"
         isi = f"{komoditas} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
             isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
@@ -227,8 +318,11 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             # ke lembar. Ketukan pertama yang berbeda-beda artinya di tiap
             # kartu memaksa orang menebak apa yang akan terjadi sebelum
             # menekan — dan yang menebak akan berhenti menekan.
-            pilihan=[("gabah_masuk", "Catat & tentukan tempatnya",
-                      "Gabah basah ke mesin pengering; kering boleh langsung ke silo")],
+            # Tujuannya ditekan LANGSUNG dari kartu — tak ada lembar melayang
+            # untuk satu keputusan yang cuma punya beberapa jawaban.
+            tombol=await _tujuan_gabah(
+                db, kondisi, post="/miniapp/actions/gabah-masuk",
+                data={"timbangan_transaksi_id": t["id"]}),
         ))
     return baris
 
@@ -303,8 +397,9 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             judul=b_.kode_batch,
             utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
             sub=f"gabah {b_.kondisi_gabah} · belum punya tempat",
-            pilihan=[("pindah_tumpukan", "Tentukan tempatnya",
-                      "Mesin pengering, silo, atau tumpuk di lantai")],
+            tombol=await _tujuan_gabah(
+                db, b_.kondisi_gabah, post="/miniapp/actions/pindah-tumpukan",
+                data={"kode_batch": b_.kode_batch}),
         ))
 
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
@@ -325,9 +420,9 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sub=f"menumpuk di lantai · gabah {b_.kondisi_gabah}",
             nota=("Gabah basah tak boleh ke silo — harus dikeringkan dulu."
                   if wajib_dryer else None),
-            pilihan=[("pindah_tumpukan", "Pindahkan dari tumpukan",
-                      "Harus ke mesin pengering — belum kering" if wajib_dryer
-                      else "Ke silo, atau ke mesin pengering bila perlu")],
+            tombol=await _tujuan_gabah(
+                db, b_.kondisi_gabah, post="/miniapp/actions/pindah-tumpukan",
+                data={"kode_batch": b_.kode_batch}),
         ))
 
     for lot in await _lot(db, pendinginan_selesai=True):

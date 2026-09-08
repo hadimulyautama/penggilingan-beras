@@ -260,9 +260,13 @@ async def jalan() -> None:
         # di komentar skrip laci ("pendengar ... menumpuk sekali tiap
         # perpindahan"), dan pemeriksaan yang lulus-gagal karena prosa di
         # tempat lain adalah pemeriksaan yang tak mengukur apa pun.
-        TAUT = "/aksi?buka=pindah_tumpukan"
+        # Kartu antrean dikerjakan LANGSUNG dari kartunya — tombol tujuan di
+        # dalam kotak, tanpa lembar melayang. Yang dicari tombolnya.
+        TAUT = 'data-post="/miniapp/actions/pindah-tumpukan"'
         r = await op.get("/aksi")
         cek("tumpukan MENAGIH di antrean tunggu", TAUT in r.text)
+        cek("dan bisa dikerjakan tanpa lembar melayang",
+            "tujuan&#34;: &#34;dryer:" in r.text or "tujuan\": \"dryer:" in r.text)
         r = await op.get("/berjalan")
         cek("dan TIDAK ikut di layar Berjalan", TAUT not in r.text)
 
@@ -405,8 +409,8 @@ async def jalan() -> None:
         r = await op.get("/aksi")
         cek("tiket yang menggantung terdaftar di antrean",
             "TRX-SIM-003" in r.text, f"HTTP {r.status_code}")
-        cek("barisnya menaut ke aksi yang menutupnya",
-            "/aksi?buka=gabah_masuk" in r.text)
+        cek("barisnya membawa tombol yang menutupnya",
+            'data-post="/miniapp/actions/gabah-masuk"' in r.text)
         r = await op.get("/berjalan")
         cek("dan TIDAK ikut di layar Berjalan", "TRX-SIM-003" not in r.text)
 

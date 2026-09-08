@@ -90,7 +90,35 @@
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     <div class="grup" style="gap:9px">
       {% for b in daftar %}
-        {% if b.pilihan %}
+        {# ── Tujuan yang ditekan langsung ──
+           Antrean adalah pekerjaan yang paling sering dilakukan. Membentangkan
+           kartu lalu membuka lembar melayang lalu memilih dari daftar
+           tarik-turun adalah tiga ketukan dan satu layar yang menutupi baris
+           yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
+        {% if b.tombol %}
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
+            <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <div class="pilihan">
+              {% for t in b.tombol %}
+                <button type="button"
+                        class="pilihan__satu{% if t.utama and not t.mati %} pilihan__satu--utama{% endif %}{% if t.mati %} pilihan__satu--mati{% endif %}"
+                        {% if t.mati %}disabled aria-disabled="true"{% endif %}
+                        {# Kutip TUNGGAL, wajib: `tojson` menghasilkan JSON
+                           yang penuh kutip ganda tetapi TIDAK melolosinya
+                           untuk atribut — di dalam kutip ganda, atributnya
+                           putus di karakter pertama isi muatannya. `tojson`
+                           sendiri sudah melolosikan kutip tunggal, `<`, `>`,
+                           dan `&`, jadi bentuk inilah yang aman. #}
+                        data-post="{{ t.post }}" data-kirim='{{ t.data|tojson }}'>
+                  <span class="pilihan__nama">{{ t.nama }}</span>
+                  {# Yang tak boleh tetap menyebut ALASANNYA. Tujuan yang hilang
+                     diam-diam membuat orang mengira mesinnya tak ada. #}
+                  <span class="pilihan__ket">{{ t.mati or t.ket }}</span>
+                </button>
+              {% endfor %}
+            </div>
+          </details>
+        {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
             <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             <div class="pilihan">

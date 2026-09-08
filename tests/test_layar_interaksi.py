@@ -86,7 +86,7 @@ def test_setiap_kartu_membentang_di_tempat():
                 and getattr(simpul.func, "id", None) == "Baris"):
             continue
         kunci = {k.arg for k in simpul.keywords}
-        if "aksi" in kunci and "pilihan" not in kunci:
+        if "aksi" in kunci and not (kunci & {"pilihan", "tombol"}):
             telanjang.append(f"baris {simpul.lineno}")
     assert not telanjang, (
         "baris ini masih melempar langsung ke lembar, bukan membentang:\n  "
@@ -98,10 +98,63 @@ def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
     membentang lalu menyuruh orang mencari tombolnya di tempat lain lebih
     buruk daripada tidak membentang sama sekali."""
     makro = (AKAR / "app/web/templates/_benda.html").read_text()
-    blok = makro.split("{% if b.pilihan %}")[1].split("{% elif")[0]
+    blok = makro.split("{% elif b.pilihan %}")[1].split("{% elif")[0]
     assert "<details" in blok and "<summary>" in blok
     assert 'class="pilihan"' in blok
     assert "{{ alamat }}?buka={{ id }}" in blok
+
+
+def test_antrean_dikerjakan_tanpa_lembar_melayang():
+    """Pemilik: kartu antrean tak perlu mengeluarkan layar melayang lagi —
+    langsung bentang dengan tombol opsinya.
+
+    Ini pekerjaan yang paling sering dilakukan, tiap truk yang datang. Tiga
+    ketukan dan satu layar yang menutupi barisnya sendiri, untuk satu
+    keputusan yang cuma punya beberapa jawaban.
+    """
+    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    blok = makro.split("{% if b.tombol %}")[1].split("{% elif")[0]
+    assert "<button" in blok and "data-post=" in blok
+    # Kutip TUNGGAL, wajib: `tojson` tak melolosikan kutip ganda untuk
+    # atribut, jadi di dalam kutip ganda atributnya putus di karakter pertama
+    # isi muatannya — dan halaman tetap tampil, cuma tombolnya tak berfungsi.
+    assert "data-kirim='{{ t.data|tojson }}'" in blok
+    assert "?buka=" not in blok, "tombol tujuan tak boleh menyeberang ke lembar"
+    # Yang tak boleh tetap tampil berikut alasannya.
+    assert "{{ t.mati or t.ket }}" in blok
+    assert "disabled" in blok
+
+    aksi = (AKAR / "app/web/static/aksi.js").read_text()
+    assert 'PINDAH.pasang(document, "click"' in aksi, \
+        "didelegasikan lewat PINDAH supaya tak menumpuk tiap perpindahan"
+    kirim = aksi.split('[data-kirim]')[1].split("\n  });")[0]
+    assert "t.disabled = false" in kirim, \
+        "yang ditolak harus bisa dicoba lagi tanpa memuat ulang halaman"
+    assert "PINDAH.segarkan(" in kirim, \
+        "kartu yang selesai harus hilang seketika, bukan menunggu orang pergi"
+
+
+def test_alasan_tujuan_dimatikan_ikut_aturan_server():
+    """Kalau alasannya disusun ulang di layar, cepat atau lambat layar
+    melarang yang sebenarnya boleh — atau lebih buruk, mempersilakan yang
+    akan ditolak."""
+    import inspect
+
+    from app.services.berjalan import _tujuan_gabah
+    from app.penggilingan.gudang1.services import drying
+
+    sumber = inspect.getsource(_tujuan_gabah)
+    # Ketiganya persis penolakan `masuk_dryer`.
+    for potongan in ('d.status != "aktif"', "lot is not None",
+                     'isi and isi[0] != kondisi'):
+        assert potongan in sumber, potongan
+    penolakan = inspect.getsource(drying.masuk_dryer)
+    assert "Tidak boleh mencampur gabah basah & kering" in penolakan
+    assert "kosongkan ke silo dulu" in penolakan
+    # Kapasitas sengaja diserahkan ke server — pesannya sudah menyebut sisanya
+    # dengan tepat, dan menebaknya di layar hanya menambah tempat yang salah.
+    kode = "\n".join(b for b in sumber.split('"""')[2:])
+    assert "kapasitas" not in kode.lower()
 
 
 def test_penunjuk_buka_tutup_sebaris_dengan_judulnya():
@@ -118,3 +171,16 @@ def test_penunjuk_buka_tutup_sebaris_dengan_judulnya():
     # Ruang kanannya disisakan supaya bobot yang panjang tak menabraknya.
     ringkas = css.split("details.benda > summary {")[1].split("}")[0]
     assert "padding: 13px 32px 13px 14px" in ringkas
+
+
+def test_sorotan_hanya_kalau_memang_ada_rekomendasi():
+    """Dua tombol tersorot sekaligus bukan rekomendasi melainkan hiasan, dan
+    sorotan yang muncul di mana-mana berhenti menandakan apa pun."""
+    import inspect
+
+    from app.services.berjalan import _tujuan_gabah
+
+    sumber = inspect.getsource(_tujuan_gabah)
+    assert 'utama=(kondisi == "kering" and len(silo) == 1)' in sumber
+    # Gabah basah cuma punya satu tujuan sungguhan: mesin pengering.
+    assert 'utama=(kondisi == "basah" and not mati)' in sumber

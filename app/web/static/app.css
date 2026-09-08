@@ -850,6 +850,22 @@ details.benda[open] > summary::after { transform: rotate(-135deg); }
 }
 .pilihan__nama { font-weight: 600; font-size: 14.5px; }
 .pilihan__ket { font-size: 12.5px; color: var(--redup); }
+/* Tombol memakai bentuk yang sama dengan tautannya — dari sisi orang yang
+   menekannya, keduanya "pilihan di dalam kartu"; bedanya cuma satu menyeberang
+   ke layar lain dan satu lagi tidak. Warisan tombol dibatalkan supaya
+   bentuknya tak berubah. */
+button.pilihan__satu {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+}
+/* Yang tak boleh ditekan tetap DITAMPILKAN berikut alasannya. Tujuan yang
+   hilang diam-diam membuat orang mengira mesinnya tak ada, lalu mencarinya
+   di layar lain sampai lelah. */
+.pilihan__satu--mati {
+  cursor: not-allowed; opacity: .55;
+  background: transparent; border-style: dashed;
+}
+.pilihan__satu--mati .pilihan__ket { color: var(--hati); }
+.pilihan__satu--jalan { opacity: .6; cursor: progress; }
 .pilihan__satu--utama .pilihan__ket { color: rgba(8, 19, 26, .72); }
 
 /* Daftar lengkap 11 aksi — tetap ada, tak lagi memenuhi layar. */
