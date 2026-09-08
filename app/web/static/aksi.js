@@ -20,73 +20,45 @@
   }
 
   /* ── Kabar hasil ──
-     Pesan dari server bukan satu kalimat, melainkan satu HASIL diikuti nol
-     atau beberapa PERINGATAN — dan sebelumnya ketiganya dijejalkan jadi satu
-     paragraf berwarna hijau. Peringatan yang diwarnai seperti keberhasilan
-     berhenti terbaca sebagai peringatan; dan `*PGR-…*` ikut tercetak apa
-     adanya karena penandanya berasal dari kosakata Telegram.
+     Cukup BERHASIL atau GAGAL, atas keputusan pemilik. Sebelumnya seluruh
+     kalimat server ditumpahkan ke sini — hasil berikut peringatannya — dan
+     hasilnya sebuah paragraf yang menutupi layar setiap kali orang menekan
+     satu tombol.
 
-     Jadi pesannya dipecah per baris: yang pertama hasilnya, yang berawalan
-     ⚠️ peringatannya, masing-masing dengan barisnya sendiri dan warnanya
-     sendiri. Yang membawa peringatan bertahan lebih lama di layar — kalimat
-     yang perlu dibaca tak boleh hilang secepat kalimat yang cuma
-     membenarkan. */
+     Yang membuatnya cukup: sejak lembar aksinya menutup, LAYARNYA sendiri
+     digambar ulang. Ke mana gabahnya masuk, berapa kadar airnya sekarang,
+     kartu mana yang hilang — semuanya sudah terbaca di tempat aslinya. Kabar
+     ini tinggal memastikan bahwa yang ditekan memang tersimpan.
+
+     Gagal tetap membawa SEBABNYA. "Gagal" tanpa sebab tak bisa ditindaklanjuti
+     — orangnya hanya tahu bahwa ia harus mencoba lagi, tanpa tahu apa yang
+     harus diubah. */
   function kabar(pesan, jenis) {
     var t = $("kabar");
-    var baris = String(pesan == null ? "" : pesan).split("\n")
-      .map(function (b) { return b.trim(); })
-      .filter(Boolean);
-    if (!baris.length) { return; }
-
-    var IKON = { ok: "✓", err: "!" };
-    var awal = baris[0].replace(/^[✓✔✅]\s*/, "");
-    var catatan = baris.slice(1);
-    var adaPeringatan = false;
-
-    function rapi(teks) {
-      /* `*tebal*` — kosakata Telegram — jadi tebal sungguhan. Diloloskan
-         dulu: pesannya disusun server, tetapi ia memuat nama pemasok dan
-         kode yang datang dari orang. */
-      return esc(teks).replace(/\*([^*]+)\*/g, "<b>$1</b>");
+    var teks;
+    if (jenis === "err") {
+      /* Sebab dari server sudah satu kalimat; awalannya saja yang dibuang
+         supaya tak ada dua penanda berturut-turut. */
+      teks = String(pesan == null ? "" : pesan)
+        .split("\n")[0].replace(/^[⚠️!✗×]\s*/, "").trim() || "Gagal disimpan";
+    } else {
+      teks = "Tersimpan";
     }
-
-    var html = '<div class="kabar__utama">'
+    t.innerHTML = '<div class="kabar__utama">'
       + '<span class="kabar__ikon" aria-hidden="true">'
-      + (IKON[jenis] || "•") + "</span>"
-      + '<span class="kabar__teks">' + rapi(awal) + "</span></div>";
-
-    if (catatan.length) {
-      html += '<div class="kabar__catatan">';
-      catatan.forEach(function (b) {
-        var hati = /^[⚠️!]/.test(b);
-        var jeda = /^⏸/.test(b);
-        if (hati) { adaPeringatan = true; }
-        html += '<div class="kabar__nota' + (hati ? " kabar__nota--hati" : "") + '">'
-          + '<span class="kabar__ikon" aria-hidden="true">'
-          + (hati ? "⚠" : jeda ? "⏸" : "·") + "</span>"
-          + '<span class="kabar__teks">'
-          + rapi(b.replace(/^(⚠️|⏸|!)\s*/, "")) + "</span></div>";
-      });
-      html += "</div>";
-    }
-
-    t.innerHTML = html;
+      + (jenis === "err" ? "!" : "\u2713") + "</span>"
+      + '<span class="kabar__teks">' + esc(teks) + "</span></div>";
     t.className = "kabar" + (jenis ? " kabar--" + jenis : "");
     t.style.display = "block";
-    /* Ditekan menutupnya — yang sudah membacanya tak perlu menunggu. */
     t.onclick = function () { t.style.display = "none"; clearTimeout(t._t); };
-    /* Umurnya mengikuti seberapa penting ia dibaca, dan urutannya pernah
-       terbalik: galat — satu-satunya kabar yang MENGHENTIKAN pekerjaan dan
-       menuntut tindakan — justru yang paling cepat hilang. Kini galat
-       menetap sampai ditekan atau sampai kabar berikutnya menggantikannya;
-       yang membawa peringatan bertahan lama; yang cuma membenarkan boleh
-       lewat. */
     clearTimeout(t._t);
+    /* Gagal menetap sampai ditekan: ia menghentikan pekerjaan dan menuntut
+       tindakan. Berhasil boleh lewat — layarnya sendiri sudah membuktikannya. */
     if (jenis !== "err") {
-      t._t = setTimeout(function () { t.style.display = "none"; },
-                        adaPeringatan ? 11000 : 4200);
+      t._t = setTimeout(function () { t.style.display = "none"; }, 2600);
     }
   }
+
 
   async function ambil(url) {
     var r = await fetch(url, { credentials: "same-origin" });

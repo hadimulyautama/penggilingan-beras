@@ -275,21 +275,24 @@ def test_lembar_terbuka_di_layar_tempat_tombolnya_ditekan():
         assert 'query_params.get("nilai")' in sumber, fn.__name__
 
 
-def test_kabar_memisahkan_hasil_dari_peringatan():
-    """Pemilik: popup-nya jelek sekali. Bukan cuma rupanya — pesan dari server
-    bukan satu kalimat melainkan satu HASIL diikuti beberapa PERINGATAN, dan
-    ketiganya dijejalkan jadi satu paragraf hijau. Peringatan yang diwarnai
-    seperti keberhasilan berhenti terbaca sebagai peringatan."""
+def test_kabar_cukup_berhasil_atau_gagal():
+    """Pemilik: "feedbacknya cukup berhasil atau gagal saja."
+
+    Sebelumnya seluruh kalimat server ditumpahkan ke sini — hasil berikut
+    peringatannya — dan hasilnya sebuah paragraf yang menutupi layar setiap
+    kali orang menekan satu tombol. Yang membuatnya cukup: sejak lembar
+    aksinya menutup, LAYARNYA digambar ulang, jadi apa yang terjadi sudah
+    terbaca di tempat aslinya.
+    """
     fn = AKSI.split("function kabar(pesan, jenis)")[1].split("\n  }")[0]
-    assert 'split("\\n")' in fn, "dipecah per baris, bukan satu blok"
-    assert "kabar__utama" in fn and "kabar__nota" in fn
-    assert "kabar__nota--hati" in fn, "peringatan punya warnanya sendiri"
-    # `*tebal*` — kosakata Telegram — tak boleh tercetak apa adanya.
-    assert "\\\\*([^*]+)\\\\*" in fn.replace("\\", "\\\\") or "*([^*]+)*" in fn
-    assert "<b>$1</b>" in fn
-    # Diloloskan: pesannya disusun server, tetapi memuat nama pemasok & kode
-    # yang datang dari orang.
-    assert "esc(teks)" in fn
+    assert '"Tersimpan"' in fn, "berhasil cukup satu kata"
+    assert "kabar__nota" not in fn, "peringatan tak lagi ditumpahkan ke sini"
+    # Gagal TETAP membawa sebabnya — "Gagal" tanpa sebab tak bisa
+    # ditindaklanjuti; orangnya hanya tahu harus mencoba lagi, tanpa tahu
+    # apa yang harus diubah.
+    assert 'jenis === "err"' in fn
+    assert 'split("\\n")[0]' in fn
+    assert "esc(teks)" in fn, "sebab dari server memuat nama & kode dari orang"
 
 
 def test_galat_tidak_hilang_lebih_cepat_dari_yang_lain():
@@ -298,10 +301,11 @@ def test_galat_tidak_hilang_lebih_cepat_dari_yang_lain():
     hilang, 4,2 detik, sementara peringatan bertahan 11 detik."""
     fn = AKSI.split("function kabar(pesan, jenis)")[1].split("\n  }")[0]
     assert 'if (jenis !== "err")' in fn, "galat tak berumur; ia menunggu ditekan"
-    assert "adaPeringatan ? 11000 : 4200" in fn
     # Dan bisa ditutup dengan menekannya — yang sudah membaca tak perlu menunggu.
     assert "t.onclick" in fn
 
+    # Bentuknya pun dibedakan: pil untuk berhasil, kotak untuk gagal. Dua
+    # kabar berbentuk sama tertukar di sudut mata.
     css = (AKAR / "app/web/static/app.css").read_text()
-    blok = css.split(".kabar {")[1].split("}")[0]
-    assert "left: 12px" in blok and "right: 12px" in blok, "selebar layar, bukan kolom sempit"
+    assert "border-radius: 999px" in css.split(".kabar {")[1].split("}")[0]
+    assert "border-radius: 12px" in css.split(".kabar--err {")[1].split("}")[0]
