@@ -159,7 +159,13 @@ def test_data_uji_dibuat_lewat_endpoint_bukan_insert():
 
     sumber = inspect.getsource(data_uji.isi)
     assert "ASGITransport" in sumber, "memanggil aplikasinya sendiri, tanpa jaringan"
-    assert "/miniapp/actions/gabah-masuk" in sumber
+    # Alamatnya dirangkai di satu tempat (`kirim`/`daftar`), jadi yang
+    # diperiksa nama aksinya — bukan alamat utuh yang kini tak pernah
+    # ditulis lengkap.
+    assert '/miniapp/actions/{alamat}' in sumber
+    for aksi in ("gabah-masuk", "mulai-pengeringan", "kadar-air", "mulai-giling",
+                 "selesai-giling", "qc-giling", "verify-gabah", "hentikan-proses"):
+        assert f'"{aksi}"' in sumber, aksi
     # Satu-satunya INSERT langsung: tiket timbang, milik aplikasi lain.
     insert = inspect.getsource(data_uji)
     assert insert.count("INSERT INTO") == 2, "hanya pemasok & tiket timbang"
