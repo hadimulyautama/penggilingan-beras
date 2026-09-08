@@ -102,3 +102,19 @@ def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
     assert "<details" in blok and "<summary>" in blok
     assert 'class="pilihan"' in blok
     assert "{{ alamat }}?buka={{ id }}" in blok
+
+
+def test_penunjuk_buka_tutup_sebaris_dengan_judulnya():
+    """Dulu diapungkan ke kanan, dan apungan mengikuti BARIS TERAKHIR isi
+    kartu — jadi pada kartu tinggi ia melorot ke bawah, jauh dari judul yang
+    sebenarnya ia jelaskan. Penanda yang meleset terbaca sebagai cacat meski
+    tak ada yang bisa menyebut apa yang salah."""
+    css = (AKAR / "app/web/static/app.css").read_text()
+    for kelas in ("benda", "padat"):
+        blok = css.split(f"details.{kelas} > summary::after {{")[1].split("}")[0]
+        assert "position: absolute" in blok, kelas
+        assert "float" not in blok, f"{kelas}: apungan mengikuti baris terakhir"
+        assert "width: 7px" in blok, f"{kelas}: ukurannya harus sama di kedua kartu"
+    # Ruang kanannya disisakan supaya bobot yang panjang tak menabraknya.
+    ringkas = css.split("details.benda > summary {")[1].split("}")[0]
+    assert "padding: 13px 32px 13px 14px" in ringkas

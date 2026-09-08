@@ -725,10 +725,12 @@ details.padat > summary::-webkit-details-marker { display: none; }
 /* Ditempatkan mutlak, bukan diapungkan: `summary`-nya kotak grid, dan apungan
    tak berlaku pada anak grid — penunjuknya akan hilang tanpa jejak. */
 details.padat > summary::after {
-  content: ""; position: absolute; right: 13px; top: 17px;
-  width: 8px; height: 8px;
-  border-right: 2px solid var(--redup-2); border-bottom: 2px solid var(--redup-2);
-  transform: rotate(45deg); transition: transform .15s ease;
+  content: ""; position: absolute; right: 13px; top: 18px;
+  width: 7px; height: 7px;
+  border-right: 1.5px solid var(--redup-2);
+  border-bottom: 1.5px solid var(--redup-2);
+  transform: rotate(45deg); transform-origin: 60% 60%;
+  transition: transform .15s ease;
 }
 details.padat[open] > summary::after { transform: rotate(-135deg); }
 details.padat .pilihan { padding: 0 12px 12px; }
@@ -813,16 +815,28 @@ details.padat .pilihan { padding: 0 12px 12px; }
 
 /* Benda bercabang: dibentangkan DI TEMPAT. Lembar melayang sudah dimiliki
    aksi.js, dan dua pemilik untuk satu elemen selalu berakhir buruk. */
-details.benda { display: block; padding: 0; }
+details.benda { display: block; padding: 0; position: relative; }
 details.benda > summary {
-  list-style: none; cursor: pointer; padding: 13px 14px;
+  list-style: none; cursor: pointer;
+  /* Ruang kanan disisakan untuk penunjuknya, supaya angka besar di baris
+     judul tak pernah bertabrakan dengannya betapapun panjang bobotnya. */
+  padding: 13px 32px 13px 14px;
   display: block; min-height: var(--sentuh);
 }
 details.benda > summary::-webkit-details-marker { display: none; }
+/* ── Penunjuk buka-tutup ──
+   Dulu diapungkan ke kanan. Apungan mengikuti BARIS TERAKHIR isi kartu,
+   jadi pada kartu tinggi — yang punya fakta, rincian batch, dan kepingan
+   fase — ia melorot ke bawah, jauh dari judul yang sebenarnya ia jelaskan.
+   Ditempatkan mutlak, sebaris dengan judulnya, dan dikecilkan: ia penanda
+   bahwa kartunya bisa dibuka, bukan salah satu isinya. */
 details.benda > summary::after {
-  content: ""; float: right; width: 9px; height: 9px; margin: 5px 3px 0 0;
-  border-right: 2px solid var(--redup-2); border-bottom: 2px solid var(--redup-2);
-  transform: rotate(45deg); transition: transform .15s ease;
+  content: ""; position: absolute; right: 15px; top: 23px;
+  width: 7px; height: 7px;
+  border-right: 1.5px solid var(--redup-2);
+  border-bottom: 1.5px solid var(--redup-2);
+  transform: rotate(45deg); transform-origin: 60% 60%;
+  transition: transform .15s ease;
 }
 details.benda[open] > summary::after { transform: rotate(-135deg); }
 .pilihan { display: grid; gap: 7px; padding: 0 14px 14px; }
