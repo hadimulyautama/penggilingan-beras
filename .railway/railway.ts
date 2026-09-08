@@ -36,12 +36,12 @@ export default defineRailway(() => {
     source: github("hadimulyautama/penggilingan-beras", { checkSuites: false }),
     build: { buildEnvironment: "V3", builder: "DOCKERFILE", watchPatterns: ["app/**", "migrations/**", "docker/**", "Dockerfile", "requirements.txt"] },
     replicas: { "asia-southeast1-eqsg3a": 1 },
-    env: { ADMIN_NAME: preserve(), ADMIN_SANDI_AWAL: preserve(), ADMIN_TELEGRAM_ID: preserve(), AGENT_MODEL: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), BOT_ADMIN_TOKEN: preserve(), BOT_GUDANG1_TOKEN: preserve(), BOT_GUDANG2_TOKEN: preserve(), CLAUDE_MODEL: preserve(), DATABASE_URL: preserve(), GAJIHUB_API_KEY: preserve(), GDRIVE_OAUTH_CLIENT_ID: preserve(), GDRIVE_OAUTH_CLIENT_SECRET: preserve(), GDRIVE_OAUTH_REFRESH_TOKEN: preserve(), GDRIVE_ROOT_FOLDER_ID: preserve(), GMAIL_MAILBOXES: preserve(), GMAIL_OAUTH_CLIENT_ID: preserve(), GMAIL_OAUTH_CLIENT_SECRET: preserve(), GMAIL_PRIBADI2_EMAIL: preserve(), GMAIL_PRIBADI2_REFRESH_TOKEN: preserve(), GMAIL_PRIBADI_EMAIL: preserve(), GMAIL_PRIBADI_REFRESH_TOKEN: preserve(), GMAIL_SA_JSON: preserve(), INTERNAL_API_TOKEN: preserve(), KLEDO_API_KEY: preserve(), MINIAPP_MODEL: preserve(), MODE_UJI: preserve(), PRODUKSI_API_TOKEN: preserve(), PRODUKSI_API_URL: preserve(), SECRET_KEY: preserve(), VOYAGE_API_KEY: preserve() },
+    env: { ADMIN_NAME: preserve(), ADMIN_SANDI_AWAL: preserve(), ADMIN_TELEGRAM_ID: preserve(), AGENT_MODEL: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), CLAUDE_MODEL: preserve(), DATABASE_URL: preserve(), INTERNAL_API_TOKEN: preserve(), MINIAPP_MODEL: preserve(), MODE_UJI: preserve(), PRODUKSI_API_TOKEN: preserve(), PRODUKSI_API_URL: preserve(), SECRET_KEY: preserve(), },
   });
   const posProduksiUji = service("pos-produksi-uji", {
     source: github("hadimulyautama/penggilingan-beras", { branch: "uji", checkSuites: false }),
     replicas: { "sfo": 1 },
-    env: { ADMIN_NAME: preserve(), ADMIN_TELEGRAM_ID: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), BOT_ADMIN_TOKEN: preserve(), BOT_GUDANG1_TOKEN: preserve(), BOT_GUDANG2_TOKEN: preserve(), DATABASE_URL: preserve(), MODE_UJI: preserve(), SECRET_KEY: preserve() },
+    env: { ADMIN_NAME: preserve(), ADMIN_TELEGRAM_ID: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), DATABASE_URL: preserve(), MODE_UJI: preserve(), SECRET_KEY: preserve() },
   });
 
   return project("penggilingan-beras", {
