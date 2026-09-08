@@ -167,13 +167,15 @@ def test_silo_siap_giling_tak_dihitung_lencana():
     duduk di `transit`: gabahnya sudah punya tempat, jadi ia bukan antrean —
     tetapi tak ada mesin yang menyala untuknya, jadi ia bukan pula berjalan.
     """
+    import re
+
     sumber = inspect.getsource(berjalan.untuk_gudang1)
-    # Potongan yang membuat baris silo — diperiksa sebagai satu blok, bukan
-    # seluruh fungsi: `b.menunggu.append` memang dipakai di tempat lain.
-    blok = sumber[sumber.index("huruf = silo.nama_silo"):]
-    blok = blok[:blok.index("))") + 2]
-    assert "b.transit.append" in blok
-    assert "b.menunggu.append" not in blok
+    # Dicari `append` PERTAMA sesudah baris silo mulai disusun — bukan
+    # dipotong pada tanda kurung, yang bergeser tiap kali kodenya bertambah.
+    sisa = sumber[sumber.index("huruf = silo.nama_silo"):]
+    cocok = re.search(r"b\.(menunggu|berjalan|transit)\.append", sisa)
+    assert cocok, "baris silo tak masuk golongan mana pun"
+    assert cocok.group(1) == "transit"
 
 
 def test_benda_membawa_fase_dan_pilihan():

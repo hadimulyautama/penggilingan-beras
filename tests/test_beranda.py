@@ -149,3 +149,43 @@ def test_transit_sampai_ke_layarnya():
 
     sumber = inspect.getsource(svc.untuk)
     assert sumber.count("b.transit += ") == 2, "operator DAN staff sama-sama perlu"
+
+
+def test_tiap_kartu_menyebut_asal_usul_barangnya():
+    """Pemilik: tiap kartu harus menyebut asal-usul barangnya — minimal nama
+    pemasok dan tanggal masuk.
+
+    Kode batch saja tak memberi tahu apa pun tentang gabah SIAPA yang sedang
+    di dalam mesin, dan begitu ada keluhan mutu, pemasok dan tanggal masuk
+    itulah dua hal pertama yang dicari. Menuntut orang membuka laporan untuk
+    mengetahuinya berarti pertanyaan itu tak pernah terjawab di lapangan.
+    """
+    import inspect
+
+    from app.services import berjalan as svc
+
+    sumber = inspect.getsource(svc)
+    assert "async def _asal(" in sumber
+    fn = inspect.getsource(svc._asal)
+    assert "Supplier.nama_supplier" in fn and "tanggal_pembelian" in fn
+    assert 'f"masuk {_tgl(tgl)}"' in fn
+
+    # Dipakai oleh SETIAP jenis kartu yang membawa barang: mesin pengering,
+    # pengeringan, pendinginan, lot dingin, silo, giling, dan kerja meja.
+    g1 = inspect.getsource(svc.untuk_gudang1)
+    assert g1.count("await _asal(") >= 5, "ada kartu yang belum menyebut asalnya"
+    assert "_pemasok_ringkas(" in g1
+    assert "await _asal(" in inspect.getsource(svc.untuk_staff)
+
+
+def test_beranda_tidak_ikut_berubah():
+    """Pemilik: "yang di beranda sudah sempurna, jangan disentuh lagi."
+
+    Asal-usul ditaruh di `anak` dan `sub` — keduanya TIDAK dirender kartu
+    padat, jadi Beranda tetap seperti sebelumnya. Yang dirender di sana
+    `judul`, `utama`, dan `ringkas`.
+    """
+    makro = (TPL / "_benda.html").read_text()
+    padat = makro.split("{% macro padat(b) -%}")[1].split("{%- endmacro %}")[0]
+    assert "b.anak" not in padat and "b.fakta" not in padat
+    assert "b.ringkas or b.sub or b.isi" in padat
