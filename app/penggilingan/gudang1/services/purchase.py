@@ -18,26 +18,6 @@ from app.services.codegen import next_purchase_batch_code
 from app.services.notification import create_notification
 
 
-class DailyLimitReached(Exception):
-    """Batas maksimal batch pembelian gabah per hari terlampaui.
-
-    Dulu dilempar dengan ANGKA batasnya sebagai satu-satunya argumen, dan
-    `galat()` menerjemahkan argumen pertama jadi pesan di layar — jadi
-    operator yang mencatat truk keempat hari itu melihat sebuah lembar galat
-    bertuliskan "3", tanpa satu kata pun. Angkanya tetap dibawa di `.batas`
-    untuk yang perlu menghitung; yang naik ke layar kalimat.
-    """
-
-    def __init__(self, batas: int):
-        self.batas = batas
-        super().__init__(
-            f"Sudah {batas} batch gabah tercatat hari ini — itu batas hariannya. "
-            "Tiketnya tetap menunggu di antrean dan bisa dicatat besok. "
-            "Bila batas ini memang terlalu rendah, ia disetel di server "
-            "(MAX_PURCHASE_BATCH_PER_DAY), bukan di layar."
-        )
-
-
 async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier, bool]:
     """Cari supplier aktif (case-insensitive). Kembalikan (supplier, dibuat_baru)."""
     nama = nama.strip()
@@ -85,11 +65,14 @@ async def create_purchase_batch(
     """Buat batch pembelian gabah + audit + notifikasi verifikasi harga.
 
     `tanggal`/`jam` opsional untuk backdate (isi mundur); default sekarang.
-    Melempar DailyLimitReached jika sudah mencapai batas harian.
+
+    TIDAK ADA batas jumlah batch per hari. Dulu ada — tiga — dan pemilik
+    menegaskan batas itu tak pernah ada dalam pekerjaannya: berapa truk yang
+    datang hari itu ditentukan panen, bukan oleh aplikasi. Yang lebih buruk,
+    batasnya menolak dengan melemparkan ANGKA-nya saja, jadi operator truk
+    keempat berhenti bekerja di depan lembar galat bertuliskan "3".
     """
     now = input_time(tanggal, jam)  # BackdateError bila di masa depan
-    if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
-        raise DailyLimitReached(settings.max_purchase_batch_per_day)
 
     supplier, created = await find_or_create_supplier(db, nama_supplier)
 
@@ -178,9 +161,6 @@ async def create_purchase_batch_dari_timbang(
     now = tiket.get("timbang1_waktu") or input_time(tanggal, jam)
     if tanggal or jam:            # operator menyebut waktunya sendiri — itu menang
         now = input_time(tanggal, jam)
-    if await count_batches_on(db, now.date()) >= settings.max_purchase_batch_per_day:
-        raise DailyLimitReached(settings.max_purchase_batch_per_day)
-
     # Supplier: pakai yang tertaut di tiket bila ada; selain itu cari/buat dari nama pihak.
     if tiket.get("supplier_id"):
         supplier = await db.get(Supplier, tiket["supplier_id"])

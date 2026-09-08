@@ -44,14 +44,14 @@ def test_akun_dan_alat_dipertahankan():
 
 def test_tak_memakai_cascade():
     """CASCADE-lah yang dulu menyapu tiket. Ia tak boleh kembali."""
-    kode = kode_saja(mode_uji.hapus)
+    kode = kode_saja(mode_uji._kosongkan)
     assert "CASCADE" not in kode.upper()
     assert "DELETE FROM" in kode
 
 
 def test_urutan_hapus_dari_metadata_bukan_daftar_tangan():
     """Daftar yang ditulis tangan akan basi pada tabel berikutnya."""
-    assert "Base.metadata.sorted_tables" in kode_saja(mode_uji.hapus)
+    assert "Base.metadata.sorted_tables" in kode_saja(mode_uji._kosongkan)
 
 
 @pytest.mark.asyncio
@@ -93,7 +93,7 @@ def test_nomor_urut_hanya_untuk_tabel_berkolom_id():
     from app.database import Base
     from app.web import mode_uji
 
-    sumber = inspect.getsource(mode_uji.hapus)
+    sumber = inspect.getsource(mode_uji._kosongkan)
     assert 'berid = {t.name for t in Base.metadata.sorted_tables if "id" in t.columns}' in sumber
     assert "for nama in [n for n in urut if n in berid]:" in sumber
 
@@ -101,3 +101,66 @@ def test_nomor_urut_hanya_untuk_tabel_berkolom_id():
     # menjaga sesuatu yang tak pernah terjadi.
     tanpa_id = {t.name for t in Base.metadata.sorted_tables if "id" not in t.columns}
     assert tanpa_id, "tak ada tabel tanpa id — penjaganya jadi tak berarti"
+
+
+def test_tombol_kembalikan_data_uji():
+    """Pemilik: harus ada tombol reset agar data dummy kembali seperti awal
+    dan data entry test bisa terhapus.
+
+    Menghapus saja meninggalkan tiap layar kosong, dan sesudah itu tak ada
+    yang bisa dicoba sampai seseorang mengisinya lagi dari laptop.
+    """
+    import inspect
+    import pathlib
+
+    from app.web import mode_uji
+
+    assert hasattr(mode_uji, "ulangi")
+    sumber = inspect.getsource(mode_uji.ulangi)
+    assert "_wajib_mode_uji()" in sumber, "di luar mode uji tak boleh ada sama sekali"
+    assert "akun.is_admin" in sumber
+    assert "await _kosongkan()" in sumber, "menghapus dulu, baru mengisi"
+    assert "data_uji.isi(akun)" in sumber
+
+    # Kalimatnya BERBEDA dari tombol hapus. Dua tombol yang menuntut kalimat
+    # sama adalah dua tombol yang bisa tertukar justru saat orangnya sudah
+    # hafal mengetiknya.
+    assert mode_uji.KALIMAT_ULANG != mode_uji.KALIMAT
+    assert f'"{mode_uji.KALIMAT_ULANG}"' in sumber or "KALIMAT_ULANG" in sumber
+
+    html = (pathlib.Path(__file__).resolve().parents[1]
+            / "app/web/templates/mode_uji.html").read_text()
+    assert 'action="/pengaturan/mode-uji/ulangi"' in html
+    assert "Kembalikan data uji" in html
+
+
+def test_satu_isi_dipakai_skrip_dan_tombol():
+    """Kalau skripnya punya salinan pengisiannya sendiri, data yang dibuat
+    dari laptop dan data yang dibuat dari layar akan berbeda — dan yang diuji
+    orang jadi bukan yang dipakai orang."""
+    import pathlib
+
+    from app.services import data_uji
+
+    assert hasattr(data_uji, "isi")
+    skrip = (pathlib.Path(__file__).resolve().parents[1]
+             / "scripts/isi_dummy.py").read_text()
+    assert "data_uji.isi(akun)" in skrip
+    assert "IZIN_DUMMY" in skrip, "skripnya tetap berpagar"
+
+
+def test_data_uji_dibuat_lewat_endpoint_bukan_insert():
+    """Baris yang disuntikkan langsung bisa saja mustahil menurut aturan
+    aplikasinya sendiri, dan data uji yang mustahil membuat layarnya terlihat
+    benar padahal menampilkan keadaan yang tak pernah bisa terjadi."""
+    import inspect
+
+    from app.services import data_uji
+
+    sumber = inspect.getsource(data_uji.isi)
+    assert "ASGITransport" in sumber, "memanggil aplikasinya sendiri, tanpa jaringan"
+    assert "/miniapp/actions/gabah-masuk" in sumber
+    # Satu-satunya INSERT langsung: tiket timbang, milik aplikasi lain.
+    insert = inspect.getsource(data_uji)
+    assert insert.count("INSERT INTO") == 2, "hanya pemasok & tiket timbang"
+    assert "INSERT INTO timbangan_transaksi" in insert

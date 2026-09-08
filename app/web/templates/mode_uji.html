@@ -79,7 +79,45 @@
   </p>
 </div>
 
+{% if langkah %}
+<div class="kartu" style="border-color:var(--aman)">
+  <p style="margin:0 0 6px"><b>Data uji dikembalikan seperti semula.</b></p>
+  {% for l in langkah %}
+    <div class="bantu" style="font-family:var(--mono);font-size:12.5px">{{ l }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Dua tombol, dan yang PERTAMA yang biasa dipakai ──
+   Saat menguji, yang dibutuhkan berulang kali adalah kembali ke keadaan awal
+   — bukan layar kosong. Menghapus tanpa mengisi meninggalkan tiap layar
+   kosong, dan sesudah itu tak ada yang bisa dicoba sampai seseorang
+   mengisinya lagi dari laptop. #}
+<div>
+  <span class="lbl">Kembalikan seperti semula</span>
+  <p class="bantu" style="margin:6px 0 0">
+    Menghapus seluruh catatan pekerjaan, lalu mengisinya lagi dengan data
+    karangan: beberapa tiket di antrean, gabah di mesin pengering berikut
+    bacaan kadar airnya, silo terisi, satu giling berjalan, dan harga yang
+    belum diverifikasi. Pemasoknya berawalan <b>(UJI)</b>.
+  </p>
+</div>
+
+<form method="post" action="/pengaturan/mode-uji/ulangi" class="grup">
+  <label class="lbl" for="kalimat-ulang">Ketik <b>{{ kalimat_ulang }}</b> untuk melanjutkan</label>
+  <input class="fld" id="kalimat-ulang" name="kalimat" autocomplete="off"
+         autocapitalize="characters" placeholder="{{ kalimat_ulang }}">
+  <button class="btn btn--utama" type="submit">Kembalikan data uji</button>
+</form>
+
 {% if baris %}
+<div style="margin-top:22px">
+  <span class="lbl">Atau kosongkan saja</span>
+  <p class="bantu" style="margin:6px 0 0">
+    Tanpa diisi apa pun sesudahnya. Dipakai saat beta sungguhan dimulai —
+    bukan saat menguji.
+  </p>
+</div>
 <form method="post" action="/pengaturan/mode-uji" class="grup">
   <label class="lbl" for="kalimat">Ketik <b>{{ kalimat }}</b> untuk melanjutkan</label>
   <input class="fld" id="kalimat" name="kalimat" autocomplete="off"

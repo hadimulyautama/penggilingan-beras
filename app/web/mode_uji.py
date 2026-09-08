@@ -147,6 +147,7 @@ async def _konteks(akun, **tambahan):
         tautan = await tautan_masuk(db)
     return dict(akun=akun, kembali="/pengaturan", baris=await _jumlah_baris(),
                 dipertahankan=sorted(DIPERTAHANKAN), kalimat=KALIMAT,
+                kalimat_ulang=KALIMAT_ULANG,
                 dilepas=[t for t in tautan if not t["wajib"]],
                 penghalang=[t for t in tautan if t["wajib"]], **tambahan)
 
@@ -159,16 +160,14 @@ async def halaman(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     return render(request, "mode_uji.html", **await _konteks(akun))
 
 
-@router.post("/pengaturan/mode-uji")
-async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
-    _wajib_mode_uji()
-    if not akun.is_admin:
-        raise HTTPException(403, "Hanya Admin ke atas.")
-    form = await request.form()
-    if (form.get("kalimat") or "").strip() != KALIMAT:
-        return render(request, "mode_uji.html",
-                      **await _konteks(akun, galat=f"Ketik persis: {KALIMAT}"))
+async def _kosongkan() -> str | None:
+    """Hapus seluruh catatan pekerjaan. → kalimat galat, atau None bila beres.
 
+    Dipisah dari rutenya karena DUA tombol memakainya: "Hapus data uji" dan
+    "Kembalikan data uji". Yang kedua menghapus lalu mengisi lagi — kalau
+    penghapusannya disalin, cepat atau lambat salah satunya akan menyisakan
+    tabel yang dilupakan yang lain.
+    """
     tabel = _tabel_dihapus()
     async with SessionLocal() as db:
         tautan = await tautan_masuk(db)
@@ -177,9 +176,8 @@ async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
             # Menolak, bukan memaksa. Kolom wajib isi berarti tabel di luar
             # sana akan rusak — dan tabel itu milik aplikasi lain.
             sebut = ", ".join(f"{t['dari']}.{t['kolom']} → {t['ke']}" for t in wajib)
-            return render(request, "mode_uji.html", **await _konteks(
-                akun, galat=("Dibatalkan: ada tautan wajib isi dari luar — "
-                             f"{sebut}. Tabel tujuannya harus dipertahankan.")))
+            return ("Dibatalkan: ada tautan wajib isi dari luar — "
+                    f"{sebut}. Tabel tujuannya harus dipertahankan.")
 
         # Lepas dulu tautan dari luar. Untuk tiket timbang inilah justru hasil
         # yang diinginkan: tiketnya kembali bebas dan bisa dicatat ulang.
@@ -225,4 +223,51 @@ async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     # Daftar acuan & alat dipulihkan kalau ada yang belum ada; idempoten.
     from app.services.seed import seed_master
     await seed_master()
+    return None
+
+
+@router.post("/pengaturan/mode-uji")
+async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    _wajib_mode_uji()
+    if not akun.is_admin:
+        raise HTTPException(403, "Hanya Admin ke atas.")
+    form = await request.form()
+    if (form.get("kalimat") or "").strip() != KALIMAT:
+        return render(request, "mode_uji.html",
+                      **await _konteks(akun, galat=f"Ketik persis: {KALIMAT}"))
+
+    tertahan = await _kosongkan()
+    if tertahan:
+        return render(request, "mode_uji.html", **await _konteks(akun, galat=tertahan))
     return RedirectResponse("/pengaturan?uji=bersih", status_code=303)
+
+
+#: Kalimat kedua, dan sengaja BERBEDA dari yang pertama. Dua tombol yang
+#: menuntut kalimat sama adalah dua tombol yang bisa tertukar justru saat
+#: orangnya sudah hafal mengetiknya.
+KALIMAT_ULANG = "ULANGI DATA UJI"
+
+
+@router.post("/pengaturan/mode-uji/ulangi")
+async def ulangi(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    """Kosongkan, lalu isi lagi dengan data dummy — kembali ke keadaan awal.
+
+    Menghapus saja meninggalkan setiap layar kosong, dan sesudah itu tak ada
+    yang bisa dicoba sampai seseorang mengisinya lagi dari laptop. Yang
+    berguna saat menguji bukan tombol hapus melainkan tombol kembali ke awal.
+    """
+    _wajib_mode_uji()
+    if not akun.is_admin:
+        raise HTTPException(403, "Hanya Admin ke atas.")
+    form = await request.form()
+    if (form.get("kalimat") or "").strip() != KALIMAT_ULANG:
+        return render(request, "mode_uji.html",
+                      **await _konteks(akun, galat=f"Ketik persis: {KALIMAT_ULANG}"))
+
+    tertahan = await _kosongkan()
+    if tertahan:
+        return render(request, "mode_uji.html", **await _konteks(akun, galat=tertahan))
+
+    from app.services import data_uji
+    langkah = await data_uji.isi(akun)
+    return render(request, "mode_uji.html", **await _konteks(akun, langkah=langkah))

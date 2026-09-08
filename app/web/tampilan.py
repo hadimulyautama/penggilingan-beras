@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "64"
+VERSI = "65"
 
 templates.env.globals["VERSI"] = VERSI
 

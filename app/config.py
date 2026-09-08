@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     # Aplikasi
     app_timezone: str = "Asia/Jakarta"
     undo_window_minutes: int = 15
-    max_purchase_batch_per_day: int = 3
 
     # Token rahasia untuk buka dashboard web (/dashboard?token=...). Kosong =
     # dashboard web dinonaktifkan (hanya versi Telegram yang jalan).

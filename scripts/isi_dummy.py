@@ -151,76 +151,28 @@ async def _tiket(sup_id: dict[str, int]) -> None:
 
 
 async def main() -> None:
-    from app.main import app
+    """Siapkan orang & alat, lalu serahkan pengisiannya ke layanan yang sama
+    dengan yang dipakai tombol "Kembalikan data uji" di layar Mode Uji.
 
-    babak("0. Orang, alat, dan tiket timbang")
-    sup_id = await _orang_dan_pabrik()
-    await _tiket(sup_id)
-    cek("pemasok, akun & tiket siap", True, f"{len(PEMASOK)} pemasok · {len(TIKET)} tiket")
+    Dua jalan masuk, satu isi. Kalau skripnya punya salinannya sendiri, data
+    yang dibuat dari laptop dan data yang dibuat dari layar akan berbeda —
+    dan yang diuji orang jadi bukan yang dipakai orang.
+    """
+    from sqlalchemy import select
 
-    tr = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=tr, base_url="http://dummy",
-                                 follow_redirects=False) as op:
-        r = await op.post("/masuk", data={"username": "uji_operator", "sandi": SANDI})
-        if not cek("operator masuk", r.status_code == 303, f"HTTP {r.status_code}"):
-            return
+    from app.services import data_uji
 
-        babak("1. Sebagian tiket ditindak, sebagian sengaja ditinggal di antrean")
-        tiket = (await op.get("/miniapp/actions/timbang-masuk-aktif")).json()
-        cek("tiket terbaca", len(tiket) >= 5, f"{len(tiket)} tiket")
+    babak("0. Orang & alat")
+    await _orang_dan_pabrik()
+    cek("akun & alat siap", True, f"uji_admin / uji_operator · sandi {SANDI}")
 
-        def ambil(jenis: str, n: int) -> list[dict]:
-            return [t for t in tiket if jenis.lower() in t["label"].lower()][:n]
+    async with SessionLocal() as db:
+        akun = (await db.execute(select(ProduksiAkun).where(
+            ProduksiAkun.username == "uji_admin"))).scalars().first()
 
-        # Batasnya `MAX_PURCHASE_BATCH_PER_DAY` (bawaan 3) — sengaja dihormati,
-        # bukan dinaikkan: data uji yang hanya bisa dibuat dengan melonggarkan
-        # aturan bukan gambaran hari kerja yang sungguhan.
-        #
-        # Dua basah → mesin pengering. Sisanya ditinggal supaya antrean berisi.
-        for t in ambil("basah", 2):
-            r = await op.post("/miniapp/actions/gabah-masuk",
-                              json={"timbangan_transaksi_id": t["value"],
-                                    "tujuan": "dryer:1"})
-            cek(f"gabah basah → pengering ({t['label'][:22]})", r.status_code == 200,
-                r.text[:80])
-
-        # Satu kering → silo, supaya ada yang siap digiling. Silonya dipilih
-        # dari tujuan yang DITAWARKAN server, bukan ditebak nomornya: silo di
-        # Gudang 2 bernama sama dan bernomor lain, dan menebak akan menempatkan
-        # gabah di gudang yang salah tanpa satu peringatan pun.
-        menu = {a["id"]: a for a in (await op.get("/miniapp/actions/menu")).json()}
-        tujuan_silo = [o[0] for f in menu["gabah_masuk"]["fields"]
-                       if f["name"] == "tujuan" for o in f["options"]
-                       if o[0].startswith("silo:")]
-        cek("tujuan silo ditawarkan server", bool(tujuan_silo), str(tujuan_silo))
-        for t in ambil("kering", 1):
-            r = await op.post("/miniapp/actions/gabah-masuk",
-                              json={"timbangan_transaksi_id": t["value"],
-                                    "tujuan": tujuan_silo[0]})
-            cek(f"gabah kering → {tujuan_silo[0]}", r.status_code == 200, r.text[:80])
-
-        babak("2. Satu pengeringan berjalan, dengan bacaan kadar air")
-        r = await op.post("/miniapp/actions/mulai-pengeringan",
-                          json={"target_kadar_air": 14, "mode_dryer": "20T"})
-        cek("pengeringan mulai", r.status_code == 200, r.text[:90])
-        lot = (await op.get("/miniapp/actions/drying-active")).json()
-        if lot:
-            kode = lot[0]["value"]
-            for tes in (22.4, 19.8):
-                await op.post("/miniapp/actions/kadar-air",
-                              json={"kode_lot": kode, "tes_1": tes, "tes_2": tes + .2,
-                                    "tes_3": tes - .1, "tes_4": tes + .1,
-                                    "indikator": tes - 1.2})
-            cek("dua bacaan kadar air tercatat", True, f"{kode} · 22,4% → 19,8%")
-
-        babak("3. Satu giling berjalan")
-        siap = (await op.get("/miniapp/actions/silo-siap-giling")).json()
-        if siap:
-            r = await op.post("/miniapp/actions/mulai-giling",
-                              json={"silo": siap[0]["value"]})
-            cek("giling mulai", r.status_code == 200, r.text[:90])
-        else:
-            cek("ada silo siap digiling", False, "tak ada")
+    babak("1. Mengisi data uji")
+    for baris in await data_uji.isi(akun):
+        print("  " + baris)
 
     print()
     if GAGAL:
@@ -230,7 +182,6 @@ async def main() -> None:
         sys.exit(1)
     print("\033[32mData uji siap. Masuk sebagai `uji_admin` atau `uji_operator`, "
           f"sandi `{SANDI}`.\033[0m")
-    print("Harga sengaja BELUM diverifikasi — layar Menunggu keputusan pun berisi.")
 
 
 if __name__ == "__main__":
