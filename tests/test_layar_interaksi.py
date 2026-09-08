@@ -66,3 +66,39 @@ def test_pendengar_papan_tik_tidak_menumpuk():
         keydown = teks.split('"keydown"')[0]
         assert keydown.rstrip().endswith("pasang(document,"), \
             f"{berkas}: pendengar keydown harus lewat PINDAH.pasang"
+
+
+def test_setiap_kartu_membentang_di_tempat():
+    """Pemilik: kotak yang ditekan harus membentang seperti laci, bukan
+    melemparkan lembar melayang ke depan layar.
+
+    Ketukan pertama yang artinya berbeda-beda di tiap kartu memaksa orang
+    menebak apa yang akan terjadi sebelum menekan — dan yang menebak akan
+    berhenti menekan. Jadi tiap baris yang punya tindakan wajib membawa
+    `pilihan`, sekalipun isinya cuma satu.
+    """
+    import ast
+
+    sumber = (AKAR / "app/services/berjalan.py").read_text()
+    telanjang = []
+    for simpul in ast.walk(ast.parse(sumber)):
+        if not (isinstance(simpul, ast.Call)
+                and getattr(simpul.func, "id", None) == "Baris"):
+            continue
+        kunci = {k.arg for k in simpul.keywords}
+        if "aksi" in kunci and "pilihan" not in kunci:
+            telanjang.append(f"baris {simpul.lineno}")
+    assert not telanjang, (
+        "baris ini masih melempar langsung ke lembar, bukan membentang:\n  "
+        + "\n  ".join(telanjang))
+
+
+def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
+    """Yang dibentangkan harus benar-benar bisa dikerjakan dari situ —
+    membentang lalu menyuruh orang mencari tombolnya di tempat lain lebih
+    buruk daripada tidak membentang sama sekali."""
+    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    blok = makro.split("{% if b.pilihan %}")[1].split("{% elif")[0]
+    assert "<details" in blok and "<summary>" in blok
+    assert 'class="pilihan"' in blok
+    assert "{{ alamat }}?buka={{ id }}" in blok
