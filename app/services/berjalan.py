@@ -17,7 +17,7 @@ status gudang — laporan memberi tahu, layar ini menyelesaikan.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -253,6 +253,69 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
     )).all()
     return [(f"{nama or '?'} · {kode}", _kg(kg), f"masuk {_tgl(tgl)}")
             for kode, kg, tgl, nama in baris]
+
+
+async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]:
+    """Asal-usul PK di sebuah silo Gudang 2 — dua rupa, satu aturan.
+
+    Aturan pemilik berlaku sama di sini: tiap kartu menyebut asal barangnya.
+    Bedanya PK punya dua asal. Yang buatan sendiri lahir dari satu lot giling
+    (LOT-…), dan lot itulah satu-satunya benang yang menyambungkan beras putih
+    di ujung sana kembali ke gabah dan pemasoknya. Yang beli luar membawa
+    pemasoknya sendiri (PKB-…).
+
+    Yang disebut adalah apa yang PERNAH masuk ke silo ini — berapa dan kapan —
+    bukan berapa yang masih tersisa dari masing-masing. Stok silo disimpan
+    sebagai satu jumlah, bukan lapisan, jadi sisa per lot memang tak bisa
+    dihitung; mengarangnya berarti menaruh angka yang tak bisa dipertanggung-
+    jawabkan tepat di tempat orang mencari pertanggungjawaban.
+    """
+    from app.models import InternalTransfer, PkGudang2Intake
+    from app.penggilingan.gudang2.models import PkPurchaseBatch, PkTumpukanToSilo
+
+    # Dua jalan masuk ke silo: langsung, atau lewat tumpukan. Yang lewat
+    # tumpukan bisa parsial, jadi beratnya diambil dari baris pemindahannya —
+    # bukan dari intake asalnya, yang mungkin belum seluruhnya pindah.
+    masuk: list[tuple] = []
+    for i in (await db.execute(
+        select(PkGudang2Intake)
+        .where(PkGudang2Intake.silo_id == silo_id,
+               PkGudang2Intake.tujuan.in_(["silo_a", "silo_b"]))
+    )).scalars().all():
+        masuk.append((i.tanggal_masuk, float(i.berat_kg or 0),
+                      i.internal_transfer_id, i.pk_purchase_batch_id))
+    for pindah, i in (await db.execute(
+        select(PkTumpukanToSilo, PkGudang2Intake)
+        .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
+        .where(PkTumpukanToSilo.silo_id == silo_id)
+    )).all():
+        masuk.append((pindah.tanggal, float(pindah.berat_kg or 0),
+                      i.internal_transfer_id, i.pk_purchase_batch_id))
+    if not masuk:
+        return []
+
+    lot = dict((await db.execute(
+        select(InternalTransfer.id, MillingProcess.kode_proses)
+        .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
+        .where(InternalTransfer.id.in_([m[2] for m in masuk if m[2]]))
+    )).all()) if any(m[2] for m in masuk) else {}
+    luar = {b: (kode, nama) for b, kode, nama in (await db.execute(
+        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
+        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        .where(PkPurchaseBatch.id.in_([m[3] for m in masuk if m[3]]))
+    )).all()} if any(m[3] for m in masuk) else {}
+
+    keluar = []
+    for tgl, kg, trf_id, batch_id in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
+        if trf_id and trf_id in lot:
+            judul = f"Giling sendiri · {lot[trf_id]}"
+        elif batch_id and batch_id in luar:
+            kode, nama = luar[batch_id]
+            judul = f"{nama or '?'} · {kode}"
+        else:
+            continue
+        keluar.append((judul, _kg(kg), f"masuk {_tgl(tgl)}"))
+    return keluar[:6]
 
 
 def _pemasok_ringkas(anak: list[tuple[str, str, str]]) -> str:
@@ -843,6 +906,16 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
 
     b = Berjalan()
 
+    # Kartu silo dan kartu penyosohan menanyakan silo yang SAMA. Tanpa ini
+    # asal-usulnya dikueri dua kali per silo — dan seluruh fungsi ini ikut
+    # jalan tiap kali lencana laci dihitung, yaitu di tiap halaman.
+    memo: dict[int, list[tuple[str, str, str]]] = {}
+
+    async def asal_silo(silo_id: int) -> list[tuple[str, str, str]]:
+        if silo_id not in memo:
+            memo[silo_id] = await _asal_pk(db, silo_id)
+        return memo[silo_id]
+
     # ── PK luar yang sudah diterima tetapi belum masuk silo/tumpukan ──
     #
     # "Diterima" bukan "sudah punya tempat": PK yang masuk PASTI diterima,
@@ -873,17 +946,35 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         ))
 
     # ── Penyosohan yang sedang berputar ──
+    from app.penggilingan.gudang2.models import PolishingSiloUsage
+
     for pr in (await db.execute(
         select(PolishingProcess).where(PolishingProcess.status == "proses")
         .order_by(PolishingProcess.id.desc())
     )).scalars().all():
+        # Dari silo mana ia makan — dan lewat silo itu, dari lot giling mana.
+        # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
+        # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
+        asal_pr: list[tuple[str, str, str]] = []
+        for silo_id in (await db.execute(
+            select(PolishingSiloUsage.silo_id)
+            .where(PolishingSiloUsage.polishing_process_id == pr.id)
+        )).scalars().all():
+            for a in await asal_silo(silo_id):
+                if a not in asal_pr:
+                    asal_pr.append(a)
+        pemasok_pr = _pemasok_ringkas(asal_pr)
         b.berjalan.append(Baris(
             kode=pr.kode_proses, isi="sedang disosoh",
             keadaan="catat hasil, tutup bila selesai",
             aksi="hasil_penyosohan", nilai=pr.kode_proses, fase="giling",
             sejak=pr.waktu_mulai,
-            judul="Penyosohan", sub=f"{pr.kode_proses} · mesin sosoh menyala",
-            ringkas="mesin sosoh menyala",
+            judul="Penyosohan",
+            sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
+                 else f"{pr.kode_proses} · mesin sosoh menyala"),
+            anak=asal_pr[:6],
+            ringkas=(f"menyosoh PK {pemasok_pr}" if pemasok_pr
+                     else "mesin sosoh menyala"),
             pilihan=[
                 ("hasil_penyosohan", "Perbarui hasil penyosohan",
                  "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
@@ -904,6 +995,8 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         if not kg:
             continue
         huruf = silo.nama_silo.replace("Silo ", "")
+        asal = await asal_silo(silo.id)
+        pemasok = _pemasok_ringkas(asal)
         b.transit.append(Baris(
             kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
             keadaan=("mesin sosoh sedang dipakai" if sedang
@@ -912,8 +1005,10 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             nilai=huruf, fase="silo",
             judul=f"{silo.nama_silo} · Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
-            sub="PK menunggu disosoh",
-            ringkas="PK menunggu disosoh",
+            sub=(f"PK menunggu disosoh · {pemasok}" if pemasok
+                 else "PK menunggu disosoh"),
+            anak=asal,
+            ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
             pilihan=([] if sedang else [
                 ("mulai_penyosohan", "Mulai penyosohan",
                  "Seluruh isi silo jadi satu proses", huruf)]),

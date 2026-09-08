@@ -179,6 +179,36 @@ def test_tiap_kartu_menyebut_asal_usul_barangnya():
     assert "await _asal(" in inspect.getsource(svc.untuk_staff)
 
 
+def test_kartu_pk_menyebut_lot_gilingnya():
+    """Aturan yang sama berlaku di Gudang 2 — dan di sanalah ia pernah bolong.
+
+    Kartu silo G2 dulu cuma berbunyi "PK menunggu disosoh": berat tanpa asal,
+    padahal isinya bisa PK buatan sendiri, PK beli luar, atau keduanya. Dan
+    lot giling (LOT-…) adalah SATU-SATUNYA benang yang menyambungkan beras
+    putih di ujung sana kembali ke gabah dan pemasoknya — begitu penyosohan
+    berjalan tanpa menyebutnya, rantai itu putus di tempat yang paling
+    menentukan.
+    """
+    import inspect
+
+    from app.services import berjalan as svc
+
+    fn = inspect.getsource(svc._asal_pk)
+    # Dua rupa asal PK, dua-duanya harus terbaca di kartu.
+    assert "MillingProcess.kode_proses" in fn, "lot giling tak disebut"
+    assert "Supplier.nama_supplier" in fn, "pemasok PK luar tak disebut"
+    assert "PkTumpukanToSilo" in fn, "PK yang lewat tumpukan ikut terlewat"
+    assert 'f"masuk {_tgl(tgl)}"' in fn
+
+    g2 = inspect.getsource(svc.untuk_gudang2)
+    # Kartu silo DAN kartu penyosohan — keduanya, lewat memo yang sama.
+    assert g2.count("await asal_silo(") >= 2, "ada kartu G2 yang belum menyebut asalnya"
+    assert "_pemasok_ringkas(" in g2
+    # Sisa per lot sengaja tidak diarang: stok silo disimpan sebagai jumlah,
+    # bukan lapisan.
+    assert "berat_kg" in fn
+
+
 def test_beranda_tidak_ikut_berubah():
     """Pemilik: "yang di beranda sudah sempurna, jangan disentuh lagi."
 

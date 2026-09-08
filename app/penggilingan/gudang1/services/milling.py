@@ -188,14 +188,14 @@ async def log_progress(
     tanggal=None, jam=None,
 ) -> ProgressResult:
     if not kode_proses:
-        raise MillingError("Sebutkan kode proses, contoh: `progress giling MIL-20260702-01 5 ton`")
+        raise MillingError("Sebutkan kode proses, contoh: `progress giling LOT-20260702-01 5 ton`")
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
     if berat_kumulatif is None:
-        raise MillingError("Sebutkan berat PK kumulatifnya, mis. `MIL-... sudah 5 ton`.")
+        raise MillingError("Sebutkan berat PK kumulatifnya, mis. `LOT-... sudah 5 ton`.")
 
     db.add(
         MillingProgressLog(
@@ -254,7 +254,7 @@ async def finish_milling(
     db: AsyncSession, *, user, kode_proses: str | None, tanggal=None, jam=None
 ) -> FinishResult:
     if not kode_proses:
-        raise MillingError("Sebutkan kode proses, contoh: `MIL-20260702-01 selesai`")
+        raise MillingError("Sebutkan kode proses, contoh: `LOT-20260702-01 selesai`")
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
@@ -582,7 +582,7 @@ async def log_qc_milling(
 ) -> QcResult:
     if not kode_proses:
         raise MillingError(
-            "Sebutkan kode proses, contoh: `QC MIL-20260702-01 kadar air 13 broken 5 kondisi KS`"
+            "Sebutkan kode proses, contoh: `QC LOT-20260702-01 kadar air 13 broken 5 kondisi KS`"
         )
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
@@ -636,7 +636,7 @@ async def verify_milling_output(
 ) -> VerifyOutputResult:
     if not kode_proses:
         raise MillingError(
-            "Sebutkan kode proses, contoh: `verifikasi output MIL-20260702-01 14 ton`"
+            "Sebutkan kode proses, contoh: `verifikasi output LOT-20260702-01 14 ton`"
         )
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:

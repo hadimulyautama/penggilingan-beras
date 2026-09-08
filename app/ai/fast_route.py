@@ -18,7 +18,11 @@ import re
 _I = re.IGNORECASE
 _RULES: list[tuple[re.Pattern, str]] = [
     # ── Kode transaksi (paling andal) ──
-    (re.compile(r"\bMIL-\d", _I), "milling"),
+    # LOT- adalah kode GILING, bukan pengeringan — pengeringan punya PGR-.
+    # Awalannya pernah berpindah arti, jadi kode lama MIL- tetap dikenali;
+    # yang tak boleh adalah LOT- jatuh ke pengeringan seperti dulu.
+    (re.compile(r"\b(LOT|MIL)-\d", _I), "milling"),
+    (re.compile(r"\bPGR-\d", _I), "pengeringan"),
     (re.compile(r"\bPOL-\d", _I), "penyosohan"),
     (re.compile(r"\bTRF-\d", _I), "transfer_pk"),
     (re.compile(r"\bPKB-\d", _I), "gudang2"),

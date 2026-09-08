@@ -458,7 +458,7 @@ async def moving_started(
     db.add(ml)
     await db.flush()
     # CATATAN: pendinginan selesai TIDAK diset di sini — itu keputusan operator
-    # terpisah (`pendinginan selesai LOT-...`) demi ukuran downtime dryer.
+    # terpisah (`pendinginan selesai PGR-...`) demi ukuran downtime dryer.
     await log_activity(
         db, table_name="silo_moving_logs", record_id=ml.id, action="INSERT",
         changed_by=user.id, new_value=f"mulai pindah {lot.kode_lot}",

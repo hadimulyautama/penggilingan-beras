@@ -231,7 +231,7 @@ async def log_cooling(
     (input 'pengeringan selesai' & 'mulai pendinginan' sering bersamaan/terlupa —
     salah satu memicu keduanya)."""
     if not kode_lot:
-        raise DryingError("Sebutkan kode lot, contoh: `pendinginan LOT-20260702-01`")
+        raise DryingError("Sebutkan kode lot, contoh: `pendinginan PGR-20260702-01`")
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
@@ -282,7 +282,7 @@ async def finish_cooling(
     silo belum kosong); dryer sudah idle sejak titik ini. Waktu inilah basis
     analisa downtime dryer. Kembalikan (lot, durasi_pendinginan_jam)."""
     if not kode_lot:
-        raise DryingError("Sebutkan kode lot, contoh: `pendinginan selesai LOT-20260702-01`")
+        raise DryingError("Sebutkan kode lot, contoh: `pendinginan selesai PGR-20260702-01`")
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
@@ -634,7 +634,7 @@ async def log_moisture(
     """
 
     if not kode_lot:
-        raise DryingError("Sebutkan kode lot-nya, contoh: `kadar air LOT-20260702-01 18%`")
+        raise DryingError("Sebutkan kode lot-nya, contoh: `kadar air PGR-20260702-01 18%`")
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
@@ -823,7 +823,7 @@ async def finish_drying(
     db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
 ) -> tuple[DryingLot, float]:
     if not kode_lot:
-        raise DryingError("Sebutkan kode lot yang selesai, contoh: `LOT-20260702-01 selesai`")
+        raise DryingError("Sebutkan kode lot yang selesai, contoh: `PGR-20260702-01 selesai`")
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")

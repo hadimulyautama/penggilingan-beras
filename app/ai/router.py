@@ -24,7 +24,7 @@ DOMAINS = [
     "barang_jadi",             # packing, bekatul, harga byproduct, HPP, stok BJ
     "barang_keluar",           # kirim/jual barang keluar (OUT-...)
     "pembelian_gabah",         # catat gabah masuk (Gudang 1)
-    "pengeringan",             # keringkan/selesai pengeringan (LOT-...)
+    "pengeringan",             # keringkan/selesai pengeringan (PGR-...)
     "silo_g1",                 # masukkan lot ke silo / pindah dryer->silo (G1)
     "kelola_user",             # daftar/aktif/nonaktif pengguna
     "undo",                    # batalkan input terakhir
@@ -50,13 +50,13 @@ _ROUTE_TOOL = {
                 "enum": DOMAINS,
                 "description": (
                     "Domain aksi. Contoh: 'gabah masuk 5 ton'->pembelian_gabah; "
-                    "'keringkan LOT-..'->pengeringan; 'giling silo A'->milling_qc "
+                    "'keringkan PGR-..'->pengeringan; 'giling silo A'->milling_qc "
                     "TIDAK (itu penyosohan? bukan) — 'giling/hasil PK' Gudang 1 = "
                     "milling_qc hanya utk QC/verifikasi output; mulai giling & hasil "
                     "PK Gudang 1 tetap di operator (pembelian? tidak). Gunakan: "
-                    "'giling silo A'/'hasil PK 3 ton'/'MIL-.. selesai'/'QC MIL-..'/"
-                    "'verifikasi output MIL-..'->milling; 'keringkan LOT/GB-..'/"
-                    "'selesai pengeringan'->pengeringan; 'masukkan LOT-.. ke silo A'/"
+                    "'giling silo A'/'hasil PK 3 ton'/'LOT-.. selesai'/'QC LOT-..'/"
+                    "'verifikasi output LOT-..'->milling; 'keringkan PGR/GB-..'/"
+                    "'selesai pengeringan'->pengeringan; 'masukkan PGR-.. ke silo A'/"
                     "'pindah gabah ke silo B'->silo_g1; 'terima TRF-..'->transfer_pk; "
                     "'beli PK dari..'/'stok gudang 2'/'stok silo A'/'masukkan PKB-.. ke "
                     "silo'/'pindah tumpukan'/'QC PKB-..'->gudang2; 'mulai penyosohan'/"

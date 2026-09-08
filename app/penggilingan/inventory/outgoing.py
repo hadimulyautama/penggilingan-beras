@@ -143,7 +143,7 @@ async def jual_pk_langsung(
     if user.role not in PERAN_STAF_KEATAS:
         raise InventoryError("Penjualan PK langsung hanya bisa oleh Staff atau Admin.")
     if not kode_mil or not berat_kg:
-        raise InventoryError("Sebutkan proses PK (MIL-...) & beratnya. Contoh: `jual PK langsung 2 ton dari MIL-...`")
+        raise InventoryError("Sebutkan proses PK (LOT-...) & beratnya. Contoh: `jual PK langsung 2 ton dari LOT-...`")
     proc = (
         await db.execute(select(MillingProcess).where(MillingProcess.kode_proses == kode_mil))
     ).scalars().first()

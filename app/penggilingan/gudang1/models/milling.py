@@ -18,7 +18,9 @@ from app.database import Base, TimestampMixin
 
 
 class MillingProcess(Base, TimestampMixin):
-    """Proses pecah kulit per silo. Kode: MIL-YYYYMMDD-NN."""
+    """Proses pecah kulit per silo — gabah kering jadi PK. Kode lot giling:
+    LOT-YYYYMMDD-NN (dulu MIL-; "lot" milik giling sejak pengeringan dilepas
+    jadi PGR-, karena lot yang sesungguhnya terbentuk saat giling dimulai)."""
 
     __tablename__ = "milling_process"
 

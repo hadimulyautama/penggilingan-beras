@@ -157,8 +157,8 @@ async def cmd_start(message: Message) -> None:
         "• `verifikasi GB-20260702-01 total 42 juta`\n"
         "• `verifikasi harga GB-20260702-01 5.250 per kg`\n\n"
         "*Milling* (QC & output PK):\n"
-        "• `QC MIL-20260702-01 kadar air 13 broken 5 susut 2`\n"
-        "• `verifikasi output MIL-20260702-01 14 ton`\n\n"
+        "• `QC LOT-20260702-01 kadar air 13 broken 5 susut 2`\n"
+        "• `verifikasi output LOT-20260702-01 14 ton`\n\n"
         "*Kelola pengguna* (admin) — ketik natural:\n"
         "• `daftarkan operator Budi id 12345678 gudang 1`\n"
         "• `tambah staff Sari hp 081234567890`\n"
@@ -395,7 +395,7 @@ async def _handle_transfer(message: Message, db, user, text: str, session) -> bo
             if not kode:
                 await message.answer(
                     "Sebutkan proses milling sumbernya, contoh:\n"
-                    "`transfer PK MIL-20260702-01 ke silo A`",
+                    "`transfer PK LOT-20260702-01 ke silo A`",
                     parse_mode="Markdown",
                 )
                 return True

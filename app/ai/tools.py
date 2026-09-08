@@ -170,7 +170,7 @@ PROSES_TRANSFER = {
                 ],
                 "description": (
                     "'buat_transfer': kirim PK (stok siap kirim) ke Gudang 2 "
-                    "(contoh: 'transfer PK dari MIL-... ke silo A', 'kirim 3 ton "
+                    "(contoh: 'transfer PK dari LOT-... ke silo A', 'kirim 3 ton "
                     "PK ke tumpukan gudang 2', 'transfer ke silo B'). "
                     "'laporan_siap_transfer': tanya PK stok yang siap kirim "
                     "(contoh: 'ada PK siap kirim?', 'PK siap dikirim berapa'). "
@@ -180,7 +180,7 @@ PROSES_TRANSFER = {
             },
             "kode_proses": {
                 "type": ["string", "null"],
-                "description": "Kode proses milling sumber, MIL-YYYYMMDD-NN (huruf besar).",
+                "description": "Kode proses milling sumber, LOT-YYYYMMDD-NN (huruf besar).",
             },
             "lokasi_tujuan": {
                 "type": ["string", "null"],
@@ -210,8 +210,8 @@ PROSES_MILLING_ADMIN = {
     "description": (
         "Deteksi & ekstrak aksi staff/admin untuk proses milling: input QC "
         "hasil PK, atau verifikasi berat output PK final. Contoh QC: 'QC "
-        "MIL-... kadar air 13 broken 5 susut 2'. Contoh verifikasi: "
-        "'verifikasi output MIL-... 14 ton', 'output PK MIL-... final 14000'. "
+        "LOT-... kadar air 13 broken 5 susut 2'. Contoh verifikasi: "
+        "'verifikasi output LOT-... 14 ton', 'output PK LOT-... final 14000'. "
         "Jika bukan tentang milling (mis. verifikasi HARGA gabah batch GB-...), "
         "pilih 'bukan_milling_admin'."
     ),
@@ -224,13 +224,13 @@ PROSES_MILLING_ADMIN = {
                 "description": (
                     "'qc_milling': input hasil QC PK (kadar air/broken/susut/"
                     "kondisi). 'verifikasi_output': tetapkan berat output PK "
-                    "final sebuah proses MIL-. 'bukan_milling_admin': selain itu "
+                    "final sebuah proses LOT-. 'bukan_milling_admin': selain itu "
                     "(termasuk verifikasi harga gabah batch GB-...)."
                 ),
             },
             "kode_proses": {
                 "type": ["string", "null"],
-                "description": "Kode proses milling MIL-YYYYMMDD-NN (huruf besar).",
+                "description": "Kode proses milling LOT-YYYYMMDD-NN (huruf besar).",
             },
             "kadar_air": {
                 "type": ["number", "null"],
@@ -303,10 +303,10 @@ PROSES_MILLING = {
                     "'selepan silo A'). "
                     "'progress_milling': catat HASIL berat PK kumulatif yang "
                     "sudah keluar — otomatis jadi stok siap kirim (contoh: "
-                    "'progress giling MIL-... 5 ton', 'hasil giling 5 ton', "
-                    "'PK MIL-... sudah 5000 kg'). "
+                    "'progress giling LOT-... 5 ton', 'hasil giling 5 ton', "
+                    "'PK LOT-... sudah 5000 kg'). "
                     "'selesai_milling': proses milling/selep/giling/husking "
-                    "SELESAI (contoh: 'MIL-... selesai giling', 'proses selep "
+                    "SELESAI (contoh: 'LOT-... selesai giling', 'proses selep "
                     "selesai', 'selep selesai', 'giling selesai', 'milling "
                     "selesai', 'selesai giling', 'husking selesai', 'proses "
                     "giling selesai'). Kode proses boleh tidak disebut. "
@@ -315,7 +315,7 @@ PROSES_MILLING = {
                     "'laporan milling'). Pertanyaan DETAIL sebuah proses tertentu "
                     "atau proses TERAKHIR — mis. asal bahan/supplier ('proses pk "
                     "terakhir dari bahan siapa', 'giling terakhir gabahnya dari "
-                    "siapa'), rendemen/hasil MIL-... — BUKAN laporan_milling, "
+                    "siapa'), rendemen/hasil LOT-... — BUKAN laporan_milling, "
                     "pilih 'bukan_milling' (ditangani modul detail). "
                     "'stok_pk': tanya stok PK buffer Gudang 1. "
                     "'bukan_milling': selain itu."
@@ -328,7 +328,7 @@ PROSES_MILLING = {
             },
             "kode_proses": {
                 "type": ["string", "null"],
-                "description": "Kode proses milling MIL-YYYYMMDD-NN (huruf besar).",
+                "description": "Kode proses milling LOT-YYYYMMDD-NN (huruf besar).",
             },
             "berat_kg": {
                 "type": ["number", "null"],
@@ -400,7 +400,7 @@ PROSES_SILO = {
                 ],
                 "description": (
                     "'masuk_silo': perintah langsung memasukkan gabah ke silo "
-                    "(contoh: 'masukkan LOT-... ke silo A', 'gabah GB-... masuk "
+                    "(contoh: 'masukkan PGR-... ke silo A', 'gabah GB-... masuk "
                     "silo B langsung'). "
                     "'pindah_mulai': MEMBERITAHU proses pemindahan gabah dari "
                     "dryer ke silo DIMULAI/sedang berlangsung — gabah BELUM di "
@@ -426,7 +426,7 @@ PROSES_SILO = {
             "kode_lot": {
                 "type": ["string", "null"],
                 "description": (
-                    "Kode lot pengeringan (LOT-YYYYMMDD-NN) bila gabah masuk "
+                    "Kode lot pengeringan (PGR-YYYYMMDD-NN) bila gabah masuk "
                     "silo BERASAL dari lot pengeringan. Huruf besar."
                 ),
             },
@@ -469,7 +469,7 @@ TANYA_DETAIL = {
         "(bukan sekadar kodenya, dan bukan total agregat). Contoh yang HARUS "
         "true: 'berapa harga gabah yang pertama masuk hari ini', 'berat gabah "
         "dari budi berapa', 'kadar air lot terbaru berapa', 'status GB-... "
-        "gimana', 'gabah kedua sudah diverifikasi belum', 'rendemen MIL-... "
+        "gimana', 'gabah kedua sudah diverifikasi belum', 'rendemen LOT-... "
         "berapa', 'gabah pertama dari siapa', 'proses pk/giling terakhir dari "
         "bahan/supplier siapa saja', 'milling terakhir gabahnya dari siapa' "
         "(target=milling, terbaru=true). Entitas dirujuk lewat supplier, hari, "
@@ -492,7 +492,7 @@ TANYA_DETAIL = {
                 "enum": ["batch", "lot", "milling", None],
                 "description": (
                     "Jenis entitas: 'batch' (gabah GB-), 'lot' (pengeringan "
-                    "LOT-), 'milling' (giling MIL-). PENTING: kata 'PK' / 'pecah "
+                    "PGR-), 'milling' (giling LOT-). PENTING: kata 'PK' / 'pecah "
                     "kulit' / 'proses PK' / 'hasil giling' / 'selep' -> "
                     "target='milling' (PK adalah OUTPUT milling, bukan lot "
                     "pengeringan). null -> anggap batch."
@@ -500,7 +500,7 @@ TANYA_DETAIL = {
             },
             "kode": {
                 "type": ["string", "null"],
-                "description": "Kode langsung bila disebut (GB-/LOT-/MIL-...), huruf besar.",
+                "description": "Kode langsung bila disebut (GB-/PGR-/LOT-...), huruf besar.",
             },
             "supplier_nama": {
                 "type": ["string", "null"],
@@ -633,7 +633,7 @@ CARI_KODE = {
                 "enum": ["batch", "lot", None],
                 "description": (
                     "'batch' jika mencari kode batch gabah (GB-...), 'lot' jika "
-                    "mencari kode lot pengeringan (LOT-...). null jika tak jelas "
+                    "mencari kode lot pengeringan (PGR-...). null jika tak jelas "
                     "(anggap batch)."
                 ),
             },
@@ -726,26 +726,26 @@ PROSES_PENGERINGAN = {
                     "'log_kadar_air': catat/laporkan kadar air gabah yang sedang "
                     "dikeringkan — SELALU pilih ini bila ada angka kadar air, "
                     "MESKIPUN kode lot tidak disebut (kode diisi dari konteks). "
-                    "Contoh: 'kadar air LOT-... 18%', 'kadar air gabah saat ini "
+                    "Contoh: 'kadar air PGR-... 18%', 'kadar air gabah saat ini "
                     "26%', 'kadar airnya 26 persen sekarang', 'update kadar air "
                     "indikator 18 tes manual 17'. "
                     "'log_pendinginan': catat proses PENDINGINAN — setelah "
                     "pengeringan selesai, gabah tetap di dalam dryer dan hanya "
                     "kena sirkulasi udara (bukan udara panas); tidak ada "
-                    "perpindahan/progress. Contoh: 'pendinginan LOT-...', "
+                    "perpindahan/progress. Contoh: 'pendinginan PGR-...', "
                     "'gabah didinginkan', 'mulai pendinginan', 'proses "
-                    "pendinginan', 'sirkulasi udara dingin LOT-...'. "
+                    "pendinginan', 'sirkulasi udara dingin PGR-...'. "
                     "'selesai_pengeringan': tandai lot selesai DIKERINGKAN "
                     "(fase pengeringan/pemanasan berakhir; berbeda dari "
-                    "pendinginan). Contoh: 'pengeringan LOT-... selesai', "
+                    "pendinginan). Contoh: 'pengeringan PGR-... selesai', "
                     "'gabah sudah kering', 'pemanasan selesai'. "
                     "'selesai_pendinginan': tandai fase PENDINGINAN selesai — "
                     "gabah sudah dingin & dryer jadi idle, meski gabah bisa "
                     "TETAP di dryer menunggu silo kosong (ini beda dari 'pindah "
-                    "ke silo'). Contoh: 'pendinginan LOT-... selesai', 'gabah "
+                    "ke silo'). Contoh: 'pendinginan PGR-... selesai', 'gabah "
                     "sudah dingin', 'selesai didinginkan', 'pendinginan kelar'. "
                     "'laporan_pengeringan': pertanyaan status/laporan (contoh: "
-                    "'lot pengeringan apa yang jalan', 'kadar air LOT-... "
+                    "'lot pengeringan apa yang jalan', 'kadar air PGR-... "
                     "berapa'). "
                     "'bukan_pengeringan': selain itu."
                 ),
@@ -788,7 +788,7 @@ PROSES_PENGERINGAN = {
             "kode_lot": {
                 "type": ["string", "null"],
                 "description": (
-                    "Kode lot pengeringan, format LOT-YYYYMMDD-NN (huruf besar). "
+                    "Kode lot pengeringan, format PGR-YYYYMMDD-NN (huruf besar). "
                     "Untuk log_kadar_air / selesai_pengeringan / "
                     "laporan_pengeringan satu lot."
                 ),
@@ -1086,8 +1086,8 @@ TANYA_ANALITIK = {
     "description": (
         "Deteksi pertanyaan ANALITIK STRATEGIS. Contoh: 'supplier mana paling "
         "menguntungkan', 'scorecard supplier', 'peringkat pemasok', 'tren HPP', "
-        "'biaya produksi PK per bulan', 'rincian biaya produksi MIL-...', "
-        "'HPP MIL-... berapa'. Bila bukan analitik strategis, 'bukan_analitik'."
+        "'biaya produksi PK per bulan', 'rincian biaya produksi LOT-...', "
+        "'HPP LOT-... berapa'. Bila bukan analitik strategis, 'bukan_analitik'."
     ),
     "input_schema": {
         "type": "object",
@@ -1109,7 +1109,7 @@ TANYA_ANALITIK = {
                     "(untung/harga/rendemen/kualitas). 'hpp_tren': tren biaya "
                     "pokok PK per kg dari waktu ke waktu. 'rincian_biaya': "
                     "rincian biaya produksi & HPP satu proses giling (mis. "
-                    "'rincian biaya MIL-...', 'hpp MIL-... berapa'). "
+                    "'rincian biaya LOT-...', 'hpp LOT-... berapa'). "
                     "'simulasi_hpp': hitung HPP what-if dari ANGKA yang diberikan "
                     "user — TANPA butuh batch/data nyata. Terima dua bentuk: (a) "
                     "harga gabah + rendemen%, mis. 'simulasi hpp gabah 7800 rendemen "
@@ -1129,7 +1129,7 @@ TANYA_ANALITIK = {
             },
             "kode_proses": {
                 "type": ["string", "null"],
-                "description": "Kode proses MIL-YYYYMMDD-NN utk rincian_biaya (huruf besar).",
+                "description": "Kode proses LOT-YYYYMMDD-NN utk rincian_biaya (huruf besar).",
             },
             "harga_gabah": {
                 "type": ["number", "null"],
@@ -1589,7 +1589,7 @@ PROSES_KELUAR = {
                     "karung premium Imbiss laminasi 25kg ke Toko Makmur pakai truk'). "
                     "'kirim_bekatul': kirim bekatul curah (contoh: 'kirim bekatul 300 "
                     "kg'). 'jual_pk_langsung': jual PK dari Gudang 1 (contoh: 'jual PK "
-                    "langsung 2 ton dari MIL-...'). 'laporan_keluar': riwayat barang "
+                    "langsung 2 ton dari LOT-...'). 'laporan_keluar': riwayat barang "
                     "keluar. 'bukan_keluar': selain itu."
                 ),
             },
@@ -1612,7 +1612,7 @@ PROSES_KELUAR = {
             "ukuran_kg": {"type": ["integer", "null"], "enum": [5, 10, 25, 48, 50, None], "description": "Ukuran karung."},
             "jumlah_karung": {"type": ["integer", "null"], "description": "Jumlah karung (barang jadi)."},
             "berat_kg": {"type": ["number", "null"], "description": "Berat kg (bekatul / PK langsung). Ton→kg."},
-            "kode": {"type": ["string", "null"], "description": "Kode MIL-YYYYMMDD-NN untuk jual PK langsung."},
+            "kode": {"type": ["string", "null"], "description": "Kode LOT-YYYYMMDD-NN untuk jual PK langsung."},
             "nama_pembeli": {"type": ["string", "null"], "description": "Nama pembeli/toko (opsional)."},
             "metode": {
                 "type": ["string", "null"],

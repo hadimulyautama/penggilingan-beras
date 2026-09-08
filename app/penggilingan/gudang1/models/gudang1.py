@@ -92,7 +92,7 @@ class PurchaseBatchVerification(Base, TimestampMixin):
 class DryingLot(Base, TimestampMixin):
     """Lot pengeringan gabungan 2-3 batch. Tidak boleh campur basah & kering.
 
-    Kode: LOT-YYYYMMDD-NN
+    Kode: PGR-YYYYMMDD-NN
     """
 
     __tablename__ = "drying_lots"
