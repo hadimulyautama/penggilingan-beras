@@ -14,7 +14,8 @@ import re
 
 from tests.bantu import kode_saja
 
-TPL = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates/stok.html"
+AKAR = pathlib.Path(__file__).resolve().parents[1]
+TPL = AKAR / "app/web/templates/stok.html"
 
 
 def test_stok_hanya_membaca():
@@ -235,3 +236,28 @@ def test_kelas_pk_dibaca_dari_seluruh_isi_lot():
     from app.services import stok
     assert stok.kelas_pk is milling.kelas_pk
     assert stok.KELAS_PK is milling.KELAS_PK
+
+
+def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
+    """Pernah dikecilkan jadi 10,5px dan diredupkan demi "ringkas", dan yang
+    didapat adalah daftar yang harus didekatkan ke mata.
+
+    Justru rincian inilah yang dibaca saat ada keluhan mutu: nama pemasok dan
+    kode batch dieja huruf per huruf, lalu dicocokkan ke karung di gudang. Yang
+    boleh mengecil adalah LABELNYA, bukan isinya.
+    """
+    css = (AKAR / "app/web/static/app.css").read_text()
+    assert "anak--kecil" not in css, "rincian batch dikecilkan lagi"
+    assert "anak--kecil" not in TPL.read_text()
+    # Kepalanya tetap kecil — ia label, dan label yang sebesar isinya membuat
+    # keduanya berebut mata.
+    kepala = css.split(".anak__kepala {")[1].split("}")[0]
+    assert "9.5px" in kepala and "uppercase" in kepala
+
+
+def test_rincian_menyebut_jumlah_batch_dan_bobot_masing_masing():
+    """Susunan yang diminta pemilik: berapa batch asalnya, dan tiap batch
+    berapa bobotnya — bukan satu angka gabungan."""
+    teks = TPL.read_text()
+    assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
+    assert "anak__kg" in teks and "for nama, berat, kapan in l.bahan" in teks

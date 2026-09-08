@@ -1051,17 +1051,16 @@ button.pilihan__satu {
    menghubungkan keduanya tanpa perlu membaca labelnya dulu. */
 .fakta dd.sorot { color: var(--fase-giling); font-weight: 650; }
 
-/* Rincian batch di kartu Stok: lebih kecil lagi daripada di kartu antrean.
-   Di sana ia satu-satunya isi kartu; di sini ia berdiri di bawah angka hasil
-   dan rendemen, dan detail yang sebesar angka utama membuat keduanya
-   berebut mata. */
-.anak--kecil .anak__kepala {
+/* Kepala daftar rincian batch. Ukuran barisnya sendiri sengaja TIDAK dikecilkan
+   dari `.anak` bawaan: pernah dicoba 10,5px dan redup demi "ringkas", dan yang
+   didapat adalah daftar yang harus didekatkan ke mata. Rincian ini justru yang
+   dibaca saat ada keluhan mutu — nama pemasok dan kode batch dieja huruf per
+   huruf, lalu dicocokkan ke karung di gudang. Yang boleh mengecil adalah
+   labelnya, bukan isinya. */
+.anak__kepala {
   font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
-  text-transform: uppercase; color: var(--redup-2); margin-bottom: 1px;
+  text-transform: uppercase; color: var(--redup-2); margin-bottom: 3px;
 }
-.anak--kecil .anak__nama { font-size: 10.5px; color: var(--redup); }
-.anak--kecil .anak__kg   { font-size: 10.5px; color: var(--redup); }
-.anak--kecil .anak__jam  { font-size: 9.5px; }
 .fakta dd small { font-size: 10.5px; font-weight: 500; color: var(--redup-2); }
 
 /* Rincian batch di dalam laci kartu Stok — sejajar dengan isi ringkasannya. */
