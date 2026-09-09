@@ -400,3 +400,35 @@ def test_selesai_giling_menolak_tanpa_hasil_dan_tak_menyentuh_prosesnya():
     blok = teks.split('"id": "selesai_giling"')[1].split('{"id": "hentikan_proses"')[0]
     assert '"berat_akhir"' in blok, "formulir tak meminta hasil akhir"
     assert '"Hasil akhir PK (kg)"' in blok
+
+
+def test_daftar_verifikasi_memuat_yang_sudah_diverifikasi():
+    """Kalau tidak, penguncian penunjuk terlepas pada koreksi KEDUA.
+
+    Pemilik melaporkannya begini: "mengapa harus memilih lagi? harusnya
+    otomatis sesuai dengan kartu yang dipilih kan" — dan menambahkan bahwa yang
+    pertama sudah otomatis, yang kedua tidak.
+
+    Rantainya: kartu Stok membuka `verify_output` dengan penunjuk terkunci;
+    `aksi.js` MELEPAS kunci itu bila nilainya tak ada di daftar jarak-jauhnya
+    ("barisnya sudah basi") — perlindungan yang benar untuk baris antrean yang
+    kedaluwarsa. Tetapi sumbernya dulu hanya memuat yang BELUM diverifikasi,
+    jadi begitu satu lot diverifikasi sekali ia lenyap dari daftar dan koreksi
+    berikutnya disuguhi tarik-turun.
+
+    Itu juga bertentangan dengan aksinya sendiri: `verify_milling_output`
+    memang mendukung verifikasi ulang.
+    """
+    teks = (AKAR / "app/web/miniapp.py").read_text()
+    fn = teks.split("async def milling_unverified")[1].split("\n@router")[0]
+    assert "MillingProcess.status == \"selesai\"" in fn
+    assert "~sudah" not in fn, "yang sudah diverifikasi kembali disaring keluar"
+    # Yang belum diverifikasi tetap di atas.
+    assert "case((sudah, 1)" in fn
+    # Labelnya polos: `aksi.js` memakainya juga sebagai teks TERKUNCI.
+    assert '"label": k}' in fn, "label diberi penanda; ia akan bocor ke teks terkunci"
+
+    # Dan `aksi.js` memang melepas kunci bila tak ada padanannya — sifat yang
+    # membuat sumber di atas harus lengkap.
+    js = (AKAR / "app/web/static/aksi.js").read_text()
+    assert "kuncinya" in js and "kotak.outerHTML" in js

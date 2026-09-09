@@ -510,7 +510,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Catat berat PK final → rendemen terhitung.", "fields": [
                  {"name": "kode_proses", "label": "Giling yang sudah selesai", "type": "remote",
                   "source": "/miniapp/actions/milling-unverified",
-                  "kosong": "Tidak ada hasil giling yang menunggu verifikasi."},
+                  "kosong": "Belum ada giling yang selesai."},
                  {"name": "berat_output", "label": "Berat PK final (kg)", "type": "number"},
              ]},
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
@@ -1020,23 +1020,41 @@ async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/milling-unverified")
 async def milling_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Milling SELESAI yang output PK-nya belum diverifikasi (berat final)."""
+    """Milling SELESAI — yang belum diverifikasi lebih dulu, sisanya menyusul.
+
+    Dulu hanya yang BELUM diverifikasi. Itu bertentangan dengan aksinya sendiri:
+    `verify_milling_output` memang mendukung verifikasi ulang (`re_verified`),
+    dan labelnya pun berbunyi "Giling yang sudah selesai".
+
+    Akibatnya bukan cuma daftar yang kurang. Kartu Stok membuka aksi ini dengan
+    penunjuk TERKUNCI, dan `aksi.js` melepas kuncinya bila nilainya tak ada di
+    daftar — perlindungan yang benar untuk baris antrean yang sudah basi. Lot
+    yang baru saja diverifikasi langsung keluar dari daftar, jadi koreksi kedua
+    justru disuguhi tarik-turun: "mengapa harus memilih lagi?" Yang sudah
+    ditunjuk kartunya tak boleh ditanyakan lagi.
+
+    Yang belum diverifikasi tetap di ATAS, karena itu yang biasanya dicari.
+    Tanpa penanda pada labelnya: `aksi.js` memakai label yang sama untuk teks
+    TERKUNCI di dalam lembar, dan di sana "· sudah diverifikasi" cuma
+    kebisingan pada benda yang sudah jadi pokok bahasannya.
+    """
     _require(can_see_financials(user))
-    from sqlalchemy import exists, select
+    from sqlalchemy import case, exists, select
     from app.models import MillingProcess, MillingProcessVerification
     async with SessionLocal() as db:
         sudah = exists().where(
             (MillingProcessVerification.milling_process_id == MillingProcess.id)
             & (MillingProcessVerification.berat_output_final_kg.is_not(None))
         )
-        procs = (
+        baris = (
             await db.execute(
-                select(MillingProcess.kode_proses).where(
-                    MillingProcess.status == "selesai", ~sudah
-                ).order_by(MillingProcess.kode_proses.desc())
+                select(MillingProcess.kode_proses, sudah.label("sudah"))
+                .where(MillingProcess.status == "selesai")
+                .order_by(case((sudah, 1), else_=0),
+                          MillingProcess.kode_proses.desc())
             )
-        ).scalars().all()
-    return [{"value": k, "label": k} for k in procs]
+        ).all()
+    return [{"value": k, "label": k} for k, _ in baris]
 
 
 @router.get("/actions/milling-noqc")
