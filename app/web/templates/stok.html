@@ -158,13 +158,13 @@
            Tak ditawarkan selama mesin masih giling: di sana angkanya belum
            final, dan yang dipakai operator "Perbarui hasil giling". #}
         {% if boleh_ubah and not l.berjalan %}
-          <div class="pilihan">
-            <a class="pilihan__satu pilihan__satu--utama"
+          {# Kecil dan tak berwarna: ini koreksi, bukan pekerjaan harian. Tombol
+             utama selebar kartu memanggil dirinya sendiri untuk ditekan, dan
+             yang paling sering ditekan di layar Stok seharusnya tidak ada. #}
+          <div class="ubah-hasil">
+            <a class="btn btn--kecil"
                href="/stok?buka=verify_output&amp;nilai={{ l.kode|urlencode }}">
-              <span class="pilihan__nama">
-                {{- "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" -}}
-              </span>
-              <span class="pilihan__ket">Rendemen &amp; stok ikut terhitung ulang</span>
+              {{- "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" -}}
             </a>
           </div>
         {% endif %}

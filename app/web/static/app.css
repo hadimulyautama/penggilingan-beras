@@ -1083,3 +1083,10 @@ details.padat > .anak { margin: 0 12px 12px; }
 /* Angka yang tak diketahui, bukan nol. Digambar seredup keterangan supaya tak
    dibaca sebagai jumlah. */
 .padat__nilai--kosong { color: var(--redup-2); font-weight: 500; }
+
+/* Tombol koreksi di dasar laci kartu Stok — sejajar dengan isi ringkasannya.
+   Menyusut ke lebar tulisannya: `.btn` itu `display: flex`, jadi `width: auto`
+   pada `.btn--kecil` tetap memenuhi wadahnya dan tombol koreksi terlihat
+   sepenting tombol pekerjaan. Ini koreksi, bukan pekerjaan harian. */
+.ubah-hasil { margin: 10px 12px 12px; }
+.ubah-hasil .btn { display: inline-flex; width: auto; min-height: 34px; padding: 6px 12px; }

@@ -369,3 +369,34 @@ def test_giling_tanpa_hasil_tercatat_tidak_disembunyikan():
     assert "l.belum_dicatat" in teks
     assert "padat__nilai--kosong" in teks, "angka tak diketahui digambar sebagai nol"
     assert "belum dicatat, belum terhitung" in teks, "total tak mengaku ada yang tak terhitung"
+
+
+def test_selesai_giling_menolak_tanpa_hasil_dan_tak_menyentuh_prosesnya():
+    """Keputusan pemilik: "selesai giling wajib minta hasil akhir. jika tidak
+    ada maka kartu kembali statusnya menjadi proses giling yang sedang
+    berjalan."
+
+    Yang membuat kartunya kembali sendiri adalah URUTAN: seluruh pemeriksaan
+    terjadi SEBELUM satu pun kolom diubah. Kalau `proc.status = "selesai"`
+    dipasang lebih dulu lalu ditolak, prosesnya sudah setengah tertutup di
+    dalam sesi — dan yang menyelamatkannya cuma kebetulan bahwa rollback
+    kebetulan terjadi.
+    """
+    from app.penggilingan.gudang1.services import milling
+
+    fn = kode_saja(milling.finish_milling)
+    assert "berat_akhir" in fn
+    # Pemeriksaan mendahului perubahan.
+    assert fn.index("Sebutkan hasil akhir") < fn.index("proc.status = 'selesai'"), \
+        "status diubah sebelum hasilnya diperiksa"
+    # Nol dan yang mustahil ikut ditolak: rendemen di atas 100% salah ketik.
+    assert "berat_akhir <= 0" in fn
+    assert "berat_akhir > masuk" in fn
+    # Angkanya masuk sebagai progres kumulatif, bukan kolom baru.
+    assert "MillingProgressLog" in fn
+
+    # Dan formulirnya memang meminta angkanya.
+    teks = (AKAR / "app/web/miniapp.py").read_text()
+    blok = teks.split('"id": "selesai_giling"')[1].split('{"id": "hentikan_proses"')[0]
+    assert '"berat_akhir"' in blok, "formulir tak meminta hasil akhir"
+    assert '"Hasil akhir PK (kg)"' in blok
