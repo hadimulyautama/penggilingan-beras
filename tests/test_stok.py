@@ -18,14 +18,49 @@ AKAR = pathlib.Path(__file__).resolve().parents[1]
 TPL = AKAR / "app/web/templates/stok.html"
 
 
-def test_stok_hanya_membaca():
+def test_stok_tak_pernah_menerima_angka_stok_langsung():
+    """Yang boleh dikoreksi HASIL GILINGNYA, bukan angka stoknya.
+
+    Stok = hasil − dikirim − dijual. Membolehkan orang mengetik stok berarti
+    membolehkan salah satu dari ketiganya dibengkokkan tanpa jejak, dan selisih
+    yang ditutupi berhenti jadi pertanyaan. Jadi layar ini tak punya rute POST
+    dan tak punya medan isian sendiri; ia hanya MEMBUKA aksi yang sudah ada dan
+    sudah tercatat — verifikasi output — sehingga rendemen dan stok terhitung
+    ulang sendiri dari satu angka, dan koreksinya bisa dibatalkan lewat List
+    audit.
+    """
     from app.web import layar_stok
 
     sumber = inspect.getsource(layar_stok)
     assert "@router.post" not in sumber, "Stok tidak boleh menerima kiriman"
+
     teks = TPL.read_text()
-    for larangan in ("<form", "data-post", "<input", "<button"):
-        assert larangan not in teks, f"{larangan} muncul di layar yang membaca saja"
+    for larangan in ("<form", "data-post", "<input"):
+        assert larangan not in teks, f"{larangan} muncul di layar Stok"
+    # Satu-satunya jalan tulis: membuka aksi verifikasi output. (`data-buka`
+    # pada tag skrip bukan jalan tulis — ia yang MEMBUKA lembarnya kembali
+    # setelah halaman dimuat ulang.)
+    assert "buka=verify_output" in teks
+    assert teks.count("?buka=") == 1, "ada jalan tulis kedua"
+
+
+def test_koreksi_stok_hanya_untuk_admin_keatas():
+    """Dan admin yang sedang memakai "Lihat sebagai operator" pun tidak: peran
+    efektif yang dipakai, bukan peran aslinya — samaran yang masih memegang
+    wewenangnya bukan samaran."""
+    from app.web import layar_stok
+
+    sumber = inspect.getsource(layar_stok)
+    assert "boleh_ubah=akun.is_admin" in sumber, "gerbang peran tak dipakai"
+
+    teks = TPL.read_text()
+    # Tombolnya, lembarnya, DAN skripnya semua di balik gerbang yang sama —
+    # tombol tersembunyi yang lembarnya tetap termuat masih bisa dibuka lewat
+    # alamat.
+    assert teks.count("boleh_ubah") >= 3
+    assert "{% if boleh_ubah %}" in teks
+    # Tak ditawarkan selama mesin masih giling: angkanya belum final di sana.
+    assert "boleh_ubah and not l.berjalan" in teks
 
 
 def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():

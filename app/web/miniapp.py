@@ -397,11 +397,21 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
                  {"name": "berat_kumulatif", "label": "PK kumulatif (kg)", "type": "number"},
              ]},
+            # Hasil akhir WAJIB di sini. Dulu aksi ini hanya menutup prosesnya,
+            # jadi giling bisa berakhir tanpa satu pun angka hasil — PK-nya ada
+            # di lantai, tak ada yang tahu berapa, dan lotnya jatuh dari layar
+            # Stok. Yang ditolak penutupannya, bukan pencatatannya: prosesnya
+            # tak disentuh sampai angkanya ada, jadi kartunya tetap di Sedang
+            # berjalan sampai dilengkapi.
             {"id": "selesai_giling", "label": "🏁 Selesai giling",
+             "hint": "Hasil akhir PK wajib. Tanpa angkanya, gilingnya belum "
+                     "bisa ditutup dan kartunya tetap berjalan.",
              "post": "/miniapp/actions/selesai-giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/miniapp/actions/milling-active",
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
+                 {"name": "berat_akhir", "label": "Hasil akhir PK (kg)",
+                  "type": "number"},
              ]},
             # ── Berhenti sementara ──
             # Prosesnya TIDAK ditutup: bahan, target, dan catatannya tetap.
@@ -1532,8 +1542,16 @@ class KodeProsesReq(BaseModel):
     kode_proses: str
 
 
+class SelesaiGilingReq(BaseModel):
+    kode_proses: str
+    #: Hasil akhir PK (kg). Boleh kosong HANYA bila operator sudah pernah
+    #: mencatat hasilnya lewat "Perbarui hasil giling"; layanan yang memutuskan,
+    #: bukan di sini — satu aturan, satu tempat.
+    berat_akhir: float | None = None
+
+
 @router.post("/actions/selesai-giling")
-async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(pengguna_aksi)) -> dict:
+async def act_selesai_giling(req: SelesaiGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
@@ -1541,7 +1559,8 @@ async def act_selesai_giling(req: KodeProsesReq, user: User = Depends(pengguna_a
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await finish_milling(db, user=u, kode_proses=req.kode_proses)
+            r = await finish_milling(db, user=u, kode_proses=req.kode_proses,
+                                     berat_akhir=req.berat_akhir)
         except MillingError as e:
             raise _err(e, "Gagal menyelesaikan giling.")
     jns = (r.jenis + " ") if r.jenis else ""

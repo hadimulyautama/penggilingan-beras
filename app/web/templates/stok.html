@@ -147,12 +147,44 @@
             {% endfor %}
           </div>
         {% endif %}
+        {# ── Koreksi, di dasar laci, hanya untuk Admin ke atas ──
+           Yang dikoreksi HASIL GILINGNYA, bukan angka stoknya. Stok = hasil −
+           dikirim − dijual; membolehkan orang mengetik stok berarti
+           membolehkan salah satu dari ketiganya dibengkokkan tanpa jejak.
+           Yang dibuka di sini aksi yang sudah ada dan sudah tercatat —
+           verifikasi output — jadi rendemen dan stok terhitung ulang sendiri
+           dari satu angka, dan koreksinya bisa dibatalkan lewat List audit.
+
+           Tak ditawarkan selama mesin masih giling: di sana angkanya belum
+           final, dan yang dipakai operator "Perbarui hasil giling". #}
+        {% if boleh_ubah and not l.berjalan %}
+          <div class="pilihan">
+            <a class="pilihan__satu pilihan__satu--utama"
+               href="/stok?buka=verify_output&amp;nilai={{ l.kode|urlencode }}">
+              <span class="pilihan__nama">
+                {{- "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" -}}
+              </span>
+              <span class="pilihan__ket">Rendemen &amp; stok ikut terhitung ulang</span>
+            </a>
+          </div>
+        {% endif %}
       </{{ "details" if laci else "div" }}>
     {% endfor %}
   </div>
 {% endif %}
+{% if boleh_ubah %}
+  <div class="lembar" id="lembar"></div>
+  <div class="kabar" id="kabar" role="status"></div>
+{% endif %}
 {% endblock %}
 
 {% block kaki %}
-<div class="kaki">Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini</div>
+<div class="kaki">
+  {%- if boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya
+  {%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}
+</div>
+{% if boleh_ubah %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endif %}
 {% endblock %}

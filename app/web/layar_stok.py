@@ -1,10 +1,15 @@
 """Layar Stok — PK Gudang 1 yang masih ada, per lot giling.
 
-Membaca saja. Tak ada tombol: stok tidak diubah dengan mengetik angkanya,
-melainkan dengan mencatat pekerjaan yang mengubahnya (hasil giling, kirim ke
-Gudang 2, jual langsung). Halaman yang membolehkan orang "membetulkan" stok
-akan dipakai menutupi selisih — dan selisih yang ditutupi berhenti jadi
-pertanyaan.
+Operator hanya membaca. Yang boleh mengoreksi hanya Admin ke atas, dan yang
+dikoreksi adalah HASIL GILINGNYA — bukan angka stoknya.
+
+Bedanya penting. Stok = hasil − dikirim − dijual; membolehkan orang mengetik
+stok berarti membolehkan salah satu dari ketiganya dibengkokkan tanpa jejak,
+dan selisih yang ditutupi berhenti jadi pertanyaan. Yang dibuka di sini justru
+aksi yang sudah ada dan sudah tercatat: verifikasi output giling. Ia menulis
+`berat_output_final_kg`, masuk log aktivitas, bisa dibatalkan lewat List audit,
+dan karena rendemen serta stok adalah TURUNAN dari angka itu, keduanya berubah
+sendiri — tak ada angka kedua yang bisa berselisih.
 """
 from __future__ import annotations
 
@@ -26,4 +31,15 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         request, "stok.html", layar="stok",
         lot=lot,
         total=sum(l.tersedia for l in lot),
+        # `is_admin` sudah memakai peran EFEKTIF: saat admin memakai "Lihat
+        # sebagai operator", `akun.user.role` diganti, jadi tombolnya ikut
+        # hilang — samaran yang masih memegang wewenangnya bukan samaran.
+        # Penjagaan sungguhannya tetap di rute aksinya sendiri; ini hanya
+        # menyembunyikan tombol yang memang tak akan berhasil ditekan.
+        boleh_ubah=akun.is_admin,
+        # Lembarnya terbuka DI SINI, bukan melemparkan orang ke layar aksi:
+        # yang sedang dibaca adalah kartu ini, dan berpindah layar berarti
+        # kehilangan tempatnya.
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
     )

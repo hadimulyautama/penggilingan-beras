@@ -266,8 +266,26 @@ class FinishResult:
 
 
 async def finish_milling(
-    db: AsyncSession, *, user, kode_proses: str | None, tanggal=None, jam=None
+    db: AsyncSession, *, user, kode_proses: str | None, berat_akhir: float | None = None,
+    tanggal=None, jam=None,
 ) -> FinishResult:
+    """Tutup giling. Hasil akhir PK WAJIB — tanpa itu prosesnya tidak ditutup.
+
+    Keputusan pemilik. Sebelumnya aksi ini hanya menutup prosesnya, jadi giling
+    bisa berakhir tanpa satu pun angka hasil: PK-nya ada di lantai, tetapi tak
+    ada yang tahu berapa. Lot itu lalu jatuh dari layar Stok, dan kelalaiannya
+    tak punya satu tempat pun untuk kelihatan.
+
+    Yang ditolak adalah PENUTUPANNYA, bukan pencatatannya. Prosesnya tak
+    disentuh sama sekali sebelum angkanya ada, jadi kartunya tetap berada di
+    Sedang berjalan — keadaan yang benar: mesinnya memang belum tuntas
+    dilaporkan. Kartu yang hilang tanpa penjelasan lebih buruk daripada kartu
+    yang bertahan sampai dilengkapi.
+
+    Angkanya masuk sebagai progres KUMULATIF terakhir — catatan operator.
+    Verifikasi admin (`berat_output_final_kg`) tetap langkah tersendiri, dan
+    tetap menang atas angka ini bila kelak berbeda.
+    """
     if not kode_proses:
         raise MillingError("Sebutkan kode proses, contoh: `LOT-20260702-01 selesai`")
     proc = await get_process_by_kode(db, kode_proses)
@@ -276,12 +294,48 @@ async def finish_milling(
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
 
+    # Diperiksa SEBELUM apa pun diubah. Kalau ditolak, prosesnya harus tetap
+    # utuh berstatus "proses" — itulah yang membuat kartunya kembali sendiri.
+    sudah = await _latest_progress(db, proc.id)
+    if berat_akhir is None:
+        if sudah is None:
+            raise MillingError(
+                "Sebutkan hasil akhir PK-nya dulu (kg). Giling tidak bisa "
+                "ditutup tanpa angka hasil — PK-nya ada, dan yang tak tercatat "
+                "tak akan muncul di Stok."
+            )
+        berat_akhir = sudah          # sudah pernah dicatat: pakai yang terakhir
+    berat_akhir = float(berat_akhir)
+    if berat_akhir <= 0:
+        raise MillingError("Hasil akhir PK harus lebih dari nol.")
+    masuk = float(proc.berat_gabah_masuk_kg or 0)
+    if masuk and berat_akhir > masuk:
+        raise MillingError(
+            f"Hasil PK {berat_akhir:,.0f} kg lebih besar daripada gabah yang "
+            f"masuk ({masuk:,.0f} kg). Periksa angkanya."
+            .replace(",", ".")
+        )
+
     now = input_time(tanggal, jam)
     if now < proc.waktu_mulai:
         raise MillingError(
             f"Tanggal selesai lebih awal dari mulai giling "
             f"({proc.waktu_mulai:%d-%m-%Y %H:%M})."
         )
+
+    # Dicatat sebagai progres kumulatif, bukan kolom baru: `_produced_pk` sudah
+    # membacanya, dan kolom kedua untuk fakta yang sama akan berselisih.
+    if sudah is None or berat_akhir != sudah:
+        db.add(MillingProgressLog(
+            milling_process_id=proc.id, waktu_update=now,
+            berat_kumulatif_kg=berat_akhir, input_by=user.id,
+        ))
+        await log_activity(
+            db, table_name="milling_progress_logs", record_id=proc.id, action="INSERT",
+            changed_by=user.id, new_value=f"hasil akhir {berat_akhir:.0f}kg",
+        )
+        await db.flush()
+
     proc.status = "selesai"
     proc.waktu_selesai = now
 
