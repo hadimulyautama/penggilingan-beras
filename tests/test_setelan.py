@@ -155,6 +155,13 @@ def test_setelan_dikelompokkan_per_proses():
     assert "{% macro sebab_blok(" in html
     assert html.count("sebab_blok('") == 2
 
+    # Dilipat: daftar sebab tumbuh — itu memang gunanya — dan daftar yang
+    # tumbuh terus membuat setelan di bawahnya makin jauh dari jangkauan.
+    # Jumlahnya disebut di ringkasannya, supaya yang cuma ingin tahu "ada
+    # berapa" tak perlu membukanya.
+    assert '<details class="lipat">' in html
+    assert "lipat__jml" in html and "|length }}</span>" in html
+
     # Setelan sebaris untuk yang isinya satu angka: halaman ini panjangnya
     # jangan ditentukan oleh setelan yang paling jarang diubah.
     css = (AKAR / "app/web/static/app.css").read_text()

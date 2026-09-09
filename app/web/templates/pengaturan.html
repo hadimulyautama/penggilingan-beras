@@ -111,7 +111,15 @@
    jadi deretan judul yang harus digulung untuk menemukan satu angka. Yang
    dicari orang adalah "setelan pengeringan", bukan "setelan target". #}
 {% macro sebab_blok(jenis) -%}
-  <span class="lbl" style="margin-top:14px">Sebab berhenti</span>
+  {# Dilipat. Daftar sebab tumbuh — itu gunanya, tiap sebab yang berulang naik
+     jadi pilihan tetap — dan daftar yang tumbuh terus membuat setelan lain di
+     bawahnya makin jauh dari jangkauan. Jumlahnya disebut di ringkasannya,
+     supaya yang cuma ingin tahu "ada berapa" tak perlu membukanya. #}
+  <details class="lipat">
+    <summary>
+      <span class="lbl" style="margin:0">Sebab berhenti</span>
+      <span class="lipat__jml">{{ sebab_jeda.get(jenis, [])|length }}</span>
+    </summary>
   <div class="grup" style="gap:6px">
     {% for s in sebab_jeda.get(jenis, []) %}
       <div class="baris" style="padding:7px 0">
@@ -131,6 +139,7 @@
       <button class="btn btn--kecil" type="submit">Tambah</button>
     </form>
   </div>
+  </details>
 {%- endmacro %}
 
 <div>

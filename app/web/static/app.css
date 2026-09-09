@@ -1120,3 +1120,26 @@ details.padat > .anak { margin: 0 12px 12px; }
 .saklar--nyala { background: var(--aksi); border-color: var(--aksi); }
 .saklar--nyala .saklar__bulat { transform: translateX(18px); background: var(--aksi-tinta); }
 .saklar:focus-visible { outline: 2px solid var(--aksi); outline-offset: 2px; }
+
+/* ── Bagian setelan yang dilipat ──
+   Untuk daftar yang panjangnya ditentukan pemakainya sendiri. Ringkasannya
+   menyebut JUMLAHNYA: yang cuma ingin tahu "ada berapa" tak perlu membukanya. */
+.lipat { margin-top: 12px; }
+.lipat > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; min-height: 32px;
+}
+.lipat > summary::-webkit-details-marker { display: none; }
+.lipat > summary::after {
+  content: ""; width: 7px; height: 7px; margin-left: auto;
+  border-right: 1.5px solid var(--redup-2);
+  border-bottom: 1.5px solid var(--redup-2);
+  transform: rotate(45deg); transform-origin: 60% 60%;
+  transition: transform .15s ease;
+}
+.lipat[open] > summary::after { transform: rotate(-135deg); }
+.lipat__jml {
+  font-family: var(--mono); font-size: 11px; color: var(--redup);
+  border: 1px solid var(--garis); border-radius: 999px; padding: 1px 7px;
+}
