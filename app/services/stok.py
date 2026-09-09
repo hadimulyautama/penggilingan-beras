@@ -70,6 +70,16 @@ class LotPk:
     lama: str = ""
     #: Masih menyala mesinnya. PK-nya sudah ada, tapi angkanya belum final.
     berjalan: bool = False
+    #: Mutu PK: (label, nilai) — kadar air, butir patah, susut. Kosong berarti
+    #: belum pernah dinilai.
+    #:
+    #: Diambil per KOLOM dari catatan terbaru yang mengisinya, bukan dari satu
+    #: baris terakhir saja. `milling_qc_logs` itu log: koreksi yang hanya
+    #: menyebut butir patah menulis baris baru dengan kadar air kosong, dan
+    #: membaca baris terakhir apa adanya akan MENGHAPUS kadar air dari layar
+    #: padahal ia tak pernah dicabut.
+    mutu: list[tuple[str, str]] = field(default_factory=list)
+
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tidak diketahui.
     #:
@@ -183,6 +193,31 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
     return bahan, [k for k in ("basah", "kering") if k in kondisi]
 
 
+def _persen(v) -> str:
+    return f"{float(v):g}%".replace(".", ",")
+
+
+async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
+    """Nilai QC terbaru PER KOLOM. Lihat catatan pada `LotPk.mutu`."""
+    from app.models import MillingQcLog
+
+    baris = (await db.execute(
+        select(MillingQcLog)
+        .where(MillingQcLog.milling_process_id == proc_id)
+        .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
+    )).scalars().all()
+    keluar: list[tuple[str, str]] = []
+    for label, kolom in (("Kadar air", "kadar_air"),
+                         ("Butir patah", "broken_persen"),
+                         ("Susut", "susut_persen")):
+        for b in baris:
+            v = getattr(b, kolom, None)
+            if v is not None:
+                keluar.append((label, _persen(v)))
+                break
+    return keluar
+
+
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
@@ -224,6 +259,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             rendemen=(None if belum
                       else hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg)),
             kelas=kelas_pk(kondisi),
+            mutu=await _mutu(db, proc.id),
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),

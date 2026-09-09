@@ -127,6 +127,24 @@
            muncul dua kali membuat orang mengira keduanya berbeda maksud.
            Bentuknya sama dengan rincian di kartu lain, jadi tak ada yang perlu
            dipelajari ulang. #}
+        {# Mutu PK berdiri sebelum daftar batch: ia tentang barang yang ADA di
+           lantai sekarang, sedangkan batch asal tentang gabah yang sudah lewat.
+           Belum dinilai disebut apa adanya — layar yang diam soal mutu terbaca
+           seolah mutunya baik. #}
+        <div class="anak">
+          <div class="anak__kepala">Mutu</div>
+          {% if l.mutu %}
+            <dl class="fakta" style="margin-top:0">
+              {% for label, nilai in l.mutu %}
+                <div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>
+              {% endfor %}
+            </dl>
+          {% else %}
+            <div class="anak__baris">
+              <span class="anak__nama">belum dinilai</span>
+            </div>
+          {% endif %}
+        </div>
         {% if l.bahan %}
           <div class="anak">
             {# Diberi kepala sendiri, dan kepalanya menyebut BATCH — bukan
@@ -165,6 +183,14 @@
             <a class="btn btn--kecil"
                href="/stok?buka=verify_output&amp;nilai={{ l.kode|urlencode }}">
               {{- "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" -}}
+            </a>
+            {# Mutu punya tombolnya sendiri, bukan digabung ke satu borang:
+               berat hasil dan kadar air datang dari dua penimbangan yang
+               berbeda, sering pada waktu yang berbeda pula. Satu borang berisi
+               keduanya memaksa orang mengisi yang belum ia punya. #}
+            <a class="btn btn--kecil"
+               href="/stok?buka=qc_giling&amp;nilai={{ l.kode|urlencode }}">
+              {{- "Edit kualitas" if l.mutu else "Catat kualitas" -}}
             </a>
           </div>
         {% endif %}

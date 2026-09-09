@@ -515,10 +515,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/miniapp/actions/qc-giling",
-             "hint": "Isi minimal salah satu: kadar air / broken / susut.", "fields": [
-                 {"name": "kode_proses", "label": "Giling yang belum dinilai mutunya", "type": "remote",
+             "hint": "Isi minimal salah satu: kadar air / broken / susut. Yang "
+                     "dikosongkan mempertahankan nilai sebelumnya.", "fields": [
+                 {"name": "kode_proses", "label": "Giling yang sudah selesai", "type": "remote",
                   "source": "/miniapp/actions/milling-noqc",
-                  "kosong": "Tidak ada hasil giling yang belum dinilai mutunya."},
+                  "kosong": "Belum ada giling yang selesai."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Butir patah (%)", "type": "number"},
                  {"name": "susut", "label": "Susut (%)", "type": "number"},
@@ -1059,21 +1060,28 @@ async def milling_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/milling-noqc")
 async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Milling SELESAI yang belum ada catatan QC sama sekali."""
+    """Milling SELESAI — yang belum dinilai mutunya lebih dulu, sisanya menyusul.
+
+    Dulu hanya yang belum punya catatan QC sama sekali. Itu menutup KOREKSI:
+    mutu yang salah ketik tak bisa dibetulkan lewat daftar ini, dan — sama
+    persis dengan `milling_unverified` — penguncian penunjuk dari kartu Stok
+    ikut terlepas begitu satu lot punya QC, karena `aksi.js` melepas kunci bila
+    nilainya tak ada di daftarnya.
+    """
     _require(can_see_financials(user))
-    from sqlalchemy import select
+    from sqlalchemy import case, exists, select
     from app.models import MillingProcess, MillingQcLog
     async with SessionLocal() as db:
-        qc_ids = select(MillingQcLog.milling_process_id).distinct()
-        procs = (
+        ada_qc = exists().where(MillingQcLog.milling_process_id == MillingProcess.id)
+        baris = (
             await db.execute(
-                select(MillingProcess.kode_proses).where(
-                    MillingProcess.status == "selesai",
-                    MillingProcess.id.not_in(qc_ids),
-                ).order_by(MillingProcess.kode_proses.desc())
+                select(MillingProcess.kode_proses, ada_qc.label("ada"))
+                .where(MillingProcess.status == "selesai")
+                .order_by(case((ada_qc, 1), else_=0),
+                          MillingProcess.kode_proses.desc())
             )
-        ).scalars().all()
-    return [{"value": k, "label": k} for k in procs]
+        ).all()
+    return [{"value": k, "label": k} for k, _ in baris]
 
 
 @router.get("/actions/pk-luar-qc")

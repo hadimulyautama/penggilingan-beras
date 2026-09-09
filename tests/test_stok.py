@@ -37,11 +37,13 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     teks = TPL.read_text()
     for larangan in ("<form", "data-post", "<input"):
         assert larangan not in teks, f"{larangan} muncul di layar Stok"
-    # Satu-satunya jalan tulis: membuka aksi verifikasi output. (`data-buka`
-    # pada tag skrip bukan jalan tulis — ia yang MEMBUKA lembarnya kembali
-    # setelah halaman dimuat ulang.)
-    assert "buka=verify_output" in teks
-    assert teks.count("?buka=") == 1, "ada jalan tulis kedua"
+    # Jalan tulisnya hanya MEMBUKA aksi yang sudah ada — dan hanya dua:
+    # hasil giling, dan mutunya. Keduanya menulis lewat layanan yang sudah
+    # tercatat di audit, bukan lewat borang milik layar ini. (`data-buka` pada
+    # tag skrip bukan jalan tulis — ia yang membuka lembarnya kembali setelah
+    # halaman dimuat ulang.)
+    assert "buka=verify_output" in teks and "buka=qc_giling" in teks
+    assert teks.count("?buka=") == 2, "ada jalan tulis ketiga"
 
 
 def test_koreksi_stok_hanya_untuk_admin_keatas():
@@ -432,3 +434,46 @@ def test_daftar_verifikasi_memuat_yang_sudah_diverifikasi():
     # membuat sumber di atas harus lengkap.
     js = (AKAR / "app/web/static/aksi.js").read_text()
     assert "kuncinya" in js and "kotak.outerHTML" in js
+
+
+def test_mutu_dibaca_per_kolom_bukan_per_baris_terakhir():
+    """`milling_qc_logs` itu LOG, dan koreksi boleh sebagian.
+
+    Membetulkan butir patah saja menulis baris baru dengan kadar air kosong.
+    Membaca baris terakhir apa adanya akan MENGHAPUS kadar air dari layar
+    padahal ia tak pernah dicabut — dan angka mutu yang lenyap sendiri adalah
+    cara tercepat membuat orang berhenti memercayai layarnya.
+    """
+    from app.services import stok
+
+    fn = kode_saja(stok._mutu)
+    assert "MillingQcLog.waktu.desc()" in fn, "log tak diurut dari yang terbaru"
+    # Satu lingkaran per KOLOM, berhenti pada nilai pertama yang terisi.
+    assert "kadar_air" in fn and "broken_persen" in fn and "susut_persen" in fn
+    assert "if v is not None" in fn and "break" in fn
+
+    teks = TPL.read_text()
+    assert "l.mutu" in teks
+    assert "belum dinilai" in teks, "layar diam soal mutu terbaca seolah mutunya baik"
+
+
+def test_daftar_qc_memuat_yang_sudah_dinilai():
+    """Jebakan yang sama dengan daftar verifikasi output: sumber yang menyaring
+    keluar lot yang sudah punya QC menutup koreksi, DAN melepas penguncian
+    penunjuk saat kartu Stok membukanya untuk kedua kalinya."""
+    teks = (AKAR / "app/web/miniapp.py").read_text()
+    fn = teks.split("async def milling_noqc")[1].split("\n@router")[0]
+    assert "not_in" not in fn, "yang sudah punya QC kembali disaring keluar"
+    assert "case((ada_qc, 1)" in fn, "yang belum dinilai tak lagi di atas"
+    assert '"label": k}' in fn, "label diberi penanda; ia akan bocor ke teks terkunci"
+
+
+def test_hasil_dan_mutu_punya_tombolnya_masing_masing():
+    """Berat hasil dan kadar air datang dari dua penimbangan yang berbeda,
+    sering pada waktu yang berbeda pula. Satu borang berisi keduanya memaksa
+    orang mengisi yang belum ia punya."""
+    teks = TPL.read_text()
+    assert "buka=verify_output" in teks and "buka=qc_giling" in teks
+    # Namanya ikut keadaan: mencatat pertama kali bukan mengoreksi.
+    assert '"Edit kualitas" if l.mutu else "Catat kualitas"' in teks
+    assert '"Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling"' in teks

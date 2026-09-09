@@ -1090,3 +1090,5 @@ details.padat > .anak { margin: 0 12px 12px; }
    sepenting tombol pekerjaan. Ini koreksi, bukan pekerjaan harian. */
 .ubah-hasil { margin: 10px 12px 12px; }
 .ubah-hasil .btn { display: inline-flex; width: auto; min-height: 34px; padding: 6px 12px; }
+/* Dua tombol koreksi berdampingan; membungkus bila layarnya sempit. */
+.ubah-hasil { display: flex; flex-wrap: wrap; gap: 8px; }
