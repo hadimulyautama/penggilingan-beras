@@ -117,6 +117,39 @@
   </form>
 </div>
 
+{# ── Mutu: satu saklar untuk seluruh fiturnya ──
+   Pabrik yang belum melakukan QC tak perlu melihat borangnya, dan lebih
+   penting lagi tak perlu melihat kartu "mutu belum diperiksa" yang menagih
+   pekerjaan yang memang tak dilakukan. Tagihan yang tak pernah bisa lunas
+   mengajari orang mengabaikan tagihan. #}
+<div>
+  <span class="lbl">Mutu &amp; QC</span>
+  <div class="kartu">
+    <div class="baris" style="border-bottom:0;padding-top:0">
+      <div>
+        <div><b>{{ "Menyala" if mutu_aktif else "Dimatikan" }}</b></div>
+        <p class="bantu" style="margin:2px 0 0">
+          {% if mutu_aktif %}
+            Borang QC tersedia, dan kartu Stok menyebut kadar air, butir patah,
+            serta susut.
+          {% else %}
+            Borang QC, kartu &ldquo;mutu belum diperiksa&rdquo;, dan baris mutu
+            di kartu Stok semuanya disembunyikan.
+          {% endif %}
+        </p>
+      </div>
+      <form method="post" action="/pengaturan/fitur-mutu">
+        <input type="hidden" name="aktif" value="{{ '0' if mutu_aktif else '1' }}">
+        <button class="btn btn--kecil{{ ' btn--bahaya' if mutu_aktif }}" type="submit">
+          {{ "Matikan" if mutu_aktif else "Nyalakan" }}
+        </button>
+      </form>
+    </div>
+    <p class="bantu">Catatan mutu yang sudah ada TIDAK dihapus — ia hanya tak
+      ditampilkan, dan kembali begitu fiturnya dinyalakan lagi.</p>
+  </div>
+</div>
+
 {% for jenis, nama in [('pengeringan', 'pengeringan'), ('giling', 'giling')] %}
 <div>
   <span class="lbl">Sebab berhenti · {{ nama }}</span>

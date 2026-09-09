@@ -102,6 +102,7 @@
              berapa. Yang harus dibuka dulu untuk terbaca akan dianggap tak
              ada — dan layar yang diam soal mutu terbaca seolah mutunya baik,
              jadi yang belum dinilai pun disebut. #}
+          {% if mutu_aktif %}
           {% for label, nilai in l.mutu %}
             <div>
               <dt>{{ label }}</dt>
@@ -113,6 +114,7 @@
               <dt>Mutu</dt>
               <dd class="padat__nilai--kosong">belum dinilai</dd>
             </div>
+          {% endif %}
           {% endif %}
           {% if l.dikirim %}
             <div>
@@ -187,10 +189,12 @@
                berat hasil dan kadar air datang dari dua penimbangan yang
                berbeda, sering pada waktu yang berbeda pula. Satu borang berisi
                keduanya memaksa orang mengisi yang belum ia punya. #}
-            <a class="btn btn--kecil"
-               href="/stok?buka=qc_giling&amp;nilai={{ l.kode|urlencode }}">
-              {{- "Edit kualitas" if l.mutu else "Catat kualitas" -}}
-            </a>
+            {% if mutu_aktif %}
+              <a class="btn btn--kecil"
+                 href="/stok?buka=qc_giling&amp;nilai={{ l.kode|urlencode }}">
+                {{- "Edit kualitas" if l.mutu else "Catat kualitas" -}}
+              </a>
+            {% endif %}
           </div>
         {% endif %}
       </{{ "details" if laci else "div" }}>

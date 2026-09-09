@@ -481,3 +481,37 @@ def test_hasil_dan_mutu_punya_tombolnya_masing_masing():
     # Namanya ikut keadaan: mencatat pertama kali bukan mengoreksi.
     assert '"Edit kualitas" if l.mutu else "Catat kualitas"' in teks
     assert '"Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling"' in teks
+
+
+def test_fitur_mutu_bisa_dimatikan_seluruhnya():
+    """Keputusan pemilik: mutu jadi fitur yang bisa dinyalakan/dimatikan —
+    "dari input QC sampai menunjukkan mutu".
+
+    Setengah mati adalah yang terburuk: layar yang masih menagih QC sementara
+    borangnya tak ada mengajari orang mengabaikan tagihan. Jadi yang dijaga di
+    sini adalah KELENGKAPANNYA — katalog aksi, rutenya, sumber daftarnya, kartu
+    kerja meja, dan baris mutu di kartu Stok.
+    """
+    from app.services import setelan
+
+    # Bawaannya MENYALA: pabrik yang sudah memakai QC tak boleh kehilangan
+    # layarnya hanya karena setelan baru ditambahkan.
+    fn = kode_saja(setelan.fitur_mutu)
+    assert "n != '0'" in fn, "bawaannya tidak menyala"
+
+    mini = (AKAR / "app/web/miniapp.py").read_text()
+    assert 'AKSI_MUTU = {"qc_giling", "qc_pk_luar"}' in mini
+    assert 'a["id"] not in AKSI_MUTU' in mini, "katalog tak disaring"
+    # Disembunyikan SAJA tidak cukup: alamatnya bisa diketik, dan lembar yang
+    # masih terbuka di layar orang lain masih bisa mengirim.
+    assert mini.count("await _wajib_mutu()") == 4, "ada rute mutu tanpa penjaga"
+
+    jalan = (AKAR / "app/services/berjalan.py").read_text()
+    assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"
+    assert "if await fitur_mutu(db) else []" in jalan, "kartu QC PK luar tak ikut padam"
+    # Impornya ada di FUNGSI yang memakainya — pernah tidak, dan /keputusan
+    # menjawab 500 sementara seluruh tes tetap hijau.
+    assert jalan.count("from app.services.setelan import fitur_mutu") == 2
+
+    teks = TPL.read_text()
+    assert "{% if mutu_aktif %}" in teks, "baris mutu di kartu Stok tak ikut padam"

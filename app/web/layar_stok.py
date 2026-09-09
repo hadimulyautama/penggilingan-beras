@@ -25,8 +25,11 @@ router = APIRouter(tags=["webapp"])
 
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
+    from app.services.setelan import fitur_mutu
+
     async with SessionLocal() as db:
         lot = await svc.pk_gudang1(db)
+        mutu_aktif = await fitur_mutu(db)
     return await render_laci(
         request, "stok.html", layar="stok",
         lot=lot,
@@ -37,6 +40,11 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # Penjagaan sungguhannya tetap di rute aksinya sendiri; ini hanya
         # menyembunyikan tombol yang memang tak akan berhasil ditekan.
         boleh_ubah=akun.is_admin,
+        # Mutu bisa dimatikan seluruhnya di Pengaturan — termasuk barisnya di
+        # kartu ini. Setengah mati adalah yang terburuk: kartu yang masih
+        # menyebut "belum dinilai" sementara borangnya tak ada menagih
+        # pekerjaan yang tak bisa dikerjakan siapa pun.
+        mutu_aktif=mutu_aktif,
         # Lembarnya terbuka DI SINI, bukan melemparkan orang ke layar aksi:
         # yang sedang dibaca adalah kartu ini, dan berpindah layar berarti
         # kehilangan tempatnya.

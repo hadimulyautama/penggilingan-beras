@@ -27,7 +27,7 @@ router = APIRouter(tags=["webapp"])
 
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
-    from app.services.setelan import sebab_jeda, target_kadar_air
+    from app.services.setelan import fitur_mutu, sebab_jeda, target_kadar_air
     from app.services.undo import BATAS_UNDO
     from app.web.nav import lencana
 
@@ -37,13 +37,14 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     async with SessionLocal() as db:
         target = await target_kadar_air(db) if tuan else None
         sebab = await sebab_jeda(db) if tuan else {}
+        mutu_aktif = await fitur_mutu(db) if tuan else False
     return render(
         request, "pengaturan.html",
         **await lencana(akun.user),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
-        tuan=tuan, target_bawaan=target, sebab_jeda=sebab,
+        tuan=tuan, target_bawaan=target, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
 
@@ -60,6 +61,24 @@ async def ubah_target_bawaan(request: Request, nilai: float = Form(...),
         except ValueError as e:
             return redirect(f"/pengaturan?err_teks={quote(str(e))}")
     return redirect("/pengaturan?pesan=target-diubah")
+
+
+@router.post("/pengaturan/fitur-mutu")
+async def ubah_fitur_mutu(request: Request, aktif: str = Form(""),
+                          akun: ProduksiAkun = Depends(butuh_admin)):
+    """Nyalakan atau matikan seluruh pencatatan mutu.
+
+    Satu tombol, bukan kotak centang yang harus disusul "Simpan": setelan
+    yang perlu dua ketukan sering tinggal satu — orang mencentangnya lalu
+    berpindah layar, dan yang tersimpan tetap yang lama.
+    """
+    from app.services.setelan import set_fitur_mutu
+
+    async with SessionLocal() as db:
+        u = await db.get(User, akun.user.id)
+        await set_fitur_mutu(db, aktif == "1", user=u)
+    return redirect("/pengaturan?pesan="
+                    + ("mutu-nyala" if aktif == "1" else "mutu-padam"))
 
 
 @router.post("/pengaturan/sebab-jeda")
@@ -109,6 +128,9 @@ _PESAN = {
     "sandi-diganti": "Kata sandi berhasil diganti.",
     "alat-ditambah": "Alat baru ditambahkan.",
     "alat-diubah": "Alat diperbarui.",
+    "mutu-nyala": "Pencatatan mutu dinyalakan.",
+    "mutu-padam": "Pencatatan mutu dimatikan — borang QC dan baris mutu "
+                  "disembunyikan dari semua layar.",
 }
 
 

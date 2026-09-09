@@ -913,6 +913,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     from app.models import Silo
     from app.penggilingan.gudang2.service import (
         _g2_warehouse_id, hitung_stok_silo)
+    from app.services.setelan import fitur_mutu
 
     b = Berjalan()
 
@@ -1051,7 +1052,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         select(PkPurchaseBatch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
         .order_by(PkPurchaseBatch.id.desc())
-    )).all():
+    )).all() if await fitur_mutu(db) else []:
         if pk.id in sudah_qc:
             continue
         b.meja.append(Baris(
@@ -1075,6 +1076,11 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     "ini yang mana, dan apa sudah dikerjakan?" — dan jawabannya tak boleh
     menuntut orang membuka layar lain.
     """
+    from app.services.setelan import fitur_mutu
+
+    # Sekali, di muka: kalau pabrik ini memang tak mencatat mutu, tak ada
+    # gunanya menghitung berapa yang belum dicatat.
+    mutu_aktif = await fitur_mutu(db)
     b = Berjalan()
 
     for batch, nama in (await db.execute(
@@ -1120,7 +1126,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
         ada_qc = (await db.execute(
             select(func.count()).select_from(MillingQcLog)
             .where(MillingQcLog.milling_process_id == p.id)
-        )).scalar_one()
+        )).scalar_one() if mutu_aktif else 1
         if not ada_qc:
             b.meja.append(Baris(
                 kode=p.kode_proses, isi="giling selesai, mutu belum diperiksa",

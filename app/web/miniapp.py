@@ -205,6 +205,25 @@ def _urai_tujuan(nilai: str | None) -> tuple[str, int | None]:
     return nilai, None
 
 
+#: Aksi yang lenyap begitu fitur mutu dimatikan di Pengaturan.
+AKSI_MUTU = {"qc_giling", "qc_pk_luar"}
+
+
+async def _wajib_mutu() -> None:
+    """Tolak aksi mutu saat fiturnya padam.
+
+    Menyembunyikan tombolnya saja tidak cukup: alamatnya bisa diketik, dan
+    lembar yang masih tersimpan di layar orang lain masih bisa mengirim.
+    Penjagaan yang hanya ada di tampilan bukan penjagaan.
+    """
+    from app.services.setelan import fitur_mutu
+
+    async with SessionLocal() as db:
+        if not await fitur_mutu(db):
+            raise HTTPException(
+                400, "Pencatatan mutu sedang dimatikan di Pengaturan.")
+
+
 @router.get("/actions/menu")
 async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
@@ -598,6 +617,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # hanya karena simulasi memeriksanya sebagai operator.
     if fin:
         actions = [a for a in actions if a["id"] != "undo"]
+    # Mutu bisa dimatikan seluruhnya lewat Pengaturan. Disaring DI SINI, di
+    # satu tempat, bukan di tiap cabang yang menyusun daftarnya: aksi QC
+    # bertambah lebih sering daripada penyaringnya diperiksa ulang.
+    from app.services.setelan import fitur_mutu
+
+    async with SessionLocal() as db:
+        if not await fitur_mutu(db):
+            actions = [a for a in actions if a["id"] not in AKSI_MUTU]
     # Urutan kelompok dititipkan pada aksi pertama: menu inilah satu-satunya
     # yang dikirim ke layar, dan menaruh urutannya di tempat lain berarti dua
     # tempat yang harus sepakat.
@@ -1069,6 +1096,7 @@ async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
     nilainya tak ada di daftarnya.
     """
     _require(can_see_financials(user))
+    await _wajib_mutu()
     from sqlalchemy import case, exists, select
     from app.models import MillingProcess, MillingQcLog
     async with SessionLocal() as db:
@@ -1088,6 +1116,7 @@ async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
 async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """PK luar (sudah masuk) yang BELUM diinput kualitasnya."""
     _require(can_see_financials(user))
+    await _wajib_mutu()
     from sqlalchemy import exists, or_, select
     from app.models import PkPurchaseBatch, PkPurchaseVerification
     async with SessionLocal() as db:
@@ -1658,6 +1687,7 @@ class QcGilingReq(BaseModel):
 @router.post("/actions/qc-giling")
 async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(can_see_financials(user))
+    await _wajib_mutu()
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
     if all(v is None for v in (req.kadar_air, req.broken, req.susut)):
@@ -1757,6 +1787,7 @@ class QcPkLuarReq(BaseModel):
 async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
     """Input kualitas PK luar (properti batch) — bukan keputusan terima/tolak."""
     _require(can_see_financials(user))
+    await _wajib_mutu()
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK luar dulu.")
     if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan)) \

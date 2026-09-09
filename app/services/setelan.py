@@ -22,6 +22,7 @@ from app.services.activity_log import log_activity
 
 K_TARGET = "target_kadar_air"
 K_SEBAB = "sebab_jeda"
+K_MUTU = "fitur_mutu"
 
 
 async def _ambil(db: AsyncSession, kunci: str) -> str | None:
@@ -62,6 +63,26 @@ async def set_target_kadar_air(db: AsyncSession, nilai: float, *, user) -> None:
     if not (5 <= nilai <= 30):
         raise ValueError("Target kadar air bawaan masuk akal antara 5% dan 30%.")
     await _simpan(db, K_TARGET, f"{nilai:g}", user=user)
+
+
+async def fitur_mutu(db: AsyncSession) -> bool:
+    """Apakah pabrik ini mencatat mutu sama sekali. Bawaannya YA.
+
+    Bawaan menyala, bukan padam: pabrik yang sudah memakai QC tak boleh
+    kehilangan layarnya hanya karena setelan baru ditambahkan. Yang tidak
+    memakainya cukup mematikannya sekali.
+
+    Dimatikan berarti hilang SELURUHNYA — borang QC, kartu "mutu belum
+    diperiksa", dan baris mutu di kartu Stok. Setengah mati adalah yang
+    terburuk: layar yang masih menagih QC sementara borangnya tak ada
+    mengajari orang mengabaikan tagihan.
+    """
+    n = await _ambil(db, K_MUTU)
+    return n != "0"          # apa pun selain "0" berarti menyala
+
+
+async def set_fitur_mutu(db: AsyncSession, aktif: bool, *, user) -> None:
+    await _simpan(db, K_MUTU, "1" if aktif else "0", user=user)
 
 
 async def sebab_jeda(db: AsyncSession) -> dict[str, list[str]]:
