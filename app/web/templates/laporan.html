@@ -46,14 +46,27 @@
         {% endfor %}
       </select>
     </div>
-    <pre class="laporan" id="lap-isi">Memuat…</pre>
+    <div class="lap" id="lap-isi">Memuat…</div>
   </div>
 </div>
 
 <script>
-/* Laporan datang sebagai teks — dibuat untuk dibaca, bukan diurai. Server
-   sudah menerjemahkan penanda tebal/miring jadi HTML dan meng-escape isinya
-   lebih dulu, jadi yang perlu dilakukan di sini hanya menaruhnya. */
+/* ── Laporan digambar, bukan ditumpahkan ──
+   Isinya datang sebagai teks — bentuk peninggalan masa ketika laporan dibaca
+   di Telegram. Ditaruh apa adanya di dalam satu blok monospasi, ia terbaca seperti
+   keluaran terminal: seluruh barisnya seukuran, tak ada yang menonjol, dan
+   angka yang dicari orang tenggelam di antara tanda baca.
+
+   Teks itu TIDAK diubah di server. Empat belas laporan menulisnya dengan
+   tangan masing-masing, dan menulis ulang semuanya demi tampilan berarti
+   empat belas kesempatan mengubah isinya tanpa sengaja. Yang dilakukan di
+   sini hanya MENGENALI pola yang memang sudah dipatuhi semuanya — kepala
+   bagian berakhiran titik dua, butir "•", anak butir "–" — lalu memberi tiap
+   jenis bentuknya sendiri.
+
+   Yang tak cocok pola apa pun tetap tampil sebagai paragraf biasa. Itu
+   memang keadaan hari ini, jadi laporan yang menyimpang tak akan lebih buruk
+   daripada sebelumnya — hanya tak ikut membaik. */
 (function () {
   "use strict";
   var lembar = document.getElementById("lembar");
@@ -62,6 +75,87 @@
   var grupPeriode = document.getElementById("periode-grup");
   var periode = document.getElementById("periode");
   var kodeAktif = null;
+
+  /* Emoji di awal baris adalah penanda bagian, bukan isi. Dipisah supaya ia
+     bisa digambar sebagai keping kecil, bukan sebagai huruf pertama judul. */
+  var IKON = /^([\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\uFE0F]+)\s*/u;
+
+  function belah(s) {
+    /* "Silo A: terisi — 28.550 kg" → nama + nilai. Titik dua lebih dulu,
+       lalu em dash: keduanya dipakai laporan, dan yang pertama muncul itulah
+       pemisah sesungguhnya. Tak ada keduanya berarti barisnya memang satu
+       kalimat utuh — jangan dipaksa jadi dua kolom. */
+    var i = s.indexOf(": ");
+    var j = s.indexOf(" — ");
+    if (i >= 0 && (j < 0 || i < j)) { return [s.slice(0, i), s.slice(i + 2)]; }
+    if (j >= 0) { return [s.slice(0, j), s.slice(j + 3)]; }
+    return [s, ""];
+  }
+
+  function gambar(html, nama) {
+    var keluar = "";
+    /* Baris pertama tiap laporan mengulang namanya sendiri — sisa dari masa
+       ketika ia dikirim sebagai pesan tanpa judul. Di sini judulnya sudah ada
+       di kepala lembar, dan mengulanginya membuat orang mengira ada dua
+       bagian. */
+    var sapu = (nama || "").trim().toLowerCase();
+    (html || "").split("\n").forEach(function (baris) {
+      var s = baris.trim();
+      if (!s) { keluar += '<div class="lap__jeda"></div>'; return; }
+
+      var anak = /^[–-]\s+/.test(s);
+      if (anak) {
+        keluar += '<div class="lap__anak">' + s.replace(/^[–-]\s+/, "") + "</div>";
+        return;
+      }
+      if (/^•\s+/.test(s)) {
+        var isi2 = s.replace(/^•\s+/, "");
+        var ph = belah(isi2);
+        keluar += ph[1]
+          ? '<div class="lap__baris"><span class="lap__nama">' + ph[0] +
+            '</span><span class="lap__nilai">' + ph[1] + "</span></div>"
+          : '<div class="lap__baris"><span class="lap__nama">' + isi2 + "</span></div>";
+        return;
+      }
+      var m = s.match(IKON);
+      if (m && /:$/.test(s)) {
+        var judulBab = s.slice(m[0].length).replace(/:$/, "");
+        if (judulBab.trim().toLowerCase() === sapu) { return; }
+        /* Kepala bagian ditulis kapital kecil — bentuk yang hanya bekerja
+           untuk NAMA. Kepala yang sebenarnya kalimat, seperti rentang tanggal
+           "Selasa, 01 Sep 2026 s/d Rabu, 09 Sep 2026", jadi teriakan sepanjang
+           dua baris. Yang panjang digambar sebagai subjudul biasa. */
+        keluar += judulBab.length > 30
+          ? '<div class="lap__sub"><span class="lap__ikon" aria-hidden="true">' +
+            m[1] + "</span>" + judulBab + "</div>"
+          : '<div class="lap__bab"><span class="lap__ikon" aria-hidden="true">' +
+            m[1] + "</span>" + judulBab + "</div>";
+        return;
+      }
+      if (m) {
+        var sisa = s.slice(m[0].length);
+        var ph2 = belah(sisa);
+        keluar += ph2[1]
+          ? '<div class="lap__baris lap__baris--utama">' +
+            '<span class="lap__ikon" aria-hidden="true">' + m[1] + "</span>" +
+            '<span class="lap__nama">' + ph2[0] + '</span>' +
+            '<span class="lap__nilai">' + ph2[1] + "</span></div>"
+          : (sisa.length > 30
+              /* Baris berikon tanpa pasangan nilai dan cukup panjang adalah
+                 KALIMAT — kesimpulan, catatan, peringatan. Digambar sebagai
+                 kepala bagian, ia jadi kapital sepanjang dua baris dan
+                 terbaca seperti judul yang tak punya isi. */
+              ? '<p class="lap__teks lap__teks--ikon">' +
+                '<span class="lap__ikon" aria-hidden="true">' + m[1] + "</span>" +
+                sisa + "</p>"
+              : '<div class="lap__bab"><span class="lap__ikon" aria-hidden="true">' +
+                m[1] + "</span>" + sisa + "</div>");
+        return;
+      }
+      keluar += '<p class="lap__teks">' + s + "</p>";
+    });
+    return keluar;
+  }
 
   function muat() {
     if (!kodeAktif) { return; }
@@ -73,7 +167,7 @@
         if (!r.ok) { throw new Error("Gagal memuat (" + r.status + ")."); }
         return r.json();
       })
-      .then(function (d) { judul.textContent = d.nama; isi.innerHTML = d.isi; })
+      .then(function (d) { judul.textContent = d.nama; isi.innerHTML = gambar(d.isi, d.nama); })
       .catch(function (e) { isi.textContent = String(e.message || e); });
   }
 

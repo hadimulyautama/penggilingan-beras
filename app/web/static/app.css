@@ -1143,3 +1143,53 @@ details.padat > .anak { margin: 0 12px 12px; }
   font-family: var(--mono); font-size: 11px; color: var(--redup);
   border: 1px solid var(--garis); border-radius: 999px; padding: 1px 7px;
 }
+
+/* ══ Isi laporan ══
+   Dulu satu blok <pre> monospasi: seluruh barisnya seukuran, tak ada yang
+   menonjol, dan angka yang dicari orang tenggelam di antara tanda baca.
+   Sekarang tiap jenis baris punya bentuknya sendiri — kepala bagian, butir,
+   anak butir — sehingga laporan bisa DIPINDAI, bukan dibaca dari atas. */
+.lap { font-size: 14px; line-height: 1.55; color: var(--tinta); }
+.lap__bab {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  font-family: var(--mono); color: var(--redup);
+  margin: 18px 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--garis-2);
+}
+.lap__bab:first-child { margin-top: 0; }
+.lap__ikon { font-size: 13px; letter-spacing: 0; }
+/* Membungkus, bukan mengempis. Dua kolom kaku memaksa nama menyempit sampai
+   kode lot patah di tengah — "LOT-20260905-" lalu "01" di baris berikutnya,
+   dan kode yang patah berhenti bisa dibaca sekilas. Kalau nama dan nilainya
+   tak muat sebaris, nilainya turun ke barisnya sendiri dan tetap rata kanan. */
+.lap__baris {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 2px 14px; padding: 6px 0;
+  border-bottom: 1px solid var(--garis-2);
+}
+/* Baris yang berdiri sendiri di luar bagian mana pun — ia ringkasan, bukan
+   butir, jadi ikonnya ikut tampil dan angkanya lebih tegas. */
+.lap__baris--utama .lap__nilai { color: var(--tinta); font-weight: 600; }
+.lap__nama { color: var(--tinta-2); }
+.lap__nilai {
+  margin-left: auto; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--tinta);
+}
+/* Rincian di bawah butirnya: menjorok, lebih kecil, lebih redup — ia
+   keterangan tentang baris di atasnya, bukan baris tersendiri. */
+.lap__anak {
+  font-family: var(--mono); font-size: 11.5px; color: var(--redup);
+  padding: 3px 0 3px 14px; margin-left: 4px;
+  border-left: 1px solid var(--garis);
+}
+.lap__teks { margin: 8px 0; color: var(--tinta-2); }
+.lap__jeda { height: 6px; }
+.lap b { color: #fff; font-weight: 600; }
+/* Kepala yang sebenarnya kalimat — rentang tanggal, misalnya. Kapital kecil
+   hanya bekerja untuk NAMA; untuk kalimat ia jadi teriakan dua baris. */
+.lap__sub {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--redup); margin: 0 0 12px;
+}
+.lap__teks--ikon { display: flex; gap: 8px; align-items: baseline; color: var(--tinta); }
