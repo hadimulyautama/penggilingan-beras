@@ -1092,3 +1092,31 @@ details.padat > .anak { margin: 0 12px 12px; }
 .ubah-hasil .btn { display: inline-flex; width: auto; min-height: 34px; padding: 6px 12px; }
 /* Dua tombol koreksi berdampingan; membungkus bila layarnya sempit. */
 .ubah-hasil { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── Borang sebaris: label, satu isian, satu tombol ──
+   Setelan yang isinya satu angka atau satu kata tak perlu borang setinggi
+   kartu. Halaman Pengaturan panjangnya ditentukan oleh setelan yang paling
+   jarang diubah, dan itu terbalik. */
+.sebaris-borang { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sebaris-borang .fld { flex: 1; min-width: 120px; }
+.sebaris-borang .btn { width: auto; }
+
+/* ── Saklar ──
+   Untuk setelan yang hanya punya dua keadaan. Tombol bertuliskan "Matikan"
+   memaksa orang membaca dulu keadaan sekarang untuk tahu arah tekanannya;
+   saklar MENUNJUKKAN keadaannya. */
+.saklar-borang { display: flex; align-items: center; gap: 10px; }
+.saklar {
+  flex: 0 0 auto; width: 44px; height: 26px; padding: 0;
+  border: 1px solid var(--garis); border-radius: 999px;
+  background: var(--panel-2); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.saklar__bulat {
+  display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--redup); margin-left: 3px;
+  transition: transform .15s ease, background .15s ease;
+}
+.saklar--nyala { background: var(--aksi); border-color: var(--aksi); }
+.saklar--nyala .saklar__bulat { transform: translateX(18px); background: var(--aksi-tinta); }
+.saklar:focus-visible { outline: 2px solid var(--aksi); outline-offset: 2px; }

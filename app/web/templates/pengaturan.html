@@ -105,16 +105,57 @@
    Yang boleh ada di sini hanya hal yang memang berubah di lapangan, bukan
    semua yang kebetulan berupa angka. Setelan yang tak pernah diubah cuma
    menambah tempat untuk salah. #}
+{# ── Setelan per proses ──
+   Satu blok per PROSES, bukan satu blok per setelan. Target kadar air dan
+   sebab berhenti pengeringan dulu berdiri sendiri-sendiri, dan halaman ini
+   jadi deretan judul yang harus digulung untuk menemukan satu angka. Yang
+   dicari orang adalah "setelan pengeringan", bukan "setelan target". #}
+{% macro sebab_blok(jenis) -%}
+  <span class="lbl" style="margin-top:14px">Sebab berhenti</span>
+  <div class="grup" style="gap:6px">
+    {% for s in sebab_jeda.get(jenis, []) %}
+      <div class="baris" style="padding:7px 0">
+        <span>{{ s }}</span>
+        <form method="post" action="/pengaturan/sebab-jeda">
+          <input type="hidden" name="jenis" value="{{ jenis }}">
+          <input type="hidden" name="buang" value="{{ s }}">
+          <button class="btn btn--kecil btn--bahaya" type="submit"
+                  {{ 'disabled' if sebab_jeda.get(jenis, [])|length < 2 }}>Buang</button>
+        </form>
+      </div>
+    {% endfor %}
+    <form method="post" action="/pengaturan/sebab-jeda" class="sebaris-borang">
+      <input type="hidden" name="jenis" value="{{ jenis }}">
+      <input class="fld" name="tambah" type="text" maxlength="120"
+             placeholder="Tambah sebab baru…" aria-label="Tambah sebab berhenti {{ jenis }}">
+      <button class="btn btn--kecil" type="submit">Tambah</button>
+    </form>
+  </div>
+{%- endmacro %}
+
 <div>
   <span class="lbl">Pengeringan</span>
-  <form class="kartu" method="post" action="/pengaturan/target-kadar-air">
-    <label class="lbl" for="target">Target kadar air bawaan (%)</label>
-    <input class="fld" id="target" name="nilai" type="number" step="0.1"
-           inputmode="decimal" value="{{ '%g'|format(target_bawaan) }}" required>
-    <p class="bantu">Hanya nilai awal borang. Yang menentukan tetap operator
-      saat menyalakan mesin — dan ia wajib mengisinya.</p>
-    <button class="btn btn--utama" type="submit">Simpan</button>
-  </form>
+  <div class="kartu">
+    {# Angka dan tombolnya sebaris: satu bilangan dua digit tak perlu borang
+       setinggi kartu sendiri. #}
+    <form method="post" action="/pengaturan/target-kadar-air" class="sebaris-borang">
+      <label class="lbl" for="target" style="flex:1">Target kadar air (%)</label>
+      <input class="fld fld--kecil" id="target" name="nilai" type="number" step="0.1"
+             inputmode="decimal" value="{{ '%g'|format(target_bawaan) }}"
+             style="width:88px" required>
+      <button class="btn btn--kecil" type="submit">Simpan</button>
+    </form>
+    <p class="bantu">Nilai AWAL borang, bukan aturan. Yang menentukan tetap
+      operator saat menyalakan mesin — dan ia wajib mengisinya.</p>
+    {{ sebab_blok('pengeringan') }}
+  </div>
+</div>
+
+<div>
+  <span class="lbl">Giling</span>
+  <div class="kartu">
+    {{ sebab_blok('giling') }}
+  </div>
 </div>
 
 {# ── Mutu: satu saklar untuk seluruh fiturnya ──
@@ -125,59 +166,24 @@
 <div>
   <span class="lbl">Mutu &amp; QC</span>
   <div class="kartu">
-    <div class="baris" style="border-bottom:0;padding-top:0">
-      <div>
-        <div><b>{{ "Menyala" if mutu_aktif else "Dimatikan" }}</b></div>
-        <p class="bantu" style="margin:2px 0 0">
-          {% if mutu_aktif %}
-            Borang QC tersedia, dan kartu Stok menyebut kadar air, butir patah,
-            serta susut.
-          {% else %}
-            Borang QC, kartu &ldquo;mutu belum diperiksa&rdquo;, dan baris mutu
-            di kartu Stok semuanya disembunyikan.
-          {% endif %}
-        </p>
-      </div>
-      <form method="post" action="/pengaturan/fitur-mutu">
-        <input type="hidden" name="aktif" value="{{ '0' if mutu_aktif else '1' }}">
-        <button class="btn btn--kecil{{ ' btn--bahaya' if mutu_aktif }}" type="submit">
-          {{ "Matikan" if mutu_aktif else "Nyalakan" }}
-        </button>
-      </form>
-    </div>
-    <p class="bantu">Catatan mutu yang sudah ada TIDAK dihapus — ia hanya tak
-      ditampilkan, dan kembali begitu fiturnya dinyalakan lagi.</p>
-  </div>
-</div>
-
-{% for jenis, nama in [('pengeringan', 'pengeringan'), ('giling', 'giling')] %}
-<div>
-  <span class="lbl">Sebab berhenti · {{ nama }}</span>
-  <div class="grup" style="gap:7px">
-    {% for s in sebab_jeda.get(jenis, []) %}
-      <div class="benda benda--dryer benda--diam">
-        <div style="flex:1">{{ s }}</div>
-        <form method="post" action="/pengaturan/sebab-jeda">
-          <input type="hidden" name="jenis" value="{{ jenis }}">
-          <input type="hidden" name="buang" value="{{ s }}">
-          <button class="btn btn--kecil btn--bahaya" type="submit"
-                  {{ 'disabled' if sebab_jeda.get(jenis, [])|length < 2 }}>Buang</button>
-        </form>
-      </div>
-    {% endfor %}
-    <form class="kartu" method="post" action="/pengaturan/sebab-jeda">
-      <input type="hidden" name="jenis" value="{{ jenis }}">
-      <label class="lbl" for="tambah-{{ jenis }}">Tambah sebab baru</label>
-      <input class="fld" id="tambah-{{ jenis }}" name="tambah" type="text"
-             placeholder="mis. Sabuk conveyor putus" maxlength="120">
-      <p class="bantu">Kotak “Lainnya — tulis sendiri” di borang jeda adalah
-        katupnya. Sebab yang berulang muncul di situ memang layak naik jadi
-        pilihan tetap; di sinilah tempat menaikkannya.</p>
-      <button class="btn" type="submit">Tambahkan</button>
+    <form method="post" action="/pengaturan/fitur-mutu" class="saklar-borang">
+      <input type="hidden" name="aktif" value="{{ '0' if mutu_aktif else '1' }}">
+      <button class="saklar{{ ' saklar--nyala' if mutu_aktif }}" type="submit"
+              role="switch" aria-checked="{{ 'true' if mutu_aktif else 'false' }}"
+              aria-label="Pencatatan mutu">
+        <span class="saklar__bulat"></span>
+      </button>
+      <span>Catat mutu &amp; QC</span>
     </form>
+    <p class="bantu">
+      {%- if mutu_aktif %}Borang QC tersedia; kartu Stok menyebut kadar air,
+      butir patah, dan susut.
+      {%- else %}Borang QC, kartu &ldquo;mutu belum diperiksa&rdquo;, dan baris
+      mutu di kartu Stok semuanya disembunyikan. Catatan yang sudah ada tidak
+      dihapus — ia kembali begitu dinyalakan lagi.{% endif -%}
+    </p>
   </div>
 </div>
-{% endfor %}
 
 <div>
   <span class="lbl">Batas ubah catatan</span>

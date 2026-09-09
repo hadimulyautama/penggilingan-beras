@@ -63,8 +63,9 @@ def test_setelan_kerja_hanya_untuk_admin():
     kosong = templates.get_template("pengaturan.html").render(
         request=None, akun=_akun("operator"), layar="pengaturan", MENUNGGU=0,
         MODE_UJI=True, LIHAT_SEBAGAI=None, kembali=None, pesan_ok=None, err="",
-        tuan=False, target_bawaan=None, sebab_jeda={}, JAM_BATAS=48)
-    for blok in ("Sebab berhenti", "Target kadar air bawaan", "Batas ubah catatan"):
+        tuan=False, target_bawaan=None, sebab_jeda={}, mutu_aktif=False,
+        JAM_BATAS=48)
+    for blok in ("Sebab berhenti", "Target kadar air", "Batas ubah catatan"):
         assert blok not in kosong, blok
 
     penuh = templates.get_template("pengaturan.html").render(
@@ -73,10 +74,15 @@ def test_setelan_kerja_hanya_untuk_admin():
         tuan=True, target_bawaan=14.0,
         sebab_jeda={"pengeringan": ["Listrik padam", "Bahan bakar habis"],
                     "giling": ["Mesin giling rusak", "Limbah produksi penuh"]},
-        JAM_BATAS=48)
-    for blok in ("Sebab berhenti · pengeringan", "Sebab berhenti · giling",
-                 "Target kadar air bawaan", "Batas ubah catatan"):
+        mutu_aktif=True, JAM_BATAS=48)
+    # Satu blok per PROSES, bukan satu blok per setelan: yang dicari orang
+    # adalah "setelan pengeringan", bukan "setelan target". Sebab berhenti
+    # tinggal di dalam bloknya masing-masing.
+    for blok in ("Sebab berhenti", "Target kadar air",
+                 "Batas ubah catatan", "Listrik padam", "Mesin giling rusak"):
         assert blok in penuh, blok
+    assert penuh.count("Sebab berhenti") == 2, "sebab berhenti bukan dua blok proses"
+    assert "Sebab berhenti · " not in penuh, "judul lama yang berdiri sendiri kembali"
 
 
 def test_batas_48_jam_ditampilkan_tapi_tak_bisa_diubah():
@@ -120,3 +126,36 @@ def test_satu_tombol_satu_perubahan():
 
     sumber = kode_saja(pengaturan.ubah_sebab_jeda)
     assert "tambah" in sumber and "buang" in sumber
+
+
+def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
+    """Tombol bertuliskan "Matikan" memaksa orang membaca dulu keadaan
+    sekarang untuk tahu arah tekanannya. Saklar MENUNJUKKAN keadaannya."""
+    html = (AKAR / "app/web/templates/pengaturan.html").read_text()
+    blok = html[html.index("Mutu &amp; QC"):]
+    assert 'role="switch"' in blok, "bukan saklar"
+    assert 'aria-checked="{{ \'true\' if mutu_aktif else \'false\' }}"' in blok
+    assert "saklar--nyala' if mutu_aktif" in blok
+    # Satu ketukan, bukan centang lalu "Simpan": setelan yang perlu dua ketukan
+    # sering tinggal satu.
+    assert blok.count("<button") == 1
+
+
+def test_setelan_dikelompokkan_per_proses():
+    """Halaman ini pernah jadi deretan judul yang harus digulung untuk
+    menemukan satu angka: target kadar air, lalu sebab berhenti pengeringan,
+    lalu sebab berhenti giling, masing-masing dengan judulnya sendiri. Yang
+    dicari orang adalah "setelan pengeringan", bukan "setelan target"."""
+    html = (AKAR / "app/web/templates/pengaturan.html").read_text()
+    assert '<span class="lbl">Pengeringan</span>' in html
+    assert '<span class="lbl">Giling</span>' in html
+    assert "Sebab berhenti · " not in html, "judul lama yang berdiri sendiri kembali"
+    # Sebab berhenti tinggal di dalam blok prosesnya, lewat satu macro —
+    # dua salinan akan berbeda begitu salah satunya diperbaiki.
+    assert "{% macro sebab_blok(" in html
+    assert html.count("sebab_blok('") == 2
+
+    # Setelan sebaris untuk yang isinya satu angka: halaman ini panjangnya
+    # jangan ditentukan oleh setelan yang paling jarang diubah.
+    css = (AKAR / "app/web/static/app.css").read_text()
+    assert ".sebaris-borang" in css and ".saklar {" in css
