@@ -452,9 +452,13 @@ def test_mutu_dibaca_per_kolom_bukan_per_baris_terakhir():
     assert "kadar_air" in fn and "broken_persen" in fn and "susut_persen" in fn
     assert "if v is not None" in fn and "break" in fn
 
+    # Mutu ada di KARTU UTAMA, bukan di dalam laci: ia yang menentukan PK ini
+    # masuk kelas apa dan laku berapa, dan yang harus dibuka dulu untuk terbaca
+    # akan dianggap tak ada.
     teks = TPL.read_text()
-    assert "l.mutu" in teks
-    assert "belum dinilai" in teks, "layar diam soal mutu terbaca seolah mutunya baik"
+    ring = teks.split('</{{ "summary"')[0]
+    assert "l.mutu" in ring, "mutu terlipat ke dalam laci"
+    assert "belum dinilai" in ring, "layar diam soal mutu terbaca seolah mutunya baik"
 
 
 def test_daftar_qc_memuat_yang_sudah_dinilai():
