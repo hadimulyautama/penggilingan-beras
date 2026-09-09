@@ -70,6 +70,16 @@ class LotPk:
     lama: str = ""
     #: Masih menyala mesinnya. PK-nya sudah ada, tapi angkanya belum final.
     berjalan: bool = False
+    #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
+    #: melainkan tidak diketahui.
+    #:
+    #: "Selesai giling" tidak meminta berat PK; ia hanya menutup prosesnya. Jadi
+    #: operator bisa menutup giling tanpa satu pun angka hasil, dan lot itu
+    #: dulu HILANG dari layar ini karena tersedianya nol. Yang hilang dari layar
+    #: tidak hilang dari lantai gudang: PK-nya ada, cuma tak ada yang tahu
+    #: berapa. Lebih baik baris yang mengaku tidak tahu daripada gudang yang
+    #: tampak kosong.
+    belum_dicatat: bool = False
 
 
 def _tgl(d) -> str:
@@ -186,7 +196,12 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         select(MillingProcess).order_by(MillingProcess.id.desc())
     )).scalars().all():
         bd = await _pk_breakdown(db, proc.id)
-        if bd.tersedia <= 0:
+        # Nol karena HABIS berbeda dari nol karena TAK DICATAT. Yang habis
+        # terkirim memang tak perlu didaftar; yang tak pernah dicatat justru
+        # harus, karena itulah satu-satunya tempat kelalaiannya kelihatan.
+        belum = (proc.status == "selesai" and bd.produced <= 0
+                 and bd.transferred <= 0)
+        if bd.tersedia <= 0 and not belum:
             continue
         # `sumber_batch` adalah SATU-SATUNYA jawaban "apa isi lot ini" — yang
         # sama dipakai HPP. Harga yang ikut dikembalikannya sengaja dibuang di
@@ -201,11 +216,18 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             # Penyebutnya dipinjam, bukan dipilih sendiri: dua layar yang
             # memakai penyebut berbeda akan menyebut rendemen berbeda untuk
             # lot yang sama.
-            rendemen=hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg),
+            #
+            # Yang hasilnya tak dicatat TIDAK punya rendemen. Rumusnya akan
+            # menjawab 0,0% dengan patuh — pembagian yang benar atas pembilang
+            # yang tidak diketahui — dan "0,0%" terbaca sebagai giling yang
+            # gagal total, bukan sebagai catatan yang belum diisi.
+            rendemen=(None if belum
+                      else hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg)),
             kelas=kelas_pk(kondisi),
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
+            belum_dicatat=belum,
         ))
     return keluar

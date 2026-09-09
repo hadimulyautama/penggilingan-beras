@@ -267,3 +267,70 @@ def test_rincian_menyebut_jumlah_batch_dan_bobot_masing_masing():
     teks = TPL.read_text()
     assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
     assert "anak__kg" in teks and "for nama, berat, kapan in l.bahan" in teks
+
+
+def test_selesai_giling_mengosongkan_SELURUH_sumber_silonya():
+    """Bug yang dilihat pemilik: "kenapa kembali menjadi transit di silo kering
+    setelah selesai giling?"
+
+    `start_milling` mengisi penunjuk tunggal `proc.silo_storage_id` dengan SALAH
+    SATU baris silo saja — "baris lot bila ada" — padahal satu giling boleh
+    memakan beberapa baris sejak silo boleh dicampur. `finish_milling` dulu
+    mengosongkan penunjuk itu saja, jadi baris lain tetap "terisi" dan silonya
+    muncul kembali sebagai "Transit di silo kering": gabah yang sama ditawarkan
+    untuk digiling dua kali.
+    """
+    from app.penggilingan.gudang1.services import milling
+
+    fn = kode_saja(milling.finish_milling)
+    assert "MillingProcessSource.silo_storage_id" in fn, "sumber tak dibaca"
+    # Penunjuk tunggal hanya boleh jadi CADANGAN untuk proses lama.
+    assert "if not ids and proc.silo_storage_id" in fn
+
+
+def test_output_terverifikasi_menang_atas_progres_operator():
+    """Giling yang ditutup tanpa operator mencatat hasilnya, lalu outputnya
+    diverifikasi admin, dulu tetap berstok NOL — hilang dari layar Stok DAN tak
+    bisa dikirim ke Gudang 2. Angka yang sudah diverifikasi tetapi tak dipakai
+    adalah pekerjaan verifikasi yang dibuang."""
+    from app.penggilingan.gudang1.services import milling
+
+    fn = kode_saja(milling._produced_pk)
+    assert "berat_output_final_kg" in fn, "angka final tak dibaca"
+    # Progres tetap jadi cadangan selama proses masih jalan.
+    assert "_latest_progress" in fn
+    assert fn.index("berat_output_final_kg") < fn.index("_latest_progress"), \
+        "progres operator masih menang atas angka final"
+
+
+def test_hanya_satu_tempat_menghitung_pk_dihasilkan():
+    """Dua jawaban untuk satu pertanyaan akan berselisih, dan yang salah adalah
+    yang lebih jarang dibaca."""
+    from app.services import transfer
+
+    assert transfer._produced_pk is not None
+    teks = (AKAR / "app/services/transfer.py").read_text()
+    assert "async def _produced_pk" not in teks, "salinan kedua kembali"
+    assert "import _produced_pk" in teks
+
+
+def test_giling_tanpa_hasil_tercatat_tidak_disembunyikan():
+    """Nol karena HABIS berbeda dari nol karena TAK DICATAT.
+
+    "Selesai giling" tidak meminta berat PK — ia hanya menutup prosesnya. Jadi
+    giling bisa ditutup tanpa satu pun angka hasil, dan lot itu dulu hilang dari
+    layar Stok karena tersedianya nol. Yang hilang dari layar tidak hilang dari
+    lantai gudang.
+    """
+    from app.services import stok
+
+    fn = kode_saja(stok.pk_gudang1)
+    assert "bd.tersedia <= 0 and (not belum)" in fn, "yang tak dicatat masih disembunyikan"
+    # Rendemen TIDAK dihitung untuk yang tak dicatat: rumusnya akan menjawab
+    # 0,0% dengan patuh, dan itu terbaca sebagai giling yang gagal total.
+    assert "None if belum" in fn
+
+    teks = TPL.read_text()
+    assert "l.belum_dicatat" in teks
+    assert "padat__nilai--kosong" in teks, "angka tak diketahui digambar sebagai nol"
+    assert "belum dicatat, belum terhitung" in teks, "total tak mengaku ada yang tak terhitung"

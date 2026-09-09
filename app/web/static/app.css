@@ -1080,3 +1080,6 @@ details.padat > .anak { margin: 0 12px 12px; }
 /* Umurnya menempel pada kodenya, tetapi lebih redup: ia keterangan tentang
    bendanya, bukan namanya. */
 .padat__umur { color: var(--redup); font-weight: 500; }
+/* Angka yang tak diketahui, bukan nol. Digambar seredup keterangan supaya tak
+   dibaca sebagai jumlah. */
+.padat__nilai--kosong { color: var(--redup-2); font-weight: 500; }

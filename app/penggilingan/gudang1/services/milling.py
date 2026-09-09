@@ -286,12 +286,27 @@ async def finish_milling(
     proc.waktu_selesai = now
 
     # Silo dianggap kosong saat milling selesai (bukan saat gabah keluar fisik).
+    #
+    # Dikosongkan dari SELURUH sumbernya, bukan dari `proc.silo_storage_id`.
+    # Penunjuk tunggal itu diisi `start_milling` dengan SALAH SATU baris silo
+    # saja — "baris lot bila ada" — padahal satu giling boleh memakan beberapa
+    # baris sekaligus sejak silo boleh dicampur. Baris yang tak ikut
+    # dikosongkan tetap berstatus "terisi", dan silo yang isinya sudah habis
+    # tergiling muncul kembali sebagai "Transit di silo kering": gabah yang
+    # sama ditawarkan untuk digiling dua kali.
     nama_silo = None
-    if proc.silo_storage_id:
-        st = await db.get(SiloStorage, proc.silo_storage_id)
+    ids = [s for s in (await db.execute(
+        select(MillingProcessSource.silo_storage_id).where(
+            MillingProcessSource.milling_process_id == proc.id)
+    )).scalars().all() if s]
+    if not ids and proc.silo_storage_id:
+        ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
+    for sid in ids:
+        st = await db.get(SiloStorage, sid)
         if st and st.status == "terisi":
             st.status = "kosong"
             st.tanggal_keluar = now
+    if ids:
         silo = await db.get(Silo, proc.silo_id)
         if silo:
             silo.status = "kosong"
@@ -341,7 +356,25 @@ async def _latest_progress(db: AsyncSession, proc_id: int) -> float | None:
 
 
 async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
-    """PK dihasilkan = progress kumulatif terakhir (hasil yang di-update operator)."""
+    """PK dihasilkan. Angka TERVERIFIKASI menang atas progres operator.
+
+    Progres kumulatif diketik operator sambil mesin jalan — ia perkiraan yang
+    berguna selama proses, tetapi bukan angka final. Yang final ditetapkan
+    admin di `milling_process_verifications.berat_output_final_kg`, dan itulah
+    yang sudah dipakai HPP.
+
+    Sebelumnya fungsi ini hanya membaca progres. Akibatnya: giling yang ditutup
+    TANPA operator pernah mencatat hasilnya, lalu outputnya diverifikasi admin
+    sebesar 6.300 kg, tetap berstok NOL — hilang dari layar Stok dan tak bisa
+    dikirim ke Gudang 2. Angka yang sudah diverifikasi tetapi tak dipakai
+    adalah pekerjaan verifikasi yang dibuang.
+    """
+    v = (await db.execute(
+        select(MillingProcessVerification.berat_output_final_kg).where(
+            MillingProcessVerification.milling_process_id == proc_id)
+    )).scalars().first()
+    if v is not None:
+        return float(v)
     v = await _latest_progress(db, proc_id)
     return float(v) if v is not None else 0.0
 

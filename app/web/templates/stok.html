@@ -25,9 +25,14 @@
   <div class="jumlah">
     <span class="lbl">PK di Gudang 1</span>
     <div class="jumlah__angka">{{ kg(total) }}<small>kg</small></div>
+    {# Lot yang hasilnya tak dicatat TIDAK ikut dijumlahkan — tak ada angka
+       yang bisa dijumlahkan. Itu harus disebut di sebelah totalnya, kalau
+       tidak totalnya diam-diam lebih kecil daripada isi gudang. #}
+    {% set belum = lot|selectattr("belum_dicatat")|list|length %}
     <div class="jumlah__ket">
       {{ lot|length }} lot · dihitung saat dibuka, hasil giling dikurangi yang
       sudah dikirim &amp; dijual
+      {%- if belum %} · <b>{{ belum }} lot belum dicatat, belum terhitung</b>{% endif -%}
     </div>
   </div>
 
@@ -46,7 +51,13 @@
             {{- l.kode }} · {{ l.tanggal }}
             {%- if l.lama %} · <span class="padat__umur">{{ l.lama }}</span>{% endif -%}
           </span>
-          <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
+          {# Tak dicatat bukan nol. "0 kg" adalah pernyataan bahwa gudangnya
+             kosong; yang benar adalah kita tidak tahu berapa. #}
+          {% if l.belum_dicatat %}
+            <span class="padat__nilai padat__nilai--kosong">—</span>
+          {% else %}
+            <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
+          {% endif %}
         </div>
         {# Hasil giling dan rendemen naik jadi angka, bukan keterangan.
            Rendemen adalah satu-satunya angka di kartu ini yang menilai
@@ -59,7 +70,9 @@
         <dl class="fakta">
           <div>
             <dt>Hasil</dt>
-            <dd>{{ kg(l.dihasilkan) }} kg</dd>
+            {# Sama alasannya dengan angka besar di atas: nol adalah pernyataan,
+               dan yang benar di sini adalah belum ada pernyataan. #}
+            <dd>{% if l.belum_dicatat %}—{% else %}{{ kg(l.dihasilkan) }} kg{% endif %}</dd>
           </div>
           {% if l.rendemen is not none %}
             <div>
@@ -97,6 +110,13 @@
           <div class="nota nota--hati">
             <span aria-hidden="true">⏸</span>
             <span>Mesin masih giling — hasil &amp; rendemen belum final</span>
+          </div>
+        {% elif l.belum_dicatat %}
+          <div class="nota nota--hati">
+            <span aria-hidden="true">⚠</span>
+            <span>Hasil giling belum dicatat — PK-nya ada, tapi belum terhitung.
+              Catat lewat <b>Perbarui hasil giling</b>, atau verifikasi output
+              finalnya.</span>
           </div>
         {% endif %}
       </{{ "summary" if laci else "div" }}>

@@ -49,16 +49,13 @@ async def hpp_per_kg_pk(db: AsyncSession, proc: MillingProcess) -> float | None:
     return bd.total_penuh / output if output else None
 
 
-async def _produced_pk(db: AsyncSession, proc_id: int) -> float:
-    v = (
-        await db.execute(
-            select(MillingProgressLog.berat_kumulatif_kg)
-            .where(MillingProgressLog.milling_process_id == proc_id)
-            .order_by(MillingProgressLog.waktu_update.desc())
-            .limit(1)
-        )
-    ).scalars().first()
-    return float(v) if v is not None else 0.0
+#: Berapa PK dihasilkan sebuah giling — SATU jawaban untuk seluruh aplikasi.
+#:
+#: Dulu ditulis ulang di sini, membaca progres operator saja. Dua jawaban untuk
+#: satu pertanyaan akan berselisih cepat atau lambat, dan yang salah adalah
+#: yang lebih jarang dibaca — di sini artinya PK terverifikasi yang tak bisa
+#: dikirim ke Gudang 2 karena stoknya terbaca nol.
+from app.penggilingan.gudang1.services.milling import _produced_pk  # noqa: E402
 
 
 async def _transferred_pk(db: AsyncSession, proc_id: int) -> float:
