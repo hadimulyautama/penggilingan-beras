@@ -23,15 +23,18 @@ jalan ketiga.
 kecuali `MODE_UJI` dinyalakan di environment. Mematikannya bukan sekadar
 menyembunyikan tombol: endpointnya ikut menolak.
 
-Gerbangnya **Admin ke atas**, bukan Super Admin. Bukan pelonggaran asal:
-`superadmin` belum bisa dipakai di sini. Kantor — layanan lain di basis data
-yang sama — punya DELAPAN pemeriksaan `role == "admin"` yang persis (Gmail,
-GajiHub, IT aset, pengetahuan, keuangan), jadi menaikkan peran pemilik ke
-`superadmin` justru mematikan aksesnya di sana. Sampai Kantor ikut
-disesuaikan, `admin` adalah peran tertinggi yang benar-benar berlaku.
+Gerbangnya **Super Admin saja** sejak 10 September 2026.
+
+Sebelumnya Admin ke atas, dan itu bukan pelonggaran asal: `superadmin` memang
+belum bisa dipakai. Kantor — layanan lain di basis data yang sama — punya
+delapan pemeriksaan `role == "admin"` yang persis (Gmail, GajiHub, IT aset,
+pengetahuan, keuangan), jadi menaikkan peran pemilik ke `superadmin` justru
+mematikan aksesnya di sana. Terbukti bukan teori: pemilik naik pangkat pagi
+itu, dan botnya langsung menolak. Kantor sudah disesuaikan dan dikirim ulang
+hari yang sama, jadi puncak tangga kini benar-benar bisa dipijak.
 
 Yang menjaga fitur ini tetap tiga lapis dan tak berkurang: `MODE_UJI` harus
-menyala di environment (padam secara bawaan), harus Admin ke atas, dan
+menyala di environment (padam secara bawaan), harus Super Admin, dan
 kalimatnya harus diketik persis.
 
 Yang DIPERTAHANKAN: akun & orang (supaya masih bisa masuk sesudahnya), alat
