@@ -250,8 +250,8 @@ def test_hanya_titik_pertama_yang_wajib():
 
     js = (pathlib.Path(__file__).resolve().parents[1]
           / "app/web/static/aksi.js").read_text()
-    tambah = js[js.index('t.dataset.tambah'):]
-    assert 'removeAttribute("data-wajib")' in tambah[:900], (
+    tambah = js[js.index("[data-tambah]"):]
+    assert 'removeAttribute("data-wajib")' in tambah[:1200], (
         "kotak yang ditambahkan ikut wajib — menekan tambah lalu ragu jadi "
         "tak bisa disimpan")
 
@@ -671,3 +671,70 @@ def test_kembali_tak_menghapus_isian():
           / "app/web/static/aksi.js").read_text()
     assert 'bukaAksi(id, v)' in js
     assert "function bukaAksi(id, semula)" in js
+
+
+def test_ubah_target_punya_lembarnya_sendiri_dan_konfirmasi():
+    """Mencatat kadar air MELAPORKAN apa yang terbaca; mengubah target
+    MENETAPKAN kapan mesin dimatikan, dan itu ikut menentukan gabah ini dijual
+    sebagai apa.
+
+    Dua hal sebesar itu berbagi satu tombol Simpan berarti yang berat ikut
+    tertekan bersama yang ringan — dan tak ada satu pun titik di mana orangnya
+    ditanya apakah ia sungguh bermaksud menggesernya.
+    """
+    import inspect
+
+    from app.web import miniapp
+
+    spec = inspect.getsource(miniapp)
+
+    # Bukan lagi medan di borang kadar air.
+    kadar = spec[spec.index('"id": "kadar_air"'):spec.index('"id": "ubah_target"')]
+    assert '"name": "target_baru"' not in kadar
+    assert '"type": "tombol_aksi"' in kadar and '"aksi": "ubah_target"' in kadar
+    # Benda yang sedang dikerjakan ikut dibawa — orangnya baru saja menjawab
+    # "lot yang mana" di borang yang ia tinggalkan.
+    assert '"bawa": "kode_lot"' in kadar
+
+    # Aksinya sendiri, dan ia MENUNTUT konfirmasi.
+    aksi = spec[spec.index('"id": "ubah_target"'):spec.index('"id": "selesai_pengeringan"')]
+    assert '"konfirmasi"' in aksi
+    # Konfirmasi mengulang ANGKA yang baru diketik, bukan bertanya "yakin?".
+    # "Yakin?" tak menanyakan apa pun — ia cuma melatih orang menekan Ya.
+    assert "{target}" in aksi and "{kode_lot}" in aksi
+
+
+def test_tombol_aksi_digambar_di_paling_bawah():
+    """Letaknya yang menyampaikan maksudnya. Di tengah borang ia terbaca
+    sebagai isian yang belum diisi; di bawah tombol Simpan ia terbaca sebagai
+    jalan keluar yang lain — dan memang itu."""
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    assert js.index('id="simpan"') < js.index("tombolLain +")
+    # Dan ia tak ikut digambar sebagai medan biasa.
+    assert 'if (f.type === "tombol_aksi") { return ""; }' in js
+
+
+def test_pendengar_lembar_dipasang_sekali_saja():
+    """`#lembar` elemen yang TETAP — yang ditukar tiap kali aksi dibuka
+    hanyalah isinya. Pendengar yang dipasang di dalam `bukaAksi` menumpuk satu
+    tiap kali lembar dibuka, jadi sesudah tiga kali membuka, satu ketukan
+    "Tambah" menambah TIGA kotak.
+
+    Bug itu sempat masuk pada 10 September 2026 bersama medan berulangnya
+    sendiri, dan ketahuan saat diuji di peramban.
+    """
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    badan = js[js.index("function bukaAksi"):js.index("  muat();")]
+    assert 'addEventListener("click"' not in badan, (
+        "pendengar dipasang di dalam bukaAksi — ia akan menumpuk")
+    # Dipasang lewat PINDAH.pasang, karena `document` tak ikut ditukar saat
+    # halaman berpindah dan pendengarnya akan menumpuk per perpindahan.
+    luar = js[js.index("[data-tambah]"):]
+    assert "PINDAH.pasang" in js[:js.index("[data-tambah]")][-1500:] or \
+        "PINDAH.pasang" in luar[:200], "pendengar tak lewat PINDAH.pasang"

@@ -199,7 +199,23 @@
       }
     }
 
+    /* Tombol ke aksi LAIN — digambar di paling bawah, sesudah Simpan.
+     *
+     * Letaknya yang menyampaikan maksudnya. Di tengah borang ia terbaca
+     * sebagai isian yang belum diisi; di bawah tombol Simpan ia terbaca
+     * sebagai jalan keluar yang lain — dan memang itu: menekannya
+     * meninggalkan borang ini dan membuka borang lain. */
+    var tombolLain = (a.fields || []).filter(function (f) {
+      return f.type === "tombol_aksi";
+    }).map(function (f) {
+      return '<button type="button" class="btn btn--kecil lembar__lain"' +
+        ' data-buka-aksi="' + esc(f.aksi) + '"' +
+        (f.bawa ? ' data-bawa="' + esc(f.bawa) + '"' : "") + ">" +
+        esc(f.label) + "</button>";
+    }).join("");
+
     var isi = (a.fields || []).map(function (f) {
+      if (f.type === "tombol_aksi") { return ""; }
       if (f.name === namaKunci) {
         var teks = terkunci;
         if (f.type === "select") {
@@ -283,6 +299,7 @@
         (a.hint ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
         '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +
+        tombolLain +
       "</div>";
     lembar.style.display = "flex";
     document.body.style.overflow = "hidden";
@@ -447,32 +464,6 @@
       $("ya").onclick = function () { simpan(isi, v, $("ya")); };
     }
 
-    /* Tombol tambah. Didelegasikan pada lembarnya, bukan dipasang per
-       tombol: lembar digambar ulang tiap kali aksi dibuka, dan pendengar
-       yang dipasang langsung akan memegang tombol yang sudah dibuang. */
-    lembar.addEventListener("click", function (e) {
-      var t = e.target.closest ? e.target.closest("[data-tambah]") : null;
-      if (!t) return;
-      e.preventDefault();
-      var wadah = lembar.querySelector('[data-ulang-untuk="' + t.dataset.tambah + '"]');
-      if (!wadah) return;
-      var ada = wadah.querySelectorAll("input").length;
-      var maks = parseInt(wadah.dataset.maks, 10) || 4;
-      if (ada >= maks) return;
-      var contoh = wadah.querySelector("input");
-      var baru = contoh.cloneNode(true);
-      baru.value = "";
-      baru.removeAttribute("id");          // id harus tetap satu di halaman
-      baru.removeAttribute("data-wajib");  // hanya titik pertama yang wajib
-      baru.placeholder = "titik " + (ada + 1);
-      wadah.appendChild(baru);
-      baru.focus();
-      /* Tombolnya HILANG saat penuh, bukan diam tak menanggapi. Tombol yang
-         ditekan lalu tak melakukan apa pun terbaca sebagai aplikasi rusak,
-         dan orangnya menekannya berkali-kali untuk memastikan. */
-      if (ada + 1 >= maks) t.hidden = true;
-    });
-
     $("simpan").onclick = function () {
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
@@ -603,6 +594,66 @@
       t.classList.remove("pilihan__satu--jalan");
       t.innerHTML = semula;
       kabar(String(err), "err");
+    }
+  });
+
+  /* ── Tombol di dalam lembar: tambah kotak, dan buka aksi lain ──
+   *
+   * Dipasang SEKALI di sini, bukan di dalam `bukaAksi`. `#lembar` adalah
+   * elemen yang TETAP — yang ditukar tiap kali aksi dibuka hanyalah isinya —
+   * jadi pendengar yang dipasang di dalam `bukaAksi` menumpuk satu tiap kali
+   * lembar dibuka. Sesudah membuka lembar tiga kali, satu ketukan "Tambah"
+   * menambah TIGA kotak. Bug itu sempat masuk hari ini bersama medan
+   * berulangnya sendiri.
+   *
+   * Lewat PINDAH.pasang: `document` tak ikut ditukar saat halaman berpindah,
+   * jadi pendengar yang dipasang langsung padanya juga menumpuk — satu tiap
+   * perpindahan halaman. */
+  (window.PINDAH && PINDAH.pasang ? PINDAH.pasang : function (s, j, f) {
+    s.addEventListener(j, f);
+  })(document, "click", function (e) {
+    if (!e.target.closest) return;
+
+    var tambah = e.target.closest("[data-tambah]");
+    if (tambah) {
+      e.preventDefault();
+      var wadah = document.querySelector(
+        '#lembar [data-ulang-untuk="' + tambah.dataset.tambah + '"]');
+      if (!wadah) return;
+      var ada = wadah.querySelectorAll("input").length;
+      var maks = parseInt(wadah.dataset.maks, 10) || 4;
+      if (ada >= maks) return;
+      var kotak = wadah.querySelector("input").cloneNode(true);
+      kotak.value = "";
+      kotak.removeAttribute("id");          // id harus tetap satu di halaman
+      kotak.removeAttribute("data-wajib");  // hanya titik pertama yang wajib
+      kotak.placeholder = "titik " + (ada + 1);
+      wadah.appendChild(kotak);
+      kotak.focus();
+      /* Tombolnya HILANG saat penuh, bukan diam tak menanggapi. Tombol yang
+         ditekan lalu tak melakukan apa pun terbaca sebagai aplikasi rusak,
+         dan orangnya menekannya berkali-kali untuk memastikan. */
+      if (ada + 1 >= maks) tambah.hidden = true;
+      return;
+    }
+
+    var pindah = e.target.closest("[data-buka-aksi]");
+    if (pindah) {
+      e.preventDefault();
+      /* Benda yang sedang dikerjakan ikut dibawa, jadi orangnya tak ditanya
+         dua kali "lot yang mana" — ia baru saja menjawabnya di borang yang
+         sedang ditinggalkan. Yang dibawa TULISANNYA, bukan kodenya:
+         pemulihan isian mencocokkan pilihan lewat teks yang tampil. */
+      var bawa = {};
+      if (pindah.dataset.bawa) {
+        var el = document.querySelector('#lembar [data-name="' + pindah.dataset.bawa + '"]');
+        var kunci = document.getElementById("t_" + pindah.dataset.bawa);
+        if (kunci) { bawa[pindah.dataset.bawa] = kunci.textContent.trim(); }
+        else if (el && el.tagName === "SELECT" && el.selectedIndex >= 0) {
+          bawa[pindah.dataset.bawa] = el.options[el.selectedIndex].text;
+        }
+      }
+      bukaAksi(pindah.dataset.bukaAksi, bawa);
     }
   });
 

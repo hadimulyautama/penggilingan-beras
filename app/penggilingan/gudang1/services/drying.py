@@ -902,6 +902,58 @@ async def finish_drying(
     return lot, _hours(lot.waktu_selesai_pengeringan or now, mulai)
 
 
+async def ubah_target(
+    db: AsyncSession, *, user, kode_lot: str | None, target: float | None
+) -> tuple[DryingLot, float | None]:
+    """Geser garis selesai pengeringan — sendirian, tanpa mencatat kadar air.
+
+    Sebelumnya target hanya bisa berubah sebagai medan SAMPINGAN di borang
+    "Perbarui kadar air", dan ia menumpang pada `log_moisture` yang menolak
+    kiriman tanpa satu pun bacaan. Jadi mengubah target menuntut ikut mengukur
+    kadar air — padahal keputusan menggeser garis selesai justru sering datang
+    tanpa pengukuran baru: pembeli berubah maunya, atau gabahnya ternyata
+    untuk pasar yang lain.
+
+    Dipisah juga karena bobotnya berbeda. Mencatat kadar air melaporkan apa
+    yang TERBACA; mengubah target menetapkan kapan mesin dimatikan, dan itu
+    ikut menentukan gabah ini dijual sebagai apa. Dua hal sebesar itu tak
+    pantas berbagi satu tombol Simpan.
+
+    Perubahannya dicatat di jurnal aktivitas berikut nilai lamanya: garis
+    selesai yang bergeser tanpa jejak membuat "kenapa berhenti di 15%?" tak
+    bisa dijawab bulan depan.
+    """
+    if not kode_lot:
+        raise DryingError("Sebutkan kode lot yang targetnya diubah.")
+    if target is None:
+        raise DryingError("Sebutkan target kadar airnya.")
+    if not 0 < float(target) <= 100:
+        raise DryingError(
+            f"Target {target:g}% di luar akal — isikan persen, bukan berat."
+        )
+    lot = await get_lot_by_kode(db, kode_lot)
+    if lot is None:
+        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    if lot.status == "selesai":
+        raise DryingError(
+            f"Lot {kode_lot} sudah selesai — targetnya tak bisa diubah lagi."
+        )
+
+    lama = float(lot.target_kadar_air) if lot.target_kadar_air is not None else None
+    if lama is not None and abs(lama - float(target)) < 1e-9:
+        raise DryingError(f"Targetnya memang sudah {target:g}%.")
+
+    lot.target_kadar_air = float(target)
+    await log_activity(
+        db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
+        changed_by=user.id, field_name="target_kadar_air",
+        old_value=str(lama), new_value=str(float(target)),
+    )
+    await db.commit()
+    await db.refresh(lot)
+    return lot, lama
+
+
 # ─────────────────────────── Laporan ───────────────────────────
 async def _latest_log(db: AsyncSession, lot_id: int) -> DryingMoistureLog | None:
     return (

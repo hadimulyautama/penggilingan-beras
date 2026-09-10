@@ -347,7 +347,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              }},
             {"id": "kadar_air", "label": "💧 Perbarui kadar air",
              "post": "/miniapp/actions/kadar-air",
-             "hint": "Empat titik dengan alat tes — yang dipakai rata-ratanya. "
+             "hint": "Beberapa titik dengan alat tes — yang dipakai rata-ratanya. "
                      "Satu titik saja bisa kebetulan mengenai bagian paling basah. "
                      "Angka mesin dicatat terpisah, bukan dirata-ratakan bersamanya.",
              "fields": [
@@ -368,13 +368,51 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "wajib": True},
                  {"name": "indikator", "label": "Terbaca di mesin dryer (%)",
                   "type": "number", "optional": True},
-                 # Target boleh berubah SEIRING pengeringan, dan diubah DI SINI
-                 # — di layar tempat operator menilai kembali. Menaruhnya di
-                 # aksi tersendiri berarti keputusan "sudah cukup atau belum"
-                 # dan angka yang mendasarinya terpisah dua ketukan.
-                 {"name": "target_baru", "label": "Ubah target kadar air (%) — kosongkan bila tetap",
-                  "type": "number", "optional": True},
+                 # Target TIDAK lagi jadi medan di sini. Ia dulu menumpang
+                 # sebagai isian sampingan di borang ini, dengan alasan yang
+                 # masuk akal: operator menilai kembali "sudah cukup atau
+                 # belum" justru saat melihat angkanya.
+                 #
+                 # Tetapi bobot keduanya tidak sama. Mencatat kadar air
+                 # MELAPORKAN apa yang terbaca; mengubah target MENETAPKAN
+                 # kapan mesin dimatikan, dan itu ikut menentukan gabah ini
+                 # dijual sebagai apa. Dua hal sebesar itu berbagi satu tombol
+                 # Simpan berarti yang berat ikut tertekan bersama yang
+                 # ringan — dan tak ada satu pun titik di mana orangnya
+                 # ditanya apakah ia sungguh bermaksud menggesernya.
+                 #
+                 # Jadi ia jadi TOMBOL ke lembarnya sendiri, yang menuntut
+                 # konfirmasi. Tetap satu ketukan dari sini, jadi penilaian
+                 # tak terpisah dari angka yang mendasarinya — tapi tak lagi
+                 # bisa berubah tanpa disengaja.
+                 {"name": "buka_ubah_target", "type": "tombol_aksi",
+                  "aksi": "ubah_target", "label": "Ubah target kadar air",
+                  "bawa": "kode_lot"},
              ]},
+            {"id": "ubah_target", "label": "🎯 Ubah target kadar air",
+             "post": "/miniapp/actions/ubah-target",
+             "hint": "Garis selesai pengeringan. Menggesernya mengubah kapan "
+                     "mesin dimatikan — dan itu ikut menentukan gabah ini "
+                     "dijual sebagai apa. Perubahannya tercatat berikut angka "
+                     "lamanya.",
+             "fields": [
+                 {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan",
+                  "type": "remote", "source": "/miniapp/actions/drying-active",
+                  "kosong": "Tidak ada pengeringan yang sedang berjalan."},
+                 {"name": "target", "label": "Target kadar air baru (%)",
+                  "type": "number", "wajib": True},
+             ],
+             # Angkanya diulang, bukan ditanya "yakin?". "Yakin?" tak
+             # menanyakan apa pun — ia cuma melatih orang menekan Ya. Yang
+             # berguna adalah menyebut kembali angka yang baru diketik,
+             # berikut akibatnya: mesin akan dimatikan di situ.
+             "konfirmasi": {
+                 "judul": "Geser garis selesainya?",
+                 "teks": "Pengeringan {kode_lot} akan dihentikan di {target}%. "
+                         "Angka ini yang menentukan kapan mesin dimatikan, dan "
+                         "ikut menentukan gabahnya dijual sebagai apa.",
+                 "ya": "Ya, ubah targetnya",
+             }},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "post": "/miniapp/actions/selesai-pengeringan",
              "hint": "Isikan kadar air yang TERTERA DI MESIN saat dimatikan — "
@@ -679,6 +717,7 @@ _GRUP_AKSI = {
 }
 for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
            "selesai_pengeringan", "selesai_pendinginan", "pindah_silo",
+           "ubah_target",
            "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
            "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling"):
     _GRUP_AKSI[_a] = GRUP_KARTU
@@ -697,6 +736,7 @@ URUT_GRUP = [
 _ACTION_WH = {
     # Gudang 1 (Selepan)
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
+    "ubah_target": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "hentikan_proses": "g1", "lanjutkan_proses": "g1",
@@ -1471,6 +1511,33 @@ class SelesaiPengeringanReq(BaseModel):
 
     kode_lot: str
     kadar_air: float | None = None
+
+
+class UbahTargetReq(BaseModel):
+    kode_lot: str
+    target: float | None = None
+
+
+@router.post("/actions/ubah-target")
+async def act_ubah_target(req: UbahTargetReq, user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_lot or "").strip():
+        raise HTTPException(400, "Pilih pengeringan dulu.")
+    from app.penggilingan.gudang1.services.drying import ubah_target, DryingError
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            lot, lama = await ubah_target(db, user=u, kode_lot=req.kode_lot,
+                                          target=req.target)
+        except DryingError as e:
+            raise _err(e, "Gagal mengubah target kadar air.")
+    # Angka LAMA ikut disebut. "Target jadi 15%" tak memberi tahu apakah
+    # garisnya bergeser jauh atau sedikit — dan yang baru menggesernya berhak
+    # melihat seberapa jauh ia baru saja bergeser.
+    dari = f" (dari {lama:g}%)" if lama is not None else ""
+    return {"ok": True,
+            "pesan": (f"✓ Target *{req.kode_lot}* jadi "
+                      f"{float(lot.target_kadar_air):g}%{dari}.")}
 
 
 @router.post("/actions/selesai-pengeringan")
