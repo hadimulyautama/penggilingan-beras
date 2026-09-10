@@ -27,7 +27,7 @@ import logging
 
 from app.database import SessionLocal
 from app.models import User
-from app.web.layar import MEJA
+from app.web.layar import ADMIN, MEJA, POLESAN, SUPER
 
 log = logging.getLogger("web.nav")
 
@@ -59,8 +59,21 @@ TAB = (
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None),
     ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None),
     ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None),
+    # BUKAN untuk operator selepan. Katalog ini ada karena dulu sebagian
+    # pekerjaan tak punya kartu; di Gudang 1 keadaan itu sudah lewat. Dari 13
+    # aksi yang diterima operator selepan, 12 memang dikerjakan dari kartu di
+    # Antrian tunggu — termasuk "Gabah masuk", yang WAJIB memilih tiket
+    # timbang, dan tiap tiket yang belum ditaut sudah berdiri sebagai kartu.
+    # Menyisakan katalognya berarti pintu kedua ke pekerjaan yang sudah punya
+    # pintu, dan pintu kedua membuat orang ragu pintu mana yang benar.
+    #
+    # Yang ke-13 adalah "Batalkan input terakhir" — satu-satunya yang tak
+    # punya kartu, karena yang dibatalkan bukan benda di gudang melainkan
+    # catatan yang baru saja dibuat. Ia dipindahkan ke kaki Antrian tunggu,
+    # tempat catatan itu dibuat. Menghapus katalog tanpa memindahkannya
+    # berarti tiap salah ketik berubah jadi panggilan telepon ke Admin.
     ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
-     "Harga, QC, barang keluar, batalkan", None),
+     "Harga, QC, barang keluar, batalkan", (SUPER, ADMIN, POLESAN)),
     # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.

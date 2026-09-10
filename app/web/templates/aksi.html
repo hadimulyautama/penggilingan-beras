@@ -71,11 +71,30 @@
       <h2>Tidak ada yang menunggu Anda</h2>
       <p class="bantu">
         Semua gabah sudah punya tempat. Yang sedang berjalan ada di
-        <a href="/berjalan">Sedang berjalan</a>; pekerjaan lain yang jarang
-        dipakai ada di <a href="/aksi-lain">Catat pekerjaan lain</a>.
+        <a href="/berjalan">Sedang berjalan</a>{% if VIEW != V_SELEPAN %};
+        pekerjaan lain yang jarang dipakai ada di
+        <a href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}.
       </p>
     </div>
   </div>
+{% endif %}
+
+{# ── SALAH KETIK, DIBERESKAN DI TEMPAT SALAHNYA ──
+   Hanya untuk operator selepan, dan hanya karena katalog "Catat pekerjaan
+   lain" dicabut dari layarnya. Membatalkan adalah satu-satunya aksinya yang
+   tak berwujud benda di gudang — yang dibatalkan bukan gabah melainkan
+   catatan yang baru saja dibuat — jadi ia tak punya kartu dan akan hilang
+   sama sekali bersama katalognya.
+
+   Di sinilah tempatnya yang benar: orang yang salah menimbang menekan
+   tombolnya di layar yang sama tempat ia baru saja mencatat, bukan setelah
+   berpindah ke daftar kata kerja. Kecil dan tak berwarna — ini jaring
+   pengaman, bukan pekerjaan harian, dan tombol besar memanggil dirinya
+   sendiri untuk ditekan. #}
+{% if VIEW == V_SELEPAN %}
+<div class="ubah-hasil" style="margin-top:14px">
+  <a class="btn btn--kecil" href="/aksi?buka=undo">Batalkan input terakhir</a>
+</div>
 {% endif %}
 
 <div class="lembar" id="lembar"></div>

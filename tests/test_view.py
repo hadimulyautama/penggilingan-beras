@@ -276,3 +276,49 @@ def test_tiap_view_punya_namanya_sendiri(view):
 
     assert NAMA_VIEW[view] and NAMA_VIEW[view] != view
     assert len({NAMA_VIEW[v] for v in (SUPER, ADMIN, SELEPAN, POLESAN)}) == 4
+
+
+# ────────────── Katalog "Catat pekerjaan lain" bukan milik selepan ──────────────
+
+def test_katalog_dicabut_dari_selepan():
+    """Dari 13 aksi yang diterima operator selepan, 12 dikerjakan dari kartu
+    di Antrian tunggu. Katalognya cuma pintu kedua ke pekerjaan yang sudah
+    punya pintu."""
+    from app.web.nav import TAB
+
+    view = {k: v for k, _, _, _, v in TAB}
+    assert SELEPAN not in view["aksi_lain"]
+    # Polesan TETAP memilikinya: pekerjaan Gudang 2 belum seluruhnya berkartu.
+    assert POLESAN in view["aksi_lain"]
+    for v in MEJA:
+        assert v in view["aksi_lain"], v
+
+
+def test_alamat_katalog_ikut_ditutup_bukan_cuma_pintunya():
+    """Halaman yang katanya tak ada tetapi tetap terbuka adalah halaman yang
+    tetap ada — alamatnya bisa diketik, atau tersimpan sebagai pintasan."""
+    from app import main
+
+    sumber = inspect.getsource(main.halaman_aksi_lain)
+    assert "== SELEPAN" in sumber and 'RedirectResponse("/aksi"' in sumber
+
+
+def test_membatalkan_tidak_ikut_terbuang():
+    """"Batalkan input terakhir" satu-satunya aksi selepan yang tak berwujud
+    benda di gudang, jadi ia tak punya kartu dan akan hilang sama sekali
+    bersama katalognya. Tiap salah ketik lalu berubah jadi panggilan telepon
+    ke Admin."""
+    teks = (AKAR / "app/web/templates/aksi.html").read_text()
+    assert "/aksi?buka=undo" in teks
+    # Hanya di layar yang kehilangan katalognya. View lain masih punya
+    # katalognya, dan dua pintu ke satu hal adalah dua tempat di kepala orang.
+    sebelum = teks.split("/aksi?buka=undo")[0]
+    assert sebelum.rstrip().split("\n")[-3:][0].strip() == "{% if VIEW == V_SELEPAN %}"
+
+
+def test_layar_kosong_tak_menunjuk_pintu_yang_dicabut():
+    """Ajakan menuju halaman yang tak dimiliki pembacanya adalah jalan buntu
+    yang tak terlihat sebagai jalan buntu."""
+    teks = (AKAR / "app/web/templates/aksi.html").read_text()
+    tautan = teks.split('<a href="/aksi-lain">')[0]
+    assert "VIEW != V_SELEPAN" in tautan

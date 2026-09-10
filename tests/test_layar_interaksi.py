@@ -258,8 +258,12 @@ def test_lembar_terbuka_di_layar_tempat_tombolnya_ditekan():
             # Kerangka lembarnya harus ada, kalau tidak tautannya menganga.
             assert 'id="lembar"' in teks and 'id="kabar"' in teks, berkas
             assert "aksi.js" in teks and "data-buka=" in teks, berkas
-        # Tak satu pun lagi melempar ke antrean.
-        assert '"/aksi?buka=' not in teks, berkas
+        # Tak satu pun LAYAR LAIN melempar orang ke antrean. Antrean sendiri
+        # boleh menyebut alamatnya sendiri: itu pola yang sama dengan
+        # `/stok?buka=…` — halaman digambar ulang lalu lembarnya terbuka DI
+        # SITU, bukan orangnya yang dipindahkan ke layar lain.
+        if berkas != "aksi.html":
+            assert '"/aksi?buka=' not in teks, berkas
 
     # Dan rutenya benar-benar meneruskan `buka`/`nilai`; tanpa itu lembarnya
     # tak pernah terbuka meski tautannya benar.
