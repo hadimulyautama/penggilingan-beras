@@ -196,11 +196,19 @@ async def beranda(request: Request):
     # apa yang berjalan adalah Beranda yang cepat atau lambat menyebut angka
     # yang berbeda dari layar sebelahnya — dan yang berbeda diam-diam justru
     # tak akan ada yang menyadarinya.
-    o, jalan = {}, svc.Berjalan()
+    from app.web.layar import gudang1, petak_beranda
+
+    view = getattr(request.state, "view", "tamu")
+    o, jalan, petak = {}, svc.Berjalan(), []
     try:
         async with SessionLocal() as db:
-            o = (await dashboard_data(db)).get("operasional", {}) or {}
+            # Angka Gudang 1 mahal dan tak dipakai view polesan. Operator
+            # polesan yang menunggu kueri gudang sebelah membayar waktu untuk
+            # angka yang tak akan pernah tampil di layarnya.
+            if gudang1(view):
+                o = (await dashboard_data(db)).get("operasional", {}) or {}
             jalan = await svc.untuk(db, akun.user)
+            petak = await petak_beranda(db, view, o)
     except Exception:
         log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
 
@@ -209,18 +217,11 @@ async def beranda(request: Request):
     # kalimat palsu lewat tautan.
     _PESAN = {"sandi-diganti": "Kata sandi berhasil diganti."}
 
-    gabah = o.get("gabah_hari_ini", {}) or {}
-    silo = o.get("silo", []) or []
     return render(
         request, "beranda.html",
-        gabah_kg=gabah.get("total_kg", 0) or 0,
-        gabah_batch=gabah.get("batch", 0) or 0,
-        pengeringan=len(o.get("pengeringan", []) or []),
-        silo_terisi=sum(1 for s in silo if s.get("terisi")),
-        silo_total=len(silo),
-        giling=len(o.get("giling", []) or []),
-        stok_pk=(o.get("stok_pk", {}) or {}).get("total", 0) or 0,
-        stok_pk_maks=(o.get("stok_pk", {}) or {}).get("maks", 0) or 0,
+        # Petaknya disusun `app.web.layar` menurut view — Beranda tak lagi
+        # punya satu bentuk yang dipakai bersama oleh empat peran.
+        petak=petak,
         berjalan=jalan.berjalan, transit=jalan.transit,
         lama=svc._lama,
         # Membuka lembar aksi DI LAYAR INI, bukan melemparkan orang ke

@@ -27,6 +27,7 @@ import logging
 
 from app.database import SessionLocal
 from app.models import User
+from app.web.layar import MEJA
 
 log = logging.getLogger("web.nav")
 
@@ -37,7 +38,14 @@ log = logging.getLogger("web.nav")
 #: atas batas aman untuk ibu jari (tingginya tetap 56px), tetapi labelnya
 #: harus pendek: "Pengaturan" patah dua baris di lebar itu, dan label yang
 #: patah lebih buruk daripada label yang disingkat.
-#: Kolom kelima: peran terendah yang boleh melihatnya. None = semua.
+#: Kolom kelima: VIEW mana yang ditawari pintu ini (lihat `app.web.layar`).
+#: `None` = keempatnya.
+#:
+#: Dulu kolom ini berisi satu kata, "admin", dan templat mengabaikan isinya —
+#: ia cuma memeriksa "kolomnya terisi atau tidak" lalu membandingkan peran
+#: dengan `PERAN_ADMIN_KEATAS`. Jadi kolomnya sebenarnya boolean yang menyamar
+#: sebagai nama peran, dan tak ada cara menulis "Super Admin saja" maupun
+#: "operator polesan saja". Sekarang isinya dipakai apa adanya.
 #:
 #: List audit BUKAN milik operator. Ia memuat seluruh jejak pencatatan
 #: berikut tombol yang membatalkannya — dan orang yang bisa membatalkan
@@ -57,15 +65,15 @@ TAB = (
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.
     ("keputusan",  "/keputusan",  "Menunggu keputusan",
-     "Harga, mutu, verifikasi output", "admin"),
+     "Harga, mutu, verifikasi output", MEJA),
     # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
     # berhak tahu berapa yang sudah terkumpul.
-    ("stok",       "/stok",       "Stok",           "PK Gudang 1 yang masih ada", None),
+    ("stok",       "/stok",       "Stok",           "Yang masih ada di gudang", None),
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
-     "admin"),
+     MEJA),
     ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None),
 )
 

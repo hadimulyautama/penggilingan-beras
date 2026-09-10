@@ -43,7 +43,16 @@
   </a>
 </div>
 
-{% if akun.is_admin %}
+{# Orang, akun, dan alat adalah blok SUPER ADMIN — dan itu bukan aturan baru
+   melainkan aturan yang sudah lama tertulis dan belum pernah terlihat. Daftar
+   peran di halaman Pengguna berbunyi: Super Admin = "semua di atas, DITAMBAH
+   mengelola orang, akun, dan alat". Selama blok ini muncul juga di layar
+   Admin, kalimat itu cuma keterangan yang tak dipakai siapa pun.
+
+   Rutenya sendiri BELUM dipersempit: `butuh_admin` masih menerima Admin.
+   Yang dikerjakan di sini hanya berhenti menawarkan — supaya pekerjaan
+   harian Admin tidak dipenuhi pintu yang bukan bagiannya. #}
+{% if VIEW == V_SUPER %}
 <div>
   <span class="lbl">Pengelolaan sistem</span>
   <div class="grup" style="gap:8px">
@@ -206,7 +215,7 @@
 </div>
 {% endif %}
 
-{% if MODE_UJI and akun.is_admin %}
+{% if MODE_UJI and VIEW == V_SUPER %}
 <div>
   <span class="lbl">Mode uji</span>
   <div class="grup" style="gap:8px">

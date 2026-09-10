@@ -31,14 +31,21 @@ from app.config import settings  # noqa: E402
 #: baru ketahuan berminggu-minggu kemudian.
 templates.env.globals["MODE_UJI"] = settings.mode_uji
 
-from app.peran import PERAN_ADMIN_KEATAS  # noqa: E402
+from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
 from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)
 
 templates.env.globals["TAB"] = TAB
 templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _, _ in TAB}
-# Peran yang boleh melihat tiap pintu — dipakai templat untuk menyaring
-# laci. Penjagaan sungguhannya tetap di rute masing-masing.
-templates.env.globals["PERAN_ADMIN_KEATAS"] = PERAN_ADMIN_KEATAS
+# Nama view dipakai kepala laci: orang yang sedang memakai "Lihat sebagai"
+# harus bisa membaca layar SIAPA yang sedang ia lihat, dan "operator" saja
+# tak menjawabnya di pabrik yang punya dua gudang.
+templates.env.globals["NAMA_VIEW"] = NAMA_VIEW
+# Dipakai templat untuk membedakan isi yang tak punya pintunya sendiri —
+# mis. petak Beranda dan blok Orang & alat di Pengaturan.
+templates.env.globals["V_MEJA"] = MEJA
+templates.env.globals["V_SUPER"] = SUPER
+templates.env.globals["V_SELEPAN"] = SELEPAN
+templates.env.globals["V_POLESAN"] = POLESAN
 # Judul layar naik ke bilah atas — laci menyembunyikan posisi orang,
 # dan layar tanpa nama membuat orang menekan menu hanya untuk memastikan
 # ia sedang di mana.
@@ -77,6 +84,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     konteks.setdefault("LIHAT_SEBAGAI", getattr(request.state, "lihat_sebagai", None))
     konteks.setdefault("PERAN_ASLI", getattr(request.state, "peran_asli", None))
     konteks.setdefault("layar", nama.replace(".html", ""))
+    # View ditetapkan `akun_opsional`, satu kali per permintaan. Layar tak
+    # pernah menghitungnya sendiri — lihat `app.web.layar`.
+    konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
     konteks.setdefault("MENUNGGU", 0)
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
 

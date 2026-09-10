@@ -173,8 +173,15 @@ def test_layar_keputusan_hanya_admin():
 
     assert "Depends(butuh_admin)" in inspect.getsource(
         layar_keputusan.halaman_keputusan)
-    kunci = {k: peran for k, _, _, _, peran in TAB}
-    assert kunci["keputusan"] == "admin"
+    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER
+
+    kunci = {k: view for k, _, _, _, view in TAB}
+    # Kolomnya kini menyebut VIEW mana yang ditawari pintunya, bukan satu
+    # nama peran yang templatnya abaikan. Kedua view meja masuk; kedua view
+    # operator tidak.
+    assert set(kunci["keputusan"]) == {SUPER, ADMIN}
+    assert SELEPAN not in kunci["keputusan"]
+    assert POLESAN not in kunci["keputusan"]
 
 
 def test_tiap_layar_berlaci_membawa_ketiga_lencana():

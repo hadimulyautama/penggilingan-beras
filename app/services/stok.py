@@ -6,10 +6,15 @@ menumpuk, PK mana yang gabahnya dari pemasok yang sedang dipersoalkan. Maka
 barisnya adalah LOT GILING — satuan yang sama dengan yang tertulis di kartu
 dan di catatan, jadi orang tak perlu menerjemahkan apa pun.
 
-Gudang 2 (beras putih, menir, bekatul) sengaja belum ikut: pemilik memutuskan
-Gudang 1 dulu. Kodenya tidak ditinggalkan menganggur di sini — riwayat git
-menyimpannya, dan kode menganggur yang menunggu dipakai lagi selalu sudah
-basi saat gilirannya tiba.
+Gudang 2 menyusul di bawah, tetapi dengan satuan yang BERBEDA — per tempat,
+bukan per lot — dan alasannya ditulis panjang di sana: PK dari beberapa asal
+dituang ke silo yang sama, jadi "sisa lot ini berapa" memang tak punya
+jawaban di sana.
+
+Barang jadi Gudang 2 (beras putih, menir, bekatul) dan kemasan masih belum
+ikut. Keduanya subjek lain — yang KELUAR dari penyosohan, bukan yang menunggu
+disosoh — dan menempelkannya di halaman yang sama akan membuat satu layar
+menjawab dua pertanyaan sekaligus.
 """
 from __future__ import annotations
 
@@ -266,4 +271,114 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             berjalan=proc.status == "proses",
             belum_dicatat=belum,
         ))
+    return keluar
+
+
+# ─────────────────────────── Gudang 2 — Penyosohan ───────────────────────────
+#
+# Gudang 1 mendaftar stoknya per LOT GILING, karena di sana satuan yang
+# tertulis di kartu dan di catatan memang lot. Gudang 2 tidak bisa begitu:
+# PK dari beberapa asal dituang ke silo yang sama dan stoknya disimpan sebagai
+# SATU jumlah, bukan lapisan. Menampilkannya per lot berarti mengarang sisa
+# per lot — angka yang tak bisa dipertanggungjawabkan, tepat di tempat orang
+# mencari pertanggungjawaban.
+#
+# Maka satuannya TEMPAT: silo A, silo B, tumpukan. Asal-usulnya tetap disebut
+# di dalam kartunya sebagai riwayat "apa yang pernah masuk ke sini", persis
+# yang sudah dipakai kartu silo di layar Sedang berjalan.
+
+
+@dataclass
+class TempatPk:
+    """Satu tempat penyimpanan PK di Gudang 2, beserta isinya."""
+
+    kode: str
+    tersedia: float
+    #: Kapasitas tempat ini dalam kg. None = tak berbatas / tak tercatat.
+    maks: float | None = None
+    #: Apa yang PERNAH masuk ke sini: (asal, berat, kapan). Bukan sisa
+    #: per asal — lihat catatan di atas.
+    isi: list[tuple[str, str, str]] = field(default_factory=list)
+    #: Penuh berapa persen. None bila kapasitasnya tak diketahui.
+    persen: float | None = None
+
+
+async def _isi_tumpukan(db: AsyncSession) -> list[tuple[str, str, str]]:
+    """Asal PK yang masih menumpuk di lantai Gudang 2.
+
+    Berbeda dari silo, tumpukan MEMANG bisa dirinci: tiap pemasukan tetap
+    berdiri sendiri sampai dipindahkan, dan sisanya dihitung per pemasukan
+    oleh `_sisa_tumpukan_intake`. Yang sisanya nol tak disebut — daftar yang
+    memuat baris nol mengajari orang melewatkan barisnya.
+    """
+    from app.models import InternalTransfer, PkGudang2Intake
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from app.penggilingan.gudang2.service import _sisa_tumpukan_intake
+    from app.models import Supplier
+
+    keluar: list[tuple[str, str, str]] = []
+    for i in (await db.execute(
+        select(PkGudang2Intake)
+        .where(PkGudang2Intake.tujuan == "ditumpuk")
+        .order_by(PkGudang2Intake.id.desc())
+    )).scalars().all():
+        sisa = await _sisa_tumpukan_intake(db, i.id)
+        if sisa <= 0:
+            continue
+        judul = "PK"
+        if i.internal_transfer_id:
+            kode = (await db.execute(
+                select(MillingProcess.kode_proses)
+                .join(InternalTransfer,
+                      InternalTransfer.milling_process_id == MillingProcess.id)
+                .where(InternalTransfer.id == i.internal_transfer_id)
+            )).scalars().first()
+            judul = f"Giling sendiri · {kode}" if kode else "Giling sendiri"
+        elif i.pk_purchase_batch_id:
+            baris = (await db.execute(
+                select(PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
+                .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+                .where(PkPurchaseBatch.id == i.pk_purchase_batch_id)
+            )).first()
+            if baris:
+                judul = f"{baris[1] or '?'} · {baris[0]}"
+        keluar.append((judul, _kg(sisa), f"masuk {_tgl(i.tanggal_masuk)}"))
+    return keluar[:8]
+
+
+async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
+    """PK yang masih ada di Gudang 2 — per tempat, silo dulu lalu tumpukan.
+
+    Tempat KOSONG tetap ditampilkan, dan di sinilah aturan Gudang 1 sengaja
+    dibalik. Di sana barisnya lot: lot yang habis memang tak ada lagi, jadi
+    menyembunyikannya benar. Di sini barisnya tempat, dan tempat yang kosong
+    tetap ADA — silo yang hilang dari daftar terbaca sebagai silo yang rusak
+    atau data yang gagal dimuat, dan operator akan mencarinya di layar lain.
+    """
+    from app.config import settings
+    from app.penggilingan.gudang2.service import (
+        get_g2_silo, hitung_stok_silo, hitung_stok_tumpukan)
+    from app.services.berjalan import _asal_pk
+
+    keluar: list[TempatPk] = []
+    for huruf in ("A", "B"):
+        silo = await get_g2_silo(db, huruf)
+        if silo is None:
+            continue
+        stok = float(await hitung_stok_silo(db, silo.id))
+        maks = (float(silo.kapasitas_ton) * 1000
+                if silo.kapasitas_ton is not None else None)
+        keluar.append(TempatPk(
+            kode=f"Silo {huruf}", tersedia=stok, maks=maks,
+            isi=(await _asal_pk(db, silo.id)) if stok > 0 else [],
+            persen=(stok / maks * 100 if maks else None),
+        ))
+
+    tump = float(await hitung_stok_tumpukan(db))
+    maks_t = float(settings.g2_tumpukan_maks_kg or 0) or None
+    keluar.append(TempatPk(
+        kode="Tumpukan", tersedia=tump, maks=maks_t,
+        isi=(await _isi_tumpukan(db)) if tump > 0 else [],
+        persen=(tump / maks_t * 100 if maks_t else None),
+    ))
     return keluar

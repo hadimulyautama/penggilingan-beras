@@ -217,8 +217,10 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
 
     # Buka dan tutup harus berpasangan — keduanya ditulis dengan ekspresi yang
     # sama, jadi yang dijaga adalah jumlahnya.
-    assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 1
-    assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 1
+    # Dua kartu berlipat sekarang: lot giling Gudang 1 dan tempat Gudang 2.
+    # Yang dijaga tetap sama — tiap yang dibuka ada penutupnya.
+    assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 2
+    assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 2
 
 
 def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():

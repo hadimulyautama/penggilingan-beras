@@ -39,8 +39,8 @@ TINGKAT = {"operator": 1, "staff": 2, "admin": 3, "superadmin": 4}
 PILIHAN = (
     ("", "Peran saya sendiri"),
     ("admin", "Admin"),
-    ("operator:g1", "Operator Gudang 1 — Selepan"),
-    ("operator:g2", "Operator Gudang 2 — Penyosohan"),
+    ("operator:g1", "Operator selepan (Gudang 1)"),
+    ("operator:g2", "Operator polesan (Gudang 2)"),
 )
 
 #: Pola nama gudang untuk tiap kode.

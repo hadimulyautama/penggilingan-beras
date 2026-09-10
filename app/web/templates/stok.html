@@ -4,21 +4,30 @@
 
 {% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
 
-{% if not lot %}
+{% if not lot and not tempat %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
       <path d="M12 13v7"/></svg>
     <div>
+      {% if VIEW == V_POLESAN %}
+      <h2>Tak ada PK tersisa di Gudang 2</h2>
+      <p class="bantu">
+        Silo dan tumpukan kosong — semuanya sudah disosoh, atau belum ada PK
+        yang masuk.
+      </p>
+      {% else %}
       <h2>Tak ada PK tersisa di Gudang 1</h2>
       <p class="bantu">
         Semua hasil giling sudah dikirim ke Gudang 2 atau terjual — atau
         belum ada giling yang menghasilkan.
       </p>
+      {% endif %}
     </div>
   </div>
 {% else %}
+{% if lot %}
   {# Jumlahnya di muka: yang membuka halaman ini paling sering ingin tahu
      "cukup tidak untuk satu kiriman", dan itu satu angka. Rinciannya di
      bawah, untuk yang bertanya "yang mana". #}
@@ -201,6 +210,83 @@
     {% endfor %}
   </div>
 {% endif %}
+
+{# ── GUDANG 2 — PER TEMPAT, BUKAN PER LOT ──
+   Satuannya sengaja berbeda dari Gudang 1, dan bedanya bukan selera. Di
+   Gudang 1 tiap lot giling berdiri sendiri sampai habis, jadi "berapa sisa
+   lot ini" punya jawaban. Di Gudang 2 PK dari beberapa asal dituang ke silo
+   yang sama dan stoknya disimpan sebagai satu jumlah — sisa per asal memang
+   tak ada. Maka barisnya TEMPAT, dan asal-usulnya disebut di dalamnya
+   sebagai riwayat: apa saja yang pernah masuk ke sini.
+
+   Tempat kosong tetap ditampilkan. Silo yang hilang dari daftar terbaca
+   sebagai silo yang rusak atau data yang gagal dimuat. #}
+{% if tempat %}
+  <div{% if lot %} style="margin-top:18px"{% endif %}>
+    <div class="jumlah">
+      <span class="lbl">PK di Gudang 2</span>
+      <div class="jumlah__angka">{{ kg(tempat|sum(attribute="tersedia")) }}<small>kg</small></div>
+      <div class="jumlah__ket">
+        {{ tempat|length }} tempat · masuk dikurangi yang sudah disosoh
+      </div>
+    </div>
+
+    <div class="grup" style="gap:9px">
+      {% for t in tempat %}
+        {% set laci = t.isi|length > 0 %}
+        <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
+        <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
+          <div class="padat__atas">
+            <span class="padat__nama">{{ t.kode }}</span>
+            {% if t.tersedia > 0 %}
+              <span class="padat__nilai">{{ kg(t.tersedia) }}<small>kg</small></span>
+            {% else %}
+              <span class="padat__nilai padat__nilai--kosong">kosong</span>
+            {% endif %}
+          </div>
+          {% if t.maks %}
+            <dl class="fakta">
+              <div>
+                <dt>Kapasitas</dt>
+                <dd>{{ kg(t.maks) }} kg</dd>
+              </div>
+              <div>
+                <dt>Terisi</dt>
+                {# Sengaja TIDAK disorot, tak seperti rendemen di kartu Gudang
+                   1. Rendemen menilai pekerjaan: makin tinggi makin baik, jadi
+                   warnanya berarti sesuatu. "Terisi" tidak — silo penuh bukan
+                   kabar baik maupun buruk, ia cuma keadaan. Warna yang tak
+                   berarti apa-apa mengajari orang mengabaikan warna yang
+                   berarti. #}
+                <dd>{{ "%.0f"|format(t.persen) }}%</dd>
+              </div>
+            </dl>
+            {% if t.persen and t.persen > 100 %}
+              <div class="nota nota--hati">
+                <span aria-hidden="true">⚠</span>
+                <span>Melebihi kapasitas — periksa pencatatannya.</span>
+              </div>
+            {% endif %}
+          {% endif %}
+        </{{ "summary" if laci else "div" }}>
+          {% if t.isi %}
+            <div class="anak">
+              <div class="anak__kepala">Pernah masuk · {{ t.isi|length }}</div>
+              {% for nama, berat, kapan in t.isi %}
+                <div class="anak__baris">
+                  <span class="anak__nama">{{ nama }}</span>
+                  <span class="anak__kg">{{ berat }}</span>
+                  <span class="anak__jam">{{ kapan }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </{{ "details" if laci else "div" }}>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+{% endif %}
 {% if boleh_ubah %}
   <div class="lembar" id="lembar"></div>
   <div class="kabar" id="kabar" role="status"></div>
@@ -209,7 +295,8 @@
 
 {% block kaki %}
 <div class="kaki">
-  {%- if boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya
+  {%- if VIEW == V_POLESAN %}Stok silo terhitung dari PK masuk dikurangi yang sudah disosoh
+  {%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya
   {%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}
 </div>
 {% if boleh_ubah %}

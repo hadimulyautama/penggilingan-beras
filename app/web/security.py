@@ -221,6 +221,24 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
                     akun.user.default_warehouse_id = wid
                     request.state.lihat_sebagai = f"operator {gd.upper()}"
 
+    # ── View: layar siapa yang sedang digambar ──
+    #
+    # DI SINI, sesudah peran efektif ditetapkan, bukan di tiap layar. Empat
+    # layar yang masing-masing menghitung sendiri "ini operator gudang mana"
+    # adalah empat tempat yang bisa menjawab berbeda — dan yang berbeda
+    # diam-diam tak akan ada yang menyadarinya sampai ada operator yang
+    # melihat gudang orang lain.
+    from app.web.layar import TAMU, view_untuk
+
+    request.state.view = TAMU
+    if akun is not None and akun.user is not None:
+        try:
+            request.state.view = await view_untuk(akun.user)
+        except Exception:
+            # Basis data yang sedang terganggu tak boleh menjatuhkan halaman;
+            # `tamu` menampilkan layar paling sedikit, bukan paling banyak.
+            log.exception("View gagal ditentukan (layar tamu dipakai)")
+
     request.state.akun = akun
     return akun
 

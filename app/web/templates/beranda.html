@@ -5,35 +5,42 @@
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
+{# ── EMPAT ANGKA PERTAMA, MILIK ORANG YANG MEMBACANYA ──
+   Isinya datang dari `app.web.layar`, bukan ditulis di sini. Beranda yang
+   menuliskan sendiri petaknya adalah Beranda yang hanya bisa punya satu
+   bentuk — dan bentuk yang satu itu terlanjur milik gudang selepan. Operator
+   polesan yang disambut "Gabah masuk" membaca kabar dari gudang sebelah,
+   lalu berhenti membaca baris teratas ini selamanya. #}
+{% for blok in petak %}
 <div>
-  <span class="lbl">Keadaan pabrik hari ini</span>
+  <span class="lbl">
+    {%- if blok.judul %}{{ blok.judul }}{% elif loop.first %}Keadaan pabrik hari ini{% endif -%}
+  </span>
   <div class="petak">
-    <div class="petak__sel">
-      <div class="petak__label">Gabah masuk</div>
-      <div class="petak__nilai">{{ "{:,}".format(gabah_kg|int).replace(",", ".") }}<span class="petak__sat"> kg</span></div>
-      <div class="petak__label" style="margin-top:2px">{{ gabah_batch }} batch</div>
+    {% for s in blok.sel %}
+    <div class="petak__sel{% if s.nada %} petak__sel--{{ s.nada }}{% endif %}">
+      <div class="petak__label">{{ s.label }}</div>
+      <div class="petak__nilai">{{ s.nilai }}<span class="petak__sat">{{ s.sat }}</span></div>
+      {% if s.ket %}<div class="petak__label" style="margin-top:2px">{{ s.ket }}</div>{% endif %}
     </div>
-    <div class="petak__sel{% if pengeringan %} petak__sel--hati{% endif %}">
-      <div class="petak__label">Pengeringan</div>
-      <div class="petak__nilai">{{ pengeringan }}<span class="petak__sat"> lot</span></div>
-      <div class="petak__label" style="margin-top:2px">{{ "berjalan" if pengeringan else "tak ada" }}</div>
-    </div>
-    <div class="petak__sel{% if silo_terisi %} petak__sel--aman{% endif %}">
-      <div class="petak__label">Silo terisi</div>
-      <div class="petak__nilai">{{ silo_terisi }}<span class="petak__sat"> / {{ silo_total }}</span></div>
-    </div>
-    {# Batasnya ikut disebut. Angka telanjang tak memberi tahu apa pun sampai
-       orang hafal berapa muat lantainya — dan yang perlu bertindak justru yang
-       belum hafal. #}
-    <div class="petak__sel{% if stok_pk_maks and stok_pk > stok_pk_maks %} petak__sel--bahaya{% endif %}">
-      <div class="petak__label">Stok PK</div>
-      <div class="petak__nilai">{{ "{:,}".format(stok_pk|int).replace(",", ".") }}<span class="petak__sat"> kg</span></div>
-      <div class="petak__label" style="margin-top:2px">
-        {% if stok_pk_maks %}tumpukan maks {{ (stok_pk_maks / 1000)|int }} ton · {% endif %}{{ giling }} giling berjalan
-      </div>
-    </div>
+    {% endfor %}
   </div>
 </div>
+{% endfor %}
+
+{# Operator yang belum diberi gudang. Tanpa baris ini Beranda-nya tampil
+   sebagai halaman yang hampir kosong — dan halaman kosong terbaca sebagai
+   aplikasi yang rusak, bukan sebagai akun yang belum selesai didaftarkan.
+   Yang membacanya berdiri di gudang dan tak bisa menebak bedanya. #}
+{% if not petak %}
+<div>
+  <span class="lbl">Keadaan pabrik hari ini</span>
+  <div class="kosong-tipis">
+    Akun Anda belum ditetapkan gudangnya, jadi belum ada angka yang bisa
+    ditampilkan. Minta Super Admin menyetel gudang Anda.
+  </div>
+</div>
+{% endif %}
 
 {# ── YANG SEDANG BERJALAN, VERSI PADAT ──
    Dulu hanya pengeringan yang sampai ke sini, dan itu membuat Beranda
@@ -77,6 +84,31 @@
     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
          stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
   </a>
+  {# Kerja MEJA berdiri sejajar kerja gudang, dan hanya untuk yang punya
+     meja. Bagi Admin justru INILAH pekerjaannya: antrean gudang dikerjakan
+     operator, sedangkan harga yang belum diverifikasi menahan pabrik di
+     mejanya sendiri. Pintu yang cuma ada di laci tak menyebutkan berapa
+     yang menunggu sampai lacinya dibuka. #}
+  {% if VIEW in V_MEJA %}
+  <a class="tindakan" href="/keputusan" style="margin-top:8px">
+    <div class="tindakan__ikon">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+    </div>
+    <div class="tindakan__isi">
+      <div class="tindakan__nama">Menunggu keputusan</div>
+      <div class="tindakan__ket">
+        {%- if KEPUTUSAN %}{{ KEPUTUSAN }} menunggu diputuskan
+        {%- else %}tak ada yang tertahan{% endif -%}
+      </div>
+    </div>
+    {% if KEPUTUSAN %}<span class="lencana">{{ KEPUTUSAN }}</span>{% endif %}
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
+         stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+  </a>
+  {% endif %}
 </div>
 
 {# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat
