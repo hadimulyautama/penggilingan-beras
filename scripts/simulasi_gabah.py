@@ -315,8 +315,11 @@ async def jalan() -> None:
                           json={"kode_lot": kode_lot, "kadar_air": 14.2})
         cek("kadar air kedua tercatat", r.status_code == 200)
 
+        # Kadar air akhir kini WAJIB — angka yang tertera di mesin saat
+        # dimatikan. Skenario ini memakai 13,8% supaya tampak turun dari
+        # 14,2% pembaruan sebelumnya.
         r = await op.post("/miniapp/actions/selesai-pengeringan",
-                          json={"kode_lot": kode_lot})
+                          json={"kode_lot": kode_lot, "kadar_air": 13.8})
         cek("pengeringan selesai", r.status_code == 200, r.text[:120])
 
         babak("6. Pendinginan lalu pindah ke silo")

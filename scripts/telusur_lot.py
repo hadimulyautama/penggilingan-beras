@@ -66,7 +66,8 @@ async def bangun(op, sids) -> None:
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
     pgr = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
     await op.post("/miniapp/actions/kadar-air", json={"kode_lot": pgr, "kadar_air": 14})
-    await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": pgr})
+    await op.post("/miniapp/actions/selesai-pengeringan",
+                  json={"kode_lot": pgr, "kadar_air": 14.0})
     await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": pgr})
     await op.post("/miniapp/actions/pindah-silo", json={"kode_lot": pgr, "silo": "A"})
 

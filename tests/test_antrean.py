@@ -361,3 +361,73 @@ def test_tumpukan_tetap_dihitung_lencana_antrean():
     # Dan `jumlah_menunggu` memang membaca `menunggu` apa adanya.
     assert "len(self.menunggu)" in inspect.getsource(
         type(svc.Berjalan()).jumlah_menunggu.fget)
+
+
+def test_selesai_pengeringan_menuntut_kadar_air_mesin():
+    """Kadar air akhir satu-satunya jawaban atas "kenapa pengeringan ini
+    dihentikan di sini", dan satu-satunya yang menghubungkan lama pengeringan
+    dengan hasilnya.
+
+    Sebelumnya ia hanya bisa masuk lewat aksi TERPISAH ("Perbarui kadar air")
+    yang dipakai selama proses berjalan — jadi lot yang tak sekali pun
+    diperbarui selesai tanpa satu angka pun, dan tak ada layar yang memberi
+    tahu bahwa ia kosong. Sesudah gabahnya pindah ke silo, bercampur, lalu
+    digiling, angka itu hilang bersama momennya.
+    """
+    import inspect
+
+    from app.penggilingan.gudang1.services import drying
+    from app.web import miniapp
+
+    sumber = inspect.getsource(drying.finish_drying)
+    assert "kadar_air_akhir" in sumber
+
+    # Ditolak bila kosong, dan ditolak bila di luar akal.
+    assert "if kadar_air_akhir is None:" in sumber
+    assert "0 < float(kadar_air_akhir) <= 100" in sumber
+
+    # SELURUH penolakan sebelum satu pun perubahan — aturan yang sama dipakai
+    # `finish_milling`, dan pelanggarannya pernah meninggalkan proses yang
+    # setengah tertutup: tak di antrean karena sudah selesai, tak di laporan
+    # karena datanya belum lengkap.
+    assert sumber.index("kadar_air_akhir is None") < sumber.index('lot.status = "selesai"')
+
+    # Medannya WAJIB di katalog aksi, kalau tidak borangnya mengirim kosong
+    # lalu ditolak server — dan yang ditolak sesudah mengetik akan berhenti
+    # percaya pada borangnya.
+    menu = inspect.getsource(miniapp.actions_menu)
+    blok = menu.split('"id": "selesai_pengeringan"')[1].split('"id":')[0]
+    assert '"name": "kadar_air"' in blok and '"wajib": True' in blok
+
+
+def test_kadar_air_akhir_lewat_jalan_yang_sudah_ada():
+    """Dicatat lewat `log_moisture`, bukan kolom baru di `drying_lots`.
+
+    Satu jalan masuk berarti satu jalan pembatalan, satu bentuk jurnal, dan
+    tak ada angka kedua yang bisa berselisih dengan yang pertama. Ditulis
+    SEBELUM status berpindah, karena `log_moisture` menolak lot yang sudah
+    selesai — dan penolakan itu benar: sesudah selesai, log baru bukan lagi
+    pengukuran melainkan koreksi.
+    """
+    import inspect
+
+    from app.penggilingan.gudang1.services import drying
+
+    sumber = inspect.getsource(drying.finish_drying)
+    assert "await log_moisture(" in sumber
+    assert "indikator=float(kadar_air_akhir)" in sumber
+    assert sumber.index("await log_moisture(") < sumber.index('lot.status = "selesai"')
+
+
+def test_skrip_simulasi_ikut_mengirim_kadar_air():
+    """Skrip yang tak ikut diperbarui akan gagal pada langkah yang dulu jalan,
+    dan kegagalannya terbaca sebagai fitur yang rusak."""
+    import pathlib
+
+    akar = pathlib.Path(__file__).resolve().parents[1] / "scripts"
+    for berkas in akar.glob("*.py"):
+        isi = berkas.read_text()
+        if "actions/selesai-pengeringan" not in isi:
+            continue
+        potong = isi.split("actions/selesai-pengeringan")[1][:220]
+        assert "kadar_air" in potong, f"{berkas.name} belum mengirim kadar_air"

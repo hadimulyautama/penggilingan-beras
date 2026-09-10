@@ -820,8 +820,31 @@ async def start_drying(
 
 
 async def finish_drying(
-    db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
+    db: AsyncSession, *, user, kode_lot: str | None,
+    kadar_air_akhir: float | None = None, tanggal=None, jam=None
 ) -> tuple[DryingLot, float]:
+    """Nyatakan pengeringan selesai — berikut kadar air yang TERTERA DI MESIN.
+
+    Angka itu wajib, dan alasannya bukan kerapian data. Kadar air akhir adalah
+    satu-satunya jawaban atas pertanyaan "kenapa pengeringan ini dihentikan di
+    sini?", dan ia satu-satunya yang menghubungkan lama pengeringan dengan
+    hasilnya. Tanpa dicatat pada saat mesin dimatikan, ia tak akan pernah
+    tercatat: gabahnya pindah ke silo, bercampur, lalu digiling, dan angka itu
+    hilang bersama momennya.
+
+    Sebelumnya menyelesaikan pengeringan tak menuntut apa pun selain memilih
+    lotnya. Yang mencatat kadar air adalah aksi TERPISAH ("Perbarui kadar
+    air") yang dipakai selama proses berjalan — jadi lot yang dikeringkan
+    tanpa sekali pun diperbarui akan selesai tanpa satu angka pun, dan tak ada
+    layar yang memberi tahu bahwa ia kosong.
+
+    Dicatat lewat `log_moisture` yang sudah ada, BUKAN dengan menulis kolom
+    baru: satu jalan masuk berarti satu jalan pembatalan, satu bentuk jurnal,
+    dan tak ada angka kedua yang bisa berselisih dengan yang pertama. Ia
+    ditulis SEBELUM status berpindah — `log_moisture` menolak lot yang sudah
+    "selesai", dan penolakan itu benar: sesudah selesai, log baru bukan lagi
+    pengukuran melainkan koreksi.
+    """
     if not kode_lot:
         raise DryingError("Sebutkan kode lot yang selesai, contoh: `PGR-20260702-01 selesai`")
     lot = await get_lot_by_kode(db, kode_lot)
@@ -839,6 +862,31 @@ async def finish_drying(
                 f"Tanggal selesai lebih awal dari mulai pengeringan "
                 f"({lot.waktu_mulai_pengeringan:%d-%m-%Y %H:%M})."
             )
+        # ── Seluruh penolakan SEBELUM satu pun perubahan ──
+        #
+        # Aturan yang sama dipakai `finish_milling`, dan ia ada karena
+        # pelanggarannya pernah mahal: proses yang setengah tertutup — status
+        # sudah berpindah, angkanya ditolak — meninggalkan lot yang tak muncul
+        # di layar mana pun. Tak di antrean karena sudah selesai, tak di
+        # laporan karena datanya belum lengkap.
+        if kadar_air_akhir is None:
+            raise DryingError(
+                "Sebutkan kadar air yang tertera di mesin saat dimatikan. "
+                "Angka itu yang menjawab kenapa pengeringan dihentikan di "
+                "sini, dan ia tak bisa dicari lagi setelah gabahnya pindah."
+            )
+        if not 0 < float(kadar_air_akhir) <= 100:
+            raise DryingError(
+                f"Kadar air {kadar_air_akhir:g}% di luar akal — isikan persen, "
+                f"bukan berat."
+            )
+        # Dicatat lebih dulu, selagi lotnya masih berjalan. `log_moisture`
+        # melakukan commit-nya sendiri; itu tak mengapa, karena baris ini
+        # sebuah PENGUKURAN yang memang terjadi — ia tetap benar walau
+        # penutupan di bawahnya gagal.
+        await log_moisture(db, user=user, kode_lot=kode_lot,
+                           indikator=float(kadar_air_akhir),
+                           tanggal=tanggal, jam=jam)
         lot.status = "selesai"
         lot.waktu_selesai_pengeringan = now
         await _close_late_notifs(db, lot.id)

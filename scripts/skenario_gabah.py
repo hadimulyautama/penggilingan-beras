@@ -162,7 +162,8 @@ async def s1(op, dir_, sid):
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
     lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
     await op.post("/miniapp/actions/kadar-air", json={"kode_lot": lot, "kadar_air": 14})
-    await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
+    await op.post("/miniapp/actions/selesai-pengeringan",
+                  json={"kode_lot": lot, "kadar_air": 14.0})
     await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": lot})
     r = await op.post("/miniapp/actions/pindah-silo",
                       json={"kode_lot": lot, "silo": "A"})
@@ -240,7 +241,8 @@ async def s5(op, dir_, sid):
                   json={"timbangan_transaksi_id": t[0]["value"], "tujuan": DRYER})
     await op.post("/miniapp/actions/mulai-pengeringan", json={})
     lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
-    await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
+    await op.post("/miniapp/actions/selesai-pengeringan",
+                  json={"kode_lot": lot, "kadar_air": 14.0})
     await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": lot})
     r = await op.post("/miniapp/actions/pindah-silo", json={"kode_lot": lot, "silo": "A"})
     cek("lot masuk Silo A", r.status_code == 200, r.text[:90])
@@ -328,7 +330,8 @@ async def s9(op, dir_, sid):
                   json={"timbangan_transaksi_id": t2[0]["value"], "tujuan": SILO_A})
 
     lot = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
-    await op.post("/miniapp/actions/selesai-pengeringan", json={"kode_lot": lot})
+    await op.post("/miniapp/actions/selesai-pengeringan",
+                  json={"kode_lot": lot, "kadar_air": 14.0})
     await op.post("/miniapp/actions/selesai-pendinginan", json={"kode_lot": lot})
     r = await op.post("/miniapp/actions/pindah-silo",
                       json={"kode_lot": lot, "silo": "A"})

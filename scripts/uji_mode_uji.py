@@ -76,8 +76,12 @@ async def main() -> None:
                           json={"timbangan_transaksi_id": t[0]["value"], "tujuan": S.DRYER})
         await op.post("/miniapp/actions/mulai-pengeringan", json={})
         pgr = (await op.get("/miniapp/actions/drying-active")).json()[0]["value"]
+        # Selesai pengeringan menuntut kadar air mesin; selesai
+        # pendinginan tidak. Medan tambahan yang tak dikenal diabaikan
+        # pengurainya, jadi satu badan kiriman cukup untuk keduanya.
         for aksi in ("selesai-pengeringan", "selesai-pendinginan"):
-            await op.post(f"/miniapp/actions/{aksi}", json={"kode_lot": pgr})
+            await op.post(f"/miniapp/actions/{aksi}",
+                          json={"kode_lot": pgr, "kadar_air": 14.0})
         await op.post("/miniapp/actions/pindah-silo", json={"kode_lot": pgr, "silo": "A"})
         await op.post("/miniapp/actions/mulai-giling", json={"silo": "A"})
 

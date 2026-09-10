@@ -373,11 +373,22 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "selesai_pengeringan", "label": "🌡️ Selesai pengeringan",
              "post": "/miniapp/actions/selesai-pengeringan",
-             "hint": "Pengeringan masuk fase pendinginan otomatis (gabah tetap di mesin).",
+             "hint": "Isikan kadar air yang TERTERA DI MESIN saat dimatikan — "
+                     "angka itu tak bisa dicari lagi setelah gabahnya pindah. "
+                     "Lalu pengeringan masuk fase pendinginan otomatis (gabah "
+                     "tetap di mesin).",
              "fields": [
                  {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
                   "kosong": "Tidak ada pengeringan yang sedang berjalan."},
+                 # WAJIB. Kadar air akhir satu-satunya jawaban atas "kenapa
+                 # pengeringan ini dihentikan di sini", dan satu-satunya yang
+                 # menghubungkan lama pengeringan dengan hasilnya. Sebelum ini
+                 # ia hanya bisa masuk lewat aksi TERPISAH selama proses
+                 # berjalan — jadi lot yang tak sekali pun diperbarui selesai
+                 # tanpa satu angka pun, tanpa satu layar pun memberitahu.
+                 {"name": "kadar_air", "label": "Kadar air di mesin (%)",
+                  "type": "number", "wajib": True},
              ]},
             {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
              "post": "/miniapp/actions/selesai-pendinginan",
@@ -1438,8 +1449,22 @@ class KodeLotReq(BaseModel):
     kode_lot: str
 
 
+class SelesaiPengeringanReq(BaseModel):
+    """Model sendiri, bukan `KodeLotReq` yang dipakai bersama aksi lain.
+
+    `kadar_air` wajib di sini dan tidak di sana, jadi menumpangkannya pada
+    model bersama akan membuat aksi-aksi lain diam-diam menerima medan yang
+    tak berlaku bagi mereka.
+    """
+
+    kode_lot: str
+    kadar_air: float | None = None
+
+
 @router.post("/actions/selesai-pengeringan")
-async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
+async def act_selesai_pengeringan(
+    req: SelesaiPengeringanReq, user: User = Depends(pengguna_aksi)
+) -> dict:
     _require(await _is_g1_operator(user))
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
@@ -1447,10 +1472,15 @@ async def act_selesai_pengeringan(req: KodeLotReq, user: User = Depends(pengguna
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            lot, jam = await finish_drying(db, user=u, kode_lot=req.kode_lot)
+            lot, jam = await finish_drying(db, user=u, kode_lot=req.kode_lot,
+                                           kadar_air_akhir=req.kadar_air)
         except DryingError as e:
             raise _err(e, "Gagal menyelesaikan pengeringan.")
-    pesan = (f"✓ Pengeringan *{req.kode_lot}* selesai ({jam:.0f} jam) → "
+    # Angkanya diulang di balasan. Yang baru mengetiknya sedang berdiri di
+    # depan mesin dan bisa membandingkan langsung dengan layar dryer — salah
+    # ketik satu digit paling murah ketahuannya justru pada detik ini.
+    ka = f" · kadar air {req.kadar_air:g}%" if req.kadar_air is not None else ""
+    pesan = (f"✓ Pengeringan *{req.kode_lot}* selesai ({jam:.0f} jam{ka}) → "
              "fase pendinginan. Nyatakan pendinginan selesai saat sudah dingin.")
     return {"ok": True, "pesan": pesan}
 
