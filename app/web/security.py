@@ -259,9 +259,69 @@ async def butuh_staff(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
 
 
 async def butuh_admin(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
-    """Super Admin saja — tingkat tertinggi."""
+    """Direksi ke atas.
+
+    Namanya sempat berbohong: docstring-nya berbunyi "Super Admin saja"
+    padahal `is_admin` menerima Direksi juga. Yang benar-benar hanya untuk
+    Super Admin sekarang punya penjaganya sendiri di bawah.
+    """
     if not akun.is_admin:
-        raise AksesDitolak("Halaman ini hanya untuk Super Admin.")
+        raise AksesDitolak("Halaman ini hanya untuk Direksi ke atas.")
+    return akun
+
+
+async def ada_superadmin() -> bool:
+    """Adakah satu pun akun Super Admin yang masih AKTIF.
+
+    Aktif, bukan sekadar terdaftar: Super Admin yang dinonaktifkan tak bisa
+    membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci pabrik
+    atas nama orang yang tak bisa datang.
+    """
+    from sqlalchemy import func, select as _select
+
+    from app.models import ProduksiAkun as _A, User as _U
+
+    async with SessionLocal() as db:
+        n = (await db.execute(
+            _select(func.count(_A.id))
+            .join(_U, _U.id == _A.user_id)
+            .where(_A.status == "aktif", _U.role == "superadmin")
+        )).scalar() or 0
+    return n > 0
+
+
+async def butuh_super(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
+    """Super Admin saja — mengelola ORANG, AKUN, dan ALAT.
+
+    Batas ini tertulis di daftar peran sejak awal: Super Admin = "semua di
+    atas, ditambah mengelola orang, akun, dan alat". Sampai sekarang ia cuma
+    keterangan; gerbangnya menerima Direksi juga.
+
+    Ia bukan soal kerapian melainkan soal tangga. Yang bisa mengelola akun
+    bisa mengubah peran — termasuk perannya sendiri — jadi selama Direksi
+    boleh masuk ke sini, tangganya tak punya puncak: satu ketukan dan ia
+    Super Admin. Menutup pintunya menutup jalan itu sekaligus.
+
+    **Kecuali belum ada Super Admin sama sekali.** Pabrik yang seluruh
+    akunnya Direksi tak punya siapa pun yang bisa mengangkat Super Admin
+    pertama — dan pintu satu-satunya menuju ke sana adalah pintu ini. Kunci
+    yang ditinggal di dalam rumah. Maka selama tak ada satu pun Super Admin
+    AKTIF, Direksi diterima.
+
+    Itu tidak melemahkan kuncinya. Untuk sampai ke keadaan "tak ada Super
+    Admin", seseorang harus menurunkan atau menonaktifkan Super Admin
+    terakhir — dan itu hanya bisa dikerjakan DI SINI, di balik pintu yang
+    baru saja ditutup untuknya. Jalan pintasnya lewat penjaga "akun tertinggi
+    terakhir", yang menolak penurunan itu.
+
+    Sengaja BUKAN diselesaikan lewat basis data. Pemulihan yang menuntut
+    seseorang membuka Postgres berarti pabrik berhenti sampai orang itu
+    sempat — dan orang itu selama ini saya.
+    """
+    if not akun.is_super and not (akun.is_admin and not await ada_superadmin()):
+        raise AksesDitolak(
+            "Halaman ini hanya untuk Super Admin — mengelola orang, akun, "
+            "dan alat.")
     return akun
 
 

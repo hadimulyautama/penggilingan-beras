@@ -18,30 +18,12 @@ from fastapi import APIRouter, Depends, Form, Request
 from app.database import SessionLocal
 from app.peran import PERAN_ADMIN_KEATAS
 from app.models import ProduksiAkun
-from app.web.security import butuh_admin, butuh_akun
+from app.web.security import (ada_superadmin, butuh_admin, butuh_akun,
+                               butuh_super)
 from app.web.tampilan import redirect, render
 from hmu_core import User
 
 router = APIRouter(tags=["webapp"])
-
-
-async def _ada_superadmin(db) -> bool:
-    """Adakah satu pun akun Super Admin yang masih aktif.
-
-    Dipakai layar Pengaturan untuk memutuskan siapa yang ditawari blok
-    "Pengelolaan sistem". Bukan penjagaan — rutenya sendiri masih menerima
-    Admin ke atas; ini menentukan apa yang DITAWARKAN.
-    """
-    from sqlalchemy import func, select as _select
-
-    from app.models import ProduksiAkun as _A, User as _U
-
-    n = (await db.execute(
-        _select(func.count(_A.id))
-        .join(_U, _U.id == _A.user_id)
-        .where(_A.status == "aktif", _U.role == "superadmin")
-    )).scalar() or 0
-    return n > 0
 
 
 @router.get("/pengaturan")
@@ -66,7 +48,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # Menyembuhkan dirinya sendiri: begitu ada satu Super Admin aktif,
         # bloknya hilang dari layar Admin tanpa ada yang perlu menyentuh apa
         # pun. Dan ia tak pernah bisa mengunci siapa pun di luar.
-        ada_super = await _ada_superadmin(db) if tuan else False
+        ada_super = await ada_superadmin() if tuan else False
     return render(
         request, "pengaturan.html",
         **await lencana(akun.user),
@@ -199,7 +181,7 @@ MAKS_ALAT = 12
 
 
 @router.get("/pengaturan/alat")
-async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_admin)):
+async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_super)):
     from app.penggilingan.gudang1.services.drying import dryers_g1
     from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
     from app.web.nav import lencana
@@ -228,7 +210,7 @@ _ERR = {
 @router.post("/pengaturan/alat/dryer")
 async def tambah_dryer(
     request: Request, nama: str = Form(...), kapasitas_kg: int = Form(...),
-    akun: ProduksiAkun = Depends(butuh_admin),
+    akun: ProduksiAkun = Depends(butuh_super),
 ):
     """Tambah mesin pengering.
 
@@ -260,7 +242,7 @@ async def tambah_dryer(
 @router.post("/pengaturan/alat/silo")
 async def tambah_silo(
     request: Request, nama: str = Form(...),
-    akun: ProduksiAkun = Depends(butuh_admin),
+    akun: ProduksiAkun = Depends(butuh_super),
 ):
     """Tambah silo gabah kering.
 
@@ -292,7 +274,7 @@ async def tambah_silo(
 @router.post("/pengaturan/alat/dryer/status")
 async def ubah_status_dryer(
     request: Request, dryer_id: int = Form(...),
-    akun: ProduksiAkun = Depends(butuh_admin),
+    akun: ProduksiAkun = Depends(butuh_super),
 ):
     """Nonaktifkan atau aktifkan mesin — TIDAK menghapusnya.
 

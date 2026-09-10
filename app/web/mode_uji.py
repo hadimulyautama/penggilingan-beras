@@ -155,7 +155,7 @@ async def _konteks(akun, **tambahan):
 @router.get("/pengaturan/mode-uji", response_class=HTMLResponse)
 async def halaman(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     _wajib_mode_uji()
-    if not akun.is_admin:
+    if not akun.is_super:
         raise HTTPException(403, "Hanya Admin ke atas.")
     return render(request, "mode_uji.html", **await _konteks(akun))
 
@@ -229,7 +229,7 @@ async def _kosongkan() -> str | None:
 @router.post("/pengaturan/mode-uji")
 async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     _wajib_mode_uji()
-    if not akun.is_admin:
+    if not akun.is_super:
         raise HTTPException(403, "Hanya Admin ke atas.")
     form = await request.form()
     if (form.get("kalimat") or "").strip() != KALIMAT:
@@ -257,7 +257,7 @@ async def ulangi(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     berguna saat menguji bukan tombol hapus melainkan tombol kembali ke awal.
     """
     _wajib_mode_uji()
-    if not akun.is_admin:
+    if not akun.is_super:
         raise HTTPException(403, "Hanya Admin ke atas.")
     form = await request.form()
     if (form.get("kalimat") or "").strip() != KALIMAT_ULANG:

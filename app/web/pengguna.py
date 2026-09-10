@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from app.database import SessionLocal
 from app.models import ProduksiAkun
 from app.models.akun import mode_bawaan
-from app.web.security import butuh_admin, hash_sandi, sandi_acak
+from app.web.security import butuh_super, hash_sandi, sandi_acak
 from app.web.tampilan import redirect, render
 from hmu_core import User
 
@@ -75,7 +75,7 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
 
 
 @router.get("/pengguna")
-async def halaman_pengguna(request: Request, _=Depends(butuh_admin)):
+async def halaman_pengguna(request: Request, _=Depends(butuh_super)):
     return render(request, "pengguna.html", **await _muat())
 
 
@@ -84,7 +84,7 @@ async def buat_akun(
     request: Request,
     user_id: int = Form(...),
     username: str = Form(...),
-    _=Depends(butuh_admin),
+    _=Depends(butuh_super),
 ):
     uname = username.strip().lower()
     if not uname or " " in uname or len(uname) < 3:
@@ -117,7 +117,7 @@ async def buat_akun(
 
 
 @router.post("/pengguna/reset")
-async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butuh_admin)):
+async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butuh_super)):
     sandi = sandi_acak()
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
@@ -133,7 +133,7 @@ async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butu
 
 
 @router.post("/pengguna/status")
-async def ubah_status(request: Request, akun_id: int = Form(...), _=Depends(butuh_admin)):
+async def ubah_status(request: Request, akun_id: int = Form(...), _=Depends(butuh_super)):
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
@@ -147,7 +147,7 @@ async def ubah_status(request: Request, akun_id: int = Form(...), _=Depends(butu
 @router.post("/pengguna/mode")
 async def ubah_mode(
     request: Request, akun_id: int = Form(...), mode: str = Form(...),
-    _=Depends(butuh_admin),
+    _=Depends(butuh_super),
 ):
     if mode not in _MODE:
         return render(request, "pengguna.html", **await _muat(pesan_err="Jenis perangkat tidak dikenal."))
@@ -169,7 +169,7 @@ async def orang_baru(
     nama: str = Form(...),
     peran: str = Form(...),
     gudang: str = Form(""),
-    akun=Depends(butuh_admin),
+    akun=Depends(butuh_super),
 ):
     """Daftarkan ORANG baru — bukan akunnya.
 
@@ -192,6 +192,16 @@ async def orang_baru(
     if peran not in {p[0] for p in PERAN}:
         return render(request, "pengguna.html",
                       **await _muat(pesan_err="Peran tidak dikenal."))
+    # Langit-langit yang sama seperti saat MENGUBAH peran. Ditulis di kedua
+    # tempat karena keduanya jalan masuk yang berbeda: yang dijaga cuma satu
+    # akan dilewati lewat yang lain, dan mendaftarkan orang baru berperan
+    # lebih tinggi lalu masuk sebagai dia adalah jalan memutar yang sama
+    # panjangnya dengan satu ketukan.
+    from app.web.lihat_sebagai import TINGKAT
+
+    if TINGKAT.get(peran, 0) > TINGKAT.get((akun.peran or "").strip().lower(), 0):
+        return render(request, "pengguna.html",
+                      **await _muat(pesan_err=_ERR_UBAH["terlalu-tinggi"]))
 
     async with SessionLocal() as db:
         # Nama kembar bukan kesalahan data, tetapi hampir selalu kesalahan
@@ -220,7 +230,7 @@ async def orang_baru(
 # ─────────────────────── Ubah satu akun ───────────────────────
 
 @router.get("/pengguna/{akun_id}")
-async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_admin)):
+async def halaman_ubah(request: Request, akun_id: int, _=Depends(butuh_super)):
     """Satu akun, satu halaman — mengikuti bentuk aplikasi Timbangan.
 
     Sebelumnya peran orang TIDAK bisa diubah setelah ia didaftarkan: operator
@@ -250,6 +260,9 @@ _ERR_UBAH = {
     "admin-terakhir": ("Ini satu-satunya akun tingkat tertinggi yang aktif. "
                        "Angkat orang lain dulu — kalau tidak, tak ada yang "
                        "bisa mengelola akun lagi."),
+    "terlalu-tinggi": ("Peran itu di atas peran Anda sendiri. Yang bisa "
+                       "mengangkat orang setinggi dirinya bisa mengangkat "
+                       "dirinya sendiri."),
 }
 _OK_UBAH = {"tersimpan": "Perubahan tersimpan.", "tidak-berubah": "Tidak ada yang diubah."}
 
@@ -277,7 +290,7 @@ async def simpan_ubah(
     username: str = Form(""),
     peran: str = Form(""),
     mode: str = Form(""),
-    akun=Depends(butuh_admin),
+    akun=Depends(butuh_super),
 ):
     nama = " ".join(nama.split())
     uname = username.strip().lower()
@@ -316,6 +329,22 @@ async def simpan_ubah(
         #   perannya bukan "admin" sehingga syaratnya tak pernah menyala.
         #   Persis lubang yang penjaga ini dibuat untuk menutup.
         from app.web.lihat_sebagai import TINGKAT
+
+        # ── Langit-langit: tak seorang pun mengangkat orang lebih tinggi
+        #    dari dirinya sendiri ──
+        #
+        # Tanpa ini, "boleh mengelola akun" diam-diam berarti "boleh jadi
+        # apa saja": daftar perannya memuat Super Admin, dan tak ada yang
+        # melarang seseorang memilihkannya untuk dirinya sendiri. Satu
+        # ketukan, dan tangganya tak punya puncak lagi.
+        #
+        # Hari ini gerbang halaman ini sudah Super Admin saja, jadi aturan
+        # ini belum menolak siapa pun. Ia ditulis justru karena itu: gerbang
+        # bisa dilonggarkan lagi suatu hari — sudah pernah — dan aturan yang
+        # baru ditambahkan setelah pintunya dibuka selalu terlambat.
+        aku = TINGKAT.get((akun.peran or "").strip().lower(), 0)
+        if peran and TINGKAT.get(peran, 0) > aku:
+            return redirect(f"/pengguna/{akun_id}?err=terlalu-tinggi")
 
         turun = TINGKAT.get(peran, 0) < TINGKAT.get(a.user.role, 0)
         if peran and a.is_admin and turun and await _jumlah_admin(db) <= 1:

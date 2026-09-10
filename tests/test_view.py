@@ -277,17 +277,92 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
     assert "ada_super=ada_super" in inspect.getsource(pengaturan.halaman_pengaturan)
     # Hitungannya hanya akun AKTIF: Super Admin yang dinonaktifkan tak bisa
     # membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci.
-    hitung = inspect.getsource(pengaturan._ada_superadmin)
+    from app.web import security
+
+    hitung = inspect.getsource(security.ada_superadmin)
     assert '"aktif"' in hitung and '"superadmin"' in hitung
 
 
-def test_rutenya_belum_dipersempit():
-    """Yang diubah TAMPILAN, bukan wewenang. Uji ini bukan restu — ia catatan
-    bahwa keduanya belum sejalan, supaya perbedaannya disengaja dan bukan
-    ditemukan orang lain sebagai kejutan."""
+def test_pintu_dan_gerbang_memakai_aturan_yang_SAMA():
+    """Blok yang tampil lalu menolak saat ditekan lebih buruk daripada blok
+    yang tak tampil: yang pertama membuat orang mengira aplikasinya rusak,
+    yang kedua cuma tak menawarkan.
+
+    Sempat terjadi persis begitu — layar Pengaturan memakai jaring pengaman
+    "belum ada Super Admin", rutenya tidak, jadi Direksi melihat pintunya lalu
+    dijawab 403. Keduanya kini bertanya pada fungsi yang sama.
+    """
+    from app.web import pengaturan, security
+
+    assert "ada_superadmin" in inspect.getsource(security.butuh_super)
+    assert "ada_superadmin" in inspect.getsource(pengaturan.halaman_pengaturan)
+
+
+def test_jaring_pengaman_tak_bisa_dijadikan_jalan_naik():
+    """Untuk sampai ke keadaan "tak ada Super Admin", seseorang harus
+    menurunkan Super Admin terakhir — dan itu hanya bisa dikerjakan di balik
+    pintu yang sama, lewat penjaga yang menolak penurunan itu."""
+    from app.web import pengguna, security
+
+    # Jaringnya cuma untuk yang sudah Direksi, bukan siapa saja.
+    assert "akun.is_admin" in inspect.getsource(security.butuh_super)
+    # Dan penjaga penurunan tetap berdiri.
+    assert "admin-terakhir" in inspect.getsource(pengguna.simpan_ubah)
+
+
+def test_orang_akun_dan_alat_dikunci_ke_super_admin():
+    """Tampilan dan wewenang akhirnya sejalan — atas keputusan pemilik, sesudah
+    ia mengangkat akun Super Admin pertama pada 10 September 2026.
+
+    Bukan soal kerapian melainkan soal tangga: yang bisa mengelola akun bisa
+    mengubah peran, termasuk perannya sendiri. Selama Direksi boleh masuk ke
+    halaman ini, tangganya tak punya puncak.
+    """
+    from app.web import mode_uji, pengaturan, pengguna
+
+    # Seluruh pengelolaan orang & akun.
+    sumber = inspect.getsource(pengguna)
+    assert "butuh_admin" not in sumber, "masih ada gerbang Direksi di Kelola pengguna"
+    for fn in (pengguna.halaman_pengguna, pengguna.orang_baru,
+               pengguna.reset_sandi, pengguna.simpan_ubah):
+        assert "butuh_super" in inspect.getsource(fn), fn.__name__
+
+    # Alat — dryer & silo.
+    assert "butuh_super" in inspect.getsource(pengaturan.halaman_alat)
+    assert "butuh_super" in inspect.getsource(pengaturan.tambah_silo)
+
+    # Menghapus data uji.
+    assert "akun.is_super" in inspect.getsource(mode_uji.hapus)
+
+
+def test_setelan_kerja_TETAP_milik_direksi():
+    """Yang dikunci pengelolaan ORANG, AKUN, dan ALAT — bukan setelan kerja.
+
+    Target kadar air, sebab berhenti, dan sakelar mutu adalah keputusan
+    operasional harian. Menguncinya ke Super Admin berarti tiap penyetelan
+    kecil menunggu satu orang, dan yang menunggu satu orang akan dikerjakan
+    dengan cara lain.
+    """
+    from app.web import pengaturan
+
+    for fn in (pengaturan.ubah_target_bawaan, pengaturan.ubah_fitur_mutu,
+               pengaturan.ubah_sebab_jeda):
+        sumber = inspect.getsource(fn)
+        assert "butuh_admin" in sumber, fn.__name__
+        assert "butuh_super" not in sumber, fn.__name__
+
+
+def test_tak_seorang_pun_mengangkat_di_atas_dirinya():
+    """Yang bisa mengangkat orang setinggi dirinya bisa mengangkat dirinya
+    sendiri. Dijaga di KEDUA jalan masuk — mengubah peran, dan mendaftarkan
+    orang baru — karena yang dijaga cuma satu akan dilewati lewat yang lain.
+    """
     from app.web import pengguna
 
-    assert "butuh_admin" in inspect.getsource(pengguna.halaman_pengguna)
+    for fn in (pengguna.simpan_ubah, pengguna.orang_baru):
+        sumber = inspect.getsource(fn)
+        assert "terlalu-tinggi" in sumber, fn.__name__
+        assert "TINGKAT" in sumber, fn.__name__
 
 
 @pytest.mark.parametrize("view", [SUPER, ADMIN, SELEPAN, POLESAN])

@@ -118,7 +118,7 @@ def test_tombol_kembalikan_data_uji():
     assert hasattr(mode_uji, "ulangi")
     sumber = inspect.getsource(mode_uji.ulangi)
     assert "_wajib_mode_uji()" in sumber, "di luar mode uji tak boleh ada sama sekali"
-    assert "akun.is_admin" in sumber
+    assert "akun.is_super" in sumber
     assert "await _kosongkan()" in sumber, "menghapus dulu, baru mengisi"
     assert "data_uji.isi(akun)" in sumber
 
