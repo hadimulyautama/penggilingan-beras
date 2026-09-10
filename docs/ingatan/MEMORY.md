@@ -1,0 +1,42 @@
+- [Penggilingan Beras project](penggilingan-beras-project.md) — rice-mill system, phased Telegram+FastAPI build, Phase 1 done
+- [Test cleanup safety](test-cleanup-safety.md) — never blanket-delete shared tables in tests; scope to test-created rows
+- [Agentic layer](agentic-layer.md) — Haiku forced-tool parser vs Sonnet 5 agent fallback; controlled-write (propose→confirm→deterministic)
+- [Railway deploy](railway-deploy.md) — production live on Railway 24/7; URL, redeploy via `railway up`, single-replica/billing caveats
+- [MCP server](mcp-server.md) — 2nd Railway service `mcp`, read-only tools (HPP/stok/laporan) over HTTP+token for Hermes/Cowork agents
+- [Company website project](company-website-project.md) — PT Hadi Mulya Utama site migrated from Manus to self-hosted Flask (separate repo ~/Developer/hadimulya-website)
+- [Kantor AI project](kantor-ai-project.md) — executive assistant (CEO/CFO/HRD/Arsip/Aset) atop rice-mill engine; 24/7 server, all consequential actions require approval; Phase 0 scaffolded, Drive service-account setup pending
+- [Kantor otak perusahaan](kantor-otak-perusahaan.md) — 8-turn chat memory + permanent knowledge base; Voyage AI semantic search LIVE + proactive auto-save of durable facts
+- [SOP mastery principle](sop-mastery-principle.md) — master existing SOPs & work exactly to them; flag deviations (in work OR the SOP itself); align together, never change official docs unilaterally
+- [No redundancy with Kledo](no-redundancy-kledo.md) — don't rebuild what Kledo/GajiHub already do; assistant fills only the gaps; Kledo API access coming so finance runs THROUGH Kledo
+- [Hermes vs own bot](hermes-vs-own-bot.md) — Kantor AI runs on our OWN Railway Telegram bot, not Hermes; when to revisit Hermes later
+- [Drive audit subfolder lesson](drive-audit-subfolder-lesson.md) — CRITICAL: never bulk-move by top-level category; Drive has deep deliberate structure incl. a PT Rajawali legal-dispute file; audit must be subfolder-aware
+- [GajiHub/Kledo integration](gajihub-kledo-integration.md) — HR/payroll REST API (GajiHub on Kledo domain); read-only, admin-only tools; Bearer PAT, endpoint-discovery via OpenAPI spec
+- [Kantor email (Gmail)](kantor-email-gmail.md) — agent manages 3 Workspace mailboxes via Service Account + Domain-wide Delegation; read/draft/organize direct, send gated, admin-only, no permanent delete
+- [Kantor proaktif](kantor-proaktif.md) — proactive layer: morning briefing (07:00 Mon–Sat) + 2-hourly email notifier LIVE; roadmap = deadline radar / anomaly / cross-system / voice
+- [Bulk LLM audit cost](bulk-llm-audit-cost.md) — bulk Drive OCR/LLM jobs share the bot's API key & can trip the monthly spend cap (took bot offline 2026-08-12); use Haiku, cap batch, raise Console limit to restore
+- [Drive audit UNFINISHED](drive-audit-unfinished.md) — file audit stopped ~776/1533 on 2026-08-12 (API limit); 757 files untouched; resume steps + report/script archived in memory dir; 49 flagged + 171 anomali await user
+- [Kantor org & RBAC](kantor-org-rbac.md) — org structure (Direksi×2, Muthia HR-Mgr, Elfira multi-mgr, Legal Officer, Eka; Elfira/Eka multi-hat) → multi-agent RBAC design; operators use mini-app not agent; controls = sensitive sub-scopes + approval authority + audit
+- [Kantor uji nanti](kantor-uji-nanti.md) — runtime test checklist for Tahap 0 (biaya guard) & Tahap 1 (RBAC) to run once API is back + deployed; enforcement wiring still pending
+- [Kantor bot consolidation](kantor-bot-consolidation.md) — TUNTAS 2026-09-08: bot produksi dibubarkan, perintah lewat percakapan dihapus; agen baca-saja untuk Direksi/pengawas, Kantor satu-satunya bot
+- [Kledo integration](kledo-integration.md) — read-only finance tools (tagihan/faktur/kontak/akun/neraca); endpoints /finance/* + reports /reportings/*; KLEDO_API_KEY; snapshot totals; webhook later
+- [Kantor arsitektur terintegrasi](kantor-arsitektur-terintegrasi.md) — CANONICAL design: AI Agent=config not process (one loop, domain tool-bundles); Production=separate delegated module; shared foundation (memory/knowledge/RBAC/cost); router NYATA = kata-kunci deterministik (bukan Haiku), di balik flag; halaman pengembangan = artifact "Pengembangan Kantor AI"
+- [Kantor IT Management domain](kantor-it-management-domain.md) — IT Manager Assistant as a DOMAIN (not new bot) atop existing "IT Accounts" sheet; read tools + gated write (perbarui_it) + Status/Siklus cols; radar already existed; LIVE
+- [Kantor invoice auto](kantor-invoice-auto.md) — auto-process incoming invoices → 1 gated confirm doing Arsip filing + IT Management update; brain built & proven (invoice.py, inert), next=executor+auto-watch poller; test at GajiHub renewal
+- [Kledo kontak & supplier sync](kledo-kontak-supplier-sync.md) — Kledo has no merge (reassign txns→delete); 611 contacts deduped (worklist+prompt); planned Kledo→production supplier sync (basis riwayat pembelian, designed not built)
+- [Timbangan module](timbangan-module.md) — pos timbang webapp, 3rd Railway service; zero price columns by design; rules live in data
+- [Rahasia Railway](rahasia-railway.md) — JANGAN cetak nilai variabel (private key pernah bocor); cara aman lihat nama; variabel Kantor & token bot sudah dibersihkan dari layanan produksi 2026-09-08
+- [Railway deploy jebakan](railway-deploy-jebakan.md) — 3 deploy gagal: docker/ tidak disalin, $PORT butuh sh -c, dep transitif hilang; uji di image bukan di venv
+- [Timbangan↔intake integrasi](timbangan-intake-integrasi.md) — cegah dobel-entry gabah/PK masuk: timbangan=otoritas berat, PurchaseBatch menaut (timbangan_transaksi_id UNIQUE) bukan mengetik ulang; designed not built
+- [Kledo tipe kontak](kledo-tipe-kontak.md) — type_id 1 = vendor (BUKAN 4, itu beban: PLN/Pertamina); bukti dari 63 pemasok komoditas
+- [Graphify tool](graphify-tool.md) — code knowledge-graph CLI + /graphify skill; query repo structure vs grep (graphify-out/ built, gitignored)
+- [Basis data bersama](basis-data-bersama.md) — 3 tabel yang tampak milik produksi tapi dipakai Timbangan/Kantor; aturan penghapusan massal & mode uji
+- [Ketelusuran hulu-hilir](ketelusuran-hulu-hilir.md) — beras putih wajib bisa dirunut ke PK beli/giling sendiri; rantai sampai PK terbukti, penyosohan ditunda pemilik
+- [HPP costing model](hpp-costing-model.md) — white-rice HPP was material-only; penyosohan cost now added (basis PK); milling hpp_penuh still not wired in; marketing=beban not HPP
+- [Kledo redesign blueprint](kledo-redesign-blueprint.md) — mill=physical/Kledo=money boundary; Kledo write API confirmed; phased plan (Fase 1 next: write client + approval gate)
+- [Pisah Kantor & Produksi](pisah-kantor-produksi.md) — TUNTAS 2026-09-02: Kantor repo+service sendiri, MCP dipensiunkan, app/kantor dihapus
+- [Workspace layout](workspace-layout.md) — ~/Developer/Hadi Mulya Systems = workspace 5 repo sejajar; produksi turun ke produksi/
+- [Gmail pribadi token mati](gmail-pribadi-token-mati.md) — 2 mailbox pribadi invalid_grant sejak 2026-09-02; bukan akibat pemisahan, perlu OAuth ulang
+- [Fase B webapp produksi](fase-b-webapp-produksi.md) — B1–B3 + PWA + perpindahan halaman instan selesai; desain arah C "panel pabrik"; sisa: ADMIN_SANDI_AWAL, notifikasi in-app, region Railway
+- [Printer thermal ePOS](printer-thermal-epos.md) — struk 80mm lewat ePOS-Print di TM-m30III; AirPrint tidak ada di model ini
+- [Railway region sfo→Singapura](railway-region-sfo.md) — PINDAH TUNTAS 2026-09-04, origin 202ms→66ms; jebakan railway scale & tidak ada freeze lewat CLI
+- [Peran superadmin tuntas](peran-superadmin-tuntas.md) — puncak tangga akhirnya bisa dipijak; produksi mengunci orang/akun/alat; Kantor di-deploy lewat railway up
