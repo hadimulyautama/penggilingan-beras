@@ -69,6 +69,52 @@
         }
         if (sesudah) { sesudah(); }
       });
+    },
+
+    /* ── Menyegarkan DIAM-DIAM ──
+     *
+     * Bedanya dengan `segarkan`: yang ini boleh MEMBATALKAN diri sendiri.
+     * Ia berjalan tanpa diminta — saat aplikasi kembali ke depan, dan tiap
+     * setengah menit — jadi ia harus tahu kapan tidak boleh mengganggu.
+     *
+     * Tiga keadaan yang membuatnya mundur:
+     *   · ada lembar aksi terbuka — menukar isi di bawah borang yang sedang
+     *     diisi berarti membuang ketikan orang;
+     *   · ada kotak isian yang sedang dipegang — sama saja;
+     *   · isinya ternyata tidak berubah — menukar HTML yang identik tetap
+     *     menghapus posisi gulung dan menjalankan ulang skripnya.
+     *
+     * Posisi gulung dikembalikan. `pasang` menukar seluruh isi `.bingkai`,
+     * jadi tanpa ini orang yang sedang membaca baris ke-20 dilempar kembali
+     * ke atas tiap kali ada operator mencatat sesuatu — dan itu jauh lebih
+     * mengganggu daripada angka yang telat.
+     */
+    diam: function () {
+      var alamat = location.pathname + location.search;
+      if (!bingkai) { return; }
+      if (lembarTerbuka()) { return; }
+      var fokus = document.activeElement;
+      if (fokus && /^(INPUT|SELECT|TEXTAREA)$/.test(fokus.tagName)) { return; }
+
+      var lama = bingkai.innerHTML;
+      delete simpan[alamat];
+      ambil(alamat).then(function (teks) {
+        if (!teks) { return; }
+        if (location.pathname + location.search !== alamat) { return; }
+        if (lembarTerbuka()) { return; }
+        var f = document.activeElement;
+        if (f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)) { return; }
+
+        var doc = new DOMParser().parseFromString(teks, "text/html");
+        var isiBaru = doc.querySelector(".bingkai");
+        if (!isiBaru || isiBaru.innerHTML === lama) { return; }
+
+        var gulung = document.querySelector(".isi");
+        var atas = gulung ? gulung.scrollTop : 0;
+        if (!pasang(teks, alamat)) { return; }
+        var g2 = document.querySelector(".isi");
+        if (g2 && atas) { g2.scrollTop = atas; }
+      });
     }
   };
   function cabutSemua() {
@@ -253,4 +299,60 @@
   } else {
     mulai();
   }
+
+  /* ── Layar yang tidak pernah berubah sendiri ──
+   *
+   * Masalah yang dilaporkan pemilik pada 10 September 2026: operator mencatat
+   * sesuatu dari HP-nya, dan di layar pemilik tak terjadi apa-apa. Ia harus
+   * MEMATIKAN aplikasinya dulu, lalu membukanya lagi, baru perubahannya
+   * terlihat.
+   *
+   * Sebabnya bukan cache yang basi — `pindah` sudah memeriksa ulang tiap kali
+   * orang berpindah layar. Sebabnya lebih sederhana dan lebih buruk: TAK ADA
+   * SATU PUN pemicu penyegaran. Halaman digambar sekali saat dibuka, lalu
+   * diam selamanya. Aplikasi terpasang di layar utama tak pernah dimuat ulang
+   * saat dibuka kembali dari latar belakang — ia melanjutkan DOM yang sama —
+   * jadi satu-satunya cara memaksanya adalah mematikan aplikasinya.
+   *
+   * Layar pabrik yang menunjukkan keadaan setengah jam lalu tanpa memberi
+   * tahu bahwa ia basi lebih buruk daripada layar yang kosong: yang kosong
+   * membuat orang bertanya, yang basi membuat orang yakin.
+   *
+   * Dua pemicu, dan keduanya perlu:
+   *   · KEMBALI KE DEPAN — inilah yang menjawab keluhannya. Telepon dikantongi,
+   *     dikeluarkan lagi, dan yang pertama dilihat orang harus keadaan
+   *     sekarang, bukan keadaan saat ia mengantonginya.
+   *   · DENYUT tiap setengah menit — untuk telepon yang tergeletak menyala di
+   *     meja, atau layar yang dipasang di dinding. Hanya berdetak saat halaman
+   *     TERLIHAT; yang di latar belakang tak menghabiskan baterai maupun kuota.
+   */
+  var denyut = null;
+
+  function mulaiDenyut() {
+    if (denyut) { return; }
+    denyut = setInterval(function () {
+      if (document.visibilityState === "visible") { window.PINDAH.diam(); }
+    }, 30000);
+  }
+
+  function hentikanDenyut() {
+    if (denyut) { clearInterval(denyut); denyut = null; }
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") {
+      window.PINDAH.diam();
+      mulaiDenyut();
+    } else {
+      hentikanDenyut();
+    }
+  });
+
+  /* Sebagian peramban mengembalikan halaman dari simpanan maju-mundurnya
+     tanpa memicu `visibilitychange` sama sekali. */
+  window.addEventListener("pageshow", function (e) {
+    if (e.persisted) { window.PINDAH.diam(); }
+  });
+
+  if (document.visibilityState === "visible") { mulaiDenyut(); }
 })();

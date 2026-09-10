@@ -74,10 +74,18 @@ async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
 
 
 def is_operator_gudang2(user: User, g2_wid: int) -> bool:
-    """Operator Gudang 2 (admin sebagai fallback selalu boleh)."""
-    if user.role == "admin":
+    """Operator Gudang 2 — Direksi ke atas selalu boleh.
+
+    Dulu berbunyi `user.role == "admin"`, jadi SUPER ADMIN jatuh ke baris di
+    bawahnya, gagal syarat "operator", lalu ditolak. Peran tertinggi kehilangan
+    seluruh Gudang 2 — pola yang sudah sembilan kali berulang di kode ini.
+    """
+    from app.peran import PERAN_ADMIN_KEATAS
+
+    peran = (user.role or "").strip().lower()
+    if peran in PERAN_ADMIN_KEATAS:
         return True
-    return user.role == "operator" and user.default_warehouse_id == g2_wid
+    return peran == "operator" and user.default_warehouse_id == g2_wid
 
 
 # ─────────────────────────── Formula stok ───────────────────────────

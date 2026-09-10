@@ -62,7 +62,13 @@ async def seed() -> None:
         admin_tg = os.getenv("SEED_ADMIN_TELEGRAM_ID")
         admin_wa = os.getenv("SEED_ADMIN_WA")
         admin_nama = os.getenv("SEED_ADMIN_NAMA", "Admin")
-        result = await db.execute(select(User).where(User.role == "admin"))
+        # Super Admin ikut dihitung: pabrik yang adminnya sudah dinaikkan akan
+        # dianggap belum punya admin sama sekali, lalu diberi akun kedua yang
+        # tak diminta siapa pun.
+        from app.peran import PERAN_ADMIN_KEATAS
+
+        result = await db.execute(
+            select(User).where(User.role.in_(PERAN_ADMIN_KEATAS)))
         admin = result.scalars().first()
         if not admin:
             db.add(

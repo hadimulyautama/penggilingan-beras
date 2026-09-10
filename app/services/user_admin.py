@@ -13,6 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, Warehouse
+from app.peran import PERAN_ADMIN_KEATAS
+
+
+def admin_keatas(role: str | None) -> bool:
+    """Direksi maupun Super Admin. Tahan spasi & huruf besar."""
+    return (role or "").strip().lower() in PERAN_ADMIN_KEATAS
 
 #: Tangga peran sejak 3 September 2026. "staff" tidak lagi ditawarkan,
 #: tetapi baris lama yang menyebutnya tetap sah dibaca — lihat
@@ -69,8 +75,14 @@ async def register_user(
     ID untuk orang yang tak akan pernah memakai Telegram justru melanggengkan
     ikatan yang sedang dilepas Fase B, dan mendorong orang mengarang angka.
     """
-    if not actor or actor.role != "admin":
-        raise UserAdminError("⛔ Hanya admin yang bisa mendaftarkan pengguna.")
+    # `PERAN_ADMIN_KEATAS`, bukan `!= "admin"`. Ini kali KESEMBILAN pola yang
+    # sama: peran baru ditambahkan di puncak, gerbang lama menyebut namanya
+    # satu per satu, dan peran TERTINGGI jadi yang paling tak berdaya. Kali
+    # ini akibatnya langsung terasa — pemilik naik ke `superadmin` pada 10
+    # September 2026 dan seketika tak bisa mendaftarkan orang baru, padahal
+    # halaman Kelola pengguna baru saja dikunci ke Super Admin saja.
+    if not actor or not admin_keatas(actor.role):
+        raise UserAdminError("⛔ Hanya Direksi ke atas yang bisa mendaftarkan pengguna.")
     if not nama:
         raise UserAdminError("Sebutkan nama pengguna. Contoh: `daftarkan operator Budi id 12345678 gudang 1`")
     role = (role or "").lower()
@@ -146,8 +158,8 @@ async def list_users(db: AsyncSession) -> str:
 
 
 async def set_user_status(db: AsyncSession, *, actor, ref: str | None, aktif: bool) -> str:
-    if not actor or actor.role != "admin":
-        raise UserAdminError("⛔ Hanya admin yang bisa mengubah status pengguna.")
+    if not actor or not admin_keatas(actor.role):
+        raise UserAdminError("⛔ Hanya Direksi ke atas yang bisa mengubah status pengguna.")
     if not ref:
         raise UserAdminError("Sebutkan nama atau ID pengguna.")
     q = select(User)

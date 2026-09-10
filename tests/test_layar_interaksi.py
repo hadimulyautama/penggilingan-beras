@@ -403,3 +403,56 @@ def test_kartu_tidak_menyusut_di_bawah_isinya():
         blok = css.split(f".{kelas} {{")[1].split("}")[0]
         assert "flex-shrink: 0" in blok, kelas
         assert "min-height" in blok, f"{kelas}: min-height-nya yang membuat ini perlu"
+
+
+def test_layar_menyegarkan_diri_saat_kembali_ke_depan():
+    """Keluhan pemilik, 10 September 2026: operator mencatat sesuatu dari
+    HP-nya, dan di layar pemilik tak terjadi apa-apa — ia harus MEMATIKAN
+    aplikasinya dulu, baru perubahannya terlihat.
+
+    Sebabnya bukan cache yang basi; `pindah` sudah memeriksa ulang tiap kali
+    orang berpindah layar. Sebabnya lebih sederhana dan lebih buruk: tak ada
+    SATU PUN pemicu penyegaran. Halaman digambar sekali saat dibuka lalu diam
+    selamanya, dan aplikasi terpasang tak pernah dimuat ulang saat dibuka
+    kembali dari latar belakang — ia melanjutkan DOM yang sama.
+
+    Layar pabrik yang menunjukkan keadaan setengah jam lalu tanpa memberi tahu
+    bahwa ia basi lebih buruk daripada layar kosong: yang kosong membuat orang
+    bertanya, yang basi membuat orang yakin.
+    """
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+
+    # Kembali ke depan — inilah yang menjawab keluhannya.
+    assert 'addEventListener("visibilitychange"' in js
+    # Dan simpanan maju-mundur peramban, yang tak memicu visibilitychange.
+    assert 'addEventListener("pageshow"' in js
+    # Denyut untuk telepon yang tergeletak menyala; hanya saat TERLIHAT, supaya
+    # yang di latar belakang tak menghabiskan baterai maupun kuota.
+    assert "setInterval" in js and 'visibilityState === "visible"' in js
+
+
+def test_penyegaran_diam_tak_membuang_ketikan_orang():
+    """Ia berjalan TANPA diminta, jadi ia harus tahu kapan tidak boleh
+    mengganggu. Menukar isi di bawah borang yang sedang diisi berarti membuang
+    ketikan orang — dan sekali itu terjadi, orang berhenti memakai borangnya.
+    """
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
+
+    assert "lembarTerbuka()" in diam, "lembar terbuka tak dijaga"
+    assert "INPUT|SELECT|TEXTAREA" in diam, "kotak isian yang dipegang tak dijaga"
+    # Diperiksa DUA KALI — sebelum meminta, dan sesudah jawabannya datang.
+    # Orang bisa membuka lembar tepat selagi permintaannya di jalan.
+    assert diam.count("lembarTerbuka()") >= 2
+    # Isi yang tak berubah tak ditukar: menukar HTML yang identik tetap
+    # menghapus posisi gulung dan menjalankan ulang skripnya.
+    assert "innerHTML === lama" in diam
+    # Posisi gulung dikembalikan — yang sedang membaca baris ke-20 tak boleh
+    # dilempar ke atas tiap kali ada operator mencatat sesuatu.
+    assert "scrollTop" in diam
