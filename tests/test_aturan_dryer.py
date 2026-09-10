@@ -221,21 +221,39 @@ def test_bentuk_lama_satu_angka_tak_patah():
     # Bentuk baru: empat sampel, mesin terpisah.
     b = KadarAirReq(kode_lot="PGR-1", tes_1=18.2, tes_2=18.6, indikator=18.5)
     assert b.tes_1 == 18.2 and b.indikator == 18.5 and b.kadar_air is None
+    # Bentuk TERBARU: satu daftar, sepanjang titik yang benar-benar diukur.
+    c = KadarAirReq(kode_lot="PGR-1", tes=[18.2, 18.6, 19.0], indikator=18.5)
+    assert c.tes == [18.2, 18.6, 19.0] and c.tes_1 is None
 
 
 def test_hanya_titik_pertama_yang_wajib():
     """Alat tes bisa rusak, muatan bisa kecil. Memaksa empat angka berarti
     memaksa operator mengarang tiga di antaranya — dan catatan karangan lebih
-    buruk daripada catatan yang kurang lengkap."""
+    buruk daripada catatan yang kurang lengkap.
+
+    Empat kotak bernomor diganti SATU kotak berikut tombol yang menambah
+    kotak, jadi aturannya sekarang dijaga di dua tempat: spesifikasinya
+    menyebut satu medan wajib, dan `aksi.js` hanya memberi `data-wajib` pada
+    kotak pertama.
+    """
     import inspect
+    import pathlib
 
     from app.web import miniapp
 
-    spec = inspect.getsource(miniapp.susun_aksi) if hasattr(miniapp, "susun_aksi") \
-        else inspect.getsource(miniapp)
-    blok = spec[spec.index('"name": "tes_1"'):spec.index('"name": "indikator"')]
-    assert '"optional": True' not in blok.split('"name": "tes_2"')[0]   # titik 1 wajib
-    assert blok.count('"optional": True') == 3                          # titik 2–4 tidak
+    spec = inspect.getsource(miniapp)
+    blok = spec[spec.index('"name": "tes"'):spec.index('"name": "indikator"')]
+    assert '"type": "ulang"' in blok and '"wajib": True' in blok
+    # Empat kolom tersimpan; menaikkan `maks` tanpa migrasi akan membuang
+    # titik kelima diam-diam.
+    assert '"maks": 4' in blok
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/aksi.js").read_text()
+    tambah = js[js.index('t.dataset.tambah'):]
+    assert 'removeAttribute("data-wajib")' in tambah[:900], (
+        "kotak yang ditambahkan ikut wajib — menekan tambah lalu ragu jadi "
+        "tak bisa disimpan")
 
 
 def test_kartu_pengeringan_menyebut_kedua_bacaan():

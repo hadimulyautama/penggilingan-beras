@@ -354,14 +354,18 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kode_lot", "label": "Pengeringan yang sedang berjalan", "type": "remote",
                   "source": "/miniapp/actions/drying-active",
                   "kosong": "Tidak ada pengeringan yang sedang berjalan."},
-                 {"name": "tes_1", "label": "Alat tes — titik 1 (%)", "type": "number",
+                 # SATU kotak, lalu tombol yang menambah kotak — bukan empat
+                 # kotak yang selalu tergambar. Berapa titik yang diukur
+                 # berbeda tiap kali: tumpukan kecil cukup satu tusukan, yang
+                 # besar perlu empat. Borang yang sebagian besarnya kosong
+                 # terbaca seperti borang yang belum selesai diisi.
+                 #
+                 # `maks` 4 karena hanya empat titik yang punya kolom
+                 # tersimpan. Menaikkannya menuntut migrasi — jangan naikkan
+                 # angka ini sendirian, atau titik kelima hilang diam-diam.
+                 {"name": "tes", "label": "Alat tes — kadar air tiap titik (%)",
+                  "type": "ulang", "maks": 4, "tambah": "+ Tambah titik tes",
                   "wajib": True},
-                 {"name": "tes_2", "label": "Alat tes — titik 2 (%)", "type": "number",
-                  "optional": True},
-                 {"name": "tes_3", "label": "Alat tes — titik 3 (%)", "type": "number",
-                  "optional": True},
-                 {"name": "tes_4", "label": "Alat tes — titik 4 (%)", "type": "number",
-                  "optional": True},
                  {"name": "indikator", "label": "Terbaca di mesin dryer (%)",
                   "type": "number", "optional": True},
                  # Target boleh berubah SEIRING pengeringan, dan diubah DI SINI
@@ -1324,6 +1328,10 @@ class KadarAirReq(BaseModel):
     #: atau muatannya kecil, memaksa empat angka berarti memaksa operator
     #: mengarang tiga di antaranya, dan catatan karangan lebih buruk daripada
     #: catatan yang kurang lengkap.
+    #: Bentuk BARU — daftar, sebanyak titik yang benar-benar diukur.
+    tes: list[float] | None = None
+    #: Bentuk LAMA — empat kolom bernomor. Dipertahankan karena skrip dan
+    #: tautan tersimpan masih mengirimnya; keduanya digabung di endpoint.
     tes_1: float | None = None
     tes_2: float | None = None
     tes_3: float | None = None
@@ -1344,7 +1352,11 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
     if not (req.kode_lot or "").strip():
         raise HTTPException(400, "Pilih pengeringan dulu.")
     from app.penggilingan.gudang1.services.drying import log_moisture
-    sampel = [req.tes_1, req.tes_2, req.tes_3, req.tes_4]
+    # Daftar baru menang bila ada; kalau tidak, empat kolom lama dipakai.
+    # Keduanya tak pernah digabung — dua sumber untuk satu angka berarti satu
+    # kiriman bisa menghasilkan delapan titik dari empat tusukan.
+    sampel = ([x for x in req.tes if x is not None] if req.tes
+              else [req.tes_1, req.tes_2, req.tes_3, req.tes_4])
     indikator = req.indikator if req.indikator is not None else req.kadar_air
     async with SessionLocal() as db:
         u = await db.get(User, user.id)

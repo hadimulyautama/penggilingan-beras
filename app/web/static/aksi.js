@@ -233,6 +233,33 @@
           '"' + (f.optional ? "" : ' data-wajib="1"') +
           ' data-label="' + esc(f.label) + '"><option>memuat…</option></select>';
       }
+      /* MEDAN BERULANG — satu kotak, lalu tombol yang menambah kotak.
+       *
+       * Alat tes kadar air dipakai di beberapa titik, dan berapa titiknya
+       * berbeda tiap kali: tumpukan kecil cukup satu tusukan, yang besar
+       * perlu empat. Empat kotak yang selalu tergambar memaksa operator
+       * melihat tiga kotak kosong tiap kali ia mencatat satu titik — dan
+       * borang yang sebagian besarnya kosong terbaca seperti borang yang
+       * belum selesai diisi.
+       *
+       * Kotak pertama bawa `data-wajib`; yang ditambahkan tidak. Menambah
+       * kotak lalu meninggalkannya kosong bukan kesalahan — orang menekan
+       * tombolnya lalu berubah pikiran, dan menolak simpan karenanya akan
+       * menghukum keragu-raguan yang wajar. */
+      if (f.type === "ulang") {
+        var maks = f.maks || 4;
+        return l +
+          '<div class="ulang" data-ulang-untuk="' + esc(f.name) + '"' +
+          ' data-maks="' + maks + '">' +
+          '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
+          '" data-ulang="1" data-wajib="1" data-label="' + esc(f.label) + '"' +
+          ' type="number" inputmode="decimal" autocomplete="off"' +
+          ' placeholder="titik 1">' +
+          "</div>" +
+          '<button type="button" class="btn btn--kecil ulang__tambah"' +
+          ' data-tambah="' + esc(f.name) + '">' +
+          esc(f.tambah || "Tambah") + "</button>";
+      }
       var angka = f.type === "number";
       // `wajib` OPT-IN, bukan kebalikan dari `optional`.
       //
@@ -334,6 +361,15 @@
            konfirmasi yang menyebut "silo:2" alih-alih "Silo B" menuntut
            orangnya menerjemahkan sendiri — persis saat ia sedang diminta
            memastikan. */
+        if (el.dataset.ulang) {
+          /* Digabung, bukan ditimpa. Tanpa ini konfirmasi cuma menyebut
+             titik TERAKHIR — dan yang diminta orangnya periksa justru
+             seluruh titik yang baru ia ketik. */
+          if (!String(el.value).trim()) return;
+          v[el.dataset.name] = (v[el.dataset.name] ? v[el.dataset.name] + " · " : "")
+            + el.value + "%";
+          return;
+        }
         var kotak = el.type === "hidden" ? $("t_" + el.dataset.name) : null;
         v[el.dataset.name] = kotak ? kotak.textContent.trim() : el.value;
       });
@@ -358,6 +394,15 @@
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
         var v = el.value;
         if (el.type === "number") v = (v === "" ? null : parseFloat(v));
+        /* Medan berulang dikirim sebagai DAFTAR, dan yang kosong dibuang di
+           sini — bukan di server. Kotak yang ditambahkan lalu ditinggalkan
+           kosong bukan "titik bernilai nol"; ia titik yang tak pernah
+           diukur, dan nol akan menyeret rata-ratanya turun. */
+        if (el.dataset.ulang) {
+          if (!isi[el.dataset.name]) isi[el.dataset.name] = [];
+          if (v !== null && v !== "") isi[el.dataset.name].push(v);
+          return;
+        }
         isi[el.dataset.name] = v;
       });
       return isi;
@@ -402,6 +447,32 @@
       $("ya").onclick = function () { simpan(isi, v, $("ya")); };
     }
 
+    /* Tombol tambah. Didelegasikan pada lembarnya, bukan dipasang per
+       tombol: lembar digambar ulang tiap kali aksi dibuka, dan pendengar
+       yang dipasang langsung akan memegang tombol yang sudah dibuang. */
+    lembar.addEventListener("click", function (e) {
+      var t = e.target.closest ? e.target.closest("[data-tambah]") : null;
+      if (!t) return;
+      e.preventDefault();
+      var wadah = lembar.querySelector('[data-ulang-untuk="' + t.dataset.tambah + '"]');
+      if (!wadah) return;
+      var ada = wadah.querySelectorAll("input").length;
+      var maks = parseInt(wadah.dataset.maks, 10) || 4;
+      if (ada >= maks) return;
+      var contoh = wadah.querySelector("input");
+      var baru = contoh.cloneNode(true);
+      baru.value = "";
+      baru.removeAttribute("id");          // id harus tetap satu di halaman
+      baru.removeAttribute("data-wajib");  // hanya titik pertama yang wajib
+      baru.placeholder = "titik " + (ada + 1);
+      wadah.appendChild(baru);
+      baru.focus();
+      /* Tombolnya HILANG saat penuh, bukan diam tak menanggapi. Tombol yang
+         ditekan lalu tak melakukan apa pun terbaca sebagai aplikasi rusak,
+         dan orangnya menekannya berkali-kali untuk memastikan. */
+      if (ada + 1 >= maks) t.hidden = true;
+    });
+
     $("simpan").onclick = function () {
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
@@ -425,6 +496,29 @@
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
         var t = semula[el.dataset.name];
         if (t === undefined || t === "") return;
+        /* Medan berulang disimpan sebagai satu teks bergabung ("18% · 19%").
+           Dipecah lagi di sini, dan kotaknya ditambah sebanyak yang perlu —
+           kalau tidak, orang yang menekan "Kembali" kehilangan titik kedua
+           dan seterusnya tanpa diberi tahu. */
+        if (el.dataset.ulang) {
+          if (el.previousElementSibling) return;   // cukup sekali per wadah
+          var titik = String(t).split("·").map(function (x) {
+            return x.replace("%", "").trim();
+          }).filter(Boolean);
+          var wadah = el.parentNode;
+          titik.forEach(function (nilai, i) {
+            var kotak = wadah.querySelectorAll("input")[i];
+            if (!kotak) {
+              kotak = el.cloneNode(true);
+              kotak.removeAttribute("id");
+              kotak.removeAttribute("data-wajib");
+              kotak.placeholder = "titik " + (i + 1);
+              wadah.appendChild(kotak);
+            }
+            kotak.value = nilai;
+          });
+          return;
+        }
         if (el.tagName !== "SELECT") { el.value = t; return; }
         var pasang = function () {
           for (var i = 0; i < el.options.length; i++) {

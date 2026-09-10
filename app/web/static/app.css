@@ -203,6 +203,14 @@ a:hover { color: #7fcbe8; }
 }
 .petak__sat { font-size: 12px; font-weight: 400; color: var(--redup-2); }
 
+/* ── Medan berulang: satu kotak, lalu tombol yang menambah kotak ── */
+.ulang { display: flex; flex-direction: column; gap: 8px; }
+/* Tombolnya kecil dan menempel pada kelompoknya, bukan selebar borang: ia
+   menambah SATU kotak, bukan menyimpan. Tombol selebar borang memanggil
+   dirinya sendiri untuk ditekan, dan yang paling sering ditekan di sini
+   seharusnya kotaknya, bukan tombolnya. */
+.ulang__tambah { align-self: flex-start; margin-top: -4px; }
+
 /* ── Formulir ── */
 .grup { display: flex; flex-direction: column; gap: 15px; }
 .fld {
