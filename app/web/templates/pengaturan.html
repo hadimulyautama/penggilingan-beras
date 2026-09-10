@@ -52,9 +52,19 @@
    Rutenya sendiri BELUM dipersempit: `butuh_admin` masih menerima Admin.
    Yang dikerjakan di sini hanya berhenti menawarkan — supaya pekerjaan
    harian Admin tidak dipenuhi pintu yang bukan bagiannya. #}
-{% if VIEW == V_SUPER %}
+{% if VIEW == V_SUPER or (tuan and not ada_super) %}
 <div>
   <span class="lbl">Pengelolaan sistem</span>
+  {# Selama belum ada Super Admin, bloknya tetap terbuka untuk Admin — dan
+     alasannya disebut, bukan didiamkan. Blok yang muncul lalu hilang sendiri
+     tanpa keterangan terbaca sebagai aplikasi yang berubah-ubah. #}
+  {% if VIEW != V_SUPER %}
+    <p class="bantu" style="margin:6px 0 8px">
+      Belum ada akun Super Admin di pabrik ini, jadi pengelolaan akun &amp;
+      alat masih di tangan Direksi. Begitu satu Super Admin diangkat, blok ini
+      pindah ke layarnya.
+    </p>
+  {% endif %}
   <div class="grup" style="gap:8px">
     <a class="tindakan" href="/pengguna">
       <div class="tindakan__ikon">

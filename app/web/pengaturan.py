@@ -25,6 +25,25 @@ from hmu_core import User
 router = APIRouter(tags=["webapp"])
 
 
+async def _ada_superadmin(db) -> bool:
+    """Adakah satu pun akun Super Admin yang masih aktif.
+
+    Dipakai layar Pengaturan untuk memutuskan siapa yang ditawari blok
+    "Pengelolaan sistem". Bukan penjagaan — rutenya sendiri masih menerima
+    Admin ke atas; ini menentukan apa yang DITAWARKAN.
+    """
+    from sqlalchemy import func, select as _select
+
+    from app.models import ProduksiAkun as _A, User as _U
+
+    n = (await db.execute(
+        _select(func.count(_A.id))
+        .join(_U, _U.id == _A.user_id)
+        .where(_A.status == "aktif", _U.role == "superadmin")
+    )).scalar() or 0
+    return n > 0
+
+
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services.setelan import fitur_mutu, sebab_jeda, target_kadar_air
@@ -38,6 +57,16 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         target = await target_kadar_air(db) if tuan else None
         sebab = await sebab_jeda(db) if tuan else {}
         mutu_aktif = await fitur_mutu(db) if tuan else False
+        # Blok "Pengelolaan sistem" milik Super Admin — TETAPI hanya kalau
+        # Super Admin-nya ada. Pabrik ini menjalankan satu akun Admin dan nol
+        # Super Admin, jadi menyembunyikannya dari Admin menyembunyikannya
+        # dari semua orang: satu-satunya jalan mengangkat Super Admin pertama
+        # ada di balik pintu yang baru saja ditutup untuk semua.
+        #
+        # Menyembuhkan dirinya sendiri: begitu ada satu Super Admin aktif,
+        # bloknya hilang dari layar Admin tanpa ada yang perlu menyentuh apa
+        # pun. Dan ia tak pernah bisa mengunci siapa pun di luar.
+        ada_super = await _ada_superadmin(db) if tuan else False
     return render(
         request, "pengaturan.html",
         **await lencana(akun.user),
@@ -45,6 +74,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
         tuan=tuan, target_bawaan=target, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
+        ada_super=ada_super,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
 

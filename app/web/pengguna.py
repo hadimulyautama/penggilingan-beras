@@ -298,11 +298,27 @@ async def simpan_ubah(
         if a is None or a.user is None:
             return redirect("/pengguna")
 
-        # Menurunkan akun tertinggi terakhir mengunci semua orang di luar pengelolaan
-        # akun — termasuk yang menurunkannya. Ditolak SEBELUM tersimpan, bukan
-        # diperbaiki sesudahnya, karena sesudahnya tak ada yang bisa.
-        if (peran and a.user.role == "admin" and peran != "admin"
-                and await _jumlah_admin(db) <= 1):
+        # Menurunkan akun tertinggi terakhir mengunci semua orang di luar
+        # pengelolaan akun — termasuk yang menurunkannya. Ditolak SEBELUM
+        # tersimpan, bukan diperbaiki sesudahnya, karena sesudahnya tak ada
+        # yang bisa.
+        #
+        # Yang dibandingkan TINGKATNYA, bukan namanya. Berbunyi `peran !=
+        # "admin"` dulu, dan itu salah dua arah sekaligus:
+        #
+        # · Admin terakhir yang mau NAIK ke Super Admin ikut ditolak —
+        #   padahal tingkatnya bertambah, bukan berkurang. Di pabrik yang
+        #   Super Admin-nya belum pernah diangkat, itu berarti puncak tangga
+        #   tak bisa diisi oleh siapa pun, selamanya. Catatan di
+        #   `_jumlah_admin` sudah menyebut bahaya ini dan membetulkan cara
+        #   MENGHITUNGNYA; syaratnya sendiri terlewat.
+        # · Super Admin terakhir yang diturunkan jadi operator LOLOS, karena
+        #   perannya bukan "admin" sehingga syaratnya tak pernah menyala.
+        #   Persis lubang yang penjaga ini dibuat untuk menutup.
+        from app.web.lihat_sebagai import TINGKAT
+
+        turun = TINGKAT.get(peran, 0) < TINGKAT.get(a.user.role, 0)
+        if peran and a.is_admin and turun and await _jumlah_admin(db) <= 1:
             return redirect(f"/pengguna/{akun_id}?err=admin-terakhir")
 
         if uname and uname != a.username:

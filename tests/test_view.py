@@ -251,12 +251,34 @@ def test_tempat_kosong_tetap_didaftar():
 
 # ─────────────────── Pengaturan: yang hanya milik pemilik ───────────────────
 
-def test_orang_dan_alat_hanya_di_view_super():
+def test_orang_dan_alat_milik_view_super():
     """Daftar peran berbunyi: Super Admin = "semua di atas, DITAMBAH
     mengelola orang, akun, dan alat"."""
     teks = (AKAR / "app/web/templates/pengaturan.html").read_text()
-    assert "{% if VIEW == V_SUPER %}" in teks
+    assert "VIEW == V_SUPER" in teks
     assert "akun.is_admin" not in teks
+
+
+def test_blok_sistem_tak_bisa_mengunci_semua_orang():
+    """Pabrik ini menjalankan SATU akun Admin dan NOL Super Admin. Blok yang
+    ketat kepada Admin karenanya menyembunyikan dirinya dari semua orang —
+    dan satu-satunya jalan mengangkat Super Admin pertama ada di balik pintu
+    yang baru saja ditutup untuk semua. Kunci yang ditinggal di dalam rumah.
+
+    Menyembuhkan dirinya sendiri: begitu ada satu Super Admin aktif, bloknya
+    berpindah ke layarnya tanpa ada yang perlu menyentuh apa pun.
+    """
+    import inspect
+
+    from app.web import pengaturan
+
+    teks = (AKAR / "app/web/templates/pengaturan.html").read_text()
+    assert "tuan and not ada_super" in teks
+    assert "ada_super=ada_super" in inspect.getsource(pengaturan.halaman_pengaturan)
+    # Hitungannya hanya akun AKTIF: Super Admin yang dinonaktifkan tak bisa
+    # membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci.
+    hitung = inspect.getsource(pengaturan._ada_superadmin)
+    assert '"aktif"' in hitung and '"superadmin"' in hitung
 
 
 def test_rutenya_belum_dipersempit():
@@ -322,3 +344,54 @@ def test_layar_kosong_tak_menunjuk_pintu_yang_dicabut():
     teks = (AKAR / "app/web/templates/aksi.html").read_text()
     tautan = teks.split('<a href="/aksi-lain">')[0]
     assert "VIEW != V_SELEPAN" in tautan
+
+
+# ─────────── Puncak tangga harus bisa diisi, dan tak boleh dikosongkan ───────────
+
+def test_admin_terakhir_boleh_NAIK_jadi_super_admin():
+    """Penjaga "akun tertinggi terakhir" dulu membandingkan NAMA peran, bukan
+    tingkatnya: `peran != "admin"` menolak Admin terakhir yang mau naik ke
+    Super Admin — padahal tingkatnya bertambah, bukan berkurang.
+
+    Akibatnya di pabrik yang Super Admin-nya belum pernah diangkat, puncak
+    tangga tak bisa diisi oleh siapa pun, selamanya. Ditemukan pemilik pada
+    10 September 2026, saat mencoba menaikkan akunnya sendiri.
+    """
+    import inspect
+
+    from app.web import pengguna
+
+    sumber = inspect.getsource(pengguna.simpan_ubah)
+    assert "TINGKAT" in sumber, "penjaga masih membandingkan nama peran"
+    assert 'peran != "admin"' not in sumber
+
+
+def test_super_admin_terakhir_tak_boleh_diturunkan():
+    """Lubang kedua di penjaga yang sama, arah sebaliknya: syaratnya menyala
+    hanya bila peran LAMA-nya "admin", jadi Super Admin terakhir yang
+    diturunkan jadi operator lolos — persis lubang yang penjaga ini dibuat
+    untuk menutup."""
+    import inspect
+
+    from app.web import pengguna
+
+    sumber = inspect.getsource(pengguna.simpan_ubah)
+    assert 'a.user.role == "admin"' not in sumber
+    assert "a.is_admin" in sumber and "turun" in sumber
+
+
+def test_tingkat_menjawab_naik_turun_dengan_benar():
+    """Perbandingannya diuji langsung, bukan cuma keberadaan namanya di kode."""
+    from app.web.lihat_sebagai import TINGKAT
+
+    def turun(lama, baru):
+        return TINGKAT.get(baru, 0) < TINGKAT.get(lama, 0)
+
+    assert not turun("admin", "superadmin"), "naik ke Super Admin bukan turun"
+    assert turun("superadmin", "admin")
+    assert turun("admin", "operator")
+    assert turun("superadmin", "operator")
+    assert not turun("operator", "admin")
+    # Peran yang tak dikenal bernilai 0 — dianggap turun, dan menolak itu
+    # sikap yang benar untuk akun tertinggi terakhir.
+    assert turun("admin", "dewa")
