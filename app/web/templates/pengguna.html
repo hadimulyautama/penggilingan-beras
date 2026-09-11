@@ -30,6 +30,7 @@
     buatkan akunnya di kotak berikutnya.
   </p>
   <form method="post" action="/pengguna/orang-baru" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <div>
       <label class="lbl" for="nama">Nama lengkap</label>
       <input class="fld" id="nama" name="nama" required autocomplete="off"
@@ -84,6 +85,7 @@
       Orang di daftar pengguna yang belum punya akun webapp.
     </p>
     <form method="post" action="/pengguna/buat" class="grup">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <div>
         <label class="lbl" for="user_id">Orangnya</label>
         <select class="fld" id="user_id" name="user_id" required>
@@ -124,16 +126,19 @@
         <a class="btn btn--kecil" href="/pengguna/{{ a.id }}">Ubah</a>
         <form class="sebaris" method="post" action="/pengguna/reset"
               onsubmit="return confirm('Setel ulang sandi {{ a.nama }}? Sandi lamanya langsung tidak berlaku.')">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
           <input type="hidden" name="akun_id" value="{{ a.id }}">
           <button class="btn btn--kecil" type="submit">Setel ulang sandi</button>
         </form>
         <form class="sebaris" method="post" action="/pengguna/mode">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
           <input type="hidden" name="akun_id" value="{{ a.id }}">
           <input type="hidden" name="mode" value="{{ "pribadi" if a.mode_perangkat == "bersama" else "bersama" }}">
           <button class="btn btn--kecil" type="submit">→ {{ "perangkat sendiri" if a.mode_perangkat == "bersama" else "perangkat gudang" }}</button>
         </form>
         <form class="sebaris" method="post" action="/pengguna/status"
               {% if a.status == "aktif" %}onsubmit="return confirm('Nonaktifkan {{ a.nama }}? Ia langsung tidak bisa masuk. Catatan lamanya tetap utuh.')"{% endif %}>
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
           <input type="hidden" name="akun_id" value="{{ a.id }}">
           <button class="btn btn--kecil{% if a.status == "aktif" %} btn--bahaya{% endif %}" type="submit">{{ "Aktifkan" if a.status != "aktif" else "Nonaktifkan" }}</button>
         </form>

@@ -15,6 +15,7 @@
   </div>
 
   <form method="post" action="/pengguna/{{ a.id }}" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <div>
       <label class="lbl" for="nama">Nama</label>
       <input class="fld" id="nama" name="nama" value="{{ a.nama }}" minlength="3" required>
@@ -70,6 +71,7 @@
   </p>
   <form method="post" action="/pengguna/reset"
         onsubmit="return confirm('Setel ulang sandi {{ a.nama }}? Sandi lamanya langsung tidak berlaku.')">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <input type="hidden" name="akun_id" value="{{ a.id }}">
     <button class="btn" type="submit">Setel ulang sandi</button>
   </form>

@@ -84,6 +84,32 @@ def cek_sandi(sandi: str, tersimpan: str) -> bool:
     return hmac.compare_digest(kunci.hex(), hash_hex)
 
 
+#: Hash yang TIDAK pernah cocok dengan sandi apa pun, dipakai saat nama
+#: penggunanya tak dikenal.
+#:
+#: Tanpa ini, nama yang ada dijawab dalam ~55 ms (scrypt dijalankan) dan nama
+#: yang tak ada dalam ~5 ms (tak ada yang dijalankan). Selisih itu adalah
+#: daftar nama pengguna perusahaan, terbuka bagi siapa pun yang mau
+#: mengukurnya. Temuan QA P-S-13.
+#:
+#: Dihitung sekali saat modul dimuat, dari sandi acak yang langsung dibuang.
+HASH_TIRUAN = hash_sandi(secrets.token_urlsafe(24))
+
+
+async def cek_sandi_async(sandi: str, tersimpan: str) -> bool:
+    """`cek_sandi` di threadpool — scrypt memakan ~50 ms CPU.
+
+    Dijalankan langsung di event loop, dua belas permintaan masuk bersamaan
+    menahan SELURUH aplikasi: QA mengukur /health naik dari 4 ms ke 119 ms
+    sementara orang-orang mengetik sandinya. Yang tersendat bukan halaman
+    masuk saja, melainkan setiap layar yang sedang dibuka siapa pun.
+    Temuan QA P-S-04.
+    """
+    import asyncio
+
+    return await asyncio.to_thread(cek_sandi, sandi, tersimpan)
+
+
 def sandi_acak(panjang: int = 10) -> str:
     """Sandi awal yang mudah dibacakan lewat telepon — tanpa huruf/angka rancu."""
     abjad = "abcdefghjkmnpqrstuvwxyz23456789"  # tanpa i l o 0 1
@@ -98,8 +124,21 @@ _KUNCI_SEMENTARA: bytes | None = None
 def _kunci() -> bytes:
     rahasia = settings.secret_key
     if not rahasia:
-        # Cadangan: kunci acak per proses. Sesi hangus saat restart — cukup
-        # aman, tetapi di produksi WAJIB set SECRET_KEY.
+        # ── Di SERVER ini kekeliruan, bukan keadaan yang boleh berlanjut ──
+        #
+        # Kunci acak per proses berarti seluruh sesi hangus tiap deploy, dan
+        # itu bukan sekadar merepotkan: ia membuat kekeliruan konfigurasi
+        # tampak seperti gangguan biasa, sehingga tak pernah diperbaiki.
+        # Peringatan di log sudah ada sejak dulu dan tak pernah dibaca siapa
+        # pun. Temuan QA P-S-16.
+        if settings.lingkungan_produksi:
+            raise RuntimeError(
+                "SECRET_KEY kosong. Di server, kunci penanda-tangan sesi wajib "
+                "disetel — tanpanya semua orang keluar sendiri tiap deploy. "
+                "Setel SECRET_KEY lalu jalankan ulang."
+            )
+        # Di laptop: kunci acak per proses sudah cukup, dan pagar yang
+        # menghalangi pengembangan akan dimatikan orang.
         global _KUNCI_SEMENTARA
         if _KUNCI_SEMENTARA is None:
             _KUNCI_SEMENTARA = os.urandom(32)
@@ -134,43 +173,96 @@ def umur_sesi_detik(akun: ProduksiAkun) -> int:
     return settings.sesi_hari * 24 * 3600
 
 
+#: Batas atas nomor akun yang masuk akal. Id di luar rentang ini dulu sampai
+#: ke basis data apa adanya dan pulang sebagai galat asyncpg mentah — yang
+#: tampil ke pengguna sebagai halaman 500 berisi nama tabel. Temuan QA P-S-12.
+_MAKS_ID = 2 ** 31 - 1
+
+
 def buat_token(akun: ProduksiAkun) -> str:
-    """Token sesi bertanda tangan: <payload>.<signature>."""
+    """Token sesi bertanda tangan: <payload>.<signature>.
+
+    `v` adalah versi token akun. Ia naik saat orangnya keluar dari semua
+    perangkat, saat sandinya diganti atau direset, dan saat perannya berubah —
+    dan token yang membawa versi lama berhenti berlaku saat itu juga. Tanpa
+    angka ini, token yang sudah beredar tak bisa ditarik kembali oleh tindakan
+    apa pun: "keluar" hanya menghapus cookie di perangkat yang menekannya,
+    sementara perangkat lain tetap masuk sampai 30 hari. Temuan QA P-S-05.
+    """
     kedaluwarsa = datetime.now(timezone.utc) + timedelta(
         seconds=umur_sesi_detik(akun)
     )
     payload = _b64e(json.dumps(
-        {"sub": int(akun.id), "exp": int(kedaluwarsa.timestamp())},
+        {"sub": int(akun.id), "exp": int(kedaluwarsa.timestamp()),
+         "v": int(getattr(akun, "token_version", 1) or 1)},
         separators=(",", ":"),
     ).encode())
     tanda = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{tanda}"
 
 
-def baca_token(token: str | None) -> int | None:
-    """Kembalikan akun_id bila token sah & belum kedaluwarsa."""
+def baca_token(token: str | None) -> tuple[int, int] | None:
+    """(akun_id, versi) bila token sah & belum kedaluwarsa; selain itu None.
+
+    **Tak pernah melempar.** Cookie datang dari luar, jadi isinya bisa apa
+    saja — termasuk huruf non-ASCII, yang dulu menjatuhkan `compare_digest`
+    dengan TypeError dan membuat SETIAP halaman menjawab 500, bukan hanya
+    halaman masuk. Temuan QA P-S-12.
+    """
     if not token or "." not in token:
         return None
-    payload, _, tanda = token.partition(".")
-    harapan = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
-    if not hmac.compare_digest(tanda, harapan):
-        return None
     try:
+        payload, _, tanda = token.partition(".")
+        harapan = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(tanda, harapan):
+            return None
         data = json.loads(_b64d(payload))
         if int(data["exp"]) < int(datetime.now(timezone.utc).timestamp()):
             return None
-        return int(data["sub"])
-    except (ValueError, KeyError, TypeError):
+        akun_id = int(data["sub"])
+        if not 0 < akun_id <= _MAKS_ID:
+            return None
+        # Token lama (dibuat sebelum kolom versi ada) dianggap versi 1: deploy
+        # tak boleh memutus semua orang sekaligus, hanya mereka yang versinya
+        # memang sudah dinaikkan sesudahnya.
+        return akun_id, int(data.get("v", 1) or 1)
+    except (ValueError, KeyError, TypeError, UnicodeError, AttributeError):
         return None
+
+
+def token_masih_berlaku(dibaca: tuple[int, int] | None, *, versi_akun: int) -> bool:
+    """Apakah token yang sudah dibaca masih sepadan dengan versi akunnya."""
+    return dibaca is not None and dibaca[1] >= int(versi_akun or 1)
+
+
+def tujuan_aman(nilai: str | None) -> str:
+    """Alamat tujuan setelah masuk — hanya path di aplikasi ini sendiri.
+
+    Halaman masuk yang mengantar orang ke situs lain adalah halaman masuk yang
+    bisa dipakai memanen sandi: alamat yang diklik benar, tampilannya benar,
+    dan yang terbuka berikutnya bukan milik kita. `//evil.example` adalah
+    bentuk yang paling sering terlewat — peramban membacanya sebagai alamat
+    lengkap tanpa skema, bukan sebagai path. Temuan QA P-S-06.
+    """
+    v = (nilai or "").strip()
+    if not v.startswith("/"):
+        return "/"
+    # Satu garis miring, dan yang kedua bukan garis miring maupun backslash.
+    if v[1:2] in ("/", "\\"):
+        return "/"
+    if any(c in v for c in ("\r", "\n", "\\")):
+        return "/"
+    return v
 
 
 # ─────────────────────────── Dependency ───────────────────────────
 
 async def akun_opsional(request: Request) -> ProduksiAkun | None:
     """Akun dari cookie sesi, atau None. Tidak pernah melempar error."""
-    akun_id = baca_token(request.cookies.get(NAMA_COOKIE))
-    if akun_id is None:
+    dibaca = baca_token(request.cookies.get(NAMA_COOKIE))
+    if dibaca is None:
         return None
+    akun_id, _versi = dibaca
     async with SessionLocal() as db:
         akun = (
             await db.execute(
@@ -181,6 +273,20 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
             )
         ).scalars().first()
         if akun is not None:
+            # ── Tiga pemeriksaan yang dulu tak ada satu pun ──
+            #
+            # Versi token: token yang dibuat sebelum orangnya keluar dari
+            # semua perangkat, mengganti sandi, atau perannya berubah sudah
+            # bukan miliknya lagi.
+            #
+            # Status di MASTER: dinonaktifkan di `users` berarti orangnya
+            # tidak lagi bekerja di sini, dan itu berlaku untuk ketiga
+            # aplikasi. Sebelumnya yang diperiksa hanya status akun
+            # produksinya sendiri. Temuan QA P-S-05 & X-11.
+            if not token_masih_berlaku(dibaca, versi_akun=akun.token_version):
+                return None
+            if akun.user is None or (akun.user.status or "").lower() != "aktif":
+                return None
             # Peran ikut termuat (relasi lazy="joined") sebelum sesi ditutup.
             _ = akun.peran
 

@@ -9,6 +9,7 @@
   <span class="lbl">Akun saya</span>
   <div class="kartu">
     <form method="post" action="/pengaturan/nama" class="grup">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <div>
         <label class="lbl" for="nama">Nama Anda</label>
         <input class="fld" id="nama" name="nama" value="{{ akun.nama }}"
@@ -109,6 +110,7 @@
     lebih tinggi dari peran Anda tidak bisa dipilih.
   </p>
   <form method="post" action="/lihat-sebagai" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <select class="fld" name="peran">
       {% for kode, nama in LIHAT_PILIHAN %}
         <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
@@ -144,6 +146,7 @@
       <div class="baris" style="padding:7px 0">
         <span>{{ s }}</span>
         <form method="post" action="/pengaturan/sebab-jeda">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
           <input type="hidden" name="jenis" value="{{ jenis }}">
           <input type="hidden" name="buang" value="{{ s }}">
           <button class="btn btn--kecil btn--bahaya" type="submit"
@@ -152,6 +155,7 @@
       </div>
     {% endfor %}
     <form method="post" action="/pengaturan/sebab-jeda" class="sebaris-borang">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <input type="hidden" name="jenis" value="{{ jenis }}">
       <input class="fld" name="tambah" type="text" maxlength="120"
              placeholder="Tambah sebab baru…" aria-label="Tambah sebab berhenti {{ jenis }}">
@@ -167,6 +171,7 @@
     {# Angka dan tombolnya sebaris: satu bilangan dua digit tak perlu borang
        setinggi kartu sendiri. #}
     <form method="post" action="/pengaturan/target-kadar-air" class="sebaris-borang">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <label class="lbl" for="target" style="flex:1">Target kadar air (%)</label>
       <input class="fld fld--kecil" id="target" name="nilai" type="number" step="0.1"
              inputmode="decimal" value="{{ '%g'|format(target_bawaan) }}"
@@ -195,6 +200,7 @@
   <span class="lbl">Mutu &amp; QC</span>
   <div class="kartu">
     <form method="post" action="/pengaturan/fitur-mutu" class="saklar-borang">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <input type="hidden" name="aktif" value="{{ '0' if mutu_aktif else '1' }}">
       <button class="saklar{{ ' saklar--nyala' if mutu_aktif }}" type="submit"
               role="switch" aria-checked="{{ 'true' if mutu_aktif else 'false' }}"

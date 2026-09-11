@@ -27,6 +27,7 @@
 {% endif %}
 
 <form method="post" action="/masuk" class="grup" autocomplete="on">
+  <input type="hidden" name="_csrf" value="{{ CSRF }}">
   <input type="hidden" name="tujuan" value="{{ tujuan }}">
   <div>
     <label class="lbl" for="username">Nama pengguna</label>

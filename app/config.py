@@ -1,6 +1,8 @@
 """Konfigurasi aplikasi — dibaca dari environment (.env)."""
 from __future__ import annotations
 
+import os
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -65,6 +67,13 @@ class Settings(BaseSettings):
     # Kunci penanda-tangan cookie sesi. WAJIB diisi di produksi — bila kosong,
     # dipakai kunci acak per proses dan semua sesi hangus tiap kali restart.
     secret_key: str = ""
+    # Apakah proses ini berjalan di SERVER, bukan di laptop. Railway menyetel
+    # RAILWAY_ENVIRONMENT sendiri; nilainya tak pernah ada di mesin
+    # pengembangan. Dipakai satu tempat: `secret_key` yang kosong di server
+    # menggagalkan start, sedangkan di laptop ia hanya memakai kunci
+    # sementara. Pagar yang menghalangi pengembangan akan dimatikan orang,
+    # dan yang dimatikan tak pernah dinyalakan lagi. Temuan QA P-S-16.
+    lingkungan_produksi: bool = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
     # Umur sesi untuk perangkat PRIBADI (HP sendiri): panjang, supaya membuka
     # aplikasi lagi tak pernah meminta sandi.
     sesi_hari: int = 30

@@ -8,6 +8,7 @@ yang dipanggilnya untuk membaca data pabrik.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 from contextlib import asynccontextmanager
 
@@ -167,10 +168,127 @@ async def perpanjang_sesi_pendek(request: Request, call_next):
     return balasan
 
 
+@app.middleware("http")
+async def penjaga_csrf(request: Request, call_next):
+    """Formulir POST wajib membawa token yang cocok dengan cookie-nya.
+
+    Cookie sesi sudah bertanda `SameSite=Lax`, dan itu memang menahan sebagian
+    besar kiriman dari situs lain. Tetapi ia menahannya DI PERAMBAN: yang
+    menjaga adalah pengaturan di sisi pengunjung, bukan pemeriksaan di sisi
+    kita. Temuan QA P-S-15.
+
+    Halaman masuk ikut dipagari. Tanpa itu, situs lain bisa memaksa peramban
+    seseorang masuk sebagai akun milik penyerang, dan pekerjaan yang ia catat
+    sesudahnya tercatat atas nama orang lain.
+    """
+    from app.web import csrf as _csrf
+
+    if _csrf.perlu_periksa(request.method, request.url.path):
+        di_kuki = request.cookies.get(_csrf.NAMA_COOKIE)
+        dikirim = request.headers.get(_csrf.NAMA_HEADER)
+        if not dikirim:
+            # ── Badan permintaan DIBACA lalu DIKEMBALIKAN ──
+            #
+            # Middleware memegang objek `Request` sendiri, terpisah dari yang
+            # nanti diterima rutenya. Membaca formulir di sini tanpa
+            # mengembalikan badannya membuat rute menunggu aliran yang sudah
+            # habis — dan yang terlihat orang adalah SETIAP kiriman formulir
+            # menggantung, bukan galat.
+            badan = await request.body()
+
+            async def _terima() -> dict:
+                return {"type": "http.request", "body": badan, "more_body": False}
+
+            request._receive = _terima
+            try:
+                formulir = await request.form()
+                dikirim = formulir.get(_csrf.NAMA_FIELD)
+            except Exception:  # noqa: BLE001 — badan JSON, bukan formulir
+                dikirim = None
+            request._receive = _terima
+        if not _csrf.cocok(di_kuki, dikirim):
+            log.warning("Token CSRF tak cocok pada %s %s",
+                        request.method, request.url.path)
+            return render(
+                request, "error.html",
+                pesan=("Halaman ini sudah kedaluwarsa. Muat ulang halamannya "
+                       "lalu coba lagi."),
+                status_code=403,
+            )
+
+    balasan = await call_next(request)
+    # Terbitkan sekali per peramban, lalu biarkan. Token yang diganti tiap
+    # permintaan membuat dua tab yang terbuka bersamaan saling membatalkan.
+    if not request.cookies.get(_csrf.NAMA_COOKIE):
+        nilai = getattr(request.state, "csrf", None) or _csrf.terbitkan_baru()
+        balasan.set_cookie(
+            _csrf.NAMA_COOKIE, nilai, max_age=365 * 24 * 3600,
+            httponly=False,   # dibaca skrip halaman untuk permintaan JSON
+            samesite="lax", secure=request.url.scheme == "https", path="/",
+        )
+    return balasan
+
+
+@app.middleware("http")
+async def wajib_ganti_sandi_dulu(request: Request, call_next):
+    """Selama sandi awal belum diganti, TIDAK ADA tulisan yang diterima.
+
+    Sebelumnya `harus_ganti_sandi` hanya mengarahkan orangnya ke formulir
+    saat login. Pengalihan itu soal tampilan; POST ke alamat mana pun tetap
+    diterima apa adanya. Jadi sandi awal yang diberikan lisan oleh Super
+    Admin — dan karenanya dipegang dua orang — tetap bisa dipakai bekerja
+    tanpa batas. Temuan QA P-S-07.
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    if request.url.path in ("/ganti-sandi", "/keluar", "/keluar-semua"):
+        return await call_next(request)
+    if request.url.path.startswith(("/health", "/internal/")):
+        return await call_next(request)
+
+    from app.web.security import akun_opsional as _akun
+
+    akun = await _akun(request)
+    if akun is not None and akun.harus_ganti_sandi:
+        return render(
+            request, "error.html",
+            pesan=("Ganti kata sandi awal Anda dulu sebelum mencatat apa pun. "
+                   "Buka menu Ganti sandi."),
+            status_code=403,
+        )
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def _galat_tak_terduga(request: Request, exc: Exception):
+    """Halaman galat NETRAL — tanpa nama tabel, tanpa pesan asyncpg.
+
+    Galat asyncpg mentah dulu tampil apa adanya ke pengguna: nama tabel, nama
+    kolom, dan potongan SQL. Itu peta bagi siapa pun yang membacanya, dan bagi
+    operator ia sekadar layar yang menakutkan. Yang lengkap tetap masuk log —
+    di sanalah tempatnya. Temuan QA P-S-12.
+    """
+    log.exception("Galat tak tertangani pada %s %s", request.method, request.url.path)
+    return render(
+        request, "error.html",
+        pesan=("Ada gangguan di sistem. Catatan Anda mungkin belum tersimpan — "
+               "coba lagi sebentar lagi, dan beri tahu Super Admin bila "
+               "berulang."),
+        status_code=500,
+    )
+
+
 @app.exception_handler(ButuhLogin)
 async def _belum_masuk(request: Request, exc: ButuhLogin):
     from urllib.parse import quote
-    return RedirectResponse(f"/masuk?next={quote(request.url.path)}", status_code=303)
+
+    from app.web.security import tujuan_aman
+
+    # Path-nya sendiri sudah relatif, tetapi disaring lewat jalur yang sama
+    # dengan yang dari luar: satu fungsi yang menentukan apa itu "tujuan yang
+    # boleh", bukan dua aturan yang bisa berbeda.
+    return RedirectResponse(
+        f"/masuk?next={quote(tujuan_aman(request.url.path))}", status_code=303)
 
 
 @app.exception_handler(AksesDitolak)
@@ -303,15 +421,23 @@ async def halaman_aksi_lain(request: Request):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(token: str = Query("")) -> HTMLResponse:
-    """Dashboard produksi staff (web). Dilindungi token rahasia di URL.
+async def dashboard(request: Request, token: str = Query("")) -> HTMLResponse:
+    """Dashboard produksi staff (web). Dilindungi token rahasia.
 
-    Set env `DASHBOARD_TOKEN` lalu buka /dashboard?token=<token>. Berisi data
-    uang (HPP) — hanya bagikan link ke staff/admin.
+    **Tokennya lebih baik dikirim sebagai header `X-Dashboard-Token`.** Yang
+    ada di query string ikut tertulis di log akses, di riwayat peramban, dan
+    di header Referer saat halamannya menaut ke mana pun — tiga tempat yang
+    tak satu pun dianggap rahasia oleh siapa pun. Query string tetap diterima
+    karena tautan yang sudah beredar masih dipakai; header didahulukan.
+    Temuan QA P-S-14.
+
+    Perbandingannya konstan-waktu: `!=` berhenti di huruf pertama yang
+    berbeda, dan selisih waktunya cukup untuk menebak token huruf demi huruf.
     """
     if not settings.dashboard_token:
         raise HTTPException(status_code=404, detail="Dashboard web tidak aktif.")
-    if token != settings.dashboard_token:
+    dikirim = request.headers.get("x-dashboard-token") or token or ""
+    if not hmac.compare_digest(dikirim, settings.dashboard_token):
         raise HTTPException(status_code=403, detail="Token tidak valid.")
     async with SessionLocal() as db:
         data = await dashboard_data(db)

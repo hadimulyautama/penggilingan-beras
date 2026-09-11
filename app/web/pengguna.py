@@ -53,6 +53,42 @@ def _saran_username(nama: str) -> str:
     return "".join(kata)[:20]
 
 
+def _terlalu_tinggi(pelaku, peran_sasaran: str | None) -> bool:
+    """Sasaran berperan LEBIH TINGGI daripada pelaku?
+
+    Jaring pengaman "belum ada Super Admin → Direksi diterima" ada supaya
+    pabrik tak terkunci. Tetapi selama jaring itu terbentang, Direksi berdiri
+    di halaman ini dengan wewenang penuh — dan dua jalur di sini tak pernah
+    membandingkan tingkat sama sekali: membuatkan login, dan menyetel ulang
+    sandi. Jadi ia bisa membuatkan login baru untuk orang ber-peran Super
+    Admin, lalu memakai sandi awal yang ia bacakan sendiri. Temuan QA P-S-10.
+
+    `simpan_ubah` sudah punya perbandingan ini sejak awal; yang ditambahkan
+    sekarang hanyalah memakainya di dua jalur yang terlewat.
+    """
+    from app.web.lihat_sebagai import TINGKAT
+
+    aku = TINGKAT.get((getattr(pelaku, "peran", "") or "").strip().lower(), 0)
+    dia = TINGKAT.get((peran_sasaran or "").strip().lower(), 0)
+    return dia > aku
+
+
+async def _catat(db, aksi: str, sasaran: str, pelaku, keterangan: str = "") -> None:
+    """Tulis jejak audit untuk tindakan pengelolaan akun.
+
+    Yang dijaga bukan pencegahannya melainkan kemungkinan menelusurinya:
+    pembuatan login, reset sandi, dan penonaktifan adalah tindakan yang
+    akibatnya baru terlihat berhari-hari kemudian, oleh orang lain.
+    """
+    from app.services.audit import log_activity
+
+    await log_activity(
+        db, table_name="produksi_akun", record_id=None, action="UPDATE",
+        changed_by=getattr(pelaku, "user_id", None),
+        new_value=f"{aksi} · {sasaran}" + (f" · {keterangan}" if keterangan else ""),
+    )
+
+
 async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
                 sandi_awal: dict | None = None) -> dict:
     """Daftar akun + orang di `users` yang belum punya akun."""
@@ -84,7 +120,7 @@ async def buat_akun(
     request: Request,
     user_id: int = Form(...),
     username: str = Form(...),
-    _=Depends(butuh_super),
+    pelaku=Depends(butuh_super),
 ):
     uname = username.strip().lower()
     if not uname or " " in uname or len(uname) < 3:
@@ -96,6 +132,11 @@ async def buat_akun(
         if orang is None:
             return render(request, "pengguna.html",
                           **await _muat(pesan_err="Orang itu tidak ada di daftar pengguna."))
+        if _terlalu_tinggi(pelaku, orang.role):
+            return render(request, "pengguna.html", **await _muat(
+                pesan_err=("Orang itu berperan lebih tinggi daripada Anda — "
+                           "loginnya hanya bisa dibuat oleh peran yang sama "
+                           "atau di atasnya.")))
         bentrok = (await db.execute(
             select(ProduksiAkun).where(ProduksiAkun.username == uname)
         )).scalars().first()
@@ -106,6 +147,8 @@ async def buat_akun(
             user_id=orang.id, username=uname, password_hash=hash_sandi(sandi),
             mode_perangkat=mode_bawaan(orang.role), harus_ganti_sandi=True,
         ))
+        await _catat(db, "buat login", f"{orang.nama} ({uname})", pelaku,
+                     f"peran {orang.role}")
         await db.commit()
         nama = orang.nama
     # Sandi awal ditampilkan sebagai blok tersendiri, bukan diselipkan dalam
@@ -117,15 +160,25 @@ async def buat_akun(
 
 
 @router.post("/pengguna/reset")
-async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butuh_super)):
+async def reset_sandi(request: Request, akun_id: int = Form(...),
+                      pelaku=Depends(butuh_super)):
     sandi = sandi_acak()
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
             return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
+        if _terlalu_tinggi(pelaku, akun.peran):
+            return render(request, "pengguna.html", **await _muat(
+                pesan_err=("Akun itu berperan lebih tinggi daripada Anda — "
+                           "sandinya tak bisa Anda setel ulang.")))
         akun.password_hash = hash_sandi(sandi)
         akun.harus_ganti_sandi = True
+        # Sandi yang disetel ulang memutus sesi lama di semua perangkat.
+        # Tanpa ini, sandi lama yang sudah dicuri tetap berguna — dan justru
+        # itulah alasan sandinya disetel ulang.
+        akun.token_version = (akun.token_version or 1) + 1
         uname, nama = akun.username, akun.nama
+        await _catat(db, "reset sandi", f"{nama} ({uname})", pelaku)
         await db.commit()
     return render(request, "pengguna.html", **await _muat(
         sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
@@ -133,13 +186,40 @@ async def reset_sandi(request: Request, akun_id: int = Form(...), _=Depends(butu
 
 
 @router.post("/pengguna/status")
-async def ubah_status(request: Request, akun_id: int = Form(...), _=Depends(butuh_super)):
+async def ubah_status(request: Request, akun_id: int = Form(...),
+                      pelaku=Depends(butuh_super)):
+    """Nonaktifkan / aktifkan — untuk KETIGA aplikasi sekaligus.
+
+    Sampai 11 September 2026 ada tiga bendera nonaktif yang terpisah
+    (`users.status`, `produksi_akun.status`, `timbangan_akun.status`), dan tak
+    satu baris kode pun pernah menyetel yang pertama. Jadi menonaktifkan orang
+    di sini tidak memutus akses Kantor maupun Timbangan: ia keluar dari
+    pabrik, dan asisten Telegram-nya tetap menjawab. Temuan QA X-11.
+
+    `users.status` adalah saklar yang sudah dibaca Kantor di setiap
+    permintaan; yang kurang hanyalah sesuatu yang pernah menyetelnya.
+    """
     async with SessionLocal() as db:
         akun = await db.get(ProduksiAkun, akun_id)
         if akun is None:
             return render(request, "pengguna.html", **await _muat(pesan_err="Akun tidak ditemukan."))
-        akun.status = "nonaktif" if akun.status == "aktif" else "aktif"
-        pesan = f"Akun '{akun.username}' sekarang {akun.status}."
+        if _terlalu_tinggi(pelaku, akun.peran):
+            return render(request, "pengguna.html", **await _muat(
+                pesan_err=("Akun itu berperan lebih tinggi daripada Anda — "
+                           "statusnya tak bisa Anda ubah.")))
+        nonaktif = akun.status == "aktif"
+        akun.status = "nonaktif" if nonaktif else "aktif"
+        if akun.user is not None:
+            akun.user.status = "nonaktif" if nonaktif else "aktif"
+        if nonaktif:
+            # Sesi yang sedang berjalan ikut putus SEKARANG. Tanpa ini,
+            # orang yang baru dinonaktifkan tetap bekerja sampai tokennya
+            # kedaluwarsa sendiri — sampai 30 hari di perangkat pribadi.
+            akun.token_version = (akun.token_version or 1) + 1
+        pesan = (f"Akun '{akun.username}' sekarang {akun.status} — "
+                 "berlaku juga di Kantor dan Timbangan.")
+        await _catat(db, f"status → {akun.status}", akun.username, pelaku,
+                     "termasuk users.status")
         await db.commit()
     return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
 
@@ -367,6 +447,10 @@ async def simpan_ubah(
             berubah.append("nama pengguna")
         if peran and peran != a.user.role:
             a.user.role = peran
+            # Perannya berubah, jadi sesi yang sedang berjalan membawa hak
+            # yang sudah bukan miliknya. Yang turun harus benar-benar turun,
+            # dan itu tak terjadi sampai tokennya diperbarui.
+            a.token_version = (a.token_version or 1) + 1
             berubah.append("peran")
         if mode and mode != a.mode_perangkat:
             a.mode_perangkat = mode

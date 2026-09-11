@@ -78,6 +78,11 @@ _TABLE_LABEL = {
     # Setelan tidak dibatalkan lewat undo: yang benar adalah mengubahnya
     # kembali di layar Pengaturan, dan itu meninggalkan jejaknya sendiri.
     "setelan_pabrik": "setelan pabrik",
+    # Pengelolaan akun juga tak dibatalkan lewat undo — membatalkan "reset
+    # sandi" berarti mengembalikan sandi yang sudah tidak berlaku. Labelnya
+    # tetap ada karena jejaknya MUNCUL di layar List audit, dan baris yang
+    # berbunyi "produksi_akun" di sana tak menolong siapa pun.
+    "produksi_akun": "akun & login",
     "polishing_process": "penyosohan", "polishing_output_logs": "hasil penyosohan",
     "polishing_silo_usage": "penyosohan", "finished_goods": "stok barang jadi",
     "packaging_stock": "stok kemasan", "beras_stock": "stok beras",

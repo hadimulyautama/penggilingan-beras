@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
@@ -59,6 +59,21 @@ class ProduksiAkun(Base, TimestampMixin):
     )
 
     terakhir_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # ── Versi token sesi ──
+    #
+    # Token sesi bertanda tangan HMAC dan tak dicatat di mana pun, jadi sekali
+    # beredar ia tak bisa ditarik kembali oleh tindakan apa pun: "Keluar"
+    # hanya menghapus cookie di perangkat yang menekannya, dan perangkat lain
+    # — termasuk yang hilang — tetap masuk sampai 30 hari.
+    #
+    # Angka ini ikut di dalam token. Menaikkannya membuat semua token lama
+    # berhenti berlaku seketika, dan itulah yang membuat "keluar dari semua
+    # perangkat", ganti sandi, reset sandi, dan penonaktifan benar-benar
+    # memutus akses. Temuan QA P-S-05.
+    token_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
 
     user: Mapped[User] = relationship(lazy="joined")
 

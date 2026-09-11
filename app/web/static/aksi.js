@@ -117,10 +117,19 @@
     return r.json();
   }
 
+  /* Token CSRF dibaca dari kuki-nya sendiri.
+     Situs lain bisa membuat peramban MENGIRIM kuki, tetapi tak bisa
+     MEMBACANYA — jadi ia tak bisa menyertakan nilai yang sama di header
+     permintaannya. Itulah yang membuat pola ini bekerja. */
+  function kukiCsrf() {
+    var bagian = ("; " + document.cookie).split("; produksi_csrf=");
+    return bagian.length === 2 ? bagian.pop().split(";").shift() : "";
+  }
+
   async function kirim(url, isi) {
     var r = await fetch(url, {
       method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": kukiCsrf() },
       body: JSON.stringify(isi),
     });
     var j = await r.json().catch(function () { return {}; });

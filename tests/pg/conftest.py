@@ -77,13 +77,37 @@ async def pg():
 
     # Layanannya memakai `SessionLocal` modulnya sendiri; diarahkan ke mesin
     # uji supaya yang diuji benar-benar kode yang dipakai, bukan salinannya.
+    #
+    # Modul yang menulis `from app.database import SessionLocal` memegang
+    # SALINAN referensinya sejak diimpor, jadi mengganti yang di `app.database`
+    # saja tak menyentuh mereka: mereka tetap memakai mesin aplikasi yang
+    # terikat event loop lain, dan galatnya berbunyi "another operation is in
+    # progress" — kalimat yang terbacanya seperti kerusakan asyncpg, bukan
+    # seperti uji yang salah pasang.
+    import sys
+
     from app import database
+
     asli = database.SessionLocal
     database.SessionLocal = Sesi
+    #
+    # Dipindai TIAP uji, dan yang lama disimpan apa adanya — bukan dianggap
+    # selalu sama dengan referensi aslinya. Modul yang baru diimpor DI TENGAH
+    # uji sebelumnya (impor malas di dalam fungsi) menangkap sessionmaker
+    # milik uji itu, dan mesinnya sudah dibuang saat uji berikutnya berjalan.
+    disalin = [
+        (m, m.SessionLocal) for m in list(sys.modules.values())
+        if getattr(m, "__name__", "").startswith("app.")
+        and hasattr(m, "SessionLocal")
+    ]
+    for m, _ in disalin:
+        m.SessionLocal = Sesi
     try:
         yield Sesi
     finally:
         database.SessionLocal = asli
+        for m, _lama in disalin:
+            m.SessionLocal = asli
         # ── Dikosongkan SESUDAH tiap uji ──
         #
         # Basis datanya sama untuk seluruh berkas uji, jadi baris dari uji

@@ -135,6 +135,11 @@ async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
 #: lewat tautan.
 _PESAN = {
     "nama-diganti": "Nama Anda sudah diperbarui.",
+    "nama-pendek": "Nama minimal 3 huruf.",
+    "nama-dipakai": ("Nama itu sudah dipakai orang lain. Nama Anda tertulis "
+                     "sebagai pelaku di setiap catatan, jadi dua orang "
+                     "bernama sama membuat catatan keduanya tak bisa "
+                     "dibedakan lagi."),
     "target-diubah": "Target kadar air bawaan sudah diperbarui.",
     "sebab-diubah": "Daftar sebab berhenti sudah diperbarui.",
     "sandi-diganti": "Kata sandi berhasil diganti.",
@@ -167,6 +172,25 @@ async def ganti_nama(
         orang = await db.get(User, akun.user_id)
         if orang is None:
             return redirect("/pengaturan")
+        # ── Nama kembar ditolak ──
+        #
+        # Nama inilah yang tertulis sebagai PELAKU di seluruh catatan, dan
+        # layar audit menampilkannya apa adanya. Operator yang mengganti
+        # namanya menjadi nama Direksi karenanya membuat catatannya sendiri
+        # terbaca sebagai catatan Direksi — tak ada satu pun layar yang bisa
+        # membedakan keduanya lagi. Temuan QA P-S-11.
+        #
+        # Dibandingkan tanpa memedulikan huruf besar-kecil dan spasi ganda:
+        # "wahid  nurhani" dan "Wahid Nurhani" terbaca sama oleh orang, dan
+        # orang itulah yang dikelabui.
+        from sqlalchemy import func as _f, select as _select
+
+        kembar = (await db.execute(
+            _select(User).where(_f.lower(User.nama) == nama.lower(),
+                               User.id != orang.id)
+        )).scalars().first()
+        if kembar is not None:
+            return redirect("/pengaturan?err=nama-dipakai")
         orang.nama = nama
         await db.commit()
     return redirect("/pengaturan?pesan=nama-diganti")

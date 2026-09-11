@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "120"
+VERSI = "121"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -88,6 +88,24 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     # pernah menghitungnya sendiri — lihat `app.web.layar`.
     konteks.setdefault("VIEW", getattr(request.state, "view", "tamu"))
     konteks.setdefault("MENUNGGU", 0)
+    # ── Token CSRF, satu per peramban ──
+    #
+    # Dibaca dari cookie bila sudah ada; kalau belum, diterbitkan di sini dan
+    # dititipkan ke `request.state` supaya middleware memasang cookie yang
+    # SAMA. Kalau keduanya menerbitkan sendiri-sendiri, formulir yang baru
+    # dirender akan membawa nilai yang berbeda dari cookie-nya — dan setiap
+    # kiriman pertama ditolak.
+    from app.web import csrf as _csrf
+
+    nilai = (request.cookies.get(_csrf.NAMA_COOKIE)
+             or getattr(request.state, "csrf", None))
+    if not nilai:
+        nilai = _csrf.terbitkan_baru()
+        try:
+            request.state.csrf = nilai
+        except Exception:  # noqa: BLE001 — permintaan tiruan tanpa state
+            pass
+    konteks.setdefault("CSRF", nilai)
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
 
 

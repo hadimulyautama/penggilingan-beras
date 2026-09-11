@@ -13,6 +13,7 @@
 {% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
 
 <form method="post" action="/ganti-sandi" class="grup">
+  <input type="hidden" name="_csrf" value="{{ CSRF }}">
   {% if not wajib %}
     <div>
       <label class="lbl" for="lama">Kata sandi sekarang</label>

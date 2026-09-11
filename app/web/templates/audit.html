@@ -49,6 +49,7 @@
       <div class="benda__isi">{{ pratinjau.ringkas }}</div>
       {% if pratinjau.didukung %}
         <form method="post" action="/audit/batalkan" style="margin-top:9px">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
           <input type="hidden" name="rentang" value="{{ rentang }}">
           <input type="hidden" name="kelompok" value="{{ kelompok }}">
           <input type="hidden" name="cari" value="{{ cari }}">

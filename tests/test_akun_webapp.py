@@ -70,8 +70,11 @@ class AkunPalsu:
 
 
 def test_token_pulang_pergi():
+    """`baca_token` kini mengembalikan (id, versi) — versinyalah yang membuat
+    sesi yang sudah beredar bisa ditarik kembali. Lihat P-S-05 di
+    `test_sesi_dan_login.py`."""
     akun = AkunPalsu(id=42)
-    assert sec.baca_token(sec.buat_token(akun)) == 42
+    assert sec.baca_token(sec.buat_token(akun)) == (42, 1)
 
 
 def test_token_yang_diutak_atik_ditolak():
