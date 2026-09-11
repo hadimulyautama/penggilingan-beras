@@ -43,6 +43,49 @@ async def me(user: User = Depends(pengguna_aksi)) -> dict:
     }
 
 
+# ──────────────────────── Penanda keadaan ────────────────────────
+
+@router.get("/keadaan")
+async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
+    """Satu penanda: APAKAH ada yang berubah — bukan apa yang berubah.
+
+    Dipanggil tiap sepuluh detik oleh tiap perangkat yang layarnya menyala.
+    Sebelum ini, denyut penyegaran mengunduh SELURUH halaman (14–26 KB) hanya
+    untuk menyimpulkan "tak ada yang berubah" di hampir semua denyutnya —
+    sekitar 17 MB kuota per perangkat per sif, dan operator memakai kuotanya
+    sendiri.
+
+    Sekarang yang ditanya cuma ini. Halamannya baru diambil kalau jawabannya
+    berbeda dari yang terakhir dilihat.
+
+    **Isinya dua bagian, dan yang kedua mudah terlupa.** `activity_logs`
+    mencatat hampir seluruh perubahan di aplikasi ini — 67 tempat memanggil
+    pencatatnya, dan pencatat itu tidak commit sendiri melainkan ikut
+    transaksi pemanggilnya, jadi barisnya muncul TEPAT saat perubahannya jadi.
+    Tetapi tiket timbang dibuat aplikasi TIMBANGAN, yang menulis ke basis data
+    yang sama tanpa lewat catatan aktivitas ini — padahal tiket yang belum
+    ditaut berdiri sebagai kartu di Antrian tunggu. Tanpa bagian kedua, truk
+    yang baru masuk tak akan pernah muncul sendiri di layar.
+
+    Yang dipakai NOMOR yang selalu naik, bukan cap waktu: jam server yang
+    bergeser sedikit bisa membuat satu perubahan terlewat selamanya. Untuk
+    tabel timbangan, `updated_at` ikut karena tiket DIUBAH saat timbang kedua
+    — nomornya sendiri tak bergerak di situ.
+    """
+    from sqlalchemy import func, select, text
+
+    from app.models import ActivityLog
+
+    async with SessionLocal() as db:
+        n = (await db.execute(select(func.max(ActivityLog.id)))).scalar() or 0
+        t = (await db.execute(text(
+            "select coalesce(max(id), 0), "
+            "coalesce(cast(extract(epoch from max(updated_at)) as bigint), 0) "
+            "from timbangan_transaksi"
+        ))).first()
+    return {"n": f"{n}.{t[0]}.{t[1]}"}
+
+
 # ─────────────────────────── Dashboard ───────────────────────────
 
 def _clean(s: str) -> str:

@@ -489,3 +489,94 @@ def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
     # mematikan penyegaran untuk selamanya sampai aplikasi dimatikan.
     pasang = js[js.index("function pasang"):js.index("function angkatLembar")]
     assert "disentuh = false" in pasang
+
+
+# ────────── Penanda keadaan: bertanya dulu, mengunduh belakangan ──────────
+
+def test_denyut_bertanya_dulu():
+    """Denyut yang mengunduh seluruh halaman (14–26 KB) hanya untuk
+    menyimpulkan "tak ada yang berubah" membakar sekitar 17 MB kuota per
+    perangkat per sif — dan operator memakai kuotanya sendiri."""
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
+    assert "tanyaPenanda()" in diam
+    # Penanda ditanya SEBELUM halamannya diambil, bukan sesudahnya.
+    assert diam.index("tanyaPenanda()") < diam.index("ambil(alamat)")
+
+
+def test_belum_tahu_bukan_berarti_tak_berubah():
+    """`null` terjadi tepat sesudah aplikasi dibuka — dan di situlah justru
+    yang paling mungkin basi, karena telepon bisa saja sejam di kantong.
+    Menganggapnya "tak berubah" berarti mengulang keluhan yang sedang
+    diperbaiki."""
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
+    assert "p !== null && penanda !== null" in diam
+
+
+def test_sesi_habis_tak_memicu_muat_ulang_tanpa_henti():
+    """Sesi habis menjawab halaman masuk, bukan JSON."""
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+    blok = js[js.index("function tanyaPenanda"):js.index("function bolehDiam")]
+    assert "r.ok ? r.json() : null" in blok
+    assert ".catch(" in blok
+
+
+def test_penanda_memuat_tiket_timbang():
+    """Tiket timbang dibuat aplikasi TIMBANGAN, yang menulis ke basis data
+    yang sama tanpa lewat `activity_logs` milik aplikasi ini — padahal tiket
+    gabah yang belum ditaut berdiri sebagai kartu di Antrian tunggu.
+
+    Tanpa bagian kedua ini, truk yang baru masuk tak akan pernah muncul
+    sendiri di layar operator; ia harus berpindah layar dulu.
+    """
+    import inspect
+
+    from app.web import miniapp
+
+    src = inspect.getsource(miniapp.keadaan)
+    assert "ActivityLog" in src, "perubahan di aplikasi ini tak terpantau"
+    assert "timbangan_transaksi" in src, "tiket timbang tak terpantau"
+    # `updated_at` ikut: tiket DIUBAH saat timbang kedua, nomornya tak
+    # bergerak di situ.
+    assert "max(updated_at)" in src
+    # Nomor yang selalu naik, bukan jam perangkat.
+    assert "extract(epoch" in src
+
+
+def test_tiket_gabah_baru_muncul_sendiri_di_antrean():
+    """Pemilik: "jika ada tiket timbang baru, di antrian tunggu app
+    operasional harus ada, jika itu gabah."
+
+    Dua hal harus benar bersamaan, dan keduanya mudah luput satu-satu.
+    Penandanya harus ikut bergerak saat aplikasi TIMBANGAN menulis tiket —
+    ia tak lewat `activity_logs` milik aplikasi ini. Dan penyaringnya harus
+    membuang yang BUKAN gabah: PK dan komoditas lain punya alurnya sendiri,
+    dan kartu yang salah alur menuntun operator memasukkan barang ke tempat
+    yang salah.
+
+    Dibuktikan di peramban pada 11 September 2026: tiket gabah basah baru
+    dimasukkan ke basis data dari luar, satu denyut dijalankan tanpa memuat
+    ulang halaman, dan kartunya muncul.
+    """
+    import inspect
+
+    from app.services import berjalan
+    from app.web import miniapp
+
+    assert "timbangan_transaksi" in inspect.getsource(miniapp.keadaan)
+
+    saring = inspect.getsource(berjalan._tiket_belum_ditaut)
+    assert 'info.model != "gabah"' in saring, "yang bukan gabah tak disaring"
+    # Jenisnya dibaca dari PETA JENIS, bukan ditebak dari awalan kodenya —
+    # komoditas baru diam-diam dianggap gabah kering kalau ditebak.
+    assert "intake_dari_jenis" in saring

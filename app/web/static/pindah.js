@@ -95,6 +95,15 @@
       if (!bolehDiam()) { return; }
 
       var lama = bingkai.innerHTML;
+
+      tanyaPenanda().then(function (p) {
+        var sama = (p !== null && penanda !== null && p === penanda);
+        if (p !== null) { penanda = p; }
+        if (sama) { return; }        // tak ada yang berubah: berhenti di sini
+        lanjutkan();
+      });
+
+      function lanjutkan() {
       delete simpan[alamat];
       ambil(alamat).then(function (teks) {
         if (!teks) { return; }
@@ -113,6 +122,7 @@
         var g2 = document.querySelector(".isi");
         if (g2 && atas) { g2.scrollTop = atas; }
       });
+      }
     }
   };
   function cabutSemua() {
@@ -213,6 +223,35 @@
    * sampai orangnya pergi sendiri. Penandanya direset tiap `pasang`, karena
    * saat itu halamannya memang berganti. */
   var disentuh = false;
+
+  /* ── Penanda keadaan: bertanya dulu, mengunduh belakangan ──
+   *
+   * Denyut ini dulu mengunduh SELURUH halaman (14–26 KB) hanya untuk
+   * menyimpulkan "tak ada yang berubah" di hampir semua denyutnya. Sekitar
+   * 17 MB kuota per perangkat per sif, dan operator memakai kuotanya sendiri.
+   *
+   * Sekarang yang ditanya lebih dulu satu penanda pendek. Halamannya baru
+   * diambil kalau penandanya berbeda dari yang terakhir dilihat — dan karena
+   * bertanya jadi murah, jaraknya bisa dirapatkan dari 30 detik ke 10.
+   *
+   * `null` berarti BELUM TAHU, dan itu diperlakukan sebagai "mungkin
+   * berubah": halamannya tetap diambil. Keadaan itu terjadi tepat sesudah
+   * aplikasi dibuka — dan di situlah justru yang paling mungkin basi, karena
+   * telepon bisa saja sejam di dalam kantong. Menganggapnya "tak berubah"
+   * berarti mengulang persis keluhan yang sedang diperbaiki.
+   *
+   * Gagal bertanya juga `null`: jaringan putus, atau sesi habis dan yang
+   * datang halaman masuk, bukan JSON. Yang terakhir itu penting — kalau
+   * pengalihan ke halaman masuk ditafsirkan sebagai "ada perubahan", layarnya
+   * akan memuat ulang tanpa henti. */
+  var penanda = null;
+
+  function tanyaPenanda() {
+    return fetch("/miniapp/keadaan", { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { return (j && j.n) ? String(j.n) : null; })
+      .catch(function () { return null; });
+  }
 
   function bolehDiam() {
     if (disentuh) { return false; }
@@ -363,7 +402,7 @@
     if (denyut) { return; }
     denyut = setInterval(function () {
       if (document.visibilityState === "visible") { window.PINDAH.diam(); }
-    }, 30000);
+    }, 10000);
   }
 
   function hentikanDenyut() {
