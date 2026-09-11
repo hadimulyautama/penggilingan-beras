@@ -304,10 +304,26 @@ def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
     css = (AKAR / "app/web/static/app.css").read_text()
     assert "anak--kecil" not in css, "rincian batch dikecilkan lagi"
     assert "anak--kecil" not in TPL.read_text()
-    # Kepalanya tetap kecil — ia label, dan label yang sebesar isinya membuat
-    # keduanya berebut mata.
+    # Kepalanya tetap LEBIH KECIL daripada isinya — ia label, dan label yang
+    # sebesar isinya membuat keduanya berebut mata.
+    #
+    # Angkanya bukan lagi 9,5px: sejak UI-04 tak ada teks di bawah 13px sama
+    # sekali. QA menghitung 24–41 potong teks di bawah 13px per layar, dan
+    # layar ini dibaca sambil berdiri, kadang di bawah matahari. Yang dijaga
+    # uji ini tetap sama — hierarkinya — bukan angka yang kebetulan dipakai
+    # saat ia ditulis.
+    import re
+
+    def ukuran(blok: str) -> float:
+        m = re.search(r"font-size: *([\d.]+)px", blok)
+        return float(m.group(1)) if m else 0.0
+
     kepala = css.split(".anak__kepala {")[1].split("}")[0]
-    assert "9.5px" in kepala and "uppercase" in kepala
+    isi = css.split(".anak__kg {")[1].split("}")[0] if ".anak__kg {" in css else ""
+    assert "uppercase" in kepala
+    assert ukuran(kepala) >= 13, "label turun di bawah 13px lagi"
+    if isi:
+        assert ukuran(kepala) <= ukuran(isi), "label sebesar isinya"
 
 
 def test_rincian_menyebut_jumlah_batch_dan_bobot_masing_masing():

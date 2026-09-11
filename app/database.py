@@ -25,6 +25,20 @@ def now_local() -> datetime:
     return datetime.now(ZoneInfo(settings.app_timezone))
 
 
+def berzona(saat: datetime | None) -> datetime | None:
+    """Ubah ke waktu Jakarta. None tetap None.
+
+    asyncpg mengembalikan timestamptz sebagai datetime ber-UTC, dan jam yang
+    ditampilkan apa adanya meleset tujuh jam — cukup untuk membuat "pukul
+    10:42" terbaca sebagai kejadian yang belum terjadi.
+    """
+    if saat is None:
+        return None
+    if saat.tzinfo is None:
+        return saat
+    return saat.astimezone(ZoneInfo(settings.app_timezone))
+
+
 def tanggal_lokal(saat: datetime | None) -> date | None:
     """Tanggal Asia/Jakarta dari sebuah waktu — juga bila waktunya dari DB.
 

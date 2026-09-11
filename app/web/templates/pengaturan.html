@@ -8,7 +8,25 @@
 <div>
   <span class="lbl">Akun saya</span>
   <div class="kartu">
-    <form method="post" action="/pengaturan/nama" class="grup">
+    {# ── Mode terik ──
+     Layar terang untuk kerja di bawah matahari. Per PERANGKAT, bukan per
+     akun. Ditaruh paling atas karena ia satu-satunya setelan di halaman ini
+     yang dicari orang sambil berdiri di luar. Temuan QA UI-04. #}
+  <form method="post" action="/pengaturan/terik" class="saklar-borang">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <div>
+      <div class="lbl">Mode terik</div>
+      <div class="bantu">Layar terang untuk kerja di bawah matahari. Berlaku
+        untuk perangkat ini saja.</div>
+    </div>
+    <button class="saklar{{ ' saklar--nyala' if TERIK }}" type="submit"
+            aria-pressed="{{ 'true' if TERIK else 'false' }}"
+            aria-label="Mode terik">
+      <span class="saklar__bulat"></span>
+    </button>
+  </form>
+
+  <form method="post" action="/pengaturan/nama" class="grup">
       <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <div>
         <label class="lbl" for="nama">Nama Anda</label>

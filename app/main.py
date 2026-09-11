@@ -354,8 +354,19 @@ async def beranda(request: Request):
 
 @app.get("/health")
 async def health() -> dict:
+    """Kesehatan, termasuk apakah SKEMA-nya selaras dengan kode ini.
+
+    Sebelumnya jawabannya "ok" tanpa pernah melihat basis datanya. Layanan
+    yang menyala di atas skema yang tertinggal satu migrasi menerima
+    pencatatan dan menyimpannya salah — dan tak ada satu tanda pun yang
+    menyebut sebabnya. Temuan QA X-04.
+    """
+    from app.web.skema import keadaan
+
+    skema = await keadaan()
     return {
-        "status": "ok",
+        "status": "ok" if skema["selaras"] else "skema-tidak-selaras",
+        "skema": skema,
         "model": settings.claude_model,
     }
 

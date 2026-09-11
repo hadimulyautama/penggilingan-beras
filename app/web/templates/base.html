@@ -57,7 +57,10 @@
 <script src="/static/pindah.js?v={{ VERSI }}"></script>
 
 </head>
-<body>
+{# Mode terik disimpan per PERANGKAT di kuki, bukan per akun: satu orang
+   memakai ponselnya sendiri di dalam gudang dan perangkat gudang di luar, dan
+   yang menentukan bukan siapa dia melainkan di mana layarnya berada. #}
+<body class="{{ 'terik' if TERIK }}">
 <div class="bingkai">
 {% if MODE_UJI %}<div class="pita-uji">MODE UJI · DATA BOLEH DIHAPUS</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:

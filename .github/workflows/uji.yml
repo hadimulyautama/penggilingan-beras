@@ -1,0 +1,75 @@
+# Uji penuh + uji Postgres, tiap push dan pull request.
+#
+# Temuan QA UJI-02, 11 September 2026. Bug khusus Postgres dan balapan harus
+# tertangkap di sini, bukan di pos timbang: SQLite mengubah NaN jadi NULL, tak
+# menegakkan panjang VARCHAR, mematikan foreign key, dan memakai satu koneksi —
+# jadi lima temuan (T-03, T-04, T-08, T-09, T-12) lolos di suite lalu gagal di
+# server.
+#
+# Alur ini TIDAK menyentuh Railway: tak ada rahasia yang dipakai, tak ada
+# deploy. Ia hanya menjalankan uji di database sementara milik runner-nya
+# sendiri.
+name: uji
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  uji:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Pagar yang sama dengan di laptop: loopback, dan nama berawalan "uji_".
+      # Uji Postgres MENOLAK jalan bila salah satunya tak terpenuhi — lihat
+      # tests/pg/conftest.py.
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Pasang dependensi
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Migrasi dari database KOSONG
+        run: alembic upgrade head
+
+      # `alembic check` dijalankan sebagai LAPORAN dulu, bukan penjaga.
+      #
+      # Ada selisih lama antara model dan migrasi — 66 kolom yang di basis data
+      # NOT NULL tetapi di model tak dinyatakan begitu, dan 46 indeks yang
+      # dibuat migrasi tanpa dideklarasikan di model. Tak satu pun berbahaya;
+      # semuanya membuat `check` berbunyi merah. Menjadikannya penjaga
+      # sekarang berarti alur ini merah sejak hari pertama, dan alur yang
+      # selalu merah berhenti dibaca orang.
+      #
+      # Rencananya: rapikan selisih itu (perubahan DEKLARASI saja, tanpa DDL),
+      # lalu ganti `|| true` ini dengan penjaga sungguhan.
+      - name: Periksa selisih model ↔ migrasi (laporan)
+        run: alembic check || true
+        continue-on-error: true
+
+      - name: Uji penuh (termasuk tests/pg)
+        run: pytest -q

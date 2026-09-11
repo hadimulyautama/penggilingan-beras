@@ -19,8 +19,17 @@
 
   --tinta:      #dce7ec;
   --tinta-2:    #b6c6ce;
-  --redup:      #8ba0ab;
-  --redup-2:    #6f8794;
+  /* ── Kontras teks kerja: minimal 7:1 ──
+     Diukur terhadap --panel (#16212a). Sebelum 11 September 2026:
+     --redup 6,00:1 dan --redup-2 hanya 4,33:1, yaitu DI BAWAH ambang WCAG AA
+     4,5:1 — dan ini layar yang dibaca sambil berdiri di gudang, kadang kena
+     matahari langsung. Temuan QA UI-04.
+
+     Dinaikkan di TOKEN, bukan per elemen: warna yang dibetulkan satu-satu
+     akan tertinggal di layar berikutnya, dan yang tertinggal justru layar
+     yang paling jarang dibuka orang. */
+  --redup:      #b4c6cf;   /*  9,28:1 */
+  --redup-2:    #a8bcc6;   /*  8,31:1 */
 
   --aksi:       #4fb3d9;
   --aksi-gelap: #3d94b6;
@@ -33,6 +42,11 @@
   --sentuh:     56px;
 
   --mono:  'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  /* ── Tak ada teks di bawah 13 px ──
+     QA menghitung 24–41 potong teks di bawah 13 px PER LAYAR, sebagian besar
+     label huruf besar monospace berukuran 10,5–11 px. Layar ini dibaca sambil
+     berdiri, satu tangan memegang ponsel, kadang di bawah matahari. Seluruh
+     `font-size` di bawah 13 px dinaikkan ke 13 px. Temuan QA UI-04. */
   --teks:  'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -128,12 +142,26 @@ html, body {
   font-weight: 600; font-size: 17px; line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* ── Subjudul kepala BOLEH membungkus ──
+   Dulu ia satu baris dengan elipsis, dan yang terpotong justru bagian yang
+   gunanya paling besar: "OPERATOR UJI · OPERATOR SELEPAN · PERANGK…".
+   Keterangan perangkat itulah yang dipakai orang untuk memutuskan "tekan
+   Ganti bila bukan Anda" — dan ia tak pernah terlihat. Temuan QA UI-05.
+
+   Dibatasi dua baris: cukup untuk memuat ketiganya di 390 px, dan tetap
+   menahan kepala halaman dari tumbuh tak terkendali. */
 .bar__sub {
   font-family: var(--mono);
-  font-size: 11px; letter-spacing: .05em;
+  font-size: 13px; letter-spacing: .05em;
+  line-height: 1.35;
   color: var(--redup-2);
   text-transform: uppercase;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .isi {
@@ -153,7 +181,7 @@ html, body {
 /* ── Judul & label ── */
 .lbl {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   letter-spacing: .15em;
   text-transform: uppercase;
   color: var(--redup-2);
@@ -164,7 +192,7 @@ h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; line-height: 1.2; }
 h2 { font-size: 17px; font-weight: 600; margin: 0 0 10px; }
 p  { margin: 0 0 12px; }
 p:last-child { margin-bottom: 0; }
-.bantu { font-size: 12.5px; color: var(--redup); line-height: 1.5; }
+.bantu { font-size: 13px; color: var(--redup); line-height: 1.5; }
 .mono  { font-family: var(--mono); }
 a { color: var(--aksi); text-underline-offset: 2px; }
 a:hover { color: #7fcbe8; }
@@ -191,7 +219,7 @@ a:hover { color: #7fcbe8; }
 .petak__sel--bahaya { border-left: 3px solid var(--bahaya); }
 .petak__label {
   font-family: var(--mono);
-  font-size: 10.5px; letter-spacing: .1em;
+  font-size: 13px; letter-spacing: .1em;
   color: var(--redup-2);
   text-transform: uppercase;
 }
@@ -201,7 +229,7 @@ a:hover { color: #7fcbe8; }
   margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
-.petak__sat { font-size: 12px; font-weight: 400; color: var(--redup-2); }
+.petak__sat { font-size: 13px; font-weight: 400; color: var(--redup-2); }
 
 /* ── Medan berulang: satu kotak, lalu tombol yang menambah kotak ── */
 .ulang { display: flex; flex-direction: column; gap: 8px; }
@@ -290,7 +318,7 @@ select.fld { appearance: none; }
 .baris__isi { min-width: 0; flex: 1 1 190px; }
 .baris__aksi { display: flex; flex-wrap: wrap; gap: 6px; }
 .baris__nama { font-size: 15px; font-weight: 500; }
-.baris__ket { font-family: var(--mono); font-size: 11px; color: var(--redup); letter-spacing: .04em; }
+.baris__ket { font-family: var(--mono); font-size: 13px; color: var(--redup); letter-spacing: .04em; }
 
 /* ── Menu tindakan ── */
 .tindakan {
@@ -315,7 +343,7 @@ select.fld { appearance: none; }
 /* Keterangan dipangkas dua baris: daftar aksi harus tetap bisa dipindai, dan
    penjelasan panjangnya toh diulang di dalam lembar aksinya. */
 .tindakan__ket {
-  font-family: var(--mono); font-size: 11px; color: var(--redup-2); letter-spacing: .04em;
+  font-family: var(--mono); font-size: 13px; color: var(--redup-2); letter-spacing: .04em;
   line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
@@ -325,7 +353,7 @@ select.fld { appearance: none; }
 .lencana {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
   padding: 3px 8px; border-radius: 5px;
   background: var(--panel-2); color: var(--redup);
 }
@@ -349,7 +377,7 @@ select.fld { appearance: none; }
   padding: 16px 0 0;
   border-top: 1px solid var(--garis-2);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 13px;
   letter-spacing: .08em;
   color: var(--redup-2);
   text-transform: uppercase;
@@ -378,7 +406,7 @@ select.fld { appearance: none; }
   height: 100%; padding: 0 14px;
   border: 0; background: none;
   color: var(--redup);
-  font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .08em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -471,7 +499,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   display: grid; grid-template-columns: 15px 1fr; gap: 9px; align-items: center;
 }
 .kabar__ikon {
-  font-size: 12.5px; text-align: center; color: var(--redup); font-weight: 700;
+  font-size: 13px; text-align: center; color: var(--redup); font-weight: 700;
 }
 .kabar__teks { min-width: 0; word-break: break-word; }
 
@@ -497,7 +525,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .laporan {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--tinta);
   white-space: pre-wrap;
@@ -588,9 +616,9 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .pintu__ikon { font-size: 16px; text-align: center; color: var(--redup-2); }
 .pintu__isi { display: grid; gap: 1px; min-width: 0; }
 .pintu__nama { font-size: 15px; font-weight: 500; }
-.pintu__ket { font-size: 11.5px; color: var(--redup-2); }
+.pintu__ket { font-size: 13px; color: var(--redup-2); }
 .pintu__jml {
-  font-family: var(--mono); font-size: 11px;
+  font-family: var(--mono); font-size: 13px;
   min-width: 20px; padding: 2px 8px; text-align: center;
   border-radius: 999px;
   background: var(--aksi); color: var(--aksi-tinta);
@@ -620,7 +648,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 .jalan__isi { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .jalan__kode { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: .02em; }
 .jalan__ket { font-size: 14px; color: var(--tinta-2); line-height: 1.35; }
-.jalan__keadaan { font-family: var(--mono); font-size: 11px; color: var(--redup-2); letter-spacing: .04em; }
+.jalan__keadaan { font-family: var(--mono); font-size: 13px; color: var(--redup-2); letter-spacing: .04em; }
 
 /* ── Layar kosong ── */
 .kosong {
@@ -661,7 +689,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   background: var(--hati);
   color: #1a1206;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: .1em;
   text-align: center;
   padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
@@ -675,7 +703,7 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   background: var(--aksi); color: var(--aksi-tinta);
-  font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .08em;
   padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
   margin: 0;
 }
@@ -771,8 +799,8 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   font-size: 15px; font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; letter-spacing: -.01em;
 }
-.padat__nilai small { font-size: 11px; font-weight: 500; color: var(--redup); }
-.padat__ket { font-size: 12px; color: var(--redup); line-height: 1.4; }
+.padat__nilai small { font-size: 13px; font-weight: 500; color: var(--redup); }
+.padat__ket { font-size: 13px; color: var(--redup); line-height: 1.4; }
 /* Batangnya lebih tipis daripada di kartu penuh: di sini ia keterangan
    sekilas, bukan alat ukur yang dibaca angkanya. */
 .padat .maju__bar { height: 5px; margin-top: 0; }
@@ -824,16 +852,16 @@ details.padat .pilihan { padding: 0 12px 12px; }
   font-size: 16.5px; font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; letter-spacing: -.01em;
 }
-.benda__nilai small { font-size: 11.5px; font-weight: 500; color: var(--redup); margin-left: 3px; }
+.benda__nilai small { font-size: 13px; font-weight: 500; color: var(--redup); margin-left: 3px; }
 .benda__sub {
   grid-column: 1 / -1;
-  font-size: 11.5px; font-weight: 400; color: var(--redup);
+  font-size: 13px; font-weight: 400; color: var(--redup);
 }
 
 .fakta { display: flex; flex-wrap: wrap; gap: 5px 14px; margin: 4px 0 0; }
 .fakta > div { display: grid; gap: 1px; }
 .fakta dt {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--redup-2);
 }
 .fakta dd {
@@ -847,18 +875,18 @@ details.padat .pilihan { padding: 0 12px 12px; }
   padding-left: 10px; border-left: 1px solid var(--garis);
 }
 .anak__baris { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
-.anak__nama { font-family: var(--mono); font-size: 12px; color: var(--tinta-2); }
-.anak__kg { font-size: 12.5px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+.anak__nama { font-family: var(--mono); font-size: 13px; color: var(--tinta-2); }
+.anak__kg { font-size: 13px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
 .anak__jam {
   grid-column: 1 / -1;
-  font-family: var(--mono); font-size: 10.5px; color: var(--redup-2);
+  font-family: var(--mono); font-size: 13px; color: var(--redup-2);
 }
 
 /* Satu-satunya baris berwarna dalam kartu — untuk yang menuntut perhatian. */
 .nota {
   margin-top: 7px; padding-left: 9px;
   border-left: 2px solid var(--fase);
-  font-size: 12.5px; line-height: 1.45; color: var(--tinta-2);
+  font-size: 13px; line-height: 1.45; color: var(--tinta-2);
 }
 /* Yang MENAHAN pekerjaan: mesin belum dinyalakan, proses dijeda.
    Digambar setipis keterangan biasa, kartu yang berhenti terbaca sama dengan
@@ -875,14 +903,14 @@ details.padat .pilihan { padding: 0 12px 12px; }
 /* Kepingan fase sewarna garis tepi: keduanya menguatkan satu keterangan,
    bukan dua penanda berbeda yang harus dicocokkan. */
 .keping {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--fase);
   border: 1px solid rgba(255, 255, 255, .13);
   background: rgba(255, 255, 255, .05);
   border-radius: 999px; padding: 2px 8px; white-space: nowrap;
 }
 .benda__status {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .05em;
   color: var(--redup-2); text-transform: uppercase;
 }
 
@@ -922,7 +950,7 @@ details.benda[open] > summary::after { transform: rotate(-135deg); }
   background: var(--aksi); border-color: var(--aksi); color: var(--aksi-tinta);
 }
 .pilihan__nama { font-weight: 600; font-size: 14.5px; }
-.pilihan__ket { font-size: 12.5px; color: var(--redup); }
+.pilihan__ket { font-size: 13px; color: var(--redup); }
 /* Tombol memakai bentuk yang sama dengan tautannya — dari sisi orang yang
    menekannya, keduanya "pilihan di dalam kartu"; bedanya cuma satu menyeberang
    ke layar lain dan satu lagi tidak. Warisan tombol dibatalkan supaya
@@ -945,9 +973,9 @@ button.pilihan__satu {
    diketahui sebelum menyimpulkan mengapa kadar airnya tak turun. */
 .catatan {
   display: grid; grid-template-columns: 14px 1fr; gap: 7px;
-  margin-top: 6px; font-size: 12.5px; line-height: 1.45; color: var(--hati);
+  margin-top: 6px; font-size: 13px; line-height: 1.45; color: var(--hati);
 }
-.catatan > span:first-child { font-size: 11px; line-height: 1.6; text-align: center; }
+.catatan > span:first-child { font-size: 13px; line-height: 1.6; text-align: center; }
 
 /* ── Isian yang sudah ditunjuk kartunya ──
    Bukan kolom isian, melainkan keterangan: orang sudah memilihnya saat
@@ -968,7 +996,7 @@ button.pilihan__satu {
   color: var(--aksi); font-size: 14.5px;
 }
 .semua-aksi > summary::-webkit-details-marker { display: none; }
-.semua-aksi > summary .bantu { font-size: 12px; }
+.semua-aksi > summary .bantu { font-size: 13px; }
 .semua-aksi[open] > summary { margin-bottom: 14px; }
 
 /* ══ Kemajuan pengeringan di Beranda ══
@@ -983,7 +1011,7 @@ button.pilihan__satu {
 }
 .maju__kepala { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .maju__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
-.maju__jam { font-family: var(--mono); font-size: 11.5px; color: var(--redup); }
+.maju__jam { font-family: var(--mono); font-size: 13px; color: var(--redup); }
 .maju__isi { color: var(--tinta-2); font-size: 13px; line-height: 1.45; }
 .maju__bar {
   height: 7px; border-radius: 999px; background: var(--garis-2);
@@ -997,7 +1025,7 @@ button.pilihan__satu {
 @media (prefers-reduced-motion: reduce) { .maju__bar > span { transition: none; } }
 .maju__kaki {
   display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
   color: var(--redup-2);
 }
 .maju__kini { color: var(--tinta-2); }
@@ -1008,7 +1036,7 @@ button.pilihan__satu {
 .saring { display: grid; gap: 7px; margin-bottom: 10px; }
 .pil-baris { display: flex; gap: 6px; flex-wrap: wrap; }
 .pil {
-  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
   min-height: 32px; display: inline-flex; align-items: center;
   padding: 6px 11px; border-radius: 999px;
   background: transparent; color: var(--redup);
@@ -1017,7 +1045,7 @@ button.pilihan__satu {
 .pil:hover { background: var(--panel); }
 .pil--on { background: var(--aksi); border-color: var(--aksi); color: var(--aksi-tinta); }
 .hitungan {
-  font-family: var(--mono); font-size: 11px; color: var(--redup-2);
+  font-family: var(--mono); font-size: 13px; color: var(--redup-2);
   margin-bottom: 10px;
 }
 
@@ -1032,13 +1060,13 @@ button.pilihan__satu {
 .audit--tua { opacity: .72; }
 .audit__atas {
   display: flex; justify-content: space-between; gap: 8px; align-items: baseline;
-  font-family: var(--mono); font-size: 11px; color: var(--redup-2);
+  font-family: var(--mono); font-size: 13px; color: var(--redup-2);
 }
 .audit__jenis { color: var(--tinta-2); letter-spacing: .05em; text-transform: uppercase; }
 .audit__teks { font-size: 13.5px; color: var(--tinta-2); line-height: 1.5; }
 .audit__kaki {
   display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
-  font-family: var(--mono); font-size: 10.5px; color: var(--redup-2);
+  font-family: var(--mono); font-size: 13px; color: var(--redup-2);
 }
 .kunci-tua { color: var(--redup-2); }
 
@@ -1059,7 +1087,7 @@ button.pilihan__satu {
   font-variant-numeric: tabular-nums;
 }
 .jumlah__angka small { font-size: 14px; font-weight: 500; color: var(--redup); margin-left: 3px; }
-.jumlah__ket { font-size: 12.5px; color: var(--redup); line-height: 1.5; margin-top: 4px; }
+.jumlah__ket { font-size: 13px; color: var(--redup); line-height: 1.5; margin-top: 4px; }
 
 /* Angka yang MENILAI pekerjaan, bukan yang melaporkan isinya — rendemen.
    Warnanya mengikuti fase giling, sama dengan tepi kartunya, jadi mata
@@ -1073,10 +1101,10 @@ button.pilihan__satu {
    huruf, lalu dicocokkan ke karung di gudang. Yang boleh mengecil adalah
    labelnya, bukan isinya. */
 .anak__kepala {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--redup-2); margin-bottom: 3px;
 }
-.fakta dd small { font-size: 10.5px; font-weight: 500; color: var(--redup-2); }
+.fakta dd small { font-size: 13px; font-weight: 500; color: var(--redup-2); }
 
 /* Rincian batch di dalam laci kartu Stok — sejajar dengan isi ringkasannya. */
 details.padat > .anak { margin: 0 12px 12px; }
@@ -1149,7 +1177,7 @@ details.padat > .anak { margin: 0 12px 12px; }
 }
 .lipat[open] > summary::after { transform: rotate(-135deg); }
 .lipat__jml {
-  font-family: var(--mono); font-size: 11px; color: var(--redup);
+  font-family: var(--mono); font-size: 13px; color: var(--redup);
   border: 1px solid var(--garis); border-radius: 999px; padding: 1px 7px;
 }
 
@@ -1161,7 +1189,7 @@ details.padat > .anak { margin: 0 12px 12px; }
 .lap { font-size: 14px; line-height: 1.55; color: var(--tinta); }
 .lap__bab {
   display: flex; align-items: center; gap: 8px;
-  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
   font-family: var(--mono); color: var(--redup);
   margin: 18px 0 8px; padding-bottom: 6px;
   border-bottom: 1px solid var(--garis-2);
@@ -1188,7 +1216,7 @@ details.padat > .anak { margin: 0 12px 12px; }
 /* Rincian di bawah butirnya: menjorok, lebih kecil, lebih redup — ia
    keterangan tentang baris di atasnya, bukan baris tersendiri. */
 .lap__anak {
-  font-family: var(--mono); font-size: 11.5px; color: var(--redup);
+  font-family: var(--mono); font-size: 13px; color: var(--redup);
   padding: 3px 0 3px 14px; margin-left: 4px;
   border-left: 1px solid var(--garis);
 }
@@ -1199,7 +1227,7 @@ details.padat > .anak { margin: 0 12px 12px; }
    hanya bekerja untuk NAMA; untuk kalimat ia jadi teriakan dua baris. */
 .lap__sub {
   display: flex; align-items: baseline; gap: 8px;
-  font-size: 12.5px; color: var(--redup); margin: 0 0 12px;
+  font-size: 13px; color: var(--redup); margin: 0 0 12px;
 }
 .lap__teks--ikon { display: flex; gap: 8px; align-items: baseline; color: var(--tinta); }
 
@@ -1224,7 +1252,7 @@ details.padat > .anak { margin: 0 12px 12px; }
   margin-left: auto;
   padding: 4px 10px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: .04em;
   color: inherit;
@@ -1249,7 +1277,7 @@ details.padat > .anak { margin: 0 12px 12px; }
   right: 10px;
   bottom: 8px;
   z-index: 5;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--samar, #8a8a8a);
   background: var(--latar, #fff);
   padding: 2px 7px;
@@ -1259,3 +1287,74 @@ details.padat > .anak { margin: 0 12px 12px; }
 }
 
 @media print { .segar { display: none; } }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TARGET SENTUH — minimal 44 px
+   ══════════════════════════════════════════════════════════════════════════
+   QA mengukur tiga yang terlalu kecil: chip saringan di /audit 32 px, tombol
+   "Batalkan input terakhir" 34 px, dan sakelar Pencatatan mutu 44×26. Jari
+   orang yang sedang memegang ponsel dengan satu tangan tidak setepat kursor,
+   dan yang meleset di layar audit berarti membatalkan hal yang salah.
+   Temuan QA UI-05.
+
+   44 px adalah angka yang dipakai Apple dan Google, bukan pilihan saya.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.btn, .btn--kecil, .cip, .chip, button, [role="button"],
+.saklar, .saklar__gagang, summary {
+  min-height: 44px;
+}
+
+/* Tombol kecil tetap terlihat kecil — yang dibesarkan adalah AREA
+   SENTUHNYA, lewat padding, bukan hurufnya. Tombol yang tiba-tiba raksasa
+   membuat layar padat jadi tak terbaca, dan pemilik sudah pernah menolak itu
+   ("tombol perbaiki hasil giling terlalu besar"). */
+.btn--kecil, .cip, .chip {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Sakelar: lebar tetap, tingginya yang dinaikkan lewat area sentuh. */
+.saklar {
+  display: inline-flex;
+  align-items: center;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODE TERIK — layar terang untuk kerja di bawah matahari
+   ══════════════════════════════════════════════════════════════════════════
+   Tema gelap enak di dalam gudang dan nyaris tak terbaca di halaman, dan
+   sebagian pekerjaan memang terjadi di sana: truk yang ditimbang, gabah yang
+   dijemur. Temuan QA UI-04.
+
+   Disetel PER PERANGKAT (kuki), bukan per akun: satu orang memakai ponselnya
+   sendiri di dalam dan perangkat gudang di luar, dan yang menentukan bukan
+   siapa dia melainkan di mana layarnya berada.
+
+   Dibalik lewat TOKEN yang sama, jadi tak ada satu pun aturan di bawah yang
+   perlu tahu mode ini ada.
+   ══════════════════════════════════════════════════════════════════════════ */
+body.terik {
+  --dasar:      #eef2f4;
+  --panel:      #ffffff;
+  --panel-2:    #e4eaee;
+  --garis:      #c2ced5;
+  --garis-2:    #d7dfe4;
+
+  --tinta:      #0c1418;   /* 17,4:1 di atas --panel */
+  --tinta-2:    #1d2b33;   /* 13,6:1 */
+  --redup:      #35464f;   /*  9,4:1 */
+  --redup-2:    #3f5058;   /*  8,1:1 */
+
+  --aksi:       #10627f;
+  --aksi-gelap: #0b4a61;
+  --aksi-tinta: #ffffff;
+
+  --aman:       #1c6b3c;
+  --hati:       #7a5305;
+  --bahaya:     #a12b1c;
+}

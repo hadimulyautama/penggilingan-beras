@@ -135,6 +135,9 @@ async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
 #: lewat tautan.
 _PESAN = {
     "nama-diganti": "Nama Anda sudah diperbarui.",
+    "terik-nyala": ("Mode terik menyala untuk perangkat ini — layar terang "
+                    "untuk kerja di bawah matahari."),
+    "terik-padam": "Mode terik dipadamkan untuk perangkat ini.",
     "nama-pendek": "Nama minimal 3 huruf.",
     "nama-dipakai": ("Nama itu sudah dipakai orang lain. Nama Anda tertulis "
                      "sebagai pelaku di setiap catatan, jadi dua orang "
@@ -149,6 +152,29 @@ _PESAN = {
     "mutu-padam": "Pencatatan mutu dimatikan — borang QC dan baris mutu "
                   "disembunyikan dari semua layar.",
 }
+
+
+@router.post("/pengaturan/terik")
+async def ganti_terik(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    """Nyala/padamkan mode terik untuk PERANGKAT ini.
+
+    Tema gelap enak di dalam gudang dan nyaris tak terbaca di halaman —
+    sebagian pekerjaan memang terjadi di sana: truk yang ditimbang, gabah yang
+    dijemur. Temuan QA UI-04.
+
+    Disimpan di kuki perangkat, bukan di akun: satu orang memakai ponselnya
+    sendiri di dalam dan perangkat gudang di luar, dan yang menentukan bukan
+    siapa dia melainkan di mana layarnya berada.
+    """
+    nyala = request.cookies.get("produksi_terik") != "1"
+    balasan = redirect("/pengaturan?pesan="
+                       + ("terik-nyala" if nyala else "terik-padam"))
+    balasan.set_cookie(
+        "produksi_terik", "1" if nyala else "0",
+        max_age=365 * 24 * 3600, httponly=False, samesite="lax",
+        secure=request.url.scheme == "https", path="/",
+    )
+    return balasan
 
 
 @router.post("/pengaturan/nama")

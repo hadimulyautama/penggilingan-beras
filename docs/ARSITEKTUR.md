@@ -226,8 +226,82 @@ Dua penjaga supaya ketiganya tidak saling injak:
 | Replica | Service yang memegang bot Telegram **wajib 1 replica** | Long-polling ganda menghasilkan `409 Conflict` |
 | Token bot | Satu token = satu proses, selamanya | `BOT_KANTOR_TOKEN` kini HANYA di service `kantor`; mengisinya juga di produksi = bentrok polling |
 | Migrasi Alembic | Tiap service memigrasi chain-nya sendiri saat start | Version table terpisah membuatnya aman berjalan paralel |
-| Urutan pada DB kosong | `core` dulu, baru `kantor` | Tabel Kantor menaut ke `users` lewat foreign key |
+| Urutan pada DB kosong | **`scripts/bangun_skema.sh`** — lihat §4.1 | Urutan "core dulu" TIDAK jalan (X-02) |
 | Uji poller ganda | Nyalakan instance kedua dengan `POLLER_AKTIF=false` | Dua poller aktif = email & invoice diproses dua kali |
+
+### 4.1 Membangun skema dari database KOSONG
+
+**Jangan mulai dari `core`.** Urutan itu tertulis di dokumen ini sampai
+11 September 2026 dan tidak pernah jalan: chain produksi juga membuat tabel
+master (0001/0003/0029), tabel `kantor_*` (0016–0021), dan tabel
+`timbangan_*` (0022–0026). Menjalankan core lebih dulu membuat `warehouses`
+dua kali, dan bootstrap berhenti di sana. Temuan QA X-02.
+
+Satu-satunya urutan yang terbukti jalan, kini menjadi skrip resmi
+`produksi/scripts/bangun_skema.sh`:
+
+```
+1. produksi   alembic upgrade head
+2. core       alembic stamp 0001_baseline_master     ← akui, jangan upgrade
+3. kantor     alembic upgrade head                   ← env.py-nya mengadopsi
+4. timbangan  alembic stamp 0026_timbangan_hapus_pengawas
+              alembic upgrade head
+```
+
+Langkah 4 tak boleh `stamp head`: yang dibuat produksi berhenti di 0026, dan
+stamp sampai HEAD mengaku sudah menjalankan 0027–0029 yang kolomnya tak pernah
+ada. Akibatnya setiap kueri tiket gagal sementara `/health` menjawab "ok"
+(temuan QA X-03).
+
+Skripnya berpagar: hanya loopback, dan nama database wajib berawalan `uji_`.
+Untuk database sungguhan, jalankan keempat perintahnya satu per satu dan baca
+keluarannya.
+
+### 4.2 Balapan migrasi saat tiga layanan menyala bersamaan (USULAN)
+
+Railway menyalakan ketiga layanan bersamaan. Pada database yang SUDAH terisi
+itu aman — tiap chain punya tabel versinya sendiri. Pada database KOSONG tidak:
+ketiganya berlomba membuat tabel yang sama, dan yang kalah gagal di
+`CREATE TABLE` lalu (sejak X-04) berhenti.
+
+Usulan, belum dikerjakan karena ia menyentuh ketiga `env.py` sekaligus:
+
+```python
+# di do_run_migrations, sebelum context.run_migrations()
+connection.exec_driver_sql("SELECT pg_advisory_xact_lock(982451653)")
+```
+
+Satu angka yang sama untuk ketiga repo. Advisory lock tingkat transaksi
+dilepas sendiri saat transaksinya selesai — termasuk bila prosesnya mati — jadi
+tak ada kunci yang tertinggal. Yang kedua dan ketiga menunggu, lalu menemukan
+tabel versinya sudah ada dan bekerja seperti biasa.
+
+Yang perlu diputuskan sebelum mengerjakannya: apakah timbangan ikut, mengingat
+ia memakai `scripts/siapkan_skema.py` dan bukan `alembic upgrade` langsung.
+
+### 4.3 Siapa yang memiliki skema MASTER (USULAN — menunggu keputusan)
+
+Hari ini `users`, `suppliers`, `warehouses`, `pelanggan`, `silos`, dan `dryers`
+dimiliki paket `core` di atas kertas, tetapi:
+
+- tak ada satu layanan pun yang menjalankan migrasi core — image kantor bahkan
+  tidak menyalin `core/migrations`;
+- chain produksi masih membuat DAN mengubah tabel master (0001/0003/0029).
+
+Jadi pemiliknya `core` dan pelarinya produksi. Selama produksi selalu
+di-deploy lebih dulu itu berjalan, tetapi ia berjalan karena kebiasaan, bukan
+karena aturan. Temuan QA X-15.
+
+Dua pilihan, dan keduanya perlu persetujuan pemilik sebelum dikerjakan:
+
+1. **Produksi jadi pemilik resmi skema master.** Paling sedikit berubah —
+   cukup menuliskan yang sudah terjadi. Kerugiannya: `core` berhenti berarti
+   sebagai batas, dan repo lain kehilangan satu tempat untuk membaca bentuk
+   tabel master.
+2. **Core jadi pemilik DAN pelari.** Satu layanan (produksi) menjalankan
+   `core upgrade head` lebih dulu, lalu chain-nya sendiri. Lebih bersih, tetapi
+   menuntut migrasi produksi 0001/0003/0029 dipindahkan atau dinetralkan —
+   dan itu menyentuh sejarah yang sudah berjalan di server.
 
 ## 5. Agen adalah konfigurasi, bukan proses
 
@@ -332,3 +406,54 @@ ini belum dikerjakan:
 - **Jalur mundurnya harus tetap ada.** Denyut sepuluh detik jangan dicabut
   saat SSE dinyalakan; ia yang menyelamatkan perangkat yang sambungan
   panjangnya diputus jaringan gudang tanpa memberi tahu siapa pun.
+
+---
+
+## 9. Token tampilan bersama untuk kedua aplikasi (USULAN — belum dikerjakan)
+
+Ditulis 12 September 2026 sebagai jawaban atas temuan QA UI-07.
+
+Produksi dan Pos Timbang dipakai orang yang sama, di gudang yang sama, sering
+pada hari yang sama. Tetapi keduanya menetapkan ukuran huruf, warna, dan
+tinggi sentuhnya sendiri-sendiri — jadi perbaikan UI-04 dan UI-05 di produksi
+tidak menyentuh Pos Timbang sama sekali, dan kekeliruan yang sama akan
+ditemukan lagi di sana pada QA berikutnya.
+
+Yang diusulkan BUKAN kerangka kerja atau build step. Satu berkas CSS berisi
+token, disalin ke kedua repo oleh satu skrip, dengan uji yang menjaga
+keduanya tetap sama:
+
+```css
+/* hmu-token.css — sumbernya SATU, salinannya dua. */
+:root {
+  /* Ukuran huruf: tak ada yang di bawah --teks-min. */
+  --teks-min:    13px;   /* label, keterangan, satuan          */
+  --teks-isi:    15px;   /* teks yang dibaca, bukan dipindai   */
+  --teks-angka:  17px;   /* angka yang jadi keputusan          */
+
+  /* Tinggi sentuh: jari, bukan kursor. */
+  --sentuh-min:  44px;
+
+  /* Warna semantik — artinya, bukan rupanya. */
+  --aman:    …;   /* selesai, dalam batas            */
+  --hati:    …;   /* perlu diperiksa, belum mendesak */
+  --bahaya:  …;   /* salah, atau tak bisa dilanjutkan */
+
+  /* Kontras teks kerja terhadap latarnya: minimal 7:1, diukur bukan ditebak. */
+}
+```
+
+Tiga hal yang harus diputuskan sebelum mengerjakannya:
+
+- **Siapa pemiliknya.** Paket `core` sudah ada dan sudah memuat model bersama;
+  menaruh CSS di sana mencampur dua jenis hal. Alternatifnya repo keempat yang
+  isinya hanya token — kecil, tetapi satu repo lagi untuk dirawat.
+- **Cara menyalinnya.** Submodule git menuntut orang ingat memperbaruinya;
+  skrip salin menuntut uji yang menangkap salinan yang basi. Yang kedua lebih
+  sederhana dan lebih mungkin benar.
+- **Kedua aplikasi bertema berbeda.** Pos Timbang terang, produksi gelap (plus
+  mode terik). Yang dibagi adalah UKURAN dan ARTI warna; nilai warnanya sendiri
+  tetap milik masing-masing.
+
+Sebelum itu diputuskan, angka-angka di atas sudah berlaku di produksi dan bisa
+disalin tangan ke Pos Timbang bila ada yang menyentuh CSS-nya.

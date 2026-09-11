@@ -20,7 +20,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
 #: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
 #: dengan aturan yang sudah dicabut.
-VERSI = "122"
+VERSI = "123"
 
 templates.env.globals["VERSI"] = VERSI
 
@@ -106,6 +106,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
         except Exception:  # noqa: BLE001 — permintaan tiruan tanpa state
             pass
     konteks.setdefault("CSRF", nilai)
+    # Mode terik: layar terang untuk kerja di bawah matahari. Per perangkat,
+    # lewat kuki — lihat catatan di base.html. Temuan QA UI-04.
+    konteks.setdefault("TERIK", request.cookies.get("produksi_terik") == "1")
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
 
 

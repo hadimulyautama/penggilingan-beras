@@ -133,7 +133,19 @@
       body: JSON.stringify(isi),
     });
     var j = await r.json().catch(function () { return {}; });
-    if (!r.ok) throw (j.detail || ("Gagal disimpan (HTTP " + r.status + ")"));
+    if (!r.ok) {
+      /* ── Konflik: SEGARKAN daftarnya sekarang juga ──
+         Dua orang membuka tiket yang sama; yang kedua ditolak, tetapi kartu
+         basinya tetap berdiri di daftar dan hitungannya tak berubah. Orang
+         itu akan mencobanya lagi — dan ditolak lagi. Pesannya kini menyebut
+         siapa dan pukul berapa; daftarnya diperbarui supaya kartunya benar-
+         benar hilang. Temuan QA UI-02. */
+      if (r.status === 409 || /sudah dicatat|sudah ditautkan|sudah tercatat/i
+          .test(String(j.detail || ""))) {
+        if (window.PINDAH) { PINDAH.lupakan(); PINDAH.segarkan(); }
+      }
+      throw (j.detail || ("Gagal disimpan (HTTP " + r.status + ")"));
+    }
     /* Sesuatu baru saja tercatat: halaman yang tersimpan di memori kini
        menggambarkan keadaan SEBELUM catatan itu. Data yang telat sedikit
        masih bisa diterima; halaman yang tidak memuat pekerjaan yang baru

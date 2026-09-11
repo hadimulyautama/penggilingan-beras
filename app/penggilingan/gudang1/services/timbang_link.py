@@ -13,6 +13,8 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import berzona
+
 # Tiket MASUK yang BELUM ditaut batch mana pun — apa pun status tiketnya.
 #
 # Dulu hanya yang berstatus TERBUKA. Itu cocok dengan alur normal: truk
@@ -224,12 +226,25 @@ class TiketSudahDipakai(Exception):
 
 _SQL_KUNCI_TIKET = text("SELECT id FROM timbangan_transaksi WHERE id = :tid FOR UPDATE")
 
+#: Siapa, kapan, dan jadi batch apa. Ketiganya ikut ke pesan penolakan.
+#:
+#: "Tiket ini sudah ditautkan ke batch lain" benar tetapi tak menolong: yang
+#: ingin diketahui orang yang baru saja ditolak adalah apakah rekannya sudah
+#: mencatatnya — dan kalau ya, ke mana. Tanpa itu ia akan membuka tiketnya
+#: lagi, atau bertanya lewat telepon. Temuan QA UI-02.
 _SQL_PEMAKAI_TIKET = text("""
-    SELECT 'gabah' AS lingkup, kode_batch FROM purchase_batches
-     WHERE timbangan_transaksi_id = :tid
-    UNION ALL
-    SELECT 'PK' AS lingkup, kode_batch FROM pk_purchase_batches
-     WHERE timbangan_transaksi_id = :tid
+    SELECT lingkup, kode_batch, oleh, waktu FROM (
+      SELECT 'gabah' AS lingkup, b.kode_batch, u.nama AS oleh,
+             b.waktu_pembelian AS waktu
+        FROM purchase_batches b
+        LEFT JOIN users u ON u.id = b.input_by
+       WHERE b.timbangan_transaksi_id = :tid
+      UNION ALL
+      SELECT 'PK', b.kode_batch, u.nama, b.waktu_pembelian
+        FROM pk_purchase_batches b
+        LEFT JOIN users u ON u.id = b.input_by
+       WHERE b.timbangan_transaksi_id = :tid
+    ) x
 """)
 
 
@@ -249,6 +264,10 @@ async def kunci_tiket_untuk_ditaut(db: AsyncSession, tid: int) -> None:
     await db.execute(_SQL_KUNCI_TIKET, {"tid": tid})
     baris = (await db.execute(_SQL_PEMAKAI_TIKET, {"tid": tid})).first()
     if baris is not None:
+        lingkup, kode_batch, oleh, waktu = baris
+        siapa = f" oleh {oleh}" if oleh else ""
+        jam = f" pukul {berzona(waktu):%H:%M}" if waktu else ""
         raise TiketSudahDipakai(
-            f"Tiket timbang ini sudah tercatat sebagai batch {baris[0]} {baris[1]}."
+            f"Sudah dicatat{siapa}{jam} sebagai batch {lingkup} "
+            f"{kode_batch or '(tanpa kode)'}. Daftar tiketnya sudah diperbarui."
         )
