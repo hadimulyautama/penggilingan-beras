@@ -1,9 +1,9 @@
 """Sistem pendukung: activity_logs (audit trail), notifications."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -72,3 +72,34 @@ class SetelanPabrik(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class KodeUrut(Base):
+    """Penghitung nomor harian per awalan kode — GB, PGR, LOT, TRF, …
+
+    Nomor dulu dihitung `SELECT count(*) … + 1` atas tabel yang bersangkutan.
+    Dua hal salah di situ, dan keduanya sudah terbukti:
+
+    **Undo menghapus baris.** Sesudah Budi membatalkan GB-01, hitungannya
+    kembali nol, jadi truk berikutnya menghitung GB-02 — yang sudah ada — lalu
+    ditolak basis data. Dan tetap ditolak sepanjang hari: tiap percobaan
+    menghitung angka yang sama. Operator membaca "Tiket timbang ini sudah
+    ditautkan ke batch lain", pesan yang tak menyebut sebabnya sama sekali.
+
+    **Dua operator bersamaan.** Keduanya menghitung angka yang sama sebelum
+    salah satunya sempat menyimpan.
+
+    Diambil dengan satu `INSERT … ON CONFLICT DO UPDATE … RETURNING`, di
+    transaksi yang sama dengan penyisipan barisnya. Barisnya hanya bertambah.
+
+    **Nomor boleh melompat.** Sesudah pembatalan, nomor yang terpakai tak
+    diterbitkan ulang — GB-01 dibatalkan, truk berikutnya tetap GB-02. Itu
+    disengaja: nomor yang muncul dua kali di buku dan di surat jalan lebih
+    membingungkan daripada nomor yang bolong.
+    """
+
+    __tablename__ = "kode_urut"
+
+    awalan: Mapped[str] = mapped_column(String(8), primary_key=True)
+    tanggal: Mapped[date] = mapped_column(Date, primary_key=True)
+    n: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

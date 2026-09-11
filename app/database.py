@@ -25,6 +25,25 @@ def now_local() -> datetime:
     return datetime.now(ZoneInfo(settings.app_timezone))
 
 
+def tanggal_lokal(saat: datetime | None) -> date | None:
+    """Tanggal Asia/Jakarta dari sebuah waktu — juga bila waktunya dari DB.
+
+    asyncpg mengembalikan `timestamptz` sebagai datetime ber-UTC. Mengambil
+    `.date()` darinya langsung memberi tanggal UTC, dan antara 00:00 dan 07:00
+    WIB itu tanggal KEMARIN: truk yang ditimbang 05:30 WIB tanggal 11
+    dibukukan sebagai GB-20260910-01, sementara nota timbangnya bertanggal 11.
+    Temuan QA X-09.
+
+    Waktu tanpa zona dianggap sudah lokal — itulah yang dihasilkan
+    `input_time` saat operator menyebut tanggalnya sendiri.
+    """
+    if saat is None:
+        return None
+    if saat.tzinfo is None:
+        return saat.date()
+    return saat.astimezone(ZoneInfo(settings.app_timezone)).date()
+
+
 class BackdateError(Exception):
     """Tanggal backdate tidak valid (mis. di masa depan)."""
 

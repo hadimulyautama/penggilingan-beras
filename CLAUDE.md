@@ -88,6 +88,29 @@ per satu — jangan sapu dengan `sed` global.
 .venv/bin/python -m pytest -q
 ```
 
+### Uji ber-Postgres (`tests/pg/`)
+
+Dilewati secara bawaan. Satu kelas kesalahan hanya muncul di basis data
+sungguhan — BALAPAN: dua operator menekan simpan pada detik yang sama, atau
+satu pembatalan menggeser hitungan. SQLite tak menirukannya, dan sampai 11
+September 2026 suite ini tak punya satu pun uji ber-Postgres. Akibatnya
+tabrakan kode harian (P-K-01) berjalan berbulan-bulan tanpa terlihat.
+
+```
+createdb uji_produksi
+UJI_PG_URL=postgresql+asyncpg://postgres:pw@127.0.0.1:5432/uji_produksi \
+    .venv/bin/python -m pytest -q tests/pg
+```
+
+Skemanya dibangun lewat `alembic upgrade head`, bukan dari metadata —
+migrasinya sendiri ikut diuji, dan membangun dari metadata akan melewatkannya
+lalu lulus di laptop dan gagal di Railway.
+
+Alamatnya BERPAGAR dan gagal keras bila melanggar: host wajib loopback, nama
+basis data wajib berawalan `uji_`. Uji ini membangun dan menjatuhkan skema;
+satu salah ketik pada alamat yang tak berpagar bisa mengenai basis data yang
+sedang dipakai orang.
+
 Ujinya banyak yang membaca SUMBER dan TEMPLAT, bukan cuma menjalankan fungsi
 — itu disengaja, karena yang sering rusak adalah aturan yang tak punya tempat
 lain untuk dijaga. Kalau sebuah uji gagal karena aturannya memang berubah,

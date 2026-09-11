@@ -51,6 +51,36 @@ class Gudang2Error(Exception):
 
 
 # ─────────────────────────── Master helpers ───────────────────────────
+
+
+def _pesan_integritas(e: IntegrityError, tabel: str, kode: str) -> str:
+    """Terjemahkan pelanggaran basis data jadi kalimat yang JUJUR.
+
+    Dulu setiap `IntegrityError` di sini dilabeli "Tiket timbang ini sudah
+    ditautkan ke batch lain" — apa pun sebabnya. Itu menutupi dua hal
+    sekaligus. Pertama, tabrakan kode harian (P-K-01) muncul sebagai kalimat
+    tentang tiket, sehingga operator mencari masalah di tempat yang salah
+    seharian. Kedua, pelanggaran lain jadi tak terlihat sama sekali.
+
+    Dibedakan menurut NAMA CONSTRAINT-nya, bukan menurut tebakan: hanya
+    pelanggaran unik tautan tiket yang boleh berbunyi soal tiket.
+    """
+    nama = ""
+    asli = getattr(e, "orig", None)
+    for atribut in ("constraint_name", "diag"):
+        nilai = getattr(asli, atribut, None)
+        nama = nama or getattr(nilai, "constraint_name", None) or (
+            nilai if isinstance(nilai, str) else "")
+    nama = (nama or str(asli))[:200]
+
+    if f"uq_{tabel}_timbangan" in nama or "timbangan_transaksi_id" in nama:
+        return "Tiket timbang ini sudah ditautkan ke batch lain."
+    if kode and kode in nama or "kode" in nama:
+        return (f"Nomor {kode} ternyata sudah dipakai. Coba simpan sekali lagi — "
+                "nomornya akan diterbitkan ulang.")
+    return (f"Tersimpan gagal karena aturan basis data: {nama}. "
+            "Sebutkan pesan ini ke admin bila berulang.")
+
 async def _g2_warehouse_id(db: AsyncSession) -> int:
     wid = (
         await db.execute(
@@ -315,9 +345,9 @@ async def create_pk_purchase_dari_timbang(
     db.add(batch)
     try:
         await db.flush()
-    except IntegrityError:
+    except IntegrityError as e:
         await db.rollback()
-        raise Gudang2Error("Tiket timbang ini sudah ditautkan ke batch lain.")
+        raise Gudang2Error(_pesan_integritas(e, "pk_purchase_batches", kode))
 
     b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
     await log_activity(

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import input_time, now_local
+from app.database import input_time, now_local, tanggal_lokal
 from app.models import PurchaseBatch, Supplier, User
 from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
 from app.penggilingan.peta_jenis import intake_dari_jenis
@@ -17,6 +17,36 @@ from app.services.activity_log import log_activity
 from app.services.codegen import next_purchase_batch_code
 from app.services.notification import create_notification
 
+
+
+
+def _pesan_integritas(e: IntegrityError, tabel: str, kode: str) -> str:
+    """Terjemahkan pelanggaran basis data jadi kalimat yang JUJUR.
+
+    Dulu setiap `IntegrityError` di sini dilabeli "Tiket timbang ini sudah
+    ditautkan ke batch lain" — apa pun sebabnya. Itu menutupi dua hal
+    sekaligus. Pertama, tabrakan kode harian (P-K-01) muncul sebagai kalimat
+    tentang tiket, sehingga operator mencari masalah di tempat yang salah
+    seharian. Kedua, pelanggaran lain jadi tak terlihat sama sekali.
+
+    Dibedakan menurut NAMA CONSTRAINT-nya, bukan menurut tebakan: hanya
+    pelanggaran unik tautan tiket yang boleh berbunyi soal tiket.
+    """
+    nama = ""
+    asli = getattr(e, "orig", None)
+    for atribut in ("constraint_name", "diag"):
+        nilai = getattr(asli, atribut, None)
+        nama = nama or getattr(nilai, "constraint_name", None) or (
+            nilai if isinstance(nilai, str) else "")
+    nama = (nama or str(asli))[:200]
+
+    if f"uq_{tabel}_timbangan" in nama or "timbangan_transaksi_id" in nama:
+        return "Tiket timbang ini sudah ditautkan ke batch lain."
+    if kode and kode in nama or "kode" in nama:
+        return (f"Nomor {kode} ternyata sudah dipakai. Coba simpan sekali lagi — "
+                "nomornya akan diterbitkan ulang.")
+    return (f"Tersimpan gagal karena aturan basis data: {nama}. "
+            "Sebutkan pesan ini ke admin bila berulang.")
 
 async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier, bool]:
     """Cari supplier aktif (case-insensitive). Kembalikan (supplier, dibuat_baru)."""
@@ -76,7 +106,8 @@ async def create_purchase_batch(
 
     supplier, created = await find_or_create_supplier(db, nama_supplier)
 
-    kode = await next_purchase_batch_code(db, now.date())
+    hari = tanggal_lokal(now)
+    kode = await next_purchase_batch_code(db, hari)
     batch = PurchaseBatch(
         kode_batch=kode,
         supplier_id=supplier.id,
@@ -84,7 +115,7 @@ async def create_purchase_batch(
         no_polisi_truk=no_polisi_truk,
         kondisi_gabah=kondisi_gabah,
         kadar_air_awal_persen=kadar_air_awal_persen,
-        tanggal_pembelian=now.date(),
+        tanggal_pembelian=hari,
         waktu_pembelian=now,
         input_by=user.id,
         status_batch="baru",
@@ -171,7 +202,15 @@ async def create_purchase_batch_dari_timbang(
 
     _info = intake_dari_jenis(tiket.get("jenis_kode", ""))
     kondisi = kondisi_gabah or (_info.kondisi if _info and _info.kondisi else "basah")
-    kode = await next_purchase_batch_code(db, now.date())
+    # ── Tanggalnya tanggal JAKARTA, bukan tanggal UTC ──
+    #
+    # `now` di jalur ini datang dari basis data (`timbang1_waktu`), dan
+    # asyncpg mengembalikan timestamptz sebagai datetime ber-UTC. Mengambil
+    # `.date()` langsung memberi tanggal UTC: truk yang ditimbang 05:30 WIB
+    # tanggal 11 dibukukan GB-20260910-01, sementara nota timbangnya
+    # bertanggal 11 — dan rekap harian kedua sistem tak pernah cocok.
+    hari = tanggal_lokal(now)
+    kode = await next_purchase_batch_code(db, hari)
     batch = PurchaseBatch(
         kode_batch=kode,
         supplier_id=supplier.id,
@@ -179,7 +218,7 @@ async def create_purchase_batch_dari_timbang(
         no_polisi_truk=tiket.get("nomor_polisi"),
         kondisi_gabah=kondisi,
         kadar_air_awal_persen=kadar_air_awal_persen,
-        tanggal_pembelian=now.date(),
+        tanggal_pembelian=hari,
         waktu_pembelian=now,
         input_by=user.id,
         status_batch="baru",
@@ -190,9 +229,9 @@ async def create_purchase_batch_dari_timbang(
     db.add(batch)
     try:
         await db.flush()
-    except IntegrityError:
+    except IntegrityError as e:
         await db.rollback()
-        raise ValueError("Tiket timbang ini sudah ditautkan ke batch lain.")
+        raise ValueError(_pesan_integritas(e, "purchase_batches", kode))
 
     b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
     await log_activity(

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import (
+    KodeUrut,
     DryingLot,
     InternalTransfer,
     MillingProcess,
@@ -24,12 +25,54 @@ from app.models import (
 )
 
 
-async def _next_sequence(db: AsyncSession, prefix: str, count_stmt, tgl: date | None = None) -> str:
-    """Bentuk kode PREFIX-YYYYMMDD-NN dari jumlah baris hari itu + 1."""
-    tgl = tgl or date.today()
-    used = (await db.execute(count_stmt)).scalar_one()
-    seq = used + 1
+async def _next_sequence(db: AsyncSession, prefix: str, count_stmt=None,
+                        tgl: date | None = None) -> str:
+    """Bentuk kode PREFIX-YYYYMMDD-NN dari penghitung ATOMIK.
+
+    Dulu dari `jumlah baris hari itu + 1`, dan itu salah dua kali:
+
+    **Undo menghapus baris.** Sesudah GB-01 dibatalkan, hitungannya kembali
+    nol, jadi truk berikutnya menghitung GB-02 — yang sudah ada — lalu ditolak
+    basis data. Dan tetap ditolak SEPANJANG HARI, karena tiap percobaan
+    menghitung angka yang sama. Operator membaca "Tiket timbang ini sudah
+    ditautkan ke batch lain", pesan yang tak menyebut sebabnya sama sekali.
+
+    **Dua operator bersamaan** menghitung angka yang sama sebelum salah
+    satunya menyimpan.
+
+    Penghitungnya diambil dalam transaksi yang SAMA dengan penyisipan
+    barisnya, jadi nomor yang sudah terbit tak bisa terbit lagi meski
+    barisnya kemudian dibatalkan. Nomor boleh melompat; nomor yang muncul dua
+    kali lebih membingungkan daripada nomor yang bolong.
+
+    `count_stmt` masih diterima tetapi TAK DIPAKAI — pemanggilnya banyak dan
+    semuanya menyusunnya, jadi membuangnya sekaligus berarti sepuluh
+    perubahan yang tak menambah apa pun. Ia hilang sendiri saat tiap
+    pemanggil berikutnya disentuh.
+    """
+    tgl = tgl or now_local().date()
+    seq = await _ambil_urut(db, prefix, tgl)
     return f"{prefix}-{tgl:%Y%m%d}-{seq:02d}"
+
+
+async def _ambil_urut(db: AsyncSession, awalan: str, tgl: date) -> int:
+    """Nomor berikutnya untuk awalan & tanggal ini — satu perintah, atomik."""
+    dialek = db.bind.dialect.name if db.bind is not None else "postgresql"
+    if dialek == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as _insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert as _insert
+
+    perintah = (
+        _insert(KodeUrut)
+        .values(awalan=awalan, tanggal=tgl, n=1)
+        .on_conflict_do_update(
+            index_elements=["awalan", "tanggal"],
+            set_={"n": KodeUrut.n + 1},
+        )
+        .returning(KodeUrut.n)
+    )
+    return (await db.execute(perintah)).scalar_one()
 
 
 async def next_purchase_batch_code(db: AsyncSession, tgl: date | None = None) -> str:
@@ -37,7 +80,7 @@ async def next_purchase_batch_code(db: AsyncSession, tgl: date | None = None) ->
 
     `tgl` untuk backdate: kode & urutan mengikuti tanggal kejadian.
     """
-    tgl = tgl or date.today()
+    tgl = tgl or now_local().date()
     stmt = (
         select(func.count())
         .select_from(PurchaseBatch)
@@ -95,7 +138,7 @@ async def next_pk_purchase_code(db: AsyncSession, tgl: date | None = None) -> st
 
     `tgl` untuk backdate: kode & urutan mengikuti tanggal kejadian.
     """
-    tgl = tgl or date.today()
+    tgl = tgl or now_local().date()
     stmt = (
         select(func.count())
         .select_from(PkPurchaseBatch)
@@ -106,7 +149,7 @@ async def next_pk_purchase_code(db: AsyncSession, tgl: date | None = None) -> st
 
 async def next_rejection_code(db: AsyncSession, tgl: date | None = None) -> str:
     """Kode PK ditolak & dikembalikan (Gudang 2): REJ-YYYYMMDD-NN (reset per hari)."""
-    tgl = tgl or date.today()
+    tgl = tgl or now_local().date()
     stmt = (
         select(func.count())
         .select_from(PkRejection)
@@ -141,7 +184,7 @@ async def next_polishing_code(db: AsyncSession) -> str:
 
 async def next_packaging_purchase_code(db: AsyncSession, tgl: date | None = None) -> str:
     """Kode pembelian kemasan: PKP-YYYYMMDD-NN (reset per hari)."""
-    tgl = tgl or date.today()
+    tgl = tgl or now_local().date()
     stmt = (
         select(func.count())
         .select_from(PackagingPurchase)
@@ -152,7 +195,7 @@ async def next_packaging_purchase_code(db: AsyncSession, tgl: date | None = None
 
 async def next_outgoing_code(db: AsyncSession, tgl: date | None = None) -> str:
     """Kode barang keluar: OUT-YYYYMMDD-NN (reset per hari)."""
-    tgl = tgl or date.today()
+    tgl = tgl or now_local().date()
     stmt = (
         select(func.count())
         .select_from(OutgoingRecord)
