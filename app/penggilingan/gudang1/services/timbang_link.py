@@ -28,6 +28,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 #
 # Yang tertutup diberi tanda `susulan` supaya di layar terlihat bahwa ini
 # menambal yang terlewat, bukan pekerjaan yang sedang berjalan.
+#: Syarat "tiket ini SAH dipakai produksi" — satu tempat, dipakai semua kueri.
+#:
+#: Kata `status_transaksi` tak pernah muncul sama sekali di kode produksi
+#: sampai 11 September 2026. Akibatnya tiket yang sudah DIBATALKAN di Pos
+#: Timbang tetap ditawarkan untuk ditautkan, tetap bisa jadi batch, dan
+#: pollernya tetap menyalin berat notanya ke stok. Truk yang DITOLAK dan
+#: tiketnya ditutup paksa pun mendorong 9.800 kg masuk pembukuan.
+#:
+#: Temuan QA T-02 & X-07. Ditulis sekali di sini karena syarat yang disalin
+#: ke lima kueri akan tertinggal di salah satunya pada perubahan berikutnya —
+#: dan yang tertinggal justru jadi satu-satunya pintu yang terbuka.
+SYARAT_TIKET_SAH = """
+       AND t.status_transaksi = 'AKTIF'
+       AND t.status_tiket <> 'DITUTUP_PAKSA'
+"""
+
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
@@ -42,7 +58,7 @@ _SQL_AKTIF = text("""
       -- menyusun ulang namanya di sini berarti dua sebutan untuk satu barang,
       -- dan yang di sini yang akan basi saat namanya diubah di sana.
       LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
-     WHERE t.arah = 'MASUK'
+     WHERE t.arah = 'MASUK'""" + SYARAT_TIKET_SAH + """
        AND t.status_tiket IN ('TERBUKA', 'SELESAI')
        -- Yang sudah ditutup hanya ditawarkan selama beberapa hari.
        --
@@ -69,7 +85,7 @@ _SQL_SATU = text("""
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
       LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
-     WHERE t.id = :tid
+     WHERE t.id = :tid""" + SYARAT_TIKET_SAH + """
 """)
 
 
@@ -121,7 +137,7 @@ _SQL_SINKRON = """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.sumber_berat = 'menunggu'
-       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
+""" + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
 """
 
 
@@ -149,7 +165,7 @@ _SQL_RESINKRON = """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.sumber_berat IN ('nota', 'timbangan')     -- sudah pernah sinkron dari timbang
-       -- Satu-satunya yang MEMBEKUKAN bobot: harga sudah diverifikasi.
+""" + SYARAT_TIKET_SAH + """       -- Satu-satunya yang MEMBEKUKAN bobot: harga sudah diverifikasi.
        -- Sesudah itu ada angka rupiah yang berdiri di atas bobot ini, dan
        -- mengubahnya diam-diam membuat nilai pembelian tak lagi cocok dengan
        -- apa pun. Yang begitu diperbaiki lewat verifikasi ulang, bukan lewat
@@ -200,3 +216,39 @@ async def resinkron_bobot_berubah(db: AsyncSession) -> int:
         total += res.rowcount or 0
     await db.commit()
     return total
+
+
+class TiketSudahDipakai(Exception):
+    """Tiket timbang sudah ditaut batch lain (gabah atau PK)."""
+
+
+_SQL_KUNCI_TIKET = text("SELECT id FROM timbangan_transaksi WHERE id = :tid FOR UPDATE")
+
+_SQL_PEMAKAI_TIKET = text("""
+    SELECT 'gabah' AS lingkup, kode_batch FROM purchase_batches
+     WHERE timbangan_transaksi_id = :tid
+    UNION ALL
+    SELECT 'PK' AS lingkup, kode_batch FROM pk_purchase_batches
+     WHERE timbangan_transaksi_id = :tid
+""")
+
+
+async def kunci_tiket_untuk_ditaut(db: AsyncSession, tid: int) -> None:
+    """Kunci tiket lalu pastikan belum dipakai batch mana pun. → `TiketSudahDipakai`.
+
+    UNIQUE pada `timbangan_transaksi_id` hanya berlaku DI DALAM satu tabel.
+    Tiket yang sama karenanya bisa jadi batch gabah DAN batch PK sekaligus:
+    dua operator memilih tiket yang sama pada detik yang sama, masing-masing
+    di layarnya sendiri, dan dua-duanya lolos. Satu truk terhitung dua kali.
+
+    Kunci barisnya dipasang di TIKET, bukan di salah satu tabel batch, karena
+    tiketlah satu-satunya benda yang sama-sama dilihat kedua jalur. `FOR UPDATE`
+    di sini tidak mengubah apa pun di tabel milik timbangan — ia hanya membuat
+    pemeriksaan "sudah dipakai?" dan penulisan batch-nya tak bisa disisipi.
+    """
+    await db.execute(_SQL_KUNCI_TIKET, {"tid": tid})
+    baris = (await db.execute(_SQL_PEMAKAI_TIKET, {"tid": tid})).first()
+    if baris is not None:
+        raise TiketSudahDipakai(
+            f"Tiket timbang ini sudah tercatat sebagai batch {baris[0]} {baris[1]}."
+        )

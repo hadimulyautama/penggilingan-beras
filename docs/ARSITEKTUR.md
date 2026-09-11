@@ -143,6 +143,44 @@ suppliers.kledo_contact_id                → kontak Kledo
 timbangan_akun.user_id                    → users
 ```
 
+### 3.1 Kontrak baca produksi → `timbangan_transaksi`
+
+Produksi **membaca** satu tabel milik Timbangan dan tidak pernah menulis padanya.
+Daftar di bawah adalah kontraknya: kolom yang hilang atau berubah artinya akan
+memutus intake gabah dan PK luar, dan perubahannya harus disepakati dua repo.
+
+| Kolom | Dipakai produksi untuk |
+|---|---|
+| `id` | kunci taut — `purchase_batches.timbangan_transaksi_id` (UNIQUE), sama di `pk_purchase_batches` |
+| `kode` | nomor tiket yang dibaca orang di layar, log, dan rekonsiliasi |
+| `arah` | wajib `MASUK`; tiket KELUAR bukan intake |
+| `jenis_kode` | menentukan komoditas lewat `app/penggilingan/peta_jenis.py` (`GABAH_BASAH`, `GABAH_KERING` → gabah; `BERAS_PK` → PK) |
+| `status_transaksi` | wajib `AKTIF`. Tiket `VOID` tak ditawarkan, tak bisa jadi batch, dan bobotnya tak disalin |
+| `status_tiket` | `DITUTUP_PAKSA` ditolak sebagai sumber batch; `SELESAI`/`TERBUKA` diterima |
+| `netto_timbangan_kg` | bobot timbang riil — acuan bila tak ada nota |
+| `berat_acuan_kg` | bobot nota/surat jalan; bila > 0, inilah yang dipakai |
+| `selisih_kg`, `selisih_persen` | ditampilkan di rekonsiliasi, tidak dihitung ulang produksi |
+| `supplier_id`, `pihak_nama` | pemasok batch; `pihak_nama` hanya bila `supplier_id` kosong |
+| `nomor_polisi`, `nama_sopir` | ditempelkan ke batch untuk penelusuran |
+| `timbang1_waktu` | **waktu kedatangan batch** — bukan jam operator mengetik |
+| `tanggal` | urutan di antrean pilihan tiket |
+
+Tiga aturan yang menyertainya:
+
+1. **Nilai `status_transaksi` dan `status_tiket` adalah bagian kontrak**, bukan
+   detail internal Timbangan. Produksi membandingkannya sebagai teks
+   (`'AKTIF'`, `'DITUTUP_PAKSA'`) di `SYARAT_TIKET_SAH`
+   (`app/penggilingan/gudang1/services/timbang_link.py`) — satu tempat, dipakai
+   antrean, pengambilan satuan, sinkron, dan rekonsiliasi.
+2. **`SELECT … FOR UPDATE` pada `timbangan_transaksi` bukan penulisan.** Saat
+   menautkan batch, produksi mengunci baris tiketnya agar dua operator tak bisa
+   memakai tiket yang sama di dua tabel batch sekaligus (`UNIQUE` hanya berlaku
+   per tabel). Kuncinya dilepas begitu transaksi selesai; tak satu kolom pun
+   diubah.
+3. **Satu-satunya penulisan yang ada** adalah penyemaian data uji
+   (`app/services/data_uji.py`), dan itu menolak berjalan begitu ada tiket
+   sungguhan di tabel — tiket karangan pernah muncul di layar petugas timbang.
+
 ---
 
 ## 4. Topologi Railway

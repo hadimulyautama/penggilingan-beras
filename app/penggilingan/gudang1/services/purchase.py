@@ -11,8 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import input_time, now_local, tanggal_lokal
 from app.models import PurchaseBatch, Supplier, User
-from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
-from app.penggilingan.peta_jenis import intake_dari_jenis
+from app.penggilingan.gudang1.services.timbang_link import (
+    TiketSudahDipakai,
+    ambil_tiket,
+    kunci_tiket_untuk_ditaut,
+)
+from app.penggilingan.peta_jenis import intake_dari_jenis, is_gabah
 from app.services.activity_log import log_activity
 from app.services.codegen import next_purchase_batch_code
 from app.services.notification import create_notification
@@ -166,11 +170,25 @@ async def create_purchase_batch_dari_timbang(
     diinput ulang → cegah dobel). Bobot & `sumber_berat` ikut tiket: NOTA bila ada,
     selain itu REAL timbang. `timbangan_transaksi_id` UNIQUE → satu tiket satu batch.
     """
+    # Kunci dulu, baru baca. Urutannya penting: pemeriksaan "tiket ini sudah
+    # dipakai?" yang dilakukan sebelum kunci terpasang selalu bisa disalip.
+    try:
+        await kunci_tiket_untuk_ditaut(db, timbangan_transaksi_id)
+    except TiketSudahDipakai as e:
+        raise ValueError(str(e))
     tiket = await ambil_tiket(db, timbangan_transaksi_id)
     if tiket is None:
-        raise ValueError("Tiket timbang tidak ditemukan.")
+        raise ValueError(
+            "Tiket timbang tidak ditemukan atau sudah dibatalkan/ditutup paksa."
+        )
     if tiket.get("arah") != "MASUK":
         raise ValueError("Tiket timbang bukan barang MASUK.")
+    # Komoditasnya diperiksa DI SINI, bukan hanya di daftar pilihan mini-app.
+    # Daftar itu memang sudah menyaring, tetapi ia hanya menentukan apa yang
+    # mudah dipilih — bukan apa yang bisa dikirim. Tiket PK yang id-nya
+    # dikirim ke jalur gabah dulu lolos utuh dan menjadi batch gabah.
+    if not is_gabah(tiket.get("jenis_kode", "")):
+        raise ValueError("Tiket ini bukan gabah masuk.")
     # Bobot boleh belum ada (batch dibuat saat bongkar). Referensi bobot = tiket:
     # nota bila ada, selain itu netto timbang. Kosong → status "menunggu bobot",
     # diisi otomatis oleh sinkronisasi saat tiket punya bobot (nota/timbang-2).

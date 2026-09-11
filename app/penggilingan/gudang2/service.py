@@ -40,7 +40,11 @@ from app.services.codegen import (
 )
 from app.services.notification import create_notification
 from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
-from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
+from app.penggilingan.gudang1.services.timbang_link import (
+    TiketSudahDipakai,
+    ambil_tiket,
+    kunci_tiket_untuk_ditaut,
+)
 from app.penggilingan.peta_jenis import intake_dari_jenis
 
 _TUJUAN_SILO = {"silo_a": "A", "silo_b": "B"}
@@ -312,9 +316,16 @@ async def create_pk_purchase_dari_timbang(
     jenis = norm_jenis_pk(jenis_pk)
     if jenis is None:
         raise Gudang2Error("Pilih jenis PK: KS, KL, Campuran, atau Semi KS.")
+    # Kunci dulu, baru baca — lihat alasannya di `kunci_tiket_untuk_ditaut`.
+    try:
+        await kunci_tiket_untuk_ditaut(db, timbangan_transaksi_id)
+    except TiketSudahDipakai as e:
+        raise Gudang2Error(str(e))
     tiket = await ambil_tiket(db, timbangan_transaksi_id)
     if tiket is None:
-        raise Gudang2Error("Tiket timbang tidak ditemukan.")
+        raise Gudang2Error(
+            "Tiket timbang tidak ditemukan atau sudah dibatalkan/ditutup paksa."
+        )
     if tiket.get("arah") != "MASUK":
         raise Gudang2Error("Tiket timbang bukan barang MASUK.")
     info = intake_dari_jenis(tiket.get("jenis_kode", ""))

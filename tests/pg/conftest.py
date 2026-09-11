@@ -60,6 +60,7 @@ async def pg():
 
     import subprocess
 
+    from sqlalchemy import text as sa_text
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     akar = pathlib.Path(__file__).resolve().parents[2]
@@ -83,6 +84,28 @@ async def pg():
         yield Sesi
     finally:
         database.SessionLocal = asli
+        # ── Dikosongkan SESUDAH tiap uji ──
+        #
+        # Basis datanya sama untuk seluruh berkas uji, jadi baris dari uji
+        # sebelumnya bertahan — dan uji berikutnya gagal karena kode yang
+        # bentrok, bukan karena hal yang diujinya. Kegagalan seperti itu
+        # menuntun orang memperbaiki uji yang sebenarnya benar.
+        #
+        # SELURUH tabel versi migrasi dipertahankan: mengosongkannya membuat
+        # `alembic upgrade head` berikutnya mencoba membangun dari awal di
+        # atas skema yang sudah ada.
+        async with mesin.begin() as conn:
+            await conn.execute(sa_text("""
+                DO $$
+                DECLARE t text;
+                BEGIN
+                  FOR t IN SELECT tablename FROM pg_tables
+                            WHERE schemaname = 'public'
+                              AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
+                  LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
+                  END LOOP;
+                END $$;
+            """))
         await mesin.dispose()
 
 

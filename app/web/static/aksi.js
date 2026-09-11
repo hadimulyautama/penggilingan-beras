@@ -224,6 +224,11 @@
     return (tag && tag.dataset.nilai) || "";
   }
 
+  /* Lembar yang sedang terbuka menitipkan cara menyegarkan daftarnya di
+     sini; `null` berarti tak ada lembar terbuka. */
+  var segarkanPilihan = null;
+  var terakhirMuat = 0;
+
   function bukaAksi(id, semula) {
     var a = MENU[id];
     if (!a) return;
@@ -351,11 +356,23 @@
     lembar.style.display = "flex";
     document.body.style.overflow = "hidden";
 
-    (a.fields || []).forEach(function (f) {
+    /* ── Daftar pilihan dimuat ULANG, bukan sekali ──
+       Tiket timbang yang baru dibuat di Pos Timbang tak muncul di lembar yang
+       sudah telanjur terbuka. Operator gudang membuka "Gabah masuk", menunggu
+       truknya ditimbang, lalu tak menemukan tiketnya — dan satu-satunya jalan
+       keluar yang ia temukan sendiri adalah menutup aplikasinya.
+
+       `segar` = pemuatan ULANG, bukan yang pertama. Bedanya penting: pilihan
+       yang sudah dijatuhkan orangnya harus bertahan, dan baris terkunci tak
+       perlu dihitung ulang karena bendanya memang tak berubah. */
+    function muatPilihan(segar) {
+      terakhirMuat = Date.now();
+      (a.fields || []).forEach(function (f) {
       if (f.type !== "remote") return;
       ambil(f.source).then(function (daftar) {
         if (!daftar) return;
         if (f.name === namaKunci) {
+          if (segar) { return; }
           /* Nama bendanya baru diketahui sesudah daftarnya datang. Kalau
              ternyata tak ada yang cocok, barisnya sudah basi — kuncinya
              dilepas supaya orang bisa memilih sendiri, bukan mengirim nilai
@@ -378,10 +395,16 @@
           return;
         }
         var s = $("f_" + f.name);
+        if (!s) { return; }
+        /* Apa yang sudah dipilih orangnya bertahan melewati pemuatan ulang.
+           Daftar yang disegarkan sambil menghapus pilihan yang sedang dibuat
+           lebih merugikan daripada daftar yang basi. */
+        var dipilih = s.value;
         s.innerHTML = '<option value="">' + (daftar.length ? "— pilih —" : "(belum ada)") +
           "</option>" + daftar.map(function (o) {
             return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
           }).join("");
+        if (dipilih) { s.value = dipilih; }
         // Kalau daftarnya kosong, aksi ini memang belum bisa dikerjakan.
         // Katakan sekarang — bukan setelah orang menekan Simpan dan ditolak.
         // Pilihan yang boleh dikosongkan tak boleh menghentikan aksi ketika
@@ -389,8 +412,10 @@
         // tidak bisa dicatat.
         if (!daftar.length && !f.optional) {
           s.disabled = true;
+          if ($("kosong_" + f.name)) { return; }   // jangan menumpuk saat disegarkan
           var nota = document.createElement("p");
           nota.className = "bantu";
+          nota.id = "kosong_" + f.name;
           nota.style.marginTop = "6px";
           /* Kalimat bawaan menebak dari NAMA field, dan tebakan itu bisa
              keliru berat: daftar "Mesin pengering" yang kosong berarti tak
@@ -403,9 +428,25 @@
           s.insertAdjacentElement("afterend", nota);
           var tbl = $("simpan");
           if (tbl) { tbl.disabled = true; tbl.textContent = "Belum bisa disimpan"; }
+        } else if (daftar.length) {
+          /* Daftarnya TADI kosong dan sekarang tidak. Lembar yang sudah
+             terlanjur berkata "belum bisa disimpan" harus mencabut kembali
+             ucapannya — kalau tidak, tiket yang baru datang terlihat di
+             daftar tetapi tombol Simpan-nya tetap mati. */
+          s.disabled = false;
+          var lamaNota = $("kosong_" + f.name);
+          if (lamaNota) { lamaNota.remove(); }
+          var tbl2 = $("simpan");
+          if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
         }
       }).catch(function () {});
-    });
+      });
+    }
+    muatPilihan(false);
+    /* Siapa yang menyegarkan: pendengar di lingkup modul (di bawah), bukan
+       pendengar baru tiap lembar dibuka — yang begitu menumpuk satu tiap
+       pembukaan. */
+    segarkanPilihan = function () { muatPilihan(true); };
 
     $("tutup").onclick = tutupLembar;
 
@@ -575,8 +616,36 @@
   function tutupLembar() {
     $("lembar").style.display = "none";
     document.body.style.overflow = "";
+    segarkanPilihan = null;
     lupakanBuka();
   }
+
+  /* ── Menyegarkan daftar saat lembar kembali dilihat ──
+     Lembar aksi sering dibiarkan terbuka sementara orangnya mengurus hal
+     lain — menimbang truk, menelepon, mengunci layar. Saat ia kembali,
+     daftarnya sudah setua kepergiannya.
+
+     Dua kejadian dipakai karena keduanya berbeda: `visibilitychange` untuk
+     layar ponsel yang mati dan hidup lagi, `focus` untuk berpindah tab atau
+     kembali dari aplikasi lain. Keduanya dipasang SEKALI, di lingkup modul.
+
+     Jeda 10 detik supaya berpindah-pindah tab dengan cepat tidak menjelma
+     jadi rentetan permintaan ke server. */
+  var JEDA_SEGAR = 10000;
+
+  function mungkinSegarkan() {
+    if (!segarkanPilihan) { return; }                  // tak ada lembar terbuka
+    if (document.hidden) { return; }
+    if (Date.now() - terakhirMuat < JEDA_SEGAR) { return; }
+    segarkanPilihan();
+  }
+
+  (window.PINDAH && PINDAH.pasang ? PINDAH.pasang : function (s, j, f) {
+    s.addEventListener(j, f);
+  })(document, "visibilitychange", mungkinSegarkan);
+  (window.PINDAH && PINDAH.pasang ? PINDAH.pasang : function (s, j, f) {
+    s.addEventListener(j, f);
+  })(window, "focus", mungkinSegarkan);
 
   /* ── Alamat harus mengatakan yang sebenarnya ──
      Kartu di antrean menaut ke `?buka=…&nilai=…`, dan lembarnya terbuka

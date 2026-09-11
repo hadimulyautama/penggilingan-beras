@@ -5,11 +5,15 @@ Menutup celah dobel/bocor + menyoroti selisih nota vs timbang riil:
   2. Batch tertaut dengan SELISIH nota↔timbang (kg, %, Rp) → potensi lebih bayar / kurang terima.
   3. Batch "menunggu bobot" → belum tersinkron dari timbang.
   4. Batch MANUAL (tanpa timbang) → perlu ditinjau.
+  5. Batch yang TIKETNYA BERUBAH setelah tertaut → tiket dibatalkan, pemasok
+     dikoreksi, komoditas diganti, atau tiket ditutup paksa.
 """
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.penggilingan.peta_jenis import PETA_MASUK
 
 _SQL_BELUM_TERTAUT = text("""
     SELECT t.kode, t.jenis_kode, t.tanggal, t.nomor_polisi,
@@ -18,6 +22,11 @@ _SQL_BELUM_TERTAUT = text("""
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
      WHERE t.arah = 'MASUK'
+       -- Tiket yang DIBATALKAN memang tak boleh jadi batch. Melaporkannya
+       -- sebagai "ditimbang tapi tak tercatat" membuat daftar ini penuh
+       -- pekerjaan yang justru salah bila dikerjakan — dan daftar semacam itu
+       -- berhenti dibaca.
+       AND t.status_transaksi = 'AKTIF'
        AND t.status_tiket IN ('SELESAI', 'DITUTUP_PAKSA')
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL)
@@ -84,6 +93,94 @@ _SQL_REVISI = text("""
     ORDER BY ABS(COALESCE(tersimpan,0) - tiket_now) DESC
 """)
 
+
+# ── Tiket yang BERUBAH setelah batch-nya dibuat ─────────────────────────────
+#
+# Sampai 11 September 2026 rekonsiliasi hanya membandingkan ANGKA: berapa kg di
+# nota, berapa kg di timbangan. Semua yang lain diam-diam dianggap tak pernah
+# berubah. Padahal tiket bisa dibatalkan, pemasoknya dikoreksi, dan
+# komoditasnya diganti — semuanya SESUDAH produksi menaut batch padanya, dan
+# tak satu pun meninggalkan jejak di layar produksi.
+#
+# Empat keadaan di bawah karenanya bukan "selisih" melainkan "kontrak yang
+# putus": batch masih menunjuk tiket, tetapi tiket sudah bukan yang dulu.
+# Pesannya ditulis lengkap di SQL supaya yang membaca layar tahu apa yang
+# harus dilakukan, bukan sekadar bahwa ada yang salah.
+_SQL_MENYIMPANG = """
+      SELECT b.kode_batch, '{jenis}' AS jenis, t.kode AS kode_tiket,
+             '{tag}' AS masalah, {pesan} AS pesan
+        FROM {tbl} b
+        JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
+        LEFT JOIN suppliers sb ON sb.id = b.supplier_id
+        LEFT JOIN suppliers st ON st.id = t.supplier_id
+       WHERE {syarat}
+"""
+
+# (tag, syarat, pesan) — pesan dirakit di SQL agar memuat nama/kode sebenarnya.
+_ATURAN_MENYIMPANG = (
+    (
+        "tiket_batal",
+        "t.status_transaksi <> 'AKTIF'",
+        "'Tiket ' || t.kode || ' DIBATALKAN di Pos Timbang setelah batch ini dibuat. "
+        "Batalkan batch-nya, atau minta Pos Timbang memulihkan tiket bila "
+        "pembatalannya keliru.'",
+    ),
+    (
+        # Dibandingkan lewat supplier_id, bukan nama: nama pemasok di batch bisa
+        # saja hasil "cari atau buat" dari `pihak_nama`, dan dua ejaan nama yang
+        # sama akan terus-menerus dilaporkan sebagai selisih yang tak ada.
+        "pemasok_beda",
+        "t.status_transaksi = 'AKTIF' AND t.supplier_id IS NOT NULL "
+        "AND t.supplier_id IS DISTINCT FROM b.supplier_id",
+        "'Pemasok tiket ' || t.kode || ' kini ' || COALESCE(st.nama_supplier, '?') "
+        "|| ', sedangkan batch tercatat atas ' || COALESCE(sb.nama_supplier, '?') "
+        "|| '. Samakan sebelum harga diverifikasi.'",
+    ),
+    (
+        "komoditas_beda",
+        "t.status_transaksi = 'AKTIF' AND t.jenis_kode NOT IN :jenis_sah",
+        "'Komoditas tiket ' || t.kode || ' kini ' || t.jenis_kode "
+        "|| ', tidak lagi cocok dengan jenis batch ini. Batch salah tabel — "
+        "batalkan dan catat ulang lewat jalur yang benar.'",
+    ),
+    (
+        "tutup_paksa",
+        "t.status_transaksi = 'AKTIF' AND t.status_tiket = 'DITUTUP_PAKSA' "
+        "AND b.sumber_berat = 'menunggu'",
+        "'Tiket ' || t.kode || ' DITUTUP PAKSA sebelum sempat punya bobot, "
+        "jadi batch ini akan menunggu bobot selamanya. Isi bobotnya dari nota, "
+        "atau batalkan batch.'",
+    ),
+)
+
+
+def _rakit_menyimpang() -> str:
+    """Rakit satu kueri UNION: empat aturan × dua tabel intake.
+
+    Dirakit, bukan diketik delapan kali, karena aturan kelima nanti hanya akan
+    ditambahkan di satu tempat — dan cabang yang terlupa pada penambahan
+    berikutnya justru jadi satu-satunya lubang yang tersisa.
+    """
+    bagian = []
+    for tbl, jenis, sah in (
+        ("purchase_batches", "gabah", "gabah"),
+        ("pk_purchase_batches", "pk", "pk"),
+    ):
+        for tag, syarat, pesan in _ATURAN_MENYIMPANG:
+            kode_sah = tuple(k for k, v in PETA_MASUK.items() if v.model == sah)
+            s = syarat.replace(
+                ":jenis_sah",
+                "(" + ", ".join(f"'{k}'" for k in kode_sah) + ")",
+            )
+            bagian.append(
+                _SQL_MENYIMPANG.format(tbl=tbl, jenis=jenis, tag=tag,
+                                       pesan=pesan, syarat=s)
+            )
+    return "UNION ALL".join(bagian) + "     ORDER BY masalah, kode_batch\n"
+
+
+_SQL_TIKET_MENYIMPANG = text(_rakit_menyimpang())
+
 _SQL_MANUAL = text("""
     SELECT count(*) FROM (
       SELECT id FROM purchase_batches WHERE sumber_berat='manual'
@@ -97,9 +194,12 @@ async def rekonsiliasi(db: AsyncSession) -> dict:
     selisih = [dict(r._mapping) for r in (await db.execute(_SQL_SELISIH)).all()]
     revisi = [dict(r._mapping) for r in (await db.execute(_SQL_REVISI)).all()]
     menunggu = [dict(r._mapping) for r in (await db.execute(_SQL_MENUNGGU)).all()]
+    menyimpang = [dict(r._mapping)
+                  for r in (await db.execute(_SQL_TIKET_MENYIMPANG)).all()]
     n_manual = (await db.execute(_SQL_MANUAL)).scalar_one()
     return {"belum_tertaut": belum, "selisih": selisih, "revisi": revisi,
             "menunggu": menunggu, "jumlah_manual": int(n_manual or 0),
+            "menyimpang": menyimpang,
             "stok_negatif": await _stok_pk_negatif(db)}
 
 
@@ -167,6 +267,14 @@ def format_rekonsiliasi(d: dict) -> str:
         for x in neg[:10]:
             baris.append(f"   • {x['kode_proses']}: kelebihan {_kg(x['kurang_kg'])} kg "
                          "— layar operator memotongnya di 0, jadi hanya terlihat di sini")
-    if not belum and not sel and not rev and not neg and not d["menunggu"]:
+    menyimpang = d.get("menyimpang", [])
+    if menyimpang:
+        baris.append(f"\n⑦ TIKET BERUBAH SETELAH TERTAUT: {len(menyimpang)}")
+        # Pesannya sudah lengkap dari kueri — di sini tak dipendekkan, karena
+        # yang membaca baris ini justru perlu tahu apa yang harus dilakukan.
+        for x in menyimpang[:20]:
+            baris.append(f"   • {x['kode_batch']} ({x['jenis']}) — {x['pesan']}")
+    if (not belum and not sel and not rev and not neg and not menyimpang
+            and not d["menunggu"]):
         baris.append("\n✅ Bersih — semua timbang tertaut & tak ada selisih.")
     return "\n".join(baris)

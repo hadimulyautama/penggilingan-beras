@@ -11,7 +11,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+import logging
+
 from app.database import now_local
+
+log = logging.getLogger("dashboard")
 from app.models import (
     DryingLot,
     MillingProcess,
@@ -44,14 +48,29 @@ async def _gabah_hari_ini(db: AsyncSession, today) -> dict:
         )
     ).all()
     total = basah = kering = 0.0
+    menunggu = 0
     for kg, kondisi in rows:
+        # ── Berat NULL adalah keadaan yang SAH ──
+        #
+        # Batch yang tiketnya sudah ditautkan tetapi timbangan KEDUA-nya belum
+        # turun memang belum punya berat. `float(None)` di sini membuat
+        # Beranda kosong DIAM-DIAM dan `/internal/produksi/operasional`
+        # menjawab 500 — sehingga briefing Kantor berkata "sistem produksi
+        # bermasalah" untuk keadaan yang sebetulnya normal: satu truk sedang
+        # di jembatan. Temuan QA X-06.
+        if kg is None:
+            menunggu += 1
+            continue
         kg = float(kg)
         total += kg
         if kondisi == "kering":
             kering += kg
         else:
             basah += kg
-    return {"batch": len(rows), "total_kg": total, "basah_kg": basah, "kering_kg": kering}
+    # Yang menunggu disebut TERPISAH, bukan dijumlahkan sebagai nol: nol
+    # membuatnya hilang dari pandangan justru saat ia perlu ditindak.
+    return {"batch": len(rows), "total_kg": total, "basah_kg": basah,
+            "kering_kg": kering, "menunggu_bobot": menunggu}
 
 
 async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
@@ -459,23 +478,57 @@ async def _berhenti_hari_ini(db: AsyncSession, now) -> dict:
     }
 
 
+async def _aman(nama: str, coro, bawaan):
+    """Jalankan satu bagian dashboard; kegagalannya tak menjatuhkan sisanya.
+
+    Sebelum ini seluruh halaman disusun dalam satu ekspresi, jadi satu galat
+    di satu bagian mengosongkan SEMUANYA — dan diam-diam: Beranda tampil
+    kosong tanpa menyebutkan ada yang gagal, sementara `/internal` menjawab
+    500 sehingga briefing Kantor berkata "sistem produksi bermasalah".
+
+    Bagian yang gagal mengembalikan bawaannya dan MENYEBUTKAN dirinya di
+    `galat`, supaya yang hilang terlihat sebagai bagian yang hilang — bukan
+    sebagai pabrik yang tak bekerja.
+    """
+    try:
+        return await coro, None
+    except Exception as e:  # noqa: BLE001
+        log.exception("Bagian dashboard '%s' gagal", nama)
+        return bawaan, f"{nama}: {type(e).__name__}"
+
+
 async def dashboard_data(db: AsyncSession) -> dict:
     """Snapshot terstruktur untuk dashboard staff produksi."""
     now = now_local()
     today = now.date()
+    galat: list[str] = []
+
+    async def ambil(nama, coro, bawaan):
+        nilai, pesan = await _aman(nama, coro, bawaan)
+        if pesan:
+            galat.append(pesan)
+        return nilai
+
+    operasional = {
+        "gabah_hari_ini": await ambil(
+            "gabah hari ini", _gabah_hari_ini(db, today),
+            {"batch": 0, "total_kg": 0.0, "basah_kg": 0.0, "kering_kg": 0.0,
+             "menunggu_bobot": 0}),
+        "pengeringan": await ambil("pengeringan", _pengeringan_berjalan(db, now), []),
+        "silo": await ambil("silo", _silo_status(db), []),
+        "giling": await ambil("giling", _giling_berjalan(db, now), []),
+        "stok_pk": await ambil("stok PK", _stok_pk(db), []),
+        # Berapa lama pabrik BERHENTI hari ini, dijumlah per sebab.
+        # Satu-satunya angka di dashboard ini yang bisa langsung diperbaiki
+        # besok — dan ia hanya ada karena tiap jeda mencatat sebabnya, bukan
+        # cuma mencatat bahwa berhenti.
+        "berhenti": await ambil("berhenti", _berhenti_hari_ini(db, now), []),
+    }
     return {
         "generated_at": now,
-        "operasional": {
-            "gabah_hari_ini": await _gabah_hari_ini(db, today),
-            "pengeringan": await _pengeringan_berjalan(db, now),
-            "silo": await _silo_status(db),
-            "giling": await _giling_berjalan(db, now),
-            "stok_pk": await _stok_pk(db),
-            # Berapa lama pabrik BERHENTI hari ini, dijumlah per sebab.
-            # Satu-satunya angka di dashboard ini yang bisa langsung
-            # diperbaiki besok — dan ia hanya ada karena tiap jeda mencatat
-            # sebabnya, bukan cuma mencatat bahwa berhenti.
-            "berhenti": await _berhenti_hari_ini(db, now),
-        },
-        "tugas": await _tugas(db),
+        "operasional": operasional,
+        "tugas": await ambil("tugas", _tugas(db), []),
+        # Kosong = semua bagian berhasil. Disebutkan apa adanya supaya
+        # pembacanya tahu angka mana yang sedang tak bisa dipercaya.
+        "galat": galat,
     }
