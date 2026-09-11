@@ -445,14 +445,47 @@ def test_penyegaran_diam_tak_membuang_ketikan_orang():
           / "app/web/static/pindah.js").read_text()
     diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
 
-    assert "lembarTerbuka()" in diam, "lembar terbuka tak dijaga"
-    assert "INPUT|SELECT|TEXTAREA" in diam, "kotak isian yang dipegang tak dijaga"
+    js_semua = (pathlib.Path(__file__).resolve().parents[1]
+                / "app/web/static/pindah.js").read_text()
+    jaga = js_semua[js_semua.index("function bolehDiam"):
+                    js_semua.index("function lembarTerbuka")]
+    assert "lembarTerbuka()" in jaga, "lembar terbuka tak dijaga"
+    assert "INPUT|SELECT|TEXTAREA" in jaga, "kotak isian yang dipegang tak dijaga"
+    assert "disentuh" in jaga, "halaman yang sudah diketik tak dijaga"
     # Diperiksa DUA KALI — sebelum meminta, dan sesudah jawabannya datang.
-    # Orang bisa membuka lembar tepat selagi permintaannya di jalan.
-    assert diam.count("lembarTerbuka()") >= 2
+    # Orang bisa mulai mengetik tepat selagi permintaannya di jalan.
+    assert diam.count("bolehDiam()") >= 2
     # Isi yang tak berubah tak ditukar: menukar HTML yang identik tetap
     # menghapus posisi gulung dan menjalankan ulang skripnya.
     assert "innerHTML === lama" in diam
     # Posisi gulung dikembalikan — yang sedang membaca baris ke-20 tak boleh
     # dilempar ke atas tiap kali ada operator mencatat sesuatu.
     assert "scrollTop" in diam
+
+
+def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
+    """Memeriksa "ada kotak yang sedang dipegang" saja TIDAK CUKUP.
+
+    Pemilik menanyakannya pada 11 September 2026, lalu diuji di peramban:
+    ketikan di borang Pengaturan HILANG, diganti nilai dari server. Urutannya
+    biasa saja — orang mengetik namanya, lalu menggulir sebentar melihat
+    setelan lain sehingga kotaknya kehilangan fokus; di detik itu orang lain
+    mengubah sesuatu di halaman yang sama.
+
+    Lembar aksi memang sudah aman sejak awal, dan di sanalah hampir semua
+    pencatatan terjadi. Yang bocor borang BIASA: Pengaturan, ganti sandi,
+    kelola pengguna. Jarang dipakai — tetapi yang hilang di sana adalah
+    ketikan orang yang tak pernah diberi tahu kenapa.
+    """
+    import pathlib
+
+    js = (pathlib.Path(__file__).resolve().parents[1]
+          / "app/web/static/pindah.js").read_text()
+
+    # Penandanya dipasang dari SATU tempat, menangkap seluruh halaman.
+    assert 'addEventListener("input"' in js and 'addEventListener("change"' in js
+    assert "disentuh = true" in js
+    # Dan direset saat halamannya memang berganti — kalau tidak, satu ketikan
+    # mematikan penyegaran untuk selamanya sampai aplikasi dimatikan.
+    pasang = js[js.index("function pasang"):js.index("function angkatLembar")]
+    assert "disentuh = false" in pasang

@@ -92,18 +92,16 @@
     diam: function () {
       var alamat = location.pathname + location.search;
       if (!bingkai) { return; }
-      if (lembarTerbuka()) { return; }
-      var fokus = document.activeElement;
-      if (fokus && /^(INPUT|SELECT|TEXTAREA)$/.test(fokus.tagName)) { return; }
+      if (!bolehDiam()) { return; }
 
       var lama = bingkai.innerHTML;
       delete simpan[alamat];
       ambil(alamat).then(function (teks) {
         if (!teks) { return; }
         if (location.pathname + location.search !== alamat) { return; }
-        if (lembarTerbuka()) { return; }
-        var f = document.activeElement;
-        if (f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)) { return; }
+        // Diperiksa LAGI: orangnya bisa mulai mengetik tepat selagi
+        // permintaan ini masih di jalan.
+        if (!bolehDiam()) { return; }
 
         var doc = new DOMParser().parseFromString(teks, "text/html");
         var isiBaru = doc.querySelector(".bingkai");
@@ -162,6 +160,7 @@
     if (!baru) { location.href = alamat; return false; }
 
     cabutSemua();
+    disentuh = false;   // halamannya berganti — ketikan lamanya memang pergi
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
 
@@ -193,6 +192,38 @@
     var l = document.getElementById("lembar");
     if (l && l.parentNode !== bingkai) { bingkai.appendChild(l); }
   }
+
+  /* ── Halaman yang sudah DISENTUH tak boleh digambar ulang ──
+   *
+   * Memeriksa "ada kotak yang sedang dipegang" saja TIDAK CUKUP, dan itu
+   * terbukti: pemilik menanyakannya pada 11 September 2026, lalu diuji —
+   * ketikan di borang Pengaturan HILANG, diganti nilai dari server.
+   *
+   * Urutan kejadiannya biasa saja. Orang mengetik namanya, lalu menggulir
+   * ke bawah sebentar untuk melihat setelan lain; kotaknya kehilangan fokus.
+   * Di detik itu orang lain mengubah sesuatu di halaman yang sama, isinya
+   * jadi berbeda, dan penyegaran menukar seluruh isi bingkai.
+   *
+   * Lembar aksi memang sudah aman — `lembarTerbuka` menjaganya, dan di
+   * sanalah hampir semua pencatatan terjadi. Yang bocor adalah borang BIASA:
+   * Pengaturan, ganti sandi, kelola pengguna. Sedikit dipakai, tetapi yang
+   * hilang di sana adalah ketikan orang yang tak pernah diberi tahu kenapa.
+   *
+   * Maka sekali sebuah halaman disentuh, ia tak lagi disegarkan otomatis
+   * sampai orangnya pergi sendiri. Penandanya direset tiap `pasang`, karena
+   * saat itu halamannya memang berganti. */
+  var disentuh = false;
+
+  function bolehDiam() {
+    if (disentuh) { return false; }
+    if (lembarTerbuka()) { return false; }
+    var f = document.activeElement;
+    if (f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)) { return false; }
+    return true;
+  }
+
+  document.addEventListener("input", function () { disentuh = true; }, true);
+  document.addEventListener("change", function () { disentuh = true; }, true);
 
   function lembarTerbuka() {
     var l = document.getElementById("lembar");
