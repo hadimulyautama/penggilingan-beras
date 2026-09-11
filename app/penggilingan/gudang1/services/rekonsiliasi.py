@@ -99,7 +99,38 @@ async def rekonsiliasi(db: AsyncSession) -> dict:
     menunggu = [dict(r._mapping) for r in (await db.execute(_SQL_MENUNGGU)).all()]
     n_manual = (await db.execute(_SQL_MANUAL)).scalar_one()
     return {"belum_tertaut": belum, "selisih": selisih, "revisi": revisi,
-            "menunggu": menunggu, "jumlah_manual": int(n_manual or 0)}
+            "menunggu": menunggu, "jumlah_manual": int(n_manual or 0),
+            "stok_negatif": await _stok_pk_negatif(db)}
+
+
+async def _stok_pk_negatif(db: AsyncSession) -> list[dict]:
+    """Proses giling yang PK-nya terkirim LEBIH BANYAK daripada yang dihasilkan.
+
+    Layar operator memotong saldo di nol — dan pemotongan itu tepat untuk
+    layar: angka negatif di "stok siap kirim" akan dibaca sebagai kerusakan
+    aplikasi, bukan sebagai selisih yang perlu ditelusuri, dan yang
+    menelusurinya bukan operator.
+
+    Tetapi yang dipotong di layar tak boleh ikut hilang dari pembukuan. Temuan
+    QA P-K-06: 6 ton PK terkirim 12 ton, dan yang terbaca di mana pun "0".
+    Selisih yang tak muncul di satu layar pun tak akan pernah diperiksa siapa
+    pun — jadi ia muncul DI SINI, di tempat orang memang datang untuk mencari
+    selisih.
+    """
+    from app.models import MillingProcess
+    from app.services.transfer import saldo_pk
+
+    proses = (await db.execute(
+        select(MillingProcess.id, MillingProcess.kode_proses)
+        .where(MillingProcess.status == "selesai")
+        .order_by(MillingProcess.id.desc()).limit(200)
+    )).all()
+    keluar = []
+    for pid, kode in proses:
+        saldo = await saldo_pk(db, pid)
+        if saldo < -0.5:          # ambang: pembulatan timbangan bukan selisih
+            keluar.append({"kode_proses": kode, "kurang_kg": abs(saldo)})
+    return keluar
 
 
 def _kg(v) -> str:
@@ -130,6 +161,12 @@ def format_rekonsiliasi(d: dict) -> str:
     baris.append(f"\n④ Batch menunggu bobot: {len(d['menunggu'])}"
                  + (" — " + ", ".join(m['kode_batch'] for m in d['menunggu'][:10]) if d['menunggu'] else ""))
     baris.append(f"⑤ Batch manual (tanpa timbang): {d['jumlah_manual']}")
-    if not belum and not sel and not rev and not d["menunggu"]:
+    neg = d.get("stok_negatif", [])
+    if neg:
+        baris.append(f"\n⑥ PK TERKIRIM MELEBIHI YANG DIHASILKAN: {len(neg)} proses")
+        for x in neg[:10]:
+            baris.append(f"   • {x['kode_proses']}: kelebihan {_kg(x['kurang_kg'])} kg "
+                         "— layar operator memotongnya di 0, jadi hanya terlihat di sini")
+    if not belum and not sel and not rev and not neg and not d["menunggu"]:
         baris.append("\n✅ Bersih — semua timbang tertaut & tak ada selisih.")
     return "\n".join(baris)

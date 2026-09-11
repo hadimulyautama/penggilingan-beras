@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import input_time, now_local
@@ -408,8 +408,23 @@ async def masuk_silo(
             drying_lot_id=baris.drying_lot_id,
             purchase_batch_id=baris.purchase_batch_id, berat_kg=kg_baris,
         ))
-        giling.berat_gabah_masuk_kg = (
-            float(giling.berat_gabah_masuk_kg or 0) + kg_baris)
+        # ── Ditambah oleh BASIS DATA, bukan dibaca-lalu-ditulis ──
+        #
+        # `x = x + n` di Python membaca nilai lama ke memori lebih dulu. Dua
+        # pemasukan yang datang bersamaan sama-sama membaca angka yang sama,
+        # lalu masing-masing menulis "lama + miliknya" — jadi tambahan yang
+        # satu MENGHAPUS tambahan yang lain. Temuan QA P-K-14, dan kerusakannya
+        # sunyi: berat bahan tercatat kurang, rendemen terbaca melambung, dan
+        # tak ada satu pun pesan.
+        #
+        # Ditambah lewat SQL, angkanya tak pernah singgah di Python.
+        await db.execute(
+            update(MillingProcess)
+            .where(MillingProcess.id == giling.id)
+            .values(berat_gabah_masuk_kg=(
+                func.coalesce(MillingProcess.berat_gabah_masuk_kg, 0) + kg_baris))
+        )
+        await db.refresh(giling, ["berat_gabah_masuk_kg"])
         giling_kode = giling.kode_proses
         await log_activity(
             db, table_name="milling_process", record_id=giling.id, action="UPDATE",

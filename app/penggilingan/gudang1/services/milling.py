@@ -273,6 +273,25 @@ class FinishResult:
     jenis: str | None = None  # KS / KL / MIX
 
 
+async def _tutup_jeda_terbuka(db: AsyncSession, proc, saat) -> None:
+    """Tutup jeda proses yang masih menganga saat prosesnya selesai.
+
+    Ditutup, bukan ditolak. Menolak menutup proses yang sedang dijeda memaksa
+    operator melanjutkan dulu baru menyelesaikan — dua ketukan untuk keadaan
+    yang sudah jelas: mesinnya berhenti, dan selesai berarti selesai.
+    """
+    from app.models import JedaProses
+
+    terbuka = (await db.execute(
+        select(JedaProses).where(
+            JedaProses.milling_process_id == proc.id,
+            JedaProses.selesai.is_(None),
+        )
+    )).scalars().all()
+    for j in terbuka:
+        j.selesai = saat
+
+
 async def finish_milling(
     db: AsyncSession, *, user, kode_proses: str | None, berat_akhir: float | None = None,
     tanggal=None, jam=None,
@@ -373,23 +392,48 @@ async def finish_milling(
         if silo:
             silo.status = "kosong"
             nama_silo = silo.nama_silo.replace("Silo ", "")
-    # Batch sumber berstatus digiling.
+    # ── SELURUH sumber ditandai "digiling", bukan hanya yang utama ──
+    #
+    # Dulu hanya `proc.drying_lot_id` ATAU `proc.purchase_batch_id` — dua
+    # penunjuk tunggal peninggalan masa ketika satu giling berarti satu lot.
+    # Sejak silo boleh dicampur, sumber sesungguhnya ada di
+    # `milling_process_sources`, dan batch yang ikut tergiling lewat jalur
+    # lain tetap berstatus lama. Akibatnya ia DITAWARKAN LAGI untuk digiling
+    # kedua kalinya — gabah yang sudah jadi PK muncul kembali sebagai gabah.
+    # Temuan QA P-K-18, dan ini kali ketiga penunjuk tunggal itu menyesatkan.
+    bids: set[int] = set()
     if proc.drying_lot_id:
-        bids = (
-            await db.execute(
+        bids |= set((await db.execute(
+            select(DryingLotBatch.purchase_batch_id).where(
+                DryingLotBatch.drying_lot_id == proc.drying_lot_id)
+        )).scalars().all())
+    if proc.purchase_batch_id:
+        bids.add(proc.purchase_batch_id)
+    # Sumber sesungguhnya — termasuk gabah yang masuk saat giling berjalan.
+    for lot_id, batch_id in (await db.execute(
+        select(MillingProcessSource.drying_lot_id,
+               MillingProcessSource.purchase_batch_id)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+    )).all():
+        if batch_id:
+            bids.add(batch_id)
+        if lot_id:
+            bids |= set((await db.execute(
                 select(DryingLotBatch.purchase_batch_id).where(
-                    DryingLotBatch.drying_lot_id == proc.drying_lot_id
-                )
-            )
-        ).scalars().all()
-        for bid in bids:
-            b = await db.get(PurchaseBatch, bid)
-            if b:
-                b.status_batch = "digiling"
-    elif proc.purchase_batch_id:
-        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
+                    DryingLotBatch.drying_lot_id == lot_id)
+            )).scalars().all())
+    for bid in {b for b in bids if b}:
+        b = await db.get(PurchaseBatch, bid)
         if b:
             b.status_batch = "digiling"
+
+    # ── Jeda yang masih terbuka ikut ditutup ──
+    #
+    # Temuan QA P-K-17. Menutup proses yang sedang dijeda meninggalkan baris
+    # jeda tanpa waktu selesai, dan laporan waktu henti terus bertambah untuk
+    # mesin yang sudah berhenti berhari-hari lalu. Angka itu dipakai menilai
+    # kinerja shift, jadi yang rusak bukan cuma tampilannya.
+    await _tutup_jeda_terbuka(db, proc, now)
 
     bd = await _pk_breakdown(db, proc.id)
     await log_activity(

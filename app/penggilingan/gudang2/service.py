@@ -537,6 +537,43 @@ async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float) -> Non
         )
 
 
+async def _tolak_silo_sedang_dipoles(db: AsyncSession, silo_id: int | None) -> None:
+    """Tolak PK masuk ke silo Gudang 2 yang isinya SEDANG DIPOLES.
+
+    Temuan QA P-K-11. Rumus konsumsi penyosohan dihitung dari selisih stok
+    awal dan akhir silo. PK yang masuk di tengah proses ikut terhitung sebagai
+    "yang habis dipoles" — jadi bahan terbaca lebih banyak daripada yang
+    sungguh masuk mesin, dan rendemennya ikut salah.
+
+    Dua jalan keluar dipertimbangkan: memasukkan intake-selama-proses ke dalam
+    rumusnya, atau menolak intakenya. Yang dipilih MENOLAK, dan alasannya
+    bukan kemudahan: silo yang sedang diposes isinya sedang berkurang terus,
+    sehingga "berapa yang ada di dalamnya" tak punya satu jawaban selama
+    prosesnya berjalan. Rumus apa pun yang dibangun di atas angka yang
+    bergerak akan benar hanya sampai seseorang menimbang ulang.
+
+    Menolak juga yang paling dekat dengan kenyataan fisiknya: menuang PK baru
+    ke silo yang sedang dikuras memang bukan hal yang dikerjakan orang.
+    """
+    if silo_id is None:
+        return
+    from app.models import PolishingProcess, PolishingSiloUsage
+
+    aktif = (await db.execute(
+        select(PolishingProcess.kode_proses)
+        .join(PolishingSiloUsage,
+              PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               PolishingProcess.status == "proses")
+        .limit(1)
+    )).scalars().first()
+    if aktif:
+        raise Gudang2Error(
+            f"Silo itu sedang dipoles ({aktif}) — PK baru tak bisa masuk "
+            "sampai penyosohannya selesai. Tumpuk dulu, atau pilih silo lain."
+        )
+
+
 async def _add_intake(
     db: AsyncSession, *, user: User, sumber_tipe: str, tujuan: str,
     berat_kg: float, hpp_per_kg: float | None, tanggal, jam,
@@ -545,6 +582,8 @@ async def _add_intake(
     tujuan_norm, silo_id = await _tujuan_and_silo(db, tujuan)
     if tujuan_norm == "ditumpuk":
         await _guard_kapasitas_tumpukan(db, berat_kg)
+    else:
+        await _tolak_silo_sedang_dipoles(db, silo_id)
     now = input_time(tanggal, jam)
     intake = PkGudang2Intake(
         sumber_tipe=sumber_tipe,

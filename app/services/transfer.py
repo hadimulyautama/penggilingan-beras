@@ -84,14 +84,33 @@ async def _sold_pk_langsung(db: AsyncSession, proc_id: int) -> float:
     return float(r)
 
 
-async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
-    """PK tersedia (stok) = produksi − yang ditransfer − yang dijual langsung."""
-    return max(
+async def saldo_pk(db: AsyncSession, proc_id: int) -> float:
+    """Saldo PK apa adanya — BOLEH NEGATIF.
+
+    `pending_transfer_kg` memotongnya di nol, dan pemotongan itulah yang
+    menyembunyikan temuan QA P-K-06: 6 ton PK terkirim 12 ton, dan yang
+    terbaca di layar "0" — bukan "−6.000". Yang disembunyikan tak bisa
+    diperbaiki siapa pun, karena tak ada yang tahu ia ada.
+
+    Dipakai penjaga dan Rekonsiliasi. Yang ditampilkan ke operator tetap
+    lewat `pending_transfer_kg`: angka negatif di layar "stok siap kirim" akan
+    dibaca sebagai kerusakan aplikasi, bukan sebagai selisih yang perlu
+    ditelusuri — dan yang menelusurinya bukan operator.
+    """
+    return (
         await _produced_pk(db, proc_id)
         - await _transferred_pk(db, proc_id)
-        - await _sold_pk_langsung(db, proc_id),
-        0.0,
+        - await _sold_pk_langsung(db, proc_id)
     )
+
+
+async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
+    """PK tersedia (stok) = produksi − yang ditransfer − yang dijual langsung.
+
+    Dipotong di nol untuk TAMPILAN saja. Yang memeriksa kelebihan memakai
+    `saldo_pk`, yang tak memotong apa pun.
+    """
+    return max(await saldo_pk(db, proc_id), 0.0)
 
 
 @dataclass
@@ -113,9 +132,16 @@ async def create_internal_transfer(
     """
     if lokasi_tujuan not in _LOKASI:
         raise TransferError("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
+    # ── Prosesnya DIKUNCI sebelum saldonya dibaca ──
+    #
+    # Tanpa kunci, dua transfer yang datang bersamaan sama-sama membaca
+    # "tersedia 6 ton" sebelum salah satunya menulis — lalu keduanya
+    # mengirim 6 ton, dan 6 ton PK berubah jadi 12 ton di Gudang 2. Temuan QA
+    # P-K-06, dan kelebihannya tak terlihat karena saldonya dipotong di nol.
     proc = (
         await db.execute(
             select(MillingProcess).where(MillingProcess.kode_proses == kode_proses)
+            .with_for_update()
         )
     ).scalars().first()
     if proc is None:
