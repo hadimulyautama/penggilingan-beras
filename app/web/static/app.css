@@ -1235,3 +1235,27 @@ details.padat > .anak { margin: 0 12px 12px; }
   cursor: pointer;
 }
 .kabar__batal:disabled { opacity: .5; }
+
+/* ── Kesegaran data ──
+   Layar menyegarkan dirinya diam-diam, dan kadang TIDAK — saat ada lembar
+   terbuka, saat orangnya sedang mengetik, atau saat jaringan mati. Tanpa
+   tanda apa pun, operator tak bisa membedakan "angka ini baru" dari "angka
+   ini sudah setengah jam tak berubah". Temuan QA P-K-19.
+
+   Sengaja kecil, samar, dan di sudut: ia informasi, bukan peringatan — dan
+   peringatan yang muncul tiap menit berhenti dibaca. Tak ikut tercetak. */
+.segar {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  z-index: 5;
+  font-size: 11px;
+  color: var(--samar, #8a8a8a);
+  background: var(--latar, #fff);
+  padding: 2px 7px;
+  border-radius: 9px;
+  opacity: .72;
+  pointer-events: none;
+}
+
+@media print { .segar { display: none; } }

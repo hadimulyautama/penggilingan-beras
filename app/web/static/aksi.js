@@ -164,7 +164,10 @@
       menu.forEach(function (a) { MENU[a.id] = a; });
       gambar();
     } catch (e) {
-      $("layar").innerHTML = '<div class="pesan pesan--err">' + esc(String(e)) + "</div>";
+      var wadah = $("layar");
+      if (wadah) {
+        wadah.innerHTML = '<div class="pesan pesan--err">' + esc(String(e)) + "</div>";
+      }
     }
   }
 
@@ -626,6 +629,15 @@
     $("lembar").style.display = "none";
     document.body.style.overflow = "";
     segarkanPilihan = null;
+    /* ── Bendera "sedang mengetik" ikut dilepas ──
+       `pindah.js` menyetelnya saat orang menyentuh isian apa pun, dan
+       gunanya menahan segar-otomatis supaya ketikan yang belum tersimpan tak
+       hilang. Tetapi ia hanya direset saat halaman BERPINDAH. Jadi sesudah
+       menyentuh satu isian lalu menekan Batal, segar-otomatis mati diam-diam
+       sampai orangnya kebetulan pindah halaman: sepuluh denyut, nol
+       permintaan, dan layar yang makin lama makin basi tanpa tanda apa pun.
+       Temuan QA P-K-19. */
+    if (window.PINDAH && PINDAH.lupakanSentuhan) { PINDAH.lupakanSentuhan(); }
     lupakanBuka();
   }
 
@@ -793,7 +805,16 @@
     }
   });
 
-  muat();
+  /* ── Katalog aksi hanya dimuat di layar yang memang menampungnya ──
+     Skrip ini dimuat di enam layar, dan `muat()` memanggil dua endpoint —
+     salah satunya yang terberat di aplikasi. Hanya `aksi_lain.html` yang
+     punya wadah `#layar`; di lima layar lain hasilnya dibuang begitu saja,
+     lalu `$("layar").innerHTML` melempar TypeError yang menghentikan SELURUH
+     skrip, termasuk pendengar tombol di bawahnya.
+
+     Dan karena `pindah.js` menjalankan ulang skrip tiap perpindahan halaman
+     DAN tiap denyut, pemborosan itu berulang terus. Temuan QA UI-01. */
+  if ($("layar")) { muat(); }
 
   /* Dibuka dari layar Berjalan: satu baris di sana menaut ke aksi yang
      menutupnya. Menurunkan orang di daftar aksi lalu menyuruhnya mencari

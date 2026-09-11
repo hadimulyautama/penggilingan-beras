@@ -115,6 +115,29 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
 
+def _baris_bahan(b, nama_pemasok: str | None) -> tuple[str, str, str]:
+    """Nama pemasok SENDIRIAN di baris atas; kode-kodenya turun ke bawah.
+
+    Digabung ("Kelompok Tani Sumber Rejeki · GB-20260904-10") baris itu
+    membungkus di ponsel dan kodenya terlempar ke baris kedua sendirian —
+    yang dipindai mata justru namanya, dan nama yang terpotong oleh kode
+    membuat daftar ini berhenti bisa dibaca sekilas.
+
+    Di lingkup modul supaya versi satuan dan versi banyak-sekaligus memakai
+    bentuk yang SAMA. Dua tempat yang menyusun baris yang sama akan berbeda
+    suatu hari, dan yang membacanya tak akan tahu mana yang benar.
+    """
+    nama = nama_pemasok or "?"
+    k = (b.kondisi_gabah or "").strip().lower()
+    # Kode pengeringannya TIDAK ikut. Tiga kode dalam satu baris memaksanya
+    # membungkus sampai tiga baris di ponsel, dan dari ketiganya ia yang
+    # paling sedikit menjawab pertanyaan kartu ini — "gabah siapa, berapa".
+    ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
+    if k in KELAS_PK:
+        ket += f" · {KELAS_PK[k]}"
+    return (nama, _kg(b.berat_total_kg), ket)
+
+
 async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:
     """Daftar batch gabah yang masuk sebuah lot giling — SATU BARIS PER BATCH.
 
@@ -141,24 +164,8 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
     from app.penggilingan.gudang1.services.milling import sumber_batch
 
     async def _baris(b) -> tuple[str, str, str]:
-        """Nama pemasok SENDIRIAN di baris atas; kode-kodenya turun ke bawah.
-
-        Digabung ("Kelompok Tani Sumber Rejeki · GB-20260904-10") baris itu
-        membungkus di ponsel dan kodenya terlempar ke baris kedua sendirian —
-        yang dipindai mata justru namanya, dan nama yang terpotong oleh kode
-        membuat daftar ini berhenti bisa dibaca sekilas.
-        """
         sup = await db.get(Supplier, b.supplier_id)
-        nama = (sup.nama_supplier if sup else None) or "?"
-        k = (b.kondisi_gabah or "").strip().lower()
-        # Kode pengeringannya TIDAK ikut. Tiga kode dalam satu baris
-        # memaksanya membungkus sampai tiga baris di ponsel, dan dari ketiganya
-        # ia yang paling sedikit menjawab pertanyaan kartu ini — "gabah siapa,
-        # berapa". Jalur pengeringannya tetap terbaca dari laporan lot.
-        ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
-        if k in KELAS_PK:
-            ket += f" · {KELAS_PK[k]}"
-        return (nama, _kg(b.berat_total_kg), ket)
+        return _baris_bahan(b, sup.nama_supplier if sup else None)
 
     baris = (await db.execute(
         select(MillingProcessSource)
@@ -198,8 +205,127 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
     return bahan, [k for k in ("basah", "kering") if k in kondisi]
 
 
+async def _bahan_banyak(db: AsyncSession, proses) -> dict[int, tuple[list, list[str]]]:  # noqa: C901
+    """`_bahan` untuk banyak lot giling sekaligus — empat kueri, bukan 4×N.
+
+    Jawabannya harus SAMA PERSIS dengan versi satuan, termasuk urutan baris
+    dan aturan "satu batch tak boleh terdaftar dua kali". Percepatan yang
+    mengubah isi laporan bukan percepatan. Temuan QA P-S-02.
+    """
+    from app.models import MillingProcessSource, PurchaseBatch, Supplier
+    from app.penggilingan.gudang1.models.gudang1 import DryingLotBatch
+
+    daftar = list(proses)
+    if not daftar:
+        return {}
+    ids = [p.id for p in daftar]
+
+    sumber = list((await db.execute(
+        select(MillingProcessSource)
+        .where(MillingProcessSource.milling_process_id.in_(ids))
+        .order_by(MillingProcessSource.id))).scalars().all())
+    per_proses: dict[int, list] = {}
+    for s in sumber:
+        per_proses.setdefault(s.milling_process_id, []).append(s)
+
+    # Batch di balik tiap lot pengeringan, terurut id — urutan yang sama
+    # dengan `ORDER BY PurchaseBatch.id` pada versi satuan.
+    lot_ids = {s.drying_lot_id for s in sumber if s.drying_lot_id}
+    lot_batch: dict[int, list[int]] = {}
+    batch_ids = {s.purchase_batch_id for s in sumber if s.purchase_batch_id}
+    if lot_ids:
+        for lot_id, bid in (await db.execute(
+            select(DryingLotBatch.drying_lot_id, DryingLotBatch.purchase_batch_id)
+            .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+            .where(DryingLotBatch.drying_lot_id.in_(lot_ids))
+            .order_by(PurchaseBatch.id)
+        )).all():
+            lot_batch.setdefault(lot_id, []).append(bid)
+            batch_ids.add(bid)
+
+    # Penunjuk tunggal proses lama yang tak punya baris sumber sama sekali.
+    tanpa_sumber = [p for p in daftar if not per_proses.get(p.id)]
+    for p in tanpa_sumber:
+        if p.purchase_batch_id:
+            batch_ids.add(p.purchase_batch_id)
+        if p.drying_lot_id:
+            lot_ids.add(p.drying_lot_id)
+    if tanpa_sumber:
+        lot_lagi = {p.drying_lot_id for p in tanpa_sumber if p.drying_lot_id}
+        if lot_lagi - set(lot_batch):
+            for lot_id, bid in (await db.execute(
+                select(DryingLotBatch.drying_lot_id, DryingLotBatch.purchase_batch_id)
+                .join(PurchaseBatch,
+                      PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+                .where(DryingLotBatch.drying_lot_id.in_(lot_lagi))
+                .order_by(PurchaseBatch.id)
+            )).all():
+                lot_batch.setdefault(lot_id, []).append(bid)
+                batch_ids.add(bid)
+
+    batch = {b.id: b for b in (await db.execute(
+        select(PurchaseBatch).where(PurchaseBatch.id.in_(batch_ids))
+    )).scalars()} if batch_ids else {}
+    nama_pemasok = dict((await db.execute(
+        select(Supplier.id, Supplier.nama_supplier)
+        .where(Supplier.id.in_({b.supplier_id for b in batch.values()}))
+    )).all()) if batch else {}
+
+    hasil: dict[int, tuple[list, list[str]]] = {}
+    for p in daftar:
+        bahan: list = []
+        kondisi: set[str] = set()
+        terlihat: set[int] = set()
+
+        def _tambah(bid: int | None) -> None:
+            b = batch.get(bid) if bid else None
+            if b is None or b.id in terlihat:
+                return
+            terlihat.add(b.id)
+            k = (b.kondisi_gabah or "").strip().lower()
+            if k:
+                kondisi.add(k)
+            bahan.append(_baris_bahan(b, nama_pemasok.get(b.supplier_id)))
+
+        baris_sumber = per_proses.get(p.id)
+        if baris_sumber:
+            for sb in baris_sumber:
+                if sb.drying_lot_id:
+                    for bid in lot_batch.get(sb.drying_lot_id, []):
+                        _tambah(bid)
+                elif sb.purchase_batch_id:
+                    _tambah(sb.purchase_batch_id)
+        elif p.drying_lot_id:
+            for bid in lot_batch.get(p.drying_lot_id, []):
+                _tambah(bid)
+        elif p.purchase_batch_id:
+            _tambah(p.purchase_batch_id)
+
+        hasil[p.id] = (bahan, [k for k in ("basah", "kering") if k in kondisi])
+    return hasil
+
+
 def _persen(v) -> str:
     return f"{float(v):g}%".replace(".", ",")
+
+
+#: Kolom QC yang ditampilkan, beserta labelnya. Satu tempat, dipakai versi
+#: satuan maupun versi banyak-sekaligus.
+_KOLOM_MUTU = (("Kadar air", "kadar_air"),
+               ("Butir patah", "broken_persen"),
+               ("Susut", "susut_persen"))
+
+
+def _mutu_dari(baris) -> list[tuple[str, str]]:
+    """Nilai QC terbaru per kolom, dari baris yang SUDAH terurut terbaru dulu."""
+    keluar: list[tuple[str, str]] = []
+    for label, kolom in _KOLOM_MUTU:
+        for b in baris:
+            v = getattr(b, kolom, None)
+            if v is not None:
+                keluar.append((label, _persen(v)))
+                break
+    return keluar
 
 
 async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
@@ -211,16 +337,25 @@ async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
         .where(MillingQcLog.milling_process_id == proc_id)
         .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
     )).scalars().all()
-    keluar: list[tuple[str, str]] = []
-    for label, kolom in (("Kadar air", "kadar_air"),
-                         ("Butir patah", "broken_persen"),
-                         ("Susut", "susut_persen")):
-        for b in baris:
-            v = getattr(b, kolom, None)
-            if v is not None:
-                keluar.append((label, _persen(v)))
-                break
-    return keluar
+    return _mutu_dari(baris)
+
+
+async def _mutu_banyak(db: AsyncSession, proc_ids) -> dict[int, list]:
+    """`_mutu` untuk banyak proses sekaligus. Satu kueri, bukan satu per lot."""
+    from app.models import MillingQcLog
+
+    ids = list(proc_ids)
+    if not ids:
+        return {}
+    baris = (await db.execute(
+        select(MillingQcLog)
+        .where(MillingQcLog.milling_process_id.in_(ids))
+        .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
+    )).scalars().all()
+    per: dict[int, list] = {}
+    for b in baris:
+        per.setdefault(b.milling_process_id, []).append(b)
+    return {pid: _mutu_dari(per.get(pid, [])) for pid in ids}
 
 
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
@@ -229,13 +364,26 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     Yang sudah habis terkirim tidak ditampilkan: stok adalah apa yang ADA, dan
     daftar yang memuat baris nol mengajari orang melewatkan barisnya.
     """
-    from app.penggilingan.gudang1.services.milling import _pk_breakdown, hitung_rendemen
+    from app.penggilingan.gudang1.services.milling import (
+        hitung_rendemen,
+        pk_breakdown_banyak,
+    )
+
+    proses = list((await db.execute(
+        select(MillingProcess).order_by(MillingProcess.id.desc())
+    )).scalars().all())
+    # Satu panggilan untuk SELURUH proses, bukan empat kueri per proses.
+    # Layar ini membaca setiap giling yang pernah ada, jadi dengan data
+    # setahun gelung lamanya sendirian mengeluarkan ribuan kueri untuk
+    # menghasilkan belasan baris. Temuan QA P-S-02.
+    rincian = await pk_breakdown_banyak(db, [p.id for p in proses])
+    # Nilai QC untuk seluruh lot sekaligus. Satu kueri, bukan satu per lot.
+    peta_mutu = await _mutu_banyak(db, [p.id for p in proses])
+    peta_bahan = await _bahan_banyak(db, proses)
 
     keluar: list[LotPk] = []
-    for proc in (await db.execute(
-        select(MillingProcess).order_by(MillingProcess.id.desc())
-    )).scalars().all():
-        bd = await _pk_breakdown(db, proc.id)
+    for proc in proses:
+        bd = rincian[proc.id]
         # Nol karena HABIS berbeda dari nol karena TAK DICATAT. Yang habis
         # terkirim memang tak perlu didaftar; yang tak pernah dicatat justru
         # harus, karena itulah satu-satunya tempat kelalaiannya kelihatan.
@@ -246,7 +394,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         # `sumber_batch` adalah SATU-SATUNYA jawaban "apa isi lot ini" — yang
         # sama dipakai HPP. Harga yang ikut dikembalikannya sengaja dibuang di
         # sini, bukan disaring di templat: layar ini dilihat operator juga.
-        bahan, kondisi = await _bahan(db, proc)
+        bahan, kondisi = peta_bahan[proc.id]
         keluar.append(LotPk(
             kode=proc.kode_proses,
             tersedia=bd.tersedia,
@@ -264,7 +412,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             rendemen=(None if belum
                       else hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg)),
             kelas=kelas_pk(kondisi),
-            mutu=await _mutu(db, proc.id),
+            mutu=peta_mutu.get(proc.id, []),
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),

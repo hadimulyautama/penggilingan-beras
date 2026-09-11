@@ -25,7 +25,10 @@ def test_menutup_lembar_membersihkan_alamatnya():
     """Semua jalan keluar sama: Batal, Escape, ketukan di luar, dan simpan
     yang berhasil — keempatnya lewat `tutupLembar`."""
     assert "lupakanBuka();" in AKSI
-    badan = AKSI.split("function tutupLembar()")[1].split("}")[0]
+    # Diiris sampai penutup fungsinya, bukan sampai "}" PERTAMA: badan
+    # fungsinya kini memuat `if (...) { ... }` di dalamnya, dan irisan yang
+    # berhenti di kurung dalam melewatkan justru baris yang dicari.
+    badan = AKSI.split("function tutupLembar()")[1].split("\n  }")[0]
     assert "lupakanBuka()" in badan, "jalan keluar yang tak membersihkan alamat"
 
     fn = AKSI.split("function lupakanBuka()")[1].split("\n  }")[0]

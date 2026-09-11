@@ -217,16 +217,26 @@ async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
     yang berangkat duluan, dan jawabannya hampir selalu yang paling lama
     menunggu.
     """
-    procs = (
-        await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
-    ).scalars().all()
+    from app.penggilingan.gudang1.services.milling import (
+        pk_breakdown_banyak,
+        pk_jenis_banyak,
+    )
+
+    procs = list((await db.execute(
+        select(MillingProcess).order_by(MillingProcess.kode_proses)
+    )).scalars().all())
+    # Sisa per proses dihitung sekali untuk semuanya; jenis PK hanya dicari
+    # untuk yang benar-benar punya sisa. Temuan QA P-S-02.
+    rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
+    punya = [p for p in procs if rincian[p.id].tersedia > 0]
+    peta_jenis = await pk_jenis_banyak(db, punya)
+
     items: list[tuple[str, str | None, float, float | None]] = []
-    for p in procs:
-        avail = await pending_transfer_kg(db, p.id)
-        if avail > 0:
-            sejak = p.waktu_selesai or p.waktu_mulai
-            hari = ((now_local() - sejak).total_seconds() / 86400) if sejak else None
-            items.append((p.kode_proses, await pk_jenis(db, p), avail, hari))
+    for p in punya:
+        avail = rincian[p.id].tersedia
+        sejak = p.waktu_selesai or p.waktu_mulai
+        hari = ((now_local() - sejak).total_seconds() / 86400) if sejak else None
+        items.append((p.kode_proses, peta_jenis.get(p.id), avail, hari))
     if not items:
         return "🚚 Lantai PK Gudang 1 kosong — tidak ada yang menunggu dikirim."
     items.sort(key=lambda it: (it[3] is None, -(it[3] or 0)))

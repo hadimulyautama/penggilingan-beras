@@ -977,3 +977,140 @@ async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
     if berubah:
         await db.commit()
     return berubah
+
+
+# ══════════════════ Versi BANYAK-SEKALIGUS (temuan QA P-S-02) ══════════════════
+#
+# Fungsi-fungsi di atas menjawab satu proses giling per panggilan, dan tiap
+# jawaban memakan 2–4 kueri. Layar yang menampilkan seluruh proses karenanya
+# mengeluarkan ribuan kueri: dengan data setahun, Beranda 7.482 kueri (5,2
+# detik), /stok 6.261, /miniapp/dashboard 6.633. Bukan satu kueri yang lambat —
+# melainkan ribuan kueri yang masing-masing cepat.
+#
+# Yang di bawah menjawab pertanyaan yang SAMA untuk sekumpulan proses
+# sekaligus, satu kueri per pertanyaan. Bentuknya sengaja dibuat mengembalikan
+# kamus berkunci id, supaya pemanggilnya berubah sesedikit mungkin: yang tadinya
+# `await _pk_breakdown(db, p.id)` di dalam gelung menjadi `bd[p.id]` di luarnya.
+#
+# Yang satuan TIDAK dihapus: ia masih dipakai jalur yang memang hanya
+# menyangkut satu proses (layar rincian, laporan satu kode), dan di sana ia
+# memang bentuk yang benar.
+
+
+async def progress_banyak(db: AsyncSession, proc_ids) -> dict[int, float | None]:
+    """Progres kumulatif TERAKHIR tiap proses. Satu kueri."""
+    ids = list(proc_ids)
+    if not ids:
+        return {}
+    # Baris terakhir per proses: nomor urut menurut waktu, ambil yang pertama.
+    urut = func.row_number().over(
+        partition_by=MillingProgressLog.milling_process_id,
+        order_by=MillingProgressLog.waktu_update.desc(),
+    ).label("urut")
+    sub = select(
+        MillingProgressLog.milling_process_id.label("pid"),
+        MillingProgressLog.berat_kumulatif_kg.label("kg"),
+        urut,
+    ).where(MillingProgressLog.milling_process_id.in_(ids)).subquery()
+    baris = (await db.execute(
+        select(sub.c.pid, sub.c.kg).where(sub.c.urut == 1)
+    )).all()
+    return {pid: (float(kg) if kg is not None else None) for pid, kg in baris}
+
+
+async def pk_breakdown_banyak(db: AsyncSession, proc_ids) -> dict[int, PkBreakdown]:
+    """`_pk_breakdown` untuk banyak proses. Empat kueri, bukan 4×N."""
+    from app.models import OutgoingItem
+
+    ids = list(proc_ids)
+    if not ids:
+        return {}
+
+    verif = dict((await db.execute(
+        select(MillingProcessVerification.milling_process_id,
+               MillingProcessVerification.berat_output_final_kg)
+        .where(MillingProcessVerification.milling_process_id.in_(ids))
+    )).all())
+    progres = await progress_banyak(db, ids)
+
+    terkirim = dict((await db.execute(
+        select(InternalTransfer.milling_process_id,
+               func.coalesce(func.sum(InternalTransfer.berat_kg), 0))
+        .where(InternalTransfer.milling_process_id.in_(ids),
+               InternalTransfer.status == "terkirim")
+        .group_by(InternalTransfer.milling_process_id)
+    )).all())
+
+    terjual = dict((await db.execute(
+        select(OutgoingItem.milling_process_id,
+               func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .where(OutgoingItem.milling_process_id.in_(ids),
+               OutgoingItem.item_type == "pk_langsung")
+        .group_by(OutgoingItem.milling_process_id)
+    )).all())
+
+    hasil: dict[int, PkBreakdown] = {}
+    for pid in ids:
+        # Angka TERVERIFIKASI menang atas progres operator — urutan yang sama
+        # persis dengan `_produced_pk`, dan sengaja: dua jalur yang menjawab
+        # berbeda untuk proses yang sama adalah bug yang tak terlihat.
+        v = verif.get(pid)
+        produced = float(v) if v is not None else float(progres.get(pid) or 0.0)
+        dikirim = float(terkirim.get(pid, 0) or 0)
+        dijual = float(terjual.get(pid, 0) or 0)
+        hasil[pid] = PkBreakdown(
+            produced, dikirim, max(produced - dikirim - dijual, 0.0))
+    return hasil
+
+
+async def pk_jenis_banyak(db: AsyncSession, procs) -> dict[int, str | None]:
+    """`pk_jenis` untuk banyak proses. Tiga kueri, bukan 3×N."""
+    daftar = list(procs)
+    if not daftar:
+        return {}
+    ids = [p.id for p in daftar]
+
+    sumber = (await db.execute(
+        select(MillingProcessSource.milling_process_id,
+               MillingProcessSource.drying_lot_id,
+               MillingProcessSource.purchase_batch_id)
+        .where(MillingProcessSource.milling_process_id.in_(ids))
+    )).all()
+    per_proses: dict[int, list[tuple[int | None, int | None]]] = {}
+    for pid, lot_id, batch_id in sumber:
+        per_proses.setdefault(pid, []).append((lot_id, batch_id))
+
+    # Proses lama tanpa baris silo masih memakai penunjuk tunggalnya.
+    for p in daftar:
+        per_proses.setdefault(p.id, [(p.drying_lot_id, p.purchase_batch_id)])
+
+    lot_ids = {l for pasangan in per_proses.values() for l, _ in pasangan if l}
+    batch_ids = {b for pasangan in per_proses.values() for _, b in pasangan if b}
+
+    # Batch di balik tiap lot pengeringan.
+    lot_batch: dict[int, list[int]] = {}
+    if lot_ids:
+        for lot_id, batch_id in (await db.execute(
+            select(DryingLotBatch.drying_lot_id, DryingLotBatch.purchase_batch_id)
+            .where(DryingLotBatch.drying_lot_id.in_(lot_ids))
+        )).all():
+            lot_batch.setdefault(lot_id, []).append(batch_id)
+            batch_ids.add(batch_id)
+
+    kondisi_batch = dict((await db.execute(
+        select(PurchaseBatch.id, PurchaseBatch.kondisi_gabah)
+        .where(PurchaseBatch.id.in_(batch_ids))
+    )).all()) if batch_ids else {}
+
+    hasil: dict[int, str | None] = {}
+    for pid, pasangan in per_proses.items():
+        kondisi: list[str] = []
+        for lot_id, batch_id in pasangan:
+            ids_batch = lot_batch.get(lot_id, []) if lot_id else (
+                [batch_id] if batch_id else [])
+            for bid in ids_batch:
+                k = (kondisi_batch.get(bid) or "").strip().lower()
+                if k and k not in kondisi:
+                    kondisi.append(k)
+        hasil[pid] = kelas_pk([k for k in ("basah", "kering") if k in kondisi])
+    return hasil

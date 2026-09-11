@@ -27,7 +27,11 @@ from app.models import (
     Supplier,
 )
 from app.penggilingan.gudang1.services.drying import _latest_log
-from app.penggilingan.gudang1.services.milling import _pk_breakdown, _latest_progress, pk_jenis
+from app.penggilingan.gudang1.services.milling import (
+    pk_breakdown_banyak,
+    pk_jenis_banyak,
+    progress_banyak,
+)
 from app.penggilingan.gudang1.services.silo import (
     _active_storage,
     _g1_warehouse_id,
@@ -155,30 +159,46 @@ async def _giling_berjalan(db: AsyncSession, now) -> list[dict]:
             select(MillingProcess).where(MillingProcess.status == "proses").order_by(MillingProcess.id)
         )
     ).scalars().all()
-    out = []
-    for proc in procs:
-        prog = await _latest_progress(db, proc.id)
-        out.append({
-            "kode": proc.kode_proses,
-            "pk_kg": prog,
-            "jenis": await pk_jenis(db, proc),
-            "jam": _jam(now, proc.waktu_mulai),
-        })
-    return out
+    # Dua pertanyaan untuk SELURUH proses sekaligus, bukan dua kueri per
+    # proses. Lihat `milling.pk_jenis_banyak` untuk sebabnya.
+    prog = await progress_banyak(db, [p.id for p in procs])
+    jenis = await pk_jenis_banyak(db, procs)
+    return [{
+        "kode": proc.kode_proses,
+        "pk_kg": prog.get(proc.id),
+        "jenis": jenis.get(proc.id),
+        "jam": _jam(now, proc.waktu_mulai),
+    } for proc in procs]
 
 
 async def _stok_pk(db: AsyncSession) -> dict:
+    """PK siap kirim, per proses giling.
+
+    Dulu: SELURUH proses giling dibaca tanpa saringan apa pun, lalu empat
+    kueri dikeluarkan untuk masing-masing di dalam gelung. Dengan data
+    setahun itu ribuan kueri untuk menghitung stok yang isinya belasan baris —
+    dan hampir semuanya menjawab "tersedia 0" untuk proses yang sudah lama
+    habis terkirim. Temuan QA P-S-02.
+
+    Sekarang: satu kueri untuk daftar prosesnya, lalu tujuh kueri untuk
+    seluruh sisanya, berapa pun banyak prosesnya.
+    """
     procs = (
         await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
     ).scalars().all()
+    rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
+    # Jenis PK hanya dicari untuk proses yang MASIH punya stok — itu pekerjaan
+    # paling mahal di sini, dan proses yang stoknya nol tak muncul di layar
+    # mana pun.
+    punya = [p for p in procs if rincian[p.id].tersedia > 0]
+    peta_jenis = await pk_jenis_banyak(db, punya)
+
     total = 0.0
     per_jenis: dict[str, float] = {}
     per_proses = []
-    for proc in procs:
-        bd = await _pk_breakdown(db, proc.id)
-        if bd.tersedia <= 0:
-            continue
-        jenis = await pk_jenis(db, proc) or "?"
+    for proc in punya:
+        bd = rincian[proc.id]
+        jenis = peta_jenis.get(proc.id) or "?"
         total += bd.tersedia
         per_jenis[jenis] = per_jenis.get(jenis, 0.0) + bd.tersedia
         hari = None
@@ -215,27 +235,24 @@ async def _tugas(db: AsyncSession) -> dict:
             select(MillingProcess).where(MillingProcess.status == "selesai").order_by(MillingProcess.id)
         )
     ).scalars().all()
-    qc_output = []
-    verifikasi_output = []
-    for proc in selesai:
-        qc = (
-            await db.execute(
-                select(func.count()).select_from(MillingQcLog).where(
-                    MillingQcLog.milling_process_id == proc.id
-                )
-            )
-        ).scalar_one()
-        if not qc:
-            qc_output.append({"kode": proc.kode_proses})
-        v = (
-            await db.execute(
-                select(MillingProcessVerification.berat_output_final_kg).where(
-                    MillingProcessVerification.milling_process_id == proc.id
-                )
-            )
-        ).scalars().first()
-        if not v:
-            verifikasi_output.append({"kode": proc.kode_proses})
+    # Dua pertanyaan, dua kueri — bukan dua kueri PER PROSES. Daftar ini
+    # memuat seluruh giling yang pernah selesai, jadi dengan data setahun
+    # gelung lamanya sendirian mengeluarkan ribuan kueri. Temuan QA P-S-02.
+    ids = [p.id for p in selesai]
+    sudah_qc = set((await db.execute(
+        select(MillingQcLog.milling_process_id)
+        .where(MillingQcLog.milling_process_id.in_(ids))
+        .group_by(MillingQcLog.milling_process_id)
+    )).scalars()) if ids else set()
+    sudah_verif = set((await db.execute(
+        select(MillingProcessVerification.milling_process_id)
+        .where(MillingProcessVerification.milling_process_id.in_(ids),
+               MillingProcessVerification.berat_output_final_kg.isnot(None))
+    )).scalars()) if ids else set()
+
+    qc_output = [{"kode": p.kode_proses} for p in selesai if p.id not in sudah_qc]
+    verifikasi_output = [{"kode": p.kode_proses} for p in selesai
+                         if p.id not in sudah_verif]
     return {
         "verifikasi_harga": verifikasi_harga,
         "qc_output": qc_output,

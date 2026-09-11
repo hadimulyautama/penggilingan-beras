@@ -37,6 +37,12 @@ PERAN = (
 
 
 
+#: Sebanyak-banyaknya orang tanpa akun yang ditampilkan sekaligus. Daftar
+#: yang lebih panjang dari ini tak bisa dipakai memilih sambil berdiri, dan
+#: yang dicari orang selalu beberapa nama teratas.
+MAKS_BELUM = 50
+
+
 def _saran_username(nama: str) -> str:
     """Tebakan nama pengguna dari nama orang: kata pertama, huruf kecil.
 
@@ -97,13 +103,21 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
             select(ProduksiAkun).options(selectinload(ProduksiAkun.user))
             .order_by(ProduksiAkun.username)
         )).scalars().all()
+        # ── Disaring di SQL, dan dibatasi ──
+        #
+        # Dulu seluruh tabel orang ditarik ke memori lalu disaring di Python.
+        # Itu baik-baik saja selagi orangnya belasan; ia berhenti baik-baik
+        # saja tanpa ada yang menyadarinya. Batasnya juga bukan hiasan: daftar
+        # sepanjang ratusan nama tak bisa dipakai memilih sambil berdiri, dan
+        # yang dicari orang di layar ini selalu beberapa nama teratas.
+        # Temuan QA P-S-08.
         sudah = {a.user_id for a in akun_list}
-        belum = [
-            u for u in (await db.execute(
-                select(User).where(User.status == "aktif").order_by(User.nama)
-            )).scalars().all()
-            if u.id not in sudah
-        ]
+        q = select(User).where(User.status == "aktif")
+        if sudah:
+            q = q.where(User.id.notin_(sudah))
+        belum = list((await db.execute(
+            q.order_by(User.nama).limit(MAKS_BELUM)
+        )).scalars())
     return {"akun_list": akun_list, "kembali": "/", "PERAN": PERAN,
             "belum": [{"id": u.id, "nama": u.nama, "role": u.role,
                        "saran": _saran_username(u.nama)} for u in belum],

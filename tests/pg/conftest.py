@@ -165,3 +165,44 @@ async def pemasok(pg):
             await db.commit()
             await db.refresh(s)
         return s
+
+
+@pytest.fixture
+def hitung_kueri():
+    """Hitung berapa KUERI yang dikeluarkan sepotong kode.
+
+    Bukan berapa lama ia berjalan: waktu berubah-ubah menurut mesin dan
+    beban, sedangkan jumlah kueri adalah sifat kodenya sendiri. N+1 tak
+    pernah terlihat sebagai "lambat" di laptop dengan tiga baris data — ia
+    baru muncul setelah setahun data menumpuk, di tempat yang tak bisa
+    dicoba ulang. Angka inilah yang bisa dijaga sejak sekarang.
+
+        async with hitung_kueri() as n:
+            await sesuatu()
+        assert n.jumlah < 50
+    """
+    from contextlib import asynccontextmanager
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    class _Hitung:
+        def __init__(self):
+            self.jumlah = 0
+            self.perintah: list[str] = []
+
+    @asynccontextmanager
+    async def _pakai():
+        h = _Hitung()
+
+        def _catat(conn, cursor, statement, parameters, context, executemany):
+            h.jumlah += 1
+            h.perintah.append(statement.split("\n")[0][:120])
+
+        event.listen(Engine, "before_cursor_execute", _catat)
+        try:
+            yield h
+        finally:
+            event.remove(Engine, "before_cursor_execute", _catat)
+
+    return _pakai

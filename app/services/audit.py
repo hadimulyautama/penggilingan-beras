@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
@@ -100,13 +100,27 @@ async def daftar(
                         ActivityLog.table_name.ilike(pola)))
 
     baris = (await db.execute(q.limit(batas))).scalars().all()
-    semua = len((await db.execute(
-        select(ActivityLog.id).where(ActivityLog.table_name != "undo")
-    )).scalars().all())
 
+    # ── Dihitung di SQL, bukan di memori ──
+    #
+    # Dulu: seluruh id tabel audit ditarik ke Python hanya untuk diukur
+    # panjangnya. Tabel itulah yang paling cepat tumbuh di aplikasi ini —
+    # tiap pencatatan menambah satu baris — jadi biayanya naik terus tanpa
+    # ada yang menyadarinya sampai layar audit berhenti bisa dibuka.
+    # Temuan QA P-S-08.
+    semua = (await db.execute(
+        select(func.count(ActivityLog.id)).where(ActivityLog.table_name != "undo")
+    )).scalar_one()
+
+    # Nama hanya untuk pelaku yang benar-benar MUNCUL di halaman ini, bukan
+    # seluruh isi tabel orang.
+    pelaku = {log.changed_by for log in baris if log.changed_by}
     nama = {
         u.id: u.nama
-        for u in (await db.execute(select(User))).scalars().all()
+        for u in (await db.execute(
+            select(User).where(User.id.in_(pelaku)) if pelaku
+            else select(User).where(User.id.is_(None))
+        )).scalars().all()
     }
     keluar = []
     for log in baris:

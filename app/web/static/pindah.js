@@ -71,6 +71,20 @@
       });
     },
 
+    /* ── Melepas bendera "sedang mengetik" ──
+     *
+     * Bendera itu menahan segar-otomatis supaya ketikan yang belum tersimpan
+     * tak hilang, dan sampai 11 September 2026 ia hanya dilepas saat halaman
+     * BERPINDAH. Jadi sesudah menyentuh satu isian lalu menekan Batal,
+     * segar-otomatis mati diam-diam sampai orangnya kebetulan pindah halaman:
+     * sepuluh denyut menghasilkan nol permintaan, dan layarnya makin lama
+     * makin basi tanpa satu tanda pun. Temuan QA P-K-19.
+     *
+     * Dipanggil `aksi.js` saat lembar ditutup — di sanalah ketikan yang
+     * ditahan itu benar-benar berhenti ada.
+     */
+    lupakanSentuhan: function () { disentuh = false; },
+
     /* ── Menyegarkan DIAM-DIAM ──
      *
      * Bedanya dengan `segarkan`: yang ini boleh MEMBATALKAN diri sendiri.
@@ -98,7 +112,12 @@
 
       tanyaPenanda().then(function (p) {
         var sama = (p !== null && penanda !== null && p === penanda);
-        if (p !== null) { penanda = p; }
+        if (p !== null) {
+          penanda = p;
+          // Penanda terbaca berarti server terjangkau dan angkanya memang
+          // masih yang ini — itu sama segarnya dengan menarik ulang halaman.
+          tandaiSegar();
+        }
         if (sama) { return; }        // tak ada yang berubah: berhenti di sini
         lanjutkan();
       });
@@ -173,6 +192,7 @@
     disentuh = false;   // halamannya berganti — ketikan lamanya memang pergi
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
+    tandaiSegar();
 
     /* Skrip yang datang lewat innerHTML tidak dijalankan peramban —
        harus dibuatkan ulang elemennya. Tanpa ini layar Catat dan Laporan
@@ -263,6 +283,31 @@
 
   document.addEventListener("input", function () { disentuh = true; }, true);
   document.addEventListener("change", function () { disentuh = true; }, true);
+
+  /* ── Kesegaran data, terlihat ──
+   *
+   * Layar ini menyegarkan dirinya diam-diam, dan kadang TIDAK — saat ada
+   * lembar terbuka, saat orangnya sedang mengetik, atau saat jaringan mati.
+   * Tanpa tanda apa pun, operator tak punya cara membedakan "angka ini baru"
+   * dari "angka ini sudah setengah jam tak berubah", dan keputusan diambil
+   * di atas data basi tanpa ada yang menyadarinya. Temuan QA P-K-19.
+   *
+   * Ditulis kecil di sudut, bukan sebagai peringatan: ia informasi, bukan
+   * masalah — dan peringatan yang muncul tiap menit berhenti dibaca.
+   */
+  function tandaiSegar() {
+    var el = document.getElementById("segar");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "segar";
+      el.className = "segar";
+      document.body.appendChild(el);
+    }
+    var t = new Date();
+    el.textContent = "diperbarui " +
+      String(t.getHours()).padStart(2, "0") + ":" +
+      String(t.getMinutes()).padStart(2, "0");
+  }
 
   function lembarTerbuka() {
     var l = document.getElementById("lembar");

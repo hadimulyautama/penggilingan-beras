@@ -71,7 +71,11 @@ def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():
     yang menentukan tumpukan mana yang harus ditahan."""
     from app.services import stok
 
-    bahan = kode_saja(stok._bahan)
+    # Bentuk barisnya kini di `_baris_bahan`, satu tempat yang dipakai versi
+    # satuan MAUPUN versi banyak-sekaligus — dua tempat yang menyusun baris
+    # yang sama akan berbeda suatu hari. Ketiganya diperiksa bersama.
+    bahan = (kode_saja(stok._bahan) + kode_saja(stok._baris_bahan)
+             + kode_saja(stok._bahan_banyak))
     assert "kode_batch" in bahan and "nama_supplier" in bahan
     assert "berat_total_kg" in bahan, "bobot bahan tak disebut"
     # Proses lama tanpa baris sumber tetap dijawab, lewat sumber yang sama
@@ -95,6 +99,8 @@ def test_harga_tak_ikut_terbawa_ke_layar_stok():
     from app.services import stok
 
     assert "_harga" in kode_saja(stok._bahan), "harga tak dibuang secara eksplisit"
+    # Versi banyak-sekaligus tak pernah menyentuh tabel harga sama sekali.
+    assert "harga" not in kode_saja(stok._bahan_banyak).lower()
     for uang in ("harga_per_kg", "hpp", "rupiah"):
         assert uang not in TPL.read_text().lower(), f"{uang} bocor ke layar Stok"
 
@@ -105,7 +111,7 @@ def test_angka_stok_dipinjam_bukan_dihitung_ulang():
     from app.services import stok
 
     fn = inspect.getsource(stok.pk_gudang1)
-    assert "_pk_breakdown" in fn
+    assert "pk_breakdown_banyak" in fn
     assert "func.sum" not in fn, "stok dihitung ulang di sini"
 
 
@@ -132,14 +138,18 @@ def test_bahan_didaftar_satu_baris_per_batch():
     """
     from app.services import stok
 
-    fn = kode_saja(stok._bahan)
+    fn = kode_saja(stok._bahan) + kode_saja(stok._baris_bahan)
+    banyak = kode_saja(stok._bahan_banyak)
     assert "_kg(b.berat_total_kg)" in fn, "bobot per batch tak disebut"
     assert "berat_kg" not in fn.replace("berat_total_kg", ""), \
         "berat muatan silo dipakai lagi sebagai berat batch"
-    # Satu batch tak boleh terdaftar dua kali walau muncul di dua sumber.
+    # Satu batch tak boleh terdaftar dua kali walau muncul di dua sumber —
+    # aturan yang sama harus berlaku di KEDUA versi.
     assert "terlihat" in fn and "b.id in terlihat" in fn
+    assert "terlihat" in banyak and "b.id in terlihat" in banyak
     # Kode pengeringannya ikut disebut — itu mata rantai ke gabahnya.
     assert "DryingLotBatch" in fn, "bahan lewat pengeringan tak ditelusuri"
+    assert "DryingLotBatch" in banyak
 
     teks = TPL.read_text()
     assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
@@ -448,8 +458,13 @@ def test_mutu_dibaca_per_kolom_bukan_per_baris_terakhir():
     """
     from app.services import stok
 
-    fn = kode_saja(stok._mutu)
-    assert "MillingQcLog.waktu.desc()" in fn, "log tak diurut dari yang terbaru"
+    # Aturannya kini di `_mutu_dari`, dipakai versi satuan dan versi
+    # banyak-sekaligus. Urutan terbaru-dulu tetap ditentukan kuerinya.
+    fn = kode_saja(stok._mutu_dari) + str(stok._KOLOM_MUTU)
+    assert "MillingQcLog.waktu.desc()" in kode_saja(stok._mutu), \
+        "log tak diurut dari yang terbaru"
+    assert "MillingQcLog.waktu.desc()" in kode_saja(stok._mutu_banyak), \
+        "versi banyak tak diurut dari yang terbaru"
     # Satu lingkaran per KOLOM, berhenti pada nilai pertama yang terisi.
     assert "kadar_air" in fn and "broken_persen" in fn and "susut_persen" in fn
     assert "if v is not None" in fn and "break" in fn

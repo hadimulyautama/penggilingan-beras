@@ -297,3 +297,38 @@ Berlaku untuk modul mana pun, sekarang maupun yang ditambahkan nanti:
 6. **Sinkronisasi Kledo** untuk kontak supplier lewat `kledo_contact_id`
 
 *Dokumen ini peta, bukan aturan mati. Bila kenyataan berubah, dokumen ini yang diperbarui lebih dulu — sebelum kodenya menyimpang diam-diam.*
+
+### 8.1 Langkah berikutnya untuk realtime: pg_notify → SSE (USULAN, belum dikerjakan)
+
+Denyut sepuluh detik ke `/miniapp/keadaan` sudah jauh lebih murah daripada
+menarik halaman penuh tiap tiga puluh detik: jawabannya 23 byte, halamannya
+14 kilobyte. Tetapi ia tetap BERTANYA — dan sebagian besar jawabannya "tidak
+ada yang berubah". Enam perangkat di gudang berarti ±2.000 permintaan sia-sia
+per hari.
+
+Langkah berikutnya membalik arahnya:
+
+1. **`pg_notify` saat sesuatu tercatat.** Pemicunya sudah ada di satu tempat:
+   setiap pencatatan menulis baris `activity_logs`. Satu trigger di tabel itu
+   mengirimkan `NOTIFY keadaan, '<gudang>:<id>'` — tanpa satu baris pun
+   ditambahkan di aplikasi, jadi jalur yang lupa memberi tahu tidak mungkin
+   ada.
+2. **Satu pendengar per proses aplikasi**, memegang koneksi `LISTEN` sendiri
+   dan meneruskan ke antrean di memori.
+3. **`GET /miniapp/aliran` sebagai Server-Sent Events**, satu sambungan
+   panjang per perangkat. Perangkat tak lagi bertanya; ia diberi tahu.
+   Perubahan terlihat dalam hitungan ratusan milidetik alih-alih sepuluh
+   detik, dan lalu lintasnya mendekati nol saat pabrik sedang tenang.
+
+Tiga hal yang harus diputuskan sebelum mengerjakannya, dan justru itu sebabnya
+ini belum dikerjakan:
+
+- **Railway memutus sambungan menganggur.** SSE perlu denyut sendiri (komentar
+  `:ping` tiap ±25 detik), dan itu mengembalikan sebagian lalu lintas yang
+  hendak dihemat — meski tetap jauh lebih kecil.
+- **Satu replika.** `LISTEN` per proses aman hari ini karena prosesnya satu.
+  Bila kelak lebih dari satu, tiap proses mendengar semuanya — itu benar,
+  tetapi perlu disengaja, bukan ditemukan.
+- **Jalur mundurnya harus tetap ada.** Denyut sepuluh detik jangan dicabut
+  saat SSE dinyalakan; ia yang menyelamatkan perangkat yang sambungan
+  panjangnya diputus jaringan gudang tanpa memberi tahu siapa pun.
