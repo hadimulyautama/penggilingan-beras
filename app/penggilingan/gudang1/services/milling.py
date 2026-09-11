@@ -7,6 +7,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.services.angka import AngkaError, angka_wajar
 from app.database import input_time, now_local
 from app.models import (
     DryingLot,
@@ -212,6 +213,13 @@ async def log_progress(
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
     if berat_kumulatif is None:
         raise MillingError("Sebutkan berat PK kumulatifnya, mis. `LOT-... sudah 5 ton`.")
+    # Dijaga DI SINI juga, bukan cuma di model permintaan: lapisan AI dan
+    # sebagian rute memanggil layanan ini langsung, dan NaN yang lolos di satu
+    # tempat akan menular ke seluruh kolom yang menjumlahkannya.
+    try:
+        berat_kumulatif = angka_wajar(berat_kumulatif, "Berat PK kumulatif")
+    except AngkaError as e:
+        raise MillingError(str(e)) from None
 
     db.add(
         MillingProgressLog(

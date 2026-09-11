@@ -11,7 +11,12 @@ formulirnya.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+
+from app.services.angka import (Persen, PersenOpsional, Positif,
+                                PositifOpsional)
 
 from app.peran import PERAN_ADMIN_KEATAS, can_see_financials, can_transfer_pk
 from app.penggilingan.gudang1.services.drying import MODE_DRYER
@@ -1425,21 +1430,21 @@ class KadarAirReq(BaseModel):
     #: mengarang tiga di antaranya, dan catatan karangan lebih buruk daripada
     #: catatan yang kurang lengkap.
     #: Bentuk BARU — daftar, sebanyak titik yang benar-benar diukur.
-    tes: list[float] | None = None
+    tes: list[Persen] | None = None
     #: Bentuk LAMA — empat kolom bernomor. Dipertahankan karena skrip dan
     #: tautan tersimpan masih mengirimnya; keduanya digabung di endpoint.
-    tes_1: float | None = None
-    tes_2: float | None = None
-    tes_3: float | None = None
-    tes_4: float | None = None
+    tes_1: PersenOpsional = None
+    tes_2: PersenOpsional = None
+    tes_3: PersenOpsional = None
+    tes_4: PersenOpsional = None
     #: Yang terbaca di mesin. Tidak ikut dirata-ratakan.
-    indikator: float | None = None
+    indikator: PersenOpsional = None
     #: Target boleh diubah sambil mencatat kadar air.
-    target_baru: float | None = None
+    target_baru: PersenOpsional = None
     #: Bentuk LAMA — satu angka. Dipertahankan supaya pemanggil lama (bot,
     #: tautan tersimpan) tidak patah; diperlakukan sebagai bacaan mesin,
     #: persis seperti dulu.
-    kadar_air: float | None = None
+    kadar_air: PersenOpsional = None
 
 
 @router.post("/actions/kadar-air")
@@ -1490,7 +1495,7 @@ async def act_kadar_air(req: KadarAirReq, user: User = Depends(pengguna_aksi)) -
 
 class HasilGilingReq(BaseModel):
     kode_proses: str
-    berat_kumulatif: float
+    berat_kumulatif: Positif
 
 
 @router.post("/actions/hasil-giling")
@@ -1516,7 +1521,7 @@ class MulaiPengeringanReq(BaseModel):
     dryer_id: int | None = None
     #: Sampai berapa muatan ini dikeringkan. Bisa berbeda antar muatan, jadi
     #: ditanyakan tiap kali — bukan diambil diam-diam dari setelan aplikasi.
-    target_kadar_air: float | None = None
+    target_kadar_air: PersenOpsional = None
     #: Mode yang DISETEL DI MESIN. Konfirmasi, bukan perintah: aplikasi ini
     #: tidak tersambung ke dryer.
     mode_dryer: str | None = None
@@ -1566,7 +1571,7 @@ class SelesaiPengeringanReq(BaseModel):
     """
 
     kode_lot: str
-    kadar_air: float | None = None
+    kadar_air: PersenOpsional = None
 
 
 class UbahTargetReq(BaseModel):
@@ -1767,7 +1772,7 @@ class SelesaiGilingReq(BaseModel):
     #: Hasil akhir PK (kg). Boleh kosong HANYA bila operator sudah pernah
     #: mencatat hasilnya lewat "Perbarui hasil giling"; layanan yang memutuskan,
     #: bukan di sini — satu aturan, satu tempat.
-    berat_akhir: float | None = None
+    berat_akhir: PositifOpsional = None
 
 
 @router.post("/actions/selesai-giling")
@@ -1819,7 +1824,7 @@ async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(pengguna_ak
 
 class VerifyOutputReq(BaseModel):
     kode_proses: str
-    berat_output: float | None = None
+    berat_output: PositifOpsional = None
 
 
 @router.post("/actions/verify-output")
@@ -1844,9 +1849,9 @@ async def act_verify_output(req: VerifyOutputReq, user: User = Depends(pengguna_
 
 class QcGilingReq(BaseModel):
     kode_proses: str
-    kadar_air: float | None = None
-    broken: float | None = None
-    susut: float | None = None
+    kadar_air: PersenOpsional = None
+    broken: PersenOpsional = None
+    susut: PersenOpsional = None
 
 
 @router.post("/actions/qc-giling")
@@ -1879,7 +1884,7 @@ class CatatPkLuarReq(BaseModel):
     # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     jenis_pk: str
-    kadar_air: float | None = None
+    kadar_air: PersenOpsional = None
 
 
 @router.get("/actions/timbang-pk-aktif")
@@ -1941,9 +1946,9 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
 
 class QcPkLuarReq(BaseModel):
     kode_batch: str
-    kadar_air: float | None = None
-    broken: float | None = None
-    penyusutan: float | None = None
+    kadar_air: PersenOpsional = None
+    broken: PersenOpsional = None
+    penyusutan: PersenOpsional = None
     butir_kuning: str | None = None
     catatan_lab: str | None = None
 
@@ -1983,8 +1988,8 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
 class HargaPkLuarReq(BaseModel):
     kode_batch: str
     metode: str
-    nilai: float | None = None
-    potongan_kg: float | None = None
+    nilai: PositifOpsional = None
+    potongan_kg: PositifOpsional = None
     potongan_alasan: str | None = None
 
 
@@ -2017,7 +2022,7 @@ async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(pengguna_a
 class TransferReq(BaseModel):
     kode_proses: str
     tujuan: str
-    berat: float | None = None
+    berat: PositifOpsional = None
 
 
 @router.post("/actions/transfer-pk")
@@ -2093,7 +2098,7 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
 class HasilPenyosohanReq(BaseModel):
     kode_proses: str
     jenis: str
-    berat_kumulatif: float
+    berat_kumulatif: Positif
 
 
 @router.post("/actions/hasil-penyosohan")
@@ -2118,7 +2123,7 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
 class SelesaiPenyosohanReq(BaseModel):
     kode_proses: str
     silo: str  # A / B
-    sisa: float
+    sisa: Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
 
 @router.post("/actions/selesai-penyosohan")

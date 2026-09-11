@@ -616,8 +616,20 @@ async def masukkan_pk_luar(
     diverifikasi bila saat masuk belum ada)."""
     if not kode:
         raise Gudang2Error("Sebutkan kode PK luarnya, contoh: `masukkan PKL-... ke silo B`")
+    # ── Batch-nya DIKUNCI sebelum diperiksa ──
+    #
+    # Tanpa kunci, dua permintaan yang datang bersamaan sama-sama menemukan
+    # "belum pernah dimasukkan" lalu sama-sama menulis: PK luar masuk Gudang 2
+    # DUA KALI, dan stoknya bertambah dua kali lipat. QA mengukurnya 20 dari
+    # 20 percobaan. Temuan P-K-04.
+    #
+    # Pemeriksaan duplikatnya diulang SESUDAH kunci didapat — kalau diperiksa
+    # sebelum, kuncinya tak menjaga apa pun.
     batch = (
-        await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
+        await db.execute(
+            select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode)
+            .with_for_update()
+        )
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")

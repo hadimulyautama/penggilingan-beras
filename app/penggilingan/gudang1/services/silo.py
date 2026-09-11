@@ -257,8 +257,22 @@ async def masuk_silo(
         # berarti dryer macet setiap kali kedua silo terisi — dan kemacetan
         # itulah yang melahirkan tumpukan gabah, hal yang justru ingin
         # dihindari.
+        # ── Lotnya DIKUNCI sebelum diperiksa ──
+        #
+        # Tanpa kunci, dua operator yang memasukkan lot yang sama ke silo
+        # berbeda sama-sama lolos: keduanya memeriksa "belum ada di silo mana
+        # pun" sebelum salah satunya menulis. Hasilnya satu lot berada di Silo
+        # A dan Silo B sekaligus — keadaan yang tak mungkin ada di gudang.
+        # Temuan QA P-K-05.
+        #
+        # Indeks unik parsial di migrasi 0040 menutupnya sebagai lapisan
+        # terakhir; kunci ini yang membuat penolakannya jadi kalimat yang bisa
+        # dibaca, bukan IntegrityError yang muncul sebagai galat 500.
         lot = (
-            await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode_lot))
+            await db.execute(
+                select(DryingLot).where(DryingLot.kode_lot == kode_lot)
+                .with_for_update()
+            )
         ).scalars().first()
         if lot is None:
             raise SiloError(f"Pengeringan {kode_lot} tidak ditemukan.")
