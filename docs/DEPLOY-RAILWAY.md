@@ -66,22 +66,55 @@ migrasi baru jalan otomatis via entrypoint.
 
 ## Hapus data dummy (setelah fase pengembangan)
 
-Selama sebulan dev, data dummy menumpuk. Saat siap produksi, kosongkan **data
-transaksi** tapi pertahankan **data master** (users, gudang, silo, mesin
-pengering, supplier):
+Lewat layar **Mode Uji** di dalam aplikasi: Pengaturan → Pengelolaan sistem →
+Mode uji. Super Admin saja, dan hanya menyala bila `MODE_UJI` dinyalakan di
+environment.
 
-1. Di proyek Railway → service **Postgres** → tab **Data** (query runner), atau
-   dari laptop: `railway connect Postgres` (buka psql).
-2. Tempel & jalankan isi file **`scripts/reset_data.sql`**.
-   - Ingin supplier ikut dikosongkan? Hapus `'suppliers'` dari daftar `keep` di
-     SQL itu.
-3. Selesai — skema tetap, tabel transaksi kosong, siap data asli.
+Jangan mengosongkan basis data lewat SQL yang ditempel ke query runner.
 
-> Skema tidak dihapus, jadi **tidak perlu** migrasi ulang. `RESTART IDENTITY`
-> otomatis mereset penomoran id & kode harian (GB/LOT/MIL) dari 1 lagi.
+> ### ⚠️ Kenapa tak ada lagi skrip SQL di sini
+>
+> Dokumen ini dulu menyuruh menempelkan `scripts/reset_data.sql` ke query
+> runner Railway. Skrip itu men-`TRUNCATE ... CASCADE` **semua** tabel kecuali
+> enam — dan **basis datanya dipakai bersama** produksi, timbangan, dan
+> Kantor.
+>
+> Yang ikut terhapus, seluruhnya, dan tak satu pun disebut di skripnya:
+>
+> - semua tabel `timbangan_*` — tiket timbang dan akun petugas;
+> - semua tabel `kantor_*`, termasuk `kantor_config` yang memuat
+>   **kill-switch dan batas biaya AI**;
+> - `produksi_akun` — sesudahnya **tak ada seorang pun yang bisa masuk**;
+> - `pelanggan` dan `setelan_pabrik`;
+> - `alembic_version_core`, `_kantor`, `_timbangan` — ketiga aplikasi lupa
+>   migrasi mana yang sudah terpasang, lalu deploy berikutnya gagal.
+>
+> `CASCADE` merambat keluar lewat foreign key yang MASUK, ke tabel yang kode
+> produksi bahkan tak mengenal namanya. Karena itu skripnya dihapus, bukan
+> diperbaiki: pada perintah yang menghapus data, pilihan berbahaya yang masih
+> tersedia adalah pilihan yang cepat atau lambat akan diambil.
 
-Alternatif paling bersih: saat go-live, tambah **Postgres baru** di Railway,
-arahkan `DATABASE_URL` ke situ — data dummy ditinggal di DB lama.
+Mode Uji aman karena tiga hal yang tak dimiliki skrip itu:
+
+1. **Daftar tabelnya dibatasi** pada milik produksi saja, diambil dari metadata
+   aplikasi — bukan "semua tabel kecuali beberapa". Tabel milik aplikasi lain
+   tak pernah masuk jangkauan, termasuk yang belum ada saat ini ditulis.
+2. **`DELETE`, bukan `TRUNCATE ... CASCADE`.** DELETE menghormati foreign key
+   baris demi baris dan tak bisa merambat keluar. Sebelum menghapus, ia
+   memeriksa tautan masuk dari luar dan **membatalkan** bila ada yang wajib
+   isi.
+3. **Menolak di basis data yang sungguh dipakai.** Bila ada satu saja tiket
+   timbang yang bukan buatan pembuat data uji, seluruh penghapusan dibatalkan
+   sebelum satu baris pun hilang.
+
+`alembic_version*` tidak pernah disentuh Mode Uji. Skema dan riwayat migrasi
+tetap utuh, jadi tak perlu migrasi ulang.
+
+> **Jangan menambah Postgres baru untuk memisahkan data dummy.** Produksi,
+> Timbangan, dan Kantor saling membaca tabel yang sama — memecah basis datanya
+> memutus tautan tiket timbang ke pembelian, dan Kantor kehilangan sumber
+> angkanya. Untuk menguji, pakai environment terpisah berikut basis datanya
+> sendiri, bukan basis data kedua di environment yang sama.
 
 ## Catatan
 

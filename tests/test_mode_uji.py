@@ -9,6 +9,7 @@ menangkapnya sebelum terkirim.
 from __future__ import annotations
 
 import inspect
+import re
 
 import pytest
 
@@ -187,15 +188,237 @@ def test_data_uji_menolak_jembatan_timbang_yang_dipakai():
 
     assert hasattr(data_uji, "JembatanDipakai")
     sumber = inspect.getsource(data_uji.isi)
-    assert "_jembatan_sungguhan(db)" in sumber
+    assert "jembatan_sungguhan(db)" in sumber
     assert "raise JembatanDipakai(" in sumber
     # Diperiksa SEBELUM satu baris pun ditulis.
-    assert sumber.index("_jembatan_sungguhan") < sumber.index("_pemasok(db)")
+    assert sumber.index("jembatan_sungguhan") < sumber.index("_pemasok(db)")
 
-    penjaga = inspect.getsource(data_uji._jembatan_sungguhan)
+    penjaga = inspect.getsource(data_uji.jembatan_sungguhan)
     assert "kode NOT LIKE 'TRX-UJI-%'" in penjaga
 
     # Dan tombolnya menyampaikan alasannya, bukan jatuh dengan galat 500.
     tombol = inspect.getsource(mode_uji.ulangi)
     assert "data_uji.JembatanDipakai" in tombol
     assert "galat=str(e)" in tombol
+
+
+# ══════════════════════════════════════════════════════════════════════
+# X-05 — penjaga berjalan SEBELUM penghapusan, bukan sesudahnya
+# ══════════════════════════════════════════════════════════════════════
+
+class _Hasil:
+    """Jawaban kueri secukupnya: `_kosongkan` cuma memakai tiga bentuk ini."""
+
+    def __init__(self, nilai: int = 0, baris: list | None = None):
+        self._nilai = nilai
+        self._baris = baris or []
+
+    def scalar_one(self) -> int:
+        return self._nilai
+
+    def scalar(self) -> int:
+        return self._nilai
+
+    def all(self) -> list:
+        return self._baris
+
+
+class _SesiPalsu:
+    """Sesi yang MENCATAT apa yang dijalankan, bukan menjalankannya.
+
+    Berkas uji ini tak punya basis data, dan yang perlu dibuktikan justru
+    URUTANNYA: penjaga dijalankan sebelum satu baris pun dihapus. Sesi palsu
+    menjawab itu dengan pasti — kalau tak ada satu pun `DELETE` yang tercatat,
+    tak ada yang terhapus.
+    """
+
+    def __init__(self, jejak: list[str], tiket_sungguhan: int):
+        self.jejak = jejak
+        self.tiket_sungguhan = tiket_sungguhan
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def execute(self, klausa, params=None):
+        sql = " ".join(str(klausa).split())
+        self.jejak.append(sql)
+        if "timbangan_transaksi" in sql and "NOT LIKE" in sql:
+            return _Hasil(self.tiket_sungguhan)
+        return _Hasil(0, [])
+
+    async def commit(self):
+        self.jejak.append("COMMIT")
+
+
+def _jalankan_kosongkan(monkeypatch, tiket_sungguhan: int) -> tuple[str | None, list[str]]:
+    """Jalankan `_kosongkan` tanpa basis data; kembalikan pesan & jejak SQL."""
+    import asyncio
+
+    from app.services import seed as _seed
+
+    jejak: list[str] = []
+    monkeypatch.setattr(mode_uji, "SessionLocal",
+                        lambda: _SesiPalsu(jejak, tiket_sungguhan))
+    # `seed_master` di ekor `_kosongkan` membuka sesinya SENDIRI — kalau tak
+    # ikut diganti, ujinya menempel ke Postgres sungguhan dan gagal karena
+    # alasan yang sama sekali lain.
+    async def _diam():
+        jejak.append("SEED_MASTER")
+    monkeypatch.setattr(_seed, "seed_master", _diam)
+    return asyncio.run(mode_uji._kosongkan()), jejak
+
+
+def test_satu_tiket_sungguhan_membatalkan_SEBELUM_menghapus(monkeypatch):
+    """X-05. Penjaga "ada tiket timbang sungguhan" dulu baru berjalan saat
+    MENGISI, sesudah `_kosongkan()` selesai. Hasilnya: seluruh batch sungguhan
+    dan jejak auditnya terhapus, penolakannya datang belakangan, dan tiket
+    aslinya muncul lagi sebagai belum diproses — bisa dibukukan dua kali.
+
+    Satu tiket sungguhan saja sudah cukup untuk membatalkan, dan pembatalan
+    itu harus terjadi sebelum satu baris pun hilang.
+    """
+    pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=1)
+
+    assert pesan, "penghapusan diteruskan padahal ada tiket sungguhan"
+    hapus = [s for s in jejak if s.startswith("DELETE FROM")]
+    assert not hapus, f"{len(hapus)} tabel sudah dihapus sebelum ditolak"
+    # Tautan dari luar pun tak boleh dilepas: melepas `purchase_batch_id`
+    # membuat tiket sungguhan kembali tampak belum diproses.
+    assert not [s for s in jejak if s.startswith("UPDATE")]
+    assert "COMMIT" not in jejak
+
+
+def test_tanpa_tiket_sungguhan_penghapusan_tetap_jalan(monkeypatch):
+    """Penjaga yang menolak segalanya bukan penjaga, ia kerusakan. Di basis
+    data yang memang khusus menguji, tombolnya harus tetap bekerja."""
+    pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=0)
+
+    assert pesan is None, pesan
+    dihapus = [s for s in jejak if s.startswith("DELETE FROM")]
+    assert dihapus
+    assert "COMMIT" in jejak
+
+    # Dan yang dihapus memang HANYA milik produksi. Diperiksa dari perintah
+    # yang sungguh dijalankan, bukan dari daftar niatnya: daftar bisa benar
+    # sementara yang dikirim ke basis data sudah lain.
+    nama = {s.split('"')[1] for s in dihapus}
+    assert not [n for n in nama if n.startswith(("timbangan_", "kantor_"))]
+    assert "activity_logs" not in nama, "jejak audit ikut terhapus"
+    assert "produksi_akun" not in nama and "users" not in nama
+    assert not [n for n in nama if n.startswith("alembic_version")]
+
+
+def test_penjaga_dipasang_di_kosongkan_bukan_di_tiap_rute():
+    """DUA tombol memanggil `_kosongkan` — "Hapus data uji" dan "Kembalikan
+    data uji". Penjaga yang disalin ke tiap rute cepat atau lambat akan
+    tertinggal di salah satunya, persis seperti yang sudah terjadi pada
+    daftar tabelnya dulu."""
+    import inspect
+
+    from tests.bantu import kode_saja
+
+    kode = kode_saja(mode_uji._kosongkan)
+    assert "jembatan_sungguhan" in kode
+    # Sebelum tautan dilepas DAN sebelum satu DELETE pun disusun.
+    assert kode.index("jembatan_sungguhan") < kode.index("UPDATE")
+    assert kode.index("jembatan_sungguhan") < kode.index("DELETE FROM")
+
+    # Dan kedua rute memang lewat sana, bukan punya jalannya sendiri.
+    for rute in (mode_uji.hapus, mode_uji.ulangi):
+        assert "await _kosongkan()" in inspect.getsource(rute), rute.__name__
+
+
+def test_activity_logs_tak_pernah_ikut_terhapus():
+    """Jejak audit bersifat TAMBAH-SAJA. Ia satu-satunya catatan siapa
+    mengerjakan apa, dan menghapusnya bersama data uji berarti membuang bukti
+    yang justru dipakai menelusuri kesalahan yang sedang diperiksa."""
+    from app.web.mode_uji import DIPERTAHANKAN, _tabel_dihapus
+
+    assert "activity_logs" in DIPERTAHANKAN
+    assert "activity_logs" not in _tabel_dihapus()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# X-01 — tak ada lagi jalan TRUNCATE ... CASCADE di basis data bersama
+# ══════════════════════════════════════════════════════════════════════
+
+def test_skrip_reset_data_sql_sudah_tiada():
+    """X-01. Skrip itu men-TRUNCATE ... CASCADE SEMUA tabel kecuali enam, di
+    basis data yang dipakai bersama tiga aplikasi. Yang ikut kosong: seluruh
+    tabel timbangan, seluruh kantor_* termasuk kill-switch & batas biaya AI,
+    `produksi_akun` sehingga tak ada yang bisa masuk, `pelanggan`,
+    `setelan_pabrik`, dan tiga tabel versi migrasi.
+
+    Dokumen deploy menyuruh menjalankannya DI BASIS DATA PRODUKSI.
+    """
+    import pathlib
+
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    assert not (akar / "scripts/reset_data.sql").exists()
+
+    # Larangan butanya tak berguna: `simulasi_gabah.py` memang mengosongkan
+    # segalanya, dan itu memang gunanya. Yang membedakannya dari skrip yang
+    # dibuang adalah PAGARNYA — ia menolak berjalan kecuali alamat basis
+    # datanya jelas-jelas milik simulasi, sedangkan yang dibuang justru
+    # disuruh dijalankan di basis data produksi oleh dokumennya sendiri.
+    #
+    # Jadi yang dijaga di sini aturannya, bukan katanya: siapa pun boleh
+    # mengosongkan, asal tak bisa salah alamat.
+    for berkas in (akar / "scripts").rglob("*.py"):
+        isi = berkas.read_text(errors="ignore")
+        if "TRUNCATE" not in isi.upper():
+            continue
+        assert "_IZIN" in isi, (
+            f"{berkas.name} mengosongkan tabel tanpa pagar alamat basis data")
+        # Isi pagarnya HANYA alamat loopback. Satu entri yang menunjuk ke
+        # mesin lain sudah cukup membuat pagarnya jadi hiasan, dan itu tak
+        # akan terlihat dari nama berkasnya.
+        tuple_izin = re.search(r"_IZIN\s*=\s*\(([^)]*)\)", isi)
+        assert tuple_izin, f"{berkas.name}: _IZIN tak terbaca"
+        alamat = re.findall(r"[\"']([^\"']+)[\"']", tuple_izin.group(1))
+        assert alamat, f"{berkas.name}: pagar kosong"
+        for a in alamat:
+            assert a.startswith(("127.0.0.1:", "localhost:")), (
+                f"{berkas.name} berpagar ke alamat bukan-lokal: {a}")
+    for berkas in (akar / "scripts").rglob("*.sql"):
+        assert False, f"{berkas.name} — SQL tempel-jalan tak lagi disimpan di sini"
+
+
+def test_dokumen_deploy_tak_lagi_menyuruh_mengosongkan_db_bersama():
+    """Dokumen yang menyuruh perbuatan berbahaya sama berbahayanya dengan
+    kodenya — ia dibaca orang yang justru sedang tidak yakin.
+
+    Yang diperiksa PERINTAHNYA, bukan penyebutan katanya. Dokumen barunya
+    memang menyebut `TRUNCATE ... CASCADE` dan `reset_data.sql` — untuk
+    menerangkan kenapa keduanya dibuang, berikut daftar apa saja yang dulu
+    ikut terhapus. Uji yang menolak penyebutan itu menghukum penjelasan yang
+    baik, dan itu pelajaran yang sudah dibayar sekali di repo ini lewat
+    `tests/bantu.py::kode_saja`.
+
+    Jadi baris kutipan (`>`, tempat peringatan tinggal) dan baris bernomor
+    yang menerangkan Mode Uji dibuang dulu; sisanya yang menjadi perintah.
+    """
+    import pathlib
+
+    doc = (pathlib.Path(__file__).resolve().parents[1]
+           / "docs/DEPLOY-RAILWAY.md").read_text()
+
+    perintah = "\n".join(
+        b for b in doc.splitlines()
+        if not b.lstrip().startswith(">")
+        and "**`DELETE`, bukan" not in b
+    )
+    assert "reset_data.sql" not in perintah
+    assert "TRUNCATE" not in perintah.upper()
+    assert "RESTART IDENTITY" not in perintah.upper()
+    # Menambah Postgres baru memecah basis data yang justru harus satu:
+    # produksi, timbangan, dan Kantor saling membaca tabel yang sama.
+    assert "Postgres baru" not in perintah
+    # Dan pembacanya diarahkan ke jalan yang aman.
+    assert "Mode Uji" in doc
+    # Peringatannya sendiri HARUS ada — skrip yang hilang tanpa keterangan
+    # akan ditulis ulang oleh orang berikutnya yang mencarinya.
+    assert "reset_data.sql" in doc, "kenapa ia dibuang tak diterangkan"

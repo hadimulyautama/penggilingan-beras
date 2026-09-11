@@ -93,8 +93,13 @@ class JembatanDipakai(Exception):
     """Basis datanya melayani jembatan timbang yang sungguh dipakai."""
 
 
-async def _jembatan_sungguhan(db: AsyncSession) -> int:
+async def jembatan_sungguhan(db: AsyncSession) -> int:
     """Berapa tiket timbang di sini yang BUKAN buatan pembuat data uji.
+
+    Tanpa garis bawah: sejak 11 September 2026 ia dipakai DUA modul — di sini
+    sebelum mengisi, dan di `mode_uji._kosongkan` sebelum menghapus. Aturannya
+    satu, jadi tempatnya pun harus satu; disalin ke dua tempat, keduanya akan
+    berbeda pada perubahan berikutnya.
 
     `timbangan_transaksi` milik aplikasi Timbangan, dan aplikasi itu membaca
     basis data yang sama. Tiket karangan yang ditulis ke sini tidak berhenti
@@ -230,7 +235,7 @@ async def isi(akun: ProduksiAkun) -> list[str]:
     pemanggil ikut berubah tanpa sebab.
     """
     async with SessionLocal() as db:
-        dipakai = await _jembatan_sungguhan(db)
+        dipakai = await jembatan_sungguhan(db)
         if dipakai:
             raise JembatanDipakai(
                 f"Dibatalkan: basis data ini melayani jembatan timbang yang "

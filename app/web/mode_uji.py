@@ -94,6 +94,16 @@ DIPERTAHANKAN = frozenset({
     # melainkan mereset pengaman biaya kedua aplikasi. Namanya "kantor_*"
     # peninggalan saat kedua sistem masih satu repo.
     "kantor_config", "kantor_llm_usage",
+    # Jejak audit bersifat TAMBAH-SAJA. Ia satu-satunya catatan siapa
+    # mengerjakan apa dan kapan, dan justru dialah yang dibuka orang saat
+    # mencari tahu kenapa angkanya aneh. Menghapusnya bersama data uji berarti
+    # membuang bukti pada saat bukti itu paling dibutuhkan — dan tak ada
+    # satu pun cara mengembalikannya.
+    #
+    # Barisnya tak menjadi sampah sesudah data uji hilang: `record_id` bukan
+    # foreign key, jadi tak ada tautan yang menggantung. Yang tersisa catatan
+    # bahwa sesuatu pernah dikerjakan, dan itu memang benar.
+    "activity_logs",
 })
 
 KALIMAT = "HAPUS DATA UJI"
@@ -173,6 +183,38 @@ async def _kosongkan() -> str | None:
     """
     tabel = _tabel_dihapus()
     async with SessionLocal() as db:
+        # ── PENJAGA PERTAMA, sebelum satu baris pun disentuh ──
+        #
+        # Aturan yang sama sudah ada di `data_uji.isi`, tetapi di sana ia
+        # berjalan saat MENGISI — yaitu SESUDAH tombol "Kembalikan data uji"
+        # selesai menghapus. Urutan itu membalik seluruh maksudnya: seluruh
+        # batch sungguhan dan jejak auditnya sudah hilang, penolakannya datang
+        # belakangan, dan yang dibaca orang adalah "dibatalkan" di layar yang
+        # sudah kosong.
+        #
+        # Lebih buruk dari kehilangan itu sendiri: tiket timbang yang tadinya
+        # sudah dibukukan kembali tampak BELUM diproses, karena tautannya ikut
+        # dilepas. Truk yang sama bisa dibukukan dua kali, dan tak ada satu
+        # layar pun yang menyebut itu mungkin terjadi.
+        #
+        # Ditaruh di sini, bukan di kedua rutenya, karena DUA tombol memanggil
+        # fungsi ini. Penjaga yang disalin ke tiap rute cepat atau lambat akan
+        # tertinggal di salah satunya — persis yang sudah terjadi pada daftar
+        # tabelnya dulu.
+        from app.services.data_uji import jembatan_sungguhan
+
+        dipakai = await jembatan_sungguhan(db)
+        if dipakai:
+            return (
+                f"Dibatalkan: basis data ini melayani jembatan timbang yang "
+                f"sedang dipakai — ada {dipakai} tiket timbang sungguhan di "
+                "dalamnya. Menghapus di sini membuang catatan pembelian yang "
+                "sudah dibukukan, dan tiket aslinya kembali tampak belum "
+                "diproses sehingga truk yang sama bisa dibukukan dua kali. "
+                "Mode Uji hanya boleh dijalankan di basis data yang khusus "
+                "untuk menguji."
+            )
+
         tautan = await tautan_masuk(db)
         wajib = [t for t in tautan if t["wajib"]]
         if wajib:

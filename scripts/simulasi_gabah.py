@@ -73,8 +73,16 @@ async def _kosongkan(db) -> None:
         DO $$
         DECLARE t text;
         BEGIN
+          -- SELURUH tabel versi migrasi dipertahankan, bukan cuma satu.
+          -- Basis data ini dipakai bersama: ada alembic_version_core,
+          -- _kantor, dan _timbangan di sebelahnya. Mengosongkan ketiganya
+          -- membuat aplikasi lain lupa migrasi mana yang sudah terpasang,
+          -- lalu jalan berikutnya gagal dengan DuplicateTable — kegagalan
+          -- yang terbacanya seperti kerusakan skema, bukan seperti akibat
+          -- skrip simulasi yang dijalankan semalam.
           FOR t IN SELECT tablename FROM pg_tables
-                    WHERE schemaname = 'public' AND tablename <> 'alembic_version'
+                    WHERE schemaname = 'public'
+                      AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
           LOOP
             EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
           END LOOP;
