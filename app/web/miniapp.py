@@ -86,6 +86,19 @@ async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
     return {"n": f"{n}.{t[0]}.{t[1]}"}
 
 
+async def _id_jejak(user_id: int) -> int | None:
+    """Id jejak yang barusan ditulis — dipakai tombol BATALKAN di kabar.
+
+    Aksi satu-ketuk menyimpan tanpa konfirmasi, dan itu memang gunanya:
+    operator memegang telepon satu tangan sambil mengarahkan truk. Yang
+    ditambahkan jalan mundurnya, bukan penghalang di depannya.
+    """
+    from app.services.undo import id_log_terakhir
+
+    async with SessionLocal() as db:
+        return await id_log_terakhir(db, user_id)
+
+
 # ─────────────────────────── Dashboard ───────────────────────────
 
 def _clean(s: str) -> str:
@@ -900,7 +913,7 @@ async def act_tempatkan_gabah(req: PindahTumpukanReq,
     pesan = f"✓ *{batch.kode_batch}* ditempatkan → {tempat}."
     if peringatan:
         pesan += "\n" + peringatan
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": pesan, "log_id": await _id_jejak(user.id)}
 
 
 @router.get("/actions/drying-active")
@@ -1402,7 +1415,7 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
     pesan = f"✓ Gabah *{kode}* ({kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": pesan, "log_id": await _id_jejak(user.id)}
 
 
 class KadarAirReq(BaseModel):

@@ -1215,3 +1215,23 @@ details.padat > .anak { margin: 0 12px 12px; }
   margin-top: 10px;
   text-align: center;
 }
+
+/* ── Tombol BATALKAN di dalam kabar ──
+   Aksi satu-ketuk menyimpan tanpa konfirmasi; yang ditambahkan jalan
+   mundurnya, bukan penghalang di depannya. Tombolnya menempel di kanan kabar
+   supaya ibu jari yang baru saja menekan kartu tak perlu berpindah jauh. */
+.kabar__batal {
+  margin-left: auto;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  opacity: .85;
+  cursor: pointer;
+}
+.kabar__batal:disabled { opacity: .5; }

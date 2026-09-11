@@ -28,6 +28,30 @@ class ActivityLog(Base):
     )
     alasan_perubahan: Mapped[str | None] = mapped_column(Text)
 
+    # ── Tag aksi: APA yang dikerjakan, disebut saat mengerjakannya ──
+    #
+    # Pembatalan dulu MENEBAK maksud sebuah catatan dari nama tabel, aksi, dan
+    # nama kolomnya. Tebakan itu salah pada kasus yang paling mudah keliru:
+    # "ubah target kadar air" dan "gabungkan batch ke lot" sama-sama UPDATE
+    # pada `drying_lots`, jadi keduanya jatuh ke penangan yang sama — dan
+    # membatalkan perubahan target justru MENGELUARKAN gabah dari lot yang
+    # sedang dikeringkan.
+    #
+    # Boleh kosong: baris lama tak punya tag, dan pembatalannya jatuh ke
+    # tebakan lama. Yang baru menyebut maksudnya sendiri.
+    aksi: Mapped[str | None] = mapped_column(String(40), index=True)
+
+    # ── Sudah dibatalkan? ──
+    #
+    # Pembatalan dulu MENGHAPUS baris ini, melanggar ARSITEKTUR §6: jejak audit
+    # bersifat tambah-saja. Ia satu-satunya catatan siapa mengerjakan apa, dan
+    # menghapusnya membuang bukti persis pada saat bukti itu dicari.
+    #
+    # Ditandai, bukan dihapus — dan penandanya juga yang mencegah pembatalan
+    # ganda.
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dibatalkan_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
 
 class Notification(Base):
     """Notifikasi otomatis 🔴🟡🟢. Eskalasi 24 jam ke admin. Laporan harian 21:00."""

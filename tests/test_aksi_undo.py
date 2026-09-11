@@ -95,7 +95,7 @@ def test_tiap_tabel_yang_bisa_dibatalkan_punya_label_manusia():
 
 def test_kalimat_pratinjau_menyebut_apa_kapan_dan_siapa():
     from datetime import datetime
-    p = svc.Pratinjau(tabel="purchase_batches", label="gabah masuk",
+    p = svc.Pratinjau(log_id=7, tabel="purchase_batches", label="gabah masuk",
                       ringkas="PB-20260902-01", oleh="Rusdi",
                       waktu=datetime(2026, 9, 2, 14, 32), didukung=True)
     kalimat = au._kalimat(p)

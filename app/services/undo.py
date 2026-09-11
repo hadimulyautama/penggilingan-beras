@@ -624,7 +624,35 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int) -> str:
     return f"✓ Dibatalkan: pemasukan PK ke {lok}."
 
 
+#: Tag aksi → penangan pembatalan. Disebut saat aksinya DIBUAT, jadi tak ada
+#: yang perlu ditebak saat membatalkan.
+_PENANGAN_TAG = {
+    "ubah_target": "_undo_ubah_target",
+    "silo_masuk": "_undo_masuk_silo_baris",
+    "silo_gabung": "_undo_silo_merge_baris",
+}
+
+
 async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
+    # ── Tag lebih dulu, tebakan belakangan ──
+    #
+    # Tebakan dari nama tabel & kolom salah persis pada kasus yang paling
+    # mudah keliru: "ubah target kadar air" dan "gabungkan batch ke lot"
+    # sama-sama UPDATE pada `drying_lots`, jadi keduanya jatuh ke penangan
+    # yang sama. Membatalkan perubahan target justru MENGELUARKAN gabah dari
+    # lot yang sedang dikeringkan, dan targetnya tak kembali.
+    #
+    # Tebakan lamanya DIPERTAHANKAN untuk baris yang dibuat sebelum tag ada —
+    # mereka memang tak punya tag, dan menolak membatalkannya berarti
+    # mematikan tombol untuk pekerjaan hari ini.
+    tag = getattr(log, "aksi", None)
+    if tag == "ubah_target":
+        return await _undo_ubah_target(db, log)
+    if tag == "silo_masuk":
+        return await _undo_masuk_silo_baris(db, log.record_id)
+    if tag == "silo_gabung":
+        return await _undo_silo_merge_baris(db, log.record_id)
+
     t, rid, act = log.table_name, log.record_id, log.action
     if t == "drying_lots" and act == "INSERT":
         return await _undo_lot_create(db, rid)
@@ -672,6 +700,89 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
     )
 
 
+async def _undo_ubah_target(db: AsyncSession, log: ActivityLog) -> str:
+    """Kembalikan target kadar air ke nilai sebelumnya — itu saja.
+
+    Dulu perubahan target jatuh ke `_undo_lot_merge`, yang mengeluarkan batch
+    TERAKHIR dari lot. Pratinjaunya berkata "lot pengeringan · 13.0"; yang
+    terjadi adalah GB-02 kembali ke status "baru" tanpa lot, sementara
+    targetnya tetap 13.0. Dua kerusakan sekaligus dari satu ketukan.
+    """
+    lot = await _lot_or_error(db, log.record_id)
+    lama = log.old_value
+    lot.target_kadar_air = float(lama) if lama not in (None, "", "None") else None
+    sebut = f"{float(lama):g}%" if lot.target_kadar_air is not None else "kosong"
+    return f"Target kadar air {lot.kode_lot} dikembalikan ke {sebut}."
+
+
+async def _undo_masuk_silo_baris(db: AsyncSession, storage_id: int) -> str:
+    """Batalkan SATU baris penyimpanan — yang ini, bukan yang terbaru.
+
+    `record_id` dulu berisi id SILO, jadi pembatalan mengambil baris terbaru
+    di silo itu: milik siapa pun yang terakhir mengisi. Budi membatalkan
+    entrinya sendiri dan yang hilang entri Sari.
+    """
+    baris = await db.get(SiloStorage, storage_id)
+    if baris is None:
+        raise UndoError("Baris penyimpanan itu sudah tidak ada.")
+    await _tolak_bila_sudah_dipakai(db, baris)
+    silo = await db.get(Silo, baris.silo_id)
+    if baris.drying_lot_id:
+        await _revert_lot_batches(db, baris.drying_lot_id, "selesai")
+    if baris.purchase_batch_id:
+        b = await db.get(PurchaseBatch, baris.purchase_batch_id)
+        if b is not None:
+            b.status_batch = "baru"
+    await db.delete(baris)
+    return f"Pemasukan ke Silo {silo.nama_silo if silo else '?'} dibatalkan."
+
+
+async def _undo_silo_merge_baris(db: AsyncSession, storage_id: int) -> str:
+    """Sama, untuk penggabungan."""
+    return await _undo_masuk_silo_baris(db, storage_id)
+
+
+async def _tolak_bila_sudah_dipakai(db: AsyncSession, baris) -> None:
+    """Tolak pembatalan bila isinya sudah TERPAKAI di hilir.
+
+    Temuan QA P-K-10: pembatalan tak pernah melihat apa yang terjadi
+    sesudahnya. Membatalkan pemasukan silo yang isinya sudah digiling
+    meninggalkan proses giling yang sumbernya tak ada — dan angka rendemennya
+    terbaca melambung tanpa ada yang tahu sebabnya.
+    """
+    from app.models import MillingProcessSource
+
+    dipakai = (await db.execute(
+        select(MillingProcessSource.milling_process_id)
+        .where(MillingProcessSource.silo_storage_id == baris.id).limit(1)
+    )).scalars().first()
+    if dipakai is not None:
+        proses = await db.get(MillingProcess, dipakai)
+        raise UndoError(
+            f"Tak bisa dibatalkan: isinya sudah dipakai giling "
+            f"{proses.kode_proses if proses else f'#{dipakai}'}. "
+            "Batalkan gilingnya lebih dulu, atau perbaiki lewat koreksi."
+        )
+
+
+async def id_log_terakhir(db: AsyncSession, user_id: int) -> int | None:
+    """Id jejak terakhir milik satu orang — untuk tombol BATALKAN di kabar.
+
+    Dipanggil tepat sesudah aksinya tersimpan, jadi yang ditemukan memang
+    baris yang barusan ditulis. Id-nya dibawa ke layar supaya tombol BATALKAN
+    membatalkan CATATAN ITU, bukan "yang terakhir" — antara menekan dan
+    membatalkan, rekan di pos sebelah bisa saja sudah mencatat sesuatu.
+    """
+    return (await db.execute(
+        select(ActivityLog.id)
+        .where(ActivityLog.changed_by == user_id,
+               ActivityLog.table_name != "undo",
+               ActivityLog.dibatalkan_pada.is_(None))
+        .order_by(ActivityLog.waktu_perubahan.desc(), ActivityLog.id.desc())
+        .limit(1)
+    )).scalars().first()
+
+
 async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
     """Tindakan terakhir yang akan dibatalkan — SATU kueri untuk dua pemakai.
 
@@ -683,6 +794,10 @@ async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
     q = select(ActivityLog).where(
         ActivityLog.action.in_(["INSERT", "UPDATE"]),
         ActivityLog.table_name != "undo",
+        # Yang sudah dibatalkan bukan lagi "tindakan terakhir". Dulu ia hilang
+        # dari tabel sehingga tak perlu disaring; sekarang ia tinggal sebagai
+        # jejak, dan jejak bukan pekerjaan.
+        ActivityLog.dibatalkan_pada.is_(None),
     )
     if actor_ids is not None:
         if not actor_ids:
@@ -696,6 +811,7 @@ async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
 class Pratinjau:
     """Apa yang akan dibatalkan — dibaca sebelum ada yang berubah."""
 
+    log_id: int
     tabel: str
     label: str
     ringkas: str
@@ -722,6 +838,7 @@ async def pratinjau_terakhir(
     )).scalars().first()
     ringkas = (log.new_value or "").strip() or f"#{log.record_id}"
     return Pratinjau(
+        log_id=log.id,
         tabel=log.table_name,
         label=label_tabel(log.table_name),
         ringkas=ringkas.split("|")[0].strip()[:60],
@@ -733,13 +850,38 @@ async def pratinjau_terakhir(
 
 async def undo_last(
     db: AsyncSession, *, actor, actor_ids: list[int] | None, scope_label: str | None,
+    log_id: int | None = None,
 ) -> str:
-    """Batalkan tindakan TERAKHIR dari actor_ids. None = semua user.
+    """Batalkan tindakan yang DITAMPILKAN — bukan "yang terakhir" lagi.
 
-    Mengambil tindakan paling akhir (apa pun tabelnya, kecuali jejak 'undo'),
-    lalu membatalkannya. Bila tindakan terakhir itu memang belum didukung undo,
-    beri tahu jelas — JANGAN diam-diam membatalkan tindakan lama yang lain."""
-    log = await _log_terakhir(db, actor_ids)
+    `log_id` datang dari pratinjau yang dibaca orangnya. Dulu tak ada: layar
+    menampilkan kalimatnya, POST hanya mengirim lingkupnya, dan fungsi ini
+    mencari "aksi terakhir" SEKALI LAGI saat mengeksekusi. Bila ada aksi lain
+    masuk di antara melihat dan menekan — dan di pos yang sibuk itu biasa —
+    yang dibatalkan adalah aksi itu. Orang membaca satu kalimat lalu
+    membatalkan kalimat yang lain, tanpa satu pun tanda.
+
+    Barisnya DIKUNCI lalu diperiksa ulang: masih yang terbaru dalam lingkup
+    ini? Kalau tidak, ditolak sambil menyebut apa yang menyusul.
+    """
+    if log_id is not None:
+        log = (await db.execute(
+            select(ActivityLog).where(ActivityLog.id == log_id).with_for_update()
+        )).scalars().first()
+        if log is None:
+            raise UndoError("Tindakan itu sudah tidak ada.")
+        if log.dibatalkan_pada is not None:
+            raise UndoError("Tindakan itu sudah dibatalkan sebelumnya.")
+        terbaru = await _log_terakhir(db, actor_ids)
+        if terbaru is not None and terbaru.id != log.id:
+            raise UndoError(
+                f"Sudah berubah: yang terakhir sekarang "
+                f"'{(terbaru.new_value or '').split('|')[0].strip()[:50]}'. "
+                "Buka lagi daftarnya supaya yang dibatalkan benar-benar yang "
+                "Anda maksud."
+            )
+    else:
+        log = await _log_terakhir(db, actor_ids)
     if log is None:
         suffix = f" oleh {scope_label}" if scope_label else ""
         raise UndoError(f"Tidak ada input terakhir yang bisa dibatalkan{suffix}.")
@@ -769,12 +911,23 @@ async def undo_last(
         )
 
     msg = await _undo_one(db, log)
-    # Cegah double-undo: hapus entri yang diproses + catat jejak undo.
+    # ── Jejaknya DITANDAI, bukan dihapus ──
+    #
+    # Dulu `db.delete(log)`, dan itu melanggar ARSITEKTUR §6: jejak audit
+    # bersifat tambah-saja. Ia satu-satunya catatan siapa mengerjakan apa, dan
+    # menghapusnya membuang bukti persis pada saat bukti itu dicari — "kenapa
+    # angka kemarin berubah?" tak bisa dijawab bila jejaknya ikut hilang
+    # bersama yang dibatalkan.
+    #
+    # Penandanya sekaligus mencegah pembatalan ganda, tugas yang dulu dipikul
+    # penghapusan.
     t, rid = log.table_name, log.record_id
-    await db.delete(log)
+    log.dibatalkan_pada = now_local()
+    log.dibatalkan_oleh = actor.id
     await log_activity(
         db, table_name="undo", record_id=rid, action="UNDO",
         changed_by=actor.id, new_value=f"undo {t}#{rid}",
+        aksi="undo",
     )
     await db.commit()
     return msg

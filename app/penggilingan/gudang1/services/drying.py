@@ -651,6 +651,9 @@ async def log_moisture(
             db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
             changed_by=user.id, field_name="target_kadar_air",
             old_value=str(target_lama), new_value=str(target_baru),
+            # Ditandai, kalau tidak pembatalannya jatuh ke `_undo_lot_merge`
+            # dan justru MENGELUARKAN batch dari lot yang sedang dikeringkan.
+            aksi="ubah_target",
         )
 
     isi = [x for x in (sampel or []) if x is not None]
@@ -948,6 +951,9 @@ async def ubah_target(
         db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
         changed_by=user.id, field_name="target_kadar_air",
         old_value=str(lama), new_value=str(float(target)),
+        # Lihat catatan di `log_moisture`: tanpa tag ini, membatalkan
+        # perubahan target mengeluarkan gabah dari lotnya.
+        aksi="ubah_target",
     )
     await db.commit()
     await db.refresh(lot)

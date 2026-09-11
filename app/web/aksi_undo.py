@@ -74,8 +74,12 @@ async def undo_terakhir(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if p is None:
                 continue
             awalan = LINGKUP_LABEL[lingkup]
+            # Nilainya membawa ID LOG yang ditampilkan, bukan sekadar
+            # lingkupnya. Tanpa itu, POST mencari "aksi terakhir" sekali lagi
+            # saat mengeksekusi — dan bila ada aksi lain menyusul di antara
+            # melihat dan menekan, yang dibatalkan adalah aksi itu.
             if p.didukung:
-                pilihan.append({"value": lingkup,
+                pilihan.append({"value": f"{lingkup}:{p.log_id}",
                                 "label": f"{awalan}: {_kalimat(p)}"})
             else:
                 pilihan.append({
@@ -91,8 +95,10 @@ class UndoReq(BaseModel):
 
 @router.post("/actions/undo")
 async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
-    lingkup = (req.lingkup or "").strip()
-    if lingkup.startswith("x:"):
+    mentah = (req.lingkup or "").strip()
+    lingkup, _, sid = mentah.partition(":")
+    log_id = int(sid) if sid.isdigit() else None
+    if mentah.startswith("x:"):
         raise HTTPException(
             400,
             "Tindakan terakhir itu belum bisa dibatalkan otomatis. "
@@ -109,7 +115,7 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
             ids, label = await svc.resolve_actor_ids(
                 db, scope=lingkup, nama=None, self_id=user.id)
             pesan = await svc.undo_last(
-                db, actor=u, actor_ids=ids, scope_label=label)
+                db, actor=u, actor_ids=ids, scope_label=label, log_id=log_id)
         except svc.UndoError as e:
             raise galat(e, "Gagal membatalkan input terakhir.")
 

@@ -59,6 +59,53 @@
     }
   }
 
+  /* ── Kabar dengan jalan mundur ──
+   *
+   * Aksi satu-ketuk — "Ke Silo A" di kartu — langsung menyimpan tanpa
+   * konfirmasi, dan itu memang gunanya: operator memegang telepon satu tangan
+   * sambil mengarahkan truk. Menambahkan dialog "yakin?" akan membayar
+   * kecepatan itu dengan ketukan yang sama seringnya.
+   *
+   * Yang ditambahkan jalan mundurnya, bukan penghalang di depannya: kabar
+   * "Tersimpan" membawa tombol BATALKAN selama delapan detik, dan tombol itu
+   * membatalkan TEPAT catatan yang barusan dibuat — id-nya dibawa dari
+   * jawaban server, bukan dicari ulang sebagai "yang terakhir".
+   *
+   * Delapan detik, bukan dua-setengah seperti kabar biasa: yang perlu
+   * disadari orang di sini bukan "tersimpan" melainkan "salah silo", dan itu
+   * baru terasa sesudah ia mengangkat kepala dari layar. */
+  function kabarBisaBatal(pesan, logId) {
+    var t = $("kabar");
+    t.innerHTML = '<div class="kabar__utama">'
+      + '<span class="kabar__ikon" aria-hidden="true">\u2713</span>'
+      + '<span class="kabar__teks">' + esc(pesan || "Tersimpan") + "</span>"
+      + '<button type="button" class="kabar__batal">BATALKAN</button></div>';
+    t.className = "kabar kabar--ok";
+    t.style.display = "block";
+    clearTimeout(t._t);
+    t._t = setTimeout(function () { t.style.display = "none"; }, 8000);
+
+    t.querySelector(".kabar__batal").onclick = async function (e) {
+      e.stopPropagation();
+      this.disabled = true;
+      this.textContent = "membatalkan…";
+      try {
+        var hasil = await kirim("/miniapp/actions/undo", { lingkup: "saya:" + logId });
+        t.style.display = "none";
+        if (window.PINDAH && PINDAH.segarkan) {
+          PINDAH.segarkan(function () { kabar(hasil.pesan || "Dibatalkan", "ok"); });
+        } else {
+          kabar(hasil.pesan || "Dibatalkan", "ok");
+        }
+      } catch (err) {
+        kabar(String(err), "err");
+      }
+    };
+    /* Menekan kabarnya sendiri tetap menutup — tetapi TIDAK lewat tombolnya,
+       karena orang yang menutup kabar tak bermaksud membatalkan apa pun. */
+    t.onclick = function () { t.style.display = "none"; clearTimeout(t._t); };
+  }
+
 
   async function ambil(url) {
     var r = await fetch(url, { credentials: "same-origin" });
@@ -581,6 +628,17 @@
       var hasil = await kirim(t.dataset.post, JSON.parse(t.dataset.kirim));
       var pesan = hasil.pesan || "Tersimpan ✓";
       muat();
+      /* Server menyebutkan id catatannya; itu yang dipakai BATALKAN, bukan
+         "cari yang terakhir" — antara menekan dan membatalkan, rekan di pos
+         sebelah bisa saja sudah mencatat sesuatu. */
+      if (hasil.log_id) {
+        if (window.PINDAH && PINDAH.segarkan) {
+          PINDAH.segarkan(function () { kabarBisaBatal(pesan, hasil.log_id); });
+        } else {
+          kabarBisaBatal(pesan, hasil.log_id);
+        }
+        return;
+      }
       if (window.PINDAH && PINDAH.segarkan) {
         PINDAH.segarkan(function () { kabar(pesan, "ok"); });
       } else {

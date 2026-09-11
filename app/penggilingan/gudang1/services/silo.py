@@ -404,14 +404,29 @@ async def masuk_silo(
                       f"masuk saat giling berjalan",
         )
 
-    # Gabung ke lot silo dicatat sebagai UPDATE 'gabung' agar undo hanya
-    # melepas batch terakhir (bukan menghapus seluruh isi silo).
+    # Id barisnya baru ada sesudah flush, dan yang di atas hanya dijalankan
+    # bila kebetulan ada giling berjalan. Tanpa baris ini, `baris.id` bisa
+    # None — dan jejak audit yang menunjuk None tak bisa dibatalkan sama
+    # sekali.
+    await db.flush()
+
+    # ── Yang dicatat id BARIS penyimpanan, bukan id SILO ──
+    #
+    # Dulu `record_id=silo.id`. Pembatalan lalu mencari "baris terbaru di silo
+    # itu" — yaitu milik siapa pun yang terakhir mengisi. Budi membatalkan
+    # entrinya sendiri dan yang hilang adalah entri Sari, tanpa satu pun
+    # pesan. Temuan QA P-K-08.
+    #
+    # Id baris menunjuk satu hal dan hanya satu hal, jadi pembatalan tak perlu
+    # menebak lagi. Baris lama yang terlanjur mencatat id silo dikenali dari
+    # ketiadaan tag `aksi` dan tetap ditangani cara lama.
     await log_activity(
         db,
         table_name="silo_storage",
-        record_id=silo.id,
+        record_id=baris.id,
         action="UPDATE" if digabung else "INSERT",
         field_name="gabung" if digabung else None,
+        aksi="silo_gabung" if digabung else "silo_masuk",
         changed_by=user.id,
         new_value=f"Silo {nama_silo} <- {isi} ({tipe}{'+gabung' if digabung else ''}, {kg:.0f}kg)",
     )
