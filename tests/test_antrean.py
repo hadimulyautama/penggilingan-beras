@@ -280,13 +280,18 @@ def test_gudang2_punya_kartunya_sendiri():
     from app.services import berjalan as svc
 
     assert hasattr(svc, "untuk_gudang2")
-    fn = inspect.getsource(svc.untuk_gudang2)
+    # Kartu penyosohan & silo dibangun di pembangunnya sendiri sejak 12
+    # September 2026 — dipakai Meja (untuk_gudang2) DAN operator Gudang 2
+    # (untuk_operator_gudang2) — jadi yang dibaca ketiganya.
+    fn = (inspect.getsource(svc.untuk_gudang2)
+          + inspect.getsource(svc._kartu_penyosohan_g2)
+          + inspect.getsource(svc._kartu_silo_g2))
     for aksi in ("masukkan_pk", "harga_pk_luar", "qc_pk_luar",
                  "mulai_penyosohan", "hasil_penyosohan", "selesai_penyosohan"):
         assert aksi in fn, aksi
     # Golongannya mengikuti aturan yang sama dengan Gudang 1.
-    assert "b.menunggu.append" in fn and "b.berjalan.append" in fn
-    assert "b.transit.append" in fn and "b.meja.append" in fn
+    assert "b.menunggu.append" in fn and "b.berjalan +=" in fn
+    assert "b.transit +=" in fn and "b.meja.append" in fn
     # Patokan "belum bertempat" DIAMBIL dari yang sama dengan daftar pilihan
     # aksinya sendiri — kalau disusun ulang, kartu dan lembarnya berbeda isi.
     assert "PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id" in fn

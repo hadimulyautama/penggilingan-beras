@@ -3,7 +3,8 @@
 Acuan: MASTER_RULES_AND_LOGIC.md §12.
 - Bahan WAJIB dari silo (bukan tumpukan).
 - berat_awal silo = snapshot OTOMATIS saat mulai; berat_akhir = input MANUAL
-  saat selesai; terpakai = awal − akhir.
+  saat selesai; terpakai = awal + ditambah selama proses − akhir (silo yang
+  dipoles boleh diisi lagi — keputusan pemilik 12 September 2026).
 - Log output KUMULATIF (ambil terbaru; tak boleh turun).
 - HPP per kg beras = biaya konversi (bahan/kemasan − nilai byproduct) — di modul
   produk-jadi. Di sini fokus: run + konsumsi PK + output + rendemen.
@@ -236,13 +237,19 @@ async def selesai_penyosohan(
         raise Gudang2Error("Sebutkan silo mana yang selesai (A/B) + sisa beratnya.")
     if sisa_kg is None:
         raise Gudang2Error("Sebutkan sisa berat di silo, mis. `sisa 500 kg`.")
-    if float(sisa_kg) > float(target.berat_awal_kg):
+    # Isi silo selama proses = awal + yang DITAMBAHKAN sesudah mulai. Silo
+    # yang dipoles boleh diisi lagi (keputusan pemilik 12 September 2026),
+    # dan yang ditambahkan itu ikut jadi bahan — bukan sisa.
+    masuk = float(target.berat_masuk_kg or 0)
+    tersedia = float(target.berat_awal_kg) + masuk
+    if float(sisa_kg) > tersedia:
         raise Gudang2Error(
-            f"Sisa ({float(sisa_kg):.0f} kg) melebihi berat awal silo "
-            f"({float(target.berat_awal_kg):.0f} kg)."
+            f"Sisa ({float(sisa_kg):.0f} kg) melebihi isi silo selama proses "
+            f"({tersedia:.0f} kg = awal {float(target.berat_awal_kg):.0f}"
+            + (f" + ditambah {masuk:.0f}" if masuk else "") + ")."
         )
     target.berat_akhir_kg = sisa_kg
-    target.berat_terpakai_kg = max(float(target.berat_awal_kg) - float(sisa_kg), 0.0)
+    target.berat_terpakai_kg = max(tersedia - float(sisa_kg), 0.0)
     silo_obj = await db.get(Silo, target.silo_id)
     silo_letter = silo_obj.nama_silo.replace("Silo ", "") if silo_obj else "-"
 
@@ -255,6 +262,13 @@ async def selesai_penyosohan(
     if semua_selesai:
         proc.status = "selesai"
         proc.waktu_selesai = input_time(tanggal, jam)
+        # Jeda yang masih terbuka ikut ditutup: prosesnya sudah tak ada, dan
+        # jam tertahan yang terus berjalan akan dipakai menilai shift
+        # (temuan QA P-K-17 pada giling; aturan yang sama di sini).
+        from app.penggilingan.gudang1.services.jeda import jeda_terbuka
+        jeda = await jeda_terbuka(db, "penyosohan", proc.id)
+        if jeda is not None:
+            jeda.selesai = proc.waktu_selesai
         rendemen = (beras_total / pk_terpakai * 100) if pk_terpakai else None
         await log_activity(
             db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
@@ -308,13 +322,15 @@ async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
         for u in usages:
             silo = await db.get(Silo, u.silo_id)
             nm = silo.nama_silo.replace("Silo ", "") if silo else "-"
+            tambah = (f" + ditambah {_kg(float(u.berat_masuk_kg))}"
+                      if float(u.berat_masuk_kg or 0) else "")
             if u.berat_akhir_kg is not None:
                 lines.append(
-                    f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))} → sisa "
+                    f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))}{tambah} → sisa "
                     f"{_kg(float(u.berat_akhir_kg))} = terpakai {_kg(float(u.berat_terpakai_kg or 0))}"
                 )
             else:
-                lines.append(f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))} (belum selesai)")
+                lines.append(f"• Silo {nm}: awal {_kg(float(u.berat_awal_kg))}{tambah} (belum selesai)")
         if outputs:
             lines.append("• Hasil:")
             for jenis in GRADES + BYPRODUCTS:

@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import DryingLot, JedaProses, MillingProcess
+from app.penggilingan.gudang2.models import PolishingProcess
 from app.services.activity_log import log_activity
 
 
@@ -49,6 +50,12 @@ SEBAB = {
                     "Bahan bakar habis", "Jam kerja habis"),
     "giling": ("Mesin giling rusak", "Mesin pendukung rusak",
                "Limbah produksi penuh", "Listrik padam", "Jam kerja habis"),
+    # Penyosohan Gudang 2 — sejak 12 September 2026 (keputusan pemilik saat
+    # aplikasi operator Gudang 2 dirancang). Mesin sosoh tak kehabisan bahan
+    # bakar dan limbahnya bukan yang menghentikan; polanya tetap: mesin dulu,
+    # lalu pekerjaan.
+    "penyosohan": ("Mesin sosoh rusak", "Mesin pendukung rusak",
+                   "Listrik padam", "Jam kerja habis"),
 }
 #: Katup untuk sebab yang belum ada di daftar. Daftar yang tak lengkap memaksa
 #: orang memilih yang paling mirip — lalu angkanya berbohong dengan rapi.
@@ -91,16 +98,46 @@ async def _giling_berjalan(db: AsyncSession, kode: str) -> MillingProcess:
     return proc
 
 
-def _saring(jenis: str):
+async def _sosoh_berjalan(db: AsyncSession, kode: str) -> PolishingProcess:
+    proc = (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.kode_proses == kode)
+    )).scalars().first()
+    if proc is None:
+        raise JedaError(f"Penyosohan {kode} tidak ditemukan.")
+    if proc.status != "proses":
+        raise JedaError(f"Penyosohan {kode} sudah ditutup.")
+    return proc
+
+
+#: Kolom penunjuk proses per jenis. Satu tempat: tiga jenis, tiga kolom —
+#: menulis `if jenis == ...` di tiap fungsi adalah cara jenis ketiga
+#: tertinggal di salah satunya.
+_KOLOM = {
+    "pengeringan": JedaProses.drying_lot_id,
+    "giling": JedaProses.milling_process_id,
+    "penyosohan": JedaProses.polishing_process_id,
+}
+
+
+def _kolom(jenis: str):
+    return _KOLOM.get(jenis, JedaProses.milling_process_id)
+
+
+async def _proses_berjalan(db: AsyncSession, jenis: str, kode: str):
     if jenis == "pengeringan":
-        return JedaProses.jenis == "pengeringan"
-    return JedaProses.jenis == "giling"
+        return await _lot_berjalan(db, kode)
+    if jenis == "penyosohan":
+        return await _sosoh_berjalan(db, kode)
+    return await _giling_berjalan(db, kode)
+
+
+def _saring(jenis: str):
+    return JedaProses.jenis == jenis
 
 
 async def jeda_terbuka(db: AsyncSession, jenis: str, id_: int) -> JedaProses | None:
     """Jeda yang BELUM dilanjutkan untuk proses ini, bila ada."""
-    kolom = (JedaProses.drying_lot_id if jenis == "pengeringan"
-             else JedaProses.milling_process_id)
+    kolom = _kolom(jenis)
     return (await db.execute(
         select(JedaProses).where(kolom == id_, JedaProses.selesai.is_(None))
     )).scalars().first()
@@ -114,8 +151,7 @@ async def tertahan_detik(db: AsyncSession, jenis: str, id_: int,
     yang sedang mati akan terlihat seolah jam tertahannya berhenti bertambah,
     dan itu justru saat angkanya paling perlu terlihat naik.
     """
-    kolom = (JedaProses.drying_lot_id if jenis == "pengeringan"
-             else JedaProses.milling_process_id)
+    kolom = _kolom(jenis)
     kini = sampai or now_local()
     baris = (await db.execute(select(JedaProses).where(kolom == id_))).scalars().all()
     return sum(_detik(j.mulai, j.selesai or kini) for j in baris)
@@ -126,7 +162,7 @@ async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
     """Hentikan sementara. Prosesnya TIDAK ditutup — bahan & catatannya tetap."""
     jenis = (jenis or "").strip()
     if jenis not in SEBAB:
-        raise JedaError("Sebutkan prosesnya: pengeringan atau giling.")
+        raise JedaError("Sebutkan prosesnya: pengeringan, giling, atau penyosohan.")
     sebab = (sebab or "").strip()
     if sebab == SEBAB_LAIN:
         sebab = (sebab_lain or "").strip()
@@ -136,12 +172,8 @@ async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
     if not sebab:
         raise JedaError("Pilih sebab berhentinya.")
 
-    if jenis == "pengeringan":
-        obj = await _lot_berjalan(db, kode)
-        id_ = obj.id
-    else:
-        obj = await _giling_berjalan(db, kode)
-        id_ = obj.id
+    obj = await _proses_berjalan(db, jenis, kode)
+    id_ = obj.id
 
     if await jeda_terbuka(db, jenis, id_) is not None:
         raise JedaError(f"{kode} memang sedang berhenti. Lanjutkan dulu.")
@@ -151,6 +183,7 @@ async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
         jenis=jenis,
         drying_lot_id=id_ if jenis == "pengeringan" else None,
         milling_process_id=id_ if jenis == "giling" else None,
+        polishing_process_id=id_ if jenis == "penyosohan" else None,
         sebab=sebab[:120], mulai=now, dicatat_oleh=user.id,
     ))
     await log_activity(
@@ -159,19 +192,15 @@ async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
     )
     await db.commit()
     kali = len((await db.execute(select(JedaProses).where(
-        (JedaProses.drying_lot_id if jenis == "pengeringan"
-         else JedaProses.milling_process_id) == id_))).scalars().all())
+        _kolom(jenis) == id_))).scalars().all())
     return JedaResult(jenis=jenis, kode=kode, sebab=sebab, kali=kali)
 
 
 async def lanjutkan(db: AsyncSession, *, user, jenis: str, kode: str) -> JedaResult:
     """Jalan lagi. Bisa nanti, bisa besok — prosesnya tak pernah ditutup."""
     if jenis not in SEBAB:
-        raise JedaError("Sebutkan prosesnya: pengeringan atau giling.")
-    if jenis == "pengeringan":
-        obj = await _lot_berjalan(db, kode)
-    else:
-        obj = await _giling_berjalan(db, kode)
+        raise JedaError("Sebutkan prosesnya: pengeringan, giling, atau penyosohan.")
+    obj = await _proses_berjalan(db, jenis, kode)
 
     jeda = await jeda_terbuka(db, jenis, obj.id)
     if jeda is None:

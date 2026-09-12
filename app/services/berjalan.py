@@ -957,73 +957,10 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         ))
 
     # ── Penyosohan yang sedang berputar ──
-    from app.penggilingan.gudang2.models import PolishingSiloUsage
-
-    for pr in (await db.execute(
-        select(PolishingProcess).where(PolishingProcess.status == "proses")
-        .order_by(PolishingProcess.id.desc())
-    )).scalars().all():
-        # Dari silo mana ia makan — dan lewat silo itu, dari lot giling mana.
-        # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
-        # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
-        asal_pr: list[tuple[str, str, str]] = []
-        for silo_id in (await db.execute(
-            select(PolishingSiloUsage.silo_id)
-            .where(PolishingSiloUsage.polishing_process_id == pr.id)
-        )).scalars().all():
-            for a in await asal_silo(silo_id):
-                if a not in asal_pr:
-                    asal_pr.append(a)
-        pemasok_pr = _pemasok_ringkas(asal_pr)
-        b.berjalan.append(Baris(
-            kode=pr.kode_proses, isi="sedang disosoh",
-            keadaan="catat hasil, tutup bila selesai",
-            aksi="hasil_penyosohan", nilai=pr.kode_proses, fase="giling",
-            sejak=pr.waktu_mulai,
-            judul="Penyosohan",
-            sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
-                 else f"{pr.kode_proses} · mesin sosoh menyala"),
-            anak=asal_pr[:6],
-            ringkas=(f"menyosoh PK {pemasok_pr}" if pemasok_pr
-                     else "mesin sosoh menyala"),
-            pilihan=[
-                ("hasil_penyosohan", "Perbarui hasil penyosohan",
-                 "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
-                ("selesai_penyosohan", "Selesai penyosohan",
-                 "Tutup proses, per silo", pr.kode_proses),
-            ],
-        ))
+    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
 
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
-    sedang = (await db.execute(
-        select(PolishingProcess.id).where(PolishingProcess.status == "proses")
-    )).first()
-    wid2 = await _g2_warehouse_id(db)
-    for silo in (await db.execute(
-        select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
-    )).scalars().all():
-        kg = await hitung_stok_silo(db, silo.id)
-        if not kg:
-            continue
-        huruf = silo.nama_silo.replace("Silo ", "")
-        asal = await asal_silo(silo.id)
-        pemasok = _pemasok_ringkas(asal)
-        b.transit.append(Baris(
-            kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
-            keadaan=("mesin sosoh sedang dipakai" if sedang
-                     else "mulai penyosohan bila siap"),
-            aksi=None if sedang else "mulai_penyosohan",
-            nilai=huruf, fase="silo",
-            judul=f"{silo.nama_silo} · Gudang 2",
-            utama=(_kg(kg).removesuffix(" kg"), "kg"),
-            sub=(f"PK menunggu disosoh · {pemasok}" if pemasok
-                 else "PK menunggu disosoh"),
-            anak=asal,
-            ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
-            pilihan=([] if sedang else [
-                ("mulai_penyosohan", "Mulai penyosohan",
-                 "Seluruh isi silo jadi satu proses", huruf)]),
-        ))
+    b.transit += await _kartu_silo_g2(db, asal_silo)
 
     # ── Kerja meja: harga & mutu PK luar ──
     for pk, nama in (await db.execute(
@@ -1065,6 +1002,206 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             pilihan=[("qc_pk_luar", "Catat kualitas PK luar",
                       "Kadar air & butir patah", pk.kode_batch)],
         ))
+    return b
+
+
+async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
+    """Kartu penyosohan yang sedang berputar — berikut keadaan BERHENTI-nya.
+
+    Sejak 12 September 2026 penyosohan pun bisa dijeda (keputusan pemilik).
+    Bentuk kartunya mengikuti kartu giling: yang dijeda berganti judul,
+    membawa nota "hati" berisi sebab & lamanya, dan pilihan pertamanya
+    Lanjutkan. Kartu berhenti yang tampil sama dengan kartu berjalan akan
+    dilewati sama.
+    """
+    from app.models import Silo
+    from app.penggilingan.gudang1.services.jeda import jeda_terbuka, tertahan_detik
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+
+    keluar: list[Baris] = []
+    for pr in (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.status == "proses")
+        .order_by(PolishingProcess.id.desc())
+    )).scalars().all():
+        # Dari silo mana ia makan — dan lewat silo itu, dari lot giling mana.
+        # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
+        # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
+        asal_pr: list[tuple[str, str, str]] = []
+        silo_nama: list[str] = []
+        ditambah = 0.0
+        for u in (await db.execute(
+            select(PolishingSiloUsage)
+            .where(PolishingSiloUsage.polishing_process_id == pr.id)
+        )).scalars().all():
+            ditambah += float(u.berat_masuk_kg or 0)
+            s = await db.get(Silo, u.silo_id)
+            if s:
+                silo_nama.append(s.nama_silo)
+            for a in await asal_silo(u.silo_id):
+                if a not in asal_pr:
+                    asal_pr.append(a)
+        pemasok_pr = _pemasok_ringkas(asal_pr)
+        macet = await jeda_terbuka(db, "penyosohan", pr.id)
+        tertahan = await tertahan_detik(db, "penyosohan", pr.id)
+        fakta = [("Silo", " + ".join(silo_nama) or "—")]
+        if ditambah:
+            # PK yang dituang selama mesin jalan ikut jadi penyebut rendemen
+            # — angka yang ikut menilai pekerjaan tak boleh disembunyikan.
+            fakta.append(("Ditambah", _kg(ditambah)))
+        if tertahan >= 60:
+            fakta.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
+        keluar.append(Baris(
+            kode=pr.kode_proses,
+            isi=(f"⏸ berhenti — {macet.sebab}" if macet else "sedang disosoh"),
+            keadaan=("menunggu dilanjutkan" if macet
+                     else "catat hasil, tutup bila selesai"),
+            aksi=("lanjutkan_penyosohan" if macet else "hasil_penyosohan"),
+            nilai=(f"penyosohan:{pr.kode_proses}" if macet else pr.kode_proses),
+            fase="giling",
+            sejak=pr.waktu_mulai,
+            judul=("Penyosohan dijeda" if macet else "Penyosohan"),
+            sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
+                 else f"{pr.kode_proses} · mesin sosoh menyala"),
+            fakta=fakta,
+            anak=asal_pr[:6],
+            nota=(f"Dijeda {_jam((now_local() - macet.mulai).total_seconds())} — "
+                  f"{macet.sebab}" if macet else None),
+            nota_jenis="hati" if macet else None,
+            ringkas=(f"⏸ {macet.sebab}"
+                     + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
+                     if macet else
+                     (f"menyosoh PK {pemasok_pr}" if pemasok_pr else "mesin sosoh menyala")),
+            pilihan=([
+                ("lanjutkan_penyosohan", "Lanjutkan penyosohan",
+                 "Mesin jalan lagi — bisa nanti, bisa besok",
+                 f"penyosohan:{pr.kode_proses}"),
+                ("selesai_penyosohan", "Selesai penyosohan",
+                 "Tutup proses, per silo", pr.kode_proses),
+            ] if macet else [
+                ("hasil_penyosohan", "Perbarui hasil penyosohan",
+                 "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
+                ("hentikan_penyosohan", "Hentikan sementara",
+                 "Mesin rusak, listrik padam, jam kerja habis",
+                 f"penyosohan:{pr.kode_proses}"),
+                ("selesai_penyosohan", "Selesai penyosohan",
+                 "Tutup proses, per silo", pr.kode_proses),
+            ]),
+        ))
+    return keluar
+
+
+async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
+    """Silo Gudang 2 yang berisi PK — menunggu disosoh."""
+    from app.models import Silo
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+
+    keluar: list[Baris] = []
+    sedang = (await db.execute(
+        select(PolishingProcess.id).where(PolishingProcess.status == "proses")
+    )).first()
+    wid2 = await _g2_warehouse_id(db)
+    for silo in (await db.execute(
+        select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
+    )).scalars().all():
+        kg = await hitung_stok_silo(db, silo.id)
+        if not kg:
+            continue
+        huruf = silo.nama_silo.replace("Silo ", "")
+        asal = await asal_silo(silo.id)
+        pemasok = _pemasok_ringkas(asal)
+        keluar.append(Baris(
+            kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
+            keadaan=("mesin sosoh sedang dipakai" if sedang
+                     else "mulai penyosohan bila siap"),
+            aksi=None if sedang else "mulai_penyosohan",
+            nilai=huruf, fase="silo",
+            judul=f"{silo.nama_silo} · Gudang 2",
+            utama=(_kg(kg).removesuffix(" kg"), "kg"),
+            sub=(f"PK menunggu disosoh · {pemasok}" if pemasok
+                 else "PK menunggu disosoh"),
+            anak=asal,
+            ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
+            pilihan=([] if sedang else [
+                ("mulai_penyosohan", "Mulai penyosohan",
+                 "Seluruh isi silo jadi satu proses", huruf)]),
+        ))
+    return keluar
+
+
+async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
+    """PK di tumpukan Gudang 2, satu kartu per intake yang masih bersisa.
+
+    Inilah antrean operator Gudang 2 (keputusan pemilik 12 September 2026):
+    memindahkan PK dari lantai ke silo adalah tugas operator, boleh sebagian,
+    dan sisanya tetap berdiri sebagai kartu yang sama dengan sisa terbaru.
+    Silo yang sedang dipoles pun boleh menerima, jadi kartunya selalu bisa
+    ditekan.
+    """
+    from app.models import InternalTransfer, PkGudang2Intake
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from app.penggilingan.gudang2.service import _sisa_tumpukan_intake
+
+    keluar: list[Baris] = []
+    for it in (await db.execute(
+        select(PkGudang2Intake).where(PkGudang2Intake.tujuan == "ditumpuk")
+        .order_by(PkGudang2Intake.id)
+    )).scalars().all():
+        sisa = await _sisa_tumpukan_intake(db, it.id)
+        if sisa <= 0:
+            continue
+        if it.pk_purchase_batch_id:
+            pk, nama = (await db.execute(
+                select(PkPurchaseBatch, Supplier.nama_supplier)
+                .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+                .where(PkPurchaseBatch.id == it.pk_purchase_batch_id)
+            )).first() or (None, None)
+            kode = pk.kode_batch if pk else f"intake {it.id}"
+            judul, sumber = (nama or kode), "PK luar"
+        else:
+            kode_lot = (await db.execute(
+                select(MillingProcess.kode_proses)
+                .join(InternalTransfer, InternalTransfer.milling_process_id == MillingProcess.id)
+                .where(InternalTransfer.id == it.internal_transfer_id)
+            )).scalar() if it.internal_transfer_id else None
+            kode = kode_lot or f"intake {it.id}"
+            judul, sumber = kode, "giling sendiri"
+        keluar.append(Baris(
+            kode=kode, isi=f"PK di tumpukan · {_kg(sisa)}",
+            keadaan="menunggu dipindah ke silo — boleh sebagian",
+            aksi="pindah_tumpukan_silo", nilai=str(it.id), fase="tumpuk",
+            sejak=it.waktu_masuk, judul=judul, kelompok="tumpukan",
+            utama=(_kg(sisa).removesuffix(" kg"), "kg"),
+            sub=f"{kode} · {sumber} · masuk {_tgl(it.tanggal_masuk)}",
+            pilihan=[("pindah_tumpukan_silo", "Pindah ke silo",
+                      "Sebagian atau seluruhnya, ke Silo A / B", str(it.id))],
+        ))
+    return keluar
+
+
+async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
+    """Layar OPERATOR Gudang 2 (repo `gudang2/`), menurut pemilik 12 September 2026:
+
+      · `menunggu` = SELURUH stok PK di Gudang 2 — yang di lantai (tumpukan,
+        per intake → pindah ke silo) dan yang di silo (→ mulai penyosohan);
+      · `berjalan` = mesin yang menyala saja;
+      · tidak ada Transit, dan tidak ada kerja meja.
+
+    Berbeda dari `untuk_gudang2`, yang dipakai Meja: di sana PK luar yang
+    belum bertempat adalah antrean (entry Admin), dan silo berisi PK adalah
+    transit yang dipantau.
+    """
+    memo: dict[int, list[tuple[str, str, str]]] = {}
+
+    async def asal_silo(silo_id: int) -> list[tuple[str, str, str]]:
+        if silo_id not in memo:
+            memo[silo_id] = await _asal_pk(db, silo_id)
+        return memo[silo_id]
+
+    b = Berjalan()
+    b.menunggu += await _kartu_tumpukan_g2(db)
+    b.menunggu += await _kartu_silo_g2(db, asal_silo)
+    b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
     return b
 
 
@@ -1185,10 +1322,17 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
     # Gudang 2 tak lagi "menyusul": PK luar dan penyosohan punya kartunya
     # sendiri sekarang. Admin ke atas ikut melihatnya — mereka memegang kedua
     # gudang, dan pekerjaan yang tak terlihat oleh siapa pun akan terlewat.
-    if await _is_g2_operator(user) or can_see_financials(user):
+    if can_see_financials(user):
         g2 = await untuk_gudang2(db)
         b.menunggu += g2.menunggu
         b.berjalan += g2.berjalan
         b.transit += g2.transit
         b.meja += g2.meja
+    elif await _is_g2_operator(user):
+        # Operator Gudang 2 melihat layarnya sendiri: antrean = stok PK
+        # (tumpukan + silo), berjalan = mesin. Penempatan PK datang bukan
+        # tugasnya (keputusan pemilik 12 September 2026).
+        g2 = await untuk_operator_gudang2(db)
+        b.menunggu += g2.menunggu
+        b.berjalan += g2.berjalan
     return b

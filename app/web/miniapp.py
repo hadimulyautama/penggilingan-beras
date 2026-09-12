@@ -306,17 +306,22 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     TUJUAN_PK = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
                  ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     actions: list[dict] = []
-    if g1:
-        # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
-        # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
-        # Setelan dibaca sekali per permintaan menu — daftar sebab dan
-        # target bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
-        # membekukannya akan menampilkan pilihan yang sudah dibuang.
+    # Setelan dibaca sekali per permintaan menu — daftar sebab dan target
+    # bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
+    # membekukannya akan menampilkan pilihan yang sudah dibuang. Dibaca untuk
+    # KEDUA gudang: sejak 12 September 2026 penyosohan pun punya sebab
+    # berhenti, dan operator Gudang 2 yang tak punya blok G1 dulu menemukan
+    # SEBAB_AKTIF tak pernah terisi.
+    SEBAB_AKTIF, TARGET_BAWAAN = {}, None
+    if g1 or g2:
         from app.services.setelan import sebab_jeda, target_kadar_air
 
         async with SessionLocal() as db:
             SEBAB_AKTIF = await sebab_jeda(db)
             TARGET_BAWAAN = await target_kadar_air(db)
+    if g1:
+        # Dibangkitkan per permintaan: mesin bisa bertambah lewat Pengaturan,
+        # dan daftar tujuan yang ditulis tetap akan diam-diam ketinggalan.
         TUJUAN_BASAH = await _pilihan_tujuan_gabah("basah")
         TUJUAN_KERING = await _pilihan_tujuan_gabah("kering")
         # Urut sesuai alur kerja operator Gudang 1: terima → keringkan →
@@ -586,14 +591,24 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
         ]
     if g2:
+        # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
+        # memindahkan PK dari tumpukan ke silo, dan menjalankan mesin sosoh.
+        # Menempatkan PK yang datang (tumpuk / langsung silo) adalah entry
+        # Admin — `masukkan_pk` ada di blok `fin` di bawah.
         actions += [
-            {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
-             "post": "/miniapp/actions/masukkan-pk", "fields": [
-                 {"name": "kode_batch", "label": "PK yang menunggu dimasukkan", "type": "remote",
-                  "source": "/miniapp/actions/pk-intake-pending",
-                  "kosong": "Tidak ada PK masuk yang menunggu."},
-                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
-                  "options": TUJUAN_PK},
+            {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
+             "post": "/miniapp/actions/pindah-tumpukan-silo",
+             "hint": "Boleh sebagian — sisanya tetap di tumpukan. Silo yang sedang "
+                     "dipoles boleh diisi lagi; yang ditambahkan ikut dihitung "
+                     "sebagai bahan proses itu.",
+             "fields": [
+                 {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
+                  "source": "/miniapp/actions/tumpukan-sisa",
+                  "kosong": "Tumpukan kosong — tak ada yang perlu dipindah."},
+                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "select",
+                  "options": [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]},
+                 {"name": "berat_kg", "label": "Berat yang dipindah (kg)", "type": "number",
+                  "wajib": True},
              ]},
             {"id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
              "post": "/miniapp/actions/mulai-penyosohan", "fields": [
@@ -608,6 +623,30 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "jenis", "label": "Jenis hasil (wajib pilih)", "type": "select",
                   "options": JENIS_HASIL},
                  {"name": "berat_kumulatif", "label": "Berat kumulatif (kg)", "type": "number"},
+             ]},
+            {"id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
+             "post": "/miniapp/actions/hentikan-proses",
+             "hint": "Mesin rusak, listrik padam, jam kerja habis. Prosesnya tidak "
+                     "ditutup — bisa dilanjutkan nanti atau besok, dan jam "
+                     "tertahannya dihitung terpisah dari jam berjalan.",
+             "fields": [
+                 {"name": "proses", "label": "Penyosohan yang sedang berjalan",
+                  "type": "remote", "source": "/miniapp/actions/sosoh-berjalan",
+                  "kosong": "Tidak ada penyosohan yang sedang berjalan."},
+                 {"name": "sebab", "label": "Sebab berhenti", "type": "select",
+                  "options": [["", "— pilih —"]]
+                             + [[s, s] for s in SEBAB_AKTIF.get("penyosohan", [])]
+                             + [[SEBAB_LAIN_JEDA, "Lainnya — tulis sendiri"]]},
+                 {"name": "sebab_lain", "label": "Bila 'Lainnya': tulis sebabnya",
+                  "type": "text", "optional": True},
+             ]},
+            {"id": "lanjutkan_penyosohan", "label": "▶️ Lanjutkan penyosohan",
+             "post": "/miniapp/actions/lanjutkan-proses",
+             "hint": "Mesin jalan lagi. Lama tertahannya tercatat berikut sebabnya.",
+             "fields": [
+                 {"name": "proses", "label": "Penyosohan yang sedang berhenti",
+                  "type": "remote", "source": "/miniapp/actions/sosoh-berhenti",
+                  "kosong": "Tidak ada penyosohan yang sedang berhenti."},
              ]},
             {"id": "selesai_penyosohan", "label": "🏁 Selesai penyosohan (per silo)",
              "post": "/miniapp/actions/selesai-penyosohan", "fields": [
@@ -697,6 +736,17 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "potongan_kg", "label": "Potongan (kg) — opsional", "type": "number"},
                  {"name": "potongan_alasan", "label": "Alasan potongan — opsional", "type": "text"},
              ]},
+            # Menempatkan PK yang datang — tumpuk atau langsung silo — adalah
+            # ENTRY ADMIN (keputusan pemilik 12 September 2026); dulu ada di
+            # blok operator Gudang 2.
+            {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
+             "post": "/miniapp/actions/masukkan-pk", "fields": [
+                 {"name": "kode_batch", "label": "PK yang menunggu dimasukkan", "type": "remote",
+                  "source": "/miniapp/actions/pk-intake-pending",
+                  "kosong": "Tidak ada PK masuk yang menunggu."},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
+                  "options": TUJUAN_PK},
+             ]},
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/miniapp/actions/transfer-pk", "fields": [
                  {"name": "kode_proses", "label": "PK dari proses", "type": "remote",
@@ -756,8 +806,11 @@ GRUP_LAIN = "Lain-lain"
 _GRUP_AKSI = {
     # Gudang 2 — kini punya kartunya sendiri, tetapi tetap dicantumkan
     # supaya yang bendanya belum ada pun bisa dimulai dari sini.
+    "pindah_tumpukan_silo": "Gudang 2 · penyosohan",
     "mulai_penyosohan": "Gudang 2 · penyosohan",
     "hasil_penyosohan": "Gudang 2 · penyosohan",
+    "hentikan_penyosohan": "Gudang 2 · penyosohan",
+    "lanjutkan_penyosohan": "Gudang 2 · penyosohan",
     "selesai_penyosohan": "Gudang 2 · penyosohan",
     "transfer_pk": "Gudang 2 · penyosohan",
     # PK yang datang dari luar, bukan hasil giling sendiri.
@@ -805,7 +858,9 @@ _ACTION_WH = {
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
-    "selesai_penyosohan": "g2", "catat_pk_luar": "g2", "qc_pk_luar": "g2",
+    "selesai_penyosohan": "g2", "pindah_tumpukan_silo": "g2",
+    "hentikan_penyosohan": "g2", "lanjutkan_penyosohan": "g2",
+    "catat_pk_luar": "g2", "qc_pk_luar": "g2",
     "harga_pk_luar": "g2",
     # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
@@ -1704,9 +1759,10 @@ def _urai_proses(nilai: str) -> tuple[str, str]:
 @router.post("/actions/hentikan-proses")
 async def act_hentikan_proses(req: HentikanReq,
                               user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.jeda import JedaError, hentikan
     jenis, kode = _urai_proses(req.proses)
+    # Penyosohan milik operator Gudang 2; pengeringan & giling milik Gudang 1.
+    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dihentikan dulu.")
     async with SessionLocal() as db:
@@ -1725,9 +1781,9 @@ async def act_hentikan_proses(req: HentikanReq,
 @router.post("/actions/lanjutkan-proses")
 async def act_lanjutkan_proses(req: LanjutkanReq,
                                user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g1_operator(user))
     from app.penggilingan.gudang1.services.jeda import JedaError, lanjutkan
     jenis, kode = _urai_proses(req.proses)
+    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
     if not kode:
         raise HTTPException(400, "Pilih proses yang mau dilanjutkan dulu.")
     async with SessionLocal() as db:
@@ -2057,7 +2113,8 @@ class MasukkanPkReq(BaseModel):
 
 @router.post("/actions/masukkan-pk")
 async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(await _is_g2_operator(user))
+    # Entry Admin, bukan operator (keputusan pemilik 12 September 2026).
+    _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
     if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
@@ -2148,6 +2205,98 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
         ekor = " (menunggu silo lain)."
     pesan = f"✓ Silo {req.silo.upper()} selesai (sisa {req.sisa:g} kg){ekor}"
     return {"ok": True, "pesan": pesan}
+
+
+@router.get("/actions/tumpukan-sisa")
+async def tumpukan_sisa(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """PK di tumpukan Gudang 2 yang masih bersisa, per intake — untuk dipindah."""
+    _require(await _is_g2_operator(user))
+    from app.services.berjalan import _kartu_tumpukan_g2
+    async with SessionLocal() as db:
+        kartu = await _kartu_tumpukan_g2(db)
+    return [{"value": b.nilai, "label": f"{b.judul} · {b.kode} · sisa {b.utama[0]} kg"}
+            for b in kartu]
+
+
+@router.get("/actions/sosoh-berjalan")
+async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Penyosohan yang berjalan DAN belum berhenti."""
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+    from app.penggilingan.gudang1.services.jeda import jeda_terbuka
+    from app.penggilingan.gudang2.models import PolishingProcess
+    keluar = []
+    async with SessionLocal() as db:
+        for p in (await db.execute(
+            select(PolishingProcess).where(PolishingProcess.status == "proses")
+            .order_by(PolishingProcess.id.desc())
+        )).scalars().all():
+            if await jeda_terbuka(db, "penyosohan", p.id) is None:
+                keluar.append({"value": f"penyosohan:{p.kode_proses}",
+                               "label": f"{p.kode_proses} · sosoh"})
+    return keluar
+
+
+@router.get("/actions/sosoh-berhenti")
+async def sosoh_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Penyosohan yang sedang berhenti, berikut sebab & sejak kapan."""
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.models import JedaProses
+    from app.penggilingan.gudang2.models import PolishingProcess
+    keluar = []
+    async with SessionLocal() as db:
+        kini = now_local()
+        for j, kode in (await db.execute(
+            select(JedaProses, PolishingProcess.kode_proses)
+            .join(PolishingProcess, PolishingProcess.id == JedaProses.polishing_process_id)
+            .where(JedaProses.jenis == "penyosohan", JedaProses.selesai.is_(None),
+                   PolishingProcess.status == "proses")
+            .order_by(JedaProses.mulai)
+        )).all():
+            jam = (kini - j.mulai).total_seconds() / 3600
+            keluar.append({"value": f"penyosohan:{kode}",
+                           "label": f"{kode} · {j.sebab} · {jam:.1f} jam"})
+    return keluar
+
+
+class PindahTumpukanSiloReq(BaseModel):
+    tumpukan: str    # id intake tumpukan (dari /actions/tumpukan-sisa)
+    silo: str        # A / B
+    berat_kg: Positif
+
+
+@router.post("/actions/pindah-tumpukan-silo")
+async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
+                                   user: User = Depends(pengguna_aksi)) -> dict:
+    """Operator Gudang 2 memindahkan PK dari lantai ke silo — boleh sebagian.
+
+    Fungsinya sudah lama ada (`pindah_tumpukan_ke_silo`, kode PTS) tetapi tak
+    punya pintu di layar; sejak 12 September 2026 ia pekerjaan operator
+    (keputusan pemilik). Silo yang sedang dipoles boleh menerima — yang
+    dituang ikut dihitung sebagai bahan proses itu.
+    """
+    _require(await _is_g2_operator(user))
+    if not str(req.tumpukan or "").strip().isdigit():
+        raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
+    if (req.silo or "").upper() not in ("A", "B"):
+        raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
+    from app.penggilingan.gudang2.service import Gudang2Error, pindah_tumpukan_ke_silo
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await pindah_tumpukan_ke_silo(
+                db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.upper(),
+                berat=float(req.berat_kg))
+        except Gudang2Error as e:
+            raise _err(e, "Gagal memindahkan PK dari tumpukan.")
+    sisa = (f"sisa di tumpukan {r.sisa_tumpukan_intake:g} kg"
+            if r.sisa_tumpukan_intake > 0 else "tumpukan itu habis")
+    ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
+    return {"ok": True,
+            "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke Silo {r.nama_silo} "
+                     f"({sisa}){ekor}."}
 
 
 # ─────────────────────────── Halaman Mini App ───────────────────────────

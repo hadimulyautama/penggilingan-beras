@@ -65,18 +65,22 @@ async def test_berat_masuk_ditambah_secara_atomik(pg):
         "penambahannya belum dikerjakan basis data")
 
 
-async def test_silo_g2_yang_sedang_dipoles_menolak_pk_baru(pg):
-    """P-K-11. PK yang masuk di tengah penyosohan tak terhitung di rumus
-    konsumsi, jadi hasil polesnya terbaca lebih besar daripada bahannya."""
+async def test_silo_g2_yang_sedang_dipoles_mencatat_pk_baru_pada_prosesnya(pg):
+    """P-K-11, diselesaikan dengan cara LAIN sejak 12 September 2026.
+
+    Dulu PK yang masuk ke silo yang sedang dipoles DITOLAK, supaya rumus
+    bahan terpakai (awal − akhir) tetap benar. Pemilik memutuskan silo yang
+    dipoles boleh diisi lagi — di lapangan memang begitu — jadi yang berubah
+    rumusnya: yang masuk selama proses dicatat pada pemakaian silonya
+    (`berat_masuk_kg`), dan terpakai = awal + masuk − akhir. Perilakunya
+    dibuktikan di tests/pg/test_gudang2_operator.py; di sini dijaga bahwa
+    penjaga lama benar-benar hilang dari jalur intake dan pemindahan.
+    """
     from app.penggilingan.gudang2 import service as g2
 
-    # Penjaganya di tempat INTAKE dikerjakan, bukan di modul penyosohan:
-    # yang harus ditolak adalah PK yang masuk, bukan penyosohan yang mulai.
-    kode = inspect.getsource(g2._tolak_silo_sedang_dipoles)
-    assert "sedang dipoles" in kode
-    assert "PolishingSiloUsage" in kode
-    # Dan ia benar-benar dipanggil di jalur intake.
-    assert "_tolak_silo_sedang_dipoles(db, silo_id)" in inspect.getsource(g2._add_intake)
+    assert not hasattr(g2, "_tolak_silo_sedang_dipoles")
+    for fn in (g2._add_intake, g2.pindah_tumpukan_ke_silo, g2.pindah_tumpukan):
+        assert "_catat_masuk_selama_proses(" in inspect.getsource(fn), fn.__name__
 
 
 async def test_dryer_menolak_campur_kondisi_dan_kelebihan_muatan(pg):
