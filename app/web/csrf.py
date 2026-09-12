@@ -49,3 +49,21 @@ def perlu_periksa(metode: str, jalur: str) -> bool:
     if (metode or "").upper() in METODE_AMAN:
         return False
     return not any((jalur or "").startswith(p) for p in JALUR_BEBAS)
+
+
+#: Header yang dibawa service Meja. Token yang sama untuk /internal/meja/*
+#: dan untuk /miniapp/* atas nama akun (lihat `security.akun_dari_meja`).
+HEADER_TOKEN_MEJA = "x-internal-token"
+
+
+def dari_meja(headers) -> bool:
+    """Permintaan datang dari service Meja dengan token yang benar.
+
+    Meja adalah MESIN, bukan peramban: ia tak punya cookie dan tak bisa
+    dipaksa situs lain mengirim sesuatu. Pagar CSRF memang untuk peramban;
+    memasangnya pada Meja hanya mematikan seluruh aksi tulisnya. Yang menjaga
+    Meja adalah tokennya — dibandingkan konstan-waktu, kosong tak pernah cocok.
+    """
+    from app.config import settings
+
+    return cocok(headers.get(HEADER_TOKEN_MEJA), settings.meja_api_token)

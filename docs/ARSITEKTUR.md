@@ -134,6 +134,18 @@ itu, dan **hanya** itu, produksi membuka `/internal/produksi/{tanya,hpp,operasio
 read-only, ber-token, dipanggil `klien_produksi` di repo Kantor. Bila produksi mati,
 Kantor tetap jalan — hanya fitur pabriknya yang menjawab "tak bisa dihubungi".
 
+**Pengecualian kedua (12 September 2026): Meja Administrasi.** Repo `meja/`
+(service `meja`) memegang seluruh pekerjaan staf administrasi kedua gudang
+dan TIPIS: tanpa basis data, tanpa logika bisnis. Ia memanggil
+`/internal/meja/*` (`app/web/meja_api.py` — bungkus JSON atas layanan
+berjalan/stok/audit/undo/setelan/user_admin/alat), serta `/miniapp/*` dan
+`/api/laporan/*` yang sudah ada, atas nama akun `produksi_akun` lewat header
+`X-Internal-Token` + `X-Meja-Akun` + `X-Meja-Versi` (dikenali
+`security.akun_opsional`, pagar CSRF melewatkannya — `csrf.dari_meja`).
+Tokennya `MEJA_API_TOKEN`, SENGAJA terpisah dari `INTERNAL_API_TOKEN` Kantor
+karena Meja menulis. Layar admin di repo ini dicabut dalam satu rilis
+pindahan setelah Meja dipakai (keputusan pemilik); layanan dan API tetap.
+
 Titik temu antar-modul dibuat eksplisit sebagai kolom jembatan, bukan sebagai sambungan diam-diam:
 
 ```

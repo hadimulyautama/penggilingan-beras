@@ -114,3 +114,18 @@ Opsional: `MINIAPP_MODEL=claude-haiku-4-5`, `DASHBOARD_TOKEN=<rahasia>`.
   (standar/merk/kemasan) di-*seed* otomatis saat start.
 - Ganti kunci/token bila pernah bocor. Bot yang dihapus di @BotFather otomatis
   membatalkan tokennya.
+
+
+## Meja Administrasi (service `meja`, repo `meja/`)
+
+Sejak 12 September 2026 pekerjaan staf administrasi dikerjakan dari service
+`meja`, yang memanggil API internal service ini. Variabel yang perlu ada:
+
+| Di service | Variabel | Isi |
+|---|---|---|
+| `penggilingan-beras` | `MEJA_API_TOKEN` | token acak panjang; kosong = pintu Meja mati |
+| `meja` | `MEJA_PRODUKSI_TOKEN` | nilai yang SAMA |
+| `meja` | `MEJA_URL_PRODUKSI` | alamat privat service produksi (`http://penggilingan-beras.railway.internal:PORT`) |
+| `meja` | `MEJA_SECRET_KEY` | kunci cookie sesi Meja |
+
+Taruh rahasia lewat `--stdin` atau berkas; jangan pernah dicetak.

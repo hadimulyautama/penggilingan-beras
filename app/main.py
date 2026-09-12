@@ -24,6 +24,7 @@ from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
+from app.web.meja_api import router as meja_api_router
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
@@ -93,6 +94,7 @@ app.include_router(keputusan_router)
 app.include_router(stok_router)
 app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
+app.include_router(meja_api_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
 class StatisTerCache(StaticFiles):
@@ -177,7 +179,8 @@ async def perpanjang_sesi_pendek(request: Request, call_next):
         for b in balasan.headers.getlist("set-cookie")
     )
     if (akun is not None and akun.sesi_pendek
-            and balasan.status_code < 400 and not sudah_diurus):
+            and balasan.status_code < 400 and not sudah_diurus
+            and not getattr(request.state, "lewat_meja", False)):
         balasan.set_cookie(
             NAMA_COOKIE, buat_token(akun), max_age=umur_sesi_detik(akun),
             httponly=True, samesite="lax",
@@ -201,7 +204,10 @@ async def penjaga_csrf(request: Request, call_next):
     """
     from app.web import csrf as _csrf
 
-    if _csrf.perlu_periksa(request.method, request.url.path):
+    # Service Meja bukan peramban: tak punya cookie, tak bisa dipaksa situs
+    # lain. Tokennya yang menjaga (lihat `csrf.dari_meja`).
+    if (_csrf.perlu_periksa(request.method, request.url.path)
+            and not _csrf.dari_meja(request.headers)):
         di_kuki = request.cookies.get(_csrf.NAMA_COOKIE)
         dikirim = request.headers.get(_csrf.NAMA_HEADER)
         if not dikirim:
