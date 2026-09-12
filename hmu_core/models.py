@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Numeric, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from hmu_core.base import Base, TimestampMixin
@@ -61,6 +61,18 @@ class Supplier(Base, TimestampMixin):
     kledo_contact_id = jembatan ke kontak Kledo (sumber identitas supplier ke depan)."""
 
     __tablename__ = "suppliers"
+
+    __table_args__ = (
+        # ── Satu nama, satu baris — selama ia belum dihapus ──
+        #
+        # Tiga penulis menyentuh tabel ini dan tak satu pun tahu tentang yang
+        # lain; ketiganya mencari-lalu-membuat, dan pencarian yang mendahului
+        # pembuatan selalu bisa disalip. Dua baris bernama sama memecah
+        # riwayat satu orang jadi dua. PARSIAL: yang sudah dihapus boleh
+        # bernama sama, karena itulah gunanya soft delete. Temuan QA X-20.
+        Index("uq_suppliers_nama_hidup", text("lower(nama_supplier)"),
+              unique=True, postgresql_where=text("deleted_at IS NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nama_supplier: Mapped[str] = mapped_column(String(150), nullable=False)

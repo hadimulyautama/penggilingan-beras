@@ -19,18 +19,29 @@ melarangnya berarti nama yang pernah dipakai terkunci selamanya.
 Perbandingannya `lower(...)`: "H. Anton" dan "h. anton" adalah orang yang
 sama bagi siapa pun yang membacanya, dan orang itulah yang laporannya terbelah.
 
-Migrasi ini GAGAL bila sudah ada nama kembar — dan itu disengaja. Yang benar
-adalah menggabungkannya lebih dulu dengan tangan (memindahkan transaksi ke
-satu baris, lalu menghapus yang lain), bukan membiarkan migrasi memilih
-sendiri mana yang dibuang. Pesannya menyebutkan nama-namanya.
+Bila sudah ada nama kembar, indeksnya TIDAK dibuat dan migrasi tetap lanjut,
+dengan peringatan yang menyebut nama-namanya.
+
+Versi pertama migrasi ini melempar galat — niatnya benar (menggabungkan
+riwayat pembelian bukan keputusan yang boleh diambil migrasi sendiri), tetapi
+akibatnya salah. Entrypoint berhenti dengan exit 1 bila migrasi gagal, jadi
+satu nama kembar di basis data akan membuat SELURUH pabrik tak bisa menyala —
+dan yang hilang bukan indeksnya melainkan hari kerjanya.
+
+Indeks yang belum ada bisa ditambahkan kapan saja sesudah namanya
+digabungkan; layanan yang tak menyala tidak bisa menunggu.
 
 Revision ID: 0045_nama_pemasok_unik
 Revises: 0044_tipe_dan_indeks_master
 """
 from typing import Sequence, Union
 
+import logging
+
 import sqlalchemy as sa
 from alembic import op
+
+log = logging.getLogger("alembic.migrasi")
 
 revision: str = "0045_nama_pemasok_unik"
 down_revision: Union[str, None] = "0044_tipe_dan_indeks_master"
@@ -50,11 +61,14 @@ def upgrade() -> None:
     """)).all()
     if kembar:
         daftar = ", ".join(f"{n} ({c}×)" for n, c in kembar[:10])
-        raise RuntimeError(
-            "Ada nama pemasok kembar, dan migrasi ini tidak memilih sendiri "
-            "mana yang dibuang — riwayat pembeliannya menempel pada baris "
-            f"yang berbeda. Gabungkan dulu: {daftar}"
+        log.warning(
+            "INDEKS NAMA PEMASOK TIDAK DIBUAT — masih ada nama kembar: %s. "
+            "Gabungkan dulu (pindahkan transaksinya ke satu baris, lalu hapus "
+            "yang lain), setelah itu jalankan: CREATE UNIQUE INDEX "
+            "uq_suppliers_nama_hidup ON suppliers (lower(nama_supplier)) "
+            "WHERE deleted_at IS NULL;", daftar,
         )
+        return
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_suppliers_nama_hidup "
         "ON suppliers (lower(nama_supplier)) WHERE deleted_at IS NULL"
