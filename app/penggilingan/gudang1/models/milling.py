@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    text,
+    Index,
     Boolean,
     DateTime,
     ForeignKey,
@@ -23,6 +25,13 @@ class MillingProcess(Base, TimestampMixin):
     jadi PGR-, karena lot yang sesungguhnya terbentuk saat giling dimulai)."""
 
     __tablename__ = "milling_process"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("uq_milling_process_silo_proses", "silo_id", unique=True,
+              postgresql_where=text(
+                  "silo_id IS NOT NULL AND status = 'proses'")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -44,6 +53,12 @@ class MillingProgressLog(Base):
     """Monitoring berat kumulatif PK yang keluar (informatif)."""
 
     __tablename__ = "milling_progress_logs"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_milling_progress_proses", "milling_process_id",
+              text("waktu_update DESC")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     milling_process_id: Mapped[int] = mapped_column(
@@ -60,6 +75,11 @@ class MillingQcLog(Base):
     """QC hasil PK oleh staff/admin (min. 1x per lot)."""
 
     __tablename__ = "milling_qc_logs"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_milling_qc_proses", "milling_process_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     milling_process_id: Mapped[int] = mapped_column(
@@ -110,11 +130,16 @@ class MillingProcessSource(Base):
     __table_args__ = (
         UniqueConstraint("milling_process_id", "silo_storage_id",
                          name="uq_mps_proses_silo"),
+        # Dinamai apa adanya seperti di basis data. `index=True` polos membuat
+        # SQLAlchemy mengharapkan nama bawaannya, dan autogenerate lalu
+        # mengusulkan membuat indeks baru sambil menghapus yang lama — indeks
+        # yang sama, dua nama. Temuan QA X-19.
+        Index("ix_mps_proses", "milling_process_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     milling_process_id: Mapped[int] = mapped_column(
-        ForeignKey("milling_process.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("milling_process.id", ondelete="CASCADE"), nullable=False
     )
     silo_storage_id: Mapped[int] = mapped_column(
         ForeignKey("silo_storage.id"), nullable=False

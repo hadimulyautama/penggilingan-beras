@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    Index,
     Date,
     DateTime,
     ForeignKey,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,7 +53,7 @@ class PurchaseBatch(Base, TimestampMixin):
     #: adalah `DryingLot.dryer_id` dan kolom ini dikosongkan lagi — supaya
     #: tidak ada dua tempat yang menyebut mesin untuk gabah yang sama, lalu
     #: suatu hari berbeda.
-    dryer_id: Mapped[int | None] = mapped_column(ForeignKey("dryers.id"), index=True)
+    dryer_id: Mapped[int | None] = mapped_column(ForeignKey("dryers.id"))
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
     # ── Tautan ke timbangan (shared DB). 1 tiket timbang = maks 1 batch. ──
     # berat_total_kg/supplier/no_polisi diturunkan dari transaksi timbang; operator
@@ -65,6 +67,17 @@ class PurchaseBatch(Base, TimestampMixin):
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PurchaseBatchVerification | None"] = relationship(
         back_populates="batch", uselist=False
+    )
+
+    __table_args__ = (
+        # ── Indeks dideklarasikan APA ADANYA seperti di basis data ──
+        #
+        # Indeks yang dibuat migrasi tanpa disebut di model membuat
+        # `alembic check` mengusulkan MENGHAPUSNYA tiap kali dijalankan —
+        # termasuk indeks unik parsial yang justru menjaga keadaan mustahil
+        # tak bisa terjadi. Usulan itu terbaca seperti migrasi biasa, dan yang
+        # menerapkannya sambil terburu-buru mencabut penjaganya. Temuan QA X-19.
+        Index("ix_purchase_batches_dryer", "dryer_id"),
     )
 
 
@@ -140,6 +153,8 @@ class DryingLotBatch(Base):
     __tablename__ = "drying_lot_batches"
     __table_args__ = (
         UniqueConstraint("drying_lot_id", "purchase_batch_id", name="uq_lot_batch"),
+        Index("uq_drying_lot_batches_batch", "purchase_batch_id", unique=True,
+              postgresql_where=text("purchase_batch_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -158,6 +173,10 @@ class DryingMoistureLog(Base):
     """Log kadar air, wajib minimal tiap 5 jam. Notifikasi jika terlambat."""
 
     __tablename__ = "drying_moisture_logs"
+    __table_args__ = (
+        Index("ix_drying_moisture_lot", "drying_lot_id",
+              text("waktu_update DESC")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     drying_lot_id: Mapped[int] = mapped_column(
@@ -229,6 +248,19 @@ class SiloStorage(Base, TimestampMixin):
     """
 
     __tablename__ = "silo_storage"
+    __table_args__ = (
+        Index("ix_silo_storage_lot", "drying_lot_id"),
+        Index("ix_silo_storage_silo_status", "silo_id", "status"),
+        # Dua indeks unik PARSIAL: satu batch hanya boleh berada di satu silo
+        # SELAMA ia masih terisi. Tanpa syarat statusnya, riwayat lama ikut
+        # terlarang dan gabah yang pernah masuk tak bisa masuk lagi.
+        Index("uq_silo_storage_batch_terisi", "purchase_batch_id", unique=True,
+              postgresql_where=text(
+                  "purchase_batch_id IS NOT NULL AND status = 'terisi'")),
+        Index("uq_silo_storage_lot_terisi", "drying_lot_id", unique=True,
+              postgresql_where=text(
+                  "drying_lot_id IS NOT NULL AND status = 'terisi'")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
@@ -260,6 +292,11 @@ class JedaProses(Base):
     """
 
     __tablename__ = "jeda_proses"
+    __table_args__ = (
+        Index("ix_jeda_proses_drying_lot_id", "drying_lot_id"),
+        Index("ix_jeda_proses_milling_process_id", "milling_process_id"),
+        Index("ix_jeda_proses_mulai", "mulai"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     #: 'pengeringan' | 'giling'. Tersirat dari kolom mana yang terisi, tetapi

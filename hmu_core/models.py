@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Numeric, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from hmu_core.base import Base, TimestampMixin
@@ -39,7 +39,13 @@ class User(Base, TimestampMixin):
     # admin / staff / operator
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     whatsapp_number: Mapped[str | None] = mapped_column(String(30), unique=True)
-    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True)
+    # `unique=True` SAJA. Menambahkan `index=True` di sampingnya membuat
+    # SQLAlchemy mengharapkan indeks unik bernama `ix_users_telegram_user_id`,
+    # sementara basis data punya constraint `users_telegram_user_id_key` —
+    # dua nama untuk satu benda, dan autogenerate mengusulkan menukar
+    # keduanya tiap kali dijalankan. Constraint unik sudah berindeks.
+    # Temuan QA X-19.
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     default_warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
     # full / operational
     access_level: Mapped[str] = mapped_column(String(20), default="operational")
@@ -62,7 +68,11 @@ class Supplier(Base, TimestampMixin):
     alamat: Mapped[str | None] = mapped_column(Text)
     # aktif / nonaktif
     status: Mapped[str] = mapped_column(String(20), default="aktif")
-    deleted_at: Mapped[datetime | None] = mapped_column()
+    # `timezone=True`: kolom ini `timestamptz` di basis data, dan model
+    # yang menyebutnya tanpa zona membuat bentuknya bergantung pada SIAPA
+    # yang membangun database — migrasi (berzona) atau `create_all`
+    # (tanpa zona). Temuan QA X-19.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
 
@@ -78,7 +88,11 @@ class Pelanggan(Base, TimestampMixin):
     alamat: Mapped[str | None] = mapped_column(Text)
     # aktif / nonaktif
     status: Mapped[str] = mapped_column(String(20), default="aktif")
-    deleted_at: Mapped[datetime | None] = mapped_column()
+    # `timezone=True`: kolom ini `timestamptz` di basis data, dan model
+    # yang menyebutnya tanpa zona membuat bentuknya bergantung pada SIAPA
+    # yang membangun database — migrasi (berzona) atau `create_all`
+    # (tanpa zona). Temuan QA X-19.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
 

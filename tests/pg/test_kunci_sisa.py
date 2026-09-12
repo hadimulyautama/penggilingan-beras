@@ -118,3 +118,64 @@ async def test_stok_negatif_muncul_di_rekonsiliasi(pg):
     assert "saldo_pk" in kode, "masih memakai angka yang sudah dipotong nol"
     # Dan ia benar-benar ditampilkan, bukan cuma dihitung.
     assert "TERKIRIM MELEBIHI" in inspect.getsource(rekonsiliasi.format_rekonsiliasi)
+
+
+# ─────────────────────────── X-20 ───────────────────────────
+
+async def test_nama_pemasok_tak_bisa_kembar(pg):
+    """Tiga penulis menyentuh tabel `suppliers` dan tak satu pun tahu tentang
+    yang lain. Dua baris bernama sama memecah riwayat satu orang jadi dua —
+    tanpa ada yang salah di layar mana pun. Temuan QA X-20."""
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import Supplier
+
+    async with pg() as db:
+        db.add(Supplier(nama_supplier="H. Anton"))
+        await db.commit()
+
+    # Ejaan berbeda, orang yang sama — dan orang itulah yang laporannya
+    # terbelah.
+    async with pg() as db:
+        db.add(Supplier(nama_supplier="h. anton"))
+        with pytest.raises(IntegrityError):
+            await db.commit()
+
+
+async def test_pemasok_terhapus_boleh_bernama_sama(pg):
+    """Itulah gunanya soft delete; melarangnya berarti nama yang pernah
+    dipakai terkunci selamanya."""
+    from datetime import datetime, timezone
+
+    from app.models import Supplier
+
+    async with pg() as db:
+        db.add(Supplier(nama_supplier="Sudah Berhenti",
+                        deleted_at=datetime.now(timezone.utc)))
+        await db.commit()
+    async with pg() as db:
+        db.add(Supplier(nama_supplier="Sudah Berhenti"))
+        await db.commit()   # tak melempar
+
+
+async def test_dua_pencatat_satu_nama_menghasilkan_satu_baris(pg):
+    """Jalur `find_or_create_supplier` menerjemahkan penolakan indeks jadi
+    "pakai yang sudah ada" — yang memintanya memang cuma ingin pemasoknya."""
+    from sqlalchemy import func, select
+
+    from app.models import Supplier
+    from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
+
+    async with pg() as db:
+        s1, baru1 = await find_or_create_supplier(db, "Karyo Tani")
+        await db.commit()
+    async with pg() as db:
+        s2, baru2 = await find_or_create_supplier(db, "karyo tani")
+        await db.commit()
+
+    assert baru1 is True and baru2 is False
+    async with pg() as db:
+        n = (await db.execute(
+            select(func.count(Supplier.id))
+            .where(func.lower(Supplier.nama_supplier) == "karyo tani"))).scalar_one()
+    assert n == 1

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -13,6 +13,12 @@ class ActivityLog(Base):
     """Audit trail SEMUA perubahan — transaksi DAN master data (soft delete)."""
 
     __tablename__ = "activity_logs"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_activity_logs_table_record", "table_name", "record_id"),
+        Index("ix_activity_logs_waktu", text("waktu_perubahan DESC")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     table_name: Mapped[str] = mapped_column(String(64), nullable=False)

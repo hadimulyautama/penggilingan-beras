@@ -64,7 +64,22 @@ async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier
         return supplier, False
     supplier = Supplier(nama_supplier=nama, status="aktif")
     db.add(supplier)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # ── Ada yang mendahului di antara "cari" dan "buat" ──
+        #
+        # Tiga penulis menyentuh tabel ini — jalur ini, sinkron kontak Kledo,
+        # dan penyemai data uji — dan tak satu pun tahu tentang yang lain.
+        # Indeks unik parsial (migrasi 0045) kini menolak yang kedua; di sini
+        # penolakan itu diterjemahkan jadi "pakai yang sudah ada", bukan jadi
+        # galat. Yang meminta memang cuma ingin pemasoknya, bukan barisnya.
+        # Temuan QA X-20.
+        await db.rollback()
+        supplier = (await db.execute(stmt)).scalars().first()
+        if supplier is None:
+            raise
+        return supplier, False
     return supplier, True
 
 

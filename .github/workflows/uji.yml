@@ -56,20 +56,18 @@ jobs:
       - name: Migrasi dari database KOSONG
         run: alembic upgrade head
 
-      # `alembic check` dijalankan sebagai LAPORAN dulu, bukan penjaga.
+      # `alembic check` adalah PENJAGA, bukan laporan.
       #
-      # Ada selisih lama antara model dan migrasi — 66 kolom yang di basis data
-      # NOT NULL tetapi di model tak dinyatakan begitu, dan 46 indeks yang
-      # dibuat migrasi tanpa dideklarasikan di model. Tak satu pun berbahaya;
-      # semuanya membuat `check` berbunyi merah. Menjadikannya penjaga
-      # sekarang berarti alur ini merah sejak hari pertama, dan alur yang
-      # selalu merah berhenti dibaca orang.
+      # Selisih model ↔ migrasi sudah dirapikan (migrasi 0043 & 0044, temuan
+      # QA X-19): 33 kolom yang dijanjikan model NOT NULL kini benar-benar
+      # NOT NULL di basis data, 21 indeks dideklarasikan apa adanya di model,
+      # dan dua kolom `deleted_at` akhirnya bertipe sama.
       #
-      # Rencananya: rapikan selisih itu (perubahan DEKLARASI saja, tanpa DDL),
-      # lalu ganti `|| true` ini dengan penjaga sungguhan.
-      - name: Periksa selisih model ↔ migrasi (laporan)
-        run: alembic check || true
-        continue-on-error: true
+      # Sejak itu `check` bersih, jadi ia bisa menahan. Selisih BARU berarti
+      # seseorang mengubah model tanpa menulis migrasinya — dan itu ketahuan
+      # di sini, bukan saat deploy.
+      - name: Periksa selisih model ↔ migrasi
+        run: alembic check
 
       - name: Uji penuh (termasuk tests/pg)
         run: pytest -q

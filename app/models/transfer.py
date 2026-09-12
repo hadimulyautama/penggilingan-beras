@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -16,6 +16,11 @@ class InternalTransfer(Base, TimestampMixin):
     """
 
     __tablename__ = "internal_transfers"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_internal_transfers_proses", "milling_process_id", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_transfer: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)

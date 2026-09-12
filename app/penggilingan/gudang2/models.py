@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
@@ -89,6 +89,18 @@ class PkGudang2Intake(Base, TimestampMixin):
     """
 
     __tablename__ = "pk_gudang2_intakes"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_pk_gudang2_intakes_silo", "silo_id"),
+        Index("ix_pk_gudang2_intakes_waktu", "tanggal_masuk"),
+        Index("uq_pk_gudang2_intakes_batch", "pk_purchase_batch_id",
+              unique=True,
+              postgresql_where=text("pk_purchase_batch_id IS NOT NULL")),
+        Index("uq_pk_gudang2_intakes_transfer", "internal_transfer_id",
+              unique=True,
+              postgresql_where=text("internal_transfer_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # beli_luar / transfer_internal
@@ -156,6 +168,11 @@ class PolishingSiloUsage(Base, TimestampMixin):
     """
 
     __tablename__ = "polishing_silo_usage"
+    __table_args__ = (
+        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
+        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
+        Index("ix_polishing_silo_usage_proses", "polishing_process_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     polishing_process_id: Mapped[int] = mapped_column(

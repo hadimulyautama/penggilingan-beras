@@ -15,7 +15,21 @@ from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
 from app.config import settings
 from hmu_core import Base, TimestampMixin  # noqa: F401 — Base & skema master bersama (paket core)
 
-engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
+# ── Zona sesi basis data disetel EKSPLISIT ──
+#
+# Postgres di Railway berzona UTC, dan beberapa kueri memakai `CURRENT_DATE`
+# atau mengelompokkan tanggal di sisi SQL. Tanpa setelan ini, "hari ini"
+# menurut basis data berganti pukul 07:00 WIB — jadi truk yang ditimbang
+# pukul 05:30 masuk rekap hari sebelumnya, dan batas biaya bulanan yang
+# dihitung di SQL ikut bergeser. Temuan QA X-17.
+#
+# Disetel per KONEKSI lewat `server_settings`, bukan lewat variabel
+# lingkungan kontainer: yang menentukan adalah sesi Postgres-nya, dan
+# kontainer yang zonanya benar pun tetap membuka sesi berzona UTC.
+engine = create_async_engine(
+    settings.database_url, echo=False, pool_pre_ping=True,
+    connect_args={"server_settings": {"timezone": settings.app_timezone}},
+)
 
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
