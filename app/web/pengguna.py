@@ -79,17 +79,25 @@ def _terlalu_tinggi(pelaku, peran_sasaran: str | None) -> bool:
     return dia > aku
 
 
-async def _catat(db, aksi: str, sasaran: str, pelaku, keterangan: str = "") -> None:
+async def _catat(db, akun_id: int, aksi: str, sasaran: str, pelaku,
+                 keterangan: str = "") -> None:
     """Tulis jejak audit untuk tindakan pengelolaan akun.
 
     Yang dijaga bukan pencegahannya melainkan kemungkinan menelusurinya:
     pembuatan login, reset sandi, dan penonaktifan adalah tindakan yang
     akibatnya baru terlihat berhari-hari kemudian, oleh orang lain.
+
+    `akun_id` WAJIB dan bukan kebetulan wajib. `activity_logs.record_id`
+    berstatus NOT NULL, jadi baris tanpa nomor akun tak pernah sampai ke
+    basis data — dan yang gagal bukan sekadar catatannya melainkan seluruh
+    transaksinya: reset sandi yang batal, penonaktifan yang tak jadi.
+    Menjadikannya parameter tanpa nilai bawaan memindahkan kekeliruan itu
+    dari saat tombolnya ditekan ke saat kodenya ditulis.
     """
-    from app.services.audit import log_activity
+    from app.services.activity_log import log_activity
 
     await log_activity(
-        db, table_name="produksi_akun", record_id=None, action="UPDATE",
+        db, table_name="produksi_akun", record_id=akun_id, action="UPDATE",
         changed_by=getattr(pelaku, "user_id", None),
         new_value=f"{aksi} · {sasaran}" + (f" · {keterangan}" if keterangan else ""),
     )
@@ -157,12 +165,17 @@ async def buat_akun(
         if bentrok is not None:
             return render(request, "pengguna.html",
                           **await _muat(pesan_err=f"Nama pengguna '{uname}' sudah dipakai."))
-        db.add(ProduksiAkun(
+        akun = ProduksiAkun(
             user_id=orang.id, username=uname, password_hash=hash_sandi(sandi),
             mode_perangkat=mode_bawaan(orang.role), harus_ganti_sandi=True,
-        ))
-        await _catat(db, "buat login", f"{orang.nama} ({uname})", pelaku,
-                     f"peran {orang.role}")
+        )
+        db.add(akun)
+        # Di-flush lebih dulu supaya jejaknya menyebut nomor akun yang
+        # sesungguhnya. Tanpa itu jejak "buat login" jadi satu-satunya
+        # tindakan pengelolaan akun yang tak bisa ditelusuri balik ke akunnya.
+        await db.flush()
+        await _catat(db, akun.id, "buat login", f"{orang.nama} ({uname})",
+                     pelaku, f"peran {orang.role}")
         await db.commit()
         nama = orang.nama
     # Sandi awal ditampilkan sebagai blok tersendiri, bukan diselipkan dalam
@@ -192,7 +205,7 @@ async def reset_sandi(request: Request, akun_id: int = Form(...),
         # itulah alasan sandinya disetel ulang.
         akun.token_version = (akun.token_version or 1) + 1
         uname, nama = akun.username, akun.nama
-        await _catat(db, "reset sandi", f"{nama} ({uname})", pelaku)
+        await _catat(db, akun.id, "reset sandi", f"{nama} ({uname})", pelaku)
         await db.commit()
     return render(request, "pengguna.html", **await _muat(
         sandi_awal={"nama": nama, "username": uname, "sandi": sandi,
@@ -232,8 +245,8 @@ async def ubah_status(request: Request, akun_id: int = Form(...),
             akun.token_version = (akun.token_version or 1) + 1
         pesan = (f"Akun '{akun.username}' sekarang {akun.status} — "
                  "berlaku juga di Kantor dan Timbangan.")
-        await _catat(db, f"status → {akun.status}", akun.username, pelaku,
-                     "termasuk users.status")
+        await _catat(db, akun.id, f"status → {akun.status}", akun.username,
+                     pelaku, "termasuk users.status")
         await db.commit()
     return render(request, "pengguna.html", **await _muat(pesan_ok=pesan))
 

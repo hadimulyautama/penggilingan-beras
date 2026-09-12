@@ -156,10 +156,28 @@ async def halaman_jangan_disimpan(request: Request, call_next):
 async def perpanjang_sesi_pendek(request: Request, call_next):
     """Sesi perangkat gudang dihitung dari pemakaian TERAKHIR, bukan dari jam
     masuk: cookie-nya diperbarui setiap permintaan. Efeknya sesi mati sendiri
-    setelah ditinggal menganggur — bukan memutus orang yang sedang bekerja."""
+    setelah ditinggal menganggur — bukan memutus orang yang sedang bekerja.
+
+    **Tapi tidak bila rutenya sendiri sudah mengurus cookie itu.** `akun` di
+    sini dimuat pada AWAL permintaan; bila rutenya menaikkan versi token di
+    tengah jalan — ganti sandi, keluar dari semua perangkat — objek ini masih
+    memegang versi yang lama. Header terbitan middleware terpasang SESUDAH
+    milik rutenya, dan peramban memakai yang terakhir: token usang menimpa
+    token yang benar, lalu orangnya terlempar ke halaman masuk persis sesudah
+    berhasil mengganti sandinya sendiri. Temuan QA R-P-07.
+
+    Yang diperiksa sengaja keberadaan headernya, bukan daftar alamat rute:
+    daftar alamat harus diingat setiap kali ada rute baru yang menyentuh
+    cookie sesi, dan yang harus diingat pada akhirnya terlupakan.
+    """
     balasan = await call_next(request)
     akun = getattr(request.state, "akun", None)
-    if akun is not None and akun.sesi_pendek and balasan.status_code < 400:
+    sudah_diurus = any(
+        b.partition("=")[0].strip() == NAMA_COOKIE
+        for b in balasan.headers.getlist("set-cookie")
+    )
+    if (akun is not None and akun.sesi_pendek
+            and balasan.status_code < 400 and not sudah_diurus):
         balasan.set_cookie(
             NAMA_COOKIE, buat_token(akun), max_age=umur_sesi_detik(akun),
             httponly=True, samesite="lax",
