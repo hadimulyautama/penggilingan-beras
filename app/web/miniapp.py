@@ -182,10 +182,11 @@ async def _is_wh_operator(user: User, like: str) -> bool:
     sembilan gerbang Kantor, penjaga akun tertinggi, dan di sini) — peran baru
     ditambahkan di puncak, gerbang lama menyebut nama peran satu per satu.
     """
-    peran = (user.role or "").strip().lower()
-    if peran in PERAN_ADMIN_KEATAS:
+    from hmu_identitas import peran as P
+
+    if P.admin_keatas(user.role):
         return True
-    if peran != "operator":
+    if not P.operator_saja(user.role):
         return False
     from sqlalchemy import select
     from app.models import Warehouse

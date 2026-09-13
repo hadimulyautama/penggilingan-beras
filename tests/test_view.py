@@ -74,7 +74,10 @@ def test_tangga_peran_tak_ditulis_ulang():
     gerbang — sudah terjadi delapan kali di aplikasi ini."""
     from app.web import layar
 
-    assert "PERAN_STAF_KEATAS" in inspect.getsource(layar.view_untuk)
+    # Sejak Tahap 2 tangganya milik paket `hmu_identitas.peran`: view
+    # diputuskan `P.view(...)`, bukan daftar nama yang ditulis ulang di sini.
+    sumber = inspect.getsource(layar.view_untuk)
+    assert "P.view(" in sumber and '"superadmin"' not in sumber
 
 
 def test_lingkup_gudang_per_view():
@@ -279,8 +282,10 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
     # membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci.
     from app.web import security
 
+    # Hitungannya milik paket identitas (akun aktif DAN orangnya aktif,
+    # peran superadmin) — dipakai timbangan dengan aturan yang sama.
     hitung = inspect.getsource(security.ada_superadmin)
-    assert '"aktif"' in hitung and '"superadmin"' in hitung
+    assert "ada_superadmin_aktif" in hitung
 
 
 def test_pintu_dan_gerbang_memakai_aturan_yang_SAMA():
@@ -362,7 +367,7 @@ def test_tak_seorang_pun_mengangkat_di_atas_dirinya():
     for fn in (pengguna.simpan_ubah, pengguna.orang_baru):
         sumber = inspect.getsource(fn)
         assert "terlalu-tinggi" in sumber, fn.__name__
-        assert "TINGKAT" in sumber, fn.__name__
+        assert "terlalu_tinggi(" in sumber, fn.__name__
 
 
 @pytest.mark.parametrize("view", [SUPER, ADMIN, SELEPAN, POLESAN])

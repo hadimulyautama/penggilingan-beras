@@ -151,9 +151,9 @@ tersendiri (ADR §7 butir 2); awalan di sini ilustrasi.
 
 | Tabel | Status | Catatan |
 |---|---|---|
-| `users` | jelas | satu orang satu baris; hari ini ditulis produksi & kantor |
-| `produksi_akun` | jelas | kredensial + sesi + `token_version` untuk produksi, Meja, Gudang 2 |
-| `timbangan_akun` | jelas | kredensial & sesi terpisah pos timbang — yang disatukan Tahap 2 |
+| `users` | jelas | satu orang satu baris; `users.status` = SATU saklar nonaktif (`hmu_identitas.masuk.nonaktifkan`), dibaca kelima app tiap permintaan (Tahap 2 selesai 13 Sep) |
+| `produksi_akun` | jelas | AKUN BERSAMA (model `hmu_identitas.model.Akun`; nama tabel tak diganti, chain migrasi masih produksi): kredensial + sesi + `token_version` untuk produksi, Meja, Gudang 2, DAN timbangan (Tahap 2) |
+| `timbangan_akun` | jelas | sejak Tahap 2: PROFIL pos timbang — `akun_id → produksi_akun` (tertaut) atau kredensial lama (belum tertaut); kode perangkat & sasaran FK riwayat timbang tetap di sini |
 | `kantor_role`, `kantor_user_role` | usul | tangga peran & penugasan orang→peran |
 | `kantor_grant` | TANYA | izin per domain alat Kantor (K-09): peran (identitas) atau izin alat (agen)? |
 

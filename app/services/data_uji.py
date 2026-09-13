@@ -190,6 +190,7 @@ async def siapkan_akun(sandi: str) -> ProduksiAkun:
     from app.models.akun import mode_bawaan
     from app.services.seed import seed_master
     from app.web.security import hash_sandi
+    from hmu_identitas import peran as _P
     from hmu_core import User
 
     await seed_master()
@@ -203,7 +204,7 @@ async def siapkan_akun(sandi: str) -> ProduksiAkun:
             if ada is not None:
                 continue
             u = User(nama=nama, role=peran, telegram_user_id=None,
-                     default_warehouse_id=wid if peran == "operator" else None)
+                     default_warehouse_id=wid if _P.operator_saja(peran) else None)
             db.add(u)
             await db.flush()
             db.add(ProduksiAkun(

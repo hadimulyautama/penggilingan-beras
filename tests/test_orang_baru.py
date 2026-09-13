@@ -155,5 +155,5 @@ def test_aksi_gudang_terbuka_untuk_admin_keatas():
     from tests.bantu import kode_saja
 
     kode = kode_saja(miniapp._is_wh_operator)
-    assert "PERAN_ADMIN_KEATAS" in kode
+    assert "P.admin_keatas(" in kode
     assert "== 'admin'" not in kode and '== "admin"' not in kode

@@ -21,13 +21,14 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from app.web.security import butuh_akun
+from hmu_identitas import peran as P
+#: Tinggi tiap peran, aturan "hanya menurun", dan pengurai "operator:g1" —
+#: milik paket sejak Tahap 2; nama-nama lama diekspor ulang untuk pemakainya.
+from hmu_identitas.peran import TINGKAT, boleh_menyamar, peran_efektif, urai  # noqa: F401
 
 router = APIRouter()
 
 NAMA_KUKI = "produksi_lihat"
-
-#: Tinggi tiap peran. `staff` peran lama yang masih dipakai akun lama.
-TINGKAT = {"operator": 1, "staff": 2, "admin": 3, "superadmin": 4}
 
 #: Yang boleh dipilih di layar, dari tertinggi.
 #:
@@ -38,41 +39,15 @@ TINGKAT = {"operator": 1, "staff": 2, "admin": 3, "superadmin": 4}
 #: (memang tak perlu), jadi samarannya mewarisi ketiadaan itu.
 PILIHAN = (
     ("", "Peran saya sendiri"),
-    ("admin", "Admin"),
-    ("operator:g1", "Operator selepan (Gudang 1)"),
-    ("operator:g2", "Operator polesan (Gudang 2)"),
+    (P.ADMIN, "Admin"),
+    (f"{P.OPERATOR}:{P.G1}", "Operator selepan (Gudang 1)"),
+    (f"{P.OPERATOR}:{P.G2}", "Operator polesan (Gudang 2)"),
 )
 
 #: Pola nama gudang untuk tiap kode.
-GUDANG = {"g1": "Gudang 1%", "g2": "Gudang 2%"}
+GUDANG = {P.G1: "Gudang 1%", P.G2: "Gudang 2%"}
 
-NAMA_PERAN = {"operator": "Operator", "staff": "Staff",
-              "admin": "Admin", "superadmin": "Super Admin"}
-
-
-def urai(diminta: str | None) -> tuple[str, str | None]:
-    """Pisahkan "operator:g1" menjadi ("operator", "g1")."""
-    d = (diminta or "").strip().lower()
-    if ":" in d:
-        peran, _, gd = d.partition(":")
-        return peran, (gd if gd in GUDANG else None)
-    return d, None
-
-
-def peran_efektif(asli: str | None, diminta: str | None) -> str:
-    """Peran yang dipakai tampilan — tak pernah lebih tinggi dari yang asli."""
-    a = (asli or "").strip().lower()
-    d, _ = urai(diminta)
-    if not d or d not in TINGKAT:
-        return a
-    if TINGKAT[d] > TINGKAT.get(a, 0):
-        return a
-    return d
-
-
-def boleh_menyamar(asli: str | None) -> bool:
-    """Admin ke atas. Operator tak punya peran di bawahnya untuk dicoba."""
-    return TINGKAT.get((asli or "").strip().lower(), 0) >= TINGKAT["admin"]
+NAMA_PERAN = P.LABEL
 
 
 @router.post("/lihat-sebagai")
@@ -87,9 +62,9 @@ async def pilih(request: Request, peran: str = Form(""), _=Depends(butuh_akun)):
         return balasan
     pilih_ = peran_efektif(asli, peran)
     _, gudang = urai(peran)
-    if pilih_ == "operator" and gudang:
-        pilih_ = f"operator:{gudang}"
-    if not peran or pilih_ == (asli or "").strip().lower():
+    if P.operator_saja(pilih_) and gudang:
+        pilih_ = f"{P.OPERATOR}:{gudang}"
+    if not peran or pilih_ == P.normal(asli):
         balasan.delete_cookie(NAMA_KUKI, path="/")
     else:
         # Kuki sesi (tanpa umur): menyamar itu keadaan sementara untuk

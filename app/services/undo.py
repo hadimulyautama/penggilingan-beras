@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from hmu_identitas import peran as _P
+
 from app.models import (
     ActivityLog,
     DryingCoolingLog,
@@ -132,7 +134,7 @@ async def resolve_actor_ids(
         return None, "semua"
     q = select(User.id)
     if scope.startswith("operator"):
-        q = q.where(User.role == "operator")
+        q = q.where(User.role == _P.OPERATOR)
         gud = 1 if scope == "operator_gudang1" else 2 if scope == "operator_gudang2" else None
         if gud:
             wh = (
@@ -143,7 +145,7 @@ async def resolve_actor_ids(
             if wh:
                 q = q.where(User.default_warehouse_id == wh)
     elif scope == "staff":
-        q = q.where(User.role == "staff")
+        q = q.where(User.role.in_(_P.STAF_LAMA))
     ids = (await db.execute(q)).scalars().all()
     return list(ids), _SCOPE_LABEL.get(scope, scope)
 

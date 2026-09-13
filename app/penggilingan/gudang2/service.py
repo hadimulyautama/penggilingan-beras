@@ -114,12 +114,11 @@ def is_operator_gudang2(user: User, g2_wid: int) -> bool:
     bawahnya, gagal syarat "operator", lalu ditolak. Peran tertinggi kehilangan
     seluruh Gudang 2 — pola yang sudah sembilan kali berulang di kode ini.
     """
-    from app.peran import PERAN_ADMIN_KEATAS
+    from hmu_identitas import peran as P
 
-    peran = (user.role or "").strip().lower()
-    if peran in PERAN_ADMIN_KEATAS:
+    if P.admin_keatas(user.role):
         return True
-    return peran == "operator" and user.default_warehouse_id == g2_wid
+    return P.operator_saja(user.role) and user.default_warehouse_id == g2_wid
 
 
 # ─────────────────────────── Formula stok ───────────────────────────

@@ -1,64 +1,43 @@
-"""Siapa boleh apa — tangga peran pabrik.
+"""Siapa boleh apa — tangga peran pabrik, kini dari paket `hmu_identitas`.
 
-Dulu tinggal di `app/bots/common.py`, dari masa ketika Telegram adalah satu-
-satunya pintu masuk. Sejak bot produksi dibubarkan (perintah pindah sepenuhnya
-ke Pos Produksi), aturan peran tak boleh ikut mati bersamanya: seluruh webapp
-bergantung padanya. Ia juga tak pernah benar-benar milik bot — ia aturan
-perusahaan, dan menaruhnya di modul saluran membuat orang mengira begitu.
+Dulu tinggal di `app/bots/common.py`, lalu di sini sendiri; sejak Tahap 2
+rancang ulang (13 September 2026) tangganya SATU untuk lima repo di
+`hmu_identitas.peran`. Modul ini tinggal mengekspor ulang nama-nama yang
+sudah dipakai seluruh webapp, ditambah dua aturan yang memang milik pabrik
+(uang dan pengiriman PK).
 """
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hmu_core import User
-
-#: Peran yang boleh melihat data uang. "staff" ada di sini sebagai peran LAMA:
-#: sejak 3 September 2026 tangganya superadmin / admin / operator, dan baris
-#: lama di `users` tidak boleh kehilangan akses gara-gara namanya berganti.
-#: Semua peran DI ATAS operator — satu tempat, karena tangga ini sudah sekali
-#: bocor. `superadmin` ditambahkan di puncak saat peran dikonsolidasi, tetapi
-#: delapan gerbang masih menyebut ("staff","admin") satu per satu; akibatnya
-#: peran TERTINGGI bisa mengerjakan LEBIH SEDIKIT daripada admin di bawahnya.
-#: Tangga yang tidak menurun ke bawah bukan tangga.
-PERAN_STAF_KEATAS = ("superadmin", "admin", "staff")
-
-#: Setara "admin ke atas" — untuk gerbang yang dulu menulis `== "admin"`.
-PERAN_ADMIN_KEATAS = ("superadmin", "admin")
-
-#: Boleh melihat angka uang. Kebetulan sama isinya — tetapi disebut terpisah
-#: supaya kalau suatu saat ada peran yang boleh bekerja tanpa melihat harga,
-#: yang berubah cukup satu.
-PERAN_UANG = PERAN_STAF_KEATAS
+from hmu_identitas import peran as P
+from hmu_identitas.peran import (PERAN_ADMIN_KEATAS, PERAN_STAF_KEATAS,  # noqa: F401
+                                 PERAN_UANG)
 
 
 def can_see_financials(user: User | None) -> bool:
-    """Direksi ke atas boleh melihat data uang (harga gabah, nilai total
+    """Admin ke atas boleh melihat data uang (harga gabah, nilai total
     pembelian, HPP). Operator TIDAK boleh."""
-    return bool(user) and user.role in PERAN_UANG
+    return bool(user) and P.normal(user.role) in PERAN_UANG
 
 
 def can_transfer_pk(user: User | None) -> bool:
-    """Pengiriman PK Gudang 1 → Gudang 2 oleh staff ke atas. Operator TIDAK boleh."""
-    return bool(user) and user.role in PERAN_STAF_KEATAS
+    """Pengiriman PK Gudang 1 → Gudang 2 oleh admin ke atas. Operator TIDAK boleh."""
+    return bool(user) and P.staf_keatas(user.role)
 
 
 async def user_wh_scope(db: AsyncSession, user: User | None) -> str:
-    """Lingkup akses gudang user:
-    - 'all'  : staff/admin (lihat & kerjakan semua)
-    - 'g1'   : operator Gudang 1 (hanya Gudang 1)
-    - 'g2'   : operator Gudang 2 (hanya Gudang 2)
-    - 'none' : operator tanpa gudang / lainnya.
-    Operator Gudang 1 & 2 dipisah tegas: tak boleh lintas gudang."""
+    """Lingkup akses gudang user: 'all' / 'g1' / 'g2' / 'none'.
+
+    Nilai lama dipertahankan untuk pemanggilnya; aturannya dari
+    `hmu_identitas.peran.lingkup` (operator melekat pada satu gudang).
+    """
     if not user:
         return "none"
-    if user.role in PERAN_STAF_KEATAS:
-        return "all"
-    if user.role == "operator" and user.default_warehouse_id:
+    nama = None
+    if P.operator_saja(user.role) and user.default_warehouse_id:
         from hmu_core import Warehouse
         wh = await db.get(Warehouse, user.default_warehouse_id)
-        nama = (wh.nama_gudang if wh else "") or ""
-        if nama.startswith("Gudang 1"):
-            return "g1"
-        if nama.startswith("Gudang 2"):
-            return "g2"
-    return "none"
+        nama = wh.nama_gudang if wh else None
+    return {P.SEMUA: "all", P.G1: "g1", P.G2: "g2"}.get(P.lingkup(user.role, nama), "none")

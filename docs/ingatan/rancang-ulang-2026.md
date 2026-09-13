@@ -18,6 +18,13 @@ lintas repo, bukan sebagai rencana penggabungan. Keputusan lain pemilik pada
 hari yang sama: tabel yang ada tidak diganti nama (awalan hanya untuk tabel
 baru; peta pemilik yang menjaga), tabel verifikasi tetap di produksi dengan
 rupiah dijaga gerbang peran, branch `gudang2-api` digabung ke `main`.
+**Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
+(peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu
+fungsi "boleh masuk?", satu saklar nonaktif, penjaga AST), di-vendor ke
+lima repo; produksi/Meja/Gudang 2/Kantor memakainya; timbangan menaut
+per baris (0037) — lihat §7.8. Bukti lintas aplikasi: uji Postgres di
+produksi, timbangan, core, plus skrip HTTP tiga server satu basis data.
+
 Sore harinya (sesudah Tahap 1 selesai) pemilik menjawab dua sisanya:
 **tabel master (`suppliers`, `pelanggan`, `warehouses`, `silos`, `dryers`)
 dimiliki `core`** — satu pemilik skema sekaligus pelari migrasinya, repo lain
@@ -315,6 +322,15 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
 8. **Migrasi akun timbangan** ke identitas bersama (Tahap 2 butir 4):
    dijalankan saat pos timbang tutup, atau dengan dua tabel hidup
    berdampingan selama satu minggu?
+   **DIKERJAKAN 13 Sep sore (Tahap 2), pilihan ketiga: berdampingan PER
+   BARIS, tanpa batas waktu.** `timbangan_akun.akun_id → produksi_akun`
+   (migrasi timbangan 0037, hanya menambah). Akun yang tertaut memakai
+   sandi/sesi/peran/status akun bersama; yang belum, sandinya sendiri.
+   Penautan lewat `timbangan/scripts/identitas_tautkan.py`: rencana
+   (baca saja) → `--terapkan` (hash sandi disalin, riwayat timbang tak
+   ditulis ulang, token petugas yang bertugas tetap berlaku) → `--lepas`
+   untuk mundur. Dijalankan pemilik SESUDAH meninjau rencananya, bukan
+   otomatis saat deploy.
 9. **Branch `gudang2-api` produksi** (aturan silo Gudang 2, migrasi 0046)
    belum digabung ke `main`. Tahap 3–4 akan membangun di atasnya —
    digabung dulu, atau ditunggu?

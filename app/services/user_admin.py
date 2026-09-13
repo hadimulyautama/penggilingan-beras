@@ -13,17 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, Warehouse
-from app.peran import PERAN_ADMIN_KEATAS
-
-
-def admin_keatas(role: str | None) -> bool:
-    """Direksi maupun Super Admin. Tahan spasi & huruf besar."""
-    return (role or "").strip().lower() in PERAN_ADMIN_KEATAS
+from hmu_identitas import peran as P
+from hmu_identitas.peran import admin_keatas  # noqa: F401  (dipakai pemanggil lama)
 
 #: Tangga peran sejak 3 September 2026. "staff" tidak lagi ditawarkan,
-#: tetapi baris lama yang menyebutnya tetap sah dibaca — lihat
-#: `bots.common.PERAN_UANG`.
-_ROLES = {"operator", "admin", "superadmin"}
+#: tetapi baris lama yang menyebutnya tetap sah dibaca.
+_ROLES = set(P.PERAN_SAH)
 
 
 class UserAdminError(Exception):
@@ -45,8 +40,7 @@ def norm_phone(s: str | None) -> str | None:
 
 
 def _role_label(role: str) -> str:
-    return {"operator": "Operator", "admin": "Direksi",
-            "superadmin": "Super Admin", "staff": "Staff (lama)"}.get(role, role)
+    return P.LABEL.get(P.normal(role), role)
 
 
 async def _warehouse_for_gudang(db: AsyncSession, gudang: int | None) -> Warehouse | None:
@@ -109,7 +103,7 @@ async def register_user(
         if dup:
             raise UserAdminError(f"Nomor HP {phone} sudah terdaftar atas nama {dup.nama}.")
 
-    wh = await _warehouse_for_gudang(db, gudang) if role == "operator" else None
+    wh = await _warehouse_for_gudang(db, gudang) if P.operator_saja(role) else None
     # "pending" berarti menunggu orangnya membuktikan diri lewat Telegram.
     # Yang masuk lewat sandi tidak punya penantian itu — ia aktif begitu
     # kredensialnya dibuatkan, dan tanpa kredensial ia tak bisa masuk sama
@@ -123,7 +117,7 @@ async def register_user(
             telegram_user_id=telegram_id,
             whatsapp_number=phone,
             default_warehouse_id=wh.id if wh else None,
-            access_level="full" if role in {"admin", "staff"} else "operational",
+            access_level="full" if P.staf_keatas(role) else "operational",
             status=status,
         )
     )

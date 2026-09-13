@@ -54,16 +54,28 @@ repo tampilan, naikkan `VERSI` di sana, sinkronkan. Uji
 `tests/test_tampilan_paket.py` menolak salinan dan vendored yang basi.
 `app/web/tampilan.py` hanya mengekspor ulang `VERSI` dari paket.
 
-## Peran & empat view
+## Identitas, peran & empat view
 
-Tangga: `operator` · `admin` (disebut **Direksi** di layar) · `superadmin`.
-`staff` peran LAMA yang masih sah dibaca.
+**Identitas adalah paket bersama `hmu_identitas`** (repo `core/`, di-vendor
+ke `hmu_identitas/` di sini oleh `core/scripts/sinkron.py`; Tahap 2 rancang
+ulang, 13 Sep 2026). Sandi, token sesi, model akun (`Akun` = tabel
+`produksi_akun`, nama tabel tak diganti), "boleh masuk?" (`masuk.akun_aktif`,
+`masuk.periksa_kredensial`), satu saklar nonaktif (`masuk.nonaktifkan`), dan
+pintu per aplikasi (`pintu.boleh_masuk`) ada di sana — dipakai timbangan,
+Meja, Gudang 2, dan Kantor juga. Jangan sunting folder vendored; ubah di
+`core/`, sinkronkan. `app/web/security.py` tinggal kunci, cookie, view.
 
-**Jangan pernah menyebut peran satu per satu** (`role == "admin"`,
-`in ("admin","staff")`, `{"admin","staff"}`). Pakai `PERAN_STAF_KEATAS` /
-`PERAN_ADMIN_KEATAS` dari `app/peran.py`. Peran baru yang ditambahkan di
-puncak sudah SEMBILAN KALI tertinggal di gerbang yang menyebut nama — sekali
-di antaranya mematikan bot Kantor sepenuhnya. Ada uji yang menjaganya.
+Tangga: `operator` · `admin` · `superadmin`. `staff`/`staf` nama LAMA yang
+masih sah dibaca. Pintu per aplikasi (keputusan pemilik): operator → app
+operator, admin → Meja, timbangan → operator & admin, superadmin → semua;
+Pos Produksi masih menerima admin sampai Meja dipakai sungguhan.
+
+**Jangan pernah menyebut peran harfiah** (`role == "admin"`,
+`in ("admin","staff")`, `u.role = "admin"`). Pakai `hmu_identitas.peran`
+(`admin_keatas`, `staf_keatas`, `operator_saja`, `PERAN_*`, `TINGKAT`,
+`terlalu_tinggi`). Uji AST `tests/test_identitas_paket.py` menolak seluruh
+`app/`. Peran baru di puncak sudah SEMBILAN KALI tertinggal di gerbang yang
+menyebut nama — sekali di antaranya mematikan bot Kantor sepenuhnya.
 
 Empat VIEW, ditetapkan sekali per permintaan di `akun_opsional` dan dibaca
 `app/web/layar.py`: `super` · `admin` · `selepan` (operator Gudang 1) ·

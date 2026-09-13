@@ -37,8 +37,10 @@ from app.config import settings
 from app.database import SessionLocal, now_local
 from app.models import ProduksiAkun, User
 from app.web import csrf as _csrf
-from app.web.security import (ada_superadmin, akun_opsional, cek_sandi_async,
-                              hash_sandi, HASH_TIRUAN)
+from app.web.security import ada_superadmin, akun_opsional, hash_sandi
+from hmu_identitas import masuk as identitas
+from hmu_identitas import peran as P
+from hmu_identitas import pintu
 
 router = APIRouter(prefix="/internal/meja", tags=["internal-meja"])
 log = logging.getLogger("web.meja_api")
@@ -107,6 +109,7 @@ def _akun_json(akun: ProduksiAkun, request: Request | None = None) -> dict:
         "harus_ganti_sandi": bool(akun.harus_ganti_sandi),
         "sesi_pendek": akun.sesi_pendek,
         "is_admin": akun.is_admin, "is_super": akun.is_super,
+        "lingkup": getattr(akun, "_lingkup", None),
         "peran_asli": getattr(request.state, "peran_asli", None) if request else None,
         "lihat_sebagai": getattr(request.state, "lihat_sebagai", None) if request else None,
         "view": getattr(request.state, "view", None) if request else None,
@@ -119,6 +122,20 @@ class MasukIn(BaseModel):
     username: str
     sandi: str
     ip: str = ""
+    #: Aplikasi yang meminta: "meja" atau "gudang2" (pintu per aplikasi,
+    #: keputusan pemilik 13 Sep 2026). Kosong = tanpa pemeriksaan pintu
+    #: (klien lama) — pintu di sisi klien tetap menjaga.
+    aplikasi: str = ""
+
+
+async def _lingkup(db, akun: ProduksiAkun) -> str:
+    """Lingkup gudang orang ini, dari nama gudang bawaannya di master."""
+    nama = None
+    if P.operator_saja(akun.peran) and akun.user.default_warehouse_id:
+        from app.models import Warehouse
+        nama = (await db.execute(select(Warehouse.nama_gudang).where(
+            Warehouse.id == akun.user.default_warehouse_id))).scalar()
+    return P.lingkup(akun.peran, nama)
 
 
 @router.post("/masuk")
@@ -136,17 +153,17 @@ async def masuk(body: MasukIn, request: Request) -> dict:
         raise HTTPException(429, f"Terlalu banyak percobaan. Coba lagi {int(sisa // 60) + 1} "
                                  "menit lagi, atau hubungi Super Admin bila lupa sandi.")
     async with SessionLocal() as db:
-        akun = (await db.execute(
-            select(ProduksiAkun).where(ProduksiAkun.username == uname)
-        )).scalars().first()
-        cocok = await cek_sandi_async(body.sandi, akun.password_hash if akun else HASH_TIRUAN)
-        if akun is None or not cocok:
+        try:
+            akun = await identitas.periksa_kredensial(db, uname, body.sandi)
+        except identitas.Tolak as e:
             gerbang.catat_gagal(uname, ip)
-            raise HTTPException(401, "Nama pengguna atau kata sandi salah.")
-        if akun.status != "aktif" or akun.user is None or \
-                (akun.user.status or "").lower() != "aktif":
-            gerbang.catat_gagal(uname, ip)
-            raise HTTPException(403, "Akun ini sedang dinonaktifkan. Hubungi Super Admin.")
+            raise HTTPException(e.kode, e.pesan)
+        akun._lingkup = await _lingkup(db, akun)
+        if body.aplikasi:
+            sebab = pintu.sebab_tolak(akun.peran, body.aplikasi, akun._lingkup)
+            if sebab:
+                gerbang.catat_gagal(uname, ip)
+                raise HTTPException(403, sebab)
         gerbang.catat_berhasil(uname, ip)
         akun.terakhir_login = now_local()
         await db.commit()
@@ -194,24 +211,15 @@ class SandiIn(BaseModel):
 async def ganti_sandi(body: SandiIn, akun: ProduksiAkun = Depends(akun_meja)) -> dict:
     """Cermin `auth.proses_ganti_sandi`. Versi token naik → Meja menerima
     versi baru dan memperbarui sesinya sendiri."""
-    wajib = akun.harus_ganti_sandi
-    if not wajib and not await cek_sandi_async(body.sandi_lama, akun.password_hash):
-        raise HTTPException(400, "Kata sandi lama salah.")
     if body.sandi_baru != body.ulangi:
         raise HTTPException(400, "Kata sandi baru dan ulangannya tidak sama.")
-    if await cek_sandi_async(body.sandi_baru, akun.password_hash):
-        raise HTTPException(400, "Kata sandi baru harus berbeda dari yang lama.")
-    try:
-        hash_baru = hash_sandi(body.sandi_baru)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
     async with SessionLocal() as db:
-        baris = await db.get(ProduksiAkun, akun.id)
-        baris.password_hash = hash_baru
-        baris.harus_ganti_sandi = False
-        baris.token_version = (baris.token_version or 1) + 1
-        await db.commit()
-        versi = baris.token_version
+        try:
+            versi = await identitas.ganti_sandi(
+                db, akun, sandi_lama=body.sandi_lama, sandi_baru=body.sandi_baru,
+                wajib_lama=not akun.harus_ganti_sandi)
+        except identitas.Tolak as e:
+            raise HTTPException(e.kode, e.pesan)
     return {"ok": True, "pesan": "Kata sandi berhasil diganti.", "versi": versi}
 
 
@@ -605,7 +613,6 @@ class OrangBaruIn(BaseModel):
 @router.post("/pengguna/orang-baru")
 async def orang_baru(body: OrangBaruIn, akun: ProduksiAkun = Depends(akun_super)) -> dict:
     from app.services.user_admin import UserAdminError, register_user
-    from app.web.lihat_sebagai import TINGKAT
     from app.web.pengguna import PERAN
 
     nama = " ".join(body.nama.split())
@@ -613,7 +620,7 @@ async def orang_baru(body: OrangBaruIn, akun: ProduksiAkun = Depends(akun_super)
         raise HTTPException(400, "Nama minimal 3 huruf.")
     if body.peran not in {p[0] for p in PERAN}:
         raise HTTPException(400, "Peran tidak dikenal.")
-    if TINGKAT.get(body.peran, 0) > TINGKAT.get((akun.peran or "").strip().lower(), 0):
+    if P.terlalu_tinggi(akun.peran, body.peran):
         raise HTTPException(400, "Peran itu lebih tinggi daripada peran Anda.")
     async with SessionLocal() as db:
         kembar = (await db.execute(
@@ -705,12 +712,14 @@ async def ubah_status(body: AkunIdIn, akun: ProduksiAkun = Depends(akun_super)) 
             raise HTTPException(404, "Akun tidak ditemukan.")
         if _terlalu_tinggi(akun, a.peran):
             raise HTTPException(400, "Akun itu berperan lebih tinggi daripada Anda.")
-        nonaktif = a.status == "aktif"
-        a.status = "nonaktif" if nonaktif else "aktif"
-        if a.user is not None:
-            a.user.status = a.status
-        if nonaktif:
-            a.token_version = (a.token_version or 1) + 1
+        aktifkan = a.status != "aktif"
+        try:
+            # SATU saklar (paket identitas): users.status + cermin di akun +
+            # versi naik → putus di produksi, timbangan, Meja, Gudang 2, Kantor.
+            await identitas.nonaktifkan(db, a.user_id, aktif=aktifkan)
+        except identitas.Tolak as e:
+            raise HTTPException(e.kode, e.pesan)
+        await db.refresh(a)
         pesan = (f"Akun '{a.username}' sekarang {a.status} — berlaku juga di Kantor dan Timbangan.")
         await _catat(db, a.id, f"status → {a.status}", a.username, akun, "termasuk users.status")
         await db.commit()

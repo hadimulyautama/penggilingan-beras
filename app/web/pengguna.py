@@ -21,6 +21,8 @@ from app.models.akun import mode_bawaan
 from app.web.security import butuh_super, hash_sandi, sandi_acak
 from app.web.tampilan import redirect, render
 from hmu_core import User
+from hmu_identitas import masuk as identitas
+from hmu_identitas import peran as P
 
 router = APIRouter(tags=["webapp"])
 
@@ -28,12 +30,7 @@ _MODE = ("pribadi", "bersama")
 #: Peran yang boleh dipilih. Sengaja sama persis dengan `users.role` di master
 #: — menambah tingkat baru di sini tanpa menambahnya di sana akan membuat orang
 #: terdaftar dengan peran yang tak dikenali pemeriksa hak akses mana pun.
-PERAN = (
-    ("operator", "Operator", "Mencatat pekerjaan di gudangnya. Tidak melihat angka uang."),
-    ("admin", "Admin", "Seluruh pencatatan, verifikasi harga, dan laporan uang."),
-    ("superadmin", "Super Admin", "Semua di atas, ditambah mengelola orang, "
-                                  "akun, dan alat. Tingkat tertinggi."),
-)
+PERAN = tuple((kode, P.LABEL[kode], ket) for kode, ket in P.PILIHAN)
 
 
 
@@ -72,11 +69,7 @@ def _terlalu_tinggi(pelaku, peran_sasaran: str | None) -> bool:
     `simpan_ubah` sudah punya perbandingan ini sejak awal; yang ditambahkan
     sekarang hanyalah memakainya di dua jalur yang terlewat.
     """
-    from app.web.lihat_sebagai import TINGKAT
-
-    aku = TINGKAT.get((getattr(pelaku, "peran", "") or "").strip().lower(), 0)
-    dia = TINGKAT.get((peran_sasaran or "").strip().lower(), 0)
-    return dia > aku
+    return P.terlalu_tinggi(getattr(pelaku, "peran", ""), peran_sasaran)
 
 
 async def _catat(db, akun_id: int, aksi: str, sasaran: str, pelaku,
@@ -234,15 +227,16 @@ async def ubah_status(request: Request, akun_id: int = Form(...),
             return render(request, "pengguna.html", **await _muat(
                 pesan_err=("Akun itu berperan lebih tinggi daripada Anda — "
                            "statusnya tak bisa Anda ubah.")))
-        nonaktif = akun.status == "aktif"
-        akun.status = "nonaktif" if nonaktif else "aktif"
-        if akun.user is not None:
-            akun.user.status = "nonaktif" if nonaktif else "aktif"
-        if nonaktif:
-            # Sesi yang sedang berjalan ikut putus SEKARANG. Tanpa ini,
-            # orang yang baru dinonaktifkan tetap bekerja sampai tokennya
-            # kedaluwarsa sendiri — sampai 30 hari di perangkat pribadi.
-            akun.token_version = (akun.token_version or 1) + 1
+        aktifkan = akun.status != "aktif"
+        try:
+            # SATU saklar (paket identitas): `users.status` + cermin di akun
+            # + versi token naik, sehingga sesi yang sedang berjalan ikut
+            # putus SEKARANG — di produksi, timbangan, Meja, Gudang 2, Kantor.
+            # Super Admin aktif terakhir ditolak di sana.
+            await identitas.nonaktifkan(db, akun.user_id, aktif=aktifkan)
+        except identitas.Tolak as e:
+            return render(request, "pengguna.html", **await _muat(pesan_err=e.pesan))
+        await db.refresh(akun)
         pesan = (f"Akun '{akun.username}' sekarang {akun.status} — "
                  "berlaku juga di Kantor dan Timbangan.")
         await _catat(db, akun.id, f"status → {akun.status}", akun.username,
@@ -304,9 +298,7 @@ async def orang_baru(
     # akan dilewati lewat yang lain, dan mendaftarkan orang baru berperan
     # lebih tinggi lalu masuk sebagai dia adalah jalan memutar yang sama
     # panjangnya dengan satu ketukan.
-    from app.web.lihat_sebagai import TINGKAT
-
-    if TINGKAT.get(peran, 0) > TINGKAT.get((akun.peran or "").strip().lower(), 0):
+    if P.terlalu_tinggi(akun.peran, peran):
         return render(request, "pengguna.html",
                       **await _muat(pesan_err=_ERR_UBAH["terlalu-tinggi"]))
 
@@ -435,8 +427,6 @@ async def simpan_ubah(
         # · Super Admin terakhir yang diturunkan jadi operator LOLOS, karena
         #   perannya bukan "admin" sehingga syaratnya tak pernah menyala.
         #   Persis lubang yang penjaga ini dibuat untuk menutup.
-        from app.web.lihat_sebagai import TINGKAT
-
         # ── Langit-langit: tak seorang pun mengangkat orang lebih tinggi
         #    dari dirinya sendiri ──
         #
@@ -449,11 +439,10 @@ async def simpan_ubah(
         # ini belum menolak siapa pun. Ia ditulis justru karena itu: gerbang
         # bisa dilonggarkan lagi suatu hari — sudah pernah — dan aturan yang
         # baru ditambahkan setelah pintunya dibuka selalu terlambat.
-        aku = TINGKAT.get((akun.peran or "").strip().lower(), 0)
-        if peran and TINGKAT.get(peran, 0) > aku:
+        if peran and P.terlalu_tinggi(akun.peran, peran):
             return redirect(f"/pengguna/{akun_id}?err=terlalu-tinggi")
 
-        turun = TINGKAT.get(peran, 0) < TINGKAT.get(a.user.role, 0)
+        turun = P.tingkat(peran) < P.tingkat(a.user.role)
         if peran and a.is_admin and turun and await _jumlah_admin(db) <= 1:
             return redirect(f"/pengguna/{akun_id}?err=admin-terakhir")
 

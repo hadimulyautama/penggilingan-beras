@@ -1,30 +1,34 @@
-"""Keamanan webapp produksi: sandi, sesi cookie, dan penjaga peran.
+"""Keamanan webapp produksi: sesi cookie dan penjaga peran.
 
-Tanpa dependensi tambahan — `hashlib.scrypt` dari pustaka standar dan cookie
-bertanda tangan HMAC-SHA256. Polanya menyalin `app/timbangan/security.py` di
-repo timbangan yang sudah berjalan di pos timbang; disamakan dengan sengaja
-supaya orang yang memperbaiki salah satunya langsung paham yang lain.
+Sandi, bentuk token, dan keputusan "boleh masuk?" bukan lagi milik berkas
+ini: sejak Tahap 2 rancang ulang (13 September 2026) semuanya di paket
+bersama `hmu_identitas` — sandi (`sandi`), token (`token`), akun (`model`),
+dan pintu (`masuk`, `pintu`) — yang dipakai timbangan, Meja, Gudang 2, dan
+Kantor juga. Yang tinggal di sini: kunci HMAC milik aplikasi ini, cookie,
+umur sesi per jenis perangkat, jalur header Meja, "lihat sebagai", view, dan
+dependency FastAPI. Nama-nama lama (`hash_sandi`, `buat_token`, …) diekspor
+ulang supaya pemakainya tak perlu berubah.
 
-Perbedaannya satu: peran TIDAK disimpan pada akun. Ia dibaca dari `users` lewat
-relasi, sehingga tak mungkin berbeda antara master dan webapp.
+Peran TIDAK disimpan pada akun. Ia dibaca dari `users` lewat relasi,
+sehingga tak mungkin berbeda antara master dan webapp.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
 import logging
 import os
-import secrets
-from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, Request
-from sqlalchemy import select
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import ProduksiAkun
+from hmu_identitas import masuk as _masuk
+from hmu_identitas import peran as P
+from hmu_identitas import token as _token
+from hmu_identitas.sandi import (HASH_TIRUAN, cek_sandi, cek_sandi_async,  # noqa: F401
+                                 hash_sandi, sandi_acak)
+from hmu_identitas.token import MAKS_ID as _MAKS_ID  # noqa: F401
+from hmu_identitas.token import _b64d, _b64e  # noqa: F401  (dipakai uji lama)
 
 log = logging.getLogger("web.security")
 
@@ -37,12 +41,6 @@ NAMA_COOKIE = "produksi_sesi"
 COOKIE_PERANGKAT = "produksi_perangkat"
 MAKS_NAMA_PERANGKAT = 4
 
-# Parameter scrypt: seimbang antara aman & ringan untuk server kecil.
-_SCRYPT_N = 2 ** 14
-_SCRYPT_R = 8
-_SCRYPT_P = 1
-
-
 class ButuhLogin(Exception):
     """Belum login — pengguna diarahkan ke halaman masuk."""
 
@@ -53,67 +51,6 @@ class AksesDitolak(Exception):
     def __init__(self, pesan: str = "Halaman ini tidak tersedia untuk peran Anda."):
         super().__init__(pesan)
         self.pesan = pesan
-
-
-# ─────────────────────────── Sandi ───────────────────────────
-
-def hash_sandi(sandi: str) -> str:
-    """Hash sandi → 'scrypt$n$r$p$salt$hash' (salt acak per pengguna)."""
-    if not sandi or len(sandi) < 6:
-        raise ValueError("Kata sandi minimal 6 karakter.")
-    salt = secrets.token_bytes(16)
-    kunci = hashlib.scrypt(
-        sandi.encode(), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=32
-    )
-    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt.hex()}${kunci.hex()}"
-
-
-def cek_sandi(sandi: str, tersimpan: str) -> bool:
-    """Verifikasi sandi terhadap hash tersimpan (tahan timing attack)."""
-    try:
-        skema, n, r, p, salt_hex, hash_hex = (tersimpan or "").split("$")
-        if skema != "scrypt":
-            return False
-        kunci = hashlib.scrypt(
-            (sandi or "").encode(),
-            salt=bytes.fromhex(salt_hex),
-            n=int(n), r=int(r), p=int(p), dklen=len(bytes.fromhex(hash_hex)),
-        )
-    except (ValueError, TypeError):
-        return False
-    return hmac.compare_digest(kunci.hex(), hash_hex)
-
-
-#: Hash yang TIDAK pernah cocok dengan sandi apa pun, dipakai saat nama
-#: penggunanya tak dikenal.
-#:
-#: Tanpa ini, nama yang ada dijawab dalam ~55 ms (scrypt dijalankan) dan nama
-#: yang tak ada dalam ~5 ms (tak ada yang dijalankan). Selisih itu adalah
-#: daftar nama pengguna perusahaan, terbuka bagi siapa pun yang mau
-#: mengukurnya. Temuan QA P-S-13.
-#:
-#: Dihitung sekali saat modul dimuat, dari sandi acak yang langsung dibuang.
-HASH_TIRUAN = hash_sandi(secrets.token_urlsafe(24))
-
-
-async def cek_sandi_async(sandi: str, tersimpan: str) -> bool:
-    """`cek_sandi` di threadpool — scrypt memakan ~50 ms CPU.
-
-    Dijalankan langsung di event loop, dua belas permintaan masuk bersamaan
-    menahan SELURUH aplikasi: QA mengukur /health naik dari 4 ms ke 119 ms
-    sementara orang-orang mengetik sandinya. Yang tersendat bukan halaman
-    masuk saja, melainkan setiap layar yang sedang dibuka siapa pun.
-    Temuan QA P-S-04.
-    """
-    import asyncio
-
-    return await asyncio.to_thread(cek_sandi, sandi, tersimpan)
-
-
-def sandi_acak(panjang: int = 10) -> str:
-    """Sandi awal yang mudah dibacakan lewat telepon — tanpa huruf/angka rancu."""
-    abjad = "abcdefghjkmnpqrstuvwxyz23456789"  # tanpa i l o 0 1
-    return "".join(secrets.choice(abjad) for _ in range(panjang))
 
 
 # ─────────────────────────── Sesi ───────────────────────────
@@ -147,15 +84,7 @@ def _kunci() -> bytes:
                 "login akan hangus setiap kali server restart."
             )
         return _KUNCI_SEMENTARA
-    return hashlib.sha256(rahasia.encode()).digest()
-
-
-def _b64e(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
-
-
-def _b64d(teks: str) -> bytes:
-    return base64.urlsafe_b64decode(teks + "=" * (-len(teks) % 4))
+    return _token.kunci_dari(rahasia)
 
 
 def umur_sesi_detik(akun: ProduksiAkun) -> int:
@@ -173,61 +102,24 @@ def umur_sesi_detik(akun: ProduksiAkun) -> int:
     return settings.sesi_hari * 24 * 3600
 
 
-#: Batas atas nomor akun yang masuk akal. Id di luar rentang ini dulu sampai
-#: ke basis data apa adanya dan pulang sebagai galat asyncpg mentah — yang
-#: tampil ke pengguna sebagai halaman 500 berisi nama tabel. Temuan QA P-S-12.
-_MAKS_ID = 2 ** 31 - 1
-
-
 def buat_token(akun: ProduksiAkun) -> str:
-    """Token sesi bertanda tangan: <payload>.<signature>.
+    """Token sesi bertanda tangan (bentuknya milik `hmu_identitas.token`).
 
     `v` adalah versi token akun. Ia naik saat orangnya keluar dari semua
     perangkat, saat sandinya diganti atau direset, dan saat perannya berubah —
-    dan token yang membawa versi lama berhenti berlaku saat itu juga. Tanpa
-    angka ini, token yang sudah beredar tak bisa ditarik kembali oleh tindakan
-    apa pun: "keluar" hanya menghapus cookie di perangkat yang menekannya,
-    sementara perangkat lain tetap masuk sampai 30 hari. Temuan QA P-S-05.
+    dan token yang membawa versi lama berhenti berlaku saat itu juga. Temuan
+    QA P-S-05.
     """
-    kedaluwarsa = datetime.now(timezone.utc) + timedelta(
-        seconds=umur_sesi_detik(akun)
-    )
-    payload = _b64e(json.dumps(
-        {"sub": int(akun.id), "exp": int(kedaluwarsa.timestamp()),
-         "v": int(getattr(akun, "token_version", 1) or 1)},
-        separators=(",", ":"),
-    ).encode())
-    tanda = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
-    return f"{payload}.{tanda}"
+    return _token.buat_token(_kunci(), akun_id=int(akun.id),
+                             versi=int(getattr(akun, "token_version", 1) or 1),
+                             umur_detik=umur_sesi_detik(akun))
 
 
 def baca_token(token: str | None) -> tuple[int, int] | None:
     """(akun_id, versi) bila token sah & belum kedaluwarsa; selain itu None.
-
-    **Tak pernah melempar.** Cookie datang dari luar, jadi isinya bisa apa
-    saja — termasuk huruf non-ASCII, yang dulu menjatuhkan `compare_digest`
-    dengan TypeError dan membuat SETIAP halaman menjawab 500, bukan hanya
-    halaman masuk. Temuan QA P-S-12.
-    """
-    if not token or "." not in token:
-        return None
-    try:
-        payload, _, tanda = token.partition(".")
-        harapan = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
-        if not hmac.compare_digest(tanda, harapan):
-            return None
-        data = json.loads(_b64d(payload))
-        if int(data["exp"]) < int(datetime.now(timezone.utc).timestamp()):
-            return None
-        akun_id = int(data["sub"])
-        if not 0 < akun_id <= _MAKS_ID:
-            return None
-        # Token lama (dibuat sebelum kolom versi ada) dianggap versi 1: deploy
-        # tak boleh memutus semua orang sekaligus, hanya mereka yang versinya
-        # memang sudah dinaikkan sesudahnya.
-        return akun_id, int(data.get("v", 1) or 1)
-    except (ValueError, KeyError, TypeError, UnicodeError, AttributeError):
-        return None
+    Tak pernah melempar (QA P-S-12)."""
+    d = _token.baca_token(_kunci(), token)
+    return None if d is None else (d["akun_id"], d["versi"])
 
 
 def token_masih_berlaku(dibaca: tuple[int, int] | None, *, versi_akun: int) -> bool:
@@ -296,33 +188,17 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
     request.state.lewat_meja = lewat_meja
     if dibaca is None:
         return None
-    akun_id, _versi = dibaca
+    akun_id, versi = dibaca
     async with SessionLocal() as db:
-        akun = (
-            await db.execute(
-                select(ProduksiAkun).where(
-                    ProduksiAkun.id == akun_id,
-                    ProduksiAkun.status == "aktif",
-                )
-            )
-        ).scalars().first()
-        if akun is not None:
-            # ── Tiga pemeriksaan yang dulu tak ada satu pun ──
-            #
-            # Versi token: token yang dibuat sebelum orangnya keluar dari
-            # semua perangkat, mengganti sandi, atau perannya berubah sudah
-            # bukan miliknya lagi.
-            #
-            # Status di MASTER: dinonaktifkan di `users` berarti orangnya
-            # tidak lagi bekerja di sini, dan itu berlaku untuk ketiga
-            # aplikasi. Sebelumnya yang diperiksa hanya status akun
-            # produksinya sendiri. Temuan QA P-S-05 & X-11.
-            if not token_masih_berlaku(dibaca, versi_akun=akun.token_version):
-                return None
-            if akun.user is None or (akun.user.status or "").lower() != "aktif":
-                return None
-            # Peran ikut termuat (relasi lazy="joined") sebelum sesi ditutup.
-            _ = akun.peran
+        # SATU fungsi "boleh masuk?" untuk semua aplikasi: akun ada & aktif,
+        # orangnya aktif di MASTER (`users.status` — saklar yang berlaku di
+        # produksi, timbangan, Meja, Gudang 2, Kantor; QA X-11), dan versi
+        # token sepadan (QA P-S-05). Peran ikut termuat (relasi joined)
+        # sebelum sesi ditutup.
+        akun = await _masuk.akun_aktif(db, akun_id, versi)
+        if akun is None:
+            return None
+        _ = akun.peran
 
     # ── Melihat sebagai peran lain ──
     #
@@ -333,7 +209,7 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
     #
     # Peran asli disimpan tersendiri: ia yang menentukan siapa boleh menyamar,
     # dan ia pula yang harus tetap terbaca supaya orang bisa kembali.
-    from app.web.lihat_sebagai import GUDANG, NAMA_KUKI, peran_efektif, urai
+    from app.web.lihat_sebagai import GUDANG, NAMA_KUKI
 
     request.state.peran_asli = None
     request.state.lihat_sebagai = None
@@ -344,16 +220,16 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
         # punya kuki. Aturannya tetap satu: `peran_efektif` hanya menurun.
         diminta = (request.headers.get("x-meja-lihat") if lewat_meja
                    else request.cookies.get(NAMA_KUKI))
-        efektif = peran_efektif(asli, diminta)
-        if efektif != (asli or "").strip().lower():
+        efektif = P.peran_efektif(asli, diminta)
+        if efektif != P.normal(asli):
             akun.user.role = efektif
             request.state.lihat_sebagai = efektif
             # Operator SELALU melekat pada satu gudang. Tanpa ini, samaran
             # mewarisi gudang milik yang menyamar — dan akun admin biasanya
             # tak punya gudang default sama sekali, sehingga layar Catat
             # tampil KOSONG: "Tidak ada aksi untuk peran Anda".
-            _, gd = urai(diminta)
-            if efektif == "operator" and gd:
+            _, gd = P.urai(diminta)
+            if P.operator_saja(efektif) and gd:
                 from sqlalchemy import select as _select
                 from app.models import Warehouse as _W
                 async with SessionLocal() as db2:
@@ -414,23 +290,14 @@ async def butuh_admin(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
 
 
 async def ada_superadmin() -> bool:
-    """Adakah satu pun akun Super Admin yang masih AKTIF.
+    """Adakah satu pun akun Super Admin yang masih AKTIF (akun DAN orangnya).
 
     Aktif, bukan sekadar terdaftar: Super Admin yang dinonaktifkan tak bisa
     membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci pabrik
     atas nama orang yang tak bisa datang.
     """
-    from sqlalchemy import func, select as _select
-
-    from app.models import ProduksiAkun as _A, User as _U
-
     async with SessionLocal() as db:
-        n = (await db.execute(
-            _select(func.count(_A.id))
-            .join(_U, _U.id == _A.user_id)
-            .where(_A.status == "aktif", _U.role == "superadmin")
-        )).scalar() or 0
-    return n > 0
+        return await _masuk.ada_superadmin_aktif(db)
 
 
 async def butuh_super(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
@@ -491,7 +358,7 @@ def tulis_nama_perangkat(nilai: str | None, username: str) -> str:
 
 async def ada_akun() -> bool:
     """True bila sudah ada akun webapp — dipakai untuk pengaturan awal."""
-    from sqlalchemy import func
+    from sqlalchemy import func, select
 
     async with SessionLocal() as db:
         return bool((await db.execute(

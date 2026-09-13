@@ -19,26 +19,24 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, Form, Request
-from sqlalchemy import select
 
 from app.database import SessionLocal, now_local
 from app.models import ProduksiAkun
 from app.web import gerbang_masuk as gerbang
 from app.web.security import (
     COOKIE_PERANGKAT,
-    HASH_TIRUAN,
     NAMA_COOKIE,
     akun_opsional,
     baca_nama_perangkat,
     buat_token,
     butuh_akun,
-    cek_sandi_async,
-    hash_sandi,
     tujuan_aman,
     tulis_nama_perangkat,
     umur_sesi_detik,
 )
 from app.web.tampilan import redirect, render
+from hmu_identitas import masuk as identitas
+from hmu_identitas import pintu
 
 log = logging.getLogger("web.auth")
 
@@ -101,36 +99,21 @@ async def proses_masuk(
         )
 
     async with SessionLocal() as db:
-        akun = (await db.execute(
-            select(ProduksiAkun).where(ProduksiAkun.username == uname)
-        )).scalars().first()
-
-        # ── Waktu jawabnya tak boleh menyebut nama siapa yang ada ──
-        #
-        # Nama yang ada dulu dijawab dalam ~55 ms (scrypt dijalankan) dan nama
-        # yang tak ada dalam ~5 ms (tak ada yang dijalankan). Selisih itu
-        # adalah daftar nama pengguna perusahaan, terbuka bagi siapa pun yang
-        # mau mengukurnya. Hash tiruan membuat kedua jalur memakan waktu yang
-        # sama. Temuan QA P-S-13.
-        #
-        # Dijalankan di threadpool: scrypt memakan ~50 ms CPU, dan di event
-        # loop ia menahan SELURUH aplikasi — QA mengukur /health naik dari
-        # 4 ms ke 119 ms saat dua belas orang masuk bersamaan.
-        cocok = await cek_sandi_async(sandi, akun.password_hash if akun else HASH_TIRUAN)
-
-        # Pesan yang sama untuk pengguna tak dikenal maupun sandi salah —
-        # jangan memberi tahu penebak mana dari keduanya yang benar.
-        if akun is None or not cocok:
+        # Kredensial diperiksa paket identitas: waktu jawab yang sama untuk
+        # nama yang tak ada (QA P-S-13), scrypt di threadpool (QA P-S-04),
+        # status akun DAN status orangnya di master (QA X-11). Pesan yang
+        # sama untuk nama tak dikenal maupun sandi salah.
+        try:
+            akun = await identitas.periksa_kredensial(db, uname, sandi)
+        except identitas.Tolak as e:
             gerbang.catat_gagal(uname, ip)
-            return gagal("Nama pengguna atau kata sandi salah.")
-        if akun.status != "aktif":
+            return gagal(e.pesan)
+        # Pintu per aplikasi (keputusan pemilik 13 Sep 2026). Pos Produksi
+        # masih menerima admin sampai Meja dipakai sungguhan.
+        sebab = pintu.sebab_tolak(akun.peran, pintu.PRODUKSI)
+        if sebab:
             gerbang.catat_gagal(uname, ip)
-            return gagal("Akun ini sedang dinonaktifkan. Hubungi Super Admin.")
-        # Dinonaktifkan di MASTER berarti orangnya tak lagi bekerja di sini,
-        # dan itu berlaku untuk ketiga aplikasi sekaligus.
-        if akun.user is None or (akun.user.status or "").lower() != "aktif":
-            gerbang.catat_gagal(uname, ip)
-            return gagal("Akun ini sedang dinonaktifkan. Hubungi Super Admin.")
+            return gagal(sebab)
 
         gerbang.catat_berhasil(uname, ip)
         akun.terakhir_login = now_local()
@@ -189,14 +172,8 @@ async def naikkan_versi_token(akun_id: int, *, sebab: str = "") -> None:
     di salah satunya — dan yang tertinggal justru jadi satu-satunya tindakan
     yang tampak memutus akses padahal tidak.
     """
-    from sqlalchemy import update
-
     async with SessionLocal() as db:
-        await db.execute(
-            update(ProduksiAkun).where(ProduksiAkun.id == akun_id)
-            .values(token_version=ProduksiAkun.token_version + 1)
-        )
-        await db.commit()
+        await identitas.naikkan_versi(db, akun_id)
     if sebab:
         log.info("Versi token akun %s dinaikkan — %s", akun_id, sebab)
 
@@ -225,26 +202,17 @@ async def proses_ganti_sandi(
     # orangnya baru saja membuktikan dirinya beberapa detik lalu di halaman
     # masuk, dan memintanya mengetik ulang sandi yang justru sedang dibuang
     # hanya menambah satu kesempatan salah ketik.
-    if not wajib and not await cek_sandi_async(sandi_lama, akun.password_hash):
-        return gagal("Kata sandi lama salah.")
     if sandi_baru != ulangi:
         return gagal("Kata sandi baru dan ulangannya tidak sama.")
-    if await cek_sandi_async(sandi_baru, akun.password_hash):
-        return gagal("Kata sandi baru harus berbeda dari yang lama.")
-    try:
-        hash_baru = hash_sandi(sandi_baru)
-    except ValueError as e:
-        return gagal(str(e))
-
     async with SessionLocal() as db:
-        baris = await db.get(ProduksiAkun, akun.id)
-        baris.password_hash = hash_baru
-        baris.harus_ganti_sandi = False
-        # Sandi yang diganti memutus sesi LAMA di semua perangkat. Tanpa ini,
-        # sandi yang sudah dicuri tetap berguna sesudah diganti — yang justru
-        # alasan orang menggantinya.
-        baris.token_version = (baris.token_version or 1) + 1
-        await db.commit()
+        try:
+            # Sandi yang diganti memutus sesi LAMA di semua perangkat (versi
+            # naik di paket). Tanpa ini, sandi yang sudah dicuri tetap
+            # berguna sesudah diganti — yang justru alasan orang menggantinya.
+            await identitas.ganti_sandi(db, akun, sandi_lama=sandi_lama,
+                                        sandi_baru=sandi_baru, wajib_lama=not wajib)
+        except identitas.Tolak as e:
+            return gagal(e.pesan)
         akun_baru = await db.get(ProduksiAkun, akun.id)
         token_baru = buat_token(akun_baru)
         umur = umur_sesi_detik(akun_baru)

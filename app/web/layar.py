@@ -27,28 +27,17 @@ pintu tak pernah menjadi kunci.
 from __future__ import annotations
 
 from app.models import User
-from app.peran import PERAN_STAF_KEATAS
+from hmu_identitas import peran as P
 
-#: Empat view. Nilainya dipakai templat, jadi namanya tetap kata biasa.
-SUPER = "super"
-ADMIN = "admin"
-SELEPAN = "selepan"
-POLESAN = "polesan"
-#: Operator yang belum diberi gudang. Bukan view kelima — ia keadaan yang
-#: harus terbaca sebagai kesalahan pendaftaran, bukan sebagai layar kosong
-#: yang membuat orang mengira aplikasinya rusak.
-TAMU = "tamu"
-
-NAMA_VIEW = {
-    SUPER: "Super Admin",
-    ADMIN: "Admin",
-    SELEPAN: "Operator selepan",
-    POLESAN: "Operator polesan",
-    TAMU: "Belum punya gudang",
-}
+#: Empat view — namanya milik paket `hmu_identitas.peran` sejak Tahap 2,
+#: supaya Meja dan Gudang 2 (yang menerima `view` dari sini) membaca nama
+#: yang sama persis. TAMU = operator yang belum diberi gudang: bukan view
+#: kelima, melainkan keadaan yang harus terbaca sebagai kesalahan pendaftaran.
+SUPER, ADMIN, SELEPAN, POLESAN, TAMU = P.V_SUPER, P.V_ADMIN, P.V_SELEPAN, P.V_POLESAN, P.V_TAMU
+NAMA_VIEW = P.NAMA_VIEW
 
 #: View yang memegang kedua gudang sekaligus — dan karena itu melihat uang.
-MEJA = (SUPER, ADMIN)
+MEJA = P.VIEW_MEJA
 
 
 def gudang1(view: str) -> bool:
@@ -73,26 +62,17 @@ async def view_untuk(user: User | None) -> str:
     """
     if user is None:
         return TAMU
-    peran = (user.role or "").strip().lower()
-    if peran == "superadmin":
-        return SUPER
-    # `PERAN_STAF_KEATAS`, bukan daftar nama yang ditulis ulang di sini.
-    # `superadmin` sudah dijawab di atas, jadi yang tersisa dari tangga itu
-    # persis Admin dan peran lama `staff`. Menyebutnya satu per satu adalah
-    # cara peran baru tertinggal di gerbang — sudah terjadi delapan kali, dan
-    # ada uji yang menjaganya supaya tak terjadi lagi.
-    if peran in PERAN_STAF_KEATAS:
-        return ADMIN
-    if peran == "operator":
+    if P.operator_saja(user.role):
         # Dipinjam dari katalog aksi supaya jawaban "operator gudang mana"
         # tak pernah berselisih antara menu aksi dan layar yang memuatnya.
         from app.web.miniapp import _is_g1_operator, _is_g2_operator
 
         if await _is_g2_operator(user):
-            return POLESAN
+            return P.view(user.role, P.G2)
         if await _is_g1_operator(user):
-            return SELEPAN
-    return TAMU
+            return P.view(user.role, P.G1)
+        return P.view(user.role, P.TANPA)
+    return P.view(user.role, P.SEMUA)
 
 
 # ───────────────────────── Petak Beranda per view ─────────────────────────
