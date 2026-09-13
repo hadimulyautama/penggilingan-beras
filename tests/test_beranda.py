@@ -200,10 +200,14 @@ def test_kartu_pk_menyebut_lot_gilingnya():
     assert "PkTumpukanToSilo" in fn, "PK yang lewat tumpukan ikut terlewat"
     assert 'f"masuk {_tgl(tgl)}"' in fn
 
-    g2 = inspect.getsource(svc.untuk_gudang2)
-    # Kartu silo DAN kartu penyosohan — keduanya, lewat memo yang sama.
+    g2 = (inspect.getsource(svc._kartu_penyosohan_g2)
+          + inspect.getsource(svc._kartu_silo_g2))
+    # Kartu silo DAN kartu penyosohan — keduanya, lewat memo yang sama
+    # (`asal_silo` diterima dari pemanggilnya: untuk_gudang2 / operator).
     assert g2.count("await asal_silo(") >= 2, "ada kartu G2 yang belum menyebut asalnya"
     assert "_pemasok_ringkas(" in g2
+    assert "asal_silo" in inspect.getsource(svc.untuk_gudang2)
+    assert "asal_silo" in inspect.getsource(svc.untuk_operator_gudang2)
     # Sisa per lot sengaja tidak diarang: stok silo disimpan sebagai jumlah,
     # bukan lapisan.
     assert "berat_kg" in fn

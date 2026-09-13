@@ -295,16 +295,22 @@ class JedaProses(Base):
     __table_args__ = (
         Index("ix_jeda_proses_drying_lot_id", "drying_lot_id"),
         Index("ix_jeda_proses_milling_process_id", "milling_process_id"),
+        Index("ix_jeda_proses_polishing_process_id", "polishing_process_id"),
         Index("ix_jeda_proses_mulai", "mulai"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    #: 'pengeringan' | 'giling'. Tersirat dari kolom mana yang terisi, tetapi
-    #: disimpan supaya laporan mengelompokkan tanpa menebak.
+    #: 'pengeringan' | 'giling' | 'penyosohan'. Tersirat dari kolom mana yang
+    #: terisi, tetapi disimpan supaya laporan mengelompokkan tanpa menebak.
     jenis: Mapped[str] = mapped_column(String(20), nullable=False)
     drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
     milling_process_id: Mapped[int | None] = mapped_column(
         ForeignKey("milling_process.id")
+    )
+    #: Penyosohan Gudang 2 — sejak 12 September 2026 ia pun bisa berhenti
+    #: sementara (keputusan pemilik, aplikasi operator Gudang 2).
+    polishing_process_id: Mapped[int | None] = mapped_column(
+        ForeignKey("polishing_process.id")
     )
     sebab: Mapped[str] = mapped_column(String(120), nullable=False)
     mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

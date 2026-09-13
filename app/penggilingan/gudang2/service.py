@@ -537,8 +537,15 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
 
 
 async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float) -> None:
-    stok = await hitung_stok_tumpukan(db)
+    """Batas tumpukan hanya ditegakkan bila memang disetel (> 0).
+
+    Keputusan pemilik 12 September 2026: tumpukan Gudang 2 TIDAK berbatas —
+    bawaannya 0. Yang menyebut angka di sini adalah lantai pabrik lain.
+    """
     cap = settings.g2_tumpukan_maks_kg
+    if not cap:
+        return
+    stok = await hitung_stok_tumpukan(db)
     if stok + tambahan_kg > cap:
         sisa = max(cap - stok, 0)
         raise Gudang2Error(
@@ -548,41 +555,40 @@ async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float) -> Non
         )
 
 
-async def _tolak_silo_sedang_dipoles(db: AsyncSession, silo_id: int | None) -> None:
-    """Tolak PK masuk ke silo Gudang 2 yang isinya SEDANG DIPOLES.
+async def _catat_masuk_selama_proses(
+    db: AsyncSession, silo_id: int | None, berat_kg: float,
+) -> str | None:
+    """PK masuk ke silo yang SEDANG DIPOLES: dicatat pada prosesnya.
 
-    Temuan QA P-K-11. Rumus konsumsi penyosohan dihitung dari selisih stok
-    awal dan akhir silo. PK yang masuk di tengah proses ikut terhitung sebagai
-    "yang habis dipoles" — jadi bahan terbaca lebih banyak daripada yang
-    sungguh masuk mesin, dan rendemennya ikut salah.
+    Sampai 12 September 2026 intake seperti ini DITOLAK (temuan QA P-K-11):
+    rumus bahan terpakai adalah awal − akhir, dan PK yang masuk di tengah
+    proses akan terbaca sebagai "habis dipoles". Pemilik memutuskan lain:
+    di lapangan silo memang diisi lagi sesuai kebutuhan, jadi yang harus
+    berubah rumusnya, bukan pekerjaannya. Yang dituang selama proses ditambah
+    ke `berat_masuk_kg` pemakaian silo itu, dan saat ditutup terpakai = awal
+    + masuk − akhir. Rendemen tetap atas bahan yang sungguh masuk mesin.
 
-    Dua jalan keluar dipertimbangkan: memasukkan intake-selama-proses ke dalam
-    rumusnya, atau menolak intakenya. Yang dipilih MENOLAK, dan alasannya
-    bukan kemudahan: silo yang sedang diposes isinya sedang berkurang terus,
-    sehingga "berapa yang ada di dalamnya" tak punya satu jawaban selama
-    prosesnya berjalan. Rumus apa pun yang dibangun di atas angka yang
-    bergerak akan benar hanya sampai seseorang menimbang ulang.
-
-    Menolak juga yang paling dekat dengan kenyataan fisiknya: menuang PK baru
-    ke silo yang sedang dikuras memang bukan hal yang dikerjakan orang.
+    Mengembalikan kode proses yang menerimanya (untuk pesan ke layar), atau
+    None bila silonya tidak sedang dipoles.
     """
     if silo_id is None:
-        return
+        return None
     from app.models import PolishingProcess, PolishingSiloUsage
 
-    aktif = (await db.execute(
-        select(PolishingProcess.kode_proses)
-        .join(PolishingSiloUsage,
-              PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
+    baris = (await db.execute(
+        select(PolishingSiloUsage, PolishingProcess.kode_proses)
+        .join(PolishingProcess,
+              PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
         .where(PolishingSiloUsage.silo_id == silo_id,
-               PolishingProcess.status == "proses")
+               PolishingProcess.status == "proses",
+               PolishingSiloUsage.berat_akhir_kg.is_(None))
         .limit(1)
-    )).scalars().first()
-    if aktif:
-        raise Gudang2Error(
-            f"Silo itu sedang dipoles ({aktif}) — PK baru tak bisa masuk "
-            "sampai penyosohannya selesai. Tumpuk dulu, atau pilih silo lain."
-        )
+    )).first()
+    if baris is None:
+        return None
+    usage, kode = baris
+    usage.berat_masuk_kg = float(usage.berat_masuk_kg or 0) + float(berat_kg)
+    return kode
 
 
 async def _add_intake(
@@ -594,7 +600,7 @@ async def _add_intake(
     if tujuan_norm == "ditumpuk":
         await _guard_kapasitas_tumpukan(db, berat_kg)
     else:
-        await _tolak_silo_sedang_dipoles(db, silo_id)
+        await _catat_masuk_selama_proses(db, silo_id, berat_kg)
     now = input_time(tanggal, jam)
     intake = PkGudang2Intake(
         sumber_tipe=sumber_tipe,
@@ -717,6 +723,9 @@ class PindahResult:
     nama_silo: str
     berat_kg: float
     sisa_tumpukan_intake: float
+    #: Kode penyosohan yang sedang memakai silo itu, bila PK-nya dituang di
+    #: tengah proses — ia ikut dihitung sebagai bahan proses tersebut.
+    ke_proses: str | None = None
 
 
 async def pindah_tumpukan_ke_silo(
@@ -758,16 +767,18 @@ async def pindah_tumpukan_ke_silo(
     )
     db.add(move)
     await db.flush()
+    ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
     await log_activity(
         db, table_name="pk_tumpukan_to_silo", record_id=move.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{move.kode_pindah} | {kirim:.0f}kg → Silo {nama_silo}",
+        new_value=f"{move.kode_pindah} | {kirim:.0f}kg → Silo {nama_silo}"
+                  + (f" | ditambah ke {ke_proses}" if ke_proses else ""),
     )
     await db.commit()
     await db.refresh(move)
     return PindahResult(
         kode_pindah=move.kode_pindah, nama_silo=nama_silo, berat_kg=kirim,
-        sisa_tumpukan_intake=sisa - kirim,
+        sisa_tumpukan_intake=sisa - kirim, ke_proses=ke_proses,
     )
 
 
@@ -836,6 +847,7 @@ async def pindah_tumpukan(
         )
         db.add(move)
         await db.flush()
+        await _catat_masuk_selama_proses(db, silo.id, take)
         await log_activity(
             db, table_name="pk_tumpukan_to_silo", record_id=move.id, action="INSERT",
             changed_by=user.id,

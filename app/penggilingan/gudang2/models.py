@@ -163,8 +163,9 @@ class PolishingSiloUsage(Base, TimestampMixin):
     """Pemakaian silo per proses penyosohan.
 
     berat_awal_kg: snapshot OTOMATIS saat proses mulai (stok silo saat itu).
+    berat_masuk_kg: PK yang ditambahkan selama proses (silo boleh diisi lagi).
     berat_akhir_kg: input MANUAL operator saat selesai.
-    berat_terpakai_kg: computed = berat_awal − berat_akhir (diisi saat selesai).
+    berat_terpakai_kg: computed = awal + masuk − akhir (diisi saat selesai).
     """
 
     __tablename__ = "polishing_silo_usage"
@@ -180,6 +181,12 @@ class PolishingSiloUsage(Base, TimestampMixin):
     )
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
     berat_awal_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    #: PK yang DITAMBAHKAN ke silo ini selama proses berjalan. Keputusan
+    #: pemilik 12 September 2026: silo yang dipoles boleh diisi lagi, jadi
+    #: terpakai = awal + masuk − akhir (bukan lagi awal − akhir). Dulu intake
+    #: ke silo yang dipoles ditolak (P-K-11) supaya rumus lama tetap benar.
+    berat_masuk_kg: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0, server_default=text("0"))
     berat_akhir_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     berat_terpakai_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
 

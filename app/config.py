@@ -102,8 +102,10 @@ class Settings(BaseSettings):
     # Meja bisa MENULIS. Kosong = pintu Meja mati.
     meja_api_token: str = ""
 
-    # Kapasitas tumpukan PK Gudang 2 (maks). Lewat batas → notifikasi.
-    g2_tumpukan_maks_kg: int = 60_000
+    # Kapasitas tumpukan PK Gudang 2. 0 = TANPA BATAS — keputusan pemilik
+    # 12 September 2026: tumpukan Gudang 2 tidak dibatasi. Angka > 0 kembali
+    # menegakkan batasnya saat intake (untuk pabrik lain / masa depan).
+    g2_tumpukan_maks_kg: int = 0
     # Tumpukan PK Gudang 1 — hasil giling yang belum dikirim ke penyosohan.
     # BATAS FISIK LANTAI, bukan kebijakan: itu sebabnya ia di sini dan bukan di
     # halaman Pengaturan. Lantai tidak berubah menurut musim.
