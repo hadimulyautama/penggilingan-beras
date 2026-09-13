@@ -293,6 +293,19 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
    Jadi identitas bersama menyimpan SATU peran per orang, dan tiap aplikasi
    memeriksa peran itu di pintunya sendiri; tidak ada peran-per-aplikasi.
    Izin alat (kantor_grant) menyusul saat peran disesuaikan.
+
+   **Benih orang & peran (pemilik, 13 Sep sore)** — pegangan Tahap 2:
+
+   | Orang | Peran | Pintu |
+   |---|---|---|
+   | Wahid (Ahmad Wahid Nurhani), Miftah | superadmin (direksi) | semua aplikasi |
+   | Elfira, Eka | admin | Meja, Timbangan |
+   | Purwadi, Marno, Dany | operator | Gudang 2 / Pos Produksi, Timbangan |
+
+   Muthia dan Kurniawan (Legal) tidak disebut → tidak punya akun aplikasi
+   pabrik; mereka pengguna Kantor AI saja. Akun yang sudah ada di `users`
+   dan `timbangan_akun` dicocokkan ke daftar ini saat rencana migrasi
+   Tahap 2 ditunjukkan; yang tidak ada di daftar tidak dibuat.
 6. **`setelan_pabrik`, `notifications`, `kode_urut`**: milik proses yang
    mana? Usulan di BATAS-MODUL §4, tetapi ini keputusan.
 7. **Verifikasi harga & output** (`purchase_batch_verifications`,
