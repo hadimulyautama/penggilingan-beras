@@ -15,7 +15,8 @@ P-K-01, P-K-08, P-K-09, P-K-10, P-K-21).
     tetap ditulis sebagai CERMIN supaya layar tak berubah — satu aksi per
     kali pindah ke sini, dan pembacanya menyusul.
 
-Aksi pertama di jalur ini: "Gabah masuk" dari tiket timbang.
+Aksi di jalur ini: "Gabah masuk" (Gudang 1) dan "PK luar masuk" (Gudang 2),
+keduanya dari tiket timbang.
 """
 from __future__ import annotations
 
@@ -32,6 +33,8 @@ from app.database import Base
 #: pabrik, bukan nama tabel — tabel bisa berganti, kejadiannya tidak.
 GABAH_MASUK = "gabah_masuk"
 GABAH_MASUK_DIBATALKAN = "gabah_masuk_dibatalkan"
+PK_LUAR_MASUK = "pk_luar_masuk"
+PK_LUAR_MASUK_DIBATALKAN = "pk_luar_masuk_dibatalkan"
 
 TERCATAT, DIBATALKAN = "tercatat", "dibatalkan"
 
@@ -96,3 +99,36 @@ class ProyeksiGabahMasuk(Base):
     #: cerminnya dihapus saat dibatalkan (pembacanya masih menganggap "ada
     #: baris" = "ada gabah").
     purchase_batch_id: Mapped[int | None] = mapped_column(Integer)
+
+
+class ProyeksiPkLuarMasuk(Base):
+    """Satu baris per peristiwa `pk_luar_masuk` — kembaran proyeksi gabah
+    untuk Gudang 2. Cerminnya `pk_purchase_batches`."""
+
+    __tablename__ = "proyeksi_pk_luar_masuk"
+    __table_args__ = (
+        Index("uq_proyeksi_pk_luar_masuk_tiket_hidup", "timbangan_transaksi_id", unique=True,
+              postgresql_where=text("status = 'tercatat'"),
+              sqlite_where=text("status = 'tercatat'")),
+        Index("ix_proyeksi_pk_luar_masuk_tanggal", "tanggal"),
+    )
+
+    peristiwa_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"), primary_key=True)
+    kode_batch: Mapped[str] = mapped_column(String(20), nullable=False)
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer)
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"))
+    nama_supplier: Mapped[str | None] = mapped_column(String(150))
+    berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False)
+    #: ks / kl / campuran / semi_ks
+    jenis_pk: Mapped[str | None] = mapped_column(String(12))
+    kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    no_polisi: Mapped[str | None] = mapped_column(String(20))
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pelaku_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=TERCATAT)
+    dibatalkan_peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    pk_purchase_batch_id: Mapped[int | None] = mapped_column(Integer)

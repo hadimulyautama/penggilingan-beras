@@ -287,13 +287,9 @@ async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
         from app.models.peristiwa import GABAH_MASUK_DIBATALKAN
         from app.services import peristiwa as buku
 
-        await buku.catat(
-            db, jenis=GABAH_MASUK_DIBATALKAN, pelaku_id=None,
-            kunci_kiriman=f"{GABAH_MASUK_DIBATALKAN}:{b.peristiwa_id}",
-            muatan={"peristiwa_id": b.peristiwa_id, "kode_batch": kode,
-                    "alasan": "Dibatalkan lewat Batalkan input terakhir"},
-            membatalkan_id=b.peristiwa_id,
-        )
+        await buku.batalkan(db, jenis_lawan=GABAH_MASUK_DIBATALKAN, peristiwa_id=b.peristiwa_id,
+                            pelaku_id=None, muatan={"kode_batch": kode,
+                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     await db.delete(b)
     return f"✓ Dibatalkan: input pembelian {kode}."
 
@@ -592,6 +588,15 @@ async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
         )
     )
     kode = b.kode_batch
+    if b.peristiwa_id is not None:
+        # Jalur peristiwa (Tahap 3): pembatalan = peristiwa LAWAN; hanya
+        # baris CERMIN yang dihapus — lihat catatan di `_undo_purchase`.
+        from app.models.peristiwa import PK_LUAR_MASUK_DIBATALKAN
+        from app.services import peristiwa as buku
+
+        await buku.batalkan(db, jenis_lawan=PK_LUAR_MASUK_DIBATALKAN, peristiwa_id=b.peristiwa_id,
+                            pelaku_id=None, muatan={"kode_batch": kode,
+                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     await db.delete(b)
     return f"✓ Dibatalkan: catat PK luar {kode}."
 

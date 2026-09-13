@@ -95,8 +95,10 @@ sama, bisa dibangun ulang dari nol: `python -m scripts.bangun_ulang_proyeksi`.
 Pembatalan = peristiwa LAWAN (`membatalkan_id`), bukan penghapusan.
 
 Aksi yang sudah di jalur ini: **Gabah masuk dari tiket timbang**
-(`purchase.create_purchase_batch_dari_timbang`) dan pembatalannya
-(`undo._undo_purchase`). Urutan satu transaksi: kunci tiket → nomor atomik →
+(`purchase.create_purchase_batch_dari_timbang`, undo `_undo_purchase`) dan
+**PK luar masuk dari tiket timbang** (`gudang2.service.
+create_pk_purchase_dari_timbang`, undo `_undo_pk_purchase`, proyeksi
+`proyeksi_pk_luar_masuk`, migrasi 0048). Urutan satu transaksi: kunci tiket → nomor atomik →
 `services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
 `purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
 pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →

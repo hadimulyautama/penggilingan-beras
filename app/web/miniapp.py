@@ -1946,6 +1946,8 @@ class CatatPkLuarReq(BaseModel):
     timbangan_transaksi_id: int
     jenis_pk: str
     kadar_air: PersenOpsional = None
+    #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
+    kunci_kiriman: str | None = None
 
 
 @router.get("/actions/timbang-pk-aktif")
@@ -1990,6 +1992,7 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
             r = await create_pk_purchase_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
                 jenis_pk=req.jenis_pk, kadar_air=req.kadar_air,
+                kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
             )
         except Gudang2Error as e:
             raise _err(e, "Gagal mencatat PK luar.")

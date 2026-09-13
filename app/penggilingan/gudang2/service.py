@@ -32,6 +32,8 @@ from app.models import (
     User,
     Warehouse,
 )
+from app.models.peristiwa import PK_LUAR_MASUK
+from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import (
     next_pk_purchase_code,
@@ -305,10 +307,16 @@ async def create_pk_purchase(
 async def create_pk_purchase_dari_timbang(
     db: AsyncSession, *, user: User, timbangan_transaksi_id: int, jenis_pk: str | None,
     kadar_air: float | None = None, tanggal: date | None = None, jam: time | None = None,
+    kunci_kiriman: str | None = None,
 ) -> PkPurchaseResult:
     """Catat PK luar MASUK DARI tiket TIMBANG (jenis BERAS_PK). Supplier/bobot/nopol dari
     timbang — hanya pilih tiket + jenis PK (timbang tak membedakan ks/kl/dst). STAFF/ADMIN
     saja. Bobot boleh belum ada ('menunggu') → disinkron dari tiket. Referensi bobot = tiket.
+
+    **Jalur PERISTIWA (Tahap 3, aksi kedua)** — persis kembaran gabah masuk:
+    kunci tiket → nomor atomik → peristiwa `pk_luar_masuk` (kunci kiriman
+    idempoten) → `proyeksi_pk_luar_masuk` → cermin `pk_purchase_batches` →
+    jejak & notifikasi → commit. Gagal di mana pun = tak ada yang tersimpan.
     """
     if user.role not in PERAN_STAF_KEATAS:
         raise Gudang2Error("🔒 Input PK dari luar hanya bisa oleh Staff/Admin.")
@@ -344,20 +352,49 @@ async def create_pk_purchase_dari_timbang(
         nama = tiket.get("nama_supplier") or tiket.get("pihak_nama") or "Tanpa Nama"
         supplier, created = await find_or_create_supplier(db, nama)
 
+    if kunci_kiriman:
+        ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return PkPurchaseResult(batch=ada, supplier_nama=supplier.nama_supplier, supplier_created=False)
+    else:
+        urutan = await buku.jumlah_jenis(db, PK_LUAR_MASUK, "timbangan_transaksi_id",
+                                         timbangan_transaksi_id)
+        kunci_kiriman = f"{PK_LUAR_MASUK}:tiket:{timbangan_transaksi_id}:{urutan + 1}"
+
     kode = await next_pk_purchase_code(db, now.date())
+    muatan = {
+        "kode_batch": kode, "timbangan_transaksi_id": timbangan_transaksi_id,
+        "tiket_kode": tiket.get("kode"), "supplier_id": supplier.id,
+        "nama_supplier": supplier.nama_supplier, "berat_kg": berat, "sumber_berat": sumber,
+        "jenis_pk": jenis, "kadar_air": kadar_air, "no_polisi": tiket.get("nomor_polisi"),
+        "tanggal": now.date(), "waktu": now,
+    }
+    try:
+        e = await buku.catat(db, jenis=PK_LUAR_MASUK, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
+                             muatan=muatan, waktu=now)
+    except IntegrityError as e_:
+        raise Gudang2Error(_pesan_integritas(e_, "proyeksi_pk_luar_masuk", kode))
+    if not e.baru:
+        ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return PkPurchaseResult(batch=ada, supplier_nama=supplier.nama_supplier, supplier_created=False)
+
+    # Cermin untuk layar & laporan lama, ditambah penunjuk ke peristiwanya.
     batch = PkPurchaseBatch(
         kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat,
         no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         status_batch="diterima", flag_unverified=True,
         timbangan_transaksi_id=timbangan_transaksi_id, sumber_berat=sumber,
+        peristiwa_id=e.id,
     )
     db.add(batch)
     try:
         await db.flush()
-    except IntegrityError as e:
+    except IntegrityError as e_:
         await db.rollback()
-        raise Gudang2Error(_pesan_integritas(e, "pk_purchase_batches", kode))
+        raise Gudang2Error(_pesan_integritas(e_, "pk_purchase_batches", kode))
+    getattr(e, "proyeksi", None) and setattr(e.proyeksi, "pk_purchase_batch_id", batch.id)
 
     b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
     await log_activity(
@@ -376,6 +413,16 @@ async def create_pk_purchase_dari_timbang(
     await db.refresh(batch)
     return PkPurchaseResult(batch=batch, supplier_nama=supplier.nama_supplier,
                             supplier_created=created)
+
+
+async def _pk_batch_dari_kunci(db: AsyncSession, kunci_kiriman: str) -> PkPurchaseBatch | None:
+    """Cermin batch PK dari peristiwa berkunci ini — untuk kiriman ulang."""
+    from app.models import Peristiwa
+
+    return (await db.execute(
+        select(PkPurchaseBatch).join(Peristiwa, Peristiwa.id == PkPurchaseBatch.peristiwa_id)
+        .where(Peristiwa.kunci_kiriman == kunci_kiriman)
+    )).scalars().first()
 
 
 @dataclass

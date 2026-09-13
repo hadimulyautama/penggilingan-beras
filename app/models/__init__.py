@@ -53,7 +53,7 @@ from app.penggilingan.inventory.models import (
     RiceQualityStandard,
 )
 from app.models.akun import ProduksiAkun
-from app.models.peristiwa import Peristiwa, ProyeksiGabahMasuk
+from app.models.peristiwa import Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk
 from app.models.system import ActivityLog, KodeUrut, Notification, SetelanPabrik
 from app.models.transfer import InternalTransfer
 
@@ -113,4 +113,5 @@ __all__ = [
     "ProduksiAkun",
     "Peristiwa",
     "ProyeksiGabahMasuk",
+    "ProyeksiPkLuarMasuk",
 ]

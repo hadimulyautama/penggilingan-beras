@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, text
+from sqlalchemy import (BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer,
+                        Numeric, String, text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
@@ -39,6 +40,10 @@ class PkPurchaseBatch(Base, TimestampMixin):
     # Tautan ke timbangan (shared DB) — FK di level DB saja (migrasi 0027). Lihat PurchaseBatch.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
+    #: Peristiwa `pk_luar_masuk` yang melahirkan baris ini (Tahap 3) —
+    #: terisi = cermin buku besar; kosong = jalur lama / manual.
+    peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PkPurchaseVerification | None"] = relationship(

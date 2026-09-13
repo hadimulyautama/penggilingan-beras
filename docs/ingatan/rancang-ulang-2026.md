@@ -30,9 +30,14 @@ catat 9 → 15 kueri (9 → 14 ms), batalkan 8 → 13 kueri (8 → 12 ms). Yang 
 lebih rumit: penulisan ganda (buku besar + cermin tabel lama) sampai
 pembacanya pindah; cermin masih DIHAPUS saat dibatalkan karena ±15 pembaca
 `purchase_batches` (laporan, stok, tumpukan, rekonsiliasi) menganggap ada
-baris = ada gabah. Langkah 3: BERHENTI — pemilik memutuskan aksi berikutnya
-(usul: "PK luar masuk", pola yang sama; atau membalik urutan: pindahkan
-pembaca dulu supaya cermin tak perlu dihapus).
+baris = ada gabah. Langkah 3: BERHENTI — pemilik menjawab "lanjut" → **aksi kedua, PK luar
+masuk dari tiket timbang** (migrasi 0048 `proyeksi_pk_luar_masuk`,
+`pk_purchase_batches.peristiwa_id`; pola persis kembaran gabah; ukuran
+catat 9 → 15 kueri, 9 → 14 ms; batalkan 8 → 13 kueri, 7 → 11 ms). Yang
+belum tersentuh oleh dua aksi ini: P-K-10 hidup di aksi *pemasukan* PK ke
+silo/tumpukan (`masukkan_pk_luar` / `_undo_pk_intake`) — pembatalannya
+harus ditolak bila sudah ada pemakaian hilir (penyosohan); itu calon aksi
+ketiga. Cermin tabel lama masih dihapus saat dibatalkan (alasan sama).
 
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu
