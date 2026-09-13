@@ -276,6 +276,24 @@ async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
         delete(PurchaseBatchVerification).where(PurchaseBatchVerification.purchase_batch_id == batch_id)
     )
     kode = b.kode_batch
+    if b.peristiwa_id is not None:
+        # ── Jalur peristiwa (Tahap 3): pembatalan = peristiwa LAWAN ──
+        #
+        # Buku besar tak pernah kehilangan apa pun: `gabah_masuk` tetap ada,
+        # `gabah_masuk_dibatalkan` menunjuknya, dan proyeksinya ditandai.
+        # Yang dihapus hanya baris CERMIN di `purchase_batches` — pembaca
+        # lama (laporan, stok, tumpukan) masih menganggap "ada baris" berarti
+        # "ada gabah", dan mengubah semuanya sekaligus bukan tugas tahap ini.
+        from app.models.peristiwa import GABAH_MASUK_DIBATALKAN
+        from app.services import peristiwa as buku
+
+        await buku.catat(
+            db, jenis=GABAH_MASUK_DIBATALKAN, pelaku_id=None,
+            kunci_kiriman=f"{GABAH_MASUK_DIBATALKAN}:{b.peristiwa_id}",
+            muatan={"peristiwa_id": b.peristiwa_id, "kode_batch": kode,
+                    "alasan": "Dibatalkan lewat Batalkan input terakhir"},
+            membatalkan_id=b.peristiwa_id,
+        )
     await db.delete(b)
     return f"✓ Dibatalkan: input pembelian {kode}."
 

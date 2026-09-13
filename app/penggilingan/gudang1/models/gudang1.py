@@ -4,11 +4,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Index,
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
@@ -63,6 +65,11 @@ class PurchaseBatch(Base, TimestampMixin):
     # app ini, jadi FK cukup di level DB (migrasi 0027). Di ORM: kolom Integer + unique.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
+    #: Peristiwa `gabah_masuk` yang melahirkan baris ini (Tahap 3). Terisi =
+    #: baris ini CERMIN dari buku besar; pembatalannya lewat peristiwa lawan.
+    #: Kosong = dibuat jalur lama (manual / sebelum Tahap 3).
+    peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PurchaseBatchVerification | None"] = relationship(

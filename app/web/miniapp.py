@@ -1341,6 +1341,10 @@ class GabahMasukReq(BaseModel):
     timbangan_transaksi_id: int
     tujuan: str | None = None       # dryer / silo_a / silo_b
     kondisi: str | None = None      # opsional; diturunkan dari jenis timbang bila kosong
+    #: Kunci kiriman (Tahap 3): klien yang mengirim ulang kiriman yang sama
+    #: mendapat batch yang sama, bukan galat. Opsional — klien lama tak
+    #: mengirimnya dan tetap dilayani.
+    kunci_kiriman: str | None = None
 
 
 @router.get("/actions/timbang-masuk-aktif")
@@ -1423,7 +1427,7 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         try:
             r = await create_purchase_batch_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
-                kondisi_gabah=kondisi,
+                kondisi_gabah=kondisi, kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
             )
         except ValueError as e:
             raise HTTPException(400, str(e))

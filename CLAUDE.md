@@ -87,6 +87,24 @@ Mengelola orang, akun, dan alat: **Super Admin saja**, dengan jaring pengaman
 tak pernah terkunci dari dalam. Setelan KERJA (target kadar air, sebab
 berhenti, sakelar mutu) tetap milik Direksi.
 
+## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
+
+`peristiwa` = apa yang terjadi, TAMBAH-SAJA (trigger Postgres menolak UPDATE
+dan DELETE). `proyeksi_*` = turunan dari peristiwa, ditulis di transaksi yang
+sama, bisa dibangun ulang dari nol: `python -m scripts.bangun_ulang_proyeksi`.
+Pembatalan = peristiwa LAWAN (`membatalkan_id`), bukan penghapusan.
+
+Aksi yang sudah di jalur ini: **Gabah masuk dari tiket timbang**
+(`purchase.create_purchase_batch_dari_timbang`) dan pembatalannya
+(`undo._undo_purchase`). Urutan satu transaksi: kunci tiket → nomor atomik →
+`services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
+`purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
+pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →
+commit. Aksi lain masih jalur lama; memindahkannya satu per satu, dengan
+persetujuan pemilik, dan tiap aksi wajib punya uji Postgres dua sesi
+(`tests/pg/test_peristiwa.py` contohnya: r06, r13). Muatan JSON hanya lewat
+`peristiwa.bersih()`.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

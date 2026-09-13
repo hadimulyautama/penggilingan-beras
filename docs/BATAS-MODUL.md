@@ -85,6 +85,8 @@ lalu ALTER; chain timbangan (15) mewarisi 0022–0026 lalu membuat
 
 | Tabel | Penulis | Pembaca | Catatan |
 |---|---|---|---|
+| `peristiwa` | `app/services/peristiwa.py:catat` — SATU penulis (dipanggil `purchase.create_purchase_batch_dari_timbang` dan `undo._undo_purchase`); TAMBAH-SAJA, trigger menolak UPDATE/DELETE (migrasi 0047) | `bangun_ulang` (proyeksi), `purchase._batch_dari_kunci` | Buku besar Tahap 3. Jenis hari ini: `gabah_masuk`, `gabah_masuk_dibatalkan` |
+| `proyeksi_gabah_masuk` | penangan di `services/peristiwa.py` (I saat catat, U status saat dibatalkan; dikosongkan+diisi ulang oleh `bangun_ulang`) | belum ada layar — cerminnya `purchase_batches` yang dibaca layar | Turunan murni; indeks unik parsial: satu tiket satu pencatatan hidup |
 | `produksi_akun` | ⚠ empat jalur produksi: `web/pengguna.py` (buat/reset/status/mode), `web/meja_api.py` (implementasi paralel operasi yang sama untuk Meja), `web/auth.py` (login, `token_version`, ganti sandi), `web/seed_akun.py`; `data_uji`; 4 skrip uji | security 11 ref, pengaturan, mode_uji, deps; **meja & gudang2** lewat `/internal/meja/masuk|saya` | Identitas kedua di samping `users` (dan ketiga: `timbangan_akun`) — X-11 |
 | `activity_logs` | `app/services/activity_log.py:33` — satu-satunya INSERT (dipanggil ±40 tempat, tak commit sendiri); `undo.py:930` (U `dibatalkan_pada/oleh`, bukan DELETE — P-K-21) | audit (List audit), undo (`_log_terakhir`), miniapp (`/keadaan` cap versi) | append-only; dipertahankan Mode Uji |
 | `notifications` | `app/services/notification.py` (I), `drying.py:1112` (I telat; `update()` selesai), `verification.py:98` (`update()` selesai) | `drying.py:1103` (cek kembar) — **tak ada pembaca lain di repo mana pun** | ditulis & ditutup, **tak pernah ditampilkan** — sisa era bot |
@@ -206,6 +208,7 @@ jadi dua tabel; (c) seluruh tabel ke `uang`. ADR §7 butir 7.
 | Modul | Tabel | Status | Catatan |
 |---|---|---|---|
 | peristiwa | `activity_logs` | usul | jejak audit tambah-saja — cikal bakal buku besar |
+| peristiwa | `peristiwa`, `proyeksi_gabah_masuk` | **ADA** (Tahap 3, 13 Sep) | buku besar + proyeksi pertama; aksi berikutnya menunggu keputusan pemilik |
 | peristiwa | `kode_urut` | usul | penghitung atomik penomoran |
 | peristiwa | `notifications` | TANYA | tak dibaca siapa pun; peristiwa, agen, atau dibuang? |
 | peristiwa/?? | `setelan_pabrik` | TANYA | setelan lintas modul; belum ada modul "setelan" |

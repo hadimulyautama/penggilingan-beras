@@ -17,6 +17,8 @@ from app.penggilingan.gudang1.services.timbang_link import (
     kunci_tiket_untuk_ditaut,
 )
 from app.penggilingan.peta_jenis import intake_dari_jenis, is_gabah
+from app.models.peristiwa import GABAH_MASUK
+from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import next_purchase_batch_code
 from app.services.notification import create_notification
@@ -63,9 +65,12 @@ async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier
     if supplier:
         return supplier, False
     supplier = Supplier(nama_supplier=nama, status="aktif")
-    db.add(supplier)
     try:
-        await db.flush()
+        # SAVEPOINT: tabrakan di sini tak boleh menggugurkan transaksi
+        # pemanggil — kunci tiket yang sudah terpasang harus tetap terpasang.
+        async with db.begin_nested():
+            db.add(supplier)
+            await db.flush()
     except IntegrityError:
         # ── Ada yang mendahului di antara "cari" dan "buat" ──
         #
@@ -75,7 +80,6 @@ async def find_or_create_supplier(db: AsyncSession, nama: str) -> tuple[Supplier
         # penolakan itu diterjemahkan jadi "pakai yang sudah ada", bukan jadi
         # galat. Yang meminta memang cuma ingin pemasoknya, bukan barisnya.
         # Temuan QA X-20.
-        await db.rollback()
         supplier = (await db.execute(stmt)).scalars().first()
         if supplier is None:
             raise
@@ -178,12 +182,24 @@ async def create_purchase_batch_dari_timbang(
     kondisi_gabah: str | None = None,
     tanggal: date | None = None,
     jam: time | None = None,
+    kunci_kiriman: str | None = None,
 ) -> CreatedBatch:
     """Buat batch gabah DARI tiket TIMBANG (aplikasi terpisah, DB terintegrasi).
 
     Operator hanya memilih tiket; SUPPLIER, BOBOT, NOPOL diturunkan dari timbang (tak
     diinput ulang → cegah dobel). Bobot & `sumber_berat` ikut tiket: NOTA bila ada,
     selain itu REAL timbang. `timbangan_transaksi_id` UNIQUE → satu tiket satu batch.
+
+    **Jalur PERISTIWA (Tahap 3, aksi pertama yang dipindahkan).** Satu
+    transaksi: kunci tiket (FOR UPDATE) → pemeriksaan → nomor dari penghitung
+    atomik → peristiwa `gabah_masuk` (kunci kiriman idempoten) → proyeksi
+    `proyeksi_gabah_masuk` (constraint: satu tiket satu pencatatan hidup) →
+    cermin `purchase_batches` untuk layar lama → jejak & notifikasi → commit.
+    Gagal di mana pun = tak ada yang tersimpan, termasuk nomornya.
+
+    `kunci_kiriman` dari klien (bila ada) membuat kiriman ulang mengembalikan
+    batch yang sama; tanpa itu kuncinya diturunkan dari tiket dan urutan
+    pencatatannya.
     """
     # Kunci dulu, baru baca. Urutannya penting: pemeriksaan "tiket ini sudah
     # dipakai?" yang dilakukan sebelum kunci terpasang selalu bisa disalip.
@@ -243,7 +259,37 @@ async def create_purchase_batch_dari_timbang(
     # tanggal 11 dibukukan GB-20260910-01, sementara nota timbangnya
     # bertanggal 11 — dan rekap harian kedua sistem tak pernah cocok.
     hari = tanggal_lokal(now)
+
+    # ── Kiriman ulang? Peristiwanya sudah ada → kembalikan batch yang sama ──
+    if kunci_kiriman:
+        ada = await _batch_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return CreatedBatch(batch=ada, supplier=supplier, supplier_created=False)
+    else:
+        urutan = await buku.jumlah_jenis(db, GABAH_MASUK, "timbangan_transaksi_id",
+                                         timbangan_transaksi_id)
+        kunci_kiriman = f"{GABAH_MASUK}:tiket:{timbangan_transaksi_id}:{urutan + 1}"
+
     kode = await next_purchase_batch_code(db, hari)
+    muatan = {
+        "kode_batch": kode, "timbangan_transaksi_id": timbangan_transaksi_id,
+        "tiket_kode": tiket.get("kode"), "supplier_id": supplier.id,
+        "nama_supplier": supplier.nama_supplier, "berat_kg": berat, "sumber_berat": sumber,
+        "kondisi": kondisi, "no_polisi": tiket.get("nomor_polisi"),
+        "kadar_air_awal_persen": kadar_air_awal_persen, "tanggal": hari, "waktu": now,
+    }
+    try:
+        e = await buku.catat(db, jenis=GABAH_MASUK, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
+                             muatan=muatan, waktu=now)
+    except IntegrityError as e_:
+        raise ValueError(_pesan_integritas(e_, "proyeksi_gabah_masuk", kode))
+    if not e.baru:
+        ada = await _batch_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return CreatedBatch(batch=ada, supplier=supplier, supplier_created=False)
+
+    # Cermin untuk layar & laporan lama — bentuknya persis seperti sebelum
+    # Tahap 3, ditambah penunjuk ke peristiwanya.
     batch = PurchaseBatch(
         kode_batch=kode,
         supplier_id=supplier.id,
@@ -258,13 +304,16 @@ async def create_purchase_batch_dari_timbang(
         flag_unverified=True,
         timbangan_transaksi_id=timbangan_transaksi_id,
         sumber_berat=sumber,
+        peristiwa_id=e.id,
     )
     db.add(batch)
     try:
         await db.flush()
-    except IntegrityError as e:
+    except IntegrityError as e_:
         await db.rollback()
-        raise ValueError(_pesan_integritas(e, "purchase_batches", kode))
+        raise ValueError(_pesan_integritas(e_, "purchase_batches", kode))
+    # Penunjuk cermin di proyeksi — objeknya sudah di tangan, tanpa kueri baru.
+    getattr(e, "proyeksi", None) and setattr(e.proyeksi, "purchase_batch_id", batch.id)
 
     b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
     await log_activity(
@@ -283,6 +332,16 @@ async def create_purchase_batch_dari_timbang(
     await db.commit()
     await db.refresh(batch)
     return CreatedBatch(batch=batch, supplier=supplier, supplier_created=created)
+
+
+async def _batch_dari_kunci(db: AsyncSession, kunci_kiriman: str) -> PurchaseBatch | None:
+    """Cermin batch dari peristiwa berkunci ini — untuk kiriman ulang."""
+    from app.models import Peristiwa
+
+    return (await db.execute(
+        select(PurchaseBatch).join(Peristiwa, Peristiwa.id == PurchaseBatch.peristiwa_id)
+        .where(Peristiwa.kunci_kiriman == kunci_kiriman)
+    )).scalars().first()
 
 
 async def undo_purchase_batch(db: AsyncSession, *, batch_id: int, user: User) -> bool:

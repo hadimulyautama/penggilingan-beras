@@ -18,6 +18,22 @@ lintas repo, bukan sebagai rencana penggabungan. Keputusan lain pemilik pada
 hari yang sama: tabel yang ada tidak diganti nama (awalan hanya untuk tabel
 baru; peta pemilik yang menjaga), tabel verifikasi tetap di produksi dengan
 rupiah dijaga gerbang peran, branch `gudang2-api` digabung ke `main`.
+**Tahap 3 disetujui pemilik 13 Sep malam ("lanjut tahap 3") dan langkah 1–2
+dikerjakan sesi itu juga:** migrasi 0047 (`peristiwa` tambah-saja dengan
+trigger, `proyeksi_gabah_masuk`, `purchase_batches.peristiwa_id`),
+`app/services/peristiwa.py` (catat idempoten, penangan per jenis,
+`bangun_ulang`), skrip `scripts/bangun_ulang_proyeksi.py`. Aksi pertama:
+**Gabah masuk dari tiket timbang** + pembatalannya sebagai peristiwa lawan.
+Layar & API tak berubah (kunci kiriman opsional di `GabahMasukReq`). r06 dan
+r13 dijalankan ulang sebagai uji Postgres dua sesi: lulus. Ukuran per aksi:
+catat 9 → 15 kueri (9 → 14 ms), batalkan 8 → 13 kueri (8 → 12 ms). Yang jadi
+lebih rumit: penulisan ganda (buku besar + cermin tabel lama) sampai
+pembacanya pindah; cermin masih DIHAPUS saat dibatalkan karena ±15 pembaca
+`purchase_batches` (laporan, stok, tumpukan, rekonsiliasi) menganggap ada
+baris = ada gabah. Langkah 3: BERHENTI — pemilik memutuskan aksi berikutnya
+(usul: "PK luar masuk", pola yang sama; atau membalik urutan: pindahkan
+pembaca dulu supaya cermin tak perlu dihapus).
+
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu
 fungsi "boleh masuk?", satu saklar nonaktif, penjaga AST), di-vendor ke
