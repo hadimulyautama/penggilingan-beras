@@ -223,3 +223,55 @@ async def test_ukur_transfer_dan_batalkan(pg, pemasok, hitung_kueri):
           f"waktu={_med(t_catat) * 1000:.0f} ms; kueri undo={_med(n_undo)} (semua {n_undo}) "
           f"waktu={_med(t_undo) * 1000:.0f} ms")
     assert _med(n_catat) < 60 and _med(n_undo) < 40
+
+
+async def test_ukur_pindah_tumpukan_dan_batalkan(pg, pemasok, hitung_kueri):
+    from datetime import date
+
+    from app.database import now_local
+    from app.models import Silo, User, Warehouse
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
+    from app.services import undo as svc
+    from hmu_identitas import peran as P
+
+    async with pg() as db:
+        w = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        db.add(w)
+        await db.flush()
+        db.add_all([Silo(nama_silo="Silo A", warehouse_id=w.id), Silo(nama_silo="Silo B", warehouse_id=w.id)])
+        u = User(nama="Staf Ukur", role=P.ADMIN, status="aktif", default_warehouse_id=w.id)
+        db.add(u)
+        await db.flush()
+        db.add(PkPurchaseBatch(kode_batch="PKB-UKUR", supplier_id=pemasok.id, berat_total_kg=50_000,
+                               tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+                               input_by=u.id, status_batch="diterima", flag_unverified=True,
+                               sumber_berat="manual"))
+        await db.commit()
+        await db.refresh(u)
+        r = await masukkan_pk_luar(db, user=u, kode="PKB-UKUR", tujuan="ditumpuk")
+        sid, iid = u.id, r.intake.id
+    n_catat, t_catat, n_undo, t_undo = [], [], [], []
+    for i in range(5):
+        async with pg() as db:
+            u = await db.get(User, sid)
+            async with hitung_kueri() as h:
+                t0 = time.perf_counter()
+                await pindah_tumpukan_ke_silo(db, user=u, intake_id=iid, nama_silo="A", berat=1_000)
+                t_catat.append(time.perf_counter() - t0)
+            n_catat.append(h.jumlah)
+        async with pg() as db:
+            u = await db.get(User, sid)
+            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            async with hitung_kueri() as h:
+                t0 = time.perf_counter()
+                try:
+                    await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                except svc.UndoError:
+                    pass
+                t_undo.append(time.perf_counter() - t0)
+            n_undo.append(h.jumlah)
+    print(f"\nUKUR pindah_tumpukan_silo: kueri catat={_med(n_catat)} (semua {n_catat}) "
+          f"waktu={_med(t_catat) * 1000:.0f} ms; kueri undo={_med(n_undo)} (semua {n_undo}) "
+          f"waktu={_med(t_undo) * 1000:.0f} ms")
+    assert _med(n_catat) < 40 and _med(n_undo) < 40

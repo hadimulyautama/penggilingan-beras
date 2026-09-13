@@ -148,6 +148,9 @@ class PkTumpukanToSilo(Base, TimestampMixin):
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Peristiwa `pk_tumpukan_ke_silo` yang melahirkan baris ini (Tahap 3, aksi kelima).
+    peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
 
 
 class PolishingProcess(Base, TimestampMixin):

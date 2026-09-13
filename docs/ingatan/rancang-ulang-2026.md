@@ -52,8 +52,15 @@ dialihkan ke pembatalan transfernya), dan **cermin pertama yang TIDAK
 dihapus**: `internal_transfers.status='dibatalkan'` karena pembacanya
 menyaring `terkirim`. Ukuran kirim 25 → 31 kueri (21 → 38 ms), batalkan
 11 → 20 kueri (9 → 25 ms, kini dua kejadian). r03 dijalankan ulang: satu
-lolos, satu ditolak dengan kalimat. Berikutnya sesuai urutan: pindah
-tumpukan → silo (`pindah_tumpukan_ke_silo`).
+lolos, satu ditolak dengan kalimat. Lalu **aksi kelima, pindah tumpukan → silo**
+(migrasi 0051 `proyeksi_pindah_tumpukan_silo`; `_catat_pindah` satu titik
+tulis; baris tumpukan sumber dikunci FOR UPDATE — dua operator memindahkan
+sisa yang sama kini satu ditolak; pembatalan yang sebelumnya TAK ADA kini
+ada, dengan penjaga silo P-K-10; ukuran pindah 10 → 16 kueri, batal 12
+kueri). Dengan ini SELURUH stok PK Gudang 2 — silo dan tumpukan — lahir
+dari peristiwa. Berikutnya sesuai urutan yang disetujui: pembaca
+`purchase_batches`/`pk_*` pindah ke proyeksi supaya cermin tak perlu
+dihapus saat pembatalan (butir 10).
 
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu

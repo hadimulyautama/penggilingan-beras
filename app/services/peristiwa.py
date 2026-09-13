@@ -24,12 +24,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2,
-                        ProyeksiTransferPk)
+from app.models import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahTumpukanSilo, ProyeksiPkLuarMasuk,
+                        ProyeksiPkMasukG2, ProyeksiTransferPk)
 from app.models.peristiwa import (DIBATALKAN, GABAH_MASUK, GABAH_MASUK_DIBATALKAN, PK_DIPINDAH_G1G2,
                                   PK_DIPINDAH_G1G2_DIBATALKAN, PK_LUAR_MASUK,
                                   PK_LUAR_MASUK_DIBATALKAN, PK_MASUK_G2, PK_MASUK_G2_DIBATALKAN,
-                                  TERCATAT)
+                                  PK_TUMPUKAN_KE_SILO, PK_TUMPUKAN_KE_SILO_DIBATALKAN, TERCATAT)
 
 log = logging.getLogger("peristiwa")
 
@@ -212,6 +212,28 @@ async def _pk_dipindah_g1g2_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
     await db.flush()
 
 
+async def _pk_tumpukan_ke_silo(db: AsyncSession, e: Peristiwa) -> None:
+    m = e.muatan
+    e.proyeksi = ProyeksiPindahTumpukanSilo(
+        peristiwa_id=e.id, kode_pindah=m["kode_pindah"], intake_id=m["intake_id"],
+        intake_peristiwa_id=m.get("intake_peristiwa_id"), silo_id=m["silo_id"],
+        berat_kg=m["berat_kg"], ke_proses=m.get("ke_proses"),
+        tanggal=date.fromisoformat(m["tanggal"]), waktu=datetime.fromisoformat(m["waktu"]),
+        pelaku_id=e.pelaku_id, status=TERCATAT, move_id=m.get("move_id"),
+    )
+    db.add(e.proyeksi)
+    await db.flush()
+
+
+async def _pk_tumpukan_ke_silo_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
+    p = await db.get(ProyeksiPindahTumpukanSilo, e.membatalkan_id)
+    if p is None:
+        raise ValueError(f"peristiwa {e.id} membatalkan pk_tumpukan_ke_silo #{e.membatalkan_id} yang tak ada")
+    p.status = DIBATALKAN
+    p.dibatalkan_peristiwa_id = e.id
+    await db.flush()
+
+
 PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     GABAH_MASUK: _gabah_masuk,
     GABAH_MASUK_DIBATALKAN: _gabah_masuk_dibatalkan,
@@ -221,10 +243,13 @@ PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     PK_MASUK_G2_DIBATALKAN: _pk_masuk_g2_dibatalkan,
     PK_DIPINDAH_G1G2: _pk_dipindah_g1g2,
     PK_DIPINDAH_G1G2_DIBATALKAN: _pk_dipindah_g1g2_dibatalkan,
+    PK_TUMPUKAN_KE_SILO: _pk_tumpukan_ke_silo,
+    PK_TUMPUKAN_KE_SILO_DIBATALKAN: _pk_tumpukan_ke_silo_dibatalkan,
 }
 
 #: Tabel proyeksi yang dikosongkan lalu diisi ulang saat membangun dari nol.
-TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
+TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk,
+                  ProyeksiPindahTumpukanSilo)
 
 
 async def terapkan_ke_proyeksi(db: AsyncSession, e: Peristiwa) -> None:

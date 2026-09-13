@@ -85,10 +85,11 @@ lalu ALTER; chain timbangan (15) mewarisi 0022–0026 lalu membuat
 
 | Tabel | Penulis | Pembaca | Catatan |
 |---|---|---|---|
-| `peristiwa` | `app/services/peristiwa.py:catat` — SATU penulis (dipanggil `purchase.create_purchase_batch_dari_timbang` dan `undo._undo_purchase`); TAMBAH-SAJA, trigger menolak UPDATE/DELETE (migrasi 0047) | `bangun_ulang` (proyeksi), `purchase._batch_dari_kunci` | Buku besar Tahap 3. Jenis hari ini: `gabah_masuk`, `pk_luar_masuk`, `pk_masuk_g2`, `pk_dipindah_g1g2`, masing-masing dengan `_dibatalkan` |
+| `peristiwa` | `app/services/peristiwa.py:catat` — SATU penulis (dipanggil `purchase.create_purchase_batch_dari_timbang` dan `undo._undo_purchase`); TAMBAH-SAJA, trigger menolak UPDATE/DELETE (migrasi 0047) | `bangun_ulang` (proyeksi), `purchase._batch_dari_kunci` | Buku besar Tahap 3. Jenis hari ini: `gabah_masuk`, `pk_luar_masuk`, `pk_masuk_g2`, `pk_dipindah_g1g2`, `pk_tumpukan_ke_silo`, masing-masing dengan `_dibatalkan` |
 | `proyeksi_pk_luar_masuk` | penangan di `services/peristiwa.py` (kembaran gabah; migrasi 0048) | belum ada layar — cerminnya `pk_purchase_batches` | Turunan murni; indeks unik parsial per tiket hidup |
 | `proyeksi_pk_masuk_g2` | penangan di `services/peristiwa.py` (migrasi 0049); sumbernya `_add_intake` (PK luar & transfer G1) | belum ada layar — cerminnya `pk_gudang2_intakes` | Turunan murni; unik parsial per batch / per transfer yang hidup; `hpp_per_kg` potret saat masuk |
 | `proyeksi_transfer_pk` | penangan di `services/peristiwa.py` (migrasi 0050); sumbernya `services/transfer.py` | belum ada layar — cerminnya `internal_transfers` (status `dibatalkan`, tak dihapus) | Turunan murni; `intake_peristiwa_id` menunjuk pasangan `pk_masuk_g2` |
+| `proyeksi_pindah_tumpukan_silo` | penangan di `services/peristiwa.py` (migrasi 0051); sumbernya `gudang2.service._catat_pindah` | belum ada layar — cerminnya `pk_tumpukan_to_silo` | Turunan murni; `ke_proses` bila dituang ke silo yang dipoles |
 | `proyeksi_gabah_masuk` | penangan di `services/peristiwa.py` (I saat catat, U status saat dibatalkan; dikosongkan+diisi ulang oleh `bangun_ulang`) | belum ada layar — cerminnya `purchase_batches` yang dibaca layar | Turunan murni; indeks unik parsial: satu tiket satu pencatatan hidup |
 | `produksi_akun` | ⚠ empat jalur produksi: `web/pengguna.py` (buat/reset/status/mode), `web/meja_api.py` (implementasi paralel operasi yang sama untuk Meja), `web/auth.py` (login, `token_version`, ganti sandi), `web/seed_akun.py`; `data_uji`; 4 skrip uji | security 11 ref, pengaturan, mode_uji, deps; **meja & gudang2** lewat `/internal/meja/masuk|saya` | Identitas kedua di samping `users` (dan ketiga: `timbangan_akun`) — X-11 |
 | `activity_logs` | `app/services/activity_log.py:33` — satu-satunya INSERT (dipanggil ±40 tempat, tak commit sendiri); `undo.py:930` (U `dibatalkan_pada/oleh`, bukan DELETE — P-K-21) | audit (List audit), undo (`_log_terakhir`), miniapp (`/keadaan` cap versi) | append-only; dipertahankan Mode Uji |
@@ -211,7 +212,7 @@ jadi dua tabel; (c) seluruh tabel ke `uang`. ADR §7 butir 7.
 | Modul | Tabel | Status | Catatan |
 |---|---|---|---|
 | peristiwa | `activity_logs` | usul | jejak audit tambah-saja — cikal bakal buku besar |
-| peristiwa | `peristiwa`, `proyeksi_gabah_masuk`, `proyeksi_pk_luar_masuk`, `proyeksi_pk_masuk_g2`, `proyeksi_transfer_pk` | **ADA** (Tahap 3, 13 Sep) | buku besar + empat proyeksi (gabah masuk, PK luar masuk, PK masuk G2, transfer G1→G2); berikutnya: pindah tumpukan→silo, lalu pembaca ke proyeksi |
+| peristiwa | `peristiwa`, `proyeksi_gabah_masuk`, `proyeksi_pk_luar_masuk`, `proyeksi_pk_masuk_g2`, `proyeksi_transfer_pk`, `proyeksi_pindah_tumpukan_silo` | **ADA** (Tahap 3, 13 Sep) | buku besar + lima proyeksi — seluruh stok PK Gudang 2 (silo & tumpukan) kini lahir dari peristiwa; berikutnya: pembaca ke proyeksi |
 | peristiwa | `kode_urut` | usul | penghitung atomik penomoran |
 | peristiwa | `notifications` | TANYA | tak dibaca siapa pun; peristiwa, agen, atau dibuang? |
 | peristiwa/?? | `setelan_pabrik` | TANYA | setelan lintas modul; belum ada modul "setelan" |

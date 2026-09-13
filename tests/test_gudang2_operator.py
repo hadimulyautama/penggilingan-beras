@@ -41,8 +41,12 @@ def test_bahan_terpakai_menghitung_pk_yang_ditambahkan_selama_proses():
     assert "tersedia - float(sisa_kg)" in kode
     # Penjaga lama (menolak intake ke silo yang dipoles) benar-benar hilang.
     assert not hasattr(g2, "_tolak_silo_sedang_dipoles")
-    for fn in (g2._add_intake, g2.pindah_tumpukan_ke_silo, g2.pindah_tumpukan):
+    # Sejak Tahap 3 kedua pemindahan tumpukan menulis lewat satu titik,
+    # `_catat_pindah`, dan di sanalah tuangan ke proses yang berjalan dicatat.
+    for fn in (g2._add_intake, g2._catat_pindah):
         assert "_catat_masuk_selama_proses(" in kode_saja(fn), fn.__name__
+    for fn in (g2.pindah_tumpukan_ke_silo, g2.pindah_tumpukan):
+        assert "_catat_pindah(" in kode_saja(fn), fn.__name__
 
 
 def test_tumpukan_gudang2_tanpa_batas_secara_bawaan():

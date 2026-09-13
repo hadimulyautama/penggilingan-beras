@@ -79,8 +79,12 @@ async def test_silo_g2_yang_sedang_dipoles_mencatat_pk_baru_pada_prosesnya(pg):
     from app.penggilingan.gudang2 import service as g2
 
     assert not hasattr(g2, "_tolak_silo_sedang_dipoles")
-    for fn in (g2._add_intake, g2.pindah_tumpukan_ke_silo, g2.pindah_tumpukan):
+    # Sejak Tahap 3 kedua pemindahan tumpukan menulis lewat `_catat_pindah`,
+    # dan di sanalah tuangan ke proses yang berjalan dicatat.
+    for fn in (g2._add_intake, g2._catat_pindah):
         assert "_catat_masuk_selama_proses(" in inspect.getsource(fn), fn.__name__
+    for fn in (g2.pindah_tumpukan_ke_silo, g2.pindah_tumpukan):
+        assert "_catat_pindah(" in inspect.getsource(fn), fn.__name__
 
 
 async def test_dryer_menolak_campur_kondisi_dan_kelebihan_muatan(pg):

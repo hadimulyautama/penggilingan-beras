@@ -108,7 +108,11 @@ dipoles sesudah PK masuk atau tumpukannya sudah dipindah — P-K-10; proyeksi
 keduanya lewat penjaga hilir; cermin `internal_transfers` TIDAK dihapus,
 statusnya `dibatalkan`; proyeksi `proyeksi_transfer_pk`, migrasi 0050).
 Pemasukan yang lahir dari transfer tak bisa dibatalkan sendiri — dialihkan
-ke pembatalan transfernya. Urutan satu transaksi: kunci tiket → nomor atomik →
+ke pembatalan transfernya. Kelima: **Pindah tumpukan ke silo**
+(`gudang2.service._catat_pindah` dipakai `pindah_tumpukan_ke_silo` (baris
+tumpukan dikunci FOR UPDATE) dan `pindah_tumpukan`; undo baru
+`_undo_pindah_tumpukan` dengan penjaga silo yang sama; proyeksi
+`proyeksi_pindah_tumpukan_silo`, migrasi 0051). Urutan satu transaksi: kunci tiket → nomor atomik →
 `services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
 `purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
 pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →

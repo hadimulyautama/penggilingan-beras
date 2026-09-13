@@ -32,7 +32,7 @@ from app.models import (
     User,
     Warehouse,
 )
-from app.models.peristiwa import PK_LUAR_MASUK, PK_MASUK_G2
+from app.models.peristiwa import PK_LUAR_MASUK, PK_MASUK_G2, PK_TUMPUKAN_KE_SILO
 from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import (
@@ -822,11 +822,59 @@ class PindahResult:
     ke_proses: str | None = None
 
 
+async def _catat_pindah(
+    db: AsyncSession, *, user: User, intake: PkGudang2Intake, silo: Silo, nama_silo: str,
+    kirim: float, now, kunci_kiriman: str | None = None,
+) -> tuple[PkTumpukanToSilo, str | None]:
+    """SATU titik tulis pemindahan tumpukan → silo (jalur peristiwa, Tahap 3
+    aksi kelima): nomor atomik → catat ke proses yang sedang memakai silo →
+    peristiwa `pk_tumpukan_ke_silo` (kunci kiriman idempoten) → proyeksi →
+    cermin `pk_tumpukan_to_silo` → jejak. Tidak commit."""
+    if not kunci_kiriman:
+        n = await buku.jumlah_jenis(db, PK_TUMPUKAN_KE_SILO, "intake_id", intake.id)
+        kunci_kiriman = f"{PK_TUMPUKAN_KE_SILO}:intake:{intake.id}:{n + 1}"
+    else:
+        from app.models import Peristiwa
+        ada = (await db.execute(
+            select(PkTumpukanToSilo).join(Peristiwa, Peristiwa.id == PkTumpukanToSilo.peristiwa_id)
+            .where(Peristiwa.kunci_kiriman == kunci_kiriman))).scalars().first()
+        if ada is not None:
+            return ada, None
+    kode = await next_tumpukan_move_code(db)
+    ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
+    muatan = {
+        "kode_pindah": kode, "intake_id": intake.id, "intake_peristiwa_id": intake.peristiwa_id,
+        "silo_id": silo.id, "nama_silo": nama_silo, "berat_kg": kirim, "ke_proses": ke_proses,
+        "tanggal": now.date(), "waktu": now,
+    }
+    e = await buku.catat(db, jenis=PK_TUMPUKAN_KE_SILO, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
+                         muatan=muatan, waktu=now)
+    move = PkTumpukanToSilo(
+        kode_pindah=kode, pk_gudang2_intake_id=intake.id, silo_id=silo.id, berat_kg=kirim,
+        tanggal=now.date(), waktu=now, input_by=user.id, peristiwa_id=e.id,
+    )
+    db.add(move)
+    await db.flush()
+    getattr(e, "proyeksi", None) and setattr(e.proyeksi, "move_id", move.id)
+    await log_activity(
+        db, table_name="pk_tumpukan_to_silo", record_id=move.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{kode} | {kirim:.0f}kg → Silo {nama_silo}"
+                  + (f" | ditambah ke {ke_proses}" if ke_proses else ""),
+    )
+    return move, ke_proses
+
+
 async def pindah_tumpukan_ke_silo(
     db: AsyncSession, *, user: User, intake_id: int, nama_silo: str | None,
-    berat: float | None = None, tanggal=None, jam=None,
+    berat: float | None = None, tanggal=None, jam=None, kunci_kiriman: str | None = None,
 ) -> PindahResult:
-    """Pindah PK dari tumpukan ke silo. HANYA operator Gudang 2 (admin fallback)."""
+    """Pindah PK dari tumpukan ke silo. HANYA operator Gudang 2 (admin fallback).
+
+    Baris tumpukan sumbernya DIKUNCI sebelum sisanya dibaca: dua operator yang
+    sama-sama membaca "sisa 15.000" lalu memindahkan 10.000 akan mengosongkan
+    tumpukan −5.000 — pola yang sama dengan P-K-06 di transfer.
+    """
     g2_wid = await _g2_warehouse_id(db)
     if not is_operator_gudang2(user, g2_wid):
         raise Gudang2Error(
@@ -838,7 +886,9 @@ async def pindah_tumpukan_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    intake = await db.get(PkGudang2Intake, intake_id)
+    intake = (await db.execute(
+        select(PkGudang2Intake).where(PkGudang2Intake.id == intake_id).with_for_update()
+    )).scalars().first()
     if intake is None:
         raise Gudang2Error("Tumpukan sumber tidak ditemukan.")
     if intake.tujuan != "ditumpuk":
@@ -854,25 +904,13 @@ async def pindah_tumpukan_ke_silo(
         )
 
     now = input_time(tanggal, jam)
-    move = PkTumpukanToSilo(
-        kode_pindah=await next_tumpukan_move_code(db),
-        pk_gudang2_intake_id=intake_id, silo_id=silo.id, berat_kg=kirim,
-        tanggal=now.date(), waktu=now, input_by=user.id,
-    )
-    db.add(move)
-    await db.flush()
-    ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
-    await log_activity(
-        db, table_name="pk_tumpukan_to_silo", record_id=move.id, action="INSERT",
-        changed_by=user.id,
-        new_value=f"{move.kode_pindah} | {kirim:.0f}kg → Silo {nama_silo}"
-                  + (f" | ditambah ke {ke_proses}" if ke_proses else ""),
-    )
+    move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo, nama_silo=nama_silo,
+                                          kirim=kirim, now=now, kunci_kiriman=kunci_kiriman)
     await db.commit()
     await db.refresh(move)
     return PindahResult(
-        kode_pindah=move.kode_pindah, nama_silo=nama_silo, berat_kg=kirim,
-        sisa_tumpukan_intake=sisa - kirim, ke_proses=ke_proses,
+        kode_pindah=move.kode_pindah, nama_silo=nama_silo, berat_kg=float(move.berat_kg),
+        sisa_tumpukan_intake=sisa - float(move.berat_kg), ke_proses=ke_proses,
     )
 
 
@@ -934,19 +972,8 @@ async def pindah_tumpukan(
         if remaining <= 0:
             break
         take = min(sisa, remaining)
-        move = PkTumpukanToSilo(
-            kode_pindah=await next_tumpukan_move_code(db),
-            pk_gudang2_intake_id=it.id, silo_id=silo.id, berat_kg=take,
-            tanggal=now.date(), waktu=now, input_by=user.id,
-        )
-        db.add(move)
-        await db.flush()
-        await _catat_masuk_selama_proses(db, silo.id, take)
-        await log_activity(
-            db, table_name="pk_tumpukan_to_silo", record_id=move.id, action="INSERT",
-            changed_by=user.id,
-            new_value=f"{move.kode_pindah} | {take:.0f}kg → Silo {nama_silo}",
-        )
+        move, _ = await _catat_pindah(db, user=user, intake=it, silo=silo, nama_silo=nama_silo,
+                                      kirim=take, now=now)
         kodes.append(move.kode_pindah)
         moved += take
         remaining -= take

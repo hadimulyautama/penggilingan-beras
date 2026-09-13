@@ -2279,6 +2279,8 @@ class PindahTumpukanSiloReq(BaseModel):
     tumpukan: str    # id intake tumpukan (dari /actions/tumpukan-sisa)
     silo: str        # A / B
     berat_kg: Positif
+    #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
+    kunci_kiriman: str | None = None
 
 
 @router.post("/actions/pindah-tumpukan-silo")
@@ -2302,7 +2304,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
         try:
             r = await pindah_tumpukan_ke_silo(
                 db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.upper(),
-                berat=float(req.berat_kg))
+                berat=float(req.berat_kg), kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memindahkan PK dari tumpukan.")
     sisa = (f"sisa di tumpukan {r.sisa_tumpukan_intake:g} kg"

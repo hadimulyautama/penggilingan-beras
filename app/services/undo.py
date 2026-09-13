@@ -45,6 +45,7 @@ _UNDOABLE = {
     "silo_storage", "milling_process", "internal_transfers", "milling_qc_logs",
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
     "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
+    "pk_tumpukan_to_silo",
 }
 
 #: Label ramah per tabel — untuk pesan "belum bisa di-undo" MAUPUN untuk
@@ -72,6 +73,7 @@ _TABLE_LABEL = {
     "pk_purchase_batches": "PK luar masuk",
     "pk_purchase_verifications": "verifikasi harga PK luar",
     "pk_gudang2_intakes": "PK masuk Gudang 2",
+    "pk_tumpukan_to_silo": "PK tumpukan ke silo",
     # Belum bisa dibatalkan
     # Jeda tidak dibatalkan lewat undo: yang benar bukan menghapus catatan
     # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya
@@ -94,7 +96,6 @@ _TABLE_LABEL = {
     "purchase_batch_verifications": "verifikasi harga gabah",
     "finished_goods_stock": "stok barang jadi",
     "byproduct_stock": "stok hasil samping",
-    "pk_tumpukan_to_silo": "PK tumpukan ke silo",
 }
 
 
@@ -690,6 +691,51 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
     return f"✓ Dibatalkan: pemasukan PK ke {lok}."
 
 
+async def _tolak_bila_silo_dipakai(db: AsyncSession, silo_id: int, sejak, lok: str) -> None:
+    """Silo dipoles SESUDAH `sejak`, atau sedang dipoles → tolak (P-K-10)."""
+    from sqlalchemy import or_
+
+    from app.models import PolishingProcess, PolishingSiloUsage
+
+    kode = (await db.execute(
+        select(PolishingProcess.kode_proses)
+        .join(PolishingSiloUsage, PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               or_(PolishingProcess.waktu_mulai >= sejak,
+                   PolishingSiloUsage.berat_akhir_kg.is_(None)))
+        .order_by(PolishingProcess.id.desc()).limit(1)
+    )).scalars().first()
+    if kode is not None:
+        raise UndoError(
+            f"Tak bisa dibatalkan: {lok} sudah dipoles sesudah PK ini masuk "
+            f"(penyosohan {kode}). Membatalkannya membuat stok silo minus. "
+            "Perbaiki lewat koreksi, atau batalkan penyosohannya lebih dulu.")
+
+
+async def _undo_pindah_tumpukan(db: AsyncSession, move_id: int) -> str:
+    """Batalkan pindah tumpukan → silo: PK kembali ke tumpukan (P-K-10 dijaga)."""
+    from app.models import PkTumpukanToSilo, Silo
+
+    m = await db.get(PkTumpukanToSilo, move_id)
+    if m is None:
+        raise UndoError("Pemindahan itu sudah tidak ada.")
+    silo = await db.get(Silo, m.silo_id)
+    lok = silo.nama_silo if silo else f"silo #{m.silo_id}"
+    await _tolak_bila_silo_dipakai(db, m.silo_id, m.waktu, lok)
+    if m.peristiwa_id is not None:
+        from app.models.peristiwa import PK_TUMPUKAN_KE_SILO_DIBATALKAN
+        from app.services import peristiwa as buku
+
+        await buku.batalkan(db, jenis_lawan=PK_TUMPUKAN_KE_SILO_DIBATALKAN, peristiwa_id=m.peristiwa_id,
+                            pelaku_id=None, muatan={"kode_pindah": m.kode_pindah, "berat_kg": float(m.berat_kg),
+                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
+    kode, kg = m.kode_pindah, float(m.berat_kg)
+    # Cermin dihapus: `hitung_stok_silo`, `hitung_stok_tumpukan`, dan
+    # `_sisa_tumpukan_intake` menjumlahkan barisnya apa adanya.
+    await db.delete(m)
+    return f"✓ Dibatalkan: pemindahan {kode} ({kg:,.0f} kg) — PK kembali ke tumpukan.".replace(",", ".")
+
+
 async def _tolak_bila_pk_sudah_dipakai(db: AsyncSession, it: PkGudang2Intake, lok: str) -> None:
     """Pemasukan PK yang sudah DIPAKAI di hilir tak boleh dibatalkan — P-K-10.
 
@@ -701,24 +747,10 @@ async def _tolak_bila_pk_sudah_dipakai(db: AsyncSession, it: PkGudang2Intake, lo
         dua tempat sekaligus (r08-A).
     Yang benar: batalkan/koreksi pekerjaan hilirnya dulu, atau catat koreksi.
     """
-    from sqlalchemy import or_
-
-    from app.models import PkTumpukanToSilo, PolishingProcess, PolishingSiloUsage
+    from app.models import PkTumpukanToSilo
 
     if it.silo_id is not None:
-        kode = (await db.execute(
-            select(PolishingProcess.kode_proses)
-            .join(PolishingSiloUsage, PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
-            .where(PolishingSiloUsage.silo_id == it.silo_id,
-                   or_(PolishingProcess.waktu_mulai >= it.waktu_masuk,
-                       PolishingSiloUsage.berat_akhir_kg.is_(None)))
-            .order_by(PolishingProcess.id.desc()).limit(1)
-        )).scalars().first()
-        if kode is not None:
-            raise UndoError(
-                f"Tak bisa dibatalkan: {lok} sudah dipoles sesudah PK ini masuk "
-                f"(penyosohan {kode}). Membatalkannya membuat stok silo minus. "
-                "Perbaiki lewat koreksi, atau batalkan penyosohannya lebih dulu.")
+        await _tolak_bila_silo_dipakai(db, it.silo_id, it.waktu_masuk, lok)
     else:
         kode = (await db.execute(
             select(PkTumpukanToSilo.kode_pindah)
@@ -800,6 +832,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_pk_verif(db, rid, log.field_name)
     if t == "pk_gudang2_intakes" and act == "INSERT":
         return await _undo_pk_intake(db, rid)
+    if t == "pk_tumpukan_to_silo" and act == "INSERT":
+        return await _undo_pindah_tumpukan(db, rid)
     raise UndoError(
         f"Tindakan terakhir ({_TABLE_LABEL.get(t, t)}) belum bisa di-undo otomatis — "
         "fitur menyusul. Untuk sekarang koreksi lewat admin."
