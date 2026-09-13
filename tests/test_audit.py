@@ -83,7 +83,7 @@ def test_yang_terkunci_dibedakan_sebelum_tulisannya_dibaca():
     import pathlib
 
     akar = pathlib.Path(__file__).resolve().parents[1]
-    css = (akar / "app/web/static/app.css").read_text()
+    css = (akar / "hmu_tampilan/static/app.css").read_text()
     html = (akar / "app/web/templates/audit.html").read_text()
     assert ".audit--muda" in css and ".audit--tua" in css
     assert "'tua' if not c.muda else 'muda'" in html
@@ -142,5 +142,5 @@ def test_skrip_laci_ikut_berpindah_halaman():
 
     # Dan `pindah.js` memang menjalankan ulang skrip di dalamnya.
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
     assert "replaceChild" in js and "script" in js

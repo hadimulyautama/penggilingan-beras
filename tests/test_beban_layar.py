@@ -24,8 +24,8 @@ import pathlib
 import re
 
 AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
-AKSI_JS = (AKAR / "web/static/aksi.js").read_text()
-PINDAH_JS = (AKAR / "web/static/pindah.js").read_text()
+AKSI_JS = (AKAR.parent / "hmu_tampilan/static/aksi.js").read_text()
+PINDAH_JS = (AKAR.parent / "hmu_tampilan/static/pindah.js").read_text()
 
 
 def js_kode(teks: str) -> str:

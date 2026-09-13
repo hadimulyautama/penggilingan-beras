@@ -161,8 +161,16 @@
                  stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
         {% else %}
+          {# Isi kartu penuh dibungkus <div>, seperti pada cabang <a> di atas.
+             `.benda` adalah kotak FLEX mendatar; tanpa pembungkus, judul,
+             rincian asal, dan kepingan fase menjadi item flex yang berjajar ke
+             samping dan saling menimpa. Terlihat pada kartu silo G2 yang
+             "mesin sosoh sedang dipakai" (diam, tetapi punya rincian). Lahir
+             di salinan gudang2, dinaikkan ke paket saat Tahap 1 karena kartu
+             diam berisi rincian bisa muncul di aplikasi mana pun. Kartu padat
+             tak terkena: `.padat--diam` grid. #}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
-            {% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}
+            {% if rapat %}{{ padat(b) }}{% else %}<div>{{ penuh(b) }}</div>{% endif %}
           </div>
         {% endif %}
       {% endfor %}

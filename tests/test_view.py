@@ -107,7 +107,7 @@ def test_laci_memakai_isi_kolomnya_bukan_sekadar_terisi_atau_tidak():
     """Dulu templat memeriksa "kolomnya terisi?" lalu membandingkan peran
     dengan PERAN_ADMIN_KEATAS — jadi kolomnya boolean yang menyamar sebagai
     nama peran, dan "Super Admin saja" tak bisa ditulis sama sekali."""
-    teks = (AKAR / "app/web/templates/base.html").read_text()
+    teks = (AKAR / "hmu_tampilan/templates/base.html").read_text()
     assert "VIEW in peran_min" in teks
     assert "PERAN_ADMIN_KEATAS" not in teks
 

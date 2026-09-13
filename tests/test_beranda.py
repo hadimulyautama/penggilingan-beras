@@ -220,7 +220,7 @@ def test_beranda_tidak_ikut_berubah():
     padat, jadi Beranda tetap seperti sebelumnya. Yang dirender di sana
     `judul`, `utama`, dan `ringkas`.
     """
-    makro = (TPL / "_benda.html").read_text()
+    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     padat = makro.split("{% macro padat(b) -%}")[1].split("{%- endmacro %}")[0]
     assert "b.anak" not in padat and "b.fakta" not in padat
     assert "b.ringkas or b.sub or b.isi" in padat

@@ -9,7 +9,7 @@ import pathlib
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
 TPL = AKAR / "app/web/templates/laporan.html"
-CSS = AKAR / "app/web/static/app.css"
+CSS = AKAR / "hmu_tampilan/static/app.css"
 
 
 def test_laporan_tidak_lagi_ditumpahkan_ke_pre():

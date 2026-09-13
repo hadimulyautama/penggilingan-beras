@@ -423,6 +423,13 @@ ini belum dikerjakan:
 
 ## 9. Token tampilan bersama untuk kedua aplikasi (USULAN — belum dikerjakan)
 
+> **13 September 2026:** bagian di bawah tetap usulan untuk TOKEN (ukuran &
+> arti warna) yang bisa dibagi dengan Pos Timbang. Yang SUDAH dikerjakan
+> hari itu adalah Tahap 1 rancang ulang: seluruh CSS/JS/templat dasar
+> produksi, gudang2, dan meja kini satu paket `hmu_tampilan` (repo
+> `tampilan/`), di-vendor + manifest + uji penjaga. Lihat
+> `docs/ingatan/rancang-ulang-2026.md`.
+
 Ditulis 12 September 2026 sebagai jawaban atas temuan QA UI-07.
 
 Produksi dan Pos Timbang dipakai orang yang sama, di gudang yang sama, sering

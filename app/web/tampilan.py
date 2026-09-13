@@ -7,29 +7,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import hmu_tampilan
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.config import settings
+
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-#: Dinaikkan setiap kali CSS atau JS berubah.
-#:
-#: Tanpa ini, perangkat yang sudah pernah membuka aplikasi akan memakai berkas
-#: lama tanpa ada yang menyadarinya — dan pada layar pencatatan, JavaScript
-#: lama berarti formulir yang bentuknya sudah berubah di server tetap dirender
-#: dengan aturan yang sudah dicabut.
-VERSI = "123"
+#: VERSI aset kini SATU nomor di paket `hmu_tampilan` (Tahap 1 rancang ulang,
+#: 13 September 2026), bukan tiga nomor di tiga repo. Naikkan di repo
+#: `tampilan/`, lalu sinkronkan. Tanpa cap versi, perangkat yang sudah pernah
+#: membuka aplikasi memakai berkas lama tanpa ada yang menyadarinya.
+VERSI = hmu_tampilan.VERSI
 
-templates.env.globals["VERSI"] = VERSI
-
-from app.config import settings  # noqa: E402
-
-#: Pita "MODE UJI" di tiap layar. Orang yang tak tahu ia sedang menguji akan
-#: memperlakukan angka uji sebagai angka pabrik — dan itu kesalahan yang
-#: baru ketahuan berminggu-minggu kemudian.
-templates.env.globals["MODE_UJI"] = settings.mode_uji
+# `base.html` & `_benda.html` datang dari paket; templat layar tetap di sini.
+# Pita "MODE UJI": orang yang tak tahu ia sedang menguji akan memperlakukan
+# angka uji sebagai angka pabrik.
+hmu_tampilan.pasang_jinja(templates, app_nama="Pos Produksi", pwa_nama="Pos Produksi",
+                          mode_uji=settings.mode_uji)
 
 from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
 from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)

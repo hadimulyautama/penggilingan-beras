@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+import hmu_tampilan
 
 from app.config import settings
 from app.database import SessionLocal
@@ -99,31 +99,13 @@ app.include_router(meja_api_router)
 app.include_router(gudang2_api_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
-class StatisTerCache(StaticFiles):
-    """Berkas statis yang tidak ditanyakan ulang setiap pindah halaman.
-
-    Tanpa `Cache-Control`, peramban hanya punya ETag — dan ETag berarti ia
-    TETAP bertanya "apakah berubah?" pada tiap navigasi. Jawabannya "tidak",
-    tetapi pertanyaannya sendiri memakan satu perjalanan pulang-pergi ke
-    server, dan server ini di San Francisco: ~270 ms sekali tanya, dua berkas,
-    tiap halaman.
-
-    Aman disimpan setahun karena setiap alamatnya bercap versi
-    (`app.css?v=13`): berkas yang berubah dimintakan dengan alamat baru, jadi
-    salinan lama tak pernah terpakai. Yang TIDAK bercap versi — ikon, manifest
-    — diberi umur pendek supaya tetap bisa diperbarui.
-    """
-
-    async def get_response(self, path: str, scope):
-        balasan = await super().get_response(path, scope)
-        bercap = b"v=" in dict(scope).get("query_string", b"")
-        balasan.headers["Cache-Control"] = (
-            "public, max-age=31536000, immutable" if bercap else "public, max-age=3600"
-        )
-        return balasan
-
-
-app.mount("/static", StatisTerCache(directory=str(BASE_DIR / "static")), name="static")
+#: Berkas statis: milik aplikasi (manifest.json) di depan, paket tampilan
+#: (app.css, aksi.js, pindah.js, ikon) di belakang. Aturan cache-nya — setahun
+#: untuk alamat bercap `?v=`, sejam untuk yang tidak — kini hidup di paket;
+#: dulu kelas `StatisTerCache` di sini. Nama lamanya dipertahankan sebagai
+#: alias supaya uji yang membaca sumbernya tetap menemukan aturan itu.
+StatisTerCache = hmu_tampilan.StatisBerlapis
+app.mount("/static", hmu_tampilan.StatisBerlapis(BASE_DIR / "static"), name="static")
 
 
 # ── Sesi & penjaga halaman ──

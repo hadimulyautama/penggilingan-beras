@@ -164,5 +164,5 @@ def test_setelan_dikelompokkan_per_proses():
 
     # Setelan sebaris untuk yang isinya satu angka: halaman ini panjangnya
     # jangan ditentukan oleh setelan yang paling jarang diubah.
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     assert ".sebaris-borang" in css and ".saklar {" in css

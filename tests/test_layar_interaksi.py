@@ -16,9 +16,9 @@ from __future__ import annotations
 import pathlib
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
-AKSI = (AKAR / "app/web/static/aksi.js").read_text()
-PINDAH = (AKAR / "app/web/static/pindah.js").read_text()
-BASE = (AKAR / "app/web/templates/base.html").read_text()
+AKSI = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
+PINDAH = (AKAR / "hmu_tampilan/static/pindah.js").read_text()
+BASE = (AKAR / "hmu_tampilan/templates/base.html").read_text()
 
 
 def test_menutup_lembar_membersihkan_alamatnya():
@@ -100,7 +100,7 @@ def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
     """Yang dibentangkan harus benar-benar bisa dikerjakan dari situ —
     membentang lalu menyuruh orang mencari tombolnya di tempat lain lebih
     buruk daripada tidak membentang sama sekali."""
-    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     blok = makro.split("{% elif b.pilihan %}")[1].split("{% elif")[0]
     assert "<details" in blok and "<summary>" in blok
     assert 'class="pilihan"' in blok
@@ -115,7 +115,7 @@ def test_antrean_dikerjakan_tanpa_lembar_melayang():
     ketukan dan satu layar yang menutupi barisnya sendiri, untuk satu
     keputusan yang cuma punya beberapa jawaban.
     """
-    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     blok = makro.split("{% if b.tombol %}")[1].split("{% elif")[0]
     assert "<button" in blok and "data-post=" in blok
     # Kutip TUNGGAL, wajib: `tojson` tak melolosikan kutip ganda untuk
@@ -127,7 +127,7 @@ def test_antrean_dikerjakan_tanpa_lembar_melayang():
     assert "{{ t.mati or t.ket }}" in blok
     assert "disabled" in blok
 
-    aksi = (AKAR / "app/web/static/aksi.js").read_text()
+    aksi = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
     assert 'PINDAH.pasang(document, "click"' in aksi, \
         "didelegasikan lewat PINDAH supaya tak menumpuk tiap perpindahan"
     kirim = aksi.split('[data-kirim]')[1].split("\n  });")[0]
@@ -165,7 +165,7 @@ def test_penunjuk_buka_tutup_sebaris_dengan_judulnya():
     kartu — jadi pada kartu tinggi ia melorot ke bawah, jauh dari judul yang
     sebenarnya ia jelaskan. Penanda yang meleset terbaca sebagai cacat meski
     tak ada yang bisa menyebut apa yang salah."""
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     for kelas in ("benda", "padat"):
         blok = css.split(f"details.{kelas} > summary::after {{")[1].split("}")[0]
         assert "position: absolute" in blok, kelas
@@ -313,7 +313,7 @@ def test_galat_tidak_hilang_lebih_cepat_dari_yang_lain():
 
     # Bentuknya pun dibedakan: pil untuk berhasil, kotak untuk gagal. Dua
     # kabar berbentuk sama tertukar di sudut mata.
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     assert "border-radius: 999px" in css.split(".kabar {")[1].split("}")[0]
     assert "border-radius: 12px" in css.split(".kabar--err {")[1].split("}")[0]
 
@@ -386,7 +386,7 @@ def test_tiap_tindakan_membawa_penunjuknya_sendiri():
     assert '"Perbarui kadar air", "Catat hasil ukur terbaru", lot.kode_lot' in rapat
     assert '"Tutup proses & kosongkan silo", p.kode_proses' in rapat
 
-    makro = (AKAR / "app/web/templates/_benda.html").read_text()
+    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     assert "{% set nl = p[3] if p|length > 3 else b.nilai %}" in makro
     assert "{% if nl %}&nilai={{ nl|urlencode }}{% endif %}" in makro
 
@@ -401,7 +401,7 @@ def test_kartu_tidak_menyusut_di_bawah_isinya():
     isinya. Di halaman yang penuh, kartunya menyusut ke 56px dan
     `align-items: center` melempar isinya ke luar, atas dan bawah.
     """
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     for kelas in ("benda", "padat"):
         blok = css.split(f".{kelas} {{")[1].split("}")[0]
         assert "flex-shrink: 0" in blok, kelas
@@ -426,7 +426,7 @@ def test_layar_menyegarkan_diri_saat_kembali_ke_depan():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
 
     # Kembali ke depan — inilah yang menjawab keluhannya.
     assert 'addEventListener("visibilitychange"' in js
@@ -445,11 +445,11 @@ def test_penyegaran_diam_tak_membuang_ketikan_orang():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
     diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
 
     js_semua = (pathlib.Path(__file__).resolve().parents[1]
-                / "app/web/static/pindah.js").read_text()
+                / "hmu_tampilan/static/pindah.js").read_text()
     jaga = js_semua[js_semua.index("function bolehDiam"):
                     js_semua.index("function lembarTerbuka")]
     assert "lembarTerbuka()" in jaga, "lembar terbuka tak dijaga"
@@ -483,7 +483,7 @@ def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
 
     # Penandanya dipasang dari SATU tempat, menangkap seluruh halaman.
     assert 'addEventListener("input"' in js and 'addEventListener("change"' in js
@@ -503,7 +503,7 @@ def test_denyut_bertanya_dulu():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
     diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
     assert "tanyaPenanda()" in diam
     # Penanda ditanya SEBELUM halamannya diambil, bukan sesudahnya.
@@ -518,7 +518,7 @@ def test_belum_tahu_bukan_berarti_tak_berubah():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
     diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
     assert "p !== null && penanda !== null" in diam
 
@@ -528,7 +528,7 @@ def test_sesi_habis_tak_memicu_muat_ulang_tanpa_henti():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/pindah.js").read_text()
+          / "hmu_tampilan/static/pindah.js").read_text()
     blok = js[js.index("function tanyaPenanda"):js.index("function bolehDiam")]
     assert "r.ok ? r.json() : null" in blok
     assert ".catch(" in blok

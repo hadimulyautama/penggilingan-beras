@@ -186,7 +186,7 @@ def test_dua_layar_memakai_bentuk_kartu_yang_sama():
     akar = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates"
 
     # Bentuknya tinggal satu berkas, dan di situlah markupnya berada.
-    makro = (akar / "_benda.html").read_text()
+    makro = (akar.parents[2] / "hmu_tampilan/templates/_benda.html").read_text()
     assert "{% macro" in makro
     assert "benda__nilai" in makro and 'class="fakta"' in makro
     assert "padat__nilai" in makro, "bentuk padat Beranda ikut di sini"
@@ -231,7 +231,7 @@ def test_yang_menahan_pekerjaan_berteriak():
     blok = blok[:blok.index("b.transit.append") + 600]
     assert "nota_jenis" not in blok
 
-    css = (akar / "app/web/static/app.css").read_text()
+    css = (akar / "hmu_tampilan/static/app.css").read_text()
     hati = css.split(".nota--hati {")[1].split("}")[0]
     assert "background:" in hati and "var(--hati)" in hati
 

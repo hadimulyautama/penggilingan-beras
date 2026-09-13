@@ -142,7 +142,7 @@ async def test_aksi_satu_ketuk_menawarkan_batalkan(pg):
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[2]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     assert "kabarBisaBatal" in js
     assert "BATALKAN" in js
     # Delapan detik, bukan 2,6 seperti kabar biasa.

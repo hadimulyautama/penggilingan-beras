@@ -159,7 +159,7 @@ def test_tak_ada_dua_kalimat_bermakna_sama():
     assert "catat & tentukan tempatnya" not in sumber
     assert "susulan" in sumber, "yang susulan tetap bicara — itu menambah sesuatu"
     # Waktunya tetap terbaca meski keadaannya kosong.
-    makro = (TPL / "_benda.html").read_text()
+    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     assert "{% if b.keadaan or lama(b.sejak) %}" in makro
 
 
@@ -244,7 +244,7 @@ def test_lencana_menagih_dan_lencana_mengabari_dibedakan():
     dikerjakan; "Sedang berjalan" cuma menyebut berapa yang sedang jalan — ia
     bisa berisi seharian tanpa ada yang salah. Kalau keduanya tampil sama,
     yang menagih kehilangan artinya."""
-    base = (TPL / "base.html").read_text()
+    base = (AKAR / "hmu_tampilan/templates/base.html").read_text()
     assert "BERJALAN" in base and "pintu__jml--kabar" in base
     blok = base.split("kunci == 'berjalan' and BERJALAN")[1].split("{% elif")[0]
     assert "pintu__jml--kabar" in blok
@@ -256,7 +256,7 @@ def test_lencana_menagih_dan_lencana_mengabari_dibedakan():
     # Anda kerjakan, oranye berarti ada mesin yang sedang menyala — warna
     # yang sama dengan mesin pengering di kartu, jadi lencana dan bendanya
     # berkata hal yang sama.
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     kabar = css.split(".pintu__jml--kabar {")[1].split("}")[0]
     assert "var(--fase-dryer)" in kabar
     tagih = css.split(".pintu__jml {")[1].split("}")[0]
@@ -324,7 +324,7 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     # justru kehilangan cara memperbaikinya.
     assert 'if fin:\n        actions = [a for a in actions if a["id"] != "undo"]' in menu
 
-    aksi_js = (AKAR / "app/web/static/aksi.js").read_text()
+    aksi_js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
     assert "DATA.urutGrup" in aksi_js
     assert 'a.grup || "Lain-lain"' in aksi_js
 

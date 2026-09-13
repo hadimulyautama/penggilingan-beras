@@ -835,6 +835,20 @@
     var tag = document.querySelector("script[data-buka]");
     var id = tag && tag.dataset.buka;
     if (!id) { return; }
+    /* ── Katalog dimuat juga saat dibuka lewat ?buka= ──
+       Sejak perbaikan QA UI-01 (produksi 6be8636), `muat()` hanya dipanggil
+       di layar yang punya `#layar` — Catat pekerjaan lain. Di Beranda,
+       Antrian tunggu, Sedang berjalan, dan Keputusan MENU karenanya kosong,
+       dan pemantau di bawah menunggu 4 detik lalu menyerah: menekan kartu
+       tak pernah membuka lembarnya (temuan QA R-P-10). Tambalan ini lahir di
+       salinan gudang2 (12 September 2026) dan dinaikkan ke paket saat Tahap 1
+       karena benar untuk SEMUA aplikasi. Yang dimuat hanya katalognya, bukan
+       dashboard — UI-01 tetap terjaga. */
+    if (!Object.keys(MENU).length) {
+      ambil("/miniapp/actions/menu").then(function (menu) {
+        (menu || []).forEach(function (a) { MENU[a.id] = a; });
+      }).catch(function () {});
+    }
     var coba = 0;
     var jam = setInterval(function () {
       if (MENU[id]) { clearInterval(jam); bukaAksi(id); isiDariBaris(); return; }

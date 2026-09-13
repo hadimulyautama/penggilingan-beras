@@ -301,7 +301,7 @@ def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
     kode batch dieja huruf per huruf, lalu dicocokkan ke karung di gudang. Yang
     boleh mengecil adalah LABELNYA, bukan isinya.
     """
-    css = (AKAR / "app/web/static/app.css").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     assert "anak--kecil" not in css, "rincian batch dikecilkan lagi"
     assert "anak--kecil" not in TPL.read_text()
     # Kepalanya tetap LEBIH KECIL daripada isinya — ia label, dan label yang
@@ -460,7 +460,7 @@ def test_daftar_verifikasi_memuat_yang_sudah_diverifikasi():
 
     # Dan `aksi.js` memang melepas kunci bila tak ada padanannya — sifat yang
     # membuat sumber di atas harus lengkap.
-    js = (AKAR / "app/web/static/aksi.js").read_text()
+    js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
     assert "kuncinya" in js and "kotak.outerHTML" in js
 
 

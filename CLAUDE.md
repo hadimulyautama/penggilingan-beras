@@ -46,9 +46,13 @@ CSS & JS biasa, **tanpa langkah build**. Python 3.11.
 dan skrip di dalamnya dijalankan ulang. Konsekuensinya: pendengar yang
 dipasang pada `document` menumpuk tiap perpindahan — pakai `PINDAH.pasang`.
 
-**`VERSI` di `app/web/tampilan.py`** mematahkan cache aset. **Naikkan setiap
-kali CSS atau JS berubah.** Templat & HTML disajikan `no-store`, jadi
-perubahan templat saja tak perlu menaikkannya.
+**CSS, JS, ikon, `base.html`, dan `_benda.html` BUKAN milik repo ini** sejak
+13 September 2026 (Tahap 1 rancang ulang, temuan QA X-22): sumbernya repo
+`tampilan/` (paket `hmu_tampilan`), di-vendor ke `hmu_tampilan/` di sini oleh
+`tampilan/scripts/sinkron.py`. Jangan sunting folder vendored itu — ubah di
+repo tampilan, naikkan `VERSI` di sana, sinkronkan. Uji
+`tests/test_tampilan_paket.py` menolak salinan dan vendored yang basi.
+`app/web/tampilan.py` hanya mengekspor ulang `VERSI` dari paket.
 
 ## Peran & empat view
 

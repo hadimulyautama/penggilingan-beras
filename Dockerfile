@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt tzdata
 # repo core; nanti diganti submodule saat app pindah ke produksi/). Paket top-level
 # → importable via cwd /app tanpa perlu pip install.
 COPY hmu_core ./hmu_core
+COPY hmu_tampilan ./hmu_tampilan
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini .

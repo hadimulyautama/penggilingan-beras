@@ -249,7 +249,7 @@ def test_hanya_titik_pertama_yang_wajib():
     assert '"maks": 4' in blok
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     tambah = js[js.index("[data-tambah]"):]
     assert 'removeAttribute("data-wajib")' in tambah[:1200], (
         "kotak yang ditambahkan ikut wajib — menekan tambah lalu ragu jadi "
@@ -392,7 +392,7 @@ def test_wajib_opt_in_bukan_kebalikan_optional():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parent.parent
-          / "app" / "web" / "static" / "aksi.js").read_text()
+          / "hmu_tampilan" / "static" / "aksi.js").read_text()
     assert "f.wajib ?" in js                       # opt-in, bukan !f.optional
     assert '[data-wajib]' in js                    # input ikut diperiksa, bukan select saja
     assert "Belum diisi:" in js
@@ -649,7 +649,7 @@ def test_konfirmasi_memakai_tulisan_pilihan_bukan_id():
     """Lubang {dryer_id} diisi dari SELECT. Kalau yang dipakai nilainya, yang
     terbaca 'Periksa panel 3' — dan angka id tidak mengonfirmasi apa pun."""
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     i = js.index("function terbaca()")
     blok = js[i:i + 500]
     assert "el.options[el.selectedIndex].text" in blok
@@ -659,7 +659,7 @@ def test_konfirmasi_membaca_isi_sebelum_layar_diganti():
     """Layar konfirmasi menimpa borangnya. Kalau isinya baru dibaca sesudah
     ditekan Ya, yang dibaca adalah borang yang sudah tidak ada."""
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     i_baca = js.index("var isi = muatan(), v = terbaca();")
     i_tanya = js.index("if (a.konfirmasi) { tanyaYakin(isi, v); return; }")
     assert i_baca < i_tanya
@@ -668,7 +668,7 @@ def test_konfirmasi_membaca_isi_sebelum_layar_diganti():
 def test_kembali_tak_menghapus_isian():
     """Memeriksa ulang tidak boleh berarti mengetik ulang."""
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     assert 'bukaAksi(id, v)' in js
     assert "function bukaAksi(id, semula)" in js
 
@@ -711,7 +711,7 @@ def test_tombol_aksi_digambar_di_paling_bawah():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     assert js.index('id="simpan"') < js.index("tombolLain +")
     # Dan ia tak ikut digambar sebagai medan biasa.
     assert 'if (f.type === "tombol_aksi") { return ""; }' in js
@@ -729,7 +729,7 @@ def test_pendengar_lembar_dipasang_sekali_saja():
     import pathlib
 
     js = (pathlib.Path(__file__).resolve().parents[1]
-          / "app/web/static/aksi.js").read_text()
+          / "hmu_tampilan/static/aksi.js").read_text()
     badan = js[js.index("function bukaAksi"):js.index("  muat();")]
     assert 'addEventListener("click"' not in badan, (
         "pendengar dipasang di dalam bukaAksi — ia akan menumpuk")

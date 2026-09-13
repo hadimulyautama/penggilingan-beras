@@ -139,9 +139,9 @@ def test_baris_berjalan_membawa_nilainya_ke_lembar_aksi():
 
     assert "nilai" in Baris.__dataclass_fields__
     akar = pathlib.Path(__file__).resolve().parents[1]
-    html = (akar / "app/web/templates/_benda.html").read_text()
+    html = (akar / "hmu_tampilan/templates/_benda.html").read_text()
     assert "&nilai=" in html
-    js = (akar / "app/web/static/aksi.js").read_text()
+    js = (akar / "hmu_tampilan/static/aksi.js").read_text()
     assert "isiDariBaris" in js
 
 

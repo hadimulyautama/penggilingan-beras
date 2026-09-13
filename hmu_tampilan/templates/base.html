@@ -1,9 +1,22 @@
+{# ── base.html milik paket hmu_tampilan ──
+   Kerangka SEMUA layar: produksi, gudang2, meja. Tidak disalin ke repo
+   aplikasi; dipasang lewat pemuat Jinja berlapis (hmu_tampilan.pasang_jinja).
+
+   Titik penyesuaian yang SAH — dan hanya ini:
+     global  APP_NAMA   nama aplikasi (judul bawaan & <title>)
+     global  PWA_NAMA   nama ikon di layar utama iOS
+     global  MODE_UJI   pita "MODE UJI"     (produksi)
+     global  MOCKUP     pita "MOCKUP"       (gudang2/meja masa mockup; kini false)
+     global  TAB / TAB_KUNCI / JUDUL / NAMA_VIEW   isi laci & judul layar (data)
+     blok    judul, kepala_ekstra, pita, isi, kaki, laci_kaki
+   Menyunting berkas ini di repo aplikasi = menyalin lagi. Ubah di repo
+   tampilan, naikkan VERSI, sinkronkan. #}
 <!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{% block judul %}Pos Produksi{% endblock %} · PT Hadi Mulya Utama</title>
+<title>{% block judul %}{{ APP_NAMA }}{% endblock %} · PT Hadi Mulya Utama</title>
 <meta name="theme-color" content="#16212a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 {# `black`, BUKAN `black-translucent` — kali ini diukur, bukan ditebak.
@@ -47,7 +60,7 @@
    "Tambah ke Layar Utama" memakai potret halaman sebagai ikon. #}
 <link rel="apple-touch-icon" sizes="180x180" href="/static/ikon-180.png?v={{ VERSI }}">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/ikon-192.png?v={{ VERSI }}">
-<meta name="apple-mobile-web-app-title" content="Pos Produksi">
+<meta name="apple-mobile-web-app-title" content="{{ PWA_NAMA }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
@@ -55,14 +68,16 @@
 {# Di <head>, bukan di kaki: skrip halaman Laporan berjalan sebaris dengan
    isinya dan memanggil PINDAH sebelum </body> sempat terbaca. #}
 <script src="/static/pindah.js?v={{ VERSI }}"></script>
-
+{% block kepala_ekstra %}{% endblock %}
 </head>
 {# Mode terik disimpan per PERANGKAT di kuki, bukan per akun: satu orang
    memakai ponselnya sendiri di dalam gudang dan perangkat gudang di luar, dan
    yang menentukan bukan siapa dia melainkan di mana layarnya berada. #}
 <body class="{{ 'terik' if TERIK }}">
 <div class="bingkai">
+{% block pita %}
 {% if MODE_UJI %}<div class="pita-uji">MODE UJI · DATA BOLEH DIHAPUS</div>{% endif %}
+{% if MOCKUP %}<div class="pita-uji">MOCKUP · DATA CONTOH, BUKAN DATA PABRIK</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
    yang sedang menyamar sebagai operator mungkin tak lagi melihat menu
    itu, dan jalan pulang yang menuntut hak yang baru dilepas adalah
@@ -74,6 +89,7 @@
   <button type="submit">kembali</button>
 </form>
 {% endif %}
+{% endblock %}
 
 {% if akun %}
 <header class="bar">
@@ -174,6 +190,7 @@
         {% endif %}
       {% endfor %}
     </div>
+    {% block laci_kaki %}
     <form method="post" action="/keluar" class="laci__kaki">
       <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <button class="btn" type="submit">
@@ -191,6 +208,7 @@
         Keluar dari semua perangkat
       </button>
     </form>
+    {% endblock %}
   </nav>
 </div>
 {% endif %}
