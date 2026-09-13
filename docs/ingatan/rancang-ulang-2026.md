@@ -278,6 +278,21 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
    hanya bot Kantor AI; guard di produksi tidak boleh punya anggaran sendiri.
 5. **Peran vs izin alat**: `kantor_role`/`kantor_user_role` ke `identitas`,
    `kantor_grant` ke `agen` (K-09)? Atau ketiganya `identitas`?
+   **JAWABAN SEMENTARA 13 Sep sore:** "akses, peran, izin alat akan
+   disesuaikan" — rincian izin alat ditunda. Yang berlaku SEKARANG untuk
+   Tahap 2, satu tangga peran `superadmin / admin / operator` (timbangan
+   `PETUGAS` = `operator`) dengan pintu per aplikasi:
+
+   | Aplikasi | Boleh masuk |
+   |---|---|
+   | App operator (Gudang 2; Pos Produksi bagian operator) | operator |
+   | Meja Administrasi | admin |
+   | Timbangan | operator (petugas timbang) dan admin |
+   | Semua aplikasi | superadmin |
+
+   Jadi identitas bersama menyimpan SATU peran per orang, dan tiap aplikasi
+   memeriksa peran itu di pintunya sendiri; tidak ada peran-per-aplikasi.
+   Izin alat (kantor_grant) menyusul saat peran disesuaikan.
 6. **`setelan_pabrik`, `notifications`, `kode_urut`**: milik proses yang
    mana? Usulan di BATAS-MODUL §4, tetapi ini keputusan.
 7. **Verifikasi harga & output** (`purchase_batch_verifications`,
