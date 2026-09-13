@@ -57,6 +57,7 @@ from app.models.peristiwa import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahT
                                   ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
 from app.models.system import ActivityLog, KodeUrut, Notification, SetelanPabrik
 from app.models.transfer import InternalTransfer
+from app.models import cermin  # noqa: E402,F401  (pasang saringan cermin bertanda)
 
 __all__ = [
     "Base",

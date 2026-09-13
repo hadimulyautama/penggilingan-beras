@@ -117,7 +117,7 @@ async def test_batal_sebelum_dipakai_mengembalikan_tumpukan(pg, g2):
     await _pindah(pg, g2["op"], g2["intake"], "A", 3_000)
     assert "Dibatalkan" in await _undo(pg, g2["op"])
     assert await _stok(pg) == 15_000 and await _stok(pg, "A") == 0
-    assert await _hitung(pg, "SELECT count(*) FROM pk_tumpukan_to_silo") == 0
+    assert await _hitung(pg, "SELECT count(*) FROM pk_tumpukan_to_silo WHERE dibatalkan_pada IS NULL") == 0
     assert await _hitung(pg, "SELECT count(*) FROM proyeksi_pindah_tumpukan_silo WHERE status='dibatalkan'") == 1
     assert "UndoError" in await _undo(pg, g2["op"])
     assert (await _pindah(pg, g2["op"], g2["intake"], "B", 15_000)).startswith("OK")

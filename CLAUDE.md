@@ -93,6 +93,15 @@ berhenti, sakelar mutu) tetap milik Direksi.
 dan DELETE). `proyeksi_*` = turunan dari peristiwa, ditulis di transaksi yang
 sama, bisa dibangun ulang dari nol: `python -m scripts.bangun_ulang_proyeksi`.
 Pembatalan = peristiwa LAWAN (`membatalkan_id`), bukan penghapusan.
+**Cermin bertanda, bukan dihapus** (sejak migrasi 0052): baris cermin di
+`purchase_batches`, `pk_purchase_batches`, `pk_gudang2_intakes`,
+`pk_tumpukan_to_silo` yang dibatalkan mendapat `dibatalkan_pada`, dan SEMUA
+pembaca ORM menyaringnya otomatis lewat saringan sesi di
+`app/models/cermin.py` (`internal_transfers` memakai `status`). SQL mentah
+(`text(...)`) harus menyaring sendiri `dibatalkan_pada IS NULL` — beri
+komentar "cermin bertanda". Jalur yang memang perlu melihat baris batal
+memakai `execution_options(termasuk_dibatalkan=True)`. Constraint unik tiket
+timbang kini indeks parsial `uq_<tabel>_timbangan_hidup`.
 
 Aksi yang sudah di jalur ini: **Gabah masuk dari tiket timbang**
 (`purchase.create_purchase_batch_dari_timbang`, undo `_undo_purchase`) dan
@@ -114,8 +123,7 @@ tumpukan dikunci FOR UPDATE) dan `pindah_tumpukan`; undo baru
 `_undo_pindah_tumpukan` dengan penjaga silo yang sama; proyeksi
 `proyeksi_pindah_tumpukan_silo`, migrasi 0051). Urutan satu transaksi: kunci tiket → nomor atomik →
 `services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
-`purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
-pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →
+`purchase_batches` (layar lama membacanya; saat dibatalkan ditandai, tidak dihapus) → jejak & notifikasi →
 commit. Aksi lain masih jalur lama; memindahkannya satu per satu, dengan
 persetujuan pemilik, dan tiap aksi wajib punya uji Postgres dua sesi
 (`tests/pg/test_peristiwa.py` contohnya: r06, r13). Muatan JSON hanya lewat

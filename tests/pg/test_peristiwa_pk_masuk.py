@@ -120,6 +120,7 @@ async def test_batal_sebelum_dipakai_adalah_peristiwa_lawan(pg, g2):
     assert await _stok_silo(pg, "A") == 0
     assert await _hitung(pg, "SELECT count(*) FROM peristiwa") == 2
     assert await _hitung(pg, "SELECT count(*) FROM proyeksi_pk_masuk_g2 WHERE status='dibatalkan'") == 1
+    assert await _hitung(pg, "SELECT count(*) FROM pk_gudang2_intakes WHERE dibatalkan_pada IS NOT NULL") == 1
     async with pg() as db:
         b = (await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == "PKB-UJI-01"))).scalars().one()
         assert b.status_batch == "diterima"

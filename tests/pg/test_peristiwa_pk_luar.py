@@ -131,7 +131,7 @@ async def test_batal_lalu_catat_lagi_tiket_yang_sama(pg, pemasok):
         assert jenis == ["pk_luar_masuk", "pk_luar_masuk_dibatalkan", "pk_luar_masuk"]
         proy = (await db.execute(select(ProyeksiPkLuarMasuk).order_by(ProyeksiPkLuarMasuk.peristiwa_id))).scalars().all()
         assert [p.status for p in proy] == ["dibatalkan", "tercatat"]
-    assert await _hitung(pg, "SELECT count(*) FROM pk_purchase_batches") == 1
+    assert await _hitung(pg, "SELECT count(*) FROM pk_purchase_batches WHERE dibatalkan_pada IS NULL") == 1
 
 
 async def test_gagal_di_tengah_tak_menyimpan_apa_pun(pg, pemasok, monkeypatch):

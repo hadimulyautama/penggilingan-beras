@@ -195,7 +195,8 @@ async def test_r13_batal_lalu_catat_lagi_tak_macet(pg, pemasok):
         assert proy[0].dibatalkan_peristiwa_id == lawan.id
     # Kode harian tak bertabrakan dan nomornya tak diterbitkan ulang.
     assert await _hitung(pg, "SELECT count(DISTINCT kode_batch) FROM proyeksi_gabah_masuk") == 5
-    assert await _hitung(pg, "SELECT count(*) FROM purchase_batches") == 4
+    assert await _hitung(pg, "SELECT count(*) FROM purchase_batches WHERE dibatalkan_pada IS NULL") == 4
+    assert await _hitung(pg, "SELECT count(*) FROM purchase_batches") == 5   # cermin bertanda, tak dihapus
 
 
 async def test_pembatalan_tak_bisa_dua_kali_dan_tak_menghapus_jejak(pg, pemakai, pemasok):

@@ -19,6 +19,11 @@ class PkPurchaseBatch(Base, TimestampMixin):
     """Pembelian PK dari luar (bukan transfer dari Gudang 1). Kode: PKB-YYYYMMDD-NN."""
 
     __tablename__ = "pk_purchase_batches"
+    __table_args__ = (
+        Index("uq_pk_purchase_batches_timbangan_hidup", "timbangan_transaksi_id", unique=True,
+              postgresql_where=text("dibatalkan_pada IS NULL"),
+              sqlite_where=text("dibatalkan_pada IS NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -38,12 +43,14 @@ class PkPurchaseBatch(Base, TimestampMixin):
     status_batch: Mapped[str] = mapped_column(String(20), default="baru")
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
     # Tautan ke timbangan (shared DB) — FK di level DB saja (migrasi 0027). Lihat PurchaseBatch.
-    timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column()
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
     #: Peristiwa `pk_luar_masuk` yang melahirkan baris ini (Tahap 3) —
     #: terisi = cermin buku besar; kosong = jalur lama / manual.
     peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    #: Cermin bertanda, bukan dihapus (lihat `app/models/cermin.py`).
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PkPurchaseVerification | None"] = relationship(
@@ -101,10 +108,12 @@ class PkGudang2Intake(Base, TimestampMixin):
         Index("ix_pk_gudang2_intakes_waktu", "tanggal_masuk"),
         Index("uq_pk_gudang2_intakes_batch", "pk_purchase_batch_id",
               unique=True,
-              postgresql_where=text("pk_purchase_batch_id IS NOT NULL")),
+              postgresql_where=text("pk_purchase_batch_id IS NOT NULL AND dibatalkan_pada IS NULL"),
+              sqlite_where=text("pk_purchase_batch_id IS NOT NULL AND dibatalkan_pada IS NULL")),
         Index("uq_pk_gudang2_intakes_transfer", "internal_transfer_id",
               unique=True,
-              postgresql_where=text("internal_transfer_id IS NOT NULL")),
+              postgresql_where=text("internal_transfer_id IS NOT NULL AND dibatalkan_pada IS NULL"),
+              sqlite_where=text("internal_transfer_id IS NOT NULL AND dibatalkan_pada IS NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -128,6 +137,8 @@ class PkGudang2Intake(Base, TimestampMixin):
     #: Peristiwa `pk_masuk_g2` yang melahirkan baris ini (Tahap 3, aksi ketiga).
     peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    #: Cermin bertanda, bukan dihapus (lihat `app/models/cermin.py`).
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PkTumpukanToSilo(Base, TimestampMixin):
@@ -151,6 +162,8 @@ class PkTumpukanToSilo(Base, TimestampMixin):
     #: Peristiwa `pk_tumpukan_ke_silo` yang melahirkan baris ini (Tahap 3, aksi kelima).
     peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    #: Cermin bertanda, bukan dihapus (lihat `app/models/cermin.py`).
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PolishingProcess(Base, TimestampMixin):

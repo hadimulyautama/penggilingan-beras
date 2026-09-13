@@ -58,9 +58,23 @@ tulis; baris tumpukan sumber dikunci FOR UPDATE — dua operator memindahkan
 sisa yang sama kini satu ditolak; pembatalan yang sebelumnya TAK ADA kini
 ada, dengan penjaga silo P-K-10; ukuran pindah 10 → 16 kueri, batal 12
 kueri). Dengan ini SELURUH stok PK Gudang 2 — silo dan tumpukan — lahir
-dari peristiwa. Berikutnya sesuai urutan yang disetujui: pembaca
-`purchase_batches`/`pk_*` pindah ke proyeksi supaya cermin tak perlu
-dihapus saat pembatalan (butir 10).
+dari peristiwa. Lalu **butir 10, dikerjakan sebagai "cermin
+bertanda"**, bukan "pembaca ke proyeksi" seperti usulan semula — dan ini
+penyimpangan yang disengaja: kolom siklus hidup cermin (`status_batch`,
+penempatan, giling) masih ditulis aksi jalur lama, jadi pembaca yang
+dialihkan ke proyeksi hari ini akan mengubah layar. Yang dilakukan:
+migrasi 0052 memberi `dibatalkan_pada` pada empat tabel cermin, constraint
+unik tiket jadi indeks parsial `uq_<tabel>_timbangan_hidup`, pembatalan
+MENANDAI (tak ada `db.delete` lagi di kelima aksi), dan SATU saringan sesi
+ORM (`app/models/cermin.py`, `with_loader_criteria` untuk empat model —
+berlaku untuk `session.get`, relasi, dan `select(func.sum(...))`) menutup
+belasan pembaca sekaligus; SQL mentah (tiket timbang, rekonsiliasi: 11
+tempat) disaring eksplisit. Uji Postgres membuktikan: baris batal tetap
+ada, laporan/Beranda/stok/tiket aktif/rekonsiliasi tak melihatnya, tiket
+bisa dicatat ulang, jalur pembatalan masih melihatnya lewat
+`termasuk_dibatalkan`. Janji "tak ada baris bisnis yang dihapus" kini
+berlaku untuk kelima aksi. Pembaca ke proyeksi tetap arah akhirnya —
+dikerjakan saat siklus hidup ikut jadi peristiwa.
 
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu

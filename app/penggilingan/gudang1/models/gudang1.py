@@ -63,13 +63,16 @@ class PurchaseBatch(Base, TimestampMixin):
     # | 'manual' (tanpa jembatan). HPP: pakai nota bila ada, selain itu real.
     # Tabel timbangan_transaksi dimiliki repo timbangan (shared DB) — TAK ada di metadata
     # app ini, jadi FK cukup di level DB (migrasi 0027). Di ORM: kolom Integer + unique.
-    timbangan_transaksi_id: Mapped[int | None] = mapped_column(unique=True)
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column()
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
     #: Peristiwa `gabah_masuk` yang melahirkan baris ini (Tahap 3). Terisi =
     #: baris ini CERMIN dari buku besar; pembatalannya lewat peristiwa lawan.
     #: Kosong = dibuat jalur lama (manual / sebelum Tahap 3).
     peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    #: Cermin BERTANDA, bukan dihapus: terisi = pencatatannya dibatalkan.
+    #: Semua pembaca ORM menyaringnya lewat `app/models/cermin.py`.
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     supplier: Mapped["Supplier"] = relationship()  # noqa: F821
     verification: Mapped["PurchaseBatchVerification | None"] = relationship(
@@ -85,6 +88,10 @@ class PurchaseBatch(Base, TimestampMixin):
         # tak bisa terjadi. Usulan itu terbaca seperti migrasi biasa, dan yang
         # menerapkannya sambil terburu-buru mencabut penjaganya. Temuan QA X-19.
         Index("ix_purchase_batches_dryer", "dryer_id"),
+        # Satu tiket satu pencatatan yang HIDUP — yang dibatalkan boleh dicatat lagi.
+        Index("uq_purchase_batches_timbangan_hidup", "timbangan_transaksi_id", unique=True,
+              postgresql_where=text("dibatalkan_pada IS NULL"),
+              sqlite_where=text("dibatalkan_pada IS NULL")),
     )
 
 

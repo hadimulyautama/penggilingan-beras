@@ -148,7 +148,7 @@ async def test_batal_transfer_adalah_peristiwa_lawan_dan_cermin_tak_dihapus(pg, 
         assert t.status == "dibatalkan"                    # cermin TETAP ADA
         jenis = [r[0] for r in (await db.execute(text("SELECT jenis FROM peristiwa ORDER BY id"))).all()]
     assert jenis == ["pk_dipindah_g1g2", "pk_masuk_g2", "pk_masuk_g2_dibatalkan", "pk_dipindah_g1g2_dibatalkan"]
-    assert await _hitung(pg, "SELECT count(*) FROM pk_gudang2_intakes") == 0
+    assert await _hitung(pg, "SELECT count(*) FROM pk_gudang2_intakes WHERE dibatalkan_pada IS NULL") == 0
     assert await _hitung(pg, "SELECT count(*) FROM proyeksi_transfer_pk WHERE status='dibatalkan'") == 1
     assert await _saldo(pg, pabrik["proc_id"]) == 6_000                  # stok siap kirim kembali
     assert await _stok_silo_g2(pg, "B") == 0

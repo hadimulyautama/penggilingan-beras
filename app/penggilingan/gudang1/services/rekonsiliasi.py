@@ -28,10 +28,11 @@ _SQL_BELUM_TERTAUT = text("""
        -- berhenti dibaca.
        AND t.status_transaksi = 'AKTIF'
        AND t.status_tiket IN ('SELESAI', 'DITUTUP_PAKSA')
+       -- cermin bertanda: pencatatan yang dibatalkan tak menaut tiketnya
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM purchase_batches
-                          WHERE timbangan_transaksi_id IS NOT NULL)
+                          WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
-                          WHERE timbangan_transaksi_id IS NOT NULL)
+                          WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
      ORDER BY t.tanggal DESC, t.id DESC
 """)
 
@@ -45,6 +46,7 @@ _SQL_SELISIH = text("""
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
         LEFT JOIN purchase_batch_verifications v ON v.purchase_batch_id = b.id
+       WHERE b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'pk' AS jenis,
              t.berat_acuan_kg, t.netto_timbangan_kg, t.selisih_kg, t.selisih_persen,
@@ -53,6 +55,7 @@ _SQL_SELISIH = text("""
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
         LEFT JOIN pk_purchase_verifications v ON v.pk_purchase_batch_id = b.id
+       WHERE b.dibatalkan_pada IS NULL
     ) x
     WHERE timbang IS NOT NULL AND COALESCE(nota,0) > 0
       AND ABS(COALESCE(selisih_kg,0)) > 0
@@ -60,9 +63,11 @@ _SQL_SELISIH = text("""
 """)
 
 _SQL_MENUNGGU = text("""
-    SELECT kode_batch, 'gabah' j FROM purchase_batches WHERE sumber_berat='menunggu'
+    SELECT kode_batch, 'gabah' j FROM purchase_batches
+     WHERE sumber_berat='menunggu' AND dibatalkan_pada IS NULL
     UNION ALL
-    SELECT kode_batch, 'pk' j FROM pk_purchase_batches WHERE sumber_berat='menunggu'
+    SELECT kode_batch, 'pk' j FROM pk_purchase_batches
+     WHERE sumber_berat='menunggu' AND dibatalkan_pada IS NULL
 """)
 
 # Batch tertaut yang bobot tersimpannya BEDA dari tiket SAAT INI (tiket direvisi)
@@ -77,7 +82,7 @@ _SQL_REVISI = text("""
         FROM purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
-       WHERE b.sumber_berat IN ('nota','timbangan')
+       WHERE b.sumber_berat IN ('nota','timbangan') AND b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?'), 'pk',
              b.berat_total_kg, COALESCE(NULLIF(t.berat_acuan_kg,0), t.netto_timbangan_kg),
@@ -85,7 +90,7 @@ _SQL_REVISI = text("""
         FROM pk_purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
-       WHERE b.sumber_berat IN ('nota','timbangan')
+       WHERE b.sumber_berat IN ('nota','timbangan') AND b.dibatalkan_pada IS NULL
     ) x
     WHERE tiket_now IS NOT NULL
       AND tersimpan IS DISTINCT FROM tiket_now
@@ -113,7 +118,7 @@ _SQL_MENYIMPANG = """
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers sb ON sb.id = b.supplier_id
         LEFT JOIN suppliers st ON st.id = t.supplier_id
-       WHERE {syarat}
+       WHERE b.dibatalkan_pada IS NULL AND ({syarat})
 """
 
 # (tag, syarat, pesan) — pesan dirakit di SQL agar memuat nama/kode sebenarnya.
@@ -183,8 +188,8 @@ _SQL_TIKET_MENYIMPANG = text(_rakit_menyimpang())
 
 _SQL_MANUAL = text("""
     SELECT count(*) FROM (
-      SELECT id FROM purchase_batches WHERE sumber_berat='manual'
-      UNION ALL SELECT id FROM pk_purchase_batches WHERE sumber_berat='manual'
+      SELECT id FROM purchase_batches WHERE sumber_berat='manual' AND dibatalkan_pada IS NULL
+      UNION ALL SELECT id FROM pk_purchase_batches WHERE sumber_berat='manual' AND dibatalkan_pada IS NULL
     ) z
 """)
 

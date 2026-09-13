@@ -262,10 +262,22 @@ async def _undo_last_cooling(db: AsyncSession, lot_id: int) -> str:
     return f"✓ Dibatalkan: log pendinginan terakhir {lot.kode_lot if lot else ''}.".strip()
 
 
+async def _ambil_termasuk_batal(db: AsyncSession, model, id_: int):
+    """Baris cermin TERMASUK yang sudah dibatalkan — saringan sesi dilewati,
+    supaya pembatalan ganda bisa dijawab 'sudah dibatalkan', bukan 'tak ada'."""
+    from app.models.cermin import TERMASUK_DIBATALKAN
+
+    return (await db.execute(
+        select(model).where(model.id == id_).execution_options(**{TERMASUK_DIBATALKAN: True})
+    )).scalars().first()
+
+
 async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
-    b = await db.get(PurchaseBatch, batch_id)
+    b = await _ambil_termasuk_batal(db, PurchaseBatch, batch_id)
     if b is None:
         raise UndoError("Batch sudah tidak ada.")
+    if b.dibatalkan_pada is not None:
+        raise UndoError(f"{b.kode_batch} sudah dibatalkan sebelumnya.")
     if b.status_batch != "baru":
         raise UndoError(f"{b.kode_batch} sudah diproses ({b.status_batch}) — tidak bisa dibatalkan.")
     in_lot = (
@@ -273,25 +285,22 @@ async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
     ).first()
     if in_lot:
         raise UndoError(f"{b.kode_batch} sudah masuk lot pengeringan — tidak bisa dibatalkan.")
-    await db.execute(
-        delete(PurchaseBatchVerification).where(PurchaseBatchVerification.purchase_batch_id == batch_id)
-    )
     kode = b.kode_batch
     if b.peristiwa_id is not None:
         # ── Jalur peristiwa (Tahap 3): pembatalan = peristiwa LAWAN ──
         #
         # Buku besar tak pernah kehilangan apa pun: `gabah_masuk` tetap ada,
         # `gabah_masuk_dibatalkan` menunjuknya, dan proyeksinya ditandai.
-        # Yang dihapus hanya baris CERMIN di `purchase_batches` — pembaca
-        # lama (laporan, stok, tumpukan) masih menganggap "ada baris" berarti
-        # "ada gabah", dan mengubah semuanya sekaligus bukan tugas tahap ini.
         from app.models.peristiwa import GABAH_MASUK_DIBATALKAN
         from app.services import peristiwa as buku
 
         await buku.batalkan(db, jenis_lawan=GABAH_MASUK_DIBATALKAN, peristiwa_id=b.peristiwa_id,
                             pelaku_id=None, muatan={"kode_batch": kode,
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
-    await db.delete(b)
+    # Cermin BERTANDA, bukan dihapus: pembaca menyaringnya lewat
+    # `app/models/cermin.py`, dan tiketnya bebas dicatat lagi (indeks parsial).
+    from app.database import now_local as _now
+    b.dibatalkan_pada = _now()
     return f"✓ Dibatalkan: input pembelian {kode}."
 
 
@@ -593,9 +602,11 @@ async def _undo_verify_output(db: AsyncSession, proc_id: int) -> str:
 
 # ── PK luar (Gudang 2) ──
 async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
-    b = await db.get(PkPurchaseBatch, batch_id)
+    b = await _ambil_termasuk_batal(db, PkPurchaseBatch, batch_id)
     if b is None:
         raise UndoError("PK luar sudah tidak ada.")
+    if b.dibatalkan_pada is not None:
+        raise UndoError(f"{b.kode_batch} sudah dibatalkan sebelumnya.")
     intake = (
         await db.execute(
             select(PkGudang2Intake.id).where(PkGudang2Intake.pk_purchase_batch_id == batch_id)
@@ -605,22 +616,17 @@ async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
         raise UndoError(
             f"{b.kode_batch} sudah dimasukkan ke silo/tumpukan — batalkan pemasukannya dulu."
         )
-    await db.execute(
-        delete(PkPurchaseVerification).where(
-            PkPurchaseVerification.pk_purchase_batch_id == batch_id
-        )
-    )
     kode = b.kode_batch
     if b.peristiwa_id is not None:
-        # Jalur peristiwa (Tahap 3): pembatalan = peristiwa LAWAN; hanya
-        # baris CERMIN yang dihapus — lihat catatan di `_undo_purchase`.
+        # Jalur peristiwa (Tahap 3): pembatalan = peristiwa LAWAN.
         from app.models.peristiwa import PK_LUAR_MASUK_DIBATALKAN
         from app.services import peristiwa as buku
 
         await buku.batalkan(db, jenis_lawan=PK_LUAR_MASUK_DIBATALKAN, peristiwa_id=b.peristiwa_id,
                             pelaku_id=None, muatan={"kode_batch": kode,
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
-    await db.delete(b)
+    from app.database import now_local as _now
+    b.dibatalkan_pada = _now()   # cermin bertanda, bukan dihapus
     return f"✓ Dibatalkan: catat PK luar {kode}."
 
 
@@ -664,9 +670,11 @@ async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None
 
 
 async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: bool = False) -> str:
-    it = await db.get(PkGudang2Intake, intake_id)
+    it = await _ambil_termasuk_batal(db, PkGudang2Intake, intake_id)
     if it is None:
         raise UndoError("Pemasukan PK sudah tidak ada.")
+    if it.dibatalkan_pada is not None:
+        raise UndoError("Pemasukan PK itu sudah dibatalkan sebelumnya.")
     # Pemasukan yang lahir dari TRANSFER G1 → G2 tak berdiri sendiri: yang
     # dibatalkan adalah pemindahannya, dan pemasukannya ikut (P-K-10:
     # transfer + pemasukan = satu pembatalan). "Batalkan input terakhir"
@@ -684,7 +692,8 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
         await buku.batalkan(db, jenis_lawan=PK_MASUK_G2_DIBATALKAN, peristiwa_id=it.peristiwa_id,
                             pelaku_id=None, muatan={"tujuan": it.tujuan, "berat_kg": float(it.berat_kg),
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
-    await db.delete(it)
+    from app.database import now_local as _now
+    it.dibatalkan_pada = _now()   # cermin bertanda, bukan dihapus
     if b:
         b.status_batch = "diterima"  # kembali ke 'sudah masuk, belum ditempatkan'
         return f"✓ Dibatalkan: PK {b.kode_batch} dimasukkan ke {lok}."
@@ -716,9 +725,11 @@ async def _undo_pindah_tumpukan(db: AsyncSession, move_id: int) -> str:
     """Batalkan pindah tumpukan → silo: PK kembali ke tumpukan (P-K-10 dijaga)."""
     from app.models import PkTumpukanToSilo, Silo
 
-    m = await db.get(PkTumpukanToSilo, move_id)
+    m = await _ambil_termasuk_batal(db, PkTumpukanToSilo, move_id)
     if m is None:
         raise UndoError("Pemindahan itu sudah tidak ada.")
+    if m.dibatalkan_pada is not None:
+        raise UndoError(f"Pemindahan {m.kode_pindah} sudah dibatalkan sebelumnya.")
     silo = await db.get(Silo, m.silo_id)
     lok = silo.nama_silo if silo else f"silo #{m.silo_id}"
     await _tolak_bila_silo_dipakai(db, m.silo_id, m.waktu, lok)
@@ -730,9 +741,8 @@ async def _undo_pindah_tumpukan(db: AsyncSession, move_id: int) -> str:
                             pelaku_id=None, muatan={"kode_pindah": m.kode_pindah, "berat_kg": float(m.berat_kg),
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     kode, kg = m.kode_pindah, float(m.berat_kg)
-    # Cermin dihapus: `hitung_stok_silo`, `hitung_stok_tumpukan`, dan
-    # `_sisa_tumpukan_intake` menjumlahkan barisnya apa adanya.
-    await db.delete(m)
+    from app.database import now_local as _now
+    m.dibatalkan_pada = _now()   # cermin bertanda, bukan dihapus
     return f"✓ Dibatalkan: pemindahan {kode} ({kg:,.0f} kg) — PK kembali ke tumpukan.".replace(",", ".")
 
 

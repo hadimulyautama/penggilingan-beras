@@ -71,10 +71,11 @@ _SQL_AKTIF = text("""
        -- dilaporkan rekonsiliasi sebagai "belum tertaut".
        AND (t.status_tiket = 'TERBUKA'
             OR t.tanggal >= CURRENT_DATE - CAST(:hari AS integer))
+       -- cermin bertanda: pencatatan yang dibatalkan tak lagi menaut tiketnya
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM purchase_batches
-                          WHERE timbangan_transaksi_id IS NOT NULL)
+                          WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
-                          WHERE timbangan_transaksi_id IS NOT NULL)
+                          WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
      ORDER BY (t.status_tiket = 'TERBUKA') DESC, t.tanggal DESC, t.id DESC
 """)
 
@@ -138,6 +139,7 @@ _SQL_SINKRON = """
                               THEN 'nota' ELSE 'timbangan' END
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
+       AND b.dibatalkan_pada IS NULL          -- cermin bertanda
        AND b.sumber_berat = 'menunggu'
 """ + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
 """
@@ -166,6 +168,7 @@ _SQL_RESINKRON = """
                               THEN 'nota' ELSE 'timbangan' END
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
+       AND b.dibatalkan_pada IS NULL          -- cermin bertanda
        AND b.sumber_berat IN ('nota', 'timbangan')     -- sudah pernah sinkron dari timbang
 """ + SYARAT_TIKET_SAH + """       -- Satu-satunya yang MEMBEKUKAN bobot: harga sudah diverifikasi.
        -- Sesudah itu ada angka rupiah yang berdiri di atas bobot ini, dan
@@ -238,12 +241,12 @@ _SQL_PEMAKAI_TIKET = text("""
              b.waktu_pembelian AS waktu
         FROM purchase_batches b
         LEFT JOIN users u ON u.id = b.input_by
-       WHERE b.timbangan_transaksi_id = :tid
+       WHERE b.timbangan_transaksi_id = :tid AND b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT 'PK', b.kode_batch, u.nama, b.waktu_pembelian
         FROM pk_purchase_batches b
         LEFT JOIN users u ON u.id = b.input_by
-       WHERE b.timbangan_transaksi_id = :tid
+       WHERE b.timbangan_transaksi_id = :tid AND b.dibatalkan_pada IS NULL
     ) x
 """)
 
