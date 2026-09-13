@@ -18,7 +18,15 @@ lintas repo, bukan sebagai rencana penggabungan. Keputusan lain pemilik pada
 hari yang sama: tabel yang ada tidak diganti nama (awalan hanya untuk tabel
 baru; peta pemilik yang menjaga), tabel verifikasi tetap di produksi dengan
 rupiah dijaga gerbang peran, branch `gudang2-api` digabung ke `main`.
-Sisa pertanyaan: rumah tabel master (§7.3) dan guard biaya ganda (§7.4).
+Sore harinya (sesudah Tahap 1 selesai) pemilik menjawab dua sisanya:
+**tabel master (`suppliers`, `pelanggan`, `warehouses`, `silos`, `dryers`)
+dimiliki `core`** — satu pemilik skema sekaligus pelari migrasinya, repo lain
+hanya membaca (menutup X-15, dikerjakan sebagai bagian Tahap 2 atau tahap
+kecil sendiri); dan **guard biaya LLM = SATU anggaran**, "karena yang nanti
+hidup hanya bot Kantor AI" — guard produksi (agen pabrik) dipensiunkan atau
+memakai paket guard yang sama dengan Kantor, bukan anggaran terpisah
+(menutup arah K-10). Sisa pertanyaan §7.5, §7.6 masih terbuka; §7.8 dijawab
+saat rencana migrasi Tahap 2 ditunjukkan.
 
 Ditulis 13 September 2026 sebagai
 Tahap 0 dari `QA/RANCANGAN-untuk-claude-code.md`, menerjemahkan artifact
@@ -259,10 +267,15 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
    `silos`, `dryers`): tujuh modul tak punya tempat untuknya. Modul
    kedelapan `master`, `identitas` diperlebar jadi `pihak`, atau alat masuk
    `produksi` dan mitra masuk `uang`? (BATAS-MODUL §4.8.)
+   **DIPUTUSKAN 13 Sep sore: `core` saja** — pemilik skema dan pelari migrasi
+   tabel master adalah repo core; produksi dan kantor jadi pembaca/penulis
+   data lewat model yang sama, bukan pengubah skema.
 4. **`kantor_config` & `kantor_llm_usage`** dipakai dua guard (produksi &
    kantor). Di C pemiliknya `agen`; tetapi guard biaya produksi (agen
    pabrik, `/internal/produksi/tanya`) juga menulisnya. Satu guard di
    paket bersama, atau dua anggaran terpisah (K-10 menyarankan terpisah)?
+   **DIPUTUSKAN 13 Sep sore: satu anggaran saja**, karena yang akan hidup
+   hanya bot Kantor AI; guard di produksi tidak boleh punya anggaran sendiri.
 5. **Peran vs izin alat**: `kantor_role`/`kantor_user_role` ke `identitas`,
    `kantor_grant` ke `agen` (K-09)? Atau ketiganya `identitas`?
 6. **`setelan_pabrik`, `notifications`, `kode_urut`**: milik proses yang
