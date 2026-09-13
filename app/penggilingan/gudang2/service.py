@@ -120,7 +120,9 @@ def is_operator_gudang2(user: User, g2_wid: int) -> bool:
 
     if P.admin_keatas(user.role):
         return True
-    return P.operator_saja(user.role) and user.default_warehouse_id == g2_wid
+    # Operator mana pun: gudang utama bukan pagar (pemilik 13 Sep 2026,
+    # operator saling menggantikan). `g2_wid` dipertahankan untuk pemanggil.
+    return P.operator_saja(user.role)
 
 
 # ─────────────────────────── Formula stok ───────────────────────────

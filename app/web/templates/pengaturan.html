@@ -119,7 +119,7 @@
 </div>
 {% endif %}
 
-{% if PERAN_ASLI in ("admin", "superadmin") %}
+{% if admin_keatas(PERAN_ASLI) %}
 <div>
   <span class="lbl">Lihat sebagai</span>
   <p class="bantu" style="margin:6px 0 8px">
@@ -131,6 +131,24 @@
     <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <select class="fld" name="peran">
       {% for kode, nama in LIHAT_PILIHAN %}
+        <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn" type="submit">Terapkan</button>
+  </form>
+</div>
+{% elif boleh_ganti_gudang(PERAN_ASLI) %}
+<div>
+  <span class="lbl">Kerja di gudang</span>
+  <p class="bantu" style="margin:6px 0 8px">
+    Operator saling menggantikan bila ada yang berhalangan. Pilih gudang yang
+    sedang Anda kerjakan — layar dan aksinya mengikuti. Gudang utama Anda tidak
+    berubah; pilih "Gudang utama saya" untuk kembali.
+  </p>
+  <form method="post" action="/lihat-sebagai" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <select class="fld" name="peran">
+      {% for kode, nama in PILIHAN_GUDANG %}
         <option value="{{ kode }}"{% if kode == (LIHAT_SEBAGAI or "") %} selected{% endif %}>{{ nama }}</option>
       {% endfor %}
     </select>

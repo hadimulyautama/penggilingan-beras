@@ -32,16 +32,20 @@ BOLEH: dict[str, tuple[str, ...]] = {
     KANTOR: (P.SUPERADMIN, P.ADMIN, *P.STAF_LAMA),
 }
 
-#: Operator di aplikasi ini wajib berlingkup gudang tertentu.
-LINGKUP_OPERATOR = {GUDANG2: (P.G2,), PRODUKSI: (P.G1, P.G2)}
+#: Gudang yang dilayani aplikasi — hanya untuk PESAN, bukan pagar. Operator
+#: boleh masuk aplikasi operator mana pun (keputusan pemilik 13 Sep 2026:
+#: operator saling menggantikan); di dalamnya ia bekerja sebagai operator
+#: gudang yang dilayani aplikasi itu.
+GUDANG_APLIKASI = {GUDANG2: (P.G2,), PRODUKSI: (P.G1, P.G2)}
 
 
 def sebab_tolak(peran: str | None, aplikasi: str, lingkup: str | None = None) -> str | None:
     """Alasan menolak, atau None bila boleh masuk.
 
-    `lingkup` opsional: bila diberikan untuk operator, diperiksa terhadap
-    gudang yang dilayani aplikasi. Tanpa lingkup (mis. pintu Meja yang belum
-    tahu gudang), yang diperiksa hanya perannya.
+    `lingkup` (gudang utama operator) DITERIMA tetapi tak lagi menjadi pagar:
+    operator boleh masuk aplikasi operator mana pun dan bekerja di gudang
+    yang dilayani aplikasi itu. Parameternya dipertahankan untuk pemanggil
+    lama dan untuk pesan.
     """
     p = P.normal(peran)
     nama = NAMA_APLIKASI.get(aplikasi, aplikasi)
@@ -51,13 +55,6 @@ def sebab_tolak(peran: str | None, aplikasi: str, lingkup: str | None = None) ->
         if not p:
             return f"Akun ini belum punya peran; hubungi Super Admin."
         return f"Peran {P.LABEL.get(p, p)} tidak masuk lewat {nama}."
-    if P.operator_saja(p) and lingkup is not None and aplikasi in LINGKUP_OPERATOR:
-        if lingkup not in LINGKUP_OPERATOR[aplikasi]:
-            gudang = " / ".join("Gudang 2" if g == P.G2 else "Gudang 1"
-                                for g in LINGKUP_OPERATOR[aplikasi])
-            return (f"Akun ini bukan operator {gudang} — pakai aplikasi gudang Anda sendiri."
-                    if lingkup != P.TANPA else
-                    "Akun operator ini belum diberi gudang; hubungi Super Admin.")
     return None
 
 

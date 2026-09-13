@@ -69,6 +69,12 @@ Tangga: `operator` · `admin` · `superadmin`. `staff`/`staf` nama LAMA yang
 masih sah dibaca. Pintu per aplikasi (keputusan pemilik): operator → app
 operator, admin → Meja, timbangan → operator & admin, superadmin → semua;
 Pos Produksi masih menerima admin sampai Meja dipakai sungguhan.
+**Operator tidak terikat satu gudang** (pemilik 13 Sep: saling menggantikan):
+gudang utama = layar pertama; berpindah lewat "Kerja di gudang" di Pengaturan
+(`/lihat-sebagai` dengan `operator:g1|g2`, ditetapkan per permintaan di
+`akun_opsional`). Aplikasi Gudang 2 mengirim `X-Meja-Lihat: operator:g2`
+di tiap panggilan. `_is_g1_operator`/`_is_g2_operator` memeriksa gudang yang
+SEDANG dikerjakan, bukan gudang utama.
 
 **Jangan pernah menyebut peran harfiah** (`role == "admin"`,
 `in ("admin","staff")`, `u.role = "admin"`). Pakai `hmu_identitas.peran`

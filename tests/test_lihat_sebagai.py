@@ -41,6 +41,17 @@ def test_operator_tak_bisa_menyamar():
     assert boleh_menyamar("admin") and boleh_menyamar("superadmin")
 
 
+def test_operator_boleh_berpindah_gudang():
+    """Pemilik 13 Sep 2026: operator saling menggantikan antar gudang —
+    berpindah GUDANG boleh, menyamar PERAN tidak."""
+    from hmu_identitas.peran import boleh_ganti_gudang
+
+    assert boleh_ganti_gudang("operator") and boleh_ganti_gudang("admin")
+    assert not boleh_ganti_gudang(None)
+    assert peran_efektif("operator", "operator:g2") == "operator"
+    assert peran_efektif("operator", "admin") == "operator"
+
+
 def test_superadmin_di_puncak_tangga():
     assert TINGKAT["superadmin"] > TINGKAT["admin"] > TINGKAT["operator"]
 

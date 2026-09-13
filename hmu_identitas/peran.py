@@ -89,12 +89,16 @@ AWALAN_GUDANG = (("Gudang 1", G1), ("Gudang 2", G2))
 
 
 def lingkup(peran: str | None, nama_gudang: str | None) -> str:
-    """Lingkup kerja orang ini.
+    """Lingkup kerja orang ini — untuk operator: gudang UTAMA-nya.
 
     Admin ke atas (dan nama lama) melihat dan mengerjakan semua gudang.
-    Operator melekat pada SATU gudang — `users.default_warehouse_id` — dan
-    operator tanpa gudang tak berhak apa-apa (`TANPA`): keadaan yang harus
-    terbaca sebagai kesalahan pendaftaran, bukan layar kosong.
+    Operator punya gudang utama (`users.default_warehouse_id`) yang
+    menentukan layar mana yang dibuka lebih dulu — BUKAN pagar. Keputusan
+    pemilik 13 Sep 2026: "operator bisa jadi operator gudang 1 atau gudang 2,
+    karena saling backup jika ada yang berhalangan". Operator berpindah gudang
+    lewat "kerja di gudang" (`peran_efektif` + `urai`), dan seluruh hak serta
+    layarnya mengikuti gudang yang sedang dipilih. Operator tanpa gudang utama
+    = `TANPA`: kesalahan pendaftaran, bukan layar kosong.
     """
     if staf_keatas(peran):
         return SEMUA
@@ -157,7 +161,19 @@ def peran_efektif(asli: str | None, diminta: str | None) -> str:
 
 
 def boleh_menyamar(asli: str | None) -> bool:
+    """Melihat sebagai PERAN lain: admin ke atas."""
     return tingkat(asli) >= TINGKAT[ADMIN]
+
+
+def boleh_ganti_gudang(asli: str | None) -> bool:
+    """Berpindah GUDANG (tetap sebagai operator): operator maupun admin ke
+    atas. Operator saling menggantikan bila ada yang berhalangan."""
+    return operator_saja(asli) or admin_keatas(asli)
+
+
+#: Pilihan gudang kerja untuk operator — nilainya bentuk "operator:gX".
+PILIHAN_GUDANG = ((f"{OPERATOR}:{G1}", "Gudang 1 (selepan)"),
+                  (f"{OPERATOR}:{G2}", "Gudang 2 (penyosohan)"))
 
 
 # ───────────────────────── Timbangan (nama lama) ─────────────────────────

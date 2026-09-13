@@ -50,7 +50,12 @@ templates.env.globals["V_POLESAN"] = POLESAN
 templates.env.globals["JUDUL"] = JUDUL
 
 from app.web.lihat_sebagai import PILIHAN as _LIHAT_PILIHAN  # noqa: E402
+from hmu_identitas import peran as _P  # noqa: E402
 templates.env.globals["LIHAT_PILIHAN"] = _LIHAT_PILIHAN
+#: Operator memilih GUDANG kerja (bukan peran) — pemilik 13 Sep 2026.
+templates.env.globals["PILIHAN_GUDANG"] = (("", "Gudang utama saya"), *_P.PILIHAN_GUDANG)
+templates.env.globals["admin_keatas"] = _P.admin_keatas
+templates.env.globals["boleh_ganti_gudang"] = _P.boleh_ganti_gudang
 
 #: Nama fase barang di layar. Urutannya mengikuti perjalanan barang sendiri —
 #: menunggu orang, panas di mesin, tersimpan di silo, menghasilkan — dan

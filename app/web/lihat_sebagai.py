@@ -24,7 +24,8 @@ from app.web.security import butuh_akun
 from hmu_identitas import peran as P
 #: Tinggi tiap peran, aturan "hanya menurun", dan pengurai "operator:g1" —
 #: milik paket sejak Tahap 2; nama-nama lama diekspor ulang untuk pemakainya.
-from hmu_identitas.peran import TINGKAT, boleh_menyamar, peran_efektif, urai  # noqa: F401
+from hmu_identitas.peran import (TINGKAT, PILIHAN_GUDANG, boleh_ganti_gudang,  # noqa: F401
+                                 boleh_menyamar, peran_efektif, urai)
 
 router = APIRouter()
 
@@ -58,12 +59,17 @@ async def pilih(request: Request, peran: str = Form(""), _=Depends(butuh_akun)):
     # pada percobaan pertama, tanpa satu pun galat muncul.
     asli = getattr(request.state, "peran_asli", None)
     balasan = RedirectResponse("/", status_code=303)
-    if not boleh_menyamar(asli):
+    # Admin ke atas boleh menyamar peran; operator hanya boleh berpindah
+    # GUDANG (tetap operator) — pemilik 13 Sep 2026: saling menggantikan.
+    if not boleh_menyamar(asli) and not boleh_ganti_gudang(asli):
         return balasan
     pilih_ = peran_efektif(asli, peran)
     _, gudang = urai(peran)
     if P.operator_saja(pilih_) and gudang:
         pilih_ = f"{P.OPERATOR}:{gudang}"
+    if P.operator_saja(asli) and not gudang:
+        # Operator tanpa pilihan gudang = kembali ke gudang utamanya.
+        peran = ""
     if not peran or pilih_ == P.normal(asli):
         balasan.delete_cookie(NAMA_KUKI, path="/")
     else:

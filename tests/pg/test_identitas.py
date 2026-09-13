@@ -75,11 +75,21 @@ async def test_operator_tak_masuk_meja_tapi_masuk_gudangnya(pg, monkeypatch):
         assert r.status_code == 200 and r.json()["lingkup"] == "g2"
 
 
-async def test_operator_gudang_1_tak_masuk_gudang_2(pg, monkeypatch):
-    await _orang(pg, nama="Marno", role="operator", username="marno", gudang="Gudang 1")
+async def test_operator_gudang_1_boleh_masuk_gudang_2_dan_bekerja_di_sana(pg, monkeypatch):
+    """Pemilik 13 Sep 2026: operator saling menggantikan. Operator Gudang 1
+    masuk aplikasi Gudang 2, dan dengan header `X-Meja-Lihat: operator:g2`
+    produksi memperlakukannya sebagai operator Gudang 2 (view polesan)."""
+    await _orang(pg, nama="Dany", role="operator", username="dany", gudang="Gudang 2")  # gudang 2 ada
+    aid, _ = await _orang(pg, nama="Marno", role="operator", username="marno", gudang="Gudang 1")
     async with _klien(monkeypatch) as c:
         r = await _masuk_meja(c, "marno", "gudang2")
-        assert r.status_code == 403 and "Gudang 2" in r.json()["detail"]
+        assert r.status_code == 200 and r.json()["lingkup"] == "g1"
+        kepala = {"X-Internal-Token": TOKEN_MEJA, "X-Meja-Akun": str(aid), "X-Meja-Versi": str(r.json()["versi"])}
+        saya = (await c.get("/internal/meja/saya", headers=kepala)).json()
+        assert saya["view"] == "selepan"
+        saya2 = (await c.get("/internal/meja/saya", headers={**kepala, "X-Meja-Lihat": "operator:g2"})).json()
+        assert saya2["view"] == "polesan" and saya2["peran"] == "operator"
+        assert (await c.get("/internal/gudang2/beranda", headers={**kepala, "X-Meja-Lihat": "operator:g2"})).status_code == 200
 
 
 async def test_admin_masuk_meja_tak_masuk_gudang_2_superadmin_kemana_saja(pg, monkeypatch):

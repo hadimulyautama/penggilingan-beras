@@ -42,7 +42,10 @@ async def akun_operator_g2(akun: ProduksiAkun = Depends(akun_meja)) -> ProduksiA
     from app.web.miniapp import _is_g2_operator
 
     if not await _is_g2_operator(akun.user):
-        raise HTTPException(403, "Hanya untuk operator Gudang 2.")
+        # Aplikasi Gudang 2 mengirim `X-Meja-Lihat: operator:g2` di tiap
+        # permintaan, jadi operator gudang mana pun tiba di sini sebagai
+        # operator Gudang 2 (pemilik 13 Sep: operator saling menggantikan).
+        raise HTTPException(403, "Hanya untuk operator (Gudang 2).")
     return akun
 
 

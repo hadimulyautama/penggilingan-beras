@@ -358,6 +358,16 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
    Jadi identitas bersama menyimpan SATU peran per orang, dan tiap aplikasi
    memeriksa peran itu di pintunya sendiri; tidak ada peran-per-aplikasi.
    Izin alat (kantor_grant) menyusul saat peran disesuaikan.
+   **Tambahan pemilik 13 Sep malam: "operator bisa jadi operator gudang 1
+   atau gudang 2, karena saling backup jika ada yang berhalangan."** Maka
+   gudang utama operator (`users.default_warehouse_id`) hanya menentukan
+   layar pertama, BUKAN pagar: operator boleh masuk aplikasi Gudang 2
+   maupun Pos Produksi, dan berpindah gudang lewat "Kerja di gudang"
+   (Pengaturan; mekanisme `lihat-sebagai` dengan `operator:gX`, peran tetap
+   operator). Aplikasi Gudang 2 selalu meminta `X-Meja-Lihat: operator:g2`,
+   jadi siapa pun yang masuk bekerja sebagai operator Gudang 2 di sana; hak
+   dan layar mengikuti gudang yang dipilih (`hmu_identitas.peran.
+   boleh_ganti_gudang`, `pintu` tanpa pagar lingkup).
 
    **Benih orang & peran (pemilik, 13 Sep sore)** — pegangan Tahap 2:
 
