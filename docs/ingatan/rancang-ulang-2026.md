@@ -33,11 +33,17 @@ pembacanya pindah; cermin masih DIHAPUS saat dibatalkan karena ±15 pembaca
 baris = ada gabah. Langkah 3: BERHENTI — pemilik menjawab "lanjut" → **aksi kedua, PK luar
 masuk dari tiket timbang** (migrasi 0048 `proyeksi_pk_luar_masuk`,
 `pk_purchase_batches.peristiwa_id`; pola persis kembaran gabah; ukuran
-catat 9 → 15 kueri, 9 → 14 ms; batalkan 8 → 13 kueri, 7 → 11 ms). Yang
-belum tersentuh oleh dua aksi ini: P-K-10 hidup di aksi *pemasukan* PK ke
-silo/tumpukan (`masukkan_pk_luar` / `_undo_pk_intake`) — pembatalannya
-harus ditolak bila sudah ada pemakaian hilir (penyosohan); itu calon aksi
-ketiga. Cermin tabel lama masih dihapus saat dibatalkan (alasan sama).
+catat 9 → 15 kueri, 9 → 14 ms; batalkan 8 → 13 kueri, 7 → 11 ms). Pemilik
+"lanjut" lagi → **aksi ketiga, PK masuk Gudang 2** ke silo/tumpukan
+(`_add_intake`, satu titik tulis untuk PK luar dan transfer G1; migrasi 0049
+`proyeksi_pk_masuk_g2`; ukuran catat 10 → 16 kueri, 8 → 15 ms; batalkan
+7 → 13 kueri, 5 → 12 ms). **P-K-10 ditutup di sini:** pembatalan pemasukan
+DITOLAK bila silonya dipoles sesudah PK masuk / sedang dipoles, atau
+tumpukannya sudah dipindah sebagian — diuji di Postgres (r07-E, r08-A,
+r01). Cermin tabel lama masih dihapus saat dibatalkan (alasan sama).
+Catatan: `_undo_transfer` lama masih menghapus transfer yang intake-nya
+bertaut FK — jalur itu belum di jalur peristiwa dan perlu ditinjau saat
+aksi "pemindahan PK G1→G2" dipindahkan.
 
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu

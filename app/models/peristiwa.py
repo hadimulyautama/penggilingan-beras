@@ -15,8 +15,9 @@ P-K-01, P-K-08, P-K-09, P-K-10, P-K-21).
     tetap ditulis sebagai CERMIN supaya layar tak berubah — satu aksi per
     kali pindah ke sini, dan pembacanya menyusul.
 
-Aksi di jalur ini: "Gabah masuk" (Gudang 1) dan "PK luar masuk" (Gudang 2),
-keduanya dari tiket timbang.
+Aksi di jalur ini: "Gabah masuk" (Gudang 1), "PK luar masuk" (Gudang 2) —
+keduanya dari tiket timbang — dan "PK masuk Gudang 2" (ke silo / tumpukan,
+dari PK luar maupun transfer Gudang 1).
 """
 from __future__ import annotations
 
@@ -35,6 +36,8 @@ GABAH_MASUK = "gabah_masuk"
 GABAH_MASUK_DIBATALKAN = "gabah_masuk_dibatalkan"
 PK_LUAR_MASUK = "pk_luar_masuk"
 PK_LUAR_MASUK_DIBATALKAN = "pk_luar_masuk_dibatalkan"
+PK_MASUK_G2 = "pk_masuk_g2"
+PK_MASUK_G2_DIBATALKAN = "pk_masuk_g2_dibatalkan"
 
 TERCATAT, DIBATALKAN = "tercatat", "dibatalkan"
 
@@ -132,3 +135,44 @@ class ProyeksiPkLuarMasuk(Base):
     dibatalkan_peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
     pk_purchase_batch_id: Mapped[int | None] = mapped_column(Integer)
+
+
+class ProyeksiPkMasukG2(Base):
+    """Satu baris per peristiwa `pk_masuk_g2` — PK yang masuk ke silo atau
+    tumpukan Gudang 2, dari PK luar maupun transfer Gudang 1. Cerminnya
+    `pk_gudang2_intakes`. `hpp_per_kg` = potret saat masuk (harga yang
+    diverifikasi belakangan mengisi cerminnya, belum menjadi peristiwa).
+    Constraint parsial: satu batch PK luar / satu transfer hanya punya satu
+    pemasukan yang hidup (P-K-10 sisi ganda, r01)."""
+
+    __tablename__ = "proyeksi_pk_masuk_g2"
+    __table_args__ = (
+        Index("uq_proyeksi_pk_masuk_g2_batch_hidup", "pk_purchase_batch_id", unique=True,
+              postgresql_where=text("status = 'tercatat' AND pk_purchase_batch_id IS NOT NULL"),
+              sqlite_where=text("status = 'tercatat' AND pk_purchase_batch_id IS NOT NULL")),
+        Index("uq_proyeksi_pk_masuk_g2_transfer_hidup", "internal_transfer_id", unique=True,
+              postgresql_where=text("status = 'tercatat' AND internal_transfer_id IS NOT NULL"),
+              sqlite_where=text("status = 'tercatat' AND internal_transfer_id IS NOT NULL")),
+        Index("ix_proyeksi_pk_masuk_g2_silo", "silo_id"),
+    )
+
+    peristiwa_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"), primary_key=True)
+    #: beli_luar / transfer_internal
+    sumber_tipe: Mapped[str] = mapped_column(String(20), nullable=False)
+    pk_purchase_batch_id: Mapped[int | None] = mapped_column(Integer)
+    internal_transfer_id: Mapped[int | None] = mapped_column(Integer)
+    #: silo_a / silo_b / ditumpuk
+    tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
+    silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #: Kode penyosohan yang sedang memakai silo saat PK dituang (ikut jadi bahannya).
+    ke_proses: Mapped[str | None] = mapped_column(String(20))
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pelaku_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=TERCATAT)
+    dibatalkan_peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    intake_id: Mapped[int | None] = mapped_column(Integer)

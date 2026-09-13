@@ -32,7 +32,7 @@ from app.models import (
     User,
     Warehouse,
 )
-from app.models.peristiwa import PK_LUAR_MASUK
+from app.models.peristiwa import PK_LUAR_MASUK, PK_MASUK_G2
 from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import (
@@ -641,13 +641,56 @@ async def _add_intake(
     db: AsyncSession, *, user: User, sumber_tipe: str, tujuan: str,
     berat_kg: float, hpp_per_kg: float | None, tanggal, jam,
     pk_purchase_batch_id: int | None = None, internal_transfer_id: int | None = None,
+    kunci_kiriman: str | None = None,
 ) -> IntakeResult:
+    """SATU titik tulis untuk semua PK yang masuk Gudang 2 — dari PK luar
+    maupun transfer Gudang 1.
+
+    **Jalur PERISTIWA (Tahap 3, aksi ketiga):** tujuan & silo → penjaga
+    kapasitas / catat ke proses yang sedang memakai silo → peristiwa
+    `pk_masuk_g2` (kunci kiriman idempoten) → proyeksi (constraint: satu
+    batch / satu transfer satu pemasukan hidup) → cermin `pk_gudang2_intakes`
+    → jejak → commit. Pembatalannya (`undo._undo_pk_intake`) ditolak bila
+    PK-nya sudah dipoles atau tumpukannya sudah dipindah — P-K-10.
+    """
     tujuan_norm, silo_id = await _tujuan_and_silo(db, tujuan)
+    ke_proses = None
     if tujuan_norm == "ditumpuk":
         await _guard_kapasitas_tumpukan(db, berat_kg)
     else:
-        await _catat_masuk_selama_proses(db, silo_id, berat_kg)
+        ke_proses = await _catat_masuk_selama_proses(db, silo_id, berat_kg)
     now = input_time(tanggal, jam)
+
+    if not kunci_kiriman:
+        if pk_purchase_batch_id is not None:
+            n = await buku.jumlah_jenis(db, PK_MASUK_G2, "pk_purchase_batch_id", pk_purchase_batch_id)
+            kunci_kiriman = f"{PK_MASUK_G2}:batch:{pk_purchase_batch_id}:{n + 1}"
+        elif internal_transfer_id is not None:
+            n = await buku.jumlah_jenis(db, PK_MASUK_G2, "internal_transfer_id", internal_transfer_id)
+            kunci_kiriman = f"{PK_MASUK_G2}:transfer:{internal_transfer_id}:{n + 1}"
+        else:
+            import secrets
+            kunci_kiriman = f"{PK_MASUK_G2}:bebas:{secrets.token_hex(8)}"
+    muatan = {
+        "sumber_tipe": sumber_tipe, "pk_purchase_batch_id": pk_purchase_batch_id,
+        "internal_transfer_id": internal_transfer_id, "tujuan": tujuan_norm, "silo_id": silo_id,
+        "berat_kg": berat_kg, "hpp_per_kg": hpp_per_kg, "ke_proses": ke_proses,
+        "tanggal": now.date(), "waktu": now,
+    }
+    try:
+        e = await buku.catat(db, jenis=PK_MASUK_G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
+                             muatan=muatan, waktu=now)
+    except IntegrityError as e_:
+        raise Gudang2Error(_pesan_integritas(e_, "proyeksi_pk_masuk_g2", ""))
+    if not e.baru:
+        from app.models import Peristiwa
+        ada = (await db.execute(
+            select(PkGudang2Intake).join(Peristiwa, Peristiwa.id == PkGudang2Intake.peristiwa_id)
+            .where(Peristiwa.kunci_kiriman == kunci_kiriman))).scalars().first()
+        if ada is not None:
+            label = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}[ada.tujuan]
+            return IntakeResult(intake=ada, lokasi_label=label, hpp_per_kg=ada.hpp_per_kg)
+
     intake = PkGudang2Intake(
         sumber_tipe=sumber_tipe,
         pk_purchase_batch_id=pk_purchase_batch_id,
@@ -655,9 +698,11 @@ async def _add_intake(
         tujuan=tujuan_norm, silo_id=silo_id, berat_kg=berat_kg,
         hpp_per_kg=hpp_per_kg, flag_hpp_belum_tersedia=hpp_per_kg is None,
         tanggal_masuk=now.date(), waktu_masuk=now, input_by=user.id,
+        peristiwa_id=e.id,
     )
     db.add(intake)
     await db.flush()
+    getattr(e, "proyeksi", None) and setattr(e.proyeksi, "intake_id", intake.id)
     await log_activity(
         db, table_name="pk_gudang2_intakes", record_id=intake.id, action="INSERT",
         changed_by=user.id,
@@ -709,7 +754,7 @@ async def terima_transfer_g1(
 
 async def masukkan_pk_luar(
     db: AsyncSession, *, user: User, kode: str | None, tujuan: str | None = None,
-    tanggal=None, jam=None,
+    tanggal=None, jam=None, kunci_kiriman: str | None = None,
 ) -> IntakeResult:
     """Masukkan PK luar (yang sudah MASUK/diterima) ke silo/tumpukan G2.
 
@@ -756,6 +801,7 @@ async def masukkan_pk_luar(
     res = await _add_intake(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,
         hpp_per_kg=hpp, tanggal=tanggal, jam=jam, pk_purchase_batch_id=batch.id,
+        kunci_kiriman=kunci_kiriman,
     )
     batch.status_batch = "di_silo" if res.intake.tujuan != "ditumpuk" else "ditumpuk"
     await db.commit()

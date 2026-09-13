@@ -98,7 +98,11 @@ Aksi yang sudah di jalur ini: **Gabah masuk dari tiket timbang**
 (`purchase.create_purchase_batch_dari_timbang`, undo `_undo_purchase`) dan
 **PK luar masuk dari tiket timbang** (`gudang2.service.
 create_pk_purchase_dari_timbang`, undo `_undo_pk_purchase`, proyeksi
-`proyeksi_pk_luar_masuk`, migrasi 0048). Urutan satu transaksi: kunci tiket → nomor atomik →
+`proyeksi_pk_luar_masuk`, migrasi 0048), dan **PK masuk Gudang 2** ke
+silo/tumpukan (`gudang2.service._add_intake` — satu titik tulis untuk PK
+luar DAN transfer G1; undo `_undo_pk_intake` DITOLAK bila silonya sudah
+dipoles sesudah PK masuk atau tumpukannya sudah dipindah — P-K-10; proyeksi
+`proyeksi_pk_masuk_g2`, migrasi 0049). Urutan satu transaksi: kunci tiket → nomor atomik →
 `services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
 `purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
 pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →

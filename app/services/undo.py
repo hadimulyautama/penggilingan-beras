@@ -646,12 +646,60 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int) -> str:
         raise UndoError("Pemasukan PK sudah tidak ada.")
     lok = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}.get(
         it.tujuan, it.tujuan)
+    await _tolak_bila_pk_sudah_dipakai(db, it, lok)
     b = await db.get(PkPurchaseBatch, it.pk_purchase_batch_id) if it.pk_purchase_batch_id else None
+    if it.peristiwa_id is not None:
+        from app.models.peristiwa import PK_MASUK_G2_DIBATALKAN
+        from app.services import peristiwa as buku
+
+        await buku.batalkan(db, jenis_lawan=PK_MASUK_G2_DIBATALKAN, peristiwa_id=it.peristiwa_id,
+                            pelaku_id=None, muatan={"tujuan": it.tujuan, "berat_kg": float(it.berat_kg),
+                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     await db.delete(it)
     if b:
         b.status_batch = "diterima"  # kembali ke 'sudah masuk, belum ditempatkan'
         return f"✓ Dibatalkan: PK {b.kode_batch} dimasukkan ke {lok}."
     return f"✓ Dibatalkan: pemasukan PK ke {lok}."
+
+
+async def _tolak_bila_pk_sudah_dipakai(db: AsyncSession, it: PkGudang2Intake, lok: str) -> None:
+    """Pemasukan PK yang sudah DIPAKAI di hilir tak boleh dibatalkan — P-K-10.
+
+    Dua rupa pemakaian, keduanya pernah membuat angka bohong:
+      · silo-nya dipoles sesudah PK ini masuk (atau sedang dipoles: PK-nya
+        sudah ikut dihitung sebagai bahan proses lewat `berat_masuk_kg`) —
+        membatalkan pemasukannya membuat stok silo −7.000 kg (r07-E);
+      · tumpukannya sudah dipindah (sebagian) ke silo — beratnya lenyap dari
+        dua tempat sekaligus (r08-A).
+    Yang benar: batalkan/koreksi pekerjaan hilirnya dulu, atau catat koreksi.
+    """
+    from sqlalchemy import or_
+
+    from app.models import PkTumpukanToSilo, PolishingProcess, PolishingSiloUsage
+
+    if it.silo_id is not None:
+        kode = (await db.execute(
+            select(PolishingProcess.kode_proses)
+            .join(PolishingSiloUsage, PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
+            .where(PolishingSiloUsage.silo_id == it.silo_id,
+                   or_(PolishingProcess.waktu_mulai >= it.waktu_masuk,
+                       PolishingSiloUsage.berat_akhir_kg.is_(None)))
+            .order_by(PolishingProcess.id.desc()).limit(1)
+        )).scalars().first()
+        if kode is not None:
+            raise UndoError(
+                f"Tak bisa dibatalkan: {lok} sudah dipoles sesudah PK ini masuk "
+                f"(penyosohan {kode}). Membatalkannya membuat stok silo minus. "
+                "Perbaiki lewat koreksi, atau batalkan penyosohannya lebih dulu.")
+    else:
+        kode = (await db.execute(
+            select(PkTumpukanToSilo.kode_pindah)
+            .where(PkTumpukanToSilo.pk_gudang2_intake_id == it.id).limit(1)
+        )).scalars().first()
+        if kode is not None:
+            raise UndoError(
+                f"Tak bisa dibatalkan: PK ini sudah dipindah dari tumpukan ke silo "
+                f"({kode}). Batalkan pemindahannya dulu.")
 
 
 #: Tag aksi → penangan pembatalan. Disebut saat aksinya DIBUAT, jadi tak ada

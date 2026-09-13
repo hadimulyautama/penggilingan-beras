@@ -24,9 +24,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk
+from app.models import Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2
 from app.models.peristiwa import (DIBATALKAN, GABAH_MASUK, GABAH_MASUK_DIBATALKAN, PK_LUAR_MASUK,
-                                  PK_LUAR_MASUK_DIBATALKAN, TERCATAT)
+                                  PK_LUAR_MASUK_DIBATALKAN, PK_MASUK_G2, PK_MASUK_G2_DIBATALKAN,
+                                  TERCATAT)
 
 log = logging.getLogger("peristiwa")
 
@@ -155,15 +156,41 @@ async def _pk_luar_masuk_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
     await db.flush()
 
 
+async def _pk_masuk_g2(db: AsyncSession, e: Peristiwa) -> None:
+    m = e.muatan
+    e.proyeksi = ProyeksiPkMasukG2(
+        peristiwa_id=e.id, sumber_tipe=m["sumber_tipe"],
+        pk_purchase_batch_id=m.get("pk_purchase_batch_id"),
+        internal_transfer_id=m.get("internal_transfer_id"),
+        tujuan=m["tujuan"], silo_id=m.get("silo_id"), berat_kg=m["berat_kg"],
+        hpp_per_kg=m.get("hpp_per_kg"), ke_proses=m.get("ke_proses"),
+        tanggal=date.fromisoformat(m["tanggal"]), waktu=datetime.fromisoformat(m["waktu"]),
+        pelaku_id=e.pelaku_id, status=TERCATAT, intake_id=m.get("intake_id"),
+    )
+    db.add(e.proyeksi)
+    await db.flush()
+
+
+async def _pk_masuk_g2_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
+    p = await db.get(ProyeksiPkMasukG2, e.membatalkan_id)
+    if p is None:
+        raise ValueError(f"peristiwa {e.id} membatalkan pk_masuk_g2 #{e.membatalkan_id} yang tak ada")
+    p.status = DIBATALKAN
+    p.dibatalkan_peristiwa_id = e.id
+    await db.flush()
+
+
 PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     GABAH_MASUK: _gabah_masuk,
     GABAH_MASUK_DIBATALKAN: _gabah_masuk_dibatalkan,
     PK_LUAR_MASUK: _pk_luar_masuk,
     PK_LUAR_MASUK_DIBATALKAN: _pk_luar_masuk_dibatalkan,
+    PK_MASUK_G2: _pk_masuk_g2,
+    PK_MASUK_G2_DIBATALKAN: _pk_masuk_g2_dibatalkan,
 }
 
 #: Tabel proyeksi yang dikosongkan lalu diisi ulang saat membangun dari nol.
-TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk)
+TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2)
 
 
 async def terapkan_ke_proyeksi(db: AsyncSession, e: Peristiwa) -> None:

@@ -2117,6 +2117,8 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
 class MasukkanPkReq(BaseModel):
     kode_batch: str
     tujuan: str  # silo_a / silo_b / ditumpuk
+    #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
+    kunci_kiriman: str | None = None
 
 
 @router.post("/actions/masukkan-pk")
@@ -2131,7 +2133,8 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch, tujuan=req.tujuan)
+            r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch, tujuan=req.tujuan,
+                                       kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan PK.")
     pesan = f"✓ PK *{req.kode_batch}* dimasukkan → {r.lokasi_label}."
