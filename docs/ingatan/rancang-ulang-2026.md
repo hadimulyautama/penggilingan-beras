@@ -7,7 +7,20 @@ metadata:
 
 # Catatan keputusan arsitektur — rancang ulang 2026
 
-**Status: DIUSULKAN, belum diputuskan.** Ditulis 13 September 2026 sebagai
+**Status: DIPUTUSKAN SEBAGIAN (13 September 2026, siang).** Pemilik memilih
+**opsi A — tetap tujuh repo**: "agar jika satu modul diperbaiki, tidak
+mempengaruhi yang lain." Akibatnya: Tahap 1 (paket tampilan) dan Tahap 2
+(satu identitas) DIKERJAKAN — keduanya dirancang untuk tujuh repo; Tahap 4
+(modul masuk hmu-app) dan Tahap 5 (agen tanpa HTTP) GUGUR; Tahap 3
+(peristiwa) tetap mungkin di dalam produksi bila kelak disetujui. Peta
+tujuh modul di BATAS-MODUL §4 tetap berlaku sebagai peta KEPEMILIKAN tabel
+lintas repo, bukan sebagai rencana penggabungan. Keputusan lain pemilik pada
+hari yang sama: tabel yang ada tidak diganti nama (awalan hanya untuk tabel
+baru; peta pemilik yang menjaga), tabel verifikasi tetap di produksi dengan
+rupiah dijaga gerbang peran, branch `gudang2-api` digabung ke `main`.
+Sisa pertanyaan: rumah tabel master (§7.3) dan guard biaya ganda (§7.4).
+
+Ditulis 13 September 2026 sebagai
 Tahap 0 dari `QA/RANCANGAN-untuk-claude-code.md`, menerjemahkan artifact
 "Satu Pabrik Satu Sistem" jadi catatan yang bisa ditinjau. Tak ada kode
 yang dipindahkan dan tak ada skema yang diubah oleh tahap ini. Peta batas
@@ -141,7 +154,7 @@ Gudang 2 sudah tipis.** Keduanya tak punya tabel dan tak punya aturan;
 memasukkannya ke `hmu-app` berarti mengganti `klien.py` dengan panggilan
 fungsi dan membuang satu sesi cookie — bukan memindahkan data.
 
-## 4. Keputusan yang DIUSULKAN
+## 4. Keputusan yang DIUSULKAN (opsi C) — DITOLAK pemilik, dipertahankan sebagai catatan
 
 Opsi **C**, dikerjakan menurut tahapan `QA/RANCANGAN-untuk-claude-code.md`:
 Tahap 1 (paket tampilan) dan Tahap 2 (satu identitas) **aman dikerjakan
