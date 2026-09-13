@@ -302,8 +302,8 @@ masuk sebagai modul sendiri — dengan pembuktian ulang r01/r03 tetap 0/20.
    | Elfira, Eka | admin | Meja, Timbangan |
    | Purwadi, Marno, Dany | operator | Gudang 2 / Pos Produksi, Timbangan |
 
-   Muthia dan Kurniawan (Legal) tidak disebut → tidak punya akun aplikasi
-   pabrik; mereka pengguna Kantor AI saja. Akun yang sudah ada di `users`
+   Muthia dan Kurniawan (Legal): DIKONFIRMASI pemilik — pengguna Kantor AI
+   saja, tidak dibuatkan akun aplikasi pabrik. Akun yang sudah ada di `users`
    dan `timbangan_akun` dicocokkan ke daftar ini saat rencana migrasi
    Tahap 2 ditunjukkan; yang tidak ada di daftar tidak dibuat.
 6. **`setelan_pabrik`, `notifications`, `kode_urut`**: milik proses yang
