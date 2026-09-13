@@ -165,3 +165,61 @@ async def test_ukur_pk_masuk_g2_dan_batalkan(pg, pemasok, hitung_kueri):
           f"waktu={_med(t_catat) * 1000:.0f} ms; kueri undo={_med(n_undo)} (semua {n_undo}) "
           f"waktu={_med(t_undo) * 1000:.0f} ms")
     assert _med(n_catat) < 40 and _med(n_undo) < 40
+
+
+async def test_ukur_transfer_dan_batalkan(pg, pemasok, hitung_kueri):
+    from datetime import timedelta
+
+    from app.models import (MillingProcess, MillingProgressLog, PurchaseBatch, Silo, User,
+                            Warehouse)
+    from app.services import undo as svc
+    from app.services.transfer import create_internal_transfer
+    from hmu_identitas import peran as P
+
+    async with pg() as db:
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        db.add_all([g1, g2])
+        await db.flush()
+        s1 = Silo(nama_silo="Silo A", warehouse_id=g1.id)
+        db.add_all([s1, Silo(nama_silo="Silo A", warehouse_id=g2.id), Silo(nama_silo="Silo B", warehouse_id=g2.id)])
+        u = User(nama="Staf Ukur", role=P.ADMIN, status="aktif", default_warehouse_id=g1.id)
+        db.add(u)
+        await db.flush()
+        kini = datetime.now(timezone.utc)
+        for i in range(5):
+            b = PurchaseBatch(kode_batch=f"GB-UKUR-{i}", supplier_id=pemasok.id, tanggal_pembelian=kini.date(),
+                              waktu_pembelian=kini, berat_total_kg=10_000, kondisi_gabah="kering",
+                              input_by=u.id, status_batch="digiling")
+            db.add(b)
+            await db.flush()
+            proc = MillingProcess(kode_proses=f"LOT-UKUR-{i}", status="selesai", silo_id=s1.id,
+                                  purchase_batch_id=b.id, berat_gabah_masuk_kg=10_000,
+                                  waktu_mulai=kini - timedelta(hours=8), waktu_selesai=kini, created_by=u.id)
+            db.add(proc)
+            await db.flush()
+            db.add(MillingProgressLog(milling_process_id=proc.id, waktu_update=kini,
+                                      berat_kumulatif_kg=6_000, input_by=u.id))
+        await db.commit()
+        sid = u.id
+    n_catat, t_catat, n_undo, t_undo = [], [], [], []
+    for i in range(5):
+        async with pg() as db:
+            u = await db.get(User, sid)
+            async with hitung_kueri() as h:
+                t0 = time.perf_counter()
+                await create_internal_transfer(db, user=u, kode_proses=f"LOT-UKUR-{i}", lokasi_tujuan="silo_b")
+                t_catat.append(time.perf_counter() - t0)
+            n_catat.append(h.jumlah)
+        async with pg() as db:
+            u = await db.get(User, sid)
+            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            async with hitung_kueri() as h:
+                t0 = time.perf_counter()
+                await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                t_undo.append(time.perf_counter() - t0)
+            n_undo.append(h.jumlah)
+    print(f"\nUKUR transfer_pk: kueri catat={_med(n_catat)} (semua {n_catat}) "
+          f"waktu={_med(t_catat) * 1000:.0f} ms; kueri undo={_med(n_undo)} (semua {n_undo}) "
+          f"waktu={_med(t_undo) * 1000:.0f} ms")
+    assert _med(n_catat) < 60 and _med(n_undo) < 40

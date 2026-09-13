@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -37,3 +37,7 @@ class InternalTransfer(Base, TimestampMixin):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # terkirim / dibatalkan
     status: Mapped[str] = mapped_column(String(20), default="terkirim")
+    #: Peristiwa `pk_dipindah_g1g2` yang melahirkan baris ini (Tahap 3, aksi
+    #: keempat). Baris ini cermin yang TIDAK dihapus saat dibatalkan.
+    peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))

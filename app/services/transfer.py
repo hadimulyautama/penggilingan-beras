@@ -14,6 +14,8 @@ from app.models import (
     MillingProcessVerification,
     MillingProgressLog,
 )
+from app.models.peristiwa import PK_DIPINDAH_G1G2
+from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
 from app.services.costing import production_cost
@@ -113,6 +115,16 @@ async def pending_transfer_kg(db: AsyncSession, proc_id: int) -> float:
     return max(await saldo_pk(db, proc_id), 0.0)
 
 
+async def _transfer_dari_kunci(db: AsyncSession, kunci_kiriman: str) -> InternalTransfer | None:
+    """Cermin transfer dari peristiwa berkunci ini — untuk kiriman ulang."""
+    from app.models import Peristiwa
+
+    return (await db.execute(
+        select(InternalTransfer).join(Peristiwa, Peristiwa.id == InternalTransfer.peristiwa_id)
+        .where(Peristiwa.kunci_kiriman == kunci_kiriman)
+    )).scalars().first()
+
+
 @dataclass
 class TransferResult:
     transfer: InternalTransfer
@@ -124,11 +136,18 @@ class TransferResult:
 
 async def create_internal_transfer(
     db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str,
-    berat: float | None = None,
+    berat: float | None = None, kunci_kiriman: str | None = None,
 ) -> TransferResult:
     """Kirim PK dari sebuah milling ke Gudang 2. Mengurangi stok siap kirim.
 
     `berat` opsional: bila tidak disebut, kirim SEMUA stok yang tersedia.
+
+    **Jalur PERISTIWA (Tahap 3, aksi keempat) — dua kejadian, SATU
+    transaksi:** kunci proses (FOR UPDATE) → saldo → nomor atomik → peristiwa
+    `pk_dipindah_g1g2` (kunci kiriman idempoten) → proyeksi → cermin
+    `internal_transfers` → jejak → `_add_intake` (peristiwa `pk_masuk_g2` +
+    cermin intake, TANPA commit) → commit sekali. Gagal di mana pun = tak
+    ada yang tersimpan, termasuk nomornya.
     """
     if lokasi_tujuan not in _LOKASI:
         raise TransferError("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
@@ -158,8 +177,34 @@ async def create_internal_transfer(
     hpp = await hpp_per_kg_pk(db, proc)
     jenis = await pk_jenis(db, proc)
     now = now_local()
+
+    if kunci_kiriman:
+        ada = await _transfer_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return TransferResult(transfer=ada, kode_proses=kode_proses,
+                                  lokasi_label=_LOKASI[ada.lokasi_tujuan],
+                                  hpp_per_kg=float(ada.hpp_per_kg) if ada.hpp_per_kg is not None else None,
+                                  jenis=jenis)
+    else:
+        n = await buku.jumlah_jenis(db, PK_DIPINDAH_G1G2, "milling_process_id", proc.id)
+        kunci_kiriman = f"{PK_DIPINDAH_G1G2}:proses:{proc.id}:{n + 1}"
+
+    kode_transfer = await next_transfer_code(db)
+    muatan = {
+        "kode_transfer": kode_transfer, "milling_process_id": proc.id, "kode_proses": kode_proses,
+        "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim, "lokasi_tujuan": lokasi_tujuan,
+        "hpp_per_kg": hpp, "jenis": jenis, "tanggal": now.date(), "waktu": now,
+    }
+    e = await buku.catat(db, jenis=PK_DIPINDAH_G1G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
+                         muatan=muatan, waktu=now)
+    if not e.baru:
+        ada = await _transfer_dari_kunci(db, kunci_kiriman)
+        if ada is not None:
+            return TransferResult(transfer=ada, kode_proses=kode_proses,
+                                  lokasi_label=_LOKASI[ada.lokasi_tujuan], hpp_per_kg=hpp, jenis=jenis)
+
     transfer = InternalTransfer(
-        kode_transfer=await next_transfer_code(db),
+        kode_transfer=kode_transfer,
         milling_process_id=proc.id,
         drying_lot_id=proc.drying_lot_id,
         berat_kg=kirim,
@@ -168,9 +213,11 @@ async def create_internal_transfer(
         waktu=now,
         created_by=user.id,
         status="terkirim",
+        peristiwa_id=e.id,
     )
     db.add(transfer)
     await db.flush()
+    getattr(e, "proyeksi", None) and setattr(e.proyeksi, "transfer_id", transfer.id)
     await log_activity(
         db, table_name="internal_transfers", record_id=transfer.id, action="INSERT",
         changed_by=user.id,
@@ -184,10 +231,11 @@ async def create_internal_transfer(
         await _add_intake(
             db, user=user, sumber_tipe="transfer_internal", tujuan=lokasi_tujuan,
             berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
-            internal_transfer_id=transfer.id,
+            internal_transfer_id=transfer.id, transfer_peristiwa_id=e.id, commit=False,
         )
-    except Gudang2Error as e:  # mis. tumpukan G2 penuh → batalkan transfer
-        raise TransferError(e.args[0] if e.args else "Gagal memasukkan PK ke Gudang 2.")
+    except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
+        raise TransferError(e_.args[0] if e_.args else "Gagal memasukkan PK ke Gudang 2.")
+    await db.commit()
     await db.refresh(transfer)
     return TransferResult(
         transfer=transfer, kode_proses=kode_proses,

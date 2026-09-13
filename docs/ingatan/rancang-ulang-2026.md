@@ -41,9 +41,19 @@ catat 9 → 15 kueri, 9 → 14 ms; batalkan 8 → 13 kueri, 7 → 11 ms). Pemili
 DITOLAK bila silonya dipoles sesudah PK masuk / sedang dipoles, atau
 tumpukannya sudah dipindah sebagian — diuji di Postgres (r07-E, r08-A,
 r01). Cermin tabel lama masih dihapus saat dibatalkan (alasan sama).
-Catatan: `_undo_transfer` lama masih menghapus transfer yang intake-nya
-bertaut FK — jalur itu belum di jalur peristiwa dan perlu ditinjau saat
-aksi "pemindahan PK G1→G2" dipindahkan.
+Pemilik
+memilih mengikuti rekomendasi (urutan: transfer → pindah tumpukan→silo →
+pembaca ke proyeksi) → **aksi keempat, Pemindahan PK G1 → G2** (migrasi
+0050 `proyeksi_transfer_pk`, `internal_transfers.peristiwa_id`): dua
+peristiwa dalam satu transaksi (`pk_dipindah_g1g2` + `pk_masuk_g2`, commit
+sekali di transfer; `_add_intake` diberi `commit=False`), pembatalan = satu
+paket lewat penjaga hilir P-K-10 (pemasukan yang lahir dari transfer
+dialihkan ke pembatalan transfernya), dan **cermin pertama yang TIDAK
+dihapus**: `internal_transfers.status='dibatalkan'` karena pembacanya
+menyaring `terkirim`. Ukuran kirim 25 → 31 kueri (21 → 38 ms), batalkan
+11 → 20 kueri (9 → 25 ms, kini dua kejadian). r03 dijalankan ulang: satu
+lolos, satu ditolak dengan kalimat. Berikutnya sesuai urutan: pindah
+tumpukan → silo (`pindah_tumpukan_ke_silo`).
 
 **Tahap 2 selesai 13 Sep malam:** paket `hmu_identitas` di repo `core/`
 (peran, pintu per aplikasi, sandi, token, `Akun` atas `produksi_akun`, satu

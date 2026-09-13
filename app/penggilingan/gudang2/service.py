@@ -641,7 +641,8 @@ async def _add_intake(
     db: AsyncSession, *, user: User, sumber_tipe: str, tujuan: str,
     berat_kg: float, hpp_per_kg: float | None, tanggal, jam,
     pk_purchase_batch_id: int | None = None, internal_transfer_id: int | None = None,
-    kunci_kiriman: str | None = None,
+    kunci_kiriman: str | None = None, transfer_peristiwa_id: int | None = None,
+    commit: bool = True,
 ) -> IntakeResult:
     """SATU titik tulis untuk semua PK yang masuk Gudang 2 — dari PK luar
     maupun transfer Gudang 1.
@@ -675,7 +676,7 @@ async def _add_intake(
         "sumber_tipe": sumber_tipe, "pk_purchase_batch_id": pk_purchase_batch_id,
         "internal_transfer_id": internal_transfer_id, "tujuan": tujuan_norm, "silo_id": silo_id,
         "berat_kg": berat_kg, "hpp_per_kg": hpp_per_kg, "ke_proses": ke_proses,
-        "tanggal": now.date(), "waktu": now,
+        "tanggal": now.date(), "waktu": now, "transfer_peristiwa_id": transfer_peristiwa_id,
     }
     try:
         e = await buku.catat(db, jenis=PK_MASUK_G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
@@ -708,8 +709,9 @@ async def _add_intake(
         changed_by=user.id,
         new_value=f"{sumber_tipe} | {berat_kg:.0f}kg → {tujuan_norm} | hpp={hpp_per_kg}",
     )
-    await db.commit()
-    await db.refresh(intake)
+    if commit:
+        await db.commit()
+        await db.refresh(intake)
     label = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}[tujuan_norm]
     return IntakeResult(intake=intake, lokasi_label=label, hpp_per_kg=hpp_per_kg)
 

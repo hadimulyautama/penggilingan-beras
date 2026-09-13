@@ -24,8 +24,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2
-from app.models.peristiwa import (DIBATALKAN, GABAH_MASUK, GABAH_MASUK_DIBATALKAN, PK_LUAR_MASUK,
+from app.models import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2,
+                        ProyeksiTransferPk)
+from app.models.peristiwa import (DIBATALKAN, GABAH_MASUK, GABAH_MASUK_DIBATALKAN, PK_DIPINDAH_G1G2,
+                                  PK_DIPINDAH_G1G2_DIBATALKAN, PK_LUAR_MASUK,
                                   PK_LUAR_MASUK_DIBATALKAN, PK_MASUK_G2, PK_MASUK_G2_DIBATALKAN,
                                   TERCATAT)
 
@@ -169,12 +171,42 @@ async def _pk_masuk_g2(db: AsyncSession, e: Peristiwa) -> None:
     )
     db.add(e.proyeksi)
     await db.flush()
+    # Pemasukan pasangan sebuah transfer: tautkan ke proyeksi transfernya.
+    # Dibaca dari MUATAN, jadi bangun-ulang menghasilkan tautan yang sama.
+    if m.get("transfer_peristiwa_id"):
+        pt = await db.get(ProyeksiTransferPk, m["transfer_peristiwa_id"])
+        if pt is not None:
+            pt.intake_peristiwa_id = e.id
+            await db.flush()
 
 
 async def _pk_masuk_g2_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
     p = await db.get(ProyeksiPkMasukG2, e.membatalkan_id)
     if p is None:
         raise ValueError(f"peristiwa {e.id} membatalkan pk_masuk_g2 #{e.membatalkan_id} yang tak ada")
+    p.status = DIBATALKAN
+    p.dibatalkan_peristiwa_id = e.id
+    await db.flush()
+
+
+async def _pk_dipindah_g1g2(db: AsyncSession, e: Peristiwa) -> None:
+    m = e.muatan
+    e.proyeksi = ProyeksiTransferPk(
+        peristiwa_id=e.id, kode_transfer=m["kode_transfer"],
+        milling_process_id=m.get("milling_process_id"), kode_proses=m.get("kode_proses"),
+        berat_kg=m["berat_kg"], lokasi_tujuan=m["lokasi_tujuan"], hpp_per_kg=m.get("hpp_per_kg"),
+        jenis=m.get("jenis"), tanggal=date.fromisoformat(m["tanggal"]),
+        waktu=datetime.fromisoformat(m["waktu"]), pelaku_id=e.pelaku_id, status=TERCATAT,
+        intake_peristiwa_id=m.get("intake_peristiwa_id"), transfer_id=m.get("transfer_id"),
+    )
+    db.add(e.proyeksi)
+    await db.flush()
+
+
+async def _pk_dipindah_g1g2_dibatalkan(db: AsyncSession, e: Peristiwa) -> None:
+    p = await db.get(ProyeksiTransferPk, e.membatalkan_id)
+    if p is None:
+        raise ValueError(f"peristiwa {e.id} membatalkan pk_dipindah_g1g2 #{e.membatalkan_id} yang tak ada")
     p.status = DIBATALKAN
     p.dibatalkan_peristiwa_id = e.id
     await db.flush()
@@ -187,10 +219,12 @@ PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     PK_LUAR_MASUK_DIBATALKAN: _pk_luar_masuk_dibatalkan,
     PK_MASUK_G2: _pk_masuk_g2,
     PK_MASUK_G2_DIBATALKAN: _pk_masuk_g2_dibatalkan,
+    PK_DIPINDAH_G1G2: _pk_dipindah_g1g2,
+    PK_DIPINDAH_G1G2_DIBATALKAN: _pk_dipindah_g1g2_dibatalkan,
 }
 
 #: Tabel proyeksi yang dikosongkan lalu diisi ulang saat membangun dari nol.
-TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2)
+TABEL_PROYEKSI = (ProyeksiGabahMasuk, ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
 
 
 async def terapkan_ke_proyeksi(db: AsyncSession, e: Peristiwa) -> None:

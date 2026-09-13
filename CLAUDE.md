@@ -102,7 +102,13 @@ create_pk_purchase_dari_timbang`, undo `_undo_pk_purchase`, proyeksi
 silo/tumpukan (`gudang2.service._add_intake` — satu titik tulis untuk PK
 luar DAN transfer G1; undo `_undo_pk_intake` DITOLAK bila silonya sudah
 dipoles sesudah PK masuk atau tumpukannya sudah dipindah — P-K-10; proyeksi
-`proyeksi_pk_masuk_g2`, migrasi 0049). Urutan satu transaksi: kunci tiket → nomor atomik →
+`proyeksi_pk_masuk_g2`, migrasi 0049), dan **Pemindahan PK G1 → G2**
+(`services.transfer.create_internal_transfer`: dua peristiwa satu transaksi,
+`pk_dipindah_g1g2` lalu `pk_masuk_g2`; undo `_undo_transfer` membatalkan
+keduanya lewat penjaga hilir; cermin `internal_transfers` TIDAK dihapus,
+statusnya `dibatalkan`; proyeksi `proyeksi_transfer_pk`, migrasi 0050).
+Pemasukan yang lahir dari transfer tak bisa dibatalkan sendiri — dialihkan
+ke pembatalan transfernya. Urutan satu transaksi: kunci tiket → nomor atomik →
 `services.peristiwa.catat` (kunci kiriman idempoten) → proyeksi → CERMIN
 `purchase_batches` (layar lama membacanya; dihapus saat dibatalkan karena
 pembacanya menganggap "ada baris" = "ada gabah") → jejak & notifikasi →

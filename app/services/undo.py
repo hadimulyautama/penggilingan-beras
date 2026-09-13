@@ -499,11 +499,33 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
     t = await db.get(InternalTransfer, transfer_id)
     if t is None:
         raise UndoError("Transfer sudah tidak ada.")
+    if t.status != "terkirim":
+        raise UndoError(f"Transfer {t.kode_transfer} sudah dibatalkan sebelumnya.")
     proc = await db.get(MillingProcess, t.milling_process_id)
     kode = proc.kode_proses if proc else ""
     berat = float(t.berat_kg)
     label = _LOKASI_UNDO.get(t.lokasi_tujuan, t.lokasi_tujuan)
-    await db.delete(t)
+    # ── Transfer + pemasukan = SATU pembatalan (P-K-10) ──
+    #
+    # PK-nya sudah ada di Gudang 2. Pemasukannya lewat penjaga hilir yang
+    # sama dengan aksi "Masukkan PK": bila silonya sudah dipoles atau
+    # tumpukannya sudah dipindah, seluruh pembatalan ditolak — bukan
+    # transfernya hilang sementara PK-nya tetap terhitung di sebelah.
+    it = (await db.execute(
+        select(PkGudang2Intake).where(PkGudang2Intake.internal_transfer_id == t.id)
+    )).scalars().first()
+    if it is not None:
+        await _undo_pk_intake(db, it.id, lewat_transfer=True)
+    if t.peristiwa_id is not None:
+        from app.models.peristiwa import PK_DIPINDAH_G1G2_DIBATALKAN
+        from app.services import peristiwa as buku
+
+        await buku.batalkan(db, jenis_lawan=PK_DIPINDAH_G1G2_DIBATALKAN, peristiwa_id=t.peristiwa_id,
+                            pelaku_id=None, muatan={"kode_transfer": t.kode_transfer, "berat_kg": berat,
+                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
+    # Cermin TIDAK dihapus: `_transferred_pk` dan pembaca lain menyaring
+    # status `terkirim`, jadi menandainya sudah mengembalikan saldo.
+    t.status = "dibatalkan"
     kg = f"{berat:,.0f} kg".replace(",", ".")
     return (
         f"✓ Dibatalkan: transfer {t.kode_transfer} ({kg} PK dari {kode} → "
@@ -640,10 +662,16 @@ async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None
     return f"✓ Dibatalkan: input kualitas PK {b.kode_batch}."
 
 
-async def _undo_pk_intake(db: AsyncSession, intake_id: int) -> str:
+async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: bool = False) -> str:
     it = await db.get(PkGudang2Intake, intake_id)
     if it is None:
         raise UndoError("Pemasukan PK sudah tidak ada.")
+    # Pemasukan yang lahir dari TRANSFER G1 → G2 tak berdiri sendiri: yang
+    # dibatalkan adalah pemindahannya, dan pemasukannya ikut (P-K-10:
+    # transfer + pemasukan = satu pembatalan). "Batalkan input terakhir"
+    # menemukan jejak pemasukan karena ia ditulis terakhir — dialihkan.
+    if it.internal_transfer_id is not None and not lewat_transfer:
+        return await _undo_transfer(db, it.internal_transfer_id)
     lok = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}.get(
         it.tujuan, it.tujuan)
     await _tolak_bila_pk_sudah_dipakai(db, it, lok)

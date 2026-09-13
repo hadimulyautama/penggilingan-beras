@@ -16,8 +16,9 @@ P-K-01, P-K-08, P-K-09, P-K-10, P-K-21).
     kali pindah ke sini, dan pembacanya menyusul.
 
 Aksi di jalur ini: "Gabah masuk" (Gudang 1), "PK luar masuk" (Gudang 2) —
-keduanya dari tiket timbang — dan "PK masuk Gudang 2" (ke silo / tumpukan,
-dari PK luar maupun transfer Gudang 1).
+keduanya dari tiket timbang — "PK masuk Gudang 2" (ke silo / tumpukan,
+dari PK luar maupun transfer Gudang 1), dan "Pemindahan PK G1 → G2" (transfer;
+satu aksi = dua peristiwa dalam satu transaksi: dipindah, lalu masuk).
 """
 from __future__ import annotations
 
@@ -38,6 +39,8 @@ PK_LUAR_MASUK = "pk_luar_masuk"
 PK_LUAR_MASUK_DIBATALKAN = "pk_luar_masuk_dibatalkan"
 PK_MASUK_G2 = "pk_masuk_g2"
 PK_MASUK_G2_DIBATALKAN = "pk_masuk_g2_dibatalkan"
+PK_DIPINDAH_G1G2 = "pk_dipindah_g1g2"
+PK_DIPINDAH_G1G2_DIBATALKAN = "pk_dipindah_g1g2_dibatalkan"
 
 TERCATAT, DIBATALKAN = "tercatat", "dibatalkan"
 
@@ -176,3 +179,37 @@ class ProyeksiPkMasukG2(Base):
     dibatalkan_peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
     intake_id: Mapped[int | None] = mapped_column(Integer)
+
+
+class ProyeksiTransferPk(Base):
+    """Satu baris per peristiwa `pk_dipindah_g1g2` — PK hasil giling yang
+    dikirim ke Gudang 2. Cerminnya `internal_transfers` (yang TIDAK dihapus
+    saat dibatalkan: statusnya `dibatalkan`, pembacanya menyaring
+    `terkirim`). `intake_peristiwa_id` menunjuk peristiwa `pk_masuk_g2`
+    pasangannya."""
+
+    __tablename__ = "proyeksi_transfer_pk"
+    __table_args__ = (
+        Index("ix_proyeksi_transfer_pk_proses", "milling_process_id"),
+    )
+
+    peristiwa_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"), primary_key=True)
+    kode_transfer: Mapped[str] = mapped_column(String(20), nullable=False)
+    milling_process_id: Mapped[int | None] = mapped_column(Integer)
+    kode_proses: Mapped[str | None] = mapped_column(String(20))
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    #: silo_a / silo_b / ditumpuk
+    lokasi_tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
+    hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #: KS / KL / MIX
+    jenis: Mapped[str | None] = mapped_column(String(8))
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pelaku_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=TERCATAT)
+    dibatalkan_peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    intake_peristiwa_id: Mapped[int | None] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    transfer_id: Mapped[int | None] = mapped_column(Integer)

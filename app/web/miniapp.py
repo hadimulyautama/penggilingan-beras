@@ -2087,6 +2087,8 @@ class TransferReq(BaseModel):
     kode_proses: str
     tujuan: str
     berat: PositifOpsional = None
+    #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
+    kunci_kiriman: str | None = None
 
 
 @router.post("/actions/transfer-pk")
@@ -2103,6 +2105,7 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
             r = await create_internal_transfer(
                 db, user=u, kode_proses=req.kode_proses,
                 lokasi_tujuan=req.tujuan, berat=req.berat,
+                kunci_kiriman=(req.kunci_kiriman or "")[:120] or None,
             )
         except TransferError as e:
             raise _err(e, "Gagal pemindahan PK.")
