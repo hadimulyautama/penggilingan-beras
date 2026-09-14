@@ -209,8 +209,8 @@
     <form method="post" action="/pengaturan/target-kadar-air" class="sebaris-borang">
       <input type="hidden" name="_csrf" value="{{ CSRF }}">
       <label class="lbl" for="target" style="flex:1">Target kadar air (%)</label>
-      <input class="fld fld--kecil" id="target" name="nilai" type="number" step="0.1"
-             inputmode="decimal" value="{{ '%g'|format(target_bawaan) }}"
+      <input class="fld fld--kecil" id="target" name="nilai" type="text" inputmode="decimal" pattern="[0-9]+([.,][0-9]+)?"
+             enterkeyhint="done" value="{{ '%g'|format(target_bawaan) }}"
              style="width:88px" required>
       <button class="btn btn--kecil" type="submit">Simpan</button>
     </form>

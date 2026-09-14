@@ -45,8 +45,8 @@
     </div>
     <div>
       <label class="lbl" for="kap">Kapasitas (kg)</label>
-      <input class="fld" id="kap" name="kapasitas_kg" type="number" inputmode="numeric"
-             value="30000" min="1" required>
+      <input class="fld" id="kap" name="kapasitas_kg" type="text" inputmode="numeric" pattern="[0-9]+"
+             enterkeyhint="done" value="30000" required>
       {# Diminta, bukan diberi bawaan diam-diam: dua mesin di pabrik yang sama
          belum tentu sama besarnya. #}
       <p class="bantu" style="margin-top:6px">

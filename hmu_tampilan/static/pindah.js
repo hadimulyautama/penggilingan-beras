@@ -185,13 +185,27 @@
   }
 
   /* ── Memasang HTML yang sudah di tangan ── */
-  function pasang(teks, alamat) {
+  function pasang(teks, alamat, halus) {
     var doc = new DOMParser().parseFromString(teks, "text/html");
     var baru = doc.querySelector(".bingkai");
     if (!baru) { location.href = alamat; return false; }
 
     cabutSemua();
     disentuh = false;   // halamannya berganti — ketikan lamanya memang pergi
+    /* Perpindahan dibungkus view transition DALAM dokumen (ketukan tak pernah
+       jadi navigasi peramban, jadi aturan CSS @view-transition tak berlaku
+       di sini). Hanya untuk PERPINDAHAN yang diketuk orang — penyegaran
+       diam-diam tak boleh menggerakkan layar di bawah jari. Tanpa dukungan,
+       jalurnya persis seperti sebelumnya. */
+    if (halus && document.startViewTransition) {
+      document.startViewTransition(function () { tukar(doc, baru); });
+    } else {
+      tukar(doc, baru);
+    }
+    return true;
+  }
+
+  function tukar(doc, baru) {
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
     tandaiSegar();
@@ -208,7 +222,6 @@
       lama.parentNode.replaceChild(s, lama);
     });
     angkatLembar();
-    return true;
   }
 
   /* Lembar aksi/laporan ditulis DI DALAM `{% block isi %}`, jadi ia lahir di
@@ -439,7 +452,7 @@
 
     if (tersimpan) {
       // Sudah di tangan: tampilkan sekarang juga, tanpa menyeberangi laut.
-      if (!pasang(tersimpan, alamat)) { return; }
+      if (!pasang(tersimpan, alamat, true)) { return; }
       if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
       // Lalu periksa diam-diam apakah sudah berubah.
       delete simpan[alamat];
@@ -451,7 +464,7 @@
         if (!teks || teks === tersimpan) { return; }
         if (location.pathname + location.search !== alamat) { return; }
         if (lembarTerbuka()) { return; }
-        pasang(teks, alamat);
+        pasang(teks, alamat, true);
       });
       return;
     }
@@ -461,7 +474,7 @@
     ambil(alamat).then(function (teks) {
       bingkai.classList.remove("menunggu");
       if (!teks) { location.href = alamat; return; }
-      if (!pasang(teks, alamat)) { return; }
+      if (!pasang(teks, alamat, true)) { return; }
       if (dorong) { history.pushState({ pindah: 1 }, "", alamat); }
     });
   }

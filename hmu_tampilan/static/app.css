@@ -469,6 +469,31 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 }
 .lembar__kepala h2 { margin: 0; }
 
+/* ── Rasa sentuh ──
+   Sorotan ketuk bawaan dimatikan DAN diganti state :active yang digambar
+   sendiri — mematikan tanpa mengganti membuat app terasa mati, bukan native.
+   touch-action: manipulation membuang jeda double-tap-zoom ~300 ms. Teks
+   data (nomor tiket, angka) TIDAK diberi user-select: none — harus bisa
+   disalin. */
+.btn, button, [role="button"], .pintu, .cip, .chip, summary, a, label, select,
+.kartu[href], a.kartu, .baris[href], a.baris {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* `scale`, BUKAN `transform: scale()`: yang kedua menimpa translateX milik
+   pil/kabar yang berpusat — tombolnya melompat saat ditekan dan lepasan jari
+   jatuh di luar, ketukan tak pernah jadi. Ketahuan di uji Playwright. */
+.btn:active, button:active, [role="button"]:active, .cip:active, .chip:active, summary:active {
+  scale: .985;
+  background: var(--panel);
+  transition: scale .06s ease-out;
+}
+.btn--utama:active { background: var(--aksi-gelap); border-color: var(--aksi-gelap); }
+.pintu:active, a.kartu:active, .kartu[href]:active, a.baris:active, .baris[href]:active {
+  background: var(--panel-2);
+}
+.laci__isi, .lembar__isi { overscroll-behavior: contain; }
+
 /* ── Sinyal hilang ──
    Baris cap waktu SELEBAR LAYAR di atas, bukan ikon kecil: yang dilihat
    orang adalah data pukul sekian, dan ia harus tahu itu sebelum membaca

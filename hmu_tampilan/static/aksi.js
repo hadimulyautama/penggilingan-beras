@@ -290,7 +290,7 @@
         esc(f.label) + "</button>";
     }).join("");
 
-    var isi = (a.fields || []).map(function (f) {
+    var isi = (a.fields || []).map(function (f, i, semua) {
       if (f.type === "tombol_aksi") { return ""; }
       if (f.name === namaKunci) {
         var teks = terkunci;
@@ -345,8 +345,8 @@
           ' data-maks="' + maks + '">' +
           '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
           '" data-ulang="1" data-wajib="1" data-label="' + esc(f.label) + '"' +
-          ' type="number" inputmode="decimal" autocomplete="off"' +
-          ' placeholder="titik 1">' +
+          ' type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"' +
+          ' autocomplete="off" enterkeyhint="next" placeholder="titik 1">' +
           "</div>" +
           '<button type="button" class="btn btn--kecil ulang__tambah"' +
           ' data-tambah="' + esc(f.name) + '">' +
@@ -359,11 +359,19 @@
       // giling menerima kadar air ATAU broken ATAU susut. Menjadikan semua
       // kolom angka wajib secara diam-diam akan mematikan aksi-aksi itu, jadi
       // yang benar-benar wajib disebut satu per satu di spesifikasinya.
+      /* type="text" + inputmode, BUKAN type="number": di ponsel yang terakhir
+         memunculkan panah cacah yang tak berguna, menolak koma di sebagian
+         papan ketik, dan diam-diam membuang nilai tak sah saat dibaca.
+         Papan angka datang dari inputmode; koma diterima dan dibaca sebagai
+         titik. enterkeyhint: "berikutnya" sepanjang rantai, "selesai" di
+         kolom terakhir. */
+      var terakhir = i === semua.length - 1;
       return l + '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
         '"' + (f.wajib ? ' data-wajib="1"' : "") +
         ' data-label="' + esc(f.label) + '"' +
-        ' type="' + (angka ? "number" : "text") + '" inputmode="' + (angka ? "decimal" : "text") +
-        '" autocomplete="off">';
+        ' type="text" inputmode="' + (angka ? "decimal" : "text") + '"' +
+        (angka ? ' data-angka="1" pattern="[0-9]*[.,]?[0-9]*"' : "") +
+        ' enterkeyhint="' + (terakhir ? "done" : "next") + '" autocomplete="off">';
     }).join("");
 
     var judul = belah(a.label).teks;
@@ -522,7 +530,7 @@
       var isi = {};
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
         var v = el.value;
-        if (el.type === "number") v = (v === "" ? null : parseFloat(v));
+        if (el.dataset.angka || el.dataset.ulang) v = (v === "" ? null : parseFloat(String(v).replace(",", ".")));
         /* Medan berulang dikirim sebagai DAFTAR, dan yang kosong dibuang di
            sini — bukan di server. Kotak yang ditambahkan lalu ditinggalkan
            kosong bukan "titik bernilai nol"; ia titik yang tak pernah

@@ -62,14 +62,21 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
 
 
 @router.post("/pengaturan/target-kadar-air")
-async def ubah_target_bawaan(request: Request, nilai: float = Form(...),
+async def ubah_target_bawaan(request: Request, nilai: str = Form(...),
                              akun: ProduksiAkun = Depends(butuh_admin)):
     from app.services.setelan import set_target_kadar_air
 
+    # Kolomnya `inputmode="decimal"`, dan papan ketik itu memberi KOMA di
+    # lokal Indonesia. Dulu `nilai: float` — koma ditolak sebagai 422 tanpa
+    # kalimat yang bisa dibaca orang.
+    try:
+        angka = float(nilai.replace(",", "."))
+    except ValueError:
+        return redirect(f"/pengaturan?err_teks={quote('Target kadar air harus angka.')}")
     async with SessionLocal() as db:
         u = await db.get(User, akun.user.id)
         try:
-            await set_target_kadar_air(db, nilai, user=u)
+            await set_target_kadar_air(db, angka, user=u)
         except ValueError as e:
             return redirect(f"/pengaturan?err_teks={quote(str(e))}")
     return redirect("/pengaturan?pesan=target-diubah")
@@ -259,7 +266,7 @@ _ERR = {
 
 @router.post("/pengaturan/alat/dryer")
 async def tambah_dryer(
-    request: Request, nama: str = Form(...), kapasitas_kg: int = Form(...),
+    request: Request, nama: str = Form(...), kapasitas_kg: str = Form(...),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
     """Tambah mesin pengering.
@@ -273,6 +280,11 @@ async def tambah_dryer(
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id
 
     nama = " ".join(nama.split())
+    # `inputmode="numeric"` tanpa type=number: nilainya teks, dibaca di sini.
+    try:
+        kapasitas_kg = int(float(kapasitas_kg.replace(",", ".")))
+    except ValueError:
+        return redirect(f"/pengaturan/alat?err_teks={quote('Kapasitas harus angka.')}")
     if len(nama) < 3:
         return redirect("/pengaturan/alat?err=nama-pendek")
     if kapasitas_kg <= 0:
