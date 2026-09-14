@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block judul %}Tanpa jaringan{% endblock %}
+{% block isi %}
+  {# Disajikan service worker saat jaringan putus — untuk SEMUA alamat.
+     Tak ada data di sini, sengaja: angka pabrik yang basi lebih berbahaya
+     daripada pesan "tidak ada jaringan". #}
+  <div class="kartu kosong" style="text-align:center;padding:28px 16px">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6">
+      <path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/>
+      <path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M2 2l20 20"/></svg>
+    <h2 style="margin:14px 0 6px">Tanpa jaringan</h2>
+    <p class="bantu">
+      Halaman ini butuh jaringan. Angka pabrik tidak disimpan di ponsel,
+      supaya yang terlihat selalu keadaan sekarang — bukan keadaan saat sinyal
+      terakhir ada.
+    </p>
+    <button class="btn" type="button" onclick="location.reload()">Coba lagi</button>
+  </div>
+{% endblock %}

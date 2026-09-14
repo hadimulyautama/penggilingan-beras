@@ -266,11 +266,44 @@
    * akan memuat ulang tanpa henti. */
   var penanda = null;
 
+  /* VERSI yang sedang berjalan di ponsel ini — dibaca dari <html data-versi>,
+     yang ditulis server saat halaman UTUH terakhir dimuat. Sesudah itu
+     perpindahan terjadi di dalam dokumen (bingkai ditukar), jadi angka ini
+     bisa bertahan berhari-hari pada app yang terpasang di layar utama. */
+  var VERSI_JALAN = document.documentElement.getAttribute("data-versi") || "";
+
   function tanyaPenanda() {
     return fetch("/api/keadaan", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { return (j && j.n) ? String(j.n) : null; })
+      .then(function (j) {
+        if (!j || !j.n) { return null; }
+        if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
+        return String(j.n);
+      })
       .catch(function () { return null; });
+  }
+
+  /* ── Pil versi baru ──
+   *
+   * Server sudah menyajikan berkas versi lain, tetapi dokumen ini masih
+   * memegang yang lama — dan tanpa navigasi penuh service worker baru tak
+   * pernah aktif. Yang ditawarkan satu ketukan; TIDAK memuat ulang sendiri:
+   * operator yang sedang mengisi lembar akan kehilangan isiannya. */
+  function tawarkanVersi() {
+    if (document.querySelector(".pil-versi")) { return; }
+    var pil = document.createElement("button");
+    pil.type = "button";
+    pil.className = "pil-versi";
+    pil.textContent = "Versi baru — ketuk untuk muat ulang";
+    pil.addEventListener("click", function () { location.reload(); });
+    document.body.appendChild(pil);
+  }
+
+  /* Service worker: kerangka dari cache, halaman dari jaringan, /luring
+     saat putus. Alamatnya membawa VERSI supaya deploy = worker baru. */
+  if ("serviceWorker" in navigator && VERSI_JALAN) {
+    navigator.serviceWorker.register("/sw.js?v=" + VERSI_JALAN, { scope: "/" })
+      .catch(function () { /* tanpa service worker aplikasi tetap jalan */ });
   }
 
   function bolehDiam() {

@@ -30,13 +30,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import ChoiceLoader, FileSystemLoader
 
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "125"
+VERSI = "126"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -46,10 +48,43 @@ TEMPLATES_DIR = AKAR / "templates"
 #: bernama ini di luar folder vendored berarti menyalin lagi — ditolak
 #: `penjaga.salinan_terlarang`.
 BERKAS_PAKET = (
-    "app.css", "aksi.js", "pindah.js",
+    "app.css", "aksi.js", "pindah.js", "sw.js",
     "ikon-180.png", "ikon-192.png", "ikon-512.png",
-    "base.html", "_benda.html",
+    "base.html", "_benda.html", "luring.html",
 )
+
+
+def router_pwa(render):
+    """Dua rute yang membuat manifest berguna saat sinyal hilang.
+
+    `GET /sw.js` — service worker, dari AKAR aplikasi, bukan dari /static/:
+    peramban menolak worker yang mengaku menaungi cakupan di atas letaknya
+    sendiri (pelajaran pos timbang). `Cache-Control: no-cache` karena inilah
+    berkas yang memutuskan versi cache lainnya; kalau ia sendiri basi,
+    pembaruan tak pernah sampai. VERSI-nya ikut sebagai `?v=` pada
+    pendaftaran di pindah.js, jadi berkas ini statis dan sama untuk semua.
+
+    `GET /luring` — halaman cadangan yang disimpan worker saat dipasang.
+    `render` milik aplikasi dipakai supaya kerangkanya (base.html, tema,
+    nama aplikasi) sama dengan layar lain.
+    """
+    # `Request` WAJIB dikenal di tingkat modul: anotasi di berkas ini berupa
+    # teks (`from __future__ import annotations`), dan FastAPI mencarinya di
+    # global modul — diimpor di dalam fungsi, ia jadi parameter kueri (422).
+    router = APIRouter()
+
+    @router.get("/sw.js", include_in_schema=False)
+    async def service_worker():
+        return FileResponse(
+            STATIC_DIR / "sw.js", media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+        )
+
+    @router.get("/luring", include_in_schema=False)
+    async def luring(request: Request):
+        return render(request, "luring.html")
+
+    return router
 
 
 def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,

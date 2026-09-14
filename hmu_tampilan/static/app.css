@@ -469,6 +469,18 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 }
 .lembar__kepala h2 { margin: 0; }
 
+/* ── Pil versi baru ──
+   Mencolok di atas, selebar isinya, dan TETAP sampai diketuk: yang memutuskan
+   kapan layar dimuat ulang adalah orangnya, bukan denyut. */
+.pil-versi {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(10px + env(safe-area-inset-top)); z-index: 31;
+  background: var(--aksi); color: #fff; border: 0; border-radius: 999px;
+  padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5); cursor: pointer;
+  animation: kabar-naik .18s ease-out;
+}
+
 /* ── Kabar singkat ── */
 /* ── Kabar hasil ──
    Cukup BERHASIL atau GAGAL. Ia menandai bahwa ketukan tadi sampai, bukan

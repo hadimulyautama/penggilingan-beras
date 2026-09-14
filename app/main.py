@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
 app.include_router(api_router)
+# Service worker + halaman /luring (Tahap A rasa native) — dari paket tampilan.
+app.include_router(hmu_tampilan.router_pwa(render))
 app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
 app.include_router(laporan_router)
