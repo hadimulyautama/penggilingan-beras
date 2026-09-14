@@ -171,7 +171,14 @@ async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
 # ─────────────────────── Aksi cepat: role helper ───────────────────────
 
 async def _is_wh_operator(user: User, like: str) -> bool:
-    """Admin KE ATAS selalu boleh; operator hanya bila gudang defaultnya cocok.
+    """Admin KE ATAS selalu boleh; operator hanya bila gudang yang SEDANG
+    dikerjakannya cocok.
+
+    `default_warehouse_id` pada objek pengguna di sini adalah gudang AKTIF
+    sesi ini, bukan profilnya: `akun_opsional` menimpanya dari kuki "Kerja di
+    gudang" sesudah sesi basis data ditutup (operator saling menggantikan,
+    pemilik 13 Sep 2026). Satu sesi satu gudang — yang di seberang ditolak
+    sampai ia berpindah, supaya tak ada catatan jatuh ke gudang yang salah.
 
     Dulu berbunyi `if user.role == "admin"` lalu menolak apa pun yang bukan
     `"operator"` — sehingga SUPERADMIN jatuh ke penolakan dan kehilangan
@@ -200,12 +207,12 @@ async def _is_wh_operator(user: User, like: str) -> bool:
 
 
 async def _is_g1_operator(user: User) -> bool:
-    """Admin selalu boleh; operator hanya bila gudang default = Gudang 1."""
+    """Admin selalu boleh; operator hanya bila Gudang 1 yang sedang dikerjakannya."""
     return await _is_wh_operator(user, "Gudang 1%")
 
 
 async def _is_g2_operator(user: User) -> bool:
-    """Admin selalu boleh; operator hanya bila gudang default = Gudang 2."""
+    """Admin selalu boleh; operator hanya bila Gudang 2 yang sedang dikerjakannya."""
     return await _is_wh_operator(user, "Gudang 2%")
 
 

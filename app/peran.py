@@ -31,7 +31,10 @@ async def user_wh_scope(db: AsyncSession, user: User | None) -> str:
     """Lingkup akses gudang user: 'all' / 'g1' / 'g2' / 'none'.
 
     Nilai lama dipertahankan untuk pemanggilnya; aturannya dari
-    `hmu_identitas.peran.lingkup` (operator melekat pada satu gudang).
+    `hmu_identitas.peran.lingkup`. Bagi operator, `default_warehouse_id`
+    yang dibaca di sini adalah gudang yang SEDANG dikerjakan pada permintaan
+    ini (ditimpa `akun_opsional` dari kuki "Kerja di gudang"), bukan
+    profil tetapnya — operator tak melekat pada satu gudang.
     """
     if not user:
         return "none"

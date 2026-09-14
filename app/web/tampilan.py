@@ -86,6 +86,7 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     konteks.setdefault("akun", getattr(request.state, "akun", None))
     konteks.setdefault("LIHAT_SEBAGAI", getattr(request.state, "lihat_sebagai", None))
     konteks.setdefault("PERAN_ASLI", getattr(request.state, "peran_asli", None))
+    konteks.setdefault("PITA_SAMAR", getattr(request.state, "pita_samar", None))
     konteks.setdefault("layar", nama.replace(".html", ""))
     # View ditetapkan `akun_opsional`, satu kali per permintaan. Layar tak
     # pernah menghitungnya sendiri — lihat `app.web.layar`.

@@ -85,7 +85,9 @@
 {% if LIHAT_SEBAGAI %}
 <form method="post" action="/lihat-sebagai/selesai" class="pita-samar">
   <input type="hidden" name="_csrf" value="{{ CSRF }}">
-  <span>MELIHAT SEBAGAI {{ LIHAT_SEBAGAI|upper }}</span>
+  {# Teksnya boleh diganti aplikasi: operator yang sungguh bekerja di gudang
+     seberang bukan sedang "melihat sebagai" siapa pun. #}
+  <span>{{ PITA_SAMAR or ("MELIHAT SEBAGAI " ~ LIHAT_SEBAGAI|upper) }}</span>
   <button type="submit">kembali</button>
 </form>
 {% endif %}

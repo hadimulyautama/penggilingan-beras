@@ -213,6 +213,7 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
 
     request.state.peran_asli = None
     request.state.lihat_sebagai = None
+    request.state.pita_samar = None
     if akun is not None and akun.user is not None:
         asli = akun.user.role
         request.state.peran_asli = asli
@@ -243,6 +244,14 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
             if wid is not None and wid != akun.user.default_warehouse_id:
                 akun.user.default_warehouse_id = wid
                 request.state.lihat_sebagai = f"operator {gd.upper()}"
+                if P.operator_saja(asli):
+                    # Bukan "melihat sebagai": ia sungguh bekerja di sana.
+                    # Pitanya menyebut gudangnya dengan huruf besar di atas
+                    # SETIAP layar — operator yang salah kira sedang di
+                    # gudang lain akan mencatat ke tempat yang salah, dan
+                    # itu lebih buruk daripada tak bisa menggantikan.
+                    request.state.pita_samar = (
+                        f"BEKERJA DI GUDANG {gd[-1]} · bukan gudang utama Anda")
             elif wid is not None and efektif != P.normal(asli):
                 request.state.lihat_sebagai = f"operator {gd.upper()}"
 
