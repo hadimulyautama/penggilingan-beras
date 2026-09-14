@@ -1,8 +1,10 @@
 """Tangga peran, lingkup gudang, dan view — SATU tempat untuk lima repo.
 
-Tangganya: operator < admin < superadmin. `staff`/`staf` adalah nama LAMA
-yang masih ada di baris `users` sejak konsolidasi 3 September 2026; dibaca
-sebagai admin, tak pernah ditawarkan lagi.
+Tangganya: operator < admin < superadmin. Nama lama `staff`/`staf`
+DIPENSIUNKAN 15 September 2026 (keputusan pemilik, QA P4-03): ia berdiri di
+dua sisi sekaligus — melihat uang dan Meja, tetapi ditolak aksi gudang.
+Migrasi core 0002 memetakan baris lama ke admin (pabrik: nol baris saat
+itu); akun yang masih menyebutnya ditolak masuk dengan pesan yang jelas.
 
 Peran TIDAK PERNAH disebut harfiah di kode aplikasi — pakai himpunan dan
 fungsi di sini. Di produksi pola "gerbang menyebut nama satu per satu" sudah
@@ -15,8 +17,9 @@ OPERATOR = "operator"
 ADMIN = "admin"
 SUPERADMIN = "superadmin"
 
-#: Nama lama yang masih sah dibaca (tak ditawarkan).
-STAF_LAMA = ("staff", "staf")
+#: Nama lama yang sudah DIPENSIUNKAN — tak sah, tak dibaca sebagai apa pun.
+#: Disebut di sini hanya supaya pintu bisa menjelaskan penolakannya.
+PERAN_PENSIUN = ("staff", "staf")
 
 #: Yang boleh dipilih saat mengelola akun, dari terendah.
 PILIHAN = (
@@ -26,18 +29,16 @@ PILIHAN = (
 )
 PERAN_SAH = tuple(k for k, _ in PILIHAN)
 
-LABEL = {OPERATOR: "Operator", ADMIN: "Admin", SUPERADMIN: "Super Admin",
-         "staff": "Staff (lama)", "staf": "Staf (lama)"}
+LABEL = {OPERATOR: "Operator", ADMIN: "Admin", SUPERADMIN: "Super Admin"}
 
 #: Tinggi tiap peran; yang tak dikenal = 0.
-TINGKAT = {OPERATOR: 1, "staff": 2, "staf": 2, ADMIN: 3, SUPERADMIN: 4}
+TINGKAT = {OPERATOR: 1, ADMIN: 3, SUPERADMIN: 4}
 
 PERAN_ADMIN_KEATAS = (SUPERADMIN, ADMIN)
-PERAN_STAF_KEATAS = (SUPERADMIN, ADMIN, *STAF_LAMA)
-#: Boleh melihat angka uang. Sama isinya dengan staf ke atas — disebut
+#: Boleh melihat angka uang. Sama isinya dengan admin ke atas — disebut
 #: terpisah supaya bila kelak ada peran yang bekerja tanpa melihat harga,
 #: yang berubah cukup satu.
-PERAN_UANG = PERAN_STAF_KEATAS
+PERAN_UANG = PERAN_ADMIN_KEATAS
 
 
 def normal(peran: str | None) -> str:
@@ -51,11 +52,6 @@ def tingkat(peran: str | None) -> int:
 
 def admin_keatas(peran: str | None) -> bool:
     return normal(peran) in PERAN_ADMIN_KEATAS
-
-
-def staf_keatas(peran: str | None) -> bool:
-    """Siapa pun DI ATAS operator — termasuk nama lama."""
-    return normal(peran) in PERAN_STAF_KEATAS
 
 
 def super_saja(peran: str | None) -> bool:
@@ -100,7 +96,7 @@ def lingkup(peran: str | None, nama_gudang: str | None) -> str:
     layarnya mengikuti gudang yang sedang dipilih. Operator tanpa gudang utama
     = `TANPA`: kesalahan pendaftaran, bukan layar kosong.
     """
-    if staf_keatas(peran):
+    if admin_keatas(peran):
         return SEMUA
     if not operator_saja(peran):
         return TANPA
@@ -120,8 +116,7 @@ NAMA_VIEW = {V_SUPER: "Super Admin", V_ADMIN: "Admin",
              V_TAMU: "Belum punya gudang"}
 
 #: Peran tersimpan → view, untuk yang tak bergantung gudang.
-VIEW_DARI_PERAN = {SUPERADMIN: V_SUPER, ADMIN: V_ADMIN,
-                   **{lama: V_ADMIN for lama in STAF_LAMA}}
+VIEW_DARI_PERAN = {SUPERADMIN: V_SUPER, ADMIN: V_ADMIN}
 
 #: View yang memegang kedua gudang sekaligus — dan karena itu melihat uang.
 VIEW_MEJA = (V_SUPER, V_ADMIN)
@@ -181,8 +176,7 @@ PILIHAN_GUDANG = ((f"{OPERATOR}:{G1}", "Gudang 1 (selepan)"),
 #: Pos timbang menyimpan perannya dengan nama sendiri: PETUGAS / ADMIN /
 #: SUPERADMIN. Sejak identitas bersama, kolom itu hanya CERMIN dari
 #: `users.role` — disinkronkan saat masuk — dan pemetaannya ada di sini.
-KE_TIMBANGAN = {OPERATOR: "PETUGAS", ADMIN: "ADMIN", SUPERADMIN: "SUPERADMIN",
-                **{lama: "ADMIN" for lama in STAF_LAMA}}
+KE_TIMBANGAN = {OPERATOR: "PETUGAS", ADMIN: "ADMIN", SUPERADMIN: "SUPERADMIN"}
 DARI_TIMBANGAN = {"PETUGAS": OPERATOR, "ADMIN": ADMIN, "SUPERADMIN": SUPERADMIN}
 
 

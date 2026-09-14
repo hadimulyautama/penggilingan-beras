@@ -110,7 +110,6 @@ class UndoError(Exception):
 _SCOPE_LABEL = {
     "operator_gudang1": "operator Gudang 1",
     "operator_gudang2": "operator Gudang 2",
-    "staff": "staff",
     "semua": "semua",
 }
 _SCOPE_GUDANG = {"operator_gudang1": _P.G1, "operator_gudang2": _P.G2}
@@ -163,8 +162,6 @@ async def cakupan(
         # Semua operator — gudang tempat ia berprofil hari ini BUKAN saringan;
         # gudang catatannya yang menyaring, lewat `Cakupan.gudang`.
         q = q.where(User.role == _P.OPERATOR)
-    elif scope == "staff":
-        q = q.where(User.role.in_(_P.STAF_LAMA))
     ids = (await db.execute(q)).scalars().all()
     return Cakupan(list(ids), gudang=_SCOPE_GUDANG.get(scope),
                    label=_SCOPE_LABEL.get(scope, scope))

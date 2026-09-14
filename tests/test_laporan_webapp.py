@@ -31,8 +31,8 @@ def test_operator_tak_melihat_satu_pun_laporan_uang():
     assert not any(l.uang for l in terlihat)
 
 
-def test_staff_dan_admin_melihat_seluruhnya():
-    for role in ("staff", "admin"):
+def test_admin_ke_atas_melihat_seluruhnya():
+    for role in ("superadmin", "admin"):
         assert len(lap.daftar_untuk(_orang(role))) == len(lap._daftar())
 
 

@@ -121,7 +121,6 @@ def test_umur_sesi_beda_menurut_perangkat():
 
 @pytest.mark.parametrize("peran,harapan", [
     ("operator", "bersama"),   # perangkat gudang: data pabrik tak menetap di HP pribadi
-    ("staff", "pribadi"),
     ("admin", "pribadi"),
     ("peran_baru_yang_belum_ada", "pribadi"),
 ])

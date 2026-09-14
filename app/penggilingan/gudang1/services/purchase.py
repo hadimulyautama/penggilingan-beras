@@ -162,7 +162,7 @@ async def create_purchase_batch(
             f"🟡 Batch {kode} ({supplier.nama_supplier}, {berat_kg:.0f} kg) "
             f"menunggu verifikasi harga."
         ),
-        target_role="staff",
+        target_role="admin",
         prioritas="kuning",
         table_name="purchase_batches",
         record_id=batch.id,
@@ -325,7 +325,7 @@ async def create_purchase_batch_dari_timbang(
         db, tipe="verifikasi_harga_gabah",
         pesan=(f"🟡 Batch {kode} ({supplier.nama_supplier}, {b_str}, "
                f"dari timbang {tiket['kode']}) menunggu verifikasi harga."),
-        target_role="staff", prioritas="kuning",
+        target_role="admin", prioritas="kuning",
         table_name="purchase_batches", record_id=batch.id,
     )
 

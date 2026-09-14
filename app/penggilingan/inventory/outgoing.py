@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from hmu_identitas.peran import G1
 
-from app.peran import PERAN_STAF_KEATAS
+from app.peran import PERAN_ADMIN_KEATAS
 from app.database import input_time
 from app.models import MillingProcess, OutgoingItem, OutgoingRecord
 from app.services.activity_log import log_activity
@@ -142,7 +142,7 @@ async def jual_pk_langsung(
     harga_per_kg: float | None = None, tanggal=None, jam=None,
 ) -> OutgoingResult:
     """Jual PK langsung dari Gudang 1 (HANYA staff/admin). Karung PK 50kg CEIL."""
-    if user.role not in PERAN_STAF_KEATAS:
+    if user.role not in PERAN_ADMIN_KEATAS:
         raise InventoryError("Penjualan PK langsung hanya bisa oleh Staff atau Admin.")
     if not kode_mil or not berat_kg:
         raise InventoryError("Sebutkan proses PK (LOT-...) & beratnya. Contoh: `jual PK langsung 2 ton dari LOT-...`")

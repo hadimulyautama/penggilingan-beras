@@ -43,16 +43,20 @@ def test_tangga_perannya_tiga_tingkat():
     assert ua._ROLES == {"superadmin", "admin", "operator"}
 
 
-def test_peran_lama_staff_tetap_terbaca():
-    """Baris lama di `users` mungkin masih menyebut staff, dan orangnya tidak
-    boleh kehilangan akses uang gara-gara namanya berganti."""
+def test_peran_lama_staff_dipensiunkan():
+    """Keputusan pemilik 15 Sep 2026 (QA P4-03): nama lama tak dibaca sebagai
+    apa pun — bukan uang, bukan operator. Baris lama dipetakan migrasi core
+    0002 ke admin; akun yang masih menyebutnya ditolak masuk."""
     from types import SimpleNamespace
 
     from app.peran import can_see_financials
+    from hmu_identitas import pintu
 
-    for peran in ("superadmin", "admin", "staff"):
+    for peran in ("superadmin", "admin"):
         assert can_see_financials(SimpleNamespace(role=peran)), peran
-    assert not can_see_financials(SimpleNamespace(role="operator"))
+    for peran in ("operator", "staff", "staf"):
+        assert not can_see_financials(SimpleNamespace(role=peran)), peran
+    assert "dipensiunkan" in pintu.sebab_tolak("staff", pintu.PRODUKSI)
 
 
 def test_superadmin_termasuk_direksi():
@@ -64,7 +68,7 @@ def test_superadmin_termasuk_direksi():
 
     a = ProduksiAkun(username="x", password_hash="y")
     a.user = SimpleNamespace(role="superadmin", nama="Pemilik")
-    assert a.is_admin and a.is_super and a.is_staff
+    assert a.is_admin and a.is_super
 
 
 def test_tiap_peran_dijelaskan_akibatnya_bukan_hanya_dinamai():
@@ -111,19 +115,20 @@ def test_superadmin_tak_boleh_tertinggal_di_gerbang_mana_pun():
             if pola in isi:
                 tersangka.append(f"{berkas.relative_to(akar)}: {pola}")
     assert not tersangka, (
-        "Peran disebut satu per satu — pakai PERAN_STAF_KEATAS: " + "; ".join(tersangka)
+        "Peran disebut satu per satu — pakai PERAN_ADMIN_KEATAS: " + "; ".join(tersangka)
     )
 
 
 def test_can_transfer_pk_mencakup_superadmin():
-    from app.peran import PERAN_STAF_KEATAS, can_transfer_pk
+    from app.peran import PERAN_ADMIN_KEATAS, can_transfer_pk
 
     class _U:
         def __init__(self, role): self.role = role
 
-    assert "superadmin" in PERAN_STAF_KEATAS
-    for peran in ("superadmin", "admin", "staff"):
+    assert "superadmin" in PERAN_ADMIN_KEATAS
+    for peran in ("superadmin", "admin"):
         assert can_transfer_pk(_U(peran)), peran
+    assert not can_transfer_pk(_U("staff"))   # dipensiunkan
     assert not can_transfer_pk(_U("operator"))
     assert not can_transfer_pk(None)
 
@@ -136,7 +141,7 @@ def test_penjaga_akun_tertinggi_menghitung_superadmin():
     menolak admin TERAKHIR yang hendak naik ke superadmin — padahal tingkatnya
     bertambah, bukan berkurang — dan menganggap nol akun tertinggi di pabrik
     yang seluruh adminnya sudah dinaikkan. Ini bentuk cacat yang sama dengan
-    `PERAN_STAF_KEATAS` dan `admin_keatas()` di Kantor.
+    `PERAN_ADMIN_KEATAS` dan `admin_keatas()` di Kantor.
     """
     from app.web import pengguna
     from tests.bantu import kode_saja

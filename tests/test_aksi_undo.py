@@ -31,8 +31,8 @@ def test_operator_hanya_menjangkau_dirinya_sendiri():
     assert au._lingkup_untuk(_orang("operator")) == ("saya",)
 
 
-def test_staff_dan_admin_menjangkau_lingkup_yang_lebih_luas():
-    for role in ("staff", "admin"):
+def test_admin_ke_atas_menjangkau_lingkup_yang_lebih_luas():
+    for role in ("superadmin", "admin"):
         lingkup = au._lingkup_untuk(_orang(role))
         assert "semua" in lingkup
         assert lingkup[0] == "saya", "membatalkan pekerjaan sendiri harus yang pertama"
@@ -57,7 +57,7 @@ async def _tolak(lingkup: str, role: str) -> HTTPException:
 async def test_operator_ditolak_saat_meminta_lingkup_orang_lain():
     """Daftar pilihan memang sudah disaring — tetapi penyaringan itu
     kenyamanan, dan kenyamanan bukan pengamanan."""
-    for lingkup in ("semua", "staff", "operator_gudang2"):
+    for lingkup in ("semua", "operator_gudang1", "operator_gudang2"):
         e = await _tolak(lingkup, "operator")
         assert e.status_code == 403
 

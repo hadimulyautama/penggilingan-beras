@@ -285,13 +285,6 @@ async def butuh_akun(request: Request) -> ProduksiAkun:
     return akun
 
 
-async def butuh_staff(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
-    """Admin ke atas — batas yang sama dengan `can_see_financials`."""
-    if not akun.is_staff:
-        raise AksesDitolak("Halaman ini hanya untuk staff kantor.")
-    return akun
-
-
 async def butuh_admin(akun: ProduksiAkun = Depends(butuh_akun)) -> ProduksiAkun:
     """Direksi ke atas.
 

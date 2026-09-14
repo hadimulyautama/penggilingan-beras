@@ -41,8 +41,8 @@ async def test_peran_meja_tak_perlu_bertanya_ke_gudang():
     """
     assert await view_untuk(_Orang("superadmin")) == SUPER
     assert await view_untuk(_Orang("admin")) == ADMIN
-    # `staff` peran LAMA yang masih sah di baris `users` lama.
-    assert await view_untuk(_Orang("staff")) == ADMIN
+    # `staff` DIPENSIUNKAN (15 Sep 2026): bukan admin, bukan operator — tamu.
+    assert await view_untuk(_Orang("staff")) == TAMU
 
 
 async def test_operator_dipisah_menurut_gudangnya(monkeypatch):

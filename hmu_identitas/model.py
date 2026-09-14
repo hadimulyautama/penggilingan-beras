@@ -62,10 +62,6 @@ class Akun(Base, TimestampMixin):
         return P.super_saja(self.peran)
 
     @property
-    def is_staff(self) -> bool:
-        return P.staf_keatas(self.peran)
-
-    @property
     def sesi_pendek(self) -> bool:
         return self.mode_perangkat == BERSAMA
 

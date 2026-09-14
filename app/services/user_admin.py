@@ -117,7 +117,7 @@ async def register_user(
             telegram_user_id=telegram_id,
             whatsapp_number=phone,
             default_warehouse_id=wh.id if wh else None,
-            access_level="full" if P.staf_keatas(role) else "operational",
+            access_level="full" if P.admin_keatas(role) else "operational",
             status=status,
         )
     )

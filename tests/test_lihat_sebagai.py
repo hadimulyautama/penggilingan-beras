@@ -16,7 +16,7 @@ def test_tak_pernah_naik():
     assert peran_efektif("operator", "superadmin") == "operator"
     assert peran_efektif("operator", "admin") == "operator"
     assert peran_efektif("admin", "superadmin") == "admin"
-    assert peran_efektif("staff", "admin") == "staff"
+    assert peran_efektif("admin", "superadmin") == "admin"
 
 
 def test_boleh_turun():

@@ -36,7 +36,7 @@ def _pastikan_token(token: str | None) -> None:
 
 class TanyaIn(BaseModel):
     pertanyaan: str
-    role: str = "staff"
+    role: str = "admin"
     financial: bool = False
 
 

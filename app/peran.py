@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from hmu_core import User
 from hmu_identitas import peran as P
-from hmu_identitas.peran import (PERAN_ADMIN_KEATAS, PERAN_STAF_KEATAS,  # noqa: F401
-                                 PERAN_UANG)
+from hmu_identitas.peran import PERAN_ADMIN_KEATAS, PERAN_UANG  # noqa: F401
 
 
 def can_see_financials(user: User | None) -> bool:
@@ -24,7 +23,7 @@ def can_see_financials(user: User | None) -> bool:
 
 def can_transfer_pk(user: User | None) -> bool:
     """Pengiriman PK Gudang 1 → Gudang 2 oleh admin ke atas. Operator TIDAK boleh."""
-    return bool(user) and P.staf_keatas(user.role)
+    return bool(user) and P.admin_keatas(user.role)
 
 
 async def user_wh_scope(db: AsyncSession, user: User | None) -> str:

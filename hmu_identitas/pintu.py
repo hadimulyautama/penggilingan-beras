@@ -25,11 +25,11 @@ NAMA_APLIKASI = {PRODUKSI: "Pos Produksi", GUDANG2: "Operasi Gudang 2",
 
 #: Peran yang boleh masuk, per aplikasi. Super Admin ada di semuanya.
 BOLEH: dict[str, tuple[str, ...]] = {
-    PRODUKSI: (P.SUPERADMIN, P.ADMIN, *P.STAF_LAMA, P.OPERATOR),
+    PRODUKSI: (P.SUPERADMIN, P.ADMIN, P.OPERATOR),
     GUDANG2: (P.SUPERADMIN, P.OPERATOR),
-    MEJA: (P.SUPERADMIN, P.ADMIN, *P.STAF_LAMA),
-    TIMBANGAN: (P.SUPERADMIN, P.ADMIN, *P.STAF_LAMA, P.OPERATOR),
-    KANTOR: (P.SUPERADMIN, P.ADMIN, *P.STAF_LAMA),
+    MEJA: (P.SUPERADMIN, P.ADMIN),
+    TIMBANGAN: (P.SUPERADMIN, P.ADMIN, P.OPERATOR),
+    KANTOR: (P.SUPERADMIN, P.ADMIN),
 }
 
 #: Gudang yang dilayani aplikasi — hanya untuk PESAN, bukan pagar. Operator
@@ -54,6 +54,9 @@ def sebab_tolak(peran: str | None, aplikasi: str, lingkup: str | None = None) ->
             return f"Akun operator tidak masuk lewat {nama} — pakai aplikasi operasi gudang Anda."
         if not p:
             return f"Akun ini belum punya peran; hubungi Super Admin."
+        if p in P.PERAN_PENSIUN:
+            return ("Peran akun ini sudah dipensiunkan; minta Super Admin "
+                    "menetapkan peran baru di Kelola pengguna.")
         return f"Peran {P.LABEL.get(p, p)} tidak masuk lewat {nama}."
     return None
 

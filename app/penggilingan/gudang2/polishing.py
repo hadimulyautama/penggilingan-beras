@@ -282,7 +282,7 @@ async def selesai_penyosohan(
                 f"{beras_total:.0f} kg"
                 + (f" (rendemen {rendemen:.1f}%)" if rendemen is not None else "")
             ),
-            target_role="staff", prioritas="kuning",
+            target_role="admin", prioritas="kuning",
             table_name="polishing_process", record_id=proc.id,
         )
     else:

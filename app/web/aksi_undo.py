@@ -33,13 +33,12 @@ router = APIRouter(prefix="/api", tags=["api"])
 #: Lingkup yang boleh dipilih staff/admin, berurutan dari yang paling sempit.
 #: "saya" selalu ada dan selalu pertama — membatalkan pekerjaan sendiri adalah
 #: hal yang paling sering benar, dan yang paling jarang disesali.
-LINGKUP_LUAS = ("saya", "operator_gudang1", "operator_gudang2", "staff", "semua")
+LINGKUP_LUAS = ("saya", "operator_gudang1", "operator_gudang2", "semua")
 
 LINGKUP_LABEL = {
     "saya": "Saya sendiri",
     "operator_gudang1": "Operator Gudang 1",
     "operator_gudang2": "Operator Gudang 2",
-    "staff": "Staff",
     "semua": "Siapa pun",
 }
 

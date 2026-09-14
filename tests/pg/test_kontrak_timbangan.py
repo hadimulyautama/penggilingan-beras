@@ -65,15 +65,15 @@ async def _tiket(db, kode, *, jenis="GABAH_KERING", supplier_id=None, netto=9800
 async def staf(pg):
     """Jalur PK luar hanya terbuka untuk staf ke atas.
 
-    Perannya diambil dari `PERAN_STAF_KEATAS`, bukan diketik: daftar itulah
+    Perannya diambil dari `PERAN_ADMIN_KEATAS`, bukan diketik: daftar itulah
     yang menentukan siapa yang boleh, dan uji yang mengetik namanya sendiri
     akan tetap lulus pada hari daftarnya berubah.
     """
     from app.models import User
-    from app.peran import PERAN_STAF_KEATAS
+    from app.peran import PERAN_ADMIN_KEATAS
 
     async with pg() as db:
-        u = User(nama="Staf Uji", role=PERAN_STAF_KEATAS[-1], status="aktif")
+        u = User(nama="Staf Uji", role=PERAN_ADMIN_KEATAS[-1], status="aktif")
         db.add(u)
         await db.commit()
         await db.refresh(u)
