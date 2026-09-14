@@ -80,15 +80,22 @@ async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
     from sqlalchemy import func, select, text
 
     from app.models import ActivityLog
+    from app.web.tampilan import VERSI
 
     async with SessionLocal() as db:
         n = (await db.execute(select(func.max(ActivityLog.id)))).scalar() or 0
+        # Cap waktunya MIKRODETIK, bukan detik. Dibulatkan ke detik, tiket
+        # yang dibuat lalu ditimbang kedua pada detik yang sama menghasilkan
+        # penanda yang sama — perubahan kedua hilang selamanya, tanpa galat.
+        # Ketahuan di uji Postgres yang menyimpan dua langkah berturut-turut.
         t = (await db.execute(text(
             "select coalesce(max(id), 0), "
-            "coalesce(cast(extract(epoch from max(updated_at)) as bigint), 0) "
+            "coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0) "
             "from timbangan_transaksi"
         ))).first()
-    return {"n": f"{n}.{t[0]}.{t[1]}"}
+    # `versi` (syarat N-A-03): ponsel yang memegang berkas lama tahu dari
+    # kanal yang sama, tanpa menunggu navigasi penuh.
+    return {"n": f"{n}.{t[0]}.{t[1]}", "versi": VERSI}
 
 
 async def _id_jejak(user_id: int) -> int | None:
