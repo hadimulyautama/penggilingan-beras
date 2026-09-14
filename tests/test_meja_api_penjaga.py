@@ -54,5 +54,5 @@ def test_versi_lama_dari_meja_ditolak_seperti_cookie(monkeypatch):
 
 
 def test_csrf_tetap_memagari_jalur_miniapp_tanpa_token():
-    assert csrf.perlu_periksa("POST", "/miniapp/actions/verify-gabah")
+    assert csrf.perlu_periksa("POST", "/api/actions/verify-gabah")
     assert not csrf.perlu_periksa("POST", "/internal/meja/masuk")

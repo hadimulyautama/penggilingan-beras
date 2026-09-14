@@ -159,7 +159,7 @@ async def test_endpoint_satu_ketuk_menyebut_id_jejaknya():
     mencatat sesuatu."""
     import inspect
 
-    from app.web import miniapp
+    from app.web import api
 
-    for fn in (miniapp.act_gabah_masuk, miniapp.act_tempatkan_gabah):
+    for fn in (api.act_gabah_masuk, api.act_tempatkan_gabah):
         assert "_id_jejak(" in inspect.getsource(fn), fn.__name__

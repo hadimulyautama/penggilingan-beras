@@ -8,7 +8,7 @@ gudang2 menggambar dan meneruskan.
 
 Yang ada di sini hanyalah bungkus JSON atas layanan yang sudah ada:
 `services.berjalan.untuk_operator_gudang2`, `layar._petak_g2`, dan stok
-barang jadi. Aksi tulis (`/miniapp/*`), laporan (`/api/laporan/*`), masuk,
+barang jadi. Aksi tulis (`/api/*`), laporan (`/api/laporan/*`), masuk,
 akun, dan ganti sandi TIDAK dibungkus ulang — gudang2 memanggil pintu yang
 sama dengan Meja (`/internal/meja/masuk`, `/internal/meja/saya`,
 `/internal/meja/akun/*`), karena orangnya sama: akun `produksi_akun`.
@@ -18,7 +18,7 @@ Keamanan: token service & header akun yang SAMA dengan Meja
 Satu token untuk dua service satelit — keduanya berjalan di jaringan privat
 Railway yang sama, dan dua rahasia untuk satu pintu hanya menggandakan
 tempat bocornya. Gerbang perannya operator Gudang 2 (admin ke atas ikut
-lolos, seperti di seluruh `/miniapp/*`).
+lolos, seperti di seluruh `/api/*`).
 """
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ log = logging.getLogger("web.gudang2_api")
 
 async def akun_operator_g2(akun: ProduksiAkun = Depends(akun_meja)) -> ProduksiAkun:
     """Operator Gudang 2 (atau admin ke atas) — gerbang yang sama dengan
-    aksi `/miniapp/*` Gudang 2, supaya layar dan aksinya tak pernah berbeda
+    aksi `/api/*` Gudang 2, supaya layar dan aksinya tak pernah berbeda
     pendapat tentang siapa yang boleh."""
-    from app.web.miniapp import _is_g2_operator
+    from app.web.api import _is_g2_operator
 
     if not await _is_g2_operator(akun.user):
         # Aplikasi Gudang 2 mengirim `X-Meja-Lihat: operator:g2` di tiap

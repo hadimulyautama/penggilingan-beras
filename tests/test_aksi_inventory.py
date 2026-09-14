@@ -18,7 +18,7 @@ from fastapi import HTTPException
 
 from app.penggilingan.inventory import packaging as kms
 from app.web import aksi_inventory as inv
-from app.web import miniapp
+from app.web import api
 
 
 # ─────────────────────── Kombinasi kemasan ───────────────────────
@@ -112,17 +112,17 @@ def test_tiap_aksi_punya_gudang_yang_ditetapkan_eksplisit():
     """Aksi tanpa entri gudang jatuh ke 'g1' diam-diam — muncul di tab yang
     salah, tanpa kesalahan apa pun yang bisa dilihat siapa pun."""
     for a in _semua_aksi():
-        assert a["id"] in miniapp._ACTION_WH, f"{a['id']} belum dipetakan ke gudang"
+        assert a["id"] in api._ACTION_WH, f"{a['id']} belum dipetakan ke gudang"
 
 
 def test_tiap_aksi_menunjuk_alamat_kirim_dan_punya_isian():
     for a in _semua_aksi():
-        assert a["post"].startswith("/miniapp/actions/")
+        assert a["post"].startswith("/api/actions/")
         assert a["fields"], f"{a['id']} tanpa isian"
         for f in a["fields"]:
             assert f["type"] in ("text", "number", "select", "remote")
             if f["type"] == "remote":
-                assert f["source"].startswith("/miniapp/actions/")
+                assert f["source"].startswith("/api/actions/")
 
 
 def test_pilihan_yang_hanya_berlaku_sebagian_ditandai_boleh_kosong():

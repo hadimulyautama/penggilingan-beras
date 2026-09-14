@@ -8,7 +8,7 @@ tersimpan; pembatalan = peristiwa lawan yang menunjuk aslinya.
 
 Aksi PERTAMA yang dipindahkan: "Gabah masuk" (dari tiket timbang). Skenario
 r06 dan r13 dari QA/QA-2026-09-11-repro dijalankan ulang di sini, lewat
-LAYANAN yang sama dengan yang dipanggil /miniapp/actions/gabah_masuk.
+LAYANAN yang sama dengan yang dipanggil /api/actions/gabah_masuk.
 """
 from __future__ import annotations
 

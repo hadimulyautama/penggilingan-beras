@@ -90,7 +90,7 @@ async def test_permintaan_json_boleh_pakai_header(klien):
     t = csrf.terbitkan_baru()
     async with klien as c:
         c.cookies.set(csrf.NAMA_COOKIE, t)
-        r = await c.post("/miniapp/actions/tak-ada", json={"a": 1},
+        r = await c.post("/api/actions/tak-ada", json={"a": 1},
                          headers={csrf.NAMA_HEADER: t})
     assert r.status_code != 403
 

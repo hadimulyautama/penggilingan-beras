@@ -18,7 +18,7 @@ from fastapi import HTTPException
 
 from app.services import undo as svc
 from app.web import aksi_undo as au
-from app.web import miniapp
+from app.web import api
 
 
 def _orang(role: str):
@@ -116,7 +116,7 @@ def test_aksi_undo_terdaftar_di_router_dan_dipetakan_ke_gudang():
     terdaftar = {r.path for r in au.router.routes}
     assert a["post"] in terdaftar
     assert a["fields"][0]["source"] in terdaftar
-    assert a["id"] in miniapp._ACTION_WH
+    assert a["id"] in api._ACTION_WH
 
 
 def test_setiap_tabel_yang_menulis_jejak_punya_label_manusia():

@@ -426,7 +426,7 @@ def test_selesai_giling_menolak_tanpa_hasil_dan_tak_menyentuh_prosesnya():
     assert "MillingProgressLog" in fn
 
     # Dan formulirnya memang meminta angkanya.
-    teks = (AKAR / "app/web/miniapp.py").read_text()
+    teks = (AKAR / "app/web/api.py").read_text()
     blok = teks.split('"id": "selesai_giling"')[1].split('{"id": "hentikan_proses"')[0]
     assert '"berat_akhir"' in blok, "formulir tak meminta hasil akhir"
     assert '"Hasil akhir PK (kg)"' in blok
@@ -449,7 +449,7 @@ def test_daftar_verifikasi_memuat_yang_sudah_diverifikasi():
     Itu juga bertentangan dengan aksinya sendiri: `verify_milling_output`
     memang mendukung verifikasi ulang.
     """
-    teks = (AKAR / "app/web/miniapp.py").read_text()
+    teks = (AKAR / "app/web/api.py").read_text()
     fn = teks.split("async def milling_unverified")[1].split("\n@router")[0]
     assert "MillingProcess.status == \"selesai\"" in fn
     assert "~sudah" not in fn, "yang sudah diverifikasi kembali disaring keluar"
@@ -498,7 +498,7 @@ def test_daftar_qc_memuat_yang_sudah_dinilai():
     """Jebakan yang sama dengan daftar verifikasi output: sumber yang menyaring
     keluar lot yang sudah punya QC menutup koreksi, DAN melepas penguncian
     penunjuk saat kartu Stok membukanya untuk kedua kalinya."""
-    teks = (AKAR / "app/web/miniapp.py").read_text()
+    teks = (AKAR / "app/web/api.py").read_text()
     fn = teks.split("async def milling_noqc")[1].split("\n@router")[0]
     assert "not_in" not in fn, "yang sudah punya QC kembali disaring keluar"
     assert "case((ada_qc, 1)" in fn, "yang belum dinilai tak lagi di atas"
@@ -532,7 +532,7 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     fn = kode_saja(setelan.fitur_mutu)
     assert "n != '0'" in fn, "bawaannya tidak menyala"
 
-    mini = (AKAR / "app/web/miniapp.py").read_text()
+    mini = (AKAR / "app/web/api.py").read_text()
     assert 'AKSI_MUTU = {"qc_giling", "qc_pk_luar"}' in mini
     assert 'a["id"] not in AKSI_MUTU' in mini, "katalog tak disaring"
     # Disembunyikan SAJA tidak cukup: alamatnya bisa diketik, dan lembar yang

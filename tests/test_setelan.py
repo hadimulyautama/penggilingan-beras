@@ -112,9 +112,9 @@ def test_setelan_rusak_sebagian_tak_mengosongkan_borang():
 def test_borang_jeda_membaca_setelan_bukan_konstanta():
     """Yang ditambahkan admin harus langsung muncul tanpa menunggu kode
     berubah."""
-    from app.web import miniapp
+    from app.web import api
 
-    sumber = inspect.getsource(miniapp.actions_menu)
+    sumber = inspect.getsource(api.actions_menu)
     assert "SEBAB_AKTIF" in sumber
     assert "await sebab_jeda(db)" in sumber
 

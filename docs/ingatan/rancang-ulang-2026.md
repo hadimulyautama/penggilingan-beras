@@ -127,7 +127,7 @@ tercatat (`docs/ingatan/pisah-kantor-produksi.md`, `timbangan-module.md`,
 - **12 September** — Gudang 2 dan Meja lahir sebagai repo sendiri, lalu
   pada hari yang sama diputuskan **tipis**: "semua tidak punya tabel,
   database dipakai bersama, agar semuanya terintegrasi". Keduanya membaca
-  `/internal/*` dan menulis `/miniapp/*` di produksi atas nama akun
+  `/internal/*` dan menulis `/api/*` di produksi atas nama akun
   `produksi_akun` yang sama.
 
 Yang dicapai: kemandirian rilis. Yang tidak berubah: **datanya satu**. Dari
@@ -171,7 +171,7 @@ Ukuran biaya yang dibayar tiap hari, per 13 September:
   dan **3 himpunan peran** yang harus disapu tiap kali peran bertambah
   (sembilan kali tertinggal di gerbang yang menyebut nama — `peran-superadmin-tuntas.md`).
 - **2 kontrak HTTP internal** tanpa uji dua sisi (`/internal/produksi/*`
-  untuk Kantor; `/internal/meja/*` + `/internal/gudang2/*` + `/miniapp/*`
+  untuk Kantor; `/internal/meja/*` + `/internal/gudang2/*` + `/api/*`
   untuk Meja & Gudang 2), dengan konsekuensi "produksi mati = tiga layar mati".
 - **2 salinan `guard.py`** biaya LLM atas satu tabel `kantor_llm_usage`.
 

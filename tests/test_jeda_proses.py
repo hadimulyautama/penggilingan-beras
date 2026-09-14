@@ -112,10 +112,10 @@ def test_dashboard_menyebut_berapa_lama_pabrik_berhenti():
 
 
 def test_aksi_terdaftar_untuk_gudang1():
-    from app.web import miniapp
+    from app.web import api
 
-    assert miniapp._ACTION_WH.get("hentikan_proses") == "g1"
-    assert miniapp._ACTION_WH.get("lanjutkan_proses") == "g1"
+    assert api._ACTION_WH.get("hentikan_proses") == "g1"
+    assert api._ACTION_WH.get("lanjutkan_proses") == "g1"
 
 
 # ──────────────── Tiga golongan: antrean, berjalan, transit ────────────────

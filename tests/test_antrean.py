@@ -309,14 +309,14 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     diperbarui."""
     import inspect
 
-    from app.web import miniapp
+    from app.web import api
 
-    assert hasattr(miniapp, "_GRUP_AKSI") and hasattr(miniapp, "URUT_GRUP")
-    assert miniapp._GRUP_AKSI["mulai_penyosohan"] == "Gudang 2 · penyosohan"
-    assert miniapp._GRUP_AKSI["catat_pk_luar"] == "PK dari luar"
-    assert miniapp._GRUP_AKSI["gabah_masuk"] == miniapp.GRUP_KARTU
+    assert hasattr(api, "_GRUP_AKSI") and hasattr(api, "URUT_GRUP")
+    assert api._GRUP_AKSI["mulai_penyosohan"] == "Gudang 2 · penyosohan"
+    assert api._GRUP_AKSI["catat_pk_luar"] == "PK dari luar"
+    assert api._GRUP_AKSI["gabah_masuk"] == api.GRUP_KARTU
 
-    menu = inspect.getsource(miniapp.actions_menu)
+    menu = inspect.getsource(api.actions_menu)
     assert 'a["grup"] = _GRUP_AKSI.get' in menu
     # `undo` dibuang HANYA bagi yang punya List audit. Operator tak punya
     # layar itu, jadi katalog inilah satu-satunya jalannya membatalkan —
@@ -382,7 +382,7 @@ def test_selesai_pengeringan_menuntut_kadar_air_mesin():
     import inspect
 
     from app.penggilingan.gudang1.services import drying
-    from app.web import miniapp
+    from app.web import api
 
     sumber = inspect.getsource(drying.finish_drying)
     assert "kadar_air_akhir" in sumber
@@ -400,7 +400,7 @@ def test_selesai_pengeringan_menuntut_kadar_air_mesin():
     # Medannya WAJIB di katalog aksi, kalau tidak borangnya mengirim kosong
     # lalu ditolak server — dan yang ditolak sesudah mengetik akan berhenti
     # percaya pada borangnya.
-    menu = inspect.getsource(miniapp.actions_menu)
+    menu = inspect.getsource(api.actions_menu)
     blok = menu.split('"id": "selesai_pengeringan"')[1].split('"id":')[0]
     assert '"name": "kadar_air"' in blok and '"wajib": True' in blok
 

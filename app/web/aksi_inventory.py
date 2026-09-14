@@ -33,7 +33,7 @@ from app.penggilingan.inventory import packaging as kms
 from app.web.aksi_umum import galat, kg, rp, wajib
 from app.web.deps import pengguna_aksi
 
-router = APIRouter(prefix="/miniapp", tags=["miniapp"])
+router = APIRouter(prefix="/api", tags=["api"])
 
 #: Nama kategori produk di layar. Kunci = `ProductSku.kategori`.
 KATEGORI_LABEL = {
@@ -228,7 +228,7 @@ class PackingReq(BaseModel):
 @router.post("/actions/catat-packing")
 async def act_catat_packing(req: PackingReq,
                             user: User = Depends(pengguna_aksi)) -> dict:
-    from app.web.miniapp import _is_g2_operator
+    from app.web.api import _is_g2_operator
     wajib(await _is_g2_operator(user) or can_see_financials(user))
     kategori, material, ukuran = _urai_triple(req.produk)
     if int(req.jumlah_karung or 0) <= 0:
@@ -262,7 +262,7 @@ class BekatulReq(BaseModel):
 @router.post("/actions/catat-bekatul")
 async def act_catat_bekatul(req: BekatulReq,
                             user: User = Depends(pengguna_aksi)) -> dict:
-    from app.web.miniapp import _is_g2_operator
+    from app.web.api import _is_g2_operator
     wajib(await _is_g2_operator(user) or can_see_financials(user))
     if float(req.berat_kg or 0) <= 0:
         raise HTTPException(400, "Isi berat bekatul lebih dari 0.")
@@ -428,7 +428,7 @@ def _bidang_pengiriman() -> list[dict]:
 def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
     """Aksi inventory yang boleh dilihat pemakai ini.
 
-    Dipanggil `miniapp.actions_menu` supaya seluruh menu tetap satu daftar
+    Dipanggil `api.actions_menu` supaya seluruh menu tetap satu daftar
     dari satu tempat, meski isinya dirakit dari beberapa modul.
     """
     aksi: list[dict] = []
@@ -436,27 +436,27 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
     if g2:
         aksi += [
             {"id": "catat_packing", "label": "📦 Catat packing barang jadi",
-             "post": "/miniapp/actions/catat-packing",
+             "post": "/api/actions/catat-packing",
              "hint": "Mengurangi stok karung dan menambah stok barang jadi. "
                      "Pilih prosesnya dulu — packing boleh dicatat setelah "
                      "penyosohan ditutup.",
              "fields": [
                  {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
-                  "source": "/miniapp/actions/polishing-terkini"},
+                  "source": "/api/actions/polishing-terkini"},
                  {"name": "produk", "label": "Produk & kemasan", "type": "remote",
-                  "source": "/miniapp/actions/produk-kemasan"},
+                  "source": "/api/actions/produk-kemasan"},
                  {"name": "merk", "label": "Merk (beras saja)", "type": "remote",
-                  "optional": True, "source": "/miniapp/actions/merk"},
+                  "optional": True, "source": "/api/actions/merk"},
                  {"name": "grade", "label": "Mutu (beras putih saja)", "type": "remote",
-                  "optional": True, "source": "/miniapp/actions/mutu-beras"},
+                  "optional": True, "source": "/api/actions/mutu-beras"},
                  {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number"},
              ]},
             {"id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
-             "post": "/miniapp/actions/catat-bekatul",
+             "post": "/api/actions/catat-bekatul",
              "hint": "Bekatul dicatat per kg, bukan per karung — ia tidak dipacking.",
              "fields": [
                  {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
-                  "source": "/miniapp/actions/polishing-terkini"},
+                  "source": "/api/actions/polishing-terkini"},
                  {"name": "berat_kg", "label": "Berat (kg)", "type": "number"},
              ]},
         ]
@@ -464,48 +464,48 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
     if fin:
         aksi += [
             {"id": "beli_kemasan", "label": "🛒 Beli karung",
-             "post": "/miniapp/actions/beli-kemasan",
+             "post": "/api/actions/beli-kemasan",
              "hint": "Harga per lembar dipakai menghitung HPP kemasan "
                      "(rata-rata tertimbang) — isi bila diketahui.",
              "fields": [
                  {"name": "karung", "label": "Jenis & ukuran karung", "type": "remote",
-                  "source": "/miniapp/actions/kemasan-jenis"},
+                  "source": "/api/actions/kemasan-jenis"},
                  {"name": "merk", "label": "Merk (karung beras wajib bermerk)",
-                  "type": "remote", "optional": True, "source": "/miniapp/actions/merk"},
+                  "type": "remote", "optional": True, "source": "/api/actions/merk"},
                  {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
                  {"name": "harga_per_lembar", "label": "Harga per lembar (Rp)",
                   "type": "number"},
              ]},
             {"id": "kirim_barang_jadi", "label": "🚚 Barang jadi keluar",
-             "post": "/miniapp/actions/kirim-barang-jadi",
+             "post": "/api/actions/kirim-barang-jadi",
              "hint": "Stok yang kurang tidak menghalangi pencatatan — barangnya "
                      "sudah berangkat. Kekurangannya diberi peringatan supaya "
                      "selisihnya ditelusuri, bukan disembunyikan.",
              "fields": [
                  {"name": "produk", "label": "Produk & kemasan", "type": "remote",
-                  "source": "/miniapp/actions/produk-kemasan"},
+                  "source": "/api/actions/produk-kemasan"},
                  {"name": "merk", "label": "Merk (beras saja)", "type": "remote",
-                  "optional": True, "source": "/miniapp/actions/merk"},
+                  "optional": True, "source": "/api/actions/merk"},
                  {"name": "grade", "label": "Mutu (beras putih saja)", "type": "remote",
-                  "optional": True, "source": "/miniapp/actions/mutu-beras"},
+                  "optional": True, "source": "/api/actions/mutu-beras"},
                  {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number"},
              ] + _bidang_pengiriman()},
             {"id": "kirim_bekatul", "label": "🚚 Bekatul keluar",
-             "post": "/miniapp/actions/kirim-bekatul",
+             "post": "/api/actions/kirim-bekatul",
              "fields": [
                  {"name": "berat_kg", "label": "Berat (kg)", "type": "number"},
              ] + _bidang_pengiriman()},
             {"id": "jual_pk", "label": "💰 Jual PK langsung (Gudang 1)",
-             "post": "/miniapp/actions/jual-pk",
+             "post": "/api/actions/jual-pk",
              "hint": "PK dijual tanpa disosoh. Karung PK dihitung 50 kg, "
                      "dibulatkan ke atas.",
              "fields": [
                  {"name": "kode_mil", "label": "Proses giling asal", "type": "remote",
-                  "source": "/miniapp/actions/milling-terkini"},
+                  "source": "/api/actions/milling-terkini"},
                  {"name": "berat_kg", "label": "Berat PK (kg)", "type": "number"},
              ] + _bidang_pengiriman()},
             {"id": "harga_byproduct", "label": "🏷️ Setel harga hasil samping",
-             "post": "/miniapp/actions/harga-byproduct",
+             "post": "/api/actions/harga-byproduct",
              "hint": "Dipakai menilai stok hasil samping. Harga baru tidak "
                      "menghapus yang lama — riwayatnya tersimpan.",
              "fields": [

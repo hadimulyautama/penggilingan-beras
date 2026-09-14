@@ -14,7 +14,7 @@ import pytest
 from app.penggilingan import peta_jenis
 from app.penggilingan.gudang1.services import tumpukan
 from app.services import berjalan
-from app.web import miniapp
+from app.web import api
 
 
 # ─────────────────────── Tujuan saat gabah masuk ───────────────────────
@@ -103,7 +103,7 @@ def test_isi_tumpukan_muncul_sebagai_pekerjaan_yang_menunggu():
 
 
 def test_aksi_pindah_tumpukan_terdaftar_dan_dipetakan():
-    assert "pindah_tumpukan" in miniapp._ACTION_WH
+    assert "pindah_tumpukan" in api._ACTION_WH
 
 
 def test_gabah_yang_gagal_ditempatkan_menagih_di_berjalan():
@@ -121,7 +121,7 @@ def test_komoditas_tiket_dibaca_dari_peta_bukan_ditebak():
     dari awalan kode berarti komoditas baru diam-diam dianggap gabah kering —
     dan gabah basah yang salah dikenali akan ditawari masuk silo."""
     from app.services import berjalan as brj
-    from app.web import miniapp as mn
+    from app.web import api as mn
 
     for fungsi in (brj._tiket_belum_ditaut, mn.timbang_masuk_aktif):
         sumber = inspect.getsource(fungsi)

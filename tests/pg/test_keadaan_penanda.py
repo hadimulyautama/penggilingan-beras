@@ -1,4 +1,4 @@
-"""Penanda keadaan Pos Produksi (`/miniapp/keadaan`) — di Postgres.
+"""Penanda keadaan Pos Produksi (`/api/keadaan`) — di Postgres.
 
 Penandanya dulu membulatkan `updated_at` tiket timbang ke DETIK. Tiket yang
 dibuat lalu ditimbang kedua pada detik yang sama menghasilkan penanda yang
@@ -28,7 +28,7 @@ _SQL_TIKET = text("""
 
 
 async def _penanda(pemakai) -> dict:
-    from app.web.miniapp import keadaan
+    from app.web.api import keadaan
 
     return await keadaan(user=pemakai)
 

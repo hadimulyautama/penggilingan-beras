@@ -109,8 +109,8 @@ async def pabrik(pg, pemasok):
             "token": await _token(pg, op_akun)}
 
 
-G1_SAJA = "/miniapp/actions/drying-active"      # gerbang _is_g1_operator
-G2_SAJA = "/miniapp/actions/polishing-active"   # gerbang _is_g2_operator
+G1_SAJA = "/api/actions/drying-active"      # gerbang _is_g1_operator
+G2_SAJA = "/api/actions/polishing-active"   # gerbang _is_g2_operator
 
 
 async def test_operator_bergantian_gudang_tanpa_admin(pg, pabrik):
@@ -137,8 +137,8 @@ async def test_gudang_aktif_milik_sesi_bukan_milik_orangnya(pg, pabrik):
     """Ponsel A sedang di Gudang 2, perangkat gudang B tetap di Gudang 1 —
     orang yang sama, sesi yang sama, kuki yang berbeda."""
     async with _klien(pabrik["token"], gudang="g2") as a, _klien(pabrik["token"]) as b:
-        assert (await a.get("/miniapp/me")).json()["default_warehouse_id"] == pabrik["g2"]
-        assert (await b.get("/miniapp/me")).json()["default_warehouse_id"] == pabrik["g1"]
+        assert (await a.get("/api/me")).json()["default_warehouse_id"] == pabrik["g2"]
+        assert (await b.get("/api/me")).json()["default_warehouse_id"] == pabrik["g1"]
         assert (await a.get(G2_SAJA)).status_code == 200
         assert (await b.get(G2_SAJA)).status_code == 403
     assert await _gudang_di_db(pg, pabrik["op"]) == pabrik["g1"]
@@ -154,9 +154,9 @@ async def test_catatan_jatuh_ke_gudang_yang_aktif_saat_itu(pg, pabrik):
     isi = {"tumpukan": str(pabrik["intake"]), "silo": "A", "berat_kg": 5000}
     async with _klien(pabrik["token"]) as b:
         # Di sesi Gudang 1 pekerjaan Gudang 2 ditolak — bukan tercatat ke gudang yang salah.
-        assert (await b.post("/miniapp/actions/pindah-tumpukan-silo", json=isi)).status_code == 403
+        assert (await b.post("/api/actions/pindah-tumpukan-silo", json=isi)).status_code == 403
     async with _klien(pabrik["token"], gudang="g2") as a:
-        r = await a.post("/miniapp/actions/pindah-tumpukan-silo", json=isi)
+        r = await a.post("/api/actions/pindah-tumpukan-silo", json=isi)
         assert r.status_code == 200, r.text
         assert r.json()["ok"] is True
 

@@ -28,7 +28,7 @@ from app.services import undo as svc
 from app.web.aksi_umum import galat, wajib
 from app.web.deps import pengguna_aksi
 
-router = APIRouter(prefix="/miniapp", tags=["miniapp"])
+router = APIRouter(prefix="/api", tags=["api"])
 
 #: Lingkup yang boleh dipilih staff/admin, berurutan dari yang paling sempit.
 #: "saya" selalu ada dan selalu pertama — membatalkan pekerjaan sendiri adalah
@@ -128,12 +128,12 @@ def spesifikasi(*, boleh: bool) -> list[dict]:
     return [{
         "id": "undo",
         "label": "↩️ Batalkan input terakhir",
-        "post": "/miniapp/actions/undo",
+        "post": "/api/actions/undo",
         "hint": "Pilih tindakan yang mau dibatalkan — yang tertulis itulah yang "
                 "akan hilang. Hanya tindakan TERAKHIR yang bisa dibatalkan; "
                 "yang sebelumnya dikoreksi lewat Admin.",
         "fields": [
             {"name": "lingkup", "label": "Tindakan yang dibatalkan", "type": "remote",
-             "source": "/miniapp/actions/undo-terakhir"},
+             "source": "/api/actions/undo-terakhir"},
         ],
     }]

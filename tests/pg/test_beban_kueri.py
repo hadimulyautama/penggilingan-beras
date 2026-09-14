@@ -3,7 +3,7 @@
 Temuan QA P-S-02, 11 September 2026. Dengan data setahun, QA mengukur:
 
     /                              7.482 kueri   5,2 detik
-    /miniapp/dashboard             6.633 kueri   4,5 detik
+    /api/dashboard             6.633 kueri   4,5 detik
     /stok                          6.261 kueri   4,3 detik
     /berjalan                     ±3.657 kueri
     /internal/produksi/operasional 3.670 kueri
@@ -175,7 +175,7 @@ async def test_stok_pk_tak_lagi_satu_kueri_per_proses(pg, hitung_kueri):
 
 
 async def test_dashboard_utuh_di_bawah_batas(pg, hitung_kueri):
-    """Halaman yang dibaca Beranda, /miniapp/dashboard, dan briefing Kantor."""
+    """Halaman yang dibaca Beranda, /api/dashboard, dan briefing Kantor."""
     from app.services import dashboard
 
     await _semai(pg)

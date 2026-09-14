@@ -65,7 +65,7 @@ async def view_untuk(user: User | None) -> str:
     if P.operator_saja(user.role):
         # Dipinjam dari katalog aksi supaya jawaban "operator gudang mana"
         # tak pernah berselisih antara menu aksi dan layar yang memuatnya.
-        from app.web.miniapp import _is_g1_operator, _is_g2_operator
+        from app.web.api import _is_g1_operator, _is_g2_operator
 
         if await _is_g2_operator(user):
             return P.view(user.role, P.G2)

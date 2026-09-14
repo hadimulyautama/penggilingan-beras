@@ -167,7 +167,7 @@ def test_data_uji_dibuat_lewat_endpoint_bukan_insert():
     # skrip membuktikan skripnya jalan, bukan membuktikan layarnya bisa
     # dipakai.
     assert "ASGITransport" not in sumber
-    assert "/miniapp/actions" not in sumber
+    assert "/api/actions" not in sumber
     assert "_tiket(db, pemasok)" in sumber
     # Satu-satunya INSERT langsung: tiket timbang, milik aplikasi lain.
     insert = inspect.getsource(data_uji)

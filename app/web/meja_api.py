@@ -6,7 +6,7 @@ aplikasi itu TIPIS di atas Pos Produksi — tabel dan aturan bisnis tetap
 milik repo ini, Meja hanya menggambar dan meneruskan. Maka yang ada di sini
 bukan logika baru melainkan BUNGKUS JSON atas layanan yang sudah dipakai
 layar admin Pos Produksi: `services.berjalan`, `stok`, `audit`, `undo`,
-`setelan`, `user_admin`, dan pengelolaan alat. Aksi tulis (`/miniapp/*`)
+`setelan`, `user_admin`, dan pengelolaan alat. Aksi tulis (`/api/*`)
 serta laporan (`/api/laporan/*`) TIDAK dibungkus ulang: Meja memanggilnya
 langsung, karena `akun_opsional` sudah mengenali token Meja + header akun.
 

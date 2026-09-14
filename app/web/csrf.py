@@ -52,7 +52,7 @@ def perlu_periksa(metode: str, jalur: str) -> bool:
 
 
 #: Header yang dibawa service Meja. Token yang sama untuk /internal/meja/*
-#: dan untuk /miniapp/* atas nama akun (lihat `security.akun_dari_meja`).
+#: dan untuk /api/* atas nama akun (lihat `security.akun_dari_meja`).
 HEADER_TOKEN_MEJA = "x-internal-token"
 
 

@@ -984,7 +984,7 @@ async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
 # Fungsi-fungsi di atas menjawab satu proses giling per panggilan, dan tiap
 # jawaban memakan 2–4 kueri. Layar yang menampilkan seluruh proses karenanya
 # mengeluarkan ribuan kueri: dengan data setahun, Beranda 7.482 kueri (5,2
-# detik), /stok 6.261, /miniapp/dashboard 6.633. Bukan satu kueri yang lambat —
+# detik), /stok 6.261, /api/dashboard 6.633. Bukan satu kueri yang lambat —
 # melainkan ribuan kueri yang masing-masing cepat.
 #
 # Yang di bawah menjawab pertanyaan yang SAMA untuk sekumpulan proses

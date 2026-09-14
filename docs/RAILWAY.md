@@ -96,7 +96,7 @@ Opsional: `MINIAPP_MODEL=claude-haiku-4-5`, `DASHBOARD_TOKEN=<rahasia>`.
    curl -X POST "https://api.telegram.org/bot<TOKEN>/setChatMenuButton" \
      -H "Content-Type: application/json" \
      -d '{"menu_button":{"type":"web_app","text":"Buka Dashboard",
-          "web_app":{"url":"https://<domain>/miniapp"}}}'
+          "web_app":{"url":"https://<domain>/api"}}}'
    ```
    Ulangi untuk tiap token bot.
 4. Buka bot → tombol **Buka Dashboard** → login otomatis via Telegram (initData)

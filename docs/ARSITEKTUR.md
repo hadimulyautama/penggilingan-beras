@@ -138,7 +138,7 @@ Kantor tetap jalan — hanya fitur pabriknya yang menjawab "tak bisa dihubungi".
 (service `meja`) memegang seluruh pekerjaan staf administrasi kedua gudang
 dan TIPIS: tanpa basis data, tanpa logika bisnis. Ia memanggil
 `/internal/meja/*` (`app/web/meja_api.py` — bungkus JSON atas layanan
-berjalan/stok/audit/undo/setelan/user_admin/alat), serta `/miniapp/*` dan
+berjalan/stok/audit/undo/setelan/user_admin/alat), serta `/api/*` dan
 `/api/laporan/*` yang sudah ada, atas nama akun `produksi_akun` lewat header
 `X-Internal-Token` + `X-Meja-Akun` + `X-Meja-Versi` (dikenali
 `security.akun_opsional`, pagar CSRF melewatkannya — `csrf.dari_meja`).
@@ -386,7 +386,7 @@ Berlaku untuk modul mana pun, sekarang maupun yang ditambahkan nanti:
 
 ### 8.1 Langkah berikutnya untuk realtime: pg_notify → SSE (USULAN, belum dikerjakan)
 
-Denyut sepuluh detik ke `/miniapp/keadaan` sudah jauh lebih murah daripada
+Denyut sepuluh detik ke `/api/keadaan` sudah jauh lebih murah daripada
 menarik halaman penuh tiap tiga puluh detik: jawabannya 23 byte, halamannya
 14 kilobyte. Tetapi ia tetap BERTANYA — dan sebagian besar jawabannya "tidak
 ada yang berubah". Enam perangkat di gudang berarti ±2.000 permintaan sia-sia
@@ -401,7 +401,7 @@ Langkah berikutnya membalik arahnya:
    ada.
 2. **Satu pendengar per proses aplikasi**, memegang koneksi `LISTEN` sendiri
    dan meneruskan ke antrean di memori.
-3. **`GET /miniapp/aliran` sebagai Server-Sent Events**, satu sambungan
+3. **`GET /api/aliran` sebagai Server-Sent Events**, satu sambungan
    panjang per perangkat. Perangkat tak lagi bertanya; ia diberi tahu.
    Perubahan terlihat dalam hitungan ratusan milidetik alih-alih sepuluh
    detik, dan lalu lintasnya mendekati nol saat pabrik sedang tenang.

@@ -15,7 +15,7 @@ from app.models import ActivityLog
 #: berubah surut ketika operator berpindah gudang (temuan QA P4-02).
 #:
 #: Pembagiannya mengikuti letak fisik prosesnya, sama dengan tab G1/G2 di
-#: layar aksi (`miniapp._ACTION_WH`): selepan, pengeringan, silo gabah, dan
+#: layar aksi (`api._ACTION_WH`): selepan, pengeringan, silo gabah, dan
 #: giling di Gudang 1; PK masuk, penyosohan, kemasan, barang jadi, dan barang
 #: keluar di Gudang 2. Pemindahan PK G1→G2 dicatat pada gudang ASALnya.
 #: Yang tak ada di sini (undo, setelan, akun) bukan milik gudang mana pun.

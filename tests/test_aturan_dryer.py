@@ -13,7 +13,7 @@ from app.penggilingan.gudang1.services import drying
 from tests.bantu import kode_saja
 
 
-def _aksi(miniapp, id_aksi: str) -> dict:
+def _aksi(api, id_aksi: str) -> dict:
     """Spesifikasi satu aksi, dibaca dari SUMBER `actions_menu`.
 
     Memanggil fungsinya butuh basis data — dan yang diperiksa di sini bentuk
@@ -21,7 +21,7 @@ def _aksi(miniapp, id_aksi: str) -> dict:
     import ast
     import textwrap
 
-    pohon = ast.parse(textwrap.dedent(inspect.getsource(miniapp.actions_menu)))
+    pohon = ast.parse(textwrap.dedent(inspect.getsource(api.actions_menu)))
     for simpul in ast.walk(pohon):
         if not isinstance(simpul, ast.Dict):
             continue
@@ -98,14 +98,14 @@ def test_silo_campuran_diperingatkan_bukan_ditolak():
     harus terbaca sekarang — bukan diketahui belakangan saat angka giling
     tidak seperti yang diingat orang."""
     from app.penggilingan.gudang1.services import silo
-    from app.web import miniapp
+    from app.web import api
 
     assert "digabung = bool(sebelum)" in inspect.getsource(silo.masuk_silo)
-    assert "isinya kini tercampur" in inspect.getsource(miniapp.act_pindah_silo)
+    assert "isinya kini tercampur" in inspect.getsource(api.act_pindah_silo)
     # Dan peringatannya menyebut ISI yang sudah ada, bukan sekadar bahwa silo
     # "sudah berisi" — dua lot pengeringan yang menumpuk adalah keadaan lain
     # daripada hasil pengeringan sendiri yang bertemu gabah beli kering.
-    assert "isi_sebelumnya" in inspect.getsource(miniapp.act_pindah_silo)
+    assert "isi_sebelumnya" in inspect.getsource(api.act_pindah_silo)
 
 
 # ─────────────── Tiap dryer berjalan sendiri-sendiri ───────────────
@@ -148,22 +148,22 @@ def test_tujuan_menyebut_mesin_dalam_satu_pilihan():
     """Bukan "Dryer" lalu ditanya lagi mesin mana: itu dua ketukan untuk satu
     keputusan, dan yang menekannya sedang berdiri memegang layar dengan satu
     tangan."""
-    from app.web import miniapp
+    from app.web import api
 
-    assert miniapp._urai_tujuan("dryer:3") == ("dryer", 3)
-    assert miniapp._urai_tujuan("silo_a") == ("silo_a", None)
-    assert miniapp._urai_tujuan("tumpuk") == ("tumpuk", None)
-    assert miniapp._urai_tujuan("") == ("", None)
+    assert api._urai_tujuan("dryer:3") == ("dryer", 3)
+    assert api._urai_tujuan("silo_a") == ("silo_a", None)
+    assert api._urai_tujuan("tumpuk") == ("tumpuk", None)
+    assert api._urai_tujuan("") == ("", None)
     # Bentuk aneh tidak boleh menembus sebagai mesin nomor sekian.
-    assert miniapp._urai_tujuan("dryer:abc") == ("dryer", None)
+    assert api._urai_tujuan("dryer:abc") == ("dryer", None)
 
 
 def test_daftar_tujuan_dibangkitkan_bukan_ditulis_tetap():
     """Mesin bisa bertambah lewat Pengaturan, dan daftar yang ditulis tetap
     akan diam-diam ketinggalan."""
-    from app.web import miniapp
+    from app.web import api
 
-    sumber = inspect.getsource(miniapp.actions_menu)
+    sumber = inspect.getsource(api.actions_menu)
     assert "_pilihan_tujuan_gabah" in sumber
     assert '["dryer", "Dryer"]' not in sumber
 
@@ -171,9 +171,9 @@ def test_daftar_tujuan_dibangkitkan_bukan_ditulis_tetap():
 def test_mesin_tanpa_gabah_tak_ditawarkan_saat_mulai_pengeringan():
     """Menawarkan mesin kosong hanya menghasilkan penolakan 'tidak ada gabah
     di mesin itu' setelah orang memilihnya."""
-    from app.web import miniapp
+    from app.web import api
 
-    assert "if not batches:" in inspect.getsource(miniapp.dryer_menunggu)
+    assert "if not batches:" in inspect.getsource(api.dryer_menunggu)
 
 
 def test_kadar_air_dari_empat_sampel_bukan_satu_angka():
@@ -214,7 +214,7 @@ def test_bacaan_mesin_tidak_dirata_ratakan_bersama_alat_tes():
 def test_bentuk_lama_satu_angka_tak_patah():
     """Bot dan tautan tersimpan masih mengirim `kadar_air` tunggal. Ia
     diperlakukan sebagai bacaan mesin, persis seperti dulu."""
-    from app.web.miniapp import KadarAirReq
+    from app.web.api import KadarAirReq
 
     r = KadarAirReq(kode_lot="PGR-1", kadar_air=18)
     assert r.kadar_air == 18 and r.tes_1 is None and r.indikator is None
@@ -239,9 +239,9 @@ def test_hanya_titik_pertama_yang_wajib():
     import inspect
     import pathlib
 
-    from app.web import miniapp
+    from app.web import api
 
-    spec = inspect.getsource(miniapp)
+    spec = inspect.getsource(api)
     blok = spec[spec.index('"name": "tes"'):spec.index('"name": "indikator"')]
     assert '"type": "ulang"' in blok and '"wajib": True' in blok
     # Empat kolom tersimpan; menaikkan `maks` tanpa migrasi akan membuang
@@ -429,9 +429,9 @@ def test_isi_dryer_tetap_menghalangi_setelah_pendinginan_selesai():
 
 def test_pilihan_tujuan_menyebut_isi_tiap_mesin():
     """Operator harus bisa melihat isi mesin SEBELUM memilihnya."""
-    from app.web import miniapp
+    from app.web import api
 
-    sumber = kode_saja(miniapp._pilihan_tujuan_gabah)
+    sumber = kode_saja(api._pilihan_tujuan_gabah)
     assert "isi_dryer" in sumber
     assert "berisi gabah" in sumber
 
@@ -441,9 +441,9 @@ def test_label_mesin_tak_bergantung_kondisi_gabah_yang_masuk():
     — lalu digabung dengan membuang yang kembar. Label yang menyebut kondisi
     gabah yang MASUK akan berbeda di kedua daftar, dan mesin yang sama muncul
     dua kali."""
-    from app.web import miniapp
+    from app.web import api
 
-    sumber = kode_saja(miniapp._pilihan_tujuan_gabah)
+    sumber = kode_saja(api._pilihan_tujuan_gabah)
     kepala = sumber[:sumber.index("for d in mesin:")]
     ekor = sumber[sumber.index("for d in mesin:"):]
     # Variabel `kondisi` (kondisi gabah yang masuk) boleh dipakai untuk memilih
@@ -458,9 +458,9 @@ def test_label_mesin_tak_bergantung_kondisi_gabah_yang_masuk():
 def test_gabah_masuk_menolak_campuran_sebelum_batch_dibuat():
     """Penolakan sesudah batch tercatat menyisakan pekerjaan bersih-bersih.
     Untuk hal yang sudah pasti salah, tolak lebih dulu."""
-    from app.web import miniapp
+    from app.web import api
 
-    sumber = kode_saja(miniapp.act_gabah_masuk)
+    sumber = kode_saja(api.act_gabah_masuk)
     i_periksa = sumber.index("await isi_dryer")
     # Yang dicari PANGGILANNYA, bukan barisan `import` di kepala fungsi —
     # urutan import tak mengatakan apa-apa tentang urutan kejadian.
@@ -526,11 +526,11 @@ def test_kedua_arah_pencampuran_diperingatkan():
     """Lot masuk ke silo yang sudah berisi gabah beli kering SUDAH
     diperingatkan. Arah sebaliknya — gabah beli kering menyusul ke silo yang
     berisi lot — sampai sekarang diam."""
-    from app.web import miniapp
+    from app.web import api
     from app.penggilingan.gudang1.services import tumpukan
 
-    assert "campur_asal" in kode_saja(miniapp.act_pindah_silo)
-    assert "campur_asal" in kode_saja(miniapp.act_gabah_masuk)
+    assert "campur_asal" in kode_saja(api.act_pindah_silo)
+    assert "campur_asal" in kode_saja(api.act_gabah_masuk)
     assert "campur_asal" in kode_saja(tumpukan.tempatkan)
 
 
@@ -602,10 +602,10 @@ def test_berat_baris_bukan_berat_seluruh_silo():
 
 
 def test_penambahan_bahan_diberitahukan_di_ketiga_jalan():
-    from app.web import miniapp
+    from app.web import api
     from app.penggilingan.gudang1.services import tumpukan
 
-    for fn in (miniapp.act_pindah_silo, miniapp.act_gabah_masuk, tumpukan.tempatkan):
+    for fn in (api.act_pindah_silo, api.act_gabah_masuk, tumpukan.tempatkan):
         assert "giling_berjalan" in kode_saja(fn), fn.__name__
 
 
@@ -627,9 +627,9 @@ def test_mulai_pengeringan_minta_konfirmasi():
     mode) sebenarnya disetel dengan tangan di panel dryer. Yang tersimpan di
     sini cuma salinannya, dan salinan yang meleset baru ketahuan berjam-jam
     kemudian."""
-    from app.web import miniapp
+    from app.web import api
 
-    spec = _aksi(miniapp, "mulai_pengeringan")
+    spec = _aksi(api, "mulai_pengeringan")
     k = spec.get("konfirmasi")
     assert k, "mulai pengeringan harus dikonfirmasi"
     assert "{target_kadar_air}" in k["teks"] and "{mode_dryer}" in k["teks"], \
@@ -638,9 +638,9 @@ def test_mulai_pengeringan_minta_konfirmasi():
 
 def test_konfirmasi_mengulang_jawaban_bukan_bertanya_yakin():
     """'Yakin?' tidak menanyakan apa pun — ia melatih orang menekan Ya."""
-    from app.web import miniapp
+    from app.web import api
 
-    k = _aksi(miniapp, "mulai_pengeringan")["konfirmasi"]
+    k = _aksi(api, "mulai_pengeringan")["konfirmasi"]
     assert "yakin" not in k["teks"].lower()
     assert "yakin" not in k.get("ya", "").lower()
 
@@ -684,9 +684,9 @@ def test_ubah_target_punya_lembarnya_sendiri_dan_konfirmasi():
     """
     import inspect
 
-    from app.web import miniapp
+    from app.web import api
 
-    spec = inspect.getsource(miniapp)
+    spec = inspect.getsource(api)
 
     # Bukan lagi medan di borang kadar air.
     kadar = spec[spec.index('"id": "kadar_air"'):spec.index('"id": "ubah_target"')]

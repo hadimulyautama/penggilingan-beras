@@ -186,7 +186,7 @@ def test_metode_aman_tak_butuh_token():
     assert csrf.perlu_periksa("GET", "/aksi") is False
     assert csrf.perlu_periksa("HEAD", "/") is False
     assert csrf.perlu_periksa("POST", "/masuk") is True
-    assert csrf.perlu_periksa("POST", "/miniapp/actions/jalankan") is True
+    assert csrf.perlu_periksa("POST", "/api/actions/jalankan") is True
 
 
 def test_kait_kesehatan_tak_ikut_dipagari():

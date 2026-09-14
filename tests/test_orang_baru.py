@@ -151,9 +151,9 @@ def test_aksi_gudang_terbuka_untuk_admin_keatas():
     pun yang bukan `"operator"` — sehingga SUPERADMIN jatuh ke penolakan dan
     kehilangan SELURUH aksi gudang. Terlihat saat pemilik membandingkan
     tampilan: peran tertinggi 14 aksi, admin di bawahnya 30."""
-    from app.web import miniapp
+    from app.web import api
     from tests.bantu import kode_saja
 
-    kode = kode_saja(miniapp._is_wh_operator)
+    kode = kode_saja(api._is_wh_operator)
     assert "P.admin_keatas(" in kode
     assert "== 'admin'" not in kode and '== "admin"' not in kode

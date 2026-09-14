@@ -14,7 +14,7 @@ import inspect
 from app.penggilingan.gudang1.services import jeda
 from app.penggilingan.gudang2 import polishing, service as g2
 from app.services import berjalan
-from app.web import gudang2_api, miniapp
+from app.web import api, gudang2_api
 from tests.bantu import kode_saja
 
 
@@ -74,9 +74,9 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     async def tidak(_u):
         return False
 
-    monkeypatch.setattr(miniapp, "_is_g1_operator", tidak)
-    monkeypatch.setattr(miniapp, "_is_g2_operator", ya)
-    monkeypatch.setattr(miniapp, "can_see_financials", lambda u: False)
+    monkeypatch.setattr(api, "_is_g1_operator", tidak)
+    monkeypatch.setattr(api, "_is_g2_operator", ya)
+    monkeypatch.setattr(api, "can_see_financials", lambda u: False)
 
     class _Db:
         async def __aenter__(self):
@@ -85,7 +85,7 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
         async def __aexit__(self, *a):
             return False
 
-    monkeypatch.setattr(miniapp, "SessionLocal", lambda: _Db())
+    monkeypatch.setattr(api, "SessionLocal", lambda: _Db())
 
     async def sebab_palsu(db):
         return {k: list(v) for k, v in jeda.SEBAB.items()}
@@ -100,7 +100,7 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     from app.web import aksi_inventory
     monkeypatch.setattr(aksi_inventory, "spesifikasi", lambda **k: [])
 
-    menu = await miniapp.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
+    menu = await api.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
     ids = [a["id"] for a in menu]
     assert ids[:6] == ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
@@ -118,12 +118,12 @@ async def _nilai(v):
 
 
 def test_masukkan_pk_dan_jeda_dijaga_di_server_bukan_di_menu():
-    kode = kode_saja(miniapp.act_masukkan_pk)
+    kode = kode_saja(api.act_masukkan_pk)
     assert "can_see_financials(user)" in kode, "entry Admin harus dijaga peran, bukan cuma disembunyikan"
-    for fn in (miniapp.act_hentikan_proses, miniapp.act_lanjutkan_proses):
+    for fn in (api.act_hentikan_proses, api.act_lanjutkan_proses):
         k = kode_saja(fn)
         assert "_is_g2_operator if jenis == 'penyosohan' else _is_g1_operator" in k, fn.__name__
-    assert "_is_g2_operator" in kode_saja(miniapp.act_pindah_tumpukan_silo)
+    assert "_is_g2_operator" in kode_saja(api.act_pindah_tumpukan_silo)
 
 
 def test_layar_operator_gudang2_antrean_adalah_stok_pk():

@@ -2,7 +2,7 @@
  *
  * Formulirnya TIDAK ditulis di sini. Server yang mengirim daftar aksi beserta
  * spesifikasi tiap field (jenis, pilihan, sumber data jarak jauh) lewat
- * /miniapp/actions/menu; berkas ini hanya merendernya. Menambah aksi baru
+ * /api/actions/menu; berkas ini hanya merendernya. Menambah aksi baru
  * berarti menambah satu spesifikasi di Python — bukan menulis layar baru.
  */
 (function () {
@@ -90,7 +90,7 @@
       this.disabled = true;
       this.textContent = "membatalkan…";
       try {
-        var hasil = await kirim("/miniapp/actions/undo", { lingkup: "saya:" + logId });
+        var hasil = await kirim("/api/actions/undo", { lingkup: "saya:" + logId });
         t.style.display = "none";
         if (window.PINDAH && PINDAH.segarkan) {
           PINDAH.segarkan(function () { kabar(hasil.pesan || "Dibatalkan", "ok"); });
@@ -164,10 +164,10 @@
 
   async function muat() {
     try {
-      var d = await ambil("/miniapp/dashboard");
+      var d = await ambil("/api/dashboard");
       if (!d) return;
       var menu = [];
-      try { menu = (await ambil("/miniapp/actions/menu")) || []; } catch (e) { menu = []; }
+      try { menu = (await ambil("/api/actions/menu")) || []; } catch (e) { menu = []; }
       /* Urutan kelompok ikut dari server bersama menunya — ditempelkan pada
          aksi pertama, karena daftar itu memang satu-satunya yang dikirim.
          Menaruhnya di layar berarti dua tempat yang harus sepakat. */
@@ -845,7 +845,7 @@
        karena benar untuk SEMUA aplikasi. Yang dimuat hanya katalognya, bukan
        dashboard — UI-01 tetap terjaga. */
     if (!Object.keys(MENU).length) {
-      ambil("/miniapp/actions/menu").then(function (menu) {
+      ambil("/api/actions/menu").then(function (menu) {
         (menu || []).forEach(function (a) { MENU[a.id] = a; });
       }).catch(function () {});
     }

@@ -12,7 +12,7 @@ The rice-mill system ([[penggilingan-beras-project]]) is deployed to **Railway**
 
 - **Railway account:** wahidnurhani20@gmail.com. **Project:** `penggilingan-beras` (id `5518c07b-e1c9-4876-ae5c-89ac304ca476`), environment `production`.
 - **Services:** `Postgres` (postgres-ssl:18) + `penggilingan-beras` (app, Dockerfile build, single replica).
-- **Public URL:** https://penggilingan-beras-production.up.railway.app — `/health`, `/miniapp` (Mini App launch page). All 3 bots (@selepan_bot, @polesan_bot, @hmuadmin_bot) poll from Railway; menu button "Buka Dashboard" → `/miniapp` set on all three.
+- **Public URL:** https://penggilingan-beras-production.up.railway.app — `/health`, `/api` (Mini App launch page). All 3 bots (@selepan_bot, @polesan_bot, @hmuadmin_bot) poll from Railway; menu button "Buka Dashboard" → `/api` set on all three.
 - **Env vars set on Railway** (via CLI, secrets via `--set-from-stdin`): DATABASE_URL=`${{Postgres.DATABASE_URL}}`, ANTHROPIC_API_KEY, CLAUDE_MODEL=claude-sonnet-5, AGENT_MODEL, MINIAPP_MODEL=claude-haiku-4-5, BOT_*_TOKEN (×3), ADMIN_TELEGRAM_ID=1352846912, ADMIN_NAME, APP_TIMEZONE. Railway DB started empty; master + admin auto-seeded on boot.
 
 **Redeploy — GitHub auto-deploy is CONNECTED (verified 2026-07-05):** the app service source is the GitHub repo `hadimulyautama/penggilingan-beras` branch `main` (connected via `railway service source connect`). A push to `main` auto-triggers build + deploy. Repo is PRIVATE; Railway GitHub App has access. Migrations run automatically on boot (`docker/entrypoint.sh` → `alembic upgrade head`).

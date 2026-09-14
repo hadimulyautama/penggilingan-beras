@@ -267,7 +267,7 @@
   var penanda = null;
 
   function tanyaPenanda() {
-    return fetch("/miniapp/keadaan", { credentials: "same-origin", cache: "no-store" })
+    return fetch("/api/keadaan", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) { return (j && j.n) ? String(j.n) : null; })
       .catch(function () { return null; });

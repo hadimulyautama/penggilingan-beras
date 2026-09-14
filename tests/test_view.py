@@ -46,7 +46,7 @@ async def test_peran_meja_tak_perlu_bertanya_ke_gudang():
 
 
 async def test_operator_dipisah_menurut_gudangnya(monkeypatch):
-    from app.web import miniapp
+    from app.web import api
 
     async def g2(user):
         return user.default_warehouse_id == 2
@@ -54,8 +54,8 @@ async def test_operator_dipisah_menurut_gudangnya(monkeypatch):
     async def g1(user):
         return user.default_warehouse_id == 1
 
-    monkeypatch.setattr(miniapp, "_is_g2_operator", g2)
-    monkeypatch.setattr(miniapp, "_is_g1_operator", g1)
+    monkeypatch.setattr(api, "_is_g2_operator", g2)
+    monkeypatch.setattr(api, "_is_g1_operator", g1)
 
     assert await view_untuk(_Orang("operator", 1)) == SELEPAN
     assert await view_untuk(_Orang("operator", 2)) == POLESAN

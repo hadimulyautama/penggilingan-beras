@@ -359,7 +359,7 @@ def test_ambang_peringatan_tidak_disalin():
 
     assert (AMBANG_SEBAR, AMBANG_SELISIH_MESIN) == (1.5, 2.0)
     mini = (pathlib.Path(__file__).resolve().parents[1]
-            / "app/web/miniapp.py").read_text()
+            / "app/web/api.py").read_text()
     assert "r.sebar >= AMBANG_SEBAR" in mini
     assert "abs(r.selisih_mesin) >= AMBANG_SELISIH_MESIN" in mini
 
@@ -544,9 +544,9 @@ def test_penanda_memuat_tiket_timbang():
     """
     import inspect
 
-    from app.web import miniapp
+    from app.web import api
 
-    src = inspect.getsource(miniapp.keadaan)
+    src = inspect.getsource(api.keadaan)
     assert "ActivityLog" in src, "perubahan di aplikasi ini tak terpantau"
     assert "timbangan_transaksi" in src, "tiket timbang tak terpantau"
     # `updated_at` ikut: tiket DIUBAH saat timbang kedua, nomornya tak
@@ -574,9 +574,9 @@ def test_tiket_gabah_baru_muncul_sendiri_di_antrean():
     import inspect
 
     from app.services import berjalan
-    from app.web import miniapp
+    from app.web import api
 
-    assert "timbangan_transaksi" in inspect.getsource(miniapp.keadaan)
+    assert "timbangan_transaksi" in inspect.getsource(api.keadaan)
 
     saring = inspect.getsource(berjalan._tiket_belum_ditaut)
     assert 'info.model != "gabah"' in saring, "yang bukan gabah tak disaring"

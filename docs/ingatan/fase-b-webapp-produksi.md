@@ -85,7 +85,7 @@ melihat angka uang (`bots.common.PERAN_UANG`).
 **SEBAGIAN B2 SELESAI (commit 1c22d97):** `/aksi` — layar pencatatan di peramban. Kuncinya:
 41 endpoint aksi kini menerima sesi webapp MAUPUN initData Telegram lewat `pengguna_aksi`
 (app/web/deps.py); keduanya sengaja berdampingan sampai bot pabrik dimatikan. `static/aksi.js`
-merender formulir dari spesifikasi server (`/miniapp/actions/menu`) — menambah aksi = menambah satu
+merender formulir dari spesifikasi server (`/api/actions/menu`) — menambah aksi = menambah satu
 spesifikasi Python, bukan layar baru. TERBUKTI ujung-ke-ujung: operator masuk lewat peramban,
 catat gabah masuk manual, `input_by` = orang yang sedang masuk (tanpa Telegram sama sekali).
 
@@ -115,7 +115,7 @@ di service penggilingan-beras → deploy ulang → akun pertama dibuat utk user 
 **Rancangan Fase B selesai & diserahkan 2026-09-02.**
 Cetak biru: https://claude.ai/code/artifact/f12f077e-8532-4fd5-b598-be909650a30f
 
-**TEMUAN KUNCI yang mengubah bentuk seluruh rencana:** `app/web/miniapp.py` (1.564 baris) BUKAN
+**TEMUAN KUNCI yang mengubah bentuk seluruh rencana:** `app/web/api.py` (1.564 baris) BUKAN
 sekadar UI Telegram — ia sudah webapp lengkap: 19 GET + 23 POST, dan **menu aksinya digerakkan
 server** (server mengirim spesifikasi field/tipe/pilihan/sumber-remote, klien generik merender).
 Yang mengikatnya ke Telegram cuma `app/web/deps.py` (49 baris, initData) + `telegram_auth.py`.
@@ -136,7 +136,7 @@ supaya peran tak tersalin di dua tempat lalu berbeda diam-diam.
 (user_id UNIQUE + username + password_hash), identitas tetap di `users` — supaya satu sandi untuk
 Timbangan & Produksi; mekanisme menyalin `timbangan/app/timbangan/security.py` (216 baris, scrypt
 pustaka standar + cookie HMAC, tanpa dependensi baru). (2) API JSON & spesifikasi-aksi-dari-server
-DIPERTAHANKAN: `/miniapp/*` → `/api/*`, tukar `require_miniapp_user` → `butuh_akun`; cangkang baru
+DIPERTAHANKAN: `/api/*` → `/api/*`, tukar `require_miniapp_user` → `butuh_akun`; cangkang baru
 ikut pola Timbangan (Jinja + static + PWA manifest/sw). (3) hak akses tetap ditentukan server.
 (4) TULIS lewat formulir (608 baris NLP jalur-bot dihapus), TANYA boleh bahasa alami lewat agen yang
 sudah ada — staff/admin saja, operator tidak. (5) notifikasi pakai tabel `notifications` yang SUDAH

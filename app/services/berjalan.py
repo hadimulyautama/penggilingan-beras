@@ -464,7 +464,7 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             # Tujuannya ditekan LANGSUNG dari kartu — tak ada lembar melayang
             # untuk satu keputusan yang cuma punya beberapa jawaban.
             tombol=await _tujuan_gabah(
-                db, kondisi, post="/miniapp/actions/gabah-masuk",
+                db, kondisi, post="/api/actions/gabah-masuk",
                 data={"timbangan_transaksi_id": t["id"]}),
         ))
     return baris
@@ -565,7 +565,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             sub=f"{b_.kode_batch} · gabah {b_.kondisi_gabah} · "
                 f"masuk {_tgl(b_.tanggal_pembelian)}",
             tombol=await _tujuan_gabah(
-                db, b_.kondisi_gabah, post="/miniapp/actions/pindah-tumpukan",
+                db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
                 data={"kode_batch": b_.kode_batch}),
         ))
 
@@ -593,7 +593,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                   if wajib_dryer else None),
             kelompok="tumpukan",
             tombol=await _tujuan_gabah(
-                db, b_.kondisi_gabah, post="/miniapp/actions/pindah-tumpukan",
+                db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
                 data={"kode_batch": b_.kode_batch}),
         ))
 
@@ -1297,7 +1297,7 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
     """Gabungkan sesuai peran — server yang memutuskan, bukan layar."""
     from app.peran import can_see_financials
 
-    from app.web.miniapp import _is_g1_operator, _is_g2_operator
+    from app.web.api import _is_g1_operator, _is_g2_operator
 
     b = Berjalan()
     if await _is_g1_operator(user):

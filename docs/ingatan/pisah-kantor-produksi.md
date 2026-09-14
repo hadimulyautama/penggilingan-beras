@@ -166,7 +166,7 @@ GitHub repo, docs. Rollback noted per phase.
 
 **Fase B (LATER, separate effort) — production becomes bot-less webapp:** owner wants production
 with NO Telegram bot (like timbangan). Drop gudang1/gudang2/admin bots; evolve the existing
-mini-app (app/web/miniapp) into a STANDALONE webapp. Key issue "jika tidak dengan telegram":
+mini-app (app/web/api) into a STANDALONE webapp. Key issue "jika tidak dengan telegram":
 mini-app currently trusts Telegram identity (`require_miniapp_user`); a bot-less webapp needs its
 own login (username/PIN) — REUSE timbangan's already-bot-less auth model. Do this AFTER Fase A is
 clean (don't stack two big migrations). Nothing built yet — awaiting owner's go on Fase A step 1.

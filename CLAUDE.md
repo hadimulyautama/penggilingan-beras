@@ -34,7 +34,7 @@ tak ada.
 FastAPI · SQLAlchemy 2 async (asyncpg) · Alembic · Jinja2 dirender server ·
 CSS & JS biasa, **tanpa langkah build**. Python 3.11.
 
-- `app/web/` — layar & rute webapp. `app/web/miniapp.py` menyajikan katalog
+- `app/web/` — layar & rute webapp. `app/web/api.py` menyajikan katalog
   AKSI per peran; kliennya `static/aksi.js` yang generik.
 - `app/services/` — logika lintas gudang. `berjalan.py` menyusun isi layar
   antrean/berjalan; `stok.py` isi layar Stok.

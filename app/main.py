@@ -36,7 +36,7 @@ from app.web.mode_uji import router as mode_uji_router
 from app.web.layar_keputusan import router as keputusan_router
 from app.web.layar_stok import router as stok_router
 from app.web.lihat_sebagai import router as lihat_sebagai_router
-from app.web.miniapp import router as miniapp_router
+from app.web.api import router as api_router
 from app.web.pengguna import router as pengguna_router
 from app.web.security import (
     AksesDitolak,
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Sistem Penggilingan Beras — Backend", lifespan=lifespan)
-app.include_router(miniapp_router)
+app.include_router(api_router)
 app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
 app.include_router(laporan_router)
@@ -106,6 +106,21 @@ app.include_router(pengguna_router)
 #: alias supaya uji yang membaca sumbernya tetap menemukan aturan itu.
 StatisTerCache = hmu_tampilan.StatisBerlapis
 app.mount("/static", hmu_tampilan.StatisBerlapis(BASE_DIR / "static"), name="static")
+
+
+@app.middleware("http")
+async def alamat_lama_miniapp(request: Request, call_next):
+    """Alias peralihan: `/miniapp/*` dilayani sebagai `/api/*`.
+
+    Awalan `/miniapp` warisan Mini App Telegram dibuang 14 Sep 2026. Halaman
+    yang sudah terbuka di ponsel sebelum deploy masih memegang JS lama yang
+    memanggil alamat lama; tanpa alias, denyut penandanya 404 sampai orangnya
+    memuat ulang. Dibuang setelah Tahap A rasa native (service worker) jalan.
+    """
+    jalur = request.scope.get("path", "")
+    if jalur.startswith("/miniapp/"):
+        request.scope["path"] = "/api/" + jalur[len("/miniapp/"):]
+    return await call_next(request)
 
 
 # ── Sesi & penjaga halaman ──
@@ -382,7 +397,7 @@ async def health() -> dict:
 @app.get("/aksi", response_class=HTMLResponse)
 async def halaman_aksi(request: Request):
     """Layar pencatatan. Daftar aksi & bentuk formulirnya datang dari server
-    (`/miniapp/actions/menu`), jadi menambah aksi tak perlu layar baru."""
+    (`/api/actions/menu`), jadi menambah aksi tak perlu layar baru."""
     from app.web.security import butuh_akun
 
     akun = await butuh_akun(request)

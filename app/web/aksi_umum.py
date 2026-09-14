@@ -1,6 +1,6 @@
 """Penolong yang dipakai semua modul aksi cepat.
 
-Dipisahkan dari `miniapp.py` ketika aksi inventory pindah ke modulnya sendiri:
+Dipisahkan dari `api.py` ketika aksi inventory pindah ke modulnya sendiri:
 keduanya membutuhkan penolong yang sama, dan saling mengimpor akan melingkar.
 Isinya sengaja tipis — hanya hal yang benar-benar dipakai lebih dari satu
 modul, bukan tempat penampungan.

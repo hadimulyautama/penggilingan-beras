@@ -30,7 +30,7 @@ async def test_model_permintaan_menolak_angka_mustahil(buruk):
     """Ditolak di PINTU, sebelum menyentuh apa pun."""
     from pydantic import ValidationError
 
-    from app.web.miniapp import HasilGilingReq
+    from app.web.api import HasilGilingReq
 
     with pytest.raises(ValidationError):
         HasilGilingReq(kode_proses="LOT-1", berat_kumulatif=buruk)
