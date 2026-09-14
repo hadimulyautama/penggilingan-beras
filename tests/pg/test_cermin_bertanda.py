@@ -65,9 +65,9 @@ async def _undo(pg, user_id) -> str:
 
     async with pg() as db:
         u = await db.get(User, user_id)
-        ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+        c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
         try:
-            return await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+            return await svc.undo_last(db, actor=u, cakupan=c)
         except svc.UndoError as e:
             return f"UndoError: {e}"
 

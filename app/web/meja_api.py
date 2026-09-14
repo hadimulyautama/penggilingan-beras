@@ -476,7 +476,7 @@ async def audit(rentang: str = "48j", kelompok: str = "semua", cari: str = "",
 
     async with SessionLocal() as db:
         catatan, semua = await svc.daftar(db, rentang=rentang, kelompok=kelompok, cari=cari)
-        pratinjau = await undo_svc.pratinjau_terakhir(db, actor_ids=None)
+        pratinjau = await undo_svc.pratinjau_terakhir(db, cakupan=None)
         kartu_ = await _susun(db, akun)
     return {"catatan": _ser(catatan), "semua": semua, "pratinjau": _ser(pratinjau),
             "RENTANG": [[k, n] for k, n, _ in svc.RENTANG],
@@ -495,8 +495,8 @@ async def audit_batalkan(body: BatalkanIn, akun: ProduksiAkun = Depends(akun_adm
 
     async with SessionLocal() as db:
         try:
-            hasil = await undo_svc.undo_last(db, actor=akun.user, actor_ids=None,
-                                             scope_label=None, log_id=body.log_id)
+            hasil = await undo_svc.undo_last(db, actor=akun.user, cakupan=None,
+                                             log_id=body.log_id)
         except undo_svc.UndoError as e:
             raise HTTPException(400, e.args[0] if e.args else "Gagal membatalkan.")
     return {"ok": True, "pesan": hasil}

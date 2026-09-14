@@ -39,7 +39,7 @@ async def halaman_audit(
         # Yang bisa dibatalkan hanya YANG PALING AKHIR. Membatalkan dari
         # tengah berarti angka sesudahnya dihitung dari keadaan yang tak
         # pernah ada.
-        pratinjau = await undo_svc.pratinjau_terakhir(db, actor_ids=None)
+        pratinjau = await undo_svc.pratinjau_terakhir(db, cakupan=None)
     return await render_laci(
         request, "audit.html", layar="audit",
         catatan=catatan, semua=semua, pratinjau=pratinjau,
@@ -67,8 +67,7 @@ async def batalkan_terakhir(
     """
     async with SessionLocal() as db:
         try:
-            hasil = await undo_svc.undo_last(
-                db, actor=akun.user, actor_ids=None, scope_label=None)
+            hasil = await undo_svc.undo_last(db, actor=akun.user, cakupan=None)
         except undo_svc.UndoError as e:
             kunci, hasil = "err", (e.args[0] if e.args else "Gagal membatalkan.")
         else:

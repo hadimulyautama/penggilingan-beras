@@ -31,6 +31,8 @@ from app.models import DryingLot, JedaProses, MillingProcess
 from app.penggilingan.gudang2.models import PolishingProcess
 from app.services.activity_log import log_activity
 
+from hmu_identitas.peran import G1, G2
+
 
 class JedaError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
@@ -119,6 +121,11 @@ _KOLOM = {
 }
 
 
+def _gudang(jenis: str) -> str:
+    """Jeda dicatat pada gudang prosesnya: penyosohan di G2, sisanya di G1."""
+    return G2 if jenis == "penyosohan" else G1
+
+
 def _kolom(jenis: str):
     return _KOLOM.get(jenis, JedaProses.milling_process_id)
 
@@ -189,6 +196,7 @@ async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
     await log_activity(
         db, table_name="jeda_proses", record_id=id_, action="INSERT",
         changed_by=user.id, new_value=f"{kode} berhenti — {sebab}",
+        gudang=_gudang(jenis),
     )
     await db.commit()
     kali = len((await db.execute(select(JedaProses).where(
@@ -213,6 +221,7 @@ async def lanjutkan(db: AsyncSession, *, user, jenis: str, kode: str) -> JedaRes
         db, table_name="jeda_proses", record_id=obj.id, action="UPDATE",
         changed_by=user.id, field_name="selesai",
         new_value=f"{kode} lanjut — tertahan {lama / 3600:.1f} jam ({jeda.sebab})",
+        gudang=_gudang(jenis),
     )
     await db.commit()
     return JedaResult(jenis=jenis, kode=kode, sebab=jeda.sebab,

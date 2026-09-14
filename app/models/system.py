@@ -47,6 +47,20 @@ class ActivityLog(Base):
     # tebakan lama. Yang baru menyebut maksudnya sendiri.
     aksi: Mapped[str | None] = mapped_column(String(40), index=True)
 
+    # ── Gudang tempat catatan ini dibuat: 'g1' / 'g2' / kosong ──
+    #
+    # Cakupan pembatalan "operator Gudang 1" dulu dijawab dengan membaca gudang
+    # yang DIPEGANG orangnya SEKARANG (`users.default_warehouse_id`). Sejak
+    # operator boleh berpindah gudang untuk saling menggantikan, jawaban itu
+    # berubah surut: pada hari ia menggantikan rekannya di Gudang 2, seluruh
+    # pekerjaannya di Gudang 1 ikut tersapu cakupan Gudang 2. Temuan QA P4-02.
+    #
+    # Sekarang gudangnya milik CATATAN, diisi saat mencatat dari tabel yang
+    # dicatat (`activity_log.GUDANG_TABEL`). Kosong = tak diketahui: baris
+    # sebelum kolom ini ada, atau tabel yang bukan milik gudang mana pun —
+    # dan yang kosong tak pernah tersapu cakupan gudang mana pun.
+    gudang: Mapped[str | None] = mapped_column(String(2))
+
     # ── Sudah dibatalkan? ──
     #
     # Pembatalan dulu MENGHAPUS baris ini, melanggar ARSITEKTUR §6: jejak audit

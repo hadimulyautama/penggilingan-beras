@@ -12,6 +12,8 @@ from math import ceil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from hmu_identitas.peran import G1
+
 from app.peran import PERAN_STAF_KEATAS
 from app.database import input_time
 from app.models import MillingProcess, OutgoingItem, OutgoingRecord
@@ -168,6 +170,9 @@ async def jual_pk_langsung(
     await log_activity(
         db, table_name="outgoing_records", record_id=rec.id, action="INSERT",
         changed_by=user.id, new_value=f"{rec.kode} | PK langsung {kode_mil} {berat_kg:.0f}kg ({karung} karung)",
+        # PK dijual mentah dari Gudang 1, sebelum disosoh — bukan dari G2
+        # seperti barang keluar lainnya.
+        gudang=G1,
     )
     await db.commit()
     return OutgoingResult(kode=rec.kode, label=f"PK langsung {kode_mil}",

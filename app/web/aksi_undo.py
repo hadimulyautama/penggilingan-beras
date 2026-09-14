@@ -66,9 +66,8 @@ async def undo_terakhir(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         for lingkup in _lingkup_untuk(user):
             try:
-                ids, _ = await svc.resolve_actor_ids(
-                    db, scope=lingkup, nama=None, self_id=user.id)
-                p = await svc.pratinjau_terakhir(db, actor_ids=ids)
+                c = await svc.cakupan(db, scope=lingkup, nama=None, self_id=user.id)
+                p = await svc.pratinjau_terakhir(db, cakupan=c)
             except svc.UndoError:
                 continue
             if p is None:
@@ -112,10 +111,8 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            ids, label = await svc.resolve_actor_ids(
-                db, scope=lingkup, nama=None, self_id=user.id)
-            pesan = await svc.undo_last(
-                db, actor=u, actor_ids=ids, scope_label=label, log_id=log_id)
+            c = await svc.cakupan(db, scope=lingkup, nama=None, self_id=user.id)
+            pesan = await svc.undo_last(db, actor=u, cakupan=c, log_id=log_id)
         except svc.UndoError as e:
             raise galat(e, "Gagal membatalkan input terakhir.")
 

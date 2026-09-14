@@ -35,7 +35,6 @@ from app.models import (
     SiloMovingLog,
     SiloStorage,
     User,
-    Warehouse,
 )
 from app.services.activity_log import log_activity
 
@@ -107,19 +106,45 @@ class UndoError(Exception):
     """Kesalahan undo dengan pesan siap-tampil (args[0])."""
 
 
-# ─────────────────────── Resolusi 'oleh siapa' ───────────────────────
+# ─────────────────────── Cakupan: catatan siapa, di gudang mana ───────────────────────
 _SCOPE_LABEL = {
     "operator_gudang1": "operator Gudang 1",
     "operator_gudang2": "operator Gudang 2",
     "staff": "staff",
     "semua": "semua",
 }
+_SCOPE_GUDANG = {"operator_gudang1": _P.G1, "operator_gudang2": _P.G2}
 
 
-async def resolve_actor_ids(
+@dataclass(frozen=True)
+class Cakupan:
+    """Catatan mana yang boleh dibatalkan: oleh siapa, dan di gudang mana.
+
+    Dua saringan yang berdiri sendiri. `actor_ids` menyaring PENCATATNYA
+    (None = siapa pun); `gudang` menyaring CATATANNYA lewat
+    `activity_logs.gudang` (None = gudang mana pun).
+
+    Dulu keduanya ditumpuk pada satu daftar orang: "operator Gudang 1" =
+    operator yang HARI INI berprofil Gudang 1. Sejak operator boleh berpindah
+    gudang untuk saling menggantikan, daftar itu berubah surut — pada hari
+    Rusdi menggantikan rekannya di Gudang 2, cakupan "operator Gudang 1"
+    berhenti mengenai catatan lamanya, dan cakupan "operator Gudang 2" ikut
+    menyapu seluruh pekerjaannya di Gudang 1. Temuan QA P4-02.
+
+    Sekarang "operator Gudang 1" berarti: dicatat oleh SEORANG OPERATOR (siapa
+    pun, di gudang mana pun ia berprofil hari ini) dan catatannya MILIK
+    Gudang 1. Catatan yang gudangnya tak diketahui tak pernah tersapu.
+    """
+
+    actor_ids: list[int] | None
+    gudang: str | None = None
+    label: str | None = None
+
+
+async def cakupan(
     db: AsyncSession, *, scope: str | None, nama: str | None, self_id: int,
-) -> tuple[list[int] | None, str | None]:
-    """Kembalikan (daftar_id_user | None, label). None = tanpa filter (semua)."""
+) -> Cakupan:
+    """Terjemahkan pilihan di layar ('saya', 'operator_gudang1', nama, …)."""
     if nama:
         ids = (
             await db.execute(
@@ -128,27 +153,21 @@ async def resolve_actor_ids(
         ).scalars().all()
         if not ids:
             raise UndoError(f"Pengguna '{nama}' tidak ditemukan.")
-        return list(ids), f"'{nama}'"
+        return Cakupan(list(ids), label=f"'{nama}'")
     if scope in (None, "saya"):
-        return [self_id], None
+        return Cakupan([self_id])
     if scope == "semua":
-        return None, "semua"
+        return Cakupan(None, label="semua")
     q = select(User.id)
     if scope.startswith("operator"):
+        # Semua operator — gudang tempat ia berprofil hari ini BUKAN saringan;
+        # gudang catatannya yang menyaring, lewat `Cakupan.gudang`.
         q = q.where(User.role == _P.OPERATOR)
-        gud = 1 if scope == "operator_gudang1" else 2 if scope == "operator_gudang2" else None
-        if gud:
-            wh = (
-                await db.execute(
-                    select(Warehouse.id).where(Warehouse.nama_gudang.like(f"Gudang {gud}%"))
-                )
-            ).scalars().first()
-            if wh:
-                q = q.where(User.default_warehouse_id == wh)
     elif scope == "staff":
         q = q.where(User.role.in_(_P.STAF_LAMA))
     ids = (await db.execute(q)).scalars().all()
-    return list(ids), _SCOPE_LABEL.get(scope, scope)
+    return Cakupan(list(ids), gudang=_SCOPE_GUDANG.get(scope),
+                   label=_SCOPE_LABEL.get(scope, scope))
 
 
 # ─────────────────────────── Reversal ───────────────────────────
@@ -933,7 +952,7 @@ async def id_log_terakhir(db: AsyncSession, user_id: int) -> int | None:
     )).scalars().first()
 
 
-async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
+async def _log_terakhir(db: AsyncSession, cakupan: Cakupan | None):
     """Tindakan terakhir yang akan dibatalkan — SATU kueri untuk dua pemakai.
 
     Pratinjau dan pembatalan wajib menunjuk tindakan yang sama. Bila keduanya
@@ -949,10 +968,14 @@ async def _log_terakhir(db: AsyncSession, actor_ids: list[int] | None):
         # jejak, dan jejak bukan pekerjaan.
         ActivityLog.dibatalkan_pada.is_(None),
     )
-    if actor_ids is not None:
-        if not actor_ids:
+    if cakupan is not None and cakupan.actor_ids is not None:
+        if not cakupan.actor_ids:
             raise UndoError("Tidak ada pengguna yang cocok untuk di-undo.")
-        q = q.where(ActivityLog.changed_by.in_(actor_ids))
+        q = q.where(ActivityLog.changed_by.in_(cakupan.actor_ids))
+    if cakupan is not None and cakupan.gudang is not None:
+        # Gudang CATATAN, bukan gudang orangnya hari ini. NULL tak pernah
+        # cocok — catatan yang gudangnya tak diketahui tak tersapu.
+        q = q.where(ActivityLog.gudang == cakupan.gudang)
     q = q.order_by(ActivityLog.waktu_perubahan.desc(), ActivityLog.id.desc()).limit(1)
     return (await db.execute(q)).scalars().first()
 
@@ -971,7 +994,7 @@ class Pratinjau:
 
 
 async def pratinjau_terakhir(
-    db: AsyncSession, *, actor_ids: list[int] | None
+    db: AsyncSession, *, cakupan: Cakupan | None
 ) -> Pratinjau | None:
     """Lihat tindakan terakhir tanpa menyentuhnya. None = tidak ada.
 
@@ -980,7 +1003,7 @@ async def pratinjau_terakhir(
     ditekan untuk mencoba-coba. Karena itu yang ditawarkan adalah kalimat
     lengkapnya, dan yang ditekan orang adalah kalimat itu.
     """
-    log = await _log_terakhir(db, actor_ids)
+    log = await _log_terakhir(db, cakupan)
     if log is None:
         return None
     nama = (await db.execute(
@@ -999,8 +1022,7 @@ async def pratinjau_terakhir(
 
 
 async def undo_last(
-    db: AsyncSession, *, actor, actor_ids: list[int] | None, scope_label: str | None,
-    log_id: int | None = None,
+    db: AsyncSession, *, actor, cakupan: Cakupan | None, log_id: int | None = None,
 ) -> str:
     """Batalkan tindakan yang DITAMPILKAN — bukan "yang terakhir" lagi.
 
@@ -1022,7 +1044,7 @@ async def undo_last(
             raise UndoError("Tindakan itu sudah tidak ada.")
         if log.dibatalkan_pada is not None:
             raise UndoError("Tindakan itu sudah dibatalkan sebelumnya.")
-        terbaru = await _log_terakhir(db, actor_ids)
+        terbaru = await _log_terakhir(db, cakupan)
         if terbaru is not None and terbaru.id != log.id:
             raise UndoError(
                 f"Sudah berubah: yang terakhir sekarang "
@@ -1031,9 +1053,10 @@ async def undo_last(
                 "Anda maksud."
             )
     else:
-        log = await _log_terakhir(db, actor_ids)
+        log = await _log_terakhir(db, cakupan)
     if log is None:
-        suffix = f" oleh {scope_label}" if scope_label else ""
+        label = cakupan.label if cakupan is not None else None
+        suffix = f" oleh {label}" if label else ""
         raise UndoError(f"Tidak ada input terakhir yang bisa dibatalkan{suffix}.")
     # ── Batas 48 jam ──
     # Bukan aturan tampilan: angka hari kemarin sudah masuk laporan dan sudah

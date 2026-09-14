@@ -55,10 +55,10 @@ async def test_ukur_catat_dan_batalkan(pg, pemakai, pemasok, hitung_kueri):
             n_catat.append(h.jumlah)
         async with pg() as db:
             u = await db.get(User, pemakai.id)
-            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
-                await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                await svc.undo_last(db, actor=u, cakupan=c)
                 t_undo.append(time.perf_counter() - t0)
             n_undo.append(h.jumlah)
     med = _med
@@ -107,10 +107,10 @@ async def test_ukur_pk_luar_catat_dan_batalkan(pg, pemasok, hitung_kueri):
             n_catat.append(h.jumlah)
         async with pg() as db:
             u = await db.get(User, sid)
-            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
-                await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                await svc.undo_last(db, actor=u, cakupan=c)
                 t_undo.append(time.perf_counter() - t0)
             n_undo.append(h.jumlah)
     print(f"\nUKUR pk_luar_masuk: kueri catat={_med(n_catat)} (semua {n_catat}) "
@@ -155,10 +155,10 @@ async def test_ukur_pk_masuk_g2_dan_batalkan(pg, pemasok, hitung_kueri):
             n_catat.append(h.jumlah)
         async with pg() as db:
             u = await db.get(User, sid)
-            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
-                await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                await svc.undo_last(db, actor=u, cakupan=c)
                 t_undo.append(time.perf_counter() - t0)
             n_undo.append(h.jumlah)
     print(f"\nUKUR pk_masuk_g2: kueri catat={_med(n_catat)} (semua {n_catat}) "
@@ -213,10 +213,10 @@ async def test_ukur_transfer_dan_batalkan(pg, pemasok, hitung_kueri):
             n_catat.append(h.jumlah)
         async with pg() as db:
             u = await db.get(User, sid)
-            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
-                await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                await svc.undo_last(db, actor=u, cakupan=c)
                 t_undo.append(time.perf_counter() - t0)
             n_undo.append(h.jumlah)
     print(f"\nUKUR transfer_pk: kueri catat={_med(n_catat)} (semua {n_catat}) "
@@ -262,11 +262,11 @@ async def test_ukur_pindah_tumpukan_dan_batalkan(pg, pemasok, hitung_kueri):
             n_catat.append(h.jumlah)
         async with pg() as db:
             u = await db.get(User, sid)
-            ids, label = await svc.resolve_actor_ids(db, scope="saya", nama=None, self_id=u.id)
+            c = await svc.cakupan(db, scope="saya", nama=None, self_id=u.id)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
                 try:
-                    await svc.undo_last(db, actor=u, actor_ids=ids, scope_label=label)
+                    await svc.undo_last(db, actor=u, cakupan=c)
                 except svc.UndoError:
                     pass
                 t_undo.append(time.perf_counter() - t0)

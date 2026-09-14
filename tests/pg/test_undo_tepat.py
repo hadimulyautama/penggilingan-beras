@@ -53,7 +53,7 @@ async def test_undo_menolak_bila_ada_aksi_baru_menyusul(pg, pemakai, pemasok):
                            action="INSERT", changed_by=pemakai.id,
                            new_value="punya Budi")
         await db.commit()
-        p = await svc.pratinjau_terakhir(db, actor_ids=None)
+        p = await svc.pratinjau_terakhir(db, cakupan=None)
         assert p is not None
         lama = p.log_id
 
@@ -64,8 +64,8 @@ async def test_undo_menolak_bila_ada_aksi_baru_menyusul(pg, pemakai, pemasok):
         await db.commit()
 
         with pytest.raises(svc.UndoError) as e:
-            await svc.undo_last(db, actor=pemakai, actor_ids=None,
-                                scope_label=None, log_id=lama)
+            await svc.undo_last(db, actor=pemakai, cakupan=None,
+                                log_id=lama)
     assert "berubah" in str(e.value).lower() or "bukan" in str(e.value).lower()
 
 
@@ -82,13 +82,13 @@ async def test_jejak_audit_ditandai_bukan_dihapus(pg, pemakai, pemasok):
                            action="INSERT", changed_by=pemakai.id,
                            new_value="uji")
         await db.commit()
-        p = await svc.pratinjau_terakhir(db, actor_ids=None)
+        p = await svc.pratinjau_terakhir(db, cakupan=None)
         sebelum = (await db.execute(select(ActivityLog))).scalars().all()
         jumlah = len(sebelum)
 
         try:
-            await svc.undo_last(db, actor=pemakai, actor_ids=None,
-                                scope_label=None, log_id=p.log_id)
+            await svc.undo_last(db, actor=pemakai, cakupan=None,
+                                log_id=p.log_id)
         except svc.UndoError:
             pass          # gagal membatalkan pun tak boleh menghapus jejak
 
