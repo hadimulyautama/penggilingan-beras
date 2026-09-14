@@ -110,8 +110,7 @@ async def acuan(user: User = Depends(pengguna_aksi)) -> dict:
 
 # ──────────────────────── Penanda keadaan ────────────────────────
 
-@router.get("/keadaan")
-async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
+async def _penanda() -> dict:
     """Satu penanda: APAKAH ada yang berubah — bukan apa yang berubah.
 
     Dipanggil tiap sepuluh detik oleh tiap perangkat yang layarnya menyala.
@@ -156,6 +155,50 @@ async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
     # `versi` (syarat N-A-03): ponsel yang memegang berkas lama tahu dari
     # kanal yang sama, tanpa menunggu navigasi penuh.
     return {"n": f"{n}.{t[0]}.{t[1]}", "versi": VERSI}
+
+
+@router.get("/keadaan")
+async def keadaan(user: User = Depends(pengguna_aksi)) -> dict:
+    """Jalur kedua: denyut 10 detik dari perangkat bila kanal dorong putus."""
+    return await _penanda()
+
+
+async def aliran_penanda(jeda: float = 2.0):
+    """Kanal dorong (SSE): penanda dikirim seketika saat tersambung, lalu
+    hanya ketika bergerak. Di antaranya komentar `: hidup` tiap ~15 detik
+    supaya proxy Railway tidak menganggap sambungannya mati.
+
+    Penandanya SAMA dengan /api/keadaan — satu rumus, dua kanal. Yang
+    dipantau tetap basis data (bukan peristiwa dalam proses), jadi tiket yang
+    ditulis aplikasi timbangan ikut terdorong.
+    """
+    import asyncio
+    import json
+
+    terakhir = None
+    hidup = 0.0
+    while True:
+        p = await _penanda()
+        if p != terakhir:            # n ATAU versi — versi baru pun terdorong
+            terakhir = p
+            hidup = 0.0
+            yield "data: " + json.dumps(p) + "\n\n"
+        else:
+            hidup += jeda
+            if hidup >= 15:
+                hidup = 0.0
+                yield ": hidup\n\n"
+        await asyncio.sleep(jeda)
+
+
+@router.get("/aliran", include_in_schema=False)
+async def aliran(user: User = Depends(pengguna_aksi)):
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(
+        aliran_penanda(), media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 async def _id_jejak(user_id: int) -> int | None:

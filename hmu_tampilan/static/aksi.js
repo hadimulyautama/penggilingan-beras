@@ -549,6 +549,9 @@
       if (tbl) { tbl.disabled = true; tbl.textContent = "Menyimpan…"; }
       try {
         var hasil = await kirim(a.post, isi);
+        // Tombolnya sendiri yang menjawab: memuat → tercentang, di tempat.
+        if (tbl) { tbl.textContent = "✓ Tersimpan"; }
+        await new Promise(function (r) { setTimeout(r, 260); });
         tutupLembar();
         var pesan = hasil.pesan || "Tersimpan ✓";
         muat();

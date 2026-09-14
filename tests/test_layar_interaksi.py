@@ -455,15 +455,16 @@ def test_penyegaran_diam_tak_membuang_ketikan_orang():
     assert "lembarTerbuka()" in jaga, "lembar terbuka tak dijaga"
     assert "INPUT|SELECT|TEXTAREA" in jaga, "kotak isian yang dipegang tak dijaga"
     assert "disentuh" in jaga, "halaman yang sudah diketik tak dijaga"
-    # Diperiksa DUA KALI — sebelum meminta, dan sesudah jawabannya datang.
-    # Orang bisa mulai mengetik tepat selagi permintaannya di jalan.
-    assert diam.count("bolehDiam()") >= 2
-    # Isi yang tak berubah tak ditukar: menukar HTML yang identik tetap
-    # menghapus posisi gulung dan menjalankan ulang skripnya.
-    assert "innerHTML === lama" in diam
-    # Posisi gulung dikembalikan — yang sedang membaca baris ke-20 tak boleh
-    # dilempar ke atas tiap kali ada operator mencatat sesuatu.
-    assert "scrollTop" in diam
+    # Tahap C: denyut TIDAK PERNAH menukar isi — ia hanya bertanya. Satu-
+    # satunya penukaran tanpa ketukan adalah layar `data-segar-sendiri`
+    # (papan pantau), dan itu pun dijaga `bolehDiam()`.
+    assert "ambil(" not in diam and "pasang(" not in diam
+    terima = js[js.index("function terimaPenanda(j)"):js.index("function tawarkanPerubahan()")]
+    assert 'data-segar-sendiri' in terima and "if (bolehDiam()) { muatPerubahan(); }" in terima
+    # Posisi gulung dikembalikan saat pil diketuk — yang sedang membaca baris
+    # ke-20 tak boleh dilempar ke atas.
+    muat = js[js.index("function muatPerubahan()"):js.index("Kanal dorong (SSE)")]
+    assert "scrollTop" in muat
 
 
 def test_halaman_yang_sudah_diketik_tak_digambar_ulang():
@@ -506,8 +507,11 @@ def test_denyut_bertanya_dulu():
           / "hmu_tampilan/static/pindah.js").read_text()
     diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
     assert "tanyaPenanda()" in diam
-    # Penanda ditanya SEBELUM halamannya diambil, bukan sesudahnya.
-    assert diam.index("tanyaPenanda()") < diam.index("ambil(alamat)")
+    # Denyut HANYA bertanya; halamannya tak pernah diambil olehnya (Tahap C:
+    # yang mengambil adalah ketukan pil, `muatPerubahan`).
+    assert "ambil(alamat)" not in diam
+    muat = js[js.index("function muatPerubahan()"):js.index("Kanal dorong (SSE)")]
+    assert "ambil(alamat)" in muat
 
 
 def test_belum_tahu_bukan_berarti_tak_berubah():
@@ -519,8 +523,10 @@ def test_belum_tahu_bukan_berarti_tak_berubah():
 
     js = (pathlib.Path(__file__).resolve().parents[1]
           / "hmu_tampilan/static/pindah.js").read_text()
-    diam = js[js.index("diam: function ()"):js.index("  function cabutSemua")]
-    assert "p !== null && penanda !== null" in diam
+    terima = js[js.index("function terimaPenanda(j)"):js.index("function tawarkanPerubahan()")]
+    # `null` = belum tahu: bukan perubahan, bukan pula "tak berubah".
+    assert "if (!j) { return; }" in terima
+    assert "penanda !== null && n !== penanda" in terima
 
 
 def test_sesi_habis_tak_memicu_muat_ulang_tanpa_henti():
@@ -546,7 +552,7 @@ def test_penanda_memuat_tiket_timbang():
 
     from app.web import api
 
-    src = inspect.getsource(api.keadaan)
+    src = inspect.getsource(api._penanda)      # satu rumus untuk /keadaan dan /aliran
     assert "ActivityLog" in src, "perubahan di aplikasi ini tak terpantau"
     assert "timbangan_transaksi" in src, "tiket timbang tak terpantau"
     # `updated_at` ikut: tiket DIUBAH saat timbang kedua, nomornya tak
@@ -576,7 +582,7 @@ def test_tiket_gabah_baru_muncul_sendiri_di_antrean():
     from app.services import berjalan
     from app.web import api
 
-    assert "timbangan_transaksi" in inspect.getsource(api.keadaan)
+    assert "timbangan_transaksi" in inspect.getsource(api._penanda)
 
     saring = inspect.getsource(berjalan._tiket_belum_ditaut)
     assert 'info.model != "gabah"' in saring, "yang bukan gabah tak disaring"

@@ -494,6 +494,20 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 }
 .laci__isi, .lembar__isi { overscroll-behavior: contain; }
 
+/* ── Pil "perubahan baru" ──
+   Layar TIDAK berganti sendiri di bawah jari: yang muncul pil ini, dan yang
+   menekannya memutuskan kapan tata letak bergerak. Bila pil versi juga ada,
+   yang ini turun satu baris. */
+.pil-perubahan {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(10px + env(safe-area-inset-top)); z-index: 31;
+  background: var(--panel-2); color: var(--tinta); border: 1px solid var(--aksi);
+  border-radius: 999px; padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5); cursor: pointer;
+  animation: kabar-naik .18s ease-out;
+}
+body:has(.pil-versi) .pil-perubahan { top: calc(64px + env(safe-area-inset-top)); }
+
 /* ── Sinyal hilang ──
    Baris cap waktu SELEBAR LAYAR di atas, bukan ikon kecil: yang dilihat
    orang adalah data pukul sekian, dan ia harus tahu itu sebelum membaca

@@ -104,46 +104,20 @@
      * mengganggu daripada angka yang telat.
      */
     diam: function () {
-      var alamat = location.pathname + location.search;
       if (!bingkai) { return; }
       /* Penanda TETAP ditanya walau orangnya sedang mengetik: yang tak boleh
-         adalah menukar isi layar, bukan mengetahui sinyalnya putus. */
-      if (!bolehDiam()) { tanyaPenanda(); return; }
-
-      var lama = bingkai.innerHTML;
-
-      tanyaPenanda().then(function (p) {
-        var sama = (p !== null && penanda !== null && p === penanda);
-        if (p !== null) {
-          penanda = p;
-          // Penanda terbaca berarti server terjangkau dan angkanya memang
-          // masih yang ini — itu sama segarnya dengan menarik ulang halaman.
-          tandaiSegar();
-        }
-        if (sama) { return; }        // tak ada yang berubah: berhenti di sini
-        lanjutkan();
-      });
-
-      function lanjutkan() {
-      delete simpan[alamat];
-      ambil(alamat).then(function (teks) {
-        if (!teks) { return; }
-        if (location.pathname + location.search !== alamat) { return; }
-        // Diperiksa LAGI: orangnya bisa mulai mengetik tepat selagi
-        // permintaan ini masih di jalan.
-        if (!bolehDiam()) { return; }
-
-        var doc = new DOMParser().parseFromString(teks, "text/html");
-        var isiBaru = doc.querySelector(".bingkai");
-        if (!isiBaru || isiBaru.innerHTML === lama) { return; }
-
-        var gulung = document.querySelector(".isi");
-        var atas = gulung ? gulung.scrollTop : 0;
-        if (!pasang(teks, alamat)) { return; }
-        var g2 = document.querySelector(".isi");
-        if (g2 && atas) { g2.scrollTop = atas; }
-      });
-      }
+         adalah menukar isi layar, bukan mengetahui sinyalnya putus. Dan
+         sejak Tahap C, isinya memang TIDAK PERNAH ditukar diam-diam: bila
+         berubah, pil "perubahan baru" yang muncul — orangnya yang memutuskan
+         kapan tata letak bergerak. */
+      statistik.tanya++;
+      tanyaPenanda().then(terimaPenanda);
+    },
+    /* Ketukan pil: tukar isi SEKARANG, atas permintaan orangnya. */
+    muatPerubahan: function () { muatPerubahan(); },
+    jalur: function () { return jalur; },
+    statistik: function () {
+      return { tanya: statistik.tanya, dorongan: statistik.dorongan, perubahan: jumlahPerubahan };
     }
   };
   function cabutSemua() {
@@ -209,6 +183,10 @@
     document.title = doc.title || document.title;
     bingkai.innerHTML = baru.innerHTML;
     tandaiSegar();
+    // Isi yang baru dipasang adalah keadaan sekarang: hitungan pil dimulai
+    // dari nol, dan penanda berikutnya menjadi titik acuan baru.
+    hapusPilPerubahan();
+    penanda = null;
 
     /* Skrip yang datang lewat innerHTML tidak dijalankan peramban —
        harus dibuatkan ulang elemennya. Tanpa ini layar Catat dan Laporan
@@ -290,12 +268,116 @@
   function tanyaPenanda() {
     return fetch("/api/keadaan", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { tandaiPutus(false); return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (!j || !j.n) { return null; }
-        if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
-        return String(j.n);
-      })
+      .then(function (j) { return (j && j.n) ? j : null; })
       .catch(function () { tandaiPutus(true); return null; });
+  }
+
+  /* ── Satu pintu untuk penanda, dari kanal mana pun ──
+   *
+   * `null` berarti BELUM TAHU (baru dibuka, atau gagal bertanya) — jangan
+   * dihitung sebagai perubahan. Perubahan sungguhan menambah hitungan pil;
+   * layarnya sendiri tak disentuh sampai pil diketuk. Satu-satunya
+   * pengecualian: layar tanpa sasaran ketukan (`data-segar-sendiri`, papan
+   * pantau) boleh menyegar sendiri — tak ada jari yang bisa mendarat salah. */
+  var jumlahPerubahan = 0;
+  var statistik = { tanya: 0, dorongan: 0 };
+
+  function terimaPenanda(j) {
+    if (!j) { return; }
+    var n = String(j.n);
+    tandaiSegar();
+    if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
+    if (penanda !== null && n !== penanda) {
+      if (document.querySelector("[data-segar-sendiri]")) {
+        if (bolehDiam()) { muatPerubahan(); }
+      } else {
+        jumlahPerubahan++;
+        tawarkanPerubahan();
+      }
+    }
+    penanda = n;
+  }
+
+  function tawarkanPerubahan() {
+    var pil = document.querySelector(".pil-perubahan");
+    if (!pil) {
+      pil = document.createElement("button");
+      pil.type = "button";
+      pil.className = "pil pil-perubahan";
+      pil.setAttribute("data-pil", "perubahan");
+      pil.setAttribute("role", "status");
+      pil.addEventListener("click", muatPerubahan);
+      document.body.appendChild(pil);
+    }
+    pil.textContent = jumlahPerubahan + " perubahan baru — ketuk untuk muat";
+  }
+
+  function hapusPilPerubahan() {
+    var pil = document.querySelector(".pil-perubahan");
+    if (pil) { pil.remove(); }
+    jumlahPerubahan = 0;
+  }
+
+  function muatPerubahan() {
+    var alamat = location.pathname + location.search;
+    if (!bingkai) { return; }
+    delete simpan[alamat];
+    ambil(alamat).then(function (teks) {
+      if (!teks) { return; }
+      if (location.pathname + location.search !== alamat) { return; }
+      var gulung = document.querySelector(".isi");
+      var atas = gulung ? gulung.scrollTop : 0;
+      if (!pasang(teks, alamat)) { return; }
+      var g2 = document.querySelector(".isi");
+      if (g2 && atas) { g2.scrollTop = atas; }
+    });
+  }
+
+  /* ── Kanal dorong (SSE) — jalur pertama; denyut 10 detik jadi jalur kedua ──
+   *
+   * Railway bisa memutus sambungan panjang: saat putus, denyut mengambil
+   * alih dan sambungan dicoba lagi dengan jeda menaik (1 → 30 detik). Tidak
+   * menyambung saat halaman tak terlihat — tak ada gunanya menahan sambungan
+   * untuk layar di dalam kantong. */
+  var jalur = "denyut";
+  var aliran = null;
+  var jedaSambung = 1000;
+  var sambungUlang = null;
+
+  function sambungAliran() {
+    if (aliran || !window.EventSource || document.visibilityState !== "visible") { return; }
+    var es = new EventSource("/api/aliran");
+    aliran = es;
+    es.onmessage = function (e) {
+      var j = null;
+      try { j = JSON.parse(e.data); } catch (x) { j = null; }
+      if (!j) { return; }
+      jalur = "sse";
+      jedaSambung = 1000;
+      statistik.dorongan++;
+      tandaiPutus(false);
+      terimaPenanda(j);
+    };
+    es.onerror = function () {
+      es.close();
+      if (aliran === es) { aliran = null; }
+      jalur = "denyut";
+      jadwalkanSambung();
+    };
+  }
+
+  function jadwalkanSambung() {
+    if (sambungUlang) { return; }
+    sambungUlang = setTimeout(function () {
+      sambungUlang = null;
+      sambungAliran();
+    }, jedaSambung);
+    jedaSambung = Math.min(jedaSambung * 2, 30000);
+  }
+
+  function putuskanAliran() {
+    if (aliran) { aliran.close(); aliran = null; }
+    jalur = "denyut";
   }
 
   /* ── Sinyal hilang: cap waktu selebar layar, tombol aksi mati ──
@@ -578,7 +660,8 @@
   function mulaiDenyut() {
     if (denyut) { return; }
     denyut = setInterval(function () {
-      if (document.visibilityState === "visible") { window.PINDAH.diam(); }
+      // Jalur kedua: hanya bertanya bila kanal dorong sedang tak hidup.
+      if (document.visibilityState === "visible" && jalur !== "sse") { window.PINDAH.diam(); }
     }, 10000);
   }
 
@@ -590,8 +673,11 @@
     if (document.visibilityState === "visible") {
       window.PINDAH.diam();
       mulaiDenyut();
+      jedaSambung = 1000;
+      sambungAliran();
     } else {
       hentikanDenyut();
+      putuskanAliran();
     }
   });
 
@@ -601,7 +687,7 @@
     if (e.persisted) { window.PINDAH.diam(); }
   });
 
-  if (document.visibilityState === "visible") { mulaiDenyut(); }
+  if (document.visibilityState === "visible") { mulaiDenyut(); sambungAliran(); }
 
   function siapAcuan() {
     gambarAcuan();
