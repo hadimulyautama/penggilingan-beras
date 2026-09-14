@@ -456,6 +456,21 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
   background: rgba(6, 11, 14, .78);
   align-items: flex-end; justify-content: center;
 }
+/* Sebagai <dialog>: gaya bawaan peramban (bingkai, tepi putih, ukuran kecil
+   di tengah) dibuang; latarnya ::backdrop, isinya tetap lembar di bawah.
+   `display` HANYA saat [open] — <dialog> tertutup tak boleh dipaksa tampil. */
+dialog.lembar {
+  margin: 0; padding: 0; border: 0; width: 100%; max-width: 100%;
+  height: 100%; max-height: 100%; background: transparent; color: inherit;
+}
+dialog.lembar[open] { display: flex; }
+dialog.lembar::backdrop { background: rgba(6, 11, 14, .78); }
+@keyframes lembar-naik {
+  from { transform: translateY(24px); opacity: .6; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.lembar[open] .lembar__isi { animation: lembar-naik .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .lembar[open] .lembar__isi { animation: none; } }
 .lembar__isi {
   width: 100%; max-width: 560px; max-height: 92dvh; overflow-y: auto;
   background: var(--dasar);

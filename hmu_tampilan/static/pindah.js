@@ -525,7 +525,7 @@
 
   function lembarTerbuka() {
     var l = document.getElementById("lembar");
-    return !!(l && l.style.display === "flex");
+    return !!(l && (l.open || l.style.display === "flex"));
   }
 
   /* ── Perpindahan ── */

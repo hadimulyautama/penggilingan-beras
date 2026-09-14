@@ -32,8 +32,8 @@
 {# Satu lembar untuk semua laporan — isinya diganti, bukan halamannya. Laporan
    dibaca sambil membandingkan dengan yang lain, dan berpindah halaman bolak-balik
    membuat orang kehilangan tempatnya. #}
-<div class="lembar" id="lembar" style="display:none">
-  <div class="lembar__isi" role="dialog" aria-modal="true" aria-labelledby="lap-judul">
+<dialog class="lembar" id="lembar" aria-labelledby="lap-judul">
+  <div class="lembar__isi">
     <div class="lembar__kepala">
       <h2 id="lap-judul">Laporan</h2>
       <button class="btn btn--kecil" type="button" id="tutup">Tutup</button>
@@ -48,7 +48,7 @@
     </div>
     <div class="lap" id="lap-isi">Memuat…</div>
   </div>
-</div>
+</dialog>
 
 <script>
 /* ── Laporan digambar, bukan ditumpahkan ──
@@ -180,20 +180,23 @@
     kodeAktif = t.dataset.laporan;
     judul.textContent = t.querySelector(".tindakan__nama").textContent;
     grupPeriode.style.display = t.dataset.berperiode ? "" : "none";
-    lembar.style.display = "flex";
+    if (typeof lembar.showModal === "function") { if (!lembar.open) lembar.showModal(); }
+    else { lembar.setAttribute("open", ""); lembar.style.display = "flex"; }
     muat();
   });
 
   periode.addEventListener("change", muat);
 
   function tutup() {
-    lembar.style.display = "none";
+    if (typeof lembar.close === "function") { if (lembar.open) lembar.close(); }
+    else { lembar.removeAttribute("open"); lembar.style.display = "none"; }
     kodeAktif = null;
   }
   document.getElementById("tutup").onclick = tutup;
   lembar.addEventListener("click", function (e) { if (e.target === lembar) tutup(); });
+  lembar.addEventListener("cancel", function (e) { e.preventDefault(); tutup(); });
   PINDAH.pasang(document, "keydown", function (e) {
-    if (e.key === "Escape" && lembar.style.display === "flex") tutup();
+    if (e.key === "Escape" && (lembar.open || lembar.style.display === "flex")) tutup();
   });
 })();
 </script>

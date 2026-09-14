@@ -376,8 +376,9 @@
 
     var judul = belah(a.label).teks;
     var lembar = $("lembar");
+    lembar.setAttribute("aria-label", judul);
     lembar.innerHTML =
-      '<div class="lembar__isi" role="dialog" aria-modal="true" aria-label="' + esc(judul) + '">' +
+      '<div class="lembar__isi">' +
         '<div class="lembar__kepala"><h2>' + esc(judul) + "</h2>" +
           '<button class="btn btn--kecil" id="tutup" type="button">Batal</button></div>' +
         (a.hint ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
@@ -385,7 +386,7 @@
         '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +
         tombolLain +
       "</div>";
-    lembar.style.display = "flex";
+    bukaLembar(lembar);
     document.body.style.overflow = "hidden";
 
     /* ── Daftar pilihan dimuat ULANG, bukan sekali ──
@@ -648,8 +649,35 @@
     if (pertama) pertama.focus();
   }
 
+  /* ── Lembar = <dialog> bawaan peramban ──
+   *
+   * showModal() memberi yang dulu ditiru sendiri: fokus terkunci di dalam
+   * lembar, Escape dan tombol Kembali Android menutupnya (peristiwa `cancel`),
+   * latar (::backdrop) yang menutup seluruh layar termasuk bilah navigasi —
+   * tanpa pustaka, tanpa mengangkat elemennya ke luar `.isi`. Peramban tanpa
+   * <dialog> mendapat jalur lama: atribut open + display flex. */
+  function bukaLembar(lembar) {
+    if (typeof lembar.showModal === "function") {
+      if (!lembar.open) { lembar.showModal(); }
+    } else {
+      lembar.setAttribute("open", "");
+      lembar.style.display = "flex";
+    }
+  }
+
+  function lembarSedangTerbuka() {
+    var l = $("lembar");
+    return !!(l && (l.open || l.style.display === "flex"));
+  }
+
   function tutupLembar() {
-    $("lembar").style.display = "none";
+    var l = $("lembar");
+    if (typeof l.close === "function") {
+      if (l.open) { l.close(); }
+    } else {
+      l.removeAttribute("open");
+      l.style.display = "none";
+    }
     document.body.style.overflow = "";
     segarkanPilihan = null;
     /* ── Bendera "sedang mengetik" ikut dilepas ──
@@ -716,13 +744,20 @@
   }
 
   $("lembar").addEventListener("click", function (e) {
-    if (e.target.id === "lembar") tutupLembar();
+    if (e.target.id === "lembar") tutupLembar();     // ketukan di latar
+  });
+  /* Escape / tombol Kembali pada <dialog>: peramban meminta izin lewat
+     `cancel`; ditolak lalu ditutup lewat jalur yang sama dengan Batal, supaya
+     bendera ketikan dan alamat ?buka= ikut dibersihkan. */
+  $("lembar").addEventListener("cancel", function (e) {
+    e.preventDefault();
+    tutupLembar();
   });
   /* Lewat PINDAH, bukan langsung ke `document`: skrip halaman dijalankan
      ulang tiap kali isinya ditukar, dan pendengar yang dipasang langsung
      akan menumpuk sekali tiap perpindahan. */
   PINDAH.pasang(document, "keydown", function (e) {
-    if (e.key === "Escape" && $("lembar").style.display === "flex") tutupLembar();
+    if (e.key === "Escape" && lembarSedangTerbuka()) tutupLembar();
   });
 
   /* ── Tombol tujuan di dalam kartu ──
