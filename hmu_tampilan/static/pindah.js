@@ -106,7 +106,9 @@
     diam: function () {
       var alamat = location.pathname + location.search;
       if (!bingkai) { return; }
-      if (!bolehDiam()) { return; }
+      /* Penanda TETAP ditanya walau orangnya sedang mengetik: yang tak boleh
+         adalah menukar isi layar, bukan mengetahui sinyalnya putus. */
+      if (!bolehDiam()) { tanyaPenanda(); return; }
 
       var lama = bingkai.innerHTML;
 
@@ -274,13 +276,97 @@
 
   function tanyaPenanda() {
     return fetch("/api/keadaan", { credentials: "same-origin", cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) { tandaiPutus(false); return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j || !j.n) { return null; }
         if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
         return String(j.n);
       })
-      .catch(function () { return null; });
+      .catch(function () { tandaiPutus(true); return null; });
+  }
+
+  /* ── Sinyal hilang: cap waktu selebar layar, tombol aksi mati ──
+   *
+   * Angka di layar ini adalah keadaan pukul sekian — dan orangnya harus
+   * tahu itu SEBELUM membacanya, jadi barisnya selebar layar di atas, bukan
+   * ikon kecil di sudut. Tombol aksi dinonaktifkan sungguhan, bukan sekadar
+   * gagal saat ditekan: yang menekan lalu tak terjadi apa-apa akan menekan
+   * lima kali, dan kelimanya terkirim saat sinyal kembali. Pulih sendiri
+   * begitu penanda terbaca lagi. Persetujuan pemilik 14 Sep 2026. */
+  var pukulSegar = null;
+
+  function tandaiPutus(putus) {
+    var bar = document.querySelector(".putus");
+    if (putus) {
+      if (!bar) {
+        bar = document.createElement("div");
+        bar.className = "putus";
+        document.body.appendChild(bar);
+        document.body.classList.add("putus-jaringan");
+      }
+      bar.textContent = "Data pukul " + (pukulSegar || "?") + " · sedang offline";
+      var sasaran = document.querySelectorAll(".bingkai button, .bingkai .btn, .bingkai input[type=submit]");
+      Array.prototype.forEach.call(sasaran, function (b) {
+        if (b.disabled || b.hasAttribute("data-putus")) { return; }
+        b.setAttribute("data-putus", "1");
+        b.disabled = true;
+      });
+    } else if (bar) {
+      bar.remove();
+      document.body.classList.remove("putus-jaringan");
+      Array.prototype.forEach.call(document.querySelectorAll("[data-putus]"), function (b) {
+        b.removeAttribute("data-putus");
+        b.disabled = false;
+      });
+    }
+  }
+  window.addEventListener("offline", function () { tandaiPutus(true); });
+  window.addEventListener("online", function () { window.PINDAH.diam(); });
+
+  /* ── Data acuan untuk saat sinyal hilang ──
+   *
+   * HANYA daftar yang berubah mingguan (pemasok, pelanggan, jenis barang,
+   * nama silo & pengering) — nama saja, dari /api/acuan. Disimpan selagi
+   * jaringan ada; /luring menampilkannya di bawah cap waktu. Tak pernah isi
+   * silo, antrean, atau stok: angka yang berubah tiap jam lebih berbahaya
+   * basi daripada tidak ada. */
+  var KUNCI_ACUAN = "hmu_acuan";
+
+  function simpanAcuan() {
+    if (!navigator.onLine) { return; }
+    fetch("/api/acuan", { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.daftar) { return; }
+        try { localStorage.setItem(KUNCI_ACUAN, JSON.stringify(j)); } catch (e) { /* penuh */ }
+      })
+      .catch(function () { /* nanti lagi */ });
+  }
+
+  function gambarAcuan() {
+    var wadah = document.querySelector("[data-acuan]");
+    if (!wadah) { return; }
+    var j = null;
+    try { j = JSON.parse(localStorage.getItem(KUNCI_ACUAN) || "null"); } catch (e) { j = null; }
+    pukulSegar = j && j.pukul ? j.pukul : pukulSegar;
+    tandaiPutus(true);
+    if (!j) {
+      wadah.innerHTML = '<p class="bantu">Belum ada daftar acuan tersimpan di ponsel ini.</p>';
+      return;
+    }
+    var html = '<div class="acuan">';
+    j.daftar.forEach(function (d) {
+      if (!d.isi || !d.isi.length) { return; }
+      html += "<h3>" + teks(d.judul) + "</h3><ul>" +
+        d.isi.map(function (x) { return "<li>" + teks(x) + "</li>"; }).join("") + "</ul>";
+    });
+    wadah.innerHTML = html + "</div>";
+  }
+
+  function teks(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
   }
 
   /* ── Pil versi baru ──
@@ -337,9 +423,9 @@
       document.body.appendChild(el);
     }
     var t = new Date();
-    el.textContent = "diperbarui " +
-      String(t.getHours()).padStart(2, "0") + ":" +
+    pukulSegar = String(t.getHours()).padStart(2, "0") + ":" +
       String(t.getMinutes()).padStart(2, "0");
+    el.textContent = "diperbarui " + pukulSegar;
   }
 
   function lembarTerbuka() {
@@ -503,4 +589,17 @@
   });
 
   if (document.visibilityState === "visible") { mulaiDenyut(); }
+
+  function siapAcuan() {
+    gambarAcuan();
+    if (!document.querySelector("[data-acuan]")) {
+      simpanAcuan();
+      setInterval(simpanAcuan, 30 * 60 * 1000);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", siapAcuan);
+  } else {
+    siapAcuan();
+  }
 })();

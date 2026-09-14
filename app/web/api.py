@@ -51,6 +51,63 @@ async def me(user: User = Depends(pengguna_aksi)) -> dict:
     }
 
 
+# ──────────────────────── Data acuan saat sinyal hilang ────────────────────────
+
+#: Jenis barang yang dikenal timbang & produksi — label untuk manusia.
+_LABEL_JENIS = {
+    "GABAH_BASAH": "Gabah basah", "GABAH_KERING": "Gabah kering", "BERAS_PK": "Beras PK",
+    "BERAS": "Beras", "BROKEN": "Broken", "MENIR": "Menir", "BEKATUL": "Bekatul", "REJECT": "Reject",
+}
+
+
+@router.get("/acuan")
+async def acuan(user: User = Depends(pengguna_aksi)) -> dict:
+    """Daftar acuan yang boleh dilihat ponsel saat sinyal hilang.
+
+    Disimpan pindah.js di ponsel selagi jaringan ada, ditampilkan di /luring
+    saat putus, di bawah baris cap waktu selebar layar. Persetujuan pemilik
+    14 Sep 2026 atas usulan Tahap A — dan batasnya mutlak: HANYA yang berubah
+    mingguan, NAMA saja. Pemasok & pelanggan, jenis barang & kondisi gabah,
+    nama silo & pengering. Tidak ada isi silo, antrean timbang, PK belum
+    transfer, stok — angka yang berubah tiap jam lebih berbahaya basi
+    daripada tidak ada.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Dryer, Pelanggan, Silo, Supplier, Warehouse
+    from app.penggilingan.peta_jenis import PETA_KELUAR, PETA_MASUK
+
+    async with SessionLocal() as db:
+        pemasok = (await db.execute(
+            select(Supplier.nama_supplier).where(Supplier.deleted_at.is_(None), Supplier.status == "aktif")
+            .order_by(Supplier.nama_supplier))).scalars().all()
+        pelanggan = (await db.execute(
+            select(Pelanggan.nama_pelanggan).where(Pelanggan.deleted_at.is_(None), Pelanggan.status == "aktif")
+            .order_by(Pelanggan.nama_pelanggan))).scalars().all()
+        silo = (await db.execute(
+            select(Warehouse.nama_gudang, Silo.nama_silo).join(Warehouse, Silo.warehouse_id == Warehouse.id)
+            .order_by(Warehouse.id, Silo.nama_silo))).all()
+        dryer = (await db.execute(
+            select(Warehouse.nama_gudang, Dryer.nama).join(Warehouse, Dryer.warehouse_id == Warehouse.id)
+            .where(Dryer.status != "maintenance").order_by(Warehouse.id, Dryer.nama))).all()
+
+    def _gudang(nama: str) -> str:
+        return nama.split(" - ")[0].split(" — ")[0].strip()
+
+    jenis = [_LABEL_JENIS.get(k, k) for k in (*PETA_MASUK, *PETA_KELUAR)]
+    return {
+        "pukul": now_local().strftime("%H:%M"),
+        "daftar": [
+            {"judul": "Pemasok", "isi": list(pemasok)},
+            {"judul": "Pelanggan", "isi": list(pelanggan)},
+            {"judul": "Jenis barang", "isi": jenis},
+            {"judul": "Silo", "isi": [f"{_gudang(g)} · {s}" for g, s in silo]},
+            {"judul": "Pengering", "isi": [f"{_gudang(g)} · {d}" for g, d in dryer]},
+        ],
+    }
+
+
 # ──────────────────────── Penanda keadaan ────────────────────────
 
 @router.get("/keadaan")

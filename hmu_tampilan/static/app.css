@@ -469,6 +469,24 @@ button.tindakan { width: 100%; text-align: left; font-family: var(--teks); curso
 }
 .lembar__kepala h2 { margin: 0; }
 
+/* ── Sinyal hilang ──
+   Baris cap waktu SELEBAR LAYAR di atas, bukan ikon kecil: yang dilihat
+   orang adalah data pukul sekian, dan ia harus tahu itu sebelum membaca
+   angkanya. Tombol aksi dinonaktifkan — operator yang menekan tombol lalu
+   tak terjadi apa-apa akan menekannya lima kali, dan kelimanya terkirim
+   saat sinyal kembali. */
+.putus {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 32;
+  background: var(--bahaya); color: #fff; text-align: center;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  font-size: 14px; font-weight: 600;
+}
+body.putus-jaringan .bar { margin-top: 34px; }
+[data-putus] { opacity: .45; pointer-events: none; }
+.acuan { margin-top: 14px; }
+.acuan h3 { margin: 14px 0 4px; font-size: 14px; color: var(--redup); }
+.acuan ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+
 /* ── Pil versi baru ──
    Mencolok di atas, selebar isinya, dan TETAP sampai diketuk: yang memutuskan
    kapan layar dimuat ulang adalah orangnya, bukan denyut. */
