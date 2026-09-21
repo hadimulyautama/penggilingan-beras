@@ -180,3 +180,39 @@ async def test_betulkan_tercatat_dan_bisa_dibatalkan(pg, pemakai, pemasok, pabri
     await _poller(pg)
     assert float((await _baca(pg, kode)).berat_gabah_masuk_kg) == 7190, \
         "sesudah dibatalkan, poller tak boleh menyamakannya lagi"
+
+
+async def test_betulkan_dua_kali_kedua_ditolak_tanpa_jejak(pg, pemakai, pemasok, pabrik):
+    """QA 21 Sep (b): menekan "betulkan" pada giling yang bobotnya SUDAH cocok
+    tetap menjawab "9.190 → 9.190 kg" dan menulis jejak audit — entri yang
+    tak mengubah apa pun, pembatalannya pun tak bermakna. Tanpa selisih
+    (> ambang butir ⑪) harus DITOLAK dengan pesan jelas, tanpa jejak."""
+    from app.models import ActivityLog, User
+    from app.penggilingan.gudang1.services.koreksi_bobot import (
+        TAG_BETULKAN, KoreksiError, betulkan_bobot_masuk)
+
+    kode, pid = await _korban(pg, pemakai, pemasok, kode_tiket="T-K5", nopol="AD 25 EE")
+
+    async def _jumlah_jejak() -> int:
+        async with pg() as db:
+            return len((await db.execute(
+                select(ActivityLog).where(ActivityLog.record_id == pid,
+                                          ActivityLog.table_name == "milling_process",
+                                          ActivityLog.aksi == TAG_BETULKAN)
+            )).scalars().all())
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        r = await betulkan_bobot_masuk(db, user=u, kode_proses=kode)
+    assert (r.tercatat_kg, r.sekarang_kg) == (7190, 9190)
+    assert await _jumlah_jejak() == 1
+
+    # Kedua kali: sudah cocok → ditolak, jejak tetap satu, bobot tak tersentuh.
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        with pytest.raises(KoreksiError) as galat:
+            await betulkan_bobot_masuk(db, user=u, kode_proses=kode)
+    assert "sudah cocok" in str(galat.value) and kode in str(galat.value)
+    assert await _jumlah_jejak() == 1, "penolakan tak boleh menulis jejak"
+    p = await _baca(pg, kode)
+    assert float(p.berat_gabah_masuk_kg) == 9190 and p.bobot_masuk_final is True

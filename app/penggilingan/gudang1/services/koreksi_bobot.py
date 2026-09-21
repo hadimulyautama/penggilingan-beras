@@ -63,6 +63,19 @@ _SQL_TAK_COCOK = text("""
 """)
 
 
+# Bobot bahan SEKARANG untuk satu proses — join yang sama persis dengan
+# _SQL_TAK_COCOK, supaya "cocok" di sini dan "tak cocok" di butir ⑪ tak
+# pernah berbeda pendapat.
+_SQL_BAHAN_KINI = text("""
+    SELECT SUM(b.berat_total_kg) AS bobot_bahan_kini
+      FROM milling_process_sources s
+      LEFT JOIN drying_lot_batches dlb ON dlb.drying_lot_id = s.drying_lot_id
+      JOIN purchase_batches b ON b.id = COALESCE(s.purchase_batch_id, dlb.purchase_batch_id)
+     WHERE s.milling_process_id = :pid
+       AND b.dibatalkan_pada IS NULL
+""")
+
+
 async def giling_tak_cocok(db: AsyncSession) -> list[dict]:
     """Giling selesai yang bobot masuknya berbeda > 1 kg dari jumlah bobot
     bahannya SEKARANG — korban P6-03 lama ATAU revisi tiket yang disengaja.
@@ -118,6 +131,16 @@ async def betulkan_bobot_masuk(
             f"{kode_proses} tak punya daftar bahan (proses lama, sebelum penautan "
             "timbang) — tak ada yang bisa dibaca ulang.")
     tercatat = float(proc.berat_gabah_masuk_kg) if proc.berat_gabah_masuk_kg is not None else None
+    # Sudah cocok (selisih ≤ ambang butir ⑪)? Tolak SEBELUM menulis jejak:
+    # jejak yang tak mengubah apa pun hanya kebisingan, dan pembatalannya pun
+    # tak bermakna — admin yang menekan dua kali dulu membuat dua entri
+    # (QA 21 Sep 2026 b).
+    bahan_kini = (await db.execute(_SQL_BAHAN_KINI, {"pid": proc.id})).scalar()
+    if bahan_kini is not None and abs(float(bahan_kini) - (tercatat or 0.0)) <= AMBANG_KG:
+        sebut = f"{float(bahan_kini):,.0f} kg".replace(",", ".")
+        raise KoreksiError(
+            f"Bobot masuk {kode_proses} sudah cocok dengan bahannya ({sebut}); "
+            "tidak ada yang dibetulkan.")
     cuplikan = {
         "berat_gabah_masuk_kg": tercatat,
         "sumber": {str(s.id): (float(s.berat_kg) if s.berat_kg is not None else None)
