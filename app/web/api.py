@@ -808,6 +808,17 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Belum ada giling yang selesai."},
                  {"name": "berat_output", "label": "Berat PK final (kg)", "type": "number"},
              ]},
+            # Korban lama P6-03 atau revisi tiket yang disengaja: keduanya
+            # tampak sama dari data, jadi yang memutuskan admin, per proses.
+            {"id": "betulkan_bobot_giling", "label": "🩹 Betulkan bobot masuk giling",
+             "post": "/api/actions/betulkan-bobot-giling",
+             "hint": "Giling selesai yang bobot masuknya tak cocok dengan bobot bahannya "
+                     "sekarang. Dibetulkan ke bobot bahan, rendemen dihitung ulang — "
+                     "tercatat di jejak audit dan bisa dibatalkan.", "fields": [
+                 {"name": "kode_proses", "label": "Giling yang bobot masuknya tak cocok",
+                  "type": "remote", "source": "/api/actions/giling-tak-cocok",
+                  "kosong": "Tak ada giling yang bobot masuknya tak cocok."},
+             ]},
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/api/actions/qc-giling",
              "hint": "Isi minimal salah satu: kadar air / broken / susut. Yang "
@@ -962,6 +973,7 @@ _GRUP_AKSI = {
     # Pembelian & pencocokan.
     "beli_kemasan": "Pembelian & pencocokan",
     "rekonsiliasi_timbang": "Pembelian & pencocokan",
+    "betulkan_bobot_giling": "Pembelian & pencocokan",
 }
 for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
            "selesai_pengeringan", "selesai_pendinginan", "pindah_silo",
@@ -989,6 +1001,7 @@ _ACTION_WH = {
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "hentikan_proses": "g1", "lanjutkan_proses": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
+    "betulkan_bobot_giling": "g1",
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
@@ -1350,6 +1363,22 @@ async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return [{"value": b.kode_batch,
              "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
             for b in rows]
+
+
+@router.get("/actions/giling-tak-cocok")
+async def giling_tak_cocok_pilihan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Giling selesai yang bobot masuknya tak cocok dengan bahannya sekarang —
+    daftar yang sama dengan rekonsiliasi butir ⑪, supaya yang dibaca admin
+    dan yang bisa ia betulkan tak pernah berbeda."""
+    _require(can_see_financials(user))
+    from app.penggilingan.gudang1.services.koreksi_bobot import giling_tak_cocok
+    async with SessionLocal() as db:
+        rows = await giling_tak_cocok(db)
+    return [{"value": r["kode_proses"],
+             "label": (f"{r['kode_proses']} · tercatat {_rp(float(r['tercatat_kg'] or 0))} kg"
+                       f" → bahannya {_rp(float(r['seharusnya_kg'] or 0))} kg"
+                       f" ({float(r['kurang_persen'] or 0):+.1f}%)")}
+            for r in rows]
 
 
 @router.get("/actions/milling-unverified")
@@ -2050,6 +2079,28 @@ async def act_verify_output(req: VerifyOutputReq, user: User = Depends(pengguna_
             raise _err(e, "Gagal verifikasi output.")
     rnd = f" (rendemen {r.rendemen_persen:.1f}%)" if r.rendemen_persen is not None else ""
     pesan = f"✓ Output *{req.kode_proses}* diverifikasi: {r.berat_output:g} kg{rnd}."
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/betulkan-bobot-giling")
+async def act_betulkan_bobot_giling(req: KodeProsesReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """Admin ke atas. Menandai belum final lalu menyamakan lewat jalur poller."""
+    _require(can_see_financials(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih giling yang mau dibetulkan dulu.")
+    from app.penggilingan.gudang1.services.koreksi_bobot import (
+        KoreksiError, betulkan_bobot_masuk)
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await betulkan_bobot_masuk(db, user=u, kode_proses=req.kode_proses.strip())
+        except KoreksiError as e:
+            raise _err(e, "Gagal membetulkan bobot masuk.")
+    dari = f"{r.tercatat_kg:,.0f}".replace(",", ".") if r.tercatat_kg is not None else "belum diketahui"
+    ke = f"{r.sekarang_kg:,.0f}".replace(",", ".") if r.sekarang_kg is not None else "belum diketahui"
+    pesan = (f"✓ Bobot masuk *{r.proc.kode_proses}* dibetulkan: {dari} → {ke} kg"
+             + ("" if r.final else " (sebagian bahan masih menunggu timbang)")
+             + ". Rendemen dihitung ulang.")
     return {"ok": True, "pesan": pesan}
 
 

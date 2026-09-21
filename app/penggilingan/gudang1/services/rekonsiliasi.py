@@ -263,12 +263,17 @@ async def rekonsiliasi(db: AsyncSession) -> dict:
         _SQL_PERKIRAAN_MELESET, {"ambang": AMBANG_PERKIRAAN_PERSEN})).all()]
     giling_belum_final = [dict(r._mapping)
                           for r in (await db.execute(_SQL_GILING_BELUM_FINAL)).all()]
+    # Korban lama P6-03 ATAU revisi tiket yang disengaja — keduanya tampak
+    # sama dari data, jadi disebut, bukan dibetulkan (QA pra-deploy P6).
+    from app.penggilingan.gudang1.services.koreksi_bobot import giling_tak_cocok
+    tak_cocok = await giling_tak_cocok(db)
     return {"belum_tertaut": belum, "selisih": selisih, "revisi": revisi,
             "menunggu": menunggu, "jumlah_manual": int(n_manual or 0),
             "menyimpang": menyimpang,
             "stok_negatif": await _stok_pk_negatif(db),
             "perkiraan": perkiraan, "perkiraan_meleset": meleset,
-            "giling_belum_final": giling_belum_final}
+            "giling_belum_final": giling_belum_final,
+            "giling_tak_cocok": tak_cocok}
 
 
 async def _stok_pk_negatif(db: AsyncSession) -> list[dict]:
@@ -368,7 +373,17 @@ def format_rekonsiliasi(d: dict) -> str:
         for x in gbf[:10]:
             baris.append(f"   • {x['kode_proses']}: bahan tercatat {_kg(x['berat_gabah_masuk_kg'])} kg "
                          "(bagian yang diketahui saja)")
+    tc = d.get("giling_tak_cocok", [])
+    if tc:
+        baris.append(f"\n⑪ GILING SELESAI YANG BOBOT MASUKNYA TAK COCOK DENGAN BAHANNYA SEKARANG: "
+                     f"{len(tc)} proses — korban lama P6-03, ATAU tiket yang direvisi "
+                     "sengaja. Baca satu per satu; yang korban dibetulkan lewat aksi "
+                     "\"Betulkan bobot masuk giling\", yang revisi sengaja dibiarkan.")
+        for x in tc[:10]:
+            baris.append(f"   • {x['kode_proses']}: tercatat {_kg(x['tercatat_kg'])} kg, "
+                         f"bahannya kini {_kg(x['seharusnya_kg'])} kg "
+                         f"({float(x['kurang_persen'] or 0):+.1f}%)")
     if (not belum and not sel and not rev and not neg and not menyimpang
-            and not d["menunggu"] and not perk and not meleset and not gbf):
+            and not d["menunggu"] and not perk and not meleset and not gbf and not tc):
         baris.append("\n✅ Bersih — semua timbang tertaut & tak ada selisih.")
     return "\n".join(baris)

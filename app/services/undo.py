@@ -793,6 +793,7 @@ async def _tolak_bila_pk_sudah_dipakai(db: AsyncSession, it: PkGudang2Intake, lo
 #: yang perlu ditebak saat membatalkan.
 _PENANGAN_TAG = {
     "ubah_target": "_undo_ubah_target",
+    "betulkan_bobot": "_undo_betulkan_bobot",
     "silo_masuk": "_undo_masuk_silo_baris",
     "silo_gabung": "_undo_silo_merge_baris",
 }
@@ -813,6 +814,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
     tag = getattr(log, "aksi", None)
     if tag == "ubah_target":
         return await _undo_ubah_target(db, log)
+    if tag == "betulkan_bobot":
+        return await _undo_betulkan_bobot(db, log)
     if tag == "silo_masuk":
         return await _undo_masuk_silo_baris(db, log.record_id)
     if tag == "silo_gabung":
@@ -865,6 +868,23 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         f"Tindakan terakhir ({_TABLE_LABEL.get(t, t)}) belum bisa di-undo otomatis — "
         "fitur menyusul. Untuk sekarang koreksi lewat admin."
     )
+
+
+async def _undo_betulkan_bobot(db: AsyncSession, log: ActivityLog) -> str:
+    """Kembalikan bobot masuk giling ke cuplikan sebelum admin membetulkannya.
+
+    Tanpa tag ia jatuh ke `_undo_finish_milling` — UPDATE pada
+    `milling_process` — dan yang terjadi adalah giling yang sudah ditutup
+    dibuka lagi, sementara bobotnya tetap yang baru. Dua kerusakan dari satu
+    ketukan; pola yang sama dengan `ubah_target`.
+    """
+    from app.penggilingan.gudang1.services.koreksi_bobot import (
+        KoreksiError, kembalikan_bobot_masuk)
+
+    try:
+        return await kembalikan_bobot_masuk(db, log.record_id, log.old_value)
+    except KoreksiError as e:
+        raise UndoError(str(e))
 
 
 async def _undo_ubah_target(db: AsyncSession, log: ActivityLog) -> str:

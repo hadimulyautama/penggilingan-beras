@@ -154,3 +154,23 @@ def test_layar_tak_lagi_menulis_nol_untuk_bobot_batch():
     assert "_kg(pk.berat_total_kg)" not in sumber
     assert "_kg(batch.berat_total_kg)" not in sumber
     assert "def _utama(" in sumber
+
+
+def test_korban_lama_p6_03_disebut_bukan_dibetulkan_otomatis():
+    """QA pra-deploy P6: giling selesai yang bobot masuknya tak cocok dengan
+    bahannya sekarang tampak sama dari data dengan revisi tiket yang sengaja.
+    Maka: rekonsiliasi menyebutnya (⑪), poller TIDAK menyentuhnya (hanya yang
+    bertanda belum final), dan admin membetulkannya per proses — tercatat
+    bertag supaya pembatalannya tak jatuh ke `_undo_finish_milling`."""
+    from app.penggilingan.gudang1.services import koreksi_bobot as k
+    from app.penggilingan.gudang1.services import milling, rekonsiliasi as r
+    from app.services import undo
+
+    assert '"giling_tak_cocok":' in inspect.getsource(r.rekonsiliasi)
+    assert "not tc" in inspect.getsource(r.format_rekonsiliasi)
+    assert "m.bobot_masuk_final = true" in k._SQL_TAK_COCOK.text
+    assert "MillingProcess.bobot_masuk_final.is_(False)" in kode_saja(milling.resinkron_bahan_berjalan)
+    assert "resinkron_bahan_berjalan" in kode_saja(k.betulkan_bobot_masuk), "jalur poller yang sama"
+    assert "aksi=TAG_BETULKAN" in kode_saja(k.betulkan_bobot_masuk)
+    assert undo._PENANGAN_TAG.get("betulkan_bobot") == "_undo_betulkan_bobot"
+    assert 'tag == "betulkan_bobot"' in inspect.getsource(undo._undo_one)

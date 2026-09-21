@@ -1306,6 +1306,27 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 anak=asal,
                 pilihan=[("verify_output", "Verifikasi output giling",
                           "Berat PK final — rendemen terhitung dari sini")]))
+
+    # ── Giling selesai yang bobot masuknya tak cocok dengan bahannya ──
+    #
+    # Korban lama P6-03 (truk ditimbang SESUDAH giling ditutup, sebelum
+    # perbaikan) atau tiket yang direvisi sengaja — dari data keduanya sama.
+    # Ditaruh di meja karena memang keputusan manusia: yang korban
+    # dibetulkan, yang revisi sengaja dibiarkan (rekonsiliasi butir ⑪).
+    from app.penggilingan.gudang1.services.koreksi_bobot import giling_tak_cocok
+    for x in await giling_tak_cocok(db):
+        b.meja.append(Baris(
+            kode=x["kode_proses"],
+            isi=f"bobot masuk tercatat {_kg(x['tercatat_kg'])}, bahannya kini "
+                f"{_kg(x['seharusnya_kg'])} ({float(x['kurang_persen'] or 0):+.1f}%)",
+            keadaan="", aksi="betulkan_bobot_giling", nilai=x["kode_proses"],
+            sejak=x.get("mulai"), fase="giling",
+            judul="Bobot masuk giling tak cocok",
+            sub=f"{x['kode_proses']} · giling sudah ditutup",
+            nota="Korban P6-03 atau tiket yang direvisi sengaja? Betulkan hanya "
+                 "bila truknya memang ditimbang sesudah giling ditutup.",
+            pilihan=[("betulkan_bobot_giling", "Betulkan bobot masuk",
+                      "Disamakan dengan bobot bahan, rendemen dihitung ulang")]))
     return b
 
 
