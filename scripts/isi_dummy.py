@@ -48,12 +48,6 @@ from sqlalchemy import select, text                             # noqa: E402
 from app.database import SessionLocal                           # noqa: E402
 from app.models import ProduksiAkun, Supplier, Warehouse        # noqa: E402
 from app.services.seed import seed_master                       # noqa: E402
-from app.web.security import hash_sandi                         # noqa: E402
-from hmu_core import User                                       # noqa: E402
-
-#: Sandi akun uji. Tak ditulis di kode: yang menjalankan skrip
-#: menyebutkannya sendiri, dan masuk pertama kali wajib menggantinya.
-SANDI = os.environ.get("SANDI_UJI") or "dummy123"
 AWALAN = "(UJI) "
 
 #: Pemasok karangan. Namanya sengaja beragam panjangnya — kartu yang hanya
@@ -97,9 +91,14 @@ async def main() -> None:
     from app.services import data_uji
 
     babak("0. Orang & alat")
-    akun = await data_uji.siapkan_akun(SANDI)
-    cek("akun & alat siap", akun is not None,
-        "uji_admin / uji_operator · sandi dari SANDI_UJI")
+    # Alat disemai; ORANG tidak. Akun uji karangan (uji_admin/uji_operator)
+    # tak dibuat lagi sejak 21 September 2026 — app uji coba dipakai dengan
+    # akun yang sudah ada, supaya yang menguji sama dengan yang memakai.
+    await seed_master()
+    async with SessionLocal() as db:
+        akun = (await db.execute(select(ProduksiAkun))).scalars().first()
+    cek("alat siap & sudah ada akun", akun is not None,
+        "masuk dengan akun yang sudah ada; tak ada akun uji yang dibuat")
 
     babak("1. Mengisi data uji")
     for baris in await data_uji.isi(akun):
@@ -111,8 +110,7 @@ async def main() -> None:
         for g in GAGAL:
             print("  · " + g)
         sys.exit(1)
-    print("\033[32mData uji siap. Masuk sebagai `uji_admin` atau `uji_operator`, "
-          f"sandi `{SANDI}`.\033[0m")
+    print("\033[32mData uji siap. Masuk dengan akun yang sudah ada.\033[0m")
 
 
 if __name__ == "__main__":

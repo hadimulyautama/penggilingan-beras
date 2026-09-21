@@ -148,6 +148,11 @@ def test_satu_isi_dipakai_skrip_dan_tombol():
              / "scripts/isi_dummy.py").read_text()
     assert "data_uji.isi(akun)" in skrip
     assert "IZIN_DUMMY" in skrip, "skripnya tetap berpagar"
+    # Akun uji karangan tak dibuat lagi (21 September 2026): app uji coba
+    # dipakai dengan akun yang sudah ada. Data boleh karangan, orangnya tidak.
+    assert not hasattr(data_uji, "siapkan_akun")
+    for kata in ("siapkan_akun", "SANDI_UJI", "hash_sandi"):
+        assert kata not in skrip, kata
 
 
 def test_data_uji_dibuat_lewat_endpoint_bukan_insert():

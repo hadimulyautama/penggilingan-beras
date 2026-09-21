@@ -175,49 +175,6 @@ async def _mundurkan(hari: int, kode_lot: str | None, kode_proses: str | None) -
         await db.commit()
 
 
-async def siapkan_akun(sandi: str) -> ProduksiAkun:
-    """Akun uji — dibuat kalau belum ada, dikembalikan kalau sudah.
-
-    Ada DI SINI, bukan di skripnya, karena `scripts/` tak ikut masuk ke dalam
-    image: yang menyiapkan basis data uji di Railway hanya bisa memanggil apa
-    yang ada di dalam `app/`. Satu tempat pula berarti akun yang dipakai
-    menguji dari laptop sama dengan yang dipakai menguji dari HP.
-
-    Sandinya diserahkan pemanggil — tak ada sandi yang tertulis di kode ini,
-    dan tak ada yang pernah ditulis ke log.
-    """
-    from app.models import Warehouse
-    from app.models.akun import mode_bawaan
-    from app.services.seed import seed_master
-    from app.web.security import hash_sandi
-    from hmu_identitas import peran as _P
-    from hmu_core import User
-
-    await seed_master()
-    async with SessionLocal() as db:
-        wid = (await db.execute(select(Warehouse.id).where(
-            Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
-        for uname, peran, nama in (("uji_operator", "operator", "Operator Uji"),
-                                   ("uji_admin", "superadmin", "Admin Uji")):
-            ada = (await db.execute(select(ProduksiAkun).where(
-                ProduksiAkun.username == uname))).scalars().first()
-            if ada is not None:
-                continue
-            u = User(nama=nama, role=peran, telegram_user_id=None,
-                     default_warehouse_id=wid if _P.operator_saja(peran) else None)
-            db.add(u)
-            await db.flush()
-            db.add(ProduksiAkun(
-                user_id=u.id, username=uname, password_hash=hash_sandi(sandi),
-                mode_perangkat=mode_bawaan(peran),
-                # Sandi yang diketik seseorang di baris perintah tak boleh
-                # menetap: masuk pertama kali WAJIB menggantinya.
-                harus_ganti_sandi=True))
-        await db.commit()
-        return (await db.execute(select(ProduksiAkun).where(
-            ProduksiAkun.username == "uji_admin"))).scalars().first()
-
-
 async def isi(akun: ProduksiAkun) -> list[str]:
     """Isi data uji: pemasok & TIKET TIMBANG, tidak lebih.
 
@@ -234,6 +191,11 @@ async def isi(akun: ProduksiAkun) -> list[str]:
     `akun` tetap diterima — pemanggilnya sudah menyebutkannya, dan mengubah
     bentuk panggilan hanya untuk membuang satu argumen berarti setiap
     pemanggil ikut berubah tanpa sebab.
+
+    Akun uji karangan (`uji_admin`, `uji_operator`) TIDAK dibuat lagi sejak
+    21 September 2026: app uji coba memakai akun yang sudah ada, sama dengan
+    yang dipakai orang sungguhan. Data yang diuji boleh karangan; orang yang
+    mengujinya tidak.
     """
     async with SessionLocal() as db:
         dipakai = await jembatan_sungguhan(db)
