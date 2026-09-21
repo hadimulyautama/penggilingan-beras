@@ -25,3 +25,4 @@ graphify-out/
 # Dipasang sementara hanya untuk memverifikasi .railway/railway.ts.
 # Repo ini repo Python; SDK Node-nya tak pernah ikut ke dalamnya.
 node_modules/
+KOMIT

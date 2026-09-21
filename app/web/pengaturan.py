@@ -21,6 +21,7 @@ from app.models import ProduksiAkun
 from app.web.security import (ada_superadmin, butuh_admin, butuh_akun,
                                butuh_super)
 from app.web.tampilan import redirect, render
+from app.web import versi as _versi
 from hmu_core import User
 
 router = APIRouter(tags=["webapp"])
@@ -49,9 +50,15 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # bloknya hilang dari layar Admin tanpa ada yang perlu menyentuh apa
         # pun. Dan ia tak pernah bisa mengunci siapa pun di luar.
         ada_super = await ada_superadmin() if tuan else False
+    # Versi kode yang sedang berjalan — untuk SEMUA peran, di kaki halaman.
+    # Peringatan skema tertinggal hanya dirender untuk admin ke atas (di
+    # templat); operator tak bisa menjalankan migrasi, jadi baginya itu cuma
+    # kotak merah yang tak bisa ia tutup.
+    versi = await _versi.info()
     return render(
         request, "pengaturan.html",
         **await lencana(akun.user),
+        versi=versi,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),

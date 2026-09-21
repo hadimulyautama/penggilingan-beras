@@ -27,18 +27,25 @@ log = logging.getLogger("web.skema")
 TABEL_VERSI = "alembic_version"
 
 
-def _head_dari_berkas() -> str | None:
-    """Revisi HEAD menurut berkas migrasi di image ini.
+def revisi_berkas() -> list[str]:
+    """Seluruh revisi yang dikenal kode ini, urut dari yang tertua.
 
     Dibaca dari nama berkas, bukan dengan memuat alembic: memuat alembic saat
-    melayani /health berarti biaya dan satu cara baru untuk gagal.
+    melayani /health berarti biaya dan satu cara baru untuk gagal. Nama
+    berkasnya berawalan nomor urut empat digit dan sama persis dengan
+    `revision` di dalamnya, jadi urutan abjad = urutan rantai.
     """
     akar = pathlib.Path(__file__).resolve().parents[2] / "migrations" / "versions"
     try:
-        berkas = sorted(p.stem for p in akar.glob("0*.py"))
-        return berkas[-1] if berkas else None
+        return sorted(p.stem for p in akar.glob("0*.py"))
     except Exception:  # noqa: BLE001
-        return None
+        return []
+
+
+def _head_dari_berkas() -> str | None:
+    """Revisi HEAD menurut berkas migrasi di image ini."""
+    berkas = revisi_berkas()
+    return berkas[-1] if berkas else None
 
 
 async def keadaan() -> dict:
