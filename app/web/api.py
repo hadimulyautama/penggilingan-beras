@@ -888,6 +888,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     for a in actions:
         a["wh"] = _ACTION_WH.get(a["id"], "g1")
         a["grup"] = _GRUP_AKSI.get(a["id"], GRUP_LAIN)
+        # Aksi yang sudah punya kartu TETAP dikirim — lembarnya dibuka dari
+        # kartu di Antrian, Sedang berjalan, Keputusan, dan Stok lewat MENU
+        # ini — tetapi TIDAK digambar di katalog Catat pekerjaan lain (21
+        # September 2026, permintaan pemilik). Dua pintu untuk satu pekerjaan
+        # membuat orang bertanya yang mana yang benar; dan katalog memang
+        # untuk yang tak berwujud benda di gudang.
+        a["kartu"] = a["grup"] == GRUP_KARTU
     # `undo` dibuang dari katalog HANYA bagi yang punya List audit — di sana
     # ia lengkap dengan daftar apa yang akan hilang, dan dua pintu untuk satu
     # pekerjaan berarti yang satu tak pernah ikut diperbarui.
@@ -918,6 +925,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
 #: Kelompok katalog. Daftar datar 30 kata kerja menuntut orang membacanya
 #: seluruhnya untuk menemukan satu — persis keadaan yang sudah dibuang dari
 #: layar antrean. Kelompoknya mengikuti PEKERJAAN, bukan tabel.
+#:
+#: GRUP_KARTU bukan kelompok yang tampil: ia PENANDA bahwa aksi itu dikerjakan
+#: dari kartu (`a["kartu"]`), jadi katalog melewatkannya. Aksinya tetap ada di
+#: menu karena lembar kartu dibangun dari spesifikasi yang sama.
 GRUP_KARTU = "Biasanya dikerjakan dari kartu"
 GRUP_LAIN = "Lain-lain"
 
@@ -954,11 +965,11 @@ for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
            "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling"):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
-#: Urutan kelompok di layar — yang paling sering dipakai lebih dulu, dan yang
-#: sudah punya kartu paling akhir: ia di sini hanya sebagai jalan cadangan.
+#: Urutan kelompok di layar — yang paling sering dipakai lebih dulu. Yang
+#: sudah punya kartu tak ada di sini: ia tak digambar di katalog sama sekali.
 URUT_GRUP = [
     "Gudang 2 · penyosohan", "PK dari luar", "Hasil samping & barang jadi",
-    "Pembelian & pencocokan", GRUP_LAIN, GRUP_KARTU,
+    "Pembelian & pencocokan", GRUP_LAIN,
 ]
 
 

@@ -315,9 +315,14 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     assert api._GRUP_AKSI["mulai_penyosohan"] == "Gudang 2 · penyosohan"
     assert api._GRUP_AKSI["catat_pk_luar"] == "PK dari luar"
     assert api._GRUP_AKSI["gabah_masuk"] == api.GRUP_KARTU
+    # Yang sudah punya kartu tak digambar di katalog (21 September 2026):
+    # kelompoknya keluar dari urutan, aksinya ditandai — bukan dibuang, karena
+    # lembar kartu dibangun dari menu yang sama.
+    assert api.GRUP_KARTU not in api.URUT_GRUP
 
     menu = inspect.getsource(api.actions_menu)
     assert 'a["grup"] = _GRUP_AKSI.get' in menu
+    assert 'a["kartu"] = a["grup"] == GRUP_KARTU' in menu
     # `undo` dibuang HANYA bagi yang punya List audit. Operator tak punya
     # layar itu, jadi katalog inilah satu-satunya jalannya membatalkan —
     # membuangnya untuk semua orang berarti yang paling sering salah ketik
@@ -327,6 +332,7 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     aksi_js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
     assert "DATA.urutGrup" in aksi_js
     assert 'a.grup || "Lain-lain"' in aksi_js
+    assert "return !a.kartu" in aksi_js
 
 
 def test_tumpukan_punya_bloknya_sendiri_dan_berdiri_di_atas():

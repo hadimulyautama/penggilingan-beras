@@ -198,7 +198,12 @@
      */
     var layar = $("layar");
     {
-      var aksi = DATA.menu || [];
+      /* Yang sudah punya kartu tak digambar di sini. Server menandainya
+         (`kartu: true`) dan tetap mengirimkannya, karena lembar yang dibuka
+         dari kartu Antrian/Berjalan/Keputusan/Stok dibangun dari MENU yang
+         sama — yang dibuang hanya tombolnya di katalog. Dua pintu untuk satu
+         pekerjaan membuat orang bertanya yang mana yang benar. */
+      var aksi = (DATA.menu || []).filter(function (a) { return !a.kartu; });
       /* Dikelompokkan, bukan didaftar datar. Tiga puluh kata kerja berjajar
          sama besar menuntut orang membaca semuanya untuk menemukan satu —
          persis keadaan yang sudah dibuang dari layar antrean. Kelompok dan
