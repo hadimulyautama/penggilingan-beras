@@ -251,13 +251,61 @@ _SQL_PERKIRAAN = """
 """
 
 
+# ── Timbang kedua HARI INI pada tiket yang belum ditutup ──
+#
+# QA 21 September 2026 (d), laporan pemilik 21:00. Pos Timbang punya dua
+# tombol timbang kedua untuk barang masuk: "Simpan sementara" (jumlah karung
+# belum diketahui — `timbang2_kg` disimpan, netto sengaja TIDAK dihitung,
+# tiket tetap TERBUKA, bisa berjam-jam sampai bongkar rampung) dan "Selesai".
+# Selama itu produksi memegang perkiraan dari tara LAMA (atau NULL untuk truk
+# baru) padahal berat kosong truk HARI INI sudah ditimbang.
+#
+# Angkanya = bermuatan − kosong: rumus netto Pos Timbang sendiri
+# (`logic.hitung`; tara karung & tara lain masuk ke berat_barang, BUKAN ke
+# netto), jadi sama persis dengan `netto_timbangan_kg` yang kelak dihasilkan
+# tombol Selesai. Untuk tiket MASUK / TRANSFER / RETUR_MASUK timbang pertama
+# yang bermuatan (`logic.timbang_pertama_bermuatan`); batch intake hanya
+# lahir dari tiket MASUK, dan syaratnya ditulis eksplisit supaya tiket
+# keluar tak pernah terbalik dihitung.
+#
+# Tetap 'perkiraan' dan tetap belum final: tiketnya memang belum ditutup dan
+# masih bisa dikoreksi. `berat_perkiraan_kg` (dari tara) TIDAK ditimpa —
+# dialah yang menguji anggapan "tara stabil" di rekonsiliasi butir ⑨.
+# Hanya DUA_KALI: partai menjumlah karung, sekali tak punya timbang kosong.
+_SQL_PERKIRAAN_TIKET = """
+    UPDATE {tbl} b SET
+        berat_total_kg = t.timbang1_kg - t.timbang2_kg,
+        sumber_berat   = 'perkiraan'
+      FROM timbangan_transaksi t
+     WHERE b.timbangan_transaksi_id = t.id
+       AND b.dibatalkan_pada IS NULL          -- cermin bertanda
+       AND b.sumber_berat IN ('menunggu', 'perkiraan')
+""" + SYARAT_TIKET_SAH + """       AND t.status_tiket = 'TERBUKA'
+       AND t.arah IN ('MASUK', 'TRANSFER', 'RETUR_MASUK')
+       AND t.cara_timbang = 'DUA_KALI'
+       AND t.timbang2_kg IS NOT NULL
+       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NULL
+       AND t.timbang1_kg - t.timbang2_kg > 0
+       AND b.berat_total_kg IS DISTINCT FROM (t.timbang1_kg - t.timbang2_kg)
+"""
+
+
 async def sinkron_perkiraan(db: AsyncSession) -> int:
-    """Beri bobot perkiraan pada batch 'menunggu' yang truknya punya tara.
-    → jumlah baris. Dijalankan SEBELUM `sinkron_bobot_menunggu` di poller:
-    yang sudah punya netto tak pernah sampai ke sini karena syarat IS NULL."""
+    """Beri bobot perkiraan pada batch yang belum punya netto sungguhan.
+
+    Dua sumber, dan urutannya berarti: TARA truk yang sama untuk yang masih
+    'menunggu', lalu TIMBANG KEDUA HARI INI menimpa keduanya bila tiketnya
+    sudah punya `timbang2_kg` tetapi belum ditutup — angka timbangan menang
+    atas tebakan. → jumlah baris. Dijalankan SEBELUM `sinkron_bobot_menunggu`
+    di poller: yang sudah punya netto tak pernah sampai ke sini (IS NULL),
+    dan yang barusan diberi perkiraan langsung boleh diganti netto di langkah
+    berikutnya.
+    """
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
         res = await db.execute(text(_SQL_PERKIRAAN.format(tbl=tbl)))
+        total += res.rowcount or 0
+        res = await db.execute(text(_SQL_PERKIRAAN_TIKET.format(tbl=tbl)))
         total += res.rowcount or 0
     await db.commit()
     return total

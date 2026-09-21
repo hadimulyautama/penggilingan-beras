@@ -61,6 +61,10 @@ class Bobot:
     kg: float | None
     keadaan: str
     tak_diketahui: int = 0
+    #: Untuk PERKIRAAN saja — dari mana angkanya: "tara" (berat kosong
+    #: terakhir truk yang sama, tebakan) atau "tiket" (timbang kedua hari
+    #: ini yang tiketnya belum ditutup — angka timbangan, bukan tebakan).
+    asal: str = ""
 
     @property
     def pasti(self) -> bool:
@@ -82,7 +86,9 @@ class Bobot:
         if self.keadaan == PASTI:
             return f"{_fmt(self.angka())} kg"
         if self.keadaan == PERKIRAAN:
-            return f"± {_fmt(self.angka())} kg"
+            if self.asal == "tiket":
+                return f"{_fmt(self.angka())} kg · tiket belum ditutup"
+            return f"± {_fmt(self.angka())} kg" + (" (dari tara lama)" if self.asal == "tara" else "")
         if self.kg is None:
             return "menunggu timbang" + (
                 f" · {self.tak_diketahui} truk" if self.tak_diketahui > 1 else "")
@@ -124,12 +130,20 @@ def jumlah(items: Iterable[Bobot]) -> Bobot:
     return Bobot(kg, keadaan, tak)
 
 
-def dari_nilai(berat, sumber_berat: str | None) -> Bobot:
-    """Dari dua kolom batch: `berat_total_kg` dan `sumber_berat`."""
+def dari_nilai(berat, sumber_berat: str | None, berat_perkiraan=None) -> Bobot:
+    """Dari kolom batch: `berat_total_kg`, `sumber_berat`, dan (untuk membedakan
+    dua jenis perkiraan) `berat_perkiraan_kg`.
+
+    Perkiraan yang SAMA dengan `berat_perkiraan_kg` berasal dari tara lama;
+    yang berbeda (atau tanpa tara sama sekali) berasal dari timbang kedua hari
+    ini pada tiket yang belum ditutup — QA 21 September 2026 (d).
+    """
     if berat is None:
         return Bobot(None, TAK_DIKETAHUI, 1)
     if sumber_berat == SUMBER_PERKIRAAN:
-        return Bobot(float(berat), PERKIRAAN)
+        dari_tara = (berat_perkiraan is not None
+                     and abs(float(berat) - float(berat_perkiraan)) < 0.005)
+        return Bobot(float(berat), PERKIRAAN, asal="tara" if dari_tara else "tiket")
     return Bobot(float(berat), PASTI)
 
 
@@ -137,7 +151,8 @@ def dari_batch(b) -> Bobot:
     """Bobot sebuah batch gabah / PK luar (atau None → tak diketahui)."""
     if b is None:
         return Bobot(None, TAK_DIKETAHUI, 1)
-    return dari_nilai(getattr(b, "berat_total_kg", None), getattr(b, "sumber_berat", None))
+    return dari_nilai(getattr(b, "berat_total_kg", None), getattr(b, "sumber_berat", None),
+                      getattr(b, "berat_perkiraan_kg", None))
 
 
 def dari_batches(bs: Iterable) -> Bobot:

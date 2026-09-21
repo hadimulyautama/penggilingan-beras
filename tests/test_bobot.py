@@ -15,8 +15,11 @@ from app.penggilingan.gudang1.services import bobot as B
 from tests.bantu import kode_saja
 
 
-def _b(berat, sumber):
-    return SimpleNamespace(berat_total_kg=berat, sumber_berat=sumber)
+def _b(berat, sumber, perkiraan=None):
+    """Batch tiruan. `perkiraan` = `berat_perkiraan_kg` (perkiraan dari tara);
+    perkiraan yang sama dengannya berasal dari tara lama, yang berbeda dari
+    timbang kedua hari ini pada tiket yang belum ditutup (QA 21 Sep d)."""
+    return SimpleNamespace(berat_total_kg=berat, sumber_berat=sumber, berat_perkiraan_kg=perkiraan)
 
 
 def test_tiga_keadaan_dari_kolom_batch():
@@ -34,7 +37,12 @@ def test_teks_tak_pernah_nol_untuk_yang_belum_diketahui():
     """Angka nol untuk bobot yang belum diketahui itulah yang membuat semua
     orang mengira datanya salah (tangkapan layar pemilik: "Catur 0 kg")."""
     assert B.dari_batch(_b(11330, "timbangan")).teks() == "11.330 kg"
-    assert B.dari_batch(_b(11330, "perkiraan")).teks() == "± 11.330 kg"
+    assert B.dari_batch(_b(11330, "perkiraan", 11330)).teks() == "± 11.330 kg (dari tara lama)"
+    # Angka dari timbang kedua hari ini bukan tebakan — tanpa "±", tetapi
+    # tetap belum pasti karena tiketnya belum ditutup.
+    assert B.dari_batch(_b(9950, "perkiraan", 10240)).teks() == "9.950 kg · tiket belum ditutup"
+    assert B.dari_batch(_b(9950, "perkiraan", None)).teks() == "9.950 kg · tiket belum ditutup"
+    assert not B.dari_batch(_b(9950, "perkiraan", 10240)).pasti
     assert B.dari_batch(_b(None, "menunggu")).teks() == "menunggu timbang"
     assert "0 kg" not in B.dari_batch(_b(None, "menunggu")).teks()
     assert B.dari_batch(_b(None, "menunggu")).angka_teks() is None
@@ -174,3 +182,24 @@ def test_korban_lama_p6_03_disebut_bukan_dibetulkan_otomatis():
     assert "aksi=TAG_BETULKAN" in kode_saja(k.betulkan_bobot_masuk)
     assert undo._PENANGAN_TAG.get("betulkan_bobot") == "_undo_betulkan_bobot"
     assert 'tag == "betulkan_bobot"' in inspect.getsource(undo._undo_one)
+
+
+def test_timbang_kedua_sementara_menimpa_tebakan_tara():
+    """QA 21 Sep (d): "Simpan sementara" di Pos Timbang menyimpan timbang2
+    tanpa menghitung netto dan tiketnya tetap TERBUKA. Poller memakai angka
+    timbangan hari itu (bermuatan − kosong, rumus netto Pos Timbang sendiri)
+    untuk batch 'menunggu' MAUPUN 'perkiraan' — hanya tiket DUA KALI barang
+    masuk — dan TIDAK menimpa `berat_perkiraan_kg` (penguji "tara stabil")."""
+    from app.penggilingan.gudang1.services import timbang_link as t
+
+    sql = "\n".join(l for l in t._SQL_PERKIRAAN_TIKET.splitlines() if not l.strip().startswith("--"))
+    assert "b.sumber_berat IN ('menunggu', 'perkiraan')" in sql
+    assert "t.status_tiket = 'TERBUKA'" in sql
+    assert "t.cara_timbang = 'DUA_KALI'" in sql
+    assert "t.arah IN ('MASUK', 'TRANSFER', 'RETUR_MASUK')" in sql
+    assert "berat_total_kg = t.timbang1_kg - t.timbang2_kg" in sql
+    assert "berat_perkiraan_kg" not in sql, "perkiraan dari tara tak ditimpa"
+    assert "IS DISTINCT FROM" in sql, "idempoten tiap tiga menit"
+    sumber = kode_saja(t.sinkron_perkiraan)
+    assert sumber.index("_SQL_PERKIRAAN.format") < sumber.index("_SQL_PERKIRAAN_TIKET.format"), \
+        "angka timbangan hari ini menang atas tebakan tara"

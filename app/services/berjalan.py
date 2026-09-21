@@ -266,13 +266,13 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
     baris = (await db.execute(
         select(PurchaseBatch.kode_batch, PurchaseBatch.berat_total_kg,
                PurchaseBatch.tanggal_pembelian, Supplier.nama_supplier,
-               PurchaseBatch.sumber_berat)
+               PurchaseBatch.sumber_berat, PurchaseBatch.berat_perkiraan_kg)
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
         .where(PurchaseBatch.id.in_(list(batch_ids)))
         .order_by(PurchaseBatch.id)
     )).all()
-    return [(f"{nama or '?'} · {kode}", dari_nilai(kg, sumber).teks(), f"masuk {_tgl(tgl)}")
-            for kode, kg, tgl, nama, sumber in baris]
+    return [(f"{nama or '?'} · {kode}", dari_nilai(kg, sumber, perk).teks(), f"masuk {_tgl(tgl)}")
+            for kode, kg, tgl, nama, sumber, perk in baris]
 
 
 async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]:
