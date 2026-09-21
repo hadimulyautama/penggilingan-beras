@@ -22,6 +22,8 @@ from app.models import (
     Warehouse,
 )
 from app.services.activity_log import log_activity
+from app.penggilingan.gudang1.services.bobot import dari_batch, dari_batches
+from app.penggilingan.gudang1.services.timbang_link import berat_kotor_tiket
 from app.services.codegen import next_drying_lot_code
 
 
@@ -364,8 +366,38 @@ async def _loose_dryer_batches(
 
 
 async def loose_dryer_kg(db: AsyncSession, dryer_id: int | None = None) -> float:
-    return sum(float(b.berat_total_kg or 0)
-               for b in await _loose_dryer_batches(db, dryer_id))
+    """Yang DIKETAHUI saja — batch yang belum punya angka tak terhitung."""
+    return dari_batches(await _loose_dryer_batches(db, dryer_id)).angka()
+
+
+async def _berat_untuk_pagar(db: AsyncSession, batches) -> tuple[float, str]:
+    """Berat untuk PAGAR KAPASITAS: batas atas, bukan bawah (QA P6-04).
+
+    Truk yang belum ditimbang kedua tak punya netto, tetapi punya berat KOTOR
+    (timbang pertama) — dan kotor ≥ netto: yang muat dengan berat kotornya
+    pasti muat dengan nettonya. Dulu ia dihitung 0 dan pengering yang sudah
+    85 % menerima 15 ton lagi: 135 %. Perkiraan dipakai apa adanya. Yang tak
+    punya angka DAN tak punya tiket ditolak — pagar yang tak bisa menilai
+    bukan pagar.
+
+    → (total kg untuk pagar, catatan untuk pesan penolakan).
+    """
+    total = 0.0
+    catatan: list[str] = []
+    for b in batches:
+        bb = dari_batch(b)
+        if bb.diketahui:
+            total += bb.angka()
+            continue
+        kotor = await berat_kotor_tiket(db, b.timbangan_transaksi_id)
+        if kotor is None:
+            raise DryingError(
+                f"{b.kode_batch} belum punya bobot sama sekali, jadi tak bisa "
+                "dinilai muat atau tidak. Tunggu timbang keduanya.")
+        total += kotor
+        catatan.append(f"{b.kode_batch} belum ditimbang kedua — dihitung "
+                       f"berat kotornya {kotor:,.0f} kg".replace(",", "."))
+    return total, ("; " + "; ".join(catatan) if catatan else "")
 
 
 async def isi_dryer(
@@ -387,12 +419,10 @@ async def isi_dryer(
     if lot is not None:
         batches = await _lot_batches(db, lot.id)
         if batches:
-            return (batches[0].kondisi_gabah,
-                    sum(float(b.berat_total_kg or 0) for b in batches))
+            return (batches[0].kondisi_gabah, dari_batches(batches).angka())
     loose = await _loose_dryer_batches(db, dryer_id)
     if loose:
-        return (loose[0].kondisi_gabah,
-                sum(float(b.berat_total_kg or 0) for b in loose))
+        return (loose[0].kondisi_gabah, dari_batches(loose).angka())
     return None
 
 
@@ -440,7 +470,7 @@ async def masuk_dryer(
             f"❌ Tidak boleh mencampur gabah basah & kering di {dryer.nama}."
         )
 
-    new_total = sum(float(b.berat_total_kg or 0) for b in batches)
+    new_total, tak_pasti = await _berat_untuk_pagar(db, batches)
     if dryer is not None:
         if dryer.status != "aktif":
             raise DryingError(f"{dryer.nama} sedang {dryer.status}.")
@@ -450,7 +480,7 @@ async def masuk_dryer(
             sisa = max(cap_efektif - load, 0)
             raise DryingError(
                 f"❌ Kapasitas dryer tak cukup (sisa {sisa / 1000:g} ton, "
-                f"batch ini {new_total / 1000:g} ton)."
+                f"batch ini {new_total / 1000:g} ton{tak_pasti})."
             )
 
     for b in batches:
@@ -555,7 +585,7 @@ async def add_batches_to_lot(
         )
     kondisi = existing_kondisi or kondisi_baru.pop()
 
-    new_total = sum(float(b.berat_total_kg or 0) for b in batches)
+    new_total, tak_pasti = await _berat_untuk_pagar(db, batches)
     dryer = await _g1_dryer(db)
     if dryer is not None:
         load = await dryer_load_kg(db)  # sudah termasuk lot ini
@@ -566,7 +596,7 @@ async def add_batches_to_lot(
             raise DryingError(
                 f"❌ Kapasitas mesin pengering {cap / 1000:g} ton "
                 f"(maks dgn toleransi {cap_efektif / 1000:g} ton) tidak cukup "
-                f"(sisa {sisa / 1000:g} ton, tambahan {new_total / 1000:g} ton)."
+                f"(sisa {sisa / 1000:g} ton, tambahan {new_total / 1000:g} ton{tak_pasti})."
             )
 
     for b in batches:
@@ -583,7 +613,7 @@ async def add_batches_to_lot(
     await db.commit()
 
     all_batches = existing + batches
-    total_kg = sum(float(b.berat_total_kg or 0) for b in all_batches)
+    total_kg = dari_batches(all_batches).angka()
     return LotResult(
         lot=lot, kondisi=kondisi, total_kg=total_kg,
         batch_kodes=[b.kode_batch for b in all_batches],
@@ -778,7 +808,7 @@ async def start_drying(
         # Mesinnya kini tersimpan di lot; dua tempat yang menyebut hal sama
         # cepat atau lambat berbeda.
         b.dryer_id = None
-        total += float(b.berat_total_kg or 0)
+        total += dari_batch(b).angka()
     await log_activity(
         db, table_name="drying_lots", record_id=lot.id, action="INSERT",
         changed_by=user.id,
@@ -1042,7 +1072,7 @@ async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> 
     loose = await _loose_dryer_batches(db)
     loose_line = ""
     if loose:
-        lkg = sum(float(b.berat_total_kg or 0) for b in loose)
+        lkg = dari_batches(loose).angka()
         loose_line = (
             f"\n⏸️ Menunggu di dryer (belum mulai): {len(loose)} batch, "
             f"{lkg/1000:g} ton — {', '.join(b.kode_batch for b in loose)}.\n"

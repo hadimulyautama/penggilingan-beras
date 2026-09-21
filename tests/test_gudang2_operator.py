@@ -54,7 +54,9 @@ def test_tumpukan_gudang2_tanpa_batas_secara_bawaan():
     assert Settings.__dataclass_fields__["g2_tumpukan_maks_kg"].default == 0 \
         if hasattr(Settings, "__dataclass_fields__") else True
     kode = kode_saja(g2._guard_kapasitas_tumpukan)
-    assert "if not cap:" in kode and "return" in kode
+    # Bobot yang belum diketahui (None) pun tak ditolak — pagar yang tak bisa
+    # menilai tumpukan tanpa batas memang tak menolak apa pun (QA P6-02).
+    assert "if not cap or tambahan_kg is None:" in kode and "return" in kode
 
 
 def test_jeda_penyosohan_ditutup_saat_prosesnya_selesai():

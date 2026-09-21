@@ -15,6 +15,7 @@ from app.models import (
     User,
 )
 from app.services.activity_log import log_activity
+from app.penggilingan.gudang1.services.bobot import dari_batch
 
 
 class BatchNotFound(Exception):
@@ -61,7 +62,16 @@ async def verify_gabah_price(
     nilai_rupiah: float,
 ) -> VerificationResult:
     """Simpan/replace verifikasi harga, hapus flag unverified, catat audit."""
-    berat = float(batch.berat_total_kg or 0)
+    # Perkiraan tidak pernah dipakai untuk rupiah (keputusan pemilik, QA P6):
+    # harga menunggu bobot pasti. Pesannya menyebut keadaannya supaya orang
+    # tahu apa yang ditunggu — truk itu di antrean timbang kedua.
+    bobot = dari_batch(batch)
+    if not bobot.pasti:
+        raise ValueError(
+            f"Bobot {batch.kode_batch} masih "
+            f"{'perkiraan dari tara truk' if batch.sumber_berat == 'perkiraan' else 'menunggu timbang kedua'}"
+            " — harga menunggu bobot pasti. Perkiraan tidak pernah dipakai untuk rupiah.")
+    berat = bobot.angka()
     total, per_kg = compute_price(berat, metode, nilai_rupiah)
 
     # Upsert purchase_batch_verifications (unik per batch).

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, time
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,8 @@ from app.services.codegen import (
 )
 from app.services.notification import create_notification
 from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
+from app.penggilingan.gudang1.services.bobot import dari_batch
+from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
 from app.penggilingan.gudang1.services.timbang_link import (
     TiketSudahDipakai,
     ambil_tiket,
@@ -184,6 +186,10 @@ async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
             )
         )
     ).scalar_one()
+    if intake.berat_kg is None:
+        # Belum punya angka (truk belum ditimbang kedua, tanpa tara — P6-02).
+        # Sisanya pun belum bisa disebut: None, bukan 0. Nol berarti habis.
+        return None
     return float(intake.berat_kg) - float(dipindah)
 
 
@@ -341,10 +347,10 @@ async def create_pk_purchase_dari_timbang(
     if info is None or info.model != "pk":
         raise Gudang2Error("Tiket ini bukan PK masuk.")
 
-    b = tiket.get("berat_hpp_kg")
-    ada_bobot = b is not None and float(b) > 0
-    berat = float(b) if ada_bobot else None
-    sumber = tiket["sumber_berat"] if ada_bobot else "menunggu"
+    # Tiga keadaan (QA P6, 21 September 2026): pasti / perkiraan dari tara
+    # truk yang sama / tak diketahui. Lihat `bobot_awal_dari_tiket`.
+    berat, sumber, berat_perkiraan = await bobot_awal_dari_tiket(db, tiket)
+    ada_bobot = berat is not None
 
     now = input_time(tanggal, jam)
     if tiket.get("supplier_id"):
@@ -388,6 +394,7 @@ async def create_pk_purchase_dari_timbang(
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         status_batch="diterima", flag_unverified=True,
         timbangan_transaksi_id=timbangan_transaksi_id, sumber_berat=sumber,
+        berat_perkiraan_kg=berat_perkiraan,
         peristiwa_id=e.id,
     )
     db.add(batch)
@@ -520,6 +527,13 @@ async def verify_pk_price(
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
     if metode not in ("per_kg", "total") or nilai is None:
         raise Gudang2Error("Sebutkan metode harga (per kg / total) & nilainya.")
+    # Perkiraan tidak pernah dipakai untuk rupiah (keputusan pemilik, P6).
+    bobot = dari_batch(batch)
+    if not bobot.pasti:
+        raise Gudang2Error(
+            f"Bobot {kode} masih "
+            f"{'perkiraan dari tara truk' if batch.sumber_berat == 'perkiraan' else 'menunggu timbang kedua'}"
+            " — harga menunggu bobot pasti. Perkiraan tidak pernah dipakai untuk rupiah.")
 
     berat_bersih = float(batch.berat_total_kg or 0) - float(potongan_kg or 0)
     if metode == "total":
@@ -584,14 +598,16 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
     raise Gudang2Error("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
 
 
-async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float) -> None:
+async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float | None) -> None:
     """Batas tumpukan hanya ditegakkan bila memang disetel (> 0).
 
     Keputusan pemilik 12 September 2026: tumpukan Gudang 2 TIDAK berbatas —
     bawaannya 0. Yang menyebut angka di sini adalah lantai pabrik lain.
+    Bobot yang belum diketahui (None) tak bisa dinilai, dan tumpukan yang
+    tak berbatas memang tak menolaknya.
     """
     cap = settings.g2_tumpukan_maks_kg
-    if not cap:
+    if not cap or tambahan_kg is None:
         return
     stok = await hitung_stok_tumpukan(db)
     if stok + tambahan_kg > cap:
@@ -619,7 +635,7 @@ async def _catat_masuk_selama_proses(
     Mengembalikan kode proses yang menerimanya (untuk pesan ke layar), atau
     None bila silonya tidak sedang dipoles.
     """
-    if silo_id is None:
+    if silo_id is None or berat_kg is None:
         return None
     from app.models import PolishingProcess, PolishingSiloUsage
 
@@ -641,10 +657,10 @@ async def _catat_masuk_selama_proses(
 
 async def _add_intake(
     db: AsyncSession, *, user: User, sumber_tipe: str, tujuan: str,
-    berat_kg: float, hpp_per_kg: float | None, tanggal, jam,
+    berat_kg: float | None, hpp_per_kg: float | None, tanggal, jam,
     pk_purchase_batch_id: int | None = None, internal_transfer_id: int | None = None,
     kunci_kiriman: str | None = None, transfer_peristiwa_id: int | None = None,
-    commit: bool = True,
+    commit: bool = True, bobot_final: bool = True,
 ) -> IntakeResult:
     """SATU titik tulis untuk semua PK yang masuk Gudang 2 — dari PK luar
     maupun transfer Gudang 1.
@@ -699,6 +715,9 @@ async def _add_intake(
         pk_purchase_batch_id=pk_purchase_batch_id,
         internal_transfer_id=internal_transfer_id,
         tujuan=tujuan_norm, silo_id=silo_id, berat_kg=berat_kg,
+        # False = masih perkiraan / belum diketahui saat masuk; poller
+        # melengkapinya dari batch-nya begitu netto sungguhan ada (P6-02).
+        bobot_final=bobot_final and berat_kg is not None,
         hpp_per_kg=hpp_per_kg, flag_hpp_belum_tersedia=hpp_per_kg is None,
         tanggal_masuk=now.date(), waktu_masuk=now, input_by=user.id,
         peristiwa_id=e.id,
@@ -709,7 +728,9 @@ async def _add_intake(
     await log_activity(
         db, table_name="pk_gudang2_intakes", record_id=intake.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{sumber_tipe} | {berat_kg:.0f}kg → {tujuan_norm} | hpp={hpp_per_kg}",
+        new_value=f"{sumber_tipe} | "
+                  f"{f'{berat_kg:.0f}kg' if berat_kg is not None else 'bobot menunggu timbang'}"
+                  f" → {tujuan_norm} | hpp={hpp_per_kg}",
     )
     if commit:
         await db.commit()
@@ -800,16 +821,51 @@ async def masukkan_pk_luar(
             )
         )
     ).scalars().first()
-    berat = float(batch.berat_total_kg or 0) - float(verif.potongan_kg or 0 if verif else 0)
+    # Tiga keadaan bobot (QA P6-02): pasti, perkiraan (ikut sebagai angka,
+    # ditandai belum final), tak diketahui (NULL — bukan 0, yang ditolak
+    # CHECK berat_positif dan memang bohong). Poller melengkapinya.
+    bobot = dari_batch(batch)
+    potongan = float(verif.potongan_kg or 0) if verif else 0.0
+    berat = (bobot.angka() - potongan) if bobot.diketahui else None
     hpp = float(verif.harga_per_kg) if verif and verif.harga_per_kg is not None else None
     res = await _add_intake(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,
         hpp_per_kg=hpp, tanggal=tanggal, jam=jam, pk_purchase_batch_id=batch.id,
-        kunci_kiriman=kunci_kiriman,
+        kunci_kiriman=kunci_kiriman, bobot_final=bobot.pasti,
     )
     batch.status_batch = "di_silo" if res.intake.tujuan != "ditumpuk" else "ditumpuk"
     await db.commit()
     return res
+
+
+_SQL_RESINKRON_INTAKE = text("""
+    UPDATE pk_gudang2_intakes i
+       SET berat_kg = b.berat_total_kg - COALESCE(v.potongan_kg, 0),
+           bobot_final = true
+      FROM pk_purchase_batches b
+      LEFT JOIN pk_purchase_verifications v ON v.pk_purchase_batch_id = b.id
+     WHERE i.pk_purchase_batch_id = b.id
+       AND i.dibatalkan_pada IS NULL              -- cermin bertanda
+       AND i.bobot_final = false
+       AND b.dibatalkan_pada IS NULL
+       AND b.sumber_berat IN ('nota', 'timbangan', 'manual')
+       AND b.berat_total_kg IS NOT NULL
+       AND b.berat_total_kg - COALESCE(v.potongan_kg, 0) > 0
+""")
+
+
+async def resinkron_intake_g2(db: AsyncSession) -> int:
+    """Lengkapi berat PK yang masuk Gudang 2 SEBELUM bobotnya pasti (P6-02).
+
+    Intake menyalin bobot batch saat masuk. Bila saat itu bobotnya masih
+    perkiraan atau belum diketahui, salinannya ditandai belum final; begitu
+    batch-nya punya netto sungguhan (poller langkah 1), salinannya disamakan
+    di sini. Stok silo & tumpukan dihitung dari intake, jadi keduanya ikut
+    benar tanpa ada yang mencatat ulang. → jumlah intake yang dilengkapi.
+    """
+    res = await db.execute(_SQL_RESINKRON_INTAKE)
+    await db.commit()
+    return res.rowcount or 0
 
 
 # ─────────────────────────── Pindah tumpukan → silo ───────────────────────────
@@ -897,6 +953,14 @@ async def pindah_tumpukan_ke_silo(
         raise Gudang2Error("Sumber bukan tumpukan — hanya PK di tumpukan yang bisa dipindah.")
 
     sisa = await _sisa_tumpukan_intake(db, intake_id)
+
+    if sisa is None:
+
+        raise Gudang2Error(
+
+            "Bobot PK di tumpukan ini belum diketahui — truknya belum ditimbang "
+
+            "kedua. Tunggu timbangnya, lalu pindahkan.")
     if sisa <= 0:
         raise Gudang2Error("Tumpukan ini sudah habis dipindah.")
     kirim = sisa if berat is None else min(float(berat), sisa)
@@ -954,6 +1018,10 @@ async def pindah_tumpukan(
     pool: list[tuple[PkGudang2Intake, float]] = []
     for it in intakes:
         sisa = await _sisa_tumpukan_intake(db, it.id)
+        if sisa is None:
+            raise Gudang2Error(
+                "Bobot PK di tumpukan ini belum diketahui — truknya belum ditimbang "
+                "kedua. Tunggu timbangnya, lalu pindahkan.")
         if sisa > 0:
             pool.append((it, sisa))
     total_sisa = sum(s for _, s in pool)

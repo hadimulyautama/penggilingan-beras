@@ -14,6 +14,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import berzona
+from app.penggilingan.gudang1.services.bobot import (
+    SQL_NORM_NOPOL, SUMBER_MENUNGGU, SUMBER_PERKIRAAN, norm_nopol, perkiraan)
 
 # Tiket MASUK yang BELUM ditaut batch mana pun — apa pun status tiketnya.
 #
@@ -51,6 +53,7 @@ _SQL_AKTIF = text("""
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
+           t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
@@ -84,6 +87,7 @@ _SQL_SATU = text("""
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
+           t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
@@ -130,6 +134,66 @@ async def ambil_tiket(db: AsyncSession, tid: int) -> dict | None:
     return _row(r) if r else None
 
 
+# ── Tara truk yang sama: dasar PERKIRAAN bobot sebelum timbang kedua ──
+#
+# Keputusan pemilik 21 September 2026 (QA P6, Pilihan A): "tara cenderung
+# stabil". Tiap tiket SELESAI menyimpan `berat_kosong_kg`; untuk truk yang
+# baru ditimbang bermuatan, bobot perkiraan = timbang pertama − berat kosong
+# terakhir nomor polisi yang sama. Nomor polisinya dinormalkan (huruf besar,
+# tanpa spasi) karena orang mengejanya dengan spasi berbeda-beda.
+#
+# Truk yang belum pernah punya tara → None: bobotnya "tak diketahui", bukan
+# tebakan (Pilihan B, cadangan).
+_NORM_K = SQL_NORM_NOPOL.format(kolom="k.nomor_polisi")
+_SQL_TARA = text(f"""
+    SELECT k.berat_kosong_kg
+      FROM timbangan_transaksi k
+     WHERE {_NORM_K} = :nopol
+       AND k.berat_kosong_kg IS NOT NULL AND k.berat_kosong_kg > 0
+       AND k.status_tiket = 'SELESAI' AND k.status_transaksi = 'AKTIF'
+       AND k.id <> COALESCE(:kecuali, -1)
+     ORDER BY COALESCE(k.timbang2_waktu, k.timbang1_waktu) DESC NULLS LAST, k.id DESC
+     LIMIT 1
+""")
+
+
+async def tara_terakhir(db: AsyncSession, nopol: str | None, *, kecuali: int | None = None) -> float | None:
+    """Berat kosong terakhir truk bernomor polisi ini (tiket selesai mana pun)."""
+    n = norm_nopol(nopol)
+    if not n:
+        return None
+    v = (await db.execute(_SQL_TARA, {"nopol": n, "kecuali": kecuali})).scalar()
+    return float(v) if v is not None else None
+
+
+async def bobot_awal_dari_tiket(db: AsyncSession, tiket: dict) -> tuple[float | None, str, float | None]:
+    """(berat, sumber_berat, berat_perkiraan) untuk batch yang lahir dari tiket.
+
+    Tiga keadaan, bukan dua: nota/netto → pasti; belum ditimbang kedua tetapi
+    truknya punya tara → perkiraan (disimpan di keduanya, supaya selisihnya
+    kelak bisa diuji); selebihnya → menunggu, bobot NULL.
+    """
+    b = tiket.get("berat_hpp_kg")
+    if b is not None and float(b) > 0:
+        return float(b), tiket["sumber_berat"], None
+    tara = await tara_terakhir(db, tiket.get("nomor_polisi"), kecuali=tiket.get("id"))
+    p = perkiraan(tiket.get("timbang1_kg"), tara)
+    if p is not None:
+        return p, SUMBER_PERKIRAAN, p
+    return None, SUMBER_MENUNGGU, None
+
+
+async def berat_kotor_tiket(db: AsyncSession, tid: int | None) -> float | None:
+    """Timbang pertama (truk bermuatan) — batas ATAS bobot barangnya. Dipakai
+    pagar kapasitas untuk truk yang belum ditimbang kedua: yang muat dengan
+    berat kotornya pasti muat dengan nettonya (QA P6-04)."""
+    if tid is None:
+        return None
+    v = (await db.execute(text(
+        "SELECT timbang1_kg FROM timbangan_transaksi WHERE id = :tid"), {"tid": tid})).scalar()
+    return float(v) if v is not None else None
+
+
 # Isi bobot batch yang MASIH 'menunggu' dari tiket-nya, begitu tiket punya bobot
 # (nota atau netto timbang). Bobot efektif = nota bila ada, selain itu netto real.
 _SQL_SINKRON = """
@@ -140,7 +204,10 @@ _SQL_SINKRON = """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.dibatalkan_pada IS NULL          -- cermin bertanda
-       AND b.sumber_berat = 'menunggu'
+       -- 'perkiraan' ikut: netto sungguhan mengganti perkiraan lewat jalur
+       -- yang SAMA dengan 'menunggu'. `berat_perkiraan_kg` tak disentuh —
+       -- selisihnya itulah yang kelak menguji anggapan "tara stabil".
+       AND b.sumber_berat IN ('menunggu', 'perkiraan')
 """ + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
 """
 
@@ -151,6 +218,46 @@ async def sinkron_bobot_menunggu(db: AsyncSession) -> int:
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
         res = await db.execute(text(_SQL_SINKRON.format(tbl=tbl)))
+        total += res.rowcount or 0
+    await db.commit()
+    return total
+
+
+# Isi PERKIRAAN untuk batch yang masih 'menunggu' tetapi truknya punya tara.
+# Berlaku juga untuk batch yang sudah ada sebelum perbaikan ini (mis. truk
+# yang sedang antre timbang saat kode ini terpasang) — tak ada yang perlu
+# dicatat ulang. Sama dengan `bobot_awal_dari_tiket`, dalam bentuk himpunan.
+_NORM_T = SQL_NORM_NOPOL.format(kolom="t.nomor_polisi")
+_SQL_PERKIRAAN = """
+    UPDATE {tbl} b SET
+        berat_total_kg     = t.timbang1_kg - k.berat_kosong_kg,
+        berat_perkiraan_kg = t.timbang1_kg - k.berat_kosong_kg,
+        sumber_berat       = 'perkiraan'
+      FROM timbangan_transaksi t
+      JOIN LATERAL (
+            SELECT k.berat_kosong_kg
+              FROM timbangan_transaksi k
+             WHERE """ + _NORM_K + """ = """ + _NORM_T + """
+               AND k.id <> t.id
+               AND k.berat_kosong_kg IS NOT NULL AND k.berat_kosong_kg > 0
+               AND k.status_tiket = 'SELESAI' AND k.status_transaksi = 'AKTIF'
+             ORDER BY COALESCE(k.timbang2_waktu, k.timbang1_waktu) DESC NULLS LAST, k.id DESC
+             LIMIT 1) k ON true
+     WHERE b.timbangan_transaksi_id = t.id
+       AND b.dibatalkan_pada IS NULL          -- cermin bertanda
+       AND b.sumber_berat = 'menunggu'
+""" + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NULL
+       AND t.timbang1_kg - k.berat_kosong_kg > 0
+"""
+
+
+async def sinkron_perkiraan(db: AsyncSession) -> int:
+    """Beri bobot perkiraan pada batch 'menunggu' yang truknya punya tara.
+    → jumlah baris. Dijalankan SEBELUM `sinkron_bobot_menunggu` di poller:
+    yang sudah punya netto tak pernah sampai ke sini karena syarat IS NULL."""
+    total = 0
+    for tbl in ("purchase_batches", "pk_purchase_batches"):
+        res = await db.execute(text(_SQL_PERKIRAAN.format(tbl=tbl)))
         total += res.rowcount or 0
     await db.commit()
     return total

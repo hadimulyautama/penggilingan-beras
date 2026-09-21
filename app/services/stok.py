@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
 from app.models import MillingProcess
+from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
 
 
@@ -39,6 +40,9 @@ class LotPk:
     dikirim: float
     #: Berat gabah yang masuk — penyebut rendemen.
     bahan_kg: float = 0.0
+    #: False = ada bahan yang masih perkiraan / belum ditimbang saat giling
+    #: dimulai; angkanya bagian yang diketahui saja, dibetulkan poller (P6).
+    bahan_final: bool = True
     #: Berapa persen gabah keluar jadi PK. None bila bahannya tak diketahui.
     rendemen: float | None = None
     #: Kelas PK yang keluar dari lot ini: "KS", "KL", atau "MIX".
@@ -135,7 +139,7 @@ def _baris_bahan(b, nama_pemasok: str | None) -> tuple[str, str, str]:
     ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
     if k in KELAS_PK:
         ket += f" · {KELAS_PK[k]}"
-    return (nama, _kg(b.berat_total_kg), ket)
+    return (nama, dari_batch(b).teks(), ket)
 
 
 async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:
@@ -401,6 +405,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             dihasilkan=bd.produced,
             dikirim=bd.transferred,
             bahan_kg=float(proc.berat_gabah_masuk_kg or 0),
+            bahan_final=bool(proc.bobot_masuk_final),
             # Penyebutnya dipinjam, bukan dipilih sendiri: dua layar yang
             # memakai penyebut berbeda akan menyebut rendemen berbeda untuk
             # lot yang sama.

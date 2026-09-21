@@ -92,7 +92,7 @@
           {% if l.bahan_kg %}
             <div>
               <dt>Bahan</dt>
-              <dd>{{ kg(l.bahan_kg) }} kg</dd>
+              <dd>{{ kg(l.bahan_kg) }} kg{% if not l.bahan_final %} <small class="bantu">belum final — menunggu timbang</small>{% endif %}</dd>
             </div>
           {% endif %}
           {# Kelas PK yang keluar dari lot ini, dan HANYA itu. Kondisi beli

@@ -42,6 +42,12 @@ class MillingProcess(Base, TimestampMixin):
         ForeignKey("purchase_batches.id")
     )
     berat_gabah_masuk_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #: False bila ada bahan yang masih perkiraan / belum diketahui saat giling
+    #: dimulai (QA P6-03). Poller membetulkan `berat_gabah_masuk_kg` proses
+    #: seperti ini WALAU sudah selesai, dan rekonsiliasi menyebutnya sampai
+    #: final. Verifikasi output menunggu kolom ini true.
+    bobot_masuk_final: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                                    server_default=text("true"))
     waktu_mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     waktu_selesai: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # proses / selesai
@@ -147,7 +153,10 @@ class MillingProcessSource(Base):
     #: Tepat satu dari dua ini terisi — sama seperti di `SiloStorage`.
     drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
     purchase_batch_id: Mapped[int | None] = mapped_column(ForeignKey("purchase_batches.id"))
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    #: NULL = bahan ini belum punya angka saat giling dimulai (truk belum
+    #: ditimbang kedua, tanpa tara). Bukan 0 — CHECK berat_positif menolak
+    #: nol, dan memang nol itu bohong. Diisi poller begitu timbangnya ada.
+    berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

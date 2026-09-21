@@ -7,12 +7,17 @@ Menutup celah dobel/bocor + menyoroti selisih nota vs timbang riil:
   4. Batch MANUAL (tanpa timbang) → perlu ditinjau.
   5. Batch yang TIKETNYA BERUBAH setelah tertaut → tiket dibatalkan, pemasok
      dikoreksi, komoditas diganti, atau tiket ditutup paksa.
+  6. (QA P6, 21 September 2026) Batch yang masih berdiri di atas PERKIRAAN
+     tara; perkiraan yang ternyata MELESET dari netto sungguhan (per nomor
+     polisi — menguji anggapan "tara stabil" dari data); dan giling yang
+     SELESAI dengan bobot masuk belum final (rendemennya belum bisa dipercaya).
 """
 from __future__ import annotations
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.penggilingan.gudang1.services.bobot import SQL_NORM_NOPOL
 from app.penggilingan.peta_jenis import PETA_MASUK
 
 _SQL_BELUM_TERTAUT = text("""
@@ -186,6 +191,57 @@ def _rakit_menyimpang() -> str:
 
 _SQL_TIKET_MENYIMPANG = text(_rakit_menyimpang())
 
+#: Selisih perkiraan ↔ netto sungguhan yang dianggap "meleset". 2 %: di atas
+#: itu tara truknya patut dicurigai bergeser (terpal, bak, sopir kedua) —
+#: bukan sekadar pembulatan timbangan. Usulan QA P6, belum dikunci pemilik.
+AMBANG_PERKIRAAN_PERSEN = 2.0
+
+# Batch yang MASIH berdiri di atas perkiraan tara (truknya belum ditimbang kedua).
+_SQL_PERKIRAAN = text("""
+    SELECT kode_batch, 'gabah' AS jenis, no_polisi_truk AS nomor_polisi, berat_total_kg AS perkiraan
+      FROM purchase_batches WHERE sumber_berat = 'perkiraan' AND dibatalkan_pada IS NULL
+    UNION ALL
+    SELECT kode_batch, 'pk', no_polisi_truk, berat_total_kg
+      FROM pk_purchase_batches WHERE sumber_berat = 'perkiraan' AND dibatalkan_pada IS NULL
+    ORDER BY kode_batch
+""")
+
+# Perkiraan yang SUDAH diganti netto sungguhan dan ternyata meleset. Dikelompokkan
+# per nomor polisi (dinormalkan) supaya truk yang taranya tidak stabil ketahuan
+# dari data, bukan dari rendemen yang aneh berminggu-minggu kemudian.
+_SQL_PERKIRAAN_MELESET = text(f"""
+    SELECT kode_batch, jenis, nomor_polisi, perkiraan, sungguhan, selisih_kg, selisih_persen FROM (
+      SELECT b.kode_batch, 'gabah' AS jenis,
+             {SQL_NORM_NOPOL.format(kolom='b.no_polisi_truk')} AS nomor_polisi,
+             b.berat_perkiraan_kg AS perkiraan, b.berat_total_kg AS sungguhan,
+             b.berat_total_kg - b.berat_perkiraan_kg AS selisih_kg,
+             (b.berat_total_kg - b.berat_perkiraan_kg) / b.berat_perkiraan_kg * 100 AS selisih_persen
+        FROM purchase_batches b
+       WHERE b.berat_perkiraan_kg IS NOT NULL AND b.berat_perkiraan_kg > 0
+         AND b.sumber_berat IN ('nota', 'timbangan') AND b.dibatalkan_pada IS NULL
+      UNION ALL
+      SELECT b.kode_batch, 'pk',
+             {SQL_NORM_NOPOL.format(kolom='b.no_polisi_truk')},
+             b.berat_perkiraan_kg, b.berat_total_kg,
+             b.berat_total_kg - b.berat_perkiraan_kg,
+             (b.berat_total_kg - b.berat_perkiraan_kg) / b.berat_perkiraan_kg * 100
+        FROM pk_purchase_batches b
+       WHERE b.berat_perkiraan_kg IS NOT NULL AND b.berat_perkiraan_kg > 0
+         AND b.sumber_berat IN ('nota', 'timbangan') AND b.dibatalkan_pada IS NULL
+    ) x
+    WHERE ABS(selisih_persen) > :ambang
+    ORDER BY nomor_polisi, ABS(selisih_persen) DESC
+""")
+
+# Giling yang SELESAI sementara bahannya belum final: rendemen & HPP-nya
+# berdiri di atas bobot yang kurang sampai poller melengkapinya.
+_SQL_GILING_BELUM_FINAL = text("""
+    SELECT m.kode_proses, m.berat_gabah_masuk_kg, m.waktu_selesai
+      FROM milling_process m
+     WHERE m.status = 'selesai' AND m.bobot_masuk_final = false
+     ORDER BY m.id DESC
+""")
+
 _SQL_MANUAL = text("""
     SELECT count(*) FROM (
       SELECT id FROM purchase_batches WHERE sumber_berat='manual' AND dibatalkan_pada IS NULL
@@ -202,10 +258,17 @@ async def rekonsiliasi(db: AsyncSession) -> dict:
     menyimpang = [dict(r._mapping)
                   for r in (await db.execute(_SQL_TIKET_MENYIMPANG)).all()]
     n_manual = (await db.execute(_SQL_MANUAL)).scalar_one()
+    perkiraan = [dict(r._mapping) for r in (await db.execute(_SQL_PERKIRAAN)).all()]
+    meleset = [dict(r._mapping) for r in (await db.execute(
+        _SQL_PERKIRAAN_MELESET, {"ambang": AMBANG_PERKIRAAN_PERSEN})).all()]
+    giling_belum_final = [dict(r._mapping)
+                          for r in (await db.execute(_SQL_GILING_BELUM_FINAL)).all()]
     return {"belum_tertaut": belum, "selisih": selisih, "revisi": revisi,
             "menunggu": menunggu, "jumlah_manual": int(n_manual or 0),
             "menyimpang": menyimpang,
-            "stok_negatif": await _stok_pk_negatif(db)}
+            "stok_negatif": await _stok_pk_negatif(db),
+            "perkiraan": perkiraan, "perkiraan_meleset": meleset,
+            "giling_belum_final": giling_belum_final}
 
 
 async def _stok_pk_negatif(db: AsyncSession) -> list[dict]:
@@ -279,7 +342,33 @@ def format_rekonsiliasi(d: dict) -> str:
         # yang membaca baris ini justru perlu tahu apa yang harus dilakukan.
         for x in menyimpang[:20]:
             baris.append(f"   • {x['kode_batch']} ({x['jenis']}) — {x['pesan']}")
+    perk = d.get("perkiraan", [])
+    if perk:
+        baris.append(f"\n⑧ Batch masih di atas PERKIRAAN tara (truk belum ditimbang kedua): {len(perk)}")
+        for x in perk[:10]:
+            baris.append(f"   • {x['kode_batch']} ({x['jenis']}) · {x.get('nomor_polisi') or '?'} "
+                         f"· ± {_kg(x['perkiraan'])} kg")
+    meleset = d.get("perkiraan_meleset", [])
+    if meleset:
+        baris.append(f"\n⑨ PERKIRAAN MELESET > {AMBANG_PERKIRAAN_PERSEN:g}% dari netto sungguhan: "
+                     f"{len(meleset)} batch — tara truknya patut diperiksa")
+        per_truk: dict[str, list] = {}
+        for x in meleset:
+            per_truk.setdefault(x.get("nomor_polisi") or "?", []).append(x)
+        for nopol, xs in list(per_truk.items())[:10]:
+            baris.append(f"   • {nopol}: {len(xs)} batch")
+            for x in xs[:5]:
+                baris.append(f"       {x['kode_batch']}: perkiraan {_kg(x['perkiraan'])} → "
+                             f"sungguhan {_kg(x['sungguhan'])} kg "
+                             f"({float(x['selisih_persen']):+.1f}%)")
+    gbf = d.get("giling_belum_final", [])
+    if gbf:
+        baris.append(f"\n⑩ GILING SELESAI DENGAN BOBOT MASUK BELUM FINAL: {len(gbf)} proses "
+                     "— rendemennya belum bisa dipercaya sampai truknya ditimbang")
+        for x in gbf[:10]:
+            baris.append(f"   • {x['kode_proses']}: bahan tercatat {_kg(x['berat_gabah_masuk_kg'])} kg "
+                         "(bagian yang diketahui saja)")
     if (not belum and not sel and not rev and not neg and not menyimpang
-            and not d["menunggu"]):
+            and not d["menunggu"] and not perk and not meleset and not gbf):
         baris.append("\n✅ Bersih — semua timbang tertaut & tak ada selisih.")
     return "\n".join(baris)

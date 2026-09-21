@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -26,6 +27,9 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_drying_lot_code, next_milling_code
+from app.penggilingan.gudang1.services.bobot import (
+    NOL, PASTI, TAK_DIKETAHUI, Bobot, dari_batch, dari_batches)
+from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
 from app.penggilingan.gudang1.services.silo import _silo_active_rows, get_g1_silo
 
 
@@ -52,19 +56,26 @@ async def sole_active_milling_kode(db: AsyncSession) -> str | None:
     return rows[0] if len(rows) == 1 else None
 
 
-async def _storage_kg(db: AsyncSession, st: SiloStorage) -> float:
+async def _storage_bobot(db: AsyncSession, st: SiloStorage) -> Bobot:
+    """Bobot isi satu baris silo SEKARANG — lot pengeringan atau batch lepas —
+    berikut kepastiannya (pasti / perkiraan / tak diketahui). Lihat `bobot.py`."""
     if st.drying_lot_id:
-        stmt = (
-            select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0))
-            .select_from(DryingLotBatch)
-            .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+        batches = (await db.execute(
+            select(PurchaseBatch)
+            .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
             .where(DryingLotBatch.drying_lot_id == st.drying_lot_id)
-        )
-        return float((await db.execute(stmt)).scalar_one())
+        )).scalars().all()
+        return dari_batches(batches)
     if st.purchase_batch_id:
-        b = await db.get(PurchaseBatch, st.purchase_batch_id)
-        return float(b.berat_total_kg or 0) if b else 0.0
-    return 0.0
+        return dari_batch(await db.get(PurchaseBatch, st.purchase_batch_id))
+    return NOL
+
+
+async def _storage_kg(db: AsyncSession, st: SiloStorage) -> float:
+    """Angka yang DIKETAHUI saja — untuk penjumlah lama. Yang butuh kepastian
+    memakai `_storage_bobot`; "belum diketahui" di sini terbaca 0, dan itulah
+    sebabnya ia tak boleh dipakai sebagai pagar (QA P6)."""
+    return (await _storage_bobot(db, st)).angka()
 
 
 async def _active_storage(db: AsyncSession, silo_id: int) -> SiloStorage | None:
@@ -83,6 +94,8 @@ class StartResult:
     proc: MillingProcess
     nama_silo: str
     berat_masuk: float
+    #: Berapa dan seberapa pasti — untuk kalimat di layar.
+    bobot: Bobot | None = None
 
 
 async def start_milling(
@@ -118,10 +131,18 @@ async def start_milling(
     #
     # `drying_lots` sekarang berarti satu PROSES PENGERINGAN, dan apa yang
     # digiling bersama didaftar di `milling_process_sources`.
-    berat_per_baris: list[tuple[SiloStorage, float]] = []
+    #
+    # Tiap baris dibaca berikut KEPASTIANNYA (QA P6-01). Bahan yang belum
+    # punya angka — truk belum ditimbang kedua, tanpa tara — dicatat NULL,
+    # bukan 0: nol ditolak CHECK berat_positif, dan memang nol itu bohong.
+    # Yang perkiraan ikut sebagai angka. Keduanya menandai prosesnya "bobot
+    # masuk belum final"; poller membetulkannya begitu timbangnya ada, walau
+    # giling ini sudah selesai (P6-03).
+    bobot_per_baris: list[tuple[SiloStorage, Bobot]] = []
     for r in rows:
-        berat_per_baris.append((r, await _storage_kg(db, r)))
-    berat = sum(k for _, k in berat_per_baris)
+        bobot_per_baris.append((r, await _storage_bobot(db, r)))
+    total = jumlah_bobot(b for _, b in bobot_per_baris)
+    berat = total.kg
 
     # Penunjuk tunggal di `MillingProcess` tetap diisi supaya laporan, undo,
     # dan rekonsiliasi yang membacanya tidak mati sekaligus. Yang dipilih:
@@ -134,26 +155,38 @@ async def start_milling(
         drying_lot_id=st.drying_lot_id,
         purchase_batch_id=st.purchase_batch_id,
         berat_gabah_masuk_kg=berat,
+        bobot_masuk_final=total.pasti,
         waktu_mulai=now,
         status="proses",
         created_by=user.id,
     )
     db.add(proc)
-    await db.flush()
-    for r, kg in berat_per_baris:
-        db.add(MillingProcessSource(
-            milling_process_id=proc.id, silo_storage_id=r.id,
-            drying_lot_id=r.drying_lot_id, purchase_batch_id=r.purchase_batch_id,
-            berat_kg=kg,
-        ))
-    await db.flush()
-    await log_activity(
-        db, table_name="milling_process", record_id=proc.id, action="INSERT",
-        changed_by=user.id, new_value=f"{proc.kode_proses} <- Silo {nama_silo} ({berat:.0f}kg)",
-    )
-    await db.commit()
+    try:
+        await db.flush()
+        for r, bb in bobot_per_baris:
+            db.add(MillingProcessSource(
+                milling_process_id=proc.id, silo_storage_id=r.id,
+                drying_lot_id=r.drying_lot_id, purchase_batch_id=r.purchase_batch_id,
+                berat_kg=bb.kg,
+            ))
+        await db.flush()
+        await log_activity(
+            db, table_name="milling_process", record_id=proc.id, action="INSERT",
+            changed_by=user.id,
+            new_value=f"{proc.kode_proses} <- Silo {nama_silo} ({total.teks()})",
+        )
+        await db.commit()
+    except IntegrityError as e:
+        # Seperti R-T-01 di timbangan: aturan basis data yang ditolak tak
+        # boleh sampai ke layar sebagai teks Postgres. Yang lengkap ke log.
+        await db.rollback()
+        raise MillingError(
+            f"Giling Silo {nama_silo} tidak bisa dimulai karena aturan basis data "
+            f"menolak bahannya ({total.teks()}). Coba sekali lagi; bila berulang, "
+            "sebutkan pesan ini ke Super Admin."
+        ) from e
     await db.refresh(proc)
-    return StartResult(proc=proc, nama_silo=nama_silo, berat_masuk=berat)
+    return StartResult(proc=proc, nama_silo=nama_silo, berat_masuk=total.angka(), bobot=total)
 
 
 # ─────────────────────────── Progress ───────────────────────────
@@ -336,7 +369,12 @@ async def finish_milling(
     if berat_akhir <= 0:
         raise MillingError("Hasil akhir PK harus lebih dari nol.")
     masuk = float(proc.berat_gabah_masuk_kg or 0)
-    if masuk and berat_akhir > masuk:
+    # Pagar fisiknya benar — PK tak mungkin melebihi gabah — tetapi hanya
+    # bila PEMBANDINGNYA pasti. Bahan yang masih perkiraan atau belum
+    # diketahui membuat pagar ini menolak hasil yang benar (QA P6-03a): yang
+    # begitu dibiarkan lewat, tetap bertanda belum final, dan pembandingnya
+    # dibetulkan poller begitu truknya ditimbang.
+    if proc.bobot_masuk_final and masuk and berat_akhir > masuk:
         raise MillingError(
             f"Hasil PK {berat_akhir:,.0f} kg lebih besar daripada gabah yang "
             f"masuk ({masuk:,.0f} kg). Periksa angkanya."
@@ -822,6 +860,11 @@ async def verify_milling_output(
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
     if berat_output is None:
         raise MillingError("Sebutkan berat output PK final-nya, mis. `... 14 ton`.")
+    # Rendemen final dan HPP berdiri di atas bahan masuk. Selama bahannya
+    # belum final, verifikasi ditahan — dengan menyebut truk mana yang
+    # ditunggu, bukan diam-diam menghitung dari angka yang kurang.
+    if not proc.bobot_masuk_final:
+        raise MillingError(await _pesan_belum_final(db, proc))
 
     verif = (
         await db.execute(
@@ -853,6 +896,24 @@ async def verify_milling_output(
     return VerifyOutputResult(
         proc=proc, berat_output=berat_output, rendemen_persen=rendemen, re_verified=re_verified
     )
+
+
+async def _pesan_belum_final(db: AsyncSession, proc: MillingProcess) -> str:
+    """Kalimat yang menyebut BAHAN MANA yang belum final — itulah yang bisa
+    ditindaklanjuti: dahulukan truk itu di antrean timbang."""
+    bagian = []
+    for b, _h, _lewat in await sumber_batch(db, proc):
+        bb = dari_batch(b)
+        if bb.pasti:
+            continue
+        sup = await db.get(Supplier, b.supplier_id)
+        nama = sup.nama_supplier if sup else "?"
+        bagian.append(f"{b.kode_batch} ({nama}) "
+                      + ("masih perkiraan dari tara truk" if bb.keadaan != TAK_DIKETAHUI
+                         else "belum ditimbang kedua"))
+    return (f"Bahan giling {proc.kode_proses} belum final: " + "; ".join(bagian)
+            + ". Verifikasi output menunggu bobot pasti — angkanya dibetulkan "
+              "otomatis begitu truknya ditimbang.")
 
 
 async def sumber_batch(
@@ -918,31 +979,38 @@ async def sumber_batch(
 
 
 async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
-    """Samakan bahan giling YANG SEDANG BERJALAN dengan bobot batchnya sekarang.
+    """Samakan bahan giling dengan bobot batchnya SEKARANG.
 
     `berat_gabah_masuk_kg` dan `milling_process_sources.berat_kg` diambil
     sebagai cuplikan saat giling dimulai. Cuplikan itu benar pada detik itu —
-    tetapi begitu timbangan membetulkan berat sebuah tiket, ia jadi salinan
-    yang tak pernah dibaca ulang, dan salinan yang tak pernah dibaca ulang
-    adalah cara paling umum dua aplikasi mulai berbeda tanpa ada yang
-    menyadarinya.
+    tetapi begitu timbangan membetulkan (atau baru MELENGKAPI) berat sebuah
+    tiket, ia jadi salinan yang tak pernah dibaca ulang, dan salinan yang tak
+    pernah dibaca ulang adalah cara paling umum dua aplikasi mulai berbeda
+    tanpa ada yang menyadarinya.
 
     Akibatnya bukan satu angka meleset: `berat_gabah_masuk_kg` adalah penyebut
     rendemen. Bahan yang tercatat lebih kecil daripada yang sungguh masuk
     membuat rendemen terbaca melambung — dan yang melihatnya akan mencari
     sebabnya di mesin, bukan di catatan.
 
-    Hanya proses yang masih `proses`. Yang sudah ditutup TIDAK disentuh:
-    angkanya sudah masuk laporan dan sudah dipakai orang lain memutuskan,
-    persis alasan yang sama dengan batas 48 jam pada pembatalan. Selisih yang
-    baru ketahuan sesudah itu diperbaiki dengan catatan koreksi, bukan dengan
-    menulis ulang yang lama.
+    Dua golongan proses dijangkau:
+
+      * yang masih `proses` — apa pun sebab bobotnya berubah;
+      * yang sudah `selesai` TETAPI `bobot_masuk_final` masih false — giling
+        yang ditutup sebelum truknya ditimbang kedua (QA P6-03). Dulu yang
+        selesai tak pernah disentuh, dengan alasan angkanya sudah masuk
+        laporan; untuk bahan yang sejak awal belum final, alasan itu justru
+        terbalik: laporannya berdiri di atas bobot yang kurang, selamanya.
+        Yang selesai dengan bahan yang memang sudah final tetap tak disentuh.
 
     → daftar kode proses yang berubah (kosong = semuanya sudah cocok).
     """
     berubah: list[str] = []
     procs = (await db.execute(
-        select(MillingProcess).where(MillingProcess.status == "proses")
+        select(MillingProcess).where(or_(
+            MillingProcess.status == "proses",
+            MillingProcess.bobot_masuk_final.is_(False),
+        ))
     )).scalars().all()
     for proc in procs:
         sumber = (await db.execute(
@@ -951,27 +1019,32 @@ async def resinkron_bahan_berjalan(db: AsyncSession) -> list[str]:
         )).scalars().all()
         if not sumber:
             continue
-        total = 0.0
+        bagian: list[Bobot] = []
         ada_geser = False
         for src in sumber:
             st = await db.get(SiloStorage, src.silo_storage_id)
             if st is None:
-                total += float(src.berat_kg or 0)
+                bagian.append(Bobot(float(src.berat_kg), PASTI) if src.berat_kg is not None
+                              else Bobot(None, TAK_DIKETAHUI, 1))
                 continue
-            kg = await _storage_kg(db, st)
-            if float(src.berat_kg or 0) != kg:
-                src.berat_kg = kg
+            bb = await _storage_bobot(db, st)
+            lama_src = float(src.berat_kg) if src.berat_kg is not None else None
+            if lama_src != bb.kg:
+                src.berat_kg = bb.kg
                 ada_geser = True
-            total += kg
-        if ada_geser or float(proc.berat_gabah_masuk_kg or 0) != total:
-            lama = float(proc.berat_gabah_masuk_kg or 0)
-            proc.berat_gabah_masuk_kg = total
+            bagian.append(bb)
+        total = jumlah_bobot(bagian)
+        lama = float(proc.berat_gabah_masuk_kg) if proc.berat_gabah_masuk_kg is not None else None
+        if ada_geser or lama != total.kg or proc.bobot_masuk_final != total.pasti:
+            proc.berat_gabah_masuk_kg = total.kg
+            proc.bobot_masuk_final = total.pasti
             await log_activity(
                 db, table_name="milling_process", record_id=proc.id,
                 action="UPDATE", changed_by=proc.created_by,
                 field_name="berat_gabah_masuk_kg",
-                old_value=f"{lama:.0f}", new_value=f"{total:.0f}",
-                alasan="bobot tiket direvisi di aplikasi timbangan",
+                old_value=f"{lama:.0f}" if lama is not None else "belum diketahui",
+                new_value=total.teks(),
+                alasan="bobot tiket direvisi atau dilengkapi di aplikasi timbangan",
             )
             berubah.append(proc.kode_proses)
     if berubah:

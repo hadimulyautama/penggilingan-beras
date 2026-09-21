@@ -13,6 +13,8 @@ formulirnya.
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Annotated
 
@@ -27,6 +29,9 @@ from app.penggilingan.gudang1.services.jeda import SEBAB_LAIN as SEBAB_LAIN_JEDA
 from app.database import SessionLocal
 from app.models import User
 from app.web.aksi_umum import galat as _err
+
+log = logging.getLogger("web.api")
+from app.penggilingan.gudang1.services.bobot import dari_batch, dari_batches
 from app.web.aksi_umum import rp as _rp
 from app.web.aksi_umum import wajib as _require
 from app.web.deps import pengguna_aksi
@@ -1042,12 +1047,13 @@ async def dryer_menunggu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             batches = await _loose_dryer_batches(db, d.id)
             if not batches:
                 continue
-            kg = sum(float(b.berat_total_kg or 0) for b in batches)
+            bb = dari_batches(batches)
+            kg = bb.angka()
             # Mode yang seharusnya disebut DI SINI — di baris tempat tonasenya
             # diketahui. Operator tak perlu menghitung 23 ton itu lebih dekat
             # ke 25T atau 20T sambil berdiri di depan mesin.
             out.append({"value": d.id,
-                        "label": (f"{d.nama} · {len(batches)} batch · {_rp(kg)} kg"
+                        "label": (f"{d.nama} · {len(batches)} batch · {bb.teks()}"
                                   f" · pakai mode {mode_disarankan(kg)}")})
     return out
 
@@ -1067,7 +1073,7 @@ async def gabah_menunggu_tempat(user: User = Depends(pengguna_aksi)) -> list[dic
     return [{
         "value": b.kode_batch,
         "label": (f"{b.kode_batch} · {b.kondisi_gabah} · "
-                  f"{_rp(float(b.berat_total_kg or 0))} kg · "
+                  f"{dari_batch(b).teks()} · "
                   + ("di tumpukan" if b.status_batch == DITUMPUK
                      else "belum ditempatkan")),
     } for b in batches]
@@ -1285,7 +1291,7 @@ async def gabah_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {s} · {_rp(float(b.berat_total_kg or 0))} kg"}
+             "label": f"{b.kode_batch} · {s} · {dari_batch(b).teks()}"}
             for b, s in rows]
 
 
@@ -1342,7 +1348,7 @@ async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
+             "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
             for b in rows]
 
 
@@ -1439,7 +1445,7 @@ async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
+             "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
             for b in rows]
 
 
@@ -1458,7 +1464,7 @@ async def pk_luar_harga(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {_rp(float(b.berat_total_kg or 0))} kg"}
+             "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
             for b in rows]
 
 
@@ -1940,6 +1946,8 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
     _require(await _is_g1_operator(user))
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo yang digiling dulu.")
+    from sqlalchemy.exc import IntegrityError
+
     from app.penggilingan.gudang1.services.milling import start_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -1947,8 +1955,17 @@ async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_ak
             r = await start_milling(db, user=u, nama_silo=req.silo.upper())
         except MillingError as e:
             raise _err(e, "Gagal mulai giling.")
+        except IntegrityError:
+            # Seperti R-T-01 di timbangan: aturan basis data yang ditolak tak
+            # boleh sampai ke layar sebagai teks Postgres (QA P6-01). Yang
+            # lengkap ada di log lewat penangan global; di sini kalimatnya.
+            log.exception("Mulai giling ditolak aturan basis data")
+            raise HTTPException(
+                400, "Giling tidak bisa dimulai karena aturan basis data menolak "
+                     "bahannya. Coba sekali lagi; bila berulang, sebutkan ke Super Admin.")
+    bobot = r.bobot.teks() if r.bobot is not None else f"{r.berat_masuk:g} kg"
     pesan = (f"✓ Giling *{r.proc.kode_proses}* mulai — Silo {r.nama_silo} "
-             f"({r.berat_masuk:g} kg gabah).")
+             f"({bobot} gabah).")
     return {"ok": True, "pesan": pesan}
 
 
@@ -2260,6 +2277,8 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
     if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
         raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
+    from sqlalchemy.exc import IntegrityError
+
     from app.penggilingan.gudang2.service import masukkan_pk_luar, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2268,6 +2287,12 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
                                        kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan PK.")
+        except IntegrityError:
+            # Galat mentah Postgres tak boleh sampai ke layar (QA P6-02).
+            log.exception("Masukkan PK ditolak aturan basis data")
+            raise HTTPException(
+                400, "PK tidak bisa dimasukkan karena aturan basis data menolaknya. "
+                     "Coba sekali lagi; bila berulang, sebutkan ke Super Admin.")
     pesan = f"✓ PK *{req.kode_batch}* dimasukkan → {r.lokasi_label}."
     return {"ok": True, "pesan": pesan}
 

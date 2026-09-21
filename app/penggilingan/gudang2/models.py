@@ -45,6 +45,12 @@ class PkPurchaseBatch(Base, TimestampMixin):
     # Tautan ke timbangan (shared DB) — FK di level DB saja (migrasi 0027). Lihat PurchaseBatch.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column()
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
+    #: Perkiraan dari tara truk yang sama (QA P6, 21 September 2026): terisi
+    #: saat batch lahir dari tiket yang belum ditimbang kedua, dan TETAP
+    #: tersimpan sesudah netto sungguhan datang — selisihnya menguji anggapan
+    #: "tara stabil" di rekonsiliasi. `sumber_berat='perkiraan'` selama masih
+    #: berdiri di atas angka ini.
+    berat_perkiraan_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: Peristiwa `pk_luar_masuk` yang melahirkan baris ini (Tahap 3) —
     #: terisi = cermin buku besar; kosong = jalur lama / manual.
     peristiwa_id: Mapped[int | None] = mapped_column(
@@ -128,7 +134,12 @@ class PkGudang2Intake(Base, TimestampMixin):
     # silo_a / silo_b / ditumpuk
     tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
     silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    #: NULL = belum punya angka saat masuk (PK luar yang truknya belum
+    #: ditimbang kedua, tanpa tara — QA P6-02). Diisi poller dari batch-nya.
+    berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    #: False bila `berat_kg` masih perkiraan / belum diketahui saat masuk.
+    bobot_final: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                              server_default=text("true"))
     hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     flag_hpp_belum_tersedia: Mapped[bool] = mapped_column(Boolean, default=True)
     tanggal_masuk: Mapped[date] = mapped_column(Date, nullable=False)

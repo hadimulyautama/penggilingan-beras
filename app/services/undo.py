@@ -706,7 +706,8 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
         from app.services import peristiwa as buku
 
         await buku.batalkan(db, jenis_lawan=PK_MASUK_G2_DIBATALKAN, peristiwa_id=it.peristiwa_id,
-                            pelaku_id=None, muatan={"tujuan": it.tujuan, "berat_kg": float(it.berat_kg),
+                            pelaku_id=None, muatan={"tujuan": it.tujuan,
+                                                    "berat_kg": (float(it.berat_kg) if it.berat_kg is not None else None),
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     from app.database import now_local as _now
     it.dibatalkan_pada = _now()   # cermin bertanda, bukan dihapus

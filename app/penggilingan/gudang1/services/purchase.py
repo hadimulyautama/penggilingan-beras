@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import input_time, now_local, tanggal_lokal
 from app.models import PurchaseBatch, Supplier, User
+from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
 from app.penggilingan.gudang1.services.timbang_link import (
     TiketSudahDipakai,
     ambil_tiket,
@@ -223,10 +224,10 @@ async def create_purchase_batch_dari_timbang(
     # Bobot boleh belum ada (batch dibuat saat bongkar). Referensi bobot = tiket:
     # nota bila ada, selain itu netto timbang. Kosong → status "menunggu bobot",
     # diisi otomatis oleh sinkronisasi saat tiket punya bobot (nota/timbang-2).
-    b = tiket.get("berat_hpp_kg")
-    ada_bobot = b is not None and float(b) > 0
-    berat = float(b) if ada_bobot else None
-    sumber = tiket["sumber_berat"] if ada_bobot else "menunggu"
+    # Tiga keadaan (QA P6, 21 September 2026): pasti / perkiraan dari tara
+    # truk yang sama / tak diketahui. Lihat `bobot_awal_dari_tiket`.
+    berat, sumber, berat_perkiraan = await bobot_awal_dari_tiket(db, tiket)
+    ada_bobot = berat is not None
 
     # WAKTU KEDATANGAN DIAMBIL DARI TIKET, bukan dari saat operator mengetik.
     #
@@ -304,6 +305,7 @@ async def create_purchase_batch_dari_timbang(
         flag_unverified=True,
         timbangan_transaksi_id=timbangan_transaksi_id,
         sumber_berat=sumber,
+        berat_perkiraan_kg=berat_perkiraan,
         peristiwa_id=e.id,
     )
     db.add(batch)
@@ -315,7 +317,8 @@ async def create_purchase_batch_dari_timbang(
     # Penunjuk cermin di proyeksi — objeknya sudah di tangan, tanpa kueri baru.
     getattr(e, "proyeksi", None) and setattr(e.proyeksi, "purchase_batch_id", batch.id)
 
-    b_str = f"{berat:.0f}kg ({sumber})" if ada_bobot else "menunggu bobot"
+    b_str = (f"{'± ' if sumber == 'perkiraan' else ''}{berat:.0f}kg ({sumber})"
+             if ada_bobot else "menunggu bobot")
     await log_activity(
         db, table_name="purchase_batches", record_id=batch.id, action="INSERT",
         changed_by=user.id,

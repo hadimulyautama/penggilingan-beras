@@ -20,6 +20,9 @@ from app.models import (
     Warehouse,
 )
 from app.services.activity_log import log_activity
+from app.penggilingan.gudang1.services.bobot import (
+    NOL, Bobot, dari_batch, dari_batches)
+from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
 from app.services.codegen import next_drying_lot_code
 
 
@@ -93,14 +96,19 @@ async def _active_storage(db: AsyncSession, silo_id: int) -> SiloStorage | None:
     return (await db.execute(stmt)).scalars().first()
 
 
-async def _lot_kg(db: AsyncSession, lot_id: int) -> float:
-    stmt = (
-        select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0))
-        .select_from(DryingLotBatch)
-        .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+async def _lot_bobot(db: AsyncSession, lot_id: int) -> Bobot:
+    """Bobot seluruh batch sebuah lot pengeringan, berikut kepastiannya."""
+    batches = (await db.execute(
+        select(PurchaseBatch)
+        .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
         .where(DryingLotBatch.drying_lot_id == lot_id)
-    )
-    return float((await db.execute(stmt)).scalar_one())
+    )).scalars().all()
+    return dari_batches(batches)
+
+
+async def _lot_kg(db: AsyncSession, lot_id: int) -> float:
+    """Angka yang DIKETAHUI saja. Yang butuh kepastian memakai `_lot_bobot`."""
+    return (await _lot_bobot(db, lot_id)).angka()
 
 
 async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]:
@@ -117,17 +125,27 @@ async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]
     )
 
 
-async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
+async def _row_bobot(db: AsyncSession, row: SiloStorage) -> Bobot:
     if row.drying_lot_id:
-        return await _lot_kg(db, row.drying_lot_id)
+        return await _lot_bobot(db, row.drying_lot_id)
     if row.purchase_batch_id:
-        b = await db.get(PurchaseBatch, row.purchase_batch_id)
-        return float(b.berat_total_kg or 0) if b else 0.0
-    return 0.0
+        return dari_batch(await db.get(PurchaseBatch, row.purchase_batch_id))
+    return NOL
+
+
+async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
+    return (await _row_bobot(db, row)).angka()
+
+
+async def _silo_content_bobot(db: AsyncSession, silo_id: int) -> Bobot:
+    """Isi silo SEKARANG berikut kepastiannya — layar memakai ini supaya
+    truk yang belum ditimbang terbaca "≥ X kg · 1 truk belum ditimbang",
+    bukan menghilang ke dalam jumlah (QA P6)."""
+    return jumlah_bobot([await _row_bobot(db, r) for r in await _silo_active_rows(db, silo_id)])
 
 
 async def _silo_content_kg(db: AsyncSession, silo_id: int) -> float:
-    return sum([await _row_kg(db, r) for r in await _silo_active_rows(db, silo_id)])
+    return (await _silo_content_bobot(db, silo_id)).angka()
 
 
 async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
@@ -174,7 +192,7 @@ async def isi_silo(db: AsyncSession, silo_id: int) -> list[IsiSilo]:
             b = await db.get(PurchaseBatch, r.purchase_batch_id)
             if b:
                 rinci.append(IsiSilo("beli_kering", b.kode_batch,
-                                     float(b.berat_total_kg or 0)))
+                                     dari_batch(b).angka()))
     return rinci
 
 
@@ -352,7 +370,7 @@ async def masuk_silo(
         ).first()
         if in_lot or batch.status_batch == "di_silo":
             raise SiloError(f"Batch {kode_batch} sudah masuk pengeringan atau silo.")
-        kg_new = float(batch.berat_total_kg or 0)
+        kg_new = dari_batch(batch).angka()
 
         # Gabah kering MENUNGGU lepas di silo (SiloStorage batch, TANPA lot).
         #
@@ -403,10 +421,16 @@ async def masuk_silo(
     giling_kode = None
     if giling is not None:
         await db.flush()          # baris barunya perlu id sebelum ditaut
+        # Bahan tambahan dibaca berikut KEPASTIANNYA, seperti saat giling
+        # dimulai (QA P6): yang belum punya angka dicatat NULL — bukan 0,
+        # yang ditolak CHECK berat_positif — dan prosesnya ditandai belum
+        # final supaya poller melengkapinya begitu truknya ditimbang.
+        bobot_baris = await _row_bobot(db, baris)
+        kg_baris = bobot_baris.angka()
         db.add(MillingProcessSource(
             milling_process_id=giling.id, silo_storage_id=baris.id,
             drying_lot_id=baris.drying_lot_id,
-            purchase_batch_id=baris.purchase_batch_id, berat_kg=kg_baris,
+            purchase_batch_id=baris.purchase_batch_id, berat_kg=bobot_baris.kg,
         ))
         # ── Ditambah oleh BASIS DATA, bukan dibaca-lalu-ditulis ──
         #
@@ -418,13 +442,16 @@ async def masuk_silo(
         # tak ada satu pun pesan.
         #
         # Ditambah lewat SQL, angkanya tak pernah singgah di Python.
+        # Bahan yang belum pasti menurunkan tanda finalnya; yang pasti tak
+        # menaikkannya — hanya poller yang boleh menyatakan final lagi.
+        tanda = {} if bobot_baris.pasti else {"bobot_masuk_final": False}
         await db.execute(
             update(MillingProcess)
             .where(MillingProcess.id == giling.id)
             .values(berat_gabah_masuk_kg=(
-                func.coalesce(MillingProcess.berat_gabah_masuk_kg, 0) + kg_baris))
+                func.coalesce(MillingProcess.berat_gabah_masuk_kg, 0) + kg_baris), **tanda)
         )
-        await db.refresh(giling, ["berat_gabah_masuk_kg"])
+        await db.refresh(giling, ["berat_gabah_masuk_kg", "bobot_masuk_final"])
         giling_kode = giling.kode_proses
         await log_activity(
             db, table_name="milling_process", record_id=giling.id, action="UPDATE",

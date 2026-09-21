@@ -171,7 +171,7 @@ class ProyeksiPkMasukG2(Base):
     #: silo_a / silo_b / ditumpuk
     tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
     silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
-    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))   # NULL = belum diketahui (P6-02)
     hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: Kode penyosohan yang sedang memakai silo saat PK dituang (ikut jadi bahannya).
     ke_proses: Mapped[str | None] = mapped_column(String(20))

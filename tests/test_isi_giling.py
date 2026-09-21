@@ -24,7 +24,8 @@ def test_giling_mendaftar_seluruh_isi_silo():
     """Bukan satu baris saja — kalau silo berisi lot DAN batch lepas,
     keduanya ikut tercatat."""
     sumber = inspect.getsource(milling.start_milling)
-    assert "berat_per_baris" in sumber
+    # Tiap baris dibaca berikut KEPASTIAN bobotnya sejak QA P6 (21 Sep 2026).
+    assert "bobot_per_baris" in sumber
     assert "MillingProcessSource" in sumber
     assert "for r in rows" in sumber
 
@@ -41,7 +42,9 @@ def test_berat_disalin_saat_giling_bukan_dihitung_ulang():
     """Isi silo berubah setelah giling dimulai; berapa yang MASUK ke mesin
     tidak boleh ikut berubah bersamanya."""
     assert "berat_kg" in {c.name for c in MillingProcessSource.__table__.columns}
-    assert "berat_kg=kg" in inspect.getsource(milling.start_milling)
+    # `bb.kg` = angka bila diketahui, NULL bila belum — tetap cuplikan saat
+    # mulai, bukan dihitung ulang (QA P6-01).
+    assert "berat_kg=bb.kg" in inspect.getsource(milling.start_milling)
 
 
 def test_satu_baris_silo_tak_bisa_masuk_dua_kali():

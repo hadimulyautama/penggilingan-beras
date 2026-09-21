@@ -146,7 +146,7 @@ def test_antrean_hanya_yang_belum_punya_tempat():
     # menunggu digiling — semuanya `transit`, bukan `menunggu`.
     assert golongan("batch di {mesin.nama}") == "transit"
     assert golongan("sudah dingin, dryer perlu dikosongkan") == "transit"
-    assert golongan("gabah kering · {_kg(kg_silo)}") == "transit"
+    assert golongan("gabah kering · {bs.teks()}") == "transit"
     # Yang belum punya tempat tetap antrean. Tiket datang sebagai satu
     # daftar utuh dari `_tiket_belum_ditaut`, jadi yang diperiksa
     # penggabungannya — bukan `append` seperti baris lain.

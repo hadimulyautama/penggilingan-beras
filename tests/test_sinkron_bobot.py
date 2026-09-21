@@ -37,14 +37,24 @@ def test_bahan_giling_berjalan_ikut_disamakan():
     sumber = kode_saja(milling.resinkron_bahan_berjalan)
     assert "MillingProcessSource" in sumber
     assert "berat_gabah_masuk_kg" in sumber
-    assert "_storage_kg" in sumber
+    # Dibaca berikut kepastiannya — bukan angka yang menyamakan "belum
+    # diketahui" dengan nol (QA P6).
+    assert "_storage_bobot" in sumber
 
 
 def test_giling_yang_sudah_ditutup_tidak_ditulis_ulang():
     """Angkanya sudah masuk laporan dan sudah dipakai orang lain memutuskan —
-    alasan yang sama dengan batas 48 jam pada pembatalan."""
+    alasan yang sama dengan batas 48 jam pada pembatalan.
+
+    SATU pengecualian sejak QA P6-03 (21 September 2026): giling yang ditutup
+    sementara bahannya BELUM FINAL (truk belum ditimbang kedua). Untuk itu
+    alasan di atas justru terbalik — laporannya berdiri di atas bobot yang
+    kurang, selamanya — jadi ia tetap dijangkau sampai final."""
     sumber = kode_saja(milling.resinkron_bahan_berjalan)
     assert "MillingProcess.status == 'proses'" in sumber
+    assert "MillingProcess.bobot_masuk_final.is_(False)" in sumber
+    # Yang selesai DAN final tak disentuh: hanya dua syarat itu yang dipakai.
+    assert "status == 'selesai'" not in sumber
 
 
 def test_perubahannya_meninggalkan_jejak():
@@ -52,17 +62,25 @@ def test_perubahannya_meninggalkan_jejak():
     dipertanggungjawabkan saat ditanya."""
     sumber = kode_saja(milling.resinkron_bahan_berjalan)
     assert "log_activity" in sumber
-    assert "direvisi di aplikasi timbangan" in inspect.getsource(
+    assert "direvisi atau dilengkapi di aplikasi timbangan" in inspect.getsource(
         milling.resinkron_bahan_berjalan)
 
 
-def test_poller_menjalankan_ketiga_langkahnya():
+def test_poller_menjalankan_kelima_langkahnya():
     """Langkah 2 saja tak cukup: cuplikan bahan giling diambil saat giling
-    dimulai, dan ia tak pernah membaca ulang dirinya sendiri."""
-    sumber = kode_saja(sinkron_bobot.run_sinkron_bobot_poller)
-    for langkah in ("sinkron_bobot_menunggu", "resinkron_bobot_berubah",
+    dimulai, dan ia tak pernah membaca ulang dirinya sendiri. Sejak QA P6
+    ada lima langkah, dan SEMUANYA lewat satu pintu (`satu_putaran`) — uji
+    dan server menjalankan urutan yang persis sama (pelajaran P6-R02)."""
+    sumber = kode_saja(sinkron_bobot.satu_putaran)
+    for langkah in ("sinkron_perkiraan", "sinkron_bobot_menunggu",
+                    "resinkron_bobot_berubah", "resinkron_intake_g2",
                     "resinkron_bahan_berjalan"):
         assert langkah in sumber, langkah
+    # Perkiraan diberikan SEBELUM netto sungguhan diisi: yang sudah punya
+    # netto tak pernah diberi perkiraan (syarat IS NULL), dan yang baru
+    # diberi perkiraan langsung boleh diganti netto di langkah berikutnya.
+    assert sumber.index("sinkron_perkiraan") < sumber.index("sinkron_bobot_menunggu")
+    assert "satu_putaran" in kode_saja(sinkron_bobot.run_sinkron_bobot_poller)
 
 
 def test_idempoten():

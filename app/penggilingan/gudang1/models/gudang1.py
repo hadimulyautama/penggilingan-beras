@@ -65,6 +65,12 @@ class PurchaseBatch(Base, TimestampMixin):
     # app ini, jadi FK cukup di level DB (migrasi 0027). Di ORM: kolom Integer + unique.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column()
     sumber_berat: Mapped[str] = mapped_column(String(12), nullable=False, default="manual")
+    #: Perkiraan dari tara truk yang sama (QA P6, 21 September 2026): terisi
+    #: saat batch lahir dari tiket yang belum ditimbang kedua, dan TETAP
+    #: tersimpan sesudah netto sungguhan datang — selisihnya menguji anggapan
+    #: "tara stabil" di rekonsiliasi. `sumber_berat='perkiraan'` selama masih
+    #: berdiri di atas angka ini.
+    berat_perkiraan_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: Peristiwa `gabah_masuk` yang melahirkan baris ini (Tahap 3). Terisi =
     #: baris ini CERMIN dari buku besar; pembatalannya lewat peristiwa lawan.
     #: Kosong = dibuat jalur lama (manual / sebelum Tahap 3).

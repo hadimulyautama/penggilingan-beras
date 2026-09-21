@@ -23,6 +23,8 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
+from app.penggilingan.gudang1.services.bobot import (
+    Bobot, dari_batch, dari_batches, dari_nilai)
 from app.models import (
     DryingLot,
     MillingProcess,
@@ -224,6 +226,14 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
 
+def _utama(bb: Bobot) -> tuple[str, str] | None:
+    """Angka besar kartu dari sebuah Bobot — None bila belum ada angkanya.
+    Tak pernah "0": angka nol untuk bobot yang belum diketahui itulah yang
+    membuat semua orang mengira datanya salah (QA P6)."""
+    t = bb.angka_teks()
+    return (t, "kg") if t is not None else None
+
+
 def _jam(detik: float) -> str:
     """Lama tertahan dalam kata. Nol pun disebut — "baru saja" memberi tahu
     bahwa jamnya memang dihitung, bukan bahwa ia tak diketahui."""
@@ -255,13 +265,14 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
         return []
     baris = (await db.execute(
         select(PurchaseBatch.kode_batch, PurchaseBatch.berat_total_kg,
-               PurchaseBatch.tanggal_pembelian, Supplier.nama_supplier)
+               PurchaseBatch.tanggal_pembelian, Supplier.nama_supplier,
+               PurchaseBatch.sumber_berat)
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
         .where(PurchaseBatch.id.in_(list(batch_ids)))
         .order_by(PurchaseBatch.id)
     )).all()
-    return [(f"{nama or '?'} · {kode}", _kg(kg), f"masuk {_tgl(tgl)}")
-            for kode, kg, tgl, nama in baris]
+    return [(f"{nama or '?'} · {kode}", dari_nilai(kg, sumber).teks(), f"masuk {_tgl(tgl)}")
+            for kode, kg, tgl, nama, sumber in baris]
 
 
 async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]:
@@ -508,11 +519,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         isi_mesin = await _loose_dryer_batches(db, mesin.id)
         if not isi_mesin:
             continue
-        total = sum(float(x.berat_total_kg or 0) for x in isi_mesin)
+        bt = dari_batches(isi_mesin)
+        total = bt.angka()
         kondisi = {x.kondisi_gabah for x in isi_mesin}
         b.transit.append(Baris(
             kode="",
-            isi=f"{len(isi_mesin)} batch di {mesin.nama} · {_kg(total)}",
+            isi=f"{len(isi_mesin)} batch di {mesin.nama} · {bt.teks()}",
             keadaan="nyalakan mesinnya",
             aksi="mulai_pengeringan", fase="dryer",
             # Mesinnya ikut, jadi lembarnya tak menanyakan lagi mesin mana —
@@ -520,7 +532,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             nilai=str(mesin.id),
             sejak=min((x.created_at for x in isi_mesin if x.created_at), default=None),
             judul=mesin.nama,
-            utama=(_kg(total).removesuffix(" kg"), "kg"),
+            utama=_utama(bt),
             sub=f"{len(isi_mesin)} batch"
                 + (f" · gabah {'/'.join(sorted(kondisi))}" if kondisi else ""),
             fakta=[("Mode terdekat", mode_disarankan(total)),
@@ -556,12 +568,12 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         nama_pemasok = nama_pemasok or b_.kode_batch
         b.menunggu.append(Baris(
             kode=b_.kode_batch,
-            isi=f"{_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
+            isi=f"{dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}",
             keadaan="tentukan tempatnya",
             aksi="pindah_tumpukan", nilai=b_.kode_batch, fase="baru",
             sejak=b_.created_at,
             judul=nama_pemasok,
-            utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
+            utama=_utama(dari_batch(b_)),
             sub=f"{b_.kode_batch} · gabah {b_.kondisi_gabah} · "
                 f"masuk {_tgl(b_.tanggal_pembelian)}",
             tombol=await _tujuan_gabah(
@@ -580,13 +592,13 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         )).scalars().first() or b_.kode_batch
         b.menunggu.append(Baris(
             kode=b_.kode_batch,
-            isi=f"menumpuk · {_kg(b_.berat_total_kg)} · gabah {b_.kondisi_gabah}",
+            isi=f"menumpuk · {dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}",
             keadaan=("harus ke dryer — belum kering" if wajib_dryer
                      else "tentukan tempatnya"),
             aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
             fase="tumpuk",
             judul=nama_pemasok,
-            utama=(_kg(b_.berat_total_kg).removesuffix(" kg"), "kg"),
+            utama=_utama(dari_batch(b_)),
             sub=f"{b_.kode_batch} · gabah {b_.kondisi_gabah} · "
                 f"masuk {_tgl(b_.tanggal_pembelian)}",
             nota=("Gabah basah tak boleh ke silo — harus dikeringkan dulu."
@@ -671,7 +683,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         from app.penggilingan.gudang1.services.drying import _lot_batches
 
         isi_lot = await _lot_batches(db, lot.id)
-        kg_lot = sum(float(x.berat_total_kg or 0) for x in isi_lot)
+        bl = dari_batches(isi_lot)
+        kg_lot = bl.angka()
         from app.penggilingan.gudang1.services.drying import (
             kadar_air_awal, kemajuan, peringatan_kadar_air)
         from app.services.setelan import target_kadar_air
@@ -707,7 +720,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 + (" · " + " · ".join(ka) if ka else " · kadar air belum dicatat")
                 + ("".join(" · " + t for t in tambahan)),
             judul=("Pengeringan dijeda" if macet else "Pengeringan"),
-            utama=(_kg(kg_lot).removesuffix(" kg"), "kg") if kg_lot else None,
+            utama=_utama(bl),
             sub=f"{lot.kode_lot} · {len(isi_lot)} batch"
                 + (f" · {_pemasok_ringkas(asal_lot)}" if asal_lot else ""),
             fakta=fakta,
@@ -766,7 +779,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
     # rusak, tetapi uang yang tertanam di dalamnya juga tidak bergerak.
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import (
-        _g1_warehouse_id, _silo_active_rows, _silo_content_kg)
+        _g1_warehouse_id, _silo_active_rows, _silo_content_bobot)
 
     wid = await _g1_warehouse_id(db)
     for silo in (await db.execute(
@@ -787,7 +800,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
         # tanpa ada yang salah: giling dijadwalkan, bukan didesak. Kalau ia
         # ikut dihitung, lencana tak pernah kembali nol — dan lencana yang tak
         # pernah nol mengajari orang mengabaikan lencana.
-        kg_silo = await _silo_content_kg(db, silo.id)
+        bs = await _silo_content_bobot(db, silo.id)
+        kg_silo = bs.angka()
         # Isi silo bisa datang dua jalan: batch beli-kering yang masuk
         # langsung, dan lot hasil pengeringan sendiri. Keduanya ditelusuri
         # ke batch-nya, karena hanya di situ nama pemasok dan tanggal masuk
@@ -799,11 +813,11 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 bid_silo += [x.id for x in await _lot_batches(db, r.drying_lot_id)]
         asal_silo = await _asal(db, set(bid_silo))
         b.transit.append(Baris(
-            kode=silo.nama_silo, isi=f"gabah kering · {_kg(kg_silo)}",
+            kode=silo.nama_silo, isi=f"gabah kering · {bs.teks()}",
             keadaan="mulai giling bila siap", aksi="mulai_giling",
             nilai=huruf, fase="silo",
             judul=silo.nama_silo,
-            utama=(_kg(kg_silo).removesuffix(" kg"), "kg"),
+            utama=_utama(bs),
             sub="gabah kering · menunggu giliran digiling"
                 + (f" · {_pemasok_ringkas(asal_silo)}" if asal_silo else ""),
             anak=asal_silo,
@@ -831,7 +845,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             if lid:
                 bid_giling += [x.id for x in await _lot_batches(db, lid)]
         asal_giling = await _asal(db, set(bid_giling))
-        fakta_g = [("Bahan", _kg(p.berat_gabah_masuk_kg))]
+        fakta_g = [("Bahan", _kg(p.berat_gabah_masuk_kg)
+                    + ("" if p.bobot_masuk_final else " · belum final, menunggu timbang"))]
         if tertahan >= 60:
             fakta_g.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
         b.berjalan.append(Baris(
@@ -840,7 +855,8 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                 + f" · {_kg(p.berat_gabah_masuk_kg)} gabah masuk"
                 + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else ""),
             judul=("Giling dijeda" if macet else "Giling"),
-            utama=(_kg(p.berat_gabah_masuk_kg).removesuffix(" kg"), "kg"),
+            utama=((_kg(p.berat_gabah_masuk_kg).removesuffix(" kg"), "kg")
+                   if p.berat_gabah_masuk_kg is not None else None),
             sub=f"{p.kode_proses} · bahan masuk"
                 + (f" · {_pemasok_ringkas(asal_giling)}" if asal_giling else ""),
             anak=asal_giling,
@@ -945,11 +961,11 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         .order_by(PkPurchaseBatch.id.desc())
     )).all():
         b.menunggu.append(Baris(
-            kode=pk.kode_batch, isi=f"PK luar · {_kg(pk.berat_total_kg)}",
+            kode=pk.kode_batch, isi=f"PK luar · {dari_batch(pk).teks()}",
             aksi="masukkan_pk", nilai=pk.kode_batch, fase="baru",
             sejak=pk.created_at,
             judul=nama or pk.kode_batch,
-            utama=(_kg(pk.berat_total_kg).removesuffix(" kg"), "kg"),
+            utama=_utama(dari_batch(pk)),
             sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
             keadaan="belum masuk silo maupun tumpukan",
             pilihan=[("masukkan_pk", "Masukkan ke gudang",
@@ -970,12 +986,12 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         .order_by(PkPurchaseBatch.id.desc())
     )).all():
         b.meja.append(Baris(
-            kode=pk.kode_batch, isi=f"{nama} · {_kg(pk.berat_total_kg)}",
+            kode=pk.kode_batch, isi=f"{nama} · {dari_batch(pk).teks()}",
             keadaan="", aksi="harga_pk_luar", nilai=pk.kode_batch,
             fase=("baru" if pk.status_batch == "baru" else "silo"),
             sejak=pk.created_at,
             judul=nama or pk.kode_batch,
-            utama=(_kg(pk.berat_total_kg).removesuffix(" kg"), "kg"),
+            utama=_utama(dari_batch(pk)),
             sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
             pilihan=[("harga_pk_luar", "Verifikasi harga PK luar",
                       "Sesudah ini nilainya beku", pk.kode_batch)],
@@ -1148,7 +1164,7 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
         .order_by(PkGudang2Intake.id)
     )).scalars().all():
         sisa = await _sisa_tumpukan_intake(db, it.id)
-        if sisa <= 0:
+        if sisa is not None and sisa <= 0:
             continue
         if it.pk_purchase_batch_id:
             pk, nama = (await db.execute(
@@ -1167,11 +1183,11 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
             kode = kode_lot or f"intake {it.id}"
             judul, sumber = kode, "giling sendiri"
         keluar.append(Baris(
-            kode=kode, isi=f"PK di tumpukan · {_kg(sisa)}",
+            kode=kode, isi=f"PK di tumpukan · {_kg(sisa) if sisa is not None else 'menunggu timbang'}",
             keadaan="menunggu dipindah ke silo — boleh sebagian",
             aksi="pindah_tumpukan_silo", nilai=str(it.id), fase="tumpuk",
             sejak=it.waktu_masuk, judul=judul, kelompok="tumpukan",
-            utama=(_kg(sisa).removesuffix(" kg"), "kg"),
+            utama=((_kg(sisa).removesuffix(" kg"), "kg") if sisa is not None else None),
             sub=f"{kode} · {sumber} · masuk {_tgl(it.tanggal_masuk)}",
             pilihan=[("pindah_tumpukan_silo", "Pindah ke silo",
                       "Sebagian atau seluruhnya, ke Silo A / B", str(it.id))],
@@ -1228,14 +1244,14 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     )).all():
         di_mana = _DI_MANA.get(batch.status_batch or "", batch.status_batch or "")
         b.meja.append(Baris(
-            kode=batch.kode_batch, isi=f"{nama} · {_kg(batch.berat_total_kg)}",
+            kode=batch.kode_batch, isi=f"{nama} · {dari_batch(batch).teks()}",
             # Keadaannya kosong: judul bloknya sudah mengatakannya.
             keadaan="", aksi="verify_gabah",
             nilai=batch.kode_batch,
             sejak=batch.created_at,
             fase=_FASE_BATCH.get(batch.status_batch or "", "baru"),
             judul=nama,
-            utama=(_kg(batch.berat_total_kg).removesuffix(" kg"), "kg"),
+            utama=_utama(dari_batch(batch)),
             sub=f"{batch.kode_batch} · gabah {batch.kondisi_gabah} · "
                 f"masuk {_tgl(batch.tanggal_pembelian)}",
             fakta=[("Gabahnya", di_mana)],
