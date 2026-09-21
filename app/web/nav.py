@@ -72,8 +72,13 @@ TAB = (
     # catatan yang baru saja dibuat. Ia dipindahkan ke kaki Antrian tunggu,
     # tempat catatan itu dibuat. Menghapus katalog tanpa memindahkannya
     # berarti tiap salah ketik berubah jadi panggilan telepon ke Admin.
+    #
+    # Operator polesan menyusul 21 September 2026, atas permintaan pemilik:
+    # seluruh penyosohan, tumpukan → silo, dan PK yang menunggu ditempatkan
+    # sudah berkartu. Yang tersisa tanpa kartu — packing, bekatul curah,
+    # batalkan — ikut ke kaki Antrian tunggu, sama seperti selepan.
     ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
-     "Harga, QC, barang keluar, batalkan", (SUPER, ADMIN, POLESAN)),
+     "Harga, QC, barang keluar, batalkan", (SUPER, ADMIN)),
     # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.

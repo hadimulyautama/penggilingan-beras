@@ -438,17 +438,18 @@ async def halaman_aksi_lain(request: Request):
     """
     from app.web.nav import lencana
 
-    from app.web.layar import SELEPAN
+    from app.web.layar import POLESAN, SELEPAN
 
     akun = await akun_opsional(request)
     if akun is None:
         return RedirectResponse("/masuk", status_code=303)
-    # Operator selepan tak punya halaman ini. Pintunya sudah dicabut dari
-    # laci, tetapi alamatnya tetap bisa diketik atau tersimpan sebagai
-    # pintasan — dan halaman yang katanya tak ada tetapi tetap terbuka
-    # adalah halaman yang tetap ada. Dialihkan, bukan ditolak: seluruh
-    # pekerjaannya memang ada di antrean, jadi ke sanalah orangnya diantar.
-    if getattr(request.state, "view", "") == SELEPAN:
+    # Operator selepan dan polesan tak punya halaman ini. Pintunya sudah
+    # dicabut dari laci, tetapi alamatnya tetap bisa diketik atau tersimpan
+    # sebagai pintasan — dan halaman yang katanya tak ada tetapi tetap
+    # terbuka adalah halaman yang tetap ada. Dialihkan, bukan ditolak:
+    # seluruh pekerjaannya memang ada di antrean, jadi ke sanalah orangnya
+    # diantar.
+    if getattr(request.state, "view", "") in (SELEPAN, POLESAN):
         return RedirectResponse("/aksi", status_code=303)
     return render(request, "aksi_lain.html", layar="aksi_lain",
                   buka=request.query_params.get("buka") or "",

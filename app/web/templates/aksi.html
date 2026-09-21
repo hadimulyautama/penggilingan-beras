@@ -71,7 +71,7 @@
       <h2>Tidak ada yang menunggu Anda</h2>
       <p class="bantu">
         Semua gabah sudah punya tempat. Yang sedang berjalan ada di
-        <a href="/berjalan">Sedang berjalan</a>{% if VIEW != V_SELEPAN %};
+        <a href="/berjalan">Sedang berjalan</a>{% if VIEW not in (V_SELEPAN, V_POLESAN) %};
         pekerjaan lain yang jarang dipakai ada di
         <a href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}.
       </p>
@@ -91,8 +91,16 @@
    berpindah ke daftar kata kerja. Kecil dan tak berwarna — ini jaring
    pengaman, bukan pekerjaan harian, dan tombol besar memanggil dirinya
    sendiri untuk ditekan. #}
-{% if VIEW == V_SELEPAN %}
+{% if VIEW in (V_SELEPAN, V_POLESAN) %}
 <div class="ubah-hasil" style="margin-top:14px">
+  {# Polesan kehilangan katalognya 21 September 2026. Dua aksinya yang tak
+     berwujud benda di gudang — packing dan bekatul curah lahir SESUDAH
+     proses ditutup, jadi tak ada kartu yang bisa menampungnya — ikut ke
+     sini, di samping tombol batal. #}
+  {% if VIEW == V_POLESAN %}
+  <a class="btn btn--kecil" href="/aksi?buka=catat_packing">Catat packing</a>
+  <a class="btn btn--kecil" href="/aksi?buka=catat_bekatul">Catat bekatul</a>
+  {% endif %}
   <a class="btn btn--kecil" href="/aksi?buka=undo">Batalkan input terakhir</a>
 </div>
 {% endif %}

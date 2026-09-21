@@ -390,8 +390,9 @@ def test_katalog_dicabut_dari_selepan():
 
     view = {k: v for k, _, _, _, v in TAB}
     assert SELEPAN not in view["aksi_lain"]
-    # Polesan TETAP memilikinya: pekerjaan Gudang 2 belum seluruhnya berkartu.
-    assert POLESAN in view["aksi_lain"]
+    # Polesan menyusul 21 September 2026: penyosohan, tumpukan → silo, dan
+    # PK yang menunggu ditempatkan sudah berkartu; sisanya ke kaki antrean.
+    assert POLESAN not in view["aksi_lain"]
     for v in MEJA:
         assert v in view["aksi_lain"], v
 
@@ -402,7 +403,7 @@ def test_alamat_katalog_ikut_ditutup_bukan_cuma_pintunya():
     from app import main
 
     sumber = inspect.getsource(main.halaman_aksi_lain)
-    assert "== SELEPAN" in sumber and 'RedirectResponse("/aksi"' in sumber
+    assert "in (SELEPAN, POLESAN)" in sumber and 'RedirectResponse("/aksi"' in sumber
 
 
 def test_membatalkan_tidak_ikut_terbuang():
@@ -415,7 +416,10 @@ def test_membatalkan_tidak_ikut_terbuang():
     # Hanya di layar yang kehilangan katalognya. View lain masih punya
     # katalognya, dan dua pintu ke satu hal adalah dua tempat di kepala orang.
     sebelum = teks.split("/aksi?buka=undo")[0]
-    assert sebelum.rstrip().split("\n")[-3:][0].strip() == "{% if VIEW == V_SELEPAN %}"
+    assert "{% if VIEW in (V_SELEPAN, V_POLESAN) %}" in sebelum
+    assert "{% if VIEW in (V_SELEPAN, V_POLESAN) %}" not in teks.split("/aksi?buka=undo")[1]
+    # Polesan membawa dua aksinya yang tak berkartu ke tempat yang sama.
+    assert "/aksi?buka=catat_packing" in teks and "/aksi?buka=catat_bekatul" in teks
 
 
 def test_layar_kosong_tak_menunjuk_pintu_yang_dicabut():
@@ -423,7 +427,7 @@ def test_layar_kosong_tak_menunjuk_pintu_yang_dicabut():
     yang tak terlihat sebagai jalan buntu."""
     teks = (AKAR / "app/web/templates/aksi.html").read_text()
     tautan = teks.split('<a href="/aksi-lain">')[0]
-    assert "VIEW != V_SELEPAN" in tautan
+    assert "VIEW not in (V_SELEPAN, V_POLESAN)" in tautan
 
 
 # ─────────── Puncak tangga harus bisa diisi, dan tak boleh dikosongkan ───────────
