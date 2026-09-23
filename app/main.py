@@ -339,6 +339,7 @@ async def beranda(request: Request):
     # apa yang berjalan adalah Beranda yang cepat atau lambat menyebut angka
     # yang berbeda dari layar sebelahnya — dan yang berbeda diam-diam justru
     # tak akan ada yang menyadarinya.
+    from app.web.layar import MEJA as V_MEJA
     from app.web.layar import gudang1, petak_beranda
 
     view = getattr(request.state, "view", "tamu")
@@ -373,6 +374,14 @@ async def beranda(request: Request):
         nilai=request.query_params.get("nilai") or "",
         MENUNGGU=jalan.jumlah_menunggu, BERJALAN=jalan.jumlah_berjalan,
         KEPUTUSAN=jalan.jumlah_keputusan,
+        # ── Pintu "Menunggu keputusan" (Tahap 2, beranda.html naik ke paket) ──
+        #
+        # Kerja meja berdiri sejajar kerja gudang, dan hanya untuk yang punya
+        # meja — gerbangnya `V_MEJA`, persis seperti dulu di templat. Di
+        # Operasi Gudang 2 bendera ini SELALU mati: layar Menunggu keputusan
+        # hidup di Meja Administrasi, jadi di sana pintunya akan jadi tautan
+        # mati ke rute yang tak ada.
+        blok_keputusan=view in V_MEJA,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 

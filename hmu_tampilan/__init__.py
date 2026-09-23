@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "133"
+VERSI = "134"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -69,6 +69,11 @@ BERKAS_PAKET = (
     # Kalimat yang benar-benar milik satu app tinggal di `_kata_*.html`
     # app itu — nama itu sengaja TIDAK terdaftar di sini.
     "pengaturan.html", "aksi.html",
+    # `beranda.html` = beranda aplikasi GUDANG (produksi & gudang2). Beranda
+    # Meja adalah layar LAIN, bukan variannya (keputusan pemilik 12 September
+    # 2026), dan bernama `beranda_meja.html` di repo meja — jadi nama ini boleh
+    # dijaga ketat tanpa menghalanginya.
+    "beranda.html", "_beranda.html",
 )
 
 

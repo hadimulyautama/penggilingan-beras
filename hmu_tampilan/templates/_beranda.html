@@ -1,0 +1,88 @@
+{# ── Potongan Beranda yang dipakai lebih dari satu app ──
+
+   Tahap 2, 23 September 2026. Beranda adalah satu-satunya dari empat layar
+   yang TIDAK bisa jadi satu berkas, dan itu keputusan pemilik 12 September
+   2026: Beranda Meja dibalik urutannya dan menjadikan gudang sebuah DAFTAR,
+   karena Beranda operator dibentuk untuk SATU gudang dan dipakai untuk dua ia
+   jadi tiga layar — "jika punya banyak gudang pasti bingung". Memaksa ketiganya
+   jadi satu berkas berarti kondisi bersarang yang tak bisa dibaca siapa pun,
+   dan itu justru yang dilarang brief Tahap 2.
+
+   Yang disatukan: MARKUP yang berulang. Kartu pintu bernama-berlencana dan
+   petak angka hidup di sini sebagai makro; urutan dan pilihan bloknya tetap
+   milik tiap app.
+
+   Dipakai:
+     produksi/gudang2  `beranda.html` (bersama, di paket)
+     meja              `beranda_meja.html` (milik app — layar yang berbeda) #}
+
+{# Satu sel petak. Dipisah supaya `petak_blok` dan pemakai yang punya daftar
+   petak RATA (Meja) menggambar sel yang sama persis. #}
+{% macro sel(s) -%}
+<div class="petak__sel{% if s.nada %} petak__sel--{{ s.nada }}{% endif %}">
+  <div class="petak__label">{{ s.label }}</div>
+  <div class="petak__nilai">{{ s.nilai }}<span class="petak__sat">{{ s.sat }}</span></div>
+  {% if s.ket %}<div class="petak__label" style="margin-top:2px">{{ s.ket }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{# ── EMPAT ANGKA PERTAMA, MILIK ORANG YANG MEMBACANYA ──
+   Isinya datang dari `app.web.layar.petak_beranda`, bukan ditulis di templat.
+   Beranda yang menuliskan sendiri petaknya adalah Beranda yang hanya bisa
+   punya satu bentuk — dan bentuk yang satu itu terlanjur milik gudang
+   selepan. Operator polesan yang disambut "Gabah masuk" membaca kabar dari
+   gudang sebelah, lalu berhenti membaca baris teratas ini selamanya. #}
+{% macro petak_blok(blok, pertama, judul_bawaan="Keadaan pabrik hari ini") -%}
+<div>
+  <span class="lbl">
+    {%- if blok.judul %}{{ blok.judul }}{% elif pertama %}{{ judul_bawaan }}{% endif -%}
+  </span>
+  <div class="petak">
+    {% for s in blok.sel %}{{ sel(s) }}{% endfor %}
+  </div>
+</div>
+{%- endmacro %}
+
+{# Petak RATA — satu blok tanpa judul blok, dipakai app yang tak membagi
+   angkanya per gudang. #}
+{% macro petak_rata(petak, judul="Keadaan pabrik hari ini") -%}
+<div>
+  <span class="lbl">{{ judul }}</span>
+  <div class="petak">
+    {% for s in petak %}{{ sel(s) }}{% endfor %}
+  </div>
+</div>
+{%- endmacro %}
+
+{# ── Kartu pintu: nama, keterangan, lencana, panah ──
+   Markup yang paling banyak digandakan di seluruh aplikasi — dua puluh baris
+   dengan SVG di dalamnya, dan tiap salinan adalah satu panah yang bisa
+   berbeda arah. `ikon` = isi <svg> tanpa tag luarnya; `jml` = angka lencana
+   (0/None = tanpa lencana); `nada` = kelas lencana (aman/bahaya). #}
+{% macro pintu(href, nama, ket, ikon, jml=0, nada="", gaya="") -%}
+<a class="tindakan" href="{{ href }}"{{ (' style="' ~ gaya ~ '"')|safe if gaya }}>
+  <div class="tindakan__ikon">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" stroke-linejoin="round">{{ ikon }}</svg>
+  </div>
+  <div class="tindakan__isi">
+    <div class="tindakan__nama">{{ nama }}</div>
+    <div class="tindakan__ket">{{ ket }}</div>
+  </div>
+  {% if jml %}<span class="lencana{{ ' lencana--' ~ nada if nada }}">{{ jml }}</span>{% endif %}
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="2.2"
+       stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+</a>
+{%- endmacro %}
+
+{#: Ikon yang dipakai lebih dari satu app — supaya jalur SVG-nya tak disalin. #}
+{% macro ikon_gudang() -%}<path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M10 20v-6h4v6"/>{%- endmacro %}
+{% macro ikon_antrean() -%}<path d="M3 17h18"/><path d="M7 17V9l5-4 5 4v8"/>{%- endmacro %}
+{% macro ikon_centang() -%}<path d="M20 6L9 17l-5-5"/>{%- endmacro %}
+
+{# Pintu Antrian tunggu — sama di ketiga app, termasuk kalimat kosongnya. #}
+{% macro pintu_antrean(jml) -%}
+{{ pintu("/aksi", "Antrian tunggu",
+         (jml ~ " menunggu ditindak") if jml else "tak ada yang menunggu",
+         ikon_antrean(), jml) }}
+{%- endmacro %}

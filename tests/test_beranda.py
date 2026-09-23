@@ -17,6 +17,8 @@ from app.web.tampilan import templates
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
 TPL = AKAR / "app/web/templates"
+#: Templat yang sudah naik ke paket bersama (Tahap 1 & 2).
+PAKET = AKAR / "hmu_tampilan/templates"
 
 
 def _akun(peran: str = "operator"):
@@ -115,12 +117,15 @@ def test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci():
     # Dibaca dari berkasnya, bukan dari halaman jadi: laci memang memuat
     # ketiganya, dan itu justru inti soalnya — tempatnya di laci, bukan di
     # badan halaman.
-    isi = (TPL / "beranda.html").read_text()
+    # `beranda.html` naik ke paket pada Tahap 2 (23 September 2026) — bersama
+    # Operasi Gudang 2, yang layarnya memang sama. Pintu-pintunya digambar makro
+    # `_beranda.html`, jadi keduanya dibaca.
+    isi = (PAKET / "beranda.html").read_text() + (PAKET / "_beranda.html").read_text()
     assert 'href="/laporan"' not in isi
     assert 'href="/pengaturan"' not in isi
     # Yang tersisa satu, dan ia tinggal karena membawa jumlah — pintu laci tak
     # memberi tahu berapa yang menunggu tanpa dibuka dulu.
-    assert 'href="/aksi"' in isi
+    assert '"/aksi"' in isi
     assert "Antrian tunggu" in isi and "Catat pekerjaan" not in isi
 
 
@@ -138,7 +143,7 @@ def test_beranda_memakai_daftar_yang_sama_bukan_hitungan_sendiri():
     assert "svc.untuk(db, akun.user)" in sumber
     assert "berjalan=jalan.berjalan" in sumber and "transit=jalan.transit" in sumber
     # Dan kartunya makro yang sama, bukan salinan.
-    assert '"_benda.html"' in (TPL / "beranda.html").read_text()
+    assert '"_benda.html"' in (PAKET / "beranda.html").read_text()
 
 
 def test_transit_sampai_ke_layarnya():
