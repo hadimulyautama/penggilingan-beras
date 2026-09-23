@@ -46,6 +46,23 @@ def _url() -> str | None:
     return url
 
 
+#: Mengosongkan SELURUH tabel kecuali tabel versi migrasi. Di tingkat modul
+#: supaya pola nama `alembic_version%` hanya tertulis SEKALI — pola yang disalin
+#: adalah pola yang cepat atau lambat kehilangan salah satu dari empat rantai
+#: migrasi yang hidup di basis data ini.
+_KOSONGKAN = """
+    DO $$
+    DECLARE t text;
+    BEGIN
+      FOR t IN SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public'
+                  AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
+      LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
+      END LOOP;
+    END $$;
+"""
+
+
 @pytest_asyncio.fixture
 async def pg():
     """Basis data kosong dengan skema dari MIGRASI, bukan dari metadata.
@@ -102,34 +119,36 @@ async def pg():
     ]
     for m, _ in disalin:
         m.SessionLocal = Sesi
+
+    # ── Dikosongkan SEBELUM tiap uji, bukan sesudah ──
+    #
+    # Dulu sesudah, dan itu meninggalkan satu lubang yang justru paling sulit
+    # dibaca: uji PERTAMA sebuah lintasan mewarisi isi basis data dari lintasan
+    # SEBELUMNYA — lintasan yang dihentikan di tengah, yang gagal, atau yang
+    # dijalankan dengan env berbeda. Ia menjatuhkan uji yang tak bersalah
+    # (`test_acuan_hanya_nama_daftar_mingguan`, 23 September 2026: satu pemasok
+    # sisa membuat `daftar["Pemasok"] == ["Pak Tani"]` gagal), lalu HILANG di
+    # lintasan berikutnya — kegagalan yang datang dan pergi menuntun orang
+    # menyalahkan ujinya, bukan harness-nya. Temuan QA 24 September 2026.
+    #
+    # Mengosongkan di muka menjadikannya sifat yang tak bergantung apa pun:
+    # tiap uji dimulai dari basis data kosong, apa pun yang terjadi sebelumnya.
+    #
+    # SELURUH tabel versi migrasi dipertahankan: mengosongkannya membuat
+    # `alembic upgrade head` berikutnya mencoba membangun dari awal di atas
+    # skema yang sudah ada.
+    async with mesin.begin() as conn:
+        await conn.execute(sa_text(_KOSONGKAN))
+
     try:
         yield Sesi
     finally:
         database.SessionLocal = asli
         for m, _lama in disalin:
             m.SessionLocal = asli
-        # ── Dikosongkan SESUDAH tiap uji ──
-        #
-        # Basis datanya sama untuk seluruh berkas uji, jadi baris dari uji
-        # sebelumnya bertahan — dan uji berikutnya gagal karena kode yang
-        # bentrok, bukan karena hal yang diujinya. Kegagalan seperti itu
-        # menuntun orang memperbaiki uji yang sebenarnya benar.
-        #
-        # SELURUH tabel versi migrasi dipertahankan: mengosongkannya membuat
-        # `alembic upgrade head` berikutnya mencoba membangun dari awal di
-        # atas skema yang sudah ada.
-        async with mesin.begin() as conn:
-            await conn.execute(sa_text("""
-                DO $$
-                DECLARE t text;
-                BEGIN
-                  FOR t IN SELECT tablename FROM pg_tables
-                            WHERE schemaname = 'public'
-                              AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
-                  LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
-                  END LOOP;
-                END $$;
-            """))
+        # Tidak dikosongkan lagi di sini: sekali per uji cukup, dan basis data
+        # yang tertinggal berisi justru berguna — ia bisa dibuka orang untuk
+        # melihat keadaan saat uji terakhir gagal.
         await mesin.dispose()
 
 
