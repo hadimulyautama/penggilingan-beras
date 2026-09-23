@@ -6,14 +6,21 @@ penyaring yang masing-masing benar tetapi bersama meninggalkan lubang:
 
   · `berjalan._tiket_belum_ditaut` hanya memancarkan `model == "gabah"`
     ("PK & lainnya punya alurnya sendiri");
-  · `meja_api._tiket_pk_luar` hanya memancarkan `is_pk`.
+  · `berjalan._tiket_pk_luar` hanya memancarkan `is_pk`.
 
 Jenis yang TIDAK dipetakan sama sekali tak diambil siapa pun. Hanya laporan
 Rekonsiliasi menyebutnya — dan laporan dibuka orang sesudah ia curiga.
 
 Dan lubangnya bukan sementara: `BERAS_MASUK` & `BROKEN_MASUK` memang belum
-dipetakan (menunggu keputusan pemilik), dan taksonomi jenis di Pos Timbang
-berbasis DATA, jadi jenis baru bisa lahir di sana tanpa produksi tahu.
+dipetakan (keputusan pemiliknya sudah ada sejak 24 Sep 2026 — pembelian,
+tanpa antrean giling — tapi jalurnya belum dibangun), dan taksonomi jenis di Pos
+Timbang berbasis DATA, jadi jenis baru bisa lahir di sana tanpa produksi tahu.
+
+Kedua pemancar PINDAH dari `web/meja_api.py` ke `services/berjalan.py` pada 24
+September 2026: yang di meja_api hanya dipanggil app Meja, jadi Pos Produksi
+tetap bisu — dan tangkapan layar pemilik semuanya Pos Produksi. Uji di berkas ini
+ikut pindah ke sumbernya; yang menjaga sisi Pos Produksi ada di
+`test_tiket_antrean_produksi.py`.
 """
 from __future__ import annotations
 
@@ -84,7 +91,7 @@ async def admin(pg):
 
 
 async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
-    from app.web import meja_api
+    from app.services import berjalan as svc
 
     async with pg() as db:
         await _tiket(db, "TRX-UJI-TDK-01", "BERAS_MASUK")     # belum dipetakan
@@ -93,13 +100,13 @@ async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
         await db.commit()
 
     async with pg() as db:
-        tak_dikenal = await meja_api._tiket_jenis_tak_dikenal(db)
-        pk = await meja_api._tiket_pk_luar(db)
+        tak_dikenal = await svc._tiket_jenis_tak_dikenal(db)
+        pk = await svc._tiket_pk_luar(db, boleh_catat=True)
 
     # Hanya yang TAK dipetakan, dan tepat satu.
-    assert [k["kode"] for k in tak_dikenal] == ["TRX-UJI-TDK-01"]
+    assert [k.kode for k in tak_dikenal] == ["TRX-UJI-TDK-01"]
     # Jalur PK tak berubah: ia tetap mengambil PK-nya, bukan yang ini.
-    assert [k["kode"] for k in pk] == ["TRX-UJI-PK-01"]
+    assert [k.kode for k in pk] == ["TRX-UJI-PK-01"]
 
     kartu = tak_dikenal[0]
     # ── DIAM: tak ada yang bisa ditekan ──
@@ -107,17 +114,15 @@ async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
     # `aksi`, dan kartu diam bila keduanya kosong. Borang mana pun akan
     # menolak jenis yang tak dikenalnya, dan kartu yang menjanjikan lalu
     # menolak lebih buruk daripada kartu yang diam.
-    assert kartu["aksi"] == "" and kartu["tombol"] == [] and kartu["pilihan"] == []
+    assert not kartu.aksi and kartu.tombol == [] and kartu.pilihan == []
     # ── Tetapi ia MENJELASKAN dirinya ──
-    assert "BERAS_MASUK" in kartu["keadaan"] and "belum dikenal" in kartu["keadaan"]
-    assert ["Jenis timbang", "BERAS_MASUK"] in kartu["fakta"]
+    assert "BERAS_MASUK" in kartu.keadaan and "belum dikenal" in kartu.keadaan
+    assert ("Jenis timbang", "BERAS_MASUK") in kartu.fakta
     # Bobot & pemasoknya terbaca — itu yang dipakai orang mengenali truk mana.
-    assert kartu["judul"] == "UD Sumber Tani"
-    assert kartu["utama"] and kartu["utama"][1] == "kg"
-    # Gudang tak ditebak: jenis yang belum dipetakan belum punya tujuan.
-    assert kartu["gudang"] is None
+    assert kartu.judul == "UD Sumber Tani"
+    assert kartu.utama and kartu.utama[1] == "kg"
     # Dan ia duduk di blok "Tiket timbang belum dicatat", bersama tiket PK.
-    assert kartu["kelompok"] == "tiket"
+    assert kartu.kelompok == "tiket"
 
 
 async def test_ikut_antrean_dan_lencana_meja(pg, admin, pabrik):
@@ -141,14 +146,14 @@ async def test_tiket_yang_sudah_dicatat_keluar_dari_antrean(pg, admin):
     """Jaring ini tak boleh jadi daftar yang tak pernah habis: begitu tiketnya
     tertaut batch yang hidup, `tiket_masuk_aktif` berhenti menawarkannya —
     aturan yang sama dengan tiket gabah & PK, bukan aturan baru."""
-    from app.web import meja_api
+    from app.services import berjalan as svc
 
     async with pg() as db:
         tid = await _tiket(db, "TRX-UJI-TDK-03", "BERAS_MASUK")
         await db.commit()
 
     async with pg() as db:
-        assert [k["kode"] for k in await meja_api._tiket_jenis_tak_dikenal(db)] \
+        assert [k.kode for k in await svc._tiket_jenis_tak_dikenal(db)] \
             == ["TRX-UJI-TDK-03"]
 
     # Tiket dibatalkan di Pos Timbang → hilang dari antrean, bukan menetap.
@@ -158,4 +163,4 @@ async def test_tiket_yang_sudah_dicatat_keluar_dari_antrean(pg, admin):
         await db.commit()
 
     async with pg() as db:
-        assert await meja_api._tiket_jenis_tak_dikenal(db) == []
+        assert await svc._tiket_jenis_tak_dikenal(db) == []

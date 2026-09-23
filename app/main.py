@@ -469,6 +469,22 @@ async def halaman_aksi(request: Request):
                   # timbang; kerangkanya sama, kelompoknya berbeda.
                   KELOMPOK_ATAS="tumpukan",
                   judul_atas="Menumpuk di lantai",
+                  # ── Blok TIKET, 24 September 2026 ──
+                  #
+                  # Tiket timbang yang belum dicatat mendapat bloknya sendiri,
+                  # dan bukan demi kerapian: judul blok sisanya berbunyi "Bisa
+                  # dikerjakan sekarang", sedangkan tiket PK yang dilihat
+                  # operator Gudang 2 adalah kartu DIAM — dicatat Admin, bukan
+                  # dia. Kartu yang tak bisa ditekan di bawah judul yang
+                  # menjanjikan ia bisa membuat orang menekannya berulang lalu
+                  # menyimpulkan aplikasinya rusak.
+                  #
+                  # Judulnya menyebut KEADAANNYA, bukan tindakannya: yang benar
+                  # untuk admin (ia bisa mencatat) dan untuk operator (ia tak
+                  # bisa) adalah hal yang sama — barangnya ada, catatannya
+                  # belum.
+                  KELOMPOK_TENGAH="tiket",
+                  judul_tengah="Tiket timbang belum dicatat",
                   judul_bawah="Bisa dikerjakan sekarang",
                   # Tombol kecil di bawah antrean — hanya untuk operator, dan
                   # hanya karena katalog "Catat pekerjaan lain" dicabut dari

@@ -591,6 +591,136 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
     return baris
 
 
+async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
+    """Tiket timbang PK luar yang belum dicatat.
+
+    **Pindah dari `web/meja_api.py` ke sini 24 September 2026, dan inilah
+    jawaban keluhan pemilik** — "ada PK masuk dan sudah ditimbang, kenapa tidak
+    ada di antrian tunggu?". Selama ini tiket PK hanya dipancarkan `meja_api`,
+    dan hanya app Meja yang memanggilnya; di Pos Produksi — tempat seluruh
+    tangkapan layar pemilik diambil — `_tiket_belum_ditaut` memancarkan HANYA
+    `model == "gabah"`, jadi tiket PK tak pernah sampai ke antrean mana pun di
+    sana, dipetakan maupun tidak.
+
+    Ukuran seberapa jauh ia hilang (QA, 24 Sep 2026): tak ada SATU layar pun di
+    Pos Produksi yang menyebut tiket itu, untuk peran mana pun. Operator tak
+    bisa mengerjakannya sama sekali (katalognya sudah dicabut dari laci, dan
+    sumber daftar tiket PK menjawab 403); Admin bisa, tetapi hanya bila ia sudah
+    tahu harus membuka katalog → "Catat PK luar datang" → daftar di dalam
+    borang. Tak ada apa pun yang memberitahunya ada PK menunggu.
+
+    `boleh_catat` memisahkan dua pembaca, dan bukan karena selera:
+
+      · **Admin ke atas** — kartu bertindakan. Aksinya `catat_pk_luar` sudah
+        ada, dan gerbang perannya (`PERAN_ADMIN_KEATAS` di
+        `create_pk_purchase_dari_timbang`) memang menerima mereka.
+      · **Operator Gudang 2** — kartu DIAM. Penempatan PK datang bukan tugasnya;
+        itu keputusan pemilik 12 September 2026, dan tidak diubah di sini. Tapi
+        barangnya berdiri di halamannya, jadi ia tak boleh jadi orang terakhir
+        yang tahu. Kartu diam menyebut keadaannya tanpa menawarkan borang yang
+        akan menolak isinya — menawarkan tombol yang pasti ditolak lebih buruk
+        daripada tak menawarkan apa pun.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.peta_jenis import is_pk
+
+    baris = []
+    for t in await tiket_masuk_aktif(db):
+        if not is_pk(t.get("jenis_kode", "")):
+            continue
+        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        bobot = t.get("berat_hpp_kg")
+        isi = f"PK luar · {nama} · {t.get('nomor_polisi') or '-'}"
+        if bobot:
+            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
+        baris.append(Baris(
+            kode=t["kode"], isi=isi,
+            # Kepingan keadaan hanya dipasang pada kartu diam: di kartu yang
+            # BISA ditekan, kalimat "dicatat Admin" cuma mengulang apa yang
+            # tombolnya sudah katakan.
+            keadaan="" if boleh_catat else "dicatat Admin — barangnya di halaman Anda",
+            aksi="catat_pk_luar" if boleh_catat else None,
+            nilai=str(t["id"]) if boleh_catat else None,
+            fase="baru", judul=nama,
+            utama=(_kg(bobot).removesuffix(" kg"), "kg") if bobot else None,
+            sub=f"{t['kode']} · PK luar · {t.get('nomor_polisi') or '-'}",
+            fakta=([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
+                  + [("Masuk", _tgl(t.get("tanggal")))],
+            kelompok="tiket",
+            pilihan=([("catat_pk_luar", "Catat PK luar datang",
+                       "Jenis PK & kadar air — bobot dari tiket", str(t["id"]))]
+                     if boleh_catat else []),
+        ))
+    return baris
+
+
+async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
+    """Tiket timbang MASUK yang jenisnya BELUM DIPETAKAN produksi — kartu DIAM.
+
+    Sampai 23 September 2026 tiket semacam ini lenyap dari setiap antrean tanpa
+    satu pun tanda: `_tiket_belum_ditaut` hanya memancarkan yang
+    `model == "gabah"`, `_tiket_pk_luar` hanya yang `is_pk`, dan yang bukan
+    keduanya tak diambil siapa pun. Hanya laporan Rekonsiliasi menyebutnya — dan
+    laporan dibuka orang SESUDAH ia curiga, bukan sebelum. Sementara itu
+    barangnya sudah turun dari truk dan berdiri di halaman.
+
+    Jaringnya pertama kali dipasang di `meja_api` (commit 7c26a0f) dan itu
+    **salah alamat**: hanya Meja memanggilnya, jadi Pos Produksi tetap bisu.
+    Dipindah ke sini 24 September 2026 bersama `_tiket_pk_luar`.
+
+    Bukan kekeliruan yang akan habis sendiri: `peta_jenis.PETA_MASUK` memang
+    belum memetakan BERAS_MASUK & BROKEN_MASUK (keputusan pemiliknya sudah ada —
+    pembelian, tanpa antrean giling — tapi jalurnya belum dibangun), dan
+    taksonomi jenis di Pos Timbang berbasis DATA: jenis baru bisa lahir di sana
+    kapan saja tanpa produksi tahu. Jadi ini keadaan tetap yang harus terlihat,
+    bukan galat sementara.
+
+    TANPA tindakan: yang benar memang belum ada. Yang bisa dikerjakan orang ada
+    di luar layar ini — memetakan jenisnya di produksi, atau membatalkan
+    tiketnya di Pos Timbang.
+
+    Admin ke atas saja. Operator tak punya jalan keluar untuk kartu ini:
+    pemetaan jenis bukan wewenangnya, dan kartu yang tak bisa ia kerjakan
+    maupun teruskan hanya menambah angka pada lencananya.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+
+    baris = []
+    for t in await tiket_masuk_aktif(db):
+        kode_jenis = t.get("jenis_kode") or "?"
+        if intake_dari_jenis(kode_jenis) is not None:
+            continue                       # dipetakan → sudah ada jalurnya
+        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        bobot = t.get("berat_hpp_kg")
+        # Nama jenisnya dari tabel jenis Pos Timbang bila ada; kodenya bila
+        # tidak. Keduanya disebut: nama yang dibaca orang, kode yang dipakai
+        # memetakannya nanti.
+        jenis_nama = t.get("jenis_nama") or kode_jenis
+        isi = f"{jenis_nama} · {nama} · {t.get('nomor_polisi') or '-'}"
+        if bobot:
+            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
+        baris.append(Baris(
+            kode=t["kode"], isi=isi,
+            # Kepingan keadaan, bukan tombol: ia menerangkan kenapa kartu ini
+            # tak bisa ditekan, di tempat orang mencari sebabnya.
+            keadaan=f"jenis \u201c{kode_jenis}\u201d belum dikenal produksi",
+            # `aksi` & `nilai` sengaja TIDAK disebut, bukan disebut bernilai
+            # None: `test_setiap_kartu_membentang_di_tempat` membaca AST-nya dan
+            # hanya melihat NAMA argumennya, jadi `aksi=None` terbaca seperti
+            # kartu bertindakan yang lupa membawa `pilihan`. Diamnya kartu ini
+            # dinyatakan dengan tidak menyebutnya sama sekali.
+            fase="baru", judul=nama,
+            utama=(_kg(bobot).removesuffix(" kg"), "kg") if bobot else None,
+            sub=f"{t['kode']} · {jenis_nama} · {t.get('nomor_polisi') or '-'}",
+            fakta=[("Jenis timbang", kode_jenis)]
+                  + ([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
+                  + [("Masuk", _tgl(t.get("tanggal")))],
+            kelompok="tiket",
+        ))
+    return baris
+
+
 async def _lot(db: AsyncSession, *, pendinginan_selesai: bool) -> list[DryingLot]:
     belum_silo = ~exists().where(SiloStorage.drying_lot_id == DryingLot.id)
     syarat = (DryingLot.waktu_selesai_pendinginan.is_not(None)
@@ -1053,6 +1183,15 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             memo[silo_id] = await _isian_silo(db, silo_id)
         return memo[silo_id]
 
+    # ── Tiket timbang PK yang belum dicatat ──
+    #
+    # Barisnya lahir SEBELUM batch-nya ada: truknya sudah ditimbang dan pergi,
+    # PK-nya di halaman, dan belum ada satu catatan pun yang menyebutnya. Tanpa
+    # baris ini antrean melompati langkah pertama dan baru menyebut PK sesudah
+    # seseorang sempat mencatatnya — padahal justru pencatatan itu yang
+    # terlewat. (Keluhan pemilik 23 Sep 2026; lihat `_tiket_pk_luar`.)
+    b.menunggu += await _tiket_pk_luar(db, boleh_catat=True)
+
     # ── PK luar yang sudah diterima tetapi belum masuk silo/tumpukan ──
     #
     # "Diterima" bukan "sudah punya tempat": PK yang masuk PASTI diterima,
@@ -1333,6 +1472,12 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
         return memo[silo_id]
 
     b = Berjalan()
+    # Tiket PK yang belum dicatat: kartu DIAM. Penempatan PK datang bukan tugas
+    # operator (pemilik, 12 September 2026) dan itu tidak diubah — tapi
+    # barangnya berdiri di halamannya, dan ia tak boleh jadi orang terakhir yang
+    # tahu. Ia berdiri PALING ATAS di antreannya karena ia yang paling baru
+    # turun dari truk.
+    b.menunggu += await _tiket_pk_luar(db, boleh_catat=False)
     b.menunggu += await _kartu_tumpukan_g2(db)
     b.menunggu += await _kartu_silo_g2(db, asal_silo)
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
@@ -1353,6 +1498,13 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # gunanya menghitung berapa yang belum dicatat.
     mutu_aktif = await fitur_mutu(db)
     b = Berjalan()
+
+    # Tiket berjenis tak dikenal — satu-satunya baris FISIK di fungsi ini, dan
+    # ia di sini karena jalan keluarnya memang kerja meja: memetakan jenisnya,
+    # atau membatalkan tiketnya di Pos Timbang. Ia masuk `menunggu`, bukan
+    # `meja`: yang tertahan bukan keputusan uang melainkan barang yang berdiri
+    # di halaman tanpa satu catatan pun.
+    b.menunggu += await _tiket_jenis_tak_dikenal(db)
 
     for batch, nama in (await db.execute(
         select(PurchaseBatch, Supplier.nama_supplier)
@@ -1468,6 +1620,10 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         s = await untuk_staff(db)
         b.meja += s.meja
         b.berjalan += s.berjalan
+        # `menunggu` ikut sejak 24 September 2026: `untuk_staff` kini juga
+        # memancarkan tiket berjenis tak dikenal, dan daftar yang tak diambil
+        # adalah daftar yang tak pernah tergambar.
+        b.menunggu += s.menunggu
         # Staff & Direksi tak terikat satu gudang; keadaan fisik G1 tetap
         # perlu terlihat, tetapi sebagai kabar — bukan sebagai tugas mereka.
         if not await _is_g1_operator(user):

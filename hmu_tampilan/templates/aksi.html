@@ -12,6 +12,8 @@
      KELOMPOK_ATAS   nilai `kelompok` yang mendapat bloknya sendiri di ATAS
      judul_atas      judul blok itu
      judul_bawah     judul blok sisanya
+     KELOMPOK_TENGAH nilai `kelompok` blok TENGAH — kosong = tak ada blok itu
+     judul_tengah    judul blok tengah
      PINTASAN        tombol kecil di bawah antrean: [(buka, label), …]
 
    Kalimat keadaan-kosongnya seluruhnya milik app (`_kata_aksi.html`): ketiga
@@ -73,10 +75,29 @@
    terbaca seperti pekerjaan biasa, dan yang paling ingin diketahui justru
    tenggelam di tengah daftar. Blok kosong tidak digambar sama sekali, jadi
    hari yang tak punya tumpukan tak melihat judulnya. #}
+{# Blok TENGAH untuk tiket timbang, dan ia ada karena satu kalimat yang jadi
+   bohong: di Pos Produksi judul blok sisanya "Bisa dikerjakan sekarang",
+   sedangkan tiket PK yang dilihat operator Gudang 2 adalah kartu DIAM —
+   dicatat Admin, bukan dia. Kartu yang tak bisa ditekan di bawah judul yang
+   menjanjikan ia bisa membuat orang menekannya berulang lalu menyimpulkan
+   aplikasinya rusak.
+
+   `KELOMPOK_TENGAH` kosong = tak ada blok tengah, dan keluarannya sama persis
+   seperti sebelum 24 September 2026. Di Meja tiket memang sudah jadi blok
+   ATAS, jadi di sana ia tetap kosong. #}
+{# Bawaannya kosong DI TEMPLAT, bukan di tiap app: app yang tak punya blok
+   tengah tak perlu tahu bahwa blok itu ada. #}
+{% set KELOMPOK_TENGAH = KELOMPOK_TENGAH|default("", true) %}
 {% set atas = semua|selectattr("kelompok", "equalto", KELOMPOK_ATAS)|list %}
-{% set lain = semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list %}
+{% set tengah = (semua|selectattr("kelompok", "equalto", KELOMPOK_TENGAH)|list
+                 if KELOMPOK_TENGAH else []) %}
+{% set lain = (semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)
+                    |rejectattr("kelompok", "equalto", KELOMPOK_TENGAH)|list
+               if KELOMPOK_TENGAH
+               else semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list) %}
 
 {{ benda.blok(judul_atas, atas) }}
+{% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah) }}{% endif %}
 {{ benda.blok(judul_bawah, lain) }}
 
 {# ── Ke mana antrean gudang pergi ──
