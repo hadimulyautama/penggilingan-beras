@@ -51,9 +51,33 @@ PETA_MASUK: dict[str, IntakeJenis] = {
                                 tujuan_pilihan=(SILO, DRYER, TUMPUK)),
     # PK dari luar → gudang2. Subtipe (ks/kl/campuran/semi_ks) dipilih operator (timbang
     # tak membedakannya).
+    #
+    # INILAH jenis masuk yang bahan baku: PK beli-luar mendarat di stok Gudang 2
+    # (`PkGudang2Intake`), lalu masuk silo, lalu disosoh — jalur yang sama
+    # dengan PK hasil giling sendiri, hanya asalnya beda. Ditegaskan pemilik
+    # 24 September 2026, dan ditulis di sini justru karena ia mudah tertukar
+    # dengan BERAS_MASUK di bawah: keduanya "beras beli dari luar" dalam
+    # percakapan, tapi yang satu bahan baku dan yang lain barang jadi.
     "BERAS_PK":     IntakeJenis("pk"),
-    # BROKEN_MASUK & BERAS_MASUK: BELUM dipetakan — menunggu keputusan (beli broken/beras
-    # jadi dari luar → modelnya di produksi belum ada). Tambahkan di sini bila sudah pasti.
+    # BROKEN_MASUK & BERAS_MASUK: belum dipetakan, tapi TIDAK LAGI menunggu
+    # keputusan. Pemilik memutuskan 24 September 2026: keduanya **pembelian**,
+    # dan **tidak masuk antrean giling** — beras & broken yang dibeli dari luar
+    # sudah jadi, ia tak melewati giling maupun sosoh — bedakan dari BERAS_PK
+    # di atas, yang justru bahan baku dan memang menuju silo lalu sosoh.
+    #
+    # Karena itu ia bukan `PurchaseBatch`: memetakannya ke sana menaruhnya di
+    # antrean giling dan di hitungan HPP gabah, dua tempat yang salah. Jalur
+    # yang benar adalah pembelian yang mendarat langsung di stok barang jadi
+    # Gudang 2, bertanda asal "beli luar" — dan tanda itu wajib, sebab beras
+    # beli-luar TIDAK bisa dirunut ke PK sendiri: ia memang tak punya hulu di
+    # sini, dan stok yang tidak membedakannya membuat ketelusuran hulu-hilir
+    # ikut berbohong untuk barang yang tak punya hulu.
+    #
+    # Jalurnya belum dibangun (butuh jenis peristiwa & proyeksinya sendiri),
+    # jadi sengaja DIBIARKAN kosong: jenis yang dipetakan separuh lebih buruk
+    # daripada yang belum dipetakan — tiket akan diterima lalu mendarat di
+    # tempat yang salah, sedangkan yang belum dipetakan tergambar sebagai
+    # kartu diam di Antrian tunggu dan orang tahu ia harus dikerjakan.
 }
 
 
