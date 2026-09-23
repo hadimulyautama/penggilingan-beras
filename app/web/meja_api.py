@@ -280,6 +280,73 @@ async def _tiket_pk_luar(db) -> list[dict]:
     return keluar
 
 
+async def _tiket_jenis_tak_dikenal(db) -> list[dict]:
+    """Tiket timbang MASUK yang jenisnya BELUM DIPETAKAN produksi — kartu DIAM.
+
+    Sampai 23 September 2026 tiket semacam ini lenyap dari setiap antrean tanpa
+    satu pun tanda: `berjalan._tiket_belum_ditaut` hanya memancarkan yang
+    `model == "gabah"`, `_tiket_pk_luar` hanya yang `is_pk`, dan yang bukan
+    keduanya tak diambil siapa pun. Hanya laporan Rekonsiliasi menyebutnya — dan
+    laporan dibuka orang SESUDAH ia curiga, bukan sebelum. Sementara itu
+    barangnya sudah turun dari truk dan berdiri di halaman.
+
+    Bukan kekeliruan yang akan habis sendiri: `peta_jenis.PETA_MASUK` memang
+    belum memetakan BERAS_MASUK & BROKEN_MASUK (menunggu keputusan pemilik soal
+    beli beras jadi / broken dari luar), dan taksonomi jenis di Pos Timbang
+    berbasis DATA — jenis baru bisa lahir di sana kapan saja tanpa produksi
+    tahu. Jadi ini keadaan tetap yang harus terlihat, bukan galat sementara.
+
+    TANPA tindakan: tak ada `aksi`, `pilihan`, maupun `tombol`, jadi
+    `_benda.html` menggambarnya sebagai kartu diam. Yang benar memang belum
+    ada — menawarkan borang yang akan menolak isinya lebih buruk daripada tak
+    menawarkan apa pun. Yang bisa dikerjakan orang ada di luar layar ini:
+    memetakan jenisnya di produksi, atau membatalkan tiketnya di Pos Timbang.
+
+    IKUT DIHITUNG lencana, dan itu disengaja walau ia pekerjaan yang tak bisa
+    diselesaikan dari sini. Aturan yang sudah berlaku di layar ini: lencana
+    menghitung apa yang ADA di antrean (lihat `test_tumpukan_tetap_dihitung_
+    lencana_antrean`) — lencana yang tak menghitung pekerjaan yang nyata
+    mengajari orang bahwa gudangnya beres padahal belum. Dan jalan keluarnya
+    ada: memetakan jenisnya, atau membatalkan tiketnya.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+    from app.services.berjalan import _kg, _tgl
+
+    keluar = []
+    for t in await tiket_masuk_aktif(db):
+        kode_jenis = t.get("jenis_kode") or "?"
+        if intake_dari_jenis(kode_jenis) is not None:
+            continue                       # dipetakan → sudah ada jalurnya
+        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        bobot = t.get("berat_hpp_kg")
+        # Nama jenisnya dari tabel jenis Pos Timbang bila ada; kodenya bila
+        # tidak. Keduanya disebut: nama yang dibaca orang, kode yang dipakai
+        # memetakannya nanti.
+        jenis_nama = t.get("jenis_nama") or kode_jenis
+        keluar.append({
+            "kode": t["kode"],
+            "isi": f"{jenis_nama} · {nama} · {t.get('nomor_polisi') or '-'}"
+                   + (f" · {_kg(bobot)} ({t.get('sumber_berat')})" if bobot else ""),
+            # Kepingan keadaan, bukan tombol: ia menerangkan kenapa kartu ini
+            # tak bisa ditekan, di tempat orang mencari sebabnya.
+            "keadaan": f"jenis \u201c{kode_jenis}\u201d belum dikenal produksi",
+            "aksi": "", "nilai": "", "fase": "baru", "sejak": None, "judul": nama,
+            "utama": [_kg(bobot).removesuffix(" kg"), "kg"] if bobot else None,
+            "sub": f"{t['kode']} · {jenis_nama} · {t.get('nomor_polisi') or '-'}",
+            "fakta": [["Jenis timbang", kode_jenis]]
+                     + ([["Sumber berat", str(t.get("sumber_berat") or "-")]] if bobot else [])
+                     + [["Masuk", _tgl(t.get("tanggal"))]],
+            # Gudangnya TIDAK disebut: jenis yang belum dipetakan belum punya
+            # gudang tujuan, dan menebaknya berarti kartu ini ikut tersaring
+            # penyaring gudang ke tempat yang belum tentu benar.
+            "anak": [], "nota": None, "nota_jenis": None, "catatan": [],
+            "tombol": [], "pilihan": [],
+            "kelompok": "tiket", "ringkas": None, "maju": None, "gudang": None,
+        })
+    return keluar
+
+
 async def _susun(db, akun: ProduksiAkun) -> dict:
     """Seluruh kartu meja, per golongan, sudah bertanda gudang."""
     from app.services import berjalan as svc
@@ -287,7 +354,9 @@ async def _susun(db, akun: ProduksiAkun) -> dict:
     g1 = await svc.untuk_gudang1(db)
     g2 = await svc.untuk_gudang2(db)
     s = await svc.untuk_staff(db)
-    menunggu = (await _tiket_pk_luar(db)) + _beri_gudang(g2.menunggu, "g2")
+    menunggu = ((await _tiket_pk_luar(db))
+                + (await _tiket_jenis_tak_dikenal(db))
+                + _beri_gudang(g2.menunggu, "g2"))
     berjalan = _beri_gudang(g1.berjalan, "g1") + _beri_gudang(g2.berjalan, "g2")
     transit = _beri_gudang(g1.transit, "g1") + _beri_gudang(g2.transit, "g2")
     meja = _beri_gudang(s.meja, "g1") + _beri_gudang(g2.meja, "g2")
