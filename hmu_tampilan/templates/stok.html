@@ -1,8 +1,24 @@
 {% extends "base.html" %}
 {% block judul %}Stok{% endblock %}
 {% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
 
-{% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
+{# ── Penyaring per gudang ──
+   Milik app yang memegang LEBIH DARI SATU gudang (Meja). Pos Produksi
+   memberi tiap orang satu gudang lewat view, jadi penyaringnya tak punya
+   pilihan kedua untuk ditawarkan. Daftar, bukan dua pil yang ditulis tangan:
+   menambah gudang berarti menambah baris di master, bukan di templat. #}
+{% if SARING_GUDANG %}
+<div class="saring">
+  <div class="pil-baris">
+    <a class="pil{{ ' pil--on' if not gudang }}" href="/stok">Semua</a>
+    {% for gid, nama, _ in SARING_GUDANG %}
+      <a class="pil{{ ' pil--on' if gudang == gid }}" href="/stok?gudang={{ gid }}">{{ nama }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 {% if not lot and not tempat %}
   <div class="kosong">
@@ -288,53 +304,29 @@
 {% endif %}
 {% endif %}
 
-{# ── STOK KARUNG ──
-   Keputusan pemilik 23 September 2026: stok karung harus punya bloknya
-   sendiri di layar Stok, dilihat operator Gudang 2, Admin, dan Super Admin —
-   tidak operator Gudang 1. Sebelum ini ia hanya ada di laporan teks "Stok
-   karung", dan angka yang cuma bisa dicari di laporan adalah angka yang
-   diketahui terlambat: yang menyadari karung hampir habis adalah orang yang
-   sedang mengemas, bukan orang yang sedang membuka laporan.
-
-   DI LUAR blok kosong PK di atas, dengan sengaja: karung tetap ada meski
-   tak ada satu pun PK tersisa, dan justru saat itulah pengemasan berjalan.
-
-   Tanpa HARGA. Satuan yang ditanyakan orang saat melihat tumpukan karung
-   adalah lembar, dan blok ini dibaca juga oleh yang tak boleh melihat uang. #}
-{% if karung %}
+{# ── BARANG JADI & HASIL SAMPING ──
+   Milik app yang mencatat BARANG KELUAR (Meja): yang mencatat barang keluar
+   harus melihat apa yang bisa keluar. Pos Produksi hanya punya laporan
+   teksnya (`stok_barang_jadi`); barisnya digambar di sini dengan pola yang
+   sama seperti lembar laporan. #}
+{% if barang_jadi %}
 <div style="margin-top:18px">
-  <div class="jumlah">
-    <span class="lbl">Stok karung</span>
-    <div class="jumlah__angka">{{ kg(karung|sum(attribute="lembar")) }}<small>lembar</small></div>
-    {% set tipis = karung|selectattr("menipis")|list|length %}
-    <div class="jumlah__ket">
-      {{ karung|length }} kombinasi jenis, ukuran &amp; merk · dibeli dikurangi
-      yang terpakai &amp; hilang
-      {%- if tipis %} · <b>{{ tipis }} menipis</b>{% endif -%}
-    </div>
-  </div>
+  <span class="lbl">Barang jadi &amp; hasil samping · Gudang 2</span>
   <div class="kartu">
     <div class="lap">
-      {% for g in ["Gudang 2", "Gudang 1"] %}
-        {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
-        {% if baris %}
-          <div class="lap__bab">{{ g }}</div>
-          {% for b in baris %}
-            <div class="lap__baris">
-              <span class="lap__nama">
-                {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
-              <span class="lap__nilai">
-                {{- kg(b.lembar) }} lembar
-                {%- if b.menipis %} · menipis{% endif -%}
-              </span>
-            </div>
-          {% endfor %}
-        {% endif %}
+      {% for b in barang_jadi %}
+        {% if b.jenis == "kepala" %}<div class="lap__bab">{{ b.nama }}</div>
+        {% elif b.jenis == "baris" %}
+          <div class="lap__baris"><span class="lap__nama">{{ b.nama }}</span>
+            {% if b.nilai %}<span class="lap__nilai">{{ b.nilai }}</span>{% endif %}</div>
+        {% else %}<p class="lap__teks">{{ b.nama }}</p>{% endif %}
       {% endfor %}
     </div>
   </div>
 </div>
 {% endif %}
+
+{{ st.karung_blok(karung) }}
 
 {% if boleh_ubah %}
   <dialog class="lembar" id="lembar"></dialog>

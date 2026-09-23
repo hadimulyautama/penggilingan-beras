@@ -1,0 +1,78 @@
+{# ── Potongan layar Stok yang dipakai lebih dari satu app ──
+
+   Tahap 2, 23 September 2026. Layar Stok tidak bisa jadi SATU berkas: Pos
+   Produksi & Meja menggambar stok PK (lot Gudang 1, tempat Gudang 2),
+   sedangkan Operasi Gudang 2 menggambar BARANG JADI (beras putih & hasil
+   samping) untuk operator polesan. Dua pertanyaan yang berbeda, bukan dua
+   rupa dari satu layar.
+
+   Yang memang sama di ketiganya ada di sini. #}
+
+{#: Pemisah ribuan. Namanya menyebut "kg" karena di situlah ia lahir; ia
+   sendiri tak menempelkan satuan apa pun, dan blok karung memakainya untuk
+   LEMBAR. Satuannya ditulis di sebelah angkanya, di markup. #}
+{% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
+
+{# ── STOK KARUNG ──
+   Keputusan pemilik 23 September 2026: stok karung punya bloknya sendiri di
+   layar Stok — dilihat operator Gudang 2, Admin, dan Super Admin, tidak
+   operator Gudang 1. Sebelum ini ia hanya ada di laporan teks "Stok karung",
+   dan angka yang cuma bisa dicari di laporan adalah angka yang diketahui
+   terlambat: yang menyadari karung hampir habis adalah orang yang sedang
+   mengemas, bukan orang yang sedang membuka laporan.
+
+   DI LUAR blok kosong PK, dengan sengaja: karung tetap ada meski tak ada satu
+   pun PK tersisa, dan justru saat itulah pengemasan berjalan.
+
+   Tanpa HARGA. Satuan yang ditanyakan orang saat melihat tumpukan karung
+   adalah lembar, dan blok ini dibaca juga oleh yang tak boleh melihat uang.
+
+   `judul` disebut app-nya: di Operasi Gudang 2 hanya karung gudang itu yang
+   pernah dikirim (disaring `gudang2_api.stok`), jadi judulnya menyebutnya —
+   "Stok karung · Gudang 2" — dan bab per gudang di dalamnya tak digambar,
+   karena bab yang cuma punya satu isi tak membedakan apa pun.
+
+   Lahir tiga kali pada hari yang sama (commit stok karung), dan disatukan di
+   commit berikutnya sebelum ketiganya sempat berselisih. #}
+{% macro karung_blok(karung, judul="Stok karung", per_gudang=True) -%}
+{% if karung %}
+<div style="margin-top:18px">
+  <div class="jumlah">
+    <span class="lbl">{{ judul }}</span>
+    <div class="jumlah__angka">{{ kg(karung|sum(attribute="lembar")) }}<small>lembar</small></div>
+    {% set tipis = karung|selectattr("menipis")|list|length %}
+    <div class="jumlah__ket">
+      {{ karung|length }} kombinasi jenis, ukuran &amp; merk · dibeli dikurangi
+      yang terpakai &amp; hilang
+      {%- if tipis %} · <b>{{ tipis }} menipis</b>{% endif -%}
+    </div>
+  </div>
+  <div class="kartu">
+    <div class="lap">
+      {% if per_gudang %}
+        {% for g in ["Gudang 2", "Gudang 1"] %}
+          {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
+          {% if baris %}
+            <div class="lap__bab">{{ g }}</div>
+            {% for b in baris %}{{ karung_baris(b) }}{% endfor %}
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        {% for b in karung %}{{ karung_baris(b) }}{% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro karung_baris(b) -%}
+<div class="lap__baris">
+  <span class="lap__nama">
+    {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
+  <span class="lap__nilai">
+    {{- kg(b.lembar) }} lembar
+    {%- if b.menipis %} · menipis{% endif -%}
+  </span>
+</div>
+{%- endmacro %}

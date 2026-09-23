@@ -234,7 +234,7 @@ def test_layar_stok_tak_menyebut_gudang_1_di_menu():
 def test_kartu_gudang2_menyebut_asal_barangnya():
     """Aturan pemilik untuk SETIAP kartu. Silo yang cuma menyebut jumlah tak
     memberi tahu PK siapa yang ada di dalamnya."""
-    teks = (AKAR / "app/web/templates/stok.html").read_text()
+    teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
     assert "Pernah masuk" in teks and "anak__baris" in teks
 
 

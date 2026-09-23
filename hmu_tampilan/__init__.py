@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "134"
+VERSI = "135"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -74,6 +74,9 @@ BERKAS_PAKET = (
     # 2026), dan bernama `beranda_meja.html` di repo meja — jadi nama ini boleh
     # dijaga ketat tanpa menghalanginya.
     "beranda.html", "_beranda.html",
+    # `stok.html` = stok PK (Pos Produksi & Meja). Layar Stok Gudang 2
+    # menjawab pertanyaan LAIN — barang jadi — dan bernama `stok_gudang2.html`.
+    "stok.html", "_stok.html",
 )
 
 

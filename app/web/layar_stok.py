@@ -67,6 +67,14 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     return await render_laci(
         request, "stok.html", layar="stok",
         lot=lot, tempat=tempat,
+        # ── Dua blok milik Meja (Tahap 2, stok.html naik ke paket) ──
+        #
+        # Penyaring gudang: Pos Produksi memberi tiap orang SATU gudang lewat
+        # view, jadi penyaringnya tak punya pilihan kedua untuk ditawarkan.
+        # Barang jadi: yang mencatat barang keluar harus melihat apa yang bisa
+        # keluar, dan barang keluar dicatat dari meja — di sini yang ada cuma
+        # laporan teksnya (`stok_barang_jadi`).
+        SARING_GUDANG=(), gudang="", barang_jadi=[],
         total=sum(l.tersedia for l in lot),
         # `is_admin` sudah memakai peran EFEKTIF: saat admin memakai "Lihat
         # sebagai operator", `akun.user.role` diganti, jadi tombolnya ikut

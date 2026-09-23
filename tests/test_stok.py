@@ -15,7 +15,10 @@ import re
 from tests.bantu import kode_saja
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
-TPL = AKAR / "app/web/templates/stok.html"
+#: Naik ke paket pada Tahap 2 (23 September 2026) — dipakai bersama Meja.
+TPL = AKAR / "hmu_tampilan/templates/stok.html"
+#: Potongan bersamanya: pemisah ribuan & blok stok karung.
+TPL_MAKRO = AKAR / "hmu_tampilan/templates/_stok.html"
 
 
 def test_stok_tak_pernah_menerima_angka_stok_langsung():
@@ -605,8 +608,10 @@ def test_stok_karung_tak_menyebut_uang():
     dan uji yang menghitung kata di dalam komentar melarang orang menjelaskan
     keputusannya.
     """
-    isi = TPL.read_text()
-    assert "{% if karung %}" in isi, "blok Stok karung hilang dari layar Stok"
+    # Bloknya makro bersama sejak Tahap 2; layarnya memanggilnya.
+    assert "{{ st.karung_blok(karung) }}" in TPL.read_text()
+    isi = TPL_MAKRO.read_text()
+    assert "{% if karung %}" in isi, "blok Stok karung hilang"
     blok = isi.split("{% if karung %}", 1)[1]
     tampak = re.sub(r"\{#.*?#\}", "", blok, flags=re.S)
     assert "lembar" in tampak
@@ -663,6 +668,12 @@ async def test_layar_stok_menggambar_karung_sesuai_peran(monkeypatch):
 def test_stok_karung_satu_pemformat_bukan_dua():
     """Berkas ini pernah membawa dua makro berisi persis sama (`kg` dan
     `ribuan`) — penggandaan kecil di layar yang justru sedang disatukan."""
-    isi = TPL.read_text()
-    assert isi.count('.format(n)|replace(",", ".")') == 1, "ada pemformat kembar"
-    assert "ribuan" not in isi
+    # Sejak Tahap 2 pemformatnya SATU untuk ketiga app, di `_stok.html`.
+    assert TPL_MAKRO.read_text().count('.format(n)|replace(",", ".")') == 1
+    # Yang dilarang MAKRO keduanya, bukan katanya: komentar yang menjelaskan
+    # "pemisah ribuan" tak bersalah, dan uji yang menghitung kata di dalam
+    # komentar melarang orang menjelaskan keputusannya.
+    for berkas in (TPL, TPL_MAKRO):
+        assert "macro ribuan(" not in berkas.read_text(), berkas.name
+    # Dan layarnya meminjamnya, bukan menulis ulang.
+    assert "{% set kg = st.kg %}" in TPL.read_text()
