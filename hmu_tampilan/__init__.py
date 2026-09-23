@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "139"
+VERSI = "140"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -81,6 +81,9 @@ BERKAS_PAKET = (
     # September 2026 bersama rute `/gudang/<gid>` di Pos Produksi — ia salah
     # satu layar yang harus tetap ada sesudah app meja dihapus.
     "gudang.html",
+    # Pil penyaring gudang — lahir dua kali (stok & berjalan) pada hari yang
+    # sama, disatukan 24 September 2026 sebelum keduanya sempat berselisih.
+    "_saring.html",
 )
 
 

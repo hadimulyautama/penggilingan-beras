@@ -165,8 +165,10 @@ def test_kartu_yang_sama_tak_muncul_di_dua_layar():
     aksi = kode_saja(main.halaman_aksi)
     assert "berjalan=[]" in aksi, "layar antrean tak boleh ikut memuat yang berjalan"
     jalan = kode_saja(layar_berjalan.halaman_berjalan)
-    assert "transit=b.transit" in jalan
-    assert "menunggu=" not in jalan
+    # `transit` tetap dimuat — lewat penyaring gudang sejak 24 September 2026,
+    # jadi yang diperiksa SUMBERNYA (`b.transit`), bukan bentuk pemanggilannya.
+    assert "transit=pilih(b.transit)" in jalan
+    assert "menunggu=" not in jalan, "layar ini tak boleh ikut memuat antrean"
 
 
 def test_kartu_punya_bentuk_yang_bisa_dipindai():

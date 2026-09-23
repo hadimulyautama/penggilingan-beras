@@ -12,6 +12,17 @@
    itu macro-nya melihatnya sebagai undefined dan waktu berjalan hilang diam-diam. #}
 {% import "_benda.html" as benda with context %}
 
+{# ── Penyaring per gudang ──
+   Hanya untuk view yang memegang LEBIH DARI SATU gudang: operator sudah
+   diberi satu gudang lewat view-nya, jadi penyaringnya tak punya pilihan
+   kedua untuk ditawarkan — dan pil tunggal bernama "Semua" adalah pil yang
+   tak membedakan apa pun.
+
+   Makro, bukan markup: pil ini lahir dua kali pada hari yang sama (layar Stok
+   dan layar ini di Meja). Lihat `_saring.html`. #}
+{% import "_saring.html" as saring with context %}
+{{ saring.pil_gudang("/berjalan", SARING_GUDANG, gudang) }}
+
 {% if not berjalan and not transit %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
@@ -20,8 +31,10 @@
     <div>
       <h2>Tidak ada mesin yang menyala</h2>
       <p class="bantu">
-        Tidak ada pengeringan, pendinginan, atau giling yang sedang berjalan,
-        dan tak ada gabah yang menunggu giliran di mesin maupun silo.
+        {% if gudang %}Tidak ada yang sedang diproses di gudang ini.
+        {% else %}Tidak ada pengeringan, pendinginan, atau giling yang sedang
+        berjalan, dan tak ada gabah yang menunggu giliran di mesin maupun silo.
+        {% endif %}
       </p>
     </div>
   </div>

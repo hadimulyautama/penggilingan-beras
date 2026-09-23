@@ -1,0 +1,27 @@
+{# ── Pil penyaring, satu salinan ──
+
+   Markup pil gudang lahir di `stok.html` (Meja, 23 September 2026) dan ditulis
+   lagi dengan tangan di `berjalan.html` milik meja — dua salinan yang bedanya
+   cuma satu kata: alamat layarnya. Diangkat jadi makro 24 September 2026, saat
+   Pos Produksi memerlukannya juga (celah ke-4 menjelang app meja dihapus).
+
+   QA menyebutnya lebih dulu: `SARING_GUDANG` sudah jadi nama KONTRAK templat
+   bersama, jadi pil ketiga tidak boleh ditulis tangan lagi. Pil yang disalin
+   adalah pil yang cepat atau lambat kehilangan salah satu gudang di salah satu
+   layar — dan penyaring yang diam-diam melewatkan satu gudang berbohong tanpa
+   kelihatan berbohong.
+
+   `daftar` = ((id, nama, fungsi), …) dari master gudang, bukan dua pil tetap:
+   menambah gudang berarti menambah baris di master, bukan di templat. #}
+{% macro pil_gudang(alamat, daftar, kini) -%}
+{% if daftar %}
+<div class="saring">
+  <div class="pil-baris">
+    <a class="pil{{ ' pil--on' if not kini }}" href="{{ alamat }}">Semua</a>
+    {% for gid, nama, _ in daftar %}
+      <a class="pil{{ ' pil--on' if kini == gid }}" href="{{ alamat }}?gudang={{ gid }}">{{ nama }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

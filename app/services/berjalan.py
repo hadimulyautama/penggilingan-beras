@@ -147,6 +147,17 @@ class Baris:
     #: `sub`, karena baris yang tak punya apa-apa untuk diringkas memang tak
     #: perlu dipaksa punya.
     ringkas: str | None = None
+    #: Gudang asal baris ini — "g1" / "g2", atau None bila memang tak punya
+    #: (jenis timbang yang belum dipetakan belum punya gudang tujuan, dan
+    #: menebaknya berarti mengarahkan orang ke gudang yang mungkin salah).
+    #:
+    #: Dicap oleh FUNGSI PENYUSUNNYA, sekali di ujung, bukan di tiap
+    #: pemanggilan `Baris(...)`: seratus tempat yang harus mengingat menyebutkan
+    #: gudangnya adalah seratus tempat yang bisa lupa, dan yang lupa akan
+    #: menghilang dari penyaring tanpa satu tanda pun. Dipakai pil penyaring
+    #: gudang di layar Sedang berjalan (Pos Produksi & Meja).
+    gudang: str | None = None
+
     #: Sudah sejauh mana, 0..1 — hanya untuk yang punya ukuran "sejauh mana".
     #: Pengeringan punya; giling dan silo tidak, dan memberi mereka batang
     #: kemajuan palsu lebih buruk daripada tak memberi apa-apa.
@@ -734,6 +745,20 @@ async def _lot(db: AsyncSession, *, pendinginan_selesai: bool) -> list[DryingLot
     )).scalars().all())
 
 
+def _cap_gudang(b: Berjalan, gid: str) -> Berjalan:
+    """Cap seluruh baris `b` dengan gudangnya. Sekali di ujung penyusunnya.
+
+    Baris yang SUDAH bergudang tidak ditimpa: tiket berjenis tak dikenal
+    sengaja tak punya gudang, dan mengecapnya dengan gudang penyusunnya berarti
+    menebak — lalu mengarahkan orang ke gudang yang mungkin salah.
+    """
+    for daftar in (b.menunggu, b.berjalan, b.transit, b.meja):
+        for x in daftar:
+            if x.gudang is None:
+                x.gudang = gid
+    return b
+
+
 async def untuk_gudang1(db: AsyncSession) -> Berjalan:
     """Pekerjaan operator Gudang 1, dari truk masuk sampai giling ditutup."""
     b = Berjalan()
@@ -1127,7 +1152,7 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                  p.kode_proses),
             ]),
         ))
-    return b
+    return _cap_gudang(b, "g1")
 
 
 #: Di mana gabahnya BERADA saat harganya masih ditagih. Fase inilah yang
@@ -1267,7 +1292,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             pilihan=[("qc_pk_luar", "Catat kualitas PK luar",
                       "Kadar air & butir patah", pk.kode_batch)],
         ))
-    return b
+    return _cap_gudang(b, "g2")
 
 
 async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
@@ -1481,7 +1506,7 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     b.menunggu += await _kartu_tumpukan_g2(db)
     b.menunggu += await _kartu_silo_g2(db, asal_silo)
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
-    return b
+    return _cap_gudang(b, "g2")
 
 
 async def untuk_staff(db: AsyncSession) -> Berjalan:
