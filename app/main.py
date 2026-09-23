@@ -444,6 +444,7 @@ async def halaman_aksi(request: Request):
     # Bendanya diambil dari sumber yang SAMA dengan layar Berjalan. Dua daftar
     # yang disusun terpisah akan berselisih cepat atau lambat, dan yang salah
     # adalah yang lebih jarang dibuka orang.
+    from app.peran import can_see_financials
     from app.services import berjalan as svc
     from app.web.layar import view_untuk
 
@@ -472,6 +473,12 @@ async def halaman_aksi(request: Request):
                   # lacinya: tanpa ini, aksi yang tak berwujud benda di gudang
                   # hilang sama sekali dari layarnya.
                   PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
+                  # Kartu silo & mesin pindah ke `transit` untuk pemegang kedua
+                  # gudang (`berjalan.untuk`), dan layar ini hanya merender
+                  # `menunggu`. Syaratnya dibaca dari sumber yang SAMA yang
+                  # memindahkannya — `can_see_financials` — supaya kalimatnya
+                  # tak pernah muncul di layar yang kartunya tidak pindah.
+                  blok_pengalih=can_see_financials(akun.user),
                   MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
                   KEPUTUSAN=b.jumlah_keputusan)
 

@@ -198,12 +198,15 @@ def test_kartu_pk_menyebut_lot_gilingnya():
 
     from app.services import berjalan as svc
 
-    fn = inspect.getsource(svc._asal_pk)
+    # Isinya pindah ke `_isian_silo` 23 September 2026, saat daftarnya dibatasi
+    # pada isian yang sedang berjalan; `_asal_pk` tinggal pembungkusnya.
+    fn = inspect.getsource(svc._isian_silo)
     # Dua rupa asal PK, dua-duanya harus terbaca di kartu.
     assert "MillingProcess.kode_proses" in fn, "lot giling tak disebut"
     assert "Supplier.nama_supplier" in fn, "pemasok PK luar tak disebut"
     assert "PkTumpukanToSilo" in fn, "PK yang lewat tumpukan ikut terlewat"
     assert 'f"masuk {_tgl(tgl)}"' in fn
+    assert "return (await _isian_silo(db, silo_id)).baris" in inspect.getsource(svc._asal_pk)
 
     g2 = (inspect.getsource(svc._kartu_penyosohan_g2)
           + inspect.getsource(svc._kartu_silo_g2))

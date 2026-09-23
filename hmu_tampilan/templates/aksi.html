@@ -79,6 +79,33 @@
 {{ benda.blok(judul_atas, atas) }}
 {{ benda.blok(judul_bawah, lain) }}
 
+{# ── Ke mana antrean gudang pergi ──
+   Bagi pemegang KEDUA gudang, keadaan fisik gudang adalah kabar, bukan
+   tugasnya: `berjalan.untuk()` menaruh kartu silo & mesin di `transit`, dan
+   layar ini hanya merender `menunggu`. Aturan itu benar dan tidak diubah —
+   yang salah hanyalah ia terjadi tanpa pamit. Pemilik melaporkannya 23
+   September 2026: "sebagai super admin saya tidak melihat antrian tunggu untuk
+   gudang 2", padahal ia ada, di layar sebelah.
+
+   TIDAK untuk operator: baginya tak ada yang pindah — kartu silonya memang di
+   `menunggu`, di layar ini. Kalimat yang menerangkan perpindahan yang tak
+   terjadi cuma membuat orang mencari-cari apa yang hilang.
+
+   TERMASUK saat antreannya kosong — dan justru terutama saat itu. Percobaan
+   pertama saya memberinya syarat `and semua`, dengan alasan kalimat
+   keadaan-kosong di bawah sudah menunjuk Sedang berjalan. Potret per peran
+   memperlihatkan akibatnya: bagi admin antrean ini memang KOSONG, jadi syarat
+   itu menyembunyikan kalimatnya tepat pada layar yang melahirkan keluhannya.
+   Dan kalimat keadaan-kosong itu sendiri berbunyi "Semua gabah sudah punya
+   tempat" — yang bagi pemegang kedua gudang tidak benar: silonya penuh dan
+   menunggu disosoh, hanya di layar sebelah. #}
+{% if blok_pengalih %}
+  <p class="bantu" style="margin:2px 0 0">
+    Silo &amp; mesin kedua gudang ada di
+    <a href="/berjalan">Sedang berjalan</a>.
+  </p>
+{% endif %}
+
 {# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
 
    Antrean adalah daftar BENDA — dan begitu tiap benda punya kartunya sendiri,

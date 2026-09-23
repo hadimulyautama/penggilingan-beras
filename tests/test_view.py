@@ -554,3 +554,64 @@ def test_tingkat_menjawab_naik_turun_dengan_benar():
     # Peran yang tak dikenal bernilai 0 — dianggap turun, dan menolak itu
     # sikap yang benar untuk akun tertinggi terakhir.
     assert turun("admin", "dewa")
+
+
+def test_kalimat_pengalih_hanya_untuk_pemegang_kedua_gudang():
+    """Antrean gudang pindah layar untuk admin ke atas — dan itu benar.
+
+    `berjalan.untuk()` menaruh kartu silo & mesin di `transit` bagi yang
+    memegang KEDUA gudang ("keadaan fisik gudang adalah kabar, bukan tugasnya"),
+    dan `/aksi` hanya merender `menunggu`. Pemilik melaporkannya 23 September
+    2026: "sebagai super admin saya tidak melihat antrian tunggu untuk gudang
+    2" — padahal ia ada, di layar sebelah. Pembagiannya TIDAK diubah; yang
+    ditambahkan hanya kalimat yang menyebutkannya.
+
+    Diuji per peran dengan MERENDER layarnya, dan syaratnya dibaca dari sumber
+    yang sama yang memindahkan kartunya (`can_see_financials`) — supaya kalimat
+    dan perpindahan tak pernah bisa berselisih.
+    """
+    import types
+
+    from app.peran import can_see_financials
+    from app.web.tampilan import templates
+
+    def gambar(*, pengalih: bool, ada_isi: bool) -> str:
+        akun = types.SimpleNamespace(nama="Uji", sesi_pendek=False)
+        b = [("Silo A", "1", "x")] if ada_isi else []
+        return templates.get_template("aksi.html").render(
+            request=None, akun=akun, layar="aksi", VIEW="x", LIHAT_SEBAGAI=None,
+            PERAN_ASLI="x", CSRF="c", TERIK=False, MENUNGGU=0, BERJALAN=0,
+            KEPUTUSAN=0, MODE_UJI=False, kembali=None, berjalan=[],
+            menunggu=[types.SimpleNamespace(
+                kode="Silo A", isi="PK", keadaan="", aksi=None, nilai=None,
+                sejak=None, fase="silo", pilihan=[], judul="Silo A", utama=None,
+                sub=None, fakta=[], anak=[], nota=None, nota_jenis=None,
+                catatan=[], tombol=[], kelompok=None, ringkas=None, maju=None)
+            ] if ada_isi else [],
+            buka="", nilai="", lama=lambda t: "", KELOMPOK_ATAS="tumpukan",
+            judul_atas="Menumpuk di lantai", judul_bawah="Bisa dikerjakan sekarang",
+            PINTASAN=(), blok_pengalih=pengalih)
+
+    # Admin ke atas: kalimatnya ada, dan ia menunjuk layar yang benar.
+    html = gambar(pengalih=True, ada_isi=True)
+    assert "Silo &amp; mesin kedua gudang ada di" in html
+    assert 'href="/berjalan"' in html
+
+    # Operator: tak ada yang pindah, jadi tak ada yang diterangkan.
+    assert "kedua gudang ada di" not in gambar(pengalih=False, ada_isi=True)
+
+    # ANTREAN KOSONG pun tetap, dan justru terutama saat itu: bagi admin
+    # antrean ini memang kosong — itulah layar yang melahirkan keluhannya.
+    # Percobaan pertama memberinya syarat "hanya bila berisi", dan potret per
+    # peran memperlihatkan kalimatnya hilang tepat di layar yang membutuhkannya.
+    assert "kedua gudang ada di" in gambar(pengalih=True, ada_isi=False)
+
+    # Dan rutenya memakai syarat yang SAMA dengan yang memindahkan kartunya.
+    from app import main
+
+    rute = inspect.getsource(main.halaman_aksi)
+    assert "blok_pengalih=can_see_financials(akun.user)" in rute
+    pindah = inspect.getsource(__import__(
+        "app.services.berjalan", fromlist=["untuk"]).untuk)
+    assert "can_see_financials(user)" in pindah
+    assert callable(can_see_financials)

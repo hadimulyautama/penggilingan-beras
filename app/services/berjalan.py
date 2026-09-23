@@ -17,7 +17,7 @@ status gudang — laporan memberi tahu, layar ini menyelesaikan.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -275,8 +275,35 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
             for kode, kg, tgl, nama, sumber, perk in baris]
 
 
-async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]:
-    """Asal-usul PK di sebuah silo Gudang 2 — dua rupa, satu aturan.
+#: Sebanyak-banyaknya baris asal yang ditampilkan satu kartu. Sesudah daftarnya
+#: dibatasi pada isian berjalan (23 Sep 2026) batas ini jarang menggigit —
+#: tetapi bila menggigit, jumlah yang tak tampil DISEBUT, bukan didiamkan.
+BATAS_ASAL = 6
+
+#: Toleransi saldo silo dianggap nol. Berat disimpan Numeric(12,2), jadi satu
+#: perseratus kg sudah lebih halus daripada yang bisa ditimbang siapa pun; yang
+#: dijaga toleransi ini adalah galat penjumlahan float, bukan berat sungguhan.
+_EPS_KG = 0.01
+
+
+@dataclass(frozen=True)
+class IsianSilo:
+    """Isian silo yang SEDANG BERJALAN — bukan seluruh riwayatnya.
+
+    `baris` = asal PK yang masuk SESUDAH terakhir kali silo ini mencapai nol.
+    `masuk_kg` dan `disosoh_kg` menerangkan selisih di dalam isian itu, supaya
+    judul kartu (isi sekarang) tak terbaca sebagai rincian yang tak menjumlah.
+    `lebih` = berapa baris yang tak ditampilkan karena `BATAS_ASAL`.
+    """
+
+    baris: list[tuple[str, str, str]] = field(default_factory=list)
+    lebih: int = 0
+    masuk_kg: float = 0.0
+    disosoh_kg: float = 0.0
+
+
+async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
+    """Asal-usul PK yang SEDANG ada di sebuah silo Gudang 2.
 
     Aturan pemilik berlaku sama di sini: tiap kartu menyebut asal barangnya.
     Bedanya PK punya dua asal. Yang buatan sendiri lahir dari satu lot giling
@@ -284,35 +311,94 @@ async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]
     di ujung sana kembali ke gabah dan pemasoknya. Yang beli luar membawa
     pemasoknya sendiri (PKB-…).
 
-    Yang disebut adalah apa yang PERNAH masuk ke silo ini — berapa dan kapan —
+    Yang disebut adalah apa yang masuk pada ISIAN YANG SEDANG BERJALAN —
+    pemasukan sesudah terakhir kali silo ini mencapai nol — berapa dan kapan,
     bukan berapa yang masih tersisa dari masing-masing. Stok silo disimpan
     sebagai satu jumlah, bukan lapisan, jadi sisa per lot memang tak bisa
     dihitung; mengarangnya berarti menaruh angka yang tak bisa dipertanggung-
     jawabkan tepat di tempat orang mencari pertanggungjawaban.
+
+    BATAS WAKTUNYA lahir 23 September 2026 dari galat yang dilaporkan pemilik
+    21:33 dan diukur QA (`QA/alat/p17/v_riwayat_silo.py`). Sebelumnya fungsi ini
+    tak punya batas sama sekali: ia menyebut SEGALA yang pernah masuk sejak
+    kapan pun. Di dalam satu isian itu cuma keterangan yang kurang jelas —
+    judul lebih kecil dari jumlah daftar karena sebagian sudah masuk mesin.
+    Tetapi SESUDAH silo kosong, lot lama bukan "sebagian terpakai" lagi: ia
+    habis. Menyebutnya sebagai asal isi silo sekarang adalah keterangan yang
+    SALAH. Dan ia menumpuk tiap putaran, sampai `BATAS_ASAL` memilih enam baris
+    sekadar karena urutan, bukan karena artinya.
+
+    Garis waktunya memakai patokan yang SAMA dengan `hitung_stok_silo` —
+    pemasukan langsung, pemindahan dari tumpukan, dan penyosohan yang
+    `berat_akhir_kg`-nya sudah terisi. Dua hitungan dengan patokan berbeda
+    akan berselisih justru pada kartu yang dipakai memutuskan kapan menyosoh.
+    Baris yang dibatalkan tak ikut: saringan cermin bertanda menyaringnya di
+    tingkat sesi ORM, jadi fungsi ini melihat kenyataan yang sama.
     """
     from app.models import InternalTransfer, PkGudang2Intake
-    from app.penggilingan.gudang2.models import PkPurchaseBatch, PkTumpukanToSilo
+    from app.penggilingan.gudang2.models import (PkPurchaseBatch, PkTumpukanToSilo,
+                                                 PolishingProcess, PolishingSiloUsage)
 
-    # Dua jalan masuk ke silo: langsung, atau lewat tumpukan. Yang lewat
-    # tumpukan bisa parsial, jadi beratnya diambil dari baris pemindahannya —
-    # bukan dari intake asalnya, yang mungkin belum seluruhnya pindah.
-    masuk: list[tuple] = []
+    # ── Garis waktu pergerakan silo: penambah dan pengurang bercampur ──
+    #
+    # Dua jalan masuk: langsung, atau lewat tumpukan. Yang lewat tumpukan bisa
+    # parsial, jadi beratnya diambil dari baris pemindahannya — bukan dari
+    # intake asalnya, yang mungkin belum seluruhnya pindah.
+    gerak: list[tuple[datetime, float, tuple | None]] = []
     for i in (await db.execute(
         select(PkGudang2Intake)
         .where(PkGudang2Intake.silo_id == silo_id,
                PkGudang2Intake.tujuan.in_(["silo_a", "silo_b"]))
     )).scalars().all():
-        masuk.append((i.tanggal_masuk, float(i.berat_kg or 0),
-                      i.internal_transfer_id, i.pk_purchase_batch_id))
+        kg = float(i.berat_kg or 0)
+        gerak.append((i.waktu_masuk, kg,
+                      (i.tanggal_masuk, kg, i.internal_transfer_id, i.pk_purchase_batch_id)))
     for pindah, i in (await db.execute(
         select(PkTumpukanToSilo, PkGudang2Intake)
         .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
         .where(PkTumpukanToSilo.silo_id == silo_id)
     )).all():
-        masuk.append((pindah.tanggal, float(pindah.berat_kg or 0),
-                      i.internal_transfer_id, i.pk_purchase_batch_id))
+        kg = float(pindah.berat_kg or 0)
+        gerak.append((pindah.waktu, kg,
+                      (pindah.tanggal, kg, i.internal_transfer_id, i.pk_purchase_batch_id)))
+    # Pengurangnya penyosohan. `PolishingSiloUsage` tak punya cap waktu sendiri,
+    # jadi waktunya diambil dari prosesnya: SELESAI-nya, sebab di situlah
+    # `berat_akhir_kg` terisi dan di situlah `hitung_stok_silo` mulai
+    # menguranginya. Proses yang belum selesai belum mengurangi apa pun.
+    for u, pr in (await db.execute(
+        select(PolishingSiloUsage, PolishingProcess)
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               PolishingSiloUsage.berat_akhir_kg.isnot(None))
+    )).all():
+        gerak.append((pr.waktu_selesai or pr.waktu_mulai,
+                      -float(u.berat_terpakai_kg or 0), None))
+    if not gerak:
+        return IsianSilo()
+
+    # Pengurang lebih dulu bila waktunya sama persis: silo yang dikosongkan lalu
+    # diisi ulang pada saat yang sama harus terbaca sebagai TERISI ULANG, bukan
+    # sebagai masih memegang isian lama.
+    _AWAL = datetime.min.replace(tzinfo=timezone.utc)
+    urut = sorted(gerak, key=lambda g: (g[0] or _AWAL, 0 if g[1] < 0 else 1))
+
+    # ── Titik nol terakhir ──
+    # Ditelusuri maju sekali jalan, bukan mundur: hasilnya sama, dan saldo
+    # berjalan lebih mudah dibaca. Keadaan awal silo memang nol, jadi silo yang
+    # belum pernah kosong berakhir dengan `batas = -1` — seluruh riwayatnya
+    # terdaftar, dan itu benar.
+    saldo, batas = 0.0, -1
+    for n, (_, delta, _) in enumerate(urut):
+        saldo += delta
+        if saldo <= _EPS_KG:
+            batas = n
+
+    isian = urut[batas + 1:]
+    masuk = [m for _, _, m in isian if m is not None]
+    masuk_kg = sum(m[1] for m in masuk)
+    disosoh_kg = -sum(d for _, d, _ in isian if d < 0)
     if not masuk:
-        return []
+        return IsianSilo(masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
 
     lot = dict((await db.execute(
         select(InternalTransfer.id, MillingProcess.kode_proses)
@@ -335,7 +421,31 @@ async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]
         else:
             continue
         keluar.append((judul, _kg(kg), f"masuk {_tgl(tgl)}"))
-    return keluar[:6]
+    return IsianSilo(baris=keluar[:BATAS_ASAL], lebih=max(0, len(keluar) - BATAS_ASAL),
+                     masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
+
+
+async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]:
+    """Baris asal saja, untuk pemakai yang tak butuh ringkasan selisihnya."""
+    return (await _isian_silo(db, silo_id)).baris
+
+
+def _nota_isian(isian: IsianSilo) -> str | None:
+    """Kalimat yang memberi nama pada selisih judul↔daftar, atau None.
+
+    Dua hal yang perlu disebut, dan hanya bila memang ada:
+    berapa yang masuk pada isian ini berbanding berapa yang sudah masuk mesin,
+    dan berapa baris asal yang tak ditampilkan. Selisih nol tak perlu kalimat —
+    kalimat yang selalu muncul berhenti dibaca, dan kartu yang penuh keterangan
+    tak bersisa tempat untuk keterangan yang benar-benar menahan pekerjaan.
+    """
+    bagian = []
+    if isian.disosoh_kg > _EPS_KG:
+        bagian.append(f"isian ini: {_kg(isian.masuk_kg)} masuk · "
+                      f"{_kg(isian.disosoh_kg)} sudah disosoh")
+    if isian.lebih:
+        bagian.append(f"+{isian.lebih} asal lagi tak ditampilkan")
+    return " · ".join(bagian) or None
 
 
 def _pemasok_ringkas(anak: list[tuple[str, str, str]]) -> str:
@@ -936,11 +1046,11 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     # Kartu silo dan kartu penyosohan menanyakan silo yang SAMA. Tanpa ini
     # asal-usulnya dikueri dua kali per silo — dan seluruh fungsi ini ikut
     # jalan tiap kali lencana laci dihitung, yaitu di tiap halaman.
-    memo: dict[int, list[tuple[str, str, str]]] = {}
+    memo: dict[int, IsianSilo] = {}
 
-    async def asal_silo(silo_id: int) -> list[tuple[str, str, str]]:
+    async def asal_silo(silo_id: int) -> IsianSilo:
         if silo_id not in memo:
-            memo[silo_id] = await _asal_pk(db, silo_id)
+            memo[silo_id] = await _isian_silo(db, silo_id)
         return memo[silo_id]
 
     # ── PK luar yang sudah diterima tetapi belum masuk silo/tumpukan ──
@@ -1053,7 +1163,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             s = await db.get(Silo, u.silo_id)
             if s:
                 silo_nama.append(s.nama_silo)
-            for a in await asal_silo(u.silo_id):
+            for a in (await asal_silo(u.silo_id)).baris:
                 if a not in asal_pr:
                     asal_pr.append(a)
         pemasok_pr = _pemasok_ringkas(asal_pr)
@@ -1124,7 +1234,8 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         if not kg:
             continue
         huruf = silo.nama_silo.replace("Silo ", "")
-        asal = await asal_silo(silo.id)
+        isian = await asal_silo(silo.id)
+        asal = isian.baris
         pemasok = _pemasok_ringkas(asal)
         keluar.append(Baris(
             kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
@@ -1137,6 +1248,13 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             sub=(f"PK menunggu disosoh · {pemasok}" if pemasok
                  else "PK menunggu disosoh"),
             anak=asal,
+            # ── Selisih dalam isian ini, dengan NAMA ──
+            # Judul kartu = isi SEKARANG; daftar di bawahnya = yang masuk pada
+            # isian yang sedang berjalan. Keduanya benar dan berbeda, dan tanpa
+            # baris ini pemilik membacanya sebagai rincian yang tak menjumlah
+            # (laporan 23 Sep 21:18). Selisih nol tak perlu kalimat — kalimat
+            # yang selalu muncul berhenti dibaca.
+            nota=_nota_isian(isian),
             ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
             pilihan=([] if sedang else [
                 ("mulai_penyosohan", "Mulai penyosohan",
@@ -1207,11 +1325,11 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     belum bertempat adalah antrean (entry Admin), dan silo berisi PK adalah
     transit yang dipantau.
     """
-    memo: dict[int, list[tuple[str, str, str]]] = {}
+    memo: dict[int, IsianSilo] = {}
 
-    async def asal_silo(silo_id: int) -> list[tuple[str, str, str]]:
+    async def asal_silo(silo_id: int) -> IsianSilo:
         if silo_id not in memo:
-            memo[silo_id] = await _asal_pk(db, silo_id)
+            memo[silo_id] = await _isian_silo(db, silo_id)
         return memo[silo_id]
 
     b = Berjalan()
