@@ -44,6 +44,18 @@
    lewat macro yang sama, bukan disalin — hanya dipadatkan jadi satu baris:
    nama, satu angka, satu keterangan. Ditekan, ia membuka lembar tindakan
    yang sama pula; ringkas bukan berarti tak bisa dikerjakan dari sini. #}
+{# ── PERLU PERHATIAN ──
+   Hanya bila ADA. Blok yang selalu berisi mengajari orang mengabaikannya, dan
+   warna dipakai di sini saja — bukan untuk keadaan normal. Isinya dari
+   `services.beranda.perhatian`: mesin yang dijeda, tumpukan G2 yang melewati
+   batas, harga yang menggantung lebih dari dua hari.
+
+   Naik dari Beranda Meja ke layar bersama ini pada 24 September 2026 (celah
+   ke-5 menjelang app meja dihapus). Bergerbang `blok_perhatian`, jadi Operasi
+   Gudang 2 — yang tak punya `/keputusan` maupun `/gudang/<gid>` — tidak
+   menggambarnya sama sekali. #}
+{% if blok_perhatian %}{{ br.blok_perhatian(perhatian) }}{% endif %}
+
 {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/") }}
 {{ benda.blok("Transit", transit, rapat=True, alamat="/") }}
 {% if not berjalan and not transit %}
@@ -67,12 +79,26 @@
      menunggu sampai lacinya dibuka. #}
   {# `gaya` pada <a>-nya, bukan pembungkus <div>: pembungkus menambah satu
      tingkat DOM, dan `.tindakan > svg` di app.css memilih anak LANGSUNG. #}
+  {# Rinciannya disebut bila app-nya menghitungnya, bukan cuma jumlahnya:
+     "3 menunggu" tak memberi tahu apakah yang tertahan harga, output, atau
+     mutu — dan ketiganya dikerjakan orang yang berbeda dengan urgensi yang
+     berbeda. Golongannya di `services.beranda.GOLONGAN_KEPUTUSAN`, tempat ia
+     bisa diuji terhadap jenis yang benar-benar dikirim. #}
   {% if blok_keputusan %}
   {{ br.pintu("/keputusan", "Menunggu keputusan",
-              (KEPUTUSAN ~ " menunggu diputuskan") if KEPUTUSAN else "tak ada yang tertahan",
+              ((n_harga ~ " harga · " ~ n_output ~ " output · " ~ n_mutu ~ " mutu")
+               if rinci_keputusan else (KEPUTUSAN ~ " menunggu diputuskan"))
+              if KEPUTUSAN else "tak ada yang tertahan",
               br.ikon_centang(), KEPUTUSAN, gaya="margin-top:8px") }}
   {% endif %}
 </div>
+
+{# ── SATU BARIS PER GUDANG ──
+   Dari DAFTAR, jadi sepuluh gudang = sepuluh baris. Rinciannya ada di halaman
+   gudang itu sendiri; barisnya cuma pintu. Hanya untuk pemegang KEDUA gudang:
+   operator sudah melihat gudangnya di petak teratas, dan baris kedua ke tempat
+   yang sama adalah dua tempat di kepala orang. #}
+{{ br.blok_gudang(gudang) }}
 
 {# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat
    di layar lain berarti orang kehilangan tempatnya — dan yang ia tekan tadi

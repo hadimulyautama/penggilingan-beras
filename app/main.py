@@ -346,6 +346,7 @@ async def beranda(request: Request):
 
     view = getattr(request.state, "view", "tamu")
     o, jalan, petak = {}, svc.Berjalan(), []
+    papan = None
     try:
         async with SessionLocal() as db:
             # Angka Gudang 1 mahal dan tak dipakai view polesan. Operator
@@ -355,6 +356,21 @@ async def beranda(request: Request):
                 o = (await dashboard_data(db)).get("operasional", {}) or {}
             jalan = await svc.untuk(db, akun.user)
             petak = await petak_beranda(db, view, o)
+            # ── Papan pemegang KEDUA gudang (celah ke-5, 24 Sep 2026) ──
+            #
+            # "Perlu perhatian", rincian keputusan, dan satu baris per gudang
+            # hanya ada di Beranda Meja sampai hari ini. Perhitungannya SAMA —
+            # `services.beranda` — supaya dua Beranda tak pernah menyebut angka
+            # berbeda tentang pabrik yang sama.
+            #
+            # Hanya untuk view meja, dan itu bukan soal izin melihat: operator
+            # sudah melihat gudangnya di petak teratas, dan penyimpangan gudang
+            # sebelah adalah kabar yang tak bisa ia tindaklanjuti.
+            if view in V_MEJA:
+                from app.services import beranda as svc_beranda
+
+                papan = await svc_beranda.papan(db, jalan.berjalan + jalan.transit,
+                                                jalan.meja)
     except Exception:
         log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
 
@@ -384,6 +400,17 @@ async def beranda(request: Request):
         # hidup di Meja Administrasi, jadi di sana pintunya akan jadi tautan
         # mati ke rute yang tak ada.
         blok_keputusan=view in V_MEJA,
+        # Blok "Perlu perhatian" & baris gudang: hanya bila papannya dihitung.
+        # `papan` bisa None karena kueri gagal (halaman ini sengaja tetap tampil
+        # tanpa angka), jadi bendanya dibaca dari satu tempat — bukan dari
+        # `view in V_MEJA` lagi, yang akan menggambar blok kosong saat gagal.
+        blok_perhatian=papan is not None,
+        perhatian=(papan.perhatian if papan else []),
+        gudang=(papan.gudang if papan else []),
+        rinci_keputusan=papan is not None,
+        n_harga=(papan.n_harga if papan else 0),
+        n_output=(papan.n_output if papan else 0),
+        n_mutu=(papan.n_mutu if papan else 0),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
     )
 

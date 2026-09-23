@@ -274,114 +274,23 @@ async def _susun(db, akun: ProduksiAkun) -> dict:
                         "KEPUTUSAN": len(meja)}}
 
 
-async def _perhatian(db, kartu: dict) -> list[dict]:
-    """Penyimpangan lintas gudang — hanya yang benar-benar menyimpang."""
-    from app.models import PurchaseBatch
-    from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import hitung_stok_tumpukan
-    from app.services.berjalan import _kg, _lama
-
-    kini = now_local()
-    keluar = []
-    for b in kartu["berjalan"]:
-        if b.get("nota_jenis") == "hati" and b.get("nota"):
-            keluar.append({"judul": f"{b['judul']} — {b['kode']}", "ket": b["nota"],
-                           "href": f"/gudang/{b['gudang']}", "gudang": b["gudang"]})
-    tump = float(await hitung_stok_tumpukan(db))
-    maks = float(settings.g2_tumpukan_maks_kg or 0)
-    if maks and tump > maks:
-        keluar.append({"judul": "Tumpukan PK Gudang 2 melebihi batas",
-                       "ket": f"{_kg(tump)} dari {_kg(maks)}", "href": "/gudang/g2", "gudang": "g2"})
-    batas = kini - timedelta(days=2)
-    for g, nama in (await db.execute(
-        select(PurchaseBatch, PurchaseBatch.kode_batch)
-        .where(PurchaseBatch.flag_unverified.is_(True), PurchaseBatch.created_at < batas)
-    )).all():
-        keluar.append({"judul": f"Harga {g.kode_batch} menggantung",
-                       "ket": f"{NAMA_GUDANG['g1']} · gabah · {_lama(g.created_at)}",
-                       "href": "/keputusan", "gudang": "g1"})
-    for p in (await db.execute(
-        select(PkPurchaseBatch)
-        .where(PkPurchaseBatch.flag_unverified.is_(True), PkPurchaseBatch.created_at < batas)
-    )).scalars().all():
-        keluar.append({"judul": f"Harga {p.kode_batch} menggantung",
-                       "ket": f"{NAMA_GUDANG['g2']} · PK luar · {_lama(p.created_at)}",
-                       "href": "/keputusan", "gudang": "g2"})
-    return keluar
-
-
-async def _angka_gudang(db) -> dict:
-    """Angka mentah per gudang untuk petak pabrik & baris gudang."""
-    from app.penggilingan.gudang1.services import tumpukan as tmp
-    from app.penggilingan.gudang1.services.milling import stok_pk_g1
-    from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import (get_g2_silo, hitung_stok_silo,
-                                                   hitung_stok_tumpukan)
-    from app.models import PurchaseBatch
-
-    hari = now_local().date()
-    gabah_kg, gabah_n = (await db.execute(
-        select(func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0), func.count(PurchaseBatch.id))
-        .where(PurchaseBatch.tanggal_pembelian == hari)
-    )).one()
-    pk_kg, pk_n = (await db.execute(
-        select(func.coalesce(func.sum(PkPurchaseBatch.berat_total_kg), 0), func.count(PkPurchaseBatch.id))
-        .where(PkPurchaseBatch.tanggal_pembelian == hari, PkPurchaseBatch.status_batch != "ditolak")
-    )).one()
-    tump_g1 = sum(float(b.berat_total_kg or 0) for b in await tmp.isi(db))
-    silo_g2 = 0.0
-    for huruf in ("A", "B"):
-        silo = await get_g2_silo(db, huruf)
-        silo_g2 += float(await hitung_stok_silo(db, silo.id)) if silo else 0.0
-    tump_g2 = float(await hitung_stok_tumpukan(db))
-    return {
-        "masuk_kg": float(gabah_kg or 0) + float(pk_kg or 0),
-        "masuk_n": int(gabah_n or 0) + int(pk_n or 0),
-        "g1": {"stok_pk": float(await stok_pk_g1(db)), "tumpukan": tump_g1},
-        "g2": {"stok_pk": silo_g2 + tump_g2, "tumpukan": tump_g2},
-        "tumpukan_g2_maks": float(settings.g2_tumpukan_maks_kg or 0),
-    }
-
-
-def _ribuan(n) -> str:
-    return "{:,}".format(int(n or 0)).replace(",", ".")
-
-
 @router.get("/beranda")
 async def beranda(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
+    """Papan Beranda Meja. Perhitungannya PINDAH ke `services.beranda` pada 24
+    September 2026, saat Beranda Pos Produksi memerlukannya juga: dua Beranda
+    yang menghitung penyimpangan sendiri-sendiri akan menyebut angka berbeda
+    tentang pabrik yang sama, dan tak ada yang menyadarinya sebab tak ada yang
+    membuka keduanya berdampingan."""
+    from app.services import beranda as svc_beranda
+
     async with SessionLocal() as db:
         kartu = await _susun(db, akun)
-        perhatian = await _perhatian(db, kartu)
-        a = await _angka_gudang(db)
-    mesin = len(kartu["berjalan"])
-    jeda = sum(1 for b in kartu["berjalan"] if b.get("nota_jenis") == "hati")
-    stok = a["g1"]["stok_pk"] + a["g2"]["stok_pk"]
-    tump = a["g1"]["tumpukan"] + a["g2"]["tumpukan"]
-    petak = [
-        {"label": "Masuk hari ini", "nilai": _ribuan(a["masuk_kg"]), "sat": " kg",
-         "ket": f"{a['masuk_n']} batch · gabah & PK", "nada": ""},
-        {"label": "Stok PK", "nilai": _ribuan(stok), "sat": " kg", "ket": "seluruh gudang", "nada": ""},
-        {"label": "Mesin menyala", "nilai": mesin, "sat": " proses",
-         "ket": (f"{jeda} dijeda" if jeda else "semua jalan") if mesin else "tak ada",
-         "nada": "bahaya" if jeda else ""},
-        {"label": "Menumpuk", "nilai": _ribuan(tump), "sat": " kg", "ket": "gabah & PK di lantai",
-         "nada": "bahaya" if a["tumpukan_g2_maks"] and a["g2"]["tumpukan"] > a["tumpukan_g2_maks"] else ""},
-    ]
-    perh = {p["gudang"] for p in perhatian}
-    gudang = []
-    for gid, nama, fungsi in GUDANG:
-        n_mesin = sum(1 for b in kartu["berjalan"] if b["gudang"] == gid)
-        ket = f"PK {_ribuan(a[gid]['stok_pk'])} kg"
-        if a[gid]["tumpukan"]:
-            ket += f" · menumpuk {_ribuan(a[gid]['tumpukan'])} kg"
-        gudang.append({"id": gid, "nama": nama, "fungsi": fungsi, "ket": ket,
-                       "mesin": n_mesin, "perhatian": gid in perh})
-    meja = kartu["meja"]
+        p = await svc_beranda.papan(db, kartu["berjalan"], kartu["meja"])
+        a = await svc_beranda.angka_gudang(db)
     return {
-        "lencana": kartu["lencana"], "perhatian": perhatian, "petak": petak, "gudang": gudang,
-        "n_harga": sum(1 for x in meja if x["aksi"] in ("verify_gabah", "harga_pk_luar")),
-        "n_output": sum(1 for x in meja if x["aksi"] == "verify_output"),
-        "n_mutu": sum(1 for x in meja if x["aksi"] in ("qc_giling", "qc_pk_luar")),
+        "lencana": kartu["lencana"], "perhatian": p.perhatian,
+        "petak": svc_beranda.petak_pabrik(a, kartu["berjalan"]), "gudang": p.gudang,
+        "n_harga": p.n_harga, "n_output": p.n_output, "n_mutu": p.n_mutu,
     }
 
 
