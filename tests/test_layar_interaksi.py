@@ -251,11 +251,14 @@ def test_lembar_terbuka_di_layar_tempat_tombolnya_ditekan():
     tempatnya, dan yang baru saja ia lihat ada di layar yang ia tinggalkan.
     """
     tpl = AKAR / "app/web/templates"
+    #: `aksi.html` naik ke paket pada Tahap 2; yang dijaga uji ini tak berubah.
+    paket = AKAR / "hmu_tampilan/templates"
     for berkas, alamat in (("beranda.html", '"/"'),
                            ("berjalan.html", '"/berjalan"'),
                            ("keputusan.html", '"/keputusan"'),
                            ("aksi.html", None)):
-        teks = (tpl / berkas).read_text()
+        induk = paket if (paket / berkas).exists() else tpl
+        teks = (induk / berkas).read_text()
         if alamat:
             assert f"alamat={alamat}" in teks, berkas
             # Kerangka lembarnya harus ada, kalau tidak tautannya menganga.

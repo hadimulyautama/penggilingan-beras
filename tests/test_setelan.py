@@ -27,10 +27,12 @@ def test_katalog_aksi_keluar_dari_antrean():
     """Antrean adalah daftar BENDA. Daftar kata kerja di bawahnya cuma
     menawarkan pintu kedua untuk pekerjaan yang sudah punya pintu — dan
     membuat antrean berhenti berarti apa yang ia namai."""
-    html = (AKAR / "app/web/templates/aksi.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/aksi.html").read_text()
     assert "semua-aksi" not in html
-    assert "Catat pekerjaan lain" not in html.split("{% block isi %}")[1] \
-        or "/aksi-lain" in html
+    # Ajakan ke katalog ada di `_kata_aksi.html` milik app — paket tak tahu
+    # app mana yang masih menawarkannya.
+    kata = (AKAR / "app/web/templates/_kata_aksi.html").read_text()
+    assert "/aksi-lain" in kata
 
 
 def test_katalog_punya_alamatnya_sendiri():

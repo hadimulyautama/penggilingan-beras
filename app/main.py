@@ -396,6 +396,31 @@ async def health() -> dict:
     }
 
 
+def _pintasan_aksi(view: str) -> tuple[tuple[str, str], ...]:
+    """Tombol kecil di bawah antrean, per view.
+
+    Membatalkan adalah satu-satunya aksi operator yang tak berwujud benda di
+    gudang — yang dibatalkan bukan gabah melainkan catatan yang baru saja
+    dibuat — jadi ia tak punya kartu, dan bersama katalog yang dicabut dari
+    laci operator ia akan hilang sama sekali.
+
+    Polesan kehilangan katalognya 21 September 2026, jadi dua aksinya yang
+    juga tak punya kartu ikut ke sini: packing dan bekatul curah lahir SESUDAH
+    proses ditutup. Admin ke atas masih mendapat katalognya di laci, jadi
+    baginya daftar ini kosong — dua pintu untuk satu pekerjaan hanya membuat
+    orang ragu pintu mana yang benar.
+    """
+    from app.web.layar import POLESAN, SELEPAN
+
+    if view == POLESAN:
+        return (("catat_packing", "Catat packing"),
+                ("catat_bekatul", "Catat bekatul"),
+                ("undo", "Batalkan input terakhir"))
+    if view == SELEPAN:
+        return (("undo", "Batalkan input terakhir"),)
+    return ()
+
+
 @app.get("/aksi", response_class=HTMLResponse)
 async def halaman_aksi(request: Request):
     """Layar pencatatan. Daftar aksi & bentuk formulirnya datang dari server
@@ -411,6 +436,7 @@ async def halaman_aksi(request: Request):
     # yang disusun terpisah akan berselisih cepat atau lambat, dan yang salah
     # adalah yang lebih jarang dibuka orang.
     from app.services import berjalan as svc
+    from app.web.layar import view_untuk
 
     async with SessionLocal() as db:
         b = await svc.untuk(db, akun.user)
@@ -423,6 +449,20 @@ async def halaman_aksi(request: Request):
                   # dua tempat di kepala orang, dan cepat atau lambat keduanya
                   # berbeda isi.
                   menunggu=b.menunggu, berjalan=[], lama=svc._lama,
+                  # ── Bentuk antrean (Tahap 2, aksi.html naik ke paket) ──
+                  #
+                  # Yang mendapat blok sendiri di ATAS adalah TUMPUKAN: isinya
+                  # menandakan gabah yang turun dari truk tanpa mesin atau silo
+                  # yang siap menerimanya. Di Meja yang di atas adalah tiket
+                  # timbang; kerangkanya sama, kelompoknya berbeda.
+                  KELOMPOK_ATAS="tumpukan",
+                  judul_atas="Menumpuk di lantai",
+                  judul_bawah="Bisa dikerjakan sekarang",
+                  # Tombol kecil di bawah antrean — hanya untuk operator, dan
+                  # hanya karena katalog "Catat pekerjaan lain" dicabut dari
+                  # lacinya: tanpa ini, aksi yang tak berwujud benda di gudang
+                  # hilang sama sekali dari layarnya.
+                  PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
                   MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
                   KEPUTUSAN=b.jumlah_keputusan)
 

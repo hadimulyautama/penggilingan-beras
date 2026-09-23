@@ -16,6 +16,8 @@ from app.web.tampilan import templates
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
 TPL = AKAR / "app/web/templates"
+#: Templat yang sudah naik ke paket bersama (Tahap 1 & 2).
+PAKET = AKAR / "hmu_tampilan/templates"
 
 
 def _akun(peran: str = "operator"):
@@ -41,11 +43,15 @@ def _meja(judul="Bu Sri", kode="GB-01", fase="silo"):
 def _render(menunggu, meja=()):
     """Layar ANTREAN. `meja` sengaja tak diterimanya lagi — parameternya
     tinggal supaya tesnya membaca seperti dulu."""
+    # Bentuk antrean dikirim rutenya sejak Tahap 2 (aksi.html satu berkas di
+    # paket untuk tiga app) — nilainya sama dengan yang dikirim `halaman_aksi`.
     return templates.get_template("aksi.html").render(
         request=None, akun=_akun("admin"), layar="aksi",
         MENUNGGU=len(menunggu), KEPUTUSAN=len(meja), MODE_UJI=False,
         LIHAT_SEBAGAI=None, kembali=None, menunggu=menunggu, berjalan=[],
-        buka="", nilai="", lama=lambda t: "")
+        buka="", nilai="", lama=lambda t: "",
+        KELOMPOK_ATAS="tumpukan", judul_atas="Menumpuk di lantai",
+        judul_bawah="Bisa dikerjakan sekarang", PINTASAN=())
 
 
 def _render_keputusan(meja):
@@ -110,7 +116,7 @@ def test_kerja_meja_keluar_dari_antrean():
     # sudah di silo, bahkan sudah digiling. Jadi ia tak boleh ada di sana
     # sama sekali; blok tersendiri pun masih menyalahi aturannya.
     assert label(_render([_tiket()])) == ["Bisa dikerjakan sekarang"]
-    assert "keputusan" not in (TPL / "aksi.html").read_text().lower()
+    assert "keputusan" not in (PAKET / "aksi.html").read_text().lower()
 
     # Tempatnya layar sendiri, dan lembar aksinya dibuka DI SITU — menekan
     # "Verifikasi harga" lalu mendarat di layar lain berarti orang kehilangan
@@ -350,11 +356,23 @@ def test_tumpukan_punya_bloknya_sendiri_dan_berdiri_di_atas():
     assert 'kelompok="tumpukan"' in g1, "baris tumpukan tak ditandai"
     assert g1.count('kelompok="tumpukan"') == 1
 
-    teks = (TPL / "aksi.html").read_text()
-    assert 'selectattr("kelompok", "equalto", "tumpukan")' in teks
-    assert 'rejectattr("kelompok", "equalto", "tumpukan")' in teks
-    # Urutannya bagian dari maksudnya.
-    assert teks.index('blok("Menumpuk di lantai"') < teks.index('blok("Bisa dikerjakan sekarang"')
+    # Templatnya bersama sejak Tahap 2: kelompok yang naik ke ATAS dan judulnya
+    # datang dari rute, karena di Meja yang di atas adalah tiket timbang.
+    # Jadi yang diperiksa: paket memakai `KELOMPOK_ATAS` (bukan nama kelompok
+    # satu app), dan RUTE Pos Produksi menyebut tumpukan.
+    teks = (PAKET / "aksi.html").read_text()
+    assert 'selectattr("kelompok", "equalto", KELOMPOK_ATAS)' in teks
+    assert 'rejectattr("kelompok", "equalto", KELOMPOK_ATAS)' in teks
+    assert '"tumpukan"' not in teks, "nama kelompok satu app terpateri di paket"
+    # Urutannya bagian dari maksudnya: blok ATAS digambar lebih dulu.
+    assert teks.index("benda.blok(judul_atas") < teks.index("benda.blok(judul_bawah")
+
+    from app.main import halaman_aksi
+
+    rute = inspect.getsource(halaman_aksi)
+    assert 'KELOMPOK_ATAS="tumpukan"' in rute
+    assert 'judul_atas="Menumpuk di lantai"' in rute
+    assert 'judul_bawah="Bisa dikerjakan sekarang"' in rute
 
 
 def test_tumpukan_tetap_dihitung_lencana_antrean():

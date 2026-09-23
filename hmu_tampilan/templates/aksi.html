@@ -1,7 +1,32 @@
 {% extends "base.html" %}
+{# ── Antrian tunggu: satu kerangka, dua blok, satu penyaring ──
+
+   Tahap 2 penyatuan kulit, 23 September 2026. Sebelum ini berkas ini ada tiga
+   (164 / 98 / 160 baris) dan yang paling banyak digandakan justru bagian yang
+   paling tak boleh berbeda: 45 baris JavaScript penyaring antrean, sama persis
+   tiga kali. Penyaring yang diperbaiki di satu salinan adalah penyaring yang
+   berbohong di dua layar lain.
+
+   Yang memang berbeda per app, dan datang dari app:
+
+     KELOMPOK_ATAS   nilai `kelompok` yang mendapat bloknya sendiri di ATAS
+     judul_atas      judul blok itu
+     judul_bawah     judul blok sisanya
+     PINTASAN        tombol kecil di bawah antrean: [(buka, label), …]
+
+   Kalimat keadaan-kosongnya seluruhnya milik app (`_kata_aksi.html`): ketiga
+   app menyebut benda yang berbeda ("gabah sudah punya tempat" / "tiket PK
+   sudah dicatat" / "tumpukan kosong") dan menunjuk layar yang berbeda. #}
 {% block judul %}Antrian tunggu{% endblock %}
 {% block isi %}
 {% import "_benda.html" as benda with context %}
+{# `with context` WAJIB: makro di berkas itu membaca `VIEW` untuk memutuskan
+   apakah menyebut katalog "Catat pekerjaan lain". Tanpa itu `VIEW` jadi
+   Undefined, `Undefined not in (…)` bernilai True, dan operator diajak ke
+   layar yang tak ada di lacinya — jalan buntu yang tak terlihat sebagai jalan
+   buntu. Sempat terjadi 23 September 2026; yang menangkapnya potret HTML per
+   peran, bukan ujinya. #}
+{% import "_kata_aksi.html" as kata with context %}
 
 {# ── BENDANYA DULU, TINDAKANNYA MENYUSUL ──
    Dulu layar ini membuka daftar 11 aksi berjajar sama besar: "Gabah masuk"
@@ -39,18 +64,20 @@
   </div>
 {% endif %}
 
-{# ── Yang MENUMPUK berdiri di bloknya sendiri, dan di atas ──
-   Tumpukan bukan sekadar salah satu antrean: isinya menandakan gabah yang
-   turun dari truk tanpa mesin atau silo yang siap menerimanya — pembelian
-   yang mendahului kapasitas. Dicampur ke satu daftar bersama pekerjaan biasa,
-   keadaan itu terbaca seperti pekerjaan biasa, dan yang paling ingin diketahui
-   justru tenggelam di tengah daftar. Blok kosong tidak digambar sama sekali,
-   jadi hari yang tak punya tumpukan tak melihat judulnya. #}
-{% set tumpuk = semua|selectattr("kelompok", "equalto", "tumpukan")|list %}
-{% set lain = semua|rejectattr("kelompok", "equalto", "tumpukan")|list %}
+{# ── Yang paling ingin diketahui berdiri di bloknya sendiri, dan di atas ──
+   Di Pos Produksi & Gudang 2 itu TUMPUKAN: isinya menandakan gabah atau PK
+   yang turun dari truk tanpa mesin atau silo yang siap menerimanya —
+   pembelian yang mendahului kapasitas. Di Meja itu TIKET timbang yang belum
+   dicatat: barangnya sudah berdiri di halaman tanpa satu pun catatan yang
+   menyebutnya. Dicampur ke satu daftar bersama pekerjaan biasa, keadaan itu
+   terbaca seperti pekerjaan biasa, dan yang paling ingin diketahui justru
+   tenggelam di tengah daftar. Blok kosong tidak digambar sama sekali, jadi
+   hari yang tak punya tumpukan tak melihat judulnya. #}
+{% set atas = semua|selectattr("kelompok", "equalto", KELOMPOK_ATAS)|list %}
+{% set lain = semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list %}
 
-{{ benda.blok("Menumpuk di lantai", tumpuk) }}
-{{ benda.blok("Bisa dikerjakan sekarang", lain) }}
+{{ benda.blok(judul_atas, atas) }}
+{{ benda.blok(judul_bawah, lain) }}
 
 {# Daftar lengkap aksi TIDAK lagi menggantung di bawah antrean.
 
@@ -69,39 +96,34 @@
       <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></svg>
     <div>
       <h2>Tidak ada yang menunggu Anda</h2>
-      <p class="bantu">
-        Semua gabah sudah punya tempat. Yang sedang berjalan ada di
-        <a href="/berjalan">Sedang berjalan</a>{% if VIEW not in (V_SELEPAN, V_POLESAN) %};
-        pekerjaan lain yang jarang dipakai ada di
-        <a href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}.
-      </p>
+      <p class="bantu">{{ kata.antrean_kosong() }}</p>
     </div>
   </div>
 {% endif %}
 
 {# ── SALAH KETIK, DIBERESKAN DI TEMPAT SALAHNYA ──
-   Hanya untuk operator selepan, dan hanya karena katalog "Catat pekerjaan
-   lain" dicabut dari layarnya. Membatalkan adalah satu-satunya aksinya yang
-   tak berwujud benda di gudang — yang dibatalkan bukan gabah melainkan
-   catatan yang baru saja dibuat — jadi ia tak punya kartu dan akan hilang
-   sama sekali bersama katalognya.
+   Tombol kecil di bawah antrean, untuk aksi yang tak berwujud benda di gudang
+   dan karena itu tak punya kartu: membatalkan catatan yang baru saja dibuat,
+   dan (bagi polesan di Pos Produksi) packing & bekatul curah yang lahir
+   SESUDAH proses ditutup.
+
+   Ada HANYA di app yang mencabut katalog "Catat pekerjaan lain" dari laci
+   orang itu — di Pos Produksi operator tak mendapatnya, jadi tanpa tombol ini
+   aksinya hilang sama sekali. Gudang 2 justru masih menawarkan katalognya
+   ("Packing, bekatul, batalkan" di laci), jadi di sana `PINTASAN` kosong dan
+   itu bukan kelalaian: dua pintu untuk satu pekerjaan hanya membuat orang
+   ragu pintu mana yang benar.
 
    Di sinilah tempatnya yang benar: orang yang salah menimbang menekan
    tombolnya di layar yang sama tempat ia baru saja mencatat, bukan setelah
    berpindah ke daftar kata kerja. Kecil dan tak berwarna — ini jaring
    pengaman, bukan pekerjaan harian, dan tombol besar memanggil dirinya
    sendiri untuk ditekan. #}
-{% if VIEW in (V_SELEPAN, V_POLESAN) %}
+{% if PINTASAN %}
 <div class="ubah-hasil" style="margin-top:14px">
-  {# Polesan kehilangan katalognya 21 September 2026. Dua aksinya yang tak
-     berwujud benda di gudang — packing dan bekatul curah lahir SESUDAH
-     proses ditutup, jadi tak ada kartu yang bisa menampungnya — ikut ke
-     sini, di samping tombol batal. #}
-  {% if VIEW == V_POLESAN %}
-  <a class="btn btn--kecil" href="/aksi?buka=catat_packing">Catat packing</a>
-  <a class="btn btn--kecil" href="/aksi?buka=catat_bekatul">Catat bekatul</a>
-  {% endif %}
-  <a class="btn btn--kecil" href="/aksi?buka=undo">Batalkan input terakhir</a>
+  {% for buka, label in PINTASAN %}
+  <a class="btn btn--kecil" href="/aksi?buka={{ buka }}">{{ label }}</a>
+  {% endfor %}
 </div>
 {% endif %}
 
@@ -119,7 +141,11 @@
 {# ── Penyaring antrean ──
    Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan
    mengganti seluruh isi bingkai — skrip yang dipasang sekali di luar akan
-   kehilangan elemennya begitu orang berpindah layar dan kembali. #}
+   kehilangan elemennya begitu orang berpindah layar dan kembali.
+
+   Sampai 23 September 2026 empat puluh lima baris ini disalin ke tiga repo.
+   Tak satu pun beda perilakunya — dan itulah yang membuatnya berbahaya: yang
+   diperbaiki di satu salinan tak terlihat gagal di dua layar lain. #}
 <script>
 (() => {
   const kotak = document.getElementById('cari-antri');

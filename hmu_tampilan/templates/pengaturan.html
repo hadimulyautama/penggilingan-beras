@@ -24,7 +24,11 @@
    itu — pola yang sama dengan `_kata_aksi_lain.html` (Tahap 1). Yang di sini
    berlaku untuk semuanya. #}
 {% from "_versi.html" import peringatan, baris as baris_versi %}
-{% import "_kata_pengaturan.html" as kata %}
+{# `with context`: makronya hari ini hanya mengembalikan teks, tetapi yang
+   sejenisnya di `aksi.html` membaca `VIEW` — dan namespace kosong membuat
+   syarat di dalam makro terbalik tanpa satu pun tanda. Satu pola untuk kedua
+   berkas, supaya yang menambahkan syarat nanti tak menabraknya. #}
+{% import "_kata_pengaturan.html" as kata with context %}
 {% block judul %}Pengaturan{% endblock %}
 {% block isi %}
 {% if err %}<div class="nota nota--buruk">{{ err }}</div>{% endif %}

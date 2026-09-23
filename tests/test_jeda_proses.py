@@ -193,8 +193,12 @@ def test_dua_layar_memakai_bentuk_kartu_yang_sama():
 
     # Layar yang memakainya MENGIMPOR, tidak menyalin. Salinan itulah yang
     # dulu berselisih, dan tesnya ada supaya tak lahir salinan berikutnya.
+    # `aksi.html` naik ke paket pada Tahap 2 (23 September 2026); dua lainnya
+    # masih milik app. Keduanya harus MENGIMPOR makronya, di mana pun letaknya.
+    paket = akar.parents[2] / "hmu_tampilan/templates"
     for berkas in ("aksi.html", "berjalan.html", "beranda.html"):
-        teks = (akar / berkas).read_text()
+        induk = paket if (paket / berkas).exists() else akar
+        teks = (induk / berkas).read_text()
         assert '"_benda.html"' in teks, berkas
         assert "with context" in teks, f"{berkas}: `lama` datang dari rute"
         assert "benda__nilai" not in teks, f"{berkas}: markup kartu disalin lagi"

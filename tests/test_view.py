@@ -433,23 +433,76 @@ def test_membatalkan_tidak_ikut_terbuang():
     benda di gudang, jadi ia tak punya kartu dan akan hilang sama sekali
     bersama katalognya. Tiap salah ketik lalu berubah jadi panggilan telepon
     ke Admin."""
-    teks = (AKAR / "app/web/templates/aksi.html").read_text()
-    assert "/aksi?buka=undo" in teks
-    # Hanya di layar yang kehilangan katalognya. View lain masih punya
-    # katalognya, dan dua pintu ke satu hal adalah dua tempat di kepala orang.
-    sebelum = teks.split("/aksi?buka=undo")[0]
-    assert "{% if VIEW in (V_SELEPAN, V_POLESAN) %}" in sebelum
-    assert "{% if VIEW in (V_SELEPAN, V_POLESAN) %}" not in teks.split("/aksi?buka=undo")[1]
-    # Polesan membawa dua aksinya yang tak berkartu ke tempat yang sama.
-    assert "/aksi?buka=catat_packing" in teks and "/aksi?buka=catat_bekatul" in teks
+    # Daftar tombolnya pindah dari templat ke RUTE pada Tahap 2 (23 September
+    # 2026): `aksi.html` satu berkas di paket untuk tiga app. Diuji sebagai
+    # PERILAKU per view, bukan sebagai kalimat di markup — yang harus tetap
+    # benar adalah jawabannya, juga bila namanya berubah.
+    from app.main import _pintasan_aksi
+    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER, TAMU
+
+    selepan = dict(_pintasan_aksi(SELEPAN))
+    assert "undo" in selepan, "selepan kehilangan tombol batalkan"
+
+    # Polesan membawa dua aksinya yang tak berkartu ke tempat yang sama:
+    # packing & bekatul curah lahir SESUDAH proses ditutup.
+    polesan = dict(_pintasan_aksi(POLESAN))
+    assert set(polesan) == {"undo", "catat_packing", "catat_bekatul"}
+
+    # View lain masih punya katalognya di laci, dan dua pintu ke satu hal
+    # adalah dua tempat di kepala orang.
+    for view in (ADMIN, SUPER, TAMU):
+        assert _pintasan_aksi(view) == (), view
+
+    # Templat bersama hanya MENGGAMBAR daftarnya; ia tak menebak siapa.
+    teks = (AKAR / "hmu_tampilan/templates/aksi.html").read_text()
+    assert "{% if PINTASAN %}" in teks
+    assert "buka=undo" not in teks and "V_SELEPAN" not in teks
 
 
 def test_layar_kosong_tak_menunjuk_pintu_yang_dicabut():
     """Ajakan menuju halaman yang tak dimiliki pembacanya adalah jalan buntu
-    yang tak terlihat sebagai jalan buntu."""
-    teks = (AKAR / "app/web/templates/aksi.html").read_text()
-    tautan = teks.split('<a href="/aksi-lain">')[0]
-    assert "VIEW not in (V_SELEPAN, V_POLESAN)" in tautan
+    yang tak terlihat sebagai jalan buntu.
+
+    Diuji dengan MERENDER layarnya, bukan dengan membaca syaratnya. Pada 23
+    September 2026 syarat yang benar tetap ada di berkasnya tetapi tak berlaku:
+    kalimat ini pindah ke makro `_kata_aksi.html`, dan makro yang diimpor TANPA
+    `with context` tidak melihat `VIEW` — `Undefined not in (…)` bernilai True,
+    jadi ajakannya muncul justru bagi yang tak punya pintunya. Uji yang membaca
+    syaratnya lulus; yang menangkapnya potret HTML per peran. Sejak itu uji ini
+    membaca HASILNYA.
+    """
+    import types
+
+    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER, TAMU
+    from app.web.tampilan import templates
+
+    def gambar(view: str) -> str:
+        akun = types.SimpleNamespace(nama="Uji", sesi_pendek=False)
+        return templates.get_template("aksi.html").render(
+            request=None, akun=akun, layar="aksi", VIEW=view, LIHAT_SEBAGAI=None,
+            PERAN_ASLI=view, CSRF="c", TERIK=False, MENUNGGU=0, BERJALAN=0,
+            KEPUTUSAN=0, MODE_UJI=False, kembali=None, menunggu=[], berjalan=[],
+            buka="", nilai="", lama=lambda t: "",
+            KELOMPOK_ATAS="tumpukan", judul_atas="Menumpuk di lantai",
+            judul_bawah="Bisa dikerjakan sekarang", PINTASAN=())
+
+    # Operator tak mendapat laci "Catat pekerjaan lain" — jadi tak diajak.
+    for view in (SELEPAN, POLESAN):
+        html = gambar(view)
+        assert "Tidak ada yang menunggu Anda" in html, view
+        assert "/aksi-lain" not in html, f"{view} diajak ke pintu yang dicabut"
+
+    # Yang memang punya pintunya tetap diajak.
+    for view in (ADMIN, SUPER, TAMU):
+        assert "/aksi-lain" in gambar(view), view
+
+    # Dan paket tak memuat ajakan itu: Gudang 2 menawarkan katalognya, Pos
+    # Produksi tidak, dan paket tak tahu yang mana.
+    paket = (AKAR / "hmu_tampilan/templates/aksi.html").read_text()
+    assert '<a href="/aksi-lain">' not in paket
+    # Makronya WAJIB diimpor `with context`, kalau tidak syarat di dalamnya
+    # tak pernah berlaku.
+    assert '{% import "_kata_aksi.html" as kata with context %}' in paket
 
 
 # ─────────── Puncak tangga harus bisa diisi, dan tak boleh dikosongkan ───────────

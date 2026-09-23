@@ -1,0 +1,11 @@
+{# Kalimat layar Antrian tunggu yang memang milik Pos Produksi. #}
+
+{% macro antrean_kosong() -%}
+{#- Yang diantre di sini GABAH, dan operator selepan/polesan tak mendapat
+    laci "Catat pekerjaan lain" — jadi menunjuknya kepada mereka berarti
+    menunjuk pintu yang tak ada di lacinya. -#}
+Semua gabah sudah punya tempat. Yang sedang berjalan ada di
+<a href="/berjalan">Sedang berjalan</a>{% if VIEW not in (V_SELEPAN, V_POLESAN) %};
+pekerjaan lain yang jarang dipakai ada di
+<a href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}.
+{%- endmacro %}
