@@ -55,10 +55,16 @@ def _render(menunggu, meja=()):
 
 
 def _render_keputusan(meja):
+    # Daftar blok dikirim rutenya sejak 23 September 2026 — di templat ia memuat
+    # tiga dari enam jenis yang `b.meja` sungguh bawa. Nilainya diambil dari
+    # sumber yang dipakai rutenya, bukan diketik ulang di sini.
+    from app.web.layar_keputusan import AKSI_DIKENAL, JENIS_KEPUTUSAN
+
     return templates.get_template("keputusan.html").render(
         request=None, akun=_akun("admin"), layar="keputusan",
         MENUNGGU=0, KEPUTUSAN=len(meja), MODE_UJI=False, LIHAT_SEBAGAI=None,
-        kembali=None, meja=meja, buka="", nilai="", lama=lambda t: "")
+        kembali=None, meja=meja, buka="", nilai="", lama=lambda t: "",
+        JENIS_KEPUTUSAN=JENIS_KEPUTUSAN, AKSI_DIKENAL=AKSI_DIKENAL)
 
 
 def test_kerja_meja_hanya_untuk_yang_boleh_melihat_uang():
@@ -124,7 +130,7 @@ def test_kerja_meja_keluar_dari_antrean():
     h = _render_keputusan([_meja()])
     # Judul layar sudah berkata "Menunggu keputusan"; bloknya menyebut
     # keputusan APA — dan yang kosong tak muncul.
-    assert label(h) == ["Harga belum diverifikasi"]
+    assert label(h) == ["Harga gabah belum diverifikasi"]
     assert "/keputusan?buka=verify_gabah" in h
     assert "/aksi?buka=" not in h
 

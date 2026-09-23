@@ -14,22 +14,38 @@
     <div>
       <h2>Tak ada yang menunggu keputusan</h2>
       <p class="bantu">
-        Semua harga sudah diverifikasi, dan tak ada giling yang mutunya
-        belum diperiksa.
+        Semua harga gabah dan PK luar sudah diverifikasi, dan tak ada giling
+        maupun PK luar yang mutunya belum diperiksa.
       </p>
     </div>
   </div>
 {% endif %}
 
 {# Judul layar sudah berkata "Menunggu keputusan"; blok bernama sama cuma
-   mengulangnya. Yang belum dikatakan adalah keputusan APA — dan ketiganya
-   pekerjaan yang berbeda, dikerjakan orang yang mungkin berbeda pula. #}
-{% for judul, aksi in [("Harga belum diverifikasi", "verify_gabah"),
-                       ("Mutu belum diperiksa", "qc_giling"),
-                       ("Output giling belum dicocokkan", "verify_output")] %}
+   mengulangnya. Yang belum dikatakan adalah keputusan APA — dan keenamnya
+   pekerjaan yang berbeda, dikerjakan orang yang mungkin berbeda pula.
+
+   Daftarnya ada di `layar_keputusan.JENIS_KEPUTUSAN`, bukan di sini. Sampai 23
+   September 2026 ia diketik di templat ini dan memuat TIGA dari enam jenis yang
+   `b.meja` sungguh bawa — harga PK luar, mutu PK luar, dan pembetulan bobot
+   giling ada di data tetapi tak digambar. Templat yang memegang daftarnya
+   sendiri tak bisa tahu ia ketinggalan; daftar di kode bisa diuji terhadap
+   `b.meja`. #}
+{% for aksi, judul in JENIS_KEPUTUSAN %}
   {{ benda.blok(judul, meja|selectattr("aksi", "equalto", aksi)|list,
                 alamat="/keputusan") }}
 {% endfor %}
+
+{# ── Jaring: jenis yang belum punya bloknya sendiri ──
+   Tiga jenis sempat hilang diam-diam karena tak ada yang menggambarnya. Blok
+   ini menutup kelasnya, bukan cuma ketiga kejadiannya: kartu apa pun yang
+   jenisnya belum dipikirkan tetap TERLIHAT, meski dengan judul yang belum
+   tepat. Judul yang kurang pas masih bisa diperbaiki orang; pekerjaan yang tak
+   pernah tampil tak ada yang mencarinya. Kosong pada keadaan normal, jadi ia
+   tak menambah apa pun sampai ia benar-benar perlu. #}
+{{ benda.blok("Keputusan lain — jenisnya belum punya blok sendiri",
+              meja|rejectattr("aksi", "in", AKSI_DIKENAL)|list,
+              alamat="/keputusan") }}
 
 <dialog class="lembar" id="lembar"></dialog>
 <div class="kabar" id="kabar" role="status"></div>
