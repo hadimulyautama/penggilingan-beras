@@ -511,7 +511,6 @@ async def kartu(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
 
 @router.get("/stok")
 async def stok(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
-    from app.penggilingan.inventory import finished_goods as bj
     from app.penggilingan.inventory import packaging as kms
     from app.services import stok as svc
     from app.services.setelan import fitur_mutu
@@ -520,9 +519,12 @@ async def stok(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
         lot = await svc.pk_gudang1(db)
         tempat = await svc.pk_gudang2(db)
         mutu = await fitur_mutu(db)
-        # Barang jadi & hasil samping: produksi hanya punya laporan teksnya;
-        # meja menggambarnya dari teks yang sama (laporan `stok_barang_jadi`).
-        teks_bj = await bj.laporan_stok_barang_jadi(db)
+        # Barang jadi & hasil samping: hitungan yang SAMA dengan yang dipakai
+        # layar Pos Produksi dan aplikasi Gudang 2 (`services.stok.
+        # barang_jadi_g2`). Sampai 23 September 2026 Meja menerima rupa TEKS-nya
+        # dari laporan `stok_barang_jadi` — bentuk yang tak bisa menyebut asal
+        # per proses sosoh, padahal itu yang ditanya orang saat ada keluhan mutu.
+        bjg2 = await svc.barang_jadi_g2(db)
         # Stok karung (keputusan pemilik 23 September 2026). Meja memegang
         # KEDUA gudang, jadi ia melihat seluruh barisnya — termasuk karung PK
         # di Gudang 1, karena Meja-lah yang memesannya.
@@ -537,7 +539,7 @@ async def stok(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
                   for k in await kms.stok_kemasan_rinci(db)]
         kartu_ = await _susun(db, akun)
     return {"lot": _ser(lot), "tempat": _ser(tempat), "mutu_aktif": mutu,
-            "barang_jadi_teks": teks_bj, "karung": karung,
+            "produk": bjg2.produk, "samping": bjg2.samping, "karung": karung,
             "lencana": kartu_["lencana"]}
 
 

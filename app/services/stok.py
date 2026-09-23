@@ -535,3 +535,117 @@ async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
         persen=(tump / maks_t * 100 if maks_t else None),
     ))
     return keluar
+
+
+#: Grade beras putih yang dihitung sebagai PRODUK; sisanya hasil samping.
+GRADES_BERAS = ("premium", "medsuper", "medium", "sayur")
+NAMA_KATEGORI = {"beras_b": "Beras B (olah ulang)", "menir": "Menir",
+             "broken": "Broken", "bekatul": "Bekatul", "reject": "Reject"}
+#: Urutan tampil: beras terbaik lebih dulu, hasil samping menyusul.
+_URUT_BARANG = {j: n for n, j in enumerate(
+    ("premium", "medsuper", "medium", "sayur", "beras_putih", "beras_b",
+     "bekatul", "menir", "broken", "reject"))}
+
+
+@dataclass
+class BarangJadiG2:
+    """Isi gudang barang jadi: yang dijual, dan hasil sampingnya."""
+
+    produk: list[dict]
+    samping: list[dict]
+
+
+async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
+    """Stok barang jadi Gudang 2 — satu kartu per SKU × mutu.
+
+    Satu kartu = satu SKU × mutu (jenis · merk · kemasan · ukuran); stoknya
+    masuk − keluar lewat `hitung_stok_finished_goods`, rinciannya per proses
+    penyosohan asal supaya "dari sosohan mana" tetap terjawab saat ada keluhan
+    mutu. Bekatul curah berdiri sendiri: ia tak pernah dikemas.
+
+    DI SINI, bukan di dalam endpoint, sejak 23 September 2026. Hitungan ini
+    dulu terkunci di `gudang2_api.stok`, jadi satu-satunya layar yang bisa
+    menggambarkannya adalah aplikasi Gudang 2 — dan Pos Produksi, yang memegang
+    kedua gudang, tak punya layar barang jadi sama sekali. Meja pun hanya dapat
+    rupa teksnya lewat laporan. Aturan yang sama dengan `stok_kemasan_rinci`:
+    satu hitungan, beberapa pembaca; dua hitungan untuk satu pertanyaan akan
+    berselisih pada perubahan berikutnya.
+    """
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory import finished_goods as bj
+    from app.penggilingan.inventory.models import (
+        Brand, ByproductStock, FinishedGoodsStock, PackageSize, PackagingMaterial,
+        ProductSku, RiceQualityStandard)
+
+    baris = (await db.execute(
+        select(FinishedGoodsStock, ProductSku, Brand.nama, PackagingMaterial.nama,
+               PackageSize.ukuran_kg, RiceQualityStandard.kode, RiceQualityStandard.nama,
+               PolishingProcess.kode_proses)
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .join(PackagingMaterial, PackagingMaterial.id == ProductSku.packaging_material_id)
+        .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
+        .join(Brand, Brand.id == ProductSku.brand_id, isouter=True)
+        .join(RiceQualityStandard,
+              RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
+              isouter=True)
+        .join(PolishingProcess,
+              (PolishingProcess.id == FinishedGoodsStock.source_id)
+              & (FinishedGoodsStock.source_type == "polishing"), isouter=True)
+        .order_by(FinishedGoodsStock.waktu.desc())
+    )).all()
+
+    kartu: dict[tuple, dict] = {}
+    for fg, sku, merk, kemasan, ukuran, mutu_kode, mutu_nama, pol in baris:
+        kunci = (sku.id, fg.rice_quality_standard_id)
+        k = kartu.get(kunci)
+        if k is None:
+            stok_ = await bj.hitung_stok_finished_goods(db, sku.id, fg.rice_quality_standard_id)
+            if stok_["karung"] <= 0 and stok_["kg"] <= 0:
+                kartu[kunci] = None
+                continue
+            if sku.kategori == "beras_putih":
+                jenis = (mutu_kode or "").lower() or "beras_putih"
+                nama = mutu_nama or "Beras putih"
+            else:
+                jenis = sku.kategori
+                nama = NAMA_KATEGORI.get(sku.kategori, sku.kategori.title())
+            if merk:
+                nama += f" · {merk}"
+            k = kartu[kunci] = {
+                "jenis": jenis, "nama": nama, "kemasan": f"{kemasan} {ukuran} kg",
+                "ukuran": int(ukuran), "karung": stok_["karung"], "kg": stok_["kg"],
+                "asal": [], "_pol": {}}
+        if k is None:
+            continue
+        if pol:
+            a = k["_pol"].setdefault(pol, [0, 0.0])
+            a[0] += int(fg.jumlah_karung)
+            a[1] += float(fg.berat_total_kg)
+    produk, samping = [], []
+    for k in kartu.values():
+        if k is None:
+            continue
+        k["asal"] = [(pol, f"{kg:,.0f} kg".replace(",", "."), f"{n} karung")
+                     for pol, (n, kg) in k.pop("_pol").items()]
+        (produk if k["jenis"] in GRADES_BERAS or k["jenis"] == "beras_putih"
+         else samping).append(k)
+
+    # Bekatul curah — masuk − keluar, rincian per proses.
+    curah = await bj.hitung_stok_bekatul(db)
+    if curah > 0:
+        per_pol = (await db.execute(
+            select(PolishingProcess.kode_proses, ByproductStock.berat_kg)
+            .join(PolishingProcess, PolishingProcess.id == ByproductStock.source_id)
+            .where(ByproductStock.jenis_produk == "bekatul",
+                   ByproductStock.source_type == "polishing")
+            .order_by(ByproductStock.waktu.desc())
+        )).all()
+        samping.append({
+            "jenis": "bekatul", "nama": "Bekatul", "kemasan": "curah", "ukuran": 0,
+            "karung": 0, "kg": curah,
+            "asal": [(kode, f"{float(kg):,.0f} kg".replace(",", "."), "curah")
+                     for kode, kg in per_pol][:8]})
+    for daftar in (produk, samping):
+        daftar.sort(key=lambda k: (_URUT_BARANG.get(k["jenis"], 99),
+                                   k["nama"], k["ukuran"]))
+    return BarangJadiG2(produk=produk, samping=samping)

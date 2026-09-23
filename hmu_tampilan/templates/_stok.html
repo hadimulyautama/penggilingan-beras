@@ -76,3 +76,41 @@
   </span>
 </div>
 {%- endmacro %}
+
+
+{# ── Kartu satu barang jadi: satu SKU × mutu ──
+   Naik ke paket 23 September 2026, saat Pos Produksi ikut menggambar barang
+   jadi. Sebelumnya ia hanya ada di `stok_gudang2.html`, dan itulah sebabnya
+   Pos Produksi — yang memegang KEDUA gudang — tak punya layar barang jadi sama
+   sekali; Meja pun cuma dapat rupa teksnya lewat laporan.
+
+   Rinciannya per PROSES asal: "dari sosohan mana" adalah pertanyaan yang muncul
+   begitu ada keluhan mutu. Yang tak punya asal digambar sebagai kartu DIAM,
+   bukan `<details>` kosong yang bisa ditekan lalu tak memperlihatkan apa pun. #}
+{% macro kartu_barang(k) -%}
+  {% set laci = k.asal|length > 0 %}
+  <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
+  <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
+    <div class="padat__atas">
+      <span class="padat__nama">{{ k.nama }}</span>
+      <span class="padat__nilai">{{ kg(k.kg) }}<small>kg</small></span>
+    </div>
+    <dl class="fakta">
+      <div><dt>Kemasan</dt><dd>{{ k.kemasan }}</dd></div>
+      {% if k.karung %}<div><dt>Karung</dt><dd>{{ k.karung }}</dd></div>{% endif %}
+    </dl>
+  </{{ "summary" if laci else "div" }}>
+    {% if k.asal %}
+      <div class="anak">
+        <div class="anak__kepala">Dari proses · {{ k.asal|length }}</div>
+        {% for nama, berat, ket in k.asal %}
+          <div class="anak__baris">
+            <span class="anak__nama">{{ nama }}</span>
+            <span class="anak__kg">{{ berat }}</span>
+            <span class="anak__jam">{{ ket }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </{{ "details" if laci else "div" }}>
+{%- endmacro %}

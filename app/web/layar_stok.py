@@ -64,6 +64,14 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         tempat = await svc.pk_gudang2(db) if gudang2(view) else []
         mutu_aktif = await fitur_mutu(db)
         karung = await _karung(db, view)
+        # ── Barang jadi & hasil samping ──
+        # Gerbang yang SAMA dengan stok karung tepat di bawahnya: barang jadi
+        # lahir di Gudang 2, jadi operator selepan tak melihatnya. Sampai 23
+        # September 2026 layar ini tak punya bloknya sama sekali — hitungannya
+        # terkunci di `gudang2_api.stok`, dan Pos Produksi yang memegang KEDUA
+        # gudang justru buta terhadap apa yang sudah jadi.
+        bj = (await svc.barang_jadi_g2(db) if gudang2(view)
+              else svc.BarangJadiG2(produk=[], samping=[]))
     return await render_laci(
         request, "stok.html", layar="stok",
         lot=lot, tempat=tempat,
@@ -74,7 +82,8 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # Barang jadi: yang mencatat barang keluar harus melihat apa yang bisa
         # keluar, dan barang keluar dicatat dari meja — di sini yang ada cuma
         # laporan teksnya (`stok_barang_jadi`).
-        SARING_GUDANG=(), gudang="", barang_jadi=[],
+        SARING_GUDANG=(), gudang="",
+        produk=bj.produk, samping=bj.samping,
         total=sum(l.tersedia for l in lot),
         # `is_admin` sudah memakai peran EFEKTIF: saat admin memakai "Lihat
         # sebagai operator", `akun.user.role` diganti, jadi tombolnya ikut
