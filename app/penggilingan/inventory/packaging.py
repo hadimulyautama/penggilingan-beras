@@ -257,9 +257,32 @@ def kemasan_gudang(material_kode: str | None) -> str:
     return "Gudang 1" if (material_kode or "").lower() == "karung_pk" else "Gudang 2"
 
 
-async def laporan_stok_kemasan(db: AsyncSession) -> str:
-    """Stok kombinasi karung yang pernah dibeli, DIKELOMPOKKAN per gudang
-    (karung PK di Gudang 1, sisanya di Gudang 2) + warn di bawah minimum."""
+#: Urutan gudang pada daftar stok karung. Gudang 2 lebih dulu karena di
+#: sanalah karung habis: hampir seluruh kemasan dipakai mengemas beras jadi,
+#: dan karung PK di Gudang 1 cuma satu jenis.
+_URUT_GUDANG = ("Gudang 2", "Gudang 1")
+
+
+async def stok_kemasan_rinci(db: AsyncSession) -> list[dict]:
+    """Stok tiap kombinasi karung yang pernah dibeli — satu baris per kombinasi.
+
+    Satu sumber untuk DUA pembaca: laporan teks "Stok karung" dan blok Stok
+    karung di layar Stok (Meja & Pos Produksi, keputusan pemilik 23 September
+    2026). Dulu hitungannya hidup di dalam penyusun teks laporan, jadi layar
+    yang ingin menggambarnya harus menyusun ulang aturan yang sama — dan
+    aturan yang disalin ke dua tempat akan berselisih pada perubahan
+    berikutnya, justru pada angka yang dipakai memutuskan kapan memesan.
+
+    Tidak ada HARGA di sini, dan itu bukan kelupaan: blok ini dibaca juga oleh
+    yang tak boleh melihat angka uang, dan satuan yang ditanyakan orang saat
+    melihat tumpukan karung adalah LEMBAR. Harga rata-ratanya ada pada
+    `hpp_kemasan_wavg` bagi yang memang memerlukannya.
+
+    `menipis` dihitung di sini, bukan di layar: batasnya satu setelan
+    (`min_kemasan_lembar`), dan dua layar yang masing-masing
+    membandingkannya sendiri adalah dua layar yang bisa berbeda pendapat
+    tentang kapan karung disebut hampir habis.
+    """
     combos = (
         await db.execute(
             select(PackagingPurchase.packaging_material_id,
@@ -268,24 +291,44 @@ async def laporan_stok_kemasan(db: AsyncSession) -> str:
             .distinct()
         )
     ).all()
-    if not combos:
-        return "📦 Belum ada stok kemasan (belum ada pembelian karung)."
     minimum = settings.min_kemasan_lembar
-    per_gudang: dict[str, list[str]] = {}
+    keluar: list[dict] = []
     for mat_id, size_id, brand_id in combos:
         mat = await db.get(PackagingMaterial, mat_id)
         size = await db.get(PackageSize, size_id)
         brand = await db.get(Brand, brand_id) if brand_id else None
         stok = await hitung_stok_kemasan(db, mat_id, size_id, brand_id)
-        warn = "  ⚠️ menipis" if stok <= minimum else ""
-        merk = f"{brand.nama} " if brand else ""
-        baris = (
-            f"• {merk}{mat.nama if mat else '-'} {size.ukuran_kg if size else '-'}kg: "
-            f"{stok:,} lembar{warn}".replace(",", ".")
-        )
-        per_gudang.setdefault(kemasan_gudang(mat.kode if mat else None), []).append(baris)
+        keluar.append({
+            "gudang": kemasan_gudang(mat.kode if mat else None),
+            "kode": mat.kode if mat else None,
+            "nama": mat.nama if mat else "-",
+            "merk": brand.nama if brand else None,
+            "ukuran": int(size.ukuran_kg) if size else 0,
+            "lembar": int(stok),
+            "menipis": stok <= minimum,
+        })
+    keluar.sort(key=lambda b: (_URUT_GUDANG.index(b["gudang"])
+                               if b["gudang"] in _URUT_GUDANG else 9,
+                               b["nama"], b["merk"] or "", b["ukuran"]))
+    return keluar
+
+
+async def laporan_stok_kemasan(db: AsyncSession) -> str:
+    """Stok kombinasi karung yang pernah dibeli, DIKELOMPOKKAN per gudang
+    (karung PK di Gudang 1, sisanya di Gudang 2) + warn di bawah minimum."""
+    baris = await stok_kemasan_rinci(db)
+    if not baris:
+        return "📦 Belum ada stok kemasan (belum ada pembelian karung)."
+    per_gudang: dict[str, list[str]] = {}
+    for b in baris:
+        merk = f"{b['merk']} " if b["merk"] else ""
+        teks = (
+            f"• {merk}{b['nama']} {b['ukuran']}kg: "
+            f"{b['lembar']:,} lembar{'  ⚠️ menipis' if b['menipis'] else ''}"
+        ).replace(",", ".")
+        per_gudang.setdefault(b["gudang"], []).append(teks)
     lines = ["📦 Stok kemasan:"]
-    for gudang in ("Gudang 2", "Gudang 1"):
+    for gudang in _URUT_GUDANG:
         if gudang in per_gudang:
             lines.append(f"\n🏬 {gudang}:")
             lines.extend(per_gudang[gudang])

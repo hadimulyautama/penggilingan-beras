@@ -176,5 +176,16 @@ async def stok(akun: ProduksiAkun = Depends(akun_operator_g2)) -> dict:
              "bekatul", "menir", "broken", "reject"))}
         produk.sort(key=lambda k: (urut.get(k["jenis"], 99), k["nama"], k["ukuran"]))
         samping.sort(key=lambda k: (urut.get(k["jenis"], 99), k["nama"], k["ukuran"]))
+        # ── Stok karung (keputusan pemilik 23 September 2026) ──
+        #
+        # Operator Gudang 2 MELIHAT karung; operator Gudang 1 tidak. Yang
+        # ditampilkan di sini hanya karung Gudang 2 — karung PK di Gudang 1
+        # bukan barang yang dipegang orang ini, dan angka gudang sebelah di
+        # layar operator menjawab pertanyaan yang tak ia ajukan.
+        from app.penggilingan.inventory import packaging as kms
+
+        karung = [k for k in await kms.stok_kemasan_rinci(db)
+                  if k["gudang"] == "Gudang 2"]
         b = await untuk_operator_gudang2(db)
-    return {"produk": produk, "samping": samping, "lencana": _kartu_json(b)["lencana"]}
+    return {"produk": produk, "samping": samping, "karung": karung,
+            "lencana": _kartu_json(b)["lencana"]}

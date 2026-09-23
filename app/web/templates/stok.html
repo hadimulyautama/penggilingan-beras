@@ -287,6 +287,55 @@
   </div>
 {% endif %}
 {% endif %}
+
+{# ── STOK KARUNG ──
+   Keputusan pemilik 23 September 2026: stok karung harus punya bloknya
+   sendiri di layar Stok, dilihat operator Gudang 2, Admin, dan Super Admin —
+   tidak operator Gudang 1. Sebelum ini ia hanya ada di laporan teks "Stok
+   karung", dan angka yang cuma bisa dicari di laporan adalah angka yang
+   diketahui terlambat: yang menyadari karung hampir habis adalah orang yang
+   sedang mengemas, bukan orang yang sedang membuka laporan.
+
+   DI LUAR blok kosong PK di atas, dengan sengaja: karung tetap ada meski
+   tak ada satu pun PK tersisa, dan justru saat itulah pengemasan berjalan.
+
+   Tanpa HARGA. Satuan yang ditanyakan orang saat melihat tumpukan karung
+   adalah lembar, dan blok ini dibaca juga oleh yang tak boleh melihat uang. #}
+{% if karung %}
+<div style="margin-top:18px">
+  <div class="jumlah">
+    <span class="lbl">Stok karung</span>
+    <div class="jumlah__angka">{{ kg(karung|sum(attribute="lembar")) }}<small>lembar</small></div>
+    {% set tipis = karung|selectattr("menipis")|list|length %}
+    <div class="jumlah__ket">
+      {{ karung|length }} kombinasi jenis, ukuran &amp; merk · dibeli dikurangi
+      yang terpakai &amp; hilang
+      {%- if tipis %} · <b>{{ tipis }} menipis</b>{% endif -%}
+    </div>
+  </div>
+  <div class="kartu">
+    <div class="lap">
+      {% for g in ["Gudang 2", "Gudang 1"] %}
+        {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
+        {% if baris %}
+          <div class="lap__bab">{{ g }}</div>
+          {% for b in baris %}
+            <div class="lap__baris">
+              <span class="lap__nama">
+                {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
+              <span class="lap__nilai">
+                {{- kg(b.lembar) }} lembar
+                {%- if b.menipis %} · menipis{% endif -%}
+              </span>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if boleh_ubah %}
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
