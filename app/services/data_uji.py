@@ -33,6 +33,13 @@ from app.models import ProduksiAkun, Supplier
 #: harus tahu dalam sekali lihat bahwa isinya bukan pekerjaan sungguhan.
 AWALAN = "(UJI) "
 
+#: Awalan kode tiket timbang yang MEMANG buatan pembuat data uji — satu per
+#: pembuatnya. Dipakai `jembatan_sungguhan` untuk memisahkan tiket karangan
+#: dari tiket truk yang sungguh datang; daftar inilah satu-satunya tempat
+#: awalan itu ditulis, supaya penambahan pembuat baru tak perlu menyentuh
+#: penjaganya.
+AWALAN_TIKET_UJI = ("TRX-UJI-", "TRX-SIM-")
+
 PEMASOK = [
     "H. Karyo", "Bu Sri", "Pak Tarno", "H. Sulaiman Abdurrahman",
     "Kelompok Tani Sumber Rejeki", "Mbah Wagimin", "Hj. Rohmah",
@@ -110,9 +117,20 @@ async def jembatan_sungguhan(db: AsyncSession) -> int:
     Jadi keberadaan tiket ORANG LAIN dipakai sebagai tanda: kalau jembatannya
     sudah dipakai sungguhan, tak ada satu pun tiket karangan yang boleh lahir
     di sini.
+
+    Yang dihitung sebagai "orang lain" adalah tiket yang awalan kodenya bukan
+    salah satu dari `AWALAN_TIKET_UJI`. Awalannya lebih dari satu karena
+    pembuat tiket karangan lebih dari satu: `data_uji` menulis `TRX-UJI-…`,
+    dan simulasi hari kerja (`scripts/simulasi_gabah.py`, yang biasanya
+    membangun basis data uji itu sejak kosong) menulis `TRX-SIM-…`. Selama
+    hanya satu yang dikenali, basis data uji yang dibuat simulasi terlihat
+    seperti basis data pabrik yang sedang dipakai — dan penjaga ini menolak
+    pekerjaan yang justru harus boleh dilakukan di sana, termasuk tombol
+    "Kembali ke awal" di layar Mode Uji.
     """
+    syarat = " AND ".join(f"kode NOT LIKE '{a}%'" for a in AWALAN_TIKET_UJI)
     return (await db.execute(text(
-        "SELECT count(*) FROM timbangan_transaksi WHERE kode NOT LIKE 'TRX-UJI-%'"
+        f"SELECT count(*) FROM timbangan_transaksi WHERE {syarat}"
     ))).scalar_one()
 
 

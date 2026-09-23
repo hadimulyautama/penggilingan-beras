@@ -8,6 +8,7 @@ menangkapnya sebelum terkirim.
 """
 from __future__ import annotations
 
+import asyncio
 import inspect
 import re
 
@@ -198,8 +199,26 @@ def test_data_uji_menolak_jembatan_timbang_yang_dipakai():
     # Diperiksa SEBELUM satu baris pun ditulis.
     assert sumber.index("jembatan_sungguhan") < sumber.index("_pemasok(db)")
 
-    penjaga = inspect.getsource(data_uji.jembatan_sungguhan)
-    assert "kode NOT LIKE 'TRX-UJI-%'" in penjaga
+    # Penjaganya menyaring dengan AWALAN KODE, dan awalan itu ditulis di SATU
+    # tempat: `AWALAN_TIKET_UJI`. Yang diperiksa di sini bukan kalimat SQL-nya
+    # (ia disusun dari daftar itu) melainkan bahwa TIAP awalan pembuat tiket
+    # karangan benar-benar ikut disaring — awalan yang tertinggal membuat basis
+    # data uji tampak seperti basis data pabrik yang sedang dipakai, dan
+    # penjaga ini menolak pekerjaan yang justru harus boleh di sana.
+    assert "TRX-UJI-" in data_uji.AWALAN_TIKET_UJI
+    assert "TRX-SIM-" in data_uji.AWALAN_TIKET_UJI, "tiket simulasi hari kerja"
+
+    ditanya: list[str] = []
+
+    class _Db:
+        async def execute(self, stmt, *a, **k):
+            ditanya.append(str(stmt))
+            return _Hasil(0)
+
+    asyncio.run(data_uji.jembatan_sungguhan(_Db()))
+    assert len(ditanya) == 1
+    for awalan in data_uji.AWALAN_TIKET_UJI:
+        assert f"kode NOT LIKE '{awalan}%'" in ditanya[0]
 
     # Dan tombolnya menyampaikan alasannya, bukan jatuh dengan galat 500.
     tombol = inspect.getsource(mode_uji.ulangi)
