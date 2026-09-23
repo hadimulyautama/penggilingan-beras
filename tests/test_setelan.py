@@ -68,7 +68,7 @@ def test_setelan_kerja_hanya_untuk_admin():
         request=None, akun=_akun("operator"), layar="pengaturan", MENUNGGU=0,
         MODE_UJI=True, LIHAT_SEBAGAI=None, kembali=None, pesan_ok=None, err="",
         tuan=False, target_bawaan=None, sebab_jeda={}, mutu_aktif=False,
-        JAM_BATAS=48)
+        JAM_BATAS=48, blok_setelan=False, PROSES=())
     for blok in ("Sebab berhenti", "Target kadar air", "Batas ubah catatan"):
         assert blok not in kosong, blok
 
@@ -78,7 +78,8 @@ def test_setelan_kerja_hanya_untuk_admin():
         tuan=True, target_bawaan=14.0,
         sebab_jeda={"pengeringan": ["Listrik padam", "Bahan bakar habis"],
                     "giling": ["Mesin giling rusak", "Limbah produksi penuh"]},
-        mutu_aktif=True, JAM_BATAS=48)
+        mutu_aktif=True, JAM_BATAS=48, blok_setelan=True,
+        PROSES=(("pengeringan", "Pengeringan"), ("giling", "Giling")))
     # Satu blok per PROSES, bukan satu blok per setelan: yang dicari orang
     # adalah "setelan pengeringan", bukan "setelan target". Sebab berhenti
     # tinggal di dalam bloknya masing-masing.
@@ -93,7 +94,7 @@ def test_batas_48_jam_ditampilkan_tapi_tak_bisa_diubah():
     """Batas yang bisa dilonggarkan oleh orang yang ingin melonggarkannya
     bukan batas. Tetapi menyembunyikannya juga salah — setelan yang diam tanpa
     keterangan akan dicari orang di menu lain sampai lelah."""
-    html = (AKAR / "app/web/templates/pengaturan.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
     blok = html[html.index("Batas ubah catatan"):]
     blok = blok[:blok.index("</div>\n</div>") + 12] if "</div>\n</div>" in blok else blok
     assert "<form" not in blok, "batas tak boleh punya borang"
@@ -135,7 +136,7 @@ def test_satu_tombol_satu_perubahan():
 def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
     """Tombol bertuliskan "Matikan" memaksa orang membaca dulu keadaan
     sekarang untuk tahu arah tekanannya. Saklar MENUNJUKKAN keadaannya."""
-    html = (AKAR / "app/web/templates/pengaturan.html").read_text()
+    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
     blok = html[html.index("Mutu &amp; QC"):]
     assert 'role="switch"' in blok, "bukan saklar"
     assert 'aria-checked="{{ \'true\' if mutu_aktif else \'false\' }}"' in blok
@@ -150,14 +151,23 @@ def test_setelan_dikelompokkan_per_proses():
     menemukan satu angka: target kadar air, lalu sebab berhenti pengeringan,
     lalu sebab berhenti giling, masing-masing dengan judulnya sendiri. Yang
     dicari orang adalah "setelan pengeringan", bukan "setelan target"."""
-    html = (AKAR / "app/web/templates/pengaturan.html").read_text()
-    assert '<span class="lbl">Pengeringan</span>' in html
-    assert '<span class="lbl">Giling</span>' in html
+    html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
     assert "Sebab berhenti · " not in html, "judul lama yang berdiri sendiri kembali"
     # Sebab berhenti tinggal di dalam blok prosesnya, lewat satu macro —
     # dua salinan akan berbeda begitu salah satunya diperbaiki.
     assert "{% macro sebab_blok(" in html
-    assert html.count("sebab_blok('") == 2
+    # Sejak Tahap 2 templatnya BERLINGKAR atas daftar proses, dan daftarnya
+    # milik app: Meja punya blok Penyosohan yang tak ada di sini. Jadi yang
+    # menyebut "Pengeringan" dan "Giling" adalah rutenya, bukan markupnya —
+    # dan judulnya tetap digambar `<span class="lbl">` yang sama.
+    assert "{% for jenis, judul in PROSES %}" in html
+    assert '<span class="lbl">{{ judul }}</span>' in html
+    assert html.count("{{ sebab_blok(jenis) }}") == 1
+    from app.web import pengaturan
+
+    rute = kode_saja(pengaturan.halaman_pengaturan)
+    assert "('pengeringan', 'Pengeringan')" in rute and "('giling', 'Giling')" in rute
+    assert "penyosohan" not in rute, "setelan Gudang 2 diurus dari Meja"
 
     # Dilipat: daftar sebab tumbuh — itu memang gunanya — dan daftar yang
     # tumbuh terus membuat setelan di bawahnya makin jauh dari jangkauan.

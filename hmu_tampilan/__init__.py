@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "131"
+VERSI = "132"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -63,6 +63,12 @@ BERKAS_PAKET = (
     "pengguna.html", "masuk.html", "alat.html", "ganti_sandi.html",
     # Potongan baris versi 21c: satu sumber untuk keempat app.
     "_versi.html",
+    # ── Tahap 2, 23 September 2026: layar yang memang BEDA per peran ──
+    # Bedanya sah, jadi yang disatukan kerangkanya: blok dipasang atau tidak
+    # menurut bendera yang app-nya hitung dengan mesin view yang sudah ada.
+    # Kalimat yang benar-benar milik satu app tinggal di `_kata_*.html`
+    # app itu — nama itu sengaja TIDAK terdaftar di sini.
+    "pengaturan.html",
 )
 
 

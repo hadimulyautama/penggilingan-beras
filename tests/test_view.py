@@ -256,10 +256,25 @@ def test_tempat_kosong_tetap_didaftar():
 
 def test_orang_dan_alat_milik_view_super():
     """Daftar peran berbunyi: Super Admin = "semua di atas, DITAMBAH
-    mengelola orang, akun, dan alat"."""
-    teks = (AKAR / "app/web/templates/pengaturan.html").read_text()
-    assert "VIEW == V_SUPER" in teks
-    assert "akun.is_admin" not in teks
+    mengelola orang, akun, dan alat".
+
+    Syaratnya pindah dari templat ke RUTE pada Tahap 2 (23 September 2026):
+    `pengaturan.html` satu berkas di paket untuk tiga app, dan templat bersama
+    tak boleh menebak peran — ia memasang blok yang app-nya nyatakan. Jadi yang
+    diperiksa di sini syarat di rutenya, dan bahwa templatnya memang cuma
+    membaca benderanya.
+    """
+    import inspect
+
+    from app.web import pengaturan
+
+    rute = inspect.getsource(pengaturan.halaman_pengaturan)
+    assert "blok_kelola=view == V_SUPER" in rute
+    assert "akun.is_admin" not in rute
+
+    teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
+    assert "{% if blok_kelola %}" in teks
+    assert "VIEW == V_SUPER" not in teks, "templat bersama menebak peran lagi"
 
 
 def test_blok_sistem_tak_bisa_mengunci_semua_orang():
@@ -275,9 +290,16 @@ def test_blok_sistem_tak_bisa_mengunci_semua_orang():
 
     from app.web import pengaturan
 
-    teks = (AKAR / "app/web/templates/pengaturan.html").read_text()
-    assert "tuan and not ada_super" in teks
-    assert "ada_super=ada_super" in inspect.getsource(pengaturan.halaman_pengaturan)
+    # Syaratnya di RUTE sejak Tahap 2 — templatnya bersama untuk tiga app.
+    rute = inspect.getsource(pengaturan.halaman_pengaturan)
+    assert "tuan and not ada_super" in rute
+    assert "ada_super=ada_super" in rute
+    # Dan kalimat yang menjelaskan kenapa bloknya masih terbuka ikut dipasang
+    # hanya selama pinjaman itu berlaku: blok yang muncul lalu hilang sendiri
+    # tanpa keterangan terbaca sebagai aplikasi yang berubah-ubah.
+    assert "kelola_darurat=view != V_SUPER" in rute
+    teks = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
+    assert "{% if kelola_darurat %}" in teks
     # Hitungannya hanya akun AKTIF: Super Admin yang dinonaktifkan tak bisa
     # membuka pintu apa pun, jadi menganggapnya ada sama saja mengunci.
     from app.web import security

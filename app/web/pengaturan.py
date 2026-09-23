@@ -15,9 +15,13 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Request
 
+from app.config import settings
 from app.database import SessionLocal
 from app.peran import PERAN_ADMIN_KEATAS
 from app.models import ProduksiAkun
+from app.web.layar import SUPER as V_SUPER
+from app.web.layar import view_untuk
+from hmu_identitas import peran as _P
 from app.web.security import (ada_superadmin, butuh_admin, butuh_akun,
                                butuh_super)
 from app.web.tampilan import redirect, render
@@ -55,6 +59,14 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     # templat); operator tak bisa menjalankan migrasi, jadi baginya itu cuma
     # kotak merah yang tak bisa ia tutup.
     versi = await _versi.info()
+    # ── Bendera blok (Tahap 2, templat Pengaturan naik ke paket) ──
+    #
+    # Templat bersama tidak menebak peran; ia memasang blok yang app-nya
+    # nyatakan. Syaratnya PERSIS yang dulu tertulis di templat ini, cuma
+    # pindah tempat — dan di sinilah tempatnya, karena di sini `view` dan
+    # `PERAN_ASLI` sudah ada tanpa perlu dibaca ulang dari templat.
+    view = await view_untuk(akun.user)
+    peran_asli = getattr(request.state, "peran_asli", None) or akun.peran
     return render(
         request, "pengaturan.html",
         **await lencana(akun.user),
@@ -64,6 +76,15 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
             or request.query_params.get("err_teks", ""),
         tuan=tuan, target_bawaan=target, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
         ada_super=ada_super,
+        blok_kelola=view == V_SUPER or (tuan and not ada_super),
+        kelola_darurat=view != V_SUPER,
+        blok_lihat_sebagai=_P.admin_keatas(peran_asli),
+        blok_kerja_gudang=_P.boleh_ganti_gudang(peran_asli),
+        # Pos Produksi tak punya blok Penyosohan: setelan Gudang 2 diurus dari
+        # Meja, yang memegang kedua gudang.
+        PROSES=(("pengeringan", "Pengeringan"), ("giling", "Giling")),
+        blok_setelan=tuan,
+        blok_mode_uji=settings.mode_uji and view == V_SUPER,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),
     )
 

@@ -1,0 +1,15 @@
+{# Kalimat layar Pengaturan yang memang milik Pos Produksi. Kerangkanya di
+   paket (`hmu_tampilan/templates/pengaturan.html`); yang di sini hanya yang
+   berubah artinya bila dibaca di app lain. #}
+
+{% macro nama_melekat() -%}
+{#- Di sini nama orang menempel pada TIMBANGAN dan pekerjaan lantai. -#}
+setiap catatan timbang dan pekerjaan
+{%- endmacro %}
+
+{% macro pemegang_sementara() -%}
+{#- Kata yang dipakai di app ini untuk Admin. `NAMA_VIEW[V_ADMIN]` di sini
+    berbunyi "Admin", sedangkan layar ini sejak awal menyebut "Direksi" —
+    dan yang dibaca pemilik tidak diubah demi keseragaman nama variabel. -#}
+Direksi
+{%- endmacro %}
