@@ -122,6 +122,11 @@ async def _muat(pesan_ok: str | None = None, pesan_err: str | None = None,
     return {"akun_list": akun_list, "kembali": "/", "PERAN": PERAN,
             "belum": [{"id": u.id, "nama": u.nama, "role": u.role,
                        "saran": _saran_username(u.nama)} for u in belum],
+            # `/pengguna/<id>` hanya ada DI SINI; Meja meneruskan borangnya ke
+            # rute ini dan tak punya halaman ubahnya sendiri. Templatnya satu
+            # berkas di paket sejak 23 September 2026, jadi yang memutuskan
+            # apakah tautan "Ubah" muncul adalah app-nya, bukan salinannya.
+            "ada_ubah": True,
             "pesan_ok": pesan_ok, "pesan_err": pesan_err, "sandi_awal": sandi_awal}
 
 

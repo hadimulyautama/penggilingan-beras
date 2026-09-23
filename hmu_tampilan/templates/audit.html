@@ -53,6 +53,14 @@
           <input type="hidden" name="rentang" value="{{ rentang }}">
           <input type="hidden" name="kelompok" value="{{ kelompok }}">
           <input type="hidden" name="cari" value="{{ cari }}">
+          {# `log_id` BUKAN hiasan: tanpa ia, POST mencari "aksi terakhir"
+             sekali lagi saat mengeksekusi, dan bila ada catatan lain masuk
+             antara membaca dan menekan — di pos yang sibuk itu biasa — yang
+             dibatalkan adalah catatan itu. Orang membaca satu kalimat lalu
+             membatalkan kalimat lain, tanpa satu pun tanda. Ini yang dijaga
+             `undo.undo_last(log_id=…)`; versi tanpa `log_id` sempat hidup di
+             produksi sampai penyatuan 23 September 2026. #}
+          <input type="hidden" name="log_id" value="{{ pratinjau.log_id }}">
           <button class="btn btn--bahaya" type="submit">Batalkan catatan ini</button>
         </form>
       {% else %}

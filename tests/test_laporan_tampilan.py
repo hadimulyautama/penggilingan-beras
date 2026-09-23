@@ -8,7 +8,8 @@ tenggelam di antara tanda baca.
 import pathlib
 
 AKAR = pathlib.Path(__file__).resolve().parents[1]
-TPL = AKAR / "app/web/templates/laporan.html"
+#: Milik paket sejak 23 September 2026 — berkas ini dulu ada tiga, beda 0 baris.
+TPL = AKAR / "hmu_tampilan/templates/laporan.html"
 CSS = AKAR / "hmu_tampilan/static/app.css"
 
 

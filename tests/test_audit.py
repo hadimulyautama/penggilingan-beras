@@ -84,7 +84,7 @@ def test_yang_terkunci_dibedakan_sebelum_tulisannya_dibaca():
 
     akar = pathlib.Path(__file__).resolve().parents[1]
     css = (akar / "hmu_tampilan/static/app.css").read_text()
-    html = (akar / "app/web/templates/audit.html").read_text()
+    html = (akar / "hmu_tampilan/templates/audit.html").read_text()
     assert ".audit--muda" in css and ".audit--tua" in css
     assert "'tua' if not c.muda else 'muda'" in html
     assert "terkunci" in html

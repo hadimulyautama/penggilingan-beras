@@ -57,17 +57,25 @@ async def batalkan_terakhir(
     rentang: str = Form("48j"),
     kelompok: str = Form("semua"),
     cari: str = Form(""),
+    log_id: int | None = Form(None),
     akun=Depends(butuh_admin),
 ):
-    """Batalkan catatan paling akhir — lewat layanan undo yang sudah ada.
+    """Batalkan catatan YANG DITAMPILKAN — lewat layanan undo yang sudah ada.
 
     Batas 48 jamnya ditegakkan di dalam `undo_last`, bukan di sini: jalur bot
     memakai fungsi yang sama, dan aturan yang ditulis dua kali cepat atau
     lambat berbeda di salah satunya.
+
+    `log_id` datang dari pratinjau yang dibaca orangnya. Sampai penyatuan
+    templat 23 September 2026 rute ini tak menerimanya — hanya Meja yang
+    mengirimnya — jadi `undo_last` mencari "aksi terakhir" SEKALI LAGI saat
+    mengeksekusi, dan catatan yang masuk antara membaca dan menekan-lah yang
+    dibatalkan. Di pos yang sibuk itu bukan kemungkinan teoretis.
     """
     async with SessionLocal() as db:
         try:
-            hasil = await undo_svc.undo_last(db, actor=akun.user, cakupan=None)
+            hasil = await undo_svc.undo_last(db, actor=akun.user, cakupan=None,
+                                             log_id=log_id)
         except undo_svc.UndoError as e:
             kunci, hasil = "err", (e.args[0] if e.args else "Gagal membatalkan.")
         else:

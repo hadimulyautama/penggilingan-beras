@@ -97,7 +97,7 @@ async def test_peringatan_migrasi_bila_basis_data_turun_satu_revisi(monkeypatch)
 
     monkeypatch.setattr(skema, "SessionLocal", _SesiVersi(turun))
     monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", "deadbeefcafe")
-    versi.komit.cache_clear()
+    versi.komit.cache_clear()   # pembacanya di paket; nama ini menunjuk ke sana
     try:
         info = await versi.info()
     finally:
@@ -138,26 +138,35 @@ def test_revisi_tak_dikenal_berarti_kode_lama():
 
 
 def test_hanya_hash_commit_yang_dibaca_dari_lingkungan():
-    """Layar bukan tempat nilai variabel apa pun selain hash commit. Satu-
-    satunya akses ke lingkungan di modul ini adalah satu kunci itu."""
+    """Layar bukan tempat nilai variabel apa pun selain hash commit.
+
+    Pembacanya pindah ke `hmu_tampilan.komit` pada penyatuan templat 23
+    September 2026 — keempat app memakainya — jadi aturan ini dijaga di sana.
+    Yang dijaga DI SINI: modul ini tidak membaca lingkungan sama sekali lagi."""
     import re
 
     sumber = (AKAR / "app/web/versi.py").read_text()
-    akses = re.findall(r"os\.environ[^\n]*", sumber)
-    assert akses == ['os.environ.get("RAILWAY_GIT_COMMIT_SHA"))'], akses
+    assert re.findall(r"os\.environ[^\n]*", sumber) == []
     assert "--kv" not in sumber and "railway variables" not in sumber
+
+    paket = (AKAR / "hmu_tampilan/komit.py").read_text()
+    assert re.findall(r"os\.environ[^\n]*", paket) == [
+        'os.environ.get("RAILWAY_GIT_COMMIT_SHA"))']
+    assert "--kv" not in paket and "railway variables" not in paket
 
 
 def test_commit_dari_berkas_bila_lingkungan_kosong(monkeypatch, tmp_path):
+    from hmu_tampilan import komit as k
+
     monkeypatch.delenv("RAILWAY_GIT_COMMIT_SHA", raising=False)
     berkas = tmp_path / "KOMIT"
     berkas.write_text("0123456789abcdef\n")
-    monkeypatch.setattr(versi, "BERKAS_KOMIT", berkas)
-    versi.komit.cache_clear()
+    monkeypatch.setattr(k, "BERKAS", berkas)
+    k.komit.cache_clear()
     try:
-        assert versi.komit() == "0123456"
+        assert versi.komit() == "0123456"       # `versi.komit` adalah milik paket
     finally:
-        versi.komit.cache_clear()
+        k.komit.cache_clear()
 
 
 def test_dockerfile_menulis_commit_saat_build():

@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "130"
+VERSI = "131"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -51,6 +51,18 @@ BERKAS_PAKET = (
     "app.css", "aksi.js", "pindah.js", "sw.js",
     "ikon-180.png", "ikon-192.png", "ikon-512.png",
     "base.html", "_benda.html", "luring.html",
+    # ── Delapan LAYAR yang naik ke paket 23 September 2026 ──
+    # Inventaris QA hari itu: paket memuat 3 berkas, dan 41 berkas templat
+    # disalin tangan untuk ~16 layar. Tiga di antaranya salinan murni (beda 0
+    # baris), lima sudah hanyut tanpa sengaja — `ganti_sandi.html` paling jauh:
+    # panjangnya 42 vs 43 baris tetapi 73 barisnya berbeda, karena diformat
+    # ulang sendiri-sendiri. Nama-nama ini ada di sini supaya
+    # `penjaga.salinan_terlarang` MENOLAK kemunculannya lagi di luar paket:
+    # itulah satu-satunya hal yang mencegah duplikasinya tumbuh kembali.
+    "error.html", "laporan.html", "aksi_lain.html", "audit.html",
+    "pengguna.html", "masuk.html", "alat.html", "ganti_sandi.html",
+    # Potongan baris versi 21c: satu sumber untuk keempat app.
+    "_versi.html",
 )
 
 

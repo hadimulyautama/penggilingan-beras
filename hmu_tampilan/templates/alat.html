@@ -12,7 +12,10 @@
       <div class="baris">
         <div class="baris__isi">
           <div class="baris__nama">{{ d.nama }}</div>
-          <div class="baris__ket">kapasitas {{ "%.0f"|format(d.kapasitas_kg|float / 1000) }} ton</div>
+          {# `kapasitas` dalam KG — satuannya dipakai di baris ini, bukan di
+             nama medannya, karena nama itu bentuk JSON `/internal/meja/alat`
+             yang sudah menyeberangi batas repo. #}
+          <div class="baris__ket">kapasitas {{ "%.0f"|format(d.kapasitas|float / 1000) }} ton</div>
           {% if d.status != "aktif" %}
             <div class="cip" style="margin-top:6px">
               <span class="lencana lencana--bahaya">{{ d.status }}</span>
@@ -61,12 +64,16 @@
 <div>
   <span class="lbl">Silo gabah kering</span>
   <div class="kartu">
-    {% for s, kg in silo %}
+    {# Satu nama per hal, bukan tuple yang dibongkar: produksi dulu mengirim
+       `(silo, kg)` dan Meja mengirim dict, dan itulah satu-satunya sebab
+       berkas ini hidup dua kali. Bentuk dict-lah yang menang — view produksi
+       menyusunnya sekarang. #}
+    {% for s in silo %}
       <div class="baris">
         <div class="baris__isi">
           <div class="baris__nama">{{ s.nama_silo }}</div>
           <div class="baris__ket">
-            {% if kg %}berisi {{ "{:,}".format(kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
+            {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
           </div>
         </div>
       </div>

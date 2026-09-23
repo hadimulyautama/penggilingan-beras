@@ -251,8 +251,15 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
     from app.web.nav import lencana
 
     async with SessionLocal() as db:
-        mesin = await dryers_g1(db)
-        silo = [(s, await _silo_content_kg(db, s.id)) for s in await silos_g1(db)]
+        # Bentuk yang SAMA dengan JSON `/internal/meja/alat`: `alat.html` satu
+        # berkas di paket sejak 23 September 2026, dan bentuk tuple `(silo, kg)`
+        # yang dulu dipakai di sini adalah satu-satunya sebab ia hidup dua kali.
+        # Objek ORM pun berhenti bocor ke templat.
+        mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
+                  "status": d.status} for d in await dryers_g1(db)]
+        silo = [{"id": s.id, "nama_silo": s.nama_silo,
+                 "kg": float(await _silo_content_kg(db, s.id))}
+                for s in await silos_g1(db)]
     return render(
         request, "alat.html", kembali="/pengaturan", layar="pengaturan",
         **await lencana(akun.user),

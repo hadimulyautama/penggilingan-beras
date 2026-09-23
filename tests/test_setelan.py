@@ -41,9 +41,13 @@ def test_katalog_punya_alamatnya_sendiri():
 
     assert any(k == "aksi_lain" for k, *_ in TAB)
     assert hasattr(main, "halaman_aksi_lain")
-    # Dan halamannya benar-benar memuat kerangka yang diisi aksi.js.
-    html = (AKAR / "app/web/templates/aksi_lain.html").read_text()
+    # Dan halamannya benar-benar memuat kerangka yang diisi aksi.js. Templatnya
+    # milik paket sejak 23 September 2026 (ketiga app memakainya); paragraf
+    # pembukanya yang tinggal di sini, karena ia menyebut layar app ini.
+    html = (AKAR / "hmu_tampilan/templates/aksi_lain.html").read_text()
     assert 'id="layar"' in html and "aksi.js" in html
+    kata = (AKAR / "app/web/templates/_kata_aksi_lain.html").read_text()
+    assert 'href="/aksi"' in kata and 'href="/berjalan"' in kata
 
 
 def test_antrean_kosong_menunjuk_ke_mana_lagi():

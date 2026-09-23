@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block judul %}Ganti kata sandi{% endblock %}
+{% block isi %}
+
+{# ── Satu berkas dari dua yang berbeda sungguhan ──
+   Sampai 23 September 2026 halaman ini hidup dua kali dengan MARKUP yang
+   berbeda, bukan sekadar format: produksi memakai `.fld-sandi` +
+   `.fld-sandi__lihat`, Meja & Gudang 2 memakai `.sandi` + `.btn--kecil`.
+   Hanya yang pertama ada di app.css — kotak sandi di Meja selama ini tak
+   pernah tergaya. Maka strukturnya diambil dari produksi.
+   Yang diambil dari Meja: tombol "lihat" pada KETIGA kotak, bukan cuma yang
+   tengah. Alasan tombol itu ada (lihat base.html) berlaku sama untuk ketiganya
+   — mengetik sandi sambil berdiri di gudang, satu tangan. #}
+
+<div>
+  <h1>{% if wajib %}Buat kata sandi Anda{% else %}Ganti kata sandi{% endif %}</h1>
+  {% if wajib %}
+    <p class="bantu">Sandi yang Anda pakai barusan dibuatkan Super Admin. Ganti
+    sekarang supaya hanya Anda yang tahu.</p>
+  {% endif %}
+</div>
+
+{% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
+
+<form method="post" action="/ganti-sandi" class="grup">
+  <input type="hidden" name="_csrf" value="{{ CSRF }}">
+  {% if not wajib %}
+    <div>
+      <label class="lbl" for="lama">Kata sandi sekarang</label>
+      <div class="fld-sandi">
+        <input class="fld" id="lama" name="sandi_lama" type="password"
+               autocomplete="current-password" required autofocus>
+        <button class="fld-sandi__lihat" type="button" data-lihat="lama"
+                aria-label="Tampilkan kata sandi sekarang">lihat</button>
+      </div>
+    </div>
+  {% endif %}
+  <div>
+    <label class="lbl" for="baru">Kata sandi baru — minimal 6 karakter</label>
+    <div class="fld-sandi">
+      <input class="fld" id="baru" name="sandi_baru" type="password" minlength="6"
+             autocomplete="new-password" required {% if wajib %}autofocus{% endif %}>
+      <button class="fld-sandi__lihat" type="button" data-lihat="baru"
+              aria-label="Tampilkan kata sandi baru">lihat</button>
+    </div>
+  </div>
+  <div>
+    <label class="lbl" for="ulangi">Ulangi kata sandi baru</label>
+    <div class="fld-sandi">
+      <input class="fld" id="ulangi" name="ulangi" type="password" minlength="6"
+             autocomplete="new-password" required>
+      <button class="fld-sandi__lihat" type="button" data-lihat="ulangi"
+              aria-label="Tampilkan ulangan kata sandi">lihat</button>
+    </div>
+  </div>
+  <button class="btn btn--utama" type="submit">Simpan</button>
+</form>
+
+{% if not wajib %}<p style="margin-top:6px"><a href="/">← Kembali</a></p>{% endif %}
+{% endblock %}

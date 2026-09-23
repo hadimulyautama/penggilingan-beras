@@ -123,7 +123,11 @@
         </div>
       </div>
       <div class="baris__aksi">
-        <a class="btn btn--kecil" href="/pengguna/{{ a.id }}">Ubah</a>
+        {# Halaman ubah per akun (`/pengguna/<id>`) hanya ada di Pos Produksi;
+           Meja meneruskan borang ke sana dan tak punya rutenya sendiri.
+           Tautan mati lebih buruk daripada tautan yang tak ada, jadi yang
+           memutuskan adalah app-nya lewat `ada_ubah`, bukan salinan templat. #}
+        {% if ada_ubah %}<a class="btn btn--kecil" href="/pengguna/{{ a.id }}">Ubah</a>{% endif %}
         <form class="sebaris" method="post" action="/pengguna/reset"
               onsubmit="return confirm('Setel ulang sandi {{ a.nama }}? Sandi lamanya langsung tidak berlaku.')">
           <input type="hidden" name="_csrf" value="{{ CSRF }}">

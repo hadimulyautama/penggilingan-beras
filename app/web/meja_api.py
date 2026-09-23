@@ -443,6 +443,7 @@ async def kartu(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
 @router.get("/stok")
 async def stok(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
     from app.penggilingan.inventory import finished_goods as bj
+    from app.penggilingan.inventory import packaging as kms
     from app.services import stok as svc
     from app.services.setelan import fitur_mutu
 
@@ -453,9 +454,22 @@ async def stok(akun: ProduksiAkun = Depends(akun_meja)) -> dict:
         # Barang jadi & hasil samping: produksi hanya punya laporan teksnya;
         # meja menggambarnya dari teks yang sama (laporan `stok_barang_jadi`).
         teks_bj = await bj.laporan_stok_barang_jadi(db)
+        # Stok karung (keputusan pemilik 23 September 2026). Meja memegang
+        # KEDUA gudang, jadi ia melihat seluruh barisnya — termasuk karung PK
+        # di Gudang 1, karena Meja-lah yang memesannya.
+        #
+        # Kunci pendek gudangnya ikut dikirim, diterjemahkan dari tabel yang
+        # SUDAH ada di modul ini (`GUDANG`). Penyaring "gudang mana" di kepala
+        # halaman Meja memakai kunci itu; membiarkan Meja menerjemahkan sendiri
+        # nama gudang berarti menaruh aturan di aplikasi yang sengaja tak
+        # memegang aturan — dan nama gudang hidup di master, bisa berubah.
+        _kunci = {n: k for k, n in NAMA_GUDANG.items()}
+        karung = [{**k, "gudang_id": _kunci.get(k["gudang"], "")}
+                  for k in await kms.stok_kemasan_rinci(db)]
         kartu_ = await _susun(db, akun)
     return {"lot": _ser(lot), "tempat": _ser(tempat), "mutu_aktif": mutu,
-            "barang_jadi_teks": teks_bj, "lencana": kartu_["lencana"]}
+            "barang_jadi_teks": teks_bj, "karung": karung,
+            "lencana": kartu_["lencana"]}
 
 
 @router.get("/laporan")
@@ -742,6 +756,32 @@ async def ubah_mode(body: AkunIdIn, akun: ProduksiAkun = Depends(akun_super)) ->
 
 
 # ─────────────────────────── Alat (Super Admin) ───────────────────────────
+
+# ─────────────────────────── Versi & skema ───────────────────────────
+
+@router.get("/versi")
+async def versi() -> dict:
+    """Keadaan MIGRASI layanan ini — untuk baris versi di Meja & Gudang 2.
+
+    Keduanya tak punya alembic sendiri (tak punya basis data sama sekali), dan
+    baris versi mereka harus tetap menjawab pertanyaan yang baris itu dibuat
+    untuk menjawab: "apakah perbaikannya sudah sampai?". VERSI aset dan commit
+    adalah milik mereka sendiri; revisi migrasi hanya ada di sini.
+
+    Yang dikirim cuma tiga nama revisi. Tak ada nilai variabel, tak ada commit
+    — commit tiap app dibaca app itu sendiri dari image-nya sendiri, dan
+    mengirim commit produksi ke layar Meja justru akan menyesatkan.
+
+    Tanpa gerbang peran: angka ini dibacakan operator ke QA lewat telepon, dan
+    ia sudah di balik `X-Internal-Token`.
+    """
+    from app.web import versi as _versi
+    from app.web.skema import keadaan
+
+    k = await keadaan()
+    return {"revisi": k["revisi"], "head": k["head"],
+            "keadaan": _versi.banding(k["revisi"], k["head"])}
+
 
 @router.get("/alat")
 async def alat(akun: ProduksiAkun = Depends(akun_super)) -> dict:

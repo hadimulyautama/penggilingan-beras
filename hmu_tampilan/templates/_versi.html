@@ -1,0 +1,55 @@
+{# ── Kode mana yang sedang berjalan ── (lahir 21 September 2026, "21c")
+
+   21 Sep 20:50 pemilik melaporkan galat yang sudah diperbaiki. Perbaikannya
+   benar; yang berjalan di ponselnya kode lama — dan tak ada satu layar pun
+   yang menyebutnya, jadi butuh satu putaran QA penuh hanya untuk tahu itu.
+   Tiga angka yang bersama-sama menjawab "apakah perbaikannya sudah sampai?":
+   VERSI aset yang dilihat peramban, commit yang dilihat server, revisi
+   migrasi yang dilihat skema.
+
+   Kenapa di paket, bukan di tiap app: baris ini mendarat di produksi dan
+   timbangan pada 582e3a4, TIDAK di Meja dan Gudang 2, karena pengaturan.html
+   ada tiga. Membuka Meja dari ponsel tetap tak bisa menjawab pertanyaan yang
+   baris ini dibuat untuk menjawab — tagihan duplikasi yang jatuh tempo.
+
+   `versi.skema_milik` (opsional): nama layanan yang punya basis datanya.
+   Meja & Gudang 2 tak punya alembic sendiri — revisinya diambil dari Pos
+   Produksi, dan kalimatnya harus menyebut itu, bukan berpura-pura bahwa
+   skema yang tertinggal adalah skema app ini. #}
+
+{# Mencolok, dan hanya untuk admin ke atas (`tuan`): operator tak bisa
+   menjalankan migrasi, jadi baginya kotak ini cuma peringatan yang tak bisa
+   ia tutup. Dua keadaan yang tampak sama di layar lain (galat 500 yang tak
+   menyebut sebab) dibedakan di sini, karena obatnya berlawanan: yang satu
+   perlu `alembic upgrade head`, yang lain perlu deploy ulang. #}
+{% macro peringatan(versi, tuan) -%}
+{%- if tuan and versi and versi.keadaan == 'tertinggal' %}
+  <div class="nota nota--buruk" role="alert" data-uji="skema-tertinggal">
+    <b>Migrasi belum dijalankan — jalankan <code>alembic upgrade head</code>.</b>
+    Basis data {% if versi.skema_milik %}{{ versi.skema_milik }} {% endif %}masih di revisi {{ versi.revisi }}, kode {% if versi.skema_milik %}di sana{% else %}ini{% endif %} sudah
+    {{ versi.head }}. Sampai selaras, sebagian pencatatan akan gagal dengan
+    galat yang tak menyebut sebabnya.
+  </div>
+{%- elif tuan and versi and versi.keadaan == 'kode_lama' %}
+  <div class="nota nota--buruk" role="alert" data-uji="kode-lama">
+    <b>Kode yang berjalan lebih lama dari basis datanya.</b>
+    Basis data {% if versi.skema_milik %}{{ versi.skema_milik }} {% endif %}di revisi {{ versi.revisi }} yang tak dikenal kode {% if versi.skema_milik %}di sana{% else %}ini{% endif %}
+    ({{ versi.head }}) — deploy terbaru belum sampai ke sini, atau layanan
+    ini belum dimulai ulang.
+  </div>
+{%- endif %}
+{%- endmacro %}
+
+{# Satu baris kecil, untuk SEMUA peran: operator pun boleh membacakan
+   angkanya ke QA lewat telepon. `migrasi ?` bukan kelalaian — itu jawaban
+   yang benar ketika revisinya memang tak terbaca (basis data tak terjangkau,
+   atau Pos Produksi mati dan Meja tak mau mengarang angka). #}
+{% macro baris(versi) -%}
+{%- if versi %}
+<p class="bantu mono" data-uji="baris-versi"
+   style="text-align:center;margin-top:24px;font-size:11px;letter-spacing:.04em">
+  Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·
+  migrasi {{ versi.revisi or '?' }}{% if versi.keadaan != 'selaras' %} (kode: {{ versi.head or '?' }}){% endif %}
+</p>
+{%- endif %}
+{%- endmacro %}

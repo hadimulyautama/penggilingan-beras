@@ -50,9 +50,15 @@ def test_muat_hanya_jalan_bila_wadahnya_ada():
 
 def test_hanya_satu_template_yang_punya_wadah_layar():
     """Kalau suatu hari ada dua, syarat di atas berhenti menjelaskan apa pun
-    dan harus ditinjau ulang — bukan didiamkan."""
-    punya = [p.name for p in (AKAR / "web/templates").glob("*.html")
-             if 'id="layar"' in p.read_text()]
+    dan harus ditinjau ulang — bukan didiamkan.
+
+    DUA folder dicari, bukan satu: templat layar dicari di app dulu lalu di
+    paket (`ChoiceLoader`), dan `aksi_lain.html` pindah ke paket 23 September
+    2026. Uji yang hanya melihat folder app akan lulus karena tak menemukan
+    apa pun — lulus tanpa memeriksa."""
+    punya = sorted({p.name for d in (AKAR / "web/templates",
+                                     AKAR.parent / "hmu_tampilan/templates")
+                    for p in d.glob("*.html") if 'id="layar"' in p.read_text()})
     assert punya == ["aksi_lain.html"], punya
 
 
