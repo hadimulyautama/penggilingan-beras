@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{# ── SATU GUDANG, dibaca dari luar lantainya ──
+
+   Lahir di Meja (12 September 2026) sebagai sasaran baris gudang di Beranda:
+   gudang adalah DAFTAR, dan tiap barisnya harus bisa dibuka. Naik ke paket 24
+   September 2026 karena Pos Produksi memakainya juga — app meja & gudang2 akan
+   dihapus, dan halaman ini salah satu yang harus tetap ada sesudahnya.
+
+   Isinya ringkasan, bukan pekerjaan baru: empat petak gudang ini, lalu mesin
+   yang menyala dan yang transit. Kartunya SAMA dengan yang dilihat operator —
+   makro yang sama, daftar yang sama — supaya dua layar tak pernah menyebut
+   angka yang berbeda tentang mesin yang sama.
+
+   Judulnya lewat `JUDUL={**JUDUL, "gudang": nama}` dari rute, dan `kembali="/"`
+   memasang tombol balik: halaman ini punya INDUK (Beranda), jadi laci menu
+   kalah dari tombol kembali — lihat `base.html`. #}
+{% block judul %}{{ nama_gudang }}{% endblock %}
+{% block isi %}
+{% import "_benda.html" as benda with context %}
+{% import "_beranda.html" as br with context %}
+
+{# Petaknya lewat makro: markup sel petak sempat hidup di TIGA berkas, dan sel
+   yang disalin adalah sel yang cepat atau lambat beda tinggi barisnya. #}
+{{ br.petak_rata(petak, judul=nama_gudang ~ " — " ~ fungsi) }}
+
+{{ benda.blok("Sedang berjalan", berjalan, alamat="/gudang/" ~ gid) }}
+{{ benda.blok("Transit", transit, alamat="/gudang/" ~ gid) }}
+{% if not berjalan and not transit %}
+  <div>
+    <span class="lbl">Sedang berjalan</span>
+    <div class="kosong-tipis">Tidak ada mesin yang menyala di {{ nama_gudang }}.</div>
+  </div>
+{% endif %}
+
+{# Lembar aksi hanya di app yang MEMPUNYAI rute aksinya. Di Meja tombolnya
+   tetap tergambar (kartunya sama), tapi yang membukanya adalah `aksi.js`, dan
+   `aksi.js` cuma dimuat di app yang bisa menerima kiriman itu. Memuatnya di
+   mana pun berarti tombol yang ditekan lalu tak terjadi apa-apa — dan tombol
+   bisu lebih buruk daripada tombol yang tak ada. #}
+{% if blok_aksi %}
+<dialog class="lembar" id="lembar"></dialog>
+<div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">
+  {%- if blok_aksi %}Dipantau dari sini · dikerjakan operator {{ nama_gudang }}
+  {%- else %}Dipantau dari meja · dikerjakan operator {{ nama_gudang }}{% endif -%}
+</div>
+{% if blok_aksi %}
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endif %}
+{% endblock %}

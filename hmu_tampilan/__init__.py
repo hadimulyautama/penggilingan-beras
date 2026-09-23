@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "137"
+VERSI = "138"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -77,6 +77,10 @@ BERKAS_PAKET = (
     # `stok.html` = stok PK (Pos Produksi & Meja). Layar Stok Gudang 2
     # menjawab pertanyaan LAIN — barang jadi — dan bernama `stok_gudang2.html`.
     "stok.html", "_stok.html",
+    # Ringkasan SATU gudang, sasaran baris gudang di Beranda. Naik ke paket 24
+    # September 2026 bersama rute `/gudang/<gid>` di Pos Produksi — ia salah
+    # satu layar yang harus tetap ada sesudah app meja dihapus.
+    "gudang.html",
 )
 
 

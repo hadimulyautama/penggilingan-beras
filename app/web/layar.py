@@ -39,6 +39,37 @@ NAMA_VIEW = P.NAMA_VIEW
 #: View yang memegang kedua gudang sekaligus — dan karena itu melihat uang.
 MEJA = P.VIEW_MEJA
 
+#: (id, nama, fungsi) tiap gudang — daftar, bukan tata letak.
+#:
+#: Lahir di `meja_api` karena Meja layar pertama yang memperlakukan gudang
+#: sebagai DAFTAR (keputusan pemilik 12 September 2026: "jika punya banyak
+#: gudang pasti bingung"). Dipindah ke sini 24 September 2026 saat Pos Produksi
+#: mulai memakainya juga — dua salinan daftar gudang berarti gudang ketiga yang
+#: muncul di satu layar dan tidak di layar sebelahnya.
+#:
+#: Ia sengaja TIDAK diturunkan dari tabel `warehouses`: yang di sini adalah dua
+#: FUNGSI pabrik yang dikenal kode (selepan & penyosohan, masing-masing dengan
+#: alur dan layarnya sendiri), bukan sembarang baris gudang yang bisa ditambah
+#: orang di Pengaturan.
+GUDANG: tuple[tuple[str, str, str], ...] = (
+    ("g1", "Gudang 1", "Selepan"),
+    ("g2", "Gudang 2", "Penyosohan"),
+)
+NAMA_GUDANG: dict[str, str] = {k: n for k, n, _ in GUDANG}
+FUNGSI_GUDANG: dict[str, str] = {k: f for k, _, f in GUDANG}
+
+
+def boleh_lihat_gudang(view: str, gid: str) -> bool:
+    """Bolehkah view ini membuka halaman ringkasan gudang `gid`?
+
+    Dipakai gerbang halaman `/gudang/{gid}`. Operator TIDAK dilarang melihat
+    gudangnya sendiri — Beranda-nya sudah memuat petak yang sama — tapi ia tak
+    boleh membuka gudang SEBELAH: angka gudang lain bukan pekerjaannya, dan
+    layar yang menawarkannya mengajari orang membaca kabar yang tak bisa ia
+    tindaklanjuti.
+    """
+    return {"g1": gudang1, "g2": gudang2}[gid](view) if gid in NAMA_GUDANG else False
+
 
 def gudang1(view: str) -> bool:
     """Apakah view ini berurusan dengan Gudang 1 (selepan)."""

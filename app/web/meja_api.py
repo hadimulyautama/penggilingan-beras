@@ -49,8 +49,9 @@ log = logging.getLogger("web.meja_api")
 #: master `warehouses`, fungsi). Menambah gudang = menambah baris di master;
 #: kunci di sini hanya menautkan penyusun kartu yang memang per gudang
 #: (`berjalan.untuk_gudang1/2`).
-GUDANG = (("g1", "Gudang 1", "Selepan"), ("g2", "Gudang 2", "Penyosohan"))
-NAMA_GUDANG = {k: n for k, n, _ in GUDANG}
+#: Daftar gudang hidup di `app.web.layar` sejak Pos Produksi memakainya juga
+#: (24 Sep 2026). Diimpor, bukan disalin.
+from app.web.layar import GUDANG, NAMA_GUDANG  # noqa: E402
 
 
 # ─────────────────────────── Penjaga ───────────────────────────
@@ -291,8 +292,9 @@ async def _tiket_jenis_tak_dikenal(db) -> list[dict]:
     barangnya sudah turun dari truk dan berdiri di halaman.
 
     Bukan kekeliruan yang akan habis sendiri: `peta_jenis.PETA_MASUK` memang
-    belum memetakan BERAS_MASUK & BROKEN_MASUK (menunggu keputusan pemilik soal
-    beli beras jadi / broken dari luar), dan taksonomi jenis di Pos Timbang
+    belum memetakan BERAS_MASUK & BROKEN_MASUK (keputusan pemiliknya sudah ada
+    sejak 24 Sep 2026 — pembelian, tanpa antrean giling — tapi jalurnya belum
+    dibangun; lihat `peta_jenis`), dan taksonomi jenis di Pos Timbang
     berbasis DATA — jenis baru bisa lahir di sana kapan saja tanpa produksi
     tahu. Jadi ini keadaan tetap yang harus terlihat, bukan galat sementara.
 
