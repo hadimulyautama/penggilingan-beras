@@ -78,14 +78,41 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     async with SessionLocal() as db:
         # Gudang 1 per LOT GILING, Gudang 2 per TEMPAT — dua satuan, karena
         # bendanya memang dua rupa (lihat catatan di `app.services.stok`).
-        # Operator hanya menerima gudangnya sendiri: halaman Stok yang
-        # menampilkan silo gudang sebelah menjawab pertanyaan yang tak ia
-        # ajukan, dan menenggelamkan yang ia ajukan.
+        #
+        # ── PK Gudang 1 TERLIHAT oleh operator Gudang 2 ──
+        #
+        # Keputusan pemilik 24 September 2026, dan hanya di layar Stok. Dulu
+        # syaratnya `gudang1(view)` saja, dengan alasan tertulis: "operator
+        # hanya menerima gudangnya sendiri; halaman Stok yang menampilkan silo
+        # gudang sebelah menjawab pertanyaan yang tak ia ajukan."
+        #
+        # Kalimat itu tetap BENAR untuk silo dan dryer Gudang 1 — dan SALAH
+        # untuk PK yang sudah jadi. PK itulah BAHAN BAKU orang ini: yang
+        # memutuskan "hari ini menyosoh apa" perlu tahu ada KS atau KL berapa
+        # di sebelah, mutunya bagaimana, dan dari gabah siapa. Selama ia tak
+        # bisa melihatnya, satu-satunya cara mengetahuinya adalah bertanya
+        # lewat telepon — dan yang ditanya lewat telepon tak pernah tercatat.
+        #
+        # Yang TETAP tertutup untuknya, dan sengaja: silo & dryer Gudang 1
+        # (blok `tempat` di bawah punya gerbangnya sendiri), stok karung
+        # Gudang 1 (`_karung`), dan halaman `/gudang/g1` (403 di rutenya).
+        # Melihat bahan bukan memegang gudangnya.
+        #
+        # Blok ini berjudul "PK di Gudang 1" dan totalnya hanya menjumlah lot
+        # ini — bukan menyatu dengan stok Gudang 2. Operator yang mengira
+        # barang ini sudah ada di gudangnya akan menghitung stok yang tak ia
+        # pegang.
+        #
         # Penyaringnya ikut menentukan apa yang dibaca, bukan menyembunyikan
         # yang sudah dibaca: kueri stok gudang sebelah mahal, dan membayarnya
-        # untuk angka yang tak akan tampil tak ada gunanya.
+        # untuk angka yang tak akan tampil tak ada gunanya. Hari ini operator
+        # tak ditawari pil gudang sama sekali (`saring` kosong baginya), jadi
+        # `gudang` selalu "" dan syarat di bawah lolos. KALAU kelak pil itu
+        # diberikan kepada operator, syarat ini harus ditinjau ulang: bagi
+        # operator polesan, "Gudang 1" berarti melihat BAHAN, bukan melihat
+        # gudang orang lain.
         lot = (await svc.pk_gudang1(db)
-               if gudang1(view) and gudang in ("", "g1") else [])
+               if (gudang1(view) or gudang2(view)) and gudang in ("", "g1") else [])
         tempat = (await svc.pk_gudang2(db)
                   if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
