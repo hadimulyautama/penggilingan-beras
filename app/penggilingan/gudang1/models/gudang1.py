@@ -59,8 +59,10 @@ class PurchaseBatch(Base, TimestampMixin):
     flag_unverified: Mapped[bool] = mapped_column(Boolean, default=True)
     # ── Tautan ke timbangan (shared DB). 1 tiket timbang = maks 1 batch. ──
     # berat_total_kg/supplier/no_polisi diturunkan dari transaksi timbang; operator
-    # tak input lagi. sumber_berat: 'nota' (berat_acuan_kg) | 'timbangan' (netto real)
-    # | 'manual' (tanpa jembatan). HPP: pakai nota bila ada, selain itu real.
+    # tak input lagi. sumber_berat: 'nota' (berat_acuan_kg) | 'timbangan' (angka
+    # timbangan) | 'manual' (tanpa jembatan). Basisnya satu tempat:
+    # `timbang_link.SQL_BERAT_TIKET` — nota bila ada, lalu `berat_barang_kg`
+    # (netto SUDAH dikurangi tara karung), netto sebagai cadangan tiket lama.
     # Tabel timbangan_transaksi dimiliki repo timbangan (shared DB) — TAK ada di metadata
     # app ini, jadi FK cukup di level DB (migrasi 0027). Di ORM: kolom Integer + unique.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column()

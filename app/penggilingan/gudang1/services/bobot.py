@@ -159,12 +159,47 @@ def dari_batches(bs: Iterable) -> Bobot:
     return jumlah(dari_batch(b) for b in bs)
 
 
+#: Umur maksimal tara yang masih boleh dipakai menebak (hari).
+#:
+#: "Tara cenderung stabil" (pemilik, 21 September 2026) berlaku dari muatan ke
+#: muatan, bukan sepanjang tahun: terpal dipasang, bak diganti, alat naik, sopir
+#: kedua ikut. Tara dari bulan lalu bukan pengetahuan tentang truk hari ini —
+#: dan tebakan yang salah di sini tidak terlihat salah, sebab ia berupa angka
+#: yang masuk akal.
+UMUR_TARA_HARI = 30
+
+#: Batas kewajaran: muatan tak boleh lebih dari sekian kali tara truknya.
+#:
+#: Bukan angka teknis melainkan pagar akal sehat. Truk mereka: tara ±3 ton,
+#: muatan ±10 ton — rasio 3,3. Trailer besar: tara 9 ton, muatan 30 ton — 3,3
+#: juga. Yang keluar jauh di atas itu hampir pasti tara milik kendaraan LAIN
+#: (atau salah ketik): QA 24 September 2026 (c) butir 2c menanam tara 1.000 kg
+#: pada truk yang sebenarnya 3.000 kg, dan perkiraannya keluar 12.000 kg untuk
+#: muatan 10.000 kg — meleset 2 ton KE ATAS, dan kartunya tetap bisa digiling.
+#:
+#: Yang melampaui batas ini TIDAK ditebak: bobotnya "menunggu timbang"
+#: (Pilihan B), sebab angka yang salah lebih mahal daripada angka yang belum ada.
+MUATAN_MAKS_X_TARA = 4.0
+
+
 def perkiraan(timbang1_kg, berat_kosong_kg) -> float | None:
-    """Timbang pertama − tara terakhir truk yang sama; None bila tak masuk akal."""
+    """Timbang pertama − tara terakhir truk yang sama; None bila tak masuk akal.
+
+    "Tak masuk akal" ada dua: hasilnya nol atau minus (tara lebih berat
+    daripada truk bermuatan), dan muatan yang terlalu besar untuk truk
+    setara itu (`MUATAN_MAKS_X_TARA`). Umur taranya dijaga di kuerinya
+    (`timbang_link.UMUR_TARA_HARI`), sebab hanya kueri yang tahu kapan tara itu
+    ditimbang.
+    """
     if timbang1_kg is None or berat_kosong_kg is None:
         return None
-    hasil = float(timbang1_kg) - float(berat_kosong_kg)
-    return hasil if hasil > 0 else None
+    tara = float(berat_kosong_kg)
+    hasil = float(timbang1_kg) - tara
+    if hasil <= 0:
+        return None
+    if tara > 0 and hasil > MUATAN_MAKS_X_TARA * tara:
+        return None
+    return hasil
 
 
 _NOPOL = re.compile(r"[^A-Z0-9]")

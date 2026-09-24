@@ -152,6 +152,64 @@ async def test_perkiraan_dari_tara_truk_yang_sama(pg, pemakai, pemasok, pabrik):
     assert float(b.berat_perkiraan_kg) == 17830 - 6500
 
 
+async def test_tara_kedaluwarsa_tak_dipakai_menebak(pg, pemakai, pemasok, pabrik):
+    """QA 24 September 2026 (c) butir 2c: tara dipakai APA ADANYA, tanpa batas
+    umur sama sekali.
+
+    "Tara cenderung stabil" berlaku dari muatan ke muatan — bukan sepanjang
+    tahun. Terpal dipasang, bak diganti, alat naik, sopir kedua ikut. Yang
+    lewat umur tak ditebak: bobotnya "menunggu timbang" (Pilihan B), sebab
+    angka yang salah lebih mahal daripada angka yang belum ada.
+    """
+    from app.penggilingan.gudang1.services.bobot import UMUR_TARA_HARI
+
+    async with pg() as db:
+        await _tiket(db, "T-TUA", nopol="AD 9 TUA", t1=18000, netto=11500, kosong=6500,
+                     supplier_id=pemasok.id, hari_lalu=UMUR_TARA_HARI + 5)
+        tid = await _tiket(db, "T-KINI", nopol="AD 9 TUA", t1=17830, supplier_id=pemasok.id)
+        await db.commit()
+
+    b = await _baca_batch(pg, await _batch_gabah(pg, pemakai, tid))
+    assert b.berat_total_kg is None and b.sumber_berat == "menunggu"
+
+    # Poller pun tak menambalnya: syaratnya sama di kedua jalur, kalau tidak
+    # yang menulis paling akhir yang menang.
+    await _poller(pg)
+    b = await _baca_batch(pg, b.kode_batch)
+    assert b.berat_total_kg is None and b.sumber_berat == "menunggu"
+
+
+async def test_tara_yang_tak_masuk_akal_tak_dipakai_menebak(pg, pemakai, pemasok, pabrik):
+    """Skenario QA butir 2c, angkanya persis: tara LAMA 1.000 kg untuk truk yang
+    sebenarnya 3.000 kg.
+
+    Dulu keluar perkiraan 12.000 kg untuk muatan yang sebenarnya 10.000 —
+    meleset 2 ton KE ATAS, dan kartunya tetap bisa digiling. Muatan 12 ton di
+    atas truk bertara 1 ton adalah kendaraan yang tak ada; taranya milik
+    kendaraan lain, atau salah ketik.
+    """
+    async with pg() as db:
+        await _tiket(db, "T-PICKUP", nopol="B 1 SALAH", t1=4000, netto=3000, kosong=1000,
+                     supplier_id=pemasok.id, hari_lalu=2)
+        tid = await _tiket(db, "T-TRUK", nopol="B 1 SALAH", t1=13000, supplier_id=pemasok.id)
+        await db.commit()
+
+    b = await _baca_batch(pg, await _batch_gabah(pg, pemakai, tid))
+    assert b.berat_total_kg is None, "perkiraan 12.000 kg dari tara 1.000 kg kembali"
+    assert b.sumber_berat == "menunggu"
+    await _poller(pg)
+    assert (await _baca_batch(pg, b.kode_batch)).berat_total_kg is None
+
+    # Dan begitu truknya benar-benar ditimbang kedua, angkanya masuk lewat
+    # jalur yang sama seperti biasa — 10.000, bukan 12.000.
+    async with pg() as db:
+        await _timbang_kedua(db, tid, netto=10000, kosong=3000)
+        await db.commit()
+    await _poller(pg)
+    b = await _baca_batch(pg, b.kode_batch)
+    assert (float(b.berat_total_kg), b.sumber_berat) == (10000, "timbangan")
+
+
 async def test_truk_tanpa_tara_tetap_tak_diketahui(pg, pemakai, pemasok, pabrik):
     """Truk baru tak punya tara historis → NULL, bukan nol dan bukan tebakan."""
     async with pg() as db:

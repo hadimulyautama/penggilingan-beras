@@ -18,11 +18,15 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.penggilingan.gudang1.services.bobot import SQL_NORM_NOPOL
+# Basis bobot tiket (nota → barang → netto) DIIMPOR, tak disusun ulang di sini:
+# rekonsiliasi yang memakai basis lain akan melaporkan seluruh tiket bertara
+# karung sebagai "bobot tiket berubah" — ribuan baris palsu pada hari pertama.
+from app.penggilingan.gudang1.services.timbang_link import SQL_BERAT_TIKET
 from app.penggilingan.peta_jenis import PETA_MASUK
 
 _SQL_BELUM_TERTAUT = text("""
     SELECT t.kode, t.jenis_kode, t.tanggal, t.nomor_polisi,
-           t.netto_timbangan_kg, t.berat_acuan_kg,
+           t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            COALESCE(s.nama_supplier, t.pihak_nama) AS nama
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
@@ -45,7 +49,11 @@ _SQL_BELUM_TERTAUT = text("""
 _SQL_SELISIH = text("""
     SELECT kode_batch, nama, jenis, nota, timbang, selisih_kg, selisih_persen, harga FROM (
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
-             t.berat_acuan_kg AS nota, t.netto_timbangan_kg AS timbang,
+             t.berat_acuan_kg AS nota,
+             -- BARANG, bukan netto: `selisih_kg` di tiket dihitung Pos Timbang
+             -- sebagai barang − nota, jadi netto di sebelahnya membuat dua
+             -- angka yang selisihnya tak sama dengan selisih yang tertulis.
+             COALESCE(NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg) AS timbang,
              t.selisih_kg, t.selisih_persen, v.harga_per_kg AS harga
         FROM purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
@@ -54,7 +62,9 @@ _SQL_SELISIH = text("""
        WHERE b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'pk' AS jenis,
-             t.berat_acuan_kg, t.netto_timbangan_kg, t.selisih_kg, t.selisih_persen,
+             t.berat_acuan_kg,
+             COALESCE(NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg),
+             t.selisih_kg, t.selisih_persen,
              v.harga_per_kg
         FROM pk_purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
@@ -82,7 +92,7 @@ _SQL_REVISI = text("""
     SELECT kode_batch, nama, jenis, tersimpan, tiket_now, status, terverifikasi FROM (
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
              b.berat_total_kg AS tersimpan,
-             COALESCE(NULLIF(t.berat_acuan_kg,0), t.netto_timbangan_kg) AS tiket_now,
+             """ + SQL_BERAT_TIKET + """ AS tiket_now,
              b.status_batch AS status, (NOT b.flag_unverified) AS terverifikasi
         FROM purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
@@ -90,7 +100,7 @@ _SQL_REVISI = text("""
        WHERE b.sumber_berat IN ('nota','timbangan') AND b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?'), 'pk',
-             b.berat_total_kg, COALESCE(NULLIF(t.berat_acuan_kg,0), t.netto_timbangan_kg),
+             b.berat_total_kg, """ + SQL_BERAT_TIKET + """,
              b.status_batch, (NOT b.flag_unverified)
         FROM pk_purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
@@ -315,7 +325,8 @@ def format_rekonsiliasi(d: dict) -> str:
     belum = d["belum_tertaut"]
     baris.append(f"\n① Timbang MASUK selesai tapi BELUM jadi batch: {len(belum)}")
     for t in belum[:10]:
-        b = t.get("berat_acuan_kg") or t.get("netto_timbangan_kg")
+        b = (t.get("berat_acuan_kg") or t.get("berat_barang_kg")
+             or t.get("netto_timbangan_kg"))
         baris.append(f"   • {t['kode']} · {t.get('nama') or '?'} · {t['jenis_kode']} · {_kg(b)} kg")
     sel = d["selisih"]
     baris.append(f"\n② Selisih nota ↔ timbang riil: {len(sel)} batch")

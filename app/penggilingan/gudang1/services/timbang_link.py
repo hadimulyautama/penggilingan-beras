@@ -5,7 +5,8 @@ SQL mentah pada DB yang sama. Dipakai intake produksi untuk menaut batch ke tike
 (operator memilih tiket aktif, bukan mengetik bobot/supplier).
 
 Sumber kebenaran: bobot/supplier/nopol dari timbang. Bobot:
-  netto_timbangan_kg = bobot TIMBANG (real, wajib)
+  netto_timbangan_kg = bermuatan − kosong (TRUKNYA, bukan barangnya)
+  berat_barang_kg    = netto − tara karung & tara lain (BARANGNYA)
   berat_acuan_kg     = bobot NOTA/surat jalan (opsional)
 """
 from __future__ import annotations
@@ -15,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import berzona
 from app.penggilingan.gudang1.services.bobot import (
-    SQL_NORM_NOPOL, SUMBER_MENUNGGU, SUMBER_PERKIRAAN, norm_nopol, perkiraan)
+    MUATAN_MAKS_X_TARA, SQL_NORM_NOPOL, SUMBER_MENUNGGU, SUMBER_PERKIRAAN,
+    UMUR_TARA_HARI, norm_nopol, perkiraan)
 
 # Tiket MASUK yang BELUM ditaut batch mana pun — apa pun status tiketnya.
 #
@@ -48,11 +50,33 @@ SYARAT_TIKET_SAH = """
        AND t.status_tiket <> 'DITUTUP_PAKSA'
 """
 
+#: Berapa kg BARANGNYA menurut Pos Timbang — satu tempat, dipakai semua kueri.
+#:
+#: `netto_timbangan_kg` adalah berat TRUKNYA (bermuatan − kosong). Tara karung
+#: dan tara lain dipotong sesudah itu, dan hasilnya disimpan Pos Timbang di
+#: `berat_barang_kg` (`timbangan/logic.py`: `barang = netto - total_tara`).
+#: Pos Timbang pula yang membandingkan NOTA dengan BARANG, bukan dengan netto.
+#:
+#: Sampai 24 September 2026 produksi tak pernah membaca kolom itu sama sekali —
+#: `berat_barang_kg` muncul tepat SATU kali di seluruh repo ini, di data contoh
+#: mode uji. Maka 200 karung × 0,25 kg = 50 kg tara karung tidak pernah
+#: dipotong: Pos Timbang menyebut 9.950 kg, produksi mencatat 10.000 kg.
+#: Itulah keluhan pemilik 21 September 2026 ("di timbangan 9.950, di produksi
+#: ±10.240") dan QA 24 September (c) butir 2b.
+#:
+#: Urutannya sama dengan yang sudah berlaku untuk nota: NOTA menang bila ada
+#: (keputusan yang sudah berdiri), lalu BARANG, dan netto tinggal cadangan
+#: untuk tiket lama yang belum punya snapshot barangnya. Nol berarti "tak ada
+#: angkanya", bukan "nol kilo" — alasan yang sama dengan nota.
+SQL_BERAT_TIKET = ("COALESCE(NULLIF(t.berat_acuan_kg, 0), "
+                   "NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg)")
+
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
-           t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
+           t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
+           t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
@@ -86,7 +110,8 @@ _SQL_SATU = text("""
     SELECT t.id, t.kode, t.arah, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
-           t.netto_timbangan_kg, t.berat_acuan_kg, t.selisih_kg, t.selisih_persen,
+           t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
+           t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
@@ -98,13 +123,23 @@ _SQL_SATU = text("""
 
 def _row(r) -> dict:
     d = dict(r._mapping)
-    # Basis bobot untuk HPP: nota bila ada, selain itu real timbang.
+    # Basis bobot untuk HPP — bentuk Python dari `SQL_BERAT_TIKET`, dan
+    # urutannya wajib sama: nota, lalu BARANG (netto dikurangi tara karung),
+    # lalu netto sebagai cadangan. Dua urutan berbeda untuk satu pertanyaan
+    # berarti layar dan poller menyebut angka berbeda tentang truk yang sama.
     nota = d.get("berat_acuan_kg")
+    barang = d.get("berat_barang_kg")
     real = d.get("netto_timbangan_kg")
     ada_nota = nota is not None and float(nota or 0) > 0
+    ada_barang = barang is not None and float(barang or 0) > 0
     d["susulan"] = d.get("status_tiket") == "SELESAI"
     d["sumber_berat"] = "nota" if ada_nota else "timbangan"
-    d["berat_hpp_kg"] = float(nota) if ada_nota else (float(real) if real is not None else None)
+    if ada_nota:
+        d["berat_hpp_kg"] = float(nota)
+    elif ada_barang:
+        d["berat_hpp_kg"] = float(barang)
+    else:
+        d["berat_hpp_kg"] = float(real) if real is not None else None
     return d
 
 
@@ -144,6 +179,18 @@ async def ambil_tiket(db: AsyncSession, tid: int) -> dict | None:
 #
 # Truk yang belum pernah punya tara → None: bobotnya "tak diketahui", bukan
 # tebakan (Pilihan B, cadangan).
+#
+# BATAS UMUR (QA 24 September 2026 (c) butir 2c). Sampai hari itu kueri ini
+# menuntut dua hal saja — `berat_kosong_kg > 0` dan tiket SELESAI — jadi tara
+# dari kapan pun dipakai apa adanya, tanpa batas umur dan tanpa batas
+# kewajaran. "Tara cenderung stabil" berlaku dari muatan ke muatan; tara bulan
+# lalu bukan pengetahuan tentang truk hari ini, dan tebakan yang salah di sini
+# tidak terlihat salah — ia berupa angka yang masuk akal.
+#
+# Arahnya TIDAK diperiksa, dan itu bukan kelalaian: `berat_kosong_kg` adalah
+# berat truk kosong pada arah mana pun — Pos Timbang sendiri yang memilah bruto
+# dan tara menurut arah saat menyimpan (`logic.timbang_pertama_bermuatan`).
+# Tiket keluar yang sudah selesai memberi tara yang sama sahnya.
 _NORM_K = SQL_NORM_NOPOL.format(kolom="k.nomor_polisi")
 _SQL_TARA = text(f"""
     SELECT k.berat_kosong_kg
@@ -152,6 +199,8 @@ _SQL_TARA = text(f"""
        AND k.berat_kosong_kg IS NOT NULL AND k.berat_kosong_kg > 0
        AND k.status_tiket = 'SELESAI' AND k.status_transaksi = 'AKTIF'
        AND k.id <> COALESCE(:kecuali, -1)
+       AND COALESCE(k.timbang2_waktu, k.timbang1_waktu)
+           >= now() - make_interval(days => {UMUR_TARA_HARI})
      ORDER BY COALESCE(k.timbang2_waktu, k.timbang1_waktu) DESC NULLS LAST, k.id DESC
      LIMIT 1
 """)
@@ -198,7 +247,7 @@ async def berat_kotor_tiket(db: AsyncSession, tid: int | None) -> float | None:
 # (nota atau netto timbang). Bobot efektif = nota bila ada, selain itu netto real.
 _SQL_SINKRON = """
     UPDATE {tbl} b SET
-        berat_total_kg = COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg),
+        berat_total_kg = """ + SQL_BERAT_TIKET + """,
         sumber_berat   = CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0
                               THEN 'nota' ELSE 'timbangan' END
       FROM timbangan_transaksi t
@@ -208,7 +257,7 @@ _SQL_SINKRON = """
        -- yang SAMA dengan 'menunggu'. `berat_perkiraan_kg` tak disentuh —
        -- selisihnya itulah yang kelak menguji anggapan "tara stabil".
        AND b.sumber_berat IN ('menunggu', 'perkiraan')
-""" + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
+""" + SYARAT_TIKET_SAH + """       AND """ + SQL_BERAT_TIKET + """ IS NOT NULL
 """
 
 
@@ -241,13 +290,21 @@ _SQL_PERKIRAAN = """
                AND k.id <> t.id
                AND k.berat_kosong_kg IS NOT NULL AND k.berat_kosong_kg > 0
                AND k.status_tiket = 'SELESAI' AND k.status_transaksi = 'AKTIF'
+               -- Batas umur & kewajaran yang SAMA dengan `bobot.perkiraan` dan
+               -- `_SQL_TARA`. Poller yang lebih longgar akan menambal kembali
+               -- perkiraan yang baru saja ditolak jalur satu-satu — dan yang
+               -- menang adalah yang menulis paling akhir.
+               AND COALESCE(k.timbang2_waktu, k.timbang1_waktu)
+                   >= now() - make_interval(days => 30)
              ORDER BY COALESCE(k.timbang2_waktu, k.timbang1_waktu) DESC NULLS LAST, k.id DESC
              LIMIT 1) k ON true
      WHERE b.timbangan_transaksi_id = t.id
        AND b.dibatalkan_pada IS NULL          -- cermin bertanda
        AND b.sumber_berat = 'menunggu'
-""" + SYARAT_TIKET_SAH + """       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NULL
+""" + SYARAT_TIKET_SAH + """       AND """ + SQL_BERAT_TIKET + """ IS NULL
        AND t.timbang1_kg - k.berat_kosong_kg > 0
+       AND t.timbang1_kg - k.berat_kosong_kg
+           <= 4.0 * k.berat_kosong_kg
 """
 
 
@@ -284,7 +341,7 @@ _SQL_PERKIRAAN_TIKET = """
        AND t.arah IN ('MASUK', 'TRANSFER', 'RETUR_MASUK')
        AND t.cara_timbang = 'DUA_KALI'
        AND t.timbang2_kg IS NOT NULL
-       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NULL
+       AND """ + SQL_BERAT_TIKET + """ IS NULL
        AND t.timbang1_kg - t.timbang2_kg > 0
        AND b.berat_total_kg IS DISTINCT FROM (t.timbang1_kg - t.timbang2_kg)
 """
@@ -318,7 +375,7 @@ async def sinkron_perkiraan(db: AsyncSession) -> int:
 # TIDAK diubah otomatis — dilaporkan di rekonsiliasi ("bobot tiket berubah") untuk ditinjau.
 _SQL_RESINKRON = """
     UPDATE {tbl} b SET
-        berat_total_kg = COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg),
+        berat_total_kg = """ + SQL_BERAT_TIKET + """,
         sumber_berat   = CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0
                               THEN 'nota' ELSE 'timbangan' END
       FROM timbangan_transaksi t
@@ -337,9 +394,9 @@ _SQL_RESINKRON = """
        -- sering direvisi notanya, dan revisinya tak pernah sampai.
        AND b.flag_unverified = true                     -- belum ada harga → tak ada nilai beku
        {extra}
-       AND COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg) IS NOT NULL
+       AND """ + SQL_BERAT_TIKET + """ IS NOT NULL
        AND b.berat_total_kg IS DISTINCT FROM
-           COALESCE(NULLIF(t.berat_acuan_kg, 0), t.netto_timbangan_kg)
+           """ + SQL_BERAT_TIKET + """
 """
 
 

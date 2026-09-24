@@ -70,6 +70,13 @@ def test_perkiraan_dan_normalisasi_nopol():
     assert B.perkiraan(17830, 6500) == 11330
     assert B.perkiraan(17830, None) is None
     assert B.perkiraan(6000, 6500) is None, "tara lebih besar dari kotor = tak masuk akal"
+    # Batas kewajaran (QA 24 September 2026 (c) butir 2c): muatan 12 ton di atas
+    # truk bertara 1 ton adalah kendaraan yang tak ada — taranya milik kendaraan
+    # LAIN, atau salah ketik. Yang begitu tak ditebak: "menunggu timbang".
+    assert B.perkiraan(13000, 1000) is None, "tara 1 ton untuk muatan 12 ton"
+    assert B.perkiraan(13000, 3000) == 10000, "truk sungguhan tetap ditebak"
+    # Tepat di batas masih diterima: batasnya pagar, bukan ambang ketelitian.
+    assert B.perkiraan(5000, 1000) == 4000
     assert B.norm_nopol("ad 1234 xy") == "AD1234XY" == B.norm_nopol("AD-1234-XY")
     assert B.norm_nopol(None) == ""
 
