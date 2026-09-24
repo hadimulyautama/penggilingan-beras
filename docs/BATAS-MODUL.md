@@ -1,5 +1,14 @@
 # Peta batas modul — keadaan HARI INI (13 September 2026)
 
+> **24 September 2026 — app Meja & app Gudang 2 DIHAPUS.** Keputusan pemilik:
+> keduanya tidak dipakai lagi; operator Gudang 2 maupun staf administrasi
+> memakai Pos Produksi. Layanan Railway, repo GitHub, dan folder lokalnya
+> dihapus (riwayatnya tersimpan sebagai bundel git di `../arsip/`), dan pintu
+> `/internal/meja/*` serta `/internal/gudang2/*` berikut `MEJA_API_TOKEN`
+> dicabut dari produksi. **Setiap kalimat di bawah yang menyebut kedua app itu
+> harus dibaca sebagai riwayat, bukan keadaan sekarang.**
+
+
 Dokumen ini apa adanya, bukan cita-cita: untuk setiap tabel di basis data,
 **siapa yang menulis dan siapa yang membaca**, disisir dari kode ketujuh
 repo (`produksi`, `core`, `kantor`, `timbangan`, `meja`, `gudang2`,

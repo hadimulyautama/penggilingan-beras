@@ -24,8 +24,6 @@ from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
-from app.web.meja_api import router as meja_api_router
-from app.web.gudang2_api import router as gudang2_api_router
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
@@ -99,8 +97,6 @@ app.include_router(gudang_router)
 app.include_router(stok_router)
 app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
-app.include_router(meja_api_router)
-app.include_router(gudang2_api_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
 #: Berkas statis: milik aplikasi (manifest.json) di depan, paket tampilan
@@ -207,10 +203,7 @@ async def penjaga_csrf(request: Request, call_next):
     """
     from app.web import csrf as _csrf
 
-    # Service Meja bukan peramban: tak punya cookie, tak bisa dipaksa situs
-    # lain. Tokennya yang menjaga (lihat `csrf.dari_meja`).
-    if (_csrf.perlu_periksa(request.method, request.url.path)
-            and not _csrf.dari_meja(request.headers)):
+    if _csrf.perlu_periksa(request.method, request.url.path):
         di_kuki = request.cookies.get(_csrf.NAMA_COOKIE)
         dikirim = request.headers.get(_csrf.NAMA_HEADER)
         if not dikirim:

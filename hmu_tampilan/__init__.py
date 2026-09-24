@@ -4,7 +4,15 @@ Lahir 13 September 2026 (Tahap 1 rancang ulang, temuan QA X-22): sampai hari
 itu `app.css` (1.360 baris), `aksi.js` (877), `pindah.js` (473), `base.html`,
 dan `_benda.html` disalin ke tiga repo — produksi, gudang2, meja — dan dua
 perbaikan berperilaku hidup hanya di salinan. Sekarang sumbernya SATU, di
-repo `tampilan/`, dan tiap aplikasi memasangnya lewat dua pintu:
+repo `tampilan/`.
+
+Sejak 24 September 2026 yang memakainya tinggal SATU aplikasi: app Gudang 2
+dan app Meja dihapus (keputusan pemilik — tidak dipakai lagi, seluruh
+pekerjaan lewat Pos Produksi). Paketnya tetap berdiri sendiri, dan alasannya
+tak berubah: ia yang membuat CSS/JS punya satu sumber yang bisa diuji, bukan
+lima salinan di dalam repo aplikasi.
+
+Tiap aplikasi memasangnya lewat dua pintu:
 
     templates = Jinja2Templates(directory=".../templates")
     hmu_tampilan.pasang_jinja(templates, app_nama="Pos Produksi", pwa_nama="Pos Produksi")

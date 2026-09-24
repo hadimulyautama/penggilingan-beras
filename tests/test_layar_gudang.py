@@ -60,14 +60,24 @@ def test_operator_melihat_gudangnya_bukan_gudang_sebelah():
 def test_daftar_gudang_tinggal_satu_salinan():
     """`GUDANG` lahir di `meja_api` dan dipindah ke `app.web.layar` saat Pos
     Produksi memakainya juga — dua salinan daftar gudang berarti gudang ketiga
-    yang muncul di satu layar dan tidak di layar sebelahnya."""
-    from app.web import meja_api
+    yang muncul di satu layar dan tidak di layar sebelahnya.
+
+    `meja_api` dihapus 24 September 2026 bersama app Meja; yang dijaga kini
+    seluruh `app/web/`: tak boleh ada berkas layar yang menuliskan daftarnya
+    sendiri, apa pun namanya.
+    """
+    import pathlib
+
+    from app.web import layar
 
     assert [g for g, _, _ in GUDANG] == ["g1", "g2"]
     assert set(NAMA_GUDANG) == {"g1", "g2"}
-    sumber = inspect.getsource(meja_api)
-    assert "from app.web.layar import GUDANG" in sumber
-    assert '("g1", "Gudang 1"' not in sumber, "daftar gudang disalin lagi"
+    web = pathlib.Path(inspect.getsourcefile(layar)).resolve().parent
+    for berkas in web.glob("*.py"):
+        if berkas.name == "layar.py":
+            continue
+        assert '("g1", "Gudang 1"' not in berkas.read_text(), \
+            f"daftar gudang disalin lagi di {berkas.name}"
 
 
 def test_templat_gudang_di_paket_dan_tanpa_salinan_petak():

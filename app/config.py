@@ -95,12 +95,6 @@ class Settings(BaseSettings):
     produksi_api_url: str = ""
     produksi_api_token: str = ""
     produksi_api_timeout: float = 120.0   # agent pabrik bisa lama (loop multi-tool)
-    # ── Seam Meja ↔ Produksi (repo meja/, service `meja`) ──
-    # Token untuk /internal/meja/* DAN untuk memakai /api/* serta
-    # /api/laporan/* atas nama akun (header X-Meja-Akun). SENGAJA terpisah
-    # dari internal_api_token milik Kantor: token Kantor read-only, token
-    # Meja bisa MENULIS. Kosong = pintu Meja mati.
-    meja_api_token: str = ""
 
     # Kapasitas tumpukan PK Gudang 2. 0 = TANPA BATAS — keputusan pemilik
     # 12 September 2026: tumpukan Gudang 2 tidak dibatasi. Angka > 0 kembali

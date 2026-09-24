@@ -70,13 +70,11 @@ def test_hitung_keputusan_menerima_baris_maupun_dict():
     assert svc.hitung_keputusan(b) == svc.hitung_keputusan(d)
 
 
-def test_perhitungan_tinggal_di_layanan_bukan_di_api_meja():
-    from app.web import meja_api
-
-    sumber = inspect.getsource(meja_api)
-    for pindah in ("def _perhatian", "def _angka_gudang", "def _ribuan"):
-        assert pindah not in sumber, f"{pindah} tertinggal salinannya di meja_api"
-    assert "svc_beranda.papan(" in kode_saja(meja_api.beranda)
+# `test_perhitungan_tinggal_di_layanan_bukan_di_api_meja` DIHAPUS 24 September
+# 2026: subjeknya `web/meja_api.py`, dan berkas itu ikut hilang bersama app
+# Meja. Yang dijaganya — perhitungan papan tinggal satu salinan — kini dijaga
+# `test_beranda_produksi_memakai_papan_yang_sama` di bawah, terhadap satu-satunya
+# Beranda yang tersisa.
 
 
 def test_beranda_produksi_memakai_papan_yang_sama():

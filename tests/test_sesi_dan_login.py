@@ -178,7 +178,10 @@ def test_pintu_peran_tidak_dihitung_sebagai_percobaan_gagal():
     assert gm.boleh_coba("budi", "10.0.0.1") is None
 
 
-@pytest.mark.parametrize("berkas", ["app/web/auth.py", "app/web/meja_api.py"])
+# Dulu dua berkas; `app/web/meja_api.py` dihapus 24 September 2026 bersama app
+# Meja. Aturannya tetap satu, dan berlaku untuk pintu masuk mana pun yang lahir
+# kemudian.
+@pytest.mark.parametrize("berkas", ["app/web/auth.py"])
 def test_hanya_kredensial_yang_gagal_yang_dihitung(berkas):
     """`catat_gagal` hanya boleh dipanggil di penangan `identitas.Tolak`.
 

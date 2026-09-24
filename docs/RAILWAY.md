@@ -1,5 +1,14 @@
 # Deploy ke Railway
 
+> **24 September 2026 — app Meja & app Gudang 2 DIHAPUS.** Keputusan pemilik:
+> keduanya tidak dipakai lagi; operator Gudang 2 maupun staf administrasi
+> memakai Pos Produksi. Layanan Railway, repo GitHub, dan folder lokalnya
+> dihapus (riwayatnya tersimpan sebagai bundel git di `../arsip/`), dan pintu
+> `/internal/meja/*` serta `/internal/gudang2/*` berikut `MEJA_API_TOKEN`
+> dicabut dari produksi. **Setiap kalimat di bawah yang menyebut kedua app itu
+> harus dibaca sebagai riwayat, bukan keadaan sekarang.**
+
+
 Backend = FastAPI + bot Telegram (long-polling) dalam **satu proses**, plus
 PostgreSQL. Deploy pakai **Dockerfile** yang sudah ada (migrasi jalan otomatis
 saat start via `docker/entrypoint.sh`). Port dari `$PORT` (disuntik Railway).

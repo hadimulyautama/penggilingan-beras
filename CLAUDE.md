@@ -11,8 +11,9 @@ sini.
 
 ## Tempat kerja
 
-Empat repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`):
-`produksi/` (ini), `kantor/`, `timbangan/`, `website/`.
+Repo BERSEBELAHAN di satu folder induk (`Hadi Mulya Systems/`): `produksi/`
+(ini), `core/`, `tampilan/`, `kantor/`, `timbangan/`, `website/`. App Gudang 2
+dan app Meja pernah ada di sini; keduanya dihapus 24 September 2026.
 
 **Basis datanya SATU** — Postgres yang sama dipakai produksi, timbangan, dan
 Kantor. Menghapus baris "milik sendiri" bisa merobohkan layanan sebelah.
@@ -189,16 +190,22 @@ sintaks, lalu buktikan penjaganya benar-benar gagal pada kasus lama.
 | Layanan | Cara |
 |---|---|
 | `penggilingan-beras` (produksi) | `git push origin main` — terbit sendiri |
-| ~~`pos-produksi-uji` (staging)~~ | **SUDAH TIDAK ADA** (24 Sep 2026). Cabang `origin/uji` masih ada, tetapi tak ada layanan yang menontonnya — `push main:uji` tidak menerbitkan apa pun. Proyek `penggilingan-beras` kini berisi: `penggilingan-beras`, `gudang2`, `timbangan`, `meja`, `kantor`. |
+| ~~`pos-produksi-uji` (staging)~~ | **SUDAH TIDAK ADA** (24 Sep 2026). Cabang `origin/uji` masih ada, tetapi tak ada layanan yang menontonnya — `push main:uji` tidak menerbitkan apa pun. Proyek `penggilingan-beras` kini berisi: `penggilingan-beras`, `timbangan`, `kantor`, dan dua Postgres. |
 | `kantor` | **`railway up --service kantor`** dari repo `kantor/` — TIDAK tertaut GitHub |
 | `timbangan` | repo `timbangan/` |
-| `gudang2` | `git push origin main` dari repo `gudang2/` — terbit sendiri |
-| `meja` | `git push origin main` dari repo `meja/` — terbit sendiri |
+
+**App Gudang 2 dan app Meja DIHAPUS 24 September 2026** (keputusan pemilik:
+tidak dipakai lagi — operator Gudang 2 maupun staf administrasi memakai Pos
+Produksi). Layanan Railway-nya dihapus, repo-nya dihapus, folder lokalnya
+dibuang; riwayat keduanya tersimpan sebagai bundel git di
+`../arsip/{meja,gudang2}-24sep2026.bundle` (`git clone <bundel>` memulihkannya
+utuh). Jangan membangun layar baru di sana, dan jangan menahan perbaikan demi
+"menyamakan kedua app".
 
 Dulu: kirim ke uji dulu, tunggu SUCCESS, baru produksi. Selama staging
-belum ada lagi, yang menggantikannya: jalankan suite pg + tiga app lokal
-(`docs/ingatan/` → sandbox tiga app), lalu push `main` dan TUNGGU deploy-nya
-SUCCESS sambil memegang commit sebelumnya untuk mundur.
+belum ada lagi, yang menggantikannya: jalankan suite pg, jalankan app-nya di
+laptop dan buka layarnya sebagai tiap peran, lalu push `main` dan TUNGGU
+deploy-nya SUCCESS sambil memegang commit sebelumnya untuk mundur.
 
 ## Rahasia Railway — aturan keras
 

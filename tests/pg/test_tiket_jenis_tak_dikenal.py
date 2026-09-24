@@ -20,7 +20,8 @@ Kedua pemancar PINDAH dari `web/meja_api.py` ke `services/berjalan.py` pada 24
 September 2026: yang di meja_api hanya dipanggil app Meja, jadi Pos Produksi
 tetap bisu — dan tangkapan layar pemilik semuanya Pos Produksi. Uji di berkas ini
 ikut pindah ke sumbernya; yang menjaga sisi Pos Produksi ada di
-`test_tiket_antrean_produksi.py`.
+`test_tiket_antrean_produksi.py`. (App Meja sendiri dihapus hari itu juga,
+beberapa jam kemudian — keputusan pemilik.)
 """
 from __future__ import annotations
 
@@ -125,21 +126,28 @@ async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
     assert kartu.kelompok == "tiket"
 
 
-async def test_ikut_antrean_dan_lencana_meja(pg, admin, pabrik):
-    """Bukan cuma fungsinya benar — ia benar-benar sampai ke layar."""
-    from app.web import meja_api
+async def test_ikut_antrean_dan_lencananya(pg, admin, pabrik):
+    """Bukan cuma fungsinya benar — ia benar-benar sampai ke layar.
+
+    Dulu lewat `meja_api._susun`, perakit daftar app Meja. App itu dihapus 24
+    September 2026; yang merakit sekarang `berjalan.untuk()`, satu-satunya
+    perakit yang tersisa — dan justru itu yang dipakai layar Pos Produksi,
+    tempat tangkapan layar pemilik berasal.
+    """
+    from app.models import User
+    from app.services.berjalan import untuk
 
     async with pg() as db:
         await _tiket(db, "TRX-UJI-TDK-02", "BROKEN_MASUK")
         await db.commit()
 
     async with pg() as db:
-        d = await meja_api._susun(db, admin)
+        b = await untuk(db, await db.get(User, admin.user_id))
 
-    kode = [k["kode"] for k in d["menunggu"]]
+    kode = [k.kode for k in b.menunggu]
     assert "TRX-UJI-TDK-02" in kode, "tiket tak dikenal tak sampai ke antrean"
-    assert d["lencana"]["MENUNGGU"] == len(d["menunggu"])
-    assert d["lencana"]["MENUNGGU"] >= 1, "lencana tak menghitungnya"
+    assert b.jumlah_menunggu == len(b.menunggu)
+    assert b.jumlah_menunggu >= 1, "lencana tak menghitungnya"
 
 
 async def test_tiket_yang_sudah_dicatat_keluar_dari_antrean(pg, admin):

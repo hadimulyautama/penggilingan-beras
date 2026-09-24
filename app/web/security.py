@@ -149,43 +149,16 @@ def tujuan_aman(nilai: str | None) -> str:
 
 # ─────────────────────────── Dependency ───────────────────────────
 
-def akun_dari_meja(request: Request) -> tuple[int, int] | None:
-    """(id akun, versi token) dari header service Meja — atau None.
-
-    Meja Administrasi (repo `meja/`) adalah aplikasi lain, tetapi ORANGNYA
-    sama: akun `produksi_akun`, peran di `users`. Ia masuk lewat
-    `/internal/meja/masuk`, lalu setiap permintaan berikutnya membawa token
-    service (`X-Internal-Token`), nomor akun (`X-Meja-Akun`), dan versi token
-    yang ia terima saat masuk (`X-Meja-Versi`). Versi itulah yang membuat
-    "keluar dari semua perangkat", ganti sandi, dan penonaktifan ikut memutus
-    sesi Meja — aturannya SATU dengan cookie, bukan salinan yang bisa
-    tertinggal.
-
-    Tokennya HARUS cocok dulu; tanpa itu header akun apa pun diabaikan. Yang
-    bisa memalsukan nomor akun hanyalah yang memegang token service — dan
-    yang memegangnya adalah Meja sendiri.
-    """
-    from app.web import csrf as _csrf
-
-    if not _csrf.dari_meja(request.headers):
-        return None
-    try:
-        akun_id = int(request.headers.get("x-meja-akun", ""))
-        versi = int(request.headers.get("x-meja-versi", "") or 1)
-    except ValueError:
-        return None
-    return akun_id, versi
-
-
 async def akun_opsional(request: Request) -> ProduksiAkun | None:
-    """Akun dari cookie sesi — atau dari header service Meja — atau None.
-    Tidak pernah melempar error."""
+    """Akun dari cookie sesi — atau None. Tidak pernah melempar error.
+
+    Pernah ada jalan kedua: header service dari app Meja & Gudang 2
+    (`X-Meja-Akun` + `X-Meja-Versi` di balik token service). Keduanya dihapus
+    24 September 2026 atas keputusan pemilik — tidak dipakai lagi — dan
+    jalannya ikut dicabut: pintu masuk yang tak dipakai siapa pun tetap harus
+    dijaga benar oleh setiap orang yang menyentuh berkas ini.
+    """
     dibaca = baca_token(request.cookies.get(NAMA_COOKIE))
-    lewat_meja = False
-    if dibaca is None:
-        dibaca = akun_dari_meja(request)
-        lewat_meja = dibaca is not None
-    request.state.lewat_meja = lewat_meja
     if dibaca is None:
         return None
     akun_id, versi = dibaca
@@ -217,10 +190,11 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
     if akun is not None and akun.user is not None:
         asli = akun.user.role
         request.state.peran_asli = asli
-        # Meja menitipkan samarannya lewat header, bukan kuki — ia tak
-        # punya kuki. Aturannya tetap satu: `peran_efektif` hanya menurun.
-        diminta = (request.headers.get("x-meja-lihat") if lewat_meja
-                   else request.cookies.get(NAMA_KUKI))
+        # Dari kuki. Dulu ada jalan kedua — app Meja & Gudang 2 menitipkan
+        # samarannya lewat header `X-Meja-Lihat` karena keduanya tak punya
+        # kuki; keduanya dihapus 24 September 2026. Aturannya tak berubah:
+        # `peran_efektif` hanya menurun.
+        diminta = request.cookies.get(NAMA_KUKI)
         efektif = P.peran_efektif(asli, diminta)
         if efektif != P.normal(asli):
             akun.user.role = efektif

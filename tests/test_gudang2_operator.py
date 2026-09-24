@@ -15,7 +15,7 @@ from app.penggilingan.gudang1.services import jeda
 from app.penggilingan.inventory import packaging as kms
 from app.penggilingan.gudang2 import polishing, service as g2
 from app.services import berjalan
-from app.web import api, gudang2_api
+from app.web import api
 from tests.bantu import kode_saja
 
 
@@ -190,34 +190,21 @@ def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     assert untuk.index("can_see_financials(user)") < untuk.index("untuk_operator_gudang2(db)")
 
 
-def test_api_internal_gudang2_memakai_pintu_meja_dan_gerbang_operator():
-    """Satu token, satu jalur akun — gudang2 dan Meja adalah dua satelit di
-    atas pintu yang sama; gerbang perannya operator Gudang 2."""
-    assert gudang2_api.router.prefix == "/internal/gudang2"
-    jalur = {r.path for r in gudang2_api.router.routes}
-    assert {"/internal/gudang2/beranda", "/internal/gudang2/kartu", "/internal/gudang2/stok"} <= jalur
-    assert "_is_g2_operator" in kode_saja(gudang2_api.akun_operator_g2)
-    assert "akun_meja" in inspect.getsource(gudang2_api.akun_operator_g2)
-    from app.main import app
-    assert any(r.path == "/internal/gudang2/kartu" for r in app.routes)
-
-
 def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():
     """Penyaringnya di SERVER, bukan di templat (keputusan pemilik 23 September
     2026).
 
-    Layar operator Gudang 2 menggambar apa pun yang dikirim `/internal/gudang2/
-    stok`; kalau karung Gudang 1 ikut terkirim, ia ikut tergambar. Jadi yang
-    menjamin batas gudang adalah baris penyaring di sini — dan tiruan produksi
-    di repo `gudang2/` sengaja dibuat sama ketatnya, supaya layarnya tak pernah
-    lulus uji pada bentuk yang tak pernah ia terima.
+    Dulu yang diperiksa `gudang2_api.stok` — pintu app Gudang 2, yang dihapus
+    24 September 2026 bersama app-nya. Aturannya tidak ikut hilang: ia sekarang
+    dipegang `layar_stok._karung`, yang melayani operator polesan di Pos
+    Produksi. Yang dijaga tetap sama — karung Gudang 1 tak sampai ke layarnya,
+    dan tak ada angka uang yang ikut.
     """
-    # `kode_saja` menulis ulang sumbernya dari AST, jadi kutipnya diseragamkan
-    # jadi kutip tunggal — pola yang dicari harus tak peduli kutip.
-    kode = kode_saja(gudang2_api.stok)
+    from app.web import layar_stok
+
+    kode = kode_saja(layar_stok._karung)
     assert "stok_kemasan_rinci(db)" in kode, "stok karung tak diambil"
-    assert "k['gudang'] == 'Gudang 2'" in kode, "karung Gudang 1 tak disaring"
-    assert "'karung': karung" in kode
+    assert "gudang1(view)" in kode, "batas gudang tak diperiksa"
     # Dan tak ada harga yang ikut: satuannya lembar, dan operator tak melihat
     # angka uang. Sumbernya sendiri (`stok_kemasan_rinci`) tak menyusun harga.
     rinci = kode_saja(kms.stok_kemasan_rinci)

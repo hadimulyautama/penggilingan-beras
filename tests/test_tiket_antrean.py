@@ -23,16 +23,25 @@ from tests.bantu import kode_saja
 AKAR = pathlib.Path(__file__).resolve().parents[1]
 
 
-def test_pemancar_tiket_tinggal_di_layanan_bukan_di_api_meja():
+def test_pemancar_tiket_tinggal_di_layanan():
     """Sumbernya satu. Dua daftar tiket cepat atau lambat berselisih, dan yang
-    salah adalah yang lebih jarang dibuka orang."""
+    salah adalah yang lebih jarang dibuka orang.
+
+    Dulu uji ini juga membuktikan pemancarnya tak disalin kembali ke
+    `web/meja_api.py`. Berkas itu dihapus 24 September 2026 bersama app Meja,
+    jadi yang tersisa dijaga di seluruh `app/web/`: LAYAR tak boleh memancarkan
+    tiketnya sendiri, apa pun nama berkasnya.
+    """
+    import pathlib
+
     from app.services import berjalan as svc
-    from app.web import meja_api
 
     assert hasattr(svc, "_tiket_pk_luar") and hasattr(svc, "_tiket_jenis_tak_dikenal")
-    sumber_meja = inspect.getsource(meja_api)
-    assert "def _tiket_pk_luar" not in sumber_meja, "pemancar tiket disalin lagi ke meja_api"
-    assert "def _tiket_jenis_tak_dikenal" not in sumber_meja
+    web = pathlib.Path(inspect.getsourcefile(svc)).resolve().parents[1] / "web"
+    for berkas in web.glob("*.py"):
+        teks = berkas.read_text()
+        for pemancar in ("def _tiket_pk_luar", "def _tiket_jenis_tak_dikenal"):
+            assert pemancar not in teks, f"pemancar tiket disalin ke {berkas.name}"
 
 
 def test_terpasang_pada_ketiga_jalur_peran():
@@ -59,17 +68,23 @@ def test_terpasang_pada_ketiga_jalur_peran():
 def test_tiket_tak_terangkut_dua_kali():
     """Risiko terbesar pemindahan ini (brief 2a & QA): satu tiket dua kartu.
 
-    `meja_api._susun` dulu memanggil kedua pemancar SENDIRI di samping
-    `untuk_gudang2`/`untuk_staff`. Sekarang keduanya sudah membawanya, jadi
-    memanggilnya lagi berarti tiket yang sama muncul dua kali di antrean yang
-    sama — dan yang melihatnya akan mengira ada dua truk.
-    """
-    from app.web import meja_api
+    Perakit daftar dulu memanggil kedua pemancar SENDIRI di samping
+    `untuk_gudang2`/`untuk_staff` (`meja_api._susun`, dihapus 24 September 2026
+    bersama app Meja). Sekarang keduanya sudah membawanya, jadi memanggilnya
+    lagi berarti tiket yang sama muncul dua kali di antrean yang sama — dan
+    yang melihatnya akan mengira ada dua truk.
 
-    susun = kode_saja(meja_api._susun)
-    assert "_tiket_pk_luar" not in susun
-    assert "_tiket_jenis_tak_dikenal" not in susun
-    assert "_ser(s.menunggu)" in susun
+    Yang dijaga sekarang perakit yang tersisa: `untuk()`. Ia menggabung, bukan
+    memancar.
+    """
+    from app.services import berjalan as svc
+
+    u = kode_saja(svc.untuk)
+    assert "_tiket_pk_luar" not in u, "perakit memancarkan tiketnya sendiri"
+    assert "_tiket_jenis_tak_dikenal" not in u
+    # Dan daftar dari untuk_staff memang DIAMBIL — daftar yang tak diambil
+    # adalah daftar yang tak pernah tergambar.
+    assert "b.menunggu += s.menunggu" in u
 
 
 def test_jalur_gabah_dan_jalur_pk_tak_saling_masuk():
