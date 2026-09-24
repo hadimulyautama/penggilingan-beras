@@ -150,6 +150,68 @@ def test_masuk_yang_berhasil_menghapus_hitungannya():
     assert gm.boleh_coba("budi", "10.0.0.1") is None
 
 
+def test_pintu_peran_tidak_dihitung_sebagai_percobaan_gagal():
+    """Sandi yang BENAR lalu ditolak pintu peran tidak mengunci app lain.
+
+    QA 24 September 2026 (c) butir 1, direproduksi dua kali: operator Gudang 1
+    membuka app Meja lima kali, sandinya benar tiap kali, ditolak karena
+    perannya — lalu Pos Produksi dan app Gudang 2 (kedua app yang SAH baginya)
+    menjawab "Terlalu banyak percobaan" selama lima menit, dengan pesan yang
+    tak menyebut sebabnya.
+
+    Hitungannya memang satu untuk ketiga app, dan itu benar: penebak sandi
+    tidak boleh mendapat lima tebakan per pintu. Yang salah cuma apa yang
+    dihitung sebagai percobaan.
+    """
+    from app.web import gerbang_masuk as gm
+
+    gm.bersihkan()
+    for _ in range(gm.BATAS_GAGAL):
+        gm.catat_sandi_benar("budi", "10.0.0.1")
+    assert gm.boleh_coba("budi", "10.0.0.1") is None
+    # Dan hitungan yang SUDAH ada pun luruh — sandinya sudah terbukti benar.
+    for _ in range(gm.BATAS_GAGAL - 1):
+        gm.catat_gagal("budi", "10.0.0.1")
+    gm.catat_sandi_benar("budi", "10.0.0.1")
+    for _ in range(gm.BATAS_GAGAL - 1):
+        gm.catat_gagal("budi", "10.0.0.1")
+    assert gm.boleh_coba("budi", "10.0.0.1") is None
+
+
+@pytest.mark.parametrize("berkas", ["app/web/auth.py", "app/web/meja_api.py"])
+def test_hanya_kredensial_yang_gagal_yang_dihitung(berkas):
+    """`catat_gagal` hanya boleh dipanggil di penangan `identitas.Tolak`.
+
+    Uji ini membaca SUMBER karena yang dijaganya sebuah aturan, bukan sebuah
+    keluaran: di mana pun kelak ada pemeriksaan baru sesudah kredensial
+    (pintu peran hari ini, pintu lain besok), yang gagal di sana bukan penebak
+    sandi dan tak boleh menambah hitungannya.
+    """
+    import ast
+    from pathlib import Path
+
+    pohon = ast.parse(Path(berkas).read_text())
+    luar = []
+
+    class Jelajah(ast.NodeVisitor):
+        def __init__(self, di_penangan: bool = False):
+            self.di_penangan = di_penangan
+
+        def visit_ExceptHandler(self, node):
+            for anak in node.body:
+                Jelajah(True).visit(anak)
+
+        def visit_Call(self, node):
+            nama = getattr(node.func, "attr", "")
+            if nama == "catat_gagal" and not self.di_penangan:
+                luar.append(node.lineno)
+            self.generic_visit(node)
+
+    Jelajah().visit(pohon)
+    assert luar == [], (f"{berkas}: `catat_gagal` di luar penangan kredensial, "
+                        f"baris {luar} — lihat gerbang_masuk.catat_sandi_benar")
+
+
 # ────────────────────── P-S-13 · waktu jawab tak membocorkan ──────────────────────
 
 def test_ada_hash_tiruan_untuk_nama_tak_dikenal():

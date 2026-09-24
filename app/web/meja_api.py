@@ -163,7 +163,14 @@ async def masuk(body: MasukIn, request: Request) -> dict:
         if body.aplikasi:
             sebab = pintu.sebab_tolak(akun.peran, body.aplikasi, akun._lingkup)
             if sebab:
-                gerbang.catat_gagal(uname, ip)
+                # Pintu peran BUKAN tebakan sandi: sandinya baru saja terbukti
+                # benar. Dulu penolakan ini ikut dihitung, dan hitungannya satu
+                # untuk seluruh pabrik (satu proses, kunci nama+IP) — jadi
+                # operator yang lima kali salah membuka app Meja terkunci lima
+                # menit dari Pos Produksi DAN app Gudang 2, kedua app yang sah
+                # baginya, dengan pesan yang tak menyebut sebabnya. QA 24 Sep
+                # 2026 (c) butir 1.
+                gerbang.catat_sandi_benar(uname, ip)
                 raise HTTPException(403, sebab)
         gerbang.catat_berhasil(uname, ip)
         akun.terakhir_login = now_local()

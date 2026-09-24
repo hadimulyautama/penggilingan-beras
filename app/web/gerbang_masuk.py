@@ -70,6 +70,22 @@ def catat_berhasil(username: str, ip: str) -> None:
     _gagal.pop(_kunci(username, ip), None)
 
 
+def catat_sandi_benar(username: str, ip: str) -> None:
+    """Sandinya BENAR tetapi masuknya tetap ditolak — pintu peran, bukan sandi.
+
+    Hitungan di sini menjaga satu hal saja: penebakan sandi. Sandi yang sudah
+    terbukti benar bukan tebakan, jadi penolakan sesudah itu tidak boleh
+    menambah hitungan — dan hitungan yang sudah ada pun luruh, dengan alasan
+    yang sama seperti `catat_berhasil`.
+
+    QA 24 September 2026 (c) butir 1: operator Gudang 1 membuka app Meja lima
+    kali, sandinya benar tiap kali, ditolak karena perannya — lalu Pos
+    Produksi DAN app Gudang 2, kedua app yang sah baginya, menjawab "Terlalu
+    banyak percobaan" selama lima menit. Ia tak pernah sekali pun salah ketik.
+    """
+    _gagal.pop(_kunci(username, ip), None)
+
+
 def bersihkan() -> None:
     """Kosongkan seluruh hitungan. Dipakai uji; tak dipanggil aplikasi."""
     _gagal.clear()

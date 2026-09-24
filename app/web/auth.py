@@ -112,7 +112,10 @@ async def proses_masuk(
         # masih menerima admin sampai Meja dipakai sungguhan.
         sebab = pintu.sebab_tolak(akun.peran, pintu.PRODUKSI)
         if sebab:
-            gerbang.catat_gagal(uname, ip)
+            # Tidak dihitung sebagai percobaan gagal: sandinya benar, yang
+            # menolak perannya. Alasan lengkapnya di `gerbang_masuk.
+            # catat_sandi_benar` — hitungan yang sama dipakai ketiga app.
+            gerbang.catat_sandi_benar(uname, ip)
             return gagal(sebab)
 
         gerbang.catat_berhasil(uname, ip)
