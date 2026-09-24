@@ -123,6 +123,15 @@ def _label(blok):
 
 #: Angka yang HANYA ada di Gudang 1, dan yang hanya di Gudang 2. Dipakai
 #: untuk membuktikan tak ada kebocoran antar gudang di layar operator.
+#: Keluaran `services.beranda.angka_gudang` yang dititipkan ke `petak_beranda`.
+#: Angka G2 sengaja dibuat BERBEDA antara stok dan tumpukan: kalau petaknya
+#: keliru memungut tumpukan, ujinya harus gagal — dan tumpukan yang kebetulan
+#: nol (keadaan hari QA menemukannya) membuat kekeliruan itu lolos.
+ANGKA = {"masuk_kg": 1, "masuk_n": 1,
+         "g1": {"stok_pk": 1, "tumpukan": 0},
+         "g2": {"stok_pk": 10000, "tumpukan": 0},
+         "tumpukan_g2_maks": 0}
+
 _G1_SAJA = ("Gabah masuk", "Pengeringan")
 _G2_SAJA = ("PK masuk", "Penyosohan")
 
@@ -171,7 +180,7 @@ async def test_beranda_meja_memuat_kedua_gudang(monkeypatch):
          "silo": [], "giling": [], "stok_pk": {"total": 1, "maks": 0}}
 
     for view in MEJA:
-        blok = await petak_beranda(None, view, o)
+        blok = await petak_beranda(None, view, o, angka=ANGKA)
         label = _label(blok)
         assert any(x in label for x in _G1_SAJA), view
         assert any(x in label for x in _G2_SAJA), view
@@ -180,6 +189,35 @@ async def test_beranda_meja_memuat_kedua_gudang(monkeypatch):
         # lubang itu terbaca sebagai sesuatu yang gagal dimuat.
         for b in blok:
             assert len(b["sel"]) % 2 == 0, (view, b["judul"])
+
+
+async def test_stok_pk_admin_dari_layanan_bukan_dari_posisi_petak(monkeypatch):
+    """"Stok PK G2" harus menyebut STOK, bukan tumpukan.
+
+    Dulu dua petak itu dipetik berdasarkan POSISI — petak ke-4 tiap gudang —
+    lalu keduanya diberi label "Stok PK". Petak ke-4 Gudang 1 memang stok PK;
+    petak ke-4 Gudang 2 adalah "Tumpukan PK". Akibatnya, pada satu detik yang
+    sama: Beranda Pos Produksi "Stok PK G2 0 kg", Beranda Meja "Stok PK 10.000
+    kg" — dan yang benar 10.000 (silo A 6.000 + silo B 4.000). QA 24 September
+    2026 (c) butir 3.
+
+    Angka tumpukan di `ANGKA` sengaja NOL, seperti hari QA menemukannya: nol
+    yang masuk akal itulah yang membuat kekeliruan ini bertahan.
+    """
+    from app.web import layar
+
+    async def palsu(db):
+        return [layar._sel("PK masuk", "1.000"), layar._sel("Penyosohan", 1),
+                layar._sel("Silo terisi", 1), layar._sel("Tumpukan PK", "0")]
+
+    monkeypatch.setattr(layar, "_petak_g2", palsu)
+    o = {"gabah_hari_ini": {"total_kg": 1, "batch": 1}, "pengeringan": [],
+         "silo": [], "giling": [], "stok_pk": {"total": 1, "maks": 0}}
+
+    blok = await petak_beranda(None, ADMIN, o, angka=ANGKA)
+    petak = {p["label"]: p["nilai"] for p in blok[0]["sel"]}
+    assert petak["Stok PK G2"] == "10.000", "petak Admin memungut tumpukan, bukan stok"
+    assert petak["Stok PK G1"] == "1"
 
 
 async def test_super_dan_admin_tidak_lagi_sama(monkeypatch):
@@ -195,7 +233,7 @@ async def test_super_dan_admin_tidak_lagi_sama(monkeypatch):
     o = {"gabah_hari_ini": {}, "pengeringan": [], "silo": [], "giling": [],
          "stok_pk": {}}
     assert (await petak_beranda(None, SUPER, o)
-            != await petak_beranda(None, ADMIN, o))
+            != await petak_beranda(None, ADMIN, o, angka=ANGKA))
     # Super Admin melihat kedua gudang sebagai blok BERNAMA — dua baris
     # tanpa judul memaksa orang menebak angka mana milik gudang mana.
     assert all(b["judul"] for b in await petak_beranda(None, SUPER, o))
@@ -220,6 +258,41 @@ def test_stok_mengikuti_view_pembacanya():
     # Koreksi hasil giling milik Gudang 1; operator polesan tak punya hasil
     # giling untuk dikoreksi.
     assert "view != POLESAN" in sumber
+
+
+def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
+    """Satu app, satu nama kontrak, SATU jawaban.
+
+    Layar Stok dulu memasok `SARING_GUDANG=()` dengan alasan tertulis "Pos
+    Produksi memberi tiap orang SATU gudang lewat view". Itu benar untuk
+    operator dan SALAH untuk Admin & Super Admin — dan justru dua view itulah
+    yang mendapat pilnya di /berjalan. Templatnya sudah lama siap
+    (`stok.html` memanggil makro yang sama). QA 24 September 2026 (c) butir 7.
+    """
+    from app.web import layar_berjalan, layar_stok
+
+    for modul, fungsi in ((layar_berjalan, layar_berjalan.halaman_berjalan),
+                          (layar_stok, layar_stok.halaman_stok)):
+        kode = inspect.getsource(fungsi)
+        assert "GUDANG if view in MEJA else ()" in kode, fungsi.__name__
+        # Nilai karangan dari URL diabaikan, bukan diteruskan ke kueri.
+        assert "if gudang not in {g for g, _, _ in saring}" in kode, fungsi.__name__
+        assert "SARING_GUDANG=saring" in kode and "gudang=gudang" in kode, fungsi.__name__
+
+
+def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
+    """Membuka "Gudang 1" lalu melihat barang jadi & karung Gudang 2 di bawahnya
+    membuat penyaringnya berbohong — kalimat yang sama sudah dipakai Meja."""
+    from app.web import layar_stok
+
+    kode = inspect.getsource(layar_stok.halaman_stok)
+    assert 'gudang in ("", "g1")' in kode and 'gudang in ("", "g2")' in kode
+    # Karung disaring di satu tempat — fungsinya sendiri, yang menerima pilnya.
+    assert "_karung(db, view, gudang)" in kode
+    karung = inspect.getsource(layar_stok._karung)
+    # Diterjemahkan dari master, bukan dibandingkan sebagai teks yang diketik
+    # dua kali: nama gudang bisa diubah, kunci pendeknya tidak.
+    assert "NAMA_GUDANG.get(gudang" in karung
 
 
 def test_layar_stok_tak_menyebut_gudang_1_di_menu():

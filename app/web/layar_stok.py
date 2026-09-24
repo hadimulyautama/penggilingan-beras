@@ -29,60 +29,85 @@ from app.web.tampilan import render_laci
 router = APIRouter(tags=["webapp"])
 
 
-async def _karung(db, view: str) -> list[dict]:
+async def _karung(db, view: str, gudang: str = "") -> list[dict]:
     """Baris stok karung yang boleh dilihat view ini — atau daftar kosong.
 
     Operator Gudang 1 tidak melihat blok ini sama sekali: karung mengemas
     beras JADI, dan itu pekerjaan Gudang 2. Yang memegang kedua gudang
     (Admin ke atas) ikut melihat karung PK di Gudang 1, karena ia yang
     memesannya.
+
+    `gudang` = pil penyaring di kepala halaman (kunci pendek, "" = semua).
+    Karung ikut disaring karena membuka "Gudang 1" lalu melihat karung Gudang 2
+    di bawahnya membuat penyaringnya berbohong — kalimat yang sama dipakai Meja.
+    Namanya diterjemahkan dari master (`NAMA_GUDANG`), bukan dibandingkan
+    sebagai teks: nama gudang bisa diubah, kunci pendeknya tidak.
     """
-    from app.web.layar import gudang1, gudang2
+    from app.web.layar import NAMA_GUDANG, gudang1, gudang2
 
     if not gudang2(view):
         return []
     from app.penggilingan.inventory import packaging as kms
 
+    nama = NAMA_GUDANG.get(gudang, "") if gudang else ""
     return [b for b in await kms.stok_kemasan_rinci(db)
-            if b["gudang"] != "Gudang 1" or gudang1(view)]
+            if (b["gudang"] != "Gudang 1" or gudang1(view))
+            and (not nama or b["gudang"] == nama)]
 
 
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     from app.services.setelan import fitur_mutu
 
-    from app.web.layar import POLESAN, gudang1, gudang2
+    from app.web.layar import GUDANG, MEJA, NAMA_GUDANG, POLESAN, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
+    # ── Penyaring gudang (celah ke-5, setengahnya tertinggal) ──
+    #
+    # Aturannya SATU dan sudah ditulis di layar Sedang berjalan: pilnya milik
+    # view yang memegang KEDUA gudang (`GUDANG if view in MEJA else ()`).
+    # Halaman ini dulu memasok daftar kosong dengan alasan "Pos Produksi
+    # memberi tiap orang SATU gudang lewat view" — benar untuk operator, salah
+    # untuk Admin & Super Admin, dan justru dua view itulah yang mendapat
+    # pilnya di /berjalan. Satu app, satu nama kontrak, dua jawaban (QA 24
+    # September 2026 (c) butir 7).
+    saring = GUDANG if view in MEJA else ()
+    gudang = request.query_params.get("gudang") or ""
+    if gudang not in {g for g, _, _ in saring}:
+        gudang = ""                       # nilai karangan dari URL diabaikan
     async with SessionLocal() as db:
         # Gudang 1 per LOT GILING, Gudang 2 per TEMPAT — dua satuan, karena
         # bendanya memang dua rupa (lihat catatan di `app.services.stok`).
         # Operator hanya menerima gudangnya sendiri: halaman Stok yang
         # menampilkan silo gudang sebelah menjawab pertanyaan yang tak ia
         # ajukan, dan menenggelamkan yang ia ajukan.
-        lot = await svc.pk_gudang1(db) if gudang1(view) else []
-        tempat = await svc.pk_gudang2(db) if gudang2(view) else []
+        # Penyaringnya ikut menentukan apa yang dibaca, bukan menyembunyikan
+        # yang sudah dibaca: kueri stok gudang sebelah mahal, dan membayarnya
+        # untuk angka yang tak akan tampil tak ada gunanya.
+        lot = (await svc.pk_gudang1(db)
+               if gudang1(view) and gudang in ("", "g1") else [])
+        tempat = (await svc.pk_gudang2(db)
+                  if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
-        karung = await _karung(db, view)
+        karung = await _karung(db, view, gudang)
         # ── Barang jadi & hasil samping ──
         # Gerbang yang SAMA dengan stok karung tepat di bawahnya: barang jadi
         # lahir di Gudang 2, jadi operator selepan tak melihatnya. Sampai 23
         # September 2026 layar ini tak punya bloknya sama sekali — hitungannya
         # terkunci di `gudang2_api.stok`, dan Pos Produksi yang memegang KEDUA
         # gudang justru buta terhadap apa yang sudah jadi.
-        bj = (await svc.barang_jadi_g2(db) if gudang2(view)
+        # Barang jadi milik Gudang 2, jadi ia ikut penyaring di kepala halaman —
+        # membuka "Gudang 1" lalu melihat barang jadi Gudang 2 di bawahnya
+        # membuat penyaringnya berbohong (kalimat yang sama di Meja).
+        bj = (await svc.barang_jadi_g2(db) if gudang2(view) and gudang in ("", "g2")
               else svc.BarangJadiG2(produk=[], samping=[]))
     return await render_laci(
         request, "stok.html", layar="stok",
         lot=lot, tempat=tempat,
-        # ── Dua blok milik Meja (Tahap 2, stok.html naik ke paket) ──
-        #
-        # Penyaring gudang: Pos Produksi memberi tiap orang SATU gudang lewat
-        # view, jadi penyaringnya tak punya pilihan kedua untuk ditawarkan.
-        # Barang jadi: yang mencatat barang keluar harus melihat apa yang bisa
-        # keluar, dan barang keluar dicatat dari meja — di sini yang ada cuma
-        # laporan teksnya (`stok_barang_jadi`).
-        SARING_GUDANG=(), gudang="",
+        # `SARING_GUDANG` = nama kontrak templat bersama (Tahap 2). Kosong untuk
+        # operator: ia sudah diberi satu gudang lewat view-nya, dan pil tunggal
+        # bernama "Semua" tak membedakan apa pun.
+        SARING_GUDANG=saring, gudang=gudang,
         produk=bj.produk, samping=bj.samping,
         total=sum(l.tersedia for l in lot),
         # `is_admin` sudah memakai peran EFEKTIF: saat admin memakai "Lihat

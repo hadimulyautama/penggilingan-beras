@@ -355,7 +355,17 @@ async def beranda(request: Request):
             if gudang1(view):
                 o = (await dashboard_data(db)).get("operasional", {}) or {}
             jalan = await svc.untuk(db, akun.user)
-            petak = await petak_beranda(db, view, o)
+            # Angka per gudang dihitung SEKALI untuk halaman ini: petak "Stok
+            # PK" Admin dan papan di bawahnya membaca yang sama. Sampai 24
+            # September 2026 petak Admin memetik petak ke-4 tiap gudang
+            # berdasarkan POSISI — dan petak ke-4 Gudang 2 adalah tumpukan,
+            # bukan stok (QA 24 Sep (c) butir 3).
+            angka = None
+            if view in V_MEJA:
+                from app.services import beranda as svc_beranda
+
+                angka = await svc_beranda.angka_gudang(db)
+            petak = await petak_beranda(db, view, o, angka=angka)
             # ── Papan pemegang KEDUA gudang (celah ke-5, 24 Sep 2026) ──
             #
             # "Perlu perhatian", rincian keputusan, dan satu baris per gudang
@@ -367,10 +377,8 @@ async def beranda(request: Request):
             # sudah melihat gudangnya di petak teratas, dan penyimpangan gudang
             # sebelah adalah kabar yang tak bisa ia tindaklanjuti.
             if view in V_MEJA:
-                from app.services import beranda as svc_beranda
-
                 papan = await svc_beranda.papan(db, jalan.berjalan + jalan.transit,
-                                                jalan.meja)
+                                                jalan.meja, angka=angka)
     except Exception:
         log.exception("Keadaan pabrik gagal dimuat (beranda tetap tampil)")
 

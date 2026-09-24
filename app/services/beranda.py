@@ -191,11 +191,17 @@ def petak_pabrik(a: dict, berjalan: list) -> list[dict]:
     ]
 
 
-async def papan(db, berjalan: list, meja: list) -> Papan:
+async def papan(db, berjalan: list, meja: list, angka: dict | None = None) -> Papan:
     """Seluruh papan sekaligus — satu perhitungan, dua pembaca (Pos Produksi &
-    Meja)."""
+    Meja).
+
+    `angka` boleh dititipkan pemanggil yang sudah menghitungnya untuk petak
+    teratas halaman yang sama (`layar.petak_beranda`): dua perhitungan pada
+    satu halaman bukan cuma dua kali kerja, ia juga bisa menyebut dua angka
+    berbeda bila ada yang menulis di antaranya.
+    """
     perh = await perhatian(db, berjalan)
-    a = await angka_gudang(db)
+    a = angka if angka is not None else await angka_gudang(db)
     n = hitung_keputusan(meja)
     return Papan(perhatian=perh, gudang=baris_gudang(a, berjalan, perh),
                  n_harga=n["harga"], n_output=n["output"], n_mutu=n["mutu"])

@@ -207,18 +207,27 @@ async def _petak_g2(db) -> list[dict]:
     ]
 
 
-def _ganti_label(sel: dict, label: str) -> dict:
-    """Salinan petak dengan label lain.
+def _petak_stok(a: dict, gid: str, label: str) -> dict:
+    """Petak "Stok PK" satu gudang, dari angka `services.beranda`.
 
-    Dipakai view yang memuat KEDUA gudang: "Stok PK" dua kali dalam satu
-    baris adalah dua angka yang tak bisa dibedakan tanpa menghitung
-    posisinya, dan yang harus dihitung posisinya tidak terbaca sekilas.
+    Isinya disebutkan di keterangannya — "menumpuk N kg" — karena stok yang
+    sebagian di lantai dan sebagian di silo adalah dua keadaan berbeda bagi
+    orang yang harus memutuskan apa yang dikerjakan lebih dulu. Kosakatanya
+    sama dengan baris gudang di Beranda Meja, bukan kalimat kedua untuk hal
+    yang sama.
     """
-    return {**sel, "label": label}
+    tump = a[gid]["tumpukan"]
+    maks = a["tumpukan_g2_maks"] if gid == "g2" else 0
+    return _sel(label, _ribuan(a[gid]["stok_pk"]), sat=" kg",
+                ket=(f"menumpuk {_ribuan(tump)} kg" if tump else ""),
+                nada="bahaya" if maks and tump > maks else "")
 
 
-async def petak_beranda(db, view: str, o: dict) -> list[dict]:
+async def petak_beranda(db, view: str, o: dict, angka: dict | None = None) -> list[dict]:
     """Blok-blok petak Beranda untuk view ini.
+
+    `angka` = keluaran `services.beranda.angka_gudang`, bila pemanggil sudah
+    memilikinya (view meja menghitungnya juga untuk papan di bawah petak).
 
     Satu blok = satu judul + empat angka, dua kolom. Operator selalu dapat
     SATU blok tanpa judul: ia cuma punya satu gudang, dan judul yang menamai
@@ -235,13 +244,33 @@ async def petak_beranda(db, view: str, o: dict) -> list[dict]:
     if view == ADMIN:
         # Admin tidak menjalankan mesin. Yang ia butuh dari lantai cuma dua
         # pertanyaan per gudang: apa yang MASUK hari ini, dan berapa yang
-        # MENUMPUK. Sisanya — mesin mana yang menyala — sudah ada di daftar
+        # TERSIMPAN. Sisanya — mesin mana yang menyala — sudah ada di daftar
         # "Sedang berjalan" tepat di bawahnya, dan menyebutnya dua kali
         # membuat baris teratas berhenti jadi ringkasan.
+        #
+        # Stok PK-nya dari `services.beranda.angka_gudang` — perhitungan yang
+        # SAMA dengan Beranda Meja, bukan petak ke-4 tiap gudang.
+        #
+        # Dulu dua petak itu dipetik BERDASARKAN POSISI (`g1[3]`, `g2[3]`) lalu
+        # keduanya diberi label "Stok PK". Petak ke-4 Gudang 1 memang stok PK;
+        # petak ke-4 Gudang 2 adalah TUMPUKAN. Jadi Admin membaca angka
+        # tumpukan dengan nama stok: layar yang sama, akun yang sama, detik
+        # yang sama — Beranda Pos Produksi "Stok PK G2 0 kg", Beranda Meja
+        # "Stok PK 10.000 kg". Yang benar 10.000 (silo A 6.000 + silo B 4.000).
+        # QA 24 September 2026 (c) butir 3.
+        #
+        # Dan bahayanya bukan nol itu: tumpukan yang kebetulan kosong terlihat
+        # masuk akal. Saat tumpukan berisi, angkanya tetap salah tanpa nol yang
+        # mencurigakan.
+        from app.services.beranda import angka_gudang
+
         g1, g2 = _petak_g1(o), await _petak_g2(db)
+        # Angkanya dititipkan pemanggil bila ia sudah menghitungnya untuk papan
+        # di bawahnya — satu perhitungan per halaman, bukan dua.
+        a = angka if angka is not None else await angka_gudang(db)
         return [{"judul": None, "sel": [
-            g1[0], _ganti_label(g1[3], "Stok PK G1"),
-            g2[0], _ganti_label(g2[3], "Stok PK G2"),
+            g1[0], _petak_stok(a, "g1", "Stok PK G1"),
+            g2[0], _petak_stok(a, "g2", "Stok PK G2"),
         ]}]
     if view == SUPER:
         # Seluruh pabrik, dua blok bernama. Pemilik satu-satunya yang memang
