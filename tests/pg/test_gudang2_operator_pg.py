@@ -264,3 +264,116 @@ async def test_daftar_silo_hanya_milik_proses_itu_dan_yang_belum_selesai(pg, gud
     # Yang sudah bersisa tak ditawarkan lagi: menandainya dua kali menimpa
     # angka yang sudah dicatat operator.
     assert [x["value"] for x in await sosoh_silo(induk=kode, user=u)] == ["B"]
+
+
+# ── Silo yang SEDANG disosoh tak berdiri di Antrian tunggu ──
+#
+# Laporan pemilik 24 September 2026 13:57: "Silo A · Gudang 2 · 2.000 kg · PK
+# menunggu disosoh" berdiri di blok "Bisa dikerjakan sekarang" sementara
+# penyosohan atas Silo A sedang berjalan. PK yang sama tergambar DUA KALI
+# dengan dua cerita yang bertentangan.
+#
+# Sebabnya satu bendera GLOBAL di `_kartu_silo_g2` — "adakah penyosohan
+# berjalan?" — yang tak tahu silo MANA yang dipakai. Tombolnya dicabut untuk
+# semua silo, kartunya tetap dipancarkan untuk semua silo.
+
+async def test_silo_yang_sedang_disosoh_tak_ada_di_antrean(pg, gudang2):
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo
+    from app.services.berjalan import untuk_operator_gudang2
+
+    u = gudang2["user"]
+    async with pg() as db:
+        # Silo A benar-benar menunggu; Silo B (9.800) masuk mesin.
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=2_000)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    antre = {x.kode for x in b.menunggu}
+    assert "Silo B" not in antre, "silo yang sedang disosoh masih berdiri di antrean"
+    assert "Silo A" in antre, "silo yang benar-benar menunggu ikut hilang"
+
+    # Dan tak tergambar di dua layar sekaligus.
+    jalan = {x.kode for x in b.berjalan}
+    assert r.proc.kode_proses in jalan
+    assert not (antre & jalan)
+
+    # Silo yang menunggu tetap TANPA tombol — mesinnya satu.
+    kartu_a = next(x for x in b.menunggu if x.kode == "Silo A")
+    assert kartu_a.aksi is None and kartu_a.pilihan == []
+    assert "mesin sosoh sedang dipakai" in kartu_a.keadaan
+
+
+async def test_proses_dua_silo_menghapus_keduanya_dari_antrean(pg, gudang2):
+    """"Mulai penyosohan" menerima A / B / AB — jadi yang dipakai HIMPUNAN,
+    bukan satu nilai."""
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo
+    from app.services.berjalan import untuk_operator_gudang2
+
+    u = gudang2["user"]
+    async with pg() as db:
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=2_000)
+        await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    antre = {x.kode for x in b.menunggu}
+    assert "Silo A" not in antre and "Silo B" not in antre
+
+
+async def test_silo_kembali_ke_antrean_sesudah_penyosohan_ditutup(pg, gudang2):
+    """Sisa yang masih ada kembali jadi pekerjaan — lengkap dengan tombolnya."""
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan
+    from app.services.berjalan import untuk_operator_gudang2
+
+    u = gudang2["user"]
+    async with pg() as db:
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                 nama_silo="B", sisa_kg=1_500)
+
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    kartu = next((x for x in b.menunggu if x.kode == "Silo B"), None)
+    assert kartu is not None, "sisa di silo tak kembali jadi pekerjaan"
+    assert kartu.aksi == "mulai_penyosohan" and kartu.pilihan
+
+
+async def test_stok_silo_tak_berubah_selama_disosoh(pg, gudang2):
+    """Yang berubah cuma ANTREAN. Barangnya memang masih di silo sampai
+    prosesnya ditutup dan sisanya dicatat — jangan 'memperbaiki' ini dengan
+    mengurangi stok saat proses dimulai."""
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import get_g2_silo, hitung_stok_silo
+    from app.services.stok import pk_gudang2
+
+    async with pg() as db:
+        silo_b = await get_g2_silo(db, "B")
+        sebelum = float(await hitung_stok_silo(db, silo_b.id))
+        await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+
+    async with pg() as db:
+        sesudah = float(await hitung_stok_silo(db, silo_b.id))
+        tempat = await pk_gudang2(db)
+    assert sesudah == sebelum == 9_800
+    assert any(t.tersedia == 9_800 for t in tempat), "layar Stok ikut berubah"
+
+
+async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):
+    """Keputusan pemilik 12 September: silo yang sedang dipoles boleh menerima
+    tambahan. Perbaikan antrean tak boleh ikut mencabut jalan masuknya."""
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.services.berjalan import untuk_operator_gudang2
+
+    async with pg() as db:
+        await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    tump = [x for x in b.menunggu if x.kelompok == "tumpukan"]
+    assert tump, "kartu tumpukan hilang"
+    assert any(p[0] == "pindah_tumpukan_silo" for p in tump[0].pilihan)

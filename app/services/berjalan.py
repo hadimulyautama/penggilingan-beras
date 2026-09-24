@@ -31,6 +31,7 @@ from app.models import (
     MillingProcess,
     MillingProcessVerification,
     MillingQcLog,
+    PermintaanPk,
     PurchaseBatch,
     SiloStorage,
     Supplier,
@@ -1449,16 +1450,49 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     from app.penggilingan.gudang2.models import PolishingProcess
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
 
+    from app.penggilingan.gudang2.models import PolishingSiloUsage
+
     keluar: list[Baris] = []
-    sedang = (await db.execute(
+    # ── Silo MANA yang sedang di dalam mesin, bukan sekadar "ada yang jalan" ──
+    #
+    # Sampai 24 September 2026 yang dibaca di sini cuma satu bendera global:
+    # "adakah penyosohan berstatus proses?". Tombolnya dicabut untuk SEMUA silo,
+    # tetapi kartunya tetap dipancarkan — termasuk untuk silo yang justru sedang
+    # berada di dalam mesin itu. Akibatnya PK yang sama tergambar DUA KALI
+    # dengan dua cerita yang bertentangan: Antrian tunggu bilang "menunggu
+    # disosoh", Sedang berjalan bilang "sedang disosoh". Laporan pemilik 24
+    # September 13:57, dan aturan app ini sendiri sudah menamainya: "kartu yang
+    # sama di dua tempat adalah dua tempat di kepala orang, dan cepat atau
+    # lambat keduanya berbeda isi" — di sini keduanya SUDAH berbeda isi.
+    #
+    # HIMPUNAN, bukan satu nilai: satu proses boleh memakai DUA silo sekaligus
+    # ("Mulai penyosohan" menerima A / B / AB).
+    dipakai = set((await db.execute(
+        select(PolishingSiloUsage.silo_id)
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingProcess.status == "proses")
+    )).scalars().all())
+    # Bendera global TETAP dipakai, dan di sini ia masih benar: mesinnya satu,
+    # jadi silo LAIN memang belum bisa dimulai selama ada yang jalan.
+    sedang = bool(dipakai) or bool((await db.execute(
         select(PolishingProcess.id).where(PolishingProcess.status == "proses")
-    )).first()
+    )).first())
     wid2 = await _g2_warehouse_id(db)
     for silo in (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
     )).scalars().all():
         kg = await hitung_stok_silo(db, silo.id)
         if not kg:
+            continue
+        # Silo yang sedang DI DALAM mesin tak punya kartu antrean sama sekali.
+        # Ia sudah punya wakilnya di Sedang berjalan — kartu Penyosohan, yang
+        # menyebutkan silonya. Kartu kedua untuk barang yang sama itulah yang
+        # melahirkan keluhan pemilik.
+        #
+        # STOKNYA TIDAK BERUBAH: `hitung_stok_silo` tetap menghitung PK ini
+        # sebagai isi silo sampai prosesnya ditutup dan sisanya dicatat —
+        # barangnya memang masih di sana. Yang berubah cuma ANTREAN.
+        if silo.id in dipakai:
             continue
         huruf = silo.nama_silo.replace("Silo ", "")
         isian = await asal_silo(silo.id)
@@ -1685,6 +1719,47 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                  "bila truknya memang ditimbang sesudah giling ditutup.",
             pilihan=[("betulkan_bobot_giling", "Betulkan bobot masuk",
                       "Disamakan dengan bobot bahan, rendemen dihitung ulang")]))
+
+    # ── Lot PK yang DIMINTA operator Gudang 2 ──
+    #
+    # Keputusan pemilik 24 September 2026: operator polesan melihat lot PK
+    # Gudang 1 dan boleh MEMINTA satu dipindah; yang mencatat perpindahan tetap
+    # Admin. Kartunya di `menunggu`, bukan `meja`: tak ada yang diputuskan di
+    # sini — barangnya ada, catatannya belum. Bentuknya sama dengan kartu tiket
+    # PK luar, dan `meja` adalah tempat keputusan harga/mutu/output.
+    #
+    # Yang sudah tak bisa dikerjakan digugurkan lebih dulu (lotnya habis lewat
+    # jalan lain), supaya kartunya hilang di pemuatan yang SAMA dengan
+    # sebabnya — bukan satu putaran poller kemudian.
+    from app.services import permintaan_pk as _pmt
+
+    from app.penggilingan.gudang1.services.milling import _pk_breakdown
+
+    await _pmt.gugurkan_yang_habis(db)
+    for baris, nama_minta, kode_lot in (await db.execute(
+        select(PermintaanPk, User.nama, MillingProcess.kode_proses)
+        .join(User, User.id == PermintaanPk.diminta_oleh)
+        .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
+        .where(PermintaanPk.status == "terbuka")
+        .order_by(PermintaanPk.waktu_minta)
+    )).all():
+        bd = await _pk_breakdown(db, baris.milling_process_id)
+        b.menunggu.append(Baris(
+            kode=kode_lot,
+            isi=f"{nama_minta or 'Operator Gudang 2'} minta lot ini dipindah",
+            keadaan="menunggu dipindahkan Admin",
+            aksi="transfer_pk", nilai=kode_lot, fase="giling",
+            sejak=baris.waktu_minta,
+            judul="Diminta Gudang 2",
+            utama=(_kg(bd.tersedia).removesuffix(" kg"), "kg"),
+            sub=f"{kode_lot} · diminta {nama_minta or '?'}",
+            kelompok="permintaan",
+            pilihan=[
+                ("transfer_pk", "Pindahkan ke Gudang 2",
+                 "Lot ini, sebagian atau seluruhnya", kode_lot),
+                ("tolak_permintaan_pk", "Tolak permintaan",
+                 "Sebabnya ikut terkirim ke operator", str(baris.id)),
+            ]))
     return b
 
 
