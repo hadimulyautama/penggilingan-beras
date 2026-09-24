@@ -439,3 +439,90 @@ async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
     # dibaca.
     assert b2.jumlah_menunggu == len(b2.menunggu)
     assert b2.lencana()["MENUNGGU"] == len(b2.menunggu)
+
+
+# ──────── Penyosohan dari beberapa silo, lewat BORANGNYA ────────
+
+async def test_borang_penyosohan_membaca_master_bukan_tupel(pg, gudang2):
+    """Daftar silo bahan datang dari MASTER, dan saringannya sama dengan pagar
+    layanannya.
+
+    Layanan `mulai_penyosohan` sudah menerima berapa pun silo sejak 12
+    September 2026; yang mengurungnya jadi tiga kemungkinan adalah daftar
+    pilihan "A / B / A+B" yang diketik di kode. Borang yang membaca master ikut
+    melihat silo yang ditambahkan lewat Pengaturan → Alat.
+
+    Yang TIDAK ditawarkan sama pentingnya: silo kosong, dan silo yang sedang di
+    dalam mesin. Borang yang menawarkan silo yang kemudian ditolak layanannya
+    membuat orang mengira aplikasinya rusak, padahal keduanya benar
+    sendiri-sendiri.
+    """
+    from sqlalchemy import select
+
+    from app.models import Silo, User, Warehouse
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.web.api import silo_bahan_g2
+
+    u = gudang2["user"]
+    async with pg() as db:
+        g2 = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        # Silo yang ditambahkan belakangan lewat Pengaturan → Alat.
+        db.add(Silo(nama_silo="Silo C", warehouse_id=g2.id, status="kosong"))
+        await db.commit()
+        uu = await db.get(User, u.id)
+
+    daftar = await silo_bahan_g2(user=uu)
+    nilai = [x["value"] for x in daftar]
+    assert nilai == ["B"], f"yang ditawarkan bukan hanya silo berisi: {daftar}"
+    assert any("9.800" in x["label"] for x in daftar), "isinya tak disebut"
+
+    # Sesudah B masuk mesin, ia tak ditawarkan lagi — sama seperti pagar
+    # layanannya, yang menolak silo yang sedang dipakai proses berjalan.
+    async with pg() as db:
+        uu = await db.get(User, u.id)
+        await mulai_penyosohan(db, user=uu, nama_silos=["B"])
+    assert await silo_bahan_g2(user=uu) == []
+
+
+async def test_penyosohan_beberapa_silo_lewat_pintu(pg, gudang2):
+    """Ujung ke ujung lewat pintu HTTP-nya, bukan cuma layanannya: yang dulu
+    menerjemahkan pilihan jadi silo adalah peta "A"/"B"/"AB" di pintu itu."""
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Supplier, User
+    from app.penggilingan.gudang2.models import PkPurchaseBatch, PolishingSiloUsage
+    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.web.api import MulaiPenyosohanReq, act_mulai_penyosohan
+
+    u = gudang2["user"]
+    async with pg() as db:
+        sup = (await db.execute(select(Supplier.id))).scalars().first()
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-20260924-05", supplier_id=sup, berat_total_kg=4_000,
+            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+            input_by=u.id, status_batch="diterima", flag_unverified=True,
+            sumber_berat="manual"))
+        await db.commit()
+        await masukkan_pk_luar(db, user=u, kode="PKB-20260924-05", tujuan="silo_a")
+        uu = await db.get(User, u.id)
+
+    hasil = await act_mulai_penyosohan(MulaiPenyosohanReq(silo=["A", "B"]), user=uu)
+    assert hasil["ok"]
+    assert "13800" in hasil["pesan"].replace(".", ""), hasil["pesan"]  # 4.000 + 9.800
+    async with pg() as db:
+        n = (await db.execute(select(PolishingSiloUsage))).scalars().all()
+    assert len(n) == 2, "tak semua silo tercatat sebagai bahan prosesnya"
+
+
+async def test_bentuk_tunggal_dari_kartu_tetap_diterima(pg, gudang2):
+    """Kartu silo mengirim satu huruf apa adanya. Pintu yang cuma menerima
+    daftar akan mematikan jalan yang paling sering dipakai."""
+    from app.models import User
+    from app.web.api import MulaiPenyosohanReq, act_mulai_penyosohan
+
+    async with pg() as db:
+        uu = await db.get(User, gudang2["user"].id)
+    hasil = await act_mulai_penyosohan(MulaiPenyosohanReq(silo="B"), user=uu)
+    assert hasil["ok"] and "9800" in hasil["pesan"].replace(".", "")

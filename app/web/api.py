@@ -419,8 +419,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     TUJUAN = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
               ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
-    SILO_BAHAN = [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"],
-                  ["AB", "Silo A + B"]]
     JENIS_HASIL = [["", "— belum ditentukan —"],
                    ["premium", "Beras Premium"], ["medsuper", "Beras Medium Super"],
                    ["medium", "Beras Medium"], ["sayur", "Beras Sayur"],
@@ -740,10 +738,21 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang dipindah (kg)", "type": "number",
                   "wajib": True},
              ]},
+            # BEBERAPA silo boleh dicentang, sama seperti "Mulai giling".
+            # Dulu daftarnya tupel tertulis-tangan A / B / A+B: layanannya
+            # SUDAH menerima berapa pun silo, borangnya yang mengurungnya jadi
+            # tiga kemungkinan. Silo Gudang 2 bisa bertambah lewat Pengaturan →
+            # Alat, dan silo ketiga itu tak akan pernah muncul di tupel yang
+            # diketik seseorang bertahun lalu — juga tak ikut dalam "A+B".
             {"id": "mulai_penyosohan", "label": "🏭 Mulai penyosohan",
-             "post": "/api/actions/mulai-penyosohan", "fields": [
-                 {"name": "silo", "label": "Silo bahan (wajib pilih)", "type": "select",
-                  "options": SILO_BAHAN},
+             "post": "/api/actions/mulai-penyosohan",
+             "hint": "Boleh beberapa silo sekaligus — hasilnya satu proses "
+                     "penyosohan, dan sisanya dicatat per silo saat selesai.",
+             "fields": [
+                 {"name": "silo", "label": "Silo bahan (boleh lebih dari satu)",
+                  "type": "remote_banyak",
+                  "source": "/api/actions/silo-bahan-g2",
+                  "kosong": "Tidak ada silo Gudang 2 berisi PK yang siap disosoh."},
              ]},
             {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
              "post": "/api/actions/hasil-penyosohan", "fields": [
@@ -2519,15 +2528,25 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
 
 
 class MulaiPenyosohanReq(BaseModel):
-    silo: str  # A / B / AB
+    #: Satu huruf, atau beberapa. Bentuk tunggal tetap diterima: ia yang
+    #: dikirim tombol pada kartu silo.
+    silo: str | list[str]
 
 
 @router.post("/actions/mulai-penyosohan")
 async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g2_operator(user))
-    silos = {"A": ["A"], "B": ["B"], "AB": ["A", "B"]}.get((req.silo or "").upper())
+    # ── Tak ada lagi tupel A / B / AB ──
+    #
+    # Peta itu bisa menjawab tiga kemungkinan saja, dan ketiganya menyebut silo
+    # yang namanya diketik di kode. Silo Gudang 2 bisa bertambah lewat
+    # Pengaturan → Alat: silo ketiga ditolak di pintu dengan kalimat "Pilih
+    # silo bahan dulu", padahal orangnya sudah memilih. Yang memeriksa
+    # keberadaan, isi, dan kesibukan silonya `mulai_penyosohan`, lewat master.
+    silos = [req.silo] if isinstance(req.silo, str) else list(req.silo or [])
+    silos = [str(x).strip().upper() for x in silos if str(x or "").strip()]
     if not silos:
-        raise HTTPException(400, "Pilih silo bahan dulu: Silo A / Silo B / A+B.")
+        raise HTTPException(400, "Pilih dulu silo bahannya.")
     from app.penggilingan.gudang2.polishing import mulai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2629,6 +2648,48 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if await jeda_terbuka(db, "penyosohan", p.id) is None:
                 keluar.append({"value": f"penyosohan:{p.kode_proses}",
                                "label": f"{p.kode_proses} · sosoh"})
+    return keluar
+
+
+@router.get("/actions/silo-bahan-g2")
+async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo Gudang 2 yang berisi PK dan BELUM dipakai penyosohan yang berjalan.
+
+    Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
+    2 bisa bertambah lewat Pengaturan → Alat, dan silo ketiga yang baru dibeli
+    tak akan pernah muncul di "A / B / A+B".
+
+    Saringannya sama persis dengan pagar `mulai_penyosohan` — ada isinya, dan
+    tak ada baris pemakaian pada proses yang berstatus 'proses'. Borang yang
+    menawarkan silo yang kemudian ditolak layanannya membuat orang mengira
+    aplikasinya rusak, padahal keduanya benar sendiri-sendiri.
+    """
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        dipakai = set((await db.execute(
+            select(PolishingSiloUsage.silo_id)
+            .join(PolishingProcess,
+                  PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+            .where(PolishingProcess.status == "proses")
+        )).scalars().all())
+        wid = await _g2_warehouse_id(db)
+        for s in (await db.execute(
+            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+        )).scalars().all():
+            if s.id in dipakai:
+                continue
+            kg = await hitung_stok_silo(db, s.id)
+            if not kg or kg <= 0:
+                continue
+            huruf = s.nama_silo.replace("Silo ", "")
+            keluar.append({"value": huruf, "label": f"{s.nama_silo} · {_rp(kg)} kg"})
     return keluar
 
 

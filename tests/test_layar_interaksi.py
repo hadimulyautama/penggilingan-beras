@@ -720,3 +720,35 @@ def test_kartu_mencentang_medan_banyak_bukan_melewatinya():
     ia tekan — kesempatan kedua untuk salah pilih yang penguncian ini justru
     ada untuk menutupnya."""
     assert 'f0.type !== "remote_banyak"' in AKSI
+
+
+def test_borang_penyosohan_juga_menerima_beberapa_silo():
+    """Permintaan pemilik 24 September 2026: penyosohan pun boleh lebih dari
+    satu silo, lewat borangnya.
+
+    Layanannya (`mulai_penyosohan`) sudah menerima berapa pun silo sejak 12
+    September. Yang mengurungnya jadi tiga kemungkinan adalah daftar pilihan
+    "A / B / A+B" di borang dan petanya di pintu — dua tempat yang menyebut
+    nama silo yang diketik seseorang bertahun lalu, dan takkan pernah menyebut
+    silo yang ditambahkan lewat Pengaturan → Alat.
+    """
+    import inspect
+
+    from app.web import api
+    from tests.bantu import kode_saja
+
+    sumber = inspect.getsource(api)
+    i = sumber.index('"id": "mulai_penyosohan"')
+    blok = sumber[i:i + 900]
+    assert '"type": "remote_banyak"' in blok, "borangnya masih satu pilihan"
+    assert '"source": "/api/actions/silo-bahan-g2"' in blok, "daftarnya bukan dari master"
+    assert "SILO_BAHAN" not in sumber, "tupel huruf lamanya masih berdiri"
+
+    pintu = kode_saja(api.act_mulai_penyosohan)
+    assert '"AB"' not in pintu, "peta A/B/AB berdiri lagi di pintu"
+    assert "isinstance(req.silo, str)" in pintu, "bentuk tunggal dari kartu tak diterima"
+
+    # Daftarnya menyaring persis seperti pagar layanannya: ada isinya, dan tak
+    # sedang dipakai proses yang berjalan.
+    daftar = kode_saja(api.silo_bahan_g2)
+    assert "hitung_stok_silo" in daftar and "PolishingProcess.status" in daftar
