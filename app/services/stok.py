@@ -82,11 +82,11 @@ class LotPk:
     #: Mutu PK: (label, nilai) — kadar air, butir patah, susut. Kosong berarti
     #: belum pernah dinilai.
     #:
-    #: Diambil per KOLOM dari catatan terbaru yang mengisinya, bukan dari satu
-    #: baris terakhir saja. `milling_qc_logs` itu log: koreksi yang hanya
-    #: menyebut butir patah menulis baris baru dengan kadar air kosong, dan
-    #: membaca baris terakhir apa adanya akan MENGHAPUS kadar air dari layar
-    #: padahal ia tak pernah dicabut.
+    #: RATA-RATA per KOLOM, atas catatan yang mengisi kolom itu — bukan catatan
+    #: terbaru. Mutu dicatat berulang selama giling berjalan (keputusan pemilik
+    #: 24 September 2026), dan tombolnya sendiri menjanjikan rata-rata; kartu
+    #: yang menggambar nilai terbaru membuat satu lot punya dua angka mutu yang
+    #: berbeda di dua layar. Hitungannya `milling.qc_rata_banyak`.
     mutu: list[tuple[str, str]] = field(default_factory=list)
 
     #: Sudah DIMINTA operator Gudang 2 (nama peminta), atau None.
@@ -319,56 +319,73 @@ async def _bahan_banyak(db: AsyncSession, proses) -> dict[int, tuple[list, list[
 
 
 def _persen(v) -> str:
-    return f"{float(v):g}%".replace(".", ",")
+    """Satu angka di belakang koma — SAMA seperti `QcRata.teks()` menulisnya.
+
+    Kartu giling berjalan menyebut "KA 13,0%" dan kartu Stok dulu menyebut "13%"
+    untuk bilangan yang sama. Dua tulisan berbeda atas satu angka membuat orang
+    mengira ia melihat dua pengukuran, dan itu persis kesalahpahaman yang
+    hendak ditutup temuan T-2.
+    """
+    return f"{float(v):.1f}%".replace(".", ",")
 
 
-#: Kolom QC yang ditampilkan, beserta labelnya. Satu tempat, dipakai versi
-#: satuan maupun versi banyak-sekaligus.
+#: Kolom QC yang ditampilkan, beserta labelnya dan nama medannya di `QcRata`.
+#: Satu tempat, dipakai versi satuan maupun versi banyak-sekaligus.
 _KOLOM_MUTU = (("Kadar air", "kadar_air"),
-               ("Butir patah", "broken_persen"),
-               ("Susut", "susut_persen"))
+               ("Butir patah", "broken"),
+               ("Susut", "susut"))
 
 
-def _mutu_dari(baris) -> list[tuple[str, str]]:
-    """Nilai QC terbaru per kolom, dari baris yang SUDAH terurut terbaru dulu."""
+def _mutu_dari(rata) -> list[tuple[str, str]]:
+    """Baris mutu kartu Stok dari rata-rata QC satu lot.
+
+    **RATA-RATA, bukan catatan terakhir** (keputusan pemilik 24 September 2026).
+    Sampai hari itu kartu ini menggambar nilai TERBARU per kolom sementara
+    tombol "Catat mutu sekarang" dan kalimat balasannya menjanjikan rata-rata —
+    jadi orang diberi tahu satu angka lalu diperlihatkan angka lain untuk lot
+    yang sama, di layar berikutnya. Temuan QA 24 September (T-2).
+
+    Alasan pemilik memilih rata-rata: tiap catatan adalah TUSUKAN di titik yang
+    berbeda selama giling berjalan, bukan pembetulan atas yang sebelumnya. Yang
+    menusuk tiga kali membayar waktu untuk tiga pengukuran; membuang dua di
+    antaranya membuat dua tusukan itu sia-sia.
+
+    Rata-ratanya PER KOLOM dan hanya atas catatan yang MENGISI kolom itu —
+    borangnya menerima "isi minimal salah satu", jadi catatan yang cuma
+    menyebut broken tak boleh ikut membagi rata-rata kadar air. Hitungannya
+    sendiri di `milling.qc_rata_banyak`, tempat ia diuji.
+    """
+    if rata is None or not getattr(rata, "ada", False):
+        return []
     keluar: list[tuple[str, str]] = []
-    for label, kolom in _KOLOM_MUTU:
-        for b in baris:
-            v = getattr(b, kolom, None)
-            if v is not None:
-                keluar.append((label, _persen(v)))
-                break
+    for label, medan in _KOLOM_MUTU:
+        v = getattr(rata, medan, None)
+        if v is not None:
+            keluar.append((label, _persen(v)))
     return keluar
 
 
 async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
-    """Nilai QC terbaru PER KOLOM. Lihat catatan pada `LotPk.mutu`."""
-    from app.models import MillingQcLog
-
-    baris = (await db.execute(
-        select(MillingQcLog)
-        .where(MillingQcLog.milling_process_id == proc_id)
-        .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
-    )).scalars().all()
-    return _mutu_dari(baris)
+    """Rata-rata QC PER KOLOM. Lihat catatan pada `LotPk.mutu`."""
+    return (await _mutu_banyak(db, [proc_id])).get(proc_id, [])
 
 
 async def _mutu_banyak(db: AsyncSession, proc_ids) -> dict[int, list]:
-    """`_mutu` untuk banyak proses sekaligus. Satu kueri, bukan satu per lot."""
-    from app.models import MillingQcLog
+    """`_mutu` untuk banyak proses sekaligus. Satu kueri, bukan satu per lot.
+
+    Hitungannya dipinjam dari `milling.qc_rata_banyak` — SATU jawaban untuk
+    "berapa mutu lot ini", yang sama dengan yang disebut kartu giling berjalan
+    dan kalimat balasan aksinya. Dua tempat yang menghitung rata-rata
+    sendiri-sendiri akan berselisih, dan yang salah adalah yang lebih jarang
+    dibaca.
+    """
+    from app.penggilingan.gudang1.services.milling import qc_rata_banyak
 
     ids = list(proc_ids)
     if not ids:
         return {}
-    baris = (await db.execute(
-        select(MillingQcLog)
-        .where(MillingQcLog.milling_process_id.in_(ids))
-        .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
-    )).scalars().all()
-    per: dict[int, list] = {}
-    for b in baris:
-        per.setdefault(b.milling_process_id, []).append(b)
-    return {pid: _mutu_dari(per.get(pid, [])) for pid in ids}
+    peta = await qc_rata_banyak(db, ids)
+    return {pid: _mutu_dari(peta.get(pid)) for pid in ids}
 
 
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:

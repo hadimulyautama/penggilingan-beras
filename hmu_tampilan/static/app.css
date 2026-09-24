@@ -846,6 +846,14 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .benda--dryer  { --fase: var(--fase-dryer); }
 .benda--silo   { --fase: var(--fase-silo); }
 .benda--giling { --fase: var(--fase-giling); }
+/* Gudang 2 memakai WARNA yang sama dengan Gudang 1 pada posisi perjalanan yang
+   sama — tersimpan di silo, lalu di mesin — tetapi KATANYA berbeda: silo
+   Gudang 2 bukan silo pengering, dan kartu berjudul "Penyosohan" yang berkeping
+   "Proses giling" membantah judulnya sendiri (laporan pemilik 24 September
+   2026). Kuncinya memikul dua tugas: warna dan kata. Warnanya netral antar
+   gudang, katanya tidak — jadi kunci baru, warna lama. */
+.benda--silo_g2 { --fase: var(--fase-silo); }
+.benda--sosoh   { --fase: var(--fase-giling); }
 .benda__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
 .benda__isi { color: var(--tinta-2); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
 .benda__kaki { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
@@ -872,6 +880,8 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .padat--dryer  { --fase: var(--fase-dryer); }
 .padat--silo   { --fase: var(--fase-silo); }
 .padat--giling { --fase: var(--fase-giling); }
+.padat--silo_g2 { --fase: var(--fase-silo); }
+.padat--sosoh   { --fase: var(--fase-giling); }
 /* Tanpa pembungkus `div`, isinya jadi anak langsung kotak flex dan akan
    berjajar mendatar. Yang tak bisa ditekan diberi susunannya sendiri. */
 .padat--diam { display: grid; gap: 5px; cursor: default; }

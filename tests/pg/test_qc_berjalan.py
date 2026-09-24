@@ -171,3 +171,55 @@ async def test_giling_berjalan_ditawarkan_borangnya(pg, giling, pemakai):
     # Nilainya tetap kode prosesnya apa adanya — penguncian penunjuk dari kartu
     # mencocokkan `value`, bukan `label`.
     assert daftar[0]["value"] == "LOT-QC-01", "yang sedang berjalan tak di atas"
+
+
+async def _pk_sudah_keluar(pg, giling, kg: float = 6_000) -> None:
+    """Catat hasil giling supaya lotnya punya PK dan muncul di layar Stok."""
+    from app.database import now_local
+    from app.models import MillingProgressLog
+
+    async with pg() as db:
+        db.add(MillingProgressLog(milling_process_id=giling["id"], berat_kumulatif_kg=kg,
+                                  waktu_update=now_local(), input_by=giling["user"]))
+        await db.commit()
+
+
+async def test_kartu_stok_menyebut_rata_rata_bukan_catatan_terakhir(pg, giling):
+    """Satu lot, satu angka mutu — di layar mana pun ia dibaca.
+
+    Sampai 24 September 2026 kartu Stok menggambar catatan TERBARU sementara
+    tombolnya dan kartu giling berjalan menyebut rata-rata. Jadi orang yang
+    mencatat kadar air 12 sesudah 14 diberi tahu "13,0%" lalu melihat "12,0%"
+    untuk lot yang sama di layar berikutnya, dan tak ada yang keliru cukup jelas
+    untuk dilaporkan. Temuan QA T-2; pemilik memilih rata-rata, sesuai janji
+    tombolnya.
+    """
+    from app.services.stok import pk_gudang1
+
+    await _pk_sudah_keluar(pg, giling)
+    await _catat(pg, giling, kadar_air=14.0)
+    await _catat(pg, giling, kadar_air=12.0)
+
+    async with pg() as db:
+        lot = next(l for l in await pk_gudang1(db) if l.kode == "LOT-QC-01")
+    assert dict(lot.mutu).get("Kadar air") == "13,0%", \
+        f"kartu Stok tak memakai rata-rata: {lot.mutu}"
+
+
+async def test_kartu_stok_tak_menyeret_kolom_yang_tak_diisi(pg, giling):
+    """Jebakan yang sama seperti di `qc_rata`, dan ia harus tertutup di kartu
+    juga: catatan yang cuma menyebut broken tak boleh ikut membagi rata-rata
+    kadar air, dan kolom yang belum pernah diisi tak digambar sebagai 0%."""
+    from app.services.stok import pk_gudang1
+
+    await _pk_sudah_keluar(pg, giling)
+    await _catat(pg, giling, kadar_air=13.0)
+    await _catat(pg, giling, kadar_air=15.0)
+    await _catat(pg, giling, broken=8.0)
+
+    async with pg() as db:
+        lot = next(l for l in await pk_gudang1(db) if l.kode == "LOT-QC-01")
+    m = dict(lot.mutu)
+    assert m.get("Kadar air") == "14,0%", f"kolom kosong ikut membagi: {lot.mutu}"
+    assert m.get("Butir patah") == "8,0%"
+    assert "Susut" not in m, "kolom yang tak pernah diisi digambar juga"

@@ -131,7 +131,10 @@ async def test_antrean_operator_adalah_tumpukan_dan_silo(pg, gudang2):
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
     tumpuk = [x for x in b.menunggu if x.kelompok == "tumpukan"]
-    silo = [x for x in b.menunggu if x.fase == "silo"]
+    # `silo_g2`, bukan `silo`: sejak 24 September 2026 kartu Gudang 2 memakai
+    # kunci fase sendiri supaya katanya benar ("Di silo bahan", bukan "Transit di
+    # silo kering" — silo Gudang 2 bukan silo pengering). Temuan QA T-1.
+    silo = [x for x in b.menunggu if x.fase == "silo_g2"]
     assert len(tumpuk) == 1 and tumpuk[0].nilai == str(gudang2["intake_tumpukan"])
     assert tumpuk[0].judul == "UD Sumber Rejeki" and tumpuk[0].utama[0] == "15.000"
     assert tumpuk[0].pilihan[0][0] == "pindah_tumpukan_silo"

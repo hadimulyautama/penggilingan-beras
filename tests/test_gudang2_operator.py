@@ -210,3 +210,49 @@ def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():
     rinci = kode_saja(kms.stok_kemasan_rinci)
     for uang in ("harga", "hpp", "Decimal"):
         assert uang not in rinci, uang
+
+
+def test_kartu_gudang2_memakai_kosakatanya_sendiri():
+    """Silo Gudang 2 bukan silo pengering, dan penyosohan bukan giling.
+
+    Laporan pemilik 24 September 2026: kartu silo Gudang 2 berkeping "Transit
+    di silo kering", dan kartu berjudul "Penyosohan" berkeping "Proses giling"
+    — membantah judulnya sendiri.
+
+    Kunci fase memikul DUA tugas: WARNA kartu (urutannya mengikuti perjalanan
+    barang, dan app.css mengikuti urutan yang sama) dan KATANYA. Warnanya
+    netral antar gudang; katanya tidak. Jadi kunci baru, warna lama — dan
+    kunci tanpa kelas warna akan tampil polos tanpa ada yang memberi tahu.
+    """
+    import pathlib
+
+    from app.web.tampilan import templates
+
+    FASE = templates.env.globals["FASE"]
+    assert FASE["silo_g2"] == "Di silo bahan"
+    assert FASE["sosoh"] == "Proses sosoh"
+    # Kata Gudang 1 tak ikut berubah — di sana keduanya benar.
+    assert FASE["silo"] == "Transit di silo kering" and FASE["giling"] == "Proses giling"
+
+    # Tiap kunci fase WAJIB punya kelas warnanya di kedua bentuk kartu.
+    akar = pathlib.Path(__file__).resolve().parents[1] / "hmu_tampilan/static/app.css"
+    css = akar.read_text()
+    for kunci in FASE:
+        for bentuk in ("benda", "padat"):
+            assert f".{bentuk}--{kunci}" in css, f"{bentuk}--{kunci} tak punya warna"
+
+
+def test_kartu_gudang2_tak_lagi_memakai_fase_gudang1():
+    """Yang dijaga bukan tiga barisnya, melainkan kelasnya: penyusun kartu
+    Gudang 2 tak boleh meminjam kosakata Gudang 1 lagi."""
+    import inspect
+
+    from app.services import berjalan
+
+    for fungsi in (berjalan._kartu_silo_g2, berjalan._kartu_penyosohan_g2):
+        kode = inspect.getsource(fungsi)
+        assert 'fase="silo"' not in kode, fungsi.__name__
+        assert 'fase="giling"' not in kode, fungsi.__name__
+    # Kartu mutu PK luar duduk di silo Gudang 2 juga.
+    g2 = inspect.getsource(berjalan.untuk_gudang2)
+    assert 'aksi="qc_pk_luar"' in g2 and 'fase="silo_g2"' in g2

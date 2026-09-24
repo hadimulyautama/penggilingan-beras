@@ -1348,7 +1348,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             continue
         b.meja.append(Baris(
             kode=pk.kode_batch, isi="mutu PK luar belum dicatat",
-            keadaan="", aksi="qc_pk_luar", nilai=pk.kode_batch, fase="silo",
+            keadaan="", aksi="qc_pk_luar", nilai=pk.kode_batch, fase="silo_g2",
             sejak=pk.created_at,
             judul="Mutu PK luar belum dicatat",
             sub=f"{pk.kode_batch} · {nama or '?'} · "
@@ -1411,7 +1411,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                      else "catat hasil, tutup bila selesai"),
             aksi=("lanjutkan_penyosohan" if macet else "hasil_penyosohan"),
             nilai=(f"penyosohan:{pr.kode_proses}" if macet else pr.kode_proses),
-            fase="giling",
+            fase="sosoh",
             sejak=pr.waktu_mulai,
             judul=("Penyosohan dijeda" if macet else "Penyosohan"),
             sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
@@ -1503,7 +1503,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             keadaan=("mesin sosoh sedang dipakai" if sedang
                      else "mulai penyosohan bila siap"),
             aksi=None if sedang else "mulai_penyosohan",
-            nilai=huruf, fase="silo",
+            nilai=huruf, fase="silo_g2",
             judul=f"{silo.nama_silo} · Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
             sub=(f"PK menunggu disosoh · {pemasok}" if pemasok

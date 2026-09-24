@@ -477,26 +477,41 @@ def test_daftar_verifikasi_memuat_yang_sudah_diverifikasi():
     assert "kuncinya" in js and "kotak.outerHTML" in js
 
 
-def test_mutu_dibaca_per_kolom_bukan_per_baris_terakhir():
-    """`milling_qc_logs` itu LOG, dan koreksi boleh sebagian.
+def test_mutu_kartu_stok_memakai_rata_rata_yang_sama():
+    """Kartu Stok menggambar RATA-RATA, dan rata-rata yang SAMA.
 
-    Membetulkan butir patah saja menulis baris baru dengan kadar air kosong.
-    Membaca baris terakhir apa adanya akan MENGHAPUS kadar air dari layar
-    padahal ia tak pernah dicabut — dan angka mutu yang lenyap sendiri adalah
-    cara tercepat membuat orang berhenti memercayai layarnya.
+    Pagar ini semula menjaga hal lain: "ambil nilai terbaru per kolom, jangan
+    baris terakhir apa adanya", sebab koreksi yang cuma menyebut butir patah
+    menulis baris baru dengan kadar air kosong. Niat itu betul untuk dunia di
+    mana catatan QC kedua MEMBETULKAN yang pertama.
+
+    Dunianya berubah 24 September 2026: pemilik memutuskan mutu dicatat berulang
+    selama giling berjalan dan "nanti hasilnya di rata-rata" — catatan kedua
+    adalah TUSUKAN kedua, bukan koreksi. Sejak itu tombolnya dan kalimat
+    balasannya menyebut rata-rata sementara kartu Stok masih menggambar nilai
+    terbaru: satu lot, dua angka mutu, dua layar (temuan QA T-2). Yang dijaga
+    sekarang karena itu bukan lagi "terbaru per kolom" melainkan:
+
+      · angkanya rata-rata, dan
+      · hitungannya SATU — dipinjam dari `milling.qc_rata_banyak`, tempat
+        rata-rata PER KOLOM atas baris yang mengisi kolom itu sudah diuji.
+
+    Dua tempat yang menghitung rata-rata sendiri-sendiri akan berselisih, dan
+    yang salah adalah yang lebih jarang dibaca.
     """
     from app.services import stok
 
-    # Aturannya kini di `_mutu_dari`, dipakai versi satuan dan versi
-    # banyak-sekaligus. Urutan terbaru-dulu tetap ditentukan kuerinya.
-    fn = kode_saja(stok._mutu_dari) + str(stok._KOLOM_MUTU)
-    assert "MillingQcLog.waktu.desc()" in kode_saja(stok._mutu), \
-        "log tak diurut dari yang terbaru"
-    assert "MillingQcLog.waktu.desc()" in kode_saja(stok._mutu_banyak), \
-        "versi banyak tak diurut dari yang terbaru"
-    # Satu lingkaran per KOLOM, berhenti pada nilai pertama yang terisi.
-    assert "kadar_air" in fn and "broken_persen" in fn and "susut_persen" in fn
-    assert "if v is not None" in fn and "break" in fn
+    fn = kode_saja(stok._mutu_banyak) + kode_saja(stok._mutu)
+    assert "qc_rata_banyak" in fn, "kartu Stok menghitung rata-ratanya sendiri"
+    # Tak boleh ada lagi kueri log sendiri di sini: kueri sendiri adalah cara
+    # rata-rata kedua lahir tanpa ada yang menyadarinya.
+    assert "MillingQcLog" not in fn, "masih membaca log sendiri, bukan lewat qc_rata_banyak"
+    # Labelnya dibaca dari `QcRata`, bukan dari kolom tabelnya — medan di sana
+    # bernama `broken`/`susut`, bukan `broken_persen`/`susut_persen`.
+    kolom = dict(stok._KOLOM_MUTU)
+    assert set(kolom.values()) == {"kadar_air", "broken", "susut"}
+    # Kolom yang belum pernah diisi dilewati, bukan digambar sebagai 0%.
+    assert "if v is not None" in kode_saja(stok._mutu_dari)
 
     # Mutu ada di KARTU UTAMA, bukan di dalam laci: ia yang menentukan PK ini
     # masuk kelas apa dan laku berapa, dan yang harus dibuka dulu untuk terbaca

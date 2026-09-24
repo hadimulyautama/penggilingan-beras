@@ -239,12 +239,21 @@ async def test_bahan_banyak_sama_dengan_satuan(pg):
     assert satuan == banyak
 
 
-async def test_mutu_banyak_sama_dengan_satuan(pg):
+async def test_mutu_banyak_tetap_satu_kueri(pg, hitung_kueri):
+    """Pagar ini semula membandingkan versi satuan dengan versi banyak.
+
+    Sejak rata-rata QC punya SATU sumber (`milling.qc_rata_banyak`, keputusan
+    pemilik 24 September 2026), `_mutu` cuma memanggil `_mutu_banyak` untuk satu
+    id — perbandingannya jadi benar dengan sendirinya dan tak menjaga apa pun.
+    Yang masih bisa rusak, dan yang justru dijaga berkas ini, adalah JUMLAH
+    KUERINYA: layar Stok membaca setiap giling yang pernah ada.
+    """
     from app.services import stok
 
     ids = await _semai(pg)
     async with pg() as db:
-        satuan = {i: await stok._mutu(db, i) for i in ids}
-        banyak = await stok._mutu_banyak(db, ids)
+        async with hitung_kueri() as n:
+            peta = await stok._mutu_banyak(db, ids)
 
-    assert satuan == banyak
+    assert set(peta) == set(ids)
+    assert n.jumlah == 1, _rinci(n)

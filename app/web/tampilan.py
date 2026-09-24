@@ -73,6 +73,22 @@ templates.env.globals["FASE"] = {
     "dryer": "Di mesin pengering",
     "silo": "Transit di silo kering",
     "giling": "Proses giling",
+    # ── Gudang 2 memakai KATA sendiri, warna yang sama ──
+    #
+    # Kunci fase memikul DUA tugas: warna kartu (urutannya mengikuti perjalanan
+    # barang, dan app.css mengikuti urutan yang sama) dan katanya. Warnanya
+    # netral antar gudang; katanya tidak.
+    #
+    # Kartu Gudang 2 dulu meminjam "silo" dan "giling" apa adanya, jadi silo
+    # bahan PK berkeping "Transit di silo kering" — padahal ia bukan silo
+    # pengering — dan kartu berjudul "Penyosohan" berkeping "Proses giling",
+    # membantah judulnya sendiri. Laporan pemilik 24 September 2026.
+    #
+    # Istilah "silo bahan" dari pemilik. Kelas warnanya ada di app.css
+    # (`.benda--silo_g2`, `.padat--sosoh`, dst.) — kunci tanpa kelas warna
+    # tampil polos tanpa ada yang memberi tahu.
+    "silo_g2": "Di silo bahan",
+    "sosoh": "Proses sosoh",
 }
 
 

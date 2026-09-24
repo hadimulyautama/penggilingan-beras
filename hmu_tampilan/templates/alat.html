@@ -13,8 +13,10 @@
         <div class="baris__isi">
           <div class="baris__nama">{{ d.nama }}</div>
           {# `kapasitas` dalam KG — satuannya dipakai di baris ini, bukan di
-             nama medannya, karena nama itu bentuk JSON `/internal/meja/alat`
-             yang sudah menyeberangi batas repo. #}
+             nama medannya. Nama itu dulu bentuk JSON `/internal/meja/alat`
+             yang menyeberangi batas repo; pintunya dicabut 24 September 2026
+             bersama app Meja, dan namanya tetap begini karena mengubah nama
+             medan bukan pekerjaan yang dibayar oleh siapa pun hari ini. #}
           <div class="baris__ket">kapasitas {{ "%.0f"|format(d.kapasitas|float / 1000) }} ton</div>
           {% if d.status != "aktif" %}
             <div class="cip" style="margin-top:6px">
