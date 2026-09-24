@@ -90,7 +90,8 @@ async def test_migrasi_memeriksa_data_pelanggar_lebih_dulu(pg):
     "uq_silo_storage_lot_terisi",
     "uq_silo_storage_batch_terisi",
     "uq_drying_lot_batches_batch",
-    "uq_milling_process_silo_proses",
+    # `uq_milling_process_silo_proses` DIJATUHKAN 24 September 2026 — lihat
+    # `test_penjagaan_silo_giling_pindah_ke_barisnya` di bawah.
 ])
 async def test_indeks_unik_parsial_terpasang(pg, indeks):
     """Satu lot tak boleh berada di dua silo sekaligus; PK luar tak boleh
@@ -104,6 +105,46 @@ async def test_indeks_unik_parsial_terpasang(pg, indeks):
             "SELECT count(*) FROM pg_indexes WHERE indexname = :n"
         ), {"n": indeks})).scalar()
     assert ada == 1, f"indeks {indeks} belum ada"
+
+
+async def test_penjagaan_silo_giling_pindah_ke_barisnya(pg):
+    """"Satu giling berjalan per silo" tetap dijaga — tetapi bukan lagi oleh
+    `milling_process.silo_id`.
+
+    Indeks unik parsial `uq_milling_process_silo_proses` berdiri di atas kolom
+    tunggal itu. Sejak satu lot boleh datang dari beberapa silo (keputusan
+    pemilik 24 September 2026) kolom itu menyebut silo PERTAMA saja: indeksnya
+    menjaga silo pertama dan membiarkan silo kedua terbuka — kartunya masih
+    bertombol "Mulai giling" padahal gabahnya sudah di mesin.
+
+    Penjagaannya pindah ke baris silonya sendiri, `silo_storage.
+    milling_process_id`, yang direbut dengan `UPDATE … WHERE … IS NULL`:
+    Postgres mengunci barisnya lalu menguji ulang syaratnya sesudah kunci
+    didapat, jadi penekan kedua menerima nol baris. Aturannya sama, tempatnya
+    yang berpindah — dan yang dijaga di sini ia tidak berpindah kembali.
+    """
+    from sqlalchemy import text
+
+    async with pg() as db:
+        lama = (await db.execute(text(
+            "SELECT count(*) FROM pg_indexes "
+            "WHERE indexname = 'uq_milling_process_silo_proses'"))).scalar()
+        kolom = (await db.execute(text(
+            "SELECT count(*) FROM information_schema.columns "
+            "WHERE table_name = 'silo_storage' AND column_name = 'milling_process_id'"
+        ))).scalar()
+        # ON DELETE SET NULL: proses yang dibatalkan melepaskan silonya sendiri.
+        # Tanpa itu, klaim yang tertinggal membuat silo tak bisa digiling lagi
+        # oleh siapa pun, dan tak ada satu pun kalimat yang menyebut sebabnya.
+        aturan = (await db.execute(text(
+            "SELECT confdeltype FROM pg_constraint "
+            "WHERE conname = 'fk_silo_storage_giling'"))).scalar()
+    assert lama == 0, ("indeks lama berdiri lagi — ia akan menjaga silo pertama "
+                       "saja dan membiarkan silo kedua terbuka")
+    assert kolom == 1, "klaim silo tak ada; tak ada lagi yang menjaga apa pun"
+    # `confdeltype` datang sebagai satu byte ("char" di Postgres), bukan teks.
+    assert (aturan.decode() if isinstance(aturan, bytes) else aturan) == "n", \
+        "FK klaim bukan ON DELETE SET NULL"
 
 
 async def test_berat_tak_boleh_nol_atau_negatif_di_db(pg):

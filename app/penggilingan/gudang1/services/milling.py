@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +30,8 @@ from app.services.codegen import next_drying_lot_code, next_milling_code
 from app.penggilingan.gudang1.services.bobot import (
     NOL, PASTI, TAK_DIKETAHUI, Bobot, dari_batch, dari_batches)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
-from app.penggilingan.gudang1.services.silo import _silo_active_rows, get_g1_silo
+from app.penggilingan.gudang1.services.silo import (
+    _silo_active_rows, get_g1_silo, giling_berjalan_untuk_silo, silo_ids_proses)
 
 
 class MillingError(Exception):
@@ -92,33 +93,79 @@ async def _active_storage(db: AsyncSession, silo_id: int) -> SiloStorage | None:
 @dataclass
 class StartResult:
     proc: MillingProcess
+    #: Silo yang ikut, sudah dirangkai untuk dibaca: "A" atau "A + B".
     nama_silo: str
     berat_masuk: float
     #: Berapa dan seberapa pasti — untuk kalimat di layar.
     bobot: Bobot | None = None
 
 
-async def start_milling(
-    db: AsyncSession, *, user, nama_silo: str | None, tanggal=None, jam=None
-) -> StartResult:
-    if not nama_silo:
-        raise MillingError("Sebutkan silo mana, contoh: `giling silo A`")
-    silo = await get_g1_silo(db, nama_silo)
-    if silo is None:
-        raise MillingError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
-    rows = await _silo_active_rows(db, silo.id)
-    if not rows:
-        raise MillingError(f"Silo {nama_silo} kosong — tidak ada yang bisa digiling.")
-    active = (
-        await db.execute(
-            select(MillingProcess).where(
-                MillingProcess.silo_id == silo.id, MillingProcess.status == "proses"
-            )
-        )
-    ).scalars().first()
-    if active:
-        raise MillingError(f"Silo {nama_silo} sedang digiling ({active.kode_proses}).")
+def _rangkai(nama: list[str]) -> str:
+    """"A" · "A + B" · "A + B + C" — untuk kalimat, bukan untuk disimpan."""
+    return " + ".join(nama)
 
+
+async def start_milling(
+    db: AsyncSession, *, user, nama_silo: str | list[str] | tuple | None,
+    tanggal=None, jam=None
+) -> StartResult:
+    """Mulai satu giling dari SATU ATAU BEBERAPA silo — hasilnya SATU lot.
+
+    Keputusan pemilik 24 September 2026: menggiling dari beberapa silo
+    sekaligus "sering", dan "hasilnya 1 lot". Satu lot berarti satu rendemen
+    dan satu HPP atas SELURUH bahan yang masuk — bukan dua lot yang harus
+    dijumlah orang di kepalanya.
+
+    Bentuknya sudah ada: tiap sumber punya barisnya sendiri di
+    `milling_process_sources`, dan `berat_gabah_masuk_kg` memang dijumlah atas
+    seluruh baris. Yang berubah di sini hanya: barisnya boleh datang dari
+    beberapa silo, dan SELURUH silo itu diperiksa sebelum satu pun ditulis.
+    """
+    pilihan = ([nama_silo] if isinstance(nama_silo, str)
+               else list(nama_silo or []))
+    # Dirapikan, bukan ditolak: orang yang mencentang silo yang sama dua kali
+    # bermaksud satu kali. Urutannya dipertahankan supaya kalimat balasannya
+    # menyebutnya dalam urutan yang ia pilih.
+    nama_pilih: list[str] = []
+    for n in pilihan:
+        n = str(n or "").strip()
+        if n and n not in nama_pilih:
+            nama_pilih.append(n)
+    if not nama_pilih:
+        raise MillingError("Sebutkan silo mana, contoh: `giling silo A`")
+
+    # ── SEMUA silo diperiksa DULU, baru satu pun ditulis ──
+    #
+    # Lot separuh lebih buruk daripada lot yang gagal dimulai: ia berdiri di
+    # layar sebagai giling yang berjalan, rendemennya dihitung atas bahan yang
+    # tak lengkap, dan tak ada satu pun kalimat yang menyebutkan silo mana yang
+    # tertinggal.
+    silo_pilih: list = []
+    rows: list[SiloStorage] = []
+    for nama in nama_pilih:
+        silo = await get_g1_silo(db, nama)
+        if silo is None:
+            raise MillingError(f"Silo {nama} Gudang 1 tidak ditemukan.")
+        baris = await _silo_active_rows(db, silo.id)
+        if not baris:
+            raise MillingError(f"Silo {nama} kosong — tidak ada yang bisa digiling.")
+        # Pertanyaannya "silo ini ada di antara sumber proses yang berjalan?",
+        # bukan "silo ini yang tercatat di kolom silo_id?". Lihat catatan pada
+        # `giling_berjalan_untuk_silo`.
+        jalan = await giling_berjalan_untuk_silo(db, silo.id)
+        if jalan is not None:
+            raise MillingError(f"Silo {nama} sedang digiling ({jalan.kode_proses}).")
+        silo_pilih.append(silo)
+        rows += baris
+
+    silo = silo_pilih[0]
+    nama_silo = _rangkai(nama_pilih)
+    # Dipegang sebagai ANGKA, bukan sebagai objek: sesudah `rollback()` di
+    # bawah, objek Silo lepas dari sesi dan membaca `.id`-nya memicu pemuatan
+    # ulang — yang di sesi async berbunyi "MissingGreenlet", galat yang
+    # terbacanya seperti kerusakan pustaka, bukan seperti kode yang salah
+    # urutan. Jebakan yang sama pernah muncul di `permintaan_pk.minta`.
+    id_silo = [(s.id, n) for s, n in zip(silo_pilih, nama_pilih)]
     now = input_time(tanggal, jam)
 
     # SELURUH isi silo masuk ke satu proses giling — bukan satu baris saja.
@@ -144,9 +191,19 @@ async def start_milling(
     total = jumlah_bobot(b for _, b in bobot_per_baris)
     berat = total.kg
 
-    # Penunjuk tunggal di `MillingProcess` tetap diisi supaya laporan, undo,
-    # dan rekonsiliasi yang membacanya tidak mati sekaligus. Yang dipilih:
-    # baris lot bila ada — itulah sumber terbesar dan paling berarti.
+    # ── Penunjuk tunggal: PENINGGALAN, bukan wewenang ──
+    #
+    # `silo_id`, `silo_storage_id`, `drying_lot_id`, `purchase_batch_id` tetap
+    # diisi supaya laporan dan data lama yang membacanya tidak mati sekaligus.
+    # Yang dipilih: silo PERTAMA yang dicentang, dan baris lot bila ada.
+    #
+    # TETAPI tak boleh lagi ada keputusan PERILAKU yang bergantung padanya.
+    # Sejak satu lot boleh datang dari beberapa silo, kolom-kolom ini hanya
+    # menyebut salah satu — dan tiga tempat yang dulu memercayainya masing-
+    # masing melahirkan kerusakan yang sama: silo kedua ditawarkan lagi,
+    # dikosongkan tidak, dikembalikan tidak. Yang benar selalu
+    # `milling_process_sources`. Kolom yang terlihat berwibawa padahal tinggal
+    # peninggalan adalah kolom yang akan dipakai lagi oleh orang berikutnya.
     st = next((r for r in rows if r.drying_lot_id), rows[0])
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
@@ -163,6 +220,36 @@ async def start_milling(
     db.add(proc)
     try:
         await db.flush()
+        # ── KLAIM barisnya, dan biarkan BASIS DATA yang memutuskan ──
+        #
+        # Pemeriksaan "sedang digiling?" di atas dilewati dua operator yang
+        # menekan pada detik yang sama: keduanya membaca "belum", keduanya
+        # menulis. Yang memutuskan di sini satu `UPDATE` bersyarat — Postgres
+        # mengunci barisnya lalu MENGUJI ULANG syaratnya sesudah kunci didapat,
+        # jadi yang kedua menerima nol baris dan ditolak. Lihat catatan panjang
+        # pada `SiloStorage.milling_process_id`.
+        ids_baris = [r.id for r in rows]
+        dikunci = (await db.execute(
+            update(SiloStorage)
+            .where(SiloStorage.id.in_(ids_baris),
+                   SiloStorage.milling_process_id.is_(None))
+            .values(milling_process_id=proc.id)
+        )).rowcount or 0
+        if dikunci != len(ids_baris):
+            await db.rollback()
+            # Namanya dicari SESUDAH rollback: yang menang sudah ter-commit,
+            # jadi sekarang bisa disebut kode prosesnya — kalimat "silo sedang
+            # digiling" tanpa menyebut oleh apa menyuruh orang mencari sendiri.
+            sibuk = []
+            for sid, nm in id_silo:
+                j = await giling_berjalan_untuk_silo(db, sid)
+                if j is not None:
+                    sibuk.append(f"Silo {nm} ({j.kode_proses})")
+            raise MillingError(
+                "Giling tidak dimulai — " + (
+                    " dan ".join(sibuk) + " sedang digiling." if sibuk
+                    else "silonya baru saja dipakai proses lain.")
+                + " Tidak ada yang tercatat; pilih silo lain atau tunggu.")
         for r, bb in bobot_per_baris:
             db.add(MillingProcessSource(
                 milling_process_id=proc.id, silo_storage_id=r.id,
@@ -422,14 +509,35 @@ async def finish_milling(
         ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
     for sid in ids:
         st = await db.get(SiloStorage, sid)
-        if st and st.status == "terisi":
-            st.status = "kosong"
-            st.tanggal_keluar = now
+        if st:
+            if st.status == "terisi":
+                st.status = "kosong"
+                st.tanggal_keluar = now
+            # Klaimnya dilepas bersama isinya. Baris kosong takkan pernah jadi
+            # sumber lagi, jadi klaim yang tertinggal tak menghalangi apa-apa —
+            # tapi klaim yang tertinggal juga tak bisa dibaca sebagai apa pun,
+            # dan kolom yang artinya tergantung kolom lain adalah kolom yang
+            # dibaca salah suatu hari.
+            st.milling_process_id = None
+    # ── SELURUH silo sumber dikosongkan, bukan `proc.silo_id` saja ──
+    #
+    # Sejak satu lot boleh datang dari beberapa silo (keputusan pemilik 24
+    # September 2026), `proc.silo_id` menyebut silo PERTAMA. Menandai hanya ia
+    # meninggalkan silo kedua berstatus "terisi" padahal isinya sudah jadi PK:
+    # layar Gudang menunjukkan gabah yang tidak ada, dan orang mencari-carinya.
+    # Baris `SiloStorage`-nya sendiri sudah dikosongkan seluruhnya di atas —
+    # yang tertinggal justru `Silo.status`, kolom yang paling sering dibaca.
     if ids:
-        silo = await db.get(Silo, proc.silo_id)
-        if silo:
-            silo.status = "kosong"
-            nama_silo = silo.nama_silo.replace("Silo ", "")
+        nama: list[str] = []
+        for silo_id in await silo_ids_proses(db, proc):
+            silo = await db.get(Silo, silo_id)
+            if silo:
+                silo.status = "kosong"
+                nama.append(silo.nama_silo.replace("Silo ", ""))
+        # Kalimatnya menyebut SEMUANYA. "Silo A kosong" atas giling yang
+        # memakan A dan B adalah kabar yang benar separuh, dan separuhnya yang
+        # hilang justru yang akan dicari orang.
+        nama_silo = _rangkai(nama) or None
     # ── SELURUH sumber ditandai "digiling", bukan hanya yang utama ──
     #
     # Dulu hanya `proc.drying_lot_id` ATAU `proc.purchase_batch_id` — dua

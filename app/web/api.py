@@ -641,13 +641,20 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "remote", "source": "/api/actions/silo-g1",
                   "kosong": "Tidak ada silo gabah kering. Tambahkan silo di Pengaturan → Alat."},
              ]},
+            # BEBERAPA silo boleh dicentang sekaligus, dan hasilnya TETAP satu
+            # lot — keputusan pemilik 24 September 2026 ("sering", dan
+            # "hasilnya 1 lot"). Karena itu `remote_banyak`, bukan daftar
+            # pilihan tunggal, dan bukan pula tupel tertulis-tangan A/B/AB
+            # seperti penyosohan: silo Gudang 1 lebih dari dua dan bisa
+            # bertambah lewat Pengaturan → Alat. Daftarnya dari master.
             {"id": "mulai_giling", "label": "⚙️ Mulai giling",
              "post": "/api/actions/mulai-giling",
-             "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo — boleh berisi "
-                     "beberapa pengeringan sekaligus, dan semuanya ikut. "
-                     "Di sinilah lot terbentuk.",
+             "hint": "Bentuk 1 LOT (LOT-…) dari SELURUH isi silo yang dicentang "
+                     "— boleh beberapa silo sekaligus, dan semuanya jadi SATU "
+                     "lot dengan satu rendemen. Di sinilah lot terbentuk.",
              "fields": [
-                 {"name": "silo", "label": "Silo berisi gabah kering", "type": "remote",
+                 {"name": "silo", "label": "Silo berisi gabah kering (boleh lebih dari satu)",
+                  "type": "remote_banyak",
                   "source": "/api/actions/silo-siap-giling",
                   "kosong": "Tidak ada silo berisi gabah kering yang siap digiling."},
              ]},
@@ -1327,8 +1334,10 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 1 yang ADA isinya & tak sedang digiling."""
     _require(await _is_g1_operator(user))
     from sqlalchemy import select
-    from app.models import MillingProcess, Silo
-    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_active_rows, _silo_content_kg
+    from app.models import Silo
+    from app.penggilingan.gudang1.services.silo import (
+        _g1_warehouse_id, _silo_active_rows, _silo_content_kg,
+        giling_berjalan_untuk_silo)
     out: list[dict] = []
     async with SessionLocal() as db:
         wid = await _g1_warehouse_id(db)
@@ -1341,14 +1350,10 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
             rows = await _silo_active_rows(db, s.id)
             if not rows:
                 continue
-            busy = (
-                await db.execute(
-                    select(MillingProcess.id).where(
-                        MillingProcess.silo_id == s.id, MillingProcess.status == "proses"
-                    )
-                )
-            ).first()
-            if busy:
+            # "Ada di antara sumber proses yang berjalan" — bukan `silo_id`.
+            # Borang yang menawarkan silo yang gabahnya sudah di mesin adalah
+            # borang yang mengizinkan giling kedua atas muatan yang sama.
+            if await giling_berjalan_untuk_silo(db, s.id) is not None:
                 continue
             letter = s.nama_silo.replace("Silo ", "")
             kg = await _silo_content_kg(db, s.id)
@@ -2049,21 +2054,33 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
 
 
 class MulaiGilingReq(BaseModel):
-    silo: str  # A / B
+    #: Satu huruf, atau beberapa — satu lot boleh datang dari beberapa silo
+    #: (keputusan pemilik 24 September 2026). Bentuk tunggal tetap diterima:
+    #: ia yang dikirim borang lama dan tombol pada kartu silo.
+    silo: str | list[str]
 
 
 @router.post("/actions/mulai-giling")
 async def act_mulai_giling(req: MulaiGilingReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
-    if (req.silo or "").upper() not in ("A", "B"):
-        raise HTTPException(400, "Pilih silo yang digiling dulu.")
+    # ── Tak ada lagi daftar huruf tertulis-tangan ──
+    #
+    # Dulu di sini `not in ("A", "B")`. Silo Gudang 1 bisa ditambah lewat
+    # Pengaturan → Alat, jadi silo ketiga yang baru dibeli ditolak di pintu
+    # oleh dua huruf yang diketik seseorang bertahun lalu — dan pesannya
+    # berbunyi "Pilih silo yang digiling dulu", padahal ia sudah memilih.
+    # Yang memeriksa keberadaan silonya `start_milling`, lewat master.
+    pilih = [req.silo] if isinstance(req.silo, str) else list(req.silo or [])
+    pilih = [str(x).strip().upper() for x in pilih if str(x or "").strip()]
+    if not pilih:
+        raise HTTPException(400, "Pilih dulu silo yang digiling.")
     from sqlalchemy.exc import IntegrityError
 
     from app.penggilingan.gudang1.services.milling import start_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await start_milling(db, user=u, nama_silo=req.silo.upper())
+            r = await start_milling(db, user=u, nama_silo=pilih)
         except MillingError as e:
             raise _err(e, "Gagal mulai giling.")
         except IntegrityError:

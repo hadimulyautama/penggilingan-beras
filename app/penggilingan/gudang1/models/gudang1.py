@@ -282,6 +282,11 @@ class SiloStorage(Base, TimestampMixin):
         Index("uq_silo_storage_lot_terisi", "drying_lot_id", unique=True,
               postgresql_where=text(
                   "drying_lot_id IS NOT NULL AND status = 'terisi'")),
+        # Baris yang sedang berada di dalam mesin giling — lihat catatan pada
+        # `milling_process_id` di bawah. Parsial: yang menarik cuma yang terisi
+        # klaimnya, dan itu segelintir baris di antara riwayat bertahun-tahun.
+        Index("ix_silo_storage_giling", "milling_process_id",
+              postgresql_where=text("milling_process_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -299,6 +304,30 @@ class SiloStorage(Base, TimestampMixin):
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # terisi / kosong
     status: Mapped[str] = mapped_column(String(20), default="terisi")
+    #: KLAIM: proses giling yang sedang memakai baris ini, atau NULL.
+    #:
+    #: Bukan "himpunan silo sebuah proses" — itu diturunkan dari
+    #: `milling_process_sources` dan tak perlu disimpan dua kali. Kolom ini
+    #: menjawab satu pertanyaan lain yang TIDAK BISA dijawab dengan aman
+    #: sesudahnya: "apakah baris ini sudah masuk mesin?" pada detik dua
+    #: operator menekan "Mulai giling" bersamaan.
+    #:
+    #: Kenapa bukan indeks unik parsial seperti pagar-pagar lain di app ini:
+    #: syaratnya ("prosesnya berstatus 'proses'") tinggal di BARIS TABEL LAIN,
+    #: dan indeks hanya bisa menguji baris miliknya sendiri. Pemicu pun tak
+    #: menolong — di READ COMMITTED ia tak melihat baris tetangga yang belum
+    #: di-commit, jadi dua penekan tetap sama-sama lolos.
+    #:
+    #: Yang dipakai: SATU kolom pada baris yang diperebutkan, direbut dengan
+    #: `UPDATE … WHERE milling_process_id IS NULL`. Postgres mengunci barisnya
+    #: lalu MENGUJI ULANG syaratnya sesudah kunci didapat, jadi yang kedua
+    #: menerima "0 baris" — bukan dua klaim yang sama-sama berhasil.
+    #:
+    #: Dilepas saat giling selesai (bersama `status = 'kosong'`) dan saat
+    #: pembatalan; proses yang dihapus melepaskannya lewat ON DELETE SET NULL.
+    milling_process_id: Mapped[int | None] = mapped_column(
+        ForeignKey("milling_process.id", ondelete="SET NULL", use_alter=True)
+    )
 
 
 class JedaProses(Base):

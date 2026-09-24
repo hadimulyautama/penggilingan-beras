@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hmu_identitas import peran as _P
@@ -486,6 +486,16 @@ async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
                 f"{proc.kode_proses} sudah ada progress/QC — batalkan itu dulu."
             )
     kode = proc.kode_proses
+    # ── Klaim silonya dilepas DI SINI, bukan diserahkan ke FK ──
+    #
+    # `ON DELETE SET NULL` memang melepaskannya juga, tetapi hanya di Postgres
+    # dan hanya bila FK-nya masih ada. Pembatalan yang mengembalikan separuh
+    # keadaan lebih buruk daripada pembatalan yang menolak: silo yang klaimnya
+    # tertinggal tak bisa digiling lagi oleh siapa pun, dan tak ada satu pun
+    # kalimat di layar yang menyebutkan sebabnya.
+    await db.execute(
+        update(SiloStorage).where(SiloStorage.milling_process_id == proc_id)
+        .values(milling_process_id=None))
     await db.delete(proc)
     return f"✓ Dibatalkan: mulai giling {kode}."
 
@@ -503,18 +513,62 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
         raise UndoError(f"{proc.kode_proses} sudah ada transfer PK — tidak bisa dibatalkan.")
     proc.status = "proses"
     proc.waktu_selesai = None
-    if proc.silo_storage_id:
-        st = await db.get(SiloStorage, proc.silo_storage_id)
+
+    # ── SELURUH silo sumber dikembalikan, bukan penunjuk tunggalnya ──
+    #
+    # Sejak satu lot boleh datang dari beberapa silo (keputusan pemilik 24
+    # September 2026), `proc.silo_storage_id` dan `proc.silo_id` menyebut SALAH
+    # SATU. Membatalkan lewat keduanya mengembalikan silo pertama dan
+    # meninggalkan silo kedua kosong — padahal gabahnya kembali dianggap belum
+    # tergiling. Pembatalan yang mengembalikan separuh keadaan lebih buruk
+    # daripada pembatalan yang menolak: tak ada satu pun layar yang menyebut
+    # separuh mana yang tertinggal.
+    #
+    # Klaimnya ikut DIPASANG KEMBALI: prosesnya kembali berstatus 'proses',
+    # jadi barisnya kembali "ada di dalam mesin" — tanpa itu, silo yang sama
+    # bisa diklaim proses kedua sementara yang pertama masih terbuka.
+    from app.models import MillingProcessSource
+    from app.penggilingan.gudang1.services.silo import silo_ids_proses
+
+    ids = [x for x in (await db.execute(
+        select(MillingProcessSource.silo_storage_id).where(
+            MillingProcessSource.milling_process_id == proc_id)
+    )).scalars().all() if x]
+    if not ids and proc.silo_storage_id:
+        ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
+    for sid in ids:
+        st = await db.get(SiloStorage, sid)
         if st:
             st.status = "terisi"
             st.tanggal_keluar = None
-        silo = await db.get(Silo, proc.silo_id)
+            st.milling_process_id = proc_id
+    for silo_id in await silo_ids_proses(db, proc):
+        silo = await db.get(Silo, silo_id)
         if silo:
             silo.status = "terisi"
-    if proc.drying_lot_id:
-        await _revert_lot_batches(db, proc.drying_lot_id, "di_silo")
-    elif proc.purchase_batch_id:
-        b = await db.get(PurchaseBatch, proc.purchase_batch_id)
+
+    # ── Status batch: SELURUH sumbernya juga ──
+    #
+    # `selesai_giling` menandai "digiling" setiap batch yang ikut, termasuk yang
+    # datang lewat lot pengeringan dan yang masuk saat giling berjalan (QA
+    # P-K-18). Yang dikembalikan di sini dulu hanya dua penunjuk tunggal, jadi
+    # batch lain tetap berstatus "digiling" sesudah pembatalan — gabah yang
+    # kembali ke silo tetapi tak bisa digiling lagi karena ia sudah "digiling".
+    lots = {proc.drying_lot_id} if proc.drying_lot_id else set()
+    batches = {proc.purchase_batch_id} if proc.purchase_batch_id else set()
+    for lot_id, batch_id in (await db.execute(
+        select(MillingProcessSource.drying_lot_id,
+               MillingProcessSource.purchase_batch_id)
+        .where(MillingProcessSource.milling_process_id == proc_id)
+    )).all():
+        if lot_id:
+            lots.add(lot_id)
+        if batch_id:
+            batches.add(batch_id)
+    for lot_id in {x for x in lots if x}:
+        await _revert_lot_batches(db, lot_id, "di_silo")
+    for batch_id in {x for x in batches if x}:
+        b = await db.get(PurchaseBatch, batch_id)
         if b:
             b.status_batch = "di_silo"
     return f"✓ Dibatalkan: selesai giling {proc.kode_proses} (kembali 'proses', silo terisi lagi)."

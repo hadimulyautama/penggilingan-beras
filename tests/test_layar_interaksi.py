@@ -633,3 +633,90 @@ def test_tiket_gabah_baru_muncul_sendiri_di_antrean():
     # Jenisnya dibaca dari PETA JENIS, bukan ditebak dari awalan kodenya —
     # komoditas baru diam-diam dianggap gabah kering kalau ditebak.
     assert "intake_dari_jenis" in saring
+
+
+# ──────── Beberapa pilihan sekaligus: giling dari beberapa silo ────────
+
+def test_borang_mulai_giling_menerima_beberapa_silo():
+    """Keputusan pemilik 24 September 2026: menggiling dari beberapa silo
+    "sering", dan "hasilnya 1 lot".
+
+    Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang 1
+    lebih dari dua dan bisa bertambah lewat Pengaturan → Alat. Pintu yang
+    memeriksa `not in ("A", "B")` menolak silo ketiga yang baru dibeli dengan
+    kalimat "Pilih silo yang digiling dulu" — padahal orangnya sudah memilih.
+    """
+    import inspect
+
+    from app.web import api
+    from tests.bantu import kode_saja
+
+    sumber = inspect.getsource(api)
+    i = sumber.index('"id": "mulai_giling"')
+    blok = sumber[i:i + 900]
+    assert '"type": "remote_banyak"' in blok, "borangnya masih satu silo saja"
+    assert '"source": "/api/actions/silo-siap-giling"' in blok, "daftarnya bukan dari master"
+
+    # `kode_saja`: komentar di pintunya MENYEBUT daftar huruf yang dicabut,
+    # justru supaya orang berikutnya tahu kenapa ia tak boleh kembali. Pagar
+    # yang membaca komentar akan menagih kalimat itu dihapus.
+    pintu = kode_saja(api.act_mulai_giling)
+    assert "('A', 'B')" not in pintu and '("A", "B")' not in pintu, \
+        "daftar huruf tertulis-tangan berdiri lagi"
+    assert "isinstance(req.silo, str)" in pintu, "bentuk tunggal tak lagi diterima"
+
+
+def test_daftar_centang_mengirim_daftar_dan_tak_mengunci_kartu():
+    """Tiga sifat yang masing-masing pernah jadi jalan buntu tersendiri.
+
+    · Nilainya dikirim sebagai DAFTAR, bahkan bila cuma satu tercentang —
+      server yang menerima kadang daftar kadang teks harus menebak;
+    · kartu yang membuka lembar ini MENCENTANG silonya, bukan menguncinya:
+      mengunci berarti orang yang menekan kartu Silo A tak bisa menambah Silo B
+      tanpa menutup borangnya dulu, dan kartu berubah jadi kandang;
+    · kalimat konfirmasi memakai TULISANNYA ("Silo A · Silo B"), bukan kodenya
+      ("A,B") — orang yang sedang diminta memastikan tak boleh disuruh
+      menerjemahkan sendiri.
+    """
+    assert 'f.type === "remote_banyak"' in AKSI
+    i = AKSI.index('f.type === "remote_banyak"')
+    # Cabangnya berdiri SEBELUM cabang terkunci — itulah yang membuat kartu
+    # mencentang, bukan mengunci.
+    assert i < AKSI.index("f.name === namaKunci"), "medan banyak ikut terkunci kartu"
+    assert 'data-banyak="1"' in AKSI
+    assert "String(v || \"\").split(\",\").filter(Boolean)" in AKSI, \
+        "nilainya tak dikirim sebagai daftar"
+    assert "el.dataset.teks || el.value" in AKSI, "konfirmasi menyebut kode, bukan tulisan"
+    # Yang hilang dari daftar tak boleh tetap terkirim: silonya bisa saja baru
+    # diambil proses lain sementara lembarnya terbuka.
+    assert "sinkron();" in AKSI
+
+
+def test_centang_dipulihkan_lewat_kode_bukan_tulisannya():
+    """Ditemukan di PERAMBAN, bukan di uji — dan itulah sebabnya ia dijaga.
+
+    Pemulihan sesudah "Kembali" dari layar konfirmasi dulu mencocokkan TULISAN
+    pilihannya. Tulisan itu sendiri memuat "·" ("Silo A · 10.000 kg"), yaitu
+    pemisah yang sama dengan yang menggabungkan beberapa pilihan jadi satu
+    baris — jadi pemecahannya menghasilkan potongan yang tak cocok dengan apa
+    pun, dan pilihan kedua dan seterusnya LENYAP tanpa kabar. Orang yang cuma
+    ingin memeriksa sekali lagi kehilangan separuh jawabannya, dan tak ada
+    satu pun tanda bahwa itu terjadi.
+    """
+    assert 'v["kode:" + el.dataset.name] = el.value' in AKSI, \
+        "kode pilihan tak dititipkan; pemulihan kembali menebak dari tulisan"
+    assert 'semula["kode:" + el.dataset.name]' in AKSI
+    assert '(simpanan.dataset.pulih || "").split(",")' in AKSI, \
+        "pemulihan memecah dengan pemisah yang bisa muncul di dalam tulisannya"
+    # Kunci bertanda titik dua supaya tak pernah cocok dengan lubang {nama} di
+    # kalimat konfirmasi, yang hanya menerima \w.
+    assert "replace(/\\{(\\w+)\\}/g" in AKSI
+
+
+def test_kartu_mencentang_medan_banyak_bukan_melewatinya():
+    """Penguncian dari kartu memeriksa TIPE medannya. Medan baru yang tak
+    disebut di situ akan dilewati diam-diam: kartu Silo A membuka borang yang
+    tak mencentang apa pun, dan orang harus memilih ulang benda yang baru saja
+    ia tekan — kesempatan kedua untuk salah pilih yang penguncian ini justru
+    ada untuk menutupnya."""
+    assert 'f0.type !== "remote_banyak"' in AKSI

@@ -25,18 +25,39 @@ class MillingProcess(Base, TimestampMixin):
     jadi PGR-, karena lot yang sesungguhnya terbentuk saat giling dimulai)."""
 
     __tablename__ = "milling_process"
-    __table_args__ = (
-        # Indeks dinamai apa adanya seperti di basis data — lihat catatan
-        # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
-        Index("uq_milling_process_silo_proses", "silo_id", unique=True,
-              postgresql_where=text(
-                  "silo_id IS NOT NULL AND status = 'proses'")),
-    )
+    # ── Tak ada lagi indeks unik atas `silo_id` ──
+    #
+    # Dulu `uq_milling_process_silo_proses` menjaga "satu giling berjalan per
+    # silo" lewat kolom ini. Aturannya TETAP BENAR; yang berubah, sejak satu
+    # lot boleh datang dari beberapa silo (keputusan pemilik 24 September
+    # 2026), kolom tunggal ini tak lagi menyebut seluruh silo yang dipakai —
+    # jadi ia menjaga silo pertama saja dan membiarkan silo kedua terbuka.
+    # Penjagaannya pindah ke baris silonya sendiri: `SiloStorage.
+    # milling_process_id`, lihat catatan panjang di sana. Migrasi 0056.
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    #: ⚠ PENINGGALAN — silo PERTAMA saja, dan TIDAK berwenang.
+    #:
+    #: Satu lot boleh datang dari beberapa silo sejak 24 September 2026, dan
+    #: kolom ini cuma menyebut yang pertama. Ia dipertahankan supaya data lama
+    #: dan laporan yang membacanya tidak mati sekaligus — TETAPI tak boleh lagi
+    #: ada keputusan perilaku yang bergantung padanya. Yang benar selalu
+    #: `milling_process_sources`; himpunan silonya diturunkan lewat
+    #: `silo.silo_ids_proses`, dan "silo ini sedang digiling?" lewat
+    #: `silo.giling_berjalan_untuk_silo`.
+    #:
+    #: Tiga tempat pernah memercayainya, dan ketiganya melahirkan kerusakan yang
+    #: sama dengan tiga rupa: silo kedua ditawarkan lagi untuk digiling, tidak
+    #: ikut dikosongkan, dan tidak ikut dikembalikan saat pembatalan. Kolom yang
+    #: terlihat berwibawa padahal tinggal peninggalan adalah kolom yang akan
+    #: dipakai lagi oleh orang berikutnya.
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
+    #: PENINGGALAN juga — salah satu baris silo saja ("baris lot bila ada").
+    #: Lihat catatan pada `silo_id`.
     silo_storage_id: Mapped[int | None] = mapped_column(ForeignKey("silo_storage.id"))
+    #: PENINGGALAN juga: sumber sesungguhnya di `milling_process_sources`, dan
+    #: satu proses boleh memuat beberapa lot & batch sekaligus.
     drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
     purchase_batch_id: Mapped[int | None] = mapped_column(
         ForeignKey("purchase_batches.id")

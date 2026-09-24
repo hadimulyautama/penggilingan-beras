@@ -136,6 +136,31 @@ persetujuan pemilik, dan tiap aksi wajib punya uji Postgres dua sesi
 (`tests/pg/test_peristiwa.py` contohnya: r06, r13). Muatan JSON hanya lewat
 `peristiwa.bersih()`.
 
+## Satu lot giling, beberapa silo (sejak 24 September 2026)
+
+Keputusan pemilik: menggiling dari beberapa silo sekaligus "sering", dan
+"hasilnya 1 lot" — satu rendemen dan satu HPP atas seluruh bahannya.
+
+`MillingProcess.silo_id`, `silo_storage_id`, `drying_lot_id`,
+`purchase_batch_id` adalah **PENINGGALAN**: masing-masing menyebut SALAH SATU
+sumber, dan tak boleh lagi menentukan perilaku apa pun. Yang berwenang
+`milling_process_sources` — satu baris per sumber. Dua jawaban bersama:
+
+  · `silo.giling_berjalan_untuk_silo(db, silo_id)` → "silo ini sedang
+    digiling?" (dipakai kartu antrean, borang, dan gabah yang datang saat
+    giling berjalan — ketiganya);
+  · `silo.silo_ids_proses(db, proc)` → himpunan silo sebuah proses.
+
+Keduanya punya kaki kedua lewat `silo_id` untuk proses LAMA yang lahir sebelum
+tabel sumber ada. Jangan tambah tabel anak seperti `polishing_silo_usage`:
+Gudang 2 memerlukannya karena punya SISA PER SILO, Gudang 1 tidak — `selesai`
+mengosongkan seluruh sumbernya sekaligus.
+
+"Satu giling berjalan per silo" dijaga `silo_storage.milling_process_id`
+(migrasi 0056), direbut dengan `UPDATE … WHERE milling_process_id IS NULL` —
+bukan indeks unik (syaratnya ada di baris tabel lain) dan bukan pemeriksaan di
+depan (dua penekan bersamaan sama-sama lolos).
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

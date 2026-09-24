@@ -1088,7 +1088,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # rusak, tetapi uang yang tertanam di dalamnya juga tidak bergerak.
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import (
-        _g1_warehouse_id, _silo_active_rows, _silo_content_bobot)
+        _g1_warehouse_id, _silo_active_rows, _silo_content_bobot,
+        giling_berjalan_untuk_silo)
 
     wid = await _g1_warehouse_id(db)
     for silo in (await db.execute(
@@ -1096,11 +1097,15 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     )).scalars().all():
         if not await _silo_active_rows(db, silo.id):
             continue
-        sibuk = (await db.execute(
-            select(MillingProcess.id).where(
-                MillingProcess.silo_id == silo.id, MillingProcess.status == "proses")
-        )).first()
-        if sibuk:
+        # ── "ada di antara SUMBER proses yang berjalan", bukan "silo_id-nya" ──
+        #
+        # Satu lot boleh datang dari beberapa silo (keputusan pemilik 24
+        # September 2026), dan `MillingProcess.silo_id` cuma menyebut yang
+        # pertama. Dulu di sini ia yang ditanya, jadi silo KEDUA tetap
+        # berkartu "siap digiling" — lengkap dengan tombolnya — padahal
+        # gabahnya sudah di dalam mesin. Yang menekannya memulai giling kedua
+        # atas gabah yang sama, dan dua rendemen lahir dari satu muatan.
+        if await giling_berjalan_untuk_silo(db, silo.id) is not None:
             continue
         huruf = silo.nama_silo.replace("Silo ", "")
         # Masuk `berjalan`, BUKAN `menunggu` — sengaja, dan ini soal lencana.
@@ -1131,8 +1136,14 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 + (f" · {_pemasok_ringkas(asal_silo)}" if asal_silo else ""),
             anak=asal_silo,
             ringkas="gabah kering · menunggu giliran digiling",
+            # Kartunya menyebut SATU silo, tapi borangnya membuka semuanya:
+            # silo ini sudah tercentang, dan yang lain boleh ikut dicentang —
+            # hasilnya tetap satu lot. Keterangannya menyebut itu, sebab
+            # tombol yang membuka lebih banyak daripada yang dijanjikannya
+            # membuat orang menutup borangnya lagi karena merasa salah tekan.
             pilihan=[("mulai_giling", "Mulai giling",
-                      "Seluruh isi silo jadi satu lot (LOT-…)")],
+                      "Silo ini sudah dicentang · silo lain boleh ikut, "
+                      "hasilnya tetap satu lot (LOT-…)")],
         ))
 
     giling_jalan = (await db.execute(
@@ -1467,11 +1478,23 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     #
     # HIMPUNAN, bukan satu nilai: satu proses boleh memakai DUA silo sekaligus
     # ("Mulai penyosohan" menerima A / B / AB).
-    dipakai = set((await db.execute(
-        select(PolishingSiloUsage.silo_id)
+    #
+    # DAN "di dalam mesin" bukan sama dengan "dipakai proses yang berjalan".
+    # Silo yang sisanya SUDAH dicatat (`berat_akhir_kg` terisi) sudah keluar
+    # dari mesin, sementara prosesnya masih berputar atas silo satunya. Sampai
+    # temuan QA 24 September ia ikut disembunyikan: operator menutup Silo A
+    # dengan sisa 500 kg, dan 500 kg itu LENYAP dari antreannya — berdiri di
+    # silo, tak tersebut di layar mana pun, sampai penyosohan Silo B ditutup
+    # juga. Yang hilang dari layar adalah yang tak dikerjakan siapa pun.
+    baris_pakai = (await db.execute(
+        select(PolishingSiloUsage.silo_id, PolishingSiloUsage.berat_akhir_kg)
         .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
         .where(PolishingProcess.status == "proses")
-    )).scalars().all())
+    )).all()
+    dipakai = {sid for sid, akhir in baris_pakai if akhir is None}
+    #: Sisanya sudah dicatat, mesinnya masih memakai silo lain — berkartu,
+    #: tanpa tombol, dan keterangannya menyebut keadaan itu apa adanya.
+    sisa_dicatat = {sid for sid, akhir in baris_pakai if akhir is not None} - dipakai
     # Bendera global TETAP dipakai, dan di sini ia masih benar: mesinnya satu,
     # jadi silo LAIN memang belum bisa dimulai selama ada yang jalan.
     sedang = bool(dipakai) or bool((await db.execute(
@@ -1500,14 +1523,25 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         pemasok = _pemasok_ringkas(asal)
         keluar.append(Baris(
             kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
-            keadaan=("mesin sosoh sedang dipakai" if sedang
+            # Tiga keadaan, tiga kalimat. Silo yang sisanya sudah dicatat
+            # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
+            # bahwa angka ini sisa isian yang baru saja ditutup, bukan muatan
+            # yang belum tersentuh.
+            keadaan=("sisanya sudah dicatat · mesin masih memakai silo lain"
+                     if silo.id in sisa_dicatat
+                     else "mesin sosoh sedang dipakai" if sedang
                      else "mulai penyosohan bila siap"),
             aksi=None if sedang else "mulai_penyosohan",
             nilai=huruf, fase="silo_g2",
             judul=f"{silo.nama_silo} · Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
-            sub=(f"PK menunggu disosoh · {pemasok}" if pemasok
-                 else "PK menunggu disosoh"),
+            # Kalimat bawahnya ikut menyebutnya: "menunggu disosoh" atas sisa
+            # 500 kg yang baru ditutup terbaca seperti muatan penuh yang belum
+            # tersentuh, dan operator yang membacanya akan mencari 500 kg yang
+            # ia kira baru masuk.
+            sub=((("sisa isian yang sudah ditutup · menunggu giliran berikutnya"
+                   if silo.id in sisa_dicatat else "PK menunggu disosoh"))
+                 + (f" · {pemasok}" if pemasok else "")),
             anak=asal,
             # ── Selisih dalam isian ini, dengan NAMA ──
             # Judul kartu = isi SEKARANG; daftar di bawahnya = yang masuk pada

@@ -585,7 +585,12 @@ def test_giling_berjalan_tidak_dihentikan_oleh_gabah_baru():
     from app.penggilingan.gudang1.services import silo
 
     sumber = kode_saja(silo.masuk_silo)
-    i = sumber.index("MillingProcess.status == 'proses'")
+    # Ditambatkan pada NAMA PENANYANYA, bukan pada kueri yang tertulis di
+    # tempat: sejak satu lot boleh datang dari beberapa silo (24 September
+    # 2026) pertanyaan "silo ini sedang digiling?" punya satu jawaban bersama,
+    # `giling_berjalan_untuk_silo` — dan `MillingProcess.status == 'proses'`
+    # tak lagi tertulis di sini.
+    i = sumber.index("giling_berjalan_untuk_silo")
     ekor = sumber[i:sumber.index("return MasukResult")]
     assert "raise" not in ekor, "giling berjalan tak boleh menolak gabah baru"
 
@@ -611,13 +616,31 @@ def test_penambahan_bahan_diberitahukan_di_ketiga_jalan():
 
 def test_silo_yang_digiling_tak_muncul_lagi_sebagai_siap_digiling():
     """Bug yang sama di layar: silo yang sedang dikuras terbaca seolah menunggu
-    digiling, dan penggilingannya lenyap."""
+    digiling, dan penggilingannya lenyap.
+
+    Pagar ini dulu mencari nama peubah `sibuk` dan kueri di tempat. Sejak satu
+    lot boleh datang dari beberapa silo (keputusan pemilik 24 September 2026)
+    pertanyaannya BERUBAH ARTI: "silo ini yang tercatat di `silo_id`?" cuma
+    menyebut silo pertama, jadi silo kedua tetap berkartu "siap digiling"
+    lengkap dengan tombolnya — padahal gabahnya sudah di dalam mesin. Yang
+    dijaga sekarang: KETIGA tempat yang menanyakannya memakai jawaban bersama,
+    dan tak satu pun kembali memercayai kolom tunggal itu.
+    """
     from app.services import berjalan
+    from app.penggilingan.gudang1.services import silo as svc_silo
+    from app.web import api
+
+    for fn in (berjalan.untuk_gudang1, api.silo_siap_giling, svc_silo.masuk_silo):
+        sumber = kode_saja(fn)
+        assert "giling_berjalan_untuk_silo" in sumber, fn.__name__
+        assert "MillingProcess.silo_id ==" not in sumber, (
+            f"{fn.__name__} kembali memercayai silo_id — silo kedua akan terbuka")
 
     sumber = kode_saja(berjalan.untuk_gudang1)
-    assert "sibuk" in sumber
-    i = sumber.index("sibuk")
-    assert "continue" in sumber[i:i + 400]
+    # `rindex`: kemunculan PERTAMA namanya ada di baris impor, dan yang dijaga
+    # di sini tempat ia DIPAKAI.
+    i = sumber.rindex("giling_berjalan_untuk_silo")
+    assert "continue" in sumber[i:i + 200], "silo yang digiling tetap berkartu"
 
 
 # ──────────── Konfirmasi sebelum mesin dinyalakan ────────────

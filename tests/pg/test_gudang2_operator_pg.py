@@ -380,3 +380,62 @@ async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):
     tump = [x for x in b.menunggu if x.kelompok == "tumpukan"]
     assert tump, "kartu tumpukan hilang"
     assert any(p[0] == "pindah_tumpukan_silo" for p in tump[0].pilihan)
+
+
+# ──────── Silo yang sisanya SUDAH dicatat, sementara silo lain berputar ────────
+
+async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
+    """Temuan QA 24 September 2026, sekeluarga dengan silo Gudang 1 yang kedua.
+
+    Satu penyosohan boleh memakai dua silo, dan sisanya dicatat SATU PER SATU.
+    Sampai temuan ini, seluruh silo milik proses yang berjalan disembunyikan
+    dari antrean tanpa memeriksa apakah sisanya sudah dicatat — jadi operator
+    yang menutup Silo A dengan sisa 500 kg melihat 500 kg itu LENYAP dari
+    layarnya, sementara barangnya berdiri di silo. Yang hilang dari layar adalah
+    yang tak dikerjakan siapa pun.
+
+    Yang benar: berkartu (sebab ia memang menunggu giliran berikutnya), TANPA
+    tombol (sebab mesinnya masih dipakai), dan keterangannya menyebut keadaan
+    itu apa adanya.
+    """
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan
+    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.services.berjalan import untuk_operator_gudang2
+    from app.database import now_local
+    from app.models import Supplier
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from sqlalchemy import select
+
+    u = gudang2["user"]
+    async with pg() as db:
+        sup = (await db.execute(select(Supplier.id))).scalars().first()
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-20260924-03", supplier_id=sup, berat_total_kg=4_000,
+            tanggal_pembelian=date.today(), waktu_pembelian=now_local(), input_by=u.id,
+            status_batch="diterima", flag_unverified=True, sumber_berat="manual"))
+        await db.commit()
+        await masukkan_pk_luar(db, user=u, kode="PKB-20260924-03", tujuan="silo_a")
+
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        # Selagi KEDUANYA di dalam mesin, tak satu pun berkartu antrean.
+        b = await untuk_operator_gudang2(db)
+        assert [x for x in b.menunggu if x.fase == "silo_g2"] == [], \
+            "silo yang di dalam mesin masih berkartu antrean"
+
+        # Silo A ditutup dengan sisa 500 kg; Silo B masih berputar.
+        await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                 nama_silo="A", sisa_kg=500)
+        b2 = await untuk_operator_gudang2(db)
+
+    kartu = [x for x in b2.menunggu if x.kode == "Silo A"]
+    assert len(kartu) == 1, f"sisa 500 kg lenyap dari antrean: {b2.menunggu}"
+    k = kartu[0]
+    assert k.aksi is None, "mesinnya masih dipakai, tombolnya tak boleh ada"
+    assert "sisanya sudah dicatat" in k.keadaan, k.keadaan
+    # Silo B masih di dalam mesin — ia tetap tanpa kartu antrean.
+    assert not any(x.kode == "Silo B" for x in b2.menunggu)
+    # Lencana == kartu yang digambar. Dua tempat yang menghitungnya
+    # sendiri-sendiri akan berselisih, dan yang salah adalah yang lebih jarang
+    # dibaca.
+    assert b2.jumlah_menunggu == len(b2.menunggu)
+    assert b2.lencana()["MENUNGGU"] == len(b2.menunggu)

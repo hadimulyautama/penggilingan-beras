@@ -125,6 +125,56 @@ async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]
     )
 
 
+async def giling_berjalan_untuk_silo(db: AsyncSession, silo_id: int) -> MillingProcess | None:
+    """Giling yang SEDANG berjalan dan salah satu sumbernya ada di silo ini.
+
+    SATU-SATUNYA cara yang benar menanyakan "silo ini sedang digiling?" sejak
+    satu lot boleh datang dari beberapa silo (keputusan pemilik 24 September
+    2026). Sebelumnya tiga tempat menanyakannya lewat `MillingProcess.silo_id`,
+    dan kolom itu cuma menyebut silo PERTAMA: silo kedua tetap berkartu "siap
+    digiling" — bertombol — padahal gabahnya sudah di mesin. Orang bisa memulai
+    giling kedua atas gabah yang sama, dan dua rendemen lahir dari satu muatan.
+    Itu keluhan pemilik 24 September tentang Gudang 2, di sisi Gudang 1.
+
+    Kaki KEDUA (`silo_id`) tetap ada demi proses LAMA yang lahir sebelum
+    `milling_process_sources`: ia tak punya baris sumber sama sekali, dan tanpa
+    kaki ini giling lama yang sedang berputar akan terbaca "tidak ada".
+    """
+    from sqlalchemy import or_
+
+    lewat_sumber = (
+        select(MillingProcessSource.milling_process_id)
+        .join(SiloStorage, SiloStorage.id == MillingProcessSource.silo_storage_id)
+        .where(SiloStorage.silo_id == silo_id)
+    )
+    return (await db.execute(
+        select(MillingProcess).where(
+            MillingProcess.status == "proses",
+            or_(MillingProcess.silo_id == silo_id,
+                MillingProcess.id.in_(lewat_sumber)),
+        ).limit(1)
+    )).scalars().first()
+
+
+async def silo_ids_proses(db: AsyncSession, proc: MillingProcess) -> list[int]:
+    """Silo mana saja yang jadi sumber sebuah proses giling — id-nya, terurut.
+
+    Diturunkan, TIDAK disimpan: sumbernya sudah tercatat baris per baris, dan
+    himpunan yang disimpan dua kali adalah himpunan yang kelak berselisih.
+    """
+    ids = list((await db.execute(
+        select(SiloStorage.silo_id)
+        .join(MillingProcessSource,
+              MillingProcessSource.silo_storage_id == SiloStorage.id)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+        .distinct()
+    )).scalars().all())
+    # Proses lama tanpa baris sumber: penunjuk tunggalnya yang menjawab.
+    if not ids and proc.silo_id:
+        ids = [proc.silo_id]
+    return sorted(i for i in ids if i)
+
+
 async def _row_bobot(db: AsyncSession, row: SiloStorage) -> Bobot:
     if row.drying_lot_id:
         return await _lot_bobot(db, row.drying_lot_id)
@@ -414,10 +464,11 @@ async def masuk_silo(
     #
     # Maka ia didaftar sebagai SUMBER tambahan proses yang sedang berjalan,
     # tepat seperti isi silo yang lain saat giling dimulai.
-    giling = (await db.execute(
-        select(MillingProcess).where(MillingProcess.silo_id == silo.id,
-                                     MillingProcess.status == "proses")
-    )).scalars().first()
+    # Pertanyaannya "silo ini ada di antara sumber proses yang berjalan?" —
+    # `silo_id` cuma menyebut silo pertama, jadi gabah yang datang ke silo
+    # KEDUA sebuah giling dulu tak ikut didaftar: ia tergiling, tapi
+    # `berat_gabah_masuk_kg` tinggal di angka lama dan rendemennya melambung.
+    giling = await giling_berjalan_untuk_silo(db, silo.id)
     giling_kode = None
     if giling is not None:
         await db.flush()          # baris barunya perlu id sebelum ditaut
@@ -432,6 +483,10 @@ async def masuk_silo(
             drying_lot_id=baris.drying_lot_id,
             purchase_batch_id=baris.purchase_batch_id, berat_kg=bobot_baris.kg,
         ))
+        # Baris baru ini kini ADA DI DALAM mesin: klaimnya ikut dipasang, supaya
+        # ia tak bisa direbut proses lain dan supaya `selesai_giling`
+        # melepaskannya bersama yang lain.
+        baris.milling_process_id = giling.id
         # ── Ditambah oleh BASIS DATA, bukan dibaca-lalu-ditulis ──
         #
         # `x = x + n` di Python membaca nilai lama ke memori lebih dulu. Dua

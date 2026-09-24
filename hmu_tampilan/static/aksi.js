@@ -279,7 +279,14 @@
     if (terkunci) {
       for (var i = 0; i < (a.fields || []).length; i++) {
         var f0 = a.fields[i];
-        if (f0.type !== "select" && f0.type !== "remote") { continue; }
+        /* `remote_banyak` ikut: pada medan itu "kunci" berarti TERCENTANG DI
+           AWAL, bukan tak bisa diubah (lihat cabang rendernya). Tanpa ia
+           disebut di sini, kartu Silo A membuka borang yang tak mencentang
+           apa pun — dan orang harus memilih ulang benda yang baru saja ia
+           tekan, yaitu persis kesempatan kedua untuk salah pilih yang
+           penguncian ini ada untuk menutupnya. */
+        if (f0.type !== "select" && f0.type !== "remote"
+            && f0.type !== "remote_banyak") { continue; }
         if (f0.type === "select") {
           var ada = (f0.options || []).some(function (o) { return o[0] === terkunci; });
           if (!ada) { break; }
@@ -306,6 +313,31 @@
 
     var isi = (a.fields || []).map(function (f, i, semua) {
       if (f.type === "tombol_aksi") { return ""; }
+      /* ── BEBERAPA pilihan sekaligus: centang, bukan daftar jatuh ──
+       *
+       * Satu giling boleh mengambil dari beberapa silo sekaligus (keputusan
+       * pemilik 24 September 2026), dan hasilnya tetap satu lot. Daftar jatuh
+       * `multiple` tak dipakai: di ponsel ia menuntut tekan-tahan atau tombol
+       * Ctrl yang tak ada, dan yang tak tahu caranya akan mengira hanya satu
+       * yang boleh dipilih — yaitu tepat kesalahpahaman yang hendak diperbaiki.
+       *
+       * Diletakkan SEBELUM cabang "terkunci" dengan sengaja: kartu yang
+       * membuka lembar ini menyebut satu silo, dan silo itu DICENTANG, bukan
+       * dikunci. Mengunci berarti orang yang menekan kartu Silo A tak bisa
+       * menambahkan Silo B tanpa menutup borangnya dulu — kartu jadi kandang.
+       *
+       * Nilainya dikumpulkan di satu kolom tersembunyi (kode dipisah koma),
+       * sebab pengumpul di bawah membaca `[data-name]`; `data-teks` menyimpan
+       * tulisannya untuk kalimat konfirmasi, yang harus berbunyi "Silo A ·
+       * Silo B", bukan "A,B". */
+      if (f.type === "remote_banyak") {
+        return '<label class="lbl">' + esc(f.label) + "</label>" +
+          '<div class="centangan" id="b_' + esc(f.name) + '">' +
+          '<p class="bantu">memuat…</p></div>' +
+          '<input type="hidden" data-name="' + esc(f.name) + '" data-banyak="1"' +
+          (f.optional ? "" : ' data-wajib="1"') +
+          ' data-label="' + esc(f.label) + '" value="">';
+      }
       if (f.name === namaKunci) {
         var teks = terkunci;
         if (f.type === "select") {
@@ -431,6 +463,75 @@
       return sembunyi ? sembunyi.value : "";
     }
 
+    /* Daftar centang: satu kotak per pilihan, nilainya dikumpulkan ke kolom
+       tersembunyi. Dipisah dari `muatPilihan` karena bentuknya lain sejak
+       akarnya — bukan satu <select> yang isinya ditukar, melainkan sekumpulan
+       kotak yang masing-masing punya keadaan sendiri yang harus BERTAHAN
+       melewati pemuatan ulang. */
+    function muatBanyak(f, segar) {
+      ambil(f.source).then(function (daftar) {
+        if (!daftar) { return; }
+        var wadah = $("b_" + f.name);
+        var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
+        if (!wadah || !simpanan) { return; }
+
+        function sinkron() {
+          var nilai = [], teks = [];
+          Array.prototype.forEach.call(
+            wadah.querySelectorAll('input[type="checkbox"]'), function (cb) {
+              if (cb.checked) { nilai.push(cb.value); teks.push(cb.dataset.teks || cb.value); }
+            });
+          simpanan.value = nilai.join(",");
+          simpanan.dataset.teks = teks.join(" · ");
+        }
+
+        if (!daftar.length) {
+          /* Sama seperti daftar jatuh yang kosong: dikatakan SEKARANG, bukan
+             sesudah orang menekan Simpan dan ditolak. */
+          wadah.innerHTML = '<p class="bantu" id="kosong_' + esc(f.name) + '">' +
+            esc(f.kosong || "Belum ada pilihan. Aksi ini belum bisa dikerjakan sekarang.") +
+            "</p>";
+          simpanan.value = "";
+          var tbl = $("simpan");
+          if (tbl && !f.optional) { tbl.disabled = true; tbl.textContent = "Belum bisa disimpan"; }
+          return;
+        }
+
+        /* Yang sudah tercentang orangnya bertahan; daftar yang disegarkan
+           sambil menghapus centangnya lebih merugikan daripada daftar basi. */
+        var sudah = String(simpanan.value || "").split(",").filter(Boolean);
+        /* Kartu yang membuka lembar ini sudah menyebut satu benda — ia
+           dicentang di awal, sekali, dan boleh dilepas kembali. */
+        if (!segar && f.name === namaKunci && terkunci && sudah.indexOf(terkunci) < 0) {
+          sudah.push(terkunci);
+        }
+        /* Pulih dari layar konfirmasi: KODE-nya, bukan tulisannya — tulisan
+           pilihan boleh memuat "·" sendiri ("Silo A · 10.000 kg"), dan
+           memecahnya dengan pemisah yang sama membuang separuh pilihan. */
+        var pulih = (simpanan.dataset.pulih || "").split(",").filter(Boolean);
+        delete simpanan.dataset.pulih;
+
+        wadah.innerHTML = daftar.map(function (o) {
+          var c = sudah.indexOf(o.value) >= 0 || pulih.indexOf(o.value) >= 0;
+          return '<label class="centang"><input type="checkbox" value="' + esc(o.value) +
+            '" data-teks="' + esc(o.label) + '"' + (c ? " checked" : "") + ">" +
+            "<span>" + esc(o.label) + "</span></label>";
+        }).join("");
+        Array.prototype.forEach.call(
+          wadah.querySelectorAll('input[type="checkbox"]'), function (cb) {
+            cb.addEventListener("change", sinkron);
+          });
+        /* Disetel SESUDAH kotaknya digambar: pilihan yang HILANG dari daftar
+           (silonya baru saja diambil proses lain) tak boleh tetap terkirim
+           hanya karena ia masih tercatat di kolom tersembunyi. */
+        sinkron();
+        var lamaNota = $("kosong_" + f.name);
+        if (lamaNota) { lamaNota.remove(); }
+        var tbl2 = $("simpan");
+        if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
+      }).catch(function () {});
+    }
+
     /* ── Daftar pilihan dimuat ULANG, bukan sekali ──
        Tiket timbang yang baru dibuat di Pos Timbang tak muncul di lembar yang
        sudah telanjur terbuka. Operator gudang membuka "Gabah masuk", menunggu
@@ -443,6 +544,10 @@
     function muatPilihan(segar, hanya) {
       terakhirMuat = Date.now();
       (a.fields || []).forEach(function (f) {
+      if (f.type === "remote_banyak") {
+        if (!hanya || f.name === hanya) { muatBanyak(f, segar); }
+        return;
+      }
       if (f.type !== "remote") return;
       if (hanya && f.name !== hanya) { return; }
       /* Daftar yang bergantung medan lain tak dimuat sebelum induknya dipilih:
@@ -587,6 +692,24 @@
             + el.value + "%";
           return;
         }
+        /* Daftar centang: yang dibaca orang TULISANNYA. Kalimat konfirmasi
+           yang berbunyi "A,B" menuntut ia menerjemahkan sendiri — persis saat
+           ia sedang diminta memastikan. */
+        if (el.dataset.banyak) {
+          v[el.dataset.name] = el.dataset.teks || el.value;
+          /* Kodenya dititipkan di kunci terpisah, untuk MEMULIHKAN centangnya
+             saat orang menekan "Kembali" dari layar konfirmasi. Dulu
+             pemulihannya mencocokkan tulisan, dan tulisan itu sendiri memuat
+             "·" ("Silo A · 10.000 kg") — pemisah yang sama dengan yang
+             menggabungkan beberapa pilihan. Hasilnya: yang kedua dan
+             seterusnya lenyap diam-diam, dan orang yang cuma ingin memeriksa
+             sekali lagi kehilangan separuh pilihannya. Ditemukan di peramban,
+             bukan di uji.
+             Kuncinya bertanda titik dua supaya tak pernah cocok dengan lubang
+             {nama} di kalimat konfirmasi. */
+          v["kode:" + el.dataset.name] = el.value;
+          return;
+        }
         var kotak = el.type === "hidden" ? $("t_" + el.dataset.name) : null;
         v[el.dataset.name] = kotak ? kotak.textContent.trim() : el.value;
       });
@@ -610,6 +733,13 @@
       var isi = {};
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
         var v = el.value;
+        /* Dikirim sebagai DAFTAR, bahkan bila cuma satu yang tercentang:
+           server yang menerima kadang daftar kadang teks harus menebak, dan
+           menebak sekali salah berarti giling atas silo yang tak dipilih. */
+        if (el.dataset.banyak) {
+          isi[el.dataset.name] = String(v || "").split(",").filter(Boolean);
+          return;
+        }
         if (el.dataset.angka || el.dataset.ulang) v = (v === "" ? null : parseFloat(String(v).replace(",", ".")));
         /* Medan berulang dikirim sebagai DAFTAR, dan yang kosong dibuang di
            sini — bukan di server. Kotak yang ditambahkan lalu ditinggalkan
@@ -688,6 +818,13 @@
     // karena daftarnya baru selesai dimuat sesudah ini.
     if (semula) {
       Array.prototype.forEach.call(lembar.querySelectorAll("[data-name]"), function (el) {
+        /* Daftar centang dipulihkan lewat KODE, dan diperiksa lebih dulu:
+           kotaknya belum ada saat ini dijalankan, jadi yang dititipkan
+           `data-pulih` dan dipakai `muatBanyak` begitu daftarnya datang. */
+        if (el.dataset.banyak) {
+          el.dataset.pulih = semula["kode:" + el.dataset.name] || "";
+          return;
+        }
         var t = semula[el.dataset.name];
         if (t === undefined || t === "") return;
         /* Medan berulang disimpan sebagai satu teks bergabung ("18% · 19%").

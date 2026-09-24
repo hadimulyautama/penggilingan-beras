@@ -257,6 +257,30 @@ a:hover { color: #7fcbe8; }
 .fld:focus { outline: none; border-color: var(--aksi); }
 select.fld { appearance: none; }
 
+/* ── Daftar centang: BEBERAPA pilihan sekaligus ──
+   Satu giling boleh mengambil dari beberapa silo (keputusan pemilik 24
+   September 2026). Tiap barisnya setinggi sasaran sentuh penuh dan seluruh
+   barisnya yang bisa ditekan, bukan kotak 16px-nya saja: yang mengetuk tepat
+   di kotak kecil sambil berdiri di samping mesin akan meleset, dan yang
+   meleset menyangka silonya tak bisa dipilih. */
+.centangan { display: flex; flex-direction: column; gap: 8px; }
+.centang {
+  display: flex; align-items: center; gap: 12px;
+  min-height: var(--sentuh);
+  padding: 10px 15px;
+  background: var(--panel);
+  border: 1px solid var(--garis);
+  border-radius: 10px;
+  color: var(--tinta);
+  font-size: 15px;
+  cursor: pointer;
+}
+.centang input { width: 20px; height: 20px; accent-color: var(--aksi); flex: none; }
+/* Yang tercentang harus terbaca SEKILAS: borang ini diisi sambil mesin
+   berjalan, dan "sudah saya pilih yang mana tadi?" adalah pertanyaan yang
+   jawabannya tak boleh menuntut memandangi kotak-kotak kecil. */
+.centang:has(input:checked) { border-color: var(--aksi); }
+
 /* ── Penyaring antrean ──
    Muncul hanya saat antreannya panjang, jadi ia tak boleh menyita ruang
    seperti bagian formulir: satu baris, sedikit lebih pendek dari isian
