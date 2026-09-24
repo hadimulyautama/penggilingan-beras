@@ -51,7 +51,13 @@ def test_rincian_berjumlah_sama_dengan_lencana():
     meja = [{"aksi": a} for a in K.SEMUA] + [{"aksi": "verify_gabah"}]
     n = svc.hitung_keputusan(meja)
     assert sum(n.values()) == len(meja)
-    assert n["harga"] == 3 and n["output"] == 2 and n["mutu"] == 2
+    # Jumlah tiap golongan dari SUMBERNYA, plus satu `verify_gabah` tambahan di
+    # atas — angka yang diketik di sini akan basi tiap kali satu jenis lahir
+    # atau dihapus, dan yang basi cepat "diperbaiki" dengan menurunkan
+    # tuntutannya. (Terakhir: `verify_output` dihapus 24 September 2026.)
+    for golongan, daftar in K.GOLONGAN.items():
+        tambahan = 1 if "verify_gabah" in daftar else 0
+        assert n[golongan] == len(daftar) + tambahan, golongan
 
 
 def test_hitung_keputusan_menerima_baris_maupun_dict():

@@ -60,9 +60,14 @@ def _blok_per_aksi() -> dict[str, list[str]]:
 
 
 def test_tiap_jenis_yang_dikirim_punya_bloknya_di_tepat_satu_layar():
+    from app.services import keputusan as K
+
     dikirim = _aksi_yang_dikirim_ke_meja()
-    # Premisnya: uji ini benar-benar menemukan sesuatu untuk diperiksa.
-    assert len(dikirim) >= 6, f"pembaca sumber tak menemukan append: {dikirim}"
+    # Premisnya: uji ini benar-benar menemukan sesuatu untuk diperiksa. Angkanya
+    # dari sumbernya, bukan diketik — jenis yang dihapus (verify_output, 24
+    # September 2026) tak boleh menjatuhkan premis ini, dan jenis yang lahir
+    # nanti harus ikut menaikkannya.
+    assert len(dikirim) >= len(K.SEMUA), f"pembaca sumber tak menemukan append: {dikirim}"
 
     blok = _blok_per_aksi()
     hilang = dikirim - set(blok)
@@ -209,3 +214,48 @@ def test_gerbang_halaman_mutu_sama_dengan_keputusan():
         tanda = inspect.signature(fungsi).parameters["akun"].default
         assert getattr(tanda, "dependency", None) is not None
         assert tanda.dependency.__name__ == "butuh_admin", fungsi.__name__
+
+
+def test_pencocokan_output_tak_lagi_ditagih_tetapi_koreksinya_tetap_ada():
+    """Keputusan pemilik 24 September 2026: "pencocokan hasil giling hapus saja.
+    yang mencatat hasil giling hanya operator. jika ada kesalahan sudah ada di
+    perbaiki hasil giling."
+
+    Yang hilang TAGIHANNYA — kartu "Output belum diverifikasi" yang tumbuh satu
+    baris tiap giling ditutup. Yang TETAP adalah aksinya: tombol "Perbaiki hasil
+    giling" di kartu layar Stok memanggil `verify_output`, dan menghapus aksinya
+    berarti menghapus satu-satunya jalan membetulkan angka yang salah catat.
+    """
+    import pathlib
+
+    from app.services import keputusan as K
+
+    assert "verify_output" not in K.SEMUA, "tagihan pencocokan output kembali"
+    assert "verify_output" not in _aksi_yang_dikirim_ke_meja(), \
+        "kartunya kembali dikirim ke meja"
+
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    # Aksinya tetap hidup, dan tetap dipanggil dari kartu Stok.
+    api = (akar / "app/web/api.py").read_text()
+    assert '"id": "verify_output"' in api and "/api/actions/verify-output" in api
+    stok = (akar / "hmu_tampilan/templates/stok.html").read_text()
+    assert "buka=verify_output" in stok, "tombol Perbaiki hasil giling ikut hilang"
+    # Namanya sama di kedua tempat: dua nama untuk satu pekerjaan membuat orang
+    # mengira ada dua pekerjaan.
+    assert "Perbaiki hasil giling" in api and "Perbaiki hasil giling" in stok
+
+
+def test_hpp_pk_tak_lagi_menuntut_verifikasi():
+    """Kalau tuntutan itu tinggal, HPP PK berhenti terisi diam-diam.
+
+    `hpp_per_kg_pk` dulu menjawab None tanpa `berat_output_final_kg` — aman
+    selama tiap giling ditagih verifikasi. Begitu tagihannya dihapus, hampir
+    tak ada lot yang punya angka itu, dan HPP yang kosong tak menjatuhkan apa
+    pun: ia cuma hilang dari laporan. Sumbernya kini sama dengan stok —
+    terverifikasi bila ada, selain itu progres terakhir operator.
+    """
+    from app.services import transfer
+
+    kode = inspect.getsource(transfer.hpp_per_kg_pk)
+    assert "MillingProcessVerification" not in kode, "tuntutan verifikasi kembali"
+    assert "bd.hpp_penuh" in kode

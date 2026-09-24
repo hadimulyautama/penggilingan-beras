@@ -814,13 +814,25 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "metode", "label": "Metode", "type": "select", "options": METODE},
                  {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
              ]},
-            {"id": "verify_output", "label": "⚙️ Verifikasi output giling",
+            # Namanya KOREKSI, bukan verifikasi (24 September 2026, keputusan
+            # pemilik: "yang mencatat hasil giling hanya operator. jika ada
+            # kesalahan sudah ada di perbaiki hasil giling").
+            #
+            # Aksinya tetap, dan kalimatnya yang berubah — sebab itulah
+            # pekerjaannya sekarang: membetulkan angka yang keliru, bukan
+            # mengesahkan angka yang sudah benar. Nama tombolnya disamakan
+            # dengan tombol di kartu layar Stok, yang memanggil aksi yang SAMA;
+            # dua nama untuk satu pekerjaan membuat orang mengira ada dua.
+            {"id": "verify_output", "label": "🩹 Perbaiki hasil giling",
              "post": "/api/actions/verify-output",
-             "hint": "Catat berat PK final → rendemen terhitung.", "fields": [
+             "hint": "Untuk membetulkan berat PK yang salah catat. Yang mencatat "
+                     "hasil giling operator, lewat \"Perbarui hasil giling\"; "
+                     "rendemen & HPP terhitung ulang dari angka yang dibetulkan.",
+             "fields": [
                  {"name": "kode_proses", "label": "Giling yang sudah selesai", "type": "remote",
                   "source": "/api/actions/milling-unverified",
                   "kosong": "Belum ada giling yang selesai."},
-                 {"name": "berat_output", "label": "Berat PK final (kg)", "type": "number"},
+                 {"name": "berat_output", "label": "Berat PK yang benar (kg)", "type": "number"},
              ]},
             # Korban lama P6-03 atau revisi tiket yang disengaja: keduanya
             # tampak sama dari data, jadi yang memutuskan admin, per proses.

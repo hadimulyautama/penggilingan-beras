@@ -1649,21 +1649,21 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 anak=asal,
                 pilihan=[("qc_giling", "Catat hasil QC",
                           "Kadar air, butir patah, susut")]))
-        ada_v = (await db.execute(
-            select(MillingProcessVerification.id)
-            .where(MillingProcessVerification.milling_process_id == p.id)
-        )).scalars().first()
-        if not ada_v:
-            b.meja.append(Baris(
-                kode=p.kode_proses, isi="output giling belum diverifikasi",
-                keadaan="", aksi="verify_output",
-                nilai=p.kode_proses, sejak=p.waktu_selesai, fase="giling",
-                judul="Output belum diverifikasi",
-                sub=f"{p.kode_proses} · giling sudah ditutup"
-                    + (f" · {_pemasok_ringkas(asal)}" if asal else ""),
-                anak=asal,
-                pilihan=[("verify_output", "Verifikasi output giling",
-                          "Berat PK final — rendemen terhitung dari sini")]))
+        # Kartu "Output belum diverifikasi" DIHAPUS 24 September 2026, keputusan
+        # pemilik: "yang mencatat hasil giling hanya operator. jika ada
+        # kesalahan sudah ada di perbaiki hasil giling."
+        #
+        # Yang ditagihnya adalah pencocokan ulang oleh admin atas angka yang
+        # SUDAH dicatat orang yang berdiri di mesinnya. Tagihan semacam itu
+        # tumbuh satu baris tiap giling ditutup, dan yang tumbuh tiap hari
+        # tanpa pernah habis mengajari orang mengabaikan daftarnya.
+        #
+        # Aksinya sendiri TIDAK dihapus: `verify_output` tetap jadi tombol
+        # "Perbaiki hasil giling" di kartu layar Stok — di situlah angkanya
+        # dibaca, dan di situ pula ia dibetulkan bila keliru. Dan angka operator
+        # kini dipakai apa adanya oleh stok, HPP, dan rendemen (lihat
+        # `milling._produced_pk` dan `transfer.hpp_per_kg_pk`), bukan menunggu
+        # disahkan lebih dulu.
 
     # ── Giling selesai yang bobot masuknya tak cocok dengan bahannya ──
     #

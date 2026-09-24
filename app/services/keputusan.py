@@ -41,7 +41,15 @@ MUTU = "mutu"
 JENIS: tuple[tuple[str, str, str], ...] = (
     ("verify_gabah", "Harga gabah belum diverifikasi", "harga"),
     ("harga_pk_luar", "Harga PK luar belum diverifikasi", "harga"),
-    ("verify_output", "Output giling belum dicocokkan", "output"),
+    # "Output giling belum dicocokkan" DIHAPUS 24 September 2026, keputusan
+    # pemilik: "yang mencatat hasil giling hanya operator. jika ada kesalahan
+    # sudah ada di perbaiki hasil giling."
+    #
+    # Tagihannya yang hilang, bukan aksinya: `verify_output` tetap hidup sebagai
+    # tombol "Perbaiki hasil giling" di kartu layar Stok — di situlah angkanya
+    # dibaca, dan di situ pula ia dibetulkan. Yang berhenti adalah MENAGIH
+    # admin mencocokkan tiap giling yang ditutup: angka operator kini angka
+    # yang dipakai, bukan perkiraan yang menunggu disahkan.
     ("betulkan_bobot_giling", "Bobot masuk giling tak cocok", "output"),
     ("qc_giling", "Mutu giling belum diperiksa", MUTU),
     ("qc_pk_luar", "Mutu PK luar belum dicatat", MUTU),
