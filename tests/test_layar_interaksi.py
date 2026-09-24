@@ -235,6 +235,22 @@ def test_daftar_yang_bergantung_menunggu_induknya():
     assert "else if (f.induk && daftar.length === 1)" in AKSI
 
 
+def test_penampung_sementara_pilihan_punya_value_kosong():
+    """`<option>` tanpa `value` memakai TULISANNYA sebagai nilai.
+
+    Ditemukan di peramban sungguhan, bukan oleh uji: medan silo yang bergantung
+    pada medan proses membaca "memuat…" sebagai pilihan yang sah, memuat
+    daftarnya dengan induk itu, dan menerima daftar kosong — layarnya berkata
+    "(belum ada)" lalu mematikan tombol Simpan, padahal orangnya belum memilih
+    apa pun. Uji kontrak dan uji pg tak bisa melihatnya: keduanya tak pernah
+    menanyakan `select.value` kepada peramban.
+    """
+    for penampung in ('"><option value="">', '<option value="">memuat…</option>'):
+        assert penampung in AKSI, penampung
+    # Dan tak ada penampung yang tertinggal tanpa value.
+    assert "<option>memuat…" not in AKSI
+
+
 def test_kunci_dilepas_kalau_barisnya_sudah_basi():
     """Kalau nilai dari barisnya tak ada lagi di daftar server, mengirimnya
     hanya akan ditolak. Kuncinya dilepas supaya orang bisa memilih sendiri."""

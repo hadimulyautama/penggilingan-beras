@@ -344,7 +344,13 @@
         return l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
           '"' + (f.optional ? "" : ' data-wajib="1"') +
           (f.induk ? ' data-induk="' + esc(f.induk) + '"' : "") +
-          ' data-label="' + esc(f.label) + '"><option>' +
+          /* `value=""` pada PENAMPUNG SEMENTARA, dan itu bukan kerapian:
+             <option> tanpa value memakai TULISANNYA sebagai nilai. Medan lain
+             yang bergantung pada medan ini lalu membaca "memuat…" sebagai
+             pilihan yang sah, memuat daftarnya dengan induk itu, dan menerima
+             daftar kosong — layarnya berkata "(belum ada)" lalu mematikan
+             tombol Simpan, padahal orangnya belum memilih apa pun. */
+          ' data-label="' + esc(f.label) + '"><option value="">' +
           (f.induk ? "— pilih " + esc(belah(cariLabel(semua, f.induk)).teks.toLowerCase()) +
                      " dulu —" : "memuat…") +
           "</option></select>";
@@ -539,7 +545,7 @@
       pi.addEventListener("change", function () {
         var anak = $("f_" + f.name);
         if (anak) {
-          anak.innerHTML = "<option>memuat…</option>";
+          anak.innerHTML = '<option value="">memuat…</option>';
           anak.disabled = false;
         }
         var lamaNota = $("kosong_" + f.name);
