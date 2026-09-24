@@ -506,8 +506,17 @@ def test_daftar_qc_memuat_yang_sudah_dinilai():
     teks = (AKAR / "app/web/api.py").read_text()
     fn = teks.split("async def milling_noqc")[1].split("\n@router")[0]
     assert "not_in" not in fn, "yang sudah punya QC kembali disaring keluar"
-    assert "case((ada_qc, 1)" in fn, "yang belum dinilai tak lagi di atas"
-    assert '"label": k}' in fn, "label diberi penanda; ia akan bocor ke teks terkunci"
+    # Urutannya: yang SEDANG BERJALAN di atas (di situlah orangnya berdiri saat
+    # mencatat — keputusan pemilik 24 September 2026), lalu yang selesai tetapi
+    # belum dinilai, lalu sisanya. Dulu cuma dua golongan, sebab daftar ini
+    # cuma memuat yang sudah selesai.
+    assert 'MillingProcess.status.in_(("proses", "selesai"))' in fn, \
+        "giling yang sedang berjalan tak lagi bisa dinilai mutunya"
+    assert "case((jalan, 0), (ada_qc, 2), else_=1)" in fn, "urutannya berubah"
+    # Labelnya kini menyebut keadaan & jumlah catatan. Itu AMAN untuk penguncian
+    # penunjuk dari kartu: `aksi.js` mencocokkan `value`, bukan `label` — dan
+    # nilainya tetap kode prosesnya apa adanya.
+    assert '"value": k,' in fn, "nilai bukan lagi kode proses apa adanya"
 
 
 def test_hasil_dan_mutu_punya_tombolnya_masing_masing():
@@ -548,8 +557,13 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"
     assert "if await fitur_mutu(db) else []" in jalan, "kartu QC PK luar tak ikut padam"
     # Impornya ada di FUNGSI yang memakainya — pernah tidak, dan /keputusan
-    # menjawab 500 sementara seluruh tes tetap hijau.
-    assert jalan.count("from app.services.setelan import fitur_mutu") == 2
+    # menjawab 500 sementara seluruh tes tetap hijau. Tiga sejak 24 September
+    # 2026: `untuk_gudang1` ikut membacanya, karena kartu giling yang sedang
+    # berjalan kini menawarkan "Catat mutu sekarang" dan menyebut rata-ratanya —
+    # keduanya harus ikut padam saat pencatatan mutu dimatikan.
+    assert jalan.count("from app.services.setelan import fitur_mutu") == 3
+    assert "if (boleh_qc and qc_aktif) else []" in jalan, \
+        "tombol QC di kartu giling tak ikut padam / tak bergerbang peran"
 
     teks = TPL.read_text()
     assert "{% if mutu_aktif %}" in teks, "baris mutu di kartu Stok tak ikut padam"

@@ -784,6 +784,86 @@ class QcResult:
     susut: float | None
     kondisi: str | None
     qc_count: int
+    #: Rata-rata SESUDAH catatan ini masuk — yang dibaca orang di kalimat
+    #: balasannya. Angka yang baru saja ia ketik sudah ia tahu; yang belum ia
+    #: tahu adalah ke mana angka itu menggeser rata-ratanya.
+    rata: "QcRata | None" = None
+
+
+@dataclass(frozen=True)
+class QcRata:
+    """Rata-rata QC satu proses giling, berikut berapa catatan yang menyusunnya.
+
+    Mutu dicatat BERULANG selama proses berjalan (keputusan pemilik 24 September
+    2026: "pencatatan juga bisa dilakukan saat proses berlangsung dari kartu
+    proses yang sedang berlangsung; nanti hasilnya di rata-rata"). Satu tusukan
+    di awal giling dan satu di akhir menggambarkan muatan yang sama lebih jujur
+    daripada satu angka yang kebetulan diambil di menit terakhir.
+
+    Tiap kolom dirata-rata SENDIRI, dan hanya dari catatan yang mengisinya:
+    borangnya memang menerima "isi minimal salah satu", jadi catatan yang cuma
+    menyebut broken tak boleh menyeret rata-rata kadar air ke bawah. Karena itu
+    `n` per kolom, bukan satu jumlah untuk semuanya.
+    """
+
+    kadar_air: float | None = None
+    broken: float | None = None
+    susut: float | None = None
+    n_kadar_air: int = 0
+    n_broken: int = 0
+    n_susut: int = 0
+    #: Berapa catatan QC seluruhnya — termasuk yang cuma mengisi satu kolom.
+    n: int = 0
+
+    @property
+    def ada(self) -> bool:
+        return self.n > 0
+
+    def teks(self) -> str:
+        """Satu baris untuk kartu. Kosong bila belum ada catatan sama sekali."""
+        bagian = [f"{nama} {nilai:.1f}%".replace(".", ",")
+                  for nama, nilai in (("KA", self.kadar_air), ("broken", self.broken),
+                                      ("susut", self.susut)) if nilai is not None]
+        if not bagian:
+            return ""
+        # Jumlah catatannya ikut disebut: rata-rata dari satu tusukan dan
+        # rata-rata dari lima tusukan sama-sama berupa satu angka di layar, dan
+        # yang membacanya berhak tahu bedanya.
+        return " · ".join(bagian) + f" (rata-rata {self.n} catatan)"
+
+
+async def qc_rata(db: AsyncSession, proc_id: int) -> QcRata:
+    """Rata-rata QC satu proses giling."""
+    return (await qc_rata_banyak(db, [proc_id])).get(proc_id, QcRata())
+
+
+async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
+    """Rata-rata QC beberapa proses sekaligus — SATU kueri.
+
+    Kartu giling digambar untuk tiap proses yang menyala, dan kartu itu ikut
+    disusun ulang tiap kali lencana laci dihitung, yaitu di tiap halaman. Satu
+    kueri per proses di tempat seperti itu adalah pola yang sudah pernah
+    membuat layar Stok mengeluarkan ribuan kueri (QA P-S-02).
+    """
+    ids = [int(x) for x in proc_ids]
+    if not ids:
+        return {}
+    baris = (await db.execute(
+        select(
+            MillingQcLog.milling_process_id,
+            func.avg(MillingQcLog.kadar_air), func.count(MillingQcLog.kadar_air),
+            func.avg(MillingQcLog.broken_persen), func.count(MillingQcLog.broken_persen),
+            func.avg(MillingQcLog.susut_persen), func.count(MillingQcLog.susut_persen),
+            func.count(),
+        ).where(MillingQcLog.milling_process_id.in_(ids))
+        .group_by(MillingQcLog.milling_process_id)
+    )).all()
+    return {r[0]: QcRata(
+        kadar_air=float(r[1]) if r[1] is not None else None,
+        broken=float(r[3]) if r[3] is not None else None,
+        susut=float(r[5]) if r[5] is not None else None,
+        n_kadar_air=int(r[2]), n_broken=int(r[4]), n_susut=int(r[6]), n=int(r[7]),
+    ) for r in baris}
 
 
 async def log_qc_milling(
@@ -805,6 +885,10 @@ async def log_qc_milling(
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
     if all(v is None for v in (kadar_air, broken, susut)):
         raise MillingError("Sebutkan hasil QC-nya (kadar air / broken / susut).")
+    # Proses yang MASIH BERJALAN boleh dicatat mutunya (pemilik 24 September
+    # 2026) — dan memang di situlah contohnya diambil: dari beras yang baru
+    # keluar mesin, bukan dari tumpukan yang sudah ditutup. Tak ada syarat
+    # status di sini; yang menolak hanya proses yang tak ada.
     # Jenis PK TIDAK diisi manual — ditentukan otomatis dari kondisi gabah
     # SELURUH sumbernya: basah → KS, kering → KL, dua-duanya → MIX. Input
     # manual diabaikan.
@@ -827,16 +911,10 @@ async def log_qc_milling(
         new_value=f"ka={kadar_air} broken={broken} susut={susut} kondisi={kondisi}",
     )
     await db.commit()
-    count = (
-        await db.execute(
-            select(func.count()).select_from(MillingQcLog).where(
-                MillingQcLog.milling_process_id == proc.id
-            )
-        )
-    ).scalar_one()
+    rata = await qc_rata(db, proc.id)
     return QcResult(
         proc=proc, kadar_air=kadar_air, broken=broken, susut=susut,
-        kondisi=kondisi, qc_count=count,
+        kondisi=kondisi, qc_count=rata.n, rata=rata,
     )
 
 

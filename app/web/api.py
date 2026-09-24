@@ -835,11 +835,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              ]},
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/api/actions/qc-giling",
-             "hint": "Isi minimal salah satu: kadar air / broken / susut. Yang "
-                     "dikosongkan mempertahankan nilai sebelumnya.", "fields": [
-                 {"name": "kode_proses", "label": "Giling yang sudah selesai", "type": "remote",
+             "hint": "Boleh dicatat berulang selama giling berjalan — contoh dari "
+                     "beras yang baru keluar mesin. Hasilnya dirata-rata. Isi "
+                     "minimal salah satu: kadar air / broken / susut.", "fields": [
+                 {"name": "kode_proses",
+                  "label": "Giling yang sedang berjalan atau sudah selesai",
+                  "type": "remote",
                   "source": "/api/actions/milling-noqc",
-                  "kosong": "Belum ada giling yang selesai."},
+                  "kosong": "Belum ada giling yang bisa dinilai mutunya."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Butir patah (%)", "type": "number"},
                  {"name": "susut", "label": "Susut (%)", "type": "number"},
@@ -1436,29 +1439,44 @@ async def milling_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/milling-noqc")
 async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Milling SELESAI — yang belum dinilai mutunya lebih dulu, sisanya menyusul.
+    """Giling yang bisa dinilai mutunya — yang SEDANG BERJALAN lebih dulu.
 
     Dulu hanya yang belum punya catatan QC sama sekali. Itu menutup KOREKSI:
     mutu yang salah ketik tak bisa dibetulkan lewat daftar ini, dan — sama
     persis dengan `milling_unverified` — penguncian penunjuk dari kartu Stok
     ikut terlepas begitu satu lot punya QC, karena `aksi.js` melepas kunci bila
     nilainya tak ada di daftarnya.
+
+    Dan dulu hanya yang SELESAI. Keputusan pemilik 24 September 2026: mutu juga
+    dicatat selagi mesin jalan, dari kartu prosesnya, lalu hasilnya dirata-rata —
+    contohnya memang diambil dari beras yang baru keluar mesin, bukan dari
+    tumpukan yang sudah ditutup berjam-jam sebelumnya.
+
+    Urutannya: yang sedang berjalan di atas (di situlah orangnya berdiri saat
+    mencatat), lalu yang selesai tetapi belum dinilai, lalu sisanya.
     """
     _require(can_see_financials(user))
     await _wajib_mutu()
-    from sqlalchemy import case, exists, select
+    from sqlalchemy import case, exists, func, select
     from app.models import MillingProcess, MillingQcLog
     async with SessionLocal() as db:
         ada_qc = exists().where(MillingQcLog.milling_process_id == MillingProcess.id)
+        jalan = MillingProcess.status == "proses"
+        n_qc = (select(func.count()).select_from(MillingQcLog)
+                .where(MillingQcLog.milling_process_id == MillingProcess.id)
+                .scalar_subquery())
         baris = (
             await db.execute(
-                select(MillingProcess.kode_proses, ada_qc.label("ada"))
-                .where(MillingProcess.status == "selesai")
-                .order_by(case((ada_qc, 1), else_=0),
+                select(MillingProcess.kode_proses, jalan.label("jalan"), n_qc.label("n"))
+                .where(MillingProcess.status.in_(("proses", "selesai")))
+                .order_by(case((jalan, 0), (ada_qc, 2), else_=1),
                           MillingProcess.kode_proses.desc())
             )
         ).all()
-    return [{"value": k, "label": k} for k, _ in baris]
+    return [{"value": k,
+             "label": k + (" · sedang digiling" if j else "")
+                        + (f" · {n} catatan mutu" if n else "")}
+            for k, j, n in baris]
 
 
 @router.get("/actions/pk-luar-qc")
@@ -2147,7 +2165,12 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -
         (("KA", r.kadar_air), ("broken", r.broken), ("susut", r.susut)) if v is not None
     )
     jns = f" [{r.kondisi}]" if r.kondisi else ""
-    pesan = f"✓ QC *{req.kode_proses}*{jns}: {det}."
+    # Angka yang baru saja diketik sudah diketahui orangnya; yang belum ia tahu
+    # adalah ke mana angka itu menggeser rata-ratanya. Disebut hanya bila sudah
+    # ada lebih dari satu catatan — "rata-rata 1 catatan" cuma mengulang.
+    ekor = (f" Rata-rata kini: {r.rata.teks()}."
+            if r.rata is not None and r.rata.n > 1 else "")
+    pesan = f"✓ QC *{req.kode_proses}*{jns}: {det}.{ekor}"
     return {"ok": True, "pesan": pesan}
 
 

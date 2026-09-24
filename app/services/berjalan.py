@@ -795,8 +795,15 @@ def _cap_gudang(b: Berjalan, gid: str) -> Berjalan:
     return b
 
 
-async def untuk_gudang1(db: AsyncSession) -> Berjalan:
-    """Pekerjaan operator Gudang 1, dari truk masuk sampai giling ditutup."""
+async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan:
+    """Pekerjaan operator Gudang 1, dari truk masuk sampai giling ditutup.
+
+    `boleh_qc` — pembacanya boleh mencatat mutu (admin ke atas). Mutu dicatat
+    dari kartu giling yang SEDANG BERJALAN sejak 24 September 2026 (keputusan
+    pemilik), dan tombol yang ditawarkan kepada orang yang akan ditolak rutenya
+    lebih buruk daripada tombol yang tak ada: ia mengajari orang bahwa
+    aplikasinya suka menolak.
+    """
     b = Berjalan()
 
     b.menunggu += await _tiket_belum_ditaut(db)
@@ -1127,10 +1134,19 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                       "Seluruh isi silo jadi satu lot (LOT-…)")],
         ))
 
-    for p in (await db.execute(
+    giling_jalan = (await db.execute(
         select(MillingProcess).where(MillingProcess.status == "proses")
         .order_by(MillingProcess.id.desc())
-    )).scalars().all():
+    )).scalars().all()
+    # Rata-rata QC seluruh proses yang menyala, SATU kueri — kartu ini disusun
+    # ulang tiap kali lencana laci dihitung, yaitu di tiap halaman.
+    from app.penggilingan.gudang1.services.milling import qc_rata_banyak
+    from app.services.setelan import fitur_mutu
+
+    qc_aktif = await fitur_mutu(db) if giling_jalan else False
+    rata_qc = (await qc_rata_banyak(db, [p.id for p in giling_jalan])
+               if qc_aktif else {})
+    for p in giling_jalan:
         from app.penggilingan.gudang1.services.jeda import jeda_terbuka, tertahan_detik
 
         macet = await jeda_terbuka(db, "giling", p.id)
@@ -1150,6 +1166,14 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
                     + ("" if p.bobot_masuk_final else " · belum final, menunggu timbang"))]
         if tertahan >= 60:
             fakta_g.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
+        # Mutu yang SUDAH dicatat selama proses ini berjalan. Sampai 24
+        # September 2026 angka-angka itu tersimpan tanpa pernah dibaca kembali
+        # oleh satu layar pun — `milling_qc_logs` cuma ditulis dan dihitung
+        # jumlahnya. Yang dicatat tanpa pernah terbaca sama saja dengan yang
+        # tak dicatat, kecuali ia memakan waktu orang.
+        _rata = rata_qc.get(p.id)
+        if _rata is not None and _rata.ada:
+            fakta_g.append(("Mutu", _rata.teks()))
         b.berjalan.append(Baris(
             kode=p.kode_proses,
             isi=(f"⏸ berhenti — {macet.sebab}" if macet else "digiling")
@@ -1181,6 +1205,9 @@ async def untuk_gudang1(db: AsyncSession) -> Berjalan:
             ] if macet else [
                 ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru",
                  p.kode_proses),
+                *([("qc_giling", "Catat mutu sekarang",
+                    "Contoh dari beras yang baru keluar mesin — hasilnya dirata-rata",
+                    p.kode_proses)] if (boleh_qc and qc_aktif) else []),
                 ("hentikan_proses", "Hentikan sementara",
                  "Mesin rusak, limbah penuh, jam kerja habis",
                  f"giling:{p.kode_proses}"),
@@ -1668,8 +1695,11 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
     from app.web.api import _is_g1_operator, _is_g2_operator
 
     b = Berjalan()
+    # Boleh mencatat mutu = boleh melihat uang (admin ke atas). Dihitung sekali:
+    # kartu giling yang sama disusun lewat dua cabang di bawah.
+    boleh_qc = can_see_financials(user)
     if await _is_g1_operator(user):
-        g = await untuk_gudang1(db)
+        g = await untuk_gudang1(db, boleh_qc=boleh_qc)
         b.menunggu += g.menunggu
         b.berjalan += g.berjalan
         # Transit ikut. Sebelumnya tidak, dan akibatnya blok Transit di layar
@@ -1692,7 +1722,7 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         # Staff & Direksi tak terikat satu gudang; keadaan fisik G1 tetap
         # perlu terlihat, tetapi sebagai kabar — bukan sebagai tugas mereka.
         if not await _is_g1_operator(user):
-            g1 = await untuk_gudang1(db)
+            g1 = await untuk_gudang1(db, boleh_qc=boleh_qc)
             b.berjalan += g1.berjalan
             b.transit += g1.transit
     # Gudang 2 tak lagi "menyusul": PK luar dan penyosohan punya kartunya

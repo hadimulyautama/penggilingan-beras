@@ -186,7 +186,11 @@ def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
     """Tombol bertuliskan "Matikan" memaksa orang membaca dulu keadaan
     sekarang untuk tahu arah tekanannya. Saklar MENUNJUKKAN keadaannya."""
     html = (AKAR / "hmu_tampilan/templates/pengaturan.html").read_text()
-    blok = html[html.index("Mutu &amp; QC"):]
+    # Blok setelannya bernama "Pencatatan mutu" sejak 24 September 2026: nama
+    # "Mutu & QC" kini milik LAYAR, dan dua hal bernama sama dalam satu app
+    # adalah kelas kebingungan yang pemilik sendiri pernah mengeluhkannya.
+    assert '<span class="lbl">Pencatatan mutu</span>' in html
+    blok = html[html.index('<span class="lbl">Pencatatan mutu</span>'):]
     assert 'role="switch"' in blok, "bukan saklar"
     assert 'aria-checked="{{ \'true\' if mutu_aktif else \'false\' }}"' in blok
     assert "saklar--nyala' if mutu_aktif" in blok

@@ -267,8 +267,12 @@
    penting lagi tak perlu melihat kartu "mutu belum diperiksa" yang menagih
    pekerjaan yang memang tak dilakukan. Tagihan yang tak pernah bisa lunas
    mengajari orang mengabaikan tagihan. #}
+{# Namanya "Pencatatan mutu", bukan "Mutu & QC": sejak 24 September 2026 ada
+   LAYAR bernama "Mutu & QC", dan dua hal bernama sama dalam satu aplikasi
+   adalah kelas kebingungan yang pemilik sendiri pernah mengeluhkannya. Yang di
+   sini memang bukan layarnya melainkan SAKLARNYA — `setelan.fitur_mutu`. #}
 <div>
-  <span class="lbl">Mutu &amp; QC</span>
+  <span class="lbl">Pencatatan mutu</span>
   <div class="kartu">
     <form method="post" action="/pengaturan/fitur-mutu" class="saklar-borang">
       <input type="hidden" name="_csrf" value="{{ CSRF }}">
@@ -282,7 +286,8 @@
     </form>
     <p class="bantu">
       {%- if mutu_aktif %}Borang QC tersedia; kartu Stok menyebut kadar air,
-      butir patah, dan susut; Menunggu keputusan menagih mutu yang belum diperiksa.
+      butir patah, dan susut; layar &ldquo;Mutu &amp; QC&rdquo; menagih mutu yang
+      belum diperiksa.
       {%- else %}Borang QC, kartu &ldquo;mutu belum diperiksa&rdquo;, dan baris
       mutu di kartu Stok semuanya disembunyikan. Catatan yang sudah ada tidak
       dihapus — ia kembali begitu dinyalakan lagi.{% endif -%}
