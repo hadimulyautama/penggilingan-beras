@@ -147,6 +147,14 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # kartunya — tetapi `boleh_ubah` juga yang memasang `aksi.js` di
         # kaki halaman, jadi ia dimatikan di view yang tak memuat kartunya.
         boleh_ubah=akun.is_admin and view != POLESAN,
+        # ── "Minta lot ini" — hanya view yang memegang Gudang 2 ──
+        #
+        # Operator selepan tak boleh melihatnya (bukan pekerjaannya), dan Admin
+        # tak membutuhkannya — ia bisa memindahkan langsung. Menyembunyikan
+        # tombolnya BUKAN penjagaan: rutenya dijaga sendiri
+        # (`api.act_minta_pk_g1` menuntut operator Gudang 2), dan yang di sini
+        # cuma menghindari menawarkan pintu yang akan ditolak.
+        boleh_minta=view == POLESAN,
         # Stok karung, keputusan pemilik 23 September 2026: dilihat operator
         # Gudang 2, Admin, dan Super Admin — TIDAK operator Gudang 1. Aturan
         # siapa-melihat-apa tidak ditulis ulang di sini; ia sudah bernama

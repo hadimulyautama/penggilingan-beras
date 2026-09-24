@@ -56,6 +56,7 @@ from app.models.akun import ProduksiAkun
 from app.models.peristiwa import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahTumpukanSilo,
                                   ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
 from app.models.system import ActivityLog, KodeUrut, Notification, SetelanPabrik
+from app.models.permintaan import PermintaanPk
 from app.models.transfer import InternalTransfer
 from app.models import cermin  # noqa: E402,F401  (pasang saringan cermin bertanda)
 
@@ -106,6 +107,7 @@ __all__ = [
     "OutgoingItem",
     # transfer (bridge)
     "InternalTransfer",
+    "PermintaanPk",
     # system
     "ActivityLog",
     "KodeUrut",

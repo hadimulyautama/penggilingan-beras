@@ -45,8 +45,16 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     # tercatat di audit, bukan lewat borang milik layar ini. (`data-buka` pada
     # tag skrip bukan jalan tulis — ia yang membuka lembarnya kembali setelah
     # halaman dimuat ulang.)
-    assert "buka=verify_output" in teks and "buka=qc_giling" in teks
-    assert teks.count("?buka=") == 2, "ada jalan tulis ketiga"
+    # Didaftar SATU PER SATU, bukan dihitung: angka 2 dulu berubah jadi 3 saat
+    # "Minta lot ini" lahir (24 September 2026), dan uji yang cuma menghitung
+    # akan "diperbaiki" dengan menaikkan angkanya — tanpa seorang pun membaca
+    # apa yang ditambahkan.
+    #
+    # Ketiganya membuka aksi yang SUDAH ada dan sudah tercatat. Yang ketiga
+    # bahkan tak menyentuh stok sama sekali: ia mencatat PERMINTAAN operator
+    # Gudang 2 agar lot ini dipindah, dan yang memindahkan tetap Admin.
+    dibuka = set(re.findall(r"\?buka=([a-z_0-9]+)", teks))
+    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1"}, dibuka
 
 
 def test_koreksi_stok_hanya_untuk_admin_keatas():

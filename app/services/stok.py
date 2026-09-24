@@ -89,6 +89,15 @@ class LotPk:
     #: padahal ia tak pernah dicabut.
     mutu: list[tuple[str, str]] = field(default_factory=list)
 
+    #: Sudah DIMINTA operator Gudang 2 (nama peminta), atau None.
+    #:
+    #: Kartu yang sudah diminta tak menawarkan tombol "Minta lot ini" lagi: tombol
+    #: yang ditekan dua kali karena layarnya tak berubah adalah tombol yang
+    #: mengajari orang menekan dua kali. Pagar sungguhannya tetap di basis data
+    #: (indeks parsial `uq_permintaan_pk_terbuka`) — layar tak bisa menjaga dua
+    #: permintaan yang tiba pada detik yang sama.
+    diminta_oleh: str | None = None
+
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tidak diketahui.
     #:
@@ -384,6 +393,10 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     # Nilai QC untuk seluruh lot sekaligus. Satu kueri, bukan satu per lot.
     peta_mutu = await _mutu_banyak(db, [p.id for p in proses])
     peta_bahan = await _bahan_banyak(db, proses)
+    # Permintaan yang masih terbuka, satu kueri untuk seluruh lot.
+    from app.services.permintaan_pk import diminta_peta
+
+    peta_minta = await diminta_peta(db, [p.id for p in proses])
 
     keluar: list[LotPk] = []
     for proc in proses:
@@ -422,6 +435,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
+            diminta_oleh=(peta_minta[proc.id].oleh if proc.id in peta_minta else None),
             belum_dicatat=belum,
         ))
     return keluar

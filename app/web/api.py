@@ -795,6 +795,27 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
              ]},
         ]
+        # "Minta lot ini" — permintaan, bukan izin (pemilik 24 September 2026).
+        #
+        # SESUDAH pekerjaan harian, bukan sebelumnya: yang memimpin daftar
+        # seharusnya yang paling sering dikerjakan. Dan hanya untuk OPERATOR —
+        # Admin yang juga memegang Gudang 2 tak membutuhkannya, sebab ia bisa
+        # memindahkan langsung; permintaan kepada diri sendiri cuma satu baris
+        # tambahan yang harus ditutup sendiri. Rutenya menjaga hal yang sama;
+        # yang di sini cuma berhenti menawarkan.
+        #
+        # Tak punya daftar pilihan sendiri: ia SELALU dibuka dari kartu lot di
+        # layar Stok, yang sudah menyebut lot mana.
+        if not fin:
+            actions += [
+                {"id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
+                 "post": "/api/actions/minta-pk-g1",
+                 "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. Yang "
+                         "memindahkan tetap Admin.",
+                 "fields": [
+                     {"name": "kode_proses", "label": "Lot PK", "type": "text"},
+                 ]},
+            ]
     BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
              ["sedang", "Sedang"], ["banyak", "Banyak"]]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
@@ -918,6 +939,18 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat", "label": "Berat kg (kosong = semua)", "type": "number"},
                  {"name": "tujuan", "label": "Tujuan", "type": "select", "options": TUJUAN},
              ]},
+            # Menolak permintaan operator Gudang 2. Tak punya daftar sendiri:
+            # ia SELALU dibuka dari kartunya di Antrian tunggu, yang sudah
+            # menyebut lot dan pemintanya — medan tersembunyi `permintaan`
+            # dikunci nilainya oleh kartu itu (`aksi.js`).
+            {"id": "tolak_permintaan_pk", "label": "🚫 Tolak permintaan PK",
+             "post": "/api/actions/tolak-permintaan-pk",
+             "hint": "Sebabnya terbaca operator yang meminta. Permintaan yang "
+                     "hilang tanpa kabar akan diajukan lagi besok.",
+             "fields": [
+                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "sebab", "label": "Sebab menolak", "type": "text"},
+             ]},
         ]
 
     # Aksi inventory tinggal di modulnya sendiri, tetapi menunya tetap SATU
@@ -987,6 +1020,7 @@ _GRUP_AKSI = {
     "lanjutkan_penyosohan": "Gudang 2 · penyosohan",
     "selesai_penyosohan": "Gudang 2 · penyosohan",
     "transfer_pk": "Gudang 2 · penyosohan",
+    "minta_pk_g1": "Gudang 2 · penyosohan",
     # PK yang datang dari luar, bukan hasil giling sendiri.
     "catat_pk_luar": "PK dari luar",
     "masukkan_pk": "PK dari luar",
@@ -1008,7 +1042,8 @@ for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
            "selesai_pengeringan", "selesai_pendinginan", "pindah_silo",
            "ubah_target",
            "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
-           "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling"):
+           "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling",
+           "minta_pk_g1", "tolak_permintaan_pk"):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
 #: Urutan kelompok di layar — yang paling sering dipakai lebih dulu. Yang
@@ -1030,6 +1065,9 @@ _ACTION_WH = {
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "hentikan_proses": "g1", "lanjutkan_proses": "g1",
     "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
+    # Barangnya di Gudang 1, peminatnya Gudang 2 — dicap g1, sama dengan
+    # `transfer_pk`: yang dikerjakan orang atasnya adalah memindahkan dari G1.
+    "minta_pk_g1": "g1", "tolak_permintaan_pk": "g1",
     "betulkan_bobot_giling": "g1",
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
@@ -2326,6 +2364,72 @@ async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(pengguna_a
     hpp = f" · HPP {_rp(r.hpp_per_kg)}/kg" if r.hpp_per_kg else ""
     pesan = f"✓ Harga PK *{req.kode_batch}* terverifikasi (bersih {r.berat_bersih_kg:g} kg){hpp}."
     return {"ok": True, "pesan": pesan}
+
+
+# ── Permintaan operator Gudang 2 atas lot PK Gudang 1 ──
+#
+# Keputusan pemilik 24 September 2026. Yang lahir di sini PERMINTAAN, bukan
+# izin: `can_transfer_pk` tidak disentuh, dan yang memindahkan tetap Admin.
+
+
+class MintaPkReq(BaseModel):
+    kode_proses: str
+
+
+@router.post("/actions/minta-pk-g1")
+async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """Operator Gudang 2 meminta satu lot PK Gudang 1 dipindah kepadanya.
+
+    Gerbangnya di RUTE, bukan cuma pada tombolnya: menyembunyikan pintu bukan
+    penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
+    orang lain masih bisa mengirim.
+
+    Yang boleh: operator yang sedang bekerja di Gudang 2. Admin tidak — ia bisa
+    memindahkan langsung, dan permintaan kepada diri sendiri cuma satu baris
+    tambahan yang harus ditutup sendiri.
+    """
+    _require(await _is_g2_operator(user) and not can_see_financials(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih lot PK dulu.")
+    from app.services.permintaan_pk import PermintaanError, minta
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            await minta(db, user=u, kode_proses=req.kode_proses)
+        except PermintaanError as e:
+            raise _err(e, "Gagal meminta lot PK.")
+    return {"ok": True,
+            "pesan": f"✓ Lot *{req.kode_proses}* diminta — Admin melihatnya di "
+                     "Antrian tunggu. Yang memindahkan tetap Admin."}
+
+
+class TolakPermintaanReq(BaseModel):
+    permintaan: str
+    sebab: str = ""
+
+
+@router.post("/actions/tolak-permintaan-pk")
+async def act_tolak_permintaan_pk(req: TolakPermintaanReq,
+                                  user: User = Depends(pengguna_aksi)) -> dict:
+    """Admin menolak permintaan, DENGAN sebabnya.
+
+    Sebab wajib, dan itu bukan formalitas: permintaan yang lenyap tanpa kabar
+    membuat operator mengajukannya lagi besok, dan Admin menolaknya lagi —
+    keduanya mengira pihak satunya yang lalai.
+    """
+    _require(can_transfer_pk(user))
+    try:
+        pid = int((req.permintaan or "").strip())
+    except ValueError:
+        raise HTTPException(400, "Permintaan yang mana?")
+    from app.services.permintaan_pk import PermintaanError, tolak
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            await tolak(db, user=u, permintaan_id=pid, sebab=req.sebab)
+        except PermintaanError as e:
+            raise _err(e, "Gagal menolak permintaan.")
+    return {"ok": True, "pesan": "✓ Permintaan ditolak — sebabnya terbaca operator."}
 
 
 class TransferReq(BaseModel):

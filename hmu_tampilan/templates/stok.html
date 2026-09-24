@@ -193,6 +193,29 @@
 
            Tak ditawarkan selama mesin masih giling: di sana angkanya belum
            final, dan yang dipakai operator "Perbarui hasil giling". #}
+        {# ── Operator Gudang 2: MINTA lot ini ──
+           Keputusan pemilik 24 September 2026. Ia melihat PK Gudang 1 sebagai
+           BAHAN, dan satu-satunya hal yang boleh ia lakukan atasnya adalah
+           memberitahu Admin bahwa ia memerlukannya. Yang memindahkan tetap
+           Admin — ini permintaan, bukan izin.
+
+           Yang sudah diminta TIDAK menawarkan tombolnya lagi, ia menyebut
+           keadaannya: tombol yang ditekan dua kali karena layarnya tak berubah
+           adalah tombol yang mengajari orang menekan dua kali. Pagar
+           sungguhannya tetap di basis data.
+
+           Tak ditawarkan selama mesinnya masih giling: angkanya belum final,
+           dan yang dipindah nanti bukan yang terbaca sekarang. #}
+        {% if boleh_minta and not l.berjalan %}
+          <div class="ubah-hasil">
+            {% if l.diminta_oleh %}
+              <span class="bantu">Sudah diminta {{ l.diminta_oleh }} — menunggu Admin</span>
+            {% else %}
+              <a class="btn btn--kecil"
+                 href="/stok?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>
+            {% endif %}
+          </div>
+        {% endif %}
         {% if boleh_ubah and not l.berjalan %}
           {# Kecil dan tak berwarna: ini koreksi, bukan pekerjaan harian. Tombol
              utama selebar kartu memanggil dirinya sendiri untuk ditekan, dan

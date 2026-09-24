@@ -259,3 +259,46 @@ def test_hpp_pk_tak_lagi_menuntut_verifikasi():
     kode = inspect.getsource(transfer.hpp_per_kg_pk)
     assert "MillingProcessVerification" not in kode, "tuntutan verifikasi kembali"
     assert "bd.hpp_penuh" in kode
+
+
+def test_gerbang_permintaan_pk_dua_arah():
+    """Bagian kedua keputusan pemilik 24 September 2026: operator Gudang 2 boleh
+    MEMINTA lot PK Gudang 1; yang memindahkan tetap Admin.
+
+    Dua arah, dan keduanya di RUTE — menyembunyikan pintu bukan penjagaan:
+    alamatnya bisa diketik, dan lembar yang masih terbuka di layar orang lain
+    masih bisa mengirim.
+    """
+    from app.web import api
+
+    minta = inspect.getsource(api.act_minta_pk_g1)
+    # Operator Gudang 2 — dan BUKAN admin: ia bisa memindahkan langsung, dan
+    # permintaan kepada diri sendiri cuma satu baris yang harus ditutup sendiri.
+    assert "_is_g2_operator(user) and not can_see_financials(user)" in minta
+
+    tolak = inspect.getsource(api.act_tolak_permintaan_pk)
+    assert "can_transfer_pk(user)" in tolak, "menolak permintaan bukan wewenang operator"
+
+    # Dan izin memindahkan TIDAK berubah: yang lahir permintaan, bukan izin.
+    from app.peran import can_transfer_pk
+
+    class _Op:
+        role = "operator"
+
+    assert not can_transfer_pk(_Op()), "operator mendadak boleh memindahkan PK"
+
+
+def test_tombol_minta_hanya_untuk_view_polesan():
+    """Operator selepan tak boleh melihatnya (bukan pekerjaannya), Admin tak
+    membutuhkannya."""
+    import pathlib
+
+    from app.web import layar_stok
+
+    assert "boleh_minta=view == POLESAN" in inspect.getsource(layar_stok.halaman_stok)
+    tpl = (pathlib.Path(__file__).resolve().parents[1]
+           / "hmu_tampilan/templates/stok.html").read_text()
+    assert "{% if boleh_minta and not l.berjalan %}" in tpl
+    # Yang sudah diminta menyebut keadaannya, bukan menawarkan tombol kedua.
+    assert "{% if l.diminta_oleh %}" in tpl
+    assert "buka=minta_pk_g1" in tpl

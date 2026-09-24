@@ -1754,6 +1754,13 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
             utama=(_kg(bd.tersedia).removesuffix(" kg"), "kg"),
             sub=f"{kode_lot} · diminta {nama_minta or '?'}",
             kelompok="permintaan",
+            # Dicap DI SINI, bukan oleh `_cap_gudang`: `untuk_staff` tak
+            # memanggilnya (kartunya lintas gudang). Kartu tanpa cap lenyap
+            # dari ?gudang=g1 DAN ?gudang=g2 sekaligus — invarian "Semua ==
+            # g1 + g2" patah, dan patahnya tak terlihat sampai seseorang
+            # menekan pilnya. Barangnya di Gudang 1 dan yang dikerjakan orang
+            # atasnya adalah memindahkan dari sana; sama dengan `transfer_pk`.
+            gudang="g1",
             pilihan=[
                 ("transfer_pk", "Pindahkan ke Gudang 2",
                  "Lot ini, sebagian atau seluruhnya", kode_lot),
