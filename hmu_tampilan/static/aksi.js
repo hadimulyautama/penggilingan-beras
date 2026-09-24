@@ -157,6 +157,15 @@
   /* Label aksi dari server diawali emoji ("🌾 Gabah masuk") — kosakata yang
      sudah dikenal operator dari bot. Emoji-nya dipisah ke kotak ikon supaya
      terbaca sebagai ikon, bukan sebagai hiasan di tengah kalimat. */
+  /* Label medan lain, untuk kalimat "— pilih <medan itu> dulu —". Diambil
+     dari spesifikasinya, bukan ditulis dua kali: judul medan induk yang
+     berubah tanpa kalimat ini ikut berubah menyuruh orang memilih sesuatu
+     yang tak ada lagi di layarnya. */
+  function cariLabel(fields, nama) {
+    var f = (fields || []).filter(function (x) { return x.name === nama; })[0];
+    return f ? f.label : nama;
+  }
+
   function belah(label) {
     var m = /^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u.exec(label || "");
     return m ? { ikon: m[1], teks: m[2] } : { ikon: "", teks: label || "" };
@@ -326,9 +335,19 @@
         // `optional` ada karena sebagian pilihan memang tak berlaku untuk
         // semua isian: merk hanya milik beras, mutu hanya milik beras putih.
         // Memaksanya wajib akan membuat orang mengarang jawaban.
+        //
+        // `induk` = medan lain yang menentukan isi daftar ini (silo mana yang
+        // dipakai PROSES yang dipilih di atasnya). Sebelum induknya dipilih
+        // daftarnya memang belum bisa dijawab, jadi yang tertulis "pilih dulu"
+        // — bukan daftar mati yang menawarkan pilihan yang tak pernah dipakai,
+        // lalu ditolak server sesudah ditekan.
         return l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
           '"' + (f.optional ? "" : ' data-wajib="1"') +
-          ' data-label="' + esc(f.label) + '"><option>memuat…</option></select>';
+          (f.induk ? ' data-induk="' + esc(f.induk) + '"' : "") +
+          ' data-label="' + esc(f.label) + '"><option>' +
+          (f.induk ? "— pilih " + esc(belah(cariLabel(semua, f.induk)).teks.toLowerCase()) +
+                     " dulu —" : "memuat…") +
+          "</option></select>";
       }
       /* MEDAN BERULANG — satu kotak, lalu tombol yang menambah kotak.
        *
@@ -394,6 +413,18 @@
     bukaLembar(lembar);
     document.body.style.overflow = "hidden";
 
+    /* Nilai sebuah medan, apa pun bentuknya di layar: pilihan biasa, atau
+       isian TERKUNCI yang menyimpan kodenya di kolom tersembunyi (kartu yang
+       membuka lembar ini sudah menyebut bendanya). Medan yang bergantung
+       padanya harus bekerja di kedua bentuk — kalau tidak, daftar silo kosong
+       justru pada jalan yang paling sering dipakai: menekan kartunya. */
+    function nilaiMedan(nama) {
+      var s = $("f_" + nama);
+      if (s) { return s.value; }
+      var sembunyi = lembar.querySelector('[data-name="' + nama + '"]');
+      return sembunyi ? sembunyi.value : "";
+    }
+
     /* ── Daftar pilihan dimuat ULANG, bukan sekali ──
        Tiket timbang yang baru dibuat di Pos Timbang tak muncul di lembar yang
        sudah telanjur terbuka. Operator gudang membuka "Gabah masuk", menunggu
@@ -403,11 +434,23 @@
        `segar` = pemuatan ULANG, bukan yang pertama. Bedanya penting: pilihan
        yang sudah dijatuhkan orangnya harus bertahan, dan baris terkunci tak
        perlu dihitung ulang karena bendanya memang tak berubah. */
-    function muatPilihan(segar) {
+    function muatPilihan(segar, hanya) {
       terakhirMuat = Date.now();
       (a.fields || []).forEach(function (f) {
       if (f.type !== "remote") return;
-      ambil(f.source).then(function (daftar) {
+      if (hanya && f.name !== hanya) { return; }
+      /* Daftar yang bergantung medan lain tak dimuat sebelum induknya dipilih:
+         jawabannya memang belum ada, dan daftar yang dimuat tanpa induk akan
+         menawarkan SELURUH pilihan yang mungkin — persis kesalahan yang medan
+         ini menggantikan. */
+      var sumber = f.source;
+      if (f.induk) {
+        var nilaiInduk = nilaiMedan(f.induk);
+        if (!nilaiInduk) { return; }
+        sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
+          encodeURIComponent(nilaiInduk);
+      }
+      ambil(sumber).then(function (daftar) {
         if (!daftar) return;
         if (f.name === namaKunci) {
           if (segar) { return; }
@@ -443,6 +486,11 @@
             return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
           }).join("");
         if (dipilih) { s.value = dipilih; }
+        /* Daftar bergantung yang isinya TEPAT SATU sudah menjawab dirinya
+           sendiri: proses yang memakai satu silo tak menyisakan pilihan apa
+           pun untuk dibuat. Menyuruh orang memilih satu-satunya kemungkinan
+           adalah langkah yang hanya bisa salah ditekan. */
+        else if (f.induk && daftar.length === 1) { s.value = daftar[0].value; }
         // Kalau daftarnya kosong, aksi ini memang belum bisa dikerjakan.
         // Katakan sekarang — bukan setelah orang menekan Simpan dan ditolak.
         // Pilihan yang boleh dikosongkan tak boleh menghentikan aksi ketika
@@ -481,6 +529,26 @@
       });
     }
     muatPilihan(false);
+    /* Induk berubah → daftar anaknya ikut berubah. Tanpa ini medan bergantung
+       cuma bekerja untuk proses yang dipilih PERTAMA, dan orang yang berubah
+       pikiran memilih silo milik proses yang lain. */
+    (a.fields || []).forEach(function (f) {
+      if (f.type !== "remote" || !f.induk) { return; }
+      var pi = $("f_" + f.induk);
+      if (!pi) { return; }
+      pi.addEventListener("change", function () {
+        var anak = $("f_" + f.name);
+        if (anak) {
+          anak.innerHTML = "<option>memuat…</option>";
+          anak.disabled = false;
+        }
+        var lamaNota = $("kosong_" + f.name);
+        if (lamaNota) { lamaNota.remove(); }
+        var tbl = $("simpan");
+        if (tbl && tbl.disabled) { tbl.disabled = false; tbl.textContent = "Simpan"; }
+        muatPilihan(false, f.name);
+      });
+    });
     /* Siapa yang menyegarkan: pendengar di lingkup modul (di bawah), bukan
        pendengar baru tiap lembar dibuka — yang begitu menumpuk satu tiap
        pembukaan. */

@@ -66,9 +66,13 @@ def test_jeda_penyosohan_ditutup_saat_prosesnya_selesai():
     assert "jeda_terbuka(db, 'penyosohan', proc.id)" in kode_saja(polishing.selesai_penyosohan)
 
 
-async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
-    """Operator: pindah tumpukan→silo, mulai, hasil, hentikan, lanjutkan,
-    selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
+async def _menu_g2(monkeypatch):
+    """Katalog aksi seperti yang dilihat operator Gudang 2 — tanpa basis data.
+
+    Satu tempat karena dua uji membacanya: isi katalognya, dan bentuk medan di
+    dalamnya. Dua penyiapan yang hampir sama akan menyimpang, dan yang
+    menyimpang diam-diam adalah yang tak menguji apa pun lagi.
+    """
     from types import SimpleNamespace
 
     async def ya(_u):
@@ -103,7 +107,13 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     from app.web import aksi_inventory
     monkeypatch.setattr(aksi_inventory, "spesifikasi", lambda **k: [])
 
-    menu = await api.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
+    return await api.actions_menu(SimpleNamespace(id=1, role="operator", nama="Uji"))
+
+
+async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
+    """Operator: pindah tumpukan→silo, mulai, hasil, hentikan, lanjutkan,
+    selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
+    menu = await _menu_g2(monkeypatch)
     ids = [a["id"] for a in menu]
     assert ids[:6] == ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
@@ -114,6 +124,39 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]
     assert [jeda.SEBAB_LAIN, "Lainnya — tulis sendiri"] in sebab["options"]
+
+
+async def test_silo_selesai_dibaca_dari_prosesnya_bukan_daftar_mati(monkeypatch):
+    """Keluhan pemilik 24 September 2026 07:14 — QA 24 Sep (c) butir 4.
+
+    Borang "Selesai penyosohan" menuliskan pilihan silonya DENGAN TANGAN
+    (`type: select`, daftar mati A/B) padahal medan tepat di atasnya sudah
+    menyebut prosesnya. Jadi ia menawarkan Silo A kepada orang yang menyosoh di
+    Silo B; yang menekannya dijawab 400 "Sebutkan silo mana yang selesai
+    (A/B)" — pesan yang tak masuk akal bagi orang yang BARU SAJA menyebutkan
+    silo. Sekarang medannya `remote` dengan `induk`: daftarnya silo milik proses
+    yang dipilih, dan daftar sepanjang satu terisi sendiri di klien.
+
+    Uji ini juga menjaga aturan umum `induk`: ia harus menyebut medan LAIN di
+    borang yang sama, dan medan itu harus digambar DI ATASNYA — klien memuat
+    daftar anak dari nilai induknya, jadi induk yang ada di bawah menyuruh
+    orang mengisi borangnya dari bawah ke atas.
+    """
+    menu = await _menu_g2(monkeypatch)
+    aksi = next(a for a in menu if a["id"] == "selesai_penyosohan")
+    silo = next(f for f in aksi["fields"] if f["name"] == "silo")
+    assert silo["type"] == "remote" and silo["induk"] == "kode_proses"
+    assert silo["source"] == "/api/actions/sosoh-silo"
+    assert "options" not in silo, "daftar mati A/B kembali"
+
+    for a in menu:
+        nama = [f["name"] for f in a["fields"]]
+        for i, f in enumerate(a["fields"]):
+            if not f.get("induk"):
+                continue
+            assert f["type"] == "remote", f"{a['id']}.{f['name']}: induk cuma untuk remote"
+            assert f["induk"] in nama, f"{a['id']}.{f['name']}: induk tak ada di borangnya"
+            assert nama.index(f["induk"]) < i, f"{a['id']}.{f['name']}: induk di bawahnya"
 
 
 async def _nilai(v):

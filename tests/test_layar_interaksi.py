@@ -210,6 +210,31 @@ def test_yang_sudah_ditunjuk_kartunya_tak_ditanyakan_lagi():
     assert 'f0.type !== "select" && f0.type !== "remote"' in pilih
 
 
+def test_daftar_yang_bergantung_menunggu_induknya():
+    """Medan `remote` ber-`induk` tak dimuat sebelum induknya dipilih.
+
+    Daftar yang dimuat tanpa induk akan menawarkan SELURUH pilihan yang
+    mungkin — persis kesalahan yang medan ini menggantikan: borang "Selesai
+    penyosohan" menawarkan Silo A kepada orang yang menyosoh di Silo B
+    (keluhan pemilik 24 September 2026 07:14).
+    """
+    blok = AKSI.split("function muatPilihan(")[1].split("ambil(sumber)")[0]
+    assert "if (f.induk)" in blok and "nilaiMedan(f.induk)" in blok
+    assert "if (!nilaiInduk) { return; }" in blok, "dimuat walau induknya kosong"
+    assert "induk=" in blok, "nilai induk tak ikut ke sumbernya"
+
+    # Nilai induk dibaca juga dari isian TERKUNCI (kolom tersembunyi) — itulah
+    # jalan yang paling sering dipakai: menekan kartunya.
+    nm = AKSI.split("function nilaiMedan(")[1].split("\n    }")[0]
+    assert "lembar.querySelector" in nm and "data-name=" in nm
+
+    # Induk berubah → daftar anaknya dimuat ulang. Tanpa ini medan bergantung
+    # cuma benar untuk proses yang dipilih PERTAMA.
+    assert 'pi.addEventListener("change"' in AKSI
+    # Satu-satunya kemungkinan tak perlu dipilih orang.
+    assert "else if (f.induk && daftar.length === 1)" in AKSI
+
+
 def test_kunci_dilepas_kalau_barisnya_sudah_basi():
     """Kalau nilai dari barisnya tak ada lagi di daftar server, mengirimnya
     hanya akan ditolak. Kuncinya dilepas supaya orang bisa memilih sendiri."""

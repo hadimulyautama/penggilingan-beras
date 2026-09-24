@@ -198,6 +198,21 @@ async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
     return out
 
 
+async def _sebut_silo(db: AsyncSession, usages) -> str:
+    """"Silo A dan Silo B" — dibaca dari master, bukan ditulis "A/B" tetap.
+
+    Pesan yang menyebut A/B pada pabrik yang silonya kelak bernama lain adalah
+    pesan yang menyuruh orang mencari sesuatu yang tak ada di layarnya.
+    """
+    nama = []
+    for u in usages:
+        silo = await db.get(Silo, u.silo_id)
+        nama.append(silo.nama_silo if silo else f"silo #{u.silo_id}")
+    if len(nama) <= 1:
+        return nama[0] if nama else "belum ada silo"
+    return ", ".join(nama[:-1]) + " dan " + nama[-1]
+
+
 @dataclass
 class SelesaiResult:
     proc: PolishingProcess
@@ -227,14 +242,29 @@ async def selesai_penyosohan(
         )
     ).scalars().all()
     # Pilih usage silo yang dimaksud.
+    #
+    # Tanpa nama silo, yang dipakai adalah satu-satunya silo yang MASIH terbuka.
+    # Proses satu silo karenanya tak perlu menyebutnya sama sekali — dan proses
+    # dua silo yang satunya sudah bersisa juga tidak, sebab tinggal satu
+    # kemungkinan. "Sebutkan silo mana" hanya berarti bila memang ada lebih
+    # dari satu yang bisa dimaksud (keluhan pemilik 24 September 2026 07:14).
     target = None
+    terbuka = [u for u in usages if u.berat_akhir_kg is None]
     if nama_silo:
         silo = await get_g2_silo(db, nama_silo.upper())
         target = next((u for u in usages if silo and u.silo_id == silo.id), None)
-    elif len(usages) == 1:
-        target = usages[0]
+        if target is None:
+            raise Gudang2Error(
+                f"Proses {proc.kode_proses} tidak memakai Silo {nama_silo.upper()} — "
+                f"yang dipakai: {await _sebut_silo(db, usages)}.")
+    elif len(terbuka) == 1:
+        target = terbuka[0]
     if target is None:
-        raise Gudang2Error("Sebutkan silo mana yang selesai (A/B) + sisa beratnya.")
+        if terbuka:
+            raise Gudang2Error(
+                f"Proses {proc.kode_proses} memakai {await _sebut_silo(db, terbuka)} — "
+                "sebutkan mana yang selesai, berikut sisa beratnya.")
+        raise Gudang2Error(f"Semua silo proses {proc.kode_proses} sudah ditandai selesai.")
     if sisa_kg is None:
         raise Gudang2Error("Sebutkan sisa berat di silo, mis. `sisa 500 kg`.")
     # Isi silo selama proses = awal + yang DITAMBAHKAN sesudah mulai. Silo

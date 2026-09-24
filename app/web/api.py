@@ -776,8 +776,22 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-active",
                   "kosong": "Tidak ada penyosohan yang sedang berjalan."},
-                 {"name": "silo", "label": "Silo yang selesai (wajib pilih)", "type": "select",
-                  "options": [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]},
+                 # Silo milik PROSES yang dipilih di atasnya — `induk`, bukan
+                 # daftar mati A/B.
+                 #
+                 # Borang ini dulu menuliskan pilihan silonya dengan tangan,
+                 # padahal medan di atasnya sudah menyebut prosesnya. Jadi ia
+                 # menawarkan Silo A kepada orang yang menyosoh di Silo B; yang
+                 # menekannya dijawab 400 "Sebutkan silo mana yang selesai
+                 # (A/B)" — pesan yang tak masuk akal bagi orang yang BARU SAJA
+                 # menyebutkan silonya. Keluhan pemilik 24 September 2026 07:14.
+                 #
+                 # Daftar sepanjang satu (prosesnya memakai satu silo) terisi
+                 # sendiri di klien: tak ada pilihan yang bisa dibuat di sana,
+                 # jadi tak ada pilihan yang bisa salah.
+                 {"name": "silo", "label": "Silo yang selesai", "type": "remote",
+                  "induk": "kode_proses", "source": "/api/actions/sosoh-silo",
+                  "kosong": "Semua silo proses ini sudah ditandai selesai."},
                  {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
              ]},
         ]
@@ -2397,7 +2411,11 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
 
 class SelesaiPenyosohanReq(BaseModel):
     kode_proses: str
-    silo: str  # A / B
+    #: Boleh KOSONG bila prosesnya hanya menyisakan satu silo — `polishing.
+    #: selesai_penyosohan` yang memilihnya. Dulu wajib di sini, dan gerbang itu
+    #: menghadang jalur yang sudah lama ada di layanannya (`elif len(usages)
+    #: == 1`), jadi orang yang menyosoh satu silo tetap harus menyebut silo.
+    silo: str = ""
     sisa: Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
 
@@ -2406,14 +2424,15 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
     _require(await _is_g2_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
-    if (req.silo or "").upper() not in ("A", "B"):
-        raise HTTPException(400, "Pilih silo yang selesai dulu: A atau B.")
+    silo = (req.silo or "").strip().upper() or None
     from app.penggilingan.gudang2.polishing import selesai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
+            # Silo kosong DITERUSKAN, tidak dihadang: yang tahu berapa silo
+            # yang dipakai proses ini adalah layanannya, bukan borangnya.
             r = await selesai_penyosohan(db, user=u, kode=req.kode_proses,
-                                         nama_silo=req.silo.upper(), sisa_kg=req.sisa)
+                                         nama_silo=silo, sisa_kg=req.sisa)
         except Gudang2Error as e:
             raise _err(e, "Gagal menandai selesai penyosohan.")
     if r.selesai:
@@ -2421,7 +2440,9 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
             f", rendemen {r.rendemen:.1f}%." if r.rendemen else ".")
     else:
         ekor = " (menunggu silo lain)."
-    pesan = f"✓ Silo {req.silo.upper()} selesai (sisa {req.sisa:g} kg){ekor}"
+    # `r.silo` — silo yang BENAR-BENAR ditandai, termasuk saat borangnya
+    # mengosongkan medannya dan layanan yang memilih.
+    pesan = f"✓ Silo {r.silo} selesai (sisa {req.sisa:g} kg){ekor}"
     return {"ok": True, "pesan": pesan}
 
 
@@ -2452,6 +2473,51 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
             if await jeda_terbuka(db, "penyosohan", p.id) is None:
                 keluar.append({"value": f"penyosohan:{p.kode_proses}",
                                "label": f"{p.kode_proses} · sosoh"})
+    return keluar
+
+
+@router.get("/actions/sosoh-silo")
+async def sosoh_silo(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo yang dipakai satu proses penyosohan dan BELUM ditandai selesai.
+
+    `induk` = kode proses, dikirim klien dari medan di atasnya (`data-induk`).
+    Kosong → daftar kosong, bukan seluruh silo: daftar yang menjawab tanpa
+    tahu prosesnya adalah daftar yang menawarkan silo yang tak pernah dipakai —
+    dan itulah kesalahan yang medan ini menggantikan.
+
+    Yang sudah bersisa (`berat_akhir_kg` terisi) tidak ditawarkan lagi:
+    menandainya dua kali menimpa angka yang sudah dicatat operator.
+    """
+    _require(await _is_g2_operator(user))
+    kode = (induk or "").strip()
+    if not kode:
+        return []
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    async with SessionLocal() as db:
+        proc = (await db.execute(select(PolishingProcess).where(
+            PolishingProcess.kode_proses == kode))).scalars().first()
+        if proc is None:
+            return []
+        baris = (await db.execute(
+            select(PolishingSiloUsage, Silo)
+            .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
+            .where(PolishingSiloUsage.polishing_process_id == proc.id)
+            .order_by(Silo.nama_silo)
+        )).all()
+    keluar = []
+    for u, silo in baris:
+        if u.berat_akhir_kg is not None:
+            continue
+        huruf = (silo.nama_silo or "").replace("Silo ", "").strip()
+        masuk = float(u.berat_masuk_kg or 0)
+        isi = float(u.berat_awal_kg or 0) + masuk
+        keluar.append({"value": huruf,
+                       "label": f"{silo.nama_silo} · bahan {_rp(isi)} kg"
+                                + (f" (awal {_rp(u.berat_awal_kg)} + ditambah {_rp(masuk)})"
+                                   if masuk else "")})
     return keluar
 
 

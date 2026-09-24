@@ -161,3 +161,106 @@ async def test_tumpukan_tanpa_batas_kecuali_disetel(pg, gudang2, monkeypatch):
         monkeypatch.setattr(settings, "g2_tumpukan_maks_kg", 0)
         r = await masukkan_pk_luar(db, user=u, kode="PKB-20260912-03", tujuan="ditumpuk")
         assert r.lokasi_label == "tumpukan"
+
+
+# ── "Selesai penyosohan" tak menuntut memilih silo bila cuma ada satu ──
+#
+# Keluhan pemilik 24 September 2026 07:14, QA 24 Sep (c) butir 4: prosesnya
+# SATU silo, tetapi borangnya tetap menuntut memilih A atau B — dan pilihan
+# yang ia tawarkan datang dari daftar mati, bukan dari silo yang benar-benar
+# dipakai proses itu. Menekan Silo A yang tak pernah dipakai dijawab 400
+# "Sebutkan silo mana yang selesai (A/B)": pesan yang tak masuk akal bagi
+# orang yang baru saja menyebutkan silonya.
+
+async def test_satu_silo_tak_perlu_disebut(pg, gudang2):
+    """Proses satu silo: `nama_silo=None` cukup — layanan yang memilihnya.
+
+    Jalur ini sudah ada di `polishing.py` sejak lama (`elif len(usages) == 1`);
+    yang menghadangnya adalah gerbang di `api.py` yang menolak silo kosong
+    tanpa syarat.
+    """
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan
+
+    u = gudang2["user"]
+    async with pg() as db:
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        s = await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                     nama_silo=None, sisa_kg=0)
+    assert s.silo == "B" and s.selesai
+
+
+async def test_silo_yang_tak_dipakai_proses_itu_ditolak_dengan_nama_silonya(pg, gudang2):
+    """Pesan yang menyebut silo mana yang DIPAKAI, bukan "A/B" tetap.
+
+    Operator yang salah pilih harus bisa membetulkannya tanpa menebak; dan
+    pabrik yang silonya kelak bernama lain tak boleh disuruh mencari "A/B".
+    """
+    import pytest as _pytest
+
+    from app.penggilingan.gudang2.polishing import (Gudang2Error, mulai_penyosohan,
+                                                     selesai_penyosohan)
+
+    u = gudang2["user"]
+    async with pg() as db:
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        with _pytest.raises(Gudang2Error) as e:
+            await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                     nama_silo="A", sisa_kg=0)
+    assert "tidak memakai Silo A" in str(e.value) and "Silo B" in str(e.value)
+
+
+async def test_dua_silo_tetap_wajib_disebut_lalu_sisanya_tidak(pg, gudang2):
+    """Wajib HANYA bila memang ada lebih dari satu yang bisa dimaksud.
+
+    Dan sesudah salah satunya bersisa, yang tinggal satu itu tak perlu disebut
+    lagi: pilihan yang tak punya alternatif bukan pilihan.
+    """
+    import pytest as _pytest
+
+    from app.penggilingan.gudang2.polishing import (Gudang2Error, mulai_penyosohan,
+                                                     selesai_penyosohan)
+    from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo
+
+    u = gudang2["user"]
+    async with pg() as db:
+        # Silo A perlu isi dulu — penyosohan menolak silo kosong.
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=5_000)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        kode = r.proc.kode_proses
+        with _pytest.raises(Gudang2Error) as e:
+            await selesai_penyosohan(db, user=u, kode=kode, nama_silo=None, sisa_kg=0)
+        assert "Silo A" in str(e.value) and "Silo B" in str(e.value)
+
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
+        s = await selesai_penyosohan(db, user=u, kode=kode, nama_silo=None, sisa_kg=0)
+    assert s.silo == "B" and s.selesai
+
+
+async def test_daftar_silo_hanya_milik_proses_itu_dan_yang_belum_selesai(pg, gudang2):
+    """Daftar yang ditawarkan layar = silo yang benar-benar dipakai proses itu.
+
+    Inilah yang menggantikan daftar mati A/B: tanpa `induk`, borangnya tak tahu
+    silo mana yang dipakai proses yang barusan dipilih.
+    """
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan
+    from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo
+    from app.web.api import sosoh_silo
+
+    u = gudang2["user"]
+    async with pg() as db:
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=5_000)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        kode = r.proc.kode_proses
+
+    assert [x["value"] for x in await sosoh_silo(induk=kode, user=u)] == ["A", "B"]
+    # Tanpa induk tak ada jawaban — bukan seluruh silo pabrik.
+    assert await sosoh_silo(induk="", user=u) == []
+    assert await sosoh_silo(induk="POL-TIDAK-ADA", user=u) == []
+
+    async with pg() as db:
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
+    # Yang sudah bersisa tak ditawarkan lagi: menandainya dua kali menimpa
+    # angka yang sudah dicatat operator.
+    assert [x["value"] for x in await sosoh_silo(induk=kode, user=u)] == ["B"]
