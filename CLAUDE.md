@@ -189,11 +189,16 @@ sintaks, lalu buktikan penjaganya benar-benar gagal pada kasus lama.
 | Layanan | Cara |
 |---|---|
 | `penggilingan-beras` (produksi) | `git push origin main` — terbit sendiri |
-| `pos-produksi-uji` (staging) | `git push origin main:uji` |
+| ~~`pos-produksi-uji` (staging)~~ | **SUDAH TIDAK ADA** (24 Sep 2026). Cabang `origin/uji` masih ada, tetapi tak ada layanan yang menontonnya — `push main:uji` tidak menerbitkan apa pun. Proyek `penggilingan-beras` kini berisi: `penggilingan-beras`, `gudang2`, `timbangan`, `meja`, `kantor`. |
 | `kantor` | **`railway up --service kantor`** dari repo `kantor/` — TIDAK tertaut GitHub |
 | `timbangan` | repo `timbangan/` |
+| `gudang2` | `git push origin main` dari repo `gudang2/` — terbit sendiri |
+| `meja` | `git push origin main` dari repo `meja/` — terbit sendiri |
 
-Kirim ke uji dulu, tunggu SUCCESS, baru produksi.
+Dulu: kirim ke uji dulu, tunggu SUCCESS, baru produksi. Selama staging
+belum ada lagi, yang menggantikannya: jalankan suite pg + tiga app lokal
+(`docs/ingatan/` → sandbox tiga app), lalu push `main` dan TUNGGU deploy-nya
+SUCCESS sambil memegang commit sebelumnya untuk mundur.
 
 ## Rahasia Railway — aturan keras
 
