@@ -63,6 +63,21 @@ SEBAB = {
 #: orang memilih yang paling mirip — lalu angkanya berbohong dengan rapi.
 SEBAB_LAIN = "Lainnya"
 
+#: Nama proses untuk layar, dan GUDANG pemiliknya — di sini, bersebelahan dengan
+#: `SEBAB`, supaya proses keempat cukup didaftar sekali.
+#:
+#: Layar Pengaturan memakai keduanya: ia menawarkan blok sebab berhenti hanya
+#: untuk proses milik gudang yang dipegang pembacanya. Sampai 24 September 2026
+#: daftar itu ditulis ulang di dua tempat — dua tuple `PROSES` yang diketik
+#: tangan, satu di Pos Produksi (dua proses) dan satu di Meja (tiga) — dan yang
+#: pendek itulah yang menyebabkan setelan Penyosohan tak ada di Pos Produksi
+#: sama sekali. Menghapus app Meja hari itu akan menghilangkan satu-satunya
+#: layar yang bisa menambah atau membuang sebab berhenti mesin sosoh.
+NAMA_PROSES: dict[str, str] = {"pengeringan": "Pengeringan", "giling": "Giling",
+                               "penyosohan": "Penyosohan"}
+GUDANG_PROSES: dict[str, str] = {"pengeringan": "g1", "giling": "g1",
+                                 "penyosohan": "g2"}
+
 
 @dataclass
 class JedaResult:

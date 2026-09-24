@@ -31,6 +31,17 @@ from hmu_core import User
 router = APIRouter(tags=["webapp"])
 
 
+def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
+    """Proses yang sebab berhentinya boleh diatur view ini — urut seperti
+    `jeda.SEBAB`, yaitu urutan perjalanan barang."""
+    from app.penggilingan.gudang1.services.jeda import (GUDANG_PROSES, NAMA_PROSES,
+                                                        SEBAB)
+    from app.web.layar import boleh_lihat_gudang
+
+    return tuple((k, NAMA_PROSES[k]) for k in SEBAB
+                 if boleh_lihat_gudang(view, GUDANG_PROSES[k]))
+
+
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services.setelan import fitur_mutu, sebab_jeda, target_kadar_air
@@ -80,9 +91,21 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         kelola_darurat=view != V_SUPER,
         blok_lihat_sebagai=_P.admin_keatas(peran_asli),
         blok_kerja_gudang=_P.boleh_ganti_gudang(peran_asli),
-        # Pos Produksi tak punya blok Penyosohan: setelan Gudang 2 diurus dari
-        # Meja, yang memegang kedua gudang.
-        PROSES=(("pengeringan", "Pengeringan"), ("giling", "Giling")),
+        # ── Sebab berhenti per proses: DITURUNKAN, bukan diketik ──
+        #
+        # Dulu tuple ini berisi dua proses dengan alasan tertulis "setelan
+        # Gudang 2 diurus dari Meja". Akibatnya tak ada satu layar pun di Pos
+        # Produksi yang bisa menambah atau membuang sebab berhenti mesin sosoh —
+        # dan itu satu-satunya hal yang menahan pemensiunan app Meja (QA 24
+        # September 2026, jawaban atas pertanyaan pemilik "boleh dihapus?").
+        #
+        # Sekarang dari `jeda.SEBAB` berikut gudang pemiliknya, disaring dengan
+        # VIEW: proses keempat cukup didaftar di `jeda.py`, dan operator selepan
+        # tak pernah ditawari setelan mesin yang tak ada di gudangnya. Hari ini
+        # penyaring itu tak mengubah apa pun — blok setelan memang hanya untuk
+        # admin ke atas, yang memegang kedua gudang — tetapi aturannya jadi
+        # tertulis di tempat yang benar, bukan tersimpan sebagai kebetulan.
+        PROSES=_proses_view(view),
         blok_setelan=tuan,
         blok_mode_uji=settings.mode_uji and view == V_SUPER,
         JAM_BATAS=int(BATAS_UNDO.total_seconds() // 3600),

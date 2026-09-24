@@ -92,6 +92,53 @@ def test_setelan_kerja_hanya_untuk_admin():
     assert "Sebab berhenti · " not in penuh, "judul lama yang berdiri sendiri kembali"
 
 
+def test_setelan_penyosohan_ada_di_pos_produksi():
+    """Sebab berhenti mesin sosoh harus bisa diatur dari Pos Produksi.
+
+    Sampai 24 September 2026 tidak bisa: `PROSES` di sini diketik tangan dengan
+    DUA proses dan alasan tertulis "setelan Gudang 2 diurus dari Meja". Satu-
+    satunya layar yang bisa menambah atau membuang "Mesin sosoh rusak" ada di
+    app Meja — jadi menghapus app itu akan menghilangkan setelan tersebut dari
+    seluruh sistem. Inilah yang menahan jawaban QA atas pertanyaan pemilik
+    "apa app Meja & Gudang 2 boleh dihapus?".
+
+    Sekarang daftarnya DITURUNKAN dari `jeda.SEBAB` berikut gudang pemiliknya,
+    lalu disaring dengan view: proses keempat cukup didaftar di satu tempat.
+    """
+    from app.penggilingan.gudang1.services.jeda import GUDANG_PROSES, NAMA_PROSES, SEBAB
+    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER
+    from app.web.pengaturan import _proses_view
+
+    # Satu tempat, tak ada proses yang cuma dikenal separuh sistem.
+    assert set(SEBAB) == set(NAMA_PROSES) == set(GUDANG_PROSES)
+
+    for view in (ADMIN, SUPER):
+        assert dict(_proses_view(view)) == NAMA_PROSES, view
+    # Dan penyaringnya sungguh menyaring: mesin yang tak ada di gudangnya tak
+    # ditawarkan. Hari ini blok setelan memang hanya untuk admin ke atas —
+    # aturannya tetap ditulis, supaya ia tak tersimpan sebagai kebetulan.
+    assert "penyosohan" not in dict(_proses_view(SELEPAN))
+    assert list(dict(_proses_view(POLESAN))) == ["penyosohan"]
+
+
+def test_sebab_penyosohan_bisa_diubah_lewat_rute_pos_produksi():
+    """Bukan cuma tergambar: rute POST-nya menerima jenis itu.
+
+    Blok yang tergambar lalu ditolak servernya lebih buruk daripada blok yang
+    tak ada — orang mengetik sebabnya, menekan Tambah, dan pulang menyangka
+    sudah tersimpan.
+    """
+    from app.penggilingan.gudang1.services.jeda import SEBAB
+    from app.web import pengaturan
+
+    sumber = kode_saja(pengaturan.ubah_sebab_jeda)
+    # Jenisnya diperiksa terhadap DAFTAR yang dibaca dari setelan, bukan
+    # terhadap dua nama yang diketik di rute ini.
+    assert "if jenis not in daftar" in sumber
+    assert "penyosohan" not in sumber, "rute ini tak boleh menyebut proses satu per satu"
+    assert "penyosohan" in SEBAB
+
+
 def test_batas_48_jam_ditampilkan_tapi_tak_bisa_diubah():
     """Batas yang bisa dilonggarkan oleh orang yang ingin melonggarkannya
     bukan batas. Tetapi menyembunyikannya juga salah — setelan yang diam tanpa
@@ -159,16 +206,22 @@ def test_setelan_dikelompokkan_per_proses():
     # dua salinan akan berbeda begitu salah satunya diperbaiki.
     assert "{% macro sebab_blok(" in html
     # Sejak Tahap 2 templatnya BERLINGKAR atas daftar proses, dan daftarnya
-    # milik app: Meja punya blok Penyosohan yang tak ada di sini. Jadi yang
-    # menyebut "Pengeringan" dan "Giling" adalah rutenya, bukan markupnya —
-    # dan judulnya tetap digambar `<span class="lbl">` yang sama.
+    # milik app — markupnya tak pernah menyebut nama proses, dan judulnya tetap
+    # digambar `<span class="lbl">` yang sama.
     assert "{% for jenis, judul in PROSES %}" in html
     assert '<span class="lbl">{{ judul }}</span>' in html
     assert html.count("{{ sebab_blok(jenis) }}") == 1
     from app.web import pengaturan
 
+    # Daftarnya TAK LAGI diketik di rute ini (24 September 2026). Dulu uji ini
+    # menuntut kedua tuple tertulis di sana — dan justru tuntutan itu yang
+    # membekukan kekeliruannya: yang tertulis hanya dua proses, jadi setelan
+    # Penyosohan tak ada di Pos Produksi sama sekali dan app Meja tak bisa
+    # dipensiunkan. Sekarang daftarnya diturunkan dari `jeda.SEBAB` berikut
+    # gudang pemiliknya, disaring dengan view; isinya dijaga
+    # `test_setelan_penyosohan_ada_di_pos_produksi`.
     rute = kode_saja(pengaturan.halaman_pengaturan)
-    assert "('pengeringan', 'Pengeringan')" in rute and "('giling', 'Giling')" in rute
+    assert "PROSES=_proses_view(view)" in rute
     assert "penyosohan" not in rute, "setelan Gudang 2 diurus dari Meja"
 
     # Dilipat: daftar sebab tumbuh — itu memang gunanya — dan daftar yang
