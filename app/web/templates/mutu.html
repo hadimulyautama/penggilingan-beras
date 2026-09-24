@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block judul %}Mutu &amp; QC{% endblock %}
+{% block isi %}
+{% import "_benda.html" as benda with context %}
+
+{# ── Pencatatan mutu dimatikan ──
+   Halamannya tetap bisa dibuka lewat alamat walau pintunya tak ditawarkan
+   (laci membacanya dari `PINTU_MATI`). Kalau di keadaan itu ia cuma kosong,
+   yang terbaca adalah "sudah beres" — kalimat yang paling mahal untuk salah,
+   sebab yang sebenarnya terjadi justru tak ada satu pun mutu yang dicatat.
+   Jadi ia menyebut sebabnya, berikut tempat menyalakannya lagi. #}
+{% if not MUTU_AKTIF %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--hati)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.3v.2"/></svg>
+    <div>
+      <h2>Pencatatan mutu dimatikan</h2>
+      <p class="bantu">
+        Selama saklarnya padam, tak ada mutu giling maupun mutu PK luar yang
+        ditagih di sini — dan tak ada pula yang dicatat. Nyalakan di
+        <a href="/pengaturan">Pengaturan</a> bila pabrik ini memang menilai mutu.
+      </p>
+    </div>
+  </div>
+{% elif not meja %}
+  {# Kosong di sini berarti sesuatu yang baik: tiap giling dan tiap PK luar
+     yang masuk sudah dinilai. Itu keterangan, bukan kekurangan. #}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/></svg>
+    <div>
+      <h2>Tak ada mutu yang menunggu</h2>
+      <p class="bantu">
+        Semua hasil giling sudah diperiksa, dan semua PK luar yang masuk sudah
+        dicatat mutunya.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{# Dua blok, dan daftarnya dari `services.keputusan.JENIS` — bukan diketik di
+   sini. Templat yang memegang daftarnya sendiri tak bisa tahu ia ketinggalan;
+   itu sudah pernah terjadi di `keputusan.html`, dan sejak layarnya dua, jenis
+   baru bisa hilang di antara keduanya.
+
+   Jaring penangkap jenis yang belum punya blok TIDAK ada di sini: ia satu, di
+   `/keputusan`, dan menolak gabungan id kedua layar. Dua jaring akan
+   menggambar jenis ketujuh dua kali. #}
+{% for aksi, judul in JENIS_MUTU %}
+  {{ benda.blok(judul, meja|selectattr("aksi", "equalto", aksi)|list,
+                alamat="/mutu") }}
+{% endfor %}
+
+<dialog class="lembar" id="lembar"></dialog>
+<div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">Tercatat atas nama {{ akun.nama }}</div>
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endblock %}

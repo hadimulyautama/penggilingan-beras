@@ -6,7 +6,7 @@
 {# Kosong di sini berarti sesuatu yang baik dan jarang: tak ada satu pun
    pembelian yang harganya menggantung, tak ada giling yang mutunya belum
    diperiksa. Itu keterangan, bukan kekurangan. #}
-{% if not meja %}
+{% if not meja and not semua_meja %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -14,15 +14,16 @@
     <div>
       <h2>Tak ada yang menunggu keputusan</h2>
       <p class="bantu">
-        Semua harga gabah dan PK luar sudah diverifikasi, dan tak ada giling
-        maupun PK luar yang mutunya belum diperiksa.
+        Semua harga gabah dan PK luar sudah diverifikasi, dan tak ada output
+        giling yang belum dicocokkan. Mutu punya layarnya sendiri —
+        <a href="/mutu">Mutu &amp; QC</a>.
       </p>
     </div>
   </div>
 {% endif %}
 
 {# Judul layar sudah berkata "Menunggu keputusan"; blok bernama sama cuma
-   mengulangnya. Yang belum dikatakan adalah keputusan APA — dan keenamnya
+   mengulangnya. Yang belum dikatakan adalah keputusan APA — dan keempatnya
    pekerjaan yang berbeda, dikerjakan orang yang mungkin berbeda pula.
 
    Daftarnya ada di `layar_keputusan.JENIS_KEPUTUSAN`, bukan di sini. Sampai 23
@@ -30,7 +31,11 @@
    `b.meja` sungguh bawa — harga PK luar, mutu PK luar, dan pembetulan bobot
    giling ada di data tetapi tak digambar. Templat yang memegang daftarnya
    sendiri tak bisa tahu ia ketinggalan; daftar di kode bisa diuji terhadap
-   `b.meja`. #}
+   `b.meja`.
+
+   Sejak 24 September 2026 golongan MUTU pindah ke `/mutu` (permintaan pemilik),
+   dan `JENIS_KEPUTUSAN` tinggal empat. Keduanya dipotong dari satu tupel —
+   `services.keputusan.JENIS`. #}
 {% for aksi, judul in JENIS_KEPUTUSAN %}
   {{ benda.blok(judul, meja|selectattr("aksi", "equalto", aksi)|list,
                 alamat="/keputusan") }}
@@ -43,8 +48,13 @@
    tepat. Judul yang kurang pas masih bisa diperbaiki orang; pekerjaan yang tak
    pernah tampil tak ada yang mencarinya. Kosong pada keadaan normal, jadi ia
    tak menambah apa pun sampai ia benar-benar perlu. #}
+{# `semua_meja`, bukan `meja`: layar ini cuma menggambar golongan non-mutu,
+   tetapi jaringnya menjaga SELURUH daftar. Jaring yang hanya melihat separuh
+   akan melewatkan jenis tak dikenal yang kebetulan bergolongan mutu — dan
+   layar mutu tak punya jaring sendiri, sebab dua jaring akan menggambarnya
+   dua kali. #}
 {{ benda.blok("Keputusan lain — jenisnya belum punya blok sendiri",
-              meja|rejectattr("aksi", "in", AKSI_DIKENAL)|list,
+              semua_meja|rejectattr("aksi", "in", AKSI_DIKENAL)|list,
               alamat="/keputusan") }}
 
 <dialog class="lembar" id="lembar"></dialog>

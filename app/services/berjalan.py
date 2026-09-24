@@ -23,6 +23,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
+from app.services import keputusan as K
 from app.penggilingan.gudang1.services.bobot import (
     Bobot, dari_batch, dari_batches, dari_nilai)
 from app.models import (
@@ -195,6 +196,11 @@ class Berjalan:
     #: tiket yang tertinggal — dan orang akan mencari gabah yang sebenarnya
     #: sudah lama ditempatkan.
     meja: list[Baris] = field(default_factory=list)
+    #: Apakah pabrik ini MENCATAT mutu (`setelan.fitur_mutu`). Dibawa di sini
+    #: karena penyusunnya sudah membacanya untuk memutuskan apakah baris qc_*
+    #: dipancarkan sama sekali — membacanya lagi di layar berarti satu kueri
+    #: tambahan pada tiap halaman, dan dua tempat yang bisa menjawab berbeda.
+    mutu_aktif: bool = True
 
     @property
     def jumlah_menunggu(self) -> int:
@@ -205,12 +211,42 @@ class Berjalan:
 
     @property
     def jumlah_keputusan(self) -> int:
-        return len(self.meja)
+        """Lencana "Menunggu keputusan" — TANPA golongan mutu.
+
+        Mutu pindah ke layarnya sendiri 24 September 2026 (permintaan pemilik).
+        Kalau angka ini tetap menghitung keenamnya, pintunya menjanjikan 8
+        sementara layarnya menggambar 6 — dan lencana yang tak pernah bisa
+        dinolkan mengajari orang mengabaikan lencana.
+        """
+        return sum(1 for b in self.meja if not K.golongan_mutu(b.aksi))
+
+    @property
+    def jumlah_mutu(self) -> int:
+        """Lencana "Mutu & QC"."""
+        return sum(1 for b in self.meja if K.golongan_mutu(b.aksi))
 
     @property
     def jumlah_berjalan(self) -> int:
         """Isi layar Sedang berjalan — mesin menyala DAN gabah transit."""
         return len(self.berjalan) + len(self.transit)
+
+    def lencana(self) -> dict:
+        """Seluruh angka laci sekaligus — dan pintu yang tak boleh ditawarkan.
+
+        Satu benda, bukan empat kata kunci yang disalin ke tiap `render`:
+        layar yang lupa salah satunya menampilkan laci yang berbeda dari laci
+        di layar sebelahnya, dan yang dibaca orang bukan "layar ini tidak
+        menghitung" melainkan "pekerjaannya sudah habis".
+
+        `PINTU_MATI` — pintu yang disembunyikan untuk permintaan ini. Pabrik
+        yang mematikan pencatatan mutu tak boleh ditawari pintu yang SELALU
+        kosong; halamannya sendiri tetap bisa dibuka lewat alamat, dan di sana
+        ia menyebut sebabnya.
+        """
+        return {"MENUNGGU": self.jumlah_menunggu, "BERJALAN": self.jumlah_berjalan,
+                "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
+                "MUTU_AKTIF": self.mutu_aktif,
+                "PINTU_MATI": () if self.mutu_aktif else ("mutu",)}
 
 
 def _lama(sejak: datetime | None) -> str:
@@ -1522,7 +1558,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # Sekali, di muka: kalau pabrik ini memang tak mencatat mutu, tak ada
     # gunanya menghitung berapa yang belum dicatat.
     mutu_aktif = await fitur_mutu(db)
-    b = Berjalan()
+    b = Berjalan(mutu_aktif=mutu_aktif)
 
     # Tiket berjenis tak dikenal — satu-satunya baris FISIK di fungsi ini, dan
     # ia di sini karena jalan keluarnya memang kerja meja: memetakan jenisnya,
@@ -1643,6 +1679,10 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         b.transit += g.transit
     if can_see_financials(user):
         s = await untuk_staff(db)
+        # Pencatatan mutu bisa dimatikan seluruhnya di Pengaturan. Yang membaca
+        # setelannya `untuk_staff`; benderanya ikut ke sini supaya laci tak
+        # menawarkan pintu "Mutu & QC" yang isinya pasti kosong.
+        b.mutu_aktif = s.mutu_aktif
         b.meja += s.meja
         b.berjalan += s.berjalan
         # `menunggu` ikut sejak 24 September 2026: `untuk_staff` kini juga

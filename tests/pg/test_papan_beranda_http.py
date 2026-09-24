@@ -81,8 +81,29 @@ async def test_admin_melihat_tiga_blok_papan(pg, pabrik):
         t = (await c.get("/")).text
     assert "Perlu perhatian" in t
     assert "GB-MENGGANTUNG-01" in t and "menggantung" in t
-    # Rincian keputusan, bukan cuma jumlahnya.
-    assert "harga ·" in t and "output ·" in t and "mutu" in t
+    # Rincian keputusan, bukan cuma jumlahnya — dan sejak 24 September 2026
+    # bagian mutunya berdiri sebagai PINTU KEDUA (permintaan pemilik), bukan
+    # sebagai kata ketiga di pintu pertama.
+    assert "harga ·" in t and "output" in t
+    assert 'href="/mutu"' in t, "pintu Mutu & QC tak digambar untuk admin"
+    # Yang dijaga di sini bukan kata-katanya melainkan JUMLAHNYA: rincian tiap
+    # pintu harus berjumlah sama dengan lencananya, kalau tidak orang berhenti
+    # mempercayai keduanya. (Galat kelas ini sedang hidup di app Meja: lencana
+    # 8, layar 7.)
+    import html as _html
+    import re as _re
+
+    def _pintu(alamat):
+        m = _re.search(r'<a [^>]*href="' + _re.escape(alamat) + r'"[^>]*>(.*?)</a>', t, _re.S)
+        assert m, f"pintu {alamat} tak ada"
+        isi = _html.unescape(" ".join(_re.sub(r"<[^>]+>", " ", m.group(1)).split()))
+        n = _re.search(r"lencana[^>]*>\s*(\d+)\s*<", m.group(1))
+        return isi, (int(n.group(1)) if n else 0)
+
+    isi_k, n_k = _pintu("/keputusan")
+    isi_m, n_m = _pintu("/mutu")
+    assert "mutu" not in isi_k, f"pintu keputusan masih mengaku memuat mutu: {isi_k}"
+    assert sum(int(x) for x in _re.findall(r"(\d+)\s+(?:harga|output)", isi_k)) == n_k, isi_k
     # Satu baris per gudang, masing-masing menaut ke halamannya.
     assert 'href="/gudang/g1"' in t and 'href="/gudang/g2"' in t
     assert "Gudang 1 — Selepan" in t and "Gudang 2 — Penyosohan" in t

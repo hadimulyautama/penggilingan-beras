@@ -398,8 +398,9 @@ async def beranda(request: Request):
         # antrean untuk menekan tombol yang tadi ia lihat di sini.
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
-        MENUNGGU=jalan.jumlah_menunggu, BERJALAN=jalan.jumlah_berjalan,
-        KEPUTUSAN=jalan.jumlah_keputusan,
+        # Keempat angka laci + pintu yang padam, dari satu tempat: layar yang
+        # menyalin tiga kata kunci cepat atau lambat lupa yang keempat.
+        **jalan.lencana(),
         # ── Pintu "Menunggu keputusan" (Tahap 2, beranda.html naik ke paket) ──
         #
         # Kerja meja berdiri sejajar kerja gudang, dan hanya untuk yang punya
@@ -408,6 +409,11 @@ async def beranda(request: Request):
         # hidup di Meja Administrasi, jadi di sana pintunya akan jadi tautan
         # mati ke rute yang tak ada.
         blok_keputusan=view in V_MEJA,
+        # Pintu "Mutu & QC" — gerbang yang sama (kerja meja), tetapi padam saat
+        # pencatatan mutu dimatikan di Pengaturan: pintu yang isinya pasti nol
+        # mengajari orang mengabaikan pintu. Benderanya dari daftar yang sudah
+        # di tangan, bukan kueri kedua.
+        blok_mutu=view in V_MEJA and jalan.mutu_aktif,
         # Blok "Perlu perhatian" & baris gudang: hanya bila papannya dihitung.
         # `papan` bisa None karena kueri gagal (halaman ini sengaja tetap tampil
         # tanpa angka), jadi bendanya dibaca dari satu tempat — bukan dari
@@ -532,8 +538,7 @@ async def halaman_aksi(request: Request):
                   # memindahkannya — `can_see_financials` — supaya kalimatnya
                   # tak pernah muncul di layar yang kartunya tidak pindah.
                   blok_pengalih=can_see_financials(akun.user),
-                  MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
-                  KEPUTUSAN=b.jumlah_keputusan)
+                  **b.lencana())
 
 
 @app.get("/aksi-lain", response_class=HTMLResponse)

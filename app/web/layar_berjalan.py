@@ -49,7 +49,6 @@ async def halaman_berjalan(request: Request, akun=Depends(butuh_akun)):
         berjalan=pilih(b.berjalan), transit=pilih(b.transit),
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
-        MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
-        KEPUTUSAN=b.jumlah_keputusan,
+        **b.lencana(),
         lama=svc._lama,
     )

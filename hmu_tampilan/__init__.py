@@ -38,7 +38,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "143"
+VERSI = "144"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -130,6 +130,12 @@ def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,
     env = templates.env
     env.loader = ChoiceLoader([env.loader, FileSystemLoader(str(TEMPLATES_DIR))])
     env.globals["VERSI"] = VERSI
+    # Pintu laci yang tak ditawarkan pada permintaan ini (kunci layar). App yang
+    # tak pernah mematikan layar apa pun tak perlu menyebutnya sama sekali —
+    # tanpa bawaan ini, `kunci not in PINTU_MATI` di `base.html` akan menabrak
+    # Undefined di app yang lain, dan laci yang gagal dirender berarti orang
+    # terkurung di layar yang sedang ia buka.
+    env.globals["PINTU_MATI"] = ()
     env.globals["APP_NAMA"] = app_nama
     env.globals["PWA_NAMA"] = pwa_nama
     env.globals.setdefault("MODE_UJI", mode_uji)

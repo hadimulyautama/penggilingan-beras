@@ -83,7 +83,18 @@ TAB = (
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.
     ("keputusan",  "/keputusan",  "Menunggu keputusan",
-     "Harga, mutu, verifikasi output", MEJA),
+     "Harga gabah & PK luar, pencocokan output", MEJA),
+    # Pecah dari "Menunggu keputusan" atas permintaan pemilik 24 September
+    # 2026. Gerbangnya sama — MEJA — karena ini kerja meja, bukan kerja
+    # gudang: OPERATOR TIDAK MELIHAT HALAMAN INI SAMA SEKALI. Yang ia lihat
+    # adalah mutu barangnya, di kartu Stok dan kartu proses yang berjalan;
+    # menilai mutu dan MENAGIH penilaiannya dua pekerjaan berbeda.
+    #
+    # Pintunya ikut padam saat pencatatan mutu dimatikan di Pengaturan —
+    # lewat `PINTU_MATI`, bukan lewat daftar ini: TAB dibaca sekali saat app
+    # dimuat, sedangkan setelan itu bisa berubah kapan saja.
+    ("mutu",       "/mutu",       "Mutu & QC",
+     "Mutu giling & PK luar yang belum dicatat", MEJA),
     # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
@@ -140,7 +151,7 @@ async def jumlah_keputusan(user: User | None) -> int:
         return 0
 
 
-async def lencana(user: User | None) -> dict[str, int]:
+async def lencana(user: User | None) -> dict:
     """Kedua lencana laci dari SATU kueri.
 
     Dipakai layar yang tak punya daftar `Berjalan` di tangannya. Yang sudah
@@ -153,15 +164,28 @@ async def lencana(user: User | None) -> dict[str, int]:
     lencana yang tak pernah ada.
     """
     if user is None:
-        return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0}
+        return _KOSONG()
     try:
-        from app.peran import can_see_financials
         from app.services import berjalan
         async with SessionLocal() as db:
             b = await berjalan.untuk(db, user)
-        return {"MENUNGGU": b.jumlah_menunggu,
-                "BERJALAN": b.jumlah_berjalan,
-                "KEPUTUSAN": b.jumlah_keputusan if can_see_financials(user) else 0}
+        # Angkanya disusun `Berjalan.lencana()` — satu tempat untuk keempatnya,
+        # supaya layar yang memakai jalur ini dan layar yang memegang daftarnya
+        # sendiri tak pernah menggambar laci yang berbeda. Operator tak perlu
+        # disaring lagi di sini: `untuk()` hanya mengisi `meja` untuk yang boleh
+        # melihat uang, jadi kedua angka meja sudah nol dengan sendirinya.
+        return b.lencana()
     except Exception:
         log.exception("Lencana gagal dihitung (laci tetap tampil)")
-        return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0}
+        return _KOSONG()
+
+
+def _KOSONG() -> dict:
+    """Laci tanpa angka — dipakai saat penggunanya tak ada atau kueri gagal.
+
+    `PINTU_MATI` sengaja KOSONG di sini: kegagalan kueri tak boleh menyembunyikan
+    pintu. Pintu yang hilang terbaca sebagai "layarnya sudah tak ada", dan itu
+    lebih membingungkan daripada pintu yang dibuka lalu ternyata kosong.
+    """
+    return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
+            "MUTU_AKTIF": True, "PINTU_MATI": ()}

@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 
 from app.config import settings
 from app.database import now_local
+from app.services import keputusan as K
 from app.services.berjalan import Baris, _kg, _lama
 from app.web.layar import GUDANG, NAMA_GUDANG
 
@@ -26,16 +27,12 @@ from app.web.layar import GUDANG, NAMA_GUDANG
 #: tak memberi tahu apakah yang tertahan harga, output, atau mutu — dan ketiganya
 #: dikerjakan orang yang berbeda dengan urgensi yang berbeda.
 #:
-#: Di sini, bukan di templat, supaya bisa DIUJI terhadap `AKSI_DIKENAL`: golongan
-#: yang ketinggalan satu jenis membuat rinciannya tak berjumlah sama dengan
-#: lencananya, dan angka yang tak berjumlah membuat orang berhenti mempercayai
-#: keduanya. `betulkan_bobot_giling` masuk "output" — yang ditahannya memang
-#: pencocokan hasil giling.
-GOLONGAN_KEPUTUSAN: dict[str, tuple[str, ...]] = {
-    "harga": ("verify_gabah", "harga_pk_luar"),
-    "output": ("verify_output", "betulkan_bobot_giling"),
-    "mutu": ("qc_giling", "qc_pk_luar"),
-}
+#: DITURUNKAN dari `services.keputusan.JENIS`, tidak diketik lagi di sini.
+#: Sejak 24 September 2026 golongan "mutu" bukan cuma rincian di Beranda
+#: melainkan LAYAR tersendiri (`/mutu`), dan dua daftar yang memegang pembagian
+#: yang sama akan hanyut — yang satu mendapat jenis ketujuh, yang lain tidak.
+#: Namanya dipertahankan: ia sudah dibaca templat dan uji.
+GOLONGAN_KEPUTUSAN: dict[str, tuple[str, ...]] = dict(K.GOLONGAN)
 
 
 @dataclass

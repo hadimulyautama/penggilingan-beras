@@ -277,6 +277,12 @@ async def _susun(db, akun: ProduksiAkun) -> dict:
     transit = _beri_gudang(g1.transit, "g1") + _beri_gudang(g2.transit, "g2")
     meja = _beri_gudang(s.meja, "g1") + _beri_gudang(g2.meja, "g2")
     return {"menunggu": menunggu, "berjalan": berjalan, "transit": transit, "meja": meja,
+            # KEPUTUSAN di sini sengaja menghitung SELURUH kerja meja, termasuk
+            # golongan mutu. Pos Produksi memecahnya jadi dua layar & dua
+            # lencana 24 September 2026; app Meja tidak ikut dipecah — ia sedang
+            # dipensiunkan, dan layar /keputusan-nya memang menggambar semuanya.
+            # Memakai `jumlah_keputusan` di sini akan membuat lencananya
+            # menjanjikan lebih sedikit daripada yang digambarnya.
             "lencana": {"MENUNGGU": len(menunggu), "BERJALAN": len(berjalan) + len(transit),
                         "KEPUTUSAN": len(meja)}}
 

@@ -153,8 +153,17 @@
       </div>
     </div>
     <div class="laci__daftar">
+      {# `PINTU_MATI` — pintu yang tak ditawarkan pada permintaan INI, apa pun
+         perannya. Bukan penjagaan (alamatnya tetap bisa diketik, dan rutenya
+         yang menjaga), melainkan cara menghindari menawarkan layar yang sudah
+         pasti kosong: pabrik yang mematikan pencatatan mutu tak perlu melihat
+         pintu "Mutu & QC" yang isinya selalu nol, dan lencana yang tak pernah
+         bisa dinolkan mengajari orang mengabaikan lencana.
+
+         Daftar KUNCI, bukan syarat per layar di dalam templat ini: app yang
+         menambah layar bersyarat besok tak perlu menyunting berkas bersama. #}
       {% for kunci, alamat, nama, ket, peran_min in TAB %}
-        {% if not peran_min or VIEW in peran_min %}
+        {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
         <a class="pintu{{ ' pintu--kini' if layar == kunci }}" href="{{ alamat }}"
            {{ ' aria-current=page'|safe if layar == kunci }}>
           <span class="pintu__ikon" aria-hidden="true">
@@ -162,6 +171,7 @@
             {%- elif kunci == 'aksi' %}≡
             {%- elif kunci == 'berjalan' %}◷
             {%- elif kunci == 'keputusan' %}✓
+            {%- elif kunci == 'mutu' %}◎
             {%- elif kunci == 'stok' %}▦
             {%- elif kunci == 'laporan' %}▤
             {%- else %}⚙{% endif -%}
@@ -187,6 +197,9 @@
           {% elif kunci == 'keputusan' and KEPUTUSAN %}
             <span class="pintu__jml"
                   aria-label="{{ KEPUTUSAN }} menunggu keputusan Anda">{{ KEPUTUSAN }}</span>
+          {% elif kunci == 'mutu' and MUTU %}
+            <span class="pintu__jml"
+                  aria-label="{{ MUTU }} mutu belum dicatat">{{ MUTU }}</span>
           {% endif %}
         </a>
         {% endif %}

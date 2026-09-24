@@ -75,6 +75,5 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
         blok_aksi=True,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
-        MENUNGGU=milik.jumlah_menunggu, BERJALAN=milik.jumlah_berjalan,
-        KEPUTUSAN=milik.jumlah_keputusan,
+        **milik.lencana(),
     )

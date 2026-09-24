@@ -70,13 +70,40 @@ def _render_keputusan(meja):
 def test_kerja_meja_hanya_untuk_yang_boleh_melihat_uang():
     """Verifikasi harga sejak awal fitur admin. Operator — dan admin yang
     sedang memakai Mode operator — tak boleh melihatnya sama sekali."""
+    import ast
+    import textwrap
+
     sumber = inspect.getsource(
         __import__("app.services.berjalan", fromlist=["untuk"]).untuk)
     # Satu-satunya jalan `meja` terisi adalah lewat gerbang uang.
-    assert "b.meja += s.meja" in sumber
-    baris = sumber.split("b.meja += s.meja")[0]
-    assert baris.rstrip().endswith("s = await untuk_staff(db)")
-    assert "if can_see_financials(user):" in baris
+    #
+    # Dulu ini diperiksa dengan menuntut baris `s = await untuk_staff(db)`
+    # PERSIS di atasnya. Tuntutan itu patah begitu ada baris sah yang
+    # disisipkan di antaranya — dan yang dijaga sebenarnya bukan urutan dua
+    # baris melainkan DI DALAM gerbang mana pengisian itu berada. Jadi yang
+    # dibaca sekarang pohonnya: TIAP `*.meja +=` harus punya leluhur
+    # `if can_see_financials(user):`. Berapa pun gerbang uang yang ada di
+    # fungsi ini (hari ini dua — staff dan Gudang 2), aturannya satu.
+    pohon = ast.parse(textwrap.dedent(sumber))
+    induk: dict[ast.AST, ast.AST] = {}
+    for n in ast.walk(pohon):
+        for anak in ast.iter_child_nodes(n):
+            induk[anak] = n
+
+    def bergerbang_uang(n: ast.AST) -> bool:
+        while n in induk:
+            n = induk[n]
+            if isinstance(n, ast.If) and "can_see_financials" in ast.unparse(n.test):
+                return True
+        return False
+
+    isi_meja = [n for n in ast.walk(pohon)
+                if isinstance(n, ast.AugAssign)
+                and getattr(n.target, "attr", "") == "meja"]
+    assert isi_meja, "tak ada satu pun pengisian `meja` di `untuk`"
+    for n in isi_meja:
+        assert bergerbang_uang(n), f"`{ast.unparse(n)}` di luar gerbang uang"
+    assert any("untuk_staff" in ast.unparse(induk[induk[n]]) for n in isi_meja)
     # Dan tak ada jalan lain: `untuk_gudang1` tak pernah menyentuh `meja`.
     g1 = inspect.getsource(
         __import__("app.services.berjalan", fromlist=["untuk_gudang1"]).untuk_gudang1)
@@ -390,8 +417,11 @@ def test_tumpukan_tetap_dihitung_lencana_antrean():
 
     from app.services import berjalan as svc
 
-    # Tak ada daftar keempat yang menampung tumpukan terpisah dari `menunggu`.
-    medan = {f.name for f in svc.Berjalan.__dataclass_fields__.values()}
+    # Tak ada DAFTAR keempat yang menampung tumpukan terpisah dari `menunggu`.
+    # Yang diperiksa medan berjenis daftar saja: `Berjalan` juga membawa
+    # bendera (`mutu_aktif`), dan bendera bukan tempat kartu bisa bersembunyi.
+    medan = {f.name for f in svc.Berjalan.__dataclass_fields__.values()
+             if isinstance(getattr(svc.Berjalan(), f.name), list)}
     assert medan == {"menunggu", "berjalan", "transit", "meja"}, medan
     # Dan `jumlah_menunggu` memang membaca `menunggu` apa adanya.
     assert "len(self.menunggu)" in inspect.getsource(

@@ -14,6 +14,15 @@ tanpa satu pun tanda.
 Uji ini membaca SUMBERNYA: tiap `aksi="…"` yang benar-benar di-append ke
 `b.meja`, lalu menuntut tiap satunya punya blok. Jenis ketujuh yang lahir nanti
 menjatuhkan uji ini, bukan menghilang diam-diam.
+
+Sejak 24 September 2026 layarnya DUA — "Menunggu keputusan" dan "Mutu & QC"
+(permintaan pemilik) — dan tuntutannya ikut berubah bentuk, bukan melemah:
+
+    tiap aksi yang dikirim ke `b.meja` punya blok di TEPAT SATU dari dua layar.
+
+Nol berarti pekerjaan yang tak tergambar di mana pun — kelas galat yang berkas
+ini lahir untuk menutup. Dua berarti kartu yang sama ditagih di dua tempat,
+lalu dikerjakan dua kali.
 """
 from __future__ import annotations
 
@@ -21,7 +30,7 @@ import inspect
 import re
 
 from app.services import berjalan as svc
-from app.web.layar_keputusan import AKSI_DIKENAL, JENIS_KEPUTUSAN
+from app.web.layar_keputusan import AKSI_DIKENAL, JENIS_KEPUTUSAN, JENIS_MUTU
 
 
 def _aksi_yang_dikirim_ke_meja() -> set[str]:
@@ -41,16 +50,32 @@ def _aksi_yang_dikirim_ke_meja() -> set[str]:
     return keluar
 
 
-def test_tiap_jenis_yang_dikirim_punya_bloknya():
+def _blok_per_aksi() -> dict[str, list[str]]:
+    """aksi → layar mana saja yang menggambarnya. Nol dan dua sama-sama salah."""
+    keluar: dict[str, list[str]] = {}
+    for layar, daftar in (("keputusan", JENIS_KEPUTUSAN), ("mutu", JENIS_MUTU)):
+        for aksi, _ in daftar:
+            keluar.setdefault(aksi, []).append(layar)
+    return keluar
+
+
+def test_tiap_jenis_yang_dikirim_punya_bloknya_di_tepat_satu_layar():
     dikirim = _aksi_yang_dikirim_ke_meja()
     # Premisnya: uji ini benar-benar menemukan sesuatu untuk diperiksa.
     assert len(dikirim) >= 6, f"pembaca sumber tak menemukan append: {dikirim}"
 
-    hilang = dikirim - set(AKSI_DIKENAL)
+    blok = _blok_per_aksi()
+    hilang = dikirim - set(blok)
     assert not hilang, (
-        f"jenis keputusan tanpa blok di layar: {sorted(hilang)}. "
-        "Tambahkan ke JENIS_KEPUTUSAN — pekerjaan yang tak tampil "
+        f"jenis keputusan tanpa blok di layar mana pun: {sorted(hilang)}. "
+        "Tambahkan ke `services.keputusan.JENIS` — pekerjaan yang tak tampil "
         "tak akan ada yang mencarinya.")
+    dua = {a: l for a, l in blok.items() if len(l) > 1}
+    assert not dua, f"jenis yang digambar dua layar sekaligus: {dua}"
+    # `AKSI_DIKENAL` — yang dipakai jaring penangkap — harus GABUNGAN keduanya.
+    # Kalau ia cuma daftar satu layar, jaringnya akan menangkap kembali jenis
+    # yang sebenarnya sudah punya blok di layar sebelah.
+    assert sorted(AKSI_DIKENAL) == sorted(blok)
 
     # Ketiga yang dulu hilang disebut namanya, supaya perbaikannya tak
     # tergulung balik tanpa ada yang menyadarinya.
@@ -69,14 +94,37 @@ def test_daftar_blok_tak_menyebut_jenis_yang_tak_pernah_dikirim():
 
 def test_daftarnya_di_kode_bukan_di_templat():
     """Templat yang memegang daftarnya sendiri tak bisa diuji terhadap data —
-    dan itulah yang membuat ketiga jenis hilang selama berminggu-minggu."""
+    dan itulah yang membuat ketiga jenis hilang selama berminggu-minggu.
+
+    Dua templat sekarang, dan keduanya diperiksa: layar kedua yang mulai
+    mengetik daftarnya sendiri mengulang kesalahan yang sama, cuma di tempat
+    yang belum pernah dilihat orang.
+    """
     import pathlib
 
-    tpl = (pathlib.Path(__file__).resolve().parents[1]
-           / "app/web/templates/keputusan.html").read_text()
-    assert "{% for aksi, judul in JENIS_KEPUTUSAN %}" in tpl
-    for aksi, _ in JENIS_KEPUTUSAN:
-        assert f'"{aksi}"' not in tpl, f"id aksi {aksi} diketik lagi di templat"
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates"
+    for berkas, gelung, daftar in (
+            ("keputusan.html", "{% for aksi, judul in JENIS_KEPUTUSAN %}", JENIS_KEPUTUSAN),
+            ("mutu.html", "{% for aksi, judul in JENIS_MUTU %}", JENIS_MUTU)):
+        tpl = (akar / berkas).read_text()
+        assert gelung in tpl, berkas
+        for aksi, _ in daftar:
+            assert f'"{aksi}"' not in tpl, f"id aksi {aksi} diketik lagi di {berkas}"
+        for _, judul in daftar:
+            assert judul not in tpl, f"judul blok diketik lagi di {berkas}: {judul}"
+
+
+def test_pembagian_dua_layar_dari_satu_sumber():
+    """Kedua daftar dipotong dari `services.keputusan.JENIS` — bukan dua tupel
+    yang ditulis tangan lalu dijaga cocok oleh ingatan orang."""
+    from app.services import keputusan as K
+    from app.web import layar_keputusan
+
+    kode = inspect.getsource(layar_keputusan)
+    assert "K.blok(mutu=False)" in kode and "K.blok(mutu=True)" in kode
+    assert "AKSI_DIKENAL: tuple[str, ...] = K.SEMUA" in kode
+    # Dan golongan mutu memang yang pindah — bukan tebakan dari nama id-nya.
+    assert sorted(a for a, _ in JENIS_MUTU) == sorted(K.GOLONGAN[K.MUTU])
 
 
 def test_ada_jaring_untuk_jenis_yang_belum_punya_blok():
@@ -85,7 +133,79 @@ def test_ada_jaring_untuk_jenis_yang_belum_punya_blok():
     tetap terlihat sebelum orang itu sempat."""
     import pathlib
 
-    tpl = (pathlib.Path(__file__).resolve().parents[1]
-           / "app/web/templates/keputusan.html").read_text()
+    akar = pathlib.Path(__file__).resolve().parents[1] / "app/web/templates"
+    tpl = (akar / "keputusan.html").read_text()
     assert 'rejectattr("aksi", "in", AKSI_DIKENAL)' in tpl
     assert "Keputusan lain" in tpl
+    # Jaringnya menyaring SELURUH kerja meja, bukan cuma yang digambar layar
+    # ini — jenis tak dikenal yang kebetulan bergolongan mutu tetap tertangkap.
+    assert 'semua_meja|rejectattr' in tpl
+    # Dan jaringnya SATU. Dua jaring akan menggambar jenis ketujuh dua kali:
+    # sekali di tiap layar, sebagai dua pekerjaan yang sebenarnya satu.
+    mutu = (akar / "mutu.html").read_text()
+    assert "rejectattr" not in mutu, "layar mutu tak boleh punya jaring kedua"
+
+
+# ── Lencana: tiap layar menjanjikan tepat yang digambarnya ──
+#
+# QA 24c/24e menemukan galat kelas ini hidup di app Meja: lencananya 8, layarnya
+# 7. Pemisahan layar adalah kesempatan paling besar untuk melahirkannya lagi di
+# Pos Produksi — pintu yang berjanji 8 sementara layarnya menggambar 6.
+
+def test_lencana_tiap_layar_sama_dengan_isinya():
+    from app.services.berjalan import Baris, Berjalan
+
+    meja = [Baris(kode=a, isi="", keadaan="", aksi=a) for a in AKSI_DIKENAL]
+    b = Berjalan(meja=meja)
+    n = b.lencana()
+    assert n["KEPUTUSAN"] == len(JENIS_KEPUTUSAN)
+    assert n["MUTU"] == len(JENIS_MUTU)
+    # Tak ada yang hilang di antara keduanya, dan tak ada yang terhitung dua kali.
+    assert n["KEPUTUSAN"] + n["MUTU"] == len(meja)
+
+
+def test_pintu_mutu_padam_saat_pencatatan_mutu_dimatikan():
+    """Pabrik yang mematikan pencatatan mutu tak boleh ditawari pintu yang
+    isinya SELALU nol — lencana yang tak pernah bisa dinolkan mengajari orang
+    mengabaikan lencana. Halamannya tetap bisa dibuka lewat alamat, dan di sana
+    ia menyebut sebabnya."""
+    from app.services.berjalan import Berjalan
+
+    assert Berjalan().lencana()["PINTU_MATI"] == ()
+    assert Berjalan(mutu_aktif=False).lencana()["PINTU_MATI"] == ("mutu",)
+
+    import pathlib
+    tpl = (pathlib.Path(__file__).resolve().parents[1]
+           / "app/web/templates/mutu.html").read_text()
+    assert "{% if not MUTU_AKTIF %}" in tpl
+    assert "Pencatatan mutu dimatikan" in tpl
+    assert "/pengaturan" in tpl, "sebabnya disebut tanpa jalan membetulkannya"
+
+
+def test_laci_menawarkan_mutu_hanya_ke_view_meja():
+    """Operator tidak melihat halaman ini sama sekali (pemilik, 24 September
+    2026): yang ia lihat adalah mutu BARANGNYA, di kartu Stok dan kartu proses.
+    Menilai mutu dan menagih penilaiannya dua pekerjaan berbeda."""
+    from app.web.layar import MEJA
+    from app.web.nav import JUDUL, TAB
+
+    baris = [t for t in TAB if t[0] == "mutu"]
+    assert len(baris) == 1, "pintu Mutu & QC tak ada di laci"
+    kunci, alamat, nama, ket, view = baris[0]
+    assert alamat == "/mutu" and view is MEJA
+    assert nama == "Mutu & QC"
+    # Keterangan menyebut PEKERJAANNYA, bukan mengulang judulnya.
+    assert ket and ket != nama and nama.lower() not in ket.lower()
+    # Judul bilah atas diturunkan dari daftar yang sama — nama layar tak pernah
+    # berbeda antara pintu dan judulnya.
+    assert JUDUL["mutu"] == nama
+
+
+def test_gerbang_halaman_mutu_sama_dengan_keputusan():
+    """Memisahkan layarnya tidak memindahkan wewenangnya."""
+    from app.web import layar_keputusan as L
+
+    for fungsi in (L.halaman_keputusan, L.halaman_mutu):
+        tanda = inspect.signature(fungsi).parameters["akun"].default
+        assert getattr(tanda, "dependency", None) is not None
+        assert tanda.dependency.__name__ == "butuh_admin", fungsi.__name__

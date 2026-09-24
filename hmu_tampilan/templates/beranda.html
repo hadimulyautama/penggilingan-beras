@@ -84,12 +84,36 @@
      mutu — dan ketiganya dikerjakan orang yang berbeda dengan urgensi yang
      berbeda. Golongannya di `services.beranda.GOLONGAN_KEPUTUSAN`, tempat ia
      bisa diuji terhadap jenis yang benar-benar dikirim. #}
+  {# Rinciannya menyebut isi PINTU ITU, bukan isi kerja meja seluruhnya.
+     App yang punya layar mutu tersendiri (`blok_mutu`) menaruh bagian mutunya
+     di pintu kedua; app yang tidak — Meja, yang sedang dipensiunkan —
+     /keputusan-nya masih menggambar ketiganya, jadi rinciannya pun bertiga.
+     Kalau bagian mutu hilang dari keduanya, rinciannya tak berjumlah sama
+     dengan lencananya (4 harga · 0 output di bawah angka 8), dan angka yang
+     tak berjumlah membuat orang berhenti mempercayai keduanya. #}
   {% if blok_keputusan %}
   {{ br.pintu("/keputusan", "Menunggu keputusan",
-              ((n_harga ~ " harga · " ~ n_output ~ " output · " ~ n_mutu ~ " mutu")
+              ((n_harga ~ " harga · " ~ n_output ~ " output"
+                ~ ("" if blok_mutu else " · " ~ n_mutu ~ " mutu"))
                if rinci_keputusan else (KEPUTUSAN ~ " menunggu diputuskan"))
               if KEPUTUSAN else "tak ada yang tertahan",
               br.ikon_centang(), KEPUTUSAN, gaya="margin-top:8px") }}
+  {% endif %}
+  {# Mutu pecah jadi pintu sendiri 24 September 2026 (permintaan pemilik), dan
+     rincian di pintu pertama ikut kehilangan bagiannya — dua pintu yang
+     sama-sama mengaku memuat mutu membuat orang membuka yang salah lebih dulu.
+     Angkanya dari `hitung_keputusan()`, bukan dihitung ulang di sini.
+
+     Berdiri sendiri (`blok_mutu`), bukan menumpang `blok_keputusan`: app Meja
+     punya Beranda yang sama tetapi TIDAK punya rute /mutu — ia sedang
+     dipensiunkan, dan pintu ke rute yang tak ada adalah tautan mati. #}
+  {% if blok_mutu %}
+  {# Nama polos: makro `pintu` yang meloloskannya ke HTML, dan menuliskannya
+     sudah ter-escape di sini membuatnya keluar sebagai "Mutu &amp;amp; QC" di
+     layar. Terlihat di sapuan HTTP, tak terlihat oleh uji mana pun. #}
+  {{ br.pintu("/mutu", "Mutu & QC",
+              (n_mutu ~ " belum dicatat") if MUTU else "semua sudah dinilai",
+              br.ikon_centang(), MUTU, gaya="margin-top:8px") }}
   {% endif %}
 </div>
 

@@ -1,4 +1,10 @@
-"""Layar "Menunggu keputusan" — kerja MEJA, bukan kerja gudang.
+"""Dua layar kerja MEJA: "Menunggu keputusan" dan "Mutu & QC".
+
+Keduanya di satu berkas karena keduanya satu daftar yang dipotong dua
+(`services.keputusan.JENIS`) — dan potongan yang tinggal di dua berkas cepat
+atau lambat jadi dua daftar. Pemisahannya permintaan pemilik 24 September 2026:
+harga & pencocokan output di `/keputusan`, mutu di `/mutu`.
+
 
 Barisnya pernah menumpang di Antrian tunggu, dan itu menyalahi aturan yang
 paling sering diucapkan pemilik: **begitu gabah punya tempat, ia keluar dari
@@ -21,41 +27,33 @@ from fastapi import APIRouter, Depends, Request
 
 from app.database import SessionLocal
 from app.services import berjalan as svc
+from app.services import keputusan as K
 from app.web.security import butuh_admin
 from app.web.tampilan import render
 
 router = APIRouter(tags=["webapp"])
 
-#: Blok layar ini, BERURUT: (id aksi, judul blok).
+#: Blok tiap layar, BERURUT — DITURUNKAN dari `services.keputusan.JENIS`.
 #:
-#: Dulu daftar ini hidup di dalam templat, dan isinya tiga dari ENAM jenis yang
-#: benar-benar dikirim `berjalan.untuk()` ke `b.meja`. Akibatnya harga PK luar,
-#: mutu PK luar, dan pembetulan bobot giling ada di data tetapi tak digambar di
-#: layar mana pun — pekerjaan yang menahan uang, tak tertagih, tanpa satu pun
-#: tanda. (Yang PK luar terbaca di aplikasi Meja; `betulkan_bobot_giling` tak
-#: terbaca di mana pun sejak ia lahir bersama perbaikan P6-03.)
+#: Sampai 23 September 2026 daftar ini hidup di dalam templat, dan isinya tiga
+#: dari enam jenis yang `b.meja` sungguh bawa: harga PK luar, mutu PK luar, dan
+#: pembetulan bobot giling ada di data tetapi tak digambar di layar mana pun —
+#: pekerjaan yang menahan uang, tak tertagih, tanpa satu pun tanda.
 #:
-#: Di sini, bukan di templat, karena di sinilah ia bisa DIUJI terhadap apa yang
-#: `b.meja` sungguh bawa — lihat `tests/test_keputusan_lengkap.py`. Templat yang
-#: memegang daftarnya sendiri tak bisa tahu ia ketinggalan.
-#:
-#: Urutannya mengikuti uang yang tertahan paling lama: harga lebih dulu, lalu
-#: pencocokan output, lalu mutu. Pembetulan bobot terakhir — ia perbaikan atas
-#: keadaan yang jarang, bukan pekerjaan harian, dan bobot yang tak cocok
-#: membuat rendemen & HPP salah sampai dibetulkan.
-JENIS_KEPUTUSAN: tuple[tuple[str, str], ...] = (
-    ("verify_gabah", "Harga gabah belum diverifikasi"),
-    ("harga_pk_luar", "Harga PK luar belum diverifikasi"),
-    ("verify_output", "Output giling belum dicocokkan"),
-    ("qc_giling", "Mutu giling belum diperiksa"),
-    ("qc_pk_luar", "Mutu PK luar belum dicatat"),
-    ("betulkan_bobot_giling", "Bobot masuk giling tak cocok"),
-)
+#: Sejak 24 September 2026 layarnya DUA (permintaan pemilik), dan itu membuat
+#: bahaya yang sama jadi dua rupa: jenis baru yang muncul di KEDUA layar, atau
+#: tak di mana pun. Karena itu keduanya diturunkan dari satu tupel, dan
+#: `AKSI_DIKENAL` — yang dipakai jaring penangkap — adalah GABUNGANNYA.
+JENIS_KEPUTUSAN: tuple[tuple[str, str], ...] = K.blok(mutu=False)
+JENIS_MUTU: tuple[tuple[str, str], ...] = K.blok(mutu=True)
 
-#: Id yang sudah punya bloknya sendiri. Sisanya jatuh ke blok jaring di templat,
-#: supaya jenis yang lahir nanti TERLIHAT — meski judulnya belum dipikirkan —
-#: bukan hilang diam-diam seperti tiga jenis di atas.
-AKSI_DIKENAL: tuple[str, ...] = tuple(a for a, _ in JENIS_KEPUTUSAN)
+#: Id yang sudah punya bloknya sendiri DI SALAH SATU layar. Sisanya jatuh ke
+#: blok jaring di `/keputusan`, supaya jenis yang lahir nanti TERLIHAT — meski
+#: judulnya belum dipikirkan — bukan hilang diam-diam seperti tiga jenis di atas.
+#:
+#: Jaringnya SATU, dan tinggal di `/keputusan`. Dua jaring yang masing-masing
+#: menolak daftarnya sendiri akan menggambar jenis ketujuh dua kali.
+AKSI_DIKENAL: tuple[str, ...] = K.SEMUA
 
 
 @router.get("/keputusan")
@@ -64,10 +62,46 @@ async def halaman_keputusan(request: Request, akun=Depends(butuh_admin)):
         b = await svc.untuk(db, akun.user)
     return render(
         request, "keputusan.html", layar="keputusan",
-        meja=b.meja, lama=svc._lama,
+        meja=[x for x in b.meja if not K.golongan_mutu(x.aksi)], lama=svc._lama,
+        # Jaringnya memakai SELURUH meja — termasuk golongan mutu — supaya
+        # jenis yang tak dikenal tertangkap di sini apa pun golongannya yang
+        # kelak diberikan orang kepadanya.
+        semua_meja=b.meja,
         JENIS_KEPUTUSAN=JENIS_KEPUTUSAN, AKSI_DIKENAL=AKSI_DIKENAL,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
-        MENUNGGU=b.jumlah_menunggu, BERJALAN=b.jumlah_berjalan,
-        KEPUTUSAN=b.jumlah_keputusan,
+        **b.lencana(),
+    )
+
+
+@router.get("/mutu")
+async def halaman_mutu(request: Request, akun=Depends(butuh_admin)):
+    """"Mutu & QC" — dua blok yang pecah dari Menunggu keputusan.
+
+    Gerbangnya SAMA dengan `/keputusan` (`butuh_admin`, peran efektif): mutu
+    selalu jadi kerja meja, dan memisahkan layarnya tidak memindahkan
+    wewenangnya. Admin yang sedang memakai "Lihat sebagai operator" pun ditolak
+    — samaran yang masih memegang wewenangnya bukan samaran.
+
+    **Operator tidak melihat halaman ini sama sekali** (pemilik, 24 September
+    2026). Yang ia lihat adalah MUTU BARANGNYA, di tempat barang itu berada:
+    baris mutu pada kartu di layar Stok dan pada kartu proses yang sedang
+    berjalan. Bedanya bukan soal kerahasiaan melainkan soal pekerjaan —
+    menilai mutu dan MENAGIH penilaian itu dua pekerjaan berbeda, dan yang
+    kedua dikerjakan dari meja.
+
+    Pencatatan mutu bisa dimatikan seluruhnya di Pengaturan. Saat mati, laci
+    tak menawarkan pintunya (`Berjalan.lencana` → `PINTU_MATI`) — tetapi
+    alamatnya tetap bisa diketik, dan halaman yang kosong tanpa penjelasan
+    terbaca seperti "sudah beres". Maka ia menyebut sebabnya.
+    """
+    async with SessionLocal() as db:
+        b = await svc.untuk(db, akun.user)
+    return render(
+        request, "mutu.html", layar="mutu",
+        meja=[x for x in b.meja if K.golongan_mutu(x.aksi)], lama=svc._lama,
+        JENIS_MUTU=JENIS_MUTU,
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+        **b.lencana(),
     )
