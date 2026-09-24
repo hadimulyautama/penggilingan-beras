@@ -168,17 +168,32 @@ def dari_batches(bs: Iterable) -> Bobot:
 #: yang masuk akal.
 UMUR_TARA_HARI = 30
 
+#: Berat truk kosong yang LAZIM di pabrik ini — keterangan pemilik 24 September
+#: 2026. Tidak dipakai menghitung apa pun; ia yang memberi ukuran pada pagar di
+#: bawahnya, dan tanpa angka ini pagar itu cuma selera.
+TARA_TRUK_LAZIM_KG = 3000
+
 #: Batas kewajaran: muatan tak boleh lebih dari sekian kali tara truknya.
 #:
-#: Bukan angka teknis melainkan pagar akal sehat. Truk mereka: tara ±3 ton,
-#: muatan ±10 ton — rasio 3,3. Trailer besar: tara 9 ton, muatan 30 ton — 3,3
-#: juga. Yang keluar jauh di atas itu hampir pasti tara milik kendaraan LAIN
-#: (atau salah ketik): QA 24 September 2026 (c) butir 2c menanam tara 1.000 kg
-#: pada truk yang sebenarnya 3.000 kg, dan perkiraannya keluar 12.000 kg untuk
-#: muatan 10.000 kg — meleset 2 ton KE ATAS, dan kartunya tetap bisa digiling.
+#: Bukan angka teknis melainkan pagar akal sehat, dan ukurannya dari armada
+#: sendiri: truk ±3.000 kg kosong membawa ±10.000 kg — rasio 3,3. Batas 4×
+#: memberi langit 12.000 kg, jadi muatan yang wajar tak pernah tersentuh;
+#: trailer besar (tara 9 ton, muatan 30 ton) pun 3,3. Yang keluar jauh di atas
+#: itu hampir pasti tara milik kendaraan LAIN, atau salah ketik: QA 24 September
+#: 2026 (c) butir 2c menanam tara 1.000 kg pada truk yang sebenarnya 3.000 kg,
+#: dan perkiraannya keluar 12.000 kg untuk muatan 10.000 kg — meleset 2 ton KE
+#: ATAS, dan kartunya tetap bisa digiling.
 #:
 #: Yang melampaui batas ini TIDAK ditebak: bobotnya "menunggu timbang"
 #: (Pilihan B), sebab angka yang salah lebih mahal daripada angka yang belum ada.
+#:
+#: **Sengaja TIDAK ada batas BAWAH tara.** Kalau truk lazimnya 3.000 kg, tara
+#: 1.000 kg memang bukan truk — tetapi ia bisa mobil bak yang sah (±1.000 kg
+#: kosong), dan petani kecil datang dengan itu. Pagar yang menolak angka kecil
+#: akan menolak tara yang BENAR, dan yang ditolak di sini berhenti punya bobot
+#: sampai ditimbang kedua. Yang dijaga rasionya: mobil bak bertara 1.000 kg
+#: membawa 1.500 kg tetap lolos (1,5×); yang ditolak cuma mobil bak yang
+#: "membawa" 12 ton.
 MUATAN_MAKS_X_TARA = 4.0
 
 

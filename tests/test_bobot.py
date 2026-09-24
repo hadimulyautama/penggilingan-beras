@@ -77,6 +77,15 @@ def test_perkiraan_dan_normalisasi_nopol():
     assert B.perkiraan(13000, 3000) == 10000, "truk sungguhan tetap ditebak"
     # Tepat di batas masih diterima: batasnya pagar, bukan ambang ketelitian.
     assert B.perkiraan(5000, 1000) == 4000
+    # Dan tak ada batas BAWAH: mobil bak bertara 1.000 kg yang membawa 1.500 kg
+    # adalah kendaraan yang sungguh datang ke pabrik ini (petani kecil). Pagar
+    # yang menolak angka kecil akan menolak tara yang benar — yang dijaga
+    # rasionya, bukan besarnya.
+    assert B.perkiraan(2500, 1000) == 1500
+    # Ukuran pagarnya datang dari armada sendiri (keterangan pemilik 24 Sep
+    # 2026): truk lazim 3.000 kg kosong, muatan ±10.000 kg — 3,3×, jauh di
+    # bawah batas. Angka itu tak menghitung apa pun; ia yang memberi ukuran.
+    assert B.perkiraan(13000, B.TARA_TRUK_LAZIM_KG) == 10000
     assert B.norm_nopol("ad 1234 xy") == "AD1234XY" == B.norm_nopol("AD-1234-XY")
     assert B.norm_nopol(None) == ""
 
