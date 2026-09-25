@@ -256,9 +256,15 @@ class _SesiPalsu:
     tak ada yang terhapus.
     """
 
-    def __init__(self, jejak: list[str], tiket_sungguhan: int):
+    def __init__(self, jejak: list[str], tiket_sungguhan: int,
+                 ada_tautan: bool = True):
         self.jejak = jejak
+        #: Tiket SUNGGUHAN yang sudah DIBUKUKAN — yang tautannya akan dilepas.
         self.tiket_sungguhan = tiket_sungguhan
+        #: Adakah kolom penaut dari `timbangan_transaksi` sama sekali. Basis
+        #: data yang jembatannya dipakai TETAPI belum satu pun tiket dibukukan
+        #: tetap punya kolomnya; yang kosong isinya, bukan kolomnya.
+        self.ada_tautan = ada_tautan
 
     async def __aenter__(self):
         return self
@@ -271,13 +277,21 @@ class _SesiPalsu:
         self.jejak.append(sql)
         if "timbangan_transaksi" in sql and "NOT LIKE" in sql:
             return _Hasil(self.tiket_sungguhan)
+        # Daftar tautan masuk — dikenali dari kueri katalognya. Tanpa ini
+        # penjaga tak punya kolom untuk ditanyai, dan ujinya membuktikan
+        # kebalikan dari yang dimaksudkan.
+        if "information_schema" in sql or "pg_constraint" in sql or "confrelid" in sql:
+            baris = ([("timbangan_transaksi", "purchase_batch_id",
+                       "purchase_batches", False)] if self.ada_tautan else [])
+            return _Hasil(0, baris)
         return _Hasil(0, [])
 
     async def commit(self):
         self.jejak.append("COMMIT")
 
 
-def _jalankan_kosongkan(monkeypatch, tiket_sungguhan: int) -> tuple[str | None, list[str]]:
+def _jalankan_kosongkan(monkeypatch, tiket_sungguhan: int,
+                        ada_tautan: bool = True) -> tuple[str | None, list[str]]:
     """Jalankan `_kosongkan` tanpa basis data; kembalikan pesan & jejak SQL."""
     import asyncio
 
@@ -285,7 +299,7 @@ def _jalankan_kosongkan(monkeypatch, tiket_sungguhan: int) -> tuple[str | None, 
 
     jejak: list[str] = []
     monkeypatch.setattr(mode_uji, "SessionLocal",
-                        lambda: _SesiPalsu(jejak, tiket_sungguhan))
+                        lambda: _SesiPalsu(jejak, tiket_sungguhan, ada_tautan))
     # `seed_master` di ekor `_kosongkan` membuka sesinya SENDIRI — kalau tak
     # ikut diganti, ujinya menempel ke Postgres sungguhan dan gagal karena
     # alasan yang sama sekali lain.
@@ -301,8 +315,13 @@ def test_satu_tiket_sungguhan_membatalkan_SEBELUM_menghapus(monkeypatch):
     dan jejak auditnya terhapus, penolakannya datang belakangan, dan tiket
     aslinya muncul lagi sebagai belum diproses — bisa dibukukan dua kali.
 
-    Satu tiket sungguhan saja sudah cukup untuk membatalkan, dan pembatalan
-    itu harus terjadi sebelum satu baris pun hilang.
+    Satu tiket sungguhan yang SUDAH DIBUKUKAN sudah cukup untuk membatalkan,
+    dan pembatalan itu harus terjadi sebelum satu baris pun hilang.
+
+    Yang diuji "sudah dibukukan", bukan "ada" — sejak 25 September 2026 itulah
+    pertanyaan penjaganya. Yang dirusak penghapusan ini bukan baris tiketnya
+    (ia milik Timbangan dan tak tersentuh) melainkan TANDA bahwa tiket itu
+    sudah dibukukan; tanpa satu pun tanda, tak ada yang bisa hilang.
     """
     pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=1)
 
@@ -345,10 +364,10 @@ def test_penjaga_dipasang_di_kosongkan_bukan_di_tiap_rute():
     from tests.bantu import kode_saja
 
     kode = kode_saja(mode_uji._kosongkan)
-    assert "jembatan_sungguhan" in kode
+    assert "tiket_sungguhan_tertaut" in kode
     # Sebelum tautan dilepas DAN sebelum satu DELETE pun disusun.
-    assert kode.index("jembatan_sungguhan") < kode.index("UPDATE")
-    assert kode.index("jembatan_sungguhan") < kode.index("DELETE FROM")
+    assert kode.index("tiket_sungguhan_tertaut") < kode.index("UPDATE")
+    assert kode.index("tiket_sungguhan_tertaut") < kode.index("DELETE FROM")
 
     # Dan kedua rute memang lewat sana, bukan punya jalannya sendiri.
     for rute in (mode_uji.hapus, mode_uji.ulangi):
@@ -446,3 +465,55 @@ def test_dokumen_deploy_tak_lagi_menyuruh_mengosongkan_db_bersama():
     # Peringatannya sendiri HARUS ada — skrip yang hilang tanpa keterangan
     # akan ditulis ulang oleh orang berikutnya yang mencarinya.
     assert "reset_data.sql" in doc, "kenapa ia dibuang tak diterangkan"
+
+
+def test_tiket_sungguhan_yang_belum_dibukukan_tak_menghalangi(monkeypatch):
+    """Keadaan pabrik ini pada 25 September 2026, dan sebab perubahannya.
+
+    Basis data produksi memuat 133 tiket timbang sungguhan — dan TAK SATU PUN
+    tertaut ke Pos Produksi: `purchase_batch_id` dan `pk_purchase_batch_id`
+    kosong di seluruh baris. Penghapusan di sini karena itu tidak menyentuh
+    jembatan sama sekali: tak ada tanda "sudah dibukukan" yang bisa hilang.
+
+    Penjaga lama menolaknya dengan kalimat tentang kerusakan yang tidak
+    mungkin terjadi, dan pemilik yang memang berhak mengosongkannya berhenti
+    di layar itu. Pagar yang menolak pekerjaan yang harus boleh dilakukan
+    akhirnya dilangkahi lewat jalan yang tak berpagar sama sekali.
+    """
+    pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=0)
+
+    assert pesan is None, pesan
+    assert [s for s in jejak if s.startswith("DELETE FROM")]
+    assert "COMMIT" in jejak
+
+
+def test_penjaga_bertanya_pada_KOLOM_penautnya_bukan_pada_tiketnya(monkeypatch):
+    """Pertanyaannya "adakah tautan yang akan dilepas", jadi ia harus benar
+    ketika kolom penautnya sendiri tak ada — basis data uji murni, yang tak
+    pernah dipakai Timbangan sama sekali."""
+    pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=7,
+                                       ada_tautan=False)
+
+    # Tujuh tiket sungguhan, TETAPI tak ada kolom yang menaut: tak ada yang
+    # bisa rusak, jadi tak ada alasan menolak.
+    assert pesan is None, pesan
+    assert "COMMIT" in jejak
+
+
+def test_mengisi_data_uji_tetap_ditolak_oleh_penjaga_yang_lebih_lebar():
+    """Dua pertanyaan berbeda, dan yang satu TIDAK ikut dilonggarkan.
+
+    Mengisi data uji melahirkan tiket KARANGAN, dan tiket karangan muncul di
+    layar petugas timbang di antara truk yang benar-benar datang. Bahaya itu
+    tak bergantung pada ada tidaknya tautan — jadi penjaganya tetap
+    `jembatan_sungguhan`, yang menolak begitu jembatannya dipakai sungguhan.
+    """
+    from tests.bantu import kode_saja
+
+    from app.services import data_uji
+
+    kode = kode_saja(data_uji.isi)
+    assert "jembatan_sungguhan" in kode
+    assert "tiket_sungguhan_tertaut" not in kode, \
+        "penjaga pengisian ikut dilonggarkan — tiket karangan akan lahir di " \
+        "basis data yang melayani jembatan sungguhan"

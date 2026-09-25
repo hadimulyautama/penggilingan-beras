@@ -201,21 +201,34 @@ async def _kosongkan() -> str | None:
         # fungsi ini. Penjaga yang disalin ke tiap rute cepat atau lambat akan
         # tertinggal di salah satunya — persis yang sudah terjadi pada daftar
         # tabelnya dulu.
-        from app.services.data_uji import jembatan_sungguhan
-
-        dipakai = await jembatan_sungguhan(db)
-        if dipakai:
-            return (
-                f"Dibatalkan: basis data ini melayani jembatan timbang yang "
-                f"sedang dipakai — ada {dipakai} tiket timbang sungguhan di "
-                "dalamnya. Menghapus di sini membuang catatan pembelian yang "
-                "sudah dibukukan, dan tiket aslinya kembali tampak belum "
-                "diproses sehingga truk yang sama bisa dibukukan dua kali. "
-                "Mode Uji hanya boleh dijalankan di basis data yang khusus "
-                "untuk menguji."
-            )
+        # Yang ditanyakan: adakah tautan yang akan DILEPAS penghapusan ini,
+        # pada tiket sungguhan. Bukan lagi "adakah tiket sungguhan di sini".
+        #
+        # Dua pertanyaan itu dulu dijawab penjaga yang sama, dan yang kedua
+        # terlalu lebar: basis data yang tiketnya sungguhan TETAPI belum satu
+        # pun dibukukan ditolak dengan kalimat tentang kerusakan yang tidak
+        # mungkin terjadi — tak ada tanda yang bisa hilang. Pemilik yang
+        # memang berhak mengosongkannya berhenti di layar itu, dan pagar yang
+        # menolak pekerjaan yang harus boleh dilakukan akhirnya dilangkahi
+        # lewat jalan yang tak berpagar sama sekali. 25 September 2026.
+        #
+        # Yang DIJAGA tidak berkurang: begitu ada satu saja tiket sungguhan
+        # yang sudah dibukukan, penghapusan ini akan melepas tandanya — truk
+        # yang sama bisa dibukukan dua kali — dan ia ditolak seperti dulu.
+        from app.services.data_uji import tiket_sungguhan_tertaut
 
         tautan = await tautan_masuk(db)
+        tertaut = await tiket_sungguhan_tertaut(db, tautan)
+        if tertaut:
+            return (
+                f"Dibatalkan: ada {tertaut} tiket timbang sungguhan yang sudah "
+                "dibukukan di basis data ini. Menghapus di sini membuang "
+                "catatan pembeliannya, dan tiket aslinya kembali tampak belum "
+                "diproses — truk yang sama bisa dibukukan dua kali. Batalkan "
+                "pembukuannya dulu, atau jalankan Mode Uji di basis data yang "
+                "khusus untuk menguji."
+            )
+
         wajib = [t for t in tautan if t["wajib"]]
         if wajib:
             # Menolak, bukan memaksa. Kolom wajib isi berarti tabel di luar

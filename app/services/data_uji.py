@@ -100,6 +100,43 @@ class JembatanDipakai(Exception):
     """Basis datanya melayani jembatan timbang yang sungguh dipakai."""
 
 
+async def tiket_sungguhan_tertaut(db: AsyncSession, tautan) -> int:
+    """Berapa tiket SUNGGUHAN yang tautannya akan dilepas oleh penghapusan.
+
+    Bedanya dengan `jembatan_sungguhan` halus tetapi menentukan, dan keduanya
+    memang dipakai untuk dua pertanyaan yang berbeda:
+
+      · MENGISI data uji ditolak begitu jembatannya dipakai sungguhan, titik.
+        Tiket karangan yang lahir di sini akan muncul di layar petugas timbang
+        di antara truk yang benar-benar datang — bahaya itu tak bergantung
+        pada ada tidaknya tautan;
+      · MENGHAPUS hanya berbahaya bila ada tautan yang DILEPASNYA. Yang
+        dirusak bukan barisnya (ia milik Timbangan dan tak tersentuh),
+        melainkan TANDA "tiket ini sudah dibukukan". Tanpa satu pun tanda
+        seperti itu, penghapusan di sini tidak menyentuh jembatan sama sekali.
+
+    Dulu keduanya memakai penjaga yang sama, dan akibatnya pemilik tak bisa
+    mengosongkan basis data yang tautannya memang belum pernah ada — ditolak
+    dengan kalimat tentang kerusakan yang tidak mungkin terjadi. Pagar yang
+    menolak pekerjaan yang justru harus boleh dilakukan akhirnya dilangkahi
+    orang lewat jalan yang tak berpagar sama sekali.
+
+    `tautan` = hasil `mode_uji.tautan_masuk` — foreign key dari luar daftar
+    hapus yang menunjuk ke dalamnya. Ditanyakan ke basis datanya, bukan
+    didaftar di kode: yang menunjuk adalah tabel milik aplikasi lain.
+    """
+    syarat = " AND ".join(f"kode NOT LIKE '{a}%'" for a in AWALAN_TIKET_UJI)
+    n = 0
+    for t in tautan:
+        if t["dari"] != "timbangan_transaksi":
+            continue
+        n += int((await db.execute(text(
+            f'SELECT count(*) FROM timbangan_transaksi '
+            f'WHERE "{t["kolom"]}" IS NOT NULL AND {syarat}'
+        ))).scalar_one())
+    return n
+
+
 async def jembatan_sungguhan(db: AsyncSession) -> int:
     """Berapa tiket timbang di sini yang BUKAN buatan pembuat data uji.
 
