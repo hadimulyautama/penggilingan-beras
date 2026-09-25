@@ -1625,16 +1625,23 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
 
 
 async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
-    """Layar OPERATOR Gudang 2 (repo `gudang2/`), menurut pemilik 12 September 2026:
+    """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
       · `menunggu` = SELURUH stok PK di Gudang 2 — yang di lantai (tumpukan,
         per intake → pindah ke silo) dan yang di silo (→ mulai penyosohan);
       · `berjalan` = mesin yang menyala saja;
       · tidak ada Transit, dan tidak ada kerja meja.
 
-    Berbeda dari `untuk_gudang2`, yang dipakai Meja: di sana PK luar yang
-    belum bertempat adalah antrean (entry Admin), dan silo berisi PK adalah
-    transit yang dipantau.
+    ⚠ `untuk_gudang2` di bawah BUKAN kode mati. Kalimat di sini dulu berbunyi
+    "berbeda dari `untuk_gudang2`, yang dipakai Meja", dan app Meja dihapus 24
+    September 2026 — pembaca berikutnya yang membersihkan sisa-sisanya akan
+    membaca kalimat itu sebagai penanda kode mati lalu menghapusnya, dan layar
+    Gudang 2 milik Admin ikut mati bersamanya. Temuan QA 25 September.
+    PEMAKAINYA SEKARANG, keduanya di Pos Produksi sendiri:
+    `layar_gudang` (halaman /gudang/g2) dan `untuk_admin` (antrean gabungan).
+    Bedanya tetap sama seperti dulu: di sana PK luar yang belum bertempat
+    adalah antrean (entry Admin), dan silo berisi PK adalah transit yang
+    dipantau.
     """
     memo: dict[int, IsianSilo] = {}
 

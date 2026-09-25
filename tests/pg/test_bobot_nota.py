@@ -163,12 +163,19 @@ async def _tiket(pg, kode: str, jenis: str, nota: float, barang: float) -> int:
             INSERT INTO timbangan_transaksi
                 (kode, tanggal, arah, jenis_kode, cara_timbang, timbang1_kg,
                  timbang2_kg, netto_timbangan_kg, berat_barang_kg, berat_acuan_kg,
+                 selisih_kg, selisih_persen,
                  status_tiket, status_transaksi, created_at, updated_at)
             VALUES (:k, current_date, 'MASUK', :j, 'DUA_KALI', 15000, 5000,
-                    :netto, :barang, :nota, 'SELESAI', 'AKTIF', now(), now())
+                    :netto, :barang, :nota, :selisih, :persen,
+                    'SELESAI', 'AKTIF', now(), now())
             RETURNING id
         """), {"k": kode, "j": jenis, "netto": barang + 50, "barang": barang,
-               "nota": nota})).scalar()
+               "nota": nota,
+               # Pos Timbang menghitung selisihnya sendiri: barang − nota.
+               # Rekonsiliasi butir ② menyaring dengan angka itu, jadi tiket
+               # tanpa selisih memang tak pernah masuk laporannya.
+               "selisih": barang - nota,
+               "persen": ((barang - nota) / nota * 100) if nota else 0})).scalar()
         await db.commit()
         return int(tid)
 
@@ -224,3 +231,40 @@ async def test_poller_mendarat_di_angka_yang_sama_dengan_layar(
     assert float(b.berat_total_kg) == harus, "poller mendarat di angka lain"
     assert b.sumber_berat == sumber, (
         "kolom sumber berbohong tentang asal angkanya")
+
+
+async def test_pencocokan_menyebut_angka_yang_dipegang_produksi(pg, pemakai, pemasok):
+    """Butir ② dulu menyebut DUA angka yang dua-duanya bukan yang tersimpan.
+
+    "nota 9.000 vs timbang 9.900 → selisih 900 kg" membuat pembacanya mengira
+    produksi memegang salah satunya. Bisa jadi tidak keduanya — batch lama,
+    koreksi tangan, atau aturan bobot yang memilih salah satu. Dan butir ③
+    tidak menangkapnya, sebab ia hanya melaporkan batch yang sudah
+    diverifikasi atau digiling. Jadi tak ada satu butir pun yang menjawab
+    pertanyaan yang sebenarnya dibawa orang ke layar itu. Temuan QA.
+    """
+    from app.database import now_local
+    from app.models import PurchaseBatch, User
+    from app.penggilingan.gudang1.services.rekonsiliasi import (
+        format_rekonsiliasi, rekonsiliasi)
+
+    tid = await _tiket(pg, "MSK-COCOK-01", "GABAH_BASAH", 9_000, 9_900)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        db.add(PurchaseBatch(
+            kode_batch="GB-COCOK-01", supplier_id=pemasok.id,
+            berat_total_kg=10_000,        # bukan nota, bukan timbang
+            kondisi_gabah="basah", tanggal_pembelian=now_local().date(),
+            waktu_pembelian=now_local(), input_by=u.id, flag_unverified=True,
+            sumber_berat="manual", timbangan_transaksi_id=tid))
+        await db.commit()
+
+    async with pg() as db:
+        teks = format_rekonsiliasi(await rekonsiliasi(db))
+
+    garis = [b for b in teks.splitlines() if "GB-COCOK-01" in b]
+    assert garis, f"batangnya tak muncul di rekonsiliasi:\n{teks}"
+    b = garis[0]
+    assert "9.000" in b and "9.900" in b, b
+    assert "10.000" in b, f"angka yang dipegang produksi tak disebut: {b}"
+    assert "TERCATAT" in b and "manual" in b, b

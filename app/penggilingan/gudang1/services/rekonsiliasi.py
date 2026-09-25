@@ -47,9 +47,22 @@ _SQL_BELUM_TERTAUT = text("""
 
 # Batch (gabah + PK) tertaut dgn selisih nota↔timbang. UNION dua tabel intake.
 _SQL_SELISIH = text("""
-    SELECT kode_batch, nama, jenis, nota, timbang, selisih_kg, selisih_persen, harga FROM (
+    SELECT kode_batch, nama, jenis, nota, timbang, tercatat, sumber,
+           selisih_kg, selisih_persen, harga FROM (
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
              t.berat_acuan_kg AS nota,
+             -- ── Angka yang BENAR-BENAR dipegang produksi ──
+             --
+             -- Butir ini dulu menyebut dua angka yang DUA-DUANYA bukan yang
+             -- tersimpan: nota dan timbangan. Orang yang membacanya mengira
+             -- produksi memegang salah satunya, padahal bisa jadi tidak
+             -- keduanya — batch yang dicatat sebelum aturan bobot 25 September
+             -- 2026, atau yang bobotnya dikoreksi tangan. Temuan QA.
+             --
+             -- "Jadi yang masuk pembukuan berapa?" adalah pertanyaan yang
+             -- sesungguhnya dibawa orang saat membuka layar ini, dan sampai
+             -- hari ini tak ada satu butir pun yang menjawabnya.
+             b.berat_total_kg AS tercatat, b.sumber_berat AS sumber,
              -- BARANG, bukan netto: `selisih_kg` di tiket dihitung Pos Timbang
              -- sebagai barang − nota, jadi netto di sebelahnya membuat dua
              -- angka yang selisihnya tak sama dengan selisih yang tertulis.
@@ -63,6 +76,7 @@ _SQL_SELISIH = text("""
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'pk' AS jenis,
              t.berat_acuan_kg,
+             b.berat_total_kg, b.sumber_berat,
              COALESCE(NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg),
              t.selisih_kg, t.selisih_persen,
              v.harga_per_kg
@@ -340,9 +354,18 @@ def format_rekonsiliasi(d: dict) -> str:
     for x in sel[:10]:
         rp = (float(x.get("selisih_kg") or 0) * float(x["harga"])) if x.get("harga") else None
         rps = f" ≈ Rp {_kg(rp)}" if rp is not None else ""
+        # TIGA angka, bukan dua. Yang ketiga — yang tercatat di produksi —
+        # adalah satu-satunya yang menjawab "jadi yang masuk pembukuan
+        # berapa?", dan ia bisa berbeda dari nota MAUPUN dari timbangan:
+        # batch lama, koreksi tangan, atau aturan bobot yang memilih salah
+        # satunya. Sumbernya ikut disebut supaya jelas mana yang menang.
+        tercatat = x.get("tercatat")
+        catat = (f" · TERCATAT {_kg(tercatat)} kg"
+                 + (f" ({x['sumber']})" if x.get("sumber") else "")
+                 if tercatat is not None else " · BELUM tercatat")
         baris.append(f"   • {x['kode_batch']} ({x['nama']}): nota {_kg(x['nota'])} vs timbang "
                      f"{_kg(x['timbang'])} → selisih {_kg(x['selisih_kg'])} kg "
-                     f"({float(x.get('selisih_persen') or 0):.1f}%){rps}")
+                     f"({float(x.get('selisih_persen') or 0):.1f}%){rps}{catat}")
     rev = d.get("revisi", [])
     baris.append(f"\n③ Bobot tiket BERUBAH setelah verifikasi/giling (perlu tinjau): {len(rev)}")
     for x in rev[:10]:
