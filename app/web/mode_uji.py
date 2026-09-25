@@ -258,8 +258,48 @@ async def _kosongkan() -> str | None:
         # tangan akan basi pada tabel berikutnya yang ditambahkan.
         urut = [t.name for t in reversed(Base.metadata.sorted_tables)
                 if t.name in set(tabel)]
+
+        # ── Pemicu "tambah-saja" dipadamkan SELAMA penghapusan ini ──
+        #
+        # `peristiwa` dijaga pemicu yang menolak UPDATE dan DELETE (migrasi
+        # 0047): buku besar itu memang tak boleh diubah oleh aksi apa pun.
+        # Akibatnya tombol ini berhenti bekerja sejak buku peristiwa lahir 13
+        # September 2026 — di basis data mana pun yang sudah punya satu
+        # peristiwa, penghapusan berhenti di tengah dengan Internal Server
+        # Error, dan yang membacanya mengira sistemnya rusak. Dilaporkan
+        # pemilik 25 September 2026; uji sesi-palsu tak menangkapnya karena ia
+        # tak pernah menjalankan SQL sungguhan.
+        #
+        # Mengosongkan seluruh pabrik BUKAN "aksi apa pun": ia justru satu-
+        # satunya pekerjaan yang sah menghapus buku besar, dan pintunya sudah
+        # dijaga tiga lapis (MODE_UJI menyala, Super Admin, kalimat diketik).
+        #
+        # Dipadamkan LEWAT KATALOG, bukan dengan menyebut namanya: tabel
+        # berikutnya yang dijaga pemicu serupa akan menjatuhkan tombol ini
+        # lagi, dan sebabnya akan sama sekali tak kelihatan dari sini.
+        #
+        # AMAN dari kegagalan di tengah: DDL di Postgres ikut transaksi, jadi
+        # kalau apa pun gagal sesudah ini, `ALTER TABLE` ikut berguling balik
+        # dan pemicunya kembali menyala tanpa perlu ada yang membereskannya.
+        # Dinyalakan lagi secara terang-terangan sesudah selesai, supaya
+        # jendelanya sesempit mungkin dan terbaca oleh yang membaca kode ini.
+        pemicu = (await db.execute(text("""
+            SELECT c.relname, t.tgname
+              FROM pg_trigger t
+              JOIN pg_class c ON c.oid = t.tgrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE NOT t.tgisinternal
+               AND n.nspname = current_schema()
+               AND c.relname = ANY(:tabel)
+        """), {"tabel": list(urut)})).all()
+        for rel, trg in pemicu:
+            await db.execute(text(f'ALTER TABLE "{rel}" DISABLE TRIGGER "{trg}"'))
+
         for nama in urut:
             await db.execute(text(f'DELETE FROM "{nama}"'))
+
+        for rel, trg in pemicu:
+            await db.execute(text(f'ALTER TABLE "{rel}" ENABLE TRIGGER "{trg}"'))
         # Nomor urut dikembalikan ke 1 supaya fase berikutnya benar-benar mulai
         # dari bersih, bukan melanjutkan nomor bekas percobaan.
         #

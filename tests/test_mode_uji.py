@@ -517,3 +517,44 @@ def test_mengisi_data_uji_tetap_ditolak_oleh_penjaga_yang_lebih_lebar():
     assert "tiket_sungguhan_tertaut" not in kode, \
         "penjaga pengisian ikut dilonggarkan — tiket karangan akan lahir di " \
         "basis data yang melayani jembatan sungguhan"
+
+
+def test_pemicu_dipadamkan_lalu_DINYALAKAN_lagi(monkeypatch):
+    """`peristiwa` dijaga pemicu tambah-saja, dan penghapusan ini satu-satunya
+    pekerjaan yang sah melewatinya. Yang dijaga di sini: ia menyala LAGI.
+
+    Pagar yang dipadamkan lalu tertinggal padam lebih buruk daripada pagar yang
+    tak pernah ada — buku besar berhenti jadi buku besar, dan tak ada satu layar
+    pun yang akan menyebutkan itu.
+    """
+    pesan, jejak = _jalankan_kosongkan(monkeypatch, tiket_sungguhan=0)
+
+    assert pesan is None, pesan
+    padam = [i for i, s in enumerate(jejak) if "DISABLE TRIGGER" in s]
+    nyala = [i for i, s in enumerate(jejak) if "ENABLE TRIGGER" in s
+             and "DISABLE" not in s]
+    hapus = [i for i, s in enumerate(jejak) if s.startswith("DELETE FROM")]
+    commit = jejak.index("COMMIT")
+
+    # Sesi palsu tak punya pemicu, jadi daftarnya kosong — yang diuji URUTAN
+    # perintahnya bila ada. Lihat `tests/pg/test_mode_uji_hapus.py` untuk
+    # pembuktian di basis data sungguhan.
+    assert len(padam) == len(nyala), "yang dipadamkan tak sama banyak dengan yang dinyalakan"
+    for a, b in zip(padam, nyala):
+        assert a < b, "dinyalakan sebelum dipadamkan"
+    if padam:
+        assert max(padam) < min(hapus), "pemicu dipadamkan sesudah menghapus"
+        assert max(nyala) < commit, "pemicu dinyalakan sesudah commit"
+
+
+def test_pemicu_dicari_lewat_katalog_bukan_disebut_namanya():
+    """Tabel berikutnya yang dijaga pemicu serupa akan menjatuhkan tombol ini
+    lagi, dan sebabnya tak akan kelihatan dari sini — persis yang terjadi pada
+    `peristiwa` sendiri: tombolnya berhenti bekerja 13 September 2026 dan baru
+    ketahuan 25 September, saat pemilik menekannya di produksi."""
+    from tests.bantu import kode_saja
+
+    kode = kode_saja(mode_uji._kosongkan)
+    assert "pg_trigger" in kode, "daftar pemicunya ditulis tangan"
+    assert "peristiwa_tambah_saja" not in kode, "nama pemicu diketik di kode"
+    assert "tgisinternal" in kode, "pemicu sistem (foreign key) ikut dipadamkan"
