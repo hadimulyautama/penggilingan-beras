@@ -194,7 +194,12 @@ async def _pk_dipindah_g1g2(db: AsyncSession, e: Peristiwa) -> None:
     e.proyeksi = ProyeksiTransferPk(
         peristiwa_id=e.id, kode_transfer=m["kode_transfer"],
         milling_process_id=m.get("milling_process_id"), kode_proses=m.get("kode_proses"),
-        berat_kg=m["berat_kg"], lokasi_tujuan=m["lokasi_tujuan"], hpp_per_kg=m.get("hpp_per_kg"),
+        berat_kg=m["berat_kg"], lokasi_tujuan=m["lokasi_tujuan"],
+        # Peristiwa LAMA tak memuat `silo_id` — muatannya ditulis sebelum 24
+        # September 2026, dan peristiwa tambah-saja. `.get` membuat pembangunan
+        # ulang proyeksi tetap jalan di atasnya; baris hasilnya berkolom kosong,
+        # persis seperti baris aslinya sebelum migrasi 0057 mengisinya.
+        silo_id=m.get("silo_id"), hpp_per_kg=m.get("hpp_per_kg"),
         jenis=m.get("jenis"), tanggal=date.fromisoformat(m["tanggal"]),
         waktu=datetime.fromisoformat(m["waktu"]), pelaku_id=e.pelaku_id, status=TERCATAT,
         intake_peristiwa_id=m.get("intake_peristiwa_id"), transfer_id=m.get("transfer_id"),

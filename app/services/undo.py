@@ -584,7 +584,7 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
     proc = await db.get(MillingProcess, t.milling_process_id)
     kode = proc.kode_proses if proc else ""
     berat = float(t.berat_kg)
-    label = _LOKASI_UNDO.get(t.lokasi_tujuan, t.lokasi_tujuan)
+    label = await _label_g2(db, t.lokasi_tujuan, t.silo_id)
     # ── Transfer + pemasukan = SATU pembatalan (P-K-10) ──
     #
     # PK-nya sudah ada di Gudang 2. Pemasukannya lewat penjaga hilir yang
@@ -613,7 +613,16 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
     ).strip()
 
 
-_LOKASI_UNDO = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
+async def _label_g2(db: AsyncSession, tujuan: str | None, silo_id: int | None) -> str:
+    """Nama tempat PK di Gudang 2, dibaca dari MASTER.
+
+    Dulu dua kamus di berkas ini memetakan `silo_a`/`silo_b` ke namanya. Kamus
+    seperti itu diam saja pada silo ketiga — `.get` mengembalikan kata mentah,
+    jadi kalimat pembatalan berbunyi "dimasukkan ke silo_c". Migrasi 0057.
+    """
+    from app.penggilingan.gudang2.service import label_tujuan
+
+    return await label_tujuan(db, tujuan, silo_id)
 
 
 async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
@@ -751,8 +760,7 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
     # menemukan jejak pemasukan karena ia ditulis terakhir — dialihkan.
     if it.internal_transfer_id is not None and not lewat_transfer:
         return await _undo_transfer(db, it.internal_transfer_id)
-    lok = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}.get(
-        it.tujuan, it.tujuan)
+    lok = await _label_g2(db, it.tujuan, it.silo_id)
     await _tolak_bila_pk_sudah_dipakai(db, it, lok)
     b = await db.get(PkPurchaseBatch, it.pk_purchase_batch_id) if it.pk_purchase_batch_id else None
     if it.peristiwa_id is not None:
@@ -761,6 +769,7 @@ async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: b
 
         await buku.batalkan(db, jenis_lawan=PK_MASUK_G2_DIBATALKAN, peristiwa_id=it.peristiwa_id,
                             pelaku_id=None, muatan={"tujuan": it.tujuan,
+                                                    "silo_id": it.silo_id,
                                                     "berat_kg": (float(it.berat_kg) if it.berat_kg is not None else None),
                                                     "alasan": "Dibatalkan lewat Batalkan input terakhir"})
     from app.database import now_local as _now

@@ -168,7 +168,9 @@ class ProyeksiPkMasukG2(Base):
     sumber_tipe: Mapped[str] = mapped_column(String(20), nullable=False)
     pk_purchase_batch_id: Mapped[int | None] = mapped_column(Integer)
     internal_transfer_id: Mapped[int | None] = mapped_column(Integer)
-    #: silo_a / silo_b / ditumpuk
+    #: JENIS tempatnya: `silo` atau `ditumpuk` — silo MANA ada di `silo_id`.
+    #: Baris lama menyimpan `silo_a`/`silo_b`; lihat catatan pada
+    #: `InternalTransfer.lokasi_tujuan`.
     tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
     silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
     berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))   # NULL = belum diketahui (P6-02)
@@ -202,8 +204,11 @@ class ProyeksiTransferPk(Base):
     milling_process_id: Mapped[int | None] = mapped_column(Integer)
     kode_proses: Mapped[str | None] = mapped_column(String(20))
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    #: silo_a / silo_b / ditumpuk
+    #: JENIS tempatnya: `silo` atau `ditumpuk` — silo MANA ada di `silo_id`.
+    #: Baris lama menyimpan `silo_a`/`silo_b`; lihat catatan pada
+    #: `InternalTransfer.lokasi_tujuan`.
     lokasi_tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
+    silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
     hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: KS / KL / MIX
     jenis: Mapped[str | None] = mapped_column(String(8))

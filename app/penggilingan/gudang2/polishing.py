@@ -55,6 +55,18 @@ async def mulai_penyosohan(
     for letter in dict.fromkeys(letters):  # dedupe, jaga urutan
         silo = await get_g2_silo(db, letter)
         if silo is None:
+            # ── Halaman lama yang masih memegang pilihan "AB" ──
+            #
+            # Sebelum 24 September 2026 borangnya menawarkan A / B / A+B, dan
+            # "AB" satu nilai. Halaman di ponsel operator berumur panjang
+            # (`pindah.js` menjaganya tetap hidup), jadi yang belum memuat
+            # ulang masih mengirimkannya — dan "Silo AB tidak ditemukan"
+            # menyebut nama silo yang tak pernah ada, seolah pabriknya yang
+            # kehilangan silo. Temuan QA 24 September.
+            if len(letter) > 1:
+                raise Gudang2Error(
+                    "Pilih silo dari daftar — borangnya sudah berubah. "
+                    "Muat ulang halamannya, lalu centang silo bahannya.")
             raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
         # V4: penyosohan hanya dari silo yang ADA isinya.
         if await hitung_stok_silo(db, silo.id) <= 0:

@@ -51,7 +51,14 @@ from app.penggilingan.gudang1.services.timbang_link import (
 )
 from app.penggilingan.peta_jenis import intake_dari_jenis
 
-_TUJUAN_SILO = {"silo_a": "A", "silo_b": "B"}
+#: JENIS tempat PK di Gudang 2. Yang disimpan ini, bukan nama silonya —
+#: silo MANA ada di kolom `silo_id`. Lihat migrasi 0057.
+SILO, DITUMPUK = "silo", "ditumpuk"
+
+#: Kata LAMA yang masih berdiri di baris sebelum 24 September 2026, dan masih
+#: dikirim halaman yang belum dimuat ulang. Diterima saat MEMBACA masukan,
+#: tidak pernah ditulis lagi.
+_KATA_LAMA = {"silo_a": "A", "silo_b": "B"}
 
 
 class Gudang2Error(Exception):
@@ -111,6 +118,42 @@ async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
     ).scalars().first()
 
 
+async def silo_g2_dari(db: AsyncSession, nilai: str) -> Silo | None:
+    """Silo Gudang 2 dari apa pun yang dikirim layar: "A", "Silo A", "silo_a".
+
+    Tiga bentuk, satu jawaban — dan tak satu pun daftar nama yang diketik di
+    kode. `silo_a` diterima karena halaman lama masih mengirimkannya
+    (`pindah.js` membuat halaman berumur panjang), dan karena ia tersimpan di
+    baris-baris lama.
+    """
+    teks = (nilai or "").strip()
+    if not teks:
+        return None
+    huruf = _KATA_LAMA.get(teks.lower(), teks)
+    huruf = huruf[5:].strip() if huruf.lower().startswith("silo ") else huruf
+    return await get_g2_silo(db, huruf.upper())
+
+
+async def label_tujuan(db: AsyncSession, tujuan: str | None,
+                       silo_id: int | None) -> str:
+    """Kalimat untuk layar: "Silo C" atau "tumpukan".
+
+    Dibaca dari MASTER, bukan dari kamus. Kamus lama
+    `{"silo_a": "Silo A", "silo_b": "Silo B"}` melempar `KeyError` — yaitu 500,
+    halaman putih tanpa sebab — pada nilai ketiga yang belum dikenalnya, dan ia
+    menunggu di belakang penjaga yang suatu hari dilonggarkan seseorang.
+    """
+    if silo_id is not None:
+        silo = await db.get(Silo, silo_id)
+        if silo is not None:
+            return silo.nama_silo
+    if (tujuan or "") in (DITUMPUK, ""):
+        return "tumpukan"
+    # Baris lama tanpa `silo_id` (mestinya tak ada sesudah migrasi 0057) —
+    # katanya dipakai apa adanya, bukan dijawab dengan galat.
+    return _KATA_LAMA.get(tujuan, tujuan) or "tumpukan"
+
+
 def is_operator_gudang2(user: User, g2_wid: int) -> bool:
     """Operator Gudang 2 — Direksi ke atas selalu boleh.
 
@@ -133,8 +176,12 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
     masuk_langsung = (
         await db.execute(
             select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
+                # Disaring dengan `silo_id` SAJA. Menambahkan syarat atas
+                # kata tujuannya akan membuang baris silo ketiga tanpa satu
+                # pun galat — silonya berisi, tetapi stoknya terbaca 0, lalu
+                # ia hilang dari borang. Itu jenis kerusakan yang paling sulit
+                # dilihat: tak ada yang salah di layar mana pun.
                 PkGudang2Intake.silo_id == silo_id,
-                PkGudang2Intake.tujuan.in_(["silo_a", "silo_b"]),
             )
         )
     ).scalar_one()
@@ -201,8 +248,8 @@ async def hitung_hpp_wavg_silo(db: AsyncSession, silo_id: int) -> float | None:
                 func.coalesce(func.sum(PkGudang2Intake.berat_kg * PkGudang2Intake.hpp_per_kg), 0),
                 func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0),
             ).where(
+                # `silo_id` saja — lihat catatan di `hitung_stok_silo`.
                 PkGudang2Intake.silo_id == silo_id,
-                PkGudang2Intake.tujuan.in_(["silo_a", "silo_b"]),
                 PkGudang2Intake.flag_hpp_belum_tersedia.is_(False),
             )
         )
@@ -586,16 +633,22 @@ class IntakeResult:
 
 
 async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
-    """Normalisasi tujuan → (tujuan, silo_id|None). tujuan: silo_a/silo_b/ditumpuk."""
-    tujuan = (tujuan or "").lower()
-    if tujuan == "ditumpuk":
-        return "ditumpuk", None
-    if tujuan in _TUJUAN_SILO:
-        silo = await get_g2_silo(db, _TUJUAN_SILO[tujuan])
-        if silo is None:
-            raise Gudang2Error(f"Silo {_TUJUAN_SILO[tujuan]} Gudang 2 tidak ditemukan.")
-        return tujuan, silo.id
-    raise Gudang2Error("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
+    """Normalisasi tujuan → (jenis, silo_id|None).
+
+    Yang keluar dari sini `silo` + rujukannya, atau `ditumpuk` + None. Nama
+    silonya dicari di MASTER: silo yang ditambahkan lewat Pengaturan → Alat
+    langsung bisa menerima PK, tanpa satu baris kode pun berubah.
+    """
+    teks = (tujuan or "").strip()
+    if teks.lower() == DITUMPUK:
+        return DITUMPUK, None
+    silo = await silo_g2_dari(db, teks) if teks else None
+    if silo is None:
+        # Daftarnya tak disebut dalam kalimat ini: ia berubah menurut master,
+        # dan kalimat yang menyebut dua silo akan keliru begitu ada yang ketiga.
+        raise Gudang2Error(
+            "Pilih silo Gudang 2 dari daftar, atau pilih tumpukan.")
+    return SILO, silo.id
 
 
 async def _guard_kapasitas_tumpukan(db: AsyncSession, tambahan_kg: float | None) -> None:
@@ -707,7 +760,7 @@ async def _add_intake(
             select(PkGudang2Intake).join(Peristiwa, Peristiwa.id == PkGudang2Intake.peristiwa_id)
             .where(Peristiwa.kunci_kiriman == kunci_kiriman))).scalars().first()
         if ada is not None:
-            label = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}[ada.tujuan]
+            label = await label_tujuan(db, ada.tujuan, ada.silo_id)
             return IntakeResult(intake=ada, lokasi_label=label, hpp_per_kg=ada.hpp_per_kg)
 
     intake = PkGudang2Intake(
@@ -735,7 +788,7 @@ async def _add_intake(
     if commit:
         await db.commit()
         await db.refresh(intake)
-    label = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}[tujuan_norm]
+    label = await label_tujuan(db, tujuan_norm, silo_id)
     return IntakeResult(intake=intake, lokasi_label=label, hpp_per_kg=hpp_per_kg)
 
 

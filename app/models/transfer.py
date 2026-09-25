@@ -29,8 +29,18 @@ class InternalTransfer(Base, TimestampMixin):
     )
     drying_lot_id: Mapped[int | None] = mapped_column(ForeignKey("drying_lots.id"))
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    # silo_a / silo_b / ditumpuk  (lokasi di Gudang 2)
+    #: JENIS tempatnya: `silo` atau `ditumpuk`. Silo MANA ada di `silo_id`.
+    #:
+    #: Baris lama menyimpan `silo_a`/`silo_b` — dua nama silo yang diketik ke
+    #: dalam kosakata datanya sendiri. Kosakata seperti itu tak bisa tumbuh:
+    #: silo Gudang 2 ketiga tak punya kata, jadi ia ada di master, tampil di
+    #: borang, dan tak bisa menerima satu kilogram pun. Sejak 24 September 2026
+    #: yang disimpan JENIS tempatnya, dan identitas silonya jadi rujukan.
+    #: Baris lama tetap terbaca: identitasnya dibaca dari `silo_id` yang diisi
+    #: migrasi 0057, bukan dari kata itu.
     lokasi_tujuan: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: Silo tujuan di Gudang 2. NULL berarti ditumpuk di lantai.
+    silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
     # Snapshot HPP per kg PK saat transfer (bila milling sudah diverifikasi).
     hpp_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -93,7 +93,18 @@ async def test_pk_masuk_menulis_peristiwa_proyeksi_dan_cermin(pg, g2):
     async with pg() as db:
         ev = (await db.execute(select(Peristiwa).where(Peristiwa.jenis == "pk_masuk_g2")
                                .order_by(Peristiwa.id))).scalars().all()
-        assert [e.muatan["tujuan"] for e in ev] == ["silo_a", "ditumpuk"]
+        # Muatannya menyimpan JENIS tempatnya, dan silo MANA sebagai rujukan.
+        # Dulu di sini "silo_a" — nama silo yang ikut jadi kosakata datanya
+        # sendiri, dan kosakata seperti itu tak bisa tumbuh: silo ketiga tak
+        # punya kata (migrasi 0057). Yang dijaga sekarang lebih kuat, bukan
+        # lebih longgar: identitas silonya harus ikut TERBAWA, bukan
+        # tersembunyi di dalam katanya.
+        assert [e.muatan["tujuan"] for e in ev] == ["silo", "ditumpuk"]
+        from app.penggilingan.gudang2.service import get_g2_silo
+
+        silo_a = await get_g2_silo(db, "A")
+        assert ev[0].muatan["silo_id"] == silo_a.id
+        assert ev[1].muatan["silo_id"] is None, "tumpukan tak punya silo"
         assert ev[0].muatan["sumber_tipe"] == "beli_luar" and ev[0].muatan["berat_kg"] == 8000
         proy = (await db.execute(select(ProyeksiPkMasukG2).order_by(ProyeksiPkMasukG2.peristiwa_id))).scalars().all()
         assert [p.status for p in proy] == ["tercatat", "tercatat"] and proy[0].silo_id is not None

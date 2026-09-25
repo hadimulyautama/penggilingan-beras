@@ -526,3 +526,31 @@ async def test_bentuk_tunggal_dari_kartu_tetap_diterima(pg, gudang2):
         uu = await db.get(User, gudang2["user"].id)
     hasil = await act_mulai_penyosohan(MulaiPenyosohanReq(silo="B"), user=uu)
     assert hasil["ok"] and "9800" in hasil["pesan"].replace(".", "")
+
+
+async def test_pilihan_lama_ab_dijawab_dengan_kalimat_yang_menolong(pg, gudang2):
+    """Halaman di ponsel operator berumur panjang.
+
+    Sebelum 24 September 2026 borangnya menawarkan A / B / A+B, dan "AB" satu
+    nilai. Yang belum memuat ulang masih mengirimkannya, dan jawaban apa adanya
+    — "Silo AB Gudang 2 tidak ditemukan" — menyebut nama silo yang tak pernah
+    ada, seolah pabriknya yang kehilangan silo. Temuan QA 24 September.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import Gudang2Error, mulai_penyosohan
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        with pytest.raises(Gudang2Error) as e:
+            await mulai_penyosohan(db, user=u, nama_silos=["AB"])
+    pesan = str(e.value)
+    assert "Muat ulang" in pesan and "daftar" in pesan, pesan
+    assert "Silo AB" not in pesan, "masih menyebut silo yang tak pernah ada"
+
+    # Huruf tunggal yang memang tak ada tetap dijawab apa adanya: itu bukan
+    # borang basi, melainkan silo yang belum dibuat di master.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        with pytest.raises(Gudang2Error) as e2:
+            await mulai_penyosohan(db, user=u, nama_silos=["Z"])
+    assert "Silo Z" in str(e2.value)

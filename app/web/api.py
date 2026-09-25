@@ -416,16 +416,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     g2 = await _is_g2_operator(user)
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
-    TUJUAN = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
-              ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
     JENIS_HASIL = [["", "— belum ditentukan —"],
                    ["premium", "Beras Premium"], ["medsuper", "Beras Medium Super"],
                    ["medium", "Beras Medium"], ["sayur", "Beras Sayur"],
                    ["beras_b", "Beras B (olah ulang)"], ["menir", "Menir"],
                    ["broken", "Broken"], ["bekatul", "Bekatul"], ["reject", "Reject"]]
-    TUJUAN_PK = [["", "— belum ditentukan —"], ["silo_a", "Silo A"],
-                 ["silo_b", "Silo B"], ["ditumpuk", "Tumpukan"]]
     actions: list[dict] = []
     # Setelan dibaca sekali per permintaan menu — daftar sebab dan target
     # bawaan sama-sama bisa diubah admin, dan spesifikasi aksi yang
@@ -733,8 +729,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
                   "source": "/api/actions/tumpukan-sisa",
                   "kosong": "Tumpukan kosong — tak ada yang perlu dipindah."},
-                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "select",
-                  "options": [["", "— belum ditentukan —"], ["A", "Silo A"], ["B", "Silo B"]]},
+                 # Tanpa "Tumpukan": PK ini memang sedang DIPINDAH dari
+                 # tumpukan. Daftarnya tetap dari master.
+                 {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "remote",
+                  "source": "/api/actions/silo-g2",
+                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
                  {"name": "berat_kg", "label": "Berat yang dipindah (kg)", "type": "number",
                   "wajib": True},
              ]},
@@ -944,8 +943,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kode_batch", "label": "PK yang menunggu dimasukkan", "type": "remote",
                   "source": "/api/actions/pk-intake-pending",
                   "kosong": "Tidak ada PK masuk yang menunggu."},
-                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
-                  "options": TUJUAN_PK},
+                 # Daftarnya dari MASTER, bukan dua silo yang diketik di
+                 # kode: silo Gudang 2 yang ditambahkan lewat Pengaturan →
+                 # Alat langsung bisa menerima PK. Migrasi 0057.
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "remote",
+                  "source": "/api/actions/tujuan-pk-g2",
+                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
              ]},
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/api/actions/transfer-pk", "fields": [
@@ -953,7 +956,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/pk-transfer",
                   "kosong": "Tidak ada PK yang siap dipindah."},
                  {"name": "berat", "label": "Berat kg (kosong = semua)", "type": "number"},
-                 {"name": "tujuan", "label": "Tujuan", "type": "select", "options": TUJUAN},
+                 {"name": "tujuan", "label": "Tujuan", "type": "remote",
+                  "source": "/api/actions/tujuan-pk-g2",
+                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
              ]},
             # Menolak permintaan operator Gudang 2. Tak punya daftar sendiri:
             # ia SELALU dibuka dari kartunya di Antrian tunggu, yang sudah
@@ -1660,7 +1665,12 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 # Pesannya menyebut yang SAH untuk gabah ini, bukan daftar
                 # umum: operator yang memilih Silo untuk gabah basah perlu
                 # tahu kenapa ditolak, bukan sekadar bahwa ia ditolak.
-                nama = {"dryer": "Dryer", "silo_a": "Silo A", "silo_b": "Silo B",
+                # Kuncinya JENIS tujuannya ("dryer" / "silo" / "tumpuk"),
+                # bukan nama silo. Dua kunci lama (`silo_a`, `silo_b`) tak
+                # pernah bisa cocok — `tujuan_pilihan` tak memuatnya — jadi
+                # gabah kering yang ditolak berbunyi "hanya boleh ke: silo /
+                # Dryer / Tumpukan", satu kata kecil di antara dua kata besar.
+                nama = {"dryer": "Dryer", "silo": "Silo gabah kering",
                         "tumpuk": "Tumpukan"}
                 boleh = " / ".join(nama.get(t, t) for t in info.tujuan_pilihan)
                 raise HTTPException(400, f"Gabah {kondisi} hanya boleh ke: {boleh}.")
@@ -2471,8 +2481,12 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
     _require(can_transfer_pk(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses PK dulu.")
-    if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
-        raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
+    # Nama silonya TIDAK diperiksa di sini: daftarnya tumbuh bersama master,
+    # dan penjaga yang menyebut dua silo akan menolak silo ketiga dengan
+    # kalimat yang membuat orang mengira ia salah menekan. Yang memeriksa
+    # keberadaannya `_tujuan_and_silo`, lewat master.
+    if not (req.tujuan or "").strip():
+        raise HTTPException(400, "Pilih tujuan dulu.")
     from app.services.transfer import create_internal_transfer, TransferError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2494,7 +2508,9 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
 
 class MasukkanPkReq(BaseModel):
     kode_batch: str
-    tujuan: str  # silo_a / silo_b / ditumpuk
+    #: Nama silo Gudang 2 ("A", "Silo A") atau "ditumpuk". Bentuk lama
+    #: `silo_a`/`silo_b` tetap diterima: halaman lama masih mengirimkannya.
+    tujuan: str
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
@@ -2505,8 +2521,9 @@ async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
-    if req.tujuan not in ("silo_a", "silo_b", "ditumpuk"):
-        raise HTTPException(400, "Pilih tujuan dulu: Silo A / Silo B / Tumpukan.")
+    # Lihat catatan di `act_transfer_pk`: yang memeriksa nama silonya master.
+    if not (req.tujuan or "").strip():
+        raise HTTPException(400, "Pilih tujuan dulu.")
     from sqlalchemy.exc import IntegrityError
 
     from app.penggilingan.gudang2.service import masukkan_pk_luar, Gudang2Error
@@ -2649,6 +2666,45 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 keluar.append({"value": f"penyosohan:{p.kode_proses}",
                                "label": f"{p.kode_proses} · sosoh"})
     return keluar
+
+
+@router.get("/actions/silo-g2")
+async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """SEMUA silo Gudang 2 dari master, berisi atau tidak.
+
+    Berbeda dari `silo-bahan-g2`, yang hanya menawarkan silo yang siap
+    DISOSOH: ini daftar TUJUAN — silo kosong justru tujuan yang paling wajar.
+    """
+    _require(await _is_g2_operator(user) or can_see_financials(user))
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        wid = await _g2_warehouse_id(db)
+        for s in (await db.execute(
+            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+        )).scalars().all():
+            kg = await hitung_stok_silo(db, s.id)
+            huruf = s.nama_silo.replace("Silo ", "")
+            # Isinya ikut disebut: menuang ke silo yang sudah berisi bercampur
+            # dengan isi lamanya, dan yang memilih berhak tahu itu sebelum
+            # menekan, bukan sesudah.
+            keluar.append({"value": huruf,
+                           "label": f"{s.nama_silo} · {_rp(kg)} kg" if kg
+                                    else f"{s.nama_silo} · kosong"})
+    return keluar
+
+
+@router.get("/actions/tujuan-pk-g2")
+async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Ke mana PK bisa ditaruh di Gudang 2: tiap silo dari master, atau lantai."""
+    daftar = await silo_g2_daftar(user=user)
+    # Tumpukan di BAWAH: ia tempat menunggu, bukan tujuan yang dipilih lebih
+    # dulu. Yang di atas dibaca lebih sering.
+    return daftar + [{"value": "ditumpuk", "label": "Tumpukan (lantai)"}]
 
 
 @router.get("/actions/silo-bahan-g2")

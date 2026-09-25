@@ -161,6 +161,29 @@ mengosongkan seluruh sumbernya sekaligus.
 bukan indeks unik (syaratnya ada di baris tabel lain) dan bukan pemeriksaan di
 depan (dua penekan bersamaan sama-sama lolos).
 
+## Tempat PK di Gudang 2 = rujukan silo (sejak 24 September 2026)
+
+`silo_a`/`silo_b` DIPENSIUNKAN sebagai kosakata. Yang disimpan kini JENIS
+tempatnya — `silo` atau `ditumpuk` — dan silo MANA jadi `silo_id`:
+`pk_gudang2_intakes`, `internal_transfers`, serta dua tabel proyeksinya
+(migrasi 0057 menambahkan kolomnya ke dua tabel yang belum punya, dan
+mengisinya dari kata lama).
+
+Sebabnya: kosakata yang memuat nama silo tak bisa tumbuh. Silo ketiga ada di
+master, tampil di borang, dan tak bisa menerima satu kilogram pun — temuan QA.
+
+Aturannya sekarang:
+
+  · nama silo TIDAK pernah diketik di kode. Tujuan dinormalisasi
+    `gudang2.service._tujuan_and_silo` (menerima "C", "Silo C", dan bentuk lama
+    `silo_a`), labelnya `label_tujuan` — keduanya membaca master;
+  · stok & HPP silo disaring dengan `silo_id` SAJA. Menambah syarat atas kata
+    tujuannya membuang baris silo baru DIAM-DIAM: silonya berisi, stoknya
+    terbaca 0, lalu ia hilang dari borang tanpa satu pun galat;
+  · kata lama tetap SAH di baris lama dan di muatan peristiwa (tambah-saja),
+    dan tetap diterima saat membaca masukan — halaman di ponsel berumur
+    panjang. Yang berhenti cuma MENULISNYA.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

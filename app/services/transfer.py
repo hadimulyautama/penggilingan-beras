@@ -21,7 +21,11 @@ from app.services.codegen import next_transfer_code
 from app.services.costing import production_cost
 from app.penggilingan.gudang1.services.milling import pk_jenis
 
-_LOKASI = {"silo_a": "Silo A", "silo_b": "Silo B", "ditumpuk": "tumpukan"}
+# Tak ada lagi kamus nama silo di sini: labelnya dibaca dari MASTER lewat
+# `gudang2.service.label_tujuan`, dan tujuannya dinormalisasi lewat
+# `_tujuan_and_silo` yang sama dengan jalan PK luar. Kamus lama melempar
+# `KeyError` — 500, halaman putih tanpa sebab — pada silo yang belum
+# dikenalnya. Migrasi 0057.
 
 
 class TransferError(Exception):
@@ -153,8 +157,17 @@ async def create_internal_transfer(
     cermin intake, TANPA commit) → commit sekali. Gagal di mana pun = tak
     ada yang tersimpan, termasuk nomornya.
     """
-    if lokasi_tujuan not in _LOKASI:
-        raise TransferError("Tujuan harus: Silo A, Silo B, atau ditumpuk.")
+    # Tujuannya dinormalisasi lewat jalan yang SAMA dengan PK luar: satu
+    # jawaban untuk "tempat mana di Gudang 2", dan satu daftar yang tumbuh
+    # bersama master. Yang tersimpan JENIS-nya (`silo`/`ditumpuk`); silo mana
+    # jadi rujukan di `silo_id`.
+    from app.penggilingan.gudang2.service import (
+        Gudang2Error as _G2Error, _tujuan_and_silo, label_tujuan)
+
+    try:
+        lokasi_tujuan, silo_tujuan_id = await _tujuan_and_silo(db, lokasi_tujuan)
+    except _G2Error as e_:
+        raise TransferError(e_.args[0] if e_.args else "Tujuan tidak dikenali.")
     # ── Prosesnya DIKUNCI sebelum saldonya dibaca ──
     #
     # Tanpa kunci, dua transfer yang datang bersamaan sama-sama membaca
@@ -186,7 +199,8 @@ async def create_internal_transfer(
         ada = await _transfer_dari_kunci(db, kunci_kiriman)
         if ada is not None:
             return TransferResult(transfer=ada, kode_proses=kode_proses,
-                                  lokasi_label=_LOKASI[ada.lokasi_tujuan],
+                                  lokasi_label=await label_tujuan(
+                                      db, ada.lokasi_tujuan, ada.silo_id),
                                   hpp_per_kg=float(ada.hpp_per_kg) if ada.hpp_per_kg is not None else None,
                                   jenis=jenis)
     else:
@@ -196,7 +210,8 @@ async def create_internal_transfer(
     kode_transfer = await next_transfer_code(db)
     muatan = {
         "kode_transfer": kode_transfer, "milling_process_id": proc.id, "kode_proses": kode_proses,
-        "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim, "lokasi_tujuan": lokasi_tujuan,
+        "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim,
+        "lokasi_tujuan": lokasi_tujuan, "silo_id": silo_tujuan_id,
         "hpp_per_kg": hpp, "jenis": jenis, "tanggal": now.date(), "waktu": now,
     }
     e = await buku.catat(db, jenis=PK_DIPINDAH_G1G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
@@ -204,8 +219,10 @@ async def create_internal_transfer(
     if not e.baru:
         ada = await _transfer_dari_kunci(db, kunci_kiriman)
         if ada is not None:
-            return TransferResult(transfer=ada, kode_proses=kode_proses,
-                                  lokasi_label=_LOKASI[ada.lokasi_tujuan], hpp_per_kg=hpp, jenis=jenis)
+            return TransferResult(
+                transfer=ada, kode_proses=kode_proses,
+                lokasi_label=await label_tujuan(db, ada.lokasi_tujuan, ada.silo_id),
+                hpp_per_kg=hpp, jenis=jenis)
 
     transfer = InternalTransfer(
         kode_transfer=kode_transfer,
@@ -213,6 +230,7 @@ async def create_internal_transfer(
         drying_lot_id=proc.drying_lot_id,
         berat_kg=kirim,
         lokasi_tujuan=lokasi_tujuan,
+        silo_id=silo_tujuan_id,
         hpp_per_kg=hpp,
         waktu=now,
         created_by=user.id,
@@ -225,7 +243,8 @@ async def create_internal_transfer(
     await log_activity(
         db, table_name="internal_transfers", record_id=transfer.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> {_LOKASI[lokasi_tujuan]} | hpp={hpp}",
+        new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> "
+                  f"{await label_tujuan(db, lokasi_tujuan, silo_tujuan_id)} | hpp={hpp}",
     )
     # PK LANGSUNG masuk stok Gudang 2 — staff/admin sudah menentukan tujuan saat
     # kirim, jadi tak perlu langkah 'terima' terpisah oleh operator G2.
@@ -233,7 +252,12 @@ async def create_internal_transfer(
     from app.penggilingan.gudang2.service import Gudang2Error, _add_intake
     try:
         await _add_intake(
-            db, user=user, sumber_tipe="transfer_internal", tujuan=lokasi_tujuan,
+            # Disebut dengan NAMA silonya, bukan dengan kata golongannya:
+            # `_add_intake` menormalisasi sendiri lewat master, dan "silo"
+            # tanpa nama tak bisa dicari di sana.
+            db, user=user, sumber_tipe="transfer_internal",
+            tujuan=(await label_tujuan(db, lokasi_tujuan, silo_tujuan_id)
+                    if silo_tujuan_id is not None else lokasi_tujuan),
             berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
             internal_transfer_id=transfer.id, transfer_peristiwa_id=e.id, commit=False,
         )
@@ -253,7 +277,8 @@ async def create_internal_transfer(
     await db.refresh(transfer)
     return TransferResult(
         transfer=transfer, kode_proses=kode_proses,
-        lokasi_label=_LOKASI[lokasi_tujuan], hpp_per_kg=hpp, jenis=jenis,
+        lokasi_label=await label_tujuan(db, lokasi_tujuan, silo_tujuan_id),
+        hpp_per_kg=hpp, jenis=jenis,
     )
 
 
@@ -326,6 +351,8 @@ async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
 
 async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
     """Riwayat transfer internal (terbaru dulu). HPP hanya untuk staff/admin."""
+    from app.penggilingan.gudang2.service import label_tujuan
+
     rows = (
         await db.execute(
             select(InternalTransfer, MillingProcess)
@@ -347,6 +374,6 @@ async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
         jlbl = f"{jenis} " if jenis else ""
         lines.append(
             f"• {t.kode_transfer}: {jlbl}{_kg(float(t.berat_kg))} dari {proc.kode_proses} "
-            f"→ {_LOKASI.get(t.lokasi_tujuan, t.lokasi_tujuan)}{hpp}"
+            f"→ {await label_tujuan(db, t.lokasi_tujuan, t.silo_id)}{hpp}"
         )
     return "\n".join(lines)

@@ -107,10 +107,19 @@ async def test_transfer_menulis_dua_peristiwa_dalam_satu_transaksi(pg, pabrik):
     async with pg() as db:
         ev = (await db.execute(select(Peristiwa).order_by(Peristiwa.id))).scalars().all()
         assert [e.jenis for e in ev] == ["pk_dipindah_g1g2", "pk_masuk_g2"]
-        assert ev[0].muatan["berat_kg"] == 6000 and ev[0].muatan["lokasi_tujuan"] == "silo_b"
+        # `silo` + rujukannya, bukan "silo_b" — lihat catatan pada uji yang
+        # sama di `test_peristiwa_pk_masuk.py`. Proyeksinya ikut membawanya,
+        # supaya baris hasil pembangunan ulang menunjuk silo yang sama.
+        from app.penggilingan.gudang2.service import get_g2_silo
+
+        silo_b = await get_g2_silo(db, "B")
+        assert ev[0].muatan["berat_kg"] == 6000
+        assert ev[0].muatan["lokasi_tujuan"] == "silo"
+        assert ev[0].muatan["silo_id"] == silo_b.id
         assert ev[1].muatan["sumber_tipe"] == "transfer_internal"
         p = await db.get(ProyeksiTransferPk, ev[0].id)
         assert p.status == "tercatat" and p.kode_proses == pabrik["kode"] and p.intake_peristiwa_id == ev[1].id
+        assert p.silo_id == silo_b.id, "proyeksi tak membawa silo tujuannya"
         t = (await db.execute(select(InternalTransfer))).scalars().one()
         assert t.peristiwa_id == ev[0].id and t.status == "terkirim"
         it = (await db.execute(select(PkGudang2Intake))).scalars().one()

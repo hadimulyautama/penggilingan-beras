@@ -295,9 +295,11 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
     from app.web.nav import lencana
 
     async with SessionLocal() as db:
-        # Bentuk yang SAMA dengan JSON `/internal/meja/alat`: `alat.html` satu
-        # berkas di paket sejak 23 September 2026, dan bentuk tuple `(silo, kg)`
-        # yang dulu dipakai di sini adalah satu-satunya sebab ia hidup dua kali.
+        # Bentuk kamus, bukan tuple `(silo, kg)`: `alat.html` satu berkas di
+        # paket sejak 23 September 2026, dan bentuk tuple yang dulu dipakai di
+        # sini adalah satu-satunya sebab ia hidup dua kali. Bentuk ini lahir
+        # sebagai JSON `/internal/meja/alat`; pintu itu dicabut 24 September
+        # bersama app Meja, bentuknya tinggal karena templatnya memakainya.
         # Objek ORM pun berhenti bocor ke templat.
         mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
                   "status": d.status} for d in await dryers_g1(db)]

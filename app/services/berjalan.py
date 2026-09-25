@@ -396,7 +396,9 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     for i in (await db.execute(
         select(PkGudang2Intake)
         .where(PkGudang2Intake.silo_id == silo_id,
-               PkGudang2Intake.tujuan.in_(["silo_a", "silo_b"]))
+               # `silo_id` sudah menyebut silonya; menyaring lagi dengan
+               # kata tujuannya akan membuang baris silo ketiga diam-diam.
+               PkGudang2Intake.silo_id.is_not(None))
     )).scalars().all():
         kg = float(i.berat_kg or 0)
         gerak.append((i.waktu_masuk, kg,

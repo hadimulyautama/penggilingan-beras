@@ -102,7 +102,9 @@ class PkPurchaseVerification(Base, TimestampMixin):
 class PkGudang2Intake(Base, TimestampMixin):
     """Setiap PK yang MASUK ke Gudang 2 — dari beli luar atau transfer G1.
 
-    tujuan: silo_a / silo_b / ditumpuk. silo_id NULL bila ditumpuk.
+    tujuan: JENIS tempatnya (`silo` / `ditumpuk`); silo MANA di `silo_id`,
+    NULL bila ditumpuk. Baris lama menyimpan `silo_a`/`silo_b` — lihat
+    catatan pada `InternalTransfer.lokasi_tujuan`.
     Membawa snapshot HPP/kg (flag_hpp_belum_tersedia bila milling G1 belum verif).
     """
 
