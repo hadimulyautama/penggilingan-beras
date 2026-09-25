@@ -1125,6 +1125,32 @@ async def undo_last(
             raise UndoError("Tindakan itu sudah tidak ada.")
         if log.dibatalkan_pada is not None:
             raise UndoError("Tindakan itu sudah dibatalkan sebelumnya.")
+
+        # ── Barisnya diuji terhadap CAKUPAN, bukan cuma terhadap "terbaru" ──
+        #
+        # Diambil dengan id saja, dan sampai 25 September 2026 cakupan tak
+        # pernah dikenakan padanya: satu-satunya pagar yang tersisa adalah
+        # perbandingan dengan `terbaru` di bawah — DAN PAGAR ITU DILEWATI
+        # KETIKA `terbaru is None`. Akibatnya terbalik dari yang masuk akal:
+        # semakin KOSONG lingkup seseorang, semakin bebas ia membatalkan
+        # pekerjaan orang lain. Operator yang belum mencatat apa pun hari ini
+        # adalah yang paling leluasa. Temuan QA.
+        #
+        # `aksi_undo` memang memeriksa NAMA lingkup yang diminta ("Anda hanya
+        # boleh membatalkan input Anda sendiri"), dan komentarnya menuliskan
+        # niatnya terang-terangan: "daftar itu disaring untuk kenyamanan, dan
+        # kenyamanan bukan pengamanan". Nama lingkupnya diperiksa; id lognya
+        # tidak — dan id log adalah bilangan kecil berurutan.
+        #
+        # Kalimat penolakannya SENGAJA tak menyebut lot, nama, atau apa pun
+        # dari catatan itu: yang menekan tak berhak melihatnya, dan pesan
+        # galat adalah cara termurah membocorkan isi daftar orang lain.
+        if cakupan is not None:
+            if cakupan.actor_ids is not None and log.changed_by not in cakupan.actor_ids:
+                raise UndoError("Tindakan itu bukan input Anda.")
+            if cakupan.gudang is not None and log.gudang != cakupan.gudang:
+                raise UndoError("Tindakan itu bukan input Anda.")
+
         terbaru = await _log_terakhir(db, cakupan)
         if terbaru is not None and terbaru.id != log.id:
             raise UndoError(

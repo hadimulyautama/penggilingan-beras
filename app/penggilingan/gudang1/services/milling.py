@@ -365,6 +365,41 @@ async def log_progress(
     # tumpukan Gudang 2 yang MENOLAK: di sana yang dijaga adalah keputusan
     # penempatan, dan keputusan masih bisa dialihkan ke silo.
     peringatan = None
+
+    # ── Beras tak pernah lebih berat daripada gabahnya ──
+    #
+    # Rendemen giling SELALU di bawah 100%: sekamnya terbuang. Angka di atas
+    # itu berarti salah ketik — satu digit, oleh orang yang sedang berdiri di
+    # depan mesin. "18000" untuk maksud "8000" diterima apa adanya sampai 25
+    # September 2026, dan kartu Stok lalu menggambar rendemen 164% tanpa satu
+    # pun tanda; HPP lot itu ikut bohong sampai ada yang kebetulan
+    # memperhatikan. Temuan QA.
+    #
+    # DIBERITAHU, BUKAN DITOLAK — alasannya sama dengan lantai penuh di bawah:
+    # PK-nya sudah keluar dari mesin sebelum siapa pun mengetiknya, dan angka
+    # kumulatif memang boleh MUNDUR. Justru begitulah salah ketik ini
+    # dibetulkan: mengetik angka yang benar. Menolaknya berarti menutup
+    # satu-satunya jalan perbaikan yang dipunyai operator.
+    #
+    # Yang menutup pintu adalah `finish_milling`, dan di sana memang benar
+    # menolak: menutup proses adalah tindakan terakhir, bukan catatan berjalan.
+    #
+    # Batas 100% batas FISIKA, bukan selera — jadi ia tak bersetelan. Dan ia
+    # SENDIRIAN: peringatan yang menumpuk berhenti dibaca, dan yang ini jauh
+    # lebih jarang serta lebih mendesak daripada kabar tumpukan.
+    bahan = float(proc.berat_gabah_masuk_kg or 0)
+    if rendemen is not None and rendemen > 100:
+        sementara = ("" if proc.bobot_masuk_final
+                     else " — dan bobot masuknya sendiri masih sementara")
+        return ProgressResult(
+            proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen,
+            jenis=jenis,
+            peringatan=(
+                f"⚠️ Rendemen {rendemen:.0f}% — beras tak bisa lebih berat "
+                f"daripada gabahnya ({_kg(bahan)}){sementara}. Periksa "
+                "angkanya; kalau memang benar, beri tahu Admin."),
+        )
+
     stok = await stok_pk_g1(db)
     cap = settings.g1_pk_tumpukan_maks_kg
     if stok > cap:

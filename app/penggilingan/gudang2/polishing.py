@@ -246,11 +246,23 @@ async def selesai_penyosohan(
     proc = await _get_proc(db, kode)
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
+    # ── Barisnya DIKUNCI sebelum dibaca ──
+    #
+    # Pemeriksaan "silo ini masih terbuka?" di bawah dilewati dua permintaan
+    # yang datang bersamaan: keduanya membaca "masih terbuka", keduanya
+    # menulis, dan yang kedua menimpa sisa yang sudah dicatat yang pertama.
+    # Dua operator Gudang 2 di dua HP adalah keadaan sehari-hari, jadi ini
+    # bukan kasus tepi.
+    #
+    # `FOR UPDATE` membuat yang kedua MENUNGGU sampai yang pertama commit,
+    # lalu membaca ulang barisnya — kini bersisa — dan ditolak dengan kalimat
+    # yang menyebut sisa itu. Pola yang sama dipakai `masukkan_pk_luar` dan
+    # `pindah_tumpukan_ke_silo` (P-K-04/05/06).
     usages = (
         await db.execute(
             select(PolishingSiloUsage).where(
                 PolishingSiloUsage.polishing_process_id == proc.id
-            )
+            ).with_for_update()
         )
     ).scalars().all()
     # Pilih usage silo yang dimaksud.
@@ -264,8 +276,32 @@ async def selesai_penyosohan(
     terbuka = [u for u in usages if u.berat_akhir_kg is None]
     if nama_silo:
         silo = await get_g2_silo(db, nama_silo.upper())
-        target = next((u for u in usages if silo and u.silo_id == silo.id), None)
+        # Dipilih dari yang MASIH TERBUKA, bukan dari seluruh baris.
+        #
+        # Sampai 25 September 2026 di sini tertulis `usages`, dan akibatnya
+        # satu silo bisa ditandai selesai DUA KALI: yang kedua menimpa sisa
+        # yang sudah dicatat operator pertama, dan selisihnya berpindah
+        # diam-diam dari stok ke "terpakai" — penyebut rendemen. 500 jadi 100
+        # menggeser 400 kg tanpa jejak di layar mana pun. Temuan QA.
+        #
+        # Bukan kesalahan yang perlu niat buruk: dua operator Gudang 2 di dua
+        # HP, atau satu orang yang borangnya dibiarkan terbuka sebentar
+        # (`pindah.js` membuat halaman berumur panjang), lalu menekan simpan
+        # atas silo yang barusan ditutup rekannya.
+        #
+        # Daftar borangnya SUDAH menyaring yang bersisa (`/actions/sosoh-silo`)
+        # dan komentarnya menjanjikan tepat ini — yang belum, rutenya.
+        target = next((u for u in terbuka if silo and u.silo_id == silo.id), None)
         if target is None:
+            sudah = next((u for u in usages if silo and u.silo_id == silo.id), None)
+            if sudah is not None:
+                # Kalimatnya menyebut sisa yang SUDAH tercatat: yang menekan
+                # tombol kedua kalinya biasanya tak tahu yang pertama masuk.
+                raise Gudang2Error(
+                    f"Silo {nama_silo.upper()} sudah ditandai selesai (sisa "
+                    f"{float(sudah.berat_akhir_kg):.0f} kg) — sisanya tak bisa "
+                    "dicatat dua kali. Kalau angkanya keliru, mintakan koreksi "
+                    "ke Admin.")
             raise Gudang2Error(
                 f"Proses {proc.kode_proses} tidak memakai Silo {nama_silo.upper()} — "
                 f"yang dipakai: {await _sebut_silo(db, usages)}.")
