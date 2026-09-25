@@ -184,6 +184,36 @@ Aturannya sekarang:
     dan tetap diterima saat membaca masukan — halaman di ponsel berumur
     panjang. Yang berhenti cuma MENULISNYA.
 
+## Bobot bahan: nota vs timbangan (sejak 25 September 2026)
+
+    real = berat BARANG menurut Pos Timbang (netto − tara karung)
+    kurang = nota − real
+    kurang <= toleransi  → NOTA   ·  toleransi = 0,2% nota untuk GABAH BASAH
+    kurang >  toleransi  → REAL   ·              0      untuk selainnya
+
+Sebelumnya nota menang begitu ada, sejauh apa pun timbangan di bawahnya.
+Arah kesalahannya selalu sama: gabah tercatat LEBIH BANYAK daripada yang turun
+dari truk — stok menggelembung, dan rendemen lot itu terbaca lebih rendah
+daripada yang sebenarnya.
+
+Toleransinya PERSEN, bukan kilogram tetap: susut perjalanan tumbuh bersama
+muatan (0,2% = tepat 20 kg pada 10 ton, angka yang pemilik sebut). Angkanya di
+`setelan_pabrik` → `setelan.toleransi_nota_persen`; JENIS mana yang mendapatnya
+di kode → `timbang_link.JENIS_BERTOLERANSI`. Yang tak disebut mendapat 0.
+
+SATU aturan, DUA bentuk yang wajib sepakat — `timbang_link.bobot_efektif`
+(Python, dipakai layar) dan `SQL_BERAT_TIKET` + `SQL_SUMBER_BERAT` (dipakai
+poller & rekonsiliasi, keduanya butuh bind `:tol_persen`).
+`tests/pg/test_bobot_nota.py` mengadu keduanya atas 15 kasus — jangan menyalin
+rumusnya ke kueri ketiga.
+
+`sumber_berat` dihitung dari ATURAN, bukan dari "ada nota": sesudah hari ini
+ada nota tak lagi berarti nota yang dipakai. Saat nota kalah, kartunya
+menyebut sebabnya ("nota 10.000 kg, kurang 300 kg > batas 20 kg") — itu angka
+yang dipakai orang menelepon pemasoknya.
+
+Data lama TIDAK dihitung ulang: aturan ini untuk pencatatan baru.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

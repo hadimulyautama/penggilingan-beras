@@ -11,6 +11,8 @@ Sumber kebenaran: bobot/supplier/nopol dari timbang. Bobot:
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,8 +70,73 @@ SYARAT_TIKET_SAH = """
 #: (keputusan yang sudah berdiri), lalu BARANG, dan netto tinggal cadangan
 #: untuk tiket lama yang belum punya snapshot barangnya. Nol berarti "tak ada
 #: angkanya", bukan "nol kilo" — alasan yang sama dengan nota.
-SQL_BERAT_TIKET = ("COALESCE(NULLIF(t.berat_acuan_kg, 0), "
-                   "NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg)")
+#: ── ATURAN BOBOT BAHAN — keputusan pemilik 25 September 2026 ──
+#:
+#: Sampai hari itu NOTA menang begitu ada, sejauh apa pun timbangan di
+#: bawahnya, dan komoditasnya tak pernah dilihat. Pemilik mengubahnya:
+#:
+#:     real = berat BARANG menurut Pos Timbang (netto − tara karung)
+#:     kurang = nota − real
+#:     kurang <= toleransi  → NOTA yang dipakai
+#:     kurang >  toleransi  → REAL yang dipakai
+#:
+#: Toleransinya PERSEN, bukan kilogram tetap. Pemilik menyebut "20 kg" lebih
+#: dulu, lalu menjelaskan sebabnya: "gabah basah yang dibeli biasanya
+#: ditimbang di sawah, dan dalam perjalanan bisa saja susut bobotnya. Jika
+#: dari 10 ton susutnya 20 kg, itu masih batas wajar." Susut perjalanan TUMBUH
+#: bersama muatan — 20 kg atas 10 ton = 0,2%, dan muatan 20 ton yang susut 40
+#: kg susut sama wajarnya. Angka tetap akan menolak truk besar yang normal dan
+#: memaafkan truk kecil yang tidak. Pada 10 ton keduanya sama persis.
+#:
+#: KELEBIHAN dijawab sendirinya: real yang lebih berat membuat `kurang`
+#: negatif, jadi ia jatuh ke cabang pertama — NOTA. Nota membatasi ke ATAS.
+#:
+#: Angkanya di `setelan_pabrik` (bawaan 0,2) supaya Direksi bisa menggesernya
+#: tanpa deploy; JENIS mana yang mendapatnya tetap di kode, sebab itu bukan
+#: angka melainkan keputusan tentang komoditas.
+
+#: Jenis yang mendapat toleransi. Yang TIDAK disebut mendapat 0 — perlakuan
+#: gabah kering, yang lebih ketat. Tabel `timbangan_jenis` punya dua belas
+#: jenis sementara pemilik menyebut tiga; memberi toleransi diam-diam kepada
+#: komoditas yang tak ia sebut berarti memutuskan atas namanya.
+JENIS_BERTOLERANSI = ("GABAH_BASAH",)
+
+#: Bentuk SQL dari `real`: barang bila ada, netto sebagai cadangan untuk tiket
+#: lama yang belum punya snapshot barangnya. Nol berarti "tak ada angkanya".
+SQL_REAL_TIKET = "COALESCE(NULLIF(t.berat_barang_kg, 0), t.netto_timbangan_kg)"
+
+#: Bentuk SQL dari toleransinya, dibangkitkan dari daftar di atas — bukan
+#: diketik ulang. Daftar yang disalin ke kueri kedua akan tertinggal di salah
+#: satunya pada perubahan berikutnya, dan yang tertinggal justru jadi
+#: satu-satunya pintu yang terbuka.
+SQL_TOLERANSI = (
+    "(CASE WHEN t.jenis_kode IN ("
+    + ", ".join(f"'{j}'" for j in JENIS_BERTOLERANSI)
+    + ") THEN CAST(:tol_persen AS numeric) * COALESCE(t.berat_acuan_kg, 0) / 100"
+    " ELSE 0 END)")
+
+#: Bobot yang dipakai HPP. Bentuk SQL dari `bobot_efektif` — keduanya WAJIB
+#: menjawab sama; `tests/pg/test_bobot_nota.py` mengadu keduanya atas seluruh
+#: kasus, sebab kembaran yang berpisah membuat layar dan poller menyebut angka
+#: berbeda tentang truk yang sama.
+SQL_BERAT_TIKET = (
+    "(CASE"
+    "  WHEN " + SQL_REAL_TIKET + " IS NULL THEN NULLIF(t.berat_acuan_kg, 0)"
+    "  WHEN COALESCE(t.berat_acuan_kg, 0) = 0 THEN " + SQL_REAL_TIKET +
+    "  WHEN t.berat_acuan_kg - " + SQL_REAL_TIKET + " <= " + SQL_TOLERANSI +
+    "   THEN t.berat_acuan_kg"
+    "  ELSE " + SQL_REAL_TIKET +
+    " END)")
+
+#: Dari mana angkanya datang — dihitung dari ATURAN yang sama, bukan dari "ada
+#: nota atau tidak". Sesudah 25 September, ada nota tak lagi berarti nota yang
+#: dipakai, dan kolom yang menjawab "nota" atas angka timbangan berbohong
+#: tentang asal usul angka yang sudah masuk laporan.
+SQL_SUMBER_BERAT = (
+    "(CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0"
+    "       AND (" + SQL_REAL_TIKET + " IS NULL"
+    "            OR t.berat_acuan_kg - " + SQL_REAL_TIKET + " <= " + SQL_TOLERANSI + ")"
+    "      THEN 'nota' ELSE 'timbangan' END)")
 
 _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
@@ -121,25 +188,81 @@ _SQL_SATU = text("""
 """)
 
 
-def _row(r) -> dict:
+@dataclass(frozen=True)
+class Bobot:
+    """Bobot bahan yang dipakai HPP, berikut dari mana ia datang."""
+
+    kg: float | None
+    #: 'nota' | 'timbangan' — dihitung dari ATURAN, bukan dari "ada nota".
+    sumber: str
+    #: Kalimat pendek saat NOTA KALAH: "nota 10.000, kurang 300 kg > batas 20
+    #: kg". Kosong bila tak ada yang perlu dijelaskan.
+    #:
+    #: Sesudah 25 September 2026 kata "timbangan" di kartu bisa berarti dua
+    #: hal yang sangat berbeda: tak ada notanya, atau ADA notanya tetapi
+    #: kurangnya melewati batas. Yang kedua adalah kabar yang seseorang perlu
+    #: tindak lanjuti ke pemasok, dan tanpa kalimat ini selisih 300 kg cuma
+    #: jadi angka yang tak seorang pun tahu asalnya.
+    sebab: str = ""
+
+
+def toleransi_kg(nota: float, jenis_kode: str | None, tol_persen: float) -> float:
+    """Berapa kilogram kekurangan yang masih dimaafkan untuk tiket ini."""
+    return (nota * tol_persen / 100.0
+            if (jenis_kode or "") in JENIS_BERTOLERANSI else 0.0)
+
+
+def bobot_efektif(*, nota, barang, netto, jenis_kode: str | None,
+                  tol_persen: float) -> Bobot:
+    """ATURAN BOBOT BAHAN — satu-satunya tempat ia ditulis dalam Python.
+
+    Bentuk kembarannya `SQL_BERAT_TIKET` + `SQL_SUMBER_BERAT`, dan keduanya
+    wajib menjawab sama. Lihat catatan panjang di atas untuk aturannya.
+    """
+    n = float(nota or 0)
+    real = None
+    for kandidat in (barang, netto):
+        v = float(kandidat) if kandidat is not None else 0.0
+        if v > 0:
+            real = v
+            break
+    # Belum ada angka timbangan sama sekali (tiket baru masuk, belum ditimbang
+    # kedua): tak ada yang bisa dibandingkan, jadi nota dipakai apa adanya —
+    # persis seperti sebelum aturan ini. Yang berubah adalah perbandingannya,
+    # bukan keadaan "belum ada pembanding".
+    if real is None:
+        return Bobot(kg=(n if n > 0 else None), sumber="nota" if n > 0 else "timbangan")
+    if n <= 0:
+        return Bobot(kg=real, sumber="timbangan")
+    kurang = n - real
+    batas = toleransi_kg(n, jenis_kode, tol_persen)
+    if kurang <= batas:
+        # Termasuk kurang NEGATIF: real yang lebih berat daripada nota. Nota
+        # membatasi ke atas (ditegaskan pemilik).
+        return Bobot(kg=n, sumber="nota")
+    return Bobot(
+        kg=real, sumber="timbangan",
+        sebab=(f"nota {_kg_teks(n)}, kurang {_kg_teks(kurang)} > batas "
+               f"{_kg_teks(batas)}"),
+    )
+
+
+def _kg_teks(v: float) -> str:
+    return f"{v:,.0f} kg".replace(",", ".")
+
+
+def _row(r, tol_persen: float) -> dict:
     d = dict(r._mapping)
-    # Basis bobot untuk HPP — bentuk Python dari `SQL_BERAT_TIKET`, dan
-    # urutannya wajib sama: nota, lalu BARANG (netto dikurangi tara karung),
-    # lalu netto sebagai cadangan. Dua urutan berbeda untuk satu pertanyaan
-    # berarti layar dan poller menyebut angka berbeda tentang truk yang sama.
-    nota = d.get("berat_acuan_kg")
-    barang = d.get("berat_barang_kg")
-    real = d.get("netto_timbangan_kg")
-    ada_nota = nota is not None and float(nota or 0) > 0
-    ada_barang = barang is not None and float(barang or 0) > 0
+    # Basis bobot untuk HPP — lewat `bobot_efektif`, corong yang SAMA dengan
+    # yang dipakai poller lewat bentuk SQL-nya. Dua jawaban untuk satu truk
+    # berarti layar dan poller berselisih tentang barang yang sudah turun.
+    b = bobot_efektif(nota=d.get("berat_acuan_kg"), barang=d.get("berat_barang_kg"),
+                      netto=d.get("netto_timbangan_kg"),
+                      jenis_kode=d.get("jenis_kode"), tol_persen=tol_persen)
     d["susulan"] = d.get("status_tiket") == "SELESAI"
-    d["sumber_berat"] = "nota" if ada_nota else "timbangan"
-    if ada_nota:
-        d["berat_hpp_kg"] = float(nota)
-    elif ada_barang:
-        d["berat_hpp_kg"] = float(barang)
-    else:
-        d["berat_hpp_kg"] = float(real) if real is not None else None
+    d["sumber_berat"] = b.sumber
+    d["berat_hpp_kg"] = b.kg
+    d["sebab_bobot"] = b.sebab
     return d
 
 
@@ -156,8 +279,11 @@ async def tiket_masuk_aktif(db: AsyncSession, jenis_kode: str | None = None) -> 
     Yang sudah ditutup hanya beberapa hari ke belakang; selebihnya urusan
     rekonsiliasi, bukan urusan layar harian.
     """
+    from app.services.setelan import toleransi_nota_persen
+
+    tol = await toleransi_nota_persen(db)
     rows = (await db.execute(_SQL_AKTIF, {"hari": HARI_SUSULAN})).all()
-    out = [_row(r) for r in rows]
+    out = [_row(r, tol) for r in rows]
     if jenis_kode:
         out = [d for d in out if d["jenis_kode"] == jenis_kode]
     return out
@@ -165,8 +291,10 @@ async def tiket_masuk_aktif(db: AsyncSession, jenis_kode: str | None = None) -> 
 
 async def ambil_tiket(db: AsyncSession, tid: int) -> dict | None:
     """Ambil satu tiket timbang (untuk membentuk batch)."""
+    from app.services.setelan import toleransi_nota_persen
+
     r = (await db.execute(_SQL_SATU, {"tid": tid})).first()
-    return _row(r) if r else None
+    return _row(r, await toleransi_nota_persen(db)) if r else None
 
 
 # ── Tara truk yang sama: dasar PERKIRAAN bobot sebelum timbang kedua ──
@@ -248,8 +376,9 @@ async def berat_kotor_tiket(db: AsyncSession, tid: int | None) -> float | None:
 _SQL_SINKRON = """
     UPDATE {tbl} b SET
         berat_total_kg = """ + SQL_BERAT_TIKET + """,
-        sumber_berat   = CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0
-                              THEN 'nota' ELSE 'timbangan' END
+        -- Dari ATURAN yang sama, bukan dari "ada nota": sesudah 25
+        -- September 2026 ada nota tak lagi berarti nota yang dipakai.
+        sumber_berat   = """ + SQL_SUMBER_BERAT + """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.dibatalkan_pada IS NULL          -- cermin bertanda
@@ -264,9 +393,12 @@ _SQL_SINKRON = """
 async def sinkron_bobot_menunggu(db: AsyncSession) -> int:
     """Isi bobot semua batch (gabah & PK) yang 'menunggu' dari tiket timbang-nya.
     → jumlah baris terisi. Idempoten: yang sudah terisi tak disentuh."""
+    from app.services.setelan import toleransi_nota_persen
+
+    tol = await toleransi_nota_persen(db)
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
-        res = await db.execute(text(_SQL_SINKRON.format(tbl=tbl)))
+        res = await db.execute(text(_SQL_SINKRON.format(tbl=tbl)), {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()
     return total
@@ -358,11 +490,21 @@ async def sinkron_perkiraan(db: AsyncSession) -> int:
     dan yang barusan diberi perkiraan langsung boleh diganti netto di langkah
     berikutnya.
     """
+    # Kedua kueri memakai `SQL_BERAT_TIKET IS NULL` sebagai saringan "tiketnya
+    # belum punya bobot sama sekali" — dan sejak 25 September 2026 rumus itu
+    # memuat toleransinya, jadi angkanya wajib ikut dikirim. Tanpa ini
+    # kuerinya gagal dengan "bind parameter tak terisi", dan poller berhenti
+    # diam-diam: batch tetap 'menunggu' tanpa satu pun tanda di layar.
+    from app.services.setelan import toleransi_nota_persen
+
+    tol = await toleransi_nota_persen(db)
     total = 0
     for tbl in ("purchase_batches", "pk_purchase_batches"):
-        res = await db.execute(text(_SQL_PERKIRAAN.format(tbl=tbl)))
+        res = await db.execute(text(_SQL_PERKIRAAN.format(tbl=tbl)),
+                               {"tol_persen": tol})
         total += res.rowcount or 0
-        res = await db.execute(text(_SQL_PERKIRAAN_TIKET.format(tbl=tbl)))
+        res = await db.execute(text(_SQL_PERKIRAAN_TIKET.format(tbl=tbl)),
+                               {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()
     return total
@@ -376,8 +518,9 @@ async def sinkron_perkiraan(db: AsyncSession) -> int:
 _SQL_RESINKRON = """
     UPDATE {tbl} b SET
         berat_total_kg = """ + SQL_BERAT_TIKET + """,
-        sumber_berat   = CASE WHEN COALESCE(t.berat_acuan_kg, 0) > 0
-                              THEN 'nota' ELSE 'timbangan' END
+        -- Dari ATURAN yang sama, bukan dari "ada nota": sesudah 25
+        -- September 2026 ada nota tak lagi berarti nota yang dipakai.
+        sumber_berat   = """ + SQL_SUMBER_BERAT + """
       FROM timbangan_transaksi t
      WHERE b.timbangan_transaksi_id = t.id
        AND b.dibatalkan_pada IS NULL          -- cermin bertanda
@@ -415,6 +558,9 @@ async def resinkron_bobot_berubah(db: AsyncSession) -> int:
 
     Idempoten (`IS DISTINCT FROM`), jadi aman dijalankan tiap tiga menit.
     """
+    from app.services.setelan import toleransi_nota_persen
+
+    tol = await toleransi_nota_persen(db)
     total = 0
     # Dua hal saja yang MEMBEKUKAN bobot, dan keduanya berarti "sudah
     # terlanjur dipakai":
@@ -429,7 +575,8 @@ async def resinkron_bobot_berubah(db: AsyncSession) -> int:
     # paling sering direvisi notanya, dan revisinya tak pernah sampai.
     for tbl, extra in (("purchase_batches", "AND b.status_batch <> 'digiling'"),
                        ("pk_purchase_batches", "")):
-        res = await db.execute(text(_SQL_RESINKRON.format(tbl=tbl, extra=extra)))
+        res = await db.execute(text(_SQL_RESINKRON.format(tbl=tbl, extra=extra)),
+                                    {"tol_persen": tol})
         total += res.rowcount or 0
     await db.commit()
     return total

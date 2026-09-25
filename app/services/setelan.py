@@ -23,6 +23,12 @@ from app.services.activity_log import log_activity
 K_TARGET = "target_kadar_air"
 K_SEBAB = "sebab_jeda"
 K_MUTU = "fitur_mutu"
+K_TOL_NOTA = "toleransi_nota_persen"
+
+#: Bawaan toleransi kekurangan bobot terhadap nota, dalam PERSEN dari nota.
+#: 0,2% = tepat 20 kg pada muatan 10 ton — angka yang pemilik sebut sendiri
+#: (25 September 2026). Lihat catatan panjang di `timbang_link`.
+TOL_NOTA_BAWAAN = 0.2
 
 
 async def _ambil(db: AsyncSession, kunci: str) -> str | None:
@@ -113,3 +119,34 @@ async def set_sebab_jeda(db: AsyncSession, daftar: dict[str, list[str]], *,
                 f"Sebab berhenti {jenis} tak boleh kosong — berhenti tanpa sebab "
                 "tak bisa dipakai memperbaiki apa pun.")
     await _simpan(db, K_SEBAB, json.dumps(daftar, ensure_ascii=False), user=user)
+
+
+async def toleransi_nota_persen(db: AsyncSession) -> float:
+    """Berapa PERSEN dari nota yang masih dimaafkan saat barangnya kurang.
+
+    Di setelan, bukan di kode, atas usul QA: pemilik menyebut "20 kg dari 10
+    ton" dan penalaran bahwa susut perjalanan tumbuh bersama muatan adalah
+    tafsir atas kalimat itu — bukan kalimatnya sendiri. Direksi yang kelak
+    menemukan angkanya terlalu longgar atau terlalu ketat bisa menggesernya
+    tanpa menunggu deploy.
+
+    JENIS mana yang mendapatnya tetap di kode (`JENIS_BERTOLERANSI`): itu
+    bukan angka melainkan keputusan tentang komoditas, dan memberi toleransi
+    kepada komoditas yang pemilik tak sebut berarti memutuskan atas namanya.
+
+    Nol pun sah: pabrik yang ingin nota selalu kalah begitu barangnya kurang
+    cukup menyetelnya 0, dan seluruh jenis jadi seketat gabah kering.
+    """
+    n = await _ambil(db, K_TOL_NOTA)
+    if n is None:
+        return TOL_NOTA_BAWAAN
+    try:
+        v = float(n)
+    except ValueError:
+        return TOL_NOTA_BAWAAN
+    # Negatif tak punya arti: ia berarti "hukum nota walau barangnya LEBIH".
+    return v if v >= 0 else TOL_NOTA_BAWAAN
+
+
+async def set_toleransi_nota_persen(db: AsyncSession, persen: float, *, user) -> None:
+    await _simpan(db, K_TOL_NOTA, f"{float(persen):g}", user=user)

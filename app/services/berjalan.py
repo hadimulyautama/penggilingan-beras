@@ -270,6 +270,20 @@ def _lama(sejak: datetime | None) -> str:
     return f"{menit} menit"
 
 
+def _sumber_bobot(t) -> str:
+    """Dari mana angka bobotnya datang — berikut sebabnya bila nota KALAH.
+
+    Sejak aturan bobot 25 September 2026, kata "timbangan" bisa berarti dua
+    hal yang sangat berbeda: tiket ini memang tak bernota, atau ADA notanya
+    tetapi barangnya kurang melewati batas. Yang kedua adalah kabar yang
+    seseorang perlu tindak lanjuti ke pemasok — dan tanpa menyebutkannya,
+    selisih 300 kg cuma jadi angka yang tak seorang pun tahu asalnya.
+    """
+    sumber = str(t.get("sumber_berat") or "-")
+    sebab = t.get("sebab_bobot") or ""
+    return f"{sumber} · {sebab}" if sebab else sumber
+
+
 def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
@@ -609,7 +623,7 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
         kondisi = info.kondisi or "basah"
         isi = f"{komoditas} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
-            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
+            isi += f" · {_kg(bobot)} ({_sumber_bobot(t)})"
         baris.append(Baris(
             kode=t["kode"], isi=isi, aksi="gabah_masuk", nilai=str(t["id"]),
             # Tiket yang MUNCUL di antrean sudah berarti belum ditindak —
@@ -626,7 +640,7 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             utama=(_kg(bobot).removesuffix(" kg"), "kg") if bobot else None,
             sub=f"{t['kode']} · {komoditas}"
                 + (f" · {t.get('nomor_polisi')}" if t.get("nomor_polisi") else ""),
-            fakta=([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
+            fakta=([("Sumber berat", _sumber_bobot(t))] if bobot else [])
                   + [("Masuk", _tgl(t.get("tanggal")))],
             # Satu tindakan pun tetap dibentangkan, bukan langsung dilempar
             # ke lembar. Ketukan pertama yang berbeda-beda artinya di tiap
@@ -682,7 +696,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
         bobot = t.get("berat_hpp_kg")
         isi = f"PK luar · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
-            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
+            isi += f" · {_kg(bobot)} ({_sumber_bobot(t)})"
         baris.append(Baris(
             kode=t["kode"], isi=isi,
             # Kepingan keadaan hanya dipasang pada kartu diam: di kartu yang
@@ -694,7 +708,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
             fase="baru", judul=nama,
             utama=(_kg(bobot).removesuffix(" kg"), "kg") if bobot else None,
             sub=f"{t['kode']} · PK luar · {t.get('nomor_polisi') or '-'}",
-            fakta=([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
+            fakta=([("Sumber berat", _sumber_bobot(t))] if bobot else [])
                   + [("Masuk", _tgl(t.get("tanggal")))],
             kelompok="tiket",
             pilihan=([("catat_pk_luar", "Catat PK luar datang",
@@ -749,7 +763,7 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
         jenis_nama = t.get("jenis_nama") or kode_jenis
         isi = f"{jenis_nama} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
-            isi += f" · {_kg(bobot)} ({t.get('sumber_berat')})"
+            isi += f" · {_kg(bobot)} ({_sumber_bobot(t)})"
         baris.append(Baris(
             kode=t["kode"], isi=isi,
             # Kepingan keadaan, bukan tombol: ia menerangkan kenapa kartu ini

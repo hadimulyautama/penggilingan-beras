@@ -263,7 +263,14 @@ _SQL_MANUAL = text("""
 async def rekonsiliasi(db: AsyncSession) -> dict:
     belum = [dict(r._mapping) for r in (await db.execute(_SQL_BELUM_TERTAUT)).all()]
     selisih = [dict(r._mapping) for r in (await db.execute(_SQL_SELISIH)).all()]
-    revisi = [dict(r._mapping) for r in (await db.execute(_SQL_REVISI)).all()]
+    # `SQL_BERAT_TIKET` memuat toleransi nota sejak 25 September 2026, jadi
+    # angkanya ikut dikirim. Rekonsiliasi membandingkan bobot TERSIMPAN dengan
+    # bobot tiket SAAT INI; kalau ia memakai aturan yang berbeda dari poller,
+    # ia akan melaporkan selisih yang tak pernah ada.
+    from app.services.setelan import toleransi_nota_persen
+
+    tol = {"tol_persen": await toleransi_nota_persen(db)}
+    revisi = [dict(r._mapping) for r in (await db.execute(_SQL_REVISI, tol)).all()]
     menunggu = [dict(r._mapping) for r in (await db.execute(_SQL_MENUNGGU)).all()]
     menyimpang = [dict(r._mapping)
                   for r in (await db.execute(_SQL_TIKET_MENYIMPANG)).all()]
