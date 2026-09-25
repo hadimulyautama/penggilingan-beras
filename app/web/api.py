@@ -713,6 +713,24 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/proses-berhenti",
                   "kosong": "Tidak ada proses yang sedang berhenti."},
              ]},
+            # ── Satu-satunya pemindahan PK yang boleh dikerjakan Gudang 1 ──
+            #
+            # Dan ia TIDAK melebarkan `can_transfer_pk`: yang memberi izin
+            # adalah baris permintaannya, yang sudah disetujui Admin. Operator
+            # Gudang 1 tetap tak bisa memindahkan apa pun atas kehendak
+            # sendiri — itu justru kebalikan dari yang pemilik minta.
+            #
+            # Dibuka dari kartunya di Antrian tunggu, yang cuma muncul untuk
+            # permintaan berstatus `disetujui`.
+            {"id": "kirim_permintaan_pk", "label": "🚚 Kirim PK ke Gudang 2",
+             "post": "/api/actions/kirim-permintaan-pk",
+             "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
+                     "sekarang juga, dan Admin yang menutup catatannya.",
+             "fields": [
+                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "berat", "label": "Berat yang dimuat (kg)",
+                  "type": "number", "wajib": True},
+             ]},
         ]
     if g2:
         # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
@@ -964,6 +982,32 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # ia SELALU dibuka dari kartunya di Antrian tunggu, yang sudah
             # menyebut lot dan pemintanya — medan tersembunyi `permintaan`
             # dikunci nilainya oleh kartu itu (`aksi.js`).
+            # ACC, kirim, dan tutup: ketiganya SELALU dibuka dari kartunya,
+            # yang sudah menyebut lot dan pemintanya. Medan `permintaan`
+            # dikunci nilainya oleh kartu itu (`aksi.js`).
+            {"id": "acc_permintaan_pk", "label": "✅ Setujui permintaan PK",
+             "post": "/api/actions/acc-permintaan-pk",
+             "hint": "Tujuan ditetapkan sekarang, bukan nanti: yang tahu gudang "
+                     "mana yang kosong adalah Anda, bukan yang memuat. "
+                     "Bobotnya batas atas — Gudang 1 boleh memuat kurang.",
+             "fields": [
+                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "tujuan", "label": "Tujuan di Gudang 2", "type": "remote",
+                  "source": "/api/actions/tujuan-pk-g2",
+                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
+                 {"name": "berat", "label": "Berat yang disetujui (kg)",
+                  "type": "number", "wajib": True},
+             ]},
+            {"id": "tutup_permintaan_pk", "label": "🔒 Tutup permintaan PK",
+             "post": "/api/actions/tutup-permintaan-pk",
+             "hint": "Angka Anda yang berlaku. Bila berbeda dari yang dicatat "
+                     "Gudang 1, perpindahannya ikut dibetulkan — dan angka "
+                     "Gudang 1 tetap tersimpan sebagai catatan asal.",
+             "fields": [
+                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "berat", "label": "Berat akhir (kg)", "type": "number",
+                  "wajib": True},
+             ]},
             {"id": "tolak_permintaan_pk", "label": "🚫 Tolak permintaan PK",
              "post": "/api/actions/tolak-permintaan-pk",
              "hint": "Sebabnya terbaca operator yang meminta. Permintaan yang "
@@ -1064,7 +1108,8 @@ for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
            "ubah_target",
            "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
            "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling",
-           "minta_pk_g1", "tolak_permintaan_pk"):
+           "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
+           "kirim_permintaan_pk", "tutup_permintaan_pk"):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
 #: Urutan kelompok di layar — yang paling sering dipakai lebih dulu. Yang
@@ -1089,6 +1134,8 @@ _ACTION_WH = {
     # Barangnya di Gudang 1, peminatnya Gudang 2 — dicap g1, sama dengan
     # `transfer_pk`: yang dikerjakan orang atasnya adalah memindahkan dari G1.
     "minta_pk_g1": "g1", "tolak_permintaan_pk": "g1",
+    "acc_permintaan_pk": "g1", "kirim_permintaan_pk": "g1",
+    "tutup_permintaan_pk": "g1",
     "betulkan_bobot_giling": "g1",
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
@@ -2437,6 +2484,113 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     return {"ok": True,
             "pesan": f"✓ Lot *{req.kode_proses}* diminta — Admin melihatnya di "
                      "Antrian tunggu. Yang memindahkan tetap Admin."}
+
+
+class AccPermintaanReq(BaseModel):
+    permintaan: str
+    tujuan: str
+    berat: Positif | None = None
+
+
+@router.post("/actions/acc-permintaan-pk")
+async def act_acc_permintaan_pk(req: AccPermintaanReq,
+                                user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 2 — Admin menyetujui, sambil menetapkan tujuan dan bobotnya.
+
+    Tujuannya ditetapkan di sini, bukan saat barangnya berangkat: yang tahu
+    gudang mana yang sedang kosong adalah Admin, dan operator Gudang 1 yang
+    memuat tak boleh disuruh menebaknya sambil berdiri di samping tumpukan.
+    """
+    _require(can_transfer_pk(user))
+    try:
+        pid = int((req.permintaan or "").strip())
+    except ValueError:
+        raise HTTPException(400, "Permintaan yang mana?")
+    from app.services.permintaan_pk import PermintaanError, setujui
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            b = await setujui(db, user=u, permintaan_id=pid, tujuan=req.tujuan,
+                              berat=req.berat)
+        except PermintaanError as e:
+            raise _err(e, "Gagal menyetujui permintaan.")
+        from app.penggilingan.gudang2.service import label_tujuan
+
+        lok = await label_tujuan(db, b.tujuan, b.silo_id)
+        kg = float(b.berat_setuju_kg or 0)
+    return {"ok": True,
+            "pesan": f"✓ Disetujui {_rp(kg)} kg ke {lok} — Gudang 1 melihatnya "
+                     "di Antrian tunggu, dan merekalah yang memuat."}
+
+
+class KirimPermintaanReq(BaseModel):
+    permintaan: str
+    berat: Positif | None = None
+
+
+@router.post("/actions/kirim-permintaan-pk")
+async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
+                                  user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 3 — operator Gudang 1 memuat dan mengirim. Barangnya berpindah.
+
+    WEWENANGNYA TIDAK DATANG DARI PERAN. `can_transfer_pk` tak disentuh sama
+    sekali: operator Gudang 1 tetap tak bisa memindahkan apa pun atas kehendak
+    sendiri. Yang memberi izin adalah BARIS PERMINTAANNYA — yang sudah
+    disetujui Admin — dan layanan yang dipanggil memeriksa keadaan itu sambil
+    mengunci barisnya.
+    """
+    _require(await _is_g1_operator(user))
+    try:
+        pid = int((req.permintaan or "").strip())
+    except ValueError:
+        raise HTTPException(400, "Permintaan yang mana?")
+    from app.services.permintaan_pk import PermintaanError, kirim
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            b = await kirim(db, user=u, permintaan_id=pid, berat=req.berat)
+        except PermintaanError as e:
+            raise _err(e, "Gagal mengirim PK.")
+        from app.penggilingan.gudang2.service import label_tujuan
+
+        lok = await label_tujuan(db, b.tujuan, b.silo_id)
+        kg = float(b.berat_kirim_kg or 0)
+    return {"ok": True,
+            "pesan": f"✓ {_rp(kg)} kg dikirim ke {lok} — Gudang 2 sudah bisa "
+                     "memakainya. Admin menutup catatannya."}
+
+
+class TutupPermintaanReq(BaseModel):
+    permintaan: str
+    berat: Positif | None = None
+
+
+@router.post("/actions/tutup-permintaan-pk")
+async def act_tutup_permintaan_pk(req: TutupPermintaanReq,
+                                  user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 4 — Admin menutup, dan boleh membetulkan bobotnya.
+
+    Bobot yang berbeda BUKAN suntingan satu kolom: barangnya sudah berpindah,
+    jadi koreksinya membatalkan perpindahan lamanya lalu mencatat yang baru —
+    keduanya lewat buku peristiwa. Lihat `permintaan_pk.tutup_admin`.
+    """
+    _require(can_transfer_pk(user))
+    try:
+        pid = int((req.permintaan or "").strip())
+    except ValueError:
+        raise HTTPException(400, "Permintaan yang mana?")
+    from app.services.permintaan_pk import PermintaanError, tutup_admin
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            b, catatan = await tutup_admin(db, user=u, permintaan_id=pid,
+                                           berat_final=req.berat)
+        except PermintaanError as e:
+            raise _err(e, "Gagal menutup permintaan.")
+        kg = float(b.berat_final_kg or 0)
+    return {"ok": True,
+            "pesan": f"✓ Permintaan ditutup pada {_rp(kg)} kg."
+                     + (f" {catatan}" if catatan else "")}
 
 
 class TolakPermintaanReq(BaseModel):

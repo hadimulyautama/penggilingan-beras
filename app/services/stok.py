@@ -94,9 +94,17 @@ class LotPk:
     #: Kartu yang sudah diminta tak menawarkan tombol "Minta lot ini" lagi: tombol
     #: yang ditekan dua kali karena layarnya tak berubah adalah tombol yang
     #: mengajari orang menekan dua kali. Pagar sungguhannya tetap di basis data
-    #: (indeks parsial `uq_permintaan_pk_terbuka`) — layar tak bisa menjaga dua
+    #: (indeks parsial `uq_permintaan_pk_hidup`) — layar tak bisa menjaga dua
     #: permintaan yang tiba pada detik yang sama.
     diminta_oleh: str | None = None
+    #: KEADAAN permintaannya, dalam kalimat yang bisa dibaca peminta.
+    #:
+    #: Sampai 25 September 2026 yang meminta menekan tombol lalu tak pernah
+    #: diberi kabar lagi — barangnya muncul, atau tidak, dan ia tak punya cara
+    #: tahu sedang di tangan siapa. Itu bagian yang paling kurang dari seluruh
+    #: alur ini menurut pemilik, dan ia tak butuh kartu baru: satu kalimat di
+    #: kartu yang sudah ia tatap tiap hari sudah cukup.
+    diminta_keadaan: str = ""
 
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tidak diketahui.
@@ -388,6 +396,21 @@ async def _mutu_banyak(db: AsyncSession, proc_ids) -> dict[int, list]:
     return {pid: _mutu_dari(peta.get(pid)) for pid in ids}
 
 
+def _keadaan_minta(status: str) -> str:
+    """Permintaan itu sedang di tangan siapa — dikalimatkan untuk PEMINTANYA.
+
+    Bukan nama keadaannya ("disetujui"), melainkan apa artinya bagi yang
+    membaca: siapa yang sedang memegangnya, dan apa yang ia tunggu.
+    """
+    from app.models.permintaan import DIKIRIM, DIMINTA, DISETUJUI
+
+    return {
+        DIMINTA: "menunggu keputusan Admin",
+        DISETUJUI: "disetujui — menunggu dikirim Gudang 1",
+        DIKIRIM: "sudah dikirim — menunggu ditutup Admin",
+    }.get(status, "")
+
+
 async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     """Tiap lot giling yang PK-nya masih tersisa di Gudang 1, terbaru dulu.
 
@@ -453,6 +476,8 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
             berjalan=proc.status == "proses",
             diminta_oleh=(peta_minta[proc.id].oleh if proc.id in peta_minta else None),
+            diminta_keadaan=(_keadaan_minta(peta_minta[proc.id].status)
+                             if proc.id in peta_minta else ""),
             belum_dicatat=belum,
         ))
     return keluar

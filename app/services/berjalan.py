@@ -1243,6 +1243,49 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                  p.kode_proses),
             ]),
         ))
+
+    # ── PK yang sudah DISETUJUI Admin untuk dikirim ke Gudang 2 ──
+    #
+    # Kemampuan baru operator Gudang 1 (keputusan pemilik 25 September 2026),
+    # dan ia berpagar pada BARISNYA, bukan pada peran: `can_transfer_pk` tak
+    # disentuh sama sekali. Yang muncul di sini hanya permintaan berstatus
+    # `disetujui` — yang masih menunggu keputusan Admin TIDAK ditampilkan,
+    # sebab kartu yang belum boleh dikerjakan akan ditekan juga, dan yang
+    # menekannya menerima penolakan atas pekerjaan yang memang bukan haknya
+    # hari itu.
+    from app.models import PermintaanPk
+    from app.services import permintaan_pk as _pmt
+
+    # Digugurkan lebih dulu, DI SINI JUGA. Penggugurnya dulu cuma dipanggil
+    # saat kartu Admin disusun, jadi operator Gudang 1 tetap melihat perintah
+    # memuat lot yang sudah habis lewat jalan lain — sampai kebetulan ada
+    # Admin yang membuka layarnya. Kartu yang tak bisa dikerjakan akan ditekan
+    # juga, dan penolakannya datang sesudah orangnya berjalan ke tumpukan.
+    await _pmt.gugurkan_yang_habis(db)
+    for baris, kode_lot in (await db.execute(
+        select(PermintaanPk, MillingProcess.kode_proses)
+        .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
+        .where(PermintaanPk.status == _pmt.DISETUJUI)
+        .order_by(PermintaanPk.waktu_setuju)
+    )).all():
+        from app.penggilingan.gudang2.service import label_tujuan
+
+        lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
+        kg = float(baris.berat_setuju_kg or 0)
+        b.menunggu.append(Baris(
+            kode=kode_lot,
+            isi=f"Admin menyetujui {_kg(kg)} ke {lok} — tinggal dimuat",
+            keadaan="menunggu dikirim Gudang 1",
+            aksi="kirim_permintaan_pk", nilai=str(baris.id), fase="giling",
+            sejak=baris.waktu_setuju or baris.waktu_minta,
+            judul="Kirim PK ke Gudang 2",
+            utama=(_kg(kg).removesuffix(" kg"), "kg"),
+            sub=f"{kode_lot} · tujuan {lok}",
+            kelompok="permintaan",
+            nota="Catat yang BENAR-BENAR dimuat. Boleh kurang dari yang "
+                 "disetujui; lebih tidak.",
+            pilihan=[("kirim_permintaan_pk", "Kirim ke Gudang 2",
+                      "Barangnya berpindah sekarang juga", str(baris.id))]))
     return _cap_gudang(b, "g1")
 
 
@@ -1793,19 +1836,49 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     from app.penggilingan.gudang1.services.milling import _pk_breakdown
 
     await _pmt.gugurkan_yang_habis(db)
+    # DUA keadaan berhenti di meja Admin, dan keduanya menunggu tangan yang
+    # sama: yang baru diminta (perlu diputuskan) dan yang sudah dikirim Gudang
+    # 1 (perlu ditutup). Yang di antaranya — `disetujui` — ada di tangan
+    # Gudang 1, dan menampilkannya di sini hanya akan membuat Admin menunggui
+    # pekerjaan yang bukan miliknya.
     for baris, nama_minta, kode_lot in (await db.execute(
         select(PermintaanPk, User.nama, MillingProcess.kode_proses)
         .join(User, User.id == PermintaanPk.diminta_oleh)
         .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
-        .where(PermintaanPk.status == "terbuka")
+        .where(PermintaanPk.status.in_((_pmt.DIMINTA, _pmt.DIKIRIM)))
         .order_by(PermintaanPk.waktu_minta)
     )).all():
         bd = await _pk_breakdown(db, baris.milling_process_id)
+        dikirim = baris.status == _pmt.DIKIRIM
+        if dikirim:
+            from app.penggilingan.gudang2.service import label_tujuan
+
+            lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
+            kg_kirim = float(baris.berat_kirim_kg or 0)
+            b.menunggu.append(Baris(
+                kode=kode_lot,
+                isi=f"Gudang 1 sudah mengirim {_kg(kg_kirim)} ke {lok}",
+                keadaan="menunggu ditutup Admin",
+                aksi="tutup_permintaan_pk", nilai=str(baris.id), fase="giling",
+                sejak=baris.waktu_kirim or baris.waktu_minta,
+                judul="Kiriman PK menunggu ditutup",
+                utama=(_kg(kg_kirim).removesuffix(" kg"), "kg"),
+                sub=f"{kode_lot} · diminta {nama_minta or '?'} · {lok}",
+                kelompok="permintaan", gudang="g1",
+                # Barangnya SUDAH pindah. Yang tersisa mengakui angkanya — dan
+                # angka Admin yang berlaku, jadi kartunya harus mengatakan itu
+                # sebelum ditekan, bukan sesudah.
+                nota=(f"Disetujui {_kg(float(baris.berat_setuju_kg or 0))}, "
+                      f"dimuat {_kg(kg_kirim)}. Angka Anda yang berlaku; bila "
+                      "berbeda, perpindahannya ikut dibetulkan."),
+                pilihan=[("tutup_permintaan_pk", "Tutup permintaan",
+                          "Boleh mengubah bobotnya", str(baris.id))]))
+            continue
         b.menunggu.append(Baris(
             kode=kode_lot,
             isi=f"{nama_minta or 'Operator Gudang 2'} minta lot ini dipindah",
-            keadaan="menunggu dipindahkan Admin",
-            aksi="transfer_pk", nilai=kode_lot, fase="giling",
+            keadaan="menunggu keputusan Anda",
+            aksi="acc_permintaan_pk", nilai=str(baris.id), fase="giling",
             sejak=baris.waktu_minta,
             judul="Diminta Gudang 2",
             utama=(_kg(bd.tersedia).removesuffix(" kg"), "kg"),
@@ -1819,8 +1892,12 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
             # atasnya adalah memindahkan dari sana; sama dengan `transfer_pk`.
             gudang="g1",
             pilihan=[
-                ("transfer_pk", "Pindahkan ke Gudang 2",
-                 "Lot ini, sebagian atau seluruhnya", kode_lot),
+                # ACC, bukan "pindahkan": yang memuat kini Gudang 1. Yang
+                # ditetapkan di sini tujuan dan bobotnya — dua hal yang cuma
+                # Admin tahu, dan yang tak boleh ditebak orang yang sedang
+                # berdiri di samping tumpukan.
+                ("acc_permintaan_pk", "Setujui permintaan",
+                 "Tetapkan tujuan & bobot; Gudang 1 yang memuat", str(baris.id)),
                 ("tolak_permintaan_pk", "Tolak permintaan",
                  "Sebabnya ikut terkirim ke operator", str(baris.id)),
             ]))

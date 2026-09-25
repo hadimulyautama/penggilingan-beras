@@ -263,16 +263,23 @@ async def create_internal_transfer(
         )
     except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
         raise TransferError(e_.args[0] if e_.args else "Gagal memasukkan PK ke Gudang 2.")
-    # Permintaan operator Gudang 2 atas lot ini — kalau ada — ikut tertutup di
-    # transaksi yang SAMA (keputusan pemilik 24 September 2026). Kalau ditutup
-    # sesudah commit, ada jeda di mana transfernya sudah tercatat sementara
-    # kartunya masih berdiri di layar Admin; yang membacanya akan memindahkan
-    # lot yang sama dua kali. Idempoten: lot yang tak pernah diminta tak punya
-    # baris untuk ditutup, dan itu bukan kesalahan.
-    from app.services.permintaan_pk import tutup as _tutup_permintaan
-
-    await _tutup_permintaan(db, proc.id, status="selesai", user=user,
-                            sebab="Transfer dicatat.")
+    # ── Permintaan TIDAK lagi ditutup di sini ──
+    #
+    # Sampai 25 September 2026 baris ini menutupnya: status 'selesai', sebab
+    # "Transfer dicatat.". Akibatnya permintaan menutup DIRINYA SENDIRI di
+    # langkah ketiga, dan Admin tak pernah kebagian menutupnya — padahal
+    # penutupan itulah yang pemilik jadikan langkah keempat, lengkap dengan
+    # hak membetulkan bobotnya.
+    #
+    # Yang menggantikannya: `permintaan_pk.kirim` menandai barisnya `dikirim`
+    # dan menyimpan `internal_transfer_id` — di transaksi yang SAMA dengan
+    # transfer ini, sebab ia yang memanggil fungsi ini. Alasan lama tetap
+    # berlaku dan sengaja diulang di sana: perubahan keadaan harus ikut commit
+    # yang sama, kalau tidak ada jeda di mana transfernya sudah tercatat
+    # sementara kartunya masih menawarkan pekerjaan yang sudah dikerjakan.
+    #
+    # Transfer yang BUKAN dari permintaan tetap sah dan tetap lewat sini:
+    # Admin masih boleh memindahkan atas inisiatifnya sendiri.
     await db.commit()
     await db.refresh(transfer)
     return TransferResult(

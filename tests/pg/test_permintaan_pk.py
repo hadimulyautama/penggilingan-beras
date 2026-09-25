@@ -115,8 +115,12 @@ async def test_kartu_admin_muncul_sekali_dan_membawa_pilihannya(pg, pabrik):
     assert len(kartu) == 1
     k = kartu[0]
     assert k.kode == "LOT-P2-01" and "Op Polesan" in k.isi
-    # Dua jalan keluar, dan keduanya milik Admin.
-    assert [p[0] for p in k.pilihan] == ["transfer_pk", "tolak_permintaan_pk"]
+    # Dua jalan keluar, dan keduanya milik Admin — tetapi yang pertama kini
+    # MENYETUJUI, bukan memindahkan. Sejak 25 September 2026 yang memuat adalah
+    # operator Gudang 1; Admin menetapkan tujuan dan bobotnya, lalu menutup di
+    # ujung. Pagar ini dulu menjaga "Admin memindahkan sendiri", dan itu
+    # justru yang pemilik ubah.
+    assert [p[0] for p in k.pilihan] == ["acc_permintaan_pk", "tolak_permintaan_pk"]
     # Dicap gudang — kartu tanpa cap lenyap dari ?gudang=g1 DAN ?gudang=g2.
     assert k.gudang == "g1"
     # Dan ia ikut terhitung lencana antrean layar yang menggambarnya.
@@ -137,20 +141,32 @@ async def test_operator_melihat_keadaannya_di_kartu_stok(pg, pabrik):
     assert sesudah["LOT-P2-01"] == "Op Polesan"
 
 
-async def test_transfer_menutup_permintaannya(pg, pabrik):
+async def test_transfer_sendiri_TIDAK_menutup_permintaan_siapa_pun(pg, pabrik):
+    """Kebalikan dari yang dijaga pagar ini sampai 25 September 2026.
+
+    Dulu transfer menutup permintaan lot itu: status 'selesai', sebab "Transfer
+    dicatat.". Akibatnya permintaan menutup DIRINYA SENDIRI dan Admin tak
+    pernah kebagian menutupnya — padahal penutupan itulah langkah keempat yang
+    pemilik minta, lengkap dengan hak membetulkan bobotnya.
+
+    Admin TETAP boleh memindahkan atas inisiatifnya sendiri; yang berubah cuma:
+    pemindahan itu bukan lagi jawaban atas permintaan siapa pun. Permintaannya
+    tetap berdiri, menunggu dijalani empat langkahnya — atau digugurkan
+    penggugur bila lotnya habis oleh pemindahan tadi.
+    """
     from app.models import PermintaanPk, User
-    from app.services.berjalan import untuk
+    from app.models.permintaan import DIMINTA, GUGUR
     from app.services.transfer import create_internal_transfer
 
     baris = await _minta(pg, pabrik["op2"])
     async with pg() as db:
         await create_internal_transfer(db, user=await db.get(User, pabrik["adm"]),
-                                       kode_proses="LOT-P2-01", lokasi_tujuan="silo_a")
+                                       kode_proses="LOT-P2-01", lokasi_tujuan="A",
+                                       berat=100)
     async with pg() as db:
         ada = await db.get(PermintaanPk, baris.id)
-        assert ada.status == "selesai" and ada.waktu_tutup is not None
-        b = await untuk(db, await db.get(User, pabrik["adm"]))
-    assert not [x for x in b.menunggu if x.kelompok == "permintaan"], "kartunya tetap berdiri"
+    assert ada.status == DIMINTA, "transfer menutup permintaan lagi"
+    assert ada.waktu_tutup is None and ada.ditutup_oleh is None
 
 
 async def test_lot_habis_lewat_jalan_lain_menggugurkan_permintaan(pg, pabrik):

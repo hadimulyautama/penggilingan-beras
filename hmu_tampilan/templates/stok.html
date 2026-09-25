@@ -208,8 +208,13 @@
            dan yang dipindah nanti bukan yang terbaca sekarang. #}
         {% if boleh_minta and not l.berjalan %}
           <div class="ubah-hasil">
+            {# KEADAANNYA, bukan sekadar "sudah diminta". Yang meminta menekan
+               tombol lalu tak pernah diberi kabar lagi sampai barangnya muncul
+               — atau tidak muncul; itu bagian yang paling kurang dari alur ini
+               menurut pemilik (25 September 2026). Kalimatnya datang dari
+               `stok._keadaan_minta`, satu tempat. #}
             {% if l.diminta_oleh %}
-              <span class="bantu">Sudah diminta {{ l.diminta_oleh }} — menunggu Admin</span>
+              <span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>
             {% else %}
               <a class="btn btn--kecil"
                  href="/stok?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>
