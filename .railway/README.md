@@ -1,5 +1,22 @@
 # Railway configuration
 
+> ⚠ **BERKAS INI BELUM DIPAKAI (per 25 September 2026).** Yang menyetel
+> produksi masih `railway.json` di akar repo. Buktinya: berkas ini sempat
+> mendeklarasikan layanan `pos-produksi-uji` yang sudah dihapus, dan sesudah
+> belasan deploy layanan itu tak pernah lahir kembali.
+>
+> JANGAN menghapus `railway.json` sebelum `railway config apply` sungguh
+> dijalankan dan terbukti. Tanpa `builder: DOCKERFILE` dari sana, build
+> berpindah ke Railpack, `docker/entrypoint.sh` tak dijalankan, dan
+> `alembic upgrade head` berhenti diam-diam — deploy tampak berhasil dengan
+> skema yang tertinggal.
+>
+> Langkah menyelesaikannya, pada hari yang sepi: Node 22+ (berkas ini butuh
+> `--experimental-strip-types`), `railway config plan` untuk melihat apa yang
+> akan berubah, periksa daftarnya, baru `railway config apply` — lalu
+> `railway.json` boleh dibuang. Railway memberi tenggat 1 Desember 2026.
+
+
 This project defines its Railway infrastructure in code.
 
 ```txt

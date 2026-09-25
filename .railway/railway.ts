@@ -38,13 +38,15 @@ export default defineRailway(() => {
     replicas: { "asia-southeast1-eqsg3a": 1 },
     env: { ADMIN_NAME: preserve(), ADMIN_SANDI_AWAL: preserve(), ADMIN_TELEGRAM_ID: preserve(), AGENT_MODEL: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), CLAUDE_MODEL: preserve(), DATABASE_URL: preserve(), INTERNAL_API_TOKEN: preserve(), MINIAPP_MODEL: preserve(), MODE_UJI: preserve(), PRODUKSI_API_TOKEN: preserve(), PRODUKSI_API_URL: preserve(), SECRET_KEY: preserve(), },
   });
-  const posProduksiUji = service("pos-produksi-uji", {
-    source: github("hadimulyautama/penggilingan-beras", { branch: "uji", checkSuites: false }),
-    replicas: { "sfo": 1 },
-    env: { ADMIN_NAME: preserve(), ADMIN_TELEGRAM_ID: preserve(), ANTHROPIC_API_KEY: preserve(), APP_TIMEZONE: preserve(), DATABASE_URL: preserve(), MODE_UJI: preserve(), SECRET_KEY: preserve() },
-  });
+  // `pos-produksi-uji` DIHAPUS dari sini 25 September 2026, bukan sekadar
+  // dinonaktifkan: layanannya sudah dihapus pemilik di Railway (24 September),
+  // dan berkas ini adalah satu-satunya tempat yang masih menyebutnya hidup.
+  // Berkas IaC ini belum pernah di-`apply` — buktinya layanan itu tak pernah
+  // lahir kembali sesudah belasan deploy. Justru itu bahayanya: `apply`
+  // pertama kelak akan MEMBANGUNKANNYA, lengkap dengan cabang `uji` yang
+  // sudah tak ada dan replika di region lama.
 
   return project("penggilingan-beras", {
-    resources: [kantor, timbangan, penggilinganBeras, posProduksiUji, Postgres, PostgresNPz3, postgresVolumeSCj8, postgresVolume],
+    resources: [kantor, timbangan, penggilinganBeras, Postgres, PostgresNPz3, postgresVolumeSCj8, postgresVolume],
   });
 });
