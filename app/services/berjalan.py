@@ -208,6 +208,14 @@ class Berjalan:
     #: Berapa lot yang berasnya sudah keluar mesin tetapi BELUM dipacking.
     #: Lencana pintu Stok Produk; nol berarti tak ada lencana.
     jumlah_produk: int = 0
+    #: Kabar yang belum pernah tergambar di mata orang ini. Disimpan di sini —
+    #: bukan dihitung ulang di tiap layar — karena seluruh laci disusun dari
+    #: satu benda: layar yang lupa salah satu angkanya menggambar laci yang
+    #: berbeda dari laci di layar sebelahnya.
+    jumlah_kabar: int = 0
+    #: Ada kabar MERAH yang belum dibaca — lencananya berganti warna, bukan
+    #: cuma berganti angka. Lihat `kabar.ada_merah`.
+    kabar_merah: bool = False
 
     @property
     def jumlah_menunggu(self) -> int:
@@ -261,7 +269,8 @@ class Berjalan:
             mati.append("stok_produk")
         return {"MENUNGGU": self.jumlah_menunggu, "BERJALAN": self.jumlah_berjalan,
                 "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
-                "PRODUK": self.jumlah_produk,
+                "PRODUK": self.jumlah_produk, "KABAR": self.jumlah_kabar,
+                "KABAR_MERAH": self.kabar_merah,
                 "MUTU_AKTIF": self.mutu_aktif, "PINTU_MATI": tuple(mati)}
 
 
@@ -2183,4 +2192,24 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
     # justru akan kehilangan pintunya.
     b.pintu_produk = not (await _is_g1_operator(user)
                           and not can_see_financials(user))
+
+    # ── Lencana Kabar ──
+    #
+    # DI SINI, bersama lencana yang lain, dan bukan di layar Kabar: laci itu
+    # satu benda di seluruh aplikasi, dan gunanya justru terlihat dari layar
+    # LAIN. Lencana yang cuma muncul di halamannya sendiri tak memberi tahu
+    # siapa pun bahwa ada yang perlu dibuka.
+    #
+    # Kegagalannya tak boleh menjatuhkan seluruh laci: kabar adalah tambahan,
+    # sedangkan antrean dan keputusan adalah pekerjaan. Yang gagal dihitung
+    # digambar nol — lencana yang hilang lebih baik daripada halaman yang mati.
+    try:
+        from app.services import kabar as _kabar
+        b.jumlah_kabar = await _kabar.jumlah_baru(db, user)
+        if b.jumlah_kabar:
+            b.kabar_merah = await _kabar.ada_merah(db, user)
+    except Exception:
+        import logging
+        logging.getLogger("berjalan").exception(
+            "Lencana Kabar gagal dihitung (laci tetap tampil)")
     return b

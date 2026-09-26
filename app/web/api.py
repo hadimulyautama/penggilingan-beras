@@ -831,8 +831,15 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # tambahan yang harus ditutup sendiri. Rutenya menjaga hal yang sama;
         # yang di sini cuma berhenti menawarkan.
         #
-        # Tak punya daftar pilihan sendiri: ia SELALU dibuka dari kartu lot di
-        # layar Stok, yang sudah menyebut lot mana.
+        # PUNYA DAFTARNYA SENDIRI sejak 26 September 2026. Kalimat di sini
+        # dulu berbunyi "tak punya daftar pilihan sendiri: ia SELALU dibuka
+        # dari kartu lot di layar Stok, yang sudah menyebut lot mana" — dan
+        # alasan itu salah dua kali. Penguncian-dari-kartu di `aksi.js` hanya
+        # berlaku untuk isian bertipe PILIHAN, jadi isian teksnya tak pernah
+        # terisi walau kartunya mengirim `nilai`; dan katalog "Catat pekerjaan
+        # lain" membuka aksi yang sama tanpa membawa apa pun. Akibatnya
+        # orangnya harus MENGETIK kode lot sambil berdiri memegang telepon
+        # satu tangan — laporan pemilik, dengan fotonya.
         if not fin:
             actions += [
                 {"id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
@@ -840,7 +847,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. "
                          "Admin yang menyetujui dan menetapkan tujuannya.",
                  "fields": [
-                     {"name": "kode_proses", "label": "Lot PK", "type": "text"},
+                     {"name": "kode_proses", "label": "Lot PK yang Anda perlukan",
+                      "type": "remote", "source": "/api/actions/pk-g1-tersedia",
+                      "kosong": "Tidak ada lot PK Gudang 1 yang masih bersisa "
+                                "dan belum diminta."},
                  ]},
                 # ── "Muat & kirim" atas permintaan yang sudah disetujui ──
                 #
@@ -860,7 +870,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
                          "sekarang juga, dan Admin yang menutup catatannya.",
                  "fields": [
-                     {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                     {"name": "permintaan", "label": "Permintaan yang mana",
+                     "type": "remote", "source": "/api/actions/permintaan-disetujui",
+                     "kosong": "Tidak ada permintaan yang sudah disetujui Admin."},
                      {"name": "berat", "label": "Berat yang dimuat (kg)",
                       "type": "number", "wajib": True},
                  ]},
@@ -1007,7 +1019,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "mana yang kosong adalah Anda, bukan yang memuat. "
                      "Bobotnya batas atas — Gudang 1 boleh memuat kurang.",
              "fields": [
-                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "permintaan", "label": "Permintaan yang mana",
+                     "type": "remote", "source": "/api/actions/permintaan-diminta",
+                     "kosong": "Tidak ada permintaan yang menunggu keputusan."},
                  {"name": "tujuan", "label": "Tujuan di Gudang 2", "type": "remote",
                   "source": "/api/actions/tujuan-pk-g2",
                   "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
@@ -1020,7 +1034,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                      "Gudang 1, perpindahannya ikut dibetulkan — dan angka "
                      "Gudang 1 tetap tersimpan sebagai catatan asal.",
              "fields": [
-                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "permintaan", "label": "Permintaan yang mana",
+                     "type": "remote", "source": "/api/actions/permintaan-dikirim",
+                     "kosong": "Tidak ada kiriman yang menunggu ditutup."},
                  {"name": "berat", "label": "Berat akhir (kg)", "type": "number",
                   "wajib": True},
              ]},
@@ -1029,7 +1045,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Sebabnya terbaca operator yang meminta. Permintaan yang "
                      "hilang tanpa kabar akan diajukan lagi besok.",
              "fields": [
-                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                 {"name": "permintaan", "label": "Permintaan yang mana",
+                     "type": "remote", "source": "/api/actions/permintaan-diminta",
+                     "kosong": "Tidak ada permintaan yang menunggu keputusan."},
                  {"name": "sebab", "label": "Sebab menolak", "type": "text"},
              ]},
         ]
@@ -1241,6 +1259,115 @@ async def gabah_menunggu_tempat(user: User = Depends(pengguna_aksi)) -> list[dic
                   + ("di tumpukan" if b.status_batch == DITUMPUK
                      else "belum ditempatkan")),
     } for b in batches]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# DAFTAR UNTUK RANTAI PERMINTAAN PK — supaya tak ada yang perlu DIKETIK
+#
+# Sampai 26 September 2026 kelima aksi rantai ini beriaian penunjuk bertipe
+# `text`, dengan alasan yang tertulis di spesifikasinya: "ia SELALU dibuka dari
+# kartu, yang sudah menyebut lot mana". Alasan itu salah dua kali.
+#
+# Pertama, penguncian-dari-kartu di `aksi.js` HANYA berlaku untuk isian bertipe
+# pilihan (`select`/`remote`/`remote_banyak`) — isian teks tak pernah terisi
+# apa pun. Jadi kartu memang mengirim `nilai`, dan borangnya tetap kosong.
+# Pemilik menemukannya sambil berdiri memegang telepon: "kalau harus mengetik
+# lot tentu sangat repot."
+#
+# Kedua, "selalu dari kartu" tak pernah benar: katalog "Catat pekerjaan lain"
+# membuka aksi yang sama tanpa membawa apa-apa.
+#
+# Yang ketiga, dan paling buruk, tak terlihat dari layar operator: tiga aksi
+# Admin meminta `permintaan` — ID BARIS BASIS DATA, angka yang tak pernah
+# ditampilkan di mana pun. Admin tak punya cara mengetahuinya selain menebak.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _label_permintaan(kode_lot: str, baris, lok: str = "") -> str:
+    """Satu bentuk label untuk keempat daftar di bawah.
+
+    Yang dibaca orang LOT-nya, bukan nomor barisnya — nomor baris cuma nilai
+    yang dikirim. Daftar yang menampilkan "#7" menyuruh orang menghafal angka
+    yang tak pernah ia lihat di tempat lain.
+    """
+    kg = float(baris.berat_kirim_kg or baris.berat_setuju_kg or 0)
+    bagian = [kode_lot]
+    if kg:
+        bagian.append(f"{_rp(kg)} kg")
+    if lok:
+        bagian.append(f"ke {lok}")
+    return " · ".join(bagian)
+
+
+async def _daftar_permintaan(keadaan, *, dengan_tujuan: bool = False) -> list[dict]:
+    from sqlalchemy import select
+
+    from app.models import MillingProcess, PermintaanPk
+
+    async with SessionLocal() as db:
+        baris = (await db.execute(
+            select(PermintaanPk, MillingProcess.kode_proses)
+            .join(MillingProcess,
+                  MillingProcess.id == PermintaanPk.milling_process_id)
+            .where(PermintaanPk.status.in_(keadaan))
+            .order_by(PermintaanPk.waktu_minta)
+        )).all()
+        out = []
+        for b, kode in baris:
+            lok = ""
+            if dengan_tujuan and b.tujuan:
+                from app.penggilingan.gudang2.service import label_tujuan
+                lok = await label_tujuan(db, b.tujuan, b.silo_id)
+            out.append({"value": str(b.id),
+                        "label": _label_permintaan(kode, b, lok)})
+    return out
+
+
+@router.get("/actions/pk-g1-tersedia")
+async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Lot PK Gudang 1 yang masih ada sisanya, untuk operator Gudang 2.
+
+    Yang sudah diminta orang lain TIDAK ditawarkan lagi: satu permintaan
+    terbuka per lot dijaga indeks, dan menawarkan lot yang sudah diminta cuma
+    melahirkan penolakan yang bisa dihindari sebelum orangnya menekan.
+    """
+    _require(await _is_g2_operator(user))
+    from app.services.stok import pk_gudang1
+
+    async with SessionLocal() as db:
+        lot = await pk_gudang1(db)
+    return [{"value": l.kode,
+             "label": (f"{l.kode} · {_rp(l.tersedia)} kg"
+                       + (f" · {l.kelas}" if l.kelas else "")
+                       + (f" · {l.lama}" if l.lama else ""))}
+            for l in lot if l.tersedia > 0 and not l.diminta_oleh]
+
+
+@router.get("/actions/permintaan-diminta")
+async def permintaan_menunggu_keputusan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Permintaan yang menunggu keputusan Admin — untuk Setujui dan Tolak."""
+    _require(can_transfer_pk(user))
+    from app.models.permintaan import DIMINTA
+
+    return await _daftar_permintaan((DIMINTA,))
+
+
+@router.get("/actions/permintaan-disetujui")
+async def permintaan_siap_dimuat(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Yang sudah disetujui dan tinggal dijemput — untuk operator Gudang 2."""
+    _require(await _is_g2_operator(user))
+    from app.models.permintaan import DISETUJUI
+
+    return await _daftar_permintaan((DISETUJUI,), dengan_tujuan=True)
+
+
+@router.get("/actions/permintaan-dikirim")
+async def permintaan_menunggu_ditutup(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Yang barangnya sudah berpindah dan tinggal ditutup Admin."""
+    _require(can_transfer_pk(user))
+    from app.models.permintaan import DIKIRIM
+
+    return await _daftar_permintaan((DIKIRIM,), dengan_tujuan=True)
 
 
 class PindahTumpukanReq(BaseModel):

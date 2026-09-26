@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block judul %}Kabar{% endblock %}
+{% block isi %}
+
+{# ── Kabar — pembaca `notifications`, yang selama ini tak ada ──
+   Keputusan pemilik 26 September 2026. Aplikasi ini sudah lima tempat menulis
+   notifikasi dan tak satu pun layar membacanya; kalimat-kalimatnya ditulis
+   rapi lalu masuk lemari yang tak pernah dibuka.
+
+   DIBUKA = DIBACA. Tak ada tombol "tandai sudah dibaca": ia ketukan kedua
+   untuk pekerjaan yang sudah selesai saat mata sampai ke barisnya. Yang sudah
+   dibaca TETAP tergambar sampai umurnya habis — ini riwayat tujuh hari, bukan
+   kotak masuk yang harus dikosongkan.
+
+   Yang MENAGIH pekerjaan bukan layar ini, melainkan kartunya di Antrian tunggu
+   dan Menunggu keputusan. Karena itu tak ada satu tombol pun di sini. #}
+
+{% if not kabar %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5h16v14H4z"/><path d="M4 7l8 6 8-6"/></svg>
+    <div>
+      <h2>Tidak ada kabar</h2>
+      <p class="bantu">
+        Belum ada yang perlu Anda ketahui dalam {{ hari }} hari terakhir.
+        Pekerjaan yang menunggu tetap berdiri di Antrian tunggu.
+      </p>
+    </div>
+  </div>
+{% else %}
+
+{% if baru %}
+  <div class="nota nota--hati">
+    {{ baru }} kabar baru — sudah ditandai terbaca. Yang lain tetap tergambar
+    sampai {{ hari }} hari.
+  </div>
+{% endif %}
+
+<div class="grup">
+{% for k in kabar %}
+  {# Warnanya dari PRIORITASNYA, bukan dari usianya: merah berarti ada yang
+     dibukukan tanpa pernah diproduksi, dan itu tak boleh terlihat sama dengan
+     "penyosohan sudah selesai". #}
+  <div class="padat padat--diam
+              {%- if k.prioritas == 'merah' %} padat--bahaya
+              {%- elif k.prioritas == 'hijau' %} padat--aman{% endif %}">
+    <div class="padat__ringkas">
+      <div class="padat__atas">
+        <span class="padat__nama">{{ k.pesan }}</span>
+      </div>
+      <div class="padat__umur">
+        {{- k.waktu.strftime('%d/%m %H:%M') }}
+        {%- if k.baru %} · <b>baru</b>{% endif %}
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

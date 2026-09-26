@@ -924,6 +924,16 @@ body.putus-jaringan .bar { margin-top: 34px; }
 /* Tanpa pembungkus `div`, isinya jadi anak langsung kotak flex dan akan
    berjajar mendatar. Yang tak bisa ditekan diberi susunannya sendiri. */
 .padat--diam { display: grid; gap: 5px; cursor: default; }
+/* ── Kabar: warnanya dari PRIORITASNYA, bukan dari fase barangnya ──
+   Layar Kabar (26 September 2026) tidak menggambar benda di gudang, jadi
+   kosakata `--fase-*` tak berlaku di sana: satu kabar bisa tentang gabah, beras,
+   atau permintaan sekaligus. Yang dibedakan mendesak atau tidak.
+
+   Kuning tak punya kelas sendiri — ia bawaan `.padat`, dan mayoritas kabar
+   memang kuning. Kelas untuk keadaan yang paling sering terjadi hanya menambah
+   satu hal yang bisa lupa dipasang. */
+.padat--bahaya { --fase: var(--bahaya); }
+.padat--aman   { --fase: var(--aman); }
 .padat__atas {
   display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline;
 }

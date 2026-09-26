@@ -770,3 +770,54 @@ async def test_kalimat_persetujuan_menyebut_gudang_yang_benar(pg, pabrik):
     # Dan ia tetap menyebut bahwa Gudang 1 diberi tahu — kehilangan tombol tanpa
     # kehilangan kabar adalah bagian yang disengaja.
     assert "Gudang 1 diberi tahu" in pesan and "Sedang berjalan" in pesan
+
+
+async def test_tiap_langkah_menawarkan_daftarnya_bukan_kotak_ketik(pg, pabrik):
+    """Laporan pemilik 26 September 2026 dengan fotonya: "kalau harus mengetik
+    lot tentu sangat repot."
+
+    Kelima aksi rantai ini beriaian penunjuk bertipe `text`, jadi kartu yang
+    mengirim `nilai` tak mengisi apa pun — dan tiga di antaranya meminta ID
+    BARIS BASIS DATA, angka yang tak pernah ditampilkan di layar mana pun.
+
+    Bentuk spesifikasinya dijaga `tests/test_penunjuk_borang.py`. Yang diuji di
+    sini ISINYA: tiap daftar menawarkan persis yang bisa dikerjakan pada
+    langkah itu, dan labelnya menyebut LOT — bukan nomor baris.
+    """
+    from app.models import User
+    from app.web import api
+
+    async with pg() as db:
+        adm = await db.get(User, pabrik["admin"])
+        op2 = await db.get(User, pabrik["op2"])
+
+    # 0 · sebelum diminta: lotnya ditawarkan kepada Gudang 2.
+    lot = await api.pk_g1_tersedia(user=op2)
+    assert [l["value"] for l in lot] == [pabrik["lot"]], lot
+    assert "kg" in lot[0]["label"], "daftar lot tak menyebut sisa PK-nya"
+    assert await api.permintaan_menunggu_keputusan(user=adm) == []
+
+    # 1 · diminta: lotnya BERHENTI ditawarkan (satu permintaan terbuka per lot),
+    #     dan Admin mendapat barisnya.
+    pid = await _minta(pg, pabrik)
+    assert await api.pk_g1_tersedia(user=op2) == [], \
+        "lot yang sudah diminta masih ditawarkan — penolakan yang bisa dihindari"
+    tunggu = await api.permintaan_menunggu_keputusan(user=adm)
+    assert [t["value"] for t in tunggu] == [str(pid)]
+    assert pabrik["lot"] in tunggu[0]["label"], \
+        "Admin disuruh mengenali permintaan dari nomor barisnya"
+    assert await api.permintaan_siap_dimuat(user=op2) == []
+
+    # 2 · disetujui: pindah ke daftar Gudang 2, berikut tujuannya.
+    await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
+    assert await api.permintaan_menunggu_keputusan(user=adm) == []
+    siap = await api.permintaan_siap_dimuat(user=op2)
+    assert [s["value"] for s in siap] == [str(pid)]
+    assert "Silo A" in siap[0]["label"], "tujuannya tak disebut di daftar"
+
+    # 3 · dikirim: pindah ke daftar penutupan Admin.
+    await _kirim(pg, pabrik, pid, berat=6_000)
+    assert await api.permintaan_siap_dimuat(user=op2) == []
+    tutup = await api.permintaan_menunggu_ditutup(user=adm)
+    assert [t["value"] for t in tutup] == [str(pid)]
+    assert pabrik["lot"] in tutup[0]["label"]

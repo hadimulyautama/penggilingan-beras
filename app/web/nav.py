@@ -116,7 +116,21 @@ TAB = (
     # membedakan gudang tempatnya bekerja hari ini.
     ("stok_produk", "/stok-produk", "Stok Produk",
      "Beras dan hasil samping yang sudah jadi", None),
+    # ── Kabar — keputusan pemilik 26 September 2026 ──
+    #
+    # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum
+    # diverifikasi, pengeringan telat, penyosohan selesai, packing, rantai
+    # permintaan PK) dan sampai hari itu tak satu pun layar membacanya. Kabar
+    # yang ditulis tanpa pembaca sama saja tak ditulis.
+    #
+    # Tempatnya SESUDAH Laporan dan bukan di puncak laci, dan itu disengaja:
+    # yang menagih pekerjaan tetap Antrian tunggu dan Menunggu keputusan. Kabar
+    # adalah yang SUDAH TERJADI dan perlu diketahui — sedudukan dengan Laporan,
+    # bukan dengan antrean. Pintu kabar yang berdiri di atas antrean akan
+    # ditekan lebih dulu tiap pagi, dan pekerjaan hari itu terbaca belakangan.
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
+    ("kabar",      "/kabar",      "Kabar",
+     "Yang perlu Anda ketahui, 7 hari terakhir", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      MEJA),
     ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None),
@@ -204,4 +218,5 @@ def _KOSONG() -> dict:
     lebih membingungkan daripada pintu yang dibuka lalu ternyata kosong.
     """
     return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
-            "PRODUK": 0, "MUTU_AKTIF": True, "PINTU_MATI": ()}
+            "PRODUK": 0, "KABAR": 0, "KABAR_MERAH": False,
+            "MUTU_AKTIF": True, "PINTU_MATI": ()}
