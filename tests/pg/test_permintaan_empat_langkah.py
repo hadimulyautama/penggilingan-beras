@@ -100,12 +100,14 @@ async def _acc(pg, pabrik, pid: int, *, tujuan="A", berat=6_000):
                              berat=berat)
 
 
-async def _kirim(pg, pabrik, pid: int, *, berat=6_000):
+async def _kirim(pg, pabrik, pid: int, *, berat=6_000, oleh="op2"):
+    """Yang memuat operator GUDANG 2 sejak 26 September 2026 — lihat
+    `test_yang_memuat_gudang2_yang_diberi_tahu_gudang1`."""
     from app.models import User
     from app.services.permintaan_pk import kirim
 
     async with pg() as db:
-        u = await db.get(User, pabrik["op1"])
+        u = await db.get(User, pabrik[oleh])
         return await kirim(db, user=u, permintaan_id=pid, berat=berat)
 
 
@@ -168,13 +170,51 @@ async def test_transfer_tak_lagi_menutup_permintaan_sendiri(pg, pabrik):
 
 # ─────────────────── Pagar tiap langkah ───────────────────
 
-async def test_gudang1_tak_bisa_mengirim_yang_belum_disetujui(pg, pabrik):
+async def test_tak_bisa_mengirim_yang_belum_disetujui(pg, pabrik):
     from app.services.permintaan_pk import PermintaanError
 
     pid = await _minta(pg, pabrik)
     with pytest.raises(PermintaanError) as e:
         await _kirim(pg, pabrik, pid)
     assert "menunggu keputusan Admin" in str(e.value)
+
+
+async def test_yang_memuat_gudang2_yang_diberi_tahu_gudang1(pg, pabrik):
+    """Keputusan pemilik 26 September 2026, sesudah menimbang dua kemungkinan.
+
+    Satu tangan yang memuat, satu tangan yang diberi tahu — dan alasannya bukan
+    wewenang melainkan siapa yang memegang barangnya saat angka itu diketik.
+    Yang mencatat "berat yang dimuat" harus orang yang melihat karungnya naik.
+
+    Dijaga DI PINTUNYA, bukan cuma di layar: menyembunyikan tombol bukan
+    penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
+    orang lain masih bisa mengirim.
+    """
+    import inspect
+
+    from fastapi import HTTPException
+
+    from app.models import User
+    from app.web import api
+    from tests.bantu import kode_saja
+
+    pintu = kode_saja(api.act_kirim_permintaan_pk)
+    assert "_is_g2_operator(user)" in pintu
+    assert "_is_g1_operator" not in pintu, "Gudang 1 masih bisa menekannya"
+    # Dan aksinya tak lagi ditawarkan di katalog operator Gudang 1.
+    sumber = inspect.getsource(api.actions_menu)
+    i = sumber.index("if g1:")
+    assert '"id": "kirim_permintaan_pk"' not in sumber[i:sumber.index("if g2:")]
+
+    pid = await _minta(pg, pabrik)
+    await _acc(pg, pabrik, pid, berat=6_000)
+    async with pg() as db:
+        op1 = await db.get(User, pabrik["op1"])
+        op1.role = "operator"
+        await db.commit()
+    with pytest.raises((HTTPException, Exception)):
+        await api.act_kirim_permintaan_pk(
+            api.KirimPermintaanReq(permintaan=str(pid), berat=100), user=op1)
 
 
 async def test_kirim_lebih_banyak_daripada_yang_disetujui_ditolak(pg, pabrik):
@@ -246,8 +286,11 @@ async def test_dua_admin_menekan_acc_bersamaan(pg, pabrik):
     assert f"ok:{float(b.berat_setuju_kg):.0f}" == menang[0].replace(".0", "")
 
 
-async def test_dua_operator_g1_menekan_kirim_bersamaan(pg, pabrik):
-    """Yang paling mahal bila lolos: DUA perpindahan atas PK yang sama."""
+async def test_dua_operator_menekan_kirim_bersamaan(pg, pabrik):
+    """Yang paling mahal bila lolos: DUA perpindahan atas PK yang sama.
+
+    Dua HP di satu gudang adalah keadaan sehari-hari — dan sejak yang memuat
+    hanya Gudang 2, keduanya justru ada di gudang yang sama."""
     from sqlalchemy import select
 
     from app.models import InternalTransfer, User
@@ -258,7 +301,7 @@ async def test_dua_operator_g1_menekan_kirim_bersamaan(pg, pabrik):
 
     async def kirim_satu(berat):
         async with pg() as db:
-            u = await db.get(User, pabrik["op1"])
+            u = await db.get(User, pabrik["op2"])
             try:
                 await kirim(db, user=u, permintaan_id=pid, berat=berat)
                 return f"ok:{berat}"
@@ -403,7 +446,14 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
         lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
     assert not [x for x in adm.meja if x.kelompok == "permintaan"], \
         "Admin menunggui pekerjaan yang bukan miliknya"
-    assert [x.aksi for x in g1.menunggu if x.kelompok == "permintaan"] == ["kirim_permintaan_pk"]
+    # Gudang 1 DIBERI TAHU, tanpa tombol: PK ini keluar dari gudangnya, tetapi
+    # yang memuat dan mencatat beratnya Gudang 2 (keputusan pemilik 26
+    # September 2026).
+    kabar = [x for x in g1.transit if x.kelompok == "permintaan"]
+    assert len(kabar) == 1 and kabar[0].aksi is None and not kabar[0].pilihan
+    assert "menunggu diambil Gudang 2" in kabar[0].keadaan
+    assert not [x for x in g1.menunggu if x.kelompok == "permintaan"], \
+        "kartunya masih menagih pekerjaan yang bukan miliknya"
     assert "menunggu dikirim Gudang 1" in lot.diminta_keadaan
 
     # 3 · dikirim — kembali ke Admin, untuk ditutup.
@@ -411,7 +461,8 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
     async with pg() as db:
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
     assert [x.aksi for x in adm.meja if x.kelompok == "permintaan"] == ["tutup_permintaan_pk"]
-    assert not [x for x in g1.menunggu if x.kelompok == "permintaan"]
+    assert not [x for x in g1.transit if x.kelompok == "permintaan"], \
+        "kabar untuk Gudang 1 tak hilang sesudah barangnya diambil"
 
 
 async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
@@ -419,9 +470,20 @@ async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
     operator Gudang 2 harus BERKARTU, bukan cuma melihat satu kalimat di lot
     yang kebetulan ia susuri di layar Stok.
 
-    Kartunya di TRANSIT, bukan di antrean: tak satu pun langkah alur ini
-    miliknya sesudah ia menekan Minta, dan lencana antrean yang menagih
-    pekerjaan yang tak bisa dikerjakan siapa pun akan berhenti dibaca.
+    Tempat kartunya ditentukan SIAPA yang memegang langkah berikutnya, bukan
+    di mana barangnya berada:
+
+      · `diminta` dan `dikirim` → TRANSIT tanpa tombol. Keduanya menunggu
+        Admin; lencana antrean yang menagih pekerjaan yang tak bisa dikerjakan
+        siapa pun akan berhenti dibaca;
+      · `disetujui` → ANTREAN bertombol. Pagar ini dulu menuntut ketiga
+        keadaan ada di Transit tanpa tombol, dengan alasan "tak satu pun
+        langkah alur ini miliknya sesudah ia menekan Minta". Alasan itu SALAH
+        pada langkah ketiga, dan pemilik mengoreksinya 26 September 2026:
+        "muat atau kirim harus tombol gudang 2, bukan hanya sekedar berubah
+        warna" — yang memuat memang dia, jadi tombolnya memang miliknya.
+        Pagarnya tidak dilunakkan: ia sekarang menuntut tombol itu ADA, dan
+        tetap menuntut dua keadaan lainnya tak berTombol.
     """
     from app.services.berjalan import untuk_operator_gudang2
 
@@ -439,9 +501,16 @@ async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
     await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
-    k = next(x for x in b.transit if x.judul == "Permintaan PK Anda")
-    assert "menunggu dikirim Gudang 1" in k.keadaan
+    # Sekarang BERTOMBOL, dan di antrean — inilah langkah yang miliknya.
+    assert not [x for x in b.transit if x.judul == "Permintaan PK Anda"], \
+        "yang sudah disetujui masih dipajang sebagai kabar, bukan pekerjaan"
+    k = next(x for x in b.menunggu if x.aksi == "kirim_permintaan_pk")
+    assert k.pilihan and k.pilihan[0][0] == "kirim_permintaan_pk", \
+        "kartu bertombol tanpa tombol"
+    assert k.nilai == str(pid) and k.pilihan[0][3] == str(pid), \
+        "tombolnya tak membawa permintaan yang mana"
     assert "Silo A" in (k.sub or ""), "tujuannya tak disebut"
+    assert "6.000" in k.isi, k.isi
 
     await _kirim(pg, pabrik, pid, berat=5_800)
     async with pg() as db:

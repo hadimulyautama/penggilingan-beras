@@ -713,24 +713,18 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/proses-berhenti",
                   "kosong": "Tidak ada proses yang sedang berhenti."},
              ]},
-            # ── Satu-satunya pemindahan PK yang boleh dikerjakan Gudang 1 ──
+            # Aksi "Kirim PK ke Gudang 2" DICABUT dari sini 26 September
+            # 2026, dan itu bukan pengetatan wewenang melainkan penunjukan
+            # tangan: yang mencatat "berat yang dimuat" harus orang yang
+            # melihat karungnya naik, dan yang mengambil PK adalah Gudang 2.
+            # Kalau keduanya bisa menekan, cepat atau lambat ada hari di mana
+            # yang satu mengetik angka atas muatan yang diangkat yang lain —
+            # dan selisih yang muncul kemudian tak punya orang untuk ditanya.
             #
-            # Dan ia TIDAK melebarkan `can_transfer_pk`: yang memberi izin
-            # adalah baris permintaannya, yang sudah disetujui Admin. Operator
-            # Gudang 1 tetap tak bisa memindahkan apa pun atas kehendak
-            # sendiri — itu justru kebalikan dari yang pemilik minta.
-            #
-            # Dibuka dari kartunya di Antrian tunggu, yang cuma muncul untuk
-            # permintaan berstatus `disetujui`.
-            {"id": "kirim_permintaan_pk", "label": "🚚 Kirim PK ke Gudang 2",
-             "post": "/api/actions/kirim-permintaan-pk",
-             "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
-                     "sekarang juga, dan Admin yang menutup catatannya.",
-             "fields": [
-                 {"name": "permintaan", "label": "Permintaan", "type": "text"},
-                 {"name": "berat", "label": "Berat yang dimuat (kg)",
-                  "type": "number", "wajib": True},
-             ]},
+            # Gudang 1 tetap DIBERI TAHU: kartunya ada di Transit, tanpa
+            # tombol. PK itu keluar dari gudangnya; melihatnya lenyap dari
+            # layar Stok tanpa pernah diberi tahu lebih buruk daripada
+            # kehilangan tombolnya.
         ]
     if g2:
         # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
@@ -848,15 +842,20 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  "fields": [
                      {"name": "kode_proses", "label": "Lot PK", "type": "text"},
                  ]},
-                # ── "Mulai pindah" dari kartu Stok yang sudah disetujui ──
+                # ── "Muat & kirim" atas permintaan yang sudah disetujui ──
                 #
-                # Permintaan pemilik 26 September 2026: yang memulai
-                # perpindahannya operator Gudang 2, dari kartu yang berubah
-                # warna. Spesifikasinya KEMBAR dengan milik Gudang 1 di atas —
-                # rutenya satu, keadaannya diperiksa layanan yang sama — dan
-                # yang berbeda cuma label serta kalimatnya, sebab yang
-                # membacanya berdiri di gudang yang lain.
-                {"id": "kirim_permintaan_pk", "label": "🚚 Mulai pindah PK",
+                # Keputusan pemilik 26 September 2026: yang memulai
+                # perpindahannya operator Gudang 2, dan pintunya harus TOMBOL
+                # — "muat atau kirim harus tombol gudang 2, bukan hanya
+                # sekedar berubah warna". Tombolnya berdiri di kartu antrean
+                # (`berjalan.untuk_operator_gudang2`); kartu Stok Gudang 1 yang
+                # berubah warna adalah jalan kedua ke formulir yang SAMA, untuk
+                # orang yang sedang menyusuri lotnya di sana.
+                #
+                # Gudang 1 tak punya kembarannya lagi: spesifikasi yang dulu
+                # berdiri di blok `if g1:` dicabut pada tanggal yang sama —
+                # alasannya di komentar tempatnya dulu berada.
+                {"id": "kirim_permintaan_pk", "label": "🚚 Muat & kirim PK",
                  "post": "/api/actions/kirim-permintaan-pk",
                  "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
                          "sekarang juga, dan Admin yang menutup catatannya.",
@@ -2555,15 +2554,21 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
     Yang memberi izin adalah BARIS PERMINTAANNYA — yang sudah disetujui Admin —
     dan layanan yang dipanggil memeriksa keadaan itu sambil mengunci barisnya.
 
-    KEDUA GUDANG boleh menekannya, sejak 26 September 2026 (permintaan
-    pemilik): "operator gudang 2 bisa memilih kartu tersebut dan mulai proses
-    pindah". Gudang 2 memulainya dari kartu Stok yang berubah warna; Gudang 1
-    tetap punya kartunya di Antrian tunggu. Keduanya memanggil layanan yang
-    SAMA, dan yang menekan lebih dulu yang menang — barisnya direbut dengan
-    satu `UPDATE` bersyarat, jadi yang kedua ditolak dengan kalimat yang
-    menyebut rekannya, bukan melahirkan perpindahan kedua.
+    YANG MENEKANNYA OPERATOR GUDANG 2, dan hanya dia (keputusan pemilik 26
+    September 2026): "operator gudang 2 bisa memilih kartu tersebut dan mulai
+    proses pindah". Pintunya dua, formulirnya satu: kartu BERTOMBOL di
+    antreannya sendiri ("muat atau kirim harus tombol gudang 2, bukan hanya
+    sekedar berubah warna" — pemilik, hari yang sama), dan kartu Stok Gudang 1
+    yang berubah warna untuk orang yang kebetulan sedang di layar itu.
+
+    Satu tangan, bukan dua — dan alasannya bukan wewenang melainkan siapa yang
+    memegang barangnya saat angka itu diketik. Yang mencatat "berat yang
+    dimuat" harus orang yang melihat karungnya naik. Operator Gudang 1 tetap
+    diberi tahu lewat kartu tanpa tombol di Transit: PK itu keluar dari
+    gudangnya, dan melihatnya lenyap tanpa kabar lebih buruk daripada tak
+    punya tombol.
     """
-    _require(await _is_g1_operator(user) or await _is_g2_operator(user))
+    _require(await _is_g2_operator(user))
     try:
         pid = int((req.permintaan or "").strip())
     except ValueError:

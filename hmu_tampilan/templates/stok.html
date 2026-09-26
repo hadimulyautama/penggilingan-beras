@@ -223,13 +223,21 @@
                `stok._keadaan_minta`, satu tempat. #}
             {# Yang sudah DISETUJUI bertombol lagi — dan tombolnya memulai
                perpindahan, bukan permintaan kedua. Sejak 26 September 2026
-               operator Gudang 2 yang memulainya dari kartu ini (permintaan
-               pemilik); operator Gudang 1 tetap punya kartunya sendiri di
-               Antrian tunggu, dan siapa pun yang menekan lebih dulu yang
-               menang — pagarnya di basis data, bukan di layar. #}
+               operator Gudang 2 yang memuat dan mencatat beratnya (keputusan
+               pemilik); Gudang 1 tinggal diberi kabar, tanpa tombol.
+
+               Ini PINTU KEDUA ke formulir yang sama. Pintu utamanya kartu
+               bertombol di antreannya — "muat atau kirim harus tombol gudang
+               2, bukan hanya sekedar berubah warna" (pemilik, hari yang sama).
+               Yang di sini melayani orang yang sedang menyusuri lot di layar
+               ini, dan labelnya dibuat SAMA supaya tak terbaca sebagai dua
+               pekerjaan yang berbeda.
+
+               Blok ini hanya tergambar untuk view POLESAN (`boleh_minta`), jadi
+               tak ada tombol yang ditawarkan kepada orang yang akan ditolak. #}
             {% if l.diminta_siap %}
               <a class="btn btn--kecil btn--utama"
-                 href="/stok?buka=kirim_permintaan_pk&amp;nilai={{ l.diminta_id }}">Mulai pindah</a>
+                 href="/stok?buka=kirim_permintaan_pk&amp;nilai={{ l.diminta_id }}">Muat &amp; kirim</a>
               <span class="bantu">Disetujui Admin — tinggal dimuat</span>
             {% elif l.diminta_oleh %}
               <span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>

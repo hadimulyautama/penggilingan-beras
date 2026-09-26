@@ -105,13 +105,13 @@ class LotPk:
     #: alur ini menurut pemilik, dan ia tak butuh kartu baru: satu kalimat di
     #: kartu yang sudah ia tatap tiap hari sudah cukup.
     diminta_keadaan: str = ""
-    #: Id permintaannya — dipakai tombol "Mulai pindah" di kartu Stok.
+    #: Id permintaannya — dipakai tombol "Muat & kirim" di kartu Stok.
     #: Sejak 26 September 2026 operator Gudang 2 memulai perpindahannya dari
     #: kartu itu (permintaan pemilik), jadi layar perlu menyebut permintaan
     #: MANA yang sedang ia kerjakan.
     diminta_id: int | None = None
     #: True saat permintaannya sudah DISETUJUI Admin — kartunya berubah warna,
-    #: dan tombol "Mulai pindah" muncul untuk yang meminta.
+    #: dan tombol "Muat & kirim" muncul untuk yang meminta.
     diminta_siap: bool = False
 
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
