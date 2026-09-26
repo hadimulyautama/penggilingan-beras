@@ -100,9 +100,9 @@ async def _acc(pg, pabrik, pid: int, *, tujuan="A", berat=6_000):
                              berat=berat)
 
 
-async def _kirim(pg, pabrik, pid: int, *, berat=6_000, oleh="op2"):
-    """Yang memuat operator GUDANG 2 sejak 26 September 2026 — lihat
-    `test_yang_memuat_gudang2_yang_diberi_tahu_gudang1`."""
+async def _kirim(pg, pabrik, pid: int, *, berat=6_000, oleh="op1"):
+    """Yang mengirim operator GUDANG 1 sejak 27 September 2026 — lihat
+    `test_yang_mengirim_gudang1_yang_ditunggu_gudang2`."""
     from app.models import User
     from app.services.permintaan_pk import kirim
 
@@ -179,12 +179,19 @@ async def test_tak_bisa_mengirim_yang_belum_disetujui(pg, pabrik):
     assert "menunggu keputusan Admin" in str(e.value)
 
 
-async def test_yang_memuat_gudang2_yang_diberi_tahu_gudang1(pg, pabrik):
-    """Keputusan pemilik 26 September 2026, sesudah menimbang dua kemungkinan.
+async def test_yang_mengirim_gudang1_yang_ditunggu_gudang2(pg, pabrik):
+    """Keputusan pemilik 27 September 2026, menjawab skenario B1 yang QA
+    tinggalkan terbuka ("di lapangan siapa yang sebenarnya mengangkat
+    karungnya?"): "gudang 1 yang mengirim", "jika sudah disetujui", "jadi
+    gudang 1 mulai proses kirim".
 
-    Satu tangan yang memuat, satu tangan yang diberi tahu — dan alasannya bukan
-    wewenang melainkan siapa yang memegang barangnya saat angka itu diketik.
-    Yang mencatat "berat yang dimuat" harus orang yang melihat karungnya naik.
+    ATURANNYA TIDAK BERUBAH, dan itu yang penting bagi pembaca berikutnya:
+    satu tangan, dan yang mencatat "berat yang dimuat" harus orang yang melihat
+    karungnya naik. Yang berubah keterangan lapangannya — orang itu Gudang 1.
+    Pagar ini sempat menuntut kebalikannya persis selama satu hari (26
+    September, `test_yang_memuat_gudang2_yang_diberi_tahu_gudang1`); kalau
+    kelak ia hendak dibalik lagi, yang diperiksa lebih dulu adalah lapangannya,
+    bukan tata letak layarnya.
 
     Dijaga DI PINTUNYA, bukan cuma di layar: menyembunyikan tombol bukan
     penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
@@ -199,22 +206,25 @@ async def test_yang_memuat_gudang2_yang_diberi_tahu_gudang1(pg, pabrik):
     from tests.bantu import kode_saja
 
     pintu = kode_saja(api.act_kirim_permintaan_pk)
-    assert "_is_g2_operator(user)" in pintu
-    assert "_is_g1_operator" not in pintu, "Gudang 1 masih bisa menekannya"
-    # Dan aksinya tak lagi ditawarkan di katalog operator Gudang 1.
+    assert "_is_g1_operator(user)" in pintu
+    assert "_is_g2_operator" not in pintu, "Gudang 2 masih bisa menekannya"
+    # Dan aksinya ditawarkan di katalog Gudang 1, BUKAN Gudang 2.
     sumber = inspect.getsource(api.actions_menu)
-    i = sumber.index("if g1:")
-    assert '"id": "kirim_permintaan_pk"' not in sumber[i:sumber.index("if g2:")]
+    g1, g2 = sumber.index("if g1:"), sumber.index("if g2:")
+    assert '"id": "kirim_permintaan_pk"' in sumber[g1:g2], \
+        "yang mengirim tak punya aksinya di katalog"
+    assert '"id": "kirim_permintaan_pk"' not in sumber[g2:], \
+        "Gudang 2 masih ditawari pengiriman"
 
     pid = await _minta(pg, pabrik)
     await _acc(pg, pabrik, pid, berat=6_000)
     async with pg() as db:
-        op1 = await db.get(User, pabrik["op1"])
-        op1.role = "operator"
+        op2 = await db.get(User, pabrik["op2"])
+        op2.role = "operator"
         await db.commit()
     with pytest.raises((HTTPException, Exception)):
         await api.act_kirim_permintaan_pk(
-            api.KirimPermintaanReq(permintaan=str(pid), berat=100), user=op1)
+            api.KirimPermintaanReq(permintaan=str(pid), berat=100), user=op2)
 
 
 async def test_kirim_lebih_banyak_daripada_yang_disetujui_ditolak(pg, pabrik):
@@ -446,14 +456,15 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
         lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
     assert not [x for x in adm.meja if x.kelompok == "permintaan"], \
         "Admin menunggui pekerjaan yang bukan miliknya"
-    # Gudang 1 DIBERI TAHU, tanpa tombol: PK ini keluar dari gudangnya, tetapi
-    # yang memuat dan mencatat beratnya Gudang 2 (keputusan pemilik 26
-    # September 2026).
-    kabar = [x for x in g1.transit if x.kelompok == "permintaan"]
-    assert len(kabar) == 1 and kabar[0].aksi is None and not kabar[0].pilihan
-    assert "menunggu diambil Gudang 2" in kabar[0].keadaan
-    assert not [x for x in g1.menunggu if x.kelompok == "permintaan"], \
-        "kartunya masih menagih pekerjaan yang bukan miliknya"
+    # Gudang 1 mendapat PEKERJAAN, bertombol, di antreannya (keputusan pemilik
+    # 27 September 2026: "gudang 1 yang mengirim"). Kartu ini sempat jadi kabar
+    # tanpa tombol selama satu hari, ketika tangan yang memuat disangka Gudang 2.
+    kerja = [x for x in g1.menunggu if x.kelompok == "permintaan"]
+    assert len(kerja) == 1 and kerja[0].aksi == "kirim_permintaan_pk"
+    assert kerja[0].pilihan and kerja[0].nilai == str(pid)
+    assert "menunggu dikirim Gudang 1" in kerja[0].keadaan
+    assert not [x for x in g1.transit if x.kelompok == "permintaan"], \
+        "pekerjaannya dipajang sebagai kabar, bukan sebagai tugas"
     assert "menunggu dikirim Gudang 1" in lot.diminta_keadaan
 
     # 3 · dikirim — kembali ke Admin, untuk ditutup.
@@ -461,8 +472,8 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
     async with pg() as db:
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
     assert [x.aksi for x in adm.meja if x.kelompok == "permintaan"] == ["tutup_permintaan_pk"]
-    assert not [x for x in g1.transit if x.kelompok == "permintaan"], \
-        "kabar untuk Gudang 1 tak hilang sesudah barangnya diambil"
+    assert not [x for x in g1.menunggu if x.kelompok == "permintaan"], \
+        "kartu Gudang 1 tak hilang sesudah barangnya berangkat"
 
 
 async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
@@ -470,20 +481,16 @@ async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
     operator Gudang 2 harus BERKARTU, bukan cuma melihat satu kalimat di lot
     yang kebetulan ia susuri di layar Stok.
 
-    Tempat kartunya ditentukan SIAPA yang memegang langkah berikutnya, bukan
-    di mana barangnya berada:
+    KETIGA keadaannya di TRANSIT, tanpa tombol: tak satu pun langkah alur ini
+    miliknya sesudah ia menekan Minta — Admin menyetujui, GUDANG 1 mengirim
+    (keputusan pemilik 27 September 2026), Admin menutup. Lencana antrean yang
+    menagih pekerjaan yang tak bisa dikerjakan siapa pun akan berhenti dibaca.
 
-      · `diminta` dan `dikirim` → TRANSIT tanpa tombol. Keduanya menunggu
-        Admin; lencana antrean yang menagih pekerjaan yang tak bisa dikerjakan
-        siapa pun akan berhenti dibaca;
-      · `disetujui` → ANTREAN bertombol. Pagar ini dulu menuntut ketiga
-        keadaan ada di Transit tanpa tombol, dengan alasan "tak satu pun
-        langkah alur ini miliknya sesudah ia menekan Minta". Alasan itu SALAH
-        pada langkah ketiga, dan pemilik mengoreksinya 26 September 2026:
-        "muat atau kirim harus tombol gudang 2, bukan hanya sekedar berubah
-        warna" — yang memuat memang dia, jadi tombolnya memang miliknya.
-        Pagarnya tidak dilunakkan: ia sekarang menuntut tombol itu ADA, dan
-        tetap menuntut dua keadaan lainnya tak berTombol.
+    ⚠ Pagar ini sempat menuntut `disetujui` berdiri di ANTREAN dengan tombol,
+    selama satu hari (26 September), ketika tangan yang memuat disangka Gudang
+    2. Yang menentukan bukan enak atau tidaknya tata letak melainkan siapa yang
+    mengangkat karungnya di lapangan; pemilik menjawabnya Gudang 1. Kalau kelak
+    hendak dibalik lagi, itu yang diperiksa lebih dulu.
     """
     from app.services.berjalan import untuk_operator_gudang2
 
@@ -501,16 +508,13 @@ async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
     await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
-    # Sekarang BERTOMBOL, dan di antrean — inilah langkah yang miliknya.
-    assert not [x for x in b.transit if x.judul == "Permintaan PK Anda"], \
-        "yang sudah disetujui masih dipajang sebagai kabar, bukan pekerjaan"
-    k = next(x for x in b.menunggu if x.aksi == "kirim_permintaan_pk")
-    assert k.pilihan and k.pilihan[0][0] == "kirim_permintaan_pk", \
-        "kartu bertombol tanpa tombol"
-    assert k.nilai == str(pid) and k.pilihan[0][3] == str(pid), \
-        "tombolnya tak membawa permintaan yang mana"
+    k = next(x for x in b.transit if x.judul == "Permintaan PK Anda")
+    assert "menunggu dikirim Gudang 1" in k.keadaan
     assert "Silo A" in (k.sub or ""), "tujuannya tak disebut"
-    assert "6.000" in k.isi, k.isi
+    assert k.aksi is None and not k.pilihan, \
+        "peminta ditawari tombol kirim yang pintunya menolak dia"
+    assert not [x for x in b.menunggu if x.aksi == "kirim_permintaan_pk"], \
+        "pengiriman menagih lencana antrean orang yang tak mengirim"
 
     await _kirim(pg, pabrik, pid, berat=5_800)
     async with pg() as db:
@@ -650,7 +654,11 @@ async def test_setiap_langkah_rantai_meninggalkan_kabarnya(pg, pabrik):
                for k in kabar)
     # Isinya menyebut TINDAKANNYA, bukan cuma keadaannya.
     assert "menunggu keputusan" in kabar[0].pesan
-    assert "DISETUJUI" in kabar[1].pesan and "dimuat" in kabar[1].pesan
+    assert "DISETUJUI" in kabar[1].pesan
+    # Satu kabar, dua gudang — `notifications` tak punya kolom orang, jadi
+    # kalimatnya yang menyebut bagian masing-masing.
+    assert "Gudang 1 yang memuat" in kabar[1].pesan
+    assert "Gudang 2 menunggu" in kabar[1].pesan
     assert "ditutup" in kabar[2].pesan
 
 
@@ -743,16 +751,18 @@ async def test_gugur_sesudah_disetujui_mengabari_dua_pihak(pg, pabrik):
 async def test_kalimat_persetujuan_menyebut_gudang_yang_benar(pg, pabrik):
     """Temuan QA 26 September 2026 pada 9c5a4c0, kecil dan pasti.
 
-    Pesan sesudah ACC dulu berbunyi "Gudang 1 melihatnya di Antrian tunggu, dan
-    merekalah yang memuat". Dua-duanya salah, dan SELURUH layar lain berkata
-    sebaliknya: yang memuat Gudang 2, kartu Gudang 1 berdiri di Sedang berjalan
-    blok Transit tanpa tombol, dan operator Gudang 1 yang menekan pintunya
-    menerima 403. Admin yang membaca kalimat lama akan menunggu Gudang 1
-    mengerjakan sesuatu yang justru ditolak untuk mereka.
+    Kalimat ini sudah DUA KALI menyebut gudang yang salah — sekali karena
+    tertinggal dari rancangan lama, sekali lagi karena tangannya berpindah.
+    Maka yang dijaga bukan bunyinya melainkan ATURANNYA: ia harus mengatakan
+    hal yang sama dengan kartu-kartunya. Admin yang membaca kalimat yang salah
+    akan menunggu gudang yang pintunya justru menolak mereka dengan 403.
+
+    Sejak 27 September 2026: yang memuat Gudang 1, kartunya bertombol di
+    Antrian tunggu Gudang 1, Gudang 2 menunggu di Transit-nya.
 
     Diuji pada KALIMAT YANG DIKEMBALIKAN, bukan pada sumbernya: komentar di
-    sebelahnya mengutip kalimat lama supaya sejarahnya tak hilang, dan pagar
-    yang membaca sumber akan tersandung kutipan itu.
+    sebelahnya mengutip kalimat-kalimat lama supaya sejarahnya tak hilang, dan
+    pagar yang membaca sumber akan tersandung kutipan itu.
     """
     from app.models import User
     from app.web import api
@@ -764,12 +774,11 @@ async def test_kalimat_persetujuan_menyebut_gudang_yang_benar(pg, pabrik):
         api.AccPermintaanReq(permintaan=str(pid), tujuan="A", berat=6_000),
         user=adm)
     pesan = jawab["pesan"]
-    assert "Gudang 2 yang menjemput" in pesan, pesan
-    assert "Antrian tunggu" not in pesan, "layar Gudang 1 disebut salah"
-    assert "merekalah yang memuat" not in pesan
-    # Dan ia tetap menyebut bahwa Gudang 1 diberi tahu — kehilangan tombol tanpa
-    # kehilangan kabar adalah bagian yang disengaja.
-    assert "Gudang 1 diberi tahu" in pesan and "Sedang berjalan" in pesan
+    assert "Gudang 1 yang memuat" in pesan, pesan
+    assert "Gudang 2 yang menjemput" not in pesan, "tangan lama masih disebut"
+    # Dan ia menunjuk layar yang benar: kartunya memang di Antrian tunggu
+    # Gudang 1, bukan di Transit seperti sehari sebelumnya.
+    assert "Antrian tunggu" in pesan
 
 
 async def test_tiap_langkah_menawarkan_daftarnya_bukan_kotak_ketik(pg, pabrik):
@@ -789,6 +798,7 @@ async def test_tiap_langkah_menawarkan_daftarnya_bukan_kotak_ketik(pg, pabrik):
 
     async with pg() as db:
         adm = await db.get(User, pabrik["admin"])
+        op1 = await db.get(User, pabrik["op1"])
         op2 = await db.get(User, pabrik["op2"])
 
     # 0 · sebelum diminta: lotnya ditawarkan kepada Gudang 2.
@@ -806,18 +816,87 @@ async def test_tiap_langkah_menawarkan_daftarnya_bukan_kotak_ketik(pg, pabrik):
     assert [t["value"] for t in tunggu] == [str(pid)]
     assert pabrik["lot"] in tunggu[0]["label"], \
         "Admin disuruh mengenali permintaan dari nomor barisnya"
-    assert await api.permintaan_siap_dimuat(user=op2) == []
+    assert await api.permintaan_siap_dimuat(user=op1) == []
 
-    # 2 · disetujui: pindah ke daftar Gudang 2, berikut tujuannya.
+    # 2 · disetujui: pindah ke daftar GUDANG 1 — yang mengirim — berikut
+    #     tujuannya (keputusan pemilik 27 September 2026).
     await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
     assert await api.permintaan_menunggu_keputusan(user=adm) == []
-    siap = await api.permintaan_siap_dimuat(user=op2)
+    siap = await api.permintaan_siap_dimuat(user=op1)
     assert [s["value"] for s in siap] == [str(pid)]
     assert "Silo A" in siap[0]["label"], "tujuannya tak disebut di daftar"
 
     # 3 · dikirim: pindah ke daftar penutupan Admin.
     await _kirim(pg, pabrik, pid, berat=6_000)
-    assert await api.permintaan_siap_dimuat(user=op2) == []
+    assert await api.permintaan_siap_dimuat(user=op1) == []
     tutup = await api.permintaan_menunggu_ditutup(user=adm)
     assert [t["value"] for t in tutup] == [str(pid)]
     assert pabrik["lot"] in tutup[0]["label"]
+
+
+async def test_lot_yang_habis_terkirim_hilang_dari_stok_gudang1(pg, pabrik):
+    """Permintaan pemilik 27 September 2026: "jika sudah gudang 1 menekan
+    tombol kirim selesai. setelah diverifikasi oleh admin. kartu lot di stock
+    gudang 1 harusnya hilang."
+
+    Diuji sebagai RANTAI, bukan pada satu titik — sebab kartunya bisa hilang
+    lalu muncul kembali. `tutup_admin` membetulkan bobot dengan membatalkan
+    perpindahannya lalu mencatat ulang (peristiwa lawan, bukan UPDATE diam-diam),
+    dan di antara keduanya stok lot ini berubah dua kali. Pagar yang cuma
+    melihat keadaan akhir akan lulus walau kartunya sempat berkedip.
+    """
+    from app.models import User
+    from app.services.permintaan_pk import tutup_admin
+    from app.services.stok import pk_gudang1
+
+    async def kartu():
+        async with pg() as db:
+            return [l for l in await pk_gudang1(db) if l.kode == pabrik["lot"]]
+
+    assert len(await kartu()) == 1, "lot belum apa-apa sudah tak berkartu"
+
+    pid = await _minta(pg, pabrik)
+    assert len(await kartu()) == 1, "kartunya hilang hanya karena diminta"
+    await _acc(pg, pabrik, pid, berat=6_000)
+    assert len(await kartu()) == 1, "kartunya hilang sebelum barangnya berangkat"
+
+    # Dikirim SELURUHNYA: 6.000 kg dari lot 6.000 kg.
+    await _kirim(pg, pabrik, pid, berat=6_000)
+    assert await kartu() == [], "PK sudah berangkat tapi kartunya masih berdiri"
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tutup_admin(db, user=u, permintaan_id=pid, berat_final=6_000)
+    assert await kartu() == [], \
+        "kartunya muncul lagi sesudah Admin menutup — pembetulan bobot " \
+        "membatalkan perpindahan lalu mencatat ulang; salah satunya tak pulih"
+
+
+async def test_pembetulan_bobot_mengembalikan_sisanya_ke_kartu(pg, pabrik):
+    """Sisi lain dari butir yang sama, dan ia WAJIB berlawanan arah.
+
+    Kalau Admin menutup dengan bobot LEBIH KECIL daripada yang dimuat, selisih
+    itu tak pernah berangkat — ia masih berdiri di lantai Gudang 1. Kartunya
+    harus KEMBALI, berisi sisanya.
+
+    Tanpa pagar ini, "kartu lot harus hilang" mudah dikerjakan dengan cara yang
+    salah — menyembunyikan kartu begitu permintaannya ditutup, apa pun bobotnya
+    — dan PK yang tak jadi berangkat lenyap dari angka stok tanpa satu pun
+    galat.
+    """
+    from app.models import User
+    from app.services.permintaan_pk import tutup_admin
+    from app.services.stok import pk_gudang1
+
+    pid = await _minta(pg, pabrik)
+    await _acc(pg, pabrik, pid, berat=6_000)
+    await _kirim(pg, pabrik, pid, berat=6_000)
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tutup_admin(db, user=u, permintaan_id=pid, berat_final=5_500)
+
+    async with pg() as db:
+        lot = [l for l in await pk_gudang1(db) if l.kode == pabrik["lot"]]
+    assert len(lot) == 1, "500 kg yang tak jadi berangkat lenyap dari Stok"
+    assert lot[0].tersedia == 500, lot[0].tersedia

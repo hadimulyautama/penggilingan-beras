@@ -50,15 +50,21 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     # akan "diperbaiki" dengan menaikkan angkanya — tanpa seorang pun membaca
     # apa yang ditambahkan.
     #
-    # Keempatnya membuka aksi yang SUDAH ada dan sudah tercatat. Dua yang
-    # terakhir bahkan tak menyentuh angka stok sama sekali: yang satu mencatat
-    # PERMINTAAN operator Gudang 2 agar lot ini dipindah, yang satu lagi
-    # MEMULAI perpindahan yang sudah disetujui Admin (permintaan pemilik 26
-    # September 2026 — kartunya berubah warna, lalu Gudang 2 yang memuatnya).
-    # Keduanya menulis lewat `permintaan_pk`, yang mengunci barisnya sendiri.
+    # Ketiganya membuka aksi yang SUDAH ada dan sudah tercatat. Yang ketiga
+    # bahkan tak menyentuh angka stok sama sekali: ia mencatat PERMINTAAN
+    # operator Gudang 2 agar lot ini dipindah, lewat `permintaan_pk` yang
+    # mengunci barisnya sendiri.
+    #
+    # `kirim_permintaan_pk` sempat ikut di sini selama satu hari (26 September
+    # 2026), ketika tangan yang memuat disangka Gudang 2 dan kartu Stok-nya
+    # diberi tombol "Muat & kirim". Pemilik menjawabnya 27 September: "gudang 1
+    # yang mengirim", "jika sudah disetujui". Blok ini hanya tergambar untuk
+    # view POLESAN, jadi tombolnya akan berdiri di layar orang yang pintunya
+    # menolak dia — dan itu dicabut, bukan disembunyikan dengan syarat baru.
     dibuka = set(re.findall(r"\?buka=([a-z_0-9]+)", teks))
-    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1",
-                      "kirim_permintaan_pk"}, dibuka
+    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1"}, dibuka
+    assert "kirim_permintaan_pk" not in teks, \
+        "layar Stok menawarkan pengiriman kepada gudang yang tak mengirim"
 
 
 def test_koreksi_stok_hanya_untuk_admin_keatas():

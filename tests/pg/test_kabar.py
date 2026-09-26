@@ -7,8 +7,8 @@ packing, dan rantai permintaan PK — dan tak satu pun layar membacanya untuk
 ditampilkan. Tabel itu dibaca hanya untuk menutup barisnya sendiri.
 
 Pagar di berkas ini menjaga dua hal yang paling mudah rusak diam-diam:
-lencananya harus menyebut angka yang sama dengan daftarnya, dan kabar Gudang 2
-tak boleh mampir ke layar operator Gudang 1.
+lencananya harus menyebut angka yang sama dengan daftarnya, dan kabar yang
+jelas milik satu gudang tak boleh mampir ke layar gudang sebelah.
 """
 from __future__ import annotations
 
@@ -102,16 +102,29 @@ async def test_lencana_menyebut_angka_yang_sama_dengan_daftarnya(pg, orang):
                 len([x for x in await daftar(db, u) if x.baru]), kunci
 
 
-async def test_kabar_gudang2_tak_mampir_ke_layar_gudang1(pg, orang):
+async def test_kabar_satu_gudang_tak_mampir_ke_gudang_sebelah(pg, orang):
     """`notifications` tak punya kolom orang, dan "operator" dipakai KEDUA
-    gudang. Tanpa saringan, operator selepan akan membaca kabar penolakan
-    permintaan yang tak pernah ia ajukan — dan kabar yang jelas bukan urusannya
-    mengajari orang melewatkan seluruh daftar."""
+    gudang. Tanpa saringan, operator polesan akan membaca kabar dryer yang tak
+    pernah ia sentuh — dan kabar yang jelas bukan urusannya mengajari orang
+    melewatkan seluruh daftar.
+
+    ⚠ `permintaan_pk` SENGAJA tidak disaring, dan pagar ini dulu menuntut
+    sebaliknya: ia memeriksa bahwa kabar permintaan hanya sampai ke Gudang 2.
+    Itu benar selama satu hari — 26 September 2026, ketika seluruh rantai
+    sesudah "Minta" disangka milik Gudang 2. Sejak pemilik menjawab skenario B1
+    pada 27 September ("gudang 1 yang mengirim"), rantai itu melibatkan KEDUA
+    gudang: yang satu meminta, yang lain memuat. Menyaringnya ke "g2" akan
+    menyembunyikan kabar "ada yang harus Anda kirim" dari orang yang harus
+    mengirimnya — persis kesalahan yang paling mahal di antara dua-duanya.
+
+    Jadi aturannya tidak dilunakkan, cuma dipakai pada jenis yang memang milik
+    satu gudang.
+    """
     from app.models import User
-    from app.services.kabar import daftar
+    from app.services.kabar import TIPE_GUDANG, daftar
 
     await _tulis(pg, tipe="permintaan_pk", untuk="operator",
-                 pesan="🔴 Gudang 2: permintaan lot LOT-01 DITOLAK Admin")
+                 pesan="🟢 Permintaan lot LOT-01 DISETUJUI — Gudang 1 memuat")
     await _tulis(pg, tipe="pengeringan_telat", untuk="operator",
                  pesan="🟡 Lot G-01 telat diperbarui")
 
@@ -119,7 +132,11 @@ async def test_kabar_gudang2_tak_mampir_ke_layar_gudang1(pg, orang):
         k1 = [x.tipe for x in await daftar(db, await db.get(User, orang["op1"]))]
         k2 = [x.tipe for x in await daftar(db, await db.get(User, orang["op2"]))]
         kadm = [x.tipe for x in await daftar(db, await db.get(User, orang["admin"]))]
-    assert k1 == ["pengeringan_telat"], k1
+    assert TIPE_GUDANG.get("pengeringan_telat") == "g1"
+    assert "permintaan_pk" not in TIPE_GUDANG, \
+        "kabar rantai permintaan disaring ke satu gudang — yang lain buta"
+    # Dryer milik Gudang 1 saja; permintaan milik keduanya.
+    assert sorted(k1) == ["pengeringan_telat", "permintaan_pk"], k1
     assert k2 == ["permintaan_pk"], k2
     # Admin memegang KEDUA gudang; kabar yang disembunyikan dari orang yang
     # bertanggung jawab atas keduanya adalah kabar yang hilang. Yang ia lihat

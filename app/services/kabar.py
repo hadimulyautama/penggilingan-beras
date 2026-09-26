@@ -60,10 +60,12 @@ ADMIN, OPERATOR = "admin", "operator"
 #: Jenis kabar yang HANYA berkepentingan bagi satu gudang. Lihat catatan di
 #: docstring modul: yang tak terdaftar dianggap milik keduanya.
 TIPE_GUDANG = {
-    # Permintaan lot PK selalu datang dari Gudang 2 dan dikerjakan Gudang 2;
-    # operator selepan tak punya satu tombol pun atasnya (keputusan pemilik
-    # 26 September 2026).
-    "permintaan_pk": "g2",
+    # `permintaan_pk` SENGAJA TIDAK di sini, dan itu perubahan 27 September
+    # 2026: rantainya melibatkan KEDUA gudang — Gudang 2 yang meminta, Gudang 1
+    # yang memuat dan mengirim sesudah Admin menyetujui. Sehari sebelumnya ia
+    # tercatat milik "g2" saja, dan dengan tangan yang sekarang itu akan
+    # menyembunyikan kabar "ada yang harus Anda kirim" dari orang yang harus
+    # mengirimnya.
     # Lot yang telat diperbarui berdiri di dryer Gudang 1.
     "pengeringan_telat": "g1",
 }

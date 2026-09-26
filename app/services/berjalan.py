@@ -1268,23 +1268,24 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             ]),
         ))
 
-    # ── PK yang sudah DISETUJUI Admin untuk diambil Gudang 2 ──
+    # ── PK yang sudah DISETUJUI Admin untuk dikirim ke Gudang 2 ──
     #
-    # KABAR, BUKAN TUGAS (keputusan pemilik 26 September 2026). Sehari
-    # sebelumnya kartu ini bertombol "Kirim ke Gudang 2" dan operator Gudang 1
-    # yang memuatnya. Yang diubah bukan wewenangnya melainkan tangannya: yang
-    # mencatat "berat yang dimuat" harus orang yang melihat karungnya naik, dan
-    # yang mengambil PK adalah Gudang 2. Dua orang yang sama-sama bisa menekan
-    # berarti, cepat atau lambat, satu angka diketik atas muatan yang diangkat
-    # orang lain.
+    # TUGAS, dan tugasnya Gudang 1 (keputusan pemilik 27 September 2026):
+    # "gudang 1 yang mengirim", "jika sudah disetujui", "jadi gudang 1 mulai
+    # proses kirim". Itu menjawab pertanyaan yang ditinggalkan QA sebagai
+    # skenario B1 — di lapangan siapa yang sebenarnya mengangkat karungnya.
     #
-    # Kartunya TETAP ADA, dan itu bagian yang tak boleh ikut dicabut: PK ini
-    # keluar dari gudangnya, dan melihat lot lenyap dari layar Stok tanpa
-    # pernah diberi tahu lebih buruk daripada kehilangan tombolnya. Ia tahu apa
-    # yang akan datang menjemput.
+    # Sehari sebelumnya kartu ini sempat jadi kabar tanpa tombol, dan tombolnya
+    # pindah ke Gudang 2. Aturannya SAMA dan tidak berubah — yang mencatat
+    # "berat yang dimuat" harus orang yang melihat karungnya naik, dan hanya
+    # satu tangan yang boleh menekan. Yang berubah keterangan lapangannya:
+    # orang itu Gudang 1.
     #
-    # Di TRANSIT, bukan antrean: lencana antrean menagih pekerjaan, dan
-    # pekerjaan ini bukan miliknya lagi.
+    # Ia berpagar pada BARISNYA, bukan pada peran: `can_transfer_pk` tak
+    # disentuh. Yang muncul di sini hanya permintaan berstatus `disetujui` —
+    # yang masih menunggu keputusan Admin TIDAK ditampilkan, sebab kartu yang
+    # belum boleh dikerjakan akan ditekan juga, dan yang menekannya menerima
+    # penolakan atas pekerjaan yang memang bukan haknya hari itu.
     from app.models import PermintaanPk
     from app.services import permintaan_pk as _pmt
 
@@ -1304,18 +1305,20 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
 
         lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
         kg = float(baris.berat_setuju_kg or 0)
-        b.transit.append(Baris(
+        b.menunggu.append(Baris(
             kode=kode_lot,
-            isi=f"Disetujui pindah {_kg(kg)} ke {lok} — menunggu diambil",
-            keadaan="menunggu diambil Gudang 2",
-            fase="giling",
+            isi=f"Admin menyetujui {_kg(kg)} ke {lok} — tinggal dimuat",
+            keadaan="menunggu dikirim Gudang 1",
+            aksi="kirim_permintaan_pk", nilai=str(baris.id), fase="giling",
             sejak=baris.waktu_setuju or baris.waktu_minta,
-            judul="PK ini akan dijemput Gudang 2",
+            judul="Kirim PK ke Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
             sub=f"{kode_lot} · tujuan {lok}",
             kelompok="permintaan",
-            ringkas=f"disetujui pindah ke {lok}",
-            nota="Gudang 2 yang memuat dan mencatat beratnya."))
+            nota="Catat yang BENAR-BENAR dimuat. Boleh kurang dari yang "
+                 "disetujui; lebih tidak.",
+            pilihan=[("kirim_permintaan_pk", "Kirim ke Gudang 2",
+                      "Barangnya berpindah sekarang juga", str(baris.id))]))
     # Pintu "Stok Produk" tak ditawarkan kepada operator selepan — lihat
     # catatan di `Berjalan.lencana()`.
     b.pintu_produk = False
@@ -1760,20 +1763,21 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     sedang berjalan bukan stoknya: ia belum ada di gudang ini.
 
     Yang menentukan tempat kartu permintaan bukan di mana barangnya berada,
-    melainkan SIAPA yang memegang langkah berikutnya:
+    melainkan SIAPA yang memegang langkah berikutnya — dan sejak 27 September
+    2026 TAK SATU PUN langkah sesudah "Minta" miliknya: Admin yang menyetujui,
+    Gudang 1 yang mengirim ("gudang 1 yang mengirim", "jika sudah disetujui",
+    "jadi gudang 1 mulai proses kirim" — pemilik), Admin lagi yang menutup.
 
-      · masih `diminta` (menunggu Admin) atau sudah `dikirim` (tinggal
-        ditutup Admin) → TRANSIT, tanpa tombol. Lencana antrean menagih
-        pekerjaan, dan kartu yang tak bisa dikerjakan siapa pun di layar ini
-        akan membuat lencananya tak pernah kembali nol — lencana yang tak
-        pernah nol mengajari orang mengabaikan lencana;
-      · sudah `disetujui` → ANTREAN, BERTOMBOL. Langkah berikutnya memang
-        miliknya: dialah yang memuat. Keputusan pemilik 26 September 2026,
-        "muat atau kirim harus tombol gudang 2, bukan hanya sekedar berubah
-        warna" — kartu Stok yang berubah warna memberi tahu lot mana yang
-        boleh diambil, tetapi ia menuntut orangnya membuka layar lain lalu
-        menyusuri kartu sampai menemukannya. Dan lencananya TETAP bisa
-        kembali nol, justru karena kartu ini bisa ia selesaikan sendiri.
+    Jadi ketiga keadaannya berdiri di TRANSIT, tanpa tombol. Lencana antrean
+    menagih pekerjaan, dan kartu yang tak bisa dikerjakan siapa pun di layar
+    ini akan membuat lencananya tak pernah kembali nol — lencana yang tak
+    pernah nol mengajari orang mengabaikan lencana.
+
+    ⚠ Kartu `disetujui` sempat berdiri di ANTREAN dengan tombol "Muat & kirim"
+    selama satu hari (26 September), ketika tangan yang memuat disangka Gudang
+    2. Kalau kelak ada yang memindahkannya ke antrean lagi, yang pertama harus
+    diperiksa adalah siapa yang mengangkat karungnya di lapangan — bukan enak
+    atau tidaknya tata letak.
 
     ⚠ `untuk_gudang2` di bawah BUKAN kode mati. Kalimat di sini dulu berbunyi
     "berbeda dari `untuk_gudang2`, yang dipakai Meja", dan app Meja dihapus 24
@@ -1805,10 +1809,10 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     # sisanya — ia berdiri di layar yang sama tempat ia menunggu pekerjaan
     # berikutnya.
     #
-    # Yang masih menunggu Admin TANPA TOMBOL, dan itu disengaja: langkah
-    # berikutnya bukan miliknya. Kartu bertombol yang ditekan lalu ditolak
-    # mengajari orang bahwa layarnya tak bisa dipercaya. Yang sudah disetujui
-    # justru sebaliknya — lihat cabang `DISETUJUI` di bawah.
+    # TANPA TOMBOL, dan itu disengaja: tak satu pun langkah alur ini miliknya
+    # sesudah menekan Minta (keputusan pemilik 27 September 2026 — Gudang 1
+    # yang mengirim). Kartu bertombol yang ditekan lalu ditolak mengajari orang
+    # bahwa layarnya tak bisa dipercaya.
     from app.models import PermintaanPk
     from app.services import permintaan_pk as _pmt
     from app.services.stok import _keadaan_minta
@@ -1825,29 +1829,6 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
         lok = (await label_tujuan(db, baris.tujuan, baris.silo_id)
                if baris.tujuan else "")
 
-        # ── YANG SUDAH DISETUJUI: kartu BERTOMBOL di antrean ──
-        #
-        # Keputusan pemilik 26 September 2026, alasannya di docstring. Kartu
-        # Stok yang berubah warna TETAP ada dan tetap berguna — ia menjawab
-        # "lot mana"; kartu ini menjawab "sekarang apa", di layar tempat ia
-        # menunggu pekerjaan berikutnya. `kelompok="permintaan"` membuatnya
-        # jatuh ke blok "Bisa dikerjakan sekarang", dan memang bisa.
-        if baris.status == _pmt.DISETUJUI:
-            b.menunggu.append(Baris(
-                kode=kode_lot,
-                isi=f"Admin menyetujui {_kg(kg)} ke {lok} — tinggal dimuat",
-                keadaan="siap diambil dari Gudang 1",
-                aksi="kirim_permintaan_pk", nilai=str(baris.id), fase="giling",
-                sejak=baris.waktu_setuju or baris.waktu_minta,
-                judul="Muat PK dari Gudang 1",
-                utama=(_kg(kg).removesuffix(" kg"), "kg"),
-                sub=f"{kode_lot} · tujuan {lok}",
-                kelompok="permintaan",
-                nota="Catat yang BENAR-BENAR dimuat. Boleh kurang dari yang "
-                     "disetujui; lebih tidak.",
-                pilihan=[("kirim_permintaan_pk", "Muat & kirim ke sini",
-                          "Barangnya berpindah sekarang juga", str(baris.id))]))
-            continue
 
         b.transit.append(Baris(
             kode=kode_lot,

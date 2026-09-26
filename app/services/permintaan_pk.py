@@ -293,13 +293,16 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     baris.disetujui_oleh, baris.waktu_setuju = user.id, now_local()
     await db.commit()
     await db.refresh(baris)
-    # Dikabari ke TANGAN YANG MEMUAT, yaitu Gudang 2 — dan ia sekaligus yang
-    # meminta, jadi satu kabar menjawab dua hal: permintaanmu disetujui, dan
-    # sekarang bagianmu.
+    # SATU kabar untuk DUA gudang, dan itu disengaja: `notifications` tak punya
+    # kolom orang, jadi keduanya membaca baris yang sama. Kalimatnya menyebut
+    # bagian masing-masing — Gudang 1 memuat (keputusan pemilik 27 September
+    # 2026), Gudang 2 menunggu barangnya. Dua baris terpisah bertarget sama
+    # cuma akan tampil dua kali di layar yang sama.
     await _kabar(db, baris, untuk="operator",
-                 pesan=f"🟢 Gudang 2: permintaan lot {await _kode_lot(db, baris)} "
-                       f"DISETUJUI {_kg(kg)} kg — tinggal dijemput dan dimuat. "
-                       "Kartunya di Antrian tunggu.",
+                 pesan=f"🟢 Permintaan lot {await _kode_lot(db, baris)} DISETUJUI "
+                       f"{_kg(kg)} kg — Gudang 1 yang memuat dan mengirim "
+                       "(kartunya di Antrian tunggu); Gudang 2 menunggu "
+                       "barangnya.",
                  prioritas="hijau")
     await db.commit()
     return baris
@@ -307,11 +310,12 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
 
 async def kirim(db: AsyncSession, *, user, permintaan_id: int,
                 berat: float | None) -> PermintaanPk:
-    """LANGKAH 3 — operator Gudang 2 menjemput dan memuat. BARANGNYA BERPINDAH.
+    """LANGKAH 3 — operator Gudang 1 memuat dan mengirim. BARANGNYA BERPINDAH.
 
-    Yang menekannya Gudang 2, bukan Gudang 1 (keputusan pemilik 26 September
-    2026): yang mencatat "berat yang dimuat" harus orang yang melihat karungnya
-    naik. Pagarnya di pintu aksinya (`_is_g2_operator`); di sini yang diperiksa
+    Yang menekannya Gudang 1 (keputusan pemilik 27 September 2026: "gudang 1
+    yang mengirim", "jika sudah disetujui"): yang mencatat "berat yang dimuat"
+    harus orang yang melihat karungnya naik, dan di lapangan orang itu Gudang
+    1. Pagarnya di pintu aksinya (`_is_g1_operator`); di sini yang diperiksa
     KEADAAN barisnya, bukan peran orangnya.
 
     Perpindahannya lewat `services.transfer`, jalur yang sudah ada: dua
@@ -398,7 +402,7 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
     # penutupan yang tertunda berarti angka yang belum dibetulkan.
     await _kabar(db, baris, untuk="admin",
                  pesan=f"🟡 Kiriman lot {kode_proses} {_kg(kg)} kg sudah dimuat "
-                       f"Gudang 2 ke {lokasi} — tinggal ditutup Admin "
+                       f"Gudang 1 ke {lokasi} — tinggal ditutup Admin "
                        "(betulkan bobotnya kalau timbangan berbeda).")
     await db.commit()
     return baris
