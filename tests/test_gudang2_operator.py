@@ -174,11 +174,28 @@ def test_masukkan_pk_dan_jeda_dijaga_di_server_bukan_di_menu():
 
 def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     """Antrean = tumpukan (per intake, boleh dipindah sebagian) + silo;
-    berjalan = mesin; tak ada transit dan tak ada kerja meja."""
+    berjalan = mesin; tak ada kerja meja.
+
+    TRANSIT: pagar ini semula menuntutnya KOSONG, dan niat itu benar untuk apa
+    yang ada saat itu — stok miliknya sendiri adalah antrean, bukan barang yang
+    dipantau (keputusan pemilik 12 September 2026). Sejak 25 September ada satu
+    hal yang memang bukan stoknya: permintaan PK yang sedang dalam perjalanan
+    dari Gudang 1, yang belum ada di gudang ini dan tak punya satu tombol pun
+    untuknya. Yang dijaga sekarang: Transit boleh memuat ITU SAJA, dan stoknya
+    sendiri tetap tak pernah masuk ke sana.
+    """
     kode = kode_saja(berjalan.untuk_operator_gudang2)
     assert "_kartu_tumpukan_g2(db)" in kode and "_kartu_silo_g2(db, asal_silo)" in kode
     assert "b.menunggu +=" in kode and "b.berjalan +=" in kode
-    assert "b.transit" not in kode and "b.meja" not in kode
+    assert "b.meja" not in kode
+    # Transit dipakai SEKALI, dan hanya untuk permintaan yang sedang berjalan.
+    assert kode.count("b.transit") == 1
+    i = kode.index("b.transit")
+    assert "PermintaanPk" in kode[:i], "Transit diisi sesuatu selain permintaan"
+    for stok in ("_kartu_tumpukan_g2", "_kartu_silo_g2"):
+        assert f"b.transit.append({stok}" not in kode and \
+            f"b.transit += await {stok}" not in kode, \
+            "stok Gudang 2 sendiri masuk ke Transit"
     tumpuk = kode_saja(berjalan._kartu_tumpukan_g2)
     assert "kelompok='tumpukan'" in tumpuk and "'pindah_tumpukan_silo'" in tumpuk
     sosoh = kode_saja(berjalan._kartu_penyosohan_g2)

@@ -409,3 +409,61 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
     assert [x.aksi for x in adm.menunggu if x.kelompok == "permintaan"] == ["tutup_permintaan_pk"]
     assert not [x for x in g1.menunggu if x.kelompok == "permintaan"]
+
+
+async def test_peminta_punya_kartunya_sendiri_sepanjang_alur(pg, pabrik):
+    """Butir pemilik yang paling mudah dianggap sudah beres, dan bukan:
+    operator Gudang 2 harus BERKARTU, bukan cuma melihat satu kalimat di lot
+    yang kebetulan ia susuri di layar Stok.
+
+    Kartunya di TRANSIT, bukan di antrean: tak satu pun langkah alur ini
+    miliknya sesudah ia menekan Minta, dan lencana antrean yang menagih
+    pekerjaan yang tak bisa dikerjakan siapa pun akan berhenti dibaca.
+    """
+    from app.services.berjalan import untuk_operator_gudang2
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    kartu = [x for x in b.transit if x.judul == "Permintaan PK Anda"]
+    assert len(kartu) == 1, f"peminta tak berkartu: {b.transit}"
+    assert "menunggu keputusan Admin" in kartu[0].keadaan
+    assert kartu[0].aksi is None and not kartu[0].pilihan, \
+        "kartu bertombol atas pekerjaan yang bukan miliknya"
+    # Dan ia TIDAK menambah lencana antrean.
+    assert not [x for x in b.menunggu if x.kode == pabrik["lot"]]
+
+    await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    k = next(x for x in b.transit if x.judul == "Permintaan PK Anda")
+    assert "menunggu dikirim Gudang 1" in k.keadaan
+    assert "Silo A" in (k.sub or ""), "tujuannya tak disebut"
+
+    await _kirim(pg, pabrik, pid, berat=5_800)
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    k = next(x for x in b.transit if x.judul == "Permintaan PK Anda")
+    assert "sudah dikirim" in k.keadaan
+    # Kabar yang menentukan apakah ia bisa mulai menyosoh hari ini.
+    assert k.nota and "boleh langsung disosoh" in k.nota
+    assert "5.800" in (k.utama[0] if k.utama else ""), k.utama
+
+
+async def test_kartu_peminta_hilang_sesudah_ditutup(pg, pabrik):
+    """Yang sudah selesai bukan lagi kabar — ia riwayat. Kartu yang tak pernah
+    hilang membuat layarnya berhenti menjadi daftar."""
+    from app.models import User
+    from app.services.berjalan import untuk_operator_gudang2
+    from app.services.permintaan_pk import tutup_admin
+
+    pid = await _minta(pg, pabrik)
+    await _acc(pg, pabrik, pid, berat=6_000)
+    await _kirim(pg, pabrik, pid, berat=6_000)
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tutup_admin(db, user=u, permintaan_id=pid, berat_final=6_000)
+
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    assert not [x for x in b.transit if x.judul == "Permintaan PK Anda"]

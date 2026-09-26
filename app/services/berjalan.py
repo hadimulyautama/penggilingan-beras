@@ -1673,7 +1673,19 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
       · `menunggu` = SELURUH stok PK di Gudang 2 — yang di lantai (tumpukan,
         per intake → pindah ke silo) dan yang di silo (→ mulai penyosohan);
       · `berjalan` = mesin yang menyala saja;
-      · tidak ada Transit, dan tidak ada kerja meja.
+      · tidak ada kerja meja.
+
+    TRANSIT lahir 25 September 2026, dan cuma untuk satu hal: permintaan PK
+    yang sedang dalam perjalanan dari Gudang 1. Keputusan 12 September yang
+    mengosongkan Transit berbicara tentang STOK MILIKNYA SENDIRI — PK yang
+    sudah di sini adalah antrean, bukan barang yang dipantau. Permintaan yang
+    sedang berjalan bukan stoknya: ia belum ada di gudang ini, dan tak ada
+    satu pun tombol untuknya.
+
+    Karena itu ia TIDAK di `menunggu`: lencana antrean menagih pekerjaan, dan
+    kartu yang tak bisa dikerjakan siapa pun di layar ini akan membuat
+    lencananya tak pernah kembali nol — lencana yang tak pernah nol mengajari
+    orang mengabaikan lencana.
 
     ⚠ `untuk_gudang2` di bawah BUKAN kode mati. Kalimat di sini dulu berbunyi
     "berbeda dari `untuk_gudang2`, yang dipakai Meja", dan app Meja dihapus 24
@@ -1694,6 +1706,55 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
         return memo[silo_id]
 
     b = Berjalan()
+
+    # ── Permintaan PK yang sedang dalam perjalanan ke sini ──
+    #
+    # Yang meminta menekan tombol lalu tak pernah diberi kabar lagi sampai
+    # barangnya muncul — atau tidak muncul; itu bagian yang paling kurang dari
+    # seluruh alur menurut pemilik (25 September 2026). Kalimat keadaan di
+    # kartu Stok menjawab sebagian: ia terbaca saat orangnya kebetulan membuka
+    # Stok dan kebetulan menyusuri lot yang ia minta. Kartu ini menjawab
+    # sisanya — ia berdiri di layar yang sama tempat ia menunggu pekerjaan
+    # berikutnya.
+    #
+    # TANPA TOMBOL, dan itu disengaja: tak satu pun langkah alur ini miliknya
+    # sesudah menekan Minta. Kartu bertombol yang ditekan lalu ditolak
+    # mengajari orang bahwa layarnya tak bisa dipercaya.
+    from app.models import PermintaanPk
+    from app.services import permintaan_pk as _pmt
+    from app.services.stok import _keadaan_minta
+
+    for baris, kode_lot in (await db.execute(
+        select(PermintaanPk, MillingProcess.kode_proses)
+        .join(MillingProcess, MillingProcess.id == PermintaanPk.milling_process_id)
+        .where(PermintaanPk.status.in_(_pmt.HIDUP))
+        .order_by(PermintaanPk.waktu_minta)
+    )).all():
+        from app.penggilingan.gudang2.service import label_tujuan
+
+        kg = float(baris.berat_kirim_kg or baris.berat_setuju_kg or 0)
+        lok = (await label_tujuan(db, baris.tujuan, baris.silo_id)
+               if baris.tujuan else "")
+        b.transit.append(Baris(
+            kode=kode_lot,
+            isi=f"PK dari Gudang 1 · {_keadaan_minta(baris.status)}",
+            keadaan=_keadaan_minta(baris.status),
+            # `aksi` sengaja TIDAK disebut sama sekali, bukan disebut None:
+            # baris yang membawa `aksi` wajib membawa `pilihan` juga (kartu
+            # yang ditekan harus membentang, bukan melempar lembar), dan
+            # kartu ini memang tak punya tindakan apa pun.
+            fase="giling",
+            sejak=baris.waktu_minta,
+            judul="Permintaan PK Anda",
+            utama=((_kg(kg).removesuffix(" kg"), "kg") if kg else None),
+            sub=(f"{kode_lot}" + (f" · tujuan {lok}" if lok else "")),
+            ringkas=_keadaan_minta(baris.status),
+            # Yang sudah dikirim sudah BISA DIPAKAI — itu kabar, bukan sekadar
+            # keadaan, dan ia yang menentukan apakah orangnya bisa mulai
+            # menyosoh hari ini atau menunggu besok.
+            nota=("Sudah ada di gudang ini — boleh langsung disosoh."
+                  if baris.status == _pmt.DIKIRIM else None)))
+
     # Tiket PK yang belum dicatat: kartu DIAM. Penempatan PK datang bukan tugas
     # operator (pemilik, 12 September 2026) dan itu tidak diubah — tapi
     # barangnya berdiri di halamannya, dan ia tak boleh jadi orang terakhir yang
