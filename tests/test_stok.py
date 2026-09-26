@@ -50,11 +50,15 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     # akan "diperbaiki" dengan menaikkan angkanya — tanpa seorang pun membaca
     # apa yang ditambahkan.
     #
-    # Ketiganya membuka aksi yang SUDAH ada dan sudah tercatat. Yang ketiga
-    # bahkan tak menyentuh stok sama sekali: ia mencatat PERMINTAAN operator
-    # Gudang 2 agar lot ini dipindah, dan yang memindahkan tetap Admin.
+    # Keempatnya membuka aksi yang SUDAH ada dan sudah tercatat. Dua yang
+    # terakhir bahkan tak menyentuh angka stok sama sekali: yang satu mencatat
+    # PERMINTAAN operator Gudang 2 agar lot ini dipindah, yang satu lagi
+    # MEMULAI perpindahan yang sudah disetujui Admin (permintaan pemilik 26
+    # September 2026 — kartunya berubah warna, lalu Gudang 2 yang memuatnya).
+    # Keduanya menulis lewat `permintaan_pk`, yang mengunci barisnya sendiri.
     dibuka = set(re.findall(r"\?buka=([a-z_0-9]+)", teks))
-    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1"}, dibuka
+    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1",
+                      "kirim_permintaan_pk"}, dibuka
 
 
 def test_koreksi_stok_hanya_untuk_admin_keatas():
@@ -67,11 +71,19 @@ def test_koreksi_stok_hanya_untuk_admin_keatas():
     assert "boleh_ubah=akun.is_admin" in sumber, "gerbang peran tak dipakai"
 
     teks = TPL.read_text()
-    # Tombolnya, lembarnya, DAN skripnya semua di balik gerbang yang sama —
-    # tombol tersembunyi yang lembarnya tetap termuat masih bisa dibuka lewat
-    # alamat.
+    # Tombol KOREKSI-nya tetap di balik gerbang yang sama; yang berubah 26
+    # September 2026 cuma lembar & skripnya, yang kini dimuat untuk siapa pun
+    # yang punya tombol di halaman ini. Sebabnya cacat: sampai hari itu
+    # syaratnya `boleh_ubah` saja, jadi tombol "Minta lot ini" milik operator
+    # Gudang 2 tak pernah bisa membuka borangnya — menekannya hanya memuat
+    # ulang /stok, dan tak ada yang menangkap `?buka=`.
+    #
+    # Yang dijaga sekarang: koreksi tetap milik admin, dan lembarnya tak
+    # pernah termuat untuk yang tak punya tombol sama sekali (operator
+    # selepan: `boleh_ubah` dan `boleh_minta` dua-duanya salah).
     assert teks.count("boleh_ubah") >= 3
-    assert "{% if boleh_ubah %}" in teks
+    assert "{% if boleh_ubah or boleh_minta %}" in teks
+    assert "{% if boleh_ubah and not l.berjalan %}" in teks
     # Tak ditawarkan selama mesin masih giling: angkanya belum final di sana.
     assert "boleh_ubah and not l.berjalan" in teks
 

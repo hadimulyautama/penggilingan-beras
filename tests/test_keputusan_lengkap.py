@@ -299,6 +299,12 @@ def test_tombol_minta_hanya_untuk_view_polesan():
     tpl = (pathlib.Path(__file__).resolve().parents[1]
            / "hmu_tampilan/templates/stok.html").read_text()
     assert "{% if boleh_minta and not l.berjalan %}" in tpl
-    # Yang sudah diminta menyebut keadaannya, bukan menawarkan tombol kedua.
-    assert "{% if l.diminta_oleh %}" in tpl
+    # Yang sudah diminta menyebut keadaannya, bukan menawarkan tombol kedua —
+    # KECUALI yang sudah disetujui Admin, yang sejak 26 September 2026
+    # bertombol lagi: tombolnya MEMULAI PERPINDAHAN, bukan permintaan kedua
+    # (permintaan pemilik). Urutannya penting, jadi diuji sebagai rantai.
+    assert "{% if l.diminta_siap %}" in tpl
+    assert "{% elif l.diminta_oleh %}" in tpl
+    assert tpl.index("l.diminta_siap") < tpl.index("l.diminta_oleh")
+    assert "buka=kirim_permintaan_pk" in tpl
     assert "buka=minta_pk_g1" in tpl

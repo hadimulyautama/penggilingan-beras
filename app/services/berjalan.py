@@ -1953,10 +1953,15 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # ── Lot PK yang DIMINTA operator Gudang 2 ──
     #
     # Keputusan pemilik 24 September 2026: operator polesan melihat lot PK
-    # Gudang 1 dan boleh MEMINTA satu dipindah; yang mencatat perpindahan tetap
-    # Admin. Kartunya di `menunggu`, bukan `meja`: tak ada yang diputuskan di
-    # sini — barangnya ada, catatannya belum. Bentuknya sama dengan kartu tiket
-    # PK luar, dan `meja` adalah tempat keputusan harga/mutu/output.
+    # Gudang 1 dan boleh MEMINTA satu dipindah.
+    #
+    # Kartunya pindah dari `menunggu` ke `MEJA` pada 26 September 2026,
+    # permintaan pemilik: "di view admin buat saja block paling atas di
+    # menunggu keputusan yang berisi kartu lot yang diminta oleh gudang 2".
+    # Dan itu memang tempatnya sejak alurnya jadi empat langkah: yang ditunggu
+    # bukan pekerjaan fisik melainkan KEPUTUSAN — disetujui berapa, ke mana,
+    # atau ditolak dengan sebabnya. Judul bloknya di `services.keputusan.JENIS`,
+    # paling atas, sebab permintaan yang menggantung menahan gudang sebelah.
     #
     # Yang sudah tak bisa dikerjakan digugurkan lebih dulu (lotnya habis lewat
     # jalan lain), supaya kartunya hilang di pemuatan yang SAMA dengan
@@ -1985,7 +1990,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
 
             lok = await label_tujuan(db, baris.tujuan, baris.silo_id)
             kg_kirim = float(baris.berat_kirim_kg or 0)
-            b.menunggu.append(Baris(
+            b.meja.append(Baris(
                 kode=kode_lot,
                 isi=f"Gudang 1 sudah mengirim {_kg(kg_kirim)} ke {lok}",
                 keadaan="menunggu ditutup Admin",
@@ -2004,7 +2009,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 pilihan=[("tutup_permintaan_pk", "Tutup permintaan",
                           "Boleh mengubah bobotnya", str(baris.id))]))
             continue
-        b.menunggu.append(Baris(
+        b.meja.append(Baris(
             kode=kode_lot,
             isi=f"{nama_minta or 'Operator Gudang 2'} minta lot ini dipindah",
             keadaan="menunggu keputusan Anda",

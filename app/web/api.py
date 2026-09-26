@@ -843,10 +843,27 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             actions += [
                 {"id": "minta_pk_g1", "label": "🙋 Minta lot PK Gudang 1",
                  "post": "/api/actions/minta-pk-g1",
-                 "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. Yang "
-                         "memindahkan tetap Admin.",
+                 "hint": "Memberitahu Admin bahwa bahan ini Anda perlukan. "
+                         "Admin yang menyetujui dan menetapkan tujuannya.",
                  "fields": [
                      {"name": "kode_proses", "label": "Lot PK", "type": "text"},
+                 ]},
+                # ── "Mulai pindah" dari kartu Stok yang sudah disetujui ──
+                #
+                # Permintaan pemilik 26 September 2026: yang memulai
+                # perpindahannya operator Gudang 2, dari kartu yang berubah
+                # warna. Spesifikasinya KEMBAR dengan milik Gudang 1 di atas —
+                # rutenya satu, keadaannya diperiksa layanan yang sama — dan
+                # yang berbeda cuma label serta kalimatnya, sebab yang
+                # membacanya berdiri di gudang yang lain.
+                {"id": "kirim_permintaan_pk", "label": "🚚 Mulai pindah PK",
+                 "post": "/api/actions/kirim-permintaan-pk",
+                 "hint": "Catat yang BENAR-BENAR dimuat. Barangnya berpindah "
+                         "sekarang juga, dan Admin yang menutup catatannya.",
+                 "fields": [
+                     {"name": "permintaan", "label": "Permintaan", "type": "text"},
+                     {"name": "berat", "label": "Berat yang dimuat (kg)",
+                      "type": "number", "wajib": True},
                  ]},
             ]
     BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
@@ -2534,12 +2551,19 @@ async def act_kirim_permintaan_pk(req: KirimPermintaanReq,
     """LANGKAH 3 — operator Gudang 1 memuat dan mengirim. Barangnya berpindah.
 
     WEWENANGNYA TIDAK DATANG DARI PERAN. `can_transfer_pk` tak disentuh sama
-    sekali: operator Gudang 1 tetap tak bisa memindahkan apa pun atas kehendak
-    sendiri. Yang memberi izin adalah BARIS PERMINTAANNYA — yang sudah
-    disetujui Admin — dan layanan yang dipanggil memeriksa keadaan itu sambil
-    mengunci barisnya.
+    sekali: tak seorang operator pun bisa memindahkan PK atas kehendak sendiri.
+    Yang memberi izin adalah BARIS PERMINTAANNYA — yang sudah disetujui Admin —
+    dan layanan yang dipanggil memeriksa keadaan itu sambil mengunci barisnya.
+
+    KEDUA GUDANG boleh menekannya, sejak 26 September 2026 (permintaan
+    pemilik): "operator gudang 2 bisa memilih kartu tersebut dan mulai proses
+    pindah". Gudang 2 memulainya dari kartu Stok yang berubah warna; Gudang 1
+    tetap punya kartunya di Antrian tunggu. Keduanya memanggil layanan yang
+    SAMA, dan yang menekan lebih dulu yang menang — barisnya direbut dengan
+    satu `UPDATE` bersyarat, jadi yang kedua ditolak dengan kalimat yang
+    menyebut rekannya, bukan melahirkan perpindahan kedua.
     """
-    _require(await _is_g1_operator(user))
+    _require(await _is_g1_operator(user) or await _is_g2_operator(user))
     try:
         pid = int((req.permintaan or "").strip())
     except ValueError:

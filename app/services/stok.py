@@ -105,6 +105,14 @@ class LotPk:
     #: alur ini menurut pemilik, dan ia tak butuh kartu baru: satu kalimat di
     #: kartu yang sudah ia tatap tiap hari sudah cukup.
     diminta_keadaan: str = ""
+    #: Id permintaannya — dipakai tombol "Mulai pindah" di kartu Stok.
+    #: Sejak 26 September 2026 operator Gudang 2 memulai perpindahannya dari
+    #: kartu itu (permintaan pemilik), jadi layar perlu menyebut permintaan
+    #: MANA yang sedang ia kerjakan.
+    diminta_id: int | None = None
+    #: True saat permintaannya sudah DISETUJUI Admin — kartunya berubah warna,
+    #: dan tombol "Mulai pindah" muncul untuk yang meminta.
+    diminta_siap: bool = False
 
     #: Giling sudah DITUTUP tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tidak diketahui.
@@ -396,6 +404,9 @@ async def _mutu_banyak(db: AsyncSession, proc_ids) -> dict[int, list]:
     return {pid: _mutu_dari(peta.get(pid)) for pid in ids}
 
 
+from app.models.permintaan import DISETUJUI
+
+
 def _keadaan_minta(status: str) -> str:
     """Permintaan itu sedang di tangan siapa — dikalimatkan untuk PEMINTANYA.
 
@@ -478,6 +489,9 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
             diminta_oleh=(peta_minta[proc.id].oleh if proc.id in peta_minta else None),
             diminta_keadaan=(_keadaan_minta(peta_minta[proc.id].status)
                              if proc.id in peta_minta else ""),
+            diminta_id=(peta_minta[proc.id].id if proc.id in peta_minta else None),
+            diminta_siap=(proc.id in peta_minta
+                          and peta_minta[proc.id].status == DISETUJUI),
             belum_dicatat=belum,
         ))
     return keluar

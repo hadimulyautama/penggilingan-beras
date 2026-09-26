@@ -904,6 +904,21 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .padat--dryer  { --fase: var(--fase-dryer); }
 .padat--silo   { --fase: var(--fase-silo); }
 .padat--giling { --fase: var(--fase-giling); }
+/* Lot yang permintaannya SUDAH DISETUJUI Admin — tinggal diambil Gudang 2.
+   Warnanya beda dari tetangganya dengan sengaja (permintaan pemilik 26
+   September 2026): yang menyusuri layar Stok mencari lot yang boleh ia ambil
+   hari ini, dan satu baris teks di antara belasan kartu menuntut ia membaca
+   semuanya.
+
+   BUKAN `--aman`: nilainya sama persis dengan `--fase-giling` (#56b880), jadi
+   kartunya tak akan berubah apa-apa — persis kegagalan yang tak kelihatan dari
+   membaca kodenya. Dipakai warna AKSI, yang di seluruh app ini berarti "ini
+   yang bisa Anda tekan", dan garisnya ditebalkan supaya bedanya terbaca juga
+   oleh mata yang tak membedakan hijau dan biru. */
+.padat--siap {
+  --fase: var(--aksi);
+  border-color: color-mix(in srgb, var(--aksi) 45%, var(--garis));
+}
 .padat--silo_g2 { --fase: var(--fase-silo); }
 .padat--sosoh   { --fase: var(--fase-giling); }
 /* Tanpa pembungkus `div`, isinya jadi anak langsung kotak flex dan akan

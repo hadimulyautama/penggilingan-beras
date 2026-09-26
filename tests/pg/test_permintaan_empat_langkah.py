@@ -388,7 +388,10 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
     async with pg() as db:
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
         lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
-    assert [x.aksi for x in adm.menunggu if x.kelompok == "permintaan"] == ["acc_permintaan_pk"]
+    # Kartunya di MEJA sejak 26 September 2026 (permintaan pemilik): yang
+    # ditunggu keputusan, bukan pekerjaan fisik. Lihat
+    # `test_kartu_permintaan_pindah_ke_menunggu_keputusan`.
+    assert [x.aksi for x in adm.meja if x.kelompok == "permintaan"] == ["acc_permintaan_pk"]
     assert not [x for x in g1.menunggu if x.kelompok == "permintaan"], \
         "Gudang 1 melihat pekerjaan yang belum boleh ia kerjakan"
     assert "menunggu keputusan Admin" in lot.diminta_keadaan
@@ -398,7 +401,7 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
     async with pg() as db:
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
         lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
-    assert not [x for x in adm.menunggu if x.kelompok == "permintaan"], \
+    assert not [x for x in adm.meja if x.kelompok == "permintaan"], \
         "Admin menunggui pekerjaan yang bukan miliknya"
     assert [x.aksi for x in g1.menunggu if x.kelompok == "permintaan"] == ["kirim_permintaan_pk"]
     assert "menunggu dikirim Gudang 1" in lot.diminta_keadaan
@@ -407,7 +410,7 @@ async def test_kartu_tiap_peran_pada_tiap_keadaan(pg, pabrik):
     await _kirim(pg, pabrik, pid, berat=6_000)
     async with pg() as db:
         adm, g1 = await untuk_staff(db), await untuk_gudang1(db)
-    assert [x.aksi for x in adm.menunggu if x.kelompok == "permintaan"] == ["tutup_permintaan_pk"]
+    assert [x.aksi for x in adm.meja if x.kelompok == "permintaan"] == ["tutup_permintaan_pk"]
     assert not [x for x in g1.menunggu if x.kelompok == "permintaan"]
 
 
@@ -467,3 +470,66 @@ async def test_kartu_peminta_hilang_sesudah_ditutup(pg, pabrik):
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
     assert not [x for x in b.transit if x.judul == "Permintaan PK Anda"]
+
+
+async def test_kartu_stok_berubah_dan_gudang2_bisa_memulai_pindah(pg, pabrik):
+    """Permintaan pemilik 26 September 2026: "jika disetujui, kartu stock di
+    gudang 1 berubah warnanya lalu operator gudang 2 bisa memilih kartu
+    tersebut dan mulai proses pindah."
+
+    Jadi yang memulai perpindahannya kini BISA operator Gudang 2 — dari kartu
+    Stok yang ia tatap tiap hari, bukan dari layar lain. Operator Gudang 1
+    tetap punya kartunya; keduanya memanggil layanan yang sama.
+    """
+    from app.models import User
+    from app.services.permintaan_pk import kirim
+    from app.services.stok import pk_gudang1
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
+    assert not lot.diminta_siap, "kartunya berubah sebelum disetujui"
+
+    await _acc(pg, pabrik, pid, tujuan="A", berat=6_000)
+    async with pg() as db:
+        lot = next(l for l in await pk_gudang1(db) if l.kode == pabrik["lot"])
+    assert lot.diminta_siap, "kartunya tak berubah sesudah disetujui"
+    assert lot.diminta_id == pid, "tombolnya tak tahu permintaan mana"
+
+    # Dan yang memuatnya operator Gudang 2 sendiri.
+    async with pg() as db:
+        op2 = await db.get(User, pabrik["op2"])
+        b = await kirim(db, user=op2, permintaan_id=pid, berat=5_500)
+    assert b.dikirim_oleh == pabrik["op2"]
+    async with pg() as db:
+        lot = next((l for l in await pk_gudang1(db) if l.kode == pabrik["lot"]), None)
+    # Lotnya habis terkirim, jadi ia tak lagi berdiri sebagai PK Gudang 1.
+    assert lot is None or not lot.diminta_siap
+
+
+async def test_kartu_permintaan_pindah_ke_menunggu_keputusan(pg, pabrik):
+    """Permintaan pemilik: blok paling atas di Menunggu keputusan, bukan di
+    Antrian tunggu. Yang ditunggu memang keputusan — disetujui berapa, ke
+    mana, atau ditolak."""
+    from app.services import keputusan as K
+    from app.services.berjalan import untuk_staff
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        b = await untuk_staff(db)
+    assert not [x for x in b.menunggu if x.kelompok == "permintaan"], \
+        "kartunya masih di Antrian tunggu"
+    meja = [x for x in b.meja if x.aksi == "acc_permintaan_pk"]
+    assert len(meja) == 1, b.meja
+    # Dan bloknya PALING ATAS di layar keputusan.
+    assert K.blok(mutu=False)[0][0] == "acc_permintaan_pk"
+    assert b.jumlah_keputusan >= 1, "lencana keputusan tak ikut menghitungnya"
+
+    # Sesudah dikirim, ia kembali ke meja Admin sebagai "menunggu ditutup".
+    await _acc(pg, pabrik, pid, berat=6_000)
+    await _kirim(pg, pabrik, pid, berat=6_000)
+    async with pg() as db:
+        b = await untuk_staff(db)
+    permintaan = [x.aksi for x in b.meja
+                  if x.aksi in ("acc_permintaan_pk", "tutup_permintaan_pk")]
+    assert permintaan == ["tutup_permintaan_pk"], permintaan

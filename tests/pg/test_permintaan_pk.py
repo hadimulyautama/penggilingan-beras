@@ -111,8 +111,12 @@ async def test_kartu_admin_muncul_sekali_dan_membawa_pilihannya(pg, pabrik):
     async with pg() as db:
         b = await untuk(db, await db.get(User, pabrik["adm"]))
 
-    kartu = [x for x in b.menunggu if x.kelompok == "permintaan"]
+    # Di MEJA sejak 26 September 2026, bukan di antrean: yang ditunggu
+    # KEPUTUSAN — disetujui berapa, ke mana, atau ditolak dengan sebabnya
+    # (permintaan pemilik). Bloknya paling atas di layar Menunggu keputusan.
+    kartu = [x for x in b.meja if x.kelompok == "permintaan"]
     assert len(kartu) == 1
+    assert not [x for x in b.menunggu if x.kelompok == "permintaan"]
     k = kartu[0]
     assert k.kode == "LOT-P2-01" and "Op Polesan" in k.isi
     # Dua jalan keluar, dan keduanya milik Admin — tetapi yang pertama kini
@@ -123,8 +127,8 @@ async def test_kartu_admin_muncul_sekali_dan_membawa_pilihannya(pg, pabrik):
     assert [p[0] for p in k.pilihan] == ["acc_permintaan_pk", "tolak_permintaan_pk"]
     # Dicap gudang — kartu tanpa cap lenyap dari ?gudang=g1 DAN ?gudang=g2.
     assert k.gudang == "g1"
-    # Dan ia ikut terhitung lencana antrean layar yang menggambarnya.
-    assert b.jumlah_menunggu == len(b.menunggu)
+    # Dan ia ikut terhitung lencana KEPUTUSAN — layar yang menggambarnya.
+    assert b.jumlah_keputusan >= 1
 
 
 async def test_operator_melihat_keadaannya_di_kartu_stok(pg, pabrik):

@@ -58,7 +58,15 @@
       {# Kartu yang PUNYA rincian jadi laci; yang tidak, tetap kotak biasa.
          Laci yang terbuka ke ruang kosong mengajari orang berhenti membukanya. #}
       {% set laci = l.bahan|length > 0 %}
-      <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
+      {# ── Warnanya BERUBAH saat permintaannya disetujui ──
+         Permintaan pemilik 26 September 2026: "jika disetujui, kartu stock di
+         gudang 1 berubah warnanya lalu operator gudang 2 bisa memilih kartu
+         tersebut dan mulai proses pindah."
+
+         Warna, bukan cuma kalimat: yang menyusuri layar Stok mencari lot yang
+         boleh ia ambil hari ini, dan satu baris teks di antara belasan kartu
+         menuntut ia membaca semuanya. #}
+      <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} {{ "padat--siap" if l.diminta_siap else "padat--giling" }}">
       <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
         {# Tanggalnya menempel pada kodenya, seukuran kodenya. Sebagai baris
            sendiri ia memakan satu baris penuh untuk lima karakter, dan kartu
@@ -213,7 +221,17 @@
                — atau tidak muncul; itu bagian yang paling kurang dari alur ini
                menurut pemilik (25 September 2026). Kalimatnya datang dari
                `stok._keadaan_minta`, satu tempat. #}
-            {% if l.diminta_oleh %}
+            {# Yang sudah DISETUJUI bertombol lagi — dan tombolnya memulai
+               perpindahan, bukan permintaan kedua. Sejak 26 September 2026
+               operator Gudang 2 yang memulainya dari kartu ini (permintaan
+               pemilik); operator Gudang 1 tetap punya kartunya sendiri di
+               Antrian tunggu, dan siapa pun yang menekan lebih dulu yang
+               menang — pagarnya di basis data, bukan di layar. #}
+            {% if l.diminta_siap %}
+              <a class="btn btn--kecil btn--utama"
+                 href="/stok?buka=kirim_permintaan_pk&amp;nilai={{ l.diminta_id }}">Mulai pindah</a>
+              <span class="bantu">Disetujui Admin — tinggal dimuat</span>
+            {% elif l.diminta_oleh %}
               <span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>
             {% else %}
               <a class="btn btn--kecil"
@@ -332,7 +350,13 @@
 
 {{ st.karung_blok(karung) }}
 
-{% if boleh_ubah %}
+{# Lembarnya dimuat untuk SIAPA PUN yang punya tombol di halaman ini, bukan
+   cuma Admin. Sampai 26 September 2026 syaratnya `boleh_ubah` saja — dan
+   akibatnya tombol "Minta lot ini" milik operator Gudang 2 tak pernah bisa
+   membuka borangnya: menekannya cuma memuat ulang /stok dengan ?buka=… dan
+   tak ada `aksi.js` yang menangkapnya. Tombol yang tak melakukan apa-apa lebih
+   buruk daripada tombol yang tak ada. #}
+{% if boleh_ubah or boleh_minta %}
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
 {% endif %}
@@ -344,7 +368,7 @@
   {%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya
   {%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}
 </div>
-{% if boleh_ubah %}
+{% if boleh_ubah or boleh_minta %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
           data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}

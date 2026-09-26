@@ -39,6 +39,17 @@ MUTU = "mutu"
 #: Menambah jenis ketujuh = menambah satu baris di sini. Layar, lencana,
 #: Beranda, dan jaring penangkapnya ikut sendiri.
 JENIS: tuple[tuple[str, str, str], ...] = (
+    # ── PALING ATAS, keputusan pemilik 26 September 2026 ──
+    #
+    # Permintaan lot PK dari Gudang 2 pindah ke layar ini dari Antrian tunggu.
+    # Tempatnya memang di sini: yang ditunggu BUKAN pekerjaan fisik melainkan
+    # keputusan — disetujui berapa, ke mana, atau ditolak dengan sebabnya.
+    # Paling atas sebab ia menahan gudang sebelah: selama belum diputuskan,
+    # mesin sosoh menunggu bahan yang sudah ada di gudang seberang.
+    ("acc_permintaan_pk", "Permintaan lot PK dari Gudang 2", "permintaan"),
+    # Yang sudah dikirim dan menunggu diakui angkanya. Tetap keputusan:
+    # bobot Admin yang berlaku, dan barangnya sudah berpindah.
+    ("tutup_permintaan_pk", "Kiriman PK menunggu ditutup", "permintaan"),
     ("verify_gabah", "Harga gabah belum diverifikasi", "harga"),
     ("harga_pk_luar", "Harga PK luar belum diverifikasi", "harga"),
     # "Output giling belum dicocokkan" DIHAPUS 24 September 2026, keputusan
