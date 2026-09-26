@@ -99,7 +99,23 @@ TAB = (
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
     # berhak tahu berapa yang sudah terkumpul.
-    ("stok",       "/stok",       "Stok",           "Yang masih ada di gudang", None),
+    ("stok",       "/stok",       "Stok",           "Bahan: gabah & PK yang masih ada", None),
+    # ── Stok Produk — keputusan pemilik 26 September 2026 ──
+    #
+    # "bagusnya ada halaman baru yaitu Stok Produk, dan kartu hasil sosoh
+    # berada di situ."
+    #
+    # Pembagiannya bersih, dan itu kekuatannya: /stok memuat BAHAN (gabah di
+    # silo Gudang 1, PK di Gudang 2), /stok-produk memuat HASIL (beras dan
+    # hasil samping). Subjudul keduanya sengaja menyebut bedanya — dua pintu
+    # bernama Stok yang subjudulnya tak membedakan akan ditekan bergantian
+    # oleh orang yang mencari satu angka.
+    #
+    # Pintunya padam untuk operator selepan lewat `PINTU_MATI`, bukan lewat
+    # daftar peran ini: keduanya sama-sama berperan `operator`, dan yang
+    # membedakan gudang tempatnya bekerja hari ini.
+    ("stok_produk", "/stok-produk", "Stok Produk",
+     "Beras dan hasil samping yang sudah jadi", None),
     ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      MEJA),
@@ -188,4 +204,4 @@ def _KOSONG() -> dict:
     lebih membingungkan daripada pintu yang dibuka lalu ternyata kosong.
     """
     return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
-            "MUTU_AKTIF": True, "PINTU_MATI": ()}
+            "PRODUK": 0, "MUTU_AKTIF": True, "PINTU_MATI": ()}

@@ -324,43 +324,11 @@
 {% endif %}
 {% endif %}
 
-{# ── BARANG JADI & HASIL SAMPING ──
-   Yang mencatat barang keluar harus melihat apa yang bisa keluar — dan yang
-   menjalankan mesin sosohnya harus melihat apa yang sudah ia hasilkan.
-
-   Sampai 23 September 2026 blok ini tak ada di Pos Produksi sama sekali:
-   hitungannya terkunci di dalam `gudang2_api.stok`, jadi satu-satunya layar
-   yang bisa menggambarkannya adalah aplikasi Gudang 2, dan Meja cuma dapat
-   rupa TEKS-nya lewat laporan. Kini hitungannya `services.stok.barang_jadi_g2`
-   dan bentuknya satu: kartu per SKU × mutu, dengan rincian per proses sosoh
-   asal — "dari sosohan mana" adalah pertanyaan yang muncul begitu ada keluhan
-   mutu, dan rupa teks tak pernah bisa menjawabnya.
-
-   SIAPA yang melihat ditentukan app-nya (`gudang2(view)` di Pos Produksi):
-   barang jadi lahir di Gudang 2, jadi operator selepan tak melihatnya —
-   aturan yang sama persis dengan blok stok karung tepat di bawah. #}
-{% if produk or samping %}
-<div style="margin-top:18px">
-  <div class="jumlah">
-    <span class="lbl">Barang jadi &amp; hasil samping · Gudang 2</span>
-    <div class="jumlah__angka">{{ kg((produk + samping)|sum(attribute="kg")) }}<small>kg</small></div>
-    <div class="jumlah__ket">
-      {{ produk|length }} produk · {{ samping|length }} hasil samping
-    </div>
-  </div>
-  {% if produk %}
-    <div class="grup" style="gap:7px;margin-top:8px">
-      {% for k in produk %}{{ st.kartu_barang(k) }}{% endfor %}
-    </div>
-  {% endif %}
-  {% if samping %}
-    <span class="lbl" style="margin-top:12px">Hasil samping</span>
-    <div class="grup" style="gap:7px">
-      {% for k in samping %}{{ st.kartu_barang(k) }}{% endfor %}
-    </div>
-  {% endif %}
-</div>
-{% endif %}
+{# Barang jadi & hasil samping PINDAH ke layar "Stok Produk" 26 September
+   2026 (keputusan pemilik). Layar ini memuat BAHAN — gabah di silo Gudang 1,
+   PK di Gudang 2 — dan docstring-nya memang sudah berbunyi begitu sejak awal.
+   Dua layar bernama Stok yang isinya bercampur akan ditekan bergantian oleh
+   orang yang mencari satu angka. #}
 
 {{ st.karung_blok(karung) }}
 

@@ -597,6 +597,118 @@ async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
 GRADES_BERAS = ("premium", "medsuper", "medium", "sayur")
 NAMA_KATEGORI = {"beras_b": "Beras B (olah ulang)", "menir": "Menir",
              "broken": "Broken", "bekatul": "Bekatul", "reject": "Reject"}
+#: Grade beras yang keluar dari mesin sosoh. Yang di luar daftar ini hasil
+#: SAMPING (menir, broken, bekatul, reject) — beda rumahnya, beda perlakuannya.
+BERAS_JENIS = ("premium", "medsuper", "medium", "sayur", "beras_b")
+
+
+@dataclass
+class BerasCurah:
+    """Beras yang sudah keluar dari mesin sosoh tetapi BELUM dikemas.
+
+    Sampai 26 September 2026 barang ini tak punya rumah. `polishing_output_logs`
+    dibaca tepat dua tempat di seluruh repo — pembanding internal saat mencatat
+    hasil, dan satu baris ringkasan di laporan Riwayat produksi — dan tak satu
+    pun layar stok membacanya. Beras baru MENJADI stok ketika seseorang
+    menjalankan "Catat packing"; sebelum itu, berton-ton beras berdiri di lantai
+    sementara aplikasi menyebut stok Gudang 2 nol.
+
+    Ketimpangannya dengan Gudang 1 yang membuatnya terasa hilang: lot giling
+    yang selesai BERKARTU lengkap di layar Stok, dan PK-nya terhitung siap
+    kirim. Output Gudang 1 adalah stok; output Gudang 2 tinggal baris log.
+    Padahal keduanya sama-sama barang yang berdiri di lantai gudang.
+
+    Temuan QA 26 September; keputusan pemilik: halaman "Stok Produk" sendiri.
+    """
+
+    kode_proses: str
+    jenis: str
+    #: Kumulatif yang tercatat keluar mesin.
+    keluar_kg: float
+    #: Yang sudah dipindahkan ke barang jadi lewat packing.
+    dikemas_kg: float
+    #: Yang masih berdiri sebagai curah — inilah angka stoknya.
+    sisa_kg: float
+    #: Kapan sosohnya ditutup. None berarti MASIH BERJALAN.
+    selesai: object | None = None
+
+    @property
+    def berjalan(self) -> bool:
+        return self.selesai is None
+
+
+async def output_sosoh(db: AsyncSession, proc_id: int) -> dict[str, float]:
+    """Kumulatif terakhir per jenis untuk satu proses penyosohan.
+
+    SATU tempat membaca `polishing_output_logs` sebagai "berapa yang keluar",
+    dipakai layar Stok Produk MAUPUN laporan Riwayat produksi. Sebelum 26
+    September 2026 polanya ditulis dua kali — sekali di `polishing`, sekali di
+    `report` — dan dua pembaca yang menyusun sendiri aturan "ambil baris
+    terbaru per jenis" akan berselisih pada perubahan berikutnya.
+    """
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+
+    baris = (await db.execute(
+        select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
+        .where(PolishingOutputLog.polishing_process_id == proc_id)
+        .order_by(PolishingOutputLog.jenis,
+                  PolishingOutputLog.waktu_update.desc(),
+                  PolishingOutputLog.id.desc())
+    )).all()
+    keluar: dict[str, float] = {}
+    for jenis, kg in baris:
+        keluar.setdefault(jenis, float(kg))     # pertama per jenis = terbaru
+    return keluar
+
+
+async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
+                      ) -> list[BerasCurah]:
+    """Beras (dan hasil samping berkemasan) yang belum dipacking, per lot × jenis.
+
+    Stok curah = yang KELUAR mesin − yang SUDAH DIKEMAS. Dua angka yang
+    dua-duanya sudah tercatat; yang belum ada cuma pengurangannya.
+
+    Proses yang MASIH BERJALAN ikut, dan itu disengaja — berasnya memang sudah
+    berdiri di lantai. Tetapi angkanya BELUM FINAL, dan layar wajib
+    mengatakannya sekeras kartu penyosohan mengatakannya ("hasil & rendemen
+    belum final"). Yang menyembunyikannya membuat orang menghitung stok atas
+    angka yang masih akan berubah; yang menyebutnya seolah pasti lebih buruk
+    lagi. `berjalan` pada tiap barisnya yang membedakan.
+    """
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory.finished_goods import _packed_kg, get_standard
+
+    q = select(PolishingProcess).order_by(PolishingProcess.id.desc())
+    if not termasuk_berjalan:
+        q = q.where(PolishingProcess.status == "selesai")
+    keluar: list[BerasCurah] = []
+    for proc in (await db.execute(q)).scalars().all():
+        for jenis, kg in (await output_sosoh(db, proc.id)).items():
+            if jenis == "bekatul":
+                # Bekatul tak pernah dikemas — ia curah sampai dijual, dan
+                # rumahnya `byproduct_stock`, yang sudah dibaca blok tersendiri.
+                continue
+            if jenis in BERAS_JENIS:
+                std = await get_standard(db, jenis)
+                dikemas = await _packed_kg(db, proc.id, "beras_putih",
+                                           std.id if std else None)
+            else:
+                dikemas = await _packed_kg(db, proc.id, jenis, None)
+            sisa = float(kg) - dikemas
+            # Nol berarti sudah habis dikemas — bukan kabar, jadi tak berkartu.
+            # Yang MINUS justru kabar: lebih banyak dikemas daripada yang keluar
+            # mesin, dan itu pertanyaan untuk orangnya, bukan angka untuk
+            # disembunyikan.
+            if abs(sisa) < 0.5:
+                continue
+            keluar.append(BerasCurah(
+                kode_proses=proc.kode_proses, jenis=jenis, keluar_kg=float(kg),
+                dikemas_kg=dikemas, sisa_kg=sisa,
+                selesai=(proc.waktu_selesai if proc.status == "selesai" else None)))
+    keluar.sort(key=lambda x: (_URUT_BARANG.get(x.jenis, 99), x.kode_proses))
+    return keluar
+
+
 #: Urutan tampil: beras terbaik lebih dulu, hasil samping menyusul.
 _URUT_BARANG = {j: n for n, j in enumerate(
     ("premium", "medsuper", "medium", "sayur", "beras_putih", "beras_b",

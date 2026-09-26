@@ -202,6 +202,12 @@ class Berjalan:
     #: dipancarkan sama sekali — membacanya lagi di layar berarti satu kueri
     #: tambahan pada tiap halaman, dan dua tempat yang bisa menjawab berbeda.
     mutu_aktif: bool = True
+    #: Apakah pintu "Stok Produk" ditawarkan pada pembaca ini. Operator
+    #: selepan: tidak — lihat `lencana()`.
+    pintu_produk: bool = True
+    #: Berapa lot yang berasnya sudah keluar mesin tetapi BELUM dipacking.
+    #: Lencana pintu Stok Produk; nol berarti tak ada lencana.
+    jumlah_produk: int = 0
 
     @property
     def jumlah_menunggu(self) -> int:
@@ -244,10 +250,19 @@ class Berjalan:
         kosong; halamannya sendiri tetap bisa dibuka lewat alamat, dan di sana
         ia menyebut sebabnya.
         """
+        mati = ([] if self.mutu_aktif else ["mutu"])
+        # Operator selepan tak ditawari pintu Stok Produk: beras dan hasil
+        # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
+        # di layar Stok. Pintu yang selalu kosong mengajari orang berhenti
+        # membuka pintu. Batas ini SEMENTARA dan pemilik yang memutuskan
+        # kelak: "Stok Produk" yang tak memuat PK akan terasa setengah, sebab
+        # PK adalah produk Gudang 1 (catatan QA 26 September 2026).
+        if not self.pintu_produk:
+            mati.append("stok_produk")
         return {"MENUNGGU": self.jumlah_menunggu, "BERJALAN": self.jumlah_berjalan,
                 "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
-                "MUTU_AKTIF": self.mutu_aktif,
-                "PINTU_MATI": () if self.mutu_aktif else ("mutu",)}
+                "PRODUK": self.jumlah_produk,
+                "MUTU_AKTIF": self.mutu_aktif, "PINTU_MATI": tuple(mati)}
 
 
 def _lama(sejak: datetime | None) -> str:
@@ -1286,6 +1301,9 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                  "disetujui; lebih tidak.",
             pilihan=[("kirim_permintaan_pk", "Kirim ke Gudang 2",
                       "Barangnya berpindah sekarang juga", str(baris.id))]))
+    # Pintu "Stok Produk" tak ditawarkan kepada operator selepan — lihat
+    # catatan di `Berjalan.lencana()`.
+    b.pintu_produk = False
     return _cap_gudang(b, "g1")
 
 
@@ -1385,6 +1403,15 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
 
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
     b.transit += await _kartu_silo_g2(db, asal_silo)
+
+    # ── Beras yang sudah keluar mesin tetapi belum dipacking ──
+    #
+    # Admin ikut melihatnya: ia yang membaca angka stok Gudang 2, dan sampai 26
+    # September 2026 angka itu menyebut NOL sepanjang jam-jam antara sosoh
+    # selesai dan packing dicatat.
+    curah = await _kartu_beras_curah(db)
+    b.menunggu += curah
+    b.jumlah_produk = len(curah)
 
     # ── Kerja meja: harga & mutu PK luar ──
     for pk, nama in (await db.execute(
@@ -1667,6 +1694,42 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
     return keluar
 
 
+async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
+    """Beras yang sudah keluar mesin sosoh tetapi belum dipacking.
+
+    Halaman yang harus dibuka sendiri tak menjawab keluhan pemilik: yang
+    hilang selama ini KABARNYA, bukan tempat menyimpannya. Berton-ton beras
+    berdiri di lantai sementara tak satu pun layar menyebutnya, dan
+    notifikasi penutupan penyosohan menjanjikan "perlu verifikasi output"
+    tanpa ada satu tombol pun yang menawarkannya. Temuan QA 26 September 2026.
+
+    Yang MASIH BERJALAN tidak berkartu: angkanya belum final, dan kartu
+    antrean yang menagih pekerjaan atas angka yang masih akan berubah membuat
+    orang mengemas dua kali. Ia tetap terbaca di halaman Stok Produk, dengan
+    keterangan yang menyebut keadaannya.
+    """
+    from app.services.stok import beras_curah
+
+    keluar: list[Baris] = []
+    for b in await beras_curah(db, termasuk_berjalan=False):
+        if b.sisa_kg <= 0:
+            continue                    # minus = pertanyaan, bukan pekerjaan
+        keluar.append(Baris(
+            kode=b.kode_proses,
+            isi=f"{b.jenis} · {_kg(b.sisa_kg)} belum dikemas",
+            keadaan="menunggu dipacking",
+            aksi="catat_packing", nilai=b.kode_proses, fase="sosoh",
+            sejak=b.selesai,
+            judul="Beras menunggu dipacking",
+            utama=(_kg(b.sisa_kg).removesuffix(" kg"), "kg"),
+            sub=f"{b.kode_proses} · {b.jenis}"
+                + (f" · dari {_kg(b.keluar_kg)}" if b.dikemas_kg else ""),
+            kelompok="produk", gudang="g2",
+            pilihan=[("catat_packing", "Catat packing barang jadi",
+                      "Memindahkan dari curah ke barang jadi", b.kode_proses)]))
+    return keluar
+
+
 async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
@@ -1763,6 +1826,12 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     b.menunggu += await _tiket_pk_luar(db, boleh_catat=False)
     b.menunggu += await _kartu_tumpukan_g2(db)
     b.menunggu += await _kartu_silo_g2(db, asal_silo)
+    # Beras yang menunggu dipacking: pekerjaan yang sungguh menunggu orang ini,
+    # jadi ia di ANTREAN — beda dengan permintaan PK di Transit, yang menunggu
+    # tangan orang lain.
+    curah = await _kartu_beras_curah(db)
+    b.menunggu += curah
+    b.jumlah_produk = len(curah)
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
     return _cap_gudang(b, "g2")
 
@@ -2011,6 +2080,7 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         b.berjalan += g2.berjalan
         b.transit += g2.transit
         b.meja += g2.meja
+        b.jumlah_produk = g2.jumlah_produk
     elif await _is_g2_operator(user):
         # Operator Gudang 2 melihat layarnya sendiri: antrean = stok PK
         # (tumpukan + silo), berjalan = mesin. Penempatan PK datang bukan
@@ -2018,4 +2088,16 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         g2 = await untuk_operator_gudang2(db)
         b.menunggu += g2.menunggu
         b.berjalan += g2.berjalan
+        b.transit += g2.transit
+        b.jumlah_produk = g2.jumlah_produk
+
+    # ── Pintu "Stok Produk": semua, KECUALI operator Gudang 1 ──
+    #
+    # Keputusan pemilik 26 September 2026. Ditetapkan DI SINI, bukan diwarisi
+    # dari daftar yang digabung di atas: `untuk()` menyusun `Berjalan` baru dan
+    # hanya menyalin daftarnya, jadi bendera yang dipasang `untuk_gudang1`
+    # tak pernah sampai — dan Admin, yang daftar Gudang 1-nya ikut digabung,
+    # justru akan kehilangan pintunya.
+    b.pintu_produk = not (await _is_g1_operator(user)
+                          and not can_see_financials(user))
     return b

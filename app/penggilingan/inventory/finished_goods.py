@@ -92,19 +92,16 @@ async def _proc_by_kode(db: AsyncSession, kode: str | None) -> PolishingProcess:
 
 
 async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
-    rows = (
-        await db.execute(
-            select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg,
-                   PolishingOutputLog.waktu_update)
-            .where(PolishingOutputLog.polishing_process_id == proc_id)
-            .order_by(PolishingOutputLog.jenis, PolishingOutputLog.waktu_update.desc())
-        )
-    ).all()
-    out: dict[str, float] = {}
-    for jenis, berat, _ in rows:
-        if jenis not in out:
-            out[jenis] = float(berat)
-    return out
+    """Kumulatif terakhir per jenis — SATU corong, `stok.output_sosoh`.
+
+    Polanya dulu ditulis tiga kali di repo ini (di sini, di `polishing`, dan di
+    `report`). Tiga pembaca yang masing-masing menyusun aturan "ambil baris
+    terbaru per jenis" akan berselisih pada perubahan berikutnya — dan yang
+    berselisih diam-diam adalah angka stok.
+    """
+    from app.services.stok import output_sosoh
+
+    return await output_sosoh(db, proc_id)
 
 
 # ─────────────────────────── Packing → barang jadi ───────────────────────────
@@ -145,6 +142,39 @@ async def catat_packing(
         brand_nama=brand_nama,
     )
     berat = float(jumlah_karung) * int(ukuran)
+
+    # ── PACKING ADALAH PERPINDAHAN, BUKAN PENCIPTAAN ──
+    #
+    # Sampai 26 September 2026 fungsi ini menulis stok barang jadi dari udara:
+    # tak ada angka asal, jadi tak ada yang bisa dilanggarnya. Yang ada cuma
+    # peringatan SESUDAH commit — "terkemas 9.500 vs hasil run 9.000" — yang
+    # tak menghentikan apa pun dan hilang begitu layarnya berpindah.
+    #
+    # Sejak beras curah punya rumah (`stok.beras_curah`), angka asalnya ada:
+    # yang keluar mesin dikurangi yang sudah dikemas. Packing yang melebihi itu
+    # berarti mengemas beras yang tak pernah keluar dari mesin mana pun — dan
+    # itu ditolak SEBELUM menulis, bukan disesali sesudahnya.
+    #
+    # Kalimatnya menyebut berapa yang tersedia: yang ditolak tanpa angka akan
+    # mencoba lagi dengan tebakan.
+    from app.services.stok import output_sosoh
+
+    jenis_out = grade if kategori == "beras_putih" else kategori
+    keluar = (await output_sosoh(db, proc.id)).get(jenis_out)
+    if keluar is None:
+        raise InventoryError(
+            f"Belum ada hasil sosoh {jenis_out} yang tercatat untuk "
+            f"{proc.kode_proses}. Catat hasil penyosohannya dulu — packing "
+            "memindahkan beras yang sudah keluar mesin, bukan menciptakannya.")
+    sudah = await _packed_kg(db, proc.id, kategori, std_id)
+    tersedia = float(keluar) - sudah
+    if berat > tersedia + 0.5:
+        raise InventoryError(
+            f"{proc.kode_proses} tinggal {tersedia:,.0f} kg {jenis_out} yang "
+            f"belum dikemas — tak bisa mengemas {berat:,.0f} kg. "
+            f"(Keluar mesin {float(keluar):,.0f} kg, sudah dikemas "
+            f"{sudah:,.0f} kg.)".replace(",", "."))
+
     now = input_time(tanggal, jam)
     wid = await _g2_warehouse_id(db)
     fg = FinishedGoodsStock(
@@ -160,18 +190,11 @@ async def catat_packing(
     )
     await db.commit()
 
-    # Validasi longgar: bandingkan total dikemas vs output run untuk jenis ini.
-    warning = None
-    outputs = await _output_map(db, proc.id)
-    jenis_out = grade if kategori == "beras_putih" else kategori
-    out_kg = outputs.get(jenis_out)
-    if out_kg is not None:
-        packed = await _packed_kg(db, proc.id, kategori, std_id)
-        if abs(packed - out_kg) > max(out_kg * 0.02, 50):
-            warning = (
-                f"⚠️ Terkemas {packed:.0f} kg vs hasil run {out_kg:.0f} kg "
-                f"(selisih {packed - out_kg:+.0f} kg)."
-            )
+    # Sisa curahnya disebutkan — itu yang dicari orang berikutnya, dan ia
+    # tak perlu membuka layar lain untuk tahu masih ada berapa.
+    sisa = tersedia - berat
+    warning = (f"Sisa {jenis_out} belum dikemas di {proc.kode_proses}: "
+               f"{sisa:,.0f} kg.".replace(",", ".") if sisa > 0.5 else None)
     return PackingResult(
         kategori=kategori, grade=grade, jumlah_karung=int(jumlah_karung),
         berat_total_kg=berat, warning=warning,

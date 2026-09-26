@@ -194,20 +194,14 @@ async def catat_output(
 
 # ─────────────────────────── Selesai + rendemen ───────────────────────────
 async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
-    """Output terbaru per jenis (kumulatif)."""
-    rows = (
-        await db.execute(
-            select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg,
-                   PolishingOutputLog.waktu_update)
-            .where(PolishingOutputLog.polishing_process_id == proc_id)
-            .order_by(PolishingOutputLog.jenis, PolishingOutputLog.waktu_update.desc())
-        )
-    ).all()
-    out: dict[str, float] = {}
-    for jenis, berat, _ in rows:
-        if jenis not in out:  # pertama per jenis = terbaru (order desc)
-            out[jenis] = float(berat)
-    return out
+    """Output terbaru per jenis (kumulatif) — lewat `stok.output_sosoh`.
+
+    Satu corong untuk tiga pembaca: pembanding di sini, layar Stok Produk, dan
+    laporan Riwayat produksi. Lihat catatan di sana.
+    """
+    from app.services.stok import output_sosoh
+
+    return await output_sosoh(db, proc_id)
 
 
 async def _sebut_silo(db: AsyncSession, usages) -> str:

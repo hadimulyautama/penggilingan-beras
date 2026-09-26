@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block judul %}Stok Produk{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{# ── Stok Produk — HASIL pabrik, bukan bahannya ──
+   Keputusan pemilik 26 September 2026. Layar Stok memuat BAHAN (gabah di silo
+   Gudang 1, PK di Gudang 2); yang sudah jadi berumah di sini.
+
+   Urutan bloknya mengikuti UMUR barangnya: yang baru keluar mesin lebih dulu,
+   sebab itu yang menunggu dikerjakan. Yang sudah dikemas dan hasil samping
+   menyusul — keduanya sudah tenang. #}
+
+{% if not curah and not produk and not samping %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
+      <path d="M12 13v7"/></svg>
+    <div>
+      <h2>Belum ada produk jadi</h2>
+      <p class="bantu">
+        Belum ada penyosohan yang menghasilkan beras, dan belum ada yang
+        dikemas. Begitu mesin sosoh mengeluarkan hasilnya, ia muncul di sini —
+        sebelum dipacking sekalipun.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{# ── 1 · BERAS CURAH — yang keluar mesin, belum dikemas ──
+   Inilah blok yang lahir dari keluhan: sampai hari ini barang ini tak ada di
+   angka stok mana pun, dan jarak antara "sosoh selesai" dan "packing dicatat"
+   adalah jam, kadang hari. #}
+{% if curah %}
+<div class="jumlah">
+  <span class="lbl">Beras belum dipacking</span>
+  <div class="jumlah__angka">{{ kg(total_curah) }}<small>kg</small></div>
+  <div class="jumlah__ket">{{ curah|length }} baris · dari mesin sosoh</div>
+</div>
+<div class="grup" style="gap:7px;margin-top:8px">
+  {% for c in curah %}
+    <div class="benda benda--sosoh">
+      <div class="benda__kepala">
+        <span class="benda__kode">{{ c.kode_proses }}</span>
+        <span class="cip">{{ c.jenis }}</span>
+      </div>
+      <div class="benda__isi">
+        {{ kg(c.sisa_kg) }} kg belum dikemas
+        {%- if c.dikemas_kg %} · dari {{ kg(c.keluar_kg) }} kg keluar mesin,
+        {{ kg(c.dikemas_kg) }} kg sudah dikemas{% endif %}
+      </div>
+      {# Proses yang MASIH BERJALAN disebut apa adanya. Kartu penyosohan sudah
+         jujur soal ini ("hasil & rendemen belum final"); blok stok yang
+         menyebutnya seolah pasti akan membuat orang mengemas dua kali. #}
+      {% if c.berjalan %}
+        <div class="nota nota--hati">
+          Mesin masih menyosoh — angkanya belum final dan masih akan bertambah.
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── 2 & 3 · Barang jadi dan hasil samping ──
+   Pindah dari layar Stok 26 September 2026. Hitungannya tetap
+   `services.stok.barang_jadi_g2` — satu hitungan, beberapa pembaca. #}
+{% if produk or samping %}
+<div style="margin-top:18px">
+  <div class="jumlah">
+    <span class="lbl">Sudah dikemas &amp; hasil samping</span>
+    <div class="jumlah__angka">{{ kg((produk + samping)|sum(attribute="kg")) }}<small>kg</small></div>
+    <div class="jumlah__ket">
+      {{ produk|length }} produk · {{ samping|length }} hasil samping
+    </div>
+  </div>
+  {% if produk %}
+    <div class="grup" style="gap:7px;margin-top:8px">
+      {% for k in produk %}{{ st.kartu_barang(k) }}{% endfor %}
+    </div>
+  {% endif %}
+  {% if samping %}
+    <span class="lbl" style="margin-top:12px">Hasil samping</span>
+    <div class="grup" style="gap:7px">
+      {% for k in samping %}{{ st.kartu_barang(k) }}{% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+<div class="kaki">
+  Beras masuk daftar ini begitu keluar dari mesin sosoh — packing
+  memindahkannya, bukan menciptakannya
+</div>
+{% endblock %}

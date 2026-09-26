@@ -243,24 +243,16 @@ async def laporan_produksi_histori(
             )
         )
     ).scalars().all()
+    # Kumulatif per jenis dibaca lewat `stok.output_sosoh` — corong yang SAMA
+    # dengan yang dipakai layar Stok Produk. Polanya dulu ditulis di sini
+    # sendiri, dan dua pembaca yang masing-masing menyusun aturan "ambil baris
+    # terbaru per jenis" akan berselisih pada perubahan berikutnya.
+    from app.services.stok import output_sosoh
+
     beras_kg = 0.0
     samping_kg = 0.0
     for pid in proc_pol:
-        logs = (
-            await db.execute(
-                select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
-                .where(PolishingOutputLog.polishing_process_id == pid)
-                .order_by(
-                    PolishingOutputLog.jenis,
-                    PolishingOutputLog.waktu_update.desc(),
-                )
-            )
-        ).all()
-        seen: set[str] = set()
-        for jenis, kg in logs:
-            if jenis in seen:  # ambil hanya baris terbaru per jenis (kumulatif)
-                continue
-            seen.add(jenis)
+        for jenis, kg in (await output_sosoh(db, pid)).items():
             if jenis in _PENYOSOHAN_SAMPING:
                 samping_kg += float(kg)
             else:

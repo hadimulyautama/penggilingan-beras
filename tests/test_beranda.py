@@ -149,12 +149,21 @@ def test_beranda_memakai_daftar_yang_sama_bukan_hitungan_sendiri():
 def test_transit_sampai_ke_layarnya():
     """Gabah di dryer dan silo sengaja dikeluarkan dari antrean. Kalau
     transitnya tak ikut dibawa, ia hilang dari KEDUA layar sekaligus — dan
-    yang hilang dari semua layar tak akan pernah ada yang mencarinya."""
+    yang hilang dari semua layar tak akan pernah ada yang mencarinya.
+
+    Pagar ini MENANGKAP SATU LAGI pada 26 September 2026, dan persis seperti
+    yang dimaksudkan: kartu Transit milik operator Gudang 2 — permintaan PK
+    yang sedang berjalan — dibuat 25 September tetapi `untuk()` tak pernah
+    membawanya, jadi ia tak muncul di layar mana pun yang memakai jalur itu.
+    Ujinya sendiri lolos karena memanggil pembangunnya langsung.
+    """
     from app.services import berjalan as svc
 
     sumber = inspect.getsource(svc.untuk)
-    # Gudang 1 (operator), Gudang 1 (staff yang bukan operator), dan Gudang 2.
-    assert sumber.count("b.transit += ") == 3, "tiap gudang & tiap peran perlu"
+    # EMPAT cabang yang menyusun daftar gudang, dan tiap satunya wajib
+    # membawa transitnya: Gudang 1 (operator), Gudang 1 (staff yang bukan
+    # operator), Gudang 2 (staff), dan Gudang 2 (operatornya sendiri).
+    assert sumber.count("b.transit += ") == 4, "tiap gudang & tiap peran perlu"
 
 
 def test_tiap_kartu_menyebut_asal_usul_barangnya():

@@ -200,6 +200,12 @@
           {% elif kunci == 'mutu' and MUTU %}
             <span class="pintu__jml"
                   aria-label="{{ MUTU }} mutu belum dicatat">{{ MUTU }}</span>
+          {# Beras yang sudah keluar mesin tetapi belum dipacking. MENAGIH,
+             bukan mengabari: selama ia berdiri, angka stok barang jadi
+             menyebut lebih sedikit daripada yang sungguh ada di gudang. #}
+          {% elif kunci == 'stok_produk' and PRODUK %}
+            <span class="pintu__jml"
+                  aria-label="{{ PRODUK }} beras belum dipacking">{{ PRODUK }}</span>
           {% endif %}
         </a>
         {% endif %}
