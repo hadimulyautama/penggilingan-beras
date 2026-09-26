@@ -2514,8 +2514,8 @@ async def act_acc_permintaan_pk(req: AccPermintaanReq,
     """LANGKAH 2 — Admin menyetujui, sambil menetapkan tujuan dan bobotnya.
 
     Tujuannya ditetapkan di sini, bukan saat barangnya berangkat: yang tahu
-    gudang mana yang sedang kosong adalah Admin, dan operator Gudang 1 yang
-    memuat tak boleh disuruh menebaknya sambil berdiri di samping tumpukan.
+    gudang mana yang sedang kosong adalah Admin, dan yang memuat tak boleh
+    disuruh menebaknya sambil berdiri di samping tumpukan.
     """
     _require(can_transfer_pk(user))
     try:
@@ -2534,9 +2534,16 @@ async def act_acc_permintaan_pk(req: AccPermintaanReq,
 
         lok = await label_tujuan(db, b.tujuan, b.silo_id)
         kg = float(b.berat_setuju_kg or 0)
+    # Kalimat ini pernah berbunyi "Gudang 1 melihatnya di Antrian tunggu, dan
+    # merekalah yang memuat". Dua-duanya tidak benar sejak 26 September 2026,
+    # dan SELURUH layar lain berkata sebaliknya (temuan QA): yang memuat Gudang
+    # 2, dan kartu Gudang 1 berdiri di Sedang berjalan blok Transit, tanpa
+    # tombol. Admin yang membaca kalimat lama akan menunggu Gudang 1
+    # mengerjakan sesuatu yang pintunya justru menolaknya dengan 403.
     return {"ok": True,
-            "pesan": f"✓ Disetujui {_rp(kg)} kg ke {lok} — Gudang 1 melihatnya "
-                     "di Antrian tunggu, dan merekalah yang memuat."}
+            "pesan": f"✓ Disetujui {_rp(kg)} kg ke {lok} — Gudang 2 yang "
+                     "menjemput dan mencatat beratnya. Gudang 1 diberi tahu di "
+                     "Sedang berjalan."}
 
 
 class KirimPermintaanReq(BaseModel):

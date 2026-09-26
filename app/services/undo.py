@@ -65,6 +65,11 @@ _TABLE_LABEL = {
     "silo_storage": "isi silo",
     "milling_process": "proses giling",
     "internal_transfers": "pemindahan PK",
+    # Bukan tabel yang bisa di-undo: ia muncul di sini karena kabar rantai
+    # permintaan menyebutnya sebagai `table_name`, dan pratinjau undo
+    # menampilkan tindakan terakhir APA PUN tabelnya. Tanpa label, layar akan
+    # berbunyi "permintaan_pk" — kalimat yang tak menolong pembacanya.
+    "permintaan_pk": "permintaan lot PK",
     "milling_qc_logs": "QC giling",
     "milling_process_verifications": "verifikasi output giling",
     "milling_progress_logs": "hasil giling",

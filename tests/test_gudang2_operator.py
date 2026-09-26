@@ -179,20 +179,33 @@ def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     TRANSIT: pagar ini semula menuntutnya KOSONG, dan niat itu benar untuk apa
     yang ada saat itu — stok miliknya sendiri adalah antrean, bukan barang yang
     dipantau (keputusan pemilik 12 September 2026). Sejak 25 September ada satu
-    hal yang memang bukan stoknya: permintaan PK yang sedang dalam perjalanan
-    dari Gudang 1, yang belum ada di gudang ini dan tak punya satu tombol pun
-    untuknya. Yang dijaga sekarang: Transit boleh memuat ITU SAJA, dan stoknya
-    sendiri tetap tak pernah masuk ke sana.
+    hal yang memang bukan stoknya: permintaan PK dari Gudang 1.
+
+    Yang dijaga BUKAN "dipakai sekali", melainkan APA yang boleh masuk: Transit
+    hanya untuk permintaan PK, dan stok Gudang 2 sendiri tak pernah masuk ke
+    sana. Pagar ini dulu menghitung pemakaian `b.transit` dan menuntutnya
+    TEPAT SATU — hitungan itu memang benar saat ditulis, tetapi ia menjaga
+    angka, bukan aturan, dan angkanya patah 26 September 2026 ketika permintaan
+    yang BERAKHIR TANPA BARANG (ditolak, gugur) mendapat kabarnya di sini juga.
+    Keduanya permintaan; aturannya utuh. Jadi yang diperiksa sekarang
+    aturannya: setiap pemakaian `b.transit` berdiri di dalam kode yang
+    berurusan dengan `PermintaanPk`, dan tak satu pun kartu stok masuk.
     """
     kode = kode_saja(berjalan.untuk_operator_gudang2)
     assert "_kartu_tumpukan_g2(db)" in kode and "_kartu_silo_g2(db, asal_silo)" in kode
     assert "b.menunggu +=" in kode and "b.berjalan +=" in kode
     assert "b.meja" not in kode
-    # Transit dipakai SEKALI, dan hanya untuk permintaan yang sedang berjalan.
-    assert kode.count("b.transit") == 1
-    i = kode.index("b.transit")
-    assert "PermintaanPk" in kode[:i], "Transit diisi sesuatu selain permintaan"
-    for stok in ("_kartu_tumpukan_g2", "_kartu_silo_g2"):
+    # Transit hanya untuk permintaan PK — diperiksa pada SETIAP pemakaiannya,
+    # bukan pada jumlahnya. Yang mendahului tiap pemakaian harus kode yang
+    # berurusan dengan permintaan; kartu stok tak boleh sampai ke sana.
+    pakai = [i for i in range(len(kode)) if kode.startswith("b.transit", i)]
+    assert pakai, "Transit tak dipakai sama sekali — kabar permintaan hilang"
+    for i in pakai:
+        awal = kode.rfind("for ", 0, i)
+        assert "PermintaanPk" in kode[:i] and awal != -1 and (
+            "_pmt." in kode[awal:i] or "PermintaanPk" in kode[awal:i]), \
+            "Transit diisi sesuatu selain permintaan"
+    for stok in ("_kartu_tumpukan_g2", "_kartu_silo_g2", "_kartu_beras_curah"):
         assert f"b.transit.append({stok}" not in kode and \
             f"b.transit += await {stok}" not in kode, \
             "stok Gudang 2 sendiri masuk ke Transit"

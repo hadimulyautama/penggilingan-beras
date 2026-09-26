@@ -1860,6 +1860,42 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
             nota=("Sudah ada di gudang ini — boleh langsung disosoh."
                   if baris.status == _pmt.DIKIRIM else None)))
 
+    # ── Yang BERAKHIR TANPA BARANG: ditolak, atau gugur ──
+    #
+    # Dua keadaan yang kartunya lenyap begitu statusnya berubah, dan satu-satunya
+    # di seluruh rantai yang tak punya jejak di layar mana pun (temuan QA 26
+    # September 2026). Yang lain berkartu: `diminta` di meja Admin, `disetujui`
+    # di antrean sini, `dikirim` di meja Admin lagi.
+    #
+    # Permintaan yang lenyap tanpa kabar membuat orangnya menekannya lagi besok,
+    # dan Admin menolaknya lagi; keduanya mengira pihak satunya yang lalai. Itu
+    # alasan yang sama yang membuat `sebab` diwajibkan pada `tolak()` — sebabnya
+    # sudah tertulis sejak awal, yang belum ada cuma yang membacakannya.
+    #
+    # Di TRANSIT dan TANPA TOMBOL: tak ada yang bisa dikerjakan atas permintaan
+    # yang sudah berakhir. Meminta lagi tetap bisa, dari kartu lotnya di layar
+    # Stok — tempat yang sama dengan permintaan pertamanya, jadi tak ada pintu
+    # kedua yang harus dihafal.
+    for baris in await _pmt.baru_ditutup(db):
+        kode_lot = (await db.execute(
+            select(MillingProcess.kode_proses)
+            .where(MillingProcess.id == baris.milling_process_id)
+        )).scalar_one_or_none() or "lot"
+        ditolak = baris.status == _pmt.DITOLAK
+        b.transit.append(Baris(
+            kode=kode_lot,
+            isi=f"Permintaan {'ditolak Admin' if ditolak else 'gugur'} — "
+                f"{baris.sebab or 'tanpa sebab tercatat'}",
+            keadaan="ditolak Admin" if ditolak else "gugur sendiri",
+            fase="giling",
+            sejak=baris.waktu_tutup or baris.waktu_minta,
+            judul=("Permintaan Anda ditolak" if ditolak
+                   else "Permintaan Anda gugur"),
+            sub=kode_lot,
+            ringkas=baris.sebab or None,
+            kelompok="permintaan", gudang="g2",
+            nota="Masih perlu lot ini? Minta lagi dari kartunya di layar Stok."))
+
     # Tiket PK yang belum dicatat: kartu DIAM. Penempatan PK datang bukan tugas
     # operator (pemilik, 12 September 2026) dan itu tidak diubah — tapi
     # barangnya berdiri di halamannya, dan ia tak boleh jadi orang terakhir yang

@@ -63,6 +63,56 @@ class Diminta:
     status: str = DIMINTA
 
 
+#: Satu `tipe` untuk seluruh rantai permintaan PK, supaya yang membacanya nanti
+#: bisa mengambilnya dengan satu syarat — dan supaya eskalasi 24 jam tak perlu
+#: menghafal empat nama.
+TIPE_KABAR = "permintaan_pk"
+
+
+async def _kabar(db: AsyncSession, baris: PermintaanPk, *, pesan: str,
+                 untuk: str, prioritas: str = "kuning") -> None:
+    """Catat kabar satu langkah rantai permintaan PK.
+
+    LAHIR 26 September 2026, atas temuan QA: sepanjang seluruh rantai —
+    minta → ACC → muat → tutup — tabel `notifications` bertambah NOL baris.
+    Empat keadaan, dan tak satu pun mengabarkan dirinya. Kartunya bagus, tetapi
+    kartu hanya terbaca oleh orang yang kebetulan sedang membuka layar itu.
+
+    ⚠ YANG PERLU DIKETAHUI PEMBACA BERIKUTNYA, sebab ia menentukan seberapa
+    jauh baris ini berguna: sampai hari ini TAK SATU PUN layar membaca
+    `notifications` untuk menampilkannya. Tabel itu ditulis lima tempat
+    (pembelian, pengeringan, penyosohan, packing, dan sekarang di sini) dan
+    dibaca hanya untuk menutup barisnya sendiri. Jadi baris-baris ini adalah
+    CATATAN dan bahan eskalasi — bukan, belum, kabar yang sampai ke mata orang.
+    Yang menjawab keluhan "saya tidak melihat request" adalah kartunya; dan
+    untuk dua keadaan yang kartunya lenyap (ditolak, gugur) ada
+    `baru_ditutup()` di bawah.
+
+    `untuk` memakai kosakata `target_role` yang sudah ada ("admin"/"operator").
+    Model `notifications` tak punya kolom orang, jadi kabar untuk SATU orang
+    tak bisa dialamatkan; pesannya yang menyebut siapa yang dituju. Menambah
+    kolomnya perlu migrasi, dan itu keputusan yang lebih besar daripada butir
+    ini.
+    """
+    from app.services.notification import create_notification
+
+    await create_notification(
+        db, tipe=TIPE_KABAR, pesan=pesan, target_role=untuk,
+        prioritas=prioritas, table_name="permintaan_pk", record_id=baris.id)
+
+
+async def _kode_lot(db: AsyncSession, baris: PermintaanPk) -> str:
+    """Kode lotnya — kabar tanpa nama lot memaksa orang membuka layar lain."""
+    return (await db.execute(
+        select(MillingProcess.kode_proses)
+        .where(MillingProcess.id == baris.milling_process_id)
+    )).scalar_one_or_none() or f"lot #{baris.milling_process_id}"
+
+
+def _kg(n) -> str:
+    return f"{float(n or 0):,.0f}".replace(",", ".")
+
+
 async def _proses(db: AsyncSession, kode: str | None) -> MillingProcess:
     p = (await db.execute(select(MillingProcess).where(
         MillingProcess.kode_proses == (kode or "").strip()))).scalars().first()
@@ -113,6 +163,10 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None) -> Permintaa
                 f"Lot {kode} sudah diminta dan masih menunggu Admin.") from None
         raise
     await db.refresh(baris)
+    await _kabar(db, baris, untuk="admin",
+                 pesan=f"🟡 Gudang 2 meminta lot {kode} — menunggu keputusan "
+                       "Admin (setujui, tetapkan tujuan & bobotnya, atau tolak).")
+    await db.commit()
     return baris
 
 
@@ -209,10 +263,10 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     """LANGKAH 2 — Admin menyetujui, sambil menetapkan TUJUAN dan BOBOT.
 
     Tujuannya ditetapkan DI SINI, bukan saat barangnya berangkat: yang tahu
-    gudang mana yang sedang kosong adalah Admin, dan operator Gudang 1 yang
-    memuat tak boleh disuruh menebaknya sambil berdiri di samping tumpukan.
+    gudang mana yang sedang kosong adalah Admin, dan yang memuat tak boleh
+    disuruh menebaknya sambil berdiri di samping tumpukan.
 
-    Bobotnya batas ATAS, bukan perintah: Gudang 1 boleh memuat kurang (karung
+    Bobotnya batas ATAS, bukan perintah: yang memuat boleh kurang (karung
     terakhir tak penuh), tetapi tidak boleh lebih daripada yang disetujui.
     """
     from app.penggilingan.gudang1.services.milling import _pk_breakdown
@@ -239,12 +293,26 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     baris.disetujui_oleh, baris.waktu_setuju = user.id, now_local()
     await db.commit()
     await db.refresh(baris)
+    # Dikabari ke TANGAN YANG MEMUAT, yaitu Gudang 2 — dan ia sekaligus yang
+    # meminta, jadi satu kabar menjawab dua hal: permintaanmu disetujui, dan
+    # sekarang bagianmu.
+    await _kabar(db, baris, untuk="operator",
+                 pesan=f"🟢 Gudang 2: permintaan lot {await _kode_lot(db, baris)} "
+                       f"DISETUJUI {_kg(kg)} kg — tinggal dijemput dan dimuat. "
+                       "Kartunya di Antrian tunggu.",
+                 prioritas="hijau")
+    await db.commit()
     return baris
 
 
 async def kirim(db: AsyncSession, *, user, permintaan_id: int,
                 berat: float | None) -> PermintaanPk:
-    """LANGKAH 3 — operator Gudang 1 memuat dan mengirim. BARANGNYA BERPINDAH.
+    """LANGKAH 3 — operator Gudang 2 menjemput dan memuat. BARANGNYA BERPINDAH.
+
+    Yang menekannya Gudang 2, bukan Gudang 1 (keputusan pemilik 26 September
+    2026): yang mencatat "berat yang dimuat" harus orang yang melihat karungnya
+    naik. Pagarnya di pintu aksinya (`_is_g2_operator`); di sini yang diperiksa
+    KEADAAN barisnya, bukan peran orangnya.
 
     Perpindahannya lewat `services.transfer`, jalur yang sudah ada: dua
     peristiwa dalam satu transaksi, cermin `internal_transfers`, dan pemasukan
@@ -323,8 +391,17 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
         update(PermintaanPk).where(PermintaanPk.id == permintaan_id)
         .values(internal_transfer_id=r.transfer.id))
     await db.commit()
-    return (await db.execute(select(PermintaanPk).where(
+    baris = (await db.execute(select(PermintaanPk).where(
         PermintaanPk.id == permintaan_id))).scalars().one()
+    # Kabar untuk Admin: ada yang menunggu DITUTUP. Langkah keempat miliknya,
+    # dan kartunya di Menunggu keputusan — tetapi barangnya sudah pindah, jadi
+    # penutupan yang tertunda berarti angka yang belum dibetulkan.
+    await _kabar(db, baris, untuk="admin",
+                 pesan=f"🟡 Kiriman lot {kode_proses} {_kg(kg)} kg sudah dimuat "
+                       f"Gudang 2 ke {lokasi} — tinggal ditutup Admin "
+                       "(betulkan bobotnya kalau timbangan berbeda).")
+    await db.commit()
+    return baris
 
 
 async def tutup_admin(db: AsyncSession, *, user, permintaan_id: int,
@@ -419,6 +496,11 @@ async def tolak(db: AsyncSession, *, user, permintaan_id: int, sebab: str) -> Pe
     baris.sebab = sebab[:500]
     await db.commit()
     await db.refresh(baris)
+    await _kabar(db, baris, untuk="operator",
+                 pesan=f"🔴 Gudang 2: permintaan lot {await _kode_lot(db, baris)} "
+                       f"DITOLAK Admin — {baris.sebab}",
+                 prioritas="merah")
+    await db.commit()
     return baris
 
 
@@ -446,16 +528,68 @@ async def gugurkan_yang_habis(db: AsyncSession) -> int:
     # disusun, yaitu di tiap halaman.
     rincian = await pk_breakdown_banyak(db, [b.milling_process_id for b in terbuka])
     n = 0
+    gugur: list[PermintaanPk] = []
     for baris in terbuka:
         bd = rincian.get(baris.milling_process_id)
         if bd is None or bd.tersedia <= 0:
+            # Sebabnya dibedakan, sebab akibatnya berbeda bagi orangnya: yang
+            # gugur sebelum disetujui cuma permintaan yang tak jadi; yang gugur
+            # SESUDAH disetujui sudah masuk antrean kerja seseorang, dan ia akan
+            # mencari kartu yang tiba-tiba tak ada.
+            sudah_acc = baris.status == DISETUJUI
             baris.status = GUGUR
             baris.waktu_tutup = now_local()
-            baris.sebab = "Lot habis sebelum permintaan dikerjakan."
+            baris.sebab = ("Lot habis lewat jalan lain SESUDAH permintaan ini "
+                           "disetujui — tak ada lagi yang bisa dimuat."
+                           if sudah_acc else
+                           "Lot habis sebelum permintaan dikerjakan.")
+            gugur.append(baris)
             n += 1
     if n:
         await db.commit()
+        # Dikabari SESUDAH commit: kabar atas pengguguran yang gagal ditulis
+        # lebih buruk daripada tak ada kabar. Dan dua pihak, bukan satu — yang
+        # meminta kehilangan permintaannya, dan Admin kehilangan barisnya dari
+        # meja tanpa pernah memutuskan apa pun.
+        for baris in gugur:
+            kode = await _kode_lot(db, baris)
+            await _kabar(db, baris, untuk="operator",
+                         pesan=f"🔴 Gudang 2: permintaan lot {kode} GUGUR — "
+                               f"{baris.sebab}", prioritas="merah")
+            await _kabar(db, baris, untuk="admin",
+                         pesan=f"🟡 Permintaan lot {kode} dari Gudang 2 gugur "
+                               f"sendiri — {baris.sebab}")
+        await db.commit()
     return n
+
+
+async def baru_ditutup(db: AsyncSession, *, jam: int = 24) -> list[PermintaanPk]:
+    """Permintaan yang BARU SAJA berakhir tanpa barang: ditolak, atau gugur.
+
+    Inilah dua keadaan yang kartunya lenyap begitu statusnya berubah, dan
+    satu-satunya di seluruh rantai yang tak punya jejak di layar mana pun.
+    Yang lain berkartu: `diminta` di meja Admin, `disetujui` di antrean Gudang
+    2, `dikirim` di meja Admin lagi.
+
+    Permintaan yang lenyap tanpa kabar membuat operator menekannya lagi besok,
+    dan Admin menolaknya lagi; keduanya mengira pihak satunya yang lalai —
+    alasan yang sama yang membuat `sebab` diwajibkan pada `tolak()`. Sebab itu
+    sudah tertulis; yang belum ada cuma yang membacakannya.
+
+    Berumur, bukan menunggu dibaca: kabar yang harus dipencet supaya hilang akan
+    menumpuk di layar orang yang sedang bekerja dengan satu tangan. Sesudah
+    `jam` ia berhenti sendiri.
+    """
+    from datetime import timedelta
+
+    batas = now_local() - timedelta(hours=jam)
+    return list((await db.execute(
+        select(PermintaanPk)
+        .where(PermintaanPk.status.in_((DITOLAK, GUGUR)),
+               PermintaanPk.waktu_tutup.is_not(None),
+               PermintaanPk.waktu_tutup >= batas)
+        .order_by(PermintaanPk.waktu_tutup.desc())
+    )).scalars().all())
 
 
 # `selesaikan()` DIHAPUS 25 September 2026. Ia menutup permintaan begitu

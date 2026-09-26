@@ -602,3 +602,171 @@ async def test_kartu_permintaan_pindah_ke_menunggu_keputusan(pg, pabrik):
     permintaan = [x.aksi for x in b.meja
                   if x.aksi in ("acc_permintaan_pk", "tutup_permintaan_pk")]
     assert permintaan == ["tutup_permintaan_pk"], permintaan
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# KABAR — temuan QA 26 September 2026 pada 9c5a4c0
+#
+#   "Diuji sepanjang seluruh rantai: minta → ACC → muat → tutup.
+#    `notifications` bertambah NOL baris."
+#
+# Empat keadaan, dan tak satu pun mengabarkan dirinya. Pagar di bawah menghitung
+# barisnya dengan cara yang sama seperti QA menemukannya — atas seluruh rantai,
+# bukan satu langkah — supaya cacat itu tak bisa kembali diam-diam.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+async def test_setiap_langkah_rantai_meninggalkan_kabarnya(pg, pabrik):
+    """Cara QA menemukannya: hitung `notifications` atas SELURUH rantai.
+
+    Bukan per langkah — cacatnya justru bahwa tak ada satu pun yang menulis,
+    dan pagar per langkah akan lulus tiga kali lalu gagal sekali tanpa
+    menunjukkan bahwa yang rusak adalah rantainya.
+    """
+    from sqlalchemy import select
+
+    from app.models import Notification, User
+    from app.services.permintaan_pk import TIPE_KABAR, tutup_admin
+
+    pid = await _minta(pg, pabrik)
+    await _acc(pg, pabrik, pid, berat=6_000)
+    await _kirim(pg, pabrik, pid, berat=6_000)
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tutup_admin(db, user=u, permintaan_id=pid, berat_final=6_000)
+
+    async with pg() as db:
+        kabar = list((await db.execute(
+            select(Notification).where(Notification.tipe == TIPE_KABAR)
+            .order_by(Notification.id))).scalars().all())
+    assert len(kabar) == 3, [k.pesan for k in kabar]
+    # Dialamatkan ke tangan yang memegang langkah BERIKUTNYA, bukan disebar.
+    assert [k.target_role for k in kabar] == ["admin", "operator", "admin"]
+    # Tiap kabar menyebut lot mana — kabar tanpa nama lot memaksa orang membuka
+    # layar lain untuk tahu ia tentang apa.
+    assert all(pabrik["lot"] in k.pesan for k in kabar), [k.pesan for k in kabar]
+    # Dan tertaut ke barisnya, supaya eskalasi 24 jam tahu apa yang tertunda.
+    assert all(k.table_name == "permintaan_pk" and k.record_id == pid
+               for k in kabar)
+    # Isinya menyebut TINDAKANNYA, bukan cuma keadaannya.
+    assert "menunggu keputusan" in kabar[0].pesan
+    assert "DISETUJUI" in kabar[1].pesan and "dimuat" in kabar[1].pesan
+    assert "ditutup" in kabar[2].pesan
+
+
+async def test_penolakan_mengabari_peminta_beserta_sebabnya(pg, pabrik):
+    """Permintaan yang lenyap tanpa kabar membuat orangnya menekannya lagi
+    besok, dan Admin menolaknya lagi; keduanya mengira pihak satunya yang
+    lalai. `sebab` sudah diwajibkan sejak awal — yang belum ada pembacanya."""
+    from sqlalchemy import select
+
+    from app.models import Notification, User
+    from app.services.permintaan_pk import tolak
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tolak(db, user=u, permintaan_id=pid, sebab="Lot ini untuk pesanan lain.")
+
+    async with pg() as db:
+        kabar = list((await db.execute(
+            select(Notification).where(Notification.tipe == "permintaan_pk")
+            .order_by(Notification.id))).scalars().all())
+    tolakan = kabar[-1]
+    assert tolakan.target_role == "operator" and tolakan.prioritas == "merah"
+    assert "DITOLAK" in tolakan.pesan and "pesanan lain" in tolakan.pesan
+
+
+async def test_yang_berakhir_tanpa_barang_tetap_berjejak_di_layarnya(pg, pabrik):
+    """Dua keadaan yang kartunya lenyap begitu statusnya berubah — dan
+    satu-satunya di seluruh rantai yang tak punya jejak di layar mana pun.
+
+    Kabar di `notifications` tidak menjawab ini: tak satu pun layar membacanya
+    untuk ditampilkan (diperiksa 26 September 2026 — tabel itu ditulis lima
+    tempat, dibaca hanya untuk menutup barisnya sendiri). Yang menjawab adalah
+    kartu di Transit, berumur, tanpa tombol.
+    """
+    from app.models import User
+    from app.services.berjalan import untuk_operator_gudang2
+    from app.services.permintaan_pk import baru_ditutup, tolak
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await tolak(db, user=u, permintaan_id=pid, sebab="Dipakai pesanan lain.")
+
+    async with pg() as db:
+        assert [x.id for x in await baru_ditutup(db)] == [pid]
+        b = await untuk_operator_gudang2(db)
+    k = next(x for x in b.transit if x.judul == "Permintaan Anda ditolak")
+    assert "Dipakai pesanan lain." in k.isi
+    assert k.aksi is None and not k.pilihan, \
+        "kartu bertombol atas permintaan yang sudah berakhir"
+    # Dan ia TIDAK menagih lencana antrean: tak ada yang bisa dikerjakan.
+    assert not [x for x in b.menunggu if x.kode == pabrik["lot"]]
+    # Berumur: yang lewat batas berhenti sendiri, tanpa perlu dipencet.
+    async with pg() as db:
+        assert await baru_ditutup(db, jam=0) == []
+
+
+async def test_gugur_sesudah_disetujui_mengabari_dua_pihak(pg, pabrik):
+    """Yang gugur SESUDAH disetujui sudah masuk antrean kerja seseorang, dan ia
+    akan mencari kartu yang tiba-tiba tak ada. Admin pun kehilangan barisnya
+    dari meja tanpa pernah memutuskan apa pun — jadi dua pihak, bukan satu."""
+    from sqlalchemy import select
+
+    from app.models import Notification, PermintaanPk, User
+    from app.services.permintaan_pk import gugurkan_yang_habis
+    from app.services.transfer import create_internal_transfer
+
+    pid = await _minta(pg, pabrik)
+    await _acc(pg, pabrik, pid, berat=1_000)
+    # Lot dihabiskan lewat jalan lain — persis kejadian yang digugurkan.
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        await create_internal_transfer(db, user=u, kode_proses=pabrik["lot"],
+                                       lokasi_tujuan="ditumpuk", berat=6_000)
+    async with pg() as db:
+        assert await gugurkan_yang_habis(db) == 1
+
+    async with pg() as db:
+        kabar = list((await db.execute(
+            select(Notification).where(Notification.tipe == "permintaan_pk")
+            .order_by(Notification.id))).scalars().all())
+        baris = await db.get(PermintaanPk, pid)
+    assert {k.target_role for k in kabar[-2:]} == {"operator", "admin"}
+    # Sebabnya membedakan gugur SESUDAH disetujui dari gugur sebelum diputuskan.
+    assert "SESUDAH permintaan ini disetujui" in (baris.sebab or "")
+    assert any("SESUDAH" in k.pesan for k in kabar[-2:])
+
+
+async def test_kalimat_persetujuan_menyebut_gudang_yang_benar(pg, pabrik):
+    """Temuan QA 26 September 2026 pada 9c5a4c0, kecil dan pasti.
+
+    Pesan sesudah ACC dulu berbunyi "Gudang 1 melihatnya di Antrian tunggu, dan
+    merekalah yang memuat". Dua-duanya salah, dan SELURUH layar lain berkata
+    sebaliknya: yang memuat Gudang 2, kartu Gudang 1 berdiri di Sedang berjalan
+    blok Transit tanpa tombol, dan operator Gudang 1 yang menekan pintunya
+    menerima 403. Admin yang membaca kalimat lama akan menunggu Gudang 1
+    mengerjakan sesuatu yang justru ditolak untuk mereka.
+
+    Diuji pada KALIMAT YANG DIKEMBALIKAN, bukan pada sumbernya: komentar di
+    sebelahnya mengutip kalimat lama supaya sejarahnya tak hilang, dan pagar
+    yang membaca sumber akan tersandung kutipan itu.
+    """
+    from app.models import User
+    from app.web import api
+
+    pid = await _minta(pg, pabrik)
+    async with pg() as db:
+        adm = await db.get(User, pabrik["admin"])
+    jawab = await api.act_acc_permintaan_pk(
+        api.AccPermintaanReq(permintaan=str(pid), tujuan="A", berat=6_000),
+        user=adm)
+    pesan = jawab["pesan"]
+    assert "Gudang 2 yang menjemput" in pesan, pesan
+    assert "Antrian tunggu" not in pesan, "layar Gudang 1 disebut salah"
+    assert "merekalah yang memuat" not in pesan
+    # Dan ia tetap menyebut bahwa Gudang 1 diberi tahu — kehilangan tombol tanpa
+    # kehilangan kabar adalah bagian yang disengaja.
+    assert "Gudang 1 diberi tahu" in pesan and "Sedang berjalan" in pesan
