@@ -8,11 +8,23 @@
    Keputusan pemilik 26 September 2026. Layar Stok memuat BAHAN (gabah di silo
    Gudang 1, PK di Gudang 2); yang sudah jadi berumah di sini.
 
-   Urutan bloknya mengikuti UMUR barangnya: yang baru keluar mesin lebih dulu,
-   sebab itu yang menunggu dikerjakan. Yang sudah dikemas dan hasil samping
-   menyusul — keduanya sudah tenang. #}
+   SATU KARTU PER KATEGORI, bukan per lot: "stok produk setiap kategori
+   dijadikan 1 kartu saja dengan informasi inti total jumlah stock. tetapi di
+   setiap kartu ada informasi dari masing-masing penyosohan dan informasi stock
+   yang sudah keluar." — "misal. premium dijadikan 1 kartu saja."
 
-{% if not curah and not produk and not samping %}
+   ANGKA DI KEPALA KARTU ADALAH SISA DI GUDANG, bukan hasil penyosohan. Kartu
+   yang kepalanya tak sama dengan kakinya akan dihitung ulang orang dengan
+   kalkulator, sekali, lalu tak dipercaya lagi. Empat sukunya berdiri di
+   `.fakta` supaya persamaannya terbaca TANPA membuka laci; rinciannya di
+   dalam laci, sebab yang mencari "dari sosohan mana" mencarinya saat ada
+   keluhan mutu, bukan setiap hari.
+
+   Bentuknya memakai kerangka yang sudah ada — `.padat`, `.fakta`, `.anak` —
+   dan itu disengaja: kelas baru untuk kartu yang sama bentuknya akan berbeda
+   rupa pada perubahan tema berikutnya. #}
+
+{% if not kartu %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -27,73 +39,120 @@
       </p>
     </div>
   </div>
-{% endif %}
+{% else %}
 
-{# ── 1 · BERAS CURAH — yang keluar mesin, belum dikemas ──
-   Inilah blok yang lahir dari keluhan: sampai hari ini barang ini tak ada di
-   angka stok mana pun, dan jarak antara "sosoh selesai" dan "packing dicatat"
-   adalah jam, kadang hari. #}
-{% if curah %}
 <div class="jumlah">
-  <span class="lbl">Beras belum dipacking</span>
-  <div class="jumlah__angka">{{ kg(total_curah) }}<small>kg</small></div>
-  <div class="jumlah__ket">{{ curah|length }} baris · dari mesin sosoh</div>
+  <span class="lbl">Sisa di gudang</span>
+  <div class="jumlah__angka">{{ kg(total_sisa) }}<small>kg</small></div>
+  <div class="jumlah__ket">
+    {{ kartu|length }} kategori{% if total_curah %} ·
+    {{ kg(total_curah) }} kg belum dipacking{% endif %}
+  </div>
 </div>
-<div class="grup" style="gap:7px;margin-top:8px">
-  {% for c in curah %}
-    <div class="benda benda--sosoh">
-      <div class="benda__kepala">
-        <span class="benda__kode">{{ c.kode_proses }}</span>
-        <span class="cip">{{ c.jenis }}</span>
-      </div>
-      <div class="benda__isi">
-        {{ kg(c.sisa_kg) }} kg belum dikemas
-        {%- if c.dikemas_kg %} · dari {{ kg(c.keluar_kg) }} kg keluar mesin,
-        {{ kg(c.dikemas_kg) }} kg sudah dikemas{% endif %}
-      </div>
-      {# Proses yang MASIH BERJALAN disebut apa adanya. Kartu penyosohan sudah
-         jujur soal ini ("hasil & rendemen belum final"); blok stok yang
-         menyebutnya seolah pasti akan membuat orang mengemas dua kali. #}
-      {% if c.berjalan %}
-        <div class="nota nota--hati">
-          Mesin masih menyosoh — angkanya belum final dan masih akan bertambah.
+
+<div class="grup">
+{% for k in kartu %}
+  <details class="padat padat--giling">
+  <summary>
+    <div class="padat__atas">
+      <span class="padat__nama">{{ k.nama }}</span>
+      <span class="padat__nilai{{ ' padat__nilai--kosong' if k.sisa_kg < 0.5 }}">
+        {{- kg(k.sisa_kg) }}<small>kg</small></span>
+    </div>
+    {# Empat suku, berurutan seperti perjalanan barangnya. Yang "belum dikemas"
+       disorot: ia yang selama ini tak ada di angka stok mana pun, dan ia yang
+       menjadi sebab halaman ini lahir. #}
+    <dl class="fakta">
+      <div><dt>Hasil sosoh</dt><dd>{{ kg(k.hasil_kg) }} kg</dd></div>
+      <div><dt>Keluar</dt><dd>{{ kg(k.keluar_kg) }} kg</dd></div>
+      <div><dt>{{ "Tercatat" if k.curah_saja else "Dikemas" }}</dt>
+           <dd>{{ kg(k.dikemas_kg) }} kg</dd></div>
+      <div><dt>{{ "Belum dicatat" if k.curah_saja else "Curah" }}</dt>
+           <dd class="sorot">{{ kg(k.curah_kg) }} kg</dd></div>
+    </dl>
+  </summary>
+
+    <div class="anak">
+      <div class="anak__kepala">Hasil penyosohan · {{ kg(k.hasil_kg) }} kg</div>
+      {% for r in k.hasil %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ r.kode }}</span>
+          <span class="anak__kg">{{ kg(r.kg) }} kg</span>
+          <span class="anak__jam">
+            {%- if r.waktu %}{{ r.waktu.strftime('%d/%m') }}{% endif %}
+            {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
+        </div>
+      {% endfor %}
+      {% if not k.hasil %}
+        <div class="anak__baris">
+          <span class="anak__nama">—</span>
+          <span class="anak__jam">Tak ada catatan hasil sosoh; angkanya
+            seluruhnya dari catatan packing atau stok lama.</span>
         </div>
       {% endif %}
+
+      {% if k.keluar %}
+        <div class="anak__kepala">Sudah keluar · {{ kg(k.keluar_kg) }} kg</div>
+        {% for r in k.keluar %}
+          <div class="anak__baris">
+            <span class="anak__nama">{{ r.kode }}</span>
+            <span class="anak__kg">{{ kg(r.kg) }} kg</span>
+            <span class="anak__jam">
+              {%- if r.waktu %}{{ r.waktu.strftime('%d/%m') }}{% endif %}
+              {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {# Sisa terbelah DUA keadaan yang sangat berbeda, dan belahan "belum
+         dikemas" wajib tampil. Tanpa ia, kartunya menunjukkan selisih yang
+         akan dikira kebocoran — padahal itu justru beras curahnya. #}
+      <div class="anak__kepala">Sisa di gudang · {{ kg(k.sisa_kg) }} kg</div>
+      <div class="anak__baris">
+        <span class="anak__nama">
+          {{- "sudah tercatat sebagai stok" if k.curah_saja else "sudah dikemas" }}</span>
+        <span class="anak__kg">{{ kg(k.dikemas_kg) }} kg</span>
+      </div>
+      {% for p in kemasan.get(k.jenis, []) %}
+        <div class="anak__baris">
+          <span class="anak__nama">· {{ p.nama }} · {{ p.kemasan }}</span>
+          <span class="anak__kg">{{ kg(p.kg) }} kg
+            {%- if p.karung %} · {{ p.karung }} krg{% endif %}</span>
+        </div>
+      {% endfor %}
+      <div class="anak__baris">
+        <span class="anak__nama">
+          {{- "belum dicatat" if k.curah_saja else "belum dikemas (curah)" }}</span>
+        <span class="anak__kg">{{ kg(k.curah_kg) }} kg</span>
+      </div>
     </div>
-  {% endfor %}
+
+    {# ── Dua keadaan yang BERLAWANAN ARAH, dua kalimat yang berbeda ──
+       Satu tanda seru untuk keduanya akan membuat operator mengabaikan
+       dua-duanya. Minus besar itu alarm: ada yang dibukukan tanpa pernah
+       diproduksi. Minus kecil cuma beda nominal-vs-timbang — berat karung
+       dihitung `jumlah × ukuran`, hasil sosoh DITIMBANG. #}
+    {% if k.alarm %}
+      <div class="nota nota--buruk">
+        ⚠ Yang dibukukan melebihi yang pernah keluar mesin sebanyak
+        {{ kg(-k.curah_kg) }} kg. Ini bukan selisih timbangan — periksa catatan
+        packing dan barang keluar kategori ini.
+      </div>
+    {% elif k.beda_timbangan %}
+      <div class="nota">
+        Beda {{ kg(-k.curah_kg) }} kg antara yang ditimbang dan berat karung
+        nominal — masih di dalam batas wajar, dan bukan stok.
+      </div>
+    {% endif %}
+
+    {% if k.belum_final_kg %}
+      <div class="nota nota--hati">
+        {{ kg(k.belum_final_kg) }} kg di antaranya dari mesin yang MASIH
+        menyosoh — angka itu belum final dan masih akan bertambah.
+      </div>
+    {% endif %}
+  </details>
+{% endfor %}
 </div>
 {% endif %}
-
-{# ── 2 & 3 · Barang jadi dan hasil samping ──
-   Pindah dari layar Stok 26 September 2026. Hitungannya tetap
-   `services.stok.barang_jadi_g2` — satu hitungan, beberapa pembaca. #}
-{% if produk or samping %}
-<div style="margin-top:18px">
-  <div class="jumlah">
-    <span class="lbl">Sudah dikemas &amp; hasil samping</span>
-    <div class="jumlah__angka">{{ kg((produk + samping)|sum(attribute="kg")) }}<small>kg</small></div>
-    <div class="jumlah__ket">
-      {{ produk|length }} produk · {{ samping|length }} hasil samping
-    </div>
-  </div>
-  {% if produk %}
-    <div class="grup" style="gap:7px;margin-top:8px">
-      {% for k in produk %}{{ st.kartu_barang(k) }}{% endfor %}
-    </div>
-  {% endif %}
-  {% if samping %}
-    <span class="lbl" style="margin-top:12px">Hasil samping</span>
-    <div class="grup" style="gap:7px">
-      {% for k in samping %}{{ st.kartu_barang(k) }}{% endfor %}
-    </div>
-  {% endif %}
-</div>
-{% endif %}
-{% endblock %}
-
-{% block kaki %}
-<div class="kaki">
-  Beras masuk daftar ini begitu keluar dari mesin sosoh — packing
-  memindahkannya, bukan menciptakannya
-</div>
 {% endblock %}

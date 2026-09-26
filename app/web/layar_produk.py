@@ -20,8 +20,16 @@ PEMBAGIANNYA:
     /stok         BAHAN  — gabah di silo Gudang 1, PK di Gudang 2
     /stok-produk  HASIL  — beras (curah & dikemas) dan hasil samping
 
-Tiga blok, urutannya mengikuti umur barangnya: yang baru keluar mesin lebih
-dulu, yang sudah dikemas berikutnya, hasil samping menyusul.
+SATU KARTU PER KATEGORI, bukan per lot (keputusan pemilik 26 September 2026):
+"stok produk setiap kategori dijadikan 1 kartu saja dengan informasi inti total
+jumlah stock. tetapi di setiap kartu ada informasi dari masing-masing
+penyosohan dan informasi stock yang sudah keluar." — "misal. premium dijadikan
+1 kartu saja."
+
+Hitungannya di `services.stok.stok_produk`; layar ini cuma menggambar. Rincian
+KEMASANNYA (merk × ukuran) tetap diambil dari `barang_jadi_g2`, hitungan yang
+sudah dipakai layar lain — dua hitungan untuk satu pertanyaan akan berselisih
+pada perubahan berikutnya.
 """
 from __future__ import annotations
 
@@ -47,11 +55,19 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     if view == SELEPAN:
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
-        curah = await svc.beras_curah(db)
+        kartu = await svc.stok_produk(db)
         bj = await svc.barang_jadi_g2(db)
+    # Rincian kemasan digantung ke kartu kategorinya lewat `jenis` — kunci yang
+    # sama yang dipakai `stok.jenis_produk`, jadi tak ada pemetaan kedua yang
+    # bisa berselisih. Angkanya NETO (masuk − keluar) seperti di layar barang
+    # jadi, supaya jumlahnya sama dengan baris "sudah dikemas" di kartunya;
+    # rincian bruto di bawah angka neto akan dijumlah orang lalu tak cocok.
+    kemasan: dict[str, list[dict]] = {}
+    for k in bj.produk + bj.samping:
+        kemasan.setdefault(k["jenis"], []).append(k)
     return await render_laci(
         request, "stok_produk.html", layar="stok_produk",
-        curah=curah,
-        produk=bj.produk, samping=bj.samping,
-        total_curah=sum(c.sisa_kg for c in curah if c.sisa_kg > 0),
+        kartu=kartu, kemasan=kemasan,
+        total_sisa=sum(k.sisa_kg for k in kartu if k.sisa_kg > 0),
+        total_curah=sum(k.curah_kg for k in kartu if k.curah_kg > 0),
     )

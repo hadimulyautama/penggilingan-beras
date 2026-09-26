@@ -723,6 +723,264 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     return keluar
 
 
+def jenis_produk(kategori: str | None, mutu_kode: str | None) -> str:
+    """Satu nama untuk satu barang, dipakai SEMUA pembaca produk jadi.
+
+    Aturannya sudah ada sejak lama, ditulis satu baris di
+    `inventory/finished_goods.py`: beras putih dikenali lewat kode standar
+    mutunya (premium / medsuper / medium / sayur), kategori lain lewat
+    `product_skus.kategori` (beras_b, menir, broken, bekatul, reject). Yang
+    baru cuma tempatnya.
+
+    DIANGKAT KE SINI 26 September 2026 atas peringatan QA, dan bukan demi
+    kerapian: aturan ini sekarang dibaca empat tempat — penolakan packing,
+    kartu barang jadi, kartu Stok Produk, dan hitungan barang keluar. Kalau ia
+    hidup empat kali, empat layar akan menyebut angka berbeda tentang beras
+    yang sama, dan bedanya baru ketahuan ketika ada yang membandingkan.
+
+    `mutu_kode` kosong pada beras putih berarti mutunya tak pernah ditetapkan;
+    ia jatuh ke keranjang `beras_putih` sendiri, bukan ditebak jadi salah satu
+    grade — tebakan di sini akan menambah stok pada kartu yang salah.
+    """
+    kategori = (kategori or "").strip().lower()
+    if kategori == "beras_putih":
+        return (mutu_kode or "").strip().lower() or "beras_putih"
+    return kategori
+
+
+def nama_produk(jenis: str) -> str:
+    """Nama yang dibaca orang untuk `jenis_produk`."""
+    return _NAMA_GRADE.get(jenis) or NAMA_KATEGORI.get(jenis) or jenis.title()
+
+
+_NAMA_GRADE = {"premium": "Beras Premium", "medsuper": "Beras Medium Super",
+               "medium": "Beras Medium", "sayur": "Beras Sayur",
+               "beras_putih": "Beras putih (mutu belum ditetapkan)"}
+
+
+#: Selisih yang MASIH WAJAR antara yang ditimbang dan yang dihitung nominal.
+#:
+#: Berat kemasan dihitung `jumlah_karung × ukuran` — angka nominal — sedangkan
+#: hasil penyosohan DITIMBANG. Keduanya hampir tak pernah sama persis, jadi
+#: selisih kecil bukan kebocoran. Ambangnya diambil dari yang sudah dipakai
+#: rekonsiliasi packing sejak sebelumnya (2% atau 50 kg, mana yang lebih
+#: besar) supaya dua tempat tak pernah berselisih pendapat tentang "selisih
+#: ini wajar atau tidak".
+def toleransi_nominal(hasil_kg: float) -> float:
+    return max(abs(float(hasil_kg)) * 0.02, 50.0)
+
+
+@dataclass
+class RincianProduk:
+    """Satu baris rincian di dalam kartu kategori."""
+
+    kode: str
+    kg: float
+    waktu: object | None = None
+    ket: str | None = None
+    #: Proses yang belum tutup: angkanya masih akan bertambah.
+    berjalan: bool = False
+
+
+@dataclass
+class KartuProduk:
+    """SATU kartu untuk SATU kategori produk — apa pun berapa kali disosoh.
+
+    Keputusan pemilik 26 September 2026: "stok produk setiap kategori dijadikan
+    1 kartu saja dengan informasi inti total jumlah stock. tetapi di setiap
+    kartu ada informasi dari masing-masing penyosohan dan informasi stock yang
+    sudah keluar. artinya total hasil penyosohan adalah total jumlah stock
+    ditambah stock yang keluar." Dan: "misal. premium dijadikan 1 kartu saja."
+
+    Jadi kartunya BUKAN per lot. Premium satu kartu, dengan rincian per
+    penyosohan di dalamnya.
+
+    ⚠ PERSAMAANNYA PUNYA EMPAT SUKU, BUKAN DUA. Kalimat pemilik menyebut dua
+    ("stok + keluar"), tetapi "stok" di Gudang 2 terbelah dua keadaan yang
+    sangat berbeda:
+
+        hasil = belum dikemas + sudah dikemas + sudah keluar
+
+    Belahan "belum dikemas" WAJIB tampil. Kalau ia tak digambar, kartunya
+    menunjukkan selisih yang akan dikira kebocoran — padahal justru beras curah
+    itulah sebab seluruh keluhan yang melahirkan halaman ini.
+
+    ANGKA DI KEPALA KARTU ADALAH `sisa_kg`, bukan `hasil_kg`. Kartu yang
+    kepalanya tak sama dengan kakinya akan dihitung ulang orang dengan
+    kalkulator, sekali, lalu tak dipercaya lagi.
+    """
+
+    jenis: str
+    nama: str
+    #: Kumulatif yang tercatat keluar mesin sosoh, seluruh proses.
+    hasil_kg: float
+    hasil: list[RincianProduk]
+    #: Bagian `hasil_kg` yang datang dari proses yang BELUM tutup.
+    belum_final_kg: float
+    #: Yang sudah punya rumah resmi dan masih di gudang. Untuk beras: sudah
+    #: dikemas. Untuk bekatul: sudah tercatat di `byproduct_stock`.
+    dikemas_kg: float
+    #: Yang masih berdiri tanpa rumah resmi — inilah yang selama ini hilang.
+    curah_kg: float
+    keluar_kg: float
+    keluar: list[RincianProduk]
+    #: `dikemas_kg + curah_kg`, dan sama dengan `hasil_kg - keluar_kg`.
+    sisa_kg: float
+    #: Kategori yang tak pernah dikemas (bekatul). Kartunya tanpa kata "kemas".
+    curah_saja: bool = False
+
+    @property
+    def alarm(self) -> bool:
+        """Yang MINUS itu alarm, yang plus kecil itu wajar — dan bedanya wajib
+        terlihat. Satu tanda seru untuk dua keadaan yang berlawanan arah akan
+        membuat operator mengabaikan dua-duanya.
+
+        Minus artinya yang dikemas atau dikeluarkan melebihi yang pernah keluar
+        dari mesin mana pun: ada beras yang dibukukan tanpa pernah diproduksi.
+        """
+        return self.curah_kg < -toleransi_nominal(self.hasil_kg)
+
+    @property
+    def beda_timbangan(self) -> bool:
+        """Minus yang masih di dalam ambang nominal-vs-timbang: bukan alarm,
+        dan bukan pula stok. Disebut apa adanya supaya tak dikira kebocoran."""
+        return -toleransi_nominal(self.hasil_kg) <= self.curah_kg < -0.5
+
+
+async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
+    """Satu kartu per kategori, dengan persamaan empat sukunya.
+
+    Tiga sumber angkanya, semuanya sudah ada sebelum hari ini:
+
+      hasil    `polishing_output_logs`, kumulatif TERAKHIR per (proses, jenis)
+               — lewat `output_sosoh`, satu pembaca untuk semua.
+      dikemas  `finished_goods_stock` × `product_skus` (+ standar mutu untuk
+               beras putih); untuk bekatul `byproduct_stock`.
+      keluar   `outgoing_items`: `finished_goods` lewat SKU + standar mutu,
+               `byproduct_curah` lewat `jenis_byproduct`. `pk_langsung` BUKAN
+               milik halaman ini — itu PK Gudang 1, bahan, bukan produk.
+
+    Yang MASIH BERJALAN ikut dihitung dan ditandai (`belum_final_kg`,
+    `RincianProduk.berjalan`). Berasnya memang sudah berdiri di lantai; tetapi
+    kartu yang menyebut angka belum final seolah pasti akan membuat orang
+    mengemas dua kali. Kartu penyosohan sudah jujur soal ini, dan blok ini
+    tidak boleh lebih berani daripadanya.
+    """
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from sqlalchemy import func
+
+    from app.penggilingan.inventory.finished_goods import hitung_stok_bekatul
+    from app.penggilingan.inventory.models import (
+        ByproductStock, FinishedGoodsStock, OutgoingItem, OutgoingRecord,
+        ProductSku, RiceQualityStandard)
+
+    hasil: dict[str, list[RincianProduk]] = {}
+    berjalan: dict[str, float] = {}
+    for proc in (await db.execute(
+        select(PolishingProcess).order_by(PolishingProcess.id.desc())
+    )).scalars().all():
+        jalan = proc.status != "selesai"
+        for jenis, kg in (await output_sosoh(db, proc.id)).items():
+            hasil.setdefault(jenis, []).append(RincianProduk(
+                kode=proc.kode_proses, kg=float(kg),
+                waktu=(proc.waktu_selesai if not jalan else proc.waktu_mulai),
+                berjalan=jalan,
+                ket=("mesin masih menyosoh — belum final" if jalan else None)))
+            if jalan:
+                berjalan[jenis] = berjalan.get(jenis, 0.0) + float(kg)
+
+    # ── Yang sudah dikemas (seluruh riwayat, bukan sisanya) ──
+    dikemas: dict[str, float] = {}
+    for kategori, mutu, kg in (await db.execute(
+        select(ProductSku.kategori, RiceQualityStandard.kode,
+               func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .join(RiceQualityStandard,
+              RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
+              isouter=True)
+        .group_by(ProductSku.kategori, RiceQualityStandard.kode)
+    )).all():
+        j = jenis_produk(kategori, mutu)
+        dikemas[j] = dikemas.get(j, 0.0) + float(kg)
+
+    # ── Yang sudah keluar ──
+    #
+    # Dua item_type, dan `pk_langsung` sengaja tak diambil: ia PK dari Gudang 1
+    # yang dijual tanpa disosoh, jadi ia tak pernah menjadi produk halaman ini.
+    # Menjumlahkannya di sini akan membuat kartu beras kehilangan stok atas
+    # barang yang bukan berasnya.
+    keluar: dict[str, list[RincianProduk]] = {}
+    #: Yang keluar DARI CURAH, dipisah dari yang keluar dari karung: keduanya
+    #: mengurangi belahan stok yang berbeda, dan menjumlahkannya jadi satu akan
+    #: membuat salah satu belahan terlihat minus tanpa sebab.
+    keluar_curah: dict[str, float] = {}
+    for tipe, mutu, kategori, byp, kode, pembeli, tgl, kg in (await db.execute(
+        select(OutgoingItem.item_type, RiceQualityStandard.kode,
+               ProductSku.kategori, OutgoingItem.jenis_byproduct,
+               OutgoingRecord.kode, OutgoingRecord.nama_pembeli,
+               OutgoingRecord.waktu, OutgoingItem.berat_kg)
+        .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+        .join(ProductSku, ProductSku.id == OutgoingItem.product_sku_id, isouter=True)
+        .join(RiceQualityStandard,
+              RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
+              isouter=True)
+        .where(OutgoingItem.item_type.in_(("finished_goods", "byproduct_curah")))
+        .order_by(OutgoingRecord.waktu.desc())
+    )).all():
+        if tipe == "byproduct_curah":
+            j = jenis_produk((byp or "").lower(), None)
+        else:
+            j = jenis_produk(kategori, mutu)
+        if not j:
+            continue
+        keluar.setdefault(j, []).append(RincianProduk(
+            kode=kode, kg=float(kg), waktu=tgl,
+            ket=(pembeli or None) if tipe == "finished_goods"
+                else " · ".join(x for x in (pembeli, "curah") if x)))
+        if tipe == "byproduct_curah":
+            keluar_curah[j] = keluar_curah.get(j, 0.0) + float(kg)
+
+    kartu: list[KartuProduk] = []
+    for jenis in sorted(set(hasil) | set(dikemas) | set(keluar),
+                        key=lambda j: (_URUT_BARANG.get(j, 99), j)):
+        baris_hasil = hasil.get(jenis, [])
+        h = sum(r.kg for r in baris_hasil)
+        baris_keluar = keluar.get(jenis, [])
+        k = sum(r.kg for r in baris_keluar)
+        curah_saja = jenis == "bekatul"
+        if curah_saja:
+            # Bekatul tak pernah dikemas; "rumah resminya" `byproduct_stock`,
+            # dan yang keluar SELALU datang dari sana — tak mungkin mengirim
+            # bekatul yang belum pernah dibukukan. Maka barisnya `masuk −
+            # keluar`, yang persis `hitung_stok_bekatul`: satu angka, satu
+            # pertanyaan. Sisanya (`hasil − masuk`) adalah bekatul yang keluar
+            # mesin tetapi belum dicatat — celah yang sama bentuknya dengan
+            # beras curah, dan sama perlunya terlihat.
+            masuk = float((await db.execute(
+                select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+                .where(ByproductStock.jenis_produk == "bekatul")
+            )).scalar_one())
+            punya_rumah = await hitung_stok_bekatul(db)   # = masuk − keluar
+            curah = h - masuk
+        else:
+            total_kemas = dikemas.get(jenis, 0.0)
+            # Yang keluar berkarung mengurangi belahan "dikemas"; yang keluar
+            # curah (menir atau broken yang dijual langsung dari lantai)
+            # mengurangi belahan curah. Keduanya dijumlah utuh di `keluar_kg`.
+            punya_rumah = total_kemas - (k - keluar_curah.get(jenis, 0.0))
+            curah = h - total_kemas - keluar_curah.get(jenis, 0.0)
+        sisa = punya_rumah + curah
+        if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
+            continue
+        kartu.append(KartuProduk(
+            jenis=jenis, nama=nama_produk(jenis), hasil_kg=h, hasil=baris_hasil,
+            belum_final_kg=berjalan.get(jenis, 0.0),
+            dikemas_kg=punya_rumah, curah_kg=curah,
+            keluar_kg=k, keluar=baris_keluar, sisa_kg=sisa,
+            curah_saja=curah_saja))
+    return kartu
+
+
 #: Urutan tampil: beras terbaik lebih dulu, hasil samping menyusul.
 _URUT_BARANG = {j: n for n, j in enumerate(
     ("premium", "medsuper", "medium", "sayur", "beras_putih", "beras_b",
@@ -785,12 +1043,12 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             if stok_["karung"] <= 0 and stok_["kg"] <= 0:
                 kartu[kunci] = None
                 continue
-            if sku.kategori == "beras_putih":
-                jenis = (mutu_kode or "").lower() or "beras_putih"
-                nama = mutu_nama or "Beras putih"
-            else:
-                jenis = sku.kategori
-                nama = NAMA_KATEGORI.get(sku.kategori, sku.kategori.title())
+            # Satu aturan, satu tempat — `jenis_produk`. Namanya masih dari
+            # standar mutunya kalau ada, sebab di sini yang dibaca orang adalah
+            # nama panjangnya, bukan kodenya.
+            jenis = jenis_produk(sku.kategori, mutu_kode)
+            nama = (mutu_nama or "Beras putih") if sku.kategori == "beras_putih" \
+                else NAMA_KATEGORI.get(sku.kategori, sku.kategori.title())
             if merk:
                 nama += f" · {merk}"
             k = kartu[kunci] = {

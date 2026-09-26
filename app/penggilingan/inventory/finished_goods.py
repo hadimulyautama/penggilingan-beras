@@ -157,9 +157,13 @@ async def catat_packing(
     #
     # Kalimatnya menyebut berapa yang tersedia: yang ditolak tanpa angka akan
     # mencoba lagi dengan tebakan.
-    from app.services.stok import output_sosoh
+    from app.services.stok import jenis_produk, output_sosoh
 
-    jenis_out = grade if kategori == "beras_putih" else kategori
+    # Aturan pemetaannya tak lagi ditulis di sini: ia diangkat jadi
+    # `stok.jenis_produk` 26 September 2026, dan dibaca juga oleh kartu Stok
+    # Produk serta hitungan barang keluar. Empat pembaca yang menyusun sendiri
+    # "apa nama barang ini" akan menyebut angka berbeda tentang beras yang sama.
+    jenis_out = jenis_produk(kategori, grade)
     keluar = (await output_sosoh(db, proc.id)).get(jenis_out)
     if keluar is None:
         raise InventoryError(

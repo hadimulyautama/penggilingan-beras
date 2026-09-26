@@ -212,3 +212,326 @@ async def test_pintu_tertutup_hanya_bagi_operator_gudang1(pg, sosoh, pemasok):
     assert "stok_produk" not in b3.lencana()["PINTU_MATI"], "operator G2 kehilangan pintunya"
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SATU KARTU PER KATEGORI — keputusan pemilik 26 September 2026
+#
+#   "stok produk setiap kategori dijadikan 1 kartu saja dengan informasi inti
+#    total jumlah stock. tetapi di setiap kartu ada informasi dari masing-masing
+#    penyosohan dan informasi stock yang sudah keluar. artinya total hasil
+#    penyosohan adalah total jumlah stock ditambah stock yang keluar."
+#   "misal. premium dijadikan 1 kartu saja."
+#
+# Persamaannya PUNYA EMPAT SUKU, bukan dua — "stok" di Gudang 2 terbelah dua
+# keadaan yang sangat berbeda, dan belahan "belum dikemas" itulah yang selama
+# ini hilang:
+#
+#       hasil = belum dikemas + sudah dikemas + sudah keluar
+# ══════════════════════════════════════════════════════════════════════════
+
+
+async def _sosoh_lagi(pg, sosoh, kode: str, jenis: str, kg: float, *,
+                      selesai: bool = True):
+    """Satu penyosohan tambahan yang mengeluarkan `kg` `jenis`."""
+    from app.database import now_local
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+
+    async with pg() as db:
+        p = PolishingProcess(
+            kode_proses=kode, status="selesai" if selesai else "berjalan",
+            waktu_mulai=now_local(),
+            waktu_selesai=now_local() if selesai else None,
+            created_by=sosoh["user"])
+        db.add(p)
+        await db.flush()
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis=jenis,
+                                  berat_kg=kg, waktu_update=now_local(),
+                                  input_by=sosoh["user"]))
+        await db.commit()
+        return p.id
+
+
+def _persamaan(k) -> None:
+    """Diperiksa DENGAN ANGKA, bukan dengan mata — permintaan QA.
+
+    Dua hal sekaligus, dan keduanya wajib:
+      · empat sukunya menutup: hasil == curah + dikemas + keluar;
+      · KEPALA kartu sama dengan KAKINYA: sisa == dikemas + curah. Kartu yang
+        kepalanya tak sama dengan kakinya akan dihitung ulang orang dengan
+        kalkulator, sekali, lalu tak dipercaya lagi.
+    """
+    assert abs(k.hasil_kg - (k.curah_kg + k.dikemas_kg + k.keluar_kg)) < 0.5, (
+        f"{k.jenis}: {k.hasil_kg} != {k.curah_kg} + {k.dikemas_kg} + {k.keluar_kg}")
+    assert abs(k.sisa_kg - (k.dikemas_kg + k.curah_kg)) < 0.5, (
+        f"{k.jenis}: kepala {k.sisa_kg} != kaki {k.dikemas_kg} + {k.curah_kg}")
+
+
+async def test_satu_jenis_dari_tiga_penyosohan_tetap_satu_kartu(pg, sosoh):
+    """Butir pemilik yang paling mudah dikerjakan salah: "misal. premium
+    dijadikan 1 kartu saja." Tiga penyosohan, satu kartu, tiga baris rincian —
+    dan totalnya sama dengan jumlah ketiganya."""
+    from app.services.stok import stok_produk
+
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-02", "medium", 4_000)
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-03", "medium", 2_000)
+
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    assert [k.jenis for k in kartu] == ["medium"], \
+        f"satu kategori harus satu kartu: {[k.jenis for k in kartu]}"
+    k = kartu[0]
+    assert len(k.hasil) == 3, f"rincian per penyosohan hilang: {k.hasil}"
+    assert {r.kode for r in k.hasil} == {"POL-UJI-01", "POL-UJI-02", "POL-UJI-03"}
+    assert k.hasil_kg == 15_000 == sum(r.kg for r in k.hasil)
+    assert k.sisa_kg == 15_000 and k.curah_kg == 15_000 and k.dikemas_kg == 0
+    _persamaan(k)
+
+
+async def test_persamaan_empat_suku_bertahan_di_setiap_langkah(pg, sosoh):
+    """Permintaan QA: persamaannya diuji SEBAGAI persamaan, untuk tiap kategori,
+    pada tiap keadaan — bukan sekali di akhir.
+
+    Langkahnya mengikuti perjalanan barangnya: keluar mesin → dikemas sebagian
+    → dikirim sebagian. Suku yang bergeser berpindah ke suku lain; jumlahnya
+    tak pernah berubah.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.penggilingan.inventory.outgoing import kirim_finished_goods
+    from app.services.stok import stok_produk
+
+    async def periksa():
+        async with pg() as db:
+            kartu = await stok_produk(db)
+        for k in kartu:
+            _persamaan(k)
+        return {k.jenis: k for k in kartu}
+
+    k = (await periksa())["medium"]
+    assert (k.hasil_kg, k.curah_kg, k.dikemas_kg, k.keluar_kg) == (9_000, 9_000, 0, 0)
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=sosoh["kode"],
+                            kategori="beras_putih", grade="medium",
+                            material_kode="biasa", ukuran=25, jumlah_karung=200)
+    k = (await periksa())["medium"]
+    assert (k.curah_kg, k.dikemas_kg, k.keluar_kg) == (4_000, 5_000, 0)
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await kirim_finished_goods(db, user=u, kategori="beras_putih",
+                                   grade="medium", material_kode="biasa",
+                                   ukuran=25, jumlah_karung=80,
+                                   nama_pembeli="Toko Uji")
+    k = (await periksa())["medium"]
+    assert (k.curah_kg, k.dikemas_kg, k.keluar_kg) == (4_000, 3_000, 2_000)
+    # Dan barang keluarnya BERKARTU, dengan pembelinya — "dari surat mana"
+    # adalah pertanyaan yang muncul begitu pembeli menelepon.
+    assert len(k.keluar) == 1 and k.keluar[0].kg == 2_000
+    assert "Toko Uji" in (k.keluar[0].ket or "")
+    assert k.keluar[0].kode.startswith("OUT-")
+
+
+async def test_dua_jenis_jadi_dua_kartu_tak_saling_menimpa(pg, sosoh):
+    """Satu proses, dua jenis beras → DUA kartu. Dulu keduanya lenyap sama
+    sekali; yang lebih buruk daripada lenyap adalah salah satu menimpa yang
+    lain dan angkanya terbaca benar."""
+    from app.database import now_local
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(
+            polishing_process_id=sosoh["proses_id"], jenis="premium",
+            berat_kg=1_500, waktu_update=now_local(), input_by=sosoh["user"]))
+        await db.commit()
+
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    assert [k.jenis for k in kartu] == ["premium", "medium"], \
+        "urutannya beras terbaik lebih dulu"
+    assert {k.jenis: k.hasil_kg for k in kartu} == {"premium": 1_500, "medium": 9_000}
+    for k in kartu:
+        _persamaan(k)
+
+
+async def test_yang_dibukukan_melebihi_hasil_jadi_ALARM(pg, sosoh):
+    """Dua keadaan yang BERLAWANAN ARAH, dan bedanya wajib terlihat:
+
+      · selisih kecil POSITIF itu normal — beras curah yang belum dikemas;
+      · selisih NEGATIF itu alarm — ada yang dibukukan tanpa pernah diproduksi.
+
+    Satu tanda seru untuk dua keadaan berlawanan akan membuat operator
+    mengabaikan dua-duanya.
+
+    Ditulis langsung ke tabel, bukan lewat `catat_packing`: pintu itu sekarang
+    MENOLAK packing yang melebihi curah (dan pagarnya sendiri ada di
+    `test_packing_melebihi_curah_ditolak_dengan_angkanya`). Yang diuji di sini
+    keadaan yang sudah tertulis sebelum pagar itu ada — dan kartunya wajib
+    tetap jujur tentangnya, bukan menyembunyikannya.
+    """
+    from app.database import now_local
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.penggilingan.inventory.packaging import find_or_create_sku, get_standard
+    from app.services.stok import stok_produk, toleransi_nominal
+
+    async with pg() as db:
+        sku = await find_or_create_sku(db, kategori="beras_putih",
+                                       material_kode="biasa", ukuran=25)
+        std = await get_standard(db, "medium")
+        db.add(FinishedGoodsStock(
+            product_sku_id=sku.id, rice_quality_standard_id=std.id if std else None,
+            source_type="polishing", source_id=sosoh["proses_id"],
+            jumlah_karung=400, berat_total_kg=10_000, waktu=now_local(),
+            input_by=sosoh["user"]))
+        await db.commit()
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert k.curah_kg == -1_000, k.curah_kg
+    assert k.alarm, "yang dibukukan melebihi hasil tapi tak jadi alarm"
+    assert not k.beda_timbangan, "alarm tak boleh sekaligus disebut wajar"
+    # Ambangnya sama dengan yang dipakai rekonsiliasi packing: 2% atau 50 kg.
+    assert toleransi_nominal(9_000) == 180.0
+    _persamaan(k)
+
+
+async def test_selisih_sekecil_beda_timbangan_bukan_alarm(pg, sosoh):
+    """Berat karung dihitung `jumlah × ukuran` — nominal — sedangkan hasil sosoh
+    DITIMBANG. Keduanya hampir tak pernah sama persis, jadi minus kecil bukan
+    kebocoran. Yang menyebutnya alarm mengajari orang mengabaikan alarm."""
+    from app.database import now_local
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.penggilingan.inventory.packaging import find_or_create_sku, get_standard
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        sku = await find_or_create_sku(db, kategori="beras_putih",
+                                       material_kode="biasa", ukuran=25)
+        std = await get_standard(db, "medium")
+        db.add(FinishedGoodsStock(
+            product_sku_id=sku.id, rice_quality_standard_id=std.id if std else None,
+            source_type="polishing", source_id=sosoh["proses_id"],
+            jumlah_karung=362, berat_total_kg=9_050, waktu=now_local(),
+            input_by=sosoh["user"]))                      # lebih 50 kg saja
+        await db.commit()
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert k.curah_kg == -50 and not k.alarm and k.beda_timbangan
+
+
+async def test_proses_berjalan_tergambar_belum_final_di_kartu_kategori(pg, sosoh):
+    """Kartu penyosohan sudah jujur soal ini; blok stok yang baru tak boleh
+    lebih berani daripadanya. Berasnya memang berdiri di lantai — tetapi
+    angkanya masih akan bertambah, dan yang menghitung stok atasnya akan
+    mengemas dua kali."""
+    from app.services.stok import stok_produk
+
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-09", "medium", 3_000, selesai=False)
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert k.hasil_kg == 12_000, "yang masih berjalan tetap dihitung"
+    assert k.belum_final_kg == 3_000, "tak ada yang menyebutnya belum final"
+    jalan = [r for r in k.hasil if r.berjalan]
+    assert len(jalan) == 1 and jalan[0].kode == "POL-UJI-09"
+    assert "belum final" in (jalan[0].ket or "")
+    _persamaan(k)
+
+
+async def test_bekatul_berbentuk_lain_dan_tak_dipaksa_seragam(pg, sosoh):
+    """Bekatul curah saja — ia tak pernah dikemas. Kartunya tak boleh menyebut
+    "dikemas", dan angka stoknya wajib sama dengan `hitung_stok_bekatul`: satu
+    pertanyaan, satu angka. Yang belum dicatat tetap terlihat, sebab celahnya
+    sama bentuknya dengan beras curah."""
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import (catat_bekatul,
+                                                           hitung_stok_bekatul)
+    from app.services.stok import stok_produk
+
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-BK", "bekatul", 800)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_bekatul(db, user=u, kode_pol="POL-UJI-BK", berat_kg=500)
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "bekatul")
+        assert k.dikemas_kg == await hitung_stok_bekatul(db)
+    assert k.curah_saja, "bekatul akan digambar seolah bisa dikemas"
+    assert (k.hasil_kg, k.dikemas_kg, k.curah_kg) == (800, 500, 300)
+    _persamaan(k)
+
+
+async def test_pk_langsung_bukan_milik_halaman_ini(pg, sosoh):
+    """PK Gudang 1 yang dijual tanpa disosoh adalah BAHAN, bukan produk.
+    Menjumlahkannya di sini akan membuat kartu beras kehilangan stok atas
+    barang yang bukan berasnya."""
+    from app.database import now_local
+    from app.penggilingan.inventory.models import OutgoingItem, OutgoingRecord
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        rec = OutgoingRecord(kode="OUT-UJI-PK", tanggal=date.today(),
+                             waktu=now_local(), input_by=sosoh["user"],
+                             nama_pembeli="Tengkulak")
+        db.add(rec)
+        await db.flush()
+        db.add(OutgoingItem(outgoing_record_id=rec.id, item_type="pk_langsung",
+                            berat_kg=5_000))
+        await db.commit()
+
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    assert all(not any(r.kode == "OUT-UJI-PK" for r in k.keluar) for k in kartu)
+    k = next(x for x in kartu if x.jenis == "medium")
+    assert k.keluar_kg == 0 and k.sisa_kg == 9_000
+
+
+async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
+    """Pagar yang tak boleh dilewatkan: hitungan yang benar di layar yang gagal
+    dirender sama saja tak ada. Dan galat templat cuma muncul saat DIRENDER —
+    tak satu pun uji layanan menyentuhnya.
+
+    Diperiksa juga bahwa keempat sukunya terbaca di halaman: kartu yang
+    menyembunyikan belahan "belum dikemas" akan menunjukkan selisih yang dikira
+    kebocoran, dan itulah cacat yang melahirkan halaman ini.
+    """
+    import httpx
+
+    from app.main import app
+    from app.models import ProduksiAkun, User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=sosoh["kode"],
+                            kategori="beras_putih", grade="medium",
+                            material_kode="biasa", ukuran=25, jumlah_karung=100)
+    async with pg() as db:
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_produk",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    assert r.status_code == 200, r.text[:400]
+    h = r.text
+    assert "Beras Medium" in h, "kartu kategorinya tak tergambar"
+    # Kepala kartu = SISA, bukan hasil penyosohan.
+    assert "9.000" in h and "6.500" in h and "2.500" in h, h[-3000:]
+    for kata in ("Hasil sosoh", "Dikemas", "Curah", "belum dikemas (curah)"):
+        assert kata in h, f"suku '{kata}' hilang dari halaman"
+    # Rincian per penyosohan ikut, lengkap dengan kodenya.
+    assert "POL-UJI-01" in h
