@@ -917,6 +917,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
    gudang, katanya tidak — jadi kunci baru, warna lama. */
 .benda--silo_g2 { --fase: var(--fase-silo); }
 .benda--sosoh   { --fase: var(--fase-giling); }
+.benda--pindah_pk { --fase: var(--fase-giling); }
 .benda__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
 .benda__isi { color: var(--tinta-2); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
 .benda__kaki { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
@@ -960,6 +961,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
 }
 .padat--silo_g2 { --fase: var(--fase-silo); }
 .padat--sosoh   { --fase: var(--fase-giling); }
+.padat--pindah_pk { --fase: var(--fase-giling); }
 /* Tanpa pembungkus `div`, isinya jadi anak langsung kotak flex dan akan
    berjajar mendatar. Yang tak bisa ditekan diberi susunannya sendiri. */
 .padat--diam { display: grid; gap: 5px; cursor: default; }

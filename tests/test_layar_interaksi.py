@@ -874,3 +874,48 @@ def test_nota_hati_selalu_punya_dua_anak():
     assert not salah, (
         "`.nota--hati` dipakai tanpa dua anak — teksnya akan patah satu kata "
         "per baris di kolom ikon selebar 15px: " + ", ".join(salah))
+
+
+def test_tiap_fase_punya_kata_dan_warnanya():
+    """Kunci fase memikul DUA tugas: KATA kepingannya dan WARNA kartunya.
+    Yang punya satu tanpa yang lain gagal diam-diam.
+
+    Ini ketiga kalinya cacat yang sama difoto pemilik:
+
+      24 Sep · kartu "Penyosohan" berkeping "Proses giling" — Gudang 2
+               meminjam fase Gudang 1 demi warnanya, ikut membawa katanya;
+      28 Sep · kartu "Kirim PK ke Gudang 2" berkeping "PROSES GILING" —
+               kelima kartu rantai permintaan meminjam "giling", alasan sama.
+
+    Dua-duanya lahir dari peminjaman yang masuk akal (warnanya memang harus
+    sama) dan berakhir pada kepingan yang membantah judul kartunya sendiri.
+    Kepingan yang berbohong lebih buruk daripada kepingan yang tak ada, sebab
+    ia dipercaya.
+
+    Maka yang dijaga ATURANNYA, bukan kelima kartu itu: setiap fase yang
+    dipakai `berjalan.py` wajib punya katanya di `FASE` DAN kelas warnanya di
+    `app.css` — untuk `.benda` maupun `.padat`, sebab satu kartu digambar
+    dengan kerangka yang berbeda di layar yang berbeda.
+    """
+    import re
+
+    from app.web.tampilan import templates
+
+    kata = templates.env.globals["FASE"]
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
+    sumber = (AKAR / "app/services/berjalan.py").read_text()
+
+    dipakai = set(re.findall(r'fase="([a-z0-9_]+)"', sumber))
+    # `_FASE_BATCH` memetakan status batch → fase; nilainya ikut dipakai.
+    blok = sumber[sumber.index("_FASE_BATCH = {"):]
+    dipakai |= set(re.findall(r':\s*"([a-z0-9_]+)"', blok[:blok.index("}")]))
+
+    tanpa_kata = sorted(f for f in dipakai if f not in kata)
+    assert not tanpa_kata, (
+        "fase tanpa kata di FASE — kepingannya tampil kosong: " + ", ".join(tanpa_kata))
+
+    tanpa_warna = sorted(
+        f for f in dipakai
+        if f".benda--{f} " not in css or f".padat--{f} " not in css)
+    assert not tanpa_warna, (
+        "fase tanpa kelas warna — kartunya tampil polos: " + ", ".join(tanpa_warna))

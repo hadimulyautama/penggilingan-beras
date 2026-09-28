@@ -1309,7 +1309,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             kode=kode_lot,
             isi=f"Admin menyetujui {_kg(kg)} ke {lok} — tinggal dimuat",
             keadaan="menunggu dikirim Gudang 1",
-            aksi="kirim_permintaan_pk", nilai=str(baris.id), fase="giling",
+            aksi="kirim_permintaan_pk", nilai=str(baris.id), fase="pindah_pk",
             sejak=baris.waktu_setuju or baris.waktu_minta,
             judul="Kirim PK ke Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
@@ -1859,7 +1859,7 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
             # baris yang membawa `aksi` wajib membawa `pilihan` juga (kartu
             # yang ditekan harus membentang, bukan melempar lembar), dan
             # kartu ini memang tak punya tindakan apa pun.
-            fase="giling",
+            fase="pindah_pk",
             sejak=baris.waktu_minta,
             judul="Permintaan PK Anda",
             utama=((_kg(kg).removesuffix(" kg"), "kg") if kg else None),
@@ -1898,7 +1898,7 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
             isi=f"Permintaan {'ditolak Admin' if ditolak else 'gugur'} — "
                 f"{baris.sebab or 'tanpa sebab tercatat'}",
             keadaan="ditolak Admin" if ditolak else "gugur sendiri",
-            fase="giling",
+            fase="pindah_pk",
             sejak=baris.waktu_tutup or baris.waktu_minta,
             judul=("Permintaan Anda ditolak" if ditolak
                    else "Permintaan Anda gugur"),
@@ -2083,7 +2083,7 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 kode=kode_lot,
                 isi=f"Gudang 1 sudah mengirim {_kg(kg_kirim)} ke {lok}",
                 keadaan="menunggu ditutup Admin",
-                aksi="tutup_permintaan_pk", nilai=str(baris.id), fase="giling",
+                aksi="tutup_permintaan_pk", nilai=str(baris.id), fase="pindah_pk",
                 sejak=baris.waktu_kirim or baris.waktu_minta,
                 judul="Kiriman PK menunggu ditutup",
                 utama=(_kg(kg_kirim).removesuffix(" kg"), "kg"),
@@ -2098,15 +2098,34 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 pilihan=[("tutup_permintaan_pk", "Tutup permintaan",
                           "Boleh mengubah bobotnya", str(baris.id))]))
             continue
+        # ── ANGKA BESARNYA = YANG DIMINTA, bukan sisa lot ──
+        #
+        # Temuan QA 28 September 2026: kartu ini dulu memajang sisa lot sebagai
+        # angka besarnya dan tak menyebut berapa yang diminta sama sekali —
+        # sebab permintaannya memang belum membawa angka. Admin menebak batas
+        # atas muatan, atau bertanya lewat WhatsApp.
+        #
+        # Yang diputuskan Admin di kartu ini "berapa yang disetujui", jadi
+        # angka yang dibacanya lebih dulu harus angka yang sedang diminta.
+        # Sisa lot tetap disebut — ia batasnya — tetapi sebagai keterangan,
+        # bukan sebagai judul.
+        kg_minta = float(baris.berat_minta_kg or 0)
         b.meja.append(Baris(
             kode=kode_lot,
-            isi=f"{nama_minta or 'Operator Gudang 2'} minta lot ini dipindah",
+            isi=(f"{nama_minta or 'Operator Gudang 2'} minta "
+                 + (f"{_kg(kg_minta)} dari lot ini" if kg_minta
+                    else "lot ini dipindah")),
             keadaan="menunggu keputusan Anda",
-            aksi="acc_permintaan_pk", nilai=str(baris.id), fase="giling",
+            aksi="acc_permintaan_pk", nilai=str(baris.id), fase="pindah_pk",
             sejak=baris.waktu_minta,
             judul="Diminta Gudang 2",
-            utama=(_kg(bd.tersedia).removesuffix(" kg"), "kg"),
+            utama=((_kg(kg_minta) if kg_minta else _kg(bd.tersedia))
+                   .removesuffix(" kg"), "kg"),
             sub=f"{kode_lot} · diminta {nama_minta or '?'}",
+            # Batasnya disebut apa adanya. Permintaan lama (sebelum 28
+            # September) tak punya angka; kartunya kembali ke bentuk lama
+            # dengan sendirinya, tanpa mengarang angka yang tak pernah ada.
+            nota=(f"Lot ini tersisa {_kg(bd.tersedia)}." if kg_minta else None),
             kelompok="permintaan",
             # Dicap DI SINI, bukan oleh `_cap_gudang`: `untuk_staff` tak
             # memanggilnya (kartunya lintas gudang). Kartu tanpa cap lenyap

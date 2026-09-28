@@ -80,13 +80,15 @@ async def pabrik(pg, pemakai, pemasok):
                 "lot": "LOT-MINTA-01", "proses_id": p.id}
 
 
-async def _minta(pg, pabrik) -> int:
+async def _minta(pg, pabrik, *, berat=6_000) -> int:
+    """Bobotnya WAJIB sejak 28 September 2026 — lihat
+    `test_permintaan_membawa_bobot_yang_diminta`."""
     from app.models import User
     from app.services.permintaan_pk import minta
 
     async with pg() as db:
         u = await db.get(User, pabrik["op2"])
-        r = await minta(db, user=u, kode_proses=pabrik["lot"])
+        r = await minta(db, user=u, kode_proses=pabrik["lot"], berat=berat)
         return r.id
 
 
@@ -923,9 +925,82 @@ async def test_kalimat_sesudah_minta_menyebut_pelaku_dan_layar_yang_benar(pg, pa
     async with pg() as db:
         op2 = await db.get(User, pabrik["op2"])
     jawab = await api.act_minta_pk_g1(
-        api.MintaPkReq(kode_proses=pabrik["lot"]), user=op2)
+        api.MintaPkReq(kode_proses=pabrik["lot"], berat=6_000), user=op2)
     pesan = jawab["pesan"]
     assert "Menunggu keputusan" in pesan, pesan
     assert "Antrian tunggu" not in pesan, "layar Admin disebut salah"
     assert "Gudang 1 yang memuat" in pesan, pesan
     assert "memindahkan tetap Admin" not in pesan, "pelaku lama masih disebut"
+
+
+async def test_permintaan_membawa_bobot_yang_diminta(pg, pabrik):
+    """Temuan QA 28 September 2026: langkah pertama rantai ini tak membawa satu
+    angka pun, jadi Admin menebak batas atas muatan — atau bertanya lewat
+    WhatsApp, koordinasi yang keluar dari aplikasi dan tak meninggalkan jejak.
+
+    Angkanya PERMINTAAN, bukan persetujuan: yang berlaku tetap milik Admin.
+    Yang berubah cuma bahwa ia membaca, bukan menebak.
+    """
+    from app.models import PermintaanPk, User
+    from app.services.permintaan_pk import PermintaanError, minta
+    from app.web import api
+
+    pid = await _minta(pg, pabrik, berat=4_500)
+    async with pg() as db:
+        baris = await db.get(PermintaanPk, pid)
+        assert float(baris.berat_minta_kg) == 4_500
+
+    # Admin melihat angkanya di kartu keputusannya — tanpa membuka apa pun.
+    from app.services.berjalan import untuk_staff
+
+    async with pg() as db:
+        adm = await untuk_staff(db)
+    k = next(x for x in adm.meja if x.aksi == "acc_permintaan_pk")
+    assert "4.500" in k.isi, k.isi
+    assert k.utama and k.utama[0] == "4.500", k.utama
+    # Dan batasnya tetap disebut — Admin tak boleh menyetujui melebihi isi lot.
+    assert k.nota and "6.000" in k.nota, k.nota
+
+    # Juga di daftar pilihan borang ACC, untuk yang membukanya dari katalog.
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+    daftar = await api.permintaan_menunggu_keputusan(user=u)
+    assert "diminta 4.500 kg" in daftar[0]["label"], daftar[0]["label"]
+
+    # Tanpa angka: ditolak, dan kalimatnya menyebut kenapa angkanya perlu.
+    async with pg() as db:
+        u2 = await db.get(User, pabrik["op2"])
+        with pytest.raises(PermintaanError) as e:
+            await minta(db, user=u2, kode_proses=pabrik["lot"], berat=None)
+    assert "berapa kg" in str(e.value).lower(), e.value
+
+
+async def test_meminta_lebih_daripada_isi_lot_ditolak(pg, pabrik):
+    """Aturan yang SAMA dengan ACC, dan disengaja: permintaan atas angka yang
+    tak mungkin akan berdiri di meja Admin, dan yang membacanya harus
+    menghitung sendiri untuk tahu itu mustahil."""
+    from app.models import User
+    from app.services.permintaan_pk import PermintaanError, minta
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["op2"])
+        with pytest.raises(PermintaanError) as e:
+            await minta(db, user=u, kode_proses=pabrik["lot"], berat=9_000)
+    pesan = str(e.value)
+    assert "6.000" in pesan and "9.000" in pesan, pesan
+
+
+async def test_kabar_ke_admin_menyebut_berapa_yang_diminta(pg, pabrik):
+    """Kabar tanpa angkanya menyuruh Admin membuka layar lain untuk tahu
+    seberapa mendesak — dan kabar yang menuntut satu langkah lagi sebelum bisa
+    diputuskan adalah kabar yang ditunda."""
+    from sqlalchemy import select
+
+    from app.models import Notification
+
+    await _minta(pg, pabrik, berat=3_200)
+    async with pg() as db:
+        kabar = (await db.execute(
+            select(Notification).where(Notification.tipe == "permintaan_pk")
+            .order_by(Notification.id))).scalars().first()
+    assert "3.200" in kabar.pesan, kabar.pesan

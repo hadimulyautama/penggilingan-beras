@@ -121,8 +121,24 @@ async def _proses(db: AsyncSession, kode: str | None) -> MillingProcess:
     return p
 
 
-async def minta(db: AsyncSession, *, user, kode_proses: str | None) -> PermintaanPk:
-    """Operator Gudang 2 meminta satu lot. Satu yang terbuka per lot.
+async def minta(db: AsyncSession, *, user, kode_proses: str | None,
+                berat: float | None = None) -> PermintaanPk:
+    """Operator Gudang 2 meminta satu lot, BERIKUT berapa yang ia perlukan.
+
+    Bobotnya lahir 28 September 2026 (temuan QA): sampai hari itu langkah
+    pertama rantai ini tak membawa satu angka pun, jadi Admin menebak batas
+    atasnya atau bertanya lewat WhatsApp — koordinasi yang keluar dari aplikasi
+    dan tak meninggalkan jejak.
+
+    Ia PERMINTAAN, bukan persetujuan: yang berlaku tetap `berat_setuju_kg`
+    milik Admin, dan Admin bebas menyetujui lebih kecil. Yang berubah cuma
+    bahwa ia membaca, bukan menebak.
+
+    Diperiksa terhadap isi lot dengan aturan yang SAMA dengan ACC —
+    `_pk_breakdown`, satu jawaban untuk "berapa PK lot ini masih ada". Meminta
+    lebih daripada yang ada bukan cuma sia-sia: kartunya berdiri di meja Admin
+    membawa angka yang tak mungkin, dan yang membacanya harus menghitung
+    sendiri untuk tahu itu.
 
     Pagarnya INDEKS, bukan pemeriksaan di depan: dua operator yang menekan pada
     detik yang sama sama-sama lolos pemeriksaan "sudah ada belum?" lalu keduanya
@@ -137,9 +153,20 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None) -> Permintaa
     # akan berdiri di layar Admin sampai seseorang menyadarinya. Sisanya dibaca
     # lewat `_pk_breakdown` — SATU jawaban untuk "berapa PK lot ini masih ada",
     # yang sama dengan yang dipakai layar Stok (hasil − dikirim − dijual).
-    if (await _pk_breakdown(db, p.id)).tersedia <= 0:
+    tersedia = (await _pk_breakdown(db, p.id)).tersedia
+    if tersedia <= 0:
         raise PermintaanError(
             f"Lot {p.kode_proses} sudah habis — tak ada PK tersisa untuk dipindah.")
+
+    kg = float(berat or 0)
+    if kg <= 0:
+        raise PermintaanError(
+            "Sebutkan berapa kg yang Anda perlukan — Admin memutuskan atas "
+            "angka itu.")
+    if kg > tersedia + 0.001:
+        raise PermintaanError(
+            f"Lot {p.kode_proses} tinggal {tersedia:,.0f} kg — tak bisa "
+            f"meminta {kg:,.0f} kg.".replace(",", "."))
 
     # Dipegang sebelum menulis: sesudah `rollback()` + `expunge_all()` di bawah,
     # `p` lepas dari sesi dan membaca atributnya akan memicu pemuatan ulang yang
@@ -147,7 +174,8 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None) -> Permintaa
     kode, proses_id = p.kode_proses, p.id
 
     baris = PermintaanPk(milling_process_id=proses_id, diminta_oleh=user.id,
-                         waktu_minta=now_local(), status=DIMINTA)
+                         waktu_minta=now_local(), status=DIMINTA,
+                         berat_minta_kg=kg)
     db.add(baris)
     try:
         await db.commit()
@@ -164,8 +192,9 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None) -> Permintaa
         raise
     await db.refresh(baris)
     await _kabar(db, baris, untuk="admin",
-                 pesan=f"🟡 Gudang 2 meminta lot {kode} — menunggu keputusan "
-                       "Admin (setujui, tetapkan tujuan & bobotnya, atau tolak).")
+                 pesan=f"🟡 Gudang 2 meminta {_kg(kg)} kg dari lot {kode} — "
+                       "menunggu keputusan Admin (setujui, tetapkan tujuan & "
+                       "bobotnya, atau tolak).")
     await db.commit()
     return baris
 

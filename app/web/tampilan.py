@@ -110,6 +110,18 @@ templates.env.globals["FASE"] = {
     # tampil polos tanpa ada yang memberi tahu.
     "silo_g2": "Di silo bahan",
     "sosoh": "Proses sosoh",
+    # ── Rantai permintaan PK: kunci baru, warna lama ──
+    #
+    # Aturan yang sama sekali lagi, dan sekali lagi ketahuan dari foto pemilik
+    # (28 September 2026): kartu berjudul "Kirim PK ke Gudang 2" berkeping
+    # "PROSES GILING". Kartunya memindahkan PK; yang digiling sudah selesai
+    # digiling. Kelima kartu rantai ini meminjam fase "giling" demi WARNANYA,
+    # dan ikut membawa KATANYA.
+    #
+    # Warnanya sengaja tetap sama dengan giling (`--fase-giling` di app.css):
+    # barangnya memang PK hasil giling, dan posisinya dalam perjalanan barang
+    # tak berubah. Yang berubah cuma katanya.
+    "pindah_pk": "Pindah PK",
 }
 
 

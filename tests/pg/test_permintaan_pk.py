@@ -75,7 +75,13 @@ async def _minta(pg, uid, kode="LOT-P2-01"):
     from app.services.permintaan_pk import minta
 
     async with pg() as db:
-        return await minta(db, user=await db.get(User, uid), kode_proses=kode)
+        # Bobotnya WAJIB sejak 28 September 2026: tanpa angka, Admin menebak
+        # batas atas muatan (temuan QA). Berkas ini menguji hal LAIN — satu
+        # permintaan per lot, kartunya, penolakannya — jadi angkanya sekadar
+        # sah; yang menjaga aturannya ada di
+        # `test_permintaan_empat_langkah.test_permintaan_membawa_bobot_yang_diminta`.
+        return await minta(db, user=await db.get(User, uid), kode_proses=kode,
+                           berat=1_000)
 
 
 async def test_satu_permintaan_terbuka_per_lot(pg, pabrik):

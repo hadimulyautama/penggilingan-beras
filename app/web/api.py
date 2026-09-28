@@ -874,6 +874,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                       "type": "remote", "source": "/api/actions/pk-g1-tersedia",
                       "kosong": "Tidak ada lot PK Gudang 1 yang masih bersisa "
                                 "dan belum diminta."},
+                     # Satu isian, dan ia menghapus satu percakapan WhatsApp:
+                     # tanpa angka ini Admin menebak batas atas muatan, atau
+                     # bertanya di luar aplikasi (temuan QA 28 September 2026).
+                     {"name": "berat", "label": "Berapa kg yang Anda perlukan",
+                      "type": "number", "wajib": True},
                  ]},
                 # Aksi "Muat & kirim PK" DIPINDAH ke blok `if g1:` pada 27
                 # September 2026 — lihat komentar di sana. Gudang 2 yang
@@ -1313,10 +1318,18 @@ def _label_permintaan(kode_lot: str, baris, lok: str = "") -> str:
     yang dikirim. Daftar yang menampilkan "#7" menyuruh orang menghafal angka
     yang tak pernah ia lihat di tempat lain.
     """
-    kg = float(baris.berat_kirim_kg or baris.berat_setuju_kg or 0)
+    # Urutannya mengikuti umur angkanya: yang PALING AKHIR diketahui menang,
+    # sebab itulah yang berlaku pada langkah ini. Yang belum diputuskan jatuh
+    # ke `berat_minta_kg`, dan itu justru keadaan yang paling butuh angkanya —
+    # daftar Admin untuk menyetujui. Tanpa itu barisnya cuma menyebut LOT, dan
+    # Admin menebak batas atasnya (temuan QA 28 September 2026).
+    kg = float(baris.berat_kirim_kg or baris.berat_setuju_kg
+               or baris.berat_minta_kg or 0)
+    diminta = (baris.berat_kirim_kg is None and baris.berat_setuju_kg is None
+               and baris.berat_minta_kg is not None)
     bagian = [kode_lot]
     if kg:
-        bagian.append(f"{_rp(kg)} kg")
+        bagian.append(f"diminta {_rp(kg)} kg" if diminta else f"{_rp(kg)} kg")
     if lok:
         bagian.append(f"ke {lok}")
     return " · ".join(bagian)
@@ -2628,6 +2641,7 @@ async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(pengguna_a
 
 class MintaPkReq(BaseModel):
     kode_proses: str
+    berat: Positif | None = None
 
 
 @router.post("/actions/minta-pk-g1")
@@ -2649,7 +2663,8 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            await minta(db, user=u, kode_proses=req.kode_proses)
+            await minta(db, user=u, kode_proses=req.kode_proses,
+                        berat=req.berat)
         except PermintaanError as e:
             raise _err(e, "Gagal meminta lot PK.")
     # Kalimat ini dua kali menyebut hal yang salah, dan keduanya ketahuan
@@ -2661,9 +2676,9 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
     # karena ia satu-satunya yang dibaca operator Gudang 2, dan tak seorang pun
     # dari kami membuka layar itu sesudah tangannya berpindah.
     return {"ok": True,
-            "pesan": f"✓ Lot *{req.kode_proses}* diminta — Admin memutuskannya "
-                     "di Menunggu keputusan. Kalau disetujui, Gudang 1 yang "
-                     "memuat dan mengirimnya."}
+            "pesan": f"✓ Lot *{req.kode_proses}* diminta {_rp(float(req.berat or 0))} "
+                     "kg — Admin memutuskannya di Menunggu keputusan. Kalau "
+                     "disetujui, Gudang 1 yang memuat dan mengirimnya."}
 
 
 class AccPermintaanReq(BaseModel):

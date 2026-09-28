@@ -63,6 +63,18 @@ class PermintaanPk(Base, TimestampMixin):
     )
     diminta_oleh: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     waktu_minta: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: Berapa kg yang DIMINTA Gudang 2 — permintaan, bukan persetujuan.
+    #:
+    #: Lahir 28 September 2026 (temuan QA): langkah pertama rantai ini tak
+    #: membawa satu angka pun, jadi Admin menebak batas atasnya atau bertanya
+    #: lewat WhatsApp. Yang berlaku tetap `berat_setuju_kg` miliknya; angka ini
+    #: berdiri di sebelahnya, sama seperti `berat_kirim_kg` milik Gudang 1
+    #: berdiri di sebelah `berat_final_kg`. Tiga angka, tiga pemilik, tak
+    #: saling menimpa — selisih yang ditimpa berhenti jadi pertanyaan.
+    #:
+    #: NULL pada baris yang lahir sebelum hari itu; layanan mewajibkannya untuk
+    #: yang baru.
+    berat_minta_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     #: Lihat daftar keadaan di atas berkas ini.
     status: Mapped[str] = mapped_column(String(12), nullable=False, default=DIMINTA)
 
