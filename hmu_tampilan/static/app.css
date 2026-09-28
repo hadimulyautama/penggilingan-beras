@@ -239,6 +239,33 @@ a:hover { color: #7fcbe8; }
    seharusnya kotaknya, bukan tombolnya. */
 .ulang__tambah { align-self: flex-start; margin-top: -4px; }
 
+/* ── Baris berpasangan: barang + jumlah + buang ──
+   Permintaan pemilik 29 September 2026 untuk barang keluar multi-item.
+
+   `minmax(0, …)` pada kolom pertama, BUKAN `1fr` telanjang: nama barang bisa
+   panjang ("Beras Premium · Karung laminasi 25 kg"), dan grid yang kolomnya
+   `auto`-lebar akan melebar mengikuti isi <select> lalu mendorong kotak
+   jumlah keluar layar di ponsel. `min-width: 0` juga wajib di anaknya —
+   elemen borang punya lebar bawaan sendiri yang menolak menyusut.
+
+   Kotak jumlahnya sempit dan TETAP: yang diketik di situ paling banyak empat
+   angka, dan kotak selebar setengah layar mengundang ia diisi nama. */
+.ulang__baris {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px var(--sentuh);
+  gap: 6px; align-items: center;
+}
+.ulang__baris > .fld { min-width: 0; }
+.ulang__buang {
+  background: none; border: 1px solid var(--garis); border-radius: 9px;
+  color: var(--redup); font-size: 19px; line-height: 1;
+  min-height: var(--sentuh); cursor: pointer;
+}
+/* Baris pertama tak bisa dibuang — ia pembawa "wajib" dan cetakan baris
+   berikutnya. Tombolnya disamarkan, bukan dihilangkan: kolom yang menyusut
+   di satu baris saja membuat seluruh tabelnya terlihat bergeser. */
+.ulang__baris:first-child .ulang__buang { visibility: hidden; }
+
 
 /* ── Formulir ── */
 .grup { display: flex; flex-direction: column; gap: 15px; }

@@ -744,15 +744,29 @@ async def test_barang_keluar_dipilih_dari_stok_yang_ada(pg, sosoh):
     from app.penggilingan.inventory.finished_goods import catat_packing
     from app.web import aksi_inventory as inv
 
-    # ⚠ AKSINYA BERGANTI 28 September 2026: `kirim_barang_jadi` dibuang, dan
-    # yang mewarisi bentuk borangnya `perintah_keluar` — langkah pertama rantai
-    # barang keluar berperintah. Yang dijaga pagar ini TIDAK berubah: SATU
-    # pilihan dari stok yang benar-benar ada, bukan tiga daftar bertingkat.
+    # ⚠ BORANGNYA BERGANTI DUA KALI, dan yang dijaga pagar ini tetap sama.
+    #
+    # 28 September: `kirim_barang_jadi` dibuang, bentuknya diwarisi
+    # `perintah_keluar`. 29 September: medannya jadi BERTABEL atas permintaan
+    # pemilik — "admin bisa memilih barang yang akan keluar beserta jumlahnya.
+    # lalu bisa klik tambah item lalu keluar field baru", sebab satu transaksi
+    # memuat beberapa macam barang.
+    #
+    # Yang dijaga sejak awal, dan tak berubah: SATU pilihan per barang, dari
+    # stok yang benar-benar ada — bukan tiga daftar bertingkat (produk+kemasan,
+    # merk, mutu) atas benda yang bisa dilihat sendiri di gudang. Sekarang
+    # pilihan itu berada di dalam baris tabelnya.
     spek = next(a for a in inv.spesifikasi(g2=False, fin=True)
                 if a["id"] == "perintah_keluar")
-    medan = [f["name"] for f in spek["fields"]]
-    assert medan[:2] == ["stok", "jumlah_karung"], medan
-    assert "grade" not in medan and "produk" not in medan and "merk" not in medan
+    medan = {f["name"]: f for f in spek["fields"]}
+    assert "barang" in medan, list(medan)
+    baris = medan["barang"]
+    assert baris["type"] == "ulang_barang", baris["type"]
+    # Sumbernya daftar barang yang BISA keluar — bukan katalog seluruh SKU.
+    assert "bisa-keluar" in baris["source"], baris["source"]
+    # Dan tiga pertanyaan lama tak kembali sebagai medan tersendiri.
+    for mati in ("grade", "produk", "merk", "stok", "jumlah_karung"):
+        assert mati not in medan, f"borang bertingkat kembali lewat '{mati}'"
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
@@ -775,6 +789,11 @@ async def test_barang_keluar_dipilih_dari_stok_yang_ada(pg, sosoh):
     # Dan perintahnya mencatat barang yang SAMA — lewat rantainya, sampai
     # stoknya benar-benar berkurang. Perintah saja tak cukup diuji: ia memang
     # sengaja BELUM memotong stok.
+    #
+    # Dikirim dalam bentuk LAMA (`stok` + `jumlah_karung`) dengan sengaja: itu
+    # yang masih dikirim lembar yang sudah terbuka di layar orang saat versi
+    # bertabel terbit, dan halaman di ponsel berumur panjang. Bentuk barunya
+    # diuji di `tests/pg/test_barang_keluar.py`.
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
         r = await inv.act_perintah_keluar(

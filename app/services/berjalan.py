@@ -267,6 +267,13 @@ class Berjalan:
         # PK adalah produk Gudang 1 (catatan QA 26 September 2026).
         if not self.pintu_produk:
             mati.append("stok_produk")
+            # Barang Keluar ikut padam untuk operator selepan, dan sebabnya
+            # SAMA: barang jadi berdiri di Gudang 2, dan perintah muatnya
+            # dibuat Admin. Pintu yang selalu kosong mengajari orang berhenti
+            # membuka pintu. Satu syarat untuk keduanya — dua syarat terpisah
+            # untuk alasan yang sama akan berbeda jawabannya pada perubahan
+            # berikutnya.
+            mati.append("barang_keluar")
         return {"MENUNGGU": self.jumlah_menunggu, "BERJALAN": self.jumlah_berjalan,
                 "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
                 "PRODUK": self.jumlah_produk, "KABAR": self.jumlah_kabar,

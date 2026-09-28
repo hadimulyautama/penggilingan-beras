@@ -544,3 +544,175 @@ async def test_tak_satu_pun_langkah_rantai_menyimpan_rupiah(pg, gudang):
     for it in items:
         assert it.harga_per_kg is None, "baris keluar menyimpan harga"
         assert it.total_harga is None, "baris keluar menyimpan total rupiah"
+
+
+async def test_satu_borang_menerima_beberapa_item_sekaligus(pg, gudang):
+    """Permintaan pemilik 29 September 2026: "admin bisa memilih barang yang akan
+    keluar beserta jumlahnya. lalu bisa klik tambah item lalu keluar field baru
+    untuk memilih item lain beserta jumlahnya, karena barang keluar bisa multi
+    item."
+
+    Diuji lewat RUTENYA, dengan muatan yang benar-benar dikirim medan
+    `ulang_barang` — daftar {pilih, jumlah}. Menguji layanannya saja tak
+    menyentuh bagian yang paling mudah salah: mengurai pasangan, dan memilah
+    SATUAN dari awalan nilainya.
+    """
+    from app.database import now_local
+    from app.models import MillingProcess, MillingProgressLog, User
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        proc = MillingProcess(kode_proses="LOT-MULTI-01", status="selesai",
+                              silo_id=gudang["silo"], berat_gabah_masuk_kg=9_000,
+                              waktu_mulai=now_local(), waktu_selesai=now_local(),
+                              created_by=gudang["op"])
+        db.add(proc)
+        await db.flush()
+        db.add(MillingProgressLog(milling_process_id=proc.id,
+                                  berat_kumulatif_kg=5_000,
+                                  waktu_update=now_local(), input_by=gudang["op"]))
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+        r = await inv.act_perintah_keluar(inv.PerintahKeluarReq(
+            barang=[
+                inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}", jumlah=100),
+                inv.BarisReq(pilih="pk:LOT-MULTI-01", jumlah=1_500),
+            ],
+            nama_pembeli="Toko Makmur", no_polisi="B 1234 XY"), user=u)
+    assert r["ok"], r
+
+    from app.services import barang_keluar as bk
+    async with pg() as db:
+        rec, items = (await bk.daftar(db))[0]
+    assert len(items) == 2, "kedua item tak masuk satu transaksi"
+    jenis = {i.item_type for i in items}
+    assert jenis == {"finished_goods", "pk_langsung"}, jenis
+    # ── SATUANNYA dipilah dari AWALAN nilainya ──
+    # `bj:` per karung (100 × 25 kg), `pk:` per kilogram apa adanya. Tanpa
+    # awalan, "100" di satu baris berarti 100 karung dan di baris lain 100 kg,
+    # dan yang membedakan cuma ingatan orang yang mengetiknya.
+    bj = next(i for i in items if i.item_type == "finished_goods")
+    pk = next(i for i in items if i.item_type == "pk_langsung")
+    assert float(bj.berat_perintah_kg) == 2_500, float(bj.berat_perintah_kg)
+    assert bj.jumlah_karung_perintah == 100
+    assert float(pk.berat_perintah_kg) == 1_500, float(pk.berat_perintah_kg)
+
+
+async def test_baris_terisi_separuh_ditolak_dengan_menyebut_barangnya(pg, gudang):
+    """Layar sudah membuang baris yang KOSONG SELURUHNYA. Yang terisi separuh
+    sampai ke sini — dan ia ditolak, bukan dibuang diam-diam: perintah yang
+    kurang satu barang tanpa sebab akan ditemukan operator di depan truk."""
+    from app.models import User
+    from app.web import aksi_inventory as inv
+    from fastapi import HTTPException
+
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+        with pytest.raises(HTTPException) as e:
+            await inv.act_perintah_keluar(inv.PerintahKeluarReq(
+                barang=[
+                    inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}", jumlah=40),
+                    inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}"),
+                ],
+                nama_pembeli="Toko Makmur"), user=u)
+    assert "jumlah" in str(e.value.detail).lower(), e.value.detail
+
+
+async def test_bentuk_borang_lama_masih_diterima(pg, gudang):
+    """Lembar yang sudah terbuka di layar orang saat versi baru terbit masih
+    mengirim bentuk lama — satu barang, `stok` + `jumlah_karung`. Halaman di
+    ponsel berumur panjang; yang berhenti cuma MENAWARKANNYA."""
+    from app.models import User
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+        r = await inv.act_perintah_keluar(inv.PerintahKeluarReq(
+            stok=f"{gudang['sku']}|{gudang['std']}", jumlah_karung=20,
+            nama_pembeli="Toko Lama"), user=u)
+    assert r["ok"], r
+
+
+async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
+    """Permintaan pemilik 28 September 2026: "kita butuh satu halaman untuk
+    transaksi barang keluar."
+
+    Sampai halaman ini ada, catatan barang keluar tersebar di kartu Stok Produk
+    (per KATEGORI) dan di List audit (baris mentah). Keduanya menyusun menurut
+    BARANG, jadi tak satu pun bisa menjawab pertanyaan yang sebenarnya
+    ditanyakan orang: "truk yang tadi siang bawa apa saja?"
+
+    Yang dijaga di sini: satu kartu per TRANSAKSI, isinya seluruh macam
+    barangnya, keadaannya terbaca, dan yang belum selesai berdiri paling atas.
+    """
+    import httpx
+
+    from app.models import ProduksiAkun, User
+    from app.services import barang_keluar as bk
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    from app.main import app
+
+    # Satu transaksi SELESAI, satu masih menunggu dimuat.
+    lama = await _perintah(pg, gudang, karung=40, pembeli="Toko Lama")
+    async with pg() as db:
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=lama.rec.id)
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                            rec_id=lama.rec.id)
+    baru = await _perintah(pg, gudang, karung=100, pembeli="Toko Baru")
+    async with pg() as db:
+        await bk.tambah_baris(
+            db, user=await db.get(User, gudang["adm"]), rec_id=baru.rec.id,
+            baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
+                                   std_id=gudang["std"], jumlah_karung=20))
+        a = ProduksiAkun(user_id=gudang["adm"], username="uji_halaman_keluar",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("admin"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/barang-keluar")
+    assert r.status_code == 200, r.text[:400]
+    h = r.text
+
+    # Kedua transaksi berkartu, dengan kodenya.
+    assert lama.rec.kode in h and baru.rec.kode in h
+    # Yang BELUM selesai berdiri lebih atas — yang membuka halaman ini di
+    # tengah hari mencari muatan yang sedang berjalan, bukan riwayat kemarin.
+    assert h.index(baru.rec.kode) < h.index(lama.rec.kode), \
+        "riwayat mendorong muatan yang sedang berjalan ke bawah layar"
+    # Keadaannya terbaca sebagai kata, bukan kode.
+    assert "Menunggu dimuat" in h and "Selesai" in h
+    # Satu kartu memuat KEDUA macam barangnya — itu seluruh sebab halaman ini.
+    assert "2 macam" in h, "isi muatan tak disebut per transaksi"
+    assert "Beras Medium" in h
+    # Pembeli & truknya ikut: yang mencari truk tertentu mencarinya lewat plat.
+    assert "Toko Baru" in h and "B 1234 XY" in h
+    # Dan jejak tiga langkahnya terbaca pada yang sudah tutup.
+    assert "Diperintah" in h and "Dimuat" in h and "Diverifikasi" in h
+
+
+async def test_operator_selepan_tak_ditawari_pintu_barang_keluar(pg, gudang):
+    """Pintunya padam bersama Stok Produk, dan syaratnya SATU — dua syarat
+    terpisah untuk alasan yang sama akan berbeda jawabannya kelak."""
+    from app.models import User
+    from app.services.berjalan import untuk
+
+    async with pg() as db:
+        u = await db.get(User, gudang["op"])
+        u.default_warehouse_id = None          # bukan operator Gudang 2
+        await db.commit()
+        b = await untuk(db, u)
+    mati = b.lencana()["PINTU_MATI"]
+    assert ("barang_keluar" in mati) == ("stok_produk" in mati), \
+        "kedua pintu berpisah nasib padahal sebabnya sama"

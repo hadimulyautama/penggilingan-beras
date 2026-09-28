@@ -566,6 +566,49 @@ async def baris_perintah(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return out
 
 
+@router.get("/actions/barang-bisa-keluar")
+async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """SATU daftar berisi seluruh yang bisa keluar pabrik — barang jadi DAN PK.
+
+    Permintaan pemilik 29 September 2026: "admin bisa memilih barang yang akan
+    keluar beserta jumlahnya. lalu bisa klik tambah item lalu keluar field baru
+    untuk memilih item lain beserta jumlahnya, karena barang keluar bisa multi
+    item."
+
+    Satu daftar, bukan dua medan bergantian: yang dipikirkan Admin "apa yang
+    naik truk ini", bukan "barang jadi atau PK". Dua daftar terpisah menuntut ia
+    menerjemahkan dulu pertanyaannya sendiri sebelum bisa menjawabnya.
+
+    Nilainya BERAWALAN — `bj:` atau `pk:` — dan awalan itu yang menentukan
+    SATUAN jumlahnya: barang jadi dihitung per karung, PK per kilogram. Tanpa
+    awalan, "100" pada satu baris berarti 100 karung dan pada baris lain 100 kg,
+    dan yang membedakan cuma ingatan orang yang mengetiknya.
+
+    Satuannya ikut tertulis di tiap label, sebab kotak jumlahnya satu dan tak
+    bisa berganti tulisan mengikuti pilihan.
+    """
+    wajib(can_see_financials(user))
+    from app.services.stok import barang_jadi_g2, pk_gudang1
+
+    out: list[dict] = []
+    async with SessionLocal() as db:
+        bj_ = await barang_jadi_g2(db)
+        for k in bj_.produk + bj_.samping:
+            if not k.get("karung"):
+                continue          # curah punya jalur sendiri
+            out.append({
+                "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
+                "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"})
+        for l in await pk_gudang1(db):
+            if l.tersedia <= 0:
+                continue
+            out.append({"value": f"pk:{l.kode}",
+                        "label": (f"PK {l.kode} · {kg(l.tersedia)}"
+                                  + (f" · {l.kelas}" if l.kelas else "")
+                                  + " (isi dalam kg)")})
+    return out
+
+
 @router.get("/actions/pk-siap-keluar")
 async def pk_siap_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Lot PK Gudang 1 yang masih bersisa — untuk dijual keluar pabrik.
@@ -617,53 +660,69 @@ async def timbang_keluar_aktif(user: User = Depends(pengguna_aksi)) -> list[dict
 # penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
 # orang lain masih bisa mengirim.
 
+class BarisReq(BaseModel):
+    """Satu baris borang bertabel: barang mana, berapa banyak."""
+
+    pilih: str = ""
+    jumlah: float | None = None
+
+
 class PerintahKeluarReq(BaseModel):
-    stok: str | None = None            # "sku_id|std_id"
+    #: Bentuk BARU sejak 29 September 2026 — daftar pasangan dari medan
+    #: `ulang_barang`. Satu transaksi memuat beberapa macam barang.
+    barang: list[BarisReq] | None = None
+    #: Bentuk LAMA — satu barang per perintah. Dipertahankan sebentar sebab
+    #: lembar yang sudah terbuka di layar orang saat versi baru terbit masih
+    #: mengirim bentuk ini, dan halaman di ponsel berumur panjang. Yang berhenti
+    #: cuma MENAWARKANNYA.
+    stok: str | None = None
     jumlah_karung: int | None = None
-    pk_lot: str | None = None          # kode LOT-…
-    pk_berat: float | None = None
     nama_pembeli: str = ""
     metode: str | None = None
     no_polisi: str | None = None
     nama_ekspedisi: str | None = None
 
 
-async def _baris_dari_borang(db, req) -> "bk.BarisPerintah":
-    """Satu baris dari borang yang menerima DUA bentuk — isi salah satu.
+async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
+    """Satu pilihan berawalan + jumlahnya → baris perintah.
 
-    Barang jadi berkarung, atau PK mentah per kg. Pola "isi salah satu" sudah
-    dipakai QC hasil giling ("kadar air ATAU broken ATAU susut"): yang memeriksa
-    rutenya, bukan borangnya, sebab borang yang mewajibkan dua-duanya akan
-    menolak pekerjaan yang sah.
-
-    ⚠ TAK ADA HARGA di kedua bentuk, dan itu bukan kelalaian — keputusan pemilik
-    29 September 2026: "sistem produksi tidak boleh ada sangkut paut dengan
-    harga. termasuk beras yang keluar."
+    Awalannya yang menentukan SATUAN: `bj:` per karung, `pk:` per kilogram.
+    Tanpa awalan, "100" pada satu baris berarti 100 karung dan pada baris lain
+    100 kg — dan yang membedakan cuma ingatan orang yang mengetiknya.
     """
     from app.models import MillingProcess
 
-    punya_bj = bool((req.stok or "").strip())
-    punya_pk = bool((req.pk_lot or "").strip())
-    if punya_bj == punya_pk:
-        raise HTTPException(
-            400, "Pilih SATU: barang jadi berkarung, atau PK mentah.")
-    if punya_bj:
-        if int(req.jumlah_karung or 0) <= 0:
-            raise HTTPException(400, "Isi jumlah karung lebih dari 0.")
-        bagian = (req.stok or "").split("|")
-        if not bagian[0].isdigit():
-            raise HTTPException(400, "Barang itu tidak ada lagi di daftar.")
-        std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
-        return bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
-                                std_id=std, jumlah_karung=int(req.jumlah_karung))
-    if float(req.pk_berat or 0) <= 0:
-        raise HTTPException(400, "Isi berat PK lebih dari 0.")
-    proc = (await db.execute(select(MillingProcess).where(
-        MillingProcess.kode_proses == (req.pk_lot or "").strip()))).scalars().first()
-    if proc is None:
-        raise HTTPException(400, f"Lot {req.pk_lot} tidak ditemukan.")
-    return bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
-                            berat_kg=float(req.pk_berat))
+    pilih = (pilih or "").strip()
+    if float(jumlah or 0) <= 0:
+        raise HTTPException(400, f"Isi jumlah untuk '{pilih}' lebih dari 0.")
+    if pilih.startswith("pk:"):
+        kode = pilih[3:].strip()
+        proc = (await db.execute(select(MillingProcess).where(
+            MillingProcess.kode_proses == kode))).scalars().first()
+        if proc is None:
+            raise HTTPException(400, f"Lot {kode} tidak ditemukan.")
+        return bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
+                                berat_kg=float(jumlah))
+    nilai = pilih[3:] if pilih.startswith("bj:") else pilih
+    bagian = nilai.split("|")
+    if not bagian or not bagian[0].isdigit():
+        raise HTTPException(400, "Pilih barangnya dulu.")
+    std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
+    return bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
+                            std_id=std, jumlah_karung=int(jumlah))
+
+
+async def _baris_dari_borang(db, req) -> list["bk.BarisPerintah"]:
+    """Seluruh baris perintah dari borangnya — bentuk baru maupun lama."""
+    if req.barang:
+        # Baris yang kosong SELURUHNYA sudah dibuang layar; yang terisi separuh
+        # sampai ke sini dan ditolak dengan menyebut barangnya — bukan dibuang
+        # diam-diam, yang akan membuat perintah kurang satu barang tanpa sebab.
+        return [await _satu_baris(db, b.pilih, b.jumlah) for b in req.barang
+                if (b.pilih or "").strip() or b.jumlah]
+    if (req.stok or "").strip():
+        return [await _satu_baris(db, req.stok, req.jumlah_karung)]
+    raise HTTPException(400, "Pilih dulu barang yang akan keluar.")
 
 
 @router.post("/actions/perintah-keluar")
@@ -676,7 +735,7 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
         baris = await _baris_dari_borang(db, req)
         try:
             r = await bk.buat_perintah(
-                db, user=u, baris=[baris], nama_pembeli=req.nama_pembeli,
+                db, user=u, baris=baris, nama_pembeli=req.nama_pembeli,
                 metode=req.metode, no_polisi=(req.no_polisi or None),
                 nama_ekspedisi=(req.nama_ekspedisi or None))
         except bk.BarangKeluarError as e:
@@ -707,8 +766,9 @@ async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
         u = await db.get(User, user.id)
         baris = await _baris_dari_borang(db, req)
         try:
-            r = await bk.tambah_baris(db, user=u, rec_id=_id(req.perintah),
-                                      baris=baris)
+            for b in baris:
+                r = await bk.tambah_baris(db, user=u, rec_id=_id(req.perintah),
+                                          baris=b)
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal menambah barang ke perintah.")
         kode, n = r.rec.kode, len(r.baris)
@@ -1008,32 +1068,26 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              "post": "/api/actions/perintah-keluar",
              "hint": "Perintah BELUM mengurangi stok — barangnya berpindah saat "
                      "operator memuatnya. Barang lain ditambahkan setelah ini.",
-             # ── DUA jenis baris, isi SALAH SATU ──
+             # ── BORANG BERTABEL: pilih barang + jumlahnya, lalu tambah item ──
              #
-             # PK mentah IKUT di sini. Keputusan pemilik 29 September 2026,
-             # meluruskan salah tangkap sehari sebelumnya: "pk juga bisa dijual
-             # dan mengurangi stock pk. tetapi istilah dijual kan harus tau
-             # harganya. sedangkan sistem produksi tidak boleh ada sangkut paut
-             # dengan harga."
+             # Permintaan pemilik 29 September 2026: "admin bisa memilih barang
+             # yang akan keluar beserta jumlahnya. lalu bisa klik tambah item
+             # lalu keluar field baru untuk memilih item lain beserta jumlahnya,
+             # karena barang keluar bisa multi item."
              #
-             # Jadi yang dikeluarkan dari sini HARGANYA, bukan barangnya.
-             # Perpindahan fisik tetap dicatat — PK yang naik truk memang
-             # berkurang dari stok Gudang 1, dan gudang yang stoknya tak pernah
-             # berkurang akan menawarkan PK yang sudah lama pergi.
+             # `ulang_barang` LAHIR untuk ini (paket tampilan): medan `ulang`
+             # yang sudah ada hanya mengulang SATU kotak, sedangkan yang perlu
+             # diulang di sini SEPASANG — barang dan jumlahnya.
              #
-             # Pola "isi salah satu" sudah dipakai QC hasil giling; rutenya yang
-             # memeriksa, bukan borangnya.
+             # SATU daftar berisi barang jadi DAN PK mentah. Yang dipikirkan
+             # Admin "apa yang naik truk ini", bukan "barang jadi atau PK".
              "fields": [
-                 {"name": "stok", "label": "Barang jadi yang keluar", "type": "remote",
-                  "optional": True, "source": "/api/actions/stok-barang-jadi",
-                  "kosong": "Tidak ada barang jadi berkarung di gudang."},
-                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
-                  "optional": True},
-                 {"name": "pk_lot", "label": "…atau PK mentah dari lot", "type": "remote",
-                  "optional": True, "source": "/api/actions/pk-siap-keluar",
-                  "kosong": "Tidak ada PK Gudang 1 yang bisa dikeluarkan."},
-                 {"name": "pk_berat", "label": "Berat PK (kg)", "type": "number",
-                  "optional": True},
+                 {"name": "barang", "label": "Barang yang keluar",
+                  "type": "ulang_barang", "maks": 12,
+                  "source": "/api/actions/barang-bisa-keluar",
+                  "label_angka": "Jumlah", "tambah": "+ Tambah item",
+                  "kosong": "Tidak ada barang jadi berkarung maupun PK yang "
+                            "bisa dikeluarkan."},
              ] + _bidang_pengiriman()},
             {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke perintah",
              "post": "/api/actions/tambah-barang-keluar",
@@ -1041,17 +1095,11 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "perintah", "label": "Perintah yang belum dimuat",
                   "type": "remote", "source": "/api/actions/perintah-terbuka",
                   "kosong": "Tidak ada perintah yang menunggu dimuat."},
-                 {"name": "stok", "label": "Barang jadi yang ditambahkan",
-                  "type": "remote", "optional": True,
-                  "source": "/api/actions/stok-barang-jadi",
-                  "kosong": "Tidak ada barang jadi berkarung di gudang."},
-                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
-                  "optional": True},
-                 {"name": "pk_lot", "label": "…atau PK mentah dari lot", "type": "remote",
-                  "optional": True, "source": "/api/actions/pk-siap-keluar",
-                  "kosong": "Tidak ada PK Gudang 1 yang bisa dikeluarkan."},
-                 {"name": "pk_berat", "label": "Berat PK (kg)", "type": "number",
-                  "optional": True},
+                 {"name": "barang", "label": "Barang yang ditambahkan",
+                  "type": "ulang_barang", "maks": 12,
+                  "source": "/api/actions/barang-bisa-keluar",
+                  "label_angka": "Jumlah", "tambah": "+ Tambah item",
+                  "kosong": "Tidak ada barang yang bisa dikeluarkan."},
              ]},
             {"id": "batal_perintah_keluar", "label": "\U0001F6AB Batalkan perintah keluar",
              "post": "/api/actions/batal-perintah-keluar",

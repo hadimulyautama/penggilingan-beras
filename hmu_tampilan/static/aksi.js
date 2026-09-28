@@ -387,6 +387,38 @@
                      " dulu —" : "memuat…") +
           "</option></select>";
       }
+      /* ── MEDAN BERULANG BERPASANGAN — satu BARIS (barang + jumlah) ──
+       *
+       * Permintaan pemilik 29 September 2026: "admin bisa memilih barang yang
+       * akan keluar beserta jumlahnya. lalu bisa klik tambah item lalu keluar
+       * field baru untuk memilih item lain beserta jumlahnya, karena barang
+       * keluar bisa multi item."
+       *
+       * Bedanya dengan `ulang` biasa, dan itu yang menuntut jenis tersendiri:
+       * yang diulang SEPASANG, bukan satu kotak. Satu transaksi barang keluar
+       * memuat beberapa macam barang, dan tiap macam punya jumlahnya sendiri.
+       *
+       * Anaknya sengaja TIDAK membawa `data-name`: pengumpul muatan dan
+       * pembaca konfirmasi menyapu `[data-name]` dan akan memperlakukan
+       * keduanya sebagai dua medan lepas — barangnya di satu kunci, jumlahnya
+       * di kunci lain, dan pasangannya hilang. Mereka memakai `data-p` dan
+       * dikumpulkan sendiri, per BARIS, supaya urutannya tak bisa tergeser.
+       *
+       * `data-wajib` hanya di baris pertama: menambah baris lalu
+       * meninggalkannya kosong bukan kesalahan — orang menekan tombolnya lalu
+       * berubah pikiran, dan menolak simpan karenanya menghukum keragu-raguan
+       * yang wajar. Baris kosong dibuang saat dikumpulkan. */
+      if (f.type === "ulang_barang") {
+        var maksB = f.maks || 10;
+        return l +
+          '<div class="ulang ulang--pasangan" data-ulang-untuk="' + esc(f.name) + '"' +
+          ' data-maks="' + maksB + '">' +
+          barisBarang(f, true) +
+          "</div>" +
+          '<button type="button" class="btn btn--kecil ulang__tambah"' +
+          ' data-tambah="' + esc(f.name) + '">' +
+          esc(f.tambah || "+ Tambah item") + "</button>";
+      }
       /* MEDAN BERULANG — satu kotak, lalu tombol yang menambah kotak.
        *
        * Alat tes kadar air dipakai di beberapa titik, dan berapa titiknya
@@ -541,11 +573,97 @@
        `segar` = pemuatan ULANG, bukan yang pertama. Bedanya penting: pilihan
        yang sudah dijatuhkan orangnya harus bertahan, dan baris terkunci tak
        perlu dihitung ulang karena bendanya memang tak berubah. */
-    function muatPilihan(segar, hanya) {
+    /* Satu baris pasangan. Dipakai saat lembar digambar DAN saat tombol
+     "+ Tambah item" ditekan — dua penulis untuk satu bentuk akan berbeda
+     atributnya pada perubahan berikutnya, dan yang berbeda diam-diam adalah
+     `data-wajib`. */
+  function barisBarang(f, pertama) {
+    var w = pertama ? ' data-wajib="1"' : "";
+    return '<div class="ulang__baris">' +
+      '<select class="fld" data-p="' + esc(f.name) + '" data-p-jenis="pilih"' +
+      w + ' data-label="' + esc(f.label) + '">' +
+      '<option value="">memuat…</option></select>' +
+      '<input class="fld" data-p="' + esc(f.name) + '" data-p-jenis="angka"' +
+      w + ' data-label="' + esc(f.label_angka || "Jumlah") + '"' +
+      ' type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"' +
+      ' autocomplete="off" enterkeyhint="next" placeholder="' +
+      esc(f.label_angka || "Jumlah") + '">' +
+      '<button type="button" class="ulang__buang" data-buang="1"' +
+      ' aria-label="Buang baris ini" title="Buang baris ini">×</button>' +
+      "</div>";
+  }
+
+  /* Mengumpulkan baris-baris pasangan jadi daftar {pilih, jumlah}.
+     Baris yang KOSONG SELURUHNYA dibuang; baris yang terisi separuh
+     DIBIARKAN LEWAT — server yang menolaknya, dengan kalimat yang menyebut
+     barang mana. Membuangnya diam-diam di sini membuat orang menekan Simpan
+     lalu melihat perintahnya kurang satu barang tanpa tahu sebabnya. */
+  function kumpulkanPasangan(lembar) {
+    var hasil = {};
+    Array.prototype.forEach.call(
+      lembar.querySelectorAll(".ulang--pasangan[data-ulang-untuk]"),
+      function (wadah) {
+        var nama = wadah.dataset.ulangUntuk;
+        var daftar = [];
+        Array.prototype.forEach.call(wadah.querySelectorAll(".ulang__baris"),
+          function (br) {
+            var sel = br.querySelector('[data-p-jenis="pilih"]');
+            var ang = br.querySelector('[data-p-jenis="angka"]');
+            var pilih = sel ? String(sel.value || "").trim() : "";
+            var jml = ang ? String(ang.value || "").trim() : "";
+            if (!pilih && !jml) { return; }
+            daftar.push({
+              pilih: pilih,
+              jumlah: jml === "" ? null : parseFloat(jml.replace(",", ".")),
+              teks: (sel && sel.selectedIndex >= 0)
+                ? sel.options[sel.selectedIndex].text : pilih
+            });
+          });
+        hasil[nama] = daftar;
+      });
+    return hasil;
+  }
+
+  function muatPilihan(segar, hanya) {
       terakhirMuat = Date.now();
       (a.fields || []).forEach(function (f) {
       if (f.type === "remote_banyak") {
         if (!hanya || f.name === hanya) { muatBanyak(f, segar); }
+        return;
+      }
+      /* Wadah berpasangan: daftarnya dimuat SEKALI lalu dipasang ke setiap
+         baris yang sudah ada. Baris yang ditambahkan sesudah ini menyalin
+         <option>-nya dari baris pertama, jadi tak ada permintaan kedua. */
+      if (f.type === "ulang_barang") {
+        if (hanya && f.name !== hanya) { return; }
+        ambil(f.source).then(function (daftar) {
+          if (!daftar) return;
+          var wadah = lembar.querySelector(
+            '.ulang--pasangan[data-ulang-untuk="' + f.name + '"]');
+          if (!wadah) return;
+          var opsi = '<option value="">' +
+            (daftar.length ? "— pilih —" : "(belum ada)") + "</option>" +
+            daftar.map(function (o) {
+              return '<option value="' + esc(o.value) + '">' + esc(o.label) +
+                "</option>";
+            }).join("");
+          Array.prototype.forEach.call(wadah.querySelectorAll("select"),
+            function (sel) {
+              var dipilih = sel.value;
+              sel.innerHTML = opsi;
+              if (dipilih) { sel.value = dipilih; }
+            });
+          if (!daftar.length) {
+            if ($("kosong_" + f.name)) { return; }
+            var nota = document.createElement("p");
+            nota.className = "bantu";
+            nota.id = "kosong_" + f.name;
+            nota.style.marginTop = "6px";
+            nota.textContent = f.kosong || ("Belum ada " +
+              (f.label || "pilihan").toLowerCase() + ".");
+            wadah.insertAdjacentElement("afterend", nota);
+          }
+        });
         return;
       }
       if (f.type !== "remote") return;
@@ -713,6 +831,16 @@
         var kotak = el.type === "hidden" ? $("t_" + el.dataset.name) : null;
         v[el.dataset.name] = kotak ? kotak.textContent.trim() : el.value;
       });
+      /* Baris pasangan: yang dibaca orang TULISAN barangnya, bukan idnya.
+         Konfirmasi yang berbunyi "12|3 × 100" tak mengonfirmasi apa pun. */
+      var pasanganT = kumpulkanPasangan(lembar);
+      Object.keys(pasanganT).forEach(function (nama) {
+        var baris = pasanganT[nama];
+        if (!baris.length) { return; }
+        v[nama] = baris.map(function (b) {
+          return b.teks + " × " + (b.jumlah === null ? "?" : b.jumlah);
+        }).join(" · ");
+      });
       return v;
     }
 
@@ -751,6 +879,16 @@
           return;
         }
         isi[el.dataset.name] = v;
+      });
+      /* Baris pasangan dikumpulkan TERPISAH — anaknya tak ber-`data-name`,
+         jadi gelung di atas tak pernah melihatnya. Dikirim sebagai daftar
+         {pilih, jumlah}: satu transaksi barang keluar memuat beberapa macam
+         barang, dan urutan pasangannya tak boleh bisa tergeser. */
+      var pasangan = kumpulkanPasangan(lembar);
+      Object.keys(pasangan).forEach(function (nama) {
+        isi[nama] = pasangan[nama].map(function (b) {
+          return { pilih: b.pilih, jumlah: b.jumlah };
+        });
       });
       return isi;
     }
@@ -1036,12 +1174,54 @@
   })(document, "click", function (e) {
     if (!e.target.closest) return;
 
+    /* Baris yang salah dipilih DIBUANG, bukan dikosongkan satu per satu.
+       Baris pertama tak pernah hilang — ia pembawa `data-wajib` dan cetakan
+       untuk baris berikutnya; kalau ia bisa dibuang, wadahnya jadi kosong dan
+       tombol "+ Tambah item" tak punya apa pun untuk disalin. */
+    var buang = e.target.closest("[data-buang]");
+    if (buang) {
+      e.preventDefault();
+      var br = buang.closest(".ulang__baris");
+      var wd = br && br.parentNode;
+      if (!wd || wd.querySelectorAll(".ulang__baris").length <= 1) {
+        if (br) {
+          Array.prototype.forEach.call(br.querySelectorAll("select, input"),
+            function (x) { x.value = ""; });
+        }
+        return;
+      }
+      br.remove();
+      var tbl = document.querySelector(
+        '[data-tambah="' + wd.dataset.ulangUntuk + '"]');
+      if (tbl) { tbl.hidden = false; }
+      return;
+    }
+
     var tambah = e.target.closest("[data-tambah]");
     if (tambah) {
       e.preventDefault();
       var wadah = document.querySelector(
         '#lembar [data-ulang-untuk="' + tambah.dataset.tambah + '"]');
       if (!wadah) return;
+      /* Wadah berpasangan menyalin satu BARIS utuh — beserta <option> yang
+         sudah terlanjur dimuat, jadi baris baru langsung berisi daftarnya
+         tanpa menunggu jaringan sekali lagi. `data-wajib` dilepas: hanya baris
+         pertama yang wajib. */
+      if (wadah.classList.contains("ulang--pasangan")) {
+        var barisAda = wadah.querySelectorAll(".ulang__baris");
+        var maksP = parseInt(wadah.dataset.maks, 10) || 10;
+        if (barisAda.length >= maksP) return;
+        var salin = barisAda[0].cloneNode(true);
+        Array.prototype.forEach.call(salin.querySelectorAll("[data-wajib]"),
+          function (x) { x.removeAttribute("data-wajib"); });
+        Array.prototype.forEach.call(salin.querySelectorAll("select, input"),
+          function (x) { x.value = ""; });
+        wadah.appendChild(salin);
+        var pilihBaru = salin.querySelector("select");
+        if (pilihBaru) { pilihBaru.focus(); }
+        if (barisAda.length + 1 >= maksP) tambah.hidden = true;
+        return;
+      }
       var ada = wadah.querySelectorAll("input").length;
       var maks = parseInt(wadah.dataset.maks, 10) || 4;
       if (ada >= maks) return;

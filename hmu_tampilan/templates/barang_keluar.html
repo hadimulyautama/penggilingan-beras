@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block judul %}Barang Keluar{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{# ── Barang Keluar — SATU TRUK SATU KARTU ──
+   Permintaan pemilik 28 September 2026: "kita butuh satu halaman untuk
+   transaksi barang keluar. 1 transaksi bisa beberapa macam barang yang
+   keluar."
+
+   Sampai halaman ini ada, catatan barang keluar tersebar di kartu Stok Produk
+   (per KATEGORI) dan di List audit (baris mentah). Keduanya menyusun menurut
+   BARANG, jadi tak satu pun bisa menjawab "truk yang tadi siang bawa apa
+   saja?".
+
+   Ia DAFTAR, bukan antrean: yang menagih pekerjaan tetap Antrian tunggu dan
+   Menunggu keputusan. Karena itu tak berlencana, dan yang sudah selesai tetap
+   tergambar — riwayatnya bagian dari gunanya.
+
+   Bentuknya memakai kerangka yang sudah ada — `.padat`, `.anak`, `.keping` —
+   dan itu disengaja: kelas baru untuk kartu yang sama bentuknya akan berbeda
+   rupa pada perubahan tema berikutnya. #}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/>
+      <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    <div>
+      <h2>Belum ada barang keluar</h2>
+      <p class="bantu">
+        Perintah muat dibuat Admin lewat “Buat perintah barang keluar”. Satu
+        perintah boleh memuat beberapa macam barang sekaligus — operator
+        menerimanya sebagai tugas di Antrian tunggu.
+      </p>
+    </div>
+  </div>
+{% else %}
+
+<div class="jumlah">
+  <span class="lbl">Sedang berjalan</span>
+  {# Dua angka, dan keduanya PEKERJAAN — bukan kilogram. Berapa ton yang keluar
+     bulan ini ada di Laporan; yang dicari orang saat membuka halaman ini
+     berapa truk yang belum beres. #}
+  <div class="jumlah__angka">{{ n_perintah + n_dimuat }}<small>transaksi</small></div>
+  <div class="jumlah__ket">
+    {{ n_perintah }} menunggu dimuat · {{ n_dimuat }} menunggu verifikasi
+  </div>
+</div>
+
+<div class="grup">
+{% for k in kartu %}
+  <details class="padat padat--{{ k.warna }}"{{ ' open' if loop.index <= 2 and k.rec.status != 'selesai' }}>
+  <summary>
+    <div class="padat__atas">
+      <span class="padat__nama">{{ k.rec.kode }}</span>
+      <span class="padat__nilai">
+        {{- kg(k.total_dimuat if k.total_dimuat else k.total_perintah) }}<small>kg</small></span>
+    </div>
+    {# Keadaan + pembeli + truk dalam satu baris: ketiganya yang dicari mata
+       saat menyapu daftar, dan yang mencari truk tertentu mencarinya lewat
+       platnya. #}
+    <div class="padat__ket">
+      {# `.keping` mewarisi `--fase` dari `.padat--…` di atasnya, jadi
+         warnanya ikut keadaan kartunya tanpa kelas kedua. #}
+      <span class="keping">{{ k.keadaan }}</span>
+      {{ k.rec.nama_pembeli or "—" }}
+      {%- if k.rec.no_polisi %} · {{ k.rec.no_polisi }}{% endif %}
+      {%- if k.rec.nama_ekspedisi %} · {{ k.rec.nama_ekspedisi }}{% endif %}
+      · {{ k.isi|length }} macam
+    </div>
+  </summary>
+
+    <div class="anak">
+      <div class="anak__kepala">Isi muatan</div>
+      {% for b in k.isi %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ b.nama }}</span>
+          {# DUA ANGKA BERDAMPINGAN — yang diperintahkan dan yang benar-benar
+             dimuat. Selisih yang ditimpa berhenti jadi pertanyaan, dan muatan
+             sungguhan memang berselisih: karung rusak, truk penuh lebih cepat.
+             Selama masih berstatus perintah, "dimuat" belum ada artinya. #}
+          <span class="anak__kg">
+            {%- if k.rec.status == 'perintah' -%}
+              {{ b.karung ~ ' karung' if b.berkarung else kg(b.perintah) ~ ' kg' }}
+            {%- else -%}
+              {{ kg(b.dimuat) }} kg
+            {%- endif -%}
+          </span>
+          {% if b.kurang %}
+            <span class="anak__jam">diperintah {{ kg(b.perintah) }} kg ·
+              kurang {{ kg(b.kurang) }} kg</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if k.rec.catatan_perintah %}
+        <div class="anak__kepala">Catatan Admin</div>
+        <div class="anak__baris">
+          <span class="anak__nama">{{ k.rec.catatan_perintah }}</span>
+        </div>
+      {% endif %}
+
+      {# ── Jejak tiga langkahnya ──
+         Siapa dan kapan, bertiga terpisah. Tiga orang dengan tiga tanggung
+         jawab; satu baris "terakhir diubah oleh" menghapus justru pertanyaan
+         yang kelak ditanyakan — siapa yang memerintahkan muatan yang salah. #}
+      <div class="anak__kepala">Jejaknya</div>
+      {% for label, waktu, oleh in [
+            ("Diperintah", k.rec.waktu_perintah, k.rec.diperintah_oleh),
+            ("Dimuat", k.rec.waktu_muat, k.rec.dimuat_oleh),
+            ("Diverifikasi", k.rec.waktu_verifikasi, k.rec.diverifikasi_oleh)] %}
+        {% if waktu %}
+          <div class="anak__baris">
+            <span class="anak__nama">{{ label }}</span>
+            <span class="anak__kg">{{ waktu.strftime('%d/%m %H:%M') }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      {% if k.rec.timbangan_transaksi_id %}
+        <div class="anak__baris">
+          <span class="anak__nama">Tiket timbang keluar</span>
+          <span class="anak__kg">#{{ k.rec.timbangan_transaksi_id }}</span>
+        </div>
+      {% elif k.rec.status == 'selesai' %}
+        {# Ditutup TANPA tiket — sah (timbangan rusak, truk lewat pintu
+           belakang), tetapi harus terlihat: transaksi tanpa tiket adalah yang
+           kelak tak bisa dicocokkan dengan Pos Timbang. #}
+        <div class="nota">
+          Ditutup tanpa kode timbang keluar — angkanya tak bisa dicocokkan
+          dengan Pos Timbang.
+        </div>
+      {% endif %}
+
+      {% if k.rec.sebab_batal %}
+        <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
+      {% endif %}
+    </div>
+  </details>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

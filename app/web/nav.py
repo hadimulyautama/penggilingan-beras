@@ -123,6 +123,21 @@ TAB = (
     # membedakan gudang tempatnya bekerja hari ini.
     ("stok_produk", "/stok-produk", "Stok Produk",
      "Beras dan hasil samping yang sudah jadi", None),
+    # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
+    #
+    # "kita butuh satu halaman untuk transaksi barang keluar."
+    #
+    # Tempatnya SESUDAH Stok Produk dan bukan di antara antrean: ia DAFTAR,
+    # bukan antrean. Yang menagih pekerjaan tetap Antrian tunggu (kartu muat)
+    # dan Menunggu keputusan (kartu verifikasi); halaman ini menjawab
+    # pertanyaan yang tak bisa dijawab keduanya — "truk yang tadi siang bawa
+    # apa saja?" — sebab keduanya menyusun menurut pekerjaan, bukan menurut
+    # truk.
+    #
+    # Pintunya padam untuk operator selepan lewat `PINTU_MATI`, sama seperti
+    # Stok Produk: barang jadi berdiri di Gudang 2.
+    ("barang_keluar", "/barang-keluar", "Barang Keluar",
+     "Perintah muat, muatan, dan riwayatnya", None),
     # ── Kabar — keputusan pemilik 26 September 2026 ──
     #
     # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum

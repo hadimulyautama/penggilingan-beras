@@ -13,7 +13,10 @@ layar. Tiga hal dijaga di sini:
 """
 from __future__ import annotations
 
+import pathlib
 import pytest
+
+AKAR = pathlib.Path(__file__).resolve().parents[1]
 from fastapi import HTTPException
 
 from app.penggilingan.inventory import packaging as kms
@@ -174,11 +177,37 @@ def test_tiap_aksi_punya_gudang_yang_ditetapkan_eksplisit():
 
 
 def test_tiap_aksi_menunjuk_alamat_kirim_dan_punya_isian():
+    """Dan jenis medannya BENAR-BENAR DIKENAL PERENDERNYA.
+
+    ⚠ DIPERKUAT 29 September 2026. Dulu baris ini mencocokkan dengan daftar
+    hafalan `("text", "number", "select", "remote")` — dan daftar hafalan punya
+    dua cara gagal yang berlawanan: ia menolak jenis baru yang sah (persis yang
+    terjadi saat `ulang_barang` lahir), dan ia MELOLOSKAN jenis yang salah ketik
+    selama kebetulan ada di daftar.
+
+    Yang benar-benar menentukan `aksi.js`: jenis yang tak dikenalinya jatuh ke
+    cabang terakhir dan digambar sebagai kotak teks biasa — borangnya tampil,
+    tak ada galat apa pun, dan orang mengetik nama barang ke kotak yang
+    seharusnya daftar pilihan. Jadi yang dibaca di sini perendernya sendiri.
+    """
+    import re
+
+    js = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
+    dikenal = set(re.findall(r'f\.type === "(\w+)"', js))
+    assert {"remote", "ulang_barang"} <= dikenal, (
+        "pembaca jenis medan tak menemukan apa pun di aksi.js — bentuknya "
+        f"berubah, sesuaikan pagarnya: {sorted(dikenal)}")
+    # `text` & `number` tak diuji `f.type === ...` di sana: keduanya cabang
+    # TERAKHIR, yang memang menampung sisanya.
+    dikenal |= {"text", "number"}
+
     for a in _semua_aksi():
         assert a["post"].startswith("/api/actions/")
         assert a["fields"], f"{a['id']} tanpa isian"
         for f in a["fields"]:
-            assert f["type"] in ("text", "number", "select", "remote")
+            assert f["type"] in dikenal, (
+                f"{a['id']}.{f.get('name')} berjenis '{f['type']}' yang tak "
+                "dikenal aksi.js — ia akan digambar sebagai kotak teks biasa")
             if f["type"] == "remote":
                 assert f["source"].startswith("/api/actions/")
 
