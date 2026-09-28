@@ -415,11 +415,30 @@ async def selesai_penyosohan(
             target_role="admin", prioritas="kuning",
             table_name="polishing_process", record_id=proc.id,
         )
-    else:
-        await log_activity(
-            db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
-            changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
-        )
+    # ── SATU baris bertanda, ditulis TERAKHIR — inilah yang dibatalkan ──
+    #
+    # Laporan operator Gudang 2, 28 September 2026: "jika operator tidak sengaja
+    # terpencet selesai penyosohan ... hasilnya akan hilang." Pagar di atas
+    # menolak penutupan yang belum punya hasil sama sekali; yang ini menjawab
+    # separuh keluhan yang lain — penutupan yang sudah berhasil, tetapi salah.
+    #
+    # Sampai hari ini penutupan mencatat DUA bentuk audit yang berbeda: baris
+    # `polishing_process` bila seluruh silo sudah bersisa, `polishing_silo_usage`
+    # bila belum. Bentuk pertama TAK BISA dibatalkan walau tabelnya didukung,
+    # dan sebabnya bukan kemauan: `record_id`-nya prosesnya, bukan silonya, jadi
+    # pembatalan tak punya cara mengetahui SILO MANA yang barusan ditutup. Pada
+    # proses dua silo ia akan membuka yang salah.
+    #
+    # Karena itu barisnya kini SELALU `polishing_silo_usage` dan selalu
+    # bertanda. Baris `polishing_process` di atas tetap ditulis — layar audit
+    # membacanya sebagai "prosesnya selesai", kejadian yang memang terjadi — dan
+    # sengaja ditulis LEBIH DULU: pratinjau undo memilih baris TERBARU, jadi
+    # urutan inilah yang menentukan tombol undo menawarkan yang benar.
+    await log_activity(
+        db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
+        changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
+        aksi="tutup_silo_sosoh",
+    )
     # Silo yang baru dibebaskan bisa SUDAH berisi PK baru — orang menuangnya
     # selagi prosesnya berjalan. Statusnya diturunkan ulang dari isinya yang
     # sebenarnya, bukan dicap "kosong" karena prosesnya selesai (temuan QA 28

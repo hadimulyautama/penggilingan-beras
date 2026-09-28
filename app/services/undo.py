@@ -52,6 +52,12 @@ _UNDOABLE = {
     # menambah dua kali tanpa terlihat, dan angka salah tak bisa dibetulkan
     # dengan mengetik ulang. Ia harus bisa dicabut.
     "polishing_output_logs",
+    # Penutupan silo penyosohan bisa dibatalkan SEJAK 28 September 2026, atas
+    # laporan operator: satu ketukan tak sengaja pada "selesai penyosohan"
+    # sampai hari itu tak punya jalan kembali sama sekali. Yang dibatalkan
+    # baris PEMAKAIAN SILO, bukan barisan prosesnya — lihat
+    # `_undo_tutup_silo_sosoh`.
+    "polishing_silo_usage",
 }
 
 #: Label ramah per tabel — untuk pesan "belum bisa di-undo" MAUPUN untuk
@@ -85,6 +91,9 @@ _TABLE_LABEL = {
     "pk_purchase_verifications": "verifikasi harga PK luar",
     "pk_gudang2_intakes": "PK masuk Gudang 2",
     "pk_tumpukan_to_silo": "PK tumpukan ke silo",
+    "polishing_silo_usage": "selesai penyosohan (silo)",
+    "polishing_output_logs": "hasil penyosohan",
+    "polishing_process": "proses penyosohan",
     # Belum bisa dibatalkan
     # Jeda tidak dibatalkan lewat undo: yang benar bukan menghapus catatan
     # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya
@@ -680,6 +689,125 @@ async def _undo_output_sosoh(db: AsyncSession, log_id: int) -> str:
             + (f" di {proc.kode_proses}" if proc else "") + ".")
 
 
+async def _undo_tutup_silo_sosoh(db: AsyncSession, usage_id: int) -> str:
+    """Buka kembali satu silo penyosohan yang barusan ditandai selesai — dan,
+    bila penutupan itu yang menutup prosesnya, buka prosesnya juga.
+
+    Laporan operator Gudang 2, 28 September 2026: "jika operator tidak sengaja
+    terpencet selesai penyosohan, tetapi belum memasukkan hasil beras dll,
+    hasilnya akan hilang." Pagar di `selesai_penyosohan` menolak penutupan yang
+    belum punya SATU PUN hasil; ia tak menolong penutupan yang hasilnya sudah
+    dicatat tetapi sisanya salah, atau silonya salah. Untuk itu satu ketukan
+    perlu jalan kembali — dan sampai hari ini seluruh penutupan penyosohan tak
+    punya jalan kembali sama sekali.
+
+    YANG DIKEMBALIKAN, semuanya, dan urutannya tidak penting sebab satu
+    transaksi:
+
+      · sisa & terpakai silo → kosong lagi (stok silonya naik kembali);
+      · status proses → 'proses', `waktu_selesai` → kosong;
+      · jeda yang IKUT DITUTUP oleh penutupan itu → terbuka lagi. Penutupan
+        menutup jeda yang masih berjalan supaya jam tertahan tak terus
+        bertambah (P-K-17); membiarkannya tertutup sesudah pembatalan berarti
+        prosesnya kembali berjalan sambil kehilangan catatan bahwa ia sedang
+        berhenti;
+      · status silo dihitung ulang dari isinya, bukan dicap "terisi".
+
+    TIGA PENOLAKAN, dan ketiganya soal hilir yang sudah berdiri di atas
+    penutupan ini:
+
+      1. sudah DIKEMAS (`finished_goods_stock` / `byproduct_stock` dengan
+         `source_type='polishing'`). Beras yang sudah jadi karung tak bisa
+         kembali jadi proses yang belum selesai — dan pengemasannya sendiri
+         tidak ikut terbatalkan, jadi yang tersisa adalah karung tanpa asal;
+      2. silonya sudah DIPAKAI penyosohan lain. `mulai_penyosohan` menolak silo
+         yang sedang dipoles; membuka yang ini akan menghasilkan dua proses
+         terbuka pada satu silo — keadaan yang tak satu pun layar bisa
+         menggambar, dan yang stoknya terhitung dua kali;
+      3. sudah dibatalkan sebelumnya (sisanya sudah kosong). Dua ketukan pada
+         tombol yang sama tak boleh membuka silo kedua.
+
+    Yang TIDAK menghalangi: PK baru yang dituang ke silo itu sesudah
+    dibebaskan. Itu keadaan sehari-hari — orang menuang selagi prosesnya
+    berjalan — dan `berat_masuk_kg` memang menampungnya. Stok silonya kembali
+    berisi sisa lama DITAMBAH yang baru, dan itu angka yang benar.
+    """
+    from app.penggilingan.gudang2.models import (PolishingProcess,
+                                                 PolishingSiloUsage)
+    from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock
+
+    u = await db.get(PolishingSiloUsage, usage_id)
+    if u is None:
+        raise UndoError("Catatan pemakaian silo itu sudah tidak ada.")
+    proc = await db.get(PolishingProcess, u.polishing_process_id)
+    kode = proc.kode_proses if proc else f"#{u.polishing_process_id}"
+    silo = await db.get(Silo, u.silo_id)
+    nm = silo.nama_silo.replace("Silo ", "") if silo else "-"
+    if u.berat_akhir_kg is None:
+        raise UndoError(
+            f"Silo {nm} pada {kode} sudah terbuka — sisanya belum tercatat, "
+            "jadi tak ada penutupan yang bisa dibatalkan.")
+
+    if proc is not None:
+        for model, apa in ((FinishedGoodsStock, "dikemas"),
+                           (ByproductStock, "dicatat sebagai hasil samping")):
+            ada = (await db.execute(
+                select(model.id).where(model.source_type == "polishing",
+                                       model.source_id == proc.id).limit(1)
+            )).first()
+            if ada:
+                raise UndoError(
+                    f"{kode} sudah {apa} — penutupannya tak bisa dibatalkan "
+                    "lagi. Mintakan koreksi ke Admin.")
+
+    lain = (await db.execute(
+        select(PolishingProcess.kode_proses)
+        .join(PolishingSiloUsage,
+              PolishingSiloUsage.polishing_process_id == PolishingProcess.id)
+        .where(PolishingSiloUsage.silo_id == u.silo_id,
+               PolishingSiloUsage.id != u.id,
+               PolishingSiloUsage.berat_akhir_kg.is_(None),
+               PolishingProcess.status == "proses")
+        .limit(1)
+    )).scalars().first()
+    if lain:
+        raise UndoError(
+            f"Silo {nm} sudah dipakai penyosohan {lain} — {kode} tak bisa "
+            "dibuka lagi tanpa membuat dua proses berebut satu silo. "
+            "Mintakan koreksi ke Admin.")
+
+    sisa = float(u.berat_akhir_kg or 0)
+    u.berat_akhir_kg = None
+    u.berat_terpakai_kg = None
+    tutup_proses = proc is not None and proc.status == "selesai"
+    if tutup_proses:
+        selesai_pada = proc.waktu_selesai
+        proc.status = "proses"
+        proc.waktu_selesai = None
+        # Yang dibuka kembali PERSIS jeda yang penutupan itu tutup — dikenali
+        # dari `selesai` yang sama dengan `waktu_selesai` prosesnya, sebab
+        # penutupan menyalin angka itu ke sana. BUKAN "jeda terakhir yang
+        # tertutup": operator yang menghentikan mesin lalu melanjutkannya
+        # sendiri pagi itu punya jeda tertutup yang sah, dan membukanya kembali
+        # akan membuat jam tertahan tumbuh terus sampai seseorang menyadarinya.
+        from app.penggilingan.gudang1.models import JedaProses
+
+        if selesai_pada is not None:
+            jeda = (await db.execute(
+                select(JedaProses).where(
+                    JedaProses.polishing_process_id == proc.id,
+                    JedaProses.selesai == selesai_pada)
+            )).scalars().first()
+            if jeda is not None:
+                jeda.selesai = None
+    from app.penggilingan.gudang2.service import segarkan_status_silo
+
+    await segarkan_status_silo(db, u.silo_id)
+    return (f"✓ Dibatalkan: penutupan Silo {nm} pada {kode} (sisa {sisa:.0f} kg "
+            "dihapus, silonya terbuka lagi"
+            + (f"; {kode} kembali berjalan)." if tutup_proses else ")."))
+
+
 async def _undo_moving_log(db: AsyncSession, log_id: int) -> str:
     ml = await db.get(SiloMovingLog, log_id)
     if ml is None:
@@ -922,6 +1050,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_masuk_silo_baris(db, log.record_id)
     if tag == "silo_gabung":
         return await _undo_silo_merge_baris(db, log.record_id)
+    if tag == "tutup_silo_sosoh":
+        return await _undo_tutup_silo_sosoh(db, log.record_id)
 
     t, rid, act = log.table_name, log.record_id, log.action
     if t == "drying_lots" and act == "INSERT":
