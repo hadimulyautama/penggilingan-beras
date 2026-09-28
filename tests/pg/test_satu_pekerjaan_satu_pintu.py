@@ -146,7 +146,9 @@ async def test_yang_tak_berkartu_tetap_punya_pintunya(pg, pabrik):
     async with pg() as db:
         u = await db.get(User, pabrik["admin"])
         katalog = await _katalog(u)
-    for wajib in ("catat_bekatul", "kirim_bekatul", "harga_byproduct",
+    # `harga_byproduct` dicoret 28 September 2026: aksinya DIHAPUS bersama
+    # seluruh harga (keputusan pemilik), jadi ia tak lagi butuh pintu.
+    for wajib in ("catat_bekatul", "kirim_bekatul",
                   "beli_kemasan", "kirim_barang_jadi", "jual_pk",
                   "transfer_pk", "rekonsiliasi_timbang"):
         assert wajib in katalog, f"{wajib} kehilangan satu-satunya pintunya"
@@ -165,7 +167,9 @@ async def test_kedua_belas_yang_dicabut_tetap_terkirim_di_menu(pg, pabrik):
     for aksi in ("mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
                  "lanjutkan_penyosohan", "selesai_penyosohan",
                  "pindah_tumpukan_silo", "catat_packing", "masukkan_pk",
-                 "catat_pk_luar", "qc_pk_luar", "harga_pk_luar",
+                 # `harga_pk_luar` dicoret 28 September 2026 — DIHAPUS, jadi
+                 # tak perlu lagi disembunyikan dari katalog.
+                 "catat_pk_luar", "qc_pk_luar",
                  "betulkan_bobot_giling"):
         assert aksi in menu, f"{aksi} hilang dari menu — kartunya jadi buntu"
         assert menu[aksi]["kartu"] is True, f"{aksi} masih digambar di katalog"

@@ -419,7 +419,7 @@ async def beranda(request: Request):
         perhatian=(papan.perhatian if papan else []),
         gudang=(papan.gudang if papan else []),
         rinci_keputusan=papan is not None,
-        n_harga=(papan.n_harga if papan else 0),
+        n_permintaan=(papan.n_permintaan if papan else 0),
         n_output=(papan.n_output if papan else 0),
         n_mutu=(papan.n_mutu if papan else 0),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),

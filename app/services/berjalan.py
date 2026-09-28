@@ -1431,25 +1431,12 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     b.menunggu += curah
     b.jumlah_produk = len(curah)
 
-    # ── Kerja meja: harga & mutu PK luar ──
-    for pk, nama in (await db.execute(
-        select(PkPurchaseBatch, Supplier.nama_supplier)
-        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
-        .where(PkPurchaseBatch.flag_unverified.is_(True))
-        .order_by(PkPurchaseBatch.id.desc())
-    )).all():
-        b.meja.append(Baris(
-            kode=pk.kode_batch, isi=f"{nama} · {dari_batch(pk).teks()}",
-            keadaan="", aksi="harga_pk_luar", nilai=pk.kode_batch,
-            fase=("baru" if pk.status_batch == "baru" else "silo"),
-            sejak=pk.created_at,
-            judul=nama or pk.kode_batch,
-            utama=_utama(dari_batch(pk)),
-            sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
-            pilihan=[("harga_pk_luar", "Verifikasi harga PK luar",
-                      "Sesudah ini nilainya beku", pk.kode_batch)],
-        ))
-
+    # ── Kerja meja: MUTU PK luar ──
+    #
+    # Harga keluar dari Pos Produksi 28 September 2026 (keputusan pemilik), dan
+    # kartu "Verifikasi harga PK luar" ikut dibuang. Yang tersisa mutunya —
+    # dan potongan bobotnya, yang pindah ke borang QC sebab ia satu-satunya
+    # penulis potongan yang tersisa. Lihat `api.act_qc_pk_luar`.
     sudah_qc = set((await db.execute(
         select(PkPurchaseVerification.pk_purchase_batch_id)
         .where(PkPurchaseVerification.kadar_air.is_not(None))
@@ -1947,28 +1934,11 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # di halaman tanpa satu catatan pun.
     b.menunggu += await _tiket_jenis_tak_dikenal(db)
 
-    for batch, nama in (await db.execute(
-        select(PurchaseBatch, Supplier.nama_supplier)
-        .join(Supplier, Supplier.id == PurchaseBatch.supplier_id)
-        .where(PurchaseBatch.flag_unverified.is_(True))
-        .order_by(PurchaseBatch.id.desc())
-    )).all():
-        di_mana = _DI_MANA.get(batch.status_batch or "", batch.status_batch or "")
-        b.meja.append(Baris(
-            kode=batch.kode_batch, isi=f"{nama} · {dari_batch(batch).teks()}",
-            # Keadaannya kosong: judul bloknya sudah mengatakannya.
-            keadaan="", aksi="verify_gabah",
-            nilai=batch.kode_batch,
-            sejak=batch.created_at,
-            fase=_FASE_BATCH.get(batch.status_batch or "", "baru"),
-            judul=nama,
-            utama=_utama(dari_batch(batch)),
-            sub=f"{batch.kode_batch} · gabah {batch.kondisi_gabah} · "
-                f"masuk {_tgl(batch.tanggal_pembelian)}",
-            fakta=[("Gabahnya", di_mana)],
-            pilihan=[("verify_gabah", "Verifikasi harga",
-                      "Sesudah ini bobotnya dibekukan — revisi nota tak lagi masuk")],
-        ))
+    # Kartu "Harga gabah belum diverifikasi" DIBUANG 28 September 2026:
+    # harga keluar dari Pos Produksi (keputusan pemilik). `flag_unverified`
+    # sendiri TIDAK ikut dibuang — ia kolom peninggalan yang masih dibaca
+    # penjaga bobot di `timbang_link`, dan barisnya tetap berdiri untuk
+    # keuangan. Yang berhenti cuma menagihnya di layar.
 
     from app.models import MillingProcessSource
     from app.penggilingan.gudang1.services.drying import _lot_batches

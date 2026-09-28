@@ -134,27 +134,17 @@ class Settings(BaseSettings):
     # memutuskan gabah sudah cukup kering tetap orang yang memegang alat tes.
     kadar_air_target_persen: float = 14
 
-    # ── Biaya operasional (Rp), untuk HPP penuh. Semua bisa diubah via env. ──
-    biaya_bongkar_per_kg_gabah: float = 20        # tenaga bongkar gabah datang
-    # Operator: FLAT per sekali proses milling (bukan per kg).
-    biaya_operator_per_proses: float = 400_000
-    biaya_tenaga_milling_per_kg_pk: float = 25    # tenaga saat milling, per kg PK
-    biaya_pengeringan_basah_per_kg: float = 100   # gabah basah dikeringkan
-    biaya_pengeringan_kering_per_kg: float = 15   # gabah kering tetap dikeringkan
-    biaya_listrik_milling_per_kg_gabah: float = 20  # listrik/mesin saat milling
-    # Rubber roll mesin pecah kulit: 1 set per N ton gabah, harga per set.
-    rubber_roll_harga_per_set: float = 2_000_000
-    rubber_roll_umur_ton: float = 100
-
-    # ── Biaya PENYOSOHAN (PK → beras putih). Basis: kg PK yang disosoh. Crew
-    #    penyosohan TERPISAH dari crew milling. Semua masuk HPP beras. ──
-    biaya_penyosohan_per_kg_pk: float = 100          # sosoh, per kg PK (Rp1jt/10 ton)
-    biaya_tenaga_penyosohan_per_kg_pk: float = 50    # tenaga crew sosoh, per kg PK
-    biaya_transport_penyosohan_per_kg_pk: float = 50  # transport inbound, per kg PK (Rp500rb/10 ton)
-    biaya_operator_penyosohan: float = 300_000       # FLAT per proses penyosohan
-    # Marketing = BEBAN PENJUALAN, BUKAN HPP. Untuk laporan margin/harga jual,
-    # jangan dimasukkan ke hitung_hpp_beras.
-    biaya_marketing_per_kg_beras: float = 50
+    # ── SELURUH TARIF BIAYA DIBUANG 28 September 2026 ──
+    #
+    # Harga keluar dari Pos Produksi (keputusan pemilik), dan bersamanya kedua
+    # HPP — HPP PK (`costing.py`) dan HPP beras (`hitung_hpp_beras`). Tarif ini
+    # tak punya pembaca lain: bongkar, operator, tenaga, pengeringan, listrik,
+    # rubber roll, keempat tarif penyosohan, dan marketing.
+    #
+    # Tarif yang dibiarkan berdiri tanpa pembaca akan dipelihara orang
+    # berikutnya — dinaikkan tiap tahun, dibahas di rapat — atas hitungan yang
+    # tak pernah dijalankan. Angkanya sendiri tersimpan di riwayat git kalau
+    # keuangan memerlukannya sebagai titik awal.
 
     # Asumsi kapasitas teoritis (utk analitik utilisasi). Bisa via env.
     kapasitas_siklus_dryer_per_hari: float = 1     # ~1 siklus (sore-besok sore)

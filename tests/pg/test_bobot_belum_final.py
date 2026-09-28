@@ -513,40 +513,15 @@ async def test_pagar_pengering_memakai_berat_kotor_untuk_truk_belum_ditimbang(
     assert load == 25500, "yang tak diketahui tak dihitung sebagai angka apa pun"
 
 
-# ──────────────── Rupiah tak pernah berdiri di atas perkiraan ────────────────
+# `test_verifikasi_harga_menunggu_bobot_pasti` DIBUANG 28 September 2026.
+#
+# Aturannya BENAR dan tidak dicabut — rupiah tak boleh berdiri di atas bobot
+# perkiraan. Yang hilang subjeknya: `verify_gabah_price` dan `verify_pk_price`
+# dihapus bersama seluruh harga (keputusan pemilik). Aturan itu kini milik
+# keuangan, dan pagarnya harus berdiri di sana.
+#
+# Sisa berkas ini menjaga seluruh jalur BOBOT-nya, dan itu tidak berubah.
 
-async def test_verifikasi_harga_menunggu_bobot_pasti(pg, pemakai, pemasok, pabrik):
-    from app.models import User
-    from app.penggilingan.gudang2 import service as g2
-    from app.services.verification import get_batch_by_kode, verify_gabah_price
-
-    async with pg() as db:
-        await _tiket(db, "T-L9", nopol="AD 14 PP", t1=18000, netto=11500, kosong=6500,
-                     supplier_id=pemasok.id, hari_lalu=1)
-        tg = await _tiket(db, "T-G9", nopol="AD 14 PP", t1=17830, supplier_id=pemasok.id)
-        await _tiket(db, "T-L10", nopol="AD 15 QQ", t1=9000, netto=5000, kosong=4000,
-                     jenis="BERAS_PK", supplier_id=pemasok.id, hari_lalu=1)
-        tp = await _tiket(db, "T-P9", nopol="AD 15 QQ", t1=9100, jenis="BERAS_PK",
-                          supplier_id=pemasok.id)
-        await db.commit()
-    kg_ = await _batch_gabah(pg, pemakai, tg)
-    assert (await _baca_batch(pg, kg_)).sumber_berat == "perkiraan"
-    async with pg() as db:
-        u = await db.get(User, pemakai.id)
-        b = await get_batch_by_kode(db, kg_)
-        with pytest.raises(ValueError, match="perkiraan"):
-            await verify_gabah_price(db, user=u, batch=b, metode="per_kg", nilai_rupiah=6000)
-    async with pg() as db:
-        u = await db.get(User, pabrik["admin"])
-        kp = (await g2.create_pk_purchase_dari_timbang(
-            db, user=u, timbangan_transaksi_id=tp, jenis_pk="KS")).batch.kode_batch
-    async with pg() as db:
-        u = await db.get(User, pabrik["admin"])
-        with pytest.raises(g2.Gudang2Error, match="perkiraan"):
-            await g2.verify_pk_price(db, user=u, kode=kp, metode="per_kg", nilai=9000)
-
-
-# ──────────────── Layar: tak ada lagi "0 kg" untuk yang tak diketahui ────────────────
 
 async def test_kartu_tak_menulis_nol_untuk_bobot_yang_belum_diketahui(pg, pemakai, pemasok, pabrik):
     from app.models import User

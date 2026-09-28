@@ -173,12 +173,11 @@ async def pemantau_nyangkut(
         add(verif, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
                         "PK luar belum diinput kualitas", vh))
 
-        # 10b. PK luar harga belum diverifikasi.
-        rows = (await db.execute(
-            select(PkPurchaseBatch).where(PkPurchaseBatch.flag_unverified.is_(True))
-        )).scalars().all()
-        add(verif, _fmt([(b.kode_batch, _hrs(now, b.waktu_pembelian)) for b in rows],
-                        "Harga PK luar belum diverifikasi", vh))
+        # Butir "Harga PK luar belum diverifikasi" DIBUANG 28 September 2026:
+        # harga keluar dari Pos Produksi. `flag_unverified` kini tak pernah
+        # kembali ke False, jadi butir itu akan menyebut SELURUH PK luar yang
+        # pernah masuk — daftar yang tak pernah habis, dan daftar yang tak
+        # pernah habis berhenti dibaca.
 
     parts: list[str] = []
     fisik = (fisik_g1 if g1 else []) + (fisik_g2 if g2 else [])

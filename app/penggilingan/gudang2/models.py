@@ -88,6 +88,19 @@ class PkPurchaseVerification(Base, TimestampMixin):
     potongan_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     potongan_alasan: Mapped[str | None] = mapped_column(String(120))
     # Harga
+    # ── PENINGGALAN: harga pindah ke keuangan 28 September 2026 ──
+    #
+    # Kolom-kolom di bawah ini TIDAK lagi ditulis maupun dibaca Pos Produksi.
+    # HANYA yang harga — `potongan_kg`, `potongan_alasan`, dan seluruh kolom
+    # QC di atas TETAP HIDUP: potongan mengubah STOK, dan QC PK luar wajib.
+    # Dipertahankan untuk RIWAYAT: harga yang sudah tercatat adalah pembelian
+    # sungguhan, dan hal pertama yang keuangan minta begitu mereka mengambil
+    # alih adalah data lama. Kalau kolomnya sudah jatuh, tak ada yang bisa
+    # mengembalikannya.
+    #
+    # Jangan dipakai lagi; jangan pula dihapus tanpa ekspor. Migrasi yang
+    # menjatuhkannya boleh menyusul SESUDAH keuangan mengambil datanya, dan
+    # atas permintaan pemilik.
     harga_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     total_biaya: Mapped[float | None] = mapped_column(Numeric(16, 2))
     # per_kg / total

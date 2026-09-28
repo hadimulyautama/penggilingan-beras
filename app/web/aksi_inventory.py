@@ -423,28 +423,6 @@ async def act_catat_bekatul(req: BekatulReq,
     return {"ok": True, "pesan": pesan}
 
 
-class HargaByproductReq(BaseModel):
-    jenis: str
-    harga: float
-
-
-@router.post("/actions/harga-byproduct")
-async def act_harga_byproduct(req: HargaByproductReq,
-                              user: User = Depends(pengguna_aksi)) -> dict:
-    wajib(can_see_financials(user))
-    if float(req.harga or 0) <= 0:
-        raise HTTPException(400, "Isi harga per kg lebih dari 0.")
-    async with SessionLocal() as db:
-        u = await db.get(User, user.id)
-        try:
-            jenis = await bj.set_harga_byproduct(
-                db, user=u, jenis=req.jenis, harga=float(req.harga))
-        except bj.InventoryError as e:
-            raise galat(e, "Gagal menyimpan harga.")
-    pesan = f"✓ Harga {jenis} disetel Rp {rp(float(req.harga))}/kg."
-    return {"ok": True, "pesan": pesan}
-
-
 # ─────────────────────────── Barang keluar ───────────────────────────
 
 class KirimBarangJadiReq(BaseModel):
@@ -718,15 +696,5 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/milling-terkini"},
                  {"name": "berat_kg", "label": "Berat PK (kg)", "type": "number"},
              ] + _bidang_pengiriman()},
-            {"id": "harga_byproduct", "label": "🏷️ Setel harga hasil samping",
-             "post": "/api/actions/harga-byproduct",
-             "hint": "Dipakai menilai stok hasil samping. Harga baru tidak "
-                     "menghapus yang lama — riwayatnya tersimpan.",
-             "fields": [
-                 {"name": "jenis", "label": "Jenis", "type": "select", "options": [
-                     ["", "— belum ditentukan —"], ["bekatul", "Bekatul"],
-                     ["broken", "Broken"], ["menir", "Menir"], ["reject", "Reject"]]},
-                 {"name": "harga", "label": "Harga per kg (Rp)", "type": "number"},
-             ]},
         ]
     return aksi

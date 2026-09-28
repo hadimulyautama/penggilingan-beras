@@ -93,7 +93,7 @@
      tak berjumlah membuat orang berhenti mempercayai keduanya. #}
   {% if blok_keputusan %}
   {{ br.pintu("/keputusan", "Menunggu keputusan",
-              ((n_harga ~ " harga · " ~ n_output ~ " output"
+              ((n_permintaan ~ " permintaan · " ~ n_output ~ " output"
                 ~ ("" if blok_mutu else " · " ~ n_mutu ~ " mutu"))
                if rinci_keputusan else (KEPUTUSAN ~ " menunggu diputuskan"))
               if KEPUTUSAN else "tak ada yang tertahan",

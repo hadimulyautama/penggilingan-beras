@@ -156,18 +156,10 @@ async def create_purchase_batch(
         changed_by=user.id,
         new_value=f"{kode} | {supplier.nama_supplier} | {berat_kg:.0f}kg | {kondisi_gabah}",
     )
-    await create_notification(
-        db,
-        tipe="verifikasi_harga_gabah",
-        pesan=(
-            f"🟡 Batch {kode} ({supplier.nama_supplier}, {berat_kg:.0f} kg) "
-            f"menunggu verifikasi harga."
-        ),
-        target_role="admin",
-        prioritas="kuning",
-        table_name="purchase_batches",
-        record_id=batch.id,
-    )
+    # Kabar "menunggu verifikasi harga" DIBUANG 28 September 2026: harga keluar
+    # dari Pos Produksi (keputusan pemilik), jadi tak ada lagi yang bisa
+    # mengerjakannya di sini. Kabar yang menagih pekerjaan yang tak punya
+    # pintu akan dibaca, ditekan, lalu diabaikan selamanya.
 
     await db.commit()
     await db.refresh(batch)
@@ -324,13 +316,10 @@ async def create_purchase_batch_dari_timbang(
         changed_by=user.id,
         new_value=f"{kode} | {supplier.nama_supplier} | {b_str} | timbang {tiket['kode']}",
     )
-    await create_notification(
-        db, tipe="verifikasi_harga_gabah",
-        pesan=(f"🟡 Batch {kode} ({supplier.nama_supplier}, {b_str}, "
-               f"dari timbang {tiket['kode']}) menunggu verifikasi harga."),
-        target_role="admin", prioritas="kuning",
-        table_name="purchase_batches", record_id=batch.id,
-    )
+    # Kabar "menunggu verifikasi harga" DIBUANG 28 September 2026: harga keluar
+    # dari Pos Produksi (keputusan pemilik), jadi tak ada lagi yang bisa
+    # mengerjakannya di sini. Kabar yang menagih pekerjaan yang tak punya
+    # pintu akan dibaca, ditekan, lalu diabaikan selamanya.
 
     await db.commit()
     await db.refresh(batch)

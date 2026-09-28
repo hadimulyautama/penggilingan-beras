@@ -299,12 +299,13 @@ async def _run_read_tool(name: str, args: dict, *, financial: bool) -> str:
         if name == "laporan_keuangan":
             if not financial:
                 return "🔒 Data keuangan hanya untuk staff/admin."
-            from app.penggilingan.inventory.finished_goods import laporan_hpp_beras
+            # HPP beras DIBUANG 28 September 2026: harga keluar dari Pos
+            # Produksi (keputusan pemilik). Yang tersisa di sini perpindahan
+            # barang dan pembelian gabah — keduanya catatan, bukan penilaian.
             from app.services.transfer import laporan_transfer
             from app.services.report import laporan_pembelian_gabah
             periode = args.get("periode") or "hari_ini"
             return "\n\n".join([
-                await laporan_hpp_beras(db, None),
                 await laporan_transfer(db, financial=True),
                 await laporan_pembelian_gabah(db, periode),
             ])

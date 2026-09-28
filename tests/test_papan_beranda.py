@@ -48,15 +48,18 @@ def test_rincian_berjumlah_sama_dengan_lencana():
     # SELURUH jenis, dari sumbernya — bukan daftar satu layar. Sejak layarnya
     # dua, memakai `JENIS_KEPUTUSAN` saja membuat uji ini buta terhadap
     # golongan yang justru baru saja dipindahkan.
-    meja = [{"aksi": a} for a in K.SEMUA] + [{"aksi": "verify_gabah"}]
+    # Baris KEDUA dari satu jenis, supaya yang diuji benar-benar penjumlahan
+    # dan bukan sekadar "tiap jenis muncul sekali". Dulu barisnya
+    # `verify_gabah`; aksinya dihapus 28 September 2026 bersama seluruh harga.
+    meja = [{"aksi": a} for a in K.SEMUA] + [{"aksi": K.SEMUA[0]}]
     n = svc.hitung_keputusan(meja)
     assert sum(n.values()) == len(meja)
-    # Jumlah tiap golongan dari SUMBERNYA, plus satu `verify_gabah` tambahan di
+    # Jumlah tiap golongan dari SUMBERNYA, plus satu baris kembar di
     # atas — angka yang diketik di sini akan basi tiap kali satu jenis lahir
     # atau dihapus, dan yang basi cepat "diperbaiki" dengan menurunkan
     # tuntutannya. (Terakhir: `verify_output` dihapus 24 September 2026.)
     for golongan, daftar in K.GOLONGAN.items():
-        tambahan = 1 if "verify_gabah" in daftar else 0
+        tambahan = 1 if K.SEMUA[0] in daftar else 0
         assert n[golongan] == len(daftar) + tambahan, golongan
 
 
@@ -100,8 +103,10 @@ def test_perhatian_hanya_memuat_yang_menyimpang():
     assert "== 'hati'" in kode
     # Tumpukan: hanya bila melewati batas, dan batasnya boleh tak diatur.
     assert "if maks and tump > maks" in kode
-    # Harga: hanya yang menggantung lebih dari dua hari.
-    assert "timedelta(days=2)" in kode
+    # Butir "harga menggantung lebih dari dua hari" DIBUANG 28 September 2026
+    # bersama seluruh harga (keputusan pemilik). Yang tersisa dua, dan aturan
+    # blok ini justru menguat: hanya yang MENYIMPANG yang masuk.
+    assert "flag_unverified" not in kode, "Beranda menagih harga lagi"
 
 
 def test_baris_gudang_dari_daftar_bukan_dua_baris_tetap():

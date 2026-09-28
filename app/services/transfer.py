@@ -18,7 +18,6 @@ from app.models.peristiwa import PK_DIPINDAH_G1G2
 from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import next_transfer_code
-from app.services.costing import production_cost
 from app.penggilingan.gudang1.services.milling import pk_jenis
 
 # Tak ada lagi kamus nama silo di sini: labelnya dibaca dari MASTER lewat
@@ -32,31 +31,15 @@ class TransferError(Exception):
     """Kesalahan transfer dengan pesan siap-tampil (args[0])."""
 
 
-async def hpp_per_kg_pk(db: AsyncSession, proc: MillingProcess) -> float | None:
-    """HPP per kg PK (hasil giling) = biaya PRODUKSI PENUH ÷ output PK.
-
-    Biaya penuh = bahan gabah + biaya giling (bongkar/pengeringan/operator/tenaga/listrik/
-    rubber), via production_cost().total_penuh. Menempel ke PK saat masuk silo → mengalir
-    lewat wavg silo ke HPP beras. None bila belum lengkap (gabah belum diverifikasi / output
-    belum ada). CATATAN: PK BELI LUAR tak melewati fungsi ini — HPP-nya = harga beli.
-
-    **Outputnya dari `production_cost`, bukan dari verifikasi admin** (24
-    September 2026). Sampai hari itu fungsi ini MENUNTUT `berat_output_final_kg`
-    dan menjawab None tanpanya. Aman selama tiap giling ditagih verifikasi; hari
-    ini tagihan itu dihapus atas keputusan pemilik ("yang mencatat hasil giling
-    hanya operator"), jadi tuntutan itu akan membuat HPP PK berhenti terisi
-    diam-diam untuk hampir semua lot — dan HPP yang kosong tak menjatuhkan apa
-    pun, ia cuma hilang dari laporan.
-
-    `production_cost` sudah lama memakai jawaban yang benar: output terverifikasi
-    bila ada, kalau tidak progres terakhir operator (`costing._pk_output`) —
-    urutan yang sama dengan stok (`milling._produced_pk`). Jadi angkanya tak
-    berubah untuk lot yang sudah diverifikasi, dan mulai ada untuk yang tidak.
-    """
-    bd = await production_cost(db, proc)
-    if bd is None or bd.total_penuh is None:  # bahan_baku None → gabah belum diverifikasi
-        return None
-    return bd.hpp_penuh
+# `hpp_per_kg_pk` DIBUANG 28 September 2026: harga keluar dari Pos Produksi
+# (keputusan pemilik). Ia berdiri di atas `costing.production_cost`, yang
+# berdiri di atas harga gabah terverifikasi — dan verifikasi harga gabah sudah
+# tak ada lagi di sini.
+#
+# `internal_transfers.hpp_per_kg` TIDAK dijatuhkan: baris lama memuat HPP
+# sungguhan dan itu riwayat. Yang baru ditulis None — kolom yang diisi angka
+# palsu lebih buruk daripada kolom kosong, sebab yang kosong terbaca sebagai
+# "tak diketahui" dan yang palsu terbaca sebagai fakta.
 
 
 #: Berapa PK dihasilkan sebuah giling — SATU jawaban untuk seluruh aplikasi.
@@ -191,7 +174,9 @@ async def create_internal_transfer(
         )
     kirim = tersedia if berat is None else min(float(berat), tersedia)
 
-    hpp = await hpp_per_kg_pk(db, proc)
+    # Sejak harga keluar dari Pos Produksi, tak ada lagi yang bisa
+    # menghitungnya di sini — lihat catatan di atas.
+    hpp = None
     jenis = await pk_jenis(db, proc)
     now = now_local()
 

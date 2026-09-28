@@ -275,38 +275,10 @@ async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
     return float(intake.berat_kg) - float(dipindah)
 
 
-async def hitung_hpp_wavg_silo(db: AsyncSession, silo_id: int) -> float | None:
-    """HPP rata-rata tertimbang bahan yang SUDAH di silo (kecuali HPP belum tersedia)."""
-    n1, b1 = (
-        await db.execute(
-            select(
-                func.coalesce(func.sum(PkGudang2Intake.berat_kg * PkGudang2Intake.hpp_per_kg), 0),
-                func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0),
-            ).where(
-                # `silo_id` saja — lihat catatan di `hitung_stok_silo`.
-                PkGudang2Intake.silo_id == silo_id,
-                PkGudang2Intake.flag_hpp_belum_tersedia.is_(False),
-            )
-        )
-    ).one()
-    n2, b2 = (
-        await db.execute(
-            select(
-                func.coalesce(func.sum(PkTumpukanToSilo.berat_kg * PkGudang2Intake.hpp_per_kg), 0),
-                func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0),
-            )
-            .select_from(PkTumpukanToSilo)
-            .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
-            .where(
-                PkTumpukanToSilo.silo_id == silo_id,
-                PkGudang2Intake.flag_hpp_belum_tersedia.is_(False),
-            )
-        )
-    ).one()
-    total_berat = float(b1) + float(b2)
-    if total_berat <= 0:
-        return None
-    return (float(n1) + float(n2)) / total_berat
+# `hitung_hpp_wavg_silo` DIBUANG 28 September 2026 — lihat catatan di
+# `stok_pk_g2`. Satu-satunya pembaca lainnya `hitung_hpp_beras`, yang juga
+# dibuang. `pk_gudang2_intakes.hpp_per_kg` TIDAK dijatuhkan: baris lama memuat
+# angka sungguhan, dan itu riwayat.
 
 
 # ─────────────────────────── Beli PK luar ───────────────────────────
@@ -525,7 +497,6 @@ class PkQcResult:
     butir_kuning: str | None
 
 
-@dataclass
 class PkPriceResult:
     batch: PkPurchaseBatch
     berat_bersih_kg: float
@@ -555,11 +526,24 @@ async def log_pk_qc(
     kadar_air: float | None = None, broken: float | None = None,
     penyusutan_persen: float | None = None, butir_kuning: str | None = None,
     catatan_lab: str | None = None,
+    potongan_kg: float | None = None, potongan_alasan: str | None = None,
 ) -> PkQcResult:
     """Input KUALITAS PK luar (uji lab) sebagai PROPERTI batch — bukan keputusan.
-    PK yang masuk sudah pasti diterima; ini hanya mencatat kualitasnya (kadar air,
-    broken%, penyusutan/bekatul lab%, butir kuning, catatan). Staff/admin, kapan
-    saja. Harga TIDAK disentuh di sini (langkah terpisah)."""
+
+    PK yang masuk sudah pasti diterima; ini mencatat kualitasnya (kadar air,
+    broken%, penyusutan/bekatul lab%, butir kuning, catatan) BERIKUT potongan
+    bobotnya. Staff/admin, kapan saja.
+
+    ⚠ POTONGAN BOBOT PINDAH KE SINI 28 September 2026, saat harga keluar dari
+    Pos Produksi. Ia dulu ditulis `verify_pk_price` — satu-satunya penulisnya —
+    dan ikut terbuang bersama harga berarti berat PK yang masuk Gudang 2
+    berubah untuk SELURUH pemasukan berikutnya, tanpa satu pesan pun.
+    `masukkan_pk_luar` mengurangkannya dari berat yang masuk, dan
+    `_SQL_RESINKRON_INTAKE` memperbaiki yang sudah terlanjur masuk.
+
+    Rumahnya di sini memang benar: potongan karena MUTU adalah pekerjaan
+    gudang, dan yang menilai mutunya borang ini. Harga TIDAK ada lagi di Pos
+    Produksi sama sekali."""
     if user.role not in PERAN_ADMIN_KEATAS:
         raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
@@ -580,6 +564,13 @@ async def log_pk_qc(
     verif.penyusutan_persen = penyusutan_persen
     verif.butir_kuning = butir_kuning
     verif.catatan_lab = catatan_lab
+    # Hanya ditulis bila disebut: borang QC boleh diisi berkali-kali (kadar air
+    # dulu, potongan menyusul), dan menimpa potongan dengan None pada panggilan
+    # kedua akan mengembalikan bobot yang sudah dipotong.
+    if potongan_kg is not None:
+        verif.potongan_kg = potongan_kg
+    if potongan_alasan is not None:
+        verif.potongan_alasan = potongan_alasan
     verif.keputusan = "terima"  # PK masuk selalu diterima
     await log_activity(
         db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
@@ -592,71 +583,16 @@ async def log_pk_qc(
                       penyusutan=penyusutan_persen, butir_kuning=butir_kuning)
 
 
-async def verify_pk_price(
-    db: AsyncSession, *, user: User, kode: str,
-    metode: str | None = None, nilai: float | None = None,
-    potongan_kg: float | None = None, potongan_alasan: str | None = None,
-) -> PkPriceResult:
-    """Verifikasi HARGA PK luar — terpisah & tanpa terikat waktu (seperti harga
-    gabah G1). Staff/admin, kapan saja. Membereskan flag_unverified & mengisi
-    HPP; bila PK sudah terlanjur masuk silo/tumpuk, snapshot HPP intake diperbarui."""
-    if user.role not in PERAN_ADMIN_KEATAS:
-        raise Gudang2Error("🔒 Verifikasi harga PK luar hanya oleh Staff/Admin.")
-    batch = (
-        await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
-    ).scalars().first()
-    if batch is None:
-        raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
-    if metode not in ("per_kg", "total") or nilai is None:
-        raise Gudang2Error("Sebutkan metode harga (per kg / total) & nilainya.")
-    # Perkiraan tidak pernah dipakai untuk rupiah (keputusan pemilik, P6).
-    bobot = dari_batch(batch)
-    if not bobot.pasti:
-        raise Gudang2Error(
-            f"Bobot {kode} masih "
-            f"{'perkiraan dari tara truk' if batch.sumber_berat == 'perkiraan' else 'menunggu timbang kedua'}"
-            " — harga menunggu bobot pasti. Perkiraan tidak pernah dipakai untuk rupiah.")
-
-    berat_bersih = float(batch.berat_total_kg or 0) - float(potongan_kg or 0)
-    if metode == "total":
-        total_biaya = float(nilai)
-        hpp = total_biaya / berat_bersih if berat_bersih else None
-    else:
-        hpp = float(nilai)
-        total_biaya = hpp * berat_bersih
-
-    verif = await _get_or_make_pk_verif(db, batch.id)
-    verif.potongan_kg = potongan_kg
-    verif.potongan_alasan = potongan_alasan
-    verif.harga_per_kg = hpp
-    verif.total_biaya = total_biaya
-    verif.metode_harga = metode
-    verif.verified_by = user.id
-    verif.waktu_verifikasi = input_time(None)
-    verif.status_verifikasi = "terverifikasi"
-    batch.flag_unverified = False
-
-    # Backfill: bila PK sudah dimasukkan (intake) sebelum harga diverifikasi,
-    # perbarui snapshot HPP-nya agar nilai stok G2 ikut benar.
-    intakes = (
-        await db.execute(
-            select(PkGudang2Intake).where(
-                PkGudang2Intake.pk_purchase_batch_id == batch.id
-            )
-        )
-    ).scalars().all()
-    for it in intakes:
-        it.hpp_per_kg = hpp
-        it.flag_hpp_belum_tersedia = hpp is None
-    await log_activity(
-        db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
-        changed_by=user.id, field_name="harga",
-        new_value=f"metode={metode} potongan={potongan_kg} hpp={hpp}",
-    )
-    await db.commit()
-    await db.refresh(batch)
-    return PkPriceResult(batch=batch, berat_bersih_kg=berat_bersih,
-                         total_biaya=total_biaya, hpp_per_kg=hpp)
+# `verify_pk_price` DIBUANG 28 September 2026: harga keluar dari Pos Produksi
+# (keputusan pemilik). Ia satu-satunya penulis `potongan_kg` — potongan BOBOT
+# karena mutu, yang MENGUBAH STOK — dan itu pindah ke `log_pk_qc`, tempatnya
+# yang benar: yang menilai mutu borang QC.
+#
+# Akibat yang perlu diketahui pembaca berikutnya: `PkPurchaseBatch.
+# flag_unverified` kini tak pernah kembali ke False, sebab tak ada lagi yang
+# memverifikasi harga di sini. Kolomnya SENGAJA tak dibuang — ia riwayat
+# pembelian sungguhan dan keuangan akan memintanya. Yang membacanya sebagai
+# "belum dikerjakan" sudah dicabut (kartu meja, pemantau, daftar pilihan).
 
 
 # ─────────────────────────── Intake ke silo/tumpukan ───────────────────────────
@@ -1172,12 +1108,12 @@ async def laporan_stok_gudang2(
             f" / maks {float(silo.kapasitas_ton):g} ton"
             if silo.kapasitas_ton is not None else ""
         )
-        baris = f"• Silo {letter}: {_kg(stok)}{cap}"
-        if financial:
-            hpp = await hitung_hpp_wavg_silo(db, silo.id)
-            if hpp is not None:
-                baris += f" · HPP rata2 {_rp(hpp)}/kg"
-        lines.append(baris)
+        # "HPP rata2" DIBUANG 28 September 2026 bersama seluruh harga. Tak
+        # disebut brief QA, tetapi akibatnya sama: sumbernya `intake.hpp_per_kg`,
+        # yang kini selalu None — baris itu akan hilang diam-diam untuk PK baru
+        # dan tetap muncul untuk PK lama, jadi dua silo bersebelahan menjawab
+        # pertanyaan yang sama dengan cara yang berbeda.
+        lines.append(f"• Silo {letter}: {_kg(stok)}{cap}")
     if not nama_silo:
         tump = await hitung_stok_tumpukan(db)
         lines.append(

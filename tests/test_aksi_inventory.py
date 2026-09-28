@@ -88,7 +88,9 @@ def test_kombinasi_mustahil_tetap_ditolak_walau_bentuknya_benar():
 def test_operator_gudang2_tak_pernah_melihat_aksi_uang():
     ids = {a["id"] for a in inv.spesifikasi(g2=True, fin=False)}
     assert ids == {"catat_packing", "catat_bekatul"}
-    for terlarang in ("beli_kemasan", "kirim_barang_jadi", "jual_pk", "harga_byproduct"):
+    # `harga_byproduct` dicoret 28 September 2026 — aksinya dihapus bersama
+    # seluruh harga (keputusan pemilik).
+    for terlarang in ("beli_kemasan", "kirim_barang_jadi", "jual_pk"):
         assert terlarang not in ids
 
 
@@ -99,7 +101,7 @@ def test_yang_tak_berperan_apa_pun_tak_mendapat_aksi():
 def test_staff_mendapat_pembelian_dan_pengiriman():
     ids = {a["id"] for a in inv.spesifikasi(g2=False, fin=True)}
     assert {"beli_kemasan", "kirim_barang_jadi", "kirim_bekatul",
-            "jual_pk", "harga_byproduct"} <= ids
+            "jual_pk"} <= ids
 
 
 # ─────────────────────── Bentuk spesifikasi ───────────────────────

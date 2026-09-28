@@ -53,29 +53,25 @@ def test_satu_baris_silo_tak_bisa_masuk_dua_kali():
     assert uq, "tanpa ini, satu baris silo bisa terhitung ganda"
 
 
-def test_hpp_dan_analitik_membaca_daftar_isi_yang_sama():
+def test_rapor_supplier_membaca_daftar_isi_yang_sama():
     """Dua jawaban untuk satu pertanyaan cepat atau lambat berbeda.
 
-    Sebelum ini, HPP dan rapor supplier masing-masing menyelesaikan sendiri
-    "apa isi proses giling ini" dari penunjuk tunggal `MillingProcess`.
-    Sekarang keduanya memanggil `milling.sumber_batch`.
+    Dulu HPP dan rapor supplier masing-masing menyelesaikan sendiri "apa isi
+    proses giling ini" dari penunjuk tunggal `MillingProcess`; keduanya
+    dipindahkan ke `milling.sumber_batch`.
+
+    HPP-nya sendiri DIBUANG 28 September 2026 bersama seluruh harga (keputusan
+    pemilik), jadi yang tersisa dijaga sendirian — dan ia masih perlu dijaga:
+    rapor supplier membagi rendemen menurut porsi berat tiap batch, dan porsi
+    yang dihitung dari penunjuk tunggal akan menyebut satu supplier saja untuk
+    lot yang isinya campuran.
+
+    Uji kembarannya, `test_biaya_pengeringan_dihitung_per_batch`, ikut dibuang:
+    seluruh subjeknya (`costing._sumber_info`) sudah tidak ada.
     """
-    from app.services import analytics, costing
+    from app.services import analytics
 
-    for fungsi in (costing._sumber_info, analytics._proc_batches):
-        assert "sumber_batch" in inspect.getsource(fungsi)
-
-
-def test_biaya_pengeringan_dihitung_per_batch():
-    """Satu silo bisa berisi gabah yang lewat dryer DAN gabah kering yang
-    langsung masuk. Satu tarif dikali total salah ke dua arah sekaligus: yang
-    kering ikut membayar pengeringan yang tak pernah terjadi."""
-    from app.services import costing
-
-    sumber = inspect.getsource(costing._sumber_info)
-    assert "lewat_dryer" in sumber
-    assert "pengeringan +=" in sumber
-    assert "pengeringan_rate * kg" not in inspect.getsource(costing.production_cost)
+    assert "sumber_batch" in inspect.getsource(analytics._proc_batches)
 
 
 def test_silo_tidak_lagi_berbatas():

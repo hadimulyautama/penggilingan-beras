@@ -221,7 +221,11 @@ async def test_gagal_di_tengah_tak_menyimpan_apa_pun(pg, pemakai, pemasok, monke
     async def meledak(*a, **k):
         raise RuntimeError("uji: gagal sesudah peristiwa ditulis")
 
-    monkeypatch.setattr(purchase, "create_notification", meledak)
+    # Yang diledakkan `log_activity`, bukan `create_notification`: kabar
+    # "menunggu verifikasi harga" dihapus 28 September 2026 bersama seluruh
+    # harga, jadi tak ada lagi yang bisa gagal di situ. Yang diuji tetap sama —
+    # langkah TERAKHIR sebelum commit gagal, dan tak ada yang tertinggal.
+    monkeypatch.setattr(purchase, "log_activity", meledak)
     tid = await _tiket(pg, "GGL", pemasok.id)
     with pytest.raises(RuntimeError):
         await _catat(pg, pemakai.id, tid)

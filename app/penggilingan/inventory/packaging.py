@@ -165,24 +165,13 @@ async def hitung_stok_kemasan(
     return int(beli) - int(hilang) - int(terpakai)
 
 
-async def hpp_kemasan_wavg(
-    db: AsyncSession, material_id: int, size_id: int, brand_id: int | None = None
-) -> float | None:
-    """Harga rata-rata tertimbang per lembar (per jenis, ukuran, MERK)."""
-    nilai, lembar = (
-        await db.execute(
-            select(
-                func.coalesce(func.sum(PackagingPurchase.jumlah_lembar * PackagingPurchase.harga_per_lembar), 0),
-                func.coalesce(func.sum(PackagingPurchase.jumlah_lembar), 0),
-            ).where(
-                PackagingPurchase.packaging_material_id == material_id,
-                PackagingPurchase.package_size_id == size_id,
-                PackagingPurchase.brand_id.is_(None) if brand_id is None else PackagingPurchase.brand_id == brand_id,
-                PackagingPurchase.harga_per_lembar.isnot(None),
-            )
-        )
-    ).one()
-    return float(nilai) / float(lembar) if float(lembar) > 0 else None
+# `hpp_kemasan_wavg` DIBUANG 28 September 2026. Satu-satunya pembacanya
+# `hitung_hpp_beras`, yang ikut dibuang bersama seluruh harga.
+#
+# Yang MENULIS harga karung tetap ada dan memang harus: "Beli karung" adalah
+# catatan pembelian sungguhan, bukan penilaian ulang. Kolomnya terisi untuk
+# keuangan; yang berhenti cuma menghitung rata-ratanya di sini. Kode yang tak
+# punya pembaca akan dikira masih dipakai.
 
 
 # ─────────────────────────── Beli / hilang ───────────────────────────

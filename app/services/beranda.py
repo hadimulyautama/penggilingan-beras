@@ -41,7 +41,9 @@ class Papan:
 
     perhatian: list[dict] = field(default_factory=list)
     gudang: list[dict] = field(default_factory=list)
-    n_harga: int = 0
+    #: Golongan "harga" dibuang 28 September 2026 bersama seluruh harga;
+    #: yang memimpin rincian kini permintaan lot PK.
+    n_permintaan: int = 0
     n_output: int = 0
     n_mutu: int = 0
 
@@ -65,12 +67,12 @@ async def perhatian(db, berjalan: list[Baris]) -> list[dict]:
     Blok yang selalu berisi mengajari orang mengabaikannya, dan warna yang
     dipakai untuk keadaan normal berhenti berarti apa-apa. Kosong = tak digambar.
 
-    Tiga sumbernya, dan ketiganya menahan pekerjaan atau uang: mesin yang dijeda,
-    tumpukan Gudang 2 yang melewati batas, dan harga yang menggantung lebih dari
-    dua hari.
+    DUA sumbernya, dan keduanya menahan pekerjaan: mesin yang dijeda, dan
+    tumpukan Gudang 2 yang melewati batas.
+
+    Yang ketiga — "harga menggantung lebih dari dua hari" — dibuang 28
+    September 2026 bersama seluruh harga (keputusan pemilik).
     """
-    from app.models import PurchaseBatch
-    from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.penggilingan.gudang2.service import hitung_stok_tumpukan
 
     keluar = []
@@ -91,21 +93,11 @@ async def perhatian(db, berjalan: list[Baris]) -> list[dict]:
                        "ket": f"{_kg(tump)} dari {_kg(maks)}",
                        "href": "/gudang/g2", "gudang": "g2"})
 
-    batas = now_local() - timedelta(days=2)
-    for g in (await db.execute(
-        select(PurchaseBatch)
-        .where(PurchaseBatch.flag_unverified.is_(True), PurchaseBatch.created_at < batas)
-    )).scalars().all():
-        keluar.append({"judul": f"Harga {g.kode_batch} menggantung",
-                       "ket": f"{NAMA_GUDANG['g1']} · gabah · {_lama(g.created_at)}",
-                       "href": "/keputusan", "gudang": "g1"})
-    for p in (await db.execute(
-        select(PkPurchaseBatch)
-        .where(PkPurchaseBatch.flag_unverified.is_(True), PkPurchaseBatch.created_at < batas)
-    )).scalars().all():
-        keluar.append({"judul": f"Harga {p.kode_batch} menggantung",
-                       "ket": f"{NAMA_GUDANG['g2']} · PK luar · {_lama(p.created_at)}",
-                       "href": "/keputusan", "gudang": "g2"})
+    # Dua butir "Harga … menggantung" DIBUANG 28 September 2026: harga keluar
+    # dari Pos Produksi (keputusan pemilik). `flag_unverified` kini tak pernah
+    # kembali ke False, jadi keduanya akan menyebut SELURUH gabah dan PK luar
+    # yang pernah masuk — daftar yang tak pernah habis, di blok yang gunanya
+    # justru memilih yang mendesak saja.
     return keluar
 
 
@@ -201,4 +193,5 @@ async def papan(db, berjalan: list, meja: list, angka: dict | None = None) -> Pa
     a = angka if angka is not None else await angka_gudang(db)
     n = hitung_keputusan(meja)
     return Papan(perhatian=perh, gudang=baris_gudang(a, berjalan, perh),
-                 n_harga=n["harga"], n_output=n["output"], n_mutu=n["mutu"])
+                 n_permintaan=n.get("permintaan", 0),
+                 n_output=n.get("output", 0), n_mutu=n.get("mutu", 0))

@@ -79,12 +79,24 @@ async def test_admin_melihat_tiga_blok_papan(pg, pabrik):
     c = await _klien(pg, role="superadmin")
     async with c:
         t = (await c.get("/")).text
-    assert "Perlu perhatian" in t
-    assert "GB-MENGGANTUNG-01" in t and "menggantung" in t
+    # Blok "Perlu perhatian" hanya digambar BILA ADA isinya — blok yang selalu
+    # berisi mengajari orang mengabaikannya. Sampai 28 September 2026 fixture
+    # ini mengisinya dengan "harga menggantung"; butir itu dibuang bersama
+    # seluruh harga, dan tak ada penggantinya di data uji ini.
+    #
+    # Yang dijaga tetap TIGA blok papannya — rincian keputusan, pintu mutu, dan
+    # baris per gudang — yaitu yang diuji di bawah.
+    assert "GB-MENGGANTUNG-01" not in t, (
+        "gabah yang belum berharga masih ditagih di Beranda")
     # Rincian keputusan, bukan cuma jumlahnya — dan sejak 24 September 2026
     # bagian mutunya berdiri sebagai PINTU KEDUA (permintaan pemilik), bukan
     # sebagai kata ketiga di pintu pertama.
-    assert "harga ·" in t and "output" in t
+    # Golongan "harga" DIBUANG 28 September 2026 bersama seluruh harga, dan
+    # fixture ini tak punya keputusan lain — jadi rinciannya memang tak
+    # digambar. Yang dijaga bukan KEHADIRAN rinciannya melainkan
+    # KEBENARANNYA, di bawah: bila ia digambar, angkanya harus berjumlah ke
+    # lencananya. Rincian yang berbohong lebih buruk daripada rincian yang
+    # tak ada.
     assert 'href="/mutu"' in t, "pintu Mutu & QC tak digambar untuk admin"
     # Yang dijaga di sini bukan kata-katanya melainkan JUMLAHNYA: rincian tiap
     # pintu harus berjumlah sama dengan lencananya, kalau tidak orang berhenti
@@ -103,7 +115,11 @@ async def test_admin_melihat_tiga_blok_papan(pg, pabrik):
     isi_k, n_k = _pintu("/keputusan")
     isi_m, n_m = _pintu("/mutu")
     assert "mutu" not in isi_k, f"pintu keputusan masih mengaku memuat mutu: {isi_k}"
-    assert sum(int(x) for x in _re.findall(r"(\d+)\s+(?:harga|output)", isi_k)) == n_k, isi_k
+    rinci = _re.findall(r"(\d+)\s+(?:permintaan|output)", isi_k)
+    if rinci:
+        assert sum(int(x) for x in rinci) == n_k, isi_k
+    else:
+        assert n_k == 0, f"lencana {n_k} tanpa rincian apa pun: {isi_k}"
     # Satu baris per gudang, masing-masing menaut ke halamannya.
     assert 'href="/gudang/g1"' in t and 'href="/gudang/g2"' in t
     assert "Gudang 1 — Selepan" in t and "Gudang 2 — Penyosohan" in t

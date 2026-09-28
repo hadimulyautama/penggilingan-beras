@@ -50,8 +50,10 @@ JENIS: tuple[tuple[str, str, str], ...] = (
     # Yang sudah dikirim dan menunggu diakui angkanya. Tetap keputusan:
     # bobot Admin yang berlaku, dan barangnya sudah berpindah.
     ("tutup_permintaan_pk", "Kiriman PK menunggu ditutup", "permintaan"),
-    ("verify_gabah", "Harga gabah belum diverifikasi", "harga"),
-    ("harga_pk_luar", "Harga PK luar belum diverifikasi", "harga"),
+    # Dua baris harga DIBUANG 28 September 2026: harga keluar dari Pos Produksi
+    # (keputusan pemilik). Golongan "harga" ikut kosong dengan sendirinya —
+    # kalau kelak ada yang menambahkan jenis baru bergolongan itu, periksa
+    # dulu apakah ia memang milik Pos Produksi.
     # "Output giling belum dicocokkan" DIHAPUS 24 September 2026, keputusan
     # pemilik: "yang mencatat hasil giling hanya operator. jika ada kesalahan
     # sudah ada di perbaiki hasil giling."

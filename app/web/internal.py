@@ -66,20 +66,11 @@ async def produksi_tanya(
     return {"teks": reply.text or ""}
 
 
-@router.post("/produksi/hpp")
-async def produksi_hpp(
-    body: HppIn, x_internal_token: str | None = Header(default=None)
-) -> dict:
-    """Simulasi what-if HPP (tarif biaya terkini). Tak menyentuh data batch."""
-    _pastikan_token(x_internal_token)
-    from app.services import analytics
-
-    teks = analytics.simulasi_hpp(
-        body.harga_gabah, body.rendemen_persen,
-        kondisi=body.kondisi, langsung_silo=body.langsung_silo,
-        berat_bahan=body.berat_bahan, berat_hasil=body.berat_hasil,
-    )
-    return {"teks": teks}
+# Rute `/produksi/hpp` (simulasi what-if) DIBUANG 28 September 2026 bersama
+# seluruh HPP: harga keluar dari Pos Produksi (keputusan pemilik). Yang
+# memanggilnya dari luar akan menerima 404, dan itu jawaban yang benar —
+# simulasi yang memakai tarif yang tak lagi dipelihara lebih buruk daripada
+# tak ada simulasi.
 
 
 @router.get("/produksi/operasional")

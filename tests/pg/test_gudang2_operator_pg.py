@@ -658,3 +658,68 @@ async def test_silo_tanpa_tombol_menyebut_apa_yang_memakai_mesinnya(pg, gudang2)
     assert kode in (a.keadaan or ""), f"keadaan tak menyebut prosesnya: {a.keadaan}"
     assert kode in (a.nota or ""), f"nota tak menyebut prosesnya: {a.nota}"
     assert "menunggu giliran" in (a.nota or "")
+
+
+async def test_potongan_bobot_tetap_mengurangi_pk_yang_masuk(pg, gudang2):
+    """⚠ JEBAKAN yang brief QA sendiri salah menebaknya, dan ini pagarnya.
+
+    Brief 28 September 2026 menulis: "Aksi `qc_pk_luar` TETAP ADA — ia yang
+    menulis kadar air, potongan, dan keputusan terima/tolak." Borangnya
+    membuktikan sebaliknya: satu-satunya penulis `potongan_kg` adalah aksi
+    HARGA yang hendak dihapus.
+
+    `potongan_kg` MENGUBAH STOK — `masukkan_pk_luar` mengurangkannya dari berat
+    yang masuk. Ikut terbuang bersama harga berarti berat PK yang masuk Gudang
+    2 berubah untuk SELURUH pemasukan berikutnya, dan tak ada satu pesan pun
+    yang memberitahu.
+
+    Maka potongannya dipindah ke QC, dan yang dijaga di sini BUKAN di mana ia
+    ditulis melainkan AKIBATNYA: potongan yang dicatat benar-benar mengurangi
+    PK yang masuk.
+    """
+    from app.database import now_local
+    from app.models import PkPurchaseBatch, User
+    from app.penggilingan.gudang2.service import (hitung_stok_silo, log_pk_qc,
+                                                  masukkan_pk_luar)
+    from datetime import date
+
+    from sqlalchemy import select
+
+    from app.models import Supplier
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        sup = (await db.execute(select(Supplier.id))).scalars().first()
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-POT-01", supplier_id=sup, berat_total_kg=5_000,
+            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+            input_by=u.id, status_batch="diterima", flag_unverified=True,
+            sumber_berat="manual"))
+        await db.commit()
+
+    # Potongan 300 kg karena mutu — dicatat lewat QC, yang memang milik Admin.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        u.role = "admin"
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await log_pk_qc(db, user=u, kode="PKB-POT-01", kadar_air=15,
+                        potongan_kg=300, potongan_alasan="banyak gabah hampa")
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        sebelum = await hitung_stok_silo(db, (await _silo_id(db, "A")))
+        await masukkan_pk_luar(db, user=u, kode="PKB-POT-01", tujuan="silo_a")
+        sesudah = await hitung_stok_silo(db, (await _silo_id(db, "A")))
+    assert sesudah - sebelum == 4_700, (
+        f"potongan 300 kg tak mengurangi PK yang masuk: {sesudah - sebelum} kg")
+
+
+async def _silo_id(db, huruf: str) -> int:
+    from sqlalchemy import select
+
+    from app.models import Silo
+
+    return (await db.execute(select(Silo.id).where(
+        Silo.nama_silo == f"Silo {huruf}"))).scalars().one()

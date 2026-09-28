@@ -29,52 +29,25 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.penggilingan.gudang2.polishing import BYPRODUCTS, GRADES
-from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_hpp_wavg_silo
+from app.penggilingan.gudang2.service import _g2_warehouse_id
 from app.penggilingan.inventory.packaging import (
     InventoryError,
     find_or_create_sku,
     get_material,
     get_size,
     get_standard,
-    hpp_kemasan_wavg,
 )
 
 _BERAS_KATEGORI = {"beras_putih", "beras_b"}
 
 
 # ─────────────────────────── Harga byproduct (master) ───────────────────────────
-async def set_harga_byproduct(
-    db: AsyncSession, *, user, jenis: str | None, harga: float | None,
-) -> str:
-    if not jenis or jenis.lower() not in ("bekatul", "broken", "menir", "reject"):
-        raise InventoryError("Jenis byproduct: bekatul / broken / menir / reject.")
-    if harga is None:
-        raise InventoryError("Sebutkan harganya per kg.")
-    jenis = jenis.lower()
-    db.add(ByproductPrice(
-        jenis=jenis, harga_per_kg=harga, waktu=now_local(), updated_by=user.id,
-    ))
-    await log_activity(
-        db, table_name="byproduct_prices", record_id=0, action="INSERT",
-        changed_by=user.id, new_value=f"{jenis}={harga}",
-    )
-    await db.commit()
-    return jenis
+# `set_harga_byproduct` & `harga_byproduct` DIBUANG 28 September 2026: harga
+# keluar dari Pos Produksi (keputusan pemilik). Satu-satunya pembacanya
+# `hitung_hpp_beras`, yang ikut dibuang. Kolom & baris harganya TIDAK
+# dijatuhkan — itu riwayat, dan keuangan akan memintanya.
 
 
-async def harga_byproduct(db: AsyncSession, jenis: str) -> float | None:
-    v = (
-        await db.execute(
-            select(ByproductPrice.harga_per_kg)
-            .where(ByproductPrice.jenis == jenis)
-            .order_by(ByproductPrice.id.desc())
-            .limit(1)
-        )
-    ).scalars().first()
-    return float(v) if v is not None else None
-
-
-# ─────────────────────────── Polishing helpers ───────────────────────────
 async def _proc_by_kode(db: AsyncSession, kode: str | None) -> PolishingProcess:
     if not kode:
         rows = (
@@ -290,7 +263,6 @@ async def hitung_stok_finished_goods(
 
 
 # ─────────────────────────── HPP beras per proses ───────────────────────────
-@dataclass
 class HppBeras:
     hpp_per_kg: float | None
     biaya_pk: float
@@ -301,83 +273,14 @@ class HppBeras:
     lengkap: bool
 
 
-def biaya_penyosohan_proses(total_pk_kg: float) -> float:
-    """Biaya konversi PENYOSOHAN 1 proses (masuk HPP beras). Basis: kg PK disosoh.
-    = (sosoh + tenaga + transport) per kg PK × kg PK + operator FLAT per proses."""
-    s = settings
-    rate_per_kg_pk = (
-        s.biaya_penyosohan_per_kg_pk
-        + s.biaya_tenaga_penyosohan_per_kg_pk
-        + s.biaya_transport_penyosohan_per_kg_pk
-    )
-    return rate_per_kg_pk * float(total_pk_kg or 0) + s.biaya_operator_penyosohan
+# `biaya_penyosohan_proses` dan `hitung_hpp_beras` DIBUANG 28 September 2026.
+#
+# Keduanya mati dengan sendirinya begitu harga pergi: HPP beras butuh HPP PK
+# dan harga hasil samping, dan dua-duanya tak ada lagi. Yang dibiarkan hidup
+# akan menjawab "menunggu data lengkap" selamanya — dan blok yang selalu
+# kosong mengajari orang berhenti membaca dasbornya.
 
 
-async def hitung_hpp_beras(db: AsyncSession, kode_pol: str | None) -> HppBeras:
-    """HPP per kg beras putih (sama rata semua grade) untuk 1 proses penyosohan."""
-    proc = await _proc_by_kode(db, kode_pol)
-    usages = (
-        await db.execute(
-            select(PolishingSiloUsage).where(PolishingSiloUsage.polishing_process_id == proc.id)
-        )
-    ).scalars().all()
-    biaya_pk = 0.0
-    total_pk = 0.0
-    lengkap = True
-    for u in usages:
-        terpakai = float(u.berat_terpakai_kg or 0)
-        if terpakai <= 0:
-            continue
-        total_pk += terpakai  # PK disosoh → dasar biaya penyosohan (terlepas HPP silo)
-        wavg = await hitung_hpp_wavg_silo(db, u.silo_id)
-        if wavg is None:
-            lengkap = False  # HPP PK silo belum tersedia (upstream belum verif)
-            continue
-        biaya_pk += wavg * terpakai
-
-    # Biaya konversi penyosohan (sosoh + tenaga + transport per kg PK + operator flat).
-    biaya_penyosohan = biaya_penyosohan_proses(total_pk)
-
-    # Biaya kemasan beras (weighted-avg harga/lembar × jumlah karung).
-    beras_rows = (
-        await db.execute(
-            select(FinishedGoodsStock.jumlah_karung, ProductSku.packaging_material_id,
-                   ProductSku.package_size_id, ProductSku.brand_id)
-            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-            .where(
-                FinishedGoodsStock.source_id == proc.id,
-                ProductSku.kategori.in_(list(_BERAS_KATEGORI)),
-            )
-        )
-    ).all()
-    biaya_kemasan = 0.0
-    for jml, mat_id, size_id, brand_id in beras_rows:
-        hk = await hpp_kemasan_wavg(db, mat_id, size_id, brand_id)
-        if hk is not None:
-            biaya_kemasan += hk * int(jml)
-
-    # Nilai byproduct = output kg × harga acuan.
-    outputs = await _output_map(db, proc.id)
-    nilai_byproduct = 0.0
-    for jenis in BYPRODUCTS:
-        kg = outputs.get(jenis, 0.0)
-        if kg > 0:
-            h = await harga_byproduct(db, jenis)
-            if h is not None:
-                nilai_byproduct += kg * h
-
-    total_beras = sum(v for k, v in outputs.items() if k in GRADES)
-    hpp = None
-    if total_beras > 0 and lengkap:
-        hpp = (biaya_pk + biaya_kemasan + biaya_penyosohan - nilai_byproduct) / total_beras
-    return HppBeras(
-        hpp_per_kg=hpp, biaya_pk=biaya_pk, biaya_kemasan=biaya_kemasan,
-        biaya_penyosohan=biaya_penyosohan, nilai_byproduct=nilai_byproduct,
-        total_beras_kg=total_beras, lengkap=lengkap,
-    )
-
-
-# ─────────────────────────── Laporan ───────────────────────────
 def _kg(kg: float) -> str:
     return f"{kg:,.0f} kg".replace(",", ".")
 
@@ -415,16 +318,4 @@ async def laporan_stok_barang_jadi(db: AsyncSession) -> str:
     return "\n".join(lines)
 
 
-async def laporan_hpp_beras(db: AsyncSession, kode_pol: str | None) -> str:
-    h = await hitung_hpp_beras(db, kode_pol)
-    lines = ["🧮 HPP beras putih (per proses):"]
-    lines.append(f"• Biaya PK (silo): {_rp(h.biaya_pk)}")
-    lines.append(f"• Biaya penyosohan: {_rp(h.biaya_penyosohan)}")
-    lines.append(f"• Biaya kemasan: {_rp(h.biaya_kemasan)}")
-    lines.append(f"• (−) Nilai byproduct: {_rp(h.nilai_byproduct)}")
-    lines.append(f"• Total beras: {_kg(h.total_beras_kg)}")
-    if h.hpp_per_kg is not None:
-        lines.append(f"➡️ *HPP {_rp(h.hpp_per_kg)}/kg* (sama rata semua grade)")
-    else:
-        lines.append("➡️ HPP belum lengkap (HPP PK dari Gudang 1 belum diverifikasi).")
-    return "\n".join(lines)
+# `laporan_hpp_beras` DIBUANG 28 September 2026 — lihat catatan di atas.

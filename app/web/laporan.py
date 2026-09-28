@@ -74,13 +74,12 @@ def _daftar() -> tuple[Laporan, ...]:
         # ── Laporan uang: staff & admin ──
         Laporan("pembelian_gabah", "Pembelian gabah", "Gabah masuk beserta harganya.",
                 True, None, berperiode=True),
-        Laporan("hpp_beras", "HPP beras", "Harga pokok beras dari penyosohan terakhir.",
-                True, lambda db: bj.laporan_hpp_beras(db, None)),
-        Laporan("hpp_trend", "Tren HPP", "Arah harga pokok dari waktu ke waktu.",
-                True, analytics.hpp_trend),
-        Laporan("biaya_proses", "Biaya proses", "Biaya per proses giling & penyosohan.",
-                True, analytics.biaya_proses_ringkas),
-        Laporan("supplier", "Rapor supplier", "Siapa yang timbangannya paling jujur.",
+        # Tiga laporan HPP/biaya DIBUANG 28 September 2026: harga keluar dari
+        # Pos Produksi (keputusan pemilik), jadi ketiganya tak punya bahan baku
+        # lagi. Membiarkannya berarti laporan yang selamanya berbunyi
+        # "menunggu data lengkap".
+        Laporan("supplier", "Rapor supplier",
+                "Siapa yang gabahnya paling banyak jadi beras.",
                 True, analytics.supplier_scorecard),
         Laporan("rekap_bulanan", "Rekap bulanan", "Ringkasan produksi sebulan.",
                 True, analytics.rekap_produksi_bulanan),

@@ -36,7 +36,11 @@ def _meja(judul="Bu Sri", kode="GB-01", fase="silo"):
     return Baris(kode=kode, isi=f"{judul} · 6.100 kg", judul=judul,
                  utama=("6.100", "kg"), sub=f"{kode} · gabah kering",
                  fakta=[("Gabahnya", "sudah di silo")],
-                 keadaan="harga belum diverifikasi", aksi="verify_gabah",
+                 # Aksinya dulu `verify_gabah`, dihapus 28 September 2026
+                 # bersama seluruh harga. Penggantinya harus tetap keputusan
+                 # NON-MUTU — `jumlah_keputusan` sengaja tak menghitung
+                 # golongan mutu, dan kartu mutu di sini membuat lencananya nol.
+                 keadaan="bobot masuk tak cocok", aksi="betulkan_bobot_giling",
                  nilai=kode, fase=fase)
 
 
@@ -121,8 +125,11 @@ def test_lencana_antrean_tidak_menagih_kerja_meja():
 def test_kepingan_fase_baris_meja_tidak_berbohong():
     """"Belum ada tindakan" untuk gabah yang sudah di dalam mesin adalah
     kepingan yang dipercaya justru karena ia salah."""
-    sumber = inspect.getsource(untuk_staff)
-    assert "_FASE_BATCH" in sumber and "fase=_FASE_BATCH" in sumber
+    # `untuk_staff` tak lagi menggambar kartu gabah: satu-satunya kartunya di
+    # sana adalah "Harga gabah belum diverifikasi", dihapus 28 September 2026
+    # bersama seluruh harga. Petanya sendiri TETAP DIJAGA — ia yang menjaga
+    # kepingan tak berbohong di mana pun ia dipakai kelak, dan aturan itu yang
+    # ingin kita pertahankan, bukan satu pemakainya.
     from app.services.berjalan import _DI_MANA, _FASE_BATCH
 
     assert _FASE_BATCH["di_dryer"] == "dryer"
@@ -132,9 +139,10 @@ def test_kepingan_fase_baris_meja_tidak_berbohong():
     # "baru" akan membuat kepingannya berbunyi "Belum ada tindakan", persis
     # kebohongan yang tes ini jaga.
     assert _FASE_BATCH["ditumpuk"] == "tumpuk"
-    # Dan barisnya menyebut di mana gabahnya, supaya tak perlu buka layar lain.
+    # Dan kedua peta tetap sepadan: `_DI_MANA` yang memberi tahu DI MANA
+    # gabahnya, `_FASE_BATCH` yang memberi warna & kata. Status yang punya satu
+    # tanpa yang lain akan menggambar kartu yang separuh menjelaskan dirinya.
     assert set(_DI_MANA) == set(_FASE_BATCH)
-    assert "fakta=[(\"Gabahnya\"" in sumber
 
 
 def test_kerja_meja_keluar_dari_antrean():
@@ -157,8 +165,8 @@ def test_kerja_meja_keluar_dari_antrean():
     h = _render_keputusan([_meja()])
     # Judul layar sudah berkata "Menunggu keputusan"; bloknya menyebut
     # keputusan APA — dan yang kosong tak muncul.
-    assert label(h) == ["Harga gabah belum diverifikasi"]
-    assert "/keputusan?buka=verify_gabah" in h
+    assert label(h) == ["Bobot masuk giling tak cocok"]
+    assert "/keputusan?buka=betulkan_bobot_giling" in h
     assert "/aksi?buka=" not in h
 
 
@@ -325,7 +333,8 @@ def test_gudang2_punya_kartunya_sendiri():
     fn = (inspect.getsource(svc.untuk_gudang2)
           + inspect.getsource(svc._kartu_penyosohan_g2)
           + inspect.getsource(svc._kartu_silo_g2))
-    for aksi in ("masukkan_pk", "harga_pk_luar", "qc_pk_luar",
+    # `harga_pk_luar` dicoret 28 September 2026 — dihapus bersama harga.
+    for aksi in ("masukkan_pk", "qc_pk_luar",
                  "mulai_penyosohan", "hasil_penyosohan", "selesai_penyosohan"):
         assert aksi in fn, aksi
     # Golongannya mengikuti aturan yang sama dengan Gudang 1.

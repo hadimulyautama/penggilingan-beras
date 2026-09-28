@@ -225,22 +225,10 @@ def _clean(s: str) -> str:
     return (s or "").replace("*", "").replace("_", "")
 
 
-async def _hpp_terkini(db) -> str:
-    from sqlalchemy import select
-    from app.models import PolishingProcess
-    from app.penggilingan.inventory.finished_goods import laporan_hpp_beras
-    from app.penggilingan.inventory.packaging import InventoryError
-    kode = (
-        await db.execute(
-            select(PolishingProcess.kode_proses).order_by(PolishingProcess.id.desc()).limit(1)
-        )
-    ).scalars().first()
-    if not kode:
-        return "Belum ada penyosohan."
-    try:
-        return _clean(await laporan_hpp_beras(db, kode))
-    except InventoryError:
-        return "Belum tersedia (menunggu data lengkap)."
+# `_hpp_terkini` DIBUANG 28 September 2026 bersama blok "HPP beras terkini" di
+# Dashboard: harga keluar dari Pos Produksi (keputusan pemilik). Dibiarkan, ia
+# akan berbunyi "Belum tersedia (menunggu data lengkap)" SELAMANYA — dan blok
+# yang selalu kosong mengajari orang berhenti membaca dasbornya.
 
 
 @router.get("/dashboard")
@@ -277,8 +265,7 @@ async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
         if fin:
             sections.append({"icon": "✅", "title": "Tugas verifikasi & QC", "body": _clean(
                 await pending_verifikasi(db))})
-            sections.append({"icon": "💰", "title": "HPP beras terkini",
-                             "body": await _hpp_terkini(db)})
+
     return {"user": {"nama": user.nama, "role": user.role, "see_financials": fin},
             "sections": sections}
 
@@ -895,14 +882,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "post": "/api/actions/rekonsiliasi-timbang",
              "hint": "Tiket timbang yang belum tercatat, selisih nota dengan hasil "
                      "timbang, dan catatan yang masih menunggu bobot.", "fields": []},
-            {"id": "verify_gabah", "label": "✅ Verifikasi harga gabah",
-             "post": "/api/actions/verify-gabah", "fields": [
-                 {"name": "kode_batch", "label": "Gabah yang harganya belum diverifikasi", "type": "remote",
-                  "source": "/api/actions/gabah-unverified",
-                  "kosong": "Tidak ada gabah masuk yang menunggu verifikasi."},
-                 {"name": "metode", "label": "Metode", "type": "select", "options": METODE},
-                 {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
-             ]},
             # Namanya KOREKSI, bukan verifikasi (24 September 2026, keputusan
             # pemilik: "yang mencatat hasil giling hanya operator. jika ada
             # kesalahan sudah ada di perbaiki hasil giling").
@@ -974,19 +953,22 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
                   "options": BUTIR, "optional": True},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
-             ]},
-            {"id": "harga_pk_luar", "label": "💰 Verifikasi harga PK luar",
-             "post": "/api/actions/harga-pk-luar",
-             "hint": "Terpisah dari kualitas — kapan saja. Isi metode & nilai; "
-                     "potongan opsional.", "fields": [
-                 {"name": "kode_batch", "label": "PK luar yang harganya belum ditetapkan",
-                  "type": "remote", "source": "/api/actions/pk-luar-harga",
-                  "kosong": "Tidak ada PK luar yang menunggu penetapan harga."},
-                 {"name": "metode", "label": "Metode harga (wajib pilih)", "type": "select",
-                  "options": METODE},
-                 {"name": "nilai", "label": "Nilai (Rp)", "type": "number"},
-                 {"name": "potongan_kg", "label": "Potongan (kg) — opsional", "type": "number"},
-                 {"name": "potongan_alasan", "label": "Alasan potongan — opsional", "type": "text"},
+                 # ── POTONGAN BOBOT pindah ke sini 28 September 2026 ──
+                 #
+                 # Harga keluar dari Pos Produksi hari ini, dan bersamanya aksi
+                 # "Verifikasi harga PK luar" — satu-satunya tempat potongan
+                 # bobot pernah ditulis. Brief menyangka QC yang menulisnya;
+                 # borangnya membuktikan tidak.
+                 #
+                 # Ia memang milik QC: potongan karena MUTU, pekerjaan gudang,
+                 # dan ia MENGUBAH STOK (`masukkan_pk_luar` mengurangkannya
+                 # dari berat yang masuk). Ikut terbuang bersama harga berarti
+                 # berat PK yang masuk Gudang 2 berubah untuk seluruh pemasukan
+                 # berikutnya, tanpa satu pesan pun.
+                 {"name": "potongan_kg", "label": "Potongan bobot (kg) — opsional",
+                  "type": "number", "optional": True},
+                 {"name": "potongan_alasan", "label": "Alasan potongan — opsional",
+                  "type": "text", "optional": True},
              ]},
             # Menempatkan PK yang datang — tumpuk atau langsung silo — adalah
             # ENTRY ADMIN (keputusan pemilik 12 September 2026); dulu ada di
@@ -1124,7 +1106,6 @@ _GRUP_AKSI = {
     "catat_bekatul": "Hasil samping & barang jadi",
     "kirim_bekatul": "Hasil samping & barang jadi",
     "kirim_barang_jadi": "Hasil samping & barang jadi",
-    "harga_byproduct": "Hasil samping & barang jadi",
     "jual_pk": "Hasil samping & barang jadi",
     # Pembelian & pencocokan.
     "beli_kemasan": "Pembelian & pencocokan",
@@ -1159,7 +1140,7 @@ for _a in (
     "gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
     "selesai_pengeringan", "selesai_pendinginan", "pindah_silo", "ubah_target",
     "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
-    "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling",
+    "lanjutkan_proses", "verify_output", "qc_giling",
     # Rantai permintaan PK
     "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
     "kirim_permintaan_pk", "tutup_permintaan_pk",
@@ -1169,7 +1150,7 @@ for _a in (
     "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
     "catat_packing",
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
-    "masukkan_pk", "catat_pk_luar", "qc_pk_luar", "harga_pk_luar",
+    "masukkan_pk", "catat_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
@@ -1192,7 +1173,7 @@ _ACTION_WH = {
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "hentikan_proses": "g1", "lanjutkan_proses": "g1",
-    "verify_gabah": "g1", "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
+    "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
     # Barangnya di Gudang 1, peminatnya Gudang 2 — dicap g1, sama dengan
     # `transfer_pk`: yang dikerjakan orang atasnya adalah memindahkan dari G1.
     "minta_pk_g1": "g1", "tolak_permintaan_pk": "g1",
@@ -1205,12 +1186,11 @@ _ACTION_WH = {
     "selesai_penyosohan": "g2", "pindah_tumpukan_silo": "g2",
     "hentikan_penyosohan": "g2", "lanjutkan_penyosohan": "g2",
     "catat_pk_luar": "g2", "qc_pk_luar": "g2",
-    "harga_pk_luar": "g2",
     # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
     "catat_packing": "g2", "catat_bekatul": "g2", "beli_kemasan": "g2",
-    "kirim_barang_jadi": "g2", "kirim_bekatul": "g2", "harga_byproduct": "g2",
+    "kirim_barang_jadi": "g2", "kirim_bekatul": "g2",
     # Kecuali PK: ia dijual mentah dari Gudang 1, sebelum disosoh.
     "jual_pk": "g1",
     # Undo tidak milik gudang mana pun; ia ikut G1 karena di situlah
@@ -1606,25 +1586,6 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return out
 
 
-@router.get("/actions/gabah-unverified")
-async def gabah_unverified(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    _require(can_see_financials(user))
-    from sqlalchemy import select
-    from app.models import PurchaseBatch, Supplier
-    async with SessionLocal() as db:
-        rows = (
-            await db.execute(
-                select(PurchaseBatch, Supplier.nama_supplier)
-                .join(Supplier, Supplier.id == PurchaseBatch.supplier_id)
-                .where(PurchaseBatch.flag_unverified.is_(True))
-                .order_by(PurchaseBatch.id.desc()).limit(30)
-            )
-        ).all()
-    return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {s} · {dari_batch(b).teks()}"}
-            for b, s in rows]
-
-
 @router.get("/actions/pk-transfer")
 async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(can_transfer_pk(user))
@@ -1802,25 +1763,6 @@ async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 select(PkPurchaseBatch).where(
                     PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk")),
                     ~qc_ada,
-                ).order_by(PkPurchaseBatch.id.desc()).limit(30)
-            )
-        ).scalars().all()
-    return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
-            for b in rows]
-
-
-@router.get("/actions/pk-luar-harga")
-async def pk_luar_harga(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """PK luar yang HARGA-nya belum diverifikasi (flag_unverified)."""
-    _require(can_see_financials(user))
-    from sqlalchemy import select
-    from app.models import PkPurchaseBatch
-    async with SessionLocal() as db:
-        rows = (
-            await db.execute(
-                select(PkPurchaseBatch).where(
-                    PkPurchaseBatch.flag_unverified.is_(True),
                 ).order_by(PkPurchaseBatch.id.desc()).limit(30)
             )
         ).scalars().all()
@@ -2378,34 +2320,6 @@ async def act_selesai_giling(req: SelesaiGilingReq, user: User = Depends(penggun
     return {"ok": True, "pesan": pesan}
 
 
-class VerifyGabahReq(BaseModel):
-    kode_batch: str
-    metode: str
-    nilai: float
-
-
-@router.post("/actions/verify-gabah")
-async def act_verify_gabah(req: VerifyGabahReq, user: User = Depends(pengguna_aksi)) -> dict:
-    _require(can_see_financials(user))
-    if not (req.kode_batch or "").strip():
-        raise HTTPException(400, "Pilih batch gabah dulu.")
-    if req.metode not in ("per_kg", "total"):
-        raise HTTPException(400, "Pilih metode dulu: Total atau Per kg.")
-    from app.services.verification import get_batch_by_kode, verify_gabah_price
-    async with SessionLocal() as db:
-        u = await db.get(User, user.id)
-        batch = await get_batch_by_kode(db, req.kode_batch)
-        if batch is None:
-            raise HTTPException(404, f"Batch {req.kode_batch} tidak ditemukan.")
-        try:
-            await verify_gabah_price(db, user=u, batch=batch,
-                                     metode=req.metode, nilai_rupiah=req.nilai)
-        except Exception as e:  # noqa: BLE001
-            raise _err(e, "Gagal verifikasi harga.")
-    pesan = f"✓ Harga gabah *{req.kode_batch}* diverifikasi & tersimpan."
-    return {"ok": True, "pesan": pesan}
-
-
 class VerifyOutputReq(BaseModel):
     kode_proses: str
     berat_output: PositifOpsional = None
@@ -2565,6 +2479,10 @@ class QcPkLuarReq(BaseModel):
     penyusutan: PersenOpsional = None
     butir_kuning: str | None = None
     catatan_lab: str | None = None
+    #: Potongan BOBOT karena mutu — pindah ke sini bersama hapusnya aksi harga
+    #: (28 September 2026). Ia mengubah stok, bukan rupiah.
+    potongan_kg: PositifOpsional = None
+    potongan_alasan: str | None = None
 
 
 @router.post("/actions/qc-pk-luar")
@@ -2574,10 +2492,12 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
     await _wajib_mutu()
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK luar dulu.")
-    if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan)) \
+    if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan,
+                               req.potongan_kg)) \
             and not (req.butir_kuning or req.catatan_lab):
         raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / "
-                                 "penyusutan / butir kuning / catatan.")
+                                 "penyusutan / butir kuning / catatan / "
+                                 "potongan bobot.")
     from app.penggilingan.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2587,6 +2507,8 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
                 broken=req.broken, penyusutan_persen=req.penyusutan,
                 butir_kuning=(req.butir_kuning or None),
                 catatan_lab=(req.catatan_lab or None),
+                potongan_kg=req.potongan_kg,
+                potongan_alasan=(req.potongan_alasan or None),
             )
         except Gudang2Error as e:
             raise _err(e, "Gagal input kualitas PK.")
@@ -2597,46 +2519,6 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
     bk = f" · butir kuning {r.butir_kuning}" if r.butir_kuning else ""
     pesan = f"✓ Kualitas PK *{req.kode_batch}* tercatat: {det or '—'}{bk}."
     return {"ok": True, "pesan": pesan}
-
-
-class HargaPkLuarReq(BaseModel):
-    kode_batch: str
-    metode: str
-    nilai: PositifOpsional = None
-    potongan_kg: PositifOpsional = None
-    potongan_alasan: str | None = None
-
-
-@router.post("/actions/harga-pk-luar")
-async def act_harga_pk_luar(req: HargaPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
-    """Verifikasi harga PK luar — terpisah dari kualitas, kapan saja."""
-    _require(can_see_financials(user))
-    if not (req.kode_batch or "").strip():
-        raise HTTPException(400, "Pilih PK luar dulu.")
-    if req.metode not in ("per_kg", "total"):
-        raise HTTPException(400, "Pilih metode harga dulu: Total atau Per kg.")
-    if req.nilai is None:
-        raise HTTPException(400, "Isi nilai harga dulu.")
-    from app.penggilingan.gudang2.service import verify_pk_price, Gudang2Error
-    async with SessionLocal() as db:
-        u = await db.get(User, user.id)
-        try:
-            r = await verify_pk_price(
-                db, user=u, kode=req.kode_batch, metode=req.metode, nilai=req.nilai,
-                potongan_kg=req.potongan_kg,
-                potongan_alasan=(req.potongan_alasan or None),
-            )
-        except Gudang2Error as e:
-            raise _err(e, "Gagal verifikasi harga PK.")
-    hpp = f" · HPP {_rp(r.hpp_per_kg)}/kg" if r.hpp_per_kg else ""
-    pesan = f"✓ Harga PK *{req.kode_batch}* terverifikasi (bersih {r.berat_bersih_kg:g} kg){hpp}."
-    return {"ok": True, "pesan": pesan}
-
-
-# ── Permintaan operator Gudang 2 atas lot PK Gudang 1 ──
-#
-# Keputusan pemilik 24 September 2026. Yang lahir di sini PERMINTAAN, bukan
-# izin: `can_transfer_pk` tidak disentuh, dan yang memindahkan tetap Admin.
 
 
 class MintaPkReq(BaseModel):

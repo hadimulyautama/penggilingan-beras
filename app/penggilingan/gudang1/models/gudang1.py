@@ -112,6 +112,17 @@ class PurchaseBatchVerification(Base, TimestampMixin):
     purchase_batch_id: Mapped[int] = mapped_column(
         ForeignKey("purchase_batches.id"), unique=True, nullable=False
     )
+    # ── PENINGGALAN: harga pindah ke keuangan 28 September 2026 ──
+    #
+    # Kolom-kolom di bawah ini TIDAK lagi ditulis maupun dibaca Pos Produksi.
+    # Dipertahankan untuk RIWAYAT: harga yang sudah tercatat adalah pembelian
+    # sungguhan, dan hal pertama yang keuangan minta begitu mereka mengambil
+    # alih adalah data lama. Kalau kolomnya sudah jatuh, tak ada yang bisa
+    # mengembalikannya.
+    #
+    # Jangan dipakai lagi; jangan pula dihapus tanpa ekspor. Migrasi yang
+    # menjatuhkannya boleh menyusul SESUDAH keuangan mengambil datanya, dan
+    # atas permintaan pemilik.
     harga_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     total_biaya: Mapped[float | None] = mapped_column(Numeric(16, 2))
     # per_kg / total

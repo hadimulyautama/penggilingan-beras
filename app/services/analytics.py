@@ -17,17 +17,11 @@ from app.models import (
     MillingProgressLog,
     MillingQcLog,
     PurchaseBatch,
-    PurchaseBatchVerification,
     Supplier,
 )
-from app.services.costing import production_cost
 
 _BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt",
           "Nov", "Des"]
-
-
-def _rp(n: float | None) -> str:
-    return "Rp " + f"{n:,.0f}".replace(",", ".") if n is not None else "-"
 
 
 def _ton(kg: float) -> str:
@@ -73,8 +67,18 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
     """Data terstruktur scorecard supplier (dipakai teks bot & dashboard).
 
     Kembalikan {"diproduksi": [...], "belum": [...]}, tiap item punya field
-    turunan: harga_per_kg, rendemen (%), hpp_pk. `diproduksi` diperingkat dari
-    HPP/kg PK terendah.
+    turunan: rendemen (%) dan kadar air masuk. `diproduksi` diperingkat dari
+    RENDEMEN PK TERTINGGI.
+
+    ⚠ PERINGKATNYA BERUBAH 28 September 2026, dan pemilik perlu tahu: dulu ia
+    HPP/kg PK terendah. Harga keluar dari Pos Produksi hari itu (keputusan
+    pemilik), jadi dasar lama tak punya bahan baku lagi.
+
+    Rapor ini TIDAK dibiarkan mati, dan itu keputusan yang bisa pemilik balik:
+    seluruh fakta lain di dalamnya milik produksi dan tetap ada — pasok, jumlah
+    batch, rendemen, kadar air masuk. Untuk aplikasi produksi rendemen justru
+    dasar yang lebih tepat: pemasok terbaik adalah yang gabahnya paling banyak
+    jadi beras. Keuangan bisa memeringkat dengan biaya di sisi mereka.
     """
     # ── 1. Pengadaan per supplier (semua batch) ──
     prow = (
@@ -97,41 +101,25 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
         agg[sid] = {
             "nama": nama, "n_batch": int(nbatch), "kg": float(kg),
             "kadar_air": float(ka) if ka is not None else None,
-            "biaya_verif": 0.0, "kg_verif": 0.0,
             "pk_alloc": 0.0, "gabah_milled": 0.0,
-            "cost_milled": 0.0, "pk_for_hpp": 0.0,
         }
 
-    vrow = (
-        await db.execute(
-            select(
-                PurchaseBatch.supplier_id,
-                func.coalesce(func.sum(PurchaseBatch.berat_total_kg * PurchaseBatchVerification.harga_per_kg), 0),
-                func.coalesce(func.sum(PurchaseBatch.berat_total_kg), 0),
-            )
-            .join(PurchaseBatchVerification, PurchaseBatchVerification.purchase_batch_id == PurchaseBatch.id)
-            .where(PurchaseBatchVerification.harga_per_kg.isnot(None))
-            .group_by(PurchaseBatch.supplier_id)
-        )
-    ).all()
-    for sid, biaya, kgv in vrow:
-        if sid in agg:
-            agg[sid]["biaya_verif"] = float(biaya)
-            agg[sid]["kg_verif"] = float(kgv)
-
+    # ── 2. Rendemen: berapa PK yang keluar dari gabah tiap supplier ──
+    #
+    # Dibagi menurut PORSI BERAT gabahnya dalam lot, sama seperti dulu — yang
+    # dibuang cuma suku rupiahnya. Satu lot boleh datang dari beberapa batch
+    # beberapa supplier, dan tak ada cara memisahkan PK-nya selain porsi.
     procs = (
         await db.execute(select(MillingProcess).where(MillingProcess.status == "selesai"))
     ).scalars().all()
     for proc in procs:
-        bd = await production_cost(db, proc)
-        if bd is None:
+        output = await _proc_pk_output(db, proc)
+        if not output:
             continue
-        output = bd.pk_output
         batches = await _proc_batches(db, proc)
         total_kg = sum(float(b.berat_total_kg or 0) for b, _ in batches)
         if total_kg <= 0:
             continue
-        total_cost = bd.total_penuh
         for b, _harga in batches:
             sid = b.supplier_id
             if sid not in agg:
@@ -139,221 +127,52 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
             share = float(b.berat_total_kg or 0) / total_kg
             agg[sid]["pk_alloc"] += output * share
             agg[sid]["gabah_milled"] += float(b.berat_total_kg or 0)
-            if total_cost is not None:
-                agg[sid]["cost_milled"] += total_cost * share
-                agg[sid]["pk_for_hpp"] += output * share
 
     for a in agg.values():
-        a["harga_per_kg"] = a["biaya_verif"] / a["kg_verif"] if a["kg_verif"] > 0 else None
         a["rendemen"] = a["pk_alloc"] / a["gabah_milled"] * 100 if a["gabah_milled"] > 0 else None
-        a["hpp_pk"] = a["cost_milled"] / a["pk_for_hpp"] if a["pk_for_hpp"] > 0 else None
 
     rows = list(agg.values())
     diproduksi = [a for a in rows if a["pk_alloc"] > 0]
     belum = [a for a in rows if a["pk_alloc"] <= 0]
-    diproduksi.sort(key=lambda a: (a["hpp_pk"] is None, a["hpp_pk"] or 0))
+    # Rendemen TERTINGGI lebih dulu; yang tak punya angka di belakang.
+    diproduksi.sort(key=lambda a: (a["rendemen"] is None, -(a["rendemen"] or 0)))
     return {"diproduksi": diproduksi, "belum": belum}
 
 
 async def supplier_scorecard(db: AsyncSession) -> str:
-    """Skor per supplier: pasok, harga, rendemen, kualitas, HPP/kg PK.
+    """Rapor supplier: pasok, rendemen, kadar air masuk.
 
-    Diperingkat dari HPP/kg PK terendah (paling hemat = paling menguntungkan
-    pada harga jual PK yang sama).
+    Diperingkat dari RENDEMEN PK TERTINGGI — pemasok terbaik adalah yang
+    gabahnya paling banyak jadi beras. Lihat catatan di
+    `supplier_scorecard_data` tentang perubahan dasar peringkatnya.
     """
     data = await supplier_scorecard_data(db)
     diproduksi, belum = data["diproduksi"], data["belum"]
     if not diproduksi and not belum:
         return "📊 Belum ada data pembelian untuk dianalisa."
 
-    lines = ["📊 *Supplier Scorecard* (keseluruhan)"]
+    lines = ["📊 *Rapor Supplier* (keseluruhan)"]
     medali = ["🥇", "🥈", "🥉"]
     for i, a in enumerate(diproduksi):
         tag = medali[i] if i < len(medali) else "•"
         ka = f"{a['kadar_air']:.0f}%" if a["kadar_air"] is not None else "-"
-        h = a["hpp_pk"]
+        r = a["rendemen"]
         lines.append(
-            f"\n{tag} *{a['nama']}* — HPP PK {_rp(h)}/kg"
-            + ("  ⭐ terhemat" if i == 0 and h is not None else "")
+            f"\n{tag} *{a['nama']}* — rendemen PK "
+            + (f"{r:.1f}%" if r is not None else "-")
+            + ("  ⭐ tertinggi" if i == 0 and r is not None else "")
         )
-        lines.append(
-            f"• Pasok {_ton(a['kg'])} ({a['n_batch']} batch) · harga ~{_rp(a['harga_per_kg'])}/kg"
-        )
-        lines.append(
-            f"• Rendemen PK {a['rendemen']:.1f}% · kadar air masuk {ka}"
-            if a["rendemen"] is not None else f"• kadar air masuk {ka}"
-        )
+        lines.append(f"• Pasok {_ton(a['kg'])} ({a['n_batch']} batch)")
+        lines.append(f"• Kadar air masuk {ka}")
     if belum:
         lines.append("\n_Belum ada produksi PK (hanya pengadaan):_")
         for a in belum:
-            lines.append(
-                f"• {a['nama']}: {_ton(a['kg'])} ({a['n_batch']} batch) "
-                f"· ~{_rp(a['harga_per_kg'])}/kg"
-            )
+            lines.append(f"• {a['nama']}: {_ton(a['kg'])} ({a['n_batch']} batch)")
     lines.append(
-        "\n_Peringkat = HPP/kg PK terendah (harga + rendemen). Profit riil butuh "
-        "harga jual PK._"
+        "\n_Peringkat = rendemen PK tertinggi. Biaya dan harga ada di "
+        "keuangan, tidak lagi di Pos Produksi._"
     )
     return "\n".join(lines)
-
-
-async def hpp_trend(db: AsyncSession) -> str:
-    """Tren HPP per kg PK per bulan (rata-rata tertimbang output)."""
-    procs = (
-        await db.execute(
-            select(MillingProcess)
-            .where(MillingProcess.status == "selesai", MillingProcess.waktu_selesai.isnot(None))
-            .order_by(MillingProcess.waktu_selesai)
-        )
-    ).scalars().all()
-
-    per_bulan: dict[tuple[int, int], list[float]] = {}  # (thn,bln) -> [cost, output]
-    for proc in procs:
-        v = (
-            await db.execute(
-                select(MillingProcessVerification.berat_output_final_kg).where(
-                    MillingProcessVerification.milling_process_id == proc.id
-                )
-            )
-        ).scalars().first()
-        if not v:
-            continue  # output belum terverifikasi
-        bd = await production_cost(db, proc)
-        if bd is None or bd.total_penuh is None:
-            continue  # biaya bahan baku belum lengkap
-        key = (proc.waktu_selesai.year, proc.waktu_selesai.month)
-        acc = per_bulan.setdefault(key, [0.0, 0.0])
-        acc[0] += bd.total_penuh
-        acc[1] += bd.pk_output
-
-    if not per_bulan:
-        return (
-            "📉 Belum ada data HPP. Butuh proses giling yang SELESAI dengan "
-            "output PK terverifikasi dan harga gabah terverifikasi."
-        )
-    lines = ["📉 *Tren HPP penuh per kg PK* (per bulan):"]
-    prev = None
-    for (thn, bln) in sorted(per_bulan):
-        cost, out = per_bulan[(thn, bln)]
-        hpp = cost / out if out else 0
-        arah = ""
-        if prev is not None:
-            arah = " 🔺" if hpp > prev else (" 🔻" if hpp < prev else " ➡️")
-        lines.append(f"• {_BULAN[bln - 1]} {thn}: {_rp(hpp)}/kg (PK {_ton(out)}){arah}")
-        prev = hpp
-    return "\n".join(lines)
-
-
-async def biaya_produksi_detail(db: AsyncSession, kode_proses: str | None = None) -> str:
-    """Rincian biaya produksi + HPP penuh sebuah proses (default: terakhir)."""
-    q = select(MillingProcess)
-    if kode_proses:
-        q = q.where(MillingProcess.kode_proses == kode_proses)
-    else:
-        q = q.where(MillingProcess.status == "selesai").order_by(MillingProcess.id.desc())
-    proc = (await db.execute(q.limit(1))).scalars().first()
-    if proc is None:
-        return "Proses giling tidak ditemukan." if kode_proses else "Belum ada proses giling selesai."
-    bd = await production_cost(db, proc)
-    if bd is None:
-        return f"{proc.kode_proses}: output PK belum ada — biaya belum bisa dihitung."
-
-    rend = bd.pk_output / bd.kg_gabah * 100 if bd.kg_gabah else 0
-    ker = f" ({bd.kondisi}{'/dikeringkan' if bd.dried else '/langsung silo'})" if bd.kondisi else ""
-    lines = [
-        f"💵 *Rincian biaya {proc.kode_proses}*",
-        f"Gabah {_ton(bd.kg_gabah)}{ker} → PK {_ton(bd.pk_output)} (rendemen {rend:.1f}%)",
-        f"• Bahan baku (gabah): {_rp(bd.bahan_baku)}",
-        f"• Bongkar: {_rp(bd.bongkar)}",
-        f"• Pengeringan: {_rp(bd.pengeringan)}",
-        f"• Operator: {_rp(bd.operator)}",
-        f"• Tenaga milling: {_rp(bd.tenaga_milling)}",
-        f"• Rubber roll: {_rp(bd.rubber_roll)}",
-    ]
-    if bd.listrik:
-        lines.append(f"• Listrik/mesin: {_rp(bd.listrik)}")
-    lines.append(f"• _Subtotal operasional: {_rp(bd.operasional)}_")
-    if bd.total_penuh is not None:
-        hpp_bahan = bd.bahan_baku / bd.pk_output if bd.pk_output else 0
-        hpp_op = bd.operasional / bd.pk_output if bd.pk_output else 0
-        lines.append(f"*Total: {_rp(bd.total_penuh)}*")
-        lines.append(
-            f"*HPP penuh: {_rp(bd.hpp_penuh)}/kg PK* "
-            f"(bahan baku {_rp(hpp_bahan)} + operasional {_rp(hpp_op)})"
-        )
-    else:
-        lines.append(
-            f"_Operasional {_rp(bd.operasional / bd.pk_output)}/kg PK. "
-            "Bahan baku belum diverifikasi → HPP penuh belum bisa dihitung._"
-        )
-    return "\n".join(lines)
-
-
-def simulasi_hpp(
-    harga_gabah: float | None, rendemen_persen: float | None, *,
-    kondisi: str = "basah", langsung_silo: bool = False,
-    berat_bahan: float | None = None, berat_hasil: float | None = None,
-) -> str:
-    """What-if HPP dari harga gabah & rendemen (pakai tarif biaya terkini).
-
-    Rendemen bisa diberikan langsung (persen) ATAU dihitung dari tonase bahan &
-    hasil (berat_hasil / berat_bahan). Tak butuh batch/data nyata."""
-    from app.config import settings as s
-
-    # Rendemen dari tonase bila tak disebut eksplisit.
-    if not rendemen_persen and berat_bahan and berat_hasil:
-        if berat_bahan <= 0:
-            return "Tonase bahan harus lebih dari 0."
-        rendemen_persen = berat_hasil / berat_bahan * 100
-    if not harga_gabah or not rendemen_persen:
-        return (
-            "Sebutkan harga beli + rendemen ATAU tonase bahan & hasil, contoh:\n"
-            "`simulasi hpp gabah 7800 rendemen 64`\n"
-            "`simulasi hpp bahan 10 ton hasil 6,4 ton harga 7800`"
-        )
-    rend = rendemen_persen / 100
-    if rend <= 0 or rend > 1:
-        return "Rendemen harus antara 1–100 persen (cek tonase bahan ≥ hasil)."
-
-    # Biaya operator FLAT per proses → butuh tonase bahan untuk dibagi per kg.
-    if not berat_bahan:
-        return (
-            f"Sebutkan TONASE bahannya juga — biaya operator {_rp(s.biaya_operator_per_proses)} "
-            "FLAT per proses milling dibagi tonase. Contoh:\n"
-            "`simulasi hpp bahan 10 ton hasil 6,4 ton harga 7800`"
-        )
-    operator_kg = s.biaya_operator_per_proses / berat_bahan
-
-    if langsung_silo:
-        dry, jalur = 0.0, "kering · langsung silo (tanpa pengeringan)"
-    elif kondisi == "kering":
-        dry, jalur = s.biaya_pengeringan_kering_per_kg, "kering · tetap dikeringkan"
-    else:
-        dry, jalur = s.biaya_pengeringan_basah_per_kg, "basah · dikeringkan"
-
-    rubber = s.rubber_roll_harga_per_set / (s.rubber_roll_umur_ton * 1000)
-    per_gabah = (
-        s.biaya_bongkar_per_kg_gabah + dry + operator_kg
-        + rubber + s.biaya_listrik_milling_per_kg_gabah
-    )
-    milling_labor = s.biaya_tenaga_milling_per_kg_pk * rend  # per kg gabah
-    op = per_gabah + milling_labor
-    total_gabah = harga_gabah + op
-    hpp_pk = total_gabah / rend
-
-    return "\n".join([
-        f"🧮 *Simulasi HPP* — gabah {jalur}, rendemen {rendemen_persen:g}%",
-        f"• Tonase: {berat_bahan:g} kg bahan"
-        + (f" → {berat_hasil:g} kg hasil" if berat_hasil else ""),
-        f"• Harga gabah: {_rp(harga_gabah)}/kg",
-        f"• Biaya proses: {_rp(op)}/kg gabah",
-        f"   (bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · pengeringan {_rp(dry)} · "
-        f"operator {_rp(operator_kg)}/kg ({_rp(s.biaya_operator_per_proses)} flat ÷ {berat_bahan:g} kg) · "
-        f"rubber {_rp(rubber)} · listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} · "
-        f"tenaga giling {_rp(milling_labor)})",
-        f"\n➡️ *HPP: {_rp(hpp_pk)}/kg PK*  ·  {_rp(total_gabah)}/kg gabah",
-        f"_(bahan baku {_rp(harga_gabah / rend)} + operasional {_rp(op / rend)} per kg PK)_",
-    ])
 
 
 async def _avg_rendemen(db: AsyncSession) -> float:
@@ -373,35 +192,7 @@ async def _avg_rendemen(db: AsyncSession) -> float:
     return s.rendemen_asumsi_persen / 100
 
 
-async def biaya_proses_ringkas(db: AsyncSession) -> str:
-    """Biaya PROSES (operasional, tanpa harga gabah) per kg gabah — tiap jalur."""
-    from app.config import settings as s
-    rend = await _avg_rendemen(db)
-    rubber = s.rubber_roll_harga_per_set / (s.rubber_roll_umur_ton * 1000)
-    tetap = (
-        s.biaya_bongkar_per_kg_gabah
-        + rubber + s.biaya_listrik_milling_per_kg_gabah
-    )  # per kg gabah, di luar pengeringan & operator (operator kini flat/proses)
-    milling = s.biaya_tenaga_milling_per_kg_pk * rend  # per kg gabah
-    op_10ton = s.biaya_operator_per_proses / 10000  # ilustrasi @ 10 ton
-
-    def total(dry):
-        return tetap + dry + milling
-
-    return "\n".join([
-        f"🏭 *Biaya proses per kg gabah* (operasional, di luar harga beli)",
-        f"_Tenaga giling {_rp(s.biaya_tenaga_milling_per_kg_pk)}/kg PK "
-        f"≈ {_rp(milling)}/kg gabah @ rendemen {rend * 100:.0f}%_",
-        f"_Operator {_rp(s.biaya_operator_per_proses)} FLAT/proses "
-        f"(≈ {_rp(op_10ton)}/kg @ 10 ton) — belum termasuk di angka /kg di bawah._",
-        f"\n• Basah (dikeringkan): *{_rp(total(s.biaya_pengeringan_basah_per_kg))}/kg gabah*",
-        f"• Kering (tetap dikeringkan): *{_rp(total(s.biaya_pengeringan_kering_per_kg))}/kg*",
-        f"• Kering langsung silo (tanpa pengeringan): *{_rp(total(0))}/kg*",
-        f"\nKomponen tetap/kg gabah: bongkar {_rp(s.biaya_bongkar_per_kg_gabah)} · "
-        f"rubber {_rp(rubber)} · listrik {_rp(s.biaya_listrik_milling_per_kg_gabah)} "
-        f"+ pengeringan (sesuai jalur) + giling {_rp(milling)} "
-        f"+ operator {_rp(s.biaya_operator_per_proses)} flat/proses.",
-    ])
+# `biaya_proses_ringkas` DIBUANG 28 September 2026 — lihat catatan di atas.
 
 
 async def rekap_produksi_bulanan(db: AsyncSession) -> str:

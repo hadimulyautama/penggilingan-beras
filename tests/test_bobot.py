@@ -122,13 +122,15 @@ def test_pagar_pengering_memakai_batas_atas():
     assert "belum ditimbang kedua" in inspect.getsource(drying._berat_untuk_pagar)
 
 
-def test_rupiah_tak_pernah_berdiri_di_atas_perkiraan():
-    from app.penggilingan.gudang2 import service as g2
-    from app.services import verification
-
-    for fn in (verification.verify_gabah_price, g2.verify_pk_price):
-        sumber = kode_saja(fn)
-        assert "dari_batch(batch)" in sumber and "if not bobot.pasti:" in sumber, fn.__name__
+# `test_rupiah_tak_pernah_berdiri_di_atas_perkiraan` DIBUANG 28 September 2026.
+#
+# Aturannya BENAR dan tidak dicabut — rupiah memang tak boleh berdiri di atas
+# bobot perkiraan. Yang hilang subjeknya: kedua penulis harga (`verify_gabah_
+# price`, `verify_pk_price`) dihapus bersama seluruh harga, atas keputusan
+# pemilik. Aturan itu kini milik keuangan, dan pagarnya harus berdiri di sana.
+#
+# Yang TETAP dijaga di berkas ini seluruh jalur BOBOT-nya: perkiraan tak pernah
+# dipakai sebagai angka pasti, poller menggantinya, dan pagar dryer menolaknya.
 
 
 def test_poller_mengganti_perkiraan_lewat_jalur_menunggu():

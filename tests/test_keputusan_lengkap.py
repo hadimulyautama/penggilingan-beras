@@ -84,7 +84,8 @@ def test_tiap_jenis_yang_dikirim_punya_bloknya_di_tepat_satu_layar():
 
     # Ketiga yang dulu hilang disebut namanya, supaya perbaikannya tak
     # tergulung balik tanpa ada yang menyadarinya.
-    for aksi in ("harga_pk_luar", "qc_pk_luar", "betulkan_bobot_giling"):
+    # `harga_pk_luar` dicoret 28 September 2026 — dihapus bersama harga.
+    for aksi in ("qc_pk_luar", "betulkan_bobot_giling"):
         assert aksi in AKSI_DIKENAL, aksi
 
 
@@ -245,20 +246,10 @@ def test_pencocokan_output_tak_lagi_ditagih_tetapi_koreksinya_tetap_ada():
     assert "Perbaiki hasil giling" in api and "Perbaiki hasil giling" in stok
 
 
-def test_hpp_pk_tak_lagi_menuntut_verifikasi():
-    """Kalau tuntutan itu tinggal, HPP PK berhenti terisi diam-diam.
-
-    `hpp_per_kg_pk` dulu menjawab None tanpa `berat_output_final_kg` — aman
-    selama tiap giling ditagih verifikasi. Begitu tagihannya dihapus, hampir
-    tak ada lot yang punya angka itu, dan HPP yang kosong tak menjatuhkan apa
-    pun: ia cuma hilang dari laporan. Sumbernya kini sama dengan stok —
-    terverifikasi bila ada, selain itu progres terakhir operator.
-    """
-    from app.services import transfer
-
-    kode = inspect.getsource(transfer.hpp_per_kg_pk)
-    assert "MillingProcessVerification" not in kode, "tuntutan verifikasi kembali"
-    assert "bd.hpp_penuh" in kode
+# `test_hpp_pk_tak_lagi_menuntut_verifikasi` DIBUANG 28 September 2026 bersama
+# subjeknya: `transfer.hpp_per_kg_pk` tak ada lagi, sebab harga keluar dari Pos
+# Produksi (keputusan pemilik). Aturan yang dijaganya — "HPP jangan menuntut
+# verifikasi yang sudah dihapus" — kini tak punya HPP untuk dijaga.
 
 
 def test_gerbang_permintaan_pk_dua_arah():
