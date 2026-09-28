@@ -38,6 +38,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from hmu_identitas.peran import G1
+
 from app.database import now_local
 from app.models import MillingProcess, PermintaanPk
 from app.models.permintaan import (DIKIRIM, DIMINTA, DISETUJUI, DITOLAK, GUGUR,
@@ -99,6 +101,57 @@ async def _kabar(db: AsyncSession, baris: PermintaanPk, *, pesan: str,
     await create_notification(
         db, tipe=TIPE_KABAR, pesan=pesan, target_role=untuk,
         prioritas=prioritas, table_name="permintaan_pk", record_id=baris.id)
+
+
+async def _jejak(db: AsyncSession, baris: PermintaanPk, *, langkah: str,
+                 oleh, ringkas: str) -> None:
+    """Satu baris audit per langkah rantai — dan ini BUKAN soal audit.
+
+    Yang memberi tahu layar orang sebelah bahwa ada sesuatu yang baru adalah
+    `/api/keadaan`: satu penanda pendek, ditanya tiap sepuluh detik atau
+    didorong lewat SSE, dan bila angkanya bergerak muncul pil "… perubahan baru
+    — ketuk untuk muat". Penanda itu `max(activity_logs.id)`.
+
+    Maka langkah yang tak menulis satu baris audit pun TAK TERLIHAT oleh
+    mekanisme itu. Bukan telat — tak pernah datang: layarnya menunggu penanda
+    yang tak pernah bergerak, sampai orangnya kebetulan berpindah halaman.
+
+    Sampai 28 September 2026 seluruh rantai ini begitu. Empat langkah, tiga
+    orang, dua gudang — dan tak satu pun dari mereka diberi tahu:
+
+      · Gudang 2 menekan "Minta lot ini" → layar Admin diam;
+      · Admin menyetujui → layar Gudang 1 diam, padahal Gudang 1 yang memuat;
+      · Admin menolak → operator yang menunggu diam-diam ditinggalkan.
+
+    Rantai yang dibangun supaya koordinasinya BERHENTI lewat WhatsApp berakhir
+    menuntut WhatsApp untuk memberi tahu bahwa ada yang harus dilihat. Dan ia
+    tak terlihat saat diuji: yang mengujinya membuka layarnya sendiri, dan
+    membuka layar memuatnya ulang.
+
+    ⚠ AKIBAT SAMPINGAN yang disengaja: pratinjau undo menampilkan tindakan
+    TERAKHIR apa pun tabelnya, jadi sesudah satu langkah rantai ini tombol undo
+    akan berbunyi "permintaan lot PK — belum bisa dibatalkan" alih-alih
+    menawarkan pekerjaan sebelumnya. Itu jujur (langkah rantai memang tak
+    dibatalkan lewat undo, melainkan lewat Tolak) dan sudah jadi perilaku
+    tabel-tabel lain yang begitu — `jeda_proses`, `setelan_pabrik`. Labelnya
+    sudah ada di `undo._TABLE_LABEL`, ditulis untuk saat ini.
+
+    `oleh` boleh None: pengguguran otomatis tak punya orang, dan mengarang
+    salah satu peminta sebagai pelakunya lebih buruk daripada kolom kosong.
+    """
+    from app.services.activity_log import log_activity
+
+    await log_activity(
+        db, table_name="permintaan_pk", record_id=baris.id, action="UPDATE",
+        # Gudang ASAL barangnya, sama dengan pemindahan PK yang ia lahirkan
+        # (`GUDANG_TABEL["internal_transfers"]`): lingkup pembatalan & saringan
+        # audit per gudang harus menempatkan rantai ini di satu tempat, bukan
+        # berpindah gudang tiap langkah mengikuti siapa yang menekan.
+        gudang=G1,
+        aksi=f"permintaan_pk_{langkah}",
+        changed_by=getattr(oleh, "id", None),
+        new_value=ringkas[:200],
+    )
 
 
 async def _kode_lot(db: AsyncSession, baris: PermintaanPk) -> str:
@@ -195,6 +248,8 @@ async def minta(db: AsyncSession, *, user, kode_proses: str | None,
                  pesan=f"🟡 Gudang 2 meminta {_kg(kg)} kg dari lot {kode} — "
                        "menunggu keputusan Admin (setujui, tetapkan tujuan & "
                        "bobotnya, atau tolak).")
+    await _jejak(db, baris, langkah="minta", oleh=user,
+                 ringkas=f"Gudang 2 meminta {_kg(kg)} kg lot {kode}")
     await db.commit()
     return baris
 
@@ -333,6 +388,9 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
                        "(kartunya di Antrian tunggu); Gudang 2 menunggu "
                        "barangnya.",
                  prioritas="hijau")
+    await _jejak(db, baris, langkah="setujui", oleh=user,
+                 ringkas=f"Disetujui {_kg(kg)} kg lot "
+                         f"{await _kode_lot(db, baris)}")
     await db.commit()
     return baris
 
@@ -433,6 +491,8 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
                  pesan=f"🟡 Kiriman lot {kode_proses} {_kg(kg)} kg sudah dimuat "
                        f"Gudang 1 ke {lokasi} — tinggal ditutup Admin "
                        "(betulkan bobotnya kalau timbangan berbeda).")
+    await _jejak(db, baris, langkah="kirim", oleh=user,
+                 ringkas=f"Dikirim {_kg(kg)} kg lot {kode_proses} ke {lokasi}")
     await db.commit()
     return baris
 
@@ -504,6 +564,17 @@ async def tutup_admin(db: AsyncSession, *, user, permintaan_id: int,
     baris.berat_final_kg = final
     baris.ditutup_oleh, baris.waktu_tutup = user.id, now_local()
     baris.sebab = "Ditutup Admin."
+    # Langkah keempat TIDAK berkabar — sengaja, dan tetap berjejak. Tak berkabar
+    # sebab tak ada yang harus mengerjakan apa pun sesudahnya: barangnya sudah
+    # pindah di langkah 3, dan penutupan adalah titik. Tetap berjejak sebab
+    # kartunya LENYAP dari layar Admin — dan layar yang masih menagih pekerjaan
+    # yang baru saja diselesaikan orang itu sendiri adalah cara tercepat membuat
+    # orang berhenti mempercayainya. Koreksi bobot memang menulis jejaknya
+    # sendiri lewat pembatalan transfer, tetapi penutupan TANPA koreksi — yang
+    # paling sering terjadi — tidak menulis apa pun.
+    await _jejak(db, baris, langkah="tutup", oleh=user,
+                 ringkas=f"Ditutup {_kg(final)} kg"
+                         + (" (bobot dibetulkan)" if catatan else ""))
     await db.commit()
     await db.refresh(baris)
     return baris, catatan
@@ -533,6 +604,9 @@ async def tolak(db: AsyncSession, *, user, permintaan_id: int, sebab: str) -> Pe
                  pesan=f"🔴 Gudang 2: permintaan lot {await _kode_lot(db, baris)} "
                        f"DITOLAK Admin — {baris.sebab}",
                  prioritas="merah")
+    await _jejak(db, baris, langkah="tolak", oleh=user,
+                 ringkas=f"Ditolak lot {await _kode_lot(db, baris)} — "
+                         f"{baris.sebab}")
     await db.commit()
     return baris
 
@@ -592,6 +666,11 @@ async def gugurkan_yang_habis(db: AsyncSession) -> int:
             await _kabar(db, baris, untuk="admin",
                          pesan=f"🟡 Permintaan lot {kode} dari Gudang 2 gugur "
                                f"sendiri — {baris.sebab}")
+            # SATU baris audit walau kabarnya dua: yang terjadi satu peristiwa,
+            # dan dua baris audit atas satu kejadian membuat siapa pun yang
+            # menghitung di layar audit menghitungnya dua kali.
+            await _jejak(db, baris, langkah="gugur", oleh=None,
+                         ringkas=f"Gugur sendiri lot {kode} — {baris.sebab}")
         await db.commit()
     return n
 

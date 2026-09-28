@@ -66,8 +66,8 @@ async def pabrik(pg):
         db.add(MillingProgressLog(milling_process_id=p.id, berat_kumulatif_kg=6_500,
                                   waktu_update=now_local(), input_by=op1.id))
         await db.commit()
-        return {"lot": p.kode_proses, "lot_id": p.id, "op2": op2.id,
-                "op2b": op2b.id, "adm": adm.id}
+        return {"lot": p.kode_proses, "lot_id": p.id, "op1": op1.id,
+                "op2": op2.id, "op2b": op2b.id, "adm": adm.id}
 
 
 async def _minta(pg, uid, kode="LOT-P2-01"):
@@ -235,3 +235,85 @@ async def test_lot_yang_sudah_habis_tak_bisa_diminta(pg, pabrik):
     with pytest.raises(PermintaanError) as e:
         await _minta(pg, pabrik["op2"])
     assert "habis" in str(e.value)
+
+
+async def _penanda_sekarang():
+    """Penanda yang sama yang ditanya ponsel tiap sepuluh detik."""
+    from app.web.api import _penanda
+    return (await _penanda())["n"]
+
+
+async def test_tiap_langkah_rantai_menggerakkan_penanda_penyegaran(pg, pabrik):
+    """Rantai empat langkah ini melintasi TIGA ORANG di dua gudang — dan tak
+    satu pun dari mereka duduk menatap layarnya menunggu.
+
+    Yang memberi tahu layar bahwa ada sesuatu yang baru adalah `/api/keadaan`:
+    satu penanda pendek, ditanya tiap sepuluh detik (atau didorong lewat SSE),
+    dan bila angkanya bergerak muncul pil "… perubahan baru — ketuk untuk
+    muat". Layarnya TIDAK ditukar sendiri — orangnya yang mengetuk, sebab
+    menukar isi di bawah borang yang sedang diisi berarti membuang ketikannya.
+
+    Penanda itu `max(activity_logs.id)`. Maka aksi yang tak menulis satu baris
+    audit pun TAK TERLIHAT oleh mekanisme ini — bukan telat, tetapi tak pernah
+    datang. Dan itulah yang terjadi sampai 28 September 2026: dari lima aksi
+    rantai permintaan, tiga tak mencatat apa pun. Akibatnya persis melawan
+    maksud rantainya:
+
+      · Gudang 2 menekan "Minta lot ini" → layar Admin tak pernah menyebutnya;
+      · Admin menyetujui → layar Gudang 1 tak pernah menyebutnya, padahal
+        Gudang 1-lah yang harus memuat;
+      · Admin menolak → operator yang menunggu tak diberi tahu.
+
+    Rantai yang dibangun supaya koordinasinya berhenti lewat WhatsApp berakhir
+    menuntut WhatsApp untuk memberi tahu bahwa ada yang harus dilihat.
+
+    Ujinya menanyai PENANDANYA, bukan keberadaan baris audit: yang harus benar
+    adalah "layar orang sebelah tahu", dan itu yang akan tetap benar bila suatu
+    hari penandanya dihitung dari tabel lain.
+    """
+    from app.models import User
+    from app.services.permintaan_pk import kirim, setujui, tutup_admin
+
+    p0 = await _penanda_sekarang()
+
+    b = await _minta(pg, pabrik["op2"])
+    p1 = await _penanda_sekarang()
+    assert p1 != p0, "permintaan lahir tanpa menggerakkan penanda — Admin tak diberi tahu"
+
+    async with pg() as db:
+        await setujui(db, user=await db.get(User, pabrik["adm"]),
+                      permintaan_id=b.id, tujuan="A", berat=1_000)
+    p2 = await _penanda_sekarang()
+    assert p2 != p1, "persetujuan tak menggerakkan penanda — Gudang 1 tak tahu harus memuat"
+
+    async with pg() as db:
+        await kirim(db, user=await db.get(User, pabrik["op1"]),
+                    permintaan_id=b.id, berat=1_000)
+    p3 = await _penanda_sekarang()
+    assert p3 != p2, "pengiriman tak menggerakkan penanda — Admin tak tahu harus menutup"
+
+    async with pg() as db:
+        await tutup_admin(db, user=await db.get(User, pabrik["adm"]),
+                          permintaan_id=b.id, berat_final=1_000)
+    p4 = await _penanda_sekarang()
+    assert p4 != p3, "penutupan tak menggerakkan penanda — kartu tetap berdiri di layar"
+
+
+async def test_penolakan_menggerakkan_penanda_penyegaran(pg, pabrik):
+    """Ditulis terpisah sebab ia CABANG yang mati, dan yang mati paling mudah
+    terlupa: penolakan tak memanggil satu pun layanan pemindahan, jadi ia tak
+    ikut menumpang pencatatan milik orang lain.
+
+    Sebabnya wajib supaya operator tahu kenapa — dan sebab yang tertulis rapi
+    di basis data tetapi tak pernah sampai ke layarnya sama saja dengan diam.
+    """
+    from app.models import User
+    from app.services.permintaan_pk import tolak
+
+    b = await _minta(pg, pabrik["op2"])
+    p0 = await _penanda_sekarang()
+    async with pg() as db:
+        await tolak(db, user=await db.get(User, pabrik["adm"]),
+                    permintaan_id=b.id, sebab="Silo A penuh")
+    assert await _penanda_sekarang() != p0, \
+        "penolakan tak menggerakkan penanda — operator menunggu kabar yang tak datang"
