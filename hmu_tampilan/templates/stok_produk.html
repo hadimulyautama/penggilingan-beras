@@ -63,7 +63,7 @@
        disorot: ia yang selama ini tak ada di angka stok mana pun, dan ia yang
        menjadi sebab halaman ini lahir. #}
     <dl class="fakta">
-      <div><dt>Hasil sosoh</dt><dd>{{ kg(k.hasil_kg) }} kg</dd></div>
+      <div><dt>Hasil sosoh · total</dt><dd>{{ kg(k.hasil_kg) }} kg</dd></div>
       <div><dt>Keluar</dt><dd>{{ kg(k.keluar_kg) }} kg</dd></div>
       <div><dt>{{ "Tercatat" if k.curah_saja else "Dikemas" }}</dt>
            <dd>{{ kg(k.dikemas_kg) }} kg</dd></div>
@@ -73,7 +73,19 @@
   </summary>
 
     <div class="anak">
-      <div class="anak__kepala">Hasil penyosohan · {{ kg(k.hasil_kg) }} kg</div>
+      {# ── PERKIRAAN, bukan catatan — dan kepalanya wajib mengatakannya ──
+         Daftar ini menyusut bersama barangnya (FIFO): yang keluar lebih dulu
+         dianggap yang disosoh lebih dulu, jadi yang tersisa datang dari
+         penyosohan paling baru. Jumlahnya SAMA dengan kepala kartu.
+
+         Tetapi `outgoing_items` tak punya taut ke penyosohan maupun ke baris
+         stok yang dipakai — begitu karung naik ke truk, hubungannya dengan
+         penyosohan asalnya putus. Jadi ini anggapan yang masuk akal, bukan
+         penelusuran, dan yang menangani keluhan pembeli harus tahu bedanya:
+         kalau ia menyangka ini catatan, ia akan menyalahkan penyosohan yang
+         salah — dan di beras itu berujung ke pemasok dan ke uang. #}
+      <div class="anak__kepala">Perkiraan asal stok (FIFO) ·
+        {{ kg(k.sisa_kg) }} kg</div>
       {% for r in k.hasil %}
         <div class="anak__baris">
           <span class="anak__nama">{{ r.kode }}</span>
@@ -83,6 +95,12 @@
             {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
         </div>
       {% endfor %}
+      {% if k.hasil_lagi %}
+        <div class="anak__baris">
+          <span class="anak__nama">· {{ k.hasil_lagi }} penyosohan lainnya</span>
+          <span class="anak__kg">{{ kg(k.hasil_lagi_kg) }} kg</span>
+        </div>
+      {% endif %}
       {% if not k.hasil %}
         <div class="anak__baris">
           <span class="anak__nama">—</span>
@@ -102,6 +120,15 @@
               {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
           </div>
         {% endfor %}
+        {# Riwayat memang bertambah selamanya, jadi FIFO tak menolong daftar
+           ini — obatnya batas. Angka di KEPALA tetap seluruhnya: memotong
+           daftar tak boleh memotong persamaannya. #}
+        {% if k.keluar_lagi %}
+          <div class="anak__baris">
+            <span class="anak__nama">· {{ k.keluar_lagi }} pengiriman lainnya</span>
+            <span class="anak__kg">{{ kg(k.keluar_lagi_kg) }} kg</span>
+          </div>
+        {% endif %}
       {% endif %}
 
       {# Sisa terbelah DUA keadaan yang sangat berbeda, dan belahan "belum

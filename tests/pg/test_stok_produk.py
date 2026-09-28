@@ -535,6 +535,16 @@ async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
         assert kata in h, f"suku '{kata}' hilang dari halaman"
     # Rincian per penyosohan ikut, lengkap dengan kodenya.
     assert "POL-UJI-01" in h
+    # ── Dan kepalanya menyebut bahwa itu PERKIRAAN ──
+    #
+    # Daftar ini dipakai orang yang menangani keluhan pembeli untuk mencari
+    # batch-nya. `outgoing_items` tak punya taut ke penyosohan maupun ke baris
+    # stok yang dipakai, jadi begitu karung naik ke truk hubungannya putus —
+    # FIFO di sini anggapan yang masuk akal, bukan penelusuran. Yang
+    # menyangkanya catatan akan menyalahkan penyosohan yang salah, dan di beras
+    # itu berujung ke pemasok dan ke uang.
+    assert "Perkiraan asal stok (FIFO)" in h, \
+        "daftar perkiraan dipajang seolah catatan pasti"
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -748,3 +758,176 @@ async def test_bekatul_curah_tak_ditawarkan_sebagai_barang_berkarung(pg, sosoh):
     async with pg() as db:
         daftar = await inv.stok_barang_jadi(user=await db.get(User, sosoh["user"]))
     assert not [d for d in daftar if "ekatul" in d["label"]], daftar
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# DAFTAR YANG MENYUSUT BERSAMA BARANGNYA — temuan QA 28 September 2026
+#
+# Kepala kartu sudah benar (sisa 3.000 kg) tetapi daftar "Hasil penyosohan"
+# tetap 8 baris berjumlah 24.000 kg: satu kartu memuat dua angka yang
+# bertentangan, dan yang besar dicetak sebagai daftar rinci yang terlihat
+# berwibawa. Pada 500 penyosohan daftarnya 508 baris, halamannya 119 KB dan
+# 1,77 detik — dan itu baru SATU dari sembilan jenis.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+async def _jual(pg, sosoh, kg_per_nota, *, n=1):
+    """Kirim barang jadi `n` kali, tiap kali `kg_per_nota` kg (karung 25 kg)."""
+    from app.models import User
+    from app.penggilingan.inventory.outgoing import kirim_finished_goods
+
+    for i in range(n):
+        async with pg() as db:
+            u = await db.get(User, sosoh["user"])
+            await kirim_finished_goods(
+                db, user=u, kategori="beras_putih", grade="medium",
+                material_kode="biasa", ukuran=25,
+                jumlah_karung=int(kg_per_nota // 25),
+                nama_pembeli=f"Toko {i + 1}")
+
+
+async def test_fifo_daftar_menyusut_dan_berjumlah_sama_dengan_kepalanya(pg, sosoh):
+    """Skenario QA persis: 8 penyosohan @ 3 ton, dikemas semua, dijual 21 ton.
+
+    Sisanya 3 ton, dan menurut FIFO ia seluruhnya dari penyosohan TERAKHIR —
+    jadi daftarnya satu baris, bukan delapan.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.stok import stok_produk
+
+    # POL-UJI-01 sudah ada (9.000 kg medium) — dipakai ulang jadi 3.000 kg
+    # supaya angkanya sama dengan laporan QA.
+    from sqlalchemy import update
+
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+
+    async with pg() as db:
+        await db.execute(update(PolishingOutputLog).values(berat_kg=3_000))
+        await db.commit()
+    for i in range(2, 9):
+        await _sosoh_lagi(pg, sosoh, f"POL-UJI-{i:02d}", "medium", 3_000)
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert k.hasil_kg == 24_000 and len(k.hasil) == 8
+
+    # Dikemas seluruhnya, lalu dijual 21 ton lewat 7 nota.
+    for i in range(1, 9):
+        async with pg() as db:
+            u = await db.get(User, sosoh["user"])
+            await catat_packing(db, user=u, kode_pol=f"POL-UJI-{i:02d}",
+                                kategori="beras_putih", grade="medium",
+                                material_kode="biasa", ukuran=25,
+                                jumlah_karung=120)          # 3.000 kg
+    await _jual(pg, sosoh, 3_000, n=7)
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+
+    # Kepalanya TIDAK berubah — QA menegaskan angka kepala sudah benar.
+    assert (k.hasil_kg, k.keluar_kg, k.sisa_kg) == (24_000, 21_000, 3_000)
+    # Daftarnya yang menyusut, dan ia berjumlah SAMA dengan kepalanya.
+    assert [r.kode for r in k.hasil] == ["POL-UJI-08"], [r.kode for r in k.hasil]
+    assert sum(r.kg for r in k.hasil) == k.sisa_kg
+    assert k.hasil_lagi == 0
+
+
+async def test_fifo_menampilkan_sisa_baris_yang_termakan_sebagian(pg, sosoh):
+    """Yang termakan separuh ditampilkan SISANYA, bukan angka aslinya — kalau
+    tidak, jumlah daftar melampaui kepala kartu dan kartunya kembali
+    bertentangan dengan dirinya sendiri."""
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.stok import stok_produk
+
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-20", "medium", 3_000)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        for kode, karung in (("POL-UJI-01", 360), ("POL-UJI-20", 120)):
+            await catat_packing(db, user=u, kode_pol=kode,
+                                kategori="beras_putih", grade="medium",
+                                material_kode="biasa", ukuran=25,
+                                jumlah_karung=karung)
+    await _jual(pg, sosoh, 10_000)            # makan POL-01 (9.000) + 1.000
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert k.sisa_kg == 2_000
+    assert [(r.kode, r.kg) for r in k.hasil] == [("POL-UJI-20", 2_000)]
+    assert sum(r.kg for r in k.hasil) == k.sisa_kg
+
+
+async def test_daftar_berbatas_dan_sisanya_diringkas(pg, sosoh):
+    """Tanpa batas, 500 penyosohan jadi 508 baris pada satu kartu. Sisanya
+    DIRINGKAS, bukan dilipat: melipat baris tetap menuntut seluruhnya dikirim
+    ke telepon, dan yang diukur QA adalah byte-nya."""
+    from app.services.stok import BATAS_RINCI_HASIL, stok_produk
+
+    # Fixture `sosoh` sudah menyumbang SATU penyosohan; dua di atas batas.
+    for i in range(2, 2 + BATAS_RINCI_HASIL + 2):
+        await _sosoh_lagi(pg, sosoh, f"POL-BNY-{i:02d}", "medium", 1_000)
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert len(k.hasil) == BATAS_RINCI_HASIL
+    assert k.hasil_lagi == 3, k.hasil_lagi
+    # Yang diringkas tetap terhitung: daftar + ringkasan = kepala kartu.
+    assert sum(r.kg for r in k.hasil) + k.hasil_lagi_kg == k.sisa_kg
+
+
+async def test_memotong_daftar_keluar_tak_memotong_persamaannya(pg, sosoh):
+    """"ANGKA `keluar_kg` DI KEPALA KARTU TETAP SELURUHNYA" — kalau suku keluar
+    ikut terpotong, persamaan hasil = keluar + dikemas + curah patah, dan
+    seluruh kartu ini berdiri di atas persamaan itu."""
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.stok import BATAS_RINCI_KELUAR, stok_produk
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=sosoh["kode"],
+                            kategori="beras_putih", grade="medium",
+                            material_kode="biasa", ukuran=25, jumlah_karung=360)
+    n = BATAS_RINCI_KELUAR + 3
+    await _jual(pg, sosoh, 500, n=n)          # n nota @ 500 kg
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "medium")
+    assert len(k.keluar) == BATAS_RINCI_KELUAR
+    assert k.keluar_lagi == 3
+    assert k.keluar_kg == 500 * n, "kepala kartu ikut terpotong"
+    assert sum(r.kg for r in k.keluar) + k.keluar_lagi_kg == k.keluar_kg
+    _persamaan(k)
+
+
+async def test_bentuk_borongan_sama_dengan_bentuk_tunggal(pg, sosoh):
+    """`output_sosoh_banyak` memakai aturan yang SAMA dengan `output_sosoh`.
+
+    Bentuk borongan yang menyusun aturannya sendiri (misalnya `MAX(id)`) akan
+    berselisih dengan bentuk tunggalnya pada baris yang waktunya diketik
+    mundur — dan yang salah adalah yang lebih jarang dibaca orang.
+    """
+    from app.database import now_local
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.services.stok import output_sosoh, output_sosoh_banyak
+    from sqlalchemy import select
+
+    # Baris kedua: id LEBIH BESAR tetapi waktunya LEBIH TUA.
+    from datetime import timedelta
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(
+            polishing_process_id=sosoh["proses_id"], jenis="medium",
+            berat_kg=111, waktu_update=now_local() - timedelta(days=1),
+            input_by=sosoh["user"]))
+        await db.commit()
+
+    async with pg() as db:
+        ids = list((await db.execute(select(PolishingProcess.id))).scalars().all())
+        borongan = await output_sosoh_banyak(db, ids)
+        for pid in ids:
+            assert await output_sosoh(db, pid) == borongan.get(pid, {}), pid
+        # Dan tanpa daftar id = seluruhnya.
+        assert await output_sosoh_banyak(db) == borongan

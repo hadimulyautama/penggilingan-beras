@@ -651,6 +651,43 @@ class BerasCurah:
         return self.selesai is None
 
 
+async def output_sosoh_banyak(db: AsyncSession, proc_ids=None
+                              ) -> dict[int, dict[str, float]]:
+    """Kumulatif terakhir per (proses, jenis) — SATU kueri untuk semuanya.
+
+    Lahir 28 September 2026 atas pengukuran QA: layar Stok Produk memanggil
+    `output_sosoh` sekali per proses penyosohan, jadi 500 penyosohan berarti
+    500 kueri, dan halamannya 1,77 detik. Di HP lewat 4G itu bukan lagi halaman
+    yang bisa dibuka.
+
+    Aturannya SAMA PERSIS dengan `output_sosoh` — baris terbaru per (proses,
+    jenis), diurutkan `waktu_update` lalu `id` — dan itu disengaja: bentuk
+    borongan yang memakai aturan sendiri (misalnya `MAX(id)`) akan berselisih
+    dengan bentuk tunggalnya pada baris yang waktunya diketik mundur. Dijaga
+    `test_bentuk_borongan_sama_dengan_bentuk_tunggal`.
+
+    `proc_ids=None` berarti SELURUH proses; itu yang dipakai layar Stok Produk,
+    yang memang menjumlah seluruh riwayat untuk kepala kartunya.
+    """
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+
+    q = (select(PolishingOutputLog.polishing_process_id,
+                PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
+         .order_by(PolishingOutputLog.polishing_process_id,
+                   PolishingOutputLog.jenis,
+                   PolishingOutputLog.waktu_update.desc(),
+                   PolishingOutputLog.id.desc()))
+    if proc_ids is not None:
+        ids = list(proc_ids)
+        if not ids:
+            return {}
+        q = q.where(PolishingOutputLog.polishing_process_id.in_(ids))
+    keluar: dict[int, dict[str, float]] = {}
+    for pid, jenis, kg in (await db.execute(q)).all():
+        keluar.setdefault(pid, {}).setdefault(jenis, float(kg))
+    return keluar
+
+
 async def output_sosoh(db: AsyncSession, proc_id: int) -> dict[str, float]:
     """Kumulatif terakhir per jenis untuk satu proses penyosohan.
 
@@ -659,20 +696,11 @@ async def output_sosoh(db: AsyncSession, proc_id: int) -> dict[str, float]:
     September 2026 polanya ditulis dua kali — sekali di `polishing`, sekali di
     `report` — dan dua pembaca yang menyusun sendiri aturan "ambil baris
     terbaru per jenis" akan berselisih pada perubahan berikutnya.
-    """
-    from app.penggilingan.gudang2.models import PolishingOutputLog
 
-    baris = (await db.execute(
-        select(PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
-        .where(PolishingOutputLog.polishing_process_id == proc_id)
-        .order_by(PolishingOutputLog.jenis,
-                  PolishingOutputLog.waktu_update.desc(),
-                  PolishingOutputLog.id.desc())
-    )).all()
-    keluar: dict[str, float] = {}
-    for jenis, kg in baris:
-        keluar.setdefault(jenis, float(kg))     # pertama per jenis = terbaru
-    return keluar
+    Yang membaca BANYAK proses sekaligus memakai `output_sosoh_banyak`; ini
+    tinggal bungkusnya, supaya aturannya tetap satu.
+    """
+    return (await output_sosoh_banyak(db, [proc_id])).get(proc_id, {})
 
 
 async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
@@ -844,6 +872,13 @@ class KartuProduk:
     keluar: list[RincianProduk]
     #: `dikemas_kg + curah_kg`, dan sama dengan `hasil_kg - keluar_kg`.
     sisa_kg: float
+    #: Berapa baris rincian yang TIDAK digambar, dan berapa kg jumlahnya.
+    #: Dipisah dari daftarnya supaya kartunya tetap menyebut seluruhnya tanpa
+    #: mengirim seluruhnya — lihat `BATAS_RINCI_HASIL`.
+    hasil_lagi: int = 0
+    hasil_lagi_kg: float = 0.0
+    keluar_lagi: int = 0
+    keluar_lagi_kg: float = 0.0
     #: Kategori yang tak pernah dikemas (bekatul). Kartunya tanpa kata "kemas".
     curah_saja: bool = False
 
@@ -863,6 +898,69 @@ class KartuProduk:
         """Minus yang masih di dalam ambang nominal-vs-timbang: bukan alarm,
         dan bukan pula stok. Disebut apa adanya supaya tak dikira kebocoran."""
         return -toleransi_nominal(self.hasil_kg) <= self.curah_kg < -0.5
+
+
+#: Berapa baris rincian yang digambar sebelum sisanya diringkas jadi satu
+#: kalimat. Diukur QA 28 September 2026: tanpa batas, 500 penyosohan menjadi
+#: 508 baris pada SATU kartu, halamannya 119 KB dan 1,77 detik — di HP lewat
+#: 4G itu bukan lagi halaman yang bisa dibuka. Dan itu baru satu dari sembilan
+#: jenis.
+#:
+#: Sisanya DIRINGKAS, bukan disembunyikan di balik "lihat selengkapnya":
+#: melipat baris tetap menuntut seluruhnya dikirim ke telepon, dan yang diukur
+#: QA adalah byte-nya. Yang benar-benar perlu melihat seluruh riwayat membuka
+#: Laporan, yang memang untuk itu.
+BATAS_RINCI_HASIL, BATAS_RINCI_KELUAR = 10, 6
+
+
+def _fifo_sisa(baris: list[RincianProduk], keluar_kg: float) -> list[RincianProduk]:
+    """Rincian asal stok yang MASIH ada, menurut anggapan FIFO.
+
+    Yang keluar lebih dulu dianggap yang disosoh lebih dulu, jadi `keluar_kg`
+    "dimakan" dari baris TERTUA. Yang habis dibuang; yang termakan sebagian
+    ditampilkan SISANYA, bukan angka aslinya.
+
+    DITURUNKAN, tidak disimpan — sama seperti `silo_ids_proses` menurunkan
+    jawabannya: himpunan yang disimpan dua kali adalah himpunan yang kelak
+    berselisih.
+
+    ⚠ INI ANGGAPAN, BUKAN PENELUSURAN, dan pemakainya wajib diberi tahu.
+    `finished_goods_stock` memang tahu karungnya dari penyosohan mana
+    (`source_type='polishing'` + `source_id`), tetapi `outgoing_items` TIDAK
+    punya taut ke penyosohan maupun ke baris stok yang dipakai — jadi begitu
+    karung naik ke truk, hubungannya dengan penyosohan asalnya putus. Aplikasi
+    tidak tahu, dan tidak bisa tahu, karung dari POL mana yang berangkat.
+
+    Karena itu kepalanya berbunyi "Perkiraan asal stok (FIFO)", bukan "Hasil
+    penyosohan" polos. Yang menangani keluhan pembeli akan memakai daftar ini
+    untuk mencari batch-nya; kalau ia menyangka ini catatan padahal perkiraan,
+    ia akan menyalahkan penyosohan yang salah — dan di beras, keluhan mutu
+    berujung ke pemasok dan ke uang.
+
+    Penelusuran sungguhan kurang SATU kolom: `outgoing_items.
+    finished_goods_stock_id`. Belum dikerjakan (pemilik belum meminta), dan
+    tidak ada di sini yang membuatnya sulit ditambahkan kelak — fungsi ini
+    menerima daftar dan mengembalikan daftar.
+    """
+    sisa_makan = max(float(keluar_kg), 0.0)
+    keluar: list[RincianProduk] = []
+    # Dari yang TERTUA — `waktu` bisa kosong pada baris lama, dan yang tak
+    # bertanggal diperlakukan paling tua: ia memang yang paling dulu dicatat.
+    for r in sorted(baris, key=lambda x: (x.waktu is not None, x.waktu or 0)):
+        if sisa_makan <= 0.001:
+            keluar.append(r)
+            continue
+        if r.kg <= sisa_makan + 0.001:
+            sisa_makan -= r.kg              # habis terjual, hilang dari daftar
+            continue
+        keluar.append(RincianProduk(
+            kode=r.kode, kg=r.kg - sisa_makan, waktu=r.waktu,
+            ket=r.ket, berjalan=r.berjalan))
+        sisa_makan = 0.0
+    # Yang terbaru lebih dulu: itu yang ada di gudang sekarang, dan yang
+    # dicari orang saat menelusuri keluhan adalah yang baru dikirimkannya.
+    keluar.reverse()
+    return keluar
 
 
 async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
@@ -892,13 +990,20 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         ByproductStock, FinishedGoodsStock, OutgoingItem, OutgoingRecord,
         ProductSku, RiceQualityStandard)
 
+    # SATU kueri untuk seluruh proses, dan SATU lagi untuk seluruh catatan
+    # hasilnya — bukan dua kueri per proses. Gelungnya sendiri yang dulu
+    # mengeluarkan 500 kueri untuk menghasilkan sembilan kartu (ukuran QA 28
+    # September 2026: 1,77 detik pada 500 penyosohan).
+    proses = list((await db.execute(
+        select(PolishingProcess).order_by(PolishingProcess.id.desc())
+    )).scalars().all())
+    catatan = await output_sosoh_banyak(db, [p.id for p in proses])
+
     hasil: dict[str, list[RincianProduk]] = {}
     berjalan: dict[str, float] = {}
-    for proc in (await db.execute(
-        select(PolishingProcess).order_by(PolishingProcess.id.desc())
-    )).scalars().all():
+    for proc in proses:
         jalan = proc.status != "selesai"
-        for jenis, kg in (await output_sosoh(db, proc.id)).items():
+        for jenis, kg in catatan.get(proc.id, {}).items():
             hasil.setdefault(jenis, []).append(RincianProduk(
                 kode=proc.kode_proses, kg=float(kg),
                 waktu=(proc.waktu_selesai if not jalan else proc.waktu_mulai),
@@ -990,11 +1095,32 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         sisa = punya_rumah + curah
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue
+        # ── FIFO: daftarnya menyusut bersama barangnya ──
+        #
+        # Temuan QA 28 September 2026: kepala kartu sudah benar (sisa 3.000 kg)
+        # tetapi daftar "Hasil penyosohan" tetap memuat 8 baris berjumlah 24.000
+        # kg — satu kartu memuat dua angka yang bertentangan, dan yang besar
+        # dicetak sebagai daftar rinci yang terlihat berwibawa.
+        #
+        # Usul pemilik menjawab KEDUANYA sekaligus, dan itu sebabnya ia tepat:
+        # daftar yang menyusut sendiri tak pernah jadi panjang. Beras yang
+        # keluar lebih dulu adalah beras yang disosoh lebih dulu, jadi yang
+        # MASIH di gudang datang dari penyosohan yang PALING BARU.
+        rinci = _fifo_sisa(baris_hasil, k)
+
         kartu.append(KartuProduk(
-            jenis=jenis, nama=nama_produk(jenis), hasil_kg=h, hasil=baris_hasil,
+            jenis=jenis, nama=nama_produk(jenis), hasil_kg=h,
+            hasil=rinci[:BATAS_RINCI_HASIL],
+            hasil_lagi=max(len(rinci) - BATAS_RINCI_HASIL, 0),
+            hasil_lagi_kg=sum(r.kg for r in rinci[BATAS_RINCI_HASIL:]),
+            keluar_lagi=max(len(baris_keluar) - BATAS_RINCI_KELUAR, 0),
+            keluar_lagi_kg=sum(r.kg for r in baris_keluar[BATAS_RINCI_KELUAR:]),
             belum_final_kg=berjalan.get(jenis, 0.0),
             dikemas_kg=punya_rumah, curah_kg=curah,
-            keluar_kg=k, keluar=baris_keluar, sisa_kg=sisa,
+            # `keluar_kg` TETAP SELURUHNYA walau daftarnya dipotong: memotong
+            # daftar tak boleh memotong persamaannya, dan seluruh kartu ini
+            # berdiri di atas hasil = keluar + dikemas + curah.
+            keluar_kg=k, keluar=baris_keluar[:BATAS_RINCI_KELUAR], sisa_kg=sisa,
             curah_saja=curah_saja))
     return kartu
 
