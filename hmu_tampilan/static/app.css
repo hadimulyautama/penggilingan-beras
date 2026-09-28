@@ -885,6 +885,20 @@ body.putus-jaringan .bar { margin-top: 34px; }
   --fase-dryer:  #e07a4f;
   --fase-silo:   #4fb3d9;
   --fase-giling: #56b880;
+  /* Hasil samping — menir, broken, bekatul, reject. BUKAN fase, melainkan
+     KELAS BARANG; ia menumpang slot `--fase` sebab yang digambar sama, yaitu
+     garis kiri kartu.
+
+     Permintaan pemilik 28 September 2026, sesudah layar Stok Produk dipecah
+     dua blok. Ungu redup, dan tiga warna lain ditolak dengan sebabnya:
+     cokelat sudah berarti TUMPUKAN, jingga berarti DRYER, dan amber sudah
+     dipakai `.nota--hati` — warna yang sudah punya arti di layar lain akan
+     terbaca sebagai arti itu, bukan sebagai "ini barang lain".
+
+     Warnanya PENGUAT, bukan pembeda satu-satunya: yang memisahkan kedua
+     kelompok adalah JUDUL BLOKNYA. Yang tak bisa membedakan hijau dari ungu
+     tetap membaca "Hasil samping" di atas kartunya. */
+  --fase-samping: #9b8bd0;
 }
 
 .benda {
@@ -973,6 +987,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
    Kuning tak punya kelas sendiri — ia bawaan `.padat`, dan mayoritas kabar
    memang kuning. Kelas untuk keadaan yang paling sering terjadi hanya menambah
    satu hal yang bisa lupa dipasang. */
+.padat--samping { --fase: var(--fase-samping); }
 .padat--bahaya { --fase: var(--bahaya); }
 .padat--aman   { --fase: var(--aman); }
 .padat__atas {

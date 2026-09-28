@@ -616,6 +616,26 @@ NAMA_KATEGORI = {"beras_b": "Beras B (olah ulang)", "menir": "Menir",
 BERAS_JENIS = ("premium", "medsuper", "medium", "sayur", "beras_b")
 
 
+def adalah_beras(jenis: str | None) -> bool:
+    """Beras, atau hasil samping? SATU tempat yang menjawab.
+
+    Permintaan pemilik 28 September 2026: layar Stok Produk dipisah dua blok —
+    beras sendiri, hasil samping sendiri. Alasannya terbaca dari barangnya:
+    beras dijual per karung bermerk dan mutunya dipersoalkan pembeli; menir,
+    broken, bekatul, reject dijual curah, harganya lain, dan pembelinya lain.
+    Satu daftar berurutan membuat keduanya dibaca dengan ukuran yang sama.
+
+    BUKAN `jenis in BERAS_JENIS` langsung, dan itu bukan kerapian: `beras_putih`
+    — beras yang mutunya BELUM ditetapkan — tak ada di daftar itu, sebab daftar
+    itu dipakai mencari standar mutu dan beras tanpa mutu tak punya standar.
+    Memakainya untuk memilah blok akan menjatuhkan beras tanpa mutu ke blok
+    hasil samping: berton-ton beras putih terbaca sebagai bekatul, di layar yang
+    lahir justru karena ada beras yang tak punya rumah.
+    """
+    j = (jenis or "").strip().lower()
+    return j in BERAS_JENIS or j == "beras_putih"
+
+
 @dataclass
 class BerasCurah:
     """Beras yang sudah keluar dari mesin sosoh tetapi BELUM dikemas.

@@ -41,18 +41,28 @@
   </div>
 {% else %}
 
+{# ── DUA BLOK, dan masing-masing berjumlah sendiri ──
+   Permintaan pemilik 28 September 2026: "tolong buat block khusus untuk beras
+   dan block khusus hasil samping."
+
+   Angka besar yang menjumlah beras dengan bekatul bukan jumlah apa pun —
+   keduanya kilogram, harganya berbeda berkali-kali, pembelinya berbeda orang.
+   Jadi yang hilang di sini adalah total gabungannya, dan itu disengaja.
+
+   Blok yang KOSONG tidak digambar: judul dengan nol di bawahnya membuat orang
+   mencari barang yang memang belum ada. #}
+{% macro blok(judul, daftar, sisa, curah, ket, warna) -%}
+{% if daftar %}
 <div class="jumlah">
-  <span class="lbl">Sisa di gudang</span>
-  <div class="jumlah__angka">{{ kg(total_sisa) }}<small>kg</small></div>
+  <span class="lbl">{{ judul }}</span>
+  <div class="jumlah__angka">{{ kg(sisa) }}<small>kg</small></div>
   <div class="jumlah__ket">
-    {{ kartu|length }} kategori{% if total_curah %} ·
-    {{ kg(total_curah) }} kg belum dipacking{% endif %}
+    {{ daftar|length }} kategori{% if curah %} · {{ kg(curah) }} kg {{ ket }}{% endif %}
   </div>
 </div>
-
-<div class="grup">
-{% for k in kartu %}
-  <details class="padat padat--giling">
+<div class="grup" style="margin-bottom:26px">
+{% for k in daftar %}
+  <details class="padat padat--{{ warna }}">
   <summary>
     <div class="padat__atas">
       <span class="padat__nama">{{ k.nama }}</span>
@@ -185,5 +195,15 @@
   </details>
 {% endfor %}
 </div>
+{% endif %}
+{%- endmacro %}
+
+{# Beras lebih dulu, selalu: ia barang yang dijual bermerk dan yang mutunya
+   dipersoalkan pembeli. Hasil samping penting, tetapi bukan yang dicari orang
+   saat membuka layar ini. #}
+{{ blok("Beras · sisa di gudang", beras, sisa_beras, curah_beras,
+        "belum dipacking", "giling") }}
+{{ blok("Hasil samping · sisa di gudang", samping, sisa_samping, curah_samping,
+        "belum tercatat", "samping") }}
 {% endif %}
 {% endblock %}

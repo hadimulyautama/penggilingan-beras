@@ -1052,3 +1052,190 @@ async def test_entri_tak_bisa_dicabut_sesudah_prosesnya_ditutup(pg, sosoh):
         with pytest.raises(undo.UndoError) as e:
             await undo.undo_last(db, actor=u, cakupan=c)
     assert "sudah ditutup" in str(e.value), e.value
+
+
+async def test_beras_dan_hasil_samping_berdiri_di_dua_blok(pg, sosoh):
+    """Permintaan pemilik 28 September 2026: "tolong buat block khusus untuk
+    beras dan block khusus hasil samping."
+
+    Alasannya terbaca dari barangnya. Beras dijual per karung bermerk dan
+    mutunya dipersoalkan pembeli; menir, broken, bekatul, reject dijual curah,
+    harganya berbeda berkali-kali, dan pembelinya orang lain. Satu daftar
+    berurutan membuat keduanya dibaca dengan ukuran yang sama — dan satu angka
+    besar yang menjumlah keduanya bukan jumlah apa pun.
+
+    Yang dijaga di sini HALAMANNYA, bukan `stok_produk()`: pemilahannya bisa
+    benar di layanan lalu hilang di templat, dan yang dilihat orang templatnya.
+    Isi kartunya digambar SATU makro yang dipakai kedua blok — sekali salah
+    lingkup, isi kartu blok kedua lenyap tanpa satu galat pun.
+    """
+    from app.database import now_local
+    from app.models import ProduksiAkun, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+    import httpx
+
+    from app.main import app
+
+    async with pg() as db:
+        # Satu hasil samping, supaya blok keduanya punya isi.
+        db.add(PolishingOutputLog(
+            polishing_process_id=sosoh["proses_id"], jenis="bekatul",
+            berat_kg=400, waktu_update=now_local(), input_by=sosoh["user"]))
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_dua_blok",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    assert r.status_code == 200, r.text[:400]
+    h = r.text
+    assert "Beras · sisa di gudang" in h, "blok beras tak ada"
+    assert "Hasil samping · sisa di gudang" in h, "blok hasil samping tak ada"
+    # Urutannya tetap: beras lebih dulu. Ia barang yang dicari orang saat
+    # membuka layar ini; hasil samping penting, tetapi bukan yang dicari.
+    assert h.index("Beras · sisa") < h.index("Hasil samping · sisa")
+    # Dan tiap blok memuat kartunya sendiri, dengan ISI — bukan judul kosong.
+    ekor = h[h.index("Hasil samping · sisa"):]
+    assert "Bekatul" in ekor, "kartu bekatul tak berada di blok hasil samping"
+    assert "Hasil sosoh" in ekor, "isi kartu blok kedua lenyap (lingkup makro)"
+    assert "Beras Medium" in h[:h.index("Hasil samping · sisa")], \
+        "kartu beras bocor ke blok hasil samping"
+
+
+async def test_beras_tanpa_mutu_tak_jatuh_ke_hasil_samping():
+    """`beras_putih` — beras yang mutunya BELUM ditetapkan — bukan hasil samping.
+
+    Ia tak ada di `BERAS_JENIS`, dan itu benar: daftar itu dipakai mencari
+    STANDAR MUTU, dan beras tanpa mutu tak punya standar. Memakai daftar itu
+    untuk memilah blok akan menjatuhkan berton-ton beras putih ke blok hasil
+    samping — di layar yang lahir justru karena ada beras yang tak punya rumah.
+
+    Pagar ini berdiri di luar Postgres sebab yang diuji aturan, bukan data.
+    """
+    from app.services.stok import BERAS_JENIS, adalah_beras
+
+    for j in BERAS_JENIS:
+        assert adalah_beras(j), j
+    assert adalah_beras("beras_putih"), (
+        "beras tanpa mutu terbaca sebagai hasil samping")
+    for j in ("menir", "broken", "bekatul", "reject"):
+        assert not adalah_beras(j), j
+    assert not adalah_beras(None) and not adalah_beras("")
+
+
+async def test_kartu_hasil_samping_berwarna_lain(pg, sosoh):
+    """Permintaan pemilik 28 September 2026, sesudah bloknya dipisah:
+    "bedakan warnanya."
+
+    Garis kiri kartu beras hijau (`--fase-giling`, warna hasil), hasil samping
+    ungu redup (`--fase-samping`). Warnanya PENGUAT, bukan pembeda satu-satunya
+    — yang memisahkan kedua kelompok tetap judul bloknya, dan yang tak bisa
+    membedakan hijau dari ungu tetap membaca "Hasil samping" di atas kartunya.
+
+    Dijaga karena isinya digambar SATU makro yang dipakai kedua blok: warna
+    yang lupa dioper membuat kedua blok kembali seragam tanpa satu galat pun,
+    dan tak seorang pun melihatnya sampai ada yang membuka layarnya.
+    """
+    from app.database import now_local
+    from app.models import ProduksiAkun
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+    import httpx
+
+    from app.main import app
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(
+            polishing_process_id=sosoh["proses_id"], jenis="bekatul",
+            berat_kg=400, waktu_update=now_local(), input_by=sosoh["user"]))
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_warna",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    h = r.text
+    kepala, ekor = h.split("Hasil samping · sisa", 1)
+    assert "padat--giling" in kepala, "kartu beras kehilangan warnanya"
+    assert "padat--samping" not in kepala, "warna hasil samping bocor ke blok beras"
+    assert "padat--samping" in ekor, "kartu hasil samping tak berbeda warna"
+    assert "padat--giling" not in ekor, "kartu hasil samping masih berwarna beras"
+
+    # Dan warnanya benar-benar ADA di lembar gaya — kelas tanpa aturan tak
+    # menggambar apa pun, dan kartunya diam-diam kembali ke warna bawaan.
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
+    assert "--fase-samping:" in css, "warnanya tak pernah ditetapkan"
+    assert ".padat--samping" in css, "kelasnya tak punya aturan"
+
+
+async def test_kartu_hasil_samping_berwarna_lain(pg, sosoh):
+    """Permintaan pemilik 28 September 2026, sesudah bloknya dipisah:
+    "bedakan warnanya."
+
+    Garis kiri kartu beras hijau (`--fase-giling`, warna hasil), hasil samping
+    ungu redup (`--fase-samping`). Warnanya PENGUAT, bukan pembeda satu-satunya
+    — yang memisahkan kedua kelompok tetap judul bloknya, dan yang tak bisa
+    membedakan hijau dari ungu tetap membaca "Hasil samping" di atas kartunya.
+
+    Dijaga karena isinya digambar SATU makro yang dipakai kedua blok: warna
+    yang lupa dioper membuat kedua blok kembali seragam tanpa satu galat pun,
+    dan tak seorang pun melihatnya sampai ada yang membuka layarnya.
+    """
+    import pathlib
+
+    from app.database import now_local
+    from app.models import ProduksiAkun
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+    import httpx
+
+    from app.main import app
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(
+            polishing_process_id=sosoh["proses_id"], jenis="bekatul",
+            berat_kg=400, waktu_update=now_local(), input_by=sosoh["user"]))
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_warna",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    h = r.text
+    kepala, ekor = h.split("Hasil samping · sisa", 1)
+    assert "padat--giling" in kepala, "kartu beras kehilangan warnanya"
+    assert "padat--samping" not in kepala, "warna hasil samping bocor ke blok beras"
+    assert "padat--samping" in ekor, "kartu hasil samping tak berbeda warna"
+    assert "padat--giling" not in ekor, "kartu hasil samping masih berwarna beras"
+
+    # Dan warnanya benar-benar ADA di lembar gaya — kelas tanpa aturan tak
+    # menggambar apa pun, dan kartunya diam-diam kembali ke warna bawaan.
+    akar = pathlib.Path(__file__).resolve().parents[2]
+    css = (akar / "hmu_tampilan/static/app.css").read_text()
+    assert "--fase-samping:" in css, "warnanya tak pernah ditetapkan"
+    assert ".padat--samping" in css, "kelasnya tak punya aturan"

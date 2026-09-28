@@ -18,7 +18,7 @@ sama-sama barang yang berdiri di lantai gudang.
 
 PEMBAGIANNYA:
     /stok         BAHAN  — gabah di silo Gudang 1, PK di Gudang 2
-    /stok-produk  HASIL  — beras (curah & dikemas) dan hasil samping
+    /stok-produk  HASIL  — DUA BLOK: beras, lalu hasil samping
 
 SATU KARTU PER KATEGORI, bukan per lot (keputusan pemilik 26 September 2026):
 "stok produk setiap kategori dijadikan 1 kartu saja dengan informasi inti total
@@ -65,9 +65,25 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     kemasan: dict[str, list[dict]] = {}
     for k in bj.produk + bj.samping:
         kemasan.setdefault(k["jenis"], []).append(k)
+    # ── DUA BLOK, bukan satu daftar (permintaan pemilik 28 September 2026) ──
+    #
+    # "tolong buat block khusus untuk beras dan block khusus hasil samping."
+    #
+    # Pemilahannya `stok.adalah_beras`, bukan dikerjakan templat: aturan "mana
+    # yang beras" sudah dibaca hitungan packing dan kartu barang jadi, dan
+    # aturan yang hidup kedua kali di Jinja akan berselisih dengan yang di
+    # Python tanpa satu uji pun bisa menangkapnya.
+    #
+    # Jumlahnya DIHITUNG PER BLOK, dan itu yang sebetulnya diminta. Satu angka
+    # besar yang menjumlah beras dengan bekatul bukan jumlah apa pun: keduanya
+    # kilogram, harganya berbeda berkali-kali, dan pembelinya berbeda orang.
+    beras = [k for k in kartu if svc.adalah_beras(k.jenis)]
+    samping = [k for k in kartu if not svc.adalah_beras(k.jenis)]
     return await render_laci(
         request, "stok_produk.html", layar="stok_produk",
-        kartu=kartu, kemasan=kemasan,
-        total_sisa=sum(k.sisa_kg for k in kartu if k.sisa_kg > 0),
-        total_curah=sum(k.curah_kg for k in kartu if k.curah_kg > 0),
+        kartu=kartu, kemasan=kemasan, beras=beras, samping=samping,
+        sisa_beras=sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
+        sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
+        curah_beras=sum(k.curah_kg for k in beras if k.curah_kg > 0),
+        curah_samping=sum(k.curah_kg for k in samping if k.curah_kg > 0),
     )
