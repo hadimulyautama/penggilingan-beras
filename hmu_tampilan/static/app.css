@@ -726,6 +726,19 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .laci__daftar {
   display: grid; gap: 3px;
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  /* `align-content: start` — baris memakai tinggi ISINYA, lalu sisanya
+     meluber dan digulirkan `overflow-y`. Tanpa ini, kotak grid yang tingginya
+     ditentukan induknya (di sini `flex: 1 1 auto`) boleh membagi tingginya ke
+     baris-barisnya, dan baris yang ditekan di bawah tinggi isinya melimpahkan
+     isinya ke baris berikutnya.
+
+     ⚠ JUJUR TENTANG APA YANG TERBUKTI: pemilik memfoto baris yang saling
+     menimpa pada VERSI 157 (28 September 2026), dan yang MENYEMBUHKANNYA
+     adalah keterangan dua baris yang dicabut pada permintaannya — bukan baris
+     ini. Saya tak berhasil menirukan tumpang-tindihnya di harness, dengan
+     maupun tanpa `align-content`. Jadi ia dipasang sebagai PENJAGA atas bahaya
+     yang nyata pada bentuk ini, bukan sebagai obat yang sudah dibuktikan. */
+  align-content: start;
   /* Ruang untuk ibu jari: baris terakhir tak boleh menempel pada tombol
      Keluar, sebab keduanya berukuran sentuh dan bersebelahan. */
   padding-bottom: 6px;
@@ -751,7 +764,6 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .pintu__ikon { font-size: 16px; text-align: center; color: var(--redup-2); }
 .pintu__isi { display: grid; gap: 1px; min-width: 0; }
 .pintu__nama { font-size: 15px; font-weight: 500; }
-.pintu__ket { font-size: 13px; color: var(--redup-2); }
 .pintu__jml {
   font-family: var(--mono); font-size: 13px;
   min-width: 20px; padding: 2px 8px; text-align: center;

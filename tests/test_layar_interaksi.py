@@ -798,3 +798,79 @@ def test_jumlah_pintu_laci_melewati_satu_layar():
     assert len(TAB) >= 10, (
         f"tinggal {len(TAB)} pintu — periksa apakah laci masih bisa melebihi "
         "satu layar; kalau tidak, pagar penggulirnya tak lagi menguji apa pun")
+
+
+def test_laci_menggambar_nama_pintu_saja():
+    """Permintaan pemilik 28 September 2026: "sidebar cukup nama halamannya
+    saja", "deskripsi tambahan tidak perlu" — dan, pada pesan yang sama,
+    "angka disampingnya tetap dipertahankan".
+
+    Dua tuntutan sekaligus, jadi dijaga dua-duanya: keterangan hilang, lencana
+    tinggal. Pagar yang cuma menagih yang pertama akan meluluskan laci yang
+    ikut kehilangan angkanya.
+    """
+    tpl = (AKAR / "hmu_tampilan/templates/base.html").read_text()
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
+
+    assert "pintu__nama" in tpl
+    assert "pintu__ket" not in tpl, "keterangan pintu masih digambar"
+    assert "pintu__ket" not in css, "aturan gaya keterangan tertinggal"
+    # Angkanya tetap — keempat lencananya, masing-masing pada pintunya.
+    for lencana in ("MENUNGGU", "BERJALAN", "KEPUTUSAN", "MUTU", "PRODUK", "KABAR"):
+        assert f"and {lencana} %}}" in tpl, f"lencana {lencana} hilang dari laci"
+
+
+def test_baris_laci_tak_saling_menimpa_saat_isinya_panjang():
+    """Baris laci memakai tinggi ISINYA, bukan bagian dari tinggi kotaknya.
+
+    Kotak grid yang tingginya ditentukan induknya (di sini `flex: 1 1 auto`)
+    boleh membagi tingginya ke baris-barisnya; baris yang tertekan di bawah
+    tinggi isinya melimpahkan isinya ke baris berikutnya. `align-content:
+    start` menutup kemungkinan itu.
+
+    ⚠ JUJUR TENTANG APA YANG TERBUKTI, sebab pagar yang mengaku lebih daripada
+    yang ia ketahui menyesatkan pembaca berikutnya: pemilik memfoto baris yang
+    saling menimpa pada VERSI 157, dan yang MENYEMBUHKANNYA adalah keterangan
+    dua baris yang dicabut atas permintaannya. Tumpang-tindihnya tak berhasil
+    ditirukan di harness, dengan maupun tanpa `align-content`. Pagar ini
+    menjaga bentuk yang benar untuk daftar yang menggulir — bukan memberi
+    kesaksian bahwa ia obat foto itu.
+    """
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
+    i = css.index(".laci__daftar")
+    blok = css[i:css.index("}", i)]
+    assert "align-content: start" in blok, \
+        "baris laci bisa ditekan di bawah tinggi isinya, lalu saling menimpa"
+
+
+def test_nota_hati_selalu_punya_dua_anak():
+    """`.nota--hati` adalah grid DUA KOLOM — `15px 1fr`, kolom pertama untuk
+    ikon. Teks polos yang ditaruh sebagai anak tunggal jatuh ke kolom selebar
+    15px itu, lalu patah SATU KATA PER BARIS.
+
+    Difoto pemilik 28 September 2026 di layar Kabar: "informasi di kartu
+    pertama jelek sekali". Dua templat kena sekaligus, dan yang kedua
+    (`stok_produk.html`) belum pernah terlihat siapa pun — ia cuma muncul
+    ketika ada mesin sosoh yang sedang menyala.
+
+    Itu sebabnya pagar ini menyapu SELURUH templat paket, bukan cuma yang
+    difoto: kelas dua-kolom yang dipakai seperti kelas biasa tidak melahirkan
+    galat apa pun — ia cuma jelek, di layar yang jarang dibuka.
+    """
+    import re
+
+    akar = AKAR / "hmu_tampilan/templates"
+    salah = []
+    for berkas in sorted(akar.glob("*.html")):
+        teks = berkas.read_text()
+        for m in re.finditer(r'<div class="nota nota--hati">', teks):
+            # Isi blok sampai penutupnya — cukup, sebab blok ini tak pernah
+            # memuat <div> lain di dalamnya.
+            akhir = teks.index("</div>", m.end())
+            isi = teks[m.end():akhir]
+            if isi.count("<span") < 2:
+                baris = teks[:m.start()].count("\n") + 1
+                salah.append(f"{berkas.name}:{baris}")
+    assert not salah, (
+        "`.nota--hati` dipakai tanpa dua anak — teksnya akan patah satu kata "
+        "per baris di kolom ikon selebar 15px: " + ", ".join(salah))

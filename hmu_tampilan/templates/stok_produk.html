@@ -173,9 +173,13 @@
     {% endif %}
 
     {% if k.belum_final_kg %}
+      {# DUA anak, dan itu bukan pilihan: `.nota--hati` grid `15px 1fr`, kolom
+         pertamanya untuk ikon. Anak tunggal berupa teks jatuh ke kolom 15px
+         dan patah satu kata per baris. #}
       <div class="nota nota--hati">
-        {{ kg(k.belum_final_kg) }} kg di antaranya dari mesin yang MASIH
-        menyosoh — angka itu belum final dan masih akan bertambah.
+        <span aria-hidden="true">⏸</span>
+        <span>{{ kg(k.belum_final_kg) }} kg di antaranya dari mesin yang MASIH
+          menyosoh — angka itu belum final dan masih akan bertambah.</span>
       </div>
     {% endif %}
   </details>

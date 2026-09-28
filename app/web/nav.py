@@ -9,8 +9,15 @@ piksel tak terbaca di gudang yang kena matahari.
 **Yang hilang bersama tab diganti; satu hal justru bertambah.** Dengan tab,
 layar yang sedang dibuka selalu terlihat — maka judul layar naik ke bilah
 atas, karena laci yang menyembunyikan posisi orang lebih buruk daripada tab
-yang sempit. Sebaliknya laci memberi ruang yang tak pernah ada di tab:
-KETERANGAN satu baris tiap tujuan, dan ANGKA yang lebih dari satu macam.
+yang sempit. Sebaliknya laci memberi ruang yang tak pernah ada di tab: ANGKA
+yang lebih dari satu macam.
+
+Kalimat di atas dulu menyebut dua hal yang bertambah; yang satu lagi
+KETERANGAN satu baris tiap tujuan, dan ia DICABUT 28 September 2026 atas
+permintaan pemilik: "sidebar cukup nama halamannya saja", "deskripsi tambahan
+tidak perlu". Kolom `ket` di bawah tetap ada — ia menjelaskan tiap pintu
+kepada yang membaca kodenya, dan itu masih berguna; yang berhenti cuma
+menggambarnya di layar. Angkanya tetap, atas permintaan yang sama.
 
 **Harganya disebut apa adanya:** tombol di sudut atas kiri adalah titik
 terjauh dari ibu jari saat telepon dipegang satu tangan. Kalau kelak terasa

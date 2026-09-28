@@ -30,10 +30,18 @@
   </div>
 {% else %}
 
+{# Kepala layar, bentuknya SAMA dengan Stok dan Stok Produk: satu angka besar
+   berikut keterangannya. Sebelumnya di sini dipakai `.nota--hati`, dan itu
+   keliru dua kali — ia untuk baris di DALAM kartu, dan ia grid dua kolom yang
+   kolom pertamanya selebar 15px untuk ikon. Teks polos yang ditaruh sebagai
+   anak pertama masuk ke kolom 15px itu, lalu patah satu kata per baris.
+   Difoto pemilik 28 September 2026: "informasi di kartu pertama jelek sekali". #}
 {% if baru %}
-  <div class="nota nota--hati">
-    {{ baru }} kabar baru — sudah ditandai terbaca. Yang lain tetap tergambar
-    sampai {{ hari }} hari.
+  <div class="jumlah">
+    <span class="lbl">Belum dibaca</span>
+    <div class="jumlah__angka">{{ baru }}<small>kabar</small></div>
+    <div class="jumlah__ket">sudah ditandai terbaca ·
+      daftar {{ hari }} hari terakhir</div>
   </div>
 {% endif %}
 

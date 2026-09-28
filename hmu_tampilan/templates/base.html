@@ -177,9 +177,18 @@
             {%- elif kunci == 'kabar' %}✉
             {%- else %}⚙{% endif -%}
           </span>
+          {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
+             permintaan pemilik: "sidebar cukup nama halamannya saja",
+             "deskripsi tambahan tidak perlu".
+
+             Kolom `ket` di `nav.TAB` sengaja TIDAK ikut dibuang: di sana ia
+             menjelaskan tiap pintu kepada yang membaca kodenya, dan itu masih
+             berguna. Yang berhenti cuma menggambarnya.
+
+             Angkanya TETAP (permintaan pemilik, pesan yang sama) — lihat
+             lencana di bawah. #}
           <span class="pintu__isi">
             <span class="pintu__nama">{{ nama }}</span>
-            <span class="pintu__ket">{{ ket }}</span>
           </span>
           {# Lencana muncul HANYA bila angkanya di atas nol. Lencana
              bertuliskan "0" adalah kebisingan yang mengajari orang
