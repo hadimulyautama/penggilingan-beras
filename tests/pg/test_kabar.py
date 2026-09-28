@@ -233,7 +233,16 @@ async def test_membuka_layarnya_menandai_terbaca_dan_lencananya_nol(pg, orang):
         r = await c.get("/kabar")
     assert r.status_code == 200, r.text[:400]
     assert "perlu verifikasi output" in r.text
-    assert "1 kabar baru" in r.text, "halaman tak menyebut berapa yang baru"
+    # Kepala layar menyebut berapa yang baru. Bunyinya berubah 28 September
+    # 2026: semula satu kalimat di dalam `.nota--hati` — yang ternyata grid dua
+    # kolom, jadi kalimatnya patah satu kata per baris di kolom ikon selebar
+    # 15px ("informasi di kartu pertama jelek sekali", pemilik, dengan fotonya).
+    # Kini bentuknya SAMA dengan kepala Stok dan Stok Produk. Yang dijaga tetap
+    # sama: angkanya tergambar, dan halaman menyebut kabar itu sudah ditandai
+    # terbaca.
+    assert "Belum dibaca" in r.text, "kepala layar tak menyebut yang belum dibaca"
+    assert ">1<" in r.text, "halaman tak menyebut berapa yang baru"
+    assert "sudah ditandai terbaca" in r.text
 
     async with pg() as db:
         u = await db.get(User, orang["admin"])

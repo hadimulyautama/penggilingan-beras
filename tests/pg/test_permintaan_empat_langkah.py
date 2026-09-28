@@ -900,3 +900,32 @@ async def test_pembetulan_bobot_mengembalikan_sisanya_ke_kartu(pg, pabrik):
         lot = [l for l in await pk_gudang1(db) if l.kode == pabrik["lot"]]
     assert len(lot) == 1, "500 kg yang tak jadi berangkat lenyap dari Stok"
     assert lot[0].tersedia == 500, lot[0].tersedia
+
+
+async def test_kalimat_sesudah_minta_menyebut_pelaku_dan_layar_yang_benar(pg, pabrik):
+    """Kalimat KETIGA dari rantai yang sama, tertinggal saat dua sekerabatnya
+    dibetulkan (temuan QA 28 September 2026). Bunyinya dulu:
+
+        "Lot … diminta — Admin melihatnya di Antrian tunggu.
+         Yang memindahkan tetap Admin."
+
+    Dua-duanya salah. Admin memutuskannya di MENUNGGU KEPUTUSAN — Antrian
+    tunggu memuat pekerjaan fisik — dan yang memindahkan GUDANG 1 sejak 27
+    September, bukan Admin.
+
+    Ia tertinggal karena satu-satunya yang membacanya operator Gudang 2, dan
+    tak seorang pun dari kami membuka layar itu sesudah tangannya berpindah.
+    Maka yang dijaga BUNYI KALIMAT YANG DIKEMBALIKAN, untuk ketiganya.
+    """
+    from app.models import User
+    from app.web import api
+
+    async with pg() as db:
+        op2 = await db.get(User, pabrik["op2"])
+    jawab = await api.act_minta_pk_g1(
+        api.MintaPkReq(kode_proses=pabrik["lot"]), user=op2)
+    pesan = jawab["pesan"]
+    assert "Menunggu keputusan" in pesan, pesan
+    assert "Antrian tunggu" not in pesan, "layar Admin disebut salah"
+    assert "Gudang 1 yang memuat" in pesan, pesan
+    assert "memindahkan tetap Admin" not in pesan, "pelaku lama masih disebut"

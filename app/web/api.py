@@ -2631,9 +2631,18 @@ async def act_minta_pk_g1(req: MintaPkReq, user: User = Depends(pengguna_aksi)) 
             await minta(db, user=u, kode_proses=req.kode_proses)
         except PermintaanError as e:
             raise _err(e, "Gagal meminta lot PK.")
+    # Kalimat ini dua kali menyebut hal yang salah, dan keduanya ketahuan
+    # bersama (temuan QA 28 September 2026): Admin melihatnya di MENUNGGU
+    # KEPUTUSAN — bukan Antrian tunggu, yang memuat pekerjaan fisik — dan yang
+    # memindahkan GUDANG 1, bukan Admin (keputusan pemilik 27 September).
+    #
+    # Dua kalimat sekerabatnya sudah dibetulkan lebih dulu; yang ini tertinggal
+    # karena ia satu-satunya yang dibaca operator Gudang 2, dan tak seorang pun
+    # dari kami membuka layar itu sesudah tangannya berpindah.
     return {"ok": True,
-            "pesan": f"✓ Lot *{req.kode_proses}* diminta — Admin melihatnya di "
-                     "Antrian tunggu. Yang memindahkan tetap Admin."}
+            "pesan": f"✓ Lot *{req.kode_proses}* diminta — Admin memutuskannya "
+                     "di Menunggu keputusan. Kalau disetujui, Gudang 1 yang "
+                     "memuat dan mengirimnya."}
 
 
 class AccPermintaanReq(BaseModel):

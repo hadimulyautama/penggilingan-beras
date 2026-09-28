@@ -362,6 +362,12 @@ async def selesai_penyosohan(
             db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
             changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
         )
+    # Silo yang baru dibebaskan bisa SUDAH berisi PK baru — orang menuangnya
+    # selagi prosesnya berjalan. Statusnya diturunkan ulang dari isinya yang
+    # sebenarnya, bukan dicap "kosong" karena prosesnya selesai (temuan QA 28
+    # September 2026).
+    from app.penggilingan.gudang2.service import segarkan_status_silo
+    await segarkan_status_silo(db, target.silo_id)
     await db.commit()
     await db.refresh(proc)
     return SelesaiResult(

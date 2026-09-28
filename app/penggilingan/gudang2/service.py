@@ -171,6 +171,41 @@ def is_operator_gudang2(user: User, g2_wid: int) -> bool:
 
 
 # ─────────────────────────── Formula stok ───────────────────────────
+async def segarkan_status_silo(db: AsyncSession, silo_id: int | None) -> None:
+    """Samakan `Silo.status` dengan isi silo yang SEBENARNYA.
+
+    Temuan QA 28 September 2026: sesudah penyosohan ditutup, silo Gudang 2 yang
+    berisi 2.000 kg PK baru tetap tercap `kosong`. Diperiksa lebih jauh, sebabnya
+    lebih sederhana dan lebih buruk daripada satu cap yang salah: Gudang 2 TAK
+    PERNAH menulis kolom itu sama sekali, jadi seluruh silonya membeku pada nilai
+    yang ditanam seed. Gudang 1 justru konsisten menulisnya.
+
+    Hari ini tak ada yang rusak — tak satu pun layar membaca kolom itu; semuanya
+    membaca `hitung_stok_silo`, dan `dashboard._silo_status` pun menurunkan
+    "terisi" dari baris `SiloStorage`, bukan dari sini. Yang diperbaiki justru
+    itu: kolom yang ditulis tanpa pernah dibaca DAN isinya salah adalah kolom
+    yang akan dipercaya orang berikutnya.
+
+    DITURUNKAN, bukan ditebak: nilainya dihitung dari `hitung_stok_silo`, jawaban
+    yang sama yang dipakai layar. Dua sumber untuk satu pertanyaan akan
+    berselisih, dan yang salah adalah yang lebih jarang dibaca orang — yaitu
+    kolom ini.
+
+    Dipanggil dari corong yang MENGUBAH ISI silo G2, bukan dari tiap penulis:
+    `_add_intake` (PK masuk, satu titik tulis untuk PK luar maupun transfer G1),
+    `_catat_pindah` (tumpukan → silo), dan penutupan penyosohan per silo. Yang
+    menjaga bahwa ketiganya benar-benar memanggilnya adalah uji PERILAKU, bukan
+    uji yang membaca sumber: sesudah tiap operasi, status wajib sama dengan
+    "stoknya di atas nol".
+    """
+    if silo_id is None:
+        return
+    silo = await db.get(Silo, silo_id)
+    if silo is None:
+        return
+    silo.status = "terisi" if await hitung_stok_silo(db, silo_id) > 0.001 else "kosong"
+
+
 async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
     """Stok PK sebuah silo G2 = masuk langsung + masuk dari tumpukan − terpakai."""
     masuk_langsung = (
@@ -785,6 +820,10 @@ async def _add_intake(
                   f"{f'{berat_kg:.0f}kg' if berat_kg is not None else 'bobot menunggu timbang'}"
                   f" → {tujuan_norm} | hpp={hpp_per_kg}",
     )
+    # Status silo diturunkan ulang SEBELUM commit, supaya ia ikut satu
+    # transaksi dengan pemasukannya — status yang tertulis di transaksi kedua
+    # bisa tertinggal saat yang pertama berhasil dan yang kedua gagal.
+    await segarkan_status_silo(db, silo_id)
     if commit:
         await db.commit()
         await db.refresh(intake)
@@ -973,6 +1012,7 @@ async def _catat_pindah(
         new_value=f"{kode} | {kirim:.0f}kg → Silo {nama_silo}"
                   + (f" | ditambah ke {ke_proses}" if ke_proses else ""),
     )
+    await segarkan_status_silo(db, move.silo_id)
     return move, ke_proses
 
 

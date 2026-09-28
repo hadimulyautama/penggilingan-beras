@@ -561,7 +561,20 @@ async def finish_milling(
     # meninggalkan silo kedua berstatus "terisi" padahal isinya sudah jadi PK:
     # layar Gudang menunjukkan gabah yang tidak ada, dan orang mencari-carinya.
     # Baris `SiloStorage`-nya sendiri sudah dikosongkan seluruhnya di atas —
-    # yang tertinggal justru `Silo.status`, kolom yang paling sering dibaca.
+    # yang tertinggal `Silo.status`.
+    #
+    # ⚠ Kalimat ini dulu menyebut `Silo.status` "kolom yang paling sering
+    # dibaca", dan itu TIDAK BENAR (temuan QA 28 September 2026): tak satu pun
+    # layar membacanya. Yang menggambar isi silo membaca stoknya —
+    # `hitung_stok_silo` di Gudang 2, dan `dashboard._silo_status` menurunkan
+    # "terisi" dari baris `SiloStorage`, bukan dari kolom ini. Komentar yang
+    # memberi wibawa kepada kolom yang tak dibaca siapa pun akan membuat orang
+    # berikutnya memercayainya — dan kolom yang dipercaya tanpa dibaca adalah
+    # kolom yang dipakai mengambil keputusan tanpa pernah diverifikasi.
+    #
+    # Ia tetap ditulis, dan sekarang juga ditulis Gudang 2 (`segarkan_status_
+    # silo`), supaya isinya tak bertentangan dengan kenyataan. Bukan karena ada
+    # yang membutuhkannya hari ini.
     if ids:
         nama: list[str] = []
         for silo_id in await silo_ids_proses(db, proc):

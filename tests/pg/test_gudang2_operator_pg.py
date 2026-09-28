@@ -554,3 +554,62 @@ async def test_pilihan_lama_ab_dijawab_dengan_kalimat_yang_menolong(pg, gudang2)
         with pytest.raises(Gudang2Error) as e2:
             await mulai_penyosohan(db, user=u, nama_silos=["Z"])
     assert "Silo Z" in str(e2.value)
+
+
+async def test_status_silo_g2_tak_pernah_berbohong(pg, gudang2):
+    """Temuan QA 28 September 2026: silo Gudang 2 yang berisi PK tetap tercap
+    `kosong`.
+
+    Sebabnya lebih luas daripada satu cap yang salah — Gudang 2 TAK PERNAH
+    menulis `Silo.status`, jadi seluruh silonya membeku pada nilai yang ditanam
+    seed. Silo B fixture ini berisi 9.800 kg sejak awal dan tetap berkata
+    "kosong".
+
+    Diuji sebagai PERILAKU, bukan dengan membaca sumber: sesudah TIAP operasi
+    yang mengubah isi silo, status wajib sama dengan "stoknya di atas nol".
+    Pagar yang menegaskan "corong X memanggil fungsi Y" pecah pada tiap
+    perapian kode dan tak menangkap corong KEEMPAT yang lahir kemudian; yang
+    ini menangkapnya, sebab yang dijaga aturannya.
+    """
+    from sqlalchemy import select
+
+    from app.models import Silo, User
+    from app.penggilingan.gudang2.polishing import (mulai_penyosohan,
+                                                    selesai_penyosohan)
+    from app.penggilingan.gudang2.service import (hitung_stok_silo,
+                                                  pindah_tumpukan_ke_silo)
+
+    async def selaras(kapan):
+        async with pg() as db:
+            for huruf in ("A", "B"):
+                sid = (await db.execute(select(Silo.id).where(
+                    Silo.nama_silo == f"Silo {huruf}"))).scalars().one()
+                silo = await db.get(Silo, sid)
+                stok = await hitung_stok_silo(db, sid)
+                harus = "terisi" if stok > 0.001 else "kosong"
+                assert silo.status == harus, (
+                    f"{kapan} · Silo {huruf}: stok {stok:.0f} kg, status "
+                    f"'{silo.status}' — seharusnya '{harus}'")
+
+    # 1 · PK luar masuk langsung ke silo — corong `_add_intake`, dan keadaan
+    #     yang dulu berbohong: Silo B berisi 9.800 kg, statusnya "kosong".
+    await selaras("sesudah PK luar masuk")
+
+    # 2 · Tumpukan dipindah ke silo — corong `_catat_pindah`.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await pindah_tumpukan_ke_silo(db, user=u,
+                                      intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=2_000)
+    await selaras("sesudah tumpukan dipindah ke Silo A")
+
+    # 3 · Penyosohan menghabiskan Silo A, lalu silonya dibebaskan — corong
+    #     `selesai_penyosohan`. Inilah langkah yang difoto QA.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                 nama_silo="A", sisa_kg=0)
+    await selaras("sesudah Silo A dibebaskan")
