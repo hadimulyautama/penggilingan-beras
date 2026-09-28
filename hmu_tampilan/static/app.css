@@ -701,9 +701,36 @@ body.putus-jaringan .bar { margin-top: 34px; }
   padding: 4px 6px 14px;
   border-bottom: 1px solid var(--garis-2);
   margin-bottom: 10px;
+  /* Kepala dan kaki TIDAK ikut menyusut saat daftarnya panjang: nama orang
+     yang memakai aplikasi dan tombol Keluar adalah dua hal yang harus selalu
+     terlihat — yang satu supaya ia tahu sedang masuk sebagai siapa, yang satu
+     supaya ia bisa keluar tanpa menggulir. */
+  flex-shrink: 0;
 }
-.laci__daftar { display: grid; gap: 3px; }
-.laci__kaki { margin-top: auto; padding-top: 14px; }
+
+/* ── Daftar pintu: SATU-SATUNYA bagian laci yang menggulir ──
+   Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
+   dan "Kabar" terpotong di tepi bawah layar — berikut List audit, Pengaturan,
+   dan tombol Keluar di bawahnya.
+
+   Sebabnya bukan tab Kabar yang lahir 26 September; ia cuma yang membuat
+   daftarnya melewati tinggi layar pada telepon 6 inci. Cacatnya sudah ada
+   sejak lacinya lahir: `.laci__isi` berjangkar `inset: 0 auto 0 0` — tingginya
+   PERSIS setinggi layar — dan tak satu pun anaknya boleh menggulir. Isi yang
+   melewatinya tak ke mana-mana: ia terpotong, diam.
+
+   `min-height: 0` WAJIB bersama `overflow-y`, dan itu yang paling mudah
+   ketinggalan: anak sebuah kotak flex bawaannya `min-height: auto`, yang
+   menolak menyusut di bawah tinggi isinya — jadi `overflow-y: auto` sendirian
+   tak pernah punya kesempatan bekerja, kotaknya keburu melar. */
+.laci__daftar {
+  display: grid; gap: 3px;
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  /* Ruang untuk ibu jari: baris terakhir tak boleh menempel pada tombol
+     Keluar, sebab keduanya berukuran sentuh dan bersebelahan. */
+  padding-bottom: 6px;
+}
+.laci__kaki { margin-top: auto; padding-top: 14px; flex-shrink: 0; }
 .laci__kaki .btn { width: 100%; }
 
 .pintu {

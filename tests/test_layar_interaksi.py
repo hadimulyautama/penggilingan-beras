@@ -752,3 +752,49 @@ def test_borang_penyosohan_juga_menerima_beberapa_silo():
     # sedang dipakai proses yang berjalan.
     daftar = kode_saja(api.silo_bahan_g2)
     assert "hitung_stok_silo" in daftar and "PolishingProcess.status" in daftar
+
+
+def test_laci_bisa_digulir_sampai_pintu_terakhir():
+    """Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
+    dan "Kabar" terpotong di tepi bawah layar — berikut List audit, Pengaturan,
+    dan tombol Keluar di bawahnya.
+
+    Sebabnya bukan tab Kabar yang lahir 26 September; ia cuma yang membuat
+    daftarnya melewati tinggi layar pada telepon 6 inci. Cacatnya sudah ada
+    sejak lacinya lahir: `.laci__isi` berjangkar `inset: 0 auto 0 0` — tingginya
+    persis setinggi layar — dan tak satu pun anaknya boleh menggulir.
+
+    Pagar ini menagih KEDUANYA, dan yang kedua yang paling mudah ketinggalan:
+    anak sebuah kotak flex bawaannya `min-height: auto`, yang menolak menyusut
+    di bawah tinggi isinya. Tanpa `min-height: 0`, `overflow-y: auto`
+    sendirian tak pernah punya kesempatan bekerja — kotaknya keburu melar, dan
+    laci tetap terpotong seperti di foto itu.
+    """
+    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
+    i = css.index(".laci__daftar")
+    blok = css[i:css.index("}", i)]
+    assert "overflow-y: auto" in blok, "daftar pintu tak bisa digulir"
+    assert "min-height: 0" in blok, \
+        "overflow-y tanpa min-height:0 — kotak flex menolak menyusut"
+
+    # Dan yang di luar daftar TIDAK ikut menggulir: nama pemakai dan tombol
+    # Keluar harus selalu terlihat — yang satu supaya ia tahu sedang masuk
+    # sebagai siapa, yang satu supaya ia bisa keluar tanpa menggulir.
+    for bagian in (".laci__kepala", ".laci__kaki"):
+        j = css.index(bagian + " {")
+        assert "flex-shrink: 0" in css[j:css.index("}", j)], \
+            f"{bagian} ikut menyusut saat daftarnya panjang"
+
+
+def test_jumlah_pintu_laci_melewati_satu_layar():
+    """Pagar di atas menjaga aturannya; yang ini menjaga ALASANNYA tetap nyata.
+
+    Kalau kelak pintunya tinggal empat, `overflow-y` jadi tak terbukti apa pun
+    dan pagar di atas lulus tanpa menguji apa-apa. Dua belas pintu pada telepon
+    6 inci sudah melewati satu layar — itu yang membuat foto pemilik mungkin.
+    """
+    from app.web.nav import TAB
+
+    assert len(TAB) >= 10, (
+        f"tinggal {len(TAB)} pintu — periksa apakah laci masih bisa melebihi "
+        "satu layar; kalau tidak, pagar penggulirnya tak lagi menguji apa pun")
