@@ -535,3 +535,216 @@ async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
         assert kata in h, f"suku '{kata}' hilang dari halaman"
     # Rincian per penyosohan ikut, lengkap dengan kodenya.
     assert "POL-UJI-01" in h
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# BORANG PACKING — berhenti menanyakan yang sudah diketahui kartunya
+#
+# Keluhan pemilik 28 September 2026, dua kalimat, satu sebab:
+#
+#   "kartu beras menunggu dipacking sudah menunjukkan mutu berasnya. di catat
+#    barang jadinya untuk apa mutu juga dipilih? di bagian pemilihan produk dan
+#    kemasan pun ada keterangan beras putih, menir, reject, dll. cukup jenis
+#    kemasannya dan ukuran kemasannya."
+#
+#   "di kartu beras menunggu di packting adalah premium ya di halaman melayang
+#    catat packing barang jadi juga harus langsung tau kalau itu beras premium,
+#    beras b, reject, menir dll"
+#
+# Borangnya dulu bertanya EMPAT kali untuk satu pekerjaan — proses, produk +
+# kemasan, merk, mutu — dan tiga dari empat sudah dijawab oleh kartu yang
+# ditekan orangnya. Sebabnya penunjuknya cuma membawa kode proses, jadi
+# JENISNYA hilang di perjalanan.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+async def test_penunjuk_packing_membawa_lot_dan_jenisnya(pg, sosoh):
+    """Kartu dan daftar harus berbicara dengan BENTUK YANG SAMA. Kalau tidak,
+    kartu mengirim nilai yang tak ada di daftar, penguncian batal, dan orangnya
+    kembali disuruh memilih benda yang baru saja ia tekan."""
+    from app.models import User
+    from app.services.berjalan import _kartu_beras_curah
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        kartu = await _kartu_beras_curah(db)
+        daftar = await inv.beras_belum_dikemas(
+            user=await db.get(User, sosoh["user"]))
+
+    assert len(kartu) == 1 and kartu[0].nilai == "POL-UJI-01|medium"
+    # Tombolnya membawa nilai yang SAMA dengan kartunya.
+    assert kartu[0].pilihan[0][3] == kartu[0].nilai
+    assert [d["value"] for d in daftar] == ["POL-UJI-01|medium"]
+    # Dan labelnya menyebut jenisnya dengan kata yang dibaca orang.
+    assert "Beras Medium" in daftar[0]["label"], daftar[0]["label"]
+    assert "9.000" in daftar[0]["label"]
+
+
+async def test_borang_packing_tak_bertanya_mutu_lagi(pg, sosoh):
+    """Yang dijaga BENTUK BORANGNYA, sebab inilah yang dikeluhkan. Mutu dan
+    kategori tak boleh kembali jadi pertanyaan: keduanya sudah terbawa
+    penunjuknya."""
+    from app.web.aksi_inventory import spesifikasi
+
+    spek = next(a for a in spesifikasi(g2=True, fin=False)
+                if a["id"] == "catat_packing")
+    medan = [f["name"] for f in spek["fields"]]
+    assert medan == ["sumber", "kemasan", "merk", "jumlah_karung"], medan
+    assert "grade" not in medan and "produk" not in medan and "kode_pol" not in medan
+    # Penunjuknya bertipe yang bisa dikunci kartu, dan kemasannya bergantung
+    # padanya — daftar kemasan yang berdiri sendiri akan menawarkan karung yang
+    # tak sah untuk barang itu.
+    assert spek["fields"][0]["type"] == "remote"
+    assert spek["fields"][1]["induk"] == "sumber"
+
+
+async def test_daftar_kemasan_menyebut_karungnya_saja(pg, sosoh):
+    """"cukup jenis kemasannya dan ukuran kemasannya."
+
+    Daftar lamanya mengulang nama barangnya di tiap baris ("Beras putih ·
+    karung laminasi 25 kg", delapan kali) padahal barangnya sudah ditunjuk —
+    dan daftar yang mengulang hal sama di tiap baris memaksa mata membaca
+    bagian yang berbeda saja, yang justru tercetak paling belakang.
+    """
+    from app.models import User
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        beras = await inv.kemasan_untuk(induk="POL-UJI-01|medium", user=u)
+        menir = await inv.kemasan_untuk(induk="POL-UJI-01|menir", user=u)
+
+    assert beras, "beras putih tak punya satu kemasan pun"
+    for baris in beras:
+        assert "Beras" not in baris["label"], baris["label"]
+        assert "kg" in baris["label"]
+    # Dan daftarnya BERBEDA menurut barangnya — itu gunanya bergantung induk.
+    assert {b["value"] for b in beras} != {m["value"] for m in menir}
+    # Tanpa induk: kosong, bukan seluruh kemungkinan.
+    async with pg() as db:
+        assert await inv.kemasan_untuk(
+            induk="", user=await db.get(User, sosoh["user"])) == []
+
+
+async def test_packing_bentuk_baru_memindahkan_berasnya(pg, sosoh):
+    """Bentuk kiriman berubah; yang dicatat tidak boleh berubah."""
+    from app.models import User
+    from app.web import aksi_inventory as inv
+    from app.services.stok import beras_curah
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        r = await inv.act_catat_packing(
+            inv.PackingReq(sumber="POL-UJI-01|medium", kemasan="biasa|25",
+                           jumlah_karung=100), user=u)
+    assert r["ok"] and "2.500" in r["pesan"], r["pesan"]
+
+    async with pg() as db:
+        b = (await beras_curah(db))[0]
+    assert b.dikemas_kg == 2_500 and b.sisa_kg == 6_500
+
+
+async def test_bentuk_kiriman_lama_tetap_diterima(pg, sosoh):
+    """Halaman di ponsel berumur panjang: lembar yang sudah terbuka di layar
+    orang saat versi baru terbit akan mengirim bentuk lama, dan yang menekan
+    Simpan tak punya cara mengetahui bahwa borangnya sudah basi. Yang berhenti
+    cuma MENAWARKANNYA."""
+    from app.models import User
+    from app.services.stok import beras_curah
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        r = await inv.act_catat_packing(
+            inv.PackingReq(kode_pol="POL-UJI-01", produk="beras_putih|biasa|25",
+                           grade="medium", jumlah_karung=40), user=u)
+    assert r["ok"], r
+    async with pg() as db:
+        assert (await beras_curah(db))[0].dikemas_kg == 1_000
+
+
+async def test_kemasan_tak_sah_ditolak_walau_daftarnya_dilewati(pg, sosoh):
+    """Yang mengirim POST adalah perangkat, dan isian perangkat tak pernah jadi
+    alasan untuk melewati pemeriksaan."""
+    from fastapi import HTTPException
+
+    from app.models import User
+    from app.web import aksi_inventory as inv
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        with pytest.raises(HTTPException):
+            await inv.act_catat_packing(
+                inv.PackingReq(sumber="POL-UJI-01|medium", kemasan="biasa|7",
+                               jumlah_karung=1), user=u)
+        with pytest.raises(HTTPException):
+            await inv.act_catat_packing(
+                inv.PackingReq(sumber="POL-UJI-01", kemasan="biasa|25",
+                               jumlah_karung=1), user=u)
+
+
+async def test_barang_keluar_dipilih_dari_stok_yang_ada(pg, sosoh):
+    """Keputusan pemilik 28 September 2026, sejalan dengan borang packing.
+
+    "Barang jadi keluar" dulu bertanya TIGA kali untuk satu barang — produk +
+    kemasan, merk, lalu mutu — dan ketiganya pertanyaan tentang benda yang
+    SUDAH ADA di gudang. Daftar tiga tingkat atas benda yang bisa dilihat
+    sendiri adalah tiga kesempatan memilih kombinasi yang stoknya nol.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.web import aksi_inventory as inv
+
+    spek = next(a for a in inv.spesifikasi(g2=False, fin=True)
+                if a["id"] == "kirim_barang_jadi")
+    medan = [f["name"] for f in spek["fields"]]
+    assert medan[:2] == ["stok", "jumlah_karung"], medan
+    assert "grade" not in medan and "produk" not in medan and "merk" not in medan
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=sosoh["kode"],
+                            kategori="beras_putih", grade="medium",
+                            material_kode="biasa", ukuran=25, jumlah_karung=100)
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        u.role = "admin"                       # daftar ini milik yang lihat uang
+        await db.commit()
+        daftar = await inv.stok_barang_jadi(user=u)
+    assert len(daftar) == 1, daftar
+    # Satu baris menjawab ketiga pertanyaan lama sekaligus, berikut stoknya.
+    label = daftar[0]["label"]
+    assert "Medium" in label and "25 kg" in label and "100 karung" in label, label
+    sku_id, std_id = daftar[0]["value"].split("|")
+    assert sku_id.isdigit() and std_id.isdigit()
+
+    # Dan kirimannya mencatat barang yang SAMA.
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        r = await inv.act_kirim_barang_jadi(
+            inv.KirimBarangJadiReq(stok=daftar[0]["value"], jumlah_karung=40,
+                                   nama_pembeli="Toko Uji"), user=u)
+    assert r["ok"], r
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        sisa = await inv.stok_barang_jadi(user=u)
+    assert "60 karung" in sisa[0]["label"], sisa[0]["label"]
+
+
+async def test_bekatul_curah_tak_ditawarkan_sebagai_barang_berkarung(pg, sosoh):
+    """Ia curah dan punya aksinya sendiri; menawarkannya di daftar berkarung
+    akan membuat orang mengirim "0 karung bekatul"."""
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+    from app.web import aksi_inventory as inv
+
+    await _sosoh_lagi(pg, sosoh, "POL-UJI-BK2", "bekatul", 700)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_bekatul(db, user=u, kode_pol="POL-UJI-BK2", berat_kg=700)
+        u.role = "admin"
+        await db.commit()
+    async with pg() as db:
+        daftar = await inv.stok_barang_jadi(user=await db.get(User, sosoh["user"]))
+    assert not [d for d in daftar if "ekatul" in d["label"]], daftar

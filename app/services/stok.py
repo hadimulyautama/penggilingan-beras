@@ -748,6 +748,24 @@ def jenis_produk(kategori: str | None, mutu_kode: str | None) -> str:
     return kategori
 
 
+def kategori_dan_mutu(jenis: str) -> tuple[str, str | None]:
+    """Kebalikan `jenis_produk`: dari nama barang kembali ke (kategori, mutu).
+
+    Dipakai borang packing sejak 28 September 2026, supaya orang tak ditanya
+    ulang hal yang sudah tertulis di kartunya. Keduanya WAJIB tetap sepasang —
+    `jenis_produk(*kategori_dan_mutu(j)) == j` untuk setiap jenis yang dikenal,
+    dan itu dijaga uji, bukan diingat.
+
+    Yang tak dikenal dikembalikan apa adanya sebagai kategori: jenis baru yang
+    lupa didaftarkan lebih baik lewat dan ditolak pemeriksa kemasan dengan
+    kalimat yang menyebut namanya, daripada diam-diam berubah jadi beras putih.
+    """
+    jenis = (jenis or "").strip().lower()
+    if jenis in GRADES_BERAS:
+        return "beras_putih", jenis
+    return jenis, None
+
+
 def nama_produk(jenis: str) -> str:
     """Nama yang dibaca orang untuk `jenis_produk`."""
     return _NAMA_GRADE.get(jenis) or NAMA_KATEGORI.get(jenis) or jenis.title()
@@ -1054,6 +1072,12 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             k = kartu[kunci] = {
                 "jenis": jenis, "nama": nama, "kemasan": f"{kemasan} {ukuran} kg",
                 "ukuran": int(ukuran), "karung": stok_["karung"], "kg": stok_["kg"],
+                # Id-nya ikut sejak 28 September 2026: borang "Barang jadi
+                # keluar" memilih DARI DAFTAR INI, dan satu-satunya cara
+                # menunjuk kartu ini tanpa ambiguitas adalah pasangan idnya.
+                # Merk & mutu yang sama bisa punya dua kemasan, dan kemasan
+                # yang sama bisa punya dua merk.
+                "sku_id": sku.id, "std_id": fg.rice_quality_standard_id,
                 "asal": [], "_pol": {}}
         if k is None:
             continue

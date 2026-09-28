@@ -1736,7 +1736,10 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
             kode=b.kode_proses,
             isi=f"{b.jenis} · {_kg(b.sisa_kg)} belum dikemas",
             keadaan="menunggu dipacking",
-            aksi="catat_packing", nilai=b.kode_proses, fase="sosoh",
+            # Penunjuknya membawa LOT dan JENIS sekaligus (28 September
+            # 2026). Dengan kode proses saja, jenisnya hilang di perjalanan dan
+            # borang menanyakannya lagi — padahal kartu ini yang menyebutnya.
+            aksi="catat_packing", nilai=f"{b.kode_proses}|{b.jenis}", fase="sosoh",
             sejak=b.selesai,
             judul="Beras menunggu dipacking",
             utama=(_kg(b.sisa_kg).removesuffix(" kg"), "kg"),
@@ -1744,7 +1747,8 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
                 + (f" · dari {_kg(b.keluar_kg)}" if b.dikemas_kg else ""),
             kelompok="produk", gudang="g2",
             pilihan=[("catat_packing", "Catat packing barang jadi",
-                      "Memindahkan dari curah ke barang jadi", b.kode_proses)]))
+                      "Memindahkan dari curah ke barang jadi",
+                      f"{b.kode_proses}|{b.jenis}")]))
     return keluar
 
 
