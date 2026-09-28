@@ -61,6 +61,14 @@ async def test_pk_dituang_ke_silo_yang_dipoles_jadi_bahan_proses(pg, gudang2):
     u = gudang2["user"]
     async with pg() as db:
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         assert r.berat_awal_total == 9_800
 
         p = await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
@@ -98,6 +106,14 @@ async def test_penyosohan_berhenti_sementara_dan_jeda_tertutup_saat_selesai(pg, 
     u = gudang2["user"]
     async with pg() as db:
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         kode = r.proc.kode_proses
         with pytest.raises(JedaError):
             await hentikan(db, user=u, jenis="penyosohan", kode=kode, sebab="Lainnya",
@@ -187,6 +203,14 @@ async def test_satu_silo_tak_perlu_disebut(pg, gudang2):
     u = gudang2["user"]
     async with pg() as db:
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         s = await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                      nama_silo=None, sisa_kg=0)
     assert s.silo == "B" and s.selesai
@@ -206,6 +230,14 @@ async def test_silo_yang_tak_dipakai_proses_itu_ditolak_dengan_nama_silonya(pg, 
     u = gudang2["user"]
     async with pg() as db:
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         with _pytest.raises(Gudang2Error) as e:
             await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                      nama_silo="A", sisa_kg=0)
@@ -230,6 +262,14 @@ async def test_dua_silo_tetap_wajib_disebut_lalu_sisanya_tidak(pg, gudang2):
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
                                       nama_silo="A", berat=5_000)
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         kode = r.proc.kode_proses
         with _pytest.raises(Gudang2Error) as e:
             await selesai_penyosohan(db, user=u, kode=kode, nama_silo=None, sisa_kg=0)
@@ -255,6 +295,14 @@ async def test_daftar_silo_hanya_milik_proses_itu_dan_yang_belum_selesai(pg, gud
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
                                       nama_silo="A", berat=5_000)
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         kode = r.proc.kode_proses
 
     assert [x["value"] for x in await sosoh_silo(induk=kode, user=u)] == ["A", "B"]
@@ -291,6 +339,14 @@ async def test_silo_yang_sedang_disosoh_tak_ada_di_antrean(pg, gudang2):
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
                                       nama_silo="A", berat=2_000)
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
 
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
@@ -320,7 +376,15 @@ async def test_proses_dua_silo_menghapus_keduanya_dari_antrean(pg, gudang2):
     async with pg() as db:
         await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
                                       nama_silo="A", berat=2_000)
-        await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
 
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
@@ -336,6 +400,14 @@ async def test_silo_kembali_ke_antrean_sesudah_penyosohan_ditutup(pg, gudang2):
     u = gudang2["user"]
     async with pg() as db:
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                  nama_silo="B", sisa_kg=1_500)
 
@@ -357,7 +429,15 @@ async def test_stok_silo_tak_berubah_selama_disosoh(pg, gudang2):
     async with pg() as db:
         silo_b = await get_g2_silo(db, "B")
         sebelum = float(await hitung_stok_silo(db, silo_b.id))
-        await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+        r = await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=gudang2["user"], kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
 
     async with pg() as db:
         sesudah = float(await hitung_stok_silo(db, silo_b.id))
@@ -373,7 +453,15 @@ async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):
     from app.services.berjalan import untuk_operator_gudang2
 
     async with pg() as db:
-        await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+        r = await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=gudang2["user"], kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
 
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
@@ -417,6 +505,14 @@ async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
         await masukkan_pk_luar(db, user=u, kode="PKB-20260924-03", tujuan="silo_a")
 
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
         # Selagi KEDUANYA di dalam mesin, tak satu pun berkartu antrean.
         b = await untuk_operator_gudang2(db)
         assert [x for x in b.menunggu if x.fase == "silo_g2"] == [], \
@@ -481,7 +577,15 @@ async def test_borang_penyosohan_membaca_master_bukan_tupel(pg, gudang2):
     # layanannya, yang menolak silo yang sedang dipakai proses berjalan.
     async with pg() as db:
         uu = await db.get(User, u.id)
-        await mulai_penyosohan(db, user=uu, nama_silos=["B"])
+        r = await mulai_penyosohan(db, user=uu, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=uu, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
     assert await silo_bahan_g2(user=uu) == []
 
 
@@ -542,7 +646,15 @@ async def test_pilihan_lama_ab_dijawab_dengan_kalimat_yang_menolong(pg, gudang2)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         with pytest.raises(Gudang2Error) as e:
-            await mulai_penyosohan(db, user=u, nama_silos=["AB"])
+            r = await mulai_penyosohan(db, user=u, nama_silos=["AB"])
+            # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+            # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+            # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+            # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+            # menguji SILO, jadi angkanya sekadar sah.
+            from app.penggilingan.gudang2.polishing import catat_output as _co
+            await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                      berat_kumulatif=1)
     pesan = str(e.value)
     assert "Muat ulang" in pesan and "daftar" in pesan, pesan
     assert "Silo AB" not in pesan, "masih menyebut silo yang tak pernah ada"
@@ -552,7 +664,15 @@ async def test_pilihan_lama_ab_dijawab_dengan_kalimat_yang_menolong(pg, gudang2)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         with pytest.raises(Gudang2Error) as e2:
-            await mulai_penyosohan(db, user=u, nama_silos=["Z"])
+            r = await mulai_penyosohan(db, user=u, nama_silos=["Z"])
+            # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+            # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+            # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+            # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+            # menguji SILO, jadi angkanya sekadar sah.
+            from app.penggilingan.gudang2.polishing import catat_output as _co
+            await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                      berat_kumulatif=1)
     assert "Silo Z" in str(e2.value)
 
 
@@ -608,6 +728,14 @@ async def test_status_silo_g2_tak_pernah_berbohong(pg, gudang2):
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
@@ -641,6 +769,14 @@ async def test_silo_tanpa_tombol_menyebut_apa_yang_memakai_mesinnya(pg, gudang2)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+        # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
+        # 2026 penutupan menolak proses tanpa satu pun catatan hasil
+        # (temuan lapangan — 6 ton PK tercatat habis dengan nol baris
+        # hasil, dan penutupannya tak bisa dibatalkan). Berkas ini
+        # menguji SILO, jadi angkanya sekadar sah.
+        from app.penggilingan.gudang2.polishing import catat_output as _co
+        await _co(db, user=u, kode=r.proc.kode_proses, jenis="medium",
+                  berat_kumulatif=1)
 
     async with pg() as db:
         memo = {}
@@ -723,3 +859,59 @@ async def _silo_id(db, huruf: str) -> int:
 
     return (await db.execute(select(Silo.id).where(
         Silo.nama_silo == f"Silo {huruf}"))).scalars().one()
+
+
+async def test_penyosohan_tak_bisa_ditutup_tanpa_satu_pun_hasil(pg, gudang2):
+    """⛔ Temuan lapangan 28 September 2026, dan yang paling serius.
+
+    Operator Gudang 2: "jika operator tidak sengaja terpencet selesai
+    penyosohan, tetapi belum memasukkan hasil beras dll, hasilnya akan
+    hilang." Direproduksi QA, dan lebih buruk daripada hilang: 6 ton PK
+    tercatat habis terpakai, NOL baris hasil — berasnya berdiri di lantai
+    tanpa satu baris pun di pembukuan.
+
+    Dan penutupan penyosohan BELUM BISA DIBATALKAN, jadi satu ketukan salah
+    tak punya jalan kembali. Kabar ke Admin memang lahir, tetapi kabar tidak
+    mengembalikan apa pun.
+
+    ⚠ MENOLAK, bukan "peringatkan tapi terima" seperti rendemen mustahil di
+    Gudang 1. Alasannya berlawanan: di sana menolak menutup satu-satunya jalan
+    perbaikan; di sini MENERIMA-lah yang menutupnya.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.gudang2.polishing import (Gudang2Error, catat_output,
+                                                    mulai_penyosohan,
+                                                    selesai_penyosohan)
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+    kode = r.proc.kode_proses
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        with pytest.raises(Gudang2Error) as e:
+            await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B",
+                                     sisa_kg=0)
+    pesan = str(e.value)
+    assert "belum punya satu pun catatan hasil" in pesan, pesan
+    assert kode in pesan, "pesannya tak menyebut prosesnya"
+
+    # Dan penolakannya SEBELUM menulis: prosesnya masih berjalan, silonya
+    # belum dibebaskan. Penolakan yang terlanjur menulis separuh lebih buruk
+    # daripada tak menolak.
+    async with pg() as db:
+        proc = await db.get(PolishingProcess, r.proc.id)
+        assert proc.status == "proses", "prosesnya terlanjur ditutup"
+
+    # Sesudah hasilnya dicatat, penutupannya jalan seperti biasa.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await catat_output(db, user=u, kode=kode, jenis="medium",
+                           berat_kumulatif=8_000)
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        hasil = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B",
+                                         sisa_kg=0)
+    assert hasil.selesai and hasil.rendemen is not None

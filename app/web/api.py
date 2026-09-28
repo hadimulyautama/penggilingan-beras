@@ -2880,8 +2880,18 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
         except Gudang2Error as e:
             raise _err(e, "Gagal menandai selesai penyosohan.")
     if r.selesai:
+        # Rendemen yang tak terhitung DISEBUTKAN, tidak didiamkan. Laporan
+        # operator 28 September 2026: "Proses D1 belum ada tulisan
+        # rendemennya" — dan yang ia baca cuma "proses SELESAI", yang terbaca
+        # seperti semuanya beres.
+        #
+        # Sesudah pagar `selesai_penyosohan` (proses tanpa catatan hasil
+        # ditolak), keadaan ini hampir mustahil. "Hampir" itulah sebabnya
+        # kalimatnya tetap perlu: diam atas angka yang hilang adalah cara
+        # paling halus membuat orang percaya pada yang tak pernah dihitung.
         ekor = " — proses SELESAI" + (
-            f", rendemen {r.rendemen:.1f}%." if r.rendemen else ".")
+            f", rendemen {r.rendemen:.1f}%." if r.rendemen
+            else ". Rendemen belum bisa dihitung: PK terpakai belum tercatat.")
     else:
         ekor = " (menunggu silo lain)."
     # `r.silo` — silo yang BENAR-BENAR ditandai, termasuk saat borangnya

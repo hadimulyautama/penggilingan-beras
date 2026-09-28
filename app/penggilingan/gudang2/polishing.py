@@ -240,6 +240,28 @@ async def selesai_penyosohan(
     proc = await _get_proc(db, kode)
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
+
+    # ── PAGAR: tak boleh ditutup tanpa satu pun catatan hasil ──
+    #
+    # Laporan operator Gudang 2, 28 September 2026: "jika operator tidak
+    # sengaja terpencet selesai penyosohan, tetapi belum memasukkan hasil beras
+    # dll, hasilnya akan hilang."
+    #
+    # Direproduksi QA, dan lebih buruk daripada "hilang": 6 ton PK tercatat
+    # habis terpakai, nol baris hasil. Berasnya berdiri di lantai tanpa satu
+    # baris pun di pembukuan — dan penutupan penyosohan BELUM BISA DIBATALKAN,
+    # jadi satu ketukan salah tak punya jalan kembali.
+    #
+    # ⚠ SENGAJA MENOLAK, bukan "peringatkan tapi terima" seperti rendemen
+    # mustahil di Gudang 1. Alasannya berlawanan, dan itu yang menentukan:
+    # di sana menolak akan menutup satu-satunya jalan perbaikan (angka
+    # kumulatif boleh diketik ulang). Di sini MENERIMA-lah yang menutup jalan
+    # perbaikannya.
+    if not await _output_map(db, proc.id):
+        raise Gudang2Error(
+            f"{proc.kode_proses} belum punya satu pun catatan hasil. Catat "
+            "hasil penyosohan dulu — beras, menir, broken — baru prosesnya "
+            "bisa ditutup.")
     # ── Barisnya DIKUNCI sebelum dibaca ──
     #
     # Pemeriksaan "silo ini masih terbuka?" di bawah dilewati dua permintaan
@@ -352,7 +374,9 @@ async def selesai_penyosohan(
                 f"🟡 Penyosohan {proc.kode_proses} selesai — perlu verifikasi output "
                 f"& konfirmasi byproduct. PK terpakai {pk_terpakai:.0f} kg, beras "
                 f"{beras_total:.0f} kg"
-                + (f" (rendemen {rendemen:.1f}%)" if rendemen is not None else "")
+                + (f" (rendemen {rendemen:.1f}%)" if rendemen is not None
+                   else " — rendemen belum bisa dihitung: PK terpakai belum "
+                        "tercatat")
             ),
             target_role="admin", prioritas="kuning",
             table_name="polishing_process", record_id=proc.id,
