@@ -45,6 +45,13 @@ _UNDOABLE = {
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
     "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
     "pk_tumpukan_to_silo",
+    # Hasil penyosohan bisa dibatalkan SEJAK 28 September 2026, dan itu bukan
+    # kenyamanan melainkan syarat: angkanya berubah dari kumulatif jadi
+    # per-prosesan (migrasi 0060). Kumulatif TAHAN salah ketik — ketik ulang,
+    # nilai terakhir menang. Entri yang bertambah tidak: satu ketukan ganda
+    # menambah dua kali tanpa terlihat, dan angka salah tak bisa dibetulkan
+    # dengan mengetik ulang. Ia harus bisa dicabut.
+    "polishing_output_logs",
 }
 
 #: Label ramah per tabel — untuk pesan "belum bisa di-undo" MAUPUN untuk
@@ -646,6 +653,33 @@ async def _undo_last_progress(db: AsyncSession, proc_id: int) -> str:
     return f"✓ Dibatalkan: progress giling terakhir {proc.kode_proses if proc else ''}.".strip()
 
 
+async def _undo_output_sosoh(db: AsyncSession, log_id: int) -> str:
+    """Cabut SATU entri hasil penyosohan.
+
+    Pasangan wajib dari perubahan kumulatif → per-prosesan (28 September 2026):
+    tanpa ini, angka yang salah ketik tak punya jalan perbaikan sama sekali.
+
+    Menolak bila prosesnya SUDAH DITUTUP — rendemen dan seluruh Stok Produk
+    sudah berdiri di atas angka itu, dan mencabutnya diam-diam akan mengubah
+    keduanya tanpa satu pesan pun. Yang salah sesudah proses ditutup dibetulkan
+    Admin, bukan dicabut operator.
+    """
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+
+    baris = await db.get(PolishingOutputLog, log_id)
+    if baris is None:
+        raise UndoError("Catatan hasil penyosohan sudah tidak ada.")
+    proc = await db.get(PolishingProcess, baris.polishing_process_id)
+    if proc is not None and proc.status == "selesai":
+        raise UndoError(
+            f"{proc.kode_proses} sudah ditutup — rendemen dan stok produknya "
+            "sudah dihitung dari angka ini. Mintakan koreksi ke Admin.")
+    jenis, kg = baris.jenis, float(baris.berat_kg or 0)
+    await db.delete(baris)
+    return (f"✓ Dibatalkan: hasil {jenis} {kg:.0f} kg"
+            + (f" di {proc.kode_proses}" if proc else "") + ".")
+
+
 async def _undo_moving_log(db: AsyncSession, log_id: int) -> str:
     ml = await db.get(SiloMovingLog, log_id)
     if ml is None:
@@ -916,6 +950,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_finish_milling(db, rid)
     if t == "milling_progress_logs" and act == "INSERT":
         return await _undo_last_progress(db, rid)
+    if t == "polishing_output_logs" and act == "INSERT":
+        return await _undo_output_sosoh(db, rid)
     if t == "silo_moving_logs" and act == "INSERT":
         return await _undo_moving_log(db, rid)
     if t == "internal_transfers" and act == "INSERT":

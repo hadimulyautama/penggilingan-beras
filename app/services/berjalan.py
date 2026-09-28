@@ -1472,7 +1472,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     """
     from app.models import Silo
     from app.penggilingan.gudang1.services.jeda import jeda_terbuka, tertahan_detik
-    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    from app.penggilingan.gudang2.models import (PolishingOutputLog,
+                                                 PolishingProcess,
+                                                 PolishingSiloUsage)
 
     keluar: list[Baris] = []
     for pr in (await db.execute(
@@ -1506,6 +1508,36 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             fakta.append(("Ditambah", _kg(ditambah)))
         if tertahan >= 60:
             fakta.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
+
+        # ── Hasil yang sudah tercatat, per jenis, DAN entrinya satu per satu ──
+        #
+        # Sejak 28 September 2026 tiap entri berdiri sendiri (permintaan
+        # operator: tiap ganti spek punya hasilnya sendiri). Yang hilang
+        # bersama kumulatif adalah kemampuan MEMBACA ULANG apa yang sudah
+        # diketik — dengan kumulatif, angka di layar adalah totalnya.
+        #
+        # Maka totalnya disebut sebagai fakta, dan entrinya dirinci di bawah
+        # kartu: tanpa itu, operator yang ragu apakah ketukannya masuk akan
+        # mengetik lagi — dan entri yang bertambah menambah dua kali.
+        entri = list((await db.execute(
+            select(PolishingOutputLog)
+            .where(PolishingOutputLog.polishing_process_id == pr.id)
+            .order_by(PolishingOutputLog.waktu_update.desc(),
+                      PolishingOutputLog.id.desc())
+        )).scalars().all())
+        if entri:
+            per_jenis: dict[str, float] = {}
+            for e in entri:
+                per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
+            fakta.append(("Hasil", " · ".join(
+                f"{j} {_kg(v)}" for j, v in sorted(per_jenis.items()))))
+        rinci_hasil = [
+            (f"{e.jenis}" + (f" · {e.spek}" if e.spek else ""),
+             _kg(float(e.berat_kg or 0)),
+             e.waktu_update.strftime("%d/%m %H:%M") if e.waktu_update else "")
+            for e in entri[:8]
+        ]
+
         keluar.append(Baris(
             kode=pr.kode_proses,
             isi=(f"⏸ berhenti — {macet.sebab}" if macet else "sedang disosoh"),
@@ -1519,7 +1551,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
                  else f"{pr.kode_proses} · mesin sosoh menyala"),
             fakta=fakta,
-            anak=asal_pr[:6],
+            # Entri hasil MENDAHULUI asal PK-nya: yang dicari orang saat kartu
+            # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
+            # PK-nya" — asalnya sudah disebut fakta Silo di atas.
+            anak=(rinci_hasil + asal_pr[:6])[:10],
             nota=(f"Dijeda {_jam((now_local() - macet.mulai).total_seconds())} — "
                   f"{macet.sebab}" if macet else None),
             nota_jenis="hati" if macet else None,

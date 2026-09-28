@@ -242,10 +242,22 @@ class PolishingSiloUsage(Base, TimestampMixin):
 
 
 class PolishingOutputLog(Base):
-    """Log hasil penyosohan (KUMULATIF — ambil baris TERBARU per jenis).
+    """Satu ENTRI hasil penyosohan — yang keluar pada SATU prosesan.
+
+    ⚠ ARTINYA BERUBAH 28 September 2026 (migrasi 0060). Sampai hari itu
+    `berat_kg` KUMULATIF sejak awal proses dan pembacanya mengambil baris
+    TERBARU per jenis. Kini tiap baris berdiri sendiri, dan pembacanya
+    MENJUMLAH. Baris lama ikut diubah jadi selisihnya oleh migrasinya —
+    mencampur dua arti pada satu kolom membuat seluruh Stok Produk salah tanpa
+    satu pesan pun.
+
+    Sebabnya permintaan operator: dalam satu penyosohan mereka berganti spek,
+    dan tiap spek punya hasilnya sendiri. Dengan kumulatif, mencatat 200 kg
+    yang baru menuntut mereka mengetik 500 — jumlah yang dihitung sendiri di
+    kepala, sambil berdiri di mesin.
 
     jenis: grade beras (sayur/medium/medsuper/premium/beras_b) ATAU hasil
-    samping (menir/broken/bekatul/reject). berat_kg = kumulatif total.
+    samping (menir/broken/bekatul/reject).
     """
 
     __tablename__ = "polishing_output_logs"
@@ -255,6 +267,12 @@ class PolishingOutputLog(Base):
         ForeignKey("polishing_process.id"), nullable=False
     )
     jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: Spek yang sedang dijalankan saat entri ini keluar — keputusan pemilik 28
+    #: September 2026 ("ikut dicatat tiap entry"). Bebas teks: spek di pabrik
+    #: lahir dari permintaan pembeli, bukan dari daftar yang bisa dibekukan.
+    #: NULL pada baris yang lahir sebelum hari itu.
+    spek: Mapped[str | None] = mapped_column(String(30))
+    #: Yang keluar pada PROSESAN INI, bukan total sejak awal.
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     waktu_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

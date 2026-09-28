@@ -931,3 +931,124 @@ async def test_bentuk_borongan_sama_dengan_bentuk_tunggal(pg, sosoh):
             assert await output_sosoh(db, pid) == borongan.get(pid, {}), pid
         # Dan tanpa daftar id = seluruhnya.
         assert await output_sosoh_banyak(db) == borongan
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# HASIL PENYOSOHAN: KUMULATIF → PER PROSESAN (28 September 2026)
+#
+# Permintaan operator: dalam satu penyosohan mereka berganti spek, dan tiap
+# spek punya hasilnya sendiri. Dengan kumulatif, mencatat 200 kg broken yang
+# baru — sesudah 300 kg pada spek sebelumnya — menuntut mereka mengetik 500.
+#
+# ⛔ Satu baris menentukan benar-salahnya SELURUH Stok Produk: `output_sosoh`
+# dulu mengambil baris TERAKHIR; kini ia harus MENJUMLAH.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+async def test_entri_dijumlah_bukan_diambil_yang_terakhir(pg, sosoh):
+    """Contoh persis dari laporan QA: broken 300 lalu 200, totalnya 500.
+
+    Yang lupa diubah akan menyebut 200 kg untuk broken yang sungguhnya 500 kg
+    — dan kartunya patah tanpa satu pesan pun.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import catat_output
+    from app.services.stok import output_sosoh, stok_produk
+
+    pid = await _sosoh_lagi(pg, sosoh, "POL-SPEK-01", "medium", 1, selesai=False)
+    for kg, spek in ((300, "premium"), (200, "medium")):
+        async with pg() as db:
+            u = await db.get(User, sosoh["user"])
+            r = await catat_output(db, user=u, kode="POL-SPEK-01",
+                                   jenis="broken", berat_kg=kg, spek=spek)
+    # Yang dikembalikan: entri terakhir DAN totalnya — operator tak perlu
+    # menjumlah sendiri, justru itu yang ia keluhkan.
+    assert r.berat_kg == 200 and r.berat_kumulatif == 500 and r.spek == "medium"
+
+    async with pg() as db:
+        assert (await output_sosoh(db, pid))["broken"] == 500
+        k = next(x for x in await stok_produk(db) if x.jenis == "broken")
+    assert k.hasil_kg == 500, "Stok Produk tak menjumlah entrinya"
+    _persamaan(k)
+
+
+async def test_spek_tercatat_pada_tiap_entri(pg, sosoh):
+    """Keputusan pemilik pada pertanyaan QA: "ikut dicatat tiap entry" —
+    supaya gudang bisa menjumlah per spek."""
+    from sqlalchemy import select
+
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.gudang2.polishing import catat_output
+
+    await _sosoh_lagi(pg, sosoh, "POL-SPEK-02", "medium", 1, selesai=False)
+    for kg, spek in ((300, "premium"), (200, "medium")):
+        async with pg() as db:
+            u = await db.get(User, sosoh["user"])
+            await catat_output(db, user=u, kode="POL-SPEK-02", jenis="broken",
+                               berat_kg=kg, spek=spek)
+    async with pg() as db:
+        baris = list((await db.execute(
+            select(PolishingOutputLog)
+            .where(PolishingOutputLog.jenis == "broken")
+            .order_by(PolishingOutputLog.id))).scalars().all())
+    assert [(float(b.berat_kg), b.spek) for b in baris] == [(300, "premium"),
+                                                            (200, "medium")]
+
+
+async def test_entri_bisa_dibatalkan_satu_per_satu(pg, sosoh):
+    """Pasangan WAJIB dari per-prosesan: kumulatif tahan salah ketik — ketik
+    ulang, nilai terakhir menang. Entri yang bertambah tidak; satu ketukan
+    ganda menambah dua kali tanpa terlihat."""
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import catat_output
+    from app.services.stok import output_sosoh
+    from app.services import undo
+
+    pid = await _sosoh_lagi(pg, sosoh, "POL-SPEK-03", "medium", 1, selesai=False)
+    for _ in range(2):                            # ketukan ganda
+        async with pg() as db:
+            u = await db.get(User, sosoh["user"])
+            await catat_output(db, user=u, kode="POL-SPEK-03", jenis="broken",
+                               berat_kg=300)
+    async with pg() as db:
+        assert (await output_sosoh(db, pid))["broken"] == 600
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        c = await undo.cakupan(db, scope="saya", nama=None, self_id=u.id)
+        pesan = await undo.undo_last(db, actor=u, cakupan=c)
+        await db.commit()
+    assert "Dibatalkan" in pesan and "broken" in pesan, pesan
+    async with pg() as db:
+        assert (await output_sosoh(db, pid))["broken"] == 300
+
+
+async def test_entri_tak_bisa_dicabut_sesudah_prosesnya_ditutup(pg, sosoh):
+    """Rendemen dan Stok Produk sudah berdiri di atas angka itu; mencabutnya
+    diam-diam mengubah keduanya tanpa satu pesan pun."""
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import catat_output
+    from sqlalchemy import update
+
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.services import undo
+
+    await _sosoh_lagi(pg, sosoh, "POL-SPEK-04", "medium", 1, selesai=False)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_output(db, user=u, kode="POL-SPEK-04", jenis="broken",
+                           berat_kg=300)
+    # Prosesnya ditutup SESUDAH entrinya tercatat — persis keadaan yang
+    # membuat pencabutan berbahaya.
+    async with pg() as db:
+        await db.execute(update(PolishingProcess)
+                         .where(PolishingProcess.kode_proses == "POL-SPEK-04")
+                         .values(status="selesai"))
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        c = await undo.cakupan(db, scope="saya", nama=None, self_id=u.id)
+        with pytest.raises(undo.UndoError) as e:
+            await undo.undo_last(db, actor=u, cakupan=c)
+    assert "sudah ditutup" in str(e.value), e.value

@@ -137,59 +137,93 @@ async def _get_proc(db: AsyncSession, kode: str | None) -> PolishingProcess:
     return proc
 
 
-async def _latest_output(db: AsyncSession, proc_id: int, jenis: str) -> float:
-    v = (
-        await db.execute(
-            select(PolishingOutputLog.berat_kg)
-            .where(
-                PolishingOutputLog.polishing_process_id == proc_id,
-                PolishingOutputLog.jenis == jenis,
-            )
-            .order_by(PolishingOutputLog.waktu_update.desc())
-            .limit(1)
-        )
-    ).scalars().first()
-    return float(v) if v is not None else 0.0
+async def _total_output(db: AsyncSession, proc_id: int, jenis: str) -> float:
+    """Total satu jenis pada satu proses — JUMLAH seluruh entrinya.
+
+    Menggantikan `_latest_output`, yang mengambil baris terbaru karena angkanya
+    dulu kumulatif (migrasi 0060). Yang mengambil "terbaru" atas entri yang
+    bertambah akan menyebut prosesan terakhir sebagai seluruh hasil.
+    """
+    from sqlalchemy import func
+
+    return float((await db.execute(
+        select(func.coalesce(func.sum(PolishingOutputLog.berat_kg), 0))
+        .where(PolishingOutputLog.polishing_process_id == proc_id,
+               PolishingOutputLog.jenis == jenis)
+    )).scalar_one())
 
 
 @dataclass
 class OutputResult:
     proc: PolishingProcess
     jenis: str
+    #: Total seluruh entri jenis ini pada proses ini — dihitung, bukan disimpan.
     berat_kumulatif: float
+    #: Yang baru saja dicatat, dan speknya.
+    berat_kg: float = 0.0
+    spek: str | None = None
 
 
 async def catat_output(
     db: AsyncSession, *, user, kode: str | None, jenis: str | None,
-    berat_kumulatif: float | None, tanggal=None, jam=None,
+    berat_kg: float | None = None, spek: str | None = None,
+    berat_kumulatif: float | None = None, tanggal=None, jam=None,
 ) -> OutputResult:
-    """Catat hasil penyosohan (KUMULATIF total sejak awal, bukan tambahan)."""
+    """Catat hasil SATU PROSESAN — yang keluar sekarang, bukan total sejak awal.
+
+    ⚠ ARTINYA BERUBAH 28 September 2026 atas permintaan operator: dalam satu
+    penyosohan mereka berganti spek, dan tiap spek punya hasilnya sendiri.
+    Dengan kumulatif, mencatat 200 kg broken yang baru — sesudah 300 kg pada
+    spek sebelumnya — menuntut mereka mengetik 500, angka yang dijumlah sendiri
+    di kepala sambil berdiri di mesin.
+
+    `berat_kumulatif` MASIH DITERIMA dan diperlakukan sebagai entri biasa:
+    lembar yang sudah terbuka di layar orang saat versi baru terbit akan
+    mengirim nama lama, dan yang menekan Simpan tak punya cara tahu borangnya
+    basi. Yang berhenti cuma menawarkannya.
+
+    ⚠ YANG HILANG BERSAMA KUMULATIF, dan penggantinya wajib ada: kumulatif
+    TAHAN SALAH KETIK — salah ketik dibetulkan dengan mengetik ulang, nilai
+    terakhir menang. Begitu entri bertambah, satu ketukan ganda menambah dua
+    kali tanpa terlihat, dan angka salah tak bisa dibetulkan dengan mengetik
+    ulang. Karena itu tiap entri kini BISA DIBATALKAN sendiri-sendiri
+    (`undo._undo_output_sosoh`), dan `log_activity` menyimpan id BARISNYA —
+    bukan id prosesnya seperti dulu, yang membuat pembatalan per entri
+    mustahil.
+    """
     if not jenis or jenis.lower() not in _ALL_JENIS:
         raise Gudang2Error(
             "Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + "."
         )
     jenis = jenis.lower()
-    if berat_kumulatif is None:
-        raise Gudang2Error("Sebutkan berat (kumulatif) hasilnya, mis. `premium 2 ton`.")
+    berat = berat_kg if berat_kg is not None else berat_kumulatif
+    if berat is None:
+        raise Gudang2Error(
+            "Sebutkan berat hasil prosesan ini, mis. `premium 2 ton`.")
+    if float(berat) <= 0:
+        raise Gudang2Error(
+            "Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat "
+            "'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
     proc = await _get_proc(db, kode)
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
-    last = await _latest_output(db, proc.id, jenis)
-    if float(berat_kumulatif) < last:
-        raise Gudang2Error(
-            f"Angka kumulatif {jenis} tak boleh turun (terakhir {last:.0f} kg, "
-            f"baru {float(berat_kumulatif):.0f} kg)."
-        )
-    db.add(PolishingOutputLog(
-        polishing_process_id=proc.id, jenis=jenis, berat_kg=berat_kumulatif,
+    spek = (spek or "").strip() or None
+    baris = PolishingOutputLog(
+        polishing_process_id=proc.id, jenis=jenis, berat_kg=berat, spek=spek,
         waktu_update=input_time(tanggal, jam), input_by=user.id,
-    ))
+    )
+    db.add(baris)
+    await db.flush()
     await log_activity(
-        db, table_name="polishing_output_logs", record_id=proc.id, action="INSERT",
-        changed_by=user.id, new_value=f"{jenis} kumulatif {berat_kumulatif:.0f}kg",
+        db, table_name="polishing_output_logs", record_id=baris.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{jenis} {float(berat):.0f}kg"
+                  + (f" · spek {spek}" if spek else ""),
     )
     await db.commit()
-    return OutputResult(proc=proc, jenis=jenis, berat_kumulatif=float(berat_kumulatif))
+    total = await _total_output(db, proc.id, jenis)
+    return OutputResult(proc=proc, jenis=jenis, berat_kumulatif=total,
+                        berat_kg=float(berat), spek=spek)
 
 
 # ─────────────────────────── Selesai + rendemen ───────────────────────────

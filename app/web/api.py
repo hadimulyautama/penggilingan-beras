@@ -782,7 +782,21 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada penyosohan yang sedang berjalan."},
                  {"name": "jenis", "label": "Jenis hasil (wajib pilih)", "type": "select",
                   "options": JENIS_HASIL},
-                 {"name": "berat_kumulatif", "label": "Berat kumulatif (kg)", "type": "number"},
+                 # ── PER PROSESAN, bukan kumulatif (28 September 2026) ──
+                 #
+                 # Permintaan operator: dalam satu penyosohan mereka berganti
+                 # spek, dan tiap spek punya hasilnya sendiri. Dengan kumulatif,
+                 # mencatat 200 kg yang baru menuntut mereka mengetik 500 —
+                 # angka yang dijumlah sendiri di kepala, sambil berdiri di
+                 # mesin. Penjumlahan itu pekerjaan gudang.
+                 {"name": "berat_kg", "label": "Berat hasil prosesan ini (kg)",
+                  "type": "number"},
+                 # Speknya ikut dicatat tiap entri (keputusan pemilik pada
+                 # pertanyaan QA), supaya hasil bisa dijumlah per spek.
+                 # Teks bebas: spek lahir dari permintaan pembeli, bukan dari
+                 # daftar yang bisa dibekukan hari ini.
+                 {"name": "spek", "label": "Spek yang sedang dijalankan — opsional",
+                  "type": "text", "optional": True},
              ]},
             {"id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
              "post": "/api/actions/hentikan-proses",
@@ -2831,7 +2845,12 @@ async def act_mulai_penyosohan(req: MulaiPenyosohanReq, user: User = Depends(pen
 class HasilPenyosohanReq(BaseModel):
     kode_proses: str
     jenis: str
-    berat_kumulatif: Positif
+    #: Bentuk BARU: yang keluar pada prosesan ini. `berat_kumulatif` tetap
+    #: diterima — lembar yang sudah terbuka di layar orang saat versi baru
+    #: terbit akan mengirim nama lama.
+    berat_kg: Positif | None = None
+    spek: str | None = None
+    berat_kumulatif: Positif | None = None
 
 
 @router.post("/actions/hasil-penyosohan")
@@ -2846,10 +2865,17 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
         u = await db.get(User, user.id)
         try:
             r = await catat_output(db, user=u, kode=req.kode_proses,
-                                   jenis=req.jenis, berat_kumulatif=req.berat_kumulatif)
+                                   jenis=req.jenis, berat_kg=req.berat_kg,
+                                   spek=(req.spek or None),
+                                   berat_kumulatif=req.berat_kumulatif)
         except Gudang2Error as e:
             raise _err(e, "Gagal catat hasil penyosohan.")
-    pesan = f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kumulatif:g} kg (kumulatif)."
+    # Dua angka, dan keduanya perlu: yang BARU SAJA dicatat (supaya ia yakin
+    # angkanya masuk seperti yang ia ketik) dan TOTALNYA (supaya ia tak perlu
+    # menjumlah sendiri — justru penjumlahan itu yang dikeluhkan).
+    pesan = (f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kg:g} kg"
+             + (f" · spek {r.spek}" if r.spek else "")
+             + f" — total {r.jenis} jadi {r.berat_kumulatif:g} kg.")
     return {"ok": True, "pesan": pesan}
 
 

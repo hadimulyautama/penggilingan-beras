@@ -660,23 +660,28 @@ async def output_sosoh_banyak(db: AsyncSession, proc_ids=None
     500 kueri, dan halamannya 1,77 detik. Di HP lewat 4G itu bukan lagi halaman
     yang bisa dibuka.
 
-    Aturannya SAMA PERSIS dengan `output_sosoh` — baris terbaru per (proses,
-    jenis), diurutkan `waktu_update` lalu `id` — dan itu disengaja: bentuk
-    borongan yang memakai aturan sendiri (misalnya `MAX(id)`) akan berselisih
-    dengan bentuk tunggalnya pada baris yang waktunya diketik mundur. Dijaga
-    `test_bentuk_borongan_sama_dengan_bentuk_tunggal`.
+    ⚠ MENJUMLAH, bukan mengambil yang terbaru — dan inilah baris yang
+    menentukan benar-salahnya seluruh Stok Produk. Sampai 28 September 2026
+    `berat_kg` kumulatif, jadi yang benar adalah baris TERAKHIR; sejak migrasi
+    0060 tiap entri berdiri sendiri (permintaan operator: tiap ganti spek punya
+    hasilnya sendiri). Yang lupa diubah akan menyebut 200 kg untuk broken yang
+    sungguhnya 500 kg, dan persamaan kartunya patah tanpa satu pesan pun.
+
+    Bentuk tunggal `output_sosoh` cuma bungkus fungsi ini, jadi keduanya tak
+    mungkin berselisih — dijaga `test_bentuk_borongan_sama_dengan_bentuk_tunggal`.
 
     `proc_ids=None` berarti SELURUH proses; itu yang dipakai layar Stok Produk,
     yang memang menjumlah seluruh riwayat untuk kepala kartunya.
     """
     from app.penggilingan.gudang2.models import PolishingOutputLog
 
+    from sqlalchemy import func
+
     q = (select(PolishingOutputLog.polishing_process_id,
-                PolishingOutputLog.jenis, PolishingOutputLog.berat_kg)
-         .order_by(PolishingOutputLog.polishing_process_id,
-                   PolishingOutputLog.jenis,
-                   PolishingOutputLog.waktu_update.desc(),
-                   PolishingOutputLog.id.desc()))
+                PolishingOutputLog.jenis,
+                func.coalesce(func.sum(PolishingOutputLog.berat_kg), 0))
+         .group_by(PolishingOutputLog.polishing_process_id,
+                   PolishingOutputLog.jenis))
     if proc_ids is not None:
         ids = list(proc_ids)
         if not ids:
@@ -684,7 +689,7 @@ async def output_sosoh_banyak(db: AsyncSession, proc_ids=None
         q = q.where(PolishingOutputLog.polishing_process_id.in_(ids))
     keluar: dict[int, dict[str, float]] = {}
     for pid, jenis, kg in (await db.execute(q)).all():
-        keluar.setdefault(pid, {}).setdefault(jenis, float(kg))
+        keluar.setdefault(pid, {})[jenis] = float(kg)
     return keluar
 
 
