@@ -144,6 +144,12 @@ async def catat_packing(
             f"{proc.kode_proses}. Catat hasil penyosohannya dulu — packing "
             "memindahkan beras yang sudah keluar mesin, bukan menciptakannya.")
     sudah = await _packed_kg(db, proc.id, kategori, std_id)
+    # Bekatul punya jalan KEDUA — "Catat bekatul (curah)" — dan yang sudah
+    # dibukukan di sana tak boleh dikarungi lagi. `_packed_kg` sendirian cuma
+    # melihat karung, jadi tanpa baris ini 1.000 kg yang sudah dicatat curah
+    # masih bisa dikarungi utuh, dan stok bekatul jadi dua kali lipat.
+    if kategori == "bekatul":
+        sudah = await _bekatul_dibukukan(db, proc.id)
     tersedia = float(keluar) - sudah
     if berat > tersedia + 0.5:
         raise InventoryError(
@@ -189,6 +195,28 @@ async def _packed_kg(db: AsyncSession, proc_id: int, kategori: str, std_id: int 
     return float((await db.execute(q)).scalar_one())
 
 
+async def _bekatul_dibukukan(db: AsyncSession, proc_id: int) -> float:
+    """Bekatul penyosohan ini yang SUDAH punya rumah — lewat jalan mana pun.
+
+    Sejak 28 September 2026 bekatul punya DUA jalan (keputusan pemilik):
+    sebagian dijual curah, sebagian dikarungi 40 kg. Keduanya mengambil dari
+    tumpukan yang SAMA — bekatul yang keluar mesin pada penyosohan itu — jadi
+    keduanya wajib saling mengurangi.
+
+    Tanpa fungsi ini, 1.000 kg bisa dibukukan curah lalu dikarungi lagi:
+    keduanya lolos, stoknya jadi 2.000 kg, dan tak satu pun layar berbunyi.
+    Bekatul bukan barang mahal — tetapi angka stok yang bisa dilipatgandakan
+    dengan dua ketukan wajar membuat SELURUH layar itu berhenti dipercaya.
+    """
+    curah = float((await db.execute(
+        select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+        .where(ByproductStock.jenis_produk == "bekatul",
+               ByproductStock.source_type == "polishing",
+               ByproductStock.source_id == proc_id)
+    )).scalar_one())
+    return curah + await _packed_kg(db, proc_id, "bekatul", None)
+
+
 async def catat_bekatul(
     db: AsyncSession, *, user, kode_pol: str | None, berat_kg: float | None,
     tanggal=None, jam=None,
@@ -197,6 +225,26 @@ async def catat_bekatul(
     if not berat_kg:
         raise InventoryError("Sebutkan berat bekatulnya (kg).")
     proc = await _proc_by_kode(db, kode_pol)
+    # ── Tak boleh melebihi yang keluar mesin, DIKURANGI yang sudah dikarungi ──
+    #
+    # Hanya berlaku bila hasil bekatulnya memang DICATAT pada penyosohan itu.
+    # Kalau belum ada catatannya, jalan ini dibiarkan seperti dulu: menolak
+    # akan mematikan pencatatan curah yang sudah berjalan bertahun-tahun pada
+    # pabrik yang tak selalu menimbang bekatulnya di mesin — dan tanpa catatan
+    # hasil, packing juga mustahil, jadi tak ada jalan kedua yang bisa
+    # menggandakan angkanya.
+    from app.services.stok import output_sosoh
+
+    keluar_mesin = (await output_sosoh(db, proc.id)).get("bekatul")
+    if keluar_mesin is not None:
+        sisa = float(keluar_mesin) - await _bekatul_dibukukan(db, proc.id)
+        if float(berat_kg) > sisa + 0.5:
+            raise InventoryError(
+                f"{proc.kode_proses} tinggal {sisa:,.0f} kg bekatul yang belum "
+                f"dibukukan — tak bisa mencatat {float(berat_kg):,.0f} kg. "
+                f"(Keluar mesin {float(keluar_mesin):,.0f} kg; sudah dicatat "
+                f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
+                .replace(",", "."))
     now = input_time(tanggal, jam)
     db.add(ByproductStock(
         jenis_produk="bekatul", source_type="polishing", source_id=proc.id,

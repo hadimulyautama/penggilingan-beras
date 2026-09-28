@@ -130,10 +130,21 @@ async def seed_master() -> None:
                 db.add(RiceQualityStandard(kode=kode, nama=nama, urutan=urut))
                 created.append(f"standar {nama}")
 
+        #: Merk milik sendiri. "FJ" dan "Gunung Mas" masuk 28 September 2026
+        #: atas keterangan pemilik — keduanya sudah dipakai di lapangan.
+        #:
+        #: `tipe` menentukan URUTANNYA di borang, bukan sekadar catatan:
+        #: `/actions/merk` mengurutkan `tipe` menurun lalu nama, jadi "Polos"
+        #: (tipe `polos`) selalu jatuh ke bawah dan merk sendiri berkumpul di
+        #: atas. Merk baru yang salah tipe akan tersembunyi di ujung daftar.
+        #:
+        #: Merk PEMBELI tidak masuk sini — ia label bebas di transaksinya,
+        #: sebab daftar ini dipakai memilih apa yang PABRIK kemas sendiri.
         _BRANDS = [
             ("Imbiss", "house"), ("LosPulen", "house"), ("Pulenesia", "house"),
             ("Pulenisme", "house"), ("Raja", "house"), ("Lele", "house"),
-            ("Melon", "house"), ("Polos", "polos"),
+            ("Melon", "house"), ("FJ", "house"), ("Gunung Mas", "house"),
+            ("Polos", "polos"),
         ]
         for nama, tipe in _BRANDS:
             ada = (
@@ -156,7 +167,11 @@ async def seed_master() -> None:
                 db.add(PackagingMaterial(kode=kode, nama=nama))
                 created.append(f"karung {nama}")
 
-        for ukuran in (5, 10, 25, 48, 50):
+        # Sepasang dengan `packaging._BERAS_SIZES` — lihat catatan panjang di
+        # sana. 20 & 40 kg masuk 28 September 2026 atas keterangan pemilik.
+        # Semaian ini jalan di TIAP boot dan idempoten, jadi basis data yang
+        # sudah berisi cukup di-deploy; tak perlu migrasi.
+        for ukuran in (5, 10, 20, 25, 40, 48, 50):
             ada = (
                 await db.execute(select(PackageSize).where(PackageSize.ukuran_kg == ukuran))
             ).scalars().first()

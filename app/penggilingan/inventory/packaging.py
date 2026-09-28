@@ -61,14 +61,36 @@ async def get_standard(db: AsyncSession, kode: str) -> RiceQualityStandard | Non
 
 # Aturan kemasan per kategori (validasi kombinasi).
 KEMASAN_VALID = {
-    "beras_putih": {("biasa", None), ("laminasi", None)},  # ukuran 5/10/25/48/50
+    "beras_putih": {("biasa", None), ("laminasi", None)},  # ukuran: _BERAS_SIZES
     "beras_b": {("biasa", None), ("laminasi", None)},
     "broken": {("putih", 50), ("polos", 25)},
     "menir": {("putih", 50)},
+    # Bekatul boleh dikemas SEJAK 28 September 2026 (keterangan pemilik: karung
+    # bekas 40 kg) — dan ia satu-satunya barang yang punya DUA jalan sekaligus:
+    # sebagian dijual curah lewat "Catat bekatul (curah)" & "Bekatul keluar",
+    # sebagian dikarungi lewat packing. Pemilik memilih keduanya dengan sadar.
+    #
+    # ⚠ DUA JALAN KE SATU TUMPUKAN. Keduanya mengambil dari angka yang sama —
+    # bekatul yang keluar mesin pada penyosohan itu — jadi keduanya WAJIB saling
+    # mengurangi. Tanpa itu, 1.000 kg bisa dibukukan curah lalu dikarungi lagi,
+    # dan stoknya jadi 2.000 kg tanpa satu pesan pun. Pagarnya
+    # `finished_goods._bekatul_terpakai`, dibaca kedua pencatat.
+    "bekatul": {("bekas", 40)},
     "reject": {("bekas", 50)},
     "pk": {("karung_pk", 50)},
 }
-_BERAS_SIZES = {5, 10, 25, 48, 50}
+#: Ukuran karung beras yang dipakai pabrik. 20 dan 40 kg ditambahkan 28
+#: September 2026 atas keterangan pemilik — keduanya sudah dipakai di lapangan,
+#: dan yang belum ada di sini.
+#:
+#: ⚠ DUA TEMPAT, DAN KEDUANYA WAJIB SEPAKAT. Daftar ini yang MENAWARKAN
+#: ukurannya di borang (`aksi_inventory.kombinasi_kemasan`); yang MENERIMANYA
+#: saat disimpan adalah baris `package_sizes` di basis data
+#: (`find_or_create_sku` → `get_size`). Ukuran yang ada di sini tetapi tak
+#: disemai berakhir sebagai pilihan yang bisa ditekan lalu ditolak — "Ukuran 20
+#: kg tidak terdaftar", sesudah operator mengetik jumlah karungnya. Pagarnya
+#: `tests/test_ukuran_kemasan.py`, bukan ingatan.
+_BERAS_SIZES = {5, 10, 20, 25, 40, 48, 50}
 
 
 def _validate_kemasan(kategori: str, material_kode: str, ukuran: int) -> None:
@@ -191,14 +213,18 @@ _KARUNG_BERMERK = {"biasa", "laminasi", "putih", "bekas"}
 
 async def beli_kemasan(
     db: AsyncSession, *, user: User, material_kode: str | None, ukuran: int | None,
-    jumlah: int | None, brand_nama: str | None = None,
-    harga_per_lembar: float | None = None, tanggal=None, jam=None,
+    jumlah: int | None, brand_nama: str | None = None, tanggal=None, jam=None,
 ) -> BeliKemasanResult:
-    """Catat pembelian karung (staff/admin). Karung beras WAJIB bermerk."""
+    """Catat pembelian karung (staff/admin). Karung beras WAJIB bermerk.
+
+    TANPA HARGA sejak 29 September 2026 (keputusan pemilik). Yang dicatat di
+    sini berapa LEMBAR masuk gudang — itu yang dipakai memutuskan kapan membeli
+    lagi. Berapa rupiahnya dicatat di tempat uang dicatat.
+    """
     if not material_kode or not ukuran or not jumlah:
         raise InventoryError(
             "Sebutkan jenis karung, ukuran, dan jumlah. Contoh: "
-            "`beli karung LosPulen laminasi 25kg 2000 lembar harga 1500`"
+            "`beli karung LosPulen laminasi 25kg 2000 lembar`"
         )
     material = await get_material(db, material_kode)
     if material is None:
@@ -223,7 +249,7 @@ async def beli_kemasan(
     p = PackagingPurchase(
         kode=await next_packaging_purchase_code(db, now.date()),
         packaging_material_id=material.id, package_size_id=size.id, brand_id=brand_id,
-        jumlah_lembar=int(jumlah), harga_per_lembar=harga_per_lembar,
+        jumlah_lembar=int(jumlah),
         tanggal=now.date(), waktu=now, input_by=user.id,
     )
     db.add(p)
@@ -231,7 +257,7 @@ async def beli_kemasan(
     await log_activity(
         db, table_name="packaging_purchases", record_id=p.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{p.kode} | {brand_nama or '-'} {material.kode} {ukuran}kg x{jumlah} @ {harga_per_lembar}",
+        new_value=f"{p.kode} | {brand_nama or '-'} {material.kode} {ukuran}kg x{jumlah}",
     )
     await db.commit()
     await db.refresh(p)
