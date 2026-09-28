@@ -96,13 +96,21 @@
          salah — dan di beras itu berujung ke pemasok dan ke uang. #}
       <div class="anak__kepala">Perkiraan asal stok (FIFO) ·
         {{ kg(k.sisa_kg) }} kg</div>
+      {# Tanggalnya DI SEBELAH kodenya, bukan di baris sendiri (permintaan
+         pemilik 28 September 2026: "tanggal sosoh disamping kode sosoh saja").
+         Satu penyosohan satu baris; baris kedua yang cuma memuat "26/09"
+         membuat daftar enam penyosohan setinggi dua belas baris, dan mata
+         kehilangan pasangan kode–angkanya di tengah jalan.
+
+         Keterangannya — bila ada — tetap turun: ia bisa sepanjang nama
+         pembeli, dan yang panjang di sebelah kode akan mendorong angkanya
+         keluar. #}
       {% for r in k.hasil %}
         <div class="anak__baris">
-          <span class="anak__nama">{{ r.kode }}</span>
+          <span class="anak__nama">{{ r.kode }}
+            {%- if r.waktu %} · {{ r.waktu.strftime('%d/%m') }}{% endif %}</span>
           <span class="anak__kg">{{ kg(r.kg) }} kg</span>
-          <span class="anak__jam">
-            {%- if r.waktu %}{{ r.waktu.strftime('%d/%m') }}{% endif %}
-            {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
+          {% if r.ket %}<span class="anak__jam">{{ r.ket }}</span>{% endif %}
         </div>
       {% endfor %}
       {% if k.hasil_lagi %}
@@ -123,11 +131,10 @@
         <div class="anak__kepala">Sudah keluar · {{ kg(k.keluar_kg) }} kg</div>
         {% for r in k.keluar %}
           <div class="anak__baris">
-            <span class="anak__nama">{{ r.kode }}</span>
+            <span class="anak__nama">{{ r.kode }}
+              {%- if r.waktu %} · {{ r.waktu.strftime('%d/%m') }}{% endif %}</span>
             <span class="anak__kg">{{ kg(r.kg) }} kg</span>
-            <span class="anak__jam">
-              {%- if r.waktu %}{{ r.waktu.strftime('%d/%m') }}{% endif %}
-              {%- if r.ket %} · {{ r.ket }}{% endif %}</span>
+            {% if r.ket %}<span class="anak__jam">{{ r.ket }}</span>{% endif %}
           </div>
         {% endfor %}
         {# Riwayat memang bertambah selamanya, jadi FIFO tak menolong daftar
@@ -141,27 +148,66 @@
         {% endif %}
       {% endif %}
 
-      {# Sisa terbelah DUA keadaan yang sangat berbeda, dan belahan "belum
-         dikemas" wajib tampil. Tanpa ia, kartunya menunjukkan selisih yang
-         akan dikira kebocoran — padahal itu justru beras curahnya. #}
-      <div class="anak__kepala">Sisa di gudang · {{ kg(k.sisa_kg) }} kg</div>
-      <div class="anak__baris">
-        <span class="anak__nama">
-          {{- "sudah tercatat sebagai stok" if k.curah_saja else "sudah dikemas" }}</span>
-        <span class="anak__kg">{{ kg(k.dikemas_kg) }} kg</span>
-      </div>
+      {# ── Yang tinggal SATU kepala, bukan kepala plus barisnya ──
+         Permintaan pemilik 28 September 2026: "informasi sisa digudang sudah
+         ada di bagian atas kartu. tidak perlu lagi informasi tambahan."
+
+         Betul, dan angkanya diucapkan TIGA KALI di satu kartu: sisa di kepala
+         kartu, "Dikemas" & "Curah" di empat sukunya, lalu keduanya diulang
+         lagi di dalam laci. Yang diulang berhenti dibaca — dan yang berhenti
+         dibaca membuat empat suku di atas ikut dilewati.
+
+         Kepalanya kini MENAMAI DAFTAR DI BAWAHNYA, bukan mengumumkan sisa:
+         "Dikemas · 27.750 kg" berdiri tepat di atas rincian per merk yang
+         menjumlah persis angka itu. Kepala yang menyebut angka yang bukan
+         jumlah daftarnya adalah kepala yang menyesatkan. #}
+      <div class="anak__kepala">
+        {{- "Tercatat" if k.curah_saja else "Dikemas" }} ·
+        {{ kg(k.dikemas_kg) }} kg</div>
+      {# ── Yang disebut MERK dan KEMASANNYA, bukan kategorinya lagi ──
+         Permintaan pemilik 28 September 2026: "kita sudah tau kalau itu
+         premium. jadi informasi yang sudah dikemas tidak perlu lagi informasi
+         premium. dan kata 'karung' dihapus saja agar readability lebih baik.
+         lalu untuk nama merk ditulis agak tebal."
+
+         Barisnya berada DI DALAM kartu Premium; menyebut "Premium" sekali lagi
+         di tiap baris cuma menambah lebar tanpa menambah kabar — dan lebar itu
+         yang membuat barisnya patah dua di ponsel. Yang membedakan baris satu
+         dari baris lain adalah MERK-nya, jadi merk yang ditebalkan.
+
+         Merk kosong tetap digambar barisnya: beras tanpa merk bukan beras yang
+         tak ada, dan baris yang hilang membuat jumlahnya tak cocok dengan
+         "sudah dikemas" di atasnya. #}
       {% for p in kemasan.get(k.jenis, []) %}
         <div class="anak__baris">
-          <span class="anak__nama">· {{ p.nama }} · {{ p.kemasan }}</span>
-          <span class="anak__kg">{{ kg(p.kg) }} kg
-            {%- if p.karung %} · {{ p.karung }} krg{% endif %}</span>
+          {# Spasi TAK-PUTUS antara angka dan satuannya. Merk panjang
+             ("Pulenesia") membuat barisnya melipat, dan tanpa ini yang turun
+             ke baris berikutnya cuma kata "kg" — satu suku kata menggantung
+             sendirian di bawah barisnya, persis rupa yang dikeluhkan. Yang
+             boleh putus titik sebelum ukurannya, bukan di tengah angkanya. #}
+          <span class="anak__nama">·
+            {%- if p.merk %} <b class="anak__merk">{{ p.merk }}</b> ·{% endif %}
+            {# `ukuran` 0 berarti BUKAN karung — bekatul curah, yang berumah
+               di `byproduct_stock` dan dijual per kg. "curah 0 kg" akan
+               terbaca sebagai stok nol, padahal angkanya ada di kolom
+               sebelahnya. #}
+            {{ p.bahan }}{% if p.ukuran %} {{ p.ukuran }}&nbsp;kg{% endif %}</span>
+          <span class="anak__kg">{{ kg(p.kg) }}&nbsp;kg
+            {%- if p.karung %} · {{ p.karung }}&nbsp;krg{% endif %}</span>
         </div>
       {% endfor %}
-      <div class="anak__baris">
-        <span class="anak__nama">
-          {{- "belum dicatat" if k.curah_saja else "belum dikemas (curah)" }}</span>
-        <span class="anak__kg">{{ kg(k.curah_kg) }} kg</span>
-      </div>
+      {# Belahan "belum dikemas" tetap ada — ia sebab seluruh halaman ini
+         lahir — tetapi hanya ketika ADA. Nol yang dicetak di sini cuma
+         mengulang suku "Curah" di atas; yang bukan nol adalah beras yang
+         berdiri di lantai dan belum punya rumah, dan itu wajib terbaca tanpa
+         orang menghitung sendiri selisih dua angka. #}
+      {% if k.curah_kg > 0.5 or k.curah_kg < -0.5 %}
+        <div class="anak__baris">
+          <span class="anak__nama">
+            {{- "belum dicatat" if k.curah_saja else "belum dikemas (curah)" }}</span>
+          <span class="anak__kg">{{ kg(k.curah_kg) }}&nbsp;kg</span>
+        </div>
+      {% endif %}
     </div>
 
     {# ── Dua keadaan yang BERLAWANAN ARAH, dua kalimat yang berbeda ──

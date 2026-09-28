@@ -1076,6 +1076,11 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .anak__baris { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
 .anak__nama { font-family: var(--mono); font-size: 13px; color: var(--tinta-2); }
 .anak__kg { font-size: 13px; color: var(--tinta-2); font-variant-numeric: tabular-nums; }
+/* Merk ditebalkan (permintaan pemilik 28 September 2026): di dalam kartu yang
+   sudah menyebut kategorinya, MERK-lah yang membedakan satu baris dari baris
+   lain. 600, bukan 700 — huruf mono yang terlalu tebal di 13px menutup
+   rongganya sendiri dan justru lebih sulit dibaca di bawah matahari. */
+.anak__merk { font-weight: 600; color: var(--tinta); }
 .anak__jam {
   grid-column: 1 / -1;
   font-family: var(--mono); font-size: 13px; color: var(--redup-2);

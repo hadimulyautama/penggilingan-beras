@@ -26,10 +26,11 @@ from sqlalchemy import select
 
 from app.peran import can_see_financials
 from app.database import SessionLocal
-from app.models import User
+from app.models import OutgoingItem, User
 from app.penggilingan.inventory import finished_goods as bj
 from app.penggilingan.inventory import outgoing as keluar
 from app.penggilingan.inventory import packaging as kms
+from app.services import barang_keluar as bk
 from app.web.aksi_umum import galat, kg, rp, wajib
 from app.web.deps import pengguna_aksi
 
@@ -178,9 +179,15 @@ async def stok_barang_jadi(user: User = Depends(pengguna_aksi)) -> list[dict]:
     atas benda yang bisa dilihat sendiri adalah tiga kesempatan untuk memilih
     kombinasi yang stoknya nol.
 
-    Yang ditawarkan di sini hanya yang berkarung lebih dari nol. Bekatul tak
-    ikut: ia curah dan punya aksinya sendiri ("Bekatul keluar"); menawarkannya
-    di daftar berkarung akan membuat orang mengirim "0 karung bekatul".
+    Yang ditawarkan di sini hanya yang berkarung lebih dari nol — dan sejak 28
+    September 2026 kalimat itu memikul lebih banyak daripada dulu.
+
+    Bekatul kini punya DUA jalan (keputusan pemilik): sebagian dijual curah,
+    sebagian dikarungi 40 kg. Saringan "berkarung > 0" memilah keduanya dengan
+    sendirinya — baris karungnya ikut ke daftar ini, baris curahnya tidak,
+    sebab ia bernilai `karung: 0` dan punya aksinya sendiri ("Bekatul keluar").
+    Itu bukan kebetulan yang beruntung: menawarkan yang curah di daftar
+    berkarung akan membuat orang mengirim "0 karung bekatul".
 
     Nilainya `sku_id|std_id` — pasangan id, sebab merk & mutu yang sama bisa
     punya dua kemasan, dan kemasan yang sama bisa punya dua merk.
@@ -287,7 +294,6 @@ class BeliKemasanReq(BaseModel):
     karung: str                       # "material|ukuran"
     jumlah: int
     merk: str | None = None
-    harga_per_lembar: float | None = None
 
 
 @router.post("/actions/beli-kemasan")
@@ -306,9 +312,7 @@ async def act_beli_kemasan(req: BeliKemasanReq,
         try:
             r = await kms.beli_kemasan(
                 db, user=u, material_kode=material, ukuran=ukuran,
-                jumlah=int(req.jumlah), brand_nama=(req.merk or None),
-                harga_per_lembar=req.harga_per_lembar,
-            )
+                jumlah=int(req.jumlah), brand_nama=(req.merk or None))
         except kms.InventoryError as e:
             raise galat(e, "Gagal mencatat pembelian karung.")
 
@@ -424,27 +428,24 @@ async def act_catat_bekatul(req: BekatulReq,
 
 
 # ─────────────────────────── Barang keluar ───────────────────────────
-
-class KirimBarangJadiReq(BaseModel):
-    """Bentuk BARU sejak 28 September 2026: `stok` = `sku_id|std_id`.
-
-    Bentuk lama (`produk` + `merk` + `grade`) tetap diterima — halaman di ponsel
-    berumur panjang, dan lembar yang sudah terbuka saat versi baru terbit akan
-    mengirimnya tanpa pemakainya tahu.
-    """
-
-    jumlah_karung: int
-    nama_pembeli: str
-    stok: str | None = None           # "sku_id|std_id"
-    metode: str | None = None
-    # ── bentuk lama ──
-    produk: str | None = None         # "kategori|material|ukuran"
-    merk: str | None = None
-    grade: str | None = None
-    no_polisi: str | None = None
-    nama_ekspedisi: str | None = None
-    harga_per_kg: float | None = None
-
+#
+# ⚠ TIGA AKSI DIBUANG 28 September 2026 — `kirim_barang_jadi`, `kirim_bekatul`,
+# `jual_pk`. Keputusan pemilik, atas usul QA, dan sebabnya bukan kerapian:
+#
+# Ketiganya mengerjakan hal yang SAMA dengan rantai barang keluar berperintah,
+# tetapi tanpa perintah dan tanpa verifikasi. Dibiarkan hidup, rantai itu jadi
+# SUKARELA: barang bisa keluar lewat pintu belakang, dan angka barang keluar
+# berhenti bisa dipercaya — sebagian lewat perintah, sebagian tidak, dan tak
+# ada yang tahu mana yang mana. Itu persis yang dilarang "satu pekerjaan, satu
+# pintu".
+#
+# Dan ketiganya juga yang membuat satu truk berisi beras + broken + menir
+# melahirkan TIGA kode OUT- yang berbeda: masing-masing memanggil pembuat
+# record sendiri untuk SATU jenis barang. Skemanya sudah satu-ke-banyak sejak
+# awal; yang tak pernah memakainya adalah layarnya.
+#
+# Mengirim satu barang saja tetap bisa: perintah dengan satu baris.
+# Layanannya di `app.services.barang_keluar`.
 
 async def _urai_stok_bj(nilai: str) -> tuple[str, str | None, str | None, str, int]:
     """(kategori, mutu, merk, material, ukuran) dari satu pilihan `sku_id|std_id`.
@@ -481,108 +482,382 @@ async def _urai_stok_bj(nilai: str) -> tuple[str, str | None, str | None, str, i
     return kategori, mutu, merk, material, int(ukuran)
 
 
-@router.post("/actions/kirim-barang-jadi")
-async def act_kirim_barang_jadi(req: KirimBarangJadiReq,
-                                user: User = Depends(pengguna_aksi)) -> dict:
-    wajib(can_see_financials(user))
-    if req.stok:
-        kategori, mutu, merk, material, ukuran = await _urai_stok_bj(req.stok)
-    else:
-        # Bentuk lama — lembar yang sudah terbuka di layar orang saat versi
-        # baru terbit. Yang berhenti cuma MENAWARKANNYA.
-        kategori, material, ukuran = _urai_triple(req.produk or "")
-        mutu = (req.grade or None) if kategori == "beras_putih" else None
-        merk = req.merk or None
-    if int(req.jumlah_karung or 0) <= 0:
-        raise HTTPException(400, "Isi jumlah karung lebih dari 0.")
-    if not (req.nama_pembeli or "").strip():
-        raise HTTPException(400, "Isi nama pembeli.")
+# ── Daftar untuk medan `remote` rantai barang keluar ──
+
+def _ringkas_perintah(rec, items) -> str:
+    macam = len(items)
+    total = sum(float(i.berat_perintah_kg or 0) for i in items)
+    sudah = sum(float(i.berat_kg or 0) for i in items)
+    label = f"{rec.kode} · {rec.nama_pembeli or '?'} · {macam} macam · {kg(total)}"
+    if sudah > 0.5:
+        label += f" · sudah dimuat {kg(sudah)}"
+    if rec.no_polisi:
+        label += f" · {rec.no_polisi}"
+    return label
+
+
+@router.get("/actions/perintah-terbuka")
+async def perintah_terbuka(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Perintah yang menunggu dimuat — dibaca operator DAN Admin.
+
+    Satu daftar untuk dua peran, sebab yang ditanyakan sama: perintah mana yang
+    belum berangkat. Dua daftar yang disusun terpisah akan berselisih isinya
+    pada perubahan berikutnya, dan yang berselisih adalah daftar pekerjaan.
+    """
+    from app.penggilingan.inventory.models import OUT_PERINTAH
 
     async with SessionLocal() as db:
-        u = await db.get(User, user.id)
-        try:
-            r = await keluar.kirim_finished_goods(
-                db, user=u, kategori=kategori,
-                grade=mutu if kategori == "beras_putih" else None,
-                brand_nama=merk if kategori in KATEGORI_BERMERK else None,
-                material_kode=material, ukuran=ukuran,
-                jumlah_karung=int(req.jumlah_karung),
-                nama_pembeli=req.nama_pembeli.strip(), metode=req.metode,
-                no_polisi=(req.no_polisi or None), nama_ekspedisi=(req.nama_ekspedisi or None),
-                harga_per_kg=req.harga_per_kg,
-            )
-        except keluar.InventoryError as e:
-            raise galat(e, "Gagal mencatat barang keluar.")
-    return {"ok": True, "pesan": await _pesan_keluar(user, r)}
+        baris = await bk.daftar(db, status=(OUT_PERINTAH,))
+    return [{"value": str(r.id), "label": _ringkas_perintah(r, it)}
+            for r, it in baris]
 
 
-class KirimBekatulReq(BaseModel):
-    berat_kg: float
-    nama_pembeli: str
+@router.get("/actions/keluar-dimuat")
+async def keluar_dimuat(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Muatan yang sudah berangkat dan menunggu verifikasi Admin."""
+    wajib(can_see_financials(user))
+    from app.penggilingan.inventory.models import OUT_DIMUAT
+
+    async with SessionLocal() as db:
+        baris = await bk.daftar(db, status=(OUT_DIMUAT,))
+    out = []
+    for r, it in baris:
+        total = sum(float(i.berat_kg or 0) for i in it)
+        kurang = sum(max(float(i.berat_perintah_kg or 0) - float(i.berat_kg or 0), 0)
+                     for i in it)
+        label = f"{r.kode} · {r.nama_pembeli or '?'} · dimuat {kg(total)}"
+        # Selisihnya disebut DI DAFTAR, bukan cuma di dalam kartunya: yang
+        # memilih dari daftar inilah yang memutuskan mana yang perlu diperiksa
+        # lebih dulu.
+        if kurang > 0.5:
+            label += f" · kurang {kg(kurang)} dari perintah"
+        out.append({"value": str(r.id), "label": label})
+    return out
+
+
+@router.get("/actions/baris-perintah")
+async def baris_perintah(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Tiap BARANG di tiap perintah yang belum berangkat.
+
+    Satuannya ikut tertulis di label — karung untuk yang berkarung, kg untuk
+    yang curah — sebab kotak isiannya satu dan operator yang menentukan
+    artinya. Label tanpa satuan mengundang 200 kg diketik sebagai 200 karung.
+    """
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+
+    async with SessionLocal() as db:
+        baris = await bk.daftar(db, status=(OUT_PERINTAH,))
+        out = []
+        for r, items in baris:
+            for it in items:
+                b = bk.BarisPerintah(
+                    tipe=it.item_type, sku_id=it.product_sku_id,
+                    std_id=it.rice_quality_standard_id, jenis=it.jenis_byproduct,
+                    milling_process_id=it.milling_process_id)
+                _, nama = await bk.tersedia(db, b, abaikan_pesanan=True)
+                if it.item_type == "finished_goods":
+                    minta = f"{it.jumlah_karung_perintah or 0} karung"
+                else:
+                    minta = kg(float(it.berat_perintah_kg or 0))
+                sudah = (f" · sudah {kg(float(it.berat_kg))}"
+                         if float(it.berat_kg or 0) > 0.5 else "")
+                out.append({"value": str(it.id),
+                            "label": f"{r.kode} · {nama} · perintah {minta}{sudah}"})
+    return out
+
+
+@router.get("/actions/pk-siap-keluar")
+async def pk_siap_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Lot PK Gudang 1 yang masih bersisa — untuk dijual keluar pabrik.
+
+    Keputusan pemilik 29 September 2026: "pk juga bisa dijual dan mengurangi
+    stock pk". Yang berpindah barangnya; harganya urusan keuangan dan tak
+    disebut satu kali pun di sini.
+
+    Bedanya dengan `/actions/pk-g1-tersedia`: yang itu untuk operator Gudang 2
+    yang MEMINTA lot dipindah ke penyosohan, jadi ia menyembunyikan lot yang
+    sudah diminta orang. Yang ini untuk Admin yang mengeluarkannya dari pabrik —
+    lot yang sedang diminta Gudang 2 tetap ditawarkan, sebab permintaan bukan
+    penguncian: Admin boleh memutuskan lot itu dijual, dan permintaannya gugur
+    dengan sendirinya saat lotnya habis.
+    """
+    wajib(can_see_financials(user))
+    from app.services.stok import pk_gudang1
+
+    async with SessionLocal() as db:
+        lot = await pk_gudang1(db)
+    return [{"value": l.kode,
+             "label": (f"{l.kode} · {kg(l.tersedia)}"
+                       + (f" · {l.kelas}" if l.kelas else ""))}
+            for l in lot if l.tersedia > 0]
+
+
+@router.get("/actions/timbang-keluar-aktif")
+async def timbang_keluar_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Tiket timbang KELUAR yang belum tertaut transaksi mana pun."""
+    wajib(can_see_financials(user))
+    from app.penggilingan.gudang1.services.timbang_link import tiket_keluar_aktif
+
+    async with SessionLocal() as db:
+        tk = await tiket_keluar_aktif(db)
+    out = []
+    for t in tk:
+        nama = t.get("jenis_nama") or t.get("kategori") or t.get("jenis_kode") or "?"
+        berat = float(t.get("berat_kg") or 0)
+        bstr = kg(berat) if berat else "⚠️ bobot belum ada"
+        pihak = t.get("pihak") or "?"
+        out.append({"value": str(t["id"]),
+                    "label": f"{t['kode']} · {nama} · {bstr} · {pihak}"})
+    return out
+
+
+# ────────────────── Rantai barang keluar: rute & daftarnya ──────────────────
+#
+# Gerbangnya di RUTE, bukan cuma pada tombolnya: menyembunyikan pintu bukan
+# penjagaan — alamatnya bisa diketik, dan lembar yang masih terbuka di layar
+# orang lain masih bisa mengirim.
+
+class PerintahKeluarReq(BaseModel):
+    stok: str | None = None            # "sku_id|std_id"
+    jumlah_karung: int | None = None
+    pk_lot: str | None = None          # kode LOT-…
+    pk_berat: float | None = None
+    nama_pembeli: str = ""
     metode: str | None = None
     no_polisi: str | None = None
     nama_ekspedisi: str | None = None
-    harga_per_kg: float | None = None
 
 
-@router.post("/actions/kirim-bekatul")
-async def act_kirim_bekatul(req: KirimBekatulReq,
-                            user: User = Depends(pengguna_aksi)) -> dict:
-    wajib(can_see_financials(user))
-    if float(req.berat_kg or 0) <= 0:
-        raise HTTPException(400, "Isi berat bekatul lebih dari 0.")
-    if not (req.nama_pembeli or "").strip():
-        raise HTTPException(400, "Isi nama pembeli.")
-    async with SessionLocal() as db:
-        u = await db.get(User, user.id)
-        try:
-            r = await keluar.kirim_bekatul(
-                db, user=u, berat_kg=float(req.berat_kg),
-                nama_pembeli=req.nama_pembeli.strip(), metode=req.metode,
-                no_polisi=(req.no_polisi or None), nama_ekspedisi=(req.nama_ekspedisi or None),
-                harga_per_kg=req.harga_per_kg,
-            )
-        except keluar.InventoryError as e:
-            raise galat(e, "Gagal mencatat bekatul keluar.")
-    return {"ok": True, "pesan": await _pesan_keluar(user, r)}
+async def _baris_dari_borang(db, req) -> "bk.BarisPerintah":
+    """Satu baris dari borang yang menerima DUA bentuk — isi salah satu.
 
+    Barang jadi berkarung, atau PK mentah per kg. Pola "isi salah satu" sudah
+    dipakai QC hasil giling ("kadar air ATAU broken ATAU susut"): yang memeriksa
+    rutenya, bukan borangnya, sebab borang yang mewajibkan dua-duanya akan
+    menolak pekerjaan yang sah.
 
-class JualPkReq(BaseModel):
-    kode_mil: str
-    berat_kg: float
-    nama_pembeli: str
-    metode: str | None = None
-    no_polisi: str | None = None
-    nama_ekspedisi: str | None = None
-    harga_per_kg: float | None = None
+    ⚠ TAK ADA HARGA di kedua bentuk, dan itu bukan kelalaian — keputusan pemilik
+    29 September 2026: "sistem produksi tidak boleh ada sangkut paut dengan
+    harga. termasuk beras yang keluar."
+    """
+    from app.models import MillingProcess
 
-
-@router.post("/actions/jual-pk")
-async def act_jual_pk(req: JualPkReq, user: User = Depends(pengguna_aksi)) -> dict:
-    wajib(can_see_financials(user))
-    if float(req.berat_kg or 0) <= 0:
+    punya_bj = bool((req.stok or "").strip())
+    punya_pk = bool((req.pk_lot or "").strip())
+    if punya_bj == punya_pk:
+        raise HTTPException(
+            400, "Pilih SATU: barang jadi berkarung, atau PK mentah.")
+    if punya_bj:
+        if int(req.jumlah_karung or 0) <= 0:
+            raise HTTPException(400, "Isi jumlah karung lebih dari 0.")
+        bagian = (req.stok or "").split("|")
+        if not bagian[0].isdigit():
+            raise HTTPException(400, "Barang itu tidak ada lagi di daftar.")
+        std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
+        return bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
+                                std_id=std, jumlah_karung=int(req.jumlah_karung))
+    if float(req.pk_berat or 0) <= 0:
         raise HTTPException(400, "Isi berat PK lebih dari 0.")
-    if not (req.nama_pembeli or "").strip():
-        raise HTTPException(400, "Isi nama pembeli.")
+    proc = (await db.execute(select(MillingProcess).where(
+        MillingProcess.kode_proses == (req.pk_lot or "").strip()))).scalars().first()
+    if proc is None:
+        raise HTTPException(400, f"Lot {req.pk_lot} tidak ditemukan.")
+    return bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
+                            berat_kg=float(req.pk_berat))
+
+
+@router.post("/actions/perintah-keluar")
+async def act_perintah_keluar(req: PerintahKeluarReq,
+                              user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 1 — Admin menerbitkan perintah muat. Stok BELUM berkurang."""
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        baris = await _baris_dari_borang(db, req)
+        try:
+            r = await bk.buat_perintah(
+                db, user=u, baris=[baris], nama_pembeli=req.nama_pembeli,
+                metode=req.metode, no_polisi=(req.no_polisi or None),
+                nama_ekspedisi=(req.nama_ekspedisi or None))
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal membuat perintah barang keluar.")
+        kode = r.rec.kode
+    return {"ok": True,
+            "pesan": f"✓ Perintah *{kode}* terbit untuk {req.nama_pembeli.strip()}. "
+                     "Tambahkan barang lain bila muatannya lebih dari satu macam — "
+                     "operator melihatnya di Antrian tunggu."}
+
+
+class TambahBarangKeluarReq(PerintahKeluarReq):
+    perintah: str = ""
+
+
+@router.post("/actions/tambah-barang-keluar")
+async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
+                                   user: User = Depends(pengguna_aksi)) -> dict:
+    """Satu macam barang lagi ke perintah yang belum dimuat.
+
+    SATU TRANSAKSI BANYAK BARANG — dan itu seluruh sebab halaman ini diminta:
+    satu truk berisi beras + broken + menir dulu melahirkan tiga kode OUT- yang
+    berbeda, tiga baris di kartu Stok Produk, dan tiga pencocokan untuk satu
+    tiket timbang.
+    """
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        baris = await _baris_dari_borang(db, req)
+        try:
+            r = await bk.tambah_baris(db, user=u, rec_id=_id(req.perintah),
+                                      baris=baris)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal menambah barang ke perintah.")
+        kode, n = r.rec.kode, len(r.baris)
+    return {"ok": True, "pesan": f"✓ Ditambahkan ke *{kode}* — kini {n} macam barang."}
+
+
+def _id(nilai: str | None) -> int:
+    try:
+        return int((nilai or "").strip())
+    except ValueError:
+        raise HTTPException(400, "Perintah yang mana?") from None
+
+
+class BatalPerintahReq(BaseModel):
+    perintah: str = ""
+    sebab: str = ""
+
+
+@router.post("/actions/batal-perintah-keluar")
+async def act_batal_perintah_keluar(req: BatalPerintahReq,
+                                    user: User = Depends(pengguna_aksi)) -> dict:
+    wajib(can_see_financials(user))
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await keluar.jual_pk_langsung(
-                db, user=u, kode_mil=req.kode_mil, berat_kg=float(req.berat_kg),
-                nama_pembeli=req.nama_pembeli.strip(), metode=req.metode,
-                no_polisi=(req.no_polisi or None), nama_ekspedisi=(req.nama_ekspedisi or None),
-                harga_per_kg=req.harga_per_kg,
-            )
-        except keluar.InventoryError as e:
-            raise galat(e, "Gagal mencatat penjualan PK.")
-    return {"ok": True, "pesan": await _pesan_keluar(user, r)}
+            rec = await bk.batalkan(db, user=u, rec_id=_id(req.perintah),
+                                    sebab=req.sebab)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal membatalkan perintah.")
+        kode = rec.kode
+    return {"ok": True, "pesan": f"✓ Perintah {kode} dibatalkan — sebabnya terbaca operator."}
 
 
-async def _pesan_keluar(user: User, r) -> str:
-    karung = f" ({r.jumlah_karung} karung)" if r.jumlah_karung else ""
-    warn = f"\n{r.warning}" if r.warning else ""
-    pesan = f"✓ Keluar *{r.kode}*: {r.label} {kg(r.berat_kg)}{karung}.{warn}"
-    return pesan
+class MuatReq(BaseModel):
+    perintah: str = ""
+
+
+@router.post("/actions/muat-semua")
+async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 2 — operator memuat seluruhnya sesuai perintah. Stok berkurang.
+
+    Wewenangnya TIDAK datang dari peran melainkan dari BARIS PERINTAHNYA: tak
+    seorang operator pun bisa mengeluarkan barang atas kehendak sendiri, dan
+    layanan yang dipanggil memeriksa keadaan perintahnya sambil menguncinya.
+    """
+    from app.web.api import _is_g1_operator, _is_g2_operator
+
+    # Gudang MANA pun yang memegang barangnya: barang jadi di Gudang 2, tetapi
+    # perintah bisa memuat barang dari keduanya, dan operator memang saling
+    # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
+    # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
+    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await bk.muat_semua(db, user=u, rec_id=_id(req.perintah))
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal mencatat muatan.")
+        kode = r.rec.kode
+        total = sum(float(i.berat_kg or 0) for i in r.baris)
+    return {"ok": True,
+            "pesan": f"✓ {kode} dimuat {kg(total)} — Admin memverifikasinya "
+                     "sambil menempelkan kode timbang keluar."}
+
+
+class MuatBarisReq(BaseModel):
+    baris: str = ""
+    jumlah: float | None = None
+
+
+@router.post("/actions/muat-barang")
+async def act_muat_barang(req: MuatBarisReq,
+                          user: User = Depends(pengguna_aksi)) -> dict:
+    """Satu barang yang dimuat KURANG dari perintahnya."""
+    from app.web.api import _is_g1_operator, _is_g2_operator
+
+    # Gudang MANA pun yang memegang barangnya: barang jadi di Gudang 2, tetapi
+    # perintah bisa memuat barang dari keduanya, dan operator memang saling
+    # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
+    # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
+    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    if float(req.jumlah or 0) <= 0:
+        raise HTTPException(400, "Isi jumlah yang dimuat lebih dari 0.")
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        it = await db.get(OutgoingItem, _id(req.baris))
+        if it is None:
+            raise HTTPException(400, "Barang itu tidak ada lagi di perintahnya.")
+        # Yang berkarung diketik dalam KARUNG, yang curah dalam kg — sama dengan
+        # satuan yang tertulis di kartunya. Menuntut operator mengubah karung
+        # jadi kilogram sambil berdiri di truk adalah mengundang salah kali.
+        karung = int(req.jumlah) if it.item_type == "finished_goods" else None
+        berat = None if karung is not None else float(req.jumlah)
+        try:
+            rec, pesan = await bk.catat_muatan(db, user=u, item_id=it.id,
+                                               jumlah_karung=karung, berat_kg=berat)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal mencatat muatan.")
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/selesai-muat")
+async def act_selesai_muat(req: MuatReq, user: User = Depends(pengguna_aksi)) -> dict:
+    from app.web.api import _is_g1_operator, _is_g2_operator
+
+    # Gudang MANA pun yang memegang barangnya: barang jadi di Gudang 2, tetapi
+    # perintah bisa memuat barang dari keduanya, dan operator memang saling
+    # menggantikan (keputusan pemilik 13 September). Yang menjaga bukan peran
+    # melainkan BARIS PERINTAHNYA, yang diperiksa layanan sambil menguncinya.
+    wajib(await _is_g2_operator(user) or await _is_g1_operator(user))
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await bk.selesai_muat(db, user=u, rec_id=_id(req.perintah))
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal menutup muatan.")
+        kode = r.rec.kode
+        total = sum(float(i.berat_kg or 0) for i in r.baris)
+    return {"ok": True,
+            "pesan": f"✓ {kode} berangkat dengan {kg(total)} — menunggu "
+                     "verifikasi Admin."}
+
+
+class VerifikasiKeluarReq(BaseModel):
+    perintah: str = ""
+    tiket: str | None = None
+
+
+@router.post("/actions/verifikasi-keluar")
+async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
+                                user: User = Depends(pengguna_aksi)) -> dict:
+    """LANGKAH 3 — Admin menutup sambil menempelkan kode timbang keluarnya."""
+    wajib(can_see_financials(user))
+    tid = None
+    if (req.tiket or "").strip():
+        try:
+            tid = int(req.tiket.strip())
+        except ValueError:
+            raise HTTPException(400, "Kode timbang yang mana?") from None
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            rec, catatan = await bk.verifikasi(
+                db, user=u, rec_id=_id(req.perintah), timbangan_transaksi_id=tid)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal memverifikasi barang keluar.")
+        kode = rec.kode
+    return {"ok": True,
+            "pesan": f"✓ {kode} ditutup." + (f" {catatan}" if catatan else "")}
 
 
 # ─────────────────────────── Spesifikasi aksi ───────────────────────────
@@ -596,7 +871,18 @@ def _bidang_pengiriman() -> list[dict]:
                      ["diambil", "Diambil sendiri"], ["ekspedisi", "Ekspedisi"]]},
         {"name": "no_polisi", "label": "Plat truk (bila ada)", "type": "text"},
         {"name": "nama_ekspedisi", "label": "Ekspedisi (bila ada)", "type": "text"},
-        {"name": "harga_per_kg", "label": "Harga per kg (Rp, bila ada)", "type": "number"},
+        # ⚠ HARGA DICABUT 28 September 2026. Keputusan pemilik, dua kali:
+        # "HARGA & HPP KELUAR DARI POS PRODUKSI", lalu — saat PK dikeluarkan
+        # dari rantai ini — "pk dijual tetapi itu urusan keuangan".
+        #
+        # Yang dicatat di sini PERPINDAHAN FISIK: berapa karung naik ke truk
+        # mana, milik siapa. Berapa rupiahnya ditetapkan di tempat uang
+        # dicatat, dan angka harga yang diketik di dua sistem akan berbeda di
+        # salah satunya tanpa ada yang tahu mana yang benar.
+        #
+        # `outgoing_items.harga_per_kg` TIDAK dihapus: baris lama memuatnya, dan
+        # menghapus kolom berarti menghapus sejarah. Yang berhenti cuma
+        # MENANYAKANNYA.
     ]
 
 
@@ -610,6 +896,42 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
 
     if g2:
         aksi += [
+            # ── Operator: menerima tugas muat ──
+            #
+            # "Muat semua sesuai perintah" berdiri PALING ATAS dan itu disengaja:
+            # ia keadaan yang paling sering, dan borang yang menuntut operator
+            # mengetik ulang angka yang sudah tertulis di kartunya akan diketik
+            # asal-asalan sambil berdiri di samping truk. Yang berselisih dicatat
+            # per barang lewat aksi di bawahnya.
+            {"id": "muat_semua", "label": "\U0001F69A Muat semua sesuai perintah",
+             "post": "/api/actions/muat-semua",
+             "hint": "Seluruh barang dimuat persis seperti diperintahkan. Kalau "
+                     "ada yang berselisih, catat per barang dulu.",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah muat", "type": "remote",
+                  "source": "/api/actions/perintah-terbuka",
+                  "kosong": "Tidak ada perintah muat yang menunggu."},
+             ]},
+            {"id": "muat_barang", "label": "\U0001F4E6 Catat muatan per barang",
+             "post": "/api/actions/muat-barang",
+             "hint": "Untuk yang dimuat KURANG dari perintahnya. Sesudah semua "
+                     "tercatat, tekan 'Selesai muat'.",
+             "fields": [
+                 {"name": "baris", "label": "Barang yang dimuat", "type": "remote",
+                  "source": "/api/actions/baris-perintah",
+                  "kosong": "Tidak ada barang yang menunggu dimuat."},
+                 {"name": "jumlah", "label": "Yang benar-benar dimuat",
+                  "type": "number", "wajib": True},
+             ]},
+            {"id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",
+             "post": "/api/actions/selesai-muat",
+             "hint": "Sisa perintah yang tak dimuat HANGUS, dan selisihnya "
+                     "terbaca Admin saat verifikasi.",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah yang sudah dimuat",
+                  "type": "remote", "source": "/api/actions/perintah-terbuka",
+                  "kosong": "Tidak ada perintah muat yang menunggu."},
+             ]},
             {"id": "catat_packing", "label": "📦 Catat packing barang jadi",
              "post": "/api/actions/catat-packing",
              "hint": "Mengurangi stok karung dan menambah stok barang jadi. "
@@ -663,38 +985,94 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "merk", "label": "Merk (karung beras wajib bermerk)",
                   "type": "remote", "optional": True, "source": "/api/actions/merk"},
                  {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
-                 {"name": "harga_per_lembar", "label": "Harga per lembar (Rp)",
-                  "type": "number"},
+                 # Harga DICABUT 29 September 2026 — keputusan pemilik:
+                 # "sistem produksi tidak boleh ada sangkut paut dengan harga.
+                 # semua yang berhubungan dengan harga tolong dihapus."
+                 #
+                 # Ini medan harga TERAKHIR di seluruh Pos Produksi. Yang
+                 # dicatat di sini berapa lembar karung masuk gudang; berapa
+                 # rupiahnya dicatat di tempat uang dicatat, dan angka yang
+                 # diketik di dua sistem akan berbeda di salah satunya tanpa ada
+                 # yang tahu mana yang benar.
              ]},
-            {"id": "kirim_barang_jadi", "label": "🚚 Barang jadi keluar",
-             "post": "/api/actions/kirim-barang-jadi",
-             "hint": "Stok yang kurang tidak menghalangi pencatatan — barangnya "
-                     "sudah berangkat. Kekurangannya diberi peringatan supaya "
-                     "selisihnya ditelusuri, bukan disembunyikan.",
+            # ── Rantai barang keluar: perintah · muat · verifikasi ──
+            #
+            # Perintah dibuat dengan SATU baris barang; barang berikutnya
+            # ditambahkan lewat aksinya sendiri. Bukan satu borang bertabel:
+            # medan `ulang` yang sudah ada hanya mengulang SATU kotak, dan
+            # memperluasnya jadi sepasang (barang + jumlah) menyentuh paket
+            # tampilan yang dipakai seluruh layar lain. Bentuk ini sudah
+            # terbukti di app ini; borang bertabel bisa menyusul kelak tanpa
+            # mengubah satu kolom pun.
+            {"id": "perintah_keluar", "label": "\U0001F4CB Buat perintah barang keluar",
+             "post": "/api/actions/perintah-keluar",
+             "hint": "Perintah BELUM mengurangi stok — barangnya berpindah saat "
+                     "operator memuatnya. Barang lain ditambahkan setelah ini.",
+             # ── DUA jenis baris, isi SALAH SATU ──
+             #
+             # PK mentah IKUT di sini. Keputusan pemilik 29 September 2026,
+             # meluruskan salah tangkap sehari sebelumnya: "pk juga bisa dijual
+             # dan mengurangi stock pk. tetapi istilah dijual kan harus tau
+             # harganya. sedangkan sistem produksi tidak boleh ada sangkut paut
+             # dengan harga."
+             #
+             # Jadi yang dikeluarkan dari sini HARGANYA, bukan barangnya.
+             # Perpindahan fisik tetap dicatat — PK yang naik truk memang
+             # berkurang dari stok Gudang 1, dan gudang yang stoknya tak pernah
+             # berkurang akan menawarkan PK yang sudah lama pergi.
+             #
+             # Pola "isi salah satu" sudah dipakai QC hasil giling; rutenya yang
+             # memeriksa, bukan borangnya.
              "fields": [
-                 # SATU pilihan, dari stok yang benar-benar ada (28 September
-                 # 2026). Tiga daftar bertingkat — produk+kemasan, merk, mutu —
-                 # adalah tiga kesempatan memilih kombinasi yang stoknya nol,
-                 # atas benda yang sebenarnya bisa dilihat sendiri di gudang.
-                 {"name": "stok", "label": "Barang yang keluar", "type": "remote",
+                 {"name": "stok", "label": "Barang jadi yang keluar", "type": "remote",
+                  "optional": True, "source": "/api/actions/stok-barang-jadi",
+                  "kosong": "Tidak ada barang jadi berkarung di gudang."},
+                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
+                  "optional": True},
+                 {"name": "pk_lot", "label": "…atau PK mentah dari lot", "type": "remote",
+                  "optional": True, "source": "/api/actions/pk-siap-keluar",
+                  "kosong": "Tidak ada PK Gudang 1 yang bisa dikeluarkan."},
+                 {"name": "pk_berat", "label": "Berat PK (kg)", "type": "number",
+                  "optional": True},
+             ] + _bidang_pengiriman()},
+            {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke perintah",
+             "post": "/api/actions/tambah-barang-keluar",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah yang belum dimuat",
+                  "type": "remote", "source": "/api/actions/perintah-terbuka",
+                  "kosong": "Tidak ada perintah yang menunggu dimuat."},
+                 {"name": "stok", "label": "Barang jadi yang ditambahkan",
+                  "type": "remote", "optional": True,
                   "source": "/api/actions/stok-barang-jadi",
-                  "kosong": "Tidak ada barang jadi berkarung di gudang. "
-                            "Bekatul curah keluar lewat 'Bekatul keluar'."},
-                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number"},
-             ] + _bidang_pengiriman()},
-            {"id": "kirim_bekatul", "label": "🚚 Bekatul keluar",
-             "post": "/api/actions/kirim-bekatul",
+                  "kosong": "Tidak ada barang jadi berkarung di gudang."},
+                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
+                  "optional": True},
+                 {"name": "pk_lot", "label": "…atau PK mentah dari lot", "type": "remote",
+                  "optional": True, "source": "/api/actions/pk-siap-keluar",
+                  "kosong": "Tidak ada PK Gudang 1 yang bisa dikeluarkan."},
+                 {"name": "pk_berat", "label": "Berat PK (kg)", "type": "number",
+                  "optional": True},
+             ]},
+            {"id": "batal_perintah_keluar", "label": "\U0001F6AB Batalkan perintah keluar",
+             "post": "/api/actions/batal-perintah-keluar",
              "fields": [
-                 {"name": "berat_kg", "label": "Berat (kg)", "type": "number"},
-             ] + _bidang_pengiriman()},
-            {"id": "jual_pk", "label": "💰 Jual PK langsung (Gudang 1)",
-             "post": "/api/actions/jual-pk",
-             "hint": "PK dijual tanpa disosoh. Karung PK dihitung 50 kg, "
-                     "dibulatkan ke atas.",
+                 {"name": "perintah", "label": "Perintah yang dibatalkan",
+                  "type": "remote", "source": "/api/actions/perintah-terbuka",
+                  "kosong": "Tidak ada perintah yang menunggu dimuat."},
+                 {"name": "sebab", "label": "Sebab membatalkan", "type": "text",
+                  "wajib": True},
+             ]},
+            {"id": "verifikasi_keluar", "label": "\u2705 Verifikasi barang keluar",
+             "post": "/api/actions/verifikasi-keluar",
+             "hint": "Tempelkan kode timbang keluarnya. Beda bobot tidak "
+                     "menolak apa pun — selisihnya disebutkan supaya ditelusuri.",
              "fields": [
-                 {"name": "kode_mil", "label": "Proses giling asal", "type": "remote",
-                  "source": "/api/actions/milling-terkini"},
-                 {"name": "berat_kg", "label": "Berat PK (kg)", "type": "number"},
-             ] + _bidang_pengiriman()},
+                 {"name": "perintah", "label": "Muatan yang menunggu verifikasi",
+                  "type": "remote", "source": "/api/actions/keluar-dimuat",
+                  "kosong": "Tidak ada muatan yang menunggu diverifikasi."},
+                 {"name": "tiket", "label": "Kode timbang keluar", "type": "remote",
+                  "optional": True, "source": "/api/actions/timbang-keluar-aktif",
+                  "kosong": "Tidak ada tiket timbang keluar yang belum tertaut."},
+             ]},
         ]
     return aksi

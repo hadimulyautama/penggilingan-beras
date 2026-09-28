@@ -743,7 +743,8 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     lagi. `berjalan` pada tiap barisnya yang membedakan.
     """
     from app.penggilingan.gudang2.models import PolishingProcess
-    from app.penggilingan.inventory.finished_goods import _packed_kg, get_standard
+    from app.penggilingan.inventory.finished_goods import (_bekatul_dibukukan,
+                                                           _packed_kg, get_standard)
 
     q = select(PolishingProcess).order_by(PolishingProcess.id.desc())
     if not termasuk_berjalan:
@@ -752,10 +753,14 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     for proc in (await db.execute(q)).scalars().all():
         for jenis, kg in (await output_sosoh(db, proc.id)).items():
             if jenis == "bekatul":
-                # Bekatul tak pernah dikemas — ia curah sampai dijual, dan
-                # rumahnya `byproduct_stock`, yang sudah dibaca blok tersendiri.
-                continue
-            if jenis in BERAS_JENIS:
+                # Bekatul kini BOLEH dikarungi (keputusan pemilik 28 September
+                # 2026), jadi ia tak lagi dilewati — tetapi "sudah punya rumah"
+                # baginya berarti dua-duanya: yang dicatat curah DAN yang
+                # dikarungi. Memakai `_packed_kg` sendirian akan menampilkan
+                # seluruh bekatul yang sudah dibukukan curah sebagai "belum
+                # dikemas", tiap hari, pada pabrik yang memang menjual curah.
+                dikemas = await _bekatul_dibukukan(db, proc.id)
+            elif jenis in BERAS_JENIS:
                 std = await get_standard(db, jenis)
                 dikemas = await _packed_kg(db, proc.id, "beras_putih",
                                            std.id if std else None)
@@ -817,6 +822,19 @@ def kategori_dan_mutu(jenis: str) -> tuple[str, str | None]:
     if jenis in GRADES_BERAS:
         return "beras_putih", jenis
     return jenis, None
+
+
+def _tanpa_karung(bahan: str | None) -> str:
+    """"Karung biasa" → "biasa". Untuk rincian DI DALAM kartu yang sudah
+    menyebut kategorinya.
+
+    Hanya awalannya yang dibuang, dan hanya bila memang ada: bahan kemasan baru
+    yang bukan karung (misal "Sak plastik") harus lewat apa adanya. Menyapu
+    kata itu di mana pun ia berdiri akan mengubah nama bahan jadi kalimat yang
+    tak pernah dipilih siapa pun di master.
+    """
+    b = (bahan or "").strip()
+    return b[7:].strip() if b.lower().startswith("karung ") else b
 
 
 def nama_produk(jenis: str) -> str:
@@ -1097,19 +1115,39 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         k = sum(r.kg for r in baris_keluar)
         curah_saja = jenis == "bekatul"
         if curah_saja:
-            # Bekatul tak pernah dikemas; "rumah resminya" `byproduct_stock`,
-            # dan yang keluar SELALU datang dari sana — tak mungkin mengirim
-            # bekatul yang belum pernah dibukukan. Maka barisnya `masuk −
-            # keluar`, yang persis `hitung_stok_bekatul`: satu angka, satu
-            # pertanyaan. Sisanya (`hasil − masuk`) adalah bekatul yang keluar
-            # mesin tetapi belum dicatat — celah yang sama bentuknya dengan
-            # beras curah, dan sama perlunya terlihat.
-            masuk = float((await db.execute(
+            # ── Bekatul punya DUA rumah sekaligus, sejak 28 September 2026 ──
+            #
+            # Keputusan pemilik: sebagian dijual curah (`byproduct_stock`),
+            # sebagian dikarungi 40 kg (`finished_goods_stock`). Sampai hari itu
+            # hanya rumah pertama yang ada, dan rumusnya `masuk − keluar`.
+            #
+            # Yang dijaga di sini persis satu hal: bekatul yang dikarungi tak
+            # boleh HILANG dari stok hanya karena ia berpindah rumah. Kalau
+            # baris ini tetap membaca `byproduct_stock` saja, mengarungi 1.000
+            # kg akan menurunkan "belum dicatat" sebesar 1.000 tanpa menaikkan
+            # apa pun — bekatulnya menguap dari layar, padahal ia berdiri di
+            # gudang dalam karung.
+            #
+            # Rumusnya tetap berbentuk sama, cuma sukunya dua:
+            #   dibukukan = curah + dikarungi
+            #   punya rumah = (curah masuk − curah keluar)
+            #                 + (dikarungi − keluar berkarung)
+            #   belum dicatat = hasil mesin − dibukukan
+            # Saat belum ada satu karung pun, ia kembali persis rumus lama.
+            #
+            # `curah_saja` TETAP benar sebagai nama kolomnya: kartunya berkata
+            # "Tercatat / Belum dicatat", bukan "Dikemas / Curah", dan itu tetap
+            # kalimat yang tepat untuk barang yang boleh berumah di dua tempat.
+            # Belahan karungnya terbaca di rincian per merk di dalam laci.
+            masuk_curah = float((await db.execute(
                 select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
                 .where(ByproductStock.jenis_produk == "bekatul")
             )).scalar_one())
-            punya_rumah = await hitung_stok_bekatul(db)   # = masuk − keluar
-            curah = h - masuk
+            dikarungi = dikemas.get(jenis, 0.0)
+            keluar_karung = k - keluar_curah.get(jenis, 0.0)
+            punya_rumah = (await hitung_stok_bekatul(db)
+                           + dikarungi - keluar_karung)
+            curah = h - masuk_curah - dikarungi
         else:
             total_kemas = dikemas.get(jenis, 0.0)
             # Yang keluar berkarung mengurangi belahan "dikemas"; yang keluar
@@ -1222,6 +1260,29 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
                 nama += f" · {merk}"
             k = kartu[kunci] = {
                 "jenis": jenis, "nama": nama, "kemasan": f"{kemasan} {ukuran} kg",
+                # ── Dua medan TAMBAHAN, bukan pengganti ──
+                #
+                # Permintaan pemilik 28 September 2026 atas rincian kemasan di
+                # kartu Stok Produk: "kita sudah tau kalau itu premium. jadi
+                # informasi yang sudah dikemas tidak perlu lagi informasi
+                # premium. dan kata 'karung' dihapus saja agar readability
+                # lebih baik."
+                #
+                # Benar: barisnya berada DI DALAM kartu Premium, jadi menyebut
+                # "Premium" tiga kali di satu layar cuma menambah lebar tanpa
+                # menambah kabar — dan lebar itu yang membuat barisnya patah
+                # dua di ponsel.
+                #
+                # `nama` dan `kemasan` TIDAK diubah: hitungan ini dibaca layar
+                # Barang jadi juga, dan di SANA kategorinya tidak diketahui dari
+                # tempatnya — kartunya berdiri sendiri, jadi "Premium · Lele"
+                # memang keterangan yang dibutuhkan. Satu layar minta lebih
+                # pendek; itu bukan alasan memendekkan layar sebelah.
+                "merk": merk or "",
+                # "Karung biasa" → "biasa". Yang dibuang kata GENERIKNYA, bukan
+                # ukurannya: di dalam kartu beras, semua yang dikemas memang
+                # berkarung.
+                "bahan": _tanpa_karung(kemasan),
                 "ukuran": int(ukuran), "karung": stok_["karung"], "kg": stok_["kg"],
                 # Id-nya ikut sejak 28 September 2026: borang "Barang jadi
                 # keluar" memilih DARI DAFTAR INI, dan satu-satunya cara
@@ -1256,7 +1317,12 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             .order_by(ByproductStock.waktu.desc())
         )).all()
         samping.append({
+            # `merk` & `bahan` ikut sejak kartu Stok Produk memakainya (28
+            # September 2026). Tanpa keduanya barisnya tergambar kosong —
+            # bukan galat, cuma titik tanpa keterangan di dalam laci.
+            # `ukuran` 0 berarti "bukan karung"; templatnya tak mencetaknya.
             "jenis": "bekatul", "nama": "Bekatul", "kemasan": "curah", "ukuran": 0,
+            "merk": "", "bahan": "curah",
             "karung": 0, "kg": curah,
             "asal": [(kode, f"{float(kg):,.0f} kg".replace(",", "."), "curah")
                      for kode, kg in per_pol][:8]})
