@@ -105,7 +105,6 @@ async def laporan_pembelian_gabah(
     total_kg = 0.0
     basah_kg = 0.0
     kering_kg = 0.0
-    unverified = 0
     per_supplier: dict[str, list[float]] = {}  # nama -> [kg, count]
     for batch, nama in rows:
         kg = float(batch.berat_total_kg or 0)
@@ -114,8 +113,6 @@ async def laporan_pembelian_gabah(
             kering_kg += kg
         else:
             basah_kg += kg
-        if batch.flag_unverified:
-            unverified += 1
         agg = per_supplier.setdefault(nama, [0.0, 0])
         agg[0] += kg
         agg[1] += 1
@@ -128,8 +125,9 @@ async def laporan_pembelian_gabah(
     lines.append("• Per supplier:")
     for nama, (kg, cnt) in sorted(per_supplier.items(), key=lambda x: -x[1][0]):
         lines.append(f"   - {nama}: {_fmt_kg(kg)} ({cnt} batch)")
-    if unverified:
-        lines.append(f"⚠️ {unverified} batch belum diverifikasi harganya.")
+    # "belum diverifikasi HARGANYA" ikut dicabut 29 September 2026: verifikasi
+    # harga bukan lagi pekerjaan Pos Produksi, jadi menagihnya di layar produksi
+    # menagih pekerjaan yang tak punya tombol di sini.
     return "\n".join(lines)
 
 
@@ -291,10 +289,9 @@ async def laporan_produksi_histori(
 
 
 # ─────────────────────────── Detail / telusur ───────────────────────────
-def _rupiah(n: float | None) -> str:
-    if n is None:
-        return "-"
-    return "Rp " + f"{n:,.0f}".replace(",", ".")
+# `_rupiah` DIBUANG 29 September 2026 bersama seluruh harga: pemformat mata
+# uang yang masih berdiri di modul laporan adalah undangan untuk memakainya
+# lagi, dan yang memakainya nanti tak akan membaca sejarah keputusan ini.
 
 
 async def _resolve_batches(
@@ -370,15 +367,18 @@ async def _batch_detail_card(
         f"• Kadar air awal: {ka}",
         f"• Status: {batch.status_batch}",
     ]
-    if not financial:
-        lines.append("• Harga: 🔒 khusus staff/admin")
-    elif verif and not batch.flag_unverified:
-        lines.append(
-            f"• Harga: {_rupiah(float(verif.harga_per_kg))}/kg "
-            f"(total {_rupiah(float(verif.total_biaya))}) ✓"
-        )
-    else:
-        lines.append("• Harga: ⏳ belum diverifikasi")
+    # ⚠ BARIS HARGA DICABUT 29 September 2026 — keputusan pemilik: "sistem
+    # produksi tidak boleh ada sangkut paut dengan harga ... semua yang
+    # berhubungan dengan harga tolong dihapus."
+    #
+    # Dulu tiga cabang di sini: terkunci untuk operator, angkanya untuk yang
+    # boleh melihat uang, "belum diverifikasi" untuk sisanya. Ketiganya hilang
+    # sekaligus — termasuk yang berbunyi "🔒 khusus staff/admin", sebab gembok
+    # yang menyebut adanya angka tetap memberi tahu bahwa angkanya ada di sini.
+    #
+    # `financial` sengaja DIBIARKAN sebagai parameter: pemanggilnya banyak, dan
+    # membuangnya di sini menuntut menyentuh semuanya dalam satu sapuan yang
+    # tak ada hubungannya dengan harga.
     return "\n".join(lines)
 
 
@@ -527,19 +527,14 @@ async def pending_verifikasi(db: AsyncSession) -> str:
     """Daftar yang masih perlu diverifikasi staff/admin."""
     lines: list[str] = []
 
-    # 1. Harga gabah belum diverifikasi.
-    batches = (
-        await db.execute(
-            select(PurchaseBatch, Supplier.nama_supplier)
-            .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
-            .where(PurchaseBatch.flag_unverified.is_(True))
-            .order_by(PurchaseBatch.kode_batch)
-        )
-    ).all()
-    if batches:
-        lines.append(f"💰 Harga gabah belum diverifikasi ({len(batches)}):")
-        for b, nama in batches[:10]:
-            lines.append(f"• {b.kode_batch} — {nama}, {_fmt_kg(float(b.berat_total_kg or 0))}")
+    # ⚠ BLOK "Harga gabah belum diverifikasi" DICABUT 29 September 2026 —
+    # keputusan pemilik. Verifikasi harga bukan pekerjaan Pos Produksi, jadi
+    # menagihnya di daftar ini menagih pekerjaan yang tak punya tombolnya di
+    # sini: yang membacanya akan mencari-cari, lalu berhenti mempercayai
+    # seluruh daftarnya.
+    #
+    # `flag_unverified` sendiri TIDAK disentuh — ia dipakai jalur lain untuk
+    # menandai batch yang bobotnya belum final, bukan harganya.
 
     # 2. Output PK milling (selesai) belum diverifikasi.
     verified_ids = select(MillingProcessVerification.milling_process_id)

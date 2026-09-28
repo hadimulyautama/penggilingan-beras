@@ -370,8 +370,17 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     assert api._GRUP_AKSI["gabah_masuk"] == api.GRUP_KARTU
     # Dan yang memang tak punya kartu TETAP digambar — katalog satu-satunya
     # pintunya, jadi membuangnya berarti pekerjaannya hilang sama sekali.
-    for tanpa_kartu in ("catat_bekatul", "beli_kemasan", "kirim_barang_jadi",
-                        "jual_pk", "transfer_pk", "rekonsiliasi_timbang"):
+    #
+    # `kirim_barang_jadi` & `jual_pk` DIBUANG 28 September 2026 (keputusan
+    # pemilik): barang keluar kini berperintah, dan ketiga aksi lama adalah
+    # pintu belakang yang membuat rantainya sukarela. Penggantinya masuk daftar
+    # ini — rantai barang keluar belum berkartu, jadi katalog memang
+    # satu-satunya pintunya, dan membuangnya berarti pekerjaannya hilang.
+    for tanpa_kartu in ("catat_bekatul", "beli_kemasan", "transfer_pk",
+                        "rekonsiliasi_timbang", "perintah_keluar",
+                        "tambah_barang_keluar", "batal_perintah_keluar",
+                        "verifikasi_keluar", "muat_semua", "muat_barang",
+                        "selesai_muat"):
         assert api._GRUP_AKSI[tanpa_kartu] != api.GRUP_KARTU, tanpa_kartu
     # Yang sudah punya kartu tak digambar di katalog (21 September 2026):
     # kelompoknya keluar dari urutan, aksinya ditandai — bukan dibuang, karena

@@ -272,6 +272,54 @@ def _row(r, tol_persen: float) -> dict:
 HARI_SUSULAN = 7
 
 
+#: Tiket KELUAR yang belum tertaut transaksi barang keluar mana pun.
+#:
+#: Cerminan `_SQL_AKTIF` di sisi masuk, dan bedanya cuma dua: arahnya KELUAR,
+#: dan yang diperiksa "sudah dipakai belum" adalah `outgoing_records` — bukan
+#: kedua tabel batch. Tiket yang transaksinya DIBATALKAN muncul lagi di sini,
+#: sama seperti indeks parsialnya mengizinkannya: truk yang salah dicatat harus
+#: punya jalan pulang.
+#:
+#: `SYARAT_TIKET_SAH` ikut, dan itu bukan salinan berlebih: tiket yang
+#: dibatalkan atau ditutup paksa di Pos Timbang pernah tetap mendorong 9.800 kg
+#: ke pembukuan lewat sisi masuk.
+_SQL_KELUAR_AKTIF = text("""
+    SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
+           t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.status_tiket,
+           """ + SQL_REAL_TIKET + """ AS berat_kg,
+           COALESCE(s.nama_supplier, t.pihak_nama) AS pihak
+      FROM timbangan_transaksi t
+      LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
+     WHERE t.arah = 'KELUAR'""" + SYARAT_TIKET_SAH + """
+       AND NOT EXISTS (
+             SELECT 1 FROM outgoing_records o
+              WHERE o.timbangan_transaksi_id = t.id
+                AND o.status <> 'batal')
+     ORDER BY t.id DESC
+     LIMIT 60
+""")
+
+
+async def tiket_keluar_aktif(db: AsyncSession) -> list[dict]:
+    """Tiket timbang KELUAR yang belum tertaut, untuk ditempel Admin saat
+    verifikasi barang keluar.
+
+    ⚠ URUTAN WAKTUNYA TERBALIK DARI SISI MASUK, dan itu yang menentukan kapan
+    daftar ini dipakai: truk masuk KOSONG, dimuat, lalu ditimbang bermuatan saat
+    keluar. Tiketnya baru lengkap SESUDAH barangnya naik — jadi daftar ini
+    ditawarkan di langkah verifikasi, bukan saat perintah dibuat.
+    """
+    from app.penggilingan.peta_jenis import keluar_dari_jenis
+
+    out = []
+    for r in (await db.execute(_SQL_KELUAR_AKTIF)).mappings().all():
+        d = dict(r)
+        d["kategori"] = keluar_dari_jenis(d.get("jenis_kode") or "")
+        out.append(d)
+    return out
+
+
 async def tiket_masuk_aktif(db: AsyncSession, jenis_kode: str | None = None) -> list[dict]:
     """Daftar tiket timbang MASUK yang belum tertaut, untuk dipilih operator.
 

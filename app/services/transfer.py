@@ -1,4 +1,9 @@
-"""Logika bisnis transfer internal Gudang 1 -> Gudang 2 + HPP snapshot PK."""
+"""Logika bisnis transfer internal Gudang 1 → Gudang 2.
+
+TANPA HPP sejak harga keluar dari Pos Produksi (28–29 September 2026).
+`hpp_per_kg` yang masih lewat di sini SELALU None; kolomnya tinggal menyimpan
+angka lama, dan tak satu pun layar mencetaknya lagi.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -229,7 +234,7 @@ async def create_internal_transfer(
         db, table_name="internal_transfers", record_id=transfer.id, action="INSERT",
         changed_by=user.id,
         new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> "
-                  f"{await label_tujuan(db, lokasi_tujuan, silo_tujuan_id)} | hpp={hpp}",
+                  f"{await label_tujuan(db, lokasi_tujuan, silo_tujuan_id)}",
     )
     # PK LANGSUNG masuk stok Gudang 2 — staff/admin sudah menentukan tujuan saat
     # kirim, jadi tak perlu langkah 'terima' terpisah oleh operator G2.
@@ -342,7 +347,19 @@ async def laporan_pk_siap_transfer(db: AsyncSession) -> str:
 
 
 async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
-    """Riwayat transfer internal (terbaru dulu). HPP hanya untuk staff/admin."""
+    """Riwayat transfer internal (terbaru dulu).
+
+    TANPA HPP sejak 29 September 2026 — keputusan pemilik: "semua yang
+    berhubungan dengan harga tolong dihapus." Baris HPP di sini adalah tempat
+    TERAKHIR angka rupiah sampai ke mata orang di Pos Produksi, dan ia
+    menampilkan angka LAMA: sejak harga dicabut, `hpp_per_kg` tak pernah diisi
+    lagi (lihat `hpp = None` di atas). Jadi yang tersisa cuma sisa sejarah yang
+    dicetak seolah masih berlaku — bentuk kebohongan yang paling sulit
+    ketahuan.
+
+    `financial` dibiarkan sebagai parameter: pemanggilnya beberapa, dan
+    membuangnya di sini menuntut sapuan yang tak ada hubungannya dengan harga.
+    """
     from app.penggilingan.gudang2.service import label_tujuan
 
     rows = (
@@ -357,15 +374,10 @@ async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
         return "🚚 Belum ada transfer ke Gudang 2."
     lines = ["🚚 Transfer terakhir ke Gudang 2:"]
     for t, proc in rows:
-        hpp = (
-            f" · HPP {_rp(float(t.hpp_per_kg))}/kg"
-            if financial and t.hpp_per_kg is not None
-            else ""
-        )
         jenis = await pk_jenis(db, proc)
         jlbl = f"{jenis} " if jenis else ""
         lines.append(
             f"• {t.kode_transfer}: {jlbl}{_kg(float(t.berat_kg))} dari {proc.kode_proses} "
-            f"→ {await label_tujuan(db, t.lokasi_tujuan, t.silo_id)}{hpp}"
+            f"→ {await label_tujuan(db, t.lokasi_tujuan, t.silo_id)}"
         )
     return "\n".join(lines)

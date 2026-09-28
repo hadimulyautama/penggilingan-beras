@@ -101,6 +101,24 @@ def intake_dari_jenis(jenis_kode: str) -> IntakeJenis | None:
     return PETA_MASUK.get((jenis_kode or "").upper())
 
 
+def keluar_dari_jenis(jenis_kode: str) -> str | None:
+    """Kategori produk untuk sebuah jenis timbang KELUAR, atau None.
+
+    Pasangan `intake_dari_jenis`, dan ia LAHIR 28 September 2026 — sampai hari
+    itu `PETA_KELUAR` sudah ada tetapi satu-satunya pemakainya menyusun daftar
+    label. Tiket `arah='KELUAR'` karenanya ditimbang di Pos Timbang lalu
+    berhenti di situ: tak ada satu pun layar Produksi yang membacanya, sementara
+    sisi MASUK punya rantai lengkap dari tiket sampai batch.
+
+    Lebih longgar daripada pasangannya, dan itu disengaja: sisi masuk memakai
+    jenisnya untuk MEMILIH TUJUAN (silo mana, tumpukan atau tidak), jadi jenis
+    yang tak dipetakan harus ditolak. Di sini jenisnya cuma keterangan pada
+    kartu — muatannya sudah ditentukan perintahnya, bukan oleh tiketnya. Tiket
+    berjenis asing tetap boleh ditaut; ia cuma tak punya nama kategori.
+    """
+    return PETA_KELUAR.get((jenis_kode or "").upper())
+
+
 def is_gabah(jenis_kode: str) -> bool:
     j = intake_dari_jenis(jenis_kode)
     return bool(j and j.model == "gabah")

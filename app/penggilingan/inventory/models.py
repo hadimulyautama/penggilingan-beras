@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric,
+                        String, text)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -182,11 +183,47 @@ class ByproductPrice(Base, TimestampMixin):
     updated_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
+#: Keadaan satu transaksi barang keluar. Nilainya ditulis sekali di sini dan
+#: dibaca layanan maupun layar — kata yang diketik ulang di tiga tempat akan
+#: berbeda ejaannya di tempat keempat, dan saringan yang meleset diam-diam
+#: menyembunyikan tugas dari layar operator.
+OUT_PERINTAH, OUT_DIMUAT, OUT_SELESAI, OUT_BATAL = (
+    "perintah", "dimuat", "selesai", "batal")
+#: Yang masih berjalan — dipakai saringan antrean.
+OUT_HIDUP = (OUT_PERINTAH, OUT_DIMUAT)
+
+
 class OutgoingRecord(Base, TimestampMixin):
     """Barang keluar / dikirim. Kode: OUT-YYYYMMDD-NN. Proses jual lengkap
-    (pelanggan/faktur/piutang) ada di modul Penjualan; di sini = dispatch fisik."""
+    (pelanggan/faktur/piutang) ada di modul Penjualan; di sini = dispatch fisik.
+
+    ⭐ SATU TRANSAKSI, BANYAK BARANG — dan itu sudah begitu sejak awal lewat
+    `OutgoingItem`. Yang baru sejak 28 September 2026 adalah KEADAANNYA:
+    Admin memerintah, operator memuat, Admin memverifikasi (keputusan pemilik).
+    Sampai hari itu barisnya lahir langsung "sudah terjadi", dan ketiga aksi
+    pengirimannya masing-masing membuat baris BARU untuk SATU jenis barang —
+    jadi satu truk berisi beras + broken + menir melahirkan tiga kode OUT-,
+    tiga baris di kartu Stok Produk, dan tiga pencocokan untuk satu tiket
+    timbang.
+
+    `timbangan_transaksi_id` menunjuk tiket `arah='KELUAR'` dan NULL sampai
+    langkah verifikasi — truk masuk kosong dan baru ditimbang bermuatan saat
+    keluar, jadi tiketnya belum lengkap saat perintah dibuat maupun saat
+    barangnya dimuat.
+    """
 
     __tablename__ = "outgoing_records"
+    __table_args__ = (
+        # Satu tiket timbang keluar, satu transaksi yang HIDUP. Parsial, bukan
+        # unik polos: yang dibatalkan harus boleh dicatat ulang, kalau tidak
+        # truk yang salah dicatat tak punya jalan pulang. Syaratnya wajib sama
+        # persis dengan migrasi 0061.
+        Index("uq_outgoing_records_timbangan_hidup", "timbangan_transaksi_id",
+              unique=True,
+              postgresql_where=text("status <> 'batal'"),
+              sqlite_where=text("status <> 'batal'")),
+        Index("ix_outgoing_records_status", "status"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -200,6 +237,24 @@ class OutgoingRecord(Base, TimestampMixin):
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     catatan: Mapped[str | None] = mapped_column(String(200))
+
+    #: perintah → dimuat → selesai, dengan `batal` di sampingnya.
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=OUT_PERINTAH,
+        server_default=OUT_SELESAI)
+    #: Tiga pasang (oleh, waktu) TERPISAH — tiga orang, tiga tanggung jawab.
+    #: Satu kolom "terakhir diubah oleh" menghapus justru pertanyaan yang kelak
+    #: ditanyakan: siapa yang memerintahkan muatan yang ternyata salah.
+    diperintah_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    waktu_perintah: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dimuat_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    waktu_muat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    diverifikasi_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    waktu_verifikasi: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Tiket timbang KELUAR. NULL sampai verifikasi — lihat catatan kelas.
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer)
+    catatan_perintah: Mapped[str | None] = mapped_column(String(300))
+    sebab_batal: Mapped[str | None] = mapped_column(String(300))
 
 
 class OutgoingItem(Base, TimestampMixin):
@@ -220,7 +275,21 @@ class OutgoingItem(Base, TimestampMixin):
     )
     jenis_byproduct: Mapped[str | None] = mapped_column(String(20))
     milling_process_id: Mapped[int | None] = mapped_column(ForeignKey("milling_process.id"))
+    #: ── DUA ANGKA BERDAMPINGAN, dan yang kedua tak pernah menimpa yang
+    #: pertama ── `*_perintah` milik Admin; `jumlah_karung`/`berat_kg` yang
+    #: sudah ada berarti YANG BENAR-BENAR DIMUAT, dan dari sanalah stok
+    #: berkurang. Muatan sungguhan memang berselisih dari perintahnya, dan
+    #: selisih itu yang dilihat Admin saat verifikasi — selisih yang ditimpa
+    #: berhenti jadi pertanyaan (pelajaran rantai permintaan PK).
+    #:
+    #: NULL pada baris lama: barang yang keluar sebelum 28 September 2026
+    #: memang tak pernah punya perintah.
+    berat_perintah_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    jumlah_karung_perintah: Mapped[int | None] = mapped_column(Integer)
     jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    #: Yang BENAR-BENAR dimuat. 0 selama masih berstatus `perintah` — stok
+    #: dihitung dari kolom ini, jadi perintah yang belum dimuat tak boleh
+    #: mengurangi apa pun.
     berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     harga_per_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     total_harga: Mapped[float | None] = mapped_column(Numeric(16, 2))

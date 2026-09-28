@@ -754,7 +754,7 @@ async def _add_intake(
         changed_by=user.id,
         new_value=f"{sumber_tipe} | "
                   f"{f'{berat_kg:.0f}kg' if berat_kg is not None else 'bobot menunggu timbang'}"
-                  f" → {tujuan_norm} | hpp={hpp_per_kg}",
+                  f" → {tujuan_norm}",
     )
     # Status silo diturunkan ulang SEBELUM commit, supaya ia ikut satu
     # transaksi dengan pemasukannya — status yang tertulis di transaksi kedua

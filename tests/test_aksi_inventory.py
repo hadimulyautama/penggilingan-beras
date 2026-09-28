@@ -86,22 +86,78 @@ def test_kombinasi_mustahil_tetap_ditolak_walau_bentuknya_benar():
 # ─────────────────────── Menu per peran ───────────────────────
 
 def test_operator_gudang2_tak_pernah_melihat_aksi_uang():
+    """Operator mengerjakan BARANG, bukan uang.
+
+    Daftarnya bertambah 28 September 2026 — tiga aksi memuat, karena barang
+    keluar kini berperintah dan operatorlah yang memuat (keputusan pemilik:
+    "operator menerima tugas"). Yang TIDAK berubah, dan itu inti pagar ini:
+    tak satu pun di antaranya menetapkan harga, memilih pembeli, atau
+    memutuskan apa yang keluar. Operator menjalankan perintah yang sudah ada;
+    yang membuat perintahnya Admin.
+
+    `harga_byproduct` dicoret 28 September 2026 bersama seluruh harga.
+    """
     ids = {a["id"] for a in inv.spesifikasi(g2=True, fin=False)}
-    assert ids == {"catat_packing", "catat_bekatul"}
-    # `harga_byproduct` dicoret 28 September 2026 — aksinya dihapus bersama
-    # seluruh harga (keputusan pemilik).
-    for terlarang in ("beli_kemasan", "kirim_barang_jadi", "jual_pk"):
+    assert ids == {"catat_packing", "catat_bekatul",
+                   "muat_semua", "muat_barang", "selesai_muat"}
+    # Yang memutuskan & yang berbau uang tetap tak pernah sampai ke sini —
+    # termasuk MEMBUAT perintah dan MEMVERIFIKASI-nya.
+    for terlarang in ("beli_kemasan", "perintah_keluar", "tambah_barang_keluar",
+                      "batal_perintah_keluar", "verifikasi_keluar"):
         assert terlarang not in ids
+    # Dan tak satu pun borangnya meminta harga atau pembeli.
+    for a in inv.spesifikasi(g2=True, fin=False):
+        nama = {f.get("name") for f in a.get("fields", [])}
+        assert not (nama & {"harga_per_kg", "harga_per_lembar", "nama_pembeli"}), \
+            f"{a['id']} menanyakan urusan uang kepada operator"
 
 
 def test_yang_tak_berperan_apa_pun_tak_mendapat_aksi():
     assert inv.spesifikasi(g2=False, fin=False) == []
 
 
-def test_staff_mendapat_pembelian_dan_pengiriman():
+def test_staff_mendapat_pembelian_dan_perintah_keluar():
+    """Admin membeli kemasan, MEMERINTAHKAN barang keluar, dan memverifikasinya.
+
+    ⚠ ATURANNYA BERUBAH 28 September 2026, dan namanya ikut berubah supaya
+    tak ada yang membaca pagar ini sebagai pagar yang sama. `kirim_barang_jadi`,
+    `kirim_bekatul` dan `jual_pk` DIBUANG (keputusan pemilik, usul QA):
+    ketiganya mengeluarkan barang tanpa perintah dan tanpa verifikasi, jadi
+    rantai barunya jadi sukarela — dan satu truk berisi tiga macam barang
+    melahirkan tiga kode OUT- yang berbeda.
+
+    Yang dijaga sekarang dua arah: Admin PUNYA seluruh langkah yang jadi
+    haknya, dan ketiga pintu lama benar-benar TERTUTUP. Arah kedua itu yang
+    penting — aksi yang dihapus dari katalog tetapi rutenya tertinggal hidup
+    adalah pintu yang tak terlihat siapa pun.
+    """
     ids = {a["id"] for a in inv.spesifikasi(g2=False, fin=True)}
-    assert {"beli_kemasan", "kirim_barang_jadi", "kirim_bekatul",
-            "jual_pk"} <= ids
+    assert {"beli_kemasan", "perintah_keluar", "tambah_barang_keluar",
+            "batal_perintah_keluar", "verifikasi_keluar"} <= ids
+    for dibuang in ("kirim_barang_jadi", "kirim_bekatul", "jual_pk"):
+        assert dibuang not in ids, f"{dibuang} masih ditawarkan"
+
+
+def test_rute_ketiga_aksi_lama_ikut_hilang():
+    """Mencoret dari katalog TIDAK menutup pintunya.
+
+    Alamatnya bisa diketik, dan lembar yang masih terbuka di layar orang saat
+    versi baru terbit masih bisa mengirim. Pagar ini memeriksa rutenya, bukan
+    daftarnya — sebab itulah yang benar-benar menentukan barang bisa keluar
+    tanpa perintah atau tidak.
+    """
+    from app.main import app
+
+    jalur = {r.path for r in app.routes}
+    for mati in ("/api/actions/kirim-barang-jadi", "/api/actions/kirim-bekatul",
+                 "/api/actions/jual-pk"):
+        assert mati not in jalur, f"{mati} masih hidup sebagai pintu belakang"
+    # Dan layanannya ikut hilang — fungsi yang masih ada akan dipanggil lagi
+    # oleh rute berikutnya yang butuh "kirim barang" tanpa membaca sejarahnya.
+    from app.penggilingan.inventory import outgoing
+
+    for mati in ("kirim_finished_goods", "kirim_bekatul", "jual_pk_langsung"):
+        assert not hasattr(outgoing, mati), f"{mati} masih ada di layanannya"
 
 
 # ─────────────────────── Bentuk spesifikasi ───────────────────────

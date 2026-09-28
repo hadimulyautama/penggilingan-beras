@@ -1117,10 +1117,18 @@ _GRUP_AKSI = {
     # katalog satu-satunya pintunya. Yang berkartu ada di daftar di bawah.
     "transfer_pk": "Gudang 2 · penyosohan",
     # Yang keluar dari pabrik, dan yang bukan beras putih.
+    #
+    # `kirim_bekatul`, `kirim_barang_jadi` dan `jual_pk` DIBUANG 28 September
+    # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
+    # tanpa perintah membuat rantainya sukarela.
     "catat_bekatul": "Hasil samping & barang jadi",
-    "kirim_bekatul": "Hasil samping & barang jadi",
-    "kirim_barang_jadi": "Hasil samping & barang jadi",
-    "jual_pk": "Hasil samping & barang jadi",
+    "perintah_keluar": "Barang keluar",
+    "tambah_barang_keluar": "Barang keluar",
+    "batal_perintah_keluar": "Barang keluar",
+    "verifikasi_keluar": "Barang keluar",
+    "muat_semua": "Barang keluar",
+    "muat_barang": "Barang keluar",
+    "selesai_muat": "Barang keluar",
     # Pembelian & pencocokan.
     "beli_kemasan": "Pembelian & pencocokan",
     "rekonsiliasi_timbang": "Pembelian & pencocokan",
@@ -1204,9 +1212,14 @@ _ACTION_WH = {
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
     "catat_packing": "g2", "catat_bekatul": "g2", "beli_kemasan": "g2",
-    "kirim_barang_jadi": "g2", "kirim_bekatul": "g2",
-    # Kecuali PK: ia dijual mentah dari Gudang 1, sebelum disosoh.
-    "jual_pk": "g1",
+    # Rantai barang keluar berperintah. SELURUHNYA g2, termasuk yang dikerjakan
+    # Admin: gudangnya milik CATATAN, bukan milik orang yang menekannya, dan
+    # barang jadi memang berdiri di Gudang 2 — dari sanalah ia berangkat.
+    # PK mentah tak lagi punya jalur di sini (keputusan pemilik: "pk dijual
+    # tetapi itu urusan keuangan"), jadi tak ada lagi yang bergudang g1.
+    "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
+    "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
+    "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",
     # Undo tidak milik gudang mana pun; ia ikut G1 karena di situlah
     # tab pertama terbuka, dan aksinya sama isinya di kedua tab.
     "undo": "g1",
