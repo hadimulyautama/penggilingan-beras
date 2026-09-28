@@ -1226,6 +1226,39 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         _rata = rata_qc.get(p.id)
         if _rata is not None and _rata.ada:
             fakta_g.append(("Mutu", _rata.teks()))
+
+        # ── SILO dan HASIL: dua hal yang kartunya tak pernah sebut ──
+        #
+        # Laporan operator Gudang 1, 28 September 2026: "hasil giling ditulis
+        # lebih dari jumlah gabah bisa tersimpan, tetapi angka yg tertera sama
+        # seperti berat gabah." Diperiksa QA: angkanya TIDAK dipotong — 11.000
+        # tersimpan apa adanya, dan layar Stok menyebutnya benar. Yang keliru
+        # kartunya: angka besarnya BAHAN MASUK, dan hasilnya tak pernah muncul
+        # sama sekali. Operator menekan "Perbarui hasil giling", kembali ke
+        # kartunya, melihat 10.000 — dan menyimpulkan angkanya diganti.
+        #
+        # Ini KETIGA KALINYA kartu ini kurang informasi; silonya juga tak
+        # pernah disebut (temuan QA 27 September). Keduanya dikerjakan
+        # sekaligus, dan bentuknya disamakan dengan kartu penyosohan: dua
+        # gudang yang mengerjakan hal serupa tak boleh berkartu beda bentuk,
+        # sebab orangnya berpindah antar gudang.
+        from app.penggilingan.gudang1.services.milling import (_produced_pk,
+                                                               hitung_rendemen)
+        from app.penggilingan.gudang1.services.silo import silo_ids_proses
+
+        nama_silo_g = []
+        for sid in await silo_ids_proses(db, p):
+            si = await db.get(Silo, sid)
+            if si:
+                nama_silo_g.append(si.nama_silo.replace("Silo ", ""))
+        if nama_silo_g:
+            fakta_g.insert(0, ("Silo", " + ".join(nama_silo_g)))
+        hasil_pk = await _produced_pk(db, p.id)
+        if hasil_pk:
+            rend = hitung_rendemen(hasil_pk, p.berat_gabah_masuk_kg)
+            fakta_g.append(("Hasil", _kg(hasil_pk)
+                            + (f" · rendemen {rend:.1f}%" if rend is not None else "")))
+
         b.berjalan.append(Baris(
             kode=p.kode_proses,
             isi=(f"⏸ berhenti — {macet.sebab}" if macet else "digiling")
@@ -1242,7 +1275,9 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"
                      + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
-                     if macet else f"{_kg(p.berat_gabah_masuk_kg)} bahan masuk"),
+                     if macet else
+                     (f"{_kg(p.berat_gabah_masuk_kg)} bahan · hasil {_kg(hasil_pk)}"
+                      if hasil_pk else f"{_kg(p.berat_gabah_masuk_kg)} bahan masuk")),
             keadaan=("menunggu dilanjutkan" if macet else "catat hasil, tutup bila selesai"),
             aksi=("lanjutkan_proses" if macet else "hasil_giling"),
             nilai=(f"giling:{p.kode_proses}" if macet else p.kode_proses),

@@ -471,3 +471,58 @@ async def test_gabah_ke_silo_kedua_ikut_jadi_sumber(pg, silos):
         n = (await db.execute(select(MillingProcessSource).where(
             MillingProcessSource.milling_process_id == p.id))).scalars().all()
         assert len(n) == 3
+
+
+async def test_kartu_giling_menyebut_silo_hasil_dan_rendemennya(pg, silos):
+    """Laporan operator Gudang 1, 28 September 2026: "hasil giling ditulis
+    lebih dari jumlah gabah bisa tersimpan, tetapi angka yg tertera sama
+    seperti berat gabah."
+
+    Diperiksa QA: angkanya TIDAK dipotong — yang keliru kartunya. Angka
+    besarnya BAHAN MASUK, dan hasilnya tak pernah muncul sama sekali. Operator
+    menekan "Perbarui hasil giling", kembali ke kartunya, melihat angka gabah
+    — dan menyimpulkan hasilnya diganti jadi berat gabah.
+
+    Ini KETIGA KALINYA kartu ini kurang informasi; silonya juga tak pernah
+    disebut (temuan QA 27 September). Bentuknya kini sama dengan kartu
+    penyosohan: Silo · Bahan · Hasil + rendemen. Dua gudang yang mengerjakan
+    hal serupa tak boleh berkartu beda bentuk — orangnya berpindah antar
+    gudang.
+    """
+    from app.models import User
+    from app.penggilingan.gudang1.services.milling import log_progress
+    from app.services.berjalan import untuk_gudang1
+
+    r = await _mulai(pg, silos, ["A", "B"])
+    async with pg() as db:
+        u = await db.get(User, silos["user"])
+        await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
+                           berat_kumulatif=6_000)
+
+    async with pg() as db:
+        b = await untuk_gudang1(db)
+    k = next(x for x in b.berjalan if x.kode == r.proc.kode_proses)
+    fakta = {nama: nilai for nama, nilai in (k.fakta or [])}
+
+    assert "Silo" in fakta, f"kartu giling tak menyebut silonya: {fakta}"
+    assert "A" in fakta["Silo"] and "B" in fakta["Silo"], fakta["Silo"]
+    assert "Hasil" in fakta, f"kartu giling tak menyebut hasilnya: {fakta}"
+    assert "6.000" in fakta["Hasil"], fakta["Hasil"]
+    assert "rendemen" in fakta["Hasil"], "hasil tanpa rendemennya"
+    # Dan baris ringkasnya — yang dibaca di Beranda — ikut menyebutnya.
+    assert "hasil" in (k.ringkas or "").lower(), k.ringkas
+
+
+async def test_kartu_giling_tanpa_hasil_tak_mengarang_rendemen(pg, silos):
+    """Sebelum satu angka pun dicatat, kartunya diam soal hasil — bukan
+    menyebut nol. Nol yang dicetak sebagai fakta terbaca seperti hasil yang
+    sudah diukur, dan rendemen 0% akan dicari sebabnya di mesin."""
+    from app.services.berjalan import untuk_gudang1
+
+    r = await _mulai(pg, silos, ["A"])
+    async with pg() as db:
+        b = await untuk_gudang1(db)
+    k = next(x for x in b.berjalan if x.kode == r.proc.kode_proses)
+    fakta = {nama: nilai for nama, nilai in (k.fakta or [])}
+    assert "Hasil" not in fakta, fakta
+    assert "Silo" in fakta, "silonya tetap disebut sejak awal"
