@@ -118,9 +118,15 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     assert ids[:6] == ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
     assert "masukkan_pk" not in ids and "undo" in ids
+    # Keenamnya TETAP di menu — lembar kartunya dibangun dari spesifikasi yang
+    # sama — tetapi sejak 28 September 2026 ditandai `kartu`, jadi katalog
+    # "Catat pekerjaan lain" melewatkannya. Pagar ini dulu menuntut kelompok
+    # "Gudang 2 · penyosohan", yaitu DIGAMBAR di katalog; itu pintu kedua ke
+    # pekerjaan yang sudah punya kartu, dan aturannya sudah ditetapkan pemilik
+    # 21 September untuk Gudang 1 — Gudang 2 cuma tertinggal.
     for a in menu:
         if a["id"] in ids[:6]:
-            assert a["grup"] == "Gudang 2 · penyosohan" and a["wh"] == "g2"
+            assert a["kartu"] is True and a["wh"] == "g2", a["id"]
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]
     assert [jeda.SEBAB_LAIN, "Lainnya — tulis sendiri"] in sebab["options"]

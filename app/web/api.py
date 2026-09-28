@@ -1112,40 +1112,61 @@ GRUP_KARTU = "Biasanya dikerjakan dari kartu"
 GRUP_LAIN = "Lain-lain"
 
 _GRUP_AKSI = {
-    # Gudang 2 — kini punya kartunya sendiri, tetapi tetap dicantumkan
-    # supaya yang bendanya belum ada pun bisa dimulai dari sini.
-    "pindah_tumpukan_silo": "Gudang 2 · penyosohan",
-    "mulai_penyosohan": "Gudang 2 · penyosohan",
-    "hasil_penyosohan": "Gudang 2 · penyosohan",
-    "hentikan_penyosohan": "Gudang 2 · penyosohan",
-    "lanjutkan_penyosohan": "Gudang 2 · penyosohan",
-    "selesai_penyosohan": "Gudang 2 · penyosohan",
+    # Yang BENAR-BENAR digambar di katalog: aksi yang tak punya kartu, jadi
+    # katalog satu-satunya pintunya. Yang berkartu ada di daftar di bawah.
     "transfer_pk": "Gudang 2 · penyosohan",
-    "minta_pk_g1": "Gudang 2 · penyosohan",
-    # PK yang datang dari luar, bukan hasil giling sendiri.
-    "catat_pk_luar": "PK dari luar",
-    "masukkan_pk": "PK dari luar",
-    "harga_pk_luar": "PK dari luar",
-    "qc_pk_luar": "PK dari luar",
     # Yang keluar dari pabrik, dan yang bukan beras putih.
     "catat_bekatul": "Hasil samping & barang jadi",
     "kirim_bekatul": "Hasil samping & barang jadi",
-    "catat_packing": "Hasil samping & barang jadi",
     "kirim_barang_jadi": "Hasil samping & barang jadi",
     "harga_byproduct": "Hasil samping & barang jadi",
     "jual_pk": "Hasil samping & barang jadi",
     # Pembelian & pencocokan.
     "beli_kemasan": "Pembelian & pencocokan",
     "rekonsiliasi_timbang": "Pembelian & pencocokan",
-    "betulkan_bobot_giling": "Pembelian & pencocokan",
 }
-for _a in ("gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
-           "selesai_pengeringan", "selesai_pendinginan", "pindah_silo",
-           "ubah_target",
-           "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
-           "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling",
-           "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
-           "kirim_permintaan_pk", "tutup_permintaan_pk"):
+
+# ── Aksi yang dikerjakan DARI KARTU — katalog melewatkannya ──
+#
+# Sebelum 28 September 2026 daftar ini hampir seluruhnya Gudang 1, dan
+# kembaran Gudang 2-nya tertinggal: `mulai_giling` disembunyikan,
+# `mulai_penyosohan` tidak. Tak ada yang memutuskan itu — ia menumpuk sendiri,
+# dan hasilnya 12 pekerjaan berpintu ganda (ukuran QA lewat `/api/actions/menu`
+# untuk lima peran).
+#
+# ⚠ ALASAN LAMA YANG DIBUANG, dan ini yang paling penting bagi pembaca
+# berikutnya: kalimat di sini dulu berbunyi "kini punya kartunya sendiri,
+# tetapi tetap dicantumkan supaya yang bendanya belum ada pun bisa dimulai
+# dari sini". Alasan itu TIDAK BERLAKU, dan diperiksa satu per satu: medan
+# pertama tiap borang katalog adalah daftar jarak jauh ke endpoint yang SAMA
+# dengan yang menentukan kartunya muncul. Borangnya kosong persis saat
+# kartunya tak ada — jadi ia tak pernah bisa jadi jalan darurat; ia cuma pintu
+# kedua ke pintu yang sama.
+#
+# Yang paling patut dicurigai `catat_pk_luar` — PK yang datang tanpa lewat Pos
+# Timbang. Borang katalognya pun menuntut tiket timbang aktif
+# (`timbang-pk-aktif`), jadi ia tidak terkecuali.
+#
+# Aksinya TETAP dikirim di menu: lembar kartu dibangun dari spesifikasi yang
+# sama. Yang berubah cuma `a["kartu"]`, dan katalog melewatkannya.
+for _a in (
+    # Gudang 1
+    "gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
+    "selesai_pengeringan", "selesai_pendinginan", "pindah_silo", "ubah_target",
+    "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
+    "lanjutkan_proses", "verify_gabah", "verify_output", "qc_giling",
+    # Rantai permintaan PK
+    "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
+    "kirim_permintaan_pk", "tutup_permintaan_pk",
+    # Gudang 2 — menyusul 28 September 2026, pekerjaan yang sama bentuknya
+    # dengan Gudang 1 dan selama ini beraturan berlawanan.
+    "mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
+    "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
+    "catat_packing",
+    # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
+    "masukkan_pk", "catat_pk_luar", "qc_pk_luar", "harga_pk_luar",
+    "betulkan_bobot_giling",
+):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
 #: Urutan kelompok di layar — yang paling sering dipakai lebih dulu. Yang

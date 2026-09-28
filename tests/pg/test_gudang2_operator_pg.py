@@ -613,3 +613,48 @@ async def test_status_silo_g2_tak_pernah_berbohong(pg, gudang2):
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                  nama_silo="A", sisa_kg=0)
     await selaras("sesudah Silo A dibebaskan")
+
+
+async def test_silo_tanpa_tombol_menyebut_apa_yang_memakai_mesinnya(pg, gudang2):
+    """Butir 5 UJI PARIPURNA 28 September 2026.
+
+    Mesin sosohnya satu, jadi selama ada penyosohan berjalan, kartu silo lain
+    kehilangan tombolnya — dan itu BENAR. Tetapi sejak hari yang sama pintu
+    katalognya ikut dicabut ("satu pekerjaan, satu pintu"), jadi kartu itu
+    satu-satunya tempat orang bisa membaca sebabnya.
+
+    Kartu tanpa tombol DAN tanpa keterangan dibaca sebagai app yang rusak.
+    Maka keterangannya wajib menyebut APA yang memakai mesinnya, bukan sekadar
+    bahwa mesinnya dipakai.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import pindah_tumpukan_ke_silo
+    from app.services.berjalan import _kartu_silo_g2, _isian_silo
+
+    # Silo A diisi dari tumpukan supaya ada DUA silo berisi.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await pindah_tumpukan_ke_silo(db, user=u,
+                                      intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=3_000)
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["B"])
+
+    async with pg() as db:
+        memo = {}
+
+        async def asal_silo(sid):
+            if sid not in memo:
+                memo[sid] = await _isian_silo(db, sid)
+            return memo[sid]
+
+        kartu = await _kartu_silo_g2(db, asal_silo)
+
+    a = next(k for k in kartu if k.kode == "Silo A")
+    assert a.aksi is None and not a.pilihan, "mesin sosohnya satu, tombolnya harus hilang"
+    kode = r.proc.kode_proses
+    assert kode in (a.keadaan or ""), f"keadaan tak menyebut prosesnya: {a.keadaan}"
+    assert kode in (a.nota or ""), f"nota tak menyebut prosesnya: {a.nota}"
+    assert "menunggu giliran" in (a.nota or "")

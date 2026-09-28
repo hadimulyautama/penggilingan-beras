@@ -1601,9 +1601,17 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     sisa_dicatat = {sid for sid, akhir in baris_pakai if akhir is not None} - dipakai
     # Bendera global TETAP dipakai, dan di sini ia masih benar: mesinnya satu,
     # jadi silo LAIN memang belum bisa dimulai selama ada yang jalan.
-    sedang = bool(dipakai) or bool((await db.execute(
-        select(PolishingProcess.id).where(PolishingProcess.status == "proses")
-    )).first())
+    # Kode prosesnya ikut diambil, bukan cuma "ada atau tidak": kartu silo yang
+    # kehilangan tombolnya WAJIB menyebut apa yang memakainya. Sejak 28
+    # September 2026 pintu katalognya pun dicabut (satu pekerjaan, satu pintu),
+    # jadi ini satu-satunya tempat orang bisa membaca sebabnya — dan kartu
+    # tanpa tombol tanpa keterangan dibaca sebagai app yang rusak.
+    kode_jalan = (await db.execute(
+        select(PolishingProcess.kode_proses)
+        .where(PolishingProcess.status == "proses")
+        .order_by(PolishingProcess.id.desc())
+    )).scalars().first()
+    sedang = bool(dipakai) or bool(kode_jalan)
     wid2 = await _g2_warehouse_id(db)
     for silo in (await db.execute(
         select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
@@ -1633,7 +1641,9 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # yang belum tersentuh.
             keadaan=("sisanya sudah dicatat · mesin masih memakai silo lain"
                      if silo.id in sisa_dicatat
-                     else "mesin sosoh sedang dipakai" if sedang
+                     else (f"mesin sosoh sedang dipakai {kode_jalan}"
+                           if kode_jalan else "mesin sosoh sedang dipakai")
+                     if sedang
                      else "mulai penyosohan bila siap"),
             aksi=None if sedang else "mulai_penyosohan",
             nilai=huruf, fase="silo_g2",
@@ -1653,7 +1663,14 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # baris ini pemilik membacanya sebagai rincian yang tak menjumlah
             # (laporan 23 Sep 21:18). Selisih nol tak perlu kalimat — kalimat
             # yang selalu muncul berhenti dibaca.
-            nota=_nota_isian(isian),
+            # Kalimat yang menjelaskan KENAPA tombolnya tak ada, dan ia
+            # mendahului catatan selisih: yang membaca kartu tanpa tombol
+            # mencari sebabnya lebih dulu. Sesudah pintu katalognya dicabut
+            # (28 September 2026), tak ada tempat lain untuk membacanya.
+            nota=(f"Mesin sosoh sedang dipakai {kode_jalan} — silo ini "
+                  "menunggu giliran."
+                  if sedang and kode_jalan and silo.id not in sisa_dicatat
+                  else _nota_isian(isian)),
             ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
             pilihan=([] if sedang else [
                 ("mulai_penyosohan", "Mulai penyosohan",

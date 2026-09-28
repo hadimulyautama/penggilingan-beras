@@ -351,9 +351,19 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     from app.web import api
 
     assert hasattr(api, "_GRUP_AKSI") and hasattr(api, "URUT_GRUP")
-    assert api._GRUP_AKSI["mulai_penyosohan"] == "Gudang 2 · penyosohan"
-    assert api._GRUP_AKSI["catat_pk_luar"] == "PK dari luar"
+    # Dua baris di sini dulu menegaskan `mulai_penyosohan` berkelompok "Gudang
+    # 2 · penyosohan" dan `catat_pk_luar` "PK dari luar" — yaitu DIGAMBAR di
+    # katalog. Keduanya dicabut 28 September 2026 (ukuran QA: 12 pekerjaan
+    # berpintu ganda), sebab keduanya sudah punya kartu. Yang tersisa di
+    # katalog cuma yang tak berkartu sama sekali.
+    assert api._GRUP_AKSI["mulai_penyosohan"] == api.GRUP_KARTU
+    assert api._GRUP_AKSI["catat_pk_luar"] == api.GRUP_KARTU
     assert api._GRUP_AKSI["gabah_masuk"] == api.GRUP_KARTU
+    # Dan yang memang tak punya kartu TETAP digambar — katalog satu-satunya
+    # pintunya, jadi membuangnya berarti pekerjaannya hilang sama sekali.
+    for tanpa_kartu in ("catat_bekatul", "beli_kemasan", "kirim_barang_jadi",
+                        "jual_pk", "transfer_pk", "rekonsiliasi_timbang"):
+        assert api._GRUP_AKSI[tanpa_kartu] != api.GRUP_KARTU, tanpa_kartu
     # Yang sudah punya kartu tak digambar di katalog (21 September 2026):
     # kelompoknya keluar dari urutan, aksinya ditandai — bukan dibuang, karena
     # lembar kartu dibangun dari menu yang sama.
