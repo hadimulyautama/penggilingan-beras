@@ -23,6 +23,27 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 #: membuka aplikasi memakai berkas lama tanpa ada yang menyadarinya.
 VERSI = hmu_tampilan.VERSI
 
+# ⚠ PERBAIKAN YANG HANYA MENYENTUH `hmu_tampilan/` PERNAH TAK PERNAH TERBIT.
+#
+# 28 September 2026: laci tak bisa digulir, perbaikannya satu aturan CSS, dan
+# commit-nya di-push. Railway MELEWATINYA — `skippedReason: "No changes to
+# watched files"` — sebab layanannya memakai Watch Paths yang tak memuat
+# `hmu_tampilan/**`. Tak ada galat, tak ada build gagal; deploy-nya cuma tidak
+# pernah terjadi, dan /health tetap menjawab "ok" atas versi lama. Pemilik yang
+# menunggu perbaikannya tak punya cara mengetahui bedanya.
+#
+# Tak ketahuan berbulan-bulan karena SETIAP commit sebelumnya kebetulan ikut
+# menyentuh `app/`. Yang pertama tidak — langsung tenggelam.
+#
+# Obatnya `watchPatterns: ["**"]` di `railway.json`, yaitu: bangun pada tiap
+# push. Itu menukar beberapa menit build dengan kepastian bahwa yang sudah
+# di-push memang terbit — dan daftar pengecualian apa pun akan mengulang
+# jebakan yang sama pada berkas yang kebetulan tak terpikir hari ini.
+#
+# Cara memeriksa bahwa sesuatu benar-benar terbit: bandingkan `?v=` pada
+# halaman masuk dengan VERSI di sini. `/health` TIDAK menjawabnya — ia cuma
+# menyebut revisi skema, dan skema tak berubah saat yang berubah cuma tampilan.
+
 # `base.html` & `_benda.html` datang dari paket; templat layar tetap di sini.
 # Pita "MODE UJI": orang yang tak tahu ia sedang menguji akan memperlakukan
 # angka uji sebagai angka pabrik.

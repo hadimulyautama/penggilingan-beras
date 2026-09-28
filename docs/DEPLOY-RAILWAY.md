@@ -59,6 +59,35 @@ tidak perlu domain publik.
 > ⚠️ **Matikan bot yang jalan di laptop** sebelum ini. Dua poller pada token
 > yang sama = konflik Telegram 409 → pesan hilang.
 
+## ⚠ Yang di-push belum tentu terbit
+
+Layanan `penggilingan-beras` memakai **Watch Paths**. 28 September 2026 sebuah
+perbaikan CSS (laci tak bisa digulir) di-push dan **tidak pernah terbit**:
+Railway menandainya `SKIPPED` dengan `skippedReason: "No changes to watched
+files"`, sebab commit-nya hanya menyentuh `hmu_tampilan/` dan `tests/`.
+
+Tak ada galat dan tak ada build gagal — deploy-nya cuma tidak terjadi, dan
+`/health` tetap menjawab `ok` atas versi lama. Tak ketahuan berbulan-bulan
+karena setiap commit sebelumnya kebetulan ikut menyentuh `app/`.
+
+Sejak itu `railway.json` memuat `build.watchPatterns: ["**"]` — bangun pada
+tiap push. Jangan menyempitkannya lagi: daftar pengecualian apa pun akan
+mengulang jebakan yang sama pada berkas yang kebetulan tak terpikir hari ini.
+
+**Memeriksa sesuatu benar-benar terbit** — bandingkan `?v=` pada halaman masuk
+dengan `hmu_tampilan.VERSI`:
+
+```
+curl -s https://<host>/masuk | grep -o "v=[0-9]*" | sort -u
+```
+
+`/health` TIDAK menjawab ini: ia menyebut revisi skema, dan skema tak berubah
+saat yang berubah hanya tampilan. Status deploy terbaru:
+
+```
+railway deployment list --service penggilingan-beras
+```
+
 ## Update / redeploy
 
 Cukup `git push` ke `main`. Railway otomatis build & deploy versi baru;
