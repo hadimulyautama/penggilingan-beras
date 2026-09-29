@@ -22,6 +22,39 @@
    dan itu disengaja: kelas baru untuk kartu yang sama bentuknya akan berbeda
    rupa pada perubahan tema berikutnya. #}
 
+{# ── Pintu masuk pekerjaannya ADA DI HALAMANNYA, DI PUNCAK ──
+   Permintaan pemilik 29 September 2026: "buat tombol di barang keluar yaitu
+   perintah barang keluar", lalu: "tombol perintah barang keluar dibuat paling
+   atas saja."
+
+   Semula ia di kaki, dengan alasan yang terdengar masuk akal: yang membuka
+   halaman ini paling sering datang untuk MELIHAT, dan tombol besar di puncak
+   memanggil dirinya sendiri untuk ditekan. Pemilik memutuskan sebaliknya, dan
+   alasannya lebih kuat — halaman ini bisa panjang, dan tombol yang menuntut
+   digulung dulu adalah tombol yang tak ditemukan orang yang sedang terburu.
+
+   Tombolnya membuka LEMBAR AKSI YANG SAMA (`/aksi?buka=…`), bukan borang
+   kedua: dua borang untuk satu pekerjaan akan berselisih isinya pada
+   perubahan berikutnya.
+
+   Hanya untuk yang boleh memerintah. Gerbang sungguhannya di RUTE tiap aksi —
+   menyembunyikan tombol bukan penjagaan, sebab alamatnya bisa diketik. #}
+{% if BOLEH_PERINTAH %}
+<div class="ubah-hasil" style="margin-bottom:18px">
+  <a class="btn" href="/aksi?buka=perintah_keluar">Buat perintah barang keluar</a>
+  {# "Tambah barang" berlaku sampai SEBELUM diverifikasi — termasuk yang
+     truknya sudah dimuat. Muatan bertahap adalah keadaan sehari-hari, dan
+     barang yang menyusul setengah jam kemudian bukan transaksi baru: ia truk
+     yang sama, surat jalan yang sama, satu tiket timbang yang sama. #}
+  {% if ada_hidup %}
+  <a class="btn btn--kecil" href="/aksi?buka=tambah_barang_keluar">Tambah barang</a>
+  {% endif %}
+  {% if ada_perintah %}
+  <a class="btn btn--kecil" href="/aksi?buka=batal_perintah_keluar">Batalkan perintah</a>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if not kartu %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
@@ -138,37 +171,36 @@
       {% if k.rec.sebab_batal %}
         <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
       {% endif %}
+
+      {# ── TOMBOLNYA DI KARTUNYA SENDIRI ──
+         Keluhan pemilik 29 September 2026: "dimana tombol verifikasi untuk
+         admin dan tombol dimuat untuk operator? harusnya kan ada di kartu."
+
+         Kartu di Antrian tunggu dan Menunggu keputusan memang SELURUHNYA
+         tombol — seluruh kartu tautan yang membuka lembar aksinya. Yang tidak:
+         kartu di halaman ini, yang semula cuma memajang keadaan. Dan halaman
+         inilah yang dibuka orang untuk melihat muatan mana yang belum beres;
+         menyuruhnya berpindah layar demi satu tombol adalah perjalanan yang
+         tak punya sebab.
+
+         `nilai` mengunci transaksinya, jadi yang menekan dari sini tak perlu
+         memilih ulang transaksi yang barusan ia baca.
+
+         SATU tombol digambar penuh, sisanya kecil: tiga tombol seukuran
+         membuat mata memilih lebih lama daripada mengerjakan. #}
+      {% if k.tombol %}
+        <div class="ubah-hasil" style="margin-top:12px">
+          {% for buka, nilai, label, utama in k.tombol %}
+          <a class="btn{{ '' if utama else ' btn--kecil' }}"
+             href="/aksi?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
+             >{{ label }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
   </details>
 {% endfor %}
 </div>
 {% endif %}
 
-{# ── Pintu masuk pekerjaannya ADA DI HALAMANNYA ──
-   Permintaan pemilik 29 September 2026: "saya tidak suka proses barang keluar
-   prosesnya dilakukan di catat pekerjaan lain. buat tombol di barang keluar
-   yaitu perintah barang keluar ... lalu hapus tombol yang ada di catat
-   pekerjaan lain."
-
-   Bentuknya sama persis dengan `PINTASAN` di kaki Antrian tunggu, dan itu
-   disengaja: tombolnya membuka LEMBAR AKSI YANG SAMA (`/aksi?buka=…`), jadi
-   tak ada borang kedua yang harus dirawat dan tak ada dua tempat yang bisa
-   berselisih isinya.
-
-   Di KAKI, bukan di puncak: yang membuka halaman ini paling sering datang
-   untuk MELIHAT — muatan mana yang belum berangkat, truk tadi siang bawa apa.
-   Membuat perintah baru pekerjaan yang lebih jarang, dan tombol besar di
-   puncak memanggil dirinya sendiri untuk ditekan.
-
-   Hanya untuk yang boleh memerintah. Gerbang sungguhannya di RUTE tiap aksi —
-   menyembunyikan tombol bukan penjagaan, sebab alamatnya bisa diketik. #}
-{% if BOLEH_PERINTAH %}
-<div class="ubah-hasil" style="margin-top:18px">
-  <a class="btn" href="/aksi?buka=perintah_keluar">Buat perintah barang keluar</a>
-  {% if ada_perintah %}
-  <a class="btn btn--kecil" href="/aksi?buka=tambah_barang_keluar">Tambah barang</a>
-  <a class="btn btn--kecil" href="/aksi?buka=batal_perintah_keluar">Batalkan perintah</a>
-  {% endif %}
-</div>
-{% endif %}
 {% endblock %}

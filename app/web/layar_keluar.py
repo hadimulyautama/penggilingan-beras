@@ -29,8 +29,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
-from app.penggilingan.inventory.models import (OUT_BATAL, OUT_DIMUAT, OUT_PERINTAH,
-                                               OUT_SELESAI)
+from app.penggilingan.inventory.models import (OUT_BATAL, OUT_DIMUAT, OUT_HIDUP,
+                                               OUT_PERINTAH, OUT_SELESAI)
 from app.services import barang_keluar as svc
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
@@ -66,6 +66,27 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
     if view == SELEPAN and not can_see_financials(akun.user):
         raise HTTPException(403, "Layar ini milik Gudang 2 & Admin.")
 
+    from app.web.api import _is_g1_operator, _is_g2_operator
+
+    boleh_perintah = can_see_financials(akun.user)
+    # ── Tombol MUAT hanya untuk yang bukan Admin, dan ini keputusan sadar ──
+    #
+    # `_is_g2_operator` sengaja menjawab True untuk Admin ("Admin selalu
+    # boleh"), dan rutenya memang menerimanya — itu jalan darurat yang tak saya
+    # tutup: sore hari tanpa operator, muatan tetap harus bisa dicatat.
+    #
+    # Tetapi MENAWARKANNYA di halaman ini hal lain. Seluruh sebab rantai ini
+    # ada adalah pemisahan tangan: yang memerintah bukan yang memuat, dan yang
+    # memuat bukan yang memverifikasi. Admin yang disodori tombol "Muat semua"
+    # tepat di sebelah tombol "Verifikasi" akan menekan keduanya, dan
+    # verifikasinya jadi verifikasi atas pekerjaannya sendiri — rantainya utuh
+    # di basis data, kosong artinya.
+    #
+    # Jadi: rutenya tetap terbuka, tombolnya tidak ditawarkan.
+    boleh_muat = (not boleh_perintah
+                  and (await _is_g2_operator(akun.user)
+                       or await _is_g1_operator(akun.user)))
+
     async with SessionLocal() as db:
         baris = await svc.daftar(db, batas=60)
         nama = await _nama_barang(db, baris)
@@ -92,6 +113,25 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
         kartu.append({
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
+            # ── TOMBOL DI KARTUNYA SENDIRI ──
+            #
+            # Keluhan pemilik 29 September 2026: "dimana tombol verifikasi
+            # untuk admin dan tombol dimuat untuk operator? harusnya kan ada di
+            # kartu."
+            #
+            # Benar, dan kartu di Antrian tunggu maupun Menunggu keputusan
+            # memang SELURUHNYA tombol — seluruh kartu adalah tautan yang
+            # membuka lembar aksinya. Yang tidak: kartu di HALAMAN ini, yang
+            # semula cuma memajang keadaan. Dan halaman inilah yang dibuka
+            # orang untuk melihat muatan mana yang belum beres — menyuruhnya
+            # berpindah ke layar lain demi menekan satu tombol adalah
+            # perjalanan yang tak punya sebab.
+            #
+            # Tombolnya membuka LEMBAR AKSI YANG SAMA, terkunci pada transaksi
+            # ini lewat `nilai` — jadi yang menekannya dari sini tak perlu
+            # memilih ulang transaksi yang barusan ia baca.
+            "tombol": _tombol(rec, boleh_perintah=boleh_perintah,
+                              boleh_muat=boleh_muat),
             "total_perintah": sum(x["perintah"] for x in isi),
             "total_dimuat": sum(x["dimuat"] for x in isi),
             "urut": (_URUT.get(rec.status, 9), -rec.id),
@@ -110,16 +150,47 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
         # Ini cuma menghindari menawarkan pintu yang akan ditolak; yang menjaga
         # sungguhan `wajib(can_see_financials(...))` di tiap rutenya.
         BOLEH_PERINTAH=can_see_financials(akun.user),
-        # "Tambah barang" & "Batalkan perintah" cuma berarti bila ADA perintah
-        # yang belum dimuat — borang yang dibuka lalu daftarnya kosong adalah
-        # ketukan yang hanya bisa mengecewakan.
+        # Dua syarat, bukan satu, sebab jangkauannya memang berbeda:
+        #   · "Batalkan perintah" hanya untuk yang BELUM dimuat — yang truknya
+        #     sudah berangkat tak bisa dibatalkan, barangnya sudah pergi;
+        #   · "Tambah barang" berlaku sampai SEBELUM diverifikasi, termasuk
+        #     yang sudah dimuat (keputusan pemilik 29 September 2026).
+        # Borang yang dibuka lalu daftarnya kosong adalah ketukan yang hanya
+        # bisa mengecewakan.
         ada_perintah=any(k["rec"].status == OUT_PERINTAH for k in kartu),
+        ada_hidup=any(k["rec"].status in OUT_HIDUP for k in kartu),
         # Dua angka di kepala, dan keduanya PEKERJAAN — bukan jumlah kilogram.
         # Berapa ton yang keluar bulan ini ada di Laporan; yang dicari orang
         # saat membuka halaman ini berapa truk yang belum beres.
         n_perintah=sum(1 for k in kartu if k["rec"].status == OUT_PERINTAH),
         n_dimuat=sum(1 for k in kartu if k["rec"].status == OUT_DIMUAT),
     )
+
+
+def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool) -> list[tuple]:
+    """(buka, nilai, label, utama) untuk satu kartu — sesuai keadaan & peran.
+
+    `utama` menandai tombol yang paling mungkin ditekan: yang satu itu digambar
+    penuh, sisanya kecil. Tiga tombol seukuran membuat mata memilih lebih lama
+    daripada mengerjakan.
+
+    Yang TIDAK ditawarkan ke siapa pun: menambah & membatalkan pada transaksi
+    yang sudah ditutup, dan memuat yang truknya sudah berangkat. Tombol yang
+    ditekan lalu ditolak mengajari orang bahwa aplikasinya suka menolak.
+    """
+    n = str(rec.id)
+    t: list[tuple] = []
+    if rec.status == OUT_PERINTAH and boleh_muat:
+        t.append(("muat_semua", n, "Muat semua sesuai perintah", True))
+        t.append(("muat_barang", "", "Catat per barang", False))
+        t.append(("selesai_muat", n, "Selesai muat", False))
+    if rec.status == OUT_DIMUAT and boleh_perintah:
+        t.append(("verifikasi_keluar", n, "Verifikasi & tutup", True))
+    if rec.status in OUT_HIDUP and boleh_perintah:
+        t.append(("tambah_barang_keluar", n, "Tambah barang", not t))
+    if rec.status == OUT_PERINTAH and boleh_perintah:
+        t.append(("batal_perintah_keluar", n, "Batalkan", False))
+    return t
 
 
 async def _nama_barang(db, baris) -> dict[int, str]:

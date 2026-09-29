@@ -329,9 +329,28 @@ async def buat_perintah(
     return HasilPerintah(rec=rec, baris=items)
 
 
+def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
+    """Baris ini barang yang SAMA dengan yang hendak ditambahkan?
+
+    Yang menentukan sama-tidaknya bukan namanya di layar melainkan apa yang
+    menunjuk BARANGNYA: SKU + standar mutu untuk barang jadi (Premium 25 kg
+    laminasi berbeda barang dari Premium 50 kg biasa), jenisnya untuk curah,
+    dan lot asalnya untuk PK mentah — PK dari dua lot berbeda tak boleh
+    digabung, sebab ketelusurannya ke pemasok lewat lot itu.
+    """
+    if it.item_type != b.tipe:
+        return False
+    if b.tipe == "finished_goods":
+        return (it.product_sku_id == b.sku_id
+                and it.rice_quality_standard_id == b.std_id)
+    if b.tipe == "byproduct_curah":
+        return (it.jenis_byproduct or "") == (b.jenis or "")
+    return it.milling_process_id == b.milling_process_id
+
+
 async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
                        baris: BarisPerintah) -> HasilPerintah:
-    """Satu macam barang lagi ke perintah yang BELUM dimuat.
+    """Satu macam barang lagi ke transaksi yang BELUM DIVERIFIKASI.
 
     ⭐ INI YANG MEMBUAT "satu transaksi banyak barang" jadi nyata. Skemanya
     memang sudah satu-ke-banyak sejak awal; yang tak pernah memakainya adalah
@@ -339,28 +358,89 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     tiga kode OUT- yang berbeda — tiga baris di kartu Stok Produk, dan tiga
     pencocokan untuk satu tiket timbang.
 
-    Hanya selama masih `perintah`: menambah barang ke muatan yang truknya sudah
-    berangkat berarti mengarang barang yang tak pernah naik.
+    ── SAMPAI SEBELUM DIVERIFIKASI, bukan cuma selagi `perintah` ──
+    Keputusan pemilik 29 September 2026: "selagi belum diverifikasi dan
+    dianggap selesai, kartu barang keluar masih bisa ditambahkan."
+
+    Dan itu keputusan yang benar dari lapangan: truk dimuat bertahap, dan
+    barang yang menyusul setengah jam kemudian bukan transaksi baru — ia truk
+    yang sama, surat jalan yang sama, satu tiket timbang yang sama. Memaksanya
+    jadi OUT- kedua mengembalikan persis keadaan yang seluruh rantai ini
+    dibangun untuk menghentikan.
+
+    Yang membedakan dua keadaan itu APA YANG BERTAMBAH:
+
+      · masih `perintah` — barangnya belum berangkat, jadi yang bertambah
+        PERINTAHNYA saja. Stok belum tersentuh.
+      · sudah `dimuat` — truknya sedang dimuat, jadi yang bertambah PERINTAH
+        DAN MUATANNYA sekaligus, dan stok berkurang sekarang juga. Menambah
+        perintahnya saja akan melahirkan "kurang sekian dari perintah" atas
+        barang yang justru baru saja naik.
+
+    ── DAN KALAU ITEMNYA SUDAH ADA, JUMLAHNYA DIJUMLAH ──
+    "jika item sudah ada berarti jumlah yang keluar ditambahkan, jika belum ada
+    berarti itemnya ditambahkan." Dua baris untuk barang yang sama membuat
+    kartunya menyebut "Beras Medium" dua kali dengan angka berbeda, dan yang
+    membacanya menjumlah sendiri — lalu salah sekali dari sepuluh.
     """
-    rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    rec = await _kunci_hidup(db, rec_id)
+    tambah_muatan = rec.status == OUT_DIMUAT
+
     berat, karung = await _berat_baris(db, baris)
     if berat <= 0:
         raise BarangKeluarError("Jumlah barang harus lebih dari nol.")
-    ada, nama = await tersedia(db, baris)
+
+    # Batas atasnya berbeda menurut keadaannya, dan bedanya bukan halus:
+    # selagi `perintah`, yang sudah dipesan orang lain ikut dikurangkan sebab
+    # barangnya belum berangkat. Sesudah `dimuat`, yang dikurangkan sudah
+    # tercatat di stok — menghitungnya lagi akan menolak muatan yang ada.
+    ada, nama = await tersedia(db, baris, abaikan_pesanan=tambah_muatan)
     if berat > ada + 0.5:
         raise BarangKeluarError(
             f"{nama} tinggal {_kg(ada)} kg yang bisa keluar — tak bisa "
-            f"menambahkan {_kg(berat)} kg. (Yang sudah diperintahkan keluar "
-            "tetapi belum dimuat ikut dikurangkan.)")
-    db.add(OutgoingItem(
-        outgoing_record_id=rec.id, item_type=baris.tipe,
-        product_sku_id=baris.sku_id, rice_quality_standard_id=baris.std_id,
-        jenis_byproduct=baris.jenis, milling_process_id=baris.milling_process_id,
-        berat_perintah_kg=berat, jumlah_karung_perintah=karung,
-        berat_kg=0, jumlah_karung=None))
-    await _jejak(db, rec, langkah="tambah", oleh=user,
-                 ringkas=f"{rec.kode} + {nama} {_kg(berat)} kg")
+            f"menambahkan {_kg(berat)} kg."
+            + ("" if tambah_muatan else
+               " (Yang sudah diperintahkan keluar tetapi belum dimuat ikut "
+               "dikurangkan.)"))
+
+    items = list((await db.execute(
+        select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
+    )).scalars().all())
+    lama = next((i for i in items if _item_sama(i, baris)), None)
+
+    if lama is not None:
+        lama.berat_perintah_kg = float(lama.berat_perintah_kg or 0) + berat
+        if karung is not None:
+            lama.jumlah_karung_perintah = (lama.jumlah_karung_perintah or 0) + karung
+        if tambah_muatan:
+            lama.berat_kg = float(lama.berat_kg or 0) + berat
+            if karung is not None:
+                lama.jumlah_karung = (lama.jumlah_karung or 0) + karung
+        jadi = float(lama.berat_perintah_kg)
+    else:
+        db.add(OutgoingItem(
+            outgoing_record_id=rec.id, item_type=baris.tipe,
+            product_sku_id=baris.sku_id, rice_quality_standard_id=baris.std_id,
+            jenis_byproduct=baris.jenis,
+            milling_process_id=baris.milling_process_id,
+            berat_perintah_kg=berat, jumlah_karung_perintah=karung,
+            berat_kg=berat if tambah_muatan else 0,
+            jumlah_karung=karung if tambah_muatan else None))
+        jadi = berat
+
+    kabar = (f"{rec.kode} + {nama} {_kg(berat)} kg"
+             + (f" (jadi {_kg(jadi)} kg)" if lama is not None else "")
+             + (" · ikut dimuat" if tambah_muatan else ""))
+    if tambah_muatan:
+        # Admin sudah menunggu di mejanya untuk memverifikasi; angka yang
+        # berubah sesudah ia melihatnya harus mengabarkan dirinya.
+        await _kabar(db, rec, untuk="admin",
+                     pesan=f"🟡 {rec.kode} bertambah {nama} {_kg(berat)} kg "
+                           "sesudah dimuat — angkanya berubah sebelum "
+                           "diverifikasi.")
+    await _jejak(db, rec, langkah="tambah", oleh=user, ringkas=kabar)
     await db.commit()
+    await db.refresh(rec)
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
     )).scalars().all())
@@ -368,6 +448,27 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
 
 
 # ─────────────────────── LANGKAH 2 · Operator memuat ───────────────────────
+
+async def _kunci_hidup(db: AsyncSession, rec_id: int) -> OutgoingRecord:
+    """Ambil barisnya terkunci selama ia BELUM DIVERIFIKASI — `perintah` atau
+    `dimuat`.
+
+    Dipakai penambahan barang, yang berlaku di kedua keadaan itu (keputusan
+    pemilik 29 September 2026). Yang SUDAH ditutup tidak: menambah barang ke
+    transaksi yang angkanya sudah diakui Admin berarti mengubah angka yang
+    sudah jadi dasar keputusan, tanpa siapa pun melihatnya lagi.
+    """
+    from app.penggilingan.inventory.models import OUT_HIDUP
+
+    rec = (await db.execute(
+        select(OutgoingRecord).where(OutgoingRecord.id == rec_id).with_for_update()
+    )).scalars().first()
+    if rec is None:
+        raise BarangKeluarError("Transaksi itu sudah tidak ada.")
+    if rec.status not in OUT_HIDUP:
+        raise BarangKeluarError(await _kalimat_keadaan(db, rec, OUT_PERINTAH))
+    return rec
+
 
 async def _kunci(db: AsyncSession, rec_id: int, *, keadaan: str) -> OutgoingRecord:
     """Ambil barisnya TERKUNCI, lalu pastikan keadaannya masih yang diharap.

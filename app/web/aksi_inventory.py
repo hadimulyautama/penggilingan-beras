@@ -512,6 +512,37 @@ async def perintah_terbuka(user: User = Depends(pengguna_aksi)) -> list[dict]:
             for r, it in baris]
 
 
+@router.get("/actions/perintah-bisa-ditambah")
+async def perintah_bisa_ditambah(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Transaksi yang BELUM DIVERIFIKASI — `perintah` maupun `dimuat`.
+
+    Keputusan pemilik 29 September 2026: "selagi belum diverifikasi dan
+    dianggap selesai, kartu barang keluar masih bisa ditambahkan."
+
+    Berbeda dari `/actions/perintah-terbuka`, yang hanya memuat yang belum
+    dimuat — itu daftar PEKERJAAN operator, dan perintah yang truknya sudah
+    berangkat bukan pekerjaan siapa pun lagi. Yang ini daftar transaksi yang
+    angkanya masih boleh berubah, dan keduanya sengaja tak disatukan: satu
+    daftar untuk dua pertanyaan yang berbeda akan menawarkan pekerjaan yang
+    sudah selesai kepada orang yang mencari pekerjaan.
+
+    Keadaannya ikut tertulis di label — yang menambah barang ke muatan yang
+    SUDAH berangkat perlu tahu bahwa stoknya berkurang sekarang juga.
+    """
+    wajib(can_see_financials(user))
+    from app.penggilingan.inventory.models import OUT_DIMUAT, OUT_HIDUP
+
+    async with SessionLocal() as db:
+        baris = await bk.daftar(db, status=OUT_HIDUP)
+    out = []
+    for r, it in baris:
+        label = _ringkas_perintah(r, it)
+        if r.status == OUT_DIMUAT:
+            label += " · SUDAH DIMUAT, tambahan ikut keluar"
+        out.append({"value": str(r.id), "label": label})
+    return out
+
+
 @router.get("/actions/keluar-dimuat")
 async def keluar_dimuat(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Muatan yang sudah berangkat dan menunggu verifikasi Admin."""
@@ -1089,12 +1120,16 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Tidak ada barang jadi berkarung maupun PK yang "
                             "bisa dikeluarkan."},
              ] + _bidang_pengiriman()},
-            {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke perintah",
+            {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
              "post": "/api/actions/tambah-barang-keluar",
              "fields": [
-                 {"name": "perintah", "label": "Perintah yang belum dimuat",
-                  "type": "remote", "source": "/api/actions/perintah-terbuka",
-                  "kosong": "Tidak ada perintah yang menunggu dimuat."},
+                 # Sampai SEBELUM diverifikasi, bukan cuma selagi belum
+                 # dimuat (keputusan pemilik 29 September 2026): truk dimuat
+                 # bertahap, dan barang yang menyusul bukan transaksi baru.
+                 {"name": "perintah", "label": "Transaksi yang belum diverifikasi",
+                  "type": "remote",
+                  "source": "/api/actions/perintah-bisa-ditambah",
+                  "kosong": "Tidak ada transaksi yang masih bisa ditambah."},
                  {"name": "barang", "label": "Barang yang ditambahkan",
                   "type": "ulang_barang", "maks": 12,
                   "source": "/api/actions/barang-bisa-keluar",

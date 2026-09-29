@@ -648,8 +648,12 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
     barangnya, keadaannya terbaca, dan yang belum selesai berdiri paling atas.
     """
     import httpx
+    from sqlalchemy import select
 
+    from app.database import now_local
     from app.models import ProduksiAkun, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
     from app.services import barang_keluar as bk
     from app.web import csrf, security
     from hmu_identitas import sandi as S
@@ -665,11 +669,21 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
         await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
                             rec_id=lama.rec.id)
     baru = await _perintah(pg, gudang, karung=100, pembeli="Toko Baru")
+    # Barang KEDUA yang benar-benar berbeda — sejak 29 September 2026 barang
+    # yang sama DIGABUNG ke barisnya, jadi menambah beras yang sama lagi tetap
+    # menghasilkan "1 macam" dan uji ini takkan menguji apa pun.
     async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        db.add(PolishingOutputLog(polishing_process_id=proc.id, jenis="bekatul",
+                                  berat_kg=1_000, waktu_update=now_local(),
+                                  input_by=gudang["op"]))
+        await db.commit()
+        await catat_bekatul(db, user=await db.get(User, gudang["op"]),
+                            kode_pol=proc.kode_proses, berat_kg=1_000)
         await bk.tambah_baris(
             db, user=await db.get(User, gudang["adm"]), rec_id=baru.rec.id,
-            baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
-                                   std_id=gudang["std"], jumlah_karung=20))
+            baris=bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                   berat_kg=300))
         a = ProduksiAkun(user_id=gudang["adm"], username="uji_halaman_keluar",
                          password_hash=S.hash_sandi("rahasia123"), status="aktif",
                          mode_perangkat=mode_bawaan("admin"))
@@ -979,3 +993,249 @@ async def test_rantai_barang_keluar_tak_lagi_digambar_di_katalog(pg, gudang):
         assert aksi in peta, f"{aksi} hilang dari menu — lembarnya akan kosong"
         assert peta[aksi].get("kartu"), (
             f"{aksi} masih digambar di katalog Catat pekerjaan lain")
+
+
+# ───────── Menambah barang: sampai sebelum diverifikasi, dan digabung ────────
+
+async def test_item_yang_sudah_ada_dijumlah_bukan_jadi_baris_kedua(pg, gudang):
+    """Keputusan pemilik 29 September 2026: "jika item sudah ada berarti jumlah
+    yang keluar ditambahkan, jika belum ada berarti itemnya ditambahkan."
+
+    Dua baris untuk barang yang sama membuat kartunya menyebut "Beras Medium"
+    dua kali dengan angka berbeda, dan yang membacanya menjumlah sendiri — lalu
+    salah sekali dari sepuluh.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=40)          # 1.000 kg
+    async with pg() as db:
+        h = await bk.tambah_baris(
+            db, user=await db.get(User, gudang["adm"]), rec_id=r.rec.id,
+            baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
+                                   std_id=gudang["std"], jumlah_karung=20))
+    assert len(h.baris) == 1, "barang yang sama melahirkan baris kedua"
+    it = h.baris[0]
+    assert float(it.berat_perintah_kg) == 1_500, float(it.berat_perintah_kg)
+    assert it.jumlah_karung_perintah == 60, it.jumlah_karung_perintah
+    # Masih `perintah`, jadi stok BELUM tersentuh.
+    assert float(it.berat_kg or 0) == 0
+    assert await _stok(pg, gudang) == 10_000
+
+
+async def test_item_yang_belum_ada_jadi_baris_baru(pg, gudang):
+    """Sisi lain, dan ia wajib ada: "digabung" mudah dikerjakan dengan cara yang
+    salah — menjumlahkan apa pun ke baris pertama, lalu satu truk berisi tiga
+    macam barang tercatat sebagai satu baris beras."""
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+    from app.services import barang_keluar as bk
+    from sqlalchemy import select
+
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        db.add(PolishingOutputLog(polishing_process_id=proc.id, jenis="bekatul",
+                                  berat_kg=2_000, waktu_update=now_local(),
+                                  input_by=gudang["op"]))
+        await db.commit()
+        await catat_bekatul(db, user=await db.get(User, gudang["op"]),
+                            kode_pol=proc.kode_proses, berat_kg=2_000)
+
+    r = await _perintah(pg, gudang, karung=40)
+    async with pg() as db:
+        h = await bk.tambah_baris(
+            db, user=await db.get(User, gudang["adm"]), rec_id=r.rec.id,
+            baris=bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                   berat_kg=500))
+    assert len(h.baris) == 2, "barang berbeda tak melahirkan barisnya sendiri"
+
+
+async def test_pk_dari_lot_berbeda_tak_pernah_digabung(pg, gudang):
+    """Ketelusuran PK ke pemasok lewat LOT-nya. Dua lot yang dijumlah jadi satu
+    baris menghapus jalan pulang itu tanpa satu pesan pun."""
+    from app.database import now_local
+    from app.models import MillingProcess, MillingProgressLog, User
+    from app.services import barang_keluar as bk
+
+    pid = []
+    async with pg() as db:
+        for kode in ("LOT-GAB-01", "LOT-GAB-02"):
+            p = MillingProcess(kode_proses=kode, status="selesai",
+                               silo_id=gudang["silo"], berat_gabah_masuk_kg=8_000,
+                               waktu_mulai=now_local(), waktu_selesai=now_local(),
+                               created_by=gudang["op"])
+            db.add(p)
+            await db.flush()
+            db.add(MillingProgressLog(milling_process_id=p.id,
+                                      berat_kumulatif_kg=4_000,
+                                      waktu_update=now_local(),
+                                      input_by=gudang["op"]))
+            pid.append(p.id)
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+        r = await bk.buat_perintah(
+            db, user=u,
+            baris=[bk.BarisPerintah(tipe="pk_langsung", milling_process_id=pid[0],
+                                    berat_kg=1_000)],
+            nama_pembeli="Pabrik Seberang")
+    async with pg() as db:
+        h = await bk.tambah_baris(
+            db, user=await db.get(User, gudang["adm"]), rec_id=r.rec.id,
+            baris=bk.BarisPerintah(tipe="pk_langsung", milling_process_id=pid[1],
+                                   berat_kg=800))
+    assert len(h.baris) == 2, "PK dua lot digabung — ketelusurannya hilang"
+
+
+async def test_menambah_sesudah_dimuat_ikut_mengurangi_stok(pg, gudang):
+    """Keputusan pemilik: "selagi belum diverifikasi dan dianggap selesai,
+    kartu barang keluar masih bisa ditambahkan."
+
+    Truk dimuat bertahap, dan barang yang menyusul setengah jam kemudian bukan
+    transaksi baru — ia truk yang sama, surat jalan yang sama, satu tiket
+    timbang yang sama.
+
+    ⚠ YANG BERTAMBAH DI SINI PERINTAH **DAN** MUATANNYA. Menambah perintahnya
+    saja akan melahirkan "kurang sekian dari perintah" atas barang yang justru
+    baru saja naik ke truk — dan Admin akan menelusuri selisih yang tak pernah
+    ada.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=40)          # 1.000 kg
+    async with pg() as db:
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=r.rec.id)
+    assert await _stok(pg, gudang) == 9_000
+
+    async with pg() as db:
+        h = await bk.tambah_baris(
+            db, user=await db.get(User, gudang["adm"]), rec_id=r.rec.id,
+            baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
+                                   std_id=gudang["std"], jumlah_karung=20))
+    it = h.baris[0]
+    assert float(it.berat_perintah_kg) == 1_500, float(it.berat_perintah_kg)
+    assert float(it.berat_kg) == 1_500, float(it.berat_kg)
+    assert await _stok(pg, gudang) == 8_500, "tambahan sesudah dimuat tak memotong stok"
+    # Dan tak melahirkan selisih palsu di kartu verifikasi Admin.
+    from app.services.berjalan import untuk_staff
+    async with pg() as db:
+        b = await untuk_staff(db)
+    k = next(x for x in b.meja if x.kode == r.rec.kode)
+    assert "kurang" not in (k.ringkas or ""), k.ringkas
+
+
+async def test_yang_sudah_diverifikasi_tak_bisa_ditambah_lagi(pg, gudang):
+    """"selagi belum diverifikasi" — sesudahnya tidak.
+
+    Menambah barang ke transaksi yang angkanya sudah diakui Admin berarti
+    mengubah angka yang sudah jadi dasar keputusan, tanpa siapa pun melihatnya
+    lagi.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=40)
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]), rec_id=rid)
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.tambah_baris(
+                db, user=await db.get(User, gudang["adm"]), rec_id=rid,
+                baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
+                                       std_id=gudang["std"], jumlah_karung=10))
+    assert "ditutup" in str(e.value).lower(), str(e.value)
+
+
+async def test_tombol_perintah_berdiri_di_puncak_halaman(pg, gudang):
+    """Permintaan pemilik: "tombol perintah barang keluar dibuat paling atas
+    saja."
+
+    Semula ia di kaki. Halaman ini bisa panjang, dan tombol yang menuntut
+    digulung dulu adalah tombol yang tak ditemukan orang yang sedang terburu.
+    """
+    await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["adm"], "uji_puncak_admin")
+    async with c:
+        r = await c.get("/barang-keluar")
+    h = r.text
+    assert "buka=perintah_keluar" in h
+    # Tombolnya mendahului kartu pertama.
+    assert h.index("buka=perintah_keluar") < h.index("OUT-"), \
+        "tombol perintah masih di bawah daftar kartunya"
+
+
+async def test_kartu_di_halaman_membawa_tombolnya_sendiri(pg, gudang):
+    """Keluhan pemilik 29 September 2026: "dimana tombol verifikasi untuk admin
+    dan tombol dimuat untuk operator? harusnya kan ada di kartu."
+
+    Kartu di Antrian tunggu & Menunggu keputusan memang SELURUHNYA tombol —
+    seluruh kartu tautan yang membuka lembar aksinya. Yang tidak: kartu di
+    HALAMAN Barang Keluar, yang semula cuma memajang keadaan. Dan halaman
+    inilah yang dibuka orang untuk melihat muatan mana yang belum beres.
+
+    Yang dijaga DUA ARAH: tombolnya ada untuk yang berhak, dan TIDAK ada untuk
+    yang akan ditolak rutenya. Tombol yang ditekan lalu ditolak mengajari orang
+    bahwa aplikasinya suka menolak.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    belum = await _perintah(pg, gudang, karung=40, pembeli="Belum Dimuat")
+    sudah = await _perintah(pg, gudang, karung=20, pembeli="Sudah Dimuat")
+    async with pg() as db:
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=sudah.rec.id)
+
+    # ── Admin ──
+    c = await _klien(pg, gudang["adm"], "uji_tombol_kartu_adm")
+    async with c:
+        h = (await c.get("/barang-keluar")).text
+    # Diiris per kartu, dan batasnya kartu BERIKUTNYA — bukan "sampai akhir
+    # halaman". Yang belum dimuat berdiri lebih atas, jadi potongannya akan
+    # ikut memuat kartu di bawahnya dan pagar ini menuduh salah.
+    def potong(kode: str) -> str:
+        i = h.index(kode)
+        sisa = [h.index(k) for k in (belum.rec.kode, sudah.rec.kode)
+                if h.index(k) > i]
+        return h[i:min(sisa)] if sisa else h[i:]
+
+    kartu_belum = potong(belum.rec.kode)
+    kartu_sudah = potong(sudah.rec.kode)
+    assert "buka=verifikasi_keluar" in kartu_sudah, \
+        "Admin tak punya tombol verifikasi di kartu yang sudah dimuat"
+    assert "buka=batal_perintah_keluar" in kartu_belum
+    # ── Admin TIDAK ditawari tombol memuat, dan itu bukan soal wewenang ──
+    # Rutenya menerimanya ("Admin selalu boleh" — jalan darurat sore hari tanpa
+    # operator). Yang ditutup TAWARANNYA: Admin yang disodori "Muat semua"
+    # tepat di sebelah "Verifikasi" akan menekan keduanya, dan verifikasinya
+    # jadi verifikasi atas pekerjaannya sendiri — rantainya utuh di basis data,
+    # kosong artinya.
+    assert "buka=muat_semua" not in h, "Admin ditawari tombol memuat"
+    # Dan verifikasi tak ditawarkan pada yang belum dimuat.
+    assert "buka=verifikasi_keluar" not in kartu_belum, \
+        "verifikasi ditawarkan pada muatan yang belum berangkat"
+
+    # ── Operator ──
+    c = await _klien(pg, gudang["op"], "uji_tombol_kartu_op", mode="operator")
+    async with c:
+        h2 = (await c.get("/barang-keluar")).text
+    assert "buka=muat_semua" in h2, "operator tak punya tombol muat di kartunya"
+    assert "buka=selesai_muat" in h2
+    assert "buka=verifikasi_keluar" not in h2, "operator ditawari verifikasi"
+    assert "buka=batal_perintah_keluar" not in h2, "operator ditawari pembatalan"
+
+
+async def test_tombol_kartu_mengunci_transaksinya(pg, gudang):
+    """Yang menekan dari kartunya sudah memilih transaksinya — menanyakannya
+    lagi adalah kesempatan memilih yang salah."""
+    r = await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["adm"], "uji_tombol_kunci")
+    async with c:
+        h = (await c.get("/barang-keluar")).text
+    assert f"buka=tambah_barang_keluar&nilai={r.rec.id}" in h, \
+        "tombol kartu tak membawa transaksinya"
