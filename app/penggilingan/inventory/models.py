@@ -228,7 +228,24 @@ class OutgoingRecord(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
+    #: ── DUA KOLOM BERDAMPINGAN untuk satu pembeli, dan yang kedua bukan
+    #: kelebihan data ──
+    #:
+    #: `nama_pembeli` adalah CUPLIKAN nama pada hari truk itu berangkat;
+    #: `pelanggan_id` TAUTANNYA ke master `pelanggan` — cermin lokal pelanggan
+    #: Kledo (`type_id = 3`), yang disegarkan layanan Kantor sekali seminggu.
+    #:
+    #: Keduanya diisi bersama karena Kledo TIDAK punya "merge": kontak ganda
+    #: dirapikan dengan memindahkan transaksinya lalu MENGHAPUS yang ganda.
+    #: Kalau cuma tautannya yang disimpan, surat jalan tahun lalu kehilangan
+    #: nama pembelinya pada hari seseorang merapikan daftar kontak.
+    #:
+    #: `pelanggan_id` BOLEH KOSONG, dan itu keputusan pemilik lewat bentuk
+    #: borangnya: penyegarannya mingguan, jadi pembeli yang dibuat di Kledo
+    #: pagi ini bisa belum ada di daftar. Mewajibkannya berarti truk berhenti
+    #: di halaman menunggu keuangan membuat kontak.
     nama_pembeli: Mapped[str | None] = mapped_column(String(100))
+    pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
     # truk_sendiri / ekspedisi / sewa / pickup
     metode: Mapped[str | None] = mapped_column(String(20))
     no_polisi: Mapped[str | None] = mapped_column(String(20))

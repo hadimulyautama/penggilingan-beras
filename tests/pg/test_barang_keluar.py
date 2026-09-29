@@ -1305,3 +1305,403 @@ async def test_catat_pekerjaan_lain_berdiri_tepat_di_atas_pengaturan():
 
     urut = [t[0] for t in TAB]
     assert urut[-2:] == ["aksi_lain", "pengaturan"], urut[-4:]
+
+
+# ─────────── Jalan kembali: pembatalan input terakhir (29 Sep 2026) ───────────
+#
+# Rantai ini dibuat supaya kesalahan TERTANGKAP di langkah verifikasi Admin.
+# Sampai 29 September 2026 ia bisa menangkap tanpa bisa membetulkan: `batalkan`
+# menolak yang sudah dimuat (benar — barangnya di atas truk), dan pembatalan
+# input terakhir tak mengenal `outgoing_records` sama sekali. Berkas uji ini
+# menjaga pintu itu tetap ada, dan tetap mengembalikan angka yang benar.
+
+
+async def _undo(pg, uid, scope="semua"):
+    from app.models import User
+    from app.services import undo
+    async with pg() as db:
+        u = await db.get(User, uid)
+        c = await undo.cakupan(db, scope=scope, nama=None, self_id=u.id)
+        pesan = await undo.undo_last(db, actor=u, cakupan=c)
+        await db.commit()
+        return pesan
+
+
+async def test_rantai_barang_keluar_masuk_daftar_yang_bisa_dibatalkan():
+    """Pagar paling murah, dan yang paling menolong: tabelnya ADA di daftarnya.
+
+    `undo_last` menolak apa pun yang tabelnya tak terdaftar — sebelum penangan
+    mana pun dipanggil. Jadi seluruh penangan di bawah bisa benar seluruhnya
+    dan pintunya tetap tertutup, tanpa satu pun uji lain yang memberi tahu.
+    """
+    from app.services.undo import _UNDOABLE
+
+    assert "outgoing_records" in _UNDOABLE, \
+        "rantai barang keluar tak punya jalan kembali sama sekali"
+
+
+async def test_pencatatan_muat_bisa_dibatalkan_dan_stoknya_pulih(pg, gudang):
+    """Ketukan "dimuat semua" yang salah harus bisa ditarik, dan stoknya pulih.
+
+    Inilah keadaan yang tak punya jalan mana pun sebelum hari ini: operator
+    menekan "dimuat" atas perintah yang salah, stok berkurang 2.500 kg atas
+    beras yang masih bertumpuk, dan `batalkan` menolak sebab statusnya sudah
+    bukan `perintah`.
+    """
+    from app.models import OutgoingRecord, User
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=r.rec.id)
+    assert await _stok(pg, gudang) == 7_500
+
+    pesan = await _undo(pg, gudang["op"])
+    assert "pencatatan muat" in pesan.lower(), pesan
+    assert await _stok(pg, gudang) == 10_000, "stok tak pulih sesudah dibatalkan"
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, r.rec.id)
+        assert rec.status == OUT_PERINTAH, "kartunya tak kembali ke antrean muat"
+        assert rec.dimuat_oleh is None and rec.waktu_muat is None, \
+            "masih tertulis siapa yang memuatnya"
+
+
+async def test_pembatalan_muat_tak_menyentuh_baris_yang_dicatat_operator_sendiri(
+        pg, gudang):
+    """Dua ketukan berbeda, dua jalan kembali berbeda.
+
+    Operator mencatat satu baris sendiri (karena muatannya berselisih), lalu
+    menekan "selesai". Yang dibatalkan hanya PENUTUPANNYA; angka yang ia catat
+    sendiri tetap berdiri, sebab bukan ketukan itu yang mengisinya. Kalau ikut
+    dinol-kan, satu pembatalan menghapus dua pencatatan — yang kedua tanpa
+    diminta siapa pun, dan tanpa satu pun kalimat yang menyebutnya.
+    """
+    from sqlalchemy import select
+
+    from app.models import OutgoingItem, OutgoingRecord, User
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        it = (await db.execute(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id == r.rec.id))).scalars().first()
+        await bk.catat_muatan(db, user=await db.get(User, gudang["op"]),
+                              item_id=it.id, jumlah_karung=80)
+        await bk.selesai_muat(db, user=await db.get(User, gudang["op"]),
+                              rec_id=r.rec.id)
+    assert await _stok(pg, gudang) == 8_000        # 80 × 25 kg keluar
+
+    pesan = await _undo(pg, gudang["op"])
+    assert "pencatatan muat" in pesan.lower(), pesan
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, r.rec.id)
+        it = (await db.execute(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id == r.rec.id))).scalars().first()
+        assert rec.status == OUT_PERINTAH, "tak kembali ke antrean muat"
+        assert float(it.berat_kg) == 2_000, \
+            "angka yang dicatat operator sendiri ikut terhapus"
+    assert await _stok(pg, gudang) == 8_000, "stok bergerak tanpa diminta"
+
+
+async def test_muat_baris_kembali_ke_angka_sebelumnya_bukan_nol(pg, gudang):
+    """Baris yang dicatat 100 karung lalu diperbaiki jadi 80 harus kembali ke 100.
+
+    "Kembalikan saja ke nol" adalah tebakan yang paling menggoda dan salah
+    justru di sini: yang kembali ke nol menaikkan stok atas 100 karung yang
+    masih tertulis di catatan, dan tak ada satu pun angka di layar yang
+    menunjukkannya.
+    """
+    from sqlalchemy import select
+
+    from app.models import OutgoingItem, User
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        it = (await db.execute(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id == r.rec.id))).scalars().first()
+        u = await db.get(User, gudang["op"])
+        await bk.catat_muatan(db, user=u, item_id=it.id, jumlah_karung=100)
+        await bk.catat_muatan(db, user=u, item_id=it.id, jumlah_karung=80)
+    assert await _stok(pg, gudang) == 8_000
+
+    pesan = await _undo(pg, gudang["op"])
+    assert "2.500" in pesan, pesan
+    async with pg() as db:
+        it = (await db.execute(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id == r.rec.id))).scalars().first()
+        assert float(it.berat_kg) == 2_500, "tak kembali ke angka sebelumnya"
+        assert it.jumlah_karung == 100, "jumlah karungnya tak ikut kembali"
+    assert await _stok(pg, gudang) == 7_500
+
+
+async def test_verifikasi_bisa_dibatalkan_dan_kode_timbangnya_dilepas(pg, gudang):
+    """Verifikasi yang menempel tiket SALAH harus bisa ditarik — dan tiketnya
+    kembali bebas, kalau tidak tiket yang benar tak bisa ditempel ke mana pun
+    dan tak ada layar yang bisa menjelaskan sebabnya.
+
+    STOK TIDAK BERGERAK di langkah ini, dan itu yang diuji berdampingan:
+    barangnya berpindah saat DIMUAT, bukan saat diverifikasi.
+    """
+    from app.models import OutgoingRecord, User
+    from app.penggilingan.gudang1.services.timbang_link import tiket_keluar_aktif
+    from app.penggilingan.inventory.models import OUT_DIMUAT
+    from app.services import barang_keluar as bk
+
+    tid = await _tiket(pg, "TK-UNDO-1")
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                            rec_id=rid, timbangan_transaksi_id=tid)
+    assert await _stok(pg, gudang) == 7_500
+
+    pesan = await _undo(pg, gudang["adm"])
+    assert "verifikasi" in pesan.lower(), pesan
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.status == OUT_DIMUAT, "tak kembali menunggu verifikasi"
+        assert rec.timbangan_transaksi_id is None, "kode timbangnya masih menempel"
+        assert rec.diverifikasi_oleh is None and rec.waktu_verifikasi is None
+        assert tid in {t["id"] for t in await tiket_keluar_aktif(db)}, \
+            "tiketnya tetap terhitung terpakai — tak bisa ditempel ke mana pun"
+    assert await _stok(pg, gudang) == 7_500, "pembatalan verifikasi menggerakkan stok"
+
+
+async def test_muat_tak_bisa_dibatalkan_selagi_verifikasinya_masih_berdiri(
+        pg, gudang):
+    """Satu langkah pada satu ketukan — dan penolakannya MENYEBUT langkah yang
+    harus dibatalkan lebih dulu.
+
+    "Statusnya bukan dimuat" tak menolong siapa pun. Yang menolong adalah
+    "batalkan verifikasinya dulu", sebab itulah yang ditanyakan orang yang
+    sedang memegang HP-nya.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=40)
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]), rec_id=rid)
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.balik_muat(db, rec_id=rid, diisi=[])
+    assert "verifikasinya" in str(e.value), str(e.value)
+
+
+async def test_penerbitan_perintah_bisa_ditarik_dan_operator_dikabari(pg, gudang):
+    """Perintah yang lenyap dari antrean tanpa kabar akan ditanyakan sepanjang
+    hari — dan ditanyakan kepada orang yang tak menekan apa pun."""
+    from sqlalchemy import select
+
+    from app.models import Notification, OutgoingRecord
+    from app.penggilingan.inventory.models import OUT_BATAL
+
+    r = await _perintah(pg, gudang, karung=100)
+    pesan = await _undo(pg, gudang["adm"])
+    assert "penerbitan perintah" in pesan.lower(), pesan
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, r.rec.id)
+        assert rec.status == OUT_BATAL
+        assert (rec.sebab_batal or "").strip(), "batal tanpa sebab tertulis"
+        kabar = (await db.execute(select(Notification).where(
+            Notification.table_name == "outgoing_records",
+            Notification.record_id == r.rec.id,
+            Notification.target_role == "operator"))).scalars().all()
+        assert any("DITARIK" in k.pesan for k in kabar), \
+            "operator tak dikabari bahwa tugasnya hangus"
+    assert await _stok(pg, gudang) == 10_000, "perintah yang ditarik menyentuh stok"
+
+
+async def test_pembatalan_perintah_pun_bisa_ditarik_kembali(pg, gudang):
+    """Admin yang salah membatalkan perintah orang lain harus bisa menghidupkannya
+    kembali — kalau tidak, satu salah ketuk berarti perintah diketik ulang dari
+    awal, dan yang diketik ulang kehilangan kode OUT- yang sudah disebut di
+    telepon."""
+    from app.models import OutgoingRecord, User
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        await bk.batalkan(db, user=await db.get(User, gudang["adm"]),
+                          rec_id=r.rec.id, sebab="salah pembeli")
+    pesan = await _undo(pg, gudang["adm"])
+    assert "pembatalan perintah" in pesan.lower(), pesan
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, r.rec.id)
+        assert rec.status == OUT_PERINTAH, "perintahnya tak hidup lagi"
+        assert rec.sebab_batal is None, "sebab pembatalan lama masih menempel"
+
+
+async def test_jejak_muat_membawa_cuplikan_keadaan_sebelumnya(pg, gudang):
+    """Cuplikan itu yang membuat pembatalannya mungkin — dan ia HARUS ditulis
+    saat langkahnya terjadi. Sesudahnya, kedua macam baris (yang diisi ketukan
+    itu dan yang dicatat operator lebih dulu) sama-sama berisi angka, dan tak
+    ada cara membedakannya lagi."""
+    from sqlalchemy import select
+
+    from app.models import ActivityLog, User
+    from app.services import barang_keluar as bk
+
+    r = await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=r.rec.id)
+    async with pg() as db:
+        log = (await db.execute(
+            select(ActivityLog)
+            .where(ActivityLog.aksi == "barang_keluar_muat",
+                   ActivityLog.record_id == r.rec.id)
+            .order_by(ActivityLog.id.desc()).limit(1))).scalars().first()
+    assert log is not None, "langkah muat tak meninggalkan jejak"
+    assert log.field_name == "diisi", log.field_name
+    assert (log.old_value or "").strip(), \
+        "jejaknya tak menyebut baris mana yang diisi ketukan itu"
+
+
+async def test_layar_menawarkan_pembatalan_barang_keluar_sebagai_didukung(pg, gudang):
+    """Pratinjaunya harus berkata DIDUKUNG, bukan cuma penangannya yang ada.
+
+    Tombolnya digambar dari `Pratinjau.didukung`; penangan yang benar di
+    belakang tombol yang berkata "belum bisa" tak pernah dijalankan siapa pun.
+    """
+    from app.models import User
+    from app.services import undo
+
+    await _perintah(pg, gudang, karung=100)
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+        c = await undo.cakupan(db, scope="saya", nama=None, self_id=u.id)
+        p = await undo.pratinjau_terakhir(db, cakupan=c)
+    assert p is not None and p.tabel == "outgoing_records", p
+    assert p.didukung, "layar masih berkata barang keluar belum bisa dibatalkan"
+
+
+# ─────────── Pembeli ditautkan ke pelanggan Kledo (29 Sep 2026) ───────────
+#
+# Permintaan pemilik: "nama pembeli di barang keluar sinkronkan dengan
+# pelanggan di kledo". Sebabnya terlihat sesudah sepekan dipakai: teks bebas
+# melahirkan "Toko Makmur", "toko makmur", dan "TK Makmur" untuk satu pembeli.
+#
+# Yang dijaga di sini bukan cuma tautannya ADA, melainkan DUA hal yang mudah
+# rusak diam-diam: nama yang tercatat harus sama dengan yang dipilih, dan
+# pintu daruratnya (pembeli yang belum ada di Kledo) harus tetap terbuka —
+# penyegaran kontaknya mingguan.
+
+
+async def _pelanggan(pg, nama, *, status="aktif", dihapus=False, kledo=None):
+    from app.database import now_local
+    from app.models import Pelanggan
+    async with pg() as db:
+        p = Pelanggan(nama_pelanggan=nama, status=status,
+                      kledo_contact_id=kledo,
+                      deleted_at=now_local() if dihapus else None)
+        db.add(p)
+        await db.commit()
+        return p.id
+
+
+async def _perintah_pembeli(pg, g, *, pelanggan_id=None, nama=None, karung=40):
+    from app.models import User
+    from app.services import barang_keluar as bk
+    async with pg() as db:
+        return await bk.buat_perintah(
+            db, user=await db.get(User, g["adm"]),
+            baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=g["sku"],
+                                    std_id=g["std"], jumlah_karung=karung)],
+            nama_pembeli=nama, pelanggan_id=pelanggan_id)
+
+
+async def test_pembeli_dipilih_dari_daftar_kledo_tersimpan_bertaut(pg, gudang):
+    """Tautannya yang membuat "apa saja yang keluar ke pembeli ini" punya
+    jawaban tunggal — dan kelak bisa dicocokkan dengan faktur Kledo tanpa
+    mencocokkan ejaan."""
+    pid = await _pelanggan(pg, "PT Beras Jaya", kledo=90_001)
+    r = await _perintah_pembeli(pg, gudang, pelanggan_id=pid)
+    assert r.rec.pelanggan_id == pid, "pembelinya tak tertaut ke master"
+    assert r.rec.nama_pembeli == "PT Beras Jaya", \
+        "cuplikan namanya tak ikut tersimpan"
+
+
+async def test_nama_yang_diketik_tak_menimpa_pembeli_yang_dipilih(pg, gudang):
+    """Borangnya mengirim keduanya. Kalau yang diketik menang, laporan
+    mengelompokkan menurut tautannya sementara surat jalannya menyebut nama
+    lain — dan yang memegang kertas itu yang harus menjelaskannya di gerbang."""
+    pid = await _pelanggan(pg, "PT Beras Jaya")
+    r = await _perintah_pembeli(pg, gudang, pelanggan_id=pid,
+                                nama="toko sebelah")
+    assert r.rec.nama_pembeli == "PT Beras Jaya", r.rec.nama_pembeli
+    assert r.rec.pelanggan_id == pid
+
+
+async def test_pembeli_yang_belum_ada_di_kledo_masih_boleh_diketik(pg, gudang):
+    """PINTU DARURAT, dan ia harus tetap terbuka: penyegaran kontak Kledo
+    MINGGUAN, jadi pembeli yang dibuat pagi ini bisa belum ada di daftar.
+    Mewajibkan tautannya berarti truk berhenti di halaman menunggu keuangan."""
+    r = await _perintah_pembeli(pg, gudang, nama="  UD Pembeli Baru  ")
+    assert r.rec.nama_pembeli == "UD Pembeli Baru", r.rec.nama_pembeli
+    assert r.rec.pelanggan_id is None, "pembeli baru tertaut ke baris entah apa"
+
+
+async def test_perintah_tanpa_pembeli_ditolak_sambil_menyebut_dua_jalannya(
+        pg, gudang):
+    """Yang ditolak tanpa diberi tahu jalan keluarnya akan dicoba lagi dengan
+    cara yang sama."""
+    from app.services import barang_keluar as bk
+
+    with pytest.raises(bk.BarangKeluarError) as e:
+        await _perintah_pembeli(pg, gudang)
+    pesan = str(e.value)
+    assert "daftar" in pesan.lower() and "tulis" in pesan.lower(), pesan
+
+
+async def test_pelanggan_nonaktif_atau_terhapus_ditolak(pg, gudang):
+    """Yang DITAWARKAN dan yang DITERIMA wajib himpunan yang sama.
+
+    Daftar pilihannya menyaring `status = 'aktif'` dan `deleted_at IS NULL`;
+    kalau layanannya tidak, lembar yang sudah lama terbuka di layar seseorang
+    masih bisa menautkan ke pelanggan yang sudah dinonaktifkan di Kledo —
+    lolos tanpa satu pun tanda, dan baru jadi pertanyaan saat laporan dibuka.
+    """
+    from app.services import barang_keluar as bk
+
+    mati = await _pelanggan(pg, "CV Sudah Tutup", status="nonaktif")
+    hapus = await _pelanggan(pg, "CV Terhapus", dihapus=True)
+    for pid in (mati, hapus):
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await _perintah_pembeli(pg, gudang, pelanggan_id=pid)
+        assert "daftar" in str(e.value).lower(), str(e.value)
+
+
+async def test_daftar_pelanggan_menawarkan_yang_aktif_saja(pg, gudang):
+    """Dan daftarnya dibaca dari CERMIN LOKAL, bukan dari Kledo.
+
+    Kalau rute ini memanggil Kledo, borang perintah muat tak bisa dibuka saat
+    Kledo lambat atau mati — pabrik berhenti karena layanan akuntansi pihak
+    ketiga. `KLEDO_API_KEY` pun tak perlu ada di layanan ini.
+    """
+    import inspect
+
+    from app.web.aksi_inventory import pelanggan_kledo
+
+    await _pelanggan(pg, "PT Aktif")
+    await _pelanggan(pg, "CV Nonaktif", status="nonaktif")
+    await _pelanggan(pg, "CV Dihapus", dihapus=True)
+
+    sumber = inspect.getsource(pelanggan_kledo)
+    assert "kledo.com" not in sumber and "urlopen" not in sumber, \
+        "rute daftar pelanggan memanggil Kledo langsung dari layanan produksi"
+
+    from app.models import User
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+    daftar = await pelanggan_kledo(user=u)
+    nama = {d["label"] for d in daftar}
+    assert "PT Aktif" in nama
+    assert "CV Nonaktif" not in nama and "CV Dihapus" not in nama, sorted(nama)
+    # Nilainya harus BISA dipakai kembali — id, bukan namanya.
+    pid = next(d["value"] for d in daftar if d["label"] == "PT Aktif")
+    r = await _perintah_pembeli(pg, gudang, pelanggan_id=int(pid))
+    assert r.rec.nama_pembeli == "PT Aktif"

@@ -685,6 +685,40 @@ async def timbang_keluar_aktif(user: User = Depends(pengguna_aksi)) -> list[dict
     return out
 
 
+@router.get("/actions/pelanggan-kledo")
+async def pelanggan_kledo(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pelanggan Kledo — dari CERMIN LOKALNYA, bukan dari panggilan ke Kledo.
+
+    Dua sebab, dan yang pertama menentukan:
+
+    · borang ini dibuka di gudang, seringnya pagi-pagi saat truk sudah datang.
+      Kledo yang lambat atau mati akan membuat perintah muat tak bisa
+      diterbitkan sama sekali — pabrik berhenti karena layanan akuntansi pihak
+      ketiga, harga yang tak sepadan untuk sebuah daftar nama;
+    · kuncinya memang tak perlu ada di sini. `KLEDO_API_KEY` hidup di layanan
+      Kantor, yang menyegarkan tabel `pelanggan` sekali seminggu dari
+      `type_id = 3`. Satu kunci di satu tempat: kunci yang disalin ke layanan
+      kedua adalah kunci yang harus diputar dua kali kelak, dan yang kedua akan
+      terlupa.
+
+    Karena mingguan, pembeli yang baru dibuat di Kledo hari ini bisa BELUM
+    muncul — itu sebabnya borangnya tetap menerima nama yang diketik, dan
+    medan ini `optional`.
+
+    Syaratnya sama persis dengan yang dipakai `_pembeli` saat menerima
+    kiriman: yang ditawarkan dan yang diterima wajib himpunan yang sama.
+    """
+    wajib(can_see_financials(user))
+    from app.models import Pelanggan
+
+    async with SessionLocal() as db:
+        baris = (await db.execute(
+            select(Pelanggan.id, Pelanggan.nama_pelanggan)
+            .where(Pelanggan.deleted_at.is_(None), Pelanggan.status == "aktif")
+            .order_by(Pelanggan.nama_pelanggan))).all()
+    return [{"value": str(i), "label": n} for i, n in baris]
+
+
 # ────────────────── Rantai barang keluar: rute & daftarnya ──────────────────
 #
 # Gerbangnya di RUTE, bukan cuma pada tombolnya: menyembunyikan pintu bukan
@@ -708,6 +742,12 @@ class PerintahKeluarReq(BaseModel):
     #: cuma MENAWARKANNYA.
     stok: str | None = None
     jumlah_karung: int | None = None
+    #: Pilihan dari daftar pelanggan Kledo. Dikirim sebagai teks (isi
+    #: `<select>`), diubah jadi id di rutenya.
+    pelanggan: str | None = None
+    #: Nama yang DIKETIK, untuk pembeli yang belum ada di Kledo. Salah satu
+    #: dari keduanya wajib terisi — yang menentukan mana yang menang
+    #: `bk._pembeli`, bukan rute ini, sebab jalur bot memakai fungsi yang sama.
     nama_pembeli: str = ""
     metode: str | None = None
     no_polisi: str | None = None
@@ -767,13 +807,17 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
         try:
             r = await bk.buat_perintah(
                 db, user=u, baris=baris, nama_pembeli=req.nama_pembeli,
+                pelanggan_id=_pelanggan_id(req.pelanggan),
                 metode=req.metode, no_polisi=(req.no_polisi or None),
                 nama_ekspedisi=(req.nama_ekspedisi or None))
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah barang keluar.")
-        kode = r.rec.kode
+        kode, pembeli = r.rec.kode, r.rec.nama_pembeli
+    # Namanya dari BARISNYA, bukan dari yang diketik: kalau Admin memilih dari
+    # daftar Kledo, yang diketik memang kosong — dan kalimat "terbit untuk"
+    # yang berakhir tanpa nama membuat orang mengira pembelinya tak tersimpan.
     return {"ok": True,
-            "pesan": f"✓ Perintah *{kode}* terbit untuk {req.nama_pembeli.strip()}. "
+            "pesan": f"✓ Perintah *{kode}* terbit untuk {pembeli}. "
                      "Tambahkan barang lain bila muatannya lebih dari satu macam — "
                      "operator melihatnya di Antrian tunggu."}
 
@@ -804,6 +848,22 @@ async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
             raise galat(e, "Gagal menambah barang ke perintah.")
         kode, n = r.rec.kode, len(r.baris)
     return {"ok": True, "pesan": f"✓ Ditambahkan ke *{kode}* — kini {n} macam barang."}
+
+
+def _pelanggan_id(nilai: str | None) -> int | None:
+    """Pilihan pelanggan → id, atau None bila tak dipilih.
+
+    Kosong BUKAN kesalahan: pembeli yang belum ada di Kledo diketik namanya.
+    Yang ditolak cuma isi yang bukan angka — itu berarti borangnya mengirim
+    sesuatu yang bukan dari daftar, dan menerimanya berarti menautkan ke baris
+    yang tak pernah ada.
+    """
+    v = (nilai or "").strip()
+    if not v:
+        return None
+    if not v.isdigit():
+        raise HTTPException(400, "Pembeli yang mana? Pilih dari daftarnya.")
+    return int(v)
 
 
 def _id(nilai: str | None) -> int:
@@ -956,7 +1016,31 @@ async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
 #: Nama pembeli dst. dipakai berulang di tiga aksi keluar — ditulis sekali.
 def _bidang_pengiriman() -> list[dict]:
     return [
-        {"name": "nama_pembeli", "label": "Nama pembeli", "type": "text"},
+        # ── PEMBELINYA DIPILIH DARI DAFTAR KLEDO, dan tetap bisa diketik ──
+        #
+        # Permintaan pemilik 29 September 2026: "nama pembeli di barang keluar
+        # sinkronkan dengan pelanggan di kledo". Sebabnya terlihat setelah
+        # sepekan dipakai: teks bebas melahirkan "Toko Makmur", "toko makmur",
+        # dan "TK Makmur" untuk satu pembeli, dan tak satu pun laporan bisa
+        # menjumlahkannya.
+        #
+        # DUA MEDAN, bukan satu, dan bukan karena paket tampilan tak punya
+        # kotak gabungan. Yang kedua adalah PINTU DARURAT yang harus terlihat:
+        # penyegaran kontak Kledo mingguan, jadi pembeli yang dibuat pagi ini
+        # bisa belum ada di daftar. Satu medan yang "boleh diketik bebas kalau
+        # tak ada di daftar" menyembunyikan pintu itu di dalam kebiasaan, dan
+        # yang tak terlihat tak dipakai — orang akan memilih nama yang MIRIP.
+        #
+        # `optional` pada keduanya: yang memastikan salah satunya terisi adalah
+        # `bk._pembeli`, di layanan. Menaruhnya di sini saja berarti jalur bot
+        # dan lembar yang sudah terbuka di layar orang lolos tanpa pembeli.
+        {"name": "pelanggan", "label": "Pembeli (daftar Kledo)",
+         "type": "remote", "source": "/api/actions/pelanggan-kledo",
+         "optional": True,
+         "kosong": "Daftar pelanggan Kledo belum tersinkron — tulis nama "
+                   "pembelinya di kotak bawah."},
+        {"name": "nama_pembeli", "label": "Pembeli baru (belum di Kledo)",
+         "type": "text"},
         {"name": "metode", "label": "Cara kirim", "type": "select", "optional": True,
          "options": [["", "— belum ditentukan —"], ["diantar", "Diantar"],
                      ["diambil", "Diambil sendiri"], ["ekspedisi", "Ekspedisi"]]},

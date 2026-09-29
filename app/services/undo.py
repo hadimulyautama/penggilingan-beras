@@ -58,6 +58,18 @@ _UNDOABLE = {
     # baris PEMAKAIAN SILO, bukan barisan prosesnya — lihat
     # `_undo_tutup_silo_sosoh`.
     "polishing_silo_usage",
+    # Rantai barang keluar bisa dibatalkan SEJAK 29 September 2026, dan ia
+    # masuk belakangan bukan karena lupa: rantainya sendiri baru lahir sehari
+    # sebelumnya. Yang membuatnya WAJIB adalah bentuk rantainya — `batalkan`
+    # menolak yang sudah dimuat (benar: barangnya di atas truk), jadi tanpa
+    # pembatalan input terakhir seluruh langkah sesudah "perintah" tak punya
+    # jalan kembali sama sekali. Operator yang salah menekan "dimuat" atas dua
+    # ratus karung akan mengurangi stok yang tak pernah keluar, dan tak ada
+    # layar mana pun yang bisa membetulkannya.
+    #
+    # Empat langkahnya sama-sama UPDATE pada tabel ini, jadi yang memilih
+    # penangan WAJIB tagnya — lihat `_undo_barang_keluar`.
+    "outgoing_records",
 }
 
 #: Label ramah per tabel — untuk pesan "belum bisa di-undo" MAUPUN untuk
@@ -1052,6 +1064,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_silo_merge_baris(db, log.record_id)
     if tag == "tutup_silo_sosoh":
         return await _undo_tutup_silo_sosoh(db, log.record_id)
+    if tag and tag.startswith("barang_keluar_"):
+        return await _undo_barang_keluar(db, log)
 
     t, rid, act = log.table_name, log.record_id, log.action
     if t == "drying_lots" and act == "INSERT":
@@ -1102,6 +1116,87 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         f"Tindakan terakhir ({_TABLE_LABEL.get(t, t)}) belum bisa di-undo otomatis — "
         "fitur menyusul. Untuk sekarang koreksi lewat admin."
     )
+
+
+def _cuplikan_muat_baris(log: ActivityLog) -> tuple[int, float, int | None]:
+    """(id baris, berat sebelumnya, karung sebelumnya) dari cuplikan jejaknya.
+
+    Jejak yang ditulis SEBELUM 29 September 2026 tak membawa cuplikan ini — ia
+    lahir bersama jalan kembalinya. Yang tanpa cuplikan DITOLAK sambil menyebut
+    sebabnya, bukan dibatalkan dengan menebak nol: baris yang dicatat ulang
+    memang tidak berangkat dari nol, dan tebakan itu akan menaikkan stok atas
+    karung yang masih tertulis di catatan.
+    """
+    medan = log.field_name or ""
+    if not medan.startswith("item:") or not medan[5:].isdigit():
+        raise UndoError(
+            "Pencatatan muat itu tercatat sebelum jalan kembalinya ada, jadi "
+            "baris mana yang berubah tidak tersimpan — koreksinya lewat Admin.")
+    bagian = (log.old_value or "").split("|")
+    try:
+        berat = float(bagian[0] or 0)
+    except ValueError:
+        berat = 0.0
+    karung = (int(bagian[1]) if len(bagian) > 1 and bagian[1].strip().isdigit()
+              else None)
+    return int(medan[5:]), berat, karung
+
+
+async def _undo_barang_keluar(db: AsyncSession, log: ActivityLog) -> str:
+    """Satu langkah rantai barang keluar, kembali satu langkah.
+
+    SATU PINTU untuk keempat langkahnya, dan TAGNYA yang memilih — bukan nama
+    tabel & kolom. Keempatnya adalah UPDATE pada `outgoing_records`, jadi
+    tebakan dari tabel akan menjatuhkan "verifikasi" dan "pencatatan muat" ke
+    penangan yang sama. Yang terjadi bukan sekadar pesan salah: membatalkan
+    verifikasi padahal yang diminta pencatatan muat membuat stok tetap
+    berkurang atas barang yang tak pernah naik ke truk. Kelas kesalahan yang
+    sama dengan `ubah_target` vs `silo_gabung`.
+
+    Aturan tiap langkahnya TIDAK ditulis di sini melainkan di modul barang
+    keluar. Keadaan mana yang boleh dibatalkan, apa yang dikembalikan, dan
+    kabar kepada siapa — itu pengetahuan rantainya, dan salinannya di dua
+    berkas akan berselisih pada perubahan berikutnya.
+
+    Langkah yang belum dikenal DITOLAK sambil menyebut namanya, bukan
+    dibatalkan sebisanya: rantai ini masih tumbuh, dan penangan yang menebak
+    langkah baru akan menebak persis pada hari pertama langkah itu dipakai.
+    """
+    from app.services import barang_keluar as bk
+
+    langkah = (log.aksi or "")[len("barang_keluar_"):]
+    rid = log.record_id
+    try:
+        if langkah == "perintah":
+            return await bk.balik_perintah(db, rec_id=rid)
+        if langkah == "muat_baris":
+            item_id, berat, karung = _cuplikan_muat_baris(log)
+            return await bk.balik_muat_baris(db, rec_id=rid, item_id=item_id,
+                                             berat_lama=berat,
+                                             karung_lama=karung)
+        if langkah == "muat":
+            # `old_value` NULL berarti jejak lama — sebelum cuplikan ada.
+            # Kosong ("") berbeda artinya: ketukan itu memang tak mengisi satu
+            # angka pun (operator mencatat per baris lebih dulu), dan
+            # pembatalannya cukup membuka kembali keadaannya. Membedakan
+            # keduanya penting: yang lama kalau dibuka tanpa menol-kan apa pun
+            # akan berdiri di antrean dengan stok yang masih terpotong.
+            if log.old_value is None:
+                raise UndoError(
+                    "Pencatatan muat itu tercatat sebelum jalan kembalinya "
+                    "ada, jadi baris mana yang terisi tidak tersimpan — "
+                    "koreksinya lewat Admin.")
+            ids = [int(x) for x in log.old_value.split(",") if x.strip().isdigit()]
+            return await bk.balik_muat(db, rec_id=rid, diisi=ids)
+        if langkah == "verifikasi":
+            return await bk.balik_verifikasi(db, rec_id=rid)
+        if langkah == "batal":
+            return await bk.balik_batal(db, rec_id=rid)
+    except bk.BarangKeluarError as e:
+        raise UndoError(str(e.args[0]) if e.args else "Gagal membatalkan.") from None
+    raise UndoError(
+        f"Langkah '{langkah}' pada barang keluar belum bisa dibatalkan "
+        "otomatis — koreksinya lewat Admin.")
 
 
 async def _undo_betulkan_bobot(db: AsyncSession, log: ActivityLog) -> str:
