@@ -222,7 +222,7 @@ def test_layar_keputusan_hanya_admin():
         layar_keputusan.halaman_keputusan)
     from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER
 
-    kunci = {k: view for k, _, _, _, view in TAB}
+    kunci = {t[0]: t[4] for t in TAB}
     # Kolomnya kini menyebut VIEW mana yang ditawari pintunya, bukan satu
     # nama peran yang templatnya abaikan. Kedua view meja masuk; kedua view
     # operator tidak.
@@ -373,15 +373,24 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     #
     # `kirim_barang_jadi` & `jual_pk` DIBUANG 28 September 2026 (keputusan
     # pemilik): barang keluar kini berperintah, dan ketiga aksi lama adalah
-    # pintu belakang yang membuat rantainya sukarela. Penggantinya masuk daftar
-    # ini — rantai barang keluar belum berkartu, jadi katalog memang
-    # satu-satunya pintunya, dan membuangnya berarti pekerjaannya hilang.
+    # pintu belakang yang membuat rantainya sukarela.
+    #
+    # ⚠ DAN PENGGANTINYA IKUT KELUAR DARI KATALOG sehari kemudian, atas
+    # permintaan pemilik: "saya tidak suka proses barang keluar prosesnya
+    # dilakukan di catat pekerjaan lain." Ketujuhnya kini berpintu sendiri —
+    # tombol di kaki halaman Barang Keluar, kartu di Antrian tunggu, kartu di
+    # Menunggu keputusan — jadi tempatnya di daftar BERKARTU di bawah.
     for tanpa_kartu in ("catat_bekatul", "beli_kemasan", "transfer_pk",
-                        "rekonsiliasi_timbang", "perintah_keluar",
-                        "tambah_barang_keluar", "batal_perintah_keluar",
-                        "verifikasi_keluar", "muat_semua", "muat_barang",
-                        "selesai_muat"):
+                        "rekonsiliasi_timbang"):
         assert api._GRUP_AKSI[tanpa_kartu] != api.GRUP_KARTU, tanpa_kartu
+    # Rantai barang keluar: dicabut dari katalog, DAN tetap dikirim di menu —
+    # lembar yang dibuka dari tombol maupun kartu dibangun dari spesifikasi
+    # yang sama. Aksi yang dibuang dari menu berarti tombolnya membuka lembar
+    # kosong.
+    for berpintu in ("perintah_keluar", "tambah_barang_keluar",
+                     "batal_perintah_keluar", "verifikasi_keluar",
+                     "muat_semua", "muat_barang", "selesai_muat"):
+        assert api._GRUP_AKSI[berpintu] == api.GRUP_KARTU, berpintu
     # Yang sudah punya kartu tak digambar di katalog (21 September 2026):
     # kelompoknya keluar dari urutan, aksinya ditandai — bukan dibuang, karena
     # lembar kartu dibangun dari menu yang sama.

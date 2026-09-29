@@ -284,7 +284,9 @@ async def test_pintu_kabar_ditawarkan_ke_semua_peran(pg, orang):
     from app.services.berjalan import untuk
     from app.web.nav import TAB
 
-    kunci = {k: view for k, _, _, _, view in TAB}
+    # Diindeks, bukan dibongkar berposisi: medan keenam (ikon) lahir 29
+    # September 2026, dan yang diuji di sini medan kelima.
+    kunci = {t[0]: t[4] for t in TAB}
     assert "kabar" in kunci and kunci["kabar"] is None, \
         "pintu Kabar dibatasi peran tertentu"
     async with pg() as db:

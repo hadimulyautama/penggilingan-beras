@@ -143,4 +143,32 @@
 {% endfor %}
 </div>
 {% endif %}
+
+{# ── Pintu masuk pekerjaannya ADA DI HALAMANNYA ──
+   Permintaan pemilik 29 September 2026: "saya tidak suka proses barang keluar
+   prosesnya dilakukan di catat pekerjaan lain. buat tombol di barang keluar
+   yaitu perintah barang keluar ... lalu hapus tombol yang ada di catat
+   pekerjaan lain."
+
+   Bentuknya sama persis dengan `PINTASAN` di kaki Antrian tunggu, dan itu
+   disengaja: tombolnya membuka LEMBAR AKSI YANG SAMA (`/aksi?buka=…`), jadi
+   tak ada borang kedua yang harus dirawat dan tak ada dua tempat yang bisa
+   berselisih isinya.
+
+   Di KAKI, bukan di puncak: yang membuka halaman ini paling sering datang
+   untuk MELIHAT — muatan mana yang belum berangkat, truk tadi siang bawa apa.
+   Membuat perintah baru pekerjaan yang lebih jarang, dan tombol besar di
+   puncak memanggil dirinya sendiri untuk ditekan.
+
+   Hanya untuk yang boleh memerintah. Gerbang sungguhannya di RUTE tiap aksi —
+   menyembunyikan tombol bukan penjagaan, sebab alamatnya bisa diketik. #}
+{% if BOLEH_PERINTAH %}
+<div class="ubah-hasil" style="margin-top:18px">
+  <a class="btn" href="/aksi?buka=perintah_keluar">Buat perintah barang keluar</a>
+  {% if ada_perintah %}
+  <a class="btn btn--kecil" href="/aksi?buka=tambah_barang_keluar">Tambah barang</a>
+  <a class="btn btn--kecil" href="/aksi?buka=batal_perintah_keluar">Batalkan perintah</a>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

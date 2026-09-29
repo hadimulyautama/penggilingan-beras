@@ -54,7 +54,7 @@ from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
 from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)
 
 templates.env.globals["TAB"] = TAB
-templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _, _ in TAB}
+templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _, _, _ in TAB}
 # Nama view dipakai kepala laci: orang yang sedang memakai "Lihat sebagai"
 # harus bisa membaca layar SIAPA yang sedang ia lihat, dan "operator" saja
 # tak menjawabnya di pabrik yang punya dua gudang.

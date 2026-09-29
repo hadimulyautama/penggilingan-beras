@@ -100,6 +100,20 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
 
     return await render_laci(
         request, "barang_keluar.html", layar="barang_keluar", kartu=kartu,
+        # ── Tombol "Buat perintah" hanya untuk yang boleh memerintah ──
+        #
+        # Permintaan pemilik 29 September 2026: tombolnya untuk Admin & Super
+        # Admin. HALAMANNYA sendiri tetap terbuka untuk operator — ia perlu
+        # tahu apa yang sudah dan akan keluar dari gudangnya, dan tugasnya
+        # sendiri sampai lewat kartu di Antrian tunggu, bukan dari sini.
+        #
+        # Ini cuma menghindari menawarkan pintu yang akan ditolak; yang menjaga
+        # sungguhan `wajib(can_see_financials(...))` di tiap rutenya.
+        BOLEH_PERINTAH=can_see_financials(akun.user),
+        # "Tambah barang" & "Batalkan perintah" cuma berarti bila ADA perintah
+        # yang belum dimuat — borang yang dibuka lalu daftarnya kosong adalah
+        # ketukan yang hanya bisa mengecewakan.
+        ada_perintah=any(k["rec"].status == OUT_PERINTAH for k in kartu),
         # Dua angka di kepala, dan keduanya PEKERJAAN — bukan jumlah kilogram.
         # Berapa ton yang keluar bulan ini ada di Laporan; yang dicari orang
         # saat membuka halaman ini berapa truk yang belum beres.

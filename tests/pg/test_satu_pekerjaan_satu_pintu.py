@@ -150,16 +150,23 @@ async def test_yang_tak_berkartu_tetap_punya_pintunya(pg, pabrik):
     # seluruh harga (keputusan pemilik), jadi ia tak lagi butuh pintu.
     #
     # Tiga aksi keluar — `kirim_bekatul`, `kirim_barang_jadi`, `jual_pk` —
-    # dicoret hari yang sama dan sebabnya BERBEDA: bukan kehilangan alasan,
+    # dicoret 28 September 2026 dan sebabnya BERBEDA: bukan kehilangan alasan,
     # melainkan diganti. Barang keluar kini berperintah, dan ketiganya adalah
-    # pintu belakang yang membuat rantai itu sukarela. Penggantinya yang kini
-    # wajib berpintu — ia belum berkartu, jadi katalog memang satu-satunya
-    # jalannya.
+    # pintu belakang yang membuat rantai itu sukarela.
+    #
+    # ⚠ PENGGANTINYA IKUT KELUAR sehari kemudian (permintaan pemilik: "saya
+    # tidak suka proses barang keluar prosesnya dilakukan di catat pekerjaan
+    # lain"), jadi mereka TIDAK boleh ada di sini lagi — mereka kini berpintu
+    # sendiri: tombol di kaki halaman Barang Keluar, dan kartu di kedua
+    # antrean. Uji ini menjaga yang tak punya pintu lain; lihat sisi baliknya
+    # di `tests/pg/test_barang_keluar.py`.
     for wajib in ("catat_bekatul", "beli_kemasan",
-                  "transfer_pk", "rekonsiliasi_timbang",
-                  "perintah_keluar", "tambah_barang_keluar",
-                  "batal_perintah_keluar", "verifikasi_keluar"):
+                  "transfer_pk", "rekonsiliasi_timbang"):
         assert wajib in katalog, f"{wajib} kehilangan satu-satunya pintunya"
+    for berpintu in ("perintah_keluar", "verifikasi_keluar", "muat_semua"):
+        assert berpintu not in katalog, (
+            f"{berpintu} masih digambar di katalog padahal sudah berpintu "
+            "sendiri — dua pintu untuk satu pekerjaan membuat orang ragu")
 
 
 async def test_kedua_belas_yang_dicabut_tetap_terkirim_di_menu(pg, pabrik):

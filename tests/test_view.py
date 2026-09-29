@@ -95,7 +95,7 @@ def test_pintu_meja_tertutup_bagi_operator():
     pintu yang akan ditolak."""
     from app.web.nav import TAB
 
-    view = {k: v for k, _, _, _, v in TAB}
+    view = {t[0]: t[4] for t in TAB}
     for kunci in ("keputusan", "audit"):
         assert set(view[kunci]) == set(MEJA), kunci
 
@@ -300,7 +300,7 @@ def test_layar_stok_tak_menyebut_gudang_1_di_menu():
     Stoknya tak memuat satu pun barang Gudang 1."""
     from app.web.nav import TAB
 
-    ket = {k: t for k, _, _, t, _ in TAB}
+    ket = {t[0]: t[3] for t in TAB}
     assert "Gudang 1" not in ket["stok"]
 
 
@@ -483,7 +483,7 @@ def test_katalog_dicabut_dari_selepan():
     punya pintu."""
     from app.web.nav import TAB
 
-    view = {k: v for k, _, _, _, v in TAB}
+    view = {t[0]: t[4] for t in TAB}
     assert SELEPAN not in view["aksi_lain"]
     # Polesan menyusul 21 September 2026: penyosohan, tumpukan → silo, dan
     # PK yang menunggu ditempatkan sudah berkartu; sisanya ke kaki antrean.

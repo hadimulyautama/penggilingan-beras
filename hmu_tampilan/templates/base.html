@@ -162,21 +162,22 @@
 
          Daftar KUNCI, bukan syarat per layar di dalam templat ini: app yang
          menambah layar bersyarat besok tak perlu menyunting berkas bersama. #}
-      {% for kunci, alamat, nama, ket, peran_min in TAB %}
+      {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
         {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
         <a class="pintu{{ ' pintu--kini' if layar == kunci }}" href="{{ alamat }}"
            {{ ' aria-current=page'|safe if layar == kunci }}>
-          <span class="pintu__ikon" aria-hidden="true">
-            {%- if kunci == 'beranda' %}⌂
-            {%- elif kunci == 'aksi' %}≡
-            {%- elif kunci == 'berjalan' %}◷
-            {%- elif kunci == 'keputusan' %}✓
-            {%- elif kunci == 'mutu' %}◎
-            {%- elif kunci == 'stok' %}▦
-            {%- elif kunci == 'laporan' %}▤
-            {%- elif kunci == 'kabar' %}✉
-            {%- else %}⚙{% endif -%}
-          </span>
+          {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.
+             Rantai `if/elif` yang dulu berdiri di tempat ini berakhir dengan
+             `{% else %}⚙`, dan akibatnya LIMA pintu memakai gerigi yang sama:
+             Catat pekerjaan lain, Stok Produk, Barang Keluar, List audit,
+             Pengaturan. Ikon yang dipakai lima pintu berhenti menjadi ikon.
+
+             Dan tempatnya memang bukan di sini: berkas ini milik BERSAMA
+             beberapa aplikasi, sedangkan "pintu apa saja yang ada" milik
+             masing-masing. Prinsip yang sama sudah tertulis beberapa baris di
+             atas untuk `peran_min`; ikon satu-satunya fakta per-pintu yang
+             masih tercecer di sini. #}
+          <span class="pintu__ikon" aria-hidden="true">{{ ikon or "⚙" }}</span>
           {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
              permintaan pemilik: "sidebar cukup nama halamannya saja",
              "deskripsi tambahan tidak perlu".

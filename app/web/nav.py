@@ -62,10 +62,35 @@ log = logging.getLogger("web.nav")
 #: diketik, dan yang menjaga sungguhan adalah `butuh_admin` di rutenya.
 #: Yang dikerjakan di sini cuma menghindari menawarkan pintu yang akan
 #: ditolak.
+#: ── MEDAN KEENAM: IKON, dan ia pindah ke sini 29 September 2026 ──
+#:
+#: Sebelumnya ikon laci adalah rantai `if/elif` tertulis-tangan di
+#: `base.html`, dan cabang terakhirnya `{% else %}⚙`. Akibatnya LIMA pintu
+#: memakai gerigi yang sama — Catat pekerjaan lain, Stok Produk, Barang
+#: Keluar, List audit, Pengaturan — dan ikon yang dipakai lima pintu berhenti
+#: menjadi ikon: mata tak bisa membedakan apa pun dengannya. Pemilik
+#: mengeluhkannya sebagai "ikonnya salah"; yang salah bukan bentuknya.
+#:
+#: Tempatnya di sini, bukan di templat, dan alasannya bukan kerapian. Templat
+#: itu SENDIRI sudah menuliskan prinsipnya beberapa baris di atas rantai itu,
+#: untuk hal yang lain: "Daftar KUNCI, bukan syarat per layar di dalam templat
+#: ini — app yang menambah layar bersyarat besok tak perlu menyunting berkas
+#: bersama." `hmu_tampilan` dipakai lebih dari satu aplikasi; menambah layar
+#: seharusnya tak menuntut menyunting berkas milik bersama demi satu huruf.
+#:
+#: ⚠ BUKAN EMOJI, dan ini syarat teknis bukan selera. Emoji tampil BERWARNA
+#: dan bentuknya berbeda di tiap merek HP; dua belas ikon monokrom ditambah
+#: satu emoji akan terbaca seperti kesalahan. Semuanya dari blok yang sudah
+#: terbukti tampil di app ini — Geometric Shapes (U+25xx) dan Arrows (U+21xx).
+#:
+#: ⚠ DAN WAJIB DIUJI DI HP SUNGGUHAN. Sebagian mesin Android tak punya glif
+#: untuk sebagian tanda ini dan menggambar kotak kosong. Kalau ada yang kotak,
+#: ganti — jangan biarkan, sebab kotak kosong lebih buruk daripada gerigi yang
+#: dipakai bersama.
 TAB = (
-    ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None),
-    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None),
-    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None),
+    ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
+    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None, "≡"),
+    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None, "◷"),
     # BUKAN untuk operator selepan. Katalog ini ada karena dulu sebagian
     # pekerjaan tak punya kartu; di Gudang 1 keadaan itu sudah lewat. Dari 13
     # aksi yang diterima operator selepan, 12 memang dikerjakan dari kartu di
@@ -84,13 +109,17 @@ TAB = (
     # seluruh penyosohan, tumpukan → silo, dan PK yang menunggu ditempatkan
     # sudah berkartu. Yang tersisa tanpa kartu — packing, bekatul curah,
     # batalkan — ikut ke kaki Antrian tunggu, sama seperti selepan.
+    # Subjudulnya ikut dibetulkan 29 September 2026: "Harga" sudah tak ada di
+    # Pos Produksi sama sekali, dan "barang keluar" kini punya halamannya
+    # sendiri. Subjudul yang menjanjikan pekerjaan yang tak ada di dalamnya
+    # membuat orang membuka pintu ini untuk mencarinya.
     ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
-     "Harga, QC, barang keluar, batalkan", (SUPER, ADMIN)),
+     "QC, pembelian karung, pembatalan", (SUPER, ADMIN), "✎"),
     # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.
     ("keputusan",  "/keputusan",  "Menunggu keputusan",
-     "Harga gabah & PK luar, pencocokan output", MEJA),
+     "Harga gabah & PK luar, pencocokan output", MEJA, "✓"),
     # Pecah dari "Menunggu keputusan" atas permintaan pemilik 24 September
     # 2026. Gerbangnya sama — MEJA — karena ini kerja meja, bukan kerja
     # gudang: OPERATOR TIDAK MELIHAT HALAMAN INI SAMA SEKALI. Yang ia lihat
@@ -101,12 +130,12 @@ TAB = (
     # lewat `PINTU_MATI`, bukan lewat daftar ini: TAB dibaca sekali saat app
     # dimuat, sedangkan setelan itu bisa berubah kapan saja.
     ("mutu",       "/mutu",       "Mutu & QC",
-     "Mutu giling & PK luar yang belum dicatat", MEJA),
+     "Mutu giling & PK luar yang belum dicatat", MEJA, "◎"),
     # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
     # berhak tahu berapa yang sudah terkumpul.
-    ("stok",       "/stok",       "Stok",           "Bahan: gabah & PK yang masih ada", None),
+    ("stok",       "/stok",       "Stok",           "Bahan: gabah & PK yang masih ada", None, "▦"),
     # ── Stok Produk — keputusan pemilik 26 September 2026 ──
     #
     # "bagusnya ada halaman baru yaitu Stok Produk, dan kartu hasil sosoh
@@ -122,7 +151,7 @@ TAB = (
     # daftar peran ini: keduanya sama-sama berperan `operator`, dan yang
     # membedakan gudang tempatnya bekerja hari ini.
     ("stok_produk", "/stok-produk", "Stok Produk",
-     "Beras dan hasil samping yang sudah jadi", None),
+     "Beras dan hasil samping yang sudah jadi", None, "◧"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
     #
     # "kita butuh satu halaman untuk transaksi barang keluar."
@@ -137,7 +166,7 @@ TAB = (
     # Pintunya padam untuk operator selepan lewat `PINTU_MATI`, sama seperti
     # Stok Produk: barang jadi berdiri di Gudang 2.
     ("barang_keluar", "/barang-keluar", "Barang Keluar",
-     "Perintah muat, muatan, dan riwayatnya", None),
+     "Perintah muat, muatan, dan riwayatnya", None, "⇥"),
     # ── Kabar — keputusan pemilik 26 September 2026 ──
     #
     # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum
@@ -150,17 +179,17 @@ TAB = (
     # adalah yang SUDAH TERJADI dan perlu diketahui — sedudukan dengan Laporan,
     # bukan dengan antrean. Pintu kabar yang berdiri di atas antrean akan
     # ditekan lebih dulu tiap pagi, dan pekerjaan hari itu terbaca belakangan.
-    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None),
+    ("laporan",    "/laporan",    "Laporan",        "Yang sudah terjadi hari ini", None, "▤"),
     ("kabar",      "/kabar",      "Kabar",
-     "Yang perlu Anda ketahui, 7 hari terakhir", None),
+     "Yang perlu Anda ketahui, 7 hari terakhir", None, "✉"),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
-     MEJA),
-    ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None),
+     MEJA, "↺"),
+    ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None, "⚙"),
 )
 
 #: Judul yang naik ke bilah atas. Diambil dari daftar yang sama supaya nama
 #: layar tak pernah berbeda antara menu dan judulnya.
-JUDUL = {k: nama for k, _, nama, _, _ in TAB}
+JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
 
 
 async def jumlah_menunggu(user: User | None) -> int:

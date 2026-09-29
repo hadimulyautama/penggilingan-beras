@@ -197,7 +197,10 @@ def test_laci_menawarkan_mutu_hanya_ke_view_meja():
 
     baris = [t for t in TAB if t[0] == "mutu"]
     assert len(baris) == 1, "pintu Mutu & QC tak ada di laci"
-    kunci, alamat, nama, ket, view = baris[0]
+    # Diindeks, bukan dibongkar berposisi: medan keenam (ikon) lahir 29
+    # September 2026, dan pembongkaran berposisi mematahkan sepuluh uji
+    # sekaligus demi satu medan yang tak satu pun di antaranya pedulikan.
+    kunci, alamat, nama, ket, view = baris[0][:5]
     assert alamat == "/mutu" and view is MEJA
     assert nama == "Mutu & QC"
     # Keterangan menyebut PEKERJAANNYA, bukan mengulang judulnya.

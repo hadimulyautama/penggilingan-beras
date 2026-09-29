@@ -890,3 +890,92 @@ async def test_tiket_yang_sudah_tertaut_berhenti_ditagih(pg, gudang):
         b = await untuk_staff(db)
     assert "TK-TAUT-01" not in {x.kode for x in b.meja}, \
         "tiket yang sudah tertaut masih ditagih"
+
+
+# ──────────── Pintu masuknya di HALAMANNYA, bukan di katalog ────────────
+
+async def _klien(pg, uid, nama, mode="admin"):
+    import httpx
+
+    from app.models import ProduksiAkun
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    from app.main import app
+
+    async with pg() as db:
+        a = ProduksiAkun(user_id=uid, username=nama,
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan(mode))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+    c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                          base_url="http://uji")
+    c.cookies.set(security.NAMA_COOKIE, token)
+    c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+    return c
+
+
+async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
+    """Permintaan pemilik 29 September 2026: "saya tidak suka proses barang
+    keluar prosesnya dilakukan di catat pekerjaan lain. buat tombol di barang
+    keluar yaitu perintah barang keluar ... lalu hapus tombol yang ada di catat
+    pekerjaan lain."
+
+    Tombolnya membuka LEMBAR AKSI YANG SAMA (`/aksi?buka=…`), bukan borang
+    kedua: dua borang untuk satu pekerjaan akan berselisih isinya pada
+    perubahan berikutnya.
+    """
+    await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["adm"], "uji_tombol_admin")
+    async with c:
+        r = await c.get("/barang-keluar")
+    assert r.status_code == 200, r.status_code
+    h = r.text
+    assert "/aksi?buka=perintah_keluar" in h, "tombol perintah tak ada di halamannya"
+    # "Tambah barang" & "Batalkan" muncul karena ADA perintah yang belum dimuat.
+    assert "/aksi?buka=tambah_barang_keluar" in h
+    assert "/aksi?buka=batal_perintah_keluar" in h
+
+
+async def test_operator_melihat_halamannya_tetapi_tak_ditawari_tombolnya(pg, gudang):
+    """Pemilik menyebut tombolnya untuk Admin & Super Admin.
+
+    HALAMANNYA tetap terbuka untuk operator — ia perlu tahu apa yang sudah dan
+    akan keluar dari gudangnya. Tugasnya sendiri sampai lewat KARTU di Antrian
+    tunggu, bukan dari halaman ini: di app ini tugas selalu sampai lewat kartu,
+    dan operator yang harus membuka halaman lain untuk tahu ada pekerjaan akan
+    melewatkannya.
+    """
+    await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["op"], "uji_tombol_op", mode="operator")
+    async with c:
+        r = await c.get("/barang-keluar")
+    assert r.status_code == 200, r.status_code
+    h = r.text
+    assert "OUT-" in h, "operator tak bisa melihat isi halamannya"
+    assert "buka=perintah_keluar" not in h, "operator ditawari tombol memerintah"
+
+
+async def test_rantai_barang_keluar_tak_lagi_digambar_di_katalog(pg, gudang):
+    """Dicabut dari "Catat pekerjaan lain" — DAN tetap dikirim di menu.
+
+    Keduanya perlu, dan yang kedua mudah terlewat: lembar yang dibuka tombol
+    maupun kartu dibangun dari spesifikasi yang SAMA. Aksi yang dibuang dari
+    menu berarti tombolnya membuka lembar kosong.
+    """
+    c = await _klien(pg, gudang["adm"], "uji_katalog_admin")
+    async with c:
+        r = await c.get("/api/actions/menu")
+    daftar = r.json()
+    if isinstance(daftar, dict):
+        daftar = daftar.get("aksi") or daftar.get("actions") or []
+    peta = {a["id"]: a for a in daftar}
+    for aksi in ("perintah_keluar", "tambah_barang_keluar",
+                 "batal_perintah_keluar", "verifikasi_keluar",
+                 "muat_semua", "muat_barang", "selesai_muat"):
+        assert aksi in peta, f"{aksi} hilang dari menu — lembarnya akan kosong"
+        assert peta[aksi].get("kartu"), (
+            f"{aksi} masih digambar di katalog Catat pekerjaan lain")

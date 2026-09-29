@@ -1174,6 +1174,25 @@ for _a in (
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
     "masukkan_pk", "catat_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",
+    # ── Rantai barang keluar — dicabut dari katalog 29 September 2026 ──
+    #
+    # Permintaan pemilik: "saya tidak suka proses barang keluar prosesnya
+    # dilakukan di catat pekerjaan lain. buat tombol di barang keluar ... lalu
+    # hapus tombol yang ada di catat pekerjaan lain."
+    #
+    # Ketujuhnya punya pintunya sendiri sekarang, dan tiga bentuk yang berbeda:
+    #   · `perintah_keluar`, `tambah_barang_keluar`, `batal_perintah_keluar`
+    #     → TOMBOL di kaki halaman Barang Keluar (Admin & Super Admin);
+    #   · `muat_semua`, `muat_barang`, `selesai_muat`
+    #     → KARTU "Muat barang keluar" di Antrian tunggu operator;
+    #   · `verifikasi_keluar`
+    #     → KARTU di Menunggu keputusan Admin.
+    #
+    # Aksinya TETAP dikirim di menu — lembar yang dibuka dari tombol maupun
+    # kartu dibangun dari spesifikasi yang sama. Yang berubah cuma katalognya
+    # berhenti menggambarnya.
+    "perintah_keluar", "tambah_barang_keluar", "batal_perintah_keluar",
+    "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
 

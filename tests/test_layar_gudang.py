@@ -103,4 +103,4 @@ def test_tombol_kembali_bukan_tab():
 
     sumber = inspect.getsource(layar_gudang)
     assert 'kembali="/"' in sumber
-    assert "gudang" not in {k for k, _, _, _, _ in TAB}
+    assert "gudang" not in {t[0] for t in TAB}

@@ -63,7 +63,7 @@ def test_hanya_admin_yang_melihat_pintunya():
 
     from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER
 
-    view = {k: v for k, _, _, _, v in TAB}
+    view = {t[0]: t[4] for t in TAB}
     assert set(view["audit"]) == {SUPER, ADMIN}
     assert SELEPAN not in view["audit"] and POLESAN not in view["audit"]
     # Antrean tak punya kolom view sama sekali — keempatnya melihatnya.
@@ -102,7 +102,7 @@ def test_tombol_menu_ada_di_setiap_layar_menu():
     from app.web.tampilan import templates
 
     akun = types.SimpleNamespace(nama="Pras", peran="superadmin", sesi_pendek=False)
-    for kunci, _, _, _, _ in TAB:
+    for kunci in (t[0] for t in TAB):
         html = templates.get_template("base.html").render(
             request=None, akun=akun, layar=kunci, MENUNGGU=1, MODE_UJI=False,
             LIHAT_SEBAGAI=None, kembali=None)

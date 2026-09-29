@@ -919,3 +919,69 @@ def test_tiap_fase_punya_kata_dan_warnanya():
         if f".benda--{f} " not in css or f".padat--{f} " not in css)
     assert not tanpa_warna, (
         "fase tanpa kelas warna — kartunya tampil polos: " + ", ".join(tanpa_warna))
+
+
+def test_tiap_pintu_laci_punya_ikonnya_sendiri():
+    """Ikon yang dipakai beberapa pintu berhenti menjadi ikon.
+
+    Sampai 29 September 2026 ikon laci adalah rantai `if/elif` di `base.html`
+    yang berakhir `{% else %}⚙`. Akibatnya LIMA pintu memakai gerigi yang sama —
+    Catat pekerjaan lain, Stok Produk, Barang Keluar, List audit, Pengaturan.
+    Pemilik mengeluhkannya sebagai "ikonnya salah"; yang salah bukan bentuknya
+    melainkan bahwa mata tak bisa membedakan apa pun dengannya.
+
+    Dua arah yang dijaga, dan yang kedua yang akan patah lebih dulu: pintu BARU
+    yang lupa membawa ikonnya jatuh ke cadangan `⚙` di templat — tanpa galat,
+    tanpa kotak kosong, cuma diam-diam berbagi gerigi dengan Pengaturan lagi.
+    """
+    from app.web.nav import TAB
+
+    kurang = [t[0] for t in TAB if len(t) < 6 or not (t[5] or "").strip()]
+    assert not kurang, f"pintu tanpa ikon — akan memakai ⚙ bersama: {kurang}"
+
+    ikon = {}
+    for t in TAB:
+        ikon.setdefault(t[5], []).append(t[0])
+    kembar = {i: p for i, p in ikon.items() if len(p) > 1}
+    assert not kembar, f"ikon dipakai lebih dari satu pintu: {kembar}"
+
+
+def test_ikon_laci_bukan_emoji_dan_bukan_huruf_biasa():
+    """Emoji tampil BERWARNA dan bentuknya berbeda di tiap merek HP.
+
+    Dua belas ikon monokrom ditambah satu emoji terbaca seperti kesalahan, dan
+    yang menambahkannya tak akan melihatnya di peramban komputernya sendiri —
+    di sana emoji ikut monokrom pada sebagian sistem.
+
+    Yang diizinkan blok yang sudah TERBUKTI tampil di app ini: Geometric Shapes
+    (U+25xx), Arrows (U+21xx), Misc Technical (U+23xx), Misc Symbols (U+26xx),
+    Dingbats (U+27xx), dan beberapa tanda rumah/gerigi di U+2302/U+2699.
+    """
+    from app.web.nav import TAB
+
+    salah = []
+    for t in TAB:
+        for ch in (t[5] or ""):
+            k = ord(ch)
+            if k < 0x2000:
+                salah.append(f"{t[0]}: '{ch}' huruf biasa")
+            elif k >= 0x1F000:
+                salah.append(f"{t[0]}: '{ch}' emoji (U+{k:04X})")
+    assert not salah, "; ".join(salah)
+
+
+def test_templat_bersama_tak_lagi_memilih_ikon_per_layar():
+    """Tempatnya `nav.TAB`, bukan `base.html`.
+
+    Berkas itu milik BERSAMA beberapa aplikasi, sedangkan "pintu apa saja yang
+    ada" milik masing-masing. Templat itu sendiri sudah menuliskan prinsipnya
+    beberapa baris di atas, untuk `peran_min`; ikon satu-satunya fakta
+    per-pintu yang tercecer di sana — dan menambah layar berarti menyunting
+    berkas milik bersama demi satu huruf.
+    """
+    base = (AKAR / "hmu_tampilan/templates/base.html").read_text()
+    i = base.index('class="pintu__ikon"')
+    blok = base[i - 400:i + 200]
+    assert "kunci == 'stok'" not in blok and "kunci == 'beranda'" not in blok, (
+        "rantai if/elif ikon masih berdiri di templat bersama")
+    assert "{{ ikon" in blok, "templat tak mencetak ikon dari TAB"
