@@ -948,10 +948,15 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
         r = await c.get("/barang-keluar")
     assert r.status_code == 200, r.status_code
     h = r.text
-    assert "/aksi?buka=perintah_keluar" in h, "tombol perintah tak ada di halamannya"
+    # ⚠ ALAMATNYA BERUBAH 29 September 2026: tombolnya dulu menunjuk
+    # `/aksi?buka=…` dan memindahkan orang ke Antrian tunggu. Sekarang ia
+    # membuka lembarnya DI HALAMAN INI — lihat
+    # `test_tombolnya_membuka_lembar_di_halaman_ini`.
+    assert "/barang-keluar?buka=perintah_keluar" in h, \
+        "tombol perintah tak ada di halamannya"
     # "Tambah barang" & "Batalkan" muncul karena ADA perintah yang belum dimuat.
-    assert "/aksi?buka=tambah_barang_keluar" in h
-    assert "/aksi?buka=batal_perintah_keluar" in h
+    assert "/barang-keluar?buka=tambah_barang_keluar" in h
+    assert "/barang-keluar?buka=batal_perintah_keluar" in h
 
 
 async def test_operator_melihat_halamannya_tetapi_tak_ditawari_tombolnya(pg, gudang):
@@ -1239,3 +1244,64 @@ async def test_tombol_kartu_mengunci_transaksinya(pg, gudang):
         h = (await c.get("/barang-keluar")).text
     assert f"buka=tambah_barang_keluar&nilai={r.rec.id}" in h, \
         "tombol kartu tak membawa transaksinya"
+
+
+async def test_tombolnya_membuka_lembar_di_halaman_ini(pg, gudang):
+    """Keluhan pemilik 29 September 2026: "mengapa kalau verifikasi barang
+    keluar halamannya pindah ke antrian tunggu? begitu juga jika input perintah
+    barang keluar."
+
+    Sebabnya tombolnya menunjuk `/aksi?buka=…` — pola PINTASAN, yang lahir
+    untuk kaki halaman Antrian tunggu, tempat "pindah halaman" tak terasa sebab
+    halamannya itu-itu juga. Dari sini ia jadi perjalanan: orang yang sedang
+    membaca kartu OUT- tiba-tiba berdiri di daftar pekerjaan gudang, dan
+    sesudah menyimpan ia harus mencari jalan kembali.
+
+    Tiga hal yang harus benar bersamaan, dan yang ketiga paling mudah terlupa —
+    tanpa `aksi.js`, menekan tombolnya cuma memuat ulang halaman dengan
+    `?buka=` dan tak ada yang menangkapnya. Tombol yang tak melakukan apa-apa
+    lebih buruk daripada tombol yang tak ada (pelajaran layar Stok, 26
+    September).
+    """
+    await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["adm"], "uji_lembar_di_tempat")
+    async with c:
+        h = (await c.get("/barang-keluar")).text
+
+    assert "/aksi?buka=" not in h, "tombolnya masih melemparkan orang ke /aksi"
+    assert "/barang-keluar?buka=perintah_keluar" in h
+    assert '<dialog class="lembar" id="lembar">' in h, "halaman ini bukan tuan rumah lembarnya"
+    assert "aksi.js" in h, "aksi.js tak dimuat — tombolnya takkan menangkap apa pun"
+
+
+async def test_operator_pun_mendapat_lembarnya(pg, gudang):
+    """Syaratnya `BOLEH_PERINTAH or BOLEH_MUAT`, bukan salah satunya.
+
+    Layar Stok pernah memuat lembarnya hanya untuk yang boleh mengubah, dan
+    akibatnya tombol "Minta lot ini" milik operator tak pernah bisa membuka
+    borangnya — persis kesalahan yang sama menunggu di sini.
+    """
+    await _perintah(pg, gudang, karung=40)
+    c = await _klien(pg, gudang["op"], "uji_lembar_op", mode="operator")
+    async with c:
+        h = (await c.get("/barang-keluar")).text
+    assert "/barang-keluar?buka=muat_semua" in h
+    assert '<dialog class="lembar" id="lembar">' in h, \
+        "operator punya tombol tetapi tak punya lembarnya"
+    assert "aksi.js" in h
+
+
+async def test_catat_pekerjaan_lain_berdiri_tepat_di_atas_pengaturan():
+    """Permintaan pemilik 29 September 2026: "catat pekerjaan lain posisinya
+    diatas pengaturan saja."
+
+    Urutan laci ini urutan SEBERAPA SERING, bukan urutan alur kerja — yang
+    paling sering dibuka berdiri paling dekat ibu jari. Dan katalog ini memang
+    bukan pekerjaan harian lagi: sejak barang keluar, packing, bekatul, dan
+    pembatalan punya pintunya masing-masing, yang tersisa cuma QC, pembelian
+    karung, dan pencocokan tiket.
+    """
+    from app.web.nav import TAB
+
+    urut = [t[0] for t in TAB]
+    assert urut[-2:] == ["aksi_lain", "pengaturan"], urut[-4:]

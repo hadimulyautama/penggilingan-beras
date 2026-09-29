@@ -33,7 +33,7 @@
    alasannya lebih kuat — halaman ini bisa panjang, dan tombol yang menuntut
    digulung dulu adalah tombol yang tak ditemukan orang yang sedang terburu.
 
-   Tombolnya membuka LEMBAR AKSI YANG SAMA (`/aksi?buka=…`), bukan borang
+   Tombolnya membuka LEMBAR AKSI YANG SAMA (`/barang-keluar?buka=…`), bukan borang
    kedua: dua borang untuk satu pekerjaan akan berselisih isinya pada
    perubahan berikutnya.
 
@@ -41,16 +41,16 @@
    menyembunyikan tombol bukan penjagaan, sebab alamatnya bisa diketik. #}
 {% if BOLEH_PERINTAH %}
 <div class="ubah-hasil" style="margin-bottom:18px">
-  <a class="btn" href="/aksi?buka=perintah_keluar">Buat perintah barang keluar</a>
+  <a class="btn" href="/barang-keluar?buka=perintah_keluar">Buat perintah barang keluar</a>
   {# "Tambah barang" berlaku sampai SEBELUM diverifikasi — termasuk yang
      truknya sudah dimuat. Muatan bertahap adalah keadaan sehari-hari, dan
      barang yang menyusul setengah jam kemudian bukan transaksi baru: ia truk
      yang sama, surat jalan yang sama, satu tiket timbang yang sama. #}
   {% if ada_hidup %}
-  <a class="btn btn--kecil" href="/aksi?buka=tambah_barang_keluar">Tambah barang</a>
+  <a class="btn btn--kecil" href="/barang-keluar?buka=tambah_barang_keluar">Tambah barang</a>
   {% endif %}
   {% if ada_perintah %}
-  <a class="btn btn--kecil" href="/aksi?buka=batal_perintah_keluar">Batalkan perintah</a>
+  <a class="btn btn--kecil" href="/barang-keluar?buka=batal_perintah_keluar">Batalkan perintah</a>
   {% endif %}
 </div>
 {% endif %}
@@ -192,7 +192,7 @@
         <div class="ubah-hasil" style="margin-top:12px">
           {% for buka, nilai, label, utama in k.tombol %}
           <a class="btn{{ '' if utama else ' btn--kecil' }}"
-             href="/aksi?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
+             href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
              >{{ label }}</a>
           {% endfor %}
         </div>
@@ -203,4 +203,36 @@
 </div>
 {% endif %}
 
+{# ── LEMBARNYA DIBUKA DI SINI, bukan di layar lain ──
+   Keluhan pemilik 29 September 2026: "mengapa kalau verifikasi barang keluar
+   halamannya pindah ke antrian tunggu? begitu juga jika input perintah barang
+   keluar."
+
+   Betul, dan sebabnya tombolnya menunjuk `/aksi?buka=…` — pola PINTASAN, yang
+   lahir untuk kaki halaman Antrian tunggu, tempat "pindah halaman" tak terasa
+   sebab halamannya itu-itu juga. Dari sini ia jadi perjalanan: orang yang
+   sedang membaca kartu OUT- tiba-tiba berdiri di daftar pekerjaan gudang, dan
+   sesudah menyimpan ia harus mencari jalan kembali.
+
+   Yang dibutuhkan cuma tiga: rutenya membaca `?buka=`, halaman ini jadi tuan
+   rumah dialognya, dan `aksi.js` ikut dimuat. Layar Stok sudah begitu sejak 26
+   September 2026.
+
+   ⚠ SYARATNYA SAMA DENGAN TOMBOLNYA — `BOLEH_PERINTAH or BOLEH_MUAT`, bukan
+   salah satunya. Layar Stok pernah memuat lembarnya hanya untuk yang boleh
+   mengubah, dan akibatnya tombol "Minta lot ini" milik operator tak pernah
+   bisa membuka borangnya: menekannya cuma memuat ulang halaman dengan `?buka=`
+   dan tak ada yang menangkapnya. Tombol yang tak melakukan apa-apa lebih buruk
+   daripada tombol yang tak ada. #}
+{% if BOLEH_PERINTAH or BOLEH_MUAT %}
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+{% if BOLEH_PERINTAH or BOLEH_MUAT %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endif %}
 {% endblock %}

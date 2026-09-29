@@ -149,7 +149,15 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
         #
         # Ini cuma menghindari menawarkan pintu yang akan ditolak; yang menjaga
         # sungguhan `wajib(can_see_financials(...))` di tiap rutenya.
-        BOLEH_PERINTAH=can_see_financials(akun.user),
+        BOLEH_PERINTAH=boleh_perintah,
+        BOLEH_MUAT=boleh_muat,
+        # ── Lembarnya dibuka DI HALAMAN INI ──
+        # Sampai 29 September tombolnya menunjuk `/aksi?buka=…`, jadi menekan
+        # "Verifikasi" memindahkan orang ke Antrian tunggu — dan sesudah
+        # menyimpan ia harus mencari jalan kembali. Pola yang sama dipakai
+        # layar Stok sejak 26 September.
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
         # Dua syarat, bukan satu, sebab jangkauannya memang berbeda:
         #   · "Batalkan perintah" hanya untuk yang BELUM dimuat — yang truknya
         #     sudah berangkat tak bisa dibatalkan, barangnya sudah pergi;

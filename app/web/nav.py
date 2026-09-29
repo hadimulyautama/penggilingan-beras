@@ -91,30 +91,6 @@ TAB = (
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
     ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None, "≡"),
     ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None, "◷"),
-    # BUKAN untuk operator selepan. Katalog ini ada karena dulu sebagian
-    # pekerjaan tak punya kartu; di Gudang 1 keadaan itu sudah lewat. Dari 13
-    # aksi yang diterima operator selepan, 12 memang dikerjakan dari kartu di
-    # Antrian tunggu — termasuk "Gabah masuk", yang WAJIB memilih tiket
-    # timbang, dan tiap tiket yang belum ditaut sudah berdiri sebagai kartu.
-    # Menyisakan katalognya berarti pintu kedua ke pekerjaan yang sudah punya
-    # pintu, dan pintu kedua membuat orang ragu pintu mana yang benar.
-    #
-    # Yang ke-13 adalah "Batalkan input terakhir" — satu-satunya yang tak
-    # punya kartu, karena yang dibatalkan bukan benda di gudang melainkan
-    # catatan yang baru saja dibuat. Ia dipindahkan ke kaki Antrian tunggu,
-    # tempat catatan itu dibuat. Menghapus katalog tanpa memindahkannya
-    # berarti tiap salah ketik berubah jadi panggilan telepon ke Admin.
-    #
-    # Operator polesan menyusul 21 September 2026, atas permintaan pemilik:
-    # seluruh penyosohan, tumpukan → silo, dan PK yang menunggu ditempatkan
-    # sudah berkartu. Yang tersisa tanpa kartu — packing, bekatul curah,
-    # batalkan — ikut ke kaki Antrian tunggu, sama seperti selepan.
-    # Subjudulnya ikut dibetulkan 29 September 2026: "Harga" sudah tak ada di
-    # Pos Produksi sama sekali, dan "barang keluar" kini punya halamannya
-    # sendiri. Subjudul yang menjanjikan pekerjaan yang tak ada di dalamnya
-    # membuat orang membuka pintu ini untuk mencarinya.
-    ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
-     "QC, pembelian karung, pembatalan", (SUPER, ADMIN), "✎"),
     # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
     # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
     # keputusannya. Sejak awal pekerjaan admin.
@@ -184,6 +160,39 @@ TAB = (
      "Yang perlu Anda ketahui, 7 hari terakhir", None, "✉"),
     ("audit",      "/audit",      "List audit",     "Semua catatan, bisa disaring",
      MEJA, "↺"),
+    # ── DIPINDAH KE BAWAH 29 September 2026 ──
+    # Permintaan pemilik: "catat pekerjaan lain posisinya diatas pengaturan
+    # saja." Ia memang bukan pekerjaan harian lagi: sejak barang keluar,
+    # packing, bekatul, dan pembatalan punya pintunya masing-masing, yang
+    # tersisa di katalog ini tinggal QC, pembelian karung, dan pencocokan
+    # tiket — hal yang dibuka beberapa kali seminggu, bukan tiap jam.
+    #
+    # Urutan laci ini URUTAN SEBERAPA SERING, bukan urutan alur kerja:
+    # yang paling sering dibuka berdiri paling dekat ibu jari.
+    # BUKAN untuk operator selepan. Katalog ini ada karena dulu sebagian
+    # pekerjaan tak punya kartu; di Gudang 1 keadaan itu sudah lewat. Dari 13
+    # aksi yang diterima operator selepan, 12 memang dikerjakan dari kartu di
+    # Antrian tunggu — termasuk "Gabah masuk", yang WAJIB memilih tiket
+    # timbang, dan tiap tiket yang belum ditaut sudah berdiri sebagai kartu.
+    # Menyisakan katalognya berarti pintu kedua ke pekerjaan yang sudah punya
+    # pintu, dan pintu kedua membuat orang ragu pintu mana yang benar.
+    #
+    # Yang ke-13 adalah "Batalkan input terakhir" — satu-satunya yang tak
+    # punya kartu, karena yang dibatalkan bukan benda di gudang melainkan
+    # catatan yang baru saja dibuat. Ia dipindahkan ke kaki Antrian tunggu,
+    # tempat catatan itu dibuat. Menghapus katalog tanpa memindahkannya
+    # berarti tiap salah ketik berubah jadi panggilan telepon ke Admin.
+    #
+    # Operator polesan menyusul 21 September 2026, atas permintaan pemilik:
+    # seluruh penyosohan, tumpukan → silo, dan PK yang menunggu ditempatkan
+    # sudah berkartu. Yang tersisa tanpa kartu — packing, bekatul curah,
+    # batalkan — ikut ke kaki Antrian tunggu, sama seperti selepan.
+    # Subjudulnya ikut dibetulkan 29 September 2026: "Harga" sudah tak ada di
+    # Pos Produksi sama sekali, dan "barang keluar" kini punya halamannya
+    # sendiri. Subjudul yang menjanjikan pekerjaan yang tak ada di dalamnya
+    # membuat orang membuka pintu ini untuk mencarinya.
+    ("aksi_lain",  "/aksi-lain",  "Catat pekerjaan lain",
+     "QC, pembelian karung, pembatalan", (SUPER, ADMIN), "✎"),
     ("pengaturan", "/pengaturan", "Pengaturan",     "Data diri, sandi, alat", None, "⚙"),
 )
 
