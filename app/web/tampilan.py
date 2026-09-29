@@ -122,6 +122,20 @@ templates.env.globals["FASE"] = {
     # barangnya memang PK hasil giling, dan posisinya dalam perjalanan barang
     # tak berubah. Yang berubah cuma katanya.
     "pindah_pk": "Pindah PK",
+    # ── Barang keluar: kunci SENDIRI, bukan pinjaman ──
+    #
+    # Ini keempat kalinya aturan yang sama diuji, dan tiga yang pertama
+    # ketahuan dari foto pemilik. Kartu muat dan kartu verifikasi barang keluar
+    # bisa saja meminjam "sosoh" demi warnanya — barangnya memang hasil
+    # penyosohan — lalu berkeping "PROSES SOSOH" di atas judul "Muat barang
+    # keluar". Kepingan yang membantah judulnya sendiri lebih buruk daripada
+    # kepingan yang tak ada, sebab ia dipercaya.
+    #
+    # Warnanya juga sendiri (`--fase-keluar`): barangnya sedang MENINGGALKAN
+    # pabrik, keadaan yang tak dimiliki fase mana pun. Warna yang sama dengan
+    # penyosohan akan membuat truk yang sudah berangkat terbaca seperti mesin
+    # yang sedang menyala.
+    "keluar": "Barang keluar",
 }
 
 

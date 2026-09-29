@@ -716,3 +716,177 @@ async def test_operator_selepan_tak_ditawari_pintu_barang_keluar(pg, gudang):
     mati = b.lencana()["PINTU_MATI"]
     assert ("barang_keluar" in mati) == ("stok_produk" in mati), \
         "kedua pintu berpisah nasib padahal sebabnya sama"
+
+
+# ──────────────────────── Kartu: pekerjaan yang MENCARI orangnya ────────────
+
+async def test_operator_gudang2_melihat_perintah_muat_sebagai_kartu(pg, gudang):
+    """Sampai 29 September 2026 rantai ini berjalan LEWAT KATALOG AKSI saja.
+
+    Operator harus membuka menu dan memilih "Muat semua sesuai perintah", jadi
+    perintah yang terbit pukul tujuh pagi baru dilihat pukul sebelas. Di seluruh
+    app ini pekerjaan muncul SENDIRI sebagai kartu; barang keluar satu-satunya
+    yang tidak — dan pekerjaan yang harus dicari adalah pekerjaan yang terlambat.
+    """
+    from app.services.berjalan import untuk_operator_gudang2
+
+    r = await _perintah(pg, gudang, karung=100, pembeli="Toko Makmur")
+    async with pg() as db:
+        b = await untuk_operator_gudang2(db)
+    k = next((x for x in b.menunggu if x.kode == r.rec.kode), None)
+    assert k is not None, "perintah muat tak berkartu di antrean operator"
+    assert "Toko Makmur" in k.isi and "B 1234 XY" in k.isi, k.isi
+    # Fase SENDIRI, bukan pinjaman. Kartu berjudul "Muat barang keluar" yang
+    # berkeping "PROSES SOSOH" sudah jadi cacat yang sama tiga kali sebelumnya.
+    assert k.fase == "keluar", k.fase
+    # Tiga pilihan, dan "muat semua" paling atas — keadaan yang paling sering.
+    aksi = [p[0] for p in (k.pilihan or [])]
+    assert aksi[:1] == ["muat_semua"], aksi
+    assert {"muat_barang", "selesai_muat"} <= set(aksi), aksi
+
+
+async def test_kartu_muat_mendarat_di_gudang_yang_memegang_barangnya(pg, gudang):
+    """Perintah berisi PK MENTAH mendarat di Gudang 1; yang berisi barang jadi
+    saja tak pernah sampai ke sana.
+
+    Dihitung dari BARANGNYA, bukan dipilih Admin — perintah yang mendarat di
+    layar yang salah akan berdiri di sana sampai seseorang menelepon.
+    """
+    from app.database import now_local
+    from app.models import MillingProcess, MillingProgressLog, User
+    from app.services import barang_keluar as bk
+    from app.services.berjalan import untuk_gudang1, untuk_operator_gudang2
+
+    # Perintah A: barang jadi saja.
+    a = await _perintah(pg, gudang, karung=40, pembeli="Toko A")
+    # Perintah B: PK mentah.
+    async with pg() as db:
+        proc = MillingProcess(kode_proses="LOT-KARTU-01", status="selesai",
+                              silo_id=gudang["silo"], berat_gabah_masuk_kg=8_000,
+                              waktu_mulai=now_local(), waktu_selesai=now_local(),
+                              created_by=gudang["op"])
+        db.add(proc)
+        await db.flush()
+        db.add(MillingProgressLog(milling_process_id=proc.id,
+                                  berat_kumulatif_kg=4_000,
+                                  waktu_update=now_local(), input_by=gudang["op"]))
+        await db.commit()
+        bb = await bk.buat_perintah(
+            db, user=await db.get(User, gudang["adm"]),
+            baris=[bk.BarisPerintah(tipe="pk_langsung",
+                                    milling_process_id=proc.id, berat_kg=1_000)],
+            nama_pembeli="Pabrik Seberang")
+
+    async with pg() as db:
+        g1 = await untuk_gudang1(db)
+        g2 = await untuk_operator_gudang2(db)
+    kode_g1 = {x.kode for x in g1.menunggu}
+    kode_g2 = {x.kode for x in g2.menunggu}
+    assert bb.rec.kode in kode_g1, "perintah PK tak sampai ke Gudang 1"
+    assert a.rec.kode not in kode_g1, "perintah barang jadi bocor ke Gudang 1"
+    assert a.rec.kode in kode_g2, "perintah barang jadi tak sampai ke Gudang 2"
+
+
+async def test_admin_melihat_muatan_yang_menunggu_verifikasi_di_mejanya(pg, gudang):
+    """Ia di MEJA, bukan di antrean: barangnya sudah di atas truk dan tak ada
+    yang perlu diangkat lagi. Yang tertahan keputusan — apakah angkanya diakui
+    apa adanya, dan tiket timbang mana yang ditempelkan."""
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from app.services.berjalan import untuk_staff
+
+    r = await _perintah(pg, gudang, karung=100)
+    baris = r.baris[0]
+    async with pg() as db:
+        await bk.catat_muatan(db, user=await db.get(User, gudang["op"]),
+                              item_id=baris.id, jumlah_karung=80)
+        await bk.selesai_muat(db, user=await db.get(User, gudang["op"]),
+                              rec_id=r.rec.id)
+    async with pg() as db:
+        b = await untuk_staff(db)
+    k = next((x for x in b.meja if x.kode == r.rec.kode), None)
+    assert k is not None, "muatan tak berkartu di Menunggu keputusan"
+    assert k.aksi == "verifikasi_keluar"
+    # Selisihnya di RINGKASAN: yang memilih dari meja inilah yang memutuskan
+    # mana yang perlu diperiksa lebih dulu.
+    assert "kurang" in (k.ringkas or ""), k.ringkas
+    assert "500" in (k.ringkas or ""), k.ringkas       # 2.500 − 2.000
+    # Dan ia TIDAK ikut ke antrean: pekerjaan yang sama ditagih dua layar
+    # membuat keduanya berhenti dipercaya.
+    assert r.rec.kode not in {x.kode for x in b.menunggu}
+
+
+async def test_tiket_keluar_terlewat_berkartu_diam_di_meja(pg, gudang):
+    """Cerminan kartu "Tiket timbang belum dicatat" di sisi masuk.
+
+    Tanpa ini, tiket keluar yang terlewat menghilang diam-diam: ia ditimbang di
+    Pos Timbang lalu berhenti di situ, dan tak ada satu pun layar Produksi yang
+    menyebutnya.
+
+    DIAM — tanpa tombol. Jalan menautkannya lewat kartu verifikasi muatannya;
+    menautkan tiket ke transaksi yang BELUM ada berarti mengarang muatannya.
+    """
+    from datetime import timedelta
+
+    from app.database import now_local
+    from app.services.berjalan import untuk_staff
+    from sqlalchemy import text as _t
+
+    tid = await _tiket(pg, "TK-LEWAT-01")
+    async with pg() as db:
+        # Dimundurkan sehari: tiket HARI INI wajar belum tertaut — truknya baru
+        # keluar dan Admin belum sampai ke mejanya. Kartu yang menagih
+        # pekerjaan yang belum waktunya akan diabaikan bersama yang sungguhan.
+        await db.execute(_t("UPDATE timbangan_transaksi SET tanggal = :t "
+                            "WHERE id = :id"),
+                         {"t": now_local().date() - timedelta(days=1), "id": tid})
+        await db.commit()
+
+    async with pg() as db:
+        b = await untuk_staff(db)
+    k = next((x for x in b.meja if x.kode == "TK-LEWAT-01"), None)
+    assert k is not None, "tiket keluar yang terlewat tak berkartu"
+    assert k.aksi is None, "kartunya bertombol — ia seharusnya DIAM"
+    assert k.fase == "keluar", k.fase
+    assert "Pos Timbang" in (k.nota or ""), k.nota
+
+
+async def test_tiket_keluar_hari_ini_belum_ditagih(pg, gudang):
+    """Sisi lain, dan ia wajib ada: kartu yang muncul terlalu cepat menagih
+    pekerjaan yang belum waktunya, dan yang ditagih terlalu sering berhenti
+    dibaca."""
+    from app.services.berjalan import untuk_staff
+
+    await _tiket(pg, "TK-HARI-INI")
+    async with pg() as db:
+        b = await untuk_staff(db)
+    assert "TK-HARI-INI" not in {x.kode for x in b.meja}
+
+
+async def test_tiket_yang_sudah_tertaut_berhenti_ditagih(pg, gudang):
+    from datetime import timedelta
+
+    from app.database import now_local
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from app.services.berjalan import untuk_staff
+    from sqlalchemy import text as _t
+
+    tid = await _tiket(pg, "TK-TAUT-01")
+    async with pg() as db:
+        await db.execute(_t("UPDATE timbangan_transaksi SET tanggal = :t "
+                            "WHERE id = :id"),
+                         {"t": now_local().date() - timedelta(days=1), "id": tid})
+        await db.commit()
+    rid = await _sampai_dimuat(pg, gudang, karung=40)
+    async with pg() as db:
+        b = await untuk_staff(db)
+    assert "TK-TAUT-01" in {x.kode for x in b.meja}, "belum tertaut, harus ditagih"
+
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                            rec_id=rid, timbangan_transaksi_id=tid)
+    async with pg() as db:
+        b = await untuk_staff(db)
+    assert "TK-TAUT-01" not in {x.kode for x in b.meja}, \
+        "tiket yang sudah tertaut masih ditagih"

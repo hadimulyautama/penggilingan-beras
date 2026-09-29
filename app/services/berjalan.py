@@ -1361,6 +1361,11 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                  "disetujui; lebih tidak.",
             pilihan=[("kirim_permintaan_pk", "Kirim ke Gudang 2",
                       "Barangnya berpindah sekarang juga", str(baris.id))]))
+    # Perintah muat yang memuat PK MENTAH mendarat di sini: PK berdiri di
+    # Gudang 1, dan yang mengangkatnya operator selepan. Perintah berisi barang
+    # jadi saja tak pernah sampai ke layar ini — `gudang_perintah` menghitungnya
+    # dari barangnya, bukan dari siapa yang memerintah.
+    b.menunggu += await _kartu_barang_keluar(db, gudang="g1")
     # Pintu "Stok Produk" tak ditawarkan kepada operator selepan — lihat
     # catatan di `Berjalan.lencana()`.
     b.pintu_produk = False
@@ -1833,6 +1838,96 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     return keluar
 
 
+async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
+                               untuk_admin: bool = False) -> list[Baris]:
+    """Perintah muat yang menunggu tangan operator — atau verifikasi Admin.
+
+    Sampai hari ini rantai barang keluar berjalan LEWAT KATALOG AKSI saja:
+    operator harus membuka menu dan memilih "Muat semua sesuai perintah", dan
+    perintah yang terbit pukul tujuh pagi baru dilihat pukul sebelas. Di
+    seluruh app ini pekerjaan muncul SENDIRI sebagai kartu; barang keluar
+    satu-satunya yang tidak — dan pekerjaan yang harus dicari adalah pekerjaan
+    yang terlambat.
+
+    `untuk_admin` memilih SISI MANA yang digambar, bukan sekadar menyaring:
+      · False → perintah yang belum dimuat, untuk operator, di Antrian tunggu;
+      · True  → muatan yang sudah berangkat, untuk Admin, di Menunggu keputusan.
+
+    Satu fungsi untuk keduanya supaya kalimat dan urutannya tak bisa berselisih
+    — dua penyusun untuk satu rantai akan menyebut angka berbeda tentang truk
+    yang sama.
+    """
+    from app.penggilingan.inventory.models import OUT_DIMUAT, OUT_PERINTAH
+    from app.services import barang_keluar as bk
+
+    keadaan = OUT_DIMUAT if untuk_admin else OUT_PERINTAH
+    keluar: list[Baris] = []
+    for rec, items in await bk.daftar(db, status=(keadaan,), batas=30):
+        # Gudang mana yang harus melihatnya dihitung dari BARANGNYA, bukan
+        # dipilih Admin: perintah yang mendarat di layar yang salah akan berdiri
+        # di sana sampai seseorang menelepon. Kartu Admin tak disaring gudang —
+        # ia melihat seluruhnya.
+        if not untuk_admin and gudang not in bk.gudang_perintah(items):
+            continue
+        macam = len(items)
+        perintah = sum(float(i.berat_perintah_kg or 0) for i in items)
+        dimuat = sum(float(i.berat_kg or 0) for i in items)
+        pembeli = rec.nama_pembeli or "—"
+        truk = f" · {rec.no_polisi}" if rec.no_polisi else ""
+
+        if untuk_admin:
+            kurang = perintah - dimuat
+            # Selisihnya di RINGKASAN, bukan di dalam laci: yang memilih dari
+            # meja inilah yang memutuskan mana yang perlu diperiksa lebih dulu.
+            ringkas = (f"kurang {_kg(kurang)} dari perintah"
+                       if kurang > 0.5 else "sesuai perintah")
+            keluar.append(Baris(
+                kode=rec.kode,
+                isi=f"{pembeli}{truk} · {macam} macam · {_kg(dimuat)} dimuat",
+                keadaan="menunggu verifikasi Admin",
+                aksi="verifikasi_keluar", nilai=str(rec.id), fase="keluar",
+                sejak=rec.waktu_muat,
+                judul="Muatan menunggu diverifikasi",
+                utama=(_kg(dimuat).removesuffix(" kg"), "kg"),
+                sub=f"{rec.kode} · {pembeli}{truk}",
+                ringkas=ringkas,
+                kelompok="keluar", gudang=gudang,
+                nota="Tempelkan kode timbang keluarnya bila tiketnya sudah ada.",
+                pilihan=[("verifikasi_keluar", "Verifikasi barang keluar",
+                          "Tutup catatannya, tempelkan kode timbang",
+                          str(rec.id))]))
+            continue
+
+        sudah = (f" · {_kg(dimuat)} sudah dicatat" if dimuat > 0.5 else "")
+        keluar.append(Baris(
+            kode=rec.kode,
+            isi=f"{pembeli}{truk} · {macam} macam · {_kg(perintah)}{sudah}",
+            keadaan="menunggu dimuat",
+            # Penunjuknya id barisnya, dan borangnya terkunci dari kartu — yang
+            # menekan kartu ini sudah memilih truknya, dan menanyakannya lagi
+            # adalah kesempatan memilih yang salah.
+            aksi="muat_semua", nilai=str(rec.id), fase="keluar",
+            sejak=rec.waktu_perintah,
+            judul="Muat barang keluar",
+            utama=(_kg(perintah).removesuffix(" kg"), "kg"),
+            sub=f"{rec.kode} · {pembeli}{truk}",
+            ringkas=rec.catatan_perintah or None,
+            kelompok="keluar", gudang=gudang,
+            # TIGA pilihan, dan urutannya yang menentukan: "muat semua" paling
+            # atas sebab ia keadaan yang paling sering, dan borang yang menuntut
+            # operator mengetik ulang angka yang sudah tertulis di kartunya akan
+            # diketik asal-asalan sambil berdiri di samping truk.
+            pilihan=[
+                ("muat_semua", "Muat semua sesuai perintah",
+                 f"Seluruh {macam} macam, {_kg(perintah)}", str(rec.id)),
+                ("muat_barang", "Catat muatan per barang",
+                 "Untuk yang dimuat kurang dari perintahnya", None),
+                ("selesai_muat", "Selesai muat — truk berangkat",
+                 "Sisa yang tak dimuat hangus", str(rec.id)),
+            ]))
+    return keluar
+
+
 async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
@@ -1985,6 +2080,11 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     curah = await _kartu_beras_curah(db)
     b.menunggu += curah
     b.jumlah_produk = len(curah)
+    # Perintah muat: pekerjaan yang sungguh menunggu tangan orang ini, jadi ia
+    # di ANTREAN. Sampai 29 September 2026 rantai barang keluar berjalan lewat
+    # katalog aksi saja — perintah yang terbit pukul tujuh pagi baru dilihat
+    # pukul sebelas, sebab tak ada satu kartu pun yang menyebutnya.
+    b.menunggu += await _kartu_barang_keluar(db, gudang="g2")
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
     return _cap_gudang(b, "g2")
 
@@ -2191,7 +2291,65 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
                 ("tolak_permintaan_pk", "Tolak permintaan",
                  "Sebabnya ikut terkirim ke operator", str(baris.id)),
             ]))
+
+    # ── Muatan yang sudah berangkat, menunggu verifikasi ──
+    #
+    # Ia di MEJA, bukan di antrean: barangnya sudah di atas truk dan tak ada
+    # yang perlu diangkat lagi. Yang tertahan keputusan — apakah angkanya
+    # diakui apa adanya, dan tiket timbang mana yang ditempelkan.
+    #
+    # Dicap "g2" dengan alasan yang sama dengan kartu di atas: `untuk_staff`
+    # tak memanggil `_cap_gudang`, dan kartu tanpa cap lenyap dari kedua pilnya
+    # sekaligus. Barang jadi berdiri di Gudang 2 dan dari sanalah ia berangkat.
+    b.meja += await _kartu_barang_keluar(db, gudang="g2", untuk_admin=True)
+
+    # ── Tiket timbang KELUAR yang belum tertaut transaksi mana pun ──
+    #
+    # Cerminan kartu "Tiket timbang belum dicatat" di sisi masuk, yang sudah
+    # menyelamatkan banyak tiket. Tanpa kartu ini, tiket keluar yang terlewat
+    # menghilang diam-diam: ia ditimbang di Pos Timbang lalu berhenti di situ,
+    # dan tak ada satu pun layar Produksi yang menyebutnya.
+    #
+    # DIAM — tanpa tombol, dan itu disengaja. Jalan menautkannya lewat kartu
+    # verifikasi di atas, bukan dari sini: menautkan tiket ke transaksi yang
+    # BELUM ada berarti mengarang muatannya. Kalau tiketnya tak berpasangan
+    # sama sekali, yang benar membatalkannya di Pos Timbang — dan itu bukan
+    # tombol di aplikasi ini.
+    b.meja += await _kartu_tiket_keluar_menganggur(db)
     return b
+
+
+async def _kartu_tiket_keluar_menganggur(db: AsyncSession) -> list[Baris]:
+    """Tiket timbang keluar yang tak tertaut transaksi barang keluar mana pun.
+
+    Umurnya dibatasi: tiket hari ini wajar belum tertaut — truknya baru saja
+    keluar dan Admin belum sampai ke mejanya. Yang sudah lewat sehari itulah
+    yang benar-benar terlewat, dan kartu yang menagih pekerjaan yang belum
+    waktunya akan diabaikan bersama yang sungguhan.
+    """
+    from app.database import now_local
+    from app.penggilingan.gudang1.services.timbang_link import tiket_keluar_aktif
+
+    batas = now_local().date()
+    keluar: list[Baris] = []
+    for t in await tiket_keluar_aktif(db):
+        tgl = t.get("tanggal")
+        if tgl is not None and tgl >= batas:
+            continue                     # hari ini — belum terlambat
+        berat = float(t.get("berat_kg") or 0)
+        nama = t.get("jenis_nama") or t.get("kategori") or t.get("jenis_kode") or "?"
+        keluar.append(Baris(
+            kode=t["kode"],
+            isi=f"{nama} · {_kg(berat)} · {t.get('pihak') or '?'}",
+            keadaan="belum tertaut transaksi barang keluar",
+            fase="keluar", sejak=t.get("timbang1_waktu"),
+            judul="Tiket timbang keluar terlewat",
+            utama=(_kg(berat).removesuffix(" kg"), "kg"),
+            sub=f"{t['kode']} · {nama}",
+            kelompok="keluar", gudang="g2",
+            nota="Tautkan lewat kartu verifikasi muatannya. Kalau tiket ini "
+                 "memang tak berpasangan, batalkan di Pos Timbang."))
+    return keluar
 
 
 async def untuk(db: AsyncSession, user: User) -> Berjalan:
