@@ -148,7 +148,7 @@
         {% if waktu %}
           <div class="anak__baris">
             <span class="anak__nama">{{ label }}</span>
-            <span class="anak__kg">{{ waktu.strftime('%d/%m %H:%M') }}</span>
+            <span class="anak__kg">{{ waktu | jam }}</span>
           </div>
         {% endif %}
       {% endfor %}
@@ -170,6 +170,20 @@
 
       {% if k.rec.sebab_batal %}
         <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
+      {% endif %}
+
+      {# Selisih timbang yang BESAR: sebabnya wajib ditulis Admin saat menutup
+         (keputusan pemilik 30 September 2026), dan tandanya berdiri di kartu
+         supaya masih jadi pertanyaan besok pagi. Sebab yang cuma tersimpan di
+         kolom tanpa pernah tergambar sama saja dengan tak pernah ditanyakan. #}
+      {% if k.rec.sebab_selisih %}
+        {# DUA anak: `.nota--hati` grid `15px 1fr`, kolom pertamanya untuk
+           ikon. Anak tunggal jatuh ke kolom 15px dan patah satu kata per
+           baris. #}
+        <div class="nota nota--hati">
+          <span aria-hidden="true">⚠</span>
+          <span>Selisih timbang besar — {{ k.rec.sebab_selisih }}</span>
+        </div>
       {% endif %}
 
       {# ── TOMBOLNYA DI KARTUNYA SENDIRI ──

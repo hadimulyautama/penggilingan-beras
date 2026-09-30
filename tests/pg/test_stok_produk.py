@@ -1451,3 +1451,63 @@ async def test_sisa_di_gudang_tak_diulang_di_dalam_laci(pg, sosoh):
     # Sisanya curah, jadi barisnya memang membawa kabar — ia wajib ada.
     assert "belum dikemas (curah)" in h, \
         "beras curah yang ADA justru disembunyikan"
+
+
+async def test_kartu_bekatul_membawa_tombol_pencatatan_curahnya(pg, sosoh):
+    """Laporan operator 30 September 2026: "pilihan bekatul curah belum ada,
+    jika ada katul yg belum dikemas, pada stok produk tertulis belum dicatat."
+
+    Aksinya SELALU ada — "Catat bekatul (curah)". Yang salah letaknya:
+    aplikasi menagih di layar ini dan menyediakan obatnya di Catat pekerjaan
+    lain, dua layar jauhnya. Tulisan "belum dicatat" itu sendiri benar; ia
+    keluhan app tentang pekerjaan yang belum dilakukan.
+
+    DIUJI LEWAT HALAMAN SUNGGUHAN, bukan lewat sumbernya. Makro Jinja tidak
+    melihat variabel konteks templat: izin yang dibaca langsung di dalam
+    makro jadi Undefined — falsy, tanpa satu galat pun — dan tombolnya tak
+    pernah tergambar sementara seluruh pagar pembaca-sumber tetap hijau.
+    Hanya halaman yang benar-benar dirender yang bisa menjawabnya.
+    """
+    import httpx
+
+    from app.database import now_local
+    from app.models import ProduksiAkun, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    from app.main import app
+
+    # Bekatul yang KELUAR MESIN tetapi belum dibukukan — inilah keadaan yang
+    # membuat kartunya berbunyi "belum dicatat".
+    async with pg() as db:
+        db.add(PolishingOutputLog(polishing_process_id=sosoh["proses_id"],
+                                  jenis="bekatul", berat_kg=1_500,
+                                  waktu_update=now_local(),
+                                  input_by=sosoh["user"]))
+        u = await db.get(User, sosoh["user"])
+        await db.commit()
+        await catat_bekatul(db, user=u, kode_pol=sosoh["kode"], berat_kg=500)
+
+    async with pg() as db:
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_bekatul",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    h = r.text
+    assert "buka=catat_bekatul" in h, \
+        "tombol pencatatan bekatul curah tak tergambar di kartunya"
+    # TIGA HAL harus benar bersamaan; yang ketiga paling mudah terlupa —
+    # tanpa `aksi.js` tombolnya cuma memuat ulang halaman, tanpa satu galat.
+    assert 'id="lembar"' in h, "halamannya bukan tuan rumah lembarnya"
+    assert "aksi.js" in h, "aksi.js tak dimuat — tombolnya takkan berbuat apa-apa"

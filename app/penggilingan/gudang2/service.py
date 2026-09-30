@@ -952,6 +952,13 @@ async def _catat_pindah(
     return move, ke_proses
 
 
+#: Selisih yang masih diterima antara berat yang DIKETIK dan sisa tumpukan
+#: yang sebenarnya. Satu kilogram: di bawah ketelitian jembatan timbang, dan
+#: cukup menampung pembulatan label mana pun (yang terbesar setengah kilogram).
+#: Bukan angka kenyamanan — lihat alasan panjangnya di `pindah_tumpukan_ke_silo`.
+TOLERANSI_PINDAH_KG = 1.0
+
+
 async def pindah_tumpukan_ke_silo(
     db: AsyncSession, *, user: User, intake_id: int, nama_silo: str | None,
     berat: float | None = None, tanggal=None, jam=None, kunci_kiriman: str | None = None,
@@ -992,11 +999,31 @@ async def pindah_tumpukan_ke_silo(
             "kedua. Tunggu timbangnya, lalu pindahkan.")
     if sisa <= 0:
         raise Gudang2Error("Tumpukan ini sudah habis dipindah.")
+    # ── TOLERANSI SEKATA, dan sebabnya bukan kelonggaran ──
+    #
+    # Laporan operator 30 September 2026: pada pemindahan TERAKHIR tumpukan
+    # "harus bersisa minimal 1 kg" — tak bisa dikosongkan. Sebabnya bukan di
+    # pagar ini melainkan di LABELNYA: kartu membulatkan sisa 2.999,6 kg jadi
+    # "3.000 kg", operator mengetik angka yang dibacanya, dan 3000 > 2999,6.
+    # Ia hanya menggigit di pemindahan terakhir sebab di situlah orang
+    # mengetik angka dari layar, bukan angka kerja yang bulat. "Sisakan 1 kg"
+    # adalah siasat yang mereka temukan untuk melompatinya.
+    #
+    # Labelnya sudah dibetulkan (`berjalan._kg_tepat`), tetapi pagar yang
+    # menuntut kesamaan SAMPAI GRAM antara angka ketikan manusia dan angka
+    # timbangan akan melahirkan keluhan yang sama dalam bentuk lain. Satu
+    # kilogram adalah batas di bawah ketelitian jembatan timbang itu sendiri.
+    #
+    # Yang dipindahkan tetap `min(berat, sisa)`: toleransi membuat angkanya
+    # DITERIMA, bukan membuat tumpukan berutang. Tumpukan yang tersisa 0,4 kg
+    # bukan stok — ia pembulatan, dan kartunya akan berdiri selamanya menagih
+    # pekerjaan yang tak ada.
     kirim = sisa if berat is None else min(float(berat), sisa)
-    if berat is not None and float(berat) > sisa:
+    if berat is not None and float(berat) > sisa + TOLERANSI_PINDAH_KG:
         raise Gudang2Error(
-            f"Berat pindah ({float(berat):.0f} kg) melebihi sisa tumpukan ({sisa:.0f} kg)."
-        )
+            f"Berat pindah ({float(berat):g} kg) melebihi sisa tumpukan "
+            f"({sisa:g} kg). Kosongkan kotak beratnya untuk memindahkan "
+            "seluruh sisanya.")
 
     now = input_time(tanggal, jam)
     move, ke_proses = await _catat_pindah(db, user=user, intake=intake, silo=silo, nama_silo=nama_silo,

@@ -158,3 +158,20 @@ def test_nama_merk_tak_melebihi_kolomnya():
     dan seluruh merk sesudahnya ikut tak tersemai."""
     panjang = [n for n in _merk_tersemai() if len(n) > 50]
     assert not panjang, f"nama merk melebihi 50 huruf: {panjang}"
+
+
+def test_bekatul_dikemas_40_dan_20_kg():
+    """Jawaban pemilik 30 September 2026 atas laporan operator ("ukuran karung
+    bekatul hanya ada 40 kg saja, tidak ada 20 kg"): di lapangan dipakai
+    KEDUANYA.
+
+    Laporannya bisa dibaca dua arah — "app kurang 20" atau "benar, memang
+    cuma 40" — dan keduanya menghasilkan pekerjaan yang berlawanan. Yang
+    memutuskan pemilik, bukan tebakan.
+    """
+    from app.penggilingan.inventory.packaging import KEMASAN_VALID
+
+    ukuran = {u for m, u in KEMASAN_VALID["bekatul"]}
+    assert ukuran == {40, 20}, ukuran
+    assert {m for m, _ in KEMASAN_VALID["bekatul"]} == {"bekas"}, \
+        "bekatul dikemas karung BEKAS — bukan karung baru"

@@ -160,9 +160,25 @@ async def test_yang_tak_berkartu_tetap_punya_pintunya(pg, pabrik):
     # sendiri: tombol di kaki halaman Barang Keluar, dan kartu di kedua
     # antrean. Uji ini menjaga yang tak punya pintu lain; lihat sisi baliknya
     # di `tests/pg/test_barang_keluar.py`.
-    for wajib in ("catat_bekatul", "beli_kemasan",
-                  "transfer_pk", "rekonsiliasi_timbang"):
+    # ⚠ `catat_bekatul` KELUAR dari daftar ini 30 September 2026, dan bukan
+    # karena pagarnya dilonggarkan: ia benar-benar punya kartu sekarang.
+    # Laporan operator — "pilihan bekatul curah belum ada, jika ada katul yg
+    # belum dikemas, pada stok produk tertulis belum dicatat" — dan yang salah
+    # memang letaknya: app menagih di Stok Produk, obatnya di Catat pekerjaan
+    # lain, dua layar jauhnya. Tombolnya kini berdiri tepat di sebelah angka
+    # yang menagihnya, dijaga
+    # `test_kartu_bekatul_membawa_tombol_pencatatan_curahnya` yang merender
+    # halamannya sungguhan — bukan membaca sumbernya, sebab makro Jinja tak
+    # melihat konteks templat dan tombol yang hilang karenanya tak
+    # meninggalkan satu galat pun.
+    #
+    # Kalau tombol itu dicabut, aksi ini WAJIB kembali ke daftar di bawah —
+    # kalau tidak, mencatat bekatul curah tak punya pintu mana pun.
+    for wajib in ("beli_kemasan", "transfer_pk", "rekonsiliasi_timbang"):
         assert wajib in katalog, f"{wajib} kehilangan satu-satunya pintunya"
+    assert "catat_bekatul" not in katalog, (
+        "bekatul curah kembali ke katalog — kalau tombol di kartunya dicabut, "
+        "kembalikan juga ke daftar `wajib` di atas")
     for berpintu in ("perintah_keluar", "verifikasi_keluar", "muat_semua"):
         assert berpintu not in katalog, (
             f"{berpintu} masih digambar di katalog padahal sudah berpintu "

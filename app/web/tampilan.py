@@ -47,8 +47,12 @@ VERSI = hmu_tampilan.VERSI
 # `base.html` & `_benda.html` datang dari paket; templat layar tetap di sini.
 # Pita "MODE UJI": orang yang tak tahu ia sedang menguji akan memperlakukan
 # angka uji sebagai angka pabrik.
+# `zona` DIKIRIM, tidak dibiarkan memakai bawaannya: saringan `jam` di paket
+# yang membetulkan jam di Kabar & List audit, dan setelan zona pabrik hidup di
+# sini. Bawaan yang kebetulan sama hari ini adalah bawaan yang salah pada hari
+# setelan itu diubah.
 hmu_tampilan.pasang_jinja(templates, app_nama="Pos Produksi", pwa_nama="Pos Produksi",
-                          mode_uji=settings.mode_uji)
+                          mode_uji=settings.mode_uji, zona=settings.app_timezone)
 
 from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
 from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)

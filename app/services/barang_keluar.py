@@ -65,6 +65,27 @@ TIPE_KABAR = "barang_keluar"
 GUDANG_ITEM = {"finished_goods": G2, "byproduct_curah": G2, "pk_langsung": G1}
 
 
+#: ── Kapan selisih timbang disebut BESAR ──
+#:
+#: Keputusan pemilik 30 September 2026: yang besar boleh tetap ditutup —
+#: truknya sudah berangkat berjam-jam sebelumnya dan menahan penutupan tak
+#: mengembalikannya — tetapi DITANDAI, dan sebabnya wajib ditulis.
+#:
+#: `max(…)` dari keduanya, bukan `min`. Persen saja akan menggigit muatan
+#: kecil tanpa sebab: 2% dari 500 kg adalah 10 kg, dan sehelai terpal sudah
+#: melewatinya. Angka mati saja akan melewatkan muatan besar: 100 kg pada
+#: truk 50 ton adalah selisih yang tak berarti apa-apa. Yang ditandai harus
+#: yang BENAR-BENAR janggal, sebab tanda yang terlalu sering muncul berhenti
+#: dibaca — dan yang berhenti dibaca sama saja dengan tak ada.
+AMBANG_SELISIH_KG = 100.0
+AMBANG_SELISIH_PERSEN = 2.0
+
+
+def ambang_selisih(total_kg: float) -> float:
+    """Berapa kg selisih yang masih dianggap wajar untuk muatan sebesar ini."""
+    return max(AMBANG_SELISIH_KG, float(total_kg) * AMBANG_SELISIH_PERSEN / 100)
+
+
 class BarangKeluarError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
 
@@ -725,6 +746,7 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
 
 async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                      timbangan_transaksi_id: int | None = None,
+                     sebab_selisih: str | None = None,
                      tanggal=None, jam=None) -> tuple[OutgoingRecord, str]:
     """Admin menutup, sambil menempelkan kode timbang keluarnya. → (rec, catatan)
 
@@ -738,6 +760,21 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
     timbangan — karung tak persis 25,0 kg, dan truk membawa terpal. Yang
     dikerjakan cuma MENYEBUTKAN selisihnya, dan satu kalimat itulah yang membuat
     tautan ini berguna alih-alih sekadar ada.
+
+    ⭐ SATU TRUK, BANYAK MACAM BARANG — dan inilah jawaban atas pertanyaan
+    operator 30 September 2026 ("beras dan broken keluar jadi 1 mobil,
+    bagaimana cara menimbangnya"). Jawabannya: TIDAK ADA angka timbangan yang
+    dibagi ke tiap barang. Tiap baris punya angkanya sendiri dari karung yang
+    dimuat; tiket memberi SATU angka untuk seluruh bak; yang dibandingkan
+    TOTAL lawan TOTAL.
+
+    ⚠ Dan yang TIDAK BOLEH dikerjakan, sekarang maupun kelak: membagi selisih
+    timbangan ke tiap baris secara proporsional supaya "jumlahnya cocok". Itu
+    membuat angka per jenis terlihat pasti padahal ditebak — dan angka itulah
+    yang dipakai menghitung stok.
+
+    SELISIH BESAR wajib bersebab (keputusan pemilik 30 September 2026): boleh
+    tetap ditutup, tetapi ditandai. Ambangnya `ambang_selisih()`.
     """
     rec = await _kunci(db, rec_id, keadaan=OUT_DIMUAT)
     total = float((await db.execute(
@@ -745,6 +782,7 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
         .where(OutgoingItem.outgoing_record_id == rec.id))).scalar_one())
 
     catatan = ""
+    sebab_selisih = (sebab_selisih or "").strip()
     if timbangan_transaksi_id is not None:
         berat_tiket, kode_tiket = await _tiket_keluar(db, timbangan_transaksi_id)
         rec.timbangan_transaksi_id = int(timbangan_transaksi_id)
@@ -755,6 +793,26 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                     else f" · beda {_kg(abs(beda))} kg "
                          f"({'timbangan lebih' if beda > 0 else 'catatan lebih'}).")
         catatan = f"{kode_tiket}: {catatan}"
+        ambang = ambang_selisih(total)
+        if abs(beda) > ambang:
+            # DITOLAK SEKARANG, bukan diterima lalu ditandai diam-diam: satu-
+            # satunya orang yang masih tahu sebabnya adalah yang sedang
+            # memegang layarnya. Besok pagi tanda tanpa sebab cuma jadi
+            # pekerjaan menelusur untuk orang yang tak pernah melihat truknya.
+            if not sebab_selisih:
+                raise BarangKeluarError(
+                    f"Beda {_kg(abs(beda))} kg melewati batas wajar "
+                    f"{_kg(ambang)} kg untuk muatan {_kg(total)} kg. "
+                    "Boleh tetap ditutup — tulis sebabnya, dan kartunya akan "
+                    "ditandai.")
+            rec.sebab_selisih = sebab_selisih[:300]
+            catatan += f" ⚠ Selisih besar — {rec.sebab_selisih}"
+        elif sebab_selisih:
+            # Sebab yang ditulis padahal selisihnya wajar TETAP DISIMPAN.
+            # Admin yang repot-repot menuliskannya sedang menyebutkan sesuatu;
+            # membuangnya karena "tak wajib" berarti membuang satu-satunya
+            # keterangan yang pernah ada tentang truk itu.
+            rec.sebab_selisih = sebab_selisih[:300]
 
     now = input_time(tanggal, jam)
     rec.status = OUT_SELESAI
@@ -1030,6 +1088,10 @@ async def balik_verifikasi(db: AsyncSession, *, rec_id: int) -> str:
     rec.diverifikasi_oleh, rec.waktu_verifikasi = None, None
     ada_tiket = rec.timbangan_transaksi_id is not None
     rec.timbangan_transaksi_id = None
+    # Tanda selisih besar ikut dicabut: ia lahir dari perbandingan dengan
+    # tiket yang barusan dilepas. Tanda yang tertinggal tanpa tiketnya adalah
+    # tuduhan atas selisih yang tak bisa ditunjukkan lagi kepada siapa pun.
+    rec.sebab_selisih = None
     await _kabar(db, rec, untuk="admin",
                  pesan=f"🔁 Verifikasi {rec.kode} dibatalkan — kartunya kembali "
                        "menunggu verifikasi"

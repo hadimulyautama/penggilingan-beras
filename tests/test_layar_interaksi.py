@@ -985,3 +985,44 @@ def test_templat_bersama_tak_lagi_memilih_ikon_per_layar():
     assert "kunci == 'stok'" not in blok and "kunci == 'beranda'" not in blok, (
         "rantai if/elif ikon masih berdiri di templat bersama")
     assert "{{ ikon" in blok, "templat tak mencetak ikon dari TAB"
+
+
+# ─────── Bekatul curah: obatnya di sebelah keluhannya (30 Sep 2026) ───────
+
+def test_bekatul_curah_punya_tombol_di_kartunya():
+    """Laporan operator 30 September 2026: "pilihan bekatul curah belum ada,
+    jika ada katul yg belum dikemas, pada stok produk tertulis belum dicatat."
+
+    Aksinya SELALU ada — "Catat bekatul (curah)". Yang salah letaknya:
+    aplikasi menagih di Stok Produk dan menyediakan obatnya di Catat pekerjaan
+    lain, dua layar jauhnya. Tulisan "belum dicatat" itu sendiri benar; ia
+    keluhan app tentang pekerjaan yang belum dilakukan.
+
+    TIGA HAL dijaga bersamaan, dan yang ketiga paling mudah terlupa — tanpa
+    `aksi.js` tombolnya cuma memuat ulang halaman, tanpa satu galat pun:
+    tombolnya ada, halamannya jadi tuan rumah dialognya, dan skripnya dimuat.
+    """
+    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
+    assert "buka=catat_bekatul" in tpl, \
+        "kartu bekatul tak menawarkan pencatatan curahnya"
+    assert '<dialog class="lembar" id="lembar">' in tpl, \
+        "halamannya bukan tuan rumah lembarnya — tombolnya akan memindah layar"
+    assert 'src="/static/aksi.js' in tpl, \
+        "aksi.js tak dimuat — tombolnya cuma memuat ulang halaman"
+
+
+def test_tombol_bekatul_dioper_ke_makronya():
+    """Makro Jinja TIDAK melihat variabel konteks templat.
+
+    `BOLEH_CATAT` yang dibaca langsung di dalam `blok()` jadi Undefined —
+    falsy, tanpa satu galat pun — dan tombolnya tak pernah tergambar sementara
+    seluruh uji pembaca-sumber tetap hijau. Kelas kesalahan yang hanya
+    terlihat oleh orang yang membuka halamannya dengan mata sendiri.
+    """
+    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
+    assert "boleh_catat=False) -%}" in tpl, \
+        "makro `blok` tak menerima izinnya sebagai parameter"
+    assert "and boleh_catat %}" in tpl, \
+        "makronya membaca izin dari konteks — di dalam makro itu Undefined"
+    assert tpl.count("BOLEH_CATAT) }}") == 2, \
+        "izinnya tak dioper ke kedua pemanggilan makro (beras & hasil samping)"

@@ -79,8 +79,32 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     # kilogram, harganya berbeda berkali-kali, dan pembelinya berbeda orang.
     beras = [k for k in kartu if svc.adalah_beras(k.jenis)]
     samping = [k for k in kartu if not svc.adalah_beras(k.jenis)]
+    # ── OBATNYA DI SEBELAH KELUHANNYA ──
+    #
+    # Laporan operator 30 September 2026: "pilihan bekatul curah belum ada,
+    # jika ada katul yg belum dikemas, pada stok produk tertulis belum
+    # dicatat." Aksinya SELALU ada — "Catat bekatul (curah)" — tetapi ia
+    # tinggal di Catat pekerjaan lain, sedangkan yang membaca "belum dicatat"
+    # sedang berdiri di halaman ini. Tulisan itu sendiri benar; ia keluhan
+    # aplikasi tentang pekerjaan yang belum dilakukan. Yang salah cuma
+    # letaknya: menagih di satu layar dan menyediakan obatnya di layar lain.
+    #
+    # Lembarnya terbuka DI HALAMAN INI, sama seperti Barang Keluar — orang
+    # yang sedang membaca angka bekatulnya tak boleh tiba-tiba berdiri di
+    # daftar pekerjaan gudang.
+    #
+    # TIGA HAL harus benar bersamaan, dan yang ketiga paling mudah terlupa:
+    # rutenya membaca `?buka=`, templatnya jadi tuan rumah dialognya, DAN
+    # `aksi.js` ikut dimuat. Tanpa yang ketiga tombolnya cuma memuat ulang
+    # halaman — kesalahan yang persis pernah terjadi di layar Stok.
+    from app.web.api import _is_g2_operator
+
+    boleh_catat = await _is_g2_operator(akun.user)
     return await render_laci(
         request, "stok_produk.html", layar="stok_produk",
+        BOLEH_CATAT=boleh_catat,
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
         kartu=kartu, kemasan=kemasan, beras=beras, samping=samping,
         sisa_beras=sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
         sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),

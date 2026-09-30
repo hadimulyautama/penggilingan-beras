@@ -238,6 +238,30 @@ async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
     return await output_sosoh(db, proc_id)
 
 
+async def rendemen_proses(db: AsyncSession, proc_id: int) -> float | None:
+    """Rendemen satu penyosohan, atau None bila belum bisa dihitung.
+
+    SATU RUMUS, SATU TEMPAT. Ia dibaca penutupan (kalimat untuk operator &
+    kabar untuk Admin) dan kartu "penyosohan selesai" di layar operator.
+    Rumus yang disalin ke pembaca kedua akan berbeda pada perubahan berikutnya
+    — dan yang berbeda adalah angka yang menilai pekerjaan orang.
+
+    Penyebutnya PK TERPAKAI, bukan PK masuk: yang tersisa di silo belum
+    disosoh, dan memasukkannya ke penyebut membuat rendemen tiap proses
+    terbaca lebih rendah daripada yang sebenarnya.
+    """
+    usages = (await db.execute(
+        select(PolishingSiloUsage)
+        .where(PolishingSiloUsage.polishing_process_id == proc_id)
+    )).scalars().all()
+    pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
+    if not pk_terpakai:
+        return None
+    outputs = await _output_map(db, proc_id)
+    beras = sum(v for k, v in outputs.items() if k in GRADES)
+    return beras / pk_terpakai * 100
+
+
 async def _sebut_silo(db: AsyncSession, usages) -> str:
     """"Silo A dan Silo B" — dibaca dari master, bukan ditulis "A/B" tetap.
 
@@ -397,7 +421,10 @@ async def selesai_penyosohan(
         jeda = await jeda_terbuka(db, "penyosohan", proc.id)
         if jeda is not None:
             jeda.selesai = proc.waktu_selesai
-        rendemen = (beras_total / pk_terpakai * 100) if pk_terpakai else None
+        # Lewat `rendemen_proses`, bukan dihitung di sini: angka ini juga
+        # dibaca kartu "penyosohan selesai", dan dua rumus atas satu angka
+        # akan berselisih tanpa satu pun pesan galat.
+        rendemen = await rendemen_proses(db, proc.id)
         await log_activity(
             db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
             changed_by=user.id, field_name="status", new_value="selesai",

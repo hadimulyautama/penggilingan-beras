@@ -744,9 +744,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         actions += [
             {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
-             "hint": "Boleh sebagian — sisanya tetap di tumpukan. Silo yang sedang "
-                     "dipoles boleh diisi lagi; yang ditambahkan ikut dihitung "
-                     "sebagai bahan proses itu.",
+             "hint": "Boleh sebagian — sisanya tetap di tumpukan. KOSONGKAN kotak "
+                     "beratnya untuk memindahkan SELURUH sisa tumpukan; tak perlu "
+                     "mengetik ulang angka dari layar. Silo yang sedang dipoles "
+                     "boleh diisi lagi; yang ditambahkan ikut dihitung sebagai "
+                     "bahan proses itu.",
              "fields": [
                  {"name": "tumpukan", "label": "PK di tumpukan", "type": "remote",
                   "source": "/api/actions/tumpukan-sisa",
@@ -756,8 +758,22 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "remote",
                   "source": "/api/actions/silo-g2",
                   "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
-                 {"name": "berat_kg", "label": "Berat yang dipindah (kg)", "type": "number",
-                  "wajib": True},
+                 # ⭐ BOLEH DIKOSONGKAN = SELURUH SISANYA, dan itu yang
+                 # menghapus seluruh kelas masalahnya, bukan menggesernya satu
+                 # desimal. Pemindahan terakhir adalah satu-satunya yang
+                 # menuntut operator mengetik angka PERSIS dari layar — dan
+                 # angka di layar selalu hasil pembulatan. Yang tak perlu
+                 # diketik tak bisa salah ketik.
+                 #
+                 # Layanannya memang sudah menerima `berat=None` sejak lama
+                 # ("`berat` None = pindah semua"); yang tak pernah ada cuma
+                 # tawarannya di layar.
+                 # ⚠ Keterangannya di `hint` aksi, BUKAN di medan ini:
+                 # `aksi.js` tak mengenal keterangan per-medan, dan kunci yang
+                 # tak dikenalnya hilang tanpa jejak — tawaran yang tak pernah
+                 # terbaca sama saja dengan tawaran yang tak ada.
+                 {"name": "berat_kg", "label": "Berat yang dipindah (kg)",
+                  "type": "number"},
              ]},
             # BEBERAPA silo boleh dicentang, sama seperti "Mulai giling".
             # Dulu daftarnya tupel tertulis-tangan A / B / A+B: layanannya
@@ -1174,6 +1190,12 @@ for _a in (
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
     "masukkan_pk", "catat_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",
+    # Bekatul curah — tombolnya di kartu bekatul pada Stok Produk sejak 30
+    # September 2026, tepat di sebelah angka "belum dicatat" yang menagihnya.
+    # Pemakainya seluruhnya bisa membuka halaman itu (operator Gudang 2 &
+    # Admin; operator selepan tak boleh mencatat bekatul sama sekali), jadi
+    # mencabutnya dari katalog tidak menutup pintu siapa pun.
+    "catat_bekatul",
     # ── Rantai barang keluar — dicabut dari katalog 29 September 2026 ──
     #
     # Permintaan pemilik: "saya tidak suka proses barang keluar prosesnya
@@ -3141,7 +3163,10 @@ async def sosoh_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
 class PindahTumpukanSiloReq(BaseModel):
     tumpukan: str    # id intake tumpukan (dari /actions/tumpukan-sisa)
     silo: str        # A / B
-    berat_kg: Positif
+    #: Kosong = SELURUH sisa tumpukan. Bukan kelalaian: satu-satunya angka
+    #: yang sulit diketik benar adalah sisa terakhir, dan yang tak perlu
+    #: diketik tak bisa salah ketik.
+    berat_kg: float | None = None
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
@@ -3161,13 +3186,21 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
         raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
     if (req.silo or "").upper() not in ("A", "B"):
         raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
+    # KOSONG dan NOL dua hal berbeda: kosong berarti "seluruh sisanya", nol
+    # berarti salah ketik. Menyamakan keduanya membuat satu ketukan Enter di
+    # kotak kosong memindahkan seluruh tumpukan tanpa diminta.
+    if req.berat_kg is not None and float(req.berat_kg) <= 0:
+        raise HTTPException(
+            400, "Isi berat yang dipindah lebih dari 0 — atau kosongkan "
+                 "kotaknya untuk memindahkan seluruh sisanya.")
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_tumpukan_ke_silo
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await pindah_tumpukan_ke_silo(
                 db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.upper(),
-                berat=float(req.berat_kg), kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
+                berat=(None if req.berat_kg is None else float(req.berat_kg)),
+                kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memindahkan PK dari tumpukan.")
     sisa = (f"sisa di tumpukan {r.sisa_tumpukan_intake:g} kg"

@@ -610,13 +610,25 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     naik truk ini", bukan "barang jadi atau PK". Dua daftar terpisah menuntut ia
     menerjemahkan dulu pertanyaannya sendiri sebelum bisa menjawabnya.
 
-    Nilainya BERAWALAN — `bj:` atau `pk:` — dan awalan itu yang menentukan
-    SATUAN jumlahnya: barang jadi dihitung per karung, PK per kilogram. Tanpa
-    awalan, "100" pada satu baris berarti 100 karung dan pada baris lain 100 kg,
-    dan yang membedakan cuma ingatan orang yang mengetiknya.
+    Nilainya BERAWALAN — `bj:`, `cr:`, atau `pk:` — dan awalan itu yang
+    menentukan SATUAN jumlahnya: barang jadi dihitung per karung, curah dan PK
+    per kilogram. Tanpa awalan, "100" pada satu baris berarti 100 karung dan
+    pada baris lain 100 kg, dan yang membedakan cuma ingatan orang yang
+    mengetiknya.
 
     Satuannya ikut tertulis di tiap label, sebab kotak jumlahnya satu dan tak
     bisa berganti tulisan mengikuti pilihan.
+
+    ⛔ CURAH SEMPAT TERLEWAT SELURUHNYA, dan ini kelas kesalahan yang layak
+    diingat: dua perubahan yang masing-masing benar bisa membuka lubang di
+    antaranya. Aksi lama "Bekatul keluar" dibuang 28 September (pintu lama
+    ditutup), dan daftar ini melewati barang tanpa karung dengan alasan "curah
+    punya jalur sendiri" (pintu baru melewatinya) — padahal jalur sendiri itu
+    sudah tidak ada. Akibatnya bekatul curah masuk terus dan TAK PERNAH BISA
+    KELUAR: angka stoknya hanya bisa naik, tanpa satu pun pesan galat.
+    Sisa sistemnya tak pernah rusak — `byproduct_curah` tetap sah, layar
+    barang keluar masih menggambarnya, stoknya masih dikurangi. Yang hilang
+    cuma pintunya. Laporan operator, 30 September 2026.
     """
     wajib(can_see_financials(user))
     from app.services.stok import barang_jadi_g2, pk_gudang1
@@ -625,8 +637,20 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         bj_ = await barang_jadi_g2(db)
         for k in bj_.produk + bj_.samping:
+            # Yang membedakan curah dari berkarung `sku_id`, BUKAN jumlah
+            # karungnya. Kartu berkarung yang kebetulan tinggal nol karung
+            # masih punya SKU dan tak boleh berubah jadi baris curah —
+            # satuannya akan berganti diam-diam, dan "40" berarti 40 kg.
+            if k.get("sku_id") is None:
+                if float(k.get("kg") or 0) <= 0:
+                    continue
+                out.append({
+                    "value": f"cr:{k['jenis']}",
+                    "label": (f"{k['nama']} curah · {kg(k['kg'])} tersedia"
+                              " (isi dalam kg)")})
+                continue
             if not k.get("karung"):
-                continue          # curah punya jalur sendiri
+                continue
             out.append({
                 "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
                 "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"})
@@ -757,15 +781,22 @@ class PerintahKeluarReq(BaseModel):
 async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
     """Satu pilihan berawalan + jumlahnya → baris perintah.
 
-    Awalannya yang menentukan SATUAN: `bj:` per karung, `pk:` per kilogram.
-    Tanpa awalan, "100" pada satu baris berarti 100 karung dan pada baris lain
-    100 kg — dan yang membedakan cuma ingatan orang yang mengetiknya.
+    Awalannya yang menentukan SATUAN: `bj:` per karung, `cr:` dan `pk:` per
+    kilogram. Tanpa awalan, "100" pada satu baris berarti 100 karung dan pada
+    baris lain 100 kg — dan yang membedakan cuma ingatan orang yang
+    mengetiknya.
     """
     from app.models import MillingProcess
 
     pilih = (pilih or "").strip()
     if float(jumlah or 0) <= 0:
         raise HTTPException(400, f"Isi jumlah untuk '{pilih}' lebih dari 0.")
+    if pilih.startswith("cr:"):
+        # Curah DIKETIK DALAM KG. Jumlahnya tak pernah diturunkan dari karung
+        # sebab ia memang tak berkarung; `tersedia()` yang menjaga batasnya,
+        # dan penolakannya menyebut angkanya.
+        return bk.BarisPerintah(tipe="byproduct_curah", jenis=pilih[3:].strip(),
+                                berat_kg=float(jumlah))
     if pilih.startswith("pk:"):
         kode = pilih[3:].strip()
         proc = (await db.execute(select(MillingProcess).where(
@@ -986,6 +1017,10 @@ async def act_selesai_muat(req: MuatReq, user: User = Depends(pengguna_aksi)) ->
 class VerifikasiKeluarReq(BaseModel):
     perintah: str = ""
     tiket: str | None = None
+    #: Wajib hanya bila selisih timbang melewati ambang — yang memutuskan
+    #: `bk.verifikasi`, bukan rute ini. Jalur mana pun memakai layanan yang
+    #: sama, jadi pagarnya cukup berdiri sekali di sana.
+    sebab_selisih: str | None = None
 
 
 @router.post("/actions/verifikasi-keluar")
@@ -1003,7 +1038,8 @@ async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
         u = await db.get(User, user.id)
         try:
             rec, catatan = await bk.verifikasi(
-                db, user=u, rec_id=_id(req.perintah), timbangan_transaksi_id=tid)
+                db, user=u, rec_id=_id(req.perintah), timbangan_transaksi_id=tid,
+                sebab_selisih=req.sebab_selisih)
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal memverifikasi barang keluar.")
         kode = rec.kode
@@ -1140,7 +1176,14 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
             {"id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
              "post": "/api/actions/catat-bekatul",
-             "hint": "Bekatul dicatat per kg, bukan per karung — ia tidak dipacking.",
+             # ⚠ Kalimat lamanya berbunyi "ia tidak dipacking" dan sudah BASI
+             # sejak 28 September 2026: bekatul boleh dikarungi (karung bekas
+             # 40 kg & 20 kg). Keterangan yang basi lebih buruk daripada tak
+             # ada — orang mempercayainya lalu berhenti mencari jalan yang
+             # sebenarnya ada.
+             "hint": "Bekatul yang dijual CURAH, per kg. Yang dikarungi dicatat "
+                     "lewat packing — keduanya mengambil dari tumpukan yang "
+                     "sama dan saling mengurangi.",
              "fields": [
                  {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-terkini"},
@@ -1232,7 +1275,9 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             {"id": "verifikasi_keluar", "label": "\u2705 Verifikasi barang keluar",
              "post": "/api/actions/verifikasi-keluar",
              "hint": "Tempelkan kode timbang keluarnya. Beda bobot tidak "
-                     "menolak apa pun — selisihnya disebutkan supaya ditelusuri.",
+                     "menolak apa pun — selisihnya disebutkan supaya ditelusuri. "
+                     "Kalau bedanya BESAR, sebabnya wajib ditulis di kotak "
+                     "paling bawah; kartunya lalu ditandai.",
              "fields": [
                  {"name": "perintah", "label": "Muatan yang menunggu verifikasi",
                   "type": "remote", "source": "/api/actions/keluar-dimuat",
@@ -1240,6 +1285,14 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "tiket", "label": "Kode timbang keluar", "type": "remote",
                   "optional": True, "source": "/api/actions/timbang-keluar-aktif",
                   "kosong": "Tidak ada tiket timbang keluar yang belum tertaut."},
+                 # OPSIONAL di borang, WAJIB di layanan — dan hanya ketika
+                 # selisihnya melewati ambang. `aksi.js` tak bisa mewajibkan
+                 # satu medan menurut isi medan lain, dan memaksa medan ini
+                 # wajib akan membuat tiap penutupan normal menuntut alasan
+                 # atas selisih yang tak ada. Yang menjaga layanannya, dan
+                 # penolakannya menyebut kedua angkanya.
+                 {"name": "sebab_selisih",
+                  "label": "Sebab selisih (bila bedanya besar)", "type": "text"},
              ]},
         ]
     return aksi

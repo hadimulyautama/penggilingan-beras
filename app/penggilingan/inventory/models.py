@@ -272,6 +272,12 @@ class OutgoingRecord(Base, TimestampMixin):
     timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer)
     catatan_perintah: Mapped[str | None] = mapped_column(String(300))
     sebab_batal: Mapped[str | None] = mapped_column(String(300))
+    #: Sebab selisih timbang yang BESAR — wajib diisi Admin saat menutup bila
+    #: beda timbangan lawan catatan melewati ambang (lihat `barang_keluar.
+    #: AMBANG_SELISIH_*`). Berisi = transaksi ini pernah ditandai, dan itu
+    #: pertanyaan yang kelak ditanyakan. Kolom sendiri, bukan menumpang
+    #: `catatan`: tanda yang bisa tertimpa tulisan lain bukan tanda.
+    sebab_selisih: Mapped[str | None] = mapped_column(String(300))
 
 
 class OutgoingItem(Base, TimestampMixin):

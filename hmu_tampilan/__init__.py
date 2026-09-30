@@ -37,6 +37,7 @@ tangan atau basi ketahuan di uji, bukan di gudang.
 from __future__ import annotations
 
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
@@ -46,7 +47,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "174"
+VERSI = "175"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -129,11 +130,15 @@ def router_pwa(render):
 
 
 def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,
-                 mode_uji: bool = False, mockup: bool = False) -> None:
+                 mode_uji: bool = False, mockup: bool = False,
+                 zona: str = "Asia/Jakarta") -> None:
     """Pasang pemuat berlapis + global yang dibaca `base.html` paket.
 
     `templates` = `fastapi.templating.Jinja2Templates` milik aplikasi. Pemuat
     aplikasinya dipertahankan di depan; paket di belakang.
+
+    `zona` memasang saringan `jam` — lihat di bawah. Bawaannya Asia/Jakarta,
+    dan aplikasi yang punya setelan zona sendiri wajib mengirimkannya.
     """
     env = templates.env
     env.loader = ChoiceLoader([env.loader, FileSystemLoader(str(TEMPLATES_DIR))])
@@ -148,6 +153,31 @@ def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,
     env.globals["PWA_NAMA"] = pwa_nama
     env.globals.setdefault("MODE_UJI", mode_uji)
     env.globals.setdefault("MOCKUP", mockup)
+
+    # ── SARINGAN `jam` — dan sebabnya struktural, bukan kerapian ──
+    #
+    # Laporan operator 30 September 2026: "jam pada kabar belum sesuai". Benar,
+    # dan tujuh jam melesetnya: `notifications.created_at` adalah `timestamptz`,
+    # asyncpg mengembalikannya ber-UTC, dan `k.waktu.strftime(...)` di templat
+    # mencetaknya apa adanya. Empat templat lain mengidap hal yang sama tanpa
+    # ada yang menyadarinya — dan itulah masalah sesungguhnya: `strftime`
+    # BEKERJA. Ia tak pernah gagal, tak pernah berkabar, dan cacatnya cuma
+    # terlihat oleh orang yang membandingkannya dengan jam tangannya.
+    #
+    # Jadi yang diperbaiki bukan lima barisnya melainkan yang MUDAH DIKETIK:
+    # sesudah ini `| jam` lebih pendek daripada `.strftime(...)`, dan yang
+    # lupa memakainya tertangkap pagar `test_tampilan_paket.py`.
+    #
+    # Naif dilewatkan apa adanya: kolom tanpa zona memang sudah waktu lokal,
+    # dan memaksanya berpindah zona akan menggesernya tujuh jam ke arah lain.
+    def _jam(saat, bentuk: str = "%d/%m %H:%M") -> str:
+        if saat is None:
+            return ""
+        if getattr(saat, "tzinfo", None) is not None:
+            saat = saat.astimezone(ZoneInfo(zona))
+        return saat.strftime(bentuk)
+
+    env.filters["jam"] = _jam
 
 
 class StatisBerlapis(StaticFiles):

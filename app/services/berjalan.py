@@ -17,7 +17,7 @@ status gudang — laporan memberi tahu, layar ini menyelesaikan.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -317,6 +317,26 @@ def _sumber_bobot(t) -> str:
 
 def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
+
+
+def _kg_tepat(n) -> str:
+    """Seperti `_kg`, tetapi TAK PERNAH MEMBULATKAN KE ATAS.
+
+    Dipakai angka yang akan DIKETIK ULANG orang sebagai batas — sisa tumpukan
+    yang hendak dipindah ke silo. `_kg` membulatkan setengah ke atas, jadi
+    2.999,6 kg terbaca "3.000 kg"; operator mengetik 3.000, dan pagarnya
+    menolak angka yang barusan ditawarkan layar kepadanya. Laporan operator
+    30 September 2026, dan siasat yang mereka temukan adalah menyisakan 1 kg
+    di tiap tumpukan.
+
+    Desimalnya muncul HANYA bila ada. "3.000,0 kg" pada angka yang memang
+    bulat cuma membuat tiap kartu terbaca seperti hasil pengukuran yang
+    meragukan, dan yang membaca berhenti mempercayai desimal di mana pun.
+    """
+    v = float(n or 0)
+    if abs(v - round(v)) < 0.05:
+        return f"{round(v):,.0f} kg".replace(",", ".")
+    return f"{v:,.1f} kg".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def _utama(bb: Bobot) -> tuple[str, str] | None:
@@ -1785,12 +1805,17 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
             )).scalar() if it.internal_transfer_id else None
             kode = kode_lot or f"intake {it.id}"
             judul, sumber = kode, "giling sendiri"
+        # `_kg_tepat`, BUKAN `_kg`: angka ini diketik ulang operator sebagai
+        # batas, dan pembulatan ke atas membuat layar menawarkan satu kilogram
+        # yang tak ada lalu menolaknya.
         keluar.append(Baris(
-            kode=kode, isi=f"PK di tumpukan · {_kg(sisa) if sisa is not None else 'menunggu timbang'}",
+            kode=kode,
+            isi=f"PK di tumpukan · {_kg_tepat(sisa) if sisa is not None else 'menunggu timbang'}",
             keadaan="menunggu dipindah ke silo — boleh sebagian",
             aksi="pindah_tumpukan_silo", nilai=str(it.id), fase="tumpuk",
             sejak=it.waktu_masuk, judul=judul, kelompok="tumpukan",
-            utama=((_kg(sisa).removesuffix(" kg"), "kg") if sisa is not None else None),
+            utama=((_kg_tepat(sisa).removesuffix(" kg"), "kg")
+                   if sisa is not None else None),
             sub=f"{kode} · {sumber} · masuk {_tgl(it.tanggal_masuk)}",
             pilihan=[("pindah_tumpukan_silo", "Pindah ke silo",
                       "Sebagian atau seluruhnya, ke Silo A / B", str(it.id))],
@@ -1925,6 +1950,66 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
                 ("selesai_muat", "Selesai muat — truk berangkat",
                  "Sisa yang tak dimuat hangus", str(rec.id)),
             ]))
+    return keluar
+
+
+async def _kartu_sosoh_selesai(db: AsyncSession, *, jam: int = 24) -> list[Baris]:
+    """Penyosohan yang BARU SELESAI beserta rendemennya — tanpa tombol.
+
+    Laporan operator 30 September 2026: "hasil rendemen gudang 2 hanya muncul
+    pada KABAR admin saja." Benar, dan kabar itu memang untuk Admin — isinya
+    menagih verifikasi. Yang salah bukan tujuan kabarnya melainkan bahwa ORANG
+    YANG MENJALANKAN MESINNYA tak pernah tahu hasil kerjanya.
+
+    Kalimat penutupan memang menyebut rendemennya, tetapi ia lewat dalam satu
+    detik dan tak bisa dibuka lagi. Rendemen adalah angka yang MENILAI
+    pekerjaan operator; menyimpannya hanya di meja Admin membuat yang dinilai
+    tak pernah tahu nilainya.
+
+    TANPA TOMBOL: prosesnya sudah selesai, tak ada langkah miliknya lagi.
+    Kartu bertombol yang ditekan lalu ditolak mengajari orang bahwa layarnya
+    tak bisa dipercaya.
+
+    DIBATASI 24 JAM, dan itu yang membuatnya tak berubah jadi arsip: cukup
+    untuk dibaca besok pagi oleh shift yang menutupnya sore tadi, dan tak
+    cukup untuk menumpuk jadi dinding yang tak dibaca siapa pun.
+    """
+    from app.database import berzona, now_local
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.gudang2.polishing import GRADES, rendemen_proses
+    from app.services.stok import output_sosoh
+
+    batas = now_local() - timedelta(hours=jam)
+    keluar: list[Baris] = []
+    for pr in (await db.execute(
+        select(PolishingProcess)
+        .where(PolishingProcess.status == "selesai",
+               PolishingProcess.waktu_selesai.is_not(None),
+               PolishingProcess.waktu_selesai >= batas)
+        .order_by(PolishingProcess.waktu_selesai.desc())
+    )).scalars().all():
+        rend = await rendemen_proses(db, pr.id)
+        outputs = await output_sosoh(db, pr.id)
+        beras = sum(v for k, v in outputs.items() if k in GRADES)
+        fakta = [("Beras", _kg(beras))]
+        samping = sum(v for k, v in outputs.items() if k not in GRADES)
+        if samping:
+            fakta.append(("Hasil samping", _kg(samping)))
+        keluar.append(Baris(
+            kode=pr.kode_proses, isi=f"Penyosohan {pr.kode_proses} selesai",
+            keadaan="selesai — menunggu verifikasi Admin",
+            fase="sosoh", judul=f"Penyosohan {pr.kode_proses}",
+            # Rendemen yang TAK TERHITUNG disebut, tidak didiamkan: diam atas
+            # angka yang hilang adalah cara paling halus membuat orang percaya
+            # pada yang tak pernah dihitung.
+            utama=((f"{rend:.1f}", "%") if rend is not None else None),
+            # `berzona` — `waktu_selesai` timestamptz, dan jam UTC di kartu
+            # operator adalah cacat yang sama dengan yang baru dibetulkan di
+            # Kabar. `_jam` di berkas ini menghitung LAMA, bukan mencetak jam.
+            sub=(f"selesai {berzona(pr.waktu_selesai).strftime('%d/%m %H:%M')}"
+                 + ("" if rend is not None
+                    else " · rendemen belum bisa dihitung — PK terpakai belum tercatat")),
+            fakta=fakta, kelompok="selesai"))
     return keluar
 
 
@@ -2086,6 +2171,11 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     # pukul sebelas, sebab tak ada satu kartu pun yang menyebutnya.
     b.menunggu += await _kartu_barang_keluar(db, gudang="g2")
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
+    # TRANSIT, bukan ANTREAN: tak ada pekerjaan yang dituntutnya, jadi ia
+    # tak boleh menambah lencana antrean. Lencana yang menghitung sesuatu
+    # yang tak bisa dikerjakan siapa pun takkan pernah kembali nol — dan
+    # lencana yang tak pernah nol mengajari orang mengabaikan lencana.
+    b.transit += await _kartu_sosoh_selesai(db)
     return _cap_gudang(b, "g2")
 
 

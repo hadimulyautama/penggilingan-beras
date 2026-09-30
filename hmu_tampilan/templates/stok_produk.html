@@ -51,7 +51,11 @@
 
    Blok yang KOSONG tidak digambar: judul dengan nol di bawahnya membuat orang
    mencari barang yang memang belum ada. #}
-{% macro blok(judul, daftar, sisa, curah, ket, warna) -%}
+{# `boleh_catat` DIOPER, bukan dibaca dari konteks: makro Jinja tidak
+   melihat variabel konteks templat. Yang dibaca di dalam sini akan jadi
+   Undefined — falsy, tanpa satu pun galat — dan tombolnya tak pernah
+   tergambar sementara seluruh uji pembaca-sumber tetap hijau. #}
+{% macro blok(judul, daftar, sisa, curah, ket, warna, boleh_catat=False) -%}
 {% if daftar %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
@@ -108,7 +112,7 @@
       {% for r in k.hasil %}
         <div class="anak__baris">
           <span class="anak__nama">{{ r.kode }}
-            {%- if r.waktu %} · {{ r.waktu.strftime('%d/%m') }}{% endif %}</span>
+            {%- if r.waktu %} · {{ r.waktu | jam('%d/%m') }}{% endif %}</span>
           <span class="anak__kg">{{ kg(r.kg) }} kg</span>
           {% if r.ket %}<span class="anak__jam">{{ r.ket }}</span>{% endif %}
         </div>
@@ -132,7 +136,7 @@
         {% for r in k.keluar %}
           <div class="anak__baris">
             <span class="anak__nama">{{ r.kode }}
-              {%- if r.waktu %} · {{ r.waktu.strftime('%d/%m') }}{% endif %}</span>
+              {%- if r.waktu %} · {{ r.waktu | jam('%d/%m') }}{% endif %}</span>
             <span class="anak__kg">{{ kg(r.kg) }} kg</span>
             {% if r.ket %}<span class="anak__jam">{{ r.ket }}</span>{% endif %}
           </div>
@@ -207,6 +211,21 @@
             {{- "belum dicatat" if k.curah_saja else "belum dikemas (curah)" }}</span>
           <span class="anak__kg">{{ kg(k.curah_kg) }}&nbsp;kg</span>
         </div>
+        {# ── OBATNYA DI SEBELAH KELUHANNYA ──
+           Laporan operator 30 September 2026: "pilihan bekatul curah belum
+           ada, jika ada katul yg belum dikemas, pada stok produk tertulis
+           belum dicatat." Aksinya selalu ada, tetapi tinggal di Catat
+           pekerjaan lain — dua layar jauhnya dari tulisan yang menagihnya.
+
+           Hanya pada bekatul (`curah_saja`) dan hanya bila angkanya POSITIF:
+           angka minus berarti yang dibukukan melebihi yang keluar mesin, dan
+           mencatat lagi di atasnya justru memperbesar selisihnya. Notanya di
+           bawah yang menjelaskan keadaan itu. #}
+        {% if k.curah_saja and k.curah_kg > 0.5 and boleh_catat %}
+          <a class="btn btn--kecil"
+             href="/stok-produk?buka=catat_bekatul"
+             style="margin-top:8px">🌾 Catat bekatul (curah)</a>
+        {% endif %}
       {% endif %}
     </div>
 
@@ -248,8 +267,23 @@
    dipersoalkan pembeli. Hasil samping penting, tetapi bukan yang dicari orang
    saat membuka layar ini. #}
 {{ blok("Beras · sisa di gudang", beras, sisa_beras, curah_beras,
-        "belum dipacking", "giling") }}
+        "belum dipacking", "giling", BOLEH_CATAT) }}
 {{ blok("Hasil samping · sisa di gudang", samping, sisa_samping, curah_samping,
-        "belum tercatat", "samping") }}
+        "belum tercatat", "samping", BOLEH_CATAT) }}
+{% endif %}
+
+{# Lembarnya terbuka DI HALAMAN INI, bukan melemparkan orang ke layar aksi.
+   Dialog + kabar di sini, `aksi.js` di kaki — tanpa ketiganya tombol di atas
+   cuma memuat ulang halaman, dan tak ada galat apa pun yang mengatakannya. #}
+{% if BOLEH_CATAT %}
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+{% if BOLEH_CATAT %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}
 {% endblock %}

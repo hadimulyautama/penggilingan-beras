@@ -26,3 +26,33 @@ def test_versi_aset_satu_nomor_dari_paket():
     import hmu_tampilan
     from app.web import tampilan
     assert tampilan.VERSI == hmu_tampilan.VERSI
+
+
+def test_tak_ada_strftime_telanjang_di_templat():
+    """Jam di templat WAJIB lewat saringan `jam`, bukan `.strftime(...)`.
+
+    Laporan operator 30 September 2026: "jam pada kabar belum sesuai" — dan
+    melesetnya tujuh jam. Kolom waktu di basis data `timestamptz`; asyncpg
+    mengembalikannya ber-UTC, dan `.strftime()` di templat mencetaknya apa
+    adanya. Empat templat lain mengidap hal yang sama tanpa ada yang tahu.
+
+    Yang membuat kelas kesalahan ini bertahan: `.strftime()` BEKERJA. Ia tak
+    pernah gagal, tak pernah berkabar, dan cacatnya hanya terlihat oleh orang
+    yang membandingkan layarnya dengan jam tangannya. Jadi yang menjaganya
+    tidak bisa "ingat memakai berzona" — harus pagar.
+
+    Kalau suatu hari ada kolom yang memang naif dan perlu dicetak apa adanya:
+    saringan `jam` sudah melewatkan yang naif tanpa menggesernya. Pakai
+    saringannya; jangan longgarkan pagar ini.
+    """
+    salah = []
+    for akar in (AKAR / "hmu_tampilan/templates", AKAR / "app/web/templates"):
+        if not akar.is_dir():
+            continue
+        for berkas in sorted(akar.rglob("*.html")):
+            for n, baris in enumerate(berkas.read_text().splitlines(), 1):
+                if ".strftime(" in baris:
+                    salah.append(f"{berkas.relative_to(AKAR)}:{n}")
+    assert salah == [], (
+        "templat mencetak waktu tanpa saringan `jam` — jamnya akan meleset "
+        f"sebanyak beda zona: {salah}")

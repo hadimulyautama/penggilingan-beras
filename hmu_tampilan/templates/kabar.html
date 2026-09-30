@@ -58,7 +58,7 @@
         <span class="padat__nama">{{ k.pesan }}</span>
       </div>
       <div class="padat__umur">
-        {{- k.waktu.strftime('%d/%m %H:%M') }}
+        {{- k.waktu | jam }}
         {%- if k.baru %} · <b>baru</b>{% endif %}
       </div>
     </div>

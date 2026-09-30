@@ -76,7 +76,7 @@
     <div class="audit audit--{{ 'tua' if not c.muda else 'muda' }}">
       <div class="audit__atas">
         <span class="audit__jenis">{{ c.label }}</span>
-        <span>#{{ c.id }} · {{ c.waktu.strftime('%d %b %H.%M') }}</span>
+        <span>#{{ c.id }} · {{ c.waktu | jam('%d %b %H.%M') }}</span>
       </div>
       <div class="audit__teks">{{ c.ringkas }}</div>
       <div class="audit__kaki">

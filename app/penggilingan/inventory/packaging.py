@@ -75,7 +75,11 @@ KEMASAN_VALID = {
     # mengurangi. Tanpa itu, 1.000 kg bisa dibukukan curah lalu dikarungi lagi,
     # dan stoknya jadi 2.000 kg tanpa satu pesan pun. Pagarnya
     # `finished_goods._bekatul_terpakai`, dibaca kedua pencatat.
-    "bekatul": {("bekas", 40)},
+    # 20 kg ditambahkan 30 September 2026 atas jawaban pemilik: bekatul
+    # dikemas 40 kg DAN 20 kg di lapangan, sementara app cuma menawarkan 40.
+    # Operator yang memegang karung 20 kg tak punya pilihan yang benar, dan
+    # yang dipilihnya kemudian adalah yang salah.
+    "bekatul": {("bekas", 40), ("bekas", 20)},
     "reject": {("bekas", 50)},
     "pk": {("karung_pk", 50)},
 }

@@ -355,9 +355,13 @@ async def test_satu_tiket_tak_boleh_dipakai_dua_transaksi(pg, gudang):
     from app.models import User
     from app.services import barang_keluar as bk
 
-    tid = await _tiket(pg, "TK-002")
+    # Kedua muatan sama besarnya, dan tiketnya sepadan dengan keduanya:
+    # sejak 30 September 2026 selisih timbang yang BESAR menuntut sebab, dan
+    # pagar itu berdiri sebelum penautan tiket sempat diuji. Yang dipersoalkan
+    # uji ini keunikan tiketnya, bukan bobotnya.
+    tid = await _tiket(pg, "TK-002", barang=2_500)
     a = await _sampai_dimuat(pg, gudang, karung=100)
-    b = await _sampai_dimuat(pg, gudang, karung=40)
+    b = await _sampai_dimuat(pg, gudang, karung=100)
     async with pg() as db:
         await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
                             rec_id=a, timbangan_transaksi_id=tid)
@@ -886,7 +890,9 @@ async def test_tiket_yang_sudah_tertaut_berhenti_ditagih(pg, gudang):
     from app.services.berjalan import untuk_staff
     from sqlalchemy import text as _t
 
-    tid = await _tiket(pg, "TK-TAUT-01")
+    # Bobot tiketnya sepadan dengan muatan 40 karung × 25 kg — lihat alasan
+    # di `test_satu_tiket_tak_boleh_dipakai_dua_transaksi`.
+    tid = await _tiket(pg, "TK-TAUT-01", barang=1_000)
     async with pg() as db:
         await db.execute(_t("UPDATE timbangan_transaksi SET tanggal = :t "
                             "WHERE id = :id"),
@@ -1705,3 +1711,163 @@ async def test_daftar_pelanggan_menawarkan_yang_aktif_saja(pg, gudang):
     pid = next(d["value"] for d in daftar if d["label"] == "PT Aktif")
     r = await _perintah_pembeli(pg, gudang, pelanggan_id=int(pid))
     assert r.rec.nama_pembeli == "PT Aktif"
+
+
+# ─── Umpan balik lapangan 30 September 2026: curah & selisih timbang ───
+
+
+async def _bekatul_curah(pg, gudang, kg_=2_000):
+    """Catat bekatul curah dari penyosohan yang sudah ada di fixture."""
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        db.add(PolishingOutputLog(polishing_process_id=proc.id, jenis="bekatul",
+                                  berat_kg=kg_, waktu_update=now_local(),
+                                  input_by=gudang["op"]))
+        await db.commit()
+        await catat_bekatul(db, user=await db.get(User, gudang["op"]),
+                            kode_pol=proc.kode_proses, berat_kg=kg_)
+
+
+async def test_bekatul_curah_ditawarkan_di_daftar_barang_keluar(pg, gudang):
+    """⛔ REGRESI YANG DIJAGA DI SINI: bekatul curah tak bisa keluar sama sekali.
+
+    Dua perubahan yang masing-masing BENAR membuka lubang di antaranya. Aksi
+    lama "Bekatul keluar" dibuang 28 September (pintu lama ditutup), dan daftar
+    barang keluar melewati barang tanpa karung dengan alasan "curah punya jalur
+    sendiri" (pintu baru melewatinya) — padahal jalur sendiri itu sudah tidak
+    ada. Akibatnya bekatul curah masuk terus dan angka stoknya hanya bisa naik,
+    tanpa satu pun pesan galat. Laporan operator 30 September 2026.
+    """
+    from app.models import User
+    from app.web.aksi_inventory import barang_bisa_keluar
+
+    await _bekatul_curah(pg, gudang, 2_000)
+    async with pg() as db:
+        u = await db.get(User, gudang["adm"])
+    daftar = await barang_bisa_keluar(user=u)
+    curah = [d for d in daftar if d["value"].startswith("cr:")]
+    assert curah, f"bekatul curah tak ada di daftar: {[d['value'] for d in daftar]}"
+    assert curah[0]["value"] == "cr:bekatul", curah[0]
+    # SATUANNYA di label: kotak jumlahnya satu dan tak bisa berganti tulisan
+    # mengikuti pilihan, jadi "100" pada baris curah harus jelas 100 kg.
+    assert "kg" in curah[0]["label"], curah[0]["label"]
+
+
+async def test_bekatul_curah_benar_benar_keluar_dan_mengurangi_stok(pg, gudang):
+    """Dan satuannya KILOGRAM — bukan karung.
+
+    Yang ditawarkan tanpa bisa dikerjakan lebih buruk daripada yang tak
+    ditawarkan: operator memilihnya, mengetik jumlah, lalu ditolak di depan
+    truk.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import hitung_stok_bekatul
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import _satu_baris
+
+    await _bekatul_curah(pg, gudang, 2_000)
+    async with pg() as db:
+        assert float(await hitung_stok_bekatul(db)) == 2_000
+        baris = await _satu_baris(db, "cr:bekatul", 500)
+        r = await bk.buat_perintah(
+            db, user=await db.get(User, gudang["adm"]), baris=[baris],
+            nama_pembeli="Peternakan Jaya")
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=r.rec.id)
+    async with pg() as db:
+        assert float(await hitung_stok_bekatul(db)) == 1_500, \
+            "bekatul curah keluar tanpa mengurangi stoknya"
+
+
+async def test_perintah_curah_melebihi_stok_ditolak_dengan_angkanya(pg, gudang):
+    """Yang ditolak tanpa angka akan dicoba lagi dengan tebakan."""
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    await _bekatul_curah(pg, gudang, 2_000)
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.buat_perintah(
+                db, user=await db.get(User, gudang["adm"]),
+                baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                        berat_kg=5_000)],
+                nama_pembeli="Peternakan Jaya")
+    assert "2.000" in str(e.value), str(e.value)
+
+
+async def test_selisih_timbang_besar_menuntut_sebab(pg, gudang):
+    """Keputusan pemilik 30 September 2026: boleh tetap ditutup — truknya sudah
+    berangkat berjam-jam sebelumnya — TETAPI ditandai, dan sebabnya wajib.
+
+    Pertanyaan operator yang melahirkannya: satu mobil berisi beras DAN broken,
+    bagaimana menimbangnya. Jawabannya total lawan total; yang belum ada adalah
+    apa yang terjadi kalau totalnya berselisih jauh.
+    """
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    # 100 karung × 25 kg = 2.500 kg dicatat; tiketnya 4.000 kg → beda 1.500 kg,
+    # jauh di atas ambang (maks 100 kg atau 2% = 50 kg).
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "TK-BEDA-1", barang=4_000)
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                                rec_id=rid, timbangan_transaksi_id=tid)
+    pesan = str(e.value)
+    assert "sebab" in pesan.lower(), pesan
+    assert "1.500" in pesan, pesan
+
+    async with pg() as db:
+        rec, catatan = await bk.verifikasi(
+            db, user=await db.get(User, gudang["adm"]), rec_id=rid,
+            timbangan_transaksi_id=tid, sebab_selisih="terpal basah + palet")
+    assert rec.status == "selesai", "ditahan padahal sebabnya sudah ditulis"
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.sebab_selisih == "terpal basah + palet", rec.sebab_selisih
+
+
+async def test_selisih_wajar_tak_menuntut_apa_apa(pg, gudang):
+    """Karung tak persis 25,0 kg, dan truk membawa terpal. Menuntut alasan atas
+    selisih sehari-hari akan membuat kolom sebabnya terisi "-" setiap kali —
+    dan kolom yang selalu terisi sama berhenti jadi tanda."""
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)      # 2.500 kg
+    tid = await _tiket(pg, "TK-BEDA-2", barang=2_530)        # beda 30 kg
+    async with pg() as db:
+        rec, _ = await bk.verifikasi(
+            db, user=await db.get(User, gudang["adm"]), rec_id=rid,
+            timbangan_transaksi_id=tid)
+    assert rec.status == "selesai"
+    async with pg() as db:
+        assert (await db.get(OutgoingRecord, rid)).sebab_selisih is None, \
+            "selisih wajar ikut ditandai — tandanya jadi tak berarti"
+
+
+async def test_membatalkan_verifikasi_mencabut_tanda_selisihnya(pg, gudang):
+    """Tandanya lahir dari perbandingan dengan tiket yang ikut dilepas.
+    Tanda yang tertinggal tanpa tiketnya adalah tuduhan atas selisih yang tak
+    bisa ditunjukkan lagi kepada siapa pun."""
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "TK-BEDA-3", barang=4_000)
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                            rec_id=rid, timbangan_transaksi_id=tid,
+                            sebab_selisih="palet ikut tertimbang")
+    await _undo(pg, gudang["adm"])
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.sebab_selisih is None, "tanda selisih tertinggal tanpa tiketnya"

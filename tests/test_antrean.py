@@ -380,9 +380,22 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     # dilakukan di catat pekerjaan lain." Ketujuhnya kini berpintu sendiri —
     # tombol di kaki halaman Barang Keluar, kartu di Antrian tunggu, kartu di
     # Menunggu keputusan — jadi tempatnya di daftar BERKARTU di bawah.
-    for tanpa_kartu in ("catat_bekatul", "beli_kemasan", "transfer_pk",
-                        "rekonsiliasi_timbang"):
+    #
+    # ⚠ `catat_bekatul` KELUAR DARI DAFTAR INI 30 September 2026, dan bukan
+    # karena pagarnya dilonggarkan: ia benar-benar punya kartu sekarang.
+    # Laporan operator — "pilihan bekatul curah belum ada, jika ada katul yg
+    # belum dikemas, pada stok produk tertulis belum dicatat" — dan yang salah
+    # memang letaknya: aplikasi menagih di Stok Produk, obatnya di Catat
+    # pekerjaan lain. Tombolnya kini berdiri tepat di sebelah angka yang
+    # menagihnya, dan `test_bekatul_curah_punya_tombol_di_kartunya` yang
+    # menjaga kartu itu tetap ada. Kalau tombol itu dicabut, aksi ini WAJIB
+    # kembali ke daftar ini — kalau tidak, mencatat bekatul curah tak punya
+    # pintu mana pun.
+    for tanpa_kartu in ("beli_kemasan", "transfer_pk", "rekonsiliasi_timbang"):
         assert api._GRUP_AKSI[tanpa_kartu] != api.GRUP_KARTU, tanpa_kartu
+    assert api._GRUP_AKSI["catat_bekatul"] == api.GRUP_KARTU, (
+        "bekatul curah kembali ke katalog — kalau tombol di kartunya dicabut, "
+        "kembalikan juga ke daftar `tanpa_kartu` di atas")
     # Rantai barang keluar: dicabut dari katalog, DAN tetap dikirim di menu —
     # lembar yang dibuka dari tombol maupun kartu dibangun dari spesifikasi
     # yang sama. Aksi yang dibuang dari menu berarti tombolnya membuka lembar
