@@ -52,6 +52,7 @@ from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
 from app.penggilingan.gudang1.services.timbang_link import (
     TiketSudahDipakai,
+    adalah_jasa,
     ambil_tiket,
     kunci_tiket_untuk_ditaut,
 )
@@ -429,6 +430,24 @@ async def create_pk_purchase_dari_timbang(
     info = intake_dari_jenis(tiket.get("jenis_kode", ""))
     if info is None or info.model != "pk":
         raise Gudang2Error("Tiket ini bukan PK masuk.")
+    # ── TIKET JASA DITOLAK DI SINI, dan ini bukan kehati-hatian berlebih ──
+    #
+    # `pk_purchase_batches` TIDAK punya `jasa_id` (PK walk-in jasa menyusul),
+    # jadi tak ada tempat menyimpan pemiliknya. Dan cabang di bawah berbunyi
+    # "tak ada supplier_id → CARI ATAU BUAT dari nama pihak" — tiket jasa memang
+    # tak punya `supplier_id`. Dibiarkan lewat, PK pelanggan jadi PEMBELIAN atas
+    # nama pemasok karangan bernama pelanggan itu sendiri: lalu barang yang tak
+    # pernah dibeli ikut ke `timbangan_skor_supplier`, laporan pembelian, dan
+    # HPP, dan pemiliknya hilang tanpa jejak. Tepat jebakan yang spek larang.
+    #
+    # Hari ini belum terjangkau — belum ada borang yang menulis `pelanggan_id`
+    # pada tiket MASUK. Penjaganya dipasang SEBELUM borang itu ada, sebab yang
+    # dijaga di sini tak akan melempar galat apa pun saat ia rusak.
+    if adalah_jasa(tiket):
+        raise Gudang2Error(
+            "Tiket ini barang JASA (titipan pelanggan) — PK jasa dari luar "
+            "belum bisa dicatat: belum ada tempat menyimpan pemiliknya. "
+            "Jasa untuk sementara hanya dari GABAH KERING.")
 
     # Tiga keadaan (QA P6, 21 September 2026): pasti / perkiraan dari tara
     # truk yang sama / tak diketahui. Lihat `bobot_awal_dari_tiket`.

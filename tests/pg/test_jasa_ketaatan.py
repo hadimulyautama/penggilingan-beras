@@ -87,6 +87,22 @@ async def _terima(db, tid, user_id, kondisi="kering"):
 
 
 @pytest.fixture
+async def admin(pg, pabrik):
+    """Satu Admin — jalur PK luar berpagar peran sebelum apa pun diperiksa."""
+    from hmu_identitas import peran as P
+
+    from app.models import User
+
+    async with pg() as db:
+        u = User(nama="Elfira", role=P.ADMIN, status="aktif",
+                 default_warehouse_id=pabrik["g2"])
+        db.add(u)
+        await db.commit()
+        await db.refresh(u)
+        return u
+
+
+@pytest.fixture
 async def pabrik(pg):
     """Dua gudang, dua silo G1, dua silo G2, satu pengering.
 
@@ -658,3 +674,34 @@ async def test_silo_g2_yang_sudah_dikosongkan_menerima_pemilik_lain(pg, pemakai,
         from app.services.jasa import pemilik_silo_g2
         assert await pemilik_silo_g2(db, sid) == {None}, \
             "pemilik silo tak ikut berpindah ke muatan yang baru"
+
+
+async def test_pk_luar_menolak_tiket_jasa(pg, admin):
+    """BERAS_PK jasa DITOLAK — dan sebabnya bukan "belum diuji".
+
+    `pk_purchase_batches` tak punya `jasa_id`, dan jalur itu "cari atau buat
+    pemasok dari nama pihak". Dibiarkan lewat, PK pelanggan jadi PEMBELIAN atas
+    nama pemasok karangan bernama pelanggan itu sendiri — lalu ikut ke skor
+    pemasok, laporan pembelian, dan HPP, sementara pemiliknya hilang.
+
+    Uji ini juga membuktikan tak ada baris `suppliers` yang lahir.
+    """
+    from app.models import Supplier, User
+    from app.penggilingan.gudang2.service import (Gudang2Error,
+                                                  create_pk_purchase_dari_timbang)
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Pak Budi")
+        tid = await _tiket(db, kode="JTB0", berat=8_000, pelanggan_id=pid,
+                           jenis="BERAS_PK")
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, admin.id)
+        with pytest.raises(Gudang2Error) as e:
+            await create_pk_purchase_dari_timbang(
+                db, user=u, timbangan_transaksi_id=tid, jenis_pk="KL")
+        assert "JASA" in e.value.args[0], e.value.args[0]
+    async with pg() as db:
+        nama = [s.nama_supplier for s in
+                (await db.execute(select(Supplier))).scalars().all()]
+        assert not any("Budi" in n for n in nama), f"pemasok palsu lahir: {nama}"
