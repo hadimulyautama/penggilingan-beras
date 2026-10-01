@@ -681,6 +681,14 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
     info = intake_dari_jenis(jenis)
     sah = info.tujuan_pilihan if info else ()
+    # Gabah basah JASA kehilangan pilihan "tumpuk" — basah yang menunggu akan
+    # rusak, dan ini barang orang lain. Aturannya dibaca dari SATU tempat yang
+    # juga dipakai penjaganya (`tumpukan.tujuan_sah`): daftar pilihan yang
+    # disusun terpisah dari aturan penolakannya cepat atau lambat menawarkan
+    # yang akan ditolak.
+    if jasa_id is not None and kondisi == "basah":
+        from app.penggilingan.gudang1.services.tumpukan import tujuan_sah
+        sah = tuple(t for t in sah if t in tujuan_sah(kondisi, 1))
     keluar: list[Tombol] = []
 
     if "dryer" in sah:

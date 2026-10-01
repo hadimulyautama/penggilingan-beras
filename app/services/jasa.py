@@ -135,6 +135,57 @@ async def pastikan_satu_jasa_bernama(db: AsyncSession, pemilik) -> int | None:
         ) from None
 
 
+def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:
+    """Siapa yang MEMILIKI hasil `jenis` dari proses milik `jasa_id`.
+
+    Satu proses sosoh jasa menghasilkan barang DUA pemilik:
+
+        beras (semua grade), menir, broken, reject  →  pesanan (kembali)
+        bekatul                                     →  pabrik  (beralih milik)
+
+    ⚠ KEPUTUSANNYA DITARUH SEKALI, DI HULU — dan itu yang membuat seluruh
+    hilirnya bersih. Keputusan pemilik 12: *"bekatul tidak kembali bukan berarti
+    barangnya tidak boleh keluar. bekatul otomatis berubah kepemilikan jadi
+    milik kami."* Jadi bekatul jasa adalah stok pabrik BIASA: ia masuk Stok
+    Produk, boleh diperintahkan keluar, boleh dijual, lewat jalur yang sama
+    dengan bekatul lain.
+    
+    Karena keputusan itu diambil DI SINI, saringan seragam `WHERE jasa_id IS
+    NULL` di seluruh pembaca stok selamat tanpa satu pun cabang khusus: bekatul
+    ber-`jasa_id` NULL memang HARUS muncul di perintah penjualan biasa.
+
+    ⚠ Ini kebalikan dari yang mudah dikira. Naluri pertama saat menulis saringan
+    adalah "sembunyikan segala yang berbau jasa"; bekatul justru pengecualiannya,
+    dan ia lolos dengan sendirinya — bukan karena ada `if bekatul` di hilir.
+
+    `hasil_ditahan` adalah CUPLIKAN kesepakatan pesanan itu, dibaca dari
+    barisnya — BUKAN daftar yang ditulis di sini. Kalau kebijakannya dibaca dari
+    kode, mengubahnya suatu hari akan mengubah arti seluruh pesanan lama,
+    termasuk yang notanya sudah dipegang pelanggan.
+    """
+    if jasa_id is None:
+        return None
+    ditahan = {k.strip().lower() for k in (hasil_ditahan or "").split(",") if k.strip()}
+    return None if (jenis or "").strip().lower() in ditahan else jasa_id
+
+
+async def pemilik_hasil_proses(
+    db: AsyncSession, proses_jasa_id: int | None, jenis: str
+) -> int | None:
+    """`pemilik_hasil` yang membaca cuplikan kesepakatannya sendiri.
+
+    Dipisah dari yang sinkron supaya aturannya tetap bisa diuji tanpa basis
+    data — dan supaya pembaca yang sudah memegang barisnya tak perlu membacanya
+    dua kali.
+    """
+    if proses_jasa_id is None:
+        return None
+    pesanan = await db.get(Jasa, proses_jasa_id)
+    if pesanan is None:
+        return None
+    return pemilik_hasil(proses_jasa_id, pesanan.hasil_ditahan, jenis)
+
+
 async def kunci_silo(db: AsyncSession, silo_id: int) -> None:
     """Kunci baris `silos` sebelum isinya diperiksa.
 
@@ -246,35 +297,3 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
     return {int(terbaru[1]) if terbaru[1] is not None else None}
 
 
-async def tolak_jasa_di_penyosohan(db: AsyncSession, silo_ids) -> None:
-    """GARIS BERHENTI IRISAN INI, dan ia sengaja berupa penolakan.
-
-    `polishing_process`, `finished_goods_stock`, dan `byproduct_stock` belum
-    punya `jasa_id` — ketiganya ikut di irisan Gudang 2. Selama itu belum ada,
-    penyosohan TIDAK BISA membawa pemilik: beras pelanggan akan dibukukan sebagai
-    barang jadi pabrik, masuk Stok Produk, dan boleh diperintahkan keluar seperti
-    beras lain. Itu bukan angka yang salah — itu barang orang lain yang terjual.
-
-    Maka ditolak, bukan dibiarkan dengan catatan. Pesanan yang berhenti di PK
-    adalah keadaan yang SAH menurut keputusan pemilik tentang kedalaman
-    fleksibel: *"jika hanya jadi pk dan pk ternyata keluar berarti hanya sampai
-    pk."* Pelanggan tetap bisa mengambil PK-nya.
-
-    ⚠ Penolakan ini DICABUT di irisan Gudang 2, bukan dirawat. Kalau ia masih
-    berdiri setelah `polishing_process.jasa_id` ada, ia akan menolak pekerjaan
-    yang sudah bisa dikerjakan — dan penjaga yang menolak hal yang sah adalah
-    penjaga yang dilangkahi orang.
-    """
-    bertuan: list[str] = []
-    for sid in silo_ids:
-        for jid in await pemilik_silo_g2(db, sid):
-            if jid is not None:
-                sebutan = await nama_pemilik(db, jid)
-                if sebutan not in bertuan:
-                    bertuan.append(sebutan)
-    if bertuan:
-        raise JasaError(
-            "Silo ini berisi PK JASA (" + ", ".join(bertuan) + ") — penyosohan "
-            "barang jasa belum dibuka, jadi hasilnya belum bisa dibukukan atas "
-            "nama pemiliknya. PK-nya boleh diambil pelanggan apa adanya."
-        )

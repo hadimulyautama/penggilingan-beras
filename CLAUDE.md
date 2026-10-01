@@ -196,12 +196,38 @@ migrasi 0064 tak bergeser satu baris pun, tanpa backfill.
 memasukkan pelanggan ke `suppliers`: pemasok palsu ikut ke skor pemasok, laporan
 pembelian, dan HPP.
 
-Enam tabel membawa `jasa_id` (migrasi 0064): `purchase_batches` · `drying_lots` ·
-`silo_storage` · `milling_process` · `internal_transfers` · `pk_gudang2_intakes`.
-Enam sisanya menyusul di irisan Gudang 2 — dan sampai itu
-**`mulai_penyosohan` MENOLAK silo berisi PK jasa**
-(`jasa.tolak_jasa_di_penyosohan`), sebab `polishing_process` belum bisa membawa
-pemilik. Penjaga itu DICABUT di irisan berikutnya, bukan dirawat.
+**SEBELAS tabel** membawa `jasa_id` — enam dari migrasi 0064 (`purchase_batches`
+· `drying_lots` · `silo_storage` · `milling_process` · `internal_transfers` ·
+`pk_gudang2_intakes`) dan lima dari **0065** (`pk_purchase_batches` ·
+`polishing_process` · `finished_goods_stock` · `byproduct_stock` ·
+`outgoing_records`). Dengan 0065, jasa hidup untuk **KETIGA komoditasnya** —
+gabah basah, gabah kering, beras PK — keputusan pemilik nomor 1.
+
+`pk_tumpukan_to_silo` SENGAJA tidak ikut: pemindahan tumpukan→silo tak
+memperkenalkan pemilik baru, dan pemiliknya sudah ada di intake asalnya
+(`jasa.pemilik_silo_g2`). Kolom kedua yang berarti hal sama adalah kolom yang
+suatu hari berselisih dengan yang pertama.
+
+**Gabah basah JASA wajib ke pengering** (`tumpukan.tujuan_sah`,
+`masuk_tumpukan` menolak): basah yang menumpuk akan rusak, dan rusaknya jadi
+perselisihan dengan yang menitipkannya. Gabah basah PABRIK tetap boleh
+menumpuk — yang dibatasi hanya barang orang lain.
+
+⚠⚠ **BEKATUL: SATU KOLOM MEMIKUL DUA ARTI, DAN KEDUANYA HARUS HIDUP.**
+Keputusan pemilik 12: bekatul BERALIH milik ke pabrik, tetapi pemilik barang
+tetap berhak tahu hasil bekatul dari tiap prosesnya.
+
+    MILIK = pabrik         → `byproduct_stock.jasa_id` NULL, dan itu BENAR
+    ASAL  = JAS-2610-012   → `source_id` → `polishing_process.jasa_id`
+
+Keputusannya ditaruh SEKALI di hulu (`jasa.pemilik_hasil()`), dan itu yang
+membuat saringan `WHERE jasa_id IS NULL` di hilir tak butuh satu pun cabang
+khusus: bekatul jasa memang HARUS muncul di perintah penjualan biasa. ⚠ Naluri
+pertama saat menulis saringan adalah "sembunyikan segala yang berbau jasa" —
+bekatul justru pengecualiannya, dan ia lolos sendiri.
+
+⚠ `packaging.py` juga SENGAJA tak disaring: karung jasa memang dari stok
+kemasan PABRIK (keputusan pemilik), jadi karungnya sungguh terpakai.
 
 `app/services/jasa.py` memegang aturannya:
 

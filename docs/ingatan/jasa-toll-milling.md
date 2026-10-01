@@ -46,15 +46,38 @@ menerima tiketnya. Uji: `tests/pg/test_jasa_ketaatan.py` (12 uji).
 
 Rinciannya di `CLAUDE.md` bagian "Jasa (toll milling)".
 
+## Irisan KEDUA — sampai beras, ketiga komoditas (migrasi 0065)
+
+Pemilik menegaskan keputusan nomor 1: jasa dari **gabah basah, gabah kering,
+DAN beras PK**. Pembatasan "gabah kering saja" di irisan pertama bukan
+permintaannya — ia pembatasan sementara karena dua jalur belum utuh. Keduanya
+dibangun di irisan ini:
+
+  · `jasa_id` pada LIMA tabel sisanya (`pk_purchase_batches`,
+    `polishing_process`, `finished_goods_stock`, `byproduct_stock`,
+    `outgoing_records`) + `pk_purchase_batches.supplier_id` nullable + CHECK;
+  · `jasa.pemilik_hasil()` — beras/menir/broken/reject kembali, bekatul beralih
+    milik; penyosohan mewarisi pemilik dari silonya, dan penjaga penolaknya
+    DICABUT bersama ujinya;
+  · PK walk-in jasa: penolakan di `create_pk_purchase_dari_timbang` dicabut,
+    pesanannya dibuat lewat penolong yang sama dengan gabah;
+  · gabah basah jasa WAJIB ke pengering (`tumpukan.tujuan_sah`);
+  · saringan stok barang jadi & bekatul; `packaging.py` sengaja TIDAK disaring.
+
+⚠ **YANG MASIH TERBUKA, dan ia nyata:** pengambilan barang jasa belum punya
+jalur. `outgoing_records.jasa_id` sudah ada kolomnya, tetapi borang barang
+keluar belum menawarkan barang jasa kepada pemiliknya — dan memang tak boleh
+menawarkannya sebagai PENJUALAN. Jadi beras pelanggan tercatat benar sebagai
+miliknya dan tak bisa terjual keliru, tetapi pengambilannya belum bisa dicatat:
+stoknya akan tetap berdiri sesudah truknya pergi. Itu lubang PEMBUKUAN, bukan
+bahaya — dan ia pekerjaan irisan berikutnya bersama `sisa_jasa()`, aturan
+"selesai", layar Jasa, dan notanya.
+
 ## Yang BELUM — berurutan
 
-1. **Repo `timbangan`**: tombol "Barang masuk jasa" di Beranda + borang yang
-   menanyakan DUA hal (pelanggan, lalu pesanan baru / tambahkan ke JAS-…).
-   Kolomnya sudah ada di produksi; borangnya belum.
-2. **Rantai Gudang 2**: `jasa_id` di enam tabel sisanya, `pemilik_hasil()`,
-   sosoh, packing. ⚠ Begitu `polishing_process.jasa_id` ada, **cabut**
-   `jasa.tolak_jasa_di_penyosohan` berikut ujinya.
-3. **Sisa & aturan selesai**: SELESAI = pernah ada barang masuk DAN tak ada lagi
+1. **PENGAMBILAN barang jasa** — lihat peringatan di atas. Ini yang paling
+   mendesak: tanpanya pesanan tak pernah bisa ditutup.
+2. **Sisa & aturan selesai**: SELESAI = pernah ada barang masuk DAN tak ada lagi
    barang ber-`jasa_id` ini di pabrik. Satu penolong `sisa_jasa(jasa_id)`, satu
    sumber untuk kartu maupun pemeriksaan selesai.
 4. **Layar Jasa** (menampilkan, bukan menerima) + **nota jasa**: bobot & milik

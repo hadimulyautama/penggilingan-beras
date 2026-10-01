@@ -1128,6 +1128,10 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         .join(RiceQualityStandard,
               RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
               isouter=True)
+        # Beras pelanggan punya notanya sendiri — ia tak pernah jadi baris di
+        # kartu stok PABRIK, dan "sudah dikemas" di sini adalah penyeimbang
+        # angka pabrik.
+        .where(FinishedGoodsStock.jasa_id.is_(None))
         .group_by(ProductSku.kategori, RiceQualityStandard.kode)
     )).all():
         j = jenis_produk(kategori, mutu)
@@ -1205,7 +1209,13 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
             # Belahan karungnya terbaca di rincian per merk di dalam laci.
             masuk_curah = float((await db.execute(
                 select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
-                .where(ByproductStock.jenis_produk == "bekatul")
+                .where(ByproductStock.jenis_produk == "bekatul",
+                       # Seragam dengan `hitung_stok_bekatul` — lihat catatan
+                       # panjangnya di sana. Bekatul jasa memang dibukukan
+                       # milik pabrik, jadi saringan ini tak membuang apa pun
+                       # hari ini; ia ditulis supaya tetap benar bila sebuah
+                       # pesanan kelak sepakat bekatulnya kembali.
+                       ByproductStock.jasa_id.is_(None))
             )).scalar_one())
             dikarungi = dikemas.get(jenis, 0.0)
             keluar_karung = k - keluar_curah.get(jenis, 0.0)
@@ -1302,6 +1312,10 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
         .join(PolishingProcess,
               (PolishingProcess.id == FinishedGoodsStock.source_id)
               & (FinishedGoodsStock.source_type == "polishing"), isouter=True)
+        # Barang jadi PABRIK. Beras pelanggan memang ada di gudang, tetapi ia
+        # bukan persediaan pabrik — dan daftar inilah yang memberi makan borang
+        # barang keluar.
+        .where(FinishedGoodsStock.jasa_id.is_(None))
         .order_by(FinishedGoodsStock.waktu.desc())
     )).all()
 

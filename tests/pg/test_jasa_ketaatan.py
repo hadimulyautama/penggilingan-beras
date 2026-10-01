@@ -531,42 +531,6 @@ async def test_pk_jasa_tak_muncul_di_daftar_barang_yang_bisa_dijual(pg, pemakai,
                                              berat_kg=1_000))
 
 
-async def test_penyosohan_menolak_pk_jasa_sampai_irisan_gudang_2(pg, pemakai, pabrik):
-    """GARIS BERHENTI irisan ini, diuji supaya ia tidak diam-diam bocor.
-
-    `polishing_process` belum punya `jasa_id`, jadi beras pelanggan akan
-    terbukukan sebagai barang jadi pabrik. Pesanan yang berhenti di PK adalah
-    keadaan yang SAH; yang tidak sah adalah barangnya ikut tersosoh.
-
-    ⚠ Uji ini DICABUT bersama penjaganya di irisan Gudang 2 — kalau keduanya
-    masih berdiri sesudah `polishing_process.jasa_id` ada, keduanya menolak
-    pekerjaan yang sudah boleh dikerjakan.
-    """
-    from app.models import Jasa, User
-    from app.penggilingan.gudang2.polishing import mulai_penyosohan
-    from app.penggilingan.gudang2.service import Gudang2Error, _add_intake
-
-    async with pg() as db:
-        pid = await _pelanggan(db, "Bu Sri")
-        # Pesanannya dibuat LANGSUNG, bukan lewat tiket: yang diuji di sini
-        # penjaga di hilir, dan membangun seluruh rantai hulu hanya menambah
-        # tempat uji ini bisa gagal karena hal yang bukan pokoknya.
-        j = Jasa(kode="JAS-UJI-001", pelanggan_id=pid)
-        db.add(j)
-        await db.flush()
-        jid = j.id
-        await db.commit()
-    async with pg() as db:
-        u = await db.get(User, pemakai.id)
-        await _add_intake(db, user=u, sumber_tipe="transfer_internal", tujuan="A",
-                          berat_kg=5_000, hpp_per_kg=None, tanggal=None, jam=None,
-                          jasa_id=jid)
-    async with pg() as db:
-        u = await db.get(User, pemakai.id)
-        with pytest.raises(Gudang2Error) as e:
-            await mulai_penyosohan(db, user=u, nama_silos=["A"])
-        assert "JAS-UJI-001" in e.value.args[0], e.value.args[0]
-
 
 async def test_pembatalan_gabah_masuk_tak_meninggalkan_pesanan_yatim(pg, pemakai):
     """Tiket dibatalkan → pesanannya ikut, bila tak ada barangnya lagi.
@@ -676,32 +640,159 @@ async def test_silo_g2_yang_sudah_dikosongkan_menerima_pemilik_lain(pg, pemakai,
             "pemilik silo tak ikut berpindah ke muatan yang baru"
 
 
-async def test_pk_luar_menolak_tiket_jasa(pg, admin):
-    """BERAS_PK jasa DITOLAK — dan sebabnya bukan "belum diuji".
 
-    `pk_purchase_batches` tak punya `jasa_id`, dan jalur itu "cari atau buat
-    pemasok dari nama pihak". Dibiarkan lewat, PK pelanggan jadi PEMBELIAN atas
-    nama pemasok karangan bernama pelanggan itu sendiri — lalu ikut ke skor
-    pemasok, laporan pembelian, dan HPP, sementara pemiliknya hilang.
 
-    Uji ini juga membuktikan tak ada baris `suppliers` yang lahir.
-    """
-    from app.models import Supplier, User
-    from app.penggilingan.gudang2.service import (Gudang2Error,
-                                                  create_pk_purchase_dari_timbang)
+# ═══════════ 5 · SAMPAI BERAS: rantai Gudang 2 (migrasi 0065) ═══════════
+#
+# Sampai migrasi 0065 penyosohan MENOLAK PK jasa, sebab `polishing_process`
+# belum bisa memikul pemilik. Uji penolakan itu DICABUT bersama penjaganya —
+# penjaga yang menolak hal yang sudah sah adalah penjaga yang dilangkahi orang.
+# Yang menggantikannya: pemiliknya terbawa, dan bekatulnya beralih milik.
+
+
+async def _pk_jasa_di_silo_g2(pg, pemakai, nama_silo="A", berat=5_000.0,
+                              pelanggan="Bu Sri", kode="JAS-UJI-500"):
+    """Satu silo Gudang 2 berisi PK milik satu pesanan jasa. → (jasa_id, silo_id)"""
+    from app.models import Jasa, Silo, User
+    from app.penggilingan.gudang2.service import _add_intake, get_g2_silo
 
     async with pg() as db:
-        pid = await _pelanggan(db, "Pak Budi")
-        tid = await _tiket(db, kode="JTB0", berat=8_000, pelanggan_id=pid,
-                           jenis="BERAS_PK")
+        pid = await _pelanggan(db, pelanggan)
+        j = Jasa(kode=kode, pelanggan_id=pid)
+        db.add(j)
+        await db.flush()
+        jid = j.id
         await db.commit()
     async with pg() as db:
-        u = await db.get(User, admin.id)
-        with pytest.raises(Gudang2Error) as e:
-            await create_pk_purchase_dari_timbang(
-                db, user=u, timbangan_transaksi_id=tid, jenis_pk="KL")
-        assert "JASA" in e.value.args[0], e.value.args[0]
+        u = await db.get(User, pemakai.id)
+        await _add_intake(db, user=u, sumber_tipe="transfer_internal",
+                          tujuan=nama_silo, berat_kg=berat, hpp_per_kg=None,
+                          tanggal=None, jam=None, jasa_id=jid)
     async with pg() as db:
-        nama = [s.nama_supplier for s in
-                (await db.execute(select(Supplier))).scalars().all()]
-        assert not any("Budi" in n for n in nama), f"pemasok palsu lahir: {nama}"
+        silo = await get_g2_silo(db, nama_silo)
+        return jid, silo.id
+
+
+async def test_penyosohan_membawa_pemilik(pg, pemakai, pabrik):
+    """Proses sosoh mewarisi pemilik dari silonya — dan dari situ hasilnya."""
+    from app.models import PolishingProcess, User
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+
+    jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await mulai_penyosohan(db, user=u, nama_silos=["A"])
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().one()
+        assert proc.jasa_id == jid, "proses sosoh kehilangan pemiliknya"
+
+
+async def test_penyosohan_menolak_dua_pemilik(pg, pemakai, pabrik):
+    """Dua silo, dua pemilik, satu proses sosoh → DITOLAK.
+
+    Satu proses = satu rendemen atas seluruh bahannya, dan beras yang keluar
+    tak bisa dibagi kembali — tak ada lapisan di dalam mesin.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import Gudang2Error
+    from app.services.jasa import _PESAN_CAMPUR
+
+    await _pk_jasa_di_silo_g2(pg, pemakai, "A", kode="JAS-UJI-510",
+                              pelanggan="Pak Budi")
+    await _pk_jasa_di_silo_g2(pg, pemakai, "B", kode="JAS-UJI-511",
+                              pelanggan="Bu Sri")
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        with pytest.raises(Gudang2Error) as e:
+            await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        assert _PESAN_CAMPUR in e.value.args[0], e.value.args[0]
+
+
+async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik):
+    """⭐⭐ DUA FAKTA YANG BERPISAH, dan keduanya harus bertahan.
+
+    Keputusan pemilik 12: *"bekatul tidak kembali bukan berarti barangnya tidak
+    boleh keluar. bekatul otomatis berubah kepemilikan jadi milik kami. tetapi
+    pemilik barang juga harus tau hasil bekatul dari tiap proses barang
+    miliknya."*
+
+        MILIK = pabrik          → `byproduct_stock.jasa_id` NULL
+        ASAL  = JAS-UJI-520     → lewat `source_id` → `polishing_process.jasa_id`
+
+    Rancangan yang menyimpan keduanya di satu kolom akan menghilangkan salah
+    satunya. Uji ini menahan KEDUANYA sekaligus: itu sebabnya ia satu uji, bukan
+    dua.
+    """
+    from app.models import ByproductStock, PolishingProcess, User
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.inventory.finished_goods import (catat_bekatul,
+                                                           hitung_stok_bekatul)
+
+    jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-520")
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        kode_pol = r.proc.kode_proses
+    # Hasil sosoh dicatat, lalu bekatulnya dibukukan curah.
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        from app.penggilingan.gudang2.polishing import catat_output
+        await catat_output(db, user=u, kode=kode_pol, jenis="bekatul",
+                           berat_kg=400)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_bekatul(db, user=u, kode_pol=kode_pol, berat_kg=400)
+
+    async with pg() as db:
+        bk = (await db.execute(select(ByproductStock))).scalars().one()
+        # ① MILIK: pabrik. Bukan kelalaian — itu yang pemilik putuskan.
+        assert bk.jasa_id is None, "bekatul jadi stok pelanggan"
+        # ② ASAL: tetap terbaca lewat prosesnya, tanpa kolom tambahan.
+        proc = await db.get(PolishingProcess, bk.source_id)
+        assert proc is not None and proc.jasa_id == jid, "asal bekatul hilang"
+        # ③ Dan ia stok pabrik BIASA — boleh dijual, tanpa penghalang.
+        assert float(await hitung_stok_bekatul(db)) == 400
+
+
+async def test_beras_jasa_bukan_stok_pabrik(pg, pemakai, pabrik):
+    """⚠⚠ BAHAYA TERBESAR SELURUH PEKERJAAN JASA, dan ia tak melempar galat.
+
+    Tanpa saringan pemilik, Stok Produk menghitung beras pelanggan sebagai stok
+    pabrik lalu pabrik menjualnya — bukan angka yang salah, barang orang lain
+    yang terjual, dan itu tak bisa diperbaiki dengan pembetulan pembukuan.
+    """
+    from app.models import FinishedGoodsStock, User
+    from app.penggilingan.gudang2.polishing import catat_output, mulai_penyosohan
+    from app.penggilingan.inventory.finished_goods import (catat_packing,
+                                                           hitung_stok_finished_goods)
+    # Master produk (standar mutu, SKU, kemasan, ukuran) dari penyemai yang
+    # SAMA yang dipakai app — bukan disusun tangan di sini: baris master yang
+    # dikarang uji akan berbeda dari yang sungguhan, dan yang pertama gagal
+    # justru pemetaan nama produknya.
+    from app.services.seed import seed_master
+
+    await seed_master()
+    jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-530")
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        kode_pol = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_output(db, user=u, kode=kode_pol, jenis="medium",
+                           berat_kg=3_000)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_packing(db, user=u, kode_pol=kode_pol, kategori="beras_putih",
+                            grade="medium", material_kode="biasa", ukuran=25,
+                            jumlah_karung=120)          # 3.000 kg
+
+    async with pg() as db:
+        fg = (await db.execute(select(FinishedGoodsStock))).scalars().one()
+        # ① Berasnya milik PEMILIKNYA — kembali, bukan ditahan.
+        assert fg.jasa_id == jid, "beras pelanggan dibukukan milik pabrik"
+        # ② Dan ia TIDAK terhitung sebagai stok pabrik yang boleh dijual.
+        stok = await hitung_stok_finished_goods(
+            db, fg.product_sku_id, fg.rice_quality_standard_id)
+        assert float(stok["kg"]) == 0, \
+            f"beras pelanggan terhitung stok pabrik: {stok}"

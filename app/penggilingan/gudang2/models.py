@@ -23,11 +23,26 @@ class PkPurchaseBatch(Base, TimestampMixin):
         Index("uq_pk_purchase_batches_timbangan_hidup", "timbangan_transaksi_id", unique=True,
               postgresql_where=text("dibatalkan_pada IS NULL"),
               sqlite_where=text("dibatalkan_pada IS NULL")),
+        Index("ix_pk_purchase_batches_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id"), nullable=False)
+    #: Dari siapa PK ini DIBELI — kosong bila ia tidak dibeli.
+    #:
+    #: Boleh NULL sejak migrasi 0065: PK jasa dititipkan pelanggan untuk
+    #: disosoh, dan pemiliknya ada di `jasa_id`. `CHECK
+    #: ck_pk_purchase_batches_beli_atau_jasa` menuntut TEPAT SATU terisi.
+    #:
+    #: ⚠ JANGAN mengakalinya dengan memasukkan pelanggan ke `suppliers` —
+    #: jalur ini berbunyi "tak ada supplier_id → cari atau buat dari nama
+    #: pihak", dan pemasok palsu akan ikut ke skor pemasok, laporan pembelian,
+    #: dan HPP.
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"))
+    #: Pesanan jasa yang memiliki PK ini. NULL = milik pabrik.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     # Kosong = "menunggu bobot" (referensi bobot = tiket timbang; disinkron otomatis).
     berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
@@ -213,6 +228,11 @@ class PolishingProcess(Base, TimestampMixin):
     """
 
     __tablename__ = "polishing_process"
+    __table_args__ = (
+        Index("ix_polishing_process_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -221,6 +241,18 @@ class PolishingProcess(Base, TimestampMixin):
     # proses / selesai
     status: Mapped[str] = mapped_column(String(20), default="proses")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pesanan jasa yang memiliki SELURUH bahan proses sosoh ini. NULL = pabrik.
+    #:
+    #: Diturunkan dari silo sumbernya saat sosoh dimulai (`pastikan_satu_jasa`
+    #: atas pemilik tiap silo), lalu disimpan — dan dari sinilah hasilnya
+    #: mewarisi pemilik lewat `jasa.pemilik_hasil()`.
+    #:
+    #: ⚠ JUGA jejak ASAL bekatul. Bekatul beralih milik ke pabrik
+    #: (`byproduct_stock.jasa_id` NULL), tetapi pemilik barang berhak tahu
+    #: berapa bekatul yang keluar dari prosesnya — dan jawabannya dibaca lewat
+    #: `byproduct_stock.source_id` → proses ini → kolom ini. Tanpa kolom ini,
+    #: pertanyaan itu tak punya jawaban sama sekali.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class PolishingSiloUsage(Base, TimestampMixin):

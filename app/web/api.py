@@ -1941,6 +1941,10 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         if info is None or info.model != "gabah":
             raise HTTPException(400, "Tiket ini bukan gabah masuk.")
         kondisi = info.kondisi
+        # Tiket JASA dikenali dari `pelanggan_id`-nya, lewat satu penolong —
+        # bukan dengan memeriksa kolomnya sendiri di sini.
+        from app.penggilingan.gudang1.services.timbang_link import adalah_jasa
+        _tiket_jasa = adalah_jasa(tiket)
         mesin_id = None
         if info.tujuan_wajib:
             tujuan = info.tujuan_wajib
@@ -1967,6 +1971,16 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         # hal yang sudah pasti salah menghemat satu pembersihan manual — dan
         # gabah kering yang dikirim ke mesin berisi gabah basah adalah hal
         # yang sudah pasti salah, bukan kebetulan yang bisa jadi benar.
+        # Gabah basah JASA tak boleh ditumpuk — ditolak SEBELUM batch dibuat,
+        # sebab sesudahnya penempatan cuma jadi peringatan dan gabahnya
+        # tertinggal di lantai. Penjaga sungguhannya di `masuk_tumpukan`; yang
+        # di sini membuat penolakannya datang saat masih bisa dialihkan.
+        if tujuan == "tumpuk" and kondisi == "basah" and _tiket_jasa:
+            raise HTTPException(
+                400,
+                "Gabah basah JASA tidak boleh menumpuk — harus langsung ke "
+                "pengering. Basah yang menunggu akan rusak, dan ini barang "
+                "titipan pelanggan.")
         if tujuan == "dryer" and mesin_id:
             from app.penggilingan.gudang1.services.drying import isi_dryer
             ada = await isi_dryer(db, mesin_id)

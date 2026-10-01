@@ -69,6 +69,26 @@ async def masuk_tumpukan(db: AsyncSession, *, user, kode_batch: str) -> Purchase
         raise TumpukanError(
             f"Batch {kode_batch} sudah diproses ({batch.status_batch})."
         )
+    # ── GABAH BASAH JASA TIDAK BOLEH MENUMPUK ──
+    #
+    # Untuk gabah PABRIK, tumpukan basah sah dan memang ada: menolak gabah yang
+    # sudah turun dari truk tidak membuatnya pergi, dan yang menanggung
+    # risikonya pabrik sendiri. Itu tidak berubah satu baris pun.
+    #
+    # Pada barang titipan risikonya berpindah ke orang lain. Gabah basah yang
+    # menumpuk akan rusak, dan rusaknya jadi PERSELISIHAN dengan orang yang
+    # menitipkannya — bukan kerugian yang bisa dibukukan diam-diam. Jadi di sini
+    # ia ditolak, bukan diperingatkan, dan penolakannya menyebut jalan keluarnya.
+    #
+    # Dijaga DI SINI, bukan lewat `IntakeJenis.tujuan_wajib`: medan itu berlaku
+    # per JENIS, jadi mengisinya akan memaksa gabah basah PABRIK ke pengering
+    # juga — perubahan perilaku hari ini yang tak seorang pun minta.
+    if batch.jasa_id is not None and (batch.kondisi_gabah or "") == "basah":
+        raise TumpukanError(
+            f"{kode_batch} gabah basah JASA — tidak boleh menumpuk, harus "
+            "langsung ke pengering. Gabah basah yang menunggu akan rusak, dan "
+            "ini barang titipan."
+        )
     batch.status_batch = DITUMPUK
     await log_activity(
         db, table_name="purchase_batches", record_id=batch.id, action="UPDATE",
@@ -133,6 +153,23 @@ async def jumlah_kg(db: AsyncSession, *, pemilik: str = "pabrik") -> float:
                for b in await isi(db, pemilik=pemilik))
 
 
+def tujuan_sah(kondisi: str | None, jasa_id: int | None) -> tuple[str, ...]:
+    """Tempat yang sah untuk satu batch — mengikuti kondisi DAN pemiliknya.
+
+    Gabah basah JASA kehilangan pilihan "tumpuk": ia harus langsung ke
+    pengering, sebab basah yang menunggu akan rusak dan ini barang orang lain.
+    Lihat `masuk_tumpukan`.
+
+    Satu tempat yang menjawabnya, dibaca borang maupun penjaganya — daftar
+    pilihan yang disusun terpisah dari aturan penolakannya adalah daftar yang
+    cepat atau lambat menawarkan yang akan ditolak.
+    """
+    sah = TUJUAN_PINDAH.get(kondisi or "", ())
+    if jasa_id is not None and (kondisi or "") == "basah":
+        return tuple(t for t in sah if t != "tumpuk")
+    return sah
+
+
 async def tempatkan(
     db: AsyncSession, *, user, kode_batch: str, tujuan: str,
     dryer_id: int | None = None, silo_id: int | None = None,
@@ -162,12 +199,15 @@ async def tempatkan(
             f"Batch {kode_batch} sudah ditempatkan ({batch.status_batch})."
         )
 
-    sah = TUJUAN_PINDAH.get(batch.kondisi_gabah or "", ())
+    sah = tujuan_sah(batch.kondisi_gabah, batch.jasa_id)
     if tujuan not in sah:
         if batch.kondisi_gabah == "basah":
             raise TumpukanError(
-                f"{kode_batch} gabah basah — hanya boleh ke Dryer atau Tumpukan, "
-                "belum boleh ke silo."
+                f"{kode_batch} gabah basah — hanya boleh ke "
+                + (" atau ".join({"dryer": "Dryer", "tumpuk": "Tumpukan"}[t]
+                                 for t in sah) or "Dryer")
+                + (", dan ini barang JASA: tidak boleh menumpuk."
+                   if batch.jasa_id is not None else ", belum boleh ke silo.")
             )
         raise TumpukanError("Pilih tujuan: Dryer / Silo / Tumpukan.")
 

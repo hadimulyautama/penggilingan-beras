@@ -133,6 +133,11 @@ class FinishedGoodsStock(Base, TimestampMixin):
     """
 
     __tablename__ = "finished_goods_stock"
+    __table_args__ = (
+        Index("ix_finished_goods_stock_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     product_sku_id: Mapped[int] = mapped_column(
@@ -151,12 +156,28 @@ class FinishedGoodsStock(Base, TimestampMixin):
     warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pesanan jasa yang MEMILIKI beras ini. NULL = milik pabrik.
+    #:
+    #: ⚠ Setiap pembaca stok PABRIK menyaring `jasa_id IS NULL`. Tanpa itu Stok
+    #: Produk menghitung beras pelanggan sebagai stok pabrik, lalu pabrik
+    #: menjualnya — bukan angka yang salah, barang orang lain yang terjual, dan
+    #: itu tak bisa diperbaiki dengan pembetulan pembukuan.
+    #:
+    #: Disimpan, bukan diturunkan dari `source_id` → `polishing_process.jasa_id`:
+    #: saringan stok dibaca di hampir tiap layar, dan yang paling sering
+    #: ditanyakan tak boleh dijawab paling mahal — lewat join ke tabel lain.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class ByproductStock(Base, TimestampMixin):
     """Stok hasil samping CURAH (hanya bekatul). Dijual per kg."""
 
     __tablename__ = "byproduct_stock"
+    __table_args__ = (
+        Index("ix_byproduct_stock_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     jenis_produk: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -168,6 +189,28 @@ class ByproductStock(Base, TimestampMixin):
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="tersedia")
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pesanan jasa yang MEMILIKI hasil samping ini. NULL = milik pabrik.
+    #:
+    #: ⚠⚠ UNTUK BEKATUL, NULL ADALAH JAWABAN YANG BENAR — dan bukan karena
+    #: bekatul jasa tak ada. Keputusan pemilik 12: *"bekatul tidak kembali bukan
+    #: berarti barangnya tidak boleh keluar. bekatul otomatis berubah
+    #: kepemilikan jadi milik kami. tetapi pemilik barang juga harus tau hasil
+    #: bekatul dari tiap proses barang miliknya."*
+    #:
+    #: Jadi bekatul punya DUA fakta yang berpisah, dan kolom ini memikul yang
+    #: pertama saja:
+    #:
+    #:     MILIK = pabrik         → kolom ini NULL, dan itu benar
+    #:     ASAL  = JAS-2610-012   → lewat `source_id` → `polishing_process.jasa_id`
+    #:
+    #: Menyimpan ASAL di kolom ini akan membuat bekatul jadi stok pelanggan
+    #: yang tak boleh dijual — kebalikan dari yang pemilik putuskan. Dan
+    #: membiarkan NULL tanpa jejak asal akan menghapus hak pemilik barang untuk
+    #: mengetahuinya. Keduanya ada; yang kedua tak butuh kolom.
+    #:
+    #: Menir, broken, dan reject KEMBALI ke pelanggan — untuk ketiganya kolom
+    #: ini terisi. Yang menentukan `jasa.pemilik_hasil()`, satu tempat.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class ByproductPrice(Base, TimestampMixin):
@@ -223,6 +266,9 @@ class OutgoingRecord(Base, TimestampMixin):
               postgresql_where=text("status <> 'batal'"),
               sqlite_where=text("status <> 'batal'")),
         Index("ix_outgoing_records_status", "status"),
+        Index("ix_outgoing_records_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -246,6 +292,14 @@ class OutgoingRecord(Base, TimestampMixin):
     #: di halaman menunggu keuangan membuat kontak.
     nama_pembeli: Mapped[str | None] = mapped_column(String(100))
     pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
+    #: Pengambilan barang JASA oleh pemiliknya — NULL untuk penjualan biasa.
+    #:
+    #: Berbeda arti dari `pelanggan_id` di atasnya, dan keduanya memang bisa
+    #: menunjuk orang yang sama: `pelanggan_id` menjawab "kepada siapa surat
+    #: jalannya", `jasa_id` menjawab "ini mengurangi pesanan jasa yang mana".
+    #: Satu kolom untuk dua pertanyaan akan membuat setiap penjualan ke
+    #: pelanggan yang kebetulan juga menjasakan terbaca sebagai pengambilan.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     # truk_sendiri / ekspedisi / sewa / pickup
     metode: Mapped[str | None] = mapped_column(String(20))
     no_polisi: Mapped[str | None] = mapped_column(String(20))

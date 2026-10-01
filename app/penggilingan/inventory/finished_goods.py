@@ -160,10 +160,26 @@ async def catat_packing(
 
     now = input_time(tanggal, jam)
     wid = await _g2_warehouse_id(db)
+    # ── Pemiliknya diturunkan dari PROSESNYA, lewat satu tempat ──
+    #
+    # `pemilik_hasil()` yang memutuskan, bukan cabang di sini: beras, menir,
+    # broken, dan reject kembali ke pelanggan; bekatul beralih milik ke pabrik.
+    # Keputusan itu ditaruh SEKALI di hulu supaya saringan stok di hilir tak
+    # butuh satu pun cabang khusus — termasuk untuk bekatul, yang justru HARUS
+    # muncul di perintah penjualan biasa.
+    #
+    # `jenis_out` yang dipakai, bukan `kategori`: itu nama barang yang sama
+    # yang dibaca kartu Stok Produk dan hitungan barang keluar — empat pembaca
+    # yang menyusun sendiri "apa nama barang ini" akan menyebut angka berbeda
+    # tentang beras yang sama.
+    from app.services.jasa import pemilik_hasil_proses
+
+    pemilik = await pemilik_hasil_proses(db, proc.jasa_id, jenis_out)
     fg = FinishedGoodsStock(
         product_sku_id=sku.id, rice_quality_standard_id=std_id,
         source_type="polishing", source_id=proc.id, jumlah_karung=int(jumlah_karung),
         berat_total_kg=berat, warehouse_id=wid, waktu=now, input_by=user.id,
+        jasa_id=pemilik,
     )
     db.add(fg)
     await log_activity(
@@ -246,9 +262,26 @@ async def catat_bekatul(
                 f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
                 .replace(",", "."))
     now = input_time(tanggal, jam)
+    # ⚠ `jasa_id` SENGAJA TIDAK DIISI, dan itu jawaban yang BENAR — bukan
+    # kelalaian. Keputusan pemilik 12: bekatul otomatis BERALIH MILIK ke pabrik.
+    # Jadi bekatul dari proses jasa adalah stok pabrik biasa: masuk Stok Produk,
+    # boleh diperintahkan keluar, boleh dijual. Jangan membuat penghalang untuk
+    # ia — *"bukan berarti barangnya tidak boleh keluar."*
+    #
+    # ASALNYA tetap terbaca tanpa kolom tambahan: `source_id` menunjuk proses
+    # sosohnya, dan prosesnya punya `jasa_id`. Itu yang menjawab "berapa bekatul
+    # dari proses barang Pak Budi" — hak yang keputusan 12 tegaskan, dan
+    # kuerinya sudah ada di `stok.py` lengkap dengan rincian per proses.
+    #
+    # Lewat `pemilik_hasil()` juga, bukan ditulis `None` langsung: kalau suatu
+    # hari sebuah pesanan sepakat bekatulnya KEMBALI, yang berubah cuplikan
+    # kesepakatannya — bukan berkas ini.
+    from app.services.jasa import pemilik_hasil_proses
+
     db.add(ByproductStock(
         jenis_produk="bekatul", source_type="polishing", source_id=proc.id,
         berat_kg=berat_kg, tanggal=now.date(), waktu=now, input_by=user.id,
+        jasa_id=await pemilik_hasil_proses(db, proc.jasa_id, "bekatul"),
     ))
     await log_activity(
         db, table_name="byproduct_stock", record_id=proc.id, action="INSERT",
@@ -264,7 +297,18 @@ async def hitung_stok_bekatul(db: AsyncSession) -> float:
     masuk = (
         await db.execute(
             select(func.coalesce(func.sum(ByproductStock.berat_kg), 0)).where(
-                ByproductStock.jenis_produk == "bekatul"
+                ByproductStock.jenis_produk == "bekatul",
+                # ⚠ Saringan pemilik dipasang di SEMUA pembaca stok pabrik,
+                # termasuk yang ini — walau untuk bekatul hasilnya selalu sama.
+                #
+                # Bekatul jasa memang dibukukan `jasa_id` NULL (beralih milik ke
+                # pabrik, keputusan pemilik 12), jadi saringan ini tak membuang
+                # satu baris pun hari ini. Ia ditulis supaya tetap benar bila
+                # suatu hari sebuah pesanan sepakat bekatulnya KEMBALI — dan
+                # supaya pembaca berikutnya tak menyimpulkan "bekatul
+                # dikecualikan dari aturan pemilik". Yang mengecualikannya
+                # `pemilik_hasil()` di hulu, bukan ketiadaan saringan di sini.
+                ByproductStock.jasa_id.is_(None),
             )
         )
     ).scalar_one()
@@ -292,7 +336,17 @@ async def hitung_stok_finished_goods(
         await db.execute(_std(
             select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0),
                    func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
-            .where(FinishedGoodsStock.product_sku_id == sku_id)
+            .where(FinishedGoodsStock.product_sku_id == sku_id,
+                   # ⚠⚠ INI SARINGAN YANG PALING BERBAHAYA KALAU TERLEWAT.
+                   #
+                   # Fungsi ini menjawab "berapa stok barang jadi pabrik", dan
+                   # jawabannya dipakai borang BARANG KELUAR untuk menentukan
+                   # berapa yang boleh dijual. Tanpa saringan ini, beras
+                   # pelanggan terhitung sebagai stok pabrik lalu pabrik
+                   # menjualnya — bukan angka yang salah, barang orang lain yang
+                   # terjual, dan itu tak bisa diperbaiki dengan pembetulan
+                   # pembukuan. Dan ia tak melempar satu pun kesalahan.
+                   FinishedGoodsStock.jasa_id.is_(None))
         ))
     ).one()
     oq = select(
@@ -342,7 +396,9 @@ async def laporan_stok_barang_jadi(db: AsyncSession) -> str:
     combos = (
         await db.execute(
             select(FinishedGoodsStock.product_sku_id,
-                   FinishedGoodsStock.rice_quality_standard_id).distinct()
+                   FinishedGoodsStock.rice_quality_standard_id)
+            # Laporan stok PABRIK — beras pelanggan punya notanya sendiri.
+            .where(FinishedGoodsStock.jasa_id.is_(None)).distinct()
         )
     ).all()
     agg: dict[tuple, list] = {}

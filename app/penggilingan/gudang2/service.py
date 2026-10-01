@@ -20,6 +20,7 @@ from app.peran import PERAN_ADMIN_KEATAS
 from app.config import settings
 from app.database import input_time
 from app.models import (
+    Jasa,
     InternalTransfer,
     PkGudang2Intake,
     PkPurchaseBatch,
@@ -47,7 +48,10 @@ from app.services.jasa import (
     pemilik_silo_g2,
 )
 from app.services.notification import create_notification
-from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
+from app.penggilingan.gudang1.services.purchase import (
+    find_or_create_supplier,
+    pesanan_jasa_dari_tiket,
+)
 from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.timbang_link import bobot_awal_dari_tiket
 from app.penggilingan.gudang1.services.timbang_link import (
@@ -430,24 +434,6 @@ async def create_pk_purchase_dari_timbang(
     info = intake_dari_jenis(tiket.get("jenis_kode", ""))
     if info is None or info.model != "pk":
         raise Gudang2Error("Tiket ini bukan PK masuk.")
-    # ── TIKET JASA DITOLAK DI SINI, dan ini bukan kehati-hatian berlebih ──
-    #
-    # `pk_purchase_batches` TIDAK punya `jasa_id` (PK walk-in jasa menyusul),
-    # jadi tak ada tempat menyimpan pemiliknya. Dan cabang di bawah berbunyi
-    # "tak ada supplier_id → CARI ATAU BUAT dari nama pihak" — tiket jasa memang
-    # tak punya `supplier_id`. Dibiarkan lewat, PK pelanggan jadi PEMBELIAN atas
-    # nama pemasok karangan bernama pelanggan itu sendiri: lalu barang yang tak
-    # pernah dibeli ikut ke `timbangan_skor_supplier`, laporan pembelian, dan
-    # HPP, dan pemiliknya hilang tanpa jejak. Tepat jebakan yang spek larang.
-    #
-    # Hari ini belum terjangkau — belum ada borang yang menulis `pelanggan_id`
-    # pada tiket MASUK. Penjaganya dipasang SEBELUM borang itu ada, sebab yang
-    # dijaga di sini tak akan melempar galat apa pun saat ia rusak.
-    if adalah_jasa(tiket):
-        raise Gudang2Error(
-            "Tiket ini barang JASA (titipan pelanggan) — PK jasa dari luar "
-            "belum bisa dicatat: belum ada tempat menyimpan pemiliknya. "
-            "Jasa untuk sementara hanya dari GABAH KERING.")
 
     # Tiga keadaan (QA P6, 21 September 2026): pasti / perkiraan dari tara
     # truk yang sama / tak diketahui. Lihat `bobot_awal_dari_tiket`.
@@ -455,27 +441,64 @@ async def create_pk_purchase_dari_timbang(
     ada_bobot = berat is not None
 
     now = input_time(tanggal, jam)
-    if tiket.get("supplier_id"):
+    # ── DIBELI atau DITITIPKAN — dan cabang jasa HARUS lebih dulu ──
+    #
+    # Cabang lama di bawah berbunyi "tak ada supplier_id → CARI ATAU BUAT dari
+    # nama pihak", dan tiket jasa memang tak punya `supplier_id`. Tanpa cabang
+    # ini, PK pelanggan jadi PEMBELIAN atas nama pemasok karangan bernama
+    # pelanggan itu sendiri — lalu barang yang tak pernah dibeli ikut ke skor
+    # pemasok, laporan pembelian, dan HPP, sementara pemiliknya hilang.
+    #
+    # Sampai migrasi 0065 jalur ini MENOLAK tiket jasa terang-terangan, justru
+    # karena `pk_purchase_batches` belum punya tempat menyimpan pemiliknya.
+    # Sekarang ada, jadi penolakannya dicabut dan jalurnya dibuka.
+    jasa_ini: Jasa | None = None
+    jasa_baru = False
+    supplier: Supplier | None = None
+    created = False
+    if adalah_jasa(tiket):
+        pass                      # pesanannya dibuat sesudah pemeriksaan ulang
+    elif tiket.get("supplier_id"):
         supplier = await db.get(Supplier, tiket["supplier_id"])
-        created = False
     else:
         nama = tiket.get("nama_supplier") or tiket.get("pihak_nama") or "Tanpa Nama"
         supplier, created = await find_or_create_supplier(db, nama)
 
+    def _sebut() -> str:
+        """Nama pihak untuk kalimat & jejak — pemasok, atau PEMILIKNYA."""
+        if supplier is not None:
+            return supplier.nama_supplier
+        return (f"JASA {jasa_ini.kode} {tiket.get('nama_pelanggan') or ''}".strip()
+                if jasa_ini else "JASA")
+
     if kunci_kiriman:
         ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
-            return PkPurchaseResult(batch=ada, supplier_nama=supplier.nama_supplier, supplier_created=False)
+            return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
     else:
         urutan = await buku.jumlah_jenis(db, PK_LUAR_MASUK, "timbangan_transaksi_id",
                                          timbangan_transaksi_id)
         kunci_kiriman = f"{PK_LUAR_MASUK}:tiket:{timbangan_transaksi_id}:{urutan + 1}"
 
+    # Pesanan jasa dibuat SESUDAH pemeriksaan kiriman ulang di atas dan SEBELUM
+    # peristiwanya dicatat: muatan buku besar menyebut kodenya, dan buku besar
+    # itu tambah-saja — kode yang menyusul tak bisa ditambalkan ke sana.
+    if adalah_jasa(tiket):
+        jasa_ini, jasa_baru = await pesanan_jasa_dari_tiket(db, user=user, tiket=tiket)
+
     kode = await next_pk_purchase_code(db, now.date())
     muatan = {
         "kode_batch": kode, "timbangan_transaksi_id": timbangan_transaksi_id,
-        "tiket_kode": tiket.get("kode"), "supplier_id": supplier.id,
-        "nama_supplier": supplier.nama_supplier, "berat_kg": berat, "sumber_berat": sumber,
+        "tiket_kode": tiket.get("kode"),
+        "supplier_id": supplier.id if supplier else None,
+        "nama_supplier": supplier.nama_supplier if supplier else None,
+        # Pemiliknya ikut ke buku besar berikut NAMANYA: muatan peristiwa tak
+        # boleh bergantung pada tabel lain untuk bisa dibaca.
+        "jasa_id": jasa_ini.id if jasa_ini else None,
+        "jasa_kode": jasa_ini.kode if jasa_ini else None,
+        "pelanggan_id": tiket.get("pelanggan_id"),
+        "nama_pelanggan": tiket.get("nama_pelanggan"),
+        "berat_kg": berat, "sumber_berat": sumber,
         "jenis_pk": jenis, "kadar_air": kadar_air, "no_polisi": tiket.get("nomor_polisi"),
         "tanggal": now.date(), "waktu": now,
     }
@@ -487,11 +510,13 @@ async def create_pk_purchase_dari_timbang(
     if not e.baru:
         ada = await _pk_batch_dari_kunci(db, kunci_kiriman)
         if ada is not None:
-            return PkPurchaseResult(batch=ada, supplier_nama=supplier.nama_supplier, supplier_created=False)
+            return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
 
     # Cermin untuk layar & laporan lama, ditambah penunjuk ke peristiwanya.
     batch = PkPurchaseBatch(
-        kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat,
+        # TEPAT SATU dari keduanya — `ck_pk_purchase_batches_beli_atau_jasa`.
+        kode_batch=kode, supplier_id=supplier.id if supplier else None,
+        jasa_id=jasa_ini.id if jasa_ini else None, berat_total_kg=berat,
         no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         status_batch="diterima", flag_unverified=True,
@@ -511,18 +536,20 @@ async def create_pk_purchase_dari_timbang(
     await log_activity(
         db, table_name="pk_purchase_batches", record_id=batch.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"{kode} | {supplier.nama_supplier} | {b_str} PK {jenis} | timbang {tiket['kode']}",
+        new_value=f"{kode} | {_sebut()} | {b_str} PK {jenis} | timbang {tiket['kode']}",
     )
     await create_notification(
         db, tipe="verifikasi_pk_luar",
-        pesan=(f"🟡 PK luar {kode} ({supplier.nama_supplier}, {b_str}, {jenis}, "
+        pesan=(f"🟡 PK luar {kode} ({_sebut()}, {b_str}, {jenis}, "
                f"dari timbang {tiket['kode']}) MASUK — menunggu QC & verifikasi harga."),
         target_role="admin", prioritas="kuning",
         table_name="pk_purchase_batches", record_id=batch.id,
     )
+    if jasa_baru and jasa_ini is not None:
+        jasa_ini.peristiwa_id = e.id
     await db.commit()
     await db.refresh(batch)
-    return PkPurchaseResult(batch=batch, supplier_nama=supplier.nama_supplier,
+    return PkPurchaseResult(batch=batch, supplier_nama=_sebut(),
                             supplier_created=created)
 
 
@@ -931,6 +958,11 @@ async def masukkan_pk_luar(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,
         hpp_per_kg=hpp, tanggal=tanggal, jam=jam, pk_purchase_batch_id=batch.id,
         kunci_kiriman=kunci_kiriman, bobot_final=bobot.pasti,
+        # Pemiliknya DISALIN dari batch-nya, bukan dibaca menyusul: yang masuk
+        # sudah masuk, dan pemiliknya tak boleh ikut bergeser bila batch-nya
+        # kemudian dikoreksi. Tanpa baris ini, PK pelanggan berubah jadi PK
+        # pabrik tepat di pintu Gudang 2 — tanpa satu pun galat.
+        jasa_id=batch.jasa_id,
     )
     batch.status_batch = "di_silo" if res.intake.tujuan != "ditumpuk" else "ditumpuk"
     await db.commit()

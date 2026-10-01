@@ -177,6 +177,14 @@ async def hitung_stok_kemasan(
             )
         )
     ).scalar_one()
+    # ⚠ TIDAK disaring `jasa_id IS NULL`, dan itu disengaja.
+    #
+    # Yang dihitung di sini KARUNG yang terpakai, bukan beras yang dimiliki.
+    # Beras pelanggan dikemas dengan karung stok PABRIK — keputusan pemilik:
+    # karungnya memang milik pabrik, yang penting berasnya tetap milik
+    # pelanggan. Menyaringnya di sini akan membuat stok karung terbaca lebih
+    # banyak daripada yang ada di rak, lalu pembelian karung berikutnya
+    # terlambat tepat saat pekerjaan jasa sedang banyak.
     terpakai = (
         await db.execute(
             select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0))
