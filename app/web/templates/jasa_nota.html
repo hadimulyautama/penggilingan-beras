@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block judul %}Nota jasa{% endblock %}
+{% block isi %}
+
+{# ── Satu-satunya yang dilihat orang yang tak pernah membuka isi app ini ──
+
+   Dirender sebagai teks BLOK, bukan tabel: notanya dicetak dan diserahkan,
+   dan lebar kolom yang bergeser antar ponsel membuat angka tak berbaris.
+   Susunannya dibentuk `jasa.nota_jasa()` — satu tempat, supaya yang tercetak
+   dan yang terbaca di layar tak pernah berbeda.
+
+   ⚠ TANPA SATU PUN ANGKA UANG. Pemilik barang berhak tahu BOBOTNYA; berapa
+   nilainya urusan keuangan. #}
+
+<pre class="kartu" style="white-space:pre-wrap;font-family:var(--mono);
+     font-size:13px;line-height:1.55;overflow-x:auto">{{ teks }}</pre>
+
+<a href="/jasa" class="btn btn--halus blok">Kembali ke daftar Jasa</a>
+
+{% endblock %}

@@ -1141,6 +1141,13 @@ _GRUP_AKSI = {
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
+    # Grup SENDIRI, bukan digabung ke "Barang keluar": yang mencari
+    # pengambilan jasa mencari pesanan pelanggannya, bukan truk yang berangkat
+    # — dan tiga aksi jasa yang berserak di antara enam aksi penjualan membuat
+    # keduanya harus dibaca satu per satu tiap kali.
+    "ambil_jasa": "Jasa (titipan pelanggan)",
+    "tutup_jasa": "Jasa (titipan pelanggan)",
+    "batalkan_jasa": "Jasa (titipan pelanggan)",
     "verifikasi_keluar": "Barang keluar",
     "muat_semua": "Barang keluar",
     "muat_barang": "Barang keluar",
@@ -1261,6 +1268,14 @@ _ACTION_WH = {
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
     "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
     "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",
+    # ── Jasa: g2, dengan satu alasan yang sama seperti barang keluar ──
+    #
+    # Gudangnya milik CATATAN, bukan milik orang yang menekannya. Pengambilan
+    # barang jasa mengeluarkan barang jadi, dan barang jadi berdiri di Gudang 2
+    # — dari sanalah ia berangkat. Penutupan & pembatalan pesanan menyusul
+    # pengambilannya, jadi ia tak boleh terpisah tab darinya: aksi yang
+    # berpasangan tetapi beda tab membuat orang mencari separuhnya.
+    "ambil_jasa": "g2", "tutup_jasa": "g2", "batalkan_jasa": "g2",
     # Undo tidak milik gudang mana pun; ia ikut G1 karena di situlah
     # tab pertama terbuka, dan aksinya sama isinya di kedua tab.
     "undo": "g1",

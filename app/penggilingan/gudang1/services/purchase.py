@@ -115,6 +115,58 @@ class CreatedBatch:
     jasa_baru: bool = False
 
 
+async def find_or_create_pelanggan(db: AsyncSession, nama: str) -> tuple:
+    """Cari pelanggan aktif (case-insensitive), buat bila belum ada.
+
+    ⚠ KENAPA INI ADA, dan kenapa ia tidak sama bahayanya dengan pemasok palsu.
+    Pos Timbang sengaja mengizinkan nama pemilik DIKETIK BEBAS: cermin
+    `pelanggan` disegarkan dari Kledo sekali seminggu, jadi pelanggan yang baru
+    dibuat hari ini memang bisa belum ada di daftar — dan borang yang menolaknya
+    akan menghentikan truk di halaman sampai sinkronisasi berikutnya.
+
+    Pesanan jasa, di sisi lain, WAJIB menunjuk baris pelanggan: tanpa itu
+    barangnya tak punya alamat untuk dikembalikan, dan pesanannya tak bisa
+    ditutup. Jadi salah satu harus mengalah, dan yang mengalah bukan truknya.
+
+    Bedanya dengan `find_or_create_supplier` (yang spek larang dipakai untuk
+    jasa): pemasok palsu MENIPU ANGKA — ia ikut ke skor pemasok, laporan
+    pembelian, dan HPP sebagai pembelian yang tak pernah terjadi. Baris
+    pelanggan dari nama yang diketik tidak menipu apa pun: ia memang pelanggan
+    yang memang menitipkan barang. Risikonya cuma KEMBAR dengan baris Kledo
+    yang ejaannya beda — merugikan, tetapi bisa dibereskan belakangan, dan jauh
+    lebih murah daripada muatan yang tak bisa dicatat.
+
+    `kledo_contact_id` dibiarkan KOSONG, dan itu penting: sinkronisasi mingguan
+    memakai kolom itu untuk mengenali barisnya sendiri, jadi baris ini tak akan
+    ditimpa — dan ia terbaca sebagai "belum tertaut Kledo" oleh siapa pun yang
+    membereskan kembarannya nanti.
+    """
+    from app.models import Pelanggan
+
+    nama = (nama or "").strip()
+    stmt = select(Pelanggan).where(
+        func.lower(Pelanggan.nama_pelanggan) == nama.lower(),
+        Pelanggan.deleted_at.is_(None),
+    )
+    ada = (await db.execute(stmt)).scalars().first()
+    if ada is not None:
+        return ada, False
+    baru = Pelanggan(nama_pelanggan=nama, status="aktif")
+    try:
+        # SAVEPOINT — tabrakan di sini tak boleh menggugurkan transaksi
+        # pemanggil: kunci tiket yang sudah terpasang harus tetap terpasang.
+        # Pelajaran yang sama sudah dibayar di `find_or_create_supplier`.
+        async with db.begin_nested():
+            db.add(baru)
+            await db.flush()
+    except IntegrityError:
+        ada = (await db.execute(stmt)).scalars().first()
+        if ada is None:
+            raise
+        return ada, False
+    return baru, True
+
+
 async def pesanan_jasa_dari_tiket(
     db: AsyncSession, *, user: User, tiket: dict,
 ) -> tuple[Jasa, bool]:
@@ -143,7 +195,18 @@ async def pesanan_jasa_dari_tiket(
     """
     pelanggan_id = tiket.get("pelanggan_id")
     if pelanggan_id is None:
-        raise ValueError("Tiket ini tidak menyebut pelanggan — bukan tiket jasa.")
+        # Nama diketik bebas di Pos Timbang — pelanggan baru yang belum sampai
+        # ke cermin Kledo. Barisnya dibuat di sini; lihat
+        # `find_or_create_pelanggan` untuk kenapa ini tidak sama bahayanya
+        # dengan pemasok palsu.
+        nama = (tiket.get("pihak_nama") or "").strip()
+        if not nama:
+            raise ValueError(
+                "Tiket jasa ini tak menyebut pemilik barangnya sama sekali — "
+                "tak ada alamat untuk mengembalikan barangnya. Lengkapi "
+                "pemiliknya di Pos Timbang dulu.")
+        pel, _baru = await find_or_create_pelanggan(db, nama)
+        pelanggan_id = pel.id
 
     tunjuk = tiket.get("jasa_id")
     if tunjuk is not None:

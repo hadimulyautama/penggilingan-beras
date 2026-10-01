@@ -1259,6 +1259,57 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Tidak ada barang jadi berkarung maupun PK yang "
                             "bisa dikeluarkan."},
              ] + _bidang_pengiriman()},
+            # ── PENGAMBILAN BARANG JASA ──
+            #
+            # Aksinya SENDIRI, bukan pilihan di dalam "Buat perintah barang
+            # keluar" — dan bedanya bukan kerapian. Perintah penjualan bertanya
+            # "kepada siapa dijual"; perintah pengambilan tidak bertanya sama
+            # sekali, sebab barang titipan kembali kepada yang menitipkannya.
+            # Satu borang yang memuat keduanya akan menyodorkan medan pembeli
+            # pada pengambilan — kesempatan mengetik nama yang salah di atas
+            # surat jalan barang orang lain.
+            #
+            # Daftar barangnya bergantung pada PESANAN yang dipilih, dan
+            # kosong sampai ada yang dipilih: daftar yang menawarkan barang
+            # seluruh pelanggan sekali salah pilih menyerahkan barang ke orang
+            # lain.
+            {"id": "ambil_jasa", "label": "\u25C7 Pengambilan barang jasa",
+             "post": "/api/actions/ambil-jasa",
+             "hint": "Barang titipan kembali ke pemiliknya — pembelinya tak "
+                     "ditanya. Satu truk satu perintah; pengambilan bertahap "
+                     "berarti beberapa perintah.",
+             "fields": [
+                 {"name": "jasa", "label": "Pesanan jasa", "type": "remote",
+                  "source": "/api/actions/jasa-berjalan",
+                  "kosong": "Tidak ada pesanan jasa yang berjalan."},
+                 {"name": "barang", "label": "Barang yang diambil",
+                  "type": "ulang_barang", "maks": 12,
+                  "source": "/api/actions/barang-jasa",
+                  "label_angka": "Jumlah", "tambah": "+ Tambah item",
+                  "kosong": "Pilih pesanannya dulu — daftar barangnya mengikuti "
+                            "pemiliknya."},
+             ] + _bidang_pengiriman()},
+            {"id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
+             "post": "/api/actions/tutup-jasa",
+             "hint": "Hanya bila tak ada lagi barang pesanan itu di pabrik — "
+                     "dan pesanan yang belum pernah menerima barang tak bisa "
+                     "ditutup, ia dibatalkan.",
+             "fields": [
+                 {"name": "jasa", "label": "Pesanan yang ditutup",
+                  "type": "remote", "source": "/api/actions/jasa-berjalan",
+                  "kosong": "Tidak ada pesanan jasa yang berjalan."},
+             ]},
+            {"id": "batalkan_jasa", "label": "\U0001F6AB Batalkan pesanan jasa",
+             "post": "/api/actions/batalkan-jasa",
+             "hint": "Hanya pesanan yang BELUM pernah menerima barang. Yang "
+                     "barangnya sudah ada diselesaikan lewat pengambilan.",
+             "fields": [
+                 {"name": "jasa", "label": "Pesanan yang dibatalkan",
+                  "type": "remote", "source": "/api/actions/jasa-berjalan",
+                  "kosong": "Tidak ada pesanan jasa yang berjalan."},
+                 {"name": "sebab", "label": "Sebab membatalkan", "type": "text",
+                  "wajib": True},
+             ]},
             {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
              "post": "/api/actions/tambah-barang-keluar",
              "fields": [
@@ -1308,3 +1359,161 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
         ]
     return aksi
+
+
+# ══════════════════ PENGAMBILAN BARANG JASA ══════════════════
+#
+# Barang pelanggan keluar lewat rantai yang SAMA dengan penjualan — perintah,
+# muat, verifikasi, satu truk satu perintah — dan itu bukan kebetulan: "boleh
+# ambil bertahap" tak butuh perubahan apa pun di situ, sebab tiap pengambilan
+# memang satu perintah, satu truk, satu tiket timbang.
+#
+# Yang membedakannya DUA hal saja: perintahnya bertanda `jasa_id`, dan daftar
+# barangnya sudah tersaring menurut PEMILIK. Pilihan yang tak boleh dipilih
+# sebaiknya tak muncul, bukan ditolak di akhir — dan penjaganya tetap berdiri
+# di `barang_keluar.tersedia` sebab borang menerima yang diketik juga.
+
+
+@router.get("/actions/jasa-berjalan")
+async def jasa_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pesanan jasa yang masih berjalan — untuk memilih pesanan mana diambil."""
+    wajib(can_see_financials(user))
+    from app.services.jasa import FASE_JASA, daftar_jasa
+
+    async with SessionLocal() as db:
+        kartu = await daftar_jasa(db)
+    return [{"value": str(k.id),
+             "label": (f"{k.kode} · {k.pelanggan} · "
+                       f"{FASE_JASA.get(k.fase, k.fase)}")}
+            for k in kartu]
+
+
+@router.get("/actions/barang-jasa")
+async def barang_jasa(jasa: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Barang pesanan jasa ini yang belum diambil pemiliknya.
+
+    Tanpa `jasa` daftarnya KOSONG, bukan berisi semua: daftar yang menawarkan
+    barang seluruh pelanggan saat pesanannya belum dipilih adalah daftar yang
+    sekali salah pilih menyerahkan barang ke orang lain.
+    """
+    wajib(can_see_financials(user))
+    if not jasa.isdigit():
+        return []
+    from app.models import FinishedGoodsStock, MillingProcess, ProductSku
+    from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
+    from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
+    from app.services.stok import jenis_produk, nama_produk
+
+    jid = int(jasa)
+    out: list[dict] = []
+    async with SessionLocal() as db:
+        # Barang jadi: dikelompokkan per SKU+mutu, persis seperti stok pabrik —
+        # satu rumus, dua pemilik (lihat `hitung_stok_finished_goods`).
+        combo = (await db.execute(
+            select(FinishedGoodsStock.product_sku_id,
+                   FinishedGoodsStock.rice_quality_standard_id)
+            .where(FinishedGoodsStock.jasa_id == jid).distinct()
+        )).all()
+        for sku_id, std_id in combo:
+            stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jid)
+            if float(stok["kg"]) <= 0.5:
+                continue
+            sku = await db.get(ProductSku, sku_id)
+            nm = nama_produk(jenis_produk(sku.kategori if sku else "-", None))
+            out.append({
+                "value": f"bj:{sku_id}|{std_id or ''}",
+                "label": (f"{nm} · {int(stok['karung'])} karung "
+                          f"({kg(stok['kg'])})")})
+        # PK Gudang 1 — untuk pesanan yang berhenti di PK: pelanggan membawa
+        # gabah, mengambil PK-nya. Keadaan yang SAH menurut kedalaman fleksibel.
+        proses = (await db.execute(
+            select(MillingProcess).where(MillingProcess.jasa_id == jid)
+        )).scalars().all()
+        if proses:
+            rincian = await pk_breakdown_banyak(db, [p.id for p in proses])
+            for p in proses:
+                sisa = rincian[p.id].tersedia
+                if sisa > 0.5:
+                    out.append({"value": f"pk:{p.kode_proses}",
+                                "label": f"PK {p.kode_proses} · {kg(sisa)} "
+                                         "(isi dalam kg)"})
+    return out
+
+
+class JasaReq(BaseModel):
+    jasa: str = ""
+
+
+class JasaBatalReq(JasaReq):
+    sebab: str = ""
+
+
+class AmbilJasaReq(BaseModel):
+    jasa: str = ""
+    barang: list[BarisReq] | None = None
+    no_polisi: str = ""
+    nama_ekspedisi: str = ""
+    catatan: str = ""
+
+
+@router.post("/actions/ambil-jasa")
+async def act_ambil_jasa(req: AmbilJasaReq,
+                         user: User = Depends(pengguna_aksi)) -> dict:
+    """Terbitkan perintah PENGAMBILAN barang jasa oleh pemiliknya.
+
+    Pembelinya tidak ditanya: barang titipan kembali kepada yang menitipkannya,
+    dan medan nama di sini cuma kesempatan mengetiknya salah. `buat_perintah`
+    yang menurunkannya dari pesanannya.
+    """
+    wajib(can_see_financials(user))
+    if not (req.jasa or "").isdigit():
+        raise HTTPException(400, "Pilih pesanan jasa yang barangnya diambil.")
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        baris = await _baris_dari_borang(db, req)
+        try:
+            r = await bk.buat_perintah(
+                db, user=u, baris=baris, jasa_id=int(req.jasa),
+                metode=None, no_polisi=(req.no_polisi or None),
+                nama_ekspedisi=(req.nama_ekspedisi or None),
+                catatan=(req.catatan or None))
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal membuat perintah pengambilan.")
+        kode, pembeli = r.rec.kode, r.rec.nama_pembeli
+    return {"ok": True,
+            "pesan": f"✓ Perintah pengambilan *{kode}* terbit untuk {pembeli}. "
+                     "Operator memuatnya dari Antrian tunggu, lalu Admin "
+                     "memverifikasi dengan tiket timbang keluar."}
+
+
+@router.post("/actions/tutup-jasa")
+async def act_tutup_jasa(req: JasaReq,
+                         user: User = Depends(pengguna_aksi)) -> dict:
+    """Tutup pesanan jasa — aturan "selesai" diperiksa di layanan."""
+    wajib(can_see_financials(user))
+    from app.services.jasa import JasaError, tutup_pesanan
+
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            pesan = await tutup_pesanan(db, user=u, jasa_id=int(req.jasa))
+        except (JasaError, ValueError) as e:
+            raise galat(e, "Gagal menutup pesanan jasa.")
+    return {"ok": True, "pesan": pesan}
+
+
+@router.post("/actions/batalkan-jasa")
+async def act_batalkan_jasa(req: JasaBatalReq,
+                            user: User = Depends(pengguna_aksi)) -> dict:
+    """Batalkan pesanan jasa yang BELUM pernah menerima barang."""
+    wajib(can_see_financials(user))
+    from app.services.jasa import JasaError, batalkan_pesanan
+
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            pesan = await batalkan_pesanan(db, user=u, jasa_id=int(req.jasa),
+                                           sebab=req.sebab)
+        except (JasaError, ValueError) as e:
+            raise galat(e, "Gagal membatalkan pesanan jasa.")
+    return {"ok": True, "pesan": pesan}

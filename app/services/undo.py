@@ -106,6 +106,12 @@ _TABLE_LABEL = {
     "polishing_silo_usage": "selesai penyosohan (silo)",
     "polishing_output_logs": "hasil penyosohan",
     "polishing_process": "proses penyosohan",
+    # Bukan tabel yang bisa di-undo: penutupan & pembatalan pesanan jasa punya
+    # penjaganya sendiri (aturan "selesai", dan "belum pernah menerima
+    # barang"). Ia di sini karena pratinjau undo menampilkan tindakan terakhir
+    # APA PUN tabelnya — dan layar yang berbunyi "jasa · status=selesai" tak
+    # menolong siapa pun yang membacanya.
+    "jasa": "pesanan jasa",
     # Belum bisa dibatalkan
     # Jeda tidak dibatalkan lewat undo: yang benar bukan menghapus catatan
     # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya

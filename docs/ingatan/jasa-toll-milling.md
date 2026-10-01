@@ -64,34 +64,64 @@ dibangun di irisan ini:
   · gabah basah jasa WAJIB ke pengering (`tumpukan.tujuan_sah`);
   · saringan stok barang jadi & bekatul; `packaging.py` sengaja TIDAK disaring.
 
-⚠ **YANG MASIH TERBUKA, dan ia nyata:** pengambilan barang jasa belum punya
-jalur. `outgoing_records.jasa_id` sudah ada kolomnya, tetapi borang barang
-keluar belum menawarkan barang jasa kepada pemiliknya — dan memang tak boleh
-menawarkannya sebagai PENJUALAN. Jadi beras pelanggan tercatat benar sebagai
-miliknya dan tak bisa terjual keliru, tetapi pengambilannya belum bisa dicatat:
-stoknya akan tetap berdiri sesudah truknya pergi. Itu lubang PEMBUKUAN, bukan
-bahaya — dan ia pekerjaan irisan berikutnya bersama `sisa_jasa()`, aturan
-"selesai", layar Jasa, dan notanya.
+## Irisan KETIGA — lingkarannya tertutup
 
-## Yang BELUM — berurutan
+Sisa per fase (`sisa_jasa`), aturan "selesai" satu kalimat, pengambilan,
+layar Jasa (`/jasa`), dan notanya. Dengan ini pesanan jasa bisa ditutup.
 
-1. **PENGAMBILAN barang jasa** — lihat peringatan di atas. Ini yang paling
-   mendesak: tanpanya pesanan tak pernah bisa ditutup.
-2. **Sisa & aturan selesai**: SELESAI = pernah ada barang masuk DAN tak ada lagi
-   barang ber-`jasa_id` ini di pabrik. Satu penolong `sisa_jasa(jasa_id)`, satu
-   sumber untuk kartu maupun pemeriksaan selesai.
-4. **Layar Jasa** (menampilkan, bukan menerima) + **nota jasa**: bobot & milik
-   saja, tanpa uang; bekatul di LUAR "total kembali", per proses sosoh;
-   selisihnya SATU baris yang tidak dirinci dan mengaku tidak diukur terpisah.
-5. **Gabah basah**: `IntakeJenis.tujuan_wajib='dryer'` — jalurnya sudah dibaca
-   `api.py` tetapi belum pernah diisi satu entri pun. Satu nilai, bukan fitur.
-6. **PK walk-in** (`pk_purchase_batches`): Gudang 2 saja.
-7. **MILESTONE TERSENDIRI, jangan dicicil**: jasa sosoh BROKEN & MENIR. Rumus
-   rendemen penyosohan berpenyebut PK; sosoh broken dengan rumus itu
-   menghasilkan angka yang BENTUKNYA rendemen dan ARTINYA bukan — dan seluruh
-   pagar kewajaran berdiri di atas angka itu. Jangan menambah medan "jenis
-   bahan" penyosohan "sekalian": medan yang tak pernah berubah membuat orang
-   berikutnya menyangka jalurnya sudah ada.
+DUA bug nyata ditemukan uji irisan ini, dan keduanya tak melempar galat:
+
+  · **`baris_dari_item` tak ada.** Tiga tempat menyusun ulang baris perintah
+    dari `OutgoingItem` tanpa `jasa_id` — pemiliknya hidup di PERINTAHNYA. Maka
+    `tersedia()` membaca stok PABRIK untuk barang pelanggan, menjawab "tinggal
+    0 kg", dan pengambilan yang sah ditolak dengan kalimat yang menyuruh
+    operator mencari kesalahan yang tak ada. Di lapangan ia akan muncul sebagai
+    truk pelanggan yang sudah dimuat lalu tak bisa dicatat.
+  · **`pernah_ada_barang` cuma melihat dua tabel.** Pesanan yang barangnya sudah
+    di silo Gudang 2 terbaca "belum pernah menerima barang" — lalu ia bisa
+    DIBATALKAN, dan barangnya tertinggal tanpa pemilik yang berjalan: saringan
+    stok tetap membuangnya dari stok pabrik, jadi ia hilang dari KEDUA sisi.
+
+Dan satu keputusan yang perlu diingat: **nama pemilik yang diketik bebas di Pos
+Timbang kini melahirkan baris `pelanggan`** (`find_or_create_pelanggan`).
+Bedanya dengan pemasok palsu yang spek larang: pemasok palsu MENIPU ANGKA (ikut
+ke skor pemasok, laporan pembelian, HPP sebagai pembelian yang tak pernah
+terjadi); baris pelanggan tidak menipu apa pun — risikonya cuma kembar dengan
+baris Kledo yang ejaannya beda, dan itu bisa dibereskan belakangan.
+`kledo_contact_id` dibiarkan kosong supaya sinkronisasi mingguan tak menimpanya
+dan yang membereskan kembarannya bisa mengenalinya.
+
+## Yang BELUM
+
+**SATU hal, dan ia MILESTONE TERSENDIRI — jangan dicicil:**
+
+**Jasa sosoh BROKEN & MENIR.** Rumus rendemen penyosohan berpenyebut PK
+(`polishing.py`: `beras_total / pk_terpakai`); sosoh broken dengan rumus itu
+menghasilkan angka yang BENTUKNYA rendemen dan ARTINYA bukan — dan seluruh pagar
+kewajaran, kabar ke admin, serta pemeriksaan mustahil-rendemen berdiri di atas
+angka itu. **Satu proses sosoh broken yang lolos membuat sebaran rendemen tak
+bisa dipakai menilai apa pun lagi, untuk SEMUA proses.**
+
+Dua lubang lainnya: penyosohan tak mencatat APA yang disosoh
+(`polishing_silo_usage` cuma bobot), dan broken & menir belum punya rumah
+sebagai barang MASUK — `BROKEN_MASUK` ada sebagai jenis timbang tetapi sengaja
+tak dipetakan di `PETA_MASUK` (keputusan pemilik 24 September: broken beli-luar
+adalah pembelian, bukan antrean giling). Jadi `BROKEN_MASUK` akan bercabang dua
+arti menurut ada-tidaknya pemilik — `PETA_MASUK` berubah dari peta jadi peta
+bersyarat. Perubahan BENTUK, bukan penambahan baris.
+
+⚠ Dan jangan menambah medan "jenis bahan" penyosohan "sekalian": medan yang tak
+pernah berubah membuat orang berikutnya menyangka jalurnya sudah ada.
+
+Di Pos Timbang, membukanya nanti = centang `boleh_jasa` pada `BROKEN_MASUK` di
+master — nol baris kode.
+
+**Yang sudah selesai** (irisan 1–3): skema sebelas tabel · penjaga kepemilikan
+berkunci basis data · saringan stok · tujuh perbaikan G · tumpukan jasa · rantai
+Gudang 2 sampai beras · PK walk-in · gabah basah wajib ke pengering · sisa &
+aturan selesai · pengambilan · layar Jasa · nota · borang Pos Timbang untuk
+ketiga komoditas.
+
 
 ## Yang mudah salah
 

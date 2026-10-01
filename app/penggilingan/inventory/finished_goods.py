@@ -324,9 +324,21 @@ async def hitung_stok_bekatul(db: AsyncSession) -> float:
 
 
 async def hitung_stok_finished_goods(
-    db: AsyncSession, sku_id: int, standard_id: int | None
+    db: AsyncSession, sku_id: int, standard_id: int | None,
+    *, jasa_id: int | None = None,
 ) -> dict:
-    """Stok barang jadi (karung, kg) per SKU+grade = masuk produksi − keluar."""
+    """Stok barang jadi (karung, kg) per SKU+grade = masuk produksi − keluar.
+
+    `jasa_id` memilih MILIK SIAPA yang dihitung, dan bawaannya PABRIK (None) —
+    bukan "semua". Bawaan yang aman arahnya satu: fungsi ini memberi makan
+    borang barang keluar, dan borang itu menjual. Bawaan "semua" berarti setiap
+    pemanggil yang lupa menyebutnya akan menawarkan beras pelanggan untuk
+    dijual, tanpa satu pun galat.
+
+    Dengan `jasa_id` terisi ia menjawab pertanyaan yang berbeda: berapa barang
+    pesanan itu yang belum diambil pemiliknya. Satu fungsi, satu rumus, dua
+    pertanyaan — bukan dua fungsi yang suatu hari berbeda cara menghitungnya.
+    """
     def _std(q):
         if standard_id is None:
             return q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
@@ -339,22 +351,36 @@ async def hitung_stok_finished_goods(
             .where(FinishedGoodsStock.product_sku_id == sku_id,
                    # ⚠⚠ INI SARINGAN YANG PALING BERBAHAYA KALAU TERLEWAT.
                    #
-                   # Fungsi ini menjawab "berapa stok barang jadi pabrik", dan
-                   # jawabannya dipakai borang BARANG KELUAR untuk menentukan
-                   # berapa yang boleh dijual. Tanpa saringan ini, beras
-                   # pelanggan terhitung sebagai stok pabrik lalu pabrik
-                   # menjualnya — bukan angka yang salah, barang orang lain yang
-                   # terjual, dan itu tak bisa diperbaiki dengan pembetulan
-                   # pembukuan. Dan ia tak melempar satu pun kesalahan.
-                   FinishedGoodsStock.jasa_id.is_(None))
+                   # Tanpa saringan pemilik, beras pelanggan terhitung sebagai
+                   # stok pabrik lalu pabrik menjualnya — bukan angka yang
+                   # salah, barang orang lain yang terjual, dan itu tak bisa
+                   # diperbaiki dengan pembetulan pembukuan. Dan ia tak
+                   # melempar satu pun kesalahan.
+                   FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
+                   else FinishedGoodsStock.jasa_id == jasa_id)
         ))
     ).one()
+    # ⚠ YANG KELUAR DISARING PEMILIK JUGA, dan kalau tidak angkanya mustahil.
+    #
+    # Masuk disaring (pabrik atau pesanan itu), keluar tidak: maka pengambilan
+    # pelanggan akan dikurangkan dari stok PABRIK — stok pabrik menyusut karena
+    # barang orang lain diambil, dan pesanan jasanya tampak tak pernah berkurang.
+    # Dua kesalahan dari satu saringan yang terlupa.
+    #
+    # Dibaca dari `outgoing_records.jasa_id`: pengambilan jasa punya perintahnya
+    # sendiri, satu truk satu perintah, dan itulah yang menautkannya ke pesanan.
+    from app.penggilingan.inventory.models import OutgoingRecord
+
     oq = select(
         func.coalesce(func.sum(OutgoingItem.jumlah_karung), 0),
         func.coalesce(func.sum(OutgoingItem.berat_kg), 0),
+    ).join(
+        OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id
     ).where(
         OutgoingItem.item_type == "finished_goods",
         OutgoingItem.product_sku_id == sku_id,
+        OutgoingRecord.jasa_id.is_(None) if jasa_id is None
+        else OutgoingRecord.jasa_id == jasa_id,
     )
     if standard_id is None:
         oq = oq.where(OutgoingItem.rice_quality_standard_id.is_(None))

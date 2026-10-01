@@ -258,7 +258,37 @@ dibatalkan, dan tiket batal yang sudah melahirkan pesanan meninggalkan pesanan
 yatim. `timbangan_transaksi.jasa_id` adalah penunjuk ke pesanan BERJALAN —
 itulah yang membuat dua truk jadi satu pesanan.
 
-Uji ketaatannya `tests/pg/test_jasa_ketaatan.py`.
+**Sisa & "SELESAI"** — `jasa.sisa_jasa()` adalah SATU sumber, dipakai kartu
+maupun pemeriksaan penutupan. ⚠ Ia mengembalikan RINCIAN PER FASE dan tak pernah
+satu angka: gabah yang sudah jadi PK tak lagi ada sebagai gabah, jadi
+menjumlahkannya menghitung beras yang sama dua-tiga kali — dan angka itu dipakai
+memutuskan berapa yang diserahkan. Aturannya satu kalimat:
+
+    SELESAI = pernah ada barang masuk DAN tak ada lagi barang ber-`jasa_id` ini.
+
+Syarat pertama bukan hiasan: pesanan yang baru lahir juga bersisa NOL, dan tanpa
+`pernah_ada_barang()` ia terbaca selesai pada detik ia dibuat.
+
+**Pengambilan** menumpang rantai barang keluar apa adanya (perintah · muat ·
+verifikasi, satu truk satu perintah) — "boleh ambil bertahap" karena itu tak
+butuh perubahan apa pun di sana. Yang ditambahkan: `outgoing_records.jasa_id`,
+daftar barang yang tersaring pemilik, dan `hitung_stok_finished_goods(...,
+jasa_id=)` — satu rumus, dua pertanyaan, bawaannya PABRIK.
+
+⚠ `barang_keluar.baris_dari_item()` wajib dipakai untuk menyusun ulang baris
+perintah: `jasa_id` hidup di PERINTAHNYA, bukan di barisnya, dan tiga tempat
+pernah melewatkannya — `tersedia()` lalu membaca stok pabrik untuk barang
+pelanggan dan menolak pengambilan yang sah.
+
+**Layar Jasa** (`/jasa`, pintu ke-14, ikon `◇` — Geometric Shapes, bukan emoji)
+tempat MENAMPILKAN: pesanan lahir di Pos Timbang, jadi tak ada tombol "buat
+pesanan". Ia ada justru karena saringan stok membuang barang pelanggan dari
+setiap layar stok — tanpa halaman ini barang orang lain memakan silo tanpa
+terbaca di mana pun. **Nota** `jasa.nota_jasa()`: bobot & milik saja, bekatul di
+LUAR "Total kembali" dan per proses sosoh, selisihnya SATU baris yang mengaku
+tidak diukur terpisah.
+
+Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (21 uji).
 
 ## Bobot bahan: nota vs timbangan (sejak 25 September 2026)
 

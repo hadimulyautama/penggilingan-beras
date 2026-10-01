@@ -143,6 +143,28 @@ TAB = (
     # Stok Produk: barang jadi berdiri di Gudang 2.
     ("barang_keluar", "/barang-keluar", "Barang Keluar",
      "Perintah muat, muatan, dan riwayatnya", None, "⇥"),
+    # ── Jasa — keputusan pemilik 1 Oktober 2026 ──
+    #
+    # Pesanan jasa LAHIR di Pos Timbang (pelanggan + pesanannya) dan diterima
+    # operator lewat kartu Antrian tunggu. Jadi halaman ini tempat MENAMPILKAN,
+    # bukan tempat menerima — dan itu sebabnya ia daftar, bukan antrean: yang
+    # menagih pekerjaan tetap Antrian tunggu.
+    #
+    # Yang dijawabnya tak bisa dijawab layar lain: barang orang lain tersebar
+    # di enam tempat (halaman, pengering, silo, PK G1, PK G2, barang jadi), dan
+    # saringan stok justru MEMBUANGNYA dari tiap layar stok — benar untuk stok
+    # pabrik, dan karena itu barang pelanggan tak punya satu pun layar sampai
+    # halaman ini ada.
+    #
+    # MEJA: menutup dan membatalkan pesanan kerja meja, dan "berapa ton barang
+    # orang lain di gudang" bukan angka yang operator butuh sambil mengangkat.
+    #
+    # ⚠ IKONNYA dari Geometric Shapes (U+25xx), BUKAN emoji — sebagian mesin
+    # Android menggambar emoji sebagai kotak kosong, dan ikon yang jadi kotak
+    # pada satu ponsel membuat pintunya tak bernama di situ. "◇" dipilih karena
+    # belum dipakai pintu lain: barang yang dititipkan, bukan dimiliki.
+    ("jasa",       "/jasa",       "Jasa",
+     "Barang titipan pelanggan: sisa & pengambilannya", MEJA, "◇"),
     # ── Kabar — keputusan pemilik 26 September 2026 ──
     #
     # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum

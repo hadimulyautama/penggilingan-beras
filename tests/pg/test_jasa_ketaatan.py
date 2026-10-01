@@ -796,3 +796,249 @@ async def test_beras_jasa_bukan_stok_pabrik(pg, pemakai, pabrik):
             db, fg.product_sku_id, fg.rice_quality_standard_id)
         assert float(stok["kg"]) == 0, \
             f"beras pelanggan terhitung stok pabrik: {stok}"
+
+
+# ═══════════ 6 · PENGAMBILAN, "SELESAI", DAN NOTANYA ═══════════
+
+
+async def _pk_jasa_walk_in(pg, admin, *, berat=5_000.0, kode_tiket="JTP0",
+                           pelanggan="Bu Sri") -> int:
+    """PK jasa dari LUAR, lewat jalur sungguhannya: tiket → batch → silo G2.
+
+    ⚠ Dipakai menggantikan penyisipan `_add_intake` langsung, dan sebabnya
+    ditemukan uji: pesanan yang barangnya disisipkan tanpa batch terbaca "belum
+    pernah menerima barang" — lalu ia bisa dibatalkan sementara barangnya sudah
+    di silo. Fixture yang melompati jalur nyata menguji jalur yang tak ada.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.service import (create_pk_purchase_dari_timbang,
+                                                  masukkan_pk_luar)
+
+    async with pg() as db:
+        pid = await _pelanggan(db, pelanggan)
+        tid = await _tiket(db, kode=kode_tiket, berat=berat, pelanggan_id=pid,
+                           jenis="BERAS_PK", nopol="AD 1 PK")
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, admin.id)
+        r = await create_pk_purchase_dari_timbang(
+            db, user=u, timbangan_transaksi_id=tid, jenis_pk="KL")
+        kode_batch, jid = r.batch.kode_batch, r.batch.jasa_id
+        assert r.batch.supplier_id is None, "PK titipan jadi pembelian"
+    async with pg() as db:
+        u = await db.get(User, admin.id)
+        await masukkan_pk_luar(db, user=u, kode=kode_batch, tujuan="A")
+    return jid
+
+
+async def _pesanan_sampai_beras(pg, pemakai, admin, kode_tiket="JTP0",
+                                karung=120, pelanggan="Bu Sri",
+                                bekatul_kg: float = 0.0):
+    """Satu pesanan PK jasa yang sudah disosoh & dikemas. → (jasa_id, sku, std)
+
+    Penyosohannya DITUTUP, bukan dibiarkan berjalan: selama ia terbuka, isi
+    silo Gudang 2 masih terbaca utuh di seluruh app (`hitung_stok_silo`
+    mengurangi hanya saat `berat_akhir_kg` terisi), jadi `sisa_jasa` pun
+    menyebut PK-nya masih ada — benar, dan sengaja sama dengan layar stok.
+    """
+    from app.models import FinishedGoodsStock, User
+    from app.penggilingan.gudang2.polishing import (catat_output,
+                                                    mulai_penyosohan,
+                                                    selesai_penyosohan)
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.seed import seed_master
+
+    await seed_master()
+    jid = await _pk_jasa_walk_in(pg, admin, kode_tiket=kode_tiket,
+                                 pelanggan=pelanggan)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        kode_pol = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_output(db, user=u, kode=kode_pol, jenis="medium",
+                           berat_kg=karung * 25)
+        # Hasil samping dicatat SEBELUM prosesnya ditutup — sesudahnya
+        # `catat_output` menolak, dan benar: hasil yang muncul setelah mesin
+        # dinyatakan berhenti adalah hasil yang tak punya prosesnya.
+        if bekatul_kg:
+            await catat_output(db, user=u, kode=kode_pol, jenis="bekatul",
+                               berat_kg=bekatul_kg)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        # Sisa nol: seluruh PK-nya habis jadi beras & hasil samping. Silonya
+        # disebut satu per satu — `selesai_penyosohan` menandai SATU silo, dan
+        # prosesnya baru selesai saat semuanya ditandai.
+        await selesai_penyosohan(db, user=u, kode=kode_pol, nama_silo="A",
+                                 sisa_kg=0)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_packing(db, user=u, kode_pol=kode_pol, kategori="beras_putih",
+                            grade="medium", material_kode="biasa", ukuran=25,
+                            jumlah_karung=karung)
+    async with pg() as db:
+        fg = (await db.execute(select(FinishedGoodsStock).where(
+            FinishedGoodsStock.jasa_id == jid))).scalars().first()
+        return jid, fg.product_sku_id, fg.rice_quality_standard_id
+
+
+async def test_sisa_jasa_tidak_pernah_dijumlah_jadi_satu_angka(pg, pemakai, admin, pabrik):
+    """Rincian PER FASE, dan `fase` diturunkan dari tempat barangnya.
+
+    Satu angka gabungan akan menghitung beras yang sama dua sampai tiga kali —
+    dan angka itu dipakai orang memutuskan berapa yang harus diserahkan.
+    """
+    from app.services.jasa import sisa_jasa
+
+    jid, _, _ = await _pesanan_sampai_beras(pg, pemakai, admin)
+    async with pg() as db:
+        s = await sisa_jasa(db, jid)
+        assert s.barang_jadi_kg == 3_000
+        assert s.pk_g2_kg == 0, "PK yang sudah disosoh masih dihitung ada"
+        assert s.fase == "beras"
+        assert s.ada
+
+
+async def test_pesanan_baru_belum_selesai_walau_sisanya_nol(pg, pemakai):
+    """⚠ JEBAKAN NOL, dan ia yang membuat aturan "selesai" perlu dua syarat.
+
+    Pesanan yang baru dibuat sementara truknya belum datang juga punya sisa NOL.
+    Tanpa syarat "pernah ada barang masuk", ia akan terbaca selesai pada detik
+    ia lahir — lalu pelanggannya datang ke pesanan yang sudah ditutup.
+    """
+    from app.models import Jasa
+    from app.services.jasa import boleh_ditutup
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Pak Budi")
+        j = Jasa(kode="JAS-UJI-710", pelanggan_id=pid)
+        db.add(j)
+        await db.flush()
+        jid = j.id
+        await db.commit()
+    async with pg() as db:
+        boleh, sebab = await boleh_ditutup(db, jid)
+        assert not boleh
+        assert "Belum ada barang masuk" in sebab, sebab
+
+
+async def test_pengambilan_mengurangi_pesanan_bukan_stok_pabrik(pg, pemakai, admin, pabrik):
+    """⚠⚠ DUA KESALAHAN DARI SATU SARINGAN YANG TERLUPA.
+
+    Kalau yang KELUAR tak ikut disaring pemilik, pengambilan pelanggan akan
+    dikurangkan dari stok PABRIK: stok pabrik menyusut karena barang orang lain
+    diambil, dan pesanan jasanya tampak tak pernah berkurang. Uji ini menahan
+    keduanya sekaligus — itu sebabnya ia memeriksa DUA angka.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
+    from app.services import barang_keluar as bk
+    from app.services.jasa import sisa_jasa
+
+    jid, sku, std = await _pesanan_sampai_beras(pg, pemakai, admin)
+    async with pg() as db:
+        pabrik_sebelum = float(
+            (await hitung_stok_finished_goods(db, sku, std))["kg"])
+
+    # Perintah pengambilan 50 karung (1.250 kg), lalu dimuat seluruhnya.
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        r = await bk.buat_perintah(
+            db, user=u, jasa_id=jid,
+            baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku,
+                                    std_id=std, jumlah_karung=50)],
+            no_polisi="AD 7 JASA")
+        rec_id = r.rec.id
+        # Pembelinya PEMILIKNYA, dan tak ditanya siapa pun.
+        assert r.rec.jasa_id == jid
+        assert r.rec.nama_pembeli == "Bu Sri"
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        # ① Pesanannya berkurang.
+        s = await sisa_jasa(db, jid)
+        assert s.barang_jadi_kg == 1_750, s.barang_jadi_kg
+        # ② Stok PABRIK tidak tersentuh sama sekali.
+        assert float((await hitung_stok_finished_goods(db, sku, std))["kg"]) \
+            == pabrik_sebelum
+
+
+async def test_pesanan_ditutup_hanya_setelah_barangnya_habis(pg, pemakai, admin, pabrik):
+    """SELESAI = pernah ada barang masuk DAN tak ada lagi barangnya di pabrik."""
+    from app.models import Jasa, User
+    from app.models.jasa import SELESAI
+    from app.services import barang_keluar as bk
+    from app.services.jasa import JasaError, tutup_pesanan
+
+    jid, sku, std = await _pesanan_sampai_beras(pg, pemakai, admin,
+                                               kode_tiket="JTP2")
+
+    # Masih ada barangnya → DITOLAK, dan penolakannya menyebut di mana.
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        with pytest.raises(JasaError) as e:
+            await tutup_pesanan(db, user=u, jasa_id=jid)
+        assert "Masih ada barang" in e.value.args[0], e.value.args[0]
+
+    # Diambil SELURUHNYA (120 karung = 3.000 kg).
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        r = await bk.buat_perintah(
+            db, user=u, jasa_id=jid,
+            baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku,
+                                    std_id=std, jumlah_karung=120)],
+            no_polisi="AD 8 JASA")
+        rec_id = r.rec.id
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        pesan = await tutup_pesanan(db, user=u, jasa_id=jid)
+        assert "SELESAI" in pesan
+    async with pg() as db:
+        assert (await db.get(Jasa, jid)).status == SELESAI
+
+
+async def test_nota_memisahkan_bekatul_dari_total_kembali(pg, pemakai, admin, pabrik):
+    """⭐ TIGA hal dalam bentuk nota yang tidak boleh digeser.
+
+    1. bekatul DI LUAR "Total kembali" — ia tidak kembali, jadi
+       menjumlahkannya akan berbohong tentang apa yang diterima;
+    2. bekatul PER PROSES SOSOH, bukan satu angka gabungan;
+    3. selisihnya SATU baris yang mengaku TIDAK DIUKUR TERPISAH — sekam tak
+       bisa dideteksi dan bobot gabah kering tak pernah diukur, jadi nota yang
+       menyebut sebab terukur akan ditanyai rinciannya.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+    from app.services.jasa import nota_jasa
+
+    jid, _, _ = await _pesanan_sampai_beras(pg, pemakai, admin,
+                                           kode_tiket="JTP3", bekatul_kg=300)
+    async with pg() as db:
+        kode_pol = (await db.execute(select(PolishingProcess.kode_proses).where(
+            PolishingProcess.jasa_id == jid))).scalars().one()
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_bekatul(db, user=u, kode_pol=kode_pol, berat_kg=300)
+
+    async with pg() as db:
+        teks = await nota_jasa(db, jid)
+
+    assert "Total kembali" in teks
+    # Bekatulnya disebut, PER PROSES, dan di bagian yang terpisah.
+    assert "BERALIH MILIK" in teks
+    assert kode_pol in teks.split("BERALIH MILIK")[1], \
+        "bekatul tidak dirinci per proses sosoh"
+    # Dan ia TIDAK ikut ke "Total kembali": belum ada yang diambil sama sekali.
+    blok_kembali = teks.split("Total kembali")[1].splitlines()[0]
+    assert "0 kg" in blok_kembali, blok_kembali
+    # Selisihnya mengaku tidak diukur terpisah — tak boleh menyebut sebab
+    # terukur, sebab pabrik tidak tahu bagian mana air dan bagian mana sekam.
+    assert "tidak diukur terpisah" in teks
+    assert "susut pengeringan, sekam & susut proses" in teks

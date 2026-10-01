@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block judul %}Jasa{% endblock %}
+{% block isi %}
+
+{# ── Halaman ini MENAMPILKAN, tidak menerima ──
+
+   Pesanan jasa lahir di Pos Timbang lalu diterima operator dari kartu Antrian
+   tunggu. Tak ada tombol "buat pesanan" di sini, dan itu disengaja: pesanan
+   yang bisa dibuat di dua tempat akan dibuat dua kali — lalu satu pekerjaan
+   terpecah jadi dua nota dan dua rendemen.
+
+   Dan ia ada karena saringan stok: `jasa_id IS NULL` membuang barang pelanggan
+   dari SETIAP layar stok (benar — ia bukan stok pabrik), jadi tanpa halaman ini
+   barang orang lain memakan silo dan lantai tanpa terbaca di mana pun. #}
+
+<div class="saring">
+  {% for nilai, label in STATUS_PILIHAN %}
+    <a href="?status={{ nilai }}"
+       class="pil{{ ' pil--aktif' if tapis == nilai }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if ton > 1 %}
+  {# Satu angka, dan pemilik memintanya apa adanya: berapa ton barang orang
+     lain di gudang hari ini. TANPA ambang, tanpa warna bahaya, tanpa kalimat
+     yang menilai — keputusan pemilik tentang batas ton berlaku di sini juga.
+
+     Disebut PERKIRAAN terang-terangan: satu muatan bisa terhitung dua kali
+     bila ia sedang berpindah fase, dan angka yang disebut pasti akan dibaca
+     sebagai janji oleh orang yang menagihnya. #}
+  <div class="kartu" style="padding:10px 14px">
+    <div class="baris">
+      <span>Barang titipan di gudang</span>
+      <b>± {{ ton|round|int }} kg</b>
+    </div>
+    <small class="redup">
+      perkiraan — muatan yang sedang berpindah fase bisa terhitung dua kali
+    </small>
+  </div>
+{% endif %}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 12v8H4v-8"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/></svg>
+    <div>
+      <h2>Tak ada pesanan {{ tapis }}</h2>
+      <p class="bantu">
+        Pesanan jasa lahir di Pos Timbang — petugas memilih pelanggannya saat
+        menimbang barang masuk, lalu operator menerima tiketnya di
+        <a href="/aksi">Antrian tunggu</a>.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% for k in kartu %}
+  <div class="kartu">
+    <div class="kartu__judul">
+      {{ k.kode }} · {{ k.pelanggan }}
+      <span class="lencana lencana--netral">{{ FASE_JASA.get(k.fase, k.fase) }}</span>
+    </div>
+
+    {# Sisanya PER FASE, tidak dijumlah. Gabah yang sudah jadi PK tak lagi ada
+       sebagai gabah; satu angka gabungan akan menghitung beras yang sama dua
+       sampai tiga kali — dan angka itu dipakai orang memutuskan berapa yang
+       harus diserahkan. #}
+    {% set s = k.sisa %}
+    {% for sebut, kg in [('Gabah menunggu', s.gabah_kg),
+                         ('Di pengering', s.dryer_kg),
+                         ('Di silo', s.silo_kg),
+                         ('PK Gudang 1', s.pk_g1_kg),
+                         ('PK Gudang 2', s.pk_g2_kg),
+                         ('Barang jadi, belum diambil', s.barang_jadi_kg)] %}
+      {% if kg > 1 %}
+        <div class="baris"><span>{{ sebut }}</span><b>{{ kg|round|int }} kg</b></div>
+      {% endif %}
+    {% endfor %}
+    {% if not s.ada %}
+      <div class="baris">
+        <span>Di pabrik</span><b>tak ada barang</b>
+      </div>
+    {% endif %}
+
+    <div class="baris">
+      <span>Umur pesanan</span><b>{{ k.umur_hari }} hari</b>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <a href="/jasa/{{ k.id }}/nota" class="btn btn--halus">Nota</a>
+      {% if k.status == 'berjalan' %}
+        {# Tombol tutup hanya muncul saat memang boleh — dan sebabnya disebut
+           saat tidak. Tombol yang pasti ditolak lebih buruk daripada tombol
+           yang tak ada, tetapi tombol yang HILANG tanpa sebab menyuruh orang
+           menebak; jadi yang hilang digantikan kalimatnya. #}
+        {% if k.boleh_tutup %}
+          <button class="btn aksi-jasa" data-post="/api/actions/tutup-jasa"
+                  data-jasa="{{ k.id }}">Tutup pesanan</button>
+        {% else %}
+          <span class="bantu" style="flex:1 1 100%">{{ k.sebab }}</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}
+
+{% endblock %}
