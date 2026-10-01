@@ -181,8 +181,20 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(db, jenis=b.jenis)
     elif b.tipe == "pk_langsung":
         from app.models import MillingProcess
+        from app.services.jasa import nama_pemilik
 
         p = await db.get(MillingProcess, b.milling_process_id)
+        # ⚠ PENJAGA, bukan saringan tampilan. Borang barang keluar menerima kode
+        # lot yang DIKETIK, dan daftar pilihannya (`aksi_inventory`) sudah
+        # menyembunyikan lot jasa — tetapi daftar yang menyaring tanpa penjaga di
+        # belakangnya hanya menyaring yang patuh. Yang terjadi kalau ia lolos
+        # bukan angka yang salah: PK pelanggan keluar pabrik sebagai penjualan,
+        # dan tak ada pembetulan pembukuan yang mengembalikannya.
+        if p is not None and p.jasa_id is not None:
+            raise BarangKeluarError(
+                f"PK {p.kode_proses} milik {await nama_pemilik(db, p.jasa_id)} — "
+                "barang jasa tidak dijual pabrik. Pengambilan oleh pemiliknya "
+                "dicatat lewat jalur jasa.")
         ada = float(await pending_transfer_kg(db, b.milling_process_id))
         nama = f"PK {p.kode_proses}" if p else "PK"
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(

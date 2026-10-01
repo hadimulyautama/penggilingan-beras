@@ -34,6 +34,11 @@ class MillingProcess(Base, TimestampMixin):
     # jadi ia menjaga silo pertama saja dan membiarkan silo kedua terbuka.
     # Penjagaannya pindah ke baris silonya sendiri: `SiloStorage.
     # milling_process_id`, lihat catatan panjang di sana. Migrasi 0056.
+    __table_args__ = (
+        Index("ix_milling_process_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_proses: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -74,6 +79,18 @@ class MillingProcess(Base, TimestampMixin):
     # proses / selesai
     status: Mapped[str] = mapped_column(String(20), default="proses")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pesanan jasa yang memiliki SELURUH bahan lot ini. NULL = milik pabrik.
+    #:
+    #: Diturunkan dari sumbernya saat giling dimulai (`pastikan_satu_jasa` atas
+    #: seluruh baris silo yang masuk), lalu disimpan — dan dari sinilah PK yang
+    #: keluar mewarisi pemiliknya, sebab stok PK Gudang 1 adalah angka TURUNAN
+    #: per lot giling, bukan baris stok tersendiri.
+    #:
+    #: Terisi berarti PK lot ini TIDAK muncul di daftar barang yang boleh
+    #: dijual pabrik, dan rendemennya ditolak bila keluarannya melebihi
+    #: masukannya: pada gabah pabrik itu salah pembukuan, pada barang
+    #: pelanggan itu tagihan.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class MillingProgressLog(Base):

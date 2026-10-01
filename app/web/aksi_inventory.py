@@ -657,6 +657,17 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
         for l in await pk_gudang1(db):
             if l.tersedia <= 0:
                 continue
+            # ⚠ PK JASA TIDAK DITAWARKAN. Barangnya milik pelanggan; yang boleh
+            # mengeluarkannya pemiliknya, lewat pengambilan — bukan pabrik, lewat
+            # penjualan. Disembunyikan DI SINI, bukan ditolak di akhir: pilihan
+            # yang tak boleh dipilih sebaiknya tak muncul, sebab Admin yang sudah
+            # mengisi seluruh borang lalu ditolak akan mencari jalan lain.
+            #
+            # Penolakannya tetap ada di `barang_keluar.tersedia` — borang ini
+            # menerima kode yang DIKETIK juga, dan daftar yang menyaring tanpa
+            # penjaga di belakangnya cuma menyaring yang patuh.
+            if l.jasa_id is not None:
+                continue
             out.append({"value": f"pk:{l.kode}",
                         "label": (f"PK {l.kode} · {kg(l.tersedia)}"
                                   + (f" · {l.kelas}" if l.kelas else "")
@@ -684,10 +695,11 @@ async def pk_siap_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     async with SessionLocal() as db:
         lot = await pk_gudang1(db)
+    # PK jasa tak ditawarkan — lihat catatan di `barang_bisa_keluar`.
     return [{"value": l.kode,
              "label": (f"{l.kode} · {kg(l.tersedia)}"
                        + (f" · {l.kelas}" if l.kelas else ""))}
-            for l in lot if l.tersedia > 0]
+            for l in lot if l.tersedia > 0 and l.jasa_id is None]
 
 
 @router.get("/actions/timbang-keluar-aktif")

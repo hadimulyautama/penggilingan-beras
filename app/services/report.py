@@ -88,9 +88,18 @@ async def laporan_pembelian_gabah(
         start, end = _range(periode)
         label = _LABELS[periode]
 
+    # ⚠ `jasa_id IS NULL` — BARANG JASA BUKAN PEMBELIAN.
+    #
+    # INNER JOIN ke `suppliers` sudah membuangnya dengan sendirinya (batch jasa
+    # tak punya pemasok), tetapi syaratnya ditulis TERANG-TERANGAN: saringan yang
+    # bekerja sebagai efek samping bentuk join adalah saringan yang hilang pada
+    # hari seseorang menggantinya jadi `isouter=True` demi memperbaiki hal lain —
+    # dan hilangnya tak terlihat, sebab yang berubah cuma angka totalnya.
+    #
+    # Syarat yang sama dipasang di SELURUH kueri pembelian di berkas ini.
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
-    )
+    ).where(PurchaseBatch.jasa_id.is_(None))
     if start is not None:
         stmt = stmt.where(
             PurchaseBatch.tanggal_pembelian >= start,
@@ -160,6 +169,8 @@ async def laporan_produksi_histori(
             select(PurchaseBatch.berat_total_kg, Supplier.nama_supplier)
             .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
             .where(
+                # Barang jasa bukan pembelian — lihat `laporan_pembelian_gabah`.
+                PurchaseBatch.jasa_id.is_(None),
                 PurchaseBatch.tanggal_pembelian >= tgl_dari,
                 PurchaseBatch.tanggal_pembelian <= tgl_sampai,
             )
@@ -302,7 +313,9 @@ async def _resolve_batches(
         stmt = (
             select(PurchaseBatch, Supplier.nama_supplier)
             .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
-            .where(PurchaseBatch.kode_batch == kode)
+            .where(PurchaseBatch.kode_batch == kode,
+                   # Rujukan pembelian — batch jasa dijawab lewat layar jasa.
+                   PurchaseBatch.jasa_id.is_(None))
         )
         return (await db.execute(stmt)).all()
     if tanggal is not None:
@@ -312,9 +325,10 @@ async def _resolve_batches(
             periode, supplier=supplier, urutan=urutan, kondisi=kondisi, terbaru=terbaru
         )
         start, end = _range(eff)
+    # Barang jasa bukan pembelian — lihat `laporan_pembelian_gabah`.
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
-    )
+    ).where(PurchaseBatch.jasa_id.is_(None))
     if start is not None:
         stmt = stmt.where(
             PurchaseBatch.tanggal_pembelian >= start,
@@ -500,7 +514,13 @@ async def status_gudang1(db: AsyncSession) -> str:
     # lantai. Tumpukan itu menghilang dari layar tepat ketika ia satu-satunya
     # hal yang tersisa untuk dikerjakan.
     from app.penggilingan.gudang1.services.milling import stok_pk_g1
-    pk_menumpuk = await stok_pk_g1(db)
+    # `termasuk_jasa=True`: pertanyaan baris ini "apakah Gudang 1 ADA
+    # pekerjaannya", bukan "berapa yang pabrik punya". PK pelanggan yang
+    # menunggu diambil adalah pekerjaan yang nyata; melewatkannya membuat
+    # laporan berbunyi "tidak ada gabah/proses saat ini" sementara belasan ton
+    # barang orang berdiri di lantai — persis kerusakan yang catatan di bawah
+    # lahir untuk menutupnya.
+    pk_menumpuk = await stok_pk_g1(db, termasuk_jasa=True)
 
     if not mill_running and in_dryer <= 0 and not silo_isi and pk_menumpuk <= 0:
         return (
@@ -657,9 +677,10 @@ async def cari_kode(
         return "\n".join(lines)
 
     # target batch (default)
+    # Barang jasa bukan pembelian — lihat `laporan_pembelian_gabah`.
     stmt = select(PurchaseBatch, Supplier.nama_supplier).join(
         Supplier, PurchaseBatch.supplier_id == Supplier.id
-    )
+    ).where(PurchaseBatch.jasa_id.is_(None))
     if start is not None:
         stmt = stmt.where(
             PurchaseBatch.tanggal_pembelian >= start,

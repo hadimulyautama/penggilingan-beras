@@ -27,9 +27,14 @@ from app.penggilingan.peta_jenis import PETA_MASUK
 _SQL_BELUM_TERTAUT = text("""
     SELECT t.kode, t.jenis_kode, t.tanggal, t.nomor_polisi,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
-           COALESCE(s.nama_supplier, t.pihak_nama) AS nama
+           -- Pelanggan ikut di COALESCE: tiket JASA tak punya pemasok dan tak
+           -- punya `pihak_nama`, jadi tanpa kaki ketiga ini barisnya berdiri
+           -- tanpa nama — pada daftar yang gunanya justru menyuruh orang
+           -- mencari tiket itu.
+           COALESCE(s.nama_supplier, pl.nama_pelanggan, t.pihak_nama) AS nama
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN pelanggan pl ON pl.id = t.pelanggan_id
      WHERE t.arah = 'MASUK'
        -- Tiket yang DIBATALKAN memang tak boleh jadi batch. Melaporkannya
        -- sebagai "ditimbang tapi tak tercatat" membuat daftar ini penuh
@@ -49,7 +54,12 @@ _SQL_BELUM_TERTAUT = text("""
 _SQL_SELISIH = text("""
     SELECT kode_batch, nama, jenis, nota, timbang, tercatat, sumber,
            selisih_kg, selisih_persen, harga FROM (
-      SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
+      SELECT b.kode_batch,
+             -- Pelanggan sebagai jalan mundur: batch jasa tak punya pemasok, dan
+             -- '?' pada baris selisih berarti orang tak bisa menelepon siapa pun
+             -- tentang angka yang selisih.
+             COALESCE(s.nama_supplier, pl.nama_pelanggan, '?') AS nama,
+             'gabah' AS jenis,
              t.berat_acuan_kg AS nota,
              -- ── Angka yang BENAR-BENAR dipegang produksi ──
              --
@@ -71,6 +81,8 @@ _SQL_SELISIH = text("""
         FROM purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
+        LEFT JOIN jasa ja ON ja.id = b.jasa_id
+        LEFT JOIN pelanggan pl ON pl.id = ja.pelanggan_id
         LEFT JOIN purchase_batch_verifications v ON v.purchase_batch_id = b.id
        WHERE b.dibatalkan_pada IS NULL
       UNION ALL
@@ -104,13 +116,17 @@ _SQL_MENUNGGU = text("""
 # (nilai finansial/rendemen beku). Perlu ditinjau manual.
 _SQL_REVISI = text("""
     SELECT kode_batch, nama, jenis, tersimpan, tiket_now, status, terverifikasi FROM (
-      SELECT b.kode_batch, COALESCE(s.nama_supplier,'?') AS nama, 'gabah' AS jenis,
+      SELECT b.kode_batch,
+             COALESCE(s.nama_supplier, pl.nama_pelanggan, '?') AS nama,
+             'gabah' AS jenis,
              b.berat_total_kg AS tersimpan,
              """ + SQL_BERAT_TIKET + """ AS tiket_now,
              b.status_batch AS status, (NOT b.flag_unverified) AS terverifikasi
         FROM purchase_batches b
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers s ON s.id = b.supplier_id
+        LEFT JOIN jasa ja ON ja.id = b.jasa_id
+        LEFT JOIN pelanggan pl ON pl.id = ja.pelanggan_id
        WHERE b.sumber_berat IN ('nota','timbangan') AND b.dibatalkan_pada IS NULL
       UNION ALL
       SELECT b.kode_batch, COALESCE(s.nama_supplier,'?'), 'pk',
@@ -147,6 +163,15 @@ _SQL_MENYIMPANG = """
         JOIN timbangan_transaksi t ON t.id = b.timbangan_transaksi_id
         LEFT JOIN suppliers sb ON sb.id = b.supplier_id
         LEFT JOIN suppliers st ON st.id = t.supplier_id
+        -- Pemilik barang di kedua sisi, untuk aturan `pelanggan_beda`. `{kolom_jasa}`
+        -- karena hanya `purchase_batches` yang punya `jasa_id` di irisan ini;
+        -- untuk tabel yang belum punya, kolomnya dibaca sebagai NULL dan
+        -- aturannya tak pernah menyala. Satu rakitan, bukan dua kueri yang
+        -- cabangnya lambat laun berbeda.
+        LEFT JOIN jasa jb ON jb.id = {kolom_jasa}
+        LEFT JOIN pelanggan pb ON pb.id = jb.pelanggan_id
+        LEFT JOIN jasa jt ON jt.id = t.jasa_id
+        LEFT JOIN pelanggan pt ON pt.id = jt.pelanggan_id
        WHERE b.dibatalkan_pada IS NULL AND ({syarat})
 """
 
@@ -169,6 +194,31 @@ _ATURAN_MENYIMPANG = (
         "'Pemasok tiket ' || t.kode || ' kini ' || COALESCE(st.nama_supplier, '?') "
         "|| ', sedangkan batch tercatat atas ' || COALESCE(sb.nama_supplier, '?') "
         "|| '. Samakan sebelum harga diverifikasi.'",
+    ),
+    (
+        # ── PASANGAN `pemasok_beda` UNTUK BARANG TITIPAN ──
+        #
+        # Aturan `pemasok_beda` di atas melewati tiket jasa dengan sendirinya
+        # (`t.supplier_id IS NOT NULL`), dan itu BENAR. Yang tidak ada adalah
+        # pasangannya — dan akibat ketiadaannya tidak sejajar: untuk barang
+        # pabrik salah pemasok berarti HARGA yang salah, sesuatu yang bisa
+        # dibetulkan dengan uang; untuk jasa salah pelanggan berarti BARANG
+        # DISERAHKAN KE ORANG YANG SALAH, dan itu tak bisa dibetulkan sama
+        # sekali.
+        #
+        # Dibandingkan lewat `pelanggan_id` di balik pesanannya, bukan lewat
+        # nama: nama di cermin Kledo bisa berubah ejaannya, dan dua ejaan nama
+        # yang sama akan terus-menerus dilaporkan sebagai selisih yang tak ada —
+        # pelajaran yang sudah dibayar di `pemasok_beda`.
+        "pelanggan_beda",
+        "t.status_transaksi = 'AKTIF' AND t.pelanggan_id IS NOT NULL "
+        "AND t.pelanggan_id IS DISTINCT FROM jb.pelanggan_id",
+        "'Pemilik barang pada tiket ' || t.kode || ' kini ' "
+        "|| COALESCE(pt.nama_pelanggan, '?') "
+        "|| ', sedangkan pencatatannya atas ' "
+        "|| COALESCE(pb.nama_pelanggan, 'barang pabrik') "
+        "|| '. Barang jasa yang salah pemilik akan diserahkan ke orang yang "
+        "salah — samakan sebelum barangnya diambil.'",
     ),
     (
         "komoditas_beda",
@@ -196,9 +246,12 @@ def _rakit_menyimpang() -> str:
     berikutnya justru jadi satu-satunya lubang yang tersisa.
     """
     bagian = []
-    for tbl, jenis, sah in (
-        ("purchase_batches", "gabah", "gabah"),
-        ("pk_purchase_batches", "pk", "pk"),
+    for tbl, jenis, sah, kolom_jasa in (
+        ("purchase_batches", "gabah", "gabah", "b.jasa_id"),
+        # `pk_purchase_batches` belum punya `jasa_id` (PK walk-in jasa menyusul).
+        # NULL, bukan dihilangkan dari rakitan: aturan yang hanya dipasang pada
+        # salah satu tabel adalah aturan yang terlupa saat tabel kedua menyusul.
+        ("pk_purchase_batches", "pk", "pk", "NULL"),
     ):
         for tag, syarat, pesan in _ATURAN_MENYIMPANG:
             kode_sah = tuple(k for k, v in PETA_MASUK.items() if v.model == sah)
@@ -208,7 +261,8 @@ def _rakit_menyimpang() -> str:
             )
             bagian.append(
                 _SQL_MENYIMPANG.format(tbl=tbl, jenis=jenis, tag=tag,
-                                       pesan=pesan, syarat=s)
+                                       pesan=pesan, syarat=s,
+                                       kolom_jasa=kolom_jasa)
             )
     return "UNION ALL".join(bagian) + "     ORDER BY masalah, kode_batch\n"
 

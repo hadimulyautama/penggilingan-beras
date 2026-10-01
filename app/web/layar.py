@@ -145,7 +145,12 @@ def _petak_g1(o: dict) -> list[dict]:
     total = stok.get("total", 0) or 0
     return [
         _sel("Gabah masuk", _ribuan(gabah.get("total_kg", 0)), sat=" kg",
-             ket=f"{gabah.get('batch', 0) or 0} batch"),
+             # Barang titipan ikut di angkanya (itu memang yang turun dari truk)
+             # tetapi DISEBUT di keterangannya: petak yang satu angkanya berarti
+             # dua hal akan dipakai untuk keduanya, lalu salah untuk keduanya.
+             ket=f"{gabah.get('batch', 0) or 0} batch"
+                 + (f" · {_ribuan(gabah.get('jasa_kg', 0))} kg jasa"
+                    if gabah.get("jasa_batch") else "")),
         _sel("Pengeringan", kering, sat=" lot",
              ket="berjalan" if kering else "tak ada",
              nada="hati" if kering else ""),

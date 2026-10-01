@@ -135,6 +135,9 @@ class PkGudang2Intake(Base, TimestampMixin):
               unique=True,
               postgresql_where=text("internal_transfer_id IS NOT NULL AND dibatalkan_pada IS NULL"),
               sqlite_where=text("internal_transfer_id IS NOT NULL AND dibatalkan_pada IS NULL")),
+        Index("ix_pk_gudang2_intakes_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -165,6 +168,17 @@ class PkGudang2Intake(Base, TimestampMixin):
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
     #: Cermin bertanda, bukan dihapus (lihat `app/models/cermin.py`).
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Pesanan jasa yang memiliki PK ini. NULL = milik pabrik.
+    #:
+    #: Dari `internal_transfers.jasa_id` untuk PK kiriman Gudang 1; selalu NULL
+    #: untuk PK beli luar — PK walk-in jasa belum dikerjakan, dan kolom yang
+    #: bisa terisi lewat jalur yang belum ada adalah kolom yang akan terisi
+    #: salah.
+    #:
+    #: ⚠ `pk_tumpukan_to_silo` TIDAK punya kolom ini, dan tak perlu: pemilik isi
+    #: sebuah silo Gudang 2 dibaca dari intake-intake yang mengisinya — langsung
+    #: maupun lewat pemindahan tumpukan. Lihat `jasa.pemilik_silo_g2`.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class PkTumpukanToSilo(Base, TimestampMixin):

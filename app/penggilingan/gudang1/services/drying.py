@@ -25,6 +25,12 @@ from app.services.activity_log import log_activity
 from app.penggilingan.gudang1.services.bobot import dari_batch, dari_batches
 from app.penggilingan.gudang1.services.timbang_link import berat_kotor_tiket
 from app.services.codegen import next_drying_lot_code
+from app.services.jasa import (
+    JasaError,
+    kunci_dryer,
+    nama_pemilik,
+    pastikan_satu_jasa_bernama,
+)
 
 
 class DryingError(Exception):
@@ -463,12 +469,35 @@ async def masuk_dryer(
         if b.status_batch in ("di_silo", "dikeringkan", "digiling"):
             raise DryingError(f"{b.kode_batch} sudah diproses ({b.status_batch}).")
 
+    # ── MESINNYA DIKUNCI sebelum isinya dibaca ──
+    #
+    # Pemeriksaan pemilik di bawah ini tak berarti apa-apa tanpa kunci: dua
+    # operator yang memasukkan gabah dua pemilik ke mesin yang sama pada detik
+    # yang sama sama-sama membaca "isinya milik pabrik", dan keduanya lolos.
+    # Lihat catatan panjang di `jasa.kunci_dryer`.
+    await kunci_dryer(db, dryer.id)
     loose = await _loose_dryer_batches(db, dryer.id)
     kondisi_all = {b.kondisi_gabah for b in batches} | {b.kondisi_gabah for b in loose}
     if len(kondisi_all) > 1:
         raise DryingError(
             f"❌ Tidak boleh mencampur gabah basah & kering di {dryer.nama}."
         )
+    # ── Dan tidak boleh mencampur PEMILIK ──
+    #
+    # Sejajar dengan penjaga basah/kering di atasnya, dan untuk alasan yang
+    # LEBIH keras: gabah basah yang tercampur kering cuma merusak lotnya;
+    # gabah dua pemilik yang tercampur merusak hak orang atas barangnya, dan
+    # tak ada tombol yang memisahkannya kembali sesudah mesin menyala.
+    #
+    # Dijaga DI SINI, bukan hanya saat lotnya terbentuk: lot baru lahir di
+    # "mulai pengeringan", sedangkan gabahnya sudah bercampur sejak masuk
+    # mesin. Menolak di sana berarti menolak pada saat penolakannya sudah tak
+    # berguna.
+    try:
+        await pastikan_satu_jasa_bernama(
+            db, [b.jasa_id for b in batches] + [b.jasa_id for b in loose])
+    except JasaError as e:
+        raise DryingError(f"❌ {e.args[0]}") from None
 
     new_total, tak_pasti = await _berat_untuk_pagar(db, batches)
     if dryer is not None:
@@ -538,7 +567,13 @@ async def add_batches_to_lot(
     db: AsyncSession, *, user, kode_lot: str, kode_batch_list: list[str] | None
 ) -> LotResult:
     """Gabungkan batch tambahan ke lot pengeringan yang masih 'proses' di dryer."""
-    lot = await get_lot_by_kode(db, kode_lot)
+    # Lotnya DIKUNCI, bukan cuma dibaca: dua operator yang menambahkan batch
+    # dua pemilik ke lot yang sama pada detik yang sama sama-sama membaca
+    # pemilik lot yang lama. Pola yang sama dipakai `masuk_silo` untuk lot
+    # (P-K-05) dan `create_internal_transfer` untuk proses giling (P-K-06).
+    lot = (await db.execute(
+        select(DryingLot).where(DryingLot.kode_lot == kode_lot).with_for_update()
+    )).scalars().first()
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
     if lot.status not in ("di_dryer", "proses"):
@@ -584,6 +619,15 @@ async def add_batches_to_lot(
             "❌ Tidak boleh mencampur gabah basah dan kering dalam satu lot."
         )
     kondisi = existing_kondisi or kondisi_baru.pop()
+
+    # Pemilik lot lawan pemilik batch tambahan. Lotnya SUDAH dikunci di atas
+    # (`with_for_update` saat diambil), jadi pemeriksaan ini tak bisa disalip.
+    try:
+        pemilik = await pastikan_satu_jasa_bernama(
+            db, [lot.jasa_id] + [b.jasa_id for b in batches])
+    except JasaError as e:
+        raise DryingError(f"❌ {e.args[0]}") from None
+    lot.jasa_id = pemilik
 
     new_total, tak_pasti = await _berat_untuk_pagar(db, batches)
     dryer = await _g1_dryer(db)
@@ -773,6 +817,10 @@ async def start_drying(
 
     Masuk dryer ≠ mulai pengeringan — ini input terpisah (operator G1 utama)."""
     dryer = await pilih_dryer(db, dryer_id)
+    # Dikunci sebelum isinya dibaca, sama seperti `masuk_dryer`: gabah bisa
+    # masuk mesin pada detik lot ini dibentuk, dan lot yang lahir dari isi yang
+    # sudah bergeser akan mewarisi pemilik yang bukan pemilik seluruh isinya.
+    await kunci_dryer(db, dryer.id)
     loose = await _loose_dryer_batches(db, dryer.id)
     if not loose:
         raise DryingError(
@@ -791,10 +839,20 @@ async def start_drying(
     if len(kondisi_set) > 1:
         raise DryingError("❌ Ada campuran basah & kering di dryer — pisahkan dulu.")
     kondisi = kondisi_set.pop()
+    # Pemilik lot DITURUNKAN dari seluruh isi mesin, bukan dari batch pertama.
+    # `masuk_dryer` sudah menolak campuran pemilik, jadi di sini seharusnya
+    # tunggal — tetapi "seharusnya" bukan penjaga: gabah bisa masuk mesin lewat
+    # `tempatkan`, dan satu jalur yang lupa memanggil penjaganya akan melahirkan
+    # lot bercampur yang tak pernah ditolak di mana pun.
+    try:
+        pemilik_lot = await pastikan_satu_jasa_bernama(db, [b.jasa_id for b in loose])
+    except JasaError as e:
+        raise DryingError(f"❌ {e.args[0]}") from None
     now = input_time(tanggal, jam)
     lot = DryingLot(
         kode_lot=await next_drying_lot_code(db),
         dryer_id=dryer.id,
+        jasa_id=pemilik_lot,
         target_kadar_air=target_kadar_air,
         mode_dryer=(mode_dryer or "").strip().upper() or None,
         waktu_mulai_pengeringan=now, status="proses", created_by=user.id,
@@ -1024,17 +1082,35 @@ def _fmt_ka(log: DryingMoistureLog | None) -> str:
 
 
 async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
-    """Nama supplier asal bahan sebuah lot pengeringan (lewat batch gabungan)."""
+    """Asal bahan sebuah lot pengeringan — pemasoknya, atau pemiliknya.
+
+    ⚠ DULU INNER JOIN KE `suppliers`, DAN ITU MENGHILANGKAN BARIS. Begitu
+    `purchase_batches.supplier_id` boleh NULL (migrasi 0064), lot yang berisi
+    gabah jasa menampilkan daftar KOSONG — bukan angka yang salah, BARISNYA
+    HILANG, dan yang membaca laporan menyimpulkan lotnya kosong. Itu kelas
+    kerusakan yang paling sulit dilihat: tak ada galat, tak ada angka ganjil,
+    cuma ketiadaan.
+
+    `outerjoin` + sebutan pemiliknya: lot jasa menyebut "JAS-2610-007 Pak Budi"
+    di tempat nama pemasok biasanya berdiri — pertanyaan yang dijawab baris ini
+    memang "gabah siapa", dan untuk barang titipan jawabannya pemiliknya.
+    """
     rows = (
         await db.execute(
-            select(Supplier.nama_supplier)
-            .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
-            .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+            select(Supplier.nama_supplier, PurchaseBatch.jasa_id)
+            .select_from(DryingLotBatch)
+            .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+            .outerjoin(Supplier, PurchaseBatch.supplier_id == Supplier.id)
             .where(DryingLotBatch.drying_lot_id == lot_id)
             .distinct()
         )
-    ).scalars().all()
-    return list(rows)
+    ).all()
+    keluar: list[str] = []
+    for nama, jasa_id in rows:
+        sebutan = nama or await nama_pemilik(db, jasa_id) or "?"
+        if sebutan not in keluar:
+            keluar.append(sebutan)
+    return keluar
 
 
 async def laporan_pengeringan(db: AsyncSession, kode_lot: str | None = None) -> str:

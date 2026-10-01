@@ -203,6 +203,10 @@ async def create_internal_transfer(
         "drying_lot_id": proc.drying_lot_id, "berat_kg": kirim,
         "lokasi_tujuan": lokasi_tujuan, "silo_id": silo_tujuan_id,
         "hpp_per_kg": hpp, "jenis": jenis, "tanggal": now.date(), "waktu": now,
+        # Pemiliknya ikut ke buku besar. Tanpa ini, satu-satunya tempat yang
+        # menyebut milik siapa PK yang berpindah adalah cermin tabelnya — dan
+        # cermin bisa dibangun ulang dari peristiwa, bukan sebaliknya.
+        "jasa_id": proc.jasa_id,
     }
     e = await buku.catat(db, jenis=PK_DIPINDAH_G1G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
                          muatan=muatan, waktu=now)
@@ -218,6 +222,10 @@ async def create_internal_transfer(
         kode_transfer=kode_transfer,
         milling_process_id=proc.id,
         drying_lot_id=proc.drying_lot_id,
+        # DISALIN dari lotnya, bukan dibaca menyusul lewat `milling_process_id`:
+        # yang berpindah sudah berpindah, dan pemiliknya tak boleh ikut bergeser
+        # bila lotnya kemudian dikoreksi.
+        jasa_id=proc.jasa_id,
         berat_kg=kirim,
         lokasi_tujuan=lokasi_tujuan,
         silo_id=silo_tujuan_id,
@@ -250,6 +258,7 @@ async def create_internal_transfer(
                     if silo_tujuan_id is not None else lokasi_tujuan),
             berat_kg=kirim, hpp_per_kg=hpp, tanggal=None, jam=None,
             internal_transfer_id=transfer.id, transfer_peristiwa_id=e.id, commit=False,
+            jasa_id=proc.jasa_id,
         )
     except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
         raise TransferError(e_.args[0] if e_.args else "Gagal memasukkan PK ke Gudang 2.")

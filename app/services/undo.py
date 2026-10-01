@@ -350,7 +350,36 @@ async def _undo_purchase(db: AsyncSession, batch_id: int) -> str:
     # `app/models/cermin.py`, dan tiketnya bebas dicatat lagi (indeks parsial).
     from app.database import now_local as _now
     b.dibatalkan_pada = _now()
-    return f"✓ Dibatalkan: input pembelian {kode}."
+
+    # ── PESANAN JASA YANG JADI YATIM ──
+    #
+    # Pesanan lahir dari pencatatan ini (`purchase.pesanan_jasa_dari_tiket`), dan
+    # kalau pencatatannya dibatalkan sementara pesanannya dibiarkan, yang
+    # tertinggal adalah pesanan BERJALAN tanpa satu kilogram pun di pabrik: ia
+    # berdiri di daftar menuntut barang yang tak pernah ada, dan "sisa"-nya nol
+    # karena kosong — tak bisa dibedakan dari pesanan yang sudah diambil habis.
+    #
+    # Dibatalkan HANYA bila ini batch terakhirnya yang hidup. Pesanan dengan dua
+    # truk yang satu truknya dibatalkan tetap berjalan — barangnya memang masih
+    # ada.
+    sebut_jasa = ""
+    if b.jasa_id is not None:
+        from app.models import Jasa
+        from app.models.jasa import BERJALAN, DIBATALKAN
+
+        sisa = (await db.execute(
+            select(PurchaseBatch.id).where(
+                PurchaseBatch.jasa_id == b.jasa_id,
+                PurchaseBatch.id != b.id,
+                PurchaseBatch.dibatalkan_pada.is_(None)))).first()
+        pesanan = await db.get(Jasa, b.jasa_id)
+        if sisa is None and pesanan is not None and pesanan.status == BERJALAN:
+            pesanan.status = DIBATALKAN
+            pesanan.dibatalkan_pada = _now()
+            sebut_jasa = f" Pesanan jasa {pesanan.kode} ikut dibatalkan — tak ada barangnya lagi."
+        elif pesanan is not None:
+            sebut_jasa = f" Pesanan jasa {pesanan.kode} TETAP berjalan — truk lainnya masih ada."
+    return f"✓ Dibatalkan: input pembelian {kode}.{sebut_jasa}"
 
 
 async def _undo_penempatan(db: AsyncSession, batch_id: int) -> str:

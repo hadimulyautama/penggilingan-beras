@@ -41,3 +41,4 @@
 - [Railway region sfo→Singapura](railway-region-sfo.md) — PINDAH TUNTAS 2026-09-04, origin 202ms→66ms; jebakan railway scale & tidak ada freeze lewat CLI
 - [Peran superadmin tuntas](peran-superadmin-tuntas.md) — puncak tangga akhirnya bisa dipijak; produksi mengunci orang/akun/alat; Kantor di-deploy lewat railway up
 - [Rancang ulang 2026 (ADR)](rancang-ulang-2026.md) — USULAN satu produk dua layanan, TUJUH modul (Gudang 2 = tahap kedua modul produksi), satu chain; belum diputuskan; peta batas per tabel di docs/BATAS-MODUL.md
+- [Jasa toll milling](jasa-toll-milling.md) — irisan 1 SELESAI (skema+penjaga+saringan stok, gabah kering); kedalaman fleksibel, tanpa kolom harga; garis berhenti di penyosohan sampai irisan G2

@@ -32,9 +32,25 @@ class PurchaseBatch(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_batch: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    supplier_id: Mapped[int] = mapped_column(
-        ForeignKey("suppliers.id"), nullable=False
-    )
+    #: Dari siapa gabah ini DIBELI — kosong bila ia tidak dibeli.
+    #:
+    #: Boleh NULL sejak migrasi 0064: gabah jasa dititipkan pelanggan, dan
+    #: pemiliknya ada di `jasa_id`. `CHECK ck_purchase_batches_beli_atau_jasa`
+    #: menuntut TEPAT SATU dari keduanya terisi — pola yang sama sudah dipakai
+    #: `MillingProcessSource` dan `SiloStorage`.
+    #:
+    #: ⚠ JANGAN mengakalinya dengan memasukkan pelanggan ke `suppliers`.
+    #: Supplier palsu akan ikut ke `timbangan_skor_supplier`, laporan
+    #: pembelian, dan HPP — tiga tempat yang akan menghitung barang yang tak
+    #: pernah dibeli sebagai pembelian.
+    supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"))
+    #: Pesanan jasa yang MEMILIKI gabah ini. NULL = milik pabrik.
+    #:
+    #: Satu kolom, satu arti: siapa yang berhak atas barangnya. Setiap pembaca
+    #: stok PABRIK menyaring `jasa_id IS NULL` — tanpa itu, barang pelanggan
+    #: ikut terhitung sebagai stok yang boleh dijual, dan kesalahan itu tak
+    #: bisa diperbaiki dengan pembetulan pembukuan.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     # Kosong = "menunggu bobot" (referensi bobot ada di tiket timbang; disinkron otomatis).
     berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
@@ -82,7 +98,8 @@ class PurchaseBatch(Base, TimestampMixin):
     #: Semua pembaca ORM menyaringnya lewat `app/models/cermin.py`.
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    supplier: Mapped["Supplier"] = relationship()  # noqa: F821
+    #: Kosong untuk gabah jasa — lihat `supplier_id`.
+    supplier: Mapped["Supplier | None"] = relationship()  # noqa: F821
     verification: Mapped["PurchaseBatchVerification | None"] = relationship(
         back_populates="batch", uselist=False
     )
@@ -100,6 +117,12 @@ class PurchaseBatch(Base, TimestampMixin):
         Index("uq_purchase_batches_timbangan_hidup", "timbangan_transaksi_id", unique=True,
               postgresql_where=text("dibatalkan_pada IS NULL"),
               sqlite_where=text("dibatalkan_pada IS NULL")),
+        # Parsial: baris berpemilik segelintir di antara riwayat bertahun-tahun
+        # baris pabrik, dan indeks penuh atas kolom yang hampir selalu NULL
+        # membayar biaya tulisnya tanpa mempercepat satu kueri pun.
+        Index("ix_purchase_batches_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
 
@@ -142,6 +165,11 @@ class DryingLot(Base, TimestampMixin):
     """
 
     __tablename__ = "drying_lots"
+    __table_args__ = (
+        Index("ix_drying_lots_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_lot: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
@@ -171,6 +199,12 @@ class DryingLot(Base, TimestampMixin):
     # proses / selesai
     status: Mapped[str] = mapped_column(String(20), default="proses")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pesanan jasa yang memiliki SELURUH isi lot ini. NULL = milik pabrik.
+    #:
+    #: Satu lot tak boleh bercampur pemilik — `pastikan_satu_jasa()` menolaknya
+    #: di `masuk_dryer`, `add_batches_to_lot`, dan `start_drying`. Ditolak,
+    #: bukan diperingatkan: akibatnya barang orang lain, bukan angka.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
     lot_batches: Mapped[list["DryingLotBatch"]] = relationship(
         back_populates="drying_lot"
@@ -298,6 +332,9 @@ class SiloStorage(Base, TimestampMixin):
         # klaimnya, dan itu segelintir baris di antara riwayat bertahun-tahun.
         Index("ix_silo_storage_giling", "milling_process_id",
               postgresql_where=text("milling_process_id IS NOT NULL")),
+        Index("ix_silo_storage_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -308,6 +345,14 @@ class SiloStorage(Base, TimestampMixin):
     )
     # dari_pengeringan / langsung_kering
     tipe_masuk: Mapped[str] = mapped_column(String(20), nullable=False)
+    #: Pesanan jasa yang memiliki baris isi silo ini. NULL = milik pabrik.
+    #:
+    #: Diturunkan dari lot/batch sumbernya saat barisnya dibuat, lalu DISIMPAN:
+    #: "silo ini isinya milik siapa" ditanyakan pada setiap penuangan dan setiap
+    #: giling, dan menjawabnya lewat dua join ke batch berarti pertanyaan yang
+    #: paling sering ditanyakan dijawab paling mahal — serta pagar balapannya
+    #: harus mengunci baris di tabel lain.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     tanggal_masuk: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

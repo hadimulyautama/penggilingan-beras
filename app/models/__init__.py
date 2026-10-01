@@ -53,6 +53,7 @@ from app.penggilingan.inventory.models import (
     RiceQualityStandard,
 )
 from app.models.akun import ProduksiAkun
+from app.models.jasa import Jasa
 from app.models.peristiwa import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahTumpukanSilo,
                                   ProyeksiPkLuarMasuk, ProyeksiPkMasukG2, ProyeksiTransferPk)
 from app.models.system import ActivityLog, KodeUrut, Notification, SetelanPabrik
@@ -105,6 +106,8 @@ __all__ = [
     "ByproductPrice",
     "OutgoingRecord",
     "OutgoingItem",
+    # jasa (toll milling) — pemilik barang, bukan pembelinya
+    "Jasa",
     # transfer (bridge)
     "InternalTransfer",
     "PermintaanPk",

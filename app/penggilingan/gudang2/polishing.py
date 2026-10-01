@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_polishing_code
+from app.services.jasa import JasaError, tolak_jasa_di_penyosohan
 from app.services.notification import create_notification
 from app.penggilingan.gudang2.service import Gudang2Error, get_g2_silo, hitung_stok_silo
 
@@ -87,6 +88,24 @@ async def mulai_penyosohan(
         if aktif:
             raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
         silos.append(silo)
+
+    # ── GARIS BERHENTI JASA, dan ia sengaja berupa PENOLAKAN ──
+    #
+    # `polishing_process` belum punya `jasa_id` (ia ikut di irisan Gudang 2),
+    # jadi penyosohan belum bisa membawa pemilik: beras pelanggan akan
+    # terbukukan sebagai barang jadi PABRIK, masuk Stok Produk, dan boleh
+    # diperintahkan keluar seperti beras lain. Bukan angka yang salah — barang
+    # orang lain yang terjual.
+    #
+    # Pesanan yang berhenti di PK adalah keadaan yang SAH (kedalaman fleksibel,
+    # keputusan pemilik): PK-nya boleh diambil pelanggan apa adanya.
+    #
+    # ⚠ DICABUT di irisan Gudang 2, bukan dirawat — lihat
+    # `jasa.tolak_jasa_di_penyosohan`.
+    try:
+        await tolak_jasa_di_penyosohan(db, [s_.id for s_ in silos])
+    except JasaError as e:
+        raise Gudang2Error(e.args[0]) from None
 
     now = input_time(tanggal, jam)
     proc = PolishingProcess(

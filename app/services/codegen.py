@@ -202,3 +202,30 @@ async def next_outgoing_code(db: AsyncSession, tgl: date | None = None) -> str:
         .where(OutgoingRecord.tanggal == tgl)
     )
     return await _next_sequence(db, "OUT", stmt, tgl)
+
+
+async def next_jasa_code(db: AsyncSession, tgl: date | None = None) -> str:
+    """Kode pesanan jasa: JAS-YYMM-NNN — reset per BULAN, tiga angka.
+
+    Satu-satunya kode di app ini yang tidak harian, dan bentuknya mengikuti apa
+    yang dihitungnya. `GB`/`LOT`/`PGR` menghitung TRUK dan MUATAN: beberapa
+    sehari, dan tanggal lengkap di kodenya membuat "gabah tanggal berapa"
+    terbaca tanpa membuka apa pun. Pesanan jasa bukan muatan — ia PEKERJAAN,
+    satu pesanan bisa menerima enam truk selama dua minggu, dan tanggal
+    kedatangan truk pertama bukan fakta yang pantas jadi identitasnya.
+
+    Penghitungnya tetap `kode_urut` yang sama dan tetap ATOMIK — yang berbeda
+    hanya kuncinya: tanggal 1 bulan itu, bukan hari ini. Tiga angka karena
+    `NN` dua angka akan mentok di pesanan ke-100 dalam sebulan, dan kode yang
+    mentok akan ditolak basis data sepanjang sisa bulan itu tanpa menyebut
+    sebabnya (jebakan yang sama sudah pernah dijalani penghitung harian —
+    lihat catatan pada `_next_sequence`).
+
+    TIDAK lewat `_next_sequence`: fungsi itu merakit `PREFIX-YYYYMMDD-NN`, dan
+    menambahkan cabang format di dalamnya berarti satu fungsi yang melayani dua
+    bentuk — lalu pemanggil berikutnya mendapat bentuk yang bukan yang ia kira.
+    """
+    tgl = tgl or now_local().date()
+    awal_bulan = tgl.replace(day=1)
+    seq = await _ambil_urut(db, "JAS", awal_bulan)
+    return f"JAS-{tgl:%y%m}-{seq:03d}"

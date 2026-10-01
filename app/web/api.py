@@ -1269,6 +1269,25 @@ _ACTION_WH = {
 
 # ─────────────────────── Aksi cepat: daftar pilihan (remote) ───────────────────────
 
+async def _pemilik_isi_silo(db, silo_id: int) -> str | None:
+    """Sebutan pemilik isi satu silo Gudang 1 — None bila kosong/milik pabrik.
+
+    Satu silo tak pernah berisi dua pemilik (dijaga `silo.masuk_silo`), jadi
+    jawabannya tunggal bila ada.
+    """
+    from sqlalchemy import select
+
+    from app.models import SiloStorage
+    from app.services.jasa import nama_pemilik
+
+    jid = (await db.execute(
+        select(SiloStorage.jasa_id).where(
+            SiloStorage.silo_id == silo_id, SiloStorage.status == "terisi",
+            SiloStorage.jasa_id.is_not(None)).limit(1)
+    )).scalars().first()
+    return await nama_pemilik(db, jid) if jid is not None else None
+
+
 @router.get("/actions/silo-g1")
 async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo gabah kering Gudang 1, beserta isinya sekarang.
@@ -1278,12 +1297,21 @@ async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
     lewat peringatan sesudahnya.
     """
     _require(await _is_g1_operator(user))
-    from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
+    from app.penggilingan.gudang1.services.silo import (
+        _silo_content_kg, isi_silo, silos_g1)
     out = []
     async with SessionLocal() as db:
         for si in await silos_g1(db):
             kg = await _silo_content_kg(db, si.id)
             isi = f"berisi {_rp(kg)} kg" if kg else "kosong"
+            # Pemilik isinya ikut disebut. Operator yang memilih silo perlu tahu
+            # SEBELUM memilih bahwa isinya barang orang — bukan diberi tahu lewat
+            # penolakan sesudahnya, dengan gabah sudah di tangan.
+            if kg:
+                rinci = await isi_silo(db, si.id)
+                pemilik = {x.pemilik for x in rinci if x.pemilik}
+                if len(pemilik) == 1:
+                    isi += f" · {pemilik.pop()}"
             out.append({"value": si.nama_silo.replace("Silo ", ""),
                         "label": f"{si.nama_silo} · {isi}"})
     return out
@@ -1328,11 +1356,20 @@ async def gabah_menunggu_tempat(user: User = Depends(pengguna_aksi)) -> list[dic
     from app.penggilingan.gudang1.services.tumpukan import DITUMPUK, menunggu_tempat
     async with SessionLocal() as db:
         batches = await menunggu_tempat(db)
+    from app.services.jasa import nama_pemilik_banyak
+
+    async with SessionLocal() as db:
+        peta = await nama_pemilik_banyak(db, {b.jasa_id for b in batches})
     return [{
         "value": b.kode_batch,
-        "label": (f"{b.kode_batch} · {b.kondisi_gabah} · "
+        # Pemiliknya di DEPAN label, bukan di belakang: daftar ini dibaca
+        # sambil mencari satu baris, dan yang membedakan baris jasa dari baris
+        # pabrik adalah pemiliknya — bukan kode batchnya.
+        "label": ((f"{peta[b.jasa_id]} · " if b.jasa_id in peta else "")
+                  + f"{b.kode_batch} · {b.kondisi_gabah} · "
                   f"{dari_batch(b).teks()} · "
-                  + ("di tumpukan" if b.status_batch == DITUMPUK
+                  + ("menunggu giliran giling" if b.jasa_id is not None
+                     else "di tumpukan" if b.status_batch == DITUMPUK
                      else "belum ditempatkan")),
     } for b in batches]
 
@@ -1650,7 +1687,14 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 continue
             letter = s.nama_silo.replace("Silo ", "")
             kg = await _silo_content_kg(db, s.id)
-            out.append({"value": letter, "label": f"Silo {letter} · {_rp(kg)} kg"})
+            # Pemiliknya disebut: menggiling silo berisi barang pelanggan sah
+            # (pesanannya memang harus digiling) tetapi ia keputusan yang berbeda
+            # dari menggiling gabah pabrik — rendemennya akan ditunjukkan kepada
+            # orang yang membawa barangnya.
+            pemilik = await _pemilik_isi_silo(db, s.id)
+            out.append({"value": letter,
+                        "label": f"Silo {letter} · {_rp(kg)} kg"
+                                 + (f" · {pemilik}" if pemilik else "")})
     return out
 
 
@@ -1989,7 +2033,15 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         except (DryingError, SiloError) as e:
             warn = f"\n⚠️ Belum ditempatkan: {e.args[0] if e.args else 'gagal'}. Tempatkan manual."
 
-    pesan = f"✓ Gabah *{kode}* ({kondisi}) tercatat" + (f".\n{tempat}." if tempat else ".") + warn
+    # Pesanan jasa DISEBUT, dan kodenya disebut terutama saat ia baru lahir:
+    # nomor itulah yang pelanggan tanyakan nanti, dan satu-satunya kesempatan
+    # operator membacanya tanpa membuka layar lain adalah di kalimat ini.
+    milik = ""
+    if r.jasa is not None:
+        milik = (f" — JASA, pesanan baru *{r.jasa.kode}*" if r.jasa_baru
+                 else f" — JASA, masuk pesanan *{r.jasa.kode}*")
+    pesan = (f"✓ Gabah *{kode}* ({kondisi}) tercatat{milik}"
+             + (f".\n{tempat}." if tempat else ".") + warn)
     return {"ok": True, "pesan": pesan, "log_id": await _id_jejak(user.id)}
 
 

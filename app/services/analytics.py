@@ -90,6 +90,13 @@ async def supplier_scorecard_data(db: AsyncSession) -> dict:
                 func.avg(PurchaseBatch.kadar_air_awal_persen),
             )
             .join(PurchaseBatch, PurchaseBatch.supplier_id == Supplier.id)
+            # ⚠ Barang jasa bukan pembelian, dan di sini akibatnya lebih dari
+            # salah hitung: rapor ini diperingkat menurut RENDEMEN, jadi rendemen
+            # gabah orang lain akan menilai pemasok pabrik. Join ke `suppliers`
+            # sudah membuangnya sendiri (batch jasa tak punya pemasok), tetapi
+            # syaratnya ditulis terang supaya tak hilang bila bentuk join-nya
+            # suatu hari dilonggarkan.
+            .where(PurchaseBatch.jasa_id.is_(None))
             .group_by(Supplier.id, Supplier.nama_supplier)
         )
     ).all()
@@ -263,6 +270,9 @@ async def analisa_musiman(db: AsyncSession) -> str:
                 ),
                 func.count(PurchaseBatch.kadar_air_awal_persen),
             )
+            # Pola musiman PEMBELIAN gabah — barang titipan bukan pembelian, dan
+            # kadar airnya tak mengatakan apa pun tentang apa yang pabrik beli.
+            .where(PurchaseBatch.jasa_id.is_(None))
             .group_by(extract("month", PurchaseBatch.tanggal_pembelian))
             .order_by(extract("month", PurchaseBatch.tanggal_pembelian))
         )

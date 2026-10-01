@@ -19,13 +19,22 @@ AKAR = pathlib.Path(__file__).resolve().parents[1]
 ARTI = {"GB": "pembelian gabah", "PGR": "pengeringan", "LOT": "giling",
         "TRF": "transfer PK", "PKB": "beli PK luar", "POL": "penyosohan",
         "PTS": "pindah tumpukan", "REJ": "PK ditolak", "OUT": "barang keluar",
-        "PKP": "beli kemasan"}
+        "PKP": "beli kemasan", "JAS": "pesanan jasa"}
 
 
 def test_codegen_memakai_awalan_yang_diumumkan():
-    """Pembuat kodenya sendiri yang jadi patokan — bukan komentar di tempat lain."""
+    """Pembuat kodenya sendiri yang jadi patokan — bukan komentar di tempat lain.
+
+    DUA bentuk pemanggilan dicari, bukan satu. `_next_sequence` merakit
+    `PREFIX-YYYYMMDD-NN` untuk yang harian; `JAS` memakai penghitung yang sama
+    lewat `_ambil_urut` karena bentuknya bulanan (`JAS-YYMM-NNN`) — lihat
+    `next_jasa_code`. Pola yang hanya mengenali bentuk pertama akan membiarkan
+    awalan bulanan berikutnya lahir tanpa pernah diumumkan di sini, dan daftar
+    yang bolong lebih buruk daripada tak ada daftar: yang membacanya percaya ia
+    lengkap.
+    """
     teks = (AKAR / "app/services/codegen.py").read_text()
-    dipakai = set(re.findall(r'_next_sequence\(db, "([A-Z]+)"', teks))
+    dipakai = set(re.findall(r'_(?:next_sequence|ambil_urut)\(db, "([A-Z]+)"', teks))
     assert dipakai == set(ARTI), f"awalan tak dikenal: {dipakai ^ set(ARTI)}"
 
 

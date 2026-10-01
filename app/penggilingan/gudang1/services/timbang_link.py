@@ -142,12 +142,22 @@ _SQL_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
+           -- ── Pemilik barang, untuk tiket JASA ──
+           --
+           -- Sampai 1 Oktober 2026 setiap tiket MASUK punya pemasok: barangnya
+           -- dibeli. Tiket jasa tidak — barangnya dititipkan, dan yang terisi
+           -- `pelanggan_id`. Tanpa dua kolom ini kartunya bertanda tanya
+           -- ("? · B 1234 XY"), dan tanda tanya pada kartu yang menyuruh orang
+           -- menerima barang adalah kartu yang tak bisa dikerjakan.
+           t.pelanggan_id, pl.nama_pelanggan, t.jasa_id, ja.kode AS jasa_kode,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN pelanggan pl ON pl.id = t.pelanggan_id
+      LEFT JOIN jasa ja ON ja.id = t.jasa_id
       -- Nama komoditas DIBACA dari tabel jenis, bukan diterjemahkan dari
       -- kodenya di sisi produksi. Tiket adalah kunci asing ke proses timbang,
       -- dan proses timbang sudah memegang komoditas yang disandangnya —
@@ -177,12 +187,16 @@ _SQL_SATU = text("""
     SELECT t.id, t.kode, t.arah, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.nama_sopir,
            t.supplier_id, s.nama_supplier, t.pihak_nama,
+           -- Pemilik barang untuk tiket jasa — lihat catatan di `_SQL_AKTIF`.
+           t.pelanggan_id, pl.nama_pelanggan, t.jasa_id, ja.kode AS jasa_kode,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
            t.status_kontrol, t.status_tiket
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN pelanggan pl ON pl.id = t.pelanggan_id
+      LEFT JOIN jasa ja ON ja.id = t.jasa_id
       LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
      WHERE t.id = :tid""" + SYARAT_TIKET_SAH + """
 """)
@@ -266,6 +280,38 @@ def _row(r, tol_persen: float) -> dict:
     return d
 
 
+def adalah_jasa(t: dict) -> bool:
+    """Tiket ini membawa barang TITIPAN, bukan barang yang dibeli?
+
+    Yang menentukan `pelanggan_id`, bukan jenis komoditasnya: cara menimbang,
+    tara, dan ambang gabah jasa sama persis dengan gabah beli — yang berbeda
+    hanya pemiliknya. Itu sebabnya TIDAK ada jenis timbang `GABAH_KERING_JASA`:
+    menggandakan tiga jenis jadi enam berarti menggandakan aturan tara dan
+    memberi petugas enam tombol berpasangan mirip untuk salah pilih.
+    """
+    return t.get("pelanggan_id") is not None
+
+
+def nama_pihak(t: dict) -> str:
+    """Nama pihak di kartu sebuah tiket — pemasok, pelanggan, atau nama bebas.
+
+    ⚠ SATU penolong, dipanggil di semua tempat. Bentuk lamanya
+    (`nama_supplier or pihak_nama or "?"`) berdiri di TIGA tempat di
+    `berjalan.py`, dan tiket jasa tak punya keduanya — jadi membetulkan satu
+    saja menyisakan dua kartu bertanda tanya yang baru ketahuan di lapangan,
+    pada hari truk pelanggan sudah berdiri di halaman.
+
+    Pesanannya ikut disebut bila ada: "JAS-2610-007 Pak Budi" bukan sekadar
+    "Pak Budi". Pak Budi bisa punya dua pesanan berjalan, dan yang menentukan
+    barang ini masuk ke mana adalah pesanannya, bukan namanya.
+    """
+    if t.get("nama_pelanggan") or t.get("pelanggan_id"):
+        nama = (t.get("nama_pelanggan") or "").strip() or "pelanggan"
+        kode = (t.get("jasa_kode") or "").strip()
+        return f"JASA · {kode} {nama}".strip() if kode else f"JASA · {nama}"
+    return t.get("nama_supplier") or t.get("pihak_nama") or "?"
+
+
 #: Berapa hari ke belakang tiket yang SUDAH DITUTUP masih boleh disusulkan.
 #: Cukup panjang untuk menutupi akhir pekan dan libur, cukup pendek supaya
 #: daftar tetap bisa dibaca sambil berdiri.
@@ -287,9 +333,14 @@ _SQL_KELUAR_AKTIF = text("""
     SELECT t.id, t.kode, t.jenis_kode, j.nama AS jenis_nama,
            t.tanggal, t.timbang1_waktu, t.nomor_polisi, t.status_tiket,
            """ + SQL_REAL_TIKET + """ AS berat_kg,
-           COALESCE(s.nama_supplier, t.pihak_nama) AS pihak
+           -- Pelanggan di TENGAH, bukan di ujung: pada tiket KELUAR lawan
+           -- transaksinya memang pelanggan, dan `pihak_nama` cuma nama bebas
+           -- yang diketik petugas. Tanpa kaki ini, tiket keluar yang pembelinya
+           -- dipilih dari daftar Kledo berdiri tanpa nama di borang verifikasi.
+           COALESCE(s.nama_supplier, pl.nama_pelanggan, t.pihak_nama) AS pihak
       FROM timbangan_transaksi t
       LEFT JOIN suppliers s ON s.id = t.supplier_id
+      LEFT JOIN pelanggan pl ON pl.id = t.pelanggan_id
       LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
      WHERE t.arah = 'KELUAR'""" + SYARAT_TIKET_SAH + """
        AND NOT EXISTS (

@@ -124,6 +124,18 @@ class LotPk:
     #: berapa. Lebih baik baris yang mengaku tidak tahu daripada gudang yang
     #: tampak kosong.
     belum_dicatat: bool = False
+    #: Pesanan jasa yang memiliki PK ini — None = milik pabrik.
+    #:
+    #: ⚠ Lot jasa TETAP DIDAFTAR di sini, dan itu disengaja: barangnya memang
+    #: berdiri di lantai Gudang 1, dan daftar stok yang menyembunyikannya akan
+    #: berselisih dengan apa yang dilihat orang di gudang — jenis kebohongan yang
+    #: paling cepat membuat layar berhenti dipercaya. Yang TIDAK boleh adalah ia
+    #: ikut ke daftar barang yang bisa DIJUAL, dan itu disaring di borang barang
+    #: keluar (`aksi_inventory.barang_bisa_keluar`, `pk_siap_keluar`) berikut
+    #: penjaganya di `barang_keluar.tersedia`.
+    jasa_id: int | None = None
+    #: "JAS-2610-007 Pak Budi" — dicetak di kartunya. None untuk barang pabrik.
+    pemilik: str | None = None
 
 
 def _tgl(d) -> str:
@@ -193,8 +205,14 @@ async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], li
     from app.penggilingan.gudang1.services.milling import sumber_batch
 
     async def _baris(b) -> tuple[str, str, str]:
-        sup = await db.get(Supplier, b.supplier_id)
-        return _baris_bahan(b, sup.nama_supplier if sup else None)
+        from app.services.jasa import nama_pemilik
+
+        # Pemasok bila dibeli, PEMILIK bila dititipkan. Tanpa kaki kedua ini
+        # kartu PK dari gabah jasa berbunyi "?" di baris yang justru menjawab
+        # pertanyaan kartunya — "gabah siapa, berapa".
+        sup = await db.get(Supplier, b.supplier_id) if b.supplier_id else None
+        return _baris_bahan(b, (sup.nama_supplier if sup
+                                else await nama_pemilik(db, b.jasa_id)))
 
     baris = (await db.execute(
         select(MillingProcessSource)
@@ -297,8 +315,15 @@ async def _bahan_banyak(db: AsyncSession, proses) -> dict[int, tuple[list, list[
     )).scalars()} if batch_ids else {}
     nama_pemasok = dict((await db.execute(
         select(Supplier.id, Supplier.nama_supplier)
-        .where(Supplier.id.in_({b.supplier_id for b in batch.values()}))
+        .where(Supplier.id.in_({b.supplier_id for b in batch.values()
+                                if b.supplier_id is not None}))
     )).all()) if batch else {}
+    # Jawabannya harus SAMA PERSIS dengan versi satuan, termasuk untuk batch
+    # tanpa pemasok: yang di sana memakai `nama_pemilik`, di sini petanya.
+    from app.services.jasa import nama_pemilik_banyak
+
+    nama_pemilik_ = await nama_pemilik_banyak(
+        db, {b.jasa_id for b in batch.values()}) if batch else {}
 
     hasil: dict[int, tuple[list, list[str]]] = {}
     for p in daftar:
@@ -314,7 +339,8 @@ async def _bahan_banyak(db: AsyncSession, proses) -> dict[int, tuple[list, list[
             k = (b.kondisi_gabah or "").strip().lower()
             if k:
                 kondisi.add(k)
-            bahan.append(_baris_bahan(b, nama_pemasok.get(b.supplier_id)))
+            bahan.append(_baris_bahan(b, nama_pemasok.get(b.supplier_id)
+                                      or nama_pemilik_.get(b.jasa_id)))
 
         baris_sumber = per_proses.get(p.id)
         if baris_sumber:
@@ -446,8 +472,12 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
     peta_bahan = await _bahan_banyak(db, proses)
     # Permintaan yang masih terbuka, satu kueri untuk seluruh lot.
     from app.services.permintaan_pk import diminta_peta
+    from app.services.jasa import nama_pemilik_banyak
 
     peta_minta = await diminta_peta(db, [p.id for p in proses])
+    # Sebutan pemilik untuk SELURUH lot sekaligus — satu kueri, bukan satu per
+    # lot. Layar ini membaca setiap giling yang pernah ada (temuan QA P-S-02).
+    peta_pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in proses})
 
     keluar: list[LotPk] = []
     for proc in proses:
@@ -466,6 +496,8 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         keluar.append(LotPk(
             kode=proc.kode_proses,
             tersedia=bd.tersedia,
+            jasa_id=proc.jasa_id,
+            pemilik=peta_pemilik.get(proc.jasa_id) if proc.jasa_id else None,
             dihasilkan=bd.produced,
             dikirim=bd.transferred,
             bahan_kg=float(proc.berat_gabah_masuk_kg or 0),
@@ -524,6 +556,11 @@ class TempatPk:
     isi: list[tuple[str, str, str]] = field(default_factory=list)
     #: Penuh berapa persen. None bila kapasitasnya tak diketahui.
     persen: float | None = None
+    #: "JAS-2610-007 Pak Budi" bila tempat ini berisi PK titipan — None untuk
+    #: barang pabrik. Tempatnya TETAP didaftar: barangnya memang ada di sini,
+    #: dan layar yang menyembunyikannya berselisih dengan apa yang dilihat
+    #: operator. Yang dibedakan sebutannya, bukan ada-tidaknya barisnya.
+    pemilik: str | None = None
 
 
 async def _isi_tumpukan(db: AsyncSession) -> list[tuple[str, str, str]]:
@@ -595,6 +632,7 @@ async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
             kode=f"Silo {huruf}", tersedia=stok, maks=maks,
             isi=(await _asal_pk(db, silo.id)) if stok > 0 else [],
             persen=(stok / maks * 100 if maks else None),
+            pemilik=await _pemilik_tempat_g2(db, silo.id) if stok > 0 else None,
         ))
 
     tump = float(await hitung_stok_tumpukan(db))
@@ -603,8 +641,34 @@ async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
         kode="Tumpukan", tersedia=tump, maks=maks_t,
         isi=(await _isi_tumpukan(db)) if tump > 0 else [],
         persen=(tump / maks_t * 100 if maks_t else None),
+        # Lantai tumpukan BOLEH menampung beberapa pemilik sekaligus — ia bukan
+        # wadah, dan karung yang berdiri berjajar tak bercampur. Jadi di sini
+        # sebutannya hanya terisi bila pemiliknya memang tunggal; penjaga
+        # kepemilikan berdiri di SILO, tempat barang benar-benar menyatu.
+        pemilik=await _pemilik_tempat_g2(db, None) if tump > 0 else None,
     ))
     return keluar
+
+
+async def _pemilik_tempat_g2(db: AsyncSession, silo_id: int | None) -> str | None:
+    """Sebutan pemilik isi satu tempat PK Gudang 2 — None bila milik pabrik.
+
+    `silo_id=None` berarti tumpukan. Mengembalikan None juga bila pemiliknya
+    lebih dari satu: "dua pemilik" bukan sebutan yang bisa dipakai orang, dan
+    kartunya sudah mendaftar isinya satu per satu.
+    """
+    from app.models import PkGudang2Intake
+    from app.services.jasa import nama_pemilik, pemilik_silo_g2
+
+    if silo_id is not None:
+        pemilik = {j for j in await pemilik_silo_g2(db, silo_id) if j is not None}
+    else:
+        pemilik = {j for j in (await db.execute(
+            select(PkGudang2Intake.jasa_id).where(
+                PkGudang2Intake.tujuan == "ditumpuk",
+                PkGudang2Intake.jasa_id.is_not(None)).distinct()
+        )).scalars().all()}
+    return await nama_pemilik(db, pemilik.pop()) if len(pemilik) == 1 else None
 
 
 #: Grade beras putih yang dihitung sebagai PRODUK; sisanya hasil samping.

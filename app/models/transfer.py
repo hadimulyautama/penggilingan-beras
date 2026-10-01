@@ -3,7 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -20,6 +29,9 @@ class InternalTransfer(Base, TimestampMixin):
         # Indeks dinamai apa adanya seperti di basis data — lihat catatan
         # pada `PurchaseBatch` di gudang1.py. Temuan QA X-19.
         Index("ix_internal_transfers_proses", "milling_process_id", "status"),
+        Index("ix_internal_transfers_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -51,3 +63,11 @@ class InternalTransfer(Base, TimestampMixin):
     #: keempat). Baris ini cermin yang TIDAK dihapus saat dibatalkan.
     peristiwa_id: Mapped[int | None] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), ForeignKey("peristiwa.id"))
+    #: Pesanan jasa yang memiliki PK yang dipindah ini. NULL = milik pabrik.
+    #:
+    #: DISALIN dari `milling_process.jasa_id` saat transfer dibuat, bukan dibaca
+    #: ulang lewat lotnya: kalau pemiliknya dibaca menyusul, baris ini kehilangan
+    #: artinya pada hari lotnya dikoreksi — dan yang dipindahkan sudah berpindah.
+    #: Tanpa kolom ini, PK pelanggan berubah jadi PK pabrik tepat di perbatasan
+    #: dua gudang, tanpa satu pun galat.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))

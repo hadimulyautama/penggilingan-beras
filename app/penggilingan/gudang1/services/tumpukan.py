@@ -5,6 +5,17 @@ kalau ada tumpukan, berarti ada pembelian yang berlebih. Karena itu isinya
 tidak diperlakukan seperti isi silo — ia muncul di layar "Berjalan" sebagai
 pekerjaan yang menunggu diselesaikan, bukan sebagai keadaan yang tenang.
 
+⚠ **TETAPI ATURAN ITU UNTUK GABAH YANG DIBELI.** Barang jasa bukan pembelian,
+jadi tumpukan berisi gabah pelanggan bukan "pembelian berlebih" — ia pelanggan
+yang menunggu giliran giling, keadaan yang memang biasa. Dibiarkan apa adanya,
+tiga pelanggan yang menunggu akan berdiri di layar sebagai tiga kesalahan
+pembelian; dan daftar yang menagih pekerjaan yang tidak salah akan berhenti
+dibaca — bahaya yang sudah ditulis sendiri di `rekonsiliasi.py`.
+
+Maka KALIMATNYA berbeda, bukan kartunya disembunyikan: pelanggan yang menunggu
+tetap pekerjaan yang harus terlihat. Dan setiap hitungan "berlebih" di layar
+mana pun menyaring `jasa_id IS NULL` — lihat `isi()` dan `jumlah_kg()`.
+
 **Ada dua, dan mana yang dipakai TIDAK disimpan.** Tumpukan basah dan tumpukan
 kering; sebuah batch masuk ke tumpukan yang sesuai kondisinya, dan kondisinya
 sudah tercatat di batch itu sendiri. Menyimpannya lagi berarti dua tempat yang
@@ -82,14 +93,44 @@ async def menunggu_tempat(db: AsyncSession) -> list[PurchaseBatch]:
     )).scalars().all())
 
 
-async def isi(db: AsyncSession, kondisi: str | None = None) -> list[PurchaseBatch]:
-    """Batch yang sedang menumpuk, terbaru dulu."""
+async def isi(db: AsyncSession, kondisi: str | None = None, *,
+              pemilik: str = "semua") -> list[PurchaseBatch]:
+    """Batch yang sedang menumpuk, terbaru dulu.
+
+    `pemilik` memilih SIAPA yang dihitung, dan pemanggilnya harus memilih sadar:
+
+        "semua"   isi lantai apa adanya — untuk kartu & layar operator
+        "pabrik"  `jasa_id IS NULL` — untuk hitungan STOK dan "berlebih"
+        "jasa"    barang titipan saja
+
+    Bawaannya "semua" supaya kartu tak pernah kehilangan baris tanpa sengaja:
+    barang yang hilang dari layar tidak hilang dari lantai gudang. Yang menghitung
+    MILIK — stok, "pembelian berlebih" — menyebut "pabrik" terang-terangan.
+    """
     q = select(PurchaseBatch).where(PurchaseBatch.status_batch == DITUMPUK)
     if kondisi:
         q = q.where(PurchaseBatch.kondisi_gabah == kondisi)
+    if pemilik == "pabrik":
+        q = q.where(PurchaseBatch.jasa_id.is_(None))
+    elif pemilik == "jasa":
+        q = q.where(PurchaseBatch.jasa_id.is_not(None))
     return list((await db.execute(
         q.order_by(PurchaseBatch.id.desc())
     )).scalars().all())
+
+
+async def jumlah_kg(db: AsyncSession, *, pemilik: str = "pabrik") -> float:
+    """Berapa kilogram yang menumpuk — MILIK PABRIK secara bawaan.
+
+    Kebalikan bawaan dari `isi()`, dan itu disengaja: `isi()` memberi KARTU
+    (menyembunyikan baris = pekerjaan yang hilang), fungsi ini memberi ANGKA
+    STOK (memasukkan barang titipan = stok pabrik yang menggelembung dengan
+    barang orang lain). Bawaan yang aman berbeda arah untuk keduanya.
+    """
+    from app.penggilingan.gudang1.services.bobot import dari_batch
+
+    return sum(dari_batch(b).angka()
+               for b in await isi(db, pemilik=pemilik))
 
 
 async def tempatkan(

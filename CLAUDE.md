@@ -184,6 +184,56 @@ Aturannya sekarang:
     dan tetap diterima saat membaca masukan — halaman di ponsel berumur
     panjang. Yang berhenti cuma MENULISNYA.
 
+## Jasa (toll milling) — satu-satunya batasannya KEPEMILIKAN (sejak 1 Okt 2026)
+
+Barang pelanggan yang digiling di sini **tidak dibeli**. `jasa.id` menjawab
+"milik siapa", dan **`jasa_id` NULL = milik pabrik** — seluruh perilaku sebelum
+migrasi 0064 tak bergeser satu baris pun, tanpa backfill.
+
+`purchase_batches.supplier_id` kini BOLEH NULL, dengan
+`CHECK ck_purchase_batches_beli_atau_jasa`: tepat satu dari `supplier_id` /
+`jasa_id` terisi — dibeli, ATAU dititipkan. ⚠ Jangan pernah mengakalinya dengan
+memasukkan pelanggan ke `suppliers`: pemasok palsu ikut ke skor pemasok, laporan
+pembelian, dan HPP.
+
+Enam tabel membawa `jasa_id` (migrasi 0064): `purchase_batches` · `drying_lots` ·
+`silo_storage` · `milling_process` · `internal_transfers` · `pk_gudang2_intakes`.
+Enam sisanya menyusul di irisan Gudang 2 — dan sampai itu
+**`mulai_penyosohan` MENOLAK silo berisi PK jasa**
+(`jasa.tolak_jasa_di_penyosohan`), sebab `polishing_process` belum bisa membawa
+pemilik. Penjaga itu DICABUT di irisan berikutnya, bukan dirawat.
+
+`app/services/jasa.py` memegang aturannya:
+
+  · `pastikan_satu_jasa()` — bukan larangan mencampur, **larangan mencampur
+    PEMILIK**. Keputusan pemilik: *"yang tidak memungkinkan adalah menggabungkan
+    barang jika kepemilikan berbeda. itu saja batasannya."* Barang sepemilik
+    boleh satu silo, dua silo, digiling bersama — sebebas barang pabrik. Dan
+    pencabutan larangan campur untuk gabah PABRIK (migrasi 0031) TETAP berlaku;
+    jangan dipasang ulang "sekalian".
+  · pembandingnya **`jasa_id`, bukan `pelanggan_id`**: dua pesanan satu
+    pelanggan tetap terpisah, bobot kembalinya berbeda.
+  · DITOLAK, bukan diperingatkan — dan **berkunci basis data** (`kunci_silo`,
+    `kunci_dryer`): dua operator bisa menuang ke silo yang sama pada detik yang
+    sama.
+
+**Setiap pembaca stok PABRIK menyaring `jasa_id IS NULL`.** Tanpa itu Stok
+menghitung barang pelanggan sebagai persediaan pabrik, lalu pabrik menjualnya —
+dan itu tak melempar satu pun galat. Yang sudah disaring: `stok_pk_g1`,
+`dashboard._stok_pk`, `tumpukan.jumlah_kg`, `beranda.angka_gudang`, seluruh
+laporan pembelian (`report.py`, `analytics.py`), dan daftar barang yang bisa
+keluar (`aksi_inventory`) berikut penjaganya di `barang_keluar.tersedia`.
+Kartu stok PK **tetap mendaftar** lot jasa, bertanda pemiliknya: barangnya memang
+ada di lantai, dan layar yang menyembunyikannya berselisih dengan gudang.
+
+Pesanan lahir di **app produksi** saat operator menerima tiketnya
+(`purchase.pesanan_jasa_dari_tiket`), bukan di Pos Timbang: tiket bisa
+dibatalkan, dan tiket batal yang sudah melahirkan pesanan meninggalkan pesanan
+yatim. `timbangan_transaksi.jasa_id` adalah penunjuk ke pesanan BERJALAN —
+itulah yang membuat dua truk jadi satu pesanan.
+
+Uji ketaatannya `tests/pg/test_jasa_ketaatan.py`.
+
 ## Bobot bahan: nota vs timbangan (sejak 25 September 2026)
 
     real = berat BARANG menurut Pos Timbang (netto − tara karung)
@@ -219,7 +269,11 @@ Data lama TIDAK dihitung ulang: aturan ini untuk pencatatan baru.
 Otoritasnya `app/services/codegen.py`, bukan ingatan:
 `GB` pembelian gabah · `PGR` pengeringan · `LOT` giling · `TRF` transfer PK ·
 `PKB` beli PK luar · `POL` penyosohan · `PTS` pindah tumpukan · `REJ` PK
-ditolak · `OUT` barang keluar · `PKP` beli kemasan.
+ditolak · `OUT` barang keluar · `PKP` beli kemasan · `JAS` pesanan jasa.
+
+`JAS` satu-satunya yang BULANAN (`JAS-YYMM-NNN`, tiga angka): ia menghitung
+PEKERJAAN, bukan muatan. Daftar artinya dijaga `tests/test_awalan_kode.py`;
+awalan baru wajib didaftarkan di sana.
 
 Awalan yang salah pernah membuat lapisan AI mengarahkan perintah ke proses
 yang keliru. Kalau menyentuh teks yang memuat awalan, periksa konteksnya satu

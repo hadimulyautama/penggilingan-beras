@@ -27,6 +27,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_drying_lot_code, next_milling_code
+from app.services.jasa import JasaError, nama_pemilik, pastikan_satu_jasa_bernama
 from app.penggilingan.gudang1.services.bobot import (
     NOL, PASTI, TAK_DIKETAHUI, Bobot, dari_batch, dari_batches)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
@@ -158,6 +159,22 @@ async def start_milling(
         silo_pilih.append(silo)
         rows += baris
 
+    # ── SELURUH silo harus SEPEMILIK ──
+    #
+    # Beberapa silo jadi SATU lot (keputusan pemilik 24 September 2026), dan satu
+    # lot berarti satu rendemen atas seluruh bahannya. Kalau bahannya milik dua
+    # orang, rendemen itu jadi angka yang dipakai menagih atas gabah yang
+    # sebagian bukan milik yang ditagih — dan PK yang keluar tak bisa dibagi
+    # kembali, sebab tak ada lapisan di dalam mesin.
+    #
+    # Satu pesanan di DUA silo tetap sah, dan itu memang yang diminta: *"multi
+    # silo giling … memungkinkan. yang tidak memungkinkan adalah menggabungkan
+    # barang jika kepemilikan berbeda."*
+    try:
+        pemilik_lot = await pastikan_satu_jasa_bernama(db, [r.jasa_id for r in rows])
+    except JasaError as e:
+        raise MillingError(f"❌ {e.args[0]}") from None
+
     silo = silo_pilih[0]
     nama_silo = _rangkai(nama_pilih)
     # Dipegang sebagai ANGKA, bukan sebagai objek: sesudah `rollback()` di
@@ -208,6 +225,7 @@ async def start_milling(
     proc = MillingProcess(
         kode_proses=await next_milling_code(db),
         silo_id=silo.id,
+        jasa_id=pemilik_lot,
         silo_storage_id=st.id,
         drying_lot_id=st.drying_lot_id,
         purchase_batch_id=st.purchase_batch_id,
@@ -282,7 +300,13 @@ class ProgressResult:
     proc: MillingProcess
     berat_kumulatif: float
     rendemen_persen: float | None
-    jenis: str | None = None  # KS (dibeli basah) / KL (dibeli kering) / MIX (dua-duanya)
+    #: KS (masuk basah) / KL (masuk sudah kering) / MIX (dua-duanya).
+    #:
+    #: Dulu berbunyi "dibeli basah / dibeli kering". Klasifikasinya TETAP BENAR
+    #: untuk barang jasa — yang dibedakan memang basah-lalu-dikeringkan vs
+    #: datang-sudah-kering, dan keluarannya memang berbeda — jadi hanya katanya
+    #: yang disesuaikan. JANGAN mengubah logikanya.
+    jenis: str | None = None
     peringatan: str | None = None
 
 
@@ -302,8 +326,8 @@ def hitung_rendemen(hasil: float | None, masuk: float | None) -> float | None:
     return float(hasil) / masuk * 100
 
 
-async def stok_pk_g1(db: AsyncSession) -> float:
-    """PK yang MENUMPUK di Gudang 1 — belum dikirim, belum dijual.
+async def stok_pk_g1(db: AsyncSession, *, termasuk_jasa: bool = False) -> float:
+    """PK MILIK PABRIK yang menumpuk di Gudang 1 — belum dikirim, belum dijual.
 
     Tidak disimpan sebagai keadaan tersendiri, dan itu disengaja. "Ditumpuk"
     dan "langsung dibawa ke penyosohan" bukan dua jalan yang perlu dinyatakan
@@ -311,9 +335,24 @@ async def stok_pk_g1(db: AsyncSession) -> float:
     sudah tercatat. Menyuruh orang menyatakannya lagi berarti dua sumber untuk
     satu fakta — dan yang salah selalu yang diketik manual, karena orang lupa
     memperbaruinya setelah barangnya benar-benar pindah.
+
+    ⚠ `jasa_id IS NULL` — PK PELANGGAN BUKAN STOK PABRIK. Angka ini dibaca
+    Beranda dan laporan "status gudang" sebagai "berapa yang pabrik punya";
+    memasukkan PK titipan ke dalamnya membuat pabrik melihat barang orang lain
+    sebagai persediaannya sendiri, lalu memperlakukannya begitu. Itu bukan angka
+    yang salah — itu barang orang lain yang terjual, dan tak ada pembetulan
+    pembukuan yang mengembalikannya.
+
+    `termasuk_jasa=True` untuk pertanyaan yang memang tentang ISI gudang secara
+    fisik ("ada apa di lantai Gudang 1"), bukan tentang milik. Dipisah sebagai
+    parameter, bukan fungsi kedua: dua fungsi yang hampir sama akan dipanggil
+    salah satunya di tempat yang butuh yang lain.
     """
+    q = select(MillingProcess)
+    if not termasuk_jasa:
+        q = q.where(MillingProcess.jasa_id.is_(None))
     total = 0.0
-    for proc in (await db.execute(select(MillingProcess))).scalars().all():
+    for proc in (await db.execute(q)).scalars().all():
         bd = await _pk_breakdown(db, proc.id)
         if bd.tersedia > 0:
             total += bd.tersedia
@@ -340,6 +379,34 @@ async def log_progress(
         berat_kumulatif = angka_wajar(berat_kumulatif, "Berat PK kumulatif")
     except AngkaError as e:
         raise MillingError(str(e)) from None
+
+    # ── UNTUK BARANG JASA, ANGKA YANG MUSTAHIL DITOLAK — BUKAN DIPERINGATKAN ──
+    #
+    # ⚠ DAN DIPERIKSA SEBELUM DISIMPAN. Peringatan untuk gabah pabrik di bawah
+    # sengaja terbit SESUDAH pencatatan — PK-nya sudah keluar dari mesin, jadi
+    # catatan yang menolak hanya membuat pembukuan berbohong. Di sini
+    # kebalikannya: yang ditolak harus TIDAK tersimpan, sebab angka inilah yang
+    # ditunjukkan kepada orang yang membawa barangnya, dan ia akan menuntut
+    # angka yang tertulis. Peringatan di layar operator tak pernah sampai
+    # kepadanya.
+    #
+    # Jalan perbaikannya tetap terbuka: kumulatif terakhir yang sah tak
+    # tersentuh, dan operator mengetik angka yang benar.
+    #
+    # ⚠ HANYA batas mustahil ini, dan hanya bila pembandingnya PASTI. Ambang
+    # yang lebih ketat ("rendemen di bawah X% mustahil") TIDAK dipasang: untuk
+    # lot KS/MIX penyebutnya bobot BASAH dan kadar airnya tak pernah diukur
+    # (butuh flowing scale, dan pabrik belum punya) — ambang semacam itu akan
+    # menolak lot yang sah hanya karena gabahnya lebih basah daripada biasanya.
+    bahan_masuk = float(proc.berat_gabah_masuk_kg or 0)
+    if (proc.jasa_id is not None and proc.bobot_masuk_final and bahan_masuk
+            and float(berat_kumulatif) > bahan_masuk):
+        raise MillingError(
+            f"❌ Hasil {_kg(float(berat_kumulatif))} melebihi gabah yang masuk "
+            f"({_kg(bahan_masuk)}) — mustahil, dan ini barang jasa: angkanya "
+            "akan jadi dasar yang ditunjukkan ke pemiliknya. TIDAK dicatat; "
+            "periksa angkanya lalu ketik ulang."
+        )
 
     db.add(
         MillingProgressLog(
@@ -736,9 +803,14 @@ async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> lis
     """
     nama: list[str] = []
     for b, _harga, _lewat in await sumber_batch(db, proc):
-        sup = await db.get(Supplier, b.supplier_id)
-        if sup and sup.nama_supplier not in nama:
-            nama.append(sup.nama_supplier)
+        # `if sup and …` dulu MELEWATI batch tanpa pemasok tanpa bersuara, dan
+        # sejak `supplier_id` boleh NULL itu berarti asal gabah jasa tak tersebut
+        # sama sekali: laporannya tidak salah, ia cuma bungkam tentang bahan yang
+        # ikut tergiling. Pemiliknya yang disebut di tempatnya.
+        sebutan = (await db.get(Supplier, b.supplier_id)).nama_supplier \
+            if b.supplier_id else await nama_pemilik(db, b.jasa_id)
+        if sebutan and sebutan not in nama:
+            nama.append(sebutan)
     return nama
 
 
@@ -791,17 +863,27 @@ async def asal_isi(db: AsyncSession, proc: MillingProcess) -> list[str]:
         tiket = await kode_tiket([b.timbangan_transaksi_id for b in batches
                                  if b.timbangan_transaksi_id])
         for b in batches:
-            sup = await db.get(Supplier, b.supplier_id)
+            sup = await db.get(Supplier, b.supplier_id) if b.supplier_id else None
+            # "gabah siapa" — pemasok bila dibeli, pemilik bila dititipkan.
+            # Garis datar di tempat ini dulu berarti "pemasoknya hilang"; untuk
+            # barang jasa ia berarti "tak ada yang menjual", dan itu bukan
+            # keadaan janggal yang perlu terbaca seperti kerusakan data.
+            pihak = (sup.nama_supplier if sup
+                     else await nama_pemilik(db, b.jasa_id)) or "-"
             tk = tiket.get(b.timbangan_transaksi_id or -1)
             out.append(
                 f"     – {b.kode_batch} · {b.kondisi_gabah} "
-                f"{_kg(float(b.berat_total_kg or 0))} · {sup.nama_supplier if sup else '-'}"
+                f"{_kg(float(b.berat_total_kg or 0))} · {pihak}"
                 + (f" · tiket {tk}" if tk else "")
             )
     return out
 
 
-#: Kondisi gabah saat DIBELI → kelas PK yang keluar darinya.
+#: Kondisi gabah saat MASUK pabrik → kelas PK yang keluar darinya.
+#:
+#: "saat dibeli" sampai 1 Oktober 2026. Katanya diganti karena gabah jasa tidak
+#: dibeli — tetapi yang dibedakan tetap sama: basah-lalu-dikeringkan di sini vs
+#: datang-sudah-kering. Klasifikasinya berlaku utuh untuk barang titipan.
 KELAS_PK = {"basah": "KS", "kering": "KL"}
 
 #: Lot yang bahannya dua-duanya. Bukan "campuran" — satu kata yang meringkas
@@ -811,7 +893,7 @@ KELAS_PK_CAMPUR = "MIX"
 
 
 def kelas_pk(kondisi: list[str]) -> str | None:
-    """KS / KL / MIX dari daftar kondisi beli bahannya. None bila tak diketahui."""
+    """KS / KL / MIX dari kondisi MASUK bahannya. None bila tak diketahui."""
     kode = [KELAS_PK[k] for k in kondisi if k in KELAS_PK]
     if not kode:
         return None
@@ -819,13 +901,13 @@ def kelas_pk(kondisi: list[str]) -> str | None:
 
 
 async def _source_kondisi(db: AsyncSession, proc: MillingProcess) -> list[str]:
-    """Kondisi beli gabah sumber proses — dari SELURUH isinya.
+    """Kondisi MASUK gabah sumber proses — dari SELURUH isinya.
 
     Dulu dibaca dari `proc.drying_lot_id`/`purchase_batch_id`, penunjuk tunggal
     peninggalan masa ketika satu silo hanya boleh berisi satu hal, dengan
     catatan "satu lot tidak boleh campur basah & kering, jadi cukup satu batch
     sumber". Catatan itu tidak lagi benar: silo Gudang 1 boleh berisi gabah
-    yang KAMI keringkan (dibeli basah) bersama gabah yang datang sudah kering.
+    yang KAMI keringkan (masuk basah) bersama gabah yang datang sudah kering.
     Keduanya sama-sama kering saat digiling — yang membedakan adalah kelas PK
     yang keluar, dan itu justru yang dijual.
 
@@ -911,12 +993,29 @@ async def stok_pk_gudang1(db: AsyncSession) -> str:
         )
     ).scalars().all()
     items: list[tuple[str, str | None, PkBreakdown]] = []
+    # PK JASA dipisah, bukan disembunyikan dan bukan dijumlah bersama. Barangnya
+    # memang berdiri di lantai Gudang 1 — menyembunyikannya membuat laporan
+    # berselisih dengan apa yang dilihat orang di gudang — tetapi ia bukan "siap
+    # kirim": yang berhak mengambilnya pemiliknya.
+    jasa_items: list[tuple[str, str, PkBreakdown]] = []
     for proc in procs:
         bd = await _pk_breakdown(db, proc.id)
-        if bd.tersedia > 0:
+        if bd.tersedia <= 0:
+            continue
+        if proc.jasa_id is not None:
+            jasa_items.append((proc.kode_proses,
+                               await nama_pemilik(db, proc.jasa_id) or "jasa", bd))
+        else:
             items.append((proc.kode_proses, await pk_jenis(db, proc), bd))
-    if not items:
+    if not items and not jasa_items:
         return "📦 Stok PK Gudang 1 kosong."
+    if not items:
+        return "\n".join(
+            ["📦 Stok PK Gudang 1 kosong (milik pabrik).",
+             "",
+             "🤝 PK JASA di Gudang 1 — menunggu diambil pemiliknya:"]
+            + [f"• {pemilik}: {_kg(bd.tersedia)} dari {kode}"
+               for kode, pemilik, bd in jasa_items])
     total = sum(bd.tersedia for _, _, bd in items)
     sub: dict[str, float] = {}
     for _, jenis, bd in items:
@@ -928,6 +1027,12 @@ async def stok_pk_gudang1(db: AsyncSession) -> str:
         if bd.transferred > 0:
             detail += f" (dari {_kg(bd.produced)}, terkirim {_kg(bd.transferred)})"
         lines.append(detail)
+    if jasa_items:
+        lines.append("")
+        lines.append("🤝 PK JASA di Gudang 1 — menunggu diambil pemiliknya "
+                     "(di luar jumlah di atas):")
+        for kode, pemilik, bd in jasa_items:
+            lines.append(f"• {pemilik}: {_kg(bd.tersedia)} dari {kode}")
     return "\n".join(lines)
 
 
@@ -1100,6 +1205,21 @@ async def verify_milling_output(
     if not proc.bobot_masuk_final:
         raise MillingError(await _pesan_belum_final(db, proc))
 
+    # Pagar mustahil untuk barang JASA — lihat catatan panjang di `log_progress`.
+    #
+    # Dipasang hanya untuk jasa, dan itu disengaja: untuk gabah pabrik langkah
+    # verifikasi ini sampai hari ini menerima angka apa pun, dan memperketatnya
+    # di jalur produksi harian adalah perubahan yang harus diminta pemilik —
+    # bukan diselundupkan bersama pekerjaan jasa. `finish_milling` sudah
+    # menolaknya di sana.
+    masuk = float(proc.berat_gabah_masuk_kg or 0)
+    if proc.jasa_id is not None and masuk and float(berat_output) > masuk:
+        raise MillingError(
+            f"❌ Output {_kg(float(berat_output))} melebihi gabah yang masuk "
+            f"({_kg(masuk)}) — mustahil, dan angka ini yang ditunjukkan ke "
+            "pemilik barangnya. Tidak disimpan."
+        )
+
     verif = (
         await db.execute(
             select(MillingProcessVerification).where(
@@ -1140,8 +1260,9 @@ async def _pesan_belum_final(db: AsyncSession, proc: MillingProcess) -> str:
         bb = dari_batch(b)
         if bb.pasti:
             continue
-        sup = await db.get(Supplier, b.supplier_id)
-        nama = sup.nama_supplier if sup else "?"
+        sup = await db.get(Supplier, b.supplier_id) if b.supplier_id else None
+        nama = (sup.nama_supplier if sup
+                else await nama_pemilik(db, b.jasa_id)) or "?"
         bagian.append(f"{b.kode_batch} ({nama}) "
                       + ("masih perkiraan dari tara truk" if bb.keadaan != TAK_DIKETAHUI
                          else "belum ditimbang kedua"))

@@ -24,6 +24,12 @@ from app.penggilingan.gudang1.services.bobot import (
     NOL, Bobot, dari_batch, dari_batches)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
 from app.services.codegen import next_drying_lot_code
+from app.services.jasa import (
+    JasaError,
+    kunci_silo,
+    nama_pemilik,
+    pastikan_satu_jasa_bernama,
+)
 
 
 def _silo_cap_kg(silo) -> float | None:
@@ -199,15 +205,28 @@ async def _silo_content_kg(db: AsyncSession, silo_id: int) -> float:
 
 
 async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
-    stmt = (
-        select(Supplier.nama_supplier)
+    """Asal bahan sebuah lot — pemasoknya, atau pemiliknya bila dititipkan.
+
+    ⚠ DULU INNER JOIN, DAN ITU MENGHILANGKAN BARIS. Sejak `supplier_id` boleh
+    NULL (migrasi 0064), lot berisi gabah jasa menampilkan daftar KOSONG di
+    kartu silo — bukan angka salah, barisnya hilang, dan yang membacanya
+    menyimpulkan silonya kosong. Kembarannya ada di `drying.py` dengan catatan
+    yang sama; keduanya harus tetap sepakat.
+    """
+    rows = (await db.execute(
+        select(Supplier.nama_supplier, PurchaseBatch.jasa_id)
         .select_from(DryingLotBatch)
         .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-        .join(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+        .outerjoin(Supplier, PurchaseBatch.supplier_id == Supplier.id)
         .where(DryingLotBatch.drying_lot_id == lot_id)
         .distinct()
-    )
-    return list((await db.execute(stmt)).scalars().all())
+    )).all()
+    keluar: list[str] = []
+    for nama, jasa_id in rows:
+        sebutan = nama or await nama_pemilik(db, jasa_id) or "?"
+        if sebutan not in keluar:
+            keluar.append(sebutan)
+    return keluar
 
 
 @dataclass
@@ -217,6 +236,37 @@ class IsiSilo:
     sebutan: str       # kode lot atau kode batch
     kg: float
     lot_id: int | None = None
+    #: Pesanan jasa yang memiliki baris ini — None = milik pabrik.
+    jasa_id: int | None = None
+    #: "JAS-2610-007 Pak Budi", atau None untuk barang pabrik. Disimpan di
+    #: barisnya supaya layar tak perlu bertanya lagi per baris.
+    pemilik: str | None = None
+
+
+#: Label ASAL untuk barang PABRIK. Kata "beli" hanya sah di sini.
+#:
+#: ⚠ Nilai `asal` di basis data tetap `beli_kering` untuk barang jasa juga, dan
+#: itu disengaja: mengubah nilai enum menyentuh pembaca lain tanpa perlu, dan
+#: nilai baru yang cuma dipakai satu layar adalah nilai yang pembaca berikutnya
+#: tidak tahu harus diapakan. Yang dibetulkan LABELnya.
+_LABEL_ASAL_PABRIK = {"pengeringan": "hasil pengeringan sendiri",
+                      "beli_kering": "gabah beli kering"}
+
+#: Label ASAL untuk barang JASA. Barang jasa TIDAK DIBELI, dan bukan "sendiri".
+#:
+#: Dua kata salah dalam satu kalimat kalau label pabrik dipakai apa adanya:
+#: silo berisi gabah Pak Budi dari pengering + gabah Pak Budi yang dibawa
+#: kering akan dilaporkan "hasil pengeringan sendiri & gabah beli kering" —
+#: padahal tak ada yang dibeli dan tak ada yang milik sendiri. Dan kalimat itu
+#: justru dibaca saat memutuskan apa yang digiling.
+_LABEL_ASAL_JASA = {"pengeringan": "hasil pengeringan",
+                    "beli_kering": "gabah kering dibawa langsung"}
+
+
+def label_asal(asal: str, jasa_id: int | None) -> str:
+    """Sebutan asal sebuah baris isi silo, mengikuti pemiliknya."""
+    peta = _LABEL_ASAL_PABRIK if jasa_id is None else _LABEL_ASAL_JASA
+    return peta.get(asal, asal)
 
 
 async def isi_silo(db: AsyncSession, silo_id: int) -> list[IsiSilo]:
@@ -234,30 +284,64 @@ async def isi_silo(db: AsyncSession, silo_id: int) -> list[IsiSilo]:
     """
     rinci: list[IsiSilo] = []
     for r in await _silo_active_rows(db, silo_id):
+        # Pemiliknya dibaca dari BARIS SILO-nya, bukan dari lot/batch di
+        # belakangnya: baris itulah yang berada di dalam silo, dan `jasa_id`
+        # di sana memang disimpan supaya pertanyaan "silo ini isinya milik
+        # siapa" tak perlu dua join setiap kali ditanyakan.
+        pemilik = await nama_pemilik(db, r.jasa_id)
         if r.drying_lot_id:
             lot = await db.get(DryingLot, r.drying_lot_id)
             rinci.append(IsiSilo("pengeringan", lot.kode_lot if lot else "lot",
-                                 await _lot_kg(db, r.drying_lot_id), r.drying_lot_id))
+                                 await _lot_kg(db, r.drying_lot_id), r.drying_lot_id,
+                                 jasa_id=r.jasa_id, pemilik=pemilik))
         elif r.purchase_batch_id:
             b = await db.get(PurchaseBatch, r.purchase_batch_id)
             if b:
                 rinci.append(IsiSilo("beli_kering", b.kode_batch,
-                                     dari_batch(b).angka()))
+                                     dari_batch(b).angka(),
+                                     jasa_id=r.jasa_id, pemilik=pemilik))
     return rinci
 
 
 def _tercampur(rinci: list[IsiSilo]) -> bool:
-    """Dua ASAL berbeda dalam satu silo."""
-    return len({x.asal for x in rinci}) > 1
+    """Dua ASAL berbeda dalam satu silo — DAN barangnya milik pabrik.
+
+    ⚠ TANDA ⚠️ TERCAMPUR TIDAK DIPAKAI UNTUK SILO SEPEMILIK, dan itu keputusan
+    pemilik, bukan kerapian: satu pesanan jasa memang boleh mengisi satu silo
+    dengan gabah dari pengering DAN gabah kering yang dibawa langsung, lalu
+    menggilingnya bersama. Pencampurannya dikehendaki orang yang punya
+    barangnya.
+
+    Tanda seru di situ melaporkan keadaan normal sebagai kejanggalan — dan
+    tanda seru yang sering salah berhenti dibaca, termasuk pada hari ia benar.
+
+    Untuk gabah PABRIK tandanya TETAP: di sana campuran asal memang kabar yang
+    perlu dibaca sebelum memutuskan apa yang digiling.
+    """
+    if len({x.asal for x in rinci}) <= 1:
+        return False
+    pemilik = {x.jasa_id for x in rinci}
+    return not (len(pemilik) == 1 and None not in pemilik)
 
 
 def _sebut_isi(rinci: list[IsiSilo]) -> str:
-    """Kalimat pendek untuk peringatan: apa yang sudah ada di dalam."""
-    nama = {"pengeringan": "hasil pengeringan sendiri", "beli_kering": "gabah beli kering"}
-    per: dict[str, float] = {}
+    """Kalimat pendek untuk peringatan: apa yang sudah ada di dalam.
+
+    Dikelompokkan per (pemilik, asal) — bukan per asal saja. Silo yang isinya
+    satu pemilik akan menyebut pemiliknya SEKALI di depan, sebab itulah fakta
+    yang menentukan apa yang boleh masuk berikutnya.
+    """
+    per: dict[tuple[str | None, str], float] = {}
     for x in rinci:
-        per[x.asal] = per.get(x.asal, 0.0) + x.kg
-    return ", ".join(f"{nama.get(a, a)} {_fmt_kg(kg)}" for a, kg in per.items())
+        kunci = (x.pemilik, x.asal)
+        per[kunci] = per.get(kunci, 0.0) + x.kg
+    pemilik = {x.pemilik for x in rinci}
+    satu_pemilik = len(pemilik) == 1 and None not in pemilik
+    bagian = [f"{label_asal(a, None if p is None else 1)} {_fmt_kg(kg)}"
+              + ("" if satu_pemilik or p is None else f" ({p})")
+              for (p, a), kg in per.items()]
+    awalan = f"{pemilik.pop()} · " if satu_pemilik else ""
+    return awalan + ", ".join(bagian)
 
 
 def _fmt_kg(kg: float) -> str:
@@ -287,6 +371,10 @@ class MasukResult:
     #: Berat baris yang BARU masuk. Berbeda dari `kg`, yang pada gabah kering
     #: berarti seluruh isi silo sesudah penggabungan.
     kg_baris: float = 0.0
+    #: "JAS-2610-007 Pak Budi" bila silo ini berisi barang titipan — None untuk
+    #: barang pabrik. Dipakai kalimat balasan: operator yang baru menuang barang
+    #: pelanggan perlu melihat nama itu di layar, bukan mengingat pilihannya.
+    pemilik: str | None = None
 
 
 async def masuk_silo(
@@ -306,10 +394,19 @@ async def masuk_silo(
     now = input_time(tanggal, jam)
     digabung = False
     campur_asal = False
+    # ── SILONYA DIKUNCI sebelum isinya dibaca ──
+    #
+    # Penjaga pemilik di bawah berdiri di atas apa yang terbaca di sini. Tanpa
+    # kunci, dua operator yang menuang barang dua pemilik ke silo yang sama pada
+    # detik yang sama sama-sama membaca silo yang masih kosong, keduanya lolos,
+    # dan silo berisi barang dua orang — keadaan yang tak bisa dibatalkan dengan
+    # pembukuan. Lihat catatan panjang di `jasa.kunci_silo`.
+    await kunci_silo(db, silo.id)
     # Dibaca SEBELUM apa pun ditambahkan — sesudahnya, yang baru masuk sudah
     # ikut terhitung dan peringatannya jadi menuduh dirinya sendiri.
     sebelum = await isi_silo(db, silo.id)
     isi_sebelumnya = _sebut_isi(sebelum)
+    pemilik_sebelum = [x.jasa_id for x in sebelum]
 
     if kode_lot:
         # ── Dari pengeringan: silo BOLEH sudah berisi. ──
@@ -364,6 +461,17 @@ async def masuk_silo(
         if dup:
             raise SiloError(f"Pengeringan {kode_lot} sudah ada di silo.")
         kg = await _lot_kg(db, lot.id)
+        # ── Pemilik isi silo harus TUNGGAL ──
+        #
+        # DITOLAK, bukan diperingatkan. Peringatan `campur_asal` di bawah
+        # sengaja cuma peringatan sebab akibatnya angka yang perlu dibaca
+        # hati-hati; di sini akibatnya barang orang lain ikut tergiling, dan
+        # tak ada pembetulan pembukuan yang mengembalikannya.
+        try:
+            pemilik_baris = await pastikan_satu_jasa_bernama(
+                db, pemilik_sebelum + [lot.jasa_id])
+        except JasaError as e:
+            raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
         # Isi yang sudah ada ikut disebut. `_ensure_cap` memang tidak menolak
         # apa pun hari ini, tetapi memberinya angka 0 berarti menanam
         # kebohongan yang baru terbaca pada hari batas itu dikembalikan.
@@ -371,6 +479,7 @@ async def masuk_silo(
         baris = SiloStorage(
             silo_id=silo.id, drying_lot_id=lot.id, tipe_masuk="dari_pengeringan",
             tanggal_masuk=now, input_by=user.id, status="terisi",
+            jasa_id=pemilik_baris,
         )
         db.add(baris)
         kg_baris = kg
@@ -396,7 +505,11 @@ async def masuk_silo(
         # kosong pun dilaporkan "sudah berisi sebelumnya". Peringatan palsu
         # melatih orang mengabaikan peringatan yang sungguhan.
         digabung = bool(sebelum)
-        campur_asal = any(x.asal == "beli_kering" for x in sebelum)
+        # ⚠ Peringatan campur-asal TIDAK dipasang untuk silo sepemilik jasa:
+        # satu pesanan memang boleh mengisi satu silo dari pengering DAN dengan
+        # gabah kering yang dibawa langsung. Alasan lengkapnya di `_tercampur`.
+        campur_asal = (pemilik_baris is None
+                       and any(x.asal == "beli_kering" for x in sebelum))
         isi, tipe = kode_lot, "dari_pengeringan"
 
     elif kode_batch:
@@ -430,12 +543,18 @@ async def masuk_silo(
         # proses giling didaftar sendiri (`milling_process_sources`, migrasi
         # 0031), seluruh isi silo ikut terhitung — dan larangan itu tinggal
         # memaksa gabah menganggur di silo lain yang belum tentu ada.
+        try:
+            pemilik_baris = await pastikan_satu_jasa_bernama(
+                db, pemilik_sebelum + [batch.jasa_id])
+        except JasaError as e:
+            raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
         existing_kg = await _silo_content_kg(db, silo.id)
         _ensure_cap(silo, nama_silo, existing_kg, kg_new)
         baris = SiloStorage(
             silo_id=silo.id, purchase_batch_id=batch.id, drying_lot_id=None,
             tipe_masuk="langsung_kering", tanggal_masuk=now,
             input_by=user.id, status="terisi",
+            jasa_id=pemilik_baris,
         )
         db.add(baris)
         kg_baris = kg_new
@@ -443,7 +562,9 @@ async def masuk_silo(
         # "Digabung" kini berarti silo memang sudah berisi sesuatu — apa pun
         # isinya, lot pengeringan maupun gabah kering yang datang lebih dulu.
         digabung = bool(sebelum)
-        campur_asal = any(x.asal == "pengeringan" for x in sebelum)
+        # Lihat catatan di cabang lot: sepemilik bukan kejanggalan.
+        campur_asal = (pemilik_baris is None
+                       and any(x.asal == "pengeringan" for x in sebelum))
         isi, tipe = batch.kode_batch, "langsung_kering"
         kg = existing_kg + kg_new
     else:
@@ -545,7 +666,8 @@ async def masuk_silo(
     return MasukResult(nama_silo=nama_silo, isi=isi, kg=kg, tipe=tipe,
                        digabung=digabung, isi_sebelumnya=isi_sebelumnya,
                        campur_asal=campur_asal, giling_berjalan=giling_kode,
-                       kg_baris=kg_baris)
+                       kg_baris=kg_baris,
+                       pemilik=await nama_pemilik(db, pemilik_baris))
 
 
 # ─────────────────── Log pemindahan dryer -> silo ───────────────────
@@ -747,11 +869,21 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
                 bagian.append(x.sebutan + (f" ({sups})" if sups else "")
                               + f" {_fmt_kg(x.kg)}")
             else:
-                bagian.append(f"{x.sebutan} (beli kering) {_fmt_kg(x.kg)}")
+                # Kata "beli" hanya untuk barang pabrik — barang jasa tidak
+                # dibeli. Labelnya mengikuti pemiliknya; nilai `asal` di basis
+                # data tetap `beli_kering`. Lihat `label_asal`.
+                bagian.append(f"{x.sebutan} ({label_asal(x.asal, x.jasa_id)})"
+                              f" {_fmt_kg(x.kg)}")
 
+        # Satu pemilik jasa → sebut pemiliknya di kepala baris, dan JANGAN beri
+        # tanda bahaya: campuran itu dikehendaki orang yang punya barangnya.
+        pemilik_silo = {x.jasa_id for x in rinci}
+        sebutan_pemilik = ""
+        if len(pemilik_silo) == 1 and None not in pemilik_silo:
+            sebutan_pemilik = f" · {rinci[0].pemilik}"
         tanda = " ⚠️ TERCAMPUR" if _tercampur(rinci) else ""
         lines.append(
-            f"• {silo.nama_silo}: terisi{tanda} — {_fmt_kg(total)}, "
+            f"• {silo.nama_silo}: terisi{tanda}{sebutan_pemilik} — {_fmt_kg(total)}, "
             f"{jam:.0f} jam ({cap})"
         )
         for b in bagian:
@@ -759,6 +891,8 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
         if _tercampur(rinci):
             lines.append("    _Hasil pengeringan sendiri & gabah beli kering "
                          "dalam satu silo — digiling sebagai satu proses._")
+        elif sebutan_pemilik and len({x.asal for x in rinci}) > 1:
+            lines.append("    _Satu pemilik, digiling sebagai satu proses._")
         if not any(x.asal == "pengeringan" for x in rinci):
             lines.append(f"  _Ketik `giling {silo.nama_silo}` untuk membentuk "
                          "lot & giling._")

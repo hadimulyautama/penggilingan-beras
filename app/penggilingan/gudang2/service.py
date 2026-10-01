@@ -40,6 +40,12 @@ from app.services.codegen import (
     next_rejection_code,
     next_tumpukan_move_code,
 )
+from app.services.jasa import (
+    JasaError,
+    kunci_silo,
+    pastikan_satu_jasa_bernama,
+    pemilik_silo_g2,
+)
 from app.services.notification import create_notification
 from app.penggilingan.gudang1.services.purchase import find_or_create_supplier
 from app.penggilingan.gudang1.services.bobot import dari_batch
@@ -206,27 +212,45 @@ async def segarkan_status_silo(db: AsyncSession, silo_id: int | None) -> None:
     silo.status = "terisi" if await hitung_stok_silo(db, silo_id) > 0.001 else "kosong"
 
 
-async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
-    """Stok PK sebuah silo G2 = masuk langsung + masuk dari tumpukan − terpakai."""
+async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
+                           pemilik: str = "semua") -> float:
+    """Stok PK sebuah silo G2 = masuk langsung + masuk dari tumpukan − terpakai.
+
+    `pemilik` bawaannya "semua" — isi FISIK silonya — dan itu bukan kelonggaran:
+    angka ini dipakai menentukan status silo, menolak penyosohan dari silo
+    kosong, dan menyalin `berat_awal_kg` saat sosoh dimulai. Menyaringnya di
+    sana akan membuat silo yang berisi terbaca kosong, lalu hilang dari borang
+    tanpa satu pun galat — kelas kerusakan yang sudah pernah dibayar saat stok
+    silo disaring dengan kata tujuannya.
+
+    "pabrik" hanya untuk pertanyaan MILIK ("berapa yang pabrik punya"), dan
+    pemanggilnya menyebutnya terang-terangan.
+    """
+    syarat_langsung = [PkGudang2Intake.silo_id == silo_id]
+    # Syaratnya menempel pada INTAKE di kedua jalur — `pk_tumpukan_to_silo` tak
+    # punya `jasa_id` sendiri, pemiliknya ada di intake asalnya.
+    q_tumpukan = (select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+                  .where(PkTumpukanToSilo.silo_id == silo_id))
+    if pemilik == "pabrik":
+        syarat_langsung.append(PkGudang2Intake.jasa_id.is_(None))
+        q_tumpukan = q_tumpukan.join(
+            PkGudang2Intake,
+            PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
+        ).where(PkGudang2Intake.jasa_id.is_(None))
     masuk_langsung = (
         await db.execute(
             select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
-                # Disaring dengan `silo_id` SAJA. Menambahkan syarat atas
-                # kata tujuannya akan membuang baris silo ketiga tanpa satu
-                # pun galat — silonya berisi, tetapi stoknya terbaca 0, lalu
-                # ia hilang dari borang. Itu jenis kerusakan yang paling sulit
-                # dilihat: tak ada yang salah di layar mana pun.
-                PkGudang2Intake.silo_id == silo_id,
+                # Disaring dengan `silo_id` SAJA (di luar saringan pemilik di
+                # atas). Menambahkan syarat atas kata tujuannya akan membuang
+                # baris silo ketiga tanpa satu pun galat — silonya berisi, tetapi
+                # stoknya terbaca 0, lalu ia hilang dari borang. Itu jenis
+                # kerusakan yang paling sulit dilihat: tak ada yang salah di
+                # layar mana pun.
+                *syarat_langsung,
             )
         )
     ).scalar_one()
-    masuk_dari_tumpukan = (
-        await db.execute(
-            select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0)).where(
-                PkTumpukanToSilo.silo_id == silo_id
-            )
-        )
-    ).scalar_one()
+    masuk_dari_tumpukan = (await db.execute(q_tumpukan)).scalar_one()
     # Terpakai penyosohan (hanya proses yang berat_akhir-nya sudah diisi).
     terpakai = (
         await db.execute(
@@ -239,20 +263,25 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int) -> float:
     return float(masuk_langsung) + float(masuk_dari_tumpukan) - float(terpakai)
 
 
-async def hitung_stok_tumpukan(db: AsyncSession) -> float:
-    """Stok tumpukan G2 = total masuk sbg tumpukan − total sudah dipindah ke silo."""
-    masuk = (
-        await db.execute(
-            select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
-                PkGudang2Intake.tujuan == "ditumpuk"
-            )
-        )
-    ).scalar_one()
-    sudah_dipindah = (
-        await db.execute(
-            select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
-        )
-    ).scalar_one()
+async def hitung_stok_tumpukan(db: AsyncSession, *,
+                               pemilik: str = "semua") -> float:
+    """Stok tumpukan G2 = total masuk sbg tumpukan − total sudah dipindah ke silo.
+
+    `pemilik` bawaannya "semua" — isi FISIK lantainya, dan itu yang benar untuk
+    penjaga kapasitas: lantai tak peduli milik siapa barang yang berdiri di
+    atasnya. "pabrik" untuk pertanyaan milik. Lihat `hitung_stok_silo`.
+    """
+    q_masuk = (select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0))
+               .where(PkGudang2Intake.tujuan == "ditumpuk"))
+    q_pindah = select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+    if pemilik == "pabrik":
+        q_masuk = q_masuk.where(PkGudang2Intake.jasa_id.is_(None))
+        q_pindah = q_pindah.join(
+            PkGudang2Intake,
+            PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
+        ).where(PkGudang2Intake.jasa_id.is_(None))
+    masuk = (await db.execute(q_masuk)).scalar_one()
+    sudah_dipindah = (await db.execute(q_pindah)).scalar_one()
     return float(masuk) - float(sudah_dipindah)
 
 
@@ -685,6 +714,7 @@ async def _add_intake(
     pk_purchase_batch_id: int | None = None, internal_transfer_id: int | None = None,
     kunci_kiriman: str | None = None, transfer_peristiwa_id: int | None = None,
     commit: bool = True, bobot_final: bool = True,
+    jasa_id: int | None = None,
 ) -> IntakeResult:
     """SATU titik tulis untuk semua PK yang masuk Gudang 2 — dari PK luar
     maupun transfer Gudang 1.
@@ -701,7 +731,25 @@ async def _add_intake(
     if tujuan_norm == "ditumpuk":
         await _guard_kapasitas_tumpukan(db, berat_kg)
     else:
+        # ── Isi silo Gudang 2 harus SEPEMILIK ──
+        #
+        # Silonya dikunci lebih dulu: dua PK dua pemilik yang masuk ke silo yang
+        # sama pada detik yang sama sama-sama membaca isi yang lama. Lihat
+        # catatan panjang di `jasa.kunci_silo`.
+        await kunci_silo(db, silo_id)
+        try:
+            await pastikan_satu_jasa_bernama(
+                db, list(await pemilik_silo_g2(db, silo_id)) + [jasa_id])
+        except JasaError as e:
+            raise Gudang2Error(f"❌ {e.args[0]}") from None
         ke_proses = await _catat_masuk_selama_proses(db, silo_id, berat_kg)
+        # PK jasa TIDAK boleh menyusup ke proses sosoh yang sedang berjalan:
+        # prosesnya tak bisa membawa pemilik (`polishing_process` belum punya
+        # `jasa_id`), jadi barangnya akan terbukukan sebagai hasil pabrik.
+        if ke_proses and jasa_id is not None:
+            raise Gudang2Error(
+                f"❌ Silo itu sedang disosoh ({ke_proses}) — PK jasa tak boleh "
+                "ditambahkan ke proses yang berjalan. Pilih tempat lain.")
     now = input_time(tanggal, jam)
 
     if not kunci_kiriman:
@@ -719,6 +767,7 @@ async def _add_intake(
         "internal_transfer_id": internal_transfer_id, "tujuan": tujuan_norm, "silo_id": silo_id,
         "berat_kg": berat_kg, "hpp_per_kg": hpp_per_kg, "ke_proses": ke_proses,
         "tanggal": now.date(), "waktu": now, "transfer_peristiwa_id": transfer_peristiwa_id,
+        "jasa_id": jasa_id,
     }
     try:
         e = await buku.catat(db, jenis=PK_MASUK_G2, pelaku_id=user.id, kunci_kiriman=kunci_kiriman,
@@ -745,6 +794,9 @@ async def _add_intake(
         hpp_per_kg=hpp_per_kg, flag_hpp_belum_tersedia=hpp_per_kg is None,
         tanggal_masuk=now.date(), waktu_masuk=now, input_by=user.id,
         peristiwa_id=e.id,
+        # NULL untuk PK beli luar, selalu: PK walk-in jasa belum dikerjakan, dan
+        # jalur yang mengisinya belum ada.
+        jasa_id=jasa_id,
     )
     db.add(intake)
     await db.flush()
@@ -916,6 +968,19 @@ async def _catat_pindah(
     aksi kelima): nomor atomik → catat ke proses yang sedang memakai silo →
     peristiwa `pk_tumpukan_ke_silo` (kunci kiriman idempoten) → proyeksi →
     cermin `pk_tumpukan_to_silo` → jejak. Tidak commit."""
+    # ── Isi silo tujuan harus SEPEMILIK dengan tumpukan yang dipindah ──
+    #
+    # Titik campur keempat: N tumpukan → 1 silo Gudang 2. `pk_tumpukan_to_silo`
+    # tak punya kolom `jasa_id` sendiri dan tak perlu — pemiliknya ada di intake
+    # asalnya, dan kolom kedua yang berarti hal sama adalah kolom yang suatu
+    # hari berselisih dengan yang pertama.
+    await kunci_silo(db, silo.id)
+    try:
+        await pastikan_satu_jasa_bernama(
+            db, list(await pemilik_silo_g2(db, silo.id)) + [intake.jasa_id])
+    except JasaError as e:
+        raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
+
     if not kunci_kiriman:
         n = await buku.jumlah_jenis(db, PK_TUMPUKAN_KE_SILO, "intake_id", intake.id)
         kunci_kiriman = f"{PK_TUMPUKAN_KE_SILO}:intake:{intake.id}:{n + 1}"
@@ -928,6 +993,12 @@ async def _catat_pindah(
             return ada, None
     kode = await next_tumpukan_move_code(db)
     ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
+    # Sama seperti di `_add_intake`: PK jasa tak boleh menyusup ke proses sosoh
+    # yang sedang berjalan — prosesnya belum bisa membawa pemilik.
+    if ke_proses and intake.jasa_id is not None:
+        raise Gudang2Error(
+            f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — PK jasa tak "
+            "boleh ditambahkan ke proses yang berjalan.")
     muatan = {
         "kode_pindah": kode, "intake_id": intake.id, "intake_peristiwa_id": intake.peristiwa_id,
         "silo_id": silo.id, "nama_silo": nama_silo, "berat_kg": kirim, "ke_proses": ke_proses,

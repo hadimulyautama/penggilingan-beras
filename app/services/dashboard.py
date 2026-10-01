@@ -45,15 +45,33 @@ def _jam(now: datetime, dt: datetime | None) -> float | None:
 
 
 async def _gabah_hari_ini(db: AsyncSession, today) -> dict:
+    """Gabah yang MASUK hari ini — termasuk yang dititipkan, disebut terpisah.
+
+    Pertanyaan baris ini "apa yang turun dari truk hari ini", bukan "apa yang
+    pabrik beli", jadi gabah jasa ikut dihitung: menyembunyikannya membuat
+    dashboard berselisih dengan jumlah tiket timbang hari itu, dan selisih yang
+    tak dijelaskan selalu dicari sebagai kesalahan.
+
+    Tetapi ia DISEBUT TERPISAH (`jasa_kg`, `jasa_batch`), sebab yang membaca
+    angka "gabah masuk" sebagian memakainya untuk memperkirakan pembelian — dan
+    dua arti dalam satu angka adalah cara tercepat membuat keduanya salah.
+    """
     rows = (
         await db.execute(
-            select(PurchaseBatch.berat_total_kg, PurchaseBatch.kondisi_gabah)
+            select(PurchaseBatch.berat_total_kg, PurchaseBatch.kondisi_gabah,
+                   PurchaseBatch.jasa_id)
             .where(PurchaseBatch.tanggal_pembelian == today)
         )
     ).all()
     total = basah = kering = 0.0
+    jasa_kg = 0.0
+    jasa_batch = 0
     menunggu = 0
-    for kg, kondisi in rows:
+    for kg, kondisi, jasa_id in rows:
+        if jasa_id is not None:
+            jasa_batch += 1
+            if kg is not None:
+                jasa_kg += float(kg)
         # ── Berat NULL adalah keadaan yang SAH ──
         #
         # Batch yang tiketnya sudah ditautkan tetapi timbangan KEDUA-nya belum
@@ -74,7 +92,8 @@ async def _gabah_hari_ini(db: AsyncSession, today) -> dict:
     # Yang menunggu disebut TERPISAH, bukan dijumlahkan sebagai nol: nol
     # membuatnya hilang dari pandangan justru saat ia perlu ditindak.
     return {"batch": len(rows), "total_kg": total, "basah_kg": basah,
-            "kering_kg": kering, "menunggu_bobot": menunggu}
+            "kering_kg": kering, "menunggu_bobot": menunggu,
+            "jasa_kg": jasa_kg, "jasa_batch": jasa_batch}
 
 
 async def _pengeringan_berjalan(db: AsyncSession, now) -> list[dict]:
@@ -183,8 +202,14 @@ async def _stok_pk(db: AsyncSession) -> dict:
     Sekarang: satu kueri untuk daftar prosesnya, lalu tujuh kueri untuk
     seluruh sisanya, berapa pun banyak prosesnya.
     """
+    # ⚠ `jasa_id IS NULL`: "PK siap kirim" adalah stok PABRIK. PK pelanggan
+    # tidak siap dikirim ke mana pun selain kembali ke pemiliknya, dan kartu yang
+    # menjumlahkannya ke sini mengajari pembacanya memperlakukan barang orang
+    # lain sebagai persediaan.
     procs = (
-        await db.execute(select(MillingProcess).order_by(MillingProcess.kode_proses))
+        await db.execute(select(MillingProcess)
+                         .where(MillingProcess.jasa_id.is_(None))
+                         .order_by(MillingProcess.kode_proses))
     ).scalars().all()
     rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
     # Jenis PK hanya dicari untuk proses yang MASIH punya stok — itu pekerjaan
@@ -276,6 +301,13 @@ def render_dashboard_text(data: dict) -> str:
         f"• Gabah masuk hari ini: {g['batch']} batch, {_kg(g['total_kg'])} "
         f"(basah {_kg(g['basah_kg'])} · kering {_kg(g['kering_kg'])})"
     )
+    # Disebut hanya bila ada: baris "jasa 0 kg" tiap hari melatih mata
+    # melewatinya, lalu ia tak terbaca juga pada hari angkanya besar.
+    if g.get("jasa_batch"):
+        lines.append(
+            f"   _termasuk JASA (titipan pelanggan): {g['jasa_batch']} batch, "
+            f"{_kg(g['jasa_kg'])} — bukan pembelian_"
+        )
     if op["pengeringan"]:
         for p in op["pengeringan"]:
             ka = f"KA {p['kadar_air']:.0f}%" if p["kadar_air"] is not None else "KA -"
@@ -396,7 +428,9 @@ def render_dashboard_html(data: dict) -> str:
 
     op_html = (
         card("Gabah masuk hari ini", _kg(g["total_kg"]),
-             f"{g['batch']} batch · basah {_kg(g['basah_kg'])} · kering {_kg(g['kering_kg'])}")
+             f"{g['batch']} batch · basah {_kg(g['basah_kg'])} · kering {_kg(g['kering_kg'])}"
+             # Disebut hanya bila ada — lihat catatan di `render_dashboard_text`.
+             + (f" · termasuk JASA {_kg(g['jasa_kg'])}" if g.get("jasa_batch") else ""))
         + card("Pengeringan berjalan", peng_val, peng_sub)
         + card("Giling berjalan", gil_val, gil_sub)
         + card("Stok PK siap kirim", _kg(stok["total"]), ringkas or "&nbsp;")

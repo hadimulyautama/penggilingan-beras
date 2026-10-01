@@ -119,12 +119,25 @@ async def angka_gudang(db) -> dict:
         select(func.coalesce(func.sum(PkPurchaseBatch.berat_total_kg), 0), func.count(PkPurchaseBatch.id))
         .where(PkPurchaseBatch.tanggal_pembelian == hari, PkPurchaseBatch.status_batch != "ditolak")
     )).one()
-    tump_g1 = sum(float(b.berat_total_kg or 0) for b in await tmp.isi(db))
+    # STOK PABRIK: barang titipan tidak dihitung. Petak Beranda menjawab
+    # "berapa yang pabrik punya", dan angka yang memuat barang pelanggan
+    # membuat pabrik melihat barang orang lain sebagai persediaannya.
+    tump_g1 = await tmp.jumlah_kg(db, pemilik="pabrik")
+    # ── "berapa yang PABRIK punya", bukan "berapa yang ada di lantai" ──
+    #
+    # Petak Beranda menjawab pertanyaan MILIK. PK titipan yang menunggu diambil
+    # pemiliknya bukan persediaan pabrik, dan angka yang mencampurnya membuat
+    # pabrik melihat barang orang lain sebagai miliknya — lalu merencanakan
+    # dengan angka itu.
+    #
+    # Isi FISIK-nya tetap terbaca di layar Stok Gudang 2, per tempat, berikut
+    # pemiliknya: yang disembunyikan hanya dari hitungan milik, bukan dari mata.
     silo_g2 = 0.0
     for huruf in ("A", "B"):
         silo = await get_g2_silo(db, huruf)
-        silo_g2 += float(await hitung_stok_silo(db, silo.id)) if silo else 0.0
-    tump_g2 = float(await hitung_stok_tumpukan(db))
+        silo_g2 += (float(await hitung_stok_silo(db, silo.id, pemilik="pabrik"))
+                    if silo else 0.0)
+    tump_g2 = float(await hitung_stok_tumpukan(db, pemilik="pabrik"))
     return {
         "masuk_kg": float(gabah_kg or 0) + float(pk_kg or 0),
         "masuk_n": int(gabah_n or 0) + int(pk_n or 0),

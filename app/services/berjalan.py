@@ -26,6 +26,7 @@ from app.database import now_local
 from app.services import keputusan as K
 from app.penggilingan.gudang1.services.bobot import (
     Bobot, dari_batch, dari_batches, dari_nilai)
+from app.services.jasa import nama_pemilik, nama_pemilik_banyak
 from app.models import (
     DryingLot,
     MillingProcess,
@@ -379,13 +380,22 @@ async def _asal(db: AsyncSession, batch_ids) -> list[tuple[str, str, str]]:
     baris = (await db.execute(
         select(PurchaseBatch.kode_batch, PurchaseBatch.berat_total_kg,
                PurchaseBatch.tanggal_pembelian, Supplier.nama_supplier,
-               PurchaseBatch.sumber_berat, PurchaseBatch.berat_perkiraan_kg)
+               PurchaseBatch.sumber_berat, PurchaseBatch.berat_perkiraan_kg,
+               PurchaseBatch.jasa_id)
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
         .where(PurchaseBatch.id.in_(list(batch_ids)))
         .order_by(PurchaseBatch.id)
     )).all()
-    return [(f"{nama or '?'} · {kode}", dari_nilai(kg, sumber, perk).teks(), f"masuk {_tgl(tgl)}")
-            for kode, kg, tgl, nama, sumber, perk in baris]
+    # ⚠ Satu tempat yang memberi nama ke SEPULUH kartu. `isouter` sudah ada, jadi
+    # barisnya tak pernah hilang — tetapi tanpa kaki kedua ini ia mencetak "?"
+    # untuk setiap batch jasa, dan "?" di baris yang justru menjawab "gabah
+    # siapa" membuat kartunya tak bisa dikerjakan. Satu perbaikan di sini
+    # menutup kesepuluh kartu sekaligus; membetulkannya per kartu berarti
+    # sembilan kesempatan melewatkan satu.
+    peta = await nama_pemilik_banyak(db, {b[6] for b in baris})
+    return [(f"{nama or peta.get(jasa_id) or '?'} · {kode}",
+             dari_nilai(kg, sumber, perk).teks(), f"masuk {_tgl(tgl)}")
+            for kode, kg, tgl, nama, sumber, perk, jasa_id in baris]
 
 
 #: Sebanyak-banyaknya baris asal yang ditampilkan satu kartu. Sesudah daftarnya
@@ -515,11 +525,17 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     if not masuk:
         return IsianSilo(masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
 
-    lot = dict((await db.execute(
-        select(InternalTransfer.id, MillingProcess.kode_proses)
+    # Pemiliknya ikut diambil: PK titipan yang dipindah dari Gudang 1 tak boleh
+    # berjudul "Giling sendiri" di kartu silo. Pabrik memang yang menggilingnya,
+    # tetapi barangnya bukan miliknya — dan kartu inilah yang dibaca operator
+    # Gudang 2 saat memutuskan silo mana yang disosoh.
+    lot = {i: (kode, jid) for i, kode, jid in (await db.execute(
+        select(InternalTransfer.id, MillingProcess.kode_proses,
+               InternalTransfer.jasa_id)
         .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
         .where(InternalTransfer.id.in_([m[2] for m in masuk if m[2]]))
-    )).all()) if any(m[2] for m in masuk) else {}
+    )).all()} if any(m[2] for m in masuk) else {}
+    peta_pemilik = await nama_pemilik_banyak(db, {j for _, j in lot.values()})
     luar = {b: (kode, nama) for b, kode, nama in (await db.execute(
         select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
@@ -529,7 +545,9 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     keluar = []
     for tgl, kg, trf_id, batch_id in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
         if trf_id and trf_id in lot:
-            judul = f"Giling sendiri · {lot[trf_id]}"
+            kode_lot, jid = lot[trf_id]
+            judul = (f"{peta_pemilik[jid]} · {kode_lot}" if jid in peta_pemilik
+                     else f"Giling sendiri · {kode_lot}")
         elif batch_id and batch_id in luar:
             kode, nama = luar[batch_id]
             judul = f"{nama or '?'} · {kode}"
@@ -582,8 +600,62 @@ def _pemasok_ringkas(anak: list[tuple[str, str, str]]) -> str:
     return f"{nama[0]}, {nama[1]} +{len(nama) - 2} lagi"
 
 
+#: Pemilik yang BELUM ADA barisnya: tiket jasa yang akan melahirkan pesanan baru.
+#:
+#: Pesanan lahir saat operator menerima tiketnya (`purchase.
+#: pesanan_jasa_dari_tiket`), jadi saat kartunya digambar pemiliknya belum punya
+#: id. Tetapi sudah pasti SATU hal: barangnya tak boleh digabung dengan apa pun
+#: yang sudah ada di mana pun — termasuk gabah pabrik.
+#:
+#: Sebuah teks, bukan angka: ia dibandingkan dengan `jasa_id` yang selalu int
+#: atau None, jadi ia tak mungkin kebetulan sama dengan pemilik yang nyata.
+#: `-1` akan "bekerja" sampai hari seseorang memakai id negatif untuk hal lain.
+PEMILIK_BARU = "pesanan-baru"
+
+
+async def _mati_pemilik_dryer(db: AsyncSession, dryer_id: int,
+                              jasa_id: int | None) -> str:
+    """Kalimat sebab bila mesin ini berisi gabah pemilik LAIN — "" bila boleh."""
+    isi = (await db.execute(
+        select(PurchaseBatch.jasa_id).where(
+            PurchaseBatch.dryer_id == dryer_id,
+            PurchaseBatch.status_batch == "di_dryer").distinct()
+    )).scalars().all()
+    lain = {j for j in isi} - {jasa_id}
+    if not lain:
+        return ""
+    peta = await nama_pemilik_banyak(db, lain)
+    sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in lain)
+    return f"Berisi barang {sebut} — kepemilikan berbeda tak boleh digabung"
+
+
+async def _pemilik_silo(db: AsyncSession, silo_id: int,
+                        jasa_id: int | None) -> tuple[str | None, str]:
+    """(sebutan pemilik isi silo, sebab tombolnya dimatikan).
+
+    Satu silo tak pernah berisi dua pemilik — penjaganya di `masuk_silo` — jadi
+    "pemilik isi silo" selalu tunggal bila silonya berisi.
+    """
+    isi = (await db.execute(
+        select(SiloStorage.jasa_id).where(
+            SiloStorage.silo_id == silo_id,
+            SiloStorage.status == "terisi").distinct()
+    )).scalars().all()
+    if not isi:
+        return None, ""
+    pemilik = {j for j in isi}
+    sebutan = await nama_pemilik(db, next(iter(pemilik))) if len(pemilik) == 1 else None
+    if pemilik == {jasa_id}:
+        return sebutan, ""
+    peta = await nama_pemilik_banyak(db, pemilik)
+    sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in pemilik)
+    return sebutan, (f"Berisi barang {sebut} — kepemilikan berbeda tak boleh "
+                     "digabung")
+
+
 async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
-                        post: str, data: dict) -> list[Tombol]:
+                        post: str, data: dict,
+                        jasa_id: int | None = None) -> list[Tombol]:
     """Tujuan yang sah untuk gabah sekondisi ini — mesinnya disebut satu per satu.
 
     Alasan sebuah tujuan dimatikan diambil dari ATURAN YANG SAMA yang menolak
@@ -591,6 +663,12 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     isinya beda kondisi. Kalau alasannya disusun ulang di sini, cepat atau
     lambat layar melarang yang sebenarnya boleh — atau lebih buruk,
     mempersilakan yang akan ditolak.
+
+    `jasa_id` = pemilik gabah yang sedang ditempatkan. Tempat yang berisi barang
+    pemilik LAIN dimatikan berikut sebabnya, aturan yang sama dengan penjaga
+    basah/kering di atasnya — dan untuk alasan yang sama: tombol yang pasti
+    ditolak lebih buruk daripada tombol yang tak ada, sebab yang menekannya
+    sudah berdiri di depan mesin dengan gabah di tangan.
 
     Kapasitas sengaja TIDAK diperiksa di sini: ia bergantung pada total muatan
     dan pesan penolakannya sudah menyebut sisanya dengan tepat. Menebaknya di
@@ -616,6 +694,8 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
                 mati = f"Masih dipakai lot {lot.kode_lot} — kosongkan ke silo dulu"
             elif isi and isi[0] != kondisi:
                 mati = f"Berisi gabah {isi[0]} — tak boleh dicampur gabah {kondisi}"
+            else:
+                mati = await _mati_pemilik_dryer(db, d.id, jasa_id) or mati
             ket = ("Mesin kosong" if not isi
                    else f"Bergabung dengan {_kg(isi[1])} gabah {isi[0]}")
             keluar.append(Tombol(
@@ -633,10 +713,13 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
         # lebih baik, dan berpura-pura tahu lebih buruk daripada diam.
         for si in silo:
             kg = await _silo_content_kg(db, si.id)
+            pemilik_silo, mati_silo = await _pemilik_silo(db, si.id, jasa_id)
             keluar.append(Tombol(
                 nama=f"Ke {si.nama_silo}", post=post,
                 ket=("Silo kosong" if not kg
-                     else f"Bergabung dengan {_kg(kg)} gabah kering"),
+                     else f"Bergabung dengan {_kg(kg)} gabah kering"
+                          + (f" milik {pemilik_silo}" if pemilik_silo else "")),
+                mati=mati_silo,
                 data=dict(data, tujuan=f"silo:{si.id}"),
                 utama=(kondisi == "kering" and len(silo) == 1)))
 
@@ -648,7 +731,8 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
 
 
 async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
-    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.gudang1.services.timbang_link import (
+        nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
@@ -661,7 +745,7 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
         info = intake_dari_jenis(t.get("jenis_kode", ""))
         if info is None or info.model != "gabah":
             continue                      # PK & lainnya punya alurnya sendiri
-        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        nama = nama_pihak(t)
         bobot = t.get("berat_hpp_kg")
         # Basah atau kering disebut lebih dulu: itulah yang menentukan tujuan
         # yang boleh dipilih. Tanpa itu operator harus membuka tiketnya untuk
@@ -701,7 +785,12 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             # untuk satu keputusan yang cuma punya beberapa jawaban.
             tombol=await _tujuan_gabah(
                 db, kondisi, post="/api/actions/gabah-masuk",
-                data={"timbangan_transaksi_id": t["id"]}),
+                data={"timbangan_transaksi_id": t["id"]},
+                # Tiket jasa yang menunjuk pesanan berjalan boleh bergabung
+                # dengan barang pesanan itu; yang akan melahirkan pesanan BARU
+                # tak boleh bergabung dengan apa pun.
+                jasa_id=((t.get("jasa_id") or PEMILIK_BARU)
+                         if t.get("pelanggan_id") else None)),
         ))
     return baris
 
@@ -736,14 +825,15 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
         akan menolak isinya — menawarkan tombol yang pasti ditolak lebih buruk
         daripada tak menawarkan apa pun.
     """
-    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.gudang1.services.timbang_link import (
+        nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import is_pk
 
     baris = []
     for t in await tiket_masuk_aktif(db):
         if not is_pk(t.get("jenis_kode", "")):
             continue
-        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        nama = nama_pihak(t)
         bobot = t.get("berat_hpp_kg")
         isi = f"PK luar · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
@@ -798,7 +888,8 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
     pemetaan jenis bukan wewenangnya, dan kartu yang tak bisa ia kerjakan
     maupun teruskan hanya menambah angka pada lencananya.
     """
-    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    from app.penggilingan.gudang1.services.timbang_link import (
+        nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
@@ -806,7 +897,7 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
         kode_jenis = t.get("jenis_kode") or "?"
         if intake_dari_jenis(kode_jenis) is not None:
             continue                       # dipetakan → sudah ada jalurnya
-        nama = t.get("nama_supplier") or t.get("pihak_nama") or "?"
+        nama = nama_pihak(t)
         bobot = t.get("berat_hpp_kg")
         # Nama jenisnya dari tabel jenis Pos Timbang bila ada; kodenya bila
         # tidak. Keduanya disebut: nama yang dibaca orang, kode yang dipakai
@@ -941,7 +1032,11 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         .where(PurchaseBatch.status_batch == "baru")
         .order_by(PurchaseBatch.id.desc())
     )).all():
-        nama_pemasok = nama_pemasok or b_.kode_batch
+        # Pemiliknya menggantikan nama pemasok untuk barang titipan. Jatuh ke
+        # kode batch adalah pilihan terakhir: kode tak memberi tahu apa pun
+        # tentang siapa yang menunggu barangnya.
+        nama_pemasok = (nama_pemasok or await nama_pemilik(db, b_.jasa_id)
+                        or b_.kode_batch)
         b.menunggu.append(Baris(
             kode=b_.kode_batch,
             isi=f"{dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}",
@@ -954,7 +1049,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 f"masuk {_tgl(b_.tanggal_pembelian)}",
             tombol=await _tujuan_gabah(
                 db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
-                data={"kode_batch": b_.kode_batch}),
+                data={"kode_batch": b_.kode_batch}, jasa_id=b_.jasa_id),
         ))
 
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
@@ -963,14 +1058,35 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     from app.penggilingan.gudang1.services import tumpukan as tmp
     for b_ in await tmp.isi(db):
         wajib_dryer = b_.kondisi_gabah == "basah"
-        nama_pemasok = (await db.execute(
+        pemilik_ = await nama_pemilik(db, b_.jasa_id)
+        nama_pemasok = pemilik_ or (await db.execute(
             select(Supplier.nama_supplier).where(Supplier.id == b_.supplier_id)
         )).scalars().first() or b_.kode_batch
+        # ⚠ KALIMATNYA BERBEDA UNTUK BARANG JASA, dan kartunya TIDAK
+        # disembunyikan.
+        #
+        # Tumpukan di app ini adalah ALARM, bukan ruang tunggu: aturan Direksi
+        # yang tertulis di `tumpukan.py` berbunyi "kalau ada tumpukan, berarti
+        # ada pembelian yang berlebih". Aturan itu untuk gabah yang DIBELI, dan
+        # di situ masih benar. Barang jasa bukan pembelian — tiga pelanggan yang
+        # menunggu giliran akan berdiri sebagai tiga "pembelian berlebih", dan
+        # daftar yang menagih pekerjaan yang tidak salah akan berhenti dibaca
+        # (bahaya yang sudah ditulis sendiri di `rekonsiliasi.py`).
+        #
+        # Disembunyikan pun salah: pelanggan yang menunggu MEMANG pekerjaan.
+        # Jadi yang berubah kalimatnya.
+        if b_.jasa_id is not None:
+            keadaan_ = ("harus ke dryer — belum kering" if wajib_dryer
+                        else "menunggu giliran giling")
+        else:
+            keadaan_ = ("harus ke dryer — belum kering" if wajib_dryer
+                        else "tentukan tempatnya")
         b.menunggu.append(Baris(
             kode=b_.kode_batch,
-            isi=f"menumpuk · {dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}",
-            keadaan=("harus ke dryer — belum kering" if wajib_dryer
-                     else "tentukan tempatnya"),
+            isi=(f"menunggu giliran · {dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}"
+                 if b_.jasa_id is not None else
+                 f"menumpuk · {dari_batch(b_).teks()} · gabah {b_.kondisi_gabah}"),
+            keadaan=keadaan_,
             aksi="pindah_tumpukan", nilai=b_.kode_batch, sejak=b_.created_at,
             fase="tumpuk",
             judul=nama_pemasok,
@@ -982,7 +1098,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             kelompok="tumpukan",
             tombol=await _tujuan_gabah(
                 db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
-                data={"kode_batch": b_.kode_batch}),
+                data={"kode_batch": b_.kode_batch}, jasa_id=b_.jasa_id),
         ))
 
     from app.penggilingan.gudang1.services.drying import _lot_batches
