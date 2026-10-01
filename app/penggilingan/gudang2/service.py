@@ -1143,7 +1143,22 @@ async def laporan_stok_gudang2(
         lines.append(f"• Silo {letter}: {_kg(stok)}{cap}")
     if not nama_silo:
         tump = await hitung_stok_tumpukan(db)
-        lines.append(
-            f"• Tumpukan: {_kg(tump)} / maks {settings.g2_tumpukan_maks_kg / 1000:g} ton"
-        )
+        # ── NOL DI SINI BERARTI TAK BERBATAS, BUKAN KAPASITAS NOL ──
+        #
+        # Keputusan pemilik 12 September 2026: tumpukan Gudang 2 tidak
+        # berbatas, dan `g2_tumpukan_maks_kg` bawaannya 0 — lihat alasannya di
+        # `_pastikan_muat_tumpukan` di atas, yang sudah memperlakukannya benar
+        # (`if not cap: return`).
+        #
+        # Baris ini satu-satunya yang membacanya tanpa pagar, dan hasilnya
+        # layar berbunyi "maks 0 ton" sambil tumpukannya berisi — kalimat yang
+        # mengaku kapasitasnya nol padahal barangnya berdiri di situ. Tiga
+        # pembaca lain sudah berpagar: `stok.py` (`or None`), `beranda.py`
+        # (`if maks and ...`), `layar.py` (`if maks else ""`).
+        #
+        # ⚠ Yang dibetulkan TAMPILANNYA, bukan nilainya — pemilik: "jangan ada
+        # batasan berapa ton".
+        maks = float(settings.g2_tumpukan_maks_kg or 0)
+        batas = f" / maks {maks / 1000:g} ton" if maks else ""
+        lines.append(f"• Tumpukan: {_kg(tump)}{batas}")
     return "\n".join(lines)
