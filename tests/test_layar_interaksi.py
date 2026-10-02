@@ -56,9 +56,35 @@ def test_yang_sudah_dikerjakan_hilang_seketika():
 def test_pintu_laci_layar_yang_sedang_dibuka_bukan_jalan_buntu():
     """Menekannya tak menghasilkan apa pun — alamatnya sama dengan alamat
     sekarang — dan lacinya menggantung terbuka."""
-    assert 'laci.querySelectorAll(".pintu")' in BASE
-    blok = BASE.split('laci.querySelectorAll(".pintu")')[1][:200]
+    assert 'laci.querySelectorAll("a.pintu, .pintu-sub__satu")' in BASE
+    blok = BASE.split('laci.querySelectorAll("a.pintu, .pintu-sub__satu")')[1][:200]
     assert "buka(false)" in blok
+
+
+def test_pintu_bersubmenu_tak_ikut_menutup_laci():
+    """⭐ Cacat lapangan 2 Oktober 2026: "ketika saya klik menu antrian
+    tunggu malah yang terbuka beranda."
+
+    Pintu bersub-menu (Antrian tunggu) adalah `<summary class="pintu">`,
+    bukan `<a>`. Penjaga di atas dulu berbunyi `laci.querySelectorAll(".pintu")`
+    — pola yang menjaring KEDUANYA — sehingga menekan "Antrian tunggu" untuk
+    MEMBUKA sub-menunya (toggle bawaan peramban atas `<details>`) ikut memicu
+    `buka(false)` dan menutup SELURUH laci sebelum sub-menunya sempat
+    terlihat. Lacinya lenyap, memperlihatkan halaman di belakangnya — dan itu
+    terbaca seperti "Beranda terbuka" padahal laci itu sendiri yang tertutup.
+
+    Pemilik: "kalau di klik kemungkinannya hanya 2. expand atau diringkas
+    lagi" — dan `<details>` bawaan sudah menjawab persis itu sendirian;
+    pendengar penutup laci tak boleh ikut campur pada elemen yang bukan
+    tautan sungguhan.
+    """
+    assert 'querySelectorAll("a.pintu' in BASE
+    # `a.pintu` SAJA — bukan `.pintu` apa adanya — supaya `<summary
+    # class="pintu">` (dropdown, tanpa `href`) tak ikut terjaring.
+    assert 'querySelectorAll(".pintu")' not in BASE
+    # Sub-menunya (`.pintu-sub__satu`) TETAP `<a>` sungguhan yang menuju
+    # layar lain, dan tetap wajib menutup laci.
+    assert "pintu-sub__satu" in BASE.split('querySelectorAll("a.pintu')[1][:60]
 
 
 def test_pendengar_papan_tik_tidak_menumpuk():

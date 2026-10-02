@@ -1662,21 +1662,16 @@ body.terik {
 
    `<summary>` dibuat tampil persis seperti `<a class="pintu">` di sebelahnya —
    termasuk tinggi sentuhnya — sebab bagi yang memakainya ia MEMANG pintu yang
-   sama; yang berubah cuma apa yang terjadi sesudah diketuk. Penanda segitiga
-   bawaan peramban dibuang: ia digambar berbeda di tiap mesin, dan di sebelah
-   ikon pintu yang monokrom ia terbaca sebagai kesalahan. Yang menggantikannya
-   `::after` yang berputar — satu bentuk di semua peramban. */
+   sama; yang berubah cuma apa yang terjadi sesudah diketuk.
+
+   TANPA PENANDA SEGITIGA (dicabut 2 Oktober 2026, permintaan pemilik:
+   "icon panahnya hapus saja di antrian tunggu"). Penanda bawaan peramban
+   tetap dibuang (`-webkit-details-marker`) — ia digambar berbeda di tiap
+   mesin dan di sebelah ikon pintu yang monokrom terbaca sebagai kesalahan —
+   tetapi tidak digantikan apa pun: lencana angka dan sub-menu yang muncul
+   sesudah diketuk sudah cukup mengatakan "pintu ini punya isi lagi". */
 .pintu-lipat > summary { list-style: none; cursor: pointer; }
 .pintu-lipat > summary::-webkit-details-marker { display: none; }
-.pintu-lipat > summary::after {
-  content: "›"; margin-left: 6px; color: var(--redup-2);
-  font-size: 18px; line-height: 1; transition: transform .18s ease;
-  display: inline-block;
-}
-.pintu-lipat[open] > summary::after { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) {
-  .pintu-lipat > summary::after { transition: none; }
-}
 
 /* Anak-anaknya MENJOROK dan bergaris kiri: ia pecahan dari pintu di atasnya,
    bukan pintu sederajat. Tanpa garis itu, daftar enam baris rata terbaca

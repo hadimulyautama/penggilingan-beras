@@ -319,15 +319,32 @@
   /* Menekan di luar panel menutupnya — yang membuka laci untuk melihat
      isinya harus bisa keluar tanpa mencari tombol tutup. */
   laci.addEventListener("click", function (e) { if (e.target === laci) buka(false); });
-  /* Menekan pintu MANA PUN menutupnya. Yang menuju layar lain memang
-     tertutup sendiri (isi bingkai ditukar, lacinya ikut tergambar ulang
+  /* Menekan pintu yang MENUJU LAYAR LAIN menutupnya. Yang menuju layar lain
+     memang tertutup sendiri (isi bingkai ditukar, lacinya ikut tergambar ulang
      dalam keadaan tertutup) — tetapi pintu layar yang SEDANG dibuka tidak:
      perpindahan instan menolak tautan yang alamatnya sama persis dengan
      alamat sekarang, jadi ketukannya tak menghasilkan apa pun dan lacinya
-     menggantung terbuka. Jalan buntu yang tak terlihat sebagai jalan buntu. */
-  Array.prototype.forEach.call(laci.querySelectorAll(".pintu"), function (a) {
-    a.addEventListener("click", function () { buka(false); });
-  });
+     menggantung terbuka. Jalan buntu yang tak terlihat sebagai jalan buntu.
+
+     ⚠⚠ `a.pintu` SAJA — bukan `.pintu` apa adanya. Cacat lapangan 2 Oktober
+     2026: pintu bersub-menu (Antrian tunggu) adalah `<summary class="pintu">`,
+     bukan `<a>` — dan `.pintu` menjaring keduanya. Akibatnya menekan "Antrian
+     tunggu" untuk MEMBUKA sub-menunya (toggle bawaan peramban atas
+     `<details>`) ikut memicu pendengar ini, dan `buka(false)` menutup SELURUH
+     laci sebelum sub-menunya sempat terlihat — lacinya lenyap, memperlihatkan
+     halaman di belakangnya (Beranda, bila laci dibuka dari sana), dan itu
+     terbaca seperti "Beranda terbuka" padahal yang terjadi cuma laci tertutup.
+     Pemilik: "kalau di klik kemungkinannya hanya 2. expand atau diringkas
+     lagi" — dan `<details>` bawaan sudah menjawab persis itu SENDIRIAN;
+     pendengar ini tak boleh ikut campur pada elemen yang bukan tautan.
+
+     Sub-menunya sendiri (`.pintu-sub__satu`) tetap `<a>` sungguhan yang
+     menuju layar lain — dan TETAP menutup laci, lewat kaidah `a.pintu`
+     SAJA tidak menjangkaunya, jadi ia didaftarkan terpisah di bawah. */
+  Array.prototype.forEach.call(
+    laci.querySelectorAll("a.pintu, .pintu-sub__satu"), function (a) {
+      a.addEventListener("click", function () { buka(false); });
+    });
   /* Lewat PINDAH: `document` TIDAK ikut ditukar saat halaman berpindah,
      jadi pendengar yang dipasang langsung padanya menumpuk sekali tiap
      perpindahan — dan yang menumpuk memegang laci lama yang sudah dibuang. */
