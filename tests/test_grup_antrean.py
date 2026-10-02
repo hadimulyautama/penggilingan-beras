@@ -244,7 +244,12 @@ def test_pil_tak_digambar_bila_grupnya_cuma_satu():
     """Satu pil di atas daftar yang seluruhnya satu grup tak membedakan apa pun,
     dan ia memakan baris yang di ponsel berharga."""
     h = _layar_aksi([_kartu(aksi="catat_packing") for _ in range(5)])
-    assert 'class="pil' not in h
+    # `<a class="pil` — PENANDA PILNYA SENDIRI, bukan `.saring` (dipakai
+    # DUA fitur berbeda: kotak cari muncul begitu kartunya >4, pil muncul
+    # begitu grupnya >1 — keduanya bisa hidup berdampingan atau sendiri-
+    # sendiri) dan bukan `class="pil` polos (kartu sungguhan juga membawa
+    # `class="pilihan"`, tombol aksinya).
+    assert '<a class="pil' not in h
 
 
 def test_grup_kosong_tak_berkata_pekerjaan_anda_habis():

@@ -409,6 +409,39 @@ seluruh laci, sebab laci yang berbeda antar-layar dibaca sebagai "pekerjaannya
 sudah habis". Di `base.html` ia DIGERAKKAN DATA (`SUBMENU.get(kunci)`), bukan
 `if kunci == 'aksi'`: berkas itu milik bersama beberapa aplikasi.
 
+## Sub-menu "Menunggu keputusan" — kembaran Antrian tunggu (sejak 2 Okt 2026)
+
+Permintaan pemilik: *"lakukan yang sama ke menunggu keputusan."* Mekanismenya
+sama persis dengan Antrian tunggu — `<summary>` tanpa navigasi, ≥2 grup
+berisi untuk menawarkan dropdown, pil `?golongan=` di dalam halaman, kalimat
+"Golongan ini kosong" yang dibedakan dari "Tak ada yang menunggu keputusan".
+
+⚠ Bedanya satu, dan ia DISENGAJA: `GRUP_KEPUTUSAN`/`grup_keputusan()`
+**diturunkan dari `services/keputusan.GOLONGAN`**, bukan ditulis ulang
+tangan seperti `_GRUP_AKSI`. Taksonomi itu sudah ada dan sudah dipakai
+Beranda ("N permintaan · N output · N mutu") — menyalin nama aksinya lagi ke
+peta kedua membuka jalan yang sama yang membuat tiga nama salah ketik di
+`_GRUP_AKSI` sebelum ketahuan. Sumber tunggal tak bisa berselisih dengan
+dirinya sendiri.
+
+⚠⚠ **GOLONGAN "MUTU" TAK PERNAH MASUK `GRUP_KEPUTUSAN`.** Mutu punya
+layarnya sendiri (`/mutu`, keputusan pemilik 24 September 2026); golongan
+"mutu" di sub-menu ini akan menjanjikan pekerjaan yang tak pernah digambar
+di halaman ini. `jumlah_grup_keputusan()` melompati baris mutu secara
+eksplisit sebelum menghitung — `self.meja` membawa KEDUANYA bercampur,
+pemisahannya baru terjadi saat render `/keputusan` vs `/mutu`.
+
+Alamatnya `?golongan=`, bukan `?grup=` (nama mengikuti modulnya). Jaring
+"Keputusan lain" di `keputusan.html` tetap bekerja sama seperti sebelumnya
+saat golongan dipilih "lain" atau tak dipilih; memilih golongan lain
+("permintaan"/"output") mengosongkannya dengan sendirinya (item yang
+dikenal selalu ADA di `AKSI_DIKENAL`).
+
+Uji: `tests/test_grup_keputusan.py` (13 — grouping murni + render) dan
+`tests/pg/test_grup_keputusan_http.py` (2 — jalur HTTP sungguhan lewat
+fixture `permintaan_pk`, membuktikan `?golongan=` dan laci terhubung ke
+agregasi `svc.untuk()` yang sesungguhnya, bukan dipanggil terisolasi).
+
 ## ⚠ Kelas CSS karangan: tidak melempar galat, cuma tak menggambar
 
 Dalam dua hari ENAM kelas karangan lolos ke layar Jasa — `pil--aktif`

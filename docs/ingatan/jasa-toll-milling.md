@@ -497,3 +497,53 @@ percaya screenshot tunggal untuk keadaan yang berubah cepat; periksa lewat
 mengikuti selector baru; uji baru `test_pintu_bersubmenu_tak_ikut_menutup_
 laci` menjaga keduanya (pintu biasa vs pintu bersub-menu) tak tercampur lagi.
 Mutasi (selector lama `.pintu` dikembalikan) dibuktikan menggigit kedua uji.
+
+## 2 Oktober 2026 (lanjutan) — sub-menu "Menunggu keputusan" ditiru dari Antrian tunggu
+
+Permintaan pemilik, sesudah laci Antrian tunggu dibetulkan: *"lakukan yang
+sama ke menunggu keputusan."* Mekanisme laci (`<summary>` tanpa navigasi,
+syarat ≥2 grup, selector `a.pintu, .pintu-sub__satu`) sudah generik lewat
+`SUBMENU.get(kunci)` — tak perlu disentuh sama sekali. Yang ditambahkan
+murni di sisi Python: grup, hitungannya, dan filter `?golongan=`.
+
+**Keputusan rancangan yang berbeda dari Antrian tunggu, dan kenapa**: alih-
+alih menulis peta aksi→grup tangan kedua kalinya (`_GRUP_AKSI` sudah pernah
+salah ketik TIGA nama sebelum ketahuan pagi ini), grupnya **diturunkan
+langsung** dari `services/keputusan.GOLONGAN` — taksonomi yang sudah hidup
+di modul itu sejak 24 September dan sudah dipakai Beranda. Sumber tunggal
+yang dibaca, bukan disalin, tak bisa berselisih dengan dirinya sendiri.
+
+Golongan "mutu" sengaja TIDAK ikut (ia punya `/mutu` sendiri) — dijaga
+eksplisit di `jumlah_grup_keputusan()` karena `self.meja` membawa mutu dan
+non-mutu bercampur sampai saat render.
+
+### Yang TIDAK saya lakukan, dan sebabnya
+
+Sempat mencoba menyiapkan data uji peramban sungguhan (dua golongan nyata:
+permintaan via `permintaan_pk.minta()`, output via `koreksi_bobot.
+giling_tak_cocok()`) untuk mengulang pembuktian klik-dua-kali seperti
+Antrian tunggu. Golongan "output" ternyata butuh baris
+`milling_process_sources` (arsitektur sumber-giling-banyak, bukan kolom
+lama `purchase_batch_id`) dan simulasi bertahap (`_korban` di
+`test_koreksi_bobot_p6_03.py`) — biayanya tak sepadan untuk sekadar
+demonstrasi manual, sebab mekanisme laci itu sendiri SUDAH terbukti generik
+lewat `test_kedua_pintu_bisa_bersub_menu_bersamaan` (dua pintu bersub-menu
+sekaligus, dirender dari `base.html` yang sama, tanpa kode JS per-pintu).
+Diputuskan cukup dengan satu golongan nyata lewat HTTP (`test_grup_
+keputusan_http.py`, fixture `permintaan_pk`) + unit test murni yang lebih
+ketat daripada Antrian tunggu (grouping-nya dibandingkan LANGSUNG terhadap
+`K.GOLONGAN`, bukan ditulis ulang untuk diuji).
+
+Uji: `tests/test_grup_keputusan.py` (13), `tests/pg/test_grup_keputusan_http.py`
+(2). Satu mutasi (syaringan `?golongan=` dicabut) dibuktikan menggigit.
+
+### Perbaikan sampingan: selector uji pil yang terlalu longgar
+
+`test_grup_antrean.py`/pg baru sempat memakai `'class="pil' not in h` untuk
+membuktikan pil tak tergambar — longgar, sebab kartu SUNGGUHAN juga
+membawa `class="pilihan"` (tombol aksinya) dan halaman dengan >4 kartu juga
+membawa `<div class="saring">` untuk KOTAK CARI, bukan pil. Keduanya
+kebetulan tak muncul pada kartu buatan tangan sebelumnya, jadi lolos tanpa
+ketahuan sampai uji pg yang memakai kartu sungguhan menangkapnya. Dibetulkan
+jadi `'<a class="pil'` — penanda pil itu sendiri, bukan wadah yang dipakai
+bersama fitur lain.

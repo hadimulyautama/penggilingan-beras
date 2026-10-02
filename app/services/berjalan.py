@@ -238,6 +238,22 @@ class Berjalan:
             n[grup_baris(b)] += 1
         return n
 
+    def jumlah_grup_keputusan(self) -> dict[str, int]:
+        """Berapa kartu per GRUP — isi sub-menu "Menunggu keputusan".
+
+        Kembaran `jumlah_grup`, dan sama sebabnya. `self.meja` membawa mutu
+        DAN non-mutu bercampur (pemisahannya baru terjadi saat `/keputusan`
+        dan `/mutu` merender); baris mutu dilompati di sini — golongan "mutu"
+        sudah tak ada di `GRUP_KEPUTUSAN` sejak sumbernya, tetapi kartu mutu
+        sendiri tetap ada di `self.meja` dan wajib tak ikut terhitung.
+        """
+        n = {kunci: 0 for kunci, _ in GRUP_KEPUTUSAN}
+        for b in self.meja:
+            if K.golongan_mutu(b.aksi):
+                continue
+            n[grup_keputusan(b)] += 1
+        return n
+
     @property
     def jumlah_keputusan(self) -> int:
         """Lencana "Menunggu keputusan" — TANPA golongan mutu.
@@ -322,12 +338,24 @@ class Berjalan:
         # Syarat yang sama dipakai pil di dalam halaman (`GRUP_PIL|length > 1`),
         # dan itu disengaja: laci yang berdropdown sementara halamannya tak
         # berpil akan terbaca seperti saringan yang hilang.
-        if len(isi) < 2:
-            return {}
-        # "Semua" berdiri paling atas, dan ia WAJIB ada: tanpanya pintu antrean
-        # tak lagi punya jalan ke daftar utuhnya — klik pintunya kini membuka
-        # sub-menu, bukan membuka halamannya.
-        return {"aksi": [("/aksi", "Semua", self.jumlah_menunggu), *isi]}
+        out: dict[str, list[tuple[str, str, int]]] = {}
+        if len(isi) >= 2:
+            # "Semua" berdiri paling atas, dan ia WAJIB ada: tanpanya pintu
+            # antrean tak lagi punya jalan ke daftar utuhnya — klik pintunya
+            # kini membuka sub-menu, bukan membuka halamannya.
+            out["aksi"] = [("/aksi", "Semua", self.jumlah_menunggu), *isi]
+
+        # "Menunggu keputusan" — permintaan pemilik 2 Oktober 2026: "lakukan
+        # yang sama ke menunggu keputusan". Syarat dan bentuknya SAMA PERSIS
+        # dengan Antrian tunggu di atas; cuma sumber datanya beda (`meja`,
+        # golongan `keputusan.py`, bukan `menunggu`/`aksi` kartu).
+        nk = self.jumlah_grup_keputusan()
+        isik = [(f"/keputusan?golongan={k}", nama, nk[k])
+               for k, nama in GRUP_KEPUTUSAN if nk[k]]
+        if len(isik) >= 2:
+            out["keputusan"] = [("/keputusan", "Semua", self.jumlah_keputusan),
+                                *isik]
+        return out
 
 
 # ═════════════════ GRUP ANTREAN — sub-menu "Antrian tunggu" ═════════════════
@@ -413,6 +441,47 @@ def grup_baris(b: Baris) -> str:
     if b.kelompok and b.kelompok in _GRUP_KELOMPOK:
         return _GRUP_KELOMPOK[b.kelompok]
     return "lain"
+
+
+# ═════════════ GRUP KEPUTUSAN — sub-menu "Menunggu keputusan" ═════════════
+#
+# Permintaan pemilik 2 Oktober 2026: "lakukan yang sama ke menunggu
+# keputusan" — sub-menu dropdown yang sama persis dengan Antrian tunggu,
+# diterapkan di pintu sebelahnya.
+#
+# ⚠ DITURUNKAN dari `keputusan.GOLONGAN`, TIDAK ditulis ulang tangan. Peta
+# `_GRUP_AKSI` di atas sempat salah ketik TIGA nama aksi sebelum ketahuan
+# (catatan di kepalanya) — dan golongan di sini sudah punya sumber tunggalnya
+# sendiri (`services/keputusan.py`, dipakai juga oleh Beranda untuk "N
+# permintaan · N output"). Menyalin namanya ke sini lagi membuka jalan yang
+# sama untuk salah yang sama; membacanya langsung dari `K.GOLONGAN` tak bisa
+# berselisih dengan sumbernya karena ia memang sumbernya.
+#
+# HANYA golongan NON-MUTU. Mutu punya layarnya sendiri (`/mutu`, keputusan
+# pemilik 24 September 2026) — golongan "mutu" di sini akan menghitung
+# pekerjaan yang tak pernah digambar di halaman ini, dan sub-menu yang
+# menjanjikan lebih banyak daripada yang bisa dibuka adalah sub-menu yang
+# berbohong pada ketukan pertama.
+_NAMA_GOLONGAN_KEPUTUSAN = {
+    "permintaan": "Permintaan PK",
+    "output": "Output giling",
+}
+GRUP_KEPUTUSAN: tuple[tuple[str, str], ...] = tuple(
+    (g, _NAMA_GOLONGAN_KEPUTUSAN.get(g, g.capitalize() if g else "Lainnya"))
+    for g in K.GOLONGAN if g != K.MUTU
+) + (("lain", "Lainnya"),)
+
+#: aksi → golongan, baca sekali dari `K.GOLONGAN` — bukan gelung per baris.
+_AKSI_KE_GOLONGAN_KEPUTUSAN: dict[str, str] = {
+    a: g for g, daftar in K.GOLONGAN.items() if g != K.MUTU for a in daftar
+}
+
+
+def grup_keputusan(b: Baris) -> str:
+    """Grup sub-menu sebuah kartu "Menunggu keputusan". Golongan komplemen
+    "lain" sama alasannya dengan `grup_baris`: jenis keputusan yang lahir
+    besok (jaring `keputusan.html`) tetap kebagian grup, bukan hilang."""
+    return _AKSI_KE_GOLONGAN_KEPUTUSAN.get(b.aksi or "", "lain")
 
 
 def _lama(sejak: datetime | None) -> str:

@@ -60,13 +60,41 @@ AKSI_DIKENAL: tuple[str, ...] = K.SEMUA
 async def halaman_keputusan(request: Request, akun=Depends(butuh_admin)):
     async with SessionLocal() as db:
         b = await svc.untuk(db, akun.user)
+    meja_non_mutu = [x for x in b.meja if not K.golongan_mutu(x.aksi)]
+
+    # ── SARINGAN GRUP — permintaan pemilik 2 Oktober 2026: "lakukan yang
+    # sama ke menunggu keputusan". Bentuknya sama persis dengan `/aksi`
+    # (`?grup=` di sana), hanya alamat & sumbernya yang beda: `?golongan=`,
+    # grupnya dari `services/keputusan.py` lewat `svc.grup_keputusan`.
+    #
+    # Angkanya dihitung dari `meja_non_mutu` SEBELUM disaring — sub-menu yang
+    # menyebut "0" untuk golongan yang sedang tidak dipilih akan membuat
+    # orang menyimpulkan pekerjaannya habis.
+    n_golongan = {k: 0 for k, _ in svc.GRUP_KEPUTUSAN}
+    for x in meja_non_mutu:
+        n_golongan[svc.grup_keputusan(x)] += 1
+    golongan = (request.query_params.get("golongan") or "").strip()
+    if golongan not in dict(svc.GRUP_KEPUTUSAN):
+        golongan = ""       # alamat ngawur = tampilkan semuanya, bukan 422
+    meja_tampil = ([x for x in meja_non_mutu if svc.grup_keputusan(x) == golongan]
+                   if golongan else meja_non_mutu)
+
     return render(
         request, "keputusan.html", layar="keputusan",
-        meja=[x for x in b.meja if not K.golongan_mutu(x.aksi)], lama=svc._lama,
+        meja=meja_tampil, lama=svc._lama,
+        # Pil saringan: hanya golongan yang BERISI ditawarkan, ditambah yang
+        # sedang dipilih — sama alasannya dengan `GRUP_PIL` di `/aksi`.
+        GRUP_PIL=[(k, nama, n_golongan[k]) for k, nama in svc.GRUP_KEPUTUSAN
+                 if n_golongan[k] or k == golongan],
+        GRUP_KINI=golongan,
+        GRUP_TOTAL=sum(n_golongan.values()),
         # Jaringnya memakai SELURUH meja — termasuk golongan mutu — supaya
         # jenis yang tak dikenal tertangkap di sini apa pun golongannya yang
-        # kelak diberikan orang kepadanya.
-        semua_meja=b.meja,
+        # kelak diberikan orang kepadanya. Disaring golongan juga: memilih
+        # "Lainnya" tak boleh tetap menjaring item yang sudah tergambar di
+        # golongan lain.
+        semua_meja=(b.meja if not golongan or golongan == "lain"
+                   else [x for x in b.meja if svc.grup_keputusan(x) == golongan]),
         JENIS_KEPUTUSAN=JENIS_KEPUTUSAN, AKSI_DIKENAL=AKSI_DIKENAL,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
