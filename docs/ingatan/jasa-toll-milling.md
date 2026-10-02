@@ -439,3 +439,61 @@ padahal itu bentuk yang justru spek sebut eksplisit sebagai harus didukung.
 Penjaga skema `tests/timbangan/test_skema.py` (yang glob-nya dilebarkan 1
 Oktober, catatan di atas) menangkap migrasi 0041 belum didaftarkan pada
 percobaan pertama — bekerja persis seperti yang dirancang.
+
+## 2 Oktober 2026 (lanjutan) — sub-menu Antrian tunggu menutup laci saat dibuka
+
+Laporan pemilik, sesudah sub-menu dropdown dikirim: *"ketika saya klik menu
+antrian tunggu malah yang terbuka beranda."* Diagnosis awal salah arah (saya
+sempat mengira ini soal navigasi atau `<details>`); yang sebenarnya terjadi:
+**laci itu sendiri yang tertutup**, memperlihatkan Beranda di belakangnya —
+dan itu terbaca seperti "Beranda terbuka" padahal cuma lacinya yang lenyap.
+
+Akarnya satu baris lama di `base.html`:
+```js
+Array.prototype.forEach.call(laci.querySelectorAll(".pintu"), function (a) {
+  a.addEventListener("click", function () { buka(false); });
+});
+```
+Pintu bersub-menu (Antrian tunggu) dirender sebagai `<summary class="pintu">`
+— bukan `<a>` — supaya kliknya cuma membuka/menutup `<details>`, bukan
+berpindah halaman. Tapi selector `.pintu` menjaring KEDUANYA (`<a>` dan
+`<summary>`), jadi klik untuk MEMBUKA sub-menunya ikut memicu `buka(false)`
+dan menutup seluruh laci sebelum sub-menunya sempat terlihat.
+
+Diperbaiki: `querySelectorAll("a.pintu, .pintu-sub__satu")` — hanya tautan
+sungguhan yang menutup laci; `<summary>` dibiarkan murni sebagai toggle
+`<details>` bawaan peramban.
+
+Dan permintaan susulan: *"icon panahnya hapus saja di antrian tunggu"* —
+penanda segitiga `::after` yang berputar dicabut. Lencana angka + sub-menu
+yang muncul sesudah diketuk sudah cukup menandakan "pintu ini punya isi lagi".
+
+### Dibuktikan lewat peramban sungguhan, bukan cuma baca kode
+
+Dijalankan server lokal (`uvicorn`, bukan lewat `preview_start` — limit 5
+dev server per folder sudah dipakai sesi lain) atas basis data uji baru,
+dengan DUA grup antrean nyata (tiket gabah belum ditaut = bahan baku; sosoh
+selesai dengan curah belum dikemas = tunggu packing — dibangun lewat jalur
+layanan sungguhan, `mulai_penyosohan`→`catat_output`→`selesai_penyosohan`,
+sebab `untuk_gudang2()` TERNYATA tidak memanggil `_kartu_tumpukan_g2()` sama
+sekali — hanya `untuk_operator_gudang2()` yang memanggilnya; catatan untuk
+nanti, bukan bagian dari perbaikan ini).
+
+Diklik dua kali lewat `computer`: pertama membuka (sub-menu "Semua"
+tergambar, laci TETAP terbuka), kedua menutup kembali (details collapse,
+laci tetap terbuka) — `document.querySelector('.pintu-lipat').open`
+dikonfirmasi lewat `javascript_tool` di kedua keadaan. Lalu "Semua" diklik:
+`location.pathname` berpindah ke `/aksi` dan laci ikut tertutup (wajar,
+bagian dari pertukaran halaman).
+
+⚠ Screenshot sempat menampilkan keadaan yang BASI sesaat sesudah klik
+(sub-menu masih tergambar padahal `details.open` sudah `false`) — jangan
+percaya screenshot tunggal untuk keadaan yang berubah cepat; periksa lewat
+`javascript_tool` atau ambil screenshot kedua.
+
+### Uji
+
+`test_pintu_laci_layar_yang_sedang_dibuka_bukan_jalan_buntu` diperbarui
+mengikuti selector baru; uji baru `test_pintu_bersubmenu_tak_ikut_menutup_
+laci` menjaga keduanya (pintu biasa vs pintu bersub-menu) tak tercampur lagi.
+Mutasi (selector lama `.pintu` dikembalikan) dibuktikan menggigit kedua uji.
