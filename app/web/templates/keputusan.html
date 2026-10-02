@@ -3,11 +3,12 @@
 {% block isi %}
 {% import "_benda.html" as benda with context %}
 
-{# ── PIL GOLONGAN — "lakukan yang sama ke menunggu keputusan" ──
+{# ── PIL KATEGORI — "buat sub menu juga sesuai kategori" ──
    Permintaan pemilik 2 Oktober 2026, bentuknya kembaran pil `/aksi`
    (`GRUP_PIL`/`GRUP_KINI`/`GRUP_TOTAL`, lihat catatan di `aksi.html`). Satu
-   beda: alamatnya `?golongan=`, bukan `?grup=` — namanya mengikuti
-   `services/keputusan.py`, taksonomi yang sudah dipakai Beranda. #}
+   beda: alamatnya `?kategori=`, bukan `?grup=`, dan butirannya PER JENIS
+   KEPUTUSAN — persis judul blok di bawahnya (`services.keputusan.blok`),
+   bukan golongan yang menggabung beberapa jenis. #}
 {% set GRUP_PIL = GRUP_PIL|default([], true) %}
 {% set GRUP_KINI = GRUP_KINI|default("", true) %}
 {% set GRUP_TOTAL = GRUP_TOTAL|default((meja|length) + (semua_meja|default([], true)|length), true) %}
@@ -17,7 +18,7 @@
       <span class="pil__jml">{{ GRUP_TOTAL }}</span></a>
     {% for kunci, nama, jml in GRUP_PIL %}
       <a class="pil{{ ' pil--on' if GRUP_KINI == kunci }}"
-         href="/keputusan?golongan={{ kunci }}">{{ nama }}
+         href="/keputusan?kategori={{ kunci }}">{{ nama }}
         <span class="pil__jml">{{ jml }}</span></a>
     {% endfor %}
   </div>
@@ -27,17 +28,17 @@
    pembelian yang harganya menggantung, tak ada giling yang mutunya belum
    diperiksa. Itu keterangan, bukan kekurangan. #}
 {% if not meja and not semua_meja and GRUP_KINI %}
-  {# Kosong karena GOLONGANNYA, bukan karena pekerjaannya habis — bedanya
+  {# Kosong karena KATEGORINYA, bukan karena pekerjaannya habis — bedanya
      penting: kalimat di bawah akan menyuruh orang mengira semua sudah
-     diverifikasi padahal golongan lain masih menunggu. #}
+     diverifikasi padahal kategori lain masih menunggu. #}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
     <div>
-      <h2>Golongan ini kosong</h2>
+      <h2>Kategori ini kosong</h2>
       <p class="bantu">
-        Golongan lain masih berisi — {{ GRUP_TOTAL }} kartu seluruhnya.
+        Kategori lain masih berisi — {{ GRUP_TOTAL }} kartu seluruhnya.
         <a href="/keputusan">Lihat semua</a>.
       </p>
     </div>

@@ -547,3 +547,58 @@ kebetulan tak muncul pada kartu buatan tangan sebelumnya, jadi lolos tanpa
 ketahuan sampai uji pg yang memakai kartu sungguhan menangkapnya. Dibetulkan
 jadi `'<a class="pil'` — penanda pil itu sendiri, bukan wadah yang dipakai
 bersama fitur lain.
+
+## 2 Oktober 2026 (lanjutan) — "buat sub menu juga sesuai kategori"
+
+Sesudah mengirim sub-menu "Menunggu keputusan" dengan dua golongan kasar
+("Permintaan PK" menggabung `acc_permintaan_pk`+`tutup_permintaan_pk`,
+"Output giling" = `betulkan_bobot_giling`), pemilik meluruskan: *"maksud
+saya buat sub menu juga sesuai kategori."*
+
+Dibaca sebagai: kategorinya harus PER JENIS, persis blok yang sudah tampil
+di halaman `/keputusan` sendiri (`JENIS_KEPUTUSAN`) — bukan digabung lagi
+jadi golongan. Perbaikannya ternyata PENYEDERHANAAN, bukan penambahan kode:
+`GRUP_KEPUTUSAN` diturunkan dari `keputusan.blok(mutu=False)` (sudah ada,
+sudah dipakai menggambar blok halaman) alih-alih `keputusan.GOLONGAN`
+(mengelompokkan lagi) — satu baris lebih pendek, dan sub-menu kini menunjuk
+PERSIS kategori yang sama dengan blok halaman, dengan nama yang sama,
+karena keduanya membaca sumber yang sama.
+
+Alamatnya ikut diganti `?golongan=` → `?kategori=`, mengikuti kata pemilik
+sendiri — bukan sekadar kosmetik: nama parameter yang tak cocok dengan kata
+yang dipakai orang membuatnya terasa seperti konsep lain.
+
+### Cacat uji yang sama, muncul lagi dengan bentuk berbeda
+
+Selector `'<a class="pil'` (dipakai memperbaiki `'class="pil'` yang longgar
+sehari sebelumnya) TERNYATA MASIH LONGGAR: kartu permintaan PK sungguhan
+merender tombol "Setujui permintaan"/"Tolak permintaan" sebagai
+`<a class="pilihan__satu pilihan__satu--utama">` — diawali huruf sama
+("pil"). Lolos di uji satuan (kartu buatan tangan `pilihan=[]`), gagal diam-
+diam di uji pg pertama yang memakai kartu sungguhan hasil `permintaan_pk.
+minta()`. Dibetulkan jadi `'<div class="saring">'` — penanda blok pil itu
+sendiri, aman KHUSUS untuk `keputusan.html` (halaman itu tak punya fitur
+lain berkelas `.saring`, beda dengan `aksi.html` yang memakainya juga untuk
+kotak cari >4 kartu).
+
+Pelajarannya sama dua kali: substring pendek yang "pasti aman" di atas data
+buatan tangan tak terbukti aman sampai diuji atas data sungguhan. Prefiks
+yang lebih panjang (`<div class="saring">` ketimbang `class="pil`) bukan
+cuma lebih tepat — ia juga lebih tahan terhadap kelas BARU yang kebetulan
+berawalan sama, yang kemungkinan besar akan lahir lagi suatu hari.
+
+### Rantai `permintaan_pk` makin dipahami
+
+Dua kartu golongan "permintaan" ternyata muncul pada TAHAP yang berbeda,
+bukan serentak: `acc_permintaan_pk` ("Permintaan lot PK dari Gudang 2") saat
+status `DIMINTA`; `tutup_permintaan_pk` ("Kiriman PK menunggu ditutup") baru
+muncul sesudah `kirim()` (status `DIKIRIM`) — `setujui()` saja (status
+`DISETUJUI`) belum memunculkan kartu MEJA sama sekali (kartunya pindah ke
+`transit`/berjalan di layar operator G1, bukan ke meja Admin). Uji
+`test_dua_kategori_lahir_dari_satu_lot_tetap_terpisah` membuktikan jalur
+penuh `minta → setujui → kirim` lewat HTTP sungguhan.
+
+Uji: bagian pil `tests/test_grup_keputusan.py` & seluruh
+`tests/pg/test_grup_keputusan_http.py` diperbarui; satu uji pg baru
+(`test_dua_kategori_lahir_dari_satu_lot_tetap_terpisah`) membuktikan
+langsung klaim intinya — dua kategori dari satu permintaan yang sama.

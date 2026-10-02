@@ -62,39 +62,43 @@ async def halaman_keputusan(request: Request, akun=Depends(butuh_admin)):
         b = await svc.untuk(db, akun.user)
     meja_non_mutu = [x for x in b.meja if not K.golongan_mutu(x.aksi)]
 
-    # ── SARINGAN GRUP — permintaan pemilik 2 Oktober 2026: "lakukan yang
-    # sama ke menunggu keputusan". Bentuknya sama persis dengan `/aksi`
-    # (`?grup=` di sana), hanya alamat & sumbernya yang beda: `?golongan=`,
-    # grupnya dari `services/keputusan.py` lewat `svc.grup_keputusan`.
+    # ── SARINGAN KATEGORI — permintaan pemilik 2 Oktober 2026: "lakukan
+    # yang sama ke menunggu keputusan", diperjelas "buat sub menu juga
+    # sesuai kategori". Bentuknya sama persis dengan `/aksi` (`?grup=` di
+    # sana), hanya alamat & butirannya yang beda: `?kategori=`, PER JENIS
+    # KEPUTUSAN (bukan golongan yang menggabung beberapa jenis) — jadi
+    # kategori di sub-menu dan blok di halaman ini menunjuk hal yang persis
+    # sama, sebab keduanya dari `svc.GRUP_KEPUTUSAN`
+    # (`keputusan.blok(mutu=False)` apa adanya).
     #
     # Angkanya dihitung dari `meja_non_mutu` SEBELUM disaring — sub-menu yang
-    # menyebut "0" untuk golongan yang sedang tidak dipilih akan membuat
+    # menyebut "0" untuk kategori yang sedang tidak dipilih akan membuat
     # orang menyimpulkan pekerjaannya habis.
-    n_golongan = {k: 0 for k, _ in svc.GRUP_KEPUTUSAN}
+    n_kategori = {k: 0 for k, _ in svc.GRUP_KEPUTUSAN}
     for x in meja_non_mutu:
-        n_golongan[svc.grup_keputusan(x)] += 1
-    golongan = (request.query_params.get("golongan") or "").strip()
-    if golongan not in dict(svc.GRUP_KEPUTUSAN):
-        golongan = ""       # alamat ngawur = tampilkan semuanya, bukan 422
-    meja_tampil = ([x for x in meja_non_mutu if svc.grup_keputusan(x) == golongan]
-                   if golongan else meja_non_mutu)
+        n_kategori[svc.grup_keputusan(x)] += 1
+    kategori = (request.query_params.get("kategori") or "").strip()
+    if kategori not in dict(svc.GRUP_KEPUTUSAN):
+        kategori = ""        # alamat ngawur = tampilkan semuanya, bukan 422
+    meja_tampil = ([x for x in meja_non_mutu if svc.grup_keputusan(x) == kategori]
+                   if kategori else meja_non_mutu)
 
     return render(
         request, "keputusan.html", layar="keputusan",
         meja=meja_tampil, lama=svc._lama,
-        # Pil saringan: hanya golongan yang BERISI ditawarkan, ditambah yang
+        # Pil saringan: hanya kategori yang BERISI ditawarkan, ditambah yang
         # sedang dipilih — sama alasannya dengan `GRUP_PIL` di `/aksi`.
-        GRUP_PIL=[(k, nama, n_golongan[k]) for k, nama in svc.GRUP_KEPUTUSAN
-                 if n_golongan[k] or k == golongan],
-        GRUP_KINI=golongan,
-        GRUP_TOTAL=sum(n_golongan.values()),
+        GRUP_PIL=[(k, nama, n_kategori[k]) for k, nama in svc.GRUP_KEPUTUSAN
+                 if n_kategori[k] or k == kategori],
+        GRUP_KINI=kategori,
+        GRUP_TOTAL=sum(n_kategori.values()),
         # Jaringnya memakai SELURUH meja — termasuk golongan mutu — supaya
-        # jenis yang tak dikenal tertangkap di sini apa pun golongannya yang
-        # kelak diberikan orang kepadanya. Disaring golongan juga: memilih
-        # "Lainnya" tak boleh tetap menjaring item yang sudah tergambar di
-        # golongan lain.
-        semua_meja=(b.meja if not golongan or golongan == "lain"
-                   else [x for x in b.meja if svc.grup_keputusan(x) == golongan]),
+        # jenis yang tak dikenal tertangkap di sini apa pun kategorinya yang
+        # kelak diberikan orang kepadanya. Disaring kategori juga: memilih
+        # kategori spesifik tak boleh tetap menjaring item kategori lain
+        # ("lain" sendiri yang menjaring — karena itulah ia komplemen).
+        semua_meja=(b.meja if not kategori or kategori == "lain"
+                   else [x for x in b.meja if svc.grup_keputusan(x) == kategori]),
         JENIS_KEPUTUSAN=JENIS_KEPUTUSAN, AKSI_DIKENAL=AKSI_DIKENAL,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",

@@ -239,11 +239,11 @@ class Berjalan:
         return n
 
     def jumlah_grup_keputusan(self) -> dict[str, int]:
-        """Berapa kartu per GRUP — isi sub-menu "Menunggu keputusan".
+        """Berapa kartu per KATEGORI — isi sub-menu "Menunggu keputusan".
 
         Kembaran `jumlah_grup`, dan sama sebabnya. `self.meja` membawa mutu
         DAN non-mutu bercampur (pemisahannya baru terjadi saat `/keputusan`
-        dan `/mutu` merender); baris mutu dilompati di sini — golongan "mutu"
+        dan `/mutu` merender); baris mutu dilompati di sini — kategori mutu
         sudah tak ada di `GRUP_KEPUTUSAN` sejak sumbernya, tetapi kartu mutu
         sendiri tetap ada di `self.meja` dan wajib tak ikut terhitung.
         """
@@ -346,11 +346,13 @@ class Berjalan:
             out["aksi"] = [("/aksi", "Semua", self.jumlah_menunggu), *isi]
 
         # "Menunggu keputusan" — permintaan pemilik 2 Oktober 2026: "lakukan
-        # yang sama ke menunggu keputusan". Syarat dan bentuknya SAMA PERSIS
-        # dengan Antrian tunggu di atas; cuma sumber datanya beda (`meja`,
-        # golongan `keputusan.py`, bukan `menunggu`/`aksi` kartu).
+        # yang sama ke menunggu keputusan", diperjelas "buat sub menu juga
+        # sesuai kategori". Syarat dan bentuknya SAMA PERSIS dengan Antrian
+        # tunggu di atas; sumber datanya beda (`meja`, kategori
+        # `keputusan.py` — per JENIS, bukan golongan) dan alamatnya
+        # `?kategori=`, bukan `?grup=`.
         nk = self.jumlah_grup_keputusan()
-        isik = [(f"/keputusan?golongan={k}", nama, nk[k])
+        isik = [(f"/keputusan?kategori={k}", nama, nk[k])
                for k, nama in GRUP_KEPUTUSAN if nk[k]]
         if len(isik) >= 2:
             out["keputusan"] = [("/keputusan", "Semua", self.jumlah_keputusan),
@@ -446,42 +448,43 @@ def grup_baris(b: Baris) -> str:
 # ═════════════ GRUP KEPUTUSAN — sub-menu "Menunggu keputusan" ═════════════
 #
 # Permintaan pemilik 2 Oktober 2026: "lakukan yang sama ke menunggu
-# keputusan" — sub-menu dropdown yang sama persis dengan Antrian tunggu,
-# diterapkan di pintu sebelahnya.
+# keputusan" — lalu diperjelas: "maksud saya buat sub menu juga sesuai
+# kategori". Bukan golongan kasar ("Permintaan PK" menggabung dua jenis) —
+# PER KATEGORI, satu-satu, persis blok yang sudah tampil di halaman
+# `/keputusan` sendiri.
 #
-# ⚠ DITURUNKAN dari `keputusan.GOLONGAN`, TIDAK ditulis ulang tangan. Peta
-# `_GRUP_AKSI` di atas sempat salah ketik TIGA nama aksi sebelum ketahuan
-# (catatan di kepalanya) — dan golongan di sini sudah punya sumber tunggalnya
-# sendiri (`services/keputusan.py`, dipakai juga oleh Beranda untuk "N
-# permintaan · N output"). Menyalin namanya ke sini lagi membuka jalan yang
-# sama untuk salah yang sama; membacanya langsung dari `K.GOLONGAN` tak bisa
-# berselisih dengan sumbernya karena ia memang sumbernya.
+# ⚠ KARENA ITU DITURUNKAN DARI `keputusan.blok(mutu=False)`, BUKAN
+# `keputusan.GOLONGAN`. Keduanya sumber yang sah dan sama-sama berasal dari
+# `K.JENIS`, tetapi beda butirannya: `blok()` MEMANG per-kategori (satu
+# baris per (aksi, judul) — persis yang dibaca `JENIS_KEPUTUSAN` untuk
+# menggambar blok halaman), sedangkan `GOLONGAN` mengelompokkan beberapa
+# kategori jadi satu ember ("permintaan" memuat DUA aksi berbeda). Memakai
+# `blok()` membuat sub-menu dan halaman menunjuk kategori yang PERSIS SAMA —
+# satu sumber, dua pembaca, tak mungkin berselisih namanya.
 #
-# HANYA golongan NON-MUTU. Mutu punya layarnya sendiri (`/mutu`, keputusan
-# pemilik 24 September 2026) — golongan "mutu" di sini akan menghitung
-# pekerjaan yang tak pernah digambar di halaman ini, dan sub-menu yang
-# menjanjikan lebih banyak daripada yang bisa dibuka adalah sub-menu yang
-# berbohong pada ketukan pertama.
-_NAMA_GOLONGAN_KEPUTUSAN = {
-    "permintaan": "Permintaan PK",
-    "output": "Output giling",
-}
-GRUP_KEPUTUSAN: tuple[tuple[str, str], ...] = tuple(
-    (g, _NAMA_GOLONGAN_KEPUTUSAN.get(g, g.capitalize() if g else "Lainnya"))
-    for g in K.GOLONGAN if g != K.MUTU
-) + (("lain", "Lainnya"),)
+# Nama kategorinya pun TAK ditulis ulang tangan — diambil langsung dari
+# `judul` yang sama yang menggambar kepala tiap blok halaman. Peta `_GRUP_AKSI`
+# (Antrian tunggu) sempat salah ketik TIGA nama aksi sebelum ketahuan;
+# membaca `judul` apa adanya dari sumbernya tak bisa salah ketik.
+#
+# HANYA kategori NON-MUTU. Mutu punya layarnya sendiri (`/mutu`, keputusan
+# pemilik 24 September 2026) — kategori mutu di sini akan menjanjikan
+# pekerjaan yang tak pernah digambar di halaman ini.
+GRUP_KEPUTUSAN: tuple[tuple[str, str], ...] = K.blok(mutu=False) + (("lain", "Lainnya"),)
 
-#: aksi → golongan, baca sekali dari `K.GOLONGAN` — bukan gelung per baris.
-_AKSI_KE_GOLONGAN_KEPUTUSAN: dict[str, str] = {
-    a: g for g, daftar in K.GOLONGAN.items() if g != K.MUTU for a in daftar
-}
+#: aksi yang sudah punya kategorinya sendiri — dibaca sekali, bukan digelung
+#: per baris. SAMA dengan `layar_keputusan.JENIS_KEPUTUSAN`; keduanya
+#: `keputusan.blok(mutu=False)` apa adanya, jadi tak bisa berbeda isi.
+_AKSI_KATEGORI_KEPUTUSAN: frozenset[str] = frozenset(a for a, _ in GRUP_KEPUTUSAN[:-1])
 
 
 def grup_keputusan(b: Baris) -> str:
-    """Grup sub-menu sebuah kartu "Menunggu keputusan". Golongan komplemen
-    "lain" sama alasannya dengan `grup_baris`: jenis keputusan yang lahir
-    besok (jaring `keputusan.html`) tetap kebagian grup, bukan hilang."""
-    return _AKSI_KE_GOLONGAN_KEPUTUSAN.get(b.aksi or "", "lain")
+    """Kategori sub-menu sebuah kartu "Menunggu keputusan" — id AKSI-nya
+    sendiri, bukan golongan. Komplemen "lain" sama alasannya dengan
+    `grup_baris`: jenis keputusan yang lahir besok (jaring `keputusan.html`)
+    tetap kebagian kategori, bukan hilang."""
+    aksi = b.aksi or ""
+    return aksi if aksi in _AKSI_KATEGORI_KEPUTUSAN else "lain"
 
 
 def _lama(sejak: datetime | None) -> str:

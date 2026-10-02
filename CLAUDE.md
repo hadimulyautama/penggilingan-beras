@@ -409,38 +409,50 @@ seluruh laci, sebab laci yang berbeda antar-layar dibaca sebagai "pekerjaannya
 sudah habis". Di `base.html` ia DIGERAKKAN DATA (`SUBMENU.get(kunci)`), bukan
 `if kunci == 'aksi'`: berkas itu milik bersama beberapa aplikasi.
 
-## Sub-menu "Menunggu keputusan" — kembaran Antrian tunggu (sejak 2 Okt 2026)
+## Sub-menu "Menunggu keputusan" — PER KATEGORI (sejak 2 Okt 2026)
 
-Permintaan pemilik: *"lakukan yang sama ke menunggu keputusan."* Mekanismenya
-sama persis dengan Antrian tunggu — `<summary>` tanpa navigasi, ≥2 grup
-berisi untuk menawarkan dropdown, pil `?golongan=` di dalam halaman, kalimat
-"Golongan ini kosong" yang dibedakan dari "Tak ada yang menunggu keputusan".
+Permintaan pemilik: *"lakukan yang sama ke menunggu keputusan"* — diperjelas
+*"maksud saya buat sub menu juga sesuai kategori."* Mekanisme lacinya sama
+persis dengan Antrian tunggu — `<summary>` tanpa navigasi, ≥2 kategori
+berisi untuk menawarkan dropdown, pil `?kategori=` di dalam halaman, kalimat
+"Kategori ini kosong" yang dibedakan dari "Tak ada yang menunggu keputusan".
 
-⚠ Bedanya satu, dan ia DISENGAJA: `GRUP_KEPUTUSAN`/`grup_keputusan()`
-**diturunkan dari `services/keputusan.GOLONGAN`**, bukan ditulis ulang
-tangan seperti `_GRUP_AKSI`. Taksonomi itu sudah ada dan sudah dipakai
-Beranda ("N permintaan · N output · N mutu") — menyalin nama aksinya lagi ke
-peta kedua membuka jalan yang sama yang membuat tiga nama salah ketik di
-`_GRUP_AKSI` sebelum ketahuan. Sumber tunggal tak bisa berselisih dengan
-dirinya sendiri.
+⚠ **"Kategori" di sini PER JENIS, bukan golongan kasar.** Percobaan pertama
+mengelompokkan lewat `services/keputusan.GOLONGAN` ("permintaan" menggabung
+DUA jenis: `acc_permintaan_pk` dan `tutup_permintaan_pk`) — dan itu bukan
+yang diminta. `GRUP_KEPUTUSAN`/`grup_keputusan()` sekarang **diturunkan dari
+`keputusan.blok(mutu=False)`**, sumber yang SAMA yang menggambar blok
+halaman `/keputusan` sendiri (`JENIS_KEPUTUSAN`) — jadi kategori sub-menu
+dan blok halaman menunjuk hal yang persis sama, satu per satu, dengan nama
+yang sama (tak ditulis ulang tangan; peta `_GRUP_AKSI` di Antrian tunggu
+sempat salah ketik TIGA nama aksi sebelum ketahuan).
 
-⚠⚠ **GOLONGAN "MUTU" TAK PERNAH MASUK `GRUP_KEPUTUSAN`.** Mutu punya
-layarnya sendiri (`/mutu`, keputusan pemilik 24 September 2026); golongan
-"mutu" di sub-menu ini akan menjanjikan pekerjaan yang tak pernah digambar
+⚠⚠ **KATEGORI MUTU TAK PERNAH MASUK `GRUP_KEPUTUSAN`.** Mutu punya
+layarnya sendiri (`/mutu`, keputusan pemilik 24 September 2026); kategori
+mutu di sub-menu ini akan menjanjikan pekerjaan yang tak pernah digambar
 di halaman ini. `jumlah_grup_keputusan()` melompati baris mutu secara
 eksplisit sebelum menghitung — `self.meja` membawa KEDUANYA bercampur,
 pemisahannya baru terjadi saat render `/keputusan` vs `/mutu`.
 
-Alamatnya `?golongan=`, bukan `?grup=` (nama mengikuti modulnya). Jaring
-"Keputusan lain" di `keputusan.html` tetap bekerja sama seperti sebelumnya
-saat golongan dipilih "lain" atau tak dipilih; memilih golongan lain
-("permintaan"/"output") mengosongkannya dengan sendirinya (item yang
-dikenal selalu ADA di `AKSI_DIKENAL`).
+Alamatnya `?kategori=`, bukan `?grup=` (nama mengikuti kata pemilik) dan
+bukan `?golongan=` (percobaan pertama yang dicabut). Jaring "Keputusan lain"
+di `keputusan.html` tetap bekerja sama seperti sebelumnya saat kategori
+dipilih "lain" atau tak dipilih; memilih kategori lain mengosongkannya
+dengan sendirinya (item yang dikenal selalu ADA di `AKSI_DIKENAL`).
 
-Uji: `tests/test_grup_keputusan.py` (13 — grouping murni + render) dan
-`tests/pg/test_grup_keputusan_http.py` (2 — jalur HTTP sungguhan lewat
-fixture `permintaan_pk`, membuktikan `?golongan=` dan laci terhubung ke
-agregasi `svc.untuk()` yang sesungguhnya, bukan dipanggil terisolasi).
+Uji: `tests/test_grup_keputusan.py` (13 — grouping dibandingkan LANGSUNG
+terhadap `K.blok(mutu=False)`, render pil, render laci) dan
+`tests/pg/test_grup_keputusan_http.py` (3 — jalur HTTP sungguhan lewat
+fixture `permintaan_pk` naik sampai `kirim()`, membuktikan `?kategori=` dan
+laci terhubung ke agregasi `svc.untuk()` yang sesungguhnya, dan membuktikan
+"Permintaan lot PK dari Gudang 2" vs "Kiriman PK menunggu ditutup" memang
+dua kategori terpisah begitu satu permintaan berjalan sampai tahap kirim).
+
+⚠ Pelajaran selector uji: `'<a class="pil'` longgar — kartu SUNGGUHAN
+("Setujui/Tolak permintaan") merender `class="pilihan__satu"` sebagai
+`<a>`, diawali huruf sama. Penanda yang aman untuk `keputusan.html`:
+`'<div class="saring">'` (halaman ini tak punya fitur lain berkelas itu —
+beda dari `aksi.html`, yang memakainya untuk kotak cari).
 
 ## ⚠ Kelas CSS karangan: tidak melempar galat, cuma tak menggambar
 
