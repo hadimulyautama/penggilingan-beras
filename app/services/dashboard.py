@@ -206,12 +206,19 @@ async def _stok_pk(db: AsyncSession) -> dict:
     # tidak siap dikirim ke mana pun selain kembali ke pemiliknya, dan kartu yang
     # menjumlahkannya ke sini mengajari pembacanya memperlakukan barang orang
     # lain sebagai persediaan.
-    procs = (
+    #
+    # ⚠⚠ TETAPI IA TETAP DIDAFTAR, terpisah dan bernama. Laporan lapangan 2
+    # Oktober 2026: papan ini dan Beranda sama-sama menyebut PK = 0 sementara
+    # tujuh ton barang pelanggan berdiri di lantai Gudang 1 — lalu orang
+    # menyimpulkan tak ada apa-apa untuk dipindahkan. Menyaring tanpa
+    # menyebutkan sama buruknya dengan menjumlahkan.
+    semua = (
         await db.execute(select(MillingProcess)
-                         .where(MillingProcess.jasa_id.is_(None))
                          .order_by(MillingProcess.kode_proses))
     ).scalars().all()
-    rincian = await pk_breakdown_banyak(db, [p.id for p in procs])
+    procs = [p for p in semua if p.jasa_id is None]
+    procs_jasa = [p for p in semua if p.jasa_id is not None]
+    rincian = await pk_breakdown_banyak(db, [p.id for p in semua])
     # Jenis PK hanya dicari untuk proses yang MASIH punya stok — itu pekerjaan
     # paling mahal di sini, dan proses yang stoknya nol tak muncul di layar
     # mana pun.
@@ -235,8 +242,34 @@ async def _stok_pk(db: AsyncSession) -> dict:
     # Yang paling lama menumpuk disebut lebih dulu: itulah yang harus dikirim
     # duluan, dan urutan daftar adalah cara termurah mengatakannya.
     per_proses.sort(key=lambda p: (p["hari"] is None, -(p["hari"] or 0)))
+
+    # Titipan: cukup totalnya dan KODE PESANANNYA. Rinciannya per jenis tidak
+    # disusun — yang diputuskan atas PK jasa bukan "dijual ke siapa" melainkan
+    # "disosoh atau dikembalikan", dan jawabannya ada di layar Jasa. Kodenya ada
+    # supaya orang bisa mencarinya di sana.
+    jasa_punya = [p for p in procs_jasa if rincian[p.id].tersedia > 0]
+    kode_jasa = await _kode_jasa(db, {p.jasa_id for p in jasa_punya})
     return {"total": total, "per_jenis": per_jenis, "per_proses": per_proses,
-            "maks": settings.g1_pk_tumpukan_maks_kg}
+            "maks": settings.g1_pk_tumpukan_maks_kg,
+            "jasa_total": sum(rincian[p.id].tersedia for p in jasa_punya),
+            "jasa_proses": [{"kode": p.kode_proses,
+                             "jasa": kode_jasa.get(p.jasa_id, "?"),
+                             "kg": rincian[p.id].tersedia}
+                            for p in jasa_punya]}
+
+
+async def _kode_jasa(db: AsyncSession, ids: set[int]) -> dict[int, str]:
+    """id pesanan → "JAS-… Nama" — satu kueri, bukan satu per baris."""
+    if not ids:
+        return {}
+    from app.models import Jasa, Pelanggan
+
+    baris = (await db.execute(
+        select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
+        .outerjoin(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+        .where(Jasa.id.in_(ids))
+    )).all()
+    return {i: f"{k} {n}".strip() for i, k, n in baris}
 
 
 async def _tugas(db: AsyncSession) -> dict:
@@ -342,6 +375,12 @@ def render_dashboard_text(data: dict) -> str:
     for p in stok["per_proses"]:
         umur = f" · menunggu {p['hari']:.0f} hari" if p["hari"] is not None else ""
         lines.append(f"   ‣ {p['kode']} · {p['jenis']} {_kg(p['kg'])}{umur}")
+    if stok.get("jasa_total"):
+        lines.append(
+            f"• PK TITIPAN pelanggan di Gudang 1: {_kg(stok['jasa_total'])}"
+            " — _bukan stok pabrik, tetapi ada di lantai dan boleh dipindah_")
+        for p in stok["jasa_proses"]:
+            lines.append(f"   ‣ {p['kode']} · {p['jasa']} {_kg(p['kg'])}")
     if maks and stok["total"] > maks:
         lines.append(f"   ⚠️ Melewati batas lantai {maks / 1000:g} ton — kirim ke penyosohan.")
 
@@ -434,6 +473,10 @@ def render_dashboard_html(data: dict) -> str:
         + card("Pengeringan berjalan", peng_val, peng_sub)
         + card("Giling berjalan", gil_val, gil_sub)
         + card("Stok PK siap kirim", _kg(stok["total"]), ringkas or "&nbsp;")
+        + (card("PK titipan di Gudang 1", _kg(stok["jasa_total"]),
+                _esc(" · ".join(f"{p['jasa']} {_kg(p['kg'])}"
+                                for p in stok["jasa_proses"])))
+           if stok.get("jasa_total") else "")
         + silo_cards
     )
 

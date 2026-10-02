@@ -105,7 +105,7 @@ async def angka_gudang(db) -> dict:
     """Angka mentah per gudang — untuk petak pabrik dan baris gudang."""
     from app.models import PurchaseBatch
     from app.penggilingan.gudang1.services import tumpukan as tmp
-    from app.penggilingan.gudang1.services.milling import stok_pk_g1
+    from app.penggilingan.gudang1.services.milling import stok_pk_g1_pemilik
     from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.penggilingan.gudang2.service import (get_g2_silo, hitung_stok_silo,
                                                   hitung_stok_tumpukan)
@@ -123,6 +123,7 @@ async def angka_gudang(db) -> dict:
     # "berapa yang pabrik punya", dan angka yang memuat barang pelanggan
     # membuat pabrik melihat barang orang lain sebagai persediaannya.
     tump_g1 = await tmp.jumlah_kg(db, pemilik="pabrik")
+    tump_g1_jasa = await tmp.jumlah_kg(db, pemilik="jasa")
     # ── "berapa yang PABRIK punya", bukan "berapa yang ada di lantai" ──
     #
     # Petak Beranda menjawab pertanyaan MILIK. PK titipan yang menunggu diambil
@@ -132,17 +133,37 @@ async def angka_gudang(db) -> dict:
     #
     # Isi FISIK-nya tetap terbaca di layar Stok Gudang 2, per tempat, berikut
     # pemiliknya: yang disembunyikan hanya dari hitungan milik, bukan dari mata.
-    silo_g2 = 0.0
+    # ⚠ DAN TITIPANNYA DISEBUT DI SEBELAHNYA, tidak dihilangkan.
+    #
+    # Menyaring saja ternyata tidak cukup, dan itu laporan dari lapangan (2
+    # Oktober 2026): PK titipan yang selesai digiling TAK TERBACA di mana pun
+    # pada layar yang orang buka lebih dulu — Beranda menyebut "PK 0 kg"
+    # sementara tujuh ton barang pelanggan berdiri di lantai Gudang 1. Operator
+    # Gudang 2 lalu menyimpulkan barangnya tak bisa dipindahkan ke sana, padahal
+    # rantai permintaan→kirim menerimanya dengan baik.
+    #
+    # Jadi aturannya bukan "sembunyikan barang orang lain" melainkan "jangan
+    # pernah menghitungnya sebagai milik pabrik". Angkanya DUA, berdampingan,
+    # dan yang kedua bernama terang-terangan TITIPAN — pola yang sama dengan
+    # `jasa_kg` pada gabah masuk.
+    silo_g2 = silo_g2_jasa = 0.0
     for huruf in ("A", "B"):
         silo = await get_g2_silo(db, huruf)
-        silo_g2 += (float(await hitung_stok_silo(db, silo.id, pemilik="pabrik"))
-                    if silo else 0.0)
+        if silo is None:
+            continue
+        silo_g2 += float(await hitung_stok_silo(db, silo.id, pemilik="pabrik"))
+        silo_g2_jasa += float(await hitung_stok_silo(db, silo.id, pemilik="jasa"))
     tump_g2 = float(await hitung_stok_tumpukan(db, pemilik="pabrik"))
+    tump_g2_jasa = float(await hitung_stok_tumpukan(db, pemilik="jasa"))
+    pk_g1, pk_g1_jasa = await stok_pk_g1_pemilik(db)
     return {
         "masuk_kg": float(gabah_kg or 0) + float(pk_kg or 0),
         "masuk_n": int(gabah_n or 0) + int(pk_n or 0),
-        "g1": {"stok_pk": float(await stok_pk_g1(db)), "tumpukan": tump_g1},
-        "g2": {"stok_pk": silo_g2 + tump_g2, "tumpukan": tump_g2},
+        "g1": {"stok_pk": pk_g1, "tumpukan": tump_g1,
+               "jasa_pk": pk_g1_jasa, "jasa_tumpukan": tump_g1_jasa},
+        "g2": {"stok_pk": silo_g2 + tump_g2, "tumpukan": tump_g2,
+               "jasa_pk": silo_g2_jasa + tump_g2_jasa,
+               "jasa_tumpukan": tump_g2_jasa},
         "tumpukan_g2_maks": float(settings.g2_tumpukan_maks_kg or 0),
     }
 
@@ -161,6 +182,11 @@ def baris_gudang(a: dict, berjalan: list, perhatian_: list[dict]) -> list[dict]:
             return (b.get("gudang") if isinstance(b, dict) else b.gudang) == gid
 
         ket = f"PK {_ribuan(a[gid]['stok_pk'])} kg"
+        # Titipan disebut TERPISAH dan diberi namanya. Barisnya pintu menuju
+        # gudangnya, dan pintu yang menyebut "PK 0 kg" untuk lantai yang penuh
+        # membuat orang tak masuk — itu persisnya yang terjadi 2 Oktober 2026.
+        if a[gid].get("jasa_pk"):
+            ket += f" · titipan {_ribuan(a[gid]['jasa_pk'])} kg"
         if a[gid]["tumpukan"]:
             ket += f" · menumpuk {_ribuan(a[gid]['tumpukan'])} kg"
         keluar.append({"id": gid, "nama": nama, "fungsi": fungsi, "ket": ket,
@@ -177,11 +203,17 @@ def petak_pabrik(a: dict, berjalan: list) -> list[dict]:
     mesin = len(berjalan)
     jeda = sum(1 for b in berjalan if jenis(b) == "hati")
     stok = a["g1"]["stok_pk"] + a["g2"]["stok_pk"]
+    stok_jasa = a["g1"].get("jasa_pk", 0.0) + a["g2"].get("jasa_pk", 0.0)
     tump = a["g1"]["tumpukan"] + a["g2"]["tumpukan"]
     return [
         {"label": "Masuk hari ini", "nilai": _ribuan(a["masuk_kg"]), "sat": " kg",
          "ket": f"{a['masuk_n']} batch · gabah & PK", "nada": ""},
-        {"label": "Stok PK", "nilai": _ribuan(stok), "sat": " kg", "ket": "seluruh gudang",
+        # Angka petaknya tetap MILIK PABRIK — ia yang dipakai merencanakan
+        # penjualan. Titipannya menempel di keterangannya, tanpa nada bahaya:
+        # barang orang lain di gudang bukan masalah, ia cuma harus terlihat.
+        {"label": "Stok PK", "nilai": _ribuan(stok), "sat": " kg",
+         "ket": ("seluruh gudang" if not stok_jasa else
+                 f"seluruh gudang · + titipan {_ribuan(stok_jasa)} kg"),
          "nada": ""},
         {"label": "Mesin menyala", "nilai": mesin, "sat": " proses",
          "ket": (f"{jeda} dijeda" if jeda else "semua jalan") if mesin else "tak ada",

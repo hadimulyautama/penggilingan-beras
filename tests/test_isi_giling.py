@@ -139,11 +139,19 @@ def test_stok_pk_gudang1_diturunkan_bukan_disimpan():
     perlu dinyatakan operator: yang membedakannya hanya ada tidaknya transfer,
     dan itu sudah tercatat. Dua sumber untuk satu fakta pasti berselisih, dan
     yang salah selalu yang diketik manual."""
-    badan = kode_saja(milling.stok_pk_g1)
+    # Turunannya kini tinggal di `stok_pk_g1_pemilik` — SATU lintasan yang
+    # memecah (pabrik, titipan) sekaligus, karena Beranda butuh keduanya
+    # berdampingan. Aturannya tak bergeser, tempatnya saja; jadi yang diperiksa
+    # keduanya: yang menurunkan wajib membaca rinciannya, dan yang dipanggil
+    # orang wajib menurunkan dari situ — bukan menghitung sendiri untuk kedua
+    # kalinya.
+    badan = kode_saja(milling.stok_pk_g1_pemilik)
     assert "_pk_breakdown" in badan
+    assert "stok_pk_g1_pemilik" in kode_saja(milling.stok_pk_g1)
     # Bukan dibaca dari tabel keadaan tersendiri.
-    assert "PkStockGudang1" not in badan
-    assert "MillingPkRouting" not in badan
+    for b in (badan, kode_saja(milling.stok_pk_g1)):
+        assert "PkStockGudang1" not in b
+        assert "MillingPkRouting" not in b
 
 
 def test_tumpukan_pk_tak_hilang_saat_sisanya_kosong():

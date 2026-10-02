@@ -348,15 +348,34 @@ async def stok_pk_g1(db: AsyncSession, *, termasuk_jasa: bool = False) -> float:
     parameter, bukan fungsi kedua: dua fungsi yang hampir sama akan dipanggil
     salah satunya di tempat yang butuh yang lain.
     """
-    q = select(MillingProcess)
-    if not termasuk_jasa:
-        q = q.where(MillingProcess.jasa_id.is_(None))
-    total = 0.0
-    for proc in (await db.execute(q)).scalars().all():
+    pabrik, jasa = await stok_pk_g1_pemilik(db)
+    return pabrik + jasa if termasuk_jasa else pabrik
+
+
+async def stok_pk_g1_pemilik(db: AsyncSession) -> tuple[float, float]:
+    """PK di lantai Gudang 1, dipecah (milik pabrik, titipan pelanggan).
+
+    SATU lintasan atas prosesnya untuk kedua angka, dan `stok_pk_g1` dihitung
+    dari sini. Sebabnya dua:
+
+    · yang membutuhkannya — Beranda, baris gudang, papan Direksi — butuh
+      KEDUANYA sekaligus, supaya titipannya bisa disebut di sebelah angka
+      pabrik. Memanggil `stok_pk_g1` dua kali berarti dua lintasan penuh atas
+      seluruh riwayat giling untuk satu kartu;
+    · dan dua rumus untuk satu fakta akan berselisih. Angka "titipan" yang
+      dihitung sebagai (semua − pabrik) di satu layar dan dengan kueri sendiri
+      di layar lain adalah dua jawaban tentang berapa barang orang lain yang
+      ada di gudang — dan yang menagihnya memegang salah satunya.
+    """
+    pabrik = jasa = 0.0
+    for proc in (await db.execute(select(MillingProcess))).scalars().all():
         bd = await _pk_breakdown(db, proc.id)
         if bd.tersedia > 0:
-            total += bd.tersedia
-    return total
+            if proc.jasa_id is None:
+                pabrik += bd.tersedia
+            else:
+                jasa += bd.tersedia
+    return pabrik, jasa
 
 
 async def log_progress(

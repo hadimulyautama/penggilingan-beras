@@ -246,11 +246,51 @@ kemasan PABRIK (keputusan pemilik), jadi karungnya sungguh terpakai.
 **Setiap pembaca stok PABRIK menyaring `jasa_id IS NULL`.** Tanpa itu Stok
 menghitung barang pelanggan sebagai persediaan pabrik, lalu pabrik menjualnya —
 dan itu tak melempar satu pun galat. Yang sudah disaring: `stok_pk_g1`,
-`dashboard._stok_pk`, `tumpukan.jumlah_kg`, `beranda.angka_gudang`, seluruh
-laporan pembelian (`report.py`, `analytics.py`), dan daftar barang yang bisa
-keluar (`aksi_inventory`) berikut penjaganya di `barang_keluar.tersedia`.
-Kartu stok PK **tetap mendaftar** lot jasa, bertanda pemiliknya: barangnya memang
-ada di lantai, dan layar yang menyembunyikannya berselisih dengan gudang.
+`dashboard._stok_pk`, `tumpukan.jumlah_kg`, `beranda.angka_gudang`,
+`gudang2.hitung_stok_silo`/`hitung_stok_tumpukan`, seluruh laporan pembelian
+(`report.py`, `analytics.py`), dan daftar barang yang bisa keluar
+(`aksi_inventory`) berikut penjaganya di `barang_keluar.tersedia`.
+
+⚠⚠ **TETAPI MENYARING BUKAN MENYEMBUNYIKAN — ATURANNYA PUNYA DUA SISI.**
+Laporan pemilik 2 Oktober 2026: *"pk yang selesai digiling tidak terlihat di
+stock oleh admin dan operator gudang 2."* Bukan masalah izin: `/stok`
+mendaftarnya, dan rantai permintaan→setujui→kirim menerimanya utuh. Yang rusak
+ANGKA KEPALANYA — Beranda, baris gudang, dan papan Direksi menyebut "PK 0 kg"
+sementara tujuh ton barang pelanggan berdiri di lantai, karena ketiganya
+disaring jadi milik-pabrik **tanpa menyebut titipannya di sebelahnya**. Operator
+lalu menyimpulkan tak ada apa-apa untuk dipindahkan.
+
+    jangan pernah MENGHITUNG barang pelanggan sebagai milik pabrik
+    jangan pernah MENGHILANGKANNYA dari layar
+
+Saringan tanpa penyebutan sama berbahayanya dengan penjumlahan: yang pertama
+membuat pabrik menjual barang orang lain, yang kedua membuat pabrik
+membiarkannya menunggu di lantai sambil mengira gudangnya kosong. Pola
+penyebutannya SATU: angka pabrik apa adanya, titipannya di sebelahnya dengan
+kata **"titipan"** — `angka_gudang` → `g1/g2.jasa_pk`, `_stok_pk` →
+`jasa_total`/`jasa_proses` (berikut kode `JAS-` supaya bisa ditindaklanjuti),
+`gabah_hari_ini` → `jasa_kg`/`jasa_batch`.
+
+Dan kartunya **menggambar** pemiliknya: `LotPk.pemilik` & `TempatPk.pemilik`
+sempat dihitung lalu tak pernah disebut templatnya, jadi silo penuh barang
+pelanggan tampak persis seperti silo pabrik. Markup-nya di
+`hmu_tampilan/templates/stok.html` (repo `tampilan`) — penjaganya MERENDER
+layarnya lewat HTTP, sebab penjaga versi hitung-teks lulus saat markup-nya
+dimatikan dengan `{% if false %}`.
+
+⚠ `hitung_stok_silo` menerima **tiga** nilai `pemilik` ("semua"/"pabrik"/
+"jasa"), dan saringannya wajib menempel pada KETIGA bagian hitungannya: masuk
+langsung, masuk lewat tumpukan, dan **`terpakai` penyosohan**. Yang ketiga
+sempat tak disaring sama sekali — satu sosoh barang pelanggan lalu mengurangi
+stok PABRIK silo itu sampai −1.000 kg, tanpa satu pun galat. Bentuk yang
+menjaganya: `pabrik + jasa == semua` **sesudah ada sosoh berjalan** — tanpa
+sosohnya invarian itu lulus dengan sendirinya.
+
+⚠ Picker `/actions/pk-g1-tersedia` (permintaan Gudang 2) adalah **kebalikan**
+dari dua picker PENJUALAN (`barang-bisa-keluar`, `pk-siap-keluar`): ia
+MENAWARKAN lot jasa, sebab menyosoh barang pelanggan adalah pekerjaan yang
+dipesan — yang dilarang menjualnya, bukan memindahkannya. Labelnya menyebut
+`TITIPAN <pemilik>`.
 
 Pesanan lahir di **app produksi** saat operator menerima tiketnya
 (`purchase.pesanan_jasa_dari_tiket`), bukan di Pos Timbang: tiket bisa
@@ -288,7 +328,7 @@ terbaca di mana pun. **Nota** `jasa.nota_jasa()`: bobot & milik saja, bekatul di
 LUAR "Total kembali" dan per proses sosoh, selisihnya SATU baris yang mengaku
 tidak diukur terpisah.
 
-Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (21 uji).
+Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (26 uji, 7 bagian).
 
 ## Bobot bahan: nota vs timbangan (sejak 25 September 2026)
 

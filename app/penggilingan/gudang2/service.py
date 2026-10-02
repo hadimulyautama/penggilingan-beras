@@ -27,6 +27,7 @@ from app.models import (
     PkPurchaseVerification,
     PkRejection,
     PkTumpukanToSilo,
+    PolishingProcess,
     PolishingSiloUsage,
     Silo,
     Supplier,
@@ -229,19 +230,45 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     silo disaring dengan kata tujuannya.
 
     "pabrik" hanya untuk pertanyaan MILIK ("berapa yang pabrik punya"), dan
-    pemanggilnya menyebutnya terang-terangan.
+    pemanggilnya menyebutnya terang-terangan. "jasa" kebalikannya — barang
+    titipan saja — dan ia ADA supaya layar yang menyaring stok pabrik bisa
+    menyebut titipannya DI SEBELAHNYA alih-alih menghilangkannya: PK jasa yang
+    tidak terbaca di mana pun membuat operator menyimpulkan barangnya tak bisa
+    dipindahkan. Tiga nilai, dan "pabrik" + "jasa" = "semua".
     """
+    # ── SATU kalimat pemilik, TIGA bagian hitungan ──
+    #
+    # Dulu saringannya cuma dipasang pada dua yang MASUK; `terpakai` tak
+    # disaring sama sekali. Akibatnya satu proses sosoh barang pelanggan
+    # mengurangi stok PABRIK silo itu — angkanya turun, bisa sampai negatif,
+    # dan tak ada satu pun galat yang menyebutnya. Kelas kerusakan yang sama
+    # dengan yang membuat PK jasa hilang dari Beranda.
+    #
+    # `jasa_id` ada di `pk_gudang2_intakes` MAUPUN `polishing_process`, jadi
+    # kalimatnya sama untuk keduanya.
+    def milik(k):
+        return k.jasa_id.is_(None) if pemilik == "pabrik" else k.jasa_id.isnot(None)
+
     syarat_langsung = [PkGudang2Intake.silo_id == silo_id]
-    # Syaratnya menempel pada INTAKE di kedua jalur — `pk_tumpukan_to_silo` tak
-    # punya `jasa_id` sendiri, pemiliknya ada di intake asalnya.
+    # Syaratnya menempel pada INTAKE di kedua jalur masuk — `pk_tumpukan_to_silo`
+    # tak punya `jasa_id` sendiri, pemiliknya ada di intake asalnya.
     q_tumpukan = (select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
                   .where(PkTumpukanToSilo.silo_id == silo_id))
-    if pemilik == "pabrik":
-        syarat_langsung.append(PkGudang2Intake.jasa_id.is_(None))
+    q_terpakai = (
+        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               # Hanya proses yang berat_akhir-nya sudah diisi.
+               PolishingSiloUsage.berat_akhir_kg.isnot(None)))
+    if pemilik != "semua":
+        syarat_langsung.append(milik(PkGudang2Intake))
         q_tumpukan = q_tumpukan.join(
             PkGudang2Intake,
             PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
-        ).where(PkGudang2Intake.jasa_id.is_(None))
+        ).where(milik(PkGudang2Intake))
+        q_terpakai = q_terpakai.join(
+            PolishingProcess,
+            PolishingProcess.id == PolishingSiloUsage.polishing_process_id
+        ).where(milik(PolishingProcess))
     masuk_langsung = (
         await db.execute(
             select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
@@ -256,15 +283,7 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         )
     ).scalar_one()
     masuk_dari_tumpukan = (await db.execute(q_tumpukan)).scalar_one()
-    # Terpakai penyosohan (hanya proses yang berat_akhir-nya sudah diisi).
-    terpakai = (
-        await db.execute(
-            select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0)).where(
-                PolishingSiloUsage.silo_id == silo_id,
-                PolishingSiloUsage.berat_akhir_kg.isnot(None),
-            )
-        )
-    ).scalar_one()
+    terpakai = (await db.execute(q_terpakai)).scalar_one()
     return float(masuk_langsung) + float(masuk_dari_tumpukan) - float(terpakai)
 
 
@@ -274,17 +293,20 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
 
     `pemilik` bawaannya "semua" — isi FISIK lantainya, dan itu yang benar untuk
     penjaga kapasitas: lantai tak peduli milik siapa barang yang berdiri di
-    atasnya. "pabrik" untuk pertanyaan milik. Lihat `hitung_stok_silo`.
+    atasnya. "pabrik" untuk pertanyaan milik, "jasa" untuk titipannya yang
+    disebut di sebelahnya. Lihat `hitung_stok_silo`.
     """
     q_masuk = (select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0))
                .where(PkGudang2Intake.tujuan == "ditumpuk"))
     q_pindah = select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
-    if pemilik == "pabrik":
-        q_masuk = q_masuk.where(PkGudang2Intake.jasa_id.is_(None))
+    if pemilik != "semua":
+        syarat = (PkGudang2Intake.jasa_id.is_(None) if pemilik == "pabrik"
+                  else PkGudang2Intake.jasa_id.isnot(None))
+        q_masuk = q_masuk.where(syarat)
         q_pindah = q_pindah.join(
             PkGudang2Intake,
             PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
-        ).where(PkGudang2Intake.jasa_id.is_(None))
+        ).where(syarat)
     masuk = (await db.execute(q_masuk)).scalar_one()
     sudah_dipindah = (await db.execute(q_pindah)).scalar_one()
     return float(masuk) - float(sudah_dipindah)

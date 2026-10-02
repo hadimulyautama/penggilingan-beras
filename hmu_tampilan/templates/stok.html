@@ -84,6 +84,23 @@
             <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
           {% endif %}
         </div>
+        {# ── MILIK SIAPA, di kepala kartu ──
+           Pemiliknya sempat hanya tertulis di dalam laci "Batch asal", dan laci
+           itu tertutup. Akibatnya (laporan lapangan 2 Oktober 2026) PK titipan
+           terbaca sebagai lot pabrik biasa oleh operator yang memutuskan apa
+           yang dikerjakan hari ini — dan keputusan atas barang orang lain
+           berbeda: ia disosoh lalu DIKEMBALIKAN, tidak dijual.
+
+           Barisnya hanya ada untuk barang titipan. Lot pabrik tak diberi
+           "milik: pabrik": keterangan yang muncul di setiap kartu berhenti
+           dibaca, dan yang perlu dibaca justru yang jarang. #}
+        {% if l.pemilik %}
+          <div class="nota nota--hati" style="margin:6px 0 0">
+            <span aria-hidden="true">◇</span>
+            <span>Titipan <b>{{ l.pemilik }}</b> — disosoh lalu dikembalikan,
+              bukan dijual</span>
+          </div>
+        {% endif %}
         {# Hasil giling dan rendemen naik jadi angka, bukan keterangan.
            Rendemen adalah satu-satunya angka di kartu ini yang menilai
            PEKERJAANNYA, bukan sekadar melaporkan isinya — dan angka yang
@@ -305,6 +322,17 @@
               <span class="padat__nilai padat__nilai--kosong">kosong</span>
             {% endif %}
           </div>
+          {# `stok.TempatPk.pemilik` sudah dihitung sejak jasa sampai Gudang 2,
+             tetapi TAK PERNAH DIGAMBAR — jadi silo yang penuh barang pelanggan
+             tampak persis seperti silo pabrik. Lihat catatan kembarnya di kartu
+             lot Gudang 1 di atas. #}
+          {% if t.pemilik %}
+            <div class="nota nota--hati" style="margin:6px 0 0">
+              <span aria-hidden="true">◇</span>
+              <span>Titipan <b>{{ t.pemilik }}</b> — disosoh lalu dikembalikan,
+                bukan dijual</span>
+            </div>
+          {% endif %}
           {% if t.maks %}
             <dl class="fakta">
               <div>

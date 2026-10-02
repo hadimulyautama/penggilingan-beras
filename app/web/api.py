@@ -1466,6 +1466,17 @@ async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
     Yang sudah diminta orang lain TIDAK ditawarkan lagi: satu permintaan
     terbuka per lot dijaga indeks, dan menawarkan lot yang sudah diminta cuma
     melahirkan penolakan yang bisa dihindari sebelum orangnya menekan.
+
+    ⚠ PK JASA JUSTRU DITAWARKAN — dan itu kebalikan dari dua picker PENJUALAN
+    (`barang-bisa-keluar`, `pk-siap-keluar`) yang membuangnya. Bedanya bukan
+    kelalaian: menyosoh barang pelanggan adalah PEKERJAAN YANG DIPESAN, dan
+    jasa memang hidup sampai beras putih sejak migrasi 0065. Yang dilarang
+    menjualnya, bukan memindahkannya.
+
+    Tetapi pemiliknya DISEBUT di labelnya. Operator yang memindahkan tujuh ton
+    tanpa tahu itu barang titipan akan memperlakukannya seperti stok pabrik di
+    Gudang 2 — dan keputusan paling mahal di jalur ini (dijual atau
+    dikembalikan) diambil berdasarkan label yang dibacanya di sini.
     """
     _require(await _is_g2_operator(user))
     from app.services.stok import pk_gudang1
@@ -1475,7 +1486,8 @@ async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return [{"value": l.kode,
              "label": (f"{l.kode} · {_rp(l.tersedia)} kg"
                        + (f" · {l.kelas}" if l.kelas else "")
-                       + (f" · {l.lama}" if l.lama else ""))}
+                       + (f" · {l.lama}" if l.lama else "")
+                       + (f" · TITIPAN {l.pemilik}" if l.jasa_id else ""))}
             for l in lot if l.tersedia > 0 and not l.diminta_oleh]
 
 

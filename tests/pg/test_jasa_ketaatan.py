@@ -1042,3 +1042,331 @@ async def test_nota_memisahkan_bekatul_dari_total_kembali(pg, pemakai, admin, pa
     # terukur, sebab pabrik tidak tahu bagian mana air dan bagian mana sekam.
     assert "tidak diukur terpisah" in teks
     assert "susut pengeringan, sekam & susut proses" in teks
+
+
+# ═════════ 7 · DISARING BUKAN BERARTI DISEMBUNYIKAN ═════════
+#
+# Laporan lapangan 2 Oktober 2026, dari pemilik: *"pk yang selesai digiling
+# tidak terlihat di stock oleh admin dan operator gudang 2. kalau ternyata jasa
+# sampai beras putih harusnya barang bisa dipindahkan ke gudang 2."*
+#
+# Keduanya terbukti BUKAN masalah izin: layar `/stok` mendaftar lot jasanya,
+# dan rantai permintaan→setujui→kirim menerimanya utuh sampai silo Gudang 2.
+# Yang rusak ANGKA KEPALANYA — Beranda, baris gudang, dan papan Direksi
+# menyebut "PK 0 kg" sementara tujuh ton barang pelanggan berdiri di lantai,
+# karena ketiganya saya saring jadi milik-pabrik tanpa menyebut titipannya di
+# sebelahnya. Operator lalu menyimpulkan tak ada apa-apa untuk dipindahkan.
+#
+# Jadi aturannya PUNYA DUA SISI, dan bagian ini menjaga sisi keduanya:
+#
+#     jangan pernah MENGHITUNG barang pelanggan sebagai milik pabrik
+#     jangan pernah MENGHILANGKANNYA dari layar
+#
+# Saringan tanpa penyebutan sama berbahayanya dengan penjumlahan: yang pertama
+# membuat pabrik menjual barang orang lain, yang kedua membuat pabrik
+# membiarkannya membusuk di lantai sambil mengira gudangnya kosong.
+
+async def _pk_jasa_di_lantai_g1(pg, pemakai, *, kode_tiket="JLH1",
+                                berat=10_000.0, hasil=7_000.0):
+    """Satu pesanan jasa yang sudah jadi PK dan berdiri di lantai Gudang 1."""
+    from app.models import User
+    from app.penggilingan.gudang1.services.milling import (finish_milling,
+                                                           start_milling)
+    from app.penggilingan.gudang1.services.silo import masuk_silo
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Pak Budi")
+        tid = await _tiket(db, kode=kode_tiket, berat=berat, pelanggan_id=pid)
+        await db.commit()
+    async with pg() as db:
+        r = await _terima(db, tid, pemakai.id)
+        jid, kode_batch = r.jasa.id, r.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await masuk_silo(db, user=u, nama_silo="A", kode_lot=None,
+                         kode_batch=kode_batch)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        kode_proses = (await start_milling(db, user=u, nama_silo="A")).proc.kode_proses
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await finish_milling(db, user=u, kode_proses=kode_proses,
+                             berat_akhir=hasil)
+    return jid, kode_proses
+
+
+async def test_pk_jasa_disebut_di_angka_kepala_bukan_dihilangkan(pg, pemakai, pabrik):
+    """⭐ INTI LAPORANNYA: angka pabrik tetap 0, titipannya DISEBUT.
+
+    Diuji BERSAMA, bukan masing-masing — yang berbahaya justru tiap setengahnya
+    sendiri. `stok_pk == 7000` berarti pabrik melihat barang orang lain sebagai
+    persediaannya (dan akan menjualnya); `jasa_pk == 0` berarti tujuh ton
+    menghilang dari layar yang orang buka lebih dulu (dan tak akan dikerjakan).
+    Hanya dua angka berdampingan yang benar.
+    """
+    from app.penggilingan.gudang1.services.milling import (stok_pk_g1,
+                                                           stok_pk_g1_pemilik)
+    from app.services.beranda import angka_gudang, baris_gudang, petak_pabrik
+
+    await _pk_jasa_di_lantai_g1(pg, pemakai, hasil=7_000)
+
+    async with pg() as db:
+        pabrik_kg, jasa_kg = await stok_pk_g1_pemilik(db)
+        assert pabrik_kg == 0, "PK titipan terhitung sebagai stok pabrik"
+        assert jasa_kg == pytest.approx(7_000), "PK titipan tidak terbaca"
+        # Dan `stok_pk_g1` tetap diturunkan dari situ, satu rumus dua jawaban.
+        assert await stok_pk_g1(db) == pytest.approx(pabrik_kg)
+        assert await stok_pk_g1(db, termasuk_jasa=True) == pytest.approx(7_000)
+
+        a = await angka_gudang(db)
+
+    assert a["g1"]["stok_pk"] == 0
+    assert a["g1"]["jasa_pk"] == pytest.approx(7_000)
+
+    # Baris gudang: kata "titipan" dan angkanya, bukan angka tanpa nama.
+    baris = {b["id"]: b["ket"] for b in baris_gudang(a, [], [])}
+    assert "titipan" in baris["g1"], baris["g1"]
+    assert "7.000" in baris["g1"], baris["g1"]
+
+    # Petak "Stok PK": nilainya tetap MILIK PABRIK, titipannya di keterangan.
+    petak = {p["label"]: p for p in petak_pabrik(a, [])}
+    assert petak["Stok PK"]["nilai"] == "0"
+    assert "titipan" in petak["Stok PK"]["ket"], petak["Stok PK"]["ket"]
+
+
+async def test_papan_direksi_mendaftar_pk_titipan_berikut_kode_pesanannya(
+        pg, pemakai, pabrik):
+    """Papan Direksi juga, dan dengan KODE pesanannya.
+
+    Angka tanpa kode tak bisa ditindaklanjuti: yang perlu diputuskan atas PK
+    titipan adalah "pesanan siapa ini, dan sudah berapa lama" — jawabannya ada
+    di layar Jasa, dan kodenya satu-satunya jalan ke sana.
+    """
+    from app.services.dashboard import _stok_pk
+
+    await _pk_jasa_di_lantai_g1(pg, pemakai, kode_tiket="JLH2", hasil=7_000)
+
+    async with pg() as db:
+        s = await _stok_pk(db)
+
+    assert s["total"] == 0, "PK titipan terhitung sebagai stok pabrik"
+    assert s["jasa_total"] == pytest.approx(7_000)
+    assert len(s["jasa_proses"]) == 1
+    assert s["jasa_proses"][0]["jasa"].startswith("JAS-")
+    assert "Pak Budi" in s["jasa_proses"][0]["jasa"]
+    # Dan lot jasanya TIDAK menyusup ke daftar pabrik.
+    assert all("JAS-" not in str(p) for p in s["per_proses"])
+
+
+async def test_lot_pk_jasa_tetap_boleh_diminta_gudang_2_dan_bertanda(pg, pemakai,
+                                                                     pabrik):
+    """⭐ Sisi kedua laporannya: "harusnya barang bisa dipindahkan ke gudang 2".
+
+    Picker permintaan G2 adalah KEBALIKAN dari dua picker penjualan: menyosoh
+    barang pelanggan adalah pekerjaan yang dipesan, jadi lotnya DITAWARKAN.
+    Yang dilarang menjualnya, bukan memindahkannya.
+
+    Tetapi pemiliknya wajib disebut di labelnya. Operator yang memindahkan
+    tujuh ton tanpa tahu itu titipan akan memperlakukannya seperti stok pabrik
+    begitu barangnya sampai — dan keputusan paling mahal di jalur ini (dijual
+    atau dikembalikan) diambil dari label yang ia baca di sini.
+    """
+    import pathlib
+
+    from app.services.stok import pk_gudang1
+
+    jid, kode_proses = await _pk_jasa_di_lantai_g1(pg, pemakai,
+                                                   kode_tiket="JLH3")
+
+    async with pg() as db:
+        lot = [l for l in await pk_gudang1(db) if l.kode == kode_proses]
+    assert lot, "lot PK jasa hilang dari daftar stok PK Gudang 1"
+    l = lot[0]
+    assert l.tersedia > 0
+    assert l.jasa_id == jid
+    # `pemilik` dipakai DUA pembaca: label picker `/actions/pk-g1-tersedia`
+    # dan kartu stoknya. Ia sempat dihitung lalu tak pernah digambar.
+    assert l.pemilik and "Pak Budi" in l.pemilik, l.pemilik
+
+    # Dan picker-nya memang menyebutnya. Dibaca dari SUMBER, bukan dipanggil:
+    # memanggilnya butuh sesi operator Gudang 2 yang sudah diuji di
+    # `test_stok_pk_g1_polesan.py`, sementara yang rapuh di sini satu hal saja
+    # — labelnya berhenti menyebut pemiliknya saat seseorang merapikan f-string
+    # yang panjang itu.
+    sumber = pathlib.Path("app/web/api.py").read_text()
+    blok = sumber.split("async def pk_g1_tersedia")[1].split("\n@router")[0]
+    assert "l.pemilik" in blok, "label picker permintaan G2 tak menyebut pemiliknya"
+    assert "TITIPAN" in blok, "labelnya tak menyebut bahwa barangnya titipan"
+    # ⚠ Dan ia TIDAK boleh menyaring lot jasa seperti dua picker PENJUALAN:
+    # menyosoh barang pelanggan adalah pekerjaan yang dipesan.
+    assert "l.jasa_id is None" not in blok, \
+        "picker permintaan G2 ikut membuang lot jasa — barangnya jadi tak bisa dipindah"
+
+
+async def test_silo_g2_titipan_tak_hilang_dari_angka_dan_tak_jadi_milik_pabrik(
+        pg, pemakai, pabrik):
+    """Gudang 2 juga — dan di sini ada jebakan tambahan.
+
+    Stok silo G2 = masuk langsung + masuk lewat tumpukan − TERPAKAI penyosohan.
+    Saringan pemiliknya dulu dipasang pada dua yang MASUK saja; `terpakai` tak
+    disaring sama sekali. Akibatnya satu proses sosoh barang pelanggan
+    mengurangi stok PABRIK silo itu — angkanya turun, bisa sampai negatif, dan
+    tak ada satu pun galat yang menyebutnya.
+
+    Jadi yang diuji bukan cuma "titipannya terbaca", melainkan juga
+    "pabrik + jasa = semua" — satu-satunya bentuk yang membuktikan ketiga
+    bagian hitungannya memakai saringan yang sama.
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.polishing import (catat_output,
+                                                     mulai_penyosohan,
+                                                     selesai_penyosohan)
+    from app.penggilingan.gudang2.service import (get_g2_silo, hitung_stok_silo,
+                                                  hitung_stok_tumpukan)
+    from app.services.beranda import angka_gudang
+    from app.services.seed import seed_master
+    from app.services.transfer import create_internal_transfer
+
+    await seed_master()
+
+    jid, kode_proses = await _pk_jasa_di_lantai_g1(pg, pemakai,
+                                                   kode_tiket="JLH4")
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await create_internal_transfer(db, user=u, kode_proses=kode_proses,
+                                       lokasi_tujuan="A", berat=3_000)
+
+    async with pg() as db:
+        silo = await get_g2_silo(db, "A")
+        semua = await hitung_stok_silo(db, silo.id)
+        milik_pabrik = await hitung_stok_silo(db, silo.id, pemilik="pabrik")
+        milik_jasa = await hitung_stok_silo(db, silo.id, pemilik="jasa")
+
+    assert semua == pytest.approx(3_000)
+    assert milik_pabrik == 0, "PK titipan terhitung sebagai stok pabrik"
+    assert milik_jasa == pytest.approx(3_000), "PK titipan hilang dari angkanya"
+    assert milik_pabrik + milik_jasa == pytest.approx(semua)
+
+    # ── DAN SEKARANG SOSOHNYA DIJALANKAN ──
+    #
+    # Tanpa langkah ini `terpakai` nol, dan invarian di atas lulus dengan
+    # sendirinya — uji yang memeriksa aturan tanpa membangkitkan keadaan yang
+    # melanggarnya cuma menuliskan aturannya. Sesudah 1.000 kg barang PELANGGAN
+    # disosoh, cabang "pabrik" yang tak menyaring `terpakai` akan menjawab
+    # −1.000 kg: stok pabrik NEGATIF karena pekerjaan atas barang orang lain.
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        kode_pol = (await mulai_penyosohan(db, user=u,
+                                           nama_silos=["A"])).proc.kode_proses
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await catat_output(db, user=u, kode=kode_pol, jenis="medium",
+                           berat_kg=800)
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await selesai_penyosohan(db, user=u, kode=kode_pol, nama_silo="A",
+                                 sisa_kg=2_000)
+
+    async with pg() as db:
+        silo = await get_g2_silo(db, "A")
+        semua2 = await hitung_stok_silo(db, silo.id)
+        pabrik2 = await hitung_stok_silo(db, silo.id, pemilik="pabrik")
+        jasa2 = await hitung_stok_silo(db, silo.id, pemilik="jasa")
+
+    assert semua2 == pytest.approx(2_000), "sisa fisik silo salah"
+    assert pabrik2 == 0, \
+        f"sosoh barang pelanggan mengurangi stok PABRIK: {pabrik2} kg"
+    assert pabrik2 >= 0, "stok pabrik tak boleh pernah negatif"
+    assert jasa2 == pytest.approx(2_000)
+    assert pabrik2 + jasa2 == pytest.approx(semua2)
+
+    # Dan angka Beranda SESUDAH sosoh — lewat jalur susunnya yang sebenarnya,
+    # bukan memanggil penghitungnya langsung. `jasa_pk` Gudang 2 menjumlahkan
+    # silo DAN tumpukan, jadi saringan yang terlewat di salah satunya gagal
+    # justru pada bentuk yang dibaca orang.
+    async with pg() as db:
+        for milik in ("pabrik", "jasa"):
+            # Tumpukan G2 punya ketiga nilai yang sama — dipanggil supaya
+            # "jasa" yang belum ada di sana gagal di sini, bukan di gudang.
+            assert await hitung_stok_tumpukan(db, pemilik=milik) == 0
+        a = await angka_gudang(db)
+
+    assert a["g2"]["stok_pk"] == 0, "sisa titipan terbaca sebagai stok pabrik"
+    assert a["g2"]["jasa_pk"] == pytest.approx(2_000)
+
+
+async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
+        pg, pemakai, pabrik):
+    """⭐ Pemilik yang dihitung lalu tak digambar sama saja dengan tak dihitung.
+
+    `LotPk.pemilik` dan `TempatPk.pemilik` sempat ada di dataclass-nya dan TAK
+    PERNAH disebut templatnya — jadi silo penuh barang pelanggan tampak persis
+    seperti silo pabrik di layar yang justru dibuka untuk memutuskan.
+
+    DIRENDER SUNGGUHAN lewat HTTP, bukan dihitung kemunculan teksnya di
+    markup-nya. Penjaga versi hitung-teks saya tulis lebih dulu dan ia LULUS
+    saat markupnya dimatikan dengan `{% if false %}`: tulisan `{{ l.pemilik }}`
+    tetap ada di berkasnya, cuma tak pernah tergambar. Penjaga yang polanya
+    kurang lengkap lebih buruk daripada tak ada penjaga.
+
+    Keduanya diperiksa pada SATU layar dan untuk DUA peran: admin yang menjual
+    dan operator Gudang 2 yang menyosoh membaca kartu yang sama, dan keduanya
+    memutuskan hal berbeda atas barang yang sama.
+    """
+    import httpx
+    from app.main import app
+    from app.models import ProduksiAkun, User, Warehouse
+    from app.penggilingan.gudang2.service import get_g2_silo
+    from app.services.transfer import create_internal_transfer
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    _, kode_proses = await _pk_jasa_di_lantai_g1(pg, pemakai, kode_tiket="JLH5")
+    # Separuh dipindah ke Gudang 2: satu layar lalu memuat KEDUA kartunya.
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        await create_internal_transfer(db, user=u, kode_proses=kode_proses,
+                                       lokasi_tujuan="A", berat=3_000)
+    async with pg() as db:
+        assert await get_g2_silo(db, "A") is not None
+
+    async def klien(peran: str, gudang: str | None):
+        async with pg() as db:
+            wid = None
+            if gudang:
+                w = (await db.execute(select(Warehouse).where(
+                    Warehouse.nama_gudang.like(gudang + "%")))).scalars().first()
+                wid = w.id if w else None
+            u = User(nama=f"Uji {peran}", role=peran, status="aktif",
+                     default_warehouse_id=wid)
+            db.add(u)
+            await db.flush()
+            a = ProduksiAkun(user_id=u.id, username=f"uji_lihat{u.id}",
+                             password_hash=S.hash_sandi("rahasia123"),
+                             status="aktif", mode_perangkat=mode_bawaan(peran))
+            db.add(a)
+            await db.commit()
+            tok = security.buat_token(a)
+        c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                              base_url="http://uji", follow_redirects=True)
+        c.cookies.set(security.NAMA_COOKIE, tok)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        return c
+
+    for peran, gudang in (("admin", None), ("operator", "Gudang 2")):
+        c = await klien(peran, gudang)
+        try:
+            r = await c.get("/stok")
+        finally:
+            await c.aclose()
+        assert r.status_code == 200, (peran, r.status_code)
+        teks = r.text
+        # Nama pemiliknya, DUA kali: kartu lot Gudang 1 dan kartu silo Gudang 2.
+        assert teks.count("Pak Budi") >= 2, \
+            f"{peran}: pemilik tak tergambar di kedua kartu ({teks.count('Pak Budi')}×)"
+        assert "JAS-" in teks, f"{peran}: kode pesanannya tak tergambar"
+        # Dan sebutannya menerangkan AKIBATNYA, bukan cuma namanya: "Pak Budi"
+        # di pojok kartu tak memberi tahu siapa pun bahwa barangnya tak boleh
+        # dijual — dan itu keputusan yang diambil dari layar ini.
+        assert teks.count("bukan dijual") >= 2, peran

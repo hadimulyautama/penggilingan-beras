@@ -157,3 +157,80 @@ harian. Keputusan "tidak ada batasan ton" diucapkan dalam percakapan tentang
 jasa; mencabut pagar yang sedang bekerja di jalur lain harus DIMINTA, bukan
 disimpulkan. Dan di sana perilakunya memang sudah bukan penolakan — lantai penuh
 DIBERITAHU, bukan ditolak.
+
+## 2 Oktober 2026 — "tidak terlihat di stock": menyaring ≠ menyembunyikan
+
+Laporan pemilik, dari lapangan: *"pk yang selesai digiling tidak terlihat di
+stock oleh admin dan operator gudang 2. kalau ternyata jasa sampai beras putih
+harusnya barang bisa dipindahkan ke gudang 2."*
+
+**Dua klaim, dan keduanya diperiksa dengan REPRODUKSI — bukan dengan membaca
+kode.** Basis data `uji_lihat` di localhost, `alembic upgrade head`, lalu rantai
+sungguhan: tiket → batch jasa → silo → giling → PK 7 ton.
+
+Hasilnya membalik dugaan pertama:
+
+| Yang diperiksa | Hasil |
+|---|---|
+| `/stok` dirender admin & operator G2 | **BENAR** — lot jasanya ada, lengkap kode `JAS-` & nama |
+| `pk_gudang1()` | **BENAR** — `tersedia=7000 jasa_id=1` |
+| picker `/actions/pk-g1-tersedia` | **BENAR** — menawarkan lotnya |
+| `minta → setujui → kirim` | **BENAR** — `TRF` & intake G2 membawa `jasa_id` |
+| **Beranda petak G1 `stok_pk`** | **0 kg** ← yang dilihat orang |
+| **`dashboard._stok_pk` total** | **0 kg** |
+
+Jadi bukan izin, bukan rantai. Yang rusak **angka kepalanya**: saya menyaring
+Beranda / baris gudang / papan Direksi jadi milik-pabrik dan **tidak menyebut
+titipannya di sebelahnya**. Operator membaca "PK 0 kg" di layar pertama lalu
+menyimpulkan tak ada apa-apa untuk dipindahkan — kesimpulan yang masuk akal dari
+angka yang salah bentuknya.
+
+**Aturannya ternyata punya dua sisi, dan saya cuma menulis satu:**
+
+    jangan pernah MENGHITUNG barang pelanggan sebagai milik pabrik
+    jangan pernah MENGHILANGKANNYA dari layar
+
+Saringan tanpa penyebutan sama berbahayanya dengan penjumlahan. Yang pertama
+membuat pabrik menjual barang orang lain; yang kedua membuat pabrik
+membiarkannya menunggu di lantai sambil mengira gudangnya kosong. Keduanya tak
+melempar galat, dan keduanya baru terbaca di gudang.
+
+### Dua cacat lain yang ikut ketemu
+
+1. **`hitung_stok_silo` tidak menyaring `terpakai`.** Saringan pemiliknya
+   dipasang pada dua bagian yang MASUK; bagian ketiga — PK yang terpakai
+   penyosohan — tak disaring sama sekali. Satu sosoh barang pelanggan lalu
+   mengurangi stok PABRIK silo itu: **−1.000 kg**, negatif, tanpa galat.
+   Dibuktikan dengan uji mutasi, bukan disimpulkan.
+
+   Bentuk yang menjaganya: `pabrik + jasa == semua` **sesudah sosohnya
+   dijalankan**. Tanpa sosohnya `terpakai` nol dan invarian itu lulus dengan
+   sendirinya — uji pertama saya begitu, dan ia tak menangkap apa pun.
+
+2. **`LotPk.pemilik` & `TempatPk.pemilik` dihitung lalu tak pernah digambar.**
+   Keduanya ada di dataclass sejak jasa sampai Gudang 2; `stok.html` tak
+   menyebutnya sekali pun. Jadi silo penuh barang pelanggan tampak persis
+   seperti silo pabrik di layar yang justru dibuka untuk memutuskan. Markup-nya
+   milik repo `tampilan` (VERSI 175 → 176).
+
+   ⚠ Penjaga pertama saya menghitung kemunculan `"l.pemilik"` di markup-nya, dan
+   ia **LULUS** saat markupnya dimatikan `{% if false %}` — tulisannya tetap ada,
+   cuma tak pernah tergambar. Diganti dengan merender `/stok` lewat HTTP untuk
+   dua peran. *Penjaga yang polanya kurang lengkap lebih buruk daripada tak ada
+   penjaga* — kalimat di CLAUDE.md itu, dan saya melanggarnya sendiri hari ini.
+
+### Pola penyebutannya SATU
+
+Angka pabrik apa adanya, titipannya di sebelahnya dengan kata **"titipan"**:
+`angka_gudang` → `g1/g2.jasa_pk`; `_stok_pk` → `jasa_total` + `jasa_proses`
+(berikut kode `JAS-`, sebab angka tanpa kode tak bisa ditindaklanjuti);
+`gabah_hari_ini` → `jasa_kg`/`jasa_batch` (sudah ada sejak irisan pertama — pola
+ini TIRUAN darinya, bukan pola kedua).
+
+Dan picker permintaan G2 adalah **kebalikan** dari dua picker penjualan: ia
+menawarkan lot jasa, sebab menyosoh barang pelanggan adalah pekerjaan yang
+dipesan. Yang dilarang menjualnya, bukan memindahkannya. Labelnya menyebut
+`TITIPAN <pemilik>` — operator yang memindahkan tujuh ton tanpa tahu itu titipan
+akan memperlakukannya seperti stok pabrik begitu barangnya sampai.
+
+Uji: bagian 7 `tests/pg/test_jasa_ketaatan.py` (5 uji; seluruh berkasnya jadi 26).

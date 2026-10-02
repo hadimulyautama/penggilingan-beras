@@ -156,9 +156,15 @@ def _petak_g1(o: dict) -> list[dict]:
              nada="hati" if kering else ""),
         _sel("Silo terisi", terisi, sat=f" / {len(silo)}",
              nada="aman" if terisi else ""),
+        # Titipan pelanggan DISEBUT, tidak dihilangkan — sama seperti pada
+        # "Gabah masuk" di atas. Angkanya tetap milik pabrik; yang bertambah
+        # cuma kalimat yang mengaku ada barang lain di lantai. Tanpa itu petak
+        # ini menyebut 0 kg untuk gudang yang penuh (laporan 2 Okt 2026).
         _sel("Stok PK", _ribuan(total), sat=" kg",
              ket=(f"tumpukan maks {int(maks / 1000)} ton · " if maks else "")
-                 + f"{giling} giling berjalan",
+                 + f"{giling} giling berjalan"
+                 + (f" · + titipan {_ribuan(stok.get('jasa_total', 0))} kg"
+                    if stok.get("jasa_total") else ""),
              nada="bahaya" if maks and total > maks else ""),
     ]
 
@@ -223,8 +229,13 @@ def _petak_stok(a: dict, gid: str, label: str) -> dict:
     """
     tump = a[gid]["tumpukan"]
     maks = a["tumpukan_g2_maks"] if gid == "g2" else 0
-    return _sel(label, _ribuan(a[gid]["stok_pk"]), sat=" kg",
-                ket=(f"menumpuk {_ribuan(tump)} kg" if tump else ""),
+    jasa = a[gid].get("jasa_pk") or 0
+    # Dua keterangan, dirangkai dengan pemisah yang sama seperti baris gudang
+    # di Beranda Meja — satu kosakata untuk satu fakta, bukan kalimat kedua.
+    ket = " · ".join(x for x in (
+        f"menumpuk {_ribuan(tump)} kg" if tump else "",
+        f"titipan {_ribuan(jasa)} kg" if jasa else "") if x)
+    return _sel(label, _ribuan(a[gid]["stok_pk"]), sat=" kg", ket=ket,
                 nada="bahaya" if maks and tump > maks else "")
 
 
