@@ -330,6 +330,77 @@ tidak diukur terpisah.
 
 Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (26 uji, 7 bagian).
 
+⚠ Dua kelas CSS yang dipakai layar Jasa ternyata TAK PERNAH ADA di
+`app.css` — `pil--aktif` (yang benar `pil--on`) dan `btn--halus` (yang ada
+`btn--kecil`). Keduanya tak melempar galat: kelas yang tak dikenal cuma tak
+menggambar apa-apa, jadi pil aktifnya tak bertanda sama sekali selama sehari.
+Sebelum memakai nama kelas, cari dulu di `hmu_tampilan/static/app.css`.
+
+## Riwayat sosoh — neraca bobot, 100% tanpa sisa (sejak 2 Oktober 2026)
+
+Pintu ke-15 (`/riwayat-sosoh`, ikon `◭`). Keputusan pemilik: kartu tiap
+penyosohan **yang selesai**, dan *"terkhusus berapa persen yang jadi beras,
+berapa persen broken, berapa persen menir, berapa persen bekatul, lalu berapa
+persen susut debu/bobot."*
+
+    bahan  = PK TERPAKAI seluruh silo (awal + ditambah − sisa)
+    keluar = beras + SELURUH hasil samping
+    susut  = bahan − keluar
+    persen = bagian / bahan × 100
+
+Contoh pemilik sendiri: bahan 10.000 kg, keluar 9.900 kg → susut 1%.
+
+⚠ **Penyebutnya `berat_terpakai_kg`, bukan `berat_awal_kg`** — "termasuk
+campurannya". Silo yang dipoles boleh diisi lagi (keputusan 12 Sep 2026), dan
+PK yang masuk di tengah proses ikut jadi bahan baku. Memakai berat awal membuat
+susut terbaca jauh lebih besar daripada sebenarnya, dan susut dipakai menilai
+mesin dan orang.
+
+⚠ **SELURUH persen berpenyebut SAMA, dan itu yang membuat jumlahnya tepat
+100%.** Baris "Jumlah" di kaki kartu bukan hiasan: satu entri hasil yang salah
+ketik langsung menggeser susutnya, dan di sanalah ia terbaca tanpa seseorang
+perlu mencurigainya lebih dulu. `reject` tak pemilik sebut tetapi tetap
+DIJUMLAH — membuangnya memindahkan beratnya ke susut, dan susut adalah angka
+yang dipakai menuduh mesin bocor. Jenis samping baru pun ikut terjumlah
+sendiri: daftar sisanya dibaca dari `BYPRODUCTS`, tak ditulis tangan.
+
+Rumusnya **murni** di `polishing.neraca_sosoh(pk_terpakai, outputs)` — tanpa
+basis data, supaya kasus tepinya bisa diuji atas angka telanjang
+(`tests/test_neraca_sosoh.py`). Dan `rendemen()` dipisah jadi rumus murni juga;
+`rendemen_proses()` serta `KartuSosoh.rendemen` dua-duanya memanggilnya. Dua
+jalan yang kebetulan sepakat akan berselisih begitu salah satunya disentuh —
+dan yang berselisih di sini angka yang menilai pekerjaan orang.
+
+Dua keadaan yang **dilaporkan, bukan disembunyikan**:
+
+  · **susut negatif** (hasil melebihi bahan) = mustahil secara fisik, jadi
+    selalu salah catat. TIDAK dipangkas jadi 0%: yang dipangkas tak pernah
+    terbaca, dan yang tak terbaca tak pernah dibetulkan. Batang neracanya pun
+    tak digambar;
+  · **bahan nol** → persennya `None`, bukan 0%. Nol persen adalah pernyataan
+    bahwa tak ada yang jadi; yang benar "tak bisa dihitung".
+
+⚠ **Tak ada ambang "susut terlalu besar".** Pemilik belum menetapkannya, dan
+pagar yang ditebak sendiri menuduh mesin yang sehat — aturan yang sama dengan
+batas ton di layar Jasa.
+
+**HANYA yang selesai.** `status="selesai"` dijamin seluruh silonya sudah
+ditandai (`selesai_penyosohan`), jadi penyebutnya pasti. Proses berjalan punya
+pintunya di `/berjalan`, dan persen dari hasil yang masih bertambah akan dibaca
+sebagai hasil akhir.
+
+**Pintunya Super Admin, Admin, operator Gudang 2** (keputusan pemilik) —
+ditulis sebagai `(SUPER, ADMIN, POLESAN)` di `nav.TAB`, bukan `None` +
+`PINTU_MATI`: daftar yang BOLEH tak perlu disunting tiap kali view baru lahir.
+⚠ Rutenya menjaga sendiri lewat `_is_g2_operator`; menyembunyikan pintu bukan
+penjagaan.
+
+ENAM kueri, berapa pun banyak kartunya (tujuh bila ada kartu jasa). Dijaga
+sebagai PERBANDINGAN satu-kartu vs enam-kartu, bukan langit-langit: N+1 yang
+kebetulan kecil tetap lolos dari langit-langit. Halamannya memakai KURSOR
+(`?sebelum=<id>`), bukan nomor halaman — riwayat bertambah di ujung yang sama
+dengan arah bacanya.
+
 ## Bobot bahan: nota vs timbangan (sejak 25 September 2026)
 
     real = berat BARANG menurut Pos Timbang (netto − tara karung)

@@ -348,9 +348,15 @@ def _utama(bb: Bobot) -> tuple[str, str] | None:
     return (t, "kg") if t is not None else None
 
 
-def _jam(detik: float) -> str:
-    """Lama tertahan dalam kata. Nol pun disebut — "baru saja" memberi tahu
-    bahwa jamnya memang dihitung, bukan bahwa ia tak diketahui."""
+def lama_kata(detik: float) -> str:
+    """Rentang waktu dalam kata. Nol pun disebut — "baru saja" memberi tahu
+    bahwa jamnya memang dihitung, bukan bahwa ia tak diketahui.
+
+    Namanya dinaikkan dari `_jam` (2 Oktober 2026) ketika Riwayat sosoh
+    membutuhkannya untuk lama satu proses. Berkas ini sudah memuat DUA
+    pemformat yang hampir sama (`_lama` menghitung dari "sejak kapan", yang ini
+    dari detik); yang ketiga — di modul lain, untuk kalimat yang sama —
+    akan berbeda kata-katanya begitu salah satu disentuh."""
     detik = int(detik or 0)
     if detik < 60:
         return "baru saja"
@@ -1229,7 +1235,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             # tak memberi tahu apakah itu lima menit atau sejak kemarin, dan
             # justru itulah yang menentukan apakah seseorang harus turun
             # tangan sekarang.
-            nota=(f"Dijeda {_jam(tertahan)} — {macet.sebab}" if macet else None),
+            nota=(f"Dijeda {lama_kata(tertahan)} — {macet.sebab}" if macet else None),
             nota_jenis="hati" if macet else None,
             maju=maju,
             # Dulu hanya muncul di kabar sekejap sesudah menyimpan, lalu
@@ -1422,7 +1428,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 + (f" · {_pemasok_ringkas(asal_giling)}" if asal_giling else ""),
             anak=asal_giling,
             fakta=fakta_g,
-            nota=(f"Dijeda {_jam(tertahan)} — {macet.sebab}" if macet else None),
+            nota=(f"Dijeda {lama_kata(tertahan)} — {macet.sebab}" if macet else None),
             nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"
                      + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
@@ -1746,7 +1752,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
             # PK-nya" — asalnya sudah disebut fakta Silo di atas.
             anak=(rinci_hasil + asal_pr[:6])[:10],
-            nota=(f"Dijeda {_jam((now_local() - macet.mulai).total_seconds())} — "
+            nota=(f"Dijeda {lama_kata((now_local() - macet.mulai).total_seconds())} — "
                   f"{macet.sebab}" if macet else None),
             nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"

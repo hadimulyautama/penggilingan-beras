@@ -234,3 +234,68 @@ dipesan. Yang dilarang menjualnya, bukan memindahkannya. Labelnya menyebut
 akan memperlakukannya seperti stok pabrik begitu barangnya sampai.
 
 Uji: bagian 7 `tests/pg/test_jasa_ketaatan.py` (5 uji; seluruh berkasnya jadi 26).
+
+## 2 Oktober 2026 — halaman Riwayat sosoh, dan dua kelas CSS yang tak pernah ada
+
+Pintu ke-15. Keputusan pemilik: kartu tiap penyosohan SELESAI berikut neraca
+bobotnya — berapa persen jadi beras, broken, menir, bekatul, dan **susut
+debu/bobot**. Contohnya ia sebut sendiri: bahan 10 ton, keluar 9.900 kg →
+susut 1%.
+
+Yang membuatnya pintu sendiri dan bukan blok di Stok Produk: **susut bukan
+stok**. Layar stok menyebut apa yang ADA; susut justru yang TIDAK ada — ia cuma
+terbaca sebagai selisih antara yang masuk mesin dan yang keluar darinya, dan
+selisih itu tak disimpan di satu kolom pun.
+
+Hubungannya dengan jasa: kartunya menyebut pemiliknya. Rendemen barang titipan
+tak boleh ikut menilai mesin pabrik bersama lot pabrik — bahan bakunya datang
+dari gudang orang lain dan mutunya tak dipilih pabrik.
+
+### Yang dipelajari
+
+- **Penyebutnya `berat_terpakai_kg`, bukan `berat_awal_kg`.** Pemilik menulis
+  "termasuk campurannya", dan itu tepat menunjuk PK yang ditambahkan di tengah
+  proses (silo yang dipoles boleh diisi lagi, keputusan 12 Sep). Berat awal akan
+  membuat susut terbaca jauh lebih besar — pada angka yang dipakai menilai
+  mesin dan orang.
+- **Satu penyebut untuk semua persen = identitas 100% yang menjaga kartunya
+  sendiri.** Baris "Jumlah" bukan hiasan: satu entri hasil salah ketik langsung
+  menggeser susut, dan di sanalah ia terbaca tanpa perlu dicurigai lebih dulu.
+- **`reject` tak diminta disebut, tetapi tetap dijumlah.** Membuangnya
+  memindahkan beratnya ke susut. Jenis samping baru ikut sendiri — daftar
+  sisanya dibaca dari `BYPRODUCTS`, tak ditulis tangan; kalau tidak, susut naik
+  diam-diam pada hari sebuah jenis baru dipakai.
+- **Rumus dipisah jadi MURNI** (`neraca_sosoh`, `rendemen`) supaya kasus
+  tepinya bisa diuji atas angka telanjang. Kasus tepinya justru yang berbahaya:
+  bahan nol dan susut negatif dua-duanya berarti salah catat dan dua-duanya
+  tak melempar galat.
+- **`GRADES` memuat `beras_b`, `stok.GRADES_BERAS` sengaja tidak.** Keduanya
+  bukan karena salah satunya lupa — yang kedua memisahkan blok di Stok Produk.
+  Menukarnya menggeser penyebut rendemen seluruh pabrik tanpa satu pun galat.
+- **`_jam` dinaikkan jadi `lama_kata`.** Berkas `berjalan.py` sudah memuat dua
+  pemformat yang hampir sama; yang ketiga di modul lain untuk kalimat yang sama
+  akan berbeda kata-katanya begitu salah satu disentuh.
+
+### Dua cacat lama yang ikut ketemu
+
+1. **`pil--aktif` dan `btn--halus` TAK PERNAH ADA di `app.css`.** Keduanya saya
+   karang sehari sebelumnya di layar Jasa. Kelas CSS yang tak dikenal tidak
+   melempar apa-apa — ia cuma tak menggambar: pil saringan yang aktif tak
+   bertanda sama sekali. Yang benar `pil--on` dan `btn--kecil`. ⚠ Cari dulu
+   nama kelasnya di `app.css` sebelum memakainya; penjaga mana pun tak akan
+   menangkap ini, sebab ia bukan galat.
+2. **`dashboard._kode_jasa` mengulang `jasa.nama_pemilik_banyak`** — saya tulis
+   sehari sebelumnya juga, berarti hal yang sama persis. Dua penyusun
+   "JAS-… Nama" akan menulis namanya dengan dua cara begitu salah satunya
+   disentuh, dan yang membacanya mengira itu dua pesanan. Dihapus.
+
+### Uji
+
+`tests/test_neraca_sosoh.py` (10 uji, rumus murni atas angka telanjang) dan
+`tests/pg/test_riwayat_sosoh.py` (11 uji: tiga peran yang boleh, satu yang
+ditolak DI RUTENYA, kelima persen dirender sungguhan lewat HTTP, kursor, dan
+beban kueri). Empat mutasi dibuktikan menggigit — termasuk N+1 yang
+dikembalikan (6 → 11 kueri).
+
+⚠ Beban kuerinya dijaga sebagai PERBANDINGAN satu-kartu vs enam-kartu, bukan
+langit-langit: langit-langit masih bisa dilewati N+1 yang kebetulan kecil.

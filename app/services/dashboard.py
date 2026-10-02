@@ -212,6 +212,8 @@ async def _stok_pk(db: AsyncSession) -> dict:
     # tujuh ton barang pelanggan berdiri di lantai Gudang 1 — lalu orang
     # menyimpulkan tak ada apa-apa untuk dipindahkan. Menyaring tanpa
     # menyebutkan sama buruknya dengan menjumlahkan.
+    from app.services.jasa import nama_pemilik_banyak
+
     semua = (
         await db.execute(select(MillingProcess)
                          .order_by(MillingProcess.kode_proses))
@@ -248,7 +250,11 @@ async def _stok_pk(db: AsyncSession) -> dict:
     # "disosoh atau dikembalikan", dan jawabannya ada di layar Jasa. Kodenya ada
     # supaya orang bisa mencarinya di sana.
     jasa_punya = [p for p in procs_jasa if rincian[p.id].tersedia > 0]
-    kode_jasa = await _kode_jasa(db, {p.jasa_id for p in jasa_punya})
+    # Lewat `jasa.nama_pemilik_banyak` — satu kueri, dan satu TEMPAT. Berkas
+    # ini sempat punya `_kode_jasa` sendiri yang berarti hal yang sama persis;
+    # dua penyusun "JAS-… Nama" akan menulis namanya dengan dua cara begitu
+    # salah satunya disentuh, dan yang membacanya mengira itu dua pesanan.
+    kode_jasa = await nama_pemilik_banyak(db, {p.jasa_id for p in jasa_punya})
     return {"total": total, "per_jenis": per_jenis, "per_proses": per_proses,
             "maks": settings.g1_pk_tumpukan_maks_kg,
             "jasa_total": sum(rincian[p.id].tersedia for p in jasa_punya),
@@ -256,20 +262,6 @@ async def _stok_pk(db: AsyncSession) -> dict:
                              "jasa": kode_jasa.get(p.jasa_id, "?"),
                              "kg": rincian[p.id].tersedia}
                             for p in jasa_punya]}
-
-
-async def _kode_jasa(db: AsyncSession, ids: set[int]) -> dict[int, str]:
-    """id pesanan → "JAS-… Nama" — satu kueri, bukan satu per baris."""
-    if not ids:
-        return {}
-    from app.models import Jasa, Pelanggan
-
-    baris = (await db.execute(
-        select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
-        .outerjoin(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
-        .where(Jasa.id.in_(ids))
-    )).all()
-    return {i: f"{k} {n}".strip() for i, k, n in baris}
 
 
 async def _tugas(db: AsyncSession) -> dict:

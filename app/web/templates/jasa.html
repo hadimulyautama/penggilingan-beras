@@ -16,7 +16,7 @@
 <div class="saring">
   {% for nilai, label in STATUS_PILIHAN %}
     <a href="?status={{ nilai }}"
-       class="pil{{ ' pil--aktif' if tapis == nilai }}">{{ label }}</a>
+       class="pil{{ ' pil--on' if tapis == nilai }}">{{ label }}</a>
   {% endfor %}
 </div>
 
@@ -88,7 +88,7 @@
     </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-      <a href="/jasa/{{ k.id }}/nota" class="btn btn--halus">Nota</a>
+      <a href="/jasa/{{ k.id }}/nota" class="btn btn--kecil">Nota</a>
       {% if k.status == 'berjalan' %}
         {# Tombol tutup hanya muncul saat memang boleh — dan sebabnya disebut
            saat tidak. Tombol yang pasti ditolak lebih buruk daripada tombol

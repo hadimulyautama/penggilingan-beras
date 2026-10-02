@@ -1596,3 +1596,61 @@ body.terik {
   --hati:       #7a5305;
   --bahaya:     #a12b1c;
 }
+
+/* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
+
+   Layar Riwayat sosoh (keputusan pemilik 2 Oktober 2026). Yang digambar BUKAN
+   kemajuan melainkan PEMBAGIAN: ke mana perginya bahan baku satu penyosohan —
+   jadi beras, jadi hasil samping, atau hilang sebagai susut debu & bobot.
+
+   Karena itu ia bukan `.maju__bar`, yang hanya punya satu ruas dan berarti
+   "sudah sejauh ini". Batang ini SELALU penuh; yang berubah pembagiannya.
+
+   TIGA ruas, bukan tujuh. Tiap jenis samping memang ditanyakan pemilik satu
+   per satu — tetapi persennya dijawab BARISNYA, bukan warnanya: tujuh ruas
+   pada batang selebar ponsel membuat bekatul 0,4% jadi garis setengah piksel,
+   dan tujuh warna yang harus dihafal lebih buruk daripada angka yang terbaca.
+   Yang dijawab batang ini satu pertanyaan sekilas: berapa yang jadi barang,
+   dan berapa yang hilang.
+
+   WARNANYA MENUMPANG ARTI YANG SUDAH ADA, bukan warna baru:
+   `--fase-giling` sudah berarti HASIL, `--fase-samping` sudah berarti hasil
+   samping (lihat catatannya di blok palet). Susut memakai `--redup-2` —
+   kelabu, sengaja bukan `--bahaya`: susut adalah kenyataan fisik setiap
+   penggilingan, bukan kesalahan, dan merah akan menyuruh orang memperbaiki
+   sesuatu yang memang begitu adanya. Yang MEMANG salah — hasil melebihi bahan
+   baku — dikatakan dengan kalimat di `.nota--buruk`, bukan dengan warna ruas. */
+.neraca {
+  display: flex; height: 10px; border-radius: 999px; overflow: hidden;
+  background: var(--garis-2); margin: 8px 0 2px;
+}
+.neraca > span { display: block; height: 100%; min-width: 2px; }
+.neraca__beras  { background: var(--fase-giling); }
+.neraca__samping { background: var(--fase-samping); }
+/* Susut tak diberi `min-width`: nol susut berarti nol ruas, dan garis dua
+   piksel untuk sesuatu yang tidak ada akan dibaca sebagai "ada sedikit". */
+.neraca__susut  { background: var(--redup-2); min-width: 0; }
+
+/* Satu baris neraca: nama, kg, lalu persennya rata kanan.
+
+   Persennya `--mono` dan selebar tetap supaya titik desimalnya BERBARIS
+   menurun — deretan persen yang titiknya bergeser menuntut pembacanya
+   membandingkan angka yang tak sejajar, dan itu pekerjaan yang justru
+   dihindari orang di gudang. */
+.nrc { display: grid; grid-template-columns: 1fr auto auto; gap: 10px;
+       align-items: baseline; padding: 3px 0; }
+.nrc__nama { color: var(--tinta-2); font-size: 14px; }
+.nrc__kg   { color: var(--redup-2); font-size: 13px; font-family: var(--mono); }
+.nrc__persen { font-family: var(--mono); font-size: 14px; font-weight: 600;
+               min-width: 4.6em; text-align: right; }
+/* Tiga baris yang BUKAN rincian: beras, susut, dan jumlahnya. Dibedakan dari
+   rincian samping di atasnya supaya mata tak membaca "beras" sebagai salah
+   satu hasil samping. */
+.nrc--utama .nrc__nama { color: var(--tinta); font-weight: 600; }
+.nrc--jumlah { border-top: 1px solid var(--garis-2); margin-top: 4px;
+               padding-top: 6px; }
+.nrc--jumlah .nrc__nama, .nrc--jumlah .nrc__persen { color: var(--redup-2); }
+/* Titik warna sebesar huruf, menandai ruas mana di batang di atas. Penguat,
+   bukan pembeda: namanya tetap tertulis. */
+.nrc__titik { display: inline-block; width: 8px; height: 8px;
+              border-radius: 2px; margin-right: 6px; vertical-align: 1px; }

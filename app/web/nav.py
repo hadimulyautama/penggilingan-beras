@@ -165,6 +165,49 @@ TAB = (
     # belum dipakai pintu lain: barang yang dititipkan, bukan dimiliki.
     ("jasa",       "/jasa",       "Jasa",
      "Barang titipan pelanggan: sisa & pengambilannya", MEJA, "◇"),
+    # ── Riwayat sosoh — keputusan pemilik 2 Oktober 2026 ──
+    #
+    # "berisi kartu proses sosoh yang selesai berikut seluruh informasinya dan
+    # hasilnya. terkhusus berapa persen yang jadi beras, berapa persen broken,
+    # berapa persen menir, berapa persen bekatul, lalu berapa persen susut
+    # debu/bobot."
+    #
+    # Yang dijawabnya tak dijawab satu pun layar lain, dan itu sebabnya ia
+    # pintu sendiri alih-alih blok di Stok Produk: SUSUT bukan stok. Layar stok
+    # menyebut apa yang ADA; susut justru yang TIDAK ada — ia cuma terbaca
+    # sebagai selisih antara yang masuk mesin dan yang keluar darinya, dan
+    # selisih itu tak disimpan di kolom mana pun.
+    #
+    # Tempatnya SESUDAH Jasa dan sebelum Laporan: ia riwayat, sederajat dengan
+    # Laporan, bukan antrean. Dan ia dibuka beberapa kali sepekan — bukan tiap
+    # jam — jadi ia turun dari blok stok yang di atasnya.
+    #
+    # PERANNYA DISEBUT TIGA, bukan `None` + PINTU_MATI (keputusan pemilik:
+    # "hanya super admin, admin dan operator gudang 2 yang bisa lihat").
+    # Keduanya sama-sama menyembunyikan pintunya dari operator selepan, tetapi
+    # yang ini menuliskan siapa yang BOLEH, bukan siapa yang dikecualikan —
+    # dan daftar pengecualian harus disunting ulang tiap kali view baru lahir,
+    # sedangkan daftar yang boleh tidak.
+    #
+    # ⚠ Pintu yang disembunyikan BUKAN penjagaan: rutenya menjaga sendiri
+    # (`layar_sosoh` menuntut `_is_g2_operator`, yang berarti admin ke atas
+    # ATAU operator yang sedang bekerja di Gudang 2).
+    #
+    # ⚠ IKON "◭" dari Geometric Shapes (U+25ED) — blok yang sama dengan enam
+    # ikon lain yang sudah terbukti tampil di app ini (◇ ◷ ◧ ◎ ▦ ▤), BUKAN
+    # emoji. Dipilih karena SILUETNYA satu-satunya segitiga di laci ini:
+    # lingkaran, kotak, dan belah ketupat sudah terpakai, dan ikon yang
+    # sesiluet dengan tetangganya berhenti membedakan apa pun pada layar yang
+    # kena matahari. Setengahnya terisi — kebetulan yang menolong, sebab yang
+    # dijawab halaman ini memang pembagian satu bahan baku.
+    #
+    # ⚠ WAJIB DILIHAT DI HP SUNGGUHAN. Kalau ia tergambar sebagai kotak kosong
+    # pada mesin Android tertentu, gantinya "△" (U+25B3) — segitiga yang sama
+    # tetapi ada di hampir setiap fon. Jangan dibiarkan kotak: ikon yang jadi
+    # kotak membuat pintunya tak bernama di perangkat itu.
+    ("riwayat_sosoh", "/riwayat-sosoh", "Riwayat sosoh",
+     "Tiap penyosohan selesai: hasil, persen, dan susutnya",
+     (SUPER, ADMIN, POLESAN), "◭"),
     # ── Kabar — keputusan pemilik 26 September 2026 ──
     #
     # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum

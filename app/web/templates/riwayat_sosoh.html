@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block judul %}Riwayat sosoh{% endblock %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{# ── Persen bergaya Indonesia: koma, satu angka di belakang ──
+   `0,4%` bukan `0.4%`. Titik desimal di layar berbahasa Indonesia dibaca
+   sebagai pemisah ribuan — dan "0.4" yang terbaca "nol empat" pada angka
+   susut adalah selisih empat ribu kali. #}
+{% macro psn(v) -%}
+  {%- if v is none -%}—{%- else -%}{{ "%.1f"|format(v)|replace(".", ",") }}%{%- endif -%}
+{%- endmacro %}
+
+{% block isi %}
+
+{# ── HALAMAN INI MENJAWAB SATU PERTANYAAN YANG TAK PUNYA LAYAR LAIN ──
+
+   Keputusan pemilik 2 Oktober 2026: berapa persen bahan baku yang jadi beras,
+   berapa yang jadi broken, menir, bekatul — dan berapa yang SUSUT.
+
+   Yang terakhir itu yang tak bisa dijawab layar stok mana pun: stok menyebut
+   apa yang ADA, sedangkan susut justru yang TIDAK ada. Ia cuma terbaca sebagai
+   selisih antara yang masuk mesin dan yang keluar darinya, dan selisih itu
+   tidak disimpan di satu kolom pun — ia dihitung.
+
+   SELURUH persen berpenyebut sama (PK terpakai, termasuk yang ditambahkan di
+   tengah proses), dan itulah yang membuat jumlahnya tepat 100%. Baris
+   "Jumlah" di kaki tiap kartu bukan hiasan: satu entri hasil yang salah ketik
+   langsung menggeser susutnya, dan di sanalah ia terbaca. #}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+    <div>
+      <h2>{{ "Tak ada lagi" if dari_awal else "Belum ada penyosohan selesai" }}</h2>
+      <p class="bantu">
+        Kartu muncul di sini begitu sebuah penyosohan DITUTUP — sisa tiap
+        silonya sudah dicatat, jadi bahan bakunya pasti dan persennya tak akan
+        berubah lagi. Yang masih menyala ada di
+        <a href="/berjalan">Sedang berjalan</a>.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% for k in kartu %}
+  <details class="padat padat--sosoh">
+    <summary>
+      <div class="padat__atas">
+        <span class="padat__nama padat__nama--kode">
+          {{- k.kode }} · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+          {%- if k.lama %} · <span class="padat__umur">{{ k.lama }}</span>{% endif -%}
+        </span>
+        {# Angka besarnya PERSEN BERAS — yang pemilik sebut pertama, dan yang
+           sama dengan rendemen proses ini. Satu angka, satu arti: kartu yang
+           angka besarnya kilogram menuntut pembacanya membagi sendiri. #}
+        {% if k.neraca.bisa_dihitung %}
+          <span class="padat__nilai">{{ psn(k.rendemen) }}<small>beras</small></span>
+        {% else %}
+          <span class="padat__nilai padat__nilai--kosong">—</span>
+        {% endif %}
+      </div>
+
+      {% if k.pemilik %}
+        {# Barang titipan — dan di kartu ini sebabnya BUKAN soal jualan
+           melainkan soal angka: rendemen barang pelanggan tak boleh ikut
+           menilai mesin pabrik bersama lot pabrik, sebab bahan bakunya datang
+           dari gudang orang lain dan mutunya tak dipilih pabrik. #}
+        <div class="nota nota--hati" style="margin:6px 0 0">
+          <span aria-hidden="true">◇</span>
+          <span>Titipan <b>{{ k.pemilik }}</b></span>
+        </div>
+      {% endif %}
+
+      {% if k.neraca.bisa_dihitung %}
+        {# ── BATANG NERACA: 100% bahan baku, tiga ruas ──
+           Lebarnya langsung dari persennya, tanpa penormalan: kalau ketiganya
+           tak berjumlah 100 itu BERARTI sesuatu, dan batang yang dipaksa penuh
+           akan menyembunyikannya. #}
+        {% if not k.neraca.timpang %}
+          {% set p_samping = k.neraca.samping|sum(attribute="persen") %}
+          <div class="neraca" role="img"
+               aria-label="beras {{ psn(k.neraca.beras.persen) }}, hasil samping
+                           {{ psn(p_samping) }}, susut {{ psn(k.neraca.susut.persen) }}">
+            <span class="neraca__beras" style="width:{{ k.neraca.beras.persen }}%"></span>
+            <span class="neraca__samping" style="width:{{ p_samping }}%"></span>
+            <span class="neraca__susut" style="width:{{ [k.neraca.susut.persen, 0]|max }}%"></span>
+          </div>
+        {% endif %}
+        <div class="padat__ket">
+          bahan baku {{ kg(k.neraca.bahan_kg) }} kg →
+          keluar {{ kg(k.neraca.keluar_kg) }} kg
+        </div>
+      {% else %}
+        <div class="padat__ket">
+          bahan bakunya belum tercatat — persennya tak bisa dihitung
+        </div>
+      {% endif %}
+    </summary>
+
+    {% if k.neraca.timpang %}
+      {# MUSTAHIL SECARA FISIK, dan dikatakan apa adanya. Susut negatif selalu
+         berarti salah catat — hasil dicatat ke proses yang keliru, atau satuan
+         tertukar. Ia TIDAK dipangkas jadi 0%: yang dipangkas tak pernah
+         terbaca oleh siapa pun, dan yang tak terbaca tak pernah dibetulkan. #}
+      <div class="nota nota--buruk" style="margin:10px 12px">
+        <span aria-hidden="true">⚠</span>
+        <span>Hasilnya <b>melebihi</b> bahan bakunya
+          ({{ kg(k.neraca.keluar_kg) }} kg dari {{ kg(k.neraca.bahan_kg) }} kg) —
+          selisih {{ kg(-k.neraca.susut.kg) }} kg. Ini tak mungkin terjadi di
+          mesin; periksa catatan hasilnya, biasanya ada entri yang masuk ke
+          proses yang keliru.</span>
+      </div>
+    {% endif %}
+
+    <div class="anak">
+      {% if k.neraca.bisa_dihitung %}
+        <div class="anak__kepala">Ke mana perginya bahan baku</div>
+
+        {# BERAS lebih dulu, dan dibedakan dari rincian samping di bawahnya:
+           mata yang memindai daftar rata akan membaca "beras" sebagai salah
+           satu hasil samping. #}
+        <div class="nrc nrc--utama">
+          <span class="nrc__nama">
+            <span class="nrc__titik" style="background:var(--fase-giling)"></span>
+            {{ k.neraca.beras.nama }}
+          </span>
+          <span class="nrc__kg">{{ kg(k.neraca.beras.kg) }} kg</span>
+          <span class="nrc__persen">{{ psn(k.neraca.beras.persen) }}</span>
+        </div>
+        {# Rincian grade-nya menjorok di bawah "Beras": ia PECAHAN dari baris di
+           atasnya, bukan baris sederajat — dan daftar rata akan membuat
+           persennya terbaca seolah ikut dijumlahkan dua kali. #}
+        {% for b in k.beras %}
+          <div class="nrc" style="padding-left:22px">
+            <span class="nrc__nama">{{ b.nama }}</span>
+            <span class="nrc__kg">{{ kg(b.kg) }} kg</span>
+            <span class="nrc__persen">{{ psn(b.persen) }}</span>
+          </div>
+        {% endfor %}
+
+        {% for b in k.neraca.samping %}
+          <div class="nrc">
+            <span class="nrc__nama">
+              <span class="nrc__titik" style="background:var(--fase-samping)"></span>
+              {{ b.nama }}
+            </span>
+            <span class="nrc__kg">{{ kg(b.kg) }} kg</span>
+            <span class="nrc__persen">{{ psn(b.persen) }}</span>
+          </div>
+        {% endfor %}
+
+        <div class="nrc nrc--utama">
+          <span class="nrc__nama">
+            <span class="nrc__titik" style="background:var(--redup-2)"></span>
+            {{ k.neraca.susut.nama }}
+          </span>
+          <span class="nrc__kg">{{ kg(k.neraca.susut.kg) }} kg</span>
+          <span class="nrc__persen">{{ psn(k.neraca.susut.persen) }}</span>
+        </div>
+
+        {# Baris penutup yang MEMBUKTIKAN kartunya. Seluruh persen di atas
+           berpenyebut sama, jadi jumlahnya wajib 100% — dan kalau tidak, yang
+           salah catatan hasilnya, bukan halaman ini. #}
+        <div class="nrc nrc--jumlah">
+          <span class="nrc__nama">Jumlah</span>
+          <span class="nrc__kg">{{ kg(k.neraca.bahan_kg) }} kg</span>
+          <span class="nrc__persen">{{ psn(
+            k.neraca.beras.persen + k.neraca.samping|sum(attribute="persen")
+            + k.neraca.susut.persen) }}</span>
+        </div>
+      {% endif %}
+
+      {# ── DARI MANA ANGKA BAHAN BAKUNYA DATANG ──
+         Disebut per silo, lengkap dengan hitungannya. Penyebut seluruh persen
+         di atas adalah angka ini; tanpa memperlihatkan asalnya, orang yang
+         merasa persennya aneh tak punya tempat memeriksa. Dan "ditambah" harus
+         kelihatan — silo yang dipoles boleh diisi lagi, dan PK yang masuk di
+         tengah proses ikut jadi bahan baku. #}
+      <div class="anak__kepala" style="margin-top:10px">
+        Bahan baku · {{ k.silo|length }} silo
+      </div>
+      {% for s in k.silo %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ s.nama }}</span>
+          <span class="anak__kg">{{ kg(s.terpakai_kg) }} kg</span>
+          <span class="anak__jam">
+            awal {{ kg(s.awal_kg) }}{% if s.masuk_kg %} + ditambah {{ kg(s.masuk_kg) }}{% endif %}
+            − sisa {{ kg(s.sisa_kg or 0) }}
+          </span>
+        </div>
+      {% endfor %}
+
+      <dl class="fakta" style="padding:8px 12px 10px">
+        <div>
+          <dt>Mulai</dt>
+          <dd>{{ k.mulai|jam }}</dd>
+        </div>
+        <div>
+          <dt>Selesai</dt>
+          <dd>{{ k.selesai|jam or "—" }}</dd>
+        </div>
+        <div>
+          <dt>Dijalankan</dt>
+          <dd>{{ k.oleh }}</dd>
+        </div>
+        {% if k.spek %}
+          {# Spek dicatat per entri hasil (keputusan pemilik 28 September 2026):
+             dalam satu penyosohan operator berganti spek, dan tiap spek punya
+             hasilnya sendiri. Di sini yang disebut DAFTAR spek yang dijalankan
+             — rendemen satu proses yang spek-nya berganti tak bisa dibandingkan
+             dengan proses berspek tunggal, dan tanpa baris ini tak ada yang
+             tahu proses mana yang begitu. #}
+          <div>
+            <dt>Spek</dt>
+            <dd>{{ k.spek|join(", ") }}</dd>
+          </div>
+        {% endif %}
+      </dl>
+    </div>
+  </details>
+{% endfor %}
+
+{% if lagi or dari_awal %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    {% if dari_awal %}
+      <a href="/riwayat-sosoh" class="btn btn--kecil">Kembali ke yang terbaru</a>
+    {% endif %}
+    {% if lagi %}
+      {# Kursor, bukan nomor halaman: riwayat bertambah di ujung yang sama
+         dengan arah bacanya, dan nomor halaman menggeser satu kartu tiap kali
+         ada sosoh baru ditutup — kartu yang terlewat justru karena orang
+         menekan tombol ini. #}
+      <a href="/riwayat-sosoh?sebelum={{ sesudah }}" class="btn btn--kecil">
+        {{ SEKALI }} sebelumnya →
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -12,7 +12,7 @@ Acuan: MASTER_RULES_AND_LOGIC.md §12.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import time
+from datetime import datetime, time
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -269,28 +269,49 @@ async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
     return await output_sosoh(db, proc_id)
 
 
-async def rendemen_proses(db: AsyncSession, proc_id: int) -> float | None:
-    """Rendemen satu penyosohan, atau None bila belum bisa dihitung.
+def beras_dari_output(outputs: dict[str, float]) -> float:
+    """Berapa kg dari sebuah peta hasil yang terhitung BERAS.
 
-    SATU RUMUS, SATU TEMPAT. Ia dibaca penutupan (kalimat untuk operator &
-    kabar untuk Admin) dan kartu "penyosohan selesai" di layar operator.
-    Rumus yang disalin ke pembaca kedua akan berbeda pada perubahan berikutnya
-    — dan yang berbeda adalah angka yang menilai pekerjaan orang.
+    Pembandingnya `GRADES` — termasuk `beras_b` (beras olah ulang), sebab ia
+    memang keluar dari mesin sebagai beras. Jangan menggantinya dengan
+    `stok.GRADES_BERAS`, yang SENGAJA tak memuat `beras_b` untuk urusan lain
+    (pembagian blok di layar Stok Produk). Dua daftar itu berbeda bukan karena
+    salah satunya lupa — dan menukarnya di sini menggeser penyebut rendemen
+    seluruh pabrik tanpa satu pun galat.
+    """
+    return sum(v for k, v in outputs.items() if k in GRADES)
+
+
+def rendemen(beras_kg: float, pk_terpakai_kg: float) -> float | None:
+    """Rendemen = beras / PK terpakai, dalam persen. None bila tak bisa dihitung.
+
+    RUMUSNYA MURNI, tanpa basis data — supaya pembaca yang sudah memegang
+    kedua angkanya (kartu riwayat, yang membacanya borongan) memakai rumus
+    yang SAMA PERSIS dengan yang memegang `proc_id` saja. Angka ini menilai
+    pekerjaan orang; dua rumus untuk satu angka berarti dua penilaian.
 
     Penyebutnya PK TERPAKAI, bukan PK masuk: yang tersisa di silo belum
     disosoh, dan memasukkannya ke penyebut membuat rendemen tiap proses
     terbaca lebih rendah daripada yang sebenarnya.
+    """
+    if not pk_terpakai_kg:
+        return None
+    return beras_kg / pk_terpakai_kg * 100
+
+
+async def rendemen_proses(db: AsyncSession, proc_id: int) -> float | None:
+    """Rendemen satu penyosohan, atau None bila belum bisa dihitung.
+
+    Dibaca penutupan (kalimat untuk operator & kabar untuk Admin) dan kartu
+    "penyosohan selesai" di layar operator. Keduanya cuma punya `proc_id`;
+    yang sudah memegang angkanya memakai `rendemen()` langsung.
     """
     usages = (await db.execute(
         select(PolishingSiloUsage)
         .where(PolishingSiloUsage.polishing_process_id == proc_id)
     )).scalars().all()
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
-    if not pk_terpakai:
-        return None
-    outputs = await _output_map(db, proc_id)
-    beras = sum(v for k, v in outputs.items() if k in GRADES)
-    return beras / pk_terpakai * 100
+    return rendemen(beras_dari_output(await _output_map(db, proc_id)), pk_terpakai)
 
 
 async def _sebut_silo(db: AsyncSession, usages) -> str:
@@ -565,3 +586,281 @@ async def laporan_penyosohan(db: AsyncSession, kode: str | None = None) -> str:
     for p in procs:
         lines.append(f"• {p.kode_proses}")
     return "\n".join(lines)
+
+
+# ══════════════════ RIWAYAT SOSOH & NERACA BOBOTNYA ══════════════════
+#
+# Keputusan pemilik 2 Oktober 2026: *"berisi kartu proses sosoh yang selesai
+# berikut seluruh informasinya dan hasilnya. terkhusus berapa persen yang jadi
+# beras, berapa persen broken, berapa persen menir, berapa persen bekatul, lalu
+# berapa persen susut debu/bobot."*
+#
+# Dan rumus susutnya ia sebut sendiri, lengkap dengan contohnya: *"jika yang
+# disosoh bahan bakunya termasuk campurannya adalah 10 ton lalu dari beras dan
+# semua produk samping hasilnya totalnya hanya 9900 kg. maka persentase susut
+# adalah 100 dibagi 10000"* — 1%.
+#
+#     bahan  = PK TERPAKAI, seluruh silo (awal + ditambah − sisa)
+#     keluar = beras + SELURUH hasil samping
+#     susut  = bahan − keluar
+#     persen = bagian / bahan × 100
+#
+# ⚠ "termasuk campurannya" itu yang membuat penyebutnya `berat_terpakai_kg` dan
+# bukan `berat_awal_kg`: silo yang sedang dipoles boleh diisi lagi (keputusan
+# pemilik 12 September 2026), dan PK yang ditambah di tengah proses ikut jadi
+# bahan baku. Memakai berat awal akan membuat susut terbaca jauh lebih besar
+# daripada yang sebenarnya — dan angka susut dipakai menilai mesin dan orang.
+#
+# ⚠ SELURUH persennya berpenyebut SAMA, dan itu bukan kebetulan: ia yang
+# membuat jumlahnya TEPAT 100%. Identitas itu sendiri yang menjaga kartunya —
+# satu entri hasil yang salah ketik langsung menggeser susutnya, dan susut yang
+# bergeser terbaca di kartu tanpa perlu seseorang mencurigainya lebih dulu.
+
+#: Hasil samping yang pemilik minta disebut persennya SATU PER SATU, dalam
+#: urutan ini. `reject` tak ia sebut — tetapi ia tetap ikut DIJUMLAH (ia
+#: barang yang sungguh keluar dari mesin), dan disebut sebagai barisnya sendiri
+#: hanya bila memang ada. Membuangnya dari jumlah akan memindahkan beratnya ke
+#: "susut", dan susut adalah angka yang dipakai menuduh mesin bocor.
+SAMPING_DISEBUT = ("broken", "menir", "bekatul")
+
+
+@dataclass(frozen=True)
+class Bagian:
+    """Satu baris neraca: apa, berapa kg, berapa persen dari bahan bakunya."""
+
+    jenis: str
+    nama: str
+    kg: float
+    #: Persen dari PK terpakai. `None` bila bahan bakunya nol — dan itu BUKAN
+    #: 0%: nol persen adalah pernyataan bahwa tak ada yang jadi, sedangkan yang
+    #: benar adalah "tak bisa dihitung". Kartunya menyebut bedanya.
+    persen: float | None
+
+
+@dataclass(frozen=True)
+class NeracaSosoh:
+    """Ke mana perginya bahan baku satu penyosohan — kg dan persen.
+
+    Dipisah dari kartunya supaya ia bisa diuji sendiri atas angka telanjang,
+    tanpa basis data: rumus yang hanya bisa diuji lewat layar adalah rumus yang
+    tak pernah diuji pada kasus tepinya.
+    """
+
+    bahan_kg: float
+    beras: Bagian
+    samping: tuple[Bagian, ...]
+    susut: Bagian
+
+    @property
+    def keluar_kg(self) -> float:
+        """Seluruh yang keluar dari mesin — beras + hasil samping."""
+        return self.beras.kg + sum(b.kg for b in self.samping)
+
+    @property
+    def bisa_dihitung(self) -> bool:
+        return self.bahan_kg > 0
+
+    @property
+    def timpang(self) -> bool:
+        """Hasilnya MELEBIHI bahan bakunya — mustahil secara fisik.
+
+        Dilaporkan, tidak disembunyikan dan tidak dipangkas jadi nol: susut
+        negatif selalu berarti salah catat (hasil dicatat ke proses yang keliru,
+        atau satuan tertukar), dan itu kabar yang seseorang harus tindak
+        lanjuti. Susut yang dipangkas jadi 0% membuat kesalahannya tak pernah
+        terbaca di mana pun.
+
+        Tak ada ambang "susut terlalu besar" di sini. Pemilik belum menetapkan
+        angkanya, dan pagar yang ditebak sendiri akan menuduh mesin yang sehat.
+        """
+        return self.bisa_dihitung and self.susut.kg < -0.5
+
+
+def neraca_sosoh(pk_terpakai_kg: float, outputs: dict[str, float]) -> NeracaSosoh:
+    """Neraca bobot satu penyosohan. MURNI — tanpa basis data, bisa diuji sendiri.
+
+    `outputs` = peta jenis → kg seperti yang diberi `stok.output_sosoh`.
+    """
+    from app.services.stok import nama_produk
+
+    bahan = float(pk_terpakai_kg or 0)
+
+    def bagian(jenis: str, nama: str, kg: float) -> Bagian:
+        return Bagian(jenis=jenis, nama=nama, kg=kg,
+                      persen=(kg / bahan * 100) if bahan else None)
+
+    beras_kg = beras_dari_output(outputs)
+    # Urutannya: yang pemilik sebut lebih dulu, lalu samping lain yang memang
+    # ada. `BYPRODUCTS` dipakai sebagai daftar sisanya supaya jenis samping
+    # yang kelak ditambahkan ikut terjumlah tanpa menyunting berkas ini —
+    # kalau tidak, ia akan mengalir ke "susut" diam-diam.
+    sisa_jenis = [j for j in BYPRODUCTS if j not in SAMPING_DISEBUT]
+    samping = []
+    for jenis in (*SAMPING_DISEBUT, *sisa_jenis):
+        kg = float(outputs.get(jenis, 0) or 0)
+        # Yang pemilik minta disebut TETAP tampil walau nol — "bekatul 0%"
+        # adalah kabar (mesinnya tak mengeluarkan bekatul? belum dicatat?),
+        # sedangkan baris yang hilang cuma membuat orang mengira tak ditanyakan.
+        if jenis in SAMPING_DISEBUT or kg:
+            samping.append(bagian(jenis, nama_produk(jenis), kg))
+
+    keluar = beras_kg + sum(b.kg for b in samping)
+    return NeracaSosoh(
+        bahan_kg=bahan,
+        beras=bagian("beras", "Beras", beras_kg),
+        samping=tuple(samping),
+        susut=bagian("susut", "Susut debu & bobot", bahan - keluar),
+    )
+
+
+@dataclass(frozen=True)
+class PemakaianSilo:
+    """Satu silo dalam satu penyosohan — dari mana angka bahan bakunya datang."""
+
+    nama: str
+    awal_kg: float
+    masuk_kg: float
+    sisa_kg: float | None
+    terpakai_kg: float
+
+
+@dataclass(frozen=True)
+class KartuSosoh:
+    """Satu proses sosoh yang SUDAH SELESAI, berikut seluruh keterangannya."""
+
+    id: int
+    kode: str
+    mulai: datetime
+    selesai: datetime | None
+    lama: str
+    oleh: str
+    #: "JAS-2610-001 Pak Budi" bila bahannya barang titipan; None = milik pabrik.
+    pemilik: str | None
+    silo: tuple[PemakaianSilo, ...]
+    neraca: NeracaSosoh
+    beras: tuple[Bagian, ...]
+    #: Spek yang dijalankan selama proses ini, urut kemunculannya.
+    spek: tuple[str, ...]
+
+    @property
+    def rendemen(self) -> float | None:
+        """Lewat rumus bersama — BUKAN `neraca.beras.persen`.
+
+        Keduanya hari ini menghasilkan angka yang sama persis, dan justru itu
+        sebabnya: dua jalan yang kebetulan sepakat akan berselisih begitu salah
+        satunya disentuh, dan yang berselisih di sini adalah angka yang menilai
+        pekerjaan orang. Rendemen punya satu rumah (`rendemen()`).
+        """
+        return rendemen(self.neraca.beras.kg, self.neraca.bahan_kg)
+
+
+async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
+                        sebelum: int | None = None) -> tuple[list[KartuSosoh], bool]:
+    """Kartu penyosohan SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
+
+    Hanya yang selesai, dan itu keputusan pemilik ("kartu proses sosoh yang
+    selesai"). Yang masih berjalan sudah punya pintunya sendiri di `/berjalan`,
+    dan angkanya di sana memang belum final — mendaftarnya di sini berarti
+    halaman riwayat yang separuh isinya masih akan berubah, lalu persennya
+    dibaca sebagai hasil akhir.
+
+    ⚠ JUMLAH KUERINYA TETAP, berapa pun banyak kartunya: ENAM — tujuh bila ada
+    kartu jasa, sebab `nama_pemilik_banyak` tak bertanya apa-apa saat tak ada
+    pesanan yang perlu dinamai. Layar Stok Produk pernah mengeluarkan satu
+    kueri per penyosohan dan halamannya 1,77 detik pada 500 proses (temuan QA
+    P-S-02); halaman ini membaca hal yang sama — pemakaian silo, hasil, spek,
+    orangnya, pemiliknya — dan akan menumpuk dengan cara yang sama.
+
+    Dijaga sebagai PERBANDINGAN, bukan atas satu langit-langit: satu kartu
+    dibanding enam kartu, dan angkanya wajib sama persis
+    (`tests/pg/test_riwayat_sosoh.py`). Langit-langit masih bisa dilewati oleh
+    N+1 yang kebetulan kecil; selisih yang tumbuh bersama jumlah kartu tidak.
+
+    `sebelum` = id proses terakhir yang sudah digambar (kursor), BUKAN nomor
+    halaman: riwayat bertambah di ujung yang sama dengan arah bacanya, dan
+    nomor halaman akan menggeser satu kartu tiap kali ada sosoh baru ditutup —
+    kartu yang terlewat justru karena orang menekan "muat lagi".
+    """
+    from app.models import User
+    from app.services.jasa import nama_pemilik_banyak
+    from app.services.berjalan import lama_kata
+    from app.services.stok import nama_produk, output_sosoh_banyak
+
+    # 1) Prosesnya. Diambil `batas + 1` untuk mengetahui ada lanjutannya atau
+    #    tidak tanpa satu kueri hitung tersendiri.
+    q = (select(PolishingProcess)
+         .where(PolishingProcess.status == "selesai")
+         .order_by(PolishingProcess.id.desc())
+         .limit(batas + 1))
+    if sebelum:
+        q = q.where(PolishingProcess.id < sebelum)
+    procs = (await db.execute(q)).scalars().all()
+    lagi = len(procs) > batas
+    procs = procs[:batas]
+    if not procs:
+        return [], False
+    ids = [p.id for p in procs]
+
+    # 2) Pemakaian silonya, 3) nama silonya, 4) hasilnya, 5) spek, 6) orangnya,
+    #    7) pemilik barangnya — semuanya BORONGAN.
+    usages = (await db.execute(
+        select(PolishingSiloUsage)
+        .where(PolishingSiloUsage.polishing_process_id.in_(ids))
+        .order_by(PolishingSiloUsage.id)
+    )).scalars().all()
+    nama_silo = {i: n for i, n in (await db.execute(
+        select(Silo.id, Silo.nama_silo)
+        .where(Silo.id.in_({u.silo_id for u in usages} or {0})))).all()}
+    hasil = await output_sosoh_banyak(db, ids)
+    # Spek dibaca dari log hasilnya — satu baris per (proses, spek), bukan per
+    # entri: satu proses bisa punya dua puluh entri dengan spek yang sama.
+    spek_baris = (await db.execute(
+        select(PolishingOutputLog.polishing_process_id, PolishingOutputLog.spek)
+        .where(PolishingOutputLog.polishing_process_id.in_(ids),
+               PolishingOutputLog.spek.isnot(None))
+        .group_by(PolishingOutputLog.polishing_process_id, PolishingOutputLog.spek)
+        .order_by(PolishingOutputLog.polishing_process_id,
+                  PolishingOutputLog.spek))).all()
+    nama_orang = {i: n for i, n in (await db.execute(
+        select(User.id, User.nama)
+        .where(User.id.in_({p.created_by for p in procs} or {0})))).all()}
+    pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in procs})
+
+    per_proses: dict[int, list] = {}
+    for u in usages:
+        per_proses.setdefault(u.polishing_process_id, []).append(u)
+    spek_per: dict[int, list[str]] = {}
+    for pid, sp in spek_baris:
+        spek_per.setdefault(pid, []).append(sp)
+
+    kartu = []
+    for p in procs:
+        pakai = per_proses.get(p.id, [])
+        silo = tuple(PemakaianSilo(
+            nama=nama_silo.get(u.silo_id) or f"Silo #{u.silo_id}",
+            awal_kg=float(u.berat_awal_kg or 0),
+            masuk_kg=float(u.berat_masuk_kg or 0),
+            sisa_kg=(None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)),
+            terpakai_kg=float(u.berat_terpakai_kg or 0),
+        ) for u in pakai)
+        keluar = hasil.get(p.id, {})
+        neraca = neraca_sosoh(sum(s.terpakai_kg for s in silo), keluar)
+        # Beras dirinci per grade, urut `GRADES` — bukan urut abjad: pemilik
+        # membacanya dari mutu tertinggi ke terendah, dan abjad menaruh
+        # "beras_b" di puncak daftar mutu.
+        beras = tuple(Bagian(
+            jenis=j, nama=nama_produk(j), kg=float(keluar.get(j, 0) or 0),
+            persen=((float(keluar[j]) / neraca.bahan_kg * 100)
+                    if neraca.bahan_kg else None),
+        ) for j in reversed(GRADES) if float(keluar.get(j, 0) or 0))
+        kartu.append(KartuSosoh(
+            id=p.id, kode=p.kode_proses, mulai=p.waktu_mulai,
+            selesai=p.waktu_selesai,
+            lama=(lama_kata((p.waktu_selesai - p.waktu_mulai).total_seconds())
+                  if p.waktu_selesai else ""),
+            oleh=nama_orang.get(p.created_by) or "—",
+            pemilik=pemilik.get(p.jasa_id) if p.jasa_id else None,
+            silo=silo, neraca=neraca, beras=beras,
+            spek=tuple(spek_per.get(p.id, [])),
+        ))
+    return kartu, lagi

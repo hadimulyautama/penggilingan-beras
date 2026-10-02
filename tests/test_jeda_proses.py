@@ -227,7 +227,7 @@ def test_yang_menahan_pekerjaan_berteriak():
     # Jeda menyebut SUDAH BERAPA LAMA. "Menunggu dilanjutkan" tak memberi
     # tahu apakah itu lima menit atau sejak kemarin — dan justru itu yang
     # menentukan apakah seseorang harus turun tangan sekarang.
-    assert 'f"Dijeda {_jam(tertahan)} — {macet.sebab}"' in sumber
+    assert 'f"Dijeda {lama_kata(tertahan)} — {macet.sebab}"' in sumber
     assert sumber.count('nota_jenis="hati"') >= 1
     assert 'nota_jenis="hati" if macet else None' in sumber
 
@@ -245,9 +245,13 @@ def test_yang_menahan_pekerjaan_berteriak():
 def test_lama_tertahan_selalu_berkata_sesuatu():
     """Nol pun disebut — "baru saja" memberi tahu bahwa jamnya memang
     dihitung, bukan bahwa ia tak diketahui."""
-    from app.services.berjalan import _jam
+    # Namanya `lama_kata` sejak 2 Oktober 2026 — dulu `_jam`, dan ia dinaikkan
+    # jadi milik umum ketika Riwayat sosoh memerlukannya untuk lama satu
+    # proses. Kata-katanya tak bergeser, dan itu yang diuji di sini: pemformat
+    # ketiga di modul lain akan berbeda kalimatnya begitu salah satu disentuh.
+    from app.services.berjalan import lama_kata
 
-    assert _jam(0) == "baru saja"
-    assert _jam(90) == "1 menit"
-    assert _jam(3700) == "1 jam 1 menit"
-    assert _jam(100000) == "1 hari 3 jam"
+    assert lama_kata(0) == "baru saja"
+    assert lama_kata(90) == "1 menit"
+    assert lama_kata(3700) == "1 jam 1 menit"
+    assert lama_kata(100000) == "1 hari 3 jam"

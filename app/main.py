@@ -37,6 +37,7 @@ from app.web.layar_kabar import router as kabar_router
 from app.web.layar_jasa import router as jasa_router
 from app.web.layar_keluar import router as keluar_router
 from app.web.layar_produk import router as produk_router
+from app.web.layar_sosoh import router as sosoh_router
 from app.web.layar_stok import router as stok_router
 from app.web.lihat_sebagai import router as lihat_sebagai_router
 from app.web.api import router as api_router
@@ -101,6 +102,7 @@ app.include_router(gudang_router)
 app.include_router(produk_router)
 app.include_router(keluar_router)
 app.include_router(jasa_router)
+app.include_router(sosoh_router)
 app.include_router(kabar_router)
 app.include_router(stok_router)
 app.include_router(lihat_sebagai_router)
