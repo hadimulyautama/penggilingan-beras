@@ -33,20 +33,84 @@ from app.services import berjalan as svc
 from app.web.layar_keputusan import AKSI_DIKENAL, JENIS_KEPUTUSAN, JENIS_MUTU
 
 
-def _aksi_yang_dikirim_ke_meja() -> set[str]:
-    """Id aksi pada tiap `b.meja.append(Baris(...))` di seluruh `berjalan`.
-
-    Dibaca dari sumbernya, bukan didaftar tangan: daftar tangan di dalam uji
-    adalah salinan kedua yang bisa ketinggalan persis seperti yang di templat.
-    """
-    sumber = inspect.getsource(svc)
+def _aksi_dari_append(sumber: str, pola: str) -> set[str]:
+    """Id aksi pada tiap `<pola>(Baris(...))` yang ditemukan di `sumber`."""
     keluar = set()
-    for m in re.finditer(r"b\.meja\.append\(", sumber):
+    for m in re.finditer(re.escape(pola) + r"\(", sumber):
         # Cukup sampai penutup append-nya; `aksi=` selalu di dalamnya.
         potongan = sumber[m.end():m.end() + 1200]
         a = re.search(r'aksi="([a-z_]+)"', potongan)
         if a:
             keluar.add(a.group(1))
+    return keluar
+
+
+def _aksi_yang_dikirim_ke_meja() -> set[str]:
+    """Id aksi yang sungguh berakhir di `b.meja` — langsung ATAU lewat
+    fungsi pembantu yang hasilnya digabung `b.meja += await ...(...)`.
+
+    Dibaca dari sumbernya, bukan didaftar tangan: daftar tangan di dalam uji
+    adalah salinan kedua yang bisa ketinggalan persis seperti yang di templat.
+
+    ⚠⚠ CACAT KEMBAR, ditemukan 2 Oktober 2026 — laporan pemilik bahwa sub-menu
+    "Menunggu keputusan" tak muncul. Akarnya `verifikasi_keluar` (lahir
+    `_kartu_barang_keluar`, 28 September 2026) tak pernah terdaftar di
+    `services.keputusan.JENIS` — dan uji INI, yang justru dirancang menjaga
+    tepat celah itu, TAK MENANGKAPNYA, sebab pemindaiannya dulu hanya mencari
+    teks harfiah `b.meja.append(` — dan fungsi pembantu menulis
+    `keluar.append(Baris(..., aksi="verifikasi_keluar", ...))`, lalu
+    pemanggilnya menggabung dengan `b.meja += await _kartu_barang_keluar(...)`.
+    Pola `<var>.append(` dengan nama variabel LOKAL tak pernah cocok dengan
+    `b.meja.append(` — dan penjaga yang memindai teks persis berhenti bekerja
+    tepat pada baris yang sedikit berbeda bentuknya.
+
+    Diperbaiki dengan MENGIKUTI PEMANGGILANNYA: tiap `b.meja += await
+    <fungsi>(` dicari fungsinya yang sungguhan lewat `inspect`, lalu SUMBER
+    fungsi itu sendiri ikut dipindai dengan pola accumulator-nya sendiri
+    (apa pun namanya) — bukan menuntut semua orang menulis `b.meja.append(`
+    secara harfiah, yang berarti melarang fungsi pembantu sama sekali.
+    """
+    sumber = inspect.getsource(svc)
+    keluar = _aksi_dari_append(sumber, "b.meja.append")
+
+    for m in re.finditer(r"b\.meja\s*\+=\s*await\s+(_[a-zA-Z_]+)\(", sumber):
+        nama_fungsi = m.group(1)
+        fungsi = getattr(svc, nama_fungsi, None)
+        if fungsi is None:
+            continue
+        sumber_fungsi = inspect.getsource(fungsi)
+        # ⚠ BEBERAPA fungsi pembantu MELAYANI DUA TUJUAN SEKALIGUS lewat satu
+        # bendera (`_kartu_barang_keluar(untuk_admin=...)`: False → kartu
+        # operator di Antrian tunggu, True → kartu Admin di meja ini). Memindai
+        # SELURUH fungsi tanpa pandang bendera menjaring aksi milik CABANG
+        # YANG SALAH (`muat_semua`, yang berakhir di `b.menunggu`) sebagai
+        # kalau-kalau ia juga menuju `b.meja` — salah arah yang sama
+        # persoalannya dengan yang sedang diperbaiki uji ini, hanya terbalik.
+        #
+        # Kalau fungsinya punya cabang `if untuk_admin:`, scan dipersempit ke
+        # BADAN cabang itu saja (lewat INDENTASI — Python tak butuh lagi dari
+        # itu untuk tahu batas blok). Fungsi yang tak punya cabang begitu
+        # dipindai utuh seperti sebelumnya.
+        if "if untuk_admin:" in sumber_fungsi:
+            baris_fungsi = sumber_fungsi.splitlines()
+            for i, baris in enumerate(baris_fungsi):
+                if baris.strip() == "if untuk_admin:":
+                    lekuk = len(baris) - len(baris.lstrip())
+                    badan = []
+                    for lanjut in baris_fungsi[i + 1:]:
+                        if lanjut.strip() and len(lanjut) - len(lanjut.lstrip()) <= lekuk:
+                            break
+                        badan.append(lanjut)
+                    sumber_fungsi = "\n".join(badan)
+                    break
+        # Accumulator-nya BUKAN `b.meja` di dalam fungsi pembantu (itu
+        # variabel LOKAL, namanya beda-beda — `keluar` di kebanyakan tempat).
+        # Dicari lewat pola `.append(` apa pun di depannya, di dalam sumber
+        # fungsi (atau cabangnya) INI saja — bukan seluruh modul, supaya aksi
+        # milik fungsi pembantu lain (yang hasilnya berakhir di `b.menunggu`,
+        # bukan `b.meja`) tak ikut tertangkap.
+        for pola in re.findall(r"(\w+\.append)\(", sumber_fungsi):
+            keluar |= _aksi_dari_append(sumber_fungsi, pola)
     return keluar
 
 

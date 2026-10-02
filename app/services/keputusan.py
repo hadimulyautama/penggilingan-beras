@@ -64,6 +64,30 @@ JENIS: tuple[tuple[str, str, str], ...] = (
     # admin mencocokkan tiap giling yang ditutup: angka operator kini angka
     # yang dipakai, bukan perkiraan yang menunggu disahkan.
     ("betulkan_bobot_giling", "Bobot masuk giling tak cocok", "output"),
+    # ── CELAH YANG BARU KETAHUAN 2 Oktober 2026 ──
+    #
+    # Pemilik melaporkan sub-menu "Menunggu keputusan" tak muncul padahal ia
+    # melihat DUA blok di layarnya — "Verifikasi Muatan" dan sesuatu lagi.
+    # Diperiksa: `verifikasi_keluar` (muatan barang keluar Gudang 2 yang
+    # menunggu diverifikasi Admin, lahir di `_kartu_barang_keluar`) TAK PERNAH
+    # didaftarkan di sini. Fiturnya lahir 28 September 2026 (Barang Keluar),
+    # SESUDAH daftar ini terakhir dianggap lengkap (24 September) — persis
+    # pola yang sudah dicatat di kepala berkas ini untuk tiga jenis pertama:
+    # "ada di data tetapi tak digambar di layar mana pun".
+    #
+    # Akibatnya BUKAN cuma kosmetik: tanpa baris ini, kartunya jatuh ke jaring
+    # "Keputusan lain" — DAN ke keranjang "lain" sub-menu — bercampur dengan
+    # jenis tak dikenal LAIN APA PUN. Dua jenis berbeda yang kebetulan
+    # sama-sama jatuh ke "lain" terbaca sebagai SATU kategori, bukan dua —
+    # dan itu yang membuat sub-menu (syaratnya ≥2 kategori) tak pernah
+    # menawarkan dropdown walau layarnya sudah menunjukkan dua blok.
+    #
+    # Golongannya "output": ia memang pencocokan ATAS APA YANG KELUAR,
+    # sejenis dengan `betulkan_bobot_giling` — dan Beranda yang menghitung
+    # "N output" dari golongan ini pun sudah ikut salah-hitung sejak 28
+    # September tanpa satu pun yang menyadarinya, sebab jumlahnya tak pernah
+    # dibandingkan dengan lencana "Menunggu keputusan" yang total.
+    ("verifikasi_keluar", "Muatan menunggu diverifikasi", "output"),
     ("qc_giling", "Mutu giling belum diperiksa", MUTU),
     ("qc_pk_luar", "Mutu PK luar belum dicatat", MUTU),
 )

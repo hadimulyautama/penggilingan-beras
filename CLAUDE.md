@@ -454,6 +454,41 @@ dua kategori terpisah begitu satu permintaan berjalan sampai tahap kirim).
 `'<div class="saring">'` (halaman ini tak punya fitur lain berkelas itu —
 beda dari `aksi.html`, yang memakainya untuk kotak cari).
 
+⚠⚠ **`verifikasi_keluar` TERDAFTAR di `K.JENIS` sejak 2 Oktober 2026** —
+sebelumnya TIDAK, dan itu laporan lapangan kedua: pemilik melihat dua blok
+("1. Verifikasi Muatan", "2. Pemindahan PK") tetapi sub-menunya tak muncul.
+Akarnya: muatan barang keluar yang menunggu diverifikasi Admin (lahir
+`_kartu_barang_keluar`, fitur Barang Keluar 28 September 2026) tak pernah
+didaftarkan ke taksonomi `services.keputusan.JENIS` — persis pola yang
+dokumen modul itu sendiri peringatkan di kepalanya untuk TIGA jenis pertama
+("ada di data tetapi tak digambar di layar mana pun"). Kartunya jatuh ke
+jaring "Keputusan lain" DAN ke keranjang "lain" sub-menu — dan kalau item
+lain yang menunggu KEBETULAN juga tak dikenal, dua jenis pekerjaan berbeda
+bercampur jadi SATU kategori, sehingga syarat ≥2 tak pernah terpenuhi walau
+layarnya sudah menampilkan dua blok terpisah. Golongannya "output".
+
+Ikut terungkap: `tests/test_keputusan_lengkap.py` — yang DIRANCANG khusus
+menjaga celah persis ini — PUNYA TITIK BUTA yang sama. Pemindaiannya dulu
+hanya mencari teks harfiah `b.meja.append(` di seluruh modul; kartu
+`verifikasi_keluar` lahir di fungsi pembantu (`_kartu_barang_keluar`) lewat
+variabel LOKAL (`keluar.append(Baris(...))`, bukan `b.meja.append(...)`),
+baru digabung ke `b.meja` di titik panggilnya (`b.meja += await
+_kartu_barang_keluar(..., untuk_admin=True)`). Pola yang memindai teks
+persis berhenti bekerja tepat pada bentuk yang sedikit berbeda. Diperbaiki:
+`_aksi_yang_dikirim_ke_meja()` kini MENGIKUTI setiap `b.meja += await
+<fungsi>(`, membaca sumber fungsi itu sendiri lewat `inspect`, dan memindai
+accumulator APA PUN namanya — dengan satu penyempitan penting: fungsi yang
+melayani DUA TUJUAN lewat satu bendera (`untuk_admin`) hanya dipindai pada
+CABANG yang sesuai (lewat indentasi), supaya aksi milik cabang lain
+(`muat_semua`, yang berakhir di `b.menunggu`) tak ikut tertagih salah arah.
+
+Uji mutasi: `verifikasi_keluar` dicabut sementara dari `K.JENIS` — penjaga
+yang diperbaiki menangkapnya dengan pesan galat yang sama persis seperti
+seharusnya muncul sejak 28 September. Reproduksi lapangan langsung:
+`test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah` di
+`tests/pg/test_grup_keputusan_http.py` — barang keluar sungguhan (packing →
+perintah → muat) berdampingan dengan permintaan PK sungguhan, lewat HTTP.
+
 ## ⚠ Kelas CSS karangan: tidak melempar galat, cuma tak menggambar
 
 Dalam dua hari ENAM kelas karangan lolos ke layar Jasa — `pil--aktif`

@@ -133,3 +133,106 @@ async def test_submenu_keputusan_di_laci_sesuai_isi_sungguhan(pg, pabrik):
     # laci, persis seperti Antrian tunggu saat cuma satu grup berisi.
     assert "keputusan" not in b.submenu()
     assert b.jumlah_keputusan == 1
+
+
+# ═══ CELAH LAPANGAN 2 Oktober 2026: "verifikasi_keluar" hilang dari K.JENIS ═══
+
+async def test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah(
+        pg, pabrik):
+    """⭐⭐ REPRODUKSI LANGSUNG laporan pemilik: "1. Verifikasi Muatan /
+    2. Pemindahan PK" — dan sub-menu yang tak muncul walau DUA blok tampil.
+
+    Sebelum `verifikasi_keluar` didaftarkan ke `services.keputusan.JENIS`,
+    kartu ini jatuh ke jaring "Keputusan lain" — dan ke keranjang "lain"
+    sub-menu. Kalau item lain yang menunggu kebetulan JUGA tak dikenal, dua
+    jenis pekerjaan berbeda bercampur jadi SATU kategori, dan sub-menu
+    (syaratnya ≥2 kategori) tak pernah menawarkan dropdown — persis gejala
+    yang dilaporkan, walau layarnya sendiri sudah menampilkan dua blok.
+
+    Di sini keduanya memang jenis yang SUDAH dikenal (`acc_permintaan_pk` dan
+    `verifikasi_keluar`), jadi uji ini membuktikan sisi yang sudah benar: dua
+    jenis BEDA yang sama-sama dikenal selalu jadi dua kategori terpisah.
+    """
+    from datetime import date
+
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import FinishedGoodsStock, PkPurchaseBatch, Silo, Supplier, User, Warehouse
+    from app.penggilingan.gudang2.models import (PolishingOutputLog,
+                                                 PolishingProcess,
+                                                 PolishingSiloUsage)
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services import barang_keluar as bk
+    from app.services.seed import seed_master
+    from app.services import berjalan as svc
+
+    # ── Satu "Permintaan lot PK dari Gudang 2" ──
+    await _minta(pg, pabrik["op2"])
+
+    # ── Satu "Verifikasi Muatan" — dibangun persis seperti test_barang_
+    # keluar.py: packing barang jadi → perintah muat → dimuat operator. ──
+    await seed_master()
+    async with pg() as db:
+        g2 = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        silo = Silo(nama_silo="Silo BK", warehouse_id=g2.id)
+        s = Supplier(nama_supplier="UD Sumber BK")
+        db.add_all([silo, s])
+        await db.flush()
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-BKX-01", supplier_id=s.id, berat_total_kg=20_000,
+            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+            input_by=pabrik["op1"], status_batch="diterima", flag_unverified=True,
+            sumber_berat="manual"))
+        p = PolishingProcess(kode_proses="POL-BKX-01", status="selesai",
+                             waktu_mulai=now_local(), waktu_selesai=now_local(),
+                             created_by=pabrik["op1"])
+        db.add(p)
+        await db.flush()
+        db.add(PolishingSiloUsage(polishing_process_id=p.id, silo_id=silo.id,
+                                  berat_awal_kg=20_000, berat_masuk_kg=0,
+                                  berat_akhir_kg=0, berat_terpakai_kg=20_000))
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="medium",
+                                  berat_kg=10_000, waktu_update=now_local(),
+                                  input_by=pabrik["op1"]))
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, pabrik["op1"])
+        await catat_packing(db, user=u, kode_pol="POL-BKX-01",
+                            kategori="beras_putih", grade="medium",
+                            material_kode="biasa", ukuran=25, jumlah_karung=100)
+    async with pg() as db:
+        sku_id, std_id = (await db.execute(select(
+            FinishedGoodsStock.product_sku_id,
+            FinishedGoodsStock.rice_quality_standard_id).limit(1))).first()
+        adm = await db.get(User, pabrik["adm"])
+        r = await bk.buat_perintah(
+            db, user=adm,
+            baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku_id,
+                                    std_id=std_id, jumlah_karung=50)],
+            nama_pembeli="Toko Uji", no_polisi="B 9 BK")
+    async with pg() as db:
+        u = await db.get(User, pabrik["op1"])
+        await bk.muat_semua(db, user=u, rec_id=r.rec.id)
+
+    # ── Sekarang keduanya ada — dua KATEGORI berbeda, bukan satu ──
+    async with pg() as db:
+        adm = await db.get(User, pabrik["adm"])
+        b = await svc.untuk(db, adm)
+    n = b.jumlah_grup_keputusan()
+    assert n["acc_permintaan_pk"] == 1
+    assert n["verifikasi_keluar"] == 1
+    assert n["lain"] == 0, "salah satunya masih jatuh ke keranjang Lainnya"
+    assert "keputusan" in b.submenu(), \
+        "sub-menu tak muncul walau dua kategori berbeda sama-sama berisi"
+
+    c = await _klien(pg, pabrik["adm"])
+    try:
+        r2 = await c.get("/keputusan")
+    finally:
+        await c.aclose()
+    assert "Muatan menunggu diverifikasi" in r2.text
+    assert "Permintaan lot PK dari Gudang 2" in r2.text
+    assert "Keputusan lain" not in r2.text, \
+        "salah satunya masih jatuh ke jaring, bukan bloknya sendiri"

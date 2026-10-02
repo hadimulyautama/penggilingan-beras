@@ -602,3 +602,71 @@ Uji: bagian pil `tests/test_grup_keputusan.py` & seluruh
 `tests/pg/test_grup_keputusan_http.py` diperbarui; satu uji pg baru
 (`test_dua_kategori_lahir_dari_satu_lot_tetap_terpisah`) membuktikan
 langsung klaim intinya — dua kategori dari satu permintaan yang sama.
+
+## 2 Oktober 2026 (lanjutan) — "kok menunggu keputusan tidak ada sub menu?"
+
+Sesudah mengirim kategori per-jenis, pemilik bertanya kenapa sub-menunya tak
+muncul. Jawaban pertama saya (reproduksi: satu kategori saja berarti pintu
+kembali jadi tautan biasa, sesuai rancangan) ternyata belum lengkap. Beliau
+membalas dengan dua baris: *"1. Verifikasi Muatan / 2. Pemindahan PK"* —
+dua blok yang jelas BERBEDA, tapi sub-menunya tetap tak muncul.
+
+**Akarnya:** `verifikasi_keluar` (muatan barang keluar Gudang 2 yang
+menunggu diverifikasi Admin, lahir bersama fitur Barang Keluar 28 September
+2026) TAK PERNAH didaftarkan ke `services/keputusan.JENIS`. Persis pola yang
+sudah diperingatkan di kepala modul itu sendiri untuk tiga jenis pertama:
+"ada di data tetapi tak digambar di layar mana pun" — kali ini kejadian lagi
+untuk jenis keempat, empat hari sesudah modulnya "dianggap lengkap".
+
+Akibatnya dua lapis: kartunya jatuh ke jaring "Keputusan lain" di halaman
+(kosmetik, masih terlihat) — TAPI JUGA ke keranjang "lain" di sub-menu baru
+saya. Kalau item lain yang menunggu KEBETULAN juga tak dikenal (mis.
+"Tiket timbang keluar terlewat", yang memang tanpa `aksi` sama sekali, by
+design), dua pekerjaan yang jelas berbeda bagi mata pemilik bercampur jadi
+SATU kategori secara teknis — dan syarat ≥2 kategori yang saya pasang tak
+pernah terpenuhi, walau halamannya sendiri sudah menggambar dua blok
+terpisah. Sub-menu yang saya bangun justru MEMBONGKAR cacat lama yang
+sebelumnya cuma kosmetik (judul blok generik "Keputusan lain") jadi
+fungsional (dropdown yang tak pernah muncul).
+
+### Penjaga yang dirancang untuk celah ini PUNYA TITIK BUTA yang sama
+
+`tests/test_keputusan_lengkap.py` sudah ada sejak 23 September, dirancang
+KHUSUS menjaga "jenis keputusan ada di data tapi tak digambar". Tapi
+pemindaiannya mencari teks harfiah `b.meja.append(` di seluruh modul —
+sementara `verifikasi_keluar` lahir di fungsi PEMBANTU (`_kartu_barang_
+keluar`) lewat variabel lokal `keluar.append(Baris(...))`, baru digabung ke
+`b.meja` di titik panggil (`b.meja += await _kartu_barang_keluar(...,
+untuk_admin=True)`). Pola regex yang menuntut teks PERSIS berhenti bekerja
+pada bentuk yang sedikit berbeda — dan penjaga yang lahir untuk mencegah
+satu kelas galat punya lubang sebesar kelas galat yang sama, cuma dalam
+bentuk yang sedikit lain.
+
+Diperbaiki MENGIKUTI PEMANGGILAN: `b.meja += await <fungsi>(` dicari, lalu
+sumber `<fungsi>` ITU SENDIRI dipindai (lewat `inspect.getsource`), dengan
+accumulator APA PUN namanya. Satu penyempitan yang ternyata penting:
+`_kartu_barang_keluar` melayani DUA TUJUAN lewat satu bendera (`untuk_admin`
+→ kartu Admin vs kartu operator) — memindai SELURUH fungsi tanpa pandang
+bendera menjaring `muat_semua` (milik cabang operator, berakhir di
+`b.menunggu`) seolah ia juga menuju `b.meja`. Dipersempit ke badan cabang
+`if untuk_admin:` saja, lewat indentasi.
+
+Dibuktikan dengan mutasi: `verifikasi_keluar` dicabut sementara dari
+`K.JENIS`, dan penjaga yang diperbaiki menangkapnya dengan PESAN GALAT YANG
+SAMA PERSIS seperti yang seharusnya muncul sejak 28 September, kalau saja
+penjaganya waktu itu sudah mampu melihatnya.
+
+### Reproduksi lapangan
+
+`test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah` membangun
+KEDUANYA sungguhan — permintaan PK via `permintaan_pk.minta()`, dan barang
+keluar via rantai penuh packing → perintah → muat (bukan Baris buatan
+tangan) — lalu membuktikan lewat HTTP: dua blok tergambar dengan judul yang
+benar, TAK satu pun jatuh ke jaring "Keputusan lain", dan sub-menu muncul.
+
+Uji: `tests/test_keputusan_lengkap.py` diperbaiki (12 uji, semua tetap
+hijau + mutasi dibuktikan menggigit). `tests/pg/test_grup_keputusan_http.py`
+bertambah satu uji reproduksi lapangan (4 total). `K.GOLONGAN["output"]`
+dan Beranda-nya ("N output") pun ikut jadi benar — sebelumnya diam-diam
+mengecualikan `verifikasi_keluar` dari hitungannya sejak 28 September,
+tanpa ada yang menyadarinya (tak pernah dibandingkan dengan lencana total).
