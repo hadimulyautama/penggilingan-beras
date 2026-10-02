@@ -47,7 +47,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "177"
+VERSI = "178"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
@@ -149,6 +149,12 @@ def pasang_jinja(templates, *, app_nama: str, pwa_nama: str,
     # Undefined di app yang lain, dan laci yang gagal dirender berarti orang
     # terkurung di layar yang sedang ia buka.
     env.globals["PINTU_MATI"] = ()
+    # Sub-menu laci per pintu: {kunci: [(alamat, nama, jumlah)]}. Bawaannya
+    # KOSONG di sini, alasan yang sama dengan `PINTU_MATI` di atas: app yang
+    # tak punya sub-menu tak perlu menyebutnya, dan `SUBMENU.get(...)` atas
+    # Undefined akan menggagalkan render SELURUH laci — orang lalu terkurung
+    # di layar yang sedang ia buka.
+    env.globals["SUBMENU"] = {}
     env.globals["APP_NAMA"] = app_nama
     env.globals["PWA_NAMA"] = pwa_nama
     env.globals.setdefault("MODE_UJI", mode_uji)

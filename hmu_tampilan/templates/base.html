@@ -164,7 +164,32 @@
          menambah layar bersyarat besok tak perlu menyunting berkas bersama. #}
       {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
         {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
-        <a class="pintu{{ ' pintu--kini' if layar == kunci }}" href="{{ alamat }}"
+        {# ── SUB-MENU: pintu yang diklik MEMBUKA, bukan menuju ──
+           Keputusan pemilik 2 Oktober 2026: "bisa tidak antrian tunggu jika di
+           klik muncul dropdown sub menu?" Sebabnya kalimat sebelumnya:
+           "antrian tunggu bisa banyak sekali."
+
+           DIGERAKKAN DATA, bukan `if kunci == 'aksi'`: berkas ini milik
+           BERSAMA beberapa aplikasi, sedangkan "pintu mana yang punya
+           sub-menu" milik masing-masing — prinsip yang sama sudah tertulis di
+           atas untuk `peran_min` dan ikon, dan dua kali di berkas ini ia
+           dilanggar lalu harus dibetulkan belakangan.
+
+           Pintunya berubah dari `<a>` jadi `<summary>` — jadi mengkliknya tak
+           lagi menuju halamannya. Karena itu baris pertama tiap sub-menu WAJIB
+           "Semua", yang menuju alamat pintunya sendiri; tanpa itu daftar
+           utuhnya jadi tak terjangkau dari laci. Penyusunnya yang menjamin
+           (`Berjalan.submenu`).
+
+           TERBUKA SENDIRI saat halamannya yang sedang dibuka: yang sudah
+           berada di antrean hampir pasti ingin berpindah grup, dan satu
+           ketukan tambahan untuk itu adalah ketukan yang diulang sepanjang
+           hari. #}
+        {% set sub = SUBMENU.get(kunci) %}
+        {% if sub %}<details class="pintu-lipat"{{ ' open'|safe if layar == kunci }}>{% endif %}
+        <{{ "summary" if sub else "a" }}
+           class="pintu{{ ' pintu--kini' if layar == kunci }}"
+           {% if not sub %}href="{{ alamat }}"{% endif %}
            {{ ' aria-current=page'|safe if layar == kunci }}>
           {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.
              Rantai `if/elif` yang dulu berdiri di tempat ini berakhir dengan
@@ -233,7 +258,22 @@
                   aria-label="{{ KABAR }} kabar belum dibaca
                               {{- ', ada yang mendesak' if KABAR_MERAH }}">{{ KABAR }}</span>
           {% endif %}
-        </a>
+        </{{ "summary" if sub else "a" }}>
+        {% if sub %}
+          <div class="pintu-sub">
+            {% for sub_alamat, sub_nama, sub_jml in sub %}
+              <a class="pintu-sub__satu" href="{{ sub_alamat }}">
+                <span class="pintu-sub__nama">{{ sub_nama }}</span>
+                {# Angkanya NETRAL, bukan warna penagih: yang menagih adalah
+                   pintu induknya, dan empat lencana merah berderet di bawahnya
+                   akan membuat merah berhenti berarti apa pun. Nol pun tak
+                   pernah tergambar — penyusunnya sudah membuang grup kosong. #}
+                <span class="pintu__jml pintu__jml--kabar">{{ sub_jml }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
         {% endif %}
       {% endfor %}
     </div>

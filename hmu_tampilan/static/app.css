@@ -1654,3 +1654,52 @@ body.terik {
    bukan pembeda: namanya tetap tertulis. */
 .nrc__titik { display: inline-block; width: 8px; height: 8px;
               border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+
+/* ═══════════ SUB-MENU LACI — pintu yang diklik MEMBUKA ═══════════
+
+   Keputusan pemilik 2 Oktober 2026: "antrian tunggu bisa banyak sekali",
+   obatnya sub-menu yang muncul saat pintunya diklik.
+
+   `<summary>` dibuat tampil persis seperti `<a class="pintu">` di sebelahnya —
+   termasuk tinggi sentuhnya — sebab bagi yang memakainya ia MEMANG pintu yang
+   sama; yang berubah cuma apa yang terjadi sesudah diketuk. Penanda segitiga
+   bawaan peramban dibuang: ia digambar berbeda di tiap mesin, dan di sebelah
+   ikon pintu yang monokrom ia terbaca sebagai kesalahan. Yang menggantikannya
+   `::after` yang berputar — satu bentuk di semua peramban. */
+.pintu-lipat > summary { list-style: none; cursor: pointer; }
+.pintu-lipat > summary::-webkit-details-marker { display: none; }
+.pintu-lipat > summary::after {
+  content: "›"; margin-left: 6px; color: var(--redup-2);
+  font-size: 18px; line-height: 1; transition: transform .18s ease;
+  display: inline-block;
+}
+.pintu-lipat[open] > summary::after { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .pintu-lipat > summary::after { transition: none; }
+}
+
+/* Anak-anaknya MENJOROK dan bergaris kiri: ia pecahan dari pintu di atasnya,
+   bukan pintu sederajat. Tanpa garis itu, daftar enam baris rata terbaca
+   sebagai enam pintu — dan orang mencari "Bahan baku" di puncak laci. */
+.pintu-sub {
+  display: grid; margin: 0 0 4px 34px;
+  border-left: 2px solid var(--garis-2); padding-left: 8px;
+}
+.pintu-sub__satu {
+  display: flex; align-items: center; gap: 8px;
+  /* Tinggi sentuh penuh — ia diketuk ibu jari di gudang, sama seperti pintu
+     induknya. Sub-menu yang barisnya setinggi teks adalah sub-menu yang salah
+     ketuk, dan salah ketuk di laci memindahkan orang ke layar yang lain. */
+  min-height: var(--sentuh); padding: 0 10px 0 4px;
+  color: var(--tinta-2); text-decoration: none; border-radius: 8px;
+  font-size: 15px;
+}
+.pintu-sub__satu:active { background: var(--panel-2); }
+.pintu-sub__nama { flex: 1 1 auto; }
+
+/* Angka di dalam pil saringan halaman antrean. Redup dan lebih kecil: yang
+   dibaca lebih dulu NAMA grupnya, dan angka sebesar namanya membuat mata
+   membandingkan angka alih-alih memilih grup. */
+.pil__jml {
+  font-family: var(--mono); font-size: 12px; opacity: .72; margin-left: 4px;
+}

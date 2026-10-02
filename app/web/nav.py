@@ -344,4 +344,9 @@ def _KOSONG() -> dict:
     """
     return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
             "PRODUK": 0, "KABAR": 0, "KABAR_MERAH": False,
-            "MUTU_AKTIF": True, "PINTU_MATI": ()}
+            "MUTU_AKTIF": True, "PINTU_MATI": (),
+            # Sub-menu KOSONG saat kuerinya gagal, sama alasannya dengan
+            # `PINTU_MATI`: pintu antrean tetap bisa diklik dan tetap membuka
+            # halamannya. Sub-menu yang gagal dihitung tak boleh mengurung
+            # orang di muka pintu.
+            "SUBMENU": {}}

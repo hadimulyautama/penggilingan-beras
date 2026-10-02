@@ -150,6 +150,8 @@ _SQL_AKTIF = text("""
            -- ("? · B 1234 XY"), dan tanda tanya pada kartu yang menyuruh orang
            -- menerima barang adalah kartu yang tak bisa dikerjakan.
            t.pelanggan_id, pl.nama_pelanggan, t.jasa_id, ja.kode AS jasa_kode,
+           -- ⚠ `t.jasa` PENENTU UTAMA sejak migrasi 0066 — lihat `adalah_jasa()`.
+           t.jasa,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
@@ -189,6 +191,8 @@ _SQL_SATU = text("""
            t.supplier_id, s.nama_supplier, t.pihak_nama,
            -- Pemilik barang untuk tiket jasa — lihat catatan di `_SQL_AKTIF`.
            t.pelanggan_id, pl.nama_pelanggan, t.jasa_id, ja.kode AS jasa_kode,
+           -- ⚠ `t.jasa` PENENTU UTAMA sejak migrasi 0066 — lihat `adalah_jasa()`.
+           t.jasa,
            t.netto_timbangan_kg, t.berat_barang_kg, t.berat_acuan_kg,
            t.selisih_kg, t.selisih_persen,
            t.timbang1_kg, t.berat_kosong_kg,
@@ -283,13 +287,34 @@ def _row(r, tol_persen: float) -> dict:
 def adalah_jasa(t: dict) -> bool:
     """Tiket ini membawa barang TITIPAN, bukan barang yang dibeli?
 
-    Yang menentukan `pelanggan_id`, bukan jenis komoditasnya: cara menimbang,
-    tara, dan ambang gabah jasa sama persis dengan gabah beli — yang berbeda
-    hanya pemiliknya. Itu sebabnya TIDAK ada jenis timbang `GABAH_KERING_JASA`:
-    menggandakan tiga jenis jadi enam berarti menggandakan aturan tara dan
-    memberi petugas enam tombol berpasangan mirip untuk salah pilih.
+    Yang menentukan bukan jenis komoditasnya: cara menimbang, tara, dan ambang
+    gabah jasa sama persis dengan gabah beli — yang berbeda hanya pemiliknya.
+    Itu sebabnya TIDAK ada jenis timbang `GABAH_KERING_JASA`: menggandakan
+    tiga jenis jadi enam berarti menggandakan aturan tara dan memberi petugas
+    enam tombol berpasangan mirip untuk salah pilih.
+
+    ⚠⚠ PENENTU UTAMA `t.jasa` (migrasi 0066/0041), BUKAN `pelanggan_id`.
+
+    Cacat lapangan 2 Oktober 2026: sampai migrasi itu, fungsi ini membaca
+    `pelanggan_id is not None` — dan itu SALAH untuk pelanggan BARU yang
+    diketik bebas di pintu ketik-bebas Pos Timbang (cermin Kledo disegarkan
+    mingguan, jadi pelanggan baru memang bisa belum ada): `pelanggan_id`-nya
+    tetap NULL sampai `purchase.find_or_create_pelanggan` membuatnya DI SINI,
+    bukan di sana. Baris tiket "jasa-pelanggan-baru" jadi IDENTIK bentuknya
+    dengan "pembelian-pemasok-baru" — dan `create_purchase_batch_dari_timbang`
+    membuat PEMASOK PALSU dari nama pelanggan, persis yang dilarang keras
+    spek D3. Terlihat pertama kali di gudang: lot PK titipan pelanggan
+    tercatat sebagai pembelian pabrik, tanpa satu pun galat.
+
+    `pelanggan_id`/`jasa_id` tetap diperiksa sebagai KAKI KEDUA — bukan untuk
+    tiket baru (`t.jasa` selalu benar untuknya), melainkan untuk tiket LAMA
+    yang dibuat sebelum kolom `jasa` ada: migrasi 0066/0041 mengisinya dari
+    riwayat (`jasa = pelanggan_id IS NOT NULL OR jasa_id IS NOT NULL`), tetapi
+    baris yang dibaca lewat jalur lain (mis. kueri yang belum memilih kolom
+    `jasa`) tetap harus terbaca benar.
     """
-    return t.get("pelanggan_id") is not None
+    return bool(t.get("jasa")) or t.get("pelanggan_id") is not None \
+        or t.get("jasa_id") is not None
 
 
 def nama_pihak(t: dict) -> str:
@@ -304,9 +329,18 @@ def nama_pihak(t: dict) -> str:
     Pesanannya ikut disebut bila ada: "JAS-2610-007 Pak Budi" bukan sekadar
     "Pak Budi". Pak Budi bisa punya dua pesanan berjalan, dan yang menentukan
     barang ini masuk ke mana adalah pesanannya, bukan namanya.
+
+    ⚠ DIPERIKSA LEWAT `adalah_jasa(t)`, bukan "ada `nama_pelanggan`?" — cacat
+    kembarnya `adalah_jasa` sendiri (2 Oktober 2026): pelanggan BARU yang
+    diketik bebas belum punya baris `pelanggan`, jadi `nama_pelanggan` NULL
+    sampai produksi menerimanya. Tanpa pembetulan ini, kartu antreannya jatuh
+    ke cabang pemasok dan menampilkan nama telanjang TANPA tanda "JASA" —
+    operator yang menerimanya tak diberi tahu sama sekali bahwa barang ini
+    titipan, persis kebingungan yang melahirkan cacatnya.
     """
-    if t.get("nama_pelanggan") or t.get("pelanggan_id"):
-        nama = (t.get("nama_pelanggan") or "").strip() or "pelanggan"
+    if adalah_jasa(t):
+        nama = (t.get("nama_pelanggan") or t.get("pihak_nama") or "").strip() \
+            or "pelanggan"
         kode = (t.get("jasa_kode") or "").strip()
         return f"JASA · {kode} {nama}".strip() if kode else f"JASA · {nama}"
     return t.get("nama_supplier") or t.get("pihak_nama") or "?"

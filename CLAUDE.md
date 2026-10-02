@@ -328,13 +328,104 @@ terbaca di mana pun. **Nota** `jasa.nota_jasa()`: bobot & milik saja, bekatul di
 LUAR "Total kembali" dan per proses sosoh, selisihnya SATU baris yang mengaku
 tidak diukur terpisah.
 
-Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (26 uji, 7 bagian).
+Uji ketaatannya `tests/pg/test_jasa_ketaatan.py` (29 uji, 8 bagian).
 
-⚠ Dua kelas CSS yang dipakai layar Jasa ternyata TAK PERNAH ADA di
-`app.css` — `pil--aktif` (yang benar `pil--on`) dan `btn--halus` (yang ada
-`btn--kecil`). Keduanya tak melempar galat: kelas yang tak dikenal cuma tak
-menggambar apa-apa, jadi pil aktifnya tak bertanda sama sekali selama sehari.
-Sebelum memakai nama kelas, cari dulu di `hmu_tampilan/static/app.css`.
+⚠⚠ **"JASA?" DITENTUKAN `timbangan_transaksi.jasa` (migrasi 0066/0041 di repo
+`timbangan`), BUKAN `pelanggan_id IS NOT NULL`.** Cacat lapangan 2 Oktober
+2026 — pemilik melihat langsung di layar Stok: lot PK titipan pelanggan
+tercatat sebagai pembelian pabrik, pemasok PALSU ("MARNOOO") ikut lahir.
+
+Akarnya: borang jasa Pos Timbang SENGAJA punya pintu ketik-bebas untuk
+pelanggan baru yang belum sampai ke cermin Kledo (`_wajib_pihak`: "boleh dari
+daftar ATAU diketik bebas"). Saat nama diketik bebas, `pelanggan_id` yang
+terkirim TETAP KOSONG — `_pasang_pihak(trx, arah, pihak_id=None, jasa=True)`
+mengosongkan KEDUA kolom FK, sebab `pihak_id`-nya memang belum ada id sampai
+`purchase.find_or_create_pelanggan` membuatnya DI PRODUKSI. Baris tiket
+"jasa-pelanggan-baru" jadi IDENTIK bentuknya dengan "pembelian-pemasok-baru":
+tak ada apa pun yang membedakan keduanya tanpa penanda tersendiri.
+
+`adalah_jasa()` kini membaca `t.jasa` sebagai PENENTU UTAMA, dengan
+`pelanggan_id`/`jasa_id` sebagai kaki kedua (untuk tiket LAMA dari sebelum
+kolomnya ada — migrasinya membackfill dari situ). `nama_pihak()` punya cacat
+KEMBAR yang terpisah: ia memeriksa `nama_pelanggan`/`pelanggan_id` sendiri,
+jadi kartu antrean untuk pelanggan-baru-ketik-bebas menampilkan nama telanjang
+TANPA tanda "JASA" walau `adalah_jasa()` sudah benar — keduanya dibetulkan
+dan diuji terpisah, sebab satu bisa benar tanpa yang lain.
+
+⚠ KOLOM `jasa` MILIK RANTAI REPO `timbangan` (migrasi 0041 di sana), dan 0066
+di repo ini cuma menambahkannya IDEMPOTEN — pola yang sama persis dengan
+`pelanggan_id` di 0064. Downgrade 0066 TIDAK menjatuhkannya: menjatuhkan dari
+sini akan merobohkan Pos Timbang di repo sebelah.
+
+Satu pelajaran metodologis: `tests/timbangan/test_jasa_masuk.py` SUDAH punya
+`test_pemilik_boleh_diketik_bebas` sebelum cacat ini ditemukan, dan ia sudah
+membuktikan `(supplier_id, pelanggan_id) == (None, None)` sebagai perilaku
+yang BENAR — tetapi tak pernah memeriksa apakah jejak itu masih bisa dibaca
+BENAR oleh pembaca lain (produksi, basis data yang sama). Menguji bahwa
+sebuah pintu bekerja tidak sama dengan menguji bahwa akibatnya di seberang
+pintu itu benar.
+
+
+## Sub-menu Antrian tunggu — grup, dan jaring yang menangkap sisanya
+
+Keputusan pemilik 2 Oktober 2026: *"antrian tunggu bisa banyak sekali"* →
+*"bisa tidak antrian tunggu jika di klik muncul dropdown sub menu?"* → *"sub
+menu pertama bahan baku, kedua tunggu packing. tunggu dipindah."*
+
+Pintu "Antrian tunggu" di laci berubah jadi `<details>` saat ada **≥2 grup
+berisi**: kliknya membuka sub-menu, bukan menuju halamannya. Karena itu baris
+pertama sub-menu WAJIB **"Semua"** — tanpanya daftar utuh jadi tak terjangkau
+dari laci. Dengan satu grup, pintunya kembali jadi tautan biasa: dropdown tanpa
+pilihan merampas satu ketukan. Syaratnya SAMA dengan syarat pil di halaman,
+supaya laci berdropdown tak pernah berdiri di atas halaman tanpa pil.
+
+Di dalam halaman, grupnya jadi pil `?grup=` (alamat, bukan jangkar: yang
+dibutuhkan MENGURANGI apa yang terlihat, bukan menggulir). `?grup=` ngawur →
+tampilkan semuanya, bukan 422. Grup yang kosong berkata **"Grup ini kosong"**
+berikut jalan keluarnya — BUKAN "Tidak ada yang menunggu Anda", kalimat yang
+menyuruh orang pulang padahal tiga grup lain berisi.
+
+⚠ **`grup_baris()` berkunci pada `aksi`, BUKAN `kelompok`.** `kelompok` sudah
+dipakai untuk tiga blok DI DALAM halaman, dan ia RANCU untuk ini:
+`kelompok="tumpukan"` berarti "gabah menunggu giliran giling" di Gudang 1
+(bahan baku) dan "PK menunggu dipindah ke silo" di Gudang 2 (tunggu dipindah).
+Satu nilai, dua grup. `aksi` tidak rancu — ia memang menyebut apa yang
+DITUNGGU. Kartu DIAM (tanpa `aksi`) jatuh ke `kelompok` sebagai kaki kedua.
+
+⚠ **GRUP TERAKHIR ("Lainnya") KOMPLEMEN, bukan daftar.** Apa pun yang tak
+terpetakan jatuh ke sana — termasuk jenis kartu yang lahir besok. Hari ini
+isinya perintah muat barang keluar dan penyosohan yang menunggu verifikasi
+Admin: dua hal yang pemilik belum beri nama grup. Daftar yang harus lengkap
+adalah daftar yang suatu hari tidak, dan kartu yang tak masuk grup mana pun
+akan HILANG dari layar yang menagihnya. Invarian yang menjaganya:
+**Σ grup == panjang antrean** (`tests/test_grup_antrean.py`).
+
+⚠ Nama `aksi` yang salah tulis jatuh DIAM-DIAM ke "Lainnya" — tiga sempat
+salah tulis saat petanya ditulis. Dijaga dengan membandingkan peta terhadap
+`aksi=` yang sungguh ada di `berjalan.py`.
+
+`SUBMENU` disusun `Berjalan.submenu()` dan ikut `lencana()` — satu benda untuk
+seluruh laci, sebab laci yang berbeda antar-layar dibaca sebagai "pekerjaannya
+sudah habis". Di `base.html` ia DIGERAKKAN DATA (`SUBMENU.get(kunci)`), bukan
+`if kunci == 'aksi'`: berkas itu milik bersama beberapa aplikasi.
+
+## ⚠ Kelas CSS karangan: tidak melempar galat, cuma tak menggambar
+
+Dalam dua hari ENAM kelas karangan lolos ke layar Jasa — `pil--aktif`
+(`pil--on`), `btn--halus` (`btn--kecil`), `kartu__judul`, `lencana--netral`
+(`.lencana` tanpa pengubah memang yang netral), `redup` (`bantu`), `blok`.
+Tak satu pun melempar apa pun. Dan satu tombol MATI: "Tutup pesanan" memakai
+`data-post` tanpa `data-kirim`, sementara `aksi.js` mengikat
+`closest("[data-kirim]")` — ia diam total saat ditekan, tanpa galat, tanpa
+kabar.
+
+Dijaga `tests/test_grup_antrean.py`: setiap `class="…"` murni di
+`app/web/templates/` wajib ada di `app.css`, dan setiap `<button data-post>`
+wajib ber-`data-kirim`. Keduanya membuang komentar Jinja dulu — komentar repo
+ini sering mengutip markup yang salah berikut sebabnya, dan penjaga yang
+memerah karena kutipan akan dilonggarkan orang yang tergesa.
+
+**Sebelum memakai nama kelas, cari dulu di `hmu_tampilan/static/app.css`.**
 
 ## Riwayat sosoh — neraca bobot, 100% tanpa sisa (sejak 2 Oktober 2026)
 

@@ -1,0 +1,434 @@
+"""Grup antrean — sub-menu "Antrian tunggu", dan jaring yang menangkap sisanya.
+
+Keputusan pemilik 2 Oktober 2026: *"antrian tunggu bisa banyak sekali"* →
+*"bisa tidak antrian tunggu jika di klik muncul dropdown sub menu?"* →
+*"sub menu pertama bahan baku, kedua tunggu packing. tunggu dipindah."*
+
+⚠ YANG DIJAGA PALING KERAS: tak satu kartu pun boleh jatuh ke luar seluruh
+grup. Kartu yang tak masuk grup mana pun akan HILANG dari layar yang justru
+menagihnya — pelajaran 1 Oktober 2026, ketika saringan "milik pabrik" membuang
+tujuh ton PK pelanggan dari setiap angka tanpa satu pun galat. Menyaring tanpa
+menyebutkan sama buruknya dengan menjumlahkan.
+"""
+from __future__ import annotations
+
+import pytest
+
+from app.services.berjalan import (GRUP_ANTREAN, Baris, Berjalan, _GRUP_AKSI,
+                                   _GRUP_KELOMPOK, grup_baris)
+
+KUNCI = {k for k, _ in GRUP_ANTREAN}
+
+
+def _kartu(aksi=None, kelompok=None, kode="X-1"):
+    return Baris(kode=kode, isi="", keadaan="", aksi=aksi, kelompok=kelompok)
+
+
+def test_grup_terakhir_adalah_komplemen_bukan_daftar():
+    """⭐ JARINGNYA. Apa pun yang tak terpetakan jatuh ke grup terakhir.
+
+    Termasuk kartu jenis baru yang lahir besok — dan itu disengaja: daftar yang
+    harus lengkap adalah daftar yang suatu hari tidak lengkap, dan kartu yang
+    tak masuk grup mana pun akan hilang dari layar yang menagihnya.
+    """
+    for aneh in (_kartu(aksi="aksi_yang_belum_ada"),
+                 _kartu(kelompok="kelompok_yang_belum_ada"),
+                 _kartu(),
+                 _kartu(aksi="", kelompok="")):
+        assert grup_baris(aneh) == GRUP_ANTREAN[-1][0]
+    # Dan ia memang grup yang digambar, bukan nilai buangan: namanya ada.
+    assert dict(GRUP_ANTREAN)[GRUP_ANTREAN[-1][0]]
+
+
+def test_setiap_kartu_selalu_dapat_grup_yang_sah():
+    """`grup_baris` tak pernah melempar dan tak pernah menjawab di luar daftar."""
+    for aksi in (*_GRUP_AKSI, None, "", "entah"):
+        for kelompok in (*_GRUP_KELOMPOK, None, "", "entah", "tumpukan"):
+            g = grup_baris(_kartu(aksi=aksi, kelompok=kelompok))
+            assert g in KUNCI, (aksi, kelompok, g)
+
+
+def test_jumlah_grup_menjumlah_tepat_seluruh_antrean():
+    """⭐ INVARIAN YANG MENJAGA SELURUHNYA: Σ grup == panjang antrean.
+
+    Kalau ada kartu yang tak terhitung, angka sub-menunya akan menyebut lebih
+    sedikit daripada isinya — dan orang berhenti mencari sisanya.
+    """
+    b = Berjalan(menunggu=[
+        _kartu(aksi="gabah_masuk"), _kartu(kelompok="tiket"),
+        _kartu(aksi="pindah_tumpukan"), _kartu(aksi="pindah_tumpukan_silo"),
+        _kartu(aksi="kirim_permintaan_pk"), _kartu(aksi="catat_packing"),
+        _kartu(aksi="muat_semua", kelompok="keluar"),
+        _kartu(kelompok="selesai"), _kartu(aksi="belum_dikenal"),
+    ])
+    n = b.jumlah_grup()
+    assert sum(n.values()) == len(b.menunggu) == 9
+    assert set(n) == KUNCI, "ada grup yang tak pernah dihitung"
+
+
+def test_tumpukan_gudang_satu_dan_dua_masuk_grup_BERBEDA():
+    """⭐ `kelompok="tumpukan"` RANCU, dan itu sebabnya `aksi` dibaca lebih dulu.
+
+    Di Gudang 1 ia gabah yang menunggu giliran giling — BAHAN BAKU. Di Gudang 2
+    ia PK yang menunggu dipindah ke silo — TUNGGU DIPINDAH. Satu nilai
+    `kelompok`, dua grup; yang memetakan lewat `kelompok` akan menjawab salah
+    satunya dengan salah.
+    """
+    g1 = _kartu(aksi="pindah_tumpukan", kelompok="tumpukan")
+    g2 = _kartu(aksi="pindah_tumpukan_silo", kelompok="tumpukan")
+    assert grup_baris(g1) == "bahan"
+    assert grup_baris(g2) == "pindah"
+    assert grup_baris(g1) != grup_baris(g2)
+    # Dan `tumpukan` memang TIDAK dipetakan di kaki kedua — kalau ia dipetakan,
+    # kartu tumpukan yang kelak kehilangan `aksi`-nya akan ikut salah grup.
+    assert "tumpukan" not in _GRUP_KELOMPOK
+
+
+def test_ketiga_grup_yang_pemilik_sebut_ada_dan_bernama_begitu():
+    """Namanya yang dibaca orang, bukan kuncinya."""
+    nama = dict(GRUP_ANTREAN)
+    assert nama["bahan"] == "Bahan baku"
+    assert nama["pindah"] == "Tunggu dipindah"
+    assert nama["packing"] == "Tunggu packing"
+    # Urutannya urutan aliran barang, bukan abjad.
+    assert [k for k, _ in GRUP_ANTREAN][:3] == ["bahan", "pindah", "packing"]
+
+
+def test_aksi_yang_dipetakan_memang_ada_di_kode():
+    """Nama `aksi` yang salah tulis jatuh DIAM-DIAM ke grup komplemen.
+
+    Tiga nama sempat salah tulis saat peta ini ditulis (`pk_luar_masuk`,
+    `minta_pk_g1`, `setujui_permintaan_pk`) dan tak satu pun melempar galat —
+    kartunya cuma pindah ke "Lainnya" tanpa ada yang tahu.
+    """
+    import pathlib
+    import re
+
+    sumber = pathlib.Path("app/services/berjalan.py").read_text()
+    # Menerima kedua bentuk: `aksi="x"` dan `aksi=None if … else "x"`.
+    ada = set(re.findall(r'aksi=(?:[^,\n]*?)"([a-z_]+)"', sumber))
+    hilang = sorted(set(_GRUP_AKSI) - ada)
+    assert not hilang, f"dipetakan tapi tak ada kartu yang memakainya: {hilang}"
+
+
+# ── Sub-menu laci ──
+
+def test_submenu_butuh_dua_grup_berisi():
+    """Dropdown yang tak punya pilihan MERAMPAS satu ketukan.
+
+    Dengan satu grup berisi, membuka pintu antrean cuma menawarkan "Semua" dan
+    satu nama yang isinya sama persis. Di hari seperti itu pintunya wajib
+    kembali jadi pintu biasa — dan syaratnya sama dengan syarat pil di dalam
+    halaman, supaya laci berdropdown tak pernah muncul di atas halaman tanpa
+    pil.
+    """
+    satu = Berjalan(menunggu=[_kartu(aksi="catat_packing") for _ in range(6)])
+    assert satu.submenu() == {}
+    assert satu.lencana()["SUBMENU"] == {}
+
+    dua = Berjalan(menunggu=[_kartu(aksi="catat_packing"),
+                             _kartu(aksi="gabah_masuk")])
+    assert "aksi" in dua.submenu()
+
+    assert Berjalan().submenu() == {}, "antrean kosong tak punya sub-menu"
+
+
+def test_semua_selalu_baris_pertama_submenu():
+    """⚠ TANPA INI DAFTAR UTUHNYA TAK TERJANGKAU.
+
+    Pintunya berubah jadi `<summary>` saat ia bersub-menu, jadi mengkliknya tak
+    lagi menuju `/aksi`. Baris "Semua" satu-satunya jalan ke daftar penuh dari
+    dalam laci.
+    """
+    b = Berjalan(menunggu=[_kartu(aksi="catat_packing"),
+                           _kartu(aksi="gabah_masuk"),
+                           _kartu(aksi="pindah_tumpukan_silo")])
+    sub = b.submenu()["aksi"]
+    alamat, nama, jml = sub[0]
+    assert alamat == "/aksi", "baris pertama bukan jalan ke daftar utuh"
+    assert nama == "Semua"
+    assert jml == len(b.menunggu)
+    # Sisanya menuju alamat bergrup, dan angkanya sepadan dengan isinya.
+    assert all(a.startswith("/aksi?grup=") for a, _, _ in sub[1:])
+    assert sum(j for _, _, j in sub[1:]) == len(b.menunggu)
+
+
+def test_grup_kosong_tak_pernah_ditawarkan_di_submenu():
+    """Lencana yang tak pernah bisa dinolkan mengajari orang mengabaikannya —
+    dan baris sub-menu bertuliskan 0 jenis yang sama."""
+    b = Berjalan(menunggu=[_kartu(aksi="catat_packing"),
+                           _kartu(aksi="gabah_masuk")])
+    sub = b.submenu()["aksi"]
+    assert all(j > 0 for _, _, j in sub)
+    nama = [n for _, n, _ in sub]
+    assert "Tunggu dipindah" not in nama and "Lainnya" not in nama
+
+
+def test_angka_submenu_datang_dari_daftar_yang_akan_digambar():
+    """SATU sumber untuk angka dan isi.
+
+    Sub-menu yang menyebut 3 pada pintu yang begitu dibuka memperlihatkan 2
+    akan dipercaya satu kali saja. Jadi angkanya dihitung dari `menunggu` yang
+    sama — dibuktikan dengan menyaring sendiri dan membandingkan.
+    """
+    b = Berjalan(menunggu=[
+        _kartu(aksi="gabah_masuk"), _kartu(aksi="gabah_masuk"),
+        _kartu(aksi="catat_packing"), _kartu(aksi="pindah_tumpukan_silo"),
+        _kartu(kelompok="keluar", aksi="muat_semua"),
+    ])
+    n = b.jumlah_grup()
+    for kunci, _ in GRUP_ANTREAN:
+        saring = [x for x in b.menunggu if grup_baris(x) == kunci]
+        assert len(saring) == n[kunci], kunci
+
+
+# ══════════════ Yang TERGAMBAR: pil halaman & sub-menu laci ══════════════
+#
+# Dirender sungguhan, bukan diperiksa sebagai teks di berkas templatnya.
+# Penjaga versi hitung-teks pernah LULUS saat markup dimatikan dengan
+# `{% if false %}` — tulisannya tetap ada di berkasnya, cuma tak pernah
+# tergambar (pelajaran kartu pemilik, 2 Oktober 2026).
+
+import types
+
+from app.web.tampilan import templates
+
+
+def _akun(peran="operator"):
+    a = types.SimpleNamespace(nama="Pras", peran=peran, sesi_pendek=False)
+    a.is_admin = peran in ("admin", "superadmin")
+    return a
+
+
+def _layar_aksi(menunggu, *, grup="", pil=None, total=None):
+    """Layar antrean, dengan nilai yang DIKIRIM RUTENYA — bukan diketik ulang:
+    `halaman_aksi` menyusunnya dari `GRUP_ANTREAN` dan `jumlah_grup()`."""
+    b = Berjalan(menunggu=menunggu)
+    n = b.jumlah_grup()
+    tampil = ([x for x in menunggu if grup_baris(x) == grup] if grup else menunggu)
+    return templates.get_template("aksi.html").render(
+        request=None, akun=_akun("admin"), layar="aksi",
+        MENUNGGU=len(menunggu), KEPUTUSAN=0, MODE_UJI=False,
+        LIHAT_SEBAGAI=None, kembali=None, menunggu=tampil, berjalan=[],
+        buka="", nilai="", lama=lambda t: "",
+        KELOMPOK_ATAS="tumpukan", judul_atas="Menumpuk di lantai",
+        judul_bawah="Bisa dikerjakan sekarang", PINTASAN=(),
+        GRUP_PIL=(pil if pil is not None
+                  else [(k, nm, n[k]) for k, nm in GRUP_ANTREAN
+                        if n[k] or k == grup]),
+        GRUP_KINI=grup,
+        GRUP_TOTAL=(total if total is not None else sum(n.values())))
+
+
+def _laci(submenu, layar="beranda"):
+    from app.web.nav import TAB
+
+    return templates.get_template("base.html").render(
+        request=None, akun=_akun("admin"), layar=layar, MENUNGGU=7,
+        MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None, TAB=TAB,
+        SUBMENU=submenu, VIEW="admin", CSRF="x")
+
+
+def test_pil_grup_tergambar_dan_angkanya_ikut():
+    dua = [_kartu(aksi="gabah_masuk"), _kartu(aksi="catat_packing"),
+           _kartu(aksi="catat_packing")]
+    h = _layar_aksi(dua)
+    assert "Bahan baku" in h and "Tunggu packing" in h
+    assert "pil--on" in h, "pil 'Semua' tak bertanda aktif"
+    # Angkanya, dan kelasnya yang memang ada di app.css.
+    assert 'class="pil__jml"' in h
+    assert ">3<" in h.replace(" ", "").replace("\n", "")
+
+
+def test_pil_tak_digambar_bila_grupnya_cuma_satu():
+    """Satu pil di atas daftar yang seluruhnya satu grup tak membedakan apa pun,
+    dan ia memakan baris yang di ponsel berharga."""
+    h = _layar_aksi([_kartu(aksi="catat_packing") for _ in range(5)])
+    assert 'class="pil' not in h
+
+
+def test_grup_kosong_tak_berkata_pekerjaan_anda_habis():
+    """⚠ Bedanya menentukan apakah orang pulang.
+
+    "Tidak ada yang menunggu Anda" pada grup yang kosong sementara tiga grup
+    lain berisi adalah kalimat yang menyuruh orang berhenti bekerja.
+    """
+    kartu = [_kartu(aksi="gabah_masuk"), _kartu(aksi="catat_packing")]
+    h = _layar_aksi(kartu, grup="pindah")
+    assert "Grup ini kosong" in h
+    assert "Tidak ada yang menunggu Anda" not in h
+    # Dan ia menunjuk jalan keluarnya, berikut berapa yang ada di grup lain.
+    assert "Lihat semua" in h and "2 kartu" in h
+
+
+def test_antrean_benar_benar_kosong_tetap_memakai_kalimat_lamanya():
+    h = _layar_aksi([])
+    assert "Tidak ada yang menunggu Anda" in h
+    assert "Grup ini kosong" not in h
+
+
+def test_pintu_antrean_jadi_summary_saat_bersub_menu():
+    """⭐ Pintunya BERUBAH: `<a href>` → `<summary>`.
+
+    Itu yang membuat kliknya membuka sub-menu alih-alih menuju halamannya —
+    dan itu pula sebabnya baris "Semua" wajib ada di dalamnya.
+    """
+    sub = {"aksi": [("/aksi", "Semua", 7), ("/aksi?grup=bahan", "Bahan baku", 1),
+                    ("/aksi?grup=packing", "Tunggu packing", 6)]}
+    h = _laci(sub)
+    assert "pintu-lipat" in h
+    assert "<summary" in h
+    assert 'class="pintu-sub"' in h
+    for nama in ("Semua", "Bahan baku", "Tunggu packing"):
+        assert nama in h
+    # Jalan ke daftar utuh tetap ada.
+    assert 'href="/aksi"' in h
+    assert 'href="/aksi?grup=bahan"' in h
+
+
+def test_pintu_tetap_tautan_biasa_tanpa_sub_menu():
+    """Dan pintu LAIN tak pernah ikut berubah — sub-menunya per kunci."""
+    h = _laci({})
+    assert "pintu-lipat" not in h
+    assert 'href="/aksi"' in h
+    # Pintu lain tetap tautan walau antrean bersub-menu.
+    h2 = _laci({"aksi": [("/aksi", "Semua", 2),
+                         ("/aksi?grup=bahan", "Bahan baku", 1),
+                         ("/aksi?grup=packing", "Tunggu packing", 1)]})
+    assert 'href="/stok"' in h2 and 'href="/berjalan"' in h2
+
+
+def test_sub_menu_terbuka_sendiri_di_halamannya_sendiri():
+    """Yang sudah berada di antrean hampir pasti ingin berpindah grup, dan satu
+    ketukan tambahan untuk itu adalah ketukan yang diulang sepanjang hari."""
+    sub = {"aksi": [("/aksi", "Semua", 2), ("/aksi?grup=bahan", "Bahan baku", 1),
+                    ("/aksi?grup=packing", "Tunggu packing", 1)]}
+    assert "<details class=\"pintu-lipat\" open>" in _laci(sub, layar="aksi")
+    assert " open>" not in _laci(sub, layar="beranda")
+
+
+def test_kelas_css_sub_menu_memang_ada():
+    """⚠ Kelas yang tak dikenal TIDAK melempar galat — ia cuma tak menggambar.
+
+    `pil--aktif` dan `btn--halus` pernah dipakai layar Jasa selama sehari dan
+    dua-duanya tak pernah ada di `app.css`: pil saringan yang aktif tak
+    bertanda sama sekali, dan tak ada satu pun uji yang bisa menangkapnya.
+    """
+    import pathlib
+
+    css = pathlib.Path("hmu_tampilan/static/app.css").read_text()
+    for kelas in (".pintu-lipat", ".pintu-sub", ".pintu-sub__satu",
+                  ".pintu-sub__nama", ".pil__jml"):
+        assert kelas in css, f"{kelas} dipakai templat tapi tak ada di app.css"
+
+
+# ══════════════════ PENJAGA UMUM: kelas CSS karangan ══════════════════
+
+def test_tak_ada_kelas_css_karangan_di_templat_app_ini():
+    """⭐ Kelas yang tak dikenal TIDAK melempar galat — ia cuma tak menggambar.
+
+    Dalam dua hari, LIMA kelas karangan lolos ke layar Jasa dan nota-nya:
+
+        pil--aktif      → yang ada `pil--on`   (pil saringan aktif tak bertanda)
+        btn--halus      → yang ada `btn--kecil`
+        kartu__judul    → tak ada; `.kartu` memang panel tanpa kelas judul
+        lencana--netral → `.lencana` tanpa pengubah MEMANG yang netral
+        redup           → yang ada `bantu`
+        blok            → tak ada
+
+    Tak satu pun melempar apa pun, tak satu pun uji bisa menangkapnya, dan
+    semuanya cuma terlihat oleh orang yang membandingkan layarnya dengan layar
+    sebelah. Penjaga inilah yang menangkapnya — dan ia BERSIH saat ditulis:
+    nol gangguan dari templat yang sudah lama berdiri.
+
+    Lingkupnya templat milik repo ini saja (`app/web/templates/`). Templat paket
+    dijaga `test_tampilan_paket.py` di repo `tampilan`, tempat CSS-nya tinggal.
+
+    ⚠ Komentar Jinja DIBUANG dulu: komentar repo ini sering mengutip markup
+    yang salah berikut sebabnya, dan penjaga yang memerah karena kutipan akan
+    dilonggarkan oleh orang yang sedang tergesa.
+    """
+    import pathlib
+    import re
+
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    css = (akar / "hmu_tampilan/static/app.css").read_text()
+    ada = set(re.findall(r"\.([a-zA-Z][\w-]*)", css))
+
+    karangan: dict[str, set[str]] = {}
+    for berkas in sorted((akar / "app/web/templates").glob("*.html")):
+        markup = re.sub(r"\{#.*?#\}", "", berkas.read_text(), flags=re.S)
+        # Hanya `class="…"` yang MURNI huruf — yang memuat `{{ }}` atau `{% %}`
+        # dirakit saat render dan tak bisa dibaca dari sini.
+        for daftar in re.findall(r'class="([^"{}]*)"', markup):
+            for kelas in daftar.split():
+                if kelas and kelas not in ada:
+                    karangan.setdefault(kelas, set()).add(berkas.name)
+
+    assert not karangan, "kelas dipakai templat tapi tak ada di app.css: " + ", ".join(
+        f"{k} ({', '.join(sorted(v))})" for k, v in sorted(karangan.items()))
+
+
+def test_tombol_kirim_di_templat_app_ini_memakai_data_kirim():
+    """⭐ `aksi.js` mengikat `[data-kirim]` — `data-post` SENDIRI tak cukup.
+
+    Tombol "Tutup pesanan" di layar Jasa sempat berbunyi `data-post=…` dan
+    `data-jasa=…` tanpa `data-kirim`, dan akibatnya ia TIDAK BERBUAT APA-APA
+    saat ditekan: tak ada galat, tak ada kabar, cuma tombol yang diam. Yang
+    menekannya akan menekan berulang lalu menyimpulkan aplikasinya rusak.
+    """
+    import pathlib
+    import re
+
+    akar = pathlib.Path(__file__).resolve().parents[1]
+    js = (akar / "hmu_tampilan/static/aksi.js").read_text()
+    # Kontraknya dibaca dari JS-nya sendiri, bukan diketik ulang di sini.
+    assert 'closest("[data-kirim]")' in js, \
+        "kontrak aksi.js berubah — penjaga ini ikut harus berubah"
+
+    cacat = []
+    for berkas in sorted((akar / "app/web/templates").glob("*.html")):
+        markup = re.sub(r"\{#.*?#\}", "", berkas.read_text(), flags=re.S)
+        for tombol in re.findall(r"<button[^>]*>", markup):
+            if "data-post" in tombol and "data-kirim" not in tombol:
+                cacat.append(f"{berkas.name}: {tombol[:70]}")
+    assert not cacat, "tombol ber-data-post tanpa data-kirim (diam saat ditekan): " \
+                      + "; ".join(cacat)
+
+
+def test_tombol_tutup_jasa_sungguh_tergambar_dan_muatannya_sah():
+    """⚠ Cabang `boleh_tutup` DIRENDER, bukan cuma dibaca sebagai teks.
+
+    Pesanan yang baru lahir tak pernah boleh ditutup (aturannya benar), jadi
+    cabang ini tak pernah dilewati oleh percobaan lewat basis data — dan galat
+    Jinja di dalamnya baru akan muncul di gudang, pada pesanan pertama yang
+    memang sudah selesai.
+
+    Muatannya diperiksa sebagai JSON SUNGGUHAN dan dibandingkan dengan bentuk
+    yang rutenya terima (`JasaReq`): atribut yang kutipnya salah akan putus di
+    karakter pertama muatannya, dan yang terkirim jadi JSON tak lengkap.
+    """
+    import json
+    import re
+    import types
+
+    from app.web.aksi_inventory import JasaReq
+    from app.web.tampilan import templates
+
+    kartu = types.SimpleNamespace(
+        id=7, kode="JAS-2610-077", pelanggan="Pak Budi", fase="barang_jadi",
+        sisa=types.SimpleNamespace(gabah_kg=0, dryer_kg=0, silo_kg=0, pk_g1_kg=0,
+                                   pk_g2_kg=0, barang_jadi_kg=0, ada=False),
+        umur_hari=3, status="berjalan", boleh_tutup=True, sebab="")
+    h = templates.get_template("jasa.html").render(
+        request=None, akun=_akun("admin"), layar="jasa", MENUNGGU=0,
+        MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None, CSRF="x",
+        kartu=[kartu], FASE_JASA={}, tapis="berjalan", ton=0,
+        STATUS_PILIHAN=(("berjalan", "Berjalan"),))
+
+    assert "Tutup pesanan" in h
+    m = re.search(r"data-kirim='([^']*)'", h)
+    assert m, "tombol tutup tanpa data-kirim — ia akan diam saat ditekan"
+    muatan = json.loads(m.group(1))
+    # Bentuknya memang yang rutenya terima: `JasaReq(jasa=…)`.
+    assert JasaReq(**muatan).jasa == "7"

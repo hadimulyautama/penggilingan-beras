@@ -157,7 +157,17 @@ def test_kerja_meja_keluar_dari_antrean():
     # sudah di silo, bahkan sudah digiling. Jadi ia tak boleh ada di sana
     # sama sekali; blok tersendiri pun masih menyalahi aturannya.
     assert label(_render([_tiket()])) == ["Bisa dikerjakan sekarang"]
-    assert "keputusan" not in (PAKET / "aksi.html").read_text().lower()
+    # ⚠ KOMENTARNYA DIBUANG DULU. Sampai 2 Oktober 2026 pemeriksaan ini
+    # memindai seluruh berkas, dan ia memerah pada komentar yang menyebut
+    # "keputusan pemilik …" — kalimat yang muncul di hampir setiap komentar
+    # repo ini. Penjaga yang memerah karena prosa akan dilonggarkan oleh orang
+    # yang sedang tergesa, dan yang dilonggarkan tak menjaga apa pun lagi.
+    #
+    # Yang dijaga tetap sama: tak ada MARKUP kerja meja di layar antrean.
+    import re as _re
+    markup = _re.sub(r"\{#.*?#\}", "", (PAKET / "aksi.html").read_text(),
+                     flags=_re.S).lower()
+    assert "keputusan" not in markup
 
     # Tempatnya layar sendiri, dan lembar aksinya dibuka DI SITU — menekan
     # "Verifikasi harga" lalu mendarat di layar lain berarti orang kehilangan

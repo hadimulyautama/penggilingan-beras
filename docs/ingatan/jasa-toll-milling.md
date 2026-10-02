@@ -299,3 +299,143 @@ dikembalikan (6 → 11 kueri).
 
 ⚠ Beban kuerinya dijaga sebagai PERBANDINGAN satu-kartu vs enam-kartu, bukan
 langit-langit: langit-langit masih bisa dilewati N+1 yang kebetulan kecil.
+
+## 2 Oktober 2026 (lanjutan) — sub-menu Antrian tunggu, dan jebakan CSS yang berulang
+
+Permintaan pemilik di tengah pekerjaan Riwayat sosoh: *"antrian tunggu bisa
+banyak sekali"* → *"bisa tidak antrian tunggu jika di klik muncul dropdown sub
+menu?"* → *"sub menu pertama bahan baku, kedua tunggu packing. tunggu
+dipindah."*
+
+Infrastrukturnya SUDAH ADA sebagian: `Baris.kelompok` dan `/aksi` sudah
+memecah tiga blok di dalam halaman (menumpuk di lantai / tiket belum dicatat /
+bisa dikerjakan sekarang). Yang belum pengelompokan untuk sub-menu laci —
+dan `kelompok` yang sudah ada tidak bisa dipakai apa adanya: `kelompok=
+"tumpukan"` berarti dua hal berbeda di dua gudang. Dipetakan ulang lewat
+`aksi` (apa yang DITUNGGU kartu itu), dengan `kelompok` sebagai kaki kedua
+untuk kartu DIAM.
+
+Tiga nama `aksi` salah tulis saat peta pertama ditulis (`pk_luar_masuk` yang
+benar `catat_pk_luar`, `minta_pk_g1`/`setujui_permintaan_pk` yang benar
+`acc_permintaan_pk`) — dan tak satu pun melempar galat, kartunya cuma pindah
+diam-diam ke grup "Lainnya". Ketemu lewat perbandingan otomatis terhadap
+`aksi=` yang sungguh ada di `berjalan.py`, bukan lewat gudang.
+
+### Jebakan CSS yang sama, dua hari berturut-turut
+
+Sehari sebelumnya (layar Jasa) saya mengarang DUA kelas: `pil--aktif`,
+`btn--halus`. Hari ini saat menulis Riwayat sosoh, memeriksa ulang layar Jasa
+menemukan EMPAT LAGI: `kartu__judul`, `lencana--netral`, `redup`, `blok`. Dan
+satu cacat yang lebih serius — tombol "Tutup pesanan" memakai `data-post`
+tanpa `data-kirim`, sementara `aksi.js` mengikat `closest("[data-kirim]")`:
+tombolnya **mati total**, tanpa galat, tanpa kabar, sejak dibuat.
+
+Pelajarannya bukan "hati-hati lagi" — itu sudah dicoba dan gagal dua kali.
+Yang dipasang penjaga STRUKTURAL: `test_tak_ada_kelas_css_karangan_di_templat_
+app_ini` (setiap `class="…"` murni wajib ada di `app.css`) dan
+`test_tombol_kirim_di_templat_app_ini_memakai_data_kirim` (setiap
+`<button data-post>` wajib `data-kirim`). Keduanya BERSIH saat ditulis atas
+templat lama — nol gangguan — yang membuktikan keduanya menangkap sesuatu yang
+nyata, bukan menyaring gaya penulisan.
+
+Dan satu bukti kecil yang penting: cabang `boleh_tutup` pada kartu Jasa tak
+pernah terlewati oleh satu pun percobaan basis data (pesanan baru selalu
+belum boleh ditutup), jadi galat Jinja di dalamnya baru akan muncul di gudang
+pada pesanan PERTAMA yang memang sudah selesai. Diuji dengan merender
+template-nya langsung atas kartu palsu yang `boleh_tutup=True`.
+
+Uji: `tests/test_grup_antrean.py` (21 uji: pemetaan murni, Σ grup == panjang
+antrean, sub-menu & pil dirender sungguhan, dua penjaga umum di atas).
+
+## 2 Oktober 2026 (lanjutan) — "lot paling atas harusnya jasa. kenapa tidak terdeteksi?"
+
+Laporan pemilik, langsung dari layar Stok sungguhan (tangkapan layar): lot PK
+LOT-20261002-01 tak bertanda "Titipan", padahal seharusnya titipan pelanggan.
+Supplier-nya tertulis "MARNOOO" — nama yang jelas diketik, bukan dipilih dari
+master.
+
+**Diperiksa dengan reproduksi, bukan menebak.** Dibuktikan dalam tiga lapis:
+
+1. Pure-function: `_pasang_pihak(trx, "MASUK", None, jasa=True)` →
+   `supplier_id=None, pelanggan_id=None` — KEDUANYA kosong.
+2. Lewat `simpan_timbang_pertama` sungguhan dengan `pelanggan_id=None,
+   pihak_nama="Marnooo", jasa=True`: tersimpan tanpa satu pun penolakan.
+3. Lewat `create_purchase_batch_dari_timbang` atas tiket itu, SEBELUM
+   perbaikan: `adalah_jasa()` menjawab False, `find_or_create_supplier`
+   membuat "Marnooo" sebagai pemasok sungguhan.
+
+**Akarnya:** borang jasa Pos Timbang punya pintu ketik-bebas untuk pelanggan
+baru yang belum sampai ke cermin Kledo mingguan — dan itu SAH, bukan bug (spek
+D sendiri mewajibkannya: "cermin Kledo disegarkan mingguan, jadi pelanggan
+baru memang bisa belum ada"). Tetapi `adalah_jasa()` di produksi hanya membaca
+`pelanggan_id IS NOT NULL` — satu-satunya penanda yang tersedia sampai hari
+ini — dan nama yang diketik bebas tidak mengisi kolom itu (id-nya baru lahir
+di PRODUKSI, lewat `find_or_create_pelanggan`, bukan di Pos Timbang). Baris
+tiket "jasa-pelanggan-baru" dan "pembelian-pemasok-baru" jadi **identik
+bentuknya** — tak ada satu kolom pun yang membedakan keduanya.
+
+Yang menarik: `pesanan_jasa_dari_tiket()` di produksi SUDAH ditulis untuk
+menangani `pelanggan_id is None` dengan fallback ke `pihak_nama` — kode itu
+sendiri "tahu" skenario ini mungkin terjadi. Tapi gerbang masuknya
+(`adalah_jasa()`) tak pernah diperbarui untuk mengizinkannya lewat. Fallback
+yang ditulis itu jadi **kode mati**: tak pernah tercapai, karena gerbangnya
+menolak lebih dulu.
+
+### Perbaikan: penanda yang TERSIMPAN, bukan DITURUNKAN
+
+Kolom baru `timbangan_transaksi.jasa` (boolean), diisi SEKALI saat petugas
+menekan "Barang masuk jasa" — fakta yang ia tahu pasti pada detik itu, lepas
+dari apakah pelanggannya sudah terdaftar. Migrasi kembar: `0041_tanda_jasa`
+(repo `timbangan`, pemilik kolomnya) dan `0066_tanda_jasa_tiket` (repo
+`produksi`, idempoten — pola yang sama persis dengan `pelanggan_id` di 0064).
+Backfill tiket LAMA: `jasa = pelanggan_id IS NOT NULL OR jasa_id IS NOT NULL`
+— satu-satunya kebenaran yang tersedia untuk riwayat; tiket jasa lama yang
+pelanggannya diketik bebas TETAP salah tanda (tak bisa ditebak lagi dari data
+yang sudah terlanjur identik).
+
+`adalah_jasa()` kini: `t.jasa OR pelanggan_id is not None OR jasa_id is not
+None` — kaki kedua dipertahankan untuk tiket lama / jalur baca yang belum
+memilih kolom baru.
+
+**Cacat kembar, ditemukan sambil memperbaiki yang pertama:** `nama_pihak()`
+memeriksa `nama_pelanggan`/`pelanggan_id` SENDIRI, terpisah dari
+`adalah_jasa()`. Jadi walau `adalah_jasa()` sudah benar, kartu antrean untuk
+pelanggan-baru-ketik-bebas tetap jatuh ke cabang pemasok dan menampilkan nama
+telanjang **tanpa tanda "JASA"** — operator yang menerimanya tak diberi tahu
+sama sekali bahwa barang ini titipan. Dibetulkan: `nama_pihak()` kini memeriksa
+`adalah_jasa(t)`, bukan menyusun syaratnya sendiri.
+
+### Pelajaran metodologis — uji yang membuktikan separuh cerita
+
+`tests/timbangan/test_jasa_masuk.py::test_pemilik_boleh_diketik_bebas` SUDAH
+ADA sebelum cacat ini ditemukan. Ia membuktikan `(supplier_id, pelanggan_id)
+== (None, None)` sebagai perilaku yang **benar** untuk pintu ketik-bebas — dan
+itu memang benar, dari sudut pandang Pos Timbang sendiri. Yang tak pernah
+diperiksanya: apakah jejak dua-NULL itu masih bisa dibaca BENAR oleh pembaca
+lain — produksi, basis data yang sama, kontrak lintas repo yang tak tertulis
+di tipe mana pun. **Menguji bahwa sebuah pintu bekerja tidak sama dengan
+menguji bahwa akibatnya di seberang pintu itu benar.**
+
+Dan bagian 1–7 `test_jasa_ketaatan.py` di produksi (26 uji) punya lubang yang
+sama persis dari sisi satunya: SELURUHNYA memanggil `_tiket(pelanggan_id=pid)`
+dengan `pid` yang sudah dibuat lebih dulu lewat `_pelanggan()` — bentuk yang
+TAK PERNAH bermasalah. Tak satu pun mencoba bentuk "pelanggan belum ada",
+padahal itu bentuk yang justru spek sebut eksplisit sebagai harus didukung.
+
+### Uji
+
+- `tests/test_adalah_jasa.py` (produksi, baru, 5 uji — murni dict, tanpa basis
+  data): ketiga bentuk tiket (lama/baru/biasa) berdampingan.
+- Bagian 8 `tests/pg/test_jasa_ketaatan.py` (3 uji, lewat jalur sungguhan:
+  gabah DAN PK luar, berikut kartu antreannya).
+- `tests/timbangan/test_jasa_masuk.py` bagian 7 (2 uji baru + `test_pemilik_
+  boleh_diketik_bebas` diperkuat) dan `tests/timbangan/test_web.py` (1 uji
+  HTTP baru, reproduksi langsung "Marnooo" lewat borang sungguhan).
+- Migrasi 0066/0041 diuji naik-turun-naik di Postgres sungguhan, termasuk
+  backfill atas baris yang sengaja disisipkan menyerupai tiket jasa lama.
+- Uji mutasi: definisi lama `adalah_jasa()` dikembalikan sebentar — LIMA uji
+  di tiga berkas menangkapnya serentak.
+
+Penjaga skema `tests/timbangan/test_skema.py` (yang glob-nya dilebarkan 1
+Oktober, catatan di atas) menangkap migrasi 0041 belum didaftarkan pada
+percobaan pertama — bekerja persis seperti yang dirancang.

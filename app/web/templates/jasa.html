@@ -33,7 +33,7 @@
       <span>Barang titipan di gudang</span>
       <b>± {{ ton|round|int }} kg</b>
     </div>
-    <small class="redup">
+    <small class="bantu">
       perkiraan — muatan yang sedang berpindah fase bisa terhitung dua kali
     </small>
   </div>
@@ -57,9 +57,16 @@
 
 {% for k in kartu %}
   <div class="kartu">
-    <div class="kartu__judul">
-      {{ k.kode }} · {{ k.pelanggan }}
-      <span class="lencana lencana--netral">{{ FASE_JASA.get(k.fase, k.fase) }}</span>
+    {# `.baris` — nama di kiri, lencana di kanan. Dipakai apa adanya dan bukan
+       kelas judul sendiri: `.kartu` memang panel kosong tanpa kelas judul, dan
+       kelas karangan tidak melempar galat — ia cuma tak menggambar apa pun.
+       Berkas ini sempat memakai `kartu__judul` dan `lencana--netral`; dua-duanya
+       tak pernah ada di `app.css`. #}
+    <div class="baris">
+      <b>{{ k.kode }} · {{ k.pelanggan }}</b>
+      {# `.lencana` tanpa pengubah MEMANG yang netral (panel-2 / redup) —
+         `--aman`, `--hati`, `--bahaya` yang berwarna. #}
+      <span class="lencana">{{ FASE_JASA.get(k.fase, k.fase) }}</span>
     </div>
 
     {# Sisanya PER FASE, tidak dijumlah. Gabah yang sudah jadi PK tak lagi ada
@@ -95,8 +102,17 @@
            yang tak ada, tetapi tombol yang HILANG tanpa sebab menyuruh orang
            menebak; jadi yang hilang digantikan kalimatnya. #}
         {% if k.boleh_tutup %}
-          <button class="btn aksi-jasa" data-post="/api/actions/tutup-jasa"
-                  data-jasa="{{ k.id }}">Tutup pesanan</button>
+          {# ⚠ `data-kirim` WAJIB, dan kutipnya TUNGGAL. Penjaga di `aksi.js`
+             berbunyi `closest("[data-kirim]")` — bukan `[data-post]`. Tombol
+             ini sempat berbunyi `class="btn aksi-jasa" data-post=… data-jasa=…`
+             dan akibatnya ia TIDAK BERBUAT APA-APA saat ditekan: tak ada galat,
+             tak ada kabar, cuma tombol yang diam. `aksi-jasa` pun kelas
+             karangan yang tak ada pendengarnya.
+
+             Kutip tunggal karena `tojson` tak melolosikan kutip ganda untuk
+             atribut — lihat catatan yang sama di `_benda.html`. #}
+          <button class="btn" data-post="/api/actions/tutup-jasa"
+                  data-kirim='{{ {"jasa": k.id|string}|tojson }}'>Tutup pesanan</button>
         {% else %}
           <span class="bantu" style="flex:1 1 100%">{{ k.sebab }}</span>
         {% endif %}

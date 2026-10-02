@@ -40,11 +40,11 @@ from app.services.jasa import _PESAN_CAMPUR  # noqa: E402
 _SQL_TIKET = text("""
     INSERT INTO timbangan_transaksi
         (kode, tanggal, arah, jenis_kode, cara_timbang, supplier_id, pelanggan_id,
-         jasa_id, pihak_nama, nomor_polisi, timbang1_kg, timbang1_waktu,
+         jasa_id, jasa, pihak_nama, nomor_polisi, timbang1_kg, timbang1_waktu,
          netto_timbangan_kg, berat_barang_kg, berat_acuan_kg,
          status_tiket, status_transaksi)
     VALUES (:kode, :tanggal, 'MASUK', :jenis, 'DUA_KALI', :supplier_id, :pelanggan_id,
-            :jasa_id, :pihak, :nopol, 20000, :waktu, :berat, :berat, 0,
+            :jasa_id, :jasa, :pihak, :nopol, 20000, :waktu, :berat, :berat, 0,
             'SELESAI', 'AKTIF')
     RETURNING id
 """)
@@ -65,13 +65,26 @@ async def _pelanggan(db, nama: str) -> int:
 
 
 async def _tiket(db, *, kode, berat, pelanggan_id=None, jasa_id=None,
-                 supplier_id=None, jenis="GABAH_KERING", nopol="B 1 UJ"):
+                 supplier_id=None, jenis="GABAH_KERING", nopol="B 1 UJ",
+                 jasa=None, pihak_nama=None):
+    """Tiket timbang MASUK. `jasa` bawaannya DITURUNKAN (pelanggan_id atau
+    jasa_id terisi) — kaki kedua yang sama dengan `adalah_jasa()` sendiri,
+    supaya pemanggil lama yang tak pernah menyebut `jasa` tetap benar.
+
+    Berikan `jasa=True, pelanggan_id=None` terang-terangan untuk menguji
+    bentuk LAPANGAN: pelanggan BARU diketik bebas, belum ada baris
+    `pelanggan` — lihat `test_pelanggan_baru_ketik_bebas_*` di bawah.
+    """
     from app.database import now_local
 
+    if jasa is None:
+        jasa = bool(pelanggan_id or jasa_id)
+    if pihak_nama is None:
+        pihak_nama = None if (pelanggan_id or jasa) else "Pak Uji"
     return (await db.execute(_SQL_TIKET, {
         "kode": kode, "tanggal": now_local().date(), "jenis": jenis,
         "supplier_id": supplier_id, "pelanggan_id": pelanggan_id,
-        "jasa_id": jasa_id, "pihak": None if pelanggan_id else "Pak Uji",
+        "jasa_id": jasa_id, "jasa": jasa, "pihak": pihak_nama,
         "nopol": nopol, "berat": berat,
         "waktu": datetime.now(timezone.utc)})).scalar_one()
 
@@ -1370,3 +1383,103 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
         # di pojok kartu tak memberi tahu siapa pun bahwa barangnya tak boleh
         # dijual — dan itu keputusan yang diambil dari layar ini.
         assert teks.count("bukan dijual") >= 2, peran
+
+
+# ═══════ 8 · PELANGGAN BARU DIKETIK BEBAS — tetap jasa, bukan pemasok palsu ═══════
+#
+# Laporan lapangan 2 Oktober 2026 — pemilik melihat langsung di layar Stok:
+# *"lot paling atas harusnya jasa. kenapa tidak terdeteksi sebagai jasa?"*
+#
+# Akarnya: pintu ketik-bebas Pos Timbang (sengaja dan sah — pelanggan baru
+# memang bisa belum ada di cermin Kledo) membuat `pelanggan_id` tiketnya tetap
+# NULL; satu-satunya penanda yang dulu dibaca produksi. Bagian 1–7 di atas TAK
+# SATU PUN menguji bentuk ini — keduapuluhenam ujinya selalu memberi
+# `pelanggan_id` yang sudah terisi (pelanggan dibuat lebih dulu lewat
+# `_pelanggan()`), persis bentuk yang TIDAK pernah bermasalah. Lubangnya ada
+# di bentuk yang tak satu pun uji sebelumnya mencoba.
+
+async def test_pelanggan_baru_ketik_bebas_tetap_jadi_pesanan_bukan_pemasok(
+        pg, pemakai):
+    """⭐⭐ REPRODUKSI LANGSUNG laporan pemilik. Nama tiket sengaja SAMA.
+
+    `jasa=True, pelanggan_id=None` — persis bentuk borang saat petugas
+    mengetik nama baru alih-alih memilih dari daftar. Sebelum perbaikan ini,
+    `adalah_jasa()` menjawab False di sini dan `create_purchase_batch_dari_
+    timbang` membuat Supplier "Marnooo" dari `pihak_nama`.
+    """
+    from app.models import Supplier
+
+    async with pg() as db:
+        tid = await _tiket(db, kode="JTBEBAS1", berat=10_050, jasa=True,
+                           pelanggan_id=None, pihak_nama="Marnooo")
+        await db.commit()
+    async with pg() as db:
+        r = await _terima(db, tid, pemakai.id)
+        jid = r.jasa.id
+
+    assert r.supplier is None, "barang titipan tak boleh punya pemasok"
+    assert r.batch.supplier_id is None
+    assert r.batch.jasa_id == jid
+    assert r.jasa.kode.startswith("JAS-")
+
+    async with pg() as db:
+        pemasok = (await db.execute(select(Supplier))).scalars().all()
+        palsu = [s.nama_supplier for s in pemasok if "marno" in s.nama_supplier.lower()]
+        assert palsu == [], f"pemasok palsu lahir dari nama pelanggan: {palsu}"
+        # Dan pelanggannya SUNGGUH dibuat, dengan nama yang diketik.
+        from app.models import Pelanggan
+        pel = await db.get(Pelanggan, r.jasa.pelanggan_id)
+        assert pel.nama_pelanggan == "Marnooo"
+
+
+async def test_pelanggan_baru_ketik_bebas_pk_luar_tetap_jadi_pesanan(
+        pg, admin, pabrik):
+    """Jalur KEMBARANNYA — PK dari luar (bukan gabah). Fungsi yang berbeda,
+    `adalah_jasa()` yang sama; kalau salah satu luput, bug ini kembali untuk
+    separuh komoditas jasa."""
+    from app.models import Supplier
+    from app.penggilingan.gudang2.service import create_pk_purchase_dari_timbang
+
+    async with pg() as db:
+        tid = await _tiket(db, kode="JTBEBAS2", berat=5_000, jasa=True,
+                           pelanggan_id=None, pihak_nama="Marnooo PK",
+                           jenis="BERAS_PK")
+        await db.commit()
+    async with pg() as db:
+        from app.models import User
+
+        u = await db.get(User, admin.id)
+        r = await create_pk_purchase_dari_timbang(
+            db, user=u, timbangan_transaksi_id=tid, jenis_pk="KS")
+
+    assert r.batch.supplier_id is None
+    assert r.batch.jasa_id is not None
+
+    async with pg() as db:
+        pemasok = (await db.execute(select(Supplier))).scalars().all()
+        palsu = [s.nama_supplier for s in pemasok
+                if "marno" in s.nama_supplier.lower()]
+        assert palsu == [], f"pemasok palsu lahir dari nama pelanggan: {palsu}"
+
+
+async def test_kartu_antrean_menyebut_jasa_walau_pelanggan_belum_dibuat(
+        pg, pemakai):
+    """⚠ `nama_pihak()` punya cacat KEMBAR — diperiksa terpisah dari
+    `adalah_jasa()`, sebab satu bisa dibetulkan tanpa yang lain.
+
+    Sebelum perbaikan ini, kartu antrean untuk tiket bentuk ini jatuh ke
+    cabang pemasok dan menampilkan nama telanjang TANPA tanda "JASA" — operator
+    yang menerimanya tak diberi tahu sama sekali bahwa barang ini titipan.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import (
+        ambil_tiket, nama_pihak)
+
+    async with pg() as db:
+        tid = await _tiket(db, kode="JTBEBAS3", berat=9_000, jasa=True,
+                           pelanggan_id=None, pihak_nama="Marnooo")
+        await db.commit()
+
+    async with pg() as db:
+        t = await ambil_tiket(db, tid)
+    assert nama_pihak(t) == "JASA · Marnooo", \
+        "kartu antrean tak menyebut JASA untuk pelanggan baru ketik-bebas"

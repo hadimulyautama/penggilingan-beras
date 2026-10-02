@@ -1968,8 +1968,8 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
         if info is None or info.model != "gabah":
             raise HTTPException(400, "Tiket ini bukan gabah masuk.")
         kondisi = info.kondisi
-        # Tiket JASA dikenali dari `pelanggan_id`-nya, lewat satu penolong —
-        # bukan dengan memeriksa kolomnya sendiri di sini.
+        # Tiket JASA dikenali lewat satu penolong (`adalah_jasa`, dasarnya
+        # `t.jasa`) — bukan dengan memeriksa kolomnya sendiri di sini.
         from app.penggilingan.gudang1.services.timbang_link import adalah_jasa
         _tiket_jasa = adalah_jasa(tiket)
         mesin_id = None

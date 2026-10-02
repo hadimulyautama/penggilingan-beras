@@ -42,6 +42,36 @@
    membuka tindakan itu. #}
 {% set semua = menunggu + berjalan %}
 
+{# ── PIL GRUP — "antrian tunggu bisa banyak sekali" ──
+   Keputusan pemilik 2 Oktober 2026. Sub-menu di laci menuju alamat yang sama
+   (`?grup=`), dan pil di sini adalah wujudnya DI DALAM halaman: yang sudah
+   berada di layar ini tak perlu membuka laci lagi untuk berpindah grup.
+
+   Angkanya dihitung sebelum penyaringan, jadi pil yang tidak dipilih tetap
+   menyebut isinya — pil "Tunggu packing 0" pada hari yang punya tiga lot belum
+   dikemas akan membuat orang menyimpulkan pekerjaannya habis.
+
+   Hanya digambar bila grupnya memang lebih dari satu: satu pil bernama "Bahan
+   baku" di atas daftar yang seluruhnya bahan baku tidak membedakan apa pun,
+   dan ia memakan baris yang di ponsel berharga.
+
+   `GRUP_PIL` kosong di app yang tak mengirimnya — bawaannya DI TEMPLAT, bukan
+   di tiap app: yang tak punya grup tak perlu tahu grup itu ada. #}
+{% set GRUP_PIL = GRUP_PIL|default([], true) %}
+{% set GRUP_KINI = GRUP_KINI|default("", true) %}
+{% set GRUP_TOTAL = GRUP_TOTAL|default(semua|length, true) %}
+{% if GRUP_PIL|length > 1 %}
+  <div class="saring">
+    <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/aksi">Semua
+      <span class="pil__jml">{{ GRUP_TOTAL }}</span></a>
+    {% for kunci, nama, jml in GRUP_PIL %}
+      <a class="pil{{ ' pil--on' if GRUP_KINI == kunci }}"
+         href="/aksi?grup={{ kunci }}">{{ nama }}
+        <span class="pil__jml">{{ jml }}</span></a>
+    {% endfor %}
+  </div>
+{% endif %}
+
 {# ── Cari & saring per pemasok ──
    Muncul hanya kalau antreannya memang panjang. Di bawah lima baris,
    seluruh daftarnya sudah terbaca sekaligus — kotak cari di atasnya cuma
@@ -137,7 +167,24 @@
 
    Katalog itu kini punya alamatnya sendiri di menu: /aksi-lain. Tak ada yang
    jadi tak terjangkau, dan antrean tetap berarti apa yang ia namai. #}
-{% if not semua %}
+{% if not semua and GRUP_KINI %}
+  {# Kosong karena GRUPNYA, bukan karena pekerjaannya habis — dan bedanya
+     penting: kalimat "Tidak ada yang menunggu Anda" di bawah akan menyuruh
+     orang pulang padahal tiga grup lain masih berisi. #}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+    <div>
+      <h2>Grup ini kosong</h2>
+      <p class="bantu">
+        Grup lain masih berisi — {{ GRUP_TOTAL }} kartu seluruhnya.
+        <a href="/aksi">Lihat semua</a>.
+      </p>
+    </div>
+  </div>
+{% endif %}
+{% if not semua and not GRUP_KINI %}
   <div class="kosong">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

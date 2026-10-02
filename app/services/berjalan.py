@@ -225,6 +225,19 @@ class Berjalan:
         pekerjaan yang tak ada di dalamnya."""
         return len(self.menunggu)
 
+    def jumlah_grup(self) -> dict[str, int]:
+        """Berapa kartu per GRUP antrean — isi sub-menu "Antrian tunggu".
+
+        Dihitung dari daftar yang sama yang akan digambar, bukan dengan kueri
+        tersendiri: angka sub-menu yang disusun terpisah dari isinya akan
+        menyebut 3 pada pintu yang begitu dibuka memperlihatkan 2, dan orang
+        berhenti mempercayai angkanya setelah sekali itu.
+        """
+        n = {kunci: 0 for kunci, _ in GRUP_ANTREAN}
+        for b in self.menunggu:
+            n[grup_baris(b)] += 1
+        return n
+
     @property
     def jumlah_keputusan(self) -> int:
         """Lencana "Menunggu keputusan" — TANPA golongan mutu.
@@ -279,7 +292,127 @@ class Berjalan:
                 "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
                 "PRODUK": self.jumlah_produk, "KABAR": self.jumlah_kabar,
                 "KABAR_MERAH": self.kabar_merah,
-                "MUTU_AKTIF": self.mutu_aktif, "PINTU_MATI": tuple(mati)}
+                "MUTU_AKTIF": self.mutu_aktif, "PINTU_MATI": tuple(mati),
+                "SUBMENU": self.submenu()}
+
+    def submenu(self) -> dict[str, list[tuple[str, str, int]]]:
+        """Sub-menu laci per pintu: {kunci: [(alamat, nama, jumlah)]}.
+
+        Keputusan pemilik 2 Oktober 2026: *"bisa tidak antrian tunggu jika di
+        klik muncul dropdown sub menu?"* — ya, dan isinya grup antrean.
+
+        Disusun DI SINI, bersama lencana yang lain, dan sebabnya sudah tertulis
+        di `lencana()`: seluruh laci lahir dari satu benda. Sub-menu yang
+        disusun di layar masing-masing akan hilang di layar yang lupa
+        menyusunnya, dan laci yang berbeda antar-layar dibaca sebagai
+        "pekerjaannya sudah habis", bukan sebagai "layar ini tidak menghitung".
+
+        Grup KOSONG tidak ditawarkan — kecuali tak ada satu pun yang berisi,
+        dan di situ sub-menunya memang tak ada sama sekali: pintu yang terbuka
+        jadi daftar berisi empat nol lebih buruk daripada pintu biasa.
+        """
+        n = self.jumlah_grup()
+        isi = [(f"/aksi?grup={k}", nama, n[k]) for k, nama in GRUP_ANTREAN if n[k]]
+        # ⚠ BUTUH DUA GRUP BERISI, bukan satu. Dengan satu grup, membuka pintu
+        # antrean cuma menawarkan "Semua" dan satu nama yang isinya sama persis
+        # — dropdown yang tak punya pilihan, dan ia MERAMPAS satu ketukan dari
+        # orang yang tinggal ingin membuka halamannya. Di hari yang seluruh
+        # antreannya satu macam, pintunya kembali jadi pintu biasa.
+        #
+        # Syarat yang sama dipakai pil di dalam halaman (`GRUP_PIL|length > 1`),
+        # dan itu disengaja: laci yang berdropdown sementara halamannya tak
+        # berpil akan terbaca seperti saringan yang hilang.
+        if len(isi) < 2:
+            return {}
+        # "Semua" berdiri paling atas, dan ia WAJIB ada: tanpanya pintu antrean
+        # tak lagi punya jalan ke daftar utuhnya — klik pintunya kini membuka
+        # sub-menu, bukan membuka halamannya.
+        return {"aksi": [("/aksi", "Semua", self.jumlah_menunggu), *isi]}
+
+
+# ═════════════════ GRUP ANTREAN — sub-menu "Antrian tunggu" ═════════════════
+#
+# Keputusan pemilik 2 Oktober 2026: *"antrian tunggu bisa banyak sekali"*, dan
+# obatnya *"jika di klik muncul dropdown sub menu"* — *"sub menu pertama bahan
+# baku, kedua tunggu packing, tunggu dipindah."*
+#
+# ⚠ DIKUNCI PADA `aksi`, BUKAN PADA `kelompok`. `kelompok` sudah dipakai untuk
+# hal lain (tiga blok di dalam halaman: menumpuk di lantai, tiket belum
+# dicatat, sisanya) dan ia RANCU untuk keperluan ini: `kelompok="tumpukan"`
+# berarti "gabah menunggu giliran giling" di Gudang 1 — bahan baku — dan "PK
+# menunggu dipindah ke silo" di Gudang 2. Satu nilai, dua grup yang berbeda.
+#
+# `aksi` tidak rancu, sebab ia memang menyebut APA YANG DITUNGGU kartu itu —
+# dan itu pertanyaan yang sama dengan "grup mana". Kartu tanpa `aksi` (kartu
+# DIAM, yang dicatat orang lain) jatuh ke `kelompok` sebagai kaki kedua.
+#
+# ⚠ GRUP TERAKHIR ADALAH KOMPLEMEN, bukan daftar. Apa pun yang tak terpetakan
+# jatuh ke sana — termasuk kartu jenis baru yang lahir besok. Itu disengaja dan
+# penting: daftar yang harus lengkap adalah daftar yang suatu hari tidak, dan
+# kartu yang tak masuk grup mana pun akan HILANG dari layar yang justru
+# menagihnya. Pelajaran 1 Oktober 2026 — menyaring tanpa menyebutkan sama
+# buruknya dengan menjumlahkan.
+
+#: Urutannya URUTAN BACA, dan ia mengikuti aliran barang: yang baru datang,
+#: yang menunggu diangkut, yang menunggu dikemas, lalu sisanya.
+GRUP_ANTREAN = (
+    ("bahan", "Bahan baku"),
+    ("pindah", "Tunggu dipindah"),
+    ("packing", "Tunggu packing"),
+    # Bukan nama yang bagus, dan sengaja tidak disamarkan: di sini berdiri
+    # perintah muat barang keluar dan penyosohan yang menunggu verifikasi
+    # Admin — dua hal yang pemilik belum beri nama grup. Nama yang terlalu
+    # percaya diri ("Administrasi") akan membuat orang berhenti mencari di
+    # sini, dan isinya justru hal yang tak boleh tertinggal.
+    ("lain", "Lainnya"),
+)
+
+#: `aksi` → grup. Inilah daftar yang dibaca lebih dulu.
+_GRUP_AKSI = {
+    # ── Bahan baku: barang yang baru datang, atau menunggu diproses ──
+    "gabah_masuk": "bahan",          # tiket timbang gabah belum dicatat
+    "catat_pk_luar": "bahan",        # tiket timbang PK luar belum dicatat
+    "pindah_tumpukan": "bahan",      # batch gabah → dryer / silo / lantai
+    "masukkan_pk": "bahan",          # PK menunggu ditempatkan di Gudang 2
+    "mulai_penyosohan": "bahan",     # silo Gudang 2 berisi, siap disosoh
+    "mulai_pengeringan": "bahan",
+    "mulai_giling": "bahan",
+    # ── Tunggu dipindah ──
+    "pindah_tumpukan_silo": "pindah",   # PK tumpukan Gudang 2 → silo
+    "pindah_silo": "pindah",            # lot dingin → silo (hari ini di transit)
+    "acc_permintaan_pk": "pindah",
+    "kirim_permintaan_pk": "pindah",    # sudah disetujui, tinggal dimuat
+    "tutup_permintaan_pk": "pindah",
+    # ── Tunggu packing ──
+    "catat_packing": "packing",
+}
+
+#: Kaki kedua: `kelompok`, untuk kartu DIAM yang tak punya `aksi` sama sekali
+#: (dicatat Admin, bukan oleh yang melihatnya).
+_GRUP_KELOMPOK = {
+    "tiket": "bahan",
+    "produk": "packing",
+    "permintaan": "pindah",
+}
+
+
+def grup_baris(b: Baris) -> str:
+    """Grup sub-menu sebuah kartu antrean. SATU tempat yang memutuskan.
+
+    Dipakai penyaring halaman MAUPUN penghitung angka sub-menunya. Dua tempat
+    yang memutuskan sendiri akan menyebut 3 pada sub-menu yang begitu dibuka
+    memperlihatkan 2 — dan sesudah sekali itu, angkanya tak dipercaya lagi.
+    """
+    if b.aksi and b.aksi in _GRUP_AKSI:
+        return _GRUP_AKSI[b.aksi]
+    # ⚠ `kelompok="tumpukan"` TIDAK dipetakan di sini, dan itu bukan kelalaian:
+    # di Gudang 1 ia gabah yang menunggu giliran (bahan baku), di Gudang 2 ia PK
+    # yang menunggu dipindah ke silo. Keduanya sudah terjawab lewat `aksi` di
+    # atas — `pindah_tumpukan` vs `pindah_tumpukan_silo` — dan memetakannya di
+    # sini lagi akan menjawab salah satunya dengan salah.
+    if b.kelompok and b.kelompok in _GRUP_KELOMPOK:
+        return _GRUP_KELOMPOK[b.kelompok]
+    return "lain"
 
 
 def _lama(sejak: datetime | None) -> str:

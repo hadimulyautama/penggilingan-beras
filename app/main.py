@@ -496,15 +496,40 @@ async def halaman_aksi(request: Request):
 
     async with SessionLocal() as db:
         b = await svc.untuk(db, akun.user)
+
+    # ── SARINGAN GRUP, keputusan pemilik 2 Oktober 2026 ──
+    #
+    # *"antrian tunggu bisa banyak sekali"* — dan obat yang ia minta sub-menu
+    # yang muncul saat pintunya diklik. Alamatnya `?grup=`, bukan jangkar
+    # `#bahan`: yang dibutuhkan MENGURANGI apa yang terlihat sekaligus, bukan
+    # menggulirkan ke tengah daftar yang tetap panjang.
+    #
+    # Angkanya dihitung SEBELUM disaring — sub-menu yang menyebut "0" untuk
+    # grup yang sedang tidak dipilih akan membuat orang menyimpulkan
+    # pekerjaannya habis.
+    n_grup = b.jumlah_grup()
+    grup = (request.query_params.get("grup") or "").strip()
+    if grup not in dict(svc.GRUP_ANTREAN):
+        grup = ""          # alamat ngawur = tampilkan semuanya, bukan 422
+    menunggu = ([x for x in b.menunggu if svc.grup_baris(x) == grup]
+                if grup else b.menunggu)
+
     return render(request, "aksi.html",
                   buka=request.query_params.get("buka") or "",
                   nilai=request.query_params.get("nilai") or "",
+                  # Pil saringan: hanya grup yang BERISI ditawarkan, ditambah
+                  # yang sedang dipilih (supaya pilnya tak lenyap di bawah
+                  # tangan orang saat kartu terakhirnya selesai dikerjakan).
+                  GRUP_PIL=[(k, nama, n_grup[k]) for k, nama in svc.GRUP_ANTREAN
+                            if n_grup[k] or k == grup],
+                  GRUP_KINI=grup,
+                  GRUP_TOTAL=sum(n_grup.values()),
                   # Hanya yang BELUM PUNYA TEMPAT. Yang sudah berada di
                   # mesin atau silo pindah ke layar Sedang berjalan berikut
                   # tindakannya — kartu yang sama muncul di dua tempat adalah
                   # dua tempat di kepala orang, dan cepat atau lambat keduanya
                   # berbeda isi.
-                  menunggu=b.menunggu, berjalan=[], lama=svc._lama,
+                  menunggu=menunggu, berjalan=[], lama=svc._lama,
                   # ── Bentuk antrean (Tahap 2, aksi.html naik ke paket) ──
                   #
                   # Yang mendapat blok sendiri di ATAS adalah TUMPUKAN: isinya
