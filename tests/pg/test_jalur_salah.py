@@ -128,10 +128,12 @@ async def test_kumulatif_boleh_mundur_untuk_membetulkan(pg, pabrik):
 # ═════════ 2 · Silo penyosohan ditutup dua kali ═════════
 
 async def _isi_silo_g2(pg, pabrik, kode: str, kg: float, tujuan: str):
+    """PK masuk tumpukan dulu, lalu dipindah ke silo — PK baru tak lagi boleh
+    langsung ke silo (keputusan pemilik 4 Oktober 2026, Aturan 1)."""
     from app.database import now_local
     from app.models import User
     from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
@@ -141,7 +143,9 @@ async def _isi_silo_g2(pg, pabrik, kode: str, kg: float, tujuan: str):
             input_by=u.id, status_batch="diterima", flag_unverified=True,
             sumber_berat="manual"))
         await db.commit()
-        await masukkan_pk_luar(db, user=u, kode=kode, tujuan=tujuan)
+        r = await masukkan_pk_luar(db, user=u, kode=kode, tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r.intake.id,
+                                      nama_silo=tujuan, berat=kg)
 
 
 async def test_silo_yang_sudah_bersisa_tak_bisa_ditutup_lagi(pg, pabrik):

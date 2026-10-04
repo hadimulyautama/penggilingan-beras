@@ -143,7 +143,7 @@ async def test_pk10_batal_ditolak_bila_silonya_dipoles_sesudahnya(pg, g2):
 async def test_pk10_batal_ditolak_saat_dituang_ke_proses_berjalan(pg, g2):
     from app.models import User
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
     from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.database import now_local
 
@@ -155,14 +155,21 @@ async def test_pk10_batal_ditolak_saat_dituang_ke_proses_berjalan(pg, g2):
                                input_by=u.id, status_batch="diterima", flag_unverified=True,
                                sumber_berat="manual"))
         await db.commit()
-        await masukkan_pk_luar(db, user=u, kode="PKB-UJI-02", tujuan="silo_a")
+        r2 = await masukkan_pk_luar(db, user=u, kode="PKB-UJI-02", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r2.intake.id,
+                                      nama_silo="A", berat=2_000)
         await mulai_penyosohan(db, user=u, nama_silos=["A"])
     h = await _pindah(pg, g2["op"], g2["intake"], "A", 1_000)
     assert h.startswith("OK"), h
     assert await _hitung(pg, "SELECT berat_masuk_kg FROM polishing_silo_usage") == 1_000
     u = await _undo(pg, g2["op"])
     assert "UndoError" in u and ("dipoles" in u or "penyosohan" in u)
-    assert await _hitung(pg, "SELECT count(*) FROM pk_tumpukan_to_silo") == 1
+    # DUA baris sekarang, bukan satu: PK baru tak lagi boleh langsung ke silo
+    # (Aturan 1), jadi mengisi Silo A sebelum memulai penyosohan di atas
+    # SENDIRI sudah lewat satu `pindah_tumpukan_ke_silo` — ditambah pindah
+    # yang diuji di sini. Yang dibuktikan tetap sama: undo yang DITOLAK tidak
+    # menghapus satu pun baris pindah yang sudah berdiri.
+    assert await _hitung(pg, "SELECT count(*) FROM pk_tumpukan_to_silo") == 2
 
 
 async def test_gagal_di_tengah_tak_menyimpan_apa_pun(pg, g2, monkeypatch):

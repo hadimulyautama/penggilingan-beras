@@ -150,7 +150,7 @@ async def test_ukur_pk_masuk_g2_dan_batalkan(pg, pemasok, hitung_kueri):
             u = await db.get(User, sid)
             async with hitung_kueri() as h:
                 t0 = time.perf_counter()
-                await masukkan_pk_luar(db, user=u, kode=f"PKB-UKUR-{i}", tujuan="silo_a")
+                await masukkan_pk_luar(db, user=u, kode=f"PKB-UKUR-{i}", tujuan="ditumpuk")
                 t_catat.append(time.perf_counter() - t0)
             n_catat.append(h.jumlah)
         async with pg() as db:

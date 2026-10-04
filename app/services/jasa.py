@@ -766,7 +766,12 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
         baris_out.append(f"   gabah {b.kondisi_gabah:<7} {_kg_nota(kg):>12}   "
                          f"{b.kode_batch}")
     for b in (await db.execute(
-        select(PkPurchaseBatch).where(PkPurchaseBatch.jasa_id == jasa_id)
+        # PK yang DITOLAK tak pernah diterima — kembali ke truknya saat
+        # datang, jadi tak boleh tertulis sebagai "dibawa" di nota pelanggan
+        # (keputusan pemilik 4 Oktober 2026, saat `status_batch="ditolak"`
+        # mulai dipakai sungguhan oleh `create_pk_rejection_dari_timbang`).
+        select(PkPurchaseBatch).where(PkPurchaseBatch.jasa_id == jasa_id,
+                                      PkPurchaseBatch.status_batch != "ditolak")
         .order_by(PkPurchaseBatch.id)
     )).scalars().all():
         kg = float(b.berat_total_kg or 0)

@@ -43,7 +43,7 @@ async def pabrik(pg, pemakai, pemasok):
     from app.models import (MillingProcess, MillingProgressLog, PurchaseBatch,
                             Silo, User, Warehouse)
     from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
     from app.services.seed import seed_master
 
     await seed_master()
@@ -94,7 +94,9 @@ async def pabrik(pg, pemakai, pemasok):
             status_batch="diterima", flag_unverified=True, sumber_berat="manual"))
         await db.commit()
         await db.refresh(op2)
-        await masukkan_pk_luar(db, user=op2, kode="PKB-PINTU-01", tujuan="silo_a")
+        r = await masukkan_pk_luar(db, user=op2, kode="PKB-PINTU-01", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=op2, intake_id=r.intake.id,
+                                      nama_silo="A", berat=8_000)
         return {"op1": op1.id, "op2": op2.id, "admin": admin.id,
                 "lot": "LOT-PINTU-01"}
 
@@ -188,7 +190,14 @@ async def test_yang_tak_berkartu_tetap_punya_pintunya(pg, pabrik):
 async def test_kedua_belas_yang_dicabut_tetap_terkirim_di_menu(pg, pabrik):
     """Ditandai berkartu BUKAN dibuang: lembar yang dibuka dari kartu dibangun
     dari spesifikasi yang sama. Aksi yang hilang dari menu berarti kartunya
-    membuka lembar kosong."""
+    membuka lembar kosong.
+
+    ⚠ `pindah_tumpukan_silo` SENGAJA dikeluarkan dari daftar ini sejak 4
+    Oktober 2026 (Aturan 2): Admin memang tak lagi menerimanya di menu sama
+    sekali — pekerjaan itu operator, dan kartunya pun tak pernah tergambar
+    untuk Admin (lihat `test_admin_tak_menerima_spesifikasi_pindah_tumpukan_
+    silo` di bawah). Sebelas yang lain tetap aksi Admin yang sah.
+    """
     from app.models import User
     from app.web.api import actions_menu
 
@@ -197,10 +206,33 @@ async def test_kedua_belas_yang_dicabut_tetap_terkirim_di_menu(pg, pabrik):
         menu = {a["id"]: a for a in await actions_menu(user=u)}
     for aksi in ("mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
                  "lanjutkan_penyosohan", "selesai_penyosohan",
-                 "pindah_tumpukan_silo", "catat_packing", "masukkan_pk",
+                 "catat_packing", "masukkan_pk",
                  # `harga_pk_luar` dicoret 28 September 2026 — DIHAPUS, jadi
                  # tak perlu lagi disembunyikan dari katalog.
                  "catat_pk_luar", "qc_pk_luar",
                  "betulkan_bobot_giling"):
         assert aksi in menu, f"{aksi} hilang dari menu — kartunya jadi buntu"
         assert menu[aksi]["kartu"] is True, f"{aksi} masih digambar di katalog"
+
+
+async def test_admin_tak_menerima_spesifikasi_pindah_tumpukan_silo(pg, pabrik):
+    """⚠⚠ Aturan 2: Admin tak boleh memindahkan tumpukan ke silo, dan itu
+    harus berarti spesifikasinya TAK ADA di menu Admin sama sekali — bukan
+    cuma tombolnya yang hilang dari katalog. Spesifikasi yang tetap terkirim
+    bisa dibuka lewat deep-link `?buka=pindah_tumpukan_silo`, dan gerbang
+    yang cuma berdiri di tombol bukan penjagaan.
+
+    Operator Gudang 2 SEBALIKNYA tetap menerimanya — itulah satu-satunya
+    yang berubah dari sebelas aksi `g2` yang lain."""
+    from app.models import User
+    from app.web.api import actions_menu
+
+    async with pg() as db:
+        admin = await db.get(User, pabrik["admin"])
+        menu_admin = {a["id"] for a in await actions_menu(user=admin)}
+        op2 = await db.get(User, pabrik["op2"])
+        menu_op2 = {a["id"] for a in await actions_menu(user=op2)}
+    assert "pindah_tumpukan_silo" not in menu_admin, (
+        "Admin masih menerima spesifikasi pindah_tumpukan_silo")
+    assert "pindah_tumpukan_silo" in menu_op2, (
+        "operator Gudang 2 kehilangan pindah_tumpukan_silo dari menunya sendiri")

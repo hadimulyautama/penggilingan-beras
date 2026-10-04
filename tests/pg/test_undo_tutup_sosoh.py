@@ -32,7 +32,7 @@ async def sosoh(pg):
     from app.database import now_local
     from app.models import Silo, Supplier, User, Warehouse
     from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
         g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
@@ -52,7 +52,11 @@ async def sosoh(pg):
             sumber_berat="manual"))
         await db.commit()
         await db.refresh(u)
-        await masukkan_pk_luar(db, user=u, kode="PKB-U-01", tujuan="silo_b")
+        # PK baru tak lagi boleh langsung ke silo (Aturan 1, 4 Oktober 2026):
+        # masuk tumpukan dulu, lalu dipindah.
+        r = await masukkan_pk_luar(db, user=u, kode="PKB-U-01", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r.intake.id,
+                                      nama_silo="B", berat=9_800)
         return {"user_id": u.id}
 
 

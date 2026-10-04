@@ -329,32 +329,61 @@ async def test_giling_tertahan_sampai_ditimbang_kini_tidak_lagi(pg, pemakai, pem
 
 # ─────────────────── P6-02 · PK luar belum ditimbang masuk G2 ───────────────────
 
-async def test_pk_luar_belum_ditimbang_bisa_masuk_silo_dan_tumpukan(pg, pemakai, pemasok, pabrik):
+async def test_pk_luar_belum_ditimbang_bisa_masuk_tumpukan(pg, pemakai, pemasok, pabrik):
+    """⚠ Dulu berjudul "...bisa masuk silo dan tumpukan" dan menguji
+    keduanya — paritas yang justru DIHAPUS Aturan 1 (4 Oktober 2026): PK
+    beli luar baru tak lagi boleh langsung ke silo, bobotnya diketahui atau
+    tidak. Jalur silo diuji terpisah sebagai penolakan, di bawah; di sini
+    cuma tumpukan, yang tetap menerima bobot belum pasti apa adanya."""
     from app.models import PkGudang2Intake, User
     from app.penggilingan.gudang2 import service as g2
 
-    hasil = {}
-    for tujuan in ("silo_a", "ditumpuk"):
-        async with pg() as db:
-            tid = await _tiket(db, f"T-PK-{tujuan}", nopol=f"AD 6 {tujuan[:2].upper()}",
-                               t1=9000, jenis="BERAS_PK", supplier_id=pemasok.id)
-            await db.commit()
-        async with pg() as db:
-            u = await db.get(User, pabrik["admin"])
-            kode = (await g2.create_pk_purchase_dari_timbang(
-                db, user=u, timbangan_transaksi_id=tid, jenis_pk="KS")).batch.kode_batch
-        async with pg() as db:
-            u = await db.get(User, pabrik["admin"])
-            r = await g2.masukkan_pk_luar(db, user=u, kode=kode, tujuan=tujuan)
-            hasil[tujuan] = r.intake.id
     async with pg() as db:
-        for tujuan, iid in hasil.items():
-            it = await db.get(PkGudang2Intake, iid)
-            assert it.berat_kg is None, tujuan
-            assert it.bobot_final is False
+        tid = await _tiket(db, "T-PK-tumpuk", nopol="AD 6 TU",
+                           t1=9000, jenis="BERAS_PK", supplier_id=pemasok.id)
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        kode = (await g2.create_pk_purchase_dari_timbang(
+            db, user=u, timbangan_transaksi_id=tid, jenis_pk="KS")).batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        r = await g2.masukkan_pk_luar(db, user=u, kode=kode, tujuan="ditumpuk")
+    async with pg() as db:
+        it = await db.get(PkGudang2Intake, r.intake.id)
+        assert it.berat_kg is None
+        assert it.bobot_final is False
+
+
+async def test_pk_luar_belum_ditimbang_ditolak_langsung_ke_silo(pg, pemakai, pemasok, pabrik):
+    """Aturan 1 tak punya pengecualian untuk bobot yang belum pasti — PK
+    beli luar yang bobotnya belum diketahui JUGA harus ke tumpukan dulu,
+    sama seperti yang bobotnya sudah pasti."""
+    from app.models import User
+    from app.penggilingan.gudang2 import service as g2
+
+    async with pg() as db:
+        tid = await _tiket(db, "T-PK-silo-a", nopol="AD 6 SA",
+                           t1=9000, jenis="BERAS_PK", supplier_id=pemasok.id)
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        kode = (await g2.create_pk_purchase_dari_timbang(
+            db, user=u, timbangan_transaksi_id=tid, jenis_pk="KS")).batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pabrik["admin"])
+        with pytest.raises(g2.Gudang2Error) as e:
+            await g2.masukkan_pk_luar(db, user=u, kode=kode, tujuan="silo_a")
+    assert "tumpukan dulu" in str(e.value)
 
 
 async def test_intake_g2_dilengkapi_poller_setelah_timbang_kedua(pg, pemakai, pemasok, pabrik):
+    """⚠ Tujuannya "ditumpuk", bukan silo (Aturan 1, 4 Oktober 2026): PK baru
+    tak lagi boleh langsung ke silo, dan `pindah_tumpukan_ke_silo` MENOLAK
+    memindah tumpukan yang bobotnya belum diketahui — jadi "bobot belum
+    pasti, lalu disosoh di silo" sudah tak tercapai lewat PK luar lagi.
+    Mekanisme yang diuji di sini (poller melengkapi intake begitu tiketnya
+    ditimbang kedua) tak peduli tujuannya silo atau tumpukan."""
     from app.models import PkGudang2Intake, User
     from app.penggilingan.gudang2 import service as g2
 
@@ -368,15 +397,14 @@ async def test_intake_g2_dilengkapi_poller_setelah_timbang_kedua(pg, pemakai, pe
             db, user=u, timbangan_transaksi_id=tid, jenis_pk="KS")).batch.kode_batch
     async with pg() as db:
         u = await db.get(User, pabrik["admin"])
-        iid = (await g2.masukkan_pk_luar(db, user=u, kode=kode, tujuan="silo_b")).intake.id
+        iid = (await g2.masukkan_pk_luar(db, user=u, kode=kode, tujuan="ditumpuk")).intake.id
     async with pg() as db:
         await _timbang_kedua(db, tid, netto=5200, kosong=3800)
         await db.commit()
     await _poller(pg)
     async with pg() as db:
         it = await db.get(PkGudang2Intake, iid)
-        silo = await g2.get_g2_silo(db, "B")
-        stok = await g2.hitung_stok_silo(db, silo.id)
+        stok = await g2.hitung_stok_tumpukan(db)
     assert float(it.berat_kg) == 5200 and it.bobot_final is True
     assert stok == 5200
 

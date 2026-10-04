@@ -79,44 +79,30 @@ async def _pk_luar(pg, pabrik, kode: str, kg: float, tujuan: str):
         return await masukkan_pk_luar(db, user=u, kode=kode, tujuan=tujuan)
 
 
-# ─────────────── Jalan 1 · PK luar langsung ke silo ketiga ───────────────
+# ─────────── Jalan 1 · PK luar langsung ke silo — DITOLAK sejak 4 Oktober
+# ─────────── 2026 (Aturan 1): PK baru harus ke tumpukan dulu, apa pun nama
+# ─────────── silonya atau kosakata yang dipakai menyebutnya. ───────────
 
-async def test_pk_luar_masuk_silo_ketiga(pg, pabrik):
-    from sqlalchemy import select
+async def test_pk_luar_langsung_ke_silo_ketiga_ditolak(pg, pabrik):
+    """Silo ketiga BUKAN pengecualian: aturan "tumpukan dulu" berlaku untuk
+    silo apa pun yang namanya tak pernah diketik di kode — bukan cuma A/B
+    yang kebetulan lebih sering diuji."""
+    from app.penggilingan.gudang2.service import Gudang2Error
 
-    from app.penggilingan.gudang2.models import PkGudang2Intake
-    from app.penggilingan.gudang2.service import hitung_stok_silo
-
-    r = await _pk_luar(pg, pabrik, "PKB-C-01", 5_000, "C")
-    assert r.lokasi_label == "Silo C", "kalimatnya menyebut nama yang salah"
-
-    async with pg() as db:
-        baris = (await db.execute(select(PkGudang2Intake).where(
-            PkGudang2Intake.silo_id == pabrik["silo"]["C"]))).scalars().all()
-        assert len(baris) == 1
-        # Yang disimpan JENIS tempatnya; silo MANA jadi rujukan.
-        assert baris[0].tujuan == "silo" and baris[0].silo_id == pabrik["silo"]["C"]
-        # ⚠ Inilah yang paling halus: seandainya stoknya disaring dengan kata
-        # tujuannya, silo ini berisi tetapi terbaca 0 — lalu hilang dari borang
-        # tanpa satu pun galat di mana pun.
-        assert await hitung_stok_silo(db, pabrik["silo"]["C"]) == 5_000
+    with pytest.raises(Gudang2Error) as e:
+        await _pk_luar(pg, pabrik, "PKB-C-01", 5_000, "C")
+    assert "tumpukan dulu" in str(e.value)
 
 
-async def test_kosakata_lama_tetap_diterima(pg, pabrik):
-    """Halaman di ponsel operator berumur panjang, dan baris lama menyimpan
-    kata itu. Yang berhenti dipakai adalah MENULISNYA, bukan membacanya."""
-    from sqlalchemy import select
+async def test_kosakata_lama_juga_ditolak_langsung_ke_silo(pg, pabrik):
+    """Kosakata LAMA (`silo_a`) tetap dinormalisasi ke silo yang benar
+    SEBELUM pagar Aturan 1 memeriksanya — jadi ia tak bisa dipakai menyelinap
+    ke silo lewat kata yang sudah pensiun sebagai penulisan."""
+    from app.penggilingan.gudang2.service import Gudang2Error
 
-    from app.penggilingan.gudang2.models import PkGudang2Intake
-    from app.penggilingan.gudang2.service import hitung_stok_silo
-
-    r = await _pk_luar(pg, pabrik, "PKB-A-01", 2_000, "silo_a")
-    assert r.lokasi_label == "Silo A"
-    async with pg() as db:
-        baris = (await db.execute(select(PkGudang2Intake).where(
-            PkGudang2Intake.silo_id == pabrik["silo"]["A"]))).scalars().one()
-        assert baris.tujuan == "silo", "kata lama ikut DITULIS lagi"
-        assert await hitung_stok_silo(db, pabrik["silo"]["A"]) == 2_000
+    with pytest.raises(Gudang2Error) as e:
+        await _pk_luar(pg, pabrik, "PKB-A-01", 2_000, "silo_a")
+    assert "tumpukan dulu" in str(e.value)
 
 
 async def test_tujuan_yang_tak_ada_ditolak_tanpa_menyebut_dua_silo(pg, pabrik):
@@ -196,12 +182,25 @@ async def test_pindah_tumpukan_ke_silo_ketiga(pg, pabrik):
 
 # ─────────────── Ujungnya · disosoh, dan dibatalkan ───────────────
 
+async def _pk_luar_ke_silo(pg, pabrik, kode: str, kg: float, huruf: str):
+    """PK luar → tumpukan → silo `huruf`. PK baru tak lagi boleh langsung ke
+    silo (Aturan 1, 4 Oktober 2026) — jalan sungguhannya kini dua langkah."""
+    from app.models import User
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
+
+    r = await _pk_luar(pg, pabrik, kode, kg, "ditumpuk")
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        return await pindah_tumpukan_ke_silo(db, user=u, intake_id=r.intake.id,
+                                             nama_silo=huruf, berat=kg)
+
+
 async def test_silo_ketiga_bisa_disosoh(pg, pabrik):
     from app.models import User
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
     from app.web.api import silo_bahan_g2
 
-    await _pk_luar(pg, pabrik, "PKB-C-02", 4_000, "C")
+    await _pk_luar_ke_silo(pg, pabrik, "PKB-C-02", 4_000, "C")
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
     daftar = [x["value"] for x in await silo_bahan_g2(user=u)]
@@ -214,11 +213,46 @@ async def test_silo_ketiga_bisa_disosoh(pg, pabrik):
 
 async def test_pembatalan_menyebut_nama_silo_yang_benar(pg, pabrik):
     """Kamus lama menjawab `.get(tujuan, tujuan)` — jadi kalimat pembatalan
-    berbunyi "dimasukkan ke silo_c", kata mentah dari basis data."""
-    from app.models import User
-    from app.services import undo
+    berbunyi "dimasukkan ke silo_c", kata mentah dari basis data.
 
-    await _pk_luar(pg, pabrik, "PKB-C-03", 1_500, "C")
+    ⚠ Sumbernya TRANSFER Gudang 1, bukan PK luar langsung (Aturan 1, 4
+    Oktober 2026 melarang PK luar baru langsung ke silo — tapi transfer G1
+    tak ikut berubah, lihat Jalan 2 di atas). Jalur pembatalannya
+    (`_undo_pk_intake`) sama persis dengan PK luar: keduanya menulis baris
+    `pk_gudang2_intakes` yang sama lewat `_add_intake`, dan `label_tujuan`
+    yang dipakai membangun kalimatnya juga satu fungsi untuk keduanya."""
+    from datetime import date
+
+    from app.database import now_local
+    from app.models import MillingProcess, MillingProgressLog, PurchaseBatch, Silo, User
+    from app.services import undo
+    from app.services.transfer import create_internal_transfer
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        silo_g1 = Silo(nama_silo="Silo Selepan C", warehouse_id=pabrik["g1"])
+        db.add(silo_g1)
+        await db.flush()
+        b = PurchaseBatch(kode_batch="GB-TRF-C2", supplier_id=pabrik["pemasok"],
+                          berat_total_kg=3_000, kondisi_gabah="kering",
+                          tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+                          input_by=u.id, flag_unverified=False, sumber_berat="timbangan")
+        db.add(b)
+        await db.flush()
+        p = MillingProcess(kode_proses="LOT-TRF-C2", status="selesai", silo_id=silo_g1.id,
+                           berat_gabah_masuk_kg=3_000, waktu_mulai=now_local(),
+                           waktu_selesai=now_local(), created_by=u.id,
+                           purchase_batch_id=b.id)
+        db.add(p)
+        await db.flush()
+        db.add(MillingProgressLog(milling_process_id=p.id, berat_kumulatif_kg=1_500,
+                                  waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await create_internal_transfer(db, user=u, kode_proses="LOT-TRF-C2",
+                                       lokasi_tujuan="C", berat=1_500)
+
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
         c = await undo.cakupan(db, scope="saya", nama=None, self_id=u.id)
@@ -233,7 +267,11 @@ async def test_pembatalan_menyebut_nama_silo_yang_benar(pg, pabrik):
 async def test_dua_sesi_kunci_kiriman_sama_hanya_satu_baris(pg, pabrik):
     """Aturan repo: tiap aksi di jalur peristiwa wajib punya uji Postgres dua
     sesi. Kiriman yang diulang — tombol ditekan dua kali, jaringan terputus di
-    tengah — tak boleh melahirkan dua pemasukan."""
+    tengah — tak boleh melahirkan dua pemasukan.
+
+    ⚠ Tujuannya "ditumpuk", bukan silo (Aturan 1, 4 Oktober 2026): PK baru
+    tak lagi boleh langsung ke silo, jadi kiriman kembar `masukkan_pk_luar`
+    kini SELALU menuju tumpukan — dan itulah yang diuji di sini."""
     import asyncio
 
     from sqlalchemy import select
@@ -241,7 +279,7 @@ async def test_dua_sesi_kunci_kiriman_sama_hanya_satu_baris(pg, pabrik):
     from app.database import now_local
     from app.models import User
     from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseBatch
-    from app.penggilingan.gudang2.service import hitung_stok_silo, masukkan_pk_luar
+    from app.penggilingan.gudang2.service import hitung_stok_tumpukan, masukkan_pk_luar
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
@@ -257,7 +295,7 @@ async def test_dua_sesi_kunci_kiriman_sama_hanya_satu_baris(pg, pabrik):
             u = await db.get(User, pabrik["user"])
             try:
                 r = await masukkan_pk_luar(db, user=u, kode="PKB-C-KEMBAR",
-                                           tujuan="C", kunci_kiriman="uji-kembar-01")
+                                           tujuan="ditumpuk", kunci_kiriman="uji-kembar-01")
                 return r.lokasi_label
             except Exception as e:                      # noqa: BLE001
                 return f"tolak: {type(e).__name__}: {e}"
@@ -265,8 +303,9 @@ async def test_dua_sesi_kunci_kiriman_sama_hanya_satu_baris(pg, pabrik):
     hasil = await asyncio.gather(kirim(), kirim())
     async with pg() as db:
         baris = (await db.execute(select(PkGudang2Intake).where(
-            PkGudang2Intake.silo_id == pabrik["silo"]["C"]))).scalars().all()
+            PkGudang2Intake.pk_purchase_batch_id.is_not(None),
+            PkGudang2Intake.tujuan == "ditumpuk"))).scalars().all()
         assert len(baris) == 1, f"kiriman kembar melahirkan dua baris: {hasil}"
-        assert await hitung_stok_silo(db, pabrik["silo"]["C"]) == 7_000
-    # Yang kalah pun menjawab dengan nama silo, bukan dengan galat mentah.
-    assert all("Silo C" in x or x.startswith("tolak:") for x in hasil), hasil
+        assert await hitung_stok_tumpukan(db) == 7_000
+    # Yang kalah pun menjawab dengan nama tempatnya, bukan dengan galat mentah.
+    assert all("tumpukan" in x or x.startswith("tolak:") for x in hasil), hasil

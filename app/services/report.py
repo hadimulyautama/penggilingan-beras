@@ -197,6 +197,9 @@ async def laporan_produksi_histori(
             .where(
                 PkPurchaseBatch.tanggal_pembelian >= tgl_dari,
                 PkPurchaseBatch.tanggal_pembelian <= tgl_sampai,
+                # Ditolak = kembali ke truknya, bukan pembelian — lihat
+                # catatan yang sama di `beranda._stok_pk`/`layar.py`.
+                PkPurchaseBatch.status_batch != "ditolak",
             )
         )
     ).all()

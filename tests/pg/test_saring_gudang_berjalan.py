@@ -36,7 +36,7 @@ async def pabrik(pg):
     from app.models import Dryer, Silo, Supplier, User, Warehouse
     from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
         g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
@@ -57,7 +57,9 @@ async def pabrik(pg):
             status_batch="diterima", flag_unverified=True, sumber_berat="manual"))
         await db.commit()
         await db.refresh(u)
-        await masukkan_pk_luar(db, user=u, kode="PKB-UJI-01", tujuan="silo_a")
+        r1 = await masukkan_pk_luar(db, user=u, kode="PKB-UJI-01", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r1.intake.id,
+                                      nama_silo="A", berat=9800)
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
 
     # Kartu Gudang 1: lot yang sudah dingin, dryer-nya perlu dikosongkan.

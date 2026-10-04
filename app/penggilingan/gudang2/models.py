@@ -80,7 +80,7 @@ class PkPurchaseBatch(Base, TimestampMixin):
 
 
 class PkPurchaseVerification(Base, TimestampMixin):
-    """QC + harga PK luar (staff/admin). QC menentukan terima/tolak + potongan."""
+    """QC + harga PK luar (staff/admin). QC menentukan terima/tolak."""
 
     __tablename__ = "pk_purchase_verifications"
 
@@ -100,14 +100,19 @@ class PkPurchaseVerification(Base, TimestampMixin):
     # terima / tolak
     keputusan: Mapped[str | None] = mapped_column(String(10))
     alasan_tolak: Mapped[str | None] = mapped_column(String(255))
-    potongan_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
-    potongan_alasan: Mapped[str | None] = mapped_column(String(120))
+    # `potongan_kg`/`potongan_alasan` DIHAPUS 4 Oktober 2026 (keputusan
+    # pemilik) — basis data produksi tak pernah memuat satu baris pun
+    # berisi angka itu (0 dari 0 baris saat diperiksa), jadi tak ada
+    # riwayat yang perlu dijaga. Bobot PK yang masuk Gudang 2 kini SELALU
+    # sama dengan bobot tiket timbangnya; kalau bobot memang perlu
+    # dikoreksi, tempatnya revisi tiket di Pos Timbang, bukan potongan
+    # diam-diam di sini. Lihat migrasi yang menjatuhkan kolomnya.
     # Harga
     # ── PENINGGALAN: harga pindah ke keuangan 28 September 2026 ──
     #
     # Kolom-kolom di bawah ini TIDAK lagi ditulis maupun dibaca Pos Produksi.
-    # HANYA yang harga — `potongan_kg`, `potongan_alasan`, dan seluruh kolom
-    # QC di atas TETAP HIDUP: potongan mengubah STOK, dan QC PK luar wajib.
+    # Seluruh kolom QC di atas TETAP HIDUP: QC PK luar wajib, dan baris ini
+    # satu-satunya tempat mutunya tercatat.
     # Dipertahankan untuk RIWAYAT: harga yang sudah tercatat adalah pembelian
     # sungguhan, dan hal pertama yang keuangan minta begitu mereka mengambil
     # alih adalah data lama. Kalau kolomnya sudah jatuh, tak ada yang bisa

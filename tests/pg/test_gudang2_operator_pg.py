@@ -22,7 +22,7 @@ async def gudang2(pg):
     from app.database import now_local
     from app.models import Silo, Supplier, User, Warehouse
     from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
         g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
@@ -44,7 +44,11 @@ async def gudang2(pg):
         await db.commit()
         await db.refresh(u)
         r1 = await masukkan_pk_luar(db, user=u, kode="PKB-20260912-01", tujuan="ditumpuk")
-        await masukkan_pk_luar(db, user=u, kode="PKB-20260912-02", tujuan="silo_b")
+        # PK baru tak lagi boleh langsung ke silo (Aturan 1, 4 Oktober 2026):
+        # masuk tumpukan dulu, lalu dipindah ke Silo B.
+        r2 = await masukkan_pk_luar(db, user=u, kode="PKB-20260912-02", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r2.intake.id,
+                                      nama_silo="B", berat=9_800)
         return {"user": u, "intake_tumpukan": r1.intake.id}
 
 
@@ -489,7 +493,7 @@ async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
     itu apa adanya.
     """
     from app.penggilingan.gudang2.polishing import mulai_penyosohan, selesai_penyosohan
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
     from app.services.berjalan import untuk_operator_gudang2
     from app.database import now_local
     from app.models import Supplier
@@ -504,7 +508,9 @@ async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
             tanggal_pembelian=date.today(), waktu_pembelian=now_local(), input_by=u.id,
             status_batch="diterima", flag_unverified=True, sumber_berat="manual"))
         await db.commit()
-        await masukkan_pk_luar(db, user=u, kode="PKB-20260924-03", tujuan="silo_a")
+        r3 = await masukkan_pk_luar(db, user=u, kode="PKB-20260924-03", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r3.intake.id,
+                                      nama_silo="A", berat=4_000)
 
         r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
         # Hasil nominal supaya prosesnya BOLEH ditutup: sejak 28 September
@@ -599,7 +605,7 @@ async def test_penyosohan_beberapa_silo_lewat_pintu(pg, gudang2):
     from app.database import now_local
     from app.models import Supplier, User
     from app.penggilingan.gudang2.models import PkPurchaseBatch, PolishingSiloUsage
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
     from app.web.api import MulaiPenyosohanReq, act_mulai_penyosohan
 
     u = gudang2["user"]
@@ -611,7 +617,9 @@ async def test_penyosohan_beberapa_silo_lewat_pintu(pg, gudang2):
             input_by=u.id, status_batch="diterima", flag_unverified=True,
             sumber_berat="manual"))
         await db.commit()
-        await masukkan_pk_luar(db, user=u, kode="PKB-20260924-05", tujuan="silo_a")
+        r5 = await masukkan_pk_luar(db, user=u, kode="PKB-20260924-05", tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r5.intake.id,
+                                      nama_silo="A", berat=4_000)
         uu = await db.get(User, u.id)
 
     hasil = await act_mulai_penyosohan(MulaiPenyosohanReq(silo=["A", "B"]), user=uu)
@@ -798,69 +806,72 @@ async def test_silo_tanpa_tombol_menyebut_apa_yang_memakai_mesinnya(pg, gudang2)
     assert "menunggu giliran" in (a.nota or "")
 
 
-async def test_potongan_bobot_tetap_mengurangi_pk_yang_masuk(pg, gudang2):
-    """⚠ JEBAKAN yang brief QA sendiri salah menebaknya, dan ini pagarnya.
+async def test_berat_intake_selalu_sama_dengan_berat_batch(pg, gudang2):
+    """⚠ Potongan bobot QC DIHAPUS 4 Oktober 2026 (keputusan pemilik) — basis
+    data produksi tak pernah memuat satu baris pun berisi `potongan_kg`
+    (0 dari 0 baris saat diperiksa), jadi tak ada riwayat yang perlu dijaga
+    dengan mempertahankannya.
 
-    Brief 28 September 2026 menulis: "Aksi `qc_pk_luar` TETAP ADA — ia yang
-    menulis kadar air, potongan, dan keputusan terima/tolak." Borangnya
-    membuktikan sebaliknya: satu-satunya penulis `potongan_kg` adalah aksi
-    HARGA yang hendak dihapus.
-
-    `potongan_kg` MENGUBAH STOK — `masukkan_pk_luar` mengurangkannya dari berat
-    yang masuk. Ikut terbuang bersama harga berarti berat PK yang masuk Gudang
-    2 berubah untuk SELURUH pemasukan berikutnya, dan tak ada satu pesan pun
-    yang memberitahu.
-
-    Maka potongannya dipindah ke QC, dan yang dijaga di sini BUKAN di mana ia
-    ditulis melainkan AKIBATNYA: potongan yang dicatat benar-benar mengurangi
-    PK yang masuk.
-    """
-    from app.database import now_local
-    from app.models import PkPurchaseBatch, User
-    from app.penggilingan.gudang2.service import (hitung_stok_silo, log_pk_qc,
-                                                  masukkan_pk_luar)
+    Yang dijaga di sini GANTI ARAH: BUKAN "potongan mengurangi bobot",
+    melainkan sebaliknya — PK yang masuk tumpukan punya `berat_kg` SAMA
+    PERSIS dengan `berat_total_kg` batch-nya, berapa pun isi catatan QC-nya
+    dan dalam urutan apa pun QC dikerjakan (sebelum masuk, sesudah masuk,
+    atau tak sama sekali). Ini pengganti dua uji lama
+    (`test_potongan_bobot_tetap_mengurangi_pk_yang_masuk` dan `..._yang_
+    sudah_masuk`) yang menjaga mekanisme yang sekarang sudah tak ada."""
     from datetime import date
 
     from sqlalchemy import select
 
-    from app.models import Supplier
+    from app.database import now_local
+    from app.models import PkPurchaseBatch, Supplier, User
+    from app.penggilingan.gudang2.models import PkGudang2Intake
+    from app.penggilingan.gudang2.service import (hitung_stok_tumpukan, log_pk_qc,
+                                                  masukkan_pk_luar)
 
     async with pg() as db:
-        u = await db.get(User, gudang2["user"].id)
-        sup = (await db.execute(select(Supplier.id))).scalars().first()
-        db.add(PkPurchaseBatch(
-            kode_batch="PKB-POT-01", supplier_id=sup, berat_total_kg=5_000,
-            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
-            input_by=u.id, status_batch="diterima", flag_unverified=True,
-            sumber_berat="manual"))
-        await db.commit()
-
-    # Potongan 300 kg karena mutu — dicatat lewat QC, yang memang milik Admin.
+        sebelum = await hitung_stok_tumpukan(db)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         u.role = "admin"
+        sup = (await db.execute(select(Supplier.id))).scalars().first()
+        db.add_all([
+            PkPurchaseBatch(
+                kode_batch="PKB-QCA", supplier_id=sup, berat_total_kg=5_000,
+                tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+                input_by=u.id, status_batch="diterima", flag_unverified=True,
+                sumber_berat="manual"),
+            PkPurchaseBatch(
+                kode_batch="PKB-QCB", supplier_id=sup, berat_total_kg=3_000,
+                tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+                input_by=u.id, status_batch="diterima", flag_unverified=True,
+                sumber_berat="manual"),
+        ])
         await db.commit()
+
+    # QC DULU, baru masuk.
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
-        await log_pk_qc(db, user=u, kode="PKB-POT-01", kadar_air=15,
-                        potongan_kg=300, potongan_alasan="banyak gabah hampa")
-
+        await log_pk_qc(db, user=u, kode="PKB-QCA", kadar_air=15, broken=2)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
-        sebelum = await hitung_stok_silo(db, (await _silo_id(db, "A")))
-        await masukkan_pk_luar(db, user=u, kode="PKB-POT-01", tujuan="silo_a")
-        sesudah = await hitung_stok_silo(db, (await _silo_id(db, "A")))
-    assert sesudah - sebelum == 4_700, (
-        f"potongan 300 kg tak mengurangi PK yang masuk: {sesudah - sebelum} kg")
+        ra = await masukkan_pk_luar(db, user=u, kode="PKB-QCA", tujuan="ditumpuk")
+    assert float(ra.intake.berat_kg) == 5_000
 
+    # Masuk DULU, QC menyusul.
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        rb = await masukkan_pk_luar(db, user=u, kode="PKB-QCB", tujuan="ditumpuk")
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        await log_pk_qc(db, user=u, kode="PKB-QCB", kadar_air=16, broken=3)
+    async with pg() as db:
+        intake_b = await db.get(PkGudang2Intake, rb.intake.id)
+    assert float(intake_b.berat_kg) == 3_000, (
+        "QC yang menyusul mengubah bobot intake — seharusnya tak pernah lagi")
 
-async def _silo_id(db, huruf: str) -> int:
-    from sqlalchemy import select
-
-    from app.models import Silo
-
-    return (await db.execute(select(Silo.id).where(
-        Silo.nama_silo == f"Silo {huruf}"))).scalars().one()
+    async with pg() as db:
+        assert await hitung_stok_tumpukan(db) - sebelum == 8_000
 
 
 async def test_penyosohan_tak_bisa_ditutup_tanpa_satu_pun_hasil(pg, gudang2):
@@ -917,3 +928,33 @@ async def test_penyosohan_tak_bisa_ditutup_tanpa_satu_pun_hasil(pg, gudang2):
         hasil = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B",
                                          sisa_kg=0)
     assert hasil.selesai and hasil.rendemen is not None
+
+
+async def test_admin_ditolak_memindahkan_tumpukan_ke_silo(pg, gudang2):
+    """⚠⚠ Aturan 2, keputusan pemilik 4 Oktober 2026: pemindahan PK dari
+    tumpukan ke silo adalah pekerjaan OPERATOR, bukan Admin — pola yang sama
+    dengan `minta_pk_g1` (lihat catatannya di `api.act_pindah_tumpukan_silo`).
+
+    Sebelum perbaikan ini gerbangnya cuma `_is_g2_operator`, dan nama itu
+    menyesatkan: artinya "admin ATAU operator Gudang 2", bukan "operator
+    Gudang 2 saja" — jadi Admin & Super Admin tetap lolos. Gerbang tanpa uji
+    adalah gerbang yang akan dilonggarkan orang berikutnya tanpa ada yang
+    tahu; ini pagarnya, bukan cuma pagar pada jalur suksesnya.
+    """
+    from fastapi import HTTPException
+
+    from app.models import User
+    from app.web import api
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        u.role = "admin"
+        await db.commit()
+    async with pg() as db:
+        admin = await db.get(User, gudang2["user"].id)
+        with pytest.raises(HTTPException) as e:
+            await api.act_pindah_tumpukan_silo(
+                api.PindahTumpukanSiloReq(
+                    tumpukan=str(gudang2["intake_tumpukan"]), silo="A"),
+                user=admin)
+    assert e.value.status_code == 403

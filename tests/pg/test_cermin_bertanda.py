@@ -196,7 +196,7 @@ async def test_pk_masuk_dan_pindah_batal_tetap_ada_stok_benar(pg, pabrik, pemaso
         assert b.status_batch == "diterima"
         # Bisa dimasukkan lagi: indeks unik parsial per batch hanya menghitung yang hidup.
         u = await db.get(User, pabrik["adm"])
-        r2 = await masukkan_pk_luar(db, user=u, kode="PKB-CB-01", tujuan="silo_b")
+        r2 = await masukkan_pk_luar(db, user=u, kode="PKB-CB-01", tujuan="ditumpuk")
         assert r2.intake.id != iid
     assert await _raw(pg, "SELECT count(*) FROM pk_gudang2_intakes") == 2
 

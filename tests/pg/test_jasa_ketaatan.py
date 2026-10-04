@@ -816,16 +816,21 @@ async def test_beras_jasa_bukan_stok_pabrik(pg, pemakai, pabrik):
 
 async def _pk_jasa_walk_in(pg, admin, *, berat=5_000.0, kode_tiket="JTP0",
                            pelanggan="Bu Sri") -> int:
-    """PK jasa dari LUAR, lewat jalur sungguhannya: tiket → batch → silo G2.
+    """PK jasa dari LUAR, lewat jalur sungguhannya: tiket → batch → tumpukan
+    → silo G2.
 
     ⚠ Dipakai menggantikan penyisipan `_add_intake` langsung, dan sebabnya
     ditemukan uji: pesanan yang barangnya disisipkan tanpa batch terbaca "belum
     pernah menerima barang" — lalu ia bisa dibatalkan sementara barangnya sudah
     di silo. Fixture yang melompati jalur nyata menguji jalur yang tak ada.
+
+    ⚠ Langkah tumpukan→silo WAJIB sejak 4 Oktober 2026 (Aturan 1): PK baru
+    tak lagi boleh langsung ke silo, jadi jalur sungguhannya kini dua langkah
+    — tetap "jalur nyata", bukan jalan pintas baru.
     """
     from app.models import User
     from app.penggilingan.gudang2.service import (create_pk_purchase_dari_timbang,
-                                                  masukkan_pk_luar)
+                                                  masukkan_pk_luar, pindah_tumpukan_ke_silo)
 
     async with pg() as db:
         pid = await _pelanggan(db, pelanggan)
@@ -840,7 +845,9 @@ async def _pk_jasa_walk_in(pg, admin, *, berat=5_000.0, kode_tiket="JTP0",
         assert r.batch.supplier_id is None, "PK titipan jadi pembelian"
     async with pg() as db:
         u = await db.get(User, admin.id)
-        await masukkan_pk_luar(db, user=u, kode=kode_batch, tujuan="A")
+        ri = await masukkan_pk_luar(db, user=u, kode=kode_batch, tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=ri.intake.id,
+                                      nama_silo="A", berat=berat)
     return jid
 
 

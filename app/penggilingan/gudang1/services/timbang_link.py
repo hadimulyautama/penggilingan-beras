@@ -1,8 +1,15 @@
-"""Jembatan baca-only ke sistem TIMBANGAN (aplikasi terpisah, DB terintegrasi).
+"""Jembatan ke sistem TIMBANGAN (aplikasi terpisah, DB terintegrasi).
 
-Model `timbangan_transaksi` dimiliki repo timbangan; di sini kita hanya MEMBACA lewat
-SQL mentah pada DB yang sama. Dipakai intake produksi untuk menaut batch ke tiket timbang
-(operator memilih tiket aktif, bukan mengetik bobot/supplier).
+Model `timbangan_transaksi` dimiliki repo timbangan; di sini kita menyentuhnya
+lewat SQL mentah pada DB yang sama — dua layanan Railway terpisah, tanpa API,
+cuma satu Postgres yang sama-sama dibaca. Dipakai intake produksi untuk
+menaut batch ke tiket timbang (operator memilih tiket aktif, bukan mengetik
+bobot/supplier).
+
+⚠⚠ HAMPIR SELURUHNYA BACA-ONLY — dengan SATU pengecualian sengaja:
+`tutup_paksa_pk_ditolak` di bagian akhir berkas ini. Timbangan adalah
+OTORITAS BERAT, dan menulis ke tabelnya dari sini melangkahi batas itu;
+jangan tambah penulis kedua tanpa alasan setara kuatnya.
 
 Sumber kebenaran: bobot/supplier/nopol dari timbang. Bobot:
   netto_timbangan_kg = bermuatan − kosong (TRUKNYA, bukan barangnya)
@@ -766,3 +773,63 @@ async def kunci_tiket_untuk_ditaut(db: AsyncSession, tid: int) -> None:
             f"Sudah dicatat{siapa}{jam} sebagai batch {lingkup} "
             f"{kode_batch or '(tanpa kode)'}. Daftar tiketnya sudah diperbarui."
         )
+
+
+# ⚠⚠ SATU-SATUNYA PENULIS di berkas ini — lihat peringatan di kepala berkas.
+#
+# Timbangan sendiri MENOLAK menutup paksa tiket hanya karena muatannya
+# ditolak (`service.tutup_paksa`, Temuan QA T-15 di repo timbangan):
+#
+#   "Muatan yang DITOLAK bukan alasan melewatkan timbang keluar. Truk yang
+#   ditolak tetap keluar dari pabrik, dan tanpa angka keluarnya tak ada
+#   kontrol masuk−keluar sama sekali — truk bisa pergi membawa lebih banyak
+#   daripada yang ia bawa masuk, dan tak ada satu angka pun yang bisa
+#   menunjukkannya. Yang benar untuk muatan ditolak adalah menyelesaikan
+#   timbang keduanya seperti biasa."
+#
+# Keputusan pemilik 4 Oktober 2026 MENGESAMPINGKAN pagar itu KHUSUS untuk PK
+# luar yang ditolak produksi: tiket ditutup paksa otomatis, alasannya dari
+# produksi, tanpa menunggu timbang kedua. Ini sadar melepas kontrol
+# masuk-keluar T-15 untuk kasus ini — keputusan pemilik, bukan QA, dan bukan
+# kelonggaran yang menular ke kasus lain.
+#
+# Tak lewat `service.tutup_paksa` (tak bisa — proses Python berbeda, DB yang
+# sama), jadi efeknya DITIRU di sini: status + alasan + `_kosongkan_hasil`
+# timbangan sendiri (lihat definisinya di sana). `pastikan_bebas_tautan` di
+# timbangan SENGAJA tak ikut ditiru — pagar itu menolak menutup tiket yang
+# SUDAH ditaut batch produksi, dan baris penolakan inilah justru PENYEBAB
+# tiket ini ditutup; menjalankan pagar itu di sini akan menolak tindakan yang
+# sedang dikerjakannya sendiri.
+_SQL_TUTUP_PAKSA_PK_DITOLAK = text("""
+    UPDATE timbangan_transaksi
+       SET status_tiket = 'DITUTUP_PAKSA',
+           tutup_paksa_alasan = :alasan,
+           netto_timbangan_kg = NULL,
+           berat_barang_kg = NULL,
+           selisih_kg = 0,
+           selisih_persen = 0,
+           batas_bawah_kg = NULL,
+           batas_atas_kg = NULL,
+           status_kontrol = NULL,
+           keterangan = NULL
+     WHERE id = :tid AND status_tiket = 'TERBUKA'
+""")
+
+
+async def tutup_paksa_pk_ditolak(db: AsyncSession, *, tid: int, alasan: str) -> bool:
+    """Tutup paksa tiket timbang karena PK-nya DITOLAK di produksi.
+
+    Dipanggil DI DALAM transaksi yang sama dengan `create_pk_rejection_dari_
+    timbang` — baris tiketnya sudah terkunci `FOR UPDATE` oleh `kunci_tiket_
+    untuk_ditaut` di awal fungsi itu, jadi tak ada kunci baru di sini.
+
+    → False bila tiketnya SUDAH tak berstatus TERBUKA (sudah selesai timbang
+    kedua secara normal, atau sudah ditutup lebih dulu) — pemanggil tak
+    perlu memperlakukan itu sebagai galat, PK-nya tetap tercatat ditolak di
+    produksi; cuma tiketnya tak perlu (dan tak boleh) ditutup ulang.
+    """
+    res = await db.execute(_SQL_TUTUP_PAKSA_PK_DITOLAK, {
+        "tid": tid,
+        "alasan": f"PK ditolak di produksi: {alasan.strip()}",
+    })
+    return res.rowcount > 0

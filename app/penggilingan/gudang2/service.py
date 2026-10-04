@@ -4,7 +4,12 @@ Acuan WAJIB: LOGIKA_SILO_GUDANG2.md.
 - Silo G2 = KOLAM CAMPURAN (banyak sumber).
 - Stok silo/tumpukan DITURUNKAN (bukan kolom saldo).
 - Tumpukan WAJIB masuk silo dulu sebelum disosoh.
-- Pindah tumpukan→silo HANYA operator Gudang 2 (admin fallback), bisa parsial, cap 60t.
+- Pindah tumpukan→silo HANYA operator Gudang 2 — TANPA admin (keputusan
+  pemilik 4 Oktober 2026, Aturan 2; lihat `api.act_pindah_tumpukan_silo`),
+  bisa parsial, cap 60t.
+- PK beli luar yang BARU masuk SELALU ke tumpukan dulu — tak boleh langsung
+  ke silo (keputusan pemilik 4 Oktober 2026, Aturan 1; lihat
+  `masukkan_pk_luar`). Baris lama sebelum aturan ini tetap apa adanya.
 - HPP silo = weighted-average bahan yang SUDAH di silo (kecuali HPP belum tersedia).
 """
 from __future__ import annotations
@@ -60,6 +65,7 @@ from app.penggilingan.gudang1.services.timbang_link import (
     adalah_jasa,
     ambil_tiket,
     kunci_tiket_untuk_ditaut,
+    tutup_paksa_pk_ditolak,
 )
 from app.penggilingan.peta_jenis import intake_dari_jenis
 
@@ -575,6 +581,143 @@ async def create_pk_purchase_dari_timbang(
                             supplier_created=created)
 
 
+@dataclass
+class PkRejectionResult:
+    batch: PkPurchaseBatch
+    rejection: PkRejection
+    pihak_nama: str
+    #: True bila tiket timbangnya ikut ditutup paksa. False berarti tiketnya
+    #: sudah tak TERBUKA lagi (sudah selesai timbang kedua secara normal, atau
+    #: sudah ditutup lebih dulu) — bukan kegagalan, cuma tak ada yang perlu
+    #: ditutup lagi.
+    tiket_ditutup: bool
+
+
+async def create_pk_rejection_dari_timbang(
+    db: AsyncSession, *, user: User, timbangan_transaksi_id: int, alasan: str,
+    tanggal: date | None = None, jam: time | None = None,
+) -> PkRejectionResult:
+    """Tolak PK luar SAAT DATANG — ditimbang, tapi tak diterima, dan kembali
+    ke truknya. Keputusan pemilik 4 Oktober 2026, borang yang sama dengan
+    `catat_pk_luar`: satu tombol "Terima" (→ `create_pk_purchase_dari_timbang`
+    lalu `masukkan_pk_luar`), satu tombol "Tolak" — di sini.
+
+    ⚠ TAK LEWAT JALUR PERISTIWA (beda dari kembarannya di atas). PK yang
+    DITERIMA mengubah stok — itu yang dijaga peristiwa/proyeksi/undo. PK yang
+    DITOLAK tidak pernah jadi stok; `pk_rejections` cuma register "truk apa,
+    berapa kg, kenapa ditolak" untuk laporan, dan `kunci_tiket_untuk_ditaut`
+    sendiri sudah cukup menjaga tiket yang sama tak diproses dua kali —
+    sama seperti keputusan tiket "diterima" dijaga di sana.
+
+    ⚠ Tabel & kolomnya (`pk_rejections`, `alasan_tolak`) sudah ada sejak
+    migrasi 0012 (5 Juli 2026) tetapi TAK PERNAH dipakai — diimpor, tak
+    sekali pun diinstansiasi. Fungsi ini pemakai pertamanya.
+
+    Satu-satunya yang wajib diisi `alasan` — jenis PK & kadar air TIDAK
+    ditanya, sebab PK yang ditolak tak pernah jadi stok yang perlu diklasifikasi.
+
+    ⚠⚠ IKUT MENUTUP PAKSA TIKET TIMBANGNYA (keputusan pemilik 4 Oktober 2026,
+    MENGESAMPINGKAN Temuan QA T-15 di repo timbangan — lihat `timbang_link.
+    tutup_paksa_pk_ditolak`). Timbangan sendiri menolak menutup paksa tiket
+    hanya karena muatannya ditolak, sebab truk yang ditolak tetap wajib lewat
+    timbangan keluar untuk kontrol masuk−keluar. Pemilik sadar melepas kontrol
+    itu KHUSUS untuk kasus ini."""
+    if user.role not in PERAN_ADMIN_KEATAS:
+        raise Gudang2Error("🔒 Input PK dari luar hanya bisa oleh Staff/Admin.")
+    if not (alasan or "").strip():
+        raise Gudang2Error("Sebutkan alasan menolaknya.")
+    # Kunci dulu, baru baca — lihat alasannya di `kunci_tiket_untuk_ditaut`.
+    # Kuncinya SAMA dengan jalur terima: tiket yang sudah DITOLAK pun
+    # terbaca "sudah dipakai" bagi percobaan kedua, sebab baris penandanya
+    # tetap `pk_purchase_batches` — satu-satunya tabel yang diperiksa di sana.
+    try:
+        await kunci_tiket_untuk_ditaut(db, timbangan_transaksi_id)
+    except TiketSudahDipakai as e:
+        raise Gudang2Error(str(e))
+    tiket = await ambil_tiket(db, timbangan_transaksi_id)
+    if tiket is None:
+        raise Gudang2Error(
+            "Tiket timbang tidak ditemukan atau sudah dibatalkan/ditutup paksa."
+        )
+    if tiket.get("arah") != "MASUK":
+        raise Gudang2Error("Tiket timbang bukan barang MASUK.")
+    info = intake_dari_jenis(tiket.get("jenis_kode", ""))
+    if info is None or info.model != "pk":
+        raise Gudang2Error("Tiket ini bukan PK masuk.")
+
+    berat, sumber, berat_perkiraan = await bobot_awal_dari_tiket(db, tiket)
+    now = input_time(tanggal, jam)
+
+    # Pemiliknya tetap disebut sebagai jejak — lihat catatan jasa di
+    # `create_pk_purchase_dari_timbang`, alasan yang sama berlaku di sini:
+    # barang jasa yang ditolak bukan pembelian, dan nama pelanggannya harus
+    # tetap terbaca, bukan tersamar jadi pemasok karangan.
+    jasa_ini: Jasa | None = None
+    supplier: Supplier | None = None
+    if adalah_jasa(tiket):
+        jasa_ini, _ = await pesanan_jasa_dari_tiket(db, user=user, tiket=tiket)
+    elif tiket.get("supplier_id"):
+        supplier = await db.get(Supplier, tiket["supplier_id"])
+    else:
+        nama = tiket.get("nama_supplier") or tiket.get("pihak_nama") or "Tanpa Nama"
+        supplier, _ = await find_or_create_supplier(db, nama)
+    pihak_nama = (supplier.nama_supplier if supplier else
+                 f"JASA {jasa_ini.kode} {tiket.get('nama_pelanggan') or ''}".strip())
+
+    kode = await next_pk_purchase_code(db, now.date())
+    batch = PkPurchaseBatch(
+        kode_batch=kode, supplier_id=supplier.id if supplier else None,
+        jasa_id=jasa_ini.id if jasa_ini else None, berat_total_kg=berat,
+        no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=None,
+        tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
+        # Ditolak = tak pernah jadi stok. `flag_unverified` tak berarti apa
+        # pun di sini (tak ada harga yang menunggu verifikasi), tapi False
+        # supaya layar lama yang menyaringnya tak ikut menagih batch ini.
+        status_batch="ditolak", flag_unverified=False,
+        timbangan_transaksi_id=timbangan_transaksi_id, sumber_berat=sumber,
+        berat_perkiraan_kg=berat_perkiraan,
+    )
+    db.add(batch)
+    try:
+        await db.flush()
+    except IntegrityError as e_:
+        await db.rollback()
+        raise Gudang2Error(_pesan_integritas(e_, "pk_purchase_batches", kode))
+
+    kode_rej = await next_rejection_code(db, now.date())
+    rejection = PkRejection(
+        kode=kode_rej, pk_purchase_batch_id=batch.id,
+        berat_kg=berat or 0, no_polisi_truk=tiket.get("nomor_polisi"),
+        alasan=alasan.strip(), tanggal=now.date(), waktu=now, created_by=user.id,
+    )
+    db.add(rejection)
+    await db.flush()
+
+    b_str = f"{berat:.0f}kg ({sumber})" if berat is not None else "bobot belum diketahui"
+    await log_activity(
+        db, table_name="pk_rejections", record_id=rejection.id, action="INSERT",
+        changed_by=user.id,
+        new_value=f"{kode_rej} | batch {kode} | {pihak_nama} | {b_str} | {alasan.strip()}",
+    )
+    await create_notification(
+        db, tipe="pk_luar_ditolak",
+        pesan=(f"⛔ PK luar {kode_rej} ({pihak_nama}, {b_str}, dari timbang "
+               f"{tiket['kode']}) DITOLAK — {alasan.strip()}"),
+        target_role="admin", prioritas="kuning",
+        table_name="pk_rejections", record_id=rejection.id,
+    )
+    # Tiketnya sudah TERKUNCI `FOR UPDATE` sejak `kunci_tiket_untuk_ditaut` di
+    # atas, dalam transaksi yang SAMA — jadi ditutup di sini, bukan sesudah
+    # commit, supaya batch ini dan penutupan tiketnya gagal/berhasil bersama.
+    ditutup = await tutup_paksa_pk_ditolak(db, tid=timbangan_transaksi_id,
+                                           alasan=alasan.strip())
+    await db.commit()
+    await db.refresh(batch)
+    await db.refresh(rejection)
+    return PkRejectionResult(batch=batch, rejection=rejection, pihak_nama=pihak_nama,
+                             tiket_ditutup=ditutup)
+
+
 async def _pk_batch_dari_kunci(db: AsyncSession, kunci_kiriman: str) -> PkPurchaseBatch | None:
     """Cermin batch PK dari peristiwa berkunci ini — untuk kiriman ulang."""
     from app.models import Peristiwa
@@ -623,24 +766,14 @@ async def log_pk_qc(
     kadar_air: float | None = None, broken: float | None = None,
     penyusutan_persen: float | None = None, butir_kuning: str | None = None,
     catatan_lab: str | None = None,
-    potongan_kg: float | None = None, potongan_alasan: str | None = None,
 ) -> PkQcResult:
     """Input KUALITAS PK luar (uji lab) sebagai PROPERTI batch — bukan keputusan.
 
     PK yang masuk sudah pasti diterima; ini mencatat kualitasnya (kadar air,
-    broken%, penyusutan/bekatul lab%, butir kuning, catatan) BERIKUT potongan
-    bobotnya. Staff/admin, kapan saja.
-
-    ⚠ POTONGAN BOBOT PINDAH KE SINI 28 September 2026, saat harga keluar dari
-    Pos Produksi. Ia dulu ditulis `verify_pk_price` — satu-satunya penulisnya —
-    dan ikut terbuang bersama harga berarti berat PK yang masuk Gudang 2
-    berubah untuk SELURUH pemasukan berikutnya, tanpa satu pesan pun.
-    `masukkan_pk_luar` mengurangkannya dari berat yang masuk, dan
-    `_SQL_RESINKRON_INTAKE` memperbaiki yang sudah terlanjur masuk.
-
-    Rumahnya di sini memang benar: potongan karena MUTU adalah pekerjaan
-    gudang, dan yang menilai mutunya borang ini. Harga TIDAK ada lagi di Pos
-    Produksi sama sekali."""
+    broken%, penyusutan/bekatul lab%, butir kuning, catatan). Staff/admin,
+    kapan saja. MURNI pencatatan mutu — tak pernah mengubah stok atau bobot;
+    lihat catatan panjang soal potongan bobot yang DIHAPUS pada migrasi
+    yang membuang kolomnya dari `pk_purchase_verifications`."""
     if user.role not in PERAN_ADMIN_KEATAS:
         raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
@@ -661,13 +794,6 @@ async def log_pk_qc(
     verif.penyusutan_persen = penyusutan_persen
     verif.butir_kuning = butir_kuning
     verif.catatan_lab = catatan_lab
-    # Hanya ditulis bila disebut: borang QC boleh diisi berkali-kali (kadar air
-    # dulu, potongan menyusul), dan menimpa potongan dengan None pada panggilan
-    # kedua akan mengembalikan bobot yang sudah dipotong.
-    if potongan_kg is not None:
-        verif.potongan_kg = potongan_kg
-    if potongan_alasan is not None:
-        verif.potongan_alasan = potongan_alasan
     verif.keputusan = "terima"  # PK masuk selalu diterima
     await log_activity(
         db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
@@ -681,9 +807,12 @@ async def log_pk_qc(
 
 
 # `verify_pk_price` DIBUANG 28 September 2026: harga keluar dari Pos Produksi
-# (keputusan pemilik). Ia satu-satunya penulis `potongan_kg` — potongan BOBOT
-# karena mutu, yang MENGUBAH STOK — dan itu pindah ke `log_pk_qc`, tempatnya
-# yang benar: yang menilai mutu borang QC.
+# (keputusan pemilik). Ia dulu satu-satunya penulis `potongan_kg` — potongan
+# BOBOT karena mutu, yang mengubah stok — dan sempat pindah ke `log_pk_qc`.
+# Potongannya sendiri DIBUANG 4 Oktober 2026 (lihat migrasi yang menghapus
+# `pk_purchase_verifications.potongan_kg`/`potongan_alasan`): basis data
+# produksi tak pernah memuat satu baris pun berisi angka itu, dan bobot PK
+# yang masuk Gudang 2 kini selalu sama dengan bobot tiket timbangnya.
 #
 # Akibat yang perlu diketahui pembaca berikutnya: `PkPurchaseBatch.
 # flag_unverified` kini tak pernah kembali ke False, sebab tak ada lagi yang
@@ -929,13 +1058,34 @@ async def masukkan_pk_luar(
     db: AsyncSession, *, user: User, kode: str | None, tujuan: str | None = None,
     tanggal=None, jam=None, kunci_kiriman: str | None = None,
 ) -> IntakeResult:
-    """Masukkan PK luar (yang sudah MASUK/diterima) ke silo/tumpukan G2.
+    """Masukkan PK luar (yang sudah MASUK/diterima) — SELALU ke tumpukan G2.
 
-    PK masuk = pasti diterima, jadi boleh langsung ditempatkan operator; input
+    PK masuk = pasti diterima, jadi boleh langsung ditempatkan; input
     kualitas & verifikasi harga jalan terpisah (HPP intake di-backfill saat harga
-    diverifikasi bila saat masuk belum ada)."""
+    diverifikasi bila saat masuk belum ada).
+
+    ⚠⚠ TUJUAN TAK LAGI PERTANYAAN (keputusan pemilik 4 Oktober 2026): PK yang
+    BARU masuk selalu ke tumpukan — silo tak boleh menyimpan stok berdiri,
+    isinya hanya untuk kebutuhan proses, dan satu-satunya jalan sah ke silo
+    kini `pindah_tumpukan_ke_silo`, pekerjaan operator. Satu-satunya baris
+    historis yang pernah melanggarnya (`beli_luar` langsung ke silo, sebelum
+    aturan ini) DIBIARKAN apa adanya — PK-nya memang berdiri di silo, dan
+    menulis ulang riwayatnya membuat catatan berbohong tentang tempat
+    barangnya.
+
+    `tujuan` di sini TETAP ADA hanya sebagai PAGAR, bukan sebagai pilihan:
+    menghilangkan medannya dari borang bukan penjagaan — alamatnya bisa
+    diketik, dan lembar lama masih terbuka di layar orang lain. Kosong atau
+    "ditumpuk" diterima diam-diam (borang baru tak mengirim apa pun); apa pun
+    yang menunjuk SILO ditolak di sini, bukan cuma dihilangkan dari borang."""
     if not kode:
         raise Gudang2Error("Sebutkan kode PK luarnya, contoh: `masukkan PKL-... ke silo B`")
+    if tujuan and (await _tujuan_and_silo(db, tujuan))[0] != DITUMPUK:
+        raise Gudang2Error(
+            "❌ PK yang baru masuk harus ke tumpukan dulu — silo hanya terisi "
+            "lewat 'Pindah tumpukan ke silo', dan itu pekerjaan operator."
+        )
+    tujuan = DITUMPUK
     # ── Batch-nya DIKUNCI sebelum diperiksa ──
     #
     # Tanpa kunci, dua permintaan yang datang bersamaan sama-sama menemukan
@@ -972,9 +1122,13 @@ async def masukkan_pk_luar(
     # Tiga keadaan bobot (QA P6-02): pasti, perkiraan (ikut sebagai angka,
     # ditandai belum final), tak diketahui (NULL — bukan 0, yang ditolak
     # CHECK berat_positif dan memang bohong). Poller melengkapinya.
+    #
+    # ⚠ Bobot yang masuk sini SELALU bobot batch apa adanya (potongan bobot
+    # QC DIHAPUS 4 Oktober 2026 — basis data produksi tak pernah memuat satu
+    # baris pun berisi `potongan_kg`). `verif` tetap dibaca di sini bukan
+    # untuk potongannya, melainkan untuk HPP di baris berikutnya.
     bobot = dari_batch(batch)
-    potongan = float(verif.potongan_kg or 0) if verif else 0.0
-    berat = (bobot.angka() - potongan) if bobot.diketahui else None
+    berat = bobot.angka() if bobot.diketahui else None
     hpp = float(verif.harga_per_kg) if verif and verif.harga_per_kg is not None else None
     res = await _add_intake(
         db, user=user, sumber_tipe="beli_luar", tujuan=tujuan, berat_kg=berat,
@@ -993,17 +1147,16 @@ async def masukkan_pk_luar(
 
 _SQL_RESINKRON_INTAKE = text("""
     UPDATE pk_gudang2_intakes i
-       SET berat_kg = b.berat_total_kg - COALESCE(v.potongan_kg, 0),
+       SET berat_kg = b.berat_total_kg,
            bobot_final = true
       FROM pk_purchase_batches b
-      LEFT JOIN pk_purchase_verifications v ON v.pk_purchase_batch_id = b.id
      WHERE i.pk_purchase_batch_id = b.id
        AND i.dibatalkan_pada IS NULL              -- cermin bertanda
        AND i.bobot_final = false
        AND b.dibatalkan_pada IS NULL
        AND b.sumber_berat IN ('nota', 'timbangan', 'manual')
        AND b.berat_total_kg IS NOT NULL
-       AND b.berat_total_kg - COALESCE(v.potongan_kg, 0) > 0
+       AND b.berat_total_kg > 0
 """)
 
 

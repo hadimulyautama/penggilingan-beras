@@ -1813,9 +1813,9 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             judul=nama or pk.kode_batch,
             utama=_utama(dari_batch(pk)),
             sub=f"{pk.kode_batch} · PK luar · masuk {_tgl(pk.tanggal_pembelian)}",
-            keadaan="belum masuk silo maupun tumpukan",
+            keadaan="belum masuk tumpukan",
             pilihan=[("masukkan_pk", "Masukkan ke gudang",
-                      "Tentukan tumpukan atau silo tujuannya", pk.kode_batch)],
+                      "Langsung ke tumpukan — pindah ke silo belakangan", pk.kode_batch)],
         ))
 
     # ── Penyosohan yang sedang berputar ──
@@ -1846,6 +1846,11 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     for pk, nama in (await db.execute(
         select(PkPurchaseBatch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        # Ditolak = sudah kembali ke truknya, tak pernah diterima — menagih
+        # mutunya cuma mengundang orang men-QC barang yang sudah tak ada
+        # (keputusan pemilik 4 Oktober 2026, sejak status ini dipakai
+        # sungguhan oleh `create_pk_rejection_dari_timbang`).
+        .where(PkPurchaseBatch.status_batch != "ditolak")
         .order_by(PkPurchaseBatch.id.desc())
     )).all() if await fitur_mutu(db) else []:
         if pk.id in sudah_qc:

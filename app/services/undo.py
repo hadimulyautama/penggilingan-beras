@@ -101,6 +101,11 @@ _TABLE_LABEL = {
     "silo_moving_logs": "pemindahan silo",
     "pk_purchase_batches": "PK luar masuk",
     "pk_purchase_verifications": "verifikasi harga PK luar",
+    # Bukan tabel yang bisa di-undo: penolakan PK luar tidak pernah jadi
+    # stok, jadi tak ada apa pun untuk dibatalkan (`create_pk_rejection_dari_
+    # timbang` tak lewat jalur peristiwa). Ia di sini karena pratinjau undo
+    # menampilkan tindakan terakhir APA PUN tabelnya.
+    "pk_rejections": "penolakan PK luar",
     "pk_gudang2_intakes": "PK masuk Gudang 2",
     "pk_tumpukan_to_silo": "PK tumpukan ke silo",
     "polishing_silo_usage": "selesai penyosohan (silo)",
@@ -938,8 +943,6 @@ async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None
         verif.harga_per_kg = None
         verif.total_biaya = None
         verif.metode_harga = None
-        verif.potongan_kg = None
-        verif.potongan_alasan = None
         b.flag_unverified = True
         # Balik snapshot HPP intake yang tadi di-backfill.
         intakes = (

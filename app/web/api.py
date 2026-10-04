@@ -736,11 +736,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "number", "wajib": True},
              ]},
         ]
-    if g2:
-        # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
-        # memindahkan PK dari tumpukan ke silo, dan menjalankan mesin sosoh.
-        # Menempatkan PK yang datang (tumpuk / langsung silo) adalah entry
-        # Admin — `masukkan_pk` ada di blok `fin` di bawah.
+    if g2 and not fin:
+        # ⚠ Pindah tumpukan → silo bukan pekerjaan Admin (keputusan pemilik
+        # 4 Oktober 2026) — gerbang yang sama bentuknya dengan `minta_pk_g1`
+        # di bawah: Admin bisa memindahkan PK lewat jalur lain, dan tombol
+        # ini di tangannya cuma pintu kedua ke pekerjaan yang sama. Spesifikasi
+        # ini DIPISAH dari blok `g2` di bawah justru supaya Admin TIDAK
+        # menerimanya sama sekali — termasuk lewat deep-link `?buka=`, bukan
+        # cuma lewat kartu/katalog yang memang sudah tak menawarkannya.
         actions += [
             {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
@@ -775,6 +778,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang dipindah (kg)",
                   "type": "number"},
              ]},
+        ]
+    if g2:
+        # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
+        # menjalankan mesin sosoh. Menempatkan PK yang datang (tumpuk /
+        # langsung silo) adalah entry Admin — `masukkan_pk` ada di blok `fin`
+        # di bawah. `pindah_tumpukan_silo` PINDAH ke blok tersendiri di atas
+        # (4 Oktober 2026) — satu-satunya di sini yang Admin TIDAK boleh.
+        actions += [
             # BEBERAPA silo boleh dicentang, sama seperti "Mulai giling".
             # Dulu daftarnya tupel tertulis-tangan A / B / A+B: layanannya
             # SUDAH menerima berapa pun silo, borangnya yang mengurungnya jadi
@@ -960,7 +971,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/api/actions/catat-pk-luar",
              "hint": "Pilih tiket timbang PK yang masih aktif — supplier, bobot & plat "
-                     "otomatis dari timbangan. Selanjutnya di-QC & dinilai harga.",
+                     "otomatis dari timbangan. Langsung tertumpuk; selanjutnya "
+                     "tinggal di-QC & dinilai harga. Ditolak? Pakai tombol "
+                     "\"Tolak PK luar\" di bawah, bukan borang ini.",
              "fields": [
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang PK yang masih aktif",
                   "type": "remote", "source": "/api/actions/timbang-pk-aktif",
@@ -968,6 +981,23 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
                  {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
+             ]},
+            # ⚠⚠ Tombol KEDUA PK luar baru datang — Aturan 1 & Aturan 2, 4
+            # Oktober 2026. Tiket yang sama dengan `catat_pk_luar` di atas,
+            # tapi hasilnya berlawanan: batch TERCATAT (untuk laporan &
+            # jejak), tak pernah jadi stok, dan tiket timbangnya ikut
+            # ditutup paksa — lihat catatan panjang di `act_tolak_pk_luar`.
+            {"id": "tolak_pk_luar", "label": "⛔ Tolak PK luar",
+             "post": "/api/actions/tolak-pk-luar",
+             "hint": "PK yang datang tidak diterima — kembali ke truknya. Satu-satunya "
+                     "yang wajib diisi alasannya; jenis PK & kadar air tak ditanya, "
+                     "sebab PK yang ditolak tak pernah jadi stok. Tiket timbangnya "
+                     "ikut ditutup otomatis sebagai \"truk pergi\", dengan alasan ini.",
+             "fields": [
+                 {"name": "timbangan_transaksi_id", "label": "Tiket timbang PK yang masih aktif",
+                  "type": "remote", "source": "/api/actions/timbang-pk-aktif",
+                  "kosong": "Tidak ada tiket timbang PK yang aktif."},
+                 {"name": "alasan", "label": "Alasan menolak (wajib)", "type": "text"},
              ]},
             {"id": "qc_pk_luar", "label": "🔬 Catat kualitas PK luar",
              "post": "/api/actions/qc-pk-luar",
@@ -983,37 +1013,20 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
                   "options": BUTIR, "optional": True},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
-                 # ── POTONGAN BOBOT pindah ke sini 28 September 2026 ──
-                 #
-                 # Harga keluar dari Pos Produksi hari ini, dan bersamanya aksi
-                 # "Verifikasi harga PK luar" — satu-satunya tempat potongan
-                 # bobot pernah ditulis. Brief menyangka QC yang menulisnya;
-                 # borangnya membuktikan tidak.
-                 #
-                 # Ia memang milik QC: potongan karena MUTU, pekerjaan gudang,
-                 # dan ia MENGUBAH STOK (`masukkan_pk_luar` mengurangkannya
-                 # dari berat yang masuk). Ikut terbuang bersama harga berarti
-                 # berat PK yang masuk Gudang 2 berubah untuk seluruh pemasukan
-                 # berikutnya, tanpa satu pesan pun.
-                 {"name": "potongan_kg", "label": "Potongan bobot (kg) — opsional",
-                  "type": "number", "optional": True},
-                 {"name": "potongan_alasan", "label": "Alasan potongan — opsional",
-                  "type": "text", "optional": True},
              ]},
-            # Menempatkan PK yang datang — tumpuk atau langsung silo — adalah
-            # ENTRY ADMIN (keputusan pemilik 12 September 2026); dulu ada di
-            # blok operator Gudang 2.
+            # Mencatat PK yang datang — ENTRY ADMIN (keputusan pemilik 12
+            # September 2026); dulu ada di blok operator Gudang 2.
+            #
+            # ⚠ Medan "Tujuan" DIBUANG 4 Oktober 2026 (Aturan 1): PK yang
+            # baru masuk selalu ke tumpukan sekarang, tanpa pertanyaan —
+            # pindah ke silo adalah langkah terpisah milik operator
+            # (`pindah_tumpukan_silo`). Jangan pasang lagi medan ini di sini;
+            # lihat catatan panjang di `masukkan_pk_luar`.
             {"id": "masukkan_pk", "label": "📥 Masukkan PK diterima",
              "post": "/api/actions/masukkan-pk", "fields": [
                  {"name": "kode_batch", "label": "PK yang menunggu dimasukkan", "type": "remote",
                   "source": "/api/actions/pk-intake-pending",
                   "kosong": "Tidak ada PK masuk yang menunggu."},
-                 # Daftarnya dari MASTER, bukan dua silo yang diketik di
-                 # kode: silo Gudang 2 yang ditambahkan lewat Pengaturan →
-                 # Alat langsung bisa menerima PK. Migrasi 0057.
-                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "remote",
-                  "source": "/api/actions/tujuan-pk-g2",
-                  "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
              ]},
             {"id": "transfer_pk", "label": "🚚 Pemindahan PK G1 → G2",
              "post": "/api/actions/transfer-pk", "fields": [
@@ -1195,7 +1208,7 @@ for _a in (
     "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
     "catat_packing",
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
-    "masukkan_pk", "catat_pk_luar", "qc_pk_luar",
+    "masukkan_pk", "catat_pk_luar", "tolak_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",
     # Bekatul curah — tombolnya di kartu bekatul pada Stok Produk sejak 30
     # September 2026, tepat di sebelah angka "belum dicatat" yang menagihnya.
@@ -1255,7 +1268,7 @@ _ACTION_WH = {
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
     "selesai_penyosohan": "g2", "pindah_tumpukan_silo": "g2",
     "hentikan_penyosohan": "g2", "lanjutkan_penyosohan": "g2",
-    "catat_pk_luar": "g2", "qc_pk_luar": "g2",
+    "catat_pk_luar": "g2", "tolak_pk_luar": "g2", "qc_pk_luar": "g2",
     # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
@@ -1764,7 +1777,14 @@ async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/pk-intake-pending")
 async def pk_intake_pending(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """PK luar SUDAH diterima (QC) tapi belum dimasukkan ke silo/tumpukan."""
+    """PK luar yang sudah tercatat MASUK tapi belum punya baris intake.
+
+    ⚠ "Diterima" BUKAN "sudah di-QC" — `status_batch="diterima"` disetel
+    `catat_pk_luar` saat PK dicatat datang, bukan oleh QC. Jadi batch ini bisa
+    (dan biasa) muncul di sini SEBELUM lab mengisi kualitasnya. Itu disengaja,
+    bukan cacat: PK yang sudah turun dari truk harus punya tempat; menahannya
+    sampai lab selesai berarti PK menginap di truk. Lihat `log_pk_qc` untuk
+    bagaimana potongan QC yang menyusul tetap sampai ke stok."""
     _require(await _is_g2_operator(user))
     from sqlalchemy import exists, select
     from app.models import PkGudang2Intake, PkPurchaseBatch
@@ -2608,10 +2628,23 @@ async def act_rekonsiliasi_timbang(user: User = Depends(pengguna_aksi)) -> dict:
 
 @router.post("/actions/catat-pk-luar")
 async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """Catat PK luar datang — DAN langsung tertumpuk, satu borang (keputusan
+    pemilik 4 Oktober 2026, menyatukan `catat_pk_luar` + `masukkan_pk` yang
+    dulu dua langkah terpisah).
+
+    Dulu "catat" dan "masukkan ke gudang" adalah dua kartu berbeda yang bisa
+    berdiri bersamaan di Antrian tunggu tanpa satu pun menyebut mana lebih
+    dulu. Aturan 1 (PK baru selalu ke tumpukan, tanpa pertanyaan tujuan)
+    menghapus satu-satunya keputusan yang ada di langkah kedua — yang
+    tersisa cuma pencatatan — jadi keduanya aman disatukan jadi satu panggilan.
+
+    Lihat `act_tolak_pk_luar` untuk jalur SEBALIKNYA: PK yang ditolak, bukan
+    diterima."""
     _require(can_see_financials(user))
     if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
-    from app.penggilingan.gudang2.service import create_pk_purchase_dari_timbang, Gudang2Error
+    from app.penggilingan.gudang2.service import (
+        create_pk_purchase_dari_timbang, masukkan_pk_luar, Gudang2Error)
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
@@ -2624,13 +2657,76 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
             raise _err(e, "Gagal mencatat PK luar.")
         berat = r.batch.berat_total_kg
         nopol = r.batch.no_polisi_truk or "-"
+        # ── Langkah kedua, DI DALAM aksi yang sama (Aturan 1) ──
+        #
+        # Kiriman ulang (kunci_kiriman sama) mengembalikan batch yang SAMA
+        # dari `create_pk_purchase_dari_timbang` di atas — dan baris intake-
+        # nya pun sudah ada dari percobaan pertama. `masukkan_pk_luar`
+        # sendiri menolak batch yang sudah punya intake ("sudah dimasukkan
+        # sebelumnya"), jadi percobaan kedua di sini ditelan diam-diam,
+        # bukan dianggap galat: pesan sukses yang sama tetap tampil.
+        tertumpuk = True
+        try:
+            await masukkan_pk_luar(db, user=u, kode=r.batch.kode_batch)
+        except Gudang2Error as e:
+            if "sudah dimasukkan" not in str(e):
+                # Gagal karena sebab LAIN — batch-nya tetap tercatat (sudah
+                # commit di atas), tapi belum tertumpuk. Kartu "PK luar yang
+                # menunggu dimasukkan" (`masukkan_pk`, lihat `berjalan.
+                # untuk_gudang2`) tetap berdiri sebagai jalan penyelesaiannya
+                # — bukan jalan darurat yang baru, melainkan yang sudah ada
+                # sejak sebelum penyatuan ini.
+                tertumpuk = False
     jl = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}.get(
         r.batch.jenis_pk, r.batch.jenis_pk or "-")
     baru = " (supplier baru)" if r.supplier_created else ""
     bstr = f"{float(berat):g} kg" if berat is not None else "menunggu bobot"
+    ekor = (" Tertumpuk — menunggu input kualitas & verifikasi harga."
+           if tertumpuk else
+           " Diterima, tapi BELUM tertumpuk — selesaikan lewat kartu "
+           "\"PK luar yang menunggu dimasukkan\".")
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
-             f"{jl} {bstr}, truk {nopol}. "
-             "Diterima — menunggu input kualitas & verifikasi harga.")
+             f"{jl} {bstr}, truk {nopol}.{ekor}")
+    return {"ok": True, "pesan": pesan}
+
+
+class TolakPkLuarReq(BaseModel):
+    timbangan_transaksi_id: int
+    alasan: str
+    #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
+    kunci_kiriman: str | None = None
+
+
+@router.post("/actions/tolak-pk-luar")
+async def act_tolak_pk_luar(req: TolakPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """Tolak PK luar SAAT DATANG — tombol kedua di borang yang sama dengan
+    `catat_pk_luar` (keputusan pemilik 4 Oktober 2026). Satu-satunya yang
+    wajib: alasannya — jenis PK & kadar air tak ditanya, sebab PK yang
+    ditolak tak pernah jadi stok yang perlu diklasifikasi.
+
+    ⚠ Tiket timbangnya ikut ditutup paksa, MENGESAMPINGKAN Temuan QA T-15 di
+    repo timbangan (truk yang ditolak biasanya tetap wajib ditimbang keluar
+    untuk kontrol masuk−keluar) — keputusan pemilik, khusus kasus ini. Lihat
+    `gudang2.service.create_pk_rejection_dari_timbang`."""
+    _require(can_see_financials(user))
+    if not (req.alasan or "").strip():
+        raise HTTPException(400, "Sebutkan alasan menolaknya.")
+    from app.penggilingan.gudang2.service import create_pk_rejection_dari_timbang, Gudang2Error
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await create_pk_rejection_dari_timbang(
+                db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
+                alasan=req.alasan,
+            )
+        except Gudang2Error as e:
+            raise _err(e, "Gagal mencatat penolakan PK luar.")
+    bstr = f"{float(r.rejection.berat_kg):g} kg" if r.rejection.berat_kg else "bobot belum diketahui"
+    nopol = r.rejection.no_polisi_truk or "-"
+    ekor = ("" if r.tiket_ditutup else
+           " (tiket timbangnya sudah selesai sendiri — tak disentuh)")
+    pesan = (f"⛔ PK luar *{r.rejection.kode}* ditolak — {r.pihak_nama}, {bstr}, "
+             f"truk {nopol}. {req.alasan.strip()}{ekor}")
     return {"ok": True, "pesan": pesan}
 
 
@@ -2641,25 +2737,28 @@ class QcPkLuarReq(BaseModel):
     penyusutan: PersenOpsional = None
     butir_kuning: str | None = None
     catatan_lab: str | None = None
-    #: Potongan BOBOT karena mutu — pindah ke sini bersama hapusnya aksi harga
-    #: (28 September 2026). Ia mengubah stok, bukan rupiah.
-    potongan_kg: PositifOpsional = None
-    potongan_alasan: str | None = None
 
 
 @router.post("/actions/qc-pk-luar")
 async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
-    """Input kualitas PK luar (properti batch) — bukan keputusan terima/tolak."""
+    """Input kualitas PK luar (properti batch) — bukan keputusan terima/tolak.
+
+    ⚠ POTONGAN BOBOT DIHAPUS 4 Oktober 2026 (keputusan pemilik): basis data
+    produksi tak pernah memuat satu baris pun berisi `potongan_kg`/`potongan_
+    alasan` (keduanya 0 dari 0 baris saat diperiksa) — tak ada riwayat yang
+    hilang. Bobot PK yang masuk Gudang 2 kini SELALU sama dengan bobot
+    tiket timbangnya; borang ini murni mencatat MUTU, tak pernah mengubah
+    stok. Kalau bobot memang perlu dikoreksi, tempatnya revisi tiket di Pos
+    Timbang (`jumlah_revisi`, `terkunci`) — bukan potongan diam-diam di sini.
+    """
     _require(can_see_financials(user))
     await _wajib_mutu()
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK luar dulu.")
-    if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan,
-                               req.potongan_kg)) \
+    if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan)) \
             and not (req.butir_kuning or req.catatan_lab):
         raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / "
-                                 "penyusutan / butir kuning / catatan / "
-                                 "potongan bobot.")
+                                 "penyusutan / butir kuning / catatan.")
     from app.penggilingan.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2669,8 +2768,6 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
                 broken=req.broken, penyusutan_persen=req.penyusutan,
                 butir_kuning=(req.butir_kuning or None),
                 catatan_lab=(req.catatan_lab or None),
-                potongan_kg=req.potongan_kg,
-                potongan_alasan=(req.potongan_alasan or None),
             )
         except Gudang2Error as e:
             raise _err(e, "Gagal input kualitas PK.")
@@ -2922,29 +3019,34 @@ async def act_transfer_pk(req: TransferReq, user: User = Depends(pengguna_aksi))
 
 class MasukkanPkReq(BaseModel):
     kode_batch: str
-    #: Nama silo Gudang 2 ("A", "Silo A") atau "ditumpuk". Bentuk lama
-    #: `silo_a`/`silo_b` tetap diterima: halaman lama masih mengirimkannya.
-    tujuan: str
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
 
 @router.post("/actions/masukkan-pk")
 async def act_masukkan_pk(req: MasukkanPkReq, user: User = Depends(pengguna_aksi)) -> dict:
+    """PK luar yang baru masuk — langsung tertumpuk, tanpa pertanyaan tujuan.
+
+    ⚠⚠ MEDAN `tujuan` DIBUANG (keputusan pemilik 4 Oktober 2026, Aturan 1):
+    "apa yang bisa dijawab cuma satu jawaban" bukan pertanyaan. PK yang baru
+    masuk selalu ke tumpukan sekarang — pindah ke silo adalah langkah
+    TERPISAH (`pindah_tumpukan_silo`), pekerjaan operator, sesudah barangnya
+    berdiri di lantai. `masukkan_pk_luar` sendiri menolak tujuan apa pun
+    selain tumpukan — pagar di sini cuma mencegah borang lama (yang masih
+    menyimpan medan itu di layarnya) mengirimkan sesuatu yang akan ditolak
+    dengan pesan yang membingungkan.
+    """
     # Entry Admin, bukan operator (keputusan pemilik 12 September 2026).
     _require(can_see_financials(user))
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK yang mau dimasukkan dulu.")
-    # Lihat catatan di `act_transfer_pk`: yang memeriksa nama silonya master.
-    if not (req.tujuan or "").strip():
-        raise HTTPException(400, "Pilih tujuan dulu.")
     from sqlalchemy.exc import IntegrityError
 
     from app.penggilingan.gudang2.service import masukkan_pk_luar, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch, tujuan=req.tujuan,
+            r = await masukkan_pk_luar(db, user=u, kode=req.kode_batch,
                                        kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan PK.")
@@ -3274,8 +3376,17 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
     punya pintu di layar; sejak 12 September 2026 ia pekerjaan operator
     (keputusan pemilik). Silo yang sedang dipoles boleh menerima — yang
     dituang ikut dihitung sebagai bahan proses itu.
+
+    ⚠ Gerbangnya BUKAN cuma `_is_g2_operator` (lihat catatan panjang pada
+    `minta_pk_g1`) — nama itu menyesatkan: artinya "admin, ATAU operator yang
+    sedang di Gudang 2", bukan "operator Gudang 2 saja". `and not
+    can_see_financials` DI SINILAH yang menyempitkannya — keputusan pemilik
+    4 Oktober 2026: yang memindahkan barang adalah yang memegang barang, dan
+    PK yang menumpuk saat tak ada operator Gudang 2 bertugas memang TETAP di
+    lantai sampai ada operator. Jangan menghapus klausa ini karena mengira
+    `_is_g2_operator` saja sudah cukup sempit.
     """
-    _require(await _is_g2_operator(user))
+    _require(await _is_g2_operator(user) and not can_see_financials(user))
     if not str(req.tumpukan or "").strip().isdigit():
         raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
     if (req.silo or "").upper() not in ("A", "B"):
