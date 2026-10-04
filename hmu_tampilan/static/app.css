@@ -1771,6 +1771,22 @@ body.terik {
   /* Kontennya DIBATASI dan DIPUSATKAN di ruang sisa sesudah sidebar —
      selebar bentuk ponselnya dulu (560px, angka yang sama dengan
      `max-width` lama `.bingkai`), supaya kartu & borang tak melebar
-     janggal di monitor lebar. */
-  .isi { max-width: 560px; margin: 0 auto; width: 100%; }
+     janggal di monitor lebar.
+
+     ⚠ LEWAT PADDING, BUKAN `max-width` + `margin:auto` pada kotaknya
+     sendiri. Dicoba begitu dulu dan ketahuan rusak dari tangkapan layar
+     pemilik: `.isi` adalah kotak yang SCROLL (`overflow-y:auto` di
+     aturan dasarnya), jadi mengecilkan kotaknya memindahkan scrollbar-nya
+     ikut ke tepi kotak yang sudah menyempit — scrollbar mengambang di
+     tengah layar lebar, bukan menempel di tepi jendela sungguhan, persis
+     yang dilaporkan: "posisi scrollbar-nya aneh, seperti bukan versi
+     desktop". Padding membiarkan KOTAKNYA tetap selebar penuh (sehingga
+     scrollbar-nya tetap di tepi jendela yang benar) dan hanya mendorong
+     ISINYA ke tengah. `max(…)` menjaga jarak tak pernah lebih sempit
+     dari padding ponsel (16px) pada lebar yang pas 900px, saat ruang
+     sisa sesudah sidebar belum jauh lebih lebar dari 560px. */
+  .isi {
+    padding-left: max(16px, calc((100% - 560px) / 2));
+    padding-right: max(16px, calc((100% - 560px) / 2));
+  }
 }
