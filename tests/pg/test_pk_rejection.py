@@ -226,6 +226,70 @@ async def test_borang_gabungan_catat_langsung_tertumpuk(pg, admin, pemasok):
     assert len(intake) == 1 and float(intake[0].berat_kg) == 6_000
 
 
+async def test_borang_gabungan_mutu_sekalian_jika_diisi(pg, admin, pemasok):
+    """Keputusan pemilik 5 Oktober 2026: mutu boleh diisi DI SINI juga —
+    opsional, dan kalau diisi langsung tercatat sebagai QC sungguhan
+    (`pk_purchase_verifications`), bukan cuma snapshot di batch. Kartu
+    "Mutu PK luar belum dicatat" (`berjalan.untuk_gudang2`) berhenti
+    menagihnya begitu ini terisi."""
+    from app.models import PkPurchaseBatch, PkPurchaseVerification, User
+    from app.services.berjalan import untuk_gudang2
+    from app.web.api import CatatPkLuarReq, act_catat_pk_luar
+
+    async with pg() as db:
+        tid = await _tiket(db, "T-REJ-07", nopol="AD 7 RJ", t1=7_000,
+                           netto=7_000, kosong=0, supplier_id=pemasok.id)
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(type(admin), admin.id)
+        jawab = await act_catat_pk_luar(
+            CatatPkLuarReq(timbangan_transaksi_id=tid, jenis_pk="ks",
+                          kadar_air=15, broken=2.5, penyusutan=1.0,
+                          butir_kuning="bersih", catatan_lab="uji lapangan"),
+            user=u)
+    assert "mutu tercatat" in jawab["pesan"], jawab["pesan"]
+
+    async with pg() as db:
+        batch = (await db.execute(select(PkPurchaseBatch).where(
+            PkPurchaseBatch.timbangan_transaksi_id == tid))).scalars().one()
+        verif = (await db.execute(select(PkPurchaseVerification).where(
+            PkPurchaseVerification.pk_purchase_batch_id == batch.id))).scalars().one()
+        assert float(verif.kadar_air) == 15 and float(verif.broken_persen) == 2.5
+        assert verif.butir_kuning == "bersih"
+
+        b = await untuk_gudang2(db)
+    assert not any(k.kode == batch.kode_batch for k in b.meja), (
+        "mutu yang sudah diisi di borang gabungan masih menagih QC susulan")
+
+
+async def test_borang_gabungan_mutu_boleh_dikosongkan(pg, admin, pemasok):
+    """Mutu TETAP opsional — mengosongkannya tak menolak pencatatan, dan
+    kartu susulan tetap menagihnya seperti biasa."""
+    from app.models import PkPurchaseBatch, User
+    from app.services.berjalan import untuk_gudang2
+    from app.web.api import CatatPkLuarReq, act_catat_pk_luar
+
+    async with pg() as db:
+        tid = await _tiket(db, "T-REJ-08", nopol="AD 8 RJ", t1=4_000,
+                           netto=4_000, kosong=0, supplier_id=pemasok.id)
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(type(admin), admin.id)
+        jawab = await act_catat_pk_luar(
+            CatatPkLuarReq(timbangan_transaksi_id=tid, jenis_pk="kl"), user=u)
+    assert "mutu tercatat" not in jawab["pesan"], jawab["pesan"]
+
+    async with pg() as db:
+        batch = (await db.execute(select(PkPurchaseBatch).where(
+            PkPurchaseBatch.timbangan_transaksi_id == tid))).scalars().one()
+        b = await untuk_gudang2(db)
+    assert any(k.kode == batch.kode_batch for k in b.meja), (
+        "batch yang mutunya belum diisi harus tetap menagih kartu susulan"
+    )
+
+
 async def test_rute_tolak_wajib_admin_dan_alasan(pg, admin, pemasok):
     from fastapi import HTTPException
 
