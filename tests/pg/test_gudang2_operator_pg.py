@@ -421,10 +421,14 @@ async def test_silo_kembali_ke_antrean_sesudah_penyosohan_ditutup(pg, gudang2):
 async def test_stok_silo_tak_berubah_selama_disosoh(pg, gudang2):
     """Yang berubah cuma ANTREAN. Barangnya memang masih di silo sampai
     prosesnya ditutup dan sisanya dicatat — jangan 'memperbaiki' ini dengan
-    mengurangi stok saat proses dimulai."""
+    mengurangi stok saat proses dimulai.
+
+    ⚠ Kartu Stok (`pk_gudang2`) TIDAK lagi diperiksa di sini sejak 4 Oktober
+    2026 — silo dikeluarkan dari kartu itu (keputusan pemilik: silo tak
+    boleh menyimpan stok berdiri), jadi `hitung_stok_silo` langsung adalah
+    satu-satunya kebenaran yang tersisa untuk diuji."""
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
     from app.penggilingan.gudang2.service import get_g2_silo, hitung_stok_silo
-    from app.services.stok import pk_gudang2
 
     async with pg() as db:
         silo_b = await get_g2_silo(db, "B")
@@ -441,9 +445,7 @@ async def test_stok_silo_tak_berubah_selama_disosoh(pg, gudang2):
 
     async with pg() as db:
         sesudah = float(await hitung_stok_silo(db, silo_b.id))
-        tempat = await pk_gudang2(db)
     assert sesudah == sebelum == 9_800
-    assert any(t.tersedia == 9_800 for t in tempat), "layar Stok ikut berubah"
 
 
 async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):

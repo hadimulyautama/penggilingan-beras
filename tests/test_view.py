@@ -311,18 +311,19 @@ def test_kartu_gudang2_menyebut_asal_barangnya():
     assert "Pernah masuk" in teks and "anak__baris" in teks
 
 
-def test_tempat_kosong_tetap_didaftar():
-    """Aturan Gudang 1 sengaja dibalik di sini: di sana barisnya LOT, dan lot
-    yang habis memang tak ada lagi. Di sini barisnya TEMPAT, dan tempat yang
-    kosong tetap ada — silo yang hilang dari daftar terbaca sebagai silo yang
-    rusak atau data yang gagal dimuat."""
+def test_tempat_hanya_tumpukan_dan_disaring_kosong():
+    """Keputusan pemilik 4 Oktober 2026: silo tak boleh menyimpan stok berdiri
+    di kartu Stok, dan isinya cuma hitungan masuk-keluar, bukan ukuran fisik.
+    Jadi `pk_gudang2` tak boleh lagi menyebut silo sama sekali, dan Tumpukan
+    kini memakai aturan Gudang 1 — habis = tak didaftar — bukan aturan silo
+    lama ("tempat kosong tetap ditampilkan")."""
     from app.services import stok
 
     sumber = inspect.getsource(stok.pk_gudang2)
-    # Yang dilarang: menyaring tempat menurut isinya. Satu-satunya `continue`
-    # yang sah adalah silo yang memang tak ada barisnya di basis data.
-    assert "if stok <= 0" not in sumber and "if stok:" not in sumber
-    assert sumber.count("continue") == 1 and "if silo is None" in sumber
+    # Yang dilarang: membangun baris silo sama sekali — bukan sekadar
+    # menyebut katanya (docstring-nya sendiri menjelaskan KENAPA tak ada).
+    assert "hitung_stok_silo" not in sumber and 'kode=f"Silo' not in sumber
+    assert "if tump <= 0" in sumber and "return []" in sumber
 
 
 # ─────────────────── Pengaturan: yang hanya milik pemilik ───────────────────

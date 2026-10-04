@@ -1313,8 +1313,16 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
     """⭐ Pemilik yang dihitung lalu tak digambar sama saja dengan tak dihitung.
 
     `LotPk.pemilik` dan `TempatPk.pemilik` sempat ada di dataclass-nya dan TAK
-    PERNAH disebut templatnya — jadi silo penuh barang pelanggan tampak persis
-    seperti silo pabrik di layar yang justru dibuka untuk memutuskan.
+    PERNAH disebut templatnya — jadi tumpukan penuh barang pelanggan tampak
+    persis seperti tumpukan pabrik di layar yang justru dibuka untuk
+    memutuskan.
+
+    ⚠ Tujuannya TUMPUKAN, bukan silo (sejak 4 Oktober 2026 kartu silo
+    dihapus dari `/stok` — keputusan pemilik: silo tak boleh menyimpan stok
+    berdiri). Titipan yang berakhir di SILO tetap terbaca, tetapi lewat
+    `/jasa` ("Di silo", lihat `jasa.html`) — bukan lagi lewat kartu ini.
+    Kartu `/stok` sekarang hanya bertanggung jawab atas lot Gudang 1 dan
+    Tumpukan Gudang 2, jadi itulah yang diuji di sini.
 
     DIRENDER SUNGGUHAN lewat HTTP, bukan dihitung kemunculan teksnya di
     markup-nya. Penjaga versi hitung-teks saya tulis lebih dulu dan ia LULUS
@@ -1329,7 +1337,6 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
     import httpx
     from app.main import app
     from app.models import ProduksiAkun, User, Warehouse
-    from app.penggilingan.gudang2.service import get_g2_silo
     from app.services.transfer import create_internal_transfer
     from app.web import csrf, security
     from hmu_identitas import sandi as S
@@ -1340,9 +1347,7 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         await create_internal_transfer(db, user=u, kode_proses=kode_proses,
-                                       lokasi_tujuan="A", berat=3_000)
-    async with pg() as db:
-        assert await get_g2_silo(db, "A") is not None
+                                       lokasi_tujuan="ditumpuk", berat=3_000)
 
     async def klien(peran: str, gudang: str | None):
         async with pg() as db:
@@ -1375,7 +1380,7 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
             await c.aclose()
         assert r.status_code == 200, (peran, r.status_code)
         teks = r.text
-        # Nama pemiliknya, DUA kali: kartu lot Gudang 1 dan kartu silo Gudang 2.
+        # Nama pemiliknya, DUA kali: kartu lot Gudang 1 dan kartu Tumpukan Gudang 2.
         assert teks.count("Pak Budi") >= 2, \
             f"{peran}: pemilik tak tergambar di kedua kartu ({teks.count('Pak Budi')}×)"
         assert "JAS-" in teks, f"{peran}: kode pesanannya tak tergambar"

@@ -176,7 +176,19 @@ async def test_stok_karung_gudang1_tetap_tertutup(pg, pabrik):
 
 async def test_totalnya_tidak_menyatu_dengan_stok_gudang_dua(pg, pabrik):
     """Dua blok, dua judul, dua total. Operator yang mengira barang ini sudah
-    ada di gudangnya akan menghitung stok yang tak ia pegang."""
+    ada di gudangnya akan menghitung stok yang tak ia pegang.
+
+    Blok Gudang 2 kini cuma tampil bila Tumpukan benar-benar berisi (silo
+    dikeluarkan dari kartu Stok sejak 4 Oktober 2026) — jadi uji ini butuh
+    satu pemasukan tumpukan sungguhan, bukan sekadar silo master yang kosong."""
+    from app.models import User
+    from app.penggilingan.gudang2.service import _add_intake
+
+    async with pg() as db:
+        u2 = await db.get(User, pabrik["u2"])
+        await _add_intake(db, user=u2, sumber_tipe="beli_luar", tujuan="ditumpuk",
+                          berat_kg=2_000, hpp_per_kg=None, tanggal=None, jam=None)
+
     c = await _klien(pg, gudang_id=pabrik["g2"])
     async with c:
         t = (await c.get("/stok")).text

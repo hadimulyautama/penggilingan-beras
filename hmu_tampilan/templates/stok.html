@@ -22,8 +22,9 @@
       {% if VIEW == V_POLESAN %}
       <h2>Tak ada PK tersisa di Gudang 2</h2>
       <p class="bantu">
-        Silo dan tumpukan kosong — semuanya sudah disosoh, atau belum ada PK
-        yang masuk.
+        Tumpukan kosong — semuanya sudah disosoh, atau belum ada PK yang
+        masuk. Silo tak dihitung di sini: isinya untuk proses, bukan stok
+        yang berdiri.
       </p>
       {% else %}
       <h2>Tak ada PK tersisa di Gudang 1</h2>
@@ -289,16 +290,15 @@
   </div>
 {% endif %}
 
-{# ── GUDANG 2 — PER TEMPAT, BUKAN PER LOT ──
-   Satuannya sengaja berbeda dari Gudang 1, dan bedanya bukan selera. Di
-   Gudang 1 tiap lot giling berdiri sendiri sampai habis, jadi "berapa sisa
-   lot ini" punya jawaban. Di Gudang 2 PK dari beberapa asal dituang ke silo
-   yang sama dan stoknya disimpan sebagai satu jumlah — sisa per asal memang
-   tak ada. Maka barisnya TEMPAT, dan asal-usulnya disebut di dalamnya
-   sebagai riwayat: apa saja yang pernah masuk ke sini.
-
-   Tempat kosong tetap ditampilkan. Silo yang hilang dari daftar terbaca
-   sebagai silo yang rusak atau data yang gagal dimuat. #}
+{# ── GUDANG 2 — TUMPUKAN SAJA, SILO TAK IKUT (sejak 4 Oktober 2026) ──
+   `tempat` di sini cuma bisa berisi Tumpukan — lihat alasannya di
+   `stok.pk_gudang2`: silo tak boleh menyimpan stok berdiri (aturan pemilik),
+   dan isinya cuma hasil hitungan masuk-keluar, bukan ukuran fisik. Tumpukan
+   SEBALIKNYA punya jawaban yang bisa dipertanggungjawabkan — tiap pemasukan
+   berdiri sendiri sampai dipindahkan — jadi ia memakai aturan Gudang 1:
+   yang habis tak didaftar. Markup di bawah tetap GENERIK atas daftar
+   `tempat` (dulu memuat silo juga) supaya tak ada yang perlu ditulis ulang
+   kalau suatu hari ada tempat lain yang sah untuk didaftar di sini. #}
 {% if tempat %}
   <div{% if lot %} style="margin-top:18px"{% endif %}>
     <div class="jumlah">

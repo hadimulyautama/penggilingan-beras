@@ -538,9 +538,22 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
 # per lot — angka yang tak bisa dipertanggungjawabkan, tepat di tempat orang
 # mencari pertanggungjawaban.
 #
-# Maka satuannya TEMPAT: silo A, silo B, tumpukan. Asal-usulnya tetap disebut
-# di dalam kartunya sebagai riwayat "apa yang pernah masuk ke sini", persis
-# yang sudah dipakai kartu silo di layar Sedang berjalan.
+# ⚠ SILO SENGAJA TIDAK IKUT DI SINI (keputusan pemilik 4 Oktober 2026):
+# "di gudang 2 tidak boleh ada stock di silo — dimasukkan ke silo hanya untuk
+# kepentingan proses." Isinya pun bukan sesuatu yang DIUKUR — tak ada alat
+# ukur fisik di silo — melainkan DIHITUNG dari masuk dikurangi keluar
+# (`hitung_stok_silo`). Menyebutnya "stok" di kartu yang menjawab "berapa
+# yang BENAR-BENAR ada" memberi angka itu kepastian yang tak dimilikinya.
+# Silo tetap dipakai dan dihitung di tempat yang memang bertanya "proses apa
+# yang sedang berjalan" (layar Sedang berjalan, `berjalan.py`) — yang berubah
+# cuma kartu Stok ini.
+#
+# Yang tersisa di sini TUMPUKAN — bukan karena ia satu-satunya yang ada
+# secara fisik, tetapi karena ia satu-satunya yang punya jawaban yang bisa
+# dipertanggungjawabkan: tiap pemasukan berdiri sendiri sampai dipindahkan
+# (lihat `_isi_tumpukan`), jadi "berapa yang ada" di sana sama sahnya dengan
+# lot di Gudang 1 — dan karena itu memakai aturan Gudang 1 yang SAMA
+# ("habis = tak didaftar"), bukan aturan silo yang dibuang di atas.
 
 
 @dataclass
@@ -607,47 +620,31 @@ async def _isi_tumpukan(db: AsyncSession) -> list[tuple[str, str, str]]:
 
 
 async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
-    """PK yang masih ada di Gudang 2 — per tempat, silo dulu lalu tumpukan.
+    """PK yang masih ada di Gudang 2 — hanya Tumpukan, dan hanya bila berisi.
 
-    Tempat KOSONG tetap ditampilkan, dan di sinilah aturan Gudang 1 sengaja
-    dibalik. Di sana barisnya lot: lot yang habis memang tak ada lagi, jadi
-    menyembunyikannya benar. Di sini barisnya tempat, dan tempat yang kosong
-    tetap ADA — silo yang hilang dari daftar terbaca sebagai silo yang rusak
-    atau data yang gagal dimuat, dan operator akan mencarinya di layar lain.
+    Silo TIDAK didaftar di sini (lihat catatan di atas `TempatPk`): isinya
+    bukan stok yang sah menurut aturan pemilik, dan angkanya cuma hasil
+    hitungan masuk-keluar, bukan ukuran fisik. Yang habis di Tumpukan juga
+    tak didaftar — sama seperti lot Gudang 1, baris nol cuma mengajari orang
+    melewatkan barisnya.
     """
     from app.config import settings
-    from app.penggilingan.gudang2.service import (
-        get_g2_silo, hitung_stok_silo, hitung_stok_tumpukan)
-    from app.services.berjalan import _asal_pk
-
-    keluar: list[TempatPk] = []
-    for huruf in ("A", "B"):
-        silo = await get_g2_silo(db, huruf)
-        if silo is None:
-            continue
-        stok = float(await hitung_stok_silo(db, silo.id))
-        maks = (float(silo.kapasitas_ton) * 1000
-                if silo.kapasitas_ton is not None else None)
-        keluar.append(TempatPk(
-            kode=f"Silo {huruf}", tersedia=stok, maks=maks,
-            isi=(await _asal_pk(db, silo.id)) if stok > 0 else [],
-            persen=(stok / maks * 100 if maks else None),
-            pemilik=await _pemilik_tempat_g2(db, silo.id) if stok > 0 else None,
-        ))
+    from app.penggilingan.gudang2.service import hitung_stok_tumpukan
 
     tump = float(await hitung_stok_tumpukan(db))
+    if tump <= 0:
+        return []
     maks_t = float(settings.g2_tumpukan_maks_kg or 0) or None
-    keluar.append(TempatPk(
+    return [TempatPk(
         kode="Tumpukan", tersedia=tump, maks=maks_t,
-        isi=(await _isi_tumpukan(db)) if tump > 0 else [],
+        isi=await _isi_tumpukan(db),
         persen=(tump / maks_t * 100 if maks_t else None),
         # Lantai tumpukan BOLEH menampung beberapa pemilik sekaligus — ia bukan
         # wadah, dan karung yang berdiri berjajar tak bercampur. Jadi di sini
         # sebutannya hanya terisi bila pemiliknya memang tunggal; penjaga
         # kepemilikan berdiri di SILO, tempat barang benar-benar menyatu.
-        pemilik=await _pemilik_tempat_g2(db, None) if tump > 0 else None,
-    ))
-    return keluar
+        pemilik=await _pemilik_tempat_g2(db, None),
+    )]
 
 
 async def _pemilik_tempat_g2(db: AsyncSession, silo_id: int | None) -> str | None:
