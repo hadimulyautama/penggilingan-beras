@@ -299,30 +299,31 @@ _SQL_TIKET_KELUAR = _text("""
          nomor_polisi, timbang1_kg, timbang1_waktu, netto_timbangan_kg,
          berat_barang_kg, berat_acuan_kg, status_tiket, status_transaksi)
     VALUES
-        (:kode, :tanggal, :arah, 'BERAS', 'DUA_KALI', 'Toko Makmur',
+        (:kode, :tanggal, :arah, 'BERAS', 'DUA_KALI', :pembeli,
          'B 1234 XY', 5000, :waktu, :netto, :barang, 0, 'SELESAI', :st)
     RETURNING id
 """)
 
 
-async def _tiket(pg, kode, *, arah="KELUAR", barang=2_480, st="AKTIF"):
+async def _tiket(pg, kode, *, arah="KELUAR", barang=2_480, st="AKTIF",
+                 pembeli="Toko Makmur", tanggal=None):
     from datetime import datetime, timezone
 
     from app.database import now_local
     async with pg() as db:
         tid = (await db.execute(_SQL_TIKET_KELUAR, {
-            "kode": kode, "tanggal": now_local().date(), "arah": arah,
+            "kode": kode, "tanggal": tanggal or now_local().date(), "arah": arah,
             "waktu": datetime.now(timezone.utc), "netto": barang + 20,
-            "barang": barang, "st": st})).scalar_one()
+            "barang": barang, "st": st, "pembeli": pembeli})).scalar_one()
         await db.commit()
         return tid
 
 
-async def _sampai_dimuat(pg, g, karung=100):
+async def _sampai_dimuat(pg, g, karung=100, pembeli="Toko Makmur"):
     from app.models import User
     from app.services import barang_keluar as bk
 
-    r = await _perintah(pg, g, karung=karung)
+    r = await _perintah(pg, g, karung=karung, pembeli=pembeli)
     async with pg() as db:
         await bk.muat_semua(db, user=await db.get(User, g["op"]), rec_id=r.rec.id)
     return r.rec.id
@@ -1871,3 +1872,142 @@ async def test_membatalkan_verifikasi_mencabut_tanda_selisihnya(pg, gudang):
     async with pg() as db:
         rec = await db.get(OutgoingRecord, rid)
         assert rec.sebab_selisih is None, "tanda selisih tertinggal tanpa tiketnya"
+
+
+# ──────────────────────── Auto-taut tiket keluar menganggur ────────────────
+#
+# Permintaan pemilik 4 Oktober 2026: tiket timbang keluar lama yang terlanjur
+# menumpuk tanpa pasangan (lihat "Tiket timbang keluar terlewat" di atas)
+# ditautkan OTOMATIS — bukan lewat nomor urut kode (dua penghitung yang tak
+# berhubungan, lihat docstring `auto_tautkan`), melainkan pembeli + tanggal +
+# berat dalam ambang wajar yang SAMA dipakai verifikasi manual.
+
+async def test_auto_taut_menautkan_pasangan_yang_jelas(pg, gudang):
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)        # 2.500 kg, Toko Makmur
+    tid = await _tiket(pg, "TK-AUTO-01", barang=2_480)        # beda 20 kg — wajar
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == ["TK-AUTO-01 -> " + (await _kode(pg, rid))]
+    assert hasil.dilewati == []
+
+    from app.models import OutgoingRecord
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.timbangan_transaksi_id == tid, "tak benar-benar tertaut"
+        assert rec.status == "selesai"
+
+
+async def _kode(pg, rid) -> str:
+    from app.models import OutgoingRecord
+    async with pg() as db:
+        return (await db.get(OutgoingRecord, rid)).kode
+
+
+async def test_auto_taut_melewati_pembeli_berbeda(pg, gudang):
+    """Pembeli berbeda tak pernah jadi pasangan — berapa pun miripnya berat
+    dan tanggalnya."""
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100, pembeli="Toko Makmur")
+    tid = await _tiket(pg, "TK-AUTO-02", barang=2_480, pembeli="Toko Lain")
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == []
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.timbangan_transaksi_id is None
+        assert rec.status == "dimuat"
+
+
+async def test_auto_taut_melewati_tanggal_berbeda(pg, gudang):
+    from datetime import timedelta
+
+    from app.database import now_local
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "TK-AUTO-03", barang=2_480,
+                       tanggal=now_local().date() - timedelta(days=1))
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == []
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.timbangan_transaksi_id is None
+
+
+async def test_auto_taut_melewati_selisih_berat_di_luar_ambang(pg, gudang):
+    """Selisih besar menuntut sebab tertulis manusia (`verifikasi` menolaknya
+    tanpa itu) — auto-taut tidak mengarang sebab, cukup melewatkannya."""
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)         # 2.500 kg
+    # Ambang untuk 2.500 kg = max(100, 2.500×2%) = 100 kg. 150 kg melewatinya.
+    tid = await _tiket(pg, "TK-AUTO-04", barang=2_650)
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == []
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.timbangan_transaksi_id is None
+
+
+async def test_auto_taut_melewati_yang_ambigu(pg, gudang):
+    """Satu tiket yang cocok dengan LEBIH DARI SATU pesanan — pembeli dan
+    tanggal sama, berat sama-sama masuk ambang keduanya — dilewati, bukan
+    ditautkan ke salah satunya. Falsafah yang sama dengan nama kembar di
+    `hmu_core.kledo_kontak`: menebak berarti bisa salah pasang."""
+    from app.models import OutgoingRecord, User
+    from app.services import barang_keluar as bk
+
+    a = await _sampai_dimuat(pg, gudang, karung=100)           # 2.500 kg
+    b = await _sampai_dimuat(pg, gudang, karung=100, pembeli="Toko Makmur")
+    tid = await _tiket(pg, "TK-AUTO-05", barang=2_480)         # cocok untuk keduanya
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == []
+    assert len(hasil.dilewati) == 1
+    assert "2 pesanan" in hasil.dilewati[0], hasil.dilewati[0]
+    async with pg() as db:
+        rec_a, rec_b = await db.get(OutgoingRecord, a), await db.get(OutgoingRecord, b)
+        assert rec_a.timbangan_transaksi_id is None
+        assert rec_b.timbangan_transaksi_id is None
+
+
+async def test_auto_taut_tak_menyentuh_tiket_yang_sudah_tertaut(pg, gudang):
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "TK-AUTO-06", barang=2_480)
+    async with pg() as db:
+        await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                            rec_id=rid, timbangan_transaksi_id=tid)
+    # Pesanan kedua, pembeli & berat sama — tanpa tiket keluar yang aktif
+    # (yang tadi sudah tertaut), tak ada yang bisa ditautkan lagi ke sini.
+    await _sampai_dimuat(pg, gudang, karung=100)
+    async with pg() as db:
+        hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
+    assert hasil.tertaut == [], "tiket yang sudah tertaut ikut ditautkan ulang"
+
+
+async def test_rute_auto_taut_keluar_dipanggil_dari_aksi(pg, gudang):
+    from app.models import User
+    from app.web import aksi_inventory as inv
+
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "TK-AUTO-07", barang=2_480)
+    async with pg() as db:
+        r = await inv.act_auto_taut_keluar(user=await db.get(User, gudang["adm"]))
+    assert r["ok"] and "1 tertaut" in r["pesan"], r
+
+    from app.models import OutgoingRecord
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        assert rec.timbangan_transaksi_id == tid

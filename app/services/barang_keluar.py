@@ -904,6 +904,83 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
     return rec, catatan
 
 
+@dataclass
+class HasilAutoTaut:
+    tertaut: list[str] = field(default_factory=list)
+    dilewati: list[str] = field(default_factory=list)
+
+    @property
+    def ringkas(self) -> str:
+        bagian = [f"{len(self.tertaut)} tertaut"]
+        if self.dilewati:
+            bagian.append(f"{len(self.dilewati)} dilewati")
+        return ", ".join(bagian)
+
+
+async def auto_tautkan(db: AsyncSession, *, user) -> HasilAutoTaut:
+    """Tautkan otomatis tiket timbang keluar yang menganggur ke pesanan yang
+    menunggu verifikasi — HANYA bila pasangannya tak ambigu.
+
+    Permintaan pemilik 4 Oktober 2026, untuk membereskan tiket lama yang
+    terlanjur menumpuk tanpa pasangan (lihat `_kartu_tiket_keluar_menganggur`
+    di `berjalan.py`). Dasar pencocokannya SENGAJA bukan nomor urut kode —
+    kode timbang (`KLR-tanggal-PERANGKAT-urutan`, bernomor per ALAT per hari)
+    dan kode pesanan (`OUT-tanggal-urutan`, bernomor platform per hari) dua
+    penghitung yang sama sekali tak berhubungan; mencocokkan nomornya akan
+    menautkan pasangan yang kebetulan sama angkanya, bukan yang benar
+    berpasangan. Dasarnya PEMBELI + TANGGAL + BERAT, dan ambang beratnya
+    `ambang_selisih` yang SAMA dipakai verifikasi manual — bukan toleransi
+    baru yang ditentukan sendiri di sini.
+
+    TAK PERNAH menebak: satu tiket yang cocok dengan lebih dari satu pesanan
+    (atau sebaliknya) DILEWATI, bukan ditautkan ke salah satunya — falsafah
+    yang sama dengan nama kembar di `hmu_core.kledo_kontak`. Dipanggil lewat
+    satu tombol (bukan terjadwal tanpa pengawas): orang yang menekannya
+    tercatat sebagai yang memverifikasi, persis seperti tautan manual.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import tiket_keluar_aktif
+
+    def kunci(nama: str | None) -> str:
+        return " ".join((nama or "").lower().split())
+
+    tiket = await tiket_keluar_aktif(db)
+    pesanan = await daftar(db, status=(OUT_DIMUAT,), batas=200)
+
+    hasil = HasilAutoTaut()
+    for t in tiket:
+        berat_tiket = float(t.get("berat_kg") or 0)
+        tanggal_tiket = t.get("tanggal")
+        nama_tiket = kunci(t.get("pihak"))
+        if not nama_tiket or tanggal_tiket is None:
+            continue
+
+        cocok = []
+        for rec, items in pesanan:
+            if kunci(rec.nama_pembeli) != nama_tiket:
+                continue
+            if rec.tanggal != tanggal_tiket:
+                continue
+            dimuat = sum(float(i.berat_kg or 0) for i in items)
+            if abs(berat_tiket - dimuat) > ambang_selisih(dimuat):
+                continue
+            cocok.append(rec)
+
+        if len(cocok) > 1:
+            hasil.dilewati.append(
+                f"{t['kode']}: cocok dengan {len(cocok)} pesanan sekaligus — ambigu")
+            continue
+        if len(cocok) == 0:
+            continue
+
+        try:
+            rec2, _catatan = await verifikasi(
+                db, user=user, rec_id=cocok[0].id, timbangan_transaksi_id=t["id"])
+            hasil.tertaut.append(f"{t['kode']} -> {rec2.kode}")
+        except BarangKeluarError as e:
+            hasil.dilewati.append(f"{t['kode']}: {e}")
+    return hasil
+
+
 async def _tiket_keluar(db: AsyncSession, tid: int) -> tuple[float, str]:
     """(berat barang menurut tiket, kodenya). Menolak tiket yang bukan KELUAR.
 

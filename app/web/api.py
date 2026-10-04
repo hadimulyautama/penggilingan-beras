@@ -1267,6 +1267,7 @@ _ACTION_WH = {
     # tetapi itu urusan keuangan"), jadi tak ada lagi yang bergudang g1.
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
     "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
+    "auto_taut_keluar": "g2",
     "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",
     # ── Jasa: g2, dengan satu alasan yang sama seperti barang keluar ──
     #

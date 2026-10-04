@@ -1059,6 +1059,18 @@ async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
             "pesan": f"✓ {kode} ditutup." + (f" {catatan}" if catatan else "")}
 
 
+@router.post("/actions/auto-taut-keluar")
+async def act_auto_taut_keluar(user: User = Depends(pengguna_aksi)) -> dict:
+    """Tautkan otomatis tiket timbang keluar yang menganggur — lihat
+    `bk.auto_tautkan` untuk aturan pencocokannya (pembeli+tanggal+berat,
+    tak pernah menebak yang ambigu). Tanpa medan: satu tombol, jalankan."""
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        hasil = await bk.auto_tautkan(db, user=u)
+    return {"ok": True, "pesan": f"✓ {hasil.ringkas}."}
+
+
 # ─────────────────────────── Spesifikasi aksi ───────────────────────────
 
 #: Nama pembeli dst. dipakai berulang di tiga aksi keluar — ditulis sekali.
@@ -1356,6 +1368,23 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  # penolakannya menyebut kedua angkanya.
                  {"name": "sebab_selisih",
                   "label": "Sebab selisih (bila bedanya besar)", "type": "text"},
+             ]},
+            {"id": "auto_taut_keluar", "label": "\U0001f517 Tautkan otomatis barang keluar",
+             "post": "/api/actions/auto-taut-keluar",
+             "hint": "Mencocokkan tiket timbang keluar yang menganggur ke "
+                     "pesanan yang menunggu verifikasi — pembeli, tanggal, "
+                     "dan berat yang sama (dalam ambang wajar). Pasangan "
+                     "yang tidak jelas (cocok dengan lebih dari satu, atau "
+                     "tak cocok sama sekali) DILEWATI, bukan ditebak — tetap "
+                     "perlu ditautkan manual lewat Verifikasi barang keluar.",
+             "fields": [
+                 # Tak ada parameter yang sungguh dibutuhkan — pencocokannya
+                 # otomatis sepenuhnya. Medan ini TETAP ada (opsional) karena
+                 # lembar tanpa satu pun medan melewati jeda "lihat dulu,
+                 # baru kirim" yang seluruh aksi lain di sini punya; satu
+                 # kotak catatan opsional cukup untuk itu tanpa memaksa orang
+                 # mengisi sesuatu yang memang tak perlu diisi.
+                 {"name": "catatan", "label": "Catatan (opsional)", "type": "text"},
              ]},
         ]
     return aksi
