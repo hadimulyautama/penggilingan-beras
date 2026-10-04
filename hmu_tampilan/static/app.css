@@ -1698,3 +1698,79 @@ body.terik {
 .pil__jml {
   font-family: var(--mono); font-size: 12px; opacity: .72; margin-left: 4px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   DESKTOP: laci jadi sidebar tetap ─────────────────────────────────────
+   Permintaan pemilik 4 Oktober 2026: "bagaimana dengan versi desktop,
+   agar bisa seperti app Timbangan juga ada versi desktopnya" — pola di
+   sini meniru persis punya Timbangan (bilah navigasi → sidebar di
+   900px). Satu beda titik tolak: Timbangan punya bilah yang SELALU
+   tergambar, sedangkan laci di sini disembunyikan lewat atribut `hidden`
+   dan dibuka tombol hamburger. Jadi bukan "ubah penampilan elemen yang
+   sudah terlihat", melainkan "paksa ia selalu terlihat, lalu ubah
+   penampilannya" — HTML & JS buka/tutupnya (base.html) TIDAK disentuh
+   sama sekali: di lebar ini elemen yang jadi sasarannya (`.bar__menu`)
+   disembunyikan, jadi skripnya cuma diam, bukan dihapus. Satu markup,
+   dua bentuk — sama seperti Timbangan.
+
+   ⚠ BARU TAHAP PERTAMA: laci hanya ada di halaman yang `layar in
+   TAB_KUNCI` (base.html) — halaman detail yang dibuka lewat tombol
+   kembali (mis. rincian transaksi, `/pengaturan/alat`) belum
+   mewarisinya, jadi sidebar-nya sempat hilang sebentar saat berpindah
+   ke sana. Membuatnya menetap di SEMUA halaman butuh mengubah syarat
+   itu di base.html, bukan cuma CSS — pekerjaan susulan, bukan bagian
+   langkah ini.
+
+   Di bawah 900px, laci tetap seperti semula: ponsel di gudang tak punya
+   ruang mendatar untuk sidebar, dan navigasi harus terjangkau ibu jari. */
+@media (min-width: 900px) {
+  :root { --sidebar: 264px; }
+
+  /* Hanya digeser pada halaman yang SUNGGUH punya laci — `:has()` dipakai
+     juga di `body:has(.pil-versi)` di atas, bukan teknik baru di berkas
+     ini. Tanpa pagar ini, halaman masuk & ganti sandi (tak punya laci
+     sama sekali) ikut mendapat celah kosong di kiri tanpa sebab. */
+  .bingkai:has(.laci) { padding-left: var(--sidebar); }
+
+  /* Rangkanya melebar penuh — yang dibatasi lebarnya KONTENNYA saja (di
+     bawah), supaya bilah atas membentang selebar area seperti kepala
+     aplikasi sungguhan, bukan kartu gelap mengambang di tengah layar. */
+  .bingkai { max-width: none; }
+
+  /* Tombol hamburger percuma saat lacinya selalu terbuka. */
+  .bar__menu { display: none; }
+
+  /* Lacinya LEPAS dari padding yang baru saja diberikan ke `.bingkai` —
+     posisinya terhadap VIEWPORT (position:fixed tetap begitu walau
+     induknya sendiri `position:fixed`; yang mengubah konteksnya cuma
+     transform pada induk, dan `.bingkai` tak punya itu), supaya tetap
+     menempel ke tepi kiri sungguhan, bukan ikut terdorong oleh padding
+     barunya sendiri. */
+  .laci {
+    position: fixed; inset: 0 auto 0 0;
+    width: var(--sidebar); z-index: 10;
+    /* Lapisan gelap cuma berguna sebagai penutup pada overlay ponsel —
+       di sini lacinya bukan overlay, jadi lapisan itu cuma akan
+       menggelapkan dirinya sendiri. */
+    background: none;
+  }
+  /* Satu-satunya baris yang MELAWAN `[hidden]` — satu-satunya cara
+     memaksa laci tetap tergambar walau atributnya masih terpasang
+     (dipasang `hidden` bawaan di base.html; JS yang menggantinya tak
+     disentuh sama sekali, lihat catatan di atas). */
+  .laci[hidden] { display: block; }
+
+  .laci__isi {
+    width: 100%; max-width: none; height: 100%;
+    border-right: 1px solid var(--garis);
+    /* Tak ada lagi "geser masuk dari kiri" — di lebar ini ia selalu di
+       tempat, bukan muncul. */
+    animation: none;
+  }
+
+  /* Kontennya DIBATASI dan DIPUSATKAN di ruang sisa sesudah sidebar —
+     selebar bentuk ponselnya dulu (560px, angka yang sama dengan
+     `max-width` lama `.bingkai`), supaya kartu & borang tak melebar
+     janggal di monitor lebar. */
+  .isi { max-width: 560px; margin: 0 auto; width: 100%; }
+}
