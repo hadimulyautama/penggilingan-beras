@@ -295,6 +295,50 @@
   </div>
 </div>
 
+{# ── Kontak Kledo: PEMICU, bukan setelan ──
+   Beda sifat dari kartu-kartu di atas: tak ada nilai yang disimpan di sini,
+   cuma satu tombol yang memulai pekerjaan LATAR (~600 kontak Kledo, diambil
+   berhalaman-halaman — lihat `app/services/kledo_sinkron.py`). Karena itu
+   tombolnya dinonaktifkan dua cara berbeda, bukan disembunyikan: belum
+   tersambung (KLEDO_API_KEY kosong) tetap menjelaskan APA yang kurang, dan
+   sedang berjalan tetap menjelaskan KAPAN mencoba lagi — tombol yang hilang
+   membuat orang mengira fiturnya tak ada sama sekali. #}
+<div>
+  <span class="lbl">Kontak Kledo</span>
+  <div class="kartu">
+    <form method="post" action="/pengaturan/kledo-kontak">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
+      <button class="btn" type="submit"
+              {{ 'disabled' if not kledo.terkonfigurasi or kledo.sedang_berjalan }}>
+        {{ 'Sedang berjalan…' if kledo.sedang_berjalan else 'Perbarui Kontak' }}
+      </button>
+    </form>
+    <p class="bantu">
+      {%- if not kledo.terkonfigurasi %}
+        <b>Kledo belum tersambung.</b> Variabel <code>KLEDO_API_KEY</code>
+        belum diisi di service ini — minta yang mengelola Railway mengisinya.
+        Sampai itu diisi, kontak vendor &amp; pelanggan baru di Kledo tidak
+        ikut masuk ke daftar pos timbang.
+      {%- elif kledo.sedang_berjalan %}
+        Mengambil sekitar 600 kontak dari Kledo, berhalaman-halaman — bisa
+        beberapa menit. Muat ulang halaman ini sebentar lagi untuk melihat
+        hasilnya.
+      {%- elif kledo.gagal_terakhir %}
+        Percobaan terakhir ({{ kledo.selesai_pada | jam('%d %b %H.%M') }})
+        gagal: {{ kledo.gagal_terakhir }}
+      {%- elif kledo.hasil_terakhir %}
+        {{ kledo.hasil_terakhir }}
+        <br><span style="font-size:12px">selesai
+          {{ kledo.selesai_pada | jam('%d %b %H.%M') }}</span>
+      {%- else %}
+        Belum pernah dijalankan sejak layanan ini terakhir dinyalakan.
+        Berjalan juga otomatis tiap tengah malam, dan lewat tombol serupa
+        di Timbangan.
+      {%- endif %}
+    </p>
+  </div>
+</div>
+
 <div>
   <span class="lbl">Batas ubah catatan</span>
   <div class="kartu">

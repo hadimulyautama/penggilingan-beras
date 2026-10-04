@@ -20,10 +20,12 @@ from app.config import settings
 from app.database import SessionLocal
 from app.services.dashboard import dashboard_data, render_dashboard_html
 from app.penggilingan.gudang1.services.sinkron_bobot import run_sinkron_bobot_poller
+from app.services.kledo_scheduler import run_kledo_scheduler
 from app.services.scheduler import run_late_drying_scheduler
 from app.services.seed import seed_master
 from app.web.auth import router as auth_router
 from app.web.internal import router as internal_router
+from app.web.internal_kledo import router as internal_kledo_router
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
@@ -70,13 +72,14 @@ async def lifespan(app: FastAPI):
         log.exception("Seed akun webapp gagal (lanjut jalan)")
     sched_task = asyncio.create_task(run_late_drying_scheduler())
     sinkron_task = asyncio.create_task(run_sinkron_bobot_poller())
+    kledo_task = asyncio.create_task(run_kledo_scheduler())
     log.info("Backend siap. Tanpa bot — pencatatan lewat Pos Produksi.")
     try:
         yield
     finally:
         # Hentikan task latar dengan membatalkan. Guard karena saat --reload
         # task bisa belum/selesai berjalan.
-        for task in (sched_task, sinkron_task):
+        for task in (sched_task, sinkron_task, kledo_task):
             task.cancel()
             try:
                 await task
@@ -107,6 +110,7 @@ app.include_router(kabar_router)
 app.include_router(stok_router)
 app.include_router(lihat_sebagai_router)
 app.include_router(internal_router)
+app.include_router(internal_kledo_router)
 app.include_router(auth_router)
 app.include_router(pengguna_router)
 #: Berkas statis: milik aplikasi (manifest.json) di depan, paket tampilan

@@ -70,7 +70,7 @@ def test_setelan_kerja_hanya_untuk_admin():
         request=None, akun=_akun("operator"), layar="pengaturan", MENUNGGU=0,
         MODE_UJI=True, LIHAT_SEBAGAI=None, kembali=None, pesan_ok=None, err="",
         tuan=False, target_bawaan=None, sebab_jeda={}, mutu_aktif=False,
-        JAM_BATAS=48, blok_setelan=False, PROSES=())
+        kledo=None, JAM_BATAS=48, blok_setelan=False, PROSES=())
     for blok in ("Sebab berhenti", "Target kadar air", "Batas ubah catatan"):
         assert blok not in kosong, blok
 
@@ -80,7 +80,11 @@ def test_setelan_kerja_hanya_untuk_admin():
         tuan=True, target_bawaan=14.0,
         sebab_jeda={"pengeringan": ["Listrik padam", "Bahan bakar habis"],
                     "giling": ["Mesin giling rusak", "Limbah produksi penuh"]},
-        mutu_aktif=True, JAM_BATAS=48, blok_setelan=True,
+        mutu_aktif=True,
+        kledo=types.SimpleNamespace(terkonfigurasi=True, sedang_berjalan=False,
+                                     hasil_terakhir=None, gagal_terakhir=None,
+                                     selesai_pada=None),
+        JAM_BATAS=48, blok_setelan=True,
         PROSES=(("pengeringan", "Pengeringan"), ("giling", "Giling")))
     # Satu blok per PROSES, bukan satu blok per setelan: yang dicari orang
     # adalah "setelan pengeringan", bukan "setelan target". Sebab berhenti
@@ -190,7 +194,13 @@ def test_mutu_dipasang_sebagai_saklar_yang_menunjukkan_keadaannya():
     # "Mutu & QC" kini milik LAYAR, dan dua hal bernama sama dalam satu app
     # adalah kelas kebingungan yang pemilik sendiri pernah mengeluhkannya.
     assert '<span class="lbl">Pencatatan mutu</span>' in html
-    blok = html[html.index('<span class="lbl">Pencatatan mutu</span>'):]
+    mulai = html.index('<span class="lbl">Pencatatan mutu</span>')
+    # Dibatasi sampai LABEL BERIKUTNYA — bukan sampai akhir berkas. Blok lain
+    # yang lahir sesudah "Pencatatan mutu" (kartu Kontak Kledo, 4 Oktober
+    # 2026) punya tombolnya sendiri yang sah; tanpa batas atas, kehadirannya
+    # akan tampak seperti saklar mutu ini tiba-tiba punya tombol kedua.
+    akhir = html.index('<span class="lbl">', mulai + 1)
+    blok = html[mulai:akhir]
     assert 'role="switch"' in blok, "bukan saklar"
     assert 'aria-checked="{{ \'true\' if mutu_aktif else \'false\' }}"' in blok
     assert "saklar--nyala' if mutu_aktif" in blok

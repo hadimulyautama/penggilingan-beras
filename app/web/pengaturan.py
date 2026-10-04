@@ -44,6 +44,7 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
 
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+    from app.services import kledo_sinkron
     from app.services.setelan import fitur_mutu, sebab_jeda, target_kadar_air
     from app.services.undo import BATAS_UNDO
     from app.web.nav import lencana
@@ -65,6 +66,9 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         # bloknya hilang dari layar Admin tanpa ada yang perlu menyentuh apa
         # pun. Dan ia tak pernah bisa mengunci siapa pun di luar.
         ada_super = await ada_superadmin() if tuan else False
+    # Potret tanpa basis data (singleton di memori proses ini) — aman dibaca
+    # di luar `async with SessionLocal()` di atas.
+    kledo = kledo_sinkron.status() if tuan else None
     # Versi kode yang sedang berjalan — untuk SEMUA peran, di kaki halaman.
     # Peringatan skema tertinggal hanya dirender untuk admin ke atas (di
     # templat); operator tak bisa menjalankan migrasi, jadi baginya itu cuma
@@ -86,6 +90,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
         tuan=tuan, target_bawaan=target, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
+        kledo=kledo,
         ada_super=ada_super,
         blok_kelola=view == V_SUPER or (tuan and not ada_super),
         kelola_darurat=view != V_SUPER,
@@ -188,6 +193,27 @@ async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
     return redirect("/pengaturan?pesan=sebab-diubah")
 
 
+@router.post("/pengaturan/kledo-kontak")
+async def mulai_sinkron_kledo_kontak(
+    request: Request, akun: ProduksiAkun = Depends(butuh_admin)
+):
+    """Mulai satu putaran sinkron kontak Kledo di latar.
+
+    TIDAK menunggu selesainya — ~600 kontak Kledo diambil berhalaman-halaman,
+    cukup lama untuk menahan permintaan HTTP ini sampai kena gateway timeout
+    Railway. Hasilnya dibaca lewat `kledo_sinkron.status()` saat halaman ini
+    dimuat ulang (lihat `halaman_pengaturan`), bukan dari balasan permintaan
+    ini.
+    """
+    from app.services import kledo_sinkron
+
+    if not kledo_sinkron.status().terkonfigurasi:
+        return redirect("/pengaturan?err=kledo-belum-tersambung")
+    if not kledo_sinkron.mulai():
+        return redirect("/pengaturan?err=kledo-sedang-berjalan")
+    return redirect("/pengaturan?pesan=kledo-dimulai")
+
+
 #: Hanya kunci yang dikenal yang jadi pesan — teks bebas dari URL tak pernah
 #: ditampilkan, supaya halaman ini tak bisa dipakai menitipkan kalimat palsu
 #: lewat tautan.
@@ -209,6 +235,10 @@ _PESAN = {
     "mutu-nyala": "Pencatatan mutu dinyalakan.",
     "mutu-padam": "Pencatatan mutu dimatikan — borang QC dan baris mutu "
                   "disembunyikan dari semua layar.",
+    "kledo-dimulai": ("Sinkron kontak Kledo dimulai di latar — muat ulang "
+                       "halaman ini sebentar lagi untuk melihat hasilnya."),
+    "kledo-belum-tersambung": "Kledo belum tersambung — KLEDO_API_KEY belum diisi.",
+    "kledo-sedang-berjalan": "Sinkron kontak Kledo sudah berjalan — tunggu sampai selesai.",
 }
 
 
