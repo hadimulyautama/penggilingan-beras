@@ -971,41 +971,36 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/api/actions/catat-pk-luar",
              "hint": "Pilih tiket timbang PK yang masih aktif — supplier, bobot & plat "
-                     "otomatis dari timbangan. Langsung tertumpuk. Kadar air, broken, "
-                     "dan penyusutan WAJIB diisi; butir kuning/gabah/merang/catatan "
-                     "boleh menyusul lewat kartu \"Mutu belum dicatat\" kalau belum "
-                     "sempat diperiksa.",
+                     "otomatis dari timbangan. Langsung tertumpuk, DAN seluruh mutu "
+                     "wajib diisi sekalian — tak ada lagi langkah susulan untuk "
+                     "pencatatan baru.",
              "fields": [
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang PK yang masih aktif",
                   "type": "remote", "source": "/api/actions/timbang-pk-aktif",
                   "kosong": "Tidak ada tiket timbang PK yang aktif."},
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
-                 # ── Mutu DASAR — WAJIB sejak keputusan pemilik 5 Oktober 2026 ──
+                 # ── Mutu, SELURUHNYA WAJIB sejak keputusan pemilik 5 Oktober 2026 ──
                  #
-                 # `data-wajib` pada medan angka OPT-IN lewat `wajib: True` (lihat
+                 # `data-wajib` pada medan ANGKA OPT-IN lewat `wajib: True` (lihat
                  # catatan di aksi.js: "wajib OPT-IN, bukan kebalikan dari
-                 # optional") — tanpa ini ketiganya tetap tergambar tapi tak
-                 # pernah ditagih, dan borang akan lolos dengan isian kosong.
+                 # optional") — tanpa ini tiga medan angka tetap tergambar tapi
+                 # tak pernah ditagih. Pada medan SELECT (`butir_kuning`/`gabah`/
+                 # `merang`) `wajib` justru BALIKAN dari `optional` — menghapus
+                 # `optional: True`-nya sudah cukup. `catatan_lab` jatuh ke
+                 # cabang generik yang sama dengan medan angka, jadi tetap pakai
+                 # `wajib: True`. Tiga pola berbeda, satu akibat yang sama —
+                 # lihat `act_catat_pk_luar` yang memeriksa ulang di SERVER,
+                 # sebab Pydantic `str` menerima "" sebagai sah.
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number", "wajib": True},
                  {"name": "broken", "label": "Broken (%)", "type": "number", "wajib": True},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number",
                   "wajib": True},
-                 # ── Mutu KUALITATIF — tetap opsional ──
-                 #
-                 # Medan yang SAMA dengan borang `qc_pk_luar` di bawah, supaya
-                 # operator yang sudah pegang hasil lab saat truknya masih di
-                 # halaman tak perlu membuka borang kedua untuk mengetik ulang
-                 # kode batch yang baru saja ia catat sendiri. Lihat
-                 # `act_catat_pk_luar` untuk bagaimana keduanya disatukan.
-                 {"name": "butir_kuning", "label": "Butir kuning — opsional", "type": "select",
-                  "options": BUTIR, "optional": True},
-                 {"name": "gabah", "label": "Gabah — opsional", "type": "select",
-                  "options": BUTIR, "optional": True},
-                 {"name": "merang", "label": "Merang — opsional", "type": "select",
-                  "options": BUTIR, "optional": True},
-                 {"name": "catatan_lab", "label": "Catatan lab — opsional", "type": "text",
-                  "optional": True},
+                 {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
+                  "options": BUTIR},
+                 {"name": "gabah", "label": "Gabah", "type": "select", "options": BUTIR},
+                 {"name": "merang", "label": "Merang", "type": "select", "options": BUTIR},
+                 {"name": "catatan_lab", "label": "Catatan lab", "type": "text", "wajib": True},
                  # ── Tombol KEDUA, di borang yang SAMA — Aturan 1 & 2, 4
                  # Oktober 2026 (keputusan pemilik 5 Oktober: bukan menu
                  # terpisah, tombol DI SINI). Membawa tiket yang sudah
@@ -2101,7 +2096,12 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 r_dryer = await masuk_dryer(db, user=u, kode_batch_list=[kode],
                                             dryer_id=mesin_id)
                 nama_mesin = r_dryer.nama_dryer or "dryer"
-                tempat = (f"🌫️ masuk {nama_mesin} (menunggu — tekan "
+                # ⚠ Dulu 🌫️ (kabut) — ikon yang sah di Unicode tapi tak
+                # bergambar di sebagian ponsel (ketahuan lapangan 5 Oktober
+                # 2026: kotak kosong di antara dua baris pesan, bukan galat
+                # logika). Diganti 🔥, sudah terbukti aman — dipakai juga
+                # di label "Mulai pengeringan" tanpa keluhan.
+                tempat = (f"🔥 masuk {nama_mesin} (menunggu — tekan "
                           "`Mulai pengeringan` saat dipanaskan)")
             else:  # silo (kering langsung)
                 from app.penggilingan.gudang1.services.silo import silo_g1_by_id
@@ -2629,18 +2629,18 @@ class CatatPkLuarReq(BaseModel):
     # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     jenis_pk: str
-    #: Kadar air, broken, dan penyusutan WAJIB diisi di sini sejak keputusan
-    #: pemilik 5 Oktober 2026 — pencatatan PK luar kini SEKALIGUS mutu
-    #: dasarnya, bukan lagi dua langkah. Butir kuning/gabah/merang/catatan
-    #: tetap opsional: ketiganya skala kualitatif yang butuh pemeriksaan
-    #: lebih seksama, bukan angka dari alat ukur yang bisa langsung dibaca.
+    #: SELURUH mutu WAJIB diisi di sini sejak keputusan pemilik 5 Oktober
+    #: 2026 — pencatatan PK luar kini SEKALIGUS mutu lengkapnya, bukan lagi
+    #: dua langkah. `str` di sini TIDAK menolak string kosong (Pydantic
+    #: menerima "" sebagai `str` sah) — pemeriksaan "benar-benar terisi"
+    #: ada di `act_catat_pk_luar`, pola yang sama dengan `jenis_pk`.
     kadar_air: Persen
     broken: Persen
     penyusutan: Persen
-    butir_kuning: str | None = None
-    gabah: str | None = None
-    merang: str | None = None
-    catatan_lab: str | None = None
+    butir_kuning: str
+    gabah: str
+    merang: str
+    catatan_lab: str
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
 
@@ -2685,14 +2685,15 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
     berbeda yang bisa berdiri bersamaan di Antrian tunggu tanpa satu pun
     menyebut mana lebih dulu. Aturan 1 (PK baru selalu ke tumpukan, tanpa
     pertanyaan tujuan) menghapus satu-satunya keputusan yang ada di langkah
-    kedua — dan sejak keputusan 5 Oktober, kadar air/broken/penyusutan
-    WAJIB diisi di sini juga, jadi ketiganya memang satu pekerjaan, bukan
-    tiga yang kebetulan bisa digabung.
+    kedua — dan sejak keputusan 5 Oktober, SELURUH mutu (kadar air, broken,
+    penyusutan, butir kuning, gabah, merang, catatan lab) WAJIB diisi di
+    sini juga, jadi mencatat PK luar datang memang satu pekerjaan utuh,
+    bukan beberapa yang kebetulan bisa digabung.
 
-    ⚠ Yang TETAP opsional: butir kuning, gabah, merang, catatan lab — empat
-    hal yang butuh pemeriksaan lebih seksama daripada alat ukur yang bisa
-    langsung dibaca. Boleh menyusul lewat kartu "Mutu PK luar belum dicatat"
-    (`qc_pk_luar`, masih berdiri sendiri untuk keempatnya).
+    ⚠ `qc_pk_luar` TETAP berdiri sendiri sebagai jalan susulan — bukan untuk
+    pencatatan baru (yang sekarang selalu lengkap di sini), melainkan untuk
+    baris LAMA yang lahir sebelum keputusan ini, atau untuk kasus `log_pk_qc`
+    di bawah gagal (dilempar, bukan ditelan — lihat catatan di sana).
 
     Lihat `act_tolak_pk_luar` untuk jalur SEBALIKNYA: PK yang ditolak, bukan
     diterima — tombolnya ada di borang yang sama (`tombol_aksi` di
@@ -2702,6 +2703,13 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
     _require(can_see_financials(user))
     if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
+    # `str` Pydantic menerima "" sebagai sah (medan select yang tak dipilih
+    # mengirim string kosong, bukan None) — jadi "wajib" diperiksa di sini,
+    # bukan cuma lewat tipenya. Pola yang sama dengan jenis_pk di atas.
+    for label, nilai in (("Butir kuning", req.butir_kuning), ("Gabah", req.gabah),
+                        ("Merang", req.merang), ("Catatan lab", req.catatan_lab)):
+        if not (nilai or "").strip():
+            raise HTTPException(400, f"{label} wajib diisi.")
     from app.penggilingan.gudang2.service import (
         create_pk_purchase_dari_timbang, masukkan_pk_luar, log_pk_qc, Gudang2Error)
     async with SessionLocal() as db:
