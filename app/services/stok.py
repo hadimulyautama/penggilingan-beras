@@ -598,6 +598,27 @@ class LotPkG2:
     #: Stok, pre-isi lewat mekanisme `?buka=&nilai=` yang sama dengan
     #: "Minta lot ini" Gudang 1.
     intake_id: int = 0
+    #: Berat SAAT MASUK tumpukan — bukan sisanya. 0.0 bila `bobot_final`
+    #: False (belum punya angka sama sekali, lihat catatan di atas).
+    #:
+    #: Permintaan pemilik 5 Oktober 2026: "berapa yang sudah masuk silo dari
+    #: berat awal yang ada." Selisihnya (`berat_awal - tersedia`) adalah
+    #: jawabannya — kartu ini tak menyimpan angka "sudah ke silo" sendiri,
+    #: sebab dua angka yang mengklaim hal sama akan berselisih begitu salah
+    #: satunya disentuh; lihat `_sisa_tumpukan_intake` untuk sisanya.
+    berat_awal: float = 0.0
+    #: Kelas PK: "KS" (dari gabah basah, kami keringkan sendiri), "KL" (dari
+    #: gabah yang sudah kering saat dibeli), "Campuran"/"Semi KS" (PK beli
+    #: luar — `PkPurchaseBatch.jenis_pk`), atau "MIX" (giling sendiri, dari
+    #: silo yang berisi gabah basah DAN kering — `milling.kelas_pk`). None =
+    #: tak diketahui.
+    #:
+    #: Permintaan pemilik 5 Oktober 2026: "kondisi kl atau ks." Dua sumber
+    #: BEDA ISTILAH untuk pertanyaan yang sama — PK beli luar diketik
+    #: langsung oleh yang menerimanya; PK giling sendiri DITURUNKAN dari
+    #: kondisi gabah sumbernya, sama seperti `LotPk.kelas` di Gudang 1, dan
+    #: harus menjawab SAMA dengan yang digambar kartu lot asalnya di sana.
+    kelas: str | None = None
 
 
 async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
@@ -617,13 +638,30 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     from app.penggilingan.gudang2.models import (PkPurchaseBatch,
                                                  PkPurchaseVerification,
                                                  PkTumpukanToSilo)
-    from app.penggilingan.gudang2.service import hitung_stok_tumpukan
+    from app.penggilingan.gudang2.service import (_JENIS_PK_LABEL,
+                                                   hitung_stok_tumpukan)
     from app.services.jasa import nama_pemilik_banyak
     from sqlalchemy import func
 
     tump = float(await hitung_stok_tumpukan(db))
     if tump <= 0:
-        return []
+        # ⚠ `hitung_stok_tumpukan` menjumlah `berat_kg`, dan SQL `SUM`
+        # mengabaikan NULL — truk yang belum ditimbang kedua (P6-02) ikut
+        # TERABAIKAN, bukan ikut terhitung sebagai nol. Jadi tumpukan yang
+        # isinya CUMA pemasukan berbobot-belum-diketahui terbaca "kosong"
+        # oleh ukuran itu, padahal barangnya sudah ada di lantai — pagar
+        # cepat ini tak boleh percaya begitu saja sebelum memastikan tak
+        # ada pemasukan begitu (kueri kedua ini HANYA berjalan saat `tump`
+        # memang nol, jadi jalur umum — tumpukan sungguh berisi — tak
+        # membayar kueri tambahan ini sama sekali).
+        ada_belum_ditimbang = (await db.execute(
+            select(PkGudang2Intake.id)
+            .where(PkGudang2Intake.tujuan == "ditumpuk",
+                  PkGudang2Intake.berat_kg.is_(None))
+            .limit(1)
+        )).scalars().first()
+        if not ada_belum_ditimbang:
+            return []
 
     intakes = list((await db.execute(
         select(PkGudang2Intake)
@@ -646,7 +684,11 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
 
     # ── Asal & mutu PK beli luar — satu kueri untuk SELURUH batch sekaligus ──
     batch_ids = [i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id]
-    batch_info: dict[int, tuple[str, str | None]] = {}
+    #: (kode_batch, nama_pemasok, kelas) — kelas diterjemahkan dari
+    #: `jenis_pk` lewat `_JENIS_PK_LABEL` SAMA PERSIS dengan yang dipakai
+    #: borang `catat_pk_luar`, supaya kartu Stok tak pernah menyebut kelas
+    #: yang berbeda dari yang diketik orang yang menerimanya.
+    batch_info: dict[int, tuple[str, str | None, str | None]] = {}
     verif_info: dict[int, PkPurchaseVerification] = {}
     if batch_ids:
         for b, nama in (await db.execute(
@@ -654,7 +696,8 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
             .where(PkPurchaseBatch.id.in_(batch_ids))
         )).all():
-            batch_info[b.id] = (b.kode_batch, nama)
+            batch_info[b.id] = (b.kode_batch, nama,
+                                _JENIS_PK_LABEL.get((b.jenis_pk or "").lower()))
         for v in (await db.execute(
             select(PkPurchaseVerification)
             .where(PkPurchaseVerification.pk_purchase_batch_id.in_(batch_ids))
@@ -663,18 +706,24 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
 
     # ── Asal & mutu PK giling sendiri — lewat lot Gudang 1 yang mengirimnya ──
     transfer_ids = [i.internal_transfer_id for i in intakes if i.internal_transfer_id]
-    kode_proc: dict[int, str] = {}       # internal_transfer_id -> kode_proses
-    proc_id_dari_transfer: dict[int, int] = {}  # internal_transfer_id -> milling_process_id
+    kode_proc: dict[int, str] = {}              # internal_transfer_id -> kode_proses
+    proc_dari_transfer: dict[int, MillingProcess] = {}  # internal_transfer_id -> proses
     if transfer_ids:
-        for t_id, p_id, kode in (await db.execute(
-            select(InternalTransfer.id, MillingProcess.id, MillingProcess.kode_proses)
+        for t_id, proc in (await db.execute(
+            select(InternalTransfer.id, MillingProcess)
             .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
             .where(InternalTransfer.id.in_(transfer_ids))
         )).all():
-            kode_proc[t_id] = kode
-            proc_id_dari_transfer[t_id] = p_id
-    peta_mutu_giling = (await _mutu_banyak(db, list(proc_id_dari_transfer.values()))
-                       if proc_id_dari_transfer else {})
+            kode_proc[t_id] = proc.kode_proses
+            proc_dari_transfer[t_id] = proc
+    proses_giling = list(proc_dari_transfer.values())
+    peta_mutu_giling = (await _mutu_banyak(db, [p.id for p in proses_giling])
+                       if proses_giling else {})
+    # Kondisi MASUK bahan sumbernya — jawaban SAMA yang dipakai `LotPk.kelas`
+    # di Gudang 1 untuk lot yang persis sama; dua layar yang menghitungnya
+    # sendiri-sendiri akan berselisih pada lot yang bahannya campuran.
+    peta_bahan_giling = (await _bahan_banyak(db, proses_giling)
+                        if proses_giling else {})
 
     peta_pemilik = await nama_pemilik_banyak(
         db, {i.jasa_id for i in intakes if i.jasa_id is not None})
@@ -686,9 +735,10 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             # sekali, bukan nol. Tetap didaftar: barangnya sudah ada di
             # lantai, dan layar yang menyembunyikannya membuat orang
             # mengira tak ada apa-apa untuk dipindahkan.
-            sisa, bobot_final = 0.0, False
+            sisa, bobot_final, berat_awal = 0.0, False, 0.0
         else:
-            sisa = float(i.berat_kg) - float(dipindah.get(i.id, 0))
+            berat_awal = float(i.berat_kg)
+            sisa = berat_awal - float(dipindah.get(i.id, 0))
             bobot_final = True
             if sisa <= 0:
                 continue                 # habis dipindah — tak didaftar
@@ -696,10 +746,13 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
         if i.internal_transfer_id:
             kode = kode_proc.get(i.internal_transfer_id)
             judul = f"Giling sendiri · {kode}" if kode else "Giling sendiri"
-            proc_id = proc_id_dari_transfer.get(i.internal_transfer_id)
-            mutu = peta_mutu_giling.get(proc_id, []) if proc_id else []
+            proc = proc_dari_transfer.get(i.internal_transfer_id)
+            mutu = peta_mutu_giling.get(proc.id, []) if proc else []
+            _, kondisi = peta_bahan_giling.get(proc.id, ([], [])) if proc else ([], [])
+            kelas = kelas_pk(kondisi)
         elif i.pk_purchase_batch_id:
-            kode_batch, nama = batch_info.get(i.pk_purchase_batch_id, ("?", None))
+            kode_batch, nama, kelas = batch_info.get(
+                i.pk_purchase_batch_id, ("?", None, None))
             judul = f"{nama or '?'} · {kode_batch}"
             mutu = []
             v = verif_info.get(i.pk_purchase_batch_id)
@@ -716,13 +769,13 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
                 if v.catatan_lab:
                     mutu.append(("Catatan lab", v.catatan_lab))
         else:
-            judul, mutu = "PK", []          # baris peninggalan tanpa penunjuk
+            judul, mutu, kelas = "PK", [], None  # baris peninggalan tanpa penunjuk
 
         keluar.append(LotPkG2(
             kode=judul, tersedia=sisa, bobot_final=bobot_final,
             tanggal=_tgl(i.tanggal_masuk), lama=_hari(i.waktu_masuk),
             pemilik=peta_pemilik.get(i.jasa_id) if i.jasa_id else None,
-            mutu=mutu, intake_id=i.id,
+            mutu=mutu, intake_id=i.id, berat_awal=berat_awal, kelas=kelas,
         ))
     return keluar
 

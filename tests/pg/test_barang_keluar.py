@@ -722,8 +722,18 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
 
 
 async def test_operator_selepan_tak_ditawari_pintu_barang_keluar(pg, gudang):
-    """Pintunya padam bersama Stok Produk, dan syaratnya SATU — dua syarat
-    terpisah untuk alasan yang sama akan berbeda jawabannya kelak."""
+    """Pintu Barang Keluar diputuskan `pintu_produk` — syarat yang SAMA yang
+    dulu juga menentukan nasib pintu Stok Produk sendiri.
+
+    ⚠ TAK LAGI DIBANDINGKAN LANGSUNG sejak 5 Oktober 2026: "Stok Produk"
+    diserap sub-menu "Stok" dan pintunya sendiri kini SELALU padam, apa pun
+    `pintu_produk`-nya (lihat `tests/test_grup_antrean.py::
+    test_pintu_stok_produk_sendiri_selalu_padam_di_laci`) — jadi
+    membandingkan keduanya di sini akan gagal persis pada skenario uji ini
+    (`pintu_produk` True, tempat "barang_keluar" tetap hidup tapi
+    "stok_produk" tetap mati). Yang diperiksa sekarang `barang_keluar`
+    SAJA; sisi "Stok Produk" sudah dijaga ujinya sendiri.
+    """
     from app.models import User
     from app.services.berjalan import untuk
 
@@ -732,9 +742,8 @@ async def test_operator_selepan_tak_ditawari_pintu_barang_keluar(pg, gudang):
         u.default_warehouse_id = None          # bukan operator Gudang 2
         await db.commit()
         b = await untuk(db, u)
-    mati = b.lencana()["PINTU_MATI"]
-    assert ("barang_keluar" in mati) == ("stok_produk" in mati), \
-        "kedua pintu berpisah nasib padahal sebabnya sama"
+    assert "barang_keluar" not in b.lencana()["PINTU_MATI"], \
+        "operator yang bukan G1 pun kehilangan Barang Keluar"
 
 
 # ──────────────────────── Kartu: pekerjaan yang MENCARI orangnya ────────────

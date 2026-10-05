@@ -241,8 +241,11 @@ def test_pintu_mutu_padam_saat_pencatatan_mutu_dimatikan():
     ia menyebut sebabnya."""
     from app.services.berjalan import Berjalan
 
-    assert Berjalan().lencana()["PINTU_MATI"] == ()
-    assert Berjalan(mutu_aktif=False).lencana()["PINTU_MATI"] == ("mutu",)
+    # "stok_produk" SELALU padam sejak 5 Oktober 2026 (diserap sub-menu
+    # "Stok") — tak ada hubungannya dengan setelan mutu, jadi diperiksa
+    # terpisah dari "mutu" di sini, bukan lewat kesamaan tuple penuh.
+    assert "mutu" not in Berjalan().lencana()["PINTU_MATI"]
+    assert "mutu" in Berjalan(mutu_aktif=False).lencana()["PINTU_MATI"]
 
     import pathlib
     tpl = (pathlib.Path(__file__).resolve().parents[1]

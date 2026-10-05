@@ -289,14 +289,24 @@ class Berjalan:
         ia menyebut sebabnya.
         """
         mati = ([] if self.mutu_aktif else ["mutu"])
-        # Operator selepan tak ditawari pintu Stok Produk: beras dan hasil
+        # ── "Stok Produk" pindah jadi sub-menu "Stok" (keputusan pemilik 5
+        #    Oktober 2026: "buat stock menjadi main menu memiliki sub menu.
+        #    yaitu stock PK dan stock produk.") ──
+        #
+        # Pintu sendirinya DIPENSIUNKAN untuk SEMUA orang, bukan cuma operator
+        # selepan seperti sebelumnya — ia sekarang hanya terjangkau lewat
+        # sub-menu "Stok" (`submenu()` di bawah) atau langsung lewat
+        # alamatnya. Halaman `/stok-produk` sendiri TIDAK berubah; yang
+        # berubah cuma pintunya di laci.
+        mati.append("stok_produk")
+        # Operator selepan tak ditawari pintu Stok Produk SAMA SEKALI —
+        # termasuk lewat sub-menu "Stok" (lihat `submenu()`): beras dan hasil
         # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
         # di layar Stok. Pintu yang selalu kosong mengajari orang berhenti
         # membuka pintu. Batas ini SEMENTARA dan pemilik yang memutuskan
         # kelak: "Stok Produk" yang tak memuat PK akan terasa setengah, sebab
         # PK adalah produk Gudang 1 (catatan QA 26 September 2026).
         if not self.pintu_produk:
-            mati.append("stok_produk")
             # Barang Keluar ikut padam untuk operator selepan, dan sebabnya
             # SAMA: barang jadi berdiri di Gudang 2, dan perintah muatnya
             # dibuat Admin. Pintu yang selalu kosong mengajari orang berhenti
@@ -315,7 +325,13 @@ class Berjalan:
         """Sub-menu laci per pintu: {kunci: [(alamat, nama, jumlah)]}.
 
         Keputusan pemilik 2 Oktober 2026: *"bisa tidak antrian tunggu jika di
-        klik muncul dropdown sub menu?"* — ya, dan isinya grup antrean.
+        klik muncul dropdown sub menu?"* — ya, dan isinya grup antrean. Dan
+        5 Oktober 2026: *"ringkas menu. buat stock menjadi main menu
+        memiliki sub menu."* — pintu "Stok" dan "Menunggu keputusan"
+        menyusul dengan mekanisme yang sama, dua bentuk berbeda: yang
+        pertama dan kedua MEMFILTER satu halaman (`?grup=`/`?kategori=`),
+        yang ketiga (Stok) menggabungkan DUA HALAMAN berbeda yang sudah
+        lengkap sendiri-sendiri.
 
         Disusun DI SINI, bersama lencana yang lain, dan sebabnya sudah tertulis
         di `lencana()`: seluruh laci lahir dari satu benda. Sub-menu yang
@@ -357,6 +373,30 @@ class Berjalan:
         if len(isik) >= 2:
             out["keputusan"] = [("/keputusan", "Semua", self.jumlah_keputusan),
                                 *isik]
+
+        # "Stok" — permintaan pemilik 5 Oktober 2026: "ringkas menu. buat
+        # stock menjadi main menu memiliki sub menu. yaitu stock PK dan
+        # stock produk." BEDA bentuknya dari dua sub-menu di atas: dua
+        # tujuannya BUKAN filter atas satu halaman yang sama, melainkan DUA
+        # HALAMAN yang masing-masing sudah lengkap sendiri — jadi tak ada
+        # baris "Semua" di sini, sebab tak ada daftar utuh yang lebih besar
+        # dari keduanya untuk dituju.
+        #
+        # Angka di baris "Stok PK" sengaja 0: pintu "Stok" tak pernah punya
+        # lencana (tak seperti "Stok Produk", yang lencananya `jumlah_produk`
+        # — beras yang belum dipacking). `{% if sub_jml %}` di templat
+        # membuang badge "0" itu, bukan menggambarnya sebagai kebisingan.
+        #
+        # "Stok Produk" hanya ikut bila `pintu_produk` — operator selepan
+        # tak boleh melihatnya sama sekali (lihat `lencana()`). Dengan satu
+        # tujuan saja, "Stok" kembali jadi pintu biasa ke `/stok` — aturan
+        # ≥2 yang SAMA dengan dua sub-menu di atas, supaya laci tak pernah
+        # menawarkan dropdown tanpa pilihan.
+        isi_stok: list[tuple[str, str, int]] = [("/stok", "Stok PK", 0)]
+        if self.pintu_produk:
+            isi_stok.append(("/stok-produk", "Stok Produk", self.jumlah_produk))
+        if len(isi_stok) >= 2:
+            out["stok"] = isi_stok
         return out
 
 

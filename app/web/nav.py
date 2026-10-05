@@ -111,6 +111,18 @@ TAB = (
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
     # berhak tahu berapa yang sudah terkumpul.
+    #
+    # ── Sub-menu "Stok PK" / "Stok Produk" — keputusan pemilik 5 Oktober
+    #    2026 ──
+    #
+    # "ringkas menu. buat stock menjadi main menu memiliki sub menu. yaitu
+    # stock PK dan stock produk." Pintu ini jadi `<summary>` berdropdown
+    # (`Berjalan.submenu()`, kunci "stok") kapan pun "Stok Produk" ikut
+    # ditawarkan — klik membuka dua pilihan, bukan langsung ke `/stok`.
+    # Operator selepan (yang tak ditawari "Stok Produk" sama sekali) tetap
+    # melihatnya sebagai pintu biasa; itu bukan dikecualikan di sini, sebab
+    # aturan ≥2-pilihan di `submenu()` sudah menjamin pintu tanpa dropdown
+    # untuk satu tujuan.
     ("stok",       "/stok",       "Stok",           "Bahan: gabah & PK yang masih ada", None, "▦"),
     # ── Stok Produk — keputusan pemilik 26 September 2026 ──
     #
@@ -123,9 +135,15 @@ TAB = (
     # bernama Stok yang subjudulnya tak membedakan akan ditekan bergantian
     # oleh orang yang mencari satu angka.
     #
-    # Pintunya padam untuk operator selepan lewat `PINTU_MATI`, bukan lewat
-    # daftar peran ini: keduanya sama-sama berperan `operator`, dan yang
-    # membedakan gudang tempatnya bekerja hari ini.
+    # ⚠ BARIS INI TETAP DI `TAB` TETAPI TAK PERNAH LAGI BERDIRI SENDIRI DI
+    # LACI (keputusan 5 Oktober 2026, lihat catatan di atas "stok"): pintunya
+    # kini SELALU masuk `PINTU_MATI` (`Berjalan.lencana()`), untuk SIAPA PUN
+    # — bukan cuma operator selepan seperti sebelumnya. Barisnya dipertahankan
+    # di sini karena `JUDUL` (judul bilah atas halaman `/stok-produk`) dan
+    # `TAB_KUNCI` (penentu "halaman ini punya laci") dibaca dari seluruh
+    # daftar `TAB`, bukan cuma yang tampil di laci — menghapus barisnya akan
+    # membuat `/stok-produk` kehilangan judul DAN seluruh bingkai navigasinya,
+    # padahal halamannya sendiri sama sekali tidak berubah.
     ("stok_produk", "/stok-produk", "Stok Produk",
      "Beras dan hasil samping yang sudah jadi", None, "◧"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──

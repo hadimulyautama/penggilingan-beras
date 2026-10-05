@@ -121,16 +121,21 @@ def test_submenu_butuh_dua_grup_berisi():
     kembali jadi pintu biasa — dan syaratnya sama dengan syarat pil di dalam
     halaman, supaya laci berdropdown tak pernah muncul di atas halaman tanpa
     pil.
+
+    ⚠ Diperiksa pada kunci "aksi" SAJA, bukan `submenu() == {}`: sejak 5
+    Oktober 2026 "stok" punya sub-menunya sendiri, independen dari isi
+    antrean (`pintu_produk` bawaannya True) — lihat
+    `test_stok_bersub_menu_saat_stok_produk_ditawarkan`.
     """
     satu = Berjalan(menunggu=[_kartu(aksi="catat_packing") for _ in range(6)])
-    assert satu.submenu() == {}
-    assert satu.lencana()["SUBMENU"] == {}
+    assert "aksi" not in satu.submenu()
+    assert "aksi" not in satu.lencana()["SUBMENU"]
 
     dua = Berjalan(menunggu=[_kartu(aksi="catat_packing"),
                              _kartu(aksi="gabah_masuk")])
     assert "aksi" in dua.submenu()
 
-    assert Berjalan().submenu() == {}, "antrean kosong tak punya sub-menu"
+    assert "aksi" not in Berjalan().submenu(), "antrean kosong tak punya sub-menu"
 
 
 def test_semua_selalu_baris_pertama_submenu():
@@ -180,6 +185,45 @@ def test_angka_submenu_datang_dari_daftar_yang_akan_digambar():
     for kunci, _ in GRUP_ANTREAN:
         saring = [x for x in b.menunggu if grup_baris(x) == kunci]
         assert len(saring) == n[kunci], kunci
+
+
+# ══════════════ Sub-menu "Stok" — gabung PK & Produk, bukan filter ══════════════
+#
+# Keputusan pemilik 5 Oktober 2026: *"ringkas menu. buat stock menjadi main
+# menu memiliki sub menu. yaitu stock PK dan stock produk."* BEDA bentuknya
+# dari "aksi"/"keputusan" di atas: dua tujuannya sudah lengkap sendiri-sendiri
+# (dua HALAMAN berbeda, bukan dua filter atas satu halaman yang sama), jadi
+# tak ada baris "Semua" — tak ada daftar utuh yang lebih besar dari keduanya
+# untuk dituju.
+
+def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
+    b = Berjalan(pintu_produk=True)
+    assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
+                                   ("/stok-produk", "Stok Produk", 0)]
+
+
+def test_stok_sub_menu_angka_produk_ikut_tapi_stok_pk_tetap_nol():
+    """Stok PK tak pernah punya lencana — tak seperti Antrian tunggu/
+    Keputusan, "Stok" tak menagih pekerjaan."""
+    b = Berjalan(pintu_produk=True, jumlah_produk=3)
+    assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
+                                   ("/stok-produk", "Stok Produk", 3)]
+
+
+def test_stok_tanpa_sub_menu_bila_stok_produk_padam():
+    """Operator selepan: 'Stok Produk' tak ditawarkan sama sekali (lihat
+    `Berjalan.lencana`), jadi 'Stok' tinggal SATU tujuan — pintu biasa,
+    bukan dropdown tanpa pilihan. Aturan ≥2 yang sama dengan Antrian tunggu
+    di atas."""
+    assert "stok" not in Berjalan(pintu_produk=False).submenu()
+
+
+def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():
+    """Pintunya DIPENSIUNKAN untuk SEMUA orang sejak diserap 'Stok' —
+    bukan cuma operator selepan seperti sebelum 5 Oktober 2026."""
+    for pintu_produk in (True, False):
+        mati = Berjalan(pintu_produk=pintu_produk).lencana()["PINTU_MATI"]
+        assert "stok_produk" in mati
 
 
 # ══════════════ Yang TERGAMBAR: pil halaman & sub-menu laci ══════════════
@@ -301,6 +345,28 @@ def test_pintu_tetap_tautan_biasa_tanpa_sub_menu():
                          ("/aksi?grup=bahan", "Bahan baku", 1),
                          ("/aksi?grup=packing", "Tunggu packing", 1)]})
     assert 'href="/stok"' in h2 and 'href="/berjalan"' in h2
+
+
+def test_pintu_stok_jadi_summary_tanpa_semua_dan_tanpa_lencana_nol():
+    """⭐ "Stok" BEDA bentuk dari "Antrian tunggu": dua tujuan yang sudah
+    lengkap sendiri-sendiri, bukan dua filter satu daftar — jadi tak ada
+    baris "Semua" di dalamnya. Dan "Stok PK" tak boleh menggambar lencana
+    "0": `sub_jml=0` harus dibuang `{% if sub_jml %}` di templat, bukan
+    "kebetulan" ikut kosong seperti grup antrean yang memang disaring
+    sebelum masuk daftar.
+    """
+    sub = {"stok": [("/stok", "Stok PK", 0), ("/stok-produk", "Stok Produk", 3)]}
+    h = _laci(sub)
+    assert "pintu-lipat" in h and "<summary" in h
+    for nama in ("Stok PK", "Stok Produk"):
+        assert nama in h
+    assert 'href="/stok"' in h and 'href="/stok-produk"' in h
+    assert "Semua" not in h
+    # Lencana "0" tak tergambar (Stok PK); "3" harus (Stok Produk) — dan
+    # itu satu-satunya badge berkelas ini di laci selama BERJALAN/KABAR tak
+    # dikirim ke `_laci`.
+    assert h.count('class="pintu__jml pintu__jml--kabar"') == 1
+    assert ">3<" in h.replace(" ", "").replace("\n", "")
 
 
 def test_sub_menu_terbuka_sendiri_di_halamannya_sendiri():

@@ -223,9 +223,20 @@ async def test_kartu_antrean_dan_lencana_untuk_yang_sudah_selesai(pg, sosoh):
     assert b.lencana()["PRODUK"] == 1
 
 
-async def test_pintu_tertutup_hanya_bagi_operator_gudang1(pg, sosoh, pemasok):
+async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
+        pg, sosoh, pemasok):
     """Keputusan pemilik 26 September 2026: semua boleh, kecuali operator
-    Gudang 1 — produknya sendiri (PK) sudah berkartu di layar Stok."""
+    Gudang 1 — produknya sendiri (PK) sudah berkartu di layar Stok.
+
+    ⚠ Sejak 5 Oktober 2026 "stok_produk" TIDAK LAGI punya pintu sendiri di
+    laci — diserap sub-menu "Stok" (keputusan pemilik: "ringkas menu").
+    Jadi `PINTU_MATI` kini SELALU memuatnya, untuk SIAPA PUN (lihat
+    `tests/test_grup_antrean.py::
+    test_pintu_stok_produk_sendiri_selalu_padam_di_laci`) — yang dulu
+    membedakan Admin/operator G2 dari operator G1 di SINI sekarang
+    dibedakan lewat ISI sub-menu "Stok": dua tujuan untuk yang boleh,
+    satu (jadi tak bersub-menu sama sekali) untuk operator Gudang 1.
+    """
     from sqlalchemy import select
 
     from app.models import User, Warehouse
@@ -250,9 +261,12 @@ async def test_pintu_tertutup_hanya_bagi_operator_gudang1(pg, sosoh, pemasok):
         b1 = await untuk(db, await db.get(User, op1.id))
         b2 = await untuk(db, await db.get(User, adm.id))
         b3 = await untuk(db, await db.get(User, sosoh["user"]))
-    assert "stok_produk" in b1.lencana()["PINTU_MATI"], "operator G1 ditawari pintunya"
-    assert "stok_produk" not in b2.lencana()["PINTU_MATI"], "Admin kehilangan pintunya"
-    assert "stok_produk" not in b3.lencana()["PINTU_MATI"], "operator G2 kehilangan pintunya"
+    for b, siapa in ((b1, "op1"), (b2, "admin"), (b3, "op2")):
+        assert "stok_produk" in b.lencana()["PINTU_MATI"], \
+            f"{siapa}: pintu Stok Produk sendiri harus selalu padam"
+    assert "stok" not in b1.submenu(), "operator G1 ikut ditawari Stok Produk"
+    assert [nama for _, nama, _ in b2.submenu()["stok"]] == ["Stok PK", "Stok Produk"]
+    assert [nama for _, nama, _ in b3.submenu()["stok"]] == ["Stok PK", "Stok Produk"]
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
 

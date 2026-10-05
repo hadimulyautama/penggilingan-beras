@@ -341,11 +341,36 @@
                   bukan dijual</span>
               </div>
             {% endif %}
-            {# Mutu langsung di kartu, tidak dilipat — sama alasannya dengan
-               kartu lot Gudang 1: yang harus dibuka dulu untuk terbaca akan
-               dianggap tak ada. #}
-            {% if mutu_aktif %}
-              <dl class="fakta">
+            {# Fakta dasar + mutu dalam SATU `dl`, persis struktur kartu lot
+               Gudang 1 di atas: "Kondisi" dan "Sudah ke silo" bukan mutu
+               (tak dimatikan lewat Pengaturan → Mutu), jadi keduanya
+               BERDIRI DI LUAR `{% if mutu_aktif %}`, sama seperti `l.kelas`
+               di kartu Gudang 1 — yang dilipat ke dalam gerbang itu hanya
+               baris mutu sungguhan. #}
+            <dl class="fakta">
+              {# "Berapa yang sudah masuk silo dari berat awal yang ada"
+                 (permintaan pemilik 5 Oktober 2026). Hanya muncul begitu
+                 ADA yang sudah pindah — pemasukan yang masih utuh di
+                 tumpukan tak punya apa pun untuk dilaporkan di sini. #}
+              {% if t.berat_awal and t.berat_awal > t.tersedia %}
+                <div>
+                  <dt>Sudah ke silo</dt>
+                  <dd>{{ kg(t.berat_awal - t.tersedia) }} dari {{ kg(t.berat_awal) }} awal</dd>
+                </div>
+              {% endif %}
+              {# Kelas PK — KS (gabah basah, kami keringkan sendiri) / KL
+                 (gabah sudah kering saat dibeli) / Campuran / Semi KS / MIX.
+                 Permintaan pemilik 5 Oktober 2026: "kondisi kl atau ks." #}
+              {% if t.kelas %}
+                <div>
+                  <dt>Kondisi</dt>
+                  <dd>{{ t.kelas }}</dd>
+                </div>
+              {% endif %}
+              {# Mutu langsung di kartu, tidak dilipat — sama alasannya dengan
+                 kartu lot Gudang 1: yang harus dibuka dulu untuk terbaca akan
+                 dianggap tak ada. #}
+              {% if mutu_aktif %}
                 {% for label, nilai in t.mutu %}
                   <div>
                     <dt>{{ label }}</dt>
@@ -358,8 +383,8 @@
                     <dd class="padat__nilai--kosong">belum dinilai</dd>
                   </div>
                 {% endif %}
-              </dl>
-            {% endif %}
+              {% endif %}
+            </dl>
             {% if not t.bobot_final %}
               <div class="nota nota--hati">
                 <span aria-hidden="true">⏸</span>

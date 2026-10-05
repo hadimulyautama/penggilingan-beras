@@ -282,8 +282,18 @@
                 {# Angkanya NETRAL, bukan warna penagih: yang menagih adalah
                    pintu induknya, dan empat lencana merah berderet di bawahnya
                    akan membuat merah berhenti berarti apa pun. Nol pun tak
-                   pernah tergambar — penyusunnya sudah membuang grup kosong. #}
-                <span class="pintu__jml pintu__jml--kabar">{{ sub_jml }}</span>
+                   pernah tergambar — penyusunnya sudah membuang grup kosong.
+
+                   ⚠ KECUALI sub-menu yang BUKAN filter satu daftar (mis.
+                   "Stok", sejak 5 Oktober 2026): tujuannya dua HALAMAN
+                   berbeda, bukan dua potongan satu angka, dan salah satunya
+                   boleh memang tak punya konsep lencana sama sekali — bukan
+                   "kebetulan nol". Baris begitu lewat `sub_jml=0` apa
+                   adanya, dan `{% if sub_jml %}` di sinilah yang membuangnya,
+                   bukan penyusunnya. #}
+                {% if sub_jml %}
+                  <span class="pintu__jml pintu__jml--kabar">{{ sub_jml }}</span>
+                {% endif %}
               </a>
             {% endfor %}
           </div>
