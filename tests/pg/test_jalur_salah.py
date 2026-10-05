@@ -94,6 +94,26 @@ async def test_rendemen_di_atas_seratus_diberitahu(pg, pabrik):
     assert "10.000" in hasil.peringatan, "peringatannya tak menyebut bahannya"
 
 
+async def test_rendemen_tepat_seratus_persen_diberitahu(pg, pabrik):
+    """⭐ Tepat 100% — BUKAN lebih besar — lolos tanpa tanda sampai perbaikan
+    ini. `rendemen > 100` cuma menjaga yang MELEBIHI; keluaran yang beratnya
+    SAMA PERSIS dengan masukan (sekam nol) sama mustahilnya secara fisika,
+    dan celah ini lolos dari seluruh uji yang ada karena tak satu pun
+    mencoba angka tepat di batasnya."""
+    from app.models import User
+    from app.penggilingan.gudang1.services.milling import log_progress, start_milling
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        r = await start_milling(db, user=u, nama_silo=["A"])
+        hasil = await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
+                                   berat_kumulatif=10_000)
+
+    assert hasil.berat_kumulatif == 10_000
+    assert hasil.peringatan and "Rendemen" in hasil.peringatan
+    assert "100%" in hasil.peringatan
+
+
 async def test_angka_wajar_tak_diberi_peringatan(pg, pabrik):
     """Peringatan yang selalu muncul berhenti dibaca. 6.000 dari 10.000 =
     60%, rendemen yang biasa — dan ia harus lewat tanpa suara."""
@@ -123,6 +143,24 @@ async def test_kumulatif_boleh_mundur_untuk_membetulkan(pg, pabrik):
         betul = await log_progress(db, user=u, kode_proses=r.proc.kode_proses,
                                    berat_kumulatif=8_000)
     assert betul.berat_kumulatif == 8_000 and betul.peringatan is None
+
+
+async def test_selesai_giling_menolak_hasil_tepat_sama_dengan_bahan(pg, pabrik):
+    """⭐ `finish_milling` memakai `berat_akhir > masuk` — LEBIH BESAR, bukan
+    lebih-besar-atau-sama — jadi `berat_akhir == masuk` (rendemen tepat
+    100%) lolos sampai perbaikan ini. Sekam SELALU terbuang; keluaran yang
+    beratnya sama persis dengan bahan mustahil sama seperti yang lebih
+    berat, dan harus ditolak dengan pesan yang sama."""
+    from app.models import User
+    from app.penggilingan.gudang1.services.milling import MillingError, finish_milling, start_milling
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        r = await start_milling(db, user=u, nama_silo=["A"])
+        with pytest.raises(MillingError) as e:
+            await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
+                                 berat_akhir=10_000)
+    assert "lebih besar" in str(e.value) or "10.000" in str(e.value)
 
 
 # ═════════ 2 · Silo penyosohan ditutup dua kali ═════════

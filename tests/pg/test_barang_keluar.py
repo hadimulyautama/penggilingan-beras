@@ -437,6 +437,93 @@ async def test_daftar_tiket_keluar_menyembunyikan_yang_sudah_tertaut(pg, gudang)
             "tiket terkunci selamanya sesudah transaksinya dibatalkan"
 
 
+async def test_tiket_tak_ditawarkan_untuk_muatan_kecil(pg, gudang):
+    """⭐ Keputusan pemilik 5 Oktober 2026: muatan < 200 kg tak lagi
+    menawarkan medan "Kode timbang keluar" — `/actions/timbang-keluar-aktif
+    ?induk=<rec_id>` menjawab daftar KOSONG untuk muatan sekecil ini,
+    walau ada tiket yang sungguh menganggur."""
+    from app.models import User
+    from app.web.aksi_inventory import timbang_keluar_aktif
+
+    await _tiket(pg, "TK-KECIL-01")
+    rid = await _sampai_dimuat(pg, gudang, karung=5)          # 125 kg
+    async with pg() as db:
+        out = await timbang_keluar_aktif(induk=str(rid), user=await db.get(User, gudang["adm"]))
+    assert out == []
+
+
+async def test_tiket_tetap_ditawarkan_untuk_muatan_besar(pg, gudang):
+    """Ambangnya 200 kg, bukan nol — muatan yang memang besar tetap
+    menawarkan tiketnya seperti biasa."""
+    from app.models import User
+    from app.web.aksi_inventory import timbang_keluar_aktif
+
+    tid = await _tiket(pg, "TK-BESAR-01")
+    rid = await _sampai_dimuat(pg, gudang, karung=10)          # 250 kg
+    async with pg() as db:
+        out = await timbang_keluar_aktif(induk=str(rid), user=await db.get(User, gudang["adm"]))
+    assert tid in {int(o["value"]) for o in out}
+
+
+async def test_tiket_tanpa_induk_atau_induk_tak_dikenal_tetap_daftar_penuh(pg, gudang):
+    """Borang yang dibuka lewat katalog (bukan lewat kartu per-muatan) belum
+    punya `induk` sama sekali saat medan ini pertama kali termuat — dan
+    `induk` yang tak dikenal (id usang, borang basi) tak boleh diam-diam
+    menyembunyikan tiket yang sungguh ada. Hanya muatan yang BENAR
+    DITEMUKAN dan BENAR kecil yang menyembunyikannya."""
+    from app.models import User
+    from app.web.aksi_inventory import timbang_keluar_aktif
+
+    tid = await _tiket(pg, "TK-TANPA-INDUK-01")
+    await _sampai_dimuat(pg, gudang, karung=5)                # ada muatan kecil, tak dipakai
+    async with pg() as db:
+        admin = await db.get(User, gudang["adm"])
+        kosong = await timbang_keluar_aktif(induk="", user=admin)
+        asing = await timbang_keluar_aktif(induk="999999", user=admin)
+    assert tid in {int(o["value"]) for o in kosong}
+    assert tid in {int(o["value"]) for o in asing}
+
+
+async def test_tiket_tetap_bisa_ditautkan_ke_muatan_kecil_bukan_larangan(pg, gudang):
+    """⚠ TAK DITAWARKAN ≠ TAK DIIZINKAN. Kalau muatan sekecil ini kebetulan
+    ditimbang, tiketnya tetap tertaut seperti muatan besar manapun — yang
+    berubah cuma apakah app MENAWARKAN."""
+    from app.models import User
+    from app.services import barang_keluar as bk
+
+    tid = await _tiket(pg, "TK-KECIL-DIPAKAI-01", barang=125)
+    rid = await _sampai_dimuat(pg, gudang, karung=5)           # 125 kg
+    async with pg() as db:
+        rec, _ = await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                                     rec_id=rid, timbangan_transaksi_id=tid)
+    assert rec.timbangan_transaksi_id == tid
+
+
+async def test_medan_tiket_bergantung_perintah_dan_js_memicu_perubahannya():
+    """⚠⚠ Prasyarat teknis untuk ketiga uji di atas: tanpa `induk` di
+    katalog, medan tiket selalu memuat SELURUH tiket tanpa peduli muatan
+    mana yang dipilih — ambang 200 kg tak akan pernah berarti apa pun di
+    borang sungguhan. Dan tanpa `dispatchEvent` di `isiDariBaris`, medan
+    `induk` APA PUN (termasuk yang sudah ada sebelum ini — "silo" pada
+    "Selesai penyosohan") diam kosong selamanya tepat pada jalur bukaan
+    paling umum: kartu per-baris yang mengisi induknya lewat `?buka=&nilai=`.
+    """
+    import inspect
+    import pathlib
+
+    from app.web import aksi_inventory
+
+    src = inspect.getsource(aksi_inventory)
+    i = src.index('"name": "tiket"')
+    blok = src[i:i + 300]
+    assert '"induk": "perintah"' in blok
+
+    js = (pathlib.Path(__file__).resolve().parents[2]
+         / "hmu_tampilan/static/aksi.js").read_text()
+    j = js.index("function isiDariBaris")
+    assert 'dispatchEvent(new Event("change"' in js[j:j + 1200]
+
+
 async def test_verifikasi_boleh_tanpa_tiket(pg, gudang):
     """Tiket bisa belum ada — truk yang keluar lewat pintu belakang, atau
     timbangan yang sedang rusak. Menolak penutupan karenanya akan membuat

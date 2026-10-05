@@ -458,9 +458,11 @@ def test_selesai_giling_menolak_tanpa_hasil_dan_tak_menyentuh_prosesnya():
     # Pemeriksaan mendahului perubahan.
     assert fn.index("Sebutkan hasil akhir") < fn.index("proc.status = 'selesai'"), \
         "status diubah sebelum hasilnya diperiksa"
-    # Nol dan yang mustahil ikut ditolak: rendemen di atas 100% salah ketik.
+    # Nol dan yang mustahil ikut ditolak: rendemen 100% ATAU LEBIH salah
+    # ketik — `>=`, bukan `>` (keputusan pemilik 5 Oktober 2026: sekam
+    # selalu terbuang, jadi tepat 100% sama mustahilnya dengan di atasnya).
     assert "berat_akhir <= 0" in fn
-    assert "berat_akhir > masuk" in fn
+    assert "berat_akhir >= masuk" in fn
     # Angkanya masuk sebagai progres kumulatif, bukan kolom baru.
     assert "MillingProgressLog" in fn
 

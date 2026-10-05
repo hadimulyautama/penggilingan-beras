@@ -86,6 +86,29 @@ def ambang_selisih(total_kg: float) -> float:
     return max(AMBANG_SELISIH_KG, float(total_kg) * AMBANG_SELISIH_PERSEN / 100)
 
 
+#: ── Muatan kecil tak perlu tiket timbang keluar ──
+#:
+#: Keputusan pemilik 5 Oktober 2026. Diperiksa dulu: TIDAK ADA aturan yang
+#: MEWAJIBKAN tiket — seluruh logikanya di `verifikasi()` berdiri di dalam
+#: `if timbangan_transaksi_id is not None:`, dan tanpanya verifikasi menutup
+#: dengan bersih. Yang berubah di sini CUMA RASA PEMAKAIAN borangnya: di
+#: bawah angka ini medan "Kode timbang keluar" tak lagi DITAWARKAN sebagai
+#: pilihan (`/actions/timbang-keluar-aktif?induk=<rec_id>` menjawab daftar
+#: kosong), diganti satu baris keterangan.
+#:
+#: ⚠ BUKAN LARANGAN. Kalau muatan sekecil ini KEBETULAN ditimbang, tiketnya
+#: tetap bisa ditautkan — medannya tetap `optional`, bukan disembunyikan
+#: total, dan menautkan lewat jalur lain (mis. diketik manual kelak) tak
+#: pernah ditolak. Yang berubah apakah app MENAWARKAN, bukan apakah ia
+#: MENGIZINKAN.
+#:
+#: Satu angka di sini, di sebelah `ambang_selisih()`: dua ambang untuk dua
+#: pertanyaan yang berbeda ("berapa selisih yang wajar" vs "muatan ini perlu
+#: tiket atau tidak") tetap harus hidup berdampingan di SATU tempat, supaya
+#: tak ada yang mengarang angka kedua di berkas lain suatu hari.
+MUATAN_KECIL_TANPA_TIKET_KG = 200.0
+
+
 class BarangKeluarError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
 

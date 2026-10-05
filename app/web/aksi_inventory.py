@@ -703,12 +703,34 @@ async def pk_siap_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/timbang-keluar-aktif")
-async def timbang_keluar_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Tiket timbang KELUAR yang belum tertaut transaksi mana pun."""
+async def timbang_keluar_aktif(induk: str = "",
+                               user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Tiket timbang KELUAR yang belum tertaut transaksi mana pun.
+
+    `induk` = id muatan ("perintah") yang sedang diverifikasi, dikirim klien
+    dari medan di atasnya. Muatan di bawah `MUATAN_KECIL_TANPA_TIKET_KG`
+    (keputusan pemilik 5 Oktober 2026) menjawab daftar KOSONG — bukan
+    larangan, cuma tak ditawarkan: kalimat `kosong` pada medannya sendiri
+    yang menjelaskan sebabnya, dan tiket tetap bisa ditautkan kalau memang
+    ada (lihat catatan panjang di `barang_keluar.MUATAN_KECIL_TANPA_TIKET_KG`).
+
+    `induk` kosong ATAU muatannya tak ditemukan → daftar penuh, apa adanya:
+    borang yang dibuka lewat katalog (bukan lewat kartu per-muatan) harus
+    tetap bisa menawarkan seluruh tiket sebelum "perintah"-nya sendiri
+    sempat dipilih.
+    """
     wajib(can_see_financials(user))
+    from app.models import OutgoingRecord
     from app.penggilingan.gudang1.services.timbang_link import tiket_keluar_aktif
 
     async with SessionLocal() as db:
+        rec_id = int(induk) if induk.strip().isdigit() else None
+        if rec_id is not None and await db.get(OutgoingRecord, rec_id) is not None:
+            total = sum(float(i.berat_kg or 0) for i in (await db.execute(
+                select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec_id)
+            )).scalars().all())
+            if total < bk.MUATAN_KECIL_TANPA_TIKET_KG:
+                return []
         tk = await tiket_keluar_aktif(db)
     out = []
     for t in tk:
@@ -1357,9 +1379,26 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "perintah", "label": "Muatan yang menunggu verifikasi",
                   "type": "remote", "source": "/api/actions/keluar-dimuat",
                   "kosong": "Tidak ada muatan yang menunggu diverifikasi."},
+                 # `induk` — keputusan pemilik 5 Oktober 2026: muatan di bawah
+                 # `barang_keluar.MUATAN_KECIL_TANPA_TIKET_KG` tak perlu tiket
+                 # timbang keluar, jadi medan ini TAK DITAWARKAN untuk muatan
+                 # sekecil itu (`/api/actions/timbang-keluar-aktif?induk=`
+                 # menjawab daftar kosong, dan kalimat `kosong` di bawah
+                 # berdiri sebagai keterangannya — BUKAN larangan, tiket tetap
+                 # bisa ditautkan kalau kebetulan ada).
+                 #
+                 # ⚠ Daftar ini baru termuat SESUDAH "perintah" dipilih — dan
+                 # kartu yang membuka borang ini lewat `?buka=&nilai=` mengisi
+                 # "perintah" tanpa memicu event `change` apa pun (lihat
+                 # perbaikan `isiDariBaris` di `aksi.js`). Tanpa perbaikan itu
+                 # medan ini akan diam kosong selamanya pada jalur BUKAAN
+                 # PALING UMUM — kartu "Verifikasi & tutup" per baris.
                  {"name": "tiket", "label": "Kode timbang keluar", "type": "remote",
-                  "optional": True, "source": "/api/actions/timbang-keluar-aktif",
-                  "kosong": "Tidak ada tiket timbang keluar yang belum tertaut."},
+                  "optional": True, "induk": "perintah",
+                  "source": "/api/actions/timbang-keluar-aktif",
+                  "kosong": "Tidak ada tiket timbang keluar untuk ditautkan — "
+                           "kalau muatan ini di bawah 200 kg, tiket timbang "
+                           "memang tidak diperlukan."},
                  # OPSIONAL di borang, WAJIB di layanan — dan hanya ketika
                  # selisihnya melewati ambang. `aksi.js` tak bisa mewajibkan
                  # satu medan menurut isi medan lain, dan memaksa medan ini

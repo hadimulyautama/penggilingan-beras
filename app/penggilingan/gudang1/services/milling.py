@@ -473,17 +473,25 @@ async def log_progress(
     # Batas 100% batas FISIKA, bukan selera — jadi ia tak bersetelan. Dan ia
     # SENDIRIAN: peringatan yang menumpuk berhenti dibaca, dan yang ini jauh
     # lebih jarang serta lebih mendesak daripada kabar tumpukan.
+    #
+    # ⚠ `>= 100`, bukan `> 100` — tepat 100% SAMA mustahilnya dengan di
+    # atasnya: sekam SELALU terbuang, jadi keluaran yang beratnya SAMA
+    # PERSIS dengan masukan tak kalah mustahil daripada yang lebih berat.
+    # Ambang ini harus sama dengan `finish_milling`, sebab keduanya menjaga
+    # satu batas fisika yang sama — dua ambang berbeda akan membingungkan
+    # yang membaca keduanya.
     bahan = float(proc.berat_gabah_masuk_kg or 0)
-    if rendemen is not None and rendemen > 100:
+    if rendemen is not None and rendemen >= 100:
         sementara = ("" if proc.bobot_masuk_final
                      else " — dan bobot masuknya sendiri masih sementara")
         return ProgressResult(
             proc=proc, berat_kumulatif=berat_kumulatif, rendemen_persen=rendemen,
             jenis=jenis,
             peringatan=(
-                f"⚠️ Rendemen {rendemen:.0f}% — beras tak bisa lebih berat "
-                f"daripada gabahnya ({_kg(bahan)}){sementara}. Periksa "
-                "angkanya; kalau memang benar, beri tahu Admin."),
+                f"⚠️ Rendemen {rendemen:.0f}% — beras selalu lebih RINGAN "
+                f"daripada gabahnya ({_kg(bahan)}), sekam selalu terbuang"
+                f"{sementara}. Periksa angkanya; kalau memang benar, beri "
+                "tahu Admin."),
         )
 
     stok = await stok_pk_g1(db)
@@ -582,10 +590,18 @@ async def finish_milling(
     # diketahui membuat pagar ini menolak hasil yang benar (QA P6-03a): yang
     # begitu dibiarkan lewat, tetap bertanda belum final, dan pembandingnya
     # dibetulkan poller begitu truknya ditimbang.
-    if proc.bobot_masuk_final and masuk and berat_akhir > masuk:
+    #
+    # ⚠ `>=`, bukan `>` — rendemen giling SELALU di bawah 100%, sekamnya
+    # terbuang, jadi `berat_akhir == masuk` (rendemen tepat 100%) sama
+    # mustahilnya dengan yang lebih besar. Batas 100% batas FISIKA, bukan
+    # selera, dan ambang ini harus sama dengan yang di `log_progress` —
+    # dua ambang berbeda untuk satu batas fisika akan membingungkan yang
+    # membaca keduanya.
+    if proc.bobot_masuk_final and masuk and berat_akhir >= masuk:
         raise MillingError(
-            f"Hasil PK {berat_akhir:,.0f} kg lebih besar daripada gabah yang "
-            f"masuk ({masuk:,.0f} kg). Periksa angkanya."
+            f"Hasil PK {berat_akhir:,.0f} kg lebih besar atau sama dengan "
+            f"gabah yang masuk ({masuk:,.0f} kg) — sekam selalu terbuang, "
+            "jadi hasilnya selalu lebih ringan. Periksa angkanya."
             .replace(",", ".")
         )
 

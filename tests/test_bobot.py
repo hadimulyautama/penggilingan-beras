@@ -106,7 +106,10 @@ def test_start_milling_menulis_null_bukan_nol_dan_menandai_belum_final():
 def test_pagar_pk_lebih_besar_dari_gabah_hanya_bila_pembandingnya_pasti():
     from app.penggilingan.gudang1.services import milling
 
-    assert "if proc.bobot_masuk_final and masuk and berat_akhir > masuk:" in inspect.getsource(
+    # `>=`, bukan `>` — rendemen tepat 100% sama mustahilnya dengan yang
+    # lebih besar (keputusan pemilik 5 Oktober 2026, celah yang lolos dari
+    # 1.145 uji karena tak satu pun mencoba angka tepat di batasnya).
+    assert "if proc.bobot_masuk_final and masuk and berat_akhir >= masuk:" in inspect.getsource(
         milling.finish_milling)
     # Verifikasi output (rendemen final & HPP) menunggu bahan final.
     assert "_pesan_belum_final" in kode_saja(milling.verify_milling_output)

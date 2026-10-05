@@ -1308,7 +1308,20 @@
    * kesempatan kedua itulah tempat ia salah pilih.
    *
    * Pilihan jarak jauh dimuat setelah lembarnya tampil, jadi nilainya
-   * dipasang berulang sampai daftarnya datang — lalu berhenti. */
+   * dipasang berulang sampai daftarnya datang — lalu berhenti.
+   *
+   * ⚠ `change` DIPICU TANGAN sesudah `s.value =` — temuan 5 Oktober 2026.
+   * Medan `induk` (mis. "silo" bergantung "kode_proses", "tiket" bergantung
+   * "perintah") memuat ulang isinya lewat pendengar `change` pada induknya
+   * (lihat `pi.addEventListener("change", ...)` di atas). `s.value = nilai`
+   * TIDAK memicu event itu — ia cuma mengubah properti, bukan mensimulasikan
+   * ketukan orang — jadi medan anak yang induknya diisi di sinilah yang
+   * selama ini diam kosong selamanya tiap kartu dibuka lewat `?buka=&nilai=`,
+   * sebab satu-satunya pemicu lain `segarkanPilihan` (fokus/visibilitas
+   * kembali, berjeda 10 detik) belum tentu pernah tertekan sebelum orangnya
+   * mengetik. Memicunya di sini memperbaiki SETIAP medan `induk` yang
+   * pernah atau akan menjadi anak dari medan yang diisi lewat jalur ini —
+   * bukan cuma satu borang. */
   function isiDariBaris() {
     var tag = document.querySelector("script[data-nilai]");
     var nilai = tag && tag.dataset.nilai;
@@ -1323,6 +1336,7 @@
             if (s.options[i].value === nilai) {
               s.value = nilai;
               kena = true;
+              s.dispatchEvent(new Event("change", { bubbles: true }));
               return;
             }
           }
