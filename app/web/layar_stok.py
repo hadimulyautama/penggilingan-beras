@@ -59,7 +59,7 @@ async def _karung(db, view: str, gudang: str = "") -> list[dict]:
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     from app.services.setelan import fitur_mutu
 
-    from app.web.layar import GUDANG, MEJA, NAMA_GUDANG, POLESAN, gudang1, gudang2
+    from app.web.layar import GUDANG, MEJA, NAMA_GUDANG, POLESAN, SUPER, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
     # ── Penyaring gudang (celah ke-5, setengahnya tertinggal) ──
@@ -155,6 +155,16 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # (`api.act_minta_pk_g1` menuntut operator Gudang 2), dan yang di sini
         # cuma menghindari menawarkan pintu yang akan ditolak.
         boleh_minta=view == POLESAN,
+        # ── "Masukkan ke silo" di tiap kartu Tumpukan — operator Gudang 2
+        #    ATAU Super Admin (keputusan pemilik 5 Oktober 2026) ──
+        #
+        # Admin biasa TETAP tak ditawari: "yang memindahkan barang adalah
+        # yang memegang barang" (catatan `act_pindah_tumpukan_silo`,
+        # keputusan 4 Oktober). Super Admin ditambahkan sebagai jaring
+        # pengaman yang sama dengan `is_operator_gudang2` — peran tertinggi
+        # tak boleh kehilangan aksi gudang mana pun. Menyembunyikan tombolnya
+        # BUKAN penjagaan; gerbangnya sendiri di `api.act_pindah_tumpukan_silo`.
+        boleh_pindah_tumpukan=view in (POLESAN, SUPER),
         # Stok karung, keputusan pemilik 23 September 2026: dilihat operator
         # Gudang 2, Admin, dan Super Admin — TIDAK operator Gudang 1. Aturan
         # siapa-melihat-apa tidak ditulis ulang di sini; ia sudah bernama

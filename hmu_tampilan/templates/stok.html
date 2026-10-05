@@ -290,87 +290,98 @@
   </div>
 {% endif %}
 
-{# ── GUDANG 2 — TUMPUKAN SAJA, SILO TAK IKUT (sejak 4 Oktober 2026) ──
-   `tempat` di sini cuma bisa berisi Tumpukan — lihat alasannya di
-   `stok.pk_gudang2`: silo tak boleh menyimpan stok berdiri (aturan pemilik),
-   dan isinya cuma hasil hitungan masuk-keluar, bukan ukuran fisik. Tumpukan
-   SEBALIKNYA punya jawaban yang bisa dipertanggungjawabkan — tiap pemasukan
-   berdiri sendiri sampai dipindahkan — jadi ia memakai aturan Gudang 1:
-   yang habis tak didaftar. Markup di bawah tetap GENERIK atas daftar
-   `tempat` (dulu memuat silo juga) supaya tak ada yang perlu ditulis ulang
-   kalau suatu hari ada tempat lain yang sah untuk didaftar di sini. #}
+{# ── GUDANG 2 — TUMPUKAN PER KODE BAHAN, SILO TAK IKUT (sejak 5 Oktober 2026) ──
+   Sampai hari itu seluruh Tumpukan dibungkus jadi SATU kartu beranak, dan
+   lacinya ("Pernah masuk") tak menyebut mutu sama sekali. Keputusan pemilik:
+   *"pk di gudang 2 juga harus disajikan sama seperti di gudang 1. jangan
+   dibungkus dengan kartu tumpukan. bagaimana kami bisa tau kualitas per kode
+   bahan. tetap harus ditampilkan per kode bahan."* Jadi `tempat` di sini kini
+   SATU KARTU PER PEMASUKAN (`stok.LotPkG2`) — satuan yang sama dengan `lot`
+   Gudang 1 di atas — bukan lagi satu kartu per TEMPAT. Silo sendiri TETAP
+   tak didaftar (lihat `stok.pk_gudang2`): isinya cuma hasil hitungan
+   masuk-keluar, bukan ukuran fisik.
+
+   Kartu ini TAK BERLACI: tiap pemasukan sudah tahu asalnya sendiri (satu
+   PKB atau satu transfer G1), jadi tak ada "batch asal" yang perlu dilipat
+   seperti di Gudang 1 — mutunya langsung terlihat, tanpa satu ketukan pun. #}
 {% if tempat %}
   <div{% if lot %} style="margin-top:18px"{% endif %}>
     <div class="jumlah">
       <span class="lbl">PK di Gudang 2</span>
       <div class="jumlah__angka">{{ kg(tempat|sum(attribute="tersedia")) }}<small>kg</small></div>
       <div class="jumlah__ket">
-        {{ tempat|length }} tempat · masuk dikurangi yang sudah disosoh
+        {{ tempat|length }} kode · menumpuk, belum dipindah ke silo
       </div>
     </div>
 
     <div class="grup" style="gap:9px">
       {% for t in tempat %}
-        {% set laci = t.isi|length > 0 %}
-        <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
-        <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
-          <div class="padat__atas">
-            <span class="padat__nama">{{ t.kode }}</span>
-            {% if t.tersedia > 0 %}
-              <span class="padat__nilai">{{ kg(t.tersedia) }}<small>kg</small></span>
-            {% else %}
-              <span class="padat__nilai padat__nilai--kosong">kosong</span>
+        <div class="padat padat--diam padat--giling">
+          <div class="padat__ringkas">
+            <div class="padat__atas">
+              <span class="padat__nama padat__nama--kode">
+                {{- t.kode -}}
+                {%- if t.tanggal %} · {{ t.tanggal }}{% endif -%}
+                {%- if t.lama %} · <span class="padat__umur">{{ t.lama }}</span>{% endif -%}
+              </span>
+              {# Belum ditimbang kedua bukan nol — lihat `LotPkG2.bobot_final`,
+                 padanan "belum dicatat" kartu lot Gudang 1 di atas. #}
+              {% if t.bobot_final %}
+                <span class="padat__nilai">{{ kg(t.tersedia) }}<small>kg</small></span>
+              {% else %}
+                <span class="padat__nilai padat__nilai--kosong">—</span>
+              {% endif %}
+            </div>
+            {# Padanan persis kartu lot Gudang 1: pemiliknya di kepala kartu,
+               bukan di laci — lihat catatan panjang di sana. #}
+            {% if t.pemilik %}
+              <div class="nota nota--hati" style="margin:6px 0 0">
+                <span aria-hidden="true">◇</span>
+                <span>Titipan <b>{{ t.pemilik }}</b> — disosoh lalu dikembalikan,
+                  bukan dijual</span>
+              </div>
+            {% endif %}
+            {# Mutu langsung di kartu, tidak dilipat — sama alasannya dengan
+               kartu lot Gudang 1: yang harus dibuka dulu untuk terbaca akan
+               dianggap tak ada. #}
+            {% if mutu_aktif %}
+              <dl class="fakta">
+                {% for label, nilai in t.mutu %}
+                  <div>
+                    <dt>{{ label }}</dt>
+                    <dd>{{ nilai }}</dd>
+                  </div>
+                {% endfor %}
+                {% if not t.mutu %}
+                  <div>
+                    <dt>Mutu</dt>
+                    <dd class="padat__nilai--kosong">belum dinilai</dd>
+                  </div>
+                {% endif %}
+              </dl>
+            {% endif %}
+            {% if not t.bobot_final %}
+              <div class="nota nota--hati">
+                <span aria-hidden="true">⏸</span>
+                <span>Truknya belum ditimbang kedua — bobot belum final</span>
+              </div>
             {% endif %}
           </div>
-          {# `stok.TempatPk.pemilik` sudah dihitung sejak jasa sampai Gudang 2,
-             tetapi TAK PERNAH DIGAMBAR — jadi silo yang penuh barang pelanggan
-             tampak persis seperti silo pabrik. Lihat catatan kembarnya di kartu
-             lot Gudang 1 di atas. #}
-          {% if t.pemilik %}
-            <div class="nota nota--hati" style="margin:6px 0 0">
-              <span aria-hidden="true">◇</span>
-              <span>Titipan <b>{{ t.pemilik }}</b> — disosoh lalu dikembalikan,
-                bukan dijual</span>
+          {# ── "Masukkan ke silo" per kartu — operator Gudang 2 / Super Admin ──
+             Keputusan pemilik 5 Oktober 2026: dipilih dari SINI, bukan dari
+             Antrian tunggu lagi — kartu yang sudah menampilkan kodenya sendiri
+             adalah tempat yang paling wajar untuk memutuskan "yang ini masuk
+             silo mana". Memakai mekanisme `?buka=&nilai=` yang sama dengan
+             "Minta lot ini" Gudang 1: `nilai` dicocokkan ke opsi remote-picker
+             `tumpukan` begitu borangnya terbuka. Admin biasa TIDAK ditawari —
+             gerbangnya sendiri di `api.act_pindah_tumpukan_silo`. #}
+          {% if boleh_pindah_tumpukan and t.bobot_final %}
+            <div class="ubah-hasil">
+              <a class="btn btn--kecil"
+                 href="/stok?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a>
             </div>
           {% endif %}
-          {% if t.maks %}
-            <dl class="fakta">
-              <div>
-                <dt>Kapasitas</dt>
-                <dd>{{ kg(t.maks) }} kg</dd>
-              </div>
-              <div>
-                <dt>Terisi</dt>
-                {# Sengaja TIDAK disorot, tak seperti rendemen di kartu Gudang
-                   1. Rendemen menilai pekerjaan: makin tinggi makin baik, jadi
-                   warnanya berarti sesuatu. "Terisi" tidak — silo penuh bukan
-                   kabar baik maupun buruk, ia cuma keadaan. Warna yang tak
-                   berarti apa-apa mengajari orang mengabaikan warna yang
-                   berarti. #}
-                <dd>{{ "%.0f"|format(t.persen) }}%</dd>
-              </div>
-            </dl>
-            {% if t.persen and t.persen > 100 %}
-              <div class="nota nota--hati">
-                <span aria-hidden="true">⚠</span>
-                <span>Melebihi kapasitas — periksa pencatatannya.</span>
-              </div>
-            {% endif %}
-          {% endif %}
-        </{{ "summary" if laci else "div" }}>
-          {% if t.isi %}
-            <div class="anak">
-              <div class="anak__kepala">Pernah masuk · {{ t.isi|length }}</div>
-              {% for nama, berat, kapan in t.isi %}
-                <div class="anak__baris">
-                  <span class="anak__nama">{{ nama }}</span>
-                  <span class="anak__kg">{{ berat }}</span>
-                  <span class="anak__jam">{{ kapan }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </{{ "details" if laci else "div" }}>
+        </div>
       {% endfor %}
     </div>
   </div>

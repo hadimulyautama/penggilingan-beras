@@ -236,3 +236,25 @@ async def test_admin_tak_menerima_spesifikasi_pindah_tumpukan_silo(pg, pabrik):
         "Admin masih menerima spesifikasi pindah_tumpukan_silo")
     assert "pindah_tumpukan_silo" in menu_op2, (
         "operator Gudang 2 kehilangan pindah_tumpukan_silo dari menunya sendiri")
+
+
+async def test_super_admin_menerima_spesifikasi_pindah_tumpukan_silo(pg, pabrik):
+    """⚠⚠ Kebalikan uji di atas, keputusan pemilik 5 Oktober 2026: tombol
+    "Masukkan ke silo" di kartu Stok dibuka untuk "operator atau super
+    admin" — Super Admin DIKECUALIKAN dari larangan Admin biasa. Tanpa
+    carve-out `super_` di `actions_menu`, tombolnya tampil di kartu Stok
+    Super Admin lalu tak berbuat apa-apa: `MENU[id]` tak pernah terisi bagi
+    peran yang spesifikasinya tak terkirim.
+    """
+    from app.models import User
+    from app.web.api import actions_menu
+
+    async with pg() as db:
+        admin = await db.get(User, pabrik["admin"])
+        admin.role = "superadmin"
+        await db.commit()
+    async with pg() as db:
+        superadmin = await db.get(User, pabrik["admin"])
+        menu = {a["id"] for a in await actions_menu(user=superadmin)}
+    assert "pindah_tumpukan_silo" in menu, (
+        "Super Admin tak menerima spesifikasi pindah_tumpukan_silo")

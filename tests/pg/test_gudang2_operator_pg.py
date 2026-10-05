@@ -145,7 +145,15 @@ async def test_penyosohan_berhenti_sementara_dan_jeda_tertutup_saat_selesai(pg, 
         assert await jeda_terbuka(db, "penyosohan", r.proc.id) is None
 
 
-async def test_antrean_operator_adalah_tumpukan_dan_silo(pg, gudang2):
+async def test_antrean_operator_adalah_silo_tumpukan_pindah_lewat_stok(pg, gudang2):
+    """Sampai 4 Oktober 2026 antrean operator = tumpukan + silo. Keputusan
+    pemilik 5 Oktober 2026 mengeluarkan tumpukan dari sini: *"operator
+    memilih bahan dari halaman stok untuk masuk ke silo. tidak perlu lagi
+    dari antrian tunggu."* Kartunya (`_kartu_tumpukan_g2`) tetap hidup — ia
+    yang memasok opsi picker `/actions/tumpukan-sisa` — tapi tak lagi
+    ditambahkan ke `b.menunggu`; tombol "Masukkan ke silo" sekarang berdiri
+    di kartu PK itu sendiri di layar Stok (`stok.LotPkG2`).
+    """
     from app.services.berjalan import untuk_operator_gudang2
 
     async with pg() as db:
@@ -155,12 +163,10 @@ async def test_antrean_operator_adalah_tumpukan_dan_silo(pg, gudang2):
     # kunci fase sendiri supaya katanya benar ("Di silo bahan", bukan "Transit di
     # silo kering" — silo Gudang 2 bukan silo pengering). Temuan QA T-1.
     silo = [x for x in b.menunggu if x.fase == "silo_g2"]
-    assert len(tumpuk) == 1 and tumpuk[0].nilai == str(gudang2["intake_tumpukan"])
-    assert tumpuk[0].judul == "UD Sumber Rejeki" and tumpuk[0].utama[0] == "15.000"
-    assert tumpuk[0].pilihan[0][0] == "pindah_tumpukan_silo"
+    assert tumpuk == [], "tumpukan masih di Antrian tunggu — harusnya lewat kartu Stok"
     assert len(silo) == 1 and silo[0].kode == "Silo B" and silo[0].aksi == "mulai_penyosohan"
     assert b.transit == [] and b.meja == []
-    assert b.jumlah_menunggu == 2
+    assert b.jumlah_menunggu == 1
 
 
 async def test_tumpukan_tanpa_batas_kecuali_disetel(pg, gudang2, monkeypatch):
@@ -452,11 +458,18 @@ async def test_stok_silo_tak_berubah_selama_disosoh(pg, gudang2):
     assert sesudah == sebelum == 9_800
 
 
-async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):
+async def test_kartu_tumpukan_tetap_bisa_dipindah_selagi_menyosoh(pg, gudang2):
     """Keputusan pemilik 12 September: silo yang sedang dipoles boleh menerima
-    tambahan. Perbaikan antrean tak boleh ikut mencabut jalan masuknya."""
+    tambahan. Perbaikan antrean tak boleh ikut mencabut jalan masuknya.
+
+    Sejak 5 Oktober 2026 kartu tumpukan tak lagi di Antrian tunggu (lihat
+    `test_antrean_operator_adalah_silo_tumpukan_pindah_lewat_stok`) — yang
+    diuji di sini pindah ke fungsi yang masih memasok datanya langsung:
+    `_kartu_tumpukan_g2`, dipakai picker `/actions/tumpukan-sisa` MAUPUN
+    tombol "Masukkan ke silo" di kartu Stok (`stok.pk_gudang2`).
+    """
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
-    from app.services.berjalan import untuk_operator_gudang2
+    from app.services.berjalan import _kartu_tumpukan_g2
 
     async with pg() as db:
         r = await mulai_penyosohan(db, user=gudang2["user"], nama_silos=["B"])
@@ -470,8 +483,7 @@ async def test_kartu_tumpukan_tetap_bisa_ditekan_selagi_menyosoh(pg, gudang2):
                   berat_kumulatif=1)
 
     async with pg() as db:
-        b = await untuk_operator_gudang2(db)
-    tump = [x for x in b.menunggu if x.kelompok == "tumpukan"]
+        tump = await _kartu_tumpukan_g2(db)
     assert tump, "kartu tumpukan hilang"
     assert any(p[0] == "pindah_tumpukan_silo" for p in tump[0].pilihan)
 
@@ -958,3 +970,27 @@ async def test_admin_ditolak_memindahkan_tumpukan_ke_silo(pg, gudang2):
                     tumpukan=str(gudang2["intake_tumpukan"]), silo="A"),
                 user=admin)
     assert e.value.status_code == 403
+
+
+async def test_super_admin_boleh_memindahkan_tumpukan_ke_silo(pg, gudang2):
+    """⚠⚠ Kebalikan pagar di atas, keputusan pemilik 5 Oktober 2026: tombol
+    "Masukkan ke silo" di kartu Stok (`stok.LotPkG2`) dibuka untuk operator
+    Gudang 2 ATAU Super Admin — "operator atau super admin", bukan Admin
+    biasa. `can_see_financials` tak membedakan Admin dari Super Admin, jadi
+    carve-out-nya `P.super_saja` di `act_pindah_tumpukan_silo`, bukan
+    menghapus `not can_see_financials` yang menolak Admin di uji sebelum ini.
+    """
+    from app.models import User
+    from app.web import api
+
+    async with pg() as db:
+        u = await db.get(User, gudang2["user"].id)
+        u.role = "superadmin"
+        await db.commit()
+    async with pg() as db:
+        superadmin = await db.get(User, gudang2["user"].id)
+        hasil = await api.act_pindah_tumpukan_silo(
+            api.PindahTumpukanSiloReq(
+                tumpukan=str(gudang2["intake_tumpukan"]), silo="A", berat_kg=500),
+            user=superadmin)
+    assert hasil["ok"] is True

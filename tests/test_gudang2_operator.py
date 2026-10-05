@@ -179,8 +179,15 @@ def test_masukkan_pk_dan_jeda_dijaga_di_server_bukan_di_menu():
 
 
 def test_layar_operator_gudang2_antrean_adalah_stok_pk():
-    """Antrean = tumpukan (per intake, boleh dipindah sebagian) + silo;
-    berjalan = mesin; tak ada kerja meja.
+    """Antrean = silo; berjalan = mesin; tak ada kerja meja.
+
+    Tumpukan (per intake, boleh dipindah sebagian) KELUAR dari antrean ini
+    sejak 5 Oktober 2026 (keputusan pemilik: *"operator memilih bahan dari
+    halaman stok untuk masuk ke silo. tidak perlu lagi dari antrian
+    tunggu"*) — kartunya `_kartu_tumpukan_g2` MASIH ADA (dipakai picker
+    `/actions/tumpukan-sisa`), tapi tak lagi ditambahkan ke `b.menunggu`
+    di sini; tombol "Masukkan ke silo" sekarang ada di kartu PK-nya sendiri
+    di layar Stok.
 
     TRANSIT: pagar ini semula menuntutnya KOSONG, dan niat itu benar untuk apa
     yang ada saat itu — stok miliknya sendiri adalah antrean, bukan barang yang
@@ -198,7 +205,11 @@ def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     berurusan dengan `PermintaanPk`, dan tak satu pun kartu stok masuk.
     """
     kode = kode_saja(berjalan.untuk_operator_gudang2)
-    assert "_kartu_tumpukan_g2(db)" in kode and "_kartu_silo_g2(db, asal_silo)" in kode
+    assert "_kartu_silo_g2(db, asal_silo)" in kode
+    # Dipindah ke tombol di kartu Stok — lihat docstring di atas. Memanggilnya
+    # DI SINI lagi akan mendaftarkan PK yang sama dua kali: sekali sebagai
+    # kartu Stok yang bertombol, sekali sebagai kartu Antrian tunggu.
+    assert "_kartu_tumpukan_g2(db)" not in kode
     assert "b.menunggu +=" in kode and "b.berjalan +=" in kode
     assert "b.meja" not in kode
     # Transit hanya untuk permintaan PK — diperiksa pada SETIAP pemakaiannya,

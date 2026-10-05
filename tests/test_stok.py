@@ -40,20 +40,23 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     teks = TPL.read_text()
     for larangan in ("<form", "data-post", "<input"):
         assert larangan not in teks, f"{larangan} muncul di layar Stok"
-    # Jalan tulisnya hanya MEMBUKA aksi yang sudah ada — dan hanya dua:
-    # hasil giling, dan mutunya. Keduanya menulis lewat layanan yang sudah
-    # tercatat di audit, bukan lewat borang milik layar ini. (`data-buka` pada
-    # tag skrip bukan jalan tulis — ia yang membuka lembarnya kembali setelah
-    # halaman dimuat ulang.)
+    # Jalan tulisnya hanya MEMBUKA aksi yang sudah ada — dan hanya tiga:
+    # hasil giling, mutunya, dan pemindahan tumpukan ke silo. Ketiganya
+    # menulis lewat layanan yang sudah tercatat di audit, bukan lewat borang
+    # milik layar ini. (`data-buka` pada tag skrip bukan jalan tulis — ia
+    # yang membuka lembarnya kembali setelah halaman dimuat ulang.)
     # Didaftar SATU PER SATU, bukan dihitung: angka 2 dulu berubah jadi 3 saat
-    # "Minta lot ini" lahir (24 September 2026), dan uji yang cuma menghitung
-    # akan "diperbaiki" dengan menaikkan angkanya — tanpa seorang pun membaca
-    # apa yang ditambahkan.
+    # "Minta lot ini" lahir (24 September 2026), lalu jadi 4 saat "Masukkan ke
+    # silo" lahir (5 Oktober 2026) — dan uji yang cuma menghitung akan
+    # "diperbaiki" dengan menaikkan angkanya — tanpa seorang pun membaca apa
+    # yang ditambahkan.
     #
-    # Ketiganya membuka aksi yang SUDAH ada dan sudah tercatat. Yang ketiga
-    # bahkan tak menyentuh angka stok sama sekali: ia mencatat PERMINTAAN
-    # operator Gudang 2 agar lot ini dipindah, lewat `permintaan_pk` yang
-    # mengunci barisnya sendiri.
+    # Keempatnya membuka aksi yang SUDAH ada dan sudah tercatat. Yang ketiga
+    # (`minta_pk_g1`) tak menyentuh angka stok sama sekali: ia mencatat
+    # PERMINTAAN operator Gudang 2 agar lot ini dipindah, lewat
+    # `permintaan_pk` yang mengunci barisnya sendiri. Yang keempat
+    # (`pindah_tumpukan_silo`) jauh lebih tua dari tombolnya di sini
+    # (12 September 2026) — yang baru cuma pintunya dari kartu Stok.
     #
     # `kirim_permintaan_pk` sempat ikut di sini selama satu hari (26 September
     # 2026), ketika tangan yang memuat disangka Gudang 2 dan kartu Stok-nya
@@ -62,7 +65,8 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     # view POLESAN, jadi tombolnya akan berdiri di layar orang yang pintunya
     # menolak dia — dan itu dicabut, bukan disembunyikan dengan syarat baru.
     dibuka = set(re.findall(r"\?buka=([a-z_0-9]+)", teks))
-    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1"}, dibuka
+    assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1",
+                      "pindah_tumpukan_silo"}, dibuka
     assert "kirim_permintaan_pk" not in teks, \
         "layar Stok menawarkan pengiriman kepada gudang yang tak mengirim"
 
@@ -247,9 +251,15 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
     Tag penutupnya ikut diperiksa karena pernah hilang: `</details>` tak
     tercetak, jadi kartu kedua bersarang di dalam kartu pertama dan seluruh
     rinciannya lenyap dari halaman tanpa satu pun galat.
+
+    ⚠ Sampai 5 Oktober 2026 DUA kartu berlipat di sini: lot giling Gudang 1
+    DAN tempat Gudang 2 (laci "Pernah masuk"). Keputusan pemilik hari itu
+    membuang laci Gudang 2: kartunya kini satu per kode bahan, dan satu
+    pemasukan sudah tahu asalnya sendiri — tak ada lagi yang perlu dilipat
+    di sana. Jadi yang berlipat tinggal SATU, lot Gudang 1.
     """
     teks = TPL.read_text()
-    assert teks.count("details") >= 2 and "summary" in teks
+    assert teks.count("details") >= 1 and "summary" in teks
 
     # Yang dilipat: rincian batch. Yang tidak: peringatan mesin berjalan.
     ring = teks.split('</{{ "summary"')[0]
@@ -258,10 +268,8 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
 
     # Buka dan tutup harus berpasangan — keduanya ditulis dengan ekspresi yang
     # sama, jadi yang dijaga adalah jumlahnya.
-    # Dua kartu berlipat sekarang: lot giling Gudang 1 dan tempat Gudang 2.
-    # Yang dijaga tetap sama — tiap yang dibuka ada penutupnya.
-    assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 2
-    assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 2
+    assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 1
+    assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 1
 
 
 def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():

@@ -6,10 +6,12 @@ menumpuk, PK mana yang gabahnya dari pemasok yang sedang dipersoalkan. Maka
 barisnya adalah LOT GILING — satuan yang sama dengan yang tertulis di kartu
 dan di catatan, jadi orang tak perlu menerjemahkan apa pun.
 
-Gudang 2 menyusul di bawah, tetapi dengan satuan yang BERBEDA — per tempat,
-bukan per lot — dan alasannya ditulis panjang di sana: PK dari beberapa asal
-dituang ke silo yang sama, jadi "sisa lot ini berapa" memang tak punya
-jawaban di sana.
+Gudang 2 menyusul di bawah, per KODE BAHAN juga (keputusan pemilik 5 Oktober
+2026) — satu kartu per pemasukan yang masih menumpuk, sama seperti lot di
+atas. Yang beda cuma SILO-nya, dan alasannya ditulis panjang di sana: PK dari
+beberapa asal dituang ke silo yang sama, jadi "sisa lot ini berapa" memang
+tak punya jawaban begitu ia masuk silo — makanya silo tak didaftar di sini
+sama sekali, tumpukannya saja.
 
 Barang jadi Gudang 2 (beras putih, menir, bekatul) dan kemasan masih belum
 ikut. Keduanya subjek lain — yang KELUAR dari penyosohan, bukan yang menunggu
@@ -531,141 +533,198 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
 
 # ─────────────────────────── Gudang 2 — Penyosohan ───────────────────────────
 #
-# Gudang 1 mendaftar stoknya per LOT GILING, karena di sana satuan yang
-# tertulis di kartu dan di catatan memang lot. Gudang 2 tidak bisa begitu:
-# PK dari beberapa asal dituang ke silo yang sama dan stoknya disimpan sebagai
-# SATU jumlah, bukan lapisan. Menampilkannya per lot berarti mengarang sisa
-# per lot — angka yang tak bisa dipertanggungjawabkan, tepat di tempat orang
-# mencari pertanggungjawaban.
+# Sampai 5 Oktober 2026 Tumpukan digambar sebagai SATU kartu beranak: total
+# di kepala, rincian per pemasukan di laci bawahnya, dan laci itu tak
+# menyebut mutu sama sekali. Keputusan pemilik: *"pk di gudang 2 juga harus
+# disajikan sama seperti di gudang 1. jangan dibungkus dengan kartu tumpukan.
+# bagaimana kami bisa tau kualitas per kode bahan. tetap harus ditampilkan
+# per kode bahan."* Satu kartu total menjawab "berapa", tapi membungkus
+# pertanyaan yang justru paling sering diajukan di lantai: PK kode mana yang
+# mutunya begini, PK kode mana yang harus ditahan.
 #
-# ⚠ SILO SENGAJA TIDAK IKUT DI SINI (keputusan pemilik 4 Oktober 2026):
+# Jadi Tumpukan kini SATU KARTU PER PEMASUKAN — `LotPkG2`, satuan yang sama
+# dengan `LotPk` Gudang 1 — bukan lagi satu kartu per TEMPAT. Tiap pemasukan
+# tetap berdiri sendiri sampai dipindahkan (begitu juga sisanya, dihitung
+# oleh `_sisa_tumpukan_intake`/sisa yang dibatch di bawah), jadi "berapa yang
+# ada per kode" di sini sama sahnya dengan lot di Gudang 1 — dan karena itu
+# memakai aturan Gudang 1 yang SAMA ("habis = tak didaftar").
+#
+# ⚠ SILO TETAP TIDAK IKUT (keputusan pemilik 4 Oktober 2026, tak berubah):
 # "di gudang 2 tidak boleh ada stock di silo — dimasukkan ke silo hanya untuk
 # kepentingan proses." Isinya pun bukan sesuatu yang DIUKUR — tak ada alat
 # ukur fisik di silo — melainkan DIHITUNG dari masuk dikurangi keluar
-# (`hitung_stok_silo`). Menyebutnya "stok" di kartu yang menjawab "berapa
-# yang BENAR-BENAR ada" memberi angka itu kepastian yang tak dimilikinya.
-# Silo tetap dipakai dan dihitung di tempat yang memang bertanya "proses apa
-# yang sedang berjalan" (layar Sedang berjalan, `berjalan.py`) — yang berubah
-# cuma kartu Stok ini.
-#
-# Yang tersisa di sini TUMPUKAN — bukan karena ia satu-satunya yang ada
-# secara fisik, tetapi karena ia satu-satunya yang punya jawaban yang bisa
-# dipertanggungjawabkan: tiap pemasukan berdiri sendiri sampai dipindahkan
-# (lihat `_isi_tumpukan`), jadi "berapa yang ada" di sana sama sahnya dengan
-# lot di Gudang 1 — dan karena itu memakai aturan Gudang 1 yang SAMA
-# ("habis = tak didaftar"), bukan aturan silo yang dibuang di atas.
+# (`hitung_stok_silo`). Silo tetap dipakai dan dihitung di tempat yang memang
+# bertanya "proses apa yang sedang berjalan" (layar Sedang berjalan,
+# `berjalan.py`) — yang berubah cuma BENTUK kartu Tumpukan di sini.
+
+
+#: Skala kualitatif Butir kuning/Gabah/Merang → label yang dibaca orang.
+#: Sama persis dengan `_SKALA_KUALITATIF` di `gudang2.service` (divalidasi di
+#: sana saat disimpan) — di sini hanya penerjemah tampilannya.
+_LABEL_KUALITATIF = {"bersih": "Bersih", "sedikit": "Sedikit",
+                     "sedang": "Sedang", "banyak": "Banyak"}
 
 
 @dataclass
-class TempatPk:
-    """Satu tempat penyimpanan PK di Gudang 2, beserta isinya."""
+class LotPkG2:
+    """Satu pemasukan PK yang masih menumpuk di Gudang 2, beserta mutunya.
 
+    Padanan `LotPk` untuk Gudang 2: satuannya KODE BAHAN (satu pemasukan =
+    satu kartu), bukan lagi satu tempat penyimpanan beranak — lihat alasannya
+    di atas. Tiap kartu sudah tahu asalnya SENDIRI (satu PKB atau satu
+    transfer G1), jadi tak ada lagi "batch asal" yang perlu dilipat seperti
+    di Gudang 1: kartu ini tak berlaci.
+    """
+
+    #: "Kelompok Tani Sumber Rejeki · PKB-20261004-03", atau
+    #: "Giling sendiri · LOT-20260930-05" bila asalnya transfer G1.
     kode: str
     tersedia: float
-    #: Kapasitas tempat ini dalam kg. None = tak berbatas / tak tercatat.
-    maks: float | None = None
-    #: Apa yang PERNAH masuk ke sini: (asal, berat, kapan). Bukan sisa
-    #: per asal — lihat catatan di atas.
-    isi: list[tuple[str, str, str]] = field(default_factory=list)
-    #: Penuh berapa persen. None bila kapasitasnya tak diketahui.
-    persen: float | None = None
-    #: "JAS-2610-007 Pak Budi" bila tempat ini berisi PK titipan — None untuk
-    #: barang pabrik. Tempatnya TETAP didaftar: barangnya memang ada di sini,
-    #: dan layar yang menyembunyikannya berselisih dengan apa yang dilihat
-    #: operator. Yang dibedakan sebutannya, bukan ada-tidaknya barisnya.
+    #: False = truknya belum ditimbang kedua, `tersedia` masih perkiraan /
+    #: tak diketahui (P6-02). Beda dari `LotPk.belum_dicatat`: di sana hasil
+    #: gilingnya tak pernah dicatat; di sini beratnya memang belum ADA.
+    bobot_final: bool = True
+    tanggal: str | None = None
+    lama: str = ""
+    #: "JAS-2610-007 Pak Budi" bila pemasukan ini titipan — None untuk
+    #: barang pabrik.
     pemilik: str | None = None
+    #: (label, nilai) — Kadar air/Butir patah/Susut untuk kedua asal, plus
+    #: Butir kuning/Gabah/Merang/Catatan lab khusus PK beli luar. Kosong =
+    #: belum pernah dinilai (PK dari giling sendiri yang belum dicatat
+    #: mutunya oleh Gudang 1).
+    mutu: list[tuple[str, str]] = field(default_factory=list)
+    #: Id `PkGudang2Intake` — dipakai tombol "Masukkan ke silo" di kartu
+    #: Stok, pre-isi lewat mekanisme `?buka=&nilai=` yang sama dengan
+    #: "Minta lot ini" Gudang 1.
+    intake_id: int = 0
 
 
-async def _isi_tumpukan(db: AsyncSession) -> list[tuple[str, str, str]]:
-    """Asal PK yang masih menumpuk di lantai Gudang 2.
+async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
+    """Tiap pemasukan PK yang masih menumpuk di Gudang 2, terbaru dulu.
 
-    Berbeda dari silo, tumpukan MEMANG bisa dirinci: tiap pemasukan tetap
-    berdiri sendiri sampai dipindahkan, dan sisanya dihitung per pemasukan
-    oleh `_sisa_tumpukan_intake`. Yang sisanya nol tak disebut — daftar yang
-    memuat baris nol mengajari orang melewatkan barisnya.
-    """
-    from app.models import InternalTransfer, PkGudang2Intake
-    from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import _sisa_tumpukan_intake
-    from app.models import Supplier
-
-    keluar: list[tuple[str, str, str]] = []
-    for i in (await db.execute(
-        select(PkGudang2Intake)
-        .where(PkGudang2Intake.tujuan == "ditumpuk")
-        .order_by(PkGudang2Intake.id.desc())
-    )).scalars().all():
-        sisa = await _sisa_tumpukan_intake(db, i.id)
-        if sisa <= 0:
-            continue
-        judul = "PK"
-        if i.internal_transfer_id:
-            kode = (await db.execute(
-                select(MillingProcess.kode_proses)
-                .join(InternalTransfer,
-                      InternalTransfer.milling_process_id == MillingProcess.id)
-                .where(InternalTransfer.id == i.internal_transfer_id)
-            )).scalars().first()
-            judul = f"Giling sendiri · {kode}" if kode else "Giling sendiri"
-        elif i.pk_purchase_batch_id:
-            baris = (await db.execute(
-                select(PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
-                .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
-                .where(PkPurchaseBatch.id == i.pk_purchase_batch_id)
-            )).first()
-            if baris:
-                judul = f"{baris[1] or '?'} · {baris[0]}"
-        keluar.append((judul, _kg(sisa), f"masuk {_tgl(i.tanggal_masuk)}"))
-    return keluar[:8]
-
-
-async def pk_gudang2(db: AsyncSession) -> list[TempatPk]:
-    """PK yang masih ada di Gudang 2 — hanya Tumpukan, dan hanya bila berisi.
-
-    Silo TIDAK didaftar di sini (lihat catatan di atas `TempatPk`): isinya
-    bukan stok yang sah menurut aturan pemilik, dan angkanya cuma hasil
-    hitungan masuk-keluar, bukan ukuran fisik. Yang habis di Tumpukan juga
-    tak didaftar — sama seperti lot Gudang 1, baris nol cuma mengajari orang
+    Silo TIDAK didaftar di sini (lihat catatan di atas): isinya bukan stok
+    yang sah menurut aturan pemilik, dan angkanya cuma hasil hitungan
+    masuk-keluar, bukan ukuran fisik. Yang habis di Tumpukan juga tak
+    didaftar — sama seperti lot Gudang 1, baris nol cuma mengajari orang
     melewatkan barisnya.
+
+    Dibatch, bukan satu kueri per pemasukan — pola "SATU kueri, bukan satu
+    per baris" yang sama dipakai `pk_gudang1`: jumlah pemasukan tumbuh terus,
+    dan layar ini dibuka tiap hari.
     """
-    from app.config import settings
+    from app.models import InternalTransfer, PkGudang2Intake, Supplier
+    from app.penggilingan.gudang2.models import (PkPurchaseBatch,
+                                                 PkPurchaseVerification,
+                                                 PkTumpukanToSilo)
     from app.penggilingan.gudang2.service import hitung_stok_tumpukan
+    from app.services.jasa import nama_pemilik_banyak
+    from sqlalchemy import func
 
     tump = float(await hitung_stok_tumpukan(db))
     if tump <= 0:
         return []
-    maks_t = float(settings.g2_tumpukan_maks_kg or 0) or None
-    return [TempatPk(
-        kode="Tumpukan", tersedia=tump, maks=maks_t,
-        isi=await _isi_tumpukan(db),
-        persen=(tump / maks_t * 100 if maks_t else None),
-        # Lantai tumpukan BOLEH menampung beberapa pemilik sekaligus — ia bukan
-        # wadah, dan karung yang berdiri berjajar tak bercampur. Jadi di sini
-        # sebutannya hanya terisi bila pemiliknya memang tunggal; penjaga
-        # kepemilikan berdiri di SILO, tempat barang benar-benar menyatu.
-        pemilik=await _pemilik_tempat_g2(db, None),
-    )]
 
+    intakes = list((await db.execute(
+        select(PkGudang2Intake)
+        .where(PkGudang2Intake.tujuan == "ditumpuk")
+        .order_by(PkGudang2Intake.id.desc())
+    )).scalars().all())
+    if not intakes:
+        return []
+    ids = [i.id for i in intakes]
 
-async def _pemilik_tempat_g2(db: AsyncSession, silo_id: int | None) -> str | None:
-    """Sebutan pemilik isi satu tempat PK Gudang 2 — None bila milik pabrik.
+    # Sudah berapa yang dipindah ke silo per pemasukan — SATU kueri terkelompok,
+    # bukan `_sisa_tumpukan_intake` dipanggil bergilir (itu sendiri 1+ kueri
+    # per pemasukan, lewat `db.get` plus sum).
+    dipindah = dict((await db.execute(
+        select(PkTumpukanToSilo.pk_gudang2_intake_id,
+              func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+        .where(PkTumpukanToSilo.pk_gudang2_intake_id.in_(ids))
+        .group_by(PkTumpukanToSilo.pk_gudang2_intake_id)
+    )).all())
 
-    `silo_id=None` berarti tumpukan. Mengembalikan None juga bila pemiliknya
-    lebih dari satu: "dua pemilik" bukan sebutan yang bisa dipakai orang, dan
-    kartunya sudah mendaftar isinya satu per satu.
-    """
-    from app.models import PkGudang2Intake
-    from app.services.jasa import nama_pemilik, pemilik_silo_g2
+    # ── Asal & mutu PK beli luar — satu kueri untuk SELURUH batch sekaligus ──
+    batch_ids = [i.pk_purchase_batch_id for i in intakes if i.pk_purchase_batch_id]
+    batch_info: dict[int, tuple[str, str | None]] = {}
+    verif_info: dict[int, PkPurchaseVerification] = {}
+    if batch_ids:
+        for b, nama in (await db.execute(
+            select(PkPurchaseBatch, Supplier.nama_supplier)
+            .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+            .where(PkPurchaseBatch.id.in_(batch_ids))
+        )).all():
+            batch_info[b.id] = (b.kode_batch, nama)
+        for v in (await db.execute(
+            select(PkPurchaseVerification)
+            .where(PkPurchaseVerification.pk_purchase_batch_id.in_(batch_ids))
+        )).scalars().all():
+            verif_info[v.pk_purchase_batch_id] = v
 
-    if silo_id is not None:
-        pemilik = {j for j in await pemilik_silo_g2(db, silo_id) if j is not None}
-    else:
-        pemilik = {j for j in (await db.execute(
-            select(PkGudang2Intake.jasa_id).where(
-                PkGudang2Intake.tujuan == "ditumpuk",
-                PkGudang2Intake.jasa_id.is_not(None)).distinct()
-        )).scalars().all()}
-    return await nama_pemilik(db, pemilik.pop()) if len(pemilik) == 1 else None
+    # ── Asal & mutu PK giling sendiri — lewat lot Gudang 1 yang mengirimnya ──
+    transfer_ids = [i.internal_transfer_id for i in intakes if i.internal_transfer_id]
+    kode_proc: dict[int, str] = {}       # internal_transfer_id -> kode_proses
+    proc_id_dari_transfer: dict[int, int] = {}  # internal_transfer_id -> milling_process_id
+    if transfer_ids:
+        for t_id, p_id, kode in (await db.execute(
+            select(InternalTransfer.id, MillingProcess.id, MillingProcess.kode_proses)
+            .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
+            .where(InternalTransfer.id.in_(transfer_ids))
+        )).all():
+            kode_proc[t_id] = kode
+            proc_id_dari_transfer[t_id] = p_id
+    peta_mutu_giling = (await _mutu_banyak(db, list(proc_id_dari_transfer.values()))
+                       if proc_id_dari_transfer else {})
+
+    peta_pemilik = await nama_pemilik_banyak(
+        db, {i.jasa_id for i in intakes if i.jasa_id is not None})
+
+    keluar: list[LotPkG2] = []
+    for i in intakes:
+        if i.berat_kg is None:
+            # Truk belum ditimbang kedua (P6-02) — belum punya angka sama
+            # sekali, bukan nol. Tetap didaftar: barangnya sudah ada di
+            # lantai, dan layar yang menyembunyikannya membuat orang
+            # mengira tak ada apa-apa untuk dipindahkan.
+            sisa, bobot_final = 0.0, False
+        else:
+            sisa = float(i.berat_kg) - float(dipindah.get(i.id, 0))
+            bobot_final = True
+            if sisa <= 0:
+                continue                 # habis dipindah — tak didaftar
+
+        if i.internal_transfer_id:
+            kode = kode_proc.get(i.internal_transfer_id)
+            judul = f"Giling sendiri · {kode}" if kode else "Giling sendiri"
+            proc_id = proc_id_dari_transfer.get(i.internal_transfer_id)
+            mutu = peta_mutu_giling.get(proc_id, []) if proc_id else []
+        elif i.pk_purchase_batch_id:
+            kode_batch, nama = batch_info.get(i.pk_purchase_batch_id, ("?", None))
+            judul = f"{nama or '?'} · {kode_batch}"
+            mutu = []
+            v = verif_info.get(i.pk_purchase_batch_id)
+            if v is not None:
+                for label, nilai in (("Kadar air", v.kadar_air),
+                                     ("Butir patah", v.broken_persen),
+                                     ("Susut", v.penyusutan_persen)):
+                    if nilai is not None:
+                        mutu.append((label, _persen(nilai)))
+                for label, nilai in (("Butir kuning", v.butir_kuning),
+                                     ("Gabah", v.gabah), ("Merang", v.merang)):
+                    if nilai:
+                        mutu.append((label, _LABEL_KUALITATIF.get(nilai, nilai)))
+                if v.catatan_lab:
+                    mutu.append(("Catatan lab", v.catatan_lab))
+        else:
+            judul, mutu = "PK", []          # baris peninggalan tanpa penunjuk
+
+        keluar.append(LotPkG2(
+            kode=judul, tersedia=sisa, bobot_final=bobot_final,
+            tanggal=_tgl(i.tanggal_masuk), lama=_hari(i.waktu_masuk),
+            pemilik=peta_pemilik.get(i.jasa_id) if i.jasa_id else None,
+            mutu=mutu, intake_id=i.id,
+        ))
+    return keluar
 
 
 #: Grade beras putih yang dihitung sebagai PRODUK; sisanya hasil samping.

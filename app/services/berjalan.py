@@ -2356,10 +2356,18 @@ async def _kartu_sosoh_selesai(db: AsyncSession, *, jam: int = 24) -> list[Baris
 async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
-      · `menunggu` = SELURUH stok PK di Gudang 2 — yang di lantai (tumpukan,
-        per intake → pindah ke silo) dan yang di silo (→ mulai penyosohan);
+      · `menunggu` = stok PK di silo Gudang 2 (→ mulai penyosohan);
       · `berjalan` = mesin yang menyala saja;
       · tidak ada kerja meja.
+
+    ⚠ Sampai 4 Oktober 2026 `menunggu` JUGA memuat tumpukan (per intake →
+    pindah ke silo). Keputusan pemilik 5 Oktober 2026 memindahkannya ke
+    tombol "Masukkan ke silo" di kartu PK-nya sendiri di layar Stok
+    (`stok.LotPkG2`): *"operator memilih bahan dari halaman stok untuk masuk
+    ke silo. tidak perlu lagi dari antrian tunggu."* `_kartu_tumpukan_g2`
+    TETAP hidup — ia yang memasok opsi picker `/actions/tumpukan-sisa`, baik
+    dari tombol Stok maupun dari katalog "Catat pekerjaan lain" — hanya
+    berhenti ditambahkan ke `b.menunggu` DI SINI.
 
     TRANSIT lahir 25 September 2026, dan cuma untuk satu hal: permintaan PK
     yang sedang dalam perjalanan dari Gudang 1. Keputusan 12 September yang
@@ -2497,7 +2505,9 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     # tahu. Ia berdiri PALING ATAS di antreannya karena ia yang paling baru
     # turun dari truk.
     b.menunggu += await _tiket_pk_luar(db, boleh_catat=False)
-    b.menunggu += await _kartu_tumpukan_g2(db)
+    # `_kartu_tumpukan_g2` TIDAK lagi ditambahkan di sini sejak 5 Oktober 2026
+    # — lihat catatan panjang di docstring fungsi ini. Fungsinya tetap dipakai
+    # oleh picker `/actions/tumpukan-sisa`.
     b.menunggu += await _kartu_silo_g2(db, asal_silo)
     # Beras yang menunggu dipacking: pekerjaan yang sungguh menunggu orang ini,
     # jadi ia di ANTREAN — beda dengan permintaan PK di Transit, yang menunggu
@@ -2830,9 +2840,10 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         b.meja += g2.meja
         b.jumlah_produk = g2.jumlah_produk
     elif await _is_g2_operator(user):
-        # Operator Gudang 2 melihat layarnya sendiri: antrean = stok PK
-        # (tumpukan + silo), berjalan = mesin. Penempatan PK datang bukan
-        # tugasnya (keputusan pemilik 12 September 2026).
+        # Operator Gudang 2 melihat layarnya sendiri: antrean = stok PK di
+        # silo, berjalan = mesin. Tumpukan pindah ke tombol di kartu Stok
+        # sejak 5 Oktober 2026 (lihat `untuk_operator_gudang2`). Penempatan
+        # PK datang bukan tugasnya (keputusan pemilik 12 September 2026).
         g2 = await untuk_operator_gudang2(db)
         b.menunggu += g2.menunggu
         b.berjalan += g2.berjalan

@@ -305,10 +305,33 @@ def test_layar_stok_tak_menyebut_gudang_1_di_menu():
 
 
 def test_kartu_gudang2_menyebut_asal_barangnya():
-    """Aturan pemilik untuk SETIAP kartu. Silo yang cuma menyebut jumlah tak
-    memberi tahu PK siapa yang ada di dalamnya."""
+    """Aturan pemilik untuk SETIAP kartu. Kartu yang cuma menyebut jumlah tak
+    memberi tahu PK siapa yang ada di dalamnya.
+
+    Sampai 5 Oktober 2026 asalnya tersembunyi di laci "Pernah masuk" di dalam
+    satu kartu Tumpukan bersama. Keputusan pemilik hari itu membuang lacinya:
+    satu kartu kini SATU pemasukan (`t.kode` — "<asal> · <kode batch>"), jadi
+    asalnya ada di KEPALA kartu, bukan lagi di rincian yang perlu dibuka —
+    "Pernah masuk" sendiri cuma pernah berdiri di laci lama itu, jadi
+    lenyapnya dari seluruh berkas inilah buktinya.
+    """
     teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
-    assert "Pernah masuk" in teks and "anak__baris" in teks
+    assert "{{- t.kode" in teks or "{{ t.kode" in teks, "kepala kartu G2 tak menyebut asalnya"
+    # Markup-nya persis, bukan sekadar frasanya — catatan di atas blok ini
+    # SENGAJA menyebut nama laci lama sebagai sejarah; yang diperiksa di sini
+    # elemennya, "Pernah masuk · {{ ... }}", bukan kalimat yang mengenangnya.
+    assert "Pernah masuk ·" not in teks, "laci lama masih ada — kartu seharusnya tak berlaci lagi"
+
+
+def test_kartu_gudang2_mutu_langsung_terlihat_tanpa_laci():
+    """Keputusan pemilik 5 Oktober 2026: *"bagaimana kami bisa tau kualitas
+    per kode bahan. tetap harus ditampilkan per kode bahan."* Mutu (`t.mutu`)
+    harus tergambar di kepala kartu — di dalam `{% if mutu_aktif %}`, sama
+    seperti kartu lot Gudang 1 — bukan dilipat di laci."""
+    teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
+    assert "for label, nilai in t.mutu" in teks
+    assert "boleh_pindah_tumpukan" in teks, "tombol Masukkan ke silo tak ada"
+    assert "pindah_tumpukan_silo" in teks
 
 
 def test_tempat_hanya_tumpukan_dan_disaring_kosong():

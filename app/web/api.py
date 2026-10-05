@@ -398,9 +398,14 @@ async def _wajib_mutu() -> None:
 @router.get("/actions/menu")
 async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar aksi cepat + spesifikasi field, ditentukan SERVER per role."""
+    from hmu_identitas import peran as P
+
     fin = can_see_financials(user)
     g1 = await _is_g1_operator(user)
     g2 = await _is_g2_operator(user)
+    #: Jaring pengaman Super Admin untuk `pindah_tumpukan_silo` (keputusan
+    #: pemilik 5 Oktober 2026) — lihat catatan panjang di blok itu, di bawah.
+    super_ = P.super_saja(user.role)
     KONDISI = [["", "— belum ditentukan —"], ["basah", "Basah (→ PK KS)"],
                ["kering", "Kering (→ PK KL)"]]
     METODE = [["", "— belum ditentukan —"], ["total", "Total (Rp)"], ["per_kg", "Per kg (Rp)"]]
@@ -736,7 +741,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "number", "wajib": True},
              ]},
         ]
-    if g2 and not fin:
+    if g2 and (not fin or super_):
         # ⚠ Pindah tumpukan → silo bukan pekerjaan Admin (keputusan pemilik
         # 4 Oktober 2026) — gerbang yang sama bentuknya dengan `minta_pk_g1`
         # di bawah: Admin bisa memindahkan PK lewat jalur lain, dan tombol
@@ -744,6 +749,17 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         # ini DIPISAH dari blok `g2` di bawah justru supaya Admin TIDAK
         # menerimanya sama sekali — termasuk lewat deep-link `?buka=`, bukan
         # cuma lewat kartu/katalog yang memang sudah tak menawarkannya.
+        #
+        # ⚠⚠ Super Admin DIKECUALIKAN dari "Admin" di atas sejak 5 Oktober
+        # 2026: kartu PK di layar Stok kini menawarkan tombol "Masukkan ke
+        # silo" langsung dari kartunya (keputusan pemilik — operator memilih
+        # bahan dari situ, bukan dari Antrian tunggu), dan tombol Stok itu
+        # dipegang `view in (POLESAN, SUPER)`. Tanpa `super_` di sini, Super
+        # Admin melihat tombolnya lalu menekannya ke MENU yang tak pernah
+        # memuat aksinya — tombol yang tak melakukan apa-apa, lebih buruk
+        # daripada tombol yang tak ada. `fin` tetap menolak Admin BIASA:
+        # `can_see_financials` tak membedakan Admin dari Super Admin, jadi
+        # yang menyempitkannya kembali ke Super Admin saja adalah `super_`.
         actions += [
             {"id": "pindah_tumpukan_silo", "label": "📤 Pindah tumpukan ke silo",
              "post": "/api/actions/pindah-tumpukan-silo",
@@ -3484,8 +3500,20 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
     PK yang menumpuk saat tak ada operator Gudang 2 bertugas memang TETAP di
     lantai sampai ada operator. Jangan menghapus klausa ini karena mengira
     `_is_g2_operator` saja sudah cukup sempit.
+
+    ⚠⚠ `or super_saja` ditambahkan 5 Oktober 2026: kartu PK di layar Stok
+    kini menawarkan tombol ini langsung per kode bahan, dan pemilik memintanya
+    untuk "operator atau super admin" — Super Admin TETAP boleh walau ia juga
+    `can_see_financials`. Admin biasa tidak; klausa yang menyempitkannya di
+    atas tak berubah, ini cuma jaring pengaman di atasnya. Katalog aksi
+    (`actions_menu`) punya carve-out YANG SAMA (`super_`) — tanpanya tombol di
+    kartu Stok akan tampil untuk Super Admin lalu tak berbuat apa-apa, sebab
+    `MENU[id]` tak pernah terisi baginya.
     """
-    _require(await _is_g2_operator(user) and not can_see_financials(user))
+    from hmu_identitas import peran as P
+
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
     if not str(req.tumpukan or "").strip().isdigit():
         raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
     if (req.silo or "").upper() not in ("A", "B"):
