@@ -735,6 +735,8 @@ class PkQcResult:
     broken: float | None
     penyusutan: float | None
     butir_kuning: str | None
+    gabah: str | None
+    merang: str | None
 
 
 class PkPriceResult:
@@ -744,7 +746,11 @@ class PkPriceResult:
     hpp_per_kg: float | None
 
 
-_BUTIR_KUNING = {"bersih", "sedang", "banyak"}
+#: Skala kualitatif bersama — butir kuning, gabah, dan merang (jerami/malai)
+#: semuanya dinilai dengan kosakata yang sama: bersih/sedikit/sedang/banyak.
+#: "sedikit" ditambahkan 5 Oktober 2026 (keputusan pemilik) — dulu cuma tiga
+#: titik, melompat dari "bersih" langsung ke "sedang".
+_SKALA_KUALITATIF = {"bersih", "sedikit", "sedang", "banyak"}
 
 
 async def _get_or_make_pk_verif(db: AsyncSession, batch_id: int) -> PkPurchaseVerification:
@@ -765,15 +771,20 @@ async def log_pk_qc(
     db: AsyncSession, *, user: User, kode: str,
     kadar_air: float | None = None, broken: float | None = None,
     penyusutan_persen: float | None = None, butir_kuning: str | None = None,
+    gabah: str | None = None, merang: str | None = None,
     catatan_lab: str | None = None,
 ) -> PkQcResult:
     """Input KUALITAS PK luar (uji lab) sebagai PROPERTI batch — bukan keputusan.
 
     PK yang masuk sudah pasti diterima; ini mencatat kualitasnya (kadar air,
-    broken%, penyusutan/bekatul lab%, butir kuning, catatan). Staff/admin,
-    kapan saja. MURNI pencatatan mutu — tak pernah mengubah stok atau bobot;
-    lihat catatan panjang soal potongan bobot yang DIHAPUS pada migrasi
-    yang membuang kolomnya dari `pk_purchase_verifications`."""
+    broken%, penyusutan/bekatul lab%, butir kuning, gabah, merang, catatan).
+    Staff/admin, kapan saja. MURNI pencatatan mutu — tak pernah mengubah
+    stok atau bobot; lihat catatan panjang soal potongan bobot yang DIHAPUS
+    pada migrasi yang membuang kolomnya dari `pk_purchase_verifications`.
+
+    `gabah`/`merang` ditambahkan 5 Oktober 2026 (keputusan pemilik) —
+    campuran gabah (belum terkupas) dan merang (jerami/malai) di PK, dinilai
+    dengan skala kualitatif yang sama dengan butir kuning."""
     if user.role not in PERAN_ADMIN_KEATAS:
         raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
@@ -781,29 +792,38 @@ async def log_pk_qc(
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
-    if butir_kuning:
-        butir_kuning = butir_kuning.lower().strip()
-        if butir_kuning not in _BUTIR_KUNING:
-            raise Gudang2Error("Butir kuning harus: bersih, sedang, atau banyak.")
-    if all(v is None for v in (kadar_air, broken, penyusutan_persen, butir_kuning, catatan_lab)):
-        raise Gudang2Error("Sebutkan hasil ujinya (kadar air / broken / penyusutan / butir kuning / catatan).")
+    # Satu pagar untuk ketiganya — kosakatanya memang satu skala.
+    for label, nilai in (("Butir kuning", butir_kuning), ("Gabah", gabah), ("Merang", merang)):
+        if nilai and nilai.lower().strip() not in _SKALA_KUALITATIF:
+            raise Gudang2Error(f"{label} harus: bersih, sedikit, sedang, atau banyak.")
+    butir_kuning = butir_kuning.lower().strip() if butir_kuning else None
+    gabah = gabah.lower().strip() if gabah else None
+    merang = merang.lower().strip() if merang else None
+    if all(v is None for v in (kadar_air, broken, penyusutan_persen, butir_kuning,
+                               gabah, merang, catatan_lab)):
+        raise Gudang2Error("Sebutkan hasil ujinya (kadar air / broken / penyusutan / "
+                           "butir kuning / gabah / merang / catatan).")
 
     verif = await _get_or_make_pk_verif(db, batch.id)
     verif.kadar_air = kadar_air
     verif.broken_persen = broken
     verif.penyusutan_persen = penyusutan_persen
     verif.butir_kuning = butir_kuning
+    verif.gabah = gabah
+    verif.merang = merang
     verif.catatan_lab = catatan_lab
     verif.keputusan = "terima"  # PK masuk selalu diterima
     await log_activity(
         db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
         changed_by=user.id, field_name="qc",
-        new_value=f"ka={kadar_air} broken={broken} susut={penyusutan_persen} bk={butir_kuning}",
+        new_value=(f"ka={kadar_air} broken={broken} susut={penyusutan_persen} "
+                  f"bk={butir_kuning} gabah={gabah} merang={merang}"),
     )
     await db.commit()
     await db.refresh(batch)
     return PkQcResult(batch=batch, kadar_air=kadar_air, broken=broken,
-                      penyusutan=penyusutan_persen, butir_kuning=butir_kuning)
+                      penyusutan=penyusutan_persen, butir_kuning=butir_kuning,
+                      gabah=gabah, merang=merang)
 
 
 # `verify_pk_price` DIBUANG 28 September 2026: harga keluar dari Pos Produksi

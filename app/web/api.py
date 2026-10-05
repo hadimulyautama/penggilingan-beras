@@ -912,7 +912,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 # September 2026 — lihat komentar di sana. Gudang 2 yang
                 # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
             ]
-    BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"],
+    BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"], ["sedikit", "Sedikit"],
              ["sedang", "Sedang"], ["banyak", "Banyak"]]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
                 ["campuran", "Campuran"], ["semi_ks", "Semi KS"]]
@@ -971,28 +971,38 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/api/actions/catat-pk-luar",
              "hint": "Pilih tiket timbang PK yang masih aktif — supplier, bobot & plat "
-                     "otomatis dari timbangan. Langsung tertumpuk. Sudah ada hasil "
-                     "lab? Isi sekalian di bawah — kalau belum, kosongkan saja, "
-                     "kartu \"Mutu belum dicatat\" akan menyusul nanti.",
+                     "otomatis dari timbangan. Langsung tertumpuk. Kadar air, broken, "
+                     "dan penyusutan WAJIB diisi; butir kuning/gabah/merang/catatan "
+                     "boleh menyusul lewat kartu \"Mutu belum dicatat\" kalau belum "
+                     "sempat diperiksa.",
              "fields": [
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang PK yang masih aktif",
                   "type": "remote", "source": "/api/actions/timbang-pk-aktif",
                   "kosong": "Tidak ada tiket timbang PK yang aktif."},
                  {"name": "jenis_pk", "label": "Jenis PK (wajib pilih)", "type": "select",
                   "options": JENIS_PK},
-                 {"name": "kadar_air", "label": "Kadar air (%) — opsional", "type": "number"},
-                 # ── Mutu, SEKALIAN — keputusan pemilik 5 Oktober 2026 ──
+                 # ── Mutu DASAR — WAJIB sejak keputusan pemilik 5 Oktober 2026 ──
+                 #
+                 # `data-wajib` pada medan angka OPT-IN lewat `wajib: True` (lihat
+                 # catatan di aksi.js: "wajib OPT-IN, bukan kebalikan dari
+                 # optional") — tanpa ini ketiganya tetap tergambar tapi tak
+                 # pernah ditagih, dan borang akan lolos dengan isian kosong.
+                 {"name": "kadar_air", "label": "Kadar air (%)", "type": "number", "wajib": True},
+                 {"name": "broken", "label": "Broken (%)", "type": "number", "wajib": True},
+                 {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number",
+                  "wajib": True},
+                 # ── Mutu KUALITATIF — tetap opsional ──
                  #
                  # Medan yang SAMA dengan borang `qc_pk_luar` di bawah, supaya
                  # operator yang sudah pegang hasil lab saat truknya masih di
                  # halaman tak perlu membuka borang kedua untuk mengetik ulang
                  # kode batch yang baru saja ia catat sendiri. Lihat
                  # `act_catat_pk_luar` untuk bagaimana keduanya disatukan.
-                 {"name": "broken", "label": "Broken (%) — opsional", "type": "number",
-                  "optional": True},
-                 {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%) — opsional",
-                  "type": "number", "optional": True},
                  {"name": "butir_kuning", "label": "Butir kuning — opsional", "type": "select",
+                  "options": BUTIR, "optional": True},
+                 {"name": "gabah", "label": "Gabah — opsional", "type": "select",
+                  "options": BUTIR, "optional": True},
+                 {"name": "merang", "label": "Merang — opsional", "type": "select",
                   "options": BUTIR, "optional": True},
                  {"name": "catatan_lab", "label": "Catatan lab — opsional", "type": "text",
                   "optional": True},
@@ -1001,6 +1011,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # terpisah, tombol DI SINI). Membawa tiket yang sudah
                  # dipilih (`bawa`) supaya tak ditanya dua kali; borang
                  # tujuannya cuma mewajibkan alasan — lihat `act_tolak_pk_luar`.
+                 # TAK menanyakan mutu sama sekali: PK ditolak tak jadi stok.
                  {"type": "tombol_aksi", "aksi": "tolak_pk_luar",
                   "bawa": "timbangan_transaksi_id", "label": "⛔ Tolak PK luar"},
              ]},
@@ -1034,6 +1045,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
                  {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
+                  "options": BUTIR, "optional": True},
+                 {"name": "gabah", "label": "Gabah", "type": "select",
+                  "options": BUTIR, "optional": True},
+                 {"name": "merang", "label": "Merang", "type": "select",
                   "options": BUTIR, "optional": True},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
              ]},
@@ -2614,14 +2629,17 @@ class CatatPkLuarReq(BaseModel):
     # Pilih TIKET TIMBANG PK aktif — supplier/bobot/nopol dari timbang.
     timbangan_transaksi_id: int
     jenis_pk: str
-    kadar_air: PersenOpsional = None
-    #: Mutu — SEMUANYA opsional, keputusan pemilik 5 Oktober 2026: operator
-    #: yang punya hasil lab di tangan boleh mengisinya sekarang juga, bukan
-    #: menunggu kartu "Mutu PK luar belum dicatat" menyusul. Lihat
-    #: `act_catat_pk_luar`.
-    broken: PersenOpsional = None
-    penyusutan: PersenOpsional = None
+    #: Kadar air, broken, dan penyusutan WAJIB diisi di sini sejak keputusan
+    #: pemilik 5 Oktober 2026 — pencatatan PK luar kini SEKALIGUS mutu
+    #: dasarnya, bukan lagi dua langkah. Butir kuning/gabah/merang/catatan
+    #: tetap opsional: ketiganya skala kualitatif yang butuh pemeriksaan
+    #: lebih seksama, bukan angka dari alat ukur yang bisa langsung dibaca.
+    kadar_air: Persen
+    broken: Persen
+    penyusutan: Persen
     butir_kuning: str | None = None
+    gabah: str | None = None
+    merang: str | None = None
     catatan_lab: str | None = None
     #: Kunci kiriman (Tahap 3), opsional — lihat `GabahMasukReq`.
     kunci_kiriman: str | None = None
@@ -2659,7 +2677,7 @@ async def act_rekonsiliasi_timbang(user: User = Depends(pengguna_aksi)) -> dict:
 
 @router.post("/actions/catat-pk-luar")
 async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_aksi)) -> dict:
-    """Catat PK luar datang — langsung tertumpuk, dan mutu boleh sekalian
+    """Catat PK luar datang — langsung tertumpuk, DAN mutu dasarnya
     (keputusan pemilik 4-5 Oktober 2026, menyatukan `catat_pk_luar` +
     `masukkan_pk` + `qc_pk_luar` yang dulu tiga langkah terpisah).
 
@@ -2667,19 +2685,20 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
     berbeda yang bisa berdiri bersamaan di Antrian tunggu tanpa satu pun
     menyebut mana lebih dulu. Aturan 1 (PK baru selalu ke tumpukan, tanpa
     pertanyaan tujuan) menghapus satu-satunya keputusan yang ada di langkah
-    kedua, dan mutu MEMANG boleh diisi kapan saja — jadi ketiganya aman
-    disatukan jadi satu panggilan BILA datanya sudah ada di tangan.
+    kedua — dan sejak keputusan 5 Oktober, kadar air/broken/penyusutan
+    WAJIB diisi di sini juga, jadi ketiganya memang satu pekerjaan, bukan
+    tiga yang kebetulan bisa digabung.
 
-    ⚠ Mutu di sini TETAP OPSIONAL, bukan dipaksa: operator yang belum punya
-    hasil lab (uji butuh waktu, truknya tak boleh menunggu di halaman)
-    mengosongkannya begitu saja, dan kartu "Mutu PK luar belum dicatat"
-    (`qc_pk_luar`, masih berdiri sendiri) menyusul nanti — persis seperti
-    `masukkan_pk` tetap jadi jalan penyelesaian untuk baris yang gagal
-    tertumpuk di sini.
+    ⚠ Yang TETAP opsional: butir kuning, gabah, merang, catatan lab — empat
+    hal yang butuh pemeriksaan lebih seksama daripada alat ukur yang bisa
+    langsung dibaca. Boleh menyusul lewat kartu "Mutu PK luar belum dicatat"
+    (`qc_pk_luar`, masih berdiri sendiri untuk keempatnya).
 
     Lihat `act_tolak_pk_luar` untuk jalur SEBALIKNYA: PK yang ditolak, bukan
     diterima — tombolnya ada di borang yang sama (`tombol_aksi` di
-    spesifikasi katalog), bukan di "Catat pekerjaan lain"."""
+    spesifikasi katalog), bukan di "Catat pekerjaan lain", dan TAK menanyakan
+    mutu sama sekali: PK yang ditolak tak pernah jadi stok yang perlu
+    diklasifikasi."""
     _require(can_see_financials(user))
     if req.jenis_pk not in ("ks", "kl", "campuran", "semi_ks"):
         raise HTTPException(400, "Pilih jenis PK dulu: KS / KL / Campuran / Semi KS.")
@@ -2717,7 +2736,7 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
                 # — bukan jalan darurat yang baru, melainkan yang sudah ada
                 # sejak sebelum penyatuan ini.
                 tertumpuk = False
-        # ── Langkah ketiga, JUGA opsional — mutu, bila sudah diketahui ──
+        # ── Langkah ketiga — mutu dasarnya SELALU, keempat opsionalnya kalau ada ──
         #
         # `kadar_air` dikirim dua kali dengan sengaja: sekali sebagai snapshot
         # cepat di batch (`kadar_air_awal_persen`, baris di atas), sekali lagi
@@ -2725,31 +2744,31 @@ async def act_catat_pk_luar(req: CatatPkLuarReq, user: User = Depends(pengguna_a
         # kadar_air`) — keduanya kolom berbeda, dan kartu "Mutu belum dicatat"
         # menyaring dari yang KEDUA. Tanpa ini, kadar air yang sudah diketik di
         # sini tetap menagih QC susulan untuk angka yang sudah ada.
-        qc_tercatat = False
-        if any(v is not None for v in (req.kadar_air, req.broken, req.penyusutan)) \
-                or req.butir_kuning or req.catatan_lab:
-            try:
-                await log_pk_qc(
-                    db, user=u, kode=r.batch.kode_batch, kadar_air=req.kadar_air,
-                    broken=req.broken, penyusutan_persen=req.penyusutan,
-                    butir_kuning=(req.butir_kuning or None),
-                    catatan_lab=(req.catatan_lab or None),
-                )
-                qc_tercatat = True
-            except Gudang2Error:
-                # Mutu bukan syarat sahnya pencatatan ini — batch & tumpukan
-                # di atas sudah commit. Gagal di sini (mis. fitur mutu lagi
-                # dimatikan) jatuh ke kartu susulan, sama seperti tertumpuk.
-                pass
+        #
+        # Dibiarkan MELEMPAR, tak ditangkap diam-diam seperti `tertumpuk` di
+        # atas: kadar_air/broken/penyusutan wajib lolos validasi `Persen` di
+        # borang, jadi satu-satunya yang bisa gagal di sini adalah butir
+        # kuning/gabah/merang yang rusak — dan itu layak jadi galat sungguhan,
+        # bukan kartu susulan yang diam-diam menagih ulang pekerjaan yang
+        # orangnya KIRA sudah selesai.
+        try:
+            await log_pk_qc(
+                db, user=u, kode=r.batch.kode_batch, kadar_air=req.kadar_air,
+                broken=req.broken, penyusutan_persen=req.penyusutan,
+                butir_kuning=(req.butir_kuning or None),
+                gabah=(req.gabah or None), merang=(req.merang or None),
+                catatan_lab=(req.catatan_lab or None),
+            )
+        except Gudang2Error as e:
+            raise _err(e, "PK tercatat, tapi mutunya gagal disimpan.")
     jl = {"ks": "KS", "kl": "KL", "campuran": "Campuran", "semi_ks": "Semi KS"}.get(
         r.batch.jenis_pk, r.batch.jenis_pk or "-")
     baru = " (supplier baru)" if r.supplier_created else ""
     bstr = f"{float(berat):g} kg" if berat is not None else "menunggu bobot"
-    ekor = (" Tertumpuk" if tertumpuk else
-           " Diterima, tapi BELUM tertumpuk — selesaikan lewat kartu "
-           "\"PK luar yang menunggu dimasukkan\".")
-    ekor += (" · mutu tercatat." if qc_tercatat else
-            " — menunggu input kualitas & verifikasi harga.")
+    ekor = (" Tertumpuk, mutu tercatat."
+           if tertumpuk else
+           " Diterima & mutu tercatat, tapi BELUM tertumpuk — selesaikan "
+           "lewat kartu \"PK luar yang menunggu dimasukkan\".")
     pesan = (f"✓ PK luar *{r.batch.kode_batch}* tercatat — {r.supplier_nama}{baru}, "
              f"{jl} {bstr}, truk {nopol}.{ekor}")
     return {"ok": True, "pesan": pesan}
@@ -2801,6 +2820,8 @@ class QcPkLuarReq(BaseModel):
     broken: PersenOpsional = None
     penyusutan: PersenOpsional = None
     butir_kuning: str | None = None
+    gabah: str | None = None
+    merang: str | None = None
     catatan_lab: str | None = None
 
 
@@ -2821,9 +2842,9 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
     if not (req.kode_batch or "").strip():
         raise HTTPException(400, "Pilih PK luar dulu.")
     if all(v is None for v in (req.kadar_air, req.broken, req.penyusutan)) \
-            and not (req.butir_kuning or req.catatan_lab):
+            and not (req.butir_kuning or req.gabah or req.merang or req.catatan_lab):
         raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / "
-                                 "penyusutan / butir kuning / catatan.")
+                                 "penyusutan / butir kuning / gabah / merang / catatan.")
     from app.penggilingan.gudang2.service import log_pk_qc, Gudang2Error
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
@@ -2832,6 +2853,7 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
                 db, user=u, kode=req.kode_batch, kadar_air=req.kadar_air,
                 broken=req.broken, penyusutan_persen=req.penyusutan,
                 butir_kuning=(req.butir_kuning or None),
+                gabah=(req.gabah or None), merang=(req.merang or None),
                 catatan_lab=(req.catatan_lab or None),
             )
         except Gudang2Error as e:
@@ -2840,7 +2862,11 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
         f"{lbl} {v:g}%" for lbl, v in
         (("KA", r.kadar_air), ("broken", r.broken), ("susut", r.penyusutan)) if v is not None
     )
-    bk = f" · butir kuning {r.butir_kuning}" if r.butir_kuning else ""
+    kual = ", ".join(
+        f"{lbl} {v}" for lbl, v in
+        (("butir kuning", r.butir_kuning), ("gabah", r.gabah), ("merang", r.merang)) if v
+    )
+    bk = f" · {kual}" if kual else ""
     pesan = f"✓ Kualitas PK *{req.kode_batch}* tercatat: {det or '—'}{bk}."
     return {"ok": True, "pesan": pesan}
 
