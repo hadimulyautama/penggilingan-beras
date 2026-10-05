@@ -139,6 +139,14 @@ _TABLE_LABEL = {
     "purchase_batch_verifications": "verifikasi harga gabah",
     "finished_goods_stock": "stok barang jadi",
     "byproduct_stock": "stok hasil samping",
+    # Pembebasan silo per-silo (`tutup_silo_giling`, 5 Oktober 2026) belum
+    # bisa dibatalkan lewat undo — bentuknya BEDA dari `tutup_silo_sosoh`
+    # Gudang 2 (satu baris per silo): satu pembebasan di sini menutup
+    # BANYAK baris sumber sekaligus, dan sisa yang diketik dibagi antar
+    # baris itu (lihat docstring fungsinya) — membatalkannya berarti
+    # menyusun ulang pembagian itu dengan benar, bukan sekadar membuka satu
+    # baris. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
+    "milling_process_sources": "bahan giling (per silo)",
 }
 
 

@@ -195,6 +195,18 @@ class MillingProcessSource(Base):
     #: ditimbang kedua, tanpa tara). Bukan 0 — CHECK berat_positif menolak
     #: nol, dan memang nol itu bohong. Diisi poller begitu timbangnya ada.
     berat_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
+    #: Sisa yang tercatat saat SILO INI dibebaskan (`tutup_silo_giling`,
+    #: migrasi 0070) — NULL berarti sumber ini MASIH TERIKAT, silonya masih
+    #: dianggap sedang digiling. Sebangun `polishing_silo_usage.
+    #: berat_akhir_kg` di Gudang 2, tetapi per BARIS, bukan per silo: satu
+    #: silo di sini bisa punya banyak baris sumber (tiap pengisian melahirkan
+    #: baris baru), dan membebaskannya menutup SELURUHNYA sekaligus — lihat
+    #: `milling.tutup_silo_giling` untuk aturan pembagian sisanya antar baris.
+    berat_akhir_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
+    #: `berat_kg` dikurangi bagian yang jadi `berat_akhir_kg` baris ini —
+    #: bagian yang benar-benar dianggap masuk mesin. NULL selama baris ini
+    #: masih terikat, sama seperti `berat_akhir_kg`.
+    berat_terpakai_kg: Mapped[float | None] = mapped_column(Numeric(12, 3))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

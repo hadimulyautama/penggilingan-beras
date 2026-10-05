@@ -387,9 +387,13 @@ def test_selesai_giling_mengosongkan_SELURUH_sumber_silonya():
     from app.penggilingan.gudang1.services import milling
 
     fn = kode_saja(milling.finish_milling)
-    assert "MillingProcessSource.silo_storage_id" in fn, "sumber tak dibaca"
+    assert "MillingProcessSource.milling_process_id == proc.id" in fn, "sumber tak dibaca"
     # Penunjuk tunggal hanya boleh jadi CADANGAN untuk proses lama.
     assert "if not ids and proc.silo_storage_id" in fn
+    # Dan sejak 5 Oktober 2026: sumber yang sudah dibebaskan sendiri lewat
+    # `tutup_silo_giling` tak boleh ikut dikosongkan ulang di sini — silonya
+    # bisa sudah berisi gabah baru.
+    assert "MillingProcessSource.berat_akhir_kg.is_(None)" in fn
 
 
 def test_output_terverifikasi_menang_atas_progres_operator():

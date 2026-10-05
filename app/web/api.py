@@ -667,6 +667,35 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_akhir", "label": "Hasil akhir PK (kg)",
                   "type": "number"},
              ]},
+            # ── Bebaskan silo (boleh sebagian) — keputusan pemilik 5 Oktober
+            #    2026 ──
+            #
+            # "silo yang kosong langsung diisi gabah lagi walau tidak langsung
+            # diproses." Giling dari beberapa silo sering tak menghabiskan
+            # semuanya bersamaan — pintu ini membebaskan SATU silo supaya
+            # bisa diisi gabah baru, TANPA menutup prosesnya: yang menutup
+            # tetap "Selesai giling", di sanalah hasil akhir & pagar
+            # rendemen berdiri. Sebangun "Selesai penyosohan" Gudang 2.
+            {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo (boleh sebagian)",
+             "hint": "Mesin lanjut dari silo lain — proses TIDAK ditutup. "
+                     "Silo yang dibebaskan boleh langsung diisi gabah baru; "
+                     "gabah itu tak akan tercampur ke lot yang sedang digiling.",
+             "post": "/api/actions/tutup-silo-giling", "fields": [
+                 {"name": "kode_proses", "label": "Proses giling", "type": "remote",
+                  "source": "/api/actions/milling-active",
+                  "kosong": "Tidak ada proses giling yang sedang berjalan."},
+                 # Silo milik PROSES yang dipilih di atasnya — `induk`, sama
+                 # polanya dengan "Selesai penyosohan": borang yang dulu
+                 # menawarkan silo mati A/B lepas dari prosesnya menjawab 400
+                 # yang tak masuk akal bagi orang yang baru saja memilih
+                 # prosesnya (keluhan pemilik 24 September 2026 07:14, sisi
+                 # Gudang 2 — pola yang sama dihindari di sini sejak awal).
+                 {"name": "silo", "label": "Silo yang dibebaskan", "type": "remote",
+                  "induk": "kode_proses", "source": "/api/actions/silo-giling-terbuka",
+                  "kosong": "Semua silo proses ini sudah ditandai bebas."},
+                 {"name": "sisa", "label": "Sisa berat di silo (kg)",
+                  "type": "number", "wajib": True},
+             ]},
             # ── Berhenti sementara ──
             # Prosesnya TIDAK ditutup: bahan, target, dan catatannya tetap.
             # Tanpa aksi ini, operator yang mesinnya rusak hanya punya dua
@@ -1246,8 +1275,8 @@ for _a in (
     # Gudang 1
     "gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
     "selesai_pengeringan", "selesai_pendinginan", "pindah_silo", "ubah_target",
-    "mulai_giling", "hasil_giling", "selesai_giling", "hentikan_proses",
-    "lanjutkan_proses", "verify_output", "qc_giling",
+    "mulai_giling", "hasil_giling", "selesai_giling", "tutup_silo_giling",
+    "hentikan_proses", "lanjutkan_proses", "verify_output", "qc_giling",
     # Rantai permintaan PK
     "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
     "kirim_permintaan_pk", "tutup_permintaan_pk",
@@ -1304,6 +1333,7 @@ _ACTION_WH = {
     "ubah_target": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
+    "tutup_silo_giling": "g1",
     "hentikan_proses": "g1", "lanjutkan_proses": "g1",
     "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
     # Barangnya di Gudang 1, peminatnya Gudang 2 — dicap g1, sama dengan
@@ -1703,6 +1733,53 @@ async def milling_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
             )
         ).scalars().all()
     return [{"value": k, "label": k} for k in procs]
+
+
+@router.get("/actions/silo-giling-terbuka")
+async def silo_giling_terbuka(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo yang dipakai satu proses giling dan BELUM dibebaskan.
+
+    `induk` = kode proses, dikirim klien dari medan di atasnya (`data-induk`).
+    Kosong → daftar kosong, bukan seluruh silo — daftar yang menjawab tanpa
+    tahu prosesnya menawarkan silo yang tak pernah dipakainya. Pola yang
+    sama dengan `/actions/sosoh-silo` di Gudang 2.
+
+    ⚠ Satu silo di SINI bisa punya BANYAK baris sumber (tiap pengisian
+    melahirkan baris baru — beda dari Gudang 2, satu baris per silo), jadi
+    labelnya MENJUMLAH seluruh baris yang masih terbuka untuk silo itu:
+    membebaskannya nanti memang menutup semuanya sekaligus (lihat
+    `milling.tutup_silo_giling`), jadi angka yang ditawarkan di sini harus
+    sudah menjumlahkannya — bukan baris pertama yang kebetulan ditemukan.
+    """
+    _require(await _is_g1_operator(user))
+    kode = (induk or "").strip()
+    if not kode:
+        return []
+    from sqlalchemy import select
+
+    from app.models import MillingProcess, MillingProcessSource, Silo, SiloStorage
+    async with SessionLocal() as db:
+        proc = (await db.execute(select(MillingProcess).where(
+            MillingProcess.kode_proses == kode))).scalars().first()
+        if proc is None:
+            return []
+        baris = (await db.execute(
+            select(MillingProcessSource, Silo)
+            .join(SiloStorage, SiloStorage.id == MillingProcessSource.silo_storage_id)
+            .join(Silo, Silo.id == SiloStorage.silo_id)
+            .where(MillingProcessSource.milling_process_id == proc.id,
+                  MillingProcessSource.berat_akhir_kg.is_(None))
+            .order_by(Silo.nama_silo)
+        )).all()
+    jumlah: dict[str, float] = {}
+    tahu: dict[str, bool] = {}
+    for s, silo in baris:
+        huruf = (silo.nama_silo or "").replace("Silo ", "").strip()
+        jumlah[huruf] = jumlah.get(huruf, 0.0) + float(s.berat_kg or 0)
+        tahu[huruf] = tahu.get(huruf, True) and s.berat_kg is not None
+    return [{"value": h, "label": (f"Silo {h} · {_rp(jumlah[h])} kg" if tahu[h]
+                                   else f"Silo {h} · ⚠️ bobot belum ada")}
+           for h in sorted(jumlah)]
 
 
 @router.get("/actions/cooling-active")
@@ -2478,6 +2555,39 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
     jam = (r.tertahan_detik or 0) / 3600
     pesan = (f"▶️ *{r.kode}* dilanjutkan — tertahan {jam:.1f} jam "
              f"({r.sebab}).")
+    return {"ok": True, "pesan": pesan}
+
+
+class TutupSiloGilingReq(BaseModel):
+    kode_proses: str
+    #: Boleh KOSONG bila prosesnya hanya menyisakan satu silo yang masih
+    #: terbuka — `milling.tutup_silo_giling` yang memilihnya. Pola yang
+    #: sama dengan `SelesaiPenyosohanReq.silo` di Gudang 2.
+    silo: str = ""
+    sisa: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+
+
+@router.post("/actions/tutup-silo-giling")
+async def act_tutup_silo_giling(req: TutupSiloGilingReq,
+                                user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    if not (req.kode_proses or "").strip():
+        raise HTTPException(400, "Pilih proses giling dulu.")
+    silo = (req.silo or "").strip().upper() or None
+    from app.penggilingan.gudang1.services.milling import MillingError, tutup_silo_giling
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            # Silo kosong DITERUSKAN, tidak dihadang: yang tahu berapa silo
+            # yang masih terbuka untuk proses ini adalah layanannya, bukan
+            # borangnya — pola yang sama dengan `act_selesai_penyosohan`.
+            r = await tutup_silo_giling(db, user=u, kode_proses=req.kode_proses,
+                                        nama_silo=silo, sisa_kg=req.sisa)
+        except MillingError as e:
+            raise _err(e, "Gagal membebaskan silo.")
+    pesan = (f"✓ Silo {r.nama_silo} pada *{req.kode_proses}* dibebaskan — "
+             f"{r.terpakai_kg:g} kg terpakai, sisa {r.sisa_kg:g} kg. Boleh "
+             "langsung diisi gabah baru; gilingnya TETAP berjalan.")
     return {"ok": True, "pesan": pesan}
 
 

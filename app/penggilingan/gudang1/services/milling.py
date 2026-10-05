@@ -27,12 +27,12 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_drying_lot_code, next_milling_code
-from app.services.jasa import JasaError, nama_pemilik, pastikan_satu_jasa_bernama
+from app.services.jasa import JasaError, kunci_silo, nama_pemilik, pastikan_satu_jasa_bernama
 from app.penggilingan.gudang1.services.bobot import (
     NOL, PASTI, TAK_DIKETAHUI, Bobot, dari_batch, dari_batches)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
 from app.penggilingan.gudang1.services.silo import (
-    _silo_active_rows, get_g1_silo, giling_berjalan_untuk_silo, silo_ids_proses)
+    _silo_active_rows, get_g1_silo, giling_berjalan_untuk_silo)
 
 
 class MillingError(Exception):
@@ -512,6 +512,196 @@ async def log_progress(
     )
 
 
+# ─────────────────────────── Pembebasan silo per-silo ───────────────────────────
+#
+# Keputusan pemilik 5 Oktober 2026: *"silo yang kosong langsung diisi gabah
+# lagi walau tidak langsung diproses."* Giling dari beberapa silo (24
+# September 2026) sering tak menghabiskan semuanya BERSAMAAN — satu silo
+# bisa kosong lebih dulu sementara giling lanjut dari silo yang lain — dan
+# sampai hari ini silo itu tak bisa dibebaskan sebelum SELURUH proses selesai.
+#
+# Gudang 2 sudah punya persis ini (`selesai_penyosohan`/`polishing_silo_
+# usage`), dan bentuknya dipinjam — TETAPI TIGA BEDA di bawah bukan
+# kelalaian meniru, melainkan beda struktur yang kalau dilewatkan akan
+# membuat pembebasan ini LEBIH BURUK daripada keadaan sekarang:
+#
+#   1. Satu silo G1 bisa punya BANYAK baris sumber (`masuk_silo` melahirkan
+#      baris baru tiap pengisian; G2 satu baris per silo, tambahan menumpuk
+#      di kolom yang sama). Membebaskan silo di sini berarti menutup
+#      SELURUH baris sumbernya sekaligus — satu baris saja menyisakan silo
+#      "setengah bebas", keadaan yang tak ada artinya di lantai.
+#   2. Sisa yang diketik operator DIBAGI antar baris yang ditutup — fisiknya
+#      sudah bercampur sejak dituang ke silo yang sama, jadi tak ada cara
+#      mengetahui persis baris mana yang tersisa. Konvensinya: baris
+#      TERLAMA dianggap habis duluan, sisanya menumpuk di baris TERBARU;
+#      jumlahnya tetap tepat sama dengan sisa yang diketik.
+#   3. TIDAK menutup prosesnya walau ini silo TERAKHIR yang terbuka.
+#      `finish_milling` satu-satunya pintu penutupan — di sanalah bobot
+#      akhir PK dicatat DAN pagar rendemen (bagian atas berkas ini)
+#      berdiri. Menutup lewat sini berarti lot bisa "selesai" tanpa satu
+#      pun angka hasil, dan tanpa pagar itu — tepat cacat yang sudah pernah
+#      dibetulkan untuk `finish_milling` sendiri. Dan itu sesuai kenyataan
+#      yang disebutkan pemilik: silo bisa habis duluan sementara gabahnya
+#      MASIH DI MESIN — "silo kosong" bukan "giling selesai".
+@dataclass
+class TutupSiloResult:
+    proc: MillingProcess
+    nama_silo: str
+    sisa_kg: float
+    terpakai_kg: float
+
+
+async def tutup_silo_giling(
+    db: AsyncSession, *, user, kode_proses: str | None, nama_silo: str | None,
+    sisa_kg: float | None, tanggal=None, jam=None,
+) -> TutupSiloResult:
+    """Bebaskan SATU silo dari giling yang sedang berjalan — boleh sebagian.
+
+    `sisa_kg` SELALU wajib diketik — beda dari `finish_milling`, yang boleh
+    memakai progres terakhir bila tak disebut: di sana angkanya progres
+    KUMULATIF milik seluruh proses dan sudah tercatat; di sini tak ada
+    catatan lain yang bisa diturunkan, sebab inilah satu-satunya tempat
+    sisa PER SILO tercatat.
+    """
+    if not kode_proses:
+        raise MillingError(
+            "Sebutkan kode proses, contoh: `bebaskan Silo A dari LOT-20260702-01`"
+        )
+    proc = await get_process_by_kode(db, kode_proses)
+    if proc is None:
+        raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    if proc.status == "selesai":
+        raise MillingError(f"Proses {proc.kode_proses} sudah selesai.")
+
+    # ── Barisnya DIKUNCI sebelum dibaca ──
+    #
+    # Pola yang sama dengan `selesai_penyosohan` (P-K-04/05/06): tanpa kunci,
+    # dua operator yang membebaskan silo yang sama pada detik yang sama
+    # sama-sama membaca "masih terbuka", keduanya menulis, dan yang kedua
+    # menimpa sisa yang sudah dicatat yang pertama.
+    semua = (await db.execute(
+        select(MillingProcessSource)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+        .with_for_update()
+    )).scalars().all()
+    if not semua:
+        raise MillingError(
+            f"{proc.kode_proses} tidak punya baris sumber tercatat — proses "
+            "lama, ditutup langsung lewat `selesai giling`.")
+
+    storage_ids = [s.silo_storage_id for s in semua]
+    peta_silo = dict((await db.execute(
+        select(SiloStorage.id, SiloStorage.silo_id).where(SiloStorage.id.in_(storage_ids))
+    )).all())
+
+    if not nama_silo:
+        # Tanpa nama silo, yang dipakai adalah satu-satunya silo yang MASIH
+        # terbuka — proses satu silo karenanya tak perlu menyebutnya sama
+        # sekali. Pola yang sama dengan `selesai_penyosohan` (keluhan
+        # pemilik 24 September 2026 07:14: "sebutkan silo mana" hanya
+        # berarti bila memang ada lebih dari satu kemungkinan).
+        terbuka_silo = {peta_silo.get(s.silo_storage_id) for s in semua
+                        if s.berat_akhir_kg is None}
+        terbuka_silo.discard(None)
+        if len(terbuka_silo) == 1:
+            silo = await db.get(Silo, terbuka_silo.pop())
+        elif not terbuka_silo:
+            raise MillingError(
+                f"Semua silo proses {proc.kode_proses} sudah ditandai bebas. "
+                "Tutup gilingnya lewat `selesai giling`.")
+        else:
+            raise MillingError(
+                f"Sebutkan silo mana yang dibebaskan dari {proc.kode_proses} "
+                "— prosesnya memakai lebih dari satu.")
+    else:
+        silo = await get_g1_silo(db, nama_silo)
+        if silo is None:
+            raise MillingError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
+
+    # Kunci baris `silos` SEBELUM isinya dipastikan — pola yang sama dengan
+    # `masuk_silo`: tanpa ini, gabah baru bisa dituang (dan dibaca "silo
+    # belum dipakai siapa pun") di tengah-tengah pembebasan ini, sebelum
+    # commit-nya mendarat.
+    await kunci_silo(db, silo.id)
+
+    huruf = silo.nama_silo.replace("Silo ", "")
+    baris_silo = [s for s in semua if peta_silo.get(s.silo_storage_id) == silo.id]
+    if not baris_silo:
+        raise MillingError(f"Proses {proc.kode_proses} tidak memakai Silo {huruf}.")
+    terbuka = [s for s in baris_silo if s.berat_akhir_kg is None]
+    if not terbuka:
+        sisa_tercatat = sum(float(s.berat_akhir_kg or 0) for s in baris_silo)
+        raise MillingError(
+            f"Silo {huruf} pada {proc.kode_proses} sudah ditandai bebas "
+            f"(sisa {sisa_tercatat:,.0f} kg) — sisanya tak bisa dicatat dua "
+            "kali. Kalau angkanya keliru, mintakan koreksi ke Admin."
+            .replace(",", "."))
+
+    if sisa_kg is None:
+        raise MillingError("Sebutkan sisa berat di silo, mis. `sisa 500 kg`.")
+    sisa_kg = float(sisa_kg)
+    if sisa_kg < 0:
+        raise MillingError("Sisa berat tidak boleh negatif.")
+
+    # ⚠ Bahan yang belum punya angka (truk belum ditimbang kedua, P6) tak
+    # bisa direkonsiliasi terhadap sisa yang diketik — ditolak, bukan
+    # ditebak. Sama alasannya dengan pagar `finish_milling` terhadap bahan
+    # yang belum final, sisi SILO INI saja.
+    if any(s.berat_kg is None for s in terbuka):
+        raise MillingError(
+            f"Salah satu bahan di Silo {huruf} belum punya berat — truknya "
+            "belum ditimbang kedua. Tunggu timbangnya, baru bebaskan silonya.")
+
+    total_masuk = sum(float(s.berat_kg) for s in terbuka)
+    if sisa_kg > total_masuk:
+        raise MillingError(
+            f"Sisa ({sisa_kg:,.0f} kg) melebihi isi Silo {huruf} yang "
+            f"tercatat untuk proses ini ({total_masuk:,.0f} kg)."
+            .replace(",", "."))
+
+    # ── Sisa dibagi antar baris: TERLAMA habis duluan, sisanya di baris
+    #    TERBARU — lihat catatan panjang di kepala bagian ini (butir 2). ──
+    terbuka.sort(key=lambda s: s.id)
+    sisa_budget = total_masuk - sisa_kg
+    for s in terbuka:
+        b = float(s.berat_kg)
+        pakai = min(b, sisa_budget)
+        s.berat_terpakai_kg = pakai
+        s.berat_akhir_kg = b - pakai
+        sisa_budget -= pakai
+
+    now = input_time(tanggal, jam)
+    # ── Lepas klaimnya — SELURUH baris SiloStorage di balik silo INI saja ──
+    #
+    # Sama seperti `finish_milling`, tetapi dibatasi pada silo yang
+    # dibebaskan: silo lain yang masih terbuka (giling lanjut dari sana)
+    # tak boleh ikut tersentuh.
+    for s in terbuka:
+        st = await db.get(SiloStorage, s.silo_storage_id)
+        if st:
+            if st.status == "terisi":
+                st.status = "kosong"
+                st.tanggal_keluar = now
+            st.milling_process_id = None
+    # Status silo DITURUNKAN ULANG dari isinya yang sebenarnya, bukan dicap
+    # "kosong" begitu saja — ia bisa SUDAH berisi gabah baru (operator
+    # menuangnya begitu silonya dibebaskan, keadaan yang pemilik sebutkan
+    # sendiri). Prinsip yang sama dengan `segarkan_status_silo` di Gudang 2.
+    silo.status = "terisi" if await _silo_active_rows(db, silo.id) else "kosong"
+
+    await log_activity(
+        db, table_name="milling_process_sources", record_id=terbuka[0].id,
+        action="UPDATE", changed_by=user.id, field_name="berat_akhir_kg",
+        new_value=f"{sisa_kg:.0f}", aksi="tutup_silo_giling",
+    )
+    await db.commit()
+    await db.refresh(proc)
+    return TutupSiloResult(
+        proc=proc, nama_silo=huruf, sisa_kg=sisa_kg,
+        terpakai_kg=total_masuk - sisa_kg,
+    )
+
+
 # ─────────────────────────── Selesai (auto-kosongkan silo) ───────────────────────────
 @dataclass
 class FinishResult:
@@ -638,12 +828,33 @@ async def finish_milling(
     # tergiling muncul kembali sebagai "Transit di silo kering": gabah yang
     # sama ditawarkan untuk digiling dua kali.
     nama_silo = None
-    ids = [s for s in (await db.execute(
-        select(MillingProcessSource.silo_storage_id).where(
-            MillingProcessSource.milling_process_id == proc.id)
-    )).scalars().all() if s]
+    # ── Hanya sumber yang MASIH TERBUKA — yang sudah dibebaskan sendiri
+    #    lewat `tutup_silo_giling` TIDAK disentuh lagi di sini ──
+    #
+    # Silo yang sudah dibebaskan bisa SUDAH berisi gabah baru: operator
+    # menuangnya begitu silonya bebas, selagi giling lanjut dari silo lain
+    # (keputusan pemilik 5 Oktober 2026, lihat catatan panjang di
+    # `tutup_silo_giling`). Mengosongkan ulang baris `SiloStorage`-nya di
+    # sini akan merampas gabah baru itu dari pemiliknya yang sebenarnya,
+    # tanpa satu pun pesan — kelas kerusakan yang sama dengan jebakan
+    # `giling_berjalan_untuk_silo` yang perbaikan ini juga menutup.
+    sumber_terbuka = (await db.execute(
+        select(MillingProcessSource).where(
+            MillingProcessSource.milling_process_id == proc.id,
+            MillingProcessSource.berat_akhir_kg.is_(None))
+    )).scalars().all()
+    ids = [s.silo_storage_id for s in sumber_terbuka if s.silo_storage_id]
     if not ids and proc.silo_storage_id:
         ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
+    silo_ids_tutup: set[int] = set()
+    for s in sumber_terbuka:
+        # Proses ditutup LANGSUNG, tanpa satu pun silonya dibebaskan sendiri
+        # lebih dulu — tak ada "sisa" yang pernah diketik untuk baris ini,
+        # jadi diperlakukan sama seperti `finish_milling` selama ini: habis
+        # terpakai, tanpa sisa. Baris yang SUDAH dibebaskan (tersaring di
+        # atas) tak ikut diubah — sisanya sudah tercatat sendiri.
+        s.berat_terpakai_kg = s.berat_kg
+        s.berat_akhir_kg = 0 if s.berat_kg is not None else None
     for sid in ids:
         st = await db.get(SiloStorage, sid)
         if st:
@@ -656,6 +867,8 @@ async def finish_milling(
             # dan kolom yang artinya tergantung kolom lain adalah kolom yang
             # dibaca salah suatu hari.
             st.milling_process_id = None
+            if st.silo_id:
+                silo_ids_tutup.add(st.silo_id)
     # ── SELURUH silo sumber dikosongkan, bukan `proc.silo_id` saja ──
     #
     # Sejak satu lot boleh datang dari beberapa silo (keputusan pemilik 24
@@ -677,16 +890,23 @@ async def finish_milling(
     # Ia tetap ditulis, dan sekarang juga ditulis Gudang 2 (`segarkan_status_
     # silo`), supaya isinya tak bertentangan dengan kenyataan. Bukan karena ada
     # yang membutuhkannya hari ini.
-    if ids:
+    if silo_ids_tutup:
+        # ⚠ `silo_ids_tutup` — silo yang BARU SAJA disentuh panggilan ini —
+        # BUKAN `silo_ids_proses(db, proc)` (SELURUH silo yang pernah jadi
+        # sumber proses ini, sepanjang riwayatnya). Memakai yang lama akan
+        # ikut mengosongkan silo yang sudah dibebaskan sendiri lebih dulu
+        # lewat `tutup_silo_giling` DAN mungkin sudah berisi gabah baru —
+        # tepat kerusakan yang catatan di atas peringatkan.
         nama: list[str] = []
-        for silo_id in await silo_ids_proses(db, proc):
+        for silo_id in sorted(silo_ids_tutup):
             silo = await db.get(Silo, silo_id)
             if silo:
                 silo.status = "kosong"
                 nama.append(silo.nama_silo.replace("Silo ", ""))
-        # Kalimatnya menyebut SEMUANYA. "Silo A kosong" atas giling yang
-        # memakan A dan B adalah kabar yang benar separuh, dan separuhnya yang
-        # hilang justru yang akan dicari orang.
+        # Kalimatnya menyebut SEMUA yang baru ditutup DI SINI. Silo yang
+        # sudah dibebaskan sendiri sebelumnya sudah punya kabarnya sendiri
+        # saat itu — menyebutnya lagi di sini seolah ia baru saja kosong
+        # akan membingungkan, bukan menjelaskan.
         nama_silo = _rangkai(nama) or None
     # ── SELURUH sumber ditandai "digiling", bukan hanya yang utama ──
     #

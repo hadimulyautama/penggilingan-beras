@@ -132,7 +132,8 @@ async def _silo_active_rows(db: AsyncSession, silo_id: int) -> list[SiloStorage]
 
 
 async def giling_berjalan_untuk_silo(db: AsyncSession, silo_id: int) -> MillingProcess | None:
-    """Giling yang SEDANG berjalan dan salah satu sumbernya ada di silo ini.
+    """Giling yang SEDANG berjalan dan salah satu sumbernya ada di silo ini,
+    DAN BELUM DIBEBASKAN dari silo itu.
 
     SATU-SATUNYA cara yang benar menanyakan "silo ini sedang digiling?" sejak
     satu lot boleh datang dari beberapa silo (keputusan pemilik 24 September
@@ -142,21 +143,43 @@ async def giling_berjalan_untuk_silo(db: AsyncSession, silo_id: int) -> MillingP
     giling kedua atas gabah yang sama, dan dua rendemen lahir dari satu muatan.
     Itu keluhan pemilik 24 September tentang Gudang 2, di sisi Gudang 1.
 
-    Kaki KEDUA (`silo_id`) tetap ada demi proses LAMA yang lahir sebelum
-    `milling_process_sources`: ia tak punya baris sumber sama sekali, dan tanpa
-    kaki ini giling lama yang sedang berputar akan terbaca "tidak ada".
+    ⚠⚠ `berat_akhir_kg IS NULL` ditambahkan 5 Oktober 2026, bersama
+    `tutup_silo_giling`. Pemilik sendiri menyebutkan kenyataannya: "silo yang
+    kosong langsung diisi gabah lagi walau tidak langsung diproses." Tanpa
+    syarat ini, gabah baru yang dituang ke silo yang BARU DIBEBASKAN (giling
+    lanjut dari silo lain) akan terdaftar sebagai bahan TAMBAHAN lot LAMA —
+    bobot masuknya membengkak, rendemennya anjlok, dan gabah barunya tak
+    pernah punya catatan sendiri. Jauh lebih buruk daripada keadaan sebelum
+    pembebasan ada: dulu silo memang tak bisa dibebaskan, tapi setidaknya
+    aman. Lihat `polishing_silo_usage.berat_akhir_kg.is_(None)` di Gudang 2 —
+    pola yang sama, sudah terbukti, di tempat ini baru ditambahkan.
+
+    ⚠ Kaki KEDUA (`silo_id`) DIBATASI pada proses yang TAK PUNYA baris
+    sumber SAMA SEKALI — proses lama dari sebelum `milling_process_sources`
+    ada. Proses MODERN (berapa pun silonya) selalu punya baris sumber sejak
+    `start_milling`, dan `proc.silo_id` sendiri BEKU pada silo PERTAMA yang
+    dipilih — tak pernah diperbarui. Mempercayainya tanpa batas ini berarti
+    silo pertama yang dibebaskan tetap terbaca "sedang digiling" SELAMANYA,
+    sebab kolom itu tak pernah tahu pembebasannya — jebakan yang sama dengan
+    di atas, lewat pintu yang berbeda.
     """
-    from sqlalchemy import or_
+    from sqlalchemy import and_, or_
 
     lewat_sumber = (
         select(MillingProcessSource.milling_process_id)
         .join(SiloStorage, SiloStorage.id == MillingProcessSource.silo_storage_id)
-        .where(SiloStorage.silo_id == silo_id)
+        .where(SiloStorage.silo_id == silo_id,
+              MillingProcessSource.berat_akhir_kg.is_(None))
+    )
+    tanpa_sumber_sama_sekali = ~(
+        select(MillingProcessSource.id)
+        .where(MillingProcessSource.milling_process_id == MillingProcess.id)
+        .exists()
     )
     return (await db.execute(
         select(MillingProcess).where(
             MillingProcess.status == "proses",
-            or_(MillingProcess.silo_id == silo_id,
+            or_(and_(MillingProcess.silo_id == silo_id, tanpa_sumber_sama_sekali),
                 MillingProcess.id.in_(lewat_sumber)),
         ).limit(1)
     )).scalars().first()
