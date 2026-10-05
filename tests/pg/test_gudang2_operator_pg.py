@@ -327,6 +327,72 @@ async def test_daftar_silo_hanya_milik_proses_itu_dan_yang_belum_selesai(pg, gud
     assert [x["value"] for x in await sosoh_silo(induk=kode, user=u)] == ["B"]
 
 
+async def test_silo_g2_dibebaskan_boleh_diisi_ulang_tanpa_masuk_proses_lama(pg, gudang2):
+    """⭐⭐ KONFIRMASI, bukan perbaikan: permintaan pemilik 5 Oktober 2026
+    ("pembebasan silo juga harus bisa di gudang 2, analog gudang 1")
+    sudah terpenuhi SEBELUM permintaan ini datang. `_catat_masuk_selama_
+    proses` (dipanggil `_add_intake`, satu titik tulis PK masuk Gudang 2)
+    sudah menyaring `PolishingSiloUsage.berat_akhir_kg.is_(None)` sejak
+    silo-per-silo G2 dibangun — persis jebakan yang dihindari di
+    `milling.tutup_silo_giling` (Gudang 1) lewat
+    `giling_berjalan_untuk_silo`. Berkas G1 membuktikannya lewat uji baru;
+    ini membuktikan sisi G2-nya sungguh-sungguh, bukan cuma dibaca dari
+    sumbernya.
+    """
+    from sqlalchemy import select
+
+    from app.penggilingan.gudang2.polishing import (catat_output, mulai_penyosohan,
+                                                     selesai_penyosohan)
+    from app.penggilingan.gudang2.service import (get_g2_silo, hitung_stok_silo,
+                                                   pindah_tumpukan_ke_silo)
+
+    u = gudang2["user"]
+    async with pg() as db:
+        # Silo A berisi 5.000 kg (dari tumpukan), Silo B dari fixture.
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=5_000)
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        kode = r.proc.kode_proses
+        await catat_output(db, user=u, kode=kode, jenis="medium", berat_kumulatif=1)
+
+    # Bebaskan Silo A — giling lanjut dari Silo B.
+    async with pg() as db:
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
+
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    async with pg() as db:
+        proc_sebelum = (await db.execute(select(PolishingProcess).where(
+            PolishingProcess.kode_proses == kode))).scalars().one()
+        usage_a_sebelum = (await db.execute(select(PolishingSiloUsage).where(
+            PolishingSiloUsage.polishing_process_id == proc_sebelum.id,
+            PolishingSiloUsage.silo_id ==
+            (await get_g2_silo(db, "A")).id))).scalars().one()
+        assert usage_a_sebelum.berat_akhir_kg is not None, "Silo A semestinya sudah bebas"
+        masuk_a_sebelum = float(usage_a_sebelum.berat_masuk_kg or 0)
+
+    # PK BARU dituang ke Silo A — baru saja dibebaskan, belum tentu langsung
+    # disosoh (keadaan yang pemilik sebutkan sendiri, sisi Gudang 2).
+    async with pg() as db:
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=gudang2["intake_tumpukan"],
+                                      nama_silo="A", berat=3_000)
+
+    async with pg() as db:
+        # Bahan tambahan TIDAK terdaftar pada proses lama.
+        usage_a_sesudah = (await db.execute(select(PolishingSiloUsage).where(
+            PolishingSiloUsage.polishing_process_id == proc_sebelum.id,
+            PolishingSiloUsage.silo_id ==
+            (await get_g2_silo(db, "A")).id))).scalars().one()
+        assert float(usage_a_sesudah.berat_masuk_kg or 0) == masuk_a_sebelum, \
+            "PK baru ikut tercatat sebagai tambahan proses yang sudah dibebaskan"
+        # Dan stok Silo A sungguh bertambah 3.000 kg milik LUAR proses ini.
+        assert await hitung_stok_silo(db, (await get_g2_silo(db, "A")).id) == pytest.approx(3_000)
+
+    # Dan penyosohan tetap bisa ditutup dari Silo B.
+    async with pg() as db:
+        s = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
+    assert s.selesai is True
+
+
 # ── Silo yang SEDANG disosoh tak berdiri di Antrian tunggu ──
 #
 # Laporan pemilik 24 September 2026 13:57: "Silo A · Gudang 2 · 2.000 kg · PK
