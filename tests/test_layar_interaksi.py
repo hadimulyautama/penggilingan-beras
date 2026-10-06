@@ -1028,9 +1028,13 @@ def test_bekatul_curah_punya_tombol_di_kartunya():
     `aksi.js` tombolnya cuma memuat ulang halaman, tanpa satu galat pun:
     tombolnya ada, halamannya jadi tuan rumah dialognya, dan skripnya dimuat.
     """
-    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
-    assert "buka=catat_bekatul" in tpl, \
+    # Kartunya sendiri (makro `blok`) pindah ke `_stok.html` 6 Oktober 2026 —
+    # dipakai `/stok-produk` MAUPUN `/stok-produk-jasa` sekarang, supaya
+    # keduanya menggambar kartu yang sama persis.
+    makro = (AKAR / "hmu_tampilan/templates/_stok.html").read_text()
+    assert "buka=catat_bekatul" in makro, \
         "kartu bekatul tak menawarkan pencatatan curahnya"
+    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
     assert '<dialog class="lembar" id="lembar">' in tpl, \
         "halamannya bukan tuan rumah lembarnya — tombolnya akan memindah layar"
     assert 'src="/static/aksi.js' in tpl, \
@@ -1045,10 +1049,13 @@ def test_tombol_bekatul_dioper_ke_makronya():
     seluruh uji pembaca-sumber tetap hijau. Kelas kesalahan yang hanya
     terlihat oleh orang yang membuka halamannya dengan mata sendiri.
     """
-    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
-    assert "boleh_catat=False) -%}" in tpl, \
+    # Makronya sendiri pindah ke `_stok.html` 6 Oktober 2026 — lihat catatan
+    # di uji sebelum ini.
+    makro = (AKAR / "hmu_tampilan/templates/_stok.html").read_text()
+    assert "boleh_catat=False) -%}" in makro, \
         "makro `blok` tak menerima izinnya sebagai parameter"
-    assert "and boleh_catat %}" in tpl, \
+    assert "and boleh_catat %}" in makro, \
         "makronya membaca izin dari konteks — di dalam makro itu Undefined"
+    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
     assert tpl.count("BOLEH_CATAT) }}") == 2, \
         "izinnya tak dioper ke kedua pemanggilan makro (beras & hasil samping)"

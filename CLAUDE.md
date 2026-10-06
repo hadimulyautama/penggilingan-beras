@@ -733,7 +733,30 @@ ketiga (`nav.TAB` + `Berjalan.submenu()`/`lencana()`, mengikuti pola
 seksi per pesanan jasa; angkanya 0 di sub-menu (murni informasi, sama
 dengan "Stok PK").
 
-Uji: `tests/pg/test_stok_produk_jasa.py`.
+⚠⚠ **KARTUNYA WAJIB RUPA YANG SAMA DENGAN `/stok-produk`** — permintaan
+pemilik susulan: *"tampilannya juga harus konsisten seperti kartu stock
+milik kami sendiri."* Kartu sederhana (nama + kg saja) DICABUT; halaman ini
+sekarang memanggil `stok.stok_produk(db, jasa_id=...)` — fungsi yang SAMA
+yang memberi makan `/stok-produk`, bukan cuma `barang_jadi_g2()` — sehingga
+kartunya punya empat suku (`Hasil sosoh`/`Keluar`/`Dikemas`/`Curah`) dan
+laci FIFO yang sama persis. Makronya sendiri (`blok`) pindah dari
+`stok_produk.html` ke `_stok.html` supaya kedua halaman menggambar dari SATU
+definisi, bukan dua salinan yang akan berselisih pada perubahan berikutnya.
+
+⚠ **`stok_produk()` kini menerima `jasa_id`** (bawaan `None` = PABRIK,
+`PolishingProcess.jasa_id IS NULL`) — dan ini MEMBETULKAN cacat yang
+sebelumnya tersembunyi: fungsinya dulu TIDAK menyaring proses sama sekali,
+jadi "hasil sosoh" dan "curah" pabrik diam-diam memuat output proses jasa.
+Begitu juga kueri "keluar" (`OutgoingItem`/`OutgoingRecord`) kini ikut
+disaring `OutgoingRecord.jasa_id` — pengambilan jasa lewat rantai yang sama
+dulu ikut mengurangi "keluar" pabrik. Bekatul TETAP dikecualikan dari jalur
+`jasa_id` terisi (lihat docstring fungsinya): ia tak pernah "milik satu
+pesanan".
+
+Uji: `tests/pg/test_stok_produk_jasa.py` (termasuk pagar isolasi pabrik vs
+jasa di `stok_produk()`, dan satu uji HTTP penuh yang menggambar halamannya
+sungguhan — pelajaran `TempatPk.pemilik`: penjaga yang cuma memanggil
+fungsinya lulus pada hari templatnya berhenti menggambar angkanya).
 
 ## Kode barang
 

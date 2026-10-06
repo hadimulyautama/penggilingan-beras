@@ -7,12 +7,15 @@
 {# ── Stok Produk · Titipan pelanggan — keputusan pemilik 6 Oktober 2026 ──
    "buat saja halaman khusus stock produk dan stock hasil samping dari
    jasa. masuk di sub menu stock ... tapi pisahkan per pelanggan pemilik
-   barang."
+   barang." Lalu: "tampilannya juga harus konsisten seperti kartu stock
+   milik kami sendiri" — kartunya WAJIB rupa yang sama dengan `/stok-produk`
+   (makro `st.blok`, bukan bentuk yang lebih sederhana), satu seksi per
+   pelanggan.
 
-   `/stok-produk` memuat barang PABRIK saja; beras & hasil samping milik
-   pesanan jasa berumah di sini — satu seksi per pelanggan, supaya angka
-   satu pesanan tak pernah menyatu dengan pesanan lain atau dengan stok
-   pabrik. Hitungannya `stok.barang_jadi_g2`, disaring & dikelompokkan di
+   `/stok-produk` memuat barang PABRIK saja (keputusan yang sama) — barang
+   titipan disaring KELUAR dari sana, bukan disembunyikan: halaman ini
+   tempatnya. Hitungannya `stok.stok_produk(db, jasa_id=...)` dan
+   `stok.barang_jadi_g2`, satu panggilan per pesanan, disusun di
    `layar_produk.halaman_stok_produk_jasa`; templat ini cuma menggambar. #}
 
 {% if not daftar %}
@@ -31,28 +34,13 @@
   </div>
 {% else %}
   {% for p in daftar %}
-    <div>
+    <div style="margin-bottom:8px">
       <span class="lbl">{{ p.pemilik }}</span>
-      <div class="grup" style="margin-bottom:26px">
-        {% for k in p.produk + p.samping %}
-          <div class="padat padat--diam padat--samping">
-            <div class="padat__ringkas">
-              <div class="padat__atas">
-                <span class="padat__nama">{{ k.nama }}{% if k.merk %} · {{ k.merk }}{% endif %}</span>
-                <span class="padat__nilai">
-                  {%- if k.karung %}{{ k.karung }}&nbsp;karung
-                  {%- else %}{{ kg(k.kg) }}&nbsp;kg{% endif -%}
-                </span>
-              </div>
-              <div class="padat__ket">
-                {{- k.bahan }}{% if k.ukuran %} {{ k.ukuran }}&nbsp;kg{% endif %}
-                {%- if k.karung %} · {{ kg(k.kg) }}&nbsp;kg{% endif -%}
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
     </div>
+    {{ st.blok("Beras · sisa di gudang", p.beras, p.sisa_beras, p.curah_beras,
+              "belum dipacking", "giling", p.kemasan) }}
+    {{ st.blok("Hasil samping · sisa di gudang", p.samping, p.sisa_samping,
+              p.curah_samping, "belum tercatat", "samping", p.kemasan) }}
   {% endfor %}
 {% endif %}
 {% endblock %}

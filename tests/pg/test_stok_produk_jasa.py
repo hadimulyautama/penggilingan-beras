@@ -160,30 +160,115 @@ async def test_beras_jasa_tak_muncul_di_borang_penjualan(pg, sosoh_jasa):
     assert not any("Bu Sri" in b["label"] for b in daftar)
 
 
+async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
+    """Klien HTTP sungguhan berlogin — sebangun `_klien` di
+    `tests/pg/test_riwayat_sosoh.py`: rute `render_laci` memegang `Berjalan`
+    penuh (view, peran, lencana), dan memanggil fungsinya langsung dengan
+    objek tiruan akan berhenti di galat mock jauh sebelum sempat menguji
+    yang sungguh diuji — apa yang TERGAMBAR."""
+    import httpx
+
+    from app.main import app
+    from app.models import ProduksiAkun, User
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    async with pg() as db:
+        u = User(nama=f"Uji {peran}", role=peran, status="aktif")
+        db.add(u)
+        await db.flush()
+        a = ProduksiAkun(user_id=u.id, username=f"spj{u.id}",
+                         password_hash=S.hash_sandi("rahasia123"),
+                         status="aktif", mode_perangkat=mode_bawaan(peran))
+        db.add(a)
+        await db.commit()
+        tok = security.buat_token(a)
+    c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                          base_url="http://uji", follow_redirects=True)
+    c.cookies.set(security.NAMA_COOKIE, tok)
+    c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+    return c
+
+
 async def test_halaman_titipan_mengelompokkan_per_pelanggan(pg, sosoh_jasa):
-    """`/stok-produk-jasa` — satu seksi per pesanan, menyebut pemiliknya.
-
-    Pengelompokan yang sama persis dengan yang dikerjakan
-    `layar_produk.halaman_stok_produk_jasa` — diuji di sini atas
-    `barang_jadi_g2()` langsung, konsisten dengan pola pg lain di berkas
-    ini, tanpa butuh autentikasi HTTP penuh.
+    """`/stok-produk-jasa` — satu seksi per pesanan, menyebut pemiliknya,
+    kartunya rupa yang SAMA dengan `/stok-produk` (keputusan pemilik:
+    "tampilannya juga harus konsisten seperti kartu stock milik kami
+    sendiri") — diuji lewat HTTP sungguhan, sebab penjaga yang cuma
+    memanggil fungsinya akan lulus pada hari templatnya berhenti menggambar
+    angkanya (pelajaran `TempatPk.pemilik`, lihat `test_riwayat_sosoh.py`).
     """
-    from app.services.stok import GRADES_BERAS, barang_jadi_g2
-
     await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_pabrik"], karung=40)
     await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"], karung=20)
 
+    # Data pengelompokannya, di tingkat Python.
+    from sqlalchemy import select
+
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.services.jasa import nama_pemilik_banyak
+    from app.services.stok import adalah_beras, barang_jadi_g2, stok_produk
+
     async with pg() as db:
+        jasa_ids = sorted((await db.execute(
+            select(PolishingProcess.jasa_id.distinct())
+            .where(PolishingProcess.jasa_id.isnot(None))
+        )).scalars().all())
+        assert jasa_ids == [sosoh_jasa["jasa_id"]]
+        nama = await nama_pemilik_banyak(db, jasa_ids)
         bj = await barang_jadi_g2(db)
-    pesanan: dict[int, dict] = {}
-    for k in bj.produk + bj.samping:
-        jid = k.get("jasa_id")
-        if jid is None:
-            continue
-        p = pesanan.setdefault(jid, {"pemilik": k.get("pemilik"), "produk": [], "samping": []})
-        (p["produk"] if k["jenis"] in GRADES_BERAS or k["jenis"] == "beras_putih"
-         else p["samping"]).append(k)
-    assert len(pesanan) == 1
-    p = next(iter(pesanan.values()))
-    assert p["pemilik"] == sosoh_jasa["pemilik"]
-    assert sum(k["kg"] for k in p["produk"]) == 500
+        kartu = await stok_produk(db, jasa_id=jasa_ids[0])
+    assert nama[jasa_ids[0]] == sosoh_jasa["pemilik"]
+    beras = [k for k in kartu if adalah_beras(k.jenis)]
+    # Kartunya KartuProduk (rupa `stok_produk()`), bukan dict sederhana —
+    # itulah yang membuatnya bisa digambar `st.blok` yang sama dengan
+    # `/stok-produk`.
+    assert beras[0].jenis == "medium"
+    assert beras[0].hasil_kg == 5_000
+    assert beras[0].dikemas_kg == 500
+    kemasan_jasa = [k for k in bj.produk if k.get("jasa_id") == jasa_ids[0]]
+    assert kemasan_jasa[0]["karung"] == 20
+
+    # Dan yang SUNGGUH tergambar di HTML — lewat HTTP penuh, sebab penjaga
+    # yang cuma memanggil fungsinya akan lulus pada hari templatnya berhenti
+    # menggambar angkanya (pelajaran `TempatPk.pemilik`, lihat
+    # `test_riwayat_sosoh.py`).
+    c = await _klien(pg, peran="superadmin")
+    try:
+        r = await c.get("/stok-produk-jasa")
+    finally:
+        await c.aclose()
+    assert r.status_code == 200
+    assert sosoh_jasa["pemilik"] in r.text
+    assert "Hasil sosoh" in r.text and "Dikemas" in r.text and "Curah" in r.text
+
+
+async def test_stok_produk_pabrik_tak_tercampur_hasil_proses_jasa(pg, sosoh_jasa):
+    """Pagar yang terungkap justru oleh perbaikan ini: `stok_produk()` dulu
+    TIDAK menyaring `PolishingProcess` sama sekali, jadi "hasil sosoh"
+    pabrik diam-diam memuat output proses jasa, dan "curah" pabrik terbaca
+    lebih besar daripada yang sebenarnya (sebagian sebenarnya milik
+    pelanggan, belum dikemas atas namanya)."""
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    medium = next(k for k in kartu if k.jenis == "medium")
+    # HANYA 9.000 kg pabrik (POL-UJIP-01) — BUKAN 9.000 + 5.000 jasa.
+    assert medium.hasil_kg == 9_000
+    assert medium.curah_kg == 9_000          # belum ada yang dipacking
+
+    await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"], karung=20)  # 500 kg
+
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    medium = next(k for k in kartu if k.jenis == "medium")
+    # Packing JASA tak mengurangi curah PABRIK sedikit pun.
+    assert medium.hasil_kg == 9_000 and medium.curah_kg == 9_000
+
+    async with pg() as db:
+        kartu_jasa = await stok_produk(db, jasa_id=sosoh_jasa["jasa_id"])
+    medium_jasa = next(k for k in kartu_jasa if k.jenis == "medium")
+    assert medium_jasa.hasil_kg == 5_000
+    assert medium_jasa.dikemas_kg == 500
+    assert medium_jasa.curah_kg == pytest.approx(5_000 - 500)

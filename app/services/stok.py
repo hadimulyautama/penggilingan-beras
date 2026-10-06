@@ -1187,7 +1187,7 @@ def _fifo_sisa(baris: list[RincianProduk], keluar_kg: float) -> list[RincianProd
     return keluar
 
 
-async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
+async def stok_produk(db: AsyncSession, *, jasa_id: int | None = None) -> list[KartuProduk]:
     """Satu kartu per kategori, dengan persamaan empat sukunya.
 
     Tiga sumber angkanya, semuanya sudah ada sebelum hari ini:
@@ -1205,6 +1205,22 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
     kartu yang menyebut angka belum final seolah pasti akan membuat orang
     mengemas dua kali. Kartu penyosohan sudah jujur soal ini, dan blok ini
     tidak boleh lebih berani daripadanya.
+
+    `jasa_id` — keputusan pemilik 6 Oktober 2026: bawaannya `None` berarti
+    PABRIK (`PolishingProcess.jasa_id IS NULL`, bukan "tanpa saringan" seperti
+    sebelumnya — proses jasa yang tak disaring membuat "hasil sosoh" pabrik
+    diam-diam memuat output pesanan orang lain, dan "curah" pabrik terbaca
+    lebih besar daripada yang sebenarnya). Mengisi `jasa_id` menjawab
+    pertanyaan yang berbeda: kartu MILIK PESANAN ITU SAJA, dipakai halaman
+    "Titipan pelanggan" (`/stok-produk-jasa`) — satu rumus, dua pertanyaan,
+    pola yang sama dengan `hitung_stok_finished_goods`.
+
+    ⚠ BEKATUL TAK PERNAH MUNCUL untuk `jasa_id` terisi: ia beralih milik ke
+    pabrik tepat saat dibukukan (keputusan pemilik 12), jadi "dikemas"/"curah"
+    bekatul SELALU dihitung pabrik-lebar (`hitung_stok_bekatul`,
+    `ByproductStock.jasa_id.is_(None)`) terlepas dari proses mana yang
+    menghasilkannya — mencampurnya dengan `hasil` milik satu pesanan akan
+    menjumlah dua angka yang menjawab pertanyaan berbeda.
     """
     from app.penggilingan.gudang2.models import PolishingProcess
     from sqlalchemy import func
@@ -1214,12 +1230,16 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         ByproductStock, FinishedGoodsStock, OutgoingItem, OutgoingRecord,
         ProductSku, RiceQualityStandard)
 
+    def milik_proc(k):
+        return k.jasa_id.is_(None) if jasa_id is None else k.jasa_id == jasa_id
+
     # SATU kueri untuk seluruh proses, dan SATU lagi untuk seluruh catatan
     # hasilnya — bukan dua kueri per proses. Gelungnya sendiri yang dulu
     # mengeluarkan 500 kueri untuk menghasilkan sembilan kartu (ukuran QA 28
     # September 2026: 1,77 detik pada 500 penyosohan).
     proses = list((await db.execute(
-        select(PolishingProcess).order_by(PolishingProcess.id.desc())
+        select(PolishingProcess).where(milik_proc(PolishingProcess))
+        .order_by(PolishingProcess.id.desc())
     )).scalars().all())
     catatan = await output_sosoh_banyak(db, [p.id for p in proses])
 
@@ -1228,6 +1248,9 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
     for proc in proses:
         jalan = proc.status != "selesai"
         for jenis, kg in catatan.get(proc.id, {}).items():
+            # Bekatul tak pernah "milik pesanan" — lihat ⚠ di docstring.
+            if jenis == "bekatul" and jasa_id is not None:
+                continue
             hasil.setdefault(jenis, []).append(RincianProduk(
                 kode=proc.kode_proses, kg=float(kg),
                 waktu=(proc.waktu_selesai if not jalan else proc.waktu_mulai),
@@ -1245,10 +1268,9 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         .join(RiceQualityStandard,
               RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
               isouter=True)
-        # Beras pelanggan punya notanya sendiri — ia tak pernah jadi baris di
-        # kartu stok PABRIK, dan "sudah dikemas" di sini adalah penyeimbang
-        # angka pabrik.
-        .where(FinishedGoodsStock.jasa_id.is_(None))
+        # PABRIK saja (`jasa_id=None` bawaan) — beras pelanggan punya notanya
+        # sendiri. Milik SATU pesanan saat `jasa_id` terisi.
+        .where(milik_proc(FinishedGoodsStock))
         .group_by(ProductSku.kategori, RiceQualityStandard.kode)
     )).all():
         j = jenis_produk(kategori, mutu)
@@ -1260,6 +1282,11 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
     # yang dijual tanpa disosoh, jadi ia tak pernah menjadi produk halaman ini.
     # Menjumlahkannya di sini akan membuat kartu beras kehilangan stok atas
     # barang yang bukan berasnya.
+    #
+    # ⚠ Disaring `milik_proc(OutgoingRecord)` juga sejak pengambilan jasa ikut
+    # lewat rantai yang SAMA (`OutgoingRecord.jasa_id`, keputusan pemilik):
+    # tanpa saringan ini, pengambilan pelanggan ikut mengurangi "keluar"
+    # pabrik, dan curah pabrik terbaca lebih kecil daripada yang sebenarnya.
     keluar: dict[str, list[RincianProduk]] = {}
     #: Yang keluar DARI CURAH, dipisah dari yang keluar dari karung: keduanya
     #: mengurangi belahan stok yang berbeda, dan menjumlahkannya jadi satu akan
@@ -1275,7 +1302,8 @@ async def stok_produk(db: AsyncSession) -> list[KartuProduk]:
         .join(RiceQualityStandard,
               RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
               isouter=True)
-        .where(OutgoingItem.item_type.in_(("finished_goods", "byproduct_curah")))
+        .where(OutgoingItem.item_type.in_(("finished_goods", "byproduct_curah")),
+               milik_proc(OutgoingRecord))
         .order_by(OutgoingRecord.waktu.desc())
     )).all():
         if tipe == "byproduct_curah":

@@ -127,18 +127,26 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
 
     Keputusan pemilik 6 Oktober 2026: *"buat saja halaman khusus stock
     produk dan stock hasil samping dari jasa. masuk di sub menu stock ...
-    tapi pisahkan per pelanggan pemilik barang."*
+    tapi pisahkan per pelanggan pemilik barang."* Lalu: *"tampilannya juga
+    harus konsisten seperti kartu stock milik kami sendiri."*
 
     `/stok-produk` memuat barang PABRIK saja (keputusan yang sama) — barang
     titipan disaring KELUAR dari sana, bukan disembunyikan: halaman ini
-    tempatnya. Tanpanya "berapa punya pabrik" di `/stok-produk` akan
-    bercampur arti dengan barang orang lain begitu `barang_jadi_g2()`
-    mulai mendaftar keduanya.
+    tempatnya. SATU SEKSI PER PESANAN, kartunya rupa yang SAMA PERSIS dengan
+    `/stok-produk` (empat suku + laci FIFO, `stok.stok_produk(jasa_id=...)`
+    + makro `st.blok` yang sama) — bukan rupa yang lebih sederhana; dua
+    halaman yang menjawab pertanyaan serupa dengan dua rupa kartu berbeda
+    membuat orang mengira satunya kurang lengkap.
 
-    Satu seksi per `jasa_id` — angka Bu Sri tak boleh menyatu dengan angka
-    Pak Budi, persis alasan kartunya sendiri dikunci per pemilik
-    (`stok.barang_jadi_g2`).
+    Satu panggilan `stok_produk` per pesanan, bukan satu kueri borongan
+    disaring belakangan: `jasa_id` sudah menyaring di SUMBERNYA (proses,
+    dikemas, keluar) — lihat catatan panjang di sana untuk kenapa itu
+    penting (bekatul, terutama).
     """
+    from sqlalchemy import select
+
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.services.jasa import nama_pemilik_banyak
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")
@@ -147,23 +155,33 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
     if view == SELEPAN:
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
+        jasa_ids = sorted((await db.execute(
+            select(PolishingProcess.jasa_id.distinct())
+            .where(PolishingProcess.jasa_id.isnot(None))
+        )).scalars().all())
+        nama = await nama_pemilik_banyak(db, jasa_ids)
         bj = await svc.barang_jadi_g2(db)
-    pesanan: dict[int, dict] = {}
-    for k in bj.produk + bj.samping:
-        jid = k.get("jasa_id")
-        if jid is None:
-            continue
-        p = pesanan.setdefault(jid, {
-            "jasa_id": jid, "pemilik": k.get("pemilik") or f"pesanan #{jid}",
-            "produk": [], "samping": [],
-        })
-        # Syarat SAMA PERSIS dengan pembelahan produk/samping di
-        # `barang_jadi_g2()` sendiri — dua aturan yang hidup dua kali akan
-        # berselisih pada perubahan berikutnya (mis. ke mana `beras_b`
-        # jatuh).
-        (p["produk"] if k["jenis"] in svc.GRADES_BERAS or k["jenis"] == "beras_putih"
-         else p["samping"]).append(k)
-    daftar = sorted(pesanan.values(), key=lambda p: p["pemilik"])
+        daftar = []
+        for jid in jasa_ids:
+            kartu = await svc.stok_produk(db, jasa_id=jid)
+            if not kartu:
+                continue
+            kemasan: dict[str, list[dict]] = {}
+            for k in bj.produk + bj.samping:
+                if k.get("jasa_id") != jid:
+                    continue
+                kemasan.setdefault(k["jenis"], []).append(k)
+            beras = [k for k in kartu if svc.adalah_beras(k.jenis)]
+            samping = [k for k in kartu if not svc.adalah_beras(k.jenis)]
+            daftar.append({
+                "pemilik": nama.get(jid) or f"pesanan #{jid}",
+                "kemasan": kemasan, "beras": beras, "samping": samping,
+                "sisa_beras": sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
+                "sisa_samping": sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
+                "curah_beras": sum(k.curah_kg for k in beras if k.curah_kg > 0),
+                "curah_samping": sum(k.curah_kg for k in samping if k.curah_kg > 0),
+            })
+    daftar.sort(key=lambda p: p["pemilik"])
     return await render_laci(
         request, "stok_produk_jasa.html", layar="stok_produk_jasa",
         daftar=daftar,
