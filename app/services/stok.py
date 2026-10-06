@@ -917,6 +917,7 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     """
     from app.penggilingan.gudang2.models import PolishingProcess
     from app.penggilingan.inventory.finished_goods import (_bekatul_dibukukan,
+                                                           _broken_dibukukan,
                                                            _packed_kg, get_standard)
 
     q = select(PolishingProcess).order_by(PolishingProcess.id.desc())
@@ -933,6 +934,13 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
                 # seluruh bekatul yang sudah dibukukan curah sebagai "belum
                 # dikemas", tiap hari, pada pabrik yang memang menjual curah.
                 dikemas = await _bekatul_dibukukan(db, proc.id)
+            elif jenis == "broken":
+                # Broken punya jalan curah juga sejak 6 Oktober 2026 (`catat_
+                # broken`) — pola yang SAMA dengan bekatul di atas, dan untuk
+                # alasan yang sama: tanpanya broken yang sudah dicatat curah
+                # (lalu dipindah ke silo broken) tampil lagi sebagai "belum
+                # dikemas", tiap hari, selamanya.
+                dikemas = await _broken_dibukukan(db, proc.id)
             elif jenis in BERAS_JENIS:
                 std = await get_standard(db, jenis)
                 dikemas = await _packed_kg(db, proc.id, "beras_putih",

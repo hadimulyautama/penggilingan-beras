@@ -823,6 +823,28 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang dipindah (kg)",
                   "type": "number"},
              ]},
+            # Broken (patah hasil sosoh) punya silonya SENDIRI (keputusan
+            # pemilik 6 Oktober 2026), supaya ia bisa disosoh ulang sebagai
+            # bahan baku. Gerbangnya SAMA dengan pindah tumpukan di atas —
+            # pekerjaan operator, bukan Admin biasa; Super Admin dikecualikan
+            # untuk alasan yang sama (lihat komentar panjang di atas blok ini).
+            {"id": "pindah_broken_silo", "label": "📤 Pindah broken ke silo",
+             "post": "/api/actions/pindah-broken-silo",
+             "hint": "Broken wajib dicatat curah dulu ('Catat broken (curah)') "
+                     "sebelum bisa dipindah ke sini. Boleh sebagian — "
+                     "KOSONGKAN kotak beratnya untuk memindahkan SELURUH "
+                     "sisanya.",
+             "fields": [
+                 {"name": "broken", "label": "Broken curah", "type": "remote",
+                  "source": "/api/actions/broken-tersedia",
+                  "kosong": "Belum ada broken curah yang menunggu — catat "
+                            "dulu lewat 'Catat broken (curah)'."},
+                 {"name": "silo", "label": "Silo broken tujuan", "type": "remote",
+                  "source": "/api/actions/silo-broken-g2",
+                  "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
+                 {"name": "berat_kg", "label": "Berat yang dipindah (kg)",
+                  "type": "number"},
+             ]},
         ]
     if g2:
         # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
@@ -1223,6 +1245,11 @@ _GRUP_AKSI = {
     # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
     # tanpa perintah membuat rantainya sukarela.
     "catat_bekatul": "Hasil samping & barang jadi",
+    "catat_broken": "Hasil samping & barang jadi",
+    # Belum punya kartu tersendiri (beda dari `pindah_tumpukan_silo`, yang
+    # tombolnya ada di kartu PK Stok) — tetap di katalog umum supaya tetap
+    # terjangkau. Kartu di Stok (usul pemilik, bagian 5) bisa menyusul.
+    "pindah_broken_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
@@ -1345,7 +1372,8 @@ _ACTION_WH = {
     # Inventory: packing & bekatul lahir di Gudang 2. Pembelian karung, harga
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
-    "catat_packing": "g2", "catat_bekatul": "g2", "beli_kemasan": "g2",
+    "catat_packing": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
+    "pindah_broken_silo": "g2", "beli_kemasan": "g2",
     # Rantai barang keluar berperintah. SELURUHNYA g2, termasuk yang dikerjakan
     # Admin: gudangnya milik CATATAN, bukan milik orang yang menekannya, dan
     # barang jadi memang berdiri di Gudang 2 — dari sanalah ia berangkat.
@@ -3382,10 +3410,16 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/silo-g2")
 async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """SEMUA silo Gudang 2 dari master, berisi atau tidak.
+    """Silo Gudang 2 PK dari master, berisi atau tidak.
 
     Berbeda dari `silo-bahan-g2`, yang hanya menawarkan silo yang siap
     DISOSOH: ini daftar TUJUAN — silo kosong justru tujuan yang paling wajar.
+
+    ⚠ Disaring `jenis_isi='pk'` sejak silo broken ada (keputusan pemilik 6
+    Oktober 2026): satu-satunya pemanggilnya hari ini (`pindah_tumpukan_
+    silo`) memindahkan PK, dan menawarkan silo broken di sini hanya akan
+    membuat orang memilihnya lalu ditolak layanannya — kelas kebingungan
+    yang sudah diperingatkan `silo-bahan-g2` di bawah.
     """
     _require(await _is_g2_operator(user) or can_see_financials(user))
     from sqlalchemy import select
@@ -3397,7 +3431,8 @@ async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.jenis_isi == "pk")
+            .order_by(Silo.nama_silo)
         )).scalars().all():
             kg = await hitung_stok_silo(db, s.id)
             huruf = s.nama_silo.replace("Silo ", "")
@@ -3458,6 +3493,66 @@ async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 continue
             huruf = s.nama_silo.replace("Silo ", "")
             keluar.append({"value": huruf, "label": f"{s.nama_silo} · {_rp(kg)} kg"})
+    return keluar
+
+
+@router.get("/actions/silo-broken-g2")
+async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo Gudang 2 ber-`jenis_isi='broken'` dari master — tujuan pemindahan
+    broken. Sebangun `silo-g2`, disaring kebalikannya (lihat catatan di sana).
+    """
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        wid = await _g2_warehouse_id(db)
+        for s in (await db.execute(
+            select(Silo).where(Silo.warehouse_id == wid, Silo.jenis_isi == "broken")
+            .order_by(Silo.nama_silo)
+        )).scalars().all():
+            kg = await hitung_stok_silo(db, s.id)
+            keluar.append({"value": s.nama_silo.replace("Silo ", ""),
+                           "label": f"{s.nama_silo} · {_rp(kg)} kg" if kg
+                                    else f"{s.nama_silo} · kosong"})
+    return keluar
+
+
+@router.get("/actions/broken-tersedia")
+async def broken_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Broken curah (`byproduct_stock`, lahir dari `catat_broken`) yang masih
+    bersisa — belum habis dipindah ke silo. Sebangun `tumpukan-sisa`.
+    """
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+
+    from app.models import ByproductStock, PolishingProcess
+    from app.penggilingan.gudang2.service import _sisa_broken_row
+    from app.services.jasa import nama_pemilik
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        rows = (await db.execute(
+            select(ByproductStock, PolishingProcess.kode_proses)
+            .join(PolishingProcess,
+                  PolishingProcess.id == ByproductStock.source_id,
+                  isouter=True)
+            .where(ByproductStock.jenis_produk == "broken",
+                   ByproductStock.source_type == "polishing")
+            .order_by(ByproductStock.id.desc())
+        )).all()
+        for row, kode in rows:
+            sisa = await _sisa_broken_row(db, row.id)
+            if sisa <= 0:
+                continue
+            milik = await nama_pemilik(db, row.jasa_id)
+            label = f"{kode or '-'} · sisa {_rp(sisa)} kg"
+            if milik:
+                label += f" · titipan {milik}"
+            keluar.append({"value": str(row.id), "label": label})
     return keluar
 
 
@@ -3596,6 +3691,53 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
             raise _err(e, "Gagal memindahkan PK dari tumpukan.")
     sisa = (f"sisa di tumpukan {r.sisa_tumpukan_intake:g} kg"
             if r.sisa_tumpukan_intake > 0 else "tumpukan itu habis")
+    ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
+    return {"ok": True,
+            "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke Silo {r.nama_silo} "
+                     f"({sisa}){ekor}."}
+
+
+class PindahBrokenSiloReq(BaseModel):
+    broken: str      # id baris byproduct_stock (dari /actions/broken-tersedia)
+    silo: str        # nama silo broken, mis. "C"
+    #: Kosong = SELURUH sisa baris broken itu — lihat PindahTumpukanSiloReq.
+    berat_kg: float | None = None
+
+
+@router.post("/actions/pindah-broken-silo")
+async def act_pindah_broken_silo(req: PindahBrokenSiloReq,
+                                 user: User = Depends(pengguna_aksi)) -> dict:
+    """Operator Gudang 2 memindahkan broken curah ke silo broken — boleh
+    sebagian. Sebangun `act_pindah_tumpukan_silo` (gerbang & bentuk borang
+    sama); lihat catatan panjangnya di sana untuk alasan gerbangnya.
+
+    ⚠ Silo BUKAN "A" atau "B" tetap: berbeda dari pindah tumpukan PK (yang
+    masih menyimpan dua huruf itu secara harfiah — peninggalan lama, bukan
+    pola yang ditiru di sini), silo broken BOLEH bernama apa pun dari master.
+    """
+    from hmu_identitas import peran as P
+
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    if not str(req.broken or "").strip().isdigit():
+        raise HTTPException(400, "Pilih broken curah yang mau dipindah dulu.")
+    if not (req.silo or "").strip():
+        raise HTTPException(400, "Pilih silo broken tujuan dulu.")
+    if req.berat_kg is not None and float(req.berat_kg) <= 0:
+        raise HTTPException(
+            400, "Isi berat yang dipindah lebih dari 0 — atau kosongkan "
+                 "kotaknya untuk memindahkan seluruh sisanya.")
+    from app.penggilingan.gudang2.service import Gudang2Error, pindah_broken_ke_silo
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await pindah_broken_ke_silo(
+                db, user=u, byproduct_stock_id=int(req.broken), nama_silo=req.silo.strip(),
+                berat=(None if req.berat_kg is None else float(req.berat_kg)))
+        except Gudang2Error as e:
+            raise _err(e, "Gagal memindahkan broken ke silo.")
+    sisa = (f"sisa broken curah {r.sisa_broken:g} kg"
+            if r.sisa_broken > 0 else "broken curah itu habis")
     ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
     return {"ok": True,
             "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke Silo {r.nama_silo} "

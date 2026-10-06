@@ -89,11 +89,59 @@
 
   <form method="post" action="/pengaturan/alat/silo" class="grup" style="margin-top:12px">
     <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <input type="hidden" name="gudang" value="g1">
     <div>
       <label class="lbl" for="nama_silo">Nama silo baru</label>
       <input class="fld" id="nama_silo" name="nama" placeholder="C" required
              autocomplete="off">
       <p class="bantu" style="margin-top:6px">Cukup hurufnya — akan tersimpan sebagai “Silo C”.</p>
+    </div>
+    <button class="btn btn--utama" type="submit">Tambah silo</button>
+  </form>
+</div>
+
+<div>
+  <span class="lbl">Silo Gudang 2 (PK &amp; broken)</span>
+  <div class="kartu">
+    {# Isinya ikut disebut sama seperti silo gabah kering di atas; jenisnya
+       (PK / broken) ikut disebut sejak keputusan pemilik 6 Oktober 2026 —
+       silo broken punya wadahnya sendiri, dan itu wajib terlihat sebelum
+       diisi. #}
+    {% for s in silo_g2 %}
+      <div class="baris">
+        <div class="baris__isi">
+          <div class="baris__nama">{{ s.nama_silo }}</div>
+          <div class="baris__ket">
+            {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
+          </div>
+        </div>
+        <div class="cip">
+          <span class="lencana {{ 'lencana--bahaya' if s.jenis_isi == 'broken' else '' }}">
+            {{ "broken" if s.jenis_isi == "broken" else "PK" }}</span>
+        </div>
+      </div>
+    {% else %}
+      <p class="bantu">Belum ada silo Gudang 2.</p>
+    {% endfor %}
+    <p class="bantu" style="margin-top:8px">
+      Silo tidak berbatas isinya. Jenis isinya DITETAPKAN saat dibuat dan
+      tidak bisa diganti — broken dan PK tidak boleh tercampur satu silo.
+    </p>
+  </div>
+
+  <form method="post" action="/pengaturan/alat/silo" class="grup" style="margin-top:12px">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <input type="hidden" name="gudang" value="g2">
+    <div>
+      <label class="lbl" for="nama_silo_g2">Nama silo baru</label>
+      <input class="fld" id="nama_silo_g2" name="nama" placeholder="C" required
+             autocomplete="off">
+      <p class="bantu" style="margin-top:6px">Cukup hurufnya — akan tersimpan sebagai “Silo C”.</p>
+    </div>
+    <div>
+      <span class="lbl">Isinya</span>
+      <label class="sebaris"><input type="radio" name="jenis_isi" value="pk" checked> PK</label>
+      <label class="sebaris"><input type="radio" name="jenis_isi" value="broken"> Broken</label>
     </div>
     <button class="btn btn--utama" type="submit">Tambah silo</button>
   </form>

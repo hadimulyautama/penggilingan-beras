@@ -249,7 +249,7 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
          pemilik yang sama dengan muatan terakhir yang masuk. Pergantian pemilik
          hanya bisa terjadi SESUDAH silonya nol.
 
-    DUA jalan masuk ikut dibaca: PK yang masuk langsung ke silo
+    DUA jalan masuk PK ikut dibaca: PK yang masuk langsung ke silo
     (`pk_gudang2_intakes.silo_id`) dan PK yang masuk sebagai tumpukan lalu
     dipindah (`pk_tumpukan_to_silo` → intake asalnya). Membaca satu saja berarti
     silo yang isinya datang lewat tumpukan terbaca "milik pabrik" — dan jalur
@@ -259,11 +259,18 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
     pemiliknya sudah ada di intake asalnya, dan kolom kedua yang berarti hal
     sama adalah kolom yang suatu hari berselisih dengan yang pertama.
 
+    ⚠ SATU jalan masuk BROKEN ikut dibaca juga (`broken_ke_silo`, keputusan
+    pemilik 6 Oktober 2026) — silo broken tak punya jalan "langsung" maupun
+    "lewat tumpukan", cuma satu jalan: dipindah dari stok curah. `jasa_id`-nya
+    sendiri (disalin dari sumbernya saat dipindah), bukan lewat join. Tanpa
+    baris ini, silo broken SELALU terbaca "milik pabrik" — dan broken
+    pelanggan yang dituang ke sana akan ikut tersosoh bersama broken pabrik.
+
     Himpunan HAMPA berarti silonya kosong — BUKAN "milik pabrik" (itu `{None}`).
     Pemanggil yang memperlakukan keduanya sama akan menolak silo kosong, atau
     menerima silo campuran, tergantung arah salahnya.
     """
-    from app.models import PkGudang2Intake, PkTumpukanToSilo
+    from app.models import BrokenKeSilo, PkGudang2Intake, PkTumpukanToSilo
     # Impor malas: `gudang2.service` mengimpor berkas ini di kepalanya, jadi
     # impor di tingkat modul akan melingkar.
     from app.penggilingan.gudang2.service import hitung_stok_silo
@@ -271,9 +278,10 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
     if float(await hitung_stok_silo(db, silo_id)) <= 0.001:
         return set()
 
-    # Muatan TERBARU, dari kedua jalan masuk, diurutkan bersama. `waktu_masuk`
-    # untuk yang langsung, `waktu` pemindahan untuk yang lewat tumpukan — yang
-    # dibandingkan kapan barangnya ADA DI SILO, bukan kapan ia tiba di pabrik.
+    # Muatan TERBARU, dari ketiga jalan masuk, diurutkan bersama. `waktu_masuk`
+    # untuk yang langsung, `waktu` pemindahan untuk yang lewat tumpukan atau
+    # broken — yang dibandingkan kapan barangnya ADA DI SILO, bukan kapan ia
+    # tiba di pabrik.
     langsung = (await db.execute(
         select(PkGudang2Intake.waktu_masuk, PkGudang2Intake.jasa_id)
         .where(PkGudang2Intake.silo_id == silo_id)
@@ -288,8 +296,14 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
         .order_by(PkTumpukanToSilo.waktu.desc(), PkTumpukanToSilo.id.desc())
         .limit(1)
     )).first()
+    lewat_broken = (await db.execute(
+        select(BrokenKeSilo.waktu, BrokenKeSilo.jasa_id)
+        .where(BrokenKeSilo.silo_id == silo_id)
+        .order_by(BrokenKeSilo.waktu.desc(), BrokenKeSilo.id.desc())
+        .limit(1)
+    )).first()
 
-    calon = [b for b in (langsung, lewat_tumpukan) if b is not None]
+    calon = [b for b in (langsung, lewat_tumpukan, lewat_broken) if b is not None]
     if not calon:
         # Stoknya positif tetapi tak ada satu pun muatan yang menjelaskannya —
         # keadaan yang seharusnya mustahil. Dikembalikan sebagai "milik pabrik"
@@ -338,6 +352,15 @@ class SisaJasa:
     pk_g1_kg: float = 0.0
     #: PK yang sudah di Gudang 2 (silo maupun tumpukan), belum disosoh.
     pk_g2_kg: float = 0.0
+    #: Broken hasil sosoh pesanan ini yang BELUM dikemas — baik yang masih
+    #: tercatat curah (`byproduct_stock`) maupun yang sudah dipindah ke silo
+    #: broken menunggu disosoh ulang. Begitu dikemas ia pindah ke
+    #: `barang_jadi_kg`; begitu disosoh ulang ia hilang dari sini dan muncul
+    #: lagi sebagai hasil BARU (beras/broken/dst, fase berikutnya) — lihat
+    #: `BrokenKeSilo` dan `_hitung_stok_silo_broken`. Tanpa suku pengurang
+    #: "terpakai sosoh ulang" di sini, broken yang sudah dituang ke silo akan
+    #: terhitung DUA KALI: sekali di sini, sekali lagi sebagai hasil barunya.
+    broken_kg: float = 0.0
     #: Beras & hasil samping berkemasan yang belum diambil pemiliknya.
     barang_jadi_kg: float = 0.0
 
@@ -361,7 +384,8 @@ class SisaJasa:
         akan dibaca pelanggan sebagai janji.
         """
         return (self.gabah_kg + self.dryer_kg + self.silo_kg
-                + self.pk_g1_kg + self.pk_g2_kg + self.barang_jadi_kg)
+                + self.pk_g1_kg + self.pk_g2_kg + self.broken_kg
+                + self.barang_jadi_kg)
 
     @property
     def fase(self) -> str:
@@ -378,6 +402,8 @@ class SisaJasa:
         """
         if self.barang_jadi_kg > 1.0:
             return "beras"
+        if self.broken_kg > 1.0:
+            return "broken"
         if self.pk_g2_kg > 1.0:
             return "pk_g2"
         if self.pk_g1_kg > 1.0:
@@ -406,9 +432,10 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     Menyusun aturan sendiri di sini berarti sisa di kartu jasa berbeda dari sisa
     di layar stok, dan yang membacanya tak punya cara tahu mana yang benar.
     """
-    from app.models import (FinishedGoodsStock, MillingProcess, OutgoingItem,
-                            OutgoingRecord, PkGudang2Intake, PolishingProcess,
-                            PolishingSiloUsage, PurchaseBatch, SiloStorage)
+    from app.models import (ByproductStock, FinishedGoodsStock, MillingProcess,
+                            OutgoingItem, OutgoingRecord, PkGudang2Intake,
+                            PolishingProcess, PolishingSiloUsage, PurchaseBatch,
+                            Silo, SiloStorage)
     from app.penggilingan.gudang1.services.bobot import dari_batch
     from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
 
@@ -462,6 +489,29 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     )).scalar_one())
     pk_g2 = max(masuk_g2 - disosoh, 0.0)
 
+    # Broken = yang tercatat curah (`byproduct_stock`, lahir dari `catat_
+    # broken`) − yang sudah disosoh ULANG (silo broken, lewat usage yang sama
+    # yang dipakai pk_g2 di atas, disaring ke silo ber-`jenis_isi='broken'`
+    # saja). `broken_ke_silo` SENGAJA tak ikut dikurangkan sendiri: ia memang
+    # memindahkan broken dari curah ke silo, tapi totalnya tetap milik pesanan
+    # ini sampai disosoh ulang sungguhan — sama seperti pindah tumpukan→silo
+    # tak mengubah total `pk_g2` di atas.
+    masuk_broken = float((await db.execute(
+        select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+        .where(ByproductStock.jenis_produk == "broken",
+               ByproductStock.jasa_id == jasa_id)
+    )).scalar_one())
+    disosoh_ulang = float((await db.execute(
+        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
+        .join(PolishingProcess,
+              PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
+        .where(PolishingProcess.jasa_id == jasa_id,
+               Silo.jenis_isi == "broken",
+               PolishingSiloUsage.berat_akhir_kg.isnot(None))
+    )).scalar_one())
+    broken = max(masuk_broken - disosoh_ulang, 0.0)
+
     # Barang jadi = yang dibukukan atas pesanan ini − yang sudah diambil.
     jadi = float((await db.execute(
         select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
@@ -478,7 +528,7 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     # selisih barang jadinya yang dijepit di nol.
     return SisaJasa(
         gabah_kg=gabah, dryer_kg=dryer, silo_kg=silo,
-        pk_g1_kg=pk_g1, pk_g2_kg=pk_g2,
+        pk_g1_kg=pk_g1, pk_g2_kg=pk_g2, broken_kg=broken,
         barang_jadi_kg=max(jadi - diambil, 0.0),
     )
 
@@ -545,6 +595,7 @@ async def boleh_ditutup(db: AsyncSession, jasa_id: int) -> tuple[bool, str]:
                                    ("di silo", sisa.silo_kg),
                                    ("PK Gudang 1", sisa.pk_g1_kg),
                                    ("PK Gudang 2", sisa.pk_g2_kg),
+                                   ("broken", sisa.broken_kg),
                                    ("barang jadi", sisa.barang_jadi_kg))
                   if kg > 1.0]
         return False, ("Masih ada barang pesanan ini di pabrik: "

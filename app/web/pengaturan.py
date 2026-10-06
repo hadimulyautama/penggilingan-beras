@@ -320,8 +320,12 @@ MAKS_ALAT = 12
 
 @router.get("/pengaturan/alat")
 async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_super)):
+    from sqlalchemy import select
+
+    from app.models import Silo
     from app.penggilingan.gudang1.services.drying import dryers_g1
     from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
     from app.web.nav import lencana
 
     async with SessionLocal() as db:
@@ -336,10 +340,22 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         silo = [{"id": s.id, "nama_silo": s.nama_silo,
                  "kg": float(await _silo_content_kg(db, s.id))}
                 for s in await silos_g1(db)]
+        # Silo Gudang 2 (PK & broken, keputusan pemilik 6 Oktober 2026) —
+        # daftar TERPISAH dari silo gabah kering di atas: isinya dihitung
+        # beda (`hitung_stok_silo`, bukan `_silo_content_kg`), dan jenisnya
+        # (`jenis_isi`) wajib ikut terlihat.
+        wid_g2 = await _g2_warehouse_id(db)
+        silo_g2 = [{"id": s.id, "nama_silo": s.nama_silo,
+                    "jenis_isi": s.jenis_isi,
+                    "kg": float(await hitung_stok_silo(db, s.id))}
+                   for s in (await db.execute(
+                       select(Silo).where(Silo.warehouse_id == wid_g2)
+                       .order_by(Silo.nama_silo)
+                   )).scalars().all()]
     return render(
         request, "alat.html", kembali="/pengaturan", layar="pengaturan",
         **await lencana(akun.user),
-        mesin=mesin, silo=silo, maks=MAKS_ALAT,
+        mesin=mesin, silo=silo, silo_g2=silo_g2, maks=MAKS_ALAT,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         pesan_err=_ERR.get(request.query_params.get("err", "")),
     )
@@ -393,17 +409,28 @@ async def tambah_dryer(
 
 @router.post("/pengaturan/alat/silo")
 async def tambah_silo(
-    request: Request, nama: str = Form(...),
+    request: Request, nama: str = Form(...), gudang: str = Form("g1"),
+    jenis_isi: str = Form("pk"),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
-    """Tambah silo gabah kering.
+    """Tambah silo — Gudang 1 (gabah kering) atau Gudang 2 (PK / broken).
 
     Tanpa kapasitas: silo memang tak berbatas (keputusan Direksi 2 September
     2026), dan meminta angka yang tidak dipakai hanya mengundang orang
     mengarangnya.
+
+    `jenis_isi` cuma berarti untuk Gudang 2 — keputusan pemilik 6 Oktober
+    2026: broken dapat silonya sendiri, berdampingan dengan silo PK yang
+    sudah ada, dan jenisnya DITETAPKAN sekali saat dibuat (tak ada borang
+    untuk menggantinya — campur PK/broken dalam satu silo tak boleh terjadi
+    sama sekali, bukan cuma diperingatkan). Silo Gudang 1 selalu 'pk': belum
+    ada bentuk lain gabah kering yang butuh wadah terpisah.
     """
+    from sqlalchemy import select
+
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, silos_g1
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
 
     nama = " ".join(nama.split())
     if nama.lower().startswith("silo "):
@@ -411,14 +438,25 @@ async def tambah_silo(
     if len(nama) < 1:
         return redirect("/pengaturan/alat?err=nama-pendek")
     penuh = f"Silo {nama}"
+    g2 = (gudang or "g1").strip().lower() == "g2"
+    isi = (jenis_isi or "pk").strip().lower()
+    if isi not in ("pk", "broken"):
+        isi = "pk"
     async with SessionLocal() as db:
-        ada = await silos_g1(db)
+        if g2:
+            wid = await _g2_warehouse_id(db)
+            ada = (await db.execute(
+                select(Silo).where(Silo.warehouse_id == wid)
+            )).scalars().all()
+        else:
+            wid = await _g1_warehouse_id(db)
+            ada = await silos_g1(db)
         if len(ada) >= MAKS_ALAT:
             return redirect("/pengaturan/alat?err=penuh")
         if any(s.nama_silo.lower() == penuh.lower() for s in ada):
             return redirect("/pengaturan/alat?err=kembar")
-        db.add(Silo(warehouse_id=await _g1_warehouse_id(db), nama_silo=penuh,
-                    kapasitas_ton=0))
+        db.add(Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
+                    jenis_isi=(isi if g2 else "pk")))
         await db.commit()
     return redirect("/pengaturan/alat?pesan=alat-ditambah")
 

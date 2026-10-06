@@ -147,6 +147,11 @@ _TABLE_LABEL = {
     # menyusun ulang pembagian itu dengan benar, bukan sekadar membuka satu
     # baris. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
     "milling_process_sources": "bahan giling (per silo)",
+    # Pemindahan broken ke silo (`pindah_broken_ke_silo`, 6 Oktober 2026) juga
+    # belum bisa dibatalkan lewat undo — sengaja tak dibangun di jalur
+    # peristiwa (owner tak memintanya), sama seperti `tutup_silo_giling`.
+    # Labelnya tetap ada karena jejaknya MUNCUL di List audit.
+    "broken_ke_silo": "broken dipindah ke silo",
 }
 
 

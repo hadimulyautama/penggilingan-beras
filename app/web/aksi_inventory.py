@@ -427,6 +427,33 @@ async def act_catat_bekatul(req: BekatulReq,
     return {"ok": True, "pesan": pesan}
 
 
+class BrokenReq(BaseModel):
+    kode_pol: str
+    berat_kg: float
+
+
+@router.post("/actions/catat-broken")
+async def act_catat_broken(req: BrokenReq,
+                           user: User = Depends(pengguna_aksi)) -> dict:
+    """Catat broken curah — sebangun `act_catat_bekatul`. Keputusan pemilik
+    6 Oktober 2026: ini langkah WAJIB sebelum broken bisa dipindah ke silo
+    broken (`pindah_broken_silo`) — baris yang lahir di sini SUMBER-nya."""
+    from app.web.api import _is_g2_operator
+    wajib(await _is_g2_operator(user) or can_see_financials(user))
+    if float(req.berat_kg or 0) <= 0:
+        raise HTTPException(400, "Isi berat broken lebih dari 0.")
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            berat = await bj.catat_broken(
+                db, user=u, kode_pol=req.kode_pol, berat_kg=float(req.berat_kg))
+        except bj.InventoryError as e:
+            raise galat(e, "Gagal mencatat broken.")
+    pesan = (f"✓ Broken {kg(berat)} tercatat (curah) — pindahkan ke silo "
+             "broken untuk disosoh ulang, lewat 'Pindah broken ke silo'.")
+    return {"ok": True, "pesan": pesan}
+
+
 # ─────────────────────────── Barang keluar ───────────────────────────
 #
 # ⚠ TIGA AKSI DIBUANG 28 September 2026 — `kirim_barang_jadi`, `kirim_bekatul`,
@@ -1230,6 +1257,17 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              "hint": "Bekatul yang dijual CURAH, per kg. Yang dikarungi dicatat "
                      "lewat packing — keduanya mengambil dari tumpukan yang "
                      "sama dan saling mengurangi.",
+             "fields": [
+                 {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
+                  "source": "/api/actions/polishing-terkini"},
+                 {"name": "berat_kg", "label": "Berat (kg)", "type": "number"},
+             ]},
+            {"id": "catat_broken", "label": "🌾 Catat broken (curah)",
+             "post": "/api/actions/catat-broken",
+             "hint": "Langkah WAJIB sebelum broken bisa dipindah ke silo "
+                     "broken untuk disosoh ulang. Yang dikarungi (dijual "
+                     "apa adanya) dicatat lewat packing — keduanya mengambil "
+                     "dari hasil mesin yang sama dan saling mengurangi.",
              "fields": [
                  {"name": "kode_pol", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-terkini"},

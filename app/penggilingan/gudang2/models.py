@@ -230,6 +230,36 @@ class PkTumpukanToSilo(Base, TimestampMixin):
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class BrokenKeSilo(Base, TimestampMixin):
+    """Pemindahan broken (hasil samping sosoh) dari stok curah ke silo broken.
+
+    Sebangun `PkTumpukanToSilo`: broken yang sudah tercatat `byproduct_stock`
+    (lewat `catat_broken`) dipindah ke silo ber-`jenis_isi='broken'` supaya
+    bisa disosoh ULANG sebagai bahan baku — keputusan pemilik 6 Oktober 2026.
+    Kode: BKS-YYYYMMDD-NN.
+    """
+
+    __tablename__ = "broken_ke_silo"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    byproduct_stock_id: Mapped[int] = mapped_column(
+        ForeignKey("byproduct_stock.id"), nullable=False
+    )
+    silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pemilik broken yang dipindah — DISALIN dari baris `byproduct_stock`
+    #: sumbernya, bukan dibaca menyusul lewat join. Pola yang sama dengan
+    #: `masukkan_pk_luar`: *"Pemiliknya DISALIN dari batch-nya, bukan dibaca
+    #: menyusul… Tanpa baris ini, PK pelanggan berubah jadi PK pabrik tepat di
+    #: pintu Gudang 2 — tanpa satu pun galat."* Di sini: broken pelanggan
+    #: berubah jadi broken pabrik tepat saat ia dituang ke silo.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+
+
 class PolishingProcess(Base, TimestampMixin):
     """Proses penyosohan (PK silo → beras putih). Kode: POL-YYYYMMDD-NN.
 

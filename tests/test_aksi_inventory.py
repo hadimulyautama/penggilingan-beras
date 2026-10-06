@@ -101,7 +101,7 @@ def test_operator_gudang2_tak_pernah_melihat_aksi_uang():
     `harga_byproduct` dicoret 28 September 2026 bersama seluruh harga.
     """
     ids = {a["id"] for a in inv.spesifikasi(g2=True, fin=False)}
-    assert ids == {"catat_packing", "catat_bekatul",
+    assert ids == {"catat_packing", "catat_bekatul", "catat_broken",
                    "muat_semua", "muat_barang", "selesai_muat"}
     # Yang memutuskan & yang berbau uang tetap tak pernah sampai ke sini —
     # termasuk MEMBUAT perintah dan MEMVERIFIKASI-nya.

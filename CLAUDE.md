@@ -602,6 +602,92 @@ yang dipakai orang menelepon pemasoknya.
 
 Data lama TIDAK dihitung ulang: aturan ini untuk pencatatan baru.
 
+## Silo broken — satu wadah, dua arah, satu pemilik (sejak 6 Oktober 2026)
+
+Keputusan pemilik: broken (PK yang sudah disosoh, patah) bisa disosoh ULANG
+sebagai bahan baku — dan jalan paling murah untuk itu bukan mencatat "jenis
+bahan" per pemakaian silo, melainkan memberi broken SILONYA SENDIRI.
+`Silo.jenis_isi` ('pk' default / 'broken') kini di master (`hmu_core`,
+migrasinya DI PRODUKSI — lihat catatan di `migrations/versions/
+0071_silo_jenis_isi.py` untuk kenapa, bukan di chain core yang belum jadi
+pelari sungguhan). Dari sinilah campuran bahan sebuah proses sosoh
+DITURUNKAN dari silo sumbernya — `PolishingSiloUsage` sendiri SILO-AGNOSTIK,
+jadi `mulai_penyosohan`/`selesai_penyosohan`/`rendemen_proses` memakai silo
+broken tanpa satu baris kode pun berubah di sana.
+
+**Segregasi WAJIB, dua arah.** PK tak boleh masuk silo broken
+(`_tujuan_and_silo`, `pindah_tumpukan_ke_silo` menolak), broken tak boleh
+masuk silo PK (`pindah_broken_ke_silo` menolak) — wadahnya yang membedakan,
+bukan catatannya. `hitung_stok_silo` bercabang menurut `jenis_isi`:
+silo PK memakai rumus lama (masuk langsung + tumpukan − terpakai); silo
+broken memakai `_hitung_stok_silo_broken` (masuk dari `broken_ke_silo` −
+terpakai) — tak punya jalan "langsung" sama sekali.
+
+**Broken jadi baris sebelum bisa dipindah.** `catat_broken` (sebangun
+`catat_bekatul`) menulis `byproduct_stock` (jenis_produk='broken') — langkah
+WAJIB sebelum `pindah_broken_ke_silo` (tabel `broken_ke_silo`, sebangun
+`pk_tumpukan_to_silo`) bisa memindahkannya ke silo broken. ⚠ BEDA dari
+bekatul: `jasa_id` DIISI di sini (broken KEMBALI ke pelanggan — keputusan
+pemilik 12; hanya sekam & bekatul yang ditahan), dan DISALIN ke
+`broken_ke_silo` dari baris sumbernya — pola yang sama dengan
+`masukkan_pk_luar`, supaya broken pelanggan tak diam-diam berubah jadi
+broken pabrik tepat saat dituang. `pemilik_silo_g2` ikut membaca
+`broken_ke_silo` sebagai jalan masuk KETIGA (selain intake langsung & lewat
+tumpukan) — tanpanya silo broken selalu terbaca "milik pabrik".
+
+⚠ Keduanya (`pindah_broken_silo` & `catat_broken`) TIDAK lewat jalur
+peristiwa (Tahap 3) — owner tak memintanya di jalur itu, sama seperti
+`tutup_silo_giling`. Belum bisa di-undo; label-nya tetap ada di
+`undo._TABLE_LABEL` untuk List Audit.
+
+⚠⚠ **STOK CURAH BROKEN TIGA SUKU, BUKAN DUA.** `hitung_stok_broken_curah` =
+masuk (`byproduct_stock`) − keluar (`OutgoingItem` byproduct_curah) −
+TERPAKAI (dipindah ke silo, `broken_ke_silo`). Tanpa suku ketiga, broken
+yang sudah dipindah ke silo (dan mungkin sudah disosoh ulang) tetap
+terhitung sebagai stok curah yang bisa dijual. Pola yang sama berlaku di
+`beras_curah()` (kartu Stok Produk): `_broken_dibukukan` (sebangun
+`_bekatul_dibukukan`) menggabung yang dikarungi DAN yang dicatat curah
+supaya broken yang sudah punya rumah tak tampil lagi sebagai "belum
+dikemas" selamanya.
+
+⚠ **Pagar: proses tak boleh memakan broken yang ia hasilkan sendiri**
+(`pindah_broken_ke_silo`) — fisiknya mustahil (broken keluar di ujung mesin),
+tetapi data tak mencegahnya begitu jalur masuk broken ada: operator bisa
+mencatat hasil lalu memindahkannya ke silo yang SEDANG dipakai proses yang
+sama, sebelum prosesnya ditutup. Ditolak dengan membandingkan `source_id`
+baris broken terhadap `PolishingSiloUsage` yang masih terbuka pada silo
+tujuan.
+
+**Rendemen atas SELURUH bahan**, bukan PK saja — sama dengan lot KS/MIX
+Gudang 1. Karena `PolishingSiloUsage` tak peduli isi silonya, penyebut
+`rendemen_proses` (sum `berat_terpakai_kg` seluruh usage) SUDAH otomatis
+menjumlah PK + broken begitu kedua jenis silo ikut dalam satu proses — tak
+ada kode tambahan yang perlu menjaga ini secara eksplisit, tetapi jangan
+sampai ada pembaca baru yang menjumlah "PK terpakai saja" untuk penyebut
+rendemen proses campuran: angkanya akan terbaca lebih bagus daripada yang
+sebenarnya, sebab sebagian bahannya sudah pernah disosoh.
+
+⚠⚠ **`sisa_jasa()` dan "terhitung dua kali".** Broken milik pesanan jasa
+yang sudah dicatat curah ATAU sudah dipindah ke silo broken (belum disosoh
+ulang) dihitung SisaJasa.`broken_kg` = masuk `byproduct_stock` − terpakai
+(`PolishingSiloUsage` pada silo ber-`jenis_isi='broken'`). Suku `broken_ke_
+silo` itu sendiri SENGAJA tak dikurangkan langsung — ia menelusup
+("telescoping"): dikurangkan di satu sisi (jalan masuk silo), ditambahkan
+balik di sisi lain (jalan keluar curah), sehingga totalnya tetap benar
+selama barangnya baru BERPINDAH TEMPAT, dan baru berkurang betul-betul saat
+sungguh disosoh ulang (`berat_akhir_kg` terisi). Tanpa ini broken yang sudah
+dipindah ke silo terhitung dua kali: sekali di sini, sekali lagi sebagai
+hasil barunya begitu disosoh ulang.
+
+**Silo Gudang 2 kini bisa ditambah dari UI** (`Pengaturan → Alat`) —
+sebelumnya TIDAK bisa walau beberapa kalimat di kode sudah menjanjikannya
+("Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat"); borangnya cuma
+pernah dibangun untuk silo gabah kering Gudang 1. `jenis_isi` ditetapkan
+SEKALI saat silo dibuat — tak ada borang untuk menggantinya, sebab campur
+PK/broken dalam satu silo tak boleh terjadi sama sekali.
+
+Uji: `tests/pg/test_silo_broken.py`.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

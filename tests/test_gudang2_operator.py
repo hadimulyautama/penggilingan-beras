@@ -115,18 +115,27 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
     menu = await _menu_g2(monkeypatch)
     ids = [a["id"] for a in menu]
-    assert ids[:6] == ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
+    assert ids[:7] == ["pindah_tumpukan_silo", "pindah_broken_silo",
+                       "mulai_penyosohan", "hasil_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
     assert "masukkan_pk" not in ids and "undo" in ids
-    # Keenamnya TETAP di menu — lembar kartunya dibangun dari spesifikasi yang
-    # sama — tetapi sejak 28 September 2026 ditandai `kartu`, jadi katalog
-    # "Catat pekerjaan lain" melewatkannya. Pagar ini dulu menuntut kelompok
-    # "Gudang 2 · penyosohan", yaitu DIGAMBAR di katalog; itu pintu kedua ke
-    # pekerjaan yang sudah punya kartu, dan aturannya sudah ditetapkan pemilik
-    # 21 September untuk Gudang 1 — Gudang 2 cuma tertinggal.
+    # Keenam yang lama TETAP di menu — lembar kartunya dibangun dari
+    # spesifikasi yang sama — tetapi sejak 28 September 2026 ditandai `kartu`,
+    # jadi katalog "Catat pekerjaan lain" melewatkannya. Pagar ini dulu
+    # menuntut kelompok "Gudang 2 · penyosohan", yaitu DIGAMBAR di katalog;
+    # itu pintu kedua ke pekerjaan yang sudah punya kartu, dan aturannya sudah
+    # ditetapkan pemilik 21 September untuk Gudang 1 — Gudang 2 cuma
+    # tertinggal.
+    _BERKARTU = ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
+                "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
     for a in menu:
-        if a["id"] in ids[:6]:
+        if a["id"] in _BERKARTU:
             assert a["kartu"] is True and a["wh"] == "g2", a["id"]
+    # `pindah_broken_silo` (6 Oktober 2026) BELUM punya kartu tersendiri di
+    # Stok — tetap digambar di katalog "Catat pekerjaan lain" supaya tetap
+    # terjangkau. Beda sengaja dari enam di atas, bukan yang terlewat.
+    broken_silo = next(a for a in menu if a["id"] == "pindah_broken_silo")
+    assert not broken_silo.get("kartu") and broken_silo["wh"] == "g2"
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]
     assert [jeda.SEBAB_LAIN, "Lainnya — tulis sendiri"] in sebab["options"]

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import input_time, now_local
 from app.models import (
+    BrokenKeSilo,
     ByproductPrice,
     ByproductStock,
     FinishedGoodsStock,
@@ -233,6 +234,22 @@ async def _bekatul_dibukukan(db: AsyncSession, proc_id: int) -> float:
     return curah + await _packed_kg(db, proc_id, "bekatul", None)
 
 
+async def _broken_dibukukan(db: AsyncSession, proc_id: int) -> float:
+    """Broken penyosohan ini yang SUDAH punya rumah — sebangun `_bekatul_
+    dibukukan` (lihat catatan panjangnya di sana). Keputusan pemilik 6
+    Oktober 2026: broken kini punya jalan CURAH juga (`catat_broken` →
+    `byproduct_stock`), supaya ia bisa dipindah ke silo broken untuk disosoh
+    ulang — jalan kedua, sama seperti bekatul, yang wajib saling mengurangi
+    dengan yang dikarungi."""
+    curah = float((await db.execute(
+        select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+        .where(ByproductStock.jenis_produk == "broken",
+               ByproductStock.source_type == "polishing",
+               ByproductStock.source_id == proc_id)
+    )).scalar_one())
+    return curah + await _packed_kg(db, proc_id, "broken", None)
+
+
 async def catat_bekatul(
     db: AsyncSession, *, user, kode_pol: str | None, berat_kg: float | None,
     tanggal=None, jam=None,
@@ -291,6 +308,56 @@ async def catat_bekatul(
     return float(berat_kg)
 
 
+async def catat_broken(
+    db: AsyncSession, *, user, kode_pol: str | None, berat_kg: float | None,
+    tanggal=None, jam=None,
+) -> float:
+    """Catat broken CURAH hasil penyosohan → byproduct_stock (per kg).
+
+    Sebangun `catat_bekatul`. Keputusan pemilik 6 Oktober 2026: broken punya
+    silonya sendiri, dan jalan ke sana ("Pindah broken ke silo") memindahkan
+    dari SINI — baris `byproduct_stock` inilah "sumber"-nya (lihat
+    `BrokenKeSilo`). Tanpa langkah ini, broken yang baru keluar mesin tak
+    pernah jadi baris yang bisa dipindah; ia cuma tersimpan sebagai log
+    `polishing_output_logs` yang tak bisa dirujuk.
+
+    ⚠ `jasa_id` DIISI (beda dari bekatul): broken KEMBALI ke pelanggan
+    (keputusan pemilik 12 — hanya sekam & bekatul yang ditahan pabrik), jadi
+    broken dari proses jasa tetap barang titipan. `pemilik_hasil()` yang
+    memutuskan, bukan cabang di sini — kalau suatu hari sebuah pesanan sepakat
+    brokennya DITAHAN juga, yang berubah cuplikan kesepakatannya.
+    """
+    if not berat_kg:
+        raise InventoryError("Sebutkan berat broken-nya (kg).")
+    proc = await _proc_by_kode(db, kode_pol)
+    from app.services.stok import output_sosoh
+
+    keluar_mesin = (await output_sosoh(db, proc.id)).get("broken")
+    if keluar_mesin is not None:
+        sisa = float(keluar_mesin) - await _broken_dibukukan(db, proc.id)
+        if float(berat_kg) > sisa + 0.5:
+            raise InventoryError(
+                f"{proc.kode_proses} tinggal {sisa:,.0f} kg broken yang belum "
+                f"dibukukan — tak bisa mencatat {float(berat_kg):,.0f} kg. "
+                f"(Keluar mesin {float(keluar_mesin):,.0f} kg; sudah dicatat "
+                f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
+                .replace(",", "."))
+    now = input_time(tanggal, jam)
+    from app.services.jasa import pemilik_hasil_proses
+
+    db.add(ByproductStock(
+        jenis_produk="broken", source_type="polishing", source_id=proc.id,
+        berat_kg=berat_kg, tanggal=now.date(), waktu=now, input_by=user.id,
+        jasa_id=await pemilik_hasil_proses(db, proc.jasa_id, "broken"),
+    ))
+    await log_activity(
+        db, table_name="byproduct_stock", record_id=proc.id, action="INSERT",
+        changed_by=user.id, new_value=f"broken {berat_kg:.0f}kg",
+    )
+    await db.commit()
+    return float(berat_kg)
+
+
 # ─────────────────────────── Stok ───────────────────────────
 async def hitung_stok_bekatul(db: AsyncSession) -> float:
     """Stok bekatul curah (kg) = masuk − keluar (barang keluar byproduct_curah)."""
@@ -321,6 +388,50 @@ async def hitung_stok_bekatul(db: AsyncSession) -> float:
         )
     ).scalar_one()
     return float(masuk) - float(keluar)
+
+
+async def hitung_stok_broken_curah(db: AsyncSession, *, jasa_id: int | None = None) -> float:
+    """Stok broken curah (kg), BELUM dipindah ke silo = masuk − keluar − terpakai.
+
+    TIGA suku, bukan dua — beda dari `hitung_stok_bekatul` (yang tak punya
+    jalan "dipakai lagi sebagai bahan"). Keputusan pemilik 6 Oktober 2026,
+    bagian 3: *"broken yang dipakai sebagai BAHAN tidak muncul di salah satu
+    pun [masuk/keluar]... akibatnya broken yang sudah masuk mesin tetap
+    terhitung sebagai stok yang bisa dijual."* `terpakai` di sini = yang
+    sudah DIPINDAH ke silo broken (`broken_ke_silo`) — bukan menunggu ia
+    sungguh disosoh ulang, sama seperti `hitung_stok_tumpukan` mengurangi PK
+    yang sudah dipindah ke silo, bukan menunggu ia disosoh.
+
+    `jasa_id` SENGAJA bukan "pabrik"/"jasa"/"semua" seperti `hitung_stok_
+    silo`: bawaannya `None` (pabrik), dan pemanggil yang ingin tahu sisa satu
+    pesanan jasa menyebutnya terang-terangan — pola yang sama dengan
+    `hitung_stok_finished_goods`.
+    """
+    def milik(k):
+        return k.jasa_id.is_(None) if jasa_id is None else k.jasa_id == jasa_id
+
+    masuk = float((
+        await db.execute(
+            select(func.coalesce(func.sum(ByproductStock.berat_kg), 0)).where(
+                ByproductStock.jenis_produk == "broken", milik(ByproductStock),
+            )
+        )
+    ).scalar_one())
+    keluar = float((
+        await db.execute(
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
+                OutgoingItem.item_type == "byproduct_curah",
+                OutgoingItem.jenis_byproduct == "broken",
+            )
+        )
+    ).scalar_one())
+    q_terpakai = select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
+    if jasa_id is None:
+        q_terpakai = q_terpakai.where(BrokenKeSilo.jasa_id.is_(None))
+    else:
+        q_terpakai = q_terpakai.where(BrokenKeSilo.jasa_id == jasa_id)
+    terpakai = float((await db.execute(q_terpakai)).scalar_one())
+    return masuk - keluar - terpakai
 
 
 async def hitung_stok_finished_goods(

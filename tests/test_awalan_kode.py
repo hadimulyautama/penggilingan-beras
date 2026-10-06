@@ -19,7 +19,8 @@ AKAR = pathlib.Path(__file__).resolve().parents[1]
 ARTI = {"GB": "pembelian gabah", "PGR": "pengeringan", "LOT": "giling",
         "TRF": "transfer PK", "PKB": "beli PK luar", "POL": "penyosohan",
         "PTS": "pindah tumpukan", "REJ": "PK ditolak", "OUT": "barang keluar",
-        "PKP": "beli kemasan", "JAS": "pesanan jasa"}
+        "PKP": "beli kemasan", "JAS": "pesanan jasa",
+        "BKS": "pindah broken ke silo"}
 
 
 def test_codegen_memakai_awalan_yang_diumumkan():
