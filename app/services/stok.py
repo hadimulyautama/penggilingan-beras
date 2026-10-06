@@ -1387,19 +1387,49 @@ _URUT_BARANG = {j: n for n, j in enumerate(
 
 @dataclass
 class BarangJadiG2:
-    """Isi gudang barang jadi: yang dijual, dan hasil sampingnya."""
+    """Isi gudang barang jadi: yang dijual, dan hasil sampingnya.
+
+    Keduanya memuat barang PABRIK *dan* barang TITIPAN (pesanan jasa) —
+    masing-masing baris menyebut pemiliknya lewat `jasa_id`/`pemilik`. Lihat
+    catatan panjang di `barang_jadi_g2()` untuk kenapa menyaringnya di sini
+    salah tempat, dan `CLAUDE.md` § "Stok Produk — barang jasa".
+    """
 
     produk: list[dict]
     samping: list[dict]
 
 
 async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
-    """Stok barang jadi Gudang 2 — satu kartu per SKU × mutu.
+    """Stok barang jadi Gudang 2 — satu kartu per SKU × mutu × PEMILIK.
 
-    Satu kartu = satu SKU × mutu (jenis · merk · kemasan · ukuran); stoknya
-    masuk − keluar lewat `hitung_stok_finished_goods`, rinciannya per proses
-    penyosohan asal supaya "dari sosohan mana" tetap terjawab saat ada keluhan
-    mutu. Bekatul curah berdiri sendiri: ia tak pernah dikemas.
+    Satu kartu = satu SKU × mutu (jenis · merk · kemasan · ukuran) × pemilik;
+    stoknya masuk − keluar lewat `hitung_stok_finished_goods`, rinciannya per
+    proses penyosohan asal supaya "dari sosohan mana" tetap terjawab saat ada
+    keluhan mutu. Bekatul curah berdiri sendiri: ia tak pernah dikemas.
+
+    ⚠⚠ BARANG TITIPAN (pesanan jasa) IKUT DIDAFTAR DI SINI, dan itu disengaja
+    — keputusan pemilik 6 Oktober 2026, pola yang SAMA dengan `LotPk`/
+    `LotPkG2` di sisi PK (lihat catatan `jasa_id` pada keduanya). Barangnya
+    memang berdiri di gudang yang sama; daftar stok yang menyembunyikannya
+    akan berselisih dengan apa yang dilihat orang di lantai — jenis
+    kebohongan yang paling cepat membuat layar berhenti dipercaya.
+
+    Yang TIDAK boleh adalah ia ikut ke borang yang MENJUAL
+    (`aksi_inventory.stok_barang_jadi`, `barang_bisa_keluar`) — keduanya
+    WAJIB menyaring `jasa_id is None` sendiri, di tempat pemakaiannya,
+    persis seperti sisi PK sudah melakukannya
+    (`aksi_inventory.barang_bisa_keluar` membuang `l.jasa_id is not None`).
+    Melewatkan satu pemakai saja berarti beras pelanggan muncul di borang
+    penjualan.
+
+    Kunci kartunya ikut `jasa_id` (bukan cuma SKU × mutu): 40 karung Bu Sri
+    tak boleh menyatu dengan karung pabrik jadi satu baris — angka gabungan
+    begitu lebih buruk daripada tak menampilkannya sama sekali, sebab ia
+    terbaca sebagai milik pabrik.
+
+    ⚠ KECUALI BEKATUL: `jasa_id`-nya NULL sejak dibukukan (beralih milik,
+    keputusan pemilik 12), jadi ia memang sudah dan harus TETAP terhitung
+    sebagai stok pabrik — blok bekatul curah di bawah tidak disentuh.
 
     DI SINI, bukan di dalam endpoint, sejak 23 September 2026. Hitungan ini
     dulu terkunci di `gudang2_api.stok`, jadi satu-satunya layar yang bisa
@@ -1414,6 +1444,7 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
     from app.penggilingan.inventory.models import (
         Brand, ByproductStock, FinishedGoodsStock, PackageSize, PackagingMaterial,
         ProductSku, RiceQualityStandard)
+    from app.services.jasa import nama_pemilik_banyak
 
     baris = (await db.execute(
         select(FinishedGoodsStock, ProductSku, Brand.nama, PackagingMaterial.nama,
@@ -1429,19 +1460,20 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
         .join(PolishingProcess,
               (PolishingProcess.id == FinishedGoodsStock.source_id)
               & (FinishedGoodsStock.source_type == "polishing"), isouter=True)
-        # Barang jadi PABRIK. Beras pelanggan memang ada di gudang, tetapi ia
-        # bukan persediaan pabrik — dan daftar inilah yang memberi makan borang
-        # barang keluar.
-        .where(FinishedGoodsStock.jasa_id.is_(None))
+        # PABRIK *dan* TITIPAN — lihat catatan ⚠⚠ di atas. Penyaringan untuk
+        # borang penjualan terjadi DI PEMAKAINYA, bukan di sini.
         .order_by(FinishedGoodsStock.waktu.desc())
     )).all()
 
+    nama_pemilik = await nama_pemilik_banyak(db, {fg.jasa_id for fg, *_ in baris})
+
     kartu: dict[tuple, dict] = {}
     for fg, sku, merk, kemasan, ukuran, mutu_kode, mutu_nama, pol in baris:
-        kunci = (sku.id, fg.rice_quality_standard_id)
+        kunci = (sku.id, fg.rice_quality_standard_id, fg.jasa_id)
         k = kartu.get(kunci)
         if k is None:
-            stok_ = await bj.hitung_stok_finished_goods(db, sku.id, fg.rice_quality_standard_id)
+            stok_ = await bj.hitung_stok_finished_goods(
+                db, sku.id, fg.rice_quality_standard_id, jasa_id=fg.jasa_id)
             if stok_["karung"] <= 0 and stok_["kg"] <= 0:
                 kartu[kunci] = None
                 continue
@@ -1455,6 +1487,9 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
                 nama += f" · {merk}"
             k = kartu[kunci] = {
                 "jenis": jenis, "nama": nama, "kemasan": f"{kemasan} {ukuran} kg",
+                # Pesanan jasa yang memiliki kartu ini — None = milik pabrik.
+                # "JAS-2610-007 Pak Budi" dicetak di layar, sebangun `LotPk.pemilik`.
+                "jasa_id": fg.jasa_id, "pemilik": nama_pemilik.get(fg.jasa_id),
                 # ── Dua medan TAMBAHAN, bukan pengganti ──
                 #
                 # Permintaan pemilik 28 September 2026 atas rincian kemasan di
@@ -1518,6 +1553,8 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             # `ukuran` 0 berarti "bukan karung"; templatnya tak mencetaknya.
             "jenis": "bekatul", "nama": "Bekatul", "kemasan": "curah", "ukuran": 0,
             "merk": "", "bahan": "curah",
+            # Selalu pabrik — lihat ⚠ KECUALI BEKATUL di docstring fungsi ini.
+            "jasa_id": None, "pemilik": None,
             "karung": 0, "kg": curah,
             "asal": [(kode, f"{float(kg):,.0f} kg".replace(",", "."), "curah")
                      for kode, kg in per_pol][:8]})

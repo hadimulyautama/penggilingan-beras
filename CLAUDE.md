@@ -688,6 +688,53 @@ PK/broken dalam satu silo tak boleh terjadi sama sekali.
 
 Uji: `tests/pg/test_silo_broken.py`.
 
+## Stok Produk — barang jasa, dan saringan yang ada di tempat yang salah (6 Oktober 2026)
+
+Sebelum perbaikan: PK Gudang 1 & Gudang 2 sudah menampilkan barang jasa
+(`LotPk`/`LotPkG2`, berikut `pemilik`) di kartu stoknya; Stok Produk
+membuangnya di SUMBERNYA — `FinishedGoodsStock.jasa_id.is_(None)` di
+`stok.barang_jadi_g2()`. Akibatnya operator yang memandang 40 karung beras
+pelanggan di gudang membuka Stok Produk dan melihat kosong — padahal
+komentar di sisi PK, di berkas yang SAMA, sudah menetapkan aturannya:
+daftar stok yang menyembunyikan barang titipan berselisih dengan yang
+dilihat orang di gudang, dan yang TIDAK boleh cuma satu hal — ia ikut ke
+borang yang MENJUAL. Itu disaring di TEMPAT PEMAKAIANNYA, bukan di sumber
+datanya.
+
+**`barang_jadi_g2()` kini mendaftar PABRIK *dan* TITIPAN**, kuncinya ikut
+`jasa_id` (bukan cuma SKU × mutu — 40 karung Bu Sri tak boleh menyatu
+dengan karung pabrik jadi satu baris), tiap kartu membawa `jasa_id` dan
+`pemilik`, sebangun `LotPk`. ⚠ KECUALI BEKATUL: `jasa_id`-nya NULL sejak
+dibukukan (beralih milik, keputusan pemilik 12) — itu TETAP, blok bekatul
+curahnya tak disentuh.
+
+⚠⚠ **EMPAT PEMAKAI, DUA JENIS GERBANG — dan keduanya wajib benar bersamaan.**
+Yang memberi makan borang PENJUALAN wajib menyaring `jasa_id is None`
+sendiri, persis pola PK (`aksi_inventory.barang_bisa_keluar` membuang
+`l.jasa_id is not None` untuk PK; sekarang begitu juga untuk SKU barang
+jadi):
+
+  · `aksi_inventory.stok_barang_jadi` — JUAL, disaring.
+  · `aksi_inventory.barang_bisa_keluar` — JUAL, disaring.
+  · `layar_produk.halaman_stok_produk` (`/stok-produk`) — TAMPIL, tetap
+    PABRIK saja (disaring KELUAR dari `kemasan`, sebab kepala kartunya dari
+    `stok_produk()` yang juga pabrik-saja; mencampur keduanya akan membuat
+    rincian kemasan menjumlah lebih besar daripada kepala kartunya).
+  · `layar_produk.halaman_stok_produk_jasa` (`/stok-produk-jasa`, BARU) —
+    TAMPIL, titipan SAJA, dikelompokkan per `jasa_id` ("pisahkan per
+    pelanggan pemilik barang" — permintaan pemilik).
+
+Melewatkan satu pemakai JUAL saja berarti beras pelanggan muncul di borang
+penjualan pabrik — kerusakan yang tak terlihat sampai ada yang menjualnya.
+
+**Halaman baru `/stok-produk-jasa`** masuk sub-menu "Stok" sebagai tujuan
+ketiga (`nav.TAB` + `Berjalan.submenu()`/`lencana()`, mengikuti pola
+`stok_produk` persis: selalu `PINTU_MATI`, berdiri sendiri di laci). Satu
+seksi per pesanan jasa; angkanya 0 di sub-menu (murni informasi, sama
+dengan "Stok PK").
+
+Uji: `tests/pg/test_stok_produk_jasa.py`.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

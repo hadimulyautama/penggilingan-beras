@@ -265,8 +265,12 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
         assert "stok_produk" in b.lencana()["PINTU_MATI"], \
             f"{siapa}: pintu Stok Produk sendiri harus selalu padam"
     assert "stok" not in b1.submenu(), "operator G1 ikut ditawari Stok Produk"
-    assert [nama for _, nama, _ in b2.submenu()["stok"]] == ["Stok PK", "Stok Produk"]
-    assert [nama for _, nama, _ in b3.submenu()["stok"]] == ["Stok PK", "Stok Produk"]
+    # "Titipan pelanggan" (6 Oktober 2026) ikut sub-menu "Stok" sebagai
+    # tujuan ketiga — lihat `CLAUDE.md` § "Stok Produk — barang jasa".
+    assert [nama for _, nama, _ in b2.submenu()["stok"]] == \
+        ["Stok PK", "Stok Produk", "Titipan pelanggan"]
+    assert [nama for _, nama, _ in b3.submenu()["stok"]] == \
+        ["Stok PK", "Stok Produk", "Titipan pelanggan"]
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
 

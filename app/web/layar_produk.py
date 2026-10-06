@@ -64,6 +64,14 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     # rincian bruto di bawah angka neto akan dijumlah orang lalu tak cocok.
     kemasan: dict[str, list[dict]] = {}
     for k in bj.produk + bj.samping:
+        # ⚠ Barang TITIPAN (pesanan jasa) tak ikut rincian halaman ini —
+        # kartu kategorinya (`kartu`, dari `stok_produk()`) sengaja tetap
+        # PABRIK saja. Barang titipan mendapat halamannya sendiri sejak 6
+        # Oktober 2026 (`/stok-produk-jasa`, keputusan pemilik). Tanpa
+        # saringan ini, rincian kemasan di sini akan menjumlah lebih besar
+        # daripada kepala kartunya — dua angka bertentangan di satu kartu.
+        if k.get("jasa_id") is not None:
+            continue
         kemasan.setdefault(k["jenis"], []).append(k)
     # ── DUA BLOK, bukan satu daftar (permintaan pemilik 28 September 2026) ──
     #
@@ -110,4 +118,53 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
         sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
         curah_beras=sum(k.curah_kg for k in beras if k.curah_kg > 0),
         curah_samping=sum(k.curah_kg for k in samping if k.curah_kg > 0),
+    )
+
+
+@router.get("/stok-produk-jasa")
+async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
+    """Barang jadi & hasil samping MILIK PESANAN JASA — terpisah per pelanggan.
+
+    Keputusan pemilik 6 Oktober 2026: *"buat saja halaman khusus stock
+    produk dan stock hasil samping dari jasa. masuk di sub menu stock ...
+    tapi pisahkan per pelanggan pemilik barang."*
+
+    `/stok-produk` memuat barang PABRIK saja (keputusan yang sama) — barang
+    titipan disaring KELUAR dari sana, bukan disembunyikan: halaman ini
+    tempatnya. Tanpanya "berapa punya pabrik" di `/stok-produk` akan
+    bercampur arti dengan barang orang lain begitu `barang_jadi_g2()`
+    mulai mendaftar keduanya.
+
+    Satu seksi per `jasa_id` — angka Bu Sri tak boleh menyatu dengan angka
+    Pak Budi, persis alasan kartunya sendiri dikunci per pemilik
+    (`stok.barang_jadi_g2`).
+    """
+    from app.web.layar import SELEPAN
+
+    view = getattr(request.state, "view", "tamu")
+    # Gerbang yang SAMA dengan `/stok-produk`: barang jadi & titipannya
+    # lahir di Gudang 2.
+    if view == SELEPAN:
+        raise HTTPException(403, "Layar ini milik Gudang 2.")
+    async with SessionLocal() as db:
+        bj = await svc.barang_jadi_g2(db)
+    pesanan: dict[int, dict] = {}
+    for k in bj.produk + bj.samping:
+        jid = k.get("jasa_id")
+        if jid is None:
+            continue
+        p = pesanan.setdefault(jid, {
+            "jasa_id": jid, "pemilik": k.get("pemilik") or f"pesanan #{jid}",
+            "produk": [], "samping": [],
+        })
+        # Syarat SAMA PERSIS dengan pembelahan produk/samping di
+        # `barang_jadi_g2()` sendiri — dua aturan yang hidup dua kali akan
+        # berselisih pada perubahan berikutnya (mis. ke mana `beras_b`
+        # jatuh).
+        (p["produk"] if k["jenis"] in svc.GRADES_BERAS or k["jenis"] == "beras_putih"
+         else p["samping"]).append(k)
+    daftar = sorted(pesanan.values(), key=lambda p: p["pemilik"])
+    return await render_laci(
+        request, "stok_produk_jasa.html", layar="stok_produk_jasa",
+        daftar=daftar,
     )

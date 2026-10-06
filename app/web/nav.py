@@ -146,6 +146,19 @@ TAB = (
     # padahal halamannya sendiri sama sekali tidak berubah.
     ("stok_produk", "/stok-produk", "Stok Produk",
      "Beras dan hasil samping yang sudah jadi", None, "◧"),
+    # ── Stok Produk · Titipan jasa — keputusan pemilik 6 Oktober 2026 ──
+    #
+    # "buat saja halaman khusus stock produk dan stock hasil samping dari
+    # jasa. masuk di sub menu stock. tapi pisahkan per pelanggan pemilik
+    # barang." `/stok-produk` memuat PABRIK saja; barang titipan (beras &
+    # hasil samping milik pesanan jasa) dapat halamannya sendiri di sini,
+    # supaya keduanya tak pernah bercampur arti.
+    #
+    # SELALU di `PINTU_MATI` (lihat `Berjalan.lencana()`), sama seperti
+    # "stok_produk" — pintu berdiri sendiri di laci hanya menawarkan jalan
+    # kedua ke tempat yang sudah terjangkau lewat sub-menu "Stok".
+    ("stok_produk_jasa", "/stok-produk-jasa", "Titipan pelanggan",
+     "Beras & hasil samping milik pesanan jasa", None, "◫"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
     #
     # "kita butuh satu halaman untuk transaksi barang keluar."

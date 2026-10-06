@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block judul %}Titipan pelanggan{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{# ── Stok Produk · Titipan pelanggan — keputusan pemilik 6 Oktober 2026 ──
+   "buat saja halaman khusus stock produk dan stock hasil samping dari
+   jasa. masuk di sub menu stock ... tapi pisahkan per pelanggan pemilik
+   barang."
+
+   `/stok-produk` memuat barang PABRIK saja; beras & hasil samping milik
+   pesanan jasa berumah di sini — satu seksi per pelanggan, supaya angka
+   satu pesanan tak pernah menyatu dengan pesanan lain atau dengan stok
+   pabrik. Hitungannya `stok.barang_jadi_g2`, disaring & dikelompokkan di
+   `layar_produk.halaman_stok_produk_jasa`; templat ini cuma menggambar. #}
+
+{% if not daftar %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
+      <path d="M12 13v7"/></svg>
+    <div>
+      <h2>Belum ada titipan</h2>
+      <p class="bantu">
+        Belum ada beras atau hasil samping milik pesanan jasa yang berdiri
+        di gudang.
+      </p>
+    </div>
+  </div>
+{% else %}
+  {% for p in daftar %}
+    <div>
+      <span class="lbl">{{ p.pemilik }}</span>
+      <div class="grup" style="margin-bottom:26px">
+        {% for k in p.produk + p.samping %}
+          <div class="padat padat--diam padat--samping">
+            <div class="padat__ringkas">
+              <div class="padat__atas">
+                <span class="padat__nama">{{ k.nama }}{% if k.merk %} · {{ k.merk }}{% endif %}</span>
+                <span class="padat__nilai">
+                  {%- if k.karung %}{{ k.karung }}&nbsp;karung
+                  {%- else %}{{ kg(k.kg) }}&nbsp;kg{% endif -%}
+                </span>
+              </div>
+              <div class="padat__ket">
+                {{- k.bahan }}{% if k.ukuran %} {{ k.ukuran }}&nbsp;kg{% endif %}
+                {%- if k.karung %} · {{ kg(k.kg) }}&nbsp;kg{% endif -%}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

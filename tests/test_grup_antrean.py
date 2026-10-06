@@ -199,15 +199,18 @@ def test_angka_submenu_datang_dari_daftar_yang_akan_digambar():
 def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
     b = Berjalan(pintu_produk=True)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
-                                   ("/stok-produk", "Stok Produk", 0)]
+                                   ("/stok-produk", "Stok Produk", 0),
+                                   ("/stok-produk-jasa", "Titipan pelanggan", 0)]
 
 
 def test_stok_sub_menu_angka_produk_ikut_tapi_stok_pk_tetap_nol():
     """Stok PK tak pernah punya lencana — tak seperti Antrian tunggu/
-    Keputusan, "Stok" tak menagih pekerjaan."""
+    Keputusan, "Stok" tak menagih pekerjaan. "Titipan pelanggan" (6 Oktober
+    2026) juga tak pernah, dengan alasan yang sama: murni informasi."""
     b = Berjalan(pintu_produk=True, jumlah_produk=3)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
-                                   ("/stok-produk", "Stok Produk", 3)]
+                                   ("/stok-produk", "Stok Produk", 3),
+                                   ("/stok-produk-jasa", "Titipan pelanggan", 0)]
 
 
 def test_stok_tanpa_sub_menu_bila_stok_produk_padam():

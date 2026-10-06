@@ -197,9 +197,15 @@ async def stok_barang_jadi(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     async with SessionLocal() as db:
         bj_ = await barang_jadi_g2(db)
+    # ⚠ BARANG TITIPAN (pesanan jasa) TIDAK DITAWARKAN. Barangnya milik
+    # pelanggan; yang boleh mengeluarkannya pemiliknya lewat pengambilan
+    # jasa — bukan pabrik lewat penjualan. `barang_jadi_g2()` kini
+    # mendaftar keduanya (keputusan pemilik 6 Oktober 2026), jadi
+    # penyaringnya WAJIB di sini, sama seperti `barang_bisa_keluar`.
     return [{"value": f"{k['sku_id']}|{k['std_id'] or ''}",
              "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"}
-            for k in bj_.produk + bj_.samping if k.get("karung")]
+            for k in bj_.produk + bj_.samping
+            if k.get("karung") and k.get("jasa_id") is None]
 
 
 @router.get("/actions/kemasan-untuk")
@@ -664,6 +670,13 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         bj_ = await barang_jadi_g2(db)
         for k in bj_.produk + bj_.samping:
+            # ⚠ BARANG TITIPAN (pesanan jasa) TIDAK DITAWARKAN — sama
+            # seperti PK jasa di bawah. `barang_jadi_g2()` kini mendaftar
+            # keduanya (keputusan pemilik 6 Oktober 2026); borang penjualan
+            # ini WAJIB menyaringnya sendiri. Disembunyikan di sini, bukan
+            # ditolak di akhir — lihat alasannya pada PK jasa di bawah.
+            if k.get("jasa_id") is not None:
+                continue
             # Yang membedakan curah dari berkarung `sku_id`, BUKAN jumlah
             # karungnya. Kartu berkarung yang kebetulan tinggal nol karung
             # masih punya SKU dan tak boleh berubah jadi baris curah —

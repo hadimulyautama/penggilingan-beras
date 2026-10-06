@@ -299,6 +299,10 @@ class Berjalan:
         # alamatnya. Halaman `/stok-produk` sendiri TIDAK berubah; yang
         # berubah cuma pintunya di laci.
         mati.append("stok_produk")
+        # "Titipan pelanggan" (barang jasa, 6 Oktober 2026) — pintu sendirinya
+        # SELALU padam juga, dengan alasan yang sama persis: terjangkau lewat
+        # sub-menu "Stok", tidak berdiri sendiri di laci.
+        mati.append("stok_produk_jasa")
         # Operator selepan tak ditawari pintu Stok Produk SAMA SEKALI —
         # termasuk lewat sub-menu "Stok" (lihat `submenu()`): beras dan hasil
         # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
@@ -395,6 +399,10 @@ class Berjalan:
         isi_stok: list[tuple[str, str, int]] = [("/stok", "Stok PK", 0)]
         if self.pintu_produk:
             isi_stok.append(("/stok-produk", "Stok Produk", self.jumlah_produk))
+            # "Titipan pelanggan" — ketiga, keputusan pemilik 6 Oktober 2026.
+            # Angkanya 0 dengan alasan yang sama dengan "Stok PK": halaman
+            # murni informasi, tak menagih pekerjaan apa pun.
+            isi_stok.append(("/stok-produk-jasa", "Titipan pelanggan", 0))
         if len(isi_stok) >= 2:
             out["stok"] = isi_stok
         return out
