@@ -157,7 +157,7 @@ TAB = (
     # SELALU di `PINTU_MATI` (lihat `Berjalan.lencana()`), sama seperti
     # "stok_produk" — pintu berdiri sendiri di laci hanya menawarkan jalan
     # kedua ke tempat yang sudah terjangkau lewat sub-menu "Stok".
-    ("stok_produk_jasa", "/stok-produk-jasa", "Titipan pelanggan",
+    ("stok_produk_jasa", "/stok-produk-jasa", "Produk Jasa",
      "Beras & hasil samping milik pesanan jasa", None, "◫"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
     #

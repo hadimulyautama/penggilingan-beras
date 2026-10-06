@@ -399,10 +399,11 @@ class Berjalan:
         isi_stok: list[tuple[str, str, int]] = [("/stok", "Stok PK", 0)]
         if self.pintu_produk:
             isi_stok.append(("/stok-produk", "Stok Produk", self.jumlah_produk))
-            # "Titipan pelanggan" — ketiga, keputusan pemilik 6 Oktober 2026.
+            # "Produk Jasa" — ketiga, keputusan pemilik 6 Oktober 2026 (nama
+            # "Titipan pelanggan" semula, diganti atas permintaan pemilik).
             # Angkanya 0 dengan alasan yang sama dengan "Stok PK": halaman
             # murni informasi, tak menagih pekerjaan apa pun.
-            isi_stok.append(("/stok-produk-jasa", "Titipan pelanggan", 0))
+            isi_stok.append(("/stok-produk-jasa", "Produk Jasa", 0))
         if len(isi_stok) >= 2:
             out["stok"] = isi_stok
         return out
