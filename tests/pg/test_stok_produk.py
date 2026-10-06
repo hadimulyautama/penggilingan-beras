@@ -481,6 +481,64 @@ async def test_selisih_sekecil_beda_timbangan_bukan_alarm(pg, sosoh):
     assert k.curah_kg == -50 and not k.alarm and k.beda_timbangan
 
 
+async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
+    """Cacat lapangan 6 Oktober 2026: operator packing 1.900 kg bekatul dari
+    proses JASA, dan kartu pabrik menuduh "dibukukan melebihi hasil mesin
+    680 kg" — padahal bekatulnya memang jadi stok pabrik (keputusan pemilik
+    12), cuma tak pernah ikut terhitung di sisi "hasil".
+
+    Akarnya: `hasil["bekatul"]` dulu dijumlah dari `proses` yang SUDAH
+    disaring `jasa_id IS NULL` (kartu pabrik) — proses jasa tak pernah masuk
+    daftar itu sama sekali, jadi bekatulnya lenyap dari pembilang padahal
+    pembukuannya (sisi `dikemas`) memang tak menyaring asal prosesnya.
+    """
+    from app.database import now_local
+    from app.models import Jasa, Pelanggan, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        pel = Pelanggan(nama_pelanggan="Pak Jasa")
+        db.add(pel)
+        await db.flush()
+        jasa = Jasa(kode="JAS-2610-099", pelanggan_id=pel.id, status="berjalan")
+        db.add(jasa)
+        await db.flush()
+        assert jasa.hasil_ditahan == "sekam,bekatul", \
+            "bawaan pesanan berubah — uji ini perlu disesuaikan"
+
+        p = PolishingProcess(kode_proses="POL-UJI-JASA-01", status="selesai",
+                             waktu_mulai=now_local(), waktu_selesai=now_local(),
+                             created_by=u.id, jasa_id=jasa.id)
+        db.add(p)
+        await db.flush()
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="bekatul",
+                                  berat_kg=1_900, waktu_update=now_local(),
+                                  input_by=u.id))
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=p.kode_proses,
+                            kategori="bekatul", material_kode="bekas",
+                            ukuran=40, jumlah_karung=47)       # 1.880 kg
+
+    async with pg() as db:
+        k = next(x for x in await stok_produk(db) if x.jenis == "bekatul")
+    assert k.hasil_kg == 1_900, "bekatul proses jasa tak ikut hasil pabrik"
+    assert not k.alarm, "dibukukan (1.880) < hasil (1.900) — tak ada alasan alarm"
+    _persamaan(k)
+
+    # Dan kartu JASA tetap tak pernah menyebut bekatul sebagai miliknya —
+    # pengecualian di atas HANYA untuk kartu pabrik.
+    async with pg() as db:
+        kartu_jasa = await stok_produk(db, jasa_id=jasa.id)
+    assert not any(x.jenis == "bekatul" for x in kartu_jasa), \
+        "bekatul muncul di kartu jasa — ia tak pernah milik pesanan"
+
+
 async def test_proses_berjalan_tergambar_belum_final_di_kartu_kategori(pg, sosoh):
     """Kartu penyosohan sudah jujur soal ini; blok stok yang baru tak boleh
     lebih berani daripadanya. Berasnya memang berdiri di lantai — tetapi

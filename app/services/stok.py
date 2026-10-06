@@ -1276,6 +1276,50 @@ async def stok_produk(db: AsyncSession, *,
             if jalan:
                 berjalan[jenis] = berjalan.get(jenis, 0.0) + float(kg)
 
+    # ⚠⚠ BEKATUL PABRIK JUGA LAHIR DARI PROSES JASA, dan `proses` di atas
+    # SUDAH menyaringnya habis (`milik_proc(PolishingProcess)` = `jasa_id IS
+    # NULL` untuk kartu pabrik) — jadi tanpa blok ini, bekatul yang disosoh
+    # bersama PK titipan tak pernah masuk `hasil["bekatul"]`, walau begitu
+    # dibukukan ia memang stok pabrik (`jasa.pemilik_hasil()`, keputusan
+    # pemilik 12). Sisi "dibukukan" di bawah TAK menyaring asal prosesnya
+    # sama sekali (`ByproductStock`/`FinishedGoodsStock` ber-`jasa_id` NULL
+    # memang dari proses manapun) — jadi tanpa penyeimbang ini "hasil mesin"
+    # selalu lebih kecil dari yang sebenarnya, dan kartunya menuduh "dibukukan
+    # melebihi hasil mesin" atas bekatul yang sebenarnya cuma kurang terhitung
+    # di sisi hasil. Hanya untuk KARTU PABRIK (`jasa_id is None`) — kartu
+    # jasa sudah membuang bekatul sama sekali di atas.
+    #
+    # Dibaca lewat `pemilik_hasil()`, bukan "pokoknya bekatul jasa = pabrik"
+    # yang ditulis ulang di sini: keputusannya DITARUH SEKALI di hulu, dan
+    # `hasil_ditahan` per pesanan itulah satu-satunya yang berhak menjawab
+    # "bekatul proses ini milik siapa" — menghardkodenya di sini akan diam-diam
+    # berselisih dari hulu begitu ada pesanan yang kesepakatannya berbeda.
+    if jasa_id is None:
+        from app.models import Jasa
+        from app.services.jasa import pemilik_hasil
+
+        proses_jasa = list((await db.execute(
+            select(PolishingProcess, Jasa.hasil_ditahan)
+            .join(Jasa, Jasa.id == PolishingProcess.jasa_id)
+            .where(PolishingProcess.jasa_id.isnot(None))
+            .order_by(PolishingProcess.id.desc())
+        )).all())
+        catatan_jasa = await output_sosoh_banyak(
+            db, [proc.id for proc, _ in proses_jasa])
+        for proc, ditahan in proses_jasa:
+            kg = catatan_jasa.get(proc.id, {}).get("bekatul")
+            if not kg or pemilik_hasil(proc.jasa_id, ditahan, "bekatul") is not None:
+                continue
+            jalan = proc.status != "selesai"
+            hasil.setdefault("bekatul", []).append(RincianProduk(
+                kode=proc.kode_proses, kg=float(kg),
+                waktu=(proc.waktu_selesai if not jalan else proc.waktu_mulai),
+                berjalan=jalan,
+                ket=("mesin masih menyosoh — belum final" if jalan
+                     else "dari proses jasa — bekatulnya milik pabrik")))
+            if jalan:
+                berjalan["bekatul"] = berjalan.get("bekatul", 0.0) + float(kg)
+
     # ── Yang sudah dikemas (seluruh riwayat, bukan sisanya) ──
     dikemas: dict[str, float] = {}
     for kategori, mutu, kg in (await db.execute(

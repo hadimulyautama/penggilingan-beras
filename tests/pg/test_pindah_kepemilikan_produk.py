@@ -374,3 +374,40 @@ async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
     assert cocok, "tombol pindah broken curah tak ditemukan di halaman"
     assert {int(x) for x in cocok.group(1).split(",")} == {
         titipan["jasa1"], titipan["jasa2"]}
+
+
+async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
+    """Laporan lapangan 6 Oktober 2026: *"saya baru saja packing bekatul dari
+    proses jasa. tetapi tidak ada di halaman produk jasa."*
+
+    `bekatul_per_proc` dulu HANYA membaca `ByproductStock` (jalur "Catat
+    bekatul curah") — bekatul yang dikarungi langsung lewat `catat_packing`
+    (jalur KEDUA bekatul, sejak 28 September 2026) tak pernah dijumlahkan,
+    walau `source_id`-nya menunjuk proses yang SAMA. Operator yang packing
+    langsung (tanpa singgah "Catat bekatul curah" dulu) kehilangan barisnya.
+    """
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import catat_packing
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(
+            polishing_process_id=1,  # POL-UJIT-01, proses jasa1
+            jenis="bekatul", berat_kg=900, waktu_update=now_local(),
+            input_by=titipan["user"]))
+        await db.commit()
+        u = await db.get(User, titipan["user"])
+        await catat_packing(db, user=u, kode_pol="POL-UJIT-01",
+                            kategori="bekatul", material_kode="bekas",
+                            ukuran=40, jumlah_karung=20)      # 800 kg
+
+    c = await _klien(pg, peran="superadmin")
+    try:
+        r = await c.get("/stok-produk-jasa")
+    finally:
+        await c.aclose()
+    assert r.status_code == 200
+    assert "Bekatul dari hasil sosoh" in r.text
+    assert "800" in r.text or "800,0" in r.text or "800.0" in r.text, \
+        "bekatul yang dikarungi dari proses jasa tak tersebut angkanya"

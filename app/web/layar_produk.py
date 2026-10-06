@@ -170,7 +170,8 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
     from app.models import Pelanggan
     from app.penggilingan.gudang2.models import PolishingProcess
     from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
-    from app.penggilingan.inventory.models import ByproductStock
+    from app.penggilingan.inventory.models import (ByproductStock,
+                                                    FinishedGoodsStock, ProductSku)
     from app.peran import can_see_financials
     from app.web.layar import SELEPAN
 
@@ -195,13 +196,33 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         # sosohnya), BUKAN `byproduct_stock.jasa_id` (yang NULL, sudah
         # pabrik). Dibaca SEKALI untuk seluruh pelanggan, bukan satu kueri
         # per seksi.
-        bekatul_per_proc = {pid: float(kg) for pid, kg in (await db.execute(
+        #
+        # ⚠ DUA RUMAH, dan keduanya dijumlah — bekatul punya dua rumah sejak
+        # 28 September 2026 (curah `ByproductStock` ATAU dikarungi
+        # `FinishedGoodsStock`, lihat catatan panjangnya di `stok.
+        # stok_produk`). Sampai baris ini dibetulkan 6 Oktober 2026, baris
+        # informasi di sini HANYA membaca rumah curah — bekatul jasa yang
+        # langsung dipacking (tanpa singgah "Catat bekatul curah" dulu) tak
+        # pernah tersebut di sini, padahal angkanya sendiri sudah benar di
+        # Stok Produk pabrik (lihat perbaikan sejalan di `stok.stok_produk`).
+        bekatul_per_proc: dict[int, float] = {}
+        for pid, kg in (await db.execute(
             select(ByproductStock.source_id,
                    func.coalesce(func.sum(ByproductStock.berat_kg), 0))
             .where(ByproductStock.jenis_produk == "bekatul",
                    ByproductStock.source_type == "polishing")
             .group_by(ByproductStock.source_id)
-        )).all()}
+        )).all():
+            bekatul_per_proc[pid] = bekatul_per_proc.get(pid, 0.0) + float(kg)
+        for pid, kg in (await db.execute(
+            select(FinishedGoodsStock.source_id,
+                   func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(ProductSku.kategori == "bekatul",
+                   FinishedGoodsStock.source_type == "polishing")
+            .group_by(FinishedGoodsStock.source_id)
+        )).all():
+            bekatul_per_proc[pid] = bekatul_per_proc.get(pid, 0.0) + float(kg)
         proc_per_jasa: dict[int, list[int]] = {}
         for pid, jid in (await db.execute(
             select(PolishingProcess.id, PolishingProcess.jasa_id)
