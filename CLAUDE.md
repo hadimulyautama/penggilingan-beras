@@ -772,6 +772,41 @@ Judul seksinya pun `Pelanggan.nama_pelanggan` apa adanya ("Bu Sri"), BUKAN
 kode pesanan tunggal akan salah begitu seksinya mewakili dua pesanan atau
 lebih.
 
+## Kartu Penyosohan gabungan silo — potongan ganda yang didiamkan (6 Oktober 2026)
+
+Laporan lapangan: *"silo ditambahkan lagi beberapa, tetapi tidak tercatat,
+yang tercatat hanya 5 kali awal masukan pk."* BUKAN kegagalan mencatat —
+PK-nya tetap masuk basis data dan tetap terhitung di fakta "Ditambah"
+(`PolishingSiloUsage.berat_masuk_kg`, dijumlah dari SELURUH baris, tak
+pernah dipotong). Yang rusak murni TAMPILAN daftar asalnya, dan rusaknya
+dua lapis sekaligus.
+
+`_isian_silo()` (dipakai kartu silo TUNGGAL, `_kartu_silo_g2`) sudah benar
+sejak awal: ia membatasi `BATAS_ASAL` (6) baris PER SILO tetapi menghitung
+sisanya di `IsianSilo.lebih`, disebut lewat `_nota_isian()` ("+N asal lagi
+tak ditampilkan"). `_kartu_penyosohan_g2` — kartu GABUNGAN, dipakai saat
+satu proses sosoh memakan lebih dari satu silo sekaligus ("Silo B + Silo
+A") — memanggil `_isian_silo()` per silo lalu MEMBUANG `.lebih`-nya, lalu
+memotong LAGI daftar gabungannya (`asal_pr[:6]`) tanpa `_nota_isian`
+maupun padanannya sama sekali. Dua silo × enam baris tiap isian yang
+sudah dipotong sendiri-sendiri, dipotong SEKALI LAGI jadi enam — dan
+operator yang menuang lebih dari lima-enam kali membaca kartunya seolah
+berhenti mencatat.
+
+Perbaikannya: `asal_lebih` menjumlah `.lebih` dari setiap `asal_silo()`
+yang dipanggil; `rinci_hasil` (entri hasil) tak lagi dipotong duluan
+(`entri[:8]` dicabut); SATU potongan akhir (`_anak_batas = 10`) atas
+`rinci_hasil + asal_pr` gabungan, dan sisanya (`asal_lebih` + sisa potongan
+akhir) disebut di `nota` kartu — kalimat bentuk yang sama dengan
+`_nota_isian`, supaya tak ada dua cara menyebut hal yang sama. `nota`
+dijeda tetap menang bila proses sedang berhenti: mesin mati lebih penting
+diketahui daripada daftar yang terpotong.
+
+Uji: `tests/pg/test_isian_silo_berjalan.py::
+test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong` (dua silo, delapan
+masukan tiap silo — melewati `BATAS_ASAL` DAN batas gabungan sekaligus;
+membuktikan "Ditambah" tetap benar dan potongannya tersebut persis).
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

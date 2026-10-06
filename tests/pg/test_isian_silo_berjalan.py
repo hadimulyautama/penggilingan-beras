@@ -238,3 +238,74 @@ async def test_lebih_dari_enam_asal_jumlahnya_disebut(pg, silo, pemakai, pemasok
     assert len(isian.baris) == BATAS_ASAL
     assert isian.lebih == 2
     assert "+2 asal lagi" in _nota_isian(isian)
+
+
+# ══════ Kartu Penyosohan gabungan silo — "yang tercatat hanya 5" ══════
+#
+# Laporan lapangan 6 Oktober 2026: "silo ditambahkan lagi beberapa, tetapi
+# tidak tercatat, yang tercatat hanya 5 kali awal masukan pk." Bukan
+# kegagalan MENCATAT — PK-nya tetap masuk database dan tetap dihitung ke
+# fakta "Ditambah" — tetapi `_kartu_penyosohan_g2` memangkas daftar asalnya
+# DUA KALI (sekali per silo di dalam `_isian_silo`, sekali lagi menggabung
+# dua silo) tanpa sepatah kata pun, berbeda dari kartu silo tunggal yang
+# sudah menyebutnya lewat `_nota_isian`.
+
+async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, pemasok):
+    from app.models import Silo, Warehouse
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    from app.services.berjalan import BATAS_ASAL, untuk_gudang2
+
+    async with pg() as db:
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        db.add(g2)
+        await db.flush()
+        silo_a = Silo(nama_silo="Silo A", warehouse_id=g2.id)
+        silo_b = Silo(nama_silo="Silo B", warehouse_id=g2.id)
+        db.add_all([silo_a, silo_b])
+        await db.flush()
+        silo_a_id, silo_b_id = silo_a.id, silo_b.id
+        await db.commit()
+
+    # Delapan kali masuk per silo — DUA kali lebih banyak daripada
+    # `BATAS_ASAL`, persis bentuk keluhannya: "ditambahkan lagi beberapa".
+    for n in range(1, 9):
+        await _masuk(pg, silo_a_id, pemakai, pemasok, kode_batch=f"PKB-A{n}", kg=1_000, jam=n)
+        await _masuk(pg, silo_b_id, pemakai, pemasok, kode_batch=f"PKB-B{n}", kg=1_000, jam=n)
+
+    async with pg() as db:
+        pr = PolishingProcess(
+            kode_proses="POL-GAB-01", waktu_mulai=T0, status="proses",
+            created_by=pemakai.id)
+        db.add(pr)
+        await db.flush()
+        # `berat_masuk_kg` TERPISAH dari baris `pk_gudang2_intakes` di atas —
+        # inilah yang dibaca fakta "Ditambah", dan ia TIDAK BOLEH terpengaruh
+        # oleh potongan tampilan daftar asalnya.
+        db.add_all([
+            PolishingSiloUsage(polishing_process_id=pr.id, silo_id=silo_a_id,
+                              berat_awal_kg=0, berat_masuk_kg=8_000),
+            PolishingSiloUsage(polishing_process_id=pr.id, silo_id=silo_b_id,
+                              berat_awal_kg=0, berat_masuk_kg=8_000),
+        ])
+        await db.commit()
+
+    async with pg() as db:
+        b = await untuk_gudang2(db)
+    baris = next(x for x in b.berjalan if x.kode == "POL-GAB-01")
+
+    # Fakta "Ditambah" tetap benar — dijumlah dari SELURUH baris, bukan dari
+    # daftar yang dipotong untuk tampilan.
+    fakta = dict(baris.fakta)
+    assert fakta["Ditambah"] == "16.000 kg"
+
+    # Daftarnya sendiri dibatasi (kartu tak boleh tak berhingga panjangnya)
+    # — tetapi potongannya WAJIB disebut, bukan didiamkan.
+    assert len(baris.anak) <= 10
+    # 8 per silo − BATAS_ASAL(6) tersisa di dalam `_isian_silo` = 2 per
+    # silo yang bahkan tak sempat digabung (asal_lebih = 4), ditambah
+    # potongan gabungan terakhir di `[:10]`.
+    assert baris.nota is not None and "baris lagi tak ditampilkan" in baris.nota
+    lebih = int(baris.nota.split("+")[1].split(" ")[0])
+    # 2 per silo terpotong DI DALAM `_isian_silo` (8 − BATAS_ASAL) + 2 lagi
+    # terpotong saat 12 baris asal gabungan dijejalkan ke batas kartu [:10].
+    assert lebih == 2 * (8 - BATAS_ASAL) + 2 == 6

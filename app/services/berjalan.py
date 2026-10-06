@@ -1950,6 +1950,16 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
         # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
         asal_pr: list[tuple[str, str, str]] = []
+        # ── Baris yang tak ikut terbawa, bahkan sebelum digabung ──
+        #
+        # `asal_silo()` sendiri sudah membatasi `BATAS_ASAL` baris PER SILO
+        # (dengan `.lebih` menghitung sisanya) — benar untuk kartu silo
+        # TUNGGAL, tetapi kartu ini menggabung BEBERAPA silo sekaligus
+        # ("Silo B + Silo A"). Tanpa menjumlah `.lebih` di sini, baris yang
+        # sudah terpangkas di dalam `asal_silo()` lenyap tanpa jejak sama
+        # sekali — tak ada yang menyebutnya, beda dari kartu silo tunggal
+        # yang menyebutnya lewat `_nota_isian`.
+        asal_lebih = 0
         silo_nama: list[str] = []
         ditambah = 0.0
         for u in (await db.execute(
@@ -1960,7 +1970,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             s = await db.get(Silo, u.silo_id)
             if s:
                 silo_nama.append(s.nama_silo)
-            for a in (await asal_silo(u.silo_id)).baris:
+            isian_u = await asal_silo(u.silo_id)
+            asal_lebih += isian_u.lebih
+            for a in isian_u.baris:
                 if a not in asal_pr:
                     asal_pr.append(a)
         pemasok_pr = _pemasok_ringkas(asal_pr)
@@ -2000,8 +2012,25 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             (f"{e.jenis}" + (f" · {e.spek}" if e.spek else ""),
              _kg(float(e.berat_kg or 0)),
              e.waktu_update.strftime("%d/%m %H:%M") if e.waktu_update else "")
-            for e in entri[:8]
+            for e in entri
         ]
+
+        # ── Satu batas, dan yang tak muat DISEBUT — bukan dua batas diam ──
+        #
+        # Sampai temuan ini `anak` dipangkas DUA KALI tanpa satu pun
+        # kalimat: sekali di sini (`asal_pr[:6]`), sekali lagi di
+        # `asal_silo()` per silo (lihat `asal_lebih` di atas) — dan
+        # `rinci_hasil` ikut terpangkas diam-diam di `entri[:8]`. Operator
+        # yang menuang PK lebih dari lima-enam kali membaca kartunya
+        # "berhenti mencatat", padahal `ditambah` di atas (dijumlah dari
+        # SELURUH baris, bukan dari daftar yang dipotong) tetap benar.
+        #
+        # Laporan lapangan 6 Oktober 2026: "silo ditambahkan lagi beberapa,
+        # tetapi tidak tercatat, yang tercatat hanya 5 kali awal masukan pk."
+        _anak_batas = 10
+        _anak_penuh = rinci_hasil + asal_pr
+        anak = _anak_penuh[:_anak_batas]
+        anak_lebih = asal_lebih + max(0, len(_anak_penuh) - _anak_batas)
 
         keluar.append(Baris(
             kode=pr.kode_proses,
@@ -2019,9 +2048,14 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # Entri hasil MENDAHULUI asal PK-nya: yang dicari orang saat kartu
             # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
             # PK-nya" — asalnya sudah disebut fakta Silo di atas.
-            anak=(rinci_hasil + asal_pr[:6])[:10],
+            anak=anak,
+            # Dijeda menang bila keduanya ada: mesin berhenti lebih penting
+            # diketahui daripada daftar yang terpotong. Di luar itu, baris
+            # yang tak tampil WAJIB disebut — kalimat sama bentuknya dengan
+            # `_nota_isian`, supaya tak ada dua cara menyebut hal yang sama.
             nota=(f"Dijeda {lama_kata((now_local() - macet.mulai).total_seconds())} — "
-                  f"{macet.sebab}" if macet else None),
+                  f"{macet.sebab}" if macet
+                  else (f"+{anak_lebih} baris lagi tak ditampilkan" if anak_lebih else None)),
             nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"
                      + (f" · tertahan {tertahan / 3600:.1f} jam" if tertahan >= 60 else "")
