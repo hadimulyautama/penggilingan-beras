@@ -220,8 +220,19 @@
            langsung dengan `request=None` (tak lewat permintaan HTTP
            sungguhan), dan `request.url.path` atas `None` meledakkan
            SELURUH laci untuk uji itu. `jalan_kini` aman: string kosong
-           tak akan pernah cocok dengan `sub_alamat` mana pun. #}
-        {% set jalan_kini = request.url.path if request else "" %}
+           tak akan pernah cocok dengan `sub_alamat` mana pun.
+
+           ⚠⚠ IKUT QUERY STRING — bukan `request.url.path` polos. Sub-menu
+           "Antrian tunggu"/"Menunggu keputusan" membedakan tujuannya lewat
+           `?grup=`/`?kategori=` (mis. `/aksi?grup=packing`), BUKAN lewat
+           path; `request.url.path` sendirian cuma "/aksi" untuk SEMUA
+           grup, jadi anak yang cocok SELALU "Semua" (`/aksi` tanpa query)
+           berapa pun grup yang sungguh sedang dibuka. Laporan pemilik 7
+           Oktober 2026: "salah satu sub menu saya klik yg di highlight
+           selalu submenu Semua." `request.url.query` genap/kosong untuk
+           "Stok" (path polos, tanpa `?`) — jadi baris ini tak mengubah
+           perilakunya sama sekali di sana. #}
+        {% set jalan_kini = (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request else "" %}
         {% set sub = SUBMENU.get(kunci) %}
         {% set ns = namespace(grup_aktif=(layar == kunci)) %}
         {% if sub %}

@@ -1243,7 +1243,8 @@ async def stok_produk(db: AsyncSession, *,
     from app.penggilingan.gudang2.models import PolishingProcess
     from sqlalchemy import func
 
-    from app.penggilingan.inventory.finished_goods import hitung_stok_bekatul
+    from app.penggilingan.inventory.finished_goods import (
+        hitung_stok_bekatul, hitung_stok_broken_curah)
     from app.penggilingan.inventory.models import (
         ByproductStock, FinishedGoodsStock, OutgoingItem, OutgoingRecord,
         ProductSku, RiceQualityStandard)
@@ -1275,6 +1276,10 @@ async def stok_produk(db: AsyncSession, *,
     )).all())
     proses = [p for p, _ in baris_proses]
     ditahan_proc = {p.id: dt for p, dt in baris_proses}
+    #: Proses milik kartu INI — dipakai di bawah untuk "sudah dicatat atau
+    #: belum", yang WAJIB tak peduli pemiliknya SEKARANG. Lihat catatan
+    #: panjang di dekat `dikemas_proc`.
+    proc_ids = [p.id for p in proses]
     catatan = await output_sosoh_banyak(db, [p.id for p in proses])
 
     hasil: dict[str, list[RincianProduk]] = {}
@@ -1319,6 +1324,11 @@ async def stok_produk(db: AsyncSession, *,
     # `hasil_ditahan` per pesanan itulah satu-satunya yang berhak menjawab
     # "bekatul proses ini milik siapa" — menghardkodenya di sini akan diam-diam
     # berselisih dari hulu begitu ada pesanan yang kesepakatannya berbeda.
+    #: Proses JASA yang bekatulnya ikut "hasil" kartu PABRIK lewat blok di
+    #: atas — dipakai lagi di bawah (`dikemas_proc`/`masuk_curah_proc`) supaya
+    #: "sudah dicatat" kartu pabrik ikut menghitung baris yang sumbernya
+    #: proses-proses ini juga, bukan cuma proses pabrik sendiri.
+    proc_ids_bekatul_extra: set[int] = set()
     if jasa_id is None:
         from app.models import Jasa
         from app.services.jasa import pemilik_hasil
@@ -1344,6 +1354,7 @@ async def stok_produk(db: AsyncSession, *,
                      else "dari proses jasa — bekatulnya milik pabrik")))
             if jalan:
                 berjalan["bekatul"] = berjalan.get("bekatul", 0.0) + float(kg)
+            proc_ids_bekatul_extra.add(proc.id)
 
     # ── Yang sudah dikemas (seluruh riwayat, bukan sisanya) ──
     dikemas: dict[str, float] = {}
@@ -1361,6 +1372,26 @@ async def stok_produk(db: AsyncSession, *,
     )).all():
         j = jenis_produk(kategori, mutu)
         dikemas[j] = dikemas.get(j, 0.0) + float(kg)
+
+    #: Bekatul/broken curah yang SAAT INI milik kartu ini (`byproduct_stock`,
+    #: kepemilikan SEKARANG — bukan `masuk_curah_proc` di atas, yang per
+    #: proses). Dipakai HANYA untuk ikut menentukan jenis APA yang kartunya
+    #: dibangun di bawah — lihat catatan di titik pakainya: tanpa ini, kartu
+    #: yang SELURUH isinya curah yang baru DITERIMA lewat pindah kepemilikan
+    #: (tak punya hasil mesin sendiri, tak punya karung, tak punya penjualan)
+    #: tak pernah masuk `set(hasil) | set(dikemas) | set(keluar)` sama sekali
+    #: — kartunya bukan cuma salah angka, ia tak pernah DIBANGUN. Persis
+    #: gejala "di stok produk juga tidak bertambah": bukan angkanya nol,
+    #: barisnya sendiri tak ada.
+    masuk_curah_now: dict[str, float] = {}
+    for jp, kg in (await db.execute(
+        select(ByproductStock.jenis_produk,
+               func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+        .where(ByproductStock.jenis_produk.in_(("bekatul", "broken")),
+               milik_proc(ByproductStock))
+        .group_by(ByproductStock.jenis_produk)
+    )).all():
+        masuk_curah_now[jp] = float(kg)
 
     # ── Yang sudah keluar ──
     #
@@ -1405,26 +1436,111 @@ async def stok_produk(db: AsyncSession, *,
         if tipe == "byproduct_curah":
             keluar_curah[j] = keluar_curah.get(j, 0.0) + float(kg)
 
+    # ── "Sudah dicatat", per PROSES — bukan per pemilik SEKARANG ──
+    #
+    # Laporan lapangan 7 Oktober 2026, langsung sesudah "Pindah kepemilikan"
+    # bekatul curah dipakai sungguhan: *"angka dari stock jasa tidak
+    # berkurang dan di stok produk juga tidak bertambah."* Sebabnya bukan di
+    # `pindah_kepemilikan_bekatul_curah` — fungsi itu (dan `hitung_stok_
+    # bekatul`/`hitung_stok_broken_curah`) sudah benar, dibuktikan uji
+    # `test_pindah_kepemilikan_produk.py`. Yang salah adalah `curah` DI
+    # BAWAH ini, yang sampai hari ini dihitung `h − (byproduct_stock/
+    # finished_goods_stock MILIK KARTU INI SEKARANG) `.
+    #
+    # "Pindah kepemilikan" memecah baris TANPA mengubah `source_id` satu
+    # baris pun (lihat `pindah_kepemilikan_barang_jadi`/`_broken_curah`/
+    # `_bekatul_curah` di `finished_goods.py`: baris baru warisan persis
+    # `source_type`/`source_id` baris asalnya) — jadi begitu sebagian baris
+    # berpindah `jasa_id`, baris itu LENYAP dari "milik kartu ini SEKARANG",
+    # dan rumus lama membacanya seolah belum pernah dicatat sama sekali.
+    # Yang bergeser bukan totalnya (`sisa_kg` kartu kehilangan itu tetap
+    # persis sama) — melainkan SUKUNYA, dari "dikemas" ke "curah", pada
+    # KEDUA sisi sekaligus: kartu yang kehilangan baris membaca "belum
+    # dicatat" bertambah TANPA mengurangi apa pun, dan kartu yang
+    # menerimanya membaca "dikemas" bertambah tapi "belum dicatat"-nya ikut
+    # berkurang sebesar itu juga — totalnya diam di kedua sisi. Persis
+    # gejala yang dilaporkan.
+    #
+    # "Sudah dicatat atau belum" adalah pertanyaan tentang PROSESNYA (mesin
+    # mana yang mengeluarkannya) — dan itu TAK PERNAH berubah lewat pindah
+    # kepemilikan. Yang berubah cuma SIAPA PEMILIKNYA SEKARANG, dan itu
+    # pertanyaan yang berbeda — `dikemas`/`punya_rumah` di bawah TETAP
+    # memakai kepemilikan SAAT INI (lewat `milik_proc`/`hitung_stok_*`)
+    # karena memang begitu jawabannya seharusnya: "berapa yang masih SAYA
+    # pegang". Dua pertanyaan, dua rumus — mencampurnya jadi satu adalah
+    # cacatnya.
+    dikemas_proc: dict[str, float] = {}
+    masuk_curah_proc: dict[str, float] = {}
+    if proc_ids:
+        for kategori, mutu, kg in (await db.execute(
+            select(ProductSku.kategori, RiceQualityStandard.kode,
+                   func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .join(RiceQualityStandard,
+                  RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
+                  isouter=True)
+            .where(FinishedGoodsStock.source_type == "polishing",
+                   FinishedGoodsStock.source_id.in_(proc_ids))
+            .group_by(ProductSku.kategori, RiceQualityStandard.kode)
+        )).all():
+            j = jenis_produk(kategori, mutu)
+            dikemas_proc[j] = dikemas_proc.get(j, 0.0) + float(kg)
+
+        for jp, kg in (await db.execute(
+            select(ByproductStock.jenis_produk,
+                   func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+            .where(ByproductStock.jenis_produk.in_(("bekatul", "broken")),
+                   ByproductStock.source_type == "polishing",
+                   ByproductStock.source_id.in_(proc_ids))
+            .group_by(ByproductStock.jenis_produk)
+        )).all():
+            masuk_curah_proc[jp] = float(kg)
+
+    # Bekatul proses jasa yang ikut "hasil" kartu pabrik (blok di atas) ikut
+    # pula di sini — tanpanya "tercatat" kartu pabrik selalu lebih kecil
+    # daripada "hasil"-nya, dan bekatul itu terbaca "belum dicatat" padahal
+    # sudah lama tercatat punya pemilik pabrik.
+    if jasa_id is None and proc_ids_bekatul_extra:
+        extra_fg = float((await db.execute(
+            select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(ProductSku.kategori == "bekatul",
+                   FinishedGoodsStock.source_type == "polishing",
+                   FinishedGoodsStock.source_id.in_(proc_ids_bekatul_extra))
+        )).scalar_one())
+        dikemas_proc["bekatul"] = dikemas_proc.get("bekatul", 0.0) + extra_fg
+        extra_byp = float((await db.execute(
+            select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+            .where(ByproductStock.jenis_produk == "bekatul",
+                   ByproductStock.source_type == "polishing",
+                   ByproductStock.source_id.in_(proc_ids_bekatul_extra))
+        )).scalar_one())
+        masuk_curah_proc["bekatul"] = masuk_curah_proc.get("bekatul", 0.0) + extra_byp
+
     kartu: list[KartuProduk] = []
-    for jenis in sorted(set(hasil) | set(dikemas) | set(keluar),
+    for jenis in sorted(set(hasil) | set(dikemas) | set(keluar) | set(masuk_curah_now),
                         key=lambda j: (_URUT_BARANG.get(j, 99), j)):
         baris_hasil = hasil.get(jenis, [])
         h = sum(r.kg for r in baris_hasil)
         baris_keluar = keluar.get(jenis, [])
         k = sum(r.kg for r in baris_keluar)
-        curah_saja = jenis == "bekatul"
+        # ── Bekatul DAN broken punya DUA rumah sekaligus ──
+        #
+        # Keputusan pemilik 28 September (bekatul) dan `catat_broken` 6
+        # Oktober (broken): sebagian dijual/disimpan curah (`byproduct_
+        # stock`), sebagian dikarungi (`finished_goods_stock`). Menir dan
+        # reject TIDAK punya jalan curah ini — `catat_bekatul`/`catat_broken`
+        # adalah SATU-SATUNYA penulis `byproduct_stock` di seluruh repo
+        # (lihat impor di atas), jadi `curah_saja` HARUS persis mengikuti
+        # dua nama itu, bukan ditulis ulang sebagai daftar sendiri yang bisa
+        # hanyut darinya.
+        curah_saja = jenis in ("bekatul", "broken")
         if curah_saja:
-            # ── Bekatul punya DUA rumah sekaligus, sejak 28 September 2026 ──
-            #
-            # Keputusan pemilik: sebagian dijual curah (`byproduct_stock`),
-            # sebagian dikarungi 40 kg (`finished_goods_stock`). Sampai hari itu
-            # hanya rumah pertama yang ada, dan rumusnya `masuk − keluar`.
-            #
-            # Yang dijaga di sini persis satu hal: bekatul yang dikarungi tak
-            # boleh HILANG dari stok hanya karena ia berpindah rumah. Kalau
-            # baris ini tetap membaca `byproduct_stock` saja, mengarungi 1.000
-            # kg akan menurunkan "belum dicatat" sebesar 1.000 tanpa menaikkan
-            # apa pun — bekatulnya menguap dari layar, padahal ia berdiri di
+            # Yang dijaga di sini persis satu hal: yang dikarungi tak boleh
+            # HILANG dari stok hanya karena ia berpindah rumah. Kalau baris
+            # ini tetap membaca `byproduct_stock` saja, mengarungi 1.000 kg
+            # akan menurunkan "belum dicatat" sebesar 1.000 tanpa menaikkan
+            # apa pun — barangnya menguap dari layar, padahal ia berdiri di
             # gudang dalam karung.
             #
             # Rumusnya tetap berbentuk sama, cuma sukunya dua:
@@ -1439,27 +1555,32 @@ async def stok_produk(db: AsyncSession, *,
             # kalimat yang tepat untuk barang yang boleh berumah di dua tempat.
             # Belahan karungnya terbaca di rincian per merk di dalam laci.
             #
-            # `milik_proc` dan `hitung_stok_bekatul(jasa_id=...)` — bukan lagi
-            # `.is_(None)` tetap: sejak bekatul dicabut dari `HASIL_DITAHAN_
-            # BAWAAN` (6 Oktober 2026), kartu JASA pun bisa punya bekatul
-            # tercatat curah milik pesanan itu sendiri, bukan cuma pabrik.
-            masuk_curah = float((await db.execute(
-                select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
-                .where(ByproductStock.jenis_produk == "bekatul",
-                       milik_proc(ByproductStock))
-            )).scalar_one())
+            # ⚠⚠ "dibukukan" DI SINI memakai `dikemas_proc`/`masuk_curah_proc`
+            # (PER PROSES, bukan lagi `milik_proc`/`dikemas.get` biasa) — lihat
+            # catatan panjang di dekat deklarasinya. "Punya rumah" (`punya_
+            # rumah`, lewat `hitung_stok_bekatul`/`hitung_stok_broken_curah`)
+            # TETAP memakai kepemilikan SAAT INI, sebab itu memang jawaban
+            # yang benar untuk "berapa yang masih SAYA pegang".
+            fungsi_stok = (hitung_stok_bekatul if jenis == "bekatul"
+                           else hitung_stok_broken_curah)
             dikarungi = dikemas.get(jenis, 0.0)
             keluar_karung = k - keluar_curah.get(jenis, 0.0)
-            punya_rumah = (await hitung_stok_bekatul(db, jasa_id=jasa_id)
+            punya_rumah = (await fungsi_stok(db, jasa_id=jasa_id)
                            + dikarungi - keluar_karung)
-            curah = h - masuk_curah - dikarungi
+            curah = (h - masuk_curah_proc.get(jenis, 0.0)
+                     - dikemas_proc.get(jenis, 0.0))
         else:
             total_kemas = dikemas.get(jenis, 0.0)
             # Yang keluar berkarung mengurangi belahan "dikemas"; yang keluar
             # curah (menir atau broken yang dijual langsung dari lantai)
             # mengurangi belahan curah. Keduanya dijumlah utuh di `keluar_kg`.
             punya_rumah = total_kemas - (k - keluar_curah.get(jenis, 0.0))
-            curah = h - total_kemas - keluar_curah.get(jenis, 0.0)
+            # `dikemas_proc`, bukan `total_kemas` — "belum dicatat" bertanya
+            # tentang PROSESNYA, dan pemindahan kepemilikan (`pindah_
+            # kepemilikan_barang_jadi`, berlaku untuk SKU apa pun, termasuk
+            # beras/menir/reject) tak boleh membuatnya seolah belum pernah
+            # dikemas sama sekali. Lihat catatan panjang di dekat deklarasinya.
+            curah = h - dikemas_proc.get(jenis, 0.0) - keluar_curah.get(jenis, 0.0)
         sisa = punya_rumah + curah
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue

@@ -8,9 +8,18 @@
    Milik app yang memegang LEBIH DARI SATU gudang (Meja). Pos Produksi
    memberi tiap orang satu gudang lewat view, jadi penyaringnya tak punya
    pilihan kedua untuk ditawarkan. Daftar, bukan dua pil yang ditulis tangan:
-   menambah gudang berarti menambah baris di master, bukan di templat. #}
+   menambah gudang berarti menambah baris di master, bukan di templat.
+
+   ⚠⚠ ALAMATNYA `request.url.path`, BUKAN `"/stok"` tertulis tangan —
+   laporan pemilik 7 Oktober 2026: tombol gudang di "Stok PK Jasa"
+   (`stok_pk_jasa.html`, `{% extends "stok.html" %}` tanpa blok ditimpa)
+   malah membawa orang ke `/stok` ("stok pk"), sebab alamat pil dulu
+   HARDCODE ke path templat aslinya, bukan path yang SUNGGUH sedang
+   dibuka. `request` null-safe (bawaan `/stok` kalau templat ini dirender
+   tanpa permintaan HTTP sungguhan, pola yang sama dengan `jalan_kini` di
+   `base.html`). #}
 {% import "_saring.html" as saring with context %}
-{{ saring.pil_gudang("/stok", SARING_GUDANG, gudang) }}
+{{ saring.pil_gudang(request.url.path if request else "/stok", SARING_GUDANG, gudang) }}
 
 {% if not lot and not tempat %}
   <div class="kosong">

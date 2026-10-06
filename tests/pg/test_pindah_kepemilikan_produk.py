@@ -421,3 +421,133 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
     # tak perlu pengkabelan baru (lihat docstring `pemilik_hasil`).
     assert "buka=pindah_kepemilikan_produk&amp;nilai=bj:" in r.text, \
         "tombol pindah kepemilikan bekatul (karung) tak muncul"
+
+
+# ═══ Kartu Stok Produk — curah BENAR-BENAR berpindah, bukan cuma bergeser ═══
+#
+# Laporan lapangan 7 Oktober 2026, langsung sesudah tombol "Pindah
+# kepemilikan" bekatul curah dipakai sungguhan: *"angka dari stock jasa
+# tidak berkurang dan di stok produk juga tidak bertambah, malah statusnya
+# informasi tentang berapa yang sudah di packing hilang."* Lalu: *"coba
+# check lagi juga untuk reject, menir dan broken."*
+#
+# `hitung_stok_bekatul`/`hitung_stok_broken_curah` SUDAH benar (dibuktikan
+# di atas) — yang salah adalah `curah`/`dikemas` DI KARTU `stok_produk()`,
+# yang membaca "sudah dicatat" lewat kepemilikan SAAT INI. Baris yang
+# berpindah `jasa_id` lenyap dari situ, dan kartunya membacanya seolah
+# belum pernah dicatat — bukan berkurang di satu sisi, bertambah di sisi
+# lain. Reject & menir tak ikut diuji di sini: keduanya tak punya jalan
+# curah (`byproduct_stock`) sama sekali — cuma `catat_packing`, yang sudah
+# diuji di `test_pindah_barang_jadi_*` di atas dan tak tersentuh cacat ini
+# (lihat `dikemas_proc`: scoping-nya sama, tapi `titipan` di atas tak
+# pernah menguji KARTUNYA sesudah pindah — jadi dites juga di bawah).
+
+@pytest.fixture
+async def proses_jasa_curah(pg, pemakai):
+    """Satu pesanan jasa, satu proses sosoh: 900 kg bekatul DAN 900 kg broken
+    keluar mesin, 500 kg masing-masing sudah dicatat curah — cukup untuk
+    membuktikan kartu `stok_produk()` bergerak BENAR sesudah sebagiannya
+    pindah kepemilikan (400 kg selalu tersisa "belum dicatat", tak tersentuh
+    pemindahan apa pun)."""
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Jasa, Pelanggan, Silo, User, Warehouse
+    from app.penggilingan.gudang2.models import (PolishingOutputLog, PolishingProcess,
+                                                  PolishingSiloUsage)
+    from app.penggilingan.inventory.finished_goods import catat_bekatul, catat_broken
+    from app.services.seed import seed_master
+
+    await seed_master()
+    async with pg() as db:
+        g2 = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        if g2 is None:
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            db.add(g2)
+            await db.flush()
+        silo = (await db.execute(select(Silo).where(
+            Silo.warehouse_id == g2.id))).scalars().first()
+        if silo is None:
+            silo = Silo(nama_silo="Silo A", warehouse_id=g2.id)
+            db.add(silo)
+            await db.flush()
+        u = await db.get(User, pemakai.id)
+        u.default_warehouse_id = g2.id
+        pel = Pelanggan(nama_pelanggan="Pak Budi")
+        db.add(pel)
+        await db.flush()
+        jasa = Jasa(kode="JAS-2610-010", pelanggan_id=pel.id, status="berjalan")
+        db.add(jasa)
+        await db.flush()
+        p = PolishingProcess(kode_proses="POL-UJIC-01", status="selesai",
+                             waktu_mulai=now_local(), waktu_selesai=now_local(),
+                             created_by=u.id, jasa_id=jasa.id)
+        db.add(p)
+        await db.flush()
+        db.add(PolishingSiloUsage(polishing_process_id=p.id, silo_id=silo.id,
+                                  berat_awal_kg=9_000, berat_akhir_kg=0,
+                                  berat_terpakai_kg=9_000))
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="bekatul",
+                                  berat_kg=900, waktu_update=now_local(), input_by=u.id))
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="broken",
+                                  berat_kg=900, waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+        await catat_bekatul(db, user=u, kode_pol=p.kode_proses, berat_kg=500)
+        await catat_broken(db, user=u, kode_pol=p.kode_proses, berat_kg=500)
+    return {"user": pemakai.id, "jasa_id": jasa.id, "kode": p.kode_proses}
+
+
+async def _kartu_jasa_pabrik(pg, jasa_id, jenis):
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        kartu_jasa = {k.jenis: k for k in await stok_produk(db, jasa_id=jasa_id)}
+        kartu_pabrik = {k.jenis: k for k in await stok_produk(db)}
+    return kartu_jasa.get(jenis), kartu_pabrik.get(jenis)
+
+
+@pytest.mark.parametrize("jenis,fungsi_pindah", [
+    ("bekatul", "pindah_kepemilikan_bekatul_curah"),
+    ("broken", "pindah_kepemilikan_broken_curah"),
+])
+async def test_pindah_curah_benar_benar_berpindah_di_kartu_stok_produk(
+    pg, proses_jasa_curah, jenis, fungsi_pindah,
+):
+    """Sebelum pindah: jasa sisa 900 (400 belum dicatat + 500 tercatat
+    curah), pabrik belum punya kartu sama sekali. Sesudah memindah 300 kg:
+    jasa WAJIB turun jadi 600 (400 belum dicatat TETAP — pindah kepemilikan
+    tak "membongkar" yang sudah dicatat — 200 tercatat curah), pabrik WAJIB
+    naik jadi 300 (seluruhnya tercatat; bekatul/broken pabrik tak datang
+    dari satu proses pun miliknya sendiri, jadi "belum dicatat"-nya nol)."""
+    from app.models import User
+    from app.penggilingan.inventory import finished_goods as fg
+
+    jasa, pabrik = await _kartu_jasa_pabrik(pg, proses_jasa_curah["jasa_id"], jenis)
+    assert (jasa.hasil_kg, jasa.curah_kg, jasa.dikemas_kg, jasa.sisa_kg) == (
+        900, pytest.approx(400), pytest.approx(500), pytest.approx(900))
+    assert pabrik is None, f"belum ada kartu {jenis} pabrik sebelum pindah: {pabrik}"
+
+    async with pg() as db:
+        u = await db.get(User, proses_jasa_curah["user"])
+        await getattr(fg, fungsi_pindah)(
+            db, user=u, jasa_id=proses_jasa_curah["jasa_id"], berat_kg=300)
+
+    jasa, pabrik = await _kartu_jasa_pabrik(pg, proses_jasa_curah["jasa_id"], jenis)
+    assert jasa.hasil_kg == 900, "hasil mesin tak boleh berubah oleh pindah kepemilikan"
+    assert jasa.curah_kg == pytest.approx(400), (
+        f"'belum dicatat' jasa wajib TETAP 400, bukan {jasa.curah_kg} — pindah "
+        "kepemilikan tak boleh membuat yang sudah dicatat terbaca belum dicatat")
+    assert jasa.dikemas_kg == pytest.approx(200), \
+        f"'tercatat' jasa wajib turun jadi 200, bukan {jasa.dikemas_kg}"
+    assert jasa.sisa_kg == pytest.approx(600), \
+        f"sisa jasa wajib BERKURANG 300 kg (900→600), bukan {jasa.sisa_kg}"
+
+    assert pabrik is not None, f"kartu {jenis} pabrik wajib muncul sesudah menerima pindahan"
+    assert pabrik.hasil_kg == 0, "pabrik tak pernah menyosoh ini sendiri"
+    assert pabrik.curah_kg == pytest.approx(0), \
+        f"pabrik tak punya 'belum dicatat' sendiri untuk {jenis} ini, {pabrik.curah_kg}"
+    assert pabrik.dikemas_kg == pytest.approx(300), \
+        f"'tercatat' pabrik wajib naik jadi 300, bukan {pabrik.dikemas_kg}"
+    assert pabrik.sisa_kg == pytest.approx(300), \
+        f"sisa pabrik wajib BERTAMBAH 300 kg (0→300), bukan {pabrik.sisa_kg}"
