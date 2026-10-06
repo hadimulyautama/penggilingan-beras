@@ -758,6 +758,20 @@ jasa di `stok_produk()`, dan satu uji HTTP penuh yang menggambar halamannya
 sungguhan — pelajaran `TempatPk.pemilik`: penjaga yang cuma memanggil
 fungsinya lulus pada hari templatnya berhenti menggambar angkanya).
 
+⚠⚠ **DIKELOMPOKKAN PER PELANGGAN (`Jasa.pelanggan_id`), BUKAN PER PESANAN
+(`Jasa.id`)** — koreksi lapangan: *"pemisahannya bukan per proses. tapi per
+pelanggan."* "SATU PESANAN, BEBERAPA KEDATANGAN" (docstring `Jasa`) berarti
+kedatangan ULANG dari pelanggan yang sama melahirkan `Jasa` BARU — jadi
+mengelompokkan per `jasa_id` memecah barang SATU pelanggan jadi beberapa
+seksi, persis kebalikan dari yang diminta. `stok_produk()` karena itu
+menerima `jasa_id` sebagai DAFTAR (`int | list[int] | None`) — seluruh
+pesanan pelanggan yang sama disatukan dalam SATU panggilan (`k.jasa_id.in_
+(...)`), bukan digabung belakangan dari beberapa `KartuProduk` terpisah.
+Judul seksinya pun `Pelanggan.nama_pelanggan` apa adanya ("Bu Sri"), BUKAN
+`jasa.nama_pemilik()` yang menyebut kode pesanan ("JAS-2610-001 Bu Sri") —
+kode pesanan tunggal akan salah begitu seksinya mewakili dua pesanan atau
+lebih.
+
 ## Kode barang
 
 Otoritasnya `app/services/codegen.py`, bukan ingatan:

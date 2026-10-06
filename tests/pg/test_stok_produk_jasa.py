@@ -239,7 +239,9 @@ async def test_halaman_titipan_mengelompokkan_per_pelanggan(pg, sosoh_jasa):
     finally:
         await c.aclose()
     assert r.status_code == 200
-    assert sosoh_jasa["pemilik"] in r.text
+    # Seksinya menyebut PELANGGANNYA ("Bu Sri") — bukan kode pesanannya;
+    # koreksi lapangan: dikelompokkan per pelanggan, bukan per pesanan.
+    assert "Bu Sri" in r.text
     assert "Hasil sosoh" in r.text and "Dikemas" in r.text and "Curah" in r.text
 
 
@@ -272,3 +274,61 @@ async def test_stok_produk_pabrik_tak_tercampur_hasil_proses_jasa(pg, sosoh_jasa
     assert medium_jasa.hasil_kg == 5_000
     assert medium_jasa.dikemas_kg == 500
     assert medium_jasa.curah_kg == pytest.approx(5_000 - 500)
+
+
+async def test_dua_pesanan_satu_pelanggan_digabung_satu_seksi(pg, sosoh_jasa):
+    """⚠⚠ Koreksi lapangan: "pemisahannya bukan per proses. tapi per
+    pelanggan." Bu Sri datang KEDUA KALINYA — pesanan BARU (`Jasa` kedua,
+    kode lain), sosoh KEDUA (broken 1.000 kg) — tetapi tetap pelanggan yang
+    SAMA. Halaman ini wajib menyatukan keduanya jadi SATU seksi "Bu Sri",
+    bukan memecahnya jadi dua seksi sebagaimana jumlah pesanannya.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Jasa, Pelanggan, Silo, User
+    from app.penggilingan.gudang2.models import (PolishingOutputLog, PolishingProcess,
+                                                  PolishingSiloUsage)
+
+    async with pg() as db:
+        pel = (await db.execute(select(Pelanggan).where(
+            Pelanggan.nama_pelanggan == "Bu Sri"))).scalars().one()
+        silo = (await db.execute(select(Silo).limit(1))).scalars().first()
+        u = await db.get(User, sosoh_jasa["user"])
+        jasa2 = Jasa(kode="JAS-2610-002", pelanggan_id=pel.id, status="berjalan")
+        db.add(jasa2)
+        await db.flush()
+        p3 = PolishingProcess(kode_proses="POL-UJIJ-02", status="selesai",
+                              waktu_mulai=now_local(), waktu_selesai=now_local(),
+                              created_by=u.id, jasa_id=jasa2.id)
+        db.add(p3)
+        await db.flush()
+        db.add(PolishingSiloUsage(polishing_process_id=p3.id, silo_id=silo.id,
+                                  berat_awal_kg=1_000, berat_akhir_kg=0,
+                                  berat_terpakai_kg=1_000))
+        db.add(PolishingOutputLog(polishing_process_id=p3.id, jenis="broken",
+                                  berat_kg=1_000, waktu_update=now_local(),
+                                  input_by=u.id))
+        await db.commit()
+
+    from app.services.stok import adalah_beras, stok_produk
+
+    async with pg() as db:
+        # Dua pesanan, SATU panggilan — `jasa_id` sebagai daftar.
+        kartu = await stok_produk(db, jasa_id=[sosoh_jasa["jasa_id"], jasa2.id])
+    assert {k.jenis for k in kartu} == {"medium", "broken"}
+    beras = [k for k in kartu if adalah_beras(k.jenis)]
+    samping = [k for k in kartu if not adalah_beras(k.jenis)]
+    assert beras[0].hasil_kg == 5_000           # dari pesanan pertama
+    assert samping[0].hasil_kg == 1_000         # dari pesanan kedua
+
+    # Dan lewat rute sungguhan: SATU seksi "Bu Sri", bukan dua.
+    c = await _klien(pg, peran="superadmin")
+    try:
+        r = await c.get("/stok-produk-jasa")
+    finally:
+        await c.aclose()
+    assert r.status_code == 200
+    assert r.text.count("Bu Sri") == 1, \
+        "satu pelanggan dua pesanan harus satu seksi, bukan dua"
+    assert "Broken" in r.text

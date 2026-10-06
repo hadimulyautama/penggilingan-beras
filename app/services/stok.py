@@ -1187,7 +1187,8 @@ def _fifo_sisa(baris: list[RincianProduk], keluar_kg: float) -> list[RincianProd
     return keluar
 
 
-async def stok_produk(db: AsyncSession, *, jasa_id: int | None = None) -> list[KartuProduk]:
+async def stok_produk(db: AsyncSession, *,
+                      jasa_id: int | list[int] | None = None) -> list[KartuProduk]:
     """Satu kartu per kategori, dengan persamaan empat sukunya.
 
     Tiga sumber angkanya, semuanya sudah ada sebelum hari ini:
@@ -1221,6 +1222,13 @@ async def stok_produk(db: AsyncSession, *, jasa_id: int | None = None) -> list[K
     `ByproductStock.jasa_id.is_(None)`) terlepas dari proses mana yang
     menghasilkannya — mencampurnya dengan `hasil` milik satu pesanan akan
     menjumlah dua angka yang menjawab pertanyaan berbeda.
+
+    ⚠ `jasa_id` BOLEH DAFTAR, bukan cuma satu angka — keputusan pemilik 6
+    Oktober 2026: "Titipan pelanggan" dikelompokkan per PELANGGAN, bukan per
+    PESANAN. Satu pelanggan boleh punya beberapa `Jasa` (SATU PESANAN,
+    BEBERAPA KEDATANGAN berarti kedatangan ulang dari pelanggan yang sama
+    tetap pesanan BARU — lihat docstring `Jasa`), dan kartu stoknya wajib
+    menyatu jadi SATU seksi, bukan pecah sebanyak jumlah pesanannya.
     """
     from app.penggilingan.gudang2.models import PolishingProcess
     from sqlalchemy import func
@@ -1231,7 +1239,11 @@ async def stok_produk(db: AsyncSession, *, jasa_id: int | None = None) -> list[K
         ProductSku, RiceQualityStandard)
 
     def milik_proc(k):
-        return k.jasa_id.is_(None) if jasa_id is None else k.jasa_id == jasa_id
+        if jasa_id is None:
+            return k.jasa_id.is_(None)
+        if isinstance(jasa_id, (list, tuple, set, frozenset)):
+            return k.jasa_id.in_(jasa_id)
+        return k.jasa_id == jasa_id
 
     # SATU kueri untuk seluruh proses, dan SATU lagi untuk seluruh catatan
     # hasilnya — bukan dua kueri per proses. Gelungnya sendiri yang dulu
