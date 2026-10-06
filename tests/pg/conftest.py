@@ -63,22 +63,39 @@ _KOSONGKAN = """
 """
 
 
-@pytest_asyncio.fixture
-async def pg():
-    """Basis data kosong dengan skema dari MIGRASI, bukan dari metadata.
+@pytest.fixture(scope="session")
+def _skema_head():
+    """Menjalankan `alembic upgrade head` SEKALI untuk seluruh sesi pytest.
 
-    Sengaja lewat `alembic upgrade head`: yang diuji di sini termasuk migrasi
-    penghitung kode, dan membangun skema dari metadata akan melewatkannya —
-    lalu uji lulus di laptop dan gagal di Railway.
+    Dulu ini di dalam `pg()`, jadi tiap satu dari 150+ uji menjalankan
+    `alembic upgrade head` sebagai SUBPROCESS baru — proses Python baru,
+    mengimpor ulang seluruh `app` (lewat `migrations/env.py`), lalu membuka
+    koneksi asyncpg sendiri hanya untuk membaca `alembic_version` dan
+    mendapati skemanya SUDAH di head. Itulah yang membuat suite ini puluhan
+    menit: bukan migrasinya yang lambat, melainkan menyalakan satu proses
+    Python penuh 150+ kali untuk sesuatu yang, sesudah uji PERTAMA, selalu
+    berakhir sebagai no-op.
+
+    Yang dijaga tetap sama: skema tiap sesi uji tetap dibangun dari MIGRASI
+    sungguhan (bukan `Base.metadata.create_all`), jadi migrasi penghitung
+    kode dkk. tetap benar-benar berjalan — sekali, bukan nol kali. Kalau
+    repo ini mendapat migrasi baru sejak basis data `uji_*` terakhir
+    disentuh, panggilan SEKALI ini di awal sesi tetap akan menerapkannya
+    (atau gagal keras kalau migrasinya rusak) — persis seperti sebelumnya.
+
+    Yang TIDAK lagi dijaga ulang tiap uji: kalau sebuah uji mengubah baris
+    `alembic_version` lalu TAK mengembalikannya (`test_versi_pg.py` sengaja
+    melakukan ini sebentar, dan mengembalikannya di `finally`), `pg()` yang
+    lama akan mencoba menjalankan ulang migrasi terakhir di tengah sesi dan
+    gagal keras — sinyal cepat kalau ujinya lupa mengembalikan. Sesi ini
+    tak lagi memberi sinyal itu di tengah jalan; `test_versi_pg.py` sendiri
+    sudah menjaga baris itu lewat `finally` sebagai gantinya.
     """
     url = _url()
     if url is None:
         pytest.skip("UJI_PG_URL kosong — uji Postgres dilewati")
 
     import subprocess
-
-    from sqlalchemy import text as sa_text
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     akar = pathlib.Path(__file__).resolve().parents[2]
     lingk = {**os.environ, "DATABASE_URL": url}
@@ -88,6 +105,22 @@ async def pg():
     )
     if hasil.returncode != 0:
         pytest.fail(f"alembic upgrade head gagal:\n{hasil.stderr[-2000:]}")
+    return url
+
+
+@pytest_asyncio.fixture
+async def pg(_skema_head):
+    """Basis data kosong dengan skema dari MIGRASI, bukan dari metadata.
+
+    Skemanya sendiri (lewat `alembic upgrade head`) dibangun SEKALI per sesi
+    di `_skema_head` di atas — lihat docstring-nya untuk kenapa. Yang masih
+    terjadi di SETIAP uji, persis seperti sebelumnya, cuma mengosongkan
+    (TRUNCATE) tabelnya.
+    """
+    url = _skema_head
+
+    from sqlalchemy import text as sa_text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     mesin = create_async_engine(url)
     Sesi = async_sessionmaker(mesin, expire_on_commit=False)
