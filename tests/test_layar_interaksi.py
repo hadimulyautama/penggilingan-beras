@@ -1052,7 +1052,7 @@ def test_tombol_bekatul_dioper_ke_makronya():
     # Makronya sendiri pindah ke `_stok.html` 6 Oktober 2026 — lihat catatan
     # di uji sebelum ini.
     makro = (AKAR / "hmu_tampilan/templates/_stok.html").read_text()
-    assert "boleh_catat=False) -%}" in makro, \
+    assert "boleh_catat=False," in makro and "boleh_pindah=False) -%}" in makro, \
         "makro `blok` tak menerima izinnya sebagai parameter"
     assert "and boleh_catat %}" in makro, \
         "makronya membaca izin dari konteks — di dalam makro itu Undefined"

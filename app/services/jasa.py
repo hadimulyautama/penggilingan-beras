@@ -95,6 +95,42 @@ async def nama_pemilik_banyak(db: AsyncSession, jasa_ids) -> dict[int, str]:
     )).all()}
 
 
+async def jasa_ids_per_pelanggan_dengan_hasil(db: AsyncSession) -> dict[int, list[int]]:
+    """{pelanggan_id: [jasa_id, ...]} — SELURUH pesanan yang pernah menghasilkan
+    sosoh, dikelompokkan per PELANGGAN, bukan per pesanan.
+
+    Satu sumber untuk `/stok-produk-jasa` (`layar_produk.
+    halaman_stok_produk_jasa`) DAN picker katalog umum
+    (`aksi_inventory.produk_jasa_tersedia`): keduanya menyajikan broken
+    curah sebagai SATU angka per pelanggan (koreksi pemilik 6 Oktober 2026,
+    "pemisahannya bukan per proses. tapi per pelanggan"), dan tombol pindah
+    kepemilikan di halaman itu membawa SELURUH `jasa_id` pelanggannya — bila
+    picker mengelompokkannya sendiri secara berbeda (per pesanan, misalnya),
+    nilai tombolnya tak akan pernah cocok dengan satu pun pilihan picker,
+    dan medan "item" di borang gagal terisi otomatis tanpa satu pun galat
+    (lihat `isiDariBaris` di `aksi.js` — ia mencocokkan nilai APA ADANYA).
+    """
+    from app.penggilingan.gudang2.models import PolishingProcess
+
+    # `ORDER BY` eksplisit — tanpanya urutan `jasa_id` dalam daftar tak
+    # terjamin stabil antar permintaan (Postgres tak menjanjikan apa pun
+    # tanpa pengurut), dan nilai tombol (`cr:broken|1,2` vs `|2,1`) yang
+    # berubah-ubah pada data yang sama membuat uji yang membandingkan
+    # STRING jadi flaky — walau maknanya tetap sama (keduanya himpunan id).
+    baris = (await db.execute(
+        select(Jasa.pelanggan_id, Jasa.id)
+        .where(Jasa.id.in_(
+            select(PolishingProcess.jasa_id.distinct())
+            .where(PolishingProcess.jasa_id.isnot(None))
+        ))
+        .order_by(Jasa.id)
+    )).all()
+    out: dict[int, list[int]] = {}
+    for pelanggan_id, jasa_id in baris:
+        out.setdefault(pelanggan_id, []).append(jasa_id)
+    return out
+
+
 def pastikan_satu_jasa(pemilik) -> int | None:
     """Pemilik tunggal dari sekumpulan `jasa_id`. Campuran → DITOLAK.
 

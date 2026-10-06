@@ -409,6 +409,27 @@ seluruh laci, sebab laci yang berbeda antar-layar dibaca sebagai "pekerjaannya
 sudah habis". Di `base.html` ia DIGERAKKAN DATA (`SUBMENU.get(kunci)`), bukan
 `if kunci == 'aksi'`: berkas itu milik bersama beberapa aplikasi.
 
+⚠⚠ **GRUP YANG `aksi`-NYA SAMA TAPI PEMILIKNYA BEDA BUTUH SUMBU KETIGA.**
+Keluhan pemilik 6 Oktober 2026: *"di halaman tunggu packing tidak bisa
+dibedakan mana jasa mana yang tidak."* Kartu beras titipan pelanggan dan
+kartu beras pabrik yang sama-sama belum dikemas memakai `aksi="catat_packing"`
+IDENTIK — sheet yang dibukanya memang sama — jadi pernyataan di atas ("`aksi`
+tidak rancu") tetap benar untuk PEKERJAAN, tapi tak menjawab PEMILIK. Grup
+`"packing_jasa"` ("Packing jasa") ditambahkan dengan cabang KHUSUS di
+`grup_baris()`, DIPERIKSA SEBELUM `_GRUP_AKSI`: `aksi=="catat_packing" and
+b.jasa_id is not None → "packing_jasa"`. `Baris` dapat field baru `jasa_id`
+untuk ini — bukan menambah entri `_GRUP_AKSI` (yang kuncinya `aksi`, satu
+nilai per kartu, tak bisa membedakan dua kartu ber-`aksi` sama).
+
+Kartunya sendiri (`_kartu_beras_curah`, `app/services/berjalan.py`) juga
+menyebut pemiliknya di `sub` (`· TITIPAN <nama>`, pola yang sama dengan
+picker `/pk-g1-tersedia` dan `api.py`'s `pk_gudang1`) — grupnya memisahkan,
+tapi satu grup masih bisa berisi lebih dari satu pelanggan sekaligus, dan
+kartu yang tak menyebut pemiliknya sendiri membuat orang menebak lagi.
+
+Uji: `tests/pg/test_grup_packing_jasa.py` (kartu jatuh ke grup yang benar,
+tiga grup pertama tak bergeser, filter `?grup=` lewat HTTP sungguhan).
+
 ## Sub-menu "Menunggu keputusan" — PER KATEGORI (sejak 2 Okt 2026)
 
 Permintaan pemilik: *"lakukan yang sama ke menunggu keputusan"* — diperjelas
@@ -806,6 +827,84 @@ Uji: `tests/pg/test_isian_silo_berjalan.py::
 test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong` (dua silo, delapan
 masukan tiap silo — melewati `BATAS_ASAL` DAN batas gabungan sekaligus;
 membuktikan "Ditambah" tetap benar dan potongannya tersebut persis).
+
+## Pindah kepemilikan produk jasa — bekatul disebut, sisanya bisa dipindah (6 Oktober 2026)
+
+Keluhan pemilik tentang `/stok-produk-jasa`: *"bekatulnya kenapa tidak ada di
+halaman produk jasa? tetap harus ada. tetapi nanti bisa berpindah
+kepemilikan menjadi milik kita ... harus ada tombol pindah kepemilikan di
+seluruh kartunya. karna bisa jadi produk ataupun hasil samping jadi milik
+kita ataupun kita beli."* Lalu koreksi tegas yang membatalkan jawaban
+"recommended" semula (pindah penuh): *"admin should typr a kg/karung amount
+for a partial transter"* — HARUS sebagian, admin mengetik sendiri jumlahnya.
+
+**Bekatul: disebut, tak pernah kartu.** Ia sudah beralih milik ke pabrik
+tepat saat dibukukan (keputusan pemilik 12) — jadi ia tak pernah jadi baris
+`stok_produk()` atas nama pelanggan, dan tak pernah dapat tombol (tak ada
+kepemilikan untuk dipindah). Ia tetap tampil sebagai baris INFORMASI biasa
+(`.kartu`/`.baris`) di tiap seksi pelanggan — pola yang sama dengan "Barang
+titipan di gudang" di `/jasa`.
+
+**Pindah kepemilikan: sebagian, FIFO, baris dipecah.** `pindah_kepemilikan_
+barang_jadi` (karung, `FinishedGoodsStock`) dan `pindah_kepemilikan_broken_
+curah` (kg, `ByproductStock`) ada di `app/penggilingan/inventory/
+finished_goods.py`. Admin mengetik jumlahnya; baris TERTUA dipilih dulu
+(`ORDER BY waktu, id`, `FOR UPDATE` — dua admin tak bisa memecah baris yang
+sama pada detik yang sama), dan baris yang jumlahnya jatuh di TENGAH
+dipecah: baris asal dikurangi, baris baru ditulis untuk bagian yang
+berpindah (`jasa_id=None`).
+
+⚠⚠ **AMAN walau sebagian sisa pesanan sudah diambil pelanggan atau sudah
+dipindah ke silo broken.** Buktinya aritmetika, bukan kebetulan: diberi
+`tersedia = masuk − keluar [− terpakai]`, memindahkan TEPAT `jumlah` baris
+`masuk` dari `jasa_id=X` ke `jasa_id=None` membuat `tersedia_baru =
+tersedia_lama − jumlah` PERSIS — tak peduli baris MANA yang kebetulan
+dipilih FIFO, sebab `keluar`/`terpakai` sama sekali tak tersentuh oleh
+pemindahan ini. Satu-satunya pagar yang perlu ditegakkan karena itu cuma
+`jumlah <= tersedia` SEBELUM memindah — bukan "baris mana yang aman
+disentuh".
+
+**Hanya yang SUDAH TERCATAT.** Sebangun `catat_broken` wajib sebelum
+`pindah_broken_ke_silo`: hasil mesin yang masih mentah (kolom "curah" di
+kartu `stok_produk`, belum dikemas MAUPUN belum dicatat curah) tak punya
+baris untuk dipindah — catat dulu lewat "Catat packing" atau "Catat broken
+(curah)". Tombolnya karena itu cuma muncul pada baris `kemasan` (sudah
+dikemas, `_stok.html`) dan pada baris broken curah yang sudah `catat_broken`
+— tak pernah pada kolom "belum dikemas"/"belum dicatat".
+
+⚠⚠ **BROKEN CURAH DIJAWAB & DIPINDAH PER PELANGGAN, BUKAN PER PESANAN** —
+pola yang sama dengan koreksi lapangan `stok_produk()` ("pemisahannya bukan
+per proses, tapi per pelanggan"). `hitung_stok_broken_curah` kini menerima
+`jasa_id: int | list[int] | None`; `pindah_kepemilikan_broken_curah` juga.
+Satu pelanggan dengan dua pesanan yang MASING-MASING punya broken curah
+wajib menjawab SATU angka gabungan di kartunya — dan tombolnya di
+`/stok-produk-jasa` membawa SELURUH `jasa_ids` pelanggan itu
+(`nilai=cr:broken|id1,id2`, dipisah koma), bukan cuma pesanan pertama.
+Barang jadi berkarung (`bj:`) TAK PERLU ini: `barang_jadi_g2()` sudah
+mengunci kartunya per `(sku, std, jasa_id)`, jadi dua pesanan satu pelanggan
+selalu tampil sebagai dua baris kemasan terpisah, masing-masing dengan
+tombolnya sendiri yang menunjuk SATU `jasa_id` saja.
+
+`jasa_ids_per_pelanggan_dengan_hasil()` (`app/services/jasa.py`) adalah
+SATU sumber dipakai BERSAMA oleh `/stok-produk-jasa` (`layar_produk.
+halaman_stok_produk_jasa`) dan picker katalog umum (`aksi_inventory.
+produk_jasa_tersedia`) — keduanya wajib mengelompokkan pesanan→pelanggan
+dengan cara yang SAMA. Tanpa ini, nilai tombol per-kartu (`cr:broken|1,2`)
+tak akan pernah cocok dengan satu pun pilihan picker, dan medan "item" di
+borang gagal terisi otomatis TANPA SATU PUN GALAT — `aksi.js`
+(`isiDariBaris`) mencocokkan nilainya APA ADANYA, bukan menguraikan isinya.
+
+Gerbangnya `can_see_financials` (Admin & Super Admin) — sama untuk tombol,
+picker, maupun rute POST-nya (`/api/actions/pindah-kepemilikan-produk`).
+Dicatat dengan `aksi="pindah_kepemilikan_produk"` di `log_activity`; belum
+lewat jalur peristiwa (Tahap 3) dan belum bisa di-undo lewat List Audit —
+label fallback generik yang menanganinya.
+
+Uji: `tests/pg/test_pindah_kepemilikan_produk.py` (FIFO & pemecahan baris
+untuk kedua jenis, pagar "aman walau sebagian sudah diambil", pagar
+menolak memindahkan lebih dari sisa, picker & tombol yang nilainya cocok
+untuk pelanggan dua pesanan, gerbang peran lewat HTTP, dan tampilan bekatul
+read-only + broken bertombol di `/stok-produk-jasa`).
 
 ## Kode barang
 

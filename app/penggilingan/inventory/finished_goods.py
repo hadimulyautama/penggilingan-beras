@@ -22,6 +22,7 @@ from app.models import (
     ByproductStock,
     FinishedGoodsStock,
     OutgoingItem,
+    OutgoingRecord,
     PolishingOutputLog,
     PolishingProcess,
     PolishingSiloUsage,
@@ -390,7 +391,9 @@ async def hitung_stok_bekatul(db: AsyncSession) -> float:
     return float(masuk) - float(keluar)
 
 
-async def hitung_stok_broken_curah(db: AsyncSession, *, jasa_id: int | None = None) -> float:
+async def hitung_stok_broken_curah(
+    db: AsyncSession, *, jasa_id: int | list[int] | None = None,
+) -> float:
     """Stok broken curah (kg), BELUM dipindah ke silo = masuk − keluar − terpakai.
 
     TIGA suku, bukan dua — beda dari `hitung_stok_bekatul` (yang tak punya
@@ -405,10 +408,23 @@ async def hitung_stok_broken_curah(db: AsyncSession, *, jasa_id: int | None = No
     `jasa_id` SENGAJA bukan "pabrik"/"jasa"/"semua" seperti `hitung_stok_
     silo`: bawaannya `None` (pabrik), dan pemanggil yang ingin tahu sisa satu
     pesanan jasa menyebutnya terang-terangan — pola yang sama dengan
-    `hitung_stok_finished_goods`.
+    `hitung_stok_finished_goods`. BOLEH DAFTAR, sebangun `stok_produk()`
+    (6 Oktober 2026, koreksi "per pelanggan bukan per pesanan"): satu
+    pelanggan boleh punya beberapa `Jasa`, dan sisa curahnya WAJIB dijawab
+    sebagai satu angka gabungan, bukan dijumlah belakangan oleh pemanggil.
+
+    ⚠ `keluar` kini ikut disaring pemiliknya (`OutgoingRecord.jasa_id`) —
+    dulu TIDAK, sama seperti cacat yang sempat ada di `stok_produk()`
+    sebelum perbaikan 6 Oktober (lihat catatan panjang di sana). Dampaknya
+    DORMAN hari ini (belum ada jalur jual broken curah), tapi rumusnya
+    harus tetap benar begitu jalur itu lahir.
     """
     def milik(k):
-        return k.jasa_id.is_(None) if jasa_id is None else k.jasa_id == jasa_id
+        if jasa_id is None:
+            return k.jasa_id.is_(None)
+        if isinstance(jasa_id, (list, tuple, set, frozenset)):
+            return k.jasa_id.in_(jasa_id)
+        return k.jasa_id == jasa_id
 
     masuk = float((
         await db.execute(
@@ -419,18 +435,19 @@ async def hitung_stok_broken_curah(db: AsyncSession, *, jasa_id: int | None = No
     ).scalar_one())
     keluar = float((
         await db.execute(
-            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
-                OutgoingItem.item_type == "byproduct_curah",
-                OutgoingItem.jenis_byproduct == "broken",
-            )
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+            .where(OutgoingItem.item_type == "byproduct_curah",
+                   OutgoingItem.jenis_byproduct == "broken",
+                   milik(OutgoingRecord))
         )
     ).scalar_one())
-    q_terpakai = select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
-    if jasa_id is None:
-        q_terpakai = q_terpakai.where(BrokenKeSilo.jasa_id.is_(None))
-    else:
-        q_terpakai = q_terpakai.where(BrokenKeSilo.jasa_id == jasa_id)
-    terpakai = float((await db.execute(q_terpakai)).scalar_one())
+    terpakai = float((
+        await db.execute(
+            select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
+            .where(milik(BrokenKeSilo))
+        )
+    ).scalar_one())
     return masuk - keluar - terpakai
 
 
@@ -499,6 +516,175 @@ async def hitung_stok_finished_goods(
         oq = oq.where(OutgoingItem.rice_quality_standard_id == standard_id)
     ok, okg = (await db.execute(oq)).one()
     return {"karung": int(mk) - int(ok), "kg": float(mkg) - float(okg)}
+
+
+# ─────────────── Pindah kepemilikan — titipan jadi milik pabrik ───────────────
+#
+# Keputusan pemilik 6 Oktober 2026, halaman "Produk Jasa": *"nanti bisa
+# berpindah kepemilikan menjadi milik kita ... karna bisa jadi produk ataupun
+# hasil samping jadi milik kita ataupun kita beli."* Pelanggan kadang sepakat
+# menyerahkan sisa barangnya (beras, menir, broken, reject) ke pabrik alih-alih
+# mengambilnya — sama seperti bekatul SUDAH beralih milik otomatis (keputusan
+# 12), bedanya di sini keputusannya per-pesanan dan ATAS PERMINTAAN, jadi
+# butuh tombolnya sendiri, bukan otomatis saat dibukukan.
+#
+# ⚠ HANYA yang SUDAH TERCATAT (baris `finished_goods_stock`/`byproduct_stock`)
+# yang bisa dipindah — sama seperti broken wajib dicatat curah dulu sebelum
+# dipindah ke silo. Hasil mesin yang belum dikemas maupun belum dicatat curah
+# (kolom "curah" di kartu `stok_produk`) tak punya baris untuk dipindah;
+# catat dulu lewat "Catat packing" atau "Catat broken (curah)".
+#
+# ⚠⚠ BOLEH SEBAGIAN — admin mengetik jumlahnya sendiri, bukan "pindahkan
+# semua". FIFO, baris tertua duluan, dipecah bila jumlahnya jatuh di tengah
+# satu baris: baris asal dikurangi, baris baru ditulis untuk bagian yang
+# berpindah. AMAN walau sebagian sisa pesanan ini sudah diambil pelanggan
+# atau sudah dipindah ke silo broken — keduanya disaring lewat `jasa_id`
+# pada TABEL LAIN (`outgoing_records`/`broken_ke_silo`), bukan lewat baris
+# yang dipindah di sini, jadi aritmetikanya tetap benar: yang dijaga
+# hanyalah "jangan memindahkan lebih daripada `tersedia`" — dari situ,
+# berapa pun jumlah yang berpindah, sisa pesanan ini turun persis sebesar
+# itu, tak peduli baris MANA yang kebetulan dipilih FIFO.
+
+
+async def pindah_kepemilikan_barang_jadi(
+    db: AsyncSession, *, user, sku_id: int, standard_id: int | None,
+    jasa_id: int, karung: int,
+) -> float:
+    """Pindah N karung barang jadi dari pesanan jasa ke milik PABRIK.
+
+    Mengembalikan total kg yang berpindah (karung × ukuran sesungguhnya per
+    baris, bisa pecahan bila baris terakhir terpecah).
+    """
+    from app.models import FinishedGoodsStock
+
+    if not jasa_id:
+        raise InventoryError("Barang pabrik tak punya pemilik untuk dipindah.")
+    if not karung or karung <= 0:
+        raise InventoryError("Sebutkan jumlah karung yang dipindah, lebih dari 0.")
+    tersedia = await hitung_stok_finished_goods(db, sku_id, standard_id, jasa_id=jasa_id)
+    if karung > tersedia["karung"]:
+        raise InventoryError(
+            f"Sisa milik pesanan ini tinggal {tersedia['karung']} karung — "
+            f"tak bisa memindahkan {karung} karung.")
+
+    def _std(q):
+        if standard_id is None:
+            return q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
+        return q.where(FinishedGoodsStock.rice_quality_standard_id == standard_id)
+
+    # Baris sumbernya DIKUNCI sebelum dipecah — dua admin yang memindahkan
+    # pesanan yang sama pada detik yang sama akan memecah baris yang sama.
+    rows = (await db.execute(_std(
+        select(FinishedGoodsStock)
+        .where(FinishedGoodsStock.product_sku_id == sku_id,
+               FinishedGoodsStock.jasa_id == jasa_id)
+        .order_by(FinishedGoodsStock.waktu.asc(), FinishedGoodsStock.id.asc())
+        .with_for_update()
+    ))).scalars().all()
+
+    sisa = karung
+    berat_dipindah = 0.0
+    now = now_local()
+    baris_disentuh: list[int] = []
+    for row in rows:
+        if sisa <= 0:
+            break
+        baris_disentuh.append(row.id)
+        if row.jumlah_karung <= sisa:
+            row.jasa_id = None
+            sisa -= row.jumlah_karung
+            berat_dipindah += float(row.berat_total_kg)
+        else:
+            per_karung = float(row.berat_total_kg) / row.jumlah_karung
+            kg_dipindah = per_karung * sisa
+            row.jumlah_karung -= sisa
+            row.berat_total_kg = float(row.berat_total_kg) - kg_dipindah
+            db.add(FinishedGoodsStock(
+                product_sku_id=row.product_sku_id,
+                rice_quality_standard_id=row.rice_quality_standard_id,
+                source_type=row.source_type, source_id=row.source_id,
+                jumlah_karung=sisa, berat_total_kg=kg_dipindah,
+                warehouse_id=row.warehouse_id, waktu=now, input_by=user.id,
+                jasa_id=None,
+            ))
+            berat_dipindah += kg_dipindah
+            sisa = 0
+    await log_activity(
+        db, table_name="finished_goods_stock", record_id=baris_disentuh[0],
+        action="UPDATE", changed_by=user.id, field_name="jasa_id",
+        new_value=f"{karung} karung ({berat_dipindah:.0f}kg) → pabrik",
+        aksi="pindah_kepemilikan_produk",
+    )
+    await db.commit()
+    return berat_dipindah
+
+
+async def pindah_kepemilikan_broken_curah(
+    db: AsyncSession, *, user, jasa_id: int | list[int], berat_kg: float,
+) -> float:
+    """Pindah N kg broken CURAH dari pesanan jasa ke milik PABRIK — sebangun
+    `pindah_kepemilikan_barang_jadi`, bedanya baris `byproduct_stock` (kg,
+    tak berkarung).
+
+    `jasa_id` boleh daftar — satu pelanggan boleh punya beberapa pesanan
+    (lihat `stok_produk()`), dan sisa curahnya dijawab sebagai satu angka
+    gabungan. Baris yang DIPINDAH tetap dipilih FIFO lintas seluruh
+    `jasa_id` dalam daftar itu, bukan satu pesanan saja — kalau tidak,
+    pesanan kedua seorang pelanggan bisa menyisakan broken yang tak
+    terjangkau tombol ini walau totalnya di kartu masih menunjukkan sisa.
+    """
+    from app.models import ByproductStock
+
+    if not jasa_id:
+        raise InventoryError("Barang pabrik tak punya pemilik untuk dipindah.")
+    if not berat_kg or berat_kg <= 0:
+        raise InventoryError("Sebutkan berat yang dipindah, lebih dari 0 kg.")
+    tersedia = await hitung_stok_broken_curah(db, jasa_id=jasa_id)
+    if berat_kg > tersedia + 0.5:
+        raise InventoryError(
+            f"Sisa broken curah pesanan ini tinggal {tersedia:,.0f} kg — "
+            f"tak bisa memindahkan {berat_kg:,.0f} kg.".replace(",", "."))
+
+    milik_jasa = (
+        ByproductStock.jasa_id.in_(jasa_id)
+        if isinstance(jasa_id, (list, tuple, set, frozenset))
+        else ByproductStock.jasa_id == jasa_id
+    )
+    rows = (await db.execute(
+        select(ByproductStock)
+        .where(ByproductStock.jenis_produk == "broken", milik_jasa)
+        .order_by(ByproductStock.waktu.asc(), ByproductStock.id.asc())
+        .with_for_update()
+    )).scalars().all()
+
+    sisa = float(berat_kg)
+    now = now_local()
+    baris_disentuh: list[int] = []
+    for row in rows:
+        if sisa <= 0.001:
+            break
+        baris_disentuh.append(row.id)
+        baris_kg = float(row.berat_kg)
+        if baris_kg <= sisa + 0.001:
+            row.jasa_id = None
+            sisa -= baris_kg
+        else:
+            row.berat_kg = baris_kg - sisa
+            db.add(ByproductStock(
+                jenis_produk="broken", source_type=row.source_type,
+                source_id=row.source_id, berat_kg=sisa,
+                tanggal=now.date(), waktu=now, input_by=user.id,
+                jasa_id=None,
+            ))
+            sisa = 0
+    await log_activity(
+        db, table_name="byproduct_stock", record_id=baris_disentuh[0],
+        action="UPDATE", changed_by=user.id, field_name="jasa_id",
+        new_value=f"{berat_kg:.0f}kg broken → pabrik",
+        aksi="pindah_kepemilikan_produk",
+    )
+    await db.commit()
+    return float(berat_kg)
 
 
 # ─────────────────────────── HPP beras per proses ───────────────────────────

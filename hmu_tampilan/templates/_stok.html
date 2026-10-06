@@ -137,7 +137,8 @@
    — konteks templat (yang dibawa `with context`) hanya mengikat variabel
    tingkat-atas, bukan variabel lokal di dalam gelung. Parameter eksplisit
    tak bergantung pada yang mana yang kebetulan terpasang di konteks. #}
-{% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False) -%}
+{% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
+             boleh_pindah=False) -%}
 {% if daftar %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
@@ -281,6 +282,22 @@
           <span class="anak__kg">{{ kg(p.kg) }}&nbsp;kg
             {%- if p.karung %} · {{ p.karung }}&nbsp;krg{% endif %}</span>
         </div>
+        {# ── Pindah kepemilikan — per BARIS kemasan, bukan per kartu ──
+           Keputusan pemilik 6 Oktober 2026: barang titipan "bisa jadi
+           ... milik kita". Tombolnya di sini, bukan di kepala kartu,
+           sebab `sku_id`/`std_id` (penunjuk yang dibutuhkan borangnya)
+           cuma ada di tingkat baris — satu kartu "Premium" bisa memuat
+           beberapa merk/kemasan sekaligus, dan tombol di kepala kartu
+           tak bisa menunjuk salah satunya. Hanya tampil untuk baris
+           TITIPAN (`p.jasa_id` terisi) — baris pabrik di `/stok-produk`
+           lewat makro yang sama tak pernah mengirim `boleh_pindah`. #}
+        {% if boleh_pindah and p.jasa_id and p.karung %}
+          <div class="ubah-hasil">
+            <a class="btn btn--kecil"
+               href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=bj:{{ p.sku_id }}|{{ p.std_id or '' }}|{{ p.jasa_id }}"
+               >⇄ Pindah kepemilikan</a>
+          </div>
+        {% endif %}
       {% endfor %}
       {# Belahan "belum dikemas" tetap ada — ia sebab seluruh halaman ini
          lahir — tetapi hanya ketika ADA. Nol yang dicetak di sini cuma

@@ -166,6 +166,13 @@ class Baris:
     #: kemajuan palsu lebih buruk daripada tak memberi apa-apa.
     maju: float | None = None
 
+    #: Pemilik titipan — None = pabrik. Dipakai `grup_baris()` untuk
+    #: memisahkan kartu titipan dari kartu pabrik yang kebetulan memakai
+    #: `aksi` yang sama (mis. "Packing jasa" vs "Tunggu packing", keduanya
+    #: `aksi="catat_packing"`) — penyaringan yang `aksi`/`kelompok` sendirian
+    #: tak bisa menjawab, sebab keduanya menyebut PEKERJAAN, bukan PEMILIK.
+    jasa_id: int | None = None
+
 
 @dataclass
 class Berjalan:
@@ -438,6 +445,12 @@ GRUP_ANTREAN = (
     ("bahan", "Bahan baku"),
     ("pindah", "Tunggu dipindah"),
     ("packing", "Tunggu packing"),
+    # Keluhan pemilik 6 Oktober 2026: "di halaman tunggu packing tidak bisa
+    # dibedakan mana jasa mana yang tidak" — kartu beras titipan pelanggan
+    # dan kartu beras pabrik sama-sama `aksi="catat_packing"`, jadi tanpa
+    # grup sendiri keduanya bercampur di "Tunggu packing" tanpa tanda apa
+    # pun. Lihat `jasa_id` di `Baris` dan cabang khusus di `grup_baris()`.
+    ("packing_jasa", "Packing jasa"),
     # Bukan nama yang bagus, dan sengaja tidak disamarkan: di sini berdiri
     # perintah muat barang keluar dan penyosohan yang menunggu verifikasi
     # Admin — dua hal yang pemilik belum beri nama grup. Nama yang terlalu
@@ -482,6 +495,14 @@ def grup_baris(b: Baris) -> str:
     yang memutuskan sendiri akan menyebut 3 pada sub-menu yang begitu dibuka
     memperlihatkan 2 — dan sesudah sekali itu, angkanya tak dipercaya lagi.
     """
+    # ⚠ DIPERIKSA SEBELUM `_GRUP_AKSI`: kartu beras titipan pelanggan memakai
+    # `aksi="catat_packing"` yang SAMA dengan kartu pabrik (sheet yang
+    # dibukanya memang sama) — yang membedakan grupnya bukan `aksi`,
+    # melainkan `jasa_id`, sumbu yang sebelumnya tak pernah dibaca
+    # `grup_baris()`. Tanpa cabang ini "Packing jasa" di `GRUP_ANTREAN` tak
+    # akan pernah kemasukan satu kartu pun.
+    if b.aksi == "catat_packing" and b.jasa_id is not None:
+        return "packing_jasa"
     if b.aksi and b.aksi in _GRUP_AKSI:
         return _GRUP_AKSI[b.aksi]
     # ⚠ `kelompok="tumpukan"` TIDAK dipetakan di sini, dan itu bukan kelalaian:
@@ -2269,13 +2290,23 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     antrean yang menagih pekerjaan atas angka yang masih akan berubah membuat
     orang mengemas dua kali. Ia tetap terbaca di halaman Stok Produk, dengan
     keterangan yang menyebut keadaannya.
+
+    ⚠ Titipan pelanggan TAK DISEMBUNYIKAN, tapi KALIMATNYA BERBEDA — pola yang
+    sama dengan kartu tumpukan gabah. Keluhan pemilik 6 Oktober 2026: di
+    halaman "Tunggu packing" tak bisa dibedakan mana jasa mana yang bukan.
+    `grup_baris()` menjatuhkannya ke grup "Packing jasa" sendiri (lihat
+    `jasa_id` di `Baris`), dan `sub`-nya menyebut pemiliknya terang-terangan
+    (`· TITIPAN <nama>`, pola yang sama dengan picker `/pk-g1-tersedia`) —
+    sebab satu grup bisa saja berisi lebih dari satu pelanggan sekaligus.
     """
     from app.services.stok import beras_curah
 
+    daftar = [b for b in await beras_curah(db, termasuk_berjalan=False)
+              if b.sisa_kg > 0]            # minus = pertanyaan, bukan pekerjaan
+    nama = await nama_pemilik_banyak(db, {b.jasa_id for b in daftar if b.jasa_id})
+
     keluar: list[Baris] = []
-    for b in await beras_curah(db, termasuk_berjalan=False):
-        if b.sisa_kg <= 0:
-            continue                    # minus = pertanyaan, bukan pekerjaan
+    for b in daftar:
         keluar.append(Baris(
             kode=b.kode_proses,
             isi=f"{b.jenis} · {_kg(b.sisa_kg)} belum dikemas",
@@ -2288,8 +2319,9 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
             judul="Beras menunggu dipacking",
             utama=(_kg(b.sisa_kg).removesuffix(" kg"), "kg"),
             sub=f"{b.kode_proses} · {b.jenis}"
-                + (f" · dari {_kg(b.keluar_kg)}" if b.dikemas_kg else ""),
-            kelompok="produk", gudang="g2",
+                + (f" · dari {_kg(b.keluar_kg)}" if b.dikemas_kg else "")
+                + (f" · TITIPAN {nama.get(b.jasa_id, '?')}" if b.jasa_id else ""),
+            kelompok="produk", gudang="g2", jasa_id=b.jasa_id,
             pilihan=[("catat_packing", "Catat packing barang jadi",
                       "Memindahkan dari curah ke barang jadi",
                       f"{b.kode_proses}|{b.jenis}")]))

@@ -838,6 +838,10 @@ class BerasCurah:
     sisa_kg: float
     #: Kapan sosohnya ditutup. None berarti MASIH BERJALAN.
     selesai: object | None = None
+    #: Pemilik proses sosohnya — None = pabrik. Dibawa sejak 6 Oktober 2026
+    #: supaya pembaca (kartu Antrian tunggu) bisa membedakan titipan
+    #: pelanggan dari hasil pabrik; sebelum ini keduanya tampil identik.
+    jasa_id: int | None = None
 
     @property
     def berjalan(self) -> bool:
@@ -957,7 +961,8 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
             keluar.append(BerasCurah(
                 kode_proses=proc.kode_proses, jenis=jenis, keluar_kg=float(kg),
                 dikemas_kg=dikemas, sisa_kg=sisa,
-                selesai=(proc.waktu_selesai if proc.status == "selesai" else None)))
+                selesai=(proc.waktu_selesai if proc.status == "selesai" else None),
+                jasa_id=proc.jasa_id))
     keluar.sort(key=lambda x: (_URUT_BARANG.get(x.jenis, 99), x.kode_proses))
     return keluar
 

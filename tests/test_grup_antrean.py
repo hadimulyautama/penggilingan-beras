@@ -20,8 +20,9 @@ from app.services.berjalan import (GRUP_ANTREAN, Baris, Berjalan, _GRUP_AKSI,
 KUNCI = {k for k, _ in GRUP_ANTREAN}
 
 
-def _kartu(aksi=None, kelompok=None, kode="X-1"):
-    return Baris(kode=kode, isi="", keadaan="", aksi=aksi, kelompok=kelompok)
+def _kartu(aksi=None, kelompok=None, kode="X-1", jasa_id=None):
+    return Baris(kode=kode, isi="", keadaan="", aksi=aksi, kelompok=kelompok,
+                jasa_id=jasa_id)
 
 
 def test_grup_terakhir_adalah_komplemen_bukan_daftar():
@@ -92,6 +93,20 @@ def test_ketiga_grup_yang_pemilik_sebut_ada_dan_bernama_begitu():
     assert nama["packing"] == "Tunggu packing"
     # Urutannya urutan aliran barang, bukan abjad.
     assert [k for k, _ in GRUP_ANTREAN][:3] == ["bahan", "pindah", "packing"]
+
+
+def test_packing_titipan_dan_pabrik_masuk_grup_BERBEDA():
+    """⭐ `aksi` SAMA ("catat_packing"), pemiliknya BEDA — `aksi` sendirian tak
+    bisa menjawab ini (beda dari `kelompok="tumpukan"` di atas, yang
+    terjawab lewat `aksi` yang berbeda). Keluhan pemilik 6 Oktober 2026: "di
+    halaman tunggu packing tidak bisa dibedakan mana jasa mana yang tidak."
+    """
+    pabrik = _kartu(aksi="catat_packing", kelompok="produk")
+    titipan = _kartu(aksi="catat_packing", kelompok="produk", jasa_id=7)
+    assert grup_baris(pabrik) == "packing"
+    assert grup_baris(titipan) == "packing_jasa"
+    assert "packing_jasa" in KUNCI
+    assert dict(GRUP_ANTREAN)["packing_jasa"] == "Packing jasa"
 
 
 def test_aksi_yang_dipetakan_memang_ada_di_kode():

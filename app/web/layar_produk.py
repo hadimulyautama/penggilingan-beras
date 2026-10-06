@@ -36,6 +36,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
+from app.services import jasa
 from app.services import stok as svc
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
@@ -145,11 +146,32 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
     diminta. `stok.stok_produk` menerima DAFTAR `jasa_id` justru untuk ini:
     seluruh pesanan pelanggan yang sama disatukan dalam SATU panggilan,
     bukan digabung belakangan dari beberapa kartu terpisah.
-    """
-    from sqlalchemy import select
 
-    from app.models import Jasa, Pelanggan
+    ── Bekatul: disebut, tak pernah dikecualikan ──
+
+    Keluhan pemilik: *"bekatulnya kenapa tidak ada di halaman produk jasa?
+    tetap harus ada."* Bekatul beralih milik ke pabrik tepat saat dibukukan
+    (keputusan pemilik 12) — jadi ia TAK PERNAH jadi kartu `stok_produk`
+    atas nama pelanggan (lihat ⚠ di docstring fungsi itu) — tetapi pemilik
+    barang tetap berhak tahu BERAPA bekatul keluar dari prosesnya, pola
+    yang sama dengan `jasa.nota_jasa()`. Baris INFORMASI, bukan kartu: tak
+    ada tombol pindah kepemilikan, sebab tak ada kepemilikan untuk
+    dipindah — sudah milik pabrik sejak awal.
+
+    ── Pindah kepemilikan: Admin & Super Admin saja ──
+
+    `BOLEH_PINDAH` dioper ke templat dengan gerbang yang SAMA dengan
+    `produk_jasa_tersedia`/`act_pindah_kepemilikan_produk`
+    (`can_see_financials`) — operator yang membuka halaman ini tak boleh
+    melihat tombol yang akan ditolak rutenya.
+    """
+    from sqlalchemy import func, select
+
+    from app.models import Pelanggan
     from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
+    from app.penggilingan.inventory.models import ByproductStock
+    from app.peran import can_see_financials
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")
@@ -159,27 +181,58 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
         # Pesanan mana saja yang PERNAH menghasilkan sosoh — lalu pelanggan
-        # mana yang memiliki tiap pesanan itu.
-        baris = (await db.execute(
-            select(Jasa.pelanggan_id, Jasa.id)
-            .where(Jasa.id.in_(
-                select(PolishingProcess.jasa_id.distinct())
-                .where(PolishingProcess.jasa_id.isnot(None))
-            ))
-        )).all()
-        jasa_per_pelanggan: dict[int, list[int]] = {}
-        for pelanggan_id, jasa_id in baris:
-            jasa_per_pelanggan.setdefault(pelanggan_id, []).append(jasa_id)
+        # mana yang memiliki tiap pesanan itu. Sumber BERSAMA dengan picker
+        # katalog umum (`aksi_inventory.produk_jasa_tersedia`) — lihat
+        # docstring `jasa_ids_per_pelanggan_dengan_hasil` untuk kenapa
+        # keduanya wajib mengelompokkan dengan cara yang SAMA.
+        jasa_per_pelanggan = await jasa.jasa_ids_per_pelanggan_dengan_hasil(db)
         nama_pelanggan = {pid: n for pid, n in (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
             .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
         )).all()}
 
+        # Bekatul per proses — lalu per pesanan, lewat `source_id` (proses
+        # sosohnya), BUKAN `byproduct_stock.jasa_id` (yang NULL, sudah
+        # pabrik). Dibaca SEKALI untuk seluruh pelanggan, bukan satu kueri
+        # per seksi.
+        bekatul_per_proc = {pid: float(kg) for pid, kg in (await db.execute(
+            select(ByproductStock.source_id,
+                   func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+            .where(ByproductStock.jenis_produk == "bekatul",
+                   ByproductStock.source_type == "polishing")
+            .group_by(ByproductStock.source_id)
+        )).all()}
+        proc_per_jasa: dict[int, list[int]] = {}
+        for pid, jid in (await db.execute(
+            select(PolishingProcess.id, PolishingProcess.jasa_id)
+            .where(PolishingProcess.jasa_id.isnot(None))
+        )).all():
+            proc_per_jasa.setdefault(jid, []).append(pid)
+
+        boleh_pindah = can_see_financials(akun.user)
         bj = await svc.barang_jadi_g2(db)
         daftar = []
         for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
             kartu = await svc.stok_produk(db, jasa_id=jasa_ids)
-            if not kartu:
+            bekatul_kg = sum(
+                bekatul_per_proc.get(pid, 0.0)
+                for jid in jasa_ids for pid in proc_per_jasa.get(jid, []))
+            # Broken yang sudah dicatat CURAH (`byproduct_stock`, lewat
+            # `catat_broken`) — TERPISAH dari `curah_kg` kartu "Broken" di
+            # atas, yang menjawab pertanyaan lain ("belum tercatat sama
+            # sekali"). Ia tak punya baris kemasan (bukan karung), jadi
+            # tombol pindah kepemilikannya berdiri sendiri, bukan di dalam
+            # `st.blok`. SATU panggilan dengan daftar `jasa_ids` (bukan
+            # dijumlah per pesanan) — `hitung_stok_broken_curah` kini
+            # menerima daftar sebangun `stok_produk()`, supaya angka yang
+            # ditampilkan dan angka yang dijaga tombolnya adalah SATU
+            # sumber: tombolnya membawa seluruh `jasa_ids` ini juga (lihat
+            # `jasa_ids` di bawah), bukan cuma pesanan pertama — kalau
+            # tombol hanya menunjuk satu pesanan, pagar jumlah transfer akan
+            # menolak jumlah yang terlihat benar di kartu tapi melebihi sisa
+            # SATU pesanan itu saja.
+            broken_curah_kg = await hitung_stok_broken_curah(db, jasa_id=jasa_ids)
+            if not kartu and bekatul_kg < 0.5 and broken_curah_kg < 0.5:
                 continue
             kemasan: dict[str, list[dict]] = {}
             for k in bj.produk + bj.samping:
@@ -190,14 +243,22 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
             samping = [k for k in kartu if not svc.adalah_beras(k.jenis)]
             daftar.append({
                 "pemilik": nama_pelanggan.get(pelanggan_id) or f"pelanggan #{pelanggan_id}",
+                # SELURUH pesanan pelanggan ini — dipakai tombol curah
+                # broken (`nilai=cr:broken|1,2,3`, lihat `_stok.html`) supaya
+                # jumlah yang dijaga sama dengan `broken_curah_kg` di atas.
+                "jasa_ids": jasa_ids,
                 "kemasan": kemasan, "beras": beras, "samping": samping,
                 "sisa_beras": sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
                 "sisa_samping": sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
                 "curah_beras": sum(k.curah_kg for k in beras if k.curah_kg > 0),
                 "curah_samping": sum(k.curah_kg for k in samping if k.curah_kg > 0),
+                "bekatul_kg": bekatul_kg,
+                "broken_curah_kg": broken_curah_kg,
             })
     daftar.sort(key=lambda p: p["pemilik"])
     return await render_laci(
         request, "stok_produk_jasa.html", layar="stok_produk_jasa",
-        daftar=daftar,
+        daftar=daftar, BOLEH_PINDAH=boleh_pindah,
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
     )
