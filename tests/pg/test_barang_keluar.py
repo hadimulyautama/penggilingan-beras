@@ -931,7 +931,7 @@ async def test_admin_melihat_muatan_yang_menunggu_verifikasi_di_mejanya(pg, guda
     assert r.rec.kode not in {x.kode for x in b.menunggu}
 
 
-async def test_tiket_keluar_terlewat_berkartu_diam_di_meja(pg, gudang):
+async def test_kartu_tiket_keluar_menganggur_tetap_benar_walau_ditahan(pg, gudang):
     """Cerminan kartu "Tiket timbang belum dicatat" di sisi masuk.
 
     Tanpa ini, tiket keluar yang terlewat menghilang diam-diam: ia ditimbang di
@@ -940,11 +940,18 @@ async def test_tiket_keluar_terlewat_berkartu_diam_di_meja(pg, gudang):
 
     DIAM — tanpa tombol. Jalan menautkannya lewat kartu verifikasi muatannya;
     menautkan tiket ke transaksi yang BELUM ada berarti mengarang muatannya.
+
+    ⚠ DITAHAN dari `untuk_staff()` sejak 6 Oktober 2026 (keputusan pemilik:
+    kartunya belum punya tindak lanjut yang berguna) — lihat komentar di
+    pemanggilnya yang dulu, `untuk_staff()`. Fungsinya SENDIRI tetap ada dan
+    tetap diuji LANGSUNG di sini, supaya tinggal disambung lagi begitu ada
+    tindak lanjutnya; uji inilah yang menjaganya tak diam-diam rusak selama
+    ditahan.
     """
     from datetime import timedelta
 
     from app.database import now_local
-    from app.services.berjalan import untuk_staff
+    from app.services import berjalan as svc
     from sqlalchemy import text as _t
 
     tid = await _tiket(pg, "TK-LEWAT-01")
@@ -958,12 +965,17 @@ async def test_tiket_keluar_terlewat_berkartu_diam_di_meja(pg, gudang):
         await db.commit()
 
     async with pg() as db:
-        b = await untuk_staff(db)
-    k = next((x for x in b.meja if x.kode == "TK-LEWAT-01"), None)
+        kartu = await svc._kartu_tiket_keluar_menganggur(db)
+    k = next((x for x in kartu if x.kode == "TK-LEWAT-01"), None)
     assert k is not None, "tiket keluar yang terlewat tak berkartu"
     assert k.aksi is None, "kartunya bertombol — ia seharusnya DIAM"
     assert k.fase == "keluar", k.fase
     assert "Pos Timbang" in (k.nota or ""), k.nota
+
+    async with pg() as db:
+        b = await svc.untuk_staff(db)
+    assert "TK-LEWAT-01" not in {x.kode for x in b.meja}, \
+        "ditahan dari tampilan tapi masih muncul di Menunggu keputusan"
 
 
 async def test_tiket_keluar_hari_ini_belum_ditagih(pg, gudang):
@@ -979,12 +991,19 @@ async def test_tiket_keluar_hari_ini_belum_ditagih(pg, gudang):
 
 
 async def test_tiket_yang_sudah_tertaut_berhenti_ditagih(pg, gudang):
+    """`_kartu_tiket_keluar_menganggur` diuji LANGSUNG (bukan lewat
+    `untuk_staff()`, yang sejak 6 Oktober 2026 tak lagi memanggilnya — lihat
+    `test_kartu_tiket_keluar_menganggur_tetap_benar_walau_ditahan`): yang
+    diperiksa di sini murni `tiket_keluar_aktif()` berhenti menyebut tiket
+    begitu ia tertaut, dan itu tak bergantung pada apakah kartunya sedang
+    ditampilkan atau tidak.
+    """
     from datetime import timedelta
 
     from app.database import now_local
     from app.models import User
     from app.services import barang_keluar as bk
-    from app.services.berjalan import untuk_staff
+    from app.services.berjalan import _kartu_tiket_keluar_menganggur
     from sqlalchemy import text as _t
 
     # Bobot tiketnya sepadan dengan muatan 40 karung × 25 kg — lihat alasan
@@ -997,15 +1016,15 @@ async def test_tiket_yang_sudah_tertaut_berhenti_ditagih(pg, gudang):
         await db.commit()
     rid = await _sampai_dimuat(pg, gudang, karung=40)
     async with pg() as db:
-        b = await untuk_staff(db)
-    assert "TK-TAUT-01" in {x.kode for x in b.meja}, "belum tertaut, harus ditagih"
+        kartu = await _kartu_tiket_keluar_menganggur(db)
+    assert "TK-TAUT-01" in {x.kode for x in kartu}, "belum tertaut, harus ditagih"
 
     async with pg() as db:
         await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
                             rec_id=rid, timbangan_transaksi_id=tid)
     async with pg() as db:
-        b = await untuk_staff(db)
-    assert "TK-TAUT-01" not in {x.kode for x in b.meja}, \
+        kartu = await _kartu_tiket_keluar_menganggur(db)
+    assert "TK-TAUT-01" not in {x.kode for x in kartu}, \
         "tiket yang sudah tertaut masih ditagih"
 
 

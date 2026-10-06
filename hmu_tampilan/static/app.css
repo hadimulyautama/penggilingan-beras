@@ -965,6 +965,13 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .benda--sosoh   { --fase: var(--fase-giling); }
 .benda--pindah_pk { --fase: var(--fase-giling); }
 .benda--keluar { --fase: var(--fase-keluar); }
+/* `--fase-samping` menumpang slot sama ("garis kiri kartu", lihat catatannya
+   di blok palet) tapi di SINI artinya KELAS BARANG, bukan tahap proses:
+   kartu "Bekatul/Menir/Broken/Reject menunggu dipacking" (produksi,
+   `_kartu_beras_curah`) sebelumnya selalu hijau `--fase-giling` yang sama
+   dengan beras — satu warna untuk barang yang pembeli dan harganya berbeda.
+   Keluhan pemilik 6 Oktober 2026. */
+.benda--samping { --fase: var(--fase-samping); }
 .benda__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
 .benda__isi { color: var(--tinta-2); font-size: 13.5px; line-height: 1.5; margin-top: 2px; }
 .benda__kaki { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

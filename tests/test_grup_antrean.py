@@ -90,7 +90,7 @@ def test_ketiga_grup_yang_pemilik_sebut_ada_dan_bernama_begitu():
     nama = dict(GRUP_ANTREAN)
     assert nama["bahan"] == "Bahan baku"
     assert nama["pindah"] == "Tunggu dipindah"
-    assert nama["packing"] == "Tunggu packing"
+    assert nama["packing"] == "Packing"
     # Urutannya urutan aliran barang, bukan abjad.
     assert [k for k, _ in GRUP_ANTREAN][:3] == ["bahan", "pindah", "packing"]
 
@@ -296,7 +296,7 @@ def test_pil_grup_tergambar_dan_angkanya_ikut():
     dua = [_kartu(aksi="gabah_masuk"), _kartu(aksi="catat_packing"),
            _kartu(aksi="catat_packing")]
     h = _layar_aksi(dua)
-    assert "Bahan baku" in h and "Tunggu packing" in h
+    assert "Bahan baku" in h and "Packing" in h
     assert "pil--on" in h, "pil 'Semua' tak bertanda aktif"
     # Angkanya, dan kelasnya yang memang ada di app.css.
     assert 'class="pil__jml"' in h
@@ -342,12 +342,12 @@ def test_pintu_antrean_jadi_summary_saat_bersub_menu():
     dan itu pula sebabnya baris "Semua" wajib ada di dalamnya.
     """
     sub = {"aksi": [("/aksi", "Semua", 7), ("/aksi?grup=bahan", "Bahan baku", 1),
-                    ("/aksi?grup=packing", "Tunggu packing", 6)]}
+                    ("/aksi?grup=packing", "Packing", 6)]}
     h = _laci(sub)
     assert "pintu-lipat" in h
     assert "<summary" in h
     assert 'class="pintu-sub"' in h
-    for nama in ("Semua", "Bahan baku", "Tunggu packing"):
+    for nama in ("Semua", "Bahan baku", "Packing"):
         assert nama in h
     # Jalan ke daftar utuh tetap ada.
     assert 'href="/aksi"' in h
@@ -362,7 +362,7 @@ def test_pintu_tetap_tautan_biasa_tanpa_sub_menu():
     # Pintu lain tetap tautan walau antrean bersub-menu.
     h2 = _laci({"aksi": [("/aksi", "Semua", 2),
                          ("/aksi?grup=bahan", "Bahan baku", 1),
-                         ("/aksi?grup=packing", "Tunggu packing", 1)]})
+                         ("/aksi?grup=packing", "Packing", 1)]})
     assert 'href="/stok"' in h2 and 'href="/berjalan"' in h2
 
 
@@ -392,7 +392,7 @@ def test_sub_menu_terbuka_sendiri_di_halamannya_sendiri():
     """Yang sudah berada di antrean hampir pasti ingin berpindah grup, dan satu
     ketukan tambahan untuk itu adalah ketukan yang diulang sepanjang hari."""
     sub = {"aksi": [("/aksi", "Semua", 2), ("/aksi?grup=bahan", "Bahan baku", 1),
-                    ("/aksi?grup=packing", "Tunggu packing", 1)]}
+                    ("/aksi?grup=packing", "Packing", 1)]}
     assert "<details class=\"pintu-lipat\" open>" in _laci(sub, layar="aksi")
     assert " open>" not in _laci(sub, layar="beranda")
 

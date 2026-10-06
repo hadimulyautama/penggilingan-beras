@@ -239,7 +239,7 @@ def test_kedua_pintu_bisa_bersub_menu_bersamaan():
     laci yang sama, tanpa saling menimpa."""
     sub = {
         "aksi": [("/aksi", "Semua", 3), ("/aksi?grup=bahan", "Bahan baku", 2),
-                ("/aksi?grup=packing", "Tunggu packing", 1)],
+                ("/aksi?grup=packing", "Packing", 1)],
         "keputusan": [
             ("/keputusan", "Semua", 2),
             ("/keputusan?kategori=acc_permintaan_pk", "Permintaan lot PK dari Gudang 2", 1),

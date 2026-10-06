@@ -444,7 +444,7 @@ class Berjalan:
 GRUP_ANTREAN = (
     ("bahan", "Bahan baku"),
     ("pindah", "Tunggu dipindah"),
-    ("packing", "Tunggu packing"),
+    ("packing", "Packing"),
     # Keluhan pemilik 6 Oktober 2026: "di halaman tunggu packing tidak bisa
     # dibedakan mana jasa mana yang tidak" — kartu beras titipan pelanggan
     # dan kartu beras pabrik sama-sama `aksi="catat_packing"`, jadi tanpa
@@ -2299,7 +2299,7 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     (`· TITIPAN <nama>`, pola yang sama dengan picker `/pk-g1-tersedia`) —
     sebab satu grup bisa saja berisi lebih dari satu pelanggan sekaligus.
     """
-    from app.services.stok import beras_curah
+    from app.services.stok import adalah_beras, beras_curah, nama_produk
 
     daftar = [b for b in await beras_curah(db, termasuk_berjalan=False)
               if b.sisa_kg > 0]            # minus = pertanyaan, bukan pekerjaan
@@ -2307,18 +2307,28 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
 
     keluar: list[Baris] = []
     for b in daftar:
+        # ⚠ Judul & warna dulu SELALU "Beras" / hijau sosoh, berapa pun
+        # `b.jenis`-nya — keluhan pemilik 6 Oktober 2026: kartu bekatul dan
+        # menir pun terbaca "Beras menunggu dipacking", membingungkan.
+        # `nama_produk()` sudah ada untuk ini (dipakai Stok Produk); `fase`
+        # di sini bukan tahap proses (semuanya sudah sosoh selesai) melainkan
+        # KELAS BARANG — sama seperti `--fase-samping` di app.css: beras
+        # tetap hijau ("sosoh"), hasil samping (bekatul/menir/broken/reject)
+        # ungu.
+        nm = nama_produk(b.jenis)
         keluar.append(Baris(
             kode=b.kode_proses,
-            isi=f"{b.jenis} · {_kg(b.sisa_kg)} belum dikemas",
+            isi=f"{nm} · {_kg(b.sisa_kg)} belum dikemas",
             keadaan="menunggu dipacking",
             # Penunjuknya membawa LOT dan JENIS sekaligus (28 September
             # 2026). Dengan kode proses saja, jenisnya hilang di perjalanan dan
             # borang menanyakannya lagi — padahal kartu ini yang menyebutnya.
-            aksi="catat_packing", nilai=f"{b.kode_proses}|{b.jenis}", fase="sosoh",
+            aksi="catat_packing", nilai=f"{b.kode_proses}|{b.jenis}",
+            fase=("sosoh" if adalah_beras(b.jenis) else "samping"),
             sejak=b.selesai,
-            judul="Beras menunggu dipacking",
+            judul=f"{nm} menunggu dipacking",
             utama=(_kg(b.sisa_kg).removesuffix(" kg"), "kg"),
-            sub=f"{b.kode_proses} · {b.jenis}"
+            sub=f"{b.kode_proses} · {nm}"
                 + (f" · dari {_kg(b.keluar_kg)}" if b.dikemas_kg else "")
                 + (f" · TITIPAN {nama.get(b.jasa_id, '?')}" if b.jasa_id else ""),
             kelompok="produk", gudang="g2", jasa_id=b.jasa_id,
@@ -2870,17 +2880,16 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
 
     # ── Tiket timbang KELUAR yang belum tertaut transaksi mana pun ──
     #
-    # Cerminan kartu "Tiket timbang belum dicatat" di sisi masuk, yang sudah
-    # menyelamatkan banyak tiket. Tanpa kartu ini, tiket keluar yang terlewat
-    # menghilang diam-diam: ia ditimbang di Pos Timbang lalu berhenti di situ,
-    # dan tak ada satu pun layar Produksi yang menyebutnya.
+    # DITAHAN dari tampilan (keputusan pemilik 6 Oktober 2026): kartunya
+    # belum punya tombol atau tindak lanjut yang berguna — lihat "DIAM, tanpa
+    # tombol" di docstring `_kartu_tiket_keluar_menganggur` — jadi untuk
+    # sekarang ia cuma menagih tanpa menawarkan jalan keluar. Fungsinya
+    # TETAP ADA, tak dihapus, untuk disambung lagi begitu ada tindak lanjutnya
+    # (lihat juga `_kode`/`auto_tautkan` di `barang_keluar.py`, yang sudah
+    # menautkan tiket seperti ini secara otomatis — mungkin kartu ini
+    # akhirnya cuma perlu menyebut yang auto-taut TAK bisa selesaikan).
     #
-    # DIAM — tanpa tombol, dan itu disengaja. Jalan menautkannya lewat kartu
-    # verifikasi di atas, bukan dari sini: menautkan tiket ke transaksi yang
-    # BELUM ada berarti mengarang muatannya. Kalau tiketnya tak berpasangan
-    # sama sekali, yang benar membatalkannya di Pos Timbang — dan itu bukan
-    # tombol di aplikasi ini.
-    b.meja += await _kartu_tiket_keluar_menganggur(db)
+    # b.meja += await _kartu_tiket_keluar_menganggur(db)
     return b
 
 
