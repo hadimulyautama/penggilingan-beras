@@ -1221,12 +1221,17 @@ async def stok_produk(db: AsyncSession, *,
     "Titipan pelanggan" (`/stok-produk-jasa`) — satu rumus, dua pertanyaan,
     pola yang sama dengan `hitung_stok_finished_goods`.
 
-    ⚠ BEKATUL TAK PERNAH MUNCUL untuk `jasa_id` terisi: ia beralih milik ke
-    pabrik tepat saat dibukukan (keputusan pemilik 12), jadi "dikemas"/"curah"
-    bekatul SELALU dihitung pabrik-lebar (`hitung_stok_bekatul`,
-    `ByproductStock.jasa_id.is_(None)`) terlepas dari proses mana yang
-    menghasilkannya — mencampurnya dengan `hasil` milik satu pesanan akan
-    menjumlah dua angka yang menjawab pertanyaan berbeda.
+    ⚠⚠ BEKATUL BOLEH MUNCUL untuk `jasa_id` terisi SEJAK 6 Oktober 2026 —
+    PEMBALIKAN dari sebelumnya. Dulu bekatul beralih milik ke pabrik otomatis
+    saat dibukukan (keputusan pemilik 12); laporan lapangan ("bekatulnya kok
+    tidak ada di halaman produk jasa") membalik keputusan itu — bekatul
+    sekarang mengikuti pola broken/menir/reject: tetap milik pesanan sampai
+    dipindah lewat `pindah_kepemilikan_bekatul_curah`/`pindah_kepemilikan_
+    barang_jadi`. Yang menentukan `pemilik_hasil(proc.jasa_id, hasil_ditahan,
+    "bekatul")` per PROSES (bukan tebakan dari `jasa_id` di sini) — pesanan
+    lama yang `hasil_ditahan`-nya belum dibackfill (migrasi
+    `0073_bekatul_bukan_ditahan`) tetap menahan bekatulnya ke pabrik, dan
+    bekatul proses PABRIK (bukan jasa) selalu pabrik, titik.
 
     ⚠ `jasa_id` BOLEH DAFTAR, bukan cuma satu angka — keputusan pemilik 6
     Oktober 2026: "Titipan pelanggan" dikelompokkan per PELANGGAN, bukan per
@@ -1254,10 +1259,22 @@ async def stok_produk(db: AsyncSession, *,
     # hasilnya — bukan dua kueri per proses. Gelungnya sendiri yang dulu
     # mengeluarkan 500 kueri untuk menghasilkan sembilan kartu (ukuran QA 28
     # September 2026: 1,77 detik pada 500 penyosohan).
-    proses = list((await db.execute(
-        select(PolishingProcess).where(milik_proc(PolishingProcess))
+    #
+    # `Jasa.hasil_ditahan` ikut di-JOIN (NULL untuk proses pabrik, tak
+    # masalah — `pemilik_hasil()` memeriksa `jasa_id is None` lebih dulu)
+    # supaya bekatul per proses bisa ditanyakan pemiliknya di bawah, bukan
+    # ditebak dari `jasa_id is not None` begitu saja — lihat ⚠ di loop.
+    from app.models import Jasa
+    from app.services.jasa import pemilik_hasil
+
+    baris_proses = list((await db.execute(
+        select(PolishingProcess, Jasa.hasil_ditahan)
+        .outerjoin(Jasa, Jasa.id == PolishingProcess.jasa_id)
+        .where(milik_proc(PolishingProcess))
         .order_by(PolishingProcess.id.desc())
-    )).scalars().all())
+    )).all())
+    proses = [p for p, _ in baris_proses]
+    ditahan_proc = {p.id: dt for p, dt in baris_proses}
     catatan = await output_sosoh_banyak(db, [p.id for p in proses])
 
     hasil: dict[str, list[RincianProduk]] = {}
@@ -1265,9 +1282,17 @@ async def stok_produk(db: AsyncSession, *,
     for proc in proses:
         jalan = proc.status != "selesai"
         for jenis, kg in catatan.get(proc.id, {}).items():
-            # Bekatul tak pernah "milik pesanan" — lihat ⚠ di docstring.
+            # ⚠ Bekatul BUKAN pengecualian tetap lagi sejak 6 Oktober 2026 —
+            # `pemilik_hasil()` yang menjawab, dibaca dari cuplikan kesepakatan
+            # proses INI, bukan ditebak dari jasa_id saja. Kartu PABRIK
+            # (`jasa_id is None`) tak pernah sampai sini untuk proses jasa
+            # (sudah tersaring `milik_proc` di atas) — jadi cabang ini hanya
+            # berarti untuk kartu JASA: bekatul proses ini masuk hasil
+            # PESANAN hanya kalau kesepakatannya memang tak menahannya.
             if jenis == "bekatul" and jasa_id is not None:
-                continue
+                if pemilik_hasil(proc.jasa_id, ditahan_proc.get(proc.id) or "",
+                                 "bekatul") is None:
+                    continue
             hasil.setdefault(jenis, []).append(RincianProduk(
                 kode=proc.kode_proses, kg=float(kg),
                 waktu=(proc.waktu_selesai if not jalan else proc.waktu_mulai),
@@ -1413,19 +1438,19 @@ async def stok_produk(db: AsyncSession, *,
             # "Tercatat / Belum dicatat", bukan "Dikemas / Curah", dan itu tetap
             # kalimat yang tepat untuk barang yang boleh berumah di dua tempat.
             # Belahan karungnya terbaca di rincian per merk di dalam laci.
+            #
+            # `milik_proc` dan `hitung_stok_bekatul(jasa_id=...)` — bukan lagi
+            # `.is_(None)` tetap: sejak bekatul dicabut dari `HASIL_DITAHAN_
+            # BAWAAN` (6 Oktober 2026), kartu JASA pun bisa punya bekatul
+            # tercatat curah milik pesanan itu sendiri, bukan cuma pabrik.
             masuk_curah = float((await db.execute(
                 select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
                 .where(ByproductStock.jenis_produk == "bekatul",
-                       # Seragam dengan `hitung_stok_bekatul` — lihat catatan
-                       # panjangnya di sana. Bekatul jasa memang dibukukan
-                       # milik pabrik, jadi saringan ini tak membuang apa pun
-                       # hari ini; ia ditulis supaya tetap benar bila sebuah
-                       # pesanan kelak sepakat bekatulnya kembali.
-                       ByproductStock.jasa_id.is_(None))
+                       milik_proc(ByproductStock))
             )).scalar_one())
             dikarungi = dikemas.get(jenis, 0.0)
             keluar_karung = k - keluar_curah.get(jenis, 0.0)
-            punya_rumah = (await hitung_stok_bekatul(db)
+            punya_rumah = (await hitung_stok_bekatul(db, jasa_id=jasa_id)
                            + dikarungi - keluar_karung)
             curah = h - masuk_curah - dikarungi
         else:
@@ -1516,9 +1541,12 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
     begitu lebih buruk daripada tak menampilkannya sama sekali, sebab ia
     terbaca sebagai milik pabrik.
 
-    ⚠ KECUALI BEKATUL: `jasa_id`-nya NULL sejak dibukukan (beralih milik,
-    keputusan pemilik 12), jadi ia memang sudah dan harus TETAP terhitung
-    sebagai stok pabrik — blok bekatul curah di bawah tidak disentuh.
+    ⚠ BEKATUL KARUNG ikut aturan ini apa adanya sejak 6 Oktober 2026 (lihat
+    `HASIL_DITAHAN_BAWAAN`): `jasa_id` dibaca langsung dari barisnya, sama
+    seperti kategori lain — bukan lagi selalu NULL. Blok bekatul CURAH di
+    bawah (baris sintetis, bukan `FinishedGoodsStock`) TETAP pabrik-saja —
+    ia memberi makan layar Stok Gudang 2, bukan Produk Jasa; lihat catatan
+    di baris itu sendiri.
 
     DI SINI, bukan di dalam endpoint, sejak 23 September 2026. Hitungan ini
     dulu terkunci di `gudang2_api.stok`, jadi satu-satunya layar yang bisa
@@ -1642,7 +1670,11 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             # `ukuran` 0 berarti "bukan karung"; templatnya tak mencetaknya.
             "jenis": "bekatul", "nama": "Bekatul", "kemasan": "curah", "ukuran": 0,
             "merk": "", "bahan": "curah",
-            # Selalu pabrik — lihat ⚠ KECUALI BEKATUL di docstring fungsi ini.
+            # PABRIK saja, sengaja — baris ini memberi makan layar Stok
+            # Gudang 2 (bukan Produk Jasa, lihat ⚠ di docstring fungsi ini).
+            # Bekatul curah milik PESANAN tersebut lewat `hitung_stok_
+            # bekatul(jasa_id=...)` sendiri di `layar_produk.
+            # halaman_stok_produk_jasa`, bukan lewat baris sintetis ini.
             "jasa_id": None, "pemilik": None,
             "karung": 0, "kg": curah,
             "asal": [(kode, f"{float(kg):,.0f} kg".replace(",", "."), "curah")

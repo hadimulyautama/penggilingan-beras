@@ -147,16 +147,33 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
     seluruh pesanan pelanggan yang sama disatukan dalam SATU panggilan,
     bukan digabung belakangan dari beberapa kartu terpisah.
 
-    ── Bekatul: disebut, tak pernah dikecualikan ──
+    ── Bekatul: disebut, DAN sejak 6 Oktober 2026 juga berkartu+bertombol ──
 
-    Keluhan pemilik: *"bekatulnya kenapa tidak ada di halaman produk jasa?
-    tetap harus ada."* Bekatul beralih milik ke pabrik tepat saat dibukukan
-    (keputusan pemilik 12) — jadi ia TAK PERNAH jadi kartu `stok_produk`
-    atas nama pelanggan (lihat ⚠ di docstring fungsi itu) — tetapi pemilik
-    barang tetap berhak tahu BERAPA bekatul keluar dari prosesnya, pola
-    yang sama dengan `jasa.nota_jasa()`. Baris INFORMASI, bukan kartu: tak
-    ada tombol pindah kepemilikan, sebab tak ada kepemilikan untuk
-    dipindah — sudah milik pabrik sejak awal.
+    Keluhan pemilik mula-mula: *"bekatulnya kenapa tidak ada di halaman
+    produk jasa? tetap harus ada."* Jawaban pertama (28 September–6 Oktober):
+    baris informasi tanpa tombol, sebab bekatul otomatis milik pabrik
+    (keputusan 12). PEMBALIKAN menyusul hari yang sama, sesudah laporan
+    lapangan operator packing bekatul jasa dan Stok Produk pabrik menuduh
+    salah catat: *"jadi stock terpisah sampai pindah kepemilikan"* — bekatul
+    sekarang mengikuti pola broken/menir/reject apa adanya.
+
+    Akibatnya DUA bentuk sekaligus, dan keduanya BENAR untuk pertanyaan
+    yang berbeda:
+
+      · Bekatul yang MASIH MILIK PESANAN (hasil_ditahan tak menahannya, kasus
+        BARU/bawaan) ikut `kartu` lewat `stok_produk(jasa_id=...)` apa
+        adanya — masuk `samping` di bawah, berkartu PENUH (Hasil sosoh/
+        Keluar/Dikemas/Curah) persis broken/menir/reject, DAN kalau sudah
+        dicatat curah dapat tombol "Pindah kepemilikan" sendiri
+        (`bekatul_curah_kg`, mengikuti bentuk `broken_curah_kg` tepat di
+        bawah) — karung bekatulnya sudah tertangani otomatis lewat `st.blok`
+        yang sama (`boleh_pindah`).
+      · Bekatul yang SUDAH TERLANJUR MILIK PABRIK (pesanan lama yang
+        `hasil_ditahan`-nya belum dibackfill, migrasi
+        `0073_bekatul_bukan_ditahan`) TETAP baris informasi tanpa tombol
+        (`bekatul_kg`) — tak ada kepemilikan untuk dipindah, sudah pabrik.
+        Jarang terjadi pasca migrasi, tapi disebut tetap — bukan
+        disembunyikan, pola yang sama dengan `jasa.nota_jasa()`.
 
     ── Pindah kepemilikan: Admin & Super Admin saja ──
 
@@ -169,7 +186,8 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
 
     from app.models import Pelanggan
     from app.penggilingan.gudang2.models import PolishingProcess
-    from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
+    from app.penggilingan.inventory.finished_goods import (hitung_stok_bekatul,
+                                                            hitung_stok_broken_curah)
     from app.penggilingan.inventory.models import (ByproductStock,
                                                     FinishedGoodsStock, ProductSku)
     from app.peran import can_see_financials
@@ -192,25 +210,30 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
             .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
         )).all()}
 
-        # Bekatul per proses — lalu per pesanan, lewat `source_id` (proses
-        # sosohnya), BUKAN `byproduct_stock.jasa_id` (yang NULL, sudah
-        # pabrik). Dibaca SEKALI untuk seluruh pelanggan, bukan satu kueri
-        # per seksi.
+        # Bekatul yang SUDAH MILIK PABRIK (bukan lagi milik pesanan) — per
+        # proses, lalu per pesanan, lewat `source_id` (proses sosohnya).
+        # Dibaca SEKALI untuk seluruh pelanggan, bukan satu kueri per seksi.
         #
-        # ⚠ DUA RUMAH, dan keduanya dijumlah — bekatul punya dua rumah sejak
+        # ⚠⚠ DISARING `jasa_id IS NULL` — SEJAK 6 Oktober 2026 ini WAJIB,
+        # bukan kosmetik. Bekatul yang MASIH milik pesanan (kasus umum
+        # pasca-pembalikan keputusan 12) sudah tersebut lewat `kartu`
+        # (`stok_produk(jasa_id=...)`, masuk `samping`) dan `bekatul_curah_kg`
+        # di bawah — menjumlahkannya LAGI di sini tanpa saringan ini akan
+        # menghitung bekatul yang SAMA dua kali: sekali sebagai kartu
+        # bertombol, sekali lagi sebagai baris "sudah milik pabrik" yang
+        # justru bohong untuk bekatul yang belum dipindah.
+        #
+        # DUA RUMAH, dan keduanya dijumlah — bekatul punya dua rumah sejak
         # 28 September 2026 (curah `ByproductStock` ATAU dikarungi
         # `FinishedGoodsStock`, lihat catatan panjangnya di `stok.
-        # stok_produk`). Sampai baris ini dibetulkan 6 Oktober 2026, baris
-        # informasi di sini HANYA membaca rumah curah — bekatul jasa yang
-        # langsung dipacking (tanpa singgah "Catat bekatul curah" dulu) tak
-        # pernah tersebut di sini, padahal angkanya sendiri sudah benar di
-        # Stok Produk pabrik (lihat perbaikan sejalan di `stok.stok_produk`).
+        # stok_produk`).
         bekatul_per_proc: dict[int, float] = {}
         for pid, kg in (await db.execute(
             select(ByproductStock.source_id,
                    func.coalesce(func.sum(ByproductStock.berat_kg), 0))
             .where(ByproductStock.jenis_produk == "bekatul",
-                   ByproductStock.source_type == "polishing")
+                   ByproductStock.source_type == "polishing",
+                   ByproductStock.jasa_id.is_(None))
             .group_by(ByproductStock.source_id)
         )).all():
             bekatul_per_proc[pid] = bekatul_per_proc.get(pid, 0.0) + float(kg)
@@ -219,7 +242,8 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
                    func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
             .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
             .where(ProductSku.kategori == "bekatul",
-                   FinishedGoodsStock.source_type == "polishing")
+                   FinishedGoodsStock.source_type == "polishing",
+                   FinishedGoodsStock.jasa_id.is_(None))
             .group_by(FinishedGoodsStock.source_id)
         )).all():
             bekatul_per_proc[pid] = bekatul_per_proc.get(pid, 0.0) + float(kg)
@@ -253,7 +277,14 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
             # menolak jumlah yang terlihat benar di kartu tapi melebihi sisa
             # SATU pesanan itu saja.
             broken_curah_kg = await hitung_stok_broken_curah(db, jasa_id=jasa_ids)
-            if not kartu and bekatul_kg < 0.5 and broken_curah_kg < 0.5:
+            # Bekatul curah yang MASIH milik pesanan ini — sebangun persis
+            # `broken_curah_kg` di atas, bedanya cuma fungsi & jenisnya.
+            # Bekatul yang sudah dikarungi TAK di sini: ia sudah ikut
+            # `kartu`/`samping` (empat suku `stok_produk`, tombolnya lewat
+            # `st.blok` biasa) — baris ini cuma belahan curahnya.
+            bekatul_curah_kg = await hitung_stok_bekatul(db, jasa_id=jasa_ids)
+            if (not kartu and bekatul_kg < 0.5 and broken_curah_kg < 0.5
+                    and bekatul_curah_kg < 0.5):
                 continue
             kemasan: dict[str, list[dict]] = {}
             for k in bj.produk + bj.samping:
@@ -274,6 +305,7 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
                 "curah_beras": sum(k.curah_kg for k in beras if k.curah_kg > 0),
                 "curah_samping": sum(k.curah_kg for k in samping if k.curah_kg > 0),
                 "bekatul_kg": bekatul_kg,
+                "bekatul_curah_kg": bekatul_curah_kg,
                 "broken_curah_kg": broken_curah_kg,
             })
     daftar.sort(key=lambda p: p["pemilik"])

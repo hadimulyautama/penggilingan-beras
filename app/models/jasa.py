@@ -34,14 +34,24 @@ BERJALAN, SELESAI, DIBATALKAN = "berjalan", "selesai", "dibatalkan"
 #: Hasil yang TIDAK kembali ke pelanggan, bawaan kesepakatan hari ini.
 #:
 #: Sekam karena tak terukur — keputusan pemilik: *"susut sekam tidak bisa
-#: dideteksi, karena bisa saja masuk ke penyedot debu."* Bekatul karena
-#: BERALIH MILIK: *"bekatul tidak kembali bukan berarti barangnya tidak boleh
-#: keluar. bekatul otomatis berubah kepemilikan jadi milik kami. tetapi pemilik
-#: barang juga harus tau hasil bekatul dari tiap proses barang miliknya."*
+#: dideteksi, karena bisa saja masuk ke penyedot debu."*
+#:
+#: ⚠⚠ BEKATUL DICABUT DARI DAFTAR INI 6 Oktober 2026 — PEMBALIKAN keputusan
+#: pemilik 12. Dulu *"bekatul otomatis berubah kepemilikan jadi milik kami"*
+#: (kepemilikan OTOMATIS beralih saat dibukukan); laporan lapangan: operator
+#: packing bekatul dari proses jasa, dan Stok Produk pabrik menuduh "dibukukan
+#: melebihi hasil mesin" sebab bekatulnya ikut dihitung di dua tempat yang tak
+#: saling kenal. Keputusan baru: bekatul mengikuti pola broken/menir/reject —
+#: TETAP milik pesanan sampai dipindah lewat tombol "Pindah kepemilikan"
+#: (`pindah_kepemilikan_bekatul_curah`), bukan otomatis.
 #:
 #: Dipakai sebagai NILAI BAWAAN saat pesanan dibuat, lalu disalin ke barisnya.
-#: Jangan dibaca ulang dari sini untuk pesanan lama — itu sebabnya kolomnya ada.
-HASIL_DITAHAN_BAWAAN = "sekam,bekatul"
+#: Jangan dibaca ulang dari sini untuk pesanan lama — itu sebabnya kolomnya
+#: ada. Pesanan yang SUDAH berjalan sebelum 6 Oktober 2026 dibackfill migrasi
+#: `0073_bekatul_bukan_ditahan` supaya bekatul BARU yang dibukukan di bawahnya
+#: ikut aturan baru juga — lihat catatan panjang di migrasi itu untuk kenapa
+#: ini aman dilakukan retroaktif (belum ada bekatul yang terjual).
+HASIL_DITAHAN_BAWAAN = "sekam"
 
 
 class Jasa(Base, TimestampMixin):

@@ -159,6 +159,24 @@ TAB = (
     # kedua ke tempat yang sudah terjangkau lewat sub-menu "Stok".
     ("stok_produk_jasa", "/stok-produk-jasa", "Produk Jasa",
      "Beras & hasil samping milik pesanan jasa", None, "◫"),
+    # ── Stok PK Jasa — permintaan pemilik 6 Oktober 2026 ──
+    #
+    # "tambah satu sub-menu lagi di stok yaitu Stok PK Jasa. semua kartu PK
+    # Jasa nanti disitu. sama seperti stok pk yaitu dibagi blok menjadi di
+    # gudang 1 atau gudang 2." Padanan "stok_produk_jasa" tapi untuk BAHAN
+    # (PK), bukan HASIL: `/stok` sudah mencampur PK pabrik & PK titipan
+    # dalam satu daftar (keputusan 24 September 2026, `LotPk.pemilik`/
+    # `LotPkG2.pemilik` — barangnya memang berdiri di lantai yang sama, dan
+    # menyembunyikannya dari daftar stok akan berselisih dengan yang
+    # terlihat di gudang) — halaman ini menyaring KHUSUS yang berpemilik,
+    # memakai TEMPLAT YANG SAMA (`stok.html`, lewat `JASA_SAJA`) supaya
+    # rupanya konsisten tanpa dua salinan markup yang bisa berselisih.
+    #
+    # Ikonnya "◪" (Geometric Shapes, BUKAN emoji, pola yang sama dengan
+    # ikon pintu lain) — belum dipakai pintu lain, dan siluetnya (kotak
+    # terpotong) membedakannya dari "▦" (Stok) tanpa jauh darinya.
+    ("stok_pk_jasa", "/stok-pk-jasa", "Stok PK Jasa",
+     "PK milik pesanan jasa, di Gudang 1 & Gudang 2", None, "◪"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
     #
     # "kita butuh satu halaman untuk transaksi barang keluar."

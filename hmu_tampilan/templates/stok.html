@@ -19,7 +19,13 @@
       <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
       <path d="M12 13v7"/></svg>
     <div>
-      {% if VIEW == V_POLESAN %}
+      {% if JASA_SAJA %}
+      <h2>Tak ada PK titipan pelanggan</h2>
+      <p class="bantu">
+        Belum ada PK milik pesanan jasa yang berdiri di Gudang 1 maupun
+        Gudang 2 — atau semuanya sudah disosoh/terjual.
+      </p>
+      {% elif VIEW == V_POLESAN %}
       <h2>Tak ada PK tersisa di Gudang 2</h2>
       <p class="bantu">
         Tumpukan kosong — semuanya sudah disosoh, atau belum ada PK yang
@@ -41,7 +47,7 @@
      "cukup tidak untuk satu kiriman", dan itu satu angka. Rinciannya di
      bawah, untuk yang bertanya "yang mana". #}
   <div class="jumlah">
-    <span class="lbl">PK di Gudang 1</span>
+    <span class="lbl">{{ "PK Jasa di Gudang 1" if JASA_SAJA else "PK di Gudang 1" }}</span>
     <div class="jumlah__angka">{{ kg(total) }}<small>kg</small></div>
     {# Lot yang hasilnya tak dicatat TIDAK ikut dijumlahkan — tak ada angka
        yang bisa dijumlahkan. Itu harus disebut di sebelah totalnya, kalau
@@ -307,7 +313,7 @@
 {% if tempat %}
   <div{% if lot %} style="margin-top:18px"{% endif %}>
     <div class="jumlah">
-      <span class="lbl">PK di Gudang 2</span>
+      <span class="lbl">{{ "PK Jasa di Gudang 2" if JASA_SAJA else "PK di Gudang 2" }}</span>
       <div class="jumlah__angka">{{ kg(tempat|sum(attribute="tersedia")) }}<small>kg</small></div>
       <div class="jumlah__ket">
         {{ tempat|length }} kode · menumpuk, belum dipindah ke silo

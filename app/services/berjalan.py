@@ -310,6 +310,8 @@ class Berjalan:
         # SELALU padam juga, dengan alasan yang sama persis: terjangkau lewat
         # sub-menu "Stok", tidak berdiri sendiri di laci.
         mati.append("stok_produk_jasa")
+        # "Stok PK Jasa" — padanan `stok_produk_jasa` untuk PK, pola yang sama.
+        mati.append("stok_pk_jasa")
         # Operator selepan tak ditawari pintu Stok Produk SAMA SEKALI —
         # termasuk lewat sub-menu "Stok" (lihat `submenu()`): beras dan hasil
         # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
@@ -403,7 +405,16 @@ class Berjalan:
         # tujuan saja, "Stok" kembali jadi pintu biasa ke `/stok` — aturan
         # ≥2 yang SAMA dengan dua sub-menu di atas, supaya laci tak pernah
         # menawarkan dropdown tanpa pilihan.
-        isi_stok: list[tuple[str, str, int]] = [("/stok", "Stok PK", 0)]
+        isi_stok: list[tuple[str, str, int]] = [
+            ("/stok", "Stok PK", 0),
+            # "Stok PK Jasa" — padanan "Produk Jasa" tapi untuk BAHAN,
+            # permintaan pemilik 6 Oktober 2026. TIDAK digerbangi
+            # `pintu_produk`: PK jasa berdiri di Gudang 1 MAUPUN Gudang 2
+            # (tak seperti Stok Produk, yang G2-saja), jadi operator selepan
+            # yang sudah melihat PK titipan di "Stok PK" tetap berhak
+            # melihatnya di sini juga.
+            ("/stok-pk-jasa", "Stok PK Jasa", 0),
+        ]
         if self.pintu_produk:
             isi_stok.append(("/stok-produk", "Stok Produk", self.jumlah_produk))
             # "Produk Jasa" — ketiga, keputusan pemilik 6 Oktober 2026 (nama

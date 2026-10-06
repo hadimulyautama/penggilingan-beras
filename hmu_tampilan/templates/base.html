@@ -199,11 +199,41 @@
            TERBUKA SENDIRI saat halamannya yang sedang dibuka: yang sudah
            berada di antrean hampir pasti ingin berpindah grup, dan satu
            ketukan tambahan untuk itu adalah ketukan yang diulang sepanjang
-           hari. #}
+           hari.
+
+           ⚠⚠ "TERBUKA" dulu hanya memeriksa `layar == kunci` — cocok untuk
+           "Antrian tunggu"/"Menunggu keputusan" (filter SATU halaman,
+           `layar`-nya memang selalu `kunci` itu sendiri), tapi SALAH untuk
+           "Stok": tiga dari empat tujuannya (`stok_produk`,
+           `stok_produk_jasa`, `stok_pk_jasa`) punya `layar` SENDIRI yang
+           tak pernah sama dengan `kunci="stok"` — jadi membuka "Produk
+           Jasa" membuat laci menutup dirinya sendiri dan "Stok" terbaca
+           tak sedang dibuka sama sekali. Laporan pemilik 6 Oktober 2026:
+           "ketika yang kita klik menu atau sub menu tertentu, itulah yang
+           di highlight dan tidak usah diringkas sub menu yang ada di
+           sidebar." `grup_aktif` di bawah menjawab KEDUANYA: pintu induk
+           tetap menyala DAN tetap terbuka selama `request.url.path`
+           menunjuk salah satu anaknya — dicocokkan lewat ALAMAT (yang
+           sungguh dibuka peramban), bukan `layar`, sebab sub-menu cuma
+           membawa alamat tiap tujuannya, tak membawa kunci `layar`-nya. #}
+        {# `request` TIDAK SELALU ADA — uji paket merender `base.html`
+           langsung dengan `request=None` (tak lewat permintaan HTTP
+           sungguhan), dan `request.url.path` atas `None` meledakkan
+           SELURUH laci untuk uji itu. `jalan_kini` aman: string kosong
+           tak akan pernah cocok dengan `sub_alamat` mana pun. #}
+        {% set jalan_kini = request.url.path if request else "" %}
         {% set sub = SUBMENU.get(kunci) %}
-        {% if sub %}<details class="pintu-lipat"{{ ' open'|safe if layar == kunci }}>{% endif %}
+        {% set ns = namespace(grup_aktif=(layar == kunci)) %}
+        {% if sub %}
+          {% for sub_alamat, _sn, _sj in sub %}
+            {% if not ns.grup_aktif and jalan_kini == sub_alamat %}
+              {% set ns.grup_aktif = true %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if sub %}<details class="pintu-lipat"{{ ' open'|safe if ns.grup_aktif }}>{% endif %}
         <{{ "summary" if sub else "a" }}
-           class="pintu{{ ' pintu--kini' if layar == kunci }}"
+           class="pintu{{ ' pintu--kini' if ns.grup_aktif }}"
            {% if not sub %}href="{{ alamat }}"{% endif %}
            {{ ' aria-current=page'|safe if layar == kunci }}>
           {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.
@@ -277,7 +307,15 @@
         {% if sub %}
           <div class="pintu-sub">
             {% for sub_alamat, sub_nama, sub_jml in sub %}
-              <a class="pintu-sub__satu" href="{{ sub_alamat }}">
+              {# Anak yang SEDANG DIBUKA menyala sendiri — dicocokkan lewat
+                 alamat (apa yang sungguh dibuka peramban), bukan `layar`:
+                 baris sub-menu ini cuma membawa `sub_alamat`, tak membawa
+                 kunci `layar` tujuannya. Laporan pemilik 6 Oktober 2026
+                 (lihat catatan panjang di `ns.grup_aktif` atasnya). #}
+              {% set sub_kini = jalan_kini == sub_alamat %}
+              <a class="pintu-sub__satu{{ ' pintu-sub__satu--kini' if sub_kini }}"
+                 href="{{ sub_alamat }}"
+                 {{ ' aria-current=page'|safe if sub_kini }}>
                 <span class="pintu-sub__nama">{{ sub_nama }}</span>
                 {# Angkanya NETRAL, bukan warna penagih: yang menagih adalah
                    pintu induknya, dan empat lencana merah berderet di bawahnya

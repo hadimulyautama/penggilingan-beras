@@ -465,16 +465,19 @@ async def produk_jasa_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict
     """Barang milik pesanan jasa yang BISA dipindah kepemilikannya ke pabrik.
 
     Hanya yang SUDAH TERCATAT: barang jadi berkarung (`finished_goods_stock`,
-    lewat `barang_jadi_g2`) dan broken yang sudah dicatat curah
-    (`byproduct_stock`, lewat `hitung_stok_broken_curah`). Hasil mesin yang
-    masih mentah tak punya baris untuk dipindah — lihat catatan panjang di
-    `pindah_kepemilikan_barang_jadi`.
+    lewat `barang_jadi_g2`) dan broken/bekatul yang sudah dicatat curah
+    (`byproduct_stock`, lewat `hitung_stok_broken_curah`/`hitung_stok_
+    bekatul`). Hasil mesin yang masih mentah tak punya baris untuk dipindah —
+    lihat catatan panjang di `pindah_kepemilikan_barang_jadi`.
 
     Nilainya BERAWALAN `bj:`/`cr:`, pola yang sama dengan `barang-bisa-keluar`:
     awalan menentukan jalur (karung atau kg) dan tabel yang disentuh
-    `act_pindah_kepemilikan_produk`. Bekatul TIDAK pernah muncul di sini — ia
-    sudah milik pabrik sejak dibukukan (keputusan pemilik 12), tak ada
-    kepemilikan untuk dipindah.
+    `act_pindah_kepemilikan_produk`. Bekatul IKUT di sini sejak 6 Oktober
+    2026 — PEMBALIKAN keputusan pemilik 12 (bekatul dulu otomatis milik
+    pabrik, sekarang mengikuti pola broken: tetap milik pesanan sampai
+    dipindah). Baris `cr:bekatul|...`-nya sebangun persis `cr:broken|...`,
+    cuma jenisnya beda — lihat `act_pindah_kepemilikan_produk` untuk
+    dispatch-nya.
 
     ⚠ Baris `cr:` DIKELOMPOKKAN PER PELANGGAN (`jasa_ids_per_pelanggan_
     dengan_hasil`), bukan per pesanan — sama seperti `/stok-produk-jasa`.
@@ -484,7 +487,8 @@ async def produk_jasa_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict
     """
     wajib(can_see_financials(user))
     from app.models import Pelanggan
-    from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
+    from app.penggilingan.inventory.finished_goods import (hitung_stok_bekatul,
+                                                            hitung_stok_broken_curah)
     from app.services.jasa import jasa_ids_per_pelanggan_dengan_hasil
     from app.services.stok import barang_jadi_g2
 
@@ -500,23 +504,29 @@ async def produk_jasa_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict
                 "label": f"{k.get('pemilik') or '?'} · {k['nama']} · "
                          f"sisa {k['karung']} karung (isi dalam karung)"})
 
-        # Broken curah DIKELOMPOKKAN PER PELANGGAN, bukan per pesanan — sama
-        # dengan `/stok-produk-jasa` (lihat docstring fungsi di atas serta
-        # `jasa_ids_per_pelanggan_dengan_hasil`): nilainya harus COCOK PERSIS
-        # dengan `nilai=cr:broken|...` yang dikirim tombol per-kartu halaman
-        # itu, sebab `aksi.js` mencocokkannya apa adanya, bukan menguraikannya.
+        # Broken & bekatul curah DIKELOMPOKKAN PER PELANGGAN, bukan per
+        # pesanan — sama dengan `/stok-produk-jasa` (lihat docstring fungsi
+        # di atas serta `jasa_ids_per_pelanggan_dengan_hasil`): nilainya
+        # harus COCOK PERSIS dengan `nilai=cr:broken|...`/`cr:bekatul|...`
+        # yang dikirim tombol per-kartu halaman itu, sebab `aksi.js`
+        # mencocokkannya apa adanya, bukan menguraikannya.
         jasa_per_pelanggan = await jasa_ids_per_pelanggan_dengan_hasil(db)
         nama_pelanggan = {pid: n for pid, n in (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
             .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
         )).all()}
         for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
-            sisa = await hitung_stok_broken_curah(db, jasa_id=jasa_ids)
-            if sisa > 0.5:
-                out.append({
-                    "value": f"cr:broken|{','.join(map(str, jasa_ids))}",
-                    "label": f"{nama_pelanggan.get(pelanggan_id) or '?'} · "
-                             f"Broken (curah) · sisa {kg(sisa)} kg (isi dalam kg)"})
+            nama = nama_pelanggan.get(pelanggan_id) or "?"
+            for jenis, hitung, label in (
+                ("broken", hitung_stok_broken_curah, "Broken"),
+                ("bekatul", hitung_stok_bekatul, "Bekatul"),
+            ):
+                sisa = await hitung(db, jasa_id=jasa_ids)
+                if sisa > 0.5:
+                    out.append({
+                        "value": f"cr:{jenis}|{','.join(map(str, jasa_ids))}",
+                        "label": f"{nama} · {label} (curah) · "
+                                 f"sisa {kg(sisa)} kg (isi dalam kg)"})
     return out
 
 
@@ -553,13 +563,23 @@ async def act_pindah_kepemilikan_produk(req: PindahKepemilikanProdukReq,
                 # KARTU PELANGGAN di /stok-produk-jasa, yang menjumlah
                 # beberapa pesanan satu pelanggan — lihat `layar_produk.
                 # halaman_stok_produk_jasa`). `pindah_kepemilikan_broken_
-                # curah` menerima keduanya.
-                _jenis, jasa_id_s = bagian
+                # curah`/`pindah_kepemilikan_bekatul_curah` menerima keduanya.
+                #
+                # `jenis` DIBACA sekarang, bukan dibuang — sejak bekatul ikut
+                # jalur curah ini (6 Oktober 2026) dua fungsi berbeda perlu
+                # dipilih, sebangun pola `tipe` di atas (bj vs cr).
+                jenis, jasa_id_s = bagian
                 id_list = [int(x) for x in jasa_id_s.split(",") if x]
                 jid = id_list[0] if len(id_list) == 1 else id_list
-                berat = await bj.pindah_kepemilikan_broken_curah(
-                    db, user=u, jasa_id=jid, berat_kg=float(req.jumlah))
-                pesan = f"✓ {kg(berat)} broken curah kini milik pabrik."
+                if jenis == "broken":
+                    berat = await bj.pindah_kepemilikan_broken_curah(
+                        db, user=u, jasa_id=jid, berat_kg=float(req.jumlah))
+                elif jenis == "bekatul":
+                    berat = await bj.pindah_kepemilikan_bekatul_curah(
+                        db, user=u, jasa_id=jid, berat_kg=float(req.jumlah))
+                else:
+                    raise HTTPException(400, f"Jenis curah tak dikenal: {jenis}.")
+                pesan = f"✓ {kg(berat)} {jenis} curah kini milik pabrik."
             else:
                 raise HTTPException(400, "Pilih barang yang mau dipindah dulu.")
         except bj.InventoryError as e:
@@ -1410,9 +1430,9 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              "label": "⇄ Pindah kepemilikan ke pabrik",
              "post": "/api/actions/pindah-kepemilikan-produk",
              "hint": "Boleh sebagian. Satuannya mengikuti pilihan — karung "
-                     "untuk barang berkarung, kg untuk broken curah. Hanya "
-                     "yang SUDAH TERCATAT (dikemas atau dicatat curah) yang "
-                     "bisa dipindah — catat dulu hasil yang masih mentah.",
+                     "untuk barang berkarung, kg untuk broken/bekatul curah. "
+                     "Hanya yang SUDAH TERCATAT (dikemas atau dicatat curah) "
+                     "yang bisa dipindah — catat dulu hasil yang masih mentah.",
              "fields": [
                  {"name": "item", "label": "Barang milik pesanan jasa",
                   "type": "remote", "source": "/api/actions/produk-jasa-tersedia",

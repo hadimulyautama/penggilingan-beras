@@ -1698,6 +1698,11 @@ body.terik {
 }
 .pintu-sub__satu:active { background: var(--panel-2); }
 .pintu-sub__nama { flex: 1 1 auto; }
+/* Anak yang sedang dibuka — bentuknya SAMA dengan `.pintu--kini` (induknya),
+   sebab keduanya menjawab pertanyaan yang sama: "ini yang sedang Anda buka".
+   Permintaan pemilik 6 Oktober 2026: "ketika yang kita klik menu atau sub
+   menu tertentu, itulah yang di highlight." */
+.pintu-sub__satu--kini { background: rgba(79, 179, 217, .10); color: var(--tinta); }
 
 /* Angka di dalam pil saringan halaman antrean. Redup dan lebih kecil: yang
    dibaca lebih dulu NAMA grupnya, dan angka sebesar namanya membuat mata

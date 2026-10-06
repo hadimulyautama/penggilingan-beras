@@ -1,0 +1,19 @@
+{# "Stok PK Jasa" — padanan "Produk Jasa" untuk BAHAN (PK), bukan HASIL.
+
+   Permintaan pemilik 6 Oktober 2026: "tambah satu sub-menu lagi di stok
+   yaitu Stok PK Jasa. semua kartu PK Jasa nanti disitu. sama seperti stok
+   pk yaitu dibagi blok menjadi di gudang 1 atau gudang 2."
+
+   BERKAS INI SENGAJA KOSONG selain baris `extends` — ia bukan salinan
+   `stok.html`, melainkan ALIAS-nya: kartu PK (lot Gudang 1, tempat Gudang
+   2), laci, dan keadaan kosongnya semua didefinisikan SEKALI di sana.
+   `app.web.layar_stok.halaman_stok_pk_jasa` memanggil templat ini (bukan
+   `stok.html` langsung) semata supaya tiap pintu di `nav.TAB` punya
+   berkas `{kunci}.html`-nya sendiri — kontrak yang dijaga
+   `tests/test_antrean.py::test_tiap_layar_berlaci_membawa_ketiga_lencana`
+   — tanpa menulis ulang satu baris markup kartu PK pun; dua templat yang
+   menggambar kartu PK yang sama akan berselisih pada perubahan
+   berikutnya. Isinya disaring JASA SAJA (`lot`/`tempat` yang dikirim
+   `halaman_stok_pk_jasa`) dan `JASA_SAJA=True` mengubah kalimat kepala
+   blok & keadaan kosong — lihat `stok.html` untuk keduanya. #}
+{% extends "stok.html" %}

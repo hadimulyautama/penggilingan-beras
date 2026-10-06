@@ -360,32 +360,40 @@ async def catat_broken(
 
 
 # ─────────────────────────── Stok ───────────────────────────
-async def hitung_stok_bekatul(db: AsyncSession) -> float:
-    """Stok bekatul curah (kg) = masuk − keluar (barang keluar byproduct_curah)."""
+async def hitung_stok_bekatul(
+    db: AsyncSession, *, jasa_id: int | list[int] | None = None,
+) -> float:
+    """Stok bekatul curah (kg) = masuk − keluar (barang keluar byproduct_curah).
+
+    `jasa_id` SENGAJA bawaannya `None` (pabrik) — pola yang sama dengan
+    `hitung_stok_broken_curah`. ⚠ Saringan pemilik ditulis sejak awal walau
+    dulu "hasilnya selalu sama" (bekatul SELALU `jasa_id` NULL, keputusan
+    pemilik 12) — justru supaya SIAP begitu suatu hari sebuah pesanan sepakat
+    bekatulnya KEMBALI. Hari itu datang 6 Oktober 2026: bekatul dicabut dari
+    `HASIL_DITAHAN_BAWAAN`, dan parameter ini yang membuat pembalikannya tak
+    perlu menulis ulang fungsi ini — cuma memanggilnya dengan `jasa_id` terisi.
+    """
+    def milik(k):
+        if jasa_id is None:
+            return k.jasa_id.is_(None)
+        if isinstance(jasa_id, (list, tuple, set, frozenset)):
+            return k.jasa_id.in_(jasa_id)
+        return k.jasa_id == jasa_id
+
     masuk = (
         await db.execute(
             select(func.coalesce(func.sum(ByproductStock.berat_kg), 0)).where(
-                ByproductStock.jenis_produk == "bekatul",
-                # ⚠ Saringan pemilik dipasang di SEMUA pembaca stok pabrik,
-                # termasuk yang ini — walau untuk bekatul hasilnya selalu sama.
-                #
-                # Bekatul jasa memang dibukukan `jasa_id` NULL (beralih milik ke
-                # pabrik, keputusan pemilik 12), jadi saringan ini tak membuang
-                # satu baris pun hari ini. Ia ditulis supaya tetap benar bila
-                # suatu hari sebuah pesanan sepakat bekatulnya KEMBALI — dan
-                # supaya pembaca berikutnya tak menyimpulkan "bekatul
-                # dikecualikan dari aturan pemilik". Yang mengecualikannya
-                # `pemilik_hasil()` di hulu, bukan ketiadaan saringan di sini.
-                ByproductStock.jasa_id.is_(None),
+                ByproductStock.jenis_produk == "bekatul", milik(ByproductStock),
             )
         )
     ).scalar_one()
     keluar = (
         await db.execute(
-            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0)).where(
-                OutgoingItem.item_type == "byproduct_curah",
-                OutgoingItem.jenis_byproduct == "bekatul",
-            )
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+            .where(OutgoingItem.item_type == "byproduct_curah",
+                   OutgoingItem.jenis_byproduct == "bekatul",
+                   milik(OutgoingRecord))
         )
     ).scalar_one()
     return float(masuk) - float(keluar)
@@ -681,6 +689,73 @@ async def pindah_kepemilikan_broken_curah(
         db, table_name="byproduct_stock", record_id=baris_disentuh[0],
         action="UPDATE", changed_by=user.id, field_name="jasa_id",
         new_value=f"{berat_kg:.0f}kg broken → pabrik",
+        aksi="pindah_kepemilikan_produk",
+    )
+    await db.commit()
+    return float(berat_kg)
+
+
+async def pindah_kepemilikan_bekatul_curah(
+    db: AsyncSession, *, user, jasa_id: int | list[int], berat_kg: float,
+) -> float:
+    """Pindah N kg bekatul CURAH dari pesanan jasa ke milik PABRIK.
+
+    Kembaran `pindah_kepemilikan_broken_curah` — baris demi baris sama,
+    cuma `jenis_produk` yang beda — DITULIS TERPISAH, bukan digeneralkan jadi
+    satu fungsi berparameter `jenis`. Broken sudah lama berjalan dan diuji
+    penuh; menggabungkannya dengan bekatul (baru 6 Oktober 2026, pembalikan
+    `HASIL_DITAHAN_BAWAAN`) berarti satu baris kode yang salah bisa merusak
+    keduanya sekaligus. Dua fungsi kecil yang terpisah > satu fungsi besar
+    yang menanggung risiko satu sama lain.
+    """
+    from app.models import ByproductStock
+
+    if not jasa_id:
+        raise InventoryError("Barang pabrik tak punya pemilik untuk dipindah.")
+    if not berat_kg or berat_kg <= 0:
+        raise InventoryError("Sebutkan berat yang dipindah, lebih dari 0 kg.")
+    tersedia = await hitung_stok_bekatul(db, jasa_id=jasa_id)
+    if berat_kg > tersedia + 0.5:
+        raise InventoryError(
+            f"Sisa bekatul curah pesanan ini tinggal {tersedia:,.0f} kg — "
+            f"tak bisa memindahkan {berat_kg:,.0f} kg.".replace(",", "."))
+
+    milik_jasa = (
+        ByproductStock.jasa_id.in_(jasa_id)
+        if isinstance(jasa_id, (list, tuple, set, frozenset))
+        else ByproductStock.jasa_id == jasa_id
+    )
+    rows = (await db.execute(
+        select(ByproductStock)
+        .where(ByproductStock.jenis_produk == "bekatul", milik_jasa)
+        .order_by(ByproductStock.waktu.asc(), ByproductStock.id.asc())
+        .with_for_update()
+    )).scalars().all()
+
+    sisa = float(berat_kg)
+    now = now_local()
+    baris_disentuh: list[int] = []
+    for row in rows:
+        if sisa <= 0.001:
+            break
+        baris_disentuh.append(row.id)
+        baris_kg = float(row.berat_kg)
+        if baris_kg <= sisa + 0.001:
+            row.jasa_id = None
+            sisa -= baris_kg
+        else:
+            row.berat_kg = baris_kg - sisa
+            db.add(ByproductStock(
+                jenis_produk="bekatul", source_type=row.source_type,
+                source_id=row.source_id, berat_kg=sisa,
+                tanggal=now.date(), waktu=now, input_by=user.id,
+                jasa_id=None,
+            ))
+            sisa = 0
+    await log_activity(
+        db, table_name="byproduct_stock", record_id=baris_disentuh[0],
+        action="UPDATE", changed_by=user.id, field_name="jasa_id",
+        new_value=f"{berat_kg:.0f}kg bekatul → pabrik",
         aksi="pindah_kepemilikan_produk",
     )
     await db.commit()

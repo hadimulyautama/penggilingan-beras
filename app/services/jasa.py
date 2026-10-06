@@ -177,30 +177,26 @@ async def pastikan_satu_jasa_bernama(db: AsyncSession, pemilik) -> int | None:
 def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:
     """Siapa yang MEMILIKI hasil `jenis` dari proses milik `jasa_id`.
 
-    Satu proses sosoh jasa menghasilkan barang DUA pemilik:
+    SATU aturan untuk SEMUA jenis hasil — beras, menir, broken, reject,
+    bekatul — ditentukan oleh satu hal saja: apakah `jenis` ada di
+    `hasil_ditahan` pesanan itu. Ada di daftar → pabrik yang menahannya; tidak
+    → kembali ke pesanan. Tak ada cabang "bekatul selalu begini" di sini, dan
+    itu DISENGAJA: lihat ⚠⚠ di `HASIL_DITAHAN_BAWAAN` (`app/models/jasa.py`)
+    untuk kenapa bekatul sempat (sampai 6 Oktober 2026) SELALU ada di daftar
+    tahan bawaan, lalu dicabut — keputusan bisnisnya hidup di SATU tempat
+    (daftar itu), bukan di cabang kode yang tersebar.
 
-        beras (semua grade), menir, broken, reject  →  pesanan (kembali)
-        bekatul                                     →  pabrik  (beralih milik)
-
-    ⚠ KEPUTUSANNYA DITARUH SEKALI, DI HULU — dan itu yang membuat seluruh
-    hilirnya bersih. Keputusan pemilik 12: *"bekatul tidak kembali bukan berarti
-    barangnya tidak boleh keluar. bekatul otomatis berubah kepemilikan jadi
-    milik kami."* Jadi bekatul jasa adalah stok pabrik BIASA: ia masuk Stok
-    Produk, boleh diperintahkan keluar, boleh dijual, lewat jalur yang sama
-    dengan bekatul lain.
-    
-    Karena keputusan itu diambil DI SINI, saringan seragam `WHERE jasa_id IS
-    NULL` di seluruh pembaca stok selamat tanpa satu pun cabang khusus: bekatul
-    ber-`jasa_id` NULL memang HARUS muncul di perintah penjualan biasa.
-
-    ⚠ Ini kebalikan dari yang mudah dikira. Naluri pertama saat menulis saringan
-    adalah "sembunyikan segala yang berbau jasa"; bekatul justru pengecualiannya,
-    dan ia lolos dengan sendirinya — bukan karena ada `if bekatul` di hilir.
+    Sejak bekatul dicabut dari bawaan, bekatul jasa BARU mengikuti pola
+    broken/menir/reject apa adanya: tetap milik pesanan sampai dipindahkan
+    lewat `pindah_kepemilikan_bekatul_curah` / `pindah_kepemilikan_barang_
+    jadi` — bukan lagi otomatis.
 
     `hasil_ditahan` adalah CUPLIKAN kesepakatan pesanan itu, dibaca dari
     barisnya — BUKAN daftar yang ditulis di sini. Kalau kebijakannya dibaca dari
     kode, mengubahnya suatu hari akan mengubah arti seluruh pesanan lama,
-    termasuk yang notanya sudah dipegang pelanggan.
+    termasuk yang notanya sudah dipegang pelanggan — itulah kenapa migrasi
+    `0073_bekatul_bukan_ditahan` membackfill BARIS-barisnya satu per satu,
+    bukan mengandalkan kode ini dibaca ulang.
     """
     if jasa_id is None:
         return None
@@ -921,7 +917,20 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
             baris_out.append("  susut pengeringan, sekam & susut proses")
             baris_out.append("  — tidak diukur terpisah")
 
-    # ── HASIL YANG BERALIH MILIK: bekatul, PER PROSES ──
+    # ── BEKATUL, PER PROSES — untuk diketahui, bukan untuk "Total kembali" ──
+    #
+    # ⚠ DUA RUMAH dijumlah bersama (curah `ByproductStock` + dikarungi
+    # `FinishedGoodsStock`, sebangun catatan panjang di `stok.stok_produk`)
+    # — sampai baris ini dibetulkan 6 Oktober 2026, bekatul yang dipacking
+    # langsung tak pernah tersebut di sini.
+    #
+    # ⚠⚠ DIBACA DARI `source_id` proses, BUKAN `ByproductStock.jasa_id`/
+    # `FinishedGoodsStock.jasa_id` — angka ini menjawab "berapa bekatul
+    # KELUAR dari proses sosoh barang Anda", bukan "berapa yang MASIH milik
+    # Anda". Sejak bekatul dicabut dari `HASIL_DITAHAN_BAWAAN` (pembalikan
+    # keputusan 12), sebagian baris ini bisa jadi MASIH milik pesanan
+    # (belum dipindah) — kalimatnya sengaja tak lagi mengaku "beralih milik
+    # ke pabrik", sebab itu kini belum tentu benar.
     bekatul = (await db.execute(
         select(PolishingProcess.kode_proses, ByproductStock.berat_kg)
         .join(PolishingProcess, PolishingProcess.id == ByproductStock.source_id)
@@ -930,13 +939,24 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
                PolishingProcess.jasa_id == jasa_id)
         .order_by(PolishingProcess.kode_proses)
     )).all()
-    if bekatul:
+    bekatul_karung = (await db.execute(
+        select(PolishingProcess.kode_proses, FinishedGoodsStock.berat_total_kg)
+        .join(PolishingProcess, PolishingProcess.id == FinishedGoodsStock.source_id)
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .where(ProductSku.kategori == "bekatul",
+               FinishedGoodsStock.source_type == "polishing",
+               PolishingProcess.jasa_id == jasa_id)
+        .order_by(PolishingProcess.kode_proses)
+    )).all()
+    per_proses: dict[str, float] = {}
+    for kode, kg in [*bekatul, *bekatul_karung]:
+        per_proses[kode] = per_proses.get(kode, 0.0) + float(kg or 0)
+    if per_proses:
         baris_out.append("─" * 58)
-        baris_out.append("HASIL YANG BERALIH MILIK KE PABRIK — untuk diketahui")
-        baris_out.append("Bekatul, dari proses sosoh barang Anda:")
+        baris_out.append("BEKATUL, dari proses sosoh barang Anda — untuk diketahui")
         jum = 0.0
-        for kode, kg in bekatul:
-            kg = float(kg or 0)
+        for kode in sorted(per_proses):
+            kg = per_proses[kode]
             jum += kg
             baris_out.append(f"   {kode:<16}{_kg_nota(kg):>12}")
         baris_out.append(f"   {'Jumlah':<16}{_kg_nota(jum):>12}")

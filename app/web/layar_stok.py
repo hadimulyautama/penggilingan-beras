@@ -182,3 +182,79 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+
+
+@router.get("/stok-pk-jasa")
+async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
+    """PK milik pesanan jasa saja — padanan `/stok-produk-jasa` untuk BAHAN.
+
+    Permintaan pemilik 6 Oktober 2026: *"tambah satu sub-menu lagi di stok
+    yaitu Stok PK Jasa. semua kartu PK Jasa nanti disitu. sama seperti stok
+    pk yaitu dibagi blok menjadi di gudang 1 atau gudang 2."*
+
+    `/stok` SUDAH mencampur PK pabrik & titipan dalam satu daftar sejak 24
+    September 2026 (`LotPk.pemilik`/`LotPkG2.pemilik`) — barangnya memang
+    berdiri di lantai yang sama, dan menyembunyikannya dari situ akan
+    berselisih dengan yang terlihat di gudang. Halaman ini TIDAK memindahkan
+    barang keluar dari sana (perilaku `/stok` tak berubah); ia cuma
+    menyaring SATU pertanyaan berbeda — "yang mana milik orang lain?" — ke
+    tempatnya sendiri, pola yang sama dengan "Stok Produk" → "Produk Jasa".
+
+    MERENDER `stok_pk_jasa.html` — templat BERISI SATU BARIS, `{% extends
+    "stok.html" %}` tanpa satu pun blok ditimpa, jadi keluarannya PERSIS
+    sama dengan `/stok`, cuma dilayani lewat berkas sendiri (kontrak yang
+    dijaga `test_tiap_layar_berlaci_membawa_ketiga_lencana`: tiap pintu di
+    `nav.TAB` wajib punya `{kunci}.html`-nya). `JASA_SAJA` cuma mengubah
+    kalimat kepala blok & keadaan kosong — lihat `stok.html`.
+
+    TANPA TOMBOL AKSI (koreksi/minta lot/masukkan silo) — pola yang sama
+    dengan "Produk Jasa": halaman INFORMASI, jalan KEDUA ke barang yang
+    sudah punya rumahnya di `/stok`. Mengoreksi atau memindahkan PK titipan
+    tetap lewat `/stok` — menawarkan aksi yang sama dari dua alamat berarti
+    dua tempat yang bisa berselisih memutuskan "siapa yang berhak", dan itu
+    belum diminta pemilik.
+
+    `mutu_aktif` TETAP dibaca sungguhan (bukan dipaksa `False` seperti
+    tombol lain): ia menggerbangi TAMPILAN nilai mutu di kartu
+    (`{% if mutu_aktif %}`), bukan cuma tombolnya — memaksanya mati akan
+    menyembunyikan mutu yang SUDAH dinilai, bukan sekadar mematikan aksi.
+
+    Penyaring gudang & gerbang per-blok SAMA PERSIS dengan `/stok` — operator
+    yang sudah melihat PK titipan tercampur di sana melihat himpunan yang
+    SAMA di sini, cuma terpilah.
+    """
+    from app.services.setelan import fitur_mutu
+    from app.web.layar import GUDANG, MEJA, gudang1, gudang2
+
+    view = getattr(request.state, "view", "tamu")
+    saring = GUDANG if view in MEJA else ()
+    gudang = request.query_params.get("gudang") or ""
+    if gudang not in {g for g, _, _ in saring}:
+        gudang = ""
+    async with SessionLocal() as db:
+        lot = ([l for l in await svc.pk_gudang1(db) if l.pemilik]
+               if (gudang1(view) or gudang2(view)) and gudang in ("", "g1") else [])
+        tempat = ([t for t in await svc.pk_gudang2(db) if t.pemilik]
+                  if gudang2(view) and gudang in ("", "g2") else [])
+        mutu_aktif = await fitur_mutu(db)
+    return await render_laci(
+        request, "stok_pk_jasa.html", layar="stok_pk_jasa",
+        lot=lot, tempat=tempat,
+        SARING_GUDANG=saring, gudang=gudang,
+        produk=[], samping=[], total=sum(l.tersedia for l in lot),
+        # ── TANPA tombol aksi — baca saja ──
+        #
+        # Beda dari `/stok`: halaman ini jalan KEDUA ke barang yang sudah
+        # punya rumahnya sendiri di sana, pola yang sama dengan "Produk
+        # Jasa" (tak ada tombol pindah kepemilikan untuk PK — belum diminta
+        # pemilik). Operator yang ingin mengoreksi atau memindahkan tetap ke
+        # `/stok`; di sini murni "PK siapa, di mana, berapa".
+        boleh_ubah=False, boleh_minta=False, boleh_pindah_tumpukan=False,
+        karung=[], mutu_aktif=mutu_aktif,
+        buka="", nilai="",
+        # Kalimat kepala blok & keadaan kosong menyebut "PK Jasa", bukan
+        # "PK" polos — tanpa ini orang yang sampai di sini lewat tautan
+        # langsung (bukan lewat sub-menu "Stok") tak tahu ia sedang melihat
+        # irisan, bukan daftar utuh.
+        JASA_SAJA=True,
+    )

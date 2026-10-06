@@ -166,7 +166,11 @@ async def test_pesanan_lahir_saat_tiket_diterima_dan_batch_tanpa_pemasok(
         assert r.batch.supplier_id is None
         assert r.batch.jasa_id == r.jasa.id
         assert r.jasa.kode.startswith("JAS-")
-        assert r.jasa.hasil_ditahan == "sekam,bekatul"
+        # Bawaannya "sekam" saja sejak 6 Oktober 2026 — bekatul dicabut dari
+        # `HASIL_DITAHAN_BAWAAN` (pembalikan keputusan 12, lihat catatan
+        # panjangnya di sana): bekatul kini TETAP milik pesanan sampai
+        # dipindah, bukan otomatis milik pabrik.
+        assert r.jasa.hasil_ditahan == "sekam"
     async with pg() as db:
         pemasok = (await db.execute(select(Supplier))).scalars().all()
         assert [s.nama_supplier for s in pemasok if "Budi" in s.nama_supplier] == [], \
@@ -725,10 +729,19 @@ async def test_penyosohan_menolak_dua_pemilik(pg, pemakai, pabrik):
 async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik):
     """⭐⭐ DUA FAKTA YANG BERPISAH, dan keduanya harus bertahan.
 
-    Keputusan pemilik 12: *"bekatul tidak kembali bukan berarti barangnya tidak
-    boleh keluar. bekatul otomatis berubah kepemilikan jadi milik kami. tetapi
-    pemilik barang juga harus tau hasil bekatul dari tiap proses barang
-    miliknya."*
+    Keputusan pemilik 12 (sampai 6 Oktober 2026, bawaan SEMUA pesanan):
+    *"bekatul tidak kembali bukan berarti barangnya tidak boleh keluar.
+    bekatul otomatis berubah kepemilikan jadi milik kami. tetapi pemilik
+    barang juga harus tau hasil bekatul dari tiap proses barang miliknya."*
+
+    PEMBALIKAN menyusul hari yang sama: bekatul kini TETAP milik pesanan
+    secara BAWAAN (lihat `HASIL_DITAHAN_BAWAAN`) — tapi mekanismenya (`jasa.
+    pemilik_hasil()`, dibaca dari `hasil_ditahan` PER PESANAN) tak berubah,
+    dan keputusan 12 masih SAH untuk pesanan yang kesepakatannya memang
+    begitu. Uji ini memaksa jalur itu secara eksplisit (`hasil_ditahan`
+    diisi manual) untuk membuktikan mekanismenya masih benar — jalur
+    BAWAAN (bekatul tetap pesanan) diuji terpisah di `test_stok_produk.py`
+    & `test_pindah_kepemilikan_produk.py`.
 
         MILIK = pabrik          → `byproduct_stock.jasa_id` NULL
         ASAL  = JAS-UJI-520     → lewat `source_id` → `polishing_process.jasa_id`
@@ -737,12 +750,20 @@ async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik)
     satunya. Uji ini menahan KEDUANYA sekaligus: itu sebabnya ia satu uji, bukan
     dua.
     """
-    from app.models import ByproductStock, PolishingProcess, User
+    from sqlalchemy import update
+
+    from app.models import ByproductStock, Jasa, PolishingProcess, User
     from app.penggilingan.gudang2.polishing import mulai_penyosohan
     from app.penggilingan.inventory.finished_goods import (catat_bekatul,
                                                            hitung_stok_bekatul)
 
     jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-520")
+    async with pg() as db:
+        # Kesepakatan pesanan INI menahan bekatulnya ke pabrik — bukan
+        # bawaan sejak 6 Oktober 2026, jadi dipaksa eksplisit di sini.
+        await db.execute(update(Jasa).where(Jasa.id == jid)
+                         .values(hasil_ditahan="sekam,bekatul"))
+        await db.commit()
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
@@ -1051,9 +1072,12 @@ async def test_nota_memisahkan_bekatul_dari_total_kembali(pg, pemakai, admin, pa
         teks = await nota_jasa(db, jid)
 
     assert "Total kembali" in teks
-    # Bekatulnya disebut, PER PROSES, dan di bagian yang terpisah.
-    assert "BERALIH MILIK" in teks
-    assert kode_pol in teks.split("BERALIH MILIK")[1], \
+    # Bekatulnya disebut, PER PROSES, dan di bagian yang terpisah. Kalimatnya
+    # TAK LAGI mengaku "beralih milik ke pabrik" (pembalikan keputusan 12,
+    # 6 Oktober 2026) — itu kini belum tentu benar, bisa saja masih milik
+    # pesanan sampai dipindah lewat tombol.
+    assert "BEKATUL, dari proses sosoh barang Anda" in teks
+    assert kode_pol in teks.split("BEKATUL, dari proses sosoh barang Anda")[1], \
         "bekatul tidak dirinci per proses sosoh"
     # Dan ia TIDAK ikut ke "Total kembali": belum ada yang diambil sama sekali.
     blok_kembali = teks.split("Total kembali")[1].splitlines()[0]

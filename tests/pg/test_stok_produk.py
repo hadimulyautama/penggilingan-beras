@@ -234,8 +234,10 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
     `tests/test_grup_antrean.py::
     test_pintu_stok_produk_sendiri_selalu_padam_di_laci`) — yang dulu
     membedakan Admin/operator G2 dari operator G1 di SINI sekarang
-    dibedakan lewat ISI sub-menu "Stok": dua tujuan untuk yang boleh,
-    satu (jadi tak bersub-menu sama sekali) untuk operator Gudang 1.
+    dibedakan lewat ISI sub-menu "Stok": empat tujuan untuk yang boleh,
+    dua ("Stok PK", "Stok PK Jasa" — TIDAK bersub-menu KOSONG, sejak "Stok
+    PK Jasa" ada 6 Oktober 2026 dan tak digerbangi `pintu_produk`) untuk
+    operator Gudang 1.
     """
     from sqlalchemy import select
 
@@ -264,14 +266,21 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
     for b, siapa in ((b1, "op1"), (b2, "admin"), (b3, "op2")):
         assert "stok_produk" in b.lencana()["PINTU_MATI"], \
             f"{siapa}: pintu Stok Produk sendiri harus selalu padam"
-    assert "stok" not in b1.submenu(), "operator G1 ikut ditawari Stok Produk"
-    # "Produk Jasa" (6 Oktober 2026, semula "Titipan pelanggan") ikut
-    # sub-menu "Stok" sebagai tujuan ketiga — lihat `CLAUDE.md` §
-    # "Stok Produk — barang jasa".
+    # Operator G1 TETAP bersub-menu "Stok" sejak "Stok PK Jasa" ada (6
+    # Oktober 2026) — PK titipan berdiri di Gudang 1 juga, jadi "Stok PK
+    # Jasa" TIDAK digerbangi `pintu_produk` (lihat `Berjalan.submenu()`).
+    # Yang dulu membedakannya ("stok" sama sekali tak ditawarkan") kini
+    # dibedakan lewat ISI-nya: dua tujuan untuk G1 (bukan empat).
+    assert [nama for _, nama, _ in b1.submenu()["stok"]] == \
+        ["Stok PK", "Stok PK Jasa"], \
+        "operator G1 ikut ditawari Stok Produk/Produk Jasa"
+    # "Produk Jasa" (6 Oktober 2026, semula "Titipan pelanggan") dan "Stok
+    # PK Jasa" (padanannya untuk BAHAN) ikut sub-menu "Stok" — lihat
+    # `CLAUDE.md` § "Stok Produk — barang jasa".
     assert [nama for _, nama, _ in b2.submenu()["stok"]] == \
-        ["Stok PK", "Stok Produk", "Produk Jasa"]
+        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa"]
     assert [nama for _, nama, _ in b3.submenu()["stok"]] == \
-        ["Stok PK", "Stok Produk", "Produk Jasa"]
+        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa"]
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
 
@@ -484,13 +493,21 @@ async def test_selisih_sekecil_beda_timbangan_bukan_alarm(pg, sosoh):
 async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
     """Cacat lapangan 6 Oktober 2026: operator packing 1.900 kg bekatul dari
     proses JASA, dan kartu pabrik menuduh "dibukukan melebihi hasil mesin
-    680 kg" — padahal bekatulnya memang jadi stok pabrik (keputusan pemilik
-    12), cuma tak pernah ikut terhitung di sisi "hasil".
+    680 kg" — padahal pesanan INI kesepakatannya menahan bekatul ke pabrik
+    (`hasil_ditahan` eksplisit, lihat di bawah), cuma tak pernah ikut
+    terhitung di sisi "hasil".
 
     Akarnya: `hasil["bekatul"]` dulu dijumlah dari `proses` yang SUDAH
     disaring `jasa_id IS NULL` (kartu pabrik) — proses jasa tak pernah masuk
     daftar itu sama sekali, jadi bekatulnya lenyap dari pembilang padahal
     pembukuannya (sisi `dikemas`) memang tak menyaring asal prosesnya.
+
+    ⚠ `hasil_ditahan="sekam,bekatul"` DIISI EKSPLISIT di sini — bukan lagi
+    bawaan sejak pembalikan keputusan 12 (`HASIL_DITAHAN_BAWAAN` kini
+    "sekam" saja). Uji ini membuktikan mekanisme merge-ke-pabrik (`stok.
+    stok_produk`) masih benar untuk pesanan yang KESEPAKATANNYA memang
+    menahan bekatul; jalur BAWAAN (bekatul tetap pesanan) diuji di
+    `test_pindah_kepemilikan_produk.py`.
     """
     from app.database import now_local
     from app.models import Jasa, Pelanggan, User
@@ -503,11 +520,10 @@ async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
         pel = Pelanggan(nama_pelanggan="Pak Jasa")
         db.add(pel)
         await db.flush()
-        jasa = Jasa(kode="JAS-2610-099", pelanggan_id=pel.id, status="berjalan")
+        jasa = Jasa(kode="JAS-2610-099", pelanggan_id=pel.id, status="berjalan",
+                    hasil_ditahan="sekam,bekatul")
         db.add(jasa)
         await db.flush()
-        assert jasa.hasil_ditahan == "sekam,bekatul", \
-            "bawaan pesanan berubah — uji ini perlu disesuaikan"
 
         p = PolishingProcess(kode_proses="POL-UJI-JASA-01", status="selesai",
                              waktu_mulai=now_local(), waktu_selesai=now_local(),
@@ -531,12 +547,13 @@ async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
     assert not k.alarm, "dibukukan (1.880) < hasil (1.900) — tak ada alasan alarm"
     _persamaan(k)
 
-    # Dan kartu JASA tetap tak pernah menyebut bekatul sebagai miliknya —
-    # pengecualian di atas HANYA untuk kartu pabrik.
+    # Dan kartu JASA pesanan INI tetap tak menyebut bekatul sebagai
+    # miliknya — kesepakatannya (`hasil_ditahan`) memang menahannya ke
+    # pabrik, jadi `pemilik_hasil()` membuangnya dari sisi pesanan.
     async with pg() as db:
         kartu_jasa = await stok_produk(db, jasa_id=jasa.id)
     assert not any(x.jenis == "bekatul" for x in kartu_jasa), \
-        "bekatul muncul di kartu jasa — ia tak pernah milik pesanan"
+        "bekatul muncul di kartu jasa walau hasil_ditahan menahannya"
 
 
 async def test_proses_berjalan_tergambar_belum_final_di_kartu_kategori(pg, sosoh):

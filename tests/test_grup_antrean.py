@@ -214,27 +214,33 @@ def test_angka_submenu_datang_dari_daftar_yang_akan_digambar():
 def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
     b = Berjalan(pintu_produk=True)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
+                                   ("/stok-pk-jasa", "Stok PK Jasa", 0),
                                    ("/stok-produk", "Stok Produk", 0),
                                    ("/stok-produk-jasa", "Produk Jasa", 0)]
 
 
 def test_stok_sub_menu_angka_produk_ikut_tapi_stok_pk_tetap_nol():
-    """Stok PK tak pernah punya lencana — tak seperti Antrian tunggu/
-    Keputusan, "Stok" tak menagih pekerjaan. "Produk Jasa" (6 Oktober 2026,
-    semula "Titipan pelanggan") juga tak pernah, dengan alasan yang sama:
-    murni informasi."""
+    """Stok PK (dan Stok PK Jasa) tak pernah punya lencana — tak seperti
+    Antrian tunggu/Keputusan, "Stok" tak menagih pekerjaan. "Produk Jasa"
+    (6 Oktober 2026, semula "Titipan pelanggan") juga tak pernah, dengan
+    alasan yang sama: murni informasi."""
     b = Berjalan(pintu_produk=True, jumlah_produk=3)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
+                                   ("/stok-pk-jasa", "Stok PK Jasa", 0),
                                    ("/stok-produk", "Stok Produk", 3),
                                    ("/stok-produk-jasa", "Produk Jasa", 0)]
 
 
-def test_stok_tanpa_sub_menu_bila_stok_produk_padam():
-    """Operator selepan: 'Stok Produk' tak ditawarkan sama sekali (lihat
-    `Berjalan.lencana`), jadi 'Stok' tinggal SATU tujuan — pintu biasa,
-    bukan dropdown tanpa pilihan. Aturan ≥2 yang sama dengan Antrian tunggu
-    di atas."""
-    assert "stok" not in Berjalan(pintu_produk=False).submenu()
+def test_stok_tetap_bersub_menu_bila_stok_produk_padam():
+    """Operator selepan: 'Stok Produk' & 'Produk Jasa' tak ditawarkan sama
+    sekali (lihat `Berjalan.lencana`) — tapi 'Stok' TETAP dropdown berisi
+    DUA tujuan ('Stok PK', 'Stok PK Jasa'), bukan pintu biasa: beda dari
+    sebelum "Stok PK Jasa" ada (dulu 'Stok' sendirian berarti SATU tujuan).
+    PK titipan berdiri di Gudang 1 juga, jadi operator selepan tetap berhak
+    melihatnya — "Stok PK Jasa" TIDAK digerbangi `pintu_produk` (lihat
+    `submenu()`)."""
+    assert Berjalan(pintu_produk=False).submenu()["stok"] == [
+        ("/stok", "Stok PK", 0), ("/stok-pk-jasa", "Stok PK Jasa", 0)]
 
 
 def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():

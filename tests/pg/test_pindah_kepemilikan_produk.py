@@ -378,18 +378,18 @@ async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
 
 async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
     """Laporan lapangan 6 Oktober 2026: *"saya baru saja packing bekatul dari
-    proses jasa. tetapi tidak ada di halaman produk jasa."*
-
-    `bekatul_per_proc` dulu HANYA membaca `ByproductStock` (jalur "Catat
-    bekatul curah") — bekatul yang dikarungi langsung lewat `catat_packing`
-    (jalur KEDUA bekatul, sejak 28 September 2026) tak pernah dijumlahkan,
-    walau `source_id`-nya menunjuk proses yang SAMA. Operator yang packing
-    langsung (tanpa singgah "Catat bekatul curah" dulu) kehilangan barisnya.
+    proses jasa. tetapi tidak ada di halaman produk jasa."* — lalu koreksi
+    yang lebih dalam: *"jadi stock terpisah sampai pindah kepemilikan"*,
+    membalik keputusan pemilik 12. `titipan` memakai `HASIL_DITAHAN_BAWAAN`
+    baru ("sekam" saja), jadi bekatul proses jasa1 di sini TETAP milik
+    pesanan — bukan baris informasi pabrik lagi, melainkan kartu PENUH
+    (sebangun broken/menir/reject) di blok "Hasil samping", dengan karungnya
+    bertombol "Pindah kepemilikan" persis seperti kemasan lain.
     """
     from app.database import now_local
-    from app.models import User
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.models import User
 
     async with pg() as db:
         db.add(PolishingOutputLog(
@@ -408,6 +408,16 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
     finally:
         await c.aclose()
     assert r.status_code == 200
-    assert "Bekatul dari hasil sosoh" in r.text
-    assert "800" in r.text or "800,0" in r.text or "800.0" in r.text, \
-        "bekatul yang dikarungi dari proses jasa tak tersebut angkanya"
+    # Kartu PENUH di "Hasil samping" — bukan baris informasi pabrik: judulnya
+    # "Bekatul" saja (pola `padat--samping`, sebangun broken/menir/reject),
+    # dan "Tercatat" (800, dikarungi) + "Belum dicatat" (100, belum singgah
+    # jalur mana pun) menjumlah persis hasil mesin (900).
+    assert "Bekatul dari hasil sosoh" not in r.text, \
+        "bekatul masih dibaca sebagai milik pabrik — hasil_ditahan tak terbaca"
+    assert ">Bekatul<" in r.text and ">900<" in r.text
+    assert "800&nbsp;kg · 20&nbsp;krg" in r.text, \
+        "bekatul yang dikarungi tak tersebut angkanya (800 kg, 20 karung)"
+    # Tombol pindah kepemilikan untuk karungnya — sama seperti kemasan lain,
+    # tak perlu pengkabelan baru (lihat docstring `pemilik_hasil`).
+    assert "buka=pindah_kepemilikan_produk&amp;nilai=bj:" in r.text, \
+        "tombol pindah kepemilikan bekatul (karung) tak muncul"
