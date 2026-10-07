@@ -804,8 +804,15 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
     assert "Beras Medium" in h
     # Pembeli & truknya ikut: yang mencari truk tertentu mencarinya lewat plat.
     assert "Toko Baru" in h and "B 1234 XY" in h
-    # Dan jejak tiga langkahnya terbaca pada yang sudah tutup.
+    # Dan jejak tiga langkahnya terbaca pada yang sudah tutup — SIAPA, bukan
+    # cuma KAPAN (permintaan pemilik 7 Oktober 2026: "diperintah siapa,
+    # dimuat siapa, dan diverifikasi siapa harus jelas"). `lama` lewat
+    # ketiga langkah: `_perintah`/`verifikasi` oleh "Admin Uji", `muat_semua`
+    # oleh "Op Polesan" — dan NAMANYA, bukan cuma labelnya, wajib tergambar.
     assert "Diperintah" in h and "Dimuat" in h and "Diverifikasi" in h
+    assert h.count("Admin Uji") >= 2, \
+        "nama pemerintah & pemverifikasi tak tergambar di jejaknya"
+    assert "Op Polesan" in h, "nama pemuat tak tergambar di jejaknya"
 
 
 async def test_operator_selepan_tak_ditawari_pintu_barang_keluar(pg, gudang):

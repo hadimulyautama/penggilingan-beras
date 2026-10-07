@@ -328,6 +328,27 @@ class Berjalan:
         mati.append("riwayat_giling")
         mati.append("riwayat_pengeringan")
         mati.append("riwayat_transfer")
+        # "List audit" — permintaan pemilik 7 Oktober 2026: jangan tampil di
+        # laci, cukup lewat tombol di Pengaturan. Pola sama yang lain di
+        # atas: pintunya sendiri padam, halamannya (`/audit`) tak berubah
+        # sama sekali — cuma jalan masuknya pindah dari laci ke Pengaturan,
+        # sebab halaman ini bukan pekerjaan harian (dibuka sesekali untuk
+        # menelusuri jejak, bukan tiap jam seperti antrean).
+        mati.append("audit")
+        # "Jasa" — permintaan pemilik 7 Oktober 2026: "singkirkan dulu saja.
+        # tidak usah ditampilkan dulu sampai saya tau memanfaatkannya untuk
+        # apa." BEDA dari yang lain di atas: bukan karena ia terjangkau
+        # lewat jalan lain (tak ada dropdown/tombol pengganti) — pintunya
+        # cuma dipadamkan sementara, atas permintaan eksplisit, sampai
+        # pemilik memutuskan kelak. Halaman `/jasa` sendiri TAK disentuh:
+        # masih bisa dibuka lewat alamatnya, dan `Berjalan.untuk_staff()`
+        # dkk. yang membacanya tak berubah sama sekali.
+        mati.append("jasa")
+        # "Kabar" — permintaan pemilik 7 Oktober 2026, sama pola dengan
+        # "Jasa" barusan: disembunyikan sementara, tanpa jalan pengganti.
+        # Lencananya (`jumlah_kabar`/`kabar_merah`) TETAP dihitung — kelak
+        # kalau pintunya dibuka lagi, lencananya tak perlu dikabel ulang.
+        mati.append("kabar")
         # Operator selepan tak ditawari pintu Stok Produk SAMA SEKALI —
         # termasuk lewat sub-menu "Stok" (lihat `submenu()`): beras dan hasil
         # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
@@ -411,16 +432,15 @@ class Berjalan:
         # baris "Semua" di sini, sebab tak ada daftar utuh yang lebih besar
         # dari keduanya untuk dituju.
         #
-        # Angka di baris "Stok PK" sengaja 0: pintu "Stok" tak pernah punya
-        # lencana (tak seperti "Stok Produk", yang lencananya `jumlah_produk`
-        # — beras yang belum dipacking). `{% if sub_jml %}` di templat
-        # membuang badge "0" itu, bukan menggambarnya sebagai kebisingan.
-        #
-        # "Stok Produk" hanya ikut bila `pintu_produk` — operator selepan
-        # tak boleh melihatnya sama sekali (lihat `lencana()`). Dengan satu
-        # tujuan saja, "Stok" kembali jadi pintu biasa ke `/stok` — aturan
-        # ≥2 yang SAMA dengan dua sub-menu di atas, supaya laci tak pernah
-        # menawarkan dropdown tanpa pilihan.
+        # Angka di tiap baris sengaja 0 — TERMASUK "Stok Produk" (permintaan
+        # pemilik 7 Oktober 2026: "tidak perlu ada angkanya"). Sampai hari
+        # itu "Stok Produk" sendirian memakai `jumlah_produk` (beras yang
+        # belum dipacking) sebagai lencananya; sekarang pintu "Stok" tak
+        # pernah punya lencana sama sekali, konsisten di keempat tujuannya.
+        # `{% if sub_jml %}` di templat membuang badge "0" itu, bukan
+        # menggambarnya sebagai kebisingan. `jumlah_produk` sendiri TETAP
+        # dihitung (`b.jumlah_produk`) — cuma tak lagi disebut di sini;
+        # layar `/stok-produk` sendiri yang menyebutnya di dalam halaman.
         isi_stok: list[tuple[str, str, int]] = [
             ("/stok", "Stok PK", 0),
             # "Stok PK Jasa" — padanan "Produk Jasa" tapi untuk BAHAN,
@@ -432,7 +452,7 @@ class Berjalan:
             ("/stok-pk-jasa", "Stok PK Jasa", 0),
         ]
         if self.pintu_produk:
-            isi_stok.append(("/stok-produk", "Stok Produk", self.jumlah_produk))
+            isi_stok.append(("/stok-produk", "Stok Produk", 0))
             # "Produk Jasa" — ketiga, keputusan pemilik 6 Oktober 2026 (nama
             # "Titipan pelanggan" semula, diganti atas permintaan pemilik).
             # Angkanya 0 dengan alasan yang sama dengan "Stok PK": halaman

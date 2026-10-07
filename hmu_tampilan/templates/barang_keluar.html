@@ -139,18 +139,23 @@
       {# ── Jejak tiga langkahnya ──
          Siapa dan kapan, bertiga terpisah. Tiga orang dengan tiga tanggung
          jawab; satu baris "terakhir diubah oleh" menghapus justru pertanyaan
-         yang kelak ditanyakan — siapa yang memerintahkan muatan yang salah. #}
+         yang kelak ditanyakan — siapa yang memerintahkan muatan yang salah.
+
+         ⚠ Permintaan pemilik 7 Oktober 2026: "diperintah siapa, dimuat
+         siapa, dan diverifikasi siapa harus jelas." Sebelum ini baris
+         `oleh` ditarik ke dalam gelung tapi TAK PERNAH dicetak — kartunya
+         cuma menjawab KAPAN, bukan SIAPA, padahal itulah pertanyaan yang
+         disebut di kepala catatan ini sendiri ("siapa yang
+         memerintahkan..."). `k.jejak` kini sudah berisi (label, waktu,
+         nama) — nama diselesaikan borongan di `layar_keluar._nama_orang`,
+         bukan ditebak dari id mentah di sini. #}
       <div class="anak__kepala">Jejaknya</div>
-      {% for label, waktu, oleh in [
-            ("Diperintah", k.rec.waktu_perintah, k.rec.diperintah_oleh),
-            ("Dimuat", k.rec.waktu_muat, k.rec.dimuat_oleh),
-            ("Diverifikasi", k.rec.waktu_verifikasi, k.rec.diverifikasi_oleh)] %}
-        {% if waktu %}
-          <div class="anak__baris">
-            <span class="anak__nama">{{ label }}</span>
-            <span class="anak__kg">{{ waktu | jam }}</span>
-          </div>
-        {% endif %}
+      {% for label, waktu, nama in k.jejak %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ label }}</span>
+          <span class="anak__kg">{{ waktu | jam }}</span>
+          <span class="anak__jam">{{ nama or "?" }}</span>
+        </div>
       {% endfor %}
 
       {% if k.rec.timbangan_transaksi_id %}

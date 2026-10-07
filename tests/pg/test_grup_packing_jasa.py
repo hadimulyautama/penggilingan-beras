@@ -128,3 +128,28 @@ async def test_filter_grup_via_http_memisah_pabrik_dan_titipan(pg, dua_lot):
 
     assert dua_lot["kode_pabrik"] in r_pabrik.text
     assert dua_lot["kode_jasa"] not in r_pabrik.text
+
+
+async def test_tombol_kartu_membawa_saringan_grup_yang_aktif(pg, dua_lot):
+    """⭐ Laporan lapangan 7 Oktober 2026: memilih sub-menu Antrian tunggu
+    lalu menekan kartu yang membuka borang membuat halaman kembali
+    menampilkan SEMUA kartu sesudah borang ditutup/disimpan — bukan tetap
+    di sub-menu yang dipilih.
+
+    Akarnya `_benda.html`: tautan pembuka borang menulis `{{ alamat }}
+    ?buka=...` dari nol, membuang `?grup=` yang sedang aktif di alamat
+    peramban. `PINDAH.segarkan()` lalu menyegarkan alamat SAAT ITU — yang
+    sudah telanjur polos tanpa `grup=`. Dibuktikan di sini bahwa tautan
+    kartu di halaman TERSARING sudah membawa `grup=` ketika dibuka.
+    """
+    c = await _klien(pg, peran="admin")
+    try:
+        r = await c.get("/aksi?grup=packing")
+    finally:
+        await c.aclose()
+    assert r.status_code == 200
+    # Kartu `catat_packing` pabrik ini lewat cabang `{% elif b.aksi %}` —
+    # tautannya wajib menyebut KEDUANYA: grup yang sedang aktif, dan aksi
+    # yang akan dibuka. `&amp;` sebab href di-escape HTML seperti biasa.
+    assert "href=\"/aksi?grup=packing&amp;buka=catat_packing" in r.text, \
+        "tautan kartu kehilangan saringan ?grup= yang sedang aktif"

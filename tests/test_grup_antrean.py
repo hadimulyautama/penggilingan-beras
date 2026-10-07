@@ -219,15 +219,17 @@ def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
                                    ("/stok-produk-jasa", "Produk Jasa", 0)]
 
 
-def test_stok_sub_menu_angka_produk_ikut_tapi_stok_pk_tetap_nol():
+def test_stok_sub_menu_tak_ada_satu_pun_angka_walau_jumlah_produk_terisi():
     """Stok PK (dan Stok PK Jasa) tak pernah punya lencana — tak seperti
-    Antrian tunggu/Keputusan, "Stok" tak menagih pekerjaan. "Produk Jasa"
-    (6 Oktober 2026, semula "Titipan pelanggan") juga tak pernah, dengan
-    alasan yang sama: murni informasi."""
+    Antrian tunggu/Keputusan, "Stok" tak menagih pekerjaan. "Stok Produk"
+    pun sejak 7 Oktober 2026 (permintaan pemilik: "tidak perlu ada
+    angkanya") — sebelumnya satu-satunya baris yang memakai `jumlah_produk`
+    sebagai lencananya, sekarang sama seperti ketiga baris lain: murni
+    informasi, tanpa badge, berapa pun `jumlah_produk`-nya."""
     b = Berjalan(pintu_produk=True, jumlah_produk=3)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
                                    ("/stok-pk-jasa", "Stok PK Jasa", 0),
-                                   ("/stok-produk", "Stok Produk", 3),
+                                   ("/stok-produk", "Stok Produk", 0),
                                    ("/stok-produk-jasa", "Produk Jasa", 0)]
 
 
@@ -249,6 +251,21 @@ def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():
     for pintu_produk in (True, False):
         mati = Berjalan(pintu_produk=pintu_produk).lencana()["PINTU_MATI"]
         assert "stok_produk" in mati
+
+
+def test_audit_jasa_kabar_padam_di_laci_permintaan_pemilik_7_oktober():
+    """Tiga pintu dipadamkan permintaan pemilik 7 Oktober 2026 — tanpa
+    syarat, untuk semua orang:
+
+      · "audit" — digantikan tombol di Pengaturan (lihat `test_setelan.py::
+        test_tombol_list_audit_hanya_untuk_admin_ke_atas`), halamannya
+        sendiri tak berubah;
+      · "jasa" & "kabar" — disembunyikan sementara TANPA jalan pengganti,
+        sampai pemilik memutuskan kelak. Alamatnya (`/jasa`, `/kabar`)
+        tetap bisa diketik — menyembunyikan pintu bukan penjagaan."""
+    mati = Berjalan().lencana()["PINTU_MATI"]
+    for kunci in ("audit", "jasa", "kabar"):
+        assert kunci in mati, kunci
 
 
 # ═══════ Sub-menu "Riwayat Proses" — Penyosohan vs Penggilingan/Pengeringan/

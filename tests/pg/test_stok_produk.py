@@ -1605,3 +1605,63 @@ async def test_kartu_bekatul_membawa_tombol_pencatatan_curahnya(pg, sosoh):
     # tanpa `aksi.js` tombolnya cuma memuat ulang halaman, tanpa satu galat.
     assert 'id="lembar"' in h, "halamannya bukan tuan rumah lembarnya"
     assert "aksi.js" in h, "aksi.js tak dimuat — tombolnya takkan berbuat apa-apa"
+
+
+async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh):
+    """⭐ Laporan lapangan 7 Oktober 2026: kartu Broken menampilkan tombol
+    "Catat bekatul (curah)" — salah jenis sama sekali.
+
+    Akarnya: `curah_saja` (`stok.py`) diperluas dari "bekatul saja" menjadi
+    "bekatul ATAU broken" saat memperbaiki bug "Pindah kepemilikan curah"
+    (7 Oktober 2026) — supaya kartu Broken ikut membedakan "tercatat" dari
+    "belum dicatat" seperti Bekatul. Tapi templat tombolnya (`_stok.html`)
+    masih menulis `catat_bekatul` + "Catat bekatul (curah)" TANPA SYARAT,
+    dengan asumsi lama "curah_saja berarti bekatul" — jadi begitu Broken
+    ikut lolos syarat `curah_saja`, tombolnya ikut tergambar, tapi salah isi.
+
+    `catat_broken` sudah lama ada & terpasang penuh di katalog aksi
+    (`aksi_inventory.py`) — sebangun persis `catat_bekatul` — jadi
+    perbaikannya murni soal templat memilih yang benar lewat `k.jenis`.
+    """
+    import httpx
+
+    from app.database import now_local
+    from app.models import ProduksiAkun, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    from app.main import app
+
+    # Broken yang KELUAR MESIN tetapi belum dibukukan sama sekali — kartunya
+    # harus membaca "belum dicatat" dan menawarkan tombol pencatatannya,
+    # sama seperti kartu Bekatul di uji sebelumnya.
+    async with pg() as db:
+        db.add(PolishingOutputLog(polishing_process_id=sosoh["proses_id"],
+                                  jenis="broken", berat_kg=800,
+                                  waktu_update=now_local(),
+                                  input_by=sosoh["user"]))
+        await db.commit()
+
+    async with pg() as db:
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_broken_tombol",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    h = r.text
+    assert "buka=catat_broken" in h, \
+        "tombol pencatatan broken curah tak tergambar di kartunya"
+    assert "Catat broken (curah)" in h
+    # Dan BUKAN tombol bekatul — kartu ini tak punya bekatul sama sekali,
+    # jadi `buka=catat_bekatul` muncul di sini hanya kalau bug-nya kembali.
+    assert "buka=catat_bekatul" not in h, \
+        "kartu Broken salah menawarkan tombol Bekatul"

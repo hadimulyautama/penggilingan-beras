@@ -96,6 +96,39 @@ def test_setelan_kerja_hanya_untuk_admin():
     assert "Sebab berhenti · " not in penuh, "judul lama yang berdiri sendiri kembali"
 
 
+def _render_pengaturan(*, tuan: bool, blok_kelola: bool = False):
+    return templates.get_template("pengaturan.html").render(
+        request=None, akun=_akun("admin" if tuan else "operator"),
+        layar="pengaturan", MENUNGGU=0, MODE_UJI=False, LIHAT_SEBAGAI=None,
+        kembali=None, pesan_ok=None, err="", tuan=tuan, target_bawaan=None,
+        sebab_jeda={}, mutu_aktif=False, kledo=None, JAM_BATAS=48,
+        blok_setelan=tuan, PROSES=(), blok_kelola=blok_kelola,
+        kelola_darurat=False, blok_lihat_sebagai=False, blok_kerja_gudang=False,
+        blok_mode_uji=False)
+
+
+def test_tombol_list_audit_hanya_untuk_admin_ke_atas():
+    """⭐ Permintaan pemilik 7 Oktober 2026: "List Audit jangan tampilkan
+    lagi di side-bar tetapi buat tombol di halaman pengaturan." Gerbangnya
+    `tuan` (admin ke atas) — SAMA PERSIS gerbang rute `/audit`
+    (`butuh_admin`), bukan `blok_kelola` yang menyempit jadi Super
+    Admin-saja begitu Super Admin pertama diangkat (lihat catatan panjang
+    di templatnya)."""
+    tanpa = _render_pengaturan(tuan=False)
+    assert "List audit" not in tanpa
+    assert 'href="/audit"' not in tanpa
+
+    dengan = _render_pengaturan(tuan=True)
+    assert "List audit" in dengan
+    assert 'href="/audit"' in dengan
+
+    # Tombolnya WAJIB tetap muncul meski `blok_kelola` sudah menyempit ke
+    # Super Admin-saja (Super Admin pertama sudah diangkat) — admin biasa
+    # tetap berhak atas `/audit`.
+    admin_biasa_sesudah_super_ada = _render_pengaturan(tuan=True, blok_kelola=False)
+    assert 'href="/audit"' in admin_biasa_sesudah_super_ada
+
+
 def test_setelan_penyosohan_ada_di_pos_produksi():
     """Sebab berhenti mesin sosoh harus bisa diatur dari Pos Produksi.
 

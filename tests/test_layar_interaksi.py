@@ -130,7 +130,10 @@ def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
     blok = makro.split("{% elif b.pilihan %}")[1].split("{% elif")[0]
     assert "<details" in blok and "<summary>" in blok
     assert 'class="pilihan"' in blok
-    assert "{{ alamat }}?buka={{ id }}" in blok
+    # `{{ dasar }}` — bukan lagi `{{ alamat }}?` telanjang sejak perbaikan
+    # 7 Oktober 2026: saringan halaman (`?grup=`/`?kategori=`) wajib ikut
+    # terbawa ke borang (`dasar_borang`), lihat catatan panjangnya di sana.
+    assert "{{ dasar }}buka={{ id }}" in blok
 
 
 def test_antrean_dikerjakan_tanpa_lembar_melayang():

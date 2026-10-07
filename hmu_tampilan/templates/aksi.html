@@ -216,8 +216,12 @@
    sendiri untuk ditekan. #}
 {% if PINTASAN %}
 <div class="ubah-hasil" style="margin-top:14px">
+  {# `dasar_borang` (`_benda.html`) — saringan `?grup=` yang sedang aktif
+     ikut terbawa, pola sama kartu-kartu di atas (permintaan pemilik
+     7 Oktober 2026). #}
+  {% set dasar = benda.dasar_borang("/aksi") %}
   {% for buka, label in PINTASAN %}
-  <a class="btn btn--kecil" href="/aksi?buka={{ buka }}">{{ label }}</a>
+  <a class="btn btn--kecil" href="{{ dasar }}buka={{ buka }}">{{ label }}</a>
   {% endfor %}
 </div>
 {% endif %}

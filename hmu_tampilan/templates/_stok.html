@@ -316,14 +316,25 @@
            belum dicatat." Aksinya selalu ada, tetapi tinggal di Catat
            pekerjaan lain — dua layar jauhnya dari tulisan yang menagihnya.
 
-           Hanya pada bekatul (`curah_saja`) dan hanya bila angkanya POSITIF:
-           angka minus berarti yang dibukukan melebihi yang keluar mesin, dan
-           mencatat lagi di atasnya justru memperbesar selisihnya. Notanya di
-           bawah yang menjelaskan keadaan itu. #}
+           Hanya bila angkanya POSITIF: angka minus berarti yang dibukukan
+           melebihi yang keluar mesin, dan mencatat lagi di atasnya justru
+           memperbesar selisihnya. Notanya di bawah yang menjelaskan keadaan
+           itu.
+
+           ⚠ `curah_saja` BUKAN LAGI "bekatul saja" sejak perbaikan "Pindah
+           kepemilikan curah" (7 Oktober 2026, `stok.py`): broken sekarang
+           ikut lewat jalur yang sama (`catat_broken` → `byproduct_stock`,
+           sebangun `catat_bekatul`). Tombolnya dulu menulis "Catat bekatul
+           (curah)" + `?buka=catat_bekatul` TANPA SYARAT — benar untuk kartu
+           Bekatul, tapi ikut tergambar SALAH di kartu Broken begitu
+           `curah_saja`-nya ikut jadi `true`. Aksi & labelnya karena itu
+           WAJIB ikut `k.jenis` — `catat_broken` sudah ada & terpasang penuh
+           di katalog aksi (`aksi_inventory.py`), sebangun `catat_bekatul`. #}
         {% if k.curah_saja and k.curah_kg > 0.5 and boleh_catat %}
+          {% set aksi_curah = "catat_bekatul" if k.jenis == "bekatul" else "catat_broken" %}
           <a class="btn btn--kecil"
-             href="/stok-produk?buka=catat_bekatul"
-             style="margin-top:8px">🌾 Catat bekatul (curah)</a>
+             href="/stok-produk?buka={{ aksi_curah }}"
+             style="margin-top:8px">🌾 Catat {{ k.nama|lower }} (curah)</a>
         {% endif %}
       {% endif %}
     </div>

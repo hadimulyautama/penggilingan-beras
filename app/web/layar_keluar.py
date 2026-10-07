@@ -90,6 +90,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
     async with SessionLocal() as db:
         baris = await svc.daftar(db, batas=60)
         nama = await _nama_barang(db, baris)
+        nama_orang = await _nama_orang(db, baris)
 
     kartu = []
     for rec, items in baris:
@@ -134,6 +135,26 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
                               boleh_muat=boleh_muat),
             "total_perintah": sum(x["perintah"] for x in isi),
             "total_dimuat": sum(x["dimuat"] for x in isi),
+            # ── Jejak tiga langkahnya: SIAPA, bukan cuma kapan ──
+            #
+            # Keluhan pemilik 7 Oktober 2026: "diperintah siapa, dimuat
+            # siapa, dan diverifikasi siapa harus jelas." Kolomnya
+            # (`diperintah_oleh` dkk.) sudah ada sejak 28 September — tiga
+            # FK terpisah, dengan komentar modelnya sendiri menegaskan
+            # "tiga orang, tiga tanggung jawab" — tetapi templatnya cuma
+            # menggambar `waktu`-nya; `oleh` (id mentah) ditarik ke dalam
+            # gelung lalu tak pernah dicetak. Nama resminya diselesaikan DI
+            # SINI (`_nama_orang`, satu kueri borongan), bukan di templat:
+            # Jinja yang menebak `User` dari id mentah berarti satu kueri
+            # per baris per kartu.
+            "jejak": [
+                (label, waktu, nama_orang.get(oleh))
+                for label, waktu, oleh in (
+                    ("Diperintah", rec.waktu_perintah, rec.diperintah_oleh),
+                    ("Dimuat", rec.waktu_muat, rec.dimuat_oleh),
+                    ("Diverifikasi", rec.waktu_verifikasi, rec.diverifikasi_oleh),
+                ) if waktu
+            ],
             "urut": (_URUT.get(rec.status, 9), -rec.id),
         })
     kartu.sort(key=lambda k: k["urut"])
@@ -269,3 +290,27 @@ async def _nama_barang(db, baris) -> dict[int, str]:
             # kartu Stok Produk.
             keluar[it.id] = f"{nama_produk(j)} · {bahan} {ukuran}\u00a0kg"
     return keluar
+
+
+async def _nama_orang(db, baris) -> dict[int, str]:
+    """{id user: nama} untuk ketiga langkah (diperintah/dimuat/diverifikasi).
+
+    SATU kueri untuk seluruh halaman — pola sama `_nama_barang` di atas,
+    alasan yang sama persis: 60 transaksi x tiga kemungkinan id per
+    transaksi berarti sampai 180 kueri kalau ditanyakan satu per baris.
+    """
+    from sqlalchemy import select
+
+    from app.models import User
+
+    ids = {
+        oleh
+        for rec, _ in baris
+        for oleh in (rec.diperintah_oleh, rec.dimuat_oleh, rec.diverifikasi_oleh)
+        if oleh
+    }
+    if not ids:
+        return {}
+    return {i: n for i, n in (await db.execute(
+        select(User.id, User.nama).where(User.id.in_(ids))
+    )).all()}
