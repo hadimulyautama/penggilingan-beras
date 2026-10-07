@@ -296,12 +296,17 @@ TAB = (
     # ⚠ IKON "◨"/"◔"/"⇄" — blok yang sama (Geometric Shapes/Arrows), belum
     # dipakai pintu lain. WAJIB DILIHAT DI HP SUNGGUHAN sebelum dianggap
     # final; kalau kotak kosong, gantinya "▨"/"◐"/"⇆".
-    ("riwayat_giling", "/riwayat-giling", "Penggilingan",
-     "Tiap giling selesai: PK yang jadi, rendemen, mutunya",
-     (SUPER, ADMIN, SELEPAN), "◨"),
+    # Urutannya di sini (dan di dropdown-nya, `Berjalan.submenu()`) mengikuti
+    # ALUR PRODUKSI — koreksi pemilik 7 Oktober 2026: Pengeringan (basah→
+    # kering) → Penggilingan (kering→PK) → [Penyosohan, PK→beras, di atas] →
+    # Transfer — bukan urutan "Gudang 2 dulu" yang kebetulan lebih mudah
+    # ditulis kodenya.
     ("riwayat_pengeringan", "/riwayat-pengeringan", "Pengeringan",
      "Tiap lot kering selesai: bahan, kadar air, tujuannya",
      (SUPER, ADMIN, SELEPAN), "◔"),
+    ("riwayat_giling", "/riwayat-giling", "Penggilingan",
+     "Tiap giling selesai: PK yang jadi, rendemen, mutunya",
+     (SUPER, ADMIN, SELEPAN), "◨"),
     ("riwayat_transfer", "/riwayat-transfer", "Transfer",
      "PK yang dipindah dari Gudang 1 ke Gudang 2",
      (SUPER, ADMIN, SELEPAN), "⇄"),

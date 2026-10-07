@@ -447,12 +447,21 @@ class Berjalan:
         # satu halaman) — TANPA baris "Semua", sebab tak ada daftar gabungan
         # yang lebih besar dari keempatnya untuk dituju.
         #
+        # Urutannya URUTAN ALUR PRODUKSI (permintaan pemilik 7 Oktober 2026,
+        # koreksi susulan): Pengeringan (gabah basah→kering) → Penggilingan
+        # (kering→PK) → Penyosohan (PK→beras) → Transfer (PK Gudang 1→Gudang
+        # 2, perpindahannya sendiri) — BUKAN urutan "G2 dulu baru G1" yang
+        # kebetulan lebih mudah ditulis kodenya.
+        #
         # Isinya dibagi per PEMILIK GUDANG, bukan ditawarkan utuh ke semua
         # orang: Penyosohan menjawab pertanyaan Gudang 2, ketiga sisanya
         # menjawab pertanyaan Gudang 1, dan operator tak terikat satu gudang
         # tetap hanya melihat gudang yang SEDANG ia kerjakan (sama seperti
         # `pintu_produk`). Admin/Superadmin (kedua bendera `True`) melihat
-        # keempatnya — mereka memegang kedua gudang.
+        # keempatnya — mereka memegang kedua gudang. Karena urutannya kini
+        # menyelang-nyeling G1/G2 (bukan satu blok per gudang berturut-turut
+        # seperti sebelumnya), tiap baris diperiksa gerbangnya satu-satu —
+        # bukan dua blok `if` seperti "Stok" di atas.
         #
         # Operator yang cuma berhak atas SATU pilihan (lazimnya operator
         # Gudang 2, hanya "Penyosohan") berhenti di `len < 2`: dropdown-nya
@@ -460,14 +469,13 @@ class Berjalan:
         # TAB induk — kembali jadi tautan biasa ke `/riwayat-sosoh`, persis
         # perilakunya sebelum sub-menu ini ada.
         isi_riwayat: list[tuple[str, str, int]] = []
+        if self.boleh_riwayat_g1:
+            isi_riwayat.append(("/riwayat-pengeringan", "Pengeringan", 0))
+            isi_riwayat.append(("/riwayat-giling", "Penggilingan", 0))
         if self.boleh_riwayat_sosoh:
             isi_riwayat.append(("/riwayat-sosoh", "Penyosohan", 0))
         if self.boleh_riwayat_g1:
-            isi_riwayat += [
-                ("/riwayat-giling", "Penggilingan", 0),
-                ("/riwayat-pengeringan", "Pengeringan", 0),
-                ("/riwayat-transfer", "Transfer", 0),
-            ]
+            isi_riwayat.append(("/riwayat-transfer", "Transfer", 0))
         if len(isi_riwayat) >= 2:
             # Kunci `riwayat_sosoh`, BUKAN `riwayat_proses` — tak ada kunci
             # TAB bernama itu; "Riwayat Proses" cuma LABEL laci pintu

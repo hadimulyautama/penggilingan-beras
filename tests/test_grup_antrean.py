@@ -264,19 +264,23 @@ def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():
 # pintu `stok`).
 
 def test_riwayat_bersub_menu_untuk_admin_superadmin():
+    """Urutan ALUR PRODUKSI (koreksi pemilik 7 Oktober 2026): Pengeringan
+    (basah→kering) → Penggilingan (kering→PK) → Penyosohan (PK→beras) →
+    Transfer — bukan urutan "Gudang 2 dulu" yang kebetulan lebih mudah
+    ditulis kodenya."""
     b = Berjalan(boleh_riwayat_sosoh=True, boleh_riwayat_g1=True)
     assert b.submenu()["riwayat_sosoh"] == [
-        ("/riwayat-sosoh", "Penyosohan", 0),
-        ("/riwayat-giling", "Penggilingan", 0),
         ("/riwayat-pengeringan", "Pengeringan", 0),
+        ("/riwayat-giling", "Penggilingan", 0),
+        ("/riwayat-sosoh", "Penyosohan", 0),
         ("/riwayat-transfer", "Transfer", 0)]
 
 
 def test_riwayat_operator_gudang1_hanya_tiga_tanpa_penyosohan():
     b = Berjalan(boleh_riwayat_sosoh=False, boleh_riwayat_g1=True)
     assert b.submenu()["riwayat_sosoh"] == [
-        ("/riwayat-giling", "Penggilingan", 0),
         ("/riwayat-pengeringan", "Pengeringan", 0),
+        ("/riwayat-giling", "Penggilingan", 0),
         ("/riwayat-transfer", "Transfer", 0)]
 
 
