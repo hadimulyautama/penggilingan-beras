@@ -216,7 +216,9 @@ def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
                                    ("/stok-pk-jasa", "Stok PK Jasa", 0),
                                    ("/stok-produk", "Stok Produk", 0),
-                                   ("/stok-produk-jasa", "Produk Jasa", 0)]
+                                   ("/stok-produk-jasa", "Produk Jasa", 0),
+                                   ("/stok-karung", "Stok Karung", 0),
+                                   ("/stok-karung-jasa", "Karung Jasa", 0)]
 
 
 def test_stok_sub_menu_tak_ada_satu_pun_angka_walau_jumlah_produk_terisi():
@@ -224,13 +226,15 @@ def test_stok_sub_menu_tak_ada_satu_pun_angka_walau_jumlah_produk_terisi():
     Antrian tunggu/Keputusan, "Stok" tak menagih pekerjaan. "Stok Produk"
     pun sejak 7 Oktober 2026 (permintaan pemilik: "tidak perlu ada
     angkanya") — sebelumnya satu-satunya baris yang memakai `jumlah_produk`
-    sebagai lencananya, sekarang sama seperti ketiga baris lain: murni
-    informasi, tanpa badge, berapa pun `jumlah_produk`-nya."""
+    sebagai lencananya, sekarang sama seperti baris lain: murni informasi,
+    tanpa badge, berapa pun `jumlah_produk`-nya."""
     b = Berjalan(pintu_produk=True, jumlah_produk=3)
     assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
                                    ("/stok-pk-jasa", "Stok PK Jasa", 0),
                                    ("/stok-produk", "Stok Produk", 0),
-                                   ("/stok-produk-jasa", "Produk Jasa", 0)]
+                                   ("/stok-produk-jasa", "Produk Jasa", 0),
+                                   ("/stok-karung", "Stok Karung", 0),
+                                   ("/stok-karung-jasa", "Karung Jasa", 0)]
 
 
 def test_stok_tetap_bersub_menu_bila_stok_produk_padam():
@@ -251,6 +255,15 @@ def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():
     for pintu_produk in (True, False):
         mati = Berjalan(pintu_produk=pintu_produk).lencana()["PINTU_MATI"]
         assert "stok_produk" in mati
+
+
+def test_pintu_stok_karung_sendiri_selalu_padam_di_laci():
+    """Pola yang sama dengan 'stok_produk' — 'Stok Karung'/'Karung Jasa'
+    hanya terjangkau lewat dropdown 'Stok', tak pernah pintu berdiri
+    sendiri, untuk siapa pun."""
+    for pintu_produk in (True, False):
+        mati = Berjalan(pintu_produk=pintu_produk).lencana()["PINTU_MATI"]
+        assert "stok_karung" in mati and "stok_karung_jasa" in mati
 
 
 def test_audit_jasa_kabar_padam_di_laci_permintaan_pemilik_7_oktober():

@@ -19,6 +19,9 @@ AKAR = pathlib.Path(__file__).resolve().parents[1]
 TPL = AKAR / "hmu_tampilan/templates/stok.html"
 #: Potongan bersamanya: pemisah ribuan & blok stok karung.
 TPL_MAKRO = AKAR / "hmu_tampilan/templates/_stok.html"
+#: Stok karung PINDAH ke halamannya sendiri 7 Oktober 2026 — lihat bagian
+#: "Blok Stok karung" di bawah.
+TPL_KARUNG = AKAR / "hmu_tampilan/templates/stok_karung.html"
 
 
 def test_stok_tak_pernah_menerima_angka_stok_langsung():
@@ -625,7 +628,13 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Blok Stok karung — keputusan pemilik 23 September 2026
+# Blok Stok karung — pindah ke halaman sendiri (`/stok-karung`) 7 Oktober
+# 2026, keputusan pemilik: karung butuh stok terpisah per pemilik, dan itu
+# tak muat sebagai blok tanpa pemilik di halaman ini. Lihat
+# `layar_produk.halaman_stok_karung`/`tests/test_gudang2_operator.py` untuk
+# siapa-melihat-apa (sekarang gerbang RUTE, bukan helper `_karung` yang
+# sudah dihapus) dan `tests/pg/test_stok_karung_http.py` untuk gerbangnya
+# lewat HTTP sungguhan.
 # ══════════════════════════════════════════════════════════════════════
 
 _KARUNG = [
@@ -636,36 +645,14 @@ _KARUNG = [
 ]
 
 
-async def test_stok_karung_siapa_melihat_apa(monkeypatch):
-    """Operator Gudang 2, Admin, dan Super Admin melihat stok karung —
-    operator Gudang 1 TIDAK (keputusan pemilik 23 September 2026).
+def test_stok_karung_filter_gudang1_tetap_ada_di_rute():
+    """Operator Gudang 2 SAJA (bukan admin ke atas) tak melihat baris
+    "Gudang 1" (karung PK) — pola `_karung()` lama, dipertahankan persis
+    sesudah pindah ke `halaman_stok_karung`."""
+    from app.web import layar_produk
 
-    Karung mengemas beras JADI, dan itu pekerjaan Gudang 2. Karung PK di
-    Gudang 1 ikut tampak hanya bagi yang memegang kedua gudang, karena ia
-    yang memesannya; operator polesan tak perlu tahu isi gudang sebelah.
-
-    Diuji sebagai PERILAKU, bukan sebagai kalimat di kode: aturan
-    siapa-melihat-apa di layar ini sudah bernama `gudang1`/`gudang2`, dan
-    yang harus dijaga adalah jawabannya tetap sama bila keduanya berubah.
-    """
-    from app.penggilingan.inventory import packaging as kms
-    from app.web import layar_stok
-    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER, TAMU
-
-    async def palsu(db):
-        return [dict(b) for b in _KARUNG]
-
-    monkeypatch.setattr(kms, "stok_kemasan_rinci", palsu)
-
-    assert await layar_stok._karung(None, SELEPAN) == [], "operator Gudang 1"
-    assert await layar_stok._karung(None, TAMU) == []
-
-    polesan = await layar_stok._karung(None, POLESAN)
-    assert [b["gudang"] for b in polesan] == ["Gudang 2"]
-
-    for view in (ADMIN, SUPER):
-        semua = await layar_stok._karung(None, view)
-        assert {b["gudang"] for b in semua} == {"Gudang 1", "Gudang 2"}, view
+    kode = inspect.getsource(layar_produk.halaman_stok_karung)
+    assert 'b["gudang"] != "Gudang 1" or gudang1(view)' in kode
 
 
 def test_stok_karung_tak_menyebut_uang():
@@ -677,8 +664,8 @@ def test_stok_karung_tak_menyebut_uang():
     dan uji yang menghitung kata di dalam komentar melarang orang menjelaskan
     keputusannya.
     """
-    # Bloknya makro bersama sejak Tahap 2; layarnya memanggilnya.
-    assert "{{ st.karung_blok(karung) }}" in TPL.read_text()
+    # Bloknya makro bersama sejak Tahap 2; halamannya sendiri memanggilnya.
+    assert "st.karung_blok(karung" in TPL_KARUNG.read_text()
     isi = TPL_MAKRO.read_text()
     assert "{% if karung %}" in isi, "blok Stok karung hilang"
     blok = isi.split("{% if karung %}", 1)[1]
@@ -690,48 +677,31 @@ def test_stok_karung_tak_menyebut_uang():
         assert not re.search(rf"\b{uang}\b", tampak, re.I), uang
 
 
-async def test_layar_stok_menggambar_karung_sesuai_peran(monkeypatch):
-    """LAYARNYA, bukan cuma penyaringnya: stok.html dirender untuk tiap view.
-
-    `_karung` bisa benar sementara templatnya menggambar bloknya juga saat
-    daftarnya kosong — judul "Stok karung" di atas kartu hampa adalah tagihan
-    pekerjaan yang tak ada, dan operator Gudang 1 akan bertanya karung mana.
-    """
-    from app.penggilingan.inventory import packaging as kms
-    from app.web import layar_stok
-    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER, TAMU
+def test_layar_stok_karung_menggambar_kosong_dan_isi():
+    """LAYARNYA, bukan cuma datanya: `stok_karung.html` dirender langsung
+    (gerbang peran sudah pindah ke rute, diuji lewat HTTP di
+    `tests/pg/test_stok_karung_http.py` — di sini murni markup)."""
     from app.web.tampilan import templates
 
-    async def palsu(db):
-        return [dict(b) for b in _KARUNG]
+    def gambar(karung: list[dict], *, boleh_pindah: bool) -> str:
+        return templates.get_template("stok_karung.html").render(
+            request=None, akun=None, layar="stok_karung", VIEW="admin",
+            LIHAT_SEBAGAI=None, PERAN_ASLI="admin", CSRF="c", TERIK=False,
+            MENUNGGU=0, BERJALAN=0, KEPUTUSAN=0, MODE_UJI=False, kembali=None,
+            lama=lambda s: "", FASE={}, buka="", nilai="",
+            karung=karung, BOLEH_PINDAH=boleh_pindah)
 
-    monkeypatch.setattr(kms, "stok_kemasan_rinci", palsu)
+    kosong = gambar([], boleh_pindah=False)
+    assert "Belum ada stok kemasan" in kosong
+    assert "Karung Laminasi" not in kosong
 
-    async def gambar(view: str) -> str:
-        return templates.get_template("stok.html").render(
-            request=None, akun=None, layar="stok", VIEW=view, LIHAT_SEBAGAI=None,
-            PERAN_ASLI=view, CSRF="c", TERIK=False, MENUNGGU=0, BERJALAN=0,
-            KEPUTUSAN=0, MODE_UJI=False, kembali=None, lot=[], tempat=[],
-            produk=[], samping=[], total=0, mutu_aktif=False, boleh_ubah=False,
-            buka="", nilai="", lama=lambda s: "", FASE={},
-            karung=await layar_stok._karung(None, view))
+    isi = gambar(_KARUNG, boleh_pindah=True)
+    assert "Karung Laminasi" in isi and "Karung PK" in isi
+    assert "Pindah kepemilikan" in isi, "boleh_pindah=True harus menggambar tombolnya"
 
-    # Yang TIDAK melihat blok ini sama sekali — dan tak melihat judulnya pun.
-    for view in (SELEPAN, TAMU):
-        html = await gambar(view)
-        assert "Stok karung" not in html, view
-        assert "Karung Laminasi" not in html and "Karung PK" not in html, view
-
-    # Operator Gudang 2: karungnya sendiri, dan BUKAN karung gudang sebelah.
-    html = await gambar(POLESAN)
-    assert "Stok karung" in html and "Karung Laminasi" in html
-    assert "Karung PK" not in html, "karung Gudang 1 bocor ke operator Gudang 2"
-
-    # Yang memegang kedua gudang melihat keduanya, sebab ia yang memesannya.
-    for view in (ADMIN, SUPER):
-        html = await gambar(view)
-        assert "Karung Laminasi" in html and "Karung PK" in html, view
-        assert "menipis" in html, f"{view}: yang menipis tak terbaca menipis"
+    tanpa_tombol = gambar(_KARUNG, boleh_pindah=False)
+    assert "Pindah kepemilikan" not in tanpa_tombol
+    assert "menipis" in isi, "yang menipis tak terbaca menipis"
 
 
 def test_stok_karung_satu_pemformat_bukan_dua():

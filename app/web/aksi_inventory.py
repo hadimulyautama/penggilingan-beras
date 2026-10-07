@@ -112,6 +112,28 @@ async def kemasan_jenis(user: User = Depends(pengguna_aksi)) -> list[dict]:
     return [{"value": f"{m}|{u}", "label": f"{nama.get(m, m)} {u} kg"} for m, u in pasang]
 
 
+@router.get("/actions/karung-pabrik-tersedia")
+async def karung_pabrik_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Kombinasi karung milik PABRIK yang stoknya > 0 — sumber "Pindah
+    kepemilikan karung" (`act_pindah_kepemilikan_karung`).
+
+    Nilainya `kode|ukuran|merk` (merk boleh kosong) — KODE/nama, bukan id
+    mentah, pola yang sama dengan `kemasan-jenis` (dipakai "Beli karung").
+    Tombol per-baris di `/stok-karung` (`hmu_tampilan/_stok.html`'s
+    `karung_blok`) membangun `nilai=` dari field yang SAMA (`kode`, `ukuran`,
+    `merk`) yang sudah ada di baris `stok_kemasan_rinci` — keduanya WAJIB
+    menunjuk kombinasi yang sama persis, sebab `isiDariBaris` (`aksi.js`)
+    mencocokkan nilai APA ADANYA terhadap pilihan picker ini.
+    """
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        baris = await kms.stok_kemasan_rinci(db, jasa_id=None)
+    return [{"value": f"{b['kode']}|{b['ukuran']}|{b['merk'] or ''}",
+             "label": f"{b['merk'] + ' ' if b['merk'] else ''}{b['nama']} "
+                      f"{b['ukuran']}kg · sisa {b['lembar']} lembar"}
+            for b in baris if b["lembar"] > 0]
+
+
 @router.get("/actions/produk-kemasan")
 async def produk_kemasan(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Kombinasi produk × karung yang sah — satu pilihan, bukan tiga.
@@ -326,6 +348,40 @@ async def act_beli_kemasan(req: BeliKemasanReq,
     pesan = (f"✓ Beli karung *{merk}{r.material_nama} {r.ukuran}kg* × "
              f"{rp(r.purchase.jumlah_lembar)} lembar ({r.purchase.kode}).\n"
              f"• Stok kini: {rp(r.stok_baru)} lembar")
+    return {"ok": True, "pesan": pesan}
+
+
+class PindahKepemilikanKarungReq(BaseModel):
+    karung: str                       # "material_kode|ukuran|merk_or_kosong"
+    jasa: str                         # jasa_id
+    jumlah: int
+
+
+@router.post("/actions/pindah-kepemilikan-karung")
+async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
+                                        user: User = Depends(pengguna_aksi)) -> dict:
+    """Pindah SEBAGIAN stok karung pabrik ke milik satu pesanan jasa — arah
+    kebalikan "Pindah kepemilikan produk" (lihat catatan panjang di
+    `packaging.pindah_kepemilikan_karung`)."""
+    wajib(can_see_financials(user))
+    bagian = (req.karung or "").split("|")
+    if len(bagian) != 3 or not bagian[1].isdigit():
+        raise HTTPException(400, "Pilih kombinasi karung pabrik dulu.")
+    material_kode, ukuran, merk = bagian[0], int(bagian[1]), (bagian[2] or None)
+    if not (req.jasa or "").isdigit():
+        raise HTTPException(400, "Pilih pesanan jasa tujuan dulu.")
+    if int(req.jumlah or 0) <= 0:
+        raise HTTPException(400, "Isi jumlah lembar yang dipindah lebih dari 0.")
+
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            jumlah = await kms.pindah_kepemilikan_karung(
+                db, user=u, material_kode=material_kode, ukuran=ukuran,
+                brand_nama=merk, jasa_id=int(req.jasa), jumlah_lembar=int(req.jumlah))
+        except kms.InventoryError as e:
+            raise galat(e, "Gagal memindahkan kepemilikan karung.")
+    pesan = f"✓ {jumlah} lembar karung kini milik pesanan jasa."
     return {"ok": True, "pesan": pesan}
 
 
@@ -1440,6 +1496,28 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                             "yang bisa dipindah."},
                  {"name": "jumlah", "label": "Jumlah yang dipindah",
                   "type": "number"},
+             ]},
+            # ── Pindah kepemilikan karung — ARAH KEBALIKAN yang di atas ──
+            #
+            # Karung tak punya tiket timbang: `beli_kemasan` selalu menulis
+            # milik pabrik, jadi satu-satunya jalan sebuah lembar jadi milik
+            # jasa adalah dipindah SESUDAH dibeli, bukan diturunkan saat
+            # masuk. Keputusan pemilik 7 Oktober 2026 ("ubah jadi stok
+            # terpisah per pemilik"). Lihat `packaging.
+            # pindah_kepemilikan_karung` untuk catatan arahnya.
+            {"id": "pindah_kepemilikan_karung",
+             "label": "⇄ Pindah kepemilikan ke jasa",
+             "post": "/api/actions/pindah-kepemilikan-karung",
+             "hint": "Boleh sebagian — FIFO dari pembelian pabrik yang "
+                     "paling lama, lembar per lembar.",
+             "fields": [
+                 {"name": "karung", "label": "Karung pabrik", "type": "remote",
+                  "source": "/api/actions/karung-pabrik-tersedia",
+                  "kosong": "Tidak ada stok karung pabrik yang bisa dipindah."},
+                 {"name": "jasa", "label": "Pesanan jasa tujuan", "type": "remote",
+                  "source": "/api/actions/jasa-berjalan",
+                  "kosong": "Tidak ada pesanan jasa yang berjalan."},
+                 {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
              ]},
             {"id": "beli_kemasan", "label": "🛒 Beli karung",
              "post": "/api/actions/beli-kemasan",

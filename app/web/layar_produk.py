@@ -315,3 +315,84 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+
+
+@router.get("/stok-karung")
+async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
+    """Stok karung kosong (kemasan) milik PABRIK — DIPISAH dari `/stok` 7
+    Oktober 2026 (keputusan pemilik: karung butuh stok terpisah per
+    pemilik, menyusul "Stok Karung Jasa" di bawah).
+
+    Blok ini dulu menempel di `/stok` (keputusan 23 September 2026); pindah
+    ke halamannya sendiri sekarang karena ia butuh PEMILIK sebagai sumbu
+    baru, dan sumbu itu tak ada tempatnya di halaman BAHAN — pola yang sama
+    dengan kepindahan "Stok Produk" dari dalam `/stok` 26 September 2026.
+
+    Gerbangnya SAMA dengan dulu di `/stok` (`gudang2(view)` — Gudang 2,
+    Admin, Super Admin, TIDAK operator Gudang 1): karung mengemas beras
+    JADI, pekerjaan Gudang 2; yang memegang kedua gudang ikut melihat
+    karung PK Gudang 1, karena ia yang memesannya. Operator Gudang 2 SAJA
+    (bukan admin ke atas) tak melihat baris "Gudang 1" (karung PK) — pola
+    `_karung()` yang dulu hidup di `layar_stok.py`, dipertahankan persis.
+    """
+    from app.penggilingan.inventory import packaging as kms
+    from app.peran import can_see_financials
+    from app.web.layar import gudang1, gudang2
+
+    view = getattr(request.state, "view", "tamu")
+    if not gudang2(view):
+        raise HTTPException(403, "Layar ini milik Gudang 2.")
+    async with SessionLocal() as db:
+        karung = [b for b in await kms.stok_kemasan_rinci(db, jasa_id=None)
+                  if b["gudang"] != "Gudang 1" or gudang1(view)]
+    return await render_laci(
+        request, "stok_karung.html", layar="stok_karung",
+        karung=karung, BOLEH_PINDAH=can_see_financials(akun.user),
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+    )
+
+
+@router.get("/stok-karung-jasa")
+async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
+    """Karung kosong MILIK PESANAN JASA — per PELANGGAN, padanan
+    `/stok-produk-jasa` untuk kemasan.
+
+    Sumbernya `packaging.pindah_kepemilikan_karung`: karung tak punya
+    tiket timbang, jadi SATU-SATUNYA jalan sebuah baris pembelian jadi
+    milik jasa adalah dipindah lewat tombol "Pindah kepemilikan" di
+    `/stok-karung` (pabrik) — halaman ini murni INFORMASI, tanpa tombol
+    (arahnya cuma satu jalan: pabrik → jasa, bukan sebaliknya).
+    """
+    from sqlalchemy import select
+
+    from app.models import Pelanggan
+    from app.penggilingan.inventory import packaging as kms
+    from app.services.jasa import jasa_ids_per_pelanggan_dengan_karung
+    from app.web.layar import gudang2
+
+    view = getattr(request.state, "view", "tamu")
+    if not gudang2(view):
+        raise HTTPException(403, "Layar ini milik Gudang 2.")
+    async with SessionLocal() as db:
+        jasa_per_pelanggan = await jasa_ids_per_pelanggan_dengan_karung(db)
+        nama_pelanggan = {pid: n for pid, n in (await db.execute(
+            select(Pelanggan.id, Pelanggan.nama_pelanggan)
+            .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
+        )).all()}
+        daftar = []
+        for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
+            karung = await kms.stok_kemasan_rinci(db, jasa_id=jasa_ids)
+            if not karung:
+                continue
+            daftar.append({
+                "pemilik": nama_pelanggan.get(pelanggan_id) or f"pelanggan #{pelanggan_id}",
+                "karung": karung,
+            })
+    daftar.sort(key=lambda p: p["pemilik"])
+    return await render_laci(
+        request, "stok_karung_jasa.html", layar="stok_karung_jasa",
+        daftar=daftar,
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+    )

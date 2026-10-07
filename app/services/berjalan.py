@@ -318,6 +318,11 @@ class Berjalan:
         mati.append("stok_produk_jasa")
         # "Stok PK Jasa" — padanan `stok_produk_jasa` untuk PK, pola yang sama.
         mati.append("stok_pk_jasa")
+        # "Stok Karung"/"Karung Jasa" (7 Oktober 2026) — pola yang sama lagi:
+        # berdiri sendiri di laci hanya menawarkan jalan kedua ke sub-menu
+        # "Stok", tak pernah ditawarkan sebagai pintu sendiri.
+        mati.append("stok_karung")
+        mati.append("stok_karung_jasa")
         # "Penggilingan"/"Pengeringan"/"Transfer" — sub-menu "Riwayat Proses"
         # (7 Oktober 2026), pola yang SAMA: berdiri sendiri di laci hanya
         # menawarkan jalan kedua ke tempat yang sudah terjangkau lewat
@@ -458,6 +463,12 @@ class Berjalan:
             # Angkanya 0 dengan alasan yang sama dengan "Stok PK": halaman
             # murni informasi, tak menagih pekerjaan apa pun.
             isi_stok.append(("/stok-produk-jasa", "Produk Jasa", 0))
+            # "Stok Karung"/"Karung Jasa" — keputusan pemilik 7 Oktober 2026.
+            # Gerbang SAMA dengan Stok Produk (`pintu_produk`): karung
+            # dipakai mengemas beras jadi, pekerjaan Gudang 2 — peran yang
+            # sama yang melihat Stok Produk berhak melihat karungnya.
+            isi_stok.append(("/stok-karung", "Stok Karung", 0))
+            isi_stok.append(("/stok-karung-jasa", "Karung Jasa", 0))
         if len(isi_stok) >= 2:
             out["stok"] = isi_stok
 

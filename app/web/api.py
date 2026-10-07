@@ -1374,7 +1374,7 @@ _ACTION_WH = {
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
     "catat_packing": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
     "pindah_broken_silo": "g2", "pindah_kepemilikan_produk": "g2",
-    "beli_kemasan": "g2",
+    "beli_kemasan": "g2", "pindah_kepemilikan_karung": "g2",
     # Rantai barang keluar berperintah. SELURUHNYA g2, termasuk yang dikerjakan
     # Admin: gudangnya milik CATATAN, bukan milik orang yang menekannya, dan
     # barang jadi memang berdiri di Gudang 2 — dari sanalah ia berangkat.

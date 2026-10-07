@@ -87,7 +87,7 @@ async def pabrik(pg):
         return {"g1": g1.id, "g2": g2.id, "u1": u1.id, "u2": u2.id}
 
 
-async def _klien(pg, *, gudang_id: int) -> httpx.AsyncClient:
+async def _klien(pg, *, gudang_id: int | None = None, role: str = "operator") -> httpx.AsyncClient:
     from app.main import app
     from app.models import ProduksiAkun, User
     from app.web import csrf, security
@@ -95,13 +95,13 @@ async def _klien(pg, *, gudang_id: int) -> httpx.AsyncClient:
     from hmu_identitas.model import mode_bawaan
 
     async with pg() as db:
-        u = User(nama=f"Uji {gudang_id}", role="operator", status="aktif",
+        u = User(nama=f"Uji {role} {gudang_id}", role=role, status="aktif",
                  default_warehouse_id=gudang_id)
         db.add(u)
         await db.flush()
         a = ProduksiAkun(user_id=u.id, username=f"uji{u.id}",
                          password_hash=S.hash_sandi("rahasia123"), status="aktif",
-                         mode_perangkat=mode_bawaan("operator"))
+                         mode_perangkat=mode_bawaan(role))
         db.add(a)
         await db.commit()
         token = security.buat_token(a)
@@ -143,7 +143,10 @@ async def test_stok_karung_gudang1_tetap_tertutup(pg, pabrik):
     memesannya Admin. Membuka blok PK tak boleh ikut membukanya — dua gerbang,
     dua pertanyaan berbeda. Diuji dengan baris karung PK yang BENAR-BENAR ada:
     gerbang yang diuji tanpa data membuktikan nol.
-    """
+
+    `_karung()` PINDAH jadi bagian `layar_produk.halaman_stok_karung` (7
+    Oktober 2026, karung dapat halamannya sendiri) — diuji lewat HTTP
+    sekarang, bukan memanggil fungsinya langsung."""
     from datetime import date as _date
 
     from sqlalchemy import select
@@ -152,7 +155,6 @@ async def test_stok_karung_gudang1_tetap_tertutup(pg, pabrik):
     from app.models import User
     from app.penggilingan.inventory.models import (PackageSize, PackagingMaterial,
                                                    PackagingPurchase)
-    from app.web.layar_stok import _karung
 
     async with pg() as db:
         mat = (await db.execute(select(PackagingMaterial).where(
@@ -161,16 +163,19 @@ async def test_stok_karung_gudang1_tetap_tertutup(pg, pabrik):
         assert mat is not None and uk is not None, "master kemasan belum tersemai"
         db.add(PackagingPurchase(kode="PKP-UJI-01", packaging_material_id=mat.id,
                                  package_size_id=uk.id, jumlah_lembar=500,
-                                 harga_per_lembar=1200, tanggal=_date.today(),
-                                 waktu=now_local(),
+                                 tanggal=_date.today(), waktu=now_local(),
                                  input_by=pabrik["u1"]))
         await db.commit()
 
-    async with pg() as db:
-        polesan = await _karung(db, "polesan")
-        super_ = await _karung(db, "super")
-    assert any(b["gudang"] == "Gudang 1" for b in super_), "premis: karung G1 memang ada"
-    assert not any(b["gudang"] == "Gudang 1" for b in polesan), \
+    c_super = await _klien(pg, role="superadmin")
+    async with c_super:
+        super_ = (await c_super.get("/stok-karung")).text
+    assert "Karung PK" in super_, "premis: karung G1 memang ada"
+
+    c_polesan = await _klien(pg, gudang_id=pabrik["g2"])
+    async with c_polesan:
+        polesan = (await c_polesan.get("/stok-karung")).text
+    assert "Karung PK" not in polesan, \
         "stok karung Gudang 1 ikut terbuka untuk operator polesan"
 
 

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block judul %}Karung Jasa{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+
+{# ── Stok Karung · Karung Jasa — kemasan milik PESANAN JASA, per PELANGGAN ──
+   Keputusan pemilik 7 Oktober 2026 — padanan `/stok-produk-jasa` untuk
+   kemasan. Sumbernya `packaging.pindah_kepemilikan_karung`: karung tak
+   punya tiket timbang, jadi SATU-SATUNYA jalan sebuah baris pembelian jadi
+   milik jasa adalah dipindah lewat tombol "Pindah kepemilikan" di
+   `/stok-karung` (pabrik).
+
+   TANPA TOMBOL di sini — arahnya cuma SATU jalan (pabrik → jasa, bukan
+   sebaliknya): halaman ini murni informasi, pola yang sama dengan "PK
+   Jasa" (tak ada tombol pindah untuk PK — belum diminta pemilik). #}
+
+{% if not daftar %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
+      <path d="M12 13v7"/></svg>
+    <div>
+      <h2>Belum ada karung jasa</h2>
+      <p class="bantu">
+        Belum ada karung yang dipindah kepemilikannya ke pesanan jasa.
+      </p>
+    </div>
+  </div>
+{% else %}
+  {% for p in daftar %}
+    <div style="margin-bottom:8px">
+      <span class="lbl">{{ p.pemilik }}</span>
+    </div>
+    {{ st.karung_blok(p.karung, judul="Karung", boleh_pindah=False) }}
+  {% endfor %}
+{% endif %}
+{% endblock %}

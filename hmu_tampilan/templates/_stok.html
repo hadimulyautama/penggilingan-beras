@@ -34,7 +34,7 @@
 
    Lahir tiga kali pada hari yang sama (commit stok karung), dan disatukan di
    commit berikutnya sebelum ketiganya sempat berselisih. #}
-{% macro karung_blok(karung, judul="Stok karung", per_gudang=True) -%}
+{% macro karung_blok(karung, judul="Stok karung", per_gudang=True, boleh_pindah=False) -%}
 {% if karung %}
 <div style="margin-top:18px">
   <div class="jumlah">
@@ -54,11 +54,11 @@
           {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
           {% if baris %}
             <div class="lap__bab">{{ g }}</div>
-            {% for b in baris %}{{ karung_baris(b) }}{% endfor %}
+            {% for b in baris %}{{ karung_baris(b, boleh_pindah=boleh_pindah) }}{% endfor %}
           {% endif %}
         {% endfor %}
       {% else %}
-        {% for b in karung %}{{ karung_baris(b) }}{% endfor %}
+        {% for b in karung %}{{ karung_baris(b, boleh_pindah=boleh_pindah) }}{% endfor %}
       {% endif %}
     </div>
   </div>
@@ -66,7 +66,7 @@
 {% endif %}
 {%- endmacro %}
 
-{% macro karung_baris(b) -%}
+{% macro karung_baris(b, boleh_pindah=False) -%}
 <div class="lap__baris">
   <span class="lap__nama">
     {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
@@ -75,6 +75,26 @@
     {%- if b.menipis %} · menipis{% endif -%}
   </span>
 </div>
+{# ── Pindah kepemilikan karung — pabrik → jasa (7 Oktober 2026) ──
+   ARAH KEBALIKAN dari tombol produk/broken di atas: di sana titipan
+   bergerak balik ke pabrik; karung tak punya tiket timbang untuk mulai
+   milik jasa, jadi satu-satunya arah yang berarti adalah pabrik melepas
+   sebagian ke satu pesanan. `boleh_pindah` dikirim `True` HANYA dari
+   `/stok-karung` (pabrik) — halaman `/stok-karung-jasa` memanggil makro
+   yang sama dengan `boleh_pindah=False`: arahnya cuma satu jalan, jadi
+   sisi jasa tak pernah menawarkan tombol ini. #}
+{% if boleh_pindah and b.lembar > 0 %}
+  <div class="ubah-hasil">
+    {# `|urlencode` pada merk — bukan dua suku lain (`kode` slug tanpa
+       spasi, `ukuran` angka): merk BOLEH berspasi ("Cap Padi Emas"), dan
+       nilai mentah di query string akan memutus pasangan "|" yang dibaca
+       balik oleh `karung-pabrik-tersedia`/`act_pindah_kepemilikan_karung`.
+       Pola sama `dasar_borang()` (`_benda.html`) menyandikan nilai kueri. #}
+    <a class="btn btn--kecil"
+       href="/stok-karung?buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}"
+       >⇄ Pindah kepemilikan</a>
+  </div>
+{% endif %}
 {%- endmacro %}
 
 

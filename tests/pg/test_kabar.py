@@ -277,9 +277,20 @@ async def test_yang_sudah_selesai_tak_diputar_mundur_jadi_dibaca(pg, orang):
     assert orang["admin"]
 
 
-async def test_pintu_kabar_ditawarkan_ke_semua_peran(pg, orang):
+async def test_pintu_kabar_padam_di_laci_untuk_semua_peran(pg, orang):
     """Kabar bukan kerja meja: operator pun perlu tahu lotnya telat diperbarui
-    atau permintaannya ditolak. Pintunya tak boleh padam untuk siapa pun."""
+    atau permintaannya ditolak — gerbangnya (`gerbang VIEW`) tetap `None`,
+    terbuka untuk SIAPA PUN yang membuka alamatnya langsung.
+
+    PEMBALIKAN 7 Oktober 2026 (permintaan pemilik: "kabar di sidebar juga
+    jangan tampilkan dulu. tidak usah ditampilkan dulu sampai saya tau
+    memanfaatkannya untuk apa") — pintunya kini SELALU padam di laci,
+    untuk SIAPA PUN, sampai pemilik menentukan kegunaannya. Padanan unit
+    test `tests/test_grup_antrean.py::
+    test_audit_jasa_kabar_padam_di_laci_permintaan_pemilik_7_oktober`, di
+    sini dibuktikan lewat rantai agregasi SUNGGUHAN (`berjalan.untuk`) atas
+    peran admin & operator sungguhan, bukan `Berjalan()` yang dirakit
+    tangan."""
     from app.models import User
     from app.services.berjalan import untuk
     from app.web.nav import TAB
@@ -292,4 +303,4 @@ async def test_pintu_kabar_ditawarkan_ke_semua_peran(pg, orang):
     async with pg() as db:
         for nama in ("admin", "op1", "op2"):
             b = await untuk(db, await db.get(User, orang[nama]))
-            assert "kabar" not in b.lencana()["PINTU_MATI"], nama
+            assert "kabar" in b.lencana()["PINTU_MATI"], nama

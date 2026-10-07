@@ -105,6 +105,11 @@ class PackagingPurchase(Base, TimestampMixin):
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # NULL = milik pabrik (bawaan — pembelian tak pernah menulis ini sendiri,
+    # karung tak punya tiket timbang untuk menurunkan pemiliknya). Terisi
+    # hanya lewat "Pindah kepemilikan karung" (packaging.
+    # pindah_kepemilikan_karung), yang memecah baris pabrik yang sudah ada.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class PackagingLoss(Base, TimestampMixin):
@@ -125,6 +130,8 @@ class PackagingLoss(Base, TimestampMixin):
     tanggal: Mapped[date] = mapped_column(Date, nullable=False)
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # Simetri rumus `hitung_stok_kemasan` saja — tak ada jalur tulis hari ini.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
 class FinishedGoodsStock(Base, TimestampMixin):

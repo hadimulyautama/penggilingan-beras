@@ -29,32 +29,6 @@ from app.web.tampilan import render_laci
 router = APIRouter(tags=["webapp"])
 
 
-async def _karung(db, view: str, gudang: str = "") -> list[dict]:
-    """Baris stok karung yang boleh dilihat view ini — atau daftar kosong.
-
-    Operator Gudang 1 tidak melihat blok ini sama sekali: karung mengemas
-    beras JADI, dan itu pekerjaan Gudang 2. Yang memegang kedua gudang
-    (Admin ke atas) ikut melihat karung PK di Gudang 1, karena ia yang
-    memesannya.
-
-    `gudang` = pil penyaring di kepala halaman (kunci pendek, "" = semua).
-    Karung ikut disaring karena membuka "Gudang 1" lalu melihat karung Gudang 2
-    di bawahnya membuat penyaringnya berbohong — kalimat yang sama dipakai Meja.
-    Namanya diterjemahkan dari master (`NAMA_GUDANG`), bukan dibandingkan
-    sebagai teks: nama gudang bisa diubah, kunci pendeknya tidak.
-    """
-    from app.web.layar import NAMA_GUDANG, gudang1, gudang2
-
-    if not gudang2(view):
-        return []
-    from app.penggilingan.inventory import packaging as kms
-
-    nama = NAMA_GUDANG.get(gudang, "") if gudang else ""
-    return [b for b in await kms.stok_kemasan_rinci(db)
-            if (b["gudang"] != "Gudang 1" or gudang1(view))
-            and (not nama or b["gudang"] == nama)]
-
-
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     from app.services.setelan import fitur_mutu
@@ -116,7 +90,6 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         tempat = (await svc.pk_gudang2(db)
                   if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
-        karung = await _karung(db, view, gudang)
         # ── Barang jadi & hasil samping ──
         # Gerbang yang SAMA dengan stok karung tepat di bawahnya: barang jadi
         # lahir di Gudang 2, jadi operator selepan tak melihatnya. Sampai 23
@@ -165,12 +138,6 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # tak boleh kehilangan aksi gudang mana pun. Menyembunyikan tombolnya
         # BUKAN penjagaan; gerbangnya sendiri di `api.act_pindah_tumpukan_silo`.
         boleh_pindah_tumpukan=view in (POLESAN, SUPER),
-        # Stok karung, keputusan pemilik 23 September 2026: dilihat operator
-        # Gudang 2, Admin, dan Super Admin — TIDAK operator Gudang 1. Aturan
-        # siapa-melihat-apa tidak ditulis ulang di sini; ia sudah bernama
-        # `gudang2(view)`, dan karung memang barang Gudang 2 (kecuali karung
-        # PK, yang ikut ke sana hanya bagi yang juga memegang Gudang 1).
-        karung=karung,
         # Mutu bisa dimatikan seluruhnya di Pengaturan — termasuk barisnya di
         # kartu ini. Setengah mati adalah yang terburuk: kartu yang masih
         # menyebut "belum dinilai" sementara borangnya tak ada menagih
@@ -250,7 +217,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         # pemilik). Operator yang ingin mengoreksi atau memindahkan tetap ke
         # `/stok`; di sini murni "PK siapa, di mana, berapa".
         boleh_ubah=False, boleh_minta=False, boleh_pindah_tumpukan=False,
-        karung=[], mutu_aktif=mutu_aktif,
+        mutu_aktif=mutu_aktif,
         buka="", nilai="",
         # Kalimat kepala blok & keadaan kosong menyebut "PK Jasa", bukan
         # "PK" polos — tanpa ini orang yang sampai di sini lewat tautan

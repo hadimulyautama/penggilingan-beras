@@ -251,15 +251,16 @@ def test_stok_karung_operator_g2_hanya_gudangnya_sendiri():
     2026).
 
     Dulu yang diperiksa `gudang2_api.stok` — pintu app Gudang 2, yang dihapus
-    24 September 2026 bersama app-nya. Aturannya tidak ikut hilang: ia sekarang
-    dipegang `layar_stok._karung`, yang melayani operator polesan di Pos
-    Produksi. Yang dijaga tetap sama — karung Gudang 1 tak sampai ke layarnya,
-    dan tak ada angka uang yang ikut.
+    24 September 2026 bersama app-nya. Aturannya tidak ikut hilang: ia
+    sempat dipegang `layar_stok._karung`, lalu pindah ke
+    `layar_produk.halaman_stok_karung` (7 Oktober 2026, karung dapat
+    halamannya sendiri). Yang dijaga tetap sama — karung Gudang 1 tak
+    sampai ke layarnya, dan tak ada angka uang yang ikut.
     """
-    from app.web import layar_stok
+    from app.web import layar_produk
 
-    kode = kode_saja(layar_stok._karung)
-    assert "stok_kemasan_rinci(db)" in kode, "stok karung tak diambil"
+    kode = kode_saja(layar_produk.halaman_stok_karung)
+    assert "stok_kemasan_rinci(db" in kode, "stok karung tak diambil"
     assert "gudang1(view)" in kode, "batas gudang tak diperiksa"
     # Dan tak ada harga yang ikut: satuannya lembar, dan operator tak melihat
     # angka uang. Sumbernya sendiri (`stok_kemasan_rinci`) tak menyusun harga.

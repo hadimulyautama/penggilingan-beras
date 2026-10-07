@@ -177,6 +177,24 @@ TAB = (
     # terpotong) membedakannya dari "▦" (Stok) tanpa jauh darinya.
     ("stok_pk_jasa", "/stok-pk-jasa", "Stok PK Jasa",
      "PK milik pesanan jasa, di Gudang 1 & Gudang 2", None, "◪"),
+    # ── Stok Karung / Karung Jasa — keputusan pemilik 7 Oktober 2026 ──
+    #
+    # "di stok harus punya sub-menu stok karung dan stok karung jasa" —
+    # "ubah jadi stok terpisah per pemilik." Karung (kemasan kosong) dulu
+    # hanya blok di `/stok` (keputusan 23 September 2026); pindah ke dua
+    # halaman sendiri sekarang karena ia butuh PEMILIK sebagai sumbu baru,
+    # pola yang sama dengan "Stok Produk"/"Produk Jasa" di atas. Karung tak
+    # punya tiket timbang (beda dari PK/beras) — jadi "Karung Jasa" HANYA
+    # terisi lewat tombol "Pindah kepemilikan" di "Stok Karung", bukan lewat
+    # pembelian langsung. Lihat `packaging.pindah_kepemilikan_karung`.
+    #
+    # SELALU di `PINTU_MATI`, sama seperti seluruh pintu "X Jasa" lain —
+    # berdiri sendiri di laci hanya menawarkan jalan kedua ke sub-menu
+    # "Stok".
+    ("stok_karung", "/stok-karung", "Stok Karung",
+     "Karung kosong (kemasan) milik pabrik", None, "▥"),
+    ("stok_karung_jasa", "/stok-karung-jasa", "Karung Jasa",
+     "Karung kosong milik pesanan jasa, per pelanggan", None, "▧"),
     # ── Barang Keluar — permintaan pemilik 28 September 2026 ──
     #
     # "kita butuh satu halaman untuk transaksi barang keluar."

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block judul %}Stok Karung{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+
+{# ── Stok Karung — kemasan kosong milik PABRIK ──
+   Keputusan pemilik 7 Oktober 2026: "di stok harus punya sub-menu stok
+   karung dan stok karung jasa" — "ubah jadi stok terpisah per pemilik."
+   Blok ini dulu menempel di `/stok` (keputusan 23 September 2026); pindah
+   ke halamannya sendiri karena ia butuh PEMILIK sebagai sumbu baru, pola
+   yang sama dengan kepindahan "Stok Produk" dari dalam `/stok` 26 September
+   2026 — lihat catatan panjangnya di `layar_produk.halaman_stok_karung`.
+
+   Makronya (`karung_blok`/`karung_baris`, `_stok.html`) sudah dipakai
+   sejak 23 September 2026; yang baru di sini cuma `boleh_pindah`. #}
+
+{% if not karung %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
+      <path d="M12 13v7"/></svg>
+    <div>
+      <h2>Belum ada stok kemasan</h2>
+      <p class="bantu">Belum ada pembelian karung yang tercatat.</p>
+    </div>
+  </div>
+{% else %}
+  {{ st.karung_blok(karung, boleh_pindah=BOLEH_PINDAH) }}
+{% endif %}
+
+{# Lembarnya terbuka DI HALAMAN INI, pola yang sama dengan `/stok-produk`. #}
+{% if BOLEH_PINDAH %}
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+{% if BOLEH_PINDAH %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endif %}
+{% endblock %}

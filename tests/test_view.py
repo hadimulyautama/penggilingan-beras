@@ -281,18 +281,17 @@ def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
 
 
 def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
-    """Membuka "Gudang 1" lalu melihat barang jadi & karung Gudang 2 di bawahnya
-    membuat penyaringnya berbohong — kalimat yang sama sudah dipakai Meja."""
+    """Membuka "Gudang 1" lalu melihat barang jadi Gudang 2 di bawahnya
+    membuat penyaringnya berbohong — kalimat yang sama sudah dipakai Meja.
+
+    Karung PINDAH ke halamannya sendiri (`/stok-karung`) 7 Oktober 2026 dan
+    tak lagi punya pil `?gudang=` di sini — lihat
+    `test_stok_karung_filter_gudang1_tetap_ada_di_rute` (tests/test_stok.py)
+    untuk penyaringnya yang sekarang."""
     from app.web import layar_stok
 
     kode = inspect.getsource(layar_stok.halaman_stok)
     assert 'gudang in ("", "g1")' in kode and 'gudang in ("", "g2")' in kode
-    # Karung disaring di satu tempat — fungsinya sendiri, yang menerima pilnya.
-    assert "_karung(db, view, gudang)" in kode
-    karung = inspect.getsource(layar_stok._karung)
-    # Diterjemahkan dari master, bukan dibandingkan sebagai teks yang diketik
-    # dua kali: nama gudang bisa diubah, kunci pendeknya tidak.
-    assert "NAMA_GUDANG.get(gudang" in karung
 
 
 def test_layar_stok_tak_menyebut_gudang_1_di_menu():

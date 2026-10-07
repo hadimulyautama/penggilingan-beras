@@ -278,9 +278,11 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
     # PK Jasa" (padanannya untuk BAHAN) ikut sub-menu "Stok" — lihat
     # `CLAUDE.md` § "Stok Produk — barang jasa".
     assert [nama for _, nama, _ in b2.submenu()["stok"]] == \
-        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa"]
+        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa",
+         "Stok Karung", "Karung Jasa"]
     assert [nama for _, nama, _ in b3.submenu()["stok"]] == \
-        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa"]
+        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa",
+         "Stok Karung", "Karung Jasa"]
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
 
@@ -1462,7 +1464,17 @@ async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
     # dulu. Mencari "25 kg" harfiah membuat uji ini merah justru ketika
     # perbaikannya berhasil — dan pagar yang menghukum perbaikan akan
     # dilonggarkan orang berikutnya, bukan dibetulkan.
-    laci = h[h.index("Dikemas ·"):].replace("&nbsp;", " ").replace("\u00a0", " ")
+    #
+    # Batas AKHIR wajib ada sejak "Stok Karung" masuk sub-menu "Stok" (7
+    # Oktober 2026): tanpanya potongan ini menelan sisa halaman, termasuk
+    # dropdown laci yang menyebut "Stok Karung" — kata "Karung" yang SAH
+    # di tempat lain, bukan di rincian kemasan ini. Batasnya kepala
+    # `anak__kepala` BERIKUTNYA ("Curah", bila ada).
+    mulai = h.index("Dikemas ·")
+    akhir = h.find("anak__kepala", mulai + 10)
+    if akhir == -1:
+        akhir = mulai + 2000
+    laci = h[mulai:akhir].replace("&nbsp;", " ").replace("\u00a0", " ")
     assert "25 kg" in laci, "ukuran kemasan ikut hilang"
     assert "Karung" not in laci, "kata 'Karung' masih di rincian kemasan"
     # Kategori disebut SEKALI, di kepala kartunya — bukan di tiap baris.
