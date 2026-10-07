@@ -1510,6 +1510,13 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # (`pelanggan-kledo`, picker yang SAMA dengan "Buat perintah
             # barang keluar"), BUKAN `jasa-berjalan`. Lihat `packaging.
             # pindah_kepemilikan_karung` untuk catatan arahnya.
+            #
+            # Medan "pelanggan" berjenis `kombo` (bukan `remote` biasa) —
+            # keluhan pemilik atas daftar jatuh `<select>` di kartu Stok
+            # Karung: "harus bisa diketik sambil memfilter dari list
+            # pelanggan yang ada di database." `kombo` kotak teks yang
+            # menyaring daftar `pelanggan-kledo` yang SAMA sambil diketik —
+            # lihat catatan panjangnya di `aksi.js` (`f.type === "kombo"`).
             {"id": "pindah_kepemilikan_karung",
              "label": "⇄ Pindah kepemilikan ke pelanggan",
              "post": "/api/actions/pindah-kepemilikan-karung",
@@ -1519,8 +1526,9 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "karung", "label": "Karung pabrik", "type": "remote",
                   "source": "/api/actions/karung-pabrik-tersedia",
                   "kosong": "Tidak ada stok karung pabrik yang bisa dipindah."},
-                 {"name": "pelanggan", "label": "Pelanggan tujuan", "type": "remote",
+                 {"name": "pelanggan", "label": "Pelanggan tujuan", "type": "kombo",
                   "source": "/api/actions/pelanggan-kledo",
+                  "placeholder": "Ketik nama pelanggan…",
                   "kosong": "Tidak ada pelanggan terdaftar."},
                  {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
              ]},

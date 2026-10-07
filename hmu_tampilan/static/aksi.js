@@ -387,6 +387,33 @@
                      " dulu —" : "memuat…") +
           "</option></select>";
       }
+      /* ── MEDAN DIKETIK SAMBIL MENYARING — daftar jatuh untuk pilihan BANYAK ──
+       *
+       * Keluhan pemilik 7 Oktober 2026 atas daftar jatuh `remote` biasa di
+       * borang "Pindah kepemilikan karung": "harus bisa diketik sambil
+       * memfilter dari list pelanggan yang ada di database." Daftar jatuh
+       * `<select>` memaksa menggulir satu per satu begitu pelanggannya
+       * banyak — pintu ini kotak TEKS yang menyaring daftar yang SAMA
+       * (`ambil(f.source)`, satu kali, lalu disaring di sini tanpa
+       * permintaan baru tiap huruf) sambil diketik, dan kolom tersembunyi di
+       * sebelahnya yang membawa KODE/id-nya — pengumpul muatan tetap
+       * menyapu `[data-name]` seperti biasa, tak perlu tahu bentuknya beda.
+       *
+       * Bukan ketik-bebas: yang terkirim HANYA pilihan yang benar-benar
+       * disentuh (klik atau Enter), supaya tak ada nama yang diketik
+       * sebagian lalu terkirim sebagai id kosong. Tulisan yang tak cocok
+       * satu pilihan pun dikosongkan lagi saat kotaknya ditinggalkan
+       * (`blur`, lihat `pasangKombo`) — borang yang terlihat terisi padahal
+       * belum ada yang terpilih lebih berbahaya daripada kotak kosong. */
+      if (f.type === "kombo") {
+        return l + '<div class="kombo">' +
+          '<input type="text" class="fld" id="x_' + esc(f.name) + '" autocomplete="off"' +
+          ' placeholder="' + esc(f.placeholder || "Ketik untuk mencari…") + '">' +
+          '<div class="kombo__saran" id="c_' + esc(f.name) + '" hidden></div></div>' +
+          '<input type="hidden" data-name="' + esc(f.name) + '" data-cari="1"' +
+          (f.optional ? "" : ' data-wajib="1"') +
+          ' data-label="' + esc(f.label) + '" value="">';
+      }
       /* ── MEDAN BERULANG BERPASANGAN — satu BARIS (barang + jumlah) ──
        *
        * Permintaan pemilik 29 September 2026: "admin bisa memilih barang yang
@@ -493,6 +520,101 @@
       if (s) { return s.value; }
       var sembunyi = lembar.querySelector('[data-name="' + nama + '"]');
       return sembunyi ? sembunyi.value : "";
+    }
+
+    /* Kotak TEKS yang menyaring daftar jarak jauh sambil diketik — lihat
+       catatan panjang pada `f.type === "kombo"` di atas. Daftarnya diambil
+       SEKALI (`ambil(f.source)`, disimpan di elemen inputnya sendiri) lalu
+       disaring di peramban tiap huruf; tak ada permintaan jaringan baru
+       selama mengetik. Kolom tersembunyi yang membawa id-nya dikosongkan
+       SETIAP KALI tulisannya berubah — pilihan lama tak boleh ikut
+       terkirim diam-diam begitu orangnya mengetik nama lain. */
+    function pasangKombo(f) {
+      var masukan = $("x_" + f.name);
+      var kotak = $("c_" + f.name);
+      var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-cari]');
+      if (!masukan || !kotak || !simpanan) { return; }
+
+      ambil(f.source).then(function (daftar) {
+        if (!daftar) { return; }
+        masukan._daftarKombo = daftar;
+        /* Pulih dari layar konfirmasi — oleh TULISANNYA (`terbaca()` cuma
+           menyimpan label, bukan id), dicocokkan PERSIS sekali daftarnya
+           datang. Sebangun `data-pulih` pada `muatBanyak`. */
+        var pulih = simpanan.dataset.pulih;
+        if (pulih !== undefined) {
+          delete simpanan.dataset.pulih;
+          var cocok = null;
+          daftar.forEach(function (o) { if (o.label === pulih) cocok = o; });
+          if (cocok) { masukan.value = cocok.label; simpanan.value = cocok.value; }
+        }
+        if (!daftar.length && !f.optional) {
+          masukan.disabled = true;
+          masukan.placeholder = f.kosong || "Belum ada pilihan.";
+        }
+      }).catch(function () {});
+
+      // Pendengarnya terpasang SEKALI — `muatPilihan` bisa dipanggil ulang
+      // (segar, lihat `segarkanPilihan`) selama lembarnya masih terbuka,
+      // dan memasangnya lagi tiap kali berarti satu keystroke memicu
+      // penyaringan berkali-kali lipat.
+      if (masukan._komboTerpasang) { return; }
+      masukan._komboTerpasang = true;
+
+      function tutupSaran() { kotak.hidden = true; kotak.innerHTML = ""; }
+
+      masukan.addEventListener("input", function () {
+        simpanan.value = "";
+        var q = masukan.value.trim().toLowerCase();
+        var daftar = masukan._daftarKombo || [];
+        if (!q) { tutupSaran(); return; }
+        var cocok = daftar.filter(function (o) {
+          return o.label.toLowerCase().indexOf(q) >= 0;
+        }).slice(0, 8);
+        if (!cocok.length) {
+          kotak.innerHTML = '<div class="kombo__kosong">Tak ada yang cocok</div>';
+          kotak.hidden = false;
+          return;
+        }
+        kotak.innerHTML = cocok.map(function (o) {
+          return '<div class="kombo__opsi" data-value="' + esc(o.value) +
+            '" data-label="' + esc(o.label) + '">' + esc(o.label) + "</div>";
+        }).join("");
+        kotak.hidden = false;
+      });
+
+      // Enter memilih sarannya yang PERTAMA — tanpa ini orang yang mengetik
+      // di ponsel harus berpindah tangan ke layar sentuh hanya untuk
+      // menutup papan ketiknya dulu, baru bisa menyentuh satu baris.
+      masukan.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter") { return; }
+        var pertama = kotak.querySelector(".kombo__opsi");
+        if (kotak.hidden || !pertama) { return; }
+        e.preventDefault();
+        masukan.value = pertama.dataset.label;
+        simpanan.value = pertama.dataset.value;
+        tutupSaran();
+      });
+
+      // `mousedown`, bukan `click`: tanpa ini `blur` di bawah menutup
+      // kotaknya SEBELUM pilihannya sempat terbaca.
+      kotak.addEventListener("mousedown", function (e) {
+        var opsi = e.target.closest(".kombo__opsi");
+        if (!opsi) { return; }
+        masukan.value = opsi.dataset.label;
+        simpanan.value = opsi.dataset.value;
+        tutupSaran();
+      });
+
+      masukan.addEventListener("blur", function () {
+        setTimeout(function () {
+          tutupSaran();
+          // Tulisan yang tak cocok satu pilihan pun BUKAN pilihan —
+          // dikosongkan lagi supaya borangnya tak terlihat terisi padahal
+          // belum ada yang benar-benar terpilih.
+          if (!simpanan.value) { masukan.value = ""; }
+        }, 150);
+      });
     }
 
     /* Daftar centang: satu kotak per pilihan, nilainya dikumpulkan ke kolom
@@ -629,6 +751,10 @@
       (a.fields || []).forEach(function (f) {
       if (f.type === "remote_banyak") {
         if (!hanya || f.name === hanya) { muatBanyak(f, segar); }
+        return;
+      }
+      if (f.type === "kombo") {
+        if (!hanya || f.name === hanya) { pasangKombo(f); }
         return;
       }
       /* Wadah berpasangan: daftarnya dimuat SEKALI lalu dipasang ke setiap
@@ -828,6 +954,13 @@
           v["kode:" + el.dataset.name] = el.value;
           return;
         }
+        /* Kombo: yang terbaca orang tulisan di kotaknya ("Bu Sri Uji"),
+           bukan id tersembunyi di sebelahnya. */
+        if (el.dataset.cari) {
+          var tampil = $("x_" + el.dataset.name);
+          v[el.dataset.name] = tampil ? tampil.value : "";
+          return;
+        }
         var kotak = el.type === "hidden" ? $("t_" + el.dataset.name) : null;
         v[el.dataset.name] = kotak ? kotak.textContent.trim() : el.value;
       });
@@ -961,6 +1094,13 @@
            `data-pulih` dan dipakai `muatBanyak` begitu daftarnya datang. */
         if (el.dataset.banyak) {
           el.dataset.pulih = semula["kode:" + el.dataset.name] || "";
+          return;
+        }
+        /* Kombo: daftarnya baru selesai dimuat sesudah ini (sebangun
+           `remote`/`remote_banyak`) — tulisannya dititipkan dulu,
+           dicocokkan di `pasangKombo` begitu daftarnya datang. */
+        if (el.dataset.cari) {
+          el.dataset.pulih = semula[el.dataset.name] || "";
           return;
         }
         var t = semula[el.dataset.name];

@@ -90,11 +90,19 @@ def test_pintu_bersubmenu_tak_ikut_menutup_laci():
 def test_pendengar_papan_tik_tidak_menumpuk():
     """`document` tak ikut ditukar saat halaman berpindah, jadi pendengar
     yang dipasang langsung padanya bertambah satu tiap perpindahan — dan
-    yang bertambah memegang elemen lama yang sudah dibuang."""
+    yang bertambah memegang elemen lama yang sudah dibuang.
+
+    Yang diperiksa KHUSUS `document` — elemen LAIN (kotak `kombo` yang
+    dibangun ulang tiap lembar dibuka, misalnya) boleh punya pendengar
+    `keydown` miliknya sendiri: ia ikut terbuang bersama elemennya begitu
+    lembarnya ditutup, tak pernah menumpuk. Dulu diperiksa dengan memotong
+    teks sebelum kemunculan PERTAMA `"keydown"` — asumsi yang pecah tepat
+    begitu ada pendengar `keydown` lain, bukan pada `document`, lahir
+    LEBIH DULU di berkasnya.
+    """
     for berkas, teks in (("aksi.js", AKSI), ("base.html", BASE)):
-        keydown = teks.split('"keydown"')[0]
-        assert keydown.rstrip().endswith("pasang(document,"), \
-            f"{berkas}: pendengar keydown harus lewat PINDAH.pasang"
+        assert 'document.addEventListener("keydown"' not in teks, \
+            f"{berkas}: pendengar keydown pada document harus lewat PINDAH.pasang"
 
 
 def test_setiap_kartu_membentang_di_tempat():
