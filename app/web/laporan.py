@@ -47,26 +47,15 @@ def _daftar() -> tuple[Laporan, ...]:
     """Dibangun di dalam fungsi supaya impor layanan tidak terjadi saat modul
     dimuat — sebagiannya menarik model yang berat, dan halaman masuk tidak
     perlu membayarnya."""
-    from app.penggilingan.inventory import finished_goods as bj
-    from app.penggilingan.inventory import outgoing as keluar
-    from app.penggilingan.inventory import packaging as kms
     from app.services import analytics, report
 
     return (
         # ── Laporan kerja: boleh dilihat siapa pun yang bekerja ──
-        Laporan("status_gudang", "Status Gudang 1", "Apa yang sedang berjalan sekarang.",
-                False, report.status_gudang1),
         Laporan("pending_verifikasi", "Menunggu verifikasi",
                 "Yang tertahan menunggu tindakan orang lain.",
                 False, report.pending_verifikasi),
         Laporan("produksi", "Riwayat produksi", "Giling & pengeringan pada rentang waktu.",
                 False, None, berperiode=True),
-        Laporan("stok_kemasan", "Stok karung", "Sisa karung per jenis, ukuran, dan merk.",
-                False, kms.laporan_stok_kemasan),
-        Laporan("stok_barang_jadi", "Stok barang jadi", "Beras yang sudah dikemas dan hasil samping.",
-                False, bj.laporan_stok_barang_jadi),
-        Laporan("barang_keluar", "Barang keluar", "Pengiriman terakhir beserta pembelinya.",
-                False, keluar.laporan_barang_keluar),
         Laporan("jam_kedatangan", "Jam kedatangan gabah",
                 "Kapan truk datang — dasar mengatur giliran jaga.",
                 False, report.insight_jam_kedatangan),
