@@ -1797,3 +1797,105 @@ async def pk_jenis_banyak(db: AsyncSession, procs) -> dict[int, str | None]:
                     kondisi.append(k)
         hasil[pid] = kelas_pk([k for k in ("basah", "kering") if k in kondisi])
     return hasil
+
+
+# ═══════════════════ Riwayat Penggilingan (7 Oktober 2026) ═══════════════════
+#
+# Sub-menu "Riwayat Proses" (keputusan pemilik, sama hari dengan Riwayat
+# sosoh dulu lahir sendirian): kartu TIAP giling yang SUDAH SELESAI, terbaru
+# dulu — cetakan yang sama persis dengan `polishing.riwayat_sosoh()`.
+#
+# ⚠ BEDA dari `stok.pk_gudang1()`: di sana `if bd.tersedia <= 0 and not
+# belum: continue` — stok memang hanya menjawab "apa yang MASIH ADA", dan
+# lot yang PK-nya sudah habis terkirim/terjual tak perlu didaftar lagi.
+# Riwayat menjawab pertanyaan lain — "giling apa saja yang pernah selesai" —
+# dan lot yang habis terkirim justru salah satu yang paling sering dicari di
+# sini (menyusuri riwayat sebuah lot lama). Jadi TANPA baris itu.
+@dataclass(frozen=True)
+class KartuGiling:
+    """Satu proses giling yang SUDAH SELESAI, berikut seluruh keterangannya."""
+
+    id: int
+    kode: str
+    mulai: object
+    selesai: object | None
+    lama: str
+    #: "JAS-2610-001 Pak Budi" bila bahannya titipan; None = milik pabrik.
+    pemilik: str | None
+    bahan_kg: float
+    #: (pemasok/pemilik, kode+berat, keterangan) — bentuk sama `LotPk.bahan`.
+    bahan: list[tuple[str, str, str]]
+    rendemen: float | None
+    kelas: str | None
+    #: Satu baris teks `QcRata.teks()` — kosong bila belum pernah dicatat.
+    mutu: str
+    hasil_kg: float
+    ditransfer_kg: float
+    tersedia_kg: float
+    #: Giling SELESAI tetapi hasilnya tak pernah dicatat — bukan nol,
+    #: melainkan tak diketahui. Lihat `LotPk.belum_dicatat`, alasan sama.
+    belum_dicatat: bool = False
+
+
+async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
+                         sebelum: int | None = None
+                         ) -> tuple[list[KartuGiling], bool]:
+    """Kartu giling SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
+
+    `sebelum` = id proses TERAKHIR yang sudah digambar (kursor), bukan nomor
+    halaman — alasan yang sama persis dengan `polishing.riwayat_sosoh()`:
+    riwayat bertambah di ujung yang sama dengan arah bacanya.
+
+    Jumlah kuerinya TETAP berapa pun banyak kartunya — lima borongan
+    (`pk_breakdown_banyak`, `qc_rata_banyak`, `pk_jenis_banyak`,
+    `stok._bahan_banyak`, `jasa.nama_pemilik_banyak`) plus satu pengambilan
+    proses itu sendiri, sama pola `riwayat_sosoh` (dijaga
+    `tests/pg/test_riwayat_giling.py` sebagai PERBANDINGAN 1 vs 6 kartu).
+    """
+    from app.services.jasa import nama_pemilik_banyak
+    from app.services.berjalan import lama_kata
+    from app.services.stok import _bahan_banyak
+
+    q = (select(MillingProcess)
+         .where(MillingProcess.status == "selesai")
+         .order_by(MillingProcess.id.desc())
+         .limit(batas + 1))
+    if sebelum:
+        q = q.where(MillingProcess.id < sebelum)
+    proses = (await db.execute(q)).scalars().all()
+    lagi = len(proses) > batas
+    proses = proses[:batas]
+    if not proses:
+        return [], False
+    ids = [p.id for p in proses]
+
+    bd = await pk_breakdown_banyak(db, ids)
+    mutu = await qc_rata_banyak(db, ids)
+    kelas = await pk_jenis_banyak(db, proses)
+    bahan_per = await _bahan_banyak(db, proses)
+    pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in proses})
+
+    kartu = []
+    for p in proses:
+        b = bd.get(p.id, PkBreakdown(0.0, 0.0, 0.0))
+        bahan, _kondisi = bahan_per.get(p.id, ([], []))
+        # Nol karena HABIS berbeda dari nol karena TAK DICATAT — pola sama
+        # `pk_gudang1()` (`stok.py`): giling yang ditutup tanpa satu pun
+        # angka hasil tetap wajib tampil di riwayatnya, dengan tanda bahwa
+        # angkanya tidak diketahui, bukan menghilang begitu saja.
+        belum = b.produced <= 0 and b.transferred <= 0
+        kartu.append(KartuGiling(
+            id=p.id, kode=p.kode_proses, mulai=p.waktu_mulai,
+            selesai=p.waktu_selesai,
+            lama=(lama_kata((p.waktu_selesai - p.waktu_mulai).total_seconds())
+                  if p.waktu_selesai else ""),
+            pemilik=pemilik.get(p.jasa_id) if p.jasa_id else None,
+            bahan_kg=float(p.berat_gabah_masuk_kg or 0), bahan=bahan,
+            rendemen=(None if belum
+                      else hitung_rendemen(b.produced, p.berat_gabah_masuk_kg)),
+            kelas=kelas.get(p.id),
+            mutu=mutu.get(p.id, QcRata()).teks(),
+            hasil_kg=b.produced, ditransfer_kg=b.transferred,
+            tersedia_kg=b.tersedia, belum_dicatat=belum,
+        ))
+    return kartu, lagi

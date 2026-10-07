@@ -390,3 +390,99 @@ async def laporan_transfer(db: AsyncSession, financial: bool = True) -> str:
             f"→ {await label_tujuan(db, t.lokasi_tujuan, t.silo_id)}"
         )
     return "\n".join(lines)
+
+
+# ═══════════════════ Riwayat Transfer (7 Oktober 2026) ═══════════════════
+#
+# Sub-menu "Riwayat Proses". Beda dari `laporan_transfer()` di atas (teks
+# Telegram, 10 baris, tak menyebut pembatalan maupun pemilik): halaman ini
+# berkartu, berkursor, dan — PALING PENTING — tak menyembunyikan satu baris
+# pun.
+#
+# ⚠⚠ `InternalTransfer` BUKAN cermin (`app/models/cermin.py` tak memuatnya;
+# ia memakai kolom `status`-nya sendiri, bukan `dibatalkan_pada` yang
+# disaring otomatis sesi). Baris `status=="dibatalkan"` TETAP TAMPIL di
+# sini, bertanda jelas — bukan dihilangkan dari daftar. Prinsip yang sama
+# dipakai seluruh riwayat/neraca lain di app ini ("dilaporkan, bukan
+# disembunyikan"): transfer yang dibatalkan adalah bagian dari ceritanya,
+# dan daftar yang membuangnya diam-diam membuat orang mengira jumlah PK
+# yang berpindah lebih besar daripada yang sebenarnya.
+@dataclass(frozen=True)
+class KartuTransfer:
+    """Satu transfer PK Gudang 1 → Gudang 2, apa pun statusnya."""
+
+    id: int
+    kode: str
+    kode_proses: str
+    #: "JAS-2610-001 Pak Budi" bila PK-nya titipan; None = milik pabrik.
+    pemilik: str | None
+    berat_kg: float
+    tujuan: str
+    waktu: object
+    #: "terkirim" atau "dibatalkan" — disebut apa adanya, bukan diterjemahkan
+    #: jadi boolean tunggal: layar yang menyebut KATANYA bisa menambah
+    #: keadaan baru kelak tanpa kartu lama berhenti mengenalinya.
+    status: str
+
+    @property
+    def dibatalkan(self) -> bool:
+        return self.status == "dibatalkan"
+
+
+async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
+                           sebelum: int | None = None
+                           ) -> tuple[list[KartuTransfer], bool]:
+    """Kartu transfer TERBARU dulu, dibatalkan atau tidak. → (kartu, lagi)
+
+    `sebelum` = id transfer TERAKHIR yang sudah digambar (kursor) — pola sama
+    `polishing.riwayat_sosoh()`/`milling.riwayat_giling()`.
+
+    Nama silo diambil BORONGAN (satu kueri `Silo.id IN (...)`), bukan lewat
+    `gudang2.service.label_tujuan` per baris — fungsi itu satu `db.get` per
+    panggilan, dan dipanggil sekali per kartu akan mengembalikan halaman ini
+    ke pola N+1 yang sudah diperbaiki di layar lain (`stok.py`,
+    `polishing.riwayat_sosoh()`).
+    """
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import _KATA_LAMA, DITUMPUK
+    from app.services.jasa import nama_pemilik_banyak
+
+    q = (select(InternalTransfer)
+         .order_by(InternalTransfer.id.desc())
+         .limit(batas + 1))
+    if sebelum:
+        q = q.where(InternalTransfer.id < sebelum)
+    rows = (await db.execute(q)).scalars().all()
+    lagi = len(rows) > batas
+    rows = rows[:batas]
+    if not rows:
+        return [], False
+
+    proc = {p.id: p for p in (await db.execute(
+        select(MillingProcess)
+        .where(MillingProcess.id.in_({r.milling_process_id for r in rows}))
+    )).scalars().all()}
+    nama_silo = {i: n for i, n in (await db.execute(
+        select(Silo.id, Silo.nama_silo)
+        .where(Silo.id.in_({r.silo_id for r in rows if r.silo_id} or {0}))
+    )).all()}
+    pemilik = await nama_pemilik_banyak(db, {r.jasa_id for r in rows})
+
+    def _tujuan(t: InternalTransfer) -> str:
+        if t.silo_id is not None:
+            return nama_silo.get(t.silo_id) or f"Silo #{t.silo_id}"
+        if (t.lokasi_tujuan or "") in (DITUMPUK, ""):
+            return "Ditumpuk"
+        return _KATA_LAMA.get(t.lokasi_tujuan, t.lokasi_tujuan) or "Ditumpuk"
+
+    kartu = []
+    for t in rows:
+        p = proc.get(t.milling_process_id)
+        kartu.append(KartuTransfer(
+            id=t.id, kode=t.kode_transfer,
+            kode_proses=p.kode_proses if p else "?",
+            pemilik=pemilik.get(t.jasa_id) if t.jasa_id else None,
+            berat_kg=float(t.berat_kg), tujuan=_tujuan(t),
+            waktu=t.waktu, status=t.status,
+        ))
+    return kartu, lagi

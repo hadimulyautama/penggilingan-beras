@@ -34,7 +34,7 @@ import logging
 
 from app.database import SessionLocal
 from app.models import User
-from app.web.layar import ADMIN, MEJA, POLESAN, SUPER
+from app.web.layar import ADMIN, MEJA, POLESAN, SELEPAN, SUPER
 
 log = logging.getLogger("web.nav")
 
@@ -214,33 +214,49 @@ TAB = (
     # belum dipakai pintu lain: barang yang dititipkan, bukan dimiliki.
     ("jasa",       "/jasa",       "Jasa",
      "Barang titipan pelanggan: sisa & pengambilannya", MEJA, "◇"),
-    # ── Riwayat sosoh — keputusan pemilik 2 Oktober 2026 ──
+    # ── Riwayat Proses — keputusan pemilik 2 Oktober 2026, sub-menu 7
+    #    Oktober 2026 ──
     #
     # "berisi kartu proses sosoh yang selesai berikut seluruh informasinya dan
     # hasilnya. terkhusus berapa persen yang jadi beras, berapa persen broken,
     # berapa persen menir, berapa persen bekatul, lalu berapa persen susut
-    # debu/bobot."
+    # debu/bobot." — itu "Riwayat sosoh", yang lahir duluan dan berdiri
+    # sendiri sampai 7 Oktober 2026. Permintaan pemilik hari itu: satu menu
+    # "Riwayat Proses" dengan EMPAT sub-menu — "Penyosohan", "Penggilingan",
+    # "Pengeringan", "Transfer" — satu per tahap produksi.
     #
     # Yang dijawabnya tak dijawab satu pun layar lain, dan itu sebabnya ia
-    # pintu sendiri alih-alih blok di Stok Produk: SUSUT bukan stok. Layar stok
-    # menyebut apa yang ADA; susut justru yang TIDAK ada — ia cuma terbaca
-    # sebagai selisih antara yang masuk mesin dan yang keluar darinya, dan
-    # selisih itu tak disimpan di kolom mana pun.
+    # pintu sendiri alih-alih blok di Stok (PK) atau Stok Produk: SUSUT bukan
+    # stok. Layar stok menyebut apa yang ADA; susut justru yang TIDAK ada —
+    # ia cuma terbaca sebagai selisih antara yang masuk mesin dan yang keluar
+    # darinya, dan selisih itu tak disimpan di kolom mana pun.
     #
     # Tempatnya SESUDAH Jasa dan sebelum Laporan: ia riwayat, sederajat dengan
     # Laporan, bukan antrean. Dan ia dibuka beberapa kali sepekan — bukan tiap
     # jam — jadi ia turun dari blok stok yang di atasnya.
     #
-    # PERANNYA DISEBUT TIGA, bukan `None` + PINTU_MATI (keputusan pemilik:
-    # "hanya super admin, admin dan operator gudang 2 yang bisa lihat").
-    # Keduanya sama-sama menyembunyikan pintunya dari operator selepan, tetapi
-    # yang ini menuliskan siapa yang BOLEH, bukan siapa yang dikecualikan —
-    # dan daftar pengecualian harus disunting ulang tiap kali view baru lahir,
-    # sedangkan daftar yang boleh tidak.
+    # ── Pola "stok" PERSIS, keputusan pemilik 5 Oktober 2026 yang sama ──
     #
-    # ⚠ Pintu yang disembunyikan BUKAN penjagaan: rutenya menjaga sendiri
-    # (`layar_sosoh` menuntut `_is_g2_operator`, yang berarti admin ke atas
-    # ATAU operator yang sedang bekerja di Gudang 2).
+    # Kunci ini TETAP `riwayat_sosoh` — bukan kunci baru `riwayat_proses` —
+    # sebab ia sekaligus pintu INDUK dropdown *dan* anak pertamanya sendiri
+    # (halaman `/riwayat-sosoh` tak berubah sama sekali), sama seperti "stok"
+    # sekaligus induk dropdown Stok *dan* halaman Stok PK. Labelnya di sini
+    # ("Riwayat Proses") karenanya BERBEDA dari judul `<h1>` halamannya
+    # sendiri ("Riwayat sosoh") — pasangan yang sama persis dengan
+    # "Stok"/"Stok PK".
+    #
+    # Gerbangnya kini `None` (semua view) — DULU `(SUPER, ADMIN, POLESAN)`,
+    # ganti sebab operator Gudang 1 (view `selepan`) kini juga berhak melihat
+    # pintu ini (isi dropdown-nya "Penggilingan"/"Pengeringan"/"Transfer").
+    # `Berjalan.submenu()` yang memutuskan ISI dropdown per peran — operator
+    # Gudang 2 yang cuma berhak atas satu pilihan (Penyosohan) melihat pintu
+    # ini kembali jadi tautan BIASA ke `/riwayat-sosoh` (aturan ≥2 pilihan
+    # yang sama dipakai "Antrian tunggu"/"Menunggu keputusan"/"Stok").
+    #
+    # ⚠ Pintu yang disembunyikan BUKAN penjagaan: tiap rute menjaga sendiri
+    # (`layar_sosoh` menuntut `_is_g2_operator`; tiga rute baru di bawah
+    # menuntut `_is_g1_operator` — admin ke atas ATAU operator yang sedang
+    # bekerja di gudang itu).
     #
     # ⚠ IKON "◭" dari Geometric Shapes (U+25ED) — blok yang sama dengan enam
     # ikon lain yang sudah terbukti tampil di app ini (◇ ◷ ◧ ◎ ▦ ▤), BUKAN
@@ -254,9 +270,41 @@ TAB = (
     # pada mesin Android tertentu, gantinya "△" (U+25B3) — segitiga yang sama
     # tetapi ada di hampir setiap fon. Jangan dibiarkan kotak: ikon yang jadi
     # kotak membuat pintunya tak bernama di perangkat itu.
-    ("riwayat_sosoh", "/riwayat-sosoh", "Riwayat sosoh",
+    ("riwayat_sosoh", "/riwayat-sosoh", "Riwayat Proses",
      "Tiap penyosohan selesai: hasil, persen, dan susutnya",
-     (SUPER, ADMIN, POLESAN), "◭"),
+     None, "◭"),
+    # ── Penggilingan, Pengeringan, Transfer — sub-menu "Riwayat Proses" ──
+    #
+    # SELALU di `PINTU_MATI` (`Berjalan.lencana()`) — sama seperti
+    # `stok_produk`/`stok_pk_jasa`: berdiri sendiri di laci hanya menawarkan
+    # jalan kedua ke tempat yang sudah terjangkau lewat dropdown "Riwayat
+    # Proses" di atas. Isi tiap halaman: `app/web/layar_riwayat.py`.
+    #
+    # Ketiganya Gudang 1 (gabah→PK), beda dari Penyosohan (Gudang 2,
+    # PK→beras) — gerbangnya karena itu `(SUPER, ADMIN, SELEPAN)`, pasangan
+    # dari `(SUPER, ADMIN, POLESAN)` yang dulu dipakai Penyosohan sendirian.
+    #
+    # ⚠ Pengeringan TIDAK menyebut "susut" di mana pun — bukan kelalaian.
+    # Tak ada satu kolom pun di seluruh basis data yang menyimpan berat
+    # gabah KERING keluar dryer (`DryingLot`/`SiloStorage` tanpa kolom berat
+    # sama sekali); satu-satunya berat kering yang pernah tercatat adalah
+    # `MillingProcessSource.berat_kg`, dan itu cuma ada kalau lotnya sudah
+    # digiling. Kartunya menyebut bahan basah masuk, kadar air terakhir, dan
+    # status silo — jujur tentang yang benar-benar terukur, bukan menebak
+    # susut dari angka yang tidak pernah ada.
+    #
+    # ⚠ IKON "◨"/"◔"/"⇄" — blok yang sama (Geometric Shapes/Arrows), belum
+    # dipakai pintu lain. WAJIB DILIHAT DI HP SUNGGUHAN sebelum dianggap
+    # final; kalau kotak kosong, gantinya "▨"/"◐"/"⇆".
+    ("riwayat_giling", "/riwayat-giling", "Penggilingan",
+     "Tiap giling selesai: PK yang jadi, rendemen, mutunya",
+     (SUPER, ADMIN, SELEPAN), "◨"),
+    ("riwayat_pengeringan", "/riwayat-pengeringan", "Pengeringan",
+     "Tiap lot kering selesai: bahan, kadar air, tujuannya",
+     (SUPER, ADMIN, SELEPAN), "◔"),
+    ("riwayat_transfer", "/riwayat-transfer", "Transfer",
+     "PK yang dipindah dari Gudang 1 ke Gudang 2",
+     (SUPER, ADMIN, SELEPAN), "⇄"),
     # ── Kabar — keputusan pemilik 26 September 2026 ──
     #
     # Aplikasi ini sudah LIMA TEMPAT menulis notifikasi (harga gabah belum

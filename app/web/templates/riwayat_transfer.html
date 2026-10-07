@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block judul %}Riwayat Transfer{% endblock %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{% block isi %}
+
+{# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Kartu TIAP
+   transfer PK Gudang 1 → Gudang 2 — DIBATALKAN atau tidak.
+
+   ⚠⚠ `InternalTransfer` bukan cermin: baris `dibatalkan` TETAP TAMPIL di
+   sini, dengan tanda yang jelas (bukan dihilangkan dari daftar) — prinsip
+   yang sama dipakai seluruh riwayat lain di app ini: "dilaporkan, bukan
+   disembunyikan". Daftar yang membuang transfer batal diam-diam membuat
+   orang mengira jumlah PK yang berpindah lebih besar daripada sebenarnya. #}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+    <div>
+      <h2>{{ "Tak ada lagi" if dari_awal else "Belum ada transfer" }}</h2>
+      <p class="bantu">
+        Kartu muncul di sini begitu PK dipindah dari Gudang 1 ke Gudang 2.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% for k in kartu %}
+  <div class="padat padat--diam padat--pindah_pk">
+    <div>
+      <div class="padat__atas">
+        <span class="padat__nama padat__nama--kode">
+          {{- k.kode }} · {{ k.waktu|jam("%d/%m") }}
+        </span>
+        <span class="padat__nilai{% if k.dibatalkan %} padat__nilai--kosong{% endif %}">
+          {{ kg(k.berat_kg) }}<small>kg</small></span>
+      </div>
+
+      {% if k.pemilik %}
+        <div class="nota nota--hati" style="margin:6px 0 0">
+          <span aria-hidden="true">◇</span>
+          <span>Titipan <b>{{ k.pemilik }}</b></span>
+        </div>
+      {% endif %}
+
+      <dl class="fakta">
+        <div>
+          <dt>Dari</dt>
+          <dd>{{ k.kode_proses }}</dd>
+        </div>
+        <div>
+          <dt>Tujuan</dt>
+          <dd>{{ k.tujuan }}</dd>
+        </div>
+      </dl>
+
+      {% if k.dibatalkan %}
+        <div class="nota nota--buruk" style="margin-top:8px">
+          <span aria-hidden="true">✕</span>
+          <span><b>Dibatalkan</b> — PK ini tidak sampai ke Gudang 2.</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}
+
+{% if lagi or dari_awal %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    {% if dari_awal %}
+      <a href="/riwayat-transfer" class="btn btn--kecil">Kembali ke yang terbaru</a>
+    {% endif %}
+    {% if lagi %}
+      <a href="/riwayat-transfer?sebelum={{ sesudah }}" class="btn btn--kecil">
+        {{ SEKALI }} sebelumnya →
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

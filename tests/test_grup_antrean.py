@@ -251,6 +251,55 @@ def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():
         assert "stok_produk" in mati
 
 
+# ═══════ Sub-menu "Riwayat Proses" — Penyosohan vs Penggilingan/Pengeringan/
+#         Transfer, per GUDANG yang SEDANG dikerjakan (7 Oktober 2026) ═══════
+#
+# Pola sama "Stok" di atas (empat HALAMAN utuh, bukan filter, tanpa baris
+# "Semua") — bedanya isinya terbagi per gudang, bukan per fitur: operator
+# Gudang 2 cuma berhak atas "Penyosohan", operator Gudang 1 cuma berhak atas
+# ketiga sisanya, dan Admin/Superadmin (kedua bendera `True`) melihat
+# keempatnya. Kunci dict-nya `riwayat_sosoh` — kunci TAB yang sudah ada,
+# bukan kunci baru "riwayat_proses" (tak ada TAB bernama itu; "Riwayat
+# Proses" cuma label laci pintu `riwayat_sosoh`, persis "Stok" cuma label
+# pintu `stok`).
+
+def test_riwayat_bersub_menu_untuk_admin_superadmin():
+    b = Berjalan(boleh_riwayat_sosoh=True, boleh_riwayat_g1=True)
+    assert b.submenu()["riwayat_sosoh"] == [
+        ("/riwayat-sosoh", "Penyosohan", 0),
+        ("/riwayat-giling", "Penggilingan", 0),
+        ("/riwayat-pengeringan", "Pengeringan", 0),
+        ("/riwayat-transfer", "Transfer", 0)]
+
+
+def test_riwayat_operator_gudang1_hanya_tiga_tanpa_penyosohan():
+    b = Berjalan(boleh_riwayat_sosoh=False, boleh_riwayat_g1=True)
+    assert b.submenu()["riwayat_sosoh"] == [
+        ("/riwayat-giling", "Penggilingan", 0),
+        ("/riwayat-pengeringan", "Pengeringan", 0),
+        ("/riwayat-transfer", "Transfer", 0)]
+
+
+def test_riwayat_operator_gudang2_tanpa_dropdown_cuma_satu_pilihan():
+    """Operator Gudang 2 cuma berhak atas SATU tujuan ('Penyosohan') —
+    aturan ≥2 yang sama dipakai "Antrian tunggu"/"Keputusan"/"Stok": pintu
+    ini kembali jadi tautan biasa ke `/riwayat-sosoh`, bukan dropdown tanpa
+    pilihan yang merampas satu ketukan."""
+    b = Berjalan(boleh_riwayat_sosoh=True, boleh_riwayat_g1=False)
+    assert "riwayat_sosoh" not in b.submenu()
+
+
+def test_riwayat_giling_pengeringan_transfer_selalu_padam_di_laci():
+    """Ketiganya hanya terjangkau lewat dropdown "Riwayat Proses" —
+    `riwayat_sosoh` sendiri TETAP (ia pintu induk sekaligus anak pertama,
+    persis "stok")."""
+    for sosoh, g1 in ((True, True), (True, False), (False, True)):
+        mati = Berjalan(boleh_riwayat_sosoh=sosoh, boleh_riwayat_g1=g1).lencana()["PINTU_MATI"]
+        for kunci in ("riwayat_giling", "riwayat_pengeringan", "riwayat_transfer"):
+            assert kunci in mati
+        assert "riwayat_sosoh" not in mati
+
+
 # ══════════════ Yang TERGAMBAR: pil halaman & sub-menu laci ══════════════
 #
 # Dirender sungguhan, bukan diperiksa sebagai teks di berkas templatnya.

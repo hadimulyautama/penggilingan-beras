@@ -224,6 +224,12 @@ class Berjalan:
     #: Ada kabar MERAH yang belum dibaca — lencananya berganti warna, bukan
     #: cuma berganti angka. Lihat `kabar.ada_merah`.
     kabar_merah: bool = False
+    #: Dua bendera dropdown "Riwayat Proses" (lihat `submenu()`). Bawaannya
+    #: `True` sama alasannya dengan `pintu_produk`: kegagalan menghitungnya
+    #: tak boleh diam-diam menyembunyikan pilihan yang sah.
+    boleh_riwayat_sosoh: bool = True
+    #: Penggilingan/Pengeringan/Transfer — ketiganya Gudang 1, satu bendera.
+    boleh_riwayat_g1: bool = True
 
     @property
     def jumlah_menunggu(self) -> int:
@@ -312,6 +318,16 @@ class Berjalan:
         mati.append("stok_produk_jasa")
         # "Stok PK Jasa" — padanan `stok_produk_jasa` untuk PK, pola yang sama.
         mati.append("stok_pk_jasa")
+        # "Penggilingan"/"Pengeringan"/"Transfer" — sub-menu "Riwayat Proses"
+        # (7 Oktober 2026), pola yang SAMA: berdiri sendiri di laci hanya
+        # menawarkan jalan kedua ke tempat yang sudah terjangkau lewat
+        # dropdown "Riwayat Proses" (kunci `riwayat_sosoh`, lihat `submenu()`
+        # di bawah). TANPA kondisi, sama `stok_pk_jasa` — selalu padam untuk
+        # SIAPA PUN, sebab tak ada bentuk "pintu ini berdiri sendiri" yang
+        # masuk akal begitu dropdown-nya ada.
+        mati.append("riwayat_giling")
+        mati.append("riwayat_pengeringan")
+        mati.append("riwayat_transfer")
         # Operator selepan tak ditawari pintu Stok Produk SAMA SEKALI —
         # termasuk lewat sub-menu "Stok" (lihat `submenu()`): beras dan hasil
         # samping lahir di Gudang 2, dan produknya sendiri (PK) sudah berkartu
@@ -424,6 +440,39 @@ class Berjalan:
             isi_stok.append(("/stok-produk-jasa", "Produk Jasa", 0))
         if len(isi_stok) >= 2:
             out["stok"] = isi_stok
+
+        # "Riwayat Proses" — permintaan pemilik 7 Oktober 2026: satu menu,
+        # sub-menu "Penyosohan"/"Penggilingan"/"Pengeringan"/"Transfer".
+        # Pola SAMA dengan "Stok" di atas (empat HALAMAN utuh, bukan filter
+        # satu halaman) — TANPA baris "Semua", sebab tak ada daftar gabungan
+        # yang lebih besar dari keempatnya untuk dituju.
+        #
+        # Isinya dibagi per PEMILIK GUDANG, bukan ditawarkan utuh ke semua
+        # orang: Penyosohan menjawab pertanyaan Gudang 2, ketiga sisanya
+        # menjawab pertanyaan Gudang 1, dan operator tak terikat satu gudang
+        # tetap hanya melihat gudang yang SEDANG ia kerjakan (sama seperti
+        # `pintu_produk`). Admin/Superadmin (kedua bendera `True`) melihat
+        # keempatnya — mereka memegang kedua gudang.
+        #
+        # Operator yang cuma berhak atas SATU pilihan (lazimnya operator
+        # Gudang 2, hanya "Penyosohan") berhenti di `len < 2`: dropdown-nya
+        # tak terbentuk, dan kunci `riwayat_sosoh` — yang SEKALIGUS kunci
+        # TAB induk — kembali jadi tautan biasa ke `/riwayat-sosoh`, persis
+        # perilakunya sebelum sub-menu ini ada.
+        isi_riwayat: list[tuple[str, str, int]] = []
+        if self.boleh_riwayat_sosoh:
+            isi_riwayat.append(("/riwayat-sosoh", "Penyosohan", 0))
+        if self.boleh_riwayat_g1:
+            isi_riwayat += [
+                ("/riwayat-giling", "Penggilingan", 0),
+                ("/riwayat-pengeringan", "Pengeringan", 0),
+                ("/riwayat-transfer", "Transfer", 0),
+            ]
+        if len(isi_riwayat) >= 2:
+            # Kunci `riwayat_sosoh`, BUKAN `riwayat_proses` — tak ada kunci
+            # TAB bernama itu; "Riwayat Proses" cuma LABEL laci pintu
+            # `riwayat_sosoh`, sama seperti "Stok" cuma label pintu `stok`.
+            out["riwayat_sosoh"] = isi_riwayat
         return out
 
 
@@ -3004,6 +3053,17 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
     # justru akan kehilangan pintunya.
     b.pintu_produk = not (await _is_g1_operator(user)
                           and not can_see_financials(user))
+
+    # ── Dropdown "Riwayat Proses": per gudang yang SEDANG dikerjakan ──
+    #
+    # Pola sama `pintu_produk` di atas — dihitung di sini, bukan diwarisi,
+    # sebab `_is_g1_operator`/`_is_g2_operator` memeriksa gudang yang SEDANG
+    # dikerjakan, dan operator yang berpindah gudang harus langsung melihat
+    # dropdown yang sesuai pada permintaan BERIKUTNYA, bukan menunggu bendera
+    # lama. Admin/Superadmin: keduanya `True` (`admin_keatas` di masing-masing
+    # fungsi) — mereka memegang kedua gudang.
+    b.boleh_riwayat_sosoh = await _is_g2_operator(user)
+    b.boleh_riwayat_g1 = await _is_g1_operator(user)
 
     # ── Lencana Kabar ──
     #

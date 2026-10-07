@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block judul %}Riwayat Pengeringan{% endblock %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{% block isi %}
+
+{# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Kartu TIAP
+   lot pengeringan yang SUDAH SELESAI (kering + dingin), terbaru dulu.
+
+   ⚠⚠ TANPA SATU KOLOM PUN BERNAMA "SUSUT" — bukan kelalaian. Tak ada satu
+   tempat pun di basis data ini yang menyimpan berat gabah KERING saat
+   keluar dryer; satu-satunya berat kering yang pernah tercatat adalah
+   berat PK saat giling, dan itu cuma ada kalau lotnya sudah pernah digiling.
+   Lihat catatan panjang di `drying.riwayat_pengeringan()`. Yang ditampilkan
+   di sini hanya yang BENAR-BENAR tercatat: bahan basah masuk, kadar air
+   terakhir, dan status silo. #}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+    <div>
+      <h2>{{ "Tak ada lagi" if dari_awal else "Belum ada pengeringan selesai" }}</h2>
+      <p class="bantu">
+        Kartu muncul di sini begitu pendinginan sebuah lot DINYATAKAN
+        SELESAI — bukan cuma pengeringannya.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% for k in kartu %}
+  {% set laci = k.bahan|length > 0 %}
+  <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--dryer">
+  <{{ "summary" if laci else "div" }}>
+    <div class="padat__atas">
+      <span class="padat__nama padat__nama--kode">
+        {{- k.kode_lot }} · {{ k.selesai_dingin|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+        {%- if k.lama_total %} · <span class="padat__umur">{{ k.lama_total }}</span>{% endif -%}
+      </span>
+      <span class="padat__nilai">{{ kg(k.bahan_kg) }}<small>kg basah</small></span>
+    </div>
+
+    {% if k.pemilik %}
+      <div class="nota nota--hati" style="margin:6px 0 0">
+        <span aria-hidden="true">◇</span>
+        <span>Titipan <b>{{ k.pemilik }}</b></span>
+      </div>
+    {% endif %}
+
+    <dl class="fakta">
+      <div>
+        <dt>Dryer</dt>
+        <dd>{{ k.dryer_nama }}{% if k.mode_dryer %} · {{ k.mode_dryer }}{% endif %}</dd>
+      </div>
+      {% if k.target_kadar_air is not none %}
+        <div>
+          <dt>Target KA</dt>
+          <dd>{{ "%.1f"|format(k.target_kadar_air)|replace(".", ",") }}%</dd>
+        </div>
+      {% endif %}
+      <div>
+        <dt>Kadar air terakhir</dt>
+        <dd>{{ k.ka_terakhir }}</dd>
+      </div>
+      <div>
+        <dt>Lama kering</dt>
+        <dd>{{ k.lama_kering or "—" }}</dd>
+      </div>
+      <div>
+        <dt>Bahan basah</dt>
+        <dd>{{ kg(k.bahan_kg) }} kg{% if not k.bahan_final %}
+          <small class="bantu">belum final — menunggu timbang</small>{% endif %}</dd>
+      </div>
+    </dl>
+
+    {% if k.silo_tujuan %}
+      <div class="nota" style="margin-top:8px">
+        <span aria-hidden="true">▦</span>
+        <span>Sudah dipindah ke <b>{{ k.silo_tujuan }}</b>
+          {%- if k.waktu_masuk_silo %} pada {{ k.waktu_masuk_silo|jam("%d/%m") }}{% endif %}</span>
+      </div>
+    {% else %}
+      <div class="nota nota--hati" style="margin-top:8px">
+        <span aria-hidden="true">⚠</span>
+        <span>Belum dipindah ke silo.</span>
+      </div>
+    {% endif %}
+  </{{ "summary" if laci else "div" }}>
+
+  {% if laci %}
+    <div class="anak">
+      <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+      {% for nama, berat, kapan in k.bahan %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ nama }}</span>
+          <span class="anak__kg">{{ berat }}</span>
+          <span class="anak__jam">{{ kapan }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  </{{ "details" if laci else "div" }}>
+{% endfor %}
+
+{% if lagi or dari_awal %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    {% if dari_awal %}
+      <a href="/riwayat-pengeringan" class="btn btn--kecil">Kembali ke yang terbaru</a>
+    {% endif %}
+    {% if lagi %}
+      <a href="/riwayat-pengeringan?sebelum={{ sesudah }}" class="btn btn--kecil">
+        {{ SEKALI }} sebelumnya →
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

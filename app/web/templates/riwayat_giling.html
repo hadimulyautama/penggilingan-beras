@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block judul %}Riwayat Penggilingan{% endblock %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+
+{% block isi %}
+
+{# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Padanan
+   `/riwayat-sosoh` untuk Gudang 1: kartu TIAP giling yang SUDAH SELESAI,
+   terbaru dulu — termasuk yang PK-nya sudah habis terkirim/terjual. Beda
+   dari `/stok` (Stok PK): di sana lot yang habis tak didaftar lagi, sebab
+   stok hanya menjawab "apa yang MASIH ADA". Di sini justru lot yang habis
+   yang paling sering dicari — menyusuri riwayat sebuah giling lama. #}
+
+{% if not kartu %}
+  <div class="kosong">
+    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
+         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+    <div>
+      <h2>{{ "Tak ada lagi" if dari_awal else "Belum ada giling selesai" }}</h2>
+      <p class="bantu">
+        Kartu muncul di sini begitu sebuah giling DITUTUP. Yang masih
+        menyala ada di <a href="/berjalan">Sedang berjalan</a>.
+      </p>
+    </div>
+  </div>
+{% endif %}
+
+{% for k in kartu %}
+  {% set laci = k.bahan|length > 0 %}
+  <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
+  <{{ "summary" if laci else "div" }}>
+    <div class="padat__atas">
+      <span class="padat__nama padat__nama--kode">
+        {{- k.kode }} · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+        {%- if k.lama %} · <span class="padat__umur">{{ k.lama }}</span>{% endif -%}
+      </span>
+      {% if k.belum_dicatat %}
+        <span class="padat__nilai padat__nilai--kosong">—</span>
+      {% else %}
+        <span class="padat__nilai">{{ kg(k.hasil_kg) }}<small>kg PK</small></span>
+      {% endif %}
+    </div>
+
+    {% if k.pemilik %}
+      <div class="nota nota--hati" style="margin:6px 0 0">
+        <span aria-hidden="true">◇</span>
+        <span>Titipan <b>{{ k.pemilik }}</b> — disosoh/digiling lalu
+          dikembalikan, bukan dijual</span>
+      </div>
+    {% endif %}
+
+    <dl class="fakta">
+      <div>
+        <dt>Hasil</dt>
+        <dd>{% if k.belum_dicatat %}—{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</dd>
+      </div>
+      {% if k.rendemen is not none %}
+        <div>
+          <dt>Rendemen</dt>
+          <dd class="sorot">{{ "%.1f"|format(k.rendemen)|replace(".", ",") }}%</dd>
+        </div>
+      {% endif %}
+      {% if k.bahan_kg %}
+        <div>
+          <dt>Bahan</dt>
+          <dd>{{ kg(k.bahan_kg) }} kg</dd>
+        </div>
+      {% endif %}
+      {% if k.kelas %}
+        <div>
+          <dt>Kondisi</dt>
+          <dd>{{ k.kelas }}</dd>
+        </div>
+      {% endif %}
+      <div>
+        <dt>Mutu</dt>
+        <dd{% if not k.mutu %} class="padat__nilai--kosong"{% endif %}>
+          {{ k.mutu or "belum dinilai" }}</dd>
+      </div>
+      {% if k.ditransfer_kg %}
+        <div>
+          <dt>Sudah ditransfer</dt>
+          <dd>{{ kg(k.ditransfer_kg) }} kg</dd>
+        </div>
+      {% endif %}
+      {% if k.tersedia_kg and not k.belum_dicatat %}
+        <div>
+          <dt>Masih di Gudang 1</dt>
+          <dd>{{ kg(k.tersedia_kg) }} kg</dd>
+        </div>
+      {% endif %}
+    </dl>
+
+    {% if k.belum_dicatat %}
+      <div class="nota nota--hati">
+        <span aria-hidden="true">⚠</span>
+        <span>Giling ditutup tanpa hasil tercatat — PK-nya ada, tapi belum
+          terhitung.</span>
+      </div>
+    {% endif %}
+  </{{ "summary" if laci else "div" }}>
+
+  {% if laci %}
+    <div class="anak">
+      <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+      {% for nama, berat, kapan in k.bahan %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ nama }}</span>
+          <span class="anak__kg">{{ berat }}</span>
+          <span class="anak__jam">{{ kapan }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  </{{ "details" if laci else "div" }}>
+{% endfor %}
+
+{% if lagi or dari_awal %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    {% if dari_awal %}
+      <a href="/riwayat-giling" class="btn btn--kecil">Kembali ke yang terbaru</a>
+    {% endif %}
+    {% if lagi %}
+      <a href="/riwayat-giling?sebelum={{ sesudah }}" class="btn btn--kecil">
+        {{ SEKALI }} sebelumnya →
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

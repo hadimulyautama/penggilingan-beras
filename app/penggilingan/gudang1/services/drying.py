@@ -1304,3 +1304,187 @@ def peringatan_kadar_air(log) -> list[str]:
             keluar.append(f"Mesin membaca {selisih:+.1f}% dari alat tes — "
                           "periksa sensor dryer bila terus begini.")
     return keluar
+
+
+# ═══════════════════ Riwayat Pengeringan (7 Oktober 2026) ═══════════════════
+#
+# Sub-menu "Riwayat Proses". Cetakan sama `polishing.riwayat_sosoh()` dan
+# `milling.riwayat_giling()` — kartu TIAP lot yang SUDAH SELESAI, terbaru
+# dulu, lima-enam kueri borongan apa pun banyaknya kartu.
+#
+# ⚠⚠ TANPA SATU KOLOM PUN BERNAMA "SUSUT" — dan itu bukan kelalaian, sebab
+# tak ada satu tempat pun di seluruh basis data yang menyimpan berat gabah
+# KERING saat keluar dryer. `DryingLot` dan `SiloStorage` sama-sama tanpa
+# kolom berat; `masuk_silo()` (`silo.py`) menghitung `kg`-nya lewat
+# `_lot_kg`→`_lot_bobot`, dan itu membaca ULANG berat BASAH dari
+# `PurchaseBatch` (`dari_batches`) — bukan menimbang gabah kering yang baru
+# keluar. Satu-satunya berat KERING yang pernah tercatat adalah
+# `MillingProcessSource.berat_kg`, dan itu cuma ada kalau lotnya sudah
+# PERNAH DIGILING (sebagian, atau belum sama sekali). Jadi "susut
+# pengeringan" di sini secara jujur TIDAK BISA DIHITUNG — bukan "0%", bukan
+# "belum tersedia": tidak pernah ada cara mengukurnya hari ini. Yang
+# ditampilkan hanya yang BENAR-BENAR tercatat: bahan basah masuk, kadar air
+# terakhir, dan status silo.
+#
+# "SELESAI" di sini = `waktu_selesai_pendinginan IS NOT NULL` — bukan cuma
+# `status=="selesai"`, yang hanya menutup fase KERINGNYA. Lot bisa
+# "selesai" tapi masih di fase dingin; riwayat cuma memuat yang sudah tuntas
+# kedua fasenya, pola yang sama dengan `riwayat_sosoh` ("hanya yang
+# selesai, proses berjalan punya pintunya sendiri").
+@dataclass(frozen=True)
+class KartuPengeringan:
+    """Satu lot pengeringan yang SUDAH SELESAI (kering + dingin)."""
+
+    id: int
+    kode_lot: str
+    #: "JAS-2610-001 Pak Budi" bila gabahnya titipan; None = milik pabrik.
+    pemilik: str | None
+    dryer_nama: str
+    mode_dryer: str | None
+    target_kadar_air: float | None
+    mulai: datetime | None
+    selesai_kering: datetime | None
+    selesai_dingin: datetime | None
+    lama_kering: str
+    lama_total: str
+    #: Berat basah masuk — bobot EFEKTIF (nota vs timbangan), bukan nota
+    #: mentah. `bahan_final=False` berarti sebagian batch belum ditimbang.
+    bahan_kg: float
+    bahan_final: bool
+    #: (pemasok/pemilik, kode+berat, keterangan) — bentuk sama `LotPk.bahan`.
+    bahan: list[tuple[str, str, str]]
+    #: "indikator 13,0% / manual 12,5%", atau "belum ada log kadar air".
+    ka_terakhir: str
+    #: Nama silo tujuan, atau None = belum dipindah ke silo sama sekali.
+    silo_tujuan: str | None
+    waktu_masuk_silo: datetime | None
+
+
+async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
+                              sebelum: int | None = None
+                              ) -> tuple[list[KartuPengeringan], bool]:
+    """Kartu lot pengeringan SELESAI (kering+dingin), terbaru dulu.
+
+    `sebelum` = id lot TERAKHIR yang sudah digambar (kursor) — pola sama
+    `riwayat_sosoh`/`riwayat_giling`. Enam kueri borongan apa pun banyaknya
+    kartu (dryer, bahan+pemasok, pemilik bahan tanpa pemasok, kadar air
+    terakhir lewat jendela SQL, status silo, pemilik lot) plus satu
+    pengambilan lot itu sendiri — dijaga sebagai perbandingan 1 vs 6 kartu
+    (`tests/pg/test_riwayat_pengeringan.py`), pola yang sama `riwayat_sosoh`.
+    """
+    from types import SimpleNamespace
+
+    from app.models import Silo
+    from app.services.jasa import nama_pemilik_banyak
+    from app.services.berjalan import lama_kata
+    from app.services.stok import _baris_bahan
+
+    q = (select(DryingLot)
+         .where(DryingLot.waktu_selesai_pendinginan.isnot(None))
+         .order_by(DryingLot.id.desc())
+         .limit(batas + 1))
+    if sebelum:
+        q = q.where(DryingLot.id < sebelum)
+    lots = (await db.execute(q)).scalars().all()
+    lagi = len(lots) > batas
+    lots = lots[:batas]
+    if not lots:
+        return [], False
+    ids = [l.id for l in lots]
+
+    dryer_nama = {i: n for i, n in (await db.execute(
+        select(Dryer.id, Dryer.nama)
+        .where(Dryer.id.in_({l.dryer_id for l in lots if l.dryer_id} or {0}))
+    )).all()}
+
+    # Bahan: SELURUH batch dari SELURUH lot, satu kueri — dikelompokkan di
+    # Python, pola sama `stok._bahan_banyak`.
+    baris_batch = (await db.execute(
+        select(DryingLotBatch.drying_lot_id, PurchaseBatch, Supplier.nama_supplier)
+        .join(PurchaseBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
+        .outerjoin(Supplier, PurchaseBatch.supplier_id == Supplier.id)
+        .where(DryingLotBatch.drying_lot_id.in_(ids))
+        .order_by(DryingLotBatch.id)
+    )).all()
+    batch_per_lot: dict[int, list] = {}
+    for lot_id, b, nama_sup in baris_batch:
+        batch_per_lot.setdefault(lot_id, []).append((b, nama_sup))
+    # Batch tanpa pemasok (titipan jasa) menyebut PEMILIKnya — borongan,
+    # bukan `nama_pemilik` satu per baris (lihat catatan `_lot_suppliers`
+    # tentang kenapa baris ini wajib tetap ada, bukan sekadar "?").
+    jasa_ids_batch = {b.jasa_id for rows in batch_per_lot.values()
+                      for b, nama in rows if nama is None and b.jasa_id}
+    nama_pemilik_batch = await nama_pemilik_banyak(db, jasa_ids_batch)
+
+    # Kadar air TERAKHIR per lot — satu kueri, jendela SQL (pola sama
+    # `milling.progress_banyak`), bukan `_latest_log` yang satu-lot.
+    urut = func.row_number().over(
+        partition_by=DryingMoistureLog.drying_lot_id,
+        order_by=DryingMoistureLog.waktu_update.desc(),
+    ).label("urut")
+    sub = select(
+        DryingMoistureLog.drying_lot_id.label("lid"),
+        DryingMoistureLog.kadar_air_indikator.label("ind"),
+        DryingMoistureLog.kadar_air_tes_manual.label("man"),
+        urut,
+    ).where(DryingMoistureLog.drying_lot_id.in_(ids)).subquery()
+    ka_per_lot = {lid: (ind, man) for lid, ind, man in (await db.execute(
+        select(sub.c.lid, sub.c.ind, sub.c.man).where(sub.c.urut == 1)
+    )).all()}
+
+    # Status silo — baris PALING AWAL per lot (lazimnya cuma satu baris
+    # seumur hidup lot: "1 silo = 1 lot sekaligus" selama masih terisi, dan
+    # lot yang sama tak masuk silo dua kali).
+    silo_per_lot: dict[int, tuple[int, datetime]] = {}
+    for lid, sid, tgl in (await db.execute(
+        select(SiloStorage.drying_lot_id, SiloStorage.silo_id,
+              SiloStorage.tanggal_masuk)
+        .where(SiloStorage.drying_lot_id.in_(ids))
+        .order_by(SiloStorage.tanggal_masuk.asc())
+    )).all():
+        silo_per_lot.setdefault(lid, (sid, tgl))
+    nama_silo = {i: n for i, n in (await db.execute(
+        select(Silo.id, Silo.nama_silo)
+        .where(Silo.id.in_({sid for sid, _ in silo_per_lot.values()} or {0}))
+    )).all()}
+
+    pemilik = await nama_pemilik_banyak(db, {l.jasa_id for l in lots})
+
+    kartu = []
+    for lot in lots:
+        baris = batch_per_lot.get(lot.id, [])
+        bobot = dari_batches(b for b, _ in baris)
+        bahan = [_baris_bahan(
+            b, nama or (nama_pemilik_batch.get(b.jasa_id) if b.jasa_id else None))
+            for b, nama in baris]
+        # `in` di kamus, bukan `.get(..., (None, None))`: lot yang tak punya
+        # satu pun log kadar air harus berkata "belum ada log kadar air"
+        # (lewat `log=None`), bukan "-" — dan dua keadaan itu sama-sama
+        # terbaca `(None, None)` bila disamakan lewat bawaan `.get()`.
+        log_ka = (SimpleNamespace(kadar_air_indikator=ka_per_lot[lot.id][0],
+                                  kadar_air_tes_manual=ka_per_lot[lot.id][1])
+                 if lot.id in ka_per_lot else None)
+        sid, tgl_masuk = silo_per_lot.get(lot.id, (None, None))
+        kartu.append(KartuPengeringan(
+            id=lot.id, kode_lot=lot.kode_lot,
+            pemilik=pemilik.get(lot.jasa_id) if lot.jasa_id else None,
+            dryer_nama=dryer_nama.get(lot.dryer_id) or "?",
+            mode_dryer=lot.mode_dryer,
+            target_kadar_air=(float(lot.target_kadar_air)
+                             if lot.target_kadar_air is not None else None),
+            mulai=lot.waktu_mulai_pengeringan,
+            selesai_kering=lot.waktu_selesai_pengeringan,
+            selesai_dingin=lot.waktu_selesai_pendinginan,
+            lama_kering=(lama_kata((lot.waktu_selesai_pengeringan
+                                    - lot.waktu_mulai_pengeringan).total_seconds())
+                        if lot.waktu_mulai_pengeringan and lot.waktu_selesai_pengeringan
+                        else ""),
+            lama_total=(lama_kata((lot.waktu_selesai_pendinginan
+                                   - lot.waktu_mulai_pengeringan).total_seconds())
+                       if lot.waktu_mulai_pengeringan else ""),
+            bahan_kg=bobot.angka(), bahan_final=bobot.pasti, bahan=bahan,
+            ka_terakhir=_fmt_ka(log_ka),
+            silo_tujuan=(nama_silo.get(sid) if sid else None),
+            waktu_masuk_silo=tgl_masuk,
+        ))
+    return kartu, lagi
