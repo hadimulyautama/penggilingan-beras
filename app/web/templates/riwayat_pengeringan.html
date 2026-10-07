@@ -32,7 +32,10 @@
 {% endif %}
 
 {% for k in kartu %}
-  {% set laci = k.bahan|length > 0 %}
+  {# Laci terbuka untuk Mode dryer & Lama kering juga — bukan cuma bahan.
+     Nyaris selalu ada batch asal, tapi kartu tak boleh kehilangan satu-
+     satunya jalan melihat keduanya pada hari langka yang bahannya kosong. #}
+  {% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
   <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--dryer">
   <{{ "summary" if laci else "div" }}>
     <div class="padat__atas">
@@ -53,7 +56,7 @@
     <dl class="fakta">
       <div>
         <dt>Dryer</dt>
-        <dd>{{ k.dryer_nama }}{% if k.mode_dryer %} · {{ k.mode_dryer }}{% endif %}</dd>
+        <dd>{{ k.dryer_nama }}</dd>
       </div>
       {% if k.target_kadar_air is not none %}
         <div>
@@ -64,10 +67,6 @@
       <div>
         <dt>Kadar air terakhir</dt>
         <dd>{{ k.ka_terakhir }}</dd>
-      </div>
-      <div>
-        <dt>Lama kering</dt>
-        <dd>{{ k.lama_kering or "—" }}</dd>
       </div>
       <div>
         <dt>Bahan basah</dt>
@@ -92,14 +91,37 @@
 
   {% if laci %}
     <div class="anak">
-      <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
-      {% for nama, berat, kapan in k.bahan %}
-        <div class="anak__baris">
-          <span class="anak__nama">{{ nama }}</span>
-          <span class="anak__kg">{{ berat }}</span>
-          <span class="anak__jam">{{ kapan }}</span>
-        </div>
-      {% endfor %}
+      {# Mode dryer & Lama kering — keterangan, bukan angka yang dicari
+         sekilas, jadi pindah ke laci (permintaan pemilik: kartunya
+         kolaps-nya besar sekali). Headline kolaps tetap kode, tanggal,
+         lama TOTAL (termasuk pendinginan), dan bahan basah — empat hal
+         yang dicari pertama kali membuka halaman ini. #}
+      {% if k.mode_dryer or k.lama_kering %}
+        <dl class="fakta" style="padding:8px 12px 10px">
+          {% if k.mode_dryer %}
+            <div>
+              <dt>Mode dryer</dt>
+              <dd>{{ k.mode_dryer }}</dd>
+            </div>
+          {% endif %}
+          {% if k.lama_kering %}
+            <div>
+              <dt>Lama kering</dt>
+              <dd>{{ k.lama_kering }}</dd>
+            </div>
+          {% endif %}
+        </dl>
+      {% endif %}
+      {% if k.bahan %}
+        <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+        {% for nama, berat, kapan in k.bahan %}
+          <div class="anak__baris">
+            <span class="anak__nama">{{ nama }}</span>
+            <span class="anak__kg">{{ berat }}</span>
+            <span class="anak__jam">{{ kapan }}</span>
+          </div>
+        {% endfor %}
+      {% endif %}
     </div>
   {% endif %}
   </{{ "details" if laci else "div" }}>
