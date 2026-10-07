@@ -1,6 +1,9 @@
 """`/stok-karung` & `/stok-karung-jasa` lewat HTTP sungguhan — Postgres.
 
-Keputusan pemilik 7 Oktober 2026. Menjaga yang tak terlihat dari uji
+Keputusan pemilik 7 Oktober 2026, dengan koreksi susulan hari yang sama:
+tujuan "Pindah kepemilikan karung" adalah KONTAK pelanggan (`pelanggan-
+kledo`), BUKAN pesanan jasa (`jasa-berjalan`) — lihat catatan panjang di
+`packaging.pindah_kepemilikan_karung`. Menjaga yang tak terlihat dari uji
 service-level (`test_stok_karung_jasa.py`): gerbang peran (operator Gudang 1
 ditolak, sama dengan `/stok-produk`), gerbang `can_see_financials` pada aksi
 "Pindah kepemilikan karung", dan nilai picker `karung-pabrik-tersedia` yang
@@ -82,7 +85,7 @@ async def _beli(db, models, *, pemakai_id, lembar, kode):
         await db.flush()
     db.add(models.PackagingPurchase(
         kode=kode, packaging_material_id=mat.id, package_size_id=size.id,
-        brand_id=brand.id, jumlah_lembar=lembar, harga_per_lembar=1200,
+        brand_id=brand.id, jumlah_lembar=lembar,
         tanggal=date(2026, 10, 7), waktu=now_local(), input_by=pemakai_id))
     await db.commit()
 
@@ -125,7 +128,7 @@ async def test_operator_ditolak_admin_berhasil_pindah_kepemilikan_karung(pg):
     async with pg() as db:
         from sqlalchemy import select
 
-        from app.models import Jasa, Pelanggan, User
+        from app.models import Pelanggan, User
         uid = (await db.execute(select(User.id).limit(1))).scalars().first()
         if uid is None:
             u = User(nama="Awal", role="admin", status="aktif")
@@ -136,33 +139,38 @@ async def test_operator_ditolak_admin_berhasil_pindah_kepemilikan_karung(pg):
         await _beli(db, models, pemakai_id=uid, lembar=200, kode="PKP-UJIH-02")
         pel = Pelanggan(nama_pelanggan="Toko Makmur")
         db.add(pel)
-        await db.flush()
-        j = Jasa(kode="JAS-2610-020", pelanggan_id=pel.id, status="berjalan")
-        db.add(j)
         await db.commit()
-        await db.refresh(j)
-        jasa_id = j.id
+        await db.refresh(pel)
+        pelanggan_id = pel.id
 
     c_op = await _klien(pg, peran="operator")
     try:
         r = await c_op.post("/api/actions/pindah-kepemilikan-karung",
                            json={"karung": f"laminasi|25|Cap Padi Emas",
-                                 "jasa": str(jasa_id), "jumlah": 50})
+                                 "pelanggan": str(pelanggan_id), "jumlah": 50})
         assert r.status_code == 403
     finally:
         await c_op.aclose()
 
     c_admin = await _klien(pg, peran="admin")
     try:
-        # Picker dulu — nilainya WAJIB cocok dengan yang dikirim di bawah.
+        # Picker karung dulu — nilainya WAJIB cocok dengan yang dikirim di
+        # bawah. Picker tujuan (`pelanggan-kledo`) juga dicek: KONTAK, bukan
+        # pesanan jasa — "Toko Makmur" harus muncul APA ADANYA.
         r = await c_admin.get("/api/actions/karung-pabrik-tersedia")
         assert r.status_code == 200
         pilihan = r.json()
         nilai = next(p["value"] for p in pilihan if p["value"].startswith("laminasi|25|"))
         assert nilai == "laminasi|25|Cap Padi Emas"
 
+        r = await c_admin.get("/api/actions/pelanggan-kledo")
+        assert r.status_code == 200
+        assert any(p["value"] == str(pelanggan_id) and p["label"] == "Toko Makmur"
+                   for p in r.json())
+
         r = await c_admin.post("/api/actions/pindah-kepemilikan-karung",
-                              json={"karung": nilai, "jasa": str(jasa_id), "jumlah": 50})
+                              json={"karung": nilai, "pelanggan": str(pelanggan_id),
+                                    "jumlah": 50})
         assert r.status_code == 200, r.text
         assert r.json()["ok"] is True
     finally:

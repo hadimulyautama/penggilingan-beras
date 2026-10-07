@@ -131,34 +131,6 @@ async def jasa_ids_per_pelanggan_dengan_hasil(db: AsyncSession) -> dict[int, lis
     return out
 
 
-async def jasa_ids_per_pelanggan_dengan_karung(db: AsyncSession) -> dict[int, list[int]]:
-    """{pelanggan_id: [jasa_id, ...]} — pesanan yang punya karung berpindah
-    milik ke jasa (`packaging.pindah_kepemilikan_karung`), per PELANGGAN.
-
-    Sebangun `jasa_ids_per_pelanggan_dengan_hasil`, bedanya "punya hasil"
-    diganti "punya karung dialokasikan" — ditentukan `packaging_purchases.
-    jasa_id`, BUKAN `polishing_process.jasa_id` (dua tabel beda, dua
-    pertanyaan beda: yang satu "sudah disosoh", yang ini "sudah dapat
-    jatah karung"). Dipakai bersama `/stok-karung-jasa` dan picker
-    `karung-jasa-tersedia` — keduanya WAJIB mengelompokkan dengan cara yang
-    sama, pola yang sama dengan alasan fungsi kembarannya.
-    """
-    from app.penggilingan.inventory.models import PackagingPurchase
-
-    baris = (await db.execute(
-        select(Jasa.pelanggan_id, Jasa.id)
-        .where(Jasa.id.in_(
-            select(PackagingPurchase.jasa_id.distinct())
-            .where(PackagingPurchase.jasa_id.isnot(None))
-        ))
-        .order_by(Jasa.id)
-    )).all()
-    out: dict[int, list[int]] = {}
-    for pelanggan_id, jasa_id in baris:
-        out.setdefault(pelanggan_id, []).append(jasa_id)
-    return out
-
-
 def pastikan_satu_jasa(pemilik) -> int | None:
     """Pemilik tunggal dari sekumpulan `jasa_id`. Campuran → DITOLAK.
 

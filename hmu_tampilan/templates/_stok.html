@@ -75,14 +75,18 @@
     {%- if b.menipis %} · menipis{% endif -%}
   </span>
 </div>
-{# ── Pindah kepemilikan karung — pabrik → jasa (7 Oktober 2026) ──
+{# ── Pindah kepemilikan karung — pabrik → KONTAK pelanggan (7 Oktober
+     2026, koreksi susulan hari yang sama) ──
    ARAH KEBALIKAN dari tombol produk/broken di atas: di sana titipan
    bergerak balik ke pabrik; karung tak punya tiket timbang untuk mulai
-   milik jasa, jadi satu-satunya arah yang berarti adalah pabrik melepas
-   sebagian ke satu pesanan. `boleh_pindah` dikirim `True` HANYA dari
+   milik pelanggan, jadi satu-satunya arah yang berarti adalah pabrik
+   melepas sebagian ke satu KONTAK — langsung, tanpa indirection lewat
+   `Jasa` (borangnya memilih pelanggan lewat picker `pelanggan-kledo`,
+   bukan `jasa-berjalan`; lihat catatan panjang di `packaging.
+   pindah_kepemilikan_karung`). `boleh_pindah` dikirim `True` HANYA dari
    `/stok-karung` (pabrik) — halaman `/stok-karung-jasa` memanggil makro
    yang sama dengan `boleh_pindah=False`: arahnya cuma satu jalan, jadi
-   sisi jasa tak pernah menawarkan tombol ini. #}
+   sisi pelanggan tak pernah menawarkan tombol ini. #}
 {% if boleh_pindah and b.lembar > 0 %}
   <div class="ubah-hasil">
     {# `|urlencode` pada merk — bukan dua suku lain (`kode` slug tanpa

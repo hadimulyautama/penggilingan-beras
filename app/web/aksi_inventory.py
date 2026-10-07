@@ -127,7 +127,7 @@ async def karung_pabrik_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     """
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
-        baris = await kms.stok_kemasan_rinci(db, jasa_id=None)
+        baris = await kms.stok_kemasan_rinci(db, pelanggan_id=None)
     return [{"value": f"{b['kode']}|{b['ukuran']}|{b['merk'] or ''}",
              "label": f"{b['merk'] + ' ' if b['merk'] else ''}{b['nama']} "
                       f"{b['ukuran']}kg · sisa {b['lembar']} lembar"}
@@ -353,23 +353,23 @@ async def act_beli_kemasan(req: BeliKemasanReq,
 
 class PindahKepemilikanKarungReq(BaseModel):
     karung: str                       # "material_kode|ukuran|merk_or_kosong"
-    jasa: str                         # jasa_id
+    pelanggan: str                    # pelanggan_id
     jumlah: int
 
 
 @router.post("/actions/pindah-kepemilikan-karung")
 async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
                                         user: User = Depends(pengguna_aksi)) -> dict:
-    """Pindah SEBAGIAN stok karung pabrik ke milik satu pesanan jasa — arah
-    kebalikan "Pindah kepemilikan produk" (lihat catatan panjang di
+    """Pindah SEBAGIAN stok karung pabrik ke milik satu KONTAK pelanggan —
+    arah kebalikan "Pindah kepemilikan produk" (lihat catatan panjang di
     `packaging.pindah_kepemilikan_karung`)."""
     wajib(can_see_financials(user))
     bagian = (req.karung or "").split("|")
     if len(bagian) != 3 or not bagian[1].isdigit():
         raise HTTPException(400, "Pilih kombinasi karung pabrik dulu.")
     material_kode, ukuran, merk = bagian[0], int(bagian[1]), (bagian[2] or None)
-    if not (req.jasa or "").isdigit():
-        raise HTTPException(400, "Pilih pesanan jasa tujuan dulu.")
+    if not (req.pelanggan or "").isdigit():
+        raise HTTPException(400, "Pilih pelanggan tujuan dulu.")
     if int(req.jumlah or 0) <= 0:
         raise HTTPException(400, "Isi jumlah lembar yang dipindah lebih dari 0.")
 
@@ -378,10 +378,11 @@ async def act_pindah_kepemilikan_karung(req: PindahKepemilikanKarungReq,
         try:
             jumlah = await kms.pindah_kepemilikan_karung(
                 db, user=u, material_kode=material_kode, ukuran=ukuran,
-                brand_nama=merk, jasa_id=int(req.jasa), jumlah_lembar=int(req.jumlah))
+                brand_nama=merk, pelanggan_id=int(req.pelanggan),
+                jumlah_lembar=int(req.jumlah))
         except kms.InventoryError as e:
             raise galat(e, "Gagal memindahkan kepemilikan karung.")
-    pesan = f"✓ {jumlah} lembar karung kini milik pesanan jasa."
+    pesan = f"✓ {jumlah} lembar karung kini milik pelanggan."
     return {"ok": True, "pesan": pesan}
 
 
@@ -1501,12 +1502,16 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             #
             # Karung tak punya tiket timbang: `beli_kemasan` selalu menulis
             # milik pabrik, jadi satu-satunya jalan sebuah lembar jadi milik
-            # jasa adalah dipindah SESUDAH dibeli, bukan diturunkan saat
-            # masuk. Keputusan pemilik 7 Oktober 2026 ("ubah jadi stok
-            # terpisah per pemilik"). Lihat `packaging.
+            # pelanggan adalah dipindah SESUDAH dibeli, bukan diturunkan
+            # saat masuk. Keputusan pemilik 7 Oktober 2026 ("ubah jadi stok
+            # terpisah per pemilik"), lalu koreksi susulan hari yang sama:
+            # "jalur masuk karung untuk jasa bukan berdasarkan proses jasa.
+            # tetapi berdasarkan kontak pelanggan" — jadi tujuannya KONTAK
+            # (`pelanggan-kledo`, picker yang SAMA dengan "Buat perintah
+            # barang keluar"), BUKAN `jasa-berjalan`. Lihat `packaging.
             # pindah_kepemilikan_karung` untuk catatan arahnya.
             {"id": "pindah_kepemilikan_karung",
-             "label": "⇄ Pindah kepemilikan ke jasa",
+             "label": "⇄ Pindah kepemilikan ke pelanggan",
              "post": "/api/actions/pindah-kepemilikan-karung",
              "hint": "Boleh sebagian — FIFO dari pembelian pabrik yang "
                      "paling lama, lembar per lembar.",
@@ -1514,9 +1519,9 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "karung", "label": "Karung pabrik", "type": "remote",
                   "source": "/api/actions/karung-pabrik-tersedia",
                   "kosong": "Tidak ada stok karung pabrik yang bisa dipindah."},
-                 {"name": "jasa", "label": "Pesanan jasa tujuan", "type": "remote",
-                  "source": "/api/actions/jasa-berjalan",
-                  "kosong": "Tidak ada pesanan jasa yang berjalan."},
+                 {"name": "pelanggan", "label": "Pelanggan tujuan", "type": "remote",
+                  "source": "/api/actions/pelanggan-kledo",
+                  "kosong": "Tidak ada pelanggan terdaftar."},
                  {"name": "jumlah", "label": "Jumlah lembar", "type": "number"},
              ]},
             {"id": "beli_kemasan", "label": "🛒 Beli karung",

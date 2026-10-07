@@ -343,7 +343,7 @@ async def halaman_stok_karung(request: Request, akun=Depends(butuh_akun)):
     if not gudang2(view):
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
-        karung = [b for b in await kms.stok_kemasan_rinci(db, jasa_id=None)
+        karung = [b for b in await kms.stok_kemasan_rinci(db, pelanggan_id=None)
                   if b["gudang"] != "Gudang 1" or gudang1(view)]
     return await render_laci(
         request, "stok_karung.html", layar="stok_karung",
@@ -360,29 +360,35 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
 
     Sumbernya `packaging.pindah_kepemilikan_karung`: karung tak punya
     tiket timbang, jadi SATU-SATUNYA jalan sebuah baris pembelian jadi
-    milik jasa adalah dipindah lewat tombol "Pindah kepemilikan" di
+    milik pelanggan adalah dipindah lewat tombol "Pindah kepemilikan" di
     `/stok-karung` (pabrik) — halaman ini murni INFORMASI, tanpa tombol
-    (arahnya cuma satu jalan: pabrik → jasa, bukan sebaliknya).
+    (arahnya cuma satu jalan: pabrik → pelanggan, bukan sebaliknya).
+
+    ⚠ PER KONTAK (`pelanggan_id`), BUKAN PER PESANAN JASA — koreksi
+    pemilik 7 Oktober 2026 (lihat catatan panjang di `packaging.
+    pindah_kepemilikan_karung`). Beda dari `/stok-produk-jasa` (yang
+    mengelompokkan `Jasa.id` per pelanggan lewat tabel `Jasa`), di sini
+    `PackagingPurchase.pelanggan_id` SUDAH langsung menunjuk kontaknya —
+    tak ada indirection lewat `Jasa` sama sekali.
     """
     from sqlalchemy import select
 
     from app.models import Pelanggan
     from app.penggilingan.inventory import packaging as kms
-    from app.services.jasa import jasa_ids_per_pelanggan_dengan_karung
     from app.web.layar import gudang2
 
     view = getattr(request.state, "view", "tamu")
     if not gudang2(view):
         raise HTTPException(403, "Layar ini milik Gudang 2.")
     async with SessionLocal() as db:
-        jasa_per_pelanggan = await jasa_ids_per_pelanggan_dengan_karung(db)
+        pelanggan_ids = await kms.pelanggan_ids_dengan_karung(db)
         nama_pelanggan = {pid: n for pid, n in (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
-            .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
+            .where(Pelanggan.id.in_(pelanggan_ids or [0]))
         )).all()}
         daftar = []
-        for pelanggan_id, jasa_ids in jasa_per_pelanggan.items():
-            karung = await kms.stok_kemasan_rinci(db, jasa_id=jasa_ids)
+        for pelanggan_id in pelanggan_ids:
+            karung = await kms.stok_kemasan_rinci(db, pelanggan_id=pelanggan_id)
             if not karung:
                 continue
             daftar.append({

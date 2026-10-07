@@ -238,7 +238,12 @@ kemasan PABRIK (keputusan pemilik), jadi karungnya sungguh terpakai.
     pencabutan larangan campur untuk gabah PABRIK (migrasi 0031) TETAP berlaku;
     jangan dipasang ulang "sekalian".
   · pembandingnya **`jasa_id`, bukan `pelanggan_id`**: dua pesanan satu
-    pelanggan tetap terpisah, bobot kembalinya berbeda.
+    pelanggan tetap terpisah, bobot kembalinya berbeda. ⚠ KARUNG
+    (`packaging_purchases`/`packaging_losses`, sejak migrasi 0075)
+    PENGECUALIANNYA — bukan kelalaian, melainkan keputusan pemilik 7
+    Oktober 2026: karung bukan barang yang "dikembalikan" per pesanan,
+    jadi pemiliknya `pelanggan_id` langsung, tanpa `Jasa` sama sekali.
+    Lihat catatan panjang di `packaging.pindah_kepemilikan_karung`.
   · DITOLAK, bukan diperingatkan — dan **berkunci basis data** (`kunci_silo`,
     `kunci_dryer`): dua operator bisa menuang ke silo yang sama pada detik yang
     sama.
@@ -905,6 +910,66 @@ untuk kedua jenis, pagar "aman walau sebagian sudah diambil", pagar
 menolak memindahkan lebih dari sisa, picker & tombol yang nilainya cocok
 untuk pelanggan dua pesanan, gerbang peran lewat HTTP, dan tampilan bekatul
 read-only + broken bertombol di `/stok-produk-jasa`).
+
+## Stok Karung & Karung Jasa — milik KONTAK, bukan pesanan (7 Oktober 2026)
+
+Keputusan pemilik: *"di stok harus punya sub-menu stok karung dan stok
+karung jasa"* → *"ubah jadi stok terpisah per pemilik."* Blok "Stok karung"
+yang dulu menempel di `/stok` (23 September 2026) pindah jadi dua halaman
+sendiri — `/stok-karung` (pabrik) dan `/stok-karung-jasa` (per pelanggan)
+— pola "X"/"X Jasa" yang sama dengan Stok Produk/Produk Jasa.
+
+⚠⚠ **ARAHNYA DIBALIK DARI "Pindah kepemilikan produk", DAN PEMILIKNYA
+`pelanggan_id` — BUKAN `jasa_id`.** Dua penyimpangan sekaligus dari pola
+jasa biasa, keduanya sengaja:
+
+  1. **Arah**: di "Pindah kepemilikan produk", barang MULAI milik jasa
+     (diturunkan dari tiket timbang) dan admin mengambil sisa balik ke
+     pabrik. Karung TAK PUNYA tiket — `beli_kemasan()` selalu menulis
+     pemiliknya `NULL` (pabrik) — jadi satu-satunya arah yang berarti di
+     sini KEBALIKANNYA: admin memindahkan sebagian stok pabrik yang sudah
+     dibeli MENJADI milik pelanggan, lewat aksi "Pindah kepemilikan
+     karung" (`packaging.pindah_kepemilikan_karung`, FIFO baris tertua,
+     dipecah bila jatuh di tengah satu baris — mekanismenya sama, cuma
+     arahnya dibalik).
+  2. **Pemilik**: koreksi pemilik hari yang sama, sesudah jawaban pertama
+     (tujuannya pesanan jasa) — *"jalur masuk karung untuk jasa bukan
+     berdasarkan proses jasa. tetapi berdasarkan kontak pelanggan."*
+     `packaging_purchases.pelanggan_id`/`packaging_losses.pelanggan_id`
+     (migrasi 0075, menggantikan `jasa_id` dari migrasi 0074 SEBELUM satu
+     baris pun dipakai di produksi) menunjuk `Pelanggan` LANGSUNG, tanpa
+     `Jasa` sama sekali — berlawanan dengan aturan "pembandingnya
+     `jasa_id`, bukan `pelanggan_id`" di atas (bagian Jasa), dan itu
+     disengaja: karung bukan barang yang "dikembalikan" per pesanan
+     seperti gabah/PK/beras/broken/bekatul — yang dilacak rekening per
+     KONTAK, supaya pelanggan yang datang berulang (`Jasa` baru tiap
+     kedatangan) tetap SATU rekening karung.
+
+`hitung_stok_kemasan(pelanggan_id=...)` menyaring KETIGA suku rumus
+(beli, hilang, terpakai) — `beli`/`hilang` langsung lewat kolom
+`pelanggan_id` yang baru; suku `terpakai` TETAP membaca
+`FinishedGoodsStock.jasa_id` (kolom itu tak berubah) dan menerjemahkan
+`pelanggan_id` jadi SELURUH `jasa_id` milik kontak itu lewat sub-kueri
+`Jasa.pelanggan_id` — satu-satunya titik di mana `Jasa` masih disentuh,
+murni untuk mencocokkan konsumsi lintas pesanan pelanggan yang sama.
+
+Picker tujuan tombol "Pindah kepemilikan" adalah `/api/actions/pelanggan-
+kledo` (picker KONTAK yang sudah ada, dipakai juga "Buat perintah barang
+keluar") — BUKAN `/api/actions/jasa-berjalan`. Picker karungnya sendiri
+(`/api/actions/karung-pabrik-tersedia`) berisi KODE/ukuran/merk (sama pola
+`kemasan-jenis`), bukan id mentah, supaya tombol per-baris di `_stok.html`
+bisa membangun `nilai=` langsung dari field yang sudah ada di
+`stok_kemasan_rinci`. ⚠ Merk BOLEH berspasi ("Gunung Mas") — `nilai=`
+WAJIB `|urlencode` pada suku merk (pola sama `dasar_borang()`), kalau
+tidak nilai mentah di query string memutus pasangan "|" yang dibaca balik
+borangnya.
+
+Uji: `tests/pg/test_stok_karung_jasa.py` (rumus tiga suku, FIFO & pemecahan
+baris, pagar menolak melebihi stok pabrik, dua pindahan satu pelanggan
+digabung, suku `terpakai` lintas seluruh pesanan jasa milik satu
+pelanggan) dan `tests/pg/test_stok_karung_http.py` (gerbang peran &
+`can_see_financials` lewat HTTP, picker karung & pelanggan cocok dengan
+nilai tombol).
 
 ## Kode barang
 

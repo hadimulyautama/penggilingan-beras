@@ -109,7 +109,11 @@ class PackagingPurchase(Base, TimestampMixin):
     # karung tak punya tiket timbang untuk menurunkan pemiliknya). Terisi
     # hanya lewat "Pindah kepemilikan karung" (packaging.
     # pindah_kepemilikan_karung), yang memecah baris pabrik yang sudah ada.
-    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    #
+    # ⚠ PELANGGAN, BUKAN JASA — sengaja berbeda dari sebelas tabel ber-
+    # `jasa_id` lain (lihat migrasi 0075). Karung bukan barang yang
+    # "dikembalikan" per pesanan; yang dilacak rekening per KONTAK.
+    pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
 
 
 class PackagingLoss(Base, TimestampMixin):
@@ -131,7 +135,8 @@ class PackagingLoss(Base, TimestampMixin):
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # Simetri rumus `hitung_stok_kemasan` saja — tak ada jalur tulis hari ini.
-    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    # PELANGGAN, bukan jasa — sama alasan dengan `PackagingPurchase` di atas.
+    pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
 
 
 class FinishedGoodsStock(Base, TimestampMixin):

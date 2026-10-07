@@ -152,30 +152,46 @@ async def find_or_create_sku(
 # ─────────────────────────── Stok kemasan ───────────────────────────
 async def hitung_stok_kemasan(
     db: AsyncSession, material_id: int, size_id: int, brand_id: int | None = None,
-    *, jasa_id: int | list[int] | None = None,
+    *, pelanggan_id: int | list[int] | None = None,
 ) -> int:
     """Stok karung (lembar) per (jenis, ukuran, MERK, PEMILIK) = beli − hilang − terpakai.
 
     `brand_id`=None → cocokkan baris tanpa merk (data lama / byproduct).
     Terpakai = jumlah karung packing (SKU dgn merk+jenis+ukuran sama).
 
-    `jasa_id`=None (bawaan) → PABRIK. Sejak keputusan pemilik 7 Oktober 2026
-    ("ubah jadi stok terpisah per pemilik"), karung BOLEH berpindah milik ke
-    pesanan jasa lewat `pindah_kepemilikan_karung` — jadi KETIGA suku rumus
+    `pelanggan_id`=None (bawaan) → PABRIK. Sejak keputusan pemilik 7 Oktober
+    2026 ("ubah jadi stok terpisah per pemilik" — "berdasarkan kontak
+    pelanggan, bukan proses jasa"), karung BOLEH berpindah milik ke KONTAK
+    pelanggan lewat `pindah_kepemilikan_karung` — jadi KETIGA suku rumus
     kini ikut saringan pemilik, bukan cuma dua. Pembelian (`beli_kemasan`)
-    sendiri TETAP selalu menulis `jasa_id=NULL`: karung tak punya tiket
-    timbang untuk menurunkan pemiliknya saat masuk, jadi satu-satunya jalan
-    sebuah baris jadi milik jasa adalah dipindah sesudahnya.
+    sendiri TETAP selalu menulis `pelanggan_id=NULL`: karung tak punya
+    tiket timbang untuk menurunkan pemiliknya saat masuk, jadi satu-satunya
+    jalan sebuah baris jadi milik pelanggan adalah dipindah sesudahnya.
+
+    ⚠ Suku `terpakai` membaca `FinishedGoodsStock.jasa_id` (per PESANAN,
+    pola jasa_id biasa — lihat `app/services/jasa.py`), bukan `pelanggan_id`
+    langsung: kolom itu tak ada di tabel ini. `pelanggan_id` diterjemahkan
+    jadi seluruh `jasa_id` milik kontak itu lewat sub-kueri `Jasa.
+    pelanggan_id` — konsisten dengan `beli`/`hilang` tanpa menambah kolom
+    `pelanggan_id` ke `finished_goods_stock`.
     """
     def _brand(col):
         return col.is_(None) if brand_id is None else col == brand_id
 
-    def _jasa(col):
-        if jasa_id is None:
+    def _pelanggan(col):
+        if pelanggan_id is None:
             return col.is_(None)
-        if isinstance(jasa_id, list):
-            return col.in_(jasa_id)
-        return col == jasa_id
+        if isinstance(pelanggan_id, list):
+            return col.in_(pelanggan_id)
+        return col == pelanggan_id
+
+    def _jasa_milik_pelanggan(col):
+        if pelanggan_id is None:
+            return col.is_(None)
+        from app.models import Jasa
+        kondisi = (Jasa.pelanggan_id.in_(pelanggan_id)
+                  if isinstance(pelanggan_id, list) else Jasa.pelanggan_id == pelanggan_id)
+        return col.in_(select(Jasa.id).where(kondisi))
 
     beli = (
         await db.execute(
@@ -183,7 +199,7 @@ async def hitung_stok_kemasan(
                 PackagingPurchase.packaging_material_id == material_id,
                 PackagingPurchase.package_size_id == size_id,
                 _brand(PackagingPurchase.brand_id),
-                _jasa(PackagingPurchase.jasa_id),
+                _pelanggan(PackagingPurchase.pelanggan_id),
             )
         )
     ).scalar_one()
@@ -193,7 +209,7 @@ async def hitung_stok_kemasan(
                 PackagingLoss.packaging_material_id == material_id,
                 PackagingLoss.package_size_id == size_id,
                 _brand(PackagingLoss.brand_id),
-                _jasa(PackagingLoss.jasa_id),
+                _pelanggan(PackagingLoss.pelanggan_id),
             )
         )
     ).scalar_one()
@@ -205,7 +221,7 @@ async def hitung_stok_kemasan(
                 ProductSku.packaging_material_id == material_id,
                 ProductSku.package_size_id == size_id,
                 _brand(ProductSku.brand_id),
-                _jasa(FinishedGoodsStock.jasa_id),
+                _jasa_milik_pelanggan(FinishedGoodsStock.jasa_id),
             )
         )
     ).scalar_one()
@@ -296,18 +312,26 @@ async def beli_kemasan(
 # Kebalikan ARAH dari `pindah_kepemilikan_barang_jadi`/`_broken_curah`
 # (finished_goods.py): di sana barang MULAI milik jasa (diturunkan dari
 # tiket timbang) dan admin mengambil SISA yang tak terpakai balik ke pabrik.
-# Karung tak punya tiket — `beli_kemasan()` selalu menulis `jasa_id=NULL` —
-# jadi satu-satunya arah yang berarti di sini kebalikannya: admin mengetik
-# SEBAGIAN lembar yang sudah dibeli pabrik untuk dipindah MENJADI milik satu
-# pesanan jasa (dicatat sebagai biaya/alokasi tersendiri). Mekanismenya SAMA
-# (FIFO, baris tertua dulu, dipecah bila jumlahnya jatuh di tengah satu
-# baris) — cuma arah `jasa_id`-nya yang dibalik, mengikuti dari mana karung
-# ini sesungguhnya BERASAL (selalu pabrik).
+# Karung tak punya tiket — `beli_kemasan()` selalu menulis `pelanggan_id=
+# NULL` — jadi satu-satunya arah yang berarti di sini kebalikannya: admin
+# mengetik SEBAGIAN lembar yang sudah dibeli pabrik untuk dipindah MENJADI
+# milik satu KONTAK pelanggan (dicatat sebagai biaya/alokasi tersendiri).
+# Mekanismenya SAMA (FIFO, baris tertua dulu, dipecah bila jumlahnya jatuh
+# di tengah satu baris) — cuma arahnya yang dibalik, mengikuti dari mana
+# karung ini sesungguhnya BERASAL (selalu pabrik).
+#
+# ⚠ PELANGGAN, BUKAN JASA — koreksi pemilik 7 Oktober 2026: *"jalur masuk
+# karung untuk jasa bukan berdasarkan proses jasa. tetapi berdasarkan
+# kontak pelanggan."* Karung bukan barang yang "dikembalikan" per pesanan
+# (beda dari gabah/PK/beras/broken/bekatul, sebelas tabel ber-`jasa_id`
+# lain) — yang dilacak rekening per KONTAK, supaya pelanggan yang datang
+# berulang (`Jasa` baru tiap kedatangan) tetap SATU rekening karung, bukan
+# terpecah ulang tiap kedatangan.
 async def pindah_kepemilikan_karung(
     db: AsyncSession, *, user: User, material_kode: str, ukuran: int,
-    brand_nama: str | None, jasa_id: int, jumlah_lembar: int,
+    brand_nama: str | None, pelanggan_id: int, jumlah_lembar: int,
 ) -> int:
-    """Pindah N lembar karung dari milik PABRIK ke satu pesanan jasa.
+    """Pindah N lembar karung dari milik PABRIK ke satu KONTAK pelanggan.
 
     Identitas kombinasinya KODE/nama, bukan id mentah — sama persis dengan
     `beli_kemasan()`, supaya kartu stok (`karung_blok`) bisa membangun nilai
@@ -317,8 +341,8 @@ async def pindah_kepemilikan_karung(
     Mengembalikan jumlah lembar yang berpindah (selalu `jumlah_lembar`
     persis — dipecah dari baris pembelian pabrik, FIFO, tertua dulu).
     """
-    if not jasa_id:
-        raise InventoryError("Sebutkan pesanan jasa tujuan.")
+    if not pelanggan_id:
+        raise InventoryError("Sebutkan pelanggan tujuan.")
     if not jumlah_lembar or jumlah_lembar <= 0:
         raise InventoryError("Sebutkan jumlah lembar yang dipindah, lebih dari 0.")
     material = await get_material(db, material_kode)
@@ -334,7 +358,7 @@ async def pindah_kepemilikan_karung(
             raise InventoryError(f"Merk '{brand_nama}' tidak ada.")
         brand_id = brand.id
     material_id, size_id = material.id, size.id
-    tersedia = await hitung_stok_kemasan(db, material_id, size_id, brand_id, jasa_id=None)
+    tersedia = await hitung_stok_kemasan(db, material_id, size_id, brand_id, pelanggan_id=None)
     if jumlah_lembar > tersedia:
         raise InventoryError(
             f"Stok karung pabrik tinggal {tersedia} lembar — "
@@ -351,7 +375,7 @@ async def pindah_kepemilikan_karung(
         .where(PackagingPurchase.packaging_material_id == material_id,
                PackagingPurchase.package_size_id == size_id,
                _brand(PackagingPurchase.brand_id),
-               PackagingPurchase.jasa_id.is_(None))
+               PackagingPurchase.pelanggan_id.is_(None))
         .order_by(PackagingPurchase.tanggal.asc(), PackagingPurchase.waktu.asc(),
                    PackagingPurchase.id.asc())
         .with_for_update()
@@ -365,7 +389,7 @@ async def pindah_kepemilikan_karung(
             break
         baris_disentuh.append(row.id)
         if row.jumlah_lembar <= sisa:
-            row.jasa_id = jasa_id
+            row.pelanggan_id = pelanggan_id
             sisa -= row.jumlah_lembar
         else:
             row.jumlah_lembar -= sisa
@@ -378,13 +402,13 @@ async def pindah_kepemilikan_karung(
                 package_size_id=row.package_size_id, brand_id=row.brand_id,
                 jumlah_lembar=sisa,
                 tanggal=now.date(), waktu=now, input_by=user.id,
-                jasa_id=jasa_id,
+                pelanggan_id=pelanggan_id,
             ))
             sisa = 0
     await log_activity(
         db, table_name="packaging_purchases", record_id=baris_disentuh[0],
-        action="UPDATE", changed_by=user.id, field_name="jasa_id",
-        new_value=f"{jumlah_lembar} lembar → jasa",
+        action="UPDATE", changed_by=user.id, field_name="pelanggan_id",
+        new_value=f"{jumlah_lembar} lembar → pelanggan",
         aksi="pindah_kepemilikan_karung",
     )
     await db.commit()
@@ -404,11 +428,11 @@ _URUT_GUDANG = ("Gudang 2", "Gudang 1")
 
 
 async def stok_kemasan_rinci(
-    db: AsyncSession, *, jasa_id: int | list[int] | None = None,
+    db: AsyncSession, *, pelanggan_id: int | list[int] | None = None,
 ) -> list[dict]:
     """Stok tiap kombinasi karung yang pernah dibeli — satu baris per kombinasi.
 
-    `jasa_id`=None (bawaan) → PABRIK, dipakai `/stok-karung`. Daftar KOMBINASI
+    `pelanggan_id`=None (bawaan) → PABRIK, dipakai `/stok-karung`. Daftar KOMBINASI
     (jenis×ukuran×merk) sendiri selalu diturunkan dari SELURUH pembelian tanpa
     saring pemilik — kombinasi yang sama dipakai menanyakan stok pabrik MAUPUN
     stok jasa, cuma angkanya yang berbeda per pemanggilan `/stok-karung-jasa`.
@@ -444,7 +468,7 @@ async def stok_kemasan_rinci(
         mat = await db.get(PackagingMaterial, mat_id)
         size = await db.get(PackageSize, size_id)
         brand = await db.get(Brand, brand_id) if brand_id else None
-        stok = await hitung_stok_kemasan(db, mat_id, size_id, brand_id, jasa_id=jasa_id)
+        stok = await hitung_stok_kemasan(db, mat_id, size_id, brand_id, pelanggan_id=pelanggan_id)
         keluar.append({
             "gudang": kemasan_gudang(mat.kode if mat else None),
             "kode": mat.kode if mat else None,
@@ -458,6 +482,23 @@ async def stok_kemasan_rinci(
                                if b["gudang"] in _URUT_GUDANG else 9,
                                b["nama"], b["merk"] or "", b["ukuran"]))
     return keluar
+
+
+async def pelanggan_ids_dengan_karung(db: AsyncSession) -> list[int]:
+    """Kontak pelanggan yang punya karung dialokasikan ke mereka — dipakai
+    `/stok-karung-jasa`.
+
+    Langsung dari `PackagingPurchase.pelanggan_id` (DISTINCT), tanpa
+    indirection lewat `Jasa` — beda dari padanan di produk jadi
+    (`jasa_ids_per_pelanggan_dengan_hasil`), sebab kolomnya sendiri sudah
+    menunjuk KONTAK, bukan pesanan (lihat catatan panjang di
+    `pindah_kepemilikan_karung`).
+    """
+    return list((await db.execute(
+        select(PackagingPurchase.pelanggan_id.distinct())
+        .where(PackagingPurchase.pelanggan_id.isnot(None))
+        .order_by(PackagingPurchase.pelanggan_id)
+    )).scalars().all())
 
 
 async def laporan_stok_kemasan(db: AsyncSession) -> str:

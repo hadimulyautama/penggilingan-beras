@@ -3,16 +3,19 @@
 {% block isi %}
 {% import "_stok.html" as st with context %}
 
-{# ── Stok Karung · Karung Jasa — kemasan milik PESANAN JASA, per PELANGGAN ──
+{# ── Stok Karung · Karung Jasa — kemasan milik KONTAK pelanggan ──
    Keputusan pemilik 7 Oktober 2026 — padanan `/stok-produk-jasa` untuk
-   kemasan. Sumbernya `packaging.pindah_kepemilikan_karung`: karung tak
+   kemasan, dengan koreksi susulan hari yang sama: *"jalur masuk karung
+   untuk jasa bukan berdasarkan proses jasa. tetapi berdasarkan kontak
+   pelanggan."* Sumbernya `packaging.pindah_kepemilikan_karung`: karung tak
    punya tiket timbang, jadi SATU-SATUNYA jalan sebuah baris pembelian jadi
-   milik jasa adalah dipindah lewat tombol "Pindah kepemilikan" di
-   `/stok-karung` (pabrik).
+   milik pelanggan adalah dipindah lewat tombol "Pindah kepemilikan" di
+   `/stok-karung` (pabrik) — langsung ke KONTAK, tanpa indirection lewat
+   `Jasa` (beda dari sebelas tabel ber-`jasa_id` lain di app ini).
 
-   TANPA TOMBOL di sini — arahnya cuma SATU jalan (pabrik → jasa, bukan
-   sebaliknya): halaman ini murni informasi, pola yang sama dengan "PK
-   Jasa" (tak ada tombol pindah untuk PK — belum diminta pemilik). #}
+   TANPA TOMBOL di sini — arahnya cuma SATU jalan (pabrik → pelanggan,
+   bukan sebaliknya): halaman ini murni informasi, pola yang sama dengan
+   "PK Jasa" (tak ada tombol pindah untuk PK — belum diminta pemilik). #}
 
 {% if not daftar %}
   <div class="kosong">
@@ -23,7 +26,7 @@
     <div>
       <h2>Belum ada karung jasa</h2>
       <p class="bantu">
-        Belum ada karung yang dipindah kepemilikannya ke pesanan jasa.
+        Belum ada karung yang dipindah kepemilikannya ke pelanggan.
       </p>
     </div>
   </div>
