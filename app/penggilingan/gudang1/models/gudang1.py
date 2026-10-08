@@ -1,7 +1,7 @@
 """Gudang 1 — Produksi (Fase 1): pembelian gabah, pengeringan, silo."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -384,6 +384,100 @@ class SiloStorage(Base, TimestampMixin):
     milling_process_id: Mapped[int | None] = mapped_column(
         ForeignKey("milling_process.id", ondelete="SET NULL", use_alter=True)
     )
+    #: Berapa kg baris ini SUDAH dikeluarkan untuk dikemas+ditimbang (pesan
+    #: kerja 7 Oktober 2026, butir 6 — migrasi 0077). Jalan keluar BARU dari
+    #: silo, selain giling — gudang1.gabah_kering.keluarkan_untuk_kemasan()
+    #: menaikkan kolom ini lewat SQL (`+=`), bukan baca-lalu-tulis, pola yang
+    #: sama dengan `MillingProcess.berat_gabah_masuk_kg` (P-K-14): dua
+    #: pengeluaran bersamaan yang membaca nilai lama di Python akan saling
+    #: menghapus tambahan satu sama lain.
+    #:
+    #: ⚠ `_row_bobot` WAJIB menguranginya dari bobot baris — tanpa itu silo
+    #: yang gabahnya sudah habis dikemas tetap terbaca penuh, dan isian
+    #: berikutnya ditolak atas dasar stok yang sudah tak ada (pola yang sama
+    #: dengan pesan 8 & 11: "jalan keluar baru wajib lahir bersama suku
+    #: hitungannya").
+    dikemas_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False,
+                                               server_default="0")
+
+
+class GabahKeringLot(Base, TimestampMixin):
+    """Satu KELUARAN gabah kering dari silo — dikeluarkan, DITIMBANG (satu
+    angka global, bukan per karung — "gabah yang datang kan langsung
+    ditimbang global", keputusan pemilik 7 Oktober 2026), lalu ditumpuk.
+
+    BUKAN barang jadi — gabah tetap BAHAN (`/stok`, bukan `/stok-produk`).
+    Dan BUKAN `finished_goods_stock`: usul pertama memakai tabel itu lalu
+    DICABUT sendiri — gabah tak punya ukuran karung, dan tabel itu memaksa
+    anggapannya (`ProductSku.package_size_id` wajib isi).
+
+    Jalan keluarnya meniru `pk_langsung` (PK dijual langsung dari Gudang 1),
+    bukan `finished_goods`: SATU angka bobot, TANPA SKU, tanpa ukuran karung,
+    tanpa jumlah karung wajib. Saldo = `berat_timbang_kg` − dibongkar kembali
+    ke silo (`GabahKeringBongkar`) − keluar (`OutgoingItem.item_type=
+    "gabah_langsung"`) — sebangun `transfer.saldo_pk`.
+
+    ⚠⚠ `berat_timbang_kg` BUKAN riwayat — ia pengukuran TERAKHIR, DIGANTI di
+    tempat tiap kali ditimbang ulang (pesan kerja 12B: gabah boleh dikeringkan
+    lagi, lalu ditimbang lagi). Jejak penimbangan sebelumnya ada di
+    `activity_logs`, bukan di sini — riwayat yang bisa dijumlahkan orang akan
+    dijumlahkan orang, dan susut yang benar HANYA `basah pertama − timbang
+    TERAKHIR`, tak pernah penjumlahan per-pengeringan.
+    """
+
+    __tablename__ = "gabah_kering_lots"
+    __table_args__ = (
+        Index("ix_gabah_kering_lots_jasa", "jasa_id",
+              postgresql_where=text("jasa_id IS NOT NULL"),
+              sqlite_where=text("jasa_id IS NOT NULL")),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_lot: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    #: Baris silo asalnya — untuk menyambung ke bobot basah pembanding pagar
+    #: fisika (lihat `gabah_kering._berat_basah_pembanding`) dan untuk jejak.
+    silo_storage_id: Mapped[int] = mapped_column(
+        ForeignKey("silo_storage.id"), nullable=False
+    )
+    #: Pesanan jasa yang memiliki lot ini. NULL = milik pabrik. Disalin dari
+    #: `silo_storage.jasa_id` SEKALI saat lot dibuat, lalu disimpan — pola
+    #: yang sama dengan `SiloStorage.jasa_id` sendiri.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    #: Bobot TERUKUR terakhir — lihat docstring kelas. DIISI DARI TIMBANGAN,
+    #: bukan dihitung (`jumlah_karung × ukuran`) — gabah tak punya ukuran
+    #: karung baku, dan bobot ini BOLEH tidak bulat (100 karung bisa 4.930 kg).
+    berat_timbang_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    #: Keterangan SAJA, untuk menyusun di gudang — BUKAN dasar bobot, dan
+    #: BUKAN wajib diisi.
+    jumlah_karung: Mapped[int | None] = mapped_column(Integer)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu_timbang: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+
+class GabahKeringBongkar(Base, TimestampMixin):
+    """Satu kali tumpukan gabah kering DIBONGKAR kembali ke silo — WHOLE-LOT
+    (seluruh sisa lot, bukan sebagian — lihat `gabah_kering.bongkar_ke_silo`
+    untuk alasannya). `silo_storage_id` menunjuk baris BARU yang dibuat
+    `masuk_silo` untuk muatan ini, dikreditkan `berat_timbang_kg` LOT ini
+    (pengukuran TERAKHIR) — BUKAN bobot batch asalnya (pesan kerja 12A butir
+    4b: memakai bobot batch akan menggelembungkan isi silo dan menjatuhkan
+    rendemen giling berikutnya, kesalahan bentuk yang sama dengan nota-vs-
+    timbangan 25 September)."""
+
+    __tablename__ = "gabah_kering_bongkar"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    gabah_kering_lot_id: Mapped[int] = mapped_column(
+        ForeignKey("gabah_kering_lots.id"), nullable=False
+    )
+    silo_storage_id: Mapped[int] = mapped_column(
+        ForeignKey("silo_storage.id"), nullable=False
+    )
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
 class JedaProses(Base):

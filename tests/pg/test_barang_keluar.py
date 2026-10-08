@@ -186,6 +186,59 @@ async def test_dua_perintah_tak_boleh_membagi_stok_yang_sama(pg, gudang):
     assert "2.500" in str(e.value), str(e.value)
 
 
+async def test_byproduct_curah_tak_lagi_memakai_stok_bekatul_untuk_jenis_lain(pg, gudang):
+    """Pesan kerja 11 butir 1 — cacat pabrik yang SEDANG BERJALAN hari ini.
+
+    `tersedia()` untuk `byproduct_curah` dulu SELALU memanggil
+    `hitung_stok_bekatul(db)`, apa pun `b.jenis`-nya diminta. Dibuktikan di
+    sandbox pemilik: bekatul 1.000 kg, menir NOL, dan `tersedia('menir')`
+    menjawab 1.000 kg berlabel "Menir" — Admin bisa menerbitkan perintah
+    muat menir yang tak ada satu kilo pun, tanpa satu pun pesan.
+
+    Uji ini yang paling penting di butir 1 (per pesan kerjanya sendiri):
+    bekatul 1.000 kg, menir NOL, `tersedia('menir')` WAJIB 0 kg.
+    """
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
+    from app.services import barang_keluar as bk
+    from sqlalchemy import select
+
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        db.add(PolishingOutputLog(polishing_process_id=proc.id, jenis="bekatul",
+                                  berat_kg=1_000, waktu_update=now_local(),
+                                  input_by=gudang["op"]))
+        await db.commit()
+        # Bekatul pabrik 1.000 kg — SATU-SATUNYA hasil samping yang tercatat.
+        # Menir TIDAK PERNAH dicatat sama sekali di uji ini, sengaja: absennya
+        # barisnya DI `byproduct_stock` adalah "menir NOL" yang sebenarnya.
+        await catat_bekatul(db, user=await db.get(User, gudang["op"]),
+                            kode_pol=proc.kode_proses, berat_kg=1_000)
+
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.buat_perintah(
+                db, user=await db.get(User, gudang["adm"]),
+                baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="menir",
+                                        berat_kg=1)],
+                nama_pembeli="Toko Makmur", no_polisi="B 1234 XY")
+    assert "tinggal 0 kg" in str(e.value), str(e.value)
+    assert "1.000" not in str(e.value), \
+        "stok bekatul masih bocor ke penolakan menir: " + str(e.value)
+
+    # Bekatulnya sendiri TETAP terbaca benar — perbaikannya tidak menghapus
+    # jalan yang sudah bekerja, cuma membetulkan jenis lain.
+    async with pg() as db:
+        r = await bk.buat_perintah(
+            db, user=await db.get(User, gudang["adm"]),
+            baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                    berat_kg=1_000)],
+            nama_pembeli="Toko Makmur", no_polisi="B 1234 XY")
+    assert r.rec.kode
+
+
 async def test_muat_kurang_diterima_dan_sisanya_hangus(pg, gudang):
     """Muatan sungguhan memang berselisih — karung rusak, truk penuh lebih cepat.
 

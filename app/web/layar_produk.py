@@ -58,6 +58,10 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     async with SessionLocal() as db:
         kartu = await svc.stok_produk(db)
         bj = await svc.barang_jadi_g2(db)
+        # Pesan kerja 10 bagian 0, butir (e) — DUA SISI: kartu pabrik di atas
+        # sudah menyaring titipan KELUAR; ini separuh kalimat yang tersisa,
+        # supaya gudang yang penuh titipan tak terbaca kosong.
+        titipan = await svc.titipan_dikemas_per_jenis(db)
     # Rincian kemasan digantung ke kartu kategorinya lewat `jenis` — kunci yang
     # sama yang dipakai `stok.jenis_produk`, jadi tak ada pemetaan kedua yang
     # bisa berselisih. Angkanya NETO (masuk − keluar) seperti di layar barang
@@ -115,6 +119,7 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
         kartu=kartu, kemasan=kemasan, beras=beras, samping=samping,
+        titipan=titipan,
         sisa_beras=sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
         sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
         curah_beras=sum(k.curah_kg for k in beras if k.curah_kg > 0),

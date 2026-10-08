@@ -115,8 +115,9 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
     menu = await _menu_g2(monkeypatch)
     ids = [a["id"] for a in menu]
-    assert ids[:7] == ["pindah_tumpukan_silo", "pindah_broken_silo",
+    assert ids[:8] == ["pindah_tumpukan_silo", "masukkan_broken_silo",
                        "mulai_penyosohan", "hasil_penyosohan",
+                       "tambah_silo_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
     assert "masukkan_pk" not in ids and "undo" in ids
     # Keenam yang lama TETAP di menu — lembar kartunya dibangun dari
@@ -131,10 +132,11 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     for a in menu:
         if a["id"] in _BERKARTU:
             assert a["kartu"] is True and a["wh"] == "g2", a["id"]
-    # `pindah_broken_silo` (6 Oktober 2026) BELUM punya kartu tersendiri di
+    # `masukkan_broken_silo` (6 Oktober 2026, diganti namanya & bentuknya 7
+    # Oktober 2026 — satu aksi, bukan dua) BELUM punya kartu tersendiri di
     # Stok — tetap digambar di katalog "Catat pekerjaan lain" supaya tetap
     # terjangkau. Beda sengaja dari enam di atas, bukan yang terlewat.
-    broken_silo = next(a for a in menu if a["id"] == "pindah_broken_silo")
+    broken_silo = next(a for a in menu if a["id"] == "masukkan_broken_silo")
     assert not broken_silo.get("kartu") and broken_silo["wh"] == "g2"
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]

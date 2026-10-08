@@ -245,6 +245,42 @@ async def test_halaman_titipan_mengelompokkan_per_pelanggan(pg, sosoh_jasa):
     assert "Hasil sosoh" in r.text and "Dikemas" in r.text and "Curah" in r.text
 
 
+async def test_stok_produk_pabrik_menyebut_titipan_di_sebelah_angkanya(pg, sosoh_jasa):
+    """Pesan kerja 10 bagian 0, butir (e): "SEBUT titipannya di sebelah
+    angka pabrik" — DUA SISI (CLAUDE.md): `/stok-produk` sudah menyaring
+    titipan KELUAR dari kartunya sendiri (keputusan 6 Oktober), tetapi
+    menyaring tanpa menyebut membuat gudang tampak kosong padahal penuh.
+    """
+    # 20 karung (500 kg) dikemas atas nama pesanan jasa, PABRIK belum
+    # packing apa pun untuk "medium" — jadi "+ titipan 500 kg" harus
+    # muncul di kartu "Beras medium" milik /stok-produk, walau kartu itu
+    # sendiri kosong (hasil pabrik 9.000 kg dari fixture, belum dikemas).
+    await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"], karung=20)
+
+    async with pg() as db:
+        from app.services.stok import titipan_dikemas_per_jenis
+        titipan = await titipan_dikemas_per_jenis(db)
+    assert titipan.get("medium") == 500.0
+
+    c = await _klien(pg, peran="superadmin")
+    try:
+        r = await c.get("/stok-produk")
+    finally:
+        await c.aclose()
+    assert r.status_code == 200
+    assert "titipan" in r.text.lower()
+    assert "500" in r.text
+
+    # `/stok-produk-jasa`: TANPA mention "titipan" — tiap kartunya di sana
+    # SUDAH milik satu pesanan; "titipan" di situ tak menjawab apa pun.
+    c2 = await _klien(pg, peran="superadmin")
+    try:
+        r2 = await c2.get("/stok-produk-jasa")
+    finally:
+        await c2.aclose()
+    assert "titipan" not in r2.text.lower()
+
+
 async def test_stok_produk_pabrik_tak_tercampur_hasil_proses_jasa(pg, sosoh_jasa):
     """Pagar yang terungkap justru oleh perbaikan ini: `stok_produk()` dulu
     TIDAK menyaring `PolishingProcess` sama sekali, jadi "hasil sosoh"
@@ -274,6 +310,78 @@ async def test_stok_produk_pabrik_tak_tercampur_hasil_proses_jasa(pg, sosoh_jasa
     assert medium_jasa.hasil_kg == 5_000
     assert medium_jasa.dikemas_kg == 500
     assert medium_jasa.curah_kg == pytest.approx(5_000 - 500)
+
+
+async def test_pengambilan_jasa_tak_membuat_dikemas_pabrik_negatif(pg, sosoh_jasa):
+    """Pesan kerja 10/pengambilan jasa — reproduksi PERSIS skenario cacat yang
+    ditemukan 7 Oktober 2026: sosoh jasa 5.000 kg, dikemas 100 karung (2.500
+    kg) atas nama pesanannya, lalu DIAMBIL pemiliknya 2.500 kg.
+
+    Sebelum perbaikan 6 Oktober (lihat `stok_produk()`), `keluar` dihitung
+    dari SELURUH `OutgoingItem` tanpa saringan `jasa_id` — pengambilan
+    pelanggan ikut mengurangi "keluar" PABRIK, dan kartu "Beras putih" pabrik
+    berbunyi `dikemas = -2.500 kg`, MINUS, karena pengambilan pelanggan
+    tercatat sebagai penjualan pabrik yang sebenarnya tak pernah terjadi.
+
+    Uji ini yang paling penting di butir 2 (pesan kerjanya sendiri menyebut
+    "celahnya lolos dari 1.145 uji yang ada" — pagar packing-saja sudah ada
+    di uji lain berkas ini, yang belum pernah diuji adalah langkah AMBIL-nya).
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
+    from app.services import barang_keluar as bk
+    from app.services.stok import stok_produk
+
+    await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"], karung=100)  # 2.500 kg
+
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        sku_id, std_id = (await db.execute(_sku_terpacking())).first()
+        r = await bk.buat_perintah(
+            db, user=u,
+            baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku_id,
+                                    std_id=std_id, jumlah_karung=100)],
+            jasa_id=sosoh_jasa["jasa_id"])
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        await bk.muat_semua(db, user=u, rec_id=r.rec.id)
+
+    # ── PABRIK: angkanya tak boleh bergerak SAMA SEKALI ──
+    async with pg() as db:
+        kartu = await stok_produk(db)
+    medium = next(k for k in kartu if k.jenis == "medium")
+    assert medium.hasil_kg == 9_000, "hasil pabrik tak boleh ikut hasil jasa"
+    assert medium.dikemas_kg >= 0, \
+        f"dikemas PABRIK jadi negatif ({medium.dikemas_kg}) — pengambilan " \
+        "pelanggan bocor ke penjualan pabrik"
+    assert medium.dikemas_kg == 0, "pabrik sama sekali belum packing apa pun"
+    assert medium.curah_kg == 9_000, \
+        "curah pabrik tak boleh berubah karena pengambilan jasa"
+
+    # ── PESANAN: sudah diambil semua, sisanya 0 — bukan 5.000 kg utuh ──
+    async with pg() as db:
+        kartu_jasa = await stok_produk(db, jasa_id=sosoh_jasa["jasa_id"])
+    medium_jasa = next((k for k in kartu_jasa if k.jenis == "medium"), None)
+    if medium_jasa is not None:
+        assert medium_jasa.dikemas_kg == 0, \
+            "sisa dikemas pesanan harus 0 sesudah diambil semua"
+
+    # ── Pembanding independen: fungsi yang sudah terbukti benar ──
+    async with pg() as db:
+        pabrik = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=None)
+        pesanan = await hitung_stok_finished_goods(
+            db, sku_id, std_id, jasa_id=sosoh_jasa["jasa_id"])
+    assert pabrik == {"karung": 0, "kg": 0.0}
+    assert pesanan == {"karung": 0, "kg": 0.0}
+
+
+def _sku_terpacking():
+    from sqlalchemy import select
+
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    return (select(FinishedGoodsStock.product_sku_id,
+                  FinishedGoodsStock.rice_quality_standard_id)
+            .where(FinishedGoodsStock.jasa_id.isnot(None)).limit(1))
 
 
 async def test_dua_pesanan_satu_pelanggan_digabung_satu_seksi(pg, sosoh_jasa):
@@ -332,3 +440,67 @@ async def test_dua_pesanan_satu_pelanggan_digabung_satu_seksi(pg, sosoh_jasa):
     assert r.text.count("Bu Sri") == 1, \
         "satu pelanggan dua pesanan harus satu seksi, bukan dua"
     assert "Broken" in r.text
+
+
+async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh_jasa):
+    """Pesan kerja 10, bagian 4 (UJI) — pagar terakhir yang masih lowong:
+    hasil samping curah (menir/reject/bekatul) titipan pelanggan wajib
+    BERKURANG sesudah diangkut lewat perintah pengambilan jasa, bukan cuma
+    TAMPIL di `/stok-produk-jasa`.
+
+    ⚠ BUKAN broken — broken punya rumus tiga suku sendiri (`SisaJasa.
+    broken_kg`, lihat catatan "telescoping" di `jasa.py`) dan sudah diuji
+    jalurnya sendiri. Ini menguji `samping_kg` (menir/reject/bekatul) —
+    jalur yang baru dibuka pesan kerja 11 butir 4a (`hitung_stok_byproduct_
+    curah` + picker `cr:` di `/actions/barang-jasa`) — DIAM-DIAM sampai
+    sekarang belum pernah diuji ujung ke ujung lewat perintah sungguhan,
+    cuma lewat pemanggilan fungsi langsung.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_curah
+    from app.penggilingan.inventory.models import ByproductStock
+    from app.services import barang_keluar as bk
+    from app.services.jasa import sisa_jasa
+    from app.web.aksi_inventory import barang_jasa
+
+    jid = sosoh_jasa["jasa_id"]
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        u.role = "superadmin"      # `barang_jasa()` (picker) menuntut financials
+        now = now_local()
+        db.add(ByproductStock(
+            jenis_produk="menir", source_type="polishing", source_id=None,
+            berat_kg=800, tanggal=now.date(), waktu=now, status="tersedia",
+            input_by=u.id, jasa_id=jid))
+        await db.commit()
+
+    async with pg() as db:
+        assert await hitung_stok_byproduct_curah(db, "menir", jasa_id=jid) == 800
+        sisa = await sisa_jasa(db, jid)
+        assert sisa.samping_kg == 800
+
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+    opsi = {o["value"] for o in await barang_jasa(jasa=str(jid), user=u)}
+    assert "cr:menir" in opsi
+
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        r = await bk.buat_perintah(
+            db, user=u, jasa_id=jid,
+            baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="menir",
+                                    berat_kg=800)])
+        rec_id = r.rec.id
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        assert await hitung_stok_byproduct_curah(db, "menir", jasa_id=jid) == 0
+        assert await hitung_stok_byproduct_curah(db, "menir", jasa_id=None) == 0, \
+            "pengambilan jasa tak boleh ikut mengurangi stok menir pabrik"
+        sisa = await sisa_jasa(db, jid)
+        assert sisa.samping_kg == 0

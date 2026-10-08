@@ -14,6 +14,8 @@ from app.models import (
     KodeUrut,
     BrokenKeSilo,
     DryingLot,
+    GabahKeringBongkar,
+    GabahKeringLot,
     InternalTransfer,
     MillingProcess,
     OutgoingRecord,
@@ -181,6 +183,32 @@ async def next_broken_move_code(db: AsyncSession) -> str:
         .where(BrokenKeSilo.created_at >= start)
     )
     return await _next_sequence(db, "BKS", stmt)
+
+
+async def next_gabah_kering_code(db: AsyncSession) -> str:
+    """Kode lot gabah kering dikemas+ditimbang (Gudang 1): GKR-YYYYMMDD-NN
+    (reset per hari)."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(GabahKeringLot)
+        .where(GabahKeringLot.created_at >= start)
+    )
+    return await _next_sequence(db, "GKR", stmt)
+
+
+async def next_gabah_kering_bongkar_code(db: AsyncSession) -> str:
+    """Kode bongkar gabah kering→silo (Gudang 1): GKS-YYYYMMDD-NN (reset per
+    hari) — sebangun `next_broken_move_code`/`next_tumpukan_move_code`."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(GabahKeringBongkar)
+        .where(GabahKeringBongkar.created_at >= start)
+    )
+    return await _next_sequence(db, "GKS", stmt)
 
 
 async def next_polishing_code(db: AsyncSession) -> str:

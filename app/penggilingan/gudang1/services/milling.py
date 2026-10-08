@@ -60,17 +60,22 @@ async def sole_active_milling_kode(db: AsyncSession) -> str | None:
 
 async def _storage_bobot(db: AsyncSession, st: SiloStorage) -> Bobot:
     """Bobot isi satu baris silo SEKARANG — lot pengeringan atau batch lepas —
-    berikut kepastiannya (pasti / perkiraan / tak diketahui). Lihat `bobot.py`."""
-    if st.drying_lot_id:
-        batches = (await db.execute(
-            select(PurchaseBatch)
-            .join(DryingLotBatch, DryingLotBatch.purchase_batch_id == PurchaseBatch.id)
-            .where(DryingLotBatch.drying_lot_id == st.drying_lot_id)
-        )).scalars().all()
-        return dari_batches(batches)
-    if st.purchase_batch_id:
-        return dari_batch(await db.get(PurchaseBatch, st.purchase_batch_id))
-    return NOL
+    berikut kepastiannya (pasti / perkiraan / tak diketahui). Lihat `bobot.py`.
+
+    ⚠⚠ TIPIS, DAN WAJIB TIPIS: hanya memanggil `silo._row_bobot`, SATU-
+    SATUNYA tempat yang boleh tahu cara menghitungnya. Dulu rumusnya
+    disalin ke sini (`dari_batches`/`dari_batch` langsung) — benar sampai
+    migrasi 0077 menambahkan suku pengurang `dikemas_kg` (gabah kering
+    dikeluarkan untuk ditimbang, pesan kerja 12) HANYA di `silo.py`. Salinan
+    di sini tak pernah ikut diperbarui, jadi `start_milling` (baris di
+    bawah) dan poller `resinkron_bahan_berjalan` terus
+    mengkreditkan bobot PENUH sebuah baris silo ke proses giling — termasuk
+    bagian yang sudah dikeluarkan untuk dikemas — menggelembungkan
+    `berat_gabah_masuk_kg` dan menjatuhkan rendemen. Kelas kerusakan yang
+    sama persis dengan yang pesan 12A peringatkan untuk jalur bongkar.
+    """
+    from app.penggilingan.gudang1.services.silo import _row_bobot
+    return await _row_bobot(db, st)
 
 
 async def _storage_kg(db: AsyncSession, st: SiloStorage) -> float:
@@ -292,6 +297,146 @@ async def start_milling(
         ) from e
     await db.refresh(proc)
     return StartResult(proc=proc, nama_silo=nama_silo, berat_masuk=total.angka(), bobot=total)
+
+
+@dataclass
+class TambahSiloResult:
+    proc: MillingProcess
+    nama_silo: str
+    bertambah: float
+    bobot: Bobot | None = None
+
+
+async def tambah_silo_giling(
+    db: AsyncSession, *, user, kode_proses: str | None, nama_silo: str | list[str] | tuple | None,
+    tanggal=None, jam=None,
+) -> TambahSiloResult:
+    """Tambahkan silo lain ke giling yang SEDANG BERJALAN — mix bahan.
+
+    Laporan lapangan 7 Oktober 2026: *"jika awalnya hanya menggunakan 1
+    silo, tidak bisa menambahkan silo lainnya sebagai sumber bahan baku.
+    pada prakteknya di tengah-tengah proses, silo lainnya juga dipergunakan
+    untuk mix bahan baku jika dibutuhkan."* `start_milling` menerima
+    BEBERAPA silo, tetapi hanya pada SAAT MULAI — sesudah itu daftarnya
+    terkunci. Satu-satunya jalan silo lain ikut bergabung selama ini adalah
+    OTOMATIS, saat gabah BARU datang ke silo yang SUDAH jadi sumber proses
+    ini (lihat "Gabah yang datang saat silo sedang digiling" di
+    `silo.masuk_silo`) — bukan silo LAIN yang sudah berisi sejak sebelumnya.
+
+    Bentuknya SEBANGUN `start_milling`: SELURUH silo baru diperiksa dulu
+    (kosong? sedang dipakai proses lain? sepemilik dengan proses INI?),
+    baru satu pun ditulis. `berat_gabah_masuk_kg` ditambah lewat SQL
+    (`+=`), bukan baca-lalu-tulis — pelajaran P-K-14 yang sama dengan jalur
+    "gabah datang saat giling berjalan".
+    """
+    proc = await get_process_by_kode(db, kode_proses or "")
+    if proc is None:
+        raise MillingError(f"Giling {kode_proses} tidak ditemukan.")
+    if proc.status != "proses":
+        raise MillingError(f"{proc.kode_proses} sudah {proc.status} — tak bisa menambah silo.")
+
+    pilihan = ([nama_silo] if isinstance(nama_silo, str) else list(nama_silo or []))
+    nama_pilih: list[str] = []
+    for n in pilihan:
+        n = str(n or "").strip()
+        if n and n not in nama_pilih:
+            nama_pilih.append(n)
+    if not nama_pilih:
+        raise MillingError("Sebutkan silo yang ditambahkan, contoh: `tambah silo B`")
+
+    sudah = set((await db.execute(
+        select(MillingProcessSource.silo_storage_id)
+        .where(MillingProcessSource.milling_process_id == proc.id)
+    )).scalars().all())
+
+    silo_pilih: list = []
+    rows: list[SiloStorage] = []
+    for nama in nama_pilih:
+        silo = await get_g1_silo(db, nama)
+        if silo is None:
+            raise MillingError(f"Silo {nama} Gudang 1 tidak ditemukan.")
+        baris = [r for r in await _silo_active_rows(db, silo.id) if r.id not in sudah]
+        if not baris:
+            raise MillingError(
+                f"Silo {nama} kosong, atau isinya sudah jadi bahan {proc.kode_proses}.")
+        jalan = await giling_berjalan_untuk_silo(db, silo.id)
+        if jalan is not None and jalan.id != proc.id:
+            raise MillingError(f"Silo {nama} sedang digiling ({jalan.kode_proses}).")
+        silo_pilih.append(silo)
+        rows += baris
+
+    # ── Silo baru HARUS SEPEMILIK dengan proses yang sudah berjalan ──
+    #
+    # Sejajar `start_milling`, tetapi pembandingnya di sini `proc.jasa_id`
+    # (ditetapkan sejak mulai, tak pernah berubah) LAWAN pemilik silo baru —
+    # bukan sesama silo baru seperti saat mulai. Mencampur pemilik di
+    # tengah jalan sama bahayanya dengan mencampurnya di awal: PK yang
+    # keluar tak bisa dibagi kembali, tak ada lapisan di dalam mesin.
+    try:
+        await pastikan_satu_jasa_bernama(db, [proc.jasa_id] + [r.jasa_id for r in rows])
+    except JasaError as e:
+        raise MillingError(f"❌ {e.args[0]}") from None
+
+    nama_tambah = _rangkai(nama_pilih)
+    id_silo = [(s.id, n) for s, n in zip(silo_pilih, nama_pilih)]
+    now = input_time(tanggal, jam)
+    bobot_per_baris: list[tuple[SiloStorage, Bobot]] = []
+    for r in rows:
+        bobot_per_baris.append((r, await _storage_bobot(db, r)))
+    tambahan = jumlah_bobot(b for _, b in bobot_per_baris)
+
+    try:
+        ids_baris = [r.id for r in rows]
+        dikunci = (await db.execute(
+            update(SiloStorage)
+            .where(SiloStorage.id.in_(ids_baris), SiloStorage.milling_process_id.is_(None))
+            .values(milling_process_id=proc.id)
+        )).rowcount or 0
+        if dikunci != len(ids_baris):
+            await db.rollback()
+            sibuk = []
+            for sid, nm in id_silo:
+                j = await giling_berjalan_untuk_silo(db, sid)
+                if j is not None and j.id != proc.id:
+                    sibuk.append(f"Silo {nm} ({j.kode_proses})")
+            raise MillingError(
+                "Silo tidak ditambahkan — " + (
+                    " dan ".join(sibuk) + " sedang digiling." if sibuk
+                    else "isinya baru saja dipakai proses lain.")
+                + " Tidak ada yang tercatat; pilih silo lain atau tunggu.")
+        for r, bb in bobot_per_baris:
+            db.add(MillingProcessSource(
+                milling_process_id=proc.id, silo_storage_id=r.id,
+                drying_lot_id=r.drying_lot_id, purchase_batch_id=r.purchase_batch_id,
+                berat_kg=bb.kg,
+            ))
+        # Ditambah lewat SQL, bukan dibaca-lalu-ditulis (P-K-14) — sejajar
+        # suku tambahan "gabah datang saat giling berjalan" di `silo.py`.
+        tanda = {} if (proc.bobot_masuk_final and tambahan.pasti) else {"bobot_masuk_final": False}
+        await db.execute(
+            update(MillingProcess)
+            .where(MillingProcess.id == proc.id)
+            .values(berat_gabah_masuk_kg=(
+                func.coalesce(MillingProcess.berat_gabah_masuk_kg, 0) + (tambahan.kg or 0)),
+                **tanda)
+        )
+        await db.flush()
+        await log_activity(
+            db, table_name="milling_process", record_id=proc.id, action="UPDATE",
+            changed_by=user.id, field_name="berat_gabah_masuk_kg",
+            new_value=f"{proc.kode_proses} + Silo {nama_tambah} ({tambahan.teks()})",
+        )
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise MillingError(
+            f"Silo {nama_tambah} tidak bisa ditambahkan karena aturan basis data "
+            f"menolak bahannya ({tambahan.teks()}). Coba sekali lagi; bila berulang, "
+            "sebutkan pesan ini ke Super Admin."
+        ) from e
+    await db.refresh(proc)
+    return TambahSiloResult(proc=proc, nama_silo=nama_tambah, bertambah=tambahan.angka(),
+                            bobot=tambahan)
 
 
 # ─────────────────────────── Progress ───────────────────────────

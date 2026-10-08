@@ -559,8 +559,11 @@ def test_silo_kosong_tak_dilaporkan_sudah_berisi():
     sumber = kode_saja(silo.masuk_silo)
     assert "digabung = await _silo_content_kg" not in sumber, \
         "isi silo tak boleh dihitung ulang setelah barisnya ditambahkan"
-    assert sumber.count("digabung = bool(sebelum)") == 2, \
-        "kedua cabang harus membaca keadaan SEBELUM penambahan"
+    # TIGA cabang sejak pesan kerja 12 (gabah kering dibongkar kembali ke
+    # silo, migrasi 0077) — ketiganya harus membaca keadaan SEBELUM
+    # penambahan, bukan cuma dua yang lebih lama.
+    assert sumber.count("digabung = bool(sebelum)") == 3, \
+        "ketiga cabang harus membaca keadaan SEBELUM penambahan"
 
 
 # ──────────── Gabah yang datang saat silo sedang digiling ────────────

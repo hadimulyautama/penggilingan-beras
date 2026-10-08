@@ -152,6 +152,11 @@ _TABLE_LABEL = {
     # peristiwa (owner tak memintanya), sama seperti `tutup_silo_giling`.
     # Labelnya tetap ada karena jejaknya MUNCUL di List audit.
     "broken_ke_silo": "broken dipindah ke silo",
+    # Gabah kering dikemas & ditimbang (pesan kerja 7 Oktober 2026 butir 6,
+    # migrasi 0077) juga belum lewat jalur peristiwa — sama alasannya dengan
+    # `broken_ke_silo`. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
+    "gabah_kering_lots": "gabah kering dikemas",
+    "gabah_kering_bongkar": "gabah kering dibongkar ke silo",
 }
 
 

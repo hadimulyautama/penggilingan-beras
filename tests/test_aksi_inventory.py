@@ -99,6 +99,14 @@ def test_operator_gudang2_tak_pernah_melihat_aksi_uang():
     yang membuat perintahnya Admin.
 
     `harga_byproduct` dicoret 28 September 2026 bersama seluruh harga.
+
+    `masukkan_broken_silo` MENYUSUL 7 Oktober 2026 (katalog `g2=True` di
+    `api.py`, bukan di sini) — satu aksi yang sumbernya otomatis (curah
+    dulu, lalu karung dibongkar bila kurang), menggantikan "Pindah broken
+    ke silo" yang lama. `catat_broken` TETAP ADA berdampingan: ia menjawab
+    pertanyaan yang berbeda (mencatat hasil mesin sebagai curah, belum
+    punya tujuan) — lihat kartu "Tunggu packing" (`_kartu_beras_curah`,
+    tombol "Sisa dicurah") yang justru butuh aksi ini tetap terjangkau.
     """
     ids = {a["id"] for a in inv.spesifikasi(g2=True, fin=False)}
     assert ids == {"catat_packing", "catat_bekatul", "catat_broken",

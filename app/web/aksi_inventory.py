@@ -896,6 +896,23 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
                         "label": (f"PK {l.kode} · {kg(l.tersedia)}"
                                   + (f" · {l.kelas}" if l.kelas else "")
                                   + " (isi dalam kg)")})
+        # ── Gabah kering ditimbang (pesan kerja 12) — PABRIK saja ──
+        #
+        # Sebangun PK di atas: lot jasa TIDAK ditawarkan di sini (pengambilan
+        # pemiliknya lewat `/actions/barang-jasa`, picker `gk:`) — disembunyikan
+        # DI SINI, penjaganya tetap di `barang_keluar.tersedia`.
+        from app.models import GabahKeringLot
+        from app.penggilingan.gudang1.services.gabah_kering import (
+            pending_gabah_kering_kg)
+
+        for lot in (await db.execute(
+            select(GabahKeringLot).where(GabahKeringLot.jasa_id.is_(None))
+        )).scalars().all():
+            sisa_gkr = await pending_gabah_kering_kg(db, lot.id)
+            if sisa_gkr > 0.5:
+                out.append({"value": f"gk:{lot.kode_lot}",
+                            "label": f"Gabah kering {lot.kode_lot} · "
+                                     f"{kg(sisa_gkr)} (isi dalam kg)"})
     return out
 
 
@@ -1039,10 +1056,10 @@ class PerintahKeluarReq(BaseModel):
 async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
     """Satu pilihan berawalan + jumlahnya → baris perintah.
 
-    Awalannya yang menentukan SATUAN: `bj:` per karung, `cr:` dan `pk:` per
-    kilogram. Tanpa awalan, "100" pada satu baris berarti 100 karung dan pada
-    baris lain 100 kg — dan yang membedakan cuma ingatan orang yang
-    mengetiknya.
+    Awalannya yang menentukan SATUAN: `bj:` per karung, `cr:`, `pk:`, dan
+    `g2:` per kilogram. Tanpa awalan, "100" pada satu baris berarti 100
+    karung dan pada baris lain 100 kg — dan yang membedakan cuma ingatan
+    orang yang mengetiknya.
     """
     from app.models import MillingProcess
 
@@ -1063,6 +1080,27 @@ async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
             raise HTTPException(400, f"Lot {kode} tidak ditemukan.")
         return bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
                                 berat_kg=float(jumlah))
+    if pilih.startswith("gk:"):
+        from app.models import GabahKeringLot
+        kode = pilih[3:].strip()
+        lot = (await db.execute(select(GabahKeringLot).where(
+            GabahKeringLot.kode_lot == kode))).scalars().first()
+        if lot is None:
+            raise HTTPException(400, f"Gabah kering {kode} tidak ditemukan.")
+        return bk.BarisPerintah(tipe="gabah_langsung", gabah_kering_lot_id=lot.id,
+                                berat_kg=float(jumlah))
+    if pilih.startswith("g2:"):
+        # PK Gudang 2 — DIKETIK DALAM KG, sama seperti `pk:`/`cr:`. Tempatnya
+        # `silo:<id>` atau `tumpukan` persis; `tersedia()` yang menjaga
+        # pagarnya (pemilik tempat vs pemilik perintah).
+        tempat = pilih[3:].strip()
+        if tempat == "tumpukan":
+            return bk.BarisPerintah(tipe="pk_g2", silo_id=None,
+                                    berat_kg=float(jumlah))
+        if tempat.startswith("silo:") and tempat[5:].isdigit():
+            return bk.BarisPerintah(tipe="pk_g2", silo_id=int(tempat[5:]),
+                                    berat_kg=float(jumlah))
+        raise HTTPException(400, f"Tempat PK Gudang 2 tak dikenal: {tempat}.")
     nilai = pilih[3:] if pilih.startswith("bj:") else pilih
     bagian = nilai.split("|")
     if not bagian or not bagian[0].isdigit():
@@ -1459,9 +1497,22 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/polishing-terkini"},
                  {"name": "berat_kg", "label": "Berat (kg)", "type": "number"},
              ]},
+            # ⚠ SEMPAT DICABUT 7 Oktober 2026, DIKEMBALIKAN hari yang sama —
+            # bukan digantikan "Masukkan broken ke silo"
+            # (`masukkan_broken_silo`, katalog operator Gudang 2 di
+            # `api.py`), melainkan BERDAMPINGAN: keduanya menjawab
+            # pertanyaan yang berbeda. Ini mencatat hasil mesin SEBAGAI
+            # curah (belum punya tujuan); itu memindahkan curah yang SUDAH
+            # tercatat ke silo (sumbernya otomatis, curah dulu lalu karung
+            # dibongkar bila kurang — menggantikan "Pindah broken ke silo"
+            # yang lama, bukan langkah ini). Laporan lapangan susulan hari
+            # yang sama ("ada tombol sisa dicurah" di kartu Tunggu packing)
+            # justru BUTUH langkah ini tetap ada & terjangkau lewat katalog
+            # (`MENU["catat_broken"]`, dibuka kartu lewat `?buka=` — lihat
+            # `_kartu_beras_curah`).
             {"id": "catat_broken", "label": "🌾 Catat broken (curah)",
              "post": "/api/actions/catat-broken",
-             "hint": "Langkah WAJIB sebelum broken bisa dipindah ke silo "
+             "hint": "Langkah WAJIB sebelum broken bisa dimasukkan ke silo "
                      "broken untuk disosoh ulang. Yang dikarungi (dijual "
                      "apa adanya) dicatat lewat packing — keduanya mengambil "
                      "dari hasil mesin yang sama dan saling mengurangi.",
@@ -1798,6 +1849,68 @@ async def barang_jasa(jasa: str = "", user: User = Depends(pengguna_aksi)) -> li
                     out.append({"value": f"pk:{p.kode_proses}",
                                 "label": f"PK {p.kode_proses} · {kg(sisa)} "
                                          "(isi dalam kg)"})
+        # ── Hasil samping CURAH — pesan kerja 11, Lubang terbesar ──
+        #
+        # Sebelum ini picker TAK PERNAH menawarkan baris `cr:`, jadi menir/
+        # broken/reject/bekatul curah milik pesanan ini TAK ADA jalan
+        # keluarnya sama sekali — pesanan bisa ditutup (sebelum `sisa_jasa`
+        # dibetulkan juga) sementara barangnya masih di gudang. `_satu_baris`
+        # (dipanggil `_baris_dari_borang`) SUDAH mengenal awalan `cr:`; yang
+        # kurang cuma picker ini menawarkannya.
+        from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_curah
+        from app.services.stok import nama_produk
+
+        for jenis_curah in ("broken", "menir", "reject", "bekatul"):
+            sisa_curah = await hitung_stok_byproduct_curah(db, jenis_curah, jasa_id=jid)
+            if sisa_curah > 0.5:
+                out.append({"value": f"cr:{jenis_curah}",
+                            "label": f"{nama_produk(jenis_curah)} (curah) · "
+                                     f"{kg(sisa_curah)} (isi dalam kg)"})
+        # ── PK Gudang 2 — pesan kerja 11, Lubang kedua ──
+        #
+        # Sebelum ini PK yang sudah berdiri di silo/tumpukan Gudang 2 tak
+        # punya jalan keluar sama sekali: pesanan yang berhenti di tahap ini
+        # tak bisa pernah ditutup. Dicek LANGSUNG lewat pemilik tempatnya
+        # (bukan cuma "ada stok jasa"), sebab satu silo satu pemilik — kalau
+        # pemiliknya pesanan LAIN, silo ini bukan untuk pesanan ini walau
+        # stok "jasa"-nya sendiri positif.
+        from app.penggilingan.gudang2.service import (_g2_warehouse_id,
+                                                       hitung_stok_silo,
+                                                       hitung_stok_tumpukan)
+        from app.services.jasa import pemilik_silo_g2, pemilik_tumpukan_g2
+        from app.models import Silo as _Silo
+
+        g2_wid = await _g2_warehouse_id(db)
+        for silo in (await db.execute(
+            select(_Silo).where(_Silo.warehouse_id == g2_wid, _Silo.jenis_isi == "pk")
+            .order_by(_Silo.nama_silo)
+        )).scalars().all():
+            if jid not in await pemilik_silo_g2(db, silo.id):
+                continue
+            sisa_silo = await hitung_stok_silo(db, silo.id, pemilik="jasa")
+            if sisa_silo > 0.5:
+                out.append({"value": f"g2:silo:{silo.id}",
+                            "label": f"PK Gudang 2 · Silo {silo.nama_silo} · "
+                                     f"{kg(sisa_silo)} (isi dalam kg)"})
+        if jid in await pemilik_tumpukan_g2(db):
+            sisa_tumpukan = await hitung_stok_tumpukan(db, pemilik="jasa")
+            if sisa_tumpukan > 0.5:
+                out.append({"value": "g2:tumpukan",
+                            "label": f"PK Gudang 2 · Tumpukan · "
+                                     f"{kg(sisa_tumpukan)} (isi dalam kg)"})
+        # ── Gabah kering ditimbang (pesan kerja 12/12A) — tumpukan Gudang 1 ──
+        from app.models import GabahKeringLot
+        from app.penggilingan.gudang1.services.gabah_kering import (
+            pending_gabah_kering_kg)
+
+        for lot in (await db.execute(
+            select(GabahKeringLot).where(GabahKeringLot.jasa_id == jid)
+        )).scalars().all():
+            sisa_gkr = await pending_gabah_kering_kg(db, lot.id)
+            if sisa_gkr > 0.5:
+                out.append({"value": f"gk:{lot.kode_lot}",
+                            "label": f"Gabah kering {lot.kode_lot} · "
+                                     f"{kg(sisa_gkr)} (isi dalam kg)"})
     return out
 
 

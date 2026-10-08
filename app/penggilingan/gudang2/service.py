@@ -28,6 +28,8 @@ from app.models import (
     Jasa,
     BrokenKeSilo,
     InternalTransfer,
+    OutgoingItem,
+    OutgoingRecord,
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,
@@ -255,7 +257,7 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     silo = await db.get(Silo, silo_id)
     if silo is not None and silo.jenis_isi == "broken":
         return await _hitung_stok_silo_broken(db, silo_id, pemilik=pemilik)
-    # ── SATU kalimat pemilik, TIGA bagian hitungan ──
+    # ── SATU kalimat pemilik, EMPAT bagian hitungan ──
     #
     # Dulu saringannya cuma dipasang pada dua yang MASUK; `terpakai` tak
     # disaring sama sekali. Akibatnya satu proses sosoh barang pelanggan
@@ -278,6 +280,15 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         .where(PolishingSiloUsage.silo_id == silo_id,
                # Hanya proses yang berat_akhir-nya sudah diisi.
                PolishingSiloUsage.berat_akhir_kg.isnot(None)))
+    # Suku KEEMPAT, lahir bersamaan dengan jalur pengambilan PK Gudang 2
+    # (pesan kerja 7 Oktober 2026, butir 4 — migrasi 0076): pengambilan tanpa
+    # suku pengurang ini membuat PK terbaca utuh sesudah diangkut, dan silo
+    # yang terbaca berisi padahal sudah kosong menolak isian berikutnya.
+    q_keluar = (select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+                .join(OutgoingRecord,
+                      OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+                .where(OutgoingItem.item_type == "pk_g2",
+                       OutgoingItem.silo_id == silo_id))
     if pemilik != "semua":
         syarat_langsung.append(milik(PkGudang2Intake))
         q_tumpukan = q_tumpukan.join(
@@ -288,6 +299,7 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
             PolishingProcess,
             PolishingProcess.id == PolishingSiloUsage.polishing_process_id
         ).where(milik(PolishingProcess))
+        q_keluar = q_keluar.where(milik(OutgoingRecord))
     masuk_langsung = (
         await db.execute(
             select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
@@ -303,7 +315,9 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     ).scalar_one()
     masuk_dari_tumpukan = (await db.execute(q_tumpukan)).scalar_one()
     terpakai = (await db.execute(q_terpakai)).scalar_one()
-    return float(masuk_langsung) + float(masuk_dari_tumpukan) - float(terpakai)
+    keluar = (await db.execute(q_keluar)).scalar_one()
+    return (float(masuk_langsung) + float(masuk_dari_tumpukan)
+            - float(terpakai) - float(keluar))
 
 
 async def _hitung_stok_silo_broken(db: AsyncSession, silo_id: int, *,
@@ -336,27 +350,44 @@ async def _hitung_stok_silo_broken(db: AsyncSession, silo_id: int, *,
 
 async def hitung_stok_tumpukan(db: AsyncSession, *,
                                pemilik: str = "semua") -> float:
-    """Stok tumpukan G2 = total masuk sbg tumpukan − total sudah dipindah ke silo.
+    """Stok tumpukan G2 = masuk sbg tumpukan − dipindah ke silo − diambil keluar.
 
     `pemilik` bawaannya "semua" — isi FISIK lantainya, dan itu yang benar untuk
     penjaga kapasitas: lantai tak peduli milik siapa barang yang berdiri di
     atasnya. "pabrik" untuk pertanyaan milik, "jasa" untuk titipannya yang
     disebut di sebelahnya. Lihat `hitung_stok_silo`.
+
+    Suku KETIGA (`keluar`), lahir bersamaan dengan jalur pengambilan PK
+    Gudang 2 (pesan kerja 7 Oktober 2026, butir 4 — migrasi 0076):
+    `outgoing_items.silo_id IS NULL` menandai PK yang diambil DARI TUMPUKAN
+    (bukan "tak diisi" — lihat docstring kolomnya), jadi syaratnya `IS NULL`
+    SEKALIGUS `item_type="pk_g2"`, bukan salah satu saja — tanpa yang kedua
+    baris finished_goods/byproduct_curah/pk_langsung (yang `silo_id`-nya
+    juga selalu NULL) akan ikut terjumlah ke sini.
     """
     q_masuk = (select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0))
                .where(PkGudang2Intake.tujuan == "ditumpuk"))
     q_pindah = select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
+    q_keluar = (select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+                .join(OutgoingRecord,
+                      OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+                .where(OutgoingItem.item_type == "pk_g2",
+                       OutgoingItem.silo_id.is_(None)))
     if pemilik != "semua":
         syarat = (PkGudang2Intake.jasa_id.is_(None) if pemilik == "pabrik"
                   else PkGudang2Intake.jasa_id.isnot(None))
+        syarat_keluar = (OutgoingRecord.jasa_id.is_(None) if pemilik == "pabrik"
+                         else OutgoingRecord.jasa_id.isnot(None))
         q_masuk = q_masuk.where(syarat)
         q_pindah = q_pindah.join(
             PkGudang2Intake,
             PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id
         ).where(syarat)
+        q_keluar = q_keluar.where(syarat_keluar)
     masuk = (await db.execute(q_masuk)).scalar_one()
     sudah_dipindah = (await db.execute(q_pindah)).scalar_one()
-    return float(masuk) - float(sudah_dipindah)
+    keluar = (await db.execute(q_keluar)).scalar_one()
+    return float(masuk) - float(sudah_dipindah) - float(keluar)
 
 
 async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
@@ -1543,6 +1574,212 @@ async def pindah_broken_ke_silo(
     return PindahBrokenResult(
         kode_pindah=move.kode_pindah, nama_silo=nama_silo, berat_kg=float(move.berat_kg),
         sisa_broken=sisa - float(move.berat_kg), ke_proses=ke_proses,
+    )
+
+
+@dataclass
+class MasukkanBrokenResult:
+    nama_silo: str
+    moved_kg: float
+    dibongkar_dari_karung_kg: float
+    kodes: list[str]
+
+
+async def masukkan_broken_ke_silo(
+    db: AsyncSession, *, user: User, kode_pol: str | None, nama_silo: str | None,
+    berat_kg: float | None, jasa_id: int | None = None, tanggal=None, jam=None,
+) -> MasukkanBrokenResult:
+    """SATU aksi: masukkan broken ke silo. Sumbernya otomatis — curah dulu
+    (FIFO), lalu BONGKAR KARUNG bila curah kurang. Sisa dari karung yang
+    dibongkar tapi tak terpakai tetap jadi curah di stok.
+
+    Mengganti dua langkah lama ("Catat broken (curah)" lalu "Pindah broken ke
+    silo"): keduanya menuntut operator menjawab pertanyaan yang salah —
+    "berapa yang MASIH BELUM TERCATAT" — padahal yang ingin ia katakan cuma
+    "berapa yang masuk silo sekarang". Laporan pemilik 7 Oktober 2026:
+    mengetik 5.000 kg berakhir sebagai "tercatat melebihi hasil mesin 500 kg"
+    tanpa operator pernah salah ketik — sebabnya murni bentuk borangnya.
+
+    ⚠ `kode_pol` WAJIB — TIDAK ADA fallback "proses terbaru". `_proc_by_kode`
+    (dipakai `catat_broken`/`catat_bekatul`) jatuh ke proses PALING BARU
+    DIBUAT bila kode-nya kosong, tanpa peduli proses itu punya broken sama
+    sekali — pintu masuk cacat yang sama persis tak boleh terulang di sini.
+    """
+    from app.penggilingan.inventory.finished_goods import _proc_by_kode
+    from app.penggilingan.inventory.models import (ByproductStock, FinishedGoodsStock,
+                                                   PackageSize, ProductSku)
+
+    g2_wid = await _g2_warehouse_id(db)
+    if not is_operator_gudang2(user, g2_wid):
+        raise Gudang2Error(
+            "🔒 Memasukkan broken ke silo hanya bisa dilakukan oleh "
+            "Operator Gudang 2 (atau admin)."
+        )
+    if not berat_kg or float(berat_kg) <= 0:
+        raise Gudang2Error("Sebutkan berat yang masuk silo (kg), lebih dari 0.")
+    berat_kg = float(berat_kg)
+    if not nama_silo:
+        raise Gudang2Error("Sebutkan silo broken tujuannya.")
+    silo = await get_g2_silo(db, nama_silo)
+    if silo is None:
+        raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
+    if silo.jenis_isi != "broken":
+        raise Gudang2Error(
+            f"Silo {nama_silo} bukan silo broken — pilih silo yang isinya "
+            "memang broken.")
+    if not kode_pol:
+        raise Gudang2Error("Sebutkan proses penyosohannya (POL-...).")
+    proc = await _proc_by_kode(db, kode_pol)
+
+    def _milik(kolom):
+        return kolom.is_(None) if jasa_id is None else kolom == jasa_id
+
+    # ── Pagar: proses TAK BOLEH memakan broken yang ia hasilkan sendiri ──
+    # Sama seperti `pindah_broken_ke_silo`; diperiksa SEKALI di sini karena
+    # seluruh pool (curah MAUPUN karung yang dibongkar) berasal dari proses
+    # yang SAMA (`proc.id`).
+    sedang_dipakai = (await db.execute(
+        select(PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.silo_id == silo.id,
+               PolishingSiloUsage.berat_akhir_kg.is_(None))
+    )).scalars().first()
+    if sedang_dipakai is not None and sedang_dipakai == proc.id:
+        raise Gudang2Error(
+            f"❌ Broken ini keluar dari proses yang SEDANG memakai Silo "
+            f"{nama_silo} — tak bisa dimasukkan ke sana sebelum prosesnya "
+            "ditutup. Pilih silo broken lain, atau tunggu sampai prosesnya "
+            "selesai.")
+
+    # ── Isi silo tujuan harus SEPEMILIK ──
+    await kunci_silo(db, silo.id)
+    try:
+        await pastikan_satu_jasa_bernama(
+            db, list(await pemilik_silo_g2(db, silo.id)) + [jasa_id])
+    except JasaError as e:
+        raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
+
+    # ── Silo sedang disosoh proses LAIN? Daftarkan, dan tolak bila jasa ──
+    #
+    # Dipanggil SEKALI di sini, bukan di langkah 3 — ia bukan sekadar
+    # pembaca, `_catat_masuk_selama_proses` LANGSUNG menulis tambahan ke
+    # `berat_masuk_kg` proses yang sedang memakai silo ini. Kalau baru
+    # dipanggil belakangan (sesudah pool & `BrokenKeSilo` ditulis), gagalnya
+    # pagar jasa di bawah akan menyisakan tulisan yang sudah terlanjur
+    # separuh jalan. Sebangun `pindah_broken_ke_silo`.
+    ke_proses = await _catat_masuk_selama_proses(db, silo.id, berat_kg)
+    if ke_proses and jasa_id is not None:
+        raise Gudang2Error(
+            f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — broken jasa "
+            "tak boleh ditambahkan ke proses yang berjalan.")
+
+    # ── Langkah 1 · kumpulkan curah yang SUDAH tercatat, FIFO ──
+    curah_rows = (await db.execute(
+        select(ByproductStock).where(
+            ByproductStock.jenis_produk == "broken",
+            ByproductStock.source_type == "polishing",
+            ByproductStock.source_id == proc.id, _milik(ByproductStock.jasa_id))
+        .order_by(ByproductStock.waktu, ByproductStock.id)
+        .with_for_update()
+    )).scalars().all()
+    pool: list[tuple[int, float]] = []
+    for row in curah_rows:
+        sisa = await _sisa_broken_row(db, row.id)
+        if sisa > 0.5:
+            pool.append((row.id, sisa))
+    total_curah = sum(s for _, s in pool)
+
+    now = input_time(tanggal, jam)
+    dibongkar_kg = 0.0
+
+    # ── Langkah 2 · kurang? bongkar karung FIFO, SEUKURAN karung penuh ──
+    #
+    # Karung tak bisa dipecah — kekurangan DIBULATKAN KE ATAS ke jumlah
+    # karung penuh (`ceil`), dan sisanya (karung yang sudah dibongkar tapi
+    # tak terpakai memasuki silo) jadi baris curah TERSENDIRI, tetap berdiri
+    # sebagai stok. Karung kosongnya sendiri TIDAK dikembalikan ke Stok
+    # Karung — keputusan pemilik 7 Oktober 2026: "tidak dilacak balik".
+    if total_curah + 0.5 < berat_kg:
+        from math import ceil
+
+        kekurangan = berat_kg - total_curah
+        karung_rows = (await db.execute(
+            select(FinishedGoodsStock)
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(ProductSku.kategori == "broken",
+                   FinishedGoodsStock.source_type == "polishing",
+                   FinishedGoodsStock.source_id == proc.id,
+                   _milik(FinishedGoodsStock.jasa_id))
+            .order_by(FinishedGoodsStock.waktu, FinishedGoodsStock.id)
+            .with_for_update()
+        )).scalars().all()
+        for krow in karung_rows:
+            sisa_butuh = kekurangan - dibongkar_kg
+            if sisa_butuh <= 0.5:
+                break
+            ukuran = (await db.execute(
+                select(PackageSize.ukuran_kg)
+                .join(ProductSku, ProductSku.package_size_id == PackageSize.id)
+                .where(ProductSku.id == krow.product_sku_id)
+            )).scalar_one_or_none()
+            if not ukuran or not krow.jumlah_karung:
+                continue
+            ambil_karung = min(int(krow.jumlah_karung), ceil(sisa_butuh / float(ukuran)))
+            if ambil_karung <= 0:
+                continue
+            ambil_kg = ambil_karung * float(ukuran)
+            krow.jumlah_karung = int(krow.jumlah_karung) - ambil_karung
+            krow.berat_total_kg = float(krow.berat_total_kg) - ambil_kg
+            if krow.jumlah_karung <= 0:
+                await db.delete(krow)
+            dibongkar_kg += ambil_kg
+        if dibongkar_kg + 0.5 < kekurangan:
+            raise Gudang2Error(
+                f"{proc.kode_proses} broken (curah + berkarung) tinggal "
+                f"{total_curah + dibongkar_kg:,.0f} kg — tak bisa memasukkan "
+                f"{berat_kg:,.0f} kg ke silo.".replace(",", "."))
+        new_row = ByproductStock(
+            jenis_produk="broken", source_type="polishing", source_id=proc.id,
+            berat_kg=dibongkar_kg, tanggal=now.date(), waktu=now,
+            input_by=user.id, jasa_id=jasa_id,
+        )
+        db.add(new_row)
+        await db.flush()
+        await log_activity(
+            db, table_name="byproduct_stock", record_id=new_row.id, action="INSERT",
+            changed_by=user.id, aksi="broken_bongkar_karung",
+            new_value=f"{proc.kode_proses}: {dibongkar_kg:,.0f} kg dibongkar dari "
+                      "karung untuk dimasukkan ke silo".replace(",", "."),
+        )
+        pool.append((new_row.id, dibongkar_kg))
+
+    # ── Langkah 3 · masukkan ke silo, FIFO atas pool (curah lama + baru) ──
+    kodes: list[str] = []
+    remaining = berat_kg
+    for row_id, sisa in pool:
+        if remaining <= 0.5:
+            break
+        take = min(sisa, remaining)
+        kode = await next_broken_move_code(db)
+        move = BrokenKeSilo(
+            kode_pindah=kode, byproduct_stock_id=row_id, silo_id=silo.id,
+            berat_kg=take, tanggal=now.date(), waktu=now, input_by=user.id,
+            jasa_id=jasa_id,
+        )
+        db.add(move)
+        kodes.append(kode)
+        remaining -= take
+    await log_activity(
+        db, table_name="broken_ke_silo", record_id=proc.id, action="INSERT",
+        changed_by=user.id,
+        new_value=(f"{proc.kode_proses}: {berat_kg:,.0f}kg → Silo {nama_silo}"
+                  + (f" (termasuk {dibongkar_kg:,.0f}kg dari karung)"
+                     if dibongkar_kg else "")).replace(",", "."),
+    )
+    await segarkan_status_silo(db, silo.id)
+    await db.commit()
+    return MasukkanBrokenResult(
+        nama_silo=nama_silo, moved_kg=berat_kg,
+        dibongkar_dari_karung_kg=dibongkar_kg, kodes=kodes,
     )
 
 

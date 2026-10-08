@@ -1614,6 +1614,96 @@ async def stok_produk(db: AsyncSession, *,
     return kartu
 
 
+async def titipan_dikemas_per_jenis(db: AsyncSession) -> dict[str, float]:
+    """{jenis: kg} — TOTAL titipan (SELURUH pesanan jasa) yang sedang berdiri
+    di gudang, per jenis produk. Dipakai `/stok-produk` untuk menyebut
+    titipannya di sebelah angka pabrik.
+
+    Pesan kerja 10 bagian 0, butir (e): *"SEBUT titipannya di sebelah angka
+    pabrik... angka pabrik apa adanya, titipan di sebelahnya dengan kata
+    'titipan'."* Aturannya DUA SISI (CLAUDE.md): menyaring tanpa menyebut
+    membuat gudang tampak kosong padahal penuh — `stok_produk()` (bawaan,
+    `jasa_id=None`) sudah menyaring titipan KELUAR dari kartu pabrik; fungsi
+    ini yang menjawab separuh kalimat yang tersisa.
+
+    ⚠ BUKAN `stok_produk(jasa_id=<satu pesanan>)` dipanggil berulang — itu
+    N+1 atas SELURUH pesanan berjalan hanya untuk satu angka ringkas. Bentuk
+    di sini MENYALIN `stok_produk()`'s suku `dikemas`/`keluar` apa adanya,
+    cuma saringannya dibalik (`jasa_id IS NOT NULL`, bukan `IS NULL`), dan
+    digabung LINTAS SELURUH pesanan sekaligus — pertanyaannya "berapa
+    titipan total", bukan "titipan siapa", jadi tak perlu dipecah per
+    pesanan di sini (halaman "Produk Jasa" sudah menjawab itu).
+
+    Tak memuat bekatul yang SUDAH beralih milik ke pabrik (`jasa_id IS
+    NULL` sejak dibukukan, keputusan 12) — itu memang bukan titipan lagi,
+    sudah terhitung di kartu pabrik sendiri. Bekatul yang MASIH ber-
+    `jasa_id` (belum dipindah kepemilikannya) tetap ikut terhitung di sini
+    apa adanya, sama seperti jenis lain — tak ada cabang khusus.
+    """
+    from sqlalchemy import func
+
+    from app.penggilingan.inventory.models import (ByproductStock, FinishedGoodsStock,
+                                                    OutgoingItem, OutgoingRecord,
+                                                    ProductSku, RiceQualityStandard)
+
+    dikemas: dict[str, float] = {}
+    for kategori, mutu, kg in (await db.execute(
+        select(ProductSku.kategori, RiceQualityStandard.kode,
+               func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .join(RiceQualityStandard,
+              RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id,
+              isouter=True)
+        .where(FinishedGoodsStock.jasa_id.isnot(None))
+        .group_by(ProductSku.kategori, RiceQualityStandard.kode)
+    )).all():
+        j = jenis_produk(kategori, mutu)
+        dikemas[j] = dikemas.get(j, 0.0) + float(kg)
+
+    keluar_fg: dict[str, float] = {}
+    for kategori, mutu, kg in (await db.execute(
+        select(ProductSku.kategori, RiceQualityStandard.kode,
+               func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+        .join(ProductSku, ProductSku.id == OutgoingItem.product_sku_id)
+        .join(RiceQualityStandard,
+              RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
+              isouter=True)
+        .where(OutgoingItem.item_type == "finished_goods",
+               OutgoingRecord.jasa_id.isnot(None))
+        .group_by(ProductSku.kategori, RiceQualityStandard.kode)
+    )).all():
+        j = jenis_produk(kategori, mutu)
+        keluar_fg[j] = keluar_fg.get(j, 0.0) + float(kg)
+
+    # ── Hasil samping CURAH (belum dikarungi) — suku kedua, jenis yang sama ──
+    #
+    # "Dikemas" di atas cuma menjawab belahan berkarung; menir/broken/reject
+    # pesanan yang MASIH curah (belum dicatat "Catat broken/menir (curah)")
+    # tetap titipan, dan kartu hasil sampingnya memakai `KartuProduk` yang
+    # SAMA dengan beras — jadi suku ini digabung ke dict yang sama, bukan
+    # dijawab terpisah.
+    for jp, kg in (await db.execute(
+        select(ByproductStock.jenis_produk,
+               func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+        .where(ByproductStock.jasa_id.isnot(None))
+        .group_by(ByproductStock.jenis_produk)
+    )).all():
+        dikemas[jp] = dikemas.get(jp, 0.0) + float(kg)
+    for byp, kg in (await db.execute(
+        select(OutgoingItem.jenis_byproduct,
+               func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+        .where(OutgoingItem.item_type == "byproduct_curah",
+               OutgoingRecord.jasa_id.isnot(None))
+        .group_by(OutgoingItem.jenis_byproduct)
+    )).all():
+        keluar_fg[byp] = keluar_fg.get(byp, 0.0) + float(kg)
+
+    return {j: dikemas.get(j, 0.0) - keluar_fg.get(j, 0.0)
+            for j in dikemas if dikemas.get(j, 0.0) - keluar_fg.get(j, 0.0) > 0.5}
+
+
 #: Urutan tampil: beras terbaik lebih dulu, hasil samping menyusul.
 _URUT_BARANG = {j: n for n, j in enumerate(
     ("premium", "medsuper", "medium", "sayur", "beras_putih", "beras_b",

@@ -62,7 +62,8 @@ TIPE_KABAR = "barang_keluar"
 #: tugasnya — dihitung aplikasi, BUKAN dipilih Admin (usul QA, dan benar):
 #: perintah yang mendarat di layar yang salah akan berdiri di sana sampai
 #: seseorang menelepon.
-GUDANG_ITEM = {"finished_goods": G2, "byproduct_curah": G2, "pk_langsung": G1}
+GUDANG_ITEM = {"finished_goods": G2, "byproduct_curah": G2, "pk_langsung": G1,
+               "pk_g2": G2, "gabah_langsung": G1}
 
 
 #: ── Kapan selisih timbang disebut BESAR ──
@@ -127,6 +128,11 @@ class BarisPerintah:
     std_id: int | None = None
     jenis: str | None = None                 # byproduct_curah
     milling_process_id: int | None = None    # pk_langsung
+    #: Tempat asal — pk_g2 SAJA. None = TUMPUKAN (bukan "tak diisi", silo
+    #: tertentu mengisi id-nya) — lihat docstring `OutgoingItem.silo_id`.
+    silo_id: int | None = None               # pk_g2
+    #: Lot gabah kering yang diambil — gabah_langsung SAJA.
+    gabah_kering_lot_id: int | None = None   # gabah_langsung
     jumlah_karung: int | None = None
     berat_kg: float | None = None
     #: Pesanan jasa yang barangnya DIAMBIL — None untuk penjualan pabrik.
@@ -149,8 +155,16 @@ def _kg(n) -> str:
 
 # ────────────────────────── Stok yang benar-benar bisa keluar ──────────────
 
+#: Sentinel pembeda "silo_id tak ditanyakan" dari "ditanyakan, dan jawabannya
+#: tumpukan (None)" — `None` sendiri adalah nilai SAH untuk tumpukan, jadi
+#: pola `proc_id is not None` yang dipakai cabang lain di bawah tak bisa
+#: dipakai ulang untuk `silo_id`.
+_TAK_DIMINTA = object()
+
+
 async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
-                         jenis=None, proc_id=None) -> float:
+                         jenis=None, proc_id=None, silo_id=_TAK_DIMINTA,
+                         gkr_id=None) -> float:
     """Berapa kg barang ini sudah DIPERINTAHKAN keluar tetapi belum dimuat.
 
     Tanpa ini, Admin bisa menerbitkan dua perintah atas 2.000 kg yang sama:
@@ -184,6 +198,16 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
         q = q.where(OutgoingItem.jenis_byproduct == jenis)
     elif proc_id is not None:
         q = q.where(OutgoingItem.milling_process_id == proc_id)
+    elif silo_id is not _TAK_DIMINTA:
+        # `item_type` WAJIB ikut disebut — `silo_id` sendiri NULL untuk
+        # SELURUH jenis barang lain juga (hanya `pk_g2` yang mengisinya),
+        # jadi tumpukan (`silo_id IS NULL`) tanpa syarat ini akan ikut
+        # menjumlah perintah finished_goods/byproduct_curah/pk_langsung yang
+        # sama sekali tak berhubungan.
+        q = q.where(OutgoingItem.item_type == "pk_g2",
+                    OutgoingItem.silo_id == silo_id)
+    elif gkr_id is not None:
+        q = q.where(OutgoingItem.gabah_kering_lot_id == gkr_id)
     return float((await db.execute(q)).scalar_one())
 
 
@@ -204,7 +228,8 @@ def baris_dari_item(it: OutgoingItem, jasa_id: int | None = None,
     return BarisPerintah(
         tipe=it.item_type, sku_id=it.product_sku_id,
         std_id=it.rice_quality_standard_id, jenis=it.jenis_byproduct,
-        milling_process_id=it.milling_process_id,
+        milling_process_id=it.milling_process_id, silo_id=it.silo_id,
+        gabah_kering_lot_id=it.gabah_kering_lot_id,
         jumlah_karung=jumlah_karung, berat_kg=berat_kg,
         jasa_id=jasa_id)
 
@@ -217,7 +242,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
     "dipesan", jadi menguranginya lagi akan menolak muatan yang justru sedang
     dikerjakan sesuai perintahnya.
     """
-    from app.penggilingan.inventory.finished_goods import (hitung_stok_bekatul,
+    from app.penggilingan.inventory.finished_goods import (hitung_stok_byproduct_curah,
                                                            hitung_stok_finished_goods)
     from app.services.stok import nama_produk
     from app.services.transfer import pending_transfer_kg
@@ -232,7 +257,15 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
             db, sku_id=b.sku_id, std_id=b.std_id)
     elif b.tipe == "byproduct_curah":
-        ada, nama = float(await hitung_stok_bekatul(db)), nama_produk(b.jenis or "")
+        # ⚠ DULU SELALU `hitung_stok_bekatul(db)`, apa pun `b.jenis`-nya —
+        # "tersedia('menir')" menjawab stok BEKATUL berlabel "Menir" (pesan
+        # kerja 11 butir 1). `hitung_stok_byproduct_curah` berparameter
+        # jenis, dan pemiliknya diturunkan dari perintahnya sama seperti
+        # `finished_goods` di atas — bukan cuma cacat jenisnya yang
+        # dibetulkan, saringan pemiliknya pun baru ada sejak di sini.
+        ada = float(await hitung_stok_byproduct_curah(db, b.jenis or "",
+                                                       jasa_id=b.jasa_id))
+        nama = nama_produk(b.jenis or "")
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(db, jenis=b.jenis)
     elif b.tipe == "pk_langsung":
         from app.models import MillingProcess
@@ -262,6 +295,60 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         nama = f"PK {p.kode_proses}" if p else "PK"
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
             db, proc_id=b.milling_process_id)
+    elif b.tipe == "pk_g2":
+        from app.penggilingan.gudang2.service import (hitung_stok_silo,
+                                                       hitung_stok_tumpukan,
+                                                       label_tujuan)
+        from app.services.jasa import (nama_pemilik, pemilik_silo_g2,
+                                       pemilik_tumpukan_g2)
+
+        nama_tempat = await label_tujuan(db, None, b.silo_id)
+        pemilik_ids = (await pemilik_silo_g2(db, b.silo_id) if b.silo_id is not None
+                       else await pemilik_tumpukan_g2(db))
+        # ⚠ Dua arah, sama bentuknya dengan `pk_langsung` di atas. Himpunan
+        # HAMPA berarti tempatnya kosong — bukan "bertuan" — jadi tak ada yang
+        # ditolak di sini; `ada` di bawah akan menjawab 0 kg dengan sendirinya.
+        if pemilik_ids and b.jasa_id not in pemilik_ids:
+            milik = await nama_pemilik(db, next(iter(pemilik_ids)))
+            raise BarangKeluarError(
+                f"PK Gudang 2 ({nama_tempat}) "
+                + (f"milik {milik}" if milik else "milik pabrik")
+                + (" — barang jasa tidak dijual pabrik; pengambilannya lewat "
+                   "perintah atas nama pesanannya."
+                   if b.jasa_id is None else
+                   " — bukan barang pesanan ini. Periksa lagi pilihannya."))
+        pemilik_pagar = "pabrik" if b.jasa_id is None else "jasa"
+        ada = float(await (hitung_stok_silo(db, b.silo_id, pemilik=pemilik_pagar)
+                           if b.silo_id is not None
+                           else hitung_stok_tumpukan(db, pemilik=pemilik_pagar)))
+        nama = f"PK Gudang 2 ({nama_tempat})"
+        dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
+            db, silo_id=b.silo_id)
+    elif b.tipe == "gabah_langsung":
+        from app.models import GabahKeringLot
+        from app.penggilingan.gudang1.services.gabah_kering import (
+            pending_gabah_kering_kg)
+        from app.services.jasa import nama_pemilik
+
+        lot = await db.get(GabahKeringLot, b.gabah_kering_lot_id)
+        # ⚠ Dua arah, sama bentuknya dengan `pk_langsung`: gabah kering
+        # pesanan lain tak boleh keluar atas perintah ini, baik sebagai
+        # penjualan pabrik maupun pengambilan oleh pesanan yang BUKAN
+        # pemiliknya.
+        if lot is not None and lot.jasa_id != b.jasa_id:
+            milik = await nama_pemilik(db, lot.jasa_id)
+            raise BarangKeluarError(
+                f"Gabah kering {lot.kode_lot} "
+                + (f"milik {milik}" if milik else "milik pabrik")
+                + (" — barang jasa tidak dijual pabrik; pengambilannya lewat "
+                   "perintah atas nama pesanannya."
+                   if b.jasa_id is None else
+                   " — bukan barang pesanan ini. Periksa lagi pilihannya."))
+        ada = (await pending_gabah_kering_kg(db, b.gabah_kering_lot_id)
+              if lot is not None else 0.0)
+        nama = f"Gabah kering {lot.kode_lot}" if lot else "Gabah kering"
+        dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
+            db, gkr_id=b.gabah_kering_lot_id)
     else:
         raise BarangKeluarError(f"Jenis barang tak dikenal: {b.tipe}.")
     return ada - dipesan, nama
@@ -309,8 +396,11 @@ async def _berat_baris(db: AsyncSession, b: BarisPerintah) -> tuple[float, int |
         return float(b.jumlah_karung) * float(ukuran), int(b.jumlah_karung)
     if not b.berat_kg:
         raise BarangKeluarError("Sebutkan beratnya (kg).")
-    if b.tipe == "pk_langsung":
+    if b.tipe in ("pk_langsung", "pk_g2"):
         return float(b.berat_kg), ceil(float(b.berat_kg) / 50)
+    # `gabah_langsung` SENGAJA tak ikut baris di atas: gabah tak punya
+    # ukuran karung baku (pesan kerja 12/12A) — menurunkan jumlah karung
+    # dari kg÷50 akan mengarang ukuran yang tak pernah ada.
     return float(b.berat_kg), None
 
 
@@ -482,6 +572,7 @@ async def buat_perintah(
             outgoing_record_id=rec.id, item_type=b.tipe,
             product_sku_id=b.sku_id, rice_quality_standard_id=b.std_id,
             jenis_byproduct=b.jenis, milling_process_id=b.milling_process_id,
+            silo_id=b.silo_id, gabah_kering_lot_id=b.gabah_kering_lot_id,
             berat_perintah_kg=berat, jumlah_karung_perintah=karung,
             # Nol, bukan `berat`: stok dihitung dari kolom ini, dan perintah
             # yang belum dimuat tak boleh mengurangi satu kilogram pun.
@@ -519,6 +610,15 @@ def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
                 and it.rice_quality_standard_id == b.std_id)
     if b.tipe == "byproduct_curah":
         return (it.jenis_byproduct or "") == (b.jenis or "")
+    if b.tipe == "pk_g2":
+        # ⚠ BUKAN `milling_process_id` (selalu None di sini, pada KEDUA sisi) —
+        # tempatnya `silo_id`, dan None di situ berarti TUMPUKAN, bukan "tak
+        # diisi". Membiarkannya jatuh ke baris di bawah akan menyamakan silo
+        # manapun dengan tumpukan (None == None) selama `milling_process_id`
+        # keduanya None — yang selalu benar untuk pk_g2.
+        return it.silo_id == b.silo_id
+    if b.tipe == "gabah_langsung":
+        return it.gabah_kering_lot_id == b.gabah_kering_lot_id
     return it.milling_process_id == b.milling_process_id
 
 
@@ -596,7 +696,8 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
             outgoing_record_id=rec.id, item_type=baris.tipe,
             product_sku_id=baris.sku_id, rice_quality_standard_id=baris.std_id,
             jenis_byproduct=baris.jenis,
-            milling_process_id=baris.milling_process_id,
+            milling_process_id=baris.milling_process_id, silo_id=baris.silo_id,
+            gabah_kering_lot_id=baris.gabah_kering_lot_id,
             berat_perintah_kg=berat, jumlah_karung_perintah=karung,
             berat_kg=berat if tambah_muatan else 0,
             jumlah_karung=karung if tambah_muatan else None))

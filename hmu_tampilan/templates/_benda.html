@@ -8,6 +8,17 @@
    `padat` dipakai di Beranda: nama, satu angka, satu keterangan, dan batang
    kemajuan bila benda itu memang punya ukuran "sudah sejauh mana". #}
 
+{# Persen bergaya Indonesia: koma, satu angka di belakang. "0,4%" bukan
+   "0.4%" — titik desimal di layar berbahasa Indonesia dibaca sebagai
+   pemisah ribuan, dan "0.4" terbaca "nol empat" pada angka susut adalah
+   selisih empat ribu kali. Sebangun `psn()` di `riwayat_sosoh.html` —
+   duplikasi SENGAJA: ini presentasi (format angka), bukan hitungan;
+   angkanya sendiri satu sumber (`neraca_sosoh`), lihat catatan `b.neraca`
+   di bawah. #}
+{% macro psn(v) -%}
+  {%- if v is none -%}—{%- else -%}{{ "%.1f"|format(v)|replace(".", ",") }}%{%- endif -%}
+{%- endmacro %}
+
 {% macro penuh(b) -%}
   <div class="benda__judul">
     <span>{{ b.judul or b.kode }}</span>
@@ -23,15 +34,33 @@
       {% endfor %}
     </dl>
   {% endif %}
-  {% if b.anak %}
-    <div class="anak">
-      {% for nama, kg, jam in b.anak %}
-        <div class="anak__baris">
-          <span class="anak__nama">{{ nama }}</span>
-          <span class="anak__kg">{{ kg }}</span>
-          {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
-        </div>
-      {% endfor %}
+  {# ── Neraca LIVE (pesan kerja 7 Oktober 2026) ──
+     Sebangun bar di kartu Riwayat Penyosohan — SATU sumber angka
+     (`gudang2.polishing.neraca_sosoh`, dibawa lewat `b.neraca`), supaya
+     kartu berjalan dan kartu riwayat tak pernah menyebut persen berbeda
+     untuk proses yang sama.
+
+     ⚠ "SEMENTARA", bukan angka akhir — dan itu disebut EKSPLISIT. Proses
+     ini belum selesai: sebagian besar "susut" di sini sebenarnya "belum
+     keluar mesin", bukan kehilangan sungguhan. Menyebutnya seolah final
+     akan membuat operator menuduh mesin bocor padahal penyosohannya belum
+     tuntas.
+     Keadaan timpang (hasil > bahan) TAK digambar — kartu riwayat pun
+     menyembunyikan batangnya saat timpang; di sini sebabnya lebih biasa:
+     entri yang baru separuh diketik, bukan kerusakan. #}
+  {% if b.neraca and b.neraca.bisa_dihitung and not b.neraca.timpang %}
+    {% set p_samping = b.neraca.samping|sum(attribute="persen") %}
+    <div class="neraca" role="img"
+         aria-label="sementara — beras {{ psn(b.neraca.beras.persen) }}, hasil samping
+                     {{ psn(p_samping) }}, belum keluar/susut {{ psn(b.neraca.susut.persen) }}">
+      <span class="neraca__beras" style="width:{{ b.neraca.beras.persen }}%"></span>
+      <span class="neraca__samping" style="width:{{ p_samping }}%"></span>
+      <span class="neraca__susut" style="width:{{ [b.neraca.susut.persen, 0]|max }}%"></span>
+    </div>
+    <div class="bantu" style="margin:-6px 0 8px">
+      sementara · beras {{ psn(b.neraca.beras.persen) }} ·
+      hasil samping {{ psn(p_samping) }} ·
+      belum keluar/susut {{ psn(b.neraca.susut.persen) }}
     </div>
   {% endif %}
   {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
@@ -60,6 +89,32 @@
       </span>
     {% endif %}
   </div>
+{%- endmacro %}
+
+{# ── Bahan — hanya saat kartu di-EXPAND (pesan kerja 7 Oktober 2026) ──
+   Dulu bagian dari `penuh()`, jadi SELALU tampil di ringkasan `<summary>`
+   walau kartunya belum dibuka — daftar asal yang panjang (beberapa silo,
+   beberapa pemasok) membuat ringkasan tenggelam di rincian yang orang
+   belum tentu cari. Dipisah jadi macro sendiri, digambar `blok()` di LUAR
+   `<summary>` tapi di DALAM `<details>` — HTML native yang mengurus
+   sembunyi/tampilnya, tanpa skrip.
+
+   Hanya dipakai kartu ber-`<details>` (yang punya `pilihan`/`tombol`):
+   kartu diam & kartu bertaut langsung (cabang `aksi`/else di `blok()`)
+   tak punya mekanisme expand sama sekali, jadi keduanya TETAP memanggil
+   `penuh()` lalu `penuh_anak()` berurutan, selalu tampil seperti semula. #}
+{% macro penuh_anak(b) -%}
+  {% if b.anak %}
+    <div class="anak">
+      {% for nama, kg, jam in b.anak %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ nama }}</span>
+          <span class="anak__kg">{{ kg }}</span>
+          {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 {%- endmacro %}
 
 {% macro padat(b) -%}
@@ -145,6 +200,10 @@
         {% if b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
             <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
+               sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
+               padat tak pernah menggambar `.anak` sama sekali. #}
+            {% if not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {% for t in b.tombol %}
                 <button type="button"
@@ -168,6 +227,7 @@
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
             <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            {% if not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {# Nilai penunjuk boleh berbeda PER TINDAKAN. Satu kartu memang
                  satu proses, tetapi tiap aksi menyebut proses itu dengan
@@ -189,7 +249,9 @@
         {% elif b.aksi %}
           <a class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}
              href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
-            <div>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</div>
+            {# Tautan langsung tak punya mekanisme expand — bahan TETAP
+               selalu tampil, sama seperti sebelum pemisahan `penuh_anak`. #}
+            <div>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{{ penuh_anak(b) }}{% endif %}</div>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
                  stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
@@ -203,7 +265,9 @@
              diam berisi rincian bisa muncul di aplikasi mana pun. Kartu padat
              tak terkena: `.padat--diam` grid. #}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
-            {% if rapat %}{{ padat(b) }}{% else %}<div>{{ penuh(b) }}</div>{% endif %}
+            {# Kartu diam tak punya mekanisme expand — bahan TETAP selalu
+               tampil, sama seperti sebelum pemisahan `penuh_anak`. #}
+            {% if rapat %}{{ padat(b) }}{% else %}<div>{{ penuh(b) }}{{ penuh_anak(b) }}</div>{% endif %}
           </div>
         {% endif %}
       {% endfor %}

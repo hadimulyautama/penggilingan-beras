@@ -166,6 +166,17 @@ class Baris:
     #: kemajuan palsu lebih buruk daripada tak memberi apa-apa.
     maju: float | None = None
 
+    #: Neraca bobot LIVE (belum final) — beras/samping/susut atas bahan
+    #: baku SEJAUH INI. Hanya penyosohan: giling tak punya pecahan hasil
+    #: (PK saja), dan "susut" atas bahan yang belum semuanya keluar mesin
+    #: akan terbaca sebagai kehilangan padahal cuma belum diproses — label
+    #: di layar WAJIB menyebutnya "sementara", bukan angka akhir.
+    #:
+    #: `NeracaSosoh` dari `gudang2.polishing.neraca_sosoh()` — SATU sumber
+    #: dengan kartu Riwayat Penyosohan (`riwayat_sosoh.html`), supaya angka
+    #: yang sama tak pernah berselisih walau markupnya digambar dua kali.
+    neraca: object | None = None
+
     #: Pemilik titipan — None = pabrik. Dipakai `grup_baris()` untuk
     #: memisahkan kartu titipan dari kartu pabrik yang kebetulan memakai
     #: `aksi` yang sama (mis. "Packing jasa" vs "Tunggu packing", keduanya
@@ -1833,6 +1844,11 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 *([("qc_giling", "Catat mutu sekarang",
                     "Contoh dari beras yang baru keluar mesin — hasilnya dirata-rata",
                     p.kode_proses)] if (boleh_qc and qc_aktif) else []),
+                # Mix bahan — laporan lapangan 7 Oktober 2026: silo lain
+                # dipakai di tengah proses, bukan cuma saat mulai.
+                ("tambah_silo_giling", "Tambah silo (mix bahan)",
+                 "Silo lain ikut jadi bahan — harus sepemilik",
+                 p.kode_proses),
                 ("hentikan_proses", "Hentikan sementara",
                  "Mesin rusak, limbah penuh, jam kerja habis",
                  f"giling:{p.kode_proses}"),
@@ -2083,11 +2099,13 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         asal_lebih = 0
         silo_nama: list[str] = []
         ditambah = 0.0
+        berat_awal_total = 0.0
         for u in (await db.execute(
             select(PolishingSiloUsage)
             .where(PolishingSiloUsage.polishing_process_id == pr.id)
         )).scalars().all():
             ditambah += float(u.berat_masuk_kg or 0)
+            berat_awal_total += float(u.berat_awal_kg or 0)
             s = await db.get(Silo, u.silo_id)
             if s:
                 silo_nama.append(s.nama_silo)
@@ -2100,6 +2118,13 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         macet = await jeda_terbuka(db, "penyosohan", pr.id)
         tertahan = await tertahan_detik(db, "penyosohan", pr.id)
         fakta = [("Silo", " + ".join(silo_nama) or "—")]
+        # Total bahan baku — laporan lapangan 7 Oktober 2026: kartu berjalan
+        # tak menyebutnya, operator cuma melihat "Ditambah" (suku TAMBAHAN
+        # saja) dan harus menjumlah sendiri dengan bahan awal untuk tahu
+        # totalnya. `bahan_kg` di sini JUGA penyebut neraca di bawah — satu
+        # angka, dua pemakaian, supaya keduanya tak bisa berselisih.
+        bahan_kg = berat_awal_total + ditambah
+        fakta.append(("Total bahan baku", _kg(bahan_kg)))
         if ditambah:
             # PK yang dituang selama mesin jalan ikut jadi penyebut rendemen
             # — angka yang ikut menilai pekerjaan tak boleh disembunyikan.
@@ -2123,12 +2148,28 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             .order_by(PolishingOutputLog.waktu_update.desc(),
                       PolishingOutputLog.id.desc())
         )).scalars().all())
+        # Dihitung TANPA SYARAT (dulu hanya `if entri:`) — neraca di bawah
+        # butuh peta ini juga saat belum ada satu entri pun (bahan sudah
+        # berdiri, hasil belum dicatat), bukan cuma saat merangkai fakta
+        # "Hasil".
+        per_jenis: dict[str, float] = {}
+        for e in entri:
+            per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
         if entri:
-            per_jenis: dict[str, float] = {}
-            for e in entri:
-                per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
             fakta.append(("Hasil", " · ".join(
                 f"{j} {_kg(v)}" for j, v in sorted(per_jenis.items()))))
+        # ── Neraca LIVE — pesan kerja 7 Oktober 2026: "progress bar seperti
+        # yang di kartu riwayat proses" ──
+        #
+        # SATU fungsi dengan kartu Riwayat Penyosohan (`neraca_sosoh`,
+        # dipakai `riwayat_sosoh.html`) — angka yang menilai pekerjaan tak
+        # boleh dihitung dua cara. Bedanya cuma penanda: proses ini BELUM
+        # selesai, jadi "susut" di sini sebagian besar cuma "belum keluar
+        # mesin", bukan kehilangan sungguhan — macro-nya (`_benda.html`)
+        # WAJIB menyebut "sementara", sama seperti `beras_curah()` menyebut
+        # "belum final" untuk alasan yang sama.
+        from app.penggilingan.gudang2.polishing import neraca_sosoh
+        neraca = neraca_sosoh(bahan_kg, per_jenis) if bahan_kg > 0.5 else None
         rinci_hasil = [
             (f"{e.jenis}" + (f" · {e.spek}" if e.spek else ""),
              _kg(float(e.berat_kg or 0)),
@@ -2166,6 +2207,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
                  else f"{pr.kode_proses} · mesin sosoh menyala"),
             fakta=fakta,
+            neraca=neraca,
             # Entri hasil MENDAHULUI asal PK-nya: yang dicari orang saat kartu
             # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
             # PK-nya" — asalnya sudah disebut fakta Silo di atas.
@@ -2191,6 +2233,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             ] if macet else [
                 ("hasil_penyosohan", "Perbarui hasil penyosohan",
                  "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
+                # Mix bahan — laporan lapangan 7 Oktober 2026: silo lain
+                # dipakai di tengah proses, bukan cuma saat mulai.
+                ("tambah_silo_penyosohan", "Tambah silo (mix bahan)",
+                 "Silo lain ikut jadi bahan — harus sepemilik", pr.kode_proses),
                 ("hentikan_penyosohan", "Hentikan sementara",
                  "Mesin rusak, listrik padam, jam kerja habis",
                  f"penyosohan:{pr.kode_proses}"),
@@ -2433,7 +2479,26 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
             kelompok="produk", gudang="g2", jasa_id=b.jasa_id,
             pilihan=[("catat_packing", "Catat packing barang jadi",
                       "Memindahkan dari curah ke barang jadi",
-                      f"{b.kode_proses}|{b.jenis}")]))
+                      f"{b.kode_proses}|{b.jenis}")]
+                     # ── Sisa dicurah — laporan lapangan 7 Oktober 2026 ──
+                     #
+                     # Tak seluruh hasil berakhir dikarungi; sebagian memang
+                     # tetap dijual/disimpan curah. Sebelum ini kartu "Tunggu
+                     # packing" hanya menawarkan SATU jalan (mengemas), jadi
+                     # mencatat sisanya sebagai curah menuntut membuka
+                     # katalog umum dan mengetik kode prosesnya sendiri —
+                     # dua langkah untuk pekerjaan yang kartunya sendiri
+                     # sudah tahu kode & jenisnya.
+                     #
+                     # ⚠ Hanya bekatul & broken: keduanya SATU-SATUNYA jenis
+                     # yang punya jalan curah (`catat_bekatul`/`catat_broken`
+                     # → `byproduct_stock`) — menir & reject tak punya
+                     # (`stok.py`'s `curah_saja`). Menawarkan tombol yang
+                     # pasti ditolak lebih buruk daripada tak menawarkannya.
+                     + ([(("catat_bekatul" if b.jenis == "bekatul" else "catat_broken"),
+                         "Sisa dicurah",
+                         "Tidak dikemas — tetap dijual/disimpan curah",
+                         b.kode_proses)] if b.jenis in ("bekatul", "broken") else [])))
     return keluar
 
 

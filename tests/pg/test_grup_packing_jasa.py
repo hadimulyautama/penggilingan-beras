@@ -81,6 +81,62 @@ async def test_grup_packing_jasa_terdaftar_dan_tak_mengganggu_urutan(pg, dua_lot
     assert kunci[-1] == "lain", "komplemen wajib tetap baris terakhir"
 
 
+@pytest.fixture
+async def empat_jenis(pg, pemakai):
+    """Satu penyosohan SELESAI, empat jenis hasil sekaligus: medium (beras),
+    bekatul, broken, menir — supaya tombol "Sisa dicurah" (laporan lapangan
+    7 Oktober 2026) bisa diuji ADA dan TAK ADA pada jenis berbeda dari SATU
+    proses yang sama."""
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.services.seed import seed_master
+
+    await seed_master()
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        p = PolishingProcess(kode_proses="POL-UJIS-01", status="selesai",
+                             waktu_mulai=now_local(), waktu_selesai=now_local(),
+                             created_by=u.id)
+        db.add(p)
+        await db.flush()
+        for jenis, kg in (("medium", 1_000), ("bekatul", 300),
+                          ("broken", 200), ("menir", 100)):
+            db.add(PolishingOutputLog(polishing_process_id=p.id, jenis=jenis,
+                                      berat_kg=kg, waktu_update=now_local(),
+                                      input_by=u.id))
+        await db.commit()
+        return {"kode": p.kode_proses}
+
+
+async def test_sisa_dicurah_hanya_untuk_bekatul_dan_broken(pg, empat_jenis):
+    """Tombol "Sisa dicurah" cuma muncul untuk bekatul & broken — satu-
+    satunya jenis yang punya jalan curah sendiri (`catat_bekatul`/
+    `catat_broken` → `byproduct_stock`). Menir & beras tak punya jalan itu;
+    menawarkan tombol yang pasti ditolak borang lebih buruk daripada tak
+    menawarkannya sama sekali (lihat komentar `_kartu_beras_curah`)."""
+    from app.services import berjalan as svc
+
+    async with pg() as db:
+        kartu = await svc._kartu_beras_curah(db)
+    per_jenis = {b.nilai.split("|", 1)[1]: b for b in kartu}
+    assert set(per_jenis) == {"medium", "bekatul", "broken", "menir"}
+
+    for jenis in ("medium", "menir"):
+        b = per_jenis[jenis]
+        assert [p[0] for p in b.pilihan] == ["catat_packing"], \
+            f"{jenis} tak punya jalan curah, tombolnya harus absen: {b.pilihan}"
+
+    for jenis, aksi_curah in (("bekatul", "catat_bekatul"), ("broken", "catat_broken")):
+        b = per_jenis[jenis]
+        assert [p[0] for p in b.pilihan] == ["catat_packing", aksi_curah], \
+            f"{jenis} harus menawarkan '{aksi_curah}': {b.pilihan}"
+        sisa = b.pilihan[1]
+        assert sisa[1] == "Sisa dicurah"
+        assert sisa[3] == empat_jenis["kode"], \
+            "nilai tombol curah wajib kode_proses TELANJANG, bukan kode|jenis"
+
+
 async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
     import httpx
 

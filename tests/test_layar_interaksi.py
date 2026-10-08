@@ -1068,5 +1068,8 @@ def test_tombol_bekatul_dioper_ke_makronya():
     assert "and boleh_catat %}" in makro, \
         "makronya membaca izin dari konteks — di dalam makro itu Undefined"
     tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
-    assert tpl.count("BOLEH_CATAT) }}") == 2, \
+    # `BOLEH_CATAT` BUKAN lagi argumen terakhir sejak `titipan=titipan`
+    # ditambahkan sesudahnya (pesan kerja 10 bagian 0, butir e) — yang
+    # dijaga tetap sama: izinnya ikut terkirim di KEDUA pemanggilan.
+    assert tpl.count("BOLEH_CATAT, titipan=titipan) }}") == 2, \
         "izinnya tak dioper ke kedua pemanggilan makro (beras & hasil samping)"

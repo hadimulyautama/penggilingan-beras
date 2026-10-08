@@ -112,6 +112,20 @@ class Bobot:
 NOL = Bobot(0.0, PASTI)
 
 
+def kurang(b: Bobot, jumlah_kg: float) -> Bobot:
+    """`b` dikurangi jumlah yang PASTI diketahui (misal yang sudah dikemas
+    dari baris ini) — keadaan kepastian `b` TIDAK berubah, sebab yang
+    dikurangkan sudah terukur sendiri lewat timbangan, bukan tebakan.
+
+    Dipakai `silo._row_bobot` untuk suku keluar BARU (gabah dikeluarkan untuk
+    dikemas) — bila `b.kg` belum diketahui (`None`), tak ada yang bisa
+    dikurangi, jadi dikembalikan apa adanya.
+    """
+    if b.kg is None:
+        return b
+    return Bobot(float(b.kg) - float(jumlah_kg), b.keadaan, b.tak_diketahui, b.asal)
+
+
 def jumlah(items: Iterable[Bobot]) -> Bobot:
     """Jumlah beberapa bobot. Keadaannya yang paling tak pasti di antaranya."""
     kg: float | None = None

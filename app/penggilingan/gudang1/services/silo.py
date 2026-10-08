@@ -21,7 +21,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.penggilingan.gudang1.services.bobot import (
-    NOL, Bobot, dari_batch, dari_batches)
+    NOL, PASTI, Bobot, dari_batch, dari_batches, kurang)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
 from app.services.codegen import next_drying_lot_code
 from app.services.jasa import (
@@ -205,11 +205,37 @@ async def silo_ids_proses(db: AsyncSession, proc: MillingProcess) -> list[int]:
 
 
 async def _row_bobot(db: AsyncSession, row: SiloStorage) -> Bobot:
+    """Bobot baris silo SEKARANG — bobot sumbernya DIKURANGI yang sudah
+    dikeluarkan untuk dikemas (`dikemas_kg`, pesan kerja 12, migrasi 0077).
+
+    ⚠ Tanpa pengurangan ini, gabah yang sudah dikemas+ditimbang tetap
+    terhitung sebagai isi silo — silo yang sudah kosong (seluruhnya sudah
+    dikemas) terbaca penuh, dan isian berikutnya ditolak atas dasar stok
+    yang sudah tak ada. Pola yang sama dengan pesan 8 (broken) & pesan 11
+    (PK G2): jalan keluar baru tanpa suku pengurang membuat stok berbohong.
+
+    `tipe_masuk == "dari_gabah_kering"` (gabah kering DIBONGKAR kembali dari
+    tumpukan, pesan 12A) tak punya `drying_lot_id` maupun `purchase_batch_id`
+    — bobotnya dibaca dari `GabahKeringBongkar.berat_kg`, SNAPSHOT bobot
+    timbang TERAKHIR lot itu pada detik dibongkar (bukan `dari_batch()` batch
+    asalnya — itu bobot pra-pengeringan, dan memakainya menggelembungkan isi
+    silo serta menjatuhkan rendemen giling berikutnya, pesan 12A butir 4b).
+    """
     if row.drying_lot_id:
-        return await _lot_bobot(db, row.drying_lot_id)
-    if row.purchase_batch_id:
-        return dari_batch(await db.get(PurchaseBatch, row.purchase_batch_id))
-    return NOL
+        b = await _lot_bobot(db, row.drying_lot_id)
+    elif row.purchase_batch_id:
+        b = dari_batch(await db.get(PurchaseBatch, row.purchase_batch_id))
+    elif row.tipe_masuk == "dari_gabah_kering":
+        from app.models import GabahKeringBongkar
+        kg = (await db.execute(
+            select(GabahKeringBongkar.berat_kg)
+            .where(GabahKeringBongkar.silo_storage_id == row.id)
+        )).scalar_one_or_none()
+        b = Bobot(float(kg), PASTI) if kg is not None else NOL
+    else:
+        return NOL
+    dikemas = float(row.dikemas_kg or 0)
+    return kurang(b, dikemas) if dikemas else b
 
 
 async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
@@ -273,7 +299,8 @@ class IsiSilo:
 #: nilai baru yang cuma dipakai satu layar adalah nilai yang pembaca berikutnya
 #: tidak tahu harus diapakan. Yang dibetulkan LABELnya.
 _LABEL_ASAL_PABRIK = {"pengeringan": "hasil pengeringan sendiri",
-                      "beli_kering": "gabah beli kering"}
+                      "beli_kering": "gabah beli kering",
+                      "gabah_kering_bongkar": "gabah kering dibongkar dari tumpukan"}
 
 #: Label ASAL untuk barang JASA. Barang jasa TIDAK DIBELI, dan bukan "sendiri".
 #:
@@ -283,7 +310,8 @@ _LABEL_ASAL_PABRIK = {"pengeringan": "hasil pengeringan sendiri",
 #: padahal tak ada yang dibeli dan tak ada yang milik sendiri. Dan kalimat itu
 #: justru dibaca saat memutuskan apa yang digiling.
 _LABEL_ASAL_JASA = {"pengeringan": "hasil pengeringan",
-                    "beli_kering": "gabah kering dibawa langsung"}
+                    "beli_kering": "gabah kering dibawa langsung",
+                    "gabah_kering_bongkar": "gabah kering dibongkar dari tumpukan"}
 
 
 def label_asal(asal: str, jasa_id: int | None) -> str:
@@ -312,17 +340,32 @@ async def isi_silo(db: AsyncSession, silo_id: int) -> list[IsiSilo]:
         # di sana memang disimpan supaya pertanyaan "silo ini isinya milik
         # siapa" tak perlu dua join setiap kali ditanyakan.
         pemilik = await nama_pemilik(db, r.jasa_id)
+        # ⚠ Bobotnya SATU SUMBER dengan `_row_bobot` — ia sudah mengurangi
+        # `dikemas_kg` (pesan kerja 12, migrasi 0077). Dua cara menghitung
+        # bobot baris yang sama akan berselisih begitu salah satunya lupa
+        # suku itu; sebelum perbaikan ini, fungsi ini membaca `_lot_kg`/
+        # `dari_batch` LANGSUNG, melewati pengurangannya sama sekali.
+        kg = await _row_kg(db, r)
         if r.drying_lot_id:
             lot = await db.get(DryingLot, r.drying_lot_id)
             rinci.append(IsiSilo("pengeringan", lot.kode_lot if lot else "lot",
-                                 await _lot_kg(db, r.drying_lot_id), r.drying_lot_id,
+                                 kg, r.drying_lot_id,
                                  jasa_id=r.jasa_id, pemilik=pemilik))
         elif r.purchase_batch_id:
             b = await db.get(PurchaseBatch, r.purchase_batch_id)
             if b:
-                rinci.append(IsiSilo("beli_kering", b.kode_batch,
-                                     dari_batch(b).angka(),
+                rinci.append(IsiSilo("beli_kering", b.kode_batch, kg,
                                      jasa_id=r.jasa_id, pemilik=pemilik))
+        elif r.tipe_masuk == "dari_gabah_kering":
+            from app.models import GabahKeringBongkar, GabahKeringLot
+            kode = (await db.execute(
+                select(GabahKeringLot.kode_lot)
+                .join(GabahKeringBongkar,
+                      GabahKeringBongkar.gabah_kering_lot_id == GabahKeringLot.id)
+                .where(GabahKeringBongkar.silo_storage_id == r.id)
+            )).scalar_one_or_none()
+            rinci.append(IsiSilo("gabah_kering_bongkar", kode or "gabah kering", kg,
+                                 jasa_id=r.jasa_id, pemilik=pemilik))
     return rinci
 
 
@@ -377,7 +420,7 @@ class MasukResult:
     nama_silo: str
     isi: str
     kg: float
-    tipe: str  # dari_pengeringan | langsung_kering
+    tipe: str  # dari_pengeringan | langsung_kering | dari_gabah_kering
     digabung: bool = False  # True bila batch kering digabung ke lot silo yang ada
     #: Apa yang SUDAH ada di silo sebelum ini masuk — supaya peringatan
     #: menyebut isinya, bukan sekadar bahwa silo 'sudah berisi'. Silo yang
@@ -407,6 +450,7 @@ async def masuk_silo(
     nama_silo: str | None,
     kode_lot: str | None,
     kode_batch: str | None,
+    kode_gkr: str | None = None,
     tanggal=None, jam=None,
 ) -> MasukResult:
     if not nama_silo:
@@ -590,6 +634,67 @@ async def masuk_silo(
                        and any(x.asal == "pengeringan" for x in sebelum))
         isi, tipe = batch.kode_batch, "langsung_kering"
         kg = existing_kg + kg_new
+
+    elif kode_gkr:
+        # ── Gabah kering DIBONGKAR kembali dari tumpukan (pesan 12A) ──
+        #
+        # Lewat `masuk_silo` yang sama — bukan menulis `SiloStorage` sendiri
+        # — supaya kunci silo, penjaga satu-pemilik, dan (kalau suatu hari
+        # dipasang lagi) batas kapasitas berlaku di sini juga. Bedanya cuma
+        # bobotnya: BUKAN `dari_batch()` batch asal (itu bobot pra-
+        # pengeringan), melainkan bobot TIMBANG TERAKHIR lot ini — satu-
+        # satunya alasan fitur ini ada.
+        from app.models import GabahKeringLot
+        from app.penggilingan.gudang1.services.gabah_kering import saldo_gabah_kering
+
+        lot = (await db.execute(
+            select(GabahKeringLot).where(GabahKeringLot.kode_lot == kode_gkr)
+            .with_for_update()
+        )).scalars().first()
+        if lot is None:
+            raise SiloError(f"Gabah kering {kode_gkr} tidak ditemukan.")
+        saldo = await saldo_gabah_kering(db, lot.id)
+        if saldo <= 0.5:
+            raise SiloError(f"Gabah kering {kode_gkr} sudah tak bersisa.")
+        # ⚠ TAK DITOLAK bila silo ini sedang digiling — "menolak gabah di
+        # sini berarti menghentikan mesin yang sedang jalan" (aturan yang
+        # sama berlaku untuk kode_lot/kode_batch di atas). Baris sumber yang
+        # didaftarkan nanti (lihat kode di bawah "Gabah yang datang saat
+        # silo SEDANG DIGILING") tak punya `drying_lot_id`/`purchase_
+        # batch_id` — keduanya TIDAK WAJIB SATU TERISI di basis data
+        # (konvensi, bukan CHECK), dan `berat_kg`-nya tetap benar sebab
+        # `_row_bobot` baris ini sudah menjawabnya lewat `GabahKeringBongkar`.
+        try:
+            pemilik_baris = await pastikan_satu_jasa_bernama(
+                db, pemilik_sebelum + [lot.jasa_id])
+        except JasaError as e:
+            raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
+        existing_kg = await _silo_content_kg(db, silo.id)
+        _ensure_cap(silo, nama_silo, existing_kg, saldo)
+        baris = SiloStorage(
+            silo_id=silo.id, purchase_batch_id=None, drying_lot_id=None,
+            tipe_masuk="dari_gabah_kering", tanggal_masuk=now,
+            input_by=user.id, status="terisi",
+            jasa_id=pemilik_baris,
+        )
+        db.add(baris)
+        await db.flush()        # baris.id dibutuhkan GabahKeringBongkar
+        from app.models import GabahKeringBongkar
+        from app.services.codegen import next_gabah_kering_bongkar_code
+
+        db.add(GabahKeringBongkar(
+            kode_pindah=await next_gabah_kering_bongkar_code(db),
+            gabah_kering_lot_id=lot.id, silo_storage_id=baris.id,
+            berat_kg=saldo, waktu=now, input_by=user.id,
+        ))
+        kg_baris = saldo
+        digabung = bool(sebelum)
+        # Sejajar dengan cabang lain: tanda cuma untuk silo PABRIK, dan cuma
+        # bila isi sebelumnya berasal dari DUA BENTUK yang berbeda.
+        campur_asal = (pemilik_baris is None
+                       and any(x.asal != "gabah_kering_bongkar" for x in sebelum))
+        isi, tipe = kode_gkr, "dari_gabah_kering"
+        kg = existing_kg + saldo
     else:
         raise SiloError(
             "Sebutkan pengeringan atau batch yang dimasukkan, contoh:\n"

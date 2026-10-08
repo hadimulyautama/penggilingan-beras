@@ -459,6 +459,57 @@ async def hitung_stok_broken_curah(
     return masuk - keluar - terpakai
 
 
+async def hitung_stok_byproduct_curah(
+    db: AsyncSession, jenis: str, *, jasa_id: int | list[int] | None = None,
+) -> float:
+    """Stok hasil samping CURAH (kg) per JENIS = masuk − keluar, satu fungsi
+    untuk KEEMPAT jenis (`bekatul`, `broken`, `menir`, `reject`).
+
+    Pesan kerja 11, butir 1 — satu-satunya cacat di sini yang SEDANG BERJALAN
+    di pabrik hari ini. `barang_keluar.tersedia()` dulu memanggil
+    `hitung_stok_bekatul()` apa pun `jenis`-nya diminta: "tersedia('menir')"
+    menjawab stok BEKATUL berlabel "Menir", dan Admin bisa menerbitkan
+    perintah muat menir yang tak ada satu kilo pun, tanpa satu pun galat.
+
+    `jenis == "bekatul"`/`"broken"` DIDELEGASIKAN ke `hitung_stok_bekatul()`/
+    `hitung_stok_broken_curah()` — bukan disalin ulang. Keduanya punya
+    nuansa sendiri yang tak boleh hilang: bekatul punya DUA rumah (curah +
+    dikarungi 40 kg, keputusan 28 Sep), broken punya SUKU KETIGA (`terpakai`
+    = sudah dipindah ke silo broken untuk disosoh ulang). `menir`/`reject`
+    (dan jenis baru yang lahir nanti) TAK PUNYA nuansa semacam itu — dua
+    suku polos sudah cukup, dan itu yang dihitung langsung di sini.
+    """
+    if jenis == "bekatul":
+        return await hitung_stok_bekatul(db, jasa_id=jasa_id)
+    if jenis == "broken":
+        return await hitung_stok_broken_curah(db, jasa_id=jasa_id)
+
+    def milik(k):
+        if jasa_id is None:
+            return k.jasa_id.is_(None)
+        if isinstance(jasa_id, (list, tuple, set, frozenset)):
+            return k.jasa_id.in_(jasa_id)
+        return k.jasa_id == jasa_id
+
+    masuk = float((
+        await db.execute(
+            select(func.coalesce(func.sum(ByproductStock.berat_kg), 0)).where(
+                ByproductStock.jenis_produk == jenis, milik(ByproductStock),
+            )
+        )
+    ).scalar_one())
+    keluar = float((
+        await db.execute(
+            select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+            .where(OutgoingItem.item_type == "byproduct_curah",
+                   OutgoingItem.jenis_byproduct == jenis,
+                   milik(OutgoingRecord))
+        )
+    ).scalar_one())
+    return masuk - keluar
+
+
 async def hitung_stok_finished_goods(
     db: AsyncSession, sku_id: int, standard_id: int | None,
     *, jasa_id: int | None = None,

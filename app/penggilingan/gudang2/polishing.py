@@ -146,6 +146,106 @@ async def mulai_penyosohan(
     )
 
 
+@dataclass
+class TambahSiloResult:
+    proc: PolishingProcess
+    silos: list[str]
+    berat_awal_total: float
+
+
+async def tambah_silo_penyosohan(
+    db: AsyncSession, *, user, kode: str | None, nama_silos: list[str] | None,
+    tanggal=None, jam=None,
+) -> TambahSiloResult:
+    """Tambahkan silo lain ke penyosohan yang SEDANG BERJALAN — mix bahan.
+
+    Laporan lapangan 7 Oktober 2026: *"jika awalnya hanya menggunakan 1 silo,
+    tidak bisa menambahkan silo lainnya sebagai sumber bahan baku. pada
+    prakteknya di tengah-tengah proses, silo lainnya juga dipergunakan untuk
+    mix bahan baku jika dibutuhkan."* `mulai_penyosohan` menerima BEBERAPA
+    silo, tetapi hanya pada SAAT MULAI — sesudah itu daftarnya terkunci.
+
+    Bentuknya SEBANGUN `mulai_penyosohan`: satu baris `PolishingSiloUsage`
+    baru per silo yang ditambahkan, `berat_awal_kg` = snapshot stok silo itu
+    SEKARANG (bukan 0 — isinya ikut jadi bahan sejak detik ini, sama seperti
+    `_silo_content_bobot` menjawab isi silo G1 apa adanya saat giling baru
+    dimulai darinya). `rendemen_proses` (jumlah `berat_terpakai_kg` SELURUH
+    baris usage) otomatis menjumlah baris baru ini tanpa kode tambahan di
+    sana — itulah gunanya bahan dilacak PER BARIS, bukan per proses.
+    """
+    proc = await _get_proc(db, kode)
+    if proc.status != "proses":
+        raise Gudang2Error(
+            f"{proc.kode_proses} sudah {proc.status} — tak bisa menambah silo."
+        )
+    letters = [s.upper() for s in (nama_silos or []) if s]
+    if not letters:
+        raise Gudang2Error("Sebutkan silo yang ditambahkan, contoh: `tambah silo B`")
+
+    sudah = set((await db.execute(
+        select(PolishingSiloUsage.silo_id)
+        .where(PolishingSiloUsage.polishing_process_id == proc.id)
+    )).scalars().all())
+
+    silos: list[Silo] = []
+    for letter in dict.fromkeys(letters):
+        silo = await get_g2_silo(db, letter)
+        if silo is None:
+            raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
+        if silo.id in sudah:
+            raise Gudang2Error(
+                f"Silo {letter} sudah jadi bahan {proc.kode_proses} sejak awal."
+            )
+        if await hitung_stok_silo(db, silo.id) <= 0:
+            raise Gudang2Error(f"Silo {letter} kosong — tidak ada yang bisa ditambahkan.")
+        aktif = (await db.execute(
+            select(PolishingSiloUsage.id)
+            .join(PolishingProcess,
+                  PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+            .where(PolishingSiloUsage.silo_id == silo.id,
+                   PolishingProcess.status == "proses")
+        )).first()
+        if aktif:
+            raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
+        silos.append(silo)
+
+    # ── Pemilik silo baru HARUS SAMA dengan pemilik proses ini ──
+    #
+    # Sejajar dengan penjaga di `mulai_penyosohan` — tapi di sini pembandingnya
+    # bukan sesama silo baru, melainkan silo baru LAWAN proses yang sudah
+    # berjalan (`proc.jasa_id`, yang sudah ditetapkan sejak mulai dan tak
+    # pernah berubah). Mencampur pemilik di tengah jalan sama berbahayanya
+    # dengan mencampurnya di awal: rendemen & hasilnya tak bisa dibagi kembali.
+    pemilik_baru: list[int | None] = [proc.jasa_id]
+    for s_ in silos:
+        isi = await pemilik_silo_g2(db, s_.id)
+        pemilik_baru.extend(isi or [None])
+    try:
+        await pastikan_satu_jasa_bernama(db, pemilik_baru)
+    except JasaError as e:
+        raise Gudang2Error(f"❌ {e.args[0]}") from None
+
+    now = input_time(tanggal, jam)
+    total_awal = 0.0
+    for silo in silos:
+        awal = await hitung_stok_silo(db, silo.id)
+        total_awal += awal
+        db.add(PolishingSiloUsage(
+            polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
+        ))
+    await log_activity(
+        db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
+        changed_by=user.id, field_name="silo",
+        new_value=f"{proc.kode_proses} + silo {'+'.join(letters)} ({total_awal:.0f}kg)",
+    )
+    await db.commit()
+    await db.refresh(proc)
+    return TambahSiloResult(
+        proc=proc, silos=[s.nama_silo.replace("Silo ", "") for s in silos],
+        berat_awal_total=total_awal,
+    )
+
+
 # ─────────────────────────── Output (kumulatif) ───────────────────────────
 async def _get_proc(db: AsyncSession, kode: str | None) -> PolishingProcess:
     if not kode:

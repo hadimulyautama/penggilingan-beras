@@ -4,6 +4,8 @@ from app.penggilingan.gudang1.models.gudang1 import (
     DryingLot,
     DryingLotBatch,
     DryingMoistureLog,
+    GabahKeringBongkar,
+    GabahKeringLot,
     JedaProses,
     PurchaseBatch,
     PurchaseBatchVerification,
@@ -21,5 +23,6 @@ from app.penggilingan.gudang1.models.milling import (
 __all__ = [
     "PurchaseBatch", "PurchaseBatchVerification", "DryingLot", "DryingLotBatch",
     "DryingMoistureLog", "DryingCoolingLog", "SiloStorage", "SiloMovingLog",
+    "GabahKeringLot", "GabahKeringBongkar",
     "MillingProcess", "MillingProgressLog", "MillingQcLog",
     "MillingProcessVerification", "JedaProses", ]

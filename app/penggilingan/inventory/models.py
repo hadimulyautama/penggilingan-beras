@@ -348,8 +348,11 @@ class OutgoingRecord(Base, TimestampMixin):
 
 class OutgoingItem(Base, TimestampMixin):
     """Item barang keluar. item_type: finished_goods (karung) / byproduct_curah
-    (bekatul, kg) / pk_langsung (PK dari G1, kg→karung CEIL÷50). Harga OPSIONAL
-    (penetapan harga penuh di modul Penjualan)."""
+    (bekatul, kg) / pk_langsung (PK dari G1, kg→karung CEIL÷50) / pk_g2 (PK
+    dari Gudang 2, kg→karung CEIL÷50 — lihat `silo_id`) / gabah_langsung
+    (gabah kering tertimbang dari G1, kg→karung CEIL÷50 — lihat
+    `gabah_kering_lot_id`). Harga OPSIONAL (penetapan harga penuh di modul
+    Penjualan)."""
 
     __tablename__ = "outgoing_items"
 
@@ -364,6 +367,18 @@ class OutgoingItem(Base, TimestampMixin):
     )
     jenis_byproduct: Mapped[str | None] = mapped_column(String(20))
     milling_process_id: Mapped[int | None] = mapped_column(ForeignKey("milling_process.id"))
+    #: Tempat PK Gudang 2 ini diambil — HANYA untuk `item_type="pk_g2"`.
+    #: NULL berarti dari TUMPUKAN, bukan "tak diisi" — silo tertentu mengisi
+    #: id-nya, tumpukan sengaja tak punya id sendiri (sama seperti
+    #: `PkGudang2Intake.silo_id`, migrasi 0057). `hitung_stok_silo`/
+    #: `hitung_stok_tumpukan` membaca kolom ini sebagai suku KELUAR yang
+    #: harus lahir bersamaan dengan jalur ini — lihat migrasi 0076.
+    silo_id: Mapped[int | None] = mapped_column(ForeignKey("silos.id"))
+    #: Lot gabah kering ini diambil — HANYA untuk `item_type="gabah_langsung"`.
+    #: `gabah_kering.saldo_gabah_kering` membaca kolom ini sebagai suku
+    #: KELUAR — migrasi 0077.
+    gabah_kering_lot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("gabah_kering_lots.id"))
     #: ── DUA ANGKA BERDAMPINGAN, dan yang kedua tak pernah menimpa yang
     #: pertama ── `*_perintah` milik Admin; `jumlah_karung`/`berat_kg` yang
     #: sudah ada berarti YANG BENAR-BENAR DIMUAT, dan dari sanalah stok
