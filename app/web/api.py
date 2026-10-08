@@ -871,6 +871,34 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number"},
              ]},
+            # ── Beras jadi bahan silo — dua pintu (keputusan pemilik 8 Oktober 2026) ──
+            #
+            # "Silo Beras... bisa diisi beras premium, super, maupun medium...
+            # untuk campuran seperti silo broken" + "silo A dan silo B juga
+            # bisa dimasuki beras putih untuk disosoh ulang" — "beras putih"
+            # di sini kalimat APA ADANYA pemilik (beras yang sudah digiling),
+            # bukan bucket teknis "mutu belum ditetapkan" (lihat docstring
+            # `masukkan_beras_ke_silo` untuk kenapa bucket itu tak pernah
+            # punya baris nyata). KEDUA tujuan menerima grade yang SAMA. SATU
+            # aksi untuk keduanya — picker proses sudah menyebut jenisnya,
+            # jadi tujuannya cukup satu daftar silo gabungan (Silo Beras +
+            # silo PK); server yang menolak kombinasi yang salah.
+            {"id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
+             "post": "/api/actions/masukkan-beras-silo",
+             "hint": "Silo Beras → campuran. Silo A/B → bahan sosoh ulang. "
+                     "Sumber otomatis: curah dulu, lalu kemasan dibongkar "
+                     "bila kurang.",
+             "fields": [
+                 {"name": "proses", "label": "Proses & jenis beras", "type": "remote",
+                  "source": "/api/actions/beras-proses-tersedia",
+                  "kosong": "Belum ada beras yang bisa dimasukkan ke silo."},
+                 {"name": "silo", "label": "Silo tujuan (Beras atau PK)", "type": "remote",
+                  "source": "/api/actions/silo-beras-tujuan-g2",
+                  "kosong": "Belum ada Silo Beras atau silo PK. Tambahkan di "
+                           "Pengaturan → Alat."},
+                 {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
+                  "type": "number"},
+             ]},
         ]
     if g2:
         # Pekerjaan OPERATOR Gudang 2 (keputusan pemilik 12 September 2026):
@@ -1298,6 +1326,9 @@ _GRUP_AKSI = {
     # tombolnya ada di kartu PK Stok) — tetap di katalog umum supaya tetap
     # terjangkau. Kartu di Stok (usul pemilik, bagian 5) bisa menyusul.
     "masukkan_broken_silo": "Hasil samping & barang jadi",
+    # Sebangun `masukkan_broken_silo` — belum punya kartu tersendiri, tetap
+    # di katalog umum. Keputusan pemilik 8 Oktober 2026.
+    "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
@@ -1423,7 +1454,8 @@ _ACTION_WH = {
     # hasil samping, dan seluruh barang keluar dikelompokkan ke G2 pula —
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
     "catat_packing": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
-    "masukkan_broken_silo": "g2", "pindah_kepemilikan_produk": "g2",
+    "masukkan_broken_silo": "g2", "masukkan_beras_silo": "g2",
+    "pindah_kepemilikan_produk": "g2",
     "beli_kemasan": "g2", "pindah_kepemilikan_karung": "g2",
     # Rantai barang keluar berperintah. SELURUHNYA g2, termasuk yang dikerjakan
     # Admin: gudangnya milik CATATAN, bukan milik orang yang menekannya, dan
@@ -4113,6 +4145,155 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
                 berat_kg=float(req.berat_kg), jasa_id=jasa_id)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan broken ke silo.")
+    ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
+           .replace(",", ".") if r.dibongkar_dari_karung_kg else "")
+    return {"ok": True,
+            "pesan": f"✓ {r.moved_kg:,.0f} kg masuk Silo {r.nama_silo}{ekor}."
+                     .replace(",", ".")}
+
+
+@router.get("/actions/silo-beras-tujuan-g2")
+async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Silo Gudang 2 ber-`jenis_isi` 'beras' ATAU 'pk' — DUA pintu beras
+    sekaligus (keputusan pemilik 8 Oktober 2026): grade masuk Silo Beras,
+    `beras_putih` masuk silo PK sebagai bahan sosoh ulang. Silo broken
+    SENGAJA tak ikut — bukan tujuan yang sah untuk beras dalam bentuk apa
+    pun. Label menyebut jenisnya supaya operator tak menebak dari nama silo
+    saja; `gudang2.service.masukkan_beras_ke_silo` yang menegakkan pagarnya.
+    """
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        wid = await _g2_warehouse_id(db)
+        for s in (await db.execute(
+            select(Silo).where(Silo.warehouse_id == wid,
+                               Silo.jenis_isi.in_(("beras", "pk")))
+            .order_by(Silo.jenis_isi, Silo.nama_silo)
+        )).scalars().all():
+            kg = await hitung_stok_silo(db, s.id)
+            label_jenis = "Beras" if s.jenis_isi == "beras" else "PK — sosoh ulang"
+            keluar.append({"value": s.nama_silo.replace("Silo ", ""),
+                           "label": f"{s.nama_silo} ({label_jenis}) · {_rp(kg)} kg"
+                                    if kg else f"{s.nama_silo} ({label_jenis}) · kosong"})
+    return keluar
+
+
+@router.get("/actions/beras-proses-tersedia")
+async def beras_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Proses penyosohan × jenis beras (berikut pemiliknya) yang masih bisa
+    dimasukkan ke silo — curah (dihitung) MAUPUN kemasan dijumlah jadi SATU
+    angka per baris, sebangun `broken-proses-tersedia`. `masukkan_beras_ke_
+    silo` sendiri yang memutuskan sumbernya, dan tujuan mana yang berlaku
+    (Silo Beras atau Silo A/B) tak mengubah daftar ini — KEDUANYA menerima
+    grade yang sama (lihat docstring `masukkan_beras_ke_silo`).
+
+    Nilai: `"<kode_pol>|<jenis>|<jasa_id atau kosong>"`.
+    """
+    _require(await _is_g2_operator(user))
+    from sqlalchemy import func, select
+
+    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import _packed_kg, get_standard
+    from app.services.jasa import nama_pemilik
+    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh, nama_produk
+
+    keluar: list[dict] = []
+    async with SessionLocal() as db:
+        # ── Grade: setiap (proses, jenis) yang pernah dihasilkan mesin ──
+        baris_hasil = (await db.execute(
+            select(PolishingOutputLog.polishing_process_id, PolishingOutputLog.jenis)
+            .where(PolishingOutputLog.jenis.in_(BERAS_JENIS))
+            .distinct()
+        )).all()
+        for proc_id, jenis in baris_hasil:
+            proc = await db.get(PolishingProcess, proc_id)
+            if proc is None:
+                continue
+            hasil_kg = (await output_sosoh(db, proc_id)).get(jenis, 0.0)
+            std = await get_standard(db, jenis)
+            dikemas_total = await _packed_kg(db, proc_id, "beras_putih",
+                                             std.id if std else None)
+            dipindah = (await _dipindah_silo_proc(db, [proc_id])).get(
+                (proc_id, jenis), 0.0)
+            curah = max(0.0, float(hasil_kg) - dikemas_total - dipindah)
+            # Pemilik kemasan BOLEH berbeda dari pemilik proses — "pindah
+            # kepemilikan produk" berlaku untuk SKU apa pun. Curah sendiri
+            # tak punya jalur itu, jadi curah selalu milik `proc.jasa_id`.
+            pemilik_kemasan = set((await db.execute(
+                select(FinishedGoodsStock.jasa_id)
+                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+                .where(ProductSku.kategori == "beras_putih",
+                       FinishedGoodsStock.source_type == "polishing",
+                       FinishedGoodsStock.source_id == proc_id,
+                       FinishedGoodsStock.rice_quality_standard_id ==
+                       (std.id if std else None))
+            )).scalars().all())
+            owners = pemilik_kemasan | {proc.jasa_id}
+            for jasa_id in owners:
+                milik_q = (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
+                          else FinishedGoodsStock.jasa_id == jasa_id)
+                kemasan = float((await db.execute(
+                    select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+                    .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+                    .where(ProductSku.kategori == "beras_putih",
+                           FinishedGoodsStock.source_type == "polishing",
+                           FinishedGoodsStock.source_id == proc_id,
+                           FinishedGoodsStock.rice_quality_standard_id ==
+                           (std.id if std else None), milik_q)
+                )).scalar_one())
+                total = (curah if jasa_id == proc.jasa_id else 0.0) + kemasan
+                if total <= 0.5:
+                    continue
+                milik = await nama_pemilik(db, jasa_id)
+                label = (f"{proc.kode_proses} · {nama_produk(jenis)} · "
+                        f"{_rp(total)} kg")
+                if milik:
+                    label += f" · titipan {milik}"
+                keluar.append({"value": f"{proc.kode_proses}|{jenis}|{jasa_id or ''}",
+                               "label": label})
+    return keluar
+
+
+class MasukkanBerasSiloReq(BaseModel):
+    proses: str      # "<kode_pol>|<jenis>|<jasa_id atau kosong>", dari picker di atas
+    silo: str        # nama silo Beras atau PK, mis. "C"
+    berat_kg: Positif
+
+
+@router.post("/actions/masukkan-beras-silo")
+async def act_masukkan_beras_silo(req: MasukkanBerasSiloReq,
+                                  user: User = Depends(pengguna_aksi)) -> dict:
+    """SATU aksi: masukkan beras ke silo — grade ke Silo Beras (campuran),
+    `beras_putih` ke silo PK (bahan sosoh ulang). Lihat `gudang2.service.
+    masukkan_beras_ke_silo`. Gerbangnya SAMA dengan `act_masukkan_broken_silo`.
+    """
+    from hmu_identitas import peran as P
+
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    sisa, _, jasa_txt = (req.proses or "").partition("|")
+    kode_pol, _, jenis = sisa.partition("|")
+    kode_pol, jenis = kode_pol.strip(), jenis.strip()
+    if not kode_pol or not jenis:
+        raise HTTPException(400, "Pilih proses & jenis berasnya dulu.")
+    if not (req.silo or "").strip():
+        raise HTTPException(400, "Pilih silo tujuan dulu.")
+    jasa_id = int(jasa_txt) if jasa_txt.strip().isdigit() else None
+    from app.penggilingan.gudang2.service import Gudang2Error, masukkan_beras_ke_silo
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            r = await masukkan_beras_ke_silo(
+                db, user=u, kode_pol=kode_pol, jenis=jenis, nama_silo=req.silo.strip(),
+                berat_kg=float(req.berat_kg), jasa_id=jasa_id)
+        except Gudang2Error as e:
+            raise _err(e, "Gagal memasukkan beras ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
            .replace(",", ".") if r.dibongkar_dari_karung_kg else "")
     return {"ok": True,

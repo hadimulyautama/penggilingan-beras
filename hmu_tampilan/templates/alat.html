@@ -101,12 +101,12 @@
 </div>
 
 <div>
-  <span class="lbl">Silo Gudang 2 (PK &amp; broken)</span>
+  <span class="lbl">Silo Gudang 2 (PK, broken &amp; beras)</span>
   <div class="kartu">
     {# Isinya ikut disebut sama seperti silo gabah kering di atas; jenisnya
-       (PK / broken) ikut disebut sejak keputusan pemilik 6 Oktober 2026 —
-       silo broken punya wadahnya sendiri, dan itu wajib terlihat sebelum
-       diisi. #}
+       (PK / broken / beras) ikut disebut sejak keputusan pemilik 6 Oktober
+       (broken) dan 8 Oktober 2026 (beras) — tiap silo punya wadahnya
+       sendiri, dan itu wajib terlihat sebelum diisi. #}
     {% for s in silo_g2 %}
       <div class="baris">
         <div class="baris__isi">
@@ -116,8 +116,13 @@
           </div>
         </div>
         <div class="cip">
-          <span class="lencana {{ 'lencana--bahaya' if s.jenis_isi == 'broken' else '' }}">
-            {{ "broken" if s.jenis_isi == "broken" else "PK" }}</span>
+          {% if s.jenis_isi == "broken" %}
+            <span class="lencana lencana--bahaya">broken</span>
+          {% elif s.jenis_isi == "beras" %}
+            <span class="lencana lencana--aman">beras</span>
+          {% else %}
+            <span class="lencana">PK</span>
+          {% endif %}
         </div>
       </div>
     {% else %}
@@ -125,7 +130,7 @@
     {% endfor %}
     <p class="bantu" style="margin-top:8px">
       Silo tidak berbatas isinya. Jenis isinya DITETAPKAN saat dibuat dan
-      tidak bisa diganti — broken dan PK tidak boleh tercampur satu silo.
+      tidak bisa diganti — PK, broken, dan beras tidak boleh tercampur satu silo.
     </p>
   </div>
 
@@ -142,6 +147,7 @@
       <span class="lbl">Isinya</span>
       <label class="sebaris"><input type="radio" name="jenis_isi" value="pk" checked> PK</label>
       <label class="sebaris"><input type="radio" name="jenis_isi" value="broken"> Broken</label>
+      <label class="sebaris"><input type="radio" name="jenis_isi" value="beras"> Beras</label>
     </div>
     <button class="btn btn--utama" type="submit">Tambah silo</button>
   </form>

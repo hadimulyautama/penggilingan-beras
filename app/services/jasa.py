@@ -298,11 +298,18 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
     baris ini, silo broken SELALU terbaca "milik pabrik" — dan broken
     pelanggan yang dituang ke sana akan ikut tersosoh bersama broken pabrik.
 
+    ⚠ SATU jalan masuk BERAS ikut dibaca juga (`beras_ke_silo`, keputusan
+    pemilik 8 Oktober 2026) — bentuknya sama dengan broken: Silo Beras tak
+    punya jalan "langsung"/"lewat tumpukan" sama sekali, dan Silo PK (A/B)
+    kini punya jalan KETIGA ini di samping dua yang lama (`beras_putih` bahan
+    sosoh ulang). Tanpa baris ini, beras pelanggan yang dituang ke silo mana
+    pun terbaca "milik pabrik".
+
     Himpunan HAMPA berarti silonya kosong — BUKAN "milik pabrik" (itu `{None}`).
     Pemanggil yang memperlakukan keduanya sama akan menolak silo kosong, atau
     menerima silo campuran, tergantung arah salahnya.
     """
-    from app.models import BrokenKeSilo, PkGudang2Intake, PkTumpukanToSilo
+    from app.models import BerasKeSilo, BrokenKeSilo, PkGudang2Intake, PkTumpukanToSilo
     # Impor malas: `gudang2.service` mengimpor berkas ini di kepalanya, jadi
     # impor di tingkat modul akan melingkar.
     from app.penggilingan.gudang2.service import hitung_stok_silo
@@ -334,8 +341,15 @@ async def pemilik_silo_g2(db: AsyncSession, silo_id: int) -> set[int | None]:
         .order_by(BrokenKeSilo.waktu.desc(), BrokenKeSilo.id.desc())
         .limit(1)
     )).first()
+    lewat_beras = (await db.execute(
+        select(BerasKeSilo.waktu, BerasKeSilo.jasa_id)
+        .where(BerasKeSilo.silo_id == silo_id)
+        .order_by(BerasKeSilo.waktu.desc(), BerasKeSilo.id.desc())
+        .limit(1)
+    )).first()
 
-    calon = [b for b in (langsung, lewat_tumpukan, lewat_broken) if b is not None]
+    calon = [b for b in (langsung, lewat_tumpukan, lewat_broken, lewat_beras)
+             if b is not None]
     if not calon:
         # Stoknya positif tetapi tak ada satu pun muatan yang menjelaskannya —
         # keadaan yang seharusnya mustahil. Dikembalikan sebagai "milik pabrik"

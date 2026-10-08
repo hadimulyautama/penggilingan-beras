@@ -115,7 +115,8 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
     menu = await _menu_g2(monkeypatch)
     ids = [a["id"] for a in menu]
-    assert ids[:8] == ["pindah_tumpukan_silo", "masukkan_broken_silo",
+    assert ids[:9] == ["pindah_tumpukan_silo", "masukkan_broken_silo",
+                       "masukkan_beras_silo",
                        "mulai_penyosohan", "hasil_penyosohan",
                        "tambah_silo_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
@@ -138,6 +139,10 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     # terjangkau. Beda sengaja dari enam di atas, bukan yang terlewat.
     broken_silo = next(a for a in menu if a["id"] == "masukkan_broken_silo")
     assert not broken_silo.get("kartu") and broken_silo["wh"] == "g2"
+    # `masukkan_beras_silo` (8 Oktober 2026) sebangun — belum punya kartu
+    # tersendiri, tetap digambar di katalog "Catat pekerjaan lain".
+    beras_silo = next(a for a in menu if a["id"] == "masukkan_beras_silo")
+    assert not beras_silo.get("kartu") and beras_silo["wh"] == "g2"
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
     assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]
     assert [jeda.SEBAB_LAIN, "Lainnya — tulis sendiri"] in sebab["options"]

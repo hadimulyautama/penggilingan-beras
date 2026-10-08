@@ -260,6 +260,47 @@ class BrokenKeSilo(Base, TimestampMixin):
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
+class BerasKeSilo(Base, TimestampMixin):
+    """Beras (curah/berkemasan) dipindah jadi bahan baku silo — dua pintu,
+    keputusan pemilik 8 Oktober 2026:
+
+      · Silo Beras (`jenis_isi='beras'`) — beras GRADE (`jenis` salah satu
+        `stok.BERAS_JENIS`) dicampur untuk disosoh ulang. Sebangun silo
+        broken, "yang jelas beras... untuk campuran".
+      · Silo A/B (`jenis_isi='pk'`, TAK berubah bentuknya) — `beras_putih`
+        (mutu belum ditetapkan) ikut masuk sebagai bahan sosoh ulang.
+
+    BEDA dari `BrokenKeSilo`: tak ada baris `byproduct_stock` sumbernya —
+    curah beras murni aritmetika (`stok.beras_curah`: keluar mesin − dikemas),
+    bukan tabel. Baris ini karena itu menunjuk `polishing_process_id` +
+    `jenis` LANGSUNG, dan `jenis`-nya WAJIB disimpan (satu proses bisa
+    menghasilkan beberapa grade sekaligus — beda dari broken yang jenisnya
+    selalu tunggal). `stok.beras_curah()`/`stok_produk()` membaca tabel ini
+    untuk menyaring jumlah yang sudah pindah ke silo dari "belum dicatat" —
+    tanpanya beras yang sudah masuk silo akan terbaca DUA KALI begitu
+    silonya disosoh ulang: sekali di sini, sekali lagi sebagai hasil baru.
+
+    Kode: BRS-YYYYMMDD-NN.
+    """
+
+    __tablename__ = "beras_ke_silo"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    polishing_process_id: Mapped[int] = mapped_column(
+        ForeignKey("polishing_process.id"), nullable=False)
+    #: Grade yang dipindah — salah satu `stok.BERAS_JENIS`, atau "beras_putih".
+    jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    #: Pemilik beras yang dipindah — DISALIN dari proses sumbernya (pola
+    #: sama `BrokenKeSilo.jasa_id`), bukan dibaca menyusul lewat join.
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+
+
 class PolishingProcess(Base, TimestampMixin):
     """Proses penyosohan (PK silo → beras putih). Kode: POL-YYYYMMDD-NN.
 

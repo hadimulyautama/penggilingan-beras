@@ -31,6 +31,7 @@ from app.penggilingan.gudang1.models import (
     SiloStorage,
 )
 from app.penggilingan.gudang2.models import (
+    BerasKeSilo,
     BrokenKeSilo,
     PkGudang2Intake,
     PkPurchaseBatch,
@@ -96,6 +97,7 @@ __all__ = [
     "PkGudang2Intake",
     "PkTumpukanToSilo",
     "BrokenKeSilo",
+    "BerasKeSilo",
     "PolishingProcess",
     "PolishingSiloUsage",
     "PolishingOutputLog",

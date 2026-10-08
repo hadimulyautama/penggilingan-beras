@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import now_local
 from app.models import (
     KodeUrut,
+    BerasKeSilo,
     BrokenKeSilo,
     DryingLot,
     GabahKeringBongkar,
@@ -183,6 +184,18 @@ async def next_broken_move_code(db: AsyncSession) -> str:
         .where(BrokenKeSilo.created_at >= start)
     )
     return await _next_sequence(db, "BKS", stmt)
+
+
+async def next_beras_move_code(db: AsyncSession) -> str:
+    """Kode pindah beras→silo (Gudang 2): BRS-YYYYMMDD-NN (reset per hari)."""
+    now = now_local()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(func.count())
+        .select_from(BerasKeSilo)
+        .where(BerasKeSilo.created_at >= start)
+    )
+    return await _next_sequence(db, "BRS", stmt)
 
 
 async def next_gabah_kering_code(db: AsyncSession) -> str:

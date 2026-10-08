@@ -425,6 +425,10 @@ async def tambah_silo(
     untuk menggantinya — campur PK/broken dalam satu silo tak boleh terjadi
     sama sekali, bukan cuma diperingatkan). Silo Gudang 1 selalu 'pk': belum
     ada bentuk lain gabah kering yang butuh wadah terpisah.
+
+    Nilai KETIGA `'beras'` (keputusan pemilik 8 Oktober 2026): Silo Beras,
+    tempat grade (premium/medsuper/medium/sayur/beras_b) dicampur untuk
+    disosoh ulang — sebangun silo broken, bukan silo PK yang diubah bentuk.
     """
     from sqlalchemy import select
 
@@ -440,7 +444,7 @@ async def tambah_silo(
     penuh = f"Silo {nama}"
     g2 = (gudang or "g1").strip().lower() == "g2"
     isi = (jenis_isi or "pk").strip().lower()
-    if isi not in ("pk", "broken"):
+    if isi not in ("pk", "broken", "beras"):
         isi = "pk"
     async with SessionLocal() as db:
         if g2:

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
@@ -905,6 +905,45 @@ async def output_sosoh(db: AsyncSession, proc_id: int) -> dict[str, float]:
     return (await output_sosoh_banyak(db, [proc_id])).get(proc_id, {})
 
 
+async def _dipindah_silo_proc(db: AsyncSession, proc_ids: list[int]
+                              ) -> dict[tuple[int, str], float]:
+    """Σ `beras_ke_silo.berat_kg` per (proses, jenis) — graded beras yang
+    sudah dipindah jadi bahan Silo Beras (sosoh ulang), keputusan pemilik
+    8 Oktober 2026.
+
+    Dipakai `beras_curah()` — kartu "Tunggu packing" tak boleh terus
+    menagih kg yang operator sudah tangani lewat "Masukkan ke silo beras",
+    sebangun alasan `dikemas` dikurangkan di sana. Kuncinya (proses, jenis)
+    bukan cuma proses — satu proses bisa memindahkan beberapa grade
+    sekaligus.
+
+    ⚠ `stok_produk()` (ledger `/stok-produk`) SENGAJA TAK memakai fungsi ini.
+    Broken punya jalan yang SAMA (`broken_ke_silo`) tetapi hanya tersambung
+    ke `stok_produk()` lewat `hitung_stok_broken_curah()` — jalur `curah_saja`
+    yang sudah ada SEBELUM silo broken lahir. Beras grade tak punya jalur
+    "curah_saja" serupa (ia selalu masuk cabang generik `else`), dan
+    menganyam suku baru ke cabang itu — yang sudah tiga kali punya catatan
+    bug di komentarnya sendiri — berisiko menggeser invarian `hasil = curah +
+    dikemas + keluar` yang dijaga `test_persamaan_empat_suku_bertahan_di_
+    setiap_langkah`. Dibiarkan sebagai kesenjangan yang SAMA besarnya dengan
+    yang sudah diterima untuk broken (`_isian_silo` juga tak membaca
+    `broken_ke_silo`) — bukan baru, bukan diperbesar oleh fitur ini.
+    """
+    from app.penggilingan.gudang2.models import BerasKeSilo
+
+    if not proc_ids:
+        return {}
+    keluar: dict[tuple[int, str], float] = {}
+    for pid, jenis, kg in (await db.execute(
+        select(BerasKeSilo.polishing_process_id, BerasKeSilo.jenis,
+               func.coalesce(func.sum(BerasKeSilo.berat_kg), 0))
+        .where(BerasKeSilo.polishing_process_id.in_(proc_ids))
+        .group_by(BerasKeSilo.polishing_process_id, BerasKeSilo.jenis)
+    )).all():
+        keluar[(pid, jenis)] = float(kg)
+    return keluar
+
+
 async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
                       ) -> list[BerasCurah]:
     """Beras (dan hasil samping berkemasan) yang belum dipacking, per lot × jenis.
@@ -951,7 +990,12 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
                                            std.id if std else None)
             else:
                 dikemas = await _packed_kg(db, proc.id, jenis, None)
-            sisa = float(kg) - dikemas
+            # Grade yang sudah dipindah jadi bahan Silo Beras juga "sudah punya
+            # rumah" — pola yang sama dengan dikemas di atas (keputusan pemilik
+            # 8 Oktober 2026). Lihat docstring `_dipindah_silo_proc`.
+            dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
+                (proc.id, jenis), 0.0) if jenis in BERAS_JENIS else 0.0
+            sisa = float(kg) - dikemas - dipindah
             # Nol berarti sudah habis dikemas — bukan kabar, jadi tak berkartu.
             # Yang MINUS justru kabar: lebih banyak dikemas daripada yang keluar
             # mesin, dan itu pertanyaan untuk orangnya, bukan angka untuk
