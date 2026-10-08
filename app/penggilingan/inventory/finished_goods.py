@@ -255,9 +255,20 @@ async def catat_bekatul(
     db: AsyncSession, *, user, kode_pol: str | None, berat_kg: float | None,
     tanggal=None, jam=None,
 ) -> float:
-    """Catat bekatul CURAH hasil penyosohan → byproduct_stock (per kg)."""
+    """Catat bekatul CURAH hasil penyosohan → byproduct_stock (per kg).
+
+    ⚠ `kode_pol` WAJIB eksplisit sejak 8 Oktober 2026 — TIDAK ADA fallback
+    "proses terbaru" (`_proc_by_kode(None)` dulu diam-diam memilih proses
+    yang PALING BARU DIBUAT). Insiden lapangan sungguhan atas `catat_broken`
+    (pagar sebangun, lihat docstringnya) membuktikan jalan itu bisa
+    mendaratkan catatan di proses yang salah. Guard "belum ada catatan
+    hasil → dilewati" di bawah TETAP DIBIARKAN untuk bekatul — beda dari
+    broken — sebab itu kesepakatan sadar, bukan celah yang terlewat.
+    """
     if not berat_kg:
         raise InventoryError("Sebutkan berat bekatulnya (kg).")
+    if not kode_pol:
+        raise InventoryError("Sebutkan proses penyosohannya (POL-...).")
     proc = await _proc_by_kode(db, kode_pol)
     # ── Tak boleh melebihi yang keluar mesin, DIKURANGI yang sudah dikarungi ──
     #
@@ -327,22 +338,45 @@ async def catat_broken(
     broken dari proses jasa tetap barang titipan. `pemilik_hasil()` yang
     memutuskan, bukan cabang di sini — kalau suatu hari sebuah pesanan sepakat
     brokennya DITAHAN juga, yang berubah cuplikan kesepakatannya.
+
+    ⚠⚠ DUA PAGAR DITAMBAH 8 Oktober 2026, dari insiden lapangan sungguhan
+    (bukan dugaan): "catat broken 5.000 kg" mendarat di proses yang BARU
+    DIBUAT 3 menit sebelumnya dan belum punya satu baris hasil mesin pun —
+    bukan proses yang operator maksud.
+
+      1. `kode_pol` kini WAJIB eksplisit — TIDAK ADA fallback "proses
+         terbaru" (`_proc_by_kode(None)` dulu diam-diam memilih proses yang
+         PALING BARU DIBUAT, bukan yang punya broken). Sebangun
+         `masukkan_broken_ke_silo`.
+      2. Proses yang BELUM punya satu baris `polishing_output_logs` broken
+         pun kini DITOLAK, bukan dilewati. BEDA dari `catat_bekatul`
+         (SENGAJA dibiarkan — pabrik historisnya tak selalu menimbang
+         bekatul di mesin): broken SELALU salah satu pilihan wajib di
+         "Catat hasil penyosohan" (`_ALL_JENIS`), jadi "belum ada
+         catatannya" untuk broken bukan praktik normal — ia pertanda proses
+         yang salah dipilih, persis insiden ini.
     """
     if not berat_kg:
         raise InventoryError("Sebutkan berat broken-nya (kg).")
+    if not kode_pol:
+        raise InventoryError("Sebutkan proses penyosohannya (POL-...).")
     proc = await _proc_by_kode(db, kode_pol)
     from app.services.stok import output_sosoh
 
     keluar_mesin = (await output_sosoh(db, proc.id)).get("broken")
-    if keluar_mesin is not None:
-        sisa = float(keluar_mesin) - await _broken_dibukukan(db, proc.id)
-        if float(berat_kg) > sisa + 0.5:
-            raise InventoryError(
-                f"{proc.kode_proses} tinggal {sisa:,.0f} kg broken yang belum "
-                f"dibukukan — tak bisa mencatat {float(berat_kg):,.0f} kg. "
-                f"(Keluar mesin {float(keluar_mesin):,.0f} kg; sudah dicatat "
-                f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
-                .replace(",", "."))
+    if keluar_mesin is None:
+        raise InventoryError(
+            f"{proc.kode_proses} belum punya satu baris pun hasil broken "
+            "tercatat ('Catat hasil penyosohan') — periksa lagi prosesnya; "
+            "broken selalu wajib dicatat di mesin dulu, bukan diasumsikan.")
+    sisa = float(keluar_mesin) - await _broken_dibukukan(db, proc.id)
+    if float(berat_kg) > sisa + 0.5:
+        raise InventoryError(
+            f"{proc.kode_proses} tinggal {sisa:,.0f} kg broken yang belum "
+            f"dibukukan — tak bisa mencatat {float(berat_kg):,.0f} kg. "
+            f"(Keluar mesin {float(keluar_mesin):,.0f} kg; sudah dicatat "
+            f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
+            .replace(",", "."))
     now = input_time(tanggal, jam)
     from app.services.jasa import pemilik_hasil_proses
 
