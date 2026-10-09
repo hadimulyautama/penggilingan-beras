@@ -1893,6 +1893,18 @@ async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -
     kebalikan `/actions/silo-giling-terbuka` (yang menawarkan silo yang
     SUDAH jadi sumber). Berisi, dan belum jadi sumber proses mana pun yang
     sedang berjalan (termasuk proses ini sendiri).
+
+    ⚠ Gerbang "berisi" memakai `_silo_active_rows` (baris ADA atau tidak),
+    BUKAN `_silo_content_kg(...) <= 0` (keputusan pemilik kedua, 9 Oktober
+    2026 — laporan lapangan "gabah yang baru datang tidak bisa ditambahkan
+    ke giling yang berjalan"). `_silo_content_kg` cuma angka yang DIKETAHUI
+    saja (lihat docstringnya): gabah yang baru dituang dan belum sempat
+    ditimbang kedua kalinya punya bobot `tak_diketahui`, bukan nol — tapi
+    `_silo_content_kg`-nya tetap 0 sampai timbangan kedua itu ada. Memakainya
+    sebagai PAGAR (bukan cuma label) membuat silo yang genuinely berisi
+    gabah segar terlihat kosong dan hilang dari daftar ini, persis gejala
+    yang dilaporkan. Sebangun `/actions/silo-siap-giling`, yang sudah benar
+    sejak awal — picker ini satu-satunya yang salah meniru pola `<= 0`.
     """
     _require(await _is_g1_operator(user))
     kode = (induk or "").strip()
@@ -1902,7 +1914,7 @@ async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -
 
     from app.models import MillingProcess
     from app.penggilingan.gudang1.services.silo import (
-        _silo_content_kg, giling_berjalan_untuk_silo, silos_g1)
+        _silo_active_rows, _silo_content_kg, giling_berjalan_untuk_silo, silos_g1)
     async with SessionLocal() as db:
         proc = (await db.execute(select(MillingProcess).where(
             MillingProcess.kode_proses == kode))).scalars().first()
@@ -1910,14 +1922,16 @@ async def silo_g1_tambah(induk: str = "", user: User = Depends(pengguna_aksi)) -
             return []
         out = []
         for si in await silos_g1(db):
-            kg = await _silo_content_kg(db, si.id)
-            if kg <= 0:
+            if not await _silo_active_rows(db, si.id):
                 continue
             jalan = await giling_berjalan_untuk_silo(db, si.id)
             if jalan is not None:
                 continue
             huruf = si.nama_silo.replace("Silo ", "")
-            out.append({"value": huruf, "label": f"Silo {huruf} · {_rp(kg)} kg"})
+            kg = await _silo_content_kg(db, si.id)
+            out.append({"value": huruf,
+                        "label": (f"Silo {huruf} · {_rp(kg)} kg" if kg > 0
+                                 else f"Silo {huruf} · ⚠️ bobot belum ada")})
     return out
 
 

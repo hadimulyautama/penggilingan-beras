@@ -551,3 +551,57 @@ async def test_pindah_curah_benar_benar_berpindah_di_kartu_stok_produk(
         f"'tercatat' pabrik wajib naik jadi 300, bukan {pabrik.dikemas_kg}"
     assert pabrik.sisa_kg == pytest.approx(300), \
         f"sisa pabrik wajib BERTAMBAH 300 kg (0→300), bukan {pabrik.sisa_kg}"
+
+
+async def test_pindah_barang_jadi_benar_benar_berpindah_di_kartu_stok_produk(pg, titipan):
+    """Sebangun `test_pindah_curah_benar_benar_berpindah_di_kartu_stok_produk`,
+    tapi untuk jalur BERKARUNG (`pindah_kepemilikan_barang_jadi`, dipakai
+    beras/menir/reject — TAK PUNYA jalur curah sendiri). Laporan lapangan 9
+    Oktober 2026: "beras pindah kepemilikan hilang dari stok jasa maupun
+    stok sendiri". Dibuktikan di sini TIDAK — `hasil_kg` pabrik memang 0
+    (pabrik tak pernah menyosoh medium Bu Sri sendiri, sama seperti bekatul/
+    broken), tapi `dikemas_kg`/`sisa_kg` persis mengikuti jumlah yang
+    dipindah, di KEDUA sisi.
+
+    `titipan`: jasa1 (p1 = POL-UJIT-01) menghasilkan 5.000 kg medium, 20
+    karung (500 kg, 25 kg/karung) sudah dipacking — belum ada kartu medium
+    pabrik sama sekali.
+    """
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import pindah_kepemilikan_barang_jadi
+
+    jasa, pabrik = await _kartu_jasa_pabrik(pg, titipan["jasa1"], "medium")
+    assert (jasa.hasil_kg, jasa.dikemas_kg, jasa.curah_kg, jasa.sisa_kg) == (
+        5_000, pytest.approx(500), pytest.approx(4_500), pytest.approx(5_000))
+    assert pabrik is None, f"belum ada kartu medium pabrik sebelum pindah: {pabrik}"
+
+    async with pg() as db:
+        u = await db.get(User, titipan["user"])
+        berat = await pindah_kepemilikan_barang_jadi(
+            db, user=u, sku_id=titipan["sku_id"], standard_id=titipan["std_id"],
+            jasa_id=titipan["jasa1"], karung=5)
+    assert berat == pytest.approx(125)  # 5 karung x 25 kg
+
+    jasa, pabrik = await _kartu_jasa_pabrik(pg, titipan["jasa1"], "medium")
+    assert jasa.hasil_kg == 5_000, "hasil mesin tak boleh berubah oleh pindah kepemilikan"
+    assert jasa.curah_kg == pytest.approx(4_500), (
+        f"'belum dicatat' jasa wajib TETAP 4.500, bukan {jasa.curah_kg} — pindah "
+        "kepemilikan karung tak boleh menggeser yang belum pernah dikemas sama sekali")
+    assert jasa.dikemas_kg == pytest.approx(375), \
+        f"dikemas jasa wajib turun jadi 375 (500-125), bukan {jasa.dikemas_kg}"
+    assert jasa.sisa_kg == pytest.approx(4_875), \
+        f"sisa jasa wajib BERKURANG 125 kg (5.000→4.875), bukan {jasa.sisa_kg}"
+
+    assert pabrik is not None, (
+        "kartu medium pabrik WAJIB muncul sesudah menerima pindahan — bila ini "
+        "None, beras yang dipindah genuinely hilang, bukan sekadar 'hasil 0'")
+    assert pabrik.hasil_kg == 0, (
+        "pabrik tak pernah menyosoh medium Bu Sri sendiri — nol di sini BENAR, "
+        "sama seperti kartu bekatul/broken pabrik yang menerima pindahan curah; "
+        "'Hasil sosoh' kosong bukan tanda kehilangan, lihat `dikemas_kg`/`sisa_kg`")
+    assert pabrik.curah_kg == pytest.approx(0), \
+        f"pabrik tak punya 'belum dikemas' sendiri untuk medium ini, {pabrik.curah_kg}"
+    assert pabrik.dikemas_kg == pytest.approx(125), \
+        f"dikemas pabrik wajib jadi 125 (persis yang dipindah), bukan {pabrik.dikemas_kg}"
+    assert pabrik.sisa_kg == pytest.approx(125), \
+        f"sisa pabrik wajib BERTAMBAH persis 125 kg (0→125), bukan {pabrik.sisa_kg}"

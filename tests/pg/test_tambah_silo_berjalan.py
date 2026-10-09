@@ -72,6 +72,50 @@ async def _isi_silo_g1(pg, g1, *, huruf: str, kode: str, kg: float,
         await db.commit()
 
 
+async def test_picker_silo_g1_tambah_tak_menyembunyikan_bobot_belum_diketahui(pg, g1):
+    """Laporan lapangan 9 Oktober 2026: "gabah yang baru datang tidak bisa
+    ditambahkan ke giling yang berjalan" — picker `/actions/silo-g1-tambah`
+    dulu menyaring `_silo_content_kg(...) <= 0`, dan gabah yang BARU dituang
+    (belum sempat ditimbang kedua kalinya, `berat_total_kg IS NULL`) punya
+    bobot DIKETAHUI = 0 meski silonya genuinely berisi — ia lenyap dari
+    daftar "Silo yang ditambahkan", tampak seolah tak ada yang bisa
+    ditambahkan. Pagarnya sekarang `_silo_active_rows` (baris ada/tidak),
+    sama seperti `/actions/silo-siap-giling`.
+    """
+    from app.database import now_local
+    from app.models import PurchaseBatch, SiloStorage, User
+    from app.penggilingan.gudang1.services.milling import start_milling
+    from app.web.api import silo_g1_tambah
+
+    await _isi_silo_g1(pg, g1, huruf="A", kode="GB-TSP-01", kg=6_000)
+
+    # Silo B: gabah SUDAH di silo, tapi truknya belum lewat timbangan kedua —
+    # `berat_total_kg` masih NULL, persis keadaan "baru datang" di lapangan.
+    async with pg() as db:
+        u = await db.get(User, g1["user"])
+        b = PurchaseBatch(
+            kode_batch="GB-TSP-02", supplier_id=g1["pemasok"], berat_total_kg=None,
+            kondisi_gabah="kering", tanggal_pembelian=date.today(),
+            waktu_pembelian=now_local(), input_by=u.id, flag_unverified=True,
+            sumber_berat="perkiraan", status_batch="di_silo")
+        db.add(b)
+        await db.flush()
+        db.add(SiloStorage(silo_id=g1["silo"]["B"], purchase_batch_id=b.id,
+                           tipe_masuk="langsung_kering", tanggal_masuk=now_local(),
+                           input_by=u.id, status="terisi"))
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, g1["user"])
+        r = await start_milling(db, user=u, nama_silo="A")
+
+    async with pg() as db:
+        u = await db.get(User, g1["user"])
+        daftar = await silo_g1_tambah(induk=r.proc.kode_proses, user=u)
+    assert "B" in [x["value"] for x in daftar], \
+        f"Silo B (bobot belum diketahui) hilang dari picker: {daftar}"
+
+
 async def test_tambah_silo_giling_menambah_bahan(pg, g1):
     from app.models import User
     from app.penggilingan.gudang1.services.milling import start_milling, tambah_silo_giling
