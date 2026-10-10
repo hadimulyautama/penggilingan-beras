@@ -1006,13 +1006,20 @@ PEMILIK_BARU = "pesanan-baru"
 
 async def _mati_pemilik_dryer(db: AsyncSession, dryer_id: int,
                               jasa_id: int | None) -> str:
-    """Kalimat sebab bila mesin ini berisi gabah pemilik LAIN — "" bila boleh."""
+    """Kalimat sebab bila mesin ini berisi gabah pemilik LAIN — "" bila boleh.
+
+    ⚠ "pemilik LAIN" dijawab `cocok_pemilik` (sama persis ATAU sama
+    pelanggan), BUKAN `!= jasa_id` apa adanya — lihat ⚠⚠ di docstring-nya
+    untuk cacat lapangan yang memotivasi ini.
+    """
+    from app.services.jasa import cocok_pemilik
+
     isi = (await db.execute(
         select(PurchaseBatch.jasa_id).where(
             PurchaseBatch.dryer_id == dryer_id,
             PurchaseBatch.status_batch == "di_dryer").distinct()
     )).scalars().all()
-    lain = {j for j in isi} - {jasa_id}
+    lain = {j for j in isi if not await cocok_pemilik(db, jasa_id, j)}
     if not lain:
         return ""
     peta = await nama_pemilik_banyak(db, lain)
@@ -1026,7 +1033,12 @@ async def _pemilik_silo(db: AsyncSession, silo_id: int,
 
     Satu silo tak pernah berisi dua pemilik — penjaganya di `masuk_silo` — jadi
     "pemilik isi silo" selalu tunggal bila silonya berisi.
+
+    ⚠ "pemilik LAIN" dijawab `cocok_pemilik`, BUKAN `== {jasa_id}` apa
+    adanya — sebangun `_mati_pemilik_dryer` di atas.
     """
+    from app.services.jasa import cocok_pemilik
+
     isi = (await db.execute(
         select(SiloStorage.jasa_id).where(
             SiloStorage.silo_id == silo_id,
@@ -1036,10 +1048,11 @@ async def _pemilik_silo(db: AsyncSession, silo_id: int,
         return None, ""
     pemilik = {j for j in isi}
     sebutan = await nama_pemilik(db, next(iter(pemilik))) if len(pemilik) == 1 else None
-    if pemilik == {jasa_id}:
+    lain = {j for j in pemilik if not await cocok_pemilik(db, jasa_id, j)}
+    if not lain:
         return sebutan, ""
-    peta = await nama_pemilik_banyak(db, pemilik)
-    sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in pemilik)
+    peta = await nama_pemilik_banyak(db, lain)
+    sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in lain)
     return sebutan, (f"Berisi barang {sebut} — kepemilikan berbeda tak boleh "
                      "digabung")
 

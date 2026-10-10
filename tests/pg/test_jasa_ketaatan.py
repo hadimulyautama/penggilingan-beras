@@ -371,6 +371,50 @@ async def test_dua_pesanan_pelanggan_yang_sama_digabung_otomatis(pg, pemakai, pa
         assert diserap.digabung_ke_id == survivor_id
 
 
+async def test_tombol_dryer_tak_mati_untuk_pelanggan_sama_beda_pesanan(pg, pemakai, pabrik):
+    """Cacat lapangan 10 Oktober 2026: dua truk Pak Didik (dua tiket tanpa
+    penunjuk → dua pesanan administratif berbeda, SAMA pelanggan) — begitu
+    gabah tiket PERTAMA sudah di dryer, layar Antrian tunggu tetap mematikan
+    tombol "Ke Pengering N" untuk tiket KEDUA dengan kalimat "kepemilikan
+    berbeda tak boleh digabung", walau `masuk_dryer`/`add_batches_to_lot`
+    sejak 10 Oktober 2026 akan MENERIMA dan menggabungkannya lewat
+    `pastikan_satu_pemilik` kalau tombolnya sempat ditekan.
+
+    Akarnya: `_mati_pemilik_dryer` (`berjalan.py`) membandingkan `jasa_id`
+    APA ADANYA (`!= jasa_id`), aturan LAMA yang tak pernah ikut diperbarui
+    saat aturan campur-fisik pindah ke pelanggan (`cocok_pemilik`).
+    """
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _mati_pemilik_dryer
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Pak Didik")
+        t1 = await _tiket(db, kode="JT50", berat=5_000, pelanggan_id=pid)
+        t2 = await _tiket(db, kode="JT51", berat=5_000, pelanggan_id=pid,
+                          nopol="B 9 UJ")
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a, jid_a = a.batch.kode_batch, a.jasa.id
+    async with pg() as db:
+        b = await _terima(db, t2, pemakai.id)
+        jid_b = b.jasa.id
+        assert jid_b != jid_a, "dua tiket tanpa penunjuk wajib jadi dua pesanan"
+
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    async with pg() as db:
+        mati = await _mati_pemilik_dryer(db, d.id, jid_b)
+    assert mati == "", (
+        f"tombol 'Ke {d.nama}' MATI untuk pelanggan yang SAMA (beda pesanan "
+        f"administratif) — padahal server akan menerimanya: {mati!r}")
+
+
 async def test_satu_pesanan_boleh_dua_silo_digiling_bersama(pg, pemakai, pabrik):
     """⭐ SEBALIKNYA: barang SEPEMILIK boleh dicampur sebebas barang pabrik.
 

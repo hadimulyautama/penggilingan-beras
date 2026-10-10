@@ -335,6 +335,36 @@ async def pastikan_satu_pemilik(db: AsyncSession, *, user, jasa_ids) -> int | No
     return survivor
 
 
+async def cocok_pemilik(db: AsyncSession, a: int | None, b: int | None) -> bool:
+    """`a` dan `b` boleh dicampur fisik — SAMA PERSIS atau SAMA PELANGGAN,
+    aturan yang identik dengan `pastikan_satu_pemilik` — tanpa menggabungkan
+    apa pun. BACA-SAJA: dipakai layar (`berjalan.py`) untuk menyalakan/
+    mematikan tombol tujuan SEBELUM operator menekannya, titik yang beda dari
+    `pastikan_satu_pemilik` (yang MENULIS penggabungan saat sungguhan
+    dipanggil).
+
+    ⚠⚠ Lahir dari cacat lapangan 10 Oktober 2026: `berjalan.py` sejak awal
+    membandingkan `jasa_id` APA ADANYA (`a != b`) untuk menyalakan/mematikan
+    tombol "Ke Pengering N"/"Ke Silo N" — aturan yang BENAR sebelum
+    `pastikan_satu_pemilik` lahir, tapi tak pernah ikut diperbarui saat
+    aturannya pindah ke pelanggan. Akibatnya dua truk pelanggan yang SAMA
+    (pesanan berbeda) tetap melihat tombolnya MATI dengan kalimat
+    "kepemilikan berbeda tak boleh digabung", walau server sejak hari itu
+    akan MENERIMA dan menggabungkannya kalau tombolnya sempat ditekan — jenis
+    cacat yang docstring `_tujuan_gabah` sendiri memperingatkan ("layar
+    melarang yang sebenarnya boleh").
+    """
+    if a == b:
+        return True
+    if a is None or b is None:
+        return False
+    baris = (await db.execute(
+        select(Jasa.id, Jasa.pelanggan_id).where(Jasa.id.in_({a, b}))
+    )).all()
+    pelanggan = {jid: pel for jid, pel in baris}
+    return a in pelanggan and b in pelanggan and pelanggan[a] == pelanggan[b]
+
+
 def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:
     """Siapa yang MEMILIKI hasil `jenis` dari proses milik `jasa_id`.
 

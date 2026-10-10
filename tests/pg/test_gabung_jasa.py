@@ -213,6 +213,45 @@ async def test_dua_pelanggan_berbeda_tetap_ditolak(pg, dunia):
                 db, user=u, jasa_ids=[dunia["jasa1"], dunia["jasa3"]])
 
 
+# ═══════════════ cocok_pemilik() — kembaran BACA-SAJA utk layar ═══════════════
+
+async def test_cocok_pemilik_pelanggan_sama_beda_pesanan(pg, dunia):
+    """`jasa1` & `jasa2` SAMA pelanggan (Catur), pesanan BEDA — inilah yang
+    `berjalan.py` dulu salah baca sebagai "kepemilikan berbeda" (`!=
+    jasa_id` apa adanya). `cocok_pemilik` TIDAK menggabungkan apa pun
+    (BACA-SAJA) — beda dari `pastikan_satu_pemilik` di atas."""
+    from app.services.jasa import cocok_pemilik
+
+    async with pg() as db:
+        assert await cocok_pemilik(db, dunia["jasa1"], dunia["jasa2"])
+        assert await cocok_pemilik(db, dunia["jasa1"], dunia["jasa1"])
+        assert await cocok_pemilik(db, None, None)
+        assert not await cocok_pemilik(db, dunia["jasa1"], dunia["jasa3"])  # Budi
+        assert not await cocok_pemilik(db, dunia["jasa1"], None)  # jasa vs pabrik
+        assert not await cocok_pemilik(db, None, dunia["jasa1"])  # arah sebaliknya
+
+
+async def test_tombol_silo_g1_tak_mati_untuk_pelanggan_sama_beda_pesanan(pg, dunia):
+    """`_pemilik_silo` (`berjalan.py`, menyalakan/mematikan tombol "Ke Silo
+    N" di layar Antrian tunggu) wajib memakai aturan yang SAMA dengan
+    `pastikan_satu_pemilik` — Silo A berisi `jasa1` (Catur), tombolnya untuk
+    `jasa2` (Catur juga, pesanan lain) wajib TETAP MENYALA."""
+    from app.services.berjalan import _pemilik_silo
+
+    await _isi_silo_g1(pg, dunia, huruf="A", kode="PB-CP-01", kg=5_000,
+                       jasa_id=dunia["jasa1"])
+
+    async with pg() as db:
+        sebutan, mati = await _pemilik_silo(db, dunia["silo"]["A"], dunia["jasa2"])
+    assert mati == "", (
+        f"tombol 'Ke Silo A' MATI untuk pelanggan yang SAMA (Catur, pesanan "
+        f"lain) — padahal server akan menerimanya: {mati!r}")
+
+    async with pg() as db:
+        _, mati_budi = await _pemilik_silo(db, dunia["silo"]["A"], dunia["jasa3"])
+    assert mati_budi != "", "pelanggan BERBEDA (Budi) wajib tetap ditolak"
+
+
 # ═══════════════════════ Skenario lapangan: Gudang 1 ═══════════════════════
 
 async def _isi_silo_g1(pg, dunia, *, huruf: str, kode: str, kg: float, jasa_id: int) -> None:
