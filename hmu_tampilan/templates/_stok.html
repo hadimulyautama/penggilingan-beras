@@ -381,6 +381,25 @@
              style="margin-top:8px">🌾 Catat {{ k.nama|lower }} (curah)</a>
         {% endif %}
       {% endif %}
+      {# ── Masukkan ke silo — laporan lapangan 10 Oktober 2026 ──
+         "Masukkan broken ke silo" (ada sejak 8 Oktober) sempat cuma
+         ditawarkan dari kartu "Tunggu packing" — dan menghilang persis
+         saat brokennya SUDAH SELURUHNYA tercatat (curah MAUPUN dikemas):
+         kartu "Tunggu packing" cuma digambar untuk hasil yang BELUM
+         dicatat, jadi begitu "belum dicatat" (`k.curah_kg`) nol, kartu itu
+         tak pernah ada dan tombolnya ikut lenyap. Di sini digerakkan
+         `k.dikemas_kg` ("TERCATAT" — curah ATAUPUN karung yang sedang
+         berdiri sekarang) — bukan `k.curah_kg` ("belum dicatat") — persis
+         angka yang sumbernya dipakai `masukkan_broken_ke_silo` sendiri
+         (curah dulu, karung dibongkar bila kurang), jadi tombolnya hidup
+         selama ADA yang bisa dipindah, apa pun bentuknya sekarang. HANYA
+         broken: bekatul tak pernah disosoh ulang, tak punya silo untuk
+         ini. #}
+      {% if k.curah_saja and k.jenis == "broken" and k.dikemas_kg > 0.5 and boleh_catat %}
+        <a class="btn btn--kecil"
+           href="/stok-produk?buka=masukkan_broken_silo"
+           style="margin-top:8px">📤 Masukkan ke silo</a>
+      {% endif %}
     </div>
 
     {# ── Dua keadaan yang BERLAWANAN ARAH, dua kalimat yang berbeda ──

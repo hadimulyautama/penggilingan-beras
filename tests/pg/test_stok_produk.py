@@ -1677,3 +1677,64 @@ async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh)
     # jadi `buka=catat_bekatul` muncul di sini hanya kalau bug-nya kembali.
     assert "buka=catat_bekatul" not in h, \
         "kartu Broken salah menawarkan tombol Bekatul"
+    # Dan kartu ini BELUM menawarkan "Masukkan ke silo" — seluruh 800 kg-nya
+    # masih "belum dicatat" (curah_kg > 0, dikemas_kg masih nol), jadi belum
+    # ada apa pun yang bisa dipindah ke silo. Lihat uji di bawah untuk
+    # keadaan sebaliknya.
+    assert "buka=masukkan_broken_silo" not in h
+
+
+async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
+    """Laporan lapangan 10 Oktober 2026: begitu broken SUDAH SELURUHNYA
+    tercatat (tak ada sisa "belum dicatat" sama sekali), tombol "Masukkan
+    ke silo" harus TETAP ada — sebelum perbaikan ini ia cuma hidup di kartu
+    "Tunggu packing", yang lenyap persis pada keadaan ini (kartu itu hanya
+    digambar untuk hasil yang masih belum dicatat).
+
+    110 kg broken: 100 kg (2 karung 50 kg) sudah dipacking + 10 kg sudah
+    dicatat curah — 0 kg "belum dicatat" tersisa.
+    """
+    import httpx
+
+    from app.database import now_local
+    from app.models import ProduksiAkun, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import catat_broken, catat_packing
+    from app.web import csrf, security
+    from hmu_identitas import sandi as S
+    from hmu_identitas.model import mode_bawaan
+
+    from app.main import app
+
+    async with pg() as db:
+        db.add(PolishingOutputLog(polishing_process_id=sosoh["proses_id"],
+                                  jenis="broken", berat_kg=110,
+                                  waktu_update=now_local(),
+                                  input_by=sosoh["user"]))
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await catat_packing(db, user=u, kode_pol=sosoh["kode"], kategori="broken",
+                            material_kode="putih", ukuran=50, jumlah_karung=2)
+        await catat_broken(db, user=u, kode_pol=sosoh["kode"], berat_kg=10)
+
+    async with pg() as db:
+        a = ProduksiAkun(user_id=sosoh["user"], username="uji_broken_silo_tombol",
+                         password_hash=S.hash_sandi("rahasia123"), status="aktif",
+                         mode_perangkat=mode_bawaan("operator"))
+        db.add(a)
+        await db.commit()
+        token = security.buat_token(a)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
+        r = await c.get("/stok-produk")
+    h = r.text
+    assert "buka=masukkan_broken_silo" in h, \
+        "tombol 'Masukkan ke silo' tak tergambar walau broken sudah tercatat penuh"
+    assert "Masukkan ke silo" in h
+    # "belum dicatat" nol — kartunya tak lagi menawarkan "Catat broken (curah)".
+    assert "buka=catat_broken" not in h

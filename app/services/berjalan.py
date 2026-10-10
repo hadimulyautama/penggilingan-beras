@@ -2498,28 +2498,7 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
                      + ([(("catat_bekatul" if b.jenis == "bekatul" else "catat_broken"),
                          "Sisa dicurah",
                          "Tidak dikemas — tetap dijual/disimpan curah",
-                         b.kode_proses)] if b.jenis in ("bekatul", "broken") else [])
-                     # ── Masukkan ke silo — laporan lapangan 10 Oktober 2026 ──
-                     #
-                     # Tombolnya SUDAH ADA ("Masukkan broken ke silo", katalog
-                     # umum) tapi tak pernah ditemukan: ia duduk di kelompok
-                     # "Hasil samping & barang jadi", jauh dari kartu yang
-                     # justru menyebutkan broken-nya. Operator Gudang 2 hidup
-                     # dari kartu (hampir seluruh aksinya `GRUP_KARTU`) — dua
-                     # aksi non-kartu ini (ini & `masukkan_beras_silo`) satu-
-                     # satunya pengecualian, dan itulah yang membuatnya
-                     # "hilang". Tombol di sini cuma MEMBUKA borang yang sama
-                     # (nilai `proses` pra-isi), bukan jalur baru.
-                     #
-                     # ⚠ HANYA broken: silo broken satu-satunya yang berarti
-                     # di sini — beras (Silo Beras) tak dikeluhkan, dan
-                     # bekatul tak punya silo re-sosoh sama sekali (bekatul
-                     # tak pernah disosoh ulang).
-                     + ([("masukkan_broken_silo", "Masukkan ke silo",
-                         "Jadi bahan sosoh ulang — curah dulu, kemasan "
-                         "dibongkar bila kurang",
-                         f"{b.kode_proses}|{b.jasa_id or ''}")]
-                        if b.jenis == "broken" else [])))
+                         b.kode_proses)] if b.jenis in ("bekatul", "broken") else [])))
     return keluar
 
 
