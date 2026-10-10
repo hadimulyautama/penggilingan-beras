@@ -4077,12 +4077,23 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     Satu baris per (proses, pemilik) — dua pemilik pada proses yang sama
     (sebagian sudah pindah kepemilikan) tampil sebagai dua pilihan terpisah,
     sebab keduanya tak boleh tercampur dalam SATU pemindahan ke silo.
+
+    ⚠ Curah dijumlah PER-PROSES lewat `_sisa_broken_row` atas baris
+    `byproduct_stock` proses itu SAJA — BUKAN `hitung_stok_broken_curah()`
+    (itu GLOBAL atas seluruh pemilik, tak menerima `source_id`/proses sama
+    sekali). Dua proses pemilik yang sama dulu menampilkan angka curah yang
+    SAMA PERSIS (keduanya membaca total global yang sama), sampai-sampai
+    proses yang curahnya sendiri sudah nol tetap tampil seolah masih
+    berbobot — lalu ditolak saat disubmit, sebab `masukkan_broken_ke_silo`
+    sendiri SUDAH benar menyaring per-`source_id`. Borang yang menawarkan
+    sesuatu yang kemudian ditolak layanannya membuat orang mengira
+    aplikasinya rusak — laporan lapangan 10 Oktober 2026.
     """
     _require(await _is_g2_operator(user))
     from sqlalchemy import func, select
 
     from app.models import ByproductStock, FinishedGoodsStock, PolishingProcess, ProductSku
-    from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
+    from app.penggilingan.gudang2.service import _sisa_broken_row
     from app.services.jasa import nama_pemilik
 
     keluar: list[dict] = []
@@ -4100,7 +4111,16 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
         )).all())
         for proc_id, jasa_id in sorted(pemilik_curah | pemilik_karung,
                                        key=lambda x: (x[0], x[1] or 0)):
-            curah = await hitung_stok_broken_curah(db, jasa_id=jasa_id)
+            baris_curah = (await db.execute(
+                select(ByproductStock.id)
+                .where(ByproductStock.jenis_produk == "broken",
+                       ByproductStock.source_type == "polishing",
+                       ByproductStock.source_id == proc_id,
+                       (ByproductStock.jasa_id.is_(None) if jasa_id is None
+                        else ByproductStock.jasa_id == jasa_id))
+            )).scalars().all()
+            curah = sum([await _sisa_broken_row(db, rid) for rid in baris_curah]) \
+                if baris_curah else 0.0
             karung = float((await db.execute(
                 select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
                 .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)

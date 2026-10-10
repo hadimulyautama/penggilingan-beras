@@ -223,3 +223,93 @@ async def test_dua_pemilik_berbeda_silo_ditolak(pg, sosoh):
             await masukkan_broken_ke_silo(
                 db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=100,
                 jasa_id=jasa_id)
+
+
+async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, pemakai):
+    """Laporan lapangan 10 Oktober 2026: dua proses PABRIK (POL-A sudah
+    SEMUA curahnya dipindah ke silo, POL-B masih bersisa 50 kg) tampil di
+    picker dengan angka curah yang SAMA PERSIS — keduanya membaca
+    `hitung_stok_broken_curah()`, yang GLOBAL atas seluruh pemilik, bukan
+    per `source_id`. POL-A (curahnya sendiri 0) tetap tampil seolah
+    berbobot, lalu ditolak saat disubmit — `masukkan_broken_ke_silo`
+    sendiri SUDAH benar menyaring per-proses.
+
+    Dibuktikan di sini: picker sekarang menjawab curah MASING-MASING
+    proses sendiri, bukan total gabungan.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Silo, User, Warehouse
+    from app.penggilingan.gudang2.models import (PolishingOutputLog, PolishingProcess,
+                                                  PolishingSiloUsage)
+    from app.penggilingan.gudang2.service import masukkan_broken_ke_silo
+    from app.services.seed import seed_master
+    from app.web.api import broken_proses_tersedia
+
+    await seed_master()
+    async with pg() as db:
+        g2 = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        if g2 is None:
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            db.add(g2)
+            await db.flush()
+        silo_pk = Silo(nama_silo="Silo A", warehouse_id=g2.id, jenis_isi="pk")
+        silo_c = Silo(nama_silo="Silo C", warehouse_id=g2.id, jenis_isi="broken")
+        db.add_all([silo_pk, silo_c])
+        await db.flush()
+        u = await db.get(User, pemakai.id)
+        u.default_warehouse_id = g2.id
+        u.role = "superadmin"
+
+        proc_a = PolishingProcess(kode_proses="POL-UJIG-A", status="selesai",
+                                  waktu_mulai=now_local(), waktu_selesai=now_local(),
+                                  created_by=u.id)
+        proc_b = PolishingProcess(kode_proses="POL-UJIG-B", status="selesai",
+                                  waktu_mulai=now_local(), waktu_selesai=now_local(),
+                                  created_by=u.id)
+        db.add_all([proc_a, proc_b])
+        await db.flush()
+        for p in (proc_a, proc_b):
+            db.add(PolishingSiloUsage(polishing_process_id=p.id, silo_id=silo_pk.id,
+                                      berat_awal_kg=5_000, berat_akhir_kg=0,
+                                      berat_terpakai_kg=5_000))
+            db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="broken",
+                                      berat_kg=1_000, waktu_update=now_local(),
+                                      input_by=u.id))
+        await db.commit()
+        kode_a, kode_b, uid = proc_a.kode_proses, proc_b.kode_proses, u.id
+
+    # POL-A: catat 1.000 kg curah, lalu pindahkan SEMUANYA ke silo (sisa 0).
+    async with pg() as db:
+        from app.penggilingan.inventory.finished_goods import catat_broken
+        u = await db.get(User, uid)
+        await catat_broken(db, user=u, kode_pol=kode_a, berat_kg=1_000)
+    async with pg() as db:
+        u = await db.get(User, uid)
+        await masukkan_broken_ke_silo(
+            db, user=u, kode_pol=kode_a, nama_silo="C", berat_kg=1_000)
+
+    # POL-B: catat 1.000 kg curah, SISAKAN 50 kg di silo (pindahkan 950).
+    async with pg() as db:
+        from app.penggilingan.inventory.finished_goods import catat_broken
+        u = await db.get(User, uid)
+        await catat_broken(db, user=u, kode_pol=kode_b, berat_kg=1_000)
+    async with pg() as db:
+        u = await db.get(User, uid)
+        await masukkan_broken_ke_silo(
+            db, user=u, kode_pol=kode_b, nama_silo="C", berat_kg=950)
+
+    async with pg() as db:
+        u = await db.get(User, uid)
+        daftar = await broken_proses_tersedia(user=u)
+    per_kode = {d["value"].split("|")[0]: d["label"] for d in daftar}
+
+    assert kode_a not in per_kode, (
+        f"{kode_a} curahnya sendiri sudah 0 (semua dipindah) — tak boleh "
+        f"muncul lagi di picker: {per_kode.get(kode_a)}")
+    assert kode_b in per_kode, f"{kode_b} masih bersisa 50 kg, wajib muncul"
+    assert "50" in per_kode[kode_b], (
+        f"{kode_b} wajib menyebut 50 kg (curahnya SENDIRI), bukan angka "
+        f"gabungan dengan proses lain: {per_kode[kode_b]}")
