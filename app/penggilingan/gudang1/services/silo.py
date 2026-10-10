@@ -28,7 +28,7 @@ from app.services.jasa import (
     JasaError,
     kunci_silo,
     nama_pemilik,
-    pastikan_satu_jasa_bernama,
+    pastikan_satu_pemilik,
 )
 
 
@@ -535,8 +535,8 @@ async def masuk_silo(
         # hati-hati; di sini akibatnya barang orang lain ikut tergiling, dan
         # tak ada pembetulan pembukuan yang mengembalikannya.
         try:
-            pemilik_baris = await pastikan_satu_jasa_bernama(
-                db, pemilik_sebelum + [lot.jasa_id])
+            pemilik_baris = await pastikan_satu_pemilik(
+                db, user=user, jasa_ids=pemilik_sebelum + [lot.jasa_id])
         except JasaError as e:
             raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
         # Isi yang sudah ada ikut disebut. `_ensure_cap` memang tidak menolak
@@ -611,8 +611,8 @@ async def masuk_silo(
         # 0031), seluruh isi silo ikut terhitung — dan larangan itu tinggal
         # memaksa gabah menganggur di silo lain yang belum tentu ada.
         try:
-            pemilik_baris = await pastikan_satu_jasa_bernama(
-                db, pemilik_sebelum + [batch.jasa_id])
+            pemilik_baris = await pastikan_satu_pemilik(
+                db, user=user, jasa_ids=pemilik_sebelum + [batch.jasa_id])
         except JasaError as e:
             raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
         existing_kg = await _silo_content_kg(db, silo.id)
@@ -665,8 +665,8 @@ async def masuk_silo(
         # (konvensi, bukan CHECK), dan `berat_kg`-nya tetap benar sebab
         # `_row_bobot` baris ini sudah menjawabnya lewat `GabahKeringBongkar`.
         try:
-            pemilik_baris = await pastikan_satu_jasa_bernama(
-                db, pemilik_sebelum + [lot.jasa_id])
+            pemilik_baris = await pastikan_satu_pemilik(
+                db, user=user, jasa_ids=pemilik_sebelum + [lot.jasa_id])
         except JasaError as e:
             raise SiloError(f"❌ Silo {nama_silo}: {e.args[0]}") from None
         existing_kg = await _silo_content_kg(db, silo.id)

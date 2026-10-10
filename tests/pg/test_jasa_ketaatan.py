@@ -13,7 +13,12 @@ Tiga hal yang dijaga, dan ketiganya pernah jadi lubang di rancangan:
      `jasa_id` membuat barang pelanggan berubah jadi barang pabrik DI TENGAH
      JALAN, tanpa satu pun galat.
   2. **Campur pemilik DITOLAK** di setiap titik campur — dan ditolak, bukan
-     diperingatkan.
+     diperingatkan. ⚠ SEJAK 10 Oktober 2026 "pemilik" di sini berarti
+     PELANGGAN, bukan nomor pesanan: dua pesanan pelanggan yang SAMA yang
+     bertemu fisik digabung OTOMATIS (`jasa.pastikan_satu_pemilik`), bukan
+     ditolak — lihat `test_dua_pesanan_pelanggan_yang_sama_digabung_
+     otomatis`. Yang TETAP ditolak keras: pelanggan BERBEDA, dan pabrik
+     tercampur jasa siapa pun.
   3. **NULL = milik pabrik, dan perilaku hari ini tidak bergeser satu baris
      pun.** Ini yang paling mudah rusak diam-diam: penjaga baru yang terlalu
      rajin akan menolak gabah pabrik yang selama ini sah.
@@ -312,14 +317,21 @@ async def test_silo_menolak_dua_pemilik(pg, pemakai, pemasok, pabrik):
         assert "JAS-" in e.value.args[0], e.value.args[0]
 
 
-async def test_dua_pesanan_pelanggan_yang_sama_tetap_terpisah(pg, pemakai, pabrik):
-    """Pembandingnya `jasa_id`, BUKAN `pelanggan_id`.
-
-    Dua pesanan Pak Budi punya bobot kembali yang berbeda; mencampurnya membuat
-    pesanan pertama tampak lunas oleh barang pesanan kedua.
+async def test_dua_pesanan_pelanggan_yang_sama_digabung_otomatis(pg, pemakai, pabrik):
+    """⚠⚠ MEMBALIK keputusan lama — keputusan pemilik 10 Oktober 2026, menagih
+    kalimatnya sendiri di docstring `Jasa`: *"yang tidak memungkinkan adalah
+    menggabungkan barang jika KEPEMILIKAN berbeda."* Kepemilikan berarti
+    PELANGGAN. Dua tiket Pak Budi tanpa penunjuk tetap melahirkan DUA pesanan
+    administratif (itu bagian yang TAK berubah) — tapi begitu keduanya
+    bertemu fisik di satu silo, `pastikan_satu_pemilik()` MENGGABUNGKAN
+    keduanya (`gabung_jasa()`), bukan menolaknya: kekhawatiran lama ("bobot
+    kembali pesanan pertama tampak lunas oleh pesanan kedua") tak lagi
+    berlaku sebab begitu digabung, tak ada lagi DUA pesanan yang bisa saling
+    melunasi — cuma SATU, dengan satu hitungan sisa.
     """
-    from app.models import User
-    from app.penggilingan.gudang1.services.silo import SiloError, masuk_silo
+    from app.models import Jasa, User
+    from app.models.jasa import DIGABUNG
+    from app.penggilingan.gudang1.services.silo import masuk_silo
 
     async with pg() as db:
         pid = await _pelanggan(db, "Pak Budi")
@@ -332,20 +344,31 @@ async def test_dua_pesanan_pelanggan_yang_sama_tetap_terpisah(pg, pemakai, pabri
         a = await _terima(db, t1, pemakai.id)
         kode_a, jid_a = a.batch.kode_batch, a.jasa.id
     async with pg() as db:
-        # Tiket KEDUA tidak menunjuk pesanan pertama → pesanan BARU, sengaja.
+        # Tiket KEDUA tidak menunjuk pesanan pertama → pesanan BARU, sengaja
+        # — ini TAK berubah: "satu pesanan, beberapa kedatangan" cuma
+        # berlaku selama ada penunjuk eksplisit (`timbangan_transaksi.jasa_id`).
         b = await _terima(db, t2, pemakai.id)
-        kode_b = b.batch.kode_batch
-        assert b.jasa.id != jid_a, "dua tiket tanpa penunjuk jadi satu pesanan"
+        kode_b, jid_b = b.batch.kode_batch, b.jasa.id
+        assert jid_b != jid_a, "dua tiket tanpa penunjuk jadi satu pesanan"
     async with pg() as db:
         u = await db.get(User, pemakai.id)
         await masuk_silo(db, user=u, nama_silo=nama_silo, kode_lot=None,
                          kode_batch=kode_a)
     async with pg() as db:
         u = await db.get(User, pemakai.id)
-        with pytest.raises(SiloError) as e:
-            await masuk_silo(db, user=u, nama_silo=nama_silo, kode_lot=None,
-                             kode_batch=kode_b)
-        assert _PESAN_CAMPUR in e.value.args[0], e.value.args[0]
+        # Dulu DITOLAK (SiloError); sekarang WAJIB berhasil — pelanggannya sama.
+        await masuk_silo(db, user=u, nama_silo=nama_silo, kode_lot=None,
+                         kode_batch=kode_b)
+
+    # Salah satu pesanan menyerap yang lain — survivor-nya BERJALAN, yang
+    # diserap DIGABUNG dan menunjuk balik ke survivor.
+    async with pg() as db:
+        survivor_id, diserap_id = sorted((jid_a, jid_b))
+        survivor = await db.get(Jasa, survivor_id)
+        diserap = await db.get(Jasa, diserap_id)
+        assert survivor.status == "berjalan"
+        assert diserap.status == DIGABUNG
+        assert diserap.digabung_ke_id == survivor_id
 
 
 async def test_satu_pesanan_boleh_dua_silo_digiling_bersama(pg, pemakai, pabrik):

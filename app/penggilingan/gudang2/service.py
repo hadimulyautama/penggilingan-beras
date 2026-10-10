@@ -56,7 +56,7 @@ from app.services.codegen import (
 from app.services.jasa import (
     JasaError,
     kunci_silo,
-    pastikan_satu_jasa_bernama,
+    pastikan_satu_pemilik,
     pemilik_silo_g2,
 )
 from app.services.notification import create_notification
@@ -1084,8 +1084,8 @@ async def _add_intake(
         # catatan panjang di `jasa.kunci_silo`.
         await kunci_silo(db, silo_id)
         try:
-            await pastikan_satu_jasa_bernama(
-                db, list(await pemilik_silo_g2(db, silo_id)) + [jasa_id])
+            jasa_id = await pastikan_satu_pemilik(
+                db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo_id)) + [jasa_id])
         except JasaError as e:
             raise Gudang2Error(f"❌ {e.args[0]}") from None
         ke_proses = await _catat_masuk_selama_proses(db, silo_id, berat_kg)
@@ -1351,8 +1351,8 @@ async def _catat_pindah(
     # hari berselisih dengan yang pertama.
     await kunci_silo(db, silo.id)
     try:
-        await pastikan_satu_jasa_bernama(
-            db, list(await pemilik_silo_g2(db, silo.id)) + [intake.jasa_id])
+        await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [intake.jasa_id])
     except JasaError as e:
         raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
 
@@ -1589,8 +1589,8 @@ async def pindah_broken_ke_silo(
     # ── Isi silo tujuan harus SEPEMILIK dengan broken yang dipindah ──
     await kunci_silo(db, silo.id)
     try:
-        await pastikan_satu_jasa_bernama(
-            db, list(await pemilik_silo_g2(db, silo.id)) + [row.jasa_id])
+        await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [row.jasa_id])
     except JasaError as e:
         raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
 
@@ -1703,8 +1703,8 @@ async def masukkan_broken_ke_silo(
     # ── Isi silo tujuan harus SEPEMILIK ──
     await kunci_silo(db, silo.id)
     try:
-        await pastikan_satu_jasa_bernama(
-            db, list(await pemilik_silo_g2(db, silo.id)) + [jasa_id])
+        jasa_id = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [jasa_id])
     except JasaError as e:
         raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
 
@@ -1932,8 +1932,8 @@ async def masukkan_beras_ke_silo(
     # ── Isi silo tujuan harus SEPEMILIK ──
     await kunci_silo(db, silo.id)
     try:
-        await pastikan_satu_jasa_bernama(
-            db, list(await pemilik_silo_g2(db, silo.id)) + [jasa_id])
+        jasa_id = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=list(await pemilik_silo_g2(db, silo.id)) + [jasa_id])
     except JasaError as e:
         raise Gudang2Error(f"❌ Silo {nama_silo}: {e.args[0]}") from None
 

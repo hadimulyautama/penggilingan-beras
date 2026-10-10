@@ -17,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
 
-#: Keadaan pesanan — tiga, dan hanya satu yang berjalan.
+#: Keadaan pesanan — EMPAT, dan hanya satu yang berjalan.
 #:
 #: SELESAI punya satu definisi, dan definisinya sengaja tidak memuat
 #: "kedalaman": pernah ada barang masuk untuk pesanan ini, DAN tak ada lagi
@@ -29,7 +29,18 @@ from app.database import Base, TimestampMixin
 #: Yang menghitungnya belum ada di irisan ini (`sisa_jasa()` menyusul bersama
 #: layar Jasa dan notanya); kolom `status` sudah ada supaya pesanan bisa
 #: ditutup dan dibatalkan tanpa migrasi kedua.
-BERJALAN, SELESAI, DIBATALKAN = "berjalan", "selesai", "dibatalkan"
+#:
+#: DIGABUNG ditambah 10 Oktober 2026 (migrasi 0079) — pesanan pelanggan yang
+#: sama yang bertemu secara fisik di satu silo/dryer/proses digabung OTOMATIS
+#: (`jasa.pastikan_satu_pemilik()`), bukan ditolak. Pesanan yang "kalah"
+#: (diserap pesanan lain) berhenti BERJALAN tanpa pernah jadi SELESAI —
+#: `SELESAI` berarti barangnya sudah diambil, sedangkan pesanan yang digabung
+#: barangnya masih ada, cuma pindah "rumah administratif" ke survivor. Tanpa
+#: status sendiri, `pernah_ada_barang()`/`boleh_ditutup()` akan membaca
+#: pesanan ini seolah TAK PERNAH kedatangan apa pun (seluruh barisnya sudah
+#: ber-`jasa_id` survivor) — kebohongan yang sama persis dengan membiarkan
+#: pesanan yang sungguh belum pernah menerima barang terbaca "selesai".
+BERJALAN, SELESAI, DIBATALKAN, DIGABUNG = "berjalan", "selesai", "dibatalkan", "digabung"
 
 #: Hasil yang TIDAK kembali ke pelanggan, bawaan kesepakatan hari ini.
 #:
@@ -82,6 +93,17 @@ class Jasa(Base, TimestampMixin):
     jika kepemilikan berbeda. itu saja batasannya."* Tak ada batas minimum, tak
     ada batas ton, dan barang jasa tidak pernah ditolak. Barang SEPEMILIK boleh
     dicampur sebebas barang pabrik — lihat `app/services/jasa.py`.
+
+    ⚠⚠ "KEPEMILIKAN" BERARTI PELANGGAN, BUKAN NOMOR PESANAN INI — keputusan
+    pemilik 10 Oktober 2026, menagih kalimatnya sendiri di atas. Dua pesanan
+    pelanggan yang SAMA (`pelanggan_id` sama, "SATU PESANAN, BEBERAPA
+    KEDATANGAN" di atas tak selalu menangkap semuanya — kedatangan yang
+    terpisah cukup jauh melahirkan `Jasa` BARU) yang bertemu secara fisik di
+    satu silo/dryer/proses BUKAN pelanggaran batasan ini: `jasa.
+    pastikan_satu_pemilik()` menggabungkan keduanya OTOMATIS saat itu terjadi
+    (lihat `digabung_ke_id`/`DIGABUNG` di bawah), bukan menolaknya. Yang
+    TETAP ditolak keras: pelanggan BERBEDA, atau pabrik tercampur jasa siapa
+    pun — itulah batasan yang sungguh dimaksud "itu saja batasannya".
     """
 
     __tablename__ = "jasa"
@@ -127,4 +149,10 @@ class Jasa(Base, TimestampMixin):
     #: menyaring `status`, bukan kolom ini — tak ada saringan sesi otomatis di
     #: sini seperti pada tabel cermin, sebab `jasa` bukan cermin buku besar.
     dibatalkan_pada: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True))
+    #: Pesanan SURVIVOR yang menyerap baris ini — terisi = pesanan ini
+    #: `DIGABUNG`. Pola PERSIS `dibatalkan_pada`: `status` yang dibaca layar,
+    #: kolom ini KAPAN & KE MANA-nya. Migrasi 0079, `jasa.gabung_jasa()`.
+    digabung_ke_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    digabung_pada: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True))

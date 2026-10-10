@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.services.activity_log import log_activity
 from app.services.codegen import next_drying_lot_code, next_milling_code
-from app.services.jasa import JasaError, kunci_silo, nama_pemilik, pastikan_satu_jasa_bernama
+from app.services.jasa import JasaError, kunci_silo, nama_pemilik, pastikan_satu_pemilik
 from app.penggilingan.gudang1.services.bobot import (
     NOL, PASTI, TAK_DIKETAHUI, Bobot, dari_batch, dari_batches)
 from app.penggilingan.gudang1.services.bobot import jumlah as jumlah_bobot
@@ -175,8 +175,14 @@ async def start_milling(
     # Satu pesanan di DUA silo tetap sah, dan itu memang yang diminta: *"multi
     # silo giling … memungkinkan. yang tidak memungkinkan adalah menggabungkan
     # barang jika kepemilikan berbeda."*
+    #
+    # "Kepemilikan" berarti PELANGGAN (keputusan pemilik 10 Oktober 2026) —
+    # dua silo pelanggan yang SAMA tapi kebetulan dua pesanan administratif
+    # digabung OTOMATIS di sini, bukan ditolak. Lihat `jasa.pastikan_satu_
+    # pemilik`.
     try:
-        pemilik_lot = await pastikan_satu_jasa_bernama(db, [r.jasa_id for r in rows])
+        pemilik_lot = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=[r.jasa_id for r in rows])
     except JasaError as e:
         raise MillingError(f"❌ {e.args[0]}") from None
 
@@ -368,14 +374,23 @@ async def tambah_silo_giling(
     # ── Silo baru HARUS SEPEMILIK dengan proses yang sudah berjalan ──
     #
     # Sejajar `start_milling`, tetapi pembandingnya di sini `proc.jasa_id`
-    # (ditetapkan sejak mulai, tak pernah berubah) LAWAN pemilik silo baru —
-    # bukan sesama silo baru seperti saat mulai. Mencampur pemilik di
-    # tengah jalan sama bahayanya dengan mencampurnya di awal: PK yang
-    # keluar tak bisa dibagi kembali, tak ada lapisan di dalam mesin.
+    # LAWAN pemilik silo baru — bukan sesama silo baru seperti saat mulai.
+    # Mencampur pemilik di tengah jalan sama bahayanya dengan mencampurnya di
+    # awal: PK yang keluar tak bisa dibagi kembali, tak ada lapisan di dalam
+    # mesin.
+    #
+    # ⚠ `proc.jasa_id` BISA berubah di sini (keputusan pemilik 10 Oktober
+    # 2026): pelanggan yang sama tapi dua pesanan administratif digabung
+    # OTOMATIS, bukan ditolak — lihat `jasa.pastikan_satu_pemilik`. `proc`
+    # tak perlu dimuat ulang sesudahnya: `gabung_jasa()` memutasi baris lewat
+    # ORM, dan `proc` yang sama persis (identity map sesi ini) ikut
+    # termutakhirkan bila ia yang diserap.
     try:
-        await pastikan_satu_jasa_bernama(db, [proc.jasa_id] + [r.jasa_id for r in rows])
+        owner = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=[proc.jasa_id] + [r.jasa_id for r in rows])
     except JasaError as e:
         raise MillingError(f"❌ {e.args[0]}") from None
+    proc.jasa_id = owner
 
     nama_tambah = _rangkai(nama_pilih)
     id_silo = [(s.id, n) for s, n in zip(silo_pilih, nama_pilih)]

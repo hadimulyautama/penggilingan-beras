@@ -23,9 +23,20 @@ merugikan pabrik di jalur yang tak ada hubungannya dengan jasa.
 akibatnya barang orang lain ikut tergiling, dan tak ada pembetulan pembukuan yang
 bisa mengembalikannya.
 
-⚠ PEMBANDINGNYA `jasa_id`, BUKAN `pelanggan_id`. Dua pesanan milik pelanggan yang
-sama tetap terpisah: bobot kembalinya berbeda, dan mencampurnya membuat pesanan
-pertama tampak lunas oleh barang pesanan kedua.
+⚠⚠ PEMBANDING SUNGGUHNYA `pelanggan_id`, BUKAN `jasa_id` — keputusan pemilik
+10 Oktober 2026, MEMBALIK catatan yang pernah tertulis di sini. "Kepemilikan"
+pada kalimat pemilik di atas berarti PELANGGAN; `jasa_id` cuma nomor
+administratif satu kedatangan. Dua pesanan pelanggan yang SAMA yang bertemu
+fisik di satu silo/dryer/proses bukan "dua pemilik" — begitu bertemu,
+`pastikan_satu_pemilik()` (bukan `pastikan_satu_jasa_bernama`) MENGGABUNGKAN
+keduanya otomatis (`gabung_jasa()`) alih-alih menolaknya, sehingga kekhawatiran
+lama ("pesanan pertama tampak lunas oleh barang pesanan kedua") tak lagi
+berlaku — begitu digabung, tak ada lagi DUA pesanan yang bisa saling melunasi,
+cuma satu, dengan satu hitungan sisa. Pelanggan BERBEDA tetap ditolak sekeras
+sebelumnya. `pastikan_satu_jasa`/`pastikan_satu_jasa_bernama` sendiri TAK
+DIUBAH — keduanya aturan murni "campur dilarang", dipakai `pastikan_satu_
+pemilik()` sebagai langkah pertamanya (lolos tanpa campur sama sekali → tak
+perlu menggabungkan apa pun) sebelum menimbang pelanggan.
 """
 from __future__ import annotations
 
@@ -34,8 +45,27 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dryer, Jasa, Pelanggan, Silo
-from app.models.jasa import BERJALAN, DIBATALKAN, SELESAI
+from app.models import (
+    BerasKeSilo,
+    BrokenKeSilo,
+    ByproductStock,
+    Dryer,
+    DryingLot,
+    FinishedGoodsStock,
+    GabahKeringLot,
+    InternalTransfer,
+    Jasa,
+    MillingProcess,
+    OutgoingRecord,
+    Pelanggan,
+    PkGudang2Intake,
+    PkPurchaseBatch,
+    PolishingProcess,
+    PurchaseBatch,
+    Silo,
+    SiloStorage,
+)
+from app.models.jasa import BERJALAN, DIBATALKAN, DIGABUNG, SELESAI
 
 
 class JasaError(Exception):
@@ -172,6 +202,137 @@ async def pastikan_satu_jasa_bernama(db: AsyncSession, pemilik) -> int | None:
         raise JasaError(
             f"{_PESAN_CAMPUR} Yang bertabrakan: {_sebut(himpunan, nama)}."
         ) from None
+
+
+#: SETIAP tabel yang membawa `jasa_id` — daftar TUNGGAL, dibaca `gabung_jasa()`
+#: untuk memindahkan SELURUH jejak satu pesanan ke survivor-nya.
+#:
+#: ⚠⚠ CLAUDE.md pernah menyebut "SEBELAS tabel" dan sudah dua kali basi tanpa
+#: ketahuan (migrasi 0072 `broken_ke_silo`, 0077 `gabah_kering_lots`, 0078
+#: `beras_ke_silo` — tak satu pun memperbarui kalimat itu). Prosa bukan
+#: penjaga; daftar ini DIUJI (`tests/test_jasa_id_lengkap.py`) terhadap SETIAP
+#: `ForeignKey("jasa.id")` yang sungguh ada di basis data, supaya tabel
+#: KELIMA BELAS — kapan pun ia lahir — tak bisa diam-diam jatuh dari cakupan
+#: `gabung_jasa()` dan meninggalkan baris yatim menunjuk pesanan yang sudah
+#: diserap.
+TABEL_BER_JASA_ID: tuple[type, ...] = (
+    PurchaseBatch, DryingLot, SiloStorage, GabahKeringLot, MillingProcess,
+    PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BerasKeSilo, PolishingProcess,
+    InternalTransfer, FinishedGoodsStock, ByproductStock, OutgoingRecord,
+)
+
+
+async def kunci_jasa(db: AsyncSession, jasa_id: int) -> None:
+    """Kunci baris `jasa` sebelum statusnya diperiksa/diubah — lihat `kunci_silo`.
+
+    Dipakai `gabung_jasa()`: dua operator yang kebetulan menggabungkan pesanan
+    yang sama pada detik yang sama tak boleh sama-sama lolos memeriksa
+    `status == BERJALAN` lalu sama-sama menuliskannya.
+    """
+    await db.execute(select(Jasa.id).where(Jasa.id == jasa_id).with_for_update())
+
+
+async def gabung_jasa(db: AsyncSession, *, user, dari_id: int, ke_id: int) -> None:
+    """Pindahkan SELURUH jejak pesanan `dari_id` ke `ke_id` (survivor), lalu
+    tandai `dari_id` `DIGABUNG` — TIDAK PERNAH dipanggil langsung dari borang;
+    satu-satunya pemanggil yang sah `pastikan_satu_pemilik()`, sebab dialah
+    yang sudah memastikan pelanggannya sungguh sama.
+
+    Bukan "pindah kepemilikan" (itu `pindah_kepemilikan_*` di `finished_
+    goods.py`, SATU tabel, jasa→pabrik): ini memindahkan jasa→jasa, di SETIAP
+    tabel yang membawa `jasa_id` sekaligus (`TABEL_BER_JASA_ID`), dalam SATU
+    transaksi — supaya tak ada jendela waktu di mana sebagian jejak pesanan
+    menunjuk `dari_id` dan sebagian lagi `ke_id`.
+
+    Dikunci lewat ORM (`select(...).with_for_update()` per tabel, bukan
+    `UPDATE` SQL mentah) dengan sengaja: baris yang kebetulan SUDAH dimuat di
+    sesi yang sama (mis. proses yang sedang berjalan, yang memanggil fungsi
+    ini dari tengah pemeriksaan pemiliknya sendiri) ikut termutakhirkan lewat
+    identity map SQLAlchemy — pemanggil tak perlu memuat ulang objeknya
+    sendiri sesudah gabungan terjadi.
+    """
+    from app.database import now_local
+    from app.services.activity_log import log_activity
+
+    if dari_id == ke_id:
+        return
+    # Kunci KEDUANYA, urutan KONSISTEN (id kecil dulu) — dua penggabungan
+    # bersamaan atas pasangan yang sama dalam arah berlawanan tak boleh saling
+    # mengunci selamanya.
+    for jid in sorted((dari_id, ke_id)):
+        await kunci_jasa(db, jid)
+    dari = await db.get(Jasa, dari_id)
+    ke = await db.get(Jasa, ke_id)
+    if dari is None or ke is None:
+        raise JasaError("Pesanan yang hendak digabung tidak ditemukan.")
+    if dari.pelanggan_id != ke.pelanggan_id:
+        raise JasaError(
+            f"{dari.kode} dan {ke.kode} pelanggannya berbeda — tak bisa digabung.")
+    if dari.status != BERJALAN:
+        raise JasaError(f"{dari.kode} sudah {dari.status} — tak bisa digabung lagi.")
+    if ke.status != BERJALAN:
+        raise JasaError(f"{ke.kode} sudah {ke.status} — tak bisa jadi tujuan gabungan.")
+
+    for Model in TABEL_BER_JASA_ID:
+        baris = (await db.execute(
+            select(Model).where(Model.jasa_id == dari_id).with_for_update()
+        )).scalars().all()
+        for row in baris:
+            row.jasa_id = ke_id
+
+    now = now_local()
+    dari.status = DIGABUNG
+    dari.digabung_ke_id = ke_id
+    dari.digabung_pada = now
+    await log_activity(
+        db, table_name="jasa", record_id=dari.id, action="UPDATE",
+        changed_by=user.id,
+        new_value=f"{dari.kode} digabung ke {ke.kode} — pelanggan sama, "
+                  "bertemu di satu tempat (silo/dryer/proses).",
+    )
+
+
+async def pastikan_satu_pemilik(db: AsyncSession, *, user, jasa_ids) -> int | None:
+    """`pastikan_satu_jasa_bernama` yang MENGGABUNGKAN pesanan pelanggan yang
+    sama secara OTOMATIS, bukan menolaknya — dipakai di SETIAP titik campur
+    fisik G1/G2 (silo, dryer, mulai/tambah proses). Lihat ⚠⚠ di docstring
+    modul ini untuk alasan penuhnya.
+
+    Langkahnya:
+      1. Sudah satu pemilik (atau hampa)? Kembalikan apa adanya — jalur paling
+         sering, tanpa satu kueri `jasa` pun.
+      2. Campuran pabrik (`None`) & jasa (bukan `None`)? DITOLAK sekeras
+         sebelumnya — itu bukan soal pelanggan sama, itu pagar yang berbeda.
+      3. Beberapa `jasa_id` berbeda, SEMUA pelanggannya sama? Gabungkan semua
+         ke SATU survivor (id terkecil — pesanan yang lahir lebih dulu) lewat
+         `gabung_jasa()`, lalu kembalikan id survivor-nya.
+      4. Pelanggannya BERBEDA untuk sebagian? DITOLAK, sebut pemiliknya —
+         pola pesan yang sama dengan `pastikan_satu_jasa_bernama`.
+    """
+    himpunan = {(int(j) if j is not None else None) for j in jasa_ids}
+    if len(himpunan) <= 1:
+        return himpunan.pop() if himpunan else None
+    if None in himpunan:
+        nama = await nama_pemilik_banyak(db, himpunan)
+        raise JasaError(
+            f"{_PESAN_CAMPUR} Yang bertabrakan: {_sebut(himpunan, nama)}."
+        )
+
+    baris = (await db.execute(
+        select(Jasa.id, Jasa.pelanggan_id).where(Jasa.id.in_(himpunan))
+    )).all()
+    pelanggan_tiap = {jid: pel for jid, pel in baris}
+    pelanggan_set = set(pelanggan_tiap.values())
+    if len(pelanggan_set) > 1:
+        nama = await nama_pemilik_banyak(db, himpunan)
+        raise JasaError(
+            f"{_PESAN_CAMPUR} Yang bertabrakan: {_sebut(himpunan, nama)}."
+        )
+
+    survivor = min(himpunan)
+    for lain in sorted(himpunan - {survivor}):
+        await gabung_jasa(db, user=user, dari_id=lain, ke_id=survivor)
+    return survivor
 
 
 def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:
@@ -954,9 +1115,28 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
 
     baris_out: list[str] = [f"Pesanan {pesanan.kode} · {nama or '-'}"]
     keadaan = {BERJALAN: "Berjalan", SELESAI: "Selesai",
-               DIBATALKAN: "Dibatalkan"}.get(pesanan.status, pesanan.status)
+               DIBATALKAN: "Dibatalkan", DIGABUNG: "Digabung"}.get(
+                   pesanan.status, pesanan.status)
     baris_out.append(f"Keadaan: {keadaan}")
     baris_out.append("─" * 58)
+
+    # ── DIGABUNG: seluruh jejaknya sudah pindah ke survivor — BERHENTI DI SINI ──
+    #
+    # Tanpa ini, nota pesanan yang sudah digabung akan terus ke bawah dan
+    # membaca "Dibawa" nol baris (`PurchaseBatch.jasa_id == jasa_id` memang
+    # nol — seluruhnya sudah menunjuk survivor) — persis kalimat yang dipakai
+    # untuk pesanan yang SUNGGUH belum pernah kedatangan apa pun. Dua keadaan
+    # yang artinya berlawanan tak boleh mengucapkan kalimat yang sama.
+    if pesanan.status == DIGABUNG and pesanan.digabung_ke_id:
+        survivor = await db.get(Jasa, pesanan.digabung_ke_id)
+        kode_survivor = survivor.kode if survivor else f"#{pesanan.digabung_ke_id}"
+        baris_out.append(
+            f"Pesanan ini sudah digabung ke {kode_survivor} — pelanggannya sama, "
+            "dan bertemu fisik di satu silo/dryer/proses. Seluruh barang & "
+            "nota selanjutnya ada di sana, bukan hilang.")
+        if pesanan.digabung_pada:
+            baris_out.append(f"Digabung pada: {pesanan.digabung_pada:%d/%m/%Y %H:%M}")
+        return "\n".join(baris_out)
 
     # ── DIBAWA: bobot MASUK, satu-satunya angka yang pasti ──
     masuk = 0.0

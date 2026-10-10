@@ -28,7 +28,7 @@ from app.services.activity_log import log_activity
 from app.services.codegen import next_polishing_code
 from app.services.jasa import (
     JasaError,
-    pastikan_satu_jasa_bernama,
+    pastikan_satu_pemilik,
     pemilik_silo_g2,
 )
 from app.services.notification import create_notification
@@ -111,7 +111,7 @@ async def mulai_penyosohan(
         # sampai sini selalu punya pemilik, walau pemiliknya "pabrik" (None).
         pemilik_silo.extend(isi or [None])
     try:
-        pemilik_sosoh = await pastikan_satu_jasa_bernama(db, pemilik_silo)
+        pemilik_sosoh = await pastikan_satu_pemilik(db, user=user, jasa_ids=pemilik_silo)
     except JasaError as e:
         raise Gudang2Error(f"❌ {e.args[0]}") from None
 
@@ -213,17 +213,24 @@ async def tambah_silo_penyosohan(
     #
     # Sejajar dengan penjaga di `mulai_penyosohan` — tapi di sini pembandingnya
     # bukan sesama silo baru, melainkan silo baru LAWAN proses yang sudah
-    # berjalan (`proc.jasa_id`, yang sudah ditetapkan sejak mulai dan tak
-    # pernah berubah). Mencampur pemilik di tengah jalan sama berbahayanya
-    # dengan mencampurnya di awal: rendemen & hasilnya tak bisa dibagi kembali.
+    # berjalan (`proc.jasa_id`). Mencampur pemilik di tengah jalan sama
+    # berbahayanya dengan mencampurnya di awal: rendemen & hasilnya tak bisa
+    # dibagi kembali.
+    #
+    # ⚠ `proc.jasa_id` BISA berubah di sini (keputusan pemilik 10 Oktober
+    # 2026): pelanggan yang sama tapi dua pesanan administratif digabung
+    # OTOMATIS — lihat `jasa.pastikan_satu_pemilik`. `proc` tak perlu dimuat
+    # ulang: `gabung_jasa()` memutasi lewat ORM, dan `proc` yang sama persis
+    # (identity map sesi ini) ikut termutakhirkan bila ia yang diserap.
     pemilik_baru: list[int | None] = [proc.jasa_id]
     for s_ in silos:
         isi = await pemilik_silo_g2(db, s_.id)
         pemilik_baru.extend(isi or [None])
     try:
-        await pastikan_satu_jasa_bernama(db, pemilik_baru)
+        owner = await pastikan_satu_pemilik(db, user=user, jasa_ids=pemilik_baru)
     except JasaError as e:
         raise Gudang2Error(f"❌ {e.args[0]}") from None
+    proc.jasa_id = owner
 
     now = input_time(tanggal, jam)
     total_awal = 0.0

@@ -330,8 +330,10 @@ async def test_rendemen_proses_campuran_pk_dan_broken_atas_seluruh_bahan(pg, dun
 
         # Isi ulang Silo A dengan PK baru — SAMA jasanya (Silo A masih
         # bersisa 1.000 kg jasa, jadi tambahan ini WAJIB sepemilik juga;
-        # `pastikan_satu_jasa_bernama` menolak pabrik masuk ke silo berisi
-        # barang titipan).
+        # `pastikan_satu_pemilik` tetap menolak pabrik masuk ke silo berisi
+        # barang titipan — itu bukan soal pelanggan sama, batasan itu TAK
+        # dicabut 10 Oktober 2026, hanya digabung-otomatis-kan untuk
+        # pelanggan yang sama).
         from app.models import PkPurchaseBatch
         from app.database import now_local
         db.add(PkPurchaseBatch(

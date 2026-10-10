@@ -27,7 +27,7 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
     """Pesanan jasa yang berjalan, sisanya per fase, dan umurnya."""
     from app.peran import can_see_financials
     from app.services.jasa import FASE_JASA, daftar_jasa
-    from app.models.jasa import BERJALAN, DIBATALKAN, SELESAI
+    from app.models.jasa import BERJALAN, DIBATALKAN, DIGABUNG, SELESAI
 
     # Kerja MEJA. Pintunya sudah tak ditawarkan ke operator, tetapi pintu yang
     # disembunyikan bukan penjagaan: alamatnya bisa diketik.
@@ -35,7 +35,7 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
         raise HTTPException(403, "Layar Jasa milik Admin ke atas.")
 
     tapis = (request.query_params.get("status") or BERJALAN).strip()
-    if tapis not in (BERJALAN, SELESAI, DIBATALKAN):
+    if tapis not in (BERJALAN, SELESAI, DIBATALKAN, DIGABUNG):
         tapis = BERJALAN
     async with SessionLocal() as db:
         kartu = await daftar_jasa(db, status=tapis)
@@ -50,8 +50,12 @@ async def halaman_jasa(request: Request, akun=Depends(butuh_akun)):
     return await render_laci(
         request, "jasa.html",
         kartu=kartu, FASE_JASA=FASE_JASA, tapis=tapis, ton=ton,
+        # DIGABUNG ikut ditawarkan (10 Oktober 2026) — "cermin bertanda, bukan
+        # dihapus" berlaku di sini juga: pesanan yang digabung tetap harus
+        # bisa DILIHAT (nota-nya menunjuk ke survivor-nya), bukan menghilang
+        # dari layar begitu statusnya berubah.
         STATUS_PILIHAN=((BERJALAN, "Berjalan"), (SELESAI, "Selesai"),
-                        (DIBATALKAN, "Dibatalkan")),
+                        (DIBATALKAN, "Dibatalkan"), (DIGABUNG, "Digabung")),
     )
 
 

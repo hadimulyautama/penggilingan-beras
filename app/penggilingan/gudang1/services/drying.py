@@ -29,7 +29,7 @@ from app.services.jasa import (
     JasaError,
     kunci_dryer,
     nama_pemilik,
-    pastikan_satu_jasa_bernama,
+    pastikan_satu_pemilik,
 )
 
 
@@ -494,8 +494,9 @@ async def masuk_dryer(
     # mesin. Menolak di sana berarti menolak pada saat penolakannya sudah tak
     # berguna.
     try:
-        await pastikan_satu_jasa_bernama(
-            db, [b.jasa_id for b in batches] + [b.jasa_id for b in loose])
+        await pastikan_satu_pemilik(
+            db, user=user,
+            jasa_ids=[b.jasa_id for b in batches] + [b.jasa_id for b in loose])
     except JasaError as e:
         raise DryingError(f"❌ {e.args[0]}") from None
 
@@ -622,9 +623,12 @@ async def add_batches_to_lot(
 
     # Pemilik lot lawan pemilik batch tambahan. Lotnya SUDAH dikunci di atas
     # (`with_for_update` saat diambil), jadi pemeriksaan ini tak bisa disalip.
+    #
+    # Pelanggan yang sama, dua pesanan administratif — digabung OTOMATIS di
+    # sini (keputusan pemilik 10 Oktober 2026), bukan ditolak.
     try:
-        pemilik = await pastikan_satu_jasa_bernama(
-            db, [lot.jasa_id] + [b.jasa_id for b in batches])
+        pemilik = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=[lot.jasa_id] + [b.jasa_id for b in batches])
     except JasaError as e:
         raise DryingError(f"❌ {e.args[0]}") from None
     lot.jasa_id = pemilik
@@ -845,7 +849,8 @@ async def start_drying(
     # `tempatkan`, dan satu jalur yang lupa memanggil penjaganya akan melahirkan
     # lot bercampur yang tak pernah ditolak di mana pun.
     try:
-        pemilik_lot = await pastikan_satu_jasa_bernama(db, [b.jasa_id for b in loose])
+        pemilik_lot = await pastikan_satu_pemilik(
+            db, user=user, jasa_ids=[b.jasa_id for b in loose])
     except JasaError as e:
         raise DryingError(f"❌ {e.args[0]}") from None
     now = input_time(tanggal, jam)
