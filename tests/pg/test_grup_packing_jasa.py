@@ -127,14 +127,32 @@ async def test_sisa_dicurah_hanya_untuk_bekatul_dan_broken(pg, empat_jenis):
         assert [p[0] for p in b.pilihan] == ["catat_packing"], \
             f"{jenis} tak punya jalan curah, tombolnya harus absen: {b.pilihan}"
 
-    for jenis, aksi_curah in (("bekatul", "catat_bekatul"), ("broken", "catat_broken")):
-        b = per_jenis[jenis]
-        assert [p[0] for p in b.pilihan] == ["catat_packing", aksi_curah], \
-            f"{jenis} harus menawarkan '{aksi_curah}': {b.pilihan}"
-        sisa = b.pilihan[1]
-        assert sisa[1] == "Sisa dicurah"
-        assert sisa[3] == empat_jenis["kode"], \
-            "nilai tombol curah wajib kode_proses TELANJANG, bukan kode|jenis"
+    bekatul = per_jenis["bekatul"]
+    assert [p[0] for p in bekatul.pilihan] == ["catat_packing", "catat_bekatul"], \
+        f"bekatul harus menawarkan 'catat_bekatul': {bekatul.pilihan}"
+    sisa = bekatul.pilihan[1]
+    assert sisa[1] == "Sisa dicurah"
+    assert sisa[3] == empat_jenis["kode"], \
+        "nilai tombol curah wajib kode_proses TELANJANG, bukan kode|jenis"
+
+    # Broken dapat SATU tombol lagi — laporan lapangan 10 Oktober 2026:
+    # "Masukkan broken ke silo" ada di katalog tapi tak pernah ditemukan
+    # (bukan kartu, jauh dari kartu "Tunggu packing"). Bekatul TAK dapat
+    # tombol ini — bekatul tak pernah disosoh ulang, tak punya silo untuk itu.
+    broken = per_jenis["broken"]
+    assert [p[0] for p in broken.pilihan] == [
+        "catat_packing", "catat_broken", "masukkan_broken_silo"
+    ], f"broken harus menawarkan ketiganya: {broken.pilihan}"
+    sisa = broken.pilihan[1]
+    assert sisa[1] == "Sisa dicurah"
+    assert sisa[3] == empat_jenis["kode"], \
+        "nilai tombol curah wajib kode_proses TELANJANG, bukan kode|jenis"
+    ke_silo = broken.pilihan[2]
+    assert ke_silo[1] == "Masukkan ke silo"
+    assert ke_silo[3] == f"{empat_jenis['kode']}|", (
+        "nilai tombol silo wajib '<kode_pol>|<jasa_id atau kosong>' — sama "
+        "persis bentuk value picker /actions/broken-proses-tersedia, "
+        "supaya isiDariBaris() menemukannya")
 
 
 async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
