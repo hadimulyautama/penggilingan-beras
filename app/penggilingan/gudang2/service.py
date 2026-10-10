@@ -1639,9 +1639,11 @@ async def masukkan_broken_ke_silo(
     db: AsyncSession, *, user: User, kode_pol: str | None, nama_silo: str | None,
     berat_kg: float | None, jasa_id: int | None = None, tanggal=None, jam=None,
 ) -> MasukkanBrokenResult:
-    """SATU aksi: masukkan broken ke silo. Sumbernya otomatis — curah dulu
-    (FIFO), lalu BONGKAR KARUNG bila curah kurang. Sisa dari karung yang
-    dibongkar tapi tak terpakai tetap jadi curah di stok.
+    """SATU aksi: masukkan broken ke silo. Sumbernya otomatis — curah yang
+    SUDAH tercatat dulu (FIFO), lalu hasil mesin yang BELUM tercatat
+    dibukukan otomatis bila masih kurang, lalu BONGKAR KARUNG bila masih
+    kurang juga. Sisa dari karung yang dibongkar tapi tak terpakai tetap
+    jadi curah di stok.
 
     Mengganti dua langkah lama ("Catat broken (curah)" lalu "Pindah broken ke
     silo"): keduanya menuntut operator menjawab pertanyaan yang salah —
@@ -1650,14 +1652,34 @@ async def masukkan_broken_ke_silo(
     mengetik 5.000 kg berakhir sebagai "tercatat melebihi hasil mesin 500 kg"
     tanpa operator pernah salah ketik — sebabnya murni bentuk borangnya.
 
+    ⚠⚠ **PEMBUKUAN OTOMATIS, BUKAN CUMA PEMINDAHAN** — sejak 10 Oktober 2026.
+    Sampai hari itu, "mengganti dua langkah lama" baru benar SEBAGIAN: fungsi
+    ini cuma menggabungkan "Pindah broken ke silo" dengan pembongkaran
+    karung, tapi tetap menuntut "Catat broken (curah)" dikerjakan TERPISAH
+    lebih dulu — borang ini membaca `byproduct_stock` SAJA, tak pernah
+    `polishing_output_logs`. Laporan lapangan: proses yang BARU SAJA selesai
+    sudah mencatat 3.500 kg broken di mesin, tapi 0 kg lewat "Catat broken
+    (curah)" — borang ini menjawab "(belum ada)" walau brokennya nyata ada
+    di mesin. Sekarang kalau curah yang sudah tercatat masih kurang, SISA
+    hasil mesin yang belum dibukukan (`output_sosoh − _broken_dibukukan`)
+    dibukukan dulu — persis logika `catat_broken` — SEBELUM membongkar
+    karung, sebab fisiknya memang begitu: hasil mentah yang belum ditimbang
+    masih longgar (curah), bukan terkunci dalam karung. Hanya berlaku untuk
+    PEMILIK BAWAAN proses ini (`pemilik_hasil_proses`) — broken yang
+    sebagian sudah dipindah kepemilikan ke pemilik LAIN tak boleh diam-diam
+    "menyerap" hasil mentah yang belum pernah jadi miliknya.
+
     ⚠ `kode_pol` WAJIB — TIDAK ADA fallback "proses terbaru". `_proc_by_kode`
     (dipakai `catat_broken`/`catat_bekatul`) jatuh ke proses PALING BARU
     DIBUAT bila kode-nya kosong, tanpa peduli proses itu punya broken sama
     sekali — pintu masuk cacat yang sama persis tak boleh terulang di sini.
     """
-    from app.penggilingan.inventory.finished_goods import _proc_by_kode
+    from app.penggilingan.inventory.finished_goods import (_broken_dibukukan,
+                                                           _proc_by_kode)
     from app.penggilingan.inventory.models import (ByproductStock, FinishedGoodsStock,
                                                    PackageSize, ProductSku)
+    from app.services.jasa import pemilik_hasil_proses
+    from app.services.stok import output_sosoh
 
     g2_wid = await _g2_warehouse_id(db)
     if not is_operator_gudang2(user, g2_wid):
@@ -1740,6 +1762,33 @@ async def masukkan_broken_ke_silo(
 
     now = input_time(tanggal, jam)
     dibongkar_kg = 0.0
+
+    # ── Langkah 1.5 · masih kurang? bukukan dulu hasil mesin yang BELUM
+    #   TERCATAT, sebelum membongkar karung — lihat ⚠⚠ di docstring.
+    if total_curah + 0.5 < berat_kg:
+        pemilik_bawaan = await pemilik_hasil_proses(db, proc.jasa_id, "broken")
+        if jasa_id == pemilik_bawaan:
+            keluar_mesin = (await output_sosoh(db, proc.id)).get("broken") or 0.0
+            belum_dicatat = float(keluar_mesin) - await _broken_dibukukan(db, proc.id)
+            if belum_dicatat > 0.5:
+                catat_kg = min(belum_dicatat, berat_kg - total_curah)
+                baris_otomatis = ByproductStock(
+                    jenis_produk="broken", source_type="polishing",
+                    source_id=proc.id, berat_kg=catat_kg,
+                    tanggal=now.date(), waktu=now, input_by=user.id,
+                    jasa_id=jasa_id,
+                )
+                db.add(baris_otomatis)
+                await db.flush()
+                await log_activity(
+                    db, table_name="byproduct_stock", record_id=baris_otomatis.id,
+                    action="INSERT", changed_by=user.id, aksi="broken_catat_otomatis",
+                    new_value=f"{proc.kode_proses}: {catat_kg:,.0f} kg dibukukan "
+                              "otomatis dari hasil mesin saat 'Masukkan ke "
+                              "silo'".replace(",", "."),
+                )
+                pool.append((baris_otomatis.id, catat_kg))
+                total_curah += catat_kg
 
     # ── Langkah 2 · kurang? bongkar karung FIFO, SEUKURAN karung penuh ──
     #

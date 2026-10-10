@@ -115,21 +115,27 @@ async def test_curah_cukup_tanpa_bongkar_karung(pg, sosoh):
 
 
 async def test_curah_kurang_bongkar_karung_otomatis(pg, sosoh):
-    """1.000 kg curah + minta masuk silo 3.500 kg -> kekurangan 2.500 kg,
-    dibulatkan ke atas ke karung 50kg: 50 karung = 2.500 kg pas (uji kasus
-    genap dulu, kasus sisa di uji berikutnya)."""
+    """Sejak hasil mesin yang belum tercatat ikut dibukukan otomatis
+    (Langkah 1.5), karung baru tersentuh sesudah pool ITU habis — dan
+    mengemas 60 karung (3.000 kg) lebih dulu TURUT mengurangi pool "belum
+    tercatat" (`_broken_dibukukan` menjumlah curah MAUPUN kemasan): dari
+    8.000 kg hasil mesin, 3.000 kg sudah "dibukukan" lewat kemasan, sisa
+    5.000 kg masih bisa dibukukan otomatis sebagai curah.
+
+    Minta masuk silo 7.500 kg -> 5.000 kg dibukukan otomatis dari hasil
+    mesin, kekurangan 2.500 kg, dibulatkan ke atas ke karung 50kg: 50 karung
+    = 2.500 kg pas (uji kasus genap dulu, kasus sisa di uji berikutnya)."""
     from app.models import User
     from app.penggilingan.gudang2.service import masukkan_broken_ke_silo
     from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
 
-    await _curah(pg, sosoh, 1_000)
     await _kemas(pg, sosoh, jumlah_karung=60)  # 3.000 kg berkarung (50kg/karung)
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
         r = await masukkan_broken_ke_silo(
-            db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=3_500)
-    assert r.moved_kg == 3_500
+            db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=7_500)
+    assert r.moved_kg == 7_500
     assert r.dibongkar_dari_karung_kg == 2_500  # 50 karung x 50kg
 
     async with pg() as db:
@@ -142,46 +148,51 @@ async def test_curah_kurang_bongkar_karung_otomatis(pg, sosoh):
                    FinishedGoodsStock.source_id == sosoh["proc_id"])
         )).scalar_one()
         assert sisa_karung == 10  # 60 - 50 dibongkar
-        # Curah stok: 1.000 (lama) + 2.500 (dibongkar) - 3.500 (masuk silo) = 0
+        # Curah stok: 5.000 (dibukukan otomatis) + 2.500 (dibongkar) - 7.500 (masuk silo) = 0
         assert await hitung_stok_broken_curah(db) == 0
 
 
 async def test_bongkar_karung_sisanya_jadi_curah(pg, sosoh):
-    """Kekurangan tak genap kelipatan ukuran karung -> sisa karung yang
-    dibongkar tapi tak terpakai jadi curah BARU di stok, bukan hilang."""
+    """Kekurangan tak genap kelipatan ukuran karung, SESUDAH pool "belum
+    tercatat" (8.000 kg hasil mesin − 2.000 kg yang sudah dikemas = 6.000 kg)
+    dibukukan otomatis duluan -> sisa karung yang dibongkar tapi tak terpakai
+    jadi curah BARU di stok, bukan hilang."""
     from app.models import User
     from app.penggilingan.gudang2.service import masukkan_broken_ke_silo
     from app.penggilingan.inventory.finished_goods import hitung_stok_broken_curah
 
-    await _curah(pg, sosoh, 500)
     await _kemas(pg, sosoh, jumlah_karung=40)  # 2.000 kg berkarung (50kg/karung)
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        # kekurangan = 1.290 - 500 = 790 -> ceil(790/50) = 16 karung = 800 kg
-        # (bukan kelipatan genap 50 — sisanya 10 kg harus jadi curah baru).
+        # 6.000 kg hasil mesin (belum tercatat) dibukukan otomatis duluan;
+        # kekurangan sesudahnya = 6.790 - 6.000 = 790 -> ceil(790/50) = 16
+        # karung = 800 kg (bukan kelipatan genap 50 — sisanya 10 kg harus
+        # jadi curah baru).
         r = await masukkan_broken_ke_silo(
-            db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=1_290)
-    assert r.moved_kg == 1_290
+            db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=6_790)
+    assert r.moved_kg == 6_790
     assert r.dibongkar_dari_karung_kg == 800  # 16 karung x 50kg, dibulatkan ke atas dari 790
 
     async with pg() as db:
-        # 500 (curah lama) + 800 (dibongkar) - 1.290 (masuk silo) = 10 kg sisa curah
+        # 6.000 (dibukukan otomatis) + 800 (dibongkar) - 6.790 (masuk silo) = 10 kg sisa curah
         assert await hitung_stok_broken_curah(db) == 10
 
 
 async def test_melebihi_curah_plus_karung_ditolak(pg, sosoh):
+    """400 kg sudah dikemas, 7.600 kg bisa dibukukan otomatis dari hasil
+    mesin yang belum tercatat — 8.000 kg total tersedia (persis seluruh
+    hasil mesinnya). Meminta lebih dari itu tetap ditolak."""
     from app.models import User
     from app.penggilingan.gudang2.service import Gudang2Error, masukkan_broken_ke_silo
 
-    await _curah(pg, sosoh, 500)
     await _kemas(pg, sosoh, jumlah_karung=8)  # 400 kg berkarung (50kg/karung)
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
         with pytest.raises(Gudang2Error) as e:
             await masukkan_broken_ke_silo(
-                db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=1_000)
+                db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=8_500)
     assert "tak bisa memasukkan" in str(e.value)
 
 
@@ -332,3 +343,90 @@ async def test_picker_broken_proses_tersedia_hanya_yang_sedang_berjalan(pg, soso
     assert sosoh["kode_pol"] not in kode_yang_tampil, (
         f"{sosoh['kode_pol']} sudah SELESAI — picker ini kini wajib "
         f"menyembunyikannya walau masih bersisa broken: {daftar}")
+
+
+async def test_bukukan_otomatis_dari_hasil_mesin_belum_tercatat(pg, sosoh):
+    """Laporan lapangan 10 Oktober 2026: proses dengan 8.000 kg broken di
+    mesin (`polishing_output_logs`, fixture `sosoh`) tapi 0 kg lewat "Catat
+    broken (curah)" — SEBELUM perbaikan ini, borang "Masukkan broken ke
+    silo" menjawab "(belum ada)" walau brokennya nyata ada. Di sini TANPA
+    memanggil `_curah` sama sekali: `masukkan_broken_ke_silo` sendiri wajib
+    membukukan dulu sebanyak yang dibutuhkan dari hasil mesin yang belum
+    tercatat, SEBELUM membongkar karung — fisiknya memang begitu, hasil
+    mentah yang belum ditimbang masih longgar (curah).
+    """
+    from app.models import User
+    from app.penggilingan.gudang2.service import masukkan_broken_ke_silo
+    from app.penggilingan.inventory.finished_goods import (_broken_dibukukan,
+                                                           hitung_stok_broken_curah)
+    from app.services.stok import output_sosoh
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        r = await masukkan_broken_ke_silo(
+            db, user=u, kode_pol=sosoh["kode_pol"], nama_silo="C", berat_kg=1_200)
+    assert r.moved_kg == 1_200
+    assert r.dibongkar_dari_karung_kg == 0, "cukup dari hasil mesin, tak perlu bongkar karung"
+
+    async with pg() as db:
+        # 1.200 kg dibukukan otomatis lalu LANGSUNG dipindah semua ke silo —
+        # tak ada sisa curah yang menganggur di stok.
+        assert await hitung_stok_broken_curah(db) == 0
+        keluar_mesin = (await output_sosoh(db, sosoh["proc_id"])).get("broken")
+        dibukukan = await _broken_dibukukan(db, sosoh["proc_id"])
+        assert keluar_mesin == 8_000
+        assert dibukukan == 1_200, "hanya sebanyak yang DIBUTUHKAN, bukan seluruh 8.000 kg"
+
+
+async def test_picker_menampilkan_hasil_mesin_belum_tercatat(pg, pemakai):
+    """Sebangun uji di atas, tapi lewat PICKER (`broken_proses_tersedia`):
+    proses sedang BERJALAN, 2.000 kg broken di mesin, 0 kg tercatat — picker
+    kini wajib menawarkannya (sebelum perbaikan ini: daftar kosong)."""
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Silo, User, Warehouse
+    from app.penggilingan.gudang2.models import (PolishingOutputLog, PolishingProcess,
+                                                  PolishingSiloUsage)
+    from app.services.seed import seed_master
+    from app.web.api import broken_proses_tersedia
+
+    await seed_master()
+    async with pg() as db:
+        g2 = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        if g2 is None:
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            db.add(g2)
+            await db.flush()
+        silo_pk = Silo(nama_silo="Silo A", warehouse_id=g2.id, jenis_isi="pk")
+        db.add(silo_pk)
+        await db.flush()
+        u = await db.get(User, pemakai.id)
+        u.default_warehouse_id = g2.id
+        u.role = "superadmin"
+
+        proc = PolishingProcess(kode_proses="POL-UJIH-01", status="proses",
+                                waktu_mulai=now_local(), created_by=u.id)
+        db.add(proc)
+        await db.flush()
+        db.add(PolishingSiloUsage(polishing_process_id=proc.id, silo_id=silo_pk.id,
+                                  berat_awal_kg=5_000, berat_akhir_kg=0,
+                                  berat_terpakai_kg=5_000))
+        db.add(PolishingOutputLog(polishing_process_id=proc.id, jenis="broken",
+                                  berat_kg=2_000, waktu_update=now_local(),
+                                  input_by=u.id))
+        await db.commit()
+        kode, uid = proc.kode_proses, u.id
+
+    async with pg() as db:
+        u = await db.get(User, uid)
+        daftar = await broken_proses_tersedia(user=u)
+    per_kode = {d["value"].split("|")[0]: d["label"] for d in daftar}
+
+    assert kode in per_kode, (
+        f"{kode} punya 2.000 kg broken di mesin, belum tercatat — wajib "
+        f"muncul di picker walau 0 kg di byproduct_stock: {daftar}")
+    assert "2.000" in per_kode[kode] and "belum dicatat" in per_kode[kode], (
+        f"label wajib menyebut angkanya berasal dari hasil mesin yang "
+        f"belum dicatat: {per_kode[kode]}")
