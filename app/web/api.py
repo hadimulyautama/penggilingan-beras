@@ -2413,8 +2413,18 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
     if r.jasa is not None:
         milik = (f" — JASA, pesanan baru *{r.jasa.kode}*" if r.jasa_baru
                  else f" — JASA, masuk pesanan *{r.jasa.kode}*")
-    pesan = (f"✓ Gabah *{kode}* ({kondisi}) tercatat{milik}"
-             + (f".\n{tempat}." if tempat else ".") + warn)
+    # ⚠ `tempat` SENGAJA tak ikut kabar ini — cacat lapangan 10 Oktober 2026:
+    # kabar aksi satu-ketuk (`kabarBisaBatal`, beda dari `kabar()` biasa)
+    # membawa kalimat PENUH apa adanya, dan `tempat` ("🔥 masuk Dryer 1
+    # (menunggu — tekan `Mulai pengeringan` saat dipanaskan)") membuatnya
+    # cukup panjang untuk melipat jadi satu-kata-per-baris di layar sempit —
+    # masalah tata letak, bukan logika. `tempat` sendiri redundan di sini:
+    # ke mana gabahnya masuk sudah terbaca di kartu Antrian tunggu begitu
+    # layarnya digambar ulang (`muat()`, dipanggil SEBELUM kabar ini
+    # tampil) — sama seperti alasan `kabar()` biasa tak pernah menumpahkan
+    # kalimat server. `warn` TETAP ikut: itu bukan rute normal, dan
+    # operator perlu tahu SEGERA, bukan menebak dari kartu.
+    pesan = f"✓ Gabah *{kode}* ({kondisi}) tercatat{milik}." + warn
     return {"ok": True, "pesan": pesan, "log_id": await _id_jejak(user.id)}
 
 
