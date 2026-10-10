@@ -4088,6 +4088,14 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     sendiri SUDAH benar menyaring per-`source_id`. Borang yang menawarkan
     sesuatu yang kemudian ditolak layanannya membuat orang mengira
     aplikasinya rusak — laporan lapangan 10 Oktober 2026.
+
+    ⚠⚠ **HANYA proses `status == "proses"` (sedang berjalan)** — permintaan
+    pemilik 10 Oktober 2026 eksplisit, SESUDAH diberitahu konsekuensinya:
+    proses yang sudah `selesai` tak lagi muncul di sini, walau masih
+    bersisa broken yang belum masuk silo (persis kasus 110 kg/2 sak yang
+    melahirkan tombol "Masukkan ke silo" di Stok Produk). Pemilik memilih
+    tetap memasangnya — jalan untuk broken dari proses yang SUDAH tutup
+    bukan borang ini.
     """
     _require(await _is_g2_operator(user))
     from sqlalchemy import func, select
@@ -4111,6 +4119,9 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
         )).all())
         for proc_id, jasa_id in sorted(pemilik_curah | pemilik_karung,
                                        key=lambda x: (x[0], x[1] or 0)):
+            proc = await db.get(PolishingProcess, proc_id)
+            if proc is None or proc.status != "proses":
+                continue
             baris_curah = (await db.execute(
                 select(ByproductStock.id)
                 .where(ByproductStock.jenis_produk == "broken",
@@ -4133,8 +4144,7 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
             total = curah + karung
             if total <= 0.5:
                 continue
-            proc = await db.get(PolishingProcess, proc_id)
-            kode = proc.kode_proses if proc else f"#{proc_id}"
+            kode = proc.kode_proses
             milik = await nama_pemilik(db, jasa_id)
             label = f"{kode} · {_rp(total)} kg (curah {_rp(curah)} + kemasan {_rp(karung)})"
             if milik:

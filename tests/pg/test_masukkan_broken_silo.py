@@ -263,12 +263,10 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
         u.default_warehouse_id = g2.id
         u.role = "superadmin"
 
-        proc_a = PolishingProcess(kode_proses="POL-UJIG-A", status="selesai",
-                                  waktu_mulai=now_local(), waktu_selesai=now_local(),
-                                  created_by=u.id)
-        proc_b = PolishingProcess(kode_proses="POL-UJIG-B", status="selesai",
-                                  waktu_mulai=now_local(), waktu_selesai=now_local(),
-                                  created_by=u.id)
+        proc_a = PolishingProcess(kode_proses="POL-UJIG-A", status="proses",
+                                  waktu_mulai=now_local(), created_by=u.id)
+        proc_b = PolishingProcess(kode_proses="POL-UJIG-B", status="proses",
+                                  waktu_mulai=now_local(), created_by=u.id)
         db.add_all([proc_a, proc_b])
         await db.flush()
         for p in (proc_a, proc_b):
@@ -313,3 +311,24 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
     assert "50" in per_kode[kode_b], (
         f"{kode_b} wajib menyebut 50 kg (curahnya SENDIRI), bukan angka "
         f"gabungan dengan proses lain: {per_kode[kode_b]}")
+
+
+async def test_picker_broken_proses_tersedia_hanya_yang_sedang_berjalan(pg, sosoh):
+    """Permintaan pemilik 10 Oktober 2026: picker ini cuma menawarkan
+    proses `status=="proses"` — DIBERITAHU lebih dulu bahwa itu berarti
+    proses `selesai` yang masih bersisa broken (fixture `sosoh` di atas,
+    8.000 kg) tak lagi muncul di sini, dan pemilik tetap memilihnya.
+    """
+    from app.models import User
+    from app.web.api import broken_proses_tersedia
+
+    await _curah(pg, sosoh, 1_000)  # proses "sosoh" sudah selesai, masih bersisa 7.000 kg
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        daftar = await broken_proses_tersedia(user=u)
+    kode_yang_tampil = {d["value"].split("|")[0] for d in daftar}
+
+    assert sosoh["kode_pol"] not in kode_yang_tampil, (
+        f"{sosoh['kode_pol']} sudah SELESAI — picker ini kini wajib "
+        f"menyembunyikannya walau masih bersisa broken: {daftar}")
