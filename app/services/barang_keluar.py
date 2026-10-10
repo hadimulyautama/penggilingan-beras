@@ -137,9 +137,9 @@ class BarisPerintah:
     berat_kg: float | None = None
     #: Pesanan jasa yang barangnya DIAMBIL — None untuk penjualan pabrik.
     #:
-    #: Diisi `buat_perintah` dari perintahnya, bukan oleh pemanggil: satu
-    #: perintah milik satu pihak, dan baris yang pemiliknya berbeda dari
-    #: perintahnya adalah keadaan yang tak boleh bisa dinyatakan.
+    #: Diisi `buat_perintah`/`tambah_baris` dari perintahnya, bukan oleh
+    #: pemanggil: satu perintah milik satu pihak, dan baris yang pemiliknya
+    #: berbeda dari perintahnya adalah keadaan yang tak boleh bisa dinyatakan.
     jasa_id: int | None = None
 
 
@@ -656,9 +656,21 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     berarti itemnya ditambahkan." Dua baris untuk barang yang sama membuat
     kartunya menyebut "Beras Medium" dua kali dengan angka berbeda, dan yang
     membacanya menjumlah sendiri — lalu salah sekali dari sepuluh.
+
+    ⚠⚠ `baris.jasa_id` WAJIB diturunkan dari `rec.jasa_id` di SINI, persis
+    `buat_perintah` — tanpanya `tersedia()` selalu memeriksa `jasa_id=None`
+    (pabrik) apa pun pemilik transaksinya yang sebenarnya, dua arah sekaligus:
+    PK/gabah kering milik pesanan yang SAMA dengan transaksinya malah DITOLAK
+    (pagar dua-arahnya membandingkan terhadap `None`, bukan pemilik transaksi
+    yang sesungguhnya); produk jadi/curah malah LOLOS memakai stok PABRIK
+    untuk transaksi yang sebenarnya pengambilan jasa — sebab `OutgoingItem`
+    sendiri tak punya `jasa_id`, baris itu lalu tercatat "keluar" atas nama
+    pesanan jasa itu lewat `rec.jasa_id`, padahal yang divalidasi dan
+    difisik-ambil tadi stok pabrik. Laporan lapangan 10 Oktober 2026.
     """
     rec = await _kunci_hidup(db, rec_id)
     tambah_muatan = rec.status == OUT_DIMUAT
+    baris = replace(baris, jasa_id=rec.jasa_id)
 
     berat, karung = await _berat_baris(db, baris)
     if berat <= 0:

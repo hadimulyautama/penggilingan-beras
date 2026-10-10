@@ -162,6 +162,61 @@ async def test_satu_transaksi_memuat_beberapa_macam_barang(pg, gudang):
     assert r2.rec.kode == r.rec.kode, "lahir kode OUT- kedua untuk satu truk"
 
 
+async def test_tambah_baris_pesanan_jasa_tak_lagi_lolos_memakai_stok_pabrik(pg, gudang):
+    """Laporan lapangan 10 Oktober 2026, arah KEBALIKAN dari
+    `test_tambah_baris_pesanan_sendiri_tak_lagi_ditolak_salah_arah`
+    (`test_pk_g2_keluar.py`): `tambah_baris` dulu TIDAK PERNAH menurunkan
+    `baris.jasa_id` dari `rec.jasa_id`, jadi `tersedia()` selalu memeriksa
+    `jasa_id=None` (stok PABRIK) apa pun pemilik transaksinya. Akibatnya
+    menambahkan SKU yang jasa_a SAMA SEKALI TAK PUNYA ke perintah PENGAMBILAN
+    JASA-nya sendiri dulu LOLOS (memakai stok pabrik yang 400 karung), padahal
+    seharusnya ditolak — barang itu bukan milik pesanan ini.
+    """
+    from datetime import date
+
+    from app.database import now_local
+    from app.models import Jasa, Pelanggan, User
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.services import barang_keluar as bk
+
+    async with pg() as db:
+        bu_sri = Pelanggan(nama_pelanggan="Bu Sri")
+        db.add(bu_sri)
+        await db.flush()
+        jasa_a = Jasa(kode="JAS-2610-020", pelanggan_id=bu_sri.id, status="berjalan")
+        db.add(jasa_a)
+        await db.flush()
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-TB-01", jasa_id=jasa_a.id, berat_total_kg=3_000,
+            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
+            input_by=gudang["op"], status_batch="diterima", flag_unverified=True,
+            sumber_berat="manual"))
+        await db.commit()
+        jasa_id = jasa_a.id
+    async with pg() as db:
+        u = await db.get(User, gudang["op"])
+        await masukkan_pk_luar(db, user=u, kode="PKB-TB-01", tujuan="ditumpuk")
+
+    # Perintah PENGAMBILAN jasa_a — berisi PK-nya sendiri, bukan SKU pabrik.
+    async with pg() as db:
+        r = await bk.buat_perintah(
+            db, user=await db.get(User, gudang["adm"]), jasa_id=jasa_id,
+            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=None, berat_kg=500)])
+        rec_id = r.rec.id
+
+    # SKU pabrik (400 karung tersedia) ditambahkan ke perintah jasa_a ini —
+    # jasa_a sendiri TAK PUNYA satu karung pun SKU ini.
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError) as e:
+            await bk.tambah_baris(
+                db, user=await db.get(User, gudang["adm"]), rec_id=rec_id,
+                baris=bk.BarisPerintah(tipe="finished_goods", sku_id=gudang["sku"],
+                                       std_id=gudang["std"], jumlah_karung=50))
+    assert "tinggal 0 kg" in str(e.value), (
+        f"harusnya ditolak sebab jasa_a tak punya SKU ini sama sekali: {e.value}")
+
+
 async def test_perintah_melebihi_stok_ditolak_dengan_angkanya(pg, gudang):
     """Yang ditolak tanpa angka akan mencoba lagi dengan tebakan."""
     from app.services import barang_keluar as bk

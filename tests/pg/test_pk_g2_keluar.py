@@ -161,6 +161,50 @@ async def test_ambil_sebagian_dari_silo_mengurangi_stok_persis(pg, pabrik):
         assert await hitung_stok_silo(db, pabrik["silo_c"]) == 6_000
 
 
+async def test_tambah_baris_pesanan_sendiri_tak_lagi_ditolak_salah_arah(pg, pabrik):
+    """Laporan lapangan 10 Oktober 2026: `tambah_baris` ("➕ Tambah barang ke
+    transaksi") dulu tak pernah menurunkan `baris.jasa_id` dari `rec.jasa_id`
+    — berbeda dari `buat_perintah`, yang melakukannya. Akibatnya pagar
+    dua-arah di `tersedia()` (`pk_g2`) membandingkan `silo.jasa_id` (jasa_a)
+    terhadap `b.jasa_id` yang SELALU `None`, dan menolak penambahan barang
+    MILIK SENDIRI dengan pesan "barang jasa tidak dijual pabrik" — padahal
+    perintahnya sendiri memang milik jasa_a.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from app.penggilingan.gudang2.service import hitung_stok_silo
+
+    intake_id = await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-08", 10_000,
+                                      pabrik["jasa_a"])
+    await _pindah_ke_silo(pg, pabrik["user"], intake_id, "C", 10_000)
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        r = await bk.buat_perintah(
+            db, user=u, jasa_id=pabrik["jasa_a"],
+            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=pabrik["silo_c"],
+                                    berat_kg=2_000)])
+        rec_id = r.rec.id
+
+    # Baris KEDUA, barang yang SAMA (silo C, pemiliknya jasa_a juga) —
+    # ditambahkan ke PERINTAH YANG SAMA lewat tambah_baris, bukan buat_perintah.
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        h = await bk.tambah_baris(
+            db, user=u, rec_id=rec_id,
+            baris=bk.BarisPerintah(tipe="pk_g2", silo_id=pabrik["silo_c"],
+                                   berat_kg=3_000))
+        assert len(h.baris) == 1, "barang yang sama digabung jadi satu baris"
+        assert float(h.baris[0].berat_perintah_kg) == 5_000
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        assert await hitung_stok_silo(db, pabrik["silo_c"], pemilik="jasa") == 5_000
+
+
 # ───────────────────── Dua arah, dua pesanan ─────────────────────
 
 async def test_pesanan_lain_tak_bisa_mengambil_silo_pesanan_ini(pg, pabrik):
