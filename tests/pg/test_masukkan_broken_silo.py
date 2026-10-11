@@ -324,11 +324,10 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
         f"gabungan dengan proses lain: {per_kode[kode_b]}")
 
 
-async def test_picker_broken_proses_tersedia_hanya_yang_sedang_berjalan(pg, sosoh):
-    """Permintaan pemilik 10 Oktober 2026: picker ini cuma menawarkan
-    proses `status=="proses"` — DIBERITAHU lebih dulu bahwa itu berarti
-    proses `selesai` yang masih bersisa broken (fixture `sosoh` di atas,
-    8.000 kg) tak lagi muncul di sini, dan pemilik tetap memilihnya.
+async def test_picker_broken_menyertakan_sisa_proses_selesai(pg, sosoh):
+    """Broken yang sudah dibukukan dari proses selesai tetap dapat dipindah
+    ke silo untuk dipakai sebagai bahan proses baru. Hasil mesin yang belum
+    dibukukan dari proses selesai tidak ikut dianggap sebagai stok tersedia.
     """
     from app.models import User
     from app.web.api import broken_proses_tersedia
@@ -340,9 +339,160 @@ async def test_picker_broken_proses_tersedia_hanya_yang_sedang_berjalan(pg, soso
         daftar = await broken_proses_tersedia(user=u)
     kode_yang_tampil = {d["value"].split("|")[0] for d in daftar}
 
-    assert sosoh["kode_pol"] not in kode_yang_tampil, (
-        f"{sosoh['kode_pol']} sudah SELESAI — picker ini kini wajib "
-        f"menyembunyikannya walau masih bersisa broken: {daftar}")
+    assert sosoh["kode_pol"] in kode_yang_tampil, (
+        f"{sosoh['kode_pol']} masih punya 1.000 kg broken yang tercatat: {daftar}")
+    label = next(d["label"] for d in daftar
+                 if d["value"].split("|")[0] == sosoh["kode_pol"])
+    assert "1.000 kg" in label and "belum dicatat" not in label.lower(), label
+
+
+async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemasok):
+    """Simulasi laporan lapangan: 20 t PK dari dua pemasok, proses memakai
+    Silo A+B masing-masing 5 t, lalu menambah 77 kg broken dari stok lama
+    (3 karung × 50 kg + 17 kg curah). Sesudahnya harus tersisa 1 karung +
+    40 kg curah; neraca hasil proses mengikuti persentase yang diminta.
+    """
+    from sqlalchemy import func, select
+
+    from app.database import now_local
+    from app.models import (ByproductStock, FinishedGoodsStock, PolishingOutputLog,
+                            ProductSku, Silo, Supplier, User, Warehouse)
+    from app.penggilingan.gudang2.models import (PkGudang2Intake, PkPurchaseBatch,
+                                                  PolishingProcess, PolishingSiloUsage)
+    from app.penggilingan.gudang2.polishing import (catat_output, mulai_penyosohan,
+                                                     rendemen_proses,
+                                                     selesai_penyosohan,
+                                                     tambah_silo_penyosohan)
+    from app.penggilingan.gudang2.service import (hitung_stok_silo,
+                                                   masukkan_broken_ke_silo)
+    from app.penggilingan.inventory.finished_goods import (catat_broken,
+                                                           catat_packing,
+                                                           hitung_stok_broken_curah)
+    from app.services.seed import seed_master
+    from app.web.api import broken_proses_tersedia
+
+    await seed_master()
+    async with pg() as db:
+        wh = (await db.execute(select(Warehouse).where(
+            Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        if wh is None:
+            wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            db.add(wh)
+            await db.flush()
+        u = await db.get(User, pemakai.id)
+        u.role = "superadmin"
+        u.default_warehouse_id = wh.id
+        supplier1 = await db.get(Supplier, pemasok.id)
+        supplier2 = Supplier(nama_supplier="Pemasok Skenario Broken")
+        db.add(supplier2)
+        await db.flush()
+
+        silos = {}
+        for letter, kind in (("A", "pk"), ("B", "pk"), ("C", "broken"),
+                             ("D", "pk"), ("E", "pk")):
+            s = (await db.execute(select(Silo).where(
+                Silo.warehouse_id == wh.id, Silo.nama_silo == f"Silo {letter}"
+            ))).scalars().first()
+            if s is None:
+                s = Silo(warehouse_id=wh.id, nama_silo=f"Silo {letter}",
+                         jenis_isi=kind, status="kosong")
+                db.add(s)
+                await db.flush()
+            silos[letter] = s
+
+        # 20 ton persediaan PK: 10 ton dari tiap pemasok. A/D milik supplier
+        # pertama, B/E milik supplier kedua; proses contoh hanya mengambil A+B.
+        for supplier, letters, suffix in ((supplier1, ("A", "D"), "S1"),
+                                          (supplier2, ("B", "E"), "S2")):
+            for letter in letters:
+                batch = PkPurchaseBatch(
+                    kode_batch=f"PK-SKENARIO-{suffix}-{letter}",
+                    supplier_id=supplier.id, jasa_id=None, berat_total_kg=5_000,
+                    tanggal_pembelian=now_local().date(), waktu_pembelian=now_local(),
+                    input_by=u.id, status_batch="di_silo", flag_unverified=False,
+                    sumber_berat="timbangan")
+                db.add(batch)
+                await db.flush()
+                db.add(PkGudang2Intake(
+                    sumber_tipe="beli_luar", pk_purchase_batch_id=batch.id,
+                    tujuan="silo", silo_id=silos[letter].id, berat_kg=5_000,
+                    bobot_final=True, tanggal_masuk=now_local().date(),
+                    waktu_masuk=now_local(), input_by=u.id))
+
+        # Broken 167 kg berasal dari proses terdahulu yang sudah selesai.
+        sumber = PolishingProcess(
+            kode_proses="POL-SKENARIO-BROKEN", status="selesai",
+            waktu_mulai=now_local(), waktu_selesai=now_local(), created_by=u.id)
+        db.add(sumber)
+        await db.flush()
+        db.add(PolishingOutputLog(
+            polishing_process_id=sumber.id, jenis="broken", berat_kg=167,
+            waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+        uid, kode_sumber = u.id, sumber.kode_proses
+
+    async with pg() as db:
+        u = await db.get(User, uid)
+        await catat_packing(db, user=u, kode_pol=kode_sumber, kategori="broken",
+                            material_kode="putih", ukuran=50, jumlah_karung=3)
+        await catat_broken(db, user=u, kode_pol=kode_sumber, berat_kg=17)
+
+    async with pg() as db:
+        u = await db.get(User, uid)
+        daftar = await broken_proses_tersedia(user=u)
+        assert any(x["value"].split("|")[0] == kode_sumber for x in daftar), daftar
+        pindah = await masukkan_broken_ke_silo(
+            db, user=u, kode_pol=kode_sumber, nama_silo="C", berat_kg=77)
+        assert pindah.dibongkar_dari_karung_kg == 100
+
+    async with pg() as db:
+        u = await db.get(User, uid)
+        assert await hitung_stok_silo(db, silos["C"].id) == 77
+        proses = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        assert proses.berat_awal_total == 10_000
+        ditambah = await tambah_silo_penyosohan(
+            db, user=u, kode=proses.proc.kode_proses, nama_silos=["C"])
+        assert ditambah.berat_awal_total == 77
+
+        bahan = 10_077.0
+        hasil = {
+            "bekatul": bahan * 0.12,
+            "reject": bahan * 0.015,
+            "menir": bahan * 0.01,
+            "medium": bahan * 0.835,
+        }
+        for jenis, kg in hasil.items():
+            await catat_output(db, user=u, kode=proses.proc.kode_proses,
+                               jenis=jenis, berat_kg=kg)
+        for letter in ("A", "B", "C"):
+            await selesai_penyosohan(db, user=u, kode=proses.proc.kode_proses,
+                                     nama_silo=letter, sisa_kg=0)
+
+        assert await rendemen_proses(db, proses.proc.id) == pytest.approx(83.5)
+        usage_total = (await db.execute(
+            select(func.sum(PolishingSiloUsage.berat_terpakai_kg))
+            .where(PolishingSiloUsage.polishing_process_id == proses.proc.id)
+        )).scalar_one()
+        assert float(usage_total) == pytest.approx(10_077)
+
+        sisa_karung = (await db.execute(
+            select(func.sum(FinishedGoodsStock.jumlah_karung))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(FinishedGoodsStock.source_id == sumber.id,
+                   ProductSku.kategori == "broken")
+        )).scalar_one()
+        berat_karung = (await db.execute(
+            select(func.sum(FinishedGoodsStock.berat_total_kg))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(FinishedGoodsStock.source_id == sumber.id,
+                   ProductSku.kategori == "broken")
+        )).scalar_one()
+        sisa_curah = await hitung_stok_broken_curah(db)
+        sisa_silo = await hitung_stok_silo(db, silos["C"].id)
+
+    assert int(sisa_karung) == 1 and float(berat_karung) == pytest.approx(50)
+    assert sisa_curah == pytest.approx(40)
+    assert sisa_silo == pytest.approx(0)
 
 
 async def test_bukukan_otomatis_dari_hasil_mesin_belum_tercatat(pg, sosoh):

@@ -4114,13 +4114,11 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     sesuatu yang kemudian ditolak layanannya membuat orang mengira
     aplikasinya rusak — laporan lapangan 10 Oktober 2026.
 
-    ⚠⚠ **HANYA proses `status == "proses"` (sedang berjalan)** — permintaan
-    pemilik 10 Oktober 2026 eksplisit, SESUDAH diberitahu konsekuensinya:
-    proses yang sudah `selesai` tak lagi muncul di sini, walau masih
-    bersisa broken yang belum masuk silo (persis kasus 110 kg/2 sak yang
-    melahirkan tombol "Masukkan ke silo" di Stok Produk). Pemilik memilih
-    tetap memasangnya — jalan untuk broken dari proses yang SUDAH tutup
-    bukan borang ini.
+    Proses `proses` dan `selesai` ditawarkan bila masih ada stok broken yang
+    tercatat. Proses `selesai` perlu ikut agar broken sisa (curah/karung) dari
+    sosoh sebelumnya dapat dipindahkan ke silo sebagai bahan untuk proses baru.
+    Hasil mesin yang BELUM dibukukan hanya ditawarkan untuk proses `proses`;
+    hasil proses selesai tidak boleh muncul sebagai stok semu.
 
     ⚠⚠ **IKUT MENGHITUNG hasil mesin yang BELUM "dicatat"** — sejak
     `masukkan_broken_ke_silo` sendiri mulai membukukannya otomatis (10
@@ -4143,37 +4141,38 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
-        proses_berjalan = {p.id: p for p in (await db.execute(
-            select(PolishingProcess).where(PolishingProcess.status == "proses")
+        proses_sumber = {p.id: p for p in (await db.execute(
+            select(PolishingProcess).where(
+                PolishingProcess.status.in_(("proses", "selesai")))
         )).scalars().all()}
 
         pasangan: set[tuple[int, int | None]] = set()
-        if proses_berjalan:
+        if proses_sumber:
             pasangan |= set((await db.execute(
                 select(ByproductStock.source_id, ByproductStock.jasa_id)
                 .where(ByproductStock.jenis_produk == "broken",
                        ByproductStock.source_type == "polishing",
-                       ByproductStock.source_id.in_(proses_berjalan))
+                       ByproductStock.source_id.in_(proses_sumber))
             )).all())
             pasangan |= set((await db.execute(
                 select(FinishedGoodsStock.source_id, FinishedGoodsStock.jasa_id)
                 .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
                 .where(ProductSku.kategori == "broken",
                        FinishedGoodsStock.source_type == "polishing",
-                       FinishedGoodsStock.source_id.in_(proses_berjalan))
+                       FinishedGoodsStock.source_id.in_(proses_sumber))
             )).all())
         pemilik_bawaan: dict[int, int | None] = {}
-        for proc_id, proc in proses_berjalan.items():
+        for proc_id, proc in proses_sumber.items():
             pb = await pemilik_hasil_proses(db, proc.jasa_id, "broken")
             pemilik_bawaan[proc_id] = pb
-            # Proses yang curah/karungnya NOL tapi hasil mesinnya belum
-            # dibukukan sama sekali tak pernah masuk `pasangan` di atas
-            # (tak ada baris sama sekali) — tambahkan SELALU, pagarnya
-            # `belum_dicatat <= 0.5` yang menyaring di bawah.
-            pasangan.add((proc_id, pb))
+            # Hasil mesin belum dibukukan hanya milik proses yang masih
+            # berjalan. Untuk proses selesai, hanya stok yang sudah tercatat
+            # di atas yang boleh dipindahkan.
+            if proc.status == "proses":
+                pasangan.add((proc_id, pb))
 
         for proc_id, jasa_id in sorted(pasangan, key=lambda x: (x[0], x[1] or 0)):
-            proc = proses_berjalan.get(proc_id)
+            proc = proses_sumber.get(proc_id)
             if proc is None:
                 continue
             baris_curah = (await db.execute(
@@ -4196,7 +4195,8 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
                         else FinishedGoodsStock.jasa_id == jasa_id))
             )).scalar_one())
             belum_dicatat = 0.0
-            if jasa_id == pemilik_bawaan.get(proc_id):
+            if (proc.status == "proses"
+                    and jasa_id == pemilik_bawaan.get(proc_id)):
                 keluar_mesin = (await output_sosoh(db, proc_id)).get("broken") or 0.0
                 belum_dicatat = max(
                     0.0, float(keluar_mesin) - await _broken_dibukukan(db, proc_id))
