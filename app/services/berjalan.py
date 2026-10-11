@@ -2233,11 +2233,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     rinci_bahan_pk.extend(
                         (nama, kg, jam, "lot") for nama, kg, jam in isian_u.baris
                     )
-                    # Untuk silo yang benar-benar kosong dan sudah dilepas,
-                    # status pada baris silo sudah cukup. Jika silo masih
-                    # dipakai tetapi tautan lot tidak ada, tampilkan ini agar
-                    # ketiadaan asal tidak tampak seperti detail yang hilang.
-                    if not isian_u.baris and not (dibebaskan and sisa_u <= 0.01):
+                    # Asal lot tetap ditampilkan meski silo sudah kosong atau
+                    # dibebaskan. Bila tautan lot memang tidak tercatat,
+                    # nyatakan dengan jelas agar bukan tampak seperti detail hilang.
+                    if not isian_u.baris:
                         rinci_bahan_pk.append((
                             "Asal lot tidak tercatat", "", "", "lot"
                         ))
