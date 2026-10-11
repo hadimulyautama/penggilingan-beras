@@ -2225,10 +2225,14 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 )
                 jenis_u = {"broken": "Broken", "beras": "Beras"}.get(
                     s.jenis_isi, "PK")
+                # "Awal X kg" dicabut (permintaan pemilik 11 Oktober 2026):
+                # bisa disimpulkan sendiri dari jumlah daftar asal lot di
+                # bawahnya. "Ditambah" TETAP disebut — itu PK yang masuk
+                # SESUDAH proses mulai, dan daftar asal lot (snapshot saat
+                # mulai) tak menyebutnya sama sekali.
                 baris_silo = (
                     f"{s.nama_silo} · {jenis_u}", _kg(total_u),
-                    status_u or (f"awal {_kg(awal_u)}"
-                     + (f" · ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else "")),
+                    status_u or (f"ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else ""),
                     ("dibebaskan" if dibebaskan else
                      "broken" if s.jenis_isi == "broken" else "silo"),
                 )

@@ -266,10 +266,15 @@ async def test_lebih_dari_enam_asal_jumlahnya_disebut(pg, silo, pemakai, pemasok
 # Laporan lapangan 6 Oktober 2026: "silo ditambahkan lagi beberapa, tetapi
 # tidak tercatat, yang tercatat hanya 5 kali awal masukan pk." Bukan
 # kegagalan MENCATAT — PK-nya tetap masuk database dan tetap dihitung ke
-# fakta "Ditambah" — tetapi `_kartu_penyosohan_g2` memangkas daftar asalnya
-# DUA KALI (sekali per silo di dalam `_isian_silo`, sekali lagi menggabung
-# dua silo) tanpa sepatah kata pun, berbeda dari kartu silo tunggal yang
-# sudah menyebutnya lewat `_nota_isian`.
+# fakta "Ditambah" — tetapi `_kartu_penyosohan_g2` SEMPAT memangkas daftar
+# asalnya DUA KALI (sekali per silo di dalam `_isian_silo`, sekali lagi
+# menggabung dua silo ke `[:10]`) tanpa sepatah kata pun.
+#
+# Kartu berpindah ke `anak_grup` (11 Oktober 2026, bersamaan dengan snapshot
+# asal lot saat proses mulai): tiap silo jadi SEKSINYA SENDIRI, jadi
+# potongan gabungan `[:10]` yang dulu memangkas KEDUA KALINYA sudah tak ada
+# lagi — yang tersisa cuma satu lapis potongan, PER SILO di dalam
+# `_isian_silo` (`BATAS_ASAL`), dan itu yang dijumlah `asal_lebih`/`nota`.
 
 async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, pemasok):
     from app.models import Silo, Warehouse
@@ -294,9 +299,15 @@ async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, p
         await _masuk(pg, silo_b_id, pemakai, pemasok, kode_batch=f"PKB-B{n}", kg=1_000, jam=n)
 
     async with pg() as db:
+        # Prosesnya mulai SESUDAH seluruh 16 pemasukan (jam 1–8 di tiap
+        # silo) — sejak "Ambil asal lot dari snapshot awal proses sosoh"
+        # (11 Oktober 2026), `_isian_silo` dibatasi `sampai=pr.waktu_mulai`,
+        # dan pemasukan yang terjadi SESUDAH itu tak lagi ikut daftar asal.
+        # Tanpa jeda ini kedelapan baris per silo jatuh sesudah waktu_mulai
+        # dan daftarnya terbaca kosong, bukan terpotong.
         pr = PolishingProcess(
-            kode_proses="POL-GAB-01", waktu_mulai=T0, status="proses",
-            created_by=pemakai.id)
+            kode_proses="POL-GAB-01", waktu_mulai=T0 + timedelta(hours=9),
+            status="proses", created_by=pemakai.id)
         db.add(pr)
         await db.flush()
         # `berat_masuk_kg` TERPISAH dari baris `pk_gudang2_intakes` di atas —
@@ -319,14 +330,20 @@ async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, p
     fakta = dict(baris.fakta)
     assert fakta["Ditambah"] == "16.000 kg"
 
-    # Daftarnya sendiri dibatasi (kartu tak boleh tak berhingga panjangnya)
-    # — tetapi potongannya WAJIB disebut, bukan didiamkan.
-    assert len(baris.anak) <= 10
-    # 8 per silo − BATAS_ASAL(6) tersisa di dalam `_isian_silo` = 2 per
-    # silo yang bahkan tak sempat digabung (asal_lebih = 4), ditambah
-    # potongan gabungan terakhir di `[:10]`.
+    # Tiap silo adalah seksinya sendiri (`anak_grup`) — daftarnya dibatasi
+    # PER SILO oleh `_isian_silo` (`BATAS_ASAL`), bukan lagi oleh potongan
+    # gabungan tambahan di atasnya. Potongannya WAJIB disebut, bukan
+    # didiamkan.
     assert baris.nota is not None and "baris lagi tak ditampilkan" in baris.nota
     lebih = int(baris.nota.split("+")[1].split(" ")[0])
-    # 2 per silo terpotong DI DALAM `_isian_silo` (8 − BATAS_ASAL) + 2 lagi
-    # terpotong saat 12 baris asal gabungan dijejalkan ke batas kartu [:10].
-    assert lebih == 2 * (8 - BATAS_ASAL) + 2 == 6
+    # 2 per silo terpotong DI DALAM `_isian_silo` (8 − BATAS_ASAL), dua
+    # silo — tak ada lagi potongan gabungan kedua.
+    assert lebih == 2 * (8 - BATAS_ASAL) == 4
+
+    # Kelompok "Bahan baku masuk per silo" membawa TEPAT BATAS_ASAL (6)
+    # baris asal untuk tiap silo (A dan B), bukan terpotong lagi menjadi
+    # gabungan — ini yang membuktikan potongan gabungan lama sudah tak ada.
+    _, baris_grup = next(g for g in baris.anak_grup if g[0] == "Bahan baku masuk per silo")
+    baris_a = [b for b in baris_grup if b[3] == "lot" and "PKB-A" in b[0]]
+    baris_b = [b for b in baris_grup if b[3] == "lot" and "PKB-B" in b[0]]
+    assert len(baris_a) == len(baris_b) == BATAS_ASAL

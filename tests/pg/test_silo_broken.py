@@ -575,7 +575,10 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
                      if b.kode == r2.proc.kode_proses)
         assert ("Broken sebagai bahan", "1.000 kg") in kartu.fakta
         assert kartu.anak_grup[0][0] == "Bahan baku masuk per silo"
-        assert ("Silo C · Broken", "1.000 kg", "awal 1.000 kg") \
+        # Baris ber-4 elemen sejak peran ditambahkan (dibebaskan/broken/silo/
+        # lot); "awal X kg" dicabut 11 Oktober 2026 — tanpa `ditambah`
+        # (masuk_u = 0 di sini), keterangannya kosong.
+        assert ("Silo C · Broken", "1.000 kg", "", "broken") \
             in kartu.anak_grup[0][1]
         assert any(judul == "Hasil sosoh keluar" for judul, _ in kartu.anak_grup)
 
