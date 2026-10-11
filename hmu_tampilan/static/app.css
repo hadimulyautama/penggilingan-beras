@@ -1162,6 +1162,75 @@ details.padat .pilihan { padding: 0 12px 12px; }
   font-family: var(--mono); font-size: 13px; color: var(--redup-2);
 }
 
+/* Rincian proses yang terbuka: bahan, hasil, dan asal lot harus terlihat
+   sebagai tiga kelompok berbeda. Panel mengalir menjadi beberapa kolom di
+   desktop dan satu kolom di ponsel; angka tetap menjadi titik fokus. */
+.anak--kelompok {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr));
+  gap: 12px;
+  margin: 0 14px 12px;
+  padding: 12px 0 0;
+  border-left: 0;
+  border-top: 1px solid var(--garis-2);
+}
+.anak__kelompok {
+  min-width: 0;
+  align-self: start;
+  padding: 13px 14px;
+  border: 1px solid var(--garis-2);
+  border-left: 3px solid var(--garis);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.anak__kelompok--bahan { border-left-color: var(--fase-silo); }
+.anak__kelompok--hasil { border-left-color: var(--fase-giling); }
+.anak__kelompok--asal { border-left-color: var(--fase-samping); }
+.anak__kelompok .anak__kepala {
+  margin: 0 0 9px;
+  font-family: var(--teks);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: .015em;
+  text-transform: none;
+  color: var(--redup);
+}
+.anak__kelompok .anak__baris {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 3px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--garis-2);
+}
+.anak__kelompok .anak__nama {
+  min-width: 0;
+  font-family: var(--teks);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tinta-2);
+  overflow-wrap: anywhere;
+}
+.anak__kelompok .anak__kg {
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 650;
+  color: var(--tinta);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.anak__kelompok .anak__jam {
+  font-family: var(--teks);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--redup-2);
+}
+@media (min-width: 900px) {
+  .anak--kelompok { gap: 14px; margin-right: 18px; margin-left: 18px; }
+  .anak__kelompok { padding: 15px 17px; }
+  .anak__kelompok .anak__nama { font-size: 14.5px; }
+  .anak__kelompok .anak__kg { font-size: 16px; }
+}
+
 /* Satu-satunya baris berwarna dalam kartu — untuk yang menuntut perhatian. */
 .nota {
   margin-top: 7px; padding-left: 9px;

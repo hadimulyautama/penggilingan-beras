@@ -105,10 +105,11 @@
    `penuh()` lalu `penuh_anak()` berurutan, selalu tampil seperti semula. #}
 {% macro penuh_anak(b) -%}
   {% if b.anak_grup %}
-    <div class="anak">
+    <div class="anak anak--kelompok">
       {% for judul, baris_grup in b.anak_grup %}
-        <div class="anak__kelompok">
-          <div class="anak__kepala">{{ judul }}</div>
+        {% set jenis_grup = "bahan" if judul.startswith("Bahan baku") else ("hasil" if judul.startswith("Hasil") else "asal") %}
+        <section class="anak__kelompok anak__kelompok--{{ jenis_grup }}" aria-label="{{ judul }}">
+          <h3 class="anak__kepala">{{ judul }}</h3>
           {% for nama, kg, jam in baris_grup %}
             <div class="anak__baris">
               <span class="anak__nama">{{ nama }}</span>
@@ -116,7 +117,7 @@
               {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
             </div>
           {% endfor %}
-        </div>
+        </section>
       {% endfor %}
     </div>
   {% elif b.anak %}
