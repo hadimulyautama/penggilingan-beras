@@ -572,6 +572,28 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
         assert rend == pytest.approx(4_000 / 4_800 * 100)
 
 
+async def test_picker_nama_broken_tetap_ditemukan_setelah_normalisasi(pg, dunia):
+    """Nilai picker dinormalisasi jadi uppercase; nama silo broken title-case.
+
+    PK memakai nama huruf tunggal (A/B), jadi mismatch kapitalisasi ini baru
+    tampak saat picker mengirim "BROKEN" untuk master "Silo Broken".
+    """
+    from sqlalchemy import update
+
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import get_g2_silo
+
+    async with pg() as db:
+        await db.execute(update(Silo).where(Silo.id == dunia["silo_broken"])
+                         .values(nama_silo="Silo Broken"))
+        await db.flush()
+
+        silo = await get_g2_silo(db, "BROKEN")
+
+        assert silo is not None
+        assert silo.id == dunia["silo_broken"]
+
+
 async def test_tambah_silo_penyosohan_broken_pemilik_beda_ditolak(pg, dunia):
     """Silo C berisi broken milik jasa Bu Sri. Proses PABRIK (tanpa jasa)
     tak boleh menambahkannya sebagai bahan — pagar satu-pemilik yang sama

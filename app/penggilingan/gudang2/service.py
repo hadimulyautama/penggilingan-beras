@@ -136,7 +136,12 @@ async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
     return (
         await db.execute(
             select(Silo).where(
-                Silo.warehouse_id == wid, Silo.nama_silo == f"Silo {letter}"
+                Silo.warehouse_id == wid,
+                # Picker/API normalizes submitted values to uppercase, while
+                # master names for product silos can be title case (e.g.
+                # "Silo Broken"). Silo letters happen to be uppercase, which
+                # hid this mismatch until a broken silo was selectable.
+                func.lower(Silo.nama_silo) == f"silo {letter}".lower(),
             )
         )
     ).scalars().first()
