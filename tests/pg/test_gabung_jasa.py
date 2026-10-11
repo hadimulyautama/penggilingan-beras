@@ -231,6 +231,24 @@ async def test_cocok_pemilik_pelanggan_sama_beda_pesanan(pg, dunia):
         assert not await cocok_pemilik(db, None, dunia["jasa1"])  # arah sebaliknya
 
 
+async def test_cocok_pemilik_sentinel_pesanan_baru_tak_meledak(pg, dunia):
+    """Galat lapangan 11 Oktober 2026: `berjalan.py` memakai
+    `PEMILIK_BARU = "pesanan-baru"` (TEKS) sebagai `jasa_id` sementara untuk
+    tiket yang belum melahirkan `Jasa` sungguhan. Sebelum perbaikan ini,
+    `Jasa.id.in_({"pesanan-baru", jasa_nyata})` membuat Postgres menolak
+    kueri ("operator does not exist: integer = character varying") —
+    500 di SELURUH `/aksi`, bukan cuma kartu yang bersangkutan.
+    """
+    from app.services.berjalan import PEMILIK_BARU
+    from app.services.jasa import cocok_pemilik
+
+    async with pg() as db:
+        assert not await cocok_pemilik(db, PEMILIK_BARU, dunia["jasa1"])
+        assert not await cocok_pemilik(db, dunia["jasa1"], PEMILIK_BARU)
+        assert not await cocok_pemilik(db, PEMILIK_BARU, None)
+        assert not await cocok_pemilik(db, None, PEMILIK_BARU)
+
+
 async def test_tombol_silo_g1_tak_mati_untuk_pelanggan_sama_beda_pesanan(pg, dunia):
     """`_pemilik_silo` (`berjalan.py`, menyalakan/mematikan tombol "Ke Silo
     N" di layar Antrian tunggu) wajib memakai aturan yang SAMA dengan

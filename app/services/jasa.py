@@ -353,10 +353,25 @@ async def cocok_pemilik(db: AsyncSession, a: int | None, b: int | None) -> bool:
     akan MENERIMA dan menggabungkannya kalau tombolnya sempat ditekan — jenis
     cacat yang docstring `_tujuan_gabah` sendiri memperingatkan ("layar
     melarang yang sebenarnya boleh").
+
+    ⚠⚠ GALAT SUSULAN 11 Oktober 2026, dari perbaikan di atas: `berjalan.py`
+    memakai `PEMILIK_BARU = "pesanan-baru"` (TEKS, bukan angka) sebagai
+    `jasa_id` sementara untuk tiket yang belum melahirkan `Jasa` sungguhan —
+    "sengaja tak mungkin kebetulan sama dengan pemilik nyata" (lihat
+    docstring-nya), dan itu benar SELAMA pembandingnya `a == b` murni Python.
+    Begitu `a`/`b` lolos ke kueri `Jasa.id.in_({a, b})`, Postgres menolak
+    membandingkan kolom integer dengan parameter yang ikut dibind sebagai
+    VARCHAR gara-gara satu anggota himpunannya teks — "operator does not
+    exist: integer = character varying", 500 di SELURUH `/aksi`. Dijaga di
+    sini, bukan di pemanggil: `jasa_id` yang BUKAN int (atau None) tak
+    mungkin cocok dengan apa pun, persis seperti yang dijamin perbandingan
+    Python lama.
     """
     if a == b:
         return True
     if a is None or b is None:
+        return False
+    if not isinstance(a, int) or not isinstance(b, int):
         return False
     baris = (await db.execute(
         select(Jasa.id, Jasa.pelanggan_id).where(Jasa.id.in_({a, b}))

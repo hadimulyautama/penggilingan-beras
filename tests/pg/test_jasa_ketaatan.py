@@ -414,6 +414,21 @@ async def test_tombol_dryer_tak_mati_untuk_pelanggan_sama_beda_pesanan(pg, pemak
         f"tombol 'Ke {d.nama}' MATI untuk pelanggan yang SAMA (beda pesanan "
         f"administratif) — padahal server akan menerimanya: {mati!r}")
 
+    # ── Reproduksi PERSIS galat susulan 11 Oktober 2026 ──
+    # Tiket KETIGA (BELUM diterima — belum punya Jasa sungguhan) membuka
+    # layar Antrian tunggu: `_tujuan_gabah` memanggil `_mati_pemilik_dryer`
+    # dengan `jasa_id=PEMILIK_BARU` ("pesanan-baru", TEKS). Dryer-nya sudah
+    # berisi gabah jid_a — sebelum perbaikan ini, Postgres menolak kueri
+    # `Jasa.id.in_({"pesanan-baru", jid_a})` ("operator does not exist:
+    # integer = character varying"), 500 di SELURUH `/aksi`.
+    from app.services.berjalan import PEMILIK_BARU
+
+    async with pg() as db:
+        mati_baru = await _mati_pemilik_dryer(db, d.id, PEMILIK_BARU)
+    assert mati_baru != "", (
+        "tiket yang belum punya Jasa sungguhan tak boleh dianggap cocok "
+        "dengan gabah pemilik lain yang sudah di dryer")
+
 
 async def test_satu_pesanan_boleh_dua_silo_digiling_bersama(pg, pemakai, pabrik):
     """⭐ SEBALIKNYA: barang SEPEMILIK boleh dicampur sebebas barang pabrik.
