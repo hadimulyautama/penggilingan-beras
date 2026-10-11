@@ -953,7 +953,10 @@ async def _isian_silo(
             judul = f"{nama or '?'} · {kode}"
         else:
             continue
-        keluar.append((judul, _kg(kg), f"masuk {_tgl(tgl)}"))
+        # Tanpa tanggal masuk di sini — kode lot/batch (LOT-YYMMDD,
+        # PKB-YYYYMMDD-NN) sudah memuat tanggalnya sendiri; menyebutnya lagi
+        # di baris ini cuma mengulang (keputusan pemilik 11 Oktober 2026).
+        keluar.append((judul, _kg(kg), ""))
     return IsianSilo(baris=keluar[:BATAS_ASAL], lebih=max(0, len(keluar) - BATAS_ASAL),
                      masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
 

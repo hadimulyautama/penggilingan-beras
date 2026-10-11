@@ -214,15 +214,20 @@ def test_kartu_pk_menyebut_lot_gilingnya():
     assert "MillingProcess.kode_proses" in fn, "lot giling tak disebut"
     assert "Supplier.nama_supplier" in fn, "pemasok PK luar tak disebut"
     assert "PkTumpukanToSilo" in fn, "PK yang lewat tumpukan ikut terlewat"
-    assert 'f"masuk {_tgl(tgl)}"' in fn
     assert "return (await _isian_silo(db, silo_id)).baris" in inspect.getsource(svc._asal_pk)
 
-    g2 = (inspect.getsource(svc._kartu_penyosohan_g2)
-          + inspect.getsource(svc._kartu_silo_g2))
-    # Kartu silo DAN kartu penyosohan — keduanya, lewat memo yang sama
-    # (`asal_silo` diterima dari pemanggilnya: untuk_gudang2 / operator).
-    assert g2.count("await asal_silo(") >= 2, "ada kartu G2 yang belum menyebut asalnya"
-    assert "_pemasok_ringkas(" in g2
+    g2_proses = inspect.getsource(svc._kartu_penyosohan_g2)
+    g2_silo = inspect.getsource(svc._kartu_silo_g2)
+    # Kartu penyosohan sejak 11 Oktober 2026 mengambil snapshot pada SAAT
+    # proses mulai (`sampai=pr.waktu_mulai`) alih-alih isian silo saat ini —
+    # silo yang dikosongkan sesudahnya tak lagi menghapus jejak bahan dari
+    # kartu proses. Kartu silo tunggal (silo yang belum/sedang dipakai)
+    # tetap lewat memo `asal_silo`, sebab tak ada "saat proses mulai" untuk
+    # silo yang belum punya proses.
+    assert "_isian_silo(" in g2_proses and "sampai=pr.waktu_mulai" in g2_proses, \
+        "kartu penyosohan tak mengambil snapshot asal lot saat proses mulai"
+    assert "await asal_silo(" in g2_silo, "kartu silo tunggal belum menyebut asalnya"
+    assert "_pemasok_ringkas(" in g2_proses + g2_silo
     assert "asal_silo" in inspect.getsource(svc.untuk_gudang2)
     assert "asal_silo" in inspect.getsource(svc.untuk_operator_gudang2)
     # Sisa per lot sengaja tidak diarang: stok silo disimpan sebagai jumlah,
