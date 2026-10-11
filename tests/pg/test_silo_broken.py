@@ -547,6 +547,11 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
         # P2: mulai HANYA dari Silo A (PK) — Silo C belum jadi bahannya.
         r2 = await mulai_penyosohan(db, user=u, nama_silos=["A"])
         assert r2.berat_awal_total == 4_000
+        # Picker berdasarkan proses hanya menawarkan broken yang pemiliknya
+        # cocok dengan bahan proses (jasa Bu Sri).
+        from app.web.api import silo_bahan_g2
+        assert "C" in [x["value"] for x in await silo_bahan_g2(
+            induk=r2.proc.kode_proses, user=u)]
 
         # Mid-proses: tambahkan Silo C (broken, 1.000 kg) sebagai campuran.
         r2b = await tambah_silo_penyosohan(db, user=u, kode=r2.proc.kode_proses,
@@ -660,6 +665,9 @@ async def test_tambah_silo_penyosohan_broken_pemilik_beda_ditolak(pg, dunia):
 
         r2 = await mulai_penyosohan(db, user=u, nama_silos=["B"])
         assert r2.proc.jasa_id is None
+        from app.web.api import silo_bahan_g2
+        assert "C" not in [x["value"] for x in await silo_bahan_g2(
+            induk=r2.proc.kode_proses, user=u)]
 
         with pytest.raises(Gudang2Error):
             await tambah_silo_penyosohan(db, user=u, kode=r2.proc.kode_proses,

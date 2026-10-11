@@ -864,9 +864,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "fields": [
                  {"name": "proses", "label": "Pemilik stok broken", "type": "remote",
                   "source": "/api/actions/broken-proses-tersedia",
+                  "auto_satu": True,
                   "kosong": "Belum ada stok broken yang tersedia."},
                  {"name": "silo", "label": "Silo broken tujuan", "type": "remote",
                   "source": "/api/actions/silo-broken-g2",
+                  "auto_satu": True,
                   "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number"},
@@ -962,7 +964,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "source": "/api/actions/polishing-active",
                   "kosong": "Tidak ada penyosohan yang sedang berjalan."},
                  {"name": "silo", "label": "Silo yang ditambahkan (boleh lebih dari satu)",
-                  "type": "remote_banyak", "source": "/api/actions/silo-bahan-g2",
+                  "type": "remote_banyak", "induk": "kode",
+                  "source": "/api/actions/silo-bahan-g2",
                   "kosong": "Tidak ada silo lain yang bisa ditambahkan."},
              ]},
             {"id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
@@ -3789,7 +3792,7 @@ async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-bahan-g2")
-async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 2 yang berisi STOK dan BELUM dipakai penyosohan berjalan.
 
     Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
@@ -3808,10 +3811,9 @@ async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
     tak ada baris pemakaian pada proses yang berstatus 'proses'. Borang yang
     menawarkan silo yang kemudian ditolak layanannya membuat orang mengira
     aplikasinya rusak, padahal keduanya benar sendiri-sendiri — termasuk
-    pagar "proses tak boleh memakan broken sendiri" di `tambah_silo_
-    penyosohan`, yang tak bisa diperiksa di sini sebab picker ini tak tahu
-    proses MANA yang akan ditambahi (field `kode` di atasnya, tak terhubung
-    sebagai `induk`).
+    pagar "proses tak boleh memakan broken sendiri" di
+    `tambah_silo_penyosohan` tetap diperiksa saat simpan. Bila picker
+    dipanggil dengan `induk`, pilihan juga disaring ke pemilik proses itu.
     """
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
@@ -3819,9 +3821,19 @@ async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.services.jasa import pemilik_silo_g2
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
+        pemilik_target = None
+        if induk.strip():
+            proc = (await db.execute(select(PolishingProcess).where(
+                PolishingProcess.kode_proses == induk.strip(),
+                PolishingProcess.status == "proses",
+            ))).scalars().first()
+            if proc is None:
+                return []
+            pemilik_target = proc.jasa_id
         dipakai = set((await db.execute(
             select(PolishingSiloUsage.silo_id)
             .join(PolishingProcess,
@@ -3836,6 +3848,8 @@ async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 continue
             kg = await hitung_stok_silo(db, s.id)
             if not kg or kg <= 0:
+                continue
+            if induk.strip() and await pemilik_silo_g2(db, s.id) != {pemilik_target}:
                 continue
             huruf = s.nama_silo.replace("Silo ", "")
             keluar.append({"value": huruf, "label": f"{s.nama_silo} · {_rp(kg)} kg"})

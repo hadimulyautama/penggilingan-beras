@@ -623,7 +623,14 @@
        kotak yang masing-masing punya keadaan sendiri yang harus BERTAHAN
        melewati pemuatan ulang. */
     function muatBanyak(f, segar) {
-      ambil(f.source).then(function (daftar) {
+      var sumber = f.source;
+      if (f.induk) {
+        var nilaiInduk = nilaiMedan(f.induk);
+        if (!nilaiInduk) { return; }
+        sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
+          encodeURIComponent(nilaiInduk);
+      }
+      ambil(sumber).then(function (daftar) {
         if (!daftar) { return; }
         var wadah = $("b_" + f.name);
         var simpanan = lembar.querySelector('[data-name="' + f.name + '"][data-banyak]');
@@ -845,7 +852,9 @@
            sendiri: proses yang memakai satu silo tak menyisakan pilihan apa
            pun untuk dibuat. Menyuruh orang memilih satu-satunya kemungkinan
            adalah langkah yang hanya bisa salah ditekan. */
-        else if (f.induk && daftar.length === 1) { s.value = daftar[0].value; }
+        else if ((f.induk || f.auto_satu) && daftar.length === 1) {
+          s.value = daftar[0].value;
+        }
         // Kalau daftarnya kosong, aksi ini memang belum bisa dikerjakan.
         // Katakan sekarang — bukan setelah orang menekan Simpan dan ditolak.
         // Pilihan yang boleh dikosongkan tak boleh menghentikan aksi ketika
@@ -888,15 +897,17 @@
        cuma bekerja untuk proses yang dipilih PERTAMA, dan orang yang berubah
        pikiran memilih silo milik proses yang lain. */
     (a.fields || []).forEach(function (f) {
-      if (f.type !== "remote" || !f.induk) { return; }
+      if ((f.type !== "remote" && f.type !== "remote_banyak") || !f.induk) { return; }
       var pi = $("f_" + f.induk);
       if (!pi) { return; }
       pi.addEventListener("change", function () {
         var anak = $("f_" + f.name);
+        var banyak = f.type === "remote_banyak" ? $("b_" + f.name) : null;
         if (anak) {
           anak.innerHTML = '<option value="">memuat…</option>';
           anak.disabled = false;
         }
+        if (banyak) { banyak.innerHTML = '<p class="bantu">memuat…</p>'; }
         var lamaNota = $("kosong_" + f.name);
         if (lamaNota) { lamaNota.remove(); }
         var tbl = $("simpan");
