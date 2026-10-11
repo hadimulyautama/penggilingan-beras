@@ -995,50 +995,98 @@ def _pemasok_ringkas(anak: list[tuple[str, str, str]]) -> str:
 #:
 #: Pesanan lahir saat operator menerima tiketnya (`purchase.
 #: pesanan_jasa_dari_tiket`), jadi saat kartunya digambar pemiliknya belum punya
-#: id. Tetapi sudah pasti SATU hal: barangnya tak boleh digabung dengan apa pun
-#: yang sudah ada di mana pun — termasuk gabah pabrik.
+#: id.
 #:
-#: Sebuah teks, bukan angka: ia dibandingkan dengan `jasa_id` yang selalu int
-#: atau None, jadi ia tak mungkin kebetulan sama dengan pemilik yang nyata.
-#: `-1` akan "bekerja" sampai hari seseorang memakai id negatif untuk hal lain.
+#: ⚠⚠ TAK LAGI DIKONSTRUKSI oleh `_tiket_belum_ditaut` sejak pesan kerja 13
+#: (11 Oktober 2026) — fungsi itu kini mengoper `tiket=t` apa adanya ke
+#: `_tujuan_gabah`, dan kecocokan pemiliknya dijawab `jasa.
+#: cocok_pemilik_tiket` lewat PELANGGAN, bukan tanda ini. Tanda ini dulu
+#: membuang satu-satunya fakta yang menentukan jawabannya — pesanan baru itu
+#: milik SIAPA — sehingga tombol tempat yang sebenarnya boleh digabung
+#: (pelanggan sama, pesanan lain) ikut mati.
+#:
+#: Konstanta ini TETAP berdiri sebagai contoh kanonik "tanda bukan-int" untuk
+#: uji penjaga `cocok_pemilik`'s `isinstance(a, int)` — jangan dihapus hanya
+#: karena tak ada lagi pemanggil produksi yang menulisnya: sebuah teks, bukan
+#: angka, dan `cocok_pemilik` WAJIB tetap menjawabnya False tanpa meledak
+#: seandainya nilai semacam ini muncul lagi dari jalur lain suatu hari.
 PEMILIK_BARU = "pesanan-baru"
 
 
+async def _cocok(db: AsyncSession, jasa_id: int | None, tiket: dict | None,
+                 j: int | None) -> bool:
+    """`cocok_pemilik`/`cocok_pemilik_tiket`, dipilih menurut yang tersedia.
+
+    `tiket` menang bila ADA — pemanggil yang punya tiket mentah (belum tentu
+    berpesanan) tak pernah juga mengoper `jasa_id` sungguhan untuk sisi yang
+    sama, lihat pemanggilnya di `_tujuan_gabah`.
+    """
+    if tiket is not None:
+        from app.services.jasa import cocok_pemilik_tiket
+        return await cocok_pemilik_tiket(db, t=tiket, jasa_id_lain=j)
+    from app.services.jasa import cocok_pemilik
+    return await cocok_pemilik(db, jasa_id, j)
+
+
+async def _sisi_kita(db: AsyncSession, jasa_id: int | None,
+                     tiket: dict | None) -> str | None:
+    """Sebutan untuk barang yang SEDANG ditempatkan — sisi "ini" di kalimat
+    penolakan dua-sisi. `None` berarti pabrik."""
+    if tiket is not None:
+        from app.penggilingan.gudang1.services.timbang_link import (
+            adalah_jasa, nama_pihak)
+        return nama_pihak(tiket) if adalah_jasa(tiket) else None
+    return await nama_pemilik(db, jasa_id)
+
+
 async def _mati_pemilik_dryer(db: AsyncSession, dryer_id: int,
-                              jasa_id: int | None) -> str:
+                              jasa_id: int | None, *,
+                              tiket: dict | None = None) -> str:
     """Kalimat sebab bila mesin ini berisi gabah pemilik LAIN — "" bila boleh.
 
-    ⚠ "pemilik LAIN" dijawab `cocok_pemilik` (sama persis ATAU sama
-    pelanggan), BUKAN `!= jasa_id` apa adanya — lihat ⚠⚠ di docstring-nya
-    untuk cacat lapangan yang memotivasi ini.
-    """
-    from app.services.jasa import cocok_pemilik
+    ⚠ "pemilik LAIN" dijawab `cocok_pemilik`/`cocok_pemilik_tiket` (sama
+    persis ATAU sama pelanggan), BUKAN `!= jasa_id` apa adanya — lihat ⚠⚠ di
+    docstring keduanya untuk cacat lapangan yang memotivasi ini.
 
+    `tiket` (dict mentah dari `tiket_masuk_aktif`) dioper oleh pemanggil yang
+    BELUM tahu pesanannya sudah lahir atau belum — `_tiket_belum_ditaut`,
+    satu-satunya. Pemanggil lain (yang sudah pegang `PurchaseBatch.jasa_id`
+    sungguhan) tetap mengoper `jasa_id` apa adanya, `tiket=None`.
+    """
     isi = (await db.execute(
         select(PurchaseBatch.jasa_id).where(
             PurchaseBatch.dryer_id == dryer_id,
             PurchaseBatch.status_batch == "di_dryer").distinct()
     )).scalars().all()
-    lain = {j for j in isi if not await cocok_pemilik(db, jasa_id, j)}
+    lain = {j for j in isi if not await _cocok(db, jasa_id, tiket, j)}
     if not lain:
         return ""
     peta = await nama_pemilik_banyak(db, lain)
     sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in lain)
-    return f"Berisi barang {sebut} — kepemilikan berbeda tak boleh digabung"
+    # ⭐ DUA SISI, bukan satu — laporan lapangan 11 Oktober 2026: kalimat yang
+    # cuma menyebut isi mesin ("Berisi barang Didik") membuat operator
+    # membandingkannya dengan nama di kartunya sendiri ("Didik juga!") dan
+    # menyimpulkan aplikasinya rusak. Kadang memang rusak (pesan kerja ini);
+    # kadang BUKAN, sebab dua "Didik" bisa dua pelanggan berbeda yang
+    # kebetulan senama — dan tanpa menyebut KEDUA sisi, operator tak bisa
+    # membedakan dua keadaan itu dari kalimatnya saja.
+    sisi_kita = await _sisi_kita(db, jasa_id, tiket)
+    return (f"Berisi barang {sebut} — barang ini {sisi_kita or 'pabrik'} — "
+            "kepemilikan berbeda tak boleh digabung")
 
 
 async def _pemilik_silo(db: AsyncSession, silo_id: int,
-                        jasa_id: int | None) -> tuple[str | None, str]:
+                        jasa_id: int | None, *,
+                        tiket: dict | None = None) -> tuple[str | None, str]:
     """(sebutan pemilik isi silo, sebab tombolnya dimatikan).
 
     Satu silo tak pernah berisi dua pemilik — penjaganya di `masuk_silo` — jadi
     "pemilik isi silo" selalu tunggal bila silonya berisi.
 
-    ⚠ "pemilik LAIN" dijawab `cocok_pemilik`, BUKAN `== {jasa_id}` apa
-    adanya — sebangun `_mati_pemilik_dryer` di atas.
+    ⚠ "pemilik LAIN" dijawab `cocok_pemilik`/`cocok_pemilik_tiket`, BUKAN
+    `== {jasa_id}` apa adanya — sebangun `_mati_pemilik_dryer` di atas,
+    termasuk alasan parameter `tiket`-nya.
     """
-    from app.services.jasa import cocok_pemilik
-
     isi = (await db.execute(
         select(SiloStorage.jasa_id).where(
             SiloStorage.silo_id == silo_id,
@@ -1048,18 +1096,20 @@ async def _pemilik_silo(db: AsyncSession, silo_id: int,
         return None, ""
     pemilik = {j for j in isi}
     sebutan = await nama_pemilik(db, next(iter(pemilik))) if len(pemilik) == 1 else None
-    lain = {j for j in pemilik if not await cocok_pemilik(db, jasa_id, j)}
+    lain = {j for j in pemilik if not await _cocok(db, jasa_id, tiket, j)}
     if not lain:
         return sebutan, ""
     peta = await nama_pemilik_banyak(db, lain)
     sebut = ", ".join(peta.get(j) or "gabah pabrik" for j in lain)
-    return sebutan, (f"Berisi barang {sebut} — kepemilikan berbeda tak boleh "
-                     "digabung")
+    sisi_kita = await _sisi_kita(db, jasa_id, tiket)  # ⭐ DUA SISI — lihat catatan di atas.
+    return sebutan, (f"Berisi barang {sebut} — barang ini {sisi_kita or 'pabrik'} "
+                     "— kepemilikan berbeda tak boleh digabung")
 
 
 async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
                         post: str, data: dict,
-                        jasa_id: int | None = None) -> list[Tombol]:
+                        jasa_id: int | None = None,
+                        tiket: dict | None = None) -> list[Tombol]:
     """Tujuan yang sah untuk gabah sekondisi ini — mesinnya disebut satu per satu.
 
     Alasan sebuah tujuan dimatikan diambil dari ATURAN YANG SAMA yang menolak
@@ -1068,11 +1118,20 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     lambat layar melarang yang sebenarnya boleh — atau lebih buruk,
     mempersilakan yang akan ditolak.
 
-    `jasa_id` = pemilik gabah yang sedang ditempatkan. Tempat yang berisi barang
-    pemilik LAIN dimatikan berikut sebabnya, aturan yang sama dengan penjaga
-    basah/kering di atasnya — dan untuk alasan yang sama: tombol yang pasti
-    ditolak lebih buruk daripada tombol yang tak ada, sebab yang menekannya
-    sudah berdiri di depan mesin dengan gabah di tangan.
+    `jasa_id` = pemilik gabah yang sedang ditempatkan, DIPAKAI bila
+    pemanggilnya sudah pegang baris `PurchaseBatch`/dkk sungguhan. `tiket`
+    (dict mentah tiket timbang) dipakai sebagai gantinya oleh pemanggil yang
+    BELUM tahu pesanannya sudah lahir atau belum — lihat ⚠⚠ di
+    `jasa.cocok_pemilik_tiket` untuk cacat lapangan 11 Oktober 2026 yang
+    melahirkan jalur ini: memaksa pemanggil itu menebak `jasa_id` dulu
+    (sentinel, atau `None` dari tes `pelanggan_id` yang salah) adalah
+    SUMBER cacatnya, bukan sekadar gejalanya.
+
+    Tempat yang berisi barang pemilik LAIN dimatikan berikut sebabnya,
+    aturan yang sama dengan penjaga basah/kering di atasnya — dan untuk
+    alasan yang sama: tombol yang pasti ditolak lebih buruk daripada tombol
+    yang tak ada, sebab yang menekannya sudah berdiri di depan mesin dengan
+    gabah di tangan.
 
     Kapasitas sengaja TIDAK diperiksa di sini: ia bergantung pada total muatan
     dan pesan penolakannya sudah menyebut sisanya dengan tepat. Menebaknya di
@@ -1082,6 +1141,12 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
         active_drying_lot, dryers_g1, isi_dryer)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
+    if tiket is not None:
+        from app.penggilingan.gudang1.services.timbang_link import adalah_jasa
+        ini_jasa = adalah_jasa(tiket)
+    else:
+        ini_jasa = jasa_id is not None
+
     jenis = "GABAH_BASAH" if kondisi == "basah" else "GABAH_KERING"
     info = intake_dari_jenis(jenis)
     sah = info.tujuan_pilihan if info else ()
@@ -1090,7 +1155,13 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
     # juga dipakai penjaganya (`tumpukan.tujuan_sah`): daftar pilihan yang
     # disusun terpisah dari aturan penolakannya cepat atau lambat menawarkan
     # yang akan ditolak.
-    if jasa_id is not None and kondisi == "basah":
+    #
+    # ⚠ `ini_jasa`, BUKAN `jasa_id is not None` apa adanya — cacat lapangan
+    # 11 Oktober 2026: tiket jasa bernama bebas dulu terbaca `jasa_id=None`
+    # (tes `pelanggan_id` yang salah, lihat `cocok_pemilik_tiket`), jadi
+    # pilihan "tumpuk" ikut DITAWARKAN untuk gabah basah titipan pelanggan —
+    # padahal aturan pemilik eksplisit melarangnya.
+    if ini_jasa and kondisi == "basah":
         from app.penggilingan.gudang1.services.tumpukan import tujuan_sah
         sah = tuple(t for t in sah if t in tujuan_sah(kondisi, 1))
     keluar: list[Tombol] = []
@@ -1107,7 +1178,7 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
             elif isi and isi[0] != kondisi:
                 mati = f"Berisi gabah {isi[0]} — tak boleh dicampur gabah {kondisi}"
             else:
-                mati = await _mati_pemilik_dryer(db, d.id, jasa_id) or mati
+                mati = await _mati_pemilik_dryer(db, d.id, jasa_id, tiket=tiket) or mati
             ket = ("Mesin kosong" if not isi
                    else f"Bergabung dengan {_kg(isi[1])} gabah {isi[0]}")
             keluar.append(Tombol(
@@ -1125,7 +1196,7 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
         # lebih baik, dan berpura-pura tahu lebih buruk daripada diam.
         for si in silo:
             kg = await _silo_content_kg(db, si.id)
-            pemilik_silo, mati_silo = await _pemilik_silo(db, si.id, jasa_id)
+            pemilik_silo, mati_silo = await _pemilik_silo(db, si.id, jasa_id, tiket=tiket)
             keluar.append(Tombol(
                 nama=f"Ke {si.nama_silo}", post=post,
                 ket=("Silo kosong" if not kg
@@ -1195,14 +1266,18 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             # menekan — dan yang menebak akan berhenti menekan.
             # Tujuannya ditekan LANGSUNG dari kartu — tak ada lembar melayang
             # untuk satu keputusan yang cuma punya beberapa jawaban.
+            # ⚠⚠ `tiket=t`, BUKAN `jasa_id=` yang ditebak dari `pelanggan_id`.
+            # Pesan kerja 13 (11 Oktober 2026): `t.get("pelanggan_id")` dipakai
+            # sebagai penentu "ini jasa atau bukan" adalah cacat kembar dari
+            # `adalah_jasa()` (2 Oktober 2026) — salah untuk pelanggan BARU
+            # yang diketik bebas (`pelanggan_id`-nya NULL sampai
+            # `find_or_create_pelanggan` membuatnya nanti). `_tujuan_gabah`
+            # kini menentukan pemiliknya sendiri lewat `cocok_pemilik_tiket`
+            # (bandingannya PELANGGAN, bukan tanda `PEMILIK_BARU`) — lihat ⚠⚠
+            # di sana.
             tombol=await _tujuan_gabah(
                 db, kondisi, post="/api/actions/gabah-masuk",
-                data={"timbangan_transaksi_id": t["id"]},
-                # Tiket jasa yang menunjuk pesanan berjalan boleh bergabung
-                # dengan barang pesanan itu; yang akan melahirkan pesanan BARU
-                # tak boleh bergabung dengan apa pun.
-                jasa_id=((t.get("jasa_id") or PEMILIK_BARU)
-                         if t.get("pelanggan_id") else None)),
+                data={"timbangan_transaksi_id": t["id"]}, tiket=t),
         ))
     return baris
 

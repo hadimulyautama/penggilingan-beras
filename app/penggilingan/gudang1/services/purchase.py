@@ -115,6 +115,28 @@ class CreatedBatch:
     jasa_baru: bool = False
 
 
+async def cari_pelanggan_by_nama(db: AsyncSession, nama: str):
+    """Cari pelanggan aktif (case-insensitive) — BACA SAJA, tak pernah membuat.
+
+    SATU aturan pencocokan, dipakai di SINI dan oleh layar (`jasa.
+    pelanggan_tiket`) yang perlu tahu "nama bebas ini sudah pernah jadi
+    pelanggan?" tanpa berhak membuat barisnya — kartu antrean digambar tiap
+    kali layar dibuka, dan membuat baris `pelanggan` dari layar yang cuma
+    DILIHAT akan melahirkan pelanggan tanpa ada truk yang benar-benar datang.
+    `find_or_create_pelanggan` di bawah memanggil ini dulu, sebelum membuat.
+    """
+    from app.models import Pelanggan
+
+    nama = (nama or "").strip()
+    if not nama:
+        return None
+    stmt = select(Pelanggan).where(
+        func.lower(Pelanggan.nama_pelanggan) == nama.lower(),
+        Pelanggan.deleted_at.is_(None),
+    )
+    return (await db.execute(stmt)).scalars().first()
+
+
 async def find_or_create_pelanggan(db: AsyncSession, nama: str) -> tuple:
     """Cari pelanggan aktif (case-insensitive), buat bila belum ada.
 
@@ -144,11 +166,7 @@ async def find_or_create_pelanggan(db: AsyncSession, nama: str) -> tuple:
     from app.models import Pelanggan
 
     nama = (nama or "").strip()
-    stmt = select(Pelanggan).where(
-        func.lower(Pelanggan.nama_pelanggan) == nama.lower(),
-        Pelanggan.deleted_at.is_(None),
-    )
-    ada = (await db.execute(stmt)).scalars().first()
+    ada = await cari_pelanggan_by_nama(db, nama)
     if ada is not None:
         return ada, False
     baru = Pelanggan(nama_pelanggan=nama, status="aktif")

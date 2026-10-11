@@ -94,9 +94,19 @@ async def nama_pemilik(db: AsyncSession, jasa_id: int | None) -> str | None:
     Satu bentuk sebutan untuk SELURUH layar. Dua layar yang menyusun sebutan
     pemilik sendiri-sendiri akan menyebut barang yang sama dengan dua nama, dan
     yang membacanya tak punya cara tahu keduanya satu pesanan.
+
+    ⚠ Tanda bukan-int (mis. `berjalan.PEMILIK_BARU`) dijawab apa adanya,
+    TANPA menyentuh basis data — sebangun penjaga `cocok_pemilik`. Pesan
+    kerja 13 (11 Oktober 2026): fungsi ini dipanggil dari kalimat kabar
+    "dua sisi" yang baru (`berjalan._sisi_kita`), dan tak ada yang menjamin
+    pemanggil jauh di hilir selalu sudah menyaring tandanya sendiri —
+    `Jasa.id == jasa_id` dengan teks meledak PERSIS seperti `cocok_pemilik`
+    dulu meledak, kelas galat yang sama, tempat berbeda.
     """
     if jasa_id is None:
         return None
+    if not isinstance(jasa_id, int):
+        return f"pesanan #{jasa_id}"
     baris = (await db.execute(
         select(Jasa.kode, Pelanggan.nama_pelanggan)
         .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
@@ -378,6 +388,70 @@ async def cocok_pemilik(db: AsyncSession, a: int | None, b: int | None) -> bool:
     )).all()
     pelanggan = {jid: pel for jid, pel in baris}
     return a in pelanggan and b in pelanggan and pelanggan[a] == pelanggan[b]
+
+
+async def pelanggan_tiket(db: AsyncSession, t: dict) -> int | None:
+    """Pelanggan sebuah TIKET jasa yang belum tentu melahirkan `Jasa`
+    sungguhan — panggil SESUDAH memastikan `adalah_jasa(t)`.
+
+    `pelanggan_id` langsung bila tiketnya menunjuk pelanggan dari daftar
+    (benar untuk tiket lama MAUPUN baru — kolom ini tak berubah begitu
+    pesanannya lahir). Kalau NULL (pelanggan diketik bebas), dicari BACA-SAJA
+    dengan aturan PERSIS `find_or_create_pelanggan` (`cari_pelanggan_by_nama`)
+    — None bila nama itu belum sama sekali punya baris `pelanggan`, pesanan
+    ini genuinely baru dan tak ada apa pun untuk dicocokkan.
+    """
+    pid = t.get("pelanggan_id")
+    if pid is not None:
+        return int(pid)
+    nama = (t.get("nama_pelanggan") or t.get("pihak_nama") or "").strip()
+    if not nama:
+        return None
+    from app.penggilingan.gudang1.services.purchase import cari_pelanggan_by_nama
+
+    pel = await cari_pelanggan_by_nama(db, nama)
+    return pel.id if pel else None
+
+
+async def cocok_pemilik_tiket(db: AsyncSession, *, t: dict,
+                              jasa_id_lain: int | None) -> bool:
+    """`cocok_pemilik`, tapi untuk sebuah TIKET yang belum tentu punya `Jasa`
+    sungguhan — bandingannya langsung ke PELANGGAN, bukan ke id Jasa (yang
+    belum ada untuk tiket ini). BACA-SAJA, sebangun `cocok_pemilik`.
+
+    ⚠⚠ GALAT LAPANGAN 11 Oktober 2026, DUA EKOR: pemanggil (`berjalan.py`)
+    dulu memakai `t.get("pelanggan_id")` sebagai penentu "ini jasa atau
+    bukan" — tes yang SUDAH dinyatakan salah di `adalah_jasa()` sejak 2
+    Oktober 2026 (pelanggan BARU yang diketik bebas punya `pelanggan_id`
+    NULL sampai `find_or_create_pelanggan` membuatnya). Akibatnya tiket jasa
+    bernama bebas terbaca `jasa_id=None` = PABRIK, dua arah: tombol tampak
+    MATI kalau mesinnya berisi barang jasa pemilik yang SAMA (gejala yang
+    dilaporkan), dan — belum pernah terlihat siapa pun — tampak MENYALA
+    kalau mesinnya berisi gabah PABRIK, padahal server akan menolaknya begitu
+    pesanannya lahir dan `pastikan_satu_pemilik` melihat campurannya.
+
+    Lalu tanda `PEMILIK_BARU` ("pesanan-baru", dipakai untuk tiket pelanggan
+    DARI DAFTAR yang belum punya pesanan) membuang satu-satunya fakta yang
+    menentukan jawabannya — pesanan baru itu milik SIAPA — sehingga tombolnya
+    selalu MATI walau `pastikan_satu_pemilik` akan menggabungkannya begitu
+    pesanannya lahir dan bertemu pesanan lain milik pelanggan yang sama.
+    ⚠ Tanda itu TETAP tak boleh lolos ke `cocok_pemilik`/`Jasa.id.in_()` —
+    jalur ini sama sekali tak menyentuhnya, dan itu sebabnya ia jalur
+    TERSENDIRI, bukan pembesaran tipe `jasa_id` di `cocok_pemilik`.
+    """
+    from app.penggilingan.gudang1.services.timbang_link import adalah_jasa
+
+    if not adalah_jasa(t):
+        return jasa_id_lain is None
+    if jasa_id_lain is None:
+        return False
+    p_tiket = await pelanggan_tiket(db, t)
+    if p_tiket is None:
+        return False
+    p_lain = (await db.execute(
+        select(Jasa.pelanggan_id).where(Jasa.id == jasa_id_lain)
+    )).scalar_one_or_none()
+    return p_lain is not None and p_lain == p_tiket
 
 
 def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:

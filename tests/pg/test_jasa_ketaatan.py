@@ -430,6 +430,249 @@ async def test_tombol_dryer_tak_mati_untuk_pelanggan_sama_beda_pesanan(pg, pemak
         "dengan gabah pemilik lain yang sudah di dryer")
 
 
+# ═════════ Pesan kerja 13 (11 Oktober 2026) — kartu tiket, bukan Jasa ═════════
+#
+# Laporan lapangan: kartu "JASA · Didik (Sopir Truk)" — nama yang DIKETIK
+# BEBAS (bukan dari daftar) — tombol "Ke Pengering 1" MATI walau mesinnya
+# berisi barang Didik yang SAMA. Akarnya SATU baris, DUA cacat:
+#   A. `berjalan.py:1204` (sebelum perbaikan) memakai `t.get("pelanggan_id")`
+#      sebagai penentu "ini jasa atau bukan" — kembaran cacat `adalah_jasa()`
+#      2 Oktober 2026, dan SALAH untuk nama bebas (`pelanggan_id` NULL).
+#   B. Tanda `PEMILIK_BARU` untuk tiket pelanggan TERDAFTAR yang belum punya
+#      pesanan membuang satu-satunya fakta yang menentukan: pesanan baru itu
+#      milik SIAPA.
+# `_tujuan_gabah`/`_mati_pemilik_dryer`/`_pemilik_silo` kini menerima
+# `tiket=t` (dict mentah) dan menjawabnya lewat `jasa.cocok_pemilik_tiket` —
+# bandingannya PELANGGAN, baca-saja.
+
+async def test_tombol_dryer_tak_mati_nama_bebas_vs_pesanan_terdaftar_sama(
+        pg, pemakai, pabrik):
+    """Reproduksi PERSIS tangkapan layar pemilik: gabah PERTAMA Didik masuk
+    lewat tiket TERDAFTAR (dari daftar pelanggan), sudah di dryer. Tiket
+    KEDUA, Didik yang SAMA, tapi diketik BEBAS (pelanggan_id NULL, belum
+    tentu operator tahu ia sudah ada di daftar) — tombolnya wajib tetap
+    HIDUP, bukan "kepemilikan berbeda tak boleh digabung".
+    """
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _mati_pemilik_dryer
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Didik (Sopir Truk)")
+        t1 = await _tiket(db, kode="JT60", berat=5_000, pelanggan_id=pid)
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a = a.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    t_bebas = {"jasa": True, "pelanggan_id": None, "jasa_id": None,
+              "nama_pelanggan": None, "pihak_nama": "Didik (Sopir Truk)"}
+    async with pg() as db:
+        mati = await _mati_pemilik_dryer(db, d.id, None, tiket=t_bebas)
+    assert mati == "", (
+        f"tombol MATI untuk tiket nama bebas yang sebenarnya pelanggan SAMA "
+        f"({pid}) dengan isi dryer: {mati!r}")
+
+
+async def test_tombol_dryer_mati_nama_bebas_vs_gabah_pabrik(pg, pemakai, pemasok, pabrik):
+    """⭐ Arah KEDUA cacat A — belum pernah terlihat siapa pun sebelum pesan
+    kerja 13, sebab arahnya diam. Gabah PABRIK sudah di dryer; tiket jasa
+    nama-bebas datang. SEBELUM perbaikan: `t.get("pelanggan_id")` None →
+    `jasa_id` terbaca None → tombol MENYALA (dibaca "pabrik ketemu pabrik"),
+    padahal server akan MENOLAK begitu pesanannya lahir dan
+    `pastikan_satu_pemilik` melihat campuran jasa+pabrik — borang
+    "mempersilakan yang akan ditolak", kerusakan yang `_tujuan_gabah` sendiri
+    sebut lebih buruk daripada menolak yang sebenarnya boleh.
+    """
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _mati_pemilik_dryer
+
+    async with pg() as db:
+        t1 = await _tiket(db, kode="JT61", berat=5_000, supplier_id=pemasok.id)
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a = a.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    t_bebas = {"jasa": True, "pelanggan_id": None, "jasa_id": None,
+              "nama_pelanggan": None, "pihak_nama": "Didik (Sopir Truk)"}
+    async with pg() as db:
+        mati = await _mati_pemilik_dryer(db, d.id, None, tiket=t_bebas)
+    assert mati != "", (
+        "tombol HIDUP untuk barang titipan vs gabah PABRIK — server akan "
+        "menolaknya begitu pesanannya lahir")
+    assert "pabrik" in mati.lower(), f"kalimatnya wajib menyebut pabrik: {mati!r}"
+
+
+async def test_tombol_dryer_tak_mati_pelanggan_terdaftar_belum_berpesanan(
+        pg, pemakai, pabrik):
+    """Cacat B: tiket pelanggan DARI DAFTAR yang belum punya pesanan sendiri
+    (dulu bertanda `PEMILIK_BARU`) — tombolnya wajib HIDUP kalau mesinnya
+    berisi pesanan LAIN milik pelanggan yang SAMA, sebab `pastikan_satu_
+    pemilik` akan menggabungkannya begitu pesanannya lahir."""
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _mati_pemilik_dryer
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Pak Budi")
+        t1 = await _tiket(db, kode="JT62", berat=5_000, pelanggan_id=pid)
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a = a.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    # Tiket KEDUA — pelanggan sama, DARI DAFTAR (pelanggan_id terisi),
+    # belum punya pesanan sendiri sama sekali.
+    t_belum_pesanan = {"jasa": True, "pelanggan_id": pid, "jasa_id": None,
+                       "nama_pelanggan": "Pak Budi", "pihak_nama": None}
+    async with pg() as db:
+        mati = await _mati_pemilik_dryer(db, d.id, None, tiket=t_belum_pesanan)
+    assert mati == "", (
+        f"tombol MATI untuk pelanggan terdaftar yang SAMA tapi belum "
+        f"berpesanan: {mati!r}")
+
+
+async def test_tombol_dryer_mati_pelanggan_berbeda_kalimat_dua_sisi(
+        pg, pemakai, pabrik):
+    """Pelanggan BERBEDA tetap ditolak — dan kalimatnya menyebut KEDUA sisi
+    (isi mesin DAN barang yang sedang dipegang), bukan cuma satu. Laporan
+    lapangan: kalimat sepihak membuat operator mengira aplikasinya rusak
+    saat dua nama kebetulan sama, dan tak bisa membedakannya dari kalimat
+    yang cuma menyebut SATU sisi saat nama memang beda."""
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _mati_pemilik_dryer
+
+    async with pg() as db:
+        pid_a = await _pelanggan(db, "Pak Didik")
+        t1 = await _tiket(db, kode="JT63", berat=5_000, pelanggan_id=pid_a)
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a = a.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    t_lain = {"jasa": True, "pelanggan_id": None, "jasa_id": None,
+             "nama_pelanggan": None, "pihak_nama": "Bu Siti"}
+    async with pg() as db:
+        mati = await _mati_pemilik_dryer(db, d.id, None, tiket=t_lain)
+    assert mati != "", "pelanggan berbeda wajib tetap ditolak"
+    assert "Didik" in mati, f"sisi isi mesin wajib disebut: {mati!r}"
+    assert "Siti" in mati, f"sisi barang yang dipegang wajib disebut: {mati!r}"
+
+
+async def test_pelanggan_tiket_mengikuti_aturan_find_or_create_case_insensitive(
+        pg, pabrik):
+    """Nama bebas yang ejaan huruf besar-kecilnya beda ("didik" vs "Didik")
+    WAJIB cocok dengan baris pelanggan yang sama — aturan yang SAMA PERSIS
+    dengan `find_or_create_pelanggan`, sebab keduanya memanggil
+    `cari_pelanggan_by_nama` yang sama. Layar yang mencocokkan dengan aturan
+    berbeda dari server adalah cacat cermin yang sama bentuknya dengan
+    laporan ini."""
+    from app.services.jasa import pelanggan_tiket
+
+    async with pg() as db:
+        pid = await _pelanggan(db, "Didik (Sopir Truk)")
+        await db.commit()
+
+    async with pg() as db:
+        hasil = await pelanggan_tiket(db, {
+            "jasa": True, "pelanggan_id": None, "nama_pelanggan": None,
+            "pihak_nama": "didik (sopir truk)"})
+    assert hasil == pid, "pencocokan nama bebas wajib case-insensitive"
+
+
+async def test_pelanggan_tiket_baca_saja_tak_membuat_baris(pg, pabrik):
+    """⚠ Kartu antrean digambar TIAP KALI layar `/aksi` dibuka. `pelanggan_
+    tiket` (dipanggil dari SETIAP render kartu tiket jasa) wajib BACA-SAJA —
+    membuat baris `pelanggan` dari layar yang cuma DILIHAT akan melahirkan
+    pelanggan tanpa ada truk yang benar-benar datang, dan jumlahnya naik
+    satu setiap kali operator membuka halaman."""
+    from sqlalchemy import func, select
+
+    from app.models import Pelanggan
+    from app.services.jasa import pelanggan_tiket
+
+    t_baru = {"jasa": True, "pelanggan_id": None, "nama_pelanggan": None,
+             "pihak_nama": "Pelanggan yang Belum Pernah Ada"}
+    async with pg() as db:
+        sebelum = (await db.execute(select(func.count(Pelanggan.id)))).scalar_one()
+
+    for _ in range(3):
+        async with pg() as db:
+            hasil = await pelanggan_tiket(db, t_baru)
+            assert hasil is None, "nama yang belum pernah ada tak boleh 'ketemu'"
+
+    async with pg() as db:
+        sesudah = (await db.execute(select(func.count(Pelanggan.id)))).scalar_one()
+    assert sesudah == sebelum, (
+        f"pelanggan_tiket membuat baris baru ({sebelum} -> {sesudah}) — "
+        "wajib baca-saja")
+
+
+async def test_aksi_tak_500_saat_ada_tiket_pelanggan_terdaftar_tanpa_pesanan(
+        pg, pemakai, pabrik):
+    """Penjaga 11 Oktober 2026 (galat UndefinedFunctionError/DataError) tetap
+    berdiri — reproduksi PERSIS kondisinya: tiket pelanggan DARI DAFTAR yang
+    belum punya pesanan (dulu bertanda `PEMILIK_BARU`, TEKS) bertemu dryer
+    yang berisi gabah pesanan LAIN, lewat `_tiket_belum_ditaut` yang
+    SUNGGUH membaca tabel `timbangan_transaksi` (bukan dict buatan tangan):
+    layar `/aksi` tak boleh 500.
+
+    ⚠ Nama bebas (cacat A) TIDAK memicu galat 500 ini — tes untuk itu ada
+    di `test_tombol_dryer_mati_nama_bebas_vs_gabah_pabrik` dkk di atas, sebab
+    kode LAMA menjawabnya `jasa_id=None` (salah arah, tapi bukan tanda teks).
+    Yang memicu 500 LAMA cuma bentuk INI — pelanggan TERDAFTAR tanpa pesanan.
+    """
+    from app.models import User
+    from app.penggilingan.gudang1.services.drying import dryers_g1, masuk_dryer
+    from app.services.berjalan import _tiket_belum_ditaut
+
+    async with pg() as db:
+        pid_a = await _pelanggan(db, "Pak Didik")
+        pid_b = await _pelanggan(db, "Bu Siti")
+        t1 = await _tiket(db, kode="JT64", berat=5_000, pelanggan_id=pid_a)
+        # Tiket KEDUA: pelanggan LAIN, DARI DAFTAR, belum ditaut ke pesanan
+        # apa pun — inilah bentuk yang dulu meledak (jasa_id=PEMILIK_BARU).
+        await _tiket(db, kode="JT65", berat=4_000, pelanggan_id=pid_b,
+                     nopol="B 2 UJ")
+        await db.commit()
+    async with pg() as db:
+        a = await _terima(db, t1, pemakai.id)
+        kode_a = a.batch.kode_batch
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        dryers = await dryers_g1(db)
+        d = dryers[0]
+        await masuk_dryer(db, user=u, dryer_id=d.id, kode_batch_list=[kode_a])
+
+    async with pg() as db:
+        baris = await _tiket_belum_ditaut(db)  # tak boleh melempar apa pun
+    kode_terbaca = {b.kode for b in baris}
+    assert "JT65" in kode_terbaca
+
+
 async def test_satu_pesanan_boleh_dua_silo_digiling_bersama(pg, pemakai, pabrik):
     """⭐ SEBALIKNYA: barang SEPEMILIK boleh dicampur sebebas barang pabrik.
 
@@ -1601,3 +1844,4 @@ async def test_kartu_antrean_menyebut_jasa_walau_pelanggan_belum_dibuat(
         t = await ambil_tiket(db, tid)
     assert nama_pihak(t) == "JASA · Marnooo", \
         "kartu antrean tak menyebut JASA untuk pelanggan baru ketik-bebas"
+
