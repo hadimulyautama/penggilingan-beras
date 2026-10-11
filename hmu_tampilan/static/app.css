@@ -1240,6 +1240,13 @@ details.padat .pilihan { padding: 0 12px 12px; }
   color: var(--tinta-2);
 }
 .anak__kelompok .anak__baris--broken .anak__nama { font-weight: 650; }
+.anak__kelompok .anak__baris--dibebaskan {
+  opacity: .58;
+}
+.anak__kelompok .anak__baris--dibebaskan .anak__jam {
+  color: var(--redup);
+  font-weight: 600;
+}
 @media (min-width: 900px) {
   .anak--kelompok { gap: 14px; margin-right: 18px; margin-left: 18px; }
   .anak__kelompok { padding: 15px 17px; }

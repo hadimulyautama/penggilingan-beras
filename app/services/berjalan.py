@@ -2206,13 +2206,22 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             if s:
                 silo_nama.append(s.nama_silo)
                 total_u = awal_u + masuk_u
+                sisa_u = (float(u.berat_akhir_kg)
+                          if u.berat_akhir_kg is not None else None)
+                dibebaskan = sisa_u is not None
+                status_u = (
+                    "Sudah kosong · dibebaskan" if dibebaskan and sisa_u <= 0.01
+                    else f"Dibebaskan · sisa {_kg(sisa_u)}" if dibebaskan
+                    else ""
+                )
                 jenis_u = {"broken": "Broken", "beras": "Beras"}.get(
                     s.jenis_isi, "PK")
                 baris_silo = (
                     f"{s.nama_silo} · {jenis_u}", _kg(total_u),
-                    (f"awal {_kg(awal_u)}"
+                    status_u or (f"awal {_kg(awal_u)}"
                      + (f" · ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else "")),
-                    "broken" if s.jenis_isi == "broken" else "silo",
+                    ("dibebaskan" if dibebaskan else
+                     "broken" if s.jenis_isi == "broken" else "silo"),
                 )
                 if s.jenis_isi == "broken":
                     broken_bahan_kg += total_u
@@ -2224,6 +2233,14 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     rinci_bahan_pk.extend(
                         (nama, kg, jam, "lot") for nama, kg, jam in isian_u.baris
                     )
+                    # Untuk silo yang benar-benar kosong dan sudah dilepas,
+                    # status pada baris silo sudah cukup. Jika silo masih
+                    # dipakai tetapi tautan lot tidak ada, tampilkan ini agar
+                    # ketiadaan asal tidak tampak seperti detail yang hilang.
+                    if not isian_u.baris and not (dibebaskan and sisa_u <= 0.01):
+                        rinci_bahan_pk.append((
+                            "Asal lot tidak tercatat", "", "", "lot"
+                        ))
                     for a in isian_u.baris:
                         if a not in asal_pr:
                             asal_pr.append(a)
