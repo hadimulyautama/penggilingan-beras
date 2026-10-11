@@ -1224,17 +1224,20 @@ details.padat .pilihan { padding: 0 12px 12px; }
   line-height: 1.4;
   color: var(--redup-2);
 }
-.anak__kelompok .anak__baris--lot {
+.anak__kelompok .anak__baris--lot,
+.anak__kelompok .anak__baris--lot-dibebaskan {
   margin-left: 12px;
   padding-left: 10px;
   border-top: 0;
   border-left: 1px solid var(--garis);
 }
-.anak__kelompok .anak__baris--lot .anak__nama {
+.anak__kelompok .anak__baris--lot .anak__nama,
+.anak__kelompok .anak__baris--lot-dibebaskan .anak__nama {
   font-size: 13px;
   color: var(--redup);
 }
-.anak__kelompok .anak__baris--lot .anak__kg {
+.anak__kelompok .anak__baris--lot .anak__kg,
+.anak__kelompok .anak__baris--lot-dibebaskan .anak__kg {
   font-size: 14px;
   font-weight: 550;
   color: var(--tinta-2);
@@ -1246,6 +1249,15 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .anak__kelompok .anak__baris--dibebaskan .anak__jam {
   color: var(--redup);
   font-weight: 600;
+}
+/* Silo yang dibebaskan meredupkan baris judulnya sendiri; daftar asal lot
+   di bawahnya (peran "lot-dibebaskan", bukan "lot" biasa) ikut diredupkan
+   dengan opacity yang SAMA — kalau tidak, judul silonya terbaca sebagai
+   riwayat tapi daftar asalnya di bawahnya terbaca seperti isi yang masih
+   ada sekarang, padahal keduanya menyebut hal yang sudah tak ada lagi di
+   silo (permintaan pemilik 11 Oktober 2026). */
+.anak__kelompok .anak__baris--lot-dibebaskan {
+  opacity: .58;
 }
 @media (min-width: 900px) {
   .anak--kelompok { gap: 14px; margin-right: 18px; margin-left: 18px; }

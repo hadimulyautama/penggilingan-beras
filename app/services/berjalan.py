@@ -2244,15 +2244,21 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                         db, u.silo_id, sampai=pr.waktu_mulai
                     )
                     asal_lebih += isian_u.lebih
+                    # Silo yang dibebaskan meredupkan baris judulnya sendiri
+                    # (`.anak__baris--dibebaskan`) — daftar asal lot di
+                    # bawahnya ikut diredupkan dengan peran sendiri, supaya
+                    # seluruh kelompok terbaca sebagai riwayat, bukan isi
+                    # yang masih ada sekarang.
+                    peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
                     rinci_bahan_pk.extend(
-                        (nama, kg, jam, "lot") for nama, kg, jam in isian_u.baris
+                        (nama, kg, jam, peran_lot) for nama, kg, jam in isian_u.baris
                     )
                     # Asal lot tetap ditampilkan meski silo sudah kosong atau
                     # dibebaskan. Bila tautan lot memang tidak tercatat,
                     # nyatakan dengan jelas agar bukan tampak seperti detail hilang.
                     if not isian_u.baris:
                         rinci_bahan_pk.append((
-                            "Asal lot tidak tercatat", "", "", "lot"
+                            "Asal lot tidak tercatat", "", "", peran_lot
                         ))
                     for a in isian_u.baris:
                         if a not in asal_pr:
