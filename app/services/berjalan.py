@@ -2327,15 +2327,25 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # mesin", bukan kehilangan sungguhan — macro-nya (`_benda.html`)
         # WAJIB menyebut "sementara", sama seperti `beras_curah()` menyebut
         # "belum final" untuk alasan yang sama.
-        from app.penggilingan.gudang2.polishing import neraca_sosoh
+        from app.penggilingan.gudang2.polishing import GRADES, neraca_sosoh
         neraca = neraca_sosoh(bahan_kg, per_jenis) if bahan_kg > 0.5 else None
         # Satu baris kumulatif per jenis pada kartu; log tiap prosesan tetap
         # tersimpan sendiri untuk jejak audit dan pembatalan.
+        #
+        # Beras SELALU di atas, hasil samping SELALU di bawah (permintaan
+        # pemilik 11 Oktober 2026) — bukan cuma alfabetis, yang menyelipkan
+        # "bekatul" di antara "beras_b" dan "medium". Peran keempatnya
+        # mewarnai nama baris beda warna per kategori (`.anak__baris--beras`
+        # / `--samping`), sebangun `--fase-giling`/`--fase-samping` yang
+        # sudah dipakai membedakan warna kartu Hasil vs hasil samping.
         rinci_hasil = [
             (jenis + (f" · {', '.join(sorted(spek_per_jenis.get(jenis, set())))}"
                       if spek_per_jenis.get(jenis) else ""),
-             _kg(berat), "")
-            for jenis, berat in sorted(per_jenis.items())
+             _kg(berat), "", "beras" if jenis in GRADES else "samping")
+            for jenis, berat in sorted(
+                per_jenis.items(),
+                key=lambda kv: (0 if kv[0] in GRADES else 1, kv[0]),
+            )
         ]
 
         # ── Bahan per silo dan hasil keluar ──

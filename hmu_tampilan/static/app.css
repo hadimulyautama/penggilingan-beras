@@ -1259,6 +1259,14 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .anak__kelompok .anak__baris--lot-dibebaskan {
   opacity: .58;
 }
+/* "Hasil sosoh keluar" selalu mendahulukan beras, hasil samping di bawah
+   (permintaan pemilik 11 Oktober 2026) — urutannya sudah dijamin oleh
+   `berjalan.py` (beras_sosoh._kartu_penyosohan_g2); di sini cuma warna
+   namanya yang dibedakan, meminjam pasangan warna yang sudah dipakai
+   membedakan kartu Hasil (`--fase-giling`, hijau) dari kartu hasil
+   samping (`--fase-samping`, ungu) di tempat lain. */
+.anak__kelompok .anak__baris--beras .anak__nama { color: var(--fase-giling); }
+.anak__kelompok .anak__baris--samping .anak__nama { color: var(--fase-samping); }
 @media (min-width: 900px) {
   .anak--kelompok { gap: 14px; margin-right: 18px; margin-left: 18px; }
   .anak__kelompok { padding: 15px 17px; }
