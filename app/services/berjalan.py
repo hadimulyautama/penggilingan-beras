@@ -2262,9 +2262,14 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         per_jenis: dict[str, float] = {}
         spek_per_jenis: dict[str, set[str]] = {}
         for e in entri:
-            per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
+            # Kanonisasi untuk data warisan: label jenis lama bisa berbeda
+            # kapitalisasi/spasi, tetapi harus tetap menjadi satu total.
+            jenis = str(e.jenis or "").strip().lower()
+            if not jenis:
+                continue
+            per_jenis[jenis] = per_jenis.get(jenis, 0.0) + float(e.berat_kg or 0)
             if e.spek:
-                spek_per_jenis.setdefault(e.jenis, set()).add(e.spek)
+                spek_per_jenis.setdefault(jenis, set()).add(e.spek.strip())
         # ── Neraca LIVE — pesan kerja 7 Oktober 2026: "progress bar seperti
         # yang di kartu riwayat proses" ──
         #
@@ -2277,6 +2282,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # "belum final" untuk alasan yang sama.
         from app.penggilingan.gudang2.polishing import neraca_sosoh
         neraca = neraca_sosoh(bahan_kg, per_jenis) if bahan_kg > 0.5 else None
+        # Satu baris kumulatif per jenis pada kartu; log tiap prosesan tetap
+        # tersimpan sendiri untuk jejak audit dan pembatalan.
         rinci_hasil = [
             (jenis + (f" · {', '.join(sorted(spek_per_jenis.get(jenis, set())))}"
                       if spek_per_jenis.get(jenis) else ""),
