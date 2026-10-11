@@ -561,6 +561,19 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
 
         await catat_output(db, user=u, kode=r2.proc.kode_proses, jenis="premium",
                            berat_kg=4_000)
+
+        # Kartu proses memisahkan bahan masuk dan hasil keluar, dan secara
+        # eksplisit menyebut berat broken yang menjadi bahan baku.
+        from app.services.berjalan import untuk_gudang2
+        tampilan = await untuk_gudang2(db)
+        kartu = next(b for b in tampilan.berjalan
+                     if b.kode == r2.proc.kode_proses)
+        assert ("Broken sebagai bahan", "1.000 kg") in kartu.fakta
+        assert kartu.anak_grup[0][0] == "Bahan baku masuk per silo"
+        assert ("Silo C · Broken", "1.000 kg", "awal 1.000 kg") \
+            in kartu.anak_grup[0][1]
+        assert any(judul == "Hasil sosoh keluar" for judul, _ in kartu.anak_grup)
+
         await selesai_penyosohan(db, user=u, kode=r2.proc.kode_proses,
                                  nama_silo="A", sisa_kg=0)
         await selesai_penyosohan(db, user=u, kode=r2.proc.kode_proses,

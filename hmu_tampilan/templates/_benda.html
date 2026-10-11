@@ -104,7 +104,22 @@
    tak punya mekanisme expand sama sekali, jadi keduanya TETAP memanggil
    `penuh()` lalu `penuh_anak()` berurutan, selalu tampil seperti semula. #}
 {% macro penuh_anak(b) -%}
-  {% if b.anak %}
+  {% if b.anak_grup %}
+    <div class="anak">
+      {% for judul, baris_grup in b.anak_grup %}
+        <div class="anak__kelompok">
+          <div class="anak__kepala">{{ judul }}</div>
+          {% for nama, kg, jam in baris_grup %}
+            <div class="anak__baris">
+              <span class="anak__nama">{{ nama }}</span>
+              <span class="anak__kg">{{ kg }}</span>
+              {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  {% elif b.anak %}
     <div class="anak">
       {% for nama, kg, jam in b.anak %}
         <div class="anak__baris">

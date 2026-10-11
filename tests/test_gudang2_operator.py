@@ -144,7 +144,7 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     # masih berjalan. Hasil proses yang belum selesai memang belum bisa
     # dipindahkan ke silo sebagai hasil.
     proses_broken = next(a for a in broken_silo["fields"] if a["name"] == "proses")
-    assert "belum ada hasil broken siap dipindah" in proses_broken["kosong"].lower()
+    assert "belum ada stok broken yang tersedia" in proses_broken["kosong"].lower()
     jalan_campuran = next(f for f in broken_silo["fields"]
                           if f.get("type") == "tombol_aksi")
     assert jalan_campuran["aksi"] == "tambah_silo_penyosohan"

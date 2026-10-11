@@ -113,6 +113,9 @@ class Baris:
     #: Rincian batch: (nama, berat, waktu). Menjorok dan lebih redup — ia
     #: detail, bukan judul.
     anak: list[tuple[str, str, str]] = field(default_factory=list)
+    #: Rincian dengan judul kelompok — dipakai proses sosoh untuk memisahkan
+    #: bahan yang masuk dari hasil yang keluar.
+    anak_grup: list[tuple[str, list[tuple[str, str, str]]]] = field(default_factory=list)
     #: Satu-satunya baris berwarna, untuk yang menuntut perhatian.
     nota: str | None = None
     #: Seberapa keras nota itu bicara. "hati" untuk keadaan yang MENAHAN
@@ -2175,6 +2178,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
         # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
         asal_pr: list[tuple[str, str, str]] = []
+        rinci_bahan: list[tuple[str, str, str]] = []
+        broken_bahan_kg = 0.0
         # ── Baris yang tak ikut terbawa, bahkan sebelum digabung ──
         #
         # `asal_silo()` sendiri sudah membatasi `BATAS_ASAL` baris PER SILO
@@ -2192,11 +2197,23 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             select(PolishingSiloUsage)
             .where(PolishingSiloUsage.polishing_process_id == pr.id)
         )).scalars().all():
-            ditambah += float(u.berat_masuk_kg or 0)
-            berat_awal_total += float(u.berat_awal_kg or 0)
+            awal_u = float(u.berat_awal_kg or 0)
+            masuk_u = float(u.berat_masuk_kg or 0)
+            ditambah += masuk_u
+            berat_awal_total += awal_u
             s = await db.get(Silo, u.silo_id)
             if s:
                 silo_nama.append(s.nama_silo)
+                total_u = awal_u + masuk_u
+                jenis_u = {"broken": "Broken", "beras": "Beras"}.get(
+                    s.jenis_isi, "PK")
+                rinci_bahan.append((
+                    f"{s.nama_silo} · {jenis_u}", _kg(total_u),
+                    (f"awal {_kg(awal_u)}"
+                     + (f" · ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else "")),
+                ))
+                if s.jenis_isi == "broken":
+                    broken_bahan_kg += total_u
             isian_u = await asal_silo(u.silo_id)
             asal_lebih += isian_u.lebih
             for a in isian_u.baris:
@@ -2213,6 +2230,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # angka, dua pemakaian, supaya keduanya tak bisa berselisih.
         bahan_kg = berat_awal_total + ditambah
         fakta.append(("Total bahan baku", _kg(bahan_kg)))
+        if broken_bahan_kg > 0.001:
+            fakta.append(("Broken sebagai bahan", _kg(broken_bahan_kg)))
         if ditambah:
             # PK yang dituang selama mesin jalan ikut jadi penyebut rendemen
             # — angka yang ikut menilai pekerjaan tak boleh disembunyikan.
@@ -2244,7 +2263,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         for e in entri:
             per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
         if entri:
-            fakta.append(("Hasil", " · ".join(
+            fakta.append(("Hasil sosoh", " · ".join(
                 f"{j} {_kg(v)}" for j, v in sorted(per_jenis.items()))))
         # ── Neraca LIVE — pesan kerja 7 Oktober 2026: "progress bar seperti
         # yang di kartu riwayat proses" ──
@@ -2265,6 +2284,17 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             for e in entri
         ]
 
+        # ── Kelompok bahan masuk, asal lot PK, dan hasil keluar ──
+        # Rincian lama menggabungkan hasil (mis. medium 500 kg) dan asal PK
+        # dalam satu daftar tanpa judul. Pisahkan kelompok agar operator bisa
+        # membedakan bahan dari keluaran; jumlah broken juga disebut tersendiri
+        # di fakta kartu di atas.
+        anak_grup = [("Bahan baku masuk per silo", rinci_bahan)]
+        if rinci_hasil:
+            anak_grup.append(("Hasil sosoh keluar", rinci_hasil))
+        if asal_pr:
+            anak_grup.append(("Asal lot PK", asal_pr))
+
         # ── Satu batas, dan yang tak muat DISEBUT — bukan dua batas diam ──
         #
         # Sampai temuan ini `anak` dipangkas DUA KALI tanpa satu pun
@@ -2278,9 +2308,16 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # Laporan lapangan 6 Oktober 2026: "silo ditambahkan lagi beberapa,
         # tetapi tidak tercatat, yang tercatat hanya 5 kali awal masukan pk."
         _anak_batas = 10
-        _anak_penuh = rinci_hasil + asal_pr
+        _anak_penuh = rinci_bahan + rinci_hasil + asal_pr
         anak = _anak_penuh[:_anak_batas]
         anak_lebih = asal_lebih + max(0, len(_anak_penuh) - _anak_batas)
+        sisa_batas = _anak_batas
+        anak_grup_tampil = []
+        for judul_grup, baris_grup in anak_grup:
+            tampil = baris_grup[:sisa_batas]
+            if tampil:
+                anak_grup_tampil.append((judul_grup, tampil))
+                sisa_batas -= len(tampil)
 
         keluar.append(Baris(
             kode=pr.kode_proses,
@@ -2300,6 +2337,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
             # PK-nya" — asalnya sudah disebut fakta Silo di atas.
             anak=anak,
+            anak_grup=anak_grup_tampil,
             # Dijeda menang bila keduanya ada: mesin berhenti lebih penting
             # diketahui daripada daftar yang terpotong. Di luar itu, baris
             # yang tak tampil WAJIB disebut — kalimat sama bentuknya dengan
