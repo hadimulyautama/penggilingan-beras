@@ -2246,9 +2246,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # bersama kumulatif adalah kemampuan MEMBACA ULANG apa yang sudah
         # diketik — dengan kumulatif, angka di layar adalah totalnya.
         #
-        # Maka totalnya disebut sebagai fakta, dan entrinya dirinci di bawah
-        # kartu: tanpa itu, operator yang ragu apakah ketukannya masuk akan
-        # mengetik lagi — dan entri yang bertambah menambah dua kali.
+        # Entrinya dirinci di bagian kartu yang dibuka. Ringkasan kartu tidak
+        # mengulang angka hasil: operator dapat memeriksa setiap catatan dari
+        # bagian "Hasil sosoh keluar" saat membuka proses.
         entri = list((await db.execute(
             select(PolishingOutputLog)
             .where(PolishingOutputLog.polishing_process_id == pr.id)
@@ -2262,9 +2262,6 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         per_jenis: dict[str, float] = {}
         for e in entri:
             per_jenis[e.jenis] = per_jenis.get(e.jenis, 0.0) + float(e.berat_kg or 0)
-        if entri:
-            fakta.append(("Hasil sosoh", " · ".join(
-                f"{j} {_kg(v)}" for j, v in sorted(per_jenis.items()))))
         # ── Neraca LIVE — pesan kerja 7 Oktober 2026: "progress bar seperti
         # yang di kartu riwayat proses" ──
         #

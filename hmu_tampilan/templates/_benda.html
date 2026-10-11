@@ -50,6 +50,7 @@
      entri yang baru separuh diketik, bukan kerusakan. #}
   {% if b.neraca and b.neraca.bisa_dihitung and not b.neraca.timpang %}
     {% set p_samping = b.neraca.samping|sum(attribute="persen") %}
+    <div class="benda__neraca">
     <div class="neraca" role="img"
          aria-label="sementara — beras {{ psn(b.neraca.beras.persen) }}, hasil samping
                      {{ psn(p_samping) }}, belum keluar/susut {{ psn(b.neraca.susut.persen) }}">
@@ -61,6 +62,7 @@
       sementara · beras {{ psn(b.neraca.beras.persen) }} ·
       hasil samping {{ psn(p_samping) }} ·
       belum keluar/susut {{ psn(b.neraca.susut.persen) }}
+    </div>
     </div>
   {% endif %}
   {% if not b.judul %}<div class="benda__isi">{{ b.isi }}</div>{% endif %}
