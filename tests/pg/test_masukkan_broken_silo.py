@@ -288,9 +288,10 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
                                       berat_kg=1_000, waktu_update=now_local(),
                                       input_by=u.id))
         await db.commit()
-        kode_a, kode_b, uid = proc_a.kode_proses, proc_b.kode_proses, u.id
+        kode_a, kode_b, uid, silo_c_id = proc_a.kode_proses, proc_b.kode_proses, u.id, silo_c.id
 
-    # POL-A: catat 1.000 kg curah, lalu pindahkan SEMUANYA ke silo (sisa 0).
+    # Dua proses sumber tetap menyisakan stok, tetapi picker harus menjadikannya
+    # satu tumpukan per pemilik.
     async with pg() as db:
         from app.penggilingan.inventory.finished_goods import catat_broken
         u = await db.get(User, uid)
@@ -298,9 +299,9 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
     async with pg() as db:
         u = await db.get(User, uid)
         await masukkan_broken_ke_silo(
-            db, user=u, kode_pol=kode_a, nama_silo="C", berat_kg=1_000)
+            db, user=u, kode_pol=kode_a, nama_silo="C", berat_kg=950)
 
-    # POL-B: catat 1.000 kg curah, SISAKAN 50 kg di silo (pindahkan 950).
+    # POL-B juga menyisakan 50 kg.
     async with pg() as db:
         from app.penggilingan.inventory.finished_goods import catat_broken
         u = await db.get(User, uid)
@@ -313,15 +314,26 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
     async with pg() as db:
         u = await db.get(User, uid)
         daftar = await broken_proses_tersedia(user=u)
-    per_kode = {d["value"].split("|")[0]: d["label"] for d in daftar}
-
-    assert kode_a not in per_kode, (
-        f"{kode_a} curahnya sendiri sudah 0 (semua dipindah) — tak boleh "
-        f"muncul lagi di picker: {per_kode.get(kode_a)}")
-    assert kode_b in per_kode, f"{kode_b} masih bersisa 50 kg, wajib muncul"
-    assert "50" in per_kode[kode_b], (
-        f"{kode_b} wajib menyebut 50 kg (curahnya SENDIRI), bukan angka "
-        f"gabungan dengan proses lain: {per_kode[kode_b]}")
+    assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
+    assert "100 kg" in daftar[0]["label"]
+    async with pg() as db:
+        u = await db.get(User, uid)
+        from app.penggilingan.gudang2.service import masukkan_stok_broken_pemilik_ke_silo
+        await masukkan_stok_broken_pemilik_ke_silo(
+            db, user=u, jasa_id=None, nama_silo="C", berat_kg=75)
+        from app.models import BrokenKeSilo, ByproductStock
+        from app.penggilingan.gudang2.models import PolishingProcess
+        from sqlalchemy import func, select
+        sumber_berat = (await db.execute(
+            select(ByproductStock.source_id, func.sum(BrokenKeSilo.berat_kg))
+            .join(ByproductStock, ByproductStock.id == BrokenKeSilo.byproduct_stock_id)
+            .join(PolishingProcess, PolishingProcess.id == ByproductStock.source_id)
+            .where(BrokenKeSilo.silo_id == silo_c_id,
+                   PolishingProcess.kode_proses.in_((kode_a, kode_b)))
+            .group_by(ByproductStock.source_id)
+        )).all()
+        assert len(sumber_berat) == 2
+        assert sorted(float(row[1]) for row in sumber_berat) == [975, 1_000]
 
 
 async def test_picker_broken_menyertakan_sisa_proses_selesai(pg, sosoh):
@@ -337,13 +349,65 @@ async def test_picker_broken_menyertakan_sisa_proses_selesai(pg, sosoh):
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
         daftar = await broken_proses_tersedia(user=u)
-    kode_yang_tampil = {d["value"].split("|")[0] for d in daftar}
+    assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
+    assert "1.000 kg" in daftar[0]["label"]
 
-    assert sosoh["kode_pol"] in kode_yang_tampil, (
-        f"{sosoh['kode_pol']} masih punya 1.000 kg broken yang tercatat: {daftar}")
-    label = next(d["label"] for d in daftar
-                 if d["value"].split("|")[0] == sosoh["kode_pol"])
-    assert "1.000 kg" in label and "belum dicatat" not in label.lower(), label
+
+async def test_picker_satukan_broken_lintas_proses_tapi_pisah_pemilik(pg, sosoh):
+    """Tumpukan menggabungkan banyak proses dari pemilik yang sama, tetapi
+    pilihan pemilik berbeda tetap terpisah.
+    """
+    from app.database import now_local
+    from app.models import Jasa, Pelanggan, User, ByproductStock
+    from app.web.api import broken_proses_tersedia
+
+    await _curah(pg, sosoh, 250)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        pel = Pelanggan(nama_pelanggan="Pemilik Broken Terpisah")
+        db.add(pel)
+        await db.flush()
+        jasa = Jasa(kode="JAS-UJI-BROKEN-AGG", pelanggan_id=pel.id, status="berjalan")
+        db.add(jasa)
+        await db.flush()
+        now = now_local()
+        db.add(ByproductStock(jenis_produk="broken", source_type="polishing",
+                              source_id=sosoh["proc_id"], berat_kg=80,
+                              tanggal=now.date(), waktu=now, input_by=u.id,
+                              jasa_id=jasa.id))
+        await db.commit()
+        daftar = await broken_proses_tersedia(user=u)
+
+    assert {item["value"] for item in daftar} == {"pemilik|pabrik", f"pemilik|{jasa.id}"}
+    labels = {item["value"]: item["label"] for item in daftar}
+    assert "250 kg" in labels["pemilik|pabrik"]
+    assert "80 kg" in labels[f"pemilik|{jasa.id}"]
+
+
+async def test_pemilik_agregat_tetap_melarang_proses_memakai_broken_sendiri(pg, sosoh):
+    from app.database import now_local
+    from app.models import ByproductStock, User
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    from app.penggilingan.gudang2.service import Gudang2Error, masukkan_stok_broken_pemilik_ke_silo
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        active = PolishingProcess(kode_proses="POL-UJI-SELF-BROKEN", status="proses",
+                                  waktu_mulai=now_local(), created_by=u.id)
+        db.add(active)
+        await db.flush()
+        silo_id = sosoh["silo"]["C"]
+        db.add(PolishingSiloUsage(polishing_process_id=active.id, silo_id=silo_id,
+                                  berat_awal_kg=100, berat_akhir_kg=None,
+                                  berat_terpakai_kg=100))
+        now = now_local()
+        db.add(ByproductStock(jenis_produk="broken", source_type="polishing",
+                              source_id=active.id, berat_kg=100,
+                              tanggal=now.date(), waktu=now, input_by=u.id))
+        await db.commit()
+        with pytest.raises(Gudang2Error, match="SEDANG memakai Silo"):
+            await masukkan_stok_broken_pemilik_ke_silo(
+                db, user=u, jasa_id=None, nama_silo="C", berat_kg=50)
 
 
 async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemasok):
@@ -440,9 +504,10 @@ async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemas
     async with pg() as db:
         u = await db.get(User, uid)
         daftar = await broken_proses_tersedia(user=u)
-        assert any(x["value"].split("|")[0] == kode_sumber for x in daftar), daftar
-        pindah = await masukkan_broken_ke_silo(
-            db, user=u, kode_pol=kode_sumber, nama_silo="C", berat_kg=77)
+        assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
+        from app.penggilingan.gudang2.service import masukkan_stok_broken_pemilik_ke_silo
+        pindah = await masukkan_stok_broken_pemilik_ke_silo(
+            db, user=u, jasa_id=None, nama_silo="C", berat_kg=77)
         assert pindah.dibongkar_dari_karung_kg == 100
 
     async with pg() as db:
@@ -572,11 +637,5 @@ async def test_picker_menampilkan_hasil_mesin_belum_tercatat(pg, pemakai):
     async with pg() as db:
         u = await db.get(User, uid)
         daftar = await broken_proses_tersedia(user=u)
-    per_kode = {d["value"].split("|")[0]: d["label"] for d in daftar}
-
-    assert kode in per_kode, (
-        f"{kode} punya 2.000 kg broken di mesin, belum tercatat — wajib "
-        f"muncul di picker walau 0 kg di byproduct_stock: {daftar}")
-    assert "2.000" in per_kode[kode] and "belum dicatat" in per_kode[kode], (
-        f"label wajib menyebut angkanya berasal dari hasil mesin yang "
-        f"belum dicatat: {per_kode[kode]}")
+    assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
+    assert "2.000" in daftar[0]["label"]

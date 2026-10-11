@@ -862,9 +862,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "hint": "Sumbernya otomatis: curah dulu, lalu karung dibongkar bila "
                      "kurang — sisanya tetap jadi curah di stok.",
              "fields": [
-                 {"name": "proses", "label": "Proses penyosohan", "type": "remote",
+                 {"name": "proses", "label": "Pemilik stok broken", "type": "remote",
                   "source": "/api/actions/broken-proses-tersedia",
-                  "kosong": "Belum ada hasil broken siap dipindah. Untuk menambahkan broken yang sudah ada sebagai bahan ke proses berjalan, gunakan tombol di bawah."},
+                  "kosong": "Belum ada stok broken yang tersedia."},
                  {"name": "silo", "label": "Silo broken tujuan", "type": "remote",
                   "source": "/api/actions/silo-broken-g2",
                   "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
@@ -4211,7 +4211,17 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
             label += ")"
             if milik:
                 label += f" · titipan {milik}"
-            keluar.append({"value": f"{kode}|{jasa_id or ''}", "label": label})
+            keluar.append({"pemilik": jasa_id, "kg": total})
+        grouped: dict[int | None, float] = {}
+        for item in keluar:
+            owner = item["pemilik"]
+            grouped[owner] = grouped.get(owner, 0.0) + item["kg"]
+        keluar = []
+        for owner, total in sorted(grouped.items(), key=lambda x: (x[0] is not None, x[0] or 0)):
+            owner_name = await nama_pemilik(db, owner)
+            label = f"{'Pabrik' if owner is None else owner_name} · {_rp(total)} kg tersedia"
+            keluar.append({"value": f"pemilik|{'pabrik' if owner is None else owner}",
+                           "label": label})
     return keluar
 
 
@@ -4235,20 +4245,29 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
 
     _require((await _is_g2_operator(user) and not can_see_financials(user))
              or P.super_saja(user.role))
-    kode_pol, _, jasa_txt = (req.proses or "").partition("|")
-    kode_pol = kode_pol.strip()
-    if not kode_pol:
-        raise HTTPException(400, "Pilih proses penyosohannya dulu.")
+    pilihan = (req.proses or "").strip()
+    if not pilihan:
+        raise HTTPException(400, "Pilih pemilik stok broken dulu.")
     if not (req.silo or "").strip():
         raise HTTPException(400, "Pilih silo broken tujuan dulu.")
-    jasa_id = int(jasa_txt) if jasa_txt.strip().isdigit() else None
-    from app.penggilingan.gudang2.service import Gudang2Error, masukkan_broken_ke_silo
+    from app.penggilingan.gudang2.service import (Gudang2Error,
+        masukkan_broken_ke_silo, masukkan_stok_broken_pemilik_ke_silo)
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await masukkan_broken_ke_silo(
-                db, user=u, kode_pol=kode_pol, nama_silo=req.silo.strip(),
-                berat_kg=float(req.berat_kg), jasa_id=jasa_id)
+            if pilihan.startswith("pemilik|"):
+                owner = pilihan.partition("|")[2]
+                if owner != "pabrik" and not owner.isdigit():
+                    raise HTTPException(422, "Pilihan pemilik stok tidak valid.")
+                r = await masukkan_stok_broken_pemilik_ke_silo(
+                    db, user=u, jasa_id=None if owner == "pabrik" else int(owner),
+                    nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+            else:
+                kode_pol, _, jasa_txt = pilihan.partition("|")
+                jasa_id = int(jasa_txt) if jasa_txt.isdigit() else None
+                r = await masukkan_broken_ke_silo(
+                    db, user=u, kode_pol=kode_pol, nama_silo=req.silo.strip(),
+                    berat_kg=float(req.berat_kg), jasa_id=jasa_id)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan broken ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"

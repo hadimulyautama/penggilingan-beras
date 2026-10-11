@@ -1882,6 +1882,90 @@ async def masukkan_broken_ke_silo(
     )
 
 
+async def masukkan_stok_broken_pemilik_ke_silo(
+    db: AsyncSession, *, user: User, jasa_id: int | None, nama_silo: str,
+    berat_kg: float, tanggal=None, jam=None,
+) -> MasukkanBrokenResult:
+    """Ambil broken FIFO dari tumpukan stok milik satu pemilik.
+
+    Asal proses tetap disimpan per baris ledger, tetapi tidak menjadi pilihan
+    operator. Satu pemindahan boleh menghabiskan beberapa proses sekaligus.
+    """
+    from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock, ProductSku
+    from app.services.stok import output_sosoh
+
+    if not berat_kg or float(berat_kg) <= 0:
+        raise Gudang2Error("Sebutkan berat yang masuk silo (kg), lebih dari 0.")
+
+    def milik(col):
+        return col.is_(None) if jasa_id is None else col == jasa_id
+
+    process_ids = set((await db.execute(
+        select(ByproductStock.source_id).where(
+            ByproductStock.jenis_produk == "broken",
+            ByproductStock.source_type == "polishing", milik(ByproductStock.jasa_id))
+    )).scalars())
+    process_ids |= set((await db.execute(
+        select(FinishedGoodsStock.source_id)
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
+               milik(FinishedGoodsStock.jasa_id))
+    )).scalars())
+    process_ids |= set((await db.execute(
+        select(PolishingSiloUsage.polishing_process_id)
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingProcess.status == "proses")
+    )).scalars())
+    procs = (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.id.in_(process_ids))
+        .order_by(PolishingProcess.created_at, PolishingProcess.id)
+    )).scalars().all() if process_ids else []
+
+    # Plan seluruh sumber sebelum menulis apa pun agar stok yang sudah berubah
+    # tidak menghasilkan pemindahan parsial.
+    left = float(berat_kg)
+    plan: list[tuple[PolishingProcess, float]] = []
+    for proc in procs:
+        rows = (await db.execute(select(ByproductStock.id).where(
+            ByproductStock.jenis_produk == "broken", ByproductStock.source_type == "polishing",
+            ByproductStock.source_id == proc.id, milik(ByproductStock.jasa_id)
+        ))).scalars().all()
+        available = sum([await _sisa_broken_row(db, rid) for rid in rows])
+        packed = float((await db.execute(
+            select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
+                   FinishedGoodsStock.source_id == proc.id, milik(FinishedGoodsStock.jasa_id))
+        )).scalar_one())
+        if proc.status == "proses":
+            from app.penggilingan.inventory.finished_goods import _broken_dibukukan
+            from app.services.jasa import pemilik_hasil_proses
+            if await pemilik_hasil_proses(db, proc.jasa_id, "broken") == jasa_id:
+                available += max(0, float((await output_sosoh(db, proc.id)).get("broken") or 0)
+                                 - await _broken_dibukukan(db, proc.id))
+        take = min(left, available + packed)
+        if take > 0.5:
+            plan.append((proc, take))
+            left -= take
+        if left <= 0.5:
+            break
+    if left > 0.5:
+        raise Gudang2Error(
+            f"Stok broken milik pemilih tinggal {berat_kg-left:,.0f} kg; "
+            f"tidak cukup untuk memasukkan {berat_kg:,.0f} kg.".replace(",", "."))
+
+    moved_codes: list[str] = []
+    opened_bags = 0.0
+    for proc, take in plan:
+        result = await masukkan_broken_ke_silo(
+            db, user=user, kode_pol=proc.kode_proses, nama_silo=nama_silo,
+            berat_kg=take, jasa_id=jasa_id, tanggal=tanggal, jam=jam)
+        opened_bags += result.dibongkar_dari_karung_kg
+        moved_codes.extend(result.kodes)
+    return MasukkanBrokenResult(nama_silo=nama_silo, moved_kg=float(berat_kg),
+                                dibongkar_dari_karung_kg=opened_bags, kodes=moved_codes)
+
+
 @dataclass
 class MasukkanBerasResult:
     nama_silo: str
