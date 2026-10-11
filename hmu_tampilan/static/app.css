@@ -1289,9 +1289,6 @@ details.benda > summary::after {
   transition: transform .15s ease;
 }
 details.benda[open] > summary::after { transform: rotate(-135deg); }
-/* Hasil dan neraca baru dibaca setelah kartu dibuka; ringkasan tertutup
-   menjaga fokus pada identitas proses dan bahan yang sudah masuk. */
-details.benda:not([open]) > summary .benda__neraca { display: none; }
 .pilihan { display: grid; gap: 7px; padding: 0 14px 14px; }
 .pilihan__satu {
   display: grid; gap: 2px; padding: 12px 13px; min-height: var(--sentuh);
