@@ -110,8 +110,10 @@
         {% set jenis_grup = "bahan" if judul.startswith("Bahan baku") else ("hasil" if judul.startswith("Hasil") else "asal") %}
         <section class="anak__kelompok anak__kelompok--{{ jenis_grup }}" aria-label="{{ judul }}">
           <h3 class="anak__kepala">{{ judul }}</h3>
-          {% for nama, kg, jam in baris_grup %}
-            <div class="anak__baris">
+          {% for baris in baris_grup %}
+            {% set nama, kg, jam = baris[0], baris[1], baris[2] %}
+            {% set peran = baris[3] if baris|length > 3 else "" %}
+            <div class="anak__baris{% if peran %} anak__baris--{{ peran }}{% endif %}">
               <span class="anak__nama">{{ nama }}</span>
               <span class="anak__kg">{{ kg }}</span>
               {% if jam %}<span class="anak__jam">{{ jam }}</span>{% endif %}

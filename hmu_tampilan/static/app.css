@@ -1224,6 +1224,22 @@ details.padat .pilihan { padding: 0 12px 12px; }
   line-height: 1.4;
   color: var(--redup-2);
 }
+.anak__kelompok .anak__baris--lot {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-top: 0;
+  border-left: 1px solid var(--garis);
+}
+.anak__kelompok .anak__baris--lot .anak__nama {
+  font-size: 13px;
+  color: var(--redup);
+}
+.anak__kelompok .anak__baris--lot .anak__kg {
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--tinta-2);
+}
+.anak__kelompok .anak__baris--broken .anak__nama { font-weight: 650; }
 @media (min-width: 900px) {
   .anak--kelompok { gap: 14px; margin-right: 18px; margin-left: 18px; }
   .anak__kelompok { padding: 15px 17px; }
