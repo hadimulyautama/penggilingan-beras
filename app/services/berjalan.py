@@ -2276,8 +2276,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         neraca = neraca_sosoh(bahan_kg, per_jenis) if bahan_kg > 0.5 else None
         rinci_hasil = [
             (f"{e.jenis}" + (f" · {e.spek}" if e.spek else ""),
-             _kg(float(e.berat_kg or 0)),
-             e.waktu_update.strftime("%d/%m %H:%M") if e.waktu_update else "")
+             _kg(float(e.berat_kg or 0)), "")
             for e in entri
         ]
 
