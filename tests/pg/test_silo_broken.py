@@ -573,13 +573,26 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
         tampilan = await untuk_gudang2(db)
         kartu = next(b for b in tampilan.berjalan
                      if b.kode == r2.proc.kode_proses)
-        assert ("Broken sebagai bahan", "1.000 kg") in kartu.fakta
+        # "Broken sebagai bahan" diringkas jadi "Broken" (11 Oktober 2026) —
+        # satu fakta, tak lagi berdampingan membingungkan dengan "Ditambah"
+        # (yang sekarang PK saja; di sini 0, jadi tak muncul sama sekali).
+        assert ("Broken", "1.000 kg") in kartu.fakta
+        assert not any(label == "Ditambah" for label, _ in kartu.fakta)
         assert kartu.anak_grup[0][0] == "Bahan baku masuk per silo"
-        # Baris ber-4 elemen sejak peran ditambahkan (dibebaskan/broken/silo/
-        # lot); "awal X kg" dicabut 11 Oktober 2026 — tanpa `ditambah`
-        # (masuk_u = 0 di sini), keterangannya kosong.
-        assert ("Silo C · Broken", "1.000 kg", "", "broken") \
+        # Broken TETAP menyebut "awal X kg" (beda dari PK yang mencabutnya) —
+        # daftar asalnya di bawah cuma mencatat PENAMBAHAN, bukan isi
+        # mula-mula. Di sini masuk_u = 0 (belum ditambah lagi sejak jadi
+        # bahan P2), jadi tanpa suku "ditambah".
+        assert ("Silo C · Broken", "1.000 kg", "awal 1.000 kg", "broken") \
             in kartu.anak_grup[0][1]
+        # ...dan daftar detil SATU kali penambahan (dari `pindah_broken_ke_silo`
+        # P1 di atas), berjudul "<pemilik> · <kode pindah>" sama seperti
+        # daftar asal lot PK.
+        baris_c = [b for b in kartu.anak_grup[0][1]
+                   if b[3] == "lot" and "BKS-" in b[0]]
+        assert len(baris_c) == 1
+        assert " · BKS-" in baris_c[0][0]
+        assert baris_c[0][1] == "1.000 kg"
         assert any(judul == "Hasil sosoh keluar" for judul, _ in kartu.anak_grup)
 
         await selesai_penyosohan(db, user=u, kode=r2.proc.kode_proses,

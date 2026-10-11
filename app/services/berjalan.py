@@ -966,6 +966,70 @@ async def _asal_pk(db: AsyncSession, silo_id: int) -> list[tuple[str, str, str]]
     return (await _isian_silo(db, silo_id)).baris
 
 
+async def _isian_silo_broken(
+    db: AsyncSession, silo_id: int, *, sampai: datetime | None = None,
+) -> IsianSilo:
+    """Asal-usul broken dalam isian silo BROKEN, sebangun `_isian_silo`.
+
+    Bedanya dari PK: broken cuma punya SATU jalan masuk (`broken_ke_silo`,
+    bukan langsung+tumpukan), dan pemiliknya sudah TERSALIN di barisnya
+    sendiri (`jasa_id`) — tak perlu join ke tabel lain untuk tahu kodenya,
+    beda dari PK yang kodenya (LOT-…/PKB-…) ada di `InternalTransfer`/
+    `PkPurchaseBatch` terpisah.
+
+    Dasarnya tetap sama: isian sejak terakhir kali silo ini mencapai nol,
+    dibatasi `sampai` (snapshot saat proses mulai) sama seperti PK.
+    """
+    from app.models import BrokenKeSilo
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+
+    gerak: list[tuple[datetime, float, tuple | None]] = []
+    for r in (await db.execute(
+        select(BrokenKeSilo)
+        .where(BrokenKeSilo.silo_id == silo_id,
+               *([BrokenKeSilo.waktu <= sampai] if sampai else []))
+    )).scalars().all():
+        kg = float(r.berat_kg or 0)
+        gerak.append((r.waktu, kg, (r.tanggal, kg, r.kode_pindah, r.jasa_id)))
+    for u, pr in (await db.execute(
+        select(PolishingSiloUsage, PolishingProcess)
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               PolishingSiloUsage.berat_akhir_kg.isnot(None),
+               *([PolishingProcess.waktu_selesai <= sampai] if sampai else []))
+    )).all():
+        gerak.append((pr.waktu_selesai or pr.waktu_mulai,
+                      -float(u.berat_terpakai_kg or 0), None))
+    if not gerak:
+        return IsianSilo()
+
+    _AWAL = datetime.min.replace(tzinfo=timezone.utc)
+    urut = sorted(gerak, key=lambda g: (g[0] or _AWAL, 0 if g[1] < 0 else 1))
+    saldo, batas = 0.0, -1
+    for n, (_, delta, _) in enumerate(urut):
+        saldo += delta
+        if saldo <= _EPS_KG:
+            batas = n
+
+    isian = urut[batas + 1:]
+    masuk = [m for _, _, m in isian if m is not None]
+    masuk_kg = sum(m[1] for m in masuk)
+    disosoh_kg = -sum(d for _, d, _ in isian if d < 0)
+    if not masuk:
+        return IsianSilo(masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
+
+    peta_pemilik = await nama_pemilik_banyak(db, {m[3] for m in masuk if m[3]})
+    keluar = []
+    for tgl, kg, kode, jid in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
+        judul = (f"{peta_pemilik[jid]} · {kode}" if jid in peta_pemilik
+                 else f"Giling sendiri · {kode}")
+        # Tanpa tanggal masuk — kode pindah (BKS-YYYYMMDD-NN) sudah
+        # memuat tanggalnya sendiri, pola yang sama dengan `_isian_silo`.
+        keluar.append((judul, _kg(kg), ""))
+    return IsianSilo(baris=keluar[:BATAS_ASAL], lebih=max(0, len(keluar) - BATAS_ASAL),
+                     masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
+
+
 def _nota_isian(isian: IsianSilo) -> str | None:
     """Kalimat yang memberi nama pada selisih judul↔daftar, atau None.
 
@@ -2202,6 +2266,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         asal_lebih = 0
         silo_nama: list[str] = []
         ditambah = 0.0
+        # Hanya suku PK — dipakai fakta "Ditambah" di kartu (lihat di bawah).
+        # `ditambah` (semua jenis, dipakai `bahan_kg`/neraca) tetap utuh.
+        ditambah_pk = 0.0
         berat_awal_total = 0.0
         for u in (await db.execute(
             select(PolishingSiloUsage)
@@ -2225,20 +2292,47 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 )
                 jenis_u = {"broken": "Broken", "beras": "Beras"}.get(
                     s.jenis_isi, "PK")
-                # "Awal X kg" dicabut (permintaan pemilik 11 Oktober 2026):
-                # bisa disimpulkan sendiri dari jumlah daftar asal lot di
-                # bawahnya. "Ditambah" TETAP disebut — itu PK yang masuk
-                # SESUDAH proses mulai, dan daftar asal lot (snapshot saat
-                # mulai) tak menyebutnya sama sekali.
-                baris_silo = (
-                    f"{s.nama_silo} · {jenis_u}", _kg(total_u),
-                    status_u or (f"ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else ""),
-                    ("dibebaskan" if dibebaskan else
-                     "broken" if s.jenis_isi == "broken" else "silo"),
+                broken_u = s.jenis_isi == "broken"
+                # "Awal X kg" dicabut untuk PK (permintaan pemilik 11 Oktober
+                # 2026): bisa disimpulkan sendiri dari jumlah daftar asal lot
+                # di bawahnya. Broken TETAP menyebutnya — permintaan susulan
+                # pemilik hari yang sama: daftar asal broken (di bawah) cuma
+                # mencatat PENAMBAHANNYA, bukan isi mula-mula, jadi "awal"
+                # adalah satu-satunya tempat angka itu masih terbaca.
+                keterangan = status_u or (
+                    (f"awal {_kg(awal_u)}"
+                     + (f" · ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else ""))
+                    if broken_u else
+                    (f"ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else "")
                 )
-                if s.jenis_isi == "broken":
+                baris_silo = (
+                    f"{s.nama_silo} · {jenis_u}", _kg(total_u), keterangan,
+                    ("dibebaskan" if dibebaskan else "broken" if broken_u else "silo"),
+                )
+                # Silo yang dibebaskan meredupkan baris judulnya sendiri
+                # (`.anak__baris--dibebaskan`) — daftar asal/tambahan di
+                # bawahnya ikut diredupkan dengan peran sendiri, supaya
+                # seluruh kelompok terbaca sebagai riwayat, bukan isi yang
+                # masih ada sekarang. Sama untuk PK maupun broken.
+                peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
+                if broken_u:
                     broken_bahan_kg += total_u
                     rinci_bahan_broken.append(baris_silo)
+                    # Daftar detil tiap kali broken DITAMBAHKAN ke silo ini
+                    # (`broken_ke_silo`) — permintaan pemilik 11 Oktober
+                    # 2026, sebangun daftar asal lot PK di atas, tapi
+                    # sumbernya tunggal (lihat `_isian_silo_broken`).
+                    isian_br = await _isian_silo_broken(
+                        db, u.silo_id, sampai=pr.waktu_mulai
+                    )
+                    asal_lebih += isian_br.lebih
+                    rinci_bahan_broken.extend(
+                        (nama, kg, jam, peran_lot) for nama, kg, jam in isian_br.baris
+                    )
+                    if not isian_br.baris:
+                        rinci_bahan_broken.append((
+                            "Riwayat penambahan tidak tercatat", "", "", peran_lot
+                        ))
                 else:
                     rinci_bahan_pk.append(baris_silo)
                     # Asal lot adalah bagian dari snapshot bahan saat proses
@@ -2248,12 +2342,6 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                         db, u.silo_id, sampai=pr.waktu_mulai
                     )
                     asal_lebih += isian_u.lebih
-                    # Silo yang dibebaskan meredupkan baris judulnya sendiri
-                    # (`.anak__baris--dibebaskan`) — daftar asal lot di
-                    # bawahnya ikut diredupkan dengan peran sendiri, supaya
-                    # seluruh kelompok terbaca sebagai riwayat, bukan isi
-                    # yang masih ada sekarang.
-                    peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
                     rinci_bahan_pk.extend(
                         (nama, kg, jam, peran_lot) for nama, kg, jam in isian_u.baris
                     )
@@ -2267,8 +2355,13 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     for a in isian_u.baris:
                         if a not in asal_pr:
                             asal_pr.append(a)
-        # Broken tidak memiliki rincian asal lot PK dan selalu ditempatkan
-        # setelah semua silo PK pada daftar bahan.
+                    # "Ditambah" di fakta kartu kini PK saja (lihat di bawah)
+                    # — total broken sudah berdiri sendiri sebagai "Broken",
+                    # dan menjumlahkannya ke sini akan mengulang angka yang
+                    # sama di dua baris fakta yang terbaca tak berhubungan.
+                    ditambah_pk += masuk_u
+        # Broken kini membawa rincian asal sendiri (lihat di atas) dan
+        # selalu ditempatkan setelah semua silo PK pada daftar bahan.
         rinci_bahan = rinci_bahan_pk + rinci_bahan_broken
         pemasok_pr = _pemasok_ringkas(asal_pr)
         macet = await jeda_terbuka(db, "penyosohan", pr.id)
@@ -2281,12 +2374,20 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # angka, dua pemakaian, supaya keduanya tak bisa berselisih.
         bahan_kg = berat_awal_total + ditambah
         fakta.append(("Total bahan baku", _kg(bahan_kg)))
+        # Satu fakta ringkas untuk broken — keluhan pemilik 11 Oktober 2026:
+        # "Broken sebagai bahan" (total) berdampingan dengan "Ditambah"
+        # (dulu gabungan PK+broken) terbaca seolah dua angka yang harus
+        # dibandingkan, padahal beda sumbu (jenis bahan vs fase waktu) dan
+        # kadang tumpang-tindih. "Broken" di sini SUDAH angka utuhnya
+        # (awal + ditambah, rincian ada di "Bahan baku masuk per silo");
+        # "Ditambah" di bawah sekarang PK saja, supaya keduanya tak lagi
+        # bisa disalahbaca sebagai satu angka yang mengandung angka lain.
         if broken_bahan_kg > 0.001:
-            fakta.append(("Broken sebagai bahan", _kg(broken_bahan_kg)))
-        if ditambah:
+            fakta.append(("Broken", _kg(broken_bahan_kg)))
+        if ditambah_pk > 0.001:
             # PK yang dituang selama mesin jalan ikut jadi penyebut rendemen
             # — angka yang ikut menilai pekerjaan tak boleh disembunyikan.
-            fakta.append(("Ditambah", _kg(ditambah)))
+            fakta.append(("Ditambah", _kg(ditambah_pk)))
         if tertahan >= 60:
             fakta.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
 
