@@ -902,11 +902,11 @@
       if (!pi) { return; }
       pi.addEventListener("change", function () {
         var anak = $("f_" + f.name);
-        var banyak = f.type === "remote_banyak" ? $("b_" + f.name) : null;
         if (anak) {
           anak.innerHTML = '<option value="">memuat…</option>';
           anak.disabled = false;
         }
+        var banyak = f.type === "remote_banyak" ? $("b_" + f.name) : null;
         if (banyak) { banyak.innerHTML = '<p class="bantu">memuat…</p>'; }
         var lamaNota = $("kosong_" + f.name);
         if (lamaNota) { lamaNota.remove(); }
