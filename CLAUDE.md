@@ -684,6 +684,25 @@ sama, sebelum prosesnya ditutup. Ditolak dengan membandingkan `source_id`
 baris broken terhadap `PolishingSiloUsage` yang masih terbuka pada silo
 tujuan.
 
+⚠ **Pagar yang SAMA, arah TERBALIK** — `tambah_silo_penyosohan` (11 Oktober
+2026, laporan lapangan: operator ingin menambah broken yang sudah ada di
+silo sebagai CAMPURAN BAHAN ke proses sosoh yang berjalan, bukan menyimpan
+hasil broken). Pagar di atas tak menghadang urutan ini: broken proses P
+dipindah ke Silo X SEBELUM X jadi bahan P (saat itu X belum jadi sumber,
+jadi pagar `pindah_broken_ke_silo` diam), lalu P mencoba memakai X sebagai
+bahan BARU lewat "Tambah silo (mix bahan)". `tambah_silo_penyosohan`
+menolak begitu Silo X punya SATU baris `broken_ke_silo` pun yang menunjuk
+balik ke `proc.id` — diperiksa lewat riwayat pemindahan, bukan "stok silo
+saat ini", dan menolak silonya UTUH (bukan mencoba memisah bagian yang
+"aman", sama konservatifnya dengan `pastikan_satu_pemilik`). Picker
+`/actions/silo-bahan-g2` sendiri SENGAJA tak menyaring `jenis_isi` (PK,
+broken, Beras semua bisa jadi bahan — `PolishingSiloUsage` silo-agnostik)
+dan juga TAK memeriksa pagar ini: ia tak tahu proses mana yang akan
+ditambahi (field `kode` di atasnya tak terhubung sebagai `induk` — borang
+`remote_banyak` belum mendukungnya), jadi picker boleh menawarkan silo yang
+kemudian ditolak layanannya — pola yang sama yang sudah diterima untuk
+`mulai_penyosohan`.
+
 **Rendemen atas SELURUH bahan**, bukan PK saja — sama dengan lot KS/MIX
 Gudang 1. Karena `PolishingSiloUsage` tak peduli isi silonya, penyebut
 `rendemen_proses` (sum `berat_terpakai_kg` seluruh usage) SUDAH otomatis

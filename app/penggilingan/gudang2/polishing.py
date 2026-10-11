@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import input_time
 from app.models import (
+    BrokenKeSilo,
+    ByproductStock,
     PolishingOutputLog,
     PolishingProcess,
     PolishingSiloUsage,
@@ -207,6 +209,41 @@ async def tambah_silo_penyosohan(
         )).first()
         if aktif:
             raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
+
+        # ── PAGAR: proses TAK BOLEH memakan broken yang ia hasilkan sendiri ──
+        #
+        # Sebangun pagar `pindah_broken_ke_silo` (lihat CLAUDE.md "Silo
+        # broken" dan `tests/pg/test_silo_broken.py::
+        # test_proses_tak_boleh_memakan_broken_sendiri`), tapi dari ARAH
+        # SEBALIKNYA. Di sana broken yang BARU KELUAR ditolak masuk ke silo
+        # yang SEDANG dipakai proses yang sama — tapi urutan itu tak
+        # menghadang urutan TERBALIK: broken proses ini dipindah ke silo X
+        # SEBELUM silo X jadi bahan proses ini (saat itu X belum jadi sumber,
+        # jadi pagar `pindah_broken_ke_silo` diam), lalu BARU SEKARANG `tambah
+        # silo` mencoba memakai X sebagai bahan. Fisiknya tetap mustahil:
+        # broken yang keluar dari proses P tak bisa disosoh ulang oleh P
+        # SENDIRI selagi P masih berjalan — mesinnya sama, dan rendemen P
+        # akan menghitung berat yang sama dua kali (sekali sebagai hasil,
+        # sekali lagi sebagai bahan). Diperiksa lewat `broken_ke_silo`
+        # (bukan "stok silo saat ini"): begitu ada SATU baris yang menunjuk
+        # balik ke proses ini, silonya ditolak UTUH — sama konservatifnya
+        # dengan `pastikan_satu_pemilik`, yang juga menolak campuran utuh,
+        # bukan mencoba memisah bagian yang "aman".
+        if silo.jenis_isi == "broken":
+            sendiri = (await db.execute(
+                select(BrokenKeSilo.id)
+                .join(ByproductStock,
+                      ByproductStock.id == BrokenKeSilo.byproduct_stock_id)
+                .where(BrokenKeSilo.silo_id == silo.id,
+                       ByproductStock.source_type == "polishing",
+                       ByproductStock.source_id == proc.id)
+            )).first()
+            if sendiri:
+                raise Gudang2Error(
+                    f"❌ Silo {letter} berisi broken hasil {proc.kode_proses} "
+                    "sendiri — tak bisa dipakai lagi sebagai bahan sebelum "
+                    "prosesnya ditutup."
+                )
         silos.append(silo)
 
     # ── Pemilik silo baru HARUS SAMA dengan pemilik proses ini ──

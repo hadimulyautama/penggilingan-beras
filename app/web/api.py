@@ -3790,16 +3790,28 @@ async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/silo-bahan-g2")
 async def silo_bahan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Silo Gudang 2 yang berisi PK dan BELUM dipakai penyosohan yang berjalan.
+    """Silo Gudang 2 yang berisi STOK dan BELUM dipakai penyosohan berjalan.
 
     Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
     2 bisa bertambah lewat Pengaturan → Alat, dan silo ketiga yang baru dibeli
     tak akan pernah muncul di "A / B / A+B".
 
+    ⚠ SENGAJA tak menyaring `jenis_isi` — silo PK, broken, maupun Beras
+    (keputusan pemilik 6 & 8 Oktober 2026) sama-sama bisa jadi bahan sosoh:
+    `PolishingSiloUsage` SILO-AGNOSTIK (lihat CLAUDE.md "Silo broken"), dan
+    `hitung_stok_silo` sudah bercabang sendiri menurut jenisnya. Menambah
+    syarat `jenis_isi == 'pk'` di sini akan membuang silo broken/Beras yang
+    genuinely berisi — kelas kerusakan yang sama dengan menyaring stok lewat
+    kata tujuannya.
+
     Saringannya sama persis dengan pagar `mulai_penyosohan` — ada isinya, dan
     tak ada baris pemakaian pada proses yang berstatus 'proses'. Borang yang
     menawarkan silo yang kemudian ditolak layanannya membuat orang mengira
-    aplikasinya rusak, padahal keduanya benar sendiri-sendiri.
+    aplikasinya rusak, padahal keduanya benar sendiri-sendiri — termasuk
+    pagar "proses tak boleh memakan broken sendiri" di `tambah_silo_
+    penyosohan`, yang tak bisa diperiksa di sini sebab picker ini tak tahu
+    proses MANA yang akan ditambahi (field `kode` di atasnya, tak terhubung
+    sebagai `induk`).
     """
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
