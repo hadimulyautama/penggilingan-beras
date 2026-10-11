@@ -1165,6 +1165,19 @@ details.padat .pilihan { padding: 0 12px 12px; }
   grid-column: 1 / -1;
   font-family: var(--mono); font-size: 13px; color: var(--redup-2);
 }
+/* Asal lot di dalam daftar "Bahan baku" POLOS (Riwayat Sosoh — bukan
+   `.anak__kelompok` bergrup dari `_benda.html`): menjorok & redup, sama
+   seperti `.anak__kelompok .anak__baris--lot`, tapi digariskan lewat
+   `.padat` (pembungkus kartu riwayat) supaya spesifisitasnya tak bentrok
+   dengan aturan `.anak__kelompok` yang sudah ada (keduanya kebetulan
+   turunan elemen ber-kelas `anak`). Permintaan pemilik 11 Oktober 2026. */
+.padat .anak__baris--lot {
+  margin-left: 12px;
+  padding-left: 10px;
+  border-left: 1px solid var(--garis);
+}
+.padat .anak__baris--lot .anak__nama { color: var(--redup); }
+.padat .anak__baris--lot .anak__kg { font-weight: 550; color: var(--tinta-2); }
 
 /* Rincian proses yang terbuka: bahan, hasil, dan asal lot harus terlihat
    sebagai tiga kelompok berbeda. Panel mengalir menjadi beberapa kolom di

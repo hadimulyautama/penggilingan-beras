@@ -1030,6 +1030,170 @@ async def _isian_silo_broken(
                      masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
 
 
+async def _isian_silo_banyak(
+    db: AsyncSession,
+    permintaan: list[tuple[int, bool, datetime | None]],
+) -> dict[tuple[int, bool, datetime | None], IsianSilo]:
+    """`_isian_silo`/`_isian_silo_broken` dalam bentuk BORONGAN.
+
+    Dipakai Riwayat Sosoh (`polishing.riwayat_sosoh`), yang menjaga jumlah
+    kuerinya TETAP berapa pun banyak kartu di halaman (P-S-02 — satu kueri
+    per baris pernah membuat halaman Stok Produk 1,77 detik pada 500 baris).
+    Memanggil `_isian_silo`/`_isian_silo_broken` di dalam gelung per kartu×
+    silo akan mengeluarkan kelas kesalahan yang sama persis.
+
+    `permintaan` = daftar (silo_id, broken, sampai) — SATU per kartu×silo,
+    `sampai`-nya waktu_mulai proses MASING-MASING (bukan "sekarang"): silo
+    yang sama bisa dipakai proses berbeda pada waktu berbeda, jadi "sejak nol
+    terakhir"-nya wajib dihitung per permintaan, bukan sekali untuk silonya
+    saja. Hasilnya dict berkunci TEPAT elemen `permintaan` — pemanggil
+    mencocokkan balik dengan kuncinya sendiri.
+
+    Logikanya sengaja DIDUPLIKASI dari versi satuan, bukan dipanggil
+    lewatnya — bentuk kuerinya beda (`IN (...)` borongan vs `==` satuan,
+    sekali untuk seluruh permintaan vs sekali per silo), pola yang sama
+    dengan `BrokenKeSilo` berdiri sendiri dari `PkTumpukanToSilo`: dua
+    kebutuhan yang kebetulan mirip tapi bentuk aksesnya berbeda.
+    """
+    from app.models import BrokenKeSilo, InternalTransfer, PkGudang2Intake
+    from app.penggilingan.gudang2.models import (PkPurchaseBatch, PkTumpukanToSilo,
+                                                 PolishingProcess, PolishingSiloUsage)
+
+    if not permintaan:
+        return {}
+
+    silo_pk = {s for s, broken, _ in permintaan if not broken}
+    silo_broken = {s for s, broken, _ in permintaan if broken}
+    silo_semua = silo_pk | silo_broken
+
+    # ── Pengambilan TANPA batas waktu di SQL ──
+    # `sampai` beda per permintaan (proses yang berbeda, bahkan untuk silo
+    # yang sama), jadi disaring di Python sesudah diambil, bukan di kueri.
+    # Yang dijaga tetap di sini jumlah KUERI-nya (enam, berapa pun banyak
+    # kartu), bukan jumlah barisnya — dan baris riwayat satu silo selama
+    # pabrik berdiri masih jauh dari berat bagi memori satu permintaan HTTP.
+    gerak_pk: dict[int, list[tuple]] = {s: [] for s in silo_pk}
+    if silo_pk:
+        for i in (await db.execute(
+            select(PkGudang2Intake)
+            .where(PkGudang2Intake.silo_id.in_(silo_pk),
+                   PkGudang2Intake.silo_id.is_not(None))
+        )).scalars().all():
+            kg = float(i.berat_kg or 0)
+            gerak_pk[i.silo_id].append((i.waktu_masuk, kg,
+                (i.tanggal_masuk, kg, i.internal_transfer_id, i.pk_purchase_batch_id)))
+        for pindah, i in (await db.execute(
+            select(PkTumpukanToSilo, PkGudang2Intake)
+            .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
+            .where(PkTumpukanToSilo.silo_id.in_(silo_pk))
+        )).all():
+            kg = float(pindah.berat_kg or 0)
+            gerak_pk[pindah.silo_id].append((pindah.waktu, kg,
+                (pindah.tanggal, kg, i.internal_transfer_id, i.pk_purchase_batch_id)))
+
+    gerak_broken: dict[int, list[tuple]] = {s: [] for s in silo_broken}
+    if silo_broken:
+        for r in (await db.execute(
+            select(BrokenKeSilo).where(BrokenKeSilo.silo_id.in_(silo_broken))
+        )).scalars().all():
+            kg = float(r.berat_kg or 0)
+            gerak_broken[r.silo_id].append((r.waktu, kg, (r.tanggal, kg, r.kode_pindah, r.jasa_id)))
+
+    # Pengurang — SATU kueri untuk SELURUH silo (PK maupun broken: tabelnya
+    # silo-agnostik, sama seperti di versi satuan).
+    if silo_semua:
+        for u, pr in (await db.execute(
+            select(PolishingSiloUsage, PolishingProcess)
+            .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+            .where(PolishingSiloUsage.silo_id.in_(silo_semua),
+                   PolishingSiloUsage.berat_akhir_kg.isnot(None))
+        )).all():
+            kurang = (pr.waktu_selesai or pr.waktu_mulai,
+                      -float(u.berat_terpakai_kg or 0), None)
+            if u.silo_id in gerak_pk:
+                gerak_pk[u.silo_id].append(kurang)
+            if u.silo_id in gerak_broken:
+                gerak_broken[u.silo_id].append(kurang)
+
+    # ── Per permintaan: saring ke `sampai`-nya sendiri, cari titik nol ──
+    # terakhir — bagian MURNI dari `_isian_silo`, diulang di sini sebab
+    # dipanggil per permintaan, bukan per silo.
+    _AWAL = datetime.min.replace(tzinfo=timezone.utc)
+
+    def _masuk_sejak_nol(gerak_silo, sampai):
+        gerak = [g for g in gerak_silo if not sampai or (g[0] or _AWAL) <= sampai]
+        if not gerak:
+            return [], 0.0, 0.0
+        urut = sorted(gerak, key=lambda g: (g[0] or _AWAL, 0 if g[1] < 0 else 1))
+        saldo, batas = 0.0, -1
+        for n, (_, delta, _) in enumerate(urut):
+            saldo += delta
+            if saldo <= _EPS_KG:
+                batas = n
+        isian = urut[batas + 1:]
+        masuk = [m for _, _, m in isian if m is not None]
+        masuk_kg = sum(m[1] for m in masuk)
+        disosoh_kg = -sum(d for _, d, _ in isian if d < 0)
+        return masuk, masuk_kg, disosoh_kg
+
+    per_permintaan: dict[tuple, tuple] = {
+        key: _masuk_sejak_nol((gerak_broken if key[1] else gerak_pk).get(key[0], []), key[2])
+        for key in permintaan
+    }
+
+    # ── Label — borongan atas UNION seluruh permintaan sekaligus ──
+    trf_ids: set[int] = set()
+    batch_ids: set[int] = set()
+    broken_jasa_ids: set[int] = set()
+    for (s, broken, _), (masuk, _, _) in per_permintaan.items():
+        if broken:
+            broken_jasa_ids.update(m[3] for m in masuk if m[3])
+        else:
+            trf_ids.update(m[2] for m in masuk if m[2])
+            batch_ids.update(m[3] for m in masuk if m[3])
+
+    lot = {i: (kode, jid) for i, kode, jid in (await db.execute(
+        select(InternalTransfer.id, MillingProcess.kode_proses, InternalTransfer.jasa_id)
+        .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
+        .where(InternalTransfer.id.in_(trf_ids))
+    )).all()} if trf_ids else {}
+    luar = {b: (kode, nama) for b, kode, nama in (await db.execute(
+        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
+        .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
+        .where(PkPurchaseBatch.id.in_(batch_ids))
+    )).all()} if batch_ids else {}
+    peta_pemilik = await nama_pemilik_banyak(
+        db, {j for _, j in lot.values()} | broken_jasa_ids)
+
+    hasil: dict[tuple, IsianSilo] = {}
+    for key, (masuk, masuk_kg, disosoh_kg) in per_permintaan.items():
+        _, broken, _ = key
+        if not masuk:
+            hasil[key] = IsianSilo(masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
+            continue
+        keluar = []
+        if broken:
+            for tgl, kg, kode, jid in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
+                judul = (f"{peta_pemilik[jid]} · {kode}" if jid in peta_pemilik
+                         else f"Giling sendiri · {kode}")
+                keluar.append((judul, _kg(kg), ""))
+        else:
+            for tgl, kg, trf_id, batch_id in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
+                if trf_id and trf_id in lot:
+                    kode_lot, jid = lot[trf_id]
+                    judul = (f"{peta_pemilik[jid]} · {kode_lot}" if jid in peta_pemilik
+                             else f"Giling sendiri · {kode_lot}")
+                elif batch_id and batch_id in luar:
+                    kode, nama = luar[batch_id]
+                    judul = f"{nama or '?'} · {kode}"
+                else:
+                    continue
+                keluar.append((judul, _kg(kg), ""))
+        hasil[key] = IsianSilo(baris=keluar[:BATAS_ASAL], lebih=max(0, len(keluar) - BATAS_ASAL),
+                               masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
+    return hasil
+
+
 def _nota_isian(isian: IsianSilo) -> str | None:
     """Kalimat yang memberi nama pada selisih judul↔daftar, atau None.
 

@@ -180,6 +180,80 @@ async def test_kartu_menggambar_kelima_persen_yang_diminta(pg, pemakai):
     assert 'class="neraca"' in t
 
 
+async def test_kartu_merinci_asal_lot_pk_dan_penambahan_broken(pg, pemakai, pemasok):
+    """⭐ Keluhan pemilik 11 Oktober 2026: riwayat berhenti di tingkat silo,
+    tak merinci lot/batch PK-nya — beda dari kartu "Sedang berjalan" yang
+    sudah merinci asal lot per silo.
+
+    Dua rupa asal dicoba sekaligus, sebangun kartu berjalan: PK beli luar
+    (nama pemasok + kode batch) dan broken yang ditambahkan ke silo broken
+    (kode pindah `BKS-...`).
+    """
+    from datetime import date as _date
+
+    from sqlalchemy import select
+
+    from app.models import ByproductStock, Silo, User, Warehouse
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+    from app.penggilingan.gudang2.polishing import (catat_output,
+                                                    mulai_penyosohan,
+                                                    selesai_penyosohan)
+    from app.penggilingan.gudang2.service import (masukkan_pk_luar,
+                                                   pindah_broken_ke_silo,
+                                                   pindah_tumpukan_ke_silo)
+    from app.penggilingan.inventory.finished_goods import catat_broken
+    from app.services.seed import seed_master
+    from app.database import now_local
+
+    await seed_master()
+    async with pg() as db:
+        u = await db.get(User, pemakai.id)
+        # `seed_master()` cuma menyediakan Silo A/B Gudang 2 (keduanya PK) —
+        # Silo C (broken) ditambahkan sendiri, sebangun `dunia` di
+        # `test_silo_broken.py`.
+        g2 = (await db.execute(select(Warehouse)
+             .where(Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
+        db.add(Silo(nama_silo="Silo C", warehouse_id=g2.id, jenis_isi="broken"))
+        db.add(PkPurchaseBatch(
+            kode_batch="PKB-RIWAYAT-01", supplier_id=pemasok.id,
+            berat_total_kg=6_000, tanggal_pembelian=_date.today(),
+            waktu_pembelian=now_local(), input_by=u.id, status_batch="diterima",
+            flag_unverified=True, sumber_berat="manual"))
+        await db.commit()
+        ri = await masukkan_pk_luar(db, user=u, kode="PKB-RIWAYAT-01",
+                                    tujuan="ditumpuk")
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=ri.intake.id,
+                                      nama_silo="A", berat=6_000)
+        kode = (await mulai_penyosohan(db, user=u, nama_silos=["A"])).proc.kode_proses
+        await catat_output(db, user=u, kode=kode, jenis="premium", berat_kg=1_000)
+        await catat_output(db, user=u, kode=kode, jenis="broken", berat_kg=1_000)
+        await catat_broken(db, user=u, kode_pol=kode, berat_kg=1_000)
+        row_broken = (await db.execute(
+            select(ByproductStock).where(ByproductStock.jenis_produk == "broken")
+        )).scalars().one()
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=4_000)
+        await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row_broken.id,
+                                    nama_silo="C", berat=1_000)
+
+        # P2: sosoh ulang broken dari Silo C, supaya ia MUNCUL di riwayat.
+        kode2 = (await mulai_penyosohan(db, user=u, nama_silos=["C"])).proc.kode_proses
+        await catat_output(db, user=u, kode=kode2, jenis="menir", berat_kg=900)
+        await selesai_penyosohan(db, user=u, kode=kode2, nama_silo="C", sisa_kg=0)
+
+    c = await _klien(pg, peran="admin")
+    try:
+        r = await c.get("/riwayat-sosoh")
+    finally:
+        await c.aclose()
+    t = r.text
+    assert kode in t and kode2 in t
+    # P1 (Silo A, PK beli luar): nama pemasok + kode batch tertera.
+    assert "Pemasok Uji" in t and "PKB-RIWAYAT-01" in t
+    # P2 (Silo C, broken yang disosoh ulang): kode pindah tertera, berjudul
+    # "Giling sendiri" (bukan titipan).
+    assert "Giling sendiri · BKS-" in t
+
+
 async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pemakai):
     """Proses yang MASIH menyala tak didaftar.
 
@@ -278,17 +352,22 @@ async def test_hasil_melebihi_bahan_dikatakan_di_layarnya(pg, pemakai):
 
 async def test_jumlah_kueri_tetap_walau_kartunya_bertambah(pg, pemakai,
                                                            hitung_kueri):
-    """⭐ Tujuh kueri, bukan tujuh PER KARTU.
+    """⭐ Belasan kueri TETAP, bukan belasan PER KARTU.
 
     Layar Stok Produk pernah mengeluarkan satu kueri per penyosohan dan
     halamannya 1,77 detik pada 500 proses (temuan QA P-S-02). Halaman ini
-    membaca hal yang sama — pemakaian silo, hasil, spek, orangnya, pemiliknya —
-    dan akan menumpuk dengan cara yang sama.
+    membaca hal yang sama — pemakaian silo, hasil, spek, orangnya, pemiliknya,
+    dan sejak 11 Oktober 2026 juga asal lotnya — dan akan menumpuk dengan cara
+    yang sama kalau sampai lupa.
 
     Diuji sebagai PERBANDINGAN, bukan atas satu angka langit-langit: satu kartu
     dibanding enam kartu. Langit-langit tetap bisa dilewati oleh N+1 yang
     kebetulan kecil, sedangkan selisih yang tumbuh bersama jumlah kartu tak
-    bisa disembunyikan.
+    bisa disembunyikan. Langit-langitnya sendiri dinaikkan (10 → 16) mengikuti
+    tujuh kueri borongan baru `_isian_silo_banyak` — kelonggarannya di atas
+    sembilan yang terukur di skenario uji ini (PK langsung, tanpa jasa/lot
+    giling), sebab skenario lain (silo broken, PK titipan) bisa menambah
+    sampai tujuh kueri lagi yang di sini semuanya terlewati (0 baris).
     """
     from app.penggilingan.gudang2.polishing import riwayat_sosoh
 
@@ -311,7 +390,7 @@ async def test_jumlah_kueri_tetap_walau_kartunya_bertambah(pg, pemakai,
     assert enam.jumlah == satu.jumlah, (
         f"kuerinya tumbuh bersama jumlah kartu: {satu.jumlah} → {enam.jumlah}\n"
         + "\n".join(enam.perintah[:12]))
-    assert enam.jumlah <= 10, f"{enam.jumlah} kueri untuk satu halaman"
+    assert enam.jumlah <= 16, f"{enam.jumlah} kueri untuk satu halaman"
 
 
 async def test_halaman_berikutnya_memakai_kursor_bukan_nomor(pg, pemakai):

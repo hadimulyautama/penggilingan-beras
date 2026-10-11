@@ -191,6 +191,21 @@
             − sisa {{ kg(s.sisa_kg or 0) }}
           </span>
         </div>
+        {# Asal lot PK / penambahan broken — permintaan pemilik 11 Oktober
+           2026: riwayat dulu berhenti di tingkat silo, tak merinci dari
+           lot/pemasok mana angkanya datang, beda dari kartu "Sedang
+           berjalan". `.anak__baris--lot` sudah bergaya dari sana. #}
+        {% for judul, berat in s.asal %}
+          <div class="anak__baris anak__baris--lot">
+            <span class="anak__nama">{{ judul }}</span>
+            <span class="anak__kg">{{ berat }}</span>
+          </div>
+        {% endfor %}
+        {% if s.asal_lebih %}
+          <div class="anak__baris anak__baris--lot">
+            <span class="anak__nama">+{{ s.asal_lebih }} asal lagi tak ditampilkan</span>
+          </div>
+        {% endif %}
       {% endfor %}
 
       <dl class="fakta" style="padding:8px 12px 10px">

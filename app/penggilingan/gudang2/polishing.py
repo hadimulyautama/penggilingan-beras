@@ -866,6 +866,13 @@ class PemakaianSilo:
     masuk_kg: float
     sisa_kg: float | None
     terpakai_kg: float
+    #: Rincian asal lot PK / penambahan broken — (judul, kg) — sebangun kartu
+    #: "Sedang berjalan" (keluhan pemilik 11 Oktober 2026: riwayat berhenti
+    #: di tingkat silo, tak merinci lot/pemasoknya). Diisi borongan lewat
+    #: `berjalan._isian_silo_banyak`, bukan per silo — lihat `riwayat_sosoh`.
+    asal: tuple[tuple[str, str], ...] = ()
+    #: Berapa baris asal yang tak ditampilkan karena `BATAS_ASAL`.
+    asal_lebih: int = 0
 
 
 @dataclass(frozen=True)
@@ -908,12 +915,18 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
     halaman riwayat yang separuh isinya masih akan berubah, lalu persennya
     dibaca sebagai hasil akhir.
 
-    ⚠ JUMLAH KUERINYA TETAP, berapa pun banyak kartunya: ENAM — tujuh bila ada
-    kartu jasa, sebab `nama_pemilik_banyak` tak bertanya apa-apa saat tak ada
-    pesanan yang perlu dinamai. Layar Stok Produk pernah mengeluarkan satu
-    kueri per penyosohan dan halamannya 1,77 detik pada 500 proses (temuan QA
-    P-S-02); halaman ini membaca hal yang sama — pemakaian silo, hasil, spek,
-    orangnya, pemiliknya — dan akan menumpuk dengan cara yang sama.
+    ⚠ JUMLAH KUERINYA TETAP, berapa pun banyak kartunya — bukan satu angka
+    tetap, tapi TAK PERNAH tumbuh bersama jumlah kartu. Dasarnya enam (tujuh
+    bila ada kartu jasa, sebab `nama_pemilik_banyak` tak bertanya apa-apa
+    saat tak ada pesanan yang perlu dinamai); asal lot (`_isian_silo_banyak`,
+    11 Oktober 2026) menambah sampai tujuh lagi — langsung+tumpukan PK,
+    penambahan broken, pengurang, dua label (lot giling/beli luar), dan
+    pemiliknya — masing-masing SATU kueri borongan `IN (...)` atas SELURUH
+    kartu di halaman, bukan satu per kartu. Layar Stok Produk pernah
+    mengeluarkan satu kueri per penyosohan dan halamannya 1,77 detik pada
+    500 proses (temuan QA P-S-02); halaman ini membaca hal yang sama —
+    pemakaian silo, hasil, spek, orangnya, pemiliknya, asal lotnya — dan
+    akan menumpuk dengan cara yang sama kalau sampai lupa.
 
     Dijaga sebagai PERBANDINGAN, bukan atas satu langit-langit: satu kartu
     dibanding enam kartu, dan angkanya wajib sama persis
@@ -952,9 +965,13 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
         .where(PolishingSiloUsage.polishing_process_id.in_(ids))
         .order_by(PolishingSiloUsage.id)
     )).scalars().all()
-    nama_silo = {i: n for i, n in (await db.execute(
-        select(Silo.id, Silo.nama_silo)
+    # Nama DAN jenis isi satu tarikan — `jenis_isi` menentukan sumber asal
+    # lotnya (PK lewat intake, broken lewat `broken_ke_silo`), dibaca
+    # `_isian_silo_banyak` di bawah.
+    silo_info = {i: (n, j) for i, n, j in (await db.execute(
+        select(Silo.id, Silo.nama_silo, Silo.jenis_isi)
         .where(Silo.id.in_({u.silo_id for u in usages} or {0})))).all()}
+    nama_silo = {i: n for i, (n, _) in silo_info.items()}
     hasil = await output_sosoh_banyak(db, ids)
     # Spek dibaca dari log hasilnya — satu baris per (proses, spek), bukan per
     # entri: satu proses bisa punya dua puluh entri dengan spek yang sama.
@@ -977,16 +994,38 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
     for pid, sp in spek_baris:
         spek_per.setdefault(pid, []).append(sp)
 
+    # 8) Asal lot PK / penambahan broken — BORONGAN atas seluruh kartu×silo
+    # sekaligus (keluhan pemilik 11 Oktober 2026: riwayat berhenti di
+    # tingkat silo, tak merinci lot/pemasoknya). `_isian_silo_banyak`
+    # menjaga kueri ini TETAP jumlahnya berapa pun banyak kartu — memanggil
+    # versi satuan per silo di sini akan mengulang P-S-02.
+    from app.services.berjalan import _isian_silo_banyak
+
+    def _broken(silo_id: int) -> bool:
+        return silo_info.get(silo_id, (None, "pk"))[1] == "broken"
+
+    permintaan = [
+        (u.silo_id, _broken(u.silo_id), p.waktu_mulai)
+        for p in procs for u in per_proses.get(p.id, [])
+    ]
+    isian_map = await _isian_silo_banyak(db, permintaan)
+
     kartu = []
     for p in procs:
         pakai = per_proses.get(p.id, [])
-        silo = tuple(PemakaianSilo(
-            nama=nama_silo.get(u.silo_id) or f"Silo #{u.silo_id}",
-            awal_kg=float(u.berat_awal_kg or 0),
-            masuk_kg=float(u.berat_masuk_kg or 0),
-            sisa_kg=(None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)),
-            terpakai_kg=float(u.berat_terpakai_kg or 0),
-        ) for u in pakai)
+        silo = []
+        for u in pakai:
+            isian = isian_map[(u.silo_id, _broken(u.silo_id), p.waktu_mulai)]
+            silo.append(PemakaianSilo(
+                nama=nama_silo.get(u.silo_id) or f"Silo #{u.silo_id}",
+                awal_kg=float(u.berat_awal_kg or 0),
+                masuk_kg=float(u.berat_masuk_kg or 0),
+                sisa_kg=(None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)),
+                terpakai_kg=float(u.berat_terpakai_kg or 0),
+                asal=tuple((judul, kg) for judul, kg, _ in isian.baris),
+                asal_lebih=isian.lebih,
+            ))
+        silo = tuple(silo)
         keluar = hasil.get(p.id, {})
         neraca = neraca_sosoh(sum(s.terpakai_kg for s in silo), keluar)
         # Beras dirinci per grade, urut `GRADES` — bukan urut abjad: pemilik
