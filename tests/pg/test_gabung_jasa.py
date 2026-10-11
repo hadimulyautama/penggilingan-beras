@@ -388,6 +388,60 @@ async def test_dryer_catur_bisa_dicampur_ke_silo_catur_lain(pg, dunia):
     assert kg == pytest.approx(5_000)  # 3.000 (sudah ada) + 2.000 (dari dryer)
 
 
+async def test_gabah_kering_dryer_digabung_di_silo_yang_sama_lalu_digiling(pg, dunia):
+    """Gabah kering sudah di Silo A; gabah basah milik pelanggan yang sama
+    selesai dikeringkan, masuk ke Silo A yang sama, lalu digiling bersama."""
+    from app.database import now_local
+    from app.models import (DryingLot, DryingLotBatch, PurchaseBatch, User)
+    from app.penggilingan.gudang1.services.milling import start_milling
+    from app.penggilingan.gudang1.services.silo import masuk_silo
+    from app.models.jasa import DIGABUNG
+
+    await _isi_silo_g1(pg, dunia, huruf="A", kode="GB-SATU-SILO-KERING",
+                       kg=3_000, jasa_id=dunia["jasa1"])
+
+    async with pg() as db:
+        u = await db.get(User, dunia["user"])
+        now = now_local()
+        batch = PurchaseBatch(
+            kode_batch="GB-SATU-SILO-BASAH", jasa_id=dunia["jasa2"],
+            berat_total_kg=2_000, kondisi_gabah="basah",
+            tanggal_pembelian=date.today(), waktu_pembelian=now,
+            input_by=u.id, flag_unverified=False, sumber_berat="timbangan",
+            status_batch="di_dryer", dryer_id=dunia["dryer"],
+        )
+        db.add(batch)
+        await db.flush()
+        lot = DryingLot(
+            kode_lot="PGR-SATU-SILO", dryer_id=dunia["dryer"],
+            jasa_id=dunia["jasa2"], target_kadar_air=14.0,
+            waktu_mulai_pengeringan=now, waktu_selesai_pengeringan=now,
+            waktu_selesai_pendinginan=now, status="selesai", created_by=u.id,
+        )
+        db.add(lot)
+        await db.flush()
+        db.add(DryingLotBatch(drying_lot_id=lot.id, purchase_batch_id=batch.id))
+        await db.commit()
+
+    async with pg() as db:
+        u = await db.get(User, dunia["user"])
+        await masuk_silo(db, user=u, nama_silo="A", kode_lot="PGR-SATU-SILO",
+                         kode_batch=None, kode_gkr=None)
+
+    async with pg() as db:
+        u = await db.get(User, dunia["user"])
+        hasil = await start_milling(db, user=u, nama_silo="A")
+        assert float(hasil.berat_masuk) == pytest.approx(5_000)
+        assert hasil.proc.jasa_id == min(dunia["jasa1"], dunia["jasa2"])
+
+    async with pg() as db:
+        from app.models import Jasa
+        diserap = max(dunia["jasa1"], dunia["jasa2"])
+        jasa = await db.get(Jasa, diserap)
+        assert jasa.status == DIGABUNG
+        assert jasa.digabung_ke_id == min(dunia["jasa1"], dunia["jasa2"])
+
+
 # ═══════════════════════ Skenario lapangan: Gudang 2 ═══════════════════════
 
 async def test_dua_silo_g2_catur_disosoh_bersama_walau_dua_pesanan(pg, dunia):
