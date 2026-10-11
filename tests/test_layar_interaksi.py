@@ -268,8 +268,10 @@ def test_daftar_yang_bergantung_menunggu_induknya():
     # Induk berubah → daftar anaknya dimuat ulang. Tanpa ini medan bergantung
     # cuma benar untuk proses yang dipilih PERTAMA.
     assert 'pi.addEventListener("change"' in AKSI
-    # Satu-satunya kemungkinan tak perlu dipilih orang.
-    assert "else if (f.induk && daftar.length === 1)" in AKSI
+    # Satu-satunya kemungkinan tak perlu dipilih orang — `f.auto_satu`
+    # (11 Oktober 2026) memberi medan TANPA induk jalan yang sama, untuk
+    # borang yang daftarnya memang bisa berhenti di satu pilihan sendiri.
+    assert "daftar.length === 1)" in AKSI and "f.induk || f.auto_satu" in AKSI
 
 
 def test_penampung_sementara_pilihan_punya_value_kosong():

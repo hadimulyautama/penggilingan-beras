@@ -360,7 +360,11 @@ def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
         m = re.search(r"font-size: *([\d.]+)px", blok)
         return float(m.group(1)) if m else 0.0
 
-    kepala = css.split(".anak__kepala {")[1].split("}")[0]
+    # Split pada awal baris, bukan substring polos — sejak blok ".anak__kelompok
+    # .anak__kepala {" (kartu penyosohan bergrup, 11 Oktober 2026) selektor itu
+    # juga MENGANDUNG teks ".anak__kepala {" di tengah barisnya, dan ia datang
+    # lebih dulu dalam berkas. Tanpa penjagaan ini uji membaca blok yang salah.
+    kepala = css.split("\n.anak__kepala {")[1].split("}")[0]
     isi = css.split(".anak__kg {")[1].split("}")[0] if ".anak__kg {" in css else ""
     assert "uppercase" in kepala
     assert ukuran(kepala) >= 13, "label turun di bawah 13px lagi"

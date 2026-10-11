@@ -181,7 +181,11 @@ async def test_silo_selesai_dibaca_dari_prosesnya_bukan_daftar_mati(monkeypatch)
         for i, f in enumerate(a["fields"]):
             if not f.get("induk"):
                 continue
-            assert f["type"] == "remote", f"{a['id']}.{f['name']}: induk cuma untuk remote"
+            # `remote_banyak` ikut bisa ber-`induk` sejak "Tambah silo
+            # (mix bahan)" — medan "silo" (boleh lebih dari satu) disaring
+            # oleh "kode" proses di atasnya, pola yang sama dengan `remote`.
+            assert f["type"] in ("remote", "remote_banyak"), \
+                f"{a['id']}.{f['name']}: induk cuma untuk remote/remote_banyak"
             assert f["induk"] in nama, f"{a['id']}.{f['name']}: induk tak ada di borangnya"
             assert nama.index(f["induk"]) < i, f"{a['id']}.{f['name']}: induk di bawahnya"
 
