@@ -2367,13 +2367,21 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         macet = await jeda_terbuka(db, "penyosohan", pr.id)
         tertahan = await tertahan_detik(db, "penyosohan", pr.id)
         fakta = [("Silo", " + ".join(silo_nama) or "—")]
-        # Total bahan baku — laporan lapangan 7 Oktober 2026: kartu berjalan
-        # tak menyebutnya, operator cuma melihat "Ditambah" (suku TAMBAHAN
-        # saja) dan harus menjumlah sendiri dengan bahan awal untuk tahu
-        # totalnya. `bahan_kg` di sini JUGA penyebut neraca di bawah — satu
-        # angka, dua pemakaian, supaya keduanya tak bisa berselisih.
+        # Total bahan — laporan lapangan 7 Oktober 2026: kartu berjalan tak
+        # menyebutnya, operator cuma melihat "Ditambah" (suku TAMBAHAN saja)
+        # dan harus menjumlah sendiri dengan bahan awal untuk tahu totalnya.
+        # `bahan_kg` di sini JUGA penyebut neraca di bawah (SELURUH bahan,
+        # PK + broken — rendemen tak boleh menghitung PK saja) — satu angka,
+        # dua pemakaian, supaya keduanya tak bisa berselisih.
         bahan_kg = berat_awal_total + ditambah
-        fakta.append(("Total bahan baku", _kg(bahan_kg)))
+        # "Total bahan baku" -> "Total PK" (permintaan pemilik 11 Oktober
+        # 2026): labelnya kini menyebut cakupannya dengan jujur — angka ini
+        # TAK TERMASUK broken, broken punya fakta "Broken" sendiri di bawah.
+        # Dihitung dari dua angka yang sudah ada (`bahan_kg` - `broken_
+        # bahan_kg`), bukan akumulator baru — satu sumber, tak bisa berselisih
+        # dari jumlah PK + broken di "Bahan baku masuk per silo".
+        total_pk_kg = bahan_kg - broken_bahan_kg
+        fakta.append(("Total PK", _kg(total_pk_kg)))
         # Satu fakta ringkas untuk broken — keluhan pemilik 11 Oktober 2026:
         # "Broken sebagai bahan" (total) berdampingan dengan "Ditambah"
         # (dulu gabungan PK+broken) terbaca seolah dua angka yang harus
@@ -2382,6 +2390,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # (awal + ditambah, rincian ada di "Bahan baku masuk per silo");
         # "Ditambah" di bawah sekarang PK saja, supaya keduanya tak lagi
         # bisa disalahbaca sebagai satu angka yang mengandung angka lain.
+        #
+        # "Total PK" dan "Broken" dipertebal di template (lihat `_benda.html`,
+        # kelas `sorot-netral`) — permintaan pemilik: dua angka ini yang
+        # paling sering dicari sekilas saat membuka kartu.
         if broken_bahan_kg > 0.001:
             fakta.append(("Broken", _kg(broken_bahan_kg)))
         if ditambah_pk > 0.001:

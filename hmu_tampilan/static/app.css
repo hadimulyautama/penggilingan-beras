@@ -1143,6 +1143,10 @@ details.padat .pilihan { padding: 0 12px 12px; }
   margin: 0; font-size: 13.5px; color: var(--tinta);
   font-variant-numeric: tabular-nums;
 }
+/* Tebal TANPA ganti warna — beda dari `.sorot` (hijau, dipakai rendemen).
+   Kartu penyosohan: "Total PK" dan "Broken" (permintaan pemilik 11 Oktober
+   2026, demi keterbacaan — dua angka yang paling sering dicari sekilas). */
+.fakta dd.sorot-netral { font-size: 15px; font-weight: 700; }
 
 /* Rincian batch: menjorok dan lebih redup — ia detail, bukan judul. */
 .anak {

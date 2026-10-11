@@ -30,7 +30,13 @@
   {% if b.fakta %}
     <dl class="fakta">
       {% for label, nilai in b.fakta %}
-        <div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>
+        {# "Total PK" & "Broken" dipertebal (kartu penyosohan, permintaan
+           pemilik 11 Oktober 2026) — dua angka yang paling sering dicari
+           sekilas. `sorot-netral`, BUKAN `sorot`: `.sorot` ikut mengganti
+           warna jadi hijau (dipakai rendemen), dan warna itu tak diminta
+           di sini — cuma tebal, label lain tak boleh ikut berubah warna
+           tanpa alasan. #}
+        <div><dt>{{ label }}</dt><dd{% if label in ("Total PK", "Broken") %} class="sorot-netral"{% endif %}>{{ nilai }}</dd></div>
       {% endfor %}
     </dl>
   {% endif %}
