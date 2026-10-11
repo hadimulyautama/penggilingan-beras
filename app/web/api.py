@@ -870,9 +870,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number"},
-                 {"name": "buka_mix_broken", "type": "tombol_aksi",
-                  "aksi": "tambah_silo_penyosohan",
-                  "label": "➕ Tambahkan broken sebagai bahan ke penyosohan berjalan"},
              ]},
             # ── Beras jadi bahan silo — dua pintu (keputusan pemilik 8 Oktober 2026) ──
             #
