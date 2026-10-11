@@ -864,12 +864,15 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "fields": [
                  {"name": "proses", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/broken-proses-tersedia",
-                  "kosong": "Belum ada broken yang bisa dimasukkan ke silo."},
+                  "kosong": "Belum ada hasil broken siap dipindah. Untuk menambahkan broken yang sudah ada sebagai bahan ke proses berjalan, gunakan tombol di bawah."},
                  {"name": "silo", "label": "Silo broken tujuan", "type": "remote",
                   "source": "/api/actions/silo-broken-g2",
                   "kosong": "Belum ada silo broken. Tambahkan di Pengaturan → Alat."},
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number"},
+                 {"name": "buka_mix_broken", "type": "tombol_aksi",
+                  "aksi": "tambah_silo_penyosohan",
+                  "label": "➕ Tambahkan broken sebagai bahan ke penyosohan berjalan"},
              ]},
             # ── Beras jadi bahan silo — dua pintu (keputusan pemilik 8 Oktober 2026) ──
             #

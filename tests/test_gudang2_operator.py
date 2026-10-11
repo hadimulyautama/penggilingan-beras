@@ -139,6 +139,16 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     # terjangkau. Beda sengaja dari enam di atas, bukan yang terlewat.
     broken_silo = next(a for a in menu if a["id"] == "masukkan_broken_silo")
     assert not broken_silo.get("kartu") and broken_silo["wh"] == "g2"
+    # Formulir penyimpanan hasil broken juga mengarahkan operator ke jalur
+    # campuran bahan bila yang dicari adalah memasukkan broken ke proses yang
+    # masih berjalan. Hasil proses yang belum selesai memang belum bisa
+    # dipindahkan ke silo sebagai hasil.
+    proses_broken = next(a for a in broken_silo["fields"] if a["name"] == "proses")
+    assert "belum ada hasil broken siap dipindah" in proses_broken["kosong"].lower()
+    jalan_campuran = next(f for f in broken_silo["fields"]
+                          if f.get("type") == "tombol_aksi")
+    assert jalan_campuran["aksi"] == "tambah_silo_penyosohan"
+    assert "broken sebagai bahan" in jalan_campuran["label"].lower()
     # `masukkan_beras_silo` (8 Oktober 2026) sebangun — belum punya kartu
     # tersendiri, tetap digambar di katalog "Catat pekerjaan lain".
     beras_silo = next(a for a in menu if a["id"] == "masukkan_beras_silo")
