@@ -819,8 +819,10 @@ class IsianSilo:
     disosoh_kg: float = 0.0
 
 
-async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
-    """Asal-usul PK yang SEDANG ada di sebuah silo Gudang 2.
+async def _isian_silo(
+    db: AsyncSession, silo_id: int, *, sampai: datetime | None = None,
+) -> IsianSilo:
+    """Asal-usul PK dalam isian silo Gudang 2 pada waktu yang diminta.
 
     Aturan pemilik berlaku sama di sini: tiap kartu menyebut asal barangnya.
     Bedanya PK punya dua asal. Yang buatan sendiri lahir dari satu lot giling
@@ -828,9 +830,10 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     di ujung sana kembali ke gabah dan pemasoknya. Yang beli luar membawa
     pemasoknya sendiri (PKB-…).
 
-    Yang disebut adalah apa yang masuk pada ISIAN YANG SEDANG BERJALAN —
-    pemasukan sesudah terakhir kali silo ini mencapai nol — berapa dan kapan,
-    bukan berapa yang masih tersisa dari masing-masing. Stok silo disimpan
+    Yang disebut adalah apa yang masuk pada isian yang berjalan pada waktu
+    `sampai` (atau sekarang bila tidak diisi) — pemasukan sesudah terakhir
+    kali silo ini mencapai nol — berapa dan kapan, bukan berapa yang masih
+    tersisa dari masing-masing. Stok silo disimpan
     sebagai satu jumlah, bukan lapisan, jadi sisa per lot memang tak bisa
     dihitung; mengarangnya berarti menaruh angka yang tak bisa dipertanggung-
     jawabkan tepat di tempat orang mencari pertanggungjawaban.
@@ -865,6 +868,7 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     for i in (await db.execute(
         select(PkGudang2Intake)
         .where(PkGudang2Intake.silo_id == silo_id,
+               *([PkGudang2Intake.waktu_masuk <= sampai] if sampai else []),
                # `silo_id` sudah menyebut silonya; menyaring lagi dengan
                # kata tujuannya akan membuang baris silo ketiga diam-diam.
                PkGudang2Intake.silo_id.is_not(None))
@@ -875,7 +879,8 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
     for pindah, i in (await db.execute(
         select(PkTumpukanToSilo, PkGudang2Intake)
         .join(PkGudang2Intake, PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id)
-        .where(PkTumpukanToSilo.silo_id == silo_id)
+        .where(PkTumpukanToSilo.silo_id == silo_id,
+               *([PkTumpukanToSilo.waktu <= sampai] if sampai else []))
     )).all():
         kg = float(pindah.berat_kg or 0)
         gerak.append((pindah.waktu, kg,
@@ -888,7 +893,8 @@ async def _isian_silo(db: AsyncSession, silo_id: int) -> IsianSilo:
         select(PolishingSiloUsage, PolishingProcess)
         .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
         .where(PolishingSiloUsage.silo_id == silo_id,
-               PolishingSiloUsage.berat_akhir_kg.isnot(None))
+               PolishingSiloUsage.berat_akhir_kg.isnot(None),
+               *([PolishingProcess.waktu_selesai <= sampai] if sampai else []))
     )).all():
         gerak.append((pr.waktu_selesai or pr.waktu_mulai,
                       -float(u.berat_terpakai_kg or 0), None))
@@ -2228,7 +2234,12 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     rinci_bahan_broken.append(baris_silo)
                 else:
                     rinci_bahan_pk.append(baris_silo)
-                    isian_u = await asal_silo(u.silo_id)
+                    # Asal lot adalah bagian dari snapshot bahan saat proses
+                    # mulai. Silo yang kemudian dikosongkan tidak menghapus
+                    # jejak bahan dari kartu proses.
+                    isian_u = await _isian_silo(
+                        db, u.silo_id, sampai=pr.waktu_mulai
+                    )
                     asal_lebih += isian_u.lebih
                     rinci_bahan_pk.extend(
                         (nama, kg, jam, "lot") for nama, kg, jam in isian_u.baris

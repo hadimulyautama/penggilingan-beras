@@ -129,6 +129,27 @@ async def test_sesudah_silo_kosong_isian_lama_tak_didaftar(pg, silo, pemakai, pe
     assert isian.masuk_kg == 3_416 and isian.disosoh_kg == 0
 
 
+async def test_snapshot_asal_lot_proses_tetap_ada_setelah_silo_dikosongkan(
+    pg, silo, pemakai, pemasok,
+):
+    """Kartu proses tetap dapat membaca asal input dari saat proses dimulai."""
+    await _masuk(pg, silo, pemakai, pemasok,
+                 kode_batch="PKB-SNAPSHOT", kg=871, jam=1)
+    mulai_proses = T0 + timedelta(hours=2)
+    await _sosoh(pg, silo, pemakai, kg=871, jam=10)
+
+    from app.services.berjalan import _isian_silo
+
+    async with pg() as db:
+        sekarang = await _isian_silo(db, silo)
+        snapshot = await _isian_silo(db, silo, sampai=mulai_proses)
+
+    assert sekarang.baris == [], "isian silo saat ini memang sudah habis"
+    assert len(snapshot.baris) == 1
+    assert "PKB-SNAPSHOT" in snapshot.baris[0][0]
+    assert snapshot.baris[0][1] == "871 kg"
+
+
 async def test_penyosohan_sebagian_seluruh_isian_tetap_terdaftar(pg, silo, pemakai, pemasok):
     """Silo yang tak pernah nol: seluruh isian berjalan tetap disebut — dan
     selisihnya kini PUNYA NAMA, bukan dibiarkan terbaca sebagai salah jumlah."""
