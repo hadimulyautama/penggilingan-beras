@@ -14,6 +14,10 @@ from hmu_core.komoditas import (
     DefinisiKomoditas, Kemasan, Produk, TransformasiKomoditas, buat_produk,
     jenis_komoditas, kode_komoditas_lama, proses_komoditas,
 )
+from hmu_core.proses import (
+    ArusProses, JenisPemilik, JenisProses, PemilikProses, ProsesOperasional,
+    StatusProses,
+)
 
 __all__ = [
     "Base",
@@ -42,6 +46,12 @@ __all__ = [
     "buat_produk",
     "kode_komoditas_lama",
     "proses_komoditas",
+    "JenisProses",
+    "StatusProses",
+    "JenisPemilik",
+    "PemilikProses",
+    "ArusProses",
+    "ProsesOperasional",
 ]
 
 __version__ = "0.2.0"
