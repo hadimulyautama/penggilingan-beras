@@ -179,7 +179,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
     konteks.setdefault("CSRF", nilai)
     # Mode terik: layar terang untuk kerja di bawah matahari. Per perangkat,
     # lewat kuki — lihat catatan di base.html. Temuan QA UI-04.
-    konteks.setdefault("TERIK", request.cookies.get("produksi_terik") == "1")
+    # Mode terang adalah bawaan untuk perangkat baru. Cookie "0" berarti
+    # pengguna memang memilih tampilan gelap; "1" tetap berarti terang.
+    konteks.setdefault("TERIK", request.cookies.get("produksi_terik", "1") == "1")
     return templates.TemplateResponse(request, nama, konteks, status_code=status_code)
 
 

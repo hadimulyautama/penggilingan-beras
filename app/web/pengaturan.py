@@ -254,7 +254,9 @@ async def ganti_terik(request: Request, akun: ProduksiAkun = Depends(butuh_akun)
     sendiri di dalam dan perangkat gudang di luar, dan yang menentukan bukan
     siapa dia melainkan di mana layarnya berada.
     """
-    nyala = request.cookies.get("produksi_terik") != "1"
+    # Tanpa cookie, mode terang sedang aktif sebagai bawaan; tombol pertama
+    # harus mematikannya, bukan mengaktifkannya lagi.
+    nyala = request.cookies.get("produksi_terik", "1") != "1"
     balasan = redirect("/pengaturan?pesan="
                        + ("terik-nyala" if nyala else "terik-padam"))
     balasan.set_cookie(
