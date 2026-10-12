@@ -80,7 +80,8 @@ def _pdf_laporan_giling(data: dict) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
+                                    TableStyle, KeepTogether)
 
     navy, teal = colors.HexColor("#173042"), colors.HexColor("#0B6D83")
     muted, pale, border = (colors.HexColor("#52636D"),
@@ -144,6 +145,8 @@ def _pdf_laporan_giling(data: dict) -> bytes:
                         ([f"{hours} jam"] if hours or days else []) +
                         [f"{mins} menit"])
 
+    yield_text = (f"{data['yield']:.1f}%".replace(".", ",")
+                  if data["yield"] is not None else "Belum dapat dihitung")
     story = [Paragraph("Laporan Penggilingan Gabah", styles["GilingTitle"]),
              Paragraph(f"{escape(data['kode'])} · Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}",
                        styles["GilingSub"])]
@@ -151,12 +154,10 @@ def _pdf_laporan_giling(data: dict) -> bytes:
         ["Ringkasan proses", "Nilai"],
         ["Pemilik bahan", data["owner"]],
         ["Kondisi gabah", data["class"]],
+        ["Komposisi bahan", data["composition"]],
         ["Berat bahan masuk", kg(data["input_kg"])],
-        ["Hasil PK", kg(data["output_kg"])],
-        ["Rendemen", f"{data['yield']:.1f}%".replace(".", ",") if data["yield"] is not None else "Belum dapat dihitung"],
-        ["Rata-rata kadar air QC", data["qc_moisture_avg"]],
-        ["Rata-rata broken QC", data["qc_broken_avg"]],
-        ["Rata-rata susut QC", data["qc_loss_avg"]],
+        ["Hasil PK · rendemen", f"{kg(data['output_kg'])} · {yield_text}"],
+        ["Rata-rata QC", data["qc_summary"]],
         ["Transfer ke Gudang 2", kg(data["transferred_kg"])],
         ["Sisa PK tersedia", kg(data["available_kg"])],
     ], [70 * mm, 100 * mm]))
@@ -181,23 +182,48 @@ def _pdf_laporan_giling(data: dict) -> bytes:
         rows.append(["Tidak tercatat", "—", "—", "—", "—"])
     story.append(grid(rows, [34 * mm, 48 * mm, 30 * mm, 26 * mm, 30 * mm]))
 
-    story += [Paragraph("QC bahan baku", styles["GilingSection"]),
-              Paragraph("Setiap pencatatan penerimaan ditampilkan utuh, per batch.", styles["GilingNote"]),
+    story += [Paragraph("Riwayat pengeringan bahan", styles["GilingSection"]),
+              Paragraph("Hanya batch yang melewati pengeringan yang tercantum di sini; batch kering langsung tetap terlihat pada asal bahan baku.", styles["GilingNote"]),
               Spacer(1, 4)]
+    rows = [["Lot pengeringan", "Batch asal", "Mulai–selesai pengeringan", "Durasi", "Mulai–selesai pendinginan", "Durasi"]]
+    rows += [[x["code"], x["batches"],
+              f"{stamp(x['dry_start'])} – {stamp(x['dry_end'])}", duration(x["dry_start"], x["dry_end"]),
+              f"{stamp(x['cool_start'])} – {stamp(x['cool_end'])}", duration(x["cool_start"], x["cool_end"])]
+             for x in data["drying_lots"]]
+    if len(rows) == 1:
+        rows.append(["Tidak ada bahan melalui pengeringan", "—", "—", "—", "—", "—"])
+    story.append(grid(rows, [34 * mm, 25 * mm, 34 * mm, 20 * mm, 34 * mm, 19 * mm]))
+
+    story += [Paragraph("Pemantauan kadar air saat pengeringan", styles["GilingSection"]), Spacer(1, 4)]
+    rows = [["Lot", "Waktu", "Pembacaan sampel", "Rata-rata tes", "Indikator mesin"]]
+    rows += [[x["lot"], stamp(x["time"]), x["samples"], x["average"], x["machine"]]
+             for x in data["drying_moisture"]]
+    if len(rows) == 1:
+        rows.append(["Tidak ada catatan pengeringan", "—", "—", "—", "—"])
+    story.append(grid(rows, [30 * mm, 38 * mm, 48 * mm, 27 * mm, 25 * mm]))
+
     rows = [["Batch / QC", "Waktu", "Kadar air", "Lamur", "Biji hijau", "Densiti"]]
     rows += [[x["batch"], stamp(x["time"]), x["moisture"], x["lamur"], x["green"], x["density"]]
              for x in data["raw_qc"]]
     if len(rows) == 1:
         rows.append(["Tidak ada catatan QC", "—", "—", "—", "—", "—"])
-    story.append(grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]))
+    story.append(KeepTogether([
+        Paragraph("QC bahan baku", styles["GilingSection"]),
+        Paragraph("Setiap pencatatan penerimaan ditampilkan utuh, per batch.", styles["GilingNote"]),
+        Spacer(1, 4),
+        grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]),
+    ]))
 
-    story += [Paragraph("QC hasil penggilingan", styles["GilingSection"]), Spacer(1, 4)]
     rows = [["Waktu", "Kadar air PK", "Broken", "Susut", "Kondisi"]]
     rows += [[stamp(x["time"]), x["moisture"], x["broken"], x["loss"], x["condition"]]
              for x in data["qc"]]
     if len(rows) == 1:
         rows.append(["Belum ada catatan QC", "—", "—", "—", "—"])
-    story.append(grid(rows, [45 * mm, 33 * mm, 28 * mm, 28 * mm, 34 * mm]))
+    story.append(KeepTogether([
+        Paragraph("QC hasil penggilingan", styles["GilingSection"]),
+        Spacer(1, 4),
+        grid(rows, [45 * mm, 33 * mm, 28 * mm, 28 * mm, 34 * mm]),
+    ]))
 
     story += [Paragraph("Catatan hasil PK selama proses", styles["GilingSection"]), Spacer(1, 4)]
     rows = [["Waktu catat", "Berat PK kumulatif"]]
@@ -244,7 +270,7 @@ def _pdf_laporan_giling(data: dict) -> bytes:
 
 async def _ambil_data_laporan_giling(process_id: int) -> dict:
     """Ambil data sumber dan hasil satu proses untuk PDF riwayat giling."""
-    from app.models import (DryingLotBatch, DryingLot, InternalTransfer,
+    from app.models import (DryingLotBatch, DryingLot, DryingMoistureLog, InternalTransfer,
                             MillingProcessSource, MillingProcessVerification,
                             MillingProgressLog, MillingQcLog, PurchaseBatch,
                             PurchaseBatchQc, PurchaseBatchQcSample, Silo,
@@ -260,7 +286,7 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
 
         source_rows = (await db.execute(
             select(MillingProcessSource, Silo.nama_silo, DryingLot.kode_lot,
-                   PurchaseBatch.kode_batch)
+                   PurchaseBatch.kode_batch, SiloStorage.tipe_masuk)
             .join(SiloStorage, SiloStorage.id == MillingProcessSource.silo_storage_id)
             .join(Silo, Silo.id == SiloStorage.silo_id)
             .outerjoin(DryingLot, DryingLot.id == MillingProcessSource.drying_lot_id)
@@ -270,14 +296,18 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
         )).all()
         sources = []
         batch_ids = set()
-        for source, silo_name, lot_code, batch_code in source_rows:
-            source_name = lot_code or batch_code or "Sumber lama"
+        drying_lot_ids = set()
+        for source, silo_name, lot_code, batch_code, tipe_masuk in source_rows:
+            source_name = (f"{lot_code} · hasil pengeringan" if lot_code else
+                           f"{batch_code} · kering langsung" if batch_code and tipe_masuk == "langsung_kering" else
+                           batch_code or "Sumber lama")
             sources.append({"silo": silo_name, "source": source_name,
                             "weight": source.berat_kg, "used": source.berat_terpakai_kg,
                             "remaining": source.berat_akhir_kg})
             if source.purchase_batch_id:
                 batch_ids.add(source.purchase_batch_id)
             if source.drying_lot_id:
+                drying_lot_ids.add(source.drying_lot_id)
                 batch_ids.update((await db.execute(
                     select(DryingLotBatch.purchase_batch_id)
                     .where(DryingLotBatch.drying_lot_id == source.drying_lot_id)
@@ -289,6 +319,7 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
                 Silo.id == process.silo_id))).scalar_one_or_none()
             source_label = "Sumber lama"
             if process.drying_lot_id:
+                drying_lot_ids.add(process.drying_lot_id)
                 source_label = (await db.execute(select(DryingLot.kode_lot).where(
                     DryingLot.id == process.drying_lot_id))).scalar_one_or_none() or source_label
                 batch_ids.update((await db.execute(select(DryingLotBatch.purchase_batch_id).where(
@@ -299,6 +330,53 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
                 batch_ids.add(process.purchase_batch_id)
             sources.append({"silo": legacy_silo or "Tidak tercatat", "source": source_label,
                             "weight": process.berat_gabah_masuk_kg, "used": None, "remaining": None})
+
+        has_drying = any(row[2] for row in source_rows) if source_rows else bool(process.drying_lot_id)
+        has_direct = (any(not row[2] and row[3] and row[4] == "langsung_kering"
+                          for row in source_rows) if source_rows
+                      else bool(process.purchase_batch_id and not process.drying_lot_id))
+        composition = ("Gabah kering langsung + gabah hasil pengeringan" if has_direct and has_drying
+                       else "Gabah hasil pengeringan" if has_drying
+                       else "Gabah kering langsung" if has_direct
+                       else "Sumber bahan lama / tidak lengkap")
+
+        drying_lots = []
+        drying_moisture = []
+        if drying_lot_ids:
+            drying_rows = (await db.execute(select(DryingLot).where(
+                DryingLot.id.in_(drying_lot_ids)).order_by(DryingLot.id))).scalars().all()
+            lot_batch_rows = (await db.execute(
+                select(DryingLotBatch.drying_lot_id, PurchaseBatch.kode_batch)
+                .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+                .where(DryingLotBatch.drying_lot_id.in_(drying_lot_ids))
+                .order_by(DryingLotBatch.drying_lot_id, PurchaseBatch.id)
+            )).all()
+            batch_codes_by_lot = {}
+            for lot_id, code in lot_batch_rows:
+                batch_codes_by_lot.setdefault(lot_id, []).append(code)
+            for lot in drying_rows:
+                drying_lots.append({
+                    "code": lot.kode_lot,
+                    "batches": ", ".join(batch_codes_by_lot.get(lot.id, [])) or "Tidak tercatat",
+                    "dry_start": lot.waktu_mulai_pengeringan,
+                    "dry_end": lot.waktu_selesai_pengeringan,
+                    "cool_start": lot.waktu_mulai_pendinginan,
+                    "cool_end": lot.waktu_selesai_pendinginan,
+                })
+            moisture_rows = (await db.execute(
+                select(DryingMoistureLog, DryingLot.kode_lot)
+                .join(DryingLot, DryingLot.id == DryingMoistureLog.drying_lot_id)
+                .where(DryingMoistureLog.drying_lot_id.in_(drying_lot_ids))
+                .order_by(DryingMoistureLog.waktu_update, DryingMoistureLog.id)
+            )).all()
+            for log, lot_code in moisture_rows:
+                readings = [getattr(log, f"kadar_air_tes_{i}") for i in range(1, 5)]
+                samples = " · ".join(f"{float(v):g}%" for v in readings if v is not None) or "Tidak tercatat"
+                drying_moisture.append({
+                    "lot": lot_code, "time": log.waktu_update, "samples": samples,
+                    "average": f"{float(log.kadar_air_tes_manual):g}%" if log.kadar_air_tes_manual is not None else "—",
+                    "machine": f"{float(log.kadar_air_indikator):g}%" if log.kadar_air_indikator is not None else "—",
+                })
 
         batch_rows = []
         if batch_ids:
@@ -381,16 +459,21 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
             "kode": process.kode_proses,
             "owner": owner_names.get(process.jasa_id, "Tidak tercatat") if process.jasa_id else "Pabrik",
             "class": (condition or "Tidak tercatat").upper(),
+            "composition": composition,
             "input_kg": process.berat_gabah_masuk_kg,
             "output_kg": breakdown.produced,
             "yield": yield_rate,
-            "qc_summary": qc_avg.teks() if qc_avg and qc_avg.ada else "Belum ada catatan QC",
+            "qc_summary": (
+                f"KA {persen(qc_avg.kadar_air)} · Broken {persen(qc_avg.broken)} · Susut {persen(qc_avg.susut)}"
+                if qc_avg and qc_avg.ada else "Belum ada catatan QC"
+            ),
             "qc_moisture_avg": persen(qc_avg.kadar_air if qc_avg else None),
             "qc_broken_avg": persen(qc_avg.broken if qc_avg else None),
             "qc_loss_avg": persen(qc_avg.susut if qc_avg else None),
             "transferred_kg": breakdown.transferred,
             "available_kg": breakdown.tersedia,
             "sources": sources, "batches": batches, "raw_qc": raw_qc,
+            "drying_lots": drying_lots, "drying_moisture": drying_moisture,
             "qc": qc, "progress": progress, "transfers": transfers,
             "start": process.waktu_mulai, "end": process.waktu_selesai,
             "verified_at": verification.waktu_verifikasi if verification else None,
