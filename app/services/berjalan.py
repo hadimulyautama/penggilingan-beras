@@ -3316,6 +3316,51 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     mutu_aktif = await fitur_mutu(db)
     b = Berjalan(mutu_aktif=mutu_aktif)
 
+    # QC gabah menjadi pekerjaan di meja Mutu & QC, sejajar dengan QC giling
+    # dan PK luar. Satu kartu per truk membuka formulir untuk batch itu.
+    if mutu_aktif:
+        from app.models import PurchaseBatchQc
+
+        belum_qc = ~exists().where(
+            PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+        rows = (await db.execute(
+            select(PurchaseBatch, Supplier.nama_supplier)
+            .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
+            .where(PurchaseBatch.dibatalkan_pada.is_(None), belum_qc)
+            .order_by(PurchaseBatch.id.desc())
+        )).all()
+        pemilik_qc = await nama_pemilik_banyak(
+            db, {batch.jasa_id for batch, _ in rows if batch.jasa_id})
+        for batch, pemasok in rows:
+            kondisi = batch.kondisi_gabah
+            if kondisi not in {"basah", "kering"}:
+                continue
+            pemilik = (pemilik_qc.get(batch.jasa_id)
+                       if batch.jasa_id else pemasok) or "?"
+            berat = _kg(float(batch.berat_total_kg or 0)).removesuffix(" kg")
+            if kondisi == "basah":
+                b.meja.append(Baris(
+                    kode=batch.kode_batch, isi="gabah basah belum dicatat mutunya",
+                    keadaan="", aksi="qc_gabah_basah", nilai=batch.kode_batch,
+                    sejak=batch.created_at, fase="baru",
+                    judul="Mutu gabah basah belum dicatat",
+                    utama=(berat, "kg"),
+                    sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
+                    pilihan=[("qc_gabah_basah", "Catat QC gabah basah",
+                              "5 sampel · 10 pembacaan kadar air", batch.kode_batch)],
+                ))
+            else:
+                b.meja.append(Baris(
+                    kode=batch.kode_batch, isi="gabah kering belum dicatat mutunya",
+                    keadaan="", aksi="qc_gabah_kering", nilai=batch.kode_batch,
+                    sejak=batch.created_at, fase="baru",
+                    judul="Mutu gabah kering belum dicatat",
+                    utama=(berat, "kg"),
+                    sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
+                    pilihan=[("qc_gabah_kering", "Catat QC gabah kering",
+                              "5 sampel · 10 pembacaan kadar air", batch.kode_batch)],
+                ))
+
     # Tiket berjenis tak dikenal — satu-satunya baris FISIK di fungsi ini, dan
     # ia di sini karena jalan keluarnya memang kerja meja: memetakan jenisnya,
     # atau membatalkan tiketnya di Pos Timbang. Ia masuk `menunggu`, bukan

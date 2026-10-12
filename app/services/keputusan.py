@@ -90,6 +90,8 @@ JENIS: tuple[tuple[str, str, str], ...] = (
     ("verifikasi_keluar", "Muatan menunggu diverifikasi", "output"),
     ("qc_giling", "Mutu giling belum diperiksa", MUTU),
     ("qc_pk_luar", "Mutu PK luar belum dicatat", MUTU),
+    ("qc_gabah_basah", "Mutu gabah basah belum dicatat", MUTU),
+    ("qc_gabah_kering", "Mutu gabah kering belum dicatat", MUTU),
 )
 
 #: Seluruh id yang sudah punya bloknya sendiri — GABUNGAN kedua layar.

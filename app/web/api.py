@@ -1411,6 +1411,7 @@ for _a in (
     "mulai_giling", "hasil_giling", "selesai_giling", "tutup_silo_giling",
     "tambah_silo_giling",
     "hentikan_proses", "lanjutkan_proses", "verify_output", "qc_giling",
+    "qc_gabah_basah", "qc_gabah_kering",
     # Rantai permintaan PK
     "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
     "kirim_permintaan_pk", "tutup_permintaan_pk",

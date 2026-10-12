@@ -111,3 +111,18 @@ async def test_qc_gabah_mewajibkan_tepat_lima_sampel(pg, pemakai, pemasok):
         with pytest.raises(QcGabahError, match="tepat 5 sampel"):
             await catat_qc_gabah(db, user=user, kode_batch="GB-QC-KERING-02",
                                  sampel=_sampel()[:4], biji_hijau="sedang", densiti="padat")
+
+
+async def test_batch_gabah_belum_qc_muncul_di_halaman_mutu_dengan_formulirnya(
+    pg, pemakai, pemasok,
+):
+    from app.services.berjalan import untuk_staff
+
+    await _buat_batch(pg, pemakai, pemasok, "basah", "GB-QC-KARTU-01")
+    async with pg() as db:
+        daftar = await untuk_staff(db)
+    kartu = next(x for x in daftar.meja if x.kode == "GB-QC-KARTU-01")
+    assert kartu.aksi == "qc_gabah_basah"
+    assert kartu.nilai == "GB-QC-KARTU-01"
+    assert kartu.pilihan[0][0] == "qc_gabah_basah"
+    assert kartu.pilihan[0][3] == "GB-QC-KARTU-01"

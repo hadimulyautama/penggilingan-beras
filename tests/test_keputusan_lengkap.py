@@ -195,6 +195,7 @@ def test_pembagian_dua_layar_dari_satu_sumber():
     assert "AKSI_DIKENAL: tuple[str, ...] = K.SEMUA" in kode
     # Dan golongan mutu memang yang pindah — bukan tebakan dari nama id-nya.
     assert sorted(a for a, _ in JENIS_MUTU) == sorted(K.GOLONGAN[K.MUTU])
+    assert {"qc_gabah_basah", "qc_gabah_kering"} <= set(K.AKSI_MUTU)
 
 
 def test_ada_jaring_untuk_jenis_yang_belum_punya_blok():
