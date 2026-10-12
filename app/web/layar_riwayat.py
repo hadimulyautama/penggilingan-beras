@@ -128,7 +128,13 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     if not boleh:
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
-    rows: list[dict] = []
+    grouped: dict[str, dict] = {}
+
+    def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]]):
+        kartu = grouped.setdefault(ref, {"ref": ref, "rounds": []})
+        kartu["rounds"].append({"waktu": waktu, "nomor": nomor,
+                                "detail": detail})
+
     catatan_kosong = None
     async with SessionLocal() as db:
         if jenis in ("gabah-basah", "gabah-kering"):
@@ -143,15 +149,13 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                           PurchaseBatchQcSample.id.desc()).limit(200)
             )).all()
             for batch, _qc, sample in hasil:
-                fields = [f"Kadar air: {sample.kadar_air_1}% dan {sample.kadar_air_2}%",
-                          f"Biji hijau: {sample.biji_hijau.replace('_', ' ')}",
-                          f"Densiti: {sample.densiti}"]
+                fields = [("Kadar air", f"{sample.kadar_air_1}% dan {sample.kadar_air_2}%"),
+                          ("Biji hijau", sample.biji_hijau.replace("_", " ")),
+                          ("Densiti", sample.densiti)]
                 if kondisi == "basah":
-                    fields.insert(1, f"Lamur: {'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak")
-                rows.append({"ref": batch.kode_batch,
-                             "waktu": sample.created_at,
-                             "detail": fields,
-                             "nomor": sample.nomor_sampel})
+                    fields.insert(1, ("Lamur", f"{'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak"))
+                tambah(batch.kode_batch, sample.created_at,
+                       sample.nomor_sampel, fields)
         elif jenis == "pk-luar":
             hasil = (await db.execute(
                 select(PkPurchaseBatch, PkPurchaseVerification)
@@ -168,11 +172,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                           ("Butir kuning", qc.butir_kuning, ""),
                           ("Gabah", qc.gabah, ""), ("Merang", qc.merang, ""),
                           ("Catatan", qc.catatan_lab, "")]
-                fields = [f"{label}: {value}{unit}" for label, value, unit in values
+                fields = [(label, f"{value}{unit}") for label, value, unit in values
                           if value is not None and value != ""]
-                rows.append({"ref": batch.kode_batch, "waktu": qc.updated_at,
-                             "detail": fields or ["Belum ada hasil QC"],
-                             "nomor": None})
+                tambah(batch.kode_batch, qc.updated_at, None,
+                       fields or [("QC", "Belum ada hasil QC")])
         elif jenis == "pk-hasil-giling":
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog)
@@ -180,18 +183,29 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(200)
             )).all()
             for process, qc in hasil:
-                fields = [f"{label}: {value}{unit}" for label, value, unit in (
+                fields = [(label, f"{value}{unit}") for label, value, unit in (
                     ("Kadar air", qc.kadar_air, "%"),
                     ("Broken", qc.broken_persen, "%"),
                     ("Susut", qc.susut_persen, "%"),
                     ("Kondisi", qc.kondisi, "")) if value is not None]
-                rows.append({"ref": process.kode_proses, "waktu": qc.waktu,
-                             "detail": fields, "nomor": None})
+                tambah(process.kode_proses, qc.waktu, None, fields)
         else:
             # Belum ada model/log QC beras hasil sosoh. Jangan menampilkan
             # catatan output sebagai QC karena itu bukan pengukuran mutu.
             catatan_kosong = ("Pencatatan QC beras hasil sosoh belum tersedia. "
                               "Log hasil sosoh yang ada adalah catatan produksi, bukan hasil pengukuran QC.")
+
+    rows = list(grouped.values())
+    for kartu in rows:
+        kartu["rounds"].sort(key=lambda putaran: (
+            putaran["nomor"] is None,
+            putaran["nomor"] if putaran["nomor"] is not None else 0,
+            putaran["waktu"]
+        ))
+    rows.sort(key=lambda kartu: max(
+        (putaran["waktu"] for putaran in kartu["rounds"] if putaran["waktu"]),
+        default=None
+    ) or 0, reverse=True)
 
     return await render_laci(request, "riwayat_qc.html", judul=judul,
                              rows=rows, catatan_kosong=catatan_kosong,

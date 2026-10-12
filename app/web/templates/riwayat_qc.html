@@ -16,14 +16,21 @@
       {% for row in rows %}
         <article class="padat padat--diam">
           <div class="padat__atas">
-            <strong class="padat__nama padat__nama--kode">{{ row.ref }}{% if row.nomor %} · QC {{ row.nomor }}{% endif %}</strong>
-            {% if row.waktu %}<time class="padat__umur">{{ row.waktu|jam("%d/%m/%Y %H:%M") }}</time>{% endif %}
+            <strong class="padat__nama padat__nama--kode">{{ row.ref }}</strong>
+            <span class="padat__umur">{{ row.rounds|length }} putaran QC</span>
           </div>
-          <dl class="fakta">
-            {% for item in row.detail %}
-              <div><dt>{{ item.split(':', 1)[0] }}</dt><dd>{{ item.split(':', 1)[1] if ':' in item else item }}</dd></div>
+          <div style="display:grid;gap:8px;margin-top:10px">
+            {% for putaran in row.rounds %}
+              <div style="display:grid;grid-template-columns:minmax(78px,auto) minmax(0,1fr);gap:8px 14px;align-items:start;padding:10px 12px;border:1px solid var(--garis, #d5dfe4);border-radius:12px">
+                <strong style="white-space:nowrap">{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 16px">
+                  {% for label, value in putaran.detail %}
+                    <span><span class="bantu">{{ label }}:</span> <b>{{ value }}</b></span>
+                  {% endfor %}
+                </div>
+              </div>
             {% endfor %}
-          </dl>
+          </div>
         </article>
       {% endfor %}
     </div>
