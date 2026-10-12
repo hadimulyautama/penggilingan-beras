@@ -5,14 +5,14 @@ otomatis menjadi stok pabrik. Baris lama yang dulu otomatis berstatus pabrik
 dikembalikan ke pemilik proses. Proses yang memiliki jejak pindah kepemilikan
 manual tidak disentuh.
 
-Revision ID: 0081_bekatul_jasa_explicit_transfer
+Revision ID: 0081_bekatul_jasa
 Revises: 0080_outgoing_item_jasa_id
 """
 from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0081_bekatul_jasa_explicit_transfer"
+revision: str = "0081_bekatul_jasa"
 down_revision: Union[str, None] = "0080_outgoing_item_jasa_id"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
