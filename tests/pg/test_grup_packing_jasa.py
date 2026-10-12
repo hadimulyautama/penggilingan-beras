@@ -101,7 +101,7 @@ async def empat_jenis(pg, pemakai):
         db.add(p)
         await db.flush()
         for jenis, kg in (("medium", 1_000), ("bekatul", 300),
-                          ("broken", 200), ("menir", 100)):
+                          ("broken", 200), ("menir", 100), ("reject", 50)):
             db.add(PolishingOutputLog(polishing_process_id=p.id, jenis=jenis,
                                       berat_kg=kg, waktu_update=now_local(),
                                       input_by=u.id))
@@ -109,32 +109,19 @@ async def empat_jenis(pg, pemakai):
         return {"kode": p.kode_proses}
 
 
-async def test_sisa_dicurah_hanya_untuk_bekatul_dan_broken(pg, empat_jenis):
-    """Tombol "Sisa dicurah" cuma muncul untuk bekatul & broken — satu-
-    satunya jenis yang punya jalan curah sendiri (`catat_bekatul`/
-    `catat_broken` → `byproduct_stock`). Menir & beras tak punya jalan itu;
-    menawarkan tombol yang pasti ditolak borang lebih buruk daripada tak
-    menawarkannya sama sekali (lihat komentar `_kartu_beras_curah`)."""
+async def test_hasil_samping_otomatis_tidak_masuk_antrean_packing(pg, empat_jenis):
+    """Hasil samping punya aturan packing otomatis; operator hanya diminta
+    packing beras. Keempat jenis samping tak boleh tampil di antrean atau
+    picker `beras-belum-dikemas`."""
     from app.services import berjalan as svc
+    from app.services.stok import beras_curah
 
     async with pg() as db:
         kartu = await svc._kartu_beras_curah(db)
-    per_jenis = {b.nilai.split("|", 1)[1]: b for b in kartu}
-    assert set(per_jenis) == {"medium", "bekatul", "broken", "menir"}
-
-    for jenis in ("medium", "menir"):
-        b = per_jenis[jenis]
-        assert [p[0] for p in b.pilihan] == ["catat_packing"], \
-            f"{jenis} tak punya jalan curah, tombolnya harus absen: {b.pilihan}"
-
-    for jenis, aksi_curah in (("bekatul", "catat_bekatul"), ("broken", "catat_broken")):
-        b = per_jenis[jenis]
-        assert [p[0] for p in b.pilihan] == ["catat_packing", aksi_curah], \
-            f"{jenis} harus menawarkan '{aksi_curah}': {b.pilihan}"
-        sisa = b.pilihan[1]
-        assert sisa[1] == "Sisa dicurah"
-        assert sisa[3] == empat_jenis["kode"], \
-            "nilai tombol curah wajib kode_proses TELANJANG, bukan kode|jenis"
+        pilihan = await beras_curah(db, termasuk_berjalan=False)
+    assert [(b.nilai, b.aksi) for b in kartu] == [
+        (f"{empat_jenis['kode']}|medium", "catat_packing")]
+    assert [(b.jenis, b.sisa_kg) for b in pilihan] == [("medium", 1_000)]
 
 
 async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":

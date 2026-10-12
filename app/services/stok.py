@@ -987,10 +987,15 @@ async def _dipindah_silo_proc(db: AsyncSession, proc_ids: list[int]
 
 async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
                       ) -> list[BerasCurah]:
-    """Beras (dan hasil samping berkemasan) yang belum dipacking, per lot × jenis.
+    """Beras yang belum dipacking manual, per lot × jenis.
 
     Stok curah = yang KELUAR mesin − yang SUDAH DIKEMAS. Dua angka yang
     dua-duanya sudah tercatat; yang belum ada cuma pengurangannya.
+
+    Bekatul, reject, menir, dan broken mengikuti aturan packing otomatis
+    (`_UKURAN_KEMASAN_OTOMATIS`) dan tidak menjadi pekerjaan di antrean packing.
+    Jumlah karung penuh serta sisa curahnya dihitung di `stok_produk`; meminta
+    operator mencatat packing untuk jenis-jenis ini akan menduplikasi pekerjaan.
 
     Proses yang MASIH BERJALAN ikut, dan itu disengaja — berasnya memang sudah
     berdiri di lantai. Tetapi angkanya BELUM FINAL, dan layar wajib
@@ -1000,9 +1005,7 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     lagi. `berjalan` pada tiap barisnya yang membedakan.
     """
     from app.penggilingan.gudang2.models import PolishingProcess
-    from app.penggilingan.inventory.finished_goods import (_bekatul_dibukukan,
-                                                           _broken_dibukukan,
-                                                           _packed_kg, get_standard)
+    from app.penggilingan.inventory.finished_goods import _packed_kg, get_standard
 
     q = select(PolishingProcess).order_by(PolishingProcess.id.desc())
     if not termasuk_berjalan:
@@ -1010,22 +1013,9 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     keluar: list[BerasCurah] = []
     for proc in (await db.execute(q)).scalars().all():
         for jenis, kg in (await output_sosoh(db, proc.id)).items():
-            if jenis == "bekatul":
-                # Bekatul kini BOLEH dikarungi (keputusan pemilik 28 September
-                # 2026), jadi ia tak lagi dilewati — tetapi "sudah punya rumah"
-                # baginya berarti dua-duanya: yang dicatat curah DAN yang
-                # dikarungi. Memakai `_packed_kg` sendirian akan menampilkan
-                # seluruh bekatul yang sudah dibukukan curah sebagai "belum
-                # dikemas", tiap hari, pada pabrik yang memang menjual curah.
-                dikemas = await _bekatul_dibukukan(db, proc.id)
-            elif jenis == "broken":
-                # Broken punya jalan curah juga sejak 6 Oktober 2026 (`catat_
-                # broken`) — pola yang SAMA dengan bekatul di atas, dan untuk
-                # alasan yang sama: tanpanya broken yang sudah dicatat curah
-                # (lalu dipindah ke silo broken) tampil lagi sebagai "belum
-                # dikemas", tiap hari, selamanya.
-                dikemas = await _broken_dibukukan(db, proc.id)
-            elif jenis in BERAS_JENIS:
+            if jenis in _UKURAN_KEMASAN_OTOMATIS:
+                continue
+            if jenis in BERAS_JENIS:
                 std = await get_standard(db, jenis)
                 dikemas = await _packed_kg(db, proc.id, "beras_putih",
                                            std.id if std else None)
