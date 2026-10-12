@@ -526,6 +526,21 @@ class Berjalan:
             # TAB bernama itu; "Riwayat Proses" cuma LABEL laci pintu
             # `riwayat_sosoh`, sama seperti "Stok" cuma label pintu `stok`.
             out["riwayat_sosoh"] = isi_riwayat
+
+        isi_qc: list[tuple[str, str, int]] = []
+        if self.boleh_riwayat_g1:
+            isi_qc.extend([
+                ("/riwayat-qc/gabah-basah", "Gabah basah", 0),
+                ("/riwayat-qc/gabah-kering", "Gabah kering", 0),
+                ("/riwayat-qc/pk-hasil-giling", "PK Hasil Giling", 0),
+            ])
+        if self.boleh_riwayat_sosoh:
+            isi_qc.extend([
+                ("/riwayat-qc/pk-luar", "PK Luar", 0),
+                ("/riwayat-qc/beras-hasil-sosoh", "Beras Hasil Sosoh", 0),
+            ])
+        if len(isi_qc) >= 2:
+            out["riwayat_qc"] = isi_qc
         return out
 
 

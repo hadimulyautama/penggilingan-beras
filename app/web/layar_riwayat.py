@@ -10,10 +10,14 @@ sendiri tetapi berbagi gerbang (`_is_g1_operator`) dan bentuk kursor
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
+from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
+                        PkPurchaseVerification, PurchaseBatch,
+                        PurchaseBatchQcSample)
 
 router = APIRouter()
 
@@ -100,3 +104,95 @@ async def halaman_riwayat_transfer(request: Request, akun=Depends(butuh_akun)):
         sesudah=(kartu[-1].id if kartu and lagi else None),
         dari_awal=bool(sebelum_id),
     )
+
+
+QC_PAGES = {
+    "gabah-basah": ("Riwayat QC Gabah Basah", "g1"),
+    "gabah-kering": ("Riwayat QC Gabah Kering", "g1"),
+    "pk-luar": ("Riwayat QC PK Luar", "g2"),
+    "pk-hasil-giling": ("Riwayat QC PK Hasil Giling", "g1"),
+    "beras-hasil-sosoh": ("Riwayat QC Beras Hasil Sosoh", "g2"),
+}
+
+
+@router.get("/riwayat-qc/{jenis}")
+async def halaman_riwayat_qc(request: Request, jenis: str,
+                             akun=Depends(butuh_akun)):
+    """Riwayat pengukuran QC; baris mempertahankan isi pencatatan aslinya."""
+    if jenis not in QC_PAGES:
+        raise HTTPException(404, "Kategori riwayat QC tidak ditemukan.")
+    judul, gudang = QC_PAGES[jenis]
+    from app.web.api import _is_g1_operator, _is_g2_operator
+    boleh = await (_is_g1_operator(akun.user) if gudang == "g1"
+                   else _is_g2_operator(akun.user))
+    if not boleh:
+        raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
+
+    rows: list[dict] = []
+    catatan_kosong = None
+    async with SessionLocal() as db:
+        if jenis in ("gabah-basah", "gabah-kering"):
+            kondisi = "basah" if jenis == "gabah-basah" else "kering"
+            hasil = (await db.execute(
+                select(PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample)
+                .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
+                .where(PurchaseBatch.kondisi_gabah == kondisi,
+                       PurchaseBatch.dibatalkan_pada.is_(None))
+                .order_by(PurchaseBatchQcSample.created_at.desc(),
+                          PurchaseBatchQcSample.id.desc()).limit(200)
+            )).all()
+            for batch, _qc, sample in hasil:
+                fields = [f"Kadar air: {sample.kadar_air_1}% dan {sample.kadar_air_2}%",
+                          f"Biji hijau: {sample.biji_hijau.replace('_', ' ')}",
+                          f"Densiti: {sample.densiti}"]
+                if kondisi == "basah":
+                    fields.insert(1, f"Lamur: {'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak")
+                rows.append({"ref": batch.kode_batch,
+                             "waktu": sample.created_at,
+                             "detail": fields,
+                             "nomor": sample.nomor_sampel})
+        elif jenis == "pk-luar":
+            hasil = (await db.execute(
+                select(PkPurchaseBatch, PkPurchaseVerification)
+                .join(PkPurchaseVerification,
+                      PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
+                .where(PkPurchaseBatch.dibatalkan_pada.is_(None))
+                .order_by(PkPurchaseVerification.updated_at.desc(),
+                          PkPurchaseVerification.id.desc()).limit(200)
+            )).all()
+            for batch, qc in hasil:
+                values = [("Kadar air", qc.kadar_air, "%"),
+                          ("Broken", qc.broken_persen, "%"),
+                          ("Penyusutan", qc.penyusutan_persen, "%"),
+                          ("Butir kuning", qc.butir_kuning, ""),
+                          ("Gabah", qc.gabah, ""), ("Merang", qc.merang, ""),
+                          ("Catatan", qc.catatan_lab, "")]
+                fields = [f"{label}: {value}{unit}" for label, value, unit in values
+                          if value is not None and value != ""]
+                rows.append({"ref": batch.kode_batch, "waktu": qc.updated_at,
+                             "detail": fields or ["Belum ada hasil QC"],
+                             "nomor": None})
+        elif jenis == "pk-hasil-giling":
+            hasil = (await db.execute(
+                select(MillingProcess, MillingQcLog)
+                .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
+                .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(200)
+            )).all()
+            for process, qc in hasil:
+                fields = [f"{label}: {value}{unit}" for label, value, unit in (
+                    ("Kadar air", qc.kadar_air, "%"),
+                    ("Broken", qc.broken_persen, "%"),
+                    ("Susut", qc.susut_persen, "%"),
+                    ("Kondisi", qc.kondisi, "")) if value is not None]
+                rows.append({"ref": process.kode_proses, "waktu": qc.waktu,
+                             "detail": fields, "nomor": None})
+        else:
+            # Belum ada model/log QC beras hasil sosoh. Jangan menampilkan
+            # catatan output sebagai QC karena itu bukan pengukuran mutu.
+            catatan_kosong = ("Pencatatan QC beras hasil sosoh belum tersedia. "
+                              "Log hasil sosoh yang ada adalah catatan produksi, bukan hasil pengukuran QC.")
+
+    return await render_laci(request, "riwayat_qc.html", judul=judul,
+                             rows=rows, catatan_kosong=catatan_kosong,
+                             jenis=jenis)

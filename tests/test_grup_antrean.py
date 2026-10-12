@@ -334,6 +334,23 @@ def test_riwayat_giling_pengeringan_transfer_selalu_padam_di_laci():
         assert "riwayat_sosoh" not in mati
 
 
+def test_riwayat_qc_memuat_kategori_sesuai_gudang():
+    admin = Berjalan(boleh_riwayat_sosoh=True, boleh_riwayat_g1=True)
+    assert admin.submenu()["riwayat_qc"] == [
+        ("/riwayat-qc/gabah-basah", "Gabah basah", 0),
+        ("/riwayat-qc/gabah-kering", "Gabah kering", 0),
+        ("/riwayat-qc/pk-hasil-giling", "PK Hasil Giling", 0),
+        ("/riwayat-qc/pk-luar", "PK Luar", 0),
+        ("/riwayat-qc/beras-hasil-sosoh", "Beras Hasil Sosoh", 0),
+    ]
+    g1 = Berjalan(boleh_riwayat_sosoh=False, boleh_riwayat_g1=True)
+    assert [label for _, label, _ in g1.submenu()["riwayat_qc"]] == [
+        "Gabah basah", "Gabah kering", "PK Hasil Giling"]
+    g2 = Berjalan(boleh_riwayat_sosoh=True, boleh_riwayat_g1=False)
+    assert [label for _, label, _ in g2.submenu()["riwayat_qc"]] == [
+        "PK Luar", "Beras Hasil Sosoh"]
+
+
 # ══════════════ Yang TERGAMBAR: pil halaman & sub-menu laci ══════════════
 #
 # Dirender sungguhan, bukan diperiksa sebagai teks di berkas templatnya.

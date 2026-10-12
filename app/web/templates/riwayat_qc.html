@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block judul %}{{ judul }}{% endblock %}
+{% block isi %}
+<section class="kartu" style="max-width:900px;margin:0 auto">
+  <header style="margin-bottom:16px">
+    <h2 style="margin:0">{{ judul }}</h2>
+    <p class="bantu" style="margin:6px 0 0">Catatan QC terbaru, dengan nilai setiap pencatatan tetap utuh.</p>
+  </header>
+
+  {% if catatan_kosong %}
+    <div class="kosong"><div><h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong }}</p></div></div>
+  {% elif not rows %}
+    <div class="kosong"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
+  {% else %}
+    <div style="display:grid;gap:10px">
+      {% for row in rows %}
+        <article class="padat padat--diam">
+          <div class="padat__atas">
+            <strong class="padat__nama padat__nama--kode">{{ row.ref }}{% if row.nomor %} · QC {{ row.nomor }}{% endif %}</strong>
+            {% if row.waktu %}<time class="padat__umur">{{ row.waktu|jam("%d/%m/%Y %H:%M") }}</time>{% endif %}
+          </div>
+          <dl class="fakta">
+            {% for item in row.detail %}
+              <div><dt>{{ item.split(':', 1)[0] }}</dt><dd>{{ item.split(':', 1)[1] if ':' in item else item }}</dd></div>
+            {% endfor %}
+          </dl>
+        </article>
+      {% endfor %}
+    </div>
+    {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 catatan terbaru.</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}
