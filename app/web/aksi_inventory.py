@@ -1911,7 +1911,9 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     from app.models import FinishedGoodsStock, MillingProcess, ProductSku
     from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
     from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
-    from app.penggilingan.inventory.models import RiceQualityStandard
+    from app.penggilingan.inventory.models import (
+        Brand, PackageSize, PackagingMaterial, RiceQualityStandard,
+    )
     from app.services.stok import jenis_produk, nama_produk
 
     out: list[dict] = []
@@ -1920,13 +1922,18 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     combo = (await db.execute(
         select(FinishedGoodsStock.product_sku_id,
                FinishedGoodsStock.rice_quality_standard_id,
-               ProductSku.kategori, RiceQualityStandard.kode)
+               ProductSku.kategori, RiceQualityStandard.kode,
+               Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg)
         .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
         .outerjoin(RiceQualityStandard,
                    RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id)
+        .outerjoin(Brand, Brand.id == ProductSku.brand_id)
+        .join(PackagingMaterial,
+              PackagingMaterial.id == ProductSku.packaging_material_id)
+        .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
         .where(FinishedGoodsStock.jasa_id == jid).distinct()
     )).all()
-    for sku_id, std_id, kategori, mutu_kode in combo:
+    for sku_id, std_id, kategori, mutu_kode, merk, jenis_karung, ukuran in combo:
         stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jid)
         if float(stok["kg"]) <= 0.5:
             continue
@@ -1934,9 +1941,11 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
         # Mengirim `None` di sini menyamarkan Premium/Medium Super sebagai
         # "mutu di catatan lama kosong", walau `std_id` pada stok sudah benar.
         nm = nama_produk(jenis_produk(kategori, mutu_kode))
+        rincian = " · ".join(x for x in (merk or "Tanpa merek", jenis_karung) if x)
         out.append({
             "value": f"bj:{sku_id}|{std_id or ''}",
-            "label": (f"{nm} · {int(stok['karung'])} karung "
+            "label": (f"{nm} · {rincian} {int(ukuran)} kg · "
+                      f"{int(stok['karung'])} karung "
                       f"({kg(stok['kg'])})")})
     # PK Gudang 1 — untuk pesanan yang berhenti di PK: pelanggan membawa
     # gabah, mengambil PK-nya. Keadaan yang SAH menurut kedalaman fleksibel.
