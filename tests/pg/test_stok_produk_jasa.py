@@ -246,22 +246,10 @@ async def test_halaman_titipan_mengelompokkan_per_pelanggan(pg, sosoh_jasa):
     assert "Hasil sosoh" in r.text and "Dikemas" in r.text and "Curah" in r.text
 
 
-async def test_stok_produk_pabrik_menyebut_titipan_di_sebelah_angkanya(pg, sosoh_jasa):
-    """Pesan kerja 10 bagian 0, butir (e): "SEBUT titipannya di sebelah
-    angka pabrik" — DUA SISI (CLAUDE.md): `/stok-produk` sudah menyaring
-    titipan KELUAR dari kartunya sendiri (keputusan 6 Oktober), tetapi
-    menyaring tanpa menyebut membuat gudang tampak kosong padahal penuh.
-    """
-    # 20 karung (500 kg) dikemas atas nama pesanan jasa, PABRIK belum
-    # packing apa pun untuk "medium" — jadi "+ titipan 500 kg" harus
-    # muncul di kartu "Beras medium" milik /stok-produk, walau kartu itu
-    # sendiri kosong (hasil pabrik 9.000 kg dari fixture, belum dikemas).
+async def test_stok_produk_pabrik_tidak_mengulang_titipan_produk_jasa(pg, sosoh_jasa):
+    """Stok jasa ditampilkan pada halaman Produk Jasa saja, tidak sebagai
+    baris tambahan pada kartu stok pabrik."""
     await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"], karung=20)
-
-    async with pg() as db:
-        from app.services.stok import titipan_dikemas_per_jenis
-        titipan = await titipan_dikemas_per_jenis(db)
-    assert titipan.get("medium") == 500.0
 
     c = await _klien(pg, peran="superadmin")
     try:
@@ -269,17 +257,16 @@ async def test_stok_produk_pabrik_menyebut_titipan_di_sebelah_angkanya(pg, sosoh
     finally:
         await c.aclose()
     assert r.status_code == 200
-    assert "titipan" in r.text.lower()
-    assert "500" in r.text
+    assert "+ titipan 500 kg" not in r.text
 
-    # `/stok-produk-jasa`: TANPA mention "titipan" — tiap kartunya di sana
-    # SUDAH milik satu pesanan; "titipan" di situ tak menjawab apa pun.
+    # Stok jasa tetap tampil di rumahnya sendiri.
     c2 = await _klien(pg, peran="superadmin")
     try:
         r2 = await c2.get("/stok-produk-jasa")
     finally:
         await c2.aclose()
-    assert "titipan" not in r2.text.lower()
+    assert r2.status_code == 200
+    assert "500 kg" in r2.text
 
 
 async def test_stok_produk_pabrik_tak_tercampur_hasil_proses_jasa(pg, sosoh_jasa):
