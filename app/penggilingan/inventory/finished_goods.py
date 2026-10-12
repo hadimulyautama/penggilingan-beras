@@ -291,11 +291,9 @@ async def catat_bekatul(
                 f"curah atau dikarungi {float(keluar_mesin) - sisa:,.0f} kg.)"
                 .replace(",", "."))
     now = input_time(tanggal, jam)
-    # ⚠ `jasa_id` SENGAJA TIDAK DIISI, dan itu jawaban yang BENAR — bukan
-    # kelalaian. Keputusan pemilik 12: bekatul otomatis BERALIH MILIK ke pabrik.
-    # Jadi bekatul dari proses jasa adalah stok pabrik biasa: masuk Stok Produk,
-    # boleh diperintahkan keluar, boleh dijual. Jangan membuat penghalang untuk
-    # ia — *"bukan berarti barangnya tidak boleh keluar."*
+    # Bekatul dari proses jasa tetap milik pesanan. Menjadi milik pabrik
+    # memerlukan aksi eksplisit `pindah_kepemilikan_bekatul_curah` setelah
+    # dibukukan. `pemilik_hasil_proses` mempertahankan aturan ini.
     #
     # ASALNYA tetap terbaca tanpa kolom tambahan: `source_id` menunjuk proses
     # sosohnya, dan prosesnya punya `jasa_id`. Itu yang menjawab "berapa bekatul

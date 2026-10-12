@@ -366,7 +366,7 @@ async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
         await c.aclose()
     assert r.status_code == 200
     assert "Bekatul dari hasil sosoh" in r.text
-    assert "sudah milik pabrik sejak dibukukan" in r.text
+    assert "sudah dipindahkan ke milik pabrik" in r.text
     assert "Broken (curah), sudah dicatat" in r.text
     # Himpunan id, bukan string persis — urutannya tak dijamin (lihat
     # catatan `jasa_ids_per_pelanggan_dengan_hasil`), maknanya yang harus

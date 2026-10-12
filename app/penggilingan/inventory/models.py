@@ -202,26 +202,9 @@ class ByproductStock(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="tersedia")
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     #: Pesanan jasa yang MEMILIKI hasil samping ini. NULL = milik pabrik.
-    #:
-    #: ⚠⚠ UNTUK BEKATUL, NULL ADALAH JAWABAN YANG BENAR — dan bukan karena
-    #: bekatul jasa tak ada. Keputusan pemilik 12: *"bekatul tidak kembali bukan
-    #: berarti barangnya tidak boleh keluar. bekatul otomatis berubah
-    #: kepemilikan jadi milik kami. tetapi pemilik barang juga harus tau hasil
-    #: bekatul dari tiap proses barang miliknya."*
-    #:
-    #: Jadi bekatul punya DUA fakta yang berpisah, dan kolom ini memikul yang
-    #: pertama saja:
-    #:
-    #:     MILIK = pabrik         → kolom ini NULL, dan itu benar
-    #:     ASAL  = JAS-2610-012   → lewat `source_id` → `polishing_process.jasa_id`
-    #:
-    #: Menyimpan ASAL di kolom ini akan membuat bekatul jadi stok pelanggan
-    #: yang tak boleh dijual — kebalikan dari yang pemilik putuskan. Dan
-    #: membiarkan NULL tanpa jejak asal akan menghapus hak pemilik barang untuk
-    #: mengetahuinya. Keduanya ada; yang kedua tak butuh kolom.
-    #:
-    #: Menir, broken, dan reject KEMBALI ke pelanggan — untuk ketiganya kolom
-    #: ini terisi. Yang menentukan `jasa.pemilik_hasil()`, satu tempat.
+    #: Bekatul hasil proses jasa tetap memiliki `jasa_id` sampai dipindahkan
+    #: secara eksplisit; asal proses tetap dapat dibaca lewat `source_id` →
+    #: `polishing_process.jasa_id`.
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 

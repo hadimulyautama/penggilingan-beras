@@ -459,19 +459,9 @@ async def cocok_pemilik_tiket(db: AsyncSession, *, t: dict,
 def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | None:
     """Siapa yang MEMILIKI hasil `jenis` dari proses milik `jasa_id`.
 
-    SATU aturan untuk SEMUA jenis hasil — beras, menir, broken, reject,
-    bekatul — ditentukan oleh satu hal saja: apakah `jenis` ada di
-    `hasil_ditahan` pesanan itu. Ada di daftar → pabrik yang menahannya; tidak
-    → kembali ke pesanan. Tak ada cabang "bekatul selalu begini" di sini, dan
-    itu DISENGAJA: lihat ⚠⚠ di `HASIL_DITAHAN_BAWAAN` (`app/models/jasa.py`)
-    untuk kenapa bekatul sempat (sampai 6 Oktober 2026) SELALU ada di daftar
-    tahan bawaan, lalu dicabut — keputusan bisnisnya hidup di SATU tempat
-    (daftar itu), bukan di cabang kode yang tersebar.
-
-    Sejak bekatul dicabut dari bawaan, bekatul jasa BARU mengikuti pola
-    broken/menir/reject apa adanya: tetap milik pesanan sampai dipindahkan
-    lewat `pindah_kepemilikan_bekatul_curah` / `pindah_kepemilikan_barang_
-    jadi` — bukan lagi otomatis.
+    Bekatul hasil proses jasa selalu milik pelanggan sampai dipindahkan
+    secara eksplisit. Untuk hasil lain, `hasil_ditahan` menentukan apakah
+    barang ditahan pabrik atau kembali ke pesanan.
 
     `hasil_ditahan` adalah CUPLIKAN kesepakatan pesanan itu, dibaca dari
     barisnya — BUKAN daftar yang ditulis di sini. Kalau kebijakannya dibaca dari
@@ -482,6 +472,11 @@ def pemilik_hasil(jasa_id: int | None, hasil_ditahan: str, jenis: str) -> int | 
     """
     if jasa_id is None:
         return None
+    # Kepemilikan bekatul dari jasa tidak berubah otomatis berdasarkan
+    # kesepakatan proses. Barang tetap milik pelanggan sampai dipindahkan
+    # melalui aksi pindah kepemilikan yang tercatat.
+    if (jenis or "").strip().lower() == "bekatul":
+        return jasa_id
     ditahan = {k.strip().lower() for k in (hasil_ditahan or "").split(",") if k.strip()}
     return None if (jenis or "").strip().lower() in ditahan else jasa_id
 

@@ -44,24 +44,16 @@
               p.curah_samping, "belum tercatat", "samping", p.kemasan,
               boleh_pindah=BOLEH_PINDAH) }}
 
-    {# ── Bekatul yang SUDAH MILIK PABRIK: disebut, tapi tak pernah kartu ──
-       Pesanan LAMA yang `hasil_ditahan`-nya belum dibackfill (migrasi
-       `0073_bekatul_bukan_ditahan`) — bekatulnya beralih milik otomatis
-       (keputusan 12, sebelum dibalik). Baris INFORMASI saja (`.kartu`/
-       `.baris`, pola yang sama dengan "Barang titipan di gudang" di `/jasa`)
-       — tanpa tombol, sebab tak ada kepemilikan untuk dipindah. Jarang
-       muncul pasca migrasi; tak dihapus — lihat `layar_produk.
-       halaman_stok_produk_jasa` untuk kenapa saringan `jasa_id IS NULL`-nya
-       WAJIB (tanpanya bekatul yang masih milik pesanan terhitung dua kali:
-       di sini DAN di kartu bertombol di bawah). #}
+    {# ── Bekatul yang SUDAH dipindahkan ke pabrik: informasi saja ──
+       Kepemilikannya sudah berpindah secara eksplisit, jadi tidak ada lagi
+       tombol pemindahan untuk stok tersebut. #}
     {% if p.bekatul_kg > 0.5 %}
       <div class="kartu" style="margin-bottom:12px">
         <div class="baris">
           <span>Bekatul dari hasil sosoh pesanan ini</span>
           <b>{{ kg(p.bekatul_kg) }}&nbsp;kg</b>
         </div>
-        <small class="bantu">sudah milik pabrik sejak dibukukan — bukan
-          untuk dipindah</small>
+        <small class="bantu">sudah dipindahkan ke milik pabrik</small>
       </div>
     {% endif %}
 

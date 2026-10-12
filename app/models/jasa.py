@@ -56,6 +56,9 @@ BERJALAN, SELESAI, DIBATALKAN, DIGABUNG = "berjalan", "selesai", "dibatalkan", "
 #: TETAP milik pesanan sampai dipindah lewat tombol "Pindah kepemilikan"
 #: (`pindah_kepemilikan_bekatul_curah`), bukan otomatis.
 #:
+#: Bekatul selalu tetap milik pelanggan sampai dipindah secara eksplisit;
+#: kolom ini tidak memindahkan kepemilikannya otomatis.
+#:
 #: Dipakai sebagai NILAI BAWAAN saat pesanan dibuat, lalu disalin ke barisnya.
 #: Jangan dibaca ulang dari sini untuk pesanan lama — itu sebabnya kolomnya
 #: ada. Pesanan yang SUDAH berjalan sebelum 6 Oktober 2026 dibackfill migrasi

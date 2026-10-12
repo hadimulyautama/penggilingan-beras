@@ -495,24 +495,11 @@ async def test_selisih_sekecil_beda_timbangan_bukan_alarm(pg, sosoh):
     assert k.curah_kg == -50 and not k.alarm and k.beda_timbangan
 
 
-async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
-    """Cacat lapangan 6 Oktober 2026: operator packing 1.900 kg bekatul dari
-    proses JASA, dan kartu pabrik menuduh "dibukukan melebihi hasil mesin
-    680 kg" — padahal pesanan INI kesepakatannya menahan bekatul ke pabrik
-    (`hasil_ditahan` eksplisit, lihat di bawah), cuma tak pernah ikut
-    terhitung di sisi "hasil".
+async def test_bekatul_jasa_tetap_di_stok_pemilik_sampai_dipindah(pg, sosoh):
+    """Packing bekatul jasa tidak otomatis menambah stok pabrik.
 
-    Akarnya: `hasil["bekatul"]` dulu dijumlah dari `proses` yang SUDAH
-    disaring `jasa_id IS NULL` (kartu pabrik) — proses jasa tak pernah masuk
-    daftar itu sama sekali, jadi bekatulnya lenyap dari pembilang padahal
-    pembukuannya (sisi `dikemas`) memang tak menyaring asal prosesnya.
-
-    ⚠ `hasil_ditahan="sekam,bekatul"` DIISI EKSPLISIT di sini — bukan lagi
-    bawaan sejak pembalikan keputusan 12 (`HASIL_DITAHAN_BAWAAN` kini
-    "sekam" saja). Uji ini membuktikan mekanisme merge-ke-pabrik (`stok.
-    stok_produk`) masih benar untuk pesanan yang KESEPAKATANNYA memang
-    menahan bekatul; jalur BAWAAN (bekatul tetap pesanan) diuji di
-    `test_pindah_kepemilikan_produk.py`.
+    Bahkan bila data kesepakatan lama menyebut bekatul ditahan, kepemilikan
+    hanya berubah lewat aksi pindah kepemilikan.
     """
     from app.database import now_local
     from app.models import Jasa, Pelanggan, User
@@ -547,18 +534,17 @@ async def test_bekatul_proses_jasa_ikut_hasil_pabrik_tak_alarm_palsu(pg, sosoh):
                             ukuran=40, jumlah_karung=47)       # 1.880 kg
 
     async with pg() as db:
-        k = next(x for x in await stok_produk(db) if x.jenis == "bekatul")
-    assert k.hasil_kg == 1_900, "bekatul proses jasa tak ikut hasil pabrik"
-    assert not k.alarm, "dibukukan (1.880) < hasil (1.900) — tak ada alasan alarm"
-    _persamaan(k)
+        kartu_pabrik = await stok_produk(db)
+    assert not any(x.jenis == "bekatul" for x in kartu_pabrik), \
+        "bekatul jasa masuk ke stok pabrik sebelum dipindah"
 
-    # Dan kartu JASA pesanan INI tetap tak menyebut bekatul sebagai
-    # miliknya — kesepakatannya (`hasil_ditahan`) memang menahannya ke
-    # pabrik, jadi `pemilik_hasil()` membuangnya dari sisi pesanan.
+    # Stok jasa tetap memuat hasil, termasuk yang sudah dikarungi.
     async with pg() as db:
         kartu_jasa = await stok_produk(db, jasa_id=jasa.id)
-    assert not any(x.jenis == "bekatul" for x in kartu_jasa), \
-        "bekatul muncul di kartu jasa walau hasil_ditahan menahannya"
+    bekatul = next(x for x in kartu_jasa if x.jenis == "bekatul")
+    assert bekatul.hasil_kg == 1_900
+    assert bekatul.dikemas_kg == 1_880
+    assert bekatul.curah_kg == 20
 
 
 async def test_proses_berjalan_tergambar_belum_final_di_kartu_kategori(pg, sosoh):

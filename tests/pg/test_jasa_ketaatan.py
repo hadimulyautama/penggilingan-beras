@@ -1051,22 +1051,11 @@ async def test_penyosohan_menolak_dua_pemilik(pg, pemakai, pabrik):
         assert _PESAN_CAMPUR in e.value.args[0], e.value.args[0]
 
 
-async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik):
-    """⭐⭐ DUA FAKTA YANG BERPISAH, dan keduanya harus bertahan.
+async def test_bekatul_tetap_milik_pesanan_sampai_dipindah(pg, pemakai, pabrik):
+    """Bekatul tetap milik pelanggan meski kesepakatan lama menahannya.
 
-    Keputusan pemilik 12 (sampai 6 Oktober 2026, bawaan SEMUA pesanan):
-    *"bekatul tidak kembali bukan berarti barangnya tidak boleh keluar.
-    bekatul otomatis berubah kepemilikan jadi milik kami. tetapi pemilik
-    barang juga harus tau hasil bekatul dari tiap proses barang miliknya."*
-
-    PEMBALIKAN menyusul hari yang sama: bekatul kini TETAP milik pesanan
-    secara BAWAAN (lihat `HASIL_DITAHAN_BAWAAN`) — tapi mekanismenya (`jasa.
-    pemilik_hasil()`, dibaca dari `hasil_ditahan` PER PESANAN) tak berubah,
-    dan keputusan 12 masih SAH untuk pesanan yang kesepakatannya memang
-    begitu. Uji ini memaksa jalur itu secara eksplisit (`hasil_ditahan`
-    diisi manual) untuk membuktikan mekanismenya masih benar — jalur
-    BAWAAN (bekatul tetap pesanan) diuji terpisah di `test_stok_produk.py`
-    & `test_pindah_kepemilikan_produk.py`.
+    Kepemilikan tidak berubah otomatis dari nilai `hasil_ditahan`; pabrik
+    hanya memilikinya setelah aksi pindah kepemilikan yang tercatat.
 
         MILIK = pabrik          → `byproduct_stock.jasa_id` NULL
         ASAL  = JAS-UJI-520     → lewat `source_id` → `polishing_process.jasa_id`
@@ -1084,8 +1073,7 @@ async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik)
 
     jid, _ = await _pk_jasa_di_silo_g2(pg, pemakai, kode="JAS-UJI-520")
     async with pg() as db:
-        # Kesepakatan pesanan INI menahan bekatulnya ke pabrik — bukan
-        # bawaan sejak 6 Oktober 2026, jadi dipaksa eksplisit di sini.
+        # Nilai kesepakatan lama tetap tidak memindahkan kepemilikan otomatis.
         await db.execute(update(Jasa).where(Jasa.id == jid)
                          .values(hasil_ditahan="sekam,bekatul"))
         await db.commit()
@@ -1105,13 +1093,14 @@ async def test_bekatul_beralih_milik_tetapi_asalnya_terbaca(pg, pemakai, pabrik)
 
     async with pg() as db:
         bk = (await db.execute(select(ByproductStock))).scalars().one()
-        # ① MILIK: pabrik. Bukan kelalaian — itu yang pemilik putuskan.
-        assert bk.jasa_id is None, "bekatul jadi stok pelanggan"
+        # ① MILIK: pesanan, sampai aksi pemindahan dijalankan.
+        assert bk.jasa_id == jid, "bekatul otomatis berpindah ke pabrik"
         # ② ASAL: tetap terbaca lewat prosesnya, tanpa kolom tambahan.
         proc = await db.get(PolishingProcess, bk.source_id)
         assert proc is not None and proc.jasa_id == jid, "asal bekatul hilang"
-        # ③ Dan ia stok pabrik BIASA — boleh dijual, tanpa penghalang.
-        assert float(await hitung_stok_bekatul(db)) == 400
+        # ③ Stok pabrik belum bertambah.
+        assert float(await hitung_stok_bekatul(db)) == 0
+        assert float(await hitung_stok_bekatul(db, jasa_id=jid)) == 400
 
 
 async def test_beras_jasa_bukan_stok_pabrik(pg, pemakai, pabrik):
