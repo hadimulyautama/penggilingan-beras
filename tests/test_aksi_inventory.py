@@ -235,7 +235,10 @@ def test_alamat_kirim_tiap_aksi_benar_benar_ada_di_router():
         assert a["post"] in terdaftar, f"{a['id']} menunjuk alamat yang tidak ada"
         for f in a["fields"]:
             if f["type"] == "remote":
-                assert f["source"] in terdaftar, f"{f['source']} tidak ada"
+                # Alamatnya bisa membawa query string statis (mis.
+                # `?ada_barang=1`) — yang didaftarkan di router cuma jalurnya.
+                jalur = f["source"].split("?")[0]
+                assert jalur in terdaftar, f"{f['source']} tidak ada"
 
 
 def test_tak_ada_batas_batch_per_hari():

@@ -281,6 +281,39 @@ async def test_picker_tak_menawarkan_silo_pesanan_lain(pg, pabrik):
     assert "g2:tumpukan" not in nilai
 
 
+async def test_pesanan_jasa_ada_barang_menyaring_dan_memimpin_pelanggan(pg, pabrik):
+    """Keluhan pemilik 11 Oktober 2026: picker "Pesanan jasa" (Pengambilan
+    barang jasa) dulu menawarkan SEMUA pesanan berjalan — termasuk yang
+    barangnya sudah habis — dan baru ketahuan kosong SESUDAH dipilih.
+    `jasa_berjalan(ada_barang=1)` menyaringnya ke yang benar-benar punya
+    barang, dan labelnya memimpin dengan nama pelanggan (bukan kode pesanan),
+    sebangun pengelompokan `/stok-produk-jasa`.
+    """
+    from app.models import User
+    from app.web.aksi_inventory import jasa_berjalan
+
+    # jasa_a (Bu Sri) punya PK di tumpukan G2; jasa_b (Pak Budi) kosong sama
+    # sekali — persis skenario `test_picker_tak_menawarkan_silo_pesanan_lain`.
+    await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-08", 3_000, pabrik["jasa_a"])
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+
+    # Tanpa saringan: KEDUANYA tetap muncul (dipakai tutup_jasa/batalkan_jasa).
+    semua = await jasa_berjalan(ada_barang=False, user=u)
+    ids_semua = {o["value"] for o in semua}
+    assert str(pabrik["jasa_a"]) in ids_semua and str(pabrik["jasa_b"]) in ids_semua
+
+    # Dengan saringan: HANYA Bu Sri (jasa_a), dan labelnya memimpin namanya.
+    tersaring = await jasa_berjalan(ada_barang=True, user=u)
+    ids = {o["value"] for o in tersaring}
+    assert ids == {str(pabrik["jasa_a"])}, (
+        f"pesanan kosong masih ditawarkan, atau yang berisi malah hilang: {tersaring}")
+    label = next(o["label"] for o in tersaring if o["value"] == str(pabrik["jasa_a"]))
+    assert label.startswith("Bu Sri ·"), \
+        f"label tak memimpin dengan nama pelanggan: {label}"
+
+
 # ───────────────────── Tak pernah jadi barang jualan pabrik ─────────────────────
 
 async def test_pk_g2_tak_pernah_di_picker_penjualan(pg, pabrik):
