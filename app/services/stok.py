@@ -781,7 +781,9 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             sisa = (berat_awal - float(dipindah.get(i.id, 0))
                     - float(diambil_fifo.get(i.id, 0)))
             bobot_final = True
-            if sisa <= 0:
+            # Kartu tampil dengan kg bulat. Sisa <= 0,5 kg akan terbaca "0 kg"
+            # dan membuat operator mengira stok kosong tetapi kartunya masih ada.
+            if sisa <= 0.5:
                 continue                 # habis dipindah atau diambil — tak didaftar
 
         if i.internal_transfer_id:

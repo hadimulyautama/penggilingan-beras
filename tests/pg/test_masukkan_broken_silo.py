@@ -337,20 +337,25 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
 
 
 async def test_picker_broken_menyertakan_sisa_proses_selesai(pg, sosoh):
-    """Broken yang sudah dibukukan dari proses selesai tetap dapat dipindah
-    ke silo untuk dipakai sebagai bahan proses baru. Hasil mesin yang belum
-    dibukukan dari proses selesai tidak ikut dianggap sebagai stok tersedia.
-    """
+    """Broken yang dikemas otomatis setelah proses selesai tetap tersedia
+    sebagai bahan, walau belum punya baris stok terpisah. Saat dipindah,
+    hasilnya dibukukan untuk rekonsiliasi ledger."""
     from app.models import User
     from app.web.api import broken_proses_tersedia
-
-    await _curah(pg, sosoh, 1_000)  # proses "sosoh" sudah selesai, masih bersisa 7.000 kg
+    from app.penggilingan.gudang2.service import (
+        hitung_stok_silo, masukkan_stok_broken_pemilik_ke_silo)
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
         daftar = await broken_proses_tersedia(user=u)
     assert len(daftar) == 1 and daftar[0]["value"] == "pemilik|pabrik", daftar
-    assert "1.000 kg" in daftar[0]["label"]
+    assert "8.000 kg" in daftar[0]["label"]
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await masukkan_stok_broken_pemilik_ke_silo(
+            db, user=u, jasa_id=None, nama_silo="C", berat_kg=2_000)
+        assert await hitung_stok_silo(db, sosoh["silo"]["C"]) == 2_000
 
 
 async def test_picker_satukan_broken_lintas_proses_tapi_pisah_pemilik(pg, sosoh):
@@ -380,7 +385,10 @@ async def test_picker_satukan_broken_lintas_proses_tapi_pisah_pemilik(pg, sosoh)
 
     assert {item["value"] for item in daftar} == {"pemilik|pabrik", f"pemilik|{jasa.id}"}
     labels = {item["value"]: item["label"] for item in daftar}
-    assert "250 kg" in labels["pemilik|pabrik"]
+    # Hasil otomatis proses selesai ikut digabung, setelah mengurangi yang
+    # sudah tercatat untuk pemilik bawaan. Baris 80 kg milik jasa tak terpakai
+    # saat menghitung stok pabrik.
+    assert "8.000 kg" in labels["pemilik|pabrik"]
     assert "80 kg" in labels[f"pemilik|{jasa.id}"]
 
 
@@ -407,7 +415,7 @@ async def test_pemilik_agregat_tetap_melarang_proses_memakai_broken_sendiri(pg, 
         await db.commit()
         with pytest.raises(Gudang2Error, match="SEDANG memakai Silo"):
             await masukkan_stok_broken_pemilik_ke_silo(
-                db, user=u, jasa_id=None, nama_silo="C", berat_kg=50)
+                db, user=u, jasa_id=None, nama_silo="C", berat_kg=8_100)
 
 
 async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemasok):

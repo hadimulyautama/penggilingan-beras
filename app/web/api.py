@@ -4275,28 +4275,20 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
     sesuatu yang kemudian ditolak layanannya membuat orang mengira
     aplikasinya rusak — laporan lapangan 10 Oktober 2026.
 
-    Proses `proses` dan `selesai` ditawarkan bila masih ada stok broken yang
-    tercatat. Proses `selesai` perlu ikut agar broken sisa (curah/karung) dari
-    sosoh sebelumnya dapat dipindahkan ke silo sebagai bahan untuk proses baru.
-    Hasil mesin yang BELUM dibukukan hanya ditawarkan untuk proses `proses`;
-    hasil proses selesai tidak boleh muncul sebagai stok semu.
+    Proses `proses` dan `selesai` ditawarkan bila masih ada stok broken.
+    Hasil yang belum dibuat menjadi baris ledger juga ikut dihitung karena
+    broken otomatis tersedia sebagai stok/kemasan setelah keluar mesin.
 
-    ⚠⚠ **IKUT MENGHITUNG hasil mesin yang BELUM "dicatat"** — sejak
-    `masukkan_broken_ke_silo` sendiri mulai membukukannya otomatis (10
-    Oktober 2026, laporan lapangan: proses berjalan dengan 3.500 kg broken
-    di mesin tapi 0 kg di `byproduct_stock` menjawab "(belum ada)" di sini,
-    walau brokennya nyata ada). Angka ini (`output_sosoh − _broken_dibukukan`)
-    HANYA ditambahkan untuk PEMILIK BAWAAN proses (`pemilik_hasil_proses`) —
-    pemilik yang sudah menerima sebagian lewat "Pindah kepemilikan" tak boleh
-    seolah-olah ikut memiliki hasil mentah yang belum pernah dibukukan atas
-    namanya.
+    Angka hasil mesin yang belum dialokasikan (`output_sosoh −
+    _broken_dibukukan`) hanya ditambahkan untuk PEMILIK BAWAAN proses
+    (`pemilik_hasil_proses`). Pemilik yang menerima sebagian lewat "Pindah
+    kepemilikan" tak ikut memiliki hasil mentah yang belum dialokasikan.
     """
     _require(await _is_g2_operator(user))
     from sqlalchemy import func, select
 
     from app.models import ByproductStock, FinishedGoodsStock, PolishingProcess, ProductSku
     from app.penggilingan.gudang2.service import _sisa_broken_row
-    from app.penggilingan.inventory.finished_goods import _broken_dibukukan
     from app.services.jasa import nama_pemilik, pemilik_hasil_proses
     from app.services.stok import output_sosoh
 
@@ -4326,11 +4318,9 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
         for proc_id, proc in proses_sumber.items():
             pb = await pemilik_hasil_proses(db, proc.jasa_id, "broken")
             pemilik_bawaan[proc_id] = pb
-            # Hasil mesin belum dibukukan hanya milik proses yang masih
-            # berjalan. Untuk proses selesai, hanya stok yang sudah tercatat
-            # di atas yang boleh dipindahkan.
-            if proc.status == "proses":
-                pasangan.add((proc_id, pb))
+            # Broken hasil mesin otomatis tersedia setelah proses ditutup
+            # juga, walau belum punya baris stok terpisah.
+            pasangan.add((proc_id, pb))
 
         for proc_id, jasa_id in sorted(pasangan, key=lambda x: (x[0], x[1] or 0)):
             proc = proses_sumber.get(proc_id)
@@ -4356,11 +4346,18 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
                         else FinishedGoodsStock.jasa_id == jasa_id))
             )).scalar_one())
             belum_dicatat = 0.0
-            if (proc.status == "proses"
-                    and jasa_id == pemilik_bawaan.get(proc_id)):
+            if jasa_id == pemilik_bawaan.get(proc_id):
                 keluar_mesin = (await output_sosoh(db, proc_id)).get("broken") or 0.0
+                curah_tercatat = float((await db.execute(
+                    select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+                    .where(ByproductStock.jenis_produk == "broken",
+                           ByproductStock.source_type == "polishing",
+                           ByproductStock.source_id == proc_id,
+                           (ByproductStock.jasa_id.is_(None) if jasa_id is None
+                            else ByproductStock.jasa_id == jasa_id))
+                )).scalar_one())
                 belum_dicatat = max(
-                    0.0, float(keluar_mesin) - await _broken_dibukukan(db, proc_id))
+                    0.0, float(keluar_mesin) - curah_tercatat - karung)
             total = curah + karung + belum_dicatat
             if total <= 0.5:
                 continue
@@ -4368,7 +4365,7 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
             milik = await nama_pemilik(db, jasa_id)
             label = f"{kode} · {_rp(total)} kg (curah {_rp(curah)} + kemasan {_rp(karung)}"
             if belum_dicatat > 0.5:
-                label += f" + belum dicatat {_rp(belum_dicatat)}"
+                label += f" + hasil otomatis {_rp(belum_dicatat)}"
             label += ")"
             if milik:
                 label += f" · titipan {milik}"

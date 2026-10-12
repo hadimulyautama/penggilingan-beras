@@ -270,6 +270,11 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     `masuk_beras_putih` di bawah).
     """
     silo = await db.get(Silo, silo_id)
+    if pemilik == "semua":
+        # Toleransi timbang berlaku per pemilik. Jangan satukan defisit kecil
+        # milik A dengan stok milik B di tumpukan fisik yang sama.
+        return (await hitung_stok_silo(db, silo_id, pemilik="pabrik")
+                + await hitung_stok_silo(db, silo_id, pemilik="jasa"))
     if silo is not None and silo.jenis_isi == "broken":
         return await _hitung_stok_silo_broken(db, silo_id, pemilik=pemilik)
     if silo is not None and silo.jenis_isi == "beras":
@@ -342,8 +347,11 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     terpakai = (await db.execute(q_terpakai)).scalar_one()
     keluar = (await db.execute(q_keluar)).scalar_one()
     masuk_beras_putih = (await db.execute(q_beras)).scalar_one()
-    return (float(masuk_langsung) + float(masuk_dari_tumpukan)
-            + float(masuk_beras_putih) - float(terpakai) - float(keluar))
+    # Toleransi timbang pada barang keluar dapat mengizinkan selisih kecil
+    # (maks. 0,5 kg). Jangan biarkan selisih itu menjadi saldo negatif yang
+    # mengurangi muatan pemilik berikutnya ketika silo sudah dikosongkan.
+    return max(0.0, float(masuk_langsung) + float(masuk_dari_tumpukan)
+               + float(masuk_beras_putih) - float(terpakai) - float(keluar))
 
 
 async def _hitung_stok_silo_broken(db: AsyncSession, silo_id: int, *,
@@ -371,7 +379,7 @@ async def _hitung_stok_silo_broken(db: AsyncSession, silo_id: int, *,
         ).where(milik(PolishingProcess))
     masuk = (await db.execute(q_masuk)).scalar_one()
     terpakai = (await db.execute(q_terpakai)).scalar_one()
-    return float(masuk) - float(terpakai)
+    return max(0.0, float(masuk) - float(terpakai))
 
 
 async def _hitung_stok_silo_beras(db: AsyncSession, silo_id: int, *,
@@ -400,7 +408,7 @@ async def _hitung_stok_silo_beras(db: AsyncSession, silo_id: int, *,
         ).where(milik(PolishingProcess))
     masuk = (await db.execute(q_masuk)).scalar_one()
     terpakai = (await db.execute(q_terpakai)).scalar_one()
-    return float(masuk) - float(terpakai)
+    return max(0.0, float(masuk) - float(terpakai))
 
 
 async def hitung_stok_tumpukan(db: AsyncSession, *,
@@ -420,6 +428,12 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
     baris finished_goods/byproduct_curah/pk_langsung (yang `silo_id`-nya
     juga selalu NULL) akan ikut terjumlah ke sini.
     """
+    if pemilik == "semua":
+        # Sama seperti isi silo, pembulatan/toleransi pemilik A tak boleh
+        # mengurangi stok fisik milik B yang berada di tumpukan yang sama.
+        return (await hitung_stok_tumpukan(db, pemilik="pabrik")
+                + await hitung_stok_tumpukan(db, pemilik="jasa"))
+
     q_masuk = (select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0))
                .where(PkGudang2Intake.tujuan == "ditumpuk"))
     q_pindah = select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
@@ -445,7 +459,9 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
     masuk = (await db.execute(q_masuk)).scalar_one()
     sudah_dipindah = (await db.execute(q_pindah)).scalar_one()
     keluar = (await db.execute(q_keluar)).scalar_one()
-    return float(masuk) - float(sudah_dipindah) - float(keluar)
+    # Saldo fisik tumpukan tidak pernah negatif. Batas timbang kecil tidak
+    # boleh menjadi defisit yang mengurangi pemasukan berikutnya.
+    return max(0.0, float(masuk) - float(sudah_dipindah) - float(keluar))
 
 
 async def _sisa_tumpukan_intake(db: AsyncSession, intake_id: int) -> float:
@@ -1919,10 +1935,11 @@ async def masukkan_stok_broken_pemilik_ke_silo(
         .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
                milik(FinishedGoodsStock.jasa_id))
     )).scalars())
+    # Broken hasil sosoh yang otomatis dipacking tetap bisa dipindah setelah
+    # proses ditutup, walau belum ada baris ByproductStock/FinishedGoodsStock.
     process_ids |= set((await db.execute(
-        select(PolishingSiloUsage.polishing_process_id)
-        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
-        .where(PolishingProcess.status == "proses")
+        select(PolishingProcess.id)
+        .where(PolishingProcess.status.in_(("proses", "selesai")))
     )).scalars())
     procs = (await db.execute(
         select(PolishingProcess).where(PolishingProcess.id.in_(process_ids))
@@ -1945,12 +1962,20 @@ async def masukkan_stok_broken_pemilik_ke_silo(
             .where(ProductSku.kategori == "broken", FinishedGoodsStock.source_type == "polishing",
                    FinishedGoodsStock.source_id == proc.id, milik(FinishedGoodsStock.jasa_id))
         )).scalar_one())
-        if proc.status == "proses":
-            from app.penggilingan.inventory.finished_goods import _broken_dibukukan
-            from app.services.jasa import pemilik_hasil_proses
-            if await pemilik_hasil_proses(db, proc.jasa_id, "broken") == jasa_id:
-                available += max(0, float((await output_sosoh(db, proc.id)).get("broken") or 0)
-                                 - await _broken_dibukukan(db, proc.id))
+        from app.services.jasa import pemilik_hasil_proses
+        if await pemilik_hasil_proses(db, proc.jasa_id, "broken") == jasa_id:
+            # Hasil broken otomatis tersedia setelah proses selesai juga.
+            # Saat dipindah, masukkan_broken_ke_silo membukukan bagian yang
+            # dipakai sebelum mencatat pemindahannya.
+            curah_dibukukan = float((await db.execute(
+                select(func.coalesce(func.sum(ByproductStock.berat_kg), 0))
+                .where(ByproductStock.jenis_produk == "broken",
+                       ByproductStock.source_type == "polishing",
+                       ByproductStock.source_id == proc.id,
+                       milik(ByproductStock.jasa_id))
+            )).scalar_one())
+            available += max(0, float((await output_sosoh(db, proc.id)).get("broken") or 0)
+                             - curah_dibukukan - packed)
         take = min(left, available + packed)
         if take > 0.5:
             plan.append((proc, take))

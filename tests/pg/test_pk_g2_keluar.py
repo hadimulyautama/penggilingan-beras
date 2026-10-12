@@ -65,7 +65,7 @@ async def pabrik(pg, pemakai):
 
 
 async def _masuk_tumpukan(pg, user_id: int, kode: str, kg: float,
-                          jasa_id: int | None) -> int:
+                          jasa_id: int | None, supplier_id: int | None = None) -> int:
     """PK luar (titipan `jasa_id`, atau pabrik bila None) → tumpukan G2.
 
     → id intake-nya, supaya bisa dipindah ke silo atau diambil langsung.
@@ -78,7 +78,8 @@ async def _masuk_tumpukan(pg, user_id: int, kode: str, kg: float,
     async with pg() as db:
         u = await db.get(User, user_id)
         db.add(PkPurchaseBatch(
-            kode_batch=kode, jasa_id=jasa_id, berat_total_kg=kg,
+            kode_batch=kode, jasa_id=jasa_id, supplier_id=supplier_id,
+            berat_total_kg=kg,
             tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
             input_by=u.id, status_batch="diterima", flag_unverified=True,
             sumber_berat="manual"))
@@ -260,6 +261,52 @@ async def test_tambah_baris_pesanan_sendiri_tak_lagi_ditolak_salah_arah(pg, pabr
 
     async with pg() as db:
         assert await hitung_stok_silo(db, pabrik["silo_c"], pemilik="jasa") == 5_000
+
+
+async def test_defisit_toleransi_silo_tidak_memotong_stok_pemilik_berikutnya(
+        pg, pabrik, pemasok):
+    """Selisih timbang 0,5 kg yang diizinkan saat pengambilan tak boleh
+    menjadi saldo negatif yang ikut mengurangi intake pemilik berikutnya."""
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.penggilingan.gudang2.service import hitung_stok_silo
+
+    jasa_intake = await _masuk_tumpukan(
+        pg, pabrik["user"], "PKB-G2K-NEG-01", 1_000, pabrik["jasa_a"])
+    await _pindah_ke_silo(pg, pabrik["user"], jasa_intake, "C", 1_000)
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        perintah = await bk.buat_perintah(
+            db, user=u, jasa_id=pabrik["jasa_a"],
+            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=pabrik["silo_c"],
+                                    berat_kg=1_000.5)])
+        rec_id = perintah.rec.id
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        assert await hitung_stok_silo(db, pabrik["silo_c"]) == 0
+
+    pabrik_intake = await _masuk_tumpukan(
+        pg, pabrik["user"], "PKB-G2K-NEG-02", 2_500, None, pemasok.id)
+    await _pindah_ke_silo(pg, pabrik["user"], pabrik_intake, "C", 2_500)
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        proses = await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        assert proses.berat_awal_total == 2_500
+
+
+async def test_sisa_setengah_kg_tidak_menjadi_kartu_stok_nol(pg, pabrik, pemasok):
+    from app.services.stok import pk_gudang2
+
+    intake = await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-ROUND-01", 500,
+                                   None, pemasok.id)
+    await _pindah_ke_silo(pg, pabrik["user"], intake, "C", 499.5)
+    async with pg() as db:
+        assert not any(k.intake_id == intake for k in await pk_gudang2(db))
 
 
 # ───────────────────── Dua arah, dua pesanan ─────────────────────
