@@ -1782,6 +1782,8 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     h = r.text
     assert "buka=masukkan_broken_silo" in h, \
         "tombol 'Masukkan ke silo' tak tergambar walau broken sudah tercatat penuh"
+    assert "nilai=pemilik%7Cpabrik" in h, \
+        "tombol kartu stok pabrik harus mengunci pemilik ke pabrik"
     assert "Masukkan ke silo" in h
     assert "Dikemas otomatis" in h and "Curah · sisa kemasan" in h
     # "belum dicatat" nol — kartunya tak lagi menawarkan "Catat broken (curah)".
