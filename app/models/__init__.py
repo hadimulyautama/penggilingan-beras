@@ -5,6 +5,7 @@ dan master/system/transfer di sini. Konsumen tetap pakai `from app.models import
 """
 from app.database import Base
 from app.models.master import (
+    Armada,
     Dryer,
     Pelanggan,
     Silo,
@@ -76,6 +77,7 @@ __all__ = [
     "Supplier",
     "Silo",
     "Dryer",
+    "Armada",
     # gudang1
     "PurchaseBatch",
     "PurchaseBatchVerification",

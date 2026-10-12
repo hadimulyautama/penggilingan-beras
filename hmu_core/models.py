@@ -159,13 +159,13 @@ class Pelanggan(Base, TimestampMixin):
 
 
 class Silo(Base, TimestampMixin):
-    """Silo A & B per gudang. G1: khusus gabah kering. G2: kolam campuran PK.
+    """Wadah penyimpanan komoditas yang sama lintas aplikasi.
 
-    `jenis_isi` ('pk' / 'broken') keputusan pemilik 6 Oktober 2026: broken
-    punya silonya SENDIRI, dan dari situ jenis bahan sebuah proses sosoh
-    diturunkan dari silo sumbernya — bukan dicatat per-pemakaian. Bawaannya
-    'pk': SELURUH silo yang ada hari ini (G1 maupun G2) memang berisi PK/gabah,
-    dan baris lama tak boleh berubah arti oleh kolom yang baru ditambahkan.
+    Silo adalah wadah umum; isinya dapat berupa gabah, beras (termasuk PK),
+    broken, menir, reject, atau bekatul. `jenis_isi` menyatakan jenis bahan
+    yang ditetapkan untuk silo tertentu, bukan kelas silo yang berbeda.
+    Nilai 'pk' tetap menjadi bawaan untuk kompatibilitas baris lama dan
+    pembuatan silo Gudang 2.
     """
 
     __tablename__ = "silos"
@@ -176,7 +176,7 @@ class Silo(Base, TimestampMixin):
     kapasitas_ton: Mapped[float | None] = mapped_column(Numeric(10, 2))
     # kosong / terisi
     status: Mapped[str] = mapped_column(String(20), default="kosong")
-    # pk / broken — lihat docstring kelas.
+    # Jenis bahan (mis. gabah, pk, beras, broken, menir, reject, bekatul).
     jenis_isi: Mapped[str] = mapped_column(String(20), nullable=False, default="pk")
 
     warehouse: Mapped[Warehouse] = relationship(back_populates="silos")
@@ -193,3 +193,19 @@ class Dryer(Base, TimestampMixin):
     kapasitas_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     # aktif / rusak / maintenance
     status: Mapped[str] = mapped_column(String(20), default="aktif")
+
+
+class Armada(Base, TimestampMixin):
+    """Identitas kendaraan bersama lintas Timbangan dan Operasional.
+
+    Nama tabel `timbangan_kendaraan` dipertahankan agar seluruh data kendaraan
+    dan foreign key transaksi timbang yang sudah ada tetap utuh. Kepemilikan
+    tabel beralih ke skema bersama; detail transaksi tetap milik Timbangan.
+    """
+
+    __tablename__ = "timbangan_kendaraan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nomor_polisi: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    catatan: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")

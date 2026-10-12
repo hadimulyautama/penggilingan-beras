@@ -4,8 +4,9 @@ Impor dari sini di semua sistem:
     from hmu_core import Base, User, Supplier, Pelanggan, Warehouse, Silo, Dryer
 """
 from hmu_core.base import Base, TimestampMixin
+from hmu_core.armada import normalisasi_nomor_polisi
 from hmu_core.models import (
-    Brand, Dryer, PackageSize, PackagingMaterial, Pelanggan, RiceQualityStandard,
+    Armada, Brand, Dryer, PackageSize, PackagingMaterial, Pelanggan, RiceQualityStandard,
     Silo, Supplier, User, Warehouse,
 )
 from hmu_core.komoditas import (
@@ -18,6 +19,8 @@ __all__ = [
     "Base",
     "TimestampMixin",
     "Warehouse",
+    "Armada",
+    "normalisasi_nomor_polisi",
     "User",
     "Supplier",
     "Pelanggan",

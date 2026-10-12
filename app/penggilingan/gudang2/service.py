@@ -60,6 +60,7 @@ from app.services.jasa import (
     pemilik_silo_g2,
 )
 from app.services.notification import create_notification
+from app.services.armada import armada_dari_nomor_polisi
 from app.penggilingan.gudang1.services.purchase import (
     find_or_create_supplier,
     pesanan_jasa_dari_tiket,
@@ -543,11 +544,14 @@ async def create_pk_purchase(
     if jenis is None:
         raise Gudang2Error("Sebutkan jenis PK: KS, KL, Campuran, atau Semi KS.")
     now = input_time(tanggal, jam)  # BackdateError bila di masa depan
+    armada = await armada_dari_nomor_polisi(db, no_polisi)
     supplier, created = await find_or_create_supplier(db, nama_supplier)
     kode = await next_pk_purchase_code(db, now.date())
     batch = PkPurchaseBatch(
         kode_batch=kode, supplier_id=supplier.id, berat_total_kg=berat_kg,
-        no_polisi_truk=no_polisi, jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
+        no_polisi_truk=armada.nomor_polisi if armada else no_polisi,
+        jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
+        armada_id=armada.id if armada else None,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         # PK masuk = pasti diterima. flag_unverified = harga belum diverifikasi.
         status_batch="diterima", flag_unverified=True,
@@ -686,12 +690,16 @@ async def create_pk_purchase_dari_timbang(
         if ada is not None:
             return PkPurchaseResult(batch=ada, supplier_nama=_sebut(), supplier_created=False)
 
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
+
     # Cermin untuk layar & laporan lama, ditambah penunjuk ke peristiwanya.
     batch = PkPurchaseBatch(
         # TEPAT SATU dari keduanya — `ck_pk_purchase_batches_beli_atau_jasa`.
         kode_batch=kode, supplier_id=supplier.id if supplier else None,
         jasa_id=jasa_ini.id if jasa_ini else None, berat_total_kg=berat,
-        no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
+        no_polisi_truk=armada.nomor_polisi if armada else tiket.get("nomor_polisi"),
+        jenis_pk=jenis, kadar_air_awal_persen=kadar_air,
+        armada_id=armada.id if armada else None,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         status_batch="diterima", flag_unverified=True,
         timbangan_transaksi_id=timbangan_transaksi_id, sumber_berat=sumber,
@@ -809,12 +817,14 @@ async def create_pk_rejection_dari_timbang(
         supplier, _ = await find_or_create_supplier(db, nama)
     pihak_nama = (supplier.nama_supplier if supplier else
                  f"JASA {jasa_ini.kode} {tiket.get('nama_pelanggan') or ''}".strip())
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
 
     kode = await next_pk_purchase_code(db, now.date())
     batch = PkPurchaseBatch(
         kode_batch=kode, supplier_id=supplier.id if supplier else None,
         jasa_id=jasa_ini.id if jasa_ini else None, berat_total_kg=berat,
-        no_polisi_truk=tiket.get("nomor_polisi"), jenis_pk=None,
+        no_polisi_truk=armada.nomor_polisi if armada else tiket.get("nomor_polisi"),
+        jenis_pk=None, armada_id=armada.id if armada else None,
         tanggal_pembelian=now.date(), waktu_pembelian=now, input_by=user.id,
         # Ditolak = tak pernah jadi stok. `flag_unverified` tak berarti apa
         # pun di sini (tak ada harga yang menunggu verifikasi), tapi False

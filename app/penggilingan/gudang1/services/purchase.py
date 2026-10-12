@@ -25,6 +25,7 @@ from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import next_jasa_code, next_purchase_batch_code
 from app.services.notification import create_notification
+from app.services.armada import armada_dari_nomor_polisi
 
 
 
@@ -285,6 +286,7 @@ async def create_purchase_batch(
     keempat berhenti bekerja di depan lembar galat bertuliskan "3".
     """
     now = input_time(tanggal, jam)  # BackdateError bila di masa depan
+    armada = await armada_dari_nomor_polisi(db, no_polisi_truk)
 
     supplier, created = await find_or_create_supplier(db, nama_supplier)
 
@@ -294,7 +296,8 @@ async def create_purchase_batch(
         kode_batch=kode,
         supplier_id=supplier.id,
         berat_total_kg=berat_kg,
-        no_polisi_truk=no_polisi_truk,
+        no_polisi_truk=armada.nomor_polisi if armada else no_polisi_truk,
+        armada_id=armada.id if armada else None,
         kondisi_gabah=kondisi_gabah,
         kadar_air_awal_persen=kadar_air_awal_persen,
         tanggal_pembelian=hari,
@@ -475,6 +478,8 @@ async def create_purchase_batch_dari_timbang(
             return CreatedBatch(batch=ada, supplier=supplier, supplier_created=False,
                                 jasa=jasa_ini)
 
+    armada = await armada_dari_nomor_polisi(db, tiket.get("nomor_polisi"))
+
     # Cermin untuk layar & laporan lama — bentuknya persis seperti sebelum
     # Tahap 3, ditambah penunjuk ke peristiwanya.
     batch = PurchaseBatch(
@@ -483,7 +488,8 @@ async def create_purchase_batch_dari_timbang(
         supplier_id=supplier.id if supplier else None,
         jasa_id=jasa_ini.id if jasa_ini else None,
         berat_total_kg=berat,  # None = menunggu bobot (disinkron dari tiket)
-        no_polisi_truk=tiket.get("nomor_polisi"),
+        no_polisi_truk=armada.nomor_polisi if armada else tiket.get("nomor_polisi"),
+        armada_id=armada.id if armada else None,
         kondisi_gabah=kondisi,
         kadar_air_awal_persen=kadar_air_awal_persen,
         tanggal_pembelian=hari,

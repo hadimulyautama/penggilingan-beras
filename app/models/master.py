@@ -5,6 +5,6 @@ tetap jalan tanpa perubahan. Definisi tunggal (sumber kebenaran) ada di `hmu_cor
 dipakai bersama oleh produksi, kantor, dan timbangan. Skema master dikelola oleh chain
 migrasi core (`alembic_version_core`), bukan chain aplikasi.
 """
-from hmu_core import Dryer, Pelanggan, Silo, Supplier, User, Warehouse
+from hmu_core import Armada, Dryer, Pelanggan, Silo, Supplier, User, Warehouse
 
-__all__ = ["Warehouse", "User", "Supplier", "Pelanggan", "Silo", "Dryer"]
+__all__ = ["Warehouse", "User", "Supplier", "Pelanggan", "Silo", "Dryer", "Armada"]

@@ -13,6 +13,7 @@ from sqlalchemy import (BigInteger, Boolean, Date, DateTime, ForeignKey, Index, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
+from hmu_core import Armada
 
 
 class PkPurchaseBatch(Base, TimestampMixin):
@@ -46,6 +47,8 @@ class PkPurchaseBatch(Base, TimestampMixin):
     # Kosong = "menunggu bobot" (referensi bobot = tiket timbang; disinkron otomatis).
     berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
+    armada_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_kendaraan.id"))
+    armada: Mapped[Armada | None] = relationship()
     # Jenis PK luar: ks / kl / campuran / semi_ks (lebih luas dari G1 yg cuma KS/KL).
     jenis_pk: Mapped[str | None] = mapped_column(String(12))
     kadar_air_awal_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))

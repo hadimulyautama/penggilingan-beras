@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
+from hmu_core import Armada
 
 
 class PurchaseBatch(Base, TimestampMixin):
@@ -55,6 +56,8 @@ class PurchaseBatch(Base, TimestampMixin):
     # Kosong = "menunggu bobot" (referensi bobot ada di tiket timbang; disinkron otomatis).
     berat_total_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
     no_polisi_truk: Mapped[str | None] = mapped_column(String(20))
+    armada_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_kendaraan.id"))
+    armada: Mapped[Armada | None] = relationship()
     # basah / kering
     kondisi_gabah: Mapped[str] = mapped_column(String(10), nullable=False)
     kadar_air_awal_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
