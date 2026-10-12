@@ -458,6 +458,9 @@ async def masuk_silo(
     silo = await get_g1_silo(db, nama_silo)
     if silo is None:
         raise SiloError(f"Silo {nama_silo} Gudang 1 tidak ditemukan.")
+    from app.penggilingan.silo_policy import boleh_masuk
+    if not boleh_masuk(silo, "gabah_kering", "g1"):
+        raise SiloError(f"{silo.nama_silo} tidak menerima gabah kering menurut filter komoditasnya.")
     now = input_time(tanggal, jam)
     digabung = False
     campur_asal = False

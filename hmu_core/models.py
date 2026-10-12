@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index,
+from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, JSON,
                         Integer, Numeric, String, Text, text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -178,6 +178,8 @@ class Silo(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="kosong")
     # Jenis bahan (mis. gabah, pk, beras, broken, menir, reject, bekatul).
     jenis_isi: Mapped[str] = mapped_column(String(20), nullable=False, default="pk")
+    # Filter komoditas yang diizinkan; null berarti pakai kebijakan bawaan gudang.
+    komoditas_diizinkan: Mapped[list[str] | None] = mapped_column(JSON)
 
     warehouse: Mapped[Warehouse] = relationship(back_populates="silos")
 

@@ -68,6 +68,10 @@ async def seed_master() -> None:
                     nama_silo=snama,
                     kapasitas_ton=cap,
                     jenis_isi="gabah" if wnama.startswith("Gudang 1") else "pk",
+                    komoditas_diizinkan=(
+                        ["gabah_kering"] if wnama.startswith("Gudang 1")
+                        else ["pk", "beras_putih", "reject", "broken", "menir"]
+                    ),
                 ))
                 created.append(f"{snama} {wnama}")
             elif wnama.startswith("Gudang 1") and ex.jenis_isi != "gabah":

@@ -3890,7 +3890,7 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-g2")
-async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_g2_daftar(komoditas: str = "pk", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 2 campuran dari master, berisi atau tidak.
 
     Berbeda dari `silo-bahan-g2`, yang hanya menawarkan silo yang siap
@@ -3904,6 +3904,7 @@ async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     from app.models import Silo
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.silo_policy import boleh_masuk
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
@@ -3912,6 +3913,8 @@ async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             select(Silo).where(Silo.warehouse_id == wid)
             .order_by(Silo.nama_silo)
         )).scalars().all():
+            if not boleh_masuk(s, komoditas, "g2"):
+                continue
             kg = await hitung_stok_silo(db, s.id)
             huruf = s.nama_silo.replace("Silo ", "")
             # Isinya ikut disebut: menuang ke silo yang sudah berisi bercampur
@@ -3926,7 +3929,7 @@ async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
 @router.get("/actions/tujuan-pk-g2")
 async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Ke mana PK bisa ditaruh di Gudang 2: tiap silo dari master, atau lantai."""
-    daftar = await silo_g2_daftar(user=user)
+    daftar = await silo_g2_daftar(komoditas="pk", user=user)
     # Tumpukan di BAWAH: ia tempat menunggu, bukan tujuan yang dipilih lebih
     # dulu. Yang di atas dibaca lebih sering.
     return daftar + [{"value": "ditumpuk", "label": "Tumpukan (lantai)"}]
@@ -4005,6 +4008,7 @@ async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     from app.models import Silo
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.silo_policy import boleh_masuk
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
@@ -4013,6 +4017,8 @@ async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
             select(Silo).where(Silo.warehouse_id == wid)
             .order_by(Silo.nama_silo)
         )).scalars().all():
+            if not boleh_masuk(s, "broken", "g2"):
+                continue
             kg = await hitung_stok_silo(db, s.id)
             keluar.append({"value": s.nama_silo.replace("Silo ", ""),
                            "label": f"{s.nama_silo} · {_rp(kg)} kg" if kg
@@ -4432,6 +4438,7 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
 
     from app.models import Silo
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.silo_policy import boleh_masuk
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
@@ -4440,6 +4447,8 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
             select(Silo).where(Silo.warehouse_id == wid)
             .order_by(Silo.nama_silo)
         )).scalars().all():
+            if not boleh_masuk(s, "beras_putih", "g2"):
+                continue
             kg = await hitung_stok_silo(db, s.id)
             keluar.append({"value": s.nama_silo.replace("Silo ", ""),
                            "label": f"{s.nama_silo} · {_rp(kg)} kg"

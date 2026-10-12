@@ -58,6 +58,10 @@ async def seed() -> None:
                         nama_silo=nama,
                         kapasitas_ton=kapasitas,
                         jenis_isi="gabah" if wh is g1 else "campuran",
+                        komoditas_diizinkan=(
+                            ["gabah_kering"] if wh is g1
+                            else ["pk", "beras_putih", "reject", "broken", "menir"]
+                        ),
                     ))
             if wh is g1:
                 for silo in (await db.execute(select(Silo).where(Silo.warehouse_id == wh.id))).scalars():

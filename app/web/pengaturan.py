@@ -325,6 +325,7 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
     from sqlalchemy import select
 
     from app.models import Silo
+    from app.penggilingan.silo_policy import daftar_diizinkan, LABEL_KOMODITAS
     from app.penggilingan.gudang1.services.drying import dryers_g1
     from app.penggilingan.gudang1.services.silo import _silo_content_kg, silos_g1
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
@@ -340,6 +341,12 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
                   "status": d.status} for d in await dryers_g1(db)]
         silo = [{"id": s.id, "nama_silo": s.nama_silo,
+                 "komoditas": daftar_diizinkan(s, "g1"),
+                 "komoditas_label": ", ".join(LABEL_KOMODITAS[k] for k in daftar_diizinkan(s, "g1")),
+                 "opsi_komoditas": [{"kode": k, "label": LABEL_KOMODITAS[k],
+                                     "aktif": k in daftar_diizinkan(s, "g1")}
+                                    for k in ("gabah_kering",)],
+                 "gudang": "g1",
                  "kg": float(await _silo_content_kg(db, s.id))}
                 for s in await silos_g1(db)]
         # Silo Gudang 2 (PK & broken, keputusan pemilik 6 Oktober 2026) —
@@ -349,6 +356,12 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         wid_g2 = await _g2_warehouse_id(db)
         silo_g2 = [{"id": s.id, "nama_silo": s.nama_silo,
                     "jenis_isi": s.jenis_isi,
+                    "komoditas": daftar_diizinkan(s, "g2"),
+                    "komoditas_label": ", ".join(LABEL_KOMODITAS[k] for k in daftar_diizinkan(s, "g2")),
+                    "opsi_komoditas": [{"kode": k, "label": LABEL_KOMODITAS[k],
+                                        "aktif": k in daftar_diizinkan(s, "g2")}
+                                       for k in ("pk", "beras_putih", "reject", "broken", "menir")],
+                    "gudang": "g2",
                     "kg": float(await hitung_stok_silo(db, s.id))}
                    for s in (await db.execute(
                        select(Silo).where(Silo.warehouse_id == wid_g2)
@@ -429,6 +442,7 @@ async def tambah_silo(
     from sqlalchemy import select
 
     from app.models import Silo
+    from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, silos_g1
     from app.penggilingan.gudang2.service import _g2_warehouse_id
 
@@ -454,9 +468,100 @@ async def tambah_silo(
         if any(s.nama_silo.lower() == penuh.lower() for s in ada):
             return redirect("/pengaturan/alat?err=kembar")
         db.add(Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
-                    jenis_isi=(isi if g2 else "gabah")))
+                    jenis_isi=(isi if g2 else "gabah"),
+                    komoditas_diizinkan=list(KOMODITAS_G2 if g2 else KOMODITAS_G1)))
         await db.commit()
     return redirect("/pengaturan/alat?pesan=alat-ditambah")
+
+
+@router.post("/pengaturan/alat/silo/edit")
+async def edit_silo(
+    request: Request, silo_id: int = Form(...), nama: str = Form(...),
+    komoditas: list[str] = Form([]),
+    akun: ProduksiAkun = Depends(butuh_super),
+):
+    """Ubah nama dan filter bahan silo. Filter hanya bisa diganti saat kosong."""
+    from sqlalchemy import select
+
+    from app.models import Silo
+    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_content_kg
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
+
+    nama = " ".join(nama.split())
+    if nama.lower().startswith("silo "):
+        nama = nama[5:].strip()
+    if not nama or len(f"Silo {nama}") > 50:
+        return redirect("/pengaturan/alat?err_teks=" + quote("Nama silo tidak valid."))
+    nama_lengkap = f"Silo {nama}"
+    pilihan = list(dict.fromkeys(komoditas))
+    async with SessionLocal() as db:
+        silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
+        if silo is None:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Silo tidak ditemukan."))
+        g1_id, g2_id = await _g1_warehouse_id(db), await _g2_warehouse_id(db)
+        if silo.warehouse_id == g1_id:
+            gudang, valid, stok = "g1", KOMODITAS_G1, await _silo_content_kg(db, silo.id)
+        elif silo.warehouse_id == g2_id:
+            gudang, valid, stok = "g2", KOMODITAS_G2, await hitung_stok_silo(db, silo.id)
+        else:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Gudang silo tidak dikenal."))
+        if not pilihan or any(k not in valid for k in pilihan):
+            return redirect("/pengaturan/alat?err_teks=" + quote("Pilih komoditas yang valid."))
+        pilihan = [k for k in valid if k in pilihan]
+        if pilihan != list(silo.komoditas_diizinkan or valid) and stok > 0.5:
+            return redirect("/pengaturan/alat?err_teks=" + quote(
+                "Filter komoditas hanya bisa diubah saat silo kosong."))
+        ada_nama = (await db.execute(select(Silo.id).where(
+            Silo.warehouse_id == silo.warehouse_id,
+            Silo.id != silo.id,
+            Silo.nama_silo.ilike(nama_lengkap),
+        ))).scalar_one_or_none()
+        if ada_nama is not None:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Nama silo sudah dipakai di gudang ini."))
+        silo.nama_silo = nama_lengkap
+        silo.komoditas_diizinkan = pilihan
+        await db.commit()
+    return redirect("/pengaturan/alat?pesan=silo-diubah")
+
+
+@router.post("/pengaturan/alat/silo/hapus")
+async def hapus_silo(
+    request: Request, silo_id: int = Form(...),
+    akun: ProduksiAkun = Depends(butuh_super),
+):
+    """Hapus silo hanya bila kosong dan tidak punya riwayat/tautan proses."""
+    from sqlalchemy import func, select
+
+    from app.models import Silo
+    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_content_kg
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from hmu_core.base import Base
+
+    async with SessionLocal() as db:
+        silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
+        if silo is None:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Silo tidak ditemukan."))
+        if silo.warehouse_id == await _g1_warehouse_id(db):
+            stok = await _silo_content_kg(db, silo.id)
+        elif silo.warehouse_id == await _g2_warehouse_id(db):
+            stok = await hitung_stok_silo(db, silo.id)
+        else:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Gudang silo tidak dikenal."))
+        if stok > 0.5:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Silo masih berisi stok; kosongkan sebelum dihapus."))
+        for table in Base.metadata.tables.values():
+            for column in table.columns:
+                if any(fk.target_fullname == "silos.id" for fk in column.foreign_keys):
+                    jumlah = (await db.execute(
+                        select(func.count()).select_from(table).where(column == silo.id)
+                    )).scalar_one()
+                    if jumlah:
+                        return redirect("/pengaturan/alat?err_teks=" + quote(
+                            "Silo punya riwayat proses atau stok, jadi tidak bisa dihapus."))
+        await db.delete(silo)
+        await db.commit()
+    return redirect("/pengaturan/alat?pesan=silo-dihapus")
 
 
 @router.post("/pengaturan/alat/dryer/status")

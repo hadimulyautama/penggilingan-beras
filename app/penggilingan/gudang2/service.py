@@ -90,6 +90,13 @@ class Gudang2Error(Exception):
     """Kesalahan Gudang 2 dengan pesan siap-tampil (args[0])."""
 
 
+def _pastikan_komoditas_silo(silo: Silo, komoditas: str) -> None:
+    from app.penggilingan.silo_policy import LABEL_KOMODITAS, boleh_masuk
+    if not boleh_masuk(silo, komoditas, "g2"):
+        label = LABEL_KOMODITAS.get(komoditas, komoditas)
+        raise Gudang2Error(f"{silo.nama_silo} tidak menerima {label} menurut filter komoditasnya.")
+
+
 # ─────────────────────────── Master helpers ───────────────────────────
 
 
@@ -949,6 +956,7 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
         # dan kalimat yang menyebut dua silo akan keliru begitu ada yang ketiga.
         raise Gudang2Error(
             "Pilih silo Gudang 2 dari daftar, atau pilih tumpukan.")
+    _pastikan_komoditas_silo(silo, "pk")
     return SILO, silo.id
 
 
@@ -1304,6 +1312,7 @@ async def _catat_pindah(
     # tak punya kolom `jasa_id` sendiri dan tak perlu — pemiliknya ada di intake
     # asalnya, dan kolom kedua yang berarti hal sama adalah kolom yang suatu
     # hari berselisih dengan yang pertama.
+    _pastikan_komoditas_silo(silo, "pk")
     await kunci_silo(db, silo.id)
     try:
         await pastikan_satu_pemilik(
@@ -1381,6 +1390,7 @@ async def pindah_tumpukan_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
+    _pastikan_komoditas_silo(silo, "pk")
     intake = (await db.execute(
         select(PkGudang2Intake).where(PkGudang2Intake.id == intake_id).with_for_update()
     )).scalars().first()
@@ -1490,6 +1500,7 @@ async def pindah_broken_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
+    _pastikan_komoditas_silo(silo, "broken")
     row = (await db.execute(
         select(ByproductStock).where(ByproductStock.id == byproduct_stock_id)
         .with_for_update()
@@ -1635,6 +1646,7 @@ async def masukkan_broken_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
+    _pastikan_komoditas_silo(silo, "broken")
     if not kode_pol:
         raise Gudang2Error("Sebutkan proses penyosohannya (POL-...).")
     proc = await _proc_by_kode(db, kode_pol)
@@ -1974,6 +1986,7 @@ async def masukkan_beras_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
+    _pastikan_komoditas_silo(silo, "beras_putih")
     if jenis not in BERAS_JENIS:
         raise Gudang2Error(
             f"Jenis beras harus salah satu grade ({', '.join(BERAS_JENIS)}), "

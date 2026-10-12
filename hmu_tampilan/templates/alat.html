@@ -78,6 +78,26 @@
             {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
           </div>
           <div class="bantu">Filter komoditas: gabah kering saja</div>
+          <details style="margin-top:8px">
+            <summary class="btn btn--kecil" aria-label="Edit {{ s.nama_silo }}">✎ Edit silo</summary>
+            <form method="post" action="/pengaturan/alat/silo/edit" class="grup" style="margin-top:8px">
+              <input type="hidden" name="_csrf" value="{{ CSRF }}">
+              <input type="hidden" name="silo_id" value="{{ s.id }}">
+              <label class="lbl" for="nama_g1_{{ s.id }}">Nama silo</label>
+              <input class="fld" id="nama_g1_{{ s.id }}" name="nama" value="{{ s.nama_silo }}" required>
+              {% for opsi in s.opsi_komoditas %}
+                <label class="sebaris"><input type="checkbox" name="komoditas" value="{{ opsi.kode }}" {% if opsi.aktif %}checked{% endif %}> {{ opsi.label }}</label>
+              {% endfor %}
+              <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+            </form>
+          </details>
+        </div>
+        <div class="baris__aksi">
+          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_silo }}? Hanya silo kosong tanpa riwayat yang bisa dihapus.')">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <input type="hidden" name="silo_id" value="{{ s.id }}">
+            <button class="btn btn--kecil" type="submit" aria-label="Hapus {{ s.nama_silo }}" title="Hapus silo">⌫ Hapus</button>
+          </form>
         </div>
       </div>
     {% else %}
@@ -113,14 +133,35 @@
           <div class="baris__ket">
             {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
           </div>
+          <div class="bantu">Komoditas yang boleh masuk: {{ s.komoditas_label }}</div>
+          <details style="margin-top:8px">
+            <summary class="btn btn--kecil" aria-label="Edit {{ s.nama_silo }}">✎ Edit silo</summary>
+            <form method="post" action="/pengaturan/alat/silo/edit" class="grup" style="margin-top:8px">
+              <input type="hidden" name="_csrf" value="{{ CSRF }}">
+              <input type="hidden" name="silo_id" value="{{ s.id }}">
+              <label class="lbl" for="nama_g2_{{ s.id }}">Nama silo</label>
+              <input class="fld" id="nama_g2_{{ s.id }}" name="nama" value="{{ s.nama_silo }}" required>
+              <span class="lbl">Komoditas yang boleh masuk</span>
+              {% for opsi in s.opsi_komoditas %}
+                <label class="sebaris"><input type="checkbox" name="komoditas" value="{{ opsi.kode }}" {% if opsi.aktif %}checked{% endif %}> {{ opsi.label }}</label>
+              {% endfor %}
+              <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+            </form>
+          </details>
+        </div>
+        <div class="baris__aksi">
+          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_silo }}? Hanya silo kosong tanpa riwayat yang bisa dihapus.')">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <input type="hidden" name="silo_id" value="{{ s.id }}">
+            <button class="btn btn--kecil" type="submit" aria-label="Hapus {{ s.nama_silo }}" title="Hapus silo">⌫ Hapus</button>
+          </form>
         </div>
       </div>
     {% else %}
       <p class="bantu">Belum ada silo Gudang 2.</p>
     {% endfor %}
     <p class="bantu" style="margin-top:8px">
-      PK, beras putih, broken, menir, dan reject boleh dicampur di silo yang
-      sama. Bekatul tidak disimpan di silo.
+      Bekatul tidak termasuk dalam pilihan filter komoditas silo Gudang 2.
     </p>
   </div>
 
