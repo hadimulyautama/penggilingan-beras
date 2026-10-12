@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block judul %}Laporan {{ kode }}{% endblock %}
+
+{% block isi %}
+<section class="kartu" style="padding:16px;margin-bottom:12px">
+  <h2 style="margin:0 0 12px">Laporan penggilingan · {{ kode }}</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn btn--kecil" href="/riwayat-giling">← Kembali ke riwayat</a>
+    <button class="btn btn--kecil" type="button" id="bagikan-pdf" disabled>Bagikan PDF</button>
+    <a class="btn btn--kecil" href="{{ pdf_url }}?unduh=1">Unduh PDF</a>
+  </div>
+  <p id="status-bagikan" class="bantu" aria-live="polite" style="margin:10px 0 0">
+    Menyiapkan PDF untuk dibagikan…
+  </p>
+</section>
+
+<iframe title="Laporan penggilingan {{ kode }}" src="{{ pdf_url }}"
+  style="display:block;width:100%;height:calc(100vh - 290px);min-height:65vh;border:1px solid var(--garis, #ccd9de);border-radius:12px;background:#fff"></iframe>
+
+<script>
+(() => {
+  const pdfUrl = {{ pdf_url|tojson }};
+  const fileName = {{ ("laporan-penggilingan-" ~ kode ~ ".pdf")|tojson }};
+  const shareButton = document.getElementById("bagikan-pdf");
+  const status = document.getElementById("status-bagikan");
+  let pdfFile = null;
+
+  fetch(pdfUrl, { credentials: "same-origin" })
+    .then(response => {
+      if (!response.ok) throw new Error("PDF tidak dapat dimuat.");
+      return response.blob();
+    })
+    .then(blob => {
+      pdfFile = new File([blob], fileName, { type: "application/pdf" });
+      shareButton.disabled = false;
+      status.textContent = "PDF siap dibagikan atau diunduh.";
+    })
+    .catch(() => {
+      shareButton.disabled = false;
+      status.textContent = "Jika berbagi file tidak tersedia, tombol Bagikan akan menyalin tautan laporan.";
+    });
+
+  shareButton.addEventListener("click", async () => {
+    const absoluteUrl = new URL(pdfUrl, window.location.href).href;
+    try {
+      if (pdfFile && navigator.share && navigator.canShare &&
+          navigator.canShare({ files: [pdfFile] })) {
+        await navigator.share({ files: [pdfFile], title: "Laporan penggilingan {{ kode }}" });
+        status.textContent = "PDF dibagikan.";
+        return;
+      }
+      if (navigator.share) {
+        await navigator.share({ title: "Laporan penggilingan {{ kode }}", url: absoluteUrl });
+        status.textContent = "Tautan laporan dibagikan. Penerima perlu masuk ke aplikasi untuk membukanya.";
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(absoluteUrl);
+        status.textContent = "Tautan laporan disalin. Buka di perangkat yang sudah masuk ke aplikasi.";
+        return;
+      }
+      window.prompt("Salin tautan laporan ini:", absoluteUrl);
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        status.textContent = "Gagal membagikan PDF. Gunakan tombol Unduh PDF.";
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

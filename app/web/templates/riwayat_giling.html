@@ -112,6 +112,17 @@
           <span class="anak__jam">{{ kapan }}</span>
         </div>
       {% endfor %}
+      <div style="margin-top:12px">
+        <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">
+          ↓ Lihat / bagikan laporan PDF
+        </a>
+      </div>
+    </div>
+  {% else %}
+    <div style="padding:0 12px 12px">
+      <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">
+        ↓ Lihat / bagikan laporan PDF
+      </a>
     </div>
   {% endif %}
   </{{ "details" if laci else "div" }}>

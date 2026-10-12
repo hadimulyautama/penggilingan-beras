@@ -173,6 +173,43 @@ async def test_kartu_menggambar_rendemen_dan_bahan(pg, pabrik):
     assert "Pemasok Uji" in t  # batch asalnya tersebut
 
 
+async def test_laporan_giling_pdf_bisa_dibuka_dan_diunduh(pg, pabrik):
+    from sqlalchemy import select
+    from app.models import MillingProcess, PurchaseBatch
+
+    kode = await _giling_selesai(pg, pabrik, berat_akhir=6_500)
+    async with pg() as db:
+        process = (await db.execute(select(MillingProcess).where(
+            MillingProcess.kode_proses == kode))).scalar_one()
+        batch = await db.get(PurchaseBatch, process.purchase_batch_id)
+        batch.no_polisi_truk = "AB 1234 CD"
+        await db.commit()
+        process_id = process.id
+
+    c = await _klien(pg, peran="superadmin")
+    try:
+        page = await c.get(f"/riwayat-giling/{process_id}/laporan")
+        inline = await c.get(f"/riwayat-giling/{process_id}/laporan.pdf")
+        download = await c.get(f"/riwayat-giling/{process_id}/laporan.pdf?unduh=1")
+    finally:
+        await c.aclose()
+
+    assert page.status_code == 200
+    assert "Kembali ke riwayat" in page.text
+    assert "Bagikan PDF" in page.text
+    assert inline.status_code == download.status_code == 200
+    assert inline.headers["content-type"].startswith("application/pdf")
+    assert inline.headers["content-disposition"].startswith("inline;")
+    assert download.headers["content-disposition"].startswith("attachment;")
+    from pypdf import PdfReader
+    from io import BytesIO
+    text = "\n".join(p.extract_text() or "" for p in PdfReader(BytesIO(inline.content)).pages)
+    assert kode in text
+    assert "Pemasok Uji" in text
+    assert "AB 1234 CD" in text
+    assert "Waktu proses" in text
+
+
 async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pabrik):
     from app.models import User
     from app.penggilingan.gudang1.services.milling import start_milling
