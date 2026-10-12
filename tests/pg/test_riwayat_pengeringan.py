@@ -157,6 +157,41 @@ async def test_tiga_yang_boleh(pg, pabrik, peran, gudang, lihat):
     assert kode in r.text
 
 
+async def test_export_laporan_pdf_per_lot(pg, pabrik):
+    from pypdf import PdfReader
+    from io import BytesIO
+    from sqlalchemy import select
+    from app.models import DryingLot, PurchaseBatch
+
+    kode = await _lot_selesai(pg, pabrik)
+    async with pg() as db:
+        lot = (await db.execute(select(DryingLot).where(DryingLot.kode_lot == kode))).scalar_one()
+        # Batch yang baru dibuat adalah satu-satunya batch yang terkait lot ini.
+        from app.models import DryingLotBatch
+        batch_id = await db.scalar(select(DryingLotBatch.purchase_batch_id).where(
+            DryingLotBatch.drying_lot_id == lot.id))
+        batch = await db.get(PurchaseBatch, batch_id)
+        batch.no_polisi_truk = "AB 1234 CD"
+        lot_id = lot.id
+        await db.commit()
+
+    c = await _klien(pg, peran="superadmin")
+    try:
+        response = await c.get(f"/riwayat-pengeringan/{lot_id}/laporan.pdf")
+    finally:
+        await c.aclose()
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    text = "\n".join(page.extract_text() or "" for page in PdfReader(
+        BytesIO(response.content)).pages)
+    assert kode in text
+    assert "Pemasok Uji" in text
+    assert "AB 1234 CD" in text
+    assert "Waktu dan durasi proses" in text
+
+
 async def test_operator_gudang_dua_ditolak_rutenya_bukan_cuma_pintunya(pg, pabrik):
     await _lot_selesai(pg, pabrik)
     c = await _klien(pg, peran="operator", gudang="Gudang 2", lihat="operator:g2")

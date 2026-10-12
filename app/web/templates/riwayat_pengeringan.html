@@ -122,6 +122,11 @@
           </div>
         {% endfor %}
       {% endif %}
+      <div style="margin-top:12px">
+        <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan.pdf" download>
+          ↓ Export laporan PDF
+        </a>
+      </div>
     </div>
   {% endif %}
   </{{ "details" if laci else "div" }}>
