@@ -1354,10 +1354,6 @@ _GRUP_AKSI = {
     # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
     # tanpa perintah membuat rantainya sukarela.
     "catat_bekatul": "Hasil samping & barang jadi",
-    # `catat_broken` kini JUGA tombol langsung di kartu "Tunggu packing"
-    # ("Sisa dicurah", `_kartu_beras_curah`) — tapi tetap di katalog umum
-    # sebagai jalan cadangan, sama seperti `catat_bekatul` di atasnya.
-    "catat_broken": "Hasil samping & barang jadi",
     # Masukkan beras ke silo belum punya tombol di kartu stok, jadi tetap
     # tersedia dari katalog umum. Keputusan pemilik 8 Oktober 2026.
     "masukkan_beras_silo": "Hasil samping & barang jadi",
@@ -1420,9 +1416,9 @@ for _a in (
     # dengan Gudang 1 dan selama ini beraturan berlawanan.
     "mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
     "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
-    "tambah_silo_penyosohan", "catat_packing",
-    # Broken dimasukkan dari kartu stok broken; jangan tampilkan pintu kedua
-    # di katalog "Catat pekerjaan lain".
+    "tambah_silo_penyosohan", "catat_packing", "catat_broken",
+    # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
+    # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
     "masukkan_broken_silo",
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
     "masukkan_pk", "catat_pk_luar", "tolak_pk_luar", "qc_pk_luar",

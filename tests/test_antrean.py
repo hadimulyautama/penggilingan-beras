@@ -414,7 +414,7 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     for berpintu in ("perintah_keluar", "tambah_barang_keluar",
                      "batal_perintah_keluar", "verifikasi_keluar",
                      "muat_semua", "muat_barang", "selesai_muat",
-                     "masukkan_broken_silo"):
+                     "masukkan_broken_silo", "catat_broken"):
         assert api._GRUP_AKSI[berpintu] == api.GRUP_KARTU, berpintu
     # Yang sudah punya kartu tak digambar di katalog (21 September 2026):
     # kelompoknya keluar dari urutan, aksinya ditandai — bukan dibuang, karena
