@@ -87,14 +87,14 @@ async def sosoh_jasa(pg, pemakai):
                 "pemilik": "JAS-2610-001 Bu Sri"}
 
 
-async def _packing(pg, sosoh_jasa, *, kode_pol, karung):
+async def _packing(pg, sosoh_jasa, *, kode_pol, karung, grade="medium"):
     from app.models import User
     from app.penggilingan.inventory.finished_goods import catat_packing
 
     async with pg() as db:
         u = await db.get(User, sosoh_jasa["user"])
         await catat_packing(db, user=u, kode_pol=kode_pol,
-                           kategori="beras_putih", grade="medium",
+                           kategori="beras_putih", grade=grade,
                            material_kode="biasa", ukuran=25, jumlah_karung=karung)
 
 
@@ -506,3 +506,41 @@ async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh
             "pengambilan jasa tak boleh ikut mengurangi stok menir pabrik"
         sisa = await sisa_jasa(db, jid)
         assert sisa.samping_kg == 0
+
+
+async def test_picker_pengambilan_jasa_menampilkan_mutu_beras(pg, sosoh_jasa):
+    """Pilihan beras jasa harus memakai mutu pada stoknya, bukan label mutu
+    kosong. Kedua grade memakai SKU kemasan yang sama dan dibedakan oleh
+    rice_quality_standard_id.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.web.aksi_inventory import barang_jasa
+
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+        u.role = "superadmin"
+        proc = (await db.execute(
+            select(PolishingProcess).where(
+                PolishingProcess.kode_proses == sosoh_jasa["kode_jasa"])
+        )).scalar_one()
+        for grade in ("premium", "medsuper"):
+            db.add(PolishingOutputLog(
+                polishing_process_id=proc.id, jenis=grade, berat_kg=25,
+                waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+
+    for grade in ("premium", "medsuper"):
+        await _packing(pg, sosoh_jasa, kode_pol=sosoh_jasa["kode_jasa"],
+                       karung=1, grade=grade)
+
+    async with pg() as db:
+        u = await db.get(User, sosoh_jasa["user"])
+    opsi = await barang_jasa(induk=str(sosoh_jasa["pelanggan_id"]), user=u)
+    beras = [o["label"] for o in opsi if o["value"].startswith("bj:")]
+    assert any("Premium" in label for label in beras), beras
+    assert any("Medium Super" in label for label in beras), beras
+    assert not any("mutu di catatan lama kosong" in label for label in beras), beras

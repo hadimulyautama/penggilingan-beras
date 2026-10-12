@@ -1911,6 +1911,7 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     from app.models import FinishedGoodsStock, MillingProcess, ProductSku
     from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
     from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
+    from app.penggilingan.inventory.models import RiceQualityStandard
     from app.services.stok import jenis_produk, nama_produk
 
     out: list[dict] = []
@@ -1918,15 +1919,21 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     # satu rumus, dua pemilik (lihat `hitung_stok_finished_goods`).
     combo = (await db.execute(
         select(FinishedGoodsStock.product_sku_id,
-               FinishedGoodsStock.rice_quality_standard_id)
+               FinishedGoodsStock.rice_quality_standard_id,
+               ProductSku.kategori, RiceQualityStandard.kode)
+        .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+        .outerjoin(RiceQualityStandard,
+                   RiceQualityStandard.id == FinishedGoodsStock.rice_quality_standard_id)
         .where(FinishedGoodsStock.jasa_id == jid).distinct()
     )).all()
-    for sku_id, std_id in combo:
+    for sku_id, std_id, kategori, mutu_kode in combo:
         stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jid)
         if float(stok["kg"]) <= 0.5:
             continue
-        sku = await db.get(ProductSku, sku_id)
-        nm = nama_produk(jenis_produk(sku.kategori if sku else "-", None))
+        # Nama barang harus memakai standar mutu yang sama dengan kunci stok.
+        # Mengirim `None` di sini menyamarkan Premium/Medium Super sebagai
+        # "mutu di catatan lama kosong", walau `std_id` pada stok sudah benar.
+        nm = nama_produk(jenis_produk(kategori, mutu_kode))
         out.append({
             "value": f"bj:{sku_id}|{std_id or ''}",
             "label": (f"{nm} · {int(stok['karung'])} karung "
