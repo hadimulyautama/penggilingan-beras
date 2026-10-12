@@ -42,6 +42,17 @@
 {% if BOLEH_PERINTAH %}
 <div class="ubah-hasil" style="margin-bottom:18px">
   <a class="btn" href="/barang-keluar?buka=perintah_keluar">Buat perintah barang keluar</a>
+  {# Tombol SENDIRI, sama besarnya dengan "Buat perintah" di sebelahnya —
+     bukan tombol kecil di bawahnya. Keluhan pemilik 11 Oktober 2026: aksi
+     "◇ Pengambilan barang jasa" sudah ada sejak awal (picker "Barang yang
+     keluar" SENGAJA menyembunyikan seluruh barang titipan — dilarang
+     dijual lewat sini, cuma boleh diambil pemiliknya), tapi cuma lewat laci
+     menu, tak punya pintu sendiri di halaman ini — jadi tak kelihatan
+     bedanya dari pintu penjualan pabrik di atas. Dua tombol sejajar
+     membuat perbedaannya terbaca sekilas: yang kiri jual barang pabrik,
+     yang kanan kembalikan barang titipan — bukan satu pintu yang mengira-
+     ngira sendiri yang mana. #}
+  <a class="btn" href="/barang-keluar?buka=ambil_jasa">Pengambilan barang jasa</a>
   {# "Tambah barang" berlaku sampai SEBELUM diverifikasi — termasuk yang
      truknya sudah dimuat. Muatan bertahap adalah keadaan sehari-hari, dan
      barang yang menyusul setengah jam kemudian bukan transaksi baru: ia truk

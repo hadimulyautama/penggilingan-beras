@@ -1194,6 +1194,12 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
     # "Tambah barang" & "Batalkan" muncul karena ADA perintah yang belum dimuat.
     assert "/barang-keluar?buka=tambah_barang_keluar" in h
     assert "/barang-keluar?buka=batal_perintah_keluar" in h
+    # Tombol "Pengambilan barang jasa" sejajar dengan "Buat perintah" —
+    # keluhan pemilik 11 Oktober 2026: aksinya sudah ada lebih dulu lewat
+    # laci, tapi tak punya pintu sendiri di halaman ini, jadi tak kelihatan
+    # bedanya dari penjualan barang pabrik.
+    assert "/barang-keluar?buka=ambil_jasa" in h, \
+        "tombol pengambilan jasa tak ada di halamannya"
 
 
 async def test_operator_melihat_halamannya_tetapi_tak_ditawari_tombolnya(pg, gudang):
@@ -1213,6 +1219,7 @@ async def test_operator_melihat_halamannya_tetapi_tak_ditawari_tombolnya(pg, gud
     h = r.text
     assert "OUT-" in h, "operator tak bisa melihat isi halamannya"
     assert "buka=perintah_keluar" not in h, "operator ditawari tombol memerintah"
+    assert "buka=ambil_jasa" not in h, "operator ditawari tombol pengambilan jasa"
 
 
 async def test_rantai_barang_keluar_tak_lagi_digambar_di_katalog(pg, gudang):
