@@ -206,10 +206,18 @@
     <dl class="fakta">
       <div><dt>Hasil sosoh · total</dt><dd>{{ kg(k.hasil_kg) }} kg</dd></div>
       <div><dt>Keluar</dt><dd>{{ kg(k.keluar_kg) }} kg</dd></div>
-      <div><dt>{{ "Tercatat" if k.curah_saja else "Dikemas" }}</dt>
-           <dd>{{ kg(k.dikemas_kg) }} kg</dd></div>
-      <div><dt>{{ "Belum dicatat" if k.curah_saja else "Curah" }}</dt>
-           <dd class="sorot">{{ kg(k.curah_kg) }} kg</dd></div>
+      {% if k.jenis == "broken" %}
+        <div><dt>Dikemas · stok</dt><dd>{{ kg(k.kemasan_stok_kg) }} kg</dd></div>
+        <div><dt>Curah · total</dt>
+             <dd class="sorot">{{ kg(k.curah_stok_kg + k.curah_kg) }} kg</dd></div>
+        <div><dt>Rincian curah · stok + belum dicatat</dt>
+             <dd>{{ kg(k.curah_stok_kg) }} + {{ kg(k.curah_kg) }} kg</dd></div>
+      {% else %}
+        <div><dt>{{ "Tercatat" if k.curah_saja else "Dikemas" }}</dt>
+             <dd>{{ kg(k.dikemas_kg) }} kg</dd></div>
+        <div><dt>{{ "Belum dicatat" if k.curah_saja else "Curah" }}</dt>
+             <dd class="sorot">{{ kg(k.curah_kg) }} kg</dd></div>
+      {% endif %}
     </dl>
   </summary>
 
@@ -293,8 +301,8 @@
          menjumlah persis angka itu. Kepala yang menyebut angka yang bukan
          jumlah daftarnya adalah kepala yang menyesatkan. #}
       <div class="anak__kepala">
-        {{- "Tercatat" if k.curah_saja else "Dikemas" }} ·
-        {{ kg(k.dikemas_kg) }} kg</div>
+        {{- "Dikemas" if k.jenis == "broken" else ("Tercatat" if k.curah_saja else "Dikemas") }} ·
+        {{ kg(k.kemasan_stok_kg if k.jenis == "broken" else k.dikemas_kg) }} kg</div>
       {# ── Yang disebut MERK dan KEMASANNYA, bukan kategorinya lagi ──
          Permintaan pemilik 28 September 2026: "kita sudah tau kalau itu
          premium. jadi informasi yang sudah dikemas tidak perlu lagi informasi
@@ -343,6 +351,12 @@
           </div>
         {% endif %}
       {% endfor %}
+      {% if k.jenis == "broken" and k.curah_stok_kg > 0.5 %}
+        <div class="anak__baris">
+          <span class="anak__nama">curah · sudah dicatat</span>
+          <span class="anak__kg">{{ kg(k.curah_stok_kg) }}&nbsp;kg</span>
+        </div>
+      {% endif %}
       {# Belahan "belum dikemas" tetap ada — ia sebab seluruh halaman ini
          lahir — tetapi hanya ketika ADA. Nol yang dicetak di sini cuma
          mengulang suku "Curah" di atas; yang bukan nol adalah beras yang
@@ -351,7 +365,7 @@
       {% if k.curah_kg > 0.5 or k.curah_kg < -0.5 %}
         <div class="anak__baris">
           <span class="anak__nama">
-            {{- "belum dicatat" if k.curah_saja else "belum dikemas (curah)" }}</span>
+            {{- "belum dicatat · curah" if k.jenis == "broken" else ("belum dicatat" if k.curah_saja else "belum dikemas (curah)") }}</span>
           <span class="anak__kg">{{ kg(k.curah_kg) }}&nbsp;kg</span>
         </div>
         {# ── OBATNYA DI SEBELAH KELUHANNYA ──

@@ -1186,6 +1186,10 @@ class KartuProduk:
     keluar: list[RincianProduk]
     #: `dikemas_kg + curah_kg`, dan sama dengan `hasil_kg - keluar_kg`.
     sisa_kg: float
+    #: Untuk broken: stok fisik per bentuk, terpisah dari `dikemas_kg` dan
+    #: `curah_kg` yang tetap menjaga persamaan hasil sosoh.
+    kemasan_stok_kg: float = 0.0
+    curah_stok_kg: float = 0.0
     #: Berapa baris rincian yang TIDAK digambar, dan berapa kg jumlahnya.
     #: Dipisah dari daftarnya supaya kartunya tetap menyebut seluruhnya tanpa
     #: mengirim seluruhnya — lihat `BATAS_RINCI_HASIL`.
@@ -1625,6 +1629,8 @@ async def stok_produk(db: AsyncSession, *,
         # dua nama itu, bukan ditulis ulang sebagai daftar sendiri yang bisa
         # hanyut darinya.
         curah_saja = jenis in ("bekatul", "broken")
+        kemasan_stok = 0.0
+        curah_stok = 0.0
         if curah_saja:
             # Yang dijaga di sini persis satu hal: yang dikarungi tak boleh
             # HILANG dari stok hanya karena ia berpindah rumah. Kalau baris
@@ -1655,8 +1661,9 @@ async def stok_produk(db: AsyncSession, *,
                            else hitung_stok_broken_curah)
             dikarungi = dikemas.get(jenis, 0.0)
             keluar_karung = k - keluar_curah.get(jenis, 0.0)
-            punya_rumah = (await fungsi_stok(db, jasa_id=jasa_id)
-                           + dikarungi - keluar_karung)
+            curah_stok = await fungsi_stok(db, jasa_id=jasa_id)
+            kemasan_stok = dikarungi - keluar_karung
+            punya_rumah = curah_stok + kemasan_stok
             curah = (h - masuk_curah_proc.get(jenis, 0.0)
                      - dikemas_proc.get(jenis, 0.0))
         else:
@@ -1665,6 +1672,7 @@ async def stok_produk(db: AsyncSession, *,
             # curah (menir atau broken yang dijual langsung dari lantai)
             # mengurangi belahan curah. Keduanya dijumlah utuh di `keluar_kg`.
             punya_rumah = total_kemas - (k - keluar_curah.get(jenis, 0.0))
+            kemasan_stok = punya_rumah
             # `dikemas_proc`, bukan `total_kemas` — "belum dicatat" bertanya
             # tentang PROSESNYA, dan pemindahan kepemilikan (`pindah_
             # kepemilikan_barang_jadi`, berlaku untuk SKU apa pun, termasuk
@@ -1696,6 +1704,7 @@ async def stok_produk(db: AsyncSession, *,
             keluar_lagi_kg=sum(r.kg for r in baris_keluar[BATAS_RINCI_KELUAR:]),
             belum_final_kg=berjalan.get(jenis, 0.0),
             dikemas_kg=punya_rumah, curah_kg=curah,
+            kemasan_stok_kg=kemasan_stok, curah_stok_kg=curah_stok,
             # `keluar_kg` TETAP SELURUHNYA walau daftarnya dipotong: memotong
             # daftar tak boleh memotong persamaannya, dan seluruh kartu ini
             # berdiri di atas hasil = keluar + dikemas + curah.

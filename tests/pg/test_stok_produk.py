@@ -1736,6 +1736,12 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
         db.add(a)
         await db.commit()
         token = security.buat_token(a)
+    from app.services.stok import stok_produk
+    async with pg() as db:
+        kartu_broken = next(k for k in await stok_produk(db) if k.jenis == "broken")
+        assert kartu_broken.kemasan_stok_kg == 100
+        assert kartu_broken.curah_stok_kg == 10
+        assert kartu_broken.curah_kg == 0
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                  base_url="http://uji") as c:
@@ -1746,5 +1752,7 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     assert "buka=masukkan_broken_silo" in h, \
         "tombol 'Masukkan ke silo' tak tergambar walau broken sudah tercatat penuh"
     assert "Masukkan ke silo" in h
+    assert "Dikemas · stok" in h and "Curah · total" in h
+    assert "Rincian curah · stok + belum dicatat" in h
     # "belum dicatat" nol — kartunya tak lagi menawarkan "Catat broken (curah)".
     assert "buka=catat_broken" not in h
