@@ -339,6 +339,19 @@
           <span class="anak__nama">{{ k.jumlah_karung_otomatis }} karung @ {{ k.ukuran_kemasan_otomatis }} kg</span>
           <span class="anak__kg">{{ kg(k.dikemas_otomatis_kg) }}&nbsp;kg</span>
         </div>
+        {% for p in kemasan.get(k.jenis, []) %}
+          {% if p.jasa_id and p.karung and boleh_pindah %}
+            <div class="anak__baris">
+              <span class="anak__nama">{{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</span>
+              <span class="anak__kg">{{ kg(p.kg) }}&nbsp;kg</span>
+            </div>
+            <div class="ubah-hasil">
+              <a class="btn btn--kecil"
+                 href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=bj:{{ p.sku_id }}|{{ p.std_id or '' }}|{{ p.jasa_id }}"
+                 >⇄ Pindah kepemilikan</a>
+            </div>
+          {% endif %}
+        {% endfor %}
         <div class="anak__baris">
           <span class="anak__nama">sisa curah</span>
           <span class="anak__kg">{{ kg(k.curah_otomatis_kg) }}&nbsp;kg</span>

@@ -350,6 +350,9 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
 
     from app.database import now_local
     from app.models import ByproductStock, User
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import catat_packing
+    from app.services.stok import barang_jadi_g2
 
     async with pg() as db:
         u = await db.get(User, titipan["user"])
@@ -357,7 +360,24 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
         db.add(ByproductStock(jenis_produk="bekatul", source_type="polishing",
                               source_id=1, berat_kg=800, tanggal=kini.date(),
                               waktu=kini, input_by=u.id, jasa_id=None))
+        # Hasil samping berkarung tiap jenis harus punya kontrol transfer
+        # pada kartu yang sama; cabang kemasan otomatis sebelumnya melewati
+        # daftar SKU dan menghilangkan tombolnya.
+        for jenis in ("broken", "menir", "reject"):
+            db.add(PolishingOutputLog(
+                polishing_process_id=1, jenis=jenis, berat_kg=100,
+                waktu_update=kini, input_by=u.id))
         await db.commit()
+        for jenis in ("broken", "menir", "reject"):
+            await catat_packing(
+                db, user=u, kode_pol="POL-UJIT-01", kategori=jenis,
+                material_kode="bekas", ukuran=50, jumlah_karung=1)
+        stok_jadi = await barang_jadi_g2(db)
+        expected_bj = {
+            k["jenis"]: f"bj:{k['sku_id']}|{k['std_id'] or ''}|{titipan['jasa1']}"
+            for k in stok_jadi.samping if k.get("jasa_id") == titipan["jasa1"]
+            and k["jenis"] in ("broken", "menir", "reject")
+        }
 
     c = await _klien(pg, peran="superadmin")
     try:
@@ -383,6 +403,16 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
         r.text, re.S,
     )
     assert kartu_broken, "tombol broken curah harus berada di kartu Broken"
+    # Kontrol barang berkarung Reject, Menir, dan Broken juga harus ada.
+    for jenis in ("broken", "menir", "reject"):
+        assert jenis in expected_bj
+        nilai_bj = re.escape(expected_bj[jenis])
+        kartu = re.search(
+            r'<details class="padat padat--samping">(?:(?!</details>).)*'
+            + jenis + r"(?:(?!</details>).)*nilai=" + nilai_bj
+            + r"(?:(?!</details>).)*</details>", r.text, re.S | re.I,
+        )
+        assert kartu, f"tombol transfer barang berkarung {jenis} tak ada di kartunya"
 
 
 async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
