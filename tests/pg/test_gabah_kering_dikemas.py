@@ -280,7 +280,7 @@ async def test_pesanan_boleh_ditutup_sesudah_gabah_kering_terangkut(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = {o["value"] for o in await barang_jasa(jasa=str(pabrik["jasa_id"]), user=u)}
+    opsi = {o["value"] for o in await barang_jasa(induk=str(pabrik["jasa_id"]), user=u)}
     assert f"gk:{r.lot.kode_lot}" in opsi
 
     async with pg() as db:

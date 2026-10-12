@@ -259,7 +259,7 @@ async def test_picker_barang_jasa_menawarkan_tumpukan_dan_silo(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = await barang_jasa(jasa=str(pabrik["jasa_a"]), user=u)
+    opsi = await barang_jasa(induk=str(pabrik["jasa_a"]), user=u)
     nilai = {o["value"] for o in opsi}
     assert "g2:tumpukan" in nilai
     assert f"g2:silo:{pabrik['silo_c']}" in nilai
@@ -275,7 +275,7 @@ async def test_picker_tak_menawarkan_silo_pesanan_lain(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = await barang_jasa(jasa=str(pabrik["jasa_b"]), user=u)
+    opsi = await barang_jasa(induk=str(pabrik["jasa_b"]), user=u)
     nilai = {o["value"] for o in opsi}
     assert f"g2:silo:{pabrik['silo_c']}" not in nilai
     assert "g2:tumpukan" not in nilai
@@ -312,6 +312,47 @@ async def test_pesanan_jasa_ada_barang_menyaring_dan_memimpin_pelanggan(pg, pabr
     label = next(o["label"] for o in tersaring if o["value"] == str(pabrik["jasa_a"]))
     assert label.startswith("Bu Sri ·"), \
         f"label tak memimpin dengan nama pelanggan: {label}"
+
+
+async def test_rantai_pelanggan_pesanan_barang_pengambilan_jasa(pg, pabrik):
+    """Keluhan pemilik 11 Oktober 2026 (lanjutan): "picker 'pesanan jasa'
+    ganti dengan picker nama pelanggan yang punya barang jasa... lalu
+    barang yang diambil adalah list barang yang merupakan kepemilikan
+    pelanggan yang kita pilih di awal."
+
+    Rantai lengkap diuji: `/actions/pelanggan-ada-barang-jasa` (picker
+    pertama, pelanggan SAJA, bukan pesanan) → `/actions/jasa-berjalan?
+    induk=<pelanggan>` (pesanan milik pelanggan itu SAJA, berlabel tanpa
+    mengulang namanya) → `/actions/barang-jasa?induk=<jasa>` (parameternya
+    `induk`, bukan `jasa` lagi — supaya mekanisme `induk` baku aksi.js,
+    yang SELALU mengirim `?induk=...`, benar-benar nyambung — lihat
+    perbaikan `ulang_barang` di aksi.js pada commit yang sama: sebelum ini
+    medan "Barang yang diambil" TAK PERNAH dimuat ulang saat pesanannya
+    berganti sama sekali).
+    """
+    from app.models import User
+    from app.web.aksi_inventory import (barang_jasa, jasa_berjalan,
+                                        pelanggan_ada_barang_jasa)
+
+    await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-09", 3_000, pabrik["jasa_a"])
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+
+    # 1) Picker pelanggan: cuma Bu Sri (punya barang), bukan Pak Budi.
+    pelanggan = await pelanggan_ada_barang_jasa(user=u)
+    assert {o["label"] for o in pelanggan} == {"Bu Sri"}
+    pid = next(o["value"] for o in pelanggan if o["label"] == "Bu Sri")
+
+    # 2) Picker pesanan, disaring ke pelanggan itu: satu baris, jasa_a,
+    #    labelnya TAK mengulang "Bu Sri" (sudah disebut medan sebelumnya).
+    pesanan = await jasa_berjalan(induk=pid, user=u)
+    assert {o["value"] for o in pesanan} == {str(pabrik["jasa_a"])}
+    assert "Bu Sri" not in pesanan[0]["label"], pesanan[0]["label"]
+
+    # 3) Picker barang, `induk` (bukan `jasa`) — mekanisme induk baku.
+    barang = await barang_jasa(induk=str(pabrik["jasa_a"]), user=u)
+    assert any(o["value"] == "g2:tumpukan" for o in barang), barang
 
 
 # ───────────────────── Tak pernah jadi barang jualan pabrik ─────────────────────

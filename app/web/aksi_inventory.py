@@ -1662,22 +1662,38 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                      "ditanya. Satu truk satu perintah; pengambilan bertahap "
                      "berarti beberapa perintah.",
              "fields": [
-                 # `ada_barang=1` menyaring ke pesanan yang BENAR-BENAR punya
-                 # barang sekarang, dan label pelanggan di depan — permintaan
-                 # pemilik 11 Oktober 2026. Tanpa saringan ini, memilih
-                 # pesanan yang fasenya tercatat tapi barangnya sudah habis
-                 # berakhir di medan "Barang yang diambil" kosong — jalan
-                 # buntu yang baru terlihat SESUDAH pesanannya dipilih.
-                 {"name": "jasa", "label": "Pesanan jasa", "type": "remote",
-                  "source": "/api/actions/jasa-berjalan?ada_barang=1",
-                  "kosong": "Tidak ada pesanan jasa yang masih punya barang "
-                            "di pabrik."},
+                 # TIGA medan berantai — permintaan pemilik 11 Oktober 2026:
+                 # "picker 'pesanan jasa' ganti dengan picker nama pelanggan
+                 # yang punya barang jasa... lalu barang yang diambil adalah
+                 # list barang yang merupakan kepemilikan pelanggan yang
+                 # kita pilih di awal."
+                 #
+                 # "Pelanggan" dulu (bukan nomor pesanan) — hanya yang
+                 # benar-benar punya barang. "Pesanan" di bawahnya
+                 # (`induk: "pelanggan"`) mengisi dirinya SENDIRI kalau
+                 # pelanggan itu cuma punya satu pesanan berjalan (kasus
+                 # umum, lewat mekanisme `induk` baku — satu pilihan tak
+                 # perlu dipilih orang), dan baru benar-benar diminta
+                 # memilih kalau pelanggannya kebetulan punya lebih dari
+                 # satu. "Barang" tetap mengikuti PESANAN (bukan pelanggan
+                 # langsung): `outgoing_items` tak punya kolom kepemilikan
+                 # per baris, jadi satu perintah tetap cuma boleh menyebut
+                 # satu `jasa_id` — pagar yang mencegah barang dua pesanan
+                 # (apalagi dua pelanggan) tercampur satu truk.
+                 {"name": "pelanggan", "label": "Pelanggan", "type": "remote",
+                  "source": "/api/actions/pelanggan-ada-barang-jasa",
+                  "kosong": "Tidak ada pelanggan yang masih punya barang "
+                            "jasa di pabrik."},
+                 {"name": "jasa", "label": "Pesanan", "type": "remote",
+                  "induk": "pelanggan", "source": "/api/actions/jasa-berjalan",
+                  "kosong": "Pelanggan ini tak punya pesanan dengan barang "
+                            "tersedia."},
                  {"name": "barang", "label": "Barang yang diambil",
-                  "type": "ulang_barang", "maks": 12,
+                  "type": "ulang_barang", "maks": 12, "induk": "jasa",
                   "source": "/api/actions/barang-jasa",
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
-                  "kosong": "Pilih pesanannya dulu — daftar barangnya mengikuti "
-                            "pemiliknya."},
+                  "kosong": "Pilih pelanggannya dulu — daftar barangnya "
+                            "mengikuti pesanannya."},
              ] + _bidang_kirim()},
             {"id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
              "post": "/api/actions/tutup-jasa",
@@ -1798,34 +1814,87 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
 # di `barang_keluar.tersedia` sebab borang menerima yang diketik juga.
 
 
+@router.get("/actions/pelanggan-ada-barang-jasa")
+async def pelanggan_ada_barang_jasa(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pelanggan yang punya barang jasa tersedia SEKARANG di pabrik.
+
+    Picker PERTAMA "Pengambilan barang jasa" (keputusan pemilik 11 Oktober
+    2026: "picker 'pesanan jasa' ganti dengan picker nama pelanggan yang
+    punya barang jasa"). Satu baris per PELANGGAN, bukan per pesanan — tapi
+    di baliknya tetap satu/lebih `Jasa.id` BERJALAN; medan "Pesanan" di
+    bawahnya (`jasa-berjalan?induk=<pelanggan_id>`) yang menentukan MANA,
+    dan mengisi dirinya sendiri kalau cuma satu (lihat field spec
+    `ambil_jasa`) — satu perintah pengambilan tetap cuma boleh menyebut
+    SATU `jasa_id`, pagar yang mencegah barang dua pelanggan tercampur
+    satu truk (`outgoing_items` tak punya kolom kepemilikan per baris).
+    """
+    wajib(can_see_financials(user))
+    from app.models import Jasa, Pelanggan
+    from app.models.jasa import BERJALAN
+
+    async with SessionLocal() as db:
+        baris = (await db.execute(
+            select(Jasa.id, Jasa.pelanggan_id, Pelanggan.nama_pelanggan)
+            .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+            .where(Jasa.status == BERJALAN)
+            .order_by(Pelanggan.nama_pelanggan, Jasa.id)
+        )).all()
+        per_pelanggan: dict[int, tuple[str, list[int]]] = {}
+        for jid, pid, nama in baris:
+            per_pelanggan.setdefault(pid, (nama, []))[1].append(jid)
+        out: list[dict] = []
+        for pid, (nama, jids) in per_pelanggan.items():
+            ada = False
+            for jid in jids:
+                if await _barang_jasa_rows(db, jid):
+                    ada = True
+                    break
+            if ada:
+                out.append({"value": str(pid), "label": nama})
+    return out
+
+
 @router.get("/actions/jasa-berjalan")
-async def jasa_berjalan(ada_barang: bool = False,
+async def jasa_berjalan(ada_barang: bool = False, induk: str = "",
                         user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Pesanan jasa yang masih berjalan — untuk memilih pesanan mana diambil,
     ditutup, atau dibatalkan.
 
-    `ada_barang=1` menyaring daftarnya ke pesanan yang BENAR-BENAR punya
-    barang tersedia sekarang (permintaan pemilik 11 Oktober 2026: "filter
-    dari barang jasa, siapa saja yang punya barang jasa") — dipakai KHUSUS
-    "Pengambilan barang jasa", yang tanpa saringan ini bisa menawarkan
-    pesanan yang ternyata kosong (`fase` cuma tahap TERJAUH yang PERNAH
-    terisi, bukan jaminan masih ada sekarang) dan berakhir di "(belum ada)"
-    pada medan barangnya — jalan buntu yang baru terlihat SESUDAH pesanannya
-    dipilih. `tutup_jasa`/`batalkan_jasa` TETAP memakai daftar penuh:
-    menutup/membatalkan pesanan yang justru kosong itulah pekerjaannya.
+    TIGA bentuk:
 
-    Labelnya juga dibalik saat `ada_barang=1` — PELANGGAN dulu, bukan kode
-    pesanan — sebab pertanyaannya sekarang "siapa", bukan "pesanan yang mana"
-    (sebangun pengelompokan `/stok-produk-jasa`, walau di sini tetap satu
-    baris per PESANAN, bukan digabung per pelanggan: satu perintah
-    pengambilan cuma boleh menyebut satu `jasa_id`, pagar yang mencegah
-    barang dua pelanggan tercampur satu truk).
+    · Bawaan — `tutup_jasa`/`batalkan_jasa`: SELURUH pesanan berjalan,
+      label "<kode> · <pelanggan> · <fase>". Daftar penuh disengaja:
+      menutup/membatalkan pesanan yang justru kosong itulah pekerjaannya.
+
+    · `induk=<pelanggan_id>` — medan "Pesanan" di balik picker "Pelanggan"
+      baru (`pelanggan_ada_barang_jasa`, permintaan pemilik 11 Oktober
+      2026). Disaring ke SATU pelanggan itu SAJA, dan ke yang BENAR-BENAR
+      punya barang (`fase` cuma tahap TERJAUH yang PERNAH terisi, bukan
+      jaminan masih ada sekarang — tanpa saringan ini orang bisa memilih
+      pesanan yang ternyata kosong dan berakhir di "Barang yang diambil"
+      kosong, jalan buntu yang baru terlihat SESUDAH dipilih). Labelnya
+      TAK mengulang nama pelanggan — medan sebelumnya sudah menyebutnya.
+
+    · `ada_barang=1` TANPA `induk` — saringan yang sama, tapi daftarnya
+      tetap LINTAS pelanggan dan labelnya memimpin nama pelanggan
+      ("<pelanggan> · <kode> · <fase>"). Disisakan untuk pemakai lain yang
+      ingin daftar datar tersaring tanpa dua langkah pelanggan→pesanan.
     """
     wajib(can_see_financials(user))
     from app.services.jasa import FASE_JASA, daftar_jasa
 
     async with SessionLocal() as db:
         kartu = await daftar_jasa(db)
+        if induk.isdigit():
+            from app.models import Jasa
+            pid = int(induk)
+            milik = set((await db.execute(
+                select(Jasa.id).where(Jasa.pelanggan_id == pid))).scalars().all())
+            kartu = [k for k in kartu if k.id in milik]
+            kartu = [k for k in kartu if await _barang_jasa_rows(db, k.id)]
+            return [{"value": str(k.id),
+                     "label": f"{k.kode} · {FASE_JASA.get(k.fase, k.fase)}"}
+                    for k in kartu]
         if ada_barang:
             kartu = [k for k in kartu if await _barang_jasa_rows(db, k.id)]
     if ada_barang:
@@ -1946,20 +2015,28 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
 
 
 @router.get("/actions/barang-jasa")
-async def barang_jasa(jasa: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def barang_jasa(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Barang pesanan jasa ini yang belum diambil pemiliknya.
 
-    Tanpa `jasa` daftarnya KOSONG, bukan berisi semua: daftar yang menawarkan
-    barang seluruh pelanggan saat pesanannya belum dipilih adalah daftar yang
-    sekali salah pilih menyerahkan barang ke orang lain. Isinya sendiri ada
-    di `_barang_jasa_rows` — diangkat jadi fungsi sendiri supaya
-    `jasa_berjalan(ada_barang=1)` bisa memakainya untuk menyaring.
+    Parameternya `induk` (bukan `jasa`) sejak 11 Oktober 2026: medan "Barang
+    yang diambil" kini `induk`-nya medan "Pesanan" (mekanisme `induk` baku
+    `aksi.js`, yang selalu menambahkan `?induk=...` — sebelumnya medan ini
+    memakai `?jasa=...` sendiri dan TAK PERNAH dimuat ulang saat pesanannya
+    berganti, sebab `ulang_barang` belum mendukung `induk` sama sekali;
+    lihat perbaikan `aksi.js` di commit yang sama).
+
+    Tanpa `induk` daftarnya KOSONG, bukan berisi semua: daftar yang
+    menawarkan barang seluruh pelanggan saat pesanannya belum dipilih
+    adalah daftar yang sekali salah pilih menyerahkan barang ke orang lain.
+    Isinya sendiri ada di `_barang_jasa_rows` — diangkat jadi fungsi sendiri
+    supaya `jasa_berjalan(induk=...)`/`jasa_berjalan(ada_barang=1)` bisa
+    memakainya untuk menyaring.
     """
     wajib(can_see_financials(user))
-    if not jasa.isdigit():
+    if not induk.isdigit():
         return []
     async with SessionLocal() as db:
-        return await _barang_jasa_rows(db, int(jasa))
+        return await _barang_jasa_rows(db, int(induk))
 
 
 class JasaReq(BaseModel):

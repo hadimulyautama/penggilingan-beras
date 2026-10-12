@@ -484,7 +484,7 @@ async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh
 
     async with pg() as db:
         u = await db.get(User, sosoh_jasa["user"])
-    opsi = {o["value"] for o in await barang_jasa(jasa=str(jid), user=u)}
+    opsi = {o["value"] for o in await barang_jasa(induk=str(jid), user=u)}
     assert "cr:menir" in opsi
 
     async with pg() as db:

@@ -764,12 +764,26 @@
         if (!hanya || f.name === hanya) { pasangKombo(f); }
         return;
       }
-      /* Wadah berpasangan: daftarnya dimuat SEKALI lalu dipasang ke setiap
-         baris yang sudah ada. Baris yang ditambahkan sesudah ini menyalin
-         <option>-nya dari baris pertama, jadi tak ada permintaan kedua. */
+      /* Wadah berpasangan: daftarnya dimuat SEKALI per induk lalu dipasang ke
+         setiap baris yang sudah ada. Baris yang ditambahkan sesudah ini
+         menyalin <option>-nya dari baris pertama, jadi tak ada permintaan
+         kedua.
+
+         `induk` (mis. "barang" bergantung "jasa" di Pengambilan barang
+         jasa) BARU didukung di sini 11 Oktober 2026 — sebelumnya daftarnya
+         dimuat SEKALI saja saat lembar dibuka, induknya BELUM tentu terisi,
+         dan tak pernah dimuat ulang saat induknya berubah: medan barang
+         terbaca "(belum ada)" selamanya, apa pun pesanan yang dipilih. */
       if (f.type === "ulang_barang") {
         if (hanya && f.name !== hanya) { return; }
-        ambil(f.source).then(function (daftar) {
+        var sumberBarang = f.source;
+        if (f.induk) {
+          var indukBarang = nilaiMedan(f.induk);
+          if (!indukBarang) { return; }
+          sumberBarang += (sumberBarang.indexOf("?") >= 0 ? "&" : "?") +
+            "induk=" + encodeURIComponent(indukBarang);
+        }
+        ambil(sumberBarang).then(function (daftar) {
           if (!daftar) return;
           var wadah = lembar.querySelector(
             '.ulang--pasangan[data-ulang-untuk="' + f.name + '"]');
@@ -786,8 +800,9 @@
               sel.innerHTML = opsi;
               if (dipilih) { sel.value = dipilih; }
             });
+          var lamaNota = $("kosong_" + f.name);
           if (!daftar.length) {
-            if ($("kosong_" + f.name)) { return; }
+            if (lamaNota) { return; }
             var nota = document.createElement("p");
             nota.className = "bantu";
             nota.id = "kosong_" + f.name;
@@ -795,6 +810,11 @@
             nota.textContent = f.kosong || ("Belum ada " +
               (f.label || "pilihan").toLowerCase() + ".");
             wadah.insertAdjacentElement("afterend", nota);
+          } else if (lamaNota) {
+            // Daftarnya TADI kosong (atau induknya baru saja berganti) dan
+            // sekarang berisi — nota lama dicabut, sama seperti medan
+            // `remote` biasa.
+            lamaNota.remove();
           }
         });
         return;
@@ -897,7 +917,8 @@
        cuma bekerja untuk proses yang dipilih PERTAMA, dan orang yang berubah
        pikiran memilih silo milik proses yang lain. */
     (a.fields || []).forEach(function (f) {
-      if ((f.type !== "remote" && f.type !== "remote_banyak") || !f.induk) { return; }
+      if ((f.type !== "remote" && f.type !== "remote_banyak" &&
+           f.type !== "ulang_barang") || !f.induk) { return; }
       var pi = $("f_" + f.induk);
       if (!pi) { return; }
       pi.addEventListener("change", function () {
@@ -908,6 +929,14 @@
         }
         var banyak = f.type === "remote_banyak" ? $("b_" + f.name) : null;
         if (banyak) { banyak.innerHTML = '<p class="bantu">memuat…</p>'; }
+        if (f.type === "ulang_barang") {
+          var wadahBarang = lembar.querySelector(
+            '.ulang--pasangan[data-ulang-untuk="' + f.name + '"]');
+          if (wadahBarang) {
+            Array.prototype.forEach.call(wadahBarang.querySelectorAll("select"),
+              function (sel) { sel.innerHTML = '<option value="">memuat…</option>'; });
+          }
+        }
         var lamaNota = $("kosong_" + f.name);
         if (lamaNota) { lamaNota.remove(); }
         var tbl = $("simpan");
