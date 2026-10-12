@@ -93,7 +93,7 @@
           </details>
         </div>
         <div class="baris__aksi">
-          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_tampil }}? Hanya silo kosong tanpa riwayat yang bisa dihapus.')">
+          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_tampil }} dari daftar silo aktif? Catatan proses lama tetap disimpan.')">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
             <input type="hidden" name="silo_id" value="{{ s.id }}">
             <button class="btn btn--kecil" type="submit" aria-label="Hapus {{ s.nama_tampil }}" title="Hapus silo">⌫ Hapus</button>
@@ -146,11 +146,12 @@
                 <label class="sebaris"><input type="checkbox" name="komoditas" value="{{ opsi.kode }}" {% if opsi.aktif %}checked{% endif %}> {{ opsi.label }}</label>
               {% endfor %}
               <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+              <div class="bantu">Filter baru berlaku untuk pemasukan berikutnya. Stok yang sudah ada tetap tersimpan.</div>
             </form>
           </details>
         </div>
         <div class="baris__aksi">
-          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_tampil }}? Hanya silo kosong tanpa riwayat yang bisa dihapus.')">
+          <form method="post" action="/pengaturan/alat/silo/hapus" onsubmit="return confirm('Hapus {{ s.nama_tampil }} dari daftar silo aktif? Catatan proses lama tetap disimpan.')">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
             <input type="hidden" name="silo_id" value="{{ s.id }}">
             <button class="btn btn--kecil" type="submit" aria-label="Hapus {{ s.nama_tampil }}" title="Hapus silo">⌫ Hapus</button>

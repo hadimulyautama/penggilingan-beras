@@ -2170,7 +2170,7 @@ async def silo_siap_giling(user: User = Depends(pengguna_aksi)) -> list[dict]:
         wid = await _g1_warehouse_id(db)
         silos = (
             await db.execute(
-                select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+                select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
             )
         ).scalars().all()
         for s in silos:
@@ -3910,7 +3910,7 @@ async def silo_g2_daftar(komoditas: str = "pk", user: User = Depends(pengguna_ak
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
         )).scalars().all():
             if not boleh_masuk(s, komoditas, "g2"):
@@ -3986,7 +3986,7 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
         )).scalars().all())
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
         )).scalars().all():
             if s.id in dipakai:
                 continue
@@ -4014,7 +4014,7 @@ async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
         )).scalars().all():
             if not boleh_masuk(s, "broken", "g2"):
@@ -4444,7 +4444,7 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
         )).scalars().all():
             if not boleh_masuk(s, "beras_putih", "g2"):

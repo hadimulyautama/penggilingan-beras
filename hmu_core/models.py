@@ -180,6 +180,8 @@ class Silo(Base, TimestampMixin):
     jenis_isi: Mapped[str] = mapped_column(String(20), nullable=False, default="pk")
     # Filter komoditas yang diizinkan; null berarti pakai kebijakan bawaan gudang.
     komoditas_diizinkan: Mapped[list[str] | None] = mapped_column(JSON)
+    # False mengarsipkan silo kosong tanpa memutus riwayat yang menunjuk kepadanya.
+    aktif: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     warehouse: Mapped[Warehouse] = relationship(back_populates="silos")
 

@@ -2010,7 +2010,7 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
 
     g2_wid = await _g2_warehouse_id(db)
     for silo in (await db.execute(
-        select(_Silo).where(_Silo.warehouse_id == g2_wid)
+        select(_Silo).where(_Silo.warehouse_id == g2_wid, _Silo.aktif.is_(True))
         .order_by(_Silo.nama_silo)
     )).scalars().all():
         if jid not in await pemilik_silo_g2(db, silo.id):

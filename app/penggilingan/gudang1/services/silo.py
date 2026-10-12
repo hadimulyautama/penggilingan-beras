@@ -76,14 +76,14 @@ async def silos_g1(db: AsyncSession) -> list[Silo]:
     """
     wid = await _g1_warehouse_id(db)
     return list((await db.execute(
-        select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+        select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all())
 
 
 async def silo_g1_by_id(db: AsyncSession, silo_id: int) -> Silo | None:
     wid = await _g1_warehouse_id(db)
     return (await db.execute(
-        select(Silo).where(Silo.id == silo_id, Silo.warehouse_id == wid)
+        select(Silo).where(Silo.id == silo_id, Silo.warehouse_id == wid, Silo.aktif.is_(True))
     )).scalars().first()
 
 
@@ -92,6 +92,7 @@ async def get_g1_silo(db: AsyncSession, letter: str) -> Silo | None:
     nama = (letter or "").strip()
     stmt = select(Silo).where(
         Silo.warehouse_id == wid,
+        Silo.aktif.is_(True),
         func.lower(Silo.nama_silo).in_({nama.lower(), f"silo {nama}".lower()}),
     )
     return (await db.execute(stmt)).scalars().first()
@@ -964,7 +965,7 @@ async def laporan_silo(db: AsyncSession, nama_silo: str | None = None) -> str:
     """Status silo Gudang 1 (isi, supplier, kapasitas). `nama_silo` mem-filter
     ke satu silo (mis. 'A') bila disebut."""
     wid = await _g1_warehouse_id(db)
-    stmt = select(Silo).where(Silo.warehouse_id == wid)
+    stmt = select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
     if nama_silo:
         stmt = stmt.where(func.upper(Silo.nama_silo).like(f"%{nama_silo.upper()}%"))
     silos = (await db.execute(stmt.order_by(Silo.nama_silo))).scalars().all()

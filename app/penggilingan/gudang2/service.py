@@ -146,6 +146,7 @@ async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
         await db.execute(
             select(Silo).where(
                 Silo.warehouse_id == wid,
+                Silo.aktif.is_(True),
                 func.lower(Silo.nama_silo).in_({nama.lower(), f"silo {nama}".lower()}),
             )
         )

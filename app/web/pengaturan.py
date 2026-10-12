@@ -232,6 +232,8 @@ _PESAN = {
     "sandi-diganti": "Kata sandi berhasil diganti.",
     "alat-ditambah": "Alat baru ditambahkan.",
     "alat-diubah": "Alat diperbarui.",
+    "silo-diubah": "Nama dan filter komoditas silo berhasil disimpan.",
+    "silo-dihapus": "Silo dihapus dari daftar aktif. Catatan lama tetap tersimpan.",
     "mutu-nyala": "Pencatatan mutu dinyalakan.",
     "mutu-padam": "Pencatatan mutu dimatikan — borang QC dan baris mutu "
                   "disembunyikan dari semua layar.",
@@ -370,7 +372,7 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
                     "gudang": "g2",
                     "kg": float(await hitung_stok_silo(db, s.id))}
                    for s in (await db.execute(
-                       select(Silo).where(Silo.warehouse_id == wid_g2)
+                       select(Silo).where(Silo.warehouse_id == wid_g2, Silo.aktif.is_(True))
                        .order_by(Silo.nama_silo)
                    )).scalars().all()]
     return render(
@@ -378,7 +380,8 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         **await lencana(akun.user),
         mesin=mesin, silo=silo, silo_g2=silo_g2, maks=MAKS_ALAT,
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
-        pesan_err=_ERR.get(request.query_params.get("err", "")),
+        pesan_err=(_ERR.get(request.query_params.get("err", ""))
+                   or request.query_params.get("err_teks", "")),
     )
 
 
@@ -486,12 +489,12 @@ async def edit_silo(
     komoditas: list[str] = Form([]),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
-    """Ubah nama dan filter bahan silo. Filter hanya bisa diganti saat kosong."""
+    """Ubah nama dan filter bahan silo; filter mengatur pemasukan berikutnya."""
     from sqlalchemy import select
 
     from app.models import Silo
-    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_content_kg
-    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.gudang1.services.silo import _g1_warehouse_id
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
     from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
 
     nama = " ".join(nama.split())
@@ -501,21 +504,18 @@ async def edit_silo(
     pilihan = list(dict.fromkeys(komoditas))
     async with SessionLocal() as db:
         silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
-        if silo is None:
+        if silo is None or not silo.aktif:
             return redirect("/pengaturan/alat?err_teks=" + quote("Silo tidak ditemukan."))
         g1_id, g2_id = await _g1_warehouse_id(db), await _g2_warehouse_id(db)
         if silo.warehouse_id == g1_id:
-            gudang, valid, stok = "g1", KOMODITAS_G1, await _silo_content_kg(db, silo.id)
+            valid = KOMODITAS_G1
         elif silo.warehouse_id == g2_id:
-            gudang, valid, stok = "g2", KOMODITAS_G2, await hitung_stok_silo(db, silo.id)
+            valid = KOMODITAS_G2
         else:
             return redirect("/pengaturan/alat?err_teks=" + quote("Gudang silo tidak dikenal."))
         if not pilihan or any(k not in valid for k in pilihan):
             return redirect("/pengaturan/alat?err_teks=" + quote("Pilih komoditas yang valid."))
         pilihan = [k for k in valid if k in pilihan]
-        if pilihan != list(silo.komoditas_diizinkan or valid) and stok > 0.5:
-            return redirect("/pengaturan/alat?err_teks=" + quote(
-                "Filter komoditas hanya bisa diubah saat silo kosong."))
         ada_nama = (await db.execute(select(Silo.id).where(
             Silo.warehouse_id == silo.warehouse_id,
             Silo.id != silo.id,
@@ -534,13 +534,14 @@ async def hapus_silo(
     request: Request, silo_id: int = Form(...),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
-    """Hapus silo hanya bila kosong dan tidak punya riwayat/tautan proses."""
-    from sqlalchemy import func, select
+    """Arsipkan silo kosong agar keluar dari operasi tanpa menghapus riwayat."""
+    from sqlalchemy import select
 
     from app.models import Silo
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id, _silo_content_kg
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
-    from hmu_core.base import Base
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
+    from app.penggilingan.gudang1.services.silo import giling_berjalan_untuk_silo
 
     async with SessionLocal() as db:
         silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
@@ -554,16 +555,17 @@ async def hapus_silo(
             return redirect("/pengaturan/alat?err_teks=" + quote("Gudang silo tidak dikenal."))
         if stok > 0.5:
             return redirect("/pengaturan/alat?err_teks=" + quote("Silo masih berisi stok; kosongkan sebelum dihapus."))
-        for table in Base.metadata.tables.values():
-            for column in table.columns:
-                if any(fk.target_fullname == "silos.id" for fk in column.foreign_keys):
-                    jumlah = (await db.execute(
-                        select(func.count()).select_from(table).where(column == silo.id)
-                    )).scalar_one()
-                    if jumlah:
-                        return redirect("/pengaturan/alat?err_teks=" + quote(
-                            "Silo punya riwayat proses atau stok, jadi tidak bisa dihapus."))
-        await db.delete(silo)
+        giling_aktif = await giling_berjalan_untuk_silo(db, silo.id)
+        sosoh_aktif = (await db.execute(
+            select(PolishingSiloUsage.id)
+            .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+            .where(PolishingSiloUsage.silo_id == silo.id, PolishingProcess.status == "proses")
+            .limit(1)
+        )).scalar_one_or_none()
+        if giling_aktif is not None or sosoh_aktif is not None:
+            return redirect("/pengaturan/alat?err_teks=" + quote(
+                "Silo sedang dipakai proses berjalan; selesaikan proses sebelum menghapus."))
+        silo.aktif = False
         await db.commit()
     return redirect("/pengaturan/alat?pesan=silo-dihapus")
 

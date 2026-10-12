@@ -2033,7 +2033,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
 
     wid = await _g1_warehouse_id(db)
     for silo in (await db.execute(
-        select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+        select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all():
         if not await _silo_active_rows(db, silo.id):
             continue
@@ -2789,7 +2789,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     sedang = bool(dipakai) or bool(kode_jalan)
     wid2 = await _g2_warehouse_id(db)
     for silo in (await db.execute(
-        select(Silo).where(Silo.warehouse_id == wid2).order_by(Silo.nama_silo)
+        select(Silo).where(Silo.warehouse_id == wid2, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all():
         kg = await hitung_stok_silo(db, silo.id)
         if not kg:

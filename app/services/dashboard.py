@@ -144,7 +144,7 @@ async def _silo_status(db: AsyncSession) -> list[dict]:
     wid = await _g1_warehouse_id(db)
     silos = (
         await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid).order_by(Silo.nama_silo)
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
         )
     ).scalars().all()
     out = []
