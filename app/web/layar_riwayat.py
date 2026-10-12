@@ -154,7 +154,9 @@ def _pdf_laporan_giling(data: dict) -> bytes:
         ["Berat bahan masuk", kg(data["input_kg"])],
         ["Hasil PK", kg(data["output_kg"])],
         ["Rendemen", f"{data['yield']:.1f}%".replace(".", ",") if data["yield"] is not None else "Belum dapat dihitung"],
-        ["Mutu QC rata-rata", data["qc_summary"]],
+        ["Rata-rata kadar air QC", data["qc_moisture_avg"]],
+        ["Rata-rata broken QC", data["qc_broken_avg"]],
+        ["Rata-rata susut QC", data["qc_loss_avg"]],
         ["Transfer ke Gudang 2", kg(data["transferred_kg"])],
         ["Sisa PK tersedia", kg(data["available_kg"])],
     ], [70 * mm, 100 * mm]))
@@ -372,6 +374,9 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
         condition = (await pk_jenis_banyak(db, [process])).get(process_id)
         yield_rate = hitung_rendemen(breakdown.produced, process.berat_gabah_masuk_kg)
 
+        def persen(nilai):
+            return f"{nilai:.1f}%".replace(".", ",") if nilai is not None else "Belum ada catatan"
+
         return {
             "kode": process.kode_proses,
             "owner": owner_names.get(process.jasa_id, "Tidak tercatat") if process.jasa_id else "Pabrik",
@@ -380,6 +385,9 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
             "output_kg": breakdown.produced,
             "yield": yield_rate,
             "qc_summary": qc_avg.teks() if qc_avg and qc_avg.ada else "Belum ada catatan QC",
+            "qc_moisture_avg": persen(qc_avg.kadar_air if qc_avg else None),
+            "qc_broken_avg": persen(qc_avg.broken if qc_avg else None),
+            "qc_loss_avg": persen(qc_avg.susut if qc_avg else None),
             "transferred_kg": breakdown.transferred,
             "available_kg": breakdown.tersedia,
             "sources": sources, "batches": batches, "raw_qc": raw_qc,

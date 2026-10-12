@@ -12,7 +12,9 @@ def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
     data = {
         "kode": "LOT-20261012-01", "owner": "Pabrik", "class": "KERING",
         "input_kg": 10_000, "output_kg": 6_500, "yield": 65,
-        "qc_summary": "KA 14,2%", "transferred_kg": 5_000, "available_kg": 1_500,
+        "qc_summary": "KA 14,2%", "qc_moisture_avg": "14,2%",
+        "qc_broken_avg": "2,5%", "qc_loss_avg": "1,0%",
+        "transferred_kg": 5_000, "available_kg": 1_500,
         "sources": [{"silo": "Silo A", "source": "PGR-20261011-01",
                      "weight": 10_000, "used": 10_000, "remaining": 0}],
         "batches": [{"code": "GB-20261010-01", "origin": "Widiyanto",
@@ -34,5 +36,6 @@ def test_pdf_giling_memuat_asal_qc_hasil_transfer_dan_durasi():
 
     for expected in ("LOT-20261012-01", "Silo A", "Widiyanto", "AB 1234 CD",
                      "QC bahan baku", "25,5% / 26%", "QC hasil penggilingan",
-                     "14%", "Catatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
+                     "14%", "Rata-rata broken QC", "2,5%", "Rata-rata susut QC",
+                     "1,0%", "Catatan hasil PK", "TRF-20261012-01", "4 jam 30 menit"):
         assert expected in text
