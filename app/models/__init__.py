@@ -26,6 +26,8 @@ from app.penggilingan.gudang1.models import (
     MillingProgressLog,
     MillingQcLog,
     PurchaseBatch,
+    PurchaseBatchQc,
+    PurchaseBatchQcSample,
     PurchaseBatchVerification,
     SiloMovingLog,
     SiloStorage,
@@ -77,6 +79,8 @@ __all__ = [
     # gudang1
     "PurchaseBatch",
     "PurchaseBatchVerification",
+    "PurchaseBatchQc",
+    "PurchaseBatchQcSample",
     "DryingLot",
     "DryingLotBatch",
     "DryingMoistureLog",

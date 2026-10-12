@@ -609,11 +609,11 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert "n != '0'" in fn, "bawaannya tidak menyala"
 
     mini = (AKAR / "app/web/api.py").read_text()
-    assert 'AKSI_MUTU = {"qc_giling", "qc_pk_luar"}' in mini
+    assert 'AKSI_MUTU = {"qc_giling", "qc_pk_luar", "qc_gabah_basah", "qc_gabah_kering"}' in mini
     assert 'a["id"] not in AKSI_MUTU' in mini, "katalog tak disaring"
     # Disembunyikan SAJA tidak cukup: alamatnya bisa diketik, dan lembar yang
     # masih terbuka di layar orang lain masih bisa mengirim.
-    assert mini.count("await _wajib_mutu()") == 4, "ada rute mutu tanpa penjaga"
+    assert mini.count("await _wajib_mutu()") == 6, "ada rute mutu tanpa penjaga"
 
     jalan = (AKAR / "app/services/berjalan.py").read_text()
     assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"

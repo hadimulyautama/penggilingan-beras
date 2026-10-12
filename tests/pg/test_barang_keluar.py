@@ -580,6 +580,22 @@ async def test_tiket_tetap_ditawarkan_untuk_muatan_besar(pg, gudang):
     assert tid in {int(o["value"]) for o in out}
 
 
+async def test_picker_verifikasi_tiket_hanya_difilter_berdasarkan_nama(pg, gudang):
+    """Nama pembeli saja yang menyaring tiket; tanggal dan bobot berbeda
+    tidak menghilangkan tiket yang mungkin memang untuk truk tersebut."""
+    from app.models import User
+    from app.web.aksi_inventory import timbang_keluar_aktif
+
+    cocok = await _tiket(pg, "TK-NAMA-COCOK", barang=9_000,
+                         pembeli="  TOKO   MAKMUR  ")
+    await _tiket(pg, "TK-NAMA-LAIN", pembeli="Toko Sejahtera")
+    rid = await _sampai_dimuat(pg, gudang, karung=10, pembeli="Toko Makmur")
+    async with pg() as db:
+        out = await timbang_keluar_aktif(
+            induk=str(rid), user=await db.get(User, gudang["adm"]))
+    assert {int(o["value"]) for o in out} == {cocok}
+
+
 async def test_tiket_tanpa_induk_atau_induk_tak_dikenal_tetap_daftar_penuh(pg, gudang):
     """Borang yang dibuka lewat katalog (bukan lewat kartu per-muatan) belum
     punya `induk` sama sekali saat medan ini pertama kali termuat — dan

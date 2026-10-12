@@ -120,6 +120,8 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
                        "mulai_penyosohan", "hasil_penyosohan",
                        "tambah_silo_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
+    hasil_sosoh = next(a for a in menu if a["id"] == "hasil_penyosohan")
+    assert "spek" not in {field["name"] for field in hasil_sosoh["fields"]}
     assert "masukkan_pk" not in ids and "undo" in ids
     # Keenam yang lama TETAP di menu — lembar kartunya dibangun dari
     # spesifikasi yang sama — tetapi sejak 28 September 2026 ditandai `kartu`,

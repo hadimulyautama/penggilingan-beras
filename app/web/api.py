@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -377,7 +377,7 @@ def _urai_tujuan(nilai: str | None) -> tuple[str, int | None]:
 
 
 #: Aksi yang lenyap begitu fitur mutu dimatikan di Pengaturan.
-AKSI_MUTU = {"qc_giling", "qc_pk_luar"}
+AKSI_MUTU = {"qc_giling", "qc_pk_luar", "qc_gabah_basah", "qc_gabah_kering"}
 
 
 async def _wajib_mutu() -> None:
@@ -467,6 +467,40 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
                                              if o not in TUJUAN_BASAH]},
              ]},
+            *[
+                {
+                    "id": f"qc_gabah_{kondisi}",
+                    "label": f"🔬 QC gabah {kondisi}",
+                    "post": "/api/actions/qc-gabah/" + kondisi,
+                    "hint": "Isi lima sampel. Setiap sampel memakai dua pembacaan kadar air; "
+                            "rata-rata seluruh 10 pembacaan disimpan sebagai kadar air truk."
+                            + (" Jika tidak ada Lamur, isi jumlah sak 0." if kondisi == "basah" else ""),
+                    "fields": ([{
+                        "name": "kode_batch", "label": f"Truk gabah {kondisi} yang belum di-QC",
+                        "type": "remote", "source": f"/api/actions/gabah-qc/{kondisi}",
+                        "kosong": f"Tidak ada truk gabah {kondisi} yang menunggu QC.",
+                    }] + ([
+                        {"name": "lamur", "label": "Ada Lamur?", "type": "select",
+                         "options": [["iya", "Iya"], ["tidak", "Tidak"]], "wajib": True},
+                        {"name": "jumlah_sak_lamur", "label": "Jumlah sak yang Lamur", "type": "number", "wajib": True},
+                    ] if kondisi == "basah" else []) + [
+                        {"name": "biji_hijau", "label": "Biji hijau", "type": "select", "wajib": True,
+                         "options": [["hampir_tidak_ada", "Hampir tidak ada"], ["sedikit", "Sedikit"],
+                                     ["sedang", "Sedang"], ["banyak", "Banyak"]]},
+                        {"name": "densiti", "label": "Densiti gabah", "type": "select", "wajib": True,
+                         "options": [["padat", "Padat · sedikit gabah hampa"], ["sedang", "Sedang"],
+                                     ["empuk", "Empuk · banyak gabah hampa"]]},
+                    ] + [
+                        field
+                        for i in range(1, 6)
+                        for field in (
+                            {"name": f"kadar_air_{i}_1", "label": f"Sampel {i} · kadar air pembacaan 1 (%)", "type": "number", "wajib": True},
+                            {"name": f"kadar_air_{i}_2", "label": f"Sampel {i} · kadar air pembacaan 2 (%)", "type": "number", "wajib": True},
+                        )
+                    ])
+                }
+                for kondisi in ("basah", "kering")
+            ],
             {"id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
              "post": "/api/actions/pindah-tumpukan",
              "hint": "Gabah yang belum ada di dryer maupun silo — yang sedang "
@@ -941,12 +975,6 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # mesin. Penjumlahan itu pekerjaan gudang.
                  {"name": "berat_kg", "label": "Berat hasil prosesan ini (kg)",
                   "type": "number"},
-                 # Speknya ikut dicatat tiap entri (keputusan pemilik pada
-                 # pertanyaan QA), supaya hasil bisa dijumlah per spek.
-                 # Teks bebas: spek lahir dari permintaan pembeli, bukan dari
-                 # daftar yang bisa dibekukan hari ini.
-                 {"name": "spek", "label": "Spek yang sedang dijalankan — opsional",
-                  "type": "text", "optional": True},
              ]},
             # ── Tambah silo ke penyosohan yang berjalan — mix bahan ──
             #
@@ -1349,6 +1377,8 @@ _GRUP_AKSI = {
     # Pembelian & pencocokan.
     "beli_kemasan": "Pembelian & pencocokan",
     "rekonsiliasi_timbang": "Pembelian & pencocokan",
+    "qc_gabah_basah": "Pembelian & pencocokan",
+    "qc_gabah_kering": "Pembelian & pencocokan",
 }
 
 # ── Aksi yang dikerjakan DARI KARTU — katalog melewatkannya ──
@@ -1434,6 +1464,7 @@ URUT_GRUP = [
 _ACTION_WH = {
     # Gudang 1 (Selepan)
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
+    "qc_gabah_basah": "g1", "qc_gabah_kering": "g1",
     "ubah_target": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
@@ -1531,6 +1562,73 @@ async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
             out.append({"value": si.nama_silo.replace("Silo ", ""),
                         "label": f"{si.nama_silo} · {isi}"})
     return out
+
+
+@router.get("/actions/gabah-qc/{kondisi}")
+async def gabah_qc(kondisi: str, user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Truk gabah pada kondisi tertentu yang belum memiliki pencatatan QC."""
+    _require(await _is_g1_operator(user))
+    if kondisi not in {"basah", "kering"}:
+        raise HTTPException(404, "Kondisi gabah tidak dikenali.")
+    await _wajib_mutu()
+    from sqlalchemy import select
+    from app.models import PurchaseBatch, PurchaseBatchQc
+    async with SessionLocal() as db:
+        rows = (await db.execute(
+            select(PurchaseBatch).where(
+                PurchaseBatch.kondisi_gabah == kondisi,
+                PurchaseBatch.dibatalkan_pada.is_(None),
+                ~select(PurchaseBatchQc.id).where(
+                    PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id
+                ).exists(),
+            ).order_by(PurchaseBatch.id.desc()).limit(100)
+        )).scalars().all()
+    return [{"value": b.kode_batch,
+             "label": f"{b.kode_batch} · {b.no_polisi_truk or 'tanpa plat'} · "
+                      f"{float(b.berat_total_kg or 0):,.0f} kg".replace(",", ".")}
+            for b in rows]
+
+
+@router.post("/actions/qc-gabah/{kondisi}")
+async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
+                       user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    await _wajib_mutu()
+    if kondisi not in {"basah", "kering"}:
+        raise HTTPException(404, "Kondisi gabah tidak dikenali.")
+    kode = str(payload.get("kode_batch") or "").strip()
+    if not kode:
+        raise HTTPException(400, "Pilih truk gabah yang akan diperiksa.")
+    try:
+        sampel = [{
+            "kadar_air_1": payload.get(f"kadar_air_{i}_1"),
+            "kadar_air_2": payload.get(f"kadar_air_{i}_2"),
+        } for i in range(1, 6)]
+        lamur = None
+        jumlah_sak = None
+        if kondisi == "basah":
+            pilihan_lamur = payload.get("lamur")
+            if pilihan_lamur not in {"iya", "tidak"}:
+                raise ValueError("Pilih status Lamur: iya atau tidak.")
+            lamur = pilihan_lamur == "iya"
+            try:
+                nilai_sak = float(payload.get("jumlah_sak_lamur"))
+            except (TypeError, ValueError):
+                raise ValueError("Isi jumlah sak yang Lamur.")
+            if not nilai_sak.is_integer():
+                raise ValueError("Jumlah sak harus berupa bilangan bulat.")
+            jumlah_sak = int(nilai_sak)
+        from app.penggilingan.gudang1.services.qc_gabah import catat_qc_gabah
+        async with SessionLocal() as db:
+            u = await db.get(User, user.id)
+            qc, rata = await catat_qc_gabah(
+                db, user=u, kode_batch=kode, sampel=sampel,
+                biji_hijau=payload.get("biji_hijau"), densiti=payload.get("densiti"),
+                lamur=lamur, jumlah_sak_lamur=jumlah_sak,
+            )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "pesan": f"✓ QC *{kode}* tercatat · 5 sampel · kadar air rata-rata {rata:.2f}%"}
 
 
 @router.get("/actions/dryer-menunggu")
@@ -3638,7 +3736,6 @@ class HasilPenyosohanReq(BaseModel):
     #: diterima — lembar yang sudah terbuka di layar orang saat versi baru
     #: terbit akan mengirim nama lama.
     berat_kg: Positif | None = None
-    spek: str | None = None
     berat_kumulatif: Positif | None = None
 
 
@@ -3655,7 +3752,6 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
         try:
             r = await catat_output(db, user=u, kode=req.kode_proses,
                                    jenis=req.jenis, berat_kg=req.berat_kg,
-                                   spek=(req.spek or None),
                                    berat_kumulatif=req.berat_kumulatif)
         except Gudang2Error as e:
             raise _err(e, "Gagal catat hasil penyosohan.")
@@ -3663,7 +3759,6 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
     # angkanya masuk seperti yang ia ketik) dan TOTALNYA (supaya ia tak perlu
     # menjumlah sendiri — justru penjumlahan itu yang dikeluhkan).
     pesan = (f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kg:g} kg"
-             + (f" · spek {r.spek}" if r.spek else "")
              + f" — total {r.jenis} jadi {r.berat_kumulatif:g} kg.")
     return {"ok": True, "pesan": pesan}
 

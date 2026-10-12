@@ -968,13 +968,23 @@ async def timbang_keluar_aktif(induk: str = "",
 
     async with SessionLocal() as db:
         rec_id = int(induk) if induk.strip().isdigit() else None
-        if rec_id is not None and await db.get(OutgoingRecord, rec_id) is not None:
+        nama_pembeli = None
+        rec = await db.get(OutgoingRecord, rec_id) if rec_id is not None else None
+        if rec is not None:
+            nama_pembeli = " ".join((rec.nama_pembeli or "").split()).casefold()
             total = sum(float(i.berat_kg or 0) for i in (await db.execute(
                 select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec_id)
             )).scalars().all())
             if total < bk.MUATAN_KECIL_TANPA_TIKET_KG:
                 return []
         tk = await tiket_keluar_aktif(db)
+    # Untuk transaksi terpilih, nama pembeli adalah satu-satunya kriteria
+    # pencocokan. Bobot, tanggal, dan jenis tiket tidak menyembunyikan pilihan;
+    # perbedaan bobot tetap diperiksa dan dilaporkan saat verifikasi.
+    if nama_pembeli:
+        tk = [t for t in tk
+              if " ".join(str(t.get("pihak") or "").split()).casefold()
+              == nama_pembeli]
     out = []
     for t in tk:
         nama = t.get("jenis_nama") or t.get("kategori") or t.get("jenis_kode") or "?"

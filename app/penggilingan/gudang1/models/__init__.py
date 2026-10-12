@@ -8,6 +8,8 @@ from app.penggilingan.gudang1.models.gudang1 import (
     GabahKeringLot,
     JedaProses,
     PurchaseBatch,
+    PurchaseBatchQc,
+    PurchaseBatchQcSample,
     PurchaseBatchVerification,
     SiloMovingLog,
     SiloStorage,
@@ -21,7 +23,7 @@ from app.penggilingan.gudang1.models.milling import (
 )
 
 __all__ = [
-    "PurchaseBatch", "PurchaseBatchVerification", "DryingLot", "DryingLotBatch",
+    "PurchaseBatch", "PurchaseBatchVerification", "PurchaseBatchQc", "PurchaseBatchQcSample", "DryingLot", "DryingLotBatch",
     "DryingMoistureLog", "DryingCoolingLog", "SiloStorage", "SiloMovingLog",
     "GabahKeringLot", "GabahKeringBongkar",
     "MillingProcess", "MillingProgressLog", "MillingQcLog",
