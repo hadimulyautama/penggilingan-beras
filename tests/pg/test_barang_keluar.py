@@ -2023,6 +2023,36 @@ async def test_bekatul_curah_ditawarkan_di_daftar_barang_keluar(pg, gudang):
     assert "kg" in curah[0]["label"], curah[0]["label"]
 
 
+async def test_picker_bekatul_mengikuti_packing_otomatis_kartu_stok(pg, gudang):
+    """100 kg bekatul = 2 karung otomatis ×40 kg + 20 kg curah.
+
+    Picker sebelumnya menampilkan saldo mentah byproduct_stock sebesar 60 kg,
+    padahal kartu stok memisahkan 40 kg menjadi kemasan otomatis dan menyisakan
+    20 kg curah.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingOutputLog, PolishingProcess
+    from app.web.aksi_inventory import barang_bisa_keluar
+
+    await _bekatul_curah(pg, gudang, 60)
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        db.add(PolishingOutputLog(
+            polishing_process_id=proc.id, jenis="bekatul", berat_kg=40,
+            waktu_update=now_local(), input_by=gudang["op"]))
+        await db.commit()
+        u = await db.get(User, gudang["adm"])
+    daftar = await barang_bisa_keluar(user=u)
+    curah = next(d for d in daftar if d["value"] == "cr:bekatul")
+    assert "2 karung × 40 kg otomatis" in curah["label"], curah["label"]
+    assert "20 kg curah" in curah["label"], curah["label"]
+    assert "total 100 kg" in curah["label"], curah["label"]
+    assert "60 kg tersedia" not in curah["label"], curah["label"]
+
+
 async def test_bekatul_curah_benar_benar_keluar_dan_mengurangi_stok(pg, gudang):
     """Dan satuannya KILOGRAM — bukan karung.
 

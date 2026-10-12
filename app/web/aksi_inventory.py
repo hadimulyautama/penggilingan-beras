@@ -850,11 +850,12 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     cuma pintunya. Laporan operator, 30 September 2026.
     """
     wajib(can_see_financials(user))
-    from app.services.stok import barang_jadi_g2, pk_gudang1
+    from app.services.stok import barang_jadi_g2, pk_gudang1, stok_produk
 
     out: list[dict] = []
     async with SessionLocal() as db:
         bj_ = await barang_jadi_g2(db)
+        kartu_produk = {k.jenis: k for k in await stok_produk(db)}
         for k in bj_.produk + bj_.samping:
             # ⚠ BARANG TITIPAN (pesanan jasa) TIDAK DITAWARKAN — sama
             # seperti PK jasa di bawah. `barang_jadi_g2()` kini mendaftar
@@ -868,12 +869,28 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # masih punya SKU dan tak boleh berubah jadi baris curah —
             # satuannya akan berganti diam-diam, dan "40" berarti 40 kg.
             if k.get("sku_id") is None:
-                if float(k.get("kg") or 0) <= 0:
+                kg_tersedia = float(k.get("kg") or 0)
+                label = f"{k['nama']} curah · {kg(kg_tersedia)} tersedia"
+                if k.get("jenis") in ("bekatul", "broken", "menir", "reject"):
+                    # Saldo ByproductStock adalah berat mentah yang tercatat.
+                    # Kartu stok menerapkan aturan packing otomatis atas total
+                    # barang (termasuk karung yang bisa dibuka); gunakan
+                    # pembagian yang sama agar angka curah di picker tidak
+                    # menampilkan 60 kg ketika sisa curah otomatisnya 30 kg.
+                    kartu = kartu_produk.get(k["jenis"])
+                    if kartu is not None:
+                        ukuran = kartu.ukuran_kemasan_otomatis
+                        label = (f"{k['nama']} · {kartu.jumlah_karung_otomatis} "
+                                 f"karung × {ukuran} kg otomatis + "
+                                 f"{kg(kartu.curah_otomatis_kg)} curah · "
+                                 f"total {kg(kartu.sisa_kg)}; isi dalam kg, "
+                                 "karung dibuka otomatis bila perlu")
+                        kg_tersedia = float(kartu.sisa_kg or 0)
+                if kg_tersedia <= 0:
                     continue
                 out.append({
                     "value": f"cr:{k['jenis']}",
-                    "label": (f"{k['nama']} curah · {kg(k['kg'])} tersedia"
-                              " (isi dalam kg)")})
+                    "label": label})
                 continue
             if not k.get("karung"):
                 continue
