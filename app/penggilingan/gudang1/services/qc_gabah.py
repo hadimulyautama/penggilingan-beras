@@ -81,11 +81,20 @@ async def catat_qc_gabah(
     qc.biji_hijau, qc.densiti, qc.input_by = biji_hijau, densiti, user.id
     await db.flush()
     samples = (await db.execute(select(PurchaseBatchQcSample.kadar_air_1,
-                                       PurchaseBatchQcSample.kadar_air_2).where(
+                                       PurchaseBatchQcSample.kadar_air_2,
+                                       PurchaseBatchQcSample.lamur,
+                                       PurchaseBatchQcSample.jumlah_sak_lamur).where(
         PurchaseBatchQcSample.purchase_batch_qc_id == qc.id
     ))).all()
-    bacaan = [float(value) for row in samples for value in row]
+    bacaan = [float(value) for row in samples for value in row[:2]]
     rata = sum(bacaan) / len(bacaan)
+    if batch.kondisi_gabah == "basah":
+        # Kadar air adalah rata-rata; jumlah sak Lamur adalah total tiap baris
+        # muatan yang diperiksa. Riwayat tiap pemeriksaan tetap berada di tabel.
+        qc.lamur = any(row[2] is True for row in samples)
+        qc.jumlah_sak_lamur = sum(int(row[3] or 0) for row in samples)
+    else:
+        qc.lamur = qc.jumlah_sak_lamur = None
     batch.kadar_air_awal_persen = rata
     await db.commit()
     await db.refresh(qc)

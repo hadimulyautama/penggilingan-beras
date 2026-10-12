@@ -1662,8 +1662,10 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
             )
     except ValueError as e:
         raise HTTPException(400, str(e))
+    ringkasan_lamur = (f" · Lamur total {qc.jumlah_sak_lamur or 0} sak"
+                       if kondisi == "basah" else "")
     return {"ok": True, "pesan": f"✓ QC *{kode}* tercatat · pencatatan {jumlah}/5 · "
-                                  f"rata-rata kadar air {rata:.2f}%"}
+                                  f"rata-rata kadar air {rata:.2f}%{ringkasan_lamur}"}
 
 
 @router.post("/actions/tutup-qc-gabah")

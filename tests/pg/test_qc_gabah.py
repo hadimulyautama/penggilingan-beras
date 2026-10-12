@@ -58,6 +58,7 @@ async def test_lima_catatan_berisi_mutu_masing_masing_dan_rata_rata_sepuluh_baca
         ).order_by(PurchaseBatchQcSample.nomor_sampel))).scalars().all()
         assert len(entries) == 5
         assert batch.kadar_air_awal_persen == pytest.approx(23.25)
+        assert qc.lamur is True and qc.jumlah_sak_lamur == 15
         assert [entry.nomor_sampel for entry in entries] == [1, 2, 3, 4, 5]
         assert [entry.biji_hijau for entry in entries] == [
             "sedikit", "sedang", "banyak", "hampir_tidak_ada", "sedang"]
