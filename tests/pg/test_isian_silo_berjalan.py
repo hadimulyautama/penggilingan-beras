@@ -247,6 +247,45 @@ async def test_belum_pernah_disosoh_tak_ada_yang_berubah(pg, silo, pemakai, pema
     assert len(isian.baris) == 3 and isian.disosoh_kg == 0
 
 
+async def test_pk_luar_titipan_menyebut_pemilik_bukan_tanda_tanya(pg, silo, pemakai):
+    """Laporan lapangan 12 Oktober 2026: "pk yang masuk silo kenapa hanya
+    kode saja? namanya kenapa tanda tanya." PK luar TITIPAN (`PkPurchaseBatch.
+    jasa_id` terisi, `supplier_id` NULL sejak migrasi 0064/0065) tak punya
+    pemasok — baris "Bahan baku masuk per silo" dulu jatuh ke
+    `nama_supplier or '?'` tanpa pernah membaca pemiliknya sama sekali,
+    beda dari PK giling sendiri yang sudah benar menyebut "TITIPAN <nama>"
+    lewat `jasa_id` transfernya."""
+    from app.models import Jasa, Pelanggan, PkGudang2Intake
+    from app.penggilingan.gudang2.models import PkPurchaseBatch
+
+    async with pg() as db:
+        pel = Pelanggan(nama_pelanggan="Pak Pras")
+        db.add(pel)
+        await db.flush()
+        jasa = Jasa(kode="JAS-2610-099", pelanggan_id=pel.id, status="berjalan")
+        db.add(jasa)
+        await db.flush()
+        b = PkPurchaseBatch(kode_batch="PKB-TITIP-01", jasa_id=jasa.id,
+                            berat_total_kg=10_012,
+                            tanggal_pembelian=(T0 + timedelta(hours=1)).date(),
+                            waktu_pembelian=T0 + timedelta(hours=1),
+                            status_batch="diterima", input_by=pemakai.id)
+        db.add(b)
+        await db.flush()
+        db.add(PkGudang2Intake(
+            sumber_tipe="pk_luar", pk_purchase_batch_id=b.id, tujuan="silo_a",
+            silo_id=silo, berat_kg=10_012, jasa_id=jasa.id,
+            tanggal_masuk=(T0 + timedelta(hours=1)).date(),
+            waktu_masuk=T0 + timedelta(hours=1), input_by=pemakai.id))
+        await db.commit()
+
+    isian, _ = await _daftar(pg, silo)
+    assert len(isian.baris) == 1
+    judul = isian.baris[0][0]
+    assert "?" not in judul, f"masih tanda tanya: {judul}"
+    assert "Pak Pras" in judul and "PKB-TITIP-01" in judul
+
+
 async def test_lebih_dari_enam_asal_jumlahnya_disebut(pg, silo, pemakai, pemasok):
     """`BATAS_ASAL` tetap, tetapi yang terpotong TIDAK didiamkan — kartu yang
     memotong tanpa memberi tahu membuat orang mengira itulah seluruhnya."""

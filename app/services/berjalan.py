@@ -935,12 +935,20 @@ async def _isian_silo(
         .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
         .where(InternalTransfer.id.in_([m[2] for m in masuk if m[2]]))
     )).all()} if any(m[2] for m in masuk) else {}
-    peta_pemilik = await nama_pemilik_banyak(db, {j for _, j in lot.values()})
-    luar = {b: (kode, nama) for b, kode, nama in (await db.execute(
-        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
+    # PK beli luar TITIPAN (`PkPurchaseBatch.jasa_id` terisi, `supplier_id`
+    # NULL — migrasi 0064/0065) tak punya pemasok sama sekali: judulnya
+    # harus datang dari pemiliknya, bukan dari `Supplier.nama_supplier`
+    # yang memang kosong untuk baris ini. Dibaca BERSAMA `lot` lewat
+    # `peta_pemilik` yang sama — tanpanya baris ini jatuh ke `nama or '?'`
+    # dan menampilkan "?" (laporan lapangan 12 Oktober 2026).
+    luar = {b: (kode, nama, jid) for b, kode, nama, jid in (await db.execute(
+        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier,
+               PkPurchaseBatch.jasa_id)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
         .where(PkPurchaseBatch.id.in_([m[3] for m in masuk if m[3]]))
     )).all()} if any(m[3] for m in masuk) else {}
+    peta_pemilik = await nama_pemilik_banyak(
+        db, {j for _, j in lot.values()} | {j for _, _, j in luar.values() if j})
 
     keluar = []
     for tgl, kg, trf_id, batch_id in sorted(masuk, key=lambda m: (m[0] or date.min), reverse=True):
@@ -949,8 +957,9 @@ async def _isian_silo(
             judul = (f"{peta_pemilik[jid]} · {kode_lot}" if jid in peta_pemilik
                      else f"Giling sendiri · {kode_lot}")
         elif batch_id and batch_id in luar:
-            kode, nama = luar[batch_id]
-            judul = f"{nama or '?'} · {kode}"
+            kode, nama, jid = luar[batch_id]
+            judul = (f"{peta_pemilik[jid]} · {kode}" if jid and jid in peta_pemilik
+                     else f"{nama or '?'} · {kode}")
         else:
             continue
         # Tanpa tanggal masuk di sini — kode lot/batch (LOT-YYMMDD,
@@ -1157,13 +1166,18 @@ async def _isian_silo_banyak(
         .join(MillingProcess, MillingProcess.id == InternalTransfer.milling_process_id)
         .where(InternalTransfer.id.in_(trf_ids))
     )).all()} if trf_ids else {}
-    luar = {b: (kode, nama) for b, kode, nama in (await db.execute(
-        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier)
+    # PK beli luar TITIPAN tak punya pemasok (`supplier_id` NULL,
+    # `jasa_id` terisi) — pemiliknya dibaca lewat `peta_pemilik`, sama
+    # dengan `_isian_silo`; lihat catatan panjang di sana.
+    luar = {b: (kode, nama, jid) for b, kode, nama, jid in (await db.execute(
+        select(PkPurchaseBatch.id, PkPurchaseBatch.kode_batch, Supplier.nama_supplier,
+               PkPurchaseBatch.jasa_id)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
         .where(PkPurchaseBatch.id.in_(batch_ids))
     )).all()} if batch_ids else {}
     peta_pemilik = await nama_pemilik_banyak(
-        db, {j for _, j in lot.values()} | broken_jasa_ids)
+        db, {j for _, j in lot.values()} | broken_jasa_ids
+        | {j for _, _, j in luar.values() if j})
 
     hasil: dict[tuple, IsianSilo] = {}
     for key, (masuk, masuk_kg, disosoh_kg) in per_permintaan.items():
@@ -1184,8 +1198,9 @@ async def _isian_silo_banyak(
                     judul = (f"{peta_pemilik[jid]} · {kode_lot}" if jid in peta_pemilik
                              else f"Giling sendiri · {kode_lot}")
                 elif batch_id and batch_id in luar:
-                    kode, nama = luar[batch_id]
-                    judul = f"{nama or '?'} · {kode}"
+                    kode, nama, jid = luar[batch_id]
+                    judul = (f"{peta_pemilik[jid]} · {kode}" if jid and jid in peta_pemilik
+                             else f"{nama or '?'} · {kode}")
                 else:
                     continue
                 keluar.append((judul, _kg(kg), ""))
@@ -2366,7 +2381,7 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         select(PkPurchaseVerification.pk_purchase_batch_id)
         .where(PkPurchaseVerification.kadar_air.is_not(None))
     )).scalars().all())
-    for pk, nama in (await db.execute(
+    baris_pk_luar = (await db.execute(
         select(PkPurchaseBatch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
         # Ditolak = sudah kembali ke truknya, tak pernah diterima — menagih
@@ -2375,15 +2390,23 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
         # sungguhan oleh `create_pk_rejection_dari_timbang`).
         .where(PkPurchaseBatch.status_batch != "ditolak")
         .order_by(PkPurchaseBatch.id.desc())
-    )).all() if await fitur_mutu(db) else []:
+    )).all() if await fitur_mutu(db) else []
+    # PK luar TITIPAN tak punya pemasok — sub-baris ini jatuh ke "?" tanpa
+    # pemiliknya diikutkan (laporan lapangan 12 Oktober 2026, sama dengan
+    # `_isian_silo`).
+    peta_pemilik_qc = await nama_pemilik_banyak(
+        db, {pk.jasa_id for pk, _ in baris_pk_luar if pk.jasa_id})
+    for pk, nama in baris_pk_luar:
         if pk.id in sudah_qc:
             continue
+        pemilik = (peta_pemilik_qc[pk.jasa_id]
+                  if pk.jasa_id and pk.jasa_id in peta_pemilik_qc else (nama or "?"))
         b.meja.append(Baris(
             kode=pk.kode_batch, isi="mutu PK luar belum dicatat",
             keadaan="", aksi="qc_pk_luar", nilai=pk.kode_batch, fase="silo_g2",
             sejak=pk.created_at,
             judul="Mutu PK luar belum dicatat",
-            sub=f"{pk.kode_batch} · {nama or '?'} · "
+            sub=f"{pk.kode_batch} · {pemilik} · "
                 f"masuk {_tgl(pk.tanggal_pembelian)}",
             pilihan=[("qc_pk_luar", "Catat kualitas PK luar",
                       "Kadar air & butir patah", pk.kode_batch)],
