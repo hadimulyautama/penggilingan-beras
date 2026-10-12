@@ -459,6 +459,26 @@ async def tambah_silo_giling(
                 func.coalesce(MillingProcess.berat_gabah_masuk_kg, 0) + (tambahan.kg or 0)),
                 **tanda)
         )
+        semua_sumber = (await db.execute(
+            select(MillingProcessSource, SiloStorage)
+            .join(SiloStorage, SiloStorage.id == MillingProcessSource.silo_storage_id)
+            .where(MillingProcessSource.milling_process_id == proc.id)
+            .order_by(MillingProcessSource.id)
+        )).all()
+        from app.services.proses_bersama import perbarui_bahan_proses_bersama
+        await perbarui_bahan_proses_bersama(
+            db, tabel_sumber="milling_process", id_sumber=proc.id,
+            bahan=tuple(
+                ArusProses(
+                    produk=buat_produk("gabah", kondisi="kering"),
+                    berat_kg=Decimal(str(sumber.berat_kg)),
+                    referensi=f"SiloStorage:{sumber.silo_storage_id}",
+                    lokasi_id=storage.silo_id,
+                )
+                for sumber, storage in semua_sumber
+                if sumber.berat_kg is not None and sumber.berat_kg >= 0
+            ),
+        )
         await db.flush()
         await log_activity(
             db, table_name="milling_process", record_id=proc.id, action="UPDATE",

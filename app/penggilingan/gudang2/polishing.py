@@ -42,6 +42,11 @@ from app.penggilingan.gudang2.service import Gudang2Error, get_g2_silo, hitung_s
 GRADES = ["sayur", "medium", "medsuper", "premium", "beras_b"]
 BYPRODUCTS = ["menir", "broken", "bekatul", "reject"]
 _ALL_JENIS = set(GRADES) | set(BYPRODUCTS)
+_KODE_KOMODITAS_SILO = {
+    "pk": "beras_pk", "beras": "beras_olah_ulang",
+    "broken": "broken", "menir": "menir", "reject": "reject",
+    "bekatul": "bekatul",
+}
 
 
 # ─────────────────────────── Mulai ───────────────────────────
@@ -138,16 +143,11 @@ async def mulai_penyosohan(
             polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
         ))
     from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
-    kode_komoditas_silo = {
-        "pk": "beras_pk", "beras": "beras_olah_ulang",
-        "broken": "broken", "menir": "menir", "reject": "reject",
-        "bekatul": "bekatul",
-    }
     bahan_bersama_list = []
     for silo in silos:
         berat_silo = await hitung_stok_silo(db, silo.id)
         bahan_bersama_list.append(ArusProses(
-            produk=buat_produk(kode_komoditas_silo.get(
+            produk=buat_produk(_KODE_KOMODITAS_SILO.get(
                 silo.jenis_isi, silo.jenis_isi)),
             berat_kg=Decimal(str(berat_silo)),
             referensi=silo.nama_silo, lokasi_id=silo.id,
@@ -307,6 +307,26 @@ async def tambah_silo_penyosohan(
         db.add(PolishingSiloUsage(
             polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
         ))
+    semua_bahan = (await db.execute(
+        select(PolishingSiloUsage, Silo)
+        .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
+        .where(PolishingSiloUsage.polishing_process_id == proc.id)
+        .order_by(PolishingSiloUsage.id)
+    )).all()
+    from app.services.proses_bersama import perbarui_bahan_proses_bersama
+    await perbarui_bahan_proses_bersama(
+        db, tabel_sumber="polishing_process", id_sumber=proc.id,
+        bahan=tuple(
+            ArusProses(
+                produk=buat_produk(_KODE_KOMODITAS_SILO.get(
+                    silo.jenis_isi, silo.jenis_isi)),
+                berat_kg=Decimal(str(float(usage.berat_awal_kg)
+                                     + float(usage.berat_masuk_kg or 0))),
+                referensi=silo.nama_silo, lokasi_id=silo.id,
+            )
+            for usage, silo in semua_bahan
+        ),
+    )
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
         changed_by=user.id, field_name="silo",

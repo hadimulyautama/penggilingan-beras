@@ -94,3 +94,30 @@ async def tutup_proses_bersama(
         ))
     await db.flush()
     return row
+
+
+async def perbarui_bahan_proses_bersama(
+    db: AsyncSession, *, tabel_sumber: str, id_sumber: int | str,
+    bahan: tuple[ArusProses, ...],
+) -> ProsesTerpadu | None:
+    """Ganti snapshot bahan proses berjalan dan pertahankan hasil sementaranya."""
+    row = (await db.execute(
+        select(ProsesTerpadu).options(selectinload(ProsesTerpadu.arus)).where(
+            ProsesTerpadu.aplikasi == "produksi",
+            ProsesTerpadu.tabel_sumber == tabel_sumber,
+            ProsesTerpadu.id_sumber == str(id_sumber),
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if row is None:
+        return None
+    row.arus[:] = [a for a in row.arus if a.arah != "bahan"]
+    for item in bahan:
+        row.arus.append(ArusProsesTerpadu(
+            arah="bahan", komoditas=item.produk.komoditas,
+            atribut_produk=dict(item.produk.atribut), berat_kg=item.berat_kg,
+            referensi=item.referensi, lokasi_id=item.lokasi_id,
+            detail={"merek_produk": item.produk.merek_produk,
+                    "kemasan": None},
+        ))
+    await db.flush()
+    return row

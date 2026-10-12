@@ -133,9 +133,19 @@ async def test_tambah_silo_giling_menambah_bahan(pg, g1):
         r2 = await tambah_silo_giling(db, user=u, kode_proses=r.proc.kode_proses, nama_silo="B")
     assert r2.bertambah == 4_000
     async with pg() as db:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
         from app.models import MillingProcess
+        from hmu_core.proses_db import ProsesTerpadu
         proc = await db.get(MillingProcess, r.proc.id)
         assert proc.berat_gabah_masuk_kg == 10_000
+        bersama = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+                ProsesTerpadu.tabel_sumber == "milling_process",
+                ProsesTerpadu.id_sumber == str(r.proc.id),
+            ))).scalar_one()
+        assert sum(float(a.berat_kg) for a in bersama.arus
+                   if a.arah == "bahan") == 10_000
 
 
 async def test_tambah_silo_giling_pemilik_beda_ditolak(pg, g1):
@@ -282,13 +292,22 @@ async def test_tambah_silo_penyosohan_menambah_bahan(pg, g2):
 
     async with pg() as db:
         from sqlalchemy import func, select
+        from sqlalchemy.orm import selectinload
 
         from app.penggilingan.gudang2.models import PolishingSiloUsage
+        from hmu_core.proses_db import ProsesTerpadu
         total = (await db.execute(
             select(func.coalesce(func.sum(PolishingSiloUsage.berat_awal_kg), 0))
             .where(PolishingSiloUsage.polishing_process_id == r.proc.id)
         )).scalar_one()
         assert float(total) == 8_000
+        bersama = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+                ProsesTerpadu.tabel_sumber == "polishing_process",
+                ProsesTerpadu.id_sumber == str(r.proc.id),
+            ))).scalar_one()
+        assert sum(float(a.berat_kg) for a in bersama.arus
+                   if a.arah == "bahan") == 8_000
 
 
 async def test_tambah_silo_penyosohan_pemilik_beda_ditolak(pg, g2):
