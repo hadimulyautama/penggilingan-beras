@@ -79,3 +79,38 @@ async def test_penutupan_mempertahankan_bahan_dan_mengganti_hasil(pg):
                 for arus in saved.arus] == [
                     ("bahan", "gabah", 1000), ("hasil", "beras_pk", 650),
                 ]
+
+
+async def test_api_internal_menyajikan_proses_bersama_dengan_filter(pg, monkeypatch):
+    from app.config import settings
+    from app.web import internal
+
+    monkeypatch.setattr(internal, "SessionLocal", pg)
+    monkeypatch.setattr(settings, "internal_api_token", "token-uji")
+    async with pg() as db:
+        db.add(ProsesTerpadu(
+            aplikasi="produksi", tabel_sumber="milling_process", id_sumber="901",
+            kode="LOT-API-901", jenis="penggilingan", status="berjalan",
+            jenis_pemilik="pabrik", nama_pemilik="Pabrik",
+            referensi_asal=["GB-API-901"], metadata_domain={"asal": "gabah kering"},
+            arus=[ArusProsesTerpadu(
+                arah="bahan", komoditas="gabah", atribut_produk={"kondisi": "kering"},
+                berat_kg=1000, referensi="GB-API-901", lokasi_id=2, detail={},
+            )],
+        ))
+        await db.commit()
+
+    hasil = await internal.produksi_proses(
+        x_internal_token="token-uji", jenis="penggilingan", status="berjalan",
+        kode="901", batas=10,
+    )
+    assert len(hasil["proses"]) == 1
+    row = hasil["proses"][0]
+    assert row["kode"] == "LOT-API-901"
+    assert row["pemilik"]["jenis"] == "pabrik"
+    assert row["bahan"] == [{
+        "komoditas": "gabah", "atribut": {"kondisi": "kering"},
+        "berat_kg": 1000.0, "referensi": "GB-API-901", "lokasi_id": 2,
+        "detail": {},
+    }]
+    assert row["hasil"] == []
