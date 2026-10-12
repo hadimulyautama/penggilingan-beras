@@ -279,21 +279,7 @@
 <div>
   <span class="lbl">{{ judul }}</span>
   <div class="kartu">
-    {% if jenis == 'pengeringan' %}
-    {# Angka dan tombolnya sebaris: satu bilangan dua digit tak perlu borang
-       setinggi kartu sendiri. #}
-    <form method="post" action="/pengaturan/target-kadar-air" class="sebaris-borang">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <label class="lbl" for="target" style="flex:1">Target kadar air (%)</label>
-      <input class="fld fld--kecil" id="target" name="nilai" type="text" inputmode="decimal" pattern="[0-9]+([.,][0-9]+)?"
-             enterkeyhint="done" value="{{ '%g'|format(target_bawaan) }}"
-             style="width:88px" required>
-      <button class="btn btn--kecil" type="submit">Simpan</button>
-    </form>
-    <p class="bantu">Nilai AWAL borang operator, bukan aturan. Yang menentukan
-      tetap operator saat menyalakan mesin — dan ia wajib mengisinya.</p>
-    {% endif %}
-    {{ sebab_blok(jenis) }}
+    {% if jenis != 'pengeringan' %}{{ sebab_blok(jenis) }}{% endif %}
   </div>
 </div>
 {% endfor %}

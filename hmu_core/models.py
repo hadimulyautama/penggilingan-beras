@@ -195,6 +195,7 @@ class Dryer(Base, TimestampMixin):
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id"), nullable=False)
     nama: Mapped[str] = mapped_column(String(50), nullable=False)
     kapasitas_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    target_kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
     # aktif / rusak / maintenance
     status: Mapped[str] = mapped_column(String(20), default="aktif")
 

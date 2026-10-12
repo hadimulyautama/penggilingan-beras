@@ -857,14 +857,14 @@ async def start_drying(
             f"Tidak ada gabah di {dryer.nama}. Masukkan dulu, "
             "mis. `keringkan GB-...`."
         )
-    # Target WAJIB — keputusan pemilik. Pengeringan tanpa target adalah
-    # pengeringan yang tak punya garis selesai: kemajuannya tak bisa dihitung,
-    # dan "sudah cukup kering" jadi perasaan, bukan angka.
+    # Target tiap mesin menjadi bawaan. Nilai yang dipakai tetap disalin ke lot
+    # agar perubahan setelan mesin tidak mengubah riwayat pengeringan lama.
     if target_kadar_air is None:
-        raise DryingError(
-            "Sebutkan target kadar airnya dulu — sampai berapa muatan ini "
-            "dikeringkan."
-        )
+        if dryer.target_kadar_air is not None:
+            target_kadar_air = float(dryer.target_kadar_air)
+        else:
+            from app.services.setelan import target_kadar_air as target_umum
+            target_kadar_air = await target_umum(db)
     kondisi_set = {b.kondisi_gabah for b in loose}
     if len(kondisi_set) > 1:
         raise DryingError("❌ Ada campuran basah & kering di dryer — pisahkan dulu.")

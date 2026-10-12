@@ -45,7 +45,7 @@ def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
 @router.get("/pengaturan")
 async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     from app.services import kledo_sinkron
-    from app.services.setelan import fitur_mutu, sebab_jeda, target_kadar_air
+    from app.services.setelan import fitur_mutu, sebab_jeda
     from app.services.undo import BATAS_UNDO
     from app.web.nav import lencana
 
@@ -53,7 +53,6 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
     # data dirinya sendiri dan sandinya sendiri, tak lebih.
     tuan = akun.peran in PERAN_ADMIN_KEATAS
     async with SessionLocal() as db:
-        target = await target_kadar_air(db) if tuan else None
         sebab = await sebab_jeda(db) if tuan else {}
         mutu_aktif = await fitur_mutu(db) if tuan else False
         # Blok "Pengelolaan sistem" milik Super Admin — TETAPI hanya kalau
@@ -89,7 +88,7 @@ async def halaman_pengaturan(request: Request, akun: ProduksiAkun = Depends(butu
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         err=_PESAN.get(request.query_params.get("err", ""))
             or request.query_params.get("err_teks", ""),
-        tuan=tuan, target_bawaan=target, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
+        tuan=tuan, sebab_jeda=sebab, mutu_aktif=mutu_aktif,
         kledo=kledo,
         ada_super=ada_super,
         blok_kelola=view == V_SUPER or (tuan and not ada_super),
@@ -173,24 +172,25 @@ async def ubah_sebab_jeda(request: Request, jenis: str = Form(...),
         daftar = await sebab_jeda(db)
         if jenis not in daftar:
             return redirect("/pengaturan?err_teks=" + quote("Jenis proses tak dikenal."))
+        tujuan = "/pengaturan/alat" if jenis == "pengeringan" else "/pengaturan"
         isi = list(daftar[jenis])
         tambah, buang = tambah.strip(), buang.strip()
         if tambah:
             if tambah in isi:
-                return redirect("/pengaturan?err_teks=" + quote("Sebab itu sudah ada."))
+                return redirect(tujuan + "?err_teks=" + quote("Sebab itu sudah ada."))
             isi.append(tambah[:120])
         elif buang:
             if buang not in isi:
-                return redirect("/pengaturan?err_teks=" + quote("Sebab itu sudah tak ada."))
+                return redirect(tujuan + "?err_teks=" + quote("Sebab itu sudah tak ada."))
             isi.remove(buang)
         else:
-            return redirect("/pengaturan")
+            return redirect(tujuan)
         daftar[jenis] = isi
         try:
             await set_sebab_jeda(db, daftar, user=u)
         except ValueError as e:
-            return redirect(f"/pengaturan?err_teks={quote(str(e))}")
-    return redirect("/pengaturan?pesan=sebab-diubah")
+            return redirect(f"{tujuan}?err_teks={quote(str(e))}")
+    return redirect(f"{tujuan}?pesan=sebab-diubah")
 
 
 @router.post("/pengaturan/kledo-kontak")
@@ -340,7 +340,11 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         # sebagai JSON `/internal/meja/alat`; pintu itu dicabut 24 September
         # bersama app Meja, bentuknya tinggal karena templatnya memakainya.
         # Objek ORM pun berhenti bocor ke templat.
+        from app.services.setelan import sebab_jeda, target_kadar_air
+        target_global = await target_kadar_air(db)
+        sebab = await sebab_jeda(db)
         mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
+                  "target": float(d.target_kadar_air) if d.target_kadar_air is not None else target_global,
                   "status": d.status} for d in await dryers_g1(db)]
         silo = [{"id": s.id, "nama_silo": s.nama_silo,
                  "nama_tampil": (s.nama_silo[5:].strip()
@@ -379,6 +383,7 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         request, "alat.html", kembali="/pengaturan", layar="pengaturan",
         **await lencana(akun.user),
         mesin=mesin, silo=silo, silo_g2=silo_g2, maks=MAKS_ALAT,
+        sebab_pengeringan=sebab.get("pengeringan", []),
         pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
         pesan_err=(_ERR.get(request.query_params.get("err", ""))
                    or request.query_params.get("err_teks", "")),
@@ -408,6 +413,7 @@ async def tambah_dryer(
     from app.models import Dryer
     from app.penggilingan.gudang1.services.drying import dryers_g1
     from app.penggilingan.gudang1.services.silo import _g1_warehouse_id
+    from app.services.setelan import target_kadar_air
 
     nama = " ".join(nama.split())
     # `inputmode="numeric"` tanpa type=number: nilainya teks, dibaca di sini.
@@ -426,9 +432,43 @@ async def tambah_dryer(
         if any(d.nama.lower() == nama.lower() for d in ada):
             return redirect("/pengaturan/alat?err=kembar")
         db.add(Dryer(warehouse_id=await _g1_warehouse_id(db), nama=nama,
-                     kapasitas_kg=kapasitas_kg, status="aktif"))
+                     kapasitas_kg=kapasitas_kg, target_kadar_air=await target_kadar_air(db),
+                     status="aktif"))
         await db.commit()
     return redirect("/pengaturan/alat?pesan=alat-ditambah")
+
+
+@router.post("/pengaturan/alat/dryer/edit")
+async def edit_dryer(
+    request: Request, dryer_id: int = Form(...), nama: str = Form(...),
+    kapasitas_kg: str = Form(...), target_kadar_air: str = Form(...),
+    akun: ProduksiAkun = Depends(butuh_super),
+):
+    from app.models import Dryer
+    from app.penggilingan.gudang1.services.drying import dryers_g1
+
+    nama = " ".join(nama.split())
+    try:
+        kapasitas = float(kapasitas_kg.replace(",", "."))
+        target = float(target_kadar_air.replace(",", "."))
+    except ValueError:
+        return redirect("/pengaturan/alat?err_teks=" + quote("Kapasitas dan target harus berupa angka."))
+    if len(nama) < 3 or len(nama) > 50:
+        return redirect("/pengaturan/alat?err=nama-pendek")
+    if kapasitas <= 0:
+        return redirect("/pengaturan/alat?err=kapasitas")
+    if not 5 <= target <= 30:
+        return redirect("/pengaturan/alat?err_teks=" + quote("Target kadar air harus antara 5% dan 30%."))
+    async with SessionLocal() as db:
+        d = await db.get(Dryer, dryer_id)
+        daftar = await dryers_g1(db)
+        if d is None or d.id not in {x.id for x in daftar}:
+            return redirect("/pengaturan/alat?err_teks=" + quote("Mesin pengering tidak ditemukan."))
+        if any(x.id != d.id and x.nama.casefold() == nama.casefold() for x in daftar):
+            return redirect("/pengaturan/alat?err=kembar")
+        d.nama, d.kapasitas_kg, d.target_kadar_air = nama, kapasitas, target
+        await db.commit()
+    return redirect("/pengaturan/alat?pesan=alat-diubah")
 
 
 @router.post("/pengaturan/alat/silo")

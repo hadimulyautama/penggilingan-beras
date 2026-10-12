@@ -18,6 +18,7 @@
              bersama app Meja, dan namanya tetap begini karena mengubah nama
              medan bukan pekerjaan yang dibayar oleh siapa pun hari ini. #}
           <div class="baris__ket">kapasitas {{ "%.0f"|format(d.kapasitas|float / 1000) }} ton</div>
+          <div class="baris__ket">Target kadar air {{ '%g'|format(d.target) }}%</div>
           {% if d.status != "aktif" %}
             <div class="cip" style="margin-top:6px">
               <span class="lencana lencana--bahaya">{{ d.status }}</span>
@@ -25,6 +26,20 @@
           {% endif %}
         </div>
         <div class="baris__aksi">
+          <details style="margin-bottom:8px">
+            <summary class="btn btn--kecil" aria-label="Edit {{ d.nama }}">✎ Edit</summary>
+            <form method="post" action="/pengaturan/alat/dryer/edit" class="grup" style="margin-top:8px;min-width:min(100%,360px)">
+              <input type="hidden" name="_csrf" value="{{ CSRF }}">
+              <input type="hidden" name="dryer_id" value="{{ d.id }}">
+              <label class="lbl" for="dryer_nama_{{ d.id }}">Nama pengering</label>
+              <input class="fld" id="dryer_nama_{{ d.id }}" name="nama" value="{{ d.nama }}" minlength="3" maxlength="50" required>
+              <label class="lbl" for="dryer_kapasitas_{{ d.id }}">Kapasitas (kg)</label>
+              <input class="fld" id="dryer_kapasitas_{{ d.id }}" name="kapasitas_kg" type="text" inputmode="decimal" value="{{ '%g'|format(d.kapasitas) }}" required>
+              <label class="lbl" for="dryer_target_{{ d.id }}">Target kadar air (%)</label>
+              <input class="fld" id="dryer_target_{{ d.id }}" name="target_kadar_air" type="text" inputmode="decimal" value="{{ '%g'|format(d.target) }}" required>
+              <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+            </form>
+          </details>
           {# Mesin TIDAK pernah dihapus: lot pengeringan lama menunjuk ke sana,
              dan riwayatnya harus tetap terbaca bertahun-tahun setelah mesinnya
              dijual. Yang dimatikan hanya kemampuannya menerima gabah baru. #}
@@ -35,6 +50,7 @@
               {{ "Nonaktifkan" if d.status == "aktif" else "Aktifkan" }}</button>
           </form>
         </div>
+
       </div>
     {% else %}
       <p class="bantu">Belum ada mesin pengering.</p>
@@ -61,6 +77,34 @@
     </div>
     <button class="btn btn--utama" type="submit">Tambah mesin</button>
   </form>
+
+  <div class="kartu" style="margin-top:12px">
+    <details class="lipat">
+      <summary>
+        <span class="lbl" style="margin:0">Sebab berhenti (berlaku untuk semua pengering)</span>
+        <span class="lipat__jml">{{ sebab_pengeringan|length }}</span>
+      </summary>
+      <div class="grup" style="gap:6px">
+        {% for sebab in sebab_pengeringan %}
+          <div class="baris" style="padding:7px 0">
+            <span>{{ sebab }}</span>
+            <form method="post" action="/pengaturan/sebab-jeda">
+              <input type="hidden" name="_csrf" value="{{ CSRF }}">
+              <input type="hidden" name="jenis" value="pengeringan">
+              <input type="hidden" name="buang" value="{{ sebab }}">
+              <button class="btn btn--kecil btn--bahaya" type="submit" {% if sebab_pengeringan|length < 2 %}disabled{% endif %}>Buang</button>
+            </form>
+          </div>
+        {% endfor %}
+        <form method="post" action="/pengaturan/sebab-jeda" class="sebaris-borang">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
+          <input type="hidden" name="jenis" value="pengeringan">
+          <input class="fld" name="tambah" type="text" maxlength="120" placeholder="Tambah sebab baru…" aria-label="Tambah sebab berhenti pengeringan">
+          <button class="btn btn--kecil" type="submit">Tambah</button>
+        </form>
+      </div>
+    </details>
+  </div>
 </div>
 
 <div>
