@@ -177,10 +177,16 @@ async def test_export_laporan_pdf_per_lot(pg, pabrik):
 
     c = await _klien(pg, peran="superadmin")
     try:
-        response = await c.get(f"/riwayat-pengeringan/{lot_id}/laporan.pdf")
+        viewer = await c.get(f"/riwayat-pengeringan/{lot_id}/laporan")
+        inline = await c.get(f"/riwayat-pengeringan/{lot_id}/laporan.pdf")
+        response = await c.get(f"/riwayat-pengeringan/{lot_id}/laporan.pdf?unduh=1")
     finally:
         await c.aclose()
 
+    assert viewer.status_code == 200
+    assert "Kembali ke riwayat" in viewer.text
+    assert "Bagikan PDF" in viewer.text
+    assert inline.headers["content-disposition"].startswith("inline;")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]

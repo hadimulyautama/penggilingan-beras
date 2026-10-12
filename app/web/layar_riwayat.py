@@ -241,8 +241,9 @@ def _pdf_pengeringan(data: dict) -> bytes:
 
 
 @router.get("/riwayat-pengeringan/{lot_id}/laporan.pdf")
-async def unduh_laporan_pengeringan(lot_id: int, akun=Depends(butuh_akun)):
-    """Unduh laporan PDF lengkap untuk satu lot pengeringan yang selesai."""
+async def unduh_laporan_pengeringan(lot_id: int, unduh: int = 0,
+                                    akun=Depends(butuh_akun)):
+    """Tampilkan PDF inline, atau unduh sebagai lampiran bila diminta."""
     from app.web.api import _is_g1_operator
     from app.models import DryingLotBatch
 
@@ -361,7 +362,26 @@ async def unduh_laporan_pengeringan(lot_id: int, akun=Depends(butuh_akun)):
 
     return Response(
         content=pdf, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="laporan-pengeringan-{lot.kode_lot}.pdf"'},
+        headers={"Content-Disposition": f'{"attachment" if unduh else "inline"}; filename="laporan-pengeringan-{lot.kode_lot}.pdf"'},
+    )
+
+
+@router.get("/riwayat-pengeringan/{lot_id}/laporan")
+async def halaman_laporan_pengeringan(request: Request, lot_id: int,
+                                     akun=Depends(butuh_akun)):
+    """Penampil laporan di dalam aplikasi dengan kontrol kembali dan berbagi."""
+    from app.web.api import _is_g1_operator
+
+    if not await _is_g1_operator(akun.user):
+        raise HTTPException(403, "Laporan Pengeringan hanya untuk Admin ke atas dan operator Gudang 1.")
+    async with SessionLocal() as db:
+        lot = await db.get(DryingLot, lot_id)
+        if lot is None or lot.waktu_selesai_pendinginan is None:
+            raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
+        kode = lot.kode_lot
+    return await render_laci(
+        request, "laporan_pengeringan.html", kode=kode, lot_id=lot_id,
+        pdf_url=f"/riwayat-pengeringan/{lot_id}/laporan.pdf",
     )
 
 
