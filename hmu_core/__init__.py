@@ -18,6 +18,7 @@ from hmu_core.proses import (
     ArusProses, JenisPemilik, JenisProses, PemilikProses, ProsesOperasional,
     StatusProses,
 )
+from hmu_core.proses_db import ArusProsesTerpadu, ProsesTerpadu
 
 __all__ = [
     "Base",
@@ -52,6 +53,8 @@ __all__ = [
     "PemilikProses",
     "ArusProses",
     "ProsesOperasional",
+    "ProsesTerpadu",
+    "ArusProsesTerpadu",
 ]
 
 __version__ = "0.2.0"

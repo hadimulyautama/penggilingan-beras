@@ -149,6 +149,40 @@ class ProsesOperasional:
             "referensi_asal": list(self.referensi_asal),
         }
 
+    def ke_entitas(self, *, tabel_sumber: str, id_sumber: int | str,
+                   metadata_domain: dict | None = None):
+        """Bangun baris ORM bersama untuk disimpan aplikasi pemilik proses."""
+        from hmu_core.proses_db import ArusProsesTerpadu, ProsesTerpadu
+
+        entitas = ProsesTerpadu(
+            aplikasi=self.aplikasi, tabel_sumber=tabel_sumber,
+            id_sumber=str(id_sumber), kode=self.kode, jenis=self.jenis.value,
+            status=self.status.value, jenis_pemilik=self.pemilik.jenis.value,
+            id_pemilik=self.pemilik.id, nama_pemilik=self.pemilik.nama,
+            waktu_mulai=self.waktu_mulai, waktu_selesai=self.waktu_selesai,
+            pelaksana_id=self.pelaksana_id,
+            referensi_asal=list(self.referensi_asal),
+            metadata_domain=metadata_domain or {},
+        )
+        entitas.arus = [
+            ArusProsesTerpadu(
+                arah=arah, komoditas=baris.produk.komoditas,
+                atribut_produk=dict(baris.produk.atribut),
+                berat_kg=baris.berat_kg, referensi=baris.referensi,
+                lokasi_id=baris.lokasi_id,
+                detail={"merek_produk": baris.produk.merek_produk,
+                        "kemasan": ({
+                            "jenis_karung": baris.produk.kemasan.jenis_karung,
+                            "ukuran_kg": baris.produk.kemasan.ukuran_kg,
+                            "tara_per_karung_kg": baris.produk.kemasan.tara_per_karung_kg,
+                            "merek_karung": baris.produk.kemasan.merek_karung,
+                        } if baris.produk.kemasan else None)},
+            )
+            for arah, daftar in (("bahan", self.bahan), ("hasil", self.hasil))
+            for baris in daftar
+        ]
+        return entitas
+
     @classmethod
     def dari_dict(cls, data: dict) -> "ProsesOperasional":
         """Baca kontrak yang sama dari payload aplikasi lain."""

@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from hmu_core import ArusProses, JenisProses, StatusProses, buat_produk
 
 from app.config import settings
 from app.database import input_time, now_local
@@ -227,6 +229,25 @@ async def _ensure_cooling_started(db, lot, now, user) -> bool:
             catatan="otomatis: mulai pendinginan (pengeringan selesai)",
             input_by=user.id,
         ))
+    # Pendinginan adalah tahap proses tersendiri dalam kontrak bersama.
+    from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
+    batches = await _lot_batches(db, lot.id)
+    total = sum(dari_batch(b).angka() for b in batches)
+    await simpan_proses_bersama(
+        db,
+        bentuk_proses(
+            id=lot.id, kode=f"{lot.kode_lot}-DINGIN",
+            jenis=JenisProses.PENDINGINAN, status=StatusProses.BERJALAN,
+            jasa_id=lot.jasa_id, waktu_mulai=now, pelaksana_id=user.id,
+            bahan=(ArusProses(
+                produk=buat_produk("gabah", kondisi="kering"),
+                berat_kg=Decimal(str(total)), referensi=lot.kode_lot,
+                lokasi_id=lot.dryer_id,
+            ),), referensi_asal=(lot.kode_lot,),
+        ),
+        tabel_sumber="drying_cooling", id_sumber=lot.id,
+        metadata_domain={"drying_lot_id": lot.id},
+    )
     return True
 
 
@@ -260,7 +281,7 @@ async def log_cooling(
             new_value="selesai (otomatis dari pendinginan)",
         )
     if lot.waktu_mulai_pendinginan is None:
-        lot.waktu_mulai_pendinginan = now
+        await _ensure_cooling_started(db, lot, now, user)
 
     prev = (
         await db.execute(
@@ -323,6 +344,11 @@ async def finish_cooling(
             f"({lot.waktu_mulai_pendinginan:%d-%m-%Y %H:%M})."
         )
     lot.waktu_selesai_pendinginan = now
+    from app.services.proses_bersama import tutup_proses_bersama
+    await tutup_proses_bersama(
+        db, tabel_sumber="drying_cooling", id_sumber=lot.id,
+        waktu_selesai=now,
+    )
     db.add(DryingCoolingLog(
         drying_lot_id=lot.id, waktu=now, input_by=user.id,
         catatan="pendinginan selesai (diulang)" if ulang else "pendinginan selesai",
@@ -872,6 +898,29 @@ async def start_drying(
         # cepat atau lambat berbeda.
         b.dryer_id = None
         total += dari_batch(b).angka()
+    from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
+    arus_bahan = tuple(
+        ArusProses(
+            produk=buat_produk("gabah", kondisi=b.kondisi_gabah),
+            berat_kg=Decimal(str(dari_batch(b).angka())),
+            referensi=b.kode_batch,
+        )
+        for b in loose
+    )
+    await simpan_proses_bersama(
+        db,
+        bentuk_proses(
+            id=lot.id, kode=lot.kode_lot, jenis=JenisProses.PENGERINGAN,
+            status=StatusProses.BERJALAN, jasa_id=lot.jasa_id,
+            waktu_mulai=lot.waktu_mulai_pengeringan,
+            pelaksana_id=lot.created_by, bahan=arus_bahan,
+            referensi_asal=tuple(b.kode_batch for b in loose),
+        ),
+        tabel_sumber="drying_lots", id_sumber=lot.id,
+        metadata_domain={"dryer_id": lot.dryer_id,
+                         "target_kadar_air": float(lot.target_kadar_air),
+                         "mode_dryer": lot.mode_dryer},
+    )
     await log_activity(
         db, table_name="drying_lots", record_id=lot.id, action="INSERT",
         changed_by=user.id,
@@ -986,6 +1035,12 @@ async def finish_drying(
         lot.status = "selesai"
         lot.waktu_selesai_pengeringan = now
         await _close_late_notifs(db, lot.id)
+        from app.services.proses_bersama import tutup_proses_bersama
+        await tutup_proses_bersama(
+            db, tabel_sumber="drying_lots", id_sumber=lot.id,
+            waktu_selesai=now,
+            metadata_tambahan={"kadar_air_akhir": float(kadar_air_akhir)},
+        )
         await log_activity(
             db, table_name="drying_lots", record_id=lot.id, action="UPDATE",
             changed_by=user.id, field_name="status", new_value="selesai",

@@ -14,6 +14,7 @@ from datetime import date
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy.orm import selectinload
 
 pytestmark = pytest.mark.asyncio
 
@@ -249,6 +250,22 @@ async def test_lot_belum_dingin_tak_masuk_riwayat(pg, pabrik):
         # saja, tanpa `finish_cooling`.
         await dr.finish_drying(db, user=u, kode_lot=belum_dingin,
                                kadar_air_akhir=13.0)
+    from sqlalchemy import select
+    from hmu_core.proses_db import ProsesTerpadu
+    async with pg() as db:
+        bersama = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+            ProsesTerpadu.tabel_sumber == "drying_lots",
+            ProsesTerpadu.kode == belum_dingin,
+        ))).scalar_one()
+        pendinginan = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+            ProsesTerpadu.tabel_sumber == "drying_cooling",
+            ProsesTerpadu.id_sumber == bersama.id_sumber,
+        ))).scalar_one()
+        assert bersama.status == "selesai"
+        assert pendinginan.status == "berjalan"
+        assert not [arus for arus in bersama.arus if arus.arah == "hasil"]
 
     c = await _klien(pg, peran="superadmin")
     try:

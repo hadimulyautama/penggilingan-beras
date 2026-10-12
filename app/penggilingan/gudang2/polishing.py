@@ -13,9 +13,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, time
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from hmu_core import ArusProses, JenisProses, StatusProses, buat_produk
 
 from app.database import input_time
 from app.models import (
@@ -135,6 +137,34 @@ async def mulai_penyosohan(
         db.add(PolishingSiloUsage(
             polishing_process_id=proc.id, silo_id=silo.id, berat_awal_kg=awal,
         ))
+    from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
+    kode_komoditas_silo = {
+        "pk": "beras_pk", "beras": "beras_olah_ulang",
+        "broken": "broken", "menir": "menir", "reject": "reject",
+        "bekatul": "bekatul",
+    }
+    bahan_bersama_list = []
+    for silo in silos:
+        berat_silo = await hitung_stok_silo(db, silo.id)
+        bahan_bersama_list.append(ArusProses(
+            produk=buat_produk(kode_komoditas_silo.get(
+                silo.jenis_isi, silo.jenis_isi)),
+            berat_kg=Decimal(str(berat_silo)),
+            referensi=silo.nama_silo, lokasi_id=silo.id,
+        ))
+    bahan_bersama = tuple(bahan_bersama_list)
+    await simpan_proses_bersama(
+        db,
+        bentuk_proses(
+            id=proc.id, kode=proc.kode_proses, jenis=JenisProses.PENYOSOHAN,
+            status=StatusProses.BERJALAN, jasa_id=proc.jasa_id,
+            waktu_mulai=proc.waktu_mulai, pelaksana_id=proc.created_by,
+            bahan=bahan_bersama,
+            referensi_asal=tuple(a.referensi for a in bahan_bersama),
+        ),
+        tabel_sumber="polishing_process", id_sumber=proc.id,
+        metadata_domain={"silo_ids": [s.id for s in silos]},
+    )
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="INSERT",
         changed_by=user.id,
@@ -621,6 +651,32 @@ async def selesai_penyosohan(
         # dibaca kartu "penyosohan selesai", dan dua rumus atas satu angka
         # akan berselisih tanpa satu pun pesan galat.
         rendemen = await rendemen_proses(db, proc.id)
+        from app.services.proses_bersama import tutup_proses_bersama
+        komoditas_hasil = {
+            "sayur": ("beras_putih", {"kualitas": "sayur"}),
+            "medium": ("beras_putih", {"kualitas": "medium"}),
+            "medsuper": ("beras_putih", {"kualitas": "medsuper"}),
+            "premium": ("beras_putih", {"kualitas": "premium"}),
+            "beras_b": ("beras_olah_ulang", {}),
+            "broken": ("broken", {}), "menir": ("menir", {}),
+            "bekatul": ("bekatul", {}), "reject": ("reject", {}),
+        }
+        arus_hasil = tuple(
+            ArusProses(
+                produk=buat_produk(komoditas_hasil[jenis_hasil][0],
+                                   **komoditas_hasil[jenis_hasil][1]),
+                berat_kg=Decimal(str(berat_hasil)),
+                referensi=proc.kode_proses,
+            )
+            for jenis_hasil, berat_hasil in outputs.items()
+            if berat_hasil > 0 and jenis_hasil in komoditas_hasil
+        )
+        await tutup_proses_bersama(
+            db, tabel_sumber="polishing_process", id_sumber=proc.id,
+            waktu_selesai=proc.waktu_selesai, hasil=arus_hasil,
+            metadata_tambahan={"rendemen_beras_persen": rendemen,
+                               "berat_pk_terpakai_kg": pk_terpakai},
+        )
         await log_activity(
             db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
             changed_by=user.id, field_name="status", new_value="selesai",

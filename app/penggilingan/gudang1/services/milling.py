@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
+
+from hmu_core import ArusProses, JenisProses, StatusProses, buat_produk
 
 from app.config import settings
 from app.services.angka import AngkaError, angka_wajar
@@ -286,6 +289,27 @@ async def start_milling(
                 berat_kg=bb.kg,
             ))
         await db.flush()
+        from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
+        bahan_bersama = tuple(
+            ArusProses(
+                produk=buat_produk("gabah", kondisi="kering"),
+                berat_kg=Decimal(str(bb.kg)),
+                referensi=f"SiloStorage:{r.id}", lokasi_id=r.silo_id,
+            )
+            for r, bb in bobot_per_baris if bb.kg is not None and bb.kg >= 0
+        )
+        await simpan_proses_bersama(
+            db,
+            bentuk_proses(
+                id=proc.id, kode=proc.kode_proses,
+                jenis=JenisProses.PENGGILINGAN, status=StatusProses.BERJALAN,
+                jasa_id=proc.jasa_id, waktu_mulai=proc.waktu_mulai,
+                pelaksana_id=proc.created_by, bahan=bahan_bersama,
+                referensi_asal=tuple(a.referensi for a in bahan_bersama),
+            ),
+            tabel_sumber="milling_process", id_sumber=proc.id,
+            metadata_domain={"bobot_masuk_final": proc.bobot_masuk_final},
+        )
         await log_activity(
             db, table_name="milling_process", record_id=proc.id, action="INSERT",
             changed_by=user.id,
@@ -1117,6 +1141,19 @@ async def finish_milling(
         changed_by=user.id, field_name="status", new_value="selesai",
     )
     jenis = await pk_jenis(db, proc)
+    from app.services.proses_bersama import tutup_proses_bersama
+    await tutup_proses_bersama(
+        db, tabel_sumber="milling_process", id_sumber=proc.id,
+        waktu_selesai=now,
+        hasil=(ArusProses(
+            produk=buat_produk("beras_pk"),
+            berat_kg=Decimal(str(bd.produced)), referensi=proc.kode_proses,
+        ),),
+        metadata_tambahan={"jenis_pk": jenis,
+                           "berat_gabah_masuk_kg": masuk,
+                           "rendemen_pk_persen": (bd.produced / masuk * 100
+                                                   if masuk else None)},
+    )
     await db.commit()
     return FinishResult(
         proc=proc, nama_silo=nama_silo, produced=bd.produced, siap_kirim=bd.tersedia,

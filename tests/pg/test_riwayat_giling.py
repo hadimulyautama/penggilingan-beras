@@ -232,10 +232,22 @@ async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pabrik):
 async def test_giling_habis_terkirim_tetap_tercatat_di_riwayat(pg, pabrik):
     """⭐ Beda dari `/stok`: lot yang PK-nya sudah habis terkirim/terjual TAK
     HILANG dari riwayat — justru itu intinya."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     from app.models import User
     from app.services.transfer import create_internal_transfer
 
     kode = await _giling_selesai(pg, pabrik, berat_akhir=5_000)
+    from hmu_core.proses_db import ProsesTerpadu
+    async with pg() as db:
+        bersama = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+            ProsesTerpadu.tabel_sumber == "milling_process",
+            ProsesTerpadu.kode == kode,
+        ))).scalar_one()
+        assert bersama.status == "selesai"
+        assert any(arus.arah == "hasil" and arus.komoditas == "beras_pk"
+                   and float(arus.berat_kg) == 5_000 for arus in bersama.arus)
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
         await create_internal_transfer(

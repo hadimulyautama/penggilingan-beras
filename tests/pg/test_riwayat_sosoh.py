@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from sqlalchemy.orm import selectinload
 
 pytestmark = pytest.mark.asyncio
 
@@ -71,6 +72,7 @@ async def _sosoh_selesai(pg, uid: int, *, huruf="A", masuk=10_000.0,
 async def _klien(pg, *, peran: str, gudang: str | None = None,
                 lihat: str | None = None) -> httpx.AsyncClient:
     from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
     from app.main import app
     from app.models import ProduksiAkun, User, Warehouse
@@ -261,6 +263,8 @@ async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pemakai):
     hasil akhir, lalu dipakai menilai mesin. Yang berjalan sudah punya
     pintunya di `/berjalan`.
     """
+    from sqlalchemy import select
+    from hmu_core.proses_db import ProsesTerpadu
     from app.models import User
     from app.penggilingan.gudang2.polishing import (catat_output,
                                                     mulai_penyosohan,
@@ -268,6 +272,16 @@ async def test_hanya_yang_selesai_yang_masuk_riwayat(pg, pemakai):
     from app.services.seed import seed_master
 
     selesai = await _sosoh_selesai(pg, pemakai.id)
+    async with pg() as db:
+        bersama = (await db.execute(select(ProsesTerpadu).options(
+            selectinload(ProsesTerpadu.arus)).where(
+            ProsesTerpadu.tabel_sumber == "polishing_process",
+            ProsesTerpadu.kode == selesai,
+        ))).scalar_one()
+        assert bersama.status == "selesai"
+        assert any(arus.arah == "hasil" and arus.komoditas == "beras_putih"
+                   and arus.atribut_produk.get("kualitas") == "medium"
+                   for arus in bersama.arus)
     # Dan satu lagi yang dibiarkan terbuka.
     await seed_master()
     await _silo_berisi(pg, "B", 5_000, pemakai.id)
