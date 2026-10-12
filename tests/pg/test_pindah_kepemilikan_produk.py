@@ -337,9 +337,9 @@ async def test_rute_transfer_gerbang_admin_dan_nilai_gabungan_via_http(pg, titip
     assert gabungan == pytest.approx(50.0)
 
 
-# ═══════════════════ Halaman: bekatul disebut, broken bertombol ═══════════════
+# ═══════════════ Halaman: pemindahan curah di kartu produknya ═══════════════
 
-async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
+async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
     pg, titipan,
 ):
     """Keluhan pemilik: "bekatulnya kenapa tidak ada di halaman produk jasa?
@@ -367,7 +367,7 @@ async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
     assert r.status_code == 200
     assert "Bekatul dari hasil sosoh" in r.text
     assert "sudah dipindahkan ke milik pabrik" in r.text
-    assert "Broken (curah), sudah dicatat" in r.text
+    assert "Broken (curah), sudah dicatat" not in r.text
     # Himpunan id, bukan string persis — urutannya tak dijamin (lihat
     # catatan `jasa_ids_per_pelanggan_dengan_hasil`), maknanya yang harus
     # sama: SELURUH jasa_ids pelanggan ini, bukan cuma salah satu.
@@ -375,6 +375,14 @@ async def test_halaman_jasa_menampilkan_bekatul_readonly_dan_broken_bertombol(
     assert cocok, "tombol pindah broken curah tak ditemukan di halaman"
     assert {int(x) for x in cocok.group(1).split(",")} == {
         titipan["jasa1"], titipan["jasa2"]}
+    # Kontrol pemindahan harus berada di dalam detail kartu Broken yang
+    # memuat saldo curahnya, bukan tampil sebagai kartu lepas di bawah daftar.
+    kartu_broken = re.search(
+        r'<details class="padat padat--samping">(?:(?!</details>).)*'
+        r'Broken(?:(?!</details>).)*cr:broken\|[\d,]+(?:(?!</details>).)*</details>',
+        r.text, re.S,
+    )
+    assert kartu_broken, "tombol broken curah harus berada di kartu Broken"
 
 
 async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):

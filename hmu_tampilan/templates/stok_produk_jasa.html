@@ -42,7 +42,10 @@
               "belum dipacking", "giling", p.kemasan, boleh_pindah=BOLEH_PINDAH) }}
     {{ st.blok("Hasil samping · sisa di gudang", p.samping, p.sisa_samping,
               p.curah_samping, "belum tercatat", "samping", p.kemasan,
-              boleh_pindah=BOLEH_PINDAH) }}
+              boleh_pindah=BOLEH_PINDAH,
+              curah_titipan={"broken": p.broken_curah_kg,
+                             "bekatul": p.bekatul_curah_kg},
+              jasa_ids=p.jasa_ids) }}
 
     {# ── Bekatul yang SUDAH dipindahkan ke pabrik: informasi saja ──
        Kepemilikannya sudah berpindah secara eksplisit, jadi tidak ada lagi
@@ -57,36 +60,6 @@
       </div>
     {% endif %}
 
-    {# ── Broken & bekatul curah: berdiri sendiri, bukan di dalam `st.blok` ──
-       Keduanya bukan `KartuProduk` (tak berkarung, tak berkemasan) —
-       angkanya `hitung_stok_broken_curah`/`hitung_stok_bekatul(jasa_id=
-       <SELURUH pesanan pelanggan ini>)`, panggilan yang SAMA dengan yang
-       menjaga tombolnya. `nilai` membawa SELURUH `jasa_ids`, dipisah koma —
-       picker katalog umum (`produk_jasa_tersedia`) mengelompokkan barisnya
-       dengan cara yang SAMA, supaya nilainya cocok persis dan medan "item"
-       di borang terisi otomatis (`aksi.js` mencocokkan apa adanya).
-
-       Bekatul BARU di sini sejak 6 Oktober 2026 (pembalikan keputusan 12) —
-       belahan KARUNGnya sendiri sudah tertangani otomatis lewat kartu
-       "Hasil samping" di atas (`st.blok`, `boleh_pindah`); blok ini cuma
-       belahan curahnya, sebangun persis broken. #}
-    {% for jenis, sisa_kg, label in (
-        ("broken", p.broken_curah_kg, "Broken"),
-        ("bekatul", p.bekatul_curah_kg, "Bekatul")) %}
-      {% if sisa_kg > 0.5 %}
-        <div class="kartu" style="margin-bottom:12px">
-          <div class="baris">
-            <span>{{ label }} (curah), sudah dicatat</span>
-            <b>{{ kg(sisa_kg) }}&nbsp;kg</b>
-          </div>
-          {% if BOLEH_PINDAH %}
-            <a class="btn btn--kecil" style="margin-top:8px"
-               href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=cr:{{ jenis }}|{{ p.jasa_ids|join(',') }}"
-               >⇄ Pindah kepemilikan</a>
-          {% endif %}
-        </div>
-      {% endif %}
-    {% endfor %}
   {% endfor %}
 {% endif %}
 

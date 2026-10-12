@@ -170,7 +170,7 @@
    membingungkan: titipan dari siapa? — tak menggambar apa pun, bukan
    menggambar "0 kg" yang tak berarti. #}
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
-             boleh_pindah=False, titipan=None) -%}
+             boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=()) -%}
 {% if daftar %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
@@ -221,6 +221,20 @@
   </summary>
 
     <div class="anak">
+      {% if curah_titipan and k.jenis in curah_titipan and curah_titipan[k.jenis] > 0.5 %}
+        <div class="anak__kepala">Stok curah milik pesanan jasa</div>
+        <div class="anak__baris">
+          <span class="anak__nama">Curah · sudah dicatat</span>
+          <span class="anak__kg">{{ kg(curah_titipan[k.jenis]) }}&nbsp;kg</span>
+        </div>
+        {% if boleh_pindah %}
+          <div class="ubah-hasil">
+            <a class="btn btn--kecil"
+               href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=cr:{{ k.jenis }}|{{ jasa_ids|join(',') }}"
+               >⇄ Pindah kepemilikan</a>
+          </div>
+        {% endif %}
+      {% endif %}
       {# ── PERKIRAAN, bukan catatan — dan kepalanya wajib mengatakannya ──
          Daftar ini menyusut bersama barangnya (FIFO): yang keluar lebih dulu
          dianggap yang disosoh lebih dulu, jadi yang tersisa datang dari
