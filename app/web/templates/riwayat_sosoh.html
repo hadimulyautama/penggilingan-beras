@@ -116,6 +116,9 @@
     {% endif %}
 
     <div class="anak">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 12px 10px">
+        <a class="btn btn--kecil" href="/riwayat-sosoh/{{ k.id }}/laporan">Lihat / bagikan laporan PDF</a>
+      </div>
       {% if k.neraca.bisa_dihitung %}
         <div class="anak__kepala">Ke mana perginya bahan baku</div>
 

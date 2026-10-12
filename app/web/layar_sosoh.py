@@ -24,6 +24,7 @@ akhir — lalu dipakai menilai mesin.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 
 from app.database import SessionLocal
 from app.web.security import butuh_akun
@@ -78,4 +79,42 @@ async def halaman_riwayat_sosoh(request: Request, akun=Depends(butuh_akun)):
         # satu-satunya jalan pulang adalah tombol kembali peramban, dan
         # `pindah.js` membuat riwayat peramban tak sejalan dengan halamannya.
         dari_awal=bool(sebelum_id),
+    )
+
+
+async def _pastikan_akses_sosoh(user):
+    from app.web.api import _is_g2_operator
+    if not await _is_g2_operator(user):
+        raise HTTPException(403, "Laporan sosoh hanya untuk Admin ke atas dan operator Gudang 2.")
+
+
+@router.get("/riwayat-sosoh/{process_id}/laporan.pdf")
+async def pdf_riwayat_sosoh(process_id: int, request: Request,
+                            unduh: int = 0, akun=Depends(butuh_akun)):
+    """PDF proses sosoh selesai, siap dibuka, diunduh, atau dibagikan."""
+    await _pastikan_akses_sosoh(akun.user)
+    from app.web.laporan_sosoh import ambil_data, buat_pdf
+    data = await ambil_data(process_id)
+    mode = "attachment" if unduh else "inline"
+    filename = f"laporan-penyosohan-{data['process'].kode_proses}.pdf"
+    return Response(
+        content=buat_pdf(data), media_type="application/pdf",
+        headers={"Content-Disposition": f'{mode}; filename="{filename}"',
+                 "Cache-Control": "private, no-store"},
+    )
+
+
+@router.get("/riwayat-sosoh/{process_id}/laporan")
+async def halaman_pdf_riwayat_sosoh(request: Request, process_id: int,
+                                    akun=Depends(butuh_akun)):
+    await _pastikan_akses_sosoh(akun.user)
+    from app.penggilingan.gudang2.models import PolishingProcess
+    async with SessionLocal() as db:
+        process = await db.get(PolishingProcess, process_id)
+    if process is None or process.status != "selesai":
+        raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
+    return await render_laci(
+        request, "laporan_sosoh.html",
+        kode=process.kode_proses,
+        pdf_url=f"/riwayat-sosoh/{process_id}/laporan.pdf",
     )
