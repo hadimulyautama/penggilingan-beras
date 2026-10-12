@@ -56,8 +56,11 @@ class PemilikProses:
     def __post_init__(self) -> None:
         if self.jenis is JenisPemilik.PABRIK and self.id is not None:
             raise ValueError("Pemilik pabrik tidak memakai id pihak")
-        if self.jenis is not JenisPemilik.PABRIK and self.id is None:
-            raise ValueError("Pemilik selain pabrik harus memiliki id")
+        if (self.jenis is not JenisPemilik.PABRIK and self.id is None
+                and not (self.nama or "").strip()):
+            raise ValueError(
+                "Pemilik selain pabrik harus memiliki id atau nama"
+            )
 
 
 @dataclass(frozen=True)
