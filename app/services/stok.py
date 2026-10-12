@@ -634,7 +634,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     per baris" yang sama dipakai `pk_gudang1`: jumlah pemasukan tumbuh terus,
     dan layar ini dibuka tiap hari.
     """
-    from app.models import InternalTransfer, PkGudang2Intake, Supplier
+    from app.models import InternalTransfer, OutgoingItem, PkGudang2Intake, Supplier
     from app.penggilingan.gudang2.models import (PkPurchaseBatch,
                                                  PkPurchaseVerification,
                                                  PkTumpukanToSilo)
@@ -728,6 +728,46 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     peta_pemilik = await nama_pemilik_banyak(
         db, {i.jasa_id for i in intakes if i.jasa_id is not None})
 
+    # ── Sudah DIAMBIL (pengambilan jasa) — FIFO, sama seperti dipindah ──
+    #
+    # Laporan lapangan 12 Oktober 2026: PK titipan yang sudah diambil
+    # pemiliknya lewat perintah barang keluar TETAP tampil di kartu Stok/
+    # Stok PK Jasa seolah masih ada — picker "Barang yang diambil" sudah
+    # benar (`hitung_stok_tumpukan` ikut menyaring `keluar`, migrasi 0076),
+    # tetapi kartu PER PEMASUKAN di sini cuma menyaring `dipindah` ke silo,
+    # tak pernah menyaring yang sudah KELUAR pabrik sama sekali — dua
+    # pembaca stok tumpukan yang sama berselisih.
+    #
+    # `outgoing_items` (pk_g2 dari tumpukan, `silo_id IS NULL`) tak
+    # menunjuk SATU pemasukan tertentu — PK yang diambil cuma tahu
+    # beratnya, bukan dari truk mana asalnya. Jadi dikurangkan FIFO per
+    # pemilik (`jasa_id`, None = pabrik), pemasukan TERTUA dulu, sama
+    # persis urutan `pindah_kepemilikan_barang_jadi` — tak ada alasan
+    # pemasukan yang MANA yang "aman" disentuh: `keluar` selalu dikonsumsi
+    # dari yang paling lama berdiri.
+    keluar_jasa = dict((await db.execute(
+        select(OutgoingItem.jasa_id, func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .where(OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.is_(None))
+        .group_by(OutgoingItem.jasa_id)
+    )).all())
+    diambil_fifo: dict[int, float] = {}
+    by_pemilik: dict[int | None, list[PkGudang2Intake]] = {}
+    for i in intakes:
+        by_pemilik.setdefault(i.jasa_id, []).append(i)
+    for jid, grup in by_pemilik.items():
+        sisa_ambil = float(keluar_jasa.get(jid, 0) or 0)
+        if sisa_ambil <= 0:
+            continue
+        for i in sorted(grup, key=lambda x: (x.waktu_masuk, x.id)):
+            if sisa_ambil <= 0:
+                break
+            sisa_sesudah_pindah = float(i.berat_kg or 0) - float(dipindah.get(i.id, 0))
+            if sisa_sesudah_pindah <= 0:
+                continue
+            ambil = min(sisa_sesudah_pindah, sisa_ambil)
+            diambil_fifo[i.id] = ambil
+            sisa_ambil -= ambil
+
     keluar: list[LotPkG2] = []
     for i in intakes:
         if i.berat_kg is None:
@@ -738,10 +778,11 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             sisa, bobot_final, berat_awal = 0.0, False, 0.0
         else:
             berat_awal = float(i.berat_kg)
-            sisa = berat_awal - float(dipindah.get(i.id, 0))
+            sisa = (berat_awal - float(dipindah.get(i.id, 0))
+                    - float(diambil_fifo.get(i.id, 0)))
             bobot_final = True
             if sisa <= 0:
-                continue                 # habis dipindah — tak didaftar
+                continue                 # habis dipindah atau diambil — tak didaftar
 
         if i.internal_transfer_id:
             kode = kode_proc.get(i.internal_transfer_id)

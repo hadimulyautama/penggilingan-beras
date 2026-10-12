@@ -134,6 +134,60 @@ async def test_ambil_penuh_dari_tumpukan_mengosongkan_stok_dan_menutup_pesanan(p
         assert boleh, sebab
 
 
+async def test_kartu_tumpukan_di_stok_berkurang_sesudah_diambil(pg, pabrik):
+    """Laporan lapangan 12 Oktober 2026: "pak pras juga ada punya barang di
+    stok pk jasa. kenapa tidak ada di pilihan?" — kartu PK Gudang 2 di
+    `/stok`/`/stok-pk-jasa` (`stok.pk_gudang2`) dulu cuma menyaring yang
+    sudah DIPINDAH ke silo, tak pernah yang sudah DIAMBIL pemiliknya lewat
+    perintah barang keluar — picker "Barang yang diambil" sudah benar
+    (`hitung_stok_tumpukan` menyaring `keluar`), tapi kartunya tetap
+    menampilkan PK yang sudah tak ada lagi di lantai.
+    """
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from app.services.stok import pk_gudang2
+
+    await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-02", 5_000, pabrik["jasa_a"])
+
+    async with pg() as db:
+        kartu = await pk_gudang2(db)
+        satu = next(k for k in kartu if k.pemilik and "JAS" in k.pemilik)
+        assert satu.tersedia == 5_000
+
+    # Ambil SEBAGIAN — kartunya wajib ikut menyusut, bukan tetap 5.000.
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        r = await bk.buat_perintah(
+            db, user=u, jasa_id=pabrik["jasa_a"],
+            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=None, berat_kg=3_000)])
+        rec_id = r.rec.id
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        kartu = await pk_gudang2(db)
+        satu = next(k for k in kartu if k.pemilik and "JAS" in k.pemilik)
+        assert satu.tersedia == 2_000, \
+            "kartu Stok tak ikut berkurang sesudah PK-nya diambil"
+
+    # Ambil SISANYA — kartunya wajib HILANG, bukan nol lalu diam-diam negatif.
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        r2 = await bk.buat_perintah(
+            db, user=u, jasa_id=pabrik["jasa_a"],
+            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=None, berat_kg=2_000)])
+        rec2_id = r2.rec.id
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec2_id)
+
+    async with pg() as db:
+        kartu = await pk_gudang2(db)
+        assert not any(k.pemilik and "JAS" in k.pemilik for k in kartu), \
+            "kartu yang sudah habis diambil masih terdaftar"
+
+
 # ───────────────────────── Silo: ambil sebagian ─────────────────────────
 
 async def test_ambil_sebagian_dari_silo_mengurangi_stok_persis(pg, pabrik):
