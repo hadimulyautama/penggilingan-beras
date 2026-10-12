@@ -1190,6 +1190,10 @@ class KartuProduk:
     #: `curah_kg` yang tetap menjaga persamaan hasil sosoh.
     kemasan_stok_kg: float = 0.0
     curah_stok_kg: float = 0.0
+    ukuran_kemasan_otomatis: int = 0
+    jumlah_karung_otomatis: int = 0
+    dikemas_otomatis_kg: float = 0.0
+    curah_otomatis_kg: float = 0.0
     #: Berapa baris rincian yang TIDAK digambar, dan berapa kg jumlahnya.
     #: Dipisah dari daftarnya supaya kartunya tetap menyebut seluruhnya tanpa
     #: mengirim seluruhnya — lihat `BATAS_RINCI_HASIL`.
@@ -1199,6 +1203,7 @@ class KartuProduk:
     keluar_lagi_kg: float = 0.0
     #: Kategori yang tak pernah dikemas (bekatul). Kartunya tanpa kata "kemas".
     curah_saja: bool = False
+
 
     @property
     def alarm(self) -> bool:
@@ -1216,6 +1221,29 @@ class KartuProduk:
         """Minus yang masih di dalam ambang nominal-vs-timbang: bukan alarm,
         dan bukan pula stok. Disebut apa adanya supaya tak dikira kebocoran."""
         return -toleransi_nominal(self.hasil_kg) <= self.curah_kg < -0.5
+
+
+_UKURAN_KEMASAN_OTOMATIS = {
+    "bekatul": 40,
+    "reject": 50,
+    "menir": 50,
+    "broken": 50,
+}
+
+
+def _packing_otomatis(jenis: str, berat_kg: float) -> tuple[int, int, float, float]:
+    """Pisahkan hasil samping menjadi karung penuh dan sisa curah.
+
+    Broken memakai karung 50 kg sebagai ukuran otomatis utama. Ukuran 25 kg
+    tetap tersedia untuk pencatatan kemasan broken secara khusus.
+    """
+    ukuran = _UKURAN_KEMASAN_OTOMATIS.get(jenis, 0)
+    berat = float(berat_kg or 0)
+    if not ukuran:
+        return 0, 0, 0.0, berat
+    jumlah = max(int(berat // ukuran), 0)
+    dikemas = float(jumlah * ukuran)
+    return ukuran, jumlah, dikemas, berat - dikemas
 
 
 #: Berapa baris rincian yang digambar sebelum sisanya diringkas jadi satu
@@ -1682,6 +1710,9 @@ async def stok_produk(db: AsyncSession, *,
         sisa = punya_rumah + curah
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue
+        ukuran_auto, jumlah_auto, dikemas_auto, curah_auto = _packing_otomatis(
+            jenis, sisa
+        )
         # ── FIFO: daftarnya menyusut bersama barangnya ──
         #
         # Temuan QA 28 September 2026: kepala kartu sudah benar (sisa 3.000 kg)
@@ -1705,6 +1736,10 @@ async def stok_produk(db: AsyncSession, *,
             belum_final_kg=berjalan.get(jenis, 0.0),
             dikemas_kg=punya_rumah, curah_kg=curah,
             kemasan_stok_kg=kemasan_stok, curah_stok_kg=curah_stok,
+            ukuran_kemasan_otomatis=ukuran_auto,
+            jumlah_karung_otomatis=jumlah_auto,
+            dikemas_otomatis_kg=dikemas_auto,
+            curah_otomatis_kg=curah_auto,
             # `keluar_kg` TETAP SELURUHNYA walau daftarnya dipotong: memotong
             # daftar tak boleh memotong persamaannya, dan seluruh kartu ini
             # berdiri di atas hasil = keluar + dikemas + curah.

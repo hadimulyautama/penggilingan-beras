@@ -175,3 +175,11 @@ def test_bekatul_dikemas_40_dan_20_kg():
     assert ukuran == {40, 20}, ukuran
     assert {m for m, _ in KEMASAN_VALID["bekatul"]} == {"bekas"}, \
         "bekatul dikemas karung BEKAS — bukan karung baru"
+
+
+def test_packing_otomatis_hasil_samping_menyisakan_curah():
+    from app.services.stok import _packing_otomatis
+
+    assert _packing_otomatis("bekatul", 167) == (40, 4, 160, 7)
+    for jenis in ("reject", "menir", "broken"):
+        assert _packing_otomatis(jenis, 167) == (50, 3, 150, 17)

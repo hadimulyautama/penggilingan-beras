@@ -1694,6 +1694,36 @@ async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh)
     assert "buka=masukkan_broken_silo" not in h
 
 
+async def test_hasil_samping_dipisah_otomatis_karung_dan_curah(pg, sosoh):
+    """167 kg: bekatul 4×40 + 7 curah; lainnya 3×50 + 17 curah."""
+    from app.database import now_local
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.services.stok import stok_produk
+
+    async with pg() as db:
+        db.add_all([
+            PolishingOutputLog(
+                polishing_process_id=sosoh["proses_id"], jenis=jenis,
+                berat_kg=167, waktu_update=now_local(), input_by=sosoh["user"],
+            )
+            for jenis in ("bekatul", "reject", "menir", "broken")
+        ])
+        await db.commit()
+
+    async with pg() as db:
+        kartu = {k.jenis: k for k in await stok_produk(db)}
+
+    assert (kartu["bekatul"].ukuran_kemasan_otomatis,
+            kartu["bekatul"].jumlah_karung_otomatis,
+            kartu["bekatul"].dikemas_otomatis_kg,
+            kartu["bekatul"].curah_otomatis_kg) == (40, 4, 160, 7)
+    for jenis in ("reject", "menir", "broken"):
+        assert (kartu[jenis].ukuran_kemasan_otomatis,
+                kartu[jenis].jumlah_karung_otomatis,
+                kartu[jenis].dikemas_otomatis_kg,
+                kartu[jenis].curah_otomatis_kg) == (50, 3, 150, 17)
+
+
 async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     """Laporan lapangan 10 Oktober 2026: begitu broken SUDAH SELURUHNYA
     tercatat (tak ada sisa "belum dicatat" sama sekali), tombol "Masukkan
@@ -1752,7 +1782,6 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
     assert "buka=masukkan_broken_silo" in h, \
         "tombol 'Masukkan ke silo' tak tergambar walau broken sudah tercatat penuh"
     assert "Masukkan ke silo" in h
-    assert "Dikemas · stok" in h and "Curah · total" in h
-    assert "Rincian curah · stok + belum dicatat" in h
+    assert "Dikemas otomatis" in h and "Curah · sisa kemasan" in h
     # "belum dicatat" nol — kartunya tak lagi menawarkan "Catat broken (curah)".
     assert "buka=catat_broken" not in h
