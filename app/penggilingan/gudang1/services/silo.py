@@ -89,8 +89,10 @@ async def silo_g1_by_id(db: AsyncSession, silo_id: int) -> Silo | None:
 
 async def get_g1_silo(db: AsyncSession, letter: str) -> Silo | None:
     wid = await _g1_warehouse_id(db)
+    nama = (letter or "").strip()
     stmt = select(Silo).where(
-        Silo.warehouse_id == wid, Silo.nama_silo == f"Silo {letter}"
+        Silo.warehouse_id == wid,
+        func.lower(Silo.nama_silo).in_({nama.lower(), f"silo {nama}".lower()}),
     )
     return (await db.execute(stmt)).scalars().first()
 

@@ -141,15 +141,12 @@ async def _g2_warehouse_id(db: AsyncSession) -> int:
 
 async def get_g2_silo(db: AsyncSession, letter: str) -> Silo | None:
     wid = await _g2_warehouse_id(db)
+    nama = (letter or "").strip()
     return (
         await db.execute(
             select(Silo).where(
                 Silo.warehouse_id == wid,
-                # Picker/API normalizes submitted values to uppercase, while
-                # master names for product silos can be title case (e.g.
-                # "Silo Broken"). Silo letters happen to be uppercase, which
-                # hid this mismatch until a broken silo was selectable.
-                func.lower(Silo.nama_silo) == f"silo {letter}".lower(),
+                func.lower(Silo.nama_silo).in_({nama.lower(), f"silo {nama}".lower()}),
             )
         )
     ).scalars().first()
@@ -166,9 +163,8 @@ async def silo_g2_dari(db: AsyncSession, nilai: str) -> Silo | None:
     teks = (nilai or "").strip()
     if not teks:
         return None
-    huruf = _KATA_LAMA.get(teks.lower(), teks)
-    huruf = huruf[5:].strip() if huruf.lower().startswith("silo ") else huruf
-    return await get_g2_silo(db, huruf.upper())
+    nama = _KATA_LAMA.get(teks.lower(), teks)
+    return await get_g2_silo(db, nama)
 
 
 async def label_tujuan(db: AsyncSession, tujuan: str | None,

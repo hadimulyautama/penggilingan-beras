@@ -489,11 +489,9 @@ async def edit_silo(
     from app.penggilingan.silo_policy import KOMODITAS_G1, KOMODITAS_G2
 
     nama = " ".join(nama.split())
-    if nama.lower().startswith("silo "):
-        nama = nama[5:].strip()
-    if not nama or len(f"Silo {nama}") > 50:
+    if not nama or len(nama) > 50:
         return redirect("/pengaturan/alat?err_teks=" + quote("Nama silo tidak valid."))
-    nama_lengkap = f"Silo {nama}"
+    nama_lengkap = nama
     pilihan = list(dict.fromkeys(komoditas))
     async with SessionLocal() as db:
         silo = (await db.execute(select(Silo).where(Silo.id == silo_id).with_for_update())).scalar_one_or_none()
