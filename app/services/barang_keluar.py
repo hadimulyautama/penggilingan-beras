@@ -175,7 +175,7 @@ _TAK_DIMINTA = object()
 
 
 async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
-                         jenis=None, proc_id=None, silo_id=_TAK_DIMINTA,
+                         jenis=None, jasa_id=None, proc_id=None, silo_id=_TAK_DIMINTA,
                          gkr_id=None) -> float:
     """Berapa kg barang ini sudah DIPERINTAHKAN keluar tetapi belum dimuat.
 
@@ -208,6 +208,8 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
              else q.where(OutgoingItem.rice_quality_standard_id == std_id))
     elif jenis is not None:
         q = q.where(OutgoingItem.jenis_byproduct == jenis)
+        q = (q.where(OutgoingItem.jasa_id.is_(None)) if jasa_id is None
+             else q.where(OutgoingItem.jasa_id == jasa_id))
     elif proc_id is not None:
         q = q.where(OutgoingItem.milling_process_id == proc_id)
     elif silo_id is not _TAK_DIMINTA:
@@ -258,7 +260,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
     "dipesan", jadi menguranginya lagi akan menolak muatan yang justru sedang
     dikerjakan sesuai perintahnya.
     """
-    from app.penggilingan.inventory.finished_goods import (hitung_stok_byproduct_curah,
+    from app.penggilingan.inventory.finished_goods import (hitung_stok_byproduct_total,
                                                            hitung_stok_finished_goods)
     from app.services.stok import nama_produk
     from app.services.transfer import pending_transfer_kg
@@ -279,10 +281,11 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         # jenis, dan pemiliknya diturunkan dari perintahnya sama seperti
         # `finished_goods` di atas — bukan cuma cacat jenisnya yang
         # dibetulkan, saringan pemiliknya pun baru ada sejak di sini.
-        ada = float(await hitung_stok_byproduct_curah(db, b.jenis or "",
+        ada = float(await hitung_stok_byproduct_total(db, b.jenis or "",
                                                        jasa_id=b.jasa_id))
         nama = nama_produk(b.jenis or "")
-        dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(db, jenis=b.jenis)
+        dipesan = (0.0 if abaikan_pesanan else
+                   await _sudah_dipesan(db, jenis=b.jenis, jasa_id=b.jasa_id))
     elif b.tipe == "pk_langsung":
         from app.models import MillingProcess
         from app.services.jasa import nama_pemilik

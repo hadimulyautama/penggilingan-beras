@@ -550,6 +550,34 @@ async def hitung_stok_byproduct_curah(
     return masuk - keluar
 
 
+async def hitung_stok_byproduct_total(
+    db: AsyncSession, jenis: str, *, jasa_id: int | None = None,
+) -> float:
+    """Total hasil samping yang dapat keluar: stok curah + stok berkarung.
+
+    Packing otomatis di kartu stok adalah pembagian dari satu tumpukan, bukan
+    transaksi pengemasan fisik. Karena itu perintah barang keluar curah boleh
+    mengambil dari karung ketika saldo curah tidak cukup; saldo akhirnya
+    dihitung ulang dari total kg dan sisa karung terbuka tampil sebagai curah.
+    """
+    curah = await hitung_stok_byproduct_curah(db, jenis, jasa_id=jasa_id)
+    sku_ids = select(ProductSku.id).where(ProductSku.kategori == jenis)
+    milik_masuk = (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
+                   else FinishedGoodsStock.jasa_id == jasa_id)
+    milik_keluar = (OutgoingItem.jasa_id.is_(None) if jasa_id is None
+                    else OutgoingItem.jasa_id == jasa_id)
+    masuk_karung = float((await db.execute(
+        select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
+        .where(FinishedGoodsStock.product_sku_id.in_(sku_ids), milik_masuk)
+    )).scalar_one())
+    keluar_karung = float((await db.execute(
+        select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .where(OutgoingItem.item_type == "finished_goods",
+               OutgoingItem.product_sku_id.in_(sku_ids), milik_keluar)
+    )).scalar_one())
+    return curah + masuk_karung - keluar_karung
+
+
 async def hitung_stok_finished_goods(
     db: AsyncSession, sku_id: int, standard_id: int | None,
     *, jasa_id: int | None = None,

@@ -2034,6 +2034,50 @@ async def test_bekatul_curah_benar_benar_keluar_dan_mengurangi_stok(pg, gudang):
             "bekatul curah keluar tanpa mengurangi stoknya"
 
 
+async def test_barang_keluar_curah_membuka_karung_otomatis(pg, gudang):
+    """8 kg curah + 1 karung 40 kg, keluar 20 kg → sisa curah 28 kg.
+
+    Bekatul di lapangan satu tumpukan. Saldo curah yang kurang harus mengambil
+    sisa dari karung, dan tampilan otomatis menghitung ulang kemasan dari total
+    stok yang benar-benar tersisa.
+    """
+    from app.database import now_local
+    from app.models import User
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory.finished_goods import (
+        FinishedGoodsStock, find_or_create_sku, hitung_stok_byproduct_total,
+    )
+    from app.services import barang_keluar as bk
+    from app.services.stok import _packing_otomatis
+    from sqlalchemy import select
+
+    pelanggan_id = await _pelanggan(pg, "Peternakan Jaya")
+    await _bekatul_curah(pg, gudang, 8)
+    async with pg() as db:
+        proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        sku = await find_or_create_sku(
+            db, kategori="bekatul", material_kode="bekas", ukuran=40)
+        db.add(FinishedGoodsStock(
+            product_sku_id=sku.id, rice_quality_standard_id=None,
+            source_type="polishing", source_id=proc.id, jumlah_karung=1,
+            berat_total_kg=40, warehouse_id=None, waktu=now_local(),
+            input_by=gudang["op"], jasa_id=None))
+        await db.commit()
+        assert await hitung_stok_byproduct_total(db, "bekatul") == 48
+        perintah = await bk.buat_perintah(
+            db, user=await db.get(User, gudang["adm"]),
+            baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                    berat_kg=20)],
+            pelanggan_id=pelanggan_id)
+        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
+                            rec_id=perintah.rec.id)
+
+    async with pg() as db:
+        sisa = await hitung_stok_byproduct_total(db, "bekatul")
+        assert sisa == 28
+        assert _packing_otomatis("bekatul", sisa) == (40, 0, 0, 28)
+
+
 async def test_perintah_curah_melebihi_stok_ditolak_dengan_angkanya(pg, gudang):
     """Yang ditolak tanpa angka akan dicoba lagi dengan tebakan."""
     from app.models import User
