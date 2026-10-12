@@ -238,7 +238,7 @@ async def segarkan_status_silo(db: AsyncSession, silo_id: int | None) -> None:
 
 async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
                            pemilik: str = "semua") -> float:
-    """Stok sebuah silo G2 — rumusnya bercabang menurut `Silo.jenis_isi`.
+    """Stok campuran sebuah silo G2 dari seluruh arus masuk dan keluar.
 
     `pemilik` bawaannya "semua" — isi FISIK silonya — dan itu bukan kelonggaran:
     angka ini dipakai menentukan status silo, menolak penyosohan dari silo
@@ -254,21 +254,10 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     tidak terbaca di mana pun membuat operator menyimpulkan barangnya tak bisa
     dipindahkan. Tiga nilai, dan "pabrik" + "jasa" = "semua".
 
-    ⚠ Silo broken (`jenis_isi='broken'`, keputusan pemilik 6 Oktober 2026)
-    dijawab fungsi lain (`_hitung_stok_silo_broken`): tak punya jalan masuk
-    "langsung" seperti PK — satu-satunya jalan masuknya `broken_ke_silo`, dari
-    stok curah. `PolishingSiloUsage` sendiri SILO-AGNOSTIK (tak peduli isinya
-    PK atau broken), jadi `mulai_penyosohan`/`selesai_penyosohan`/`rendemen_
-    proses` memakai silo broken tanpa satu baris kode pun berubah di sana —
-    yang perlu bercabang cuma jawaban "berapa isinya SEKARANG", di sini.
-
-    ⚠ Silo Beras (`jenis_isi='beras'`, keputusan pemilik 8 Oktober 2026) sama
-    bentuknya dengan broken — dijawab `_hitung_stok_silo_beras`, satu-satunya
-    jalan masuknya `beras_ke_silo`. Silo PK (`jenis_isi='pk'`, cabang bawah
-    ini) TETAP dihitung di sini walau sejak keputusan yang sama ia JUGA bisa
-    menerima `beras_putih` (bahan sosoh ulang) lewat `beras_ke_silo` — bukan
-    silo baru, jalan masuk KETIGA bagi silo yang sudah ada (lihat suku
-    `masuk_beras_putih` di bawah).
+    Isi silo boleh merupakan campuran PK, beras putih, broken, menir, dan
+    reject. Karena itu jenis historis pada master silo tidak menentukan
+    hitungan stok; semua arus masuk dihitung bersama dan pemakaian/keluar
+    mengurangi saldo campuran yang sama.
     """
     silo = await db.get(Silo, silo_id)
     if pemilik == "semua":
@@ -276,10 +265,6 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         # milik A dengan stok milik B di tumpukan fisik yang sama.
         return (await hitung_stok_silo(db, silo_id, pemilik="pabrik")
                 + await hitung_stok_silo(db, silo_id, pemilik="jasa"))
-    if silo is not None and silo.jenis_isi == "broken":
-        return await _hitung_stok_silo_broken(db, silo_id, pemilik=pemilik)
-    if silo is not None and silo.jenis_isi == "beras":
-        return await _hitung_stok_silo_beras(db, silo_id, pemilik=pemilik)
     # ── SATU kalimat pemilik, EMPAT bagian hitungan ──
     #
     # Dulu saringannya cuma dipasang pada dua yang MASUK; `terpakai` tak
@@ -312,11 +297,8 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
                       OutgoingRecord.id == OutgoingItem.outgoing_record_id)
                 .where(OutgoingItem.item_type == "pk_g2",
                        OutgoingItem.silo_id == silo_id))
-    # Suku KELIMA (keputusan pemilik 8 Oktober 2026): `beras_putih` yang
-    # dituang ke silo PK ini sebagai bahan sosoh ulang. `beras_ke_silo` tak
-    # pernah menyimpan jenis lain untuk silo `jenis_isi='pk'` — pagarnya ada
-    # di `masukkan_beras_ke_silo` — jadi SATU suku `silo_id` saja sudah cukup
-    # tepat, tanpa perlu menyaring `jenis` lagi di sini.
+    q_broken = (select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
+                .where(BrokenKeSilo.silo_id == silo_id))
     q_beras = (select(func.coalesce(func.sum(BerasKeSilo.berat_kg), 0))
                .where(BerasKeSilo.silo_id == silo_id))
     if pemilik != "semua":
@@ -330,6 +312,7 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
             PolishingProcess.id == PolishingSiloUsage.polishing_process_id
         ).where(milik(PolishingProcess))
         q_keluar = q_keluar.where(milik(OutgoingRecord))
+        q_broken = q_broken.where(milik(BrokenKeSilo))
         q_beras = q_beras.where(milik(BerasKeSilo))
     masuk_langsung = (
         await db.execute(
@@ -345,6 +328,7 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         )
     ).scalar_one()
     masuk_dari_tumpukan = (await db.execute(q_tumpukan)).scalar_one()
+    masuk_broken = (await db.execute(q_broken)).scalar_one()
     terpakai = (await db.execute(q_terpakai)).scalar_one()
     keluar = (await db.execute(q_keluar)).scalar_one()
     masuk_beras_putih = (await db.execute(q_beras)).scalar_one()
@@ -352,64 +336,8 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     # (maks. 0,5 kg). Jangan biarkan selisih itu menjadi saldo negatif yang
     # mengurangi muatan pemilik berikutnya ketika silo sudah dikosongkan.
     return max(0.0, float(masuk_langsung) + float(masuk_dari_tumpukan)
-               + float(masuk_beras_putih) - float(terpakai) - float(keluar))
-
-
-async def _hitung_stok_silo_broken(db: AsyncSession, silo_id: int, *,
-                                   pemilik: str = "semua") -> float:
-    """Stok silo BROKEN = dipindah dari curah (`broken_ke_silo`) − terpakai sosoh ulang.
-
-    Dipanggil dari `hitung_stok_silo` — lihat catatan di sana untuk arti
-    `pemilik`. `terpakai` memakai kueri yang SAMA dengan silo PK:
-    `PolishingSiloUsage` tak membedakan isi silonya.
-    """
-    def milik(k):
-        return k.jasa_id.is_(None) if pemilik == "pabrik" else k.jasa_id.isnot(None)
-
-    q_masuk = (select(func.coalesce(func.sum(BrokenKeSilo.berat_kg), 0))
-               .where(BrokenKeSilo.silo_id == silo_id))
-    q_terpakai = (
-        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
-        .where(PolishingSiloUsage.silo_id == silo_id,
-               PolishingSiloUsage.berat_akhir_kg.isnot(None)))
-    if pemilik != "semua":
-        q_masuk = q_masuk.where(milik(BrokenKeSilo))
-        q_terpakai = q_terpakai.join(
-            PolishingProcess,
-            PolishingProcess.id == PolishingSiloUsage.polishing_process_id
-        ).where(milik(PolishingProcess))
-    masuk = (await db.execute(q_masuk)).scalar_one()
-    terpakai = (await db.execute(q_terpakai)).scalar_one()
-    return max(0.0, float(masuk) - float(terpakai))
-
-
-async def _hitung_stok_silo_beras(db: AsyncSession, silo_id: int, *,
-                                  pemilik: str = "semua") -> float:
-    """Stok Silo Beras = dipindah dari curah/kemasan (`beras_ke_silo`) − terpakai sosoh ulang.
-
-    Sebangun `_hitung_stok_silo_broken` persis — satu-satunya jalan masuknya
-    `beras_ke_silo`, dan `terpakai` memakai kueri yang SAMA (`PolishingSiloUsage`
-    tak membedakan isi silonya). Dipanggil dari `hitung_stok_silo` — lihat
-    catatan di sana untuk arti `pemilik`.
-    """
-    def milik(k):
-        return k.jasa_id.is_(None) if pemilik == "pabrik" else k.jasa_id.isnot(None)
-
-    q_masuk = (select(func.coalesce(func.sum(BerasKeSilo.berat_kg), 0))
-               .where(BerasKeSilo.silo_id == silo_id))
-    q_terpakai = (
-        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
-        .where(PolishingSiloUsage.silo_id == silo_id,
-               PolishingSiloUsage.berat_akhir_kg.isnot(None)))
-    if pemilik != "semua":
-        q_masuk = q_masuk.where(milik(BerasKeSilo))
-        q_terpakai = q_terpakai.join(
-            PolishingProcess,
-            PolishingProcess.id == PolishingSiloUsage.polishing_process_id
-        ).where(milik(PolishingProcess))
-    masuk = (await db.execute(q_masuk)).scalar_one()
-    terpakai = (await db.execute(q_terpakai)).scalar_one()
-    return max(0.0, float(masuk) - float(terpakai))
+               + float(masuk_broken) + float(masuk_beras_putih)
+               - float(terpakai) - float(keluar))
 
 
 async def hitung_stok_tumpukan(db: AsyncSession, *,
@@ -1021,13 +949,6 @@ async def _tujuan_and_silo(db: AsyncSession, tujuan: str | None):
         # dan kalimat yang menyebut dua silo akan keliru begitu ada yang ketiga.
         raise Gudang2Error(
             "Pilih silo Gudang 2 dari daftar, atau pilih tumpukan.")
-    # ⚠ PK tak boleh masuk silo BROKEN (keputusan pemilik 6 Oktober 2026 —
-    # "broken memang tidak dituang ke silo PK", dan sebaliknya berlaku sama).
-    # Tanpa pagar ini, PK yang masuk ke silo broken akan ikut dihitung oleh
-    # `_hitung_stok_silo_broken` sebagai broken — barang yang bukan.
-    if silo.jenis_isi != "pk":
-        raise Gudang2Error(
-            f"Silo {silo.nama_silo} bukan silo PK — pilih silo lain untuk PK.")
     return SILO, silo.id
 
 
@@ -1460,10 +1381,6 @@ async def pindah_tumpukan_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    # PK tak boleh masuk silo BROKEN — lihat catatan di `_tujuan_and_silo`.
-    if silo.jenis_isi != "pk":
-        raise Gudang2Error(
-            f"Silo {nama_silo} bukan silo PK — pilih silo lain untuk tumpukan ini.")
     intake = (await db.execute(
         select(PkGudang2Intake).where(PkGudang2Intake.id == intake_id).with_for_update()
     )).scalars().first()
@@ -1573,10 +1490,6 @@ async def pindah_broken_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    if silo.jenis_isi != "broken":
-        raise Gudang2Error(
-            f"Silo {nama_silo} bukan silo broken — pilih silo yang isinya "
-            "memang broken.")
     row = (await db.execute(
         select(ByproductStock).where(ByproductStock.id == byproduct_stock_id)
         .with_for_update()
@@ -1631,13 +1544,6 @@ async def pindah_broken_ke_silo(
     now = input_time(tanggal, jam)
     kode = await next_broken_move_code(db)
     ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
-    # Sama seperti PK: broken jasa tak boleh menyusup ke proses sosoh yang
-    # sedang berjalan — prosesnya belum bisa membawa pemilik.
-    if ke_proses and row.jasa_id is not None:
-        raise Gudang2Error(
-            f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — broken jasa "
-            "tak boleh ditambahkan ke proses yang berjalan.")
-
     move = BrokenKeSilo(
         kode_pindah=kode, byproduct_stock_id=row.id, silo_id=silo.id,
         berat_kg=kirim, tanggal=now.date(), waktu=now, input_by=user.id,
@@ -1729,10 +1635,6 @@ async def masukkan_broken_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    if silo.jenis_isi != "broken":
-        raise Gudang2Error(
-            f"Silo {nama_silo} bukan silo broken — pilih silo yang isinya "
-            "memang broken.")
     if not kode_pol:
         raise Gudang2Error("Sebutkan proses penyosohannya (POL-...).")
     proc = await _proc_by_kode(db, kode_pol)
@@ -1773,11 +1675,6 @@ async def masukkan_broken_ke_silo(
     # pagar jasa di bawah akan menyisakan tulisan yang sudah terlanjur
     # separuh jalan. Sebangun `pindah_broken_ke_silo`.
     ke_proses = await _catat_masuk_selama_proses(db, silo.id, berat_kg)
-    if ke_proses and jasa_id is not None:
-        raise Gudang2Error(
-            f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — broken jasa "
-            "tak boleh ditambahkan ke proses yang berjalan.")
-
     # ── Langkah 1 · kumpulkan curah yang SUDAH tercatat, FIFO ──
     curah_rows = (await db.execute(
         select(ByproductStock).where(
@@ -2077,11 +1974,6 @@ async def masukkan_beras_ke_silo(
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")
-    # ── Jenis vs tujuan: DUA pintu, SATU daftar jenis (lihat docstring) ──
-    if silo.jenis_isi not in ("beras", "pk"):
-        raise Gudang2Error(
-            f"Silo {nama_silo} bukan Silo Beras maupun silo PK — pilih silo "
-            "lain untuk beras.")
     if jenis not in BERAS_JENIS:
         raise Gudang2Error(
             f"Jenis beras harus salah satu grade ({', '.join(BERAS_JENIS)}), "

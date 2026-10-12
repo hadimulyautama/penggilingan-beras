@@ -77,6 +77,7 @@
           <div class="baris__ket">
             {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
           </div>
+          <div class="bantu">Filter komoditas: gabah kering saja</div>
         </div>
       </div>
     {% else %}
@@ -101,12 +102,10 @@
 </div>
 
 <div>
-  <span class="lbl">Silo Gudang 2 (PK, broken &amp; beras)</span>
+  <span class="lbl">Silo Gudang 2</span>
   <div class="kartu">
-    {# Isinya ikut disebut sama seperti silo gabah kering di atas; jenisnya
-       (PK / broken / beras) ikut disebut sejak keputusan pemilik 6 Oktober
-       (broken) dan 8 Oktober 2026 (beras) — tiap silo punya wadahnya
-       sendiri, dan itu wajib terlihat sebelum diisi. #}
+    {# Silo Gudang 2 adalah satu kolam campuran; jenis historis pada master
+       tidak menjadi batasan isi. #}
     {% for s in silo_g2 %}
       <div class="baris">
         <div class="baris__isi">
@@ -115,22 +114,13 @@
             {% if s.kg %}berisi {{ "{:,}".format(s.kg|int).replace(",", ".") }} kg{% else %}kosong{% endif %}
           </div>
         </div>
-        <div class="cip">
-          {% if s.jenis_isi == "broken" %}
-            <span class="lencana lencana--bahaya">broken</span>
-          {% elif s.jenis_isi == "beras" %}
-            <span class="lencana lencana--aman">beras</span>
-          {% else %}
-            <span class="lencana">PK</span>
-          {% endif %}
-        </div>
       </div>
     {% else %}
       <p class="bantu">Belum ada silo Gudang 2.</p>
     {% endfor %}
     <p class="bantu" style="margin-top:8px">
-      Silo tidak berbatas isinya. Jenis isinya DITETAPKAN saat dibuat dan
-      tidak bisa diganti — PK, broken, dan beras tidak boleh tercampur satu silo.
+      PK, beras putih, broken, menir, dan reject boleh dicampur di silo yang
+      sama. Bekatul tidak disimpan di silo.
     </p>
   </div>
 
@@ -142,12 +132,6 @@
       <input class="fld" id="nama_silo_g2" name="nama" placeholder="C" required
              autocomplete="off">
       <p class="bantu" style="margin-top:6px">Cukup hurufnya — akan tersimpan sebagai “Silo C”.</p>
-    </div>
-    <div>
-      <span class="lbl">Isinya</span>
-      <label class="sebaris"><input type="radio" name="jenis_isi" value="pk" checked> PK</label>
-      <label class="sebaris"><input type="radio" name="jenis_isi" value="broken"> Broken</label>
-      <label class="sebaris"><input type="radio" name="jenis_isi" value="beras"> Beras</label>
     </div>
     <button class="btn btn--utama" type="submit">Tambah silo</button>
   </form>

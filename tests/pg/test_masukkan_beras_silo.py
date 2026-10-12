@@ -162,12 +162,14 @@ async def test_tolak_jenis_tak_dikenal(pg, sosoh):
     assert "grade" in str(e.value).lower()
 
 
-async def test_tolak_silo_broken(pg, sosoh):
-    """Silo broken bukan tujuan yang sah untuk beras dalam bentuk apa pun."""
-    from app.models import Silo, User, Warehouse
-    from app.penggilingan.gudang2.service import (Gudang2Error, _g2_warehouse_id,
-                                                   masukkan_beras_ke_silo)
+async def test_beras_bisa_masuk_silo_berlabel_broken(pg, sosoh):
+    """Label jenis warisan silo tidak membatasi isi campurannya."""
     from sqlalchemy import select
+
+    from app.models import Silo, User, Warehouse
+    from app.penggilingan.gudang2.service import (_g2_warehouse_id,
+                                                   hitung_stok_silo,
+                                                   masukkan_beras_ke_silo)
 
     async with pg() as db:
         wid = await _g2_warehouse_id(db)
@@ -176,11 +178,12 @@ async def test_tolak_silo_broken(pg, sosoh):
 
     async with pg() as db:
         u = await db.get(User, sosoh["user"])
-        with pytest.raises(Gudang2Error) as e:
-            await masukkan_beras_ke_silo(
-                db, user=u, kode_pol=sosoh["kode_pol"], jenis="medium",
-                nama_silo="D", berat_kg=500)
-    assert "bukan silo beras maupun silo pk" in str(e.value).lower()
+        await masukkan_beras_ke_silo(
+            db, user=u, kode_pol=sosoh["kode_pol"], jenis="medium",
+            nama_silo="D", berat_kg=500)
+        assert await hitung_stok_silo(db, (await db.execute(
+            select(Silo.id).where(Silo.nama_silo == "Silo D")
+        )).scalar_one()) == 500
 
 
 async def test_grade_ke_silo_pk_sebagai_bahan_sosoh_ulang(pg, sosoh):

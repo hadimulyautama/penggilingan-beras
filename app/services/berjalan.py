@@ -2492,9 +2492,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     else f"Dibebaskan · sisa {_kg(sisa_u)}" if dibebaskan
                     else ""
                 )
-                jenis_u = {"broken": "Broken", "beras": "Beras"}.get(
-                    s.jenis_isi, "PK")
-                broken_u = s.jenis_isi == "broken"
+                jenis_u = "Bahan campuran"
+                broken_u = False
                 # "Awal X kg" dicabut untuk PK (permintaan pemilik 11 Oktober
                 # 2026): bisa disimpulkan sendiri dari jumlah daftar asal lot
                 # di bawahnya. Broken TETAP menyebutnya — permintaan susulan
@@ -2810,7 +2809,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         asal = isian.baris
         pemasok = _pemasok_ringkas(asal)
         keluar.append(Baris(
-            kode=silo.nama_silo, isi=f"PK · {_kg(kg)}",
+            kode=silo.nama_silo, isi=f"Bahan campuran · {_kg(kg)}",
             # Tiga keadaan, tiga kalimat. Silo yang sisanya sudah dicatat
             # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
             # bahwa angka ini sisa isian yang baru saja ditutup, bukan muatan
@@ -2847,7 +2846,8 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                   "menunggu giliran."
                   if sedang and kode_jalan and silo.id not in sisa_dicatat
                   else _nota_isian(isian)),
-            ringkas=(f"PK dari {pemasok}" if pemasok else "PK menunggu disosoh"),
+            ringkas=(f"Bahan dari {pemasok}"
+                     if pemasok else "Bahan menunggu disosoh"),
             pilihan=([] if sedang else [
                 ("mulai_penyosohan", "Mulai penyosohan",
                  "Seluruh isi silo jadi satu proses", huruf)]),

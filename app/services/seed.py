@@ -30,6 +30,7 @@ _WAREHOUSES = ["Gudang 1 - Selepan", "Gudang 2 - Penyosohan"]
 _SILOS = [
     ("Gudang 1 - Selepan", "Silo A", 35),
     ("Gudang 1 - Selepan", "Silo B", 35),
+    ("Gudang 1 - Selepan", "Silo C", 35),
     ("Gudang 2 - Penyosohan", "Silo A", None),
     ("Gudang 2 - Penyosohan", "Silo B", None),
 ]
@@ -62,8 +63,17 @@ async def seed_master() -> None:
                 )
             ).scalars().first()
             if not ex:
-                db.add(Silo(warehouse_id=w.id, nama_silo=snama, kapasitas_ton=cap))
+                db.add(Silo(
+                    warehouse_id=w.id,
+                    nama_silo=snama,
+                    kapasitas_ton=cap,
+                    jenis_isi="gabah" if wnama.startswith("Gudang 1") else "pk",
+                ))
                 created.append(f"{snama} {wnama}")
+            elif wnama.startswith("Gudang 1") and ex.jenis_isi != "gabah":
+                # Gudang 1 khusus untuk gabah; luruskan silo A/B lama yang
+                # dibuat sebelum jenis isi silo menjadi eksplisit.
+                ex.jenis_isi = "gabah"
 
         # Mesin pengering Gudang 1 (migrasi 0003 no-op di DB kosong).
         g1 = (

@@ -802,6 +802,79 @@ _GABAH_MENUNGGU = ("baru", "ditumpuk")
 _GABAH_DI_DRYER = ("di_dryer", "dikeringkan")
 
 
+async def _broken_terpakai_per_jasa_dari_silo(db: AsyncSession) -> dict[int, float]:
+    """Alokasikan pemakaian silo campuran FIFO ke komoditas sumbernya.
+
+    Berat yang dipakai penyosohan adalah total campuran. Untuk menghitung sisa
+    broken milik jasa, kita perlu tahu berapa bagian broken yang benar-benar
+    terambil; jenis historis silo tidak lagi bisa menjawabnya.
+    """
+    from app.penggilingan.gudang2.models import (
+        PkTumpukanToSilo, PolishingSiloUsage,
+    )
+
+    events: dict[int, list[tuple]] = {}
+    silo_ids: set[int] = set()
+
+    def masuk(silo_id: int, waktu, berat: float, jenis: str) -> None:
+        silo_ids.add(silo_id)
+        events.setdefault(silo_id, []).append(
+            (waktu, 1, berat, jenis, None))
+
+    for row in (await db.execute(
+        select(PkGudang2Intake).where(PkGudang2Intake.silo_id.isnot(None))
+    )).scalars().all():
+        masuk(row.silo_id, row.waktu_masuk, float(row.berat_kg or 0), "pk")
+    for move in (await db.execute(select(PkTumpukanToSilo))).scalars().all():
+        masuk(move.silo_id, move.waktu, float(move.berat_kg or 0), "pk")
+    for move in (await db.execute(select(BerasKeSilo))).scalars().all():
+        masuk(move.silo_id, move.waktu, float(move.berat_kg or 0), "beras")
+    for move in (await db.execute(select(BrokenKeSilo))).scalars().all():
+        masuk(move.silo_id, move.waktu, float(move.berat_kg or 0), "broken")
+
+    if not silo_ids:
+        return {}
+
+    for usage, process in (await db.execute(
+        select(PolishingSiloUsage, PolishingProcess)
+        .join(PolishingProcess,
+              PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.silo_id.in_(silo_ids),
+               PolishingProcess.status == "selesai")
+    )).all():
+        berat = usage.berat_terpakai_kg
+        if berat is None and usage.berat_akhir_kg is not None:
+            berat = (float(usage.berat_awal_kg or 0)
+                     + float(usage.berat_masuk_kg or 0)
+                     - float(usage.berat_akhir_kg))
+        if berat is None or float(berat) <= 0:
+            continue
+        events.setdefault(usage.silo_id, []).append((
+            process.waktu_selesai or process.waktu_mulai, -1,
+            float(berat), "consumed", process.jasa_id))
+
+    per_jasa: dict[int, float] = {}
+    for silo_events in events.values():
+        silo_events.sort(key=lambda event: (event[0], event[1]))
+        pool: list[list] = []
+        for _, direction, amount, kind, owner_id in silo_events:
+            if direction > 0:
+                if amount > 0:
+                    pool.append([kind, amount])
+                continue
+            rest = amount
+            for item in pool:
+                take = min(item[1], rest)
+                item[1] -= take
+                rest -= take
+                if kind == "consumed" and item[0] == "broken" and owner_id is not None:
+                    per_jasa[owner_id] = per_jasa.get(owner_id, 0.0) + take
+                if rest <= 0.005:
+                    break
+            pool = [item for item in pool if item[1] > 0.005]
+    return per_jasa
+
+
 async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
     """Apa yang masih ada di pabrik untuk pesanan ini, per fase.
 
@@ -911,15 +984,7 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
         .where(ByproductStock.jenis_produk == "broken",
                ByproductStock.jasa_id == jasa_id)
     )).scalar_one())
-    disosoh_ulang = float((await db.execute(
-        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
-        .join(PolishingProcess,
-              PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
-        .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
-        .where(PolishingProcess.jasa_id == jasa_id,
-               Silo.jenis_isi == "broken",
-               PolishingSiloUsage.berat_akhir_kg.isnot(None))
-    )).scalar_one())
+    disosoh_ulang = (await _broken_terpakai_per_jasa_dari_silo(db)).get(jasa_id, 0.0)
     broken = max(masuk_broken - disosoh_ulang, 0.0)
 
     # Hasil samping CURAH lain (menir, reject, bekatul) — pesan kerja 11

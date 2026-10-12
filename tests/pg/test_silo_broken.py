@@ -1,12 +1,9 @@
-"""Silo broken — satu wadah, dua arah, satu pemilik pada satu waktu.
+"""Silo campuran Gudang 2 — satu wadah untuk beberapa komoditas.
 
-Keputusan pemilik 6 Oktober 2026: broken (PK yang sudah disosoh, patah)
-punya silonya sendiri (`Silo.jenis_isi`), supaya ia bisa disosoh ULANG
-sebagai bahan baku. Berkas ini membuktikan di Postgres sungguhan: segregasi
-PK/broken per silo, pewarisan pemilik lewat `broken_ke_silo`, pagar "proses
-tak boleh memakan broken yang ia hasilkan sendiri", rendemen atas SELURUH
-bahan (bukan PK saja), dan `sisa_jasa()` yang tidak menghitung broken dua
-kali saat ia disosoh ulang.
+Gudang 2 mengizinkan PK, beras putih, reject, broken, dan menir dalam silo
+yang sama, dengan pagar kepemilikan yang tetap berlaku. Berkas ini membuktikan
+saldo gabungan, pewarisan pemilik, larangan memakai broken dari proses sendiri,
+dan rendemen atas seluruh bahan.
 """
 from __future__ import annotations
 
@@ -59,7 +56,7 @@ async def dunia(pg):
 
 # ═══════════════════════ Segregasi PK / broken ═══════════════════════
 
-async def test_pk_tak_bisa_masuk_silo_broken(pg, dunia):
+async def test_pk_bisa_masuk_silo_berlabel_broken(pg, dunia):
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_tumpukan_ke_silo
     from app.penggilingan.gudang2.models import PkPurchaseBatch
     from app.database import now_local
@@ -74,14 +71,16 @@ async def test_pk_tak_bisa_masuk_silo_broken(pg, dunia):
         await db.commit()
         from app.penggilingan.gudang2.service import masukkan_pk_luar
         r = await masukkan_pk_luar(db, user=u, kode="PKB-20261006-02", tujuan="ditumpuk")
-        with pytest.raises(Gudang2Error, match="bukan silo PK"):
-            await pindah_tumpukan_ke_silo(db, user=u, intake_id=r.intake.id,
-                                          nama_silo="C", berat=500)
+        await pindah_tumpukan_ke_silo(db, user=u, intake_id=r.intake.id,
+                                      nama_silo="C", berat=500)
+        from app.penggilingan.gudang2.service import hitung_stok_silo
+        assert await hitung_stok_silo(db, dunia["silo_broken"]) == 500
 
 
-async def test_broken_tak_bisa_masuk_silo_pk(pg, dunia):
+async def test_broken_bisa_masuk_silo_berlabel_pk(pg, dunia):
     from app.penggilingan.inventory.finished_goods import catat_broken
-    from app.penggilingan.gudang2.polishing import mulai_penyosohan, catat_output
+    from app.penggilingan.gudang2.polishing import (mulai_penyosohan, catat_output,
+                                                     selesai_penyosohan)
     from app.penggilingan.gudang2.service import Gudang2Error, pindah_broken_ke_silo
 
     u = dunia["user"]
@@ -97,9 +96,12 @@ async def test_broken_tak_bisa_masuk_silo_pk(pg, dunia):
         row = (await db.execute(select(ByproductStock)
                                 .where(ByproductStock.jenis_produk == "broken"))
               ).scalars().one()
-        with pytest.raises(Gudang2Error, match="bukan silo broken"):
-            await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row.id,
-                                        nama_silo="A", berat=900)
+        await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
+                                 nama_silo="A", sisa_kg=0)
+        await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row.id,
+                                    nama_silo="A", berat=900)
+        from app.penggilingan.gudang2.service import hitung_stok_silo
+        assert await hitung_stok_silo(db, dunia["silo_pk"]) == 900
 
 
 # ═══════════════════════ Stok silo broken ═══════════════════════

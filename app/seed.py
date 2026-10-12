@@ -43,15 +43,26 @@ async def seed() -> None:
 
         await db.flush()  # dapatkan id gudang
 
-        # ── Silo A & B per gudang ──
+        # ── Silo per gudang ──
         result = await db.execute(select(Silo))
         existing_silos = {(s.warehouse_id, s.nama_silo) for s in result.scalars().all()}
         for wh in (g1, g2):
-            # Silo Gudang 1: 35 ton per silo. Gudang 2 (kolam campuran) belum diatur.
+            # Gudang 1 memiliki tiga silo gabah @35 ton. Silo Gudang 2
+            # menerima bahan campuran; jenis isi historis bukan pembatas.
             kapasitas = 35 if wh is g1 else None
-            for nama in ("Silo A", "Silo B"):
+            nama_silo = ("Silo A", "Silo B", "Silo C") if wh is g1 else ("Silo A", "Silo B")
+            for nama in nama_silo:
                 if (wh.id, nama) not in existing_silos:
-                    db.add(Silo(warehouse_id=wh.id, nama_silo=nama, kapasitas_ton=kapasitas))
+                    db.add(Silo(
+                        warehouse_id=wh.id,
+                        nama_silo=nama,
+                        kapasitas_ton=kapasitas,
+                        jenis_isi="gabah" if wh is g1 else "campuran",
+                    ))
+            if wh is g1:
+                for silo in (await db.execute(select(Silo).where(Silo.warehouse_id == wh.id))).scalars():
+                    if silo.jenis_isi != "gabah":
+                        silo.jenis_isi = "gabah"
 
         # ── Mesin pengering Gudang 1 (1 unit, 35 ton) ──
         result = await db.execute(select(Dryer).where(Dryer.warehouse_id == g1.id))

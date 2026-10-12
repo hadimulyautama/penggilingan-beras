@@ -412,25 +412,19 @@ async def tambah_dryer(
 @router.post("/pengaturan/alat/silo")
 async def tambah_silo(
     request: Request, nama: str = Form(...), gudang: str = Form("g1"),
-    jenis_isi: str = Form("pk"),
+    jenis_isi: str = Form("campuran"),
     akun: ProduksiAkun = Depends(butuh_super),
 ):
-    """Tambah silo — Gudang 1 (gabah kering) atau Gudang 2 (PK / broken).
+    """Tambah silo gabah di Gudang 1 atau silo campuran di Gudang 2.
 
     Tanpa kapasitas: silo memang tak berbatas (keputusan Direksi 2 September
     2026), dan meminta angka yang tidak dipakai hanya mengundang orang
     mengarangnya.
 
-    `jenis_isi` cuma berarti untuk Gudang 2 — keputusan pemilik 6 Oktober
-    2026: broken dapat silonya sendiri, berdampingan dengan silo PK yang
-    sudah ada, dan jenisnya DITETAPKAN sekali saat dibuat (tak ada borang
-    untuk menggantinya — campur PK/broken dalam satu silo tak boleh terjadi
-    sama sekali, bukan cuma diperingatkan). Silo Gudang 1 selalu 'pk': belum
-    ada bentuk lain gabah kering yang butuh wadah terpisah.
+    Silo Gudang 1 selalu khusus gabah. Silo Gudang 2 merupakan silo campuran
+    untuk PK, beras putih, broken, menir, dan reject; bekatul tidak disimpan di
+    silo. `jenis_isi` hanya metadata warisan dan tidak membatasi arus barang.
 
-    Nilai KETIGA `'beras'` (keputusan pemilik 8 Oktober 2026): Silo Beras,
-    tempat grade (premium/medsuper/medium/sayur/beras_b) dicampur untuk
-    disosoh ulang — sebangun silo broken, bukan silo PK yang diubah bentuk.
     """
     from sqlalchemy import select
 
@@ -445,9 +439,7 @@ async def tambah_silo(
         return redirect("/pengaturan/alat?err=nama-pendek")
     penuh = f"Silo {nama}"
     g2 = (gudang or "g1").strip().lower() == "g2"
-    isi = (jenis_isi or "pk").strip().lower()
-    if isi not in ("pk", "broken", "beras"):
-        isi = "pk"
+    isi = "campuran"
     async with SessionLocal() as db:
         if g2:
             wid = await _g2_warehouse_id(db)
@@ -462,7 +454,7 @@ async def tambah_silo(
         if any(s.nama_silo.lower() == penuh.lower() for s in ada):
             return redirect("/pengaturan/alat?err=kembar")
         db.add(Silo(warehouse_id=wid, nama_silo=penuh, kapasitas_ton=0,
-                    jenis_isi=(isi if g2 else "pk")))
+                    jenis_isi=(isi if g2 else "gabah")))
         await db.commit()
     return redirect("/pengaturan/alat?pesan=alat-ditambah")
 

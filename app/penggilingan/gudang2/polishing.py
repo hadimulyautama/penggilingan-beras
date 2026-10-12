@@ -259,21 +259,20 @@ async def tambah_silo_penyosohan(
         # balik ke proses ini, silonya ditolak UTUH — sama konservatifnya
         # dengan `pastikan_satu_pemilik`, yang juga menolak campuran utuh,
         # bukan mencoba memisah bagian yang "aman".
-        if silo.jenis_isi == "broken":
-            sendiri = (await db.execute(
-                select(BrokenKeSilo.id)
-                .join(ByproductStock,
-                      ByproductStock.id == BrokenKeSilo.byproduct_stock_id)
-                .where(BrokenKeSilo.silo_id == silo.id,
-                       ByproductStock.source_type == "polishing",
-                       ByproductStock.source_id == proc.id)
-            )).first()
-            if sendiri:
-                raise Gudang2Error(
-                    f"❌ Silo {letter} berisi broken hasil {proc.kode_proses} "
-                    "sendiri — tak bisa dipakai lagi sebagai bahan sebelum "
-                    "prosesnya ditutup."
-                )
+        sendiri = (await db.execute(
+            select(BrokenKeSilo.id)
+            .join(ByproductStock,
+                  ByproductStock.id == BrokenKeSilo.byproduct_stock_id)
+            .where(BrokenKeSilo.silo_id == silo.id,
+                   ByproductStock.source_type == "polishing",
+                   ByproductStock.source_id == proc.id)
+        )).first()
+        if sendiri:
+            raise Gudang2Error(
+                f"❌ Silo {letter} berisi broken hasil {proc.kode_proses} "
+                "sendiri — tak bisa dipakai lagi sebagai bahan sebelum "
+                "prosesnya ditutup."
+            )
         silos.append(silo)
 
     # ── Pemilik silo baru HARUS SAMA dengan pemilik proses ini ──

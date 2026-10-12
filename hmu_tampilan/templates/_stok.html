@@ -161,8 +161,16 @@
    — konteks templat (yang dibawa `with context`) hanya mengikat variabel
    tingkat-atas, bukan variabel lokal di dalam gelung. Parameter eksplisit
    tak bergantung pada yang mana yang kebetulan terpasang di konteks. #}
+{# `titipan` — {jenis: kg} titipan SELURUH pesanan jasa untuk jenis itu,
+   dipakai HANYA oleh `/stok-produk` (pabrik). Pesan kerja 10 bagian 0, butir
+   (e): "SEBUT titipannya di sebelah angka pabrik... angka pabrik apa
+   adanya, titipan di sebelahnya dengan kata 'titipan'." Bawaannya `None`
+   (bukan `{}`) supaya pemanggil yang tak mengopernya — `/stok-produk-jasa`,
+   tiap kartunya SUDAH milik satu pesanan, menyebut "titipan" di situ akan
+   membingungkan: titipan dari siapa? — tak menggambar apa pun, bukan
+   menggambar "0 kg" yang tak berarti. #}
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
-             boleh_pindah=False, curah_titipan=None, jasa_ids=()) -%}
+             boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=()) -%}
 {% if daftar %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
@@ -180,6 +188,18 @@
       <span class="padat__nilai{{ ' padat__nilai--kosong' if k.sisa_kg < 0.5 }}">
         {{- kg(k.sisa_kg) }}<small>kg</small></span>
     </div>
+    {# Aturan DUA SISI (CLAUDE.md): angka pabrik apa adanya di atas, titipan
+       di sebelahnya — menyaring tanpa menyebut membuat gudang tampak kosong
+       padahal penuh. Pola teks SAMA dengan petak "Stok PK" di Beranda
+       (`layar._petak_g1`, "+ titipan X kg"). TANPA tautan `<a>` DI SINI:
+       ia anak `<summary>`, dan `<a>` di dalam `<summary>` jadi elemen
+       interaktif berlapis — menekannya akan SEKALIGUS membuka/menutup
+       `<details>` ini DAN berpindah halaman, dua akibat dari satu ketukan.
+       Tautan ke `/stok-produk-jasa` sudah ada di laci (sub-menu "Stok"). #}
+    {% if titipan and titipan.get(k.jenis) %}
+      <p class="bantu" style="margin:0 0 8px">
+        + titipan {{ kg(titipan[k.jenis]) }} kg</p>
+    {% endif %}
     {# Empat suku, berurutan seperti perjalanan barangnya. Yang "belum dikemas"
        disorot: ia yang selama ini tak ada di angka stok mana pun, dan ia yang
        menjadi sebab halaman ini lahir. #}
@@ -424,9 +444,9 @@
          selama ADA yang bisa dipindah, apa pun bentuknya sekarang. HANYA
          broken: bekatul tak pernah disosoh ulang, tak punya silo untuk
          ini. #}
-      {% if k.curah_saja and k.jenis == "broken" and k.sisa_kg > 0.5 and boleh_catat %}
+      {% if k.curah_saja and k.jenis == "broken" and k.dikemas_kg > 0.5 and boleh_catat %}
         <a class="btn btn--kecil"
-           href="/stok-produk?buka=masukkan_broken_silo&amp;nilai=pemilik%7Cpabrik"
+           href="/stok-produk?buka=masukkan_broken_silo"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
     </div>

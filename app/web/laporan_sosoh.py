@@ -38,7 +38,7 @@ async def ambil_data(process_id: int) -> dict:
             raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
 
         usages = (await db.execute(
-            select(PolishingSiloUsage, Silo.nama_silo, Silo.jenis_isi)
+            select(PolishingSiloUsage, Silo.nama_silo)
             .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
             .where(PolishingSiloUsage.polishing_process_id == proc.id)
             .order_by(PolishingSiloUsage.id)
@@ -169,7 +169,7 @@ async def ambil_data(process_id: int) -> dict:
                 withdrawals[usage.silo_id].append((at, -1, max(0, _angka(used)), None))
 
         per_silo_sources = []
-        for usage, silo_name, silo_kind in usages:
+        for usage, silo_name in usages:
             sid = usage.silo_id
             # Replay prior stock entries/withdrawals. Negative first for equal
             # timestamps, following _isian_silo_banyak's zero-boundary rule.
@@ -196,7 +196,7 @@ async def ambil_data(process_id: int) -> dict:
             pool_total = sum(x["remaining"] for x in pool)
             if pool_total < expected_start - .01:
                 pool.append({"kind": "legacy", "code": "Saldo silo tanpa rincian sumber",
-                             "material": "PK" if silo_kind != "broken" else "Broken",
+                             "material": "Bahan campuran",
                              "owner": "Tidak tercatat", "plate": "—",
                              "remaining": expected_start - pool_total})
             elif pool_total > expected_start + .01:

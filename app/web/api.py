@@ -3891,16 +3891,13 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/silo-g2")
 async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Silo Gudang 2 PK dari master, berisi atau tidak.
+    """Silo Gudang 2 campuran dari master, berisi atau tidak.
 
     Berbeda dari `silo-bahan-g2`, yang hanya menawarkan silo yang siap
     DISOSOH: ini daftar TUJUAN — silo kosong justru tujuan yang paling wajar.
 
-    ⚠ Disaring `jenis_isi='pk'` sejak silo broken ada (keputusan pemilik 6
-    Oktober 2026): satu-satunya pemanggilnya hari ini (`pindah_tumpukan_
-    silo`) memindahkan PK, dan menawarkan silo broken di sini hanya akan
-    membuat orang memilihnya lalu ditolak layanannya — kelas kebingungan
-    yang sudah diperingatkan `silo-bahan-g2` di bawah.
+    Semua silo Gudang 2 dapat menampung bahan campuran; pemanggil tetap
+    memvalidasi kepemilikan dan saldo sebelum mencatat perpindahan.
     """
     _require(await _is_g2_operator(user) or can_see_financials(user))
     from sqlalchemy import select
@@ -3912,7 +3909,7 @@ async def silo_g2_daftar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid, Silo.jenis_isi == "pk")
+            select(Silo).where(Silo.warehouse_id == wid)
             .order_by(Silo.nama_silo)
         )).scalars().all():
             kg = await hitung_stok_silo(db, s.id)
@@ -4002,9 +3999,7 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
 
 @router.get("/actions/silo-broken-g2")
 async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Silo Gudang 2 ber-`jenis_isi='broken'` dari master — tujuan pemindahan
-    broken. Sebangun `silo-g2`, disaring kebalikannya (lihat catatan di sana).
-    """
+    """Semua silo Gudang 2 dapat menjadi tujuan pemindahan broken campuran."""
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
 
@@ -4015,7 +4010,7 @@ async def silo_broken_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid, Silo.jenis_isi == "broken")
+            select(Silo).where(Silo.warehouse_id == wid)
             .order_by(Silo.nama_silo)
         )).scalars().all():
             kg = await hitung_stok_silo(db, s.id)
@@ -4431,13 +4426,7 @@ async def act_masukkan_broken_silo(req: MasukkanBrokenSiloReq,
 
 @router.get("/actions/silo-beras-tujuan-g2")
 async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Silo Gudang 2 ber-`jenis_isi` 'beras' ATAU 'pk' — DUA pintu beras
-    sekaligus (keputusan pemilik 8 Oktober 2026): grade masuk Silo Beras,
-    `beras_putih` masuk silo PK sebagai bahan sosoh ulang. Silo broken
-    SENGAJA tak ikut — bukan tujuan yang sah untuk beras dalam bentuk apa
-    pun. Label menyebut jenisnya supaya operator tak menebak dari nama silo
-    saja; `gudang2.service.masukkan_beras_ke_silo` yang menegakkan pagarnya.
-    """
+    """Semua silo Gudang 2 dapat menerima beras putih sebagai bahan campuran."""
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
 
@@ -4448,15 +4437,13 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(
-            select(Silo).where(Silo.warehouse_id == wid,
-                               Silo.jenis_isi.in_(("beras", "pk")))
-            .order_by(Silo.jenis_isi, Silo.nama_silo)
+            select(Silo).where(Silo.warehouse_id == wid)
+            .order_by(Silo.nama_silo)
         )).scalars().all():
             kg = await hitung_stok_silo(db, s.id)
-            label_jenis = "Beras" if s.jenis_isi == "beras" else "PK — sosoh ulang"
             keluar.append({"value": s.nama_silo.replace("Silo ", ""),
-                           "label": f"{s.nama_silo} ({label_jenis}) · {_rp(kg)} kg"
-                                    if kg else f"{s.nama_silo} ({label_jenis}) · kosong"})
+                           "label": f"{s.nama_silo} · {_rp(kg)} kg"
+                                    if kg else f"{s.nama_silo} · kosong"})
     return keluar
 
 
