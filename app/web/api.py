@@ -887,9 +887,10 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # untuk alasan yang sama (lihat komentar panjang di atas blok ini).
             #
             # ⚠⚠ SATU AKSI, bukan dua — keputusan pemilik 7 Oktober 2026.
-            # Dulu "Catat broken (curah)" (di katalog Admin, lihat
-            # `aksi_inventory.py`) lalu "Pindah broken ke silo" dua langkah
-            # terpisah, dan keduanya menuntut operator menjawab pertanyaan
+            # Dulu "Catat broken (curah)" (lihat `aksi_inventory.py`) lalu
+            # "Masukkan broken ke silo" dua langkah terpisah. Aksi ini kini
+            # dibuka dari kartu Stok Produk, bukan katalog Catat pekerjaan lain.
+            # Jalurnya menghindari operator menjawab pertanyaan
             # yang salah — "berapa yang MASIH BELUM TERCATAT" — padahal yang
             # ingin ia katakan cuma "berapa yang masuk silo sekarang".
             # Sumbernya kini OTOMATIS: curah dulu, lalu karung dibongkar bila
@@ -1357,12 +1358,8 @@ _GRUP_AKSI = {
     # ("Sisa dicurah", `_kartu_beras_curah`) — tapi tetap di katalog umum
     # sebagai jalan cadangan, sama seperti `catat_bekatul` di atasnya.
     "catat_broken": "Hasil samping & barang jadi",
-    # Belum punya kartu tersendiri (beda dari `pindah_tumpukan_silo`, yang
-    # tombolnya ada di kartu PK Stok) — tetap di katalog umum supaya tetap
-    # terjangkau. Kartu di Stok (usul pemilik, bagian 5) bisa menyusul.
-    "masukkan_broken_silo": "Hasil samping & barang jadi",
-    # Sebangun `masukkan_broken_silo` — belum punya kartu tersendiri, tetap
-    # di katalog umum. Keputusan pemilik 8 Oktober 2026.
+    # Masukkan beras ke silo belum punya tombol di kartu stok, jadi tetap
+    # tersedia dari katalog umum. Keputusan pemilik 8 Oktober 2026.
     "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
@@ -1424,6 +1421,9 @@ for _a in (
     "mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
     "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
     "tambah_silo_penyosohan", "catat_packing",
+    # Broken dimasukkan dari kartu stok broken; jangan tampilkan pintu kedua
+    # di katalog "Catat pekerjaan lain".
+    "masukkan_broken_silo",
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
     "masukkan_pk", "catat_pk_luar", "tolak_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",

@@ -132,15 +132,15 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     # tertinggal.
     _BERKARTU = ["pindah_tumpukan_silo", "mulai_penyosohan", "hasil_penyosohan",
                 "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
+    _BERKARTU.append("masukkan_broken_silo")
     for a in menu:
         if a["id"] in _BERKARTU:
             assert a["kartu"] is True and a["wh"] == "g2", a["id"]
-    # `masukkan_broken_silo` (6 Oktober 2026, diganti namanya & bentuknya 7
-    # Oktober 2026 — satu aksi, bukan dua) BELUM punya kartu tersendiri di
-    # Stok — tetap digambar di katalog "Catat pekerjaan lain" supaya tetap
-    # terjangkau. Beda sengaja dari enam di atas, bukan yang terlewat.
+    # `masukkan_broken_silo` tetap dikirim sebagai spesifikasi aksi supaya
+    # tombol di kartu Stok Produk dapat membukanya, tetapi katalog
+    # "Catat pekerjaan lain" tidak lagi menjadi pintu kedua.
     broken_silo = next(a for a in menu if a["id"] == "masukkan_broken_silo")
-    assert not broken_silo.get("kartu") and broken_silo["wh"] == "g2"
+    assert broken_silo["kartu"] and broken_silo["wh"] == "g2"
     # Formulir ini hanya menyimpan hasil broken ke silo. Penambahan silo
     # sebagai bahan proses berjalan punya aksi tersendiri di kartu penyosohan.
     proses_broken = next(a for a in broken_silo["fields"] if a["name"] == "proses")
