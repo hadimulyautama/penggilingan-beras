@@ -16,7 +16,7 @@ from app.database import SessionLocal
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
 from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
-                        PkPurchaseVerification, PurchaseBatch,
+                        PkPurchaseVerification, PurchaseBatch, PurchaseBatchQc,
                         PurchaseBatchQcSample)
 
 router = APIRouter()
