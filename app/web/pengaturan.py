@@ -341,6 +341,9 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         mesin = [{"id": d.id, "nama": d.nama, "kapasitas": float(d.kapasitas_kg or 0),
                   "status": d.status} for d in await dryers_g1(db)]
         silo = [{"id": s.id, "nama_silo": s.nama_silo,
+                 "nama_tampil": (s.nama_silo[5:].strip()
+                                 if s.nama_silo.lower().startswith("silo ")
+                                 and len(s.nama_silo.strip()) > 6 else s.nama_silo),
                  "komoditas": daftar_diizinkan(s, "g1"),
                  "komoditas_label": ", ".join(LABEL_KOMODITAS[k] for k in daftar_diizinkan(s, "g1")),
                  "opsi_komoditas": [{"kode": k, "label": LABEL_KOMODITAS[k],
@@ -355,6 +358,9 @@ async def halaman_alat(request: Request, akun: ProduksiAkun = Depends(butuh_supe
         # (`jenis_isi`) wajib ikut terlihat.
         wid_g2 = await _g2_warehouse_id(db)
         silo_g2 = [{"id": s.id, "nama_silo": s.nama_silo,
+                    "nama_tampil": (s.nama_silo[5:].strip()
+                                    if s.nama_silo.lower().startswith("silo ")
+                                    and len(s.nama_silo.strip()) > 6 else s.nama_silo),
                     "jenis_isi": s.jenis_isi,
                     "komoditas": daftar_diizinkan(s, "g2"),
                     "komoditas_label": ", ".join(LABEL_KOMODITAS[k] for k in daftar_diizinkan(s, "g2")),
