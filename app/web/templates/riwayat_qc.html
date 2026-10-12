@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block judul %}{{ judul }}{% endblock %}
 {% block isi %}
-<section class="kartu" style="max-width:900px;margin:0 auto">
-  <header style="margin-bottom:16px">
+<section style="max-width:1000px;margin:0 auto">
+  <header style="margin:0 0 12px">
     <h2 style="margin:0">{{ judul }}</h2>
-    <p class="bantu" style="margin:6px 0 0">Catatan QC terbaru, dengan nilai setiap pencatatan tetap utuh.</p>
   </header>
 
   {% if catatan_kosong %}
@@ -12,22 +11,27 @@
   {% elif not rows %}
     <div class="kosong"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
   {% else %}
-    <div style="display:grid;gap:10px">
+    <div style="display:grid;gap:8px">
       {% for row in rows %}
-        <article class="padat padat--diam">
-          <div class="padat__atas">
-            <strong class="padat__nama padat__nama--kode">{{ row.ref }}</strong>
-            <span class="padat__umur">{{ row.rounds|length }} putaran QC</span>
+        <article class="padat padat--diam" style="padding:10px 12px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <strong class="padat__nama padat__nama--kode" style="font-size:1rem">{{ row.ref }}</strong>
+            <span class="bantu">{{ row.rounds|length }} putaran</span>
           </div>
-          <div style="display:grid;gap:8px;margin-top:10px">
+          {% if row.asal or row.plat %}
+            <div class="bantu" style="display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:3px;font-size:.84rem">
+              {% if row.asal %}<span>{{ row.asal }}</span>{% endif %}
+              {% if row.plat %}<span>Armada: {{ row.plat }}</span>{% endif %}
+            </div>
+          {% endif %}
+          <div style="display:grid;gap:4px;margin-top:7px">
             {% for putaran in row.rounds %}
-              <div style="display:grid;grid-template-columns:minmax(78px,auto) minmax(0,1fr);gap:8px 14px;align-items:start;padding:10px 12px;border:1px solid var(--garis, #d5dfe4);border-radius:12px">
+              <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 12px;padding:5px 0;border-top:1px solid var(--garis, #d5dfe4);font-size:.9rem">
                 <strong style="white-space:nowrap">{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
-                <div style="display:flex;flex-wrap:wrap;gap:6px 16px">
+                {% if putaran.waktu %}<time class="bantu" style="font-size:.8rem">{{ putaran.waktu|jam("%d/%m %H:%M") }}</time>{% endif %}
                   {% for label, value in putaran.detail %}
-                    <span><span class="bantu">{{ label }}:</span> <b>{{ value }}</b></span>
+                    <span><span class="bantu">{{ label }}:</span> {{ value }}</span>
                   {% endfor %}
-                </div>
               </div>
             {% endfor %}
           </div>

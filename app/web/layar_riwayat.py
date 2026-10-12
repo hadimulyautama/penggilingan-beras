@@ -16,8 +16,9 @@ from app.database import SessionLocal
 from app.web.security import butuh_akun
 from app.web.tampilan import render_laci
 from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
+                        MillingProcessSource, DryingLotBatch,
                         PkPurchaseVerification, PurchaseBatch, PurchaseBatchQc,
-                        PurchaseBatchQcSample)
+                        PurchaseBatchQcSample, Supplier)
 
 router = APIRouter()
 
@@ -130,8 +131,14 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
 
     grouped: dict[str, dict] = {}
 
-    def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]]):
-        kartu = grouped.setdefault(ref, {"ref": ref, "rounds": []})
+    def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]],
+               *, asal: str | None = None, plat: str | None = None):
+        kartu = grouped.setdefault(ref, {"ref": ref, "rounds": [],
+                                        "asal_set": set(), "plat_set": set()})
+        if asal:
+            kartu["asal_set"].add(asal)
+        if plat:
+            kartu["plat_set"].add(plat)
         kartu["rounds"].append({"waktu": waktu, "nomor": nomor,
                                 "detail": detail})
 
@@ -140,32 +147,44 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         if jenis in ("gabah-basah", "gabah-kering"):
             kondisi = "basah" if jenis == "gabah-basah" else "kering"
             hasil = (await db.execute(
-                select(PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample)
+                select(PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample,
+                       Supplier.nama_supplier)
                 .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
                 .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
+                .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
                 .where(PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None))
                 .order_by(PurchaseBatchQcSample.created_at.desc(),
                           PurchaseBatchQcSample.id.desc()).limit(200)
             )).all()
-            for batch, _qc, sample in hasil:
+            from app.services.jasa import nama_pemilik_banyak
+            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
+            for batch, _qc, sample, nama_supplier in hasil:
                 fields = [("Kadar air", f"{sample.kadar_air_1}% dan {sample.kadar_air_2}%"),
                           ("Biji hijau", sample.biji_hijau.replace("_", " ")),
                           ("Densiti", sample.densiti)]
                 if kondisi == "basah":
                     fields.insert(1, ("Lamur", f"{'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak"))
                 tambah(batch.kode_batch, sample.created_at,
-                       sample.nomor_sampel, fields)
+                       sample.nomor_sampel, fields,
+                       asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
+                             if batch.jasa_id in pemilik else
+                             f"Supplier: {nama_supplier}" if nama_supplier else None),
+                       plat=batch.no_polisi_truk)
         elif jenis == "pk-luar":
             hasil = (await db.execute(
-                select(PkPurchaseBatch, PkPurchaseVerification)
+                select(PkPurchaseBatch, PkPurchaseVerification,
+                       Supplier.nama_supplier)
                 .join(PkPurchaseVerification,
                       PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
+                .outerjoin(Supplier, Supplier.id == PkPurchaseBatch.supplier_id)
                 .where(PkPurchaseBatch.dibatalkan_pada.is_(None))
                 .order_by(PkPurchaseVerification.updated_at.desc(),
                           PkPurchaseVerification.id.desc()).limit(200)
             )).all()
-            for batch, qc in hasil:
+            from app.services.jasa import nama_pemilik_banyak
+            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _ in hasil})
+            for batch, qc, nama_supplier in hasil:
                 values = [("Kadar air", qc.kadar_air, "%"),
                           ("Broken", qc.broken_persen, "%"),
                           ("Penyusutan", qc.penyusutan_persen, "%"),
@@ -175,20 +194,60 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 fields = [(label, f"{value}{unit}") for label, value, unit in values
                           if value is not None and value != ""]
                 tambah(batch.kode_batch, qc.updated_at, None,
-                       fields or [("QC", "Belum ada hasil QC")])
+                       fields or [("QC", "Belum ada hasil QC")],
+                       asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
+                             if batch.jasa_id in pemilik else
+                             f"Supplier: {nama_supplier}" if nama_supplier else None),
+                       plat=batch.no_polisi_truk)
         elif jenis == "pk-hasil-giling":
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(200)
             )).all()
-            for process, qc in hasil:
+            from app.services.jasa import nama_pemilik_banyak
+            pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _ in hasil})
+            proses_ids = {p.id for p, _ in hasil}
+            asal_proses: dict[int, set[str]] = {}
+            plat_proses: dict[int, set[str]] = {}
+            sumber_langsung = (await db.execute(
+                select(MillingProcessSource.milling_process_id,
+                       Supplier.nama_supplier, PurchaseBatch.no_polisi_truk)
+                .join(PurchaseBatch,
+                      PurchaseBatch.id == MillingProcessSource.purchase_batch_id)
+                .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
+                .where(MillingProcessSource.milling_process_id.in_(proses_ids))
+            )).all()
+            sumber_lot = (await db.execute(
+                select(MillingProcessSource.milling_process_id,
+                       Supplier.nama_supplier, PurchaseBatch.no_polisi_truk)
+                .join(DryingLotBatch,
+                      DryingLotBatch.drying_lot_id == MillingProcessSource.drying_lot_id)
+                .join(PurchaseBatch, PurchaseBatch.id == DryingLotBatch.purchase_batch_id)
+                .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
+                .where(MillingProcessSource.milling_process_id.in_(proses_ids))
+            )).all()
+            for proc_id, nama_supplier, no_polisi in (*sumber_langsung, *sumber_lot):
+                if nama_supplier:
+                    asal_proses.setdefault(proc_id, set()).add(f"Supplier: {nama_supplier}")
+                if no_polisi:
+                    plat_proses.setdefault(proc_id, set()).add(no_polisi)
+            putaran_per_proses: dict[int, int] = {}
+            for process, qc in sorted(hasil, key=lambda pair: pair[1].waktu):
+                putaran_per_proses[process.id] = putaran_per_proses.get(process.id, 0) + 1
                 fields = [(label, f"{value}{unit}") for label, value, unit in (
                     ("Kadar air", qc.kadar_air, "%"),
                     ("Broken", qc.broken_persen, "%"),
                     ("Susut", qc.susut_persen, "%"),
                     ("Kondisi", qc.kondisi, "")) if value is not None]
-                tambah(process.kode_proses, qc.waktu, None, fields)
+                asal = ({f"Pemilik jasa: {pemilik[process.jasa_id]}"}
+                        if process.jasa_id in pemilik else
+                        asal_proses.get(process.id, set()))
+                plats = plat_proses.get(process.id, set())
+                tambah(process.kode_proses, qc.waktu,
+                       putaran_per_proses[process.id], fields,
+                       asal=" · ".join(sorted(asal)) or None,
+                       plat=" · ".join(sorted(plats)) or None)
         else:
             # Belum ada model/log QC beras hasil sosoh. Jangan menampilkan
             # catatan output sebagai QC karena itu bukan pengukuran mutu.
@@ -197,6 +256,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
 
     rows = list(grouped.values())
     for kartu in rows:
+        kartu["asal"] = " · ".join(sorted(kartu.pop("asal_set"))) or None
+        kartu["plat"] = " · ".join(sorted(kartu.pop("plat_set"))) or None
         kartu["rounds"].sort(key=lambda putaran: (
             putaran["nomor"] is None,
             putaran["nomor"] if putaran["nomor"] is not None else 0,
