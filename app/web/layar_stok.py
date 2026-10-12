@@ -50,8 +50,10 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
     if gudang not in {g for g, _, _ in saring}:
         gudang = ""                       # nilai karangan dari URL diabaikan
     async with SessionLocal() as db:
-        # Gudang 1 per LOT GILING, Gudang 2 per TEMPAT — dua satuan, karena
-        # bendanya memang dua rupa (lihat catatan di `app.services.stok`).
+        # PK milik pabrik saja di halaman ini: PK jasa punya halaman khusus
+        # `/stok-pk-jasa`, seperti produk jasa dipisah dari Stok Produk.
+        # Layanan tetap membaca semua pemilik agar picker proses dan halaman
+        # khusus bisa memakai sumber data yang sama.
         #
         # ── PK Gudang 1 TERLIHAT oleh operator Gudang 2 ──
         #
@@ -85,9 +87,9 @@ async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
         # diberikan kepada operator, syarat ini harus ditinjau ulang: bagi
         # operator polesan, "Gudang 1" berarti melihat BAHAN, bukan melihat
         # gudang orang lain.
-        lot = (await svc.pk_gudang1(db)
+        lot = ([l for l in await svc.pk_gudang1(db) if not l.pemilik]
                if (gudang1(view) or gudang2(view)) and gudang in ("", "g1") else [])
-        tempat = (await svc.pk_gudang2(db)
+        tempat = ([t for t in await svc.pk_gudang2(db) if not t.pemilik]
                   if gudang2(view) and gudang in ("", "g2") else [])
         mutu_aktif = await fitur_mutu(db)
         # ── Barang jadi & hasil samping ──
@@ -159,13 +161,9 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     yaitu Stok PK Jasa. semua kartu PK Jasa nanti disitu. sama seperti stok
     pk yaitu dibagi blok menjadi di gudang 1 atau gudang 2."*
 
-    `/stok` SUDAH mencampur PK pabrik & titipan dalam satu daftar sejak 24
-    September 2026 (`LotPk.pemilik`/`LotPkG2.pemilik`) — barangnya memang
-    berdiri di lantai yang sama, dan menyembunyikannya dari situ akan
-    berselisih dengan yang terlihat di gudang. Halaman ini TIDAK memindahkan
-    barang keluar dari sana (perilaku `/stok` tak berubah); ia cuma
-    menyaring SATU pertanyaan berbeda — "yang mana milik orang lain?" — ke
-    tempatnya sendiri, pola yang sama dengan "Stok Produk" → "Produk Jasa".
+    PK jasa hanya ditampilkan di halaman ini. `/stok` hanya menampilkan PK
+    milik pabrik, sedangkan data layanan tetap mencakup kedua pemilik untuk
+    dipakai picker proses dan tampilan ini menyaring `pemilik`.
 
     MERENDER `stok_pk_jasa.html` — templat BERISI SATU BARIS, `{% extends
     "stok.html" %}` tanpa satu pun blok ditimpa, jadi keluarannya PERSIS
@@ -186,9 +184,8 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     (`{% if mutu_aktif %}`), bukan cuma tombolnya — memaksanya mati akan
     menyembunyikan mutu yang SUDAH dinilai, bukan sekadar mematikan aksi.
 
-    Penyaring gudang & gerbang per-blok SAMA PERSIS dengan `/stok` — operator
-    yang sudah melihat PK titipan tercampur di sana melihat himpunan yang
-    SAMA di sini, cuma terpilah.
+    Penyaring gudang & gerbang per-blok SAMA PERSIS dengan `/stok`; isi kartu
+    dibatasi ke PK jasa agar tidak muncul ganda di dua halaman.
     """
     from app.services.setelan import fitur_mutu
     from app.web.layar import GUDANG, MEJA, gudang1, gudang2
