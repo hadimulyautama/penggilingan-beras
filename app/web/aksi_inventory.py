@@ -1041,13 +1041,12 @@ class PerintahKeluarReq(BaseModel):
     #: cuma MENAWARKANNYA.
     stok: str | None = None
     jumlah_karung: int | None = None
-    #: Pilihan dari daftar pelanggan Kledo. Dikirim sebagai teks (isi
-    #: `<select>`), diubah jadi id di rutenya.
+    #: Pilihan dari daftar pelanggan Kledo. Dikirim sebagai teks (isi medan
+    #: `kombo`), diubah jadi id di rutenya. WAJIB — kotak ketik-bebas untuk
+    #: pembeli yang belum ada di Kledo dicabut 11 Oktober 2026; `bk._pembeli`
+    #: yang menegakkannya, bukan rute ini, sebab jalur bot memakai fungsi
+    #: yang sama.
     pelanggan: str | None = None
-    #: Nama yang DIKETIK, untuk pembeli yang belum ada di Kledo. Salah satu
-    #: dari keduanya wajib terisi — yang menentukan mana yang menang
-    #: `bk._pembeli`, bukan rute ini, sebab jalur bot memakai fungsi yang sama.
-    nama_pembeli: str = ""
     metode: str | None = None
     no_polisi: str | None = None
     nama_ekspedisi: str | None = None
@@ -1133,16 +1132,13 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
         baris = await _baris_dari_borang(db, req)
         try:
             r = await bk.buat_perintah(
-                db, user=u, baris=baris, nama_pembeli=req.nama_pembeli,
+                db, user=u, baris=baris,
                 pelanggan_id=_pelanggan_id(req.pelanggan),
                 metode=req.metode, no_polisi=(req.no_polisi or None),
                 nama_ekspedisi=(req.nama_ekspedisi or None))
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah barang keluar.")
         kode, pembeli = r.rec.kode, r.rec.nama_pembeli
-    # Namanya dari BARISNYA, bukan dari yang diketik: kalau Admin memilih dari
-    # daftar Kledo, yang diketik memang kosong — dan kalimat "terbit untuk"
-    # yang berakhir tanpa nama membuat orang mengira pembelinya tak tersimpan.
     return {"ok": True,
             "pesan": f"✓ Perintah *{kode}* terbit untuk {pembeli}. "
                      "Tambahkan barang lain bila muatannya lebih dari satu macam — "
@@ -1180,10 +1176,11 @@ async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
 def _pelanggan_id(nilai: str | None) -> int | None:
     """Pilihan pelanggan → id, atau None bila tak dipilih.
 
-    Kosong BUKAN kesalahan: pembeli yang belum ada di Kledo diketik namanya.
-    Yang ditolak cuma isi yang bukan angka — itu berarti borangnya mengirim
-    sesuatu yang bukan dari daftar, dan menerimanya berarti menautkan ke baris
-    yang tak pernah ada.
+    Kosong di sini BUKAN kesalahan RUTE INI — `bk._pembeli` yang menolaknya
+    (medan `pelanggan` kini WAJIB, kotak ketik-bebas dicabut 11 Oktober
+    2026). Yang ditolak DI SINI cuma isi yang bukan angka — itu berarti
+    borangnya mengirim sesuatu yang bukan dari daftar, dan menerimanya
+    berarti menautkan ke baris yang tak pernah ada.
     """
     v = (nilai or "").strip()
     if not v:
@@ -1358,33 +1355,39 @@ async def act_auto_taut_keluar(user: User = Depends(pengguna_aksi)) -> dict:
 # ─────────────────────────── Spesifikasi aksi ───────────────────────────
 
 #: Nama pembeli dst. dipakai berulang di tiga aksi keluar — ditulis sekali.
-def _bidang_pengiriman() -> list[dict]:
+def _bidang_pelanggan() -> dict:
+    """Medan pembeli — PK/perintah penjualan saja, bukan pengambilan jasa
+    (barang titipan kembali ke pemiliknya tanpa ditanya, lihat `ambil_jasa`).
+
+    Permintaan pemilik 29 September 2026: "nama pembeli di barang keluar
+    sinkronkan dengan pelanggan di kledo". Sebabnya terlihat setelah sepekan
+    dipakai: teks bebas melahirkan "Toko Makmur", "toko makmur", dan
+    "TK Makmur" untuk satu pembeli, dan tak satu pun laporan bisa
+    menjumlahkannya.
+
+    Dulu DUA medan — daftar Kledo DAN kotak ketik-bebas untuk pembeli yang
+    belum tersinkron (mingguan). Permintaan pemilik 11 Oktober 2026 mencabut
+    kotak ketik-bebasnya: "field pembeli baru hapus saja" — pelanggan baru
+    kini didaftarkan dulu di Kledo sebelum bisa dipilih di sini. `type:
+    "kombo"` (bukan "remote" polos) supaya daftarnya tetap bisa DIKETIK untuk
+    menyaring — sebangun `pindah_kepemilikan_karung` — walau sumbernya cuma
+    satu daftar sekarang, bukan dua.
+
+    WAJIB (tak lagi `optional`): `bk._pembeli` menolak tanpa `pelanggan_id`,
+    jadi membiarkannya opsional di sini cuma menunda penolakannya ke
+    sesudah seluruh borang terisi.
+    """
+    return {"name": "pelanggan", "label": "Pelanggan (daftar Kledo)",
+            "type": "kombo", "source": "/api/actions/pelanggan-kledo",
+            "placeholder": "Ketik nama pelanggan…",
+            "kosong": "Daftar pelanggan Kledo belum tersinkron — daftarkan "
+                      "pelanggannya di Kledo dulu."}
+
+
+def _bidang_kirim() -> list[dict]:
+    """Medan pengiriman — dipakai perintah penjualan MAUPUN pengambilan
+    jasa (beda dari `_bidang_pelanggan`, yang cuma milik penjualan)."""
     return [
-        # ── PEMBELINYA DIPILIH DARI DAFTAR KLEDO, dan tetap bisa diketik ──
-        #
-        # Permintaan pemilik 29 September 2026: "nama pembeli di barang keluar
-        # sinkronkan dengan pelanggan di kledo". Sebabnya terlihat setelah
-        # sepekan dipakai: teks bebas melahirkan "Toko Makmur", "toko makmur",
-        # dan "TK Makmur" untuk satu pembeli, dan tak satu pun laporan bisa
-        # menjumlahkannya.
-        #
-        # DUA MEDAN, bukan satu, dan bukan karena paket tampilan tak punya
-        # kotak gabungan. Yang kedua adalah PINTU DARURAT yang harus terlihat:
-        # penyegaran kontak Kledo mingguan, jadi pembeli yang dibuat pagi ini
-        # bisa belum ada di daftar. Satu medan yang "boleh diketik bebas kalau
-        # tak ada di daftar" menyembunyikan pintu itu di dalam kebiasaan, dan
-        # yang tak terlihat tak dipakai — orang akan memilih nama yang MIRIP.
-        #
-        # `optional` pada keduanya: yang memastikan salah satunya terisi adalah
-        # `bk._pembeli`, di layanan. Menaruhnya di sini saja berarti jalur bot
-        # dan lembar yang sudah terbuka di layar orang lolos tanpa pembeli.
-        {"name": "pelanggan", "label": "Pembeli (daftar Kledo)",
-         "type": "remote", "source": "/api/actions/pelanggan-kledo",
-         "optional": True,
-         "kosong": "Daftar pelanggan Kledo belum tersinkron — tulis nama "
-                   "pembelinya di kotak bawah."},
-        {"name": "nama_pembeli", "label": "Pembeli baru (belum di Kledo)",
-         "type": "text"},
         {"name": "metode", "label": "Cara kirim", "type": "select", "optional": True,
          "options": [["", "— belum ditentukan —"], ["diantar", "Diantar"],
                      ["diambil", "Diambil sendiri"], ["ekspedisi", "Ekspedisi"]]},
@@ -1636,13 +1639,15 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Tidak ada barang jadi berkarung maupun PK yang "
                             "bisa dikeluarkan."},
-             ] + _bidang_pengiriman()},
+                 _bidang_pelanggan(),
+             ] + _bidang_kirim()},
             # ── PENGAMBILAN BARANG JASA ──
             #
             # Aksinya SENDIRI, bukan pilihan di dalam "Buat perintah barang
             # keluar" — dan bedanya bukan kerapian. Perintah penjualan bertanya
             # "kepada siapa dijual"; perintah pengambilan tidak bertanya sama
-            # sekali, sebab barang titipan kembali kepada yang menitipkannya.
+            # sekali, sebab barang titipan kembali kepada yang menitipkannya —
+            # karena itu TAK memakai `_bidang_pelanggan()`, cuma `_bidang_kirim()`.
             # Satu borang yang memuat keduanya akan menyodorkan medan pembeli
             # pada pengambilan — kesempatan mengetik nama yang salah di atas
             # surat jalan barang orang lain.
@@ -1666,7 +1671,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Pilih pesanannya dulu — daftar barangnya mengikuti "
                             "pemiliknya."},
-             ] + _bidang_pengiriman()},
+             ] + _bidang_kirim()},
             {"id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
              "post": "/api/actions/tutup-jasa",
              "hint": "Hanya bila tak ada lagi barang pesanan itu di pabrik — "

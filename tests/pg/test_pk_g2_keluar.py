@@ -226,7 +226,7 @@ async def test_pesanan_lain_tak_bisa_mengambil_silo_pesanan_ini(pg, pabrik):
 
 
 async def test_pabrik_tak_bisa_menjual_pk_g2_titipan(pg, pabrik):
-    from app.models import User
+    from app.models import Pelanggan, User
     from app.services import barang_keluar as bk
 
     intake_id = await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-04", 3_000,
@@ -235,9 +235,12 @@ async def test_pabrik_tak_bisa_menjual_pk_g2_titipan(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        klien = Pelanggan(nama_pelanggan="Toko Beras Uji")
+        db.add(klien)
+        await db.flush()
         with pytest.raises(bk.BarangKeluarError) as e:
             await bk.buat_perintah(
-                db, user=u, nama_pembeli="Toko Beras Uji",
+                db, user=u, pelanggan_id=klien.id,
                 baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=pabrik["silo_c"],
                                         berat_kg=1_000)])
     assert "tidak dijual pabrik" in str(e.value)

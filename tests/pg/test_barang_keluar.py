@@ -91,12 +91,18 @@ async def _stok(pg, g) -> float:
 async def _perintah(pg, g, karung=100, pembeli="Toko Makmur"):
     from app.models import User
     from app.services import barang_keluar as bk
+    # `pembeli` dulu dikirim sebagai NAMA ketik-bebas; kotak itu dicabut 11
+    # Oktober 2026 (keputusan pemilik: "field pembeli baru hapus saja") —
+    # kini wajib tertaut ke master `pelanggan`, jadi helper ini membuatnya
+    # dulu supaya seluruh pemanggil lama (yang cuma peduli NAMANYA, bukan
+    # tautannya) tetap jalan tanpa diubah satu-satu.
+    pid = await _pelanggan(pg, pembeli)
     async with pg() as db:
         return await bk.buat_perintah(
             db, user=await db.get(User, g["adm"]),
             baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=g["sku"],
                                     std_id=g["std"], jumlah_karung=karung)],
-            nama_pembeli=pembeli, no_polisi="B 1234 XY")
+            pelanggan_id=pid, no_polisi="B 1234 XY")
 
 
 async def test_perintah_belum_mengurangi_stok(pg, gudang):
@@ -272,13 +278,14 @@ async def test_byproduct_curah_tak_lagi_memakai_stok_bekatul_untuk_jenis_lain(pg
         await catat_bekatul(db, user=await db.get(User, gudang["op"]),
                             kode_pol=proc.kode_proses, berat_kg=1_000)
 
+    pid = await _pelanggan(pg, "Toko Makmur")
     async with pg() as db:
         with pytest.raises(bk.BarangKeluarError) as e:
             await bk.buat_perintah(
                 db, user=await db.get(User, gudang["adm"]),
                 baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="menir",
                                         berat_kg=1)],
-                nama_pembeli="Toko Makmur", no_polisi="B 1234 XY")
+                pelanggan_id=pid, no_polisi="B 1234 XY")
     assert "tinggal 0 kg" in str(e.value), str(e.value)
     assert "1.000" not in str(e.value), \
         "stok bekatul masih bocor ke penolakan menir: " + str(e.value)
@@ -290,7 +297,7 @@ async def test_byproduct_curah_tak_lagi_memakai_stok_bekatul_untuk_jenis_lain(pg
             db, user=await db.get(User, gudang["adm"]),
             baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
                                     berat_kg=1_000)],
-            nama_pembeli="Toko Makmur", no_polisi="B 1234 XY")
+            pelanggan_id=pid, no_polisi="B 1234 XY")
     assert r.rec.kode
 
 
@@ -679,12 +686,13 @@ async def test_pk_mentah_keluar_dan_mengurangi_stok_pk(pg, gudang):
         awal = float(await pending_transfer_kg(db, pid))
     assert awal == 6_000, awal
 
+    klien = await _pelanggan(pg, "Pabrik Seberang")
     async with pg() as db:
         r = await bk.buat_perintah(
             db, user=await db.get(User, gudang["adm"]),
             baris=[bk.BarisPerintah(tipe="pk_langsung", milling_process_id=pid,
                                     berat_kg=2_000)],
-            nama_pembeli="Pabrik Seberang")
+            pelanggan_id=klien)
     async with pg() as db:
         # Perintah BELUM memindahkan apa pun — PK-nya masih di Gudang 1.
         assert float(await pending_transfer_kg(db, pid)) == 6_000
@@ -702,6 +710,7 @@ async def test_perintah_pk_melebihi_sisa_lot_ditolak_dengan_angkanya(pg, gudang)
     from app.models import MillingProcess, MillingProgressLog, User
     from app.services import barang_keluar as bk
 
+    klien = await _pelanggan(pg, "Pabrik Seberang")
     async with pg() as db:
         proc = MillingProcess(kode_proses="LOT-KLR-02", status="selesai",
                               silo_id=gudang["silo"],
@@ -719,7 +728,7 @@ async def test_perintah_pk_melebihi_sisa_lot_ditolak_dengan_angkanya(pg, gudang)
                 db, user=await db.get(User, gudang["adm"]),
                 baris=[bk.BarisPerintah(tipe="pk_langsung",
                                         milling_process_id=pid, berat_kg=4_000)],
-                nama_pembeli="Pabrik Seberang")
+                pelanggan_id=klien)
     assert "3.000" in str(e.value), str(e.value)
 
 
@@ -773,6 +782,7 @@ async def test_satu_borang_menerima_beberapa_item_sekaligus(pg, gudang):
                                   waktu_update=now_local(), input_by=gudang["op"]))
         await db.commit()
 
+    klien = await _pelanggan(pg, "Toko Makmur")
     async with pg() as db:
         u = await db.get(User, gudang["adm"])
         r = await inv.act_perintah_keluar(inv.PerintahKeluarReq(
@@ -780,7 +790,7 @@ async def test_satu_borang_menerima_beberapa_item_sekaligus(pg, gudang):
                 inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}", jumlah=100),
                 inv.BarisReq(pilih="pk:LOT-MULTI-01", jumlah=1_500),
             ],
-            nama_pembeli="Toko Makmur", no_polisi="B 1234 XY"), user=u)
+            pelanggan=str(klien), no_polisi="B 1234 XY"), user=u)
     assert r["ok"], r
 
     from app.services import barang_keluar as bk
@@ -808,6 +818,7 @@ async def test_baris_terisi_separuh_ditolak_dengan_menyebut_barangnya(pg, gudang
     from app.web import aksi_inventory as inv
     from fastapi import HTTPException
 
+    klien = await _pelanggan(pg, "Toko Makmur")
     async with pg() as db:
         u = await db.get(User, gudang["adm"])
         with pytest.raises(HTTPException) as e:
@@ -816,7 +827,7 @@ async def test_baris_terisi_separuh_ditolak_dengan_menyebut_barangnya(pg, gudang
                     inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}", jumlah=40),
                     inv.BarisReq(pilih=f"bj:{gudang['sku']}|{gudang['std']}"),
                 ],
-                nama_pembeli="Toko Makmur"), user=u)
+                pelanggan=str(klien)), user=u)
     assert "jumlah" in str(e.value.detail).lower(), e.value.detail
 
 
@@ -827,11 +838,12 @@ async def test_bentuk_borang_lama_masih_diterima(pg, gudang):
     from app.models import User
     from app.web import aksi_inventory as inv
 
+    klien = await _pelanggan(pg, "Toko Lama")
     async with pg() as db:
         u = await db.get(User, gudang["adm"])
         r = await inv.act_perintah_keluar(inv.PerintahKeluarReq(
             stok=f"{gudang['sku']}|{gudang['std']}", jumlah_karung=20,
-            nama_pembeli="Toko Lama"), user=u)
+            pelanggan=str(klien)), user=u)
     assert r["ok"], r
 
 
@@ -990,6 +1002,7 @@ async def test_kartu_muat_mendarat_di_gudang_yang_memegang_barangnya(pg, gudang)
     # Perintah A: barang jadi saja.
     a = await _perintah(pg, gudang, karung=40, pembeli="Toko A")
     # Perintah B: PK mentah.
+    klien = await _pelanggan(pg, "Pabrik Seberang")
     async with pg() as db:
         proc = MillingProcess(kode_proses="LOT-KARTU-01", status="selesai",
                               silo_id=gudang["silo"], berat_gabah_masuk_kg=8_000,
@@ -1005,7 +1018,7 @@ async def test_kartu_muat_mendarat_di_gudang_yang_memegang_barangnya(pg, gudang)
             db, user=await db.get(User, gudang["adm"]),
             baris=[bk.BarisPerintah(tipe="pk_langsung",
                                     milling_process_id=proc.id, berat_kg=1_000)],
-            nama_pembeli="Pabrik Seberang")
+            pelanggan_id=klien)
 
     async with pg() as db:
         g1 = await untuk_gudang1(db)
@@ -1324,13 +1337,14 @@ async def test_pk_dari_lot_berbeda_tak_pernah_digabung(pg, gudang):
             pid.append(p.id)
         await db.commit()
 
+    klien = await _pelanggan(pg, "Pabrik Seberang")
     async with pg() as db:
         u = await db.get(User, gudang["adm"])
         r = await bk.buat_perintah(
             db, user=u,
             baris=[bk.BarisPerintah(tipe="pk_langsung", milling_process_id=pid[0],
                                     berat_kg=1_000)],
-            nama_pembeli="Pabrik Seberang")
+            pelanggan_id=klien)
     async with pg() as db:
         h = await bk.tambah_baris(
             db, user=await db.get(User, gudang["adm"]), rec_id=r.rec.id,
@@ -1847,7 +1861,7 @@ async def _pelanggan(pg, nama, *, status="aktif", dihapus=False, kledo=None):
         return p.id
 
 
-async def _perintah_pembeli(pg, g, *, pelanggan_id=None, nama=None, karung=40):
+async def _perintah_pembeli(pg, g, *, pelanggan_id=None, karung=40):
     from app.models import User
     from app.services import barang_keluar as bk
     async with pg() as db:
@@ -1855,7 +1869,7 @@ async def _perintah_pembeli(pg, g, *, pelanggan_id=None, nama=None, karung=40):
             db, user=await db.get(User, g["adm"]),
             baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=g["sku"],
                                     std_id=g["std"], jumlah_karung=karung)],
-            nama_pembeli=nama, pelanggan_id=pelanggan_id)
+            pelanggan_id=pelanggan_id)
 
 
 async def test_pembeli_dipilih_dari_daftar_kledo_tersimpan_bertaut(pg, gudang):
@@ -1869,27 +1883,20 @@ async def test_pembeli_dipilih_dari_daftar_kledo_tersimpan_bertaut(pg, gudang):
         "cuplikan namanya tak ikut tersimpan"
 
 
-async def test_nama_yang_diketik_tak_menimpa_pembeli_yang_dipilih(pg, gudang):
-    """Borangnya mengirim keduanya. Kalau yang diketik menang, laporan
-    mengelompokkan menurut tautannya sementara surat jalannya menyebut nama
-    lain — dan yang memegang kertas itu yang harus menjelaskannya di gerbang."""
-    pid = await _pelanggan(pg, "PT Beras Jaya")
-    r = await _perintah_pembeli(pg, gudang, pelanggan_id=pid,
-                                nama="toko sebelah")
-    assert r.rec.nama_pembeli == "PT Beras Jaya", r.rec.nama_pembeli
-    assert r.rec.pelanggan_id == pid
+async def test_pembeli_yang_belum_ada_di_kledo_tak_lagi_boleh_diketik(pg, gudang):
+    """Kotak ketik-bebas ("PINTU DARURAT" untuk pembeli yang belum tersinkron
+    dari Kledo) DICABUT (keputusan pemilik 11 Oktober 2026: "field pembeli
+    baru hapus saja") — `buat_perintah` tak menerima parameter nama lagi
+    sama sekali, cuma `pelanggan_id`. Pelanggan baru didaftarkan dulu di
+    Kledo sebelum bisa dipilih di sini.
+    """
+    from app.services import barang_keluar as bk
+    import inspect
+
+    assert "nama_pembeli" not in inspect.signature(bk.buat_perintah).parameters
 
 
-async def test_pembeli_yang_belum_ada_di_kledo_masih_boleh_diketik(pg, gudang):
-    """PINTU DARURAT, dan ia harus tetap terbuka: penyegaran kontak Kledo
-    MINGGUAN, jadi pembeli yang dibuat pagi ini bisa belum ada di daftar.
-    Mewajibkan tautannya berarti truk berhenti di halaman menunggu keuangan."""
-    r = await _perintah_pembeli(pg, gudang, nama="  UD Pembeli Baru  ")
-    assert r.rec.nama_pembeli == "UD Pembeli Baru", r.rec.nama_pembeli
-    assert r.rec.pelanggan_id is None, "pembeli baru tertaut ke baris entah apa"
-
-
-async def test_perintah_tanpa_pembeli_ditolak_sambil_menyebut_dua_jalannya(
+async def test_perintah_tanpa_pembeli_ditolak_menyebut_satu_satunya_jalan(
         pg, gudang):
     """Yang ditolak tanpa diberi tahu jalan keluarnya akan dicoba lagi dengan
     cara yang sama."""
@@ -1898,7 +1905,9 @@ async def test_perintah_tanpa_pembeli_ditolak_sambil_menyebut_dua_jalannya(
     with pytest.raises(bk.BarangKeluarError) as e:
         await _perintah_pembeli(pg, gudang)
     pesan = str(e.value)
-    assert "daftar" in pesan.lower() and "tulis" in pesan.lower(), pesan
+    assert "daftar" in pesan.lower() and "kledo" in pesan.lower(), pesan
+    # Dan TAK lagi menyebut jalan ketik-bebas yang sudah dicabut.
+    assert "tulis" not in pesan.lower(), pesan
 
 
 async def test_pelanggan_nonaktif_atau_terhapus_ditolak(pg, gudang):
@@ -2010,13 +2019,14 @@ async def test_bekatul_curah_benar_benar_keluar_dan_mengurangi_stok(pg, gudang):
     from app.services import barang_keluar as bk
     from app.web.aksi_inventory import _satu_baris
 
+    klien = await _pelanggan(pg, "Peternakan Jaya")
     await _bekatul_curah(pg, gudang, 2_000)
     async with pg() as db:
         assert float(await hitung_stok_bekatul(db)) == 2_000
         baris = await _satu_baris(db, "cr:bekatul", 500)
         r = await bk.buat_perintah(
             db, user=await db.get(User, gudang["adm"]), baris=[baris],
-            nama_pembeli="Peternakan Jaya")
+            pelanggan_id=klien)
         await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
                             rec_id=r.rec.id)
     async with pg() as db:
@@ -2029,6 +2039,7 @@ async def test_perintah_curah_melebihi_stok_ditolak_dengan_angkanya(pg, gudang):
     from app.models import User
     from app.services import barang_keluar as bk
 
+    klien = await _pelanggan(pg, "Peternakan Jaya")
     await _bekatul_curah(pg, gudang, 2_000)
     async with pg() as db:
         with pytest.raises(bk.BarangKeluarError) as e:
@@ -2036,7 +2047,7 @@ async def test_perintah_curah_melebihi_stok_ditolak_dengan_angkanya(pg, gudang):
                 db, user=await db.get(User, gudang["adm"]),
                 baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
                                         berat_kg=5_000)],
-                nama_pembeli="Peternakan Jaya")
+                pelanggan_id=klien)
     assert "2.000" in str(e.value), str(e.value)
 
 

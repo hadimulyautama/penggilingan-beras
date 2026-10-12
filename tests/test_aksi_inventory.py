@@ -280,35 +280,35 @@ def _medan_perintah_keluar() -> list[dict]:
 
 def test_borang_perintah_menawarkan_daftar_pelanggan_kledo():
     """Permintaan pemilik 29 September 2026: "nama pembeli di barang keluar
-    sinkronkan dengan pelanggan di kledo".
-
-    Yang dijaga BENTUK MEDANNYA, bukan cuma ada-tidaknya nama: medan `text`
-    menerima apa saja, dan satu pembeli akan tertulis tiga ejaan dalam sepekan.
+    sinkronkan dengan pelanggan di kledo". Diperbarui 11 Oktober 2026:
+    "pembeli ganti istilahnya menjadi pelanggan... harus bisa diketik lalu
+    list pelanggan terfilter" — medan `remote` polos diganti `kombo` (ketik
+    untuk menyaring daftar yang sama, sebangun `pindah_kepemilikan_karung`).
     """
     medan = {f["name"]: f for f in _medan_perintah_keluar()}
     p = medan.get("pelanggan")
     assert p is not None, "borang perintah keluar tak menawarkan daftar pelanggan"
-    assert p["type"] == "remote", p
+    assert p["type"] == "kombo", p
     assert p["source"] == "/api/actions/pelanggan-kledo", p
+    assert p["label"] == "Pelanggan (daftar Kledo)", p
 
 
-def test_pembeli_baru_tetap_bisa_diketik():
-    """PINTU DARURAT, dan ia harus TERLIHAT di borangnya.
-
-    Penyegaran kontak Kledo mingguan — pembeli yang dibuat pagi ini bisa belum
-    ada di daftar. Kalau medan ketiknya dicabut karena "sudah ada daftarnya",
-    truk berhenti di halaman menunggu keuangan membuat kontak di Kledo.
+def test_pembeli_baru_tak_lagi_bisa_diketik():
+    """Kotak ketik-bebas untuk pembeli yang belum ada di Kledo — dulu "PINTU
+    DARURAT" yang sengaja dibiarkan terbuka — DICABUT (keputusan pemilik 11
+    Oktober 2026: "field pembeli baru hapus saja"). Pelanggan baru kini
+    didaftarkan dulu di Kledo sebelum bisa dipilih di sini.
     """
     medan = {f["name"]: f for f in _medan_perintah_keluar()}
-    assert "nama_pembeli" in medan, \
-        "pembeli yang belum ada di Kledo tak punya jalan masuk"
-    assert medan["nama_pembeli"]["type"] == "text", medan["nama_pembeli"]
+    assert "nama_pembeli" not in medan, \
+        "kotak ketik-bebas pembeli baru masih ada, padahal sudah dicabut"
 
 
-def test_daftar_pelanggan_tak_boleh_memaksa_borangnya_mati():
-    """`optional` bukan kerapian: daftar `remote` yang kosong dan TIDAK
-    optional mematikan tombol Simpan seluruh borang (lihat `muatPilihan` di
-    aksi.js). Sebelum penyegaran Kantor pertama — dan di Mode Uji — daftar itu
-    memang kosong, dan perintah muat harus tetap bisa diterbitkan."""
+def test_medan_pelanggan_wajib_terisi():
+    """Beda dari dulu (`optional: True`, sebab ada jalan keluar lewat kotak
+    ketik-bebas): medan `pelanggan` kini SATU-SATUNYA cara menyebut pembeli,
+    jadi tak lagi boleh opsional di tingkat borang — `bk._pembeli` menolak
+    tanpanya, dan membiarkannya opsional di sini cuma menunda penolakan itu
+    ke sesudah seluruh borang terisi."""
     medan = {f["name"]: f for f in _medan_perintah_keluar()}
-    assert medan["pelanggan"].get("optional") is True, medan["pelanggan"]
+    assert not medan["pelanggan"].get("optional"), medan["pelanggan"]

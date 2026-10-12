@@ -203,15 +203,19 @@ async def test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah(
                             kategori="beras_putih", grade="medium",
                             material_kode="biasa", ukuran=25, jumlah_karung=100)
     async with pg() as db:
+        from app.models import Pelanggan
         sku_id, std_id = (await db.execute(select(
             FinishedGoodsStock.product_sku_id,
             FinishedGoodsStock.rice_quality_standard_id).limit(1))).first()
         adm = await db.get(User, pabrik["adm"])
+        klien = Pelanggan(nama_pelanggan="Toko Uji")
+        db.add(klien)
+        await db.flush()
         r = await bk.buat_perintah(
             db, user=adm,
             baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku_id,
                                     std_id=std_id, jumlah_karung=50)],
-            nama_pembeli="Toko Uji", no_polisi="B 9 BK")
+            pelanggan_id=klien.id, no_polisi="B 9 BK")
     async with pg() as db:
         u = await db.get(User, pabrik["op1"])
         await bk.muat_semua(db, user=u, rec_id=r.rec.id)

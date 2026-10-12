@@ -107,13 +107,14 @@ def test_tak_satu_pun_borang_menyebut_rupiah():
 
 
 def test_borang_pengiriman_tak_menanyakan_rupiah():
-    """Disebut sendiri, sebab `_bidang_pengiriman()` dipakai berulang: satu
-    medan harga yang diselipkan ke sana akan muncul di SETIAP borang keluar
-    sekaligus, dan pagar per-aksi di atas menyebutkannya satu per satu — daftar
-    yang panjang lebih mudah dibaca sebagai "memang begitu"."""
-    from app.web.aksi_inventory import _bidang_pengiriman
+    """Disebut sendiri, sebab `_bidang_kirim()`/`_bidang_pelanggan()` dipakai
+    berulang: satu medan harga yang diselipkan ke sana akan muncul di SETIAP
+    borang keluar sekaligus, dan pagar per-aksi di atas menyebutkannya satu
+    per satu — daftar yang panjang lebih mudah dibaca sebagai "memang
+    begitu"."""
+    from app.web.aksi_inventory import _bidang_kirim, _bidang_pelanggan
 
-    nama = {f["name"] for f in _bidang_pengiriman()}
+    nama = {f["name"] for f in _bidang_kirim()} | {_bidang_pelanggan()["name"]}
     assert not [n for n in nama if "harga" in n], (
         "borang pengiriman menanyakan harga — uang urusan keuangan, "
         f"bukan Pos Produksi: {sorted(nama)}")

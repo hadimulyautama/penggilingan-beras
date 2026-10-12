@@ -34,15 +34,18 @@ async def _keluarkan(pg, uid_admin, uid_op, *, sku_id, std_id, karung,
     Ketiga langkahnya dijalankan sekaligus di sini karena yang diuji berkas ini
     ANGKANYA, bukan rantainya — rantainya dijaga `tests/pg/test_barang_keluar.py`.
     """
-    from app.models import User
+    from app.models import Pelanggan, User
     from app.services import barang_keluar as bk
 
     async with pg() as db:
+        klien = Pelanggan(nama_pelanggan=pembeli)
+        db.add(klien)
+        await db.flush()
         r = await bk.buat_perintah(
             db, user=await db.get(User, uid_admin),
             baris=[bk.BarisPerintah(tipe="finished_goods", sku_id=sku_id,
                                     std_id=std_id, jumlah_karung=karung)],
-            nama_pembeli=pembeli)
+            pelanggan_id=klien.id)
     async with pg() as db:
         await bk.muat_semua(db, user=await db.get(User, uid_op), rec_id=r.rec.id)
     async with pg() as db:
@@ -891,10 +894,17 @@ async def test_barang_keluar_dipilih_dari_stok_yang_ada(pg, sosoh):
     # bertabel terbit, dan halaman di ponsel berumur panjang. Bentuk barunya
     # diuji di `tests/pg/test_barang_keluar.py`.
     async with pg() as db:
+        from app.models import Pelanggan
+        klien = Pelanggan(nama_pelanggan="Toko Uji")
+        db.add(klien)
+        await db.flush()
+        await db.commit()
+        klien_id = klien.id
+    async with pg() as db:
         u = await db.get(User, sosoh["user"])
         r = await inv.act_perintah_keluar(
             inv.PerintahKeluarReq(stok=daftar[0]["value"], jumlah_karung=40,
-                                  nama_pembeli="Toko Uji"), user=u)
+                                  pelanggan=str(klien_id)), user=u)
     assert r["ok"], r
     async with pg() as db:
         u = await db.get(User, sosoh["user"])

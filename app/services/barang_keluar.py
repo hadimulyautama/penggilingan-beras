@@ -448,49 +448,40 @@ async def _jejak(db: AsyncSession, rec: OutgoingRecord, *, langkah: str,
 
 # ─────────────────────── LANGKAH 1 · Admin memerintah ───────────────────────
 
-async def _pembeli(db: AsyncSession, pelanggan_id: int | None,
-                   nama: str | None) -> tuple[str, int | None]:
+async def _pembeli(db: AsyncSession, pelanggan_id: int | None) -> tuple[str, int]:
     """(nama yang dicatat, id pelanggan Kledo) — satu aturan, di satu tempat.
 
-    NAMANYA DISALIN DARI MASTER ketika tautannya ada, bukan dari yang diketik.
-    Borangnya mengirim keduanya, dan kalau keduanya berbeda yang tertulis di
-    surat jalan harus sama dengan yang DIPILIH — kalau tidak, laporan
-    mengelompokkan menurut tautannya sementara kertasnya menyebut nama lain,
-    dan yang memegang kertas itulah yang harus menjelaskannya di gerbang.
+    NAMANYA DISALIN DARI MASTER, bukan dari yang diketik — borangnya hanya
+    memilih dari daftar Kledo (permintaan pemilik 11 Oktober 2026, menutup
+    kotak ketik-bebas yang dulu ada di sini): "Toko Makmur", "toko makmur",
+    dan "TK Makmur" untuk satu pembeli pernah membuat laporan tak bisa
+    menjumlahkannya.
 
-    Namanya tetap DISIMPAN meski sudah ada tautannya: ia cuplikan hari itu.
-    Kledo tidak punya "merge" — kontak ganda dirapikan dengan memindahkan
-    transaksinya lalu menghapus yang ganda — jadi tautan saja tak cukup untuk
-    menyebut pembeli sebuah surat jalan tahun lalu.
-
-    Tanpa tautan, nama yang diketik DITERIMA. Penyegaran kontaknya mingguan;
-    menolak pembeli yang belum ada di daftar berarti truk berhenti di halaman
-    menunggu keuangan membuat kontak di Kledo.
+    Namanya tetap DISIMPAN di baris perintahnya meski sudah ada tautannya: ia
+    cuplikan hari itu. Kledo tidak punya "merge" — kontak ganda dirapikan
+    dengan memindahkan transaksinya lalu menghapus yang ganda — jadi tautan
+    saja tak cukup untuk menyebut pembeli sebuah surat jalan tahun lalu.
     """
     from app.models import Pelanggan
 
-    if pelanggan_id:
-        p = await db.get(Pelanggan, int(pelanggan_id))
-        # Syaratnya sama dengan yang dipakai daftar pilihannya — yang
-        # ditawarkan dan yang diterima harus himpunan yang sama, kalau tidak
-        # ada pilihan yang bisa dipilih lalu ditolak.
-        if p is None or p.deleted_at is not None or p.status != "aktif":
-            raise BarangKeluarError(
-                "Pelanggan itu sudah tidak ada di daftar — pilih yang lain, "
-                "atau tulis namanya sebagai pembeli baru.")
-        return (p.nama_pelanggan or "").strip(), p.id
-    nama = (nama or "").strip()
-    if not nama:
+    if not pelanggan_id:
         raise BarangKeluarError(
-            "Pilih pembelinya dari daftar pelanggan Kledo — atau tulis namanya "
-            "bila ia belum ada di sana. Surat jalan tanpa nama tak bisa "
-            "diantar, dan yang memuat perlu tahu muatan ini milik siapa.")
-    return nama, None
+            "Pilih pembelinya dari daftar pelanggan Kledo. Pelanggan baru "
+            "didaftarkan dulu di Kledo sebelum bisa dipilih di sini — "
+            "penyegaran kontaknya mingguan.")
+    p = await db.get(Pelanggan, int(pelanggan_id))
+    # Syaratnya sama dengan yang dipakai daftar pilihannya — yang
+    # ditawarkan dan yang diterima harus himpunan yang sama, kalau tidak
+    # ada pilihan yang bisa dipilih lalu ditolak.
+    if p is None or p.deleted_at is not None or p.status != "aktif":
+        raise BarangKeluarError(
+            "Pelanggan itu sudah tidak ada di daftar — pilih yang lain.")
+    return (p.nama_pelanggan or "").strip(), p.id
 
 
 async def buat_perintah(
     db: AsyncSession, *, user, baris: list[BarisPerintah],
-    nama_pembeli: str | None = None, pelanggan_id: int | None = None,
+    pelanggan_id: int | None = None,
     jasa_id: int | None = None,
     metode: str | None = None,
     no_polisi: str | None = None, nama_ekspedisi: str | None = None,
@@ -507,9 +498,10 @@ async def buat_perintah(
     sekarang dikurangi yang sudah diperintahkan orang lain dan belum dimuat.
     Ditolak dengan menyebut angkanya.
 
-    PEMBELINYA DITAUTKAN ke master `pelanggan` bila Admin memilihnya dari
-    daftar (permintaan pemilik 29 September 2026: "nama pembeli di barang
-    keluar sinkronkan dengan pelanggan di kledo") — lihat `_pembeli`.
+    PEMBELINYA DITAUTKAN ke master `pelanggan` (keputusan pemilik 29 September
+    2026: "nama pembeli di barang keluar sinkronkan dengan pelanggan di
+    kledo"). `pelanggan_id` kini WAJIB — kotak ketik-bebas untuk pembeli yang
+    belum ada di Kledo dicabut 11 Oktober 2026, lihat `_pembeli`.
     """
     if not baris:
         raise BarangKeluarError(
@@ -533,12 +525,10 @@ async def buat_perintah(
                 f"Pesanan {pesanan.kode} sudah {pesanan.status} — tak bisa "
                 "mengambil barang lagi.")
         # Pembelinya PEMILIKNYA, dan tak perlu ditanya: barang titipan kembali
-        # kepada yang menitipkannya. Nama yang diketik orang di sini cuma
-        # kesempatan mengetiknya salah.
+        # kepada yang menitipkannya.
         pelanggan_id = pesanan.pelanggan_id
-        nama_pembeli = None
         baris = [replace(b, jasa_id=int(jasa_id)) for b in baris]
-    nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id, nama_pembeli)
+    nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id)
 
     dihitung: list[tuple[BarisPerintah, float, int | None]] = []
     for b in baris:
