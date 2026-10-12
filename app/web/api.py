@@ -1353,18 +1353,13 @@ _GRUP_AKSI = {
     # `kirim_bekatul`, `kirim_barang_jadi` dan `jual_pk` DIBUANG 28 September
     # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
     # tanpa perintah membuat rantainya sukarela.
-    "catat_bekatul": "Hasil samping & barang jadi",
     # Masukkan beras ke silo belum punya tombol di kartu stok, jadi tetap
     # tersedia dari katalog umum. Keputusan pemilik 8 Oktober 2026.
     "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
-    # Grup SENDIRI, bukan digabung ke "Barang keluar": yang mencari
-    # pengambilan jasa mencari pesanan pelanggannya, bukan truk yang berangkat
-    # — dan tiga aksi jasa yang berserak di antara enam aksi penjualan membuat
-    # keduanya harus dibaca satu per satu tiap kali.
-    "ambil_jasa": "Jasa (titipan pelanggan)",
+    # Tutup/batalkan pesanan jasa belum memiliki tombol kartu khusus.
     "tutup_jasa": "Jasa (titipan pelanggan)",
     "batalkan_jasa": "Jasa (titipan pelanggan)",
     "verifikasi_keluar": "Barang keluar",
@@ -1420,6 +1415,9 @@ for _a in (
     # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
     # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
     "masukkan_broken_silo",
+    # Formulir kepemilikan dibuka dari kartu stok terkait; pengambilan jasa
+    # dibuka dari halaman Barang Keluar.
+    "pindah_kepemilikan_produk", "pindah_kepemilikan_karung", "ambil_jasa",
     # PK dari luar & pencocokan — berkartu di Menunggu keputusan / Mutu & QC.
     "masukkan_pk", "catat_pk_luar", "tolak_pk_luar", "qc_pk_luar",
     "betulkan_bobot_giling",
