@@ -498,6 +498,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 }
                 for kondisi in ("basah", "kering")
             ],
+            {"id": "qc_gabah_tutup", "label": "🔒 Tutup proses QC gabah",
+             "post": "/api/actions/tutup-qc-gabah",
+             "hint": "Tutup setelah minimal satu catatan QC tersimpan. Setelah ditutup, data QC truk ini tidak bisa ditambah lagi.",
+             "fields": [{"name": "kode_batch", "label": "Proses QC yang belum lengkap",
+                         "type": "remote", "source": "/api/actions/gabah-qc-bisa-ditutup",
+                         "kosong": "Belum ada proses QC yang bisa ditutup."}]},
             {"id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
              "post": "/api/actions/pindah-tumpukan",
              "hint": "Gabah yang belum ada di dryer maupun silo — yang sedang "
@@ -1317,7 +1323,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
     async with SessionLocal() as db:
         if not await fitur_mutu(db):
-            actions = [a for a in actions if a["id"] not in AKSI_MUTU]
+            actions = [a for a in actions
+                       if a["id"] not in (*AKSI_MUTU, "qc_gabah_tutup")]
     # Urutan kelompok dititipkan pada aksi pertama: menu inilah satu-satunya
     # yang dikirim ke layar, dan menaruh urutannya di tempat lain berarti dua
     # tempat yang harus sepakat.
@@ -1408,7 +1415,7 @@ for _a in (
     "mulai_giling", "hasil_giling", "selesai_giling", "tutup_silo_giling",
     "tambah_silo_giling",
     "hentikan_proses", "lanjutkan_proses", "verify_output", "qc_giling",
-    "qc_gabah_basah", "qc_gabah_kering",
+    "qc_gabah_basah", "qc_gabah_kering", "qc_gabah_tutup",
     # Rantai permintaan PK
     "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
     "kirim_permintaan_pk", "tutup_permintaan_pk",
@@ -1462,7 +1469,7 @@ URUT_GRUP = [
 _ACTION_WH = {
     # Gudang 1 (Selepan)
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
-    "qc_gabah_basah": "g1", "qc_gabah_kering": "g1",
+    "qc_gabah_basah": "g1", "qc_gabah_kering": "g1", "qc_gabah_tutup": "g1",
     "ubah_target": "g1",
     "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
@@ -1591,6 +1598,33 @@ async def gabah_qc(kondisi: str, user: User = Depends(pengguna_aksi)) -> list[di
             for b, count in rows]
 
 
+@router.get("/actions/gabah-qc-bisa-ditutup")
+async def gabah_qc_bisa_ditutup(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """QC yang sudah memiliki catatan dan dapat ditutup sebelum 5/5."""
+    _require(await _is_g1_operator(user))
+    await _wajib_mutu()
+    from sqlalchemy import func, select
+    from app.models import PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample
+    async with SessionLocal() as db:
+        jumlah_qc = (select(func.count(PurchaseBatchQcSample.id))
+                     .select_from(PurchaseBatchQcSample)
+                     .join(PurchaseBatchQc, PurchaseBatchQc.id ==
+                           PurchaseBatchQcSample.purchase_batch_qc_id)
+                     .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                     .correlate(PurchaseBatch).scalar_subquery())
+        rows = (await db.execute(
+            select(PurchaseBatch, jumlah_qc.label("jumlah_qc"))
+            .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+            .where(PurchaseBatch.dibatalkan_pada.is_(None),
+                   PurchaseBatchQc.ditutup_pada.is_(None),
+                   jumlah_qc.between(1, 4))
+            .order_by(PurchaseBatch.id.desc()).limit(100)
+        )).all()
+    return [{"value": batch.kode_batch,
+             "label": f"{batch.kode_batch} · QC {count}/5 · {batch.no_polisi_truk or 'tanpa plat'}"}
+            for batch, count in rows]
+
+
 @router.post("/actions/qc-gabah/{kondisi}")
 async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
                        user: User = Depends(pengguna_aksi)) -> dict:
@@ -1630,6 +1664,24 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
         raise HTTPException(400, str(e))
     return {"ok": True, "pesan": f"✓ QC *{kode}* tercatat · pencatatan {jumlah}/5 · "
                                   f"rata-rata kadar air {rata:.2f}%"}
+
+
+@router.post("/actions/tutup-qc-gabah")
+async def act_tutup_qc_gabah(payload: dict = Body(...),
+                             user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    await _wajib_mutu()
+    kode = str(payload.get("kode_batch") or "").strip()
+    if not kode:
+        raise HTTPException(400, "Pilih proses QC gabah yang akan ditutup.")
+    try:
+        from app.penggilingan.gudang1.services.qc_gabah import tutup_qc_gabah
+        async with SessionLocal() as db:
+            u = await db.get(User, user.id)
+            _, jumlah = await tutup_qc_gabah(db, user=u, kode_batch=kode)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True, "pesan": f"✓ Proses QC *{kode}* ditutup · {jumlah}/5 pencatatan"}
 
 
 @router.get("/actions/dryer-menunggu")

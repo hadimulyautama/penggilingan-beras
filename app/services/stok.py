@@ -1105,7 +1105,7 @@ def nama_produk(jenis: str) -> str:
 
 _NAMA_GRADE = {"premium": "Beras Premium", "medsuper": "Beras Medium Super",
                "medium": "Beras Medium", "sayur": "Beras Sayur",
-               "beras_putih": "Beras putih (mutu belum ditetapkan)"}
+               "beras_putih": "Beras putih · mutu di catatan lama kosong"}
 
 
 #: Selisih yang MASIH WAJAR antara yang ditimbang dan yang dihitung nominal.

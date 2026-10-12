@@ -172,6 +172,8 @@ class PurchaseBatchQc(Base, TimestampMixin):
     biji_hijau: Mapped[str] = mapped_column(String(20), nullable=False)
     densiti: Mapped[str] = mapped_column(String(10), nullable=False)
     input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    ditutup_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ditutup_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     __table_args__ = (
         CheckConstraint("jumlah_sak_lamur IS NULL OR jumlah_sak_lamur >= 0",
                         name="ck_purchase_batch_qc_sak_nonnegatif"),

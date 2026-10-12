@@ -169,6 +169,21 @@ async def test_packing_melebihi_curah_ditolak_dengan_angkanya(pg, sosoh):
         assert (await barang_jadi_g2(db)).produk == []
 
 
+async def test_beras_putih_wajib_dipacking_dengan_mutunya(pg, sosoh):
+    from app.models import User
+    from app.penggilingan.inventory.finished_goods import InventoryError, catat_packing
+    from app.services.stok import barang_jadi_g2
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        with pytest.raises(InventoryError, match="Pilih mutu beras"):
+            await catat_packing(db, user=u, kode_pol=sosoh["kode"],
+                                kategori="beras_putih", material_kode="biasa",
+                                ukuran=25, jumlah_karung=10)
+    async with pg() as db:
+        assert (await barang_jadi_g2(db)).produk == []
+
+
 async def test_dua_jenis_dari_satu_proses_tak_saling_menimpa(pg, sosoh):
     from app.database import now_local
     from app.models import User

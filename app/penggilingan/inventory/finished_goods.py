@@ -107,11 +107,15 @@ async def catat_packing(
     proc = await _proc_by_kode(db, kode_pol)
     std_id = None
     if kategori == "beras_putih":
-        if grade:
-            std = await get_standard(db, grade)
-            if std is None:
-                raise InventoryError(f"Standar mutu '{grade}' tidak ada.")
-            std_id = std.id
+        if not grade:
+            raise InventoryError(
+                "Pilih mutu beras: Premium, Super, Medium, atau Sayur. "
+                "Beras putih harus dipacking sesuai mutu hasil penyosohan."
+            )
+        std = await get_standard(db, grade)
+        if std is None:
+            raise InventoryError(f"Standar mutu '{grade}' tidak ada.")
+        std_id = std.id
     sku = await find_or_create_sku(
         db, kategori=kategori, material_kode=material_kode, ukuran=int(ukuran),
         brand_nama=brand_nama,

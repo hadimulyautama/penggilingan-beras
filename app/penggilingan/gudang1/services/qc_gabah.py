@@ -60,6 +60,8 @@ async def catat_qc_gabah(
         )
         db.add(qc)
         await db.flush()
+    if qc.ditutup_pada is not None:
+        raise QcGabahError("Proses QC truk ini sudah ditutup.")
 
     jumlah = await db.scalar(select(func.count(PurchaseBatchQcSample.id)).where(
         PurchaseBatchQcSample.purchase_batch_qc_id == qc.id
@@ -88,3 +90,35 @@ async def catat_qc_gabah(
     await db.commit()
     await db.refresh(qc)
     return qc, rata, jumlah + 1
+
+
+async def tutup_qc_gabah(
+    db: AsyncSession, *, user: User, kode_batch: str,
+) -> tuple[PurchaseBatchQc, int]:
+    """Tutup QC sebelum 5 catatan hanya setelah setidaknya satu tersimpan."""
+    batch = (await db.execute(select(PurchaseBatch).where(
+        PurchaseBatch.kode_batch == kode_batch,
+        PurchaseBatch.dibatalkan_pada.is_(None),
+    ).with_for_update())).scalar_one_or_none()
+    if batch is None:
+        raise QcGabahError("Truk gabah tidak ditemukan atau sudah dibatalkan.")
+    qc = (await db.execute(select(PurchaseBatchQc).where(
+        PurchaseBatchQc.purchase_batch_id == batch.id
+    ).with_for_update())).scalar_one_or_none()
+    if qc is None:
+        raise QcGabahError("Belum ada pencatatan QC untuk truk ini.")
+    if qc.ditutup_pada is not None:
+        raise QcGabahError("Proses QC truk ini sudah ditutup.")
+    jumlah = int(await db.scalar(select(func.count(PurchaseBatchQcSample.id)).where(
+        PurchaseBatchQcSample.purchase_batch_qc_id == qc.id
+    )) or 0)
+    if jumlah == 0:
+        raise QcGabahError("Catat QC minimal satu kali sebelum menutup proses.")
+    if jumlah >= 5:
+        raise QcGabahError("QC sudah lengkap (5 dari 5 pencatatan).")
+    from app.database import now_local
+    qc.ditutup_pada = now_local()
+    qc.ditutup_by = user.id
+    await db.commit()
+    await db.refresh(qc)
+    return qc, jumlah

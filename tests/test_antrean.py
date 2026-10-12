@@ -377,6 +377,7 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
     # katalog cuma yang tak berkartu sama sekali.
     assert api._GRUP_AKSI["mulai_penyosohan"] == api.GRUP_KARTU
     assert api._GRUP_AKSI["catat_pk_luar"] == api.GRUP_KARTU
+    assert api._GRUP_AKSI["qc_gabah_tutup"] == api.GRUP_KARTU
     assert api._GRUP_AKSI["gabah_masuk"] == api.GRUP_KARTU
     # Dan yang memang tak punya kartu TETAP digambar — katalog satu-satunya
     # pintunya, jadi membuangnya berarti pekerjaannya hilang sama sekali.

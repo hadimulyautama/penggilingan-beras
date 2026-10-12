@@ -134,9 +134,38 @@ async def test_kartu_mutu_tetap_ada_sampai_catatan_kelima(pg, pemakai, pemasok):
         if n < 5:
             assert kartu is not None
             assert f"{n}/5" in kartu.isi
+            if n:
+                assert any(pilihan[0] == "qc_gabah_tutup" for pilihan in kartu.pilihan)
             async with pg() as db:
                 user = await db.get(User, pemakai.id)
                 await catat_qc_gabah(db, user=user, kode_batch=kode,
                                      **_isi(n + 1, lamur=False, sak=0))
         else:
             assert kartu is None
+
+
+async def test_proses_qc_bisa_ditutup_setelah_satu_catatan(pg, pemakai, pemasok):
+    from app.models import PurchaseBatchQc, User
+    from app.penggilingan.gudang1.services.qc_gabah import catat_qc_gabah, tutup_qc_gabah
+    from app.services.berjalan import untuk_staff
+
+    kode = "GB-QC-TUTUP-01"
+    await _buat_batch(pg, pemakai, pemasok, "basah", kode)
+    async with pg() as db:
+        user = await db.get(User, pemakai.id)
+        await catat_qc_gabah(db, user=user, kode_batch=kode,
+                             **_isi(1, lamur=False, sak=0))
+    async with pg() as db:
+        user = await db.get(User, pemakai.id)
+        qc, jumlah = await tutup_qc_gabah(db, user=user, kode_batch=kode)
+        assert jumlah == 1
+        assert qc.ditutup_pada is not None
+        assert qc.ditutup_by == pemakai.id
+    async with pg() as db:
+        daftar = await untuk_staff(db)
+        assert not any(kartu.kode == kode for kartu in daftar.meja)
+    async with pg() as db:
+        user = await db.get(User, pemakai.id)
+        with pytest.raises(ValueError, match="sudah ditutup"):
+            await catat_qc_gabah(db, user=user, kode_batch=kode,
+                                 **_isi(2, lamur=True, sak=1))
