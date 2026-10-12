@@ -472,8 +472,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                     "id": f"qc_gabah_{kondisi}",
                     "label": f"🔬 QC gabah {kondisi}",
                     "post": "/api/actions/qc-gabah/" + kondisi,
-                    "hint": "Isi lima sampel. Setiap sampel memakai dua pembacaan kadar air; "
-                            "rata-rata seluruh 10 pembacaan disimpan sebagai kadar air truk."
+                    "hint": "Satu simpan adalah satu pemeriksaan lengkap. Catat 5 kali untuk truk ini; "
+                            "setiap catatan memakai dua pembacaan kadar air. Kadar air truk adalah "
+                            "rata-rata 10 pembacaan dari kelima catatan."
                             + (" Jika tidak ada Lamur, isi jumlah sak 0." if kondisi == "basah" else ""),
                     "fields": ([{
                         "name": "kode_batch", "label": f"Truk gabah {kondisi} yang belum di-QC",
@@ -491,12 +492,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                          "options": [["padat", "Padat · sedikit gabah hampa"], ["sedang", "Sedang"],
                                      ["empuk", "Empuk · banyak gabah hampa"]]},
                     ] + [
-                        field
-                        for i in range(1, 6)
-                        for field in (
-                            {"name": f"kadar_air_{i}_1", "label": f"Sampel {i} · kadar air pembacaan 1 (%)", "type": "number", "wajib": True},
-                            {"name": f"kadar_air_{i}_2", "label": f"Sampel {i} · kadar air pembacaan 2 (%)", "type": "number", "wajib": True},
-                        )
+                        {"name": "kadar_air_1", "label": "Pembacaan kadar air 1 (%)", "type": "number", "wajib": True},
+                        {"name": "kadar_air_2", "label": "Pembacaan kadar air 2 (%)", "type": "number", "wajib": True},
                     ])
                 }
                 for kondisi in ("basah", "kering")
@@ -1567,27 +1564,31 @@ async def silo_g1(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/gabah-qc/{kondisi}")
 async def gabah_qc(kondisi: str, user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Truk gabah pada kondisi tertentu yang belum memiliki pencatatan QC."""
+    """Truk gabah dengan kurang dari lima pencatatan QC."""
     _require(await _is_g1_operator(user))
     if kondisi not in {"basah", "kering"}:
         raise HTTPException(404, "Kondisi gabah tidak dikenali.")
     await _wajib_mutu()
-    from sqlalchemy import select
-    from app.models import PurchaseBatch, PurchaseBatchQc
+    from sqlalchemy import func, select
+    from app.models import PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample
     async with SessionLocal() as db:
+        jumlah_qc = (select(func.count(PurchaseBatchQcSample.id))
+                     .select_from(PurchaseBatchQcSample)
+                     .join(PurchaseBatchQc, PurchaseBatchQc.id ==
+                           PurchaseBatchQcSample.purchase_batch_qc_id)
+                     .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                     .correlate(PurchaseBatch).scalar_subquery())
         rows = (await db.execute(
-            select(PurchaseBatch).where(
+            select(PurchaseBatch, jumlah_qc.label("jumlah_qc")).where(
                 PurchaseBatch.kondisi_gabah == kondisi,
                 PurchaseBatch.dibatalkan_pada.is_(None),
-                ~select(PurchaseBatchQc.id).where(
-                    PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id
-                ).exists(),
+                jumlah_qc < 5,
             ).order_by(PurchaseBatch.id.desc()).limit(100)
-        )).scalars().all()
+        )).all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {b.no_polisi_truk or 'tanpa plat'} · "
+             "label": f"QC {int(count)}/5 · {b.kode_batch} · {b.no_polisi_truk or 'tanpa plat'} · "
                       f"{float(b.berat_total_kg or 0):,.0f} kg".replace(",", ".")}
-            for b in rows]
+            for b, count in rows]
 
 
 @router.post("/actions/qc-gabah/{kondisi}")
@@ -1601,10 +1602,6 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
     if not kode:
         raise HTTPException(400, "Pilih truk gabah yang akan diperiksa.")
     try:
-        sampel = [{
-            "kadar_air_1": payload.get(f"kadar_air_{i}_1"),
-            "kadar_air_2": payload.get(f"kadar_air_{i}_2"),
-        } for i in range(1, 6)]
         lamur = None
         jumlah_sak = None
         if kondisi == "basah":
@@ -1622,14 +1619,17 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
         from app.penggilingan.gudang1.services.qc_gabah import catat_qc_gabah
         async with SessionLocal() as db:
             u = await db.get(User, user.id)
-            qc, rata = await catat_qc_gabah(
-                db, user=u, kode_batch=kode, sampel=sampel,
+            qc, rata, jumlah = await catat_qc_gabah(
+                db, user=u, kode_batch=kode,
+                kadar_air_1=payload.get("kadar_air_1"),
+                kadar_air_2=payload.get("kadar_air_2"),
                 biji_hijau=payload.get("biji_hijau"), densiti=payload.get("densiti"),
                 lamur=lamur, jumlah_sak_lamur=jumlah_sak,
             )
     except ValueError as e:
         raise HTTPException(400, str(e))
-    return {"ok": True, "pesan": f"✓ QC *{kode}* tercatat · 5 sampel · kadar air rata-rata {rata:.2f}%"}
+    return {"ok": True, "pesan": f"✓ QC *{kode}* tercatat · pencatatan {jumlah}/5 · "
+                                  f"rata-rata kadar air {rata:.2f}%"}
 
 
 @router.get("/actions/dryer-menunggu")

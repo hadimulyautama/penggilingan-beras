@@ -3319,46 +3319,49 @@ async def untuk_staff(db: AsyncSession) -> Berjalan:
     # QC gabah menjadi pekerjaan di meja Mutu & QC, sejajar dengan QC giling
     # dan PK luar. Satu kartu per truk membuka formulir untuk batch itu.
     if mutu_aktif:
-        from app.models import PurchaseBatchQc
+        from app.models import PurchaseBatchQc, PurchaseBatchQcSample
 
-        belum_qc = ~exists().where(
-            PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+        jumlah_qc = (select(func.count(PurchaseBatchQcSample.id))
+                     .select_from(PurchaseBatchQcSample)
+                     .join(PurchaseBatchQc, PurchaseBatchQc.id ==
+                           PurchaseBatchQcSample.purchase_batch_qc_id)
+                     .where(PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
+                     .correlate(PurchaseBatch).scalar_subquery())
         rows = (await db.execute(
-            select(PurchaseBatch, Supplier.nama_supplier)
+            select(PurchaseBatch, Supplier.nama_supplier, jumlah_qc.label("jumlah_qc"))
             .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
-            .where(PurchaseBatch.dibatalkan_pada.is_(None), belum_qc)
+            .where(PurchaseBatch.dibatalkan_pada.is_(None),
+                   PurchaseBatch.kondisi_gabah.in_(("basah", "kering")), jumlah_qc < 5)
             .order_by(PurchaseBatch.id.desc())
         )).all()
         pemilik_qc = await nama_pemilik_banyak(
-            db, {batch.jasa_id for batch, _ in rows if batch.jasa_id})
-        for batch, pemasok in rows:
+            db, {batch.jasa_id for batch, _, _ in rows if batch.jasa_id})
+        for batch, pemasok, jumlah in rows:
             kondisi = batch.kondisi_gabah
-            if kondisi not in {"basah", "kering"}:
-                continue
             pemilik = (pemilik_qc.get(batch.jasa_id)
                        if batch.jasa_id else pemasok) or "?"
             berat = _kg(float(batch.berat_total_kg or 0)).removesuffix(" kg")
             if kondisi == "basah":
                 b.meja.append(Baris(
-                    kode=batch.kode_batch, isi="gabah basah belum dicatat mutunya",
+                    kode=batch.kode_batch, isi=f"QC gabah basah · {jumlah}/5 pencatatan",
                     keadaan="", aksi="qc_gabah_basah", nilai=batch.kode_batch,
                     sejak=batch.created_at, fase="baru",
                     judul="Mutu gabah basah belum dicatat",
                     utama=(berat, "kg"),
                     sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
-                    pilihan=[("qc_gabah_basah", "Catat QC gabah basah",
-                              "5 sampel · 10 pembacaan kadar air", batch.kode_batch)],
+                    pilihan=[("qc_gabah_basah", f"Catat QC ke-{jumlah + 1} dari 5",
+                              "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)],
                 ))
             else:
                 b.meja.append(Baris(
-                    kode=batch.kode_batch, isi="gabah kering belum dicatat mutunya",
+                    kode=batch.kode_batch, isi=f"QC gabah kering · {jumlah}/5 pencatatan",
                     keadaan="", aksi="qc_gabah_kering", nilai=batch.kode_batch,
                     sejak=batch.created_at, fase="baru",
                     judul="Mutu gabah kering belum dicatat",
                     utama=(berat, "kg"),
                     sub=f"{batch.kode_batch} · {pemilik} · truk {batch.no_polisi_truk or 'tanpa plat'}",
-                    pilihan=[("qc_gabah_kering", "Catat QC gabah kering",
-                              "5 sampel · 10 pembacaan kadar air", batch.kode_batch)],
+                    pilihan=[("qc_gabah_kering", f"Catat QC ke-{jumlah + 1} dari 5",
+                              "Satu pemeriksaan · dua pembacaan kadar air", batch.kode_batch)],
                 ))
 
     # Tiket berjenis tak dikenal — satu-satunya baris FISIK di fungsi ini, dan

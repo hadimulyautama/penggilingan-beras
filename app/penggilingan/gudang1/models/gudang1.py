@@ -182,8 +182,8 @@ class PurchaseBatchQc(Base, TimestampMixin):
     )
 
 
-class PurchaseBatchQcSample(Base):
-    """Satu dari lima sampel QC truk; kadar air dibaca dua kali per sampel."""
+class PurchaseBatchQcSample(Base, TimestampMixin):
+    """Satu pencatatan QC truk; kadar air dibaca dua kali per pencatatan."""
 
     __tablename__ = "purchase_batch_qc_samples"
     __table_args__ = (UniqueConstraint(
@@ -191,6 +191,12 @@ class PurchaseBatchQcSample(Base):
         CheckConstraint("nomor_sampel BETWEEN 1 AND 5", name="ck_purchase_batch_qc_sample_no"),
         CheckConstraint("kadar_air_1 BETWEEN 0 AND 100 AND kadar_air_2 BETWEEN 0 AND 100",
                         name="ck_purchase_batch_qc_sample_air_range"),
+        CheckConstraint("jumlah_sak_lamur IS NULL OR jumlah_sak_lamur >= 0",
+                        name="ck_purchase_batch_qc_sample_sak_nonnegatif"),
+        CheckConstraint("biji_hijau IN ('hampir_tidak_ada', 'sedikit', 'sedang', 'banyak')",
+                        name="ck_purchase_batch_qc_sample_biji_hijau"),
+        CheckConstraint("densiti IN ('padat', 'sedang', 'empuk')",
+                        name="ck_purchase_batch_qc_sample_densiti"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -200,6 +206,11 @@ class PurchaseBatchQcSample(Base):
     nomor_sampel: Mapped[int] = mapped_column(Integer, nullable=False)
     kadar_air_1: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
     kadar_air_2: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    lamur: Mapped[bool | None] = mapped_column(Boolean)
+    jumlah_sak_lamur: Mapped[int | None] = mapped_column(Integer)
+    biji_hijau: Mapped[str] = mapped_column(String(20), nullable=False)
+    densiti: Mapped[str] = mapped_column(String(10), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
 class DryingLot(Base, TimestampMixin):
