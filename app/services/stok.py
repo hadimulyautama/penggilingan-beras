@@ -26,6 +26,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
+from hmu_core.komoditas import buat_produk
 from app.models import MillingProcess
 from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
@@ -1065,7 +1066,15 @@ def jenis_produk(kategori: str | None, mutu_kode: str | None) -> str:
     """
     kategori = (kategori or "").strip().lower()
     if kategori == "beras_putih":
-        return (mutu_kode or "").strip().lower() or "beras_putih"
+        mutu = (mutu_kode or "").strip().lower()
+        if not mutu:
+            return "beras_putih"
+        # Identitas bersama: beras putih adalah jenis barang, mutunya atribut.
+        # Kode hasil tetap kode mutu lama agar stok dan histori tetap kompatibel.
+        try:
+            return buat_produk("beras_putih", kualitas=mutu).atribut["kualitas"]
+        except ValueError:
+            return mutu
     return kategori
 
 

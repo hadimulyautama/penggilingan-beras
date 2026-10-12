@@ -15,53 +15,7 @@ from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Index, Integer, Num
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
-
-
-class RiceQualityStandard(Base, TimestampMixin):
-    """Standar mutu beras putih (4). Beras B TIDAK punya standar. Admin-only ubah."""
-
-    __tablename__ = "rice_quality_standards"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    nama: Mapped[str] = mapped_column(String(50), nullable=False)
-    urutan: Mapped[int] = mapped_column(Integer, default=0)
-    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
-class Brand(Base, TimestampMixin):
-    """Merk. tipe: house (milik sendiri) / polos (tanpa merk). Merk pembeli =
-    label bebas di transaksi, bukan baris di sini."""
-
-    __tablename__ = "brands"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nama: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    # house / polos
-    tipe: Mapped[str] = mapped_column(String(10), default="house")
-    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class PackagingMaterial(Base, TimestampMixin):
-    """Jenis karung/kemasan: biasa, laminasi, putih, polos, bekas, karung_pk."""
-
-    __tablename__ = "packaging_materials"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    nama: Mapped[str] = mapped_column(String(50), nullable=False)
-    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
-class PackageSize(Base, TimestampMixin):
-    """Ukuran kemasan (kg): 5, 10, 25, 48, 50."""
-
-    __tablename__ = "package_sizes"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    ukuran_kg: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
-    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
+from hmu_core import Brand, PackageSize, PackagingMaterial, RiceQualityStandard
 
 
 class ProductSku(Base, TimestampMixin):

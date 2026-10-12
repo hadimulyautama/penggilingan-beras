@@ -12,6 +12,7 @@ Dua arah:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from hmu_core.komoditas import kode_komoditas_lama
 
 # Tujuan penempatan gabah (harus cocok dengan mini-app & service).
 DRYER = "dryer"
@@ -32,6 +33,11 @@ class IntakeJenis:
     jenis_pk: str | None = None      # pk: subtipe bila sudah pasti; None = operator pilih
     tujuan_wajib: str | None = None  # bila diisi → dipaksa (operator tak perlu pilih)
     tujuan_pilihan: tuple[str, ...] = ()  # tujuan yang SAH bila tak wajib
+
+    @property
+    def komoditas_bersama(self) -> str | None:
+        """Identitas jenis bahan pada katalog bersama lintas aplikasi."""
+        return {"gabah": "gabah", "pk": "beras_pk"}.get(self.model)
 
 
 # ── MASUK (intake) ──
@@ -93,6 +99,13 @@ PETA_KELUAR: dict[str, str] = {
     "MENIR": "menir",
     "BEKATUL": "bekatul",
     "REJECT": "reject",
+}
+
+# BERAS berarti beras putih; mutu (premium/medsuper/medium/sayur) menjadi
+# atribut pada baris produk, bukan jenis komoditas yang berbeda.
+PETA_KELUAR_KOMODITAS: dict[str, str] = {
+    kode: kode_komoditas_lama(kode) or kategori
+    for kode, kategori in PETA_KELUAR.items()
 }
 
 
