@@ -180,7 +180,8 @@ async def test_pindah_barang_jadi_aman_walau_sebagian_sudah_diambil(pg, titipan)
         db.add(OutgoingItem(outgoing_record_id=rec.id, item_type="finished_goods",
                             product_sku_id=titipan["sku_id"],
                             rice_quality_standard_id=titipan["std_id"],
-                            jumlah_karung=12, berat_kg=300))
+                            jumlah_karung=12, berat_kg=300,
+                            jasa_id=titipan["jasa1"]))
         await db.commit()
 
         sisa = await hitung_stok_finished_goods(

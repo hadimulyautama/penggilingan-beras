@@ -424,15 +424,18 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
                .where(PkGudang2Intake.tujuan == "ditumpuk"))
     q_pindah = select(func.coalesce(func.sum(PkTumpukanToSilo.berat_kg), 0))
     q_keluar = (select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-                .join(OutgoingRecord,
-                      OutgoingRecord.id == OutgoingItem.outgoing_record_id)
                 .where(OutgoingItem.item_type == "pk_g2",
                        OutgoingItem.silo_id.is_(None)))
     if pemilik != "semua":
         syarat = (PkGudang2Intake.jasa_id.is_(None) if pemilik == "pabrik"
                   else PkGudang2Intake.jasa_id.isnot(None))
-        syarat_keluar = (OutgoingRecord.jasa_id.is_(None) if pemilik == "pabrik"
-                         else OutgoingRecord.jasa_id.isnot(None))
+        # `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080), bukan lewat
+        # `OutgoingRecord.jasa_id` — truk boleh menggabung beberapa pesanan
+        # satu pelanggan sejak keputusan pemilik 11 Oktober 2026, dan
+        # transaksi semacam itu punya `OutgoingRecord.jasa_id` NULL walau
+        # barisnya sendiri tetap tahu pemiliknya masing-masing.
+        syarat_keluar = (OutgoingItem.jasa_id.is_(None) if pemilik == "pabrik"
+                         else OutgoingItem.jasa_id.isnot(None))
         q_masuk = q_masuk.where(syarat)
         q_pindah = q_pindah.join(
             PkGudang2Intake,

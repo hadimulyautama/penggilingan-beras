@@ -1444,10 +1444,11 @@ async def stok_produk(db: AsyncSession, *,
     # Menjumlahkannya di sini akan membuat kartu beras kehilangan stok atas
     # barang yang bukan berasnya.
     #
-    # ⚠ Disaring `milik_proc(OutgoingRecord)` juga sejak pengambilan jasa ikut
-    # lewat rantai yang SAMA (`OutgoingRecord.jasa_id`, keputusan pemilik):
-    # tanpa saringan ini, pengambilan pelanggan ikut mengurangi "keluar"
-    # pabrik, dan curah pabrik terbaca lebih kecil daripada yang sebenarnya.
+    # ⚠ Disaring `milik_proc(OutgoingItem)` juga sejak pengambilan jasa ikut
+    # lewat rantai yang SAMA (`OutgoingItem.jasa_id`, migrasi 0080 — dulu
+    # `OutgoingRecord.jasa_id`): tanpa saringan ini, pengambilan pelanggan
+    # ikut mengurangi "keluar" pabrik, dan curah pabrik terbaca lebih kecil
+    # daripada yang sebenarnya.
     keluar: dict[str, list[RincianProduk]] = {}
     #: Yang keluar DARI CURAH, dipisah dari yang keluar dari karung: keduanya
     #: mengurangi belahan stok yang berbeda, dan menjumlahkannya jadi satu akan
@@ -1463,8 +1464,12 @@ async def stok_produk(db: AsyncSession, *,
         .join(RiceQualityStandard,
               RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
               isouter=True)
+        # `milik_proc(OutgoingItem)` — BUKAN `OutgoingRecord` (migrasi 0080):
+        # truk boleh menggabung beberapa pesanan satu pelanggan, dan
+        # `OutgoingRecord.jasa_id` NULL pada transaksi semacam itu akan
+        # membuat pengambilannya hilang dari "keluar" sama sekali.
         .where(OutgoingItem.item_type.in_(("finished_goods", "byproduct_curah")),
-               milik_proc(OutgoingRecord))
+               milik_proc(OutgoingItem))
         .order_by(OutgoingRecord.waktu.desc())
     )).all():
         if tipe == "byproduct_curah":
@@ -1713,8 +1718,11 @@ async def titipan_dikemas_per_jenis(db: AsyncSession) -> dict[str, float]:
         .join(RiceQualityStandard,
               RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
               isouter=True)
+        # `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080) — BUKAN
+        # `OutgoingRecord.jasa_id`, yang NULL pada truk yang menggabung
+        # beberapa pesanan satu pelanggan walau barisnya sendiri titipan.
         .where(OutgoingItem.item_type == "finished_goods",
-               OutgoingRecord.jasa_id.isnot(None))
+               OutgoingItem.jasa_id.isnot(None))
         .group_by(ProductSku.kategori, RiceQualityStandard.kode)
     )).all():
         j = jenis_produk(kategori, mutu)
@@ -1739,7 +1747,7 @@ async def titipan_dikemas_per_jenis(db: AsyncSession) -> dict[str, float]:
                func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
         .where(OutgoingItem.item_type == "byproduct_curah",
-               OutgoingRecord.jasa_id.isnot(None))
+               OutgoingItem.jasa_id.isnot(None))
         .group_by(OutgoingItem.jenis_byproduct)
     )).all():
         keluar_fg[byp] = keluar_fg.get(byp, 0.0) + float(kg)

@@ -316,13 +316,31 @@ Syarat pertama bukan hiasan: pesanan yang baru lahir juga bersisa NOL, dan tanpa
 
 **Pengambilan** menumpang rantai barang keluar apa adanya (perintah · muat ·
 verifikasi, satu truk satu perintah) — "boleh ambil bertahap" karena itu tak
-butuh perubahan apa pun di sana. Yang ditambahkan: `outgoing_records.jasa_id`,
-daftar barang yang tersaring pemilik, dan `hitung_stok_finished_goods(...,
-jasa_id=)` — satu rumus, dua pertanyaan, bawaannya PABRIK.
+butuh perubahan apa pun di sana. Yang ditambahkan: daftar barang yang
+tersaring pemilik, dan `hitung_stok_finished_goods(..., jasa_id=)` — satu
+rumus, dua pertanyaan, bawaannya PABRIK.
+
+⚠⚠ **SATU TRUK BOLEH MENGGABUNG BEBERAPA PESANAN SATU PELANGGAN** (migrasi
+0080, koreksi lapangan 12 Oktober 2026: *"pak pras punya pk di gudang 1 dan
+gudang 2... sekali kiriman saya mau kirim semuanya"* — dua pesanan yang tak
+pernah bertemu fisik jadi tak tergabung otomatis lewat `pastikan_satu_
+pemilik`). Kepemilikan pindah ke `outgoing_items.jasa_id` (PER BARIS) —
+`outgoing_records.jasa_id` sejak itu NULL kalau transaksinya menggabung lebih
+dari satu pesanan, satu nilai tak lagi cukup. `pelanggan_id` TETAP satu nilai
+selalu (pagar yang tetap keras: barang dua PELANGGAN tak boleh naik satu
+truk, cuma pemisahnya kini pelanggan — bukan lagi nomor pesanan).
+`jasa.sisa_jasa()` membaca kolom baris ini, bukan lagi kolom perintah.
+Medan "Pesanan" di borang "Pengambilan barang jasa" DIHAPUS — picker
+"Pelanggan" (`/actions/pelanggan-ada-barang-jasa`) langsung diikuti picker
+"Barang yang diambil" (`/actions/barang-jasa?induk=<pelanggan>`), yang
+menggabung SELURUH pesanan berjalan pelanggan itu; tiap nilainya membawa
+akhiran `@<jasa_id>` asalnya sendiri, dibongkar `aksi_inventory._satu_baris`.
 
 ⚠ `barang_keluar.baris_dari_item()` wajib dipakai untuk menyusun ulang baris
-perintah: `jasa_id` hidup di PERINTAHNYA, bukan di barisnya, dan tiga tempat
-pernah melewatkannya — `tersedia()` lalu membaca stok pabrik untuk barang
+perintah — SELALU membaca `jasa_id` dari `OutgoingItem` sumbernya sendiri
+(sejak migrasi 0080; dulu dari `jasa_id` PERINTAHNYA, parameter eksternal
+yang sudah dicabut dari tanda tangannya), dan tiga tempat pernah
+melewatkannya — `tersedia()` lalu membaca stok pabrik untuk barang
 pelanggan dan menolak pengambilan yang sah.
 
 **Layar Jasa** (`/jasa`, pintu ke-14, ikon `◇` — Geometric Shapes, bukan emoji)

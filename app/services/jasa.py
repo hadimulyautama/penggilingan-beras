@@ -56,6 +56,7 @@ from app.models import (
     InternalTransfer,
     Jasa,
     MillingProcess,
+    OutgoingItem,
     OutgoingRecord,
     Pelanggan,
     PkGudang2Intake,
@@ -229,6 +230,7 @@ TABEL_BER_JASA_ID: tuple[type, ...] = (
     PurchaseBatch, DryingLot, SiloStorage, GabahKeringLot, MillingProcess,
     PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BerasKeSilo, PolishingProcess,
     InternalTransfer, FinishedGoodsStock, ByproductStock, OutgoingRecord,
+    OutgoingItem,
 )
 
 
@@ -890,10 +892,15 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
         .where(PolishingProcess.jasa_id == jasa_id,
                PolishingSiloUsage.berat_akhir_kg.isnot(None))
     )).scalar_one())
+    # ⚠ `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080) — BUKAN lewat
+    # `OutgoingRecord.jasa_id`. Sejak truk boleh menggabung beberapa pesanan
+    # satu pelanggan, `OutgoingRecord.jasa_id` jadi NULL tepat pada transaksi
+    # semacam itu; membaca lewat sana akan membuat PK yang SUDAH diambil
+    # (lewat truk gabungan) tetap terbaca "masih ada", dan pesanan itu tak
+    # pernah bisa ditutup walau barangnya sudah di tangan pemiliknya.
     diambil_g2 = float((await db.execute(
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-        .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
-        .where(OutgoingItem.item_type == "pk_g2", OutgoingRecord.jasa_id == jasa_id)
+        .where(OutgoingItem.item_type == "pk_g2", OutgoingItem.jasa_id == jasa_id)
     )).scalar_one())
     pk_g2 = max(masuk_g2 - disosoh - diambil_g2, 0.0)
 
@@ -946,10 +953,13 @@ async def sisa_jasa(db: AsyncSession, jasa_id: int) -> SisaJasa:
         select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
         .where(FinishedGoodsStock.jasa_id == jasa_id)
     )).scalar_one())
+    # `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080) — lihat catatan panjang
+    # di `diambil_g2` di atas, alasannya sama persis. `status != "batal"`
+    # tetap lewat JOIN: itu kolom transaksinya, bukan barisnya.
     diambil = float((await db.execute(
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
-        .where(OutgoingRecord.jasa_id == jasa_id,
+        .where(OutgoingItem.jasa_id == jasa_id,
                OutgoingRecord.status != "batal")
     )).scalar_one())
     # Pengambilan PK langsung ikut dikurangkan dari PK G1 oleh
@@ -1301,7 +1311,12 @@ async def nota_jasa(db: AsyncSession, jasa_id: int) -> str:
         .join(RiceQualityStandard,
               RiceQualityStandard.id == OutgoingItem.rice_quality_standard_id,
               isouter=True)
-        .where(OutgoingRecord.jasa_id == jasa_id,
+        # `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080) — lihat catatan
+        # panjang di `sisa_jasa`: truk boleh menggabung beberapa pesanan
+        # satu pelanggan, dan `OutgoingRecord.jasa_id` NULL pada transaksi
+        # semacam itu akan membuat nota pesanan ini TAK MENYEBUT barang yang
+        # justru sudah diambil lewat truk gabungan tersebut.
+        .where(OutgoingItem.jasa_id == jasa_id,
                OutgoingRecord.status != "batal",
                OutgoingItem.berat_kg > 0)
         .group_by(ProductSku.kategori, RiceQualityStandard.kode)

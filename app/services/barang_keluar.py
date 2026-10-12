@@ -137,9 +137,21 @@ class BarisPerintah:
     berat_kg: float | None = None
     #: Pesanan jasa yang barangnya DIAMBIL — None untuk penjualan pabrik.
     #:
-    #: Diisi `buat_perintah`/`tambah_baris` dari perintahnya, bukan oleh
-    #: pemanggil: satu perintah milik satu pihak, dan baris yang pemiliknya
-    #: berbeda dari perintahnya adalah keadaan yang tak boleh bisa dinyatakan.
+    #: DUA cara terisi, sejak 11 Oktober 2026 (dulu HANYA yang pertama):
+    #:
+    #:   · Diisi `buat_perintah`/`tambah_baris` dari perintahnya (`jasa_id=`
+    #:     tunggal) — jalur SATU pesanan, dipakai saat pemanggil sudah tahu
+    #:     persis satu `jasa_id` untuk SELURUH baris.
+    #:   · Diisi PEMANGGIL langsung, per baris — jalur BANYAK pesanan, SATU
+    #:     pelanggan (picker "Pengambilan barang jasa": barang dari beberapa
+    #:     pesanan aktif pelanggan yang sama boleh naik satu truk sekaligus).
+    #:     `buat_perintah` TAK menimpanya di jalur ini — ia memvalidasi
+    #:     seluruh nilai yang sudah terisi menunjuk pesanan BERJALAN milik
+    #:     SATU pelanggan yang sama, bukan menyamakannya jadi satu nilai.
+    #:
+    #: Yang tetap tak berubah: baris yang pemiliknya (PELANGGAN, bukan lagi
+    #: nomor pesanan) berbeda dari pelanggan perintahnya adalah keadaan yang
+    #: tak boleh bisa dinyatakan — lihat `buat_perintah`.
     jasa_id: int | None = None
 
 
@@ -211,19 +223,23 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
     return float((await db.execute(q)).scalar_one())
 
 
-def baris_dari_item(it: OutgoingItem, jasa_id: int | None = None,
-                    *, jumlah_karung=None, berat_kg=None) -> BarisPerintah:
+def baris_dari_item(it: OutgoingItem, *, jumlah_karung=None, berat_kg=None
+                    ) -> BarisPerintah:
     """Susun ulang `BarisPerintah` dari baris perintah yang sudah tersimpan.
 
-    ⚠ SATU TEMPAT, DAN SEBABNYA SUDAH TERBUKTI. `jasa_id` hidup di PERINTAHNYA,
-    bukan di barisnya — satu perintah milik satu pihak. Tiga tempat menyusun
-    ulang baris ini (catat muatan, muat semua, nama untuk pesan pembatalan), dan
-    ketiganya melewatkan pemiliknya: `tersedia()` lalu membaca stok PABRIK untuk
-    barang pelanggan, menjawab "tinggal 0 kg", dan pengambilan yang sah ditolak
-    dengan kalimat yang menyuruh operator mencari kesalahan yang tak ada.
+    ⚠ SATU TEMPAT, DAN SEBABNYA SUDAH TERBUKTI DUA KALI. Sampai 10 Oktober
+    2026 `jasa_id` hidup di PERINTAHNYA (pemanggil wajib mengoper `rec.
+    jasa_id` sendiri) — tiga tempat menyusun ulang baris ini melewatkannya,
+    `tersedia()` lalu membaca stok PABRIK untuk barang pelanggan, dan
+    pengambilan yang sah ditolak dengan kalimat yang menyuruh operator
+    mencari kesalahan yang tak ada.
 
-    Ditemukan uji pengambilan, bukan di lapangan — dan di lapangan ia akan
-    muncul sebagai truk pelanggan yang sudah dimuat lalu tak bisa dicatat.
+    Migrasi 0080 (11 Oktober 2026, truk boleh menggabung beberapa pesanan
+    SATU pelanggan) menutup kelas kesalahan ini DI AKARNYA: `it.jasa_id`
+    kini kolom sendiri di barisnya, jadi fungsi ini tak lagi MENERIMA
+    parameter dari pemanggil sama sekali — tak ada lagi nilai yang bisa
+    lupa dioper atau salah dioper (`rec.jasa_id`, yang sejak migrasi ini
+    malah bisa NULL pada truk gabungan walau barisnya sendiri titipan).
     """
     return BarisPerintah(
         tipe=it.item_type, sku_id=it.product_sku_id,
@@ -231,7 +247,7 @@ def baris_dari_item(it: OutgoingItem, jasa_id: int | None = None,
         milling_process_id=it.milling_process_id, silo_id=it.silo_id,
         gabah_kering_lot_id=it.gabah_kering_lot_id,
         jumlah_karung=jumlah_karung, berat_kg=berat_kg,
-        jasa_id=jasa_id)
+        jasa_id=it.jasa_id)
 
 
 async def tersedia(db: AsyncSession, b: BarisPerintah,
@@ -502,21 +518,42 @@ async def buat_perintah(
     2026: "nama pembeli di barang keluar sinkronkan dengan pelanggan di
     kledo"). `pelanggan_id` kini WAJIB — kotak ketik-bebas untuk pembeli yang
     belum ada di Kledo dicabut 11 Oktober 2026, lihat `_pembeli`.
+
+    PENGAMBILAN JASA, DUA JALUR — keputusan pemilik 11 Oktober 2026 menambah
+    jalur kedua, sesudah laporan lapangan: Pak Pras punya PK di Gudang 1
+    *dan* Gudang 2, dua pesanan yang tak pernah bertemu fisik jadi tak
+    tergabung otomatis (`pastikan_satu_pemilik`), dan "filter menurut
+    pesanan hapus saja... sekali kiriman saya mau kirim semuanya":
+
+      · `jasa_id=` (SATU nilai) — jalur lama, dipakai saat pemanggil sudah
+        tahu persis satu pesanan untuk SELURUH baris (mis. `ambil-jasa`
+        versi sebelumnya, atau pemanggil lain yang sengaja membatasi satu
+        pesanan). Diturunkan ke SELURUH baris, menimpa apa pun yang sudah
+        ada di sana.
+      · Baris yang SUDAH membawa `jasa_id` masing-masing (picker "Barang
+        yang diambil" yang baru — satu pelanggan, lintas pesanan) — TAK
+        ditimpa. Divalidasi di sini: tiap `jasa_id` yang dipakai harus
+        pesanan BERJALAN, dan SELURUHNYA harus pelanggan yang SAMA (barang
+        dua pelanggan sekaligus tetap DITOLAK keras, cuma pemisahnya kini
+        pelanggan — bukan lagi nomor pesanan — sejalan `pastikan_satu_
+        pemilik`). `tersedia()` per baris TETAP memeriksa `jasa_id` baris
+        itu terhadap pemilik SEBENARNYA sumbernya (silo/proses/dll) —
+        tak berubah, dan itulah yang membuat jalur ini aman tanpa
+        perubahan di sana.
+
+    `outgoing_records.jasa_id` jadi NULL kalau barisnya menggabung lebih
+    dari satu pesanan (satu nilai tak lagi cukup); `pelanggan_id` TETAP
+    satu nilai selalu. `outgoing_items.jasa_id` (migrasi 0080) membawa
+    kepemilikan SEBENARNYA per baris — itulah yang dibaca `sisa_jasa()`.
     """
     if not baris:
         raise BarangKeluarError(
             "Perintah tanpa satu pun barang tak bisa dikerjakan siapa pun.")
-    # ── PENGAMBILAN JASA: pemiliknya ditetapkan di PERINTAH, sekali ──
-    #
-    # Satu perintah milik satu pihak, dan `jasa_id` diturunkan ke tiap barisnya
-    # di sini — bukan diisi pemanggil per baris. Baris yang pemiliknya berbeda
-    # dari perintahnya adalah keadaan yang tak boleh bisa dinyatakan sama
-    # sekali: ia akan lolos tiap pemeriksaan stok (masing-masing benar untuk
-    # pemiliknya sendiri) lalu menyerahkan dua milik dalam satu surat jalan.
-    if jasa_id is not None:
-        from app.models import Jasa
-        from app.models.jasa import BERJALAN
+    from app.models import Jasa
+    from app.models.jasa import BERJALAN
 
+    if jasa_id is not None:
+        # Jalur SATU pesanan — tak berubah dari sebelumnya.
         pesanan = await db.get(Jasa, int(jasa_id))
         if pesanan is None:
             raise BarangKeluarError("Pesanan jasa tidak ditemukan.")
@@ -528,6 +565,32 @@ async def buat_perintah(
         # kepada yang menitipkannya.
         pelanggan_id = pesanan.pelanggan_id
         baris = [replace(b, jasa_id=int(jasa_id)) for b in baris]
+    elif any(b.jasa_id is not None for b in baris):
+        # Jalur BANYAK pesanan, SATU pelanggan — baris sudah membawa
+        # `jasa_id` masing-masing dari picker, divalidasi (bukan ditimpa).
+        dipakai = {b.jasa_id for b in baris if b.jasa_id is not None}
+        ditemukan = {j.id: j for j in (await db.execute(
+            select(Jasa).where(Jasa.id.in_(dipakai)))).scalars().all()}
+        hilang = dipakai - ditemukan.keys()
+        if hilang:
+            raise BarangKeluarError(
+                f"Pesanan jasa {sorted(hilang)} tidak ditemukan.")
+        tak_jalan = [j for j in ditemukan.values() if j.status != BERJALAN]
+        if tak_jalan:
+            daftar = ", ".join(f"{j.kode} ({j.status})" for j in tak_jalan)
+            raise BarangKeluarError(
+                f"Pesanan sudah tak berjalan, tak bisa diambil lagi: {daftar}.")
+        pelanggan_set = {j.pelanggan_id for j in ditemukan.values()}
+        if len(pelanggan_set) > 1:
+            from app.models import Pelanggan
+            nama = dict((await db.execute(
+                select(Pelanggan.id, Pelanggan.nama_pelanggan)
+                .where(Pelanggan.id.in_(pelanggan_set)))).all())
+            raise BarangKeluarError(
+                "Barang ini milik pelanggan yang berbeda-beda — tak bisa "
+                "naik satu truk yang sama: "
+                + ", ".join(nama.get(p, f"#{p}") for p in sorted(pelanggan_set)) + ".")
+        pelanggan_id = pelanggan_set.pop()
     nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id)
 
     dihitung: list[tuple[BarisPerintah, float, int | None]] = []
@@ -543,11 +606,16 @@ async def buat_perintah(
                 "keluar tetapi belum dimuat ikut dikurangkan.)")
         dihitung.append((b, berat, karung))
 
+    # `rec.jasa_id`: satu nilai kalau SELURUH baris kebetulan satu pesanan
+    # (termasuk jalur banyak-pesanan yang kebetulan cuma dipakai satu — tetap
+    # ingin tampilannya sama persis dengan jalur lama), NULL kalau menggabung
+    # lebih dari satu. `pelanggan_id` di atas TETAP satu nilai selalu.
+    jasa_id_terpakai = {b.jasa_id for b in baris if b.jasa_id is not None}
     now = input_time(tanggal, jam)
     rec = OutgoingRecord(
         kode=await next_outgoing_code(db, now.date()),
         nama_pembeli=nama_pembeli, pelanggan_id=pelanggan_id,
-        jasa_id=int(jasa_id) if jasa_id is not None else None,
+        jasa_id=(jasa_id_terpakai.pop() if len(jasa_id_terpakai) == 1 else None),
         metode=metode, no_polisi=no_polisi,
         nama_ekspedisi=nama_ekspedisi, tanggal=now.date(), waktu=now,
         input_by=user.id, catatan_perintah=(catatan or "").strip()[:300] or None,
@@ -563,6 +631,10 @@ async def buat_perintah(
             product_sku_id=b.sku_id, rice_quality_standard_id=b.std_id,
             jenis_byproduct=b.jenis, milling_process_id=b.milling_process_id,
             silo_id=b.silo_id, gabah_kering_lot_id=b.gabah_kering_lot_id,
+            # Kepemilikan SEBENARNYA baris ini — migrasi 0080. BUKAN
+            # `rec.jasa_id` (yang bisa NULL kalau transaksinya menggabung
+            # beberapa pesanan): `sisa_jasa()` membaca kolom ini.
+            jasa_id=b.jasa_id,
             berat_perintah_kg=berat, jumlah_karung_perintah=karung,
             # Nol, bukan `berat`: stok dihitung dari kolom ini, dan perintah
             # yang belum dimuat tak boleh mengurangi satu kilogram pun.
@@ -592,8 +664,14 @@ def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
     laminasi berbeda barang dari Premium 50 kg biasa), jenisnya untuk curah,
     dan lot asalnya untuk PK mentah — PK dari dua lot berbeda tak boleh
     digabung, sebab ketelusurannya ke pemasok lewat lot itu.
+
+    ⚠ `jasa_id` ikut dibandingkan sejak migrasi 0080 (truk boleh menggabung
+    beberapa pesanan SATU pelanggan) — tanpanya "menir curah" atau "PK
+    tumpukan" dari DUA pesanan berbeda (silo/jenisnya sama persis, cuma
+    pemiliknya beda) akan terbaca sebagai baris yang sama dan DIGABUNG,
+    menghapus jejak milik pesanan mana sebagian dari kg itu sesungguhnya.
     """
-    if it.item_type != b.tipe:
+    if it.item_type != b.tipe or it.jasa_id != b.jasa_id:
         return False
     if b.tipe == "finished_goods":
         return (it.product_sku_id == b.sku_id
@@ -613,7 +691,8 @@ def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
 
 
 async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
-                       baris: BarisPerintah) -> HasilPerintah:
+                       baris: BarisPerintah,
+                       jasa_id: int | None = None) -> HasilPerintah:
     """Satu macam barang lagi ke transaksi yang BELUM DIVERIFIKASI.
 
     ⭐ INI YANG MEMBUAT "satu transaksi banyak barang" jadi nyata. Skemanya
@@ -647,20 +726,50 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     kartunya menyebut "Beras Medium" dua kali dengan angka berbeda, dan yang
     membacanya menjumlah sendiri — lalu salah sekali dari sepuluh.
 
-    ⚠⚠ `baris.jasa_id` WAJIB diturunkan dari `rec.jasa_id` di SINI, persis
-    `buat_perintah` — tanpanya `tersedia()` selalu memeriksa `jasa_id=None`
-    (pabrik) apa pun pemilik transaksinya yang sebenarnya, dua arah sekaligus:
-    PK/gabah kering milik pesanan yang SAMA dengan transaksinya malah DITOLAK
-    (pagar dua-arahnya membandingkan terhadap `None`, bukan pemilik transaksi
-    yang sesungguhnya); produk jadi/curah malah LOLOS memakai stok PABRIK
-    untuk transaksi yang sebenarnya pengambilan jasa — sebab `OutgoingItem`
-    sendiri tak punya `jasa_id`, baris itu lalu tercatat "keluar" atas nama
-    pesanan jasa itu lewat `rec.jasa_id`, padahal yang divalidasi dan
-    difisik-ambil tadi stok pabrik. Laporan lapangan 10 Oktober 2026.
+    ⚠⚠ `baris.jasa_id` WAJIB diturunkan dari pemilik transaksi SEBENARNYA di
+    SINI — tanpanya `tersedia()` selalu memeriksa `jasa_id=None` (pabrik) apa
+    pun pemilik transaksinya, dua arah sekaligus: PK/gabah kering milik
+    pesanan yang SAMA dengan transaksinya malah DITOLAK (pagar dua-arahnya
+    membandingkan terhadap `None`, bukan pemilik transaksi yang sesungguhnya);
+    produk jadi/curah malah LOLOS memakai stok PABRIK untuk transaksi yang
+    sebenarnya pengambilan jasa. Laporan lapangan 10 Oktober 2026.
+
+    ⚠ Sejak migrasi 0080 (truk boleh menggabung beberapa pesanan SATU
+    pelanggan, lihat `buat_perintah`), `rec.jasa_id` SENDIRI tak lagi cukup
+    jadi penentu: NULL berarti salah satu dari DUA keadaan — penjualan
+    pabrik biasa, atau truk jasa gabungan yang justru PUNYA pemilik, cuma
+    tak satu nilai. Dibedakan lewat ADA-TIDAKNYA baris ber-`jasa_id` yang
+    sudah tercatat di transaksi ini: kalau ada, barang BARU wajib menyebut
+    `jasa_id=` sendiri (pesanan mana, milik pelanggan transaksi yang sama)
+    — DITOLAK kalau tidak, bukan diam-diam dianggap pabrik.
     """
     rec = await _kunci_hidup(db, rec_id)
     tambah_muatan = rec.status == OUT_DIMUAT
-    baris = replace(baris, jasa_id=rec.jasa_id)
+    if rec.jasa_id is not None:
+        baris = replace(baris, jasa_id=rec.jasa_id)
+    else:
+        ada_baris_jasa = (await db.execute(
+            select(OutgoingItem.id).where(
+                OutgoingItem.outgoing_record_id == rec.id,
+                OutgoingItem.jasa_id.isnot(None)).limit(1))).first()
+        if ada_baris_jasa:
+            from app.models import Jasa
+            from app.models.jasa import BERJALAN
+
+            if jasa_id is None:
+                raise BarangKeluarError(
+                    "Transaksi ini menggabung beberapa pesanan jasa — "
+                    "sebutkan pesanan mana untuk barang tambahan ini.")
+            pesanan = await db.get(Jasa, int(jasa_id))
+            if pesanan is None or pesanan.status != BERJALAN:
+                raise BarangKeluarError(
+                    "Pesanan jasa tidak ditemukan atau sudah tak berjalan.")
+            if pesanan.pelanggan_id != rec.pelanggan_id:
+                raise BarangKeluarError(
+                    "Pesanan itu bukan milik pelanggan transaksi ini.")
+            baris = replace(baris, jasa_id=int(jasa_id))
+        else:
+            baris = replace(baris, jasa_id=None)
 
     berat, karung = await _berat_baris(db, baris)
     if berat <= 0:
@@ -700,6 +809,7 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
             jenis_byproduct=baris.jenis,
             milling_process_id=baris.milling_process_id, silo_id=baris.silo_id,
             gabah_kering_lot_id=baris.gabah_kering_lot_id,
+            jasa_id=baris.jasa_id,
             berat_perintah_kg=berat, jumlah_karung_perintah=karung,
             berat_kg=berat if tambah_muatan else 0,
             jumlah_karung=karung if tambah_muatan else None))
@@ -815,8 +925,7 @@ async def catat_muatan(db: AsyncSession, *, user, item_id: int,
     if it is None:
         raise BarangKeluarError("Baris perintah itu sudah tidak ada.")
     rec = await _kunci(db, it.outgoing_record_id, keadaan=OUT_PERINTAH)
-    b = baris_dari_item(it, rec.jasa_id, jumlah_karung=jumlah_karung,
-                        berat_kg=berat_kg)
+    b = baris_dari_item(it, jumlah_karung=jumlah_karung, berat_kg=berat_kg)
     berat, karung = await _berat_baris(db, b)
     perintah = float(it.berat_perintah_kg or 0)
     if berat > perintah + 0.5:
@@ -874,8 +983,7 @@ async def muat_semua(db: AsyncSession, *, user, rec_id: int,
     for it in items:
         if float(it.berat_kg or 0) > 0.5:
             continue                       # sudah dicatat sendiri, jangan ditimpa
-        b = baris_dari_item(it, rec.jasa_id,
-                            jumlah_karung=it.jumlah_karung_perintah,
+        b = baris_dari_item(it, jumlah_karung=it.jumlah_karung_perintah,
                             berat_kg=float(it.berat_perintah_kg or 0))
         berat, karung = await _berat_baris(db, b)
         ada, nama = await tersedia(db, b, abaikan_pesanan=True)
@@ -1249,8 +1357,7 @@ async def _kunci_untuk_balik(db: AsyncSession, rec_id: int, *, keadaan: str,
         "dibatalkan lagi.")
 
 
-async def _nama_baris(db: AsyncSession, it: OutgoingItem,
-                      jasa_id: int | None = None) -> str:
+async def _nama_baris(db: AsyncSession, it: OutgoingItem) -> str:
     """Nama barang satu baris, memakai ATURAN PENAMAAN YANG SAMA dengan layar.
 
     Lewat `tersedia()` meski stoknya tak dibutuhkan: nama barang yang disusun
@@ -1258,7 +1365,7 @@ async def _nama_baris(db: AsyncSession, it: OutgoingItem,
     pembatalan yang menyebut nama lain dari yang dilihat orang membuat orang
     itu ragu barang mana yang barusan ia kembalikan.
     """
-    return (await tersedia(db, baris_dari_item(it, jasa_id),
+    return (await tersedia(db, baris_dari_item(it),
                            abaikan_pesanan=True))[1]
 
 
@@ -1299,7 +1406,7 @@ async def balik_muat_baris(db: AsyncSession, *, rec_id: int, item_id: int,
     if it is None or it.outgoing_record_id != rec.id:
         raise BarangKeluarError(
             "Baris barang itu sudah tidak ada di perintahnya.")
-    nama = await _nama_baris(db, it, rec.jasa_id)
+    nama = await _nama_baris(db, it)
     it.berat_kg = berat_lama
     it.jumlah_karung = karung_lama
     return (f"✓ Dibatalkan: pencatatan muat {nama} pada {rec.kode} — "

@@ -421,13 +421,14 @@ async def hitung_stok_bekatul(
             )
         )
     ).scalar_one()
+    # `milik(OutgoingItem)` — lihat catatan panjang di `hitung_stok_
+    # byproduct_curah` (migrasi 0080, kolom yang sama).
     keluar = (
         await db.execute(
             select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
             .where(OutgoingItem.item_type == "byproduct_curah",
                    OutgoingItem.jenis_byproduct == "bekatul",
-                   milik(OutgoingRecord))
+                   milik(OutgoingItem))
         )
     ).scalar_one()
     return float(masuk) - float(keluar)
@@ -455,11 +456,12 @@ async def hitung_stok_broken_curah(
     pelanggan boleh punya beberapa `Jasa`, dan sisa curahnya WAJIB dijawab
     sebagai satu angka gabungan, bukan dijumlah belakangan oleh pemanggil.
 
-    ⚠ `keluar` kini ikut disaring pemiliknya (`OutgoingRecord.jasa_id`) —
-    dulu TIDAK, sama seperti cacat yang sempat ada di `stok_produk()`
-    sebelum perbaikan 6 Oktober (lihat catatan panjang di sana). Dampaknya
-    DORMAN hari ini (belum ada jalur jual broken curah), tapi rumusnya
-    harus tetap benar begitu jalur itu lahir.
+    ⚠ `keluar` kini ikut disaring pemiliknya (`OutgoingItem.jasa_id`,
+    migrasi 0080 — dulu lewat `OutgoingRecord.jasa_id`, sebelum itu TIDAK
+    disaring sama sekali, cacat yang sempat ada juga di `stok_produk()`
+    sebelum perbaikan 6 Oktober, lihat catatan panjang di sana). Jalur jual
+    broken curah sudah ADA sejak "Pengambilan barang jasa" (11 Oktober
+    2026), jadi suku ini tak lagi dorman — tetap perlu benar sekarang.
     """
     def milik(k):
         if jasa_id is None:
@@ -475,13 +477,14 @@ async def hitung_stok_broken_curah(
             )
         )
     ).scalar_one())
+    # `milik(OutgoingItem)` — lihat catatan panjang di `hitung_stok_
+    # byproduct_curah` (migrasi 0080, kolom yang sama).
     keluar = float((
         await db.execute(
             select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
             .where(OutgoingItem.item_type == "byproduct_curah",
                    OutgoingItem.jenis_byproduct == "broken",
-                   milik(OutgoingRecord))
+                   milik(OutgoingItem))
         )
     ).scalar_one())
     terpakai = float((
@@ -532,13 +535,16 @@ async def hitung_stok_byproduct_curah(
             )
         )
     ).scalar_one())
+    # `milik(OutgoingItem)` — BUKAN `OutgoingRecord` lagi (migrasi 0080):
+    # truk boleh menggabung beberapa pesanan satu pelanggan, dan transaksi
+    # semacam itu punya `OutgoingRecord.jasa_id` NULL walau barisnya sendiri
+    # tetap tahu pemiliknya masing-masing lewat `OutgoingItem.jasa_id`.
     keluar = float((
         await db.execute(
             select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-            .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
             .where(OutgoingItem.item_type == "byproduct_curah",
                    OutgoingItem.jenis_byproduct == jenis,
-                   milik(OutgoingRecord))
+                   milik(OutgoingItem))
         )
     ).scalar_one())
     return masuk - keluar
@@ -588,20 +594,21 @@ async def hitung_stok_finished_goods(
     # barang orang lain diambil, dan pesanan jasanya tampak tak pernah berkurang.
     # Dua kesalahan dari satu saringan yang terlupa.
     #
-    # Dibaca dari `outgoing_records.jasa_id`: pengambilan jasa punya perintahnya
-    # sendiri, satu truk satu perintah, dan itulah yang menautkannya ke pesanan.
-    from app.penggilingan.inventory.models import OutgoingRecord
-
+    # Dibaca dari `outgoing_items.jasa_id` LANGSUNG (migrasi 0080) — BUKAN
+    # `outgoing_records.jasa_id`. Dulu satu truk selalu satu pesanan, jadi
+    # keduanya selalu sama; sejak truk boleh menggabung beberapa pesanan
+    # satu pelanggan (keputusan pemilik 11 Oktober 2026), `outgoing_records.
+    # jasa_id` jadi NULL tepat pada transaksi semacam itu, dan membaca lewat
+    # sana akan membuat barang yang SUDAH diambil lewat truk gabungan
+    # terhitung lagi sebagai stok yang masih ada.
     oq = select(
         func.coalesce(func.sum(OutgoingItem.jumlah_karung), 0),
         func.coalesce(func.sum(OutgoingItem.berat_kg), 0),
-    ).join(
-        OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id
     ).where(
         OutgoingItem.item_type == "finished_goods",
         OutgoingItem.product_sku_id == sku_id,
-        OutgoingRecord.jasa_id.is_(None) if jasa_id is None
-        else OutgoingRecord.jasa_id == jasa_id,
+        OutgoingItem.jasa_id.is_(None) if jasa_id is None
+        else OutgoingItem.jasa_id == jasa_id,
     )
     if standard_id is None:
         oq = oq.where(OutgoingItem.rice_quality_standard_id.is_(None))

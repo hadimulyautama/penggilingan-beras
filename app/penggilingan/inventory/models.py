@@ -311,6 +311,12 @@ class OutgoingRecord(Base, TimestampMixin):
     #: jalannya", `jasa_id` menjawab "ini mengurangi pesanan jasa yang mana".
     #: Satu kolom untuk dua pertanyaan akan membuat setiap penjualan ke
     #: pelanggan yang kebetulan juga menjasakan terbaca sebagai pengambilan.
+    #:
+    #: ⚠ JUGA NULL saat transaksinya menggabung BEBERAPA pesanan jasa sekaligus
+    #: (permintaan pemilik 11 Oktober 2026 — satu truk boleh membawa barang
+    #: dari dua pesanan aktif pelanggan yang sama). `pelanggan_id` TETAP
+    #: terisi di keadaan itu (tak pernah ambigu — satu truk tetap satu
+    #: pelanggan); kepemilikan PER BARIS ada di `OutgoingItem.jasa_id`.
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     # truk_sendiri / ekspedisi / sewa / pickup
     metode: Mapped[str | None] = mapped_column(String(20))
@@ -367,6 +373,22 @@ class OutgoingItem(Base, TimestampMixin):
     )
     jenis_byproduct: Mapped[str | None] = mapped_column(String(20))
     milling_process_id: Mapped[int | None] = mapped_column(ForeignKey("milling_process.id"))
+    #: Pesanan jasa baris INI — BUKAN disalin dari `outgoing_records.jasa_id`.
+    #:
+    #: Keputusan pemilik 11 Oktober 2026: "barang yang diambil adalah list
+    #: barang yang merupakan kepemilikan pelanggan yang kita pilih" — satu
+    #: PELANGGAN boleh punya BEBERAPA pesanan jasa aktif (kedatangan
+    #: terpisah yang belum sempat/tak pernah bertemu fisik, lihat
+    #: `pastikan_satu_pemilik`), dan satu truk pengambilan boleh membawa
+    #: barang dari pesanan-pesanan itu SEKALIGUS selama pemiliknya (pelanggan)
+    #: sama. `outgoing_records.jasa_id` karena itu tak lagi cukup — ia SATU
+    #: nilai untuk SELURUH transaksi, dan jadi NULL begitu transaksinya
+    #: menggabung lebih dari satu pesanan (lihat catatan di kolom itu).
+    #: Kolom inilah yang `sisa_jasa()` baca untuk "sudah diambil" PK Gudang 2
+    #: dan barang jadi — migrasi 0080, dibackfill dari `outgoing_records.
+    #: jasa_id` (sebelum migrasi ini SELALU satu nilai per transaksi, jadi
+    #: backfill-nya tepat).
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     #: Tempat PK Gudang 2 ini diambil — HANYA untuk `item_type="pk_g2"`.
     #: NULL berarti dari TUMPUKAN, bukan "tak diisi" — silo tertentu mengisi
     #: id-nya, tumpukan sengaja tak punya id sendiri (sama seperti

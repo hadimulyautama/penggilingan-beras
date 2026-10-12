@@ -42,7 +42,8 @@ async def pabrik(pg, pemakai):
             db.add(g1)
             await db.flush()
         silo_c = Silo(nama_silo="Silo C", warehouse_id=g2.id, status="kosong")
-        db.add(silo_c)
+        silo_g1 = Silo(nama_silo="Silo G1-X", warehouse_id=g1.id, status="kosong")
+        db.add_all([silo_c, silo_g1])
         await db.flush()
 
         u = await db.get(User, pemakai.id)
@@ -57,8 +58,10 @@ async def pabrik(pg, pemakai):
         jasa_b = Jasa(kode="JAS-2610-011", pelanggan_id=pak_budi.id, status="berjalan")
         db.add_all([jasa_a, jasa_b])
         await db.commit()
-        return {"g1": g1.id, "g2": g2.id, "silo_c": silo_c.id, "user": u.id,
-                "jasa_a": jasa_a.id, "jasa_b": jasa_b.id}
+        return {"g1": g1.id, "g2": g2.id, "silo_c": silo_c.id,
+                "silo_g1": silo_g1.id, "user": u.id,
+                "jasa_a": jasa_a.id, "jasa_b": jasa_b.id,
+                "pelanggan_a": bu_sri.id, "pelanggan_b": pak_budi.id}
 
 
 async def _masuk_tumpukan(pg, user_id: int, kode: str, kg: float,
@@ -259,10 +262,10 @@ async def test_picker_barang_jasa_menawarkan_tumpukan_dan_silo(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = await barang_jasa(induk=str(pabrik["jasa_a"]), user=u)
+    opsi = await barang_jasa(induk=str(pabrik["pelanggan_a"]), user=u)
     nilai = {o["value"] for o in opsi}
-    assert "g2:tumpukan" in nilai
-    assert f"g2:silo:{pabrik['silo_c']}" in nilai
+    assert f"g2:tumpukan@{pabrik['jasa_a']}" in nilai
+    assert f"g2:silo:{pabrik['silo_c']}@{pabrik['jasa_a']}" in nilai
 
 
 async def test_picker_tak_menawarkan_silo_pesanan_lain(pg, pabrik):
@@ -275,64 +278,26 @@ async def test_picker_tak_menawarkan_silo_pesanan_lain(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = await barang_jasa(induk=str(pabrik["jasa_b"]), user=u)
+    opsi = await barang_jasa(induk=str(pabrik["pelanggan_b"]), user=u)
     nilai = {o["value"] for o in opsi}
-    assert f"g2:silo:{pabrik['silo_c']}" not in nilai
-    assert "g2:tumpukan" not in nilai
+    assert not any(v.startswith(f"g2:silo:{pabrik['silo_c']}") for v in nilai)
+    assert not any(v.startswith("g2:tumpukan") for v in nilai)
 
 
-async def test_pesanan_jasa_ada_barang_menyaring_dan_memimpin_pelanggan(pg, pabrik):
-    """Keluhan pemilik 11 Oktober 2026: picker "Pesanan jasa" (Pengambilan
-    barang jasa) dulu menawarkan SEMUA pesanan berjalan — termasuk yang
-    barangnya sudah habis — dan baru ketahuan kosong SESUDAH dipilih.
-    `jasa_berjalan(ada_barang=1)` menyaringnya ke yang benar-benar punya
-    barang, dan labelnya memimpin dengan nama pelanggan (bukan kode pesanan),
-    sebangun pengelompokan `/stok-produk-jasa`.
+async def test_rantai_pelanggan_barang_pengambilan_jasa(pg, pabrik):
+    """Keluhan pemilik 11 Oktober 2026: "picker 'pesanan jasa' ganti dengan
+    picker nama pelanggan yang punya barang jasa... lalu barang yang
+    diambil adalah list barang yang merupakan kepemilikan pelanggan yang
+    kita pilih di awal."
+
+    Rantai DUA langkah (medan "Pesanan" di tengah sudah dihapus seluruhnya
+    — koreksi lapangan 12 Oktober 2026, lihat `test_satu_truk_...` di
+    bawah): `/actions/pelanggan-ada-barang-jasa` (pelanggan SAJA) →
+    `/actions/barang-jasa?induk=<pelanggan>` (barang SELURUH pesanan
+    berjalan pelanggan itu, digabung).
     """
     from app.models import User
-    from app.web.aksi_inventory import jasa_berjalan
-
-    # jasa_a (Bu Sri) punya PK di tumpukan G2; jasa_b (Pak Budi) kosong sama
-    # sekali — persis skenario `test_picker_tak_menawarkan_silo_pesanan_lain`.
-    await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-08", 3_000, pabrik["jasa_a"])
-
-    async with pg() as db:
-        u = await db.get(User, pabrik["user"])
-
-    # Tanpa saringan: KEDUANYA tetap muncul (dipakai tutup_jasa/batalkan_jasa).
-    semua = await jasa_berjalan(ada_barang=False, user=u)
-    ids_semua = {o["value"] for o in semua}
-    assert str(pabrik["jasa_a"]) in ids_semua and str(pabrik["jasa_b"]) in ids_semua
-
-    # Dengan saringan: HANYA Bu Sri (jasa_a), dan labelnya memimpin namanya.
-    tersaring = await jasa_berjalan(ada_barang=True, user=u)
-    ids = {o["value"] for o in tersaring}
-    assert ids == {str(pabrik["jasa_a"])}, (
-        f"pesanan kosong masih ditawarkan, atau yang berisi malah hilang: {tersaring}")
-    label = next(o["label"] for o in tersaring if o["value"] == str(pabrik["jasa_a"]))
-    assert label.startswith("Bu Sri ·"), \
-        f"label tak memimpin dengan nama pelanggan: {label}"
-
-
-async def test_rantai_pelanggan_pesanan_barang_pengambilan_jasa(pg, pabrik):
-    """Keluhan pemilik 11 Oktober 2026 (lanjutan): "picker 'pesanan jasa'
-    ganti dengan picker nama pelanggan yang punya barang jasa... lalu
-    barang yang diambil adalah list barang yang merupakan kepemilikan
-    pelanggan yang kita pilih di awal."
-
-    Rantai lengkap diuji: `/actions/pelanggan-ada-barang-jasa` (picker
-    pertama, pelanggan SAJA, bukan pesanan) → `/actions/jasa-berjalan?
-    induk=<pelanggan>` (pesanan milik pelanggan itu SAJA, berlabel tanpa
-    mengulang namanya) → `/actions/barang-jasa?induk=<jasa>` (parameternya
-    `induk`, bukan `jasa` lagi — supaya mekanisme `induk` baku aksi.js,
-    yang SELALU mengirim `?induk=...`, benar-benar nyambung — lihat
-    perbaikan `ulang_barang` di aksi.js pada commit yang sama: sebelum ini
-    medan "Barang yang diambil" TAK PERNAH dimuat ulang saat pesanannya
-    berganti sama sekali).
-    """
-    from app.models import User
-    from app.web.aksi_inventory import (barang_jasa, jasa_berjalan,
-                                        pelanggan_ada_barang_jasa)
+    from app.web.aksi_inventory import barang_jasa, pelanggan_ada_barang_jasa
 
     await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-09", 3_000, pabrik["jasa_a"])
 
@@ -343,16 +308,92 @@ async def test_rantai_pelanggan_pesanan_barang_pengambilan_jasa(pg, pabrik):
     pelanggan = await pelanggan_ada_barang_jasa(user=u)
     assert {o["label"] for o in pelanggan} == {"Bu Sri"}
     pid = next(o["value"] for o in pelanggan if o["label"] == "Bu Sri")
+    assert pid == str(pabrik["pelanggan_a"])
 
-    # 2) Picker pesanan, disaring ke pelanggan itu: satu baris, jasa_a,
-    #    labelnya TAK mengulang "Bu Sri" (sudah disebut medan sebelumnya).
-    pesanan = await jasa_berjalan(induk=pid, user=u)
-    assert {o["value"] for o in pesanan} == {str(pabrik["jasa_a"])}
-    assert "Bu Sri" not in pesanan[0]["label"], pesanan[0]["label"]
+    # 2) Picker barang, langsung dari pelanggan — nilainya membawa akhiran
+    #    `@<jasa_id>` asalnya sendiri.
+    barang = await barang_jasa(induk=pid, user=u)
+    assert any(o["value"] == f"g2:tumpukan@{pabrik['jasa_a']}" for o in barang), barang
 
-    # 3) Picker barang, `induk` (bukan `jasa`) — mekanisme induk baku.
-    barang = await barang_jasa(induk=str(pabrik["jasa_a"]), user=u)
-    assert any(o["value"] == "g2:tumpukan" for o in barang), barang
+
+async def test_satu_truk_menggabung_dua_pesanan_pelanggan_sama(pg, pabrik):
+    """Skenario lapangan yang membatalkan "versi ringan" semula (keputusan
+    pemilik 12 Oktober 2026): "pak pras punya pk di gudang 1 dan gudang 2...
+    sekali kiriman saya mau kirim semuanya." Bu Sri punya PK di Gudang 1
+    (sisa giling, pesanan `jasa_a`) DAN di tumpukan Gudang 2 (pesanan BARU
+    `jasa_a2`) — dua tempat yang TAK PERNAH bertemu fisik, jadi
+    `pastikan_satu_pemilik` tak punya alasan menggabungkannya otomatis.
+    SATU truk, SATU perintah, mengambil dari kedua pesanan sekaligus.
+
+    Membuktikan migrasi 0080 ujung ke ujung: `OutgoingItem.jasa_id` per
+    baris, `sisa_jasa()` berkurang untuk KEDUA pesanan, dan
+    `OutgoingRecord.jasa_id` NULL (bukan salah satu pesanan) sebab
+    transaksinya menggabung pesanan berbeda.
+    """
+    from sqlalchemy import select
+
+    from app.database import now_local
+    from app.models import Jasa, MillingProcess, MillingProgressLog, User
+    from app.services import barang_keluar as bk
+    from app.services.jasa import sisa_jasa
+    from app.web.aksi_inventory import _satu_baris, barang_jasa
+
+    async with pg() as db:
+        jasa_a2 = Jasa(kode="JAS-2610-012", pelanggan_id=pabrik["pelanggan_a"],
+                       status="berjalan")
+        db.add(jasa_a2)
+        await db.flush()
+        jasa_a2_id = jasa_a2.id
+
+        proc = MillingProcess(kode_proses="LOT-G2K-01", status="selesai",
+                              silo_id=pabrik["silo_g1"], jasa_id=pabrik["jasa_a"],
+                              berat_gabah_masuk_kg=4_000, waktu_mulai=now_local(),
+                              waktu_selesai=now_local(), created_by=pabrik["user"])
+        db.add(proc)
+        await db.flush()
+        db.add(MillingProgressLog(milling_process_id=proc.id,
+                                  berat_kumulatif_kg=3_000,
+                                  waktu_update=now_local(), input_by=pabrik["user"]))
+        await db.commit()
+
+    await _masuk_tumpukan(pg, pabrik["user"], "PKB-G2K-11", 2_000, jasa_a2_id)
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+
+    barang = await barang_jasa(induk=str(pabrik["pelanggan_a"]), user=u)
+    nilai = {o["value"] for o in barang}
+    assert f"pk:LOT-G2K-01@{pabrik['jasa_a']}" in nilai
+    assert f"g2:tumpukan@{jasa_a2_id}" in nilai
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        b1 = await _satu_baris(db, f"pk:LOT-G2K-01@{pabrik['jasa_a']}", 3_000)
+        b2 = await _satu_baris(db, f"g2:tumpukan@{jasa_a2_id}", 2_000)
+        assert b1.jasa_id == pabrik["jasa_a"]
+        assert b2.jasa_id == jasa_a2_id
+        r = await bk.buat_perintah(db, user=u, baris=[b1, b2])
+        rec_id = r.rec.id
+        assert r.rec.jasa_id is None, \
+            "truk menggabung dua pesanan — tak boleh menyebut salah satu saja"
+        assert r.rec.pelanggan_id == pabrik["pelanggan_a"]
+
+    async with pg() as db:
+        u = await db.get(User, pabrik["user"])
+        await bk.muat_semua(db, user=u, rec_id=rec_id)
+
+    async with pg() as db:
+        from app.penggilingan.inventory.models import OutgoingItem
+
+        item_jasa = dict((await db.execute(
+            select(OutgoingItem.jasa_id, OutgoingItem.berat_kg)
+            .where(OutgoingItem.outgoing_record_id == rec_id))).all())
+        assert sorted(item_jasa) == sorted([pabrik["jasa_a"], jasa_a2_id])
+
+        sisa_a = await sisa_jasa(db, pabrik["jasa_a"])
+        assert sisa_a.pk_g1_kg == 0, sisa_a
+        sisa_a2 = await sisa_jasa(db, jasa_a2_id)
+        assert sisa_a2.pk_g2_kg == 0, sisa_a2
 
 
 # ───────────────────── Tak pernah jadi barang jualan pabrik ─────────────────────

@@ -83,6 +83,7 @@ async def sosoh_jasa(pg, pemakai):
         await db.commit()
         return {"user": u.id, "kode_pabrik": p1.kode_proses,
                 "kode_jasa": p2.kode_proses, "jasa_id": jasa.id,
+                "pelanggan_id": pel.id,
                 "pemilik": "JAS-2610-001 Bu Sri"}
 
 
@@ -484,8 +485,9 @@ async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh
 
     async with pg() as db:
         u = await db.get(User, sosoh_jasa["user"])
-    opsi = {o["value"] for o in await barang_jasa(induk=str(jid), user=u)}
-    assert "cr:menir" in opsi
+    opsi = {o["value"] for o in
+            await barang_jasa(induk=str(sosoh_jasa["pelanggan_id"]), user=u)}
+    assert f"cr:menir@{jid}" in opsi
 
     async with pg() as db:
         u = await db.get(User, sosoh_jasa["user"])

@@ -20,6 +20,8 @@ di depan matanya); harga, pembelian, dan pengiriman keluar milik staff/admin.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -1059,54 +1061,70 @@ async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
     `g2:` per kilogram. Tanpa awalan, "100" pada satu baris berarti 100
     karung dan pada baris lain 100 kg — dan yang membedakan cuma ingatan
     orang yang mengetiknya.
+
+    Akhiran `@<jasa_id>` (dari `_barang_jasa_pelanggan_rows`, keputusan
+    pemilik 11 Oktober 2026: pengambilan jasa kini per PELANGGAN, bisa
+    menggabung beberapa pesanan aktifnya sekaligus) dibongkar DULUAN,
+    sebelum awalan tipe barang diperiksa — nilainya menumpuk di BELAKANG
+    ("g2:tumpukan@42"), jadi membongkarnya lebih dulu tak mengganggu
+    pengurai lain yang sudah ada. `jasa_id` hasilnya ditempel ke
+    `BarisPerintah` APA PUN tipenya — `buat_perintah` yang baru
+    memvalidasinya milik pelanggan yang sama.
     """
     from app.models import MillingProcess
 
     pilih = (pilih or "").strip()
+    jasa_asal: int | None = None
+    depan, _, akhiran = pilih.rpartition("@")
+    if depan and akhiran.isdigit():
+        pilih, jasa_asal = depan, int(akhiran)
     if float(jumlah or 0) <= 0:
         raise HTTPException(400, f"Isi jumlah untuk '{pilih}' lebih dari 0.")
     if pilih.startswith("cr:"):
         # Curah DIKETIK DALAM KG. Jumlahnya tak pernah diturunkan dari karung
         # sebab ia memang tak berkarung; `tersedia()` yang menjaga batasnya,
         # dan penolakannya menyebut angkanya.
-        return bk.BarisPerintah(tipe="byproduct_curah", jenis=pilih[3:].strip(),
-                                berat_kg=float(jumlah))
-    if pilih.startswith("pk:"):
+        b = bk.BarisPerintah(tipe="byproduct_curah", jenis=pilih[3:].strip(),
+                             berat_kg=float(jumlah))
+    elif pilih.startswith("pk:"):
         kode = pilih[3:].strip()
         proc = (await db.execute(select(MillingProcess).where(
             MillingProcess.kode_proses == kode))).scalars().first()
         if proc is None:
             raise HTTPException(400, f"Lot {kode} tidak ditemukan.")
-        return bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
-                                berat_kg=float(jumlah))
-    if pilih.startswith("gk:"):
+        b = bk.BarisPerintah(tipe="pk_langsung", milling_process_id=proc.id,
+                             berat_kg=float(jumlah))
+    elif pilih.startswith("gk:"):
         from app.models import GabahKeringLot
         kode = pilih[3:].strip()
         lot = (await db.execute(select(GabahKeringLot).where(
             GabahKeringLot.kode_lot == kode))).scalars().first()
         if lot is None:
             raise HTTPException(400, f"Gabah kering {kode} tidak ditemukan.")
-        return bk.BarisPerintah(tipe="gabah_langsung", gabah_kering_lot_id=lot.id,
-                                berat_kg=float(jumlah))
-    if pilih.startswith("g2:"):
+        b = bk.BarisPerintah(tipe="gabah_langsung", gabah_kering_lot_id=lot.id,
+                             berat_kg=float(jumlah))
+    elif pilih.startswith("g2:"):
         # PK Gudang 2 — DIKETIK DALAM KG, sama seperti `pk:`/`cr:`. Tempatnya
         # `silo:<id>` atau `tumpukan` persis; `tersedia()` yang menjaga
         # pagarnya (pemilik tempat vs pemilik perintah).
         tempat = pilih[3:].strip()
         if tempat == "tumpukan":
-            return bk.BarisPerintah(tipe="pk_g2", silo_id=None,
-                                    berat_kg=float(jumlah))
-        if tempat.startswith("silo:") and tempat[5:].isdigit():
-            return bk.BarisPerintah(tipe="pk_g2", silo_id=int(tempat[5:]),
-                                    berat_kg=float(jumlah))
-        raise HTTPException(400, f"Tempat PK Gudang 2 tak dikenal: {tempat}.")
-    nilai = pilih[3:] if pilih.startswith("bj:") else pilih
-    bagian = nilai.split("|")
-    if not bagian or not bagian[0].isdigit():
-        raise HTTPException(400, "Pilih barangnya dulu.")
-    std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
-    return bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
-                            std_id=std, jumlah_karung=int(jumlah))
+            b = bk.BarisPerintah(tipe="pk_g2", silo_id=None,
+                                 berat_kg=float(jumlah))
+        elif tempat.startswith("silo:") and tempat[5:].isdigit():
+            b = bk.BarisPerintah(tipe="pk_g2", silo_id=int(tempat[5:]),
+                                 berat_kg=float(jumlah))
+        else:
+            raise HTTPException(400, f"Tempat PK Gudang 2 tak dikenal: {tempat}.")
+    else:
+        nilai = pilih[3:] if pilih.startswith("bj:") else pilih
+        bagian = nilai.split("|")
+        if not bagian or not bagian[0].isdigit():
+            raise HTTPException(400, "Pilih barangnya dulu.")
+        std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
+        b = bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
+                             std_id=std, jumlah_karung=int(jumlah))
+    return replace(b, jasa_id=jasa_asal) if jasa_asal is not None else b
 
 
 async def _baris_dari_borang(db, req) -> list["bk.BarisPerintah"]:
@@ -1662,38 +1680,33 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                      "ditanya. Satu truk satu perintah; pengambilan bertahap "
                      "berarti beberapa perintah.",
              "fields": [
-                 # TIGA medan berantai — permintaan pemilik 11 Oktober 2026:
+                 # DUA medan berantai — permintaan pemilik 11 Oktober 2026:
                  # "picker 'pesanan jasa' ganti dengan picker nama pelanggan
                  # yang punya barang jasa... lalu barang yang diambil adalah
                  # list barang yang merupakan kepemilikan pelanggan yang
-                 # kita pilih di awal."
+                 # kita pilih di awal", lalu lebih tegas lagi sesudah laporan
+                 # lapangan nyata (Pak Pras punya PK di Gudang 1 DAN Gudang
+                 # 2, dua pesanan yang tak tergabung otomatis): "filter
+                 # menurut pesanan hapus saja... sekali kiriman saya mau
+                 # kirim semuanya."
                  #
-                 # "Pelanggan" dulu (bukan nomor pesanan) — hanya yang
-                 # benar-benar punya barang. "Pesanan" di bawahnya
-                 # (`induk: "pelanggan"`) mengisi dirinya SENDIRI kalau
-                 # pelanggan itu cuma punya satu pesanan berjalan (kasus
-                 # umum, lewat mekanisme `induk` baku — satu pilihan tak
-                 # perlu dipilih orang), dan baru benar-benar diminta
-                 # memilih kalau pelanggannya kebetulan punya lebih dari
-                 # satu. "Barang" tetap mengikuti PESANAN (bukan pelanggan
-                 # langsung): `outgoing_items` tak punya kolom kepemilikan
-                 # per baris, jadi satu perintah tetap cuma boleh menyebut
-                 # satu `jasa_id` — pagar yang mencegah barang dua pesanan
-                 # (apalagi dua pelanggan) tercampur satu truk.
+                 # TAK ADA LAGI medan "Pesanan" — kepemilikannya pelanggan,
+                 # bukan nomor pesanan (migrasi 0080: `outgoing_items.
+                 # jasa_id` menyimpan pesanan ASAL tiap baris sendiri-
+                 # sendiri, jadi satu truk BOLEH menggabung barang dari
+                 # beberapa pesanan aktif pelanggan yang sama — pagar yang
+                 # tetap keras cuma pelanggannya harus SAMA, bukan lagi
+                 # pesanannya).
                  {"name": "pelanggan", "label": "Pelanggan", "type": "remote",
                   "source": "/api/actions/pelanggan-ada-barang-jasa",
                   "kosong": "Tidak ada pelanggan yang masih punya barang "
                             "jasa di pabrik."},
-                 {"name": "jasa", "label": "Pesanan", "type": "remote",
-                  "induk": "pelanggan", "source": "/api/actions/jasa-berjalan",
-                  "kosong": "Pelanggan ini tak punya pesanan dengan barang "
-                            "tersedia."},
                  {"name": "barang", "label": "Barang yang diambil",
-                  "type": "ulang_barang", "maks": 12, "induk": "jasa",
+                  "type": "ulang_barang", "maks": 12, "induk": "pelanggan",
                   "source": "/api/actions/barang-jasa",
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Pilih pelanggannya dulu — daftar barangnya "
-                            "mengikuti pesanannya."},
+                            "mengikuti seluruh pesanan aktifnya."},
              ] + _bidang_kirim()},
             {"id": "tutup_jasa", "label": "\u25C7 Tutup pesanan jasa",
              "post": "/api/actions/tutup-jasa",
@@ -1820,13 +1833,18 @@ async def pelanggan_ada_barang_jasa(user: User = Depends(pengguna_aksi)) -> list
 
     Picker PERTAMA "Pengambilan barang jasa" (keputusan pemilik 11 Oktober
     2026: "picker 'pesanan jasa' ganti dengan picker nama pelanggan yang
-    punya barang jasa"). Satu baris per PELANGGAN, bukan per pesanan — tapi
-    di baliknya tetap satu/lebih `Jasa.id` BERJALAN; medan "Pesanan" di
-    bawahnya (`jasa-berjalan?induk=<pelanggan_id>`) yang menentukan MANA,
-    dan mengisi dirinya sendiri kalau cuma satu (lihat field spec
-    `ambil_jasa`) — satu perintah pengambilan tetap cuma boleh menyebut
-    SATU `jasa_id`, pagar yang mencegah barang dua pelanggan tercampur
-    satu truk (`outgoing_items` tak punya kolom kepemilikan per baris).
+    punya barang jasa"). Satu baris per PELANGGAN, bukan per pesanan.
+
+    TAK ADA LAGI medan "Pesanan" di bawahnya (koreksi pemilik 12 Oktober
+    2026: "filter menurut pesanan hapus saja... sekali kiriman saya mau
+    kirim semuanya") — medan "Barang yang diambil" langsung mengikuti
+    SELURUH pesanan BERJALAN pelanggan ini sekaligus lewat
+    `/actions/barang-jasa` (lihat `_barang_jasa_pelanggan_rows`), dan satu
+    truk BOLEH menggabung barang dari beberapa pesanan aktif pelanggan yang
+    sama (migrasi 0080: `outgoing_items.jasa_id` menyimpan pesanan ASAL
+    tiap baris sendiri-sendiri). Pagar yang tetap keras cuma pelanggannya
+    harus SAMA — `buat_perintah` menolak bila baris-barisnya menunjuk
+    pelanggan yang berbeda.
     """
     wajib(can_see_financials(user))
     from app.models import Jasa, Pelanggan
@@ -1855,53 +1873,18 @@ async def pelanggan_ada_barang_jasa(user: User = Depends(pengguna_aksi)) -> list
 
 
 @router.get("/actions/jasa-berjalan")
-async def jasa_berjalan(ada_barang: bool = False, induk: str = "",
-                        user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Pesanan jasa yang masih berjalan — untuk memilih pesanan mana diambil,
-    ditutup, atau dibatalkan.
+async def jasa_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pesanan jasa yang masih berjalan — untuk `tutup_jasa`/`batalkan_jasa`.
 
-    TIGA bentuk:
-
-    · Bawaan — `tutup_jasa`/`batalkan_jasa`: SELURUH pesanan berjalan,
-      label "<kode> · <pelanggan> · <fase>". Daftar penuh disengaja:
-      menutup/membatalkan pesanan yang justru kosong itulah pekerjaannya.
-
-    · `induk=<pelanggan_id>` — medan "Pesanan" di balik picker "Pelanggan"
-      baru (`pelanggan_ada_barang_jasa`, permintaan pemilik 11 Oktober
-      2026). Disaring ke SATU pelanggan itu SAJA, dan ke yang BENAR-BENAR
-      punya barang (`fase` cuma tahap TERJAUH yang PERNAH terisi, bukan
-      jaminan masih ada sekarang — tanpa saringan ini orang bisa memilih
-      pesanan yang ternyata kosong dan berakhir di "Barang yang diambil"
-      kosong, jalan buntu yang baru terlihat SESUDAH dipilih). Labelnya
-      TAK mengulang nama pelanggan — medan sebelumnya sudah menyebutnya.
-
-    · `ada_barang=1` TANPA `induk` — saringan yang sama, tapi daftarnya
-      tetap LINTAS pelanggan dan labelnya memimpin nama pelanggan
-      ("<pelanggan> · <kode> · <fase>"). Disisakan untuk pemakai lain yang
-      ingin daftar datar tersaring tanpa dua langkah pelanggan→pesanan.
+    SELURUH pesanan berjalan, label "<kode> · <pelanggan> · <fase>". Daftar
+    penuh disengaja: menutup/membatalkan pesanan yang justru kosong itulah
+    pekerjaannya.
     """
     wajib(can_see_financials(user))
     from app.services.jasa import FASE_JASA, daftar_jasa
 
     async with SessionLocal() as db:
         kartu = await daftar_jasa(db)
-        if induk.isdigit():
-            from app.models import Jasa
-            pid = int(induk)
-            milik = set((await db.execute(
-                select(Jasa.id).where(Jasa.pelanggan_id == pid))).scalars().all())
-            kartu = [k for k in kartu if k.id in milik]
-            kartu = [k for k in kartu if await _barang_jasa_rows(db, k.id)]
-            return [{"value": str(k.id),
-                     "label": f"{k.kode} · {FASE_JASA.get(k.fase, k.fase)}"}
-                    for k in kartu]
-        if ada_barang:
-            kartu = [k for k in kartu if await _barang_jasa_rows(db, k.id)]
-    if ada_barang:
-        return [{"value": str(k.id),
-                 "label": (f"{k.pelanggan} · {k.kode} · "
-                           f"{FASE_JASA.get(k.fase, k.fase)}")}
-                for k in kartu]
     return [{"value": str(k.id),
              "label": (f"{k.kode} · {k.pelanggan} · "
                        f"{FASE_JASA.get(k.fase, k.fase)}")}
@@ -1910,9 +1893,11 @@ async def jasa_berjalan(ada_barang: bool = False, induk: str = "",
 
 async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     """Barang pesanan jasa `jid` yang belum diambil pemiliknya — isi asli
-    rute `/actions/barang-jasa`, diangkat jadi fungsi sendiri supaya
-    `jasa_berjalan(ada_barang=1)` bisa memakainya untuk menyaring TANPA
-    menempuh HTTP (satu proses, bukan panggilan balik ke diri sendiri)."""
+    rute `/actions/barang-jasa` dari jalur satu-pesanan semula, diangkat
+    jadi fungsi sendiri supaya `_barang_jasa_pelanggan_rows` bisa
+    menggabung beberapa pesanan pelanggan sekaligus (satu proses, bukan
+    panggilan balik ke diri sendiri) dan `pelanggan_ada_barang_jasa` bisa
+    memakainya untuk menyaring pelanggan yang BENAR-BENAR punya barang."""
     from app.models import FinishedGoodsStock, MillingProcess, ProductSku
     from app.penggilingan.gudang1.services.milling import pk_breakdown_banyak
     from app.penggilingan.inventory.finished_goods import hitung_stok_finished_goods
@@ -2016,27 +2001,50 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
 
 @router.get("/actions/barang-jasa")
 async def barang_jasa(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Barang pesanan jasa ini yang belum diambil pemiliknya.
+    """Barang pelanggan ini yang belum diambil — SELURUH pesanan aktifnya
+    digabung, bukan satu pesanan saja.
 
-    Parameternya `induk` (bukan `jasa`) sejak 11 Oktober 2026: medan "Barang
-    yang diambil" kini `induk`-nya medan "Pesanan" (mekanisme `induk` baku
-    `aksi.js`, yang selalu menambahkan `?induk=...` — sebelumnya medan ini
-    memakai `?jasa=...` sendiri dan TAK PERNAH dimuat ulang saat pesanannya
-    berganti, sebab `ulang_barang` belum mendukung `induk` sama sekali;
-    lihat perbaikan `aksi.js` di commit yang sama).
+    `induk` kini id PELANGGAN (dulu id pesanan/`jasa`) — keputusan pemilik
+    11 Oktober 2026: "filter menurut pesanan hapus saja... sekali kiriman
+    saya mau kirim semuanya" (laporan lapangan: PK Pak Pras ada di Gudang 1
+    DAN Gudang 2, dua pesanan yang tak tergabung otomatis sebab tak pernah
+    bertemu fisik). Tiap baris TETAP menyebut pesanan asalnya lewat akhiran
+    `@<jasa_id>` pada nilainya — migrasi 0080 (`outgoing_items.jasa_id`)
+    menyimpan kepemilikan PER BARIS, jadi tak perlu dikarang jadi satu
+    angka; `_satu_baris` membongkar akhiran itu kembali saat borang
+    dikirim, dan `buat_perintah` memvalidasi seluruhnya milik pelanggan
+    yang sama.
 
     Tanpa `induk` daftarnya KOSONG, bukan berisi semua: daftar yang
-    menawarkan barang seluruh pelanggan saat pesanannya belum dipilih
+    menawarkan barang seluruh pelanggan saat pelanggannya belum dipilih
     adalah daftar yang sekali salah pilih menyerahkan barang ke orang lain.
-    Isinya sendiri ada di `_barang_jasa_rows` — diangkat jadi fungsi sendiri
-    supaya `jasa_berjalan(induk=...)`/`jasa_berjalan(ada_barang=1)` bisa
-    memakainya untuk menyaring.
     """
     wajib(can_see_financials(user))
     if not induk.isdigit():
         return []
     async with SessionLocal() as db:
-        return await _barang_jasa_rows(db, int(induk))
+        return await _barang_jasa_pelanggan_rows(db, int(induk))
+
+
+async def _barang_jasa_pelanggan_rows(db: AsyncSession, pelanggan_id: int) -> list[dict]:
+    """Barang SELURUH pesanan BERJALAN milik pelanggan ini, digabung —
+    kepemilikan berarti PELANGGAN (keputusan pemilik 10 Oktober 2026),
+    bukan nomor pesanan. Tiap baris tetap menyebut pesanan ASALNYA lewat
+    akhiran `@<jasa_id>` pada nilainya, bukan digabung jadi satu angka —
+    lihat `barang_jasa`.
+    """
+    from app.models import Jasa
+    from app.models.jasa import BERJALAN
+
+    jids = (await db.execute(
+        select(Jasa.id).where(Jasa.pelanggan_id == pelanggan_id,
+                              Jasa.status == BERJALAN)
+    )).scalars().all()
+    out: list[dict] = []
+    for jid in jids:
+        for baris in await _barang_jasa_rows(db, jid):
+            out.append({**baris, "value": f"{baris['value']}@{jid}"})
+    return out
 
 
 class JasaReq(BaseModel):
@@ -2048,7 +2056,14 @@ class JasaBatalReq(JasaReq):
 
 
 class AmbilJasaReq(BaseModel):
-    jasa: str = ""
+    #: Dulu `jasa` (satu pesanan). Sejak 11 Oktober 2026 pemiliknya PELANGGAN
+    #: — satu truk boleh membawa barang dari BEBERAPA pesanan aktifnya
+    #: sekaligus, jadi tak ada lagi satu `jasa_id` tunggal untuk dikirim di
+    #: sini. Dipakai cuma sebagai pagar depan ("sudah pilih pelanggan?");
+    #: kepemilikan SEBENARNYA per baris menumpang akhiran `@<jasa_id>` pada
+    #: nilai tiap `barang` (lihat `_barang_jasa_pelanggan_rows`/`_satu_baris`),
+    #: dan `buat_perintah` yang memvalidasinya.
+    pelanggan: str = ""
     barang: list[BarisReq] | None = None
     no_polisi: str = ""
     nama_ekspedisi: str = ""
@@ -2061,18 +2076,25 @@ async def act_ambil_jasa(req: AmbilJasaReq,
     """Terbitkan perintah PENGAMBILAN barang jasa oleh pemiliknya.
 
     Pembelinya tidak ditanya: barang titipan kembali kepada yang menitipkannya,
-    dan medan nama di sini cuma kesempatan mengetiknya salah. `buat_perintah`
-    yang menurunkannya dari pesanannya.
+    dan medan nama di sini cuma kesempatan mengetiknya salah.
+
+    PEMILIKNYA PELANGGAN, BUKAN SATU PESANAN (keputusan pemilik 11 Oktober
+    2026, sesudah laporan lapangan: Pak Pras punya PK di Gudang 1 DAN
+    Gudang 2 — dua pesanan yang tak pernah bertemu fisik jadi tak tergabung
+    otomatis, dan "sekali kiriman saya mau kirim semuanya"). Tiap baris
+    `barang` sudah membawa `jasa_id` ASALNYA sendiri (akhiran `@<id>` pada
+    nilainya, dibongkar `_satu_baris`) — `buat_perintah` yang memvalidasi
+    seluruhnya milik SATU pelanggan yang sama, bukan rute ini.
     """
     wajib(can_see_financials(user))
-    if not (req.jasa or "").isdigit():
-        raise HTTPException(400, "Pilih pesanan jasa yang barangnya diambil.")
+    if not (req.pelanggan or "").isdigit():
+        raise HTTPException(400, "Pilih pelanggan yang barangnya diambil.")
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         baris = await _baris_dari_borang(db, req)
         try:
             r = await bk.buat_perintah(
-                db, user=u, baris=baris, jasa_id=int(req.jasa),
+                db, user=u, baris=baris,
                 metode=None, no_polisi=(req.no_polisi or None),
                 nama_ekspedisi=(req.nama_ekspedisi or None),
                 catatan=(req.catatan or None))

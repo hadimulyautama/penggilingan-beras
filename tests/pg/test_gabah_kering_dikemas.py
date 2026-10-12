@@ -61,7 +61,7 @@ async def pabrik(pg, pemakai, pemasok):
         db.add(jasa)
         await db.commit()
         return {"g1": g1.id, "silo": silo, "user": u.id, "pemasok": pemasok.id,
-                "jasa_id": jasa.id}
+                "jasa_id": jasa.id, "pelanggan_id": pel.id}
 
 
 async def _isi_silo_langsung(pg, pabrik, *, huruf: str, kode: str, kg: float,
@@ -280,8 +280,8 @@ async def test_pesanan_boleh_ditutup_sesudah_gabah_kering_terangkut(pg, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
-    opsi = {o["value"] for o in await barang_jasa(induk=str(pabrik["jasa_id"]), user=u)}
-    assert f"gk:{r.lot.kode_lot}" in opsi
+    opsi = {o["value"] for o in await barang_jasa(induk=str(pabrik["pelanggan_id"]), user=u)}
+    assert f"gk:{r.lot.kode_lot}@{pabrik['jasa_id']}" in opsi
 
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
