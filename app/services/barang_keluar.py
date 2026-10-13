@@ -552,6 +552,11 @@ async def buat_perintah(
     if not baris:
         raise BarangKeluarError(
             "Perintah tanpa satu pun barang tak bisa dikerjakan siapa pun.")
+    if any(b.tipe == "pk_g2" for b in baris):
+        raise BarangKeluarError(
+            "PK yang sudah masuk Gudang 2 tidak bisa dikirim langsung. "
+            "Gunakan PK itu sebagai bahan penyosohan, lalu kirim hasil "
+            "prosesnya dari stok produk.")
     from app.models import Jasa
     from app.models.jasa import BERJALAN
 
@@ -746,6 +751,11 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     `jasa_id=` sendiri (pesanan mana, milik pelanggan transaksi yang sama)
     — DITOLAK kalau tidak, bukan diam-diam dianggap pabrik.
     """
+    if baris.tipe == "pk_g2":
+        raise BarangKeluarError(
+            "PK yang sudah masuk Gudang 2 tidak bisa ditambahkan ke barang "
+            "keluar. Gunakan PK itu sebagai bahan penyosohan, lalu kirim "
+            "hasil prosesnya dari stok produk.")
     rec = await _kunci_hidup(db, rec_id)
     tambah_muatan = rec.status == OUT_DIMUAT
     if rec.jasa_id is not None:

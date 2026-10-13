@@ -189,6 +189,10 @@ _SQL_AKTIF = text("""
                           WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
        AND t.id NOT IN (SELECT timbangan_transaksi_id FROM pk_purchase_batches
                           WHERE timbangan_transaksi_id IS NOT NULL AND dibatalkan_pada IS NULL)
+       AND NOT EXISTS (SELECT 1 FROM finished_goods_stock f
+                        WHERE f.source_type = 'timbangan' AND f.source_id = t.id)
+       AND NOT EXISTS (SELECT 1 FROM byproduct_stock b
+                        WHERE b.source_type = 'timbangan' AND b.source_id = t.id)
      ORDER BY (t.status_tiket = 'TERBUKA') DESC, t.tanggal DESC, t.id DESC
 """)
 

@@ -107,8 +107,12 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     # `aksi.js` ikut dimuat. Tanpa yang ketiga tombolnya cuma memuat ulang
     # halaman — kesalahan yang persis pernah terjadi di layar Stok.
     from app.web.api import _is_g2_operator
+    from hmu_identitas import peran as P
 
-    boleh_catat = await _is_g2_operator(akun.user)
+    # Tombol “Masukkan broken ke silo” juga menerima Super Admin secara
+    # eksplisit di endpoint. Pastikan tampilan kartu memakai gerbang yang sama.
+    boleh_catat = (await _is_g2_operator(akun.user)
+                   or P.super_saja(akun.user.role))
     return await render_laci(
         request, "stok_produk.html", layar="stok_produk",
         BOLEH_CATAT=boleh_catat,

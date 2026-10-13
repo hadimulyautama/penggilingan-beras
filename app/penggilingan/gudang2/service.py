@@ -1862,11 +1862,30 @@ async def masukkan_stok_broken_pemilik_ke_silo(
         .order_by(PolishingProcess.created_at, PolishingProcess.id)
     )).scalars().all() if process_ids else []
 
-    # Plan seluruh sumber sebelum menulis apa pun agar stok yang sudah berubah
-    # tidak menghasilkan pemindahan parsial.
+    # Stok broken yang diterima dari Timbangan juga merupakan tumpukan biasa.
+    # Rencanakan sebagai sumber pertama sebelum hasil sosoh, tetap lewat
+    # `pindah_broken_ke_silo` agar ledger dan kepemilikan stok tercatat.
     left = float(berat_kg)
     plan: list[tuple[PolishingProcess, float]] = []
+    direct_rows = (await db.execute(
+        select(ByproductStock.id, ByproductStock.berat_kg)
+        .where(ByproductStock.jenis_produk == "broken",
+               ByproductStock.source_type == "timbangan",
+               milik(ByproductStock.jasa_id))
+        .order_by(ByproductStock.waktu, ByproductStock.id)
+    )).all()
+    direct_plan: list[tuple[int, float]] = []
+    for row_id, gross in direct_rows:
+        available = await _sisa_broken_row(db, row_id)
+        take = min(left, available)
+        if take > 0.5:
+            direct_plan.append((row_id, take))
+            left -= take
+        if left <= 0.5:
+            break
     for proc in procs:
+        if left <= 0.5:
+            break
         rows = (await db.execute(select(ByproductStock.id).where(
             ByproductStock.jenis_produk == "broken", ByproductStock.source_type == "polishing",
             ByproductStock.source_id == proc.id, milik(ByproductStock.jasa_id)
@@ -1905,6 +1924,11 @@ async def masukkan_stok_broken_pemilik_ke_silo(
 
     moved_codes: list[str] = []
     opened_bags = 0.0
+    for row_id, take in direct_plan:
+        result = await pindah_broken_ke_silo(
+            db, user=user, byproduct_stock_id=row_id, nama_silo=nama_silo,
+            berat=take, tanggal=tanggal, jam=jam)
+        moved_codes.append(result.kode_pindah)
     for proc, take in plan:
         result = await masukkan_broken_ke_silo(
             db, user=user, kode_pol=proc.kode_proses, nama_silo=nama_silo,

@@ -1616,7 +1616,9 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
     return baris
 
 
-async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
+async def _tiket_jenis_tak_dikenal(
+    db: AsyncSession, *, jenis_diizinkan: set[str] | None = None,
+) -> list[Baris]:
     """Tiket timbang MASUK yang jenisnya BELUM DIPETAKAN produksi — kartu DIAM.
 
     Sampai 23 September 2026 tiket semacam ini lenyap dari setiap antrean tanpa
@@ -1630,12 +1632,9 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
     **salah alamat**: hanya Meja memanggilnya, jadi Pos Produksi tetap bisu.
     Dipindah ke sini 24 September 2026 bersama `_tiket_pk_luar`.
 
-    Bukan kekeliruan yang akan habis sendiri: `peta_jenis.PETA_MASUK` memang
-    belum memetakan BERAS_MASUK & BROKEN_MASUK (keputusan pemiliknya sudah ada —
-    pembelian, tanpa antrean giling — tapi jalurnya belum dibangun), dan
-    taksonomi jenis di Pos Timbang berbasis DATA: jenis baru bisa lahir di sana
-    kapan saja tanpa produksi tahu. Jadi ini keadaan tetap yang harus terlihat,
-    bukan galat sementara.
+    BERAS_MASUK & BROKEN_MASUK punya jalur khusus ke stok barang jadi. Jenis
+    itu ditampilkan di Gudang 2 dengan tombol penerimaan stok, bukan sebagai
+    komoditas yang belum dikenal.
 
     TANPA tindakan: yang benar memang belum ada. Yang bisa dikerjakan orang ada
     di luar layar ini — memetakan jenisnya di produksi, atau membatalkan
@@ -1652,6 +1651,12 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
     baris = []
     for t in await tiket_masuk_aktif(db):
         kode_jenis = t.get("jenis_kode") or "?"
+        produk_masuk = {
+            "BERAS_MASUK": ("catat_beras_timbang_masuk", "Terima beras sebagai stok bertumpuk"),
+            "BROKEN_MASUK": ("catat_broken_timbang_masuk", "Terima broken sebagai stok bertumpuk"),
+        }.get(kode_jenis) if jenis_diizinkan and kode_jenis in jenis_diizinkan else None
+        if kode_jenis in {"BERAS_MASUK", "BROKEN_MASUK"} and produk_masuk is None:
+            continue  # Jalur produk ini hanya ditampilkan di antrean Gudang 2.
         if intake_dari_jenis(kode_jenis) is not None:
             continue                       # dipetakan → sudah ada jalurnya
         nama = nama_pihak(t)
@@ -1663,11 +1668,19 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
         isi = f"{jenis_nama} · {nama} · {t.get('nomor_polisi') or '-'}"
         if bobot:
             isi += f" · {_kg(bobot)} ({_sumber_bobot(t)})"
+        tindakan = {}
+        if produk_masuk:
+            tindakan = {
+                "aksi": produk_masuk[0],
+                "nilai": str(t["id"]),
+                "pilihan": [(produk_masuk[0], produk_masuk[1],
+                             "Barang masuk ke stok bertumpuk; pemindahan ke silo dilakukan dari kartu stok.",
+                             str(t["id"]))],
+            }
         baris.append(Baris(
             kode=t["kode"], isi=isi,
-            # Kepingan keadaan, bukan tombol: ia menerangkan kenapa kartu ini
-            # tak bisa ditekan, di tempat orang mencari sebabnya.
-            keadaan=f"jenis \u201c{kode_jenis}\u201d belum dikenal produksi",
+            keadaan=("menunggu dicatat sebagai stok" if produk_masuk else
+                     f"jenis \u201c{kode_jenis}\u201d belum dikenal produksi"),
             # `aksi` & `nilai` sengaja TIDAK disebut, bukan disebut bernilai
             # None: `test_setiap_kartu_membentang_di_tempat` membaca AST-nya dan
             # hanya melihat NAMA argumennya, jadi `aksi=None` terbaca seperti
@@ -1680,6 +1693,7 @@ async def _tiket_jenis_tak_dikenal(db: AsyncSession) -> list[Baris]:
                   + ([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
                   + [("Masuk", _tgl(t.get("tanggal")))],
             kelompok="tiket",
+            **tindakan,
         ))
     return baris
 
@@ -2341,6 +2355,8 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     # seseorang sempat mencatatnya — padahal justru pencatatan itu yang
     # terlewat. (Keluhan pemilik 23 Sep 2026; lihat `_tiket_pk_luar`.)
     b.menunggu += await _tiket_pk_luar(db, boleh_catat=True)
+    b.menunggu += await _tiket_jenis_tak_dikenal(
+        db, jenis_diizinkan={"BERAS_MASUK", "BROKEN_MASUK"})
 
     # ── PK luar yang sudah diterima tetapi belum masuk silo/tumpukan ──
     #

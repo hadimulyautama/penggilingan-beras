@@ -1131,18 +1131,10 @@ async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
         b = bk.BarisPerintah(tipe="gabah_langsung", gabah_kering_lot_id=lot.id,
                              berat_kg=float(jumlah))
     elif pilih.startswith("g2:"):
-        # PK Gudang 2 — DIKETIK DALAM KG, sama seperti `pk:`/`cr:`. Tempatnya
-        # `silo:<id>` atau `tumpukan` persis; `tersedia()` yang menjaga
-        # pagarnya (pemilik tempat vs pemilik perintah).
-        tempat = pilih[3:].strip()
-        if tempat == "tumpukan":
-            b = bk.BarisPerintah(tipe="pk_g2", silo_id=None,
-                                 berat_kg=float(jumlah))
-        elif tempat.startswith("silo:") and tempat[5:].isdigit():
-            b = bk.BarisPerintah(tipe="pk_g2", silo_id=int(tempat[5:]),
-                                 berat_kg=float(jumlah))
-        else:
-            raise HTTPException(400, f"Tempat PK Gudang 2 tak dikenal: {tempat}.")
+        raise HTTPException(
+            400,
+            "PK yang sudah masuk Gudang 2 tidak bisa dikirim langsung. "
+            "Gunakan PK sebagai bahan penyosohan, lalu kirim hasil prosesnya.")
     else:
         nilai = pilih[3:] if pilih.startswith("bj:") else pilih
         bagian = nilai.split("|")
@@ -1994,38 +1986,8 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
             out.append({"value": f"cr:{jenis_curah}",
                         "label": f"{nama_produk(jenis_curah)} (curah) · "
                                  f"{kg(sisa_curah)} (isi dalam kg)"})
-    # ── PK Gudang 2 — pesan kerja 11, Lubang kedua ──
-    #
-    # Sebelum ini PK yang sudah berdiri di silo/tumpukan Gudang 2 tak
-    # punya jalan keluar sama sekali: pesanan yang berhenti di tahap ini
-    # tak bisa pernah ditutup. Dicek LANGSUNG lewat pemilik tempatnya
-    # (bukan cuma "ada stok jasa"), sebab satu silo satu pemilik — kalau
-    # pemiliknya pesanan LAIN, silo ini bukan untuk pesanan ini walau
-    # stok "jasa"-nya sendiri positif.
-    from app.penggilingan.gudang2.service import (_g2_warehouse_id,
-                                                   hitung_stok_silo,
-                                                   hitung_stok_tumpukan)
-    from app.services.jasa import pemilik_silo_g2, pemilik_tumpukan_g2
-    from app.models import Silo as _Silo
-
-    g2_wid = await _g2_warehouse_id(db)
-    for silo in (await db.execute(
-        select(_Silo).where(_Silo.warehouse_id == g2_wid, _Silo.aktif.is_(True))
-        .order_by(_Silo.nama_silo)
-    )).scalars().all():
-        if jid not in await pemilik_silo_g2(db, silo.id):
-            continue
-        sisa_silo = await hitung_stok_silo(db, silo.id, pemilik="jasa")
-        if sisa_silo > 0.5:
-            out.append({"value": f"g2:silo:{silo.id}",
-                        "label": f"PK Gudang 2 · Silo {silo.nama_silo} · "
-                                 f"{kg(sisa_silo)} (isi dalam kg)"})
-    if jid in await pemilik_tumpukan_g2(db):
-        sisa_tumpukan = await hitung_stok_tumpukan(db, pemilik="jasa")
-        if sisa_tumpukan > 0.5:
-            out.append({"value": "g2:tumpukan",
-                        "label": f"PK Gudang 2 · Tumpukan · "
-                                 f"{kg(sisa_tumpukan)} (isi dalam kg)"})
+    # PK di Gudang 2 hanya boleh menjadi bahan penyosohan. Hasil proses
+    # (beras putih dan hasil samping) tersedia lewat picker stok produk.
     # ── Gabah kering ditimbang (pesan kerja 12/12A) — tumpukan Gudang 1 ──
     from app.models import GabahKeringLot
     from app.penggilingan.gudang1.services.gabah_kering import (

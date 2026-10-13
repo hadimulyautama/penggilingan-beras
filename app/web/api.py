@@ -1180,6 +1180,18 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"type": "tombol_aksi", "aksi": "tolak_pk_luar",
                   "bawa": "timbangan_transaksi_id", "label": "⛔ Tolak PK luar"},
              ]},
+            {"id": "catat_beras_timbang_masuk", "label": "📦 Terima beras sebagai stok",
+             "post": "/api/actions/catat-produk-timbang-masuk",
+             "hint": "Masuk ke stok bertumpuk sebagai Beras Medium, karung putih polos tanpa merek 50 kg.",
+             "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang beras",
+                         "type": "remote", "source": "/api/actions/produk-timbang-masuk-aktif?jenis=BERAS_MASUK",
+                         "kosong": "Tidak ada tiket beras masuk yang menunggu."}]},
+            {"id": "catat_broken_timbang_masuk", "label": "📦 Terima broken sebagai stok",
+             "post": "/api/actions/catat-produk-timbang-masuk",
+             "hint": "Masuk ke stok bertumpuk dan otomatis dikemas dalam karung putih polos tanpa merek 50 kg.",
+             "fields": [{"name": "timbangan_transaksi_id", "label": "Tiket timbang broken",
+                         "type": "remote", "source": "/api/actions/produk-timbang-masuk-aktif?jenis=BROKEN_MASUK",
+                         "kosong": "Tidak ada tiket broken masuk yang menunggu."}]},
             # ⚠⚠ TIDAK ADA PINTU SENDIRI DI "Catat pekerjaan lain" (keputusan
             # pemilik 5 Oktober 2026) — satu-satunya jalan masuk adalah tombol
             # di borang `catat_pk_luar` di atas (`tombol_aksi`). Spesifikasi
@@ -1415,7 +1427,8 @@ for _a in (
     "tambah_silo_penyosohan", "catat_packing", "catat_broken",
     # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
     # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
-    "masukkan_broken_silo",
+    "masukkan_broken_silo", "catat_beras_timbang_masuk",
+    "catat_broken_timbang_masuk",
     # Formulir kepemilikan dibuka dari kartu stok terkait; pengambilan jasa
     # dibuka dari halaman Barang Keluar.
     "pindah_kepemilikan_produk", "pindah_kepemilikan_karung", "ambil_jasa",
@@ -3239,6 +3252,107 @@ class CatatPkLuarReq(BaseModel):
     kunci_kiriman: str | None = None
 
 
+class CatatProdukTimbangMasukReq(BaseModel):
+    timbangan_transaksi_id: int
+
+
+@router.get("/actions/produk-timbang-masuk-aktif")
+async def produk_timbang_masuk_aktif(jenis: str, user: User = Depends(pengguna_aksi)) -> list[dict]:
+    _require(can_see_financials(user))
+    if jenis not in ("BERAS_MASUK", "BROKEN_MASUK"):
+        raise HTTPException(400, "Jenis barang masuk tidak dikenal.")
+    from app.penggilingan.gudang1.services.timbang_link import tiket_masuk_aktif
+    async with SessionLocal() as db:
+        tickets = await tiket_masuk_aktif(db, jenis)
+    out = []
+    for t in tickets:
+        berat = t.get("berat_hpp_kg")
+        pemilik = (t.get("nama_supplier") or t.get("nama_pelanggan")
+                   or t.get("pihak_nama") or "Tanpa nama")
+        label = f"{t['kode']} · {pemilik} · {t.get('nomor_polisi') or 'tanpa plat'}"
+        if berat:
+            label += f" · {_rp(float(berat))} kg"
+        out.append({"value": t["id"], "label": label})
+    return out
+
+
+@router.post("/actions/catat-produk-timbang-masuk")
+async def act_catat_produk_timbang_masuk(
+    req: CatatProdukTimbangMasukReq, user: User = Depends(pengguna_aksi),
+) -> dict:
+    """Terima beras/broken dari tiket sebagai stok bertumpuk, dengan asal tiket."""
+    _require(can_see_financials(user))
+    from sqlalchemy import select
+    from app.database import input_time
+    from app.models import FinishedGoodsStock
+    from app.penggilingan.gudang1.services.timbang_link import (
+        TiketSudahDipakai, ambil_tiket, bobot_awal_dari_tiket,
+        kunci_tiket_untuk_ditaut)
+    from app.penggilingan.inventory.models import ByproductStock
+    from app.penggilingan.inventory.packaging import find_or_create_sku, get_standard
+    from app.penggilingan.gudang2.service import _g2_warehouse_id
+    from app.services.activity_log import log_activity
+
+    async with SessionLocal() as db:
+        try:
+            await kunci_tiket_untuk_ditaut(db, req.timbangan_transaksi_id)
+        except TiketSudahDipakai as e:
+            raise HTTPException(409, str(e))
+        ticket = await ambil_tiket(db, req.timbangan_transaksi_id)
+        if ticket is None or ticket.get("arah") != "MASUK":
+            raise HTTPException(404, "Tiket masuk tidak ditemukan atau sudah tidak aktif.")
+        kind = ticket.get("jenis_kode")
+        if kind not in ("BERAS_MASUK", "BROKEN_MASUK"):
+            raise HTTPException(400, "Tiket ini bukan beras atau broken masuk.")
+        if kind == "BERAS_MASUK":
+            sudah_dicatat = await db.scalar(select(FinishedGoodsStock.id).where(
+                FinishedGoodsStock.source_type == "timbangan",
+                FinishedGoodsStock.source_id == ticket["id"]))
+        else:
+            sudah_dicatat = await db.scalar(select(ByproductStock.id).where(
+                ByproductStock.source_type == "timbangan",
+                ByproductStock.source_id == ticket["id"]))
+        if sudah_dicatat:
+            raise HTTPException(409, "Tiket ini sudah tercatat sebagai stok.")
+        weight, _, _ = await bobot_awal_dari_tiket(db, ticket)
+        if weight is None or weight <= 0:
+            raise HTTPException(400, "Berat barang belum tersedia dari Timbangan.")
+        jasa_id = None
+        if ticket.get("jasa"):
+            from app.penggilingan.gudang1.services.purchase import pesanan_jasa_dari_tiket
+            order, _ = await pesanan_jasa_dari_tiket(db, user=user, tiket=ticket)
+            jasa_id = order.id
+        now = input_time(None)
+        if kind == "BERAS_MASUK":
+            medium = await get_standard(db, "medium")
+            if medium is None:
+                raise HTTPException(500, "Standar mutu Medium belum tersedia.")
+            sku = await find_or_create_sku(
+                db, kategori="beras_putih", material_kode="putih", ukuran=50)
+            row = FinishedGoodsStock(
+                product_sku_id=sku.id, rice_quality_standard_id=medium.id,
+                source_type="timbangan", source_id=ticket["id"],
+                jumlah_karung=max(1, int((float(weight) + 49.999) // 50)),
+                berat_total_kg=float(weight), warehouse_id=await _g2_warehouse_id(db),
+                waktu=now, input_by=user.id, jasa_id=jasa_id)
+            db.add(row)
+            table, target = "finished_goods_stock", "Beras Medium · karung putih polos tanpa merek 50 kg"
+        else:
+            row = ByproductStock(
+                jenis_produk="broken", source_type="timbangan", source_id=ticket["id"],
+                berat_kg=float(weight), tanggal=now.date(), waktu=now,
+                input_by=user.id, jasa_id=jasa_id)
+            db.add(row)
+            table, target = "byproduct_stock", "Broken · karung putih polos tanpa merek 50 kg"
+        await db.flush()
+        await log_activity(db, table_name=table, record_id=row.id, action="INSERT",
+                           changed_by=user.id,
+                           new_value=f"{ticket['kode']} · {float(weight):.2f} kg · {target}")
+        await db.commit()
+    return {"ok": True, "pesan": f"✓ {ticket['kode']} dicatat di stok bertumpuk: "
+            f"{_rp(float(weight))} kg · {target}."}
+
+
 @router.get("/actions/timbang-pk-aktif")
 async def timbang_pk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Daftar tiket timbang PK (BERAS_PK) MASUK yang masih AKTIF & belum tertaut."""
@@ -4294,6 +4408,18 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
             select(PolishingProcess).where(
                 PolishingProcess.status.in_(("proses", "selesai")))
         )).scalars().all()}
+
+        # Broken hasil penerimaan tiket tetap stok bertumpuk dan harus bisa
+        # dipilih dari kartu stok untuk dipindahkan ke silo.
+        stok_timbangan = (await db.execute(
+            select(ByproductStock.id, ByproductStock.jasa_id)
+            .where(ByproductStock.jenis_produk == "broken",
+                   ByproductStock.source_type == "timbangan")
+        )).all()
+        for stock_id, owner_id in stok_timbangan:
+            available = await _sisa_broken_row(db, stock_id)
+            if available > 0.5:
+                keluar.append({"pemilik": owner_id, "kg": available})
 
         pasangan: set[tuple[int, int | None]] = set()
         if proses_sumber:
