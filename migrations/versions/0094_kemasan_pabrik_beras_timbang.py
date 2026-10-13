@@ -1,4 +1,4 @@
-"""Pisahkan pemilik kemasan dari pemilik beras masuk timbang."""
+"""Kecualikan beras timbang yang sudah berkemasan dari pemakaian stok karung."""
 from typing import Sequence, Union
 
 from alembic import op
@@ -13,17 +13,17 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "finished_goods_stock",
-        sa.Column("kemasan_dari_pabrik", sa.Boolean(), nullable=False,
-                  server_default=sa.false()),
+        sa.Column("kemasan_mengurangi_stok", sa.Boolean(), nullable=False,
+                  server_default=sa.true()),
     )
-    # Catatan beras timbang yang sudah sempat dibuat memakai karung pabrik
-    # juga harus mulai mengurangi stok karung pabrik setelah migrasi.
+    # Beras dari tiket timbang sudah tiba dengan kemasannya, jadi jumlah
+    # karungnya tidak dihitung sebagai pemakaian persediaan mana pun.
     op.execute(sa.text("""
         UPDATE finished_goods_stock
-        SET kemasan_dari_pabrik = TRUE
+        SET kemasan_mengurangi_stok = FALSE
         WHERE source_type = 'timbangan'
     """))
 
 
 def downgrade() -> None:
-    op.drop_column("finished_goods_stock", "kemasan_dari_pabrik")
+    op.drop_column("finished_goods_stock", "kemasan_mengurangi_stok")

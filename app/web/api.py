@@ -3361,7 +3361,7 @@ async def act_catat_produk_timbang_masuk(
                 jumlah_karung=max(1, int((float(weight) + 49.999) // 50)),
                 berat_total_kg=float(weight), warehouse_id=await _g2_warehouse_id(db),
                 waktu=now, input_by=user.id, jasa_id=jasa_id,
-                kemasan_dari_pabrik=True)
+                kemasan_mengurangi_stok=False)
             db.add(row)
             table, target = "finished_goods_stock", "Beras Medium · karung putih polos tanpa merek 50 kg"
         else:
