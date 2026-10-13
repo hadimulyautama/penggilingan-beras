@@ -109,18 +109,11 @@
            stroke-width="2.1" stroke-linecap="round">
         <path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
-  {% else %}
-    <div class="bar__avatar">{{ akun.nama[:2]|upper }}</div>
   {% endif %}
-  {# JUDUL LAYAR, bukan nama orang. Dengan tab, layar yang sedang dibuka
-     selalu terlihat di bilah bawah; laci menyembunyikannya, jadi judulnya
-     naik ke sini. Nama & perannya pindah ke kepala laci — ia dibaca sekali
-     saat masuk, bukan sepanjang hari. #}
+  {# Header hanya menampilkan judul layar. Identitas pengguna tetap tersedia
+     di sidebar, tanpa mengulang avatar, nama, dan peran di setiap halaman. #}
   <div class="bar__isi">
-    <div class="bar__nama">{{ JUDUL.get(layar, akun.nama) }}</div>
-    <div class="bar__sub">
-      {{ akun.nama }} · {{ NAMA_VIEW.get(VIEW, akun.peran) }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
-    </div>
+    <div class="bar__nama">{{ JUDUL.get(layar, APP_NAMA) }}</div>
   </div>
 </header>
 {% endif %}
