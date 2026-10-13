@@ -41,6 +41,7 @@
 .antrian-listview--tabel .antrian-tabel__status--jasa{background:#e8f5ee;color:#39815a}
 .antrian-listview--tabel .antrian-tabel__status--pabrik{background:#fff3df;color:#9a6a22}
 .antrian-listview--tabel .antrian-tabel__berat{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.antrian-listview--tabel .antrian-tabel__berat-label{text-align:right}
 .antrian-listview--tabel .antrian-tabel__berat small{font-size:.76em;font-weight:500}
 .antrian-listview--tabel .antrian-item>summary::after{right:13px}
 .antrian-listview--tabel .antrian-item__rincian,.antrian-listview--tabel .pilihan{min-width:900px}

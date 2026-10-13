@@ -232,7 +232,7 @@
     {% if tabel %}<div class="antrian-tabel-scroll">
       <div class="antrian-tabel__kepala" role="row">
         <span>Nama</span><span>Status</span><span>Komoditas</span>
-        <span>Nopol / Supir</span><span>Berat</span><span aria-hidden="true"></span>
+        <span>Nopol / Supir</span><span class="antrian-tabel__berat-label">Berat</span><span aria-hidden="true"></span>
       </div>{% endif %}
     <div class="grup" style="gap:9px"{% if tabel %} role="rowgroup"{% endif %}>
       {% for b in daftar %}

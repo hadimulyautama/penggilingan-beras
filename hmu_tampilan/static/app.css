@@ -1671,6 +1671,11 @@ details.padat .pilihan { padding: 0 12px 12px; }
   background: rgba(255, 255, 255, .05);
   border-radius: 999px; padding: 2px 8px; white-space: nowrap;
 }
+/* Fase "Belum ada tindakan" memakai putih pucat pada tema gelap. Di tema
+   terang badge-nya ada di atas kartu putih, jadi gunakan tinta kontras. */
+body.terik .benda--baru .keping {
+  color: #34404c; background: #e9eef3; border-color: #cbd3dc;
+}
 .benda__status {
   font-family: var(--mono); font-size: 13px; letter-spacing: .05em;
   color: var(--redup-2); text-transform: uppercase;
