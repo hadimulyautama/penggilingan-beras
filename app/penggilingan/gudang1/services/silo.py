@@ -59,7 +59,7 @@ class SiloError(Exception):
 async def _g1_warehouse_id(db: AsyncSession) -> int:
     wid = (
         await db.execute(
-            select(Warehouse.id).where(Warehouse.nama_gudang.like("Gudang 1%"))
+            select(Warehouse.id).where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True))
         )
     ).scalars().first()
     if wid is None:

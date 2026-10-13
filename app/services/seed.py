@@ -25,14 +25,14 @@ from app.models import (
 
 log = logging.getLogger("app.seed")
 
-_WAREHOUSES = ["Gudang 1 - Selepan", "Gudang 2 - Penyosohan"]
-# (nama_gudang, nama_silo, kapasitas_ton)
+_WAREHOUSES = [("g1", "Gudang 1 - Selepan"), ("g2", "Gudang 2 - Penyosohan")]
+# (fungsi_gudang, nama_silo, kapasitas_ton)
 _SILOS = [
-    ("Gudang 1 - Selepan", "Silo A", 35),
-    ("Gudang 1 - Selepan", "Silo B", 35),
-    ("Gudang 1 - Selepan", "Silo C", 35),
-    ("Gudang 2 - Penyosohan", "Silo A", None),
-    ("Gudang 2 - Penyosohan", "Silo B", None),
+    ("g1", "Silo A", 35),
+    ("g1", "Silo B", 35),
+    ("g1", "Silo C", 35),
+    ("g2", "Silo A", None),
+    ("g2", "Silo B", None),
 ]
 
 
@@ -41,19 +41,21 @@ async def seed_master() -> None:
         created: list[str] = []
 
         # Gudang
-        for nama in _WAREHOUSES:
+        for kode, nama in _WAREHOUSES:
             exists = (
-                await db.execute(select(Warehouse).where(Warehouse.nama_gudang == nama))
+                await db.execute(select(Warehouse).where(Warehouse.kode_fungsi == kode))
             ).scalars().first()
             if not exists:
-                db.add(Warehouse(nama_gudang=nama))
+                db.add(Warehouse(kode_fungsi=kode, nama_gudang=nama))
                 created.append(f"gudang '{nama}'")
+            else:
+                exists.aktif = True
         await db.flush()
 
         # Silo (per gudang)
-        for wnama, snama, cap in _SILOS:
+        for fungsi, snama, cap in _SILOS:
             w = (
-                await db.execute(select(Warehouse).where(Warehouse.nama_gudang == wnama))
+                await db.execute(select(Warehouse).where(Warehouse.kode_fungsi == fungsi))
             ).scalars().first()
             if not w:
                 continue
@@ -67,14 +69,14 @@ async def seed_master() -> None:
                     warehouse_id=w.id,
                     nama_silo=snama,
                     kapasitas_ton=cap,
-                    jenis_isi="gabah" if wnama.startswith("Gudang 1") else "pk",
+                    jenis_isi="gabah" if fungsi == "g1" else "pk",
                     komoditas_diizinkan=(
-                        ["gabah_kering"] if wnama.startswith("Gudang 1")
+                        ["gabah_kering"] if fungsi == "g1"
                         else ["pk", "beras_putih", "reject", "broken", "menir"]
                     ),
                 ))
-                created.append(f"{snama} {wnama}")
-            elif wnama.startswith("Gudang 1") and ex.jenis_isi != "gabah":
+                created.append(f"{snama} {fungsi}")
+            elif fungsi == "g1" and ex.jenis_isi != "gabah":
                 # Gudang 1 khusus untuk gabah; luruskan silo A/B lama yang
                 # dibuat sebelum jenis isi silo menjadi eksplisit.
                 ex.jenis_isi = "gabah"
@@ -82,7 +84,7 @@ async def seed_master() -> None:
         # Mesin pengering Gudang 1 (migrasi 0003 no-op di DB kosong).
         g1 = (
             await db.execute(
-                select(Warehouse).where(Warehouse.nama_gudang.like("Gudang 1%"))
+                select(Warehouse).where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True))
             )
         ).scalars().first()
         if g1:

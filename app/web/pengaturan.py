@@ -31,6 +31,115 @@ from hmu_core import User
 router = APIRouter(tags=["webapp"])
 
 
+@router.get("/pengaturan/gudang")
+async def halaman_gudang_pengaturan(request: Request, akun: ProduksiAkun = Depends(butuh_super)):
+    from sqlalchemy import select
+    from hmu_core import Warehouse
+    from app.web.nav import lencana
+
+    async with SessionLocal() as db:
+        daftar = (await db.execute(select(Warehouse).order_by(
+            Warehouse.aktif.desc(), Warehouse.kode_fungsi, Warehouse.nama_gudang
+        ))).scalars().all()
+        gudang = [{"id": w.id, "nama": w.nama_gudang, "alamat": w.alamat or "",
+                   "latitude": str(w.latitude) if w.latitude is not None else "",
+                   "longitude": str(w.longitude) if w.longitude is not None else "",
+                   "fungsi": w.kode_fungsi, "aktif": w.aktif}
+                  for w in daftar]
+    return render(request, "gudang_pengaturan.html", layar="pengaturan",
+                  kembali="/pengaturan", gudang=gudang,
+                  pesan_ok=_PESAN.get(request.query_params.get("pesan", "")),
+                  pesan_err=request.query_params.get("err_teks", "")
+                  or _PESAN.get(request.query_params.get("err", "")),
+                  **await lencana(akun.user))
+
+
+@router.post("/pengaturan/gudang/tambah")
+async def tambah_gudang(
+    request: Request, nama: str = Form(...), alamat: str = Form(""),
+    latitude: str = Form(""), longitude: str = Form(""),
+    akun: ProduksiAkun = Depends(butuh_super),
+):
+    from sqlalchemy import func, select
+    from hmu_core import Warehouse
+    nama = nama.strip()
+    if len(nama) < 2 or len(nama) > 100:
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Nama gudang harus 2–100 karakter."))
+    try:
+        lat = float(latitude.replace(",", ".")) if latitude.strip() else None
+        lon = float(longitude.replace(",", ".")) if longitude.strip() else None
+    except ValueError:
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Koordinat harus berupa angka."))
+    if lat is not None and not -90 <= lat <= 90 or lon is not None and not -180 <= lon <= 180:
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Koordinat di luar batas yang valid."))
+    async with SessionLocal() as db:
+        duplicate = (await db.execute(select(Warehouse.id).where(
+            func.lower(Warehouse.nama_gudang) == nama.lower(), Warehouse.aktif.is_(True)
+        ))).first()
+        if duplicate:
+            return redirect("/pengaturan/gudang?err_teks=" + quote("Nama gudang itu sudah digunakan."))
+        db.add(Warehouse(nama_gudang=nama, alamat=alamat.strip() or None,
+                         latitude=lat, longitude=lon, aktif=True))
+        await db.commit()
+    return redirect("/pengaturan/gudang?pesan=gudang-ditambah")
+
+
+@router.post("/pengaturan/gudang/edit")
+async def edit_gudang(
+    request: Request, gudang_id: int = Form(...), nama: str = Form(...),
+    alamat: str = Form(""), latitude: str = Form(""), longitude: str = Form(""),
+    akun: ProduksiAkun = Depends(butuh_super),
+):
+    from sqlalchemy import func, select
+    from hmu_core import Warehouse
+    nama = nama.strip()
+    if len(nama) < 2 or len(nama) > 100:
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Nama gudang harus 2–100 karakter."))
+    try:
+        lat = float(latitude.replace(",", ".")) if latitude.strip() else None
+        lon = float(longitude.replace(",", ".")) if longitude.strip() else None
+    except ValueError:
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Koordinat harus berupa angka."))
+    if (lat is not None and not -90 <= lat <= 90) or (lon is not None and not -180 <= lon <= 180):
+        return redirect("/pengaturan/gudang?err_teks=" + quote("Koordinat di luar batas yang valid."))
+    async with SessionLocal() as db:
+        wh = await db.get(Warehouse, gudang_id)
+        if wh is None or not wh.aktif:
+            return redirect("/pengaturan/gudang?err_teks=" + quote("Gudang tidak ditemukan atau sudah dihapus."))
+        duplicate = (await db.execute(select(Warehouse.id).where(
+            func.lower(Warehouse.nama_gudang) == nama.lower(), Warehouse.id != wh.id,
+            Warehouse.aktif.is_(True)
+        ))).first()
+        if duplicate:
+            return redirect("/pengaturan/gudang?err_teks=" + quote("Nama gudang itu sudah digunakan."))
+        wh.nama_gudang, wh.alamat = nama, alamat.strip() or None
+        wh.latitude, wh.longitude = lat, lon
+        await db.commit()
+    return redirect("/pengaturan/gudang?pesan=gudang-diubah")
+
+
+@router.post("/pengaturan/gudang/hapus")
+async def hapus_gudang(request: Request, gudang_id: int = Form(...),
+                       akun: ProduksiAkun = Depends(butuh_super)):
+    from sqlalchemy import select
+    from hmu_core import Dryer, Silo, User, Warehouse
+    async with SessionLocal() as db:
+        wh = await db.get(Warehouse, gudang_id)
+        if wh is None or not wh.aktif:
+            return redirect("/pengaturan/gudang?err_teks=" + quote("Gudang tidak ditemukan atau sudah dihapus."))
+        if wh.kode_fungsi in {"g1", "g2"}:
+            return redirect("/pengaturan/gudang?err_teks=" + quote(
+                "Gudang selepan dan penyosohan adalah bagian alur produksi; keduanya tidak bisa dihapus."))
+        if (await db.execute(select(Silo.id).where(Silo.warehouse_id == wh.id))).first() \
+                or (await db.execute(select(Dryer.id).where(Dryer.warehouse_id == wh.id))).first() \
+                or (await db.execute(select(User.id).where(User.default_warehouse_id == wh.id))).first():
+            return redirect("/pengaturan/gudang?err_teks=" + quote(
+                "Gudang masih dipakai oleh silo, mesin, atau akun. Pindahkan datanya dahulu."))
+        wh.aktif = False
+        await db.commit()
+    return redirect("/pengaturan/gudang?pesan=gudang-dihapus")
+
+
 def _proses_view(view: str) -> tuple[tuple[str, str], ...]:
     """Proses yang sebab berhentinya boleh diatur view ini — urut seperti
     `jeda.SEBAB`, yaitu urutan perjalanan barang."""
@@ -397,6 +506,12 @@ _ERR = {
     "kembar": "Sudah ada alat dengan nama itu.",
     "terisi": "Alat itu masih ada isinya — kosongkan dulu.",
 }
+
+_PESAN.update({
+    "gudang-ditambah": "Gudang ditambahkan.",
+    "gudang-diubah": "Perubahan gudang disimpan.",
+    "gudang-dihapus": "Gudang diarsipkan dari daftar aktif.",
+})
 
 
 @router.post("/pengaturan/alat/dryer")

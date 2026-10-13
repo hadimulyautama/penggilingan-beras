@@ -131,7 +131,7 @@ def _pesan_integritas(e: IntegrityError, tabel: str, kode: str) -> str:
 async def _g2_warehouse_id(db: AsyncSession) -> int:
     wid = (
         await db.execute(
-            select(Warehouse.id).where(Warehouse.nama_gudang.like("Gudang 2%"))
+            select(Warehouse.id).where(Warehouse.kode_fungsi == "g2", Warehouse.aktif.is_(True))
         )
     ).scalars().first()
     if wid is None:

@@ -44,12 +44,10 @@ def _role_label(role: str) -> str:
 
 
 async def _warehouse_for_gudang(db: AsyncSession, gudang: int | None) -> Warehouse | None:
-    if gudang == 2:
-        like = "Gudang 2%"
-    else:
-        like = "Gudang 1%"  # default operator -> Gudang 1
+    kode = "g2" if gudang == 2 else "g1"  # default operator -> selepan
     return (
-        await db.execute(select(Warehouse).where(Warehouse.nama_gudang.like(like)))
+        await db.execute(select(Warehouse).where(
+            Warehouse.kode_fungsi == kode, Warehouse.aktif.is_(True)))
     ).scalars().first()
 
 

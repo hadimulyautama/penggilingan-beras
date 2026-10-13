@@ -45,8 +45,8 @@ PILIHAN = (
     (f"{P.OPERATOR}:{P.G2}", "Operator polesan (Gudang 2)"),
 )
 
-#: Pola nama gudang untuk tiap kode.
-GUDANG = {P.G1: "Gudang 1%", P.G2: "Gudang 2%"}
+#: Identitas gudang tetap meski nama tampilannya diubah.
+GUDANG = {P.G1: "g1", P.G2: "g2"}
 
 NAMA_PERAN = P.LABEL
 

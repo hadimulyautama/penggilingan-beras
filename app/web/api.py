@@ -272,7 +272,7 @@ async def dashboard(user: User = Depends(pengguna_aksi)) -> dict:
 
 # ─────────────────────── Aksi cepat: role helper ───────────────────────
 
-async def _is_wh_operator(user: User, like: str) -> bool:
+async def _is_wh_operator(user: User, kode_fungsi: str) -> bool:
     """Admin KE ATAS selalu boleh; operator hanya bila gudang yang SEDANG
     dikerjakannya cocok.
 
@@ -302,7 +302,8 @@ async def _is_wh_operator(user: User, like: str) -> bool:
     async with SessionLocal() as db:
         wid = (
             await db.execute(
-                select(Warehouse.id).where(Warehouse.nama_gudang.like(like))
+                select(Warehouse.id).where(Warehouse.kode_fungsi == kode_fungsi,
+                                           Warehouse.aktif.is_(True))
             )
         ).scalars().first()
     return wid is not None and user.default_warehouse_id == wid
@@ -310,12 +311,12 @@ async def _is_wh_operator(user: User, like: str) -> bool:
 
 async def _is_g1_operator(user: User) -> bool:
     """Admin selalu boleh; operator hanya bila Gudang 1 yang sedang dikerjakannya."""
-    return await _is_wh_operator(user, "Gudang 1%")
+    return await _is_wh_operator(user, "g1")
 
 
 async def _is_g2_operator(user: User) -> bool:
     """Admin selalu boleh; operator hanya bila Gudang 2 yang sedang dikerjakannya."""
-    return await _is_wh_operator(user, "Gudang 2%")
+    return await _is_wh_operator(user, "g2")
 
 
 async def _pilihan_tujuan_gabah(kondisi: str) -> list[list[str]]:

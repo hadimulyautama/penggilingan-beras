@@ -144,7 +144,7 @@ async def dryers_g1(db: AsyncSession) -> list[Dryer]:
     return list((await db.execute(
         select(Dryer)
         .join(Warehouse, Dryer.warehouse_id == Warehouse.id)
-        .where(Warehouse.nama_gudang.like("Gudang 1%"))
+        .where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True))
         .order_by(Dryer.status.desc(), Dryer.id)
     )).scalars().all())
 
@@ -180,7 +180,7 @@ async def _g1_dryer(db: AsyncSession) -> Dryer | None:
     stmt = (
         select(Dryer)
         .join(Warehouse, Dryer.warehouse_id == Warehouse.id)
-        .where(Warehouse.nama_gudang.like("Gudang 1%"))
+        .where(Warehouse.kode_fungsi == "g1", Warehouse.aktif.is_(True))
         .order_by(Dryer.status.desc(), Dryer.id)  # 'aktif' > lainnya secara alfabet
     )
     return (await db.execute(stmt)).scalars().first()

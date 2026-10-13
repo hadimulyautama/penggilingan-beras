@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block judul %}Pengaturan gudang{% endblock %}
+{% block isi %}
+{% if pesan_err %}<div class="pesan pesan--err" role="alert">{{ pesan_err }}</div>{% endif %}
+{% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
+
+<div class="kartu">
+  <h2 style="margin-top:0">Daftar gudang</h2>
+  <p class="bantu">Nama boleh diubah kapan saja. Gudang selepan dan penyosohan tetap terhubung ke alur produksinya meski namanya berubah.</p>
+  {% for w in gudang %}
+    <section style="padding:14px 0;border-top:1px solid var(--garis, #d8e0e4);{% if not w.aktif %}opacity:.58{% endif %}">
+      <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <div>
+          <strong>{{ w.nama }}</strong>
+          {% if w.fungsi == "g1" %}<span class="lencana">Alur selepan</span>
+          {% elif w.fungsi == "g2" %}<span class="lencana">Alur penyosohan</span>
+          {% elif not w.aktif %}<span class="lencana">Diarsipkan</span>{% endif %}
+        </div>
+        {% if w.aktif and not w.fungsi %}
+          <form method="post" action="/pengaturan/gudang/hapus" onsubmit="return confirm('Arsipkan gudang ini?')">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <input type="hidden" name="gudang_id" value="{{ w.id }}">
+            <button class="btn btn--kecil btn--bahaya" type="submit">Hapus</button>
+          </form>
+        {% endif %}
+      </div>
+      {% if w.aktif %}
+      <details style="margin-top:10px">
+        <summary class="btn btn--kecil">✎ Edit gudang</summary>
+        <form method="post" action="/pengaturan/gudang/edit" class="grup" style="margin-top:10px">
+          <input type="hidden" name="_csrf" value="{{ CSRF }}">
+          <input type="hidden" name="gudang_id" value="{{ w.id }}">
+          <label class="lbl" for="wh_nama_{{ w.id }}">Nama gudang</label>
+          <input class="fld" id="wh_nama_{{ w.id }}" name="nama" value="{{ w.nama }}" maxlength="100" required>
+          <label class="lbl" for="wh_alamat_{{ w.id }}">Alamat</label>
+          <textarea class="fld" id="wh_alamat_{{ w.id }}" name="alamat" rows="2">{{ w.alamat }}</textarea>
+          <div class="grup grup--dua">
+            <div><label class="lbl" for="wh_lat_{{ w.id }}">Latitude</label>
+              <input class="fld" id="wh_lat_{{ w.id }}" name="latitude" inputmode="decimal" value="{{ w.latitude }}" placeholder="-6.2000000"></div>
+            <div><label class="lbl" for="wh_lon_{{ w.id }}">Longitude</label>
+              <input class="fld" id="wh_lon_{{ w.id }}" name="longitude" inputmode="decimal" value="{{ w.longitude }}" placeholder="106.8166660"></div>
+          </div>
+          <button class="btn btn--utama" type="submit">Simpan perubahan</button>
+        </form>
+      </details>
+      {% else %}
+        <div class="bantu" style="margin-top:6px">{{ w.alamat or "Alamat belum diisi" }}{% if w.latitude and w.longitude %} · {{ w.latitude }}, {{ w.longitude }}{% endif %}</div>
+      {% endif %}
+    </section>
+  {% else %}<p class="bantu">Belum ada gudang.</p>{% endfor %}
+</div>
+
+<div class="kartu" style="margin-top:14px">
+  <h2 style="margin-top:0">Tambah gudang</h2>
+  <p class="bantu">Gudang baru tercatat sebagai lokasi. Agar menjadi bagian alur produksi, alur kerjanya perlu dihubungkan lebih dahulu.</p>
+  <form method="post" action="/pengaturan/gudang/tambah" class="grup">
+    <input type="hidden" name="_csrf" value="{{ CSRF }}">
+    <label class="lbl" for="wh_baru_nama">Nama gudang</label>
+    <input class="fld" id="wh_baru_nama" name="nama" maxlength="100" required>
+    <label class="lbl" for="wh_baru_alamat">Alamat</label>
+    <textarea class="fld" id="wh_baru_alamat" name="alamat" rows="2"></textarea>
+    <div class="grup grup--dua">
+      <div><label class="lbl" for="wh_baru_lat">Latitude</label><input class="fld" id="wh_baru_lat" name="latitude" inputmode="decimal" placeholder="-6.2000000"></div>
+      <div><label class="lbl" for="wh_baru_lon">Longitude</label><input class="fld" id="wh_baru_lon" name="longitude" inputmode="decimal" placeholder="106.8166660"></div>
+    </div>
+    <button class="btn btn--utama" type="submit">Tambah gudang</button>
+  </form>
+</div>
+<a href="/pengaturan" class="btn">Kembali ke Pengaturan</a>
+{% endblock %}

@@ -213,7 +213,7 @@ async def akun_opsional(request: Request) -> ProduksiAkun | None:
             from app.models import Warehouse as _W
             async with SessionLocal() as db2:
                 wid = (await db2.execute(
-                    _select(_W.id).where(_W.nama_gudang.like(GUDANG[gd]))
+                    _select(_W.id).where(_W.kode_fungsi == GUDANG[gd], _W.aktif.is_(True))
                 )).scalars().first()
             if wid is not None and wid != akun.user.default_warehouse_id:
                 akun.user.default_warehouse_id = wid

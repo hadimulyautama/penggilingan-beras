@@ -21,25 +21,29 @@ async def seed() -> None:
         result = await db.execute(select(Warehouse))
         existing = {w.nama_gudang: w for w in result.scalars().all()}
 
-        g1 = existing.get("Gudang 1 - Selepan")
+        g1 = next((w for w in existing.values() if w.kode_fungsi == "g1"), None) or existing.get("Gudang 1 - Selepan")
         if not g1:
             g1 = Warehouse(
+                kode_fungsi="g1",
                 nama_gudang="Gudang 1 - Selepan",
                 alamat=None,
                 kapasitas_tumpuk_ton=None,
                 kapasitas_tumpuk_pk_ton=30,
             )
             db.add(g1)
+        g1.kode_fungsi = "g1"
 
-        g2 = existing.get("Gudang 2 - Penyosohan")
+        g2 = next((w for w in existing.values() if w.kode_fungsi == "g2"), None) or existing.get("Gudang 2 - Penyosohan")
         if not g2:
             g2 = Warehouse(
+                kode_fungsi="g2",
                 nama_gudang="Gudang 2 - Penyosohan",
                 alamat=None,
                 kapasitas_tumpuk_ton=60,
                 kapasitas_tumpuk_pk_ton=60,
             )
             db.add(g2)
+        g2.kode_fungsi = "g2"
 
         await db.flush()  # dapatkan id gudang
 
