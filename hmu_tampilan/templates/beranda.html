@@ -144,7 +144,7 @@
                 ~ ("" if blok_mutu else " · " ~ n_mutu ~ " mutu"))
                if rinci_keputusan else (KEPUTUSAN ~ " menunggu diputuskan"))
               if KEPUTUSAN else "tak ada yang tertahan",
-              br.ikon_centang(), KEPUTUSAN, gaya="margin-top:8px") }}
+              br.ikon_centang(), KEPUTUSAN, gaya="margin-top:8px", warna_ikon="biru") }}
   {% endif %}
   {# Mutu pecah jadi pintu sendiri 24 September 2026 (permintaan pemilik), dan
      rincian di pintu pertama ikut kehilangan bagiannya — dua pintu yang
@@ -160,7 +160,7 @@
      layar. Terlihat di sapuan HTTP, tak terlihat oleh uji mana pun. #}
   {{ br.pintu("/mutu", "Mutu & QC",
               (n_mutu ~ " belum dicatat") if MUTU else "semua sudah dinilai",
-              br.ikon_centang(), MUTU, gaya="margin-top:8px") }}
+              br.ikon_centang(), MUTU, gaya="margin-top:8px", warna_ikon="ungu") }}
   {% endif %}
 </section>
 </div>

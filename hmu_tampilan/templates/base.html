@@ -17,7 +17,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block judul %}{{ APP_NAMA }}{% endblock %} · PT Hadi Mulya Utama</title>
-<meta name="theme-color" content="#203f70">
+<meta name="theme-color" content="#303943">
 <meta name="apple-mobile-web-app-capable" content="yes">
 {# `black`, BUKAN `black-translucent` — kali ini diukur, bukan ditebak.
 
@@ -282,7 +282,7 @@
              masing-masing. Prinsip yang sama sudah tertulis beberapa baris di
              atas untuk `peran_min`; ikon satu-satunya fakta per-pintu yang
              masih tercecer di sini. #}
-          <span class="pintu__ikon" aria-hidden="true">{{ ikon or "⚙" }}</span>
+          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{{ ikon or "⚙" }}</span>
           {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
              permintaan pemilik: "sidebar cukup nama halamannya saja",
              "deskripsi tambahan tidak perlu".

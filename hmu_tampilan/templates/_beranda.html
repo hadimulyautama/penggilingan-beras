@@ -59,8 +59,8 @@
    dengan SVG di dalamnya, dan tiap salinan adalah satu panah yang bisa
    berbeda arah. `ikon` = isi <svg> tanpa tag luarnya; `jml` = angka lencana
    (0/None = tanpa lencana); `nada` = kelas lencana (aman/bahaya). #}
-{% macro pintu(href, nama, ket, ikon, jml=0, nada="", gaya="") -%}
-<a class="tindakan" href="{{ href }}"{{ (' style="' ~ gaya ~ '"')|safe if gaya }}>
+{% macro pintu(href, nama, ket, ikon, jml=0, nada="", gaya="", warna_ikon="biru") -%}
+<a class="tindakan tindakan--ikon-{{ warna_ikon }}" href="{{ href }}"{{ (' style="' ~ gaya ~ '"')|safe if gaya }}>
   <div class="tindakan__ikon">
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
          stroke-linecap="round" stroke-linejoin="round">{{ ikon }}</svg>
@@ -84,7 +84,7 @@
 {% macro pintu_antrean(jml) -%}
 {{ pintu("/aksi", "Antrian tunggu",
          (jml ~ " menunggu ditindak") if jml else "tak ada yang menunggu",
-         ikon_antrean(), jml) }}
+         ikon_antrean(), jml, warna_ikon="hijau") }}
 {%- endmacro %}
 
 {# ── PERLU PERHATIAN ──
@@ -100,7 +100,7 @@
   <span class="lbl">Perlu perhatian · {{ perhatian|length }}</span>
   <div class="grup" style="gap:8px">
     {% for p in perhatian %}
-      <a class="tindakan" href="{{ p.href }}">
+      <a class="tindakan tindakan--ikon-merah" href="{{ p.href }}">
         <div class="tindakan__ikon tindakan__ikon--emoji" style="color:var(--bahaya)">⚠</div>
         <div class="tindakan__isi">
           <div class="tindakan__nama">{{ p.judul }}</div>
@@ -128,7 +128,7 @@
     {% for g in gudang %}
       {{ pintu("/gudang/" ~ g.id, g.nama ~ " — " ~ g.fungsi, g.ket, ikon_gudang(),
                "!" if g.perhatian else g.mesin,
-               "bahaya" if g.perhatian else "aman") }}
+               "bahaya" if g.perhatian else "aman", warna_ikon=loop.cycle("jingga", "ungu")) }}
     {% endfor %}
   </div>
 </div>
