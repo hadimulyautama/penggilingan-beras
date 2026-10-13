@@ -1010,6 +1010,17 @@ body.terik .pintu { color: #34404c; }
 body.terik .pintu:hover { background: #f2f4f6; }
 body.terik .pintu--kini { background: #e9eef3; color: #202832; box-shadow: inset 3px 0 #566575; }
 body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
+
+/* Pastikan teks submenu mode terang menang dari aturan tema lama yang
+   didefinisikan lebih awal di stylesheet. */
+body.terik .laci__isi .pintu-sub a.pintu-sub__satu { color: #111; }
+body.terik .laci__isi .pintu-sub a.pintu-sub__satu:hover,
+body.terik .laci__isi .pintu-sub a.pintu-sub__satu:active {
+  background: #f2f4f6; color: #111;
+}
+body.terik .laci__isi .pintu-sub a.pintu-sub__satu.pintu-sub__satu--kini {
+  background: #e9eef3; color: #111;
+}
 body.terik .pintu-sub { border-color: #dce2e8; }
 body.terik .pintu-sub__satu { color: #202832; }
 body.terik .pintu-sub__satu:hover,
