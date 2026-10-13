@@ -178,6 +178,19 @@
   </span>
 {%- endmacro %}
 
+{% macro tabel_packing(b) -%}
+  <span class="antrian-tabel__sel antrian-tabel__nama" data-label="Barang">
+    <span>{{ (b.judul or b.kode)|replace(" menunggu dipacking", "") }}</span>
+  </span>
+  <span class="antrian-tabel__sel" data-label="Kode proses">{{ b.kode }}</span>
+  <span class="antrian-tabel__sel antrian-tabel__status antrian-tabel__status--{{ 'jasa' if b.jasa_id is not none else 'pabrik' }}" data-label="Layanan">
+    {{ "Jasa" if b.jasa_id is not none else "Pabrik" }}
+  </span>
+  <span class="antrian-tabel__sel antrian-tabel__berat" data-label="Berat siap packing">
+    {% if b.utama %}{{ b.utama[0] }}<small> {{ b.utama[1] }}</small>{% else %}—{% endif %}
+  </span>
+{%- endmacro %}
+
 {# ── Alamat borang, DENGAN saringan halaman (`?grup=`/`?kategori=`) ──
    Laporan pemilik 7 Oktober 2026: memilih sub-menu Antrian tunggu atau
    Menunggu keputusan (`?grup=bahan`, `?kategori=...`), lalu menekan kartu
@@ -227,12 +240,17 @@
   {% macro tanda(b) -%}
  data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi ~ ' ' ~ (b.tiket_kode or '') ~ ' ' ~ (b.komoditas or '') ~ ' ' ~ (b.kendaraan or '') ~ ' ' ~ ('jasa' if b.status_jasa else 'bukan jasa' if b.status_jasa is not none else ''))|lower }}" data-sup="{{ b.judul or '' }}"
   {%- endmacro %}
-  <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel"{% elif listview %} class="antrian-listview"{% endif %}>
+  <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel{% if tabel == 'packing' %} antrian-listview--tabel-packing{% endif %}"{% elif listview %} class="antrian-listview"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     {% if tabel %}<div class="antrian-tabel-scroll">
       <div class="antrian-tabel__kepala" role="row">
-        <span>Nama</span><span>Status</span><span>Komoditas</span>
-        <span>Nopol / Supir</span><span class="antrian-tabel__berat-label">Berat</span><span aria-hidden="true"></span>
+        {% if tabel == "packing" %}
+          <span>Barang</span><span>Kode proses</span><span>Layanan</span>
+          <span class="antrian-tabel__berat-label">Berat siap packing</span><span aria-hidden="true"></span>
+        {% else %}
+          <span>Nama</span><span>Status</span><span>Komoditas</span>
+          <span>Nopol / Supir</span><span class="antrian-tabel__berat-label">Berat</span><span aria-hidden="true"></span>
+        {% endif %}
       </div>{% endif %}
     <div class="grup" style="gap:9px"{% if tabel %} role="rowgroup"{% endif %}>
       {% for b in daftar %}
@@ -243,7 +261,7 @@
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
         {% if b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
@@ -271,7 +289,7 @@
           </details>
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
@@ -294,7 +312,7 @@
           </details>
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
@@ -319,7 +337,7 @@
              tak terkena: `.padat--diam` grid. #}
           {% if listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
           </details>
           {% else %}

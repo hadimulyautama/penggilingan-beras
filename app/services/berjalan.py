@@ -578,7 +578,7 @@ class Berjalan:
 #: Urutannya URUTAN BACA, dan ia mengikuti aliran barang: yang baru datang,
 #: yang menunggu diangkut, yang menunggu dikemas, lalu sisanya.
 GRUP_ANTREAN = (
-    ("bahan", "Bahan baku"),
+    ("bahan", "Tiket Timbang"),
     ("pindah", "Tunggu dipindah"),
     ("packing", "Packing"),
     # Keluhan pemilik 6 Oktober 2026: "di halaman tunggu packing tidak bisa

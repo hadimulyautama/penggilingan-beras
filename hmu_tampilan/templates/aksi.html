@@ -134,12 +134,16 @@
                else semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list) %}
 
 {% if GRUP_KINI == "bahan" %}
-  {{ benda.blok("Bahan baku", menunggu, listview=True, tabel=True) }}
+  {{ benda.blok("Tiket Timbang", menunggu, listview=True, tabel=True) }}
+{% elif GRUP_KINI in ("packing", "packing_jasa") %}
+  {{ benda.blok("Packing jasa" if GRUP_KINI == "packing_jasa" else "Packing",
+                menunggu, listview=True, tabel="packing") }}
 {% elif not GRUP_KINI and MENUNGGU_PER_GRUP %}
   <div class="antrian-semua-grup">
     {% for kunci, nama, daftar_grup in MENUNGGU_PER_GRUP %}
       {% if daftar_grup %}
-        {{ benda.blok(nama, daftar_grup, listview=True, tabel=(kunci == "bahan")) }}
+        {% set tipe_tabel = "packing" if kunci in ("packing", "packing_jasa") else ("bahan" if kunci == "bahan" else false) %}
+        {{ benda.blok(nama, daftar_grup, listview=True, tabel=tipe_tabel) }}
       {% endif %}
     {% endfor %}
   </div>
