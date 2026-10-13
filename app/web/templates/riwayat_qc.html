@@ -14,31 +14,51 @@
   {% elif not rows %}
     <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
   {% else %}
-    <div class="riwayat-list">
+    <div class="qc-history-list">
       {% for row in rows %}
-        <article class="padat padat--diam" style="padding:10px 12px">
-          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">
-            <strong class="padat__nama padat__nama--kode" style="font-size:1rem">{{ row.ref }}</strong>
-            <span class="bantu">{{ row.rounds|length }} putaran</span>
-          </div>
-          {% if row.asal or row.plat %}
-            <div class="bantu" style="display:flex;gap:4px 14px;flex-wrap:wrap;margin-top:3px;font-size:.84rem">
-              {% if row.asal %}<span>{{ row.asal }}</span>{% endif %}
-              {% if row.plat %}<span>Armada: {{ row.plat }}</span>{% endif %}
-            </div>
-          {% endif %}
-          <div style="display:grid;gap:4px;margin-top:7px">
-            {% for putaran in row.rounds %}
-              <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 12px;padding:5px 0;border-top:1px solid var(--garis, #d5dfe4);font-size:.9rem">
-                <strong style="white-space:nowrap">{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
-                {% if putaran.waktu %}<time class="bantu" style="font-size:.8rem">{{ putaran.waktu|jam("%d/%m %H:%M") }}</time>{% endif %}
-                  {% for label, value in putaran.detail %}
-                    <span><span class="bantu">{{ label }}:</span> {{ value }}</span>
-                  {% endfor %}
+        <details class="qc-history-card">
+          <summary class="qc-history-card__summary">
+            <div class="qc-history-card__head">
+              <div>
+                <span class="qc-history-card__eyebrow">Batch / proses</span>
+                <h2>{{ row.ref }}</h2>
               </div>
-            {% endfor %}
+              <span class="qc-history-card__count">{{ row.rounds|length }} putaran QC</span>
+            </div>
+            {% if row.rounds and (row.rounds[-1].waktu or row.rounds[-1].detail) %}
+              <div class="qc-history-card__preview">
+                {% if row.rounds[-1].waktu %}<time>{{ row.rounds[-1].waktu|jam("%d/%m/%Y · %H:%M") }}</time>{% endif %}
+                {% for label, value in row.rounds[-1].detail %}
+                  {% if loop.index <= 2 %}<span><b>{{ label }}</b> {{ value }}</span>{% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+            <span class="qc-history-card__toggle" aria-hidden="true">Lihat semua putaran⌄</span>
+          </summary>
+          <div class="qc-history-card__details">
+            {% if row.asal or row.plat %}
+              <div class="qc-history-card__origin">
+                {% if row.asal %}<span><small>Asal</small>{{ row.asal }}</span>{% endif %}
+                {% if row.plat %}<span><small>No. polisi</small>{{ row.plat }}</span>{% endif %}
+              </div>
+            {% endif %}
+            <div class="qc-history-card__rounds">
+              {% for putaran in row.rounds %}
+                <section class="qc-history-round">
+                  <div class="qc-history-round__head">
+                    <strong>{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
+                    {% if putaran.waktu %}<time>{{ putaran.waktu|jam("%d/%m/%Y · %H:%M") }}</time>{% endif %}
+                  </div>
+                  <dl class="qc-history-values">
+                    {% for label, value in putaran.detail %}
+                      <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+                    {% endfor %}
+                  </dl>
+                </section>
+              {% endfor %}
+            </div>
           </div>
-        </article>
+        </details>
       {% endfor %}
     </div>
     {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 catatan terbaru.</p>{% endif %}
