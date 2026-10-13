@@ -202,7 +202,7 @@
    layar Menunggu keputusan membuka lembarnya SENDIRI — menekan "Verifikasi
    harga" lalu mendarat di layar lain berarti orang kehilangan tempatnya
    setiap kali ia menyelesaikan satu baris. #}
-{% macro blok(judul, daftar, rapat=False, alamat="/aksi") -%}
+{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False) -%}
   {% if daftar %}
   {% set kelas = "padat" if rapat else "benda" %}
   {% set dasar = dasar_borang(alamat) %}
@@ -212,7 +212,7 @@
   {% macro tanda(b) -%}
  data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi)|lower }}" data-sup="{{ b.judul or '' }}"
   {%- endmacro %}
-  <div data-blok>
+  <div data-blok{% if listview %} class="antrian-listview"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     <div class="grup" style="gap:9px">
       {% for b in daftar %}
@@ -222,12 +222,13 @@
            tarik-turun adalah tiga ketukan dan satu layar yang menutupi baris
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
         {% if b.tombol %}
-          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
-            <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
+            <summary>{% if rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
-            {% if not rapat %}{{ penuh_anak(b) }}{% endif %}
+            {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+            {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {% for t in b.tombol %}
                 <button type="button"
@@ -249,9 +250,10 @@
             </div>
           </details>
         {% elif b.pilihan %}
-          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}>
-            <summary>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
-            {% if not rapat %}{{ penuh_anak(b) }}{% endif %}
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
+            <summary>{% if rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+            {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {# Nilai penunjuk boleh berbeda PER TINDAKAN. Satu kartu memang
                  satu proses, tetapi tiap aksi menyebut proses itu dengan
@@ -268,6 +270,13 @@
                   <span class="pilihan__ket">{{ ket }}</span>
                 </a>
               {% endfor %}
+            </div>
+          </details>
+        {% elif b.aksi and listview %}
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
+            <summary>{{ padat(b) }}</summary>
+            <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
+              <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
           </details>
         {% elif b.aksi %}
@@ -288,11 +297,18 @@
              di salinan gudang2, dinaikkan ke paket saat Tahap 1 karena kartu
              diam berisi rincian bisa muncul di aplikasi mana pun. Kartu padat
              tak terkena: `.padat--diam` grid. #}
+          {% if listview %}
+          <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
+            <summary>{{ padat(b) }}</summary>
+            <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+          </details>
+          {% else %}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
             {# Kartu diam tak punya mekanisme expand — bahan TETAP selalu
                tampil, sama seperti sebelum pemisahan `penuh_anak`. #}
             {% if rapat %}{{ padat(b) }}{% else %}<div>{{ penuh(b) }}{{ penuh_anak(b) }}</div>{% endif %}
           </div>
+          {% endif %}
         {% endif %}
       {% endfor %}
     </div>

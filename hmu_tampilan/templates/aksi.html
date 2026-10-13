@@ -132,9 +132,9 @@
                if KELOMPOK_TENGAH
                else semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list) %}
 
-{{ benda.blok(judul_atas, atas) }}
-{% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah) }}{% endif %}
-{{ benda.blok(judul_bawah, lain) }}
+{{ benda.blok(judul_atas, atas, listview=True) }}
+{% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}
+{{ benda.blok(judul_bawah, lain, listview=True) }}
 
 {# ── Ke mana antrean gudang pergi ──
    Bagi pemegang KEDUA gudang, keadaan fisik gudang adalah kabar, bukan
