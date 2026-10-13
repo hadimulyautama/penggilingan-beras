@@ -425,10 +425,11 @@ class Berjalan:
         # berpil akan terbaca seperti saringan yang hilang.
         out: dict[str, list[tuple[str, str, int]]] = {}
         if len(isi) >= 2:
-            # "Semua" berdiri paling atas, dan ia WAJIB ada: tanpanya pintu
-            # antrean tak lagi punya jalan ke daftar utuhnya — klik pintunya
-            # kini membuka sub-menu, bukan membuka halamannya.
-            out["aksi"] = [("/aksi", "Semua", self.jumlah_menunggu), *isi]
+            # Sub-menu hanya menawarkan kategori pekerjaan. "Lainnya" sudah
+            # menjadi pelengkap yang menampung setiap kartu yang tidak cocok
+            # dengan kategori lain (`grup_baris()`), jadi jangan menambahkan
+            # pilihan "Semua" yang mengulang seluruh antrean.
+            out["aksi"] = isi
 
         # "Menunggu keputusan" — permintaan pemilik 2 Oktober 2026: "lakukan
         # yang sama ke menunggu keputusan", diperjelas "buat sub menu juga

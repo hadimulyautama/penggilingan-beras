@@ -396,11 +396,14 @@ Keputusan pemilik 2 Oktober 2026: *"antrian tunggu bisa banyak sekali"* →
 menu pertama bahan baku, kedua tunggu packing. tunggu dipindah."*
 
 Pintu "Antrian tunggu" di laci berubah jadi `<details>` saat ada **≥2 grup
-berisi**: kliknya membuka sub-menu, bukan menuju halamannya. Karena itu baris
-pertama sub-menu WAJIB **"Semua"** — tanpanya daftar utuh jadi tak terjangkau
-dari laci. Dengan satu grup, pintunya kembali jadi tautan biasa: dropdown tanpa
-pilihan merampas satu ketukan. Syaratnya SAMA dengan syarat pil di halaman,
-supaya laci berdropdown tak pernah berdiri di atas halaman tanpa pil.
+berisi**: kliknya membuka sub-menu, bukan menuju halamannya. Sub-menu hanya
+menampilkan kategori yang berisi pekerjaan; **"Lainnya"** adalah pelengkap
+yang menampung kartu yang tidak masuk kategori lain. Pilihan "Semua" tidak
+ditampilkan karena mengulang daftar lengkap, yang tetap tersedia lewat akses
+cepat Beranda dan pil di halaman. Dengan satu grup, pintunya kembali jadi
+tautan biasa: dropdown tanpa pilihan merampas satu ketukan. Syaratnya SAMA
+dengan syarat pil di halaman, supaya laci berdropdown tak pernah berdiri di
+atas halaman tanpa pil.
 
 Di dalam halaman, grupnya jadi pil `?grup=` (alamat, bukan jangkar: yang
 dibutuhkan MENGURANGI apa yang terlihat, bukan menggulir). `?grup=` ngawur →
