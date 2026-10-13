@@ -164,8 +164,10 @@
 {%- endmacro %}
 
 {% macro tabel_antrean(b) -%}
-  <span class="antrian-tabel__sel" data-label="Nama">{{ b.judul or b.kode }}</span>
-  <span class="antrian-tabel__sel" data-label="Kode tiket timbang">{{ b.tiket_kode or "—" }}</span>
+  <span class="antrian-tabel__sel antrian-tabel__nama" data-label="Nama">
+    <span>{{ b.nama_tabel or b.judul or b.kode }}</span>
+    <small class="antrian-tabel__kode">{{ b.tiket_kode or "—" }}</small>
+  </span>
   <span class="antrian-tabel__sel antrian-tabel__status{% if b.status_jasa is not none %} antrian-tabel__status--{{ 'jasa' if b.status_jasa else 'pabrik' }}{% endif %}" data-label="Status">
     {% if b.status_jasa is not none %}{{ "Jasa" if b.status_jasa else "Bukan jasa" }}{% else %}—{% endif %}
   </span>
@@ -229,8 +231,8 @@
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     {% if tabel %}<div class="antrian-tabel-scroll">
       <div class="antrian-tabel__kepala" role="row">
-        <span>Nama</span><span>Kode tiket timbang</span><span>Status</span>
-        <span>Komoditas</span><span>Nopol / Supir</span><span>Berat</span><span aria-hidden="true"></span>
+        <span>Nama</span><span>Status</span><span>Komoditas</span>
+        <span>Nopol / Supir</span><span>Berat</span><span aria-hidden="true"></span>
       </div>{% endif %}
     <div class="grup" style="gap:9px"{% if tabel %} role="rowgroup"{% endif %}>
       {% for b in daftar %}

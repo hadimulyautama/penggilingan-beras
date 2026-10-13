@@ -192,6 +192,7 @@ class Baris:
     komoditas: str | None = None
     kendaraan: str | None = None
     status_jasa: bool | None = None
+    nama_tabel: str | None = None
 
 
 @dataclass
@@ -1559,8 +1560,21 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
         ))
     return baris
+
+
+def _nama_tabel_bahan(nama: str | None, *, jasa: bool) -> str | None:
+    """Nama ringkas tabel; kode jasa tetap tersimpan pada detail kartu."""
+    if not nama or not jasa:
+        return nama
+    nama = nama.removeprefix("JASA · ").strip()
+    if nama.startswith("JAS-"):
+        _, pemisah, pemilik = nama.partition(" ")
+        if pemisah:
+            return pemilik.strip()
+    return nama
 
 
 async def _metadata_tiket(db: AsyncSession, ids) -> dict[int, dict]:
@@ -1647,6 +1661,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
         ))
     return baris
 
@@ -1732,6 +1747,7 @@ async def _tiket_jenis_tak_dikenal(
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
             **tindakan,
         ))
     return baris
@@ -1870,6 +1886,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                                   (b_.no_polisi_truk or tiket.get("nomor_polisi"),
                                    tiket.get("nama_sopir")) if x),
             status_jasa=b_.jasa_id is not None,
+            nama_tabel=_nama_tabel_bahan(
+                nama_pemasok, jasa=b_.jasa_id is not None),
         ))
 
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
@@ -1929,6 +1947,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                                   (b_.no_polisi_truk or tiket.get("nomor_polisi"),
                                    tiket.get("nama_sopir")) if x),
             status_jasa=b_.jasa_id is not None,
+            nama_tabel=_nama_tabel_bahan(
+                nama_pemasok, jasa=b_.jasa_id is not None),
         ))
 
     from app.penggilingan.gudang1.services.drying import _lot_batches
@@ -2455,6 +2475,8 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
                                   x in (pk.no_polisi_truk or tiket.get("nomor_polisi"),
                                         tiket.get("nama_sopir")) if x),
             status_jasa=pk.jasa_id is not None,
+            nama_tabel=_nama_tabel_bahan(
+                nama or pk.kode_batch, jasa=pk.jasa_id is not None),
         ))
 
     # ── Penyosohan yang sedang berputar ──
