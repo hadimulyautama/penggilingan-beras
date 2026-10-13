@@ -233,7 +233,7 @@ async def _nama_barang(db, baris) -> dict[int, str]:
     """
     from sqlalchemy import select
 
-    from app.models import MillingProcess
+    from app.models import GabahKeringLot, MillingProcess, Silo
     from app.penggilingan.inventory.models import (PackageSize, PackagingMaterial,
                                                    ProductSku, RiceQualityStandard)
     from app.services.stok import jenis_produk, nama_produk
@@ -244,6 +244,10 @@ async def _nama_barang(db, baris) -> dict[int, str]:
 
     sku_ids = {it.product_sku_id for it in items if it.product_sku_id}
     proc_ids = {it.milling_process_id for it in items if it.milling_process_id}
+    silo_ids = {it.silo_id for it in items
+                if it.item_type == "pk_g2" and it.silo_id is not None}
+    gabah_ids = {it.gabah_kering_lot_id for it in items
+                 if it.item_type == "gabah_langsung" and it.gabah_kering_lot_id}
     std_ids = {it.rice_quality_standard_id for it in items
                if it.rice_quality_standard_id}
 
@@ -271,16 +275,36 @@ async def _nama_barang(db, baris) -> dict[int, str]:
             select(MillingProcess.id, MillingProcess.kode_proses)
             .where(MillingProcess.id.in_(proc_ids)))).all()}
 
+    silo: dict[int, str] = {}
+    if silo_ids:
+        silo = {i: n for i, n in (await db.execute(
+            select(Silo.id, Silo.nama_silo).where(Silo.id.in_(silo_ids))
+        )).all()}
+
+    gabah_lot: dict[int, str] = {}
+    if gabah_ids:
+        gabah_lot = {i: k for i, k in (await db.execute(
+            select(GabahKeringLot.id, GabahKeringLot.kode_lot)
+            .where(GabahKeringLot.id.in_(gabah_ids))
+        )).all()}
+
     keluar: dict[int, str] = {}
     for it in items:
         if it.item_type == "pk_langsung":
-            keluar[it.id] = f"PK {lot.get(it.milling_process_id, '?')}"
+            kode = lot.get(it.milling_process_id)
+            keluar[it.id] = f"PK {kode}" if kode else "PK (lot asal tidak ditemukan)"
+        elif it.item_type == "pk_g2":
+            tempat = silo.get(it.silo_id) if it.silo_id is not None else "tumpukan"
+            keluar[it.id] = f"PK Gudang 2 · {tempat or 'silo tidak ditemukan'}"
+        elif it.item_type == "gabah_langsung":
+            kode = gabah_lot.get(it.gabah_kering_lot_id)
+            keluar[it.id] = f"Gabah kering · {kode}" if kode else "Gabah kering (lot asal tidak ditemukan)"
         elif it.item_type == "byproduct_curah":
             keluar[it.id] = f"{nama_produk(it.jenis_byproduct or '')} (curah)"
         else:
             k = sku.get(it.product_sku_id)
             if k is None:
-                keluar[it.id] = "?"
+                keluar[it.id] = "Barang tidak dikenali (data produk tidak ditemukan)"
                 continue
             kategori, bahan, ukuran = k
             j = jenis_produk(kategori, mutu.get(it.rice_quality_standard_id))
