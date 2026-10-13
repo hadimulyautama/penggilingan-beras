@@ -2,3 +2,38 @@
 @media(max-width:700px){.riwayat-intro{margin-bottom:17px}.riwayat-hero{border-radius:21px;padding:21px 18px}.riwayat-stats{gap:7px;margin:11px 0 16px}.riwayat-stat{display:block;min-height:91px;padding:10px;border-radius:15px}.riwayat-stat__icon{width:34px;height:34px;min-height:34px;border-radius:11px;margin-bottom:7px;font-size:.95rem}.riwayat-stat strong{font-size:1rem}.riwayat-stat div span{font-size:.7rem;line-height:1.2}.riwayat-list{gap:9px}.riwayat-list>.padat>summary,.riwayat-list>.padat>div:first-child{padding:13px 12px}}
 .qc-history-list{display:grid;gap:12px}.qc-history-card{overflow:hidden;border:1px solid var(--kulit-batas);border-radius:18px;background:var(--kulit-kartu);color:var(--tinta);box-shadow:0 5px 18px #20304008}.qc-history-card>summary{list-style:none;cursor:pointer}.qc-history-card>summary::-webkit-details-marker{display:none}.qc-history-card__summary{position:relative;padding:16px 19px 13px}.qc-history-card__head{display:flex;align-items:center;justify-content:space-between;gap:12px}.qc-history-card__eyebrow{color:var(--kulit-redup);font-size:.72rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase}.qc-history-card__head h2{margin:3px 0 0;color:var(--tinta);font-size:1.08rem;line-height:1.3;overflow-wrap:anywhere}.qc-history-card__count{flex:0 0 auto;padding:7px 10px;border-radius:999px;background:var(--kulit-langkah);color:var(--kulit-langkah-teks);font-size:.78rem;font-weight:700}.qc-history-card__preview{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:11px;color:var(--kulit-redup);font-size:.86rem}.qc-history-card__preview time{color:var(--kulit-redup);font-variant-numeric:tabular-nums}.qc-history-card__preview b{color:var(--tinta)}.qc-history-card__toggle{display:inline-block;margin-top:11px;color:var(--kulit-redup);font-size:.79rem;font-weight:700}.qc-history-card__toggle:before{content:"＋ ";color:#39815a}.qc-history-card[open] .qc-history-card__toggle:before{content:"− ";color:#9a6a22}.qc-history-card[open] .qc-history-card__toggle{color:var(--kulit-redup)}.qc-history-card__details{padding:0 19px 17px;border-top:1px solid var(--kulit-pemisah)}.qc-history-card__origin{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}.qc-history-card__origin>span{display:block;min-width:0;padding:9px 11px;border-radius:11px;background:var(--panel-2);color:var(--tinta);font-size:.86rem;overflow-wrap:anywhere}.qc-history-card__origin small{display:block;margin-bottom:3px;color:var(--kulit-redup);font-size:.68rem;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.qc-history-card__rounds{display:grid;gap:9px;margin-top:12px}.qc-history-round{overflow:hidden;border:1px solid var(--kulit-batas);border-radius:13px;background:var(--kulit-kartu)}.qc-history-round__head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--panel-2)}.qc-history-round__head strong{color:var(--tinta);font-size:.92rem}.qc-history-round__head time{color:var(--kulit-redup);font-size:.78rem;font-variant-numeric:tabular-nums}.qc-history-values{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;margin:0;background:var(--kulit-pemisah)}.qc-history-values>div{min-width:0;padding:9px 11px;background:var(--kulit-kartu);color:var(--tinta)}.qc-history-values dt{color:var(--kulit-redup);font-size:.72rem}.qc-history-values dd{margin:3px 0 0;color:var(--tinta);font-size:.92rem;font-weight:650;overflow-wrap:anywhere}
 @media(max-width:700px){.qc-history-list{gap:9px}.qc-history-card__summary{padding:13px 12px 11px}.qc-history-card__head h2{font-size:.98rem}.qc-history-card__count{padding:6px 8px;font-size:.72rem}.qc-history-card__preview{gap:5px 10px;font-size:.78rem}.qc-history-card__details{padding:0 12px 13px}.qc-history-card__origin{grid-template-columns:1fr}.qc-history-round__head{align-items:flex-start;flex-direction:column;gap:3px}.qc-history-values{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Riwayat QC: ringkasan tampil sebagai satu baris daftar, seluruh putaran
+   tetap tersedia di bagian yang dibuka. */
+.qc-history-list{gap:0;overflow:hidden;border:1px solid var(--kulit-batas);border-radius:16px;background:var(--kulit-kartu)}
+.qc-history-card{border:0;border-bottom:1px solid var(--kulit-pemisah);border-radius:0;box-shadow:none}
+.qc-history-card:last-child{border-bottom:0}
+.qc-history-card__summary{display:grid;grid-template-columns:minmax(200px,1.1fr) minmax(220px,1.5fr) auto;align-items:center;gap:12px;padding:13px 16px}
+.qc-history-card__head{justify-content:flex-start;gap:12px}
+.qc-history-card__eyebrow{display:none}
+.qc-history-card__head h2{margin:0;font-size:.96rem}
+.qc-history-card__count{padding:5px 9px;white-space:nowrap}
+.qc-history-card__preview{min-width:0;margin:0;gap:4px 12px;font-size:.8rem}
+.qc-history-card__preview span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qc-history-card__toggle{margin:0;white-space:nowrap}
+.qc-history-card[open]>.qc-history-card__summary{background:var(--panel-2)}
+.qc-history-card__details{padding:12px 16px 16px}
+.qc-history-card__origin{margin:0 0 12px}
+.qc-history-card__rounds{gap:0;margin-top:0;border-top:1px solid var(--kulit-pemisah)}
+.qc-history-round{border:0;border-bottom:1px solid var(--kulit-pemisah);border-radius:0}
+.qc-history-round:last-child{border-bottom:0}
+.qc-history-round__head{padding:9px 10px}
+.qc-history-values{background:transparent}
+.qc-history-values>div{padding:8px 10px}
+@media(max-width:700px){
+  .qc-history-list{gap:0}
+  .qc-history-card__summary{grid-template-columns:minmax(0,1fr) auto;gap:7px 10px;padding:12px}
+  .qc-history-card__head{grid-column:1/-1;align-items:center}
+  .qc-history-card__head h2{font-size:.92rem}
+  .qc-history-card__preview{grid-column:1/-1;gap:4px 9px;font-size:.76rem}
+  .qc-history-card__toggle{grid-column:1/-1;font-size:.76rem}
+  .qc-history-card__details{padding:10px 12px 12px}
+  .qc-history-card__origin{grid-template-columns:1fr}
+  .qc-history-round__head{align-items:flex-start;flex-direction:row;gap:8px}
+  .qc-history-values{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

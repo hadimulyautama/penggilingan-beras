@@ -11,7 +11,7 @@ Tiga bagian, dan urutannya mengikuti seberapa sering dipakai:
 """
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, Form, Request
 
@@ -354,7 +354,11 @@ _PESAN = {
 
 
 @router.post("/pengaturan/terik")
-async def ganti_terik(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
+async def ganti_terik(
+    request: Request,
+    balik: str = Form("/"),
+    akun: ProduksiAkun = Depends(butuh_akun),
+):
     """Nyala/padamkan mode terik untuk PERANGKAT ini.
 
     Tema gelap enak di dalam gudang dan nyaris tak terbaca di halaman —
@@ -368,8 +372,10 @@ async def ganti_terik(request: Request, akun: ProduksiAkun = Depends(butuh_akun)
     # Tanpa cookie, mode terang sedang aktif sebagai bawaan; tombol pertama
     # harus mematikannya, bukan mengaktifkannya lagi.
     nyala = request.cookies.get("produksi_terik", "1") != "1"
-    balasan = redirect("/pengaturan?pesan="
-                       + ("terik-nyala" if nyala else "terik-padam"))
+    tujuan = urlsplit(balik)
+    if tujuan.scheme or tujuan.netloc or not tujuan.path.startswith("/") or tujuan.path.startswith("//"):
+        balik = "/"
+    balasan = redirect(balik)
     balasan.set_cookie(
         "produksi_terik", "1" if nyala else "0",
         max_age=365 * 24 * 3600, httponly=False, samesite="lax",

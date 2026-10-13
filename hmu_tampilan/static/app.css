@@ -1010,6 +1010,69 @@ body.terik .pintu { color: #34404c; }
 body.terik .pintu:hover { background: #f2f4f6; }
 body.terik .pintu--kini { background: #e9eef3; color: #202832; box-shadow: inset 3px 0 #566575; }
 body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
+body.terik .pintu-sub { border-color: #dce2e8; }
+body.terik .pintu-sub__satu { color: #202832; }
+body.terik .pintu-sub__satu:hover,
+body.terik .pintu-sub__satu:active { background: #f2f4f6; color: #202832; }
+body.terik .pintu-sub__satu--kini { background: #e9eef3; color: #202832; }
+
+/* Bilah desktop mengikuti pola ERP: akses cepat dan kontrol di baris atas,
+   breadcrumb serta tombol kembali pada baris kedua. Semua ikut bergulir
+   bersama isi halaman. */
+.desktop-chrome { display: none; }
+@media (min-width: 900px) {
+  .desktop-chrome { display: block; flex: 0 0 auto; margin: -28px calc(-1 * clamp(28px, 3.2vw, 64px)) 0; color: var(--tinta); }
+  .desktop-chrome__top, .desktop-chrome__crumbrow {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px clamp(28px, 3.2vw, 64px); background: var(--kulit-kartu);
+    border-bottom: 1px solid var(--kulit-batas);
+  }
+  .desktop-chrome__shortcuts, .desktop-chrome__tools { display: flex; align-items: center; gap: 8px; }
+  .desktop-chrome__shortcuts { min-width: 0; }
+  .desktop-chrome__shortcuts a {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 12px;
+    border: 1px solid var(--kulit-batas); border-radius: 9px; background: var(--kulit-kartu);
+    color: var(--tinta); font-size: 13px; font-weight: 650; text-decoration: none; white-space: nowrap;
+  }
+  .desktop-chrome__shortcuts a:hover { background: var(--panel-2); }
+  .desktop-chrome__shortcuts a span { color: var(--aksi); font-size: 17px; font-weight: 700; }
+  .desktop-chrome__shortcuts a:nth-child(2) span { color: #25855e; }
+  .desktop-chrome__shortcuts a:nth-child(3) span { color: #bd8127; }
+  .desktop-chrome__shortcuts a:nth-child(4) span { color: #c45e49; }
+  .desktop-chrome__tools { flex: 0 0 auto; }
+  .desktop-chrome__company { max-width: 210px; overflow: hidden; color: var(--tinta); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .desktop-language { position: relative; }
+  .desktop-language summary, .desktop-chrome__notice, .desktop-theme button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 38px; height: 38px;
+    padding: 0 10px; border: 1px solid var(--kulit-batas); border-radius: 9px;
+    background: var(--kulit-kartu); color: var(--tinta); font: 600 13px var(--teks); text-decoration: none; cursor: pointer;
+  }
+  .desktop-language summary { list-style: none; }
+  .desktop-language summary::-webkit-details-marker { display: none; }
+  .desktop-language__menu { position: absolute; z-index: 20; top: calc(100% + 7px); right: 0; display: grid; gap: 3px; min-width: 170px; padding: 12px; border: 1px solid var(--kulit-batas); border-radius: 10px; background: var(--kulit-kartu); box-shadow: 0 8px 24px #18232b20; font-size: 13px; }
+  .desktop-language__menu small { color: var(--kulit-redup); }
+  .desktop-chrome__notice { position: relative; }
+  .desktop-chrome__notice span { position: absolute; top: -5px; right: -5px; min-width: 17px; padding: 1px 4px; border-radius: 99px; background: #e57462; color: #fff; font-size: 10px; text-align: center; }
+  .desktop-theme button { position: relative; width: 58px; justify-content: flex-start; padding: 0 7px; }
+  .desktop-theme button span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--panel-2); font-size: 16px; }
+  .desktop-theme button i { position: absolute; right: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--kulit-redup); }
+  .desktop-chrome__crumbrow { min-height: 46px; padding-top: 9px; padding-bottom: 9px; }
+  .desktop-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; color: var(--kulit-redup); font-size: 14px; }
+  .desktop-breadcrumb a { color: var(--kulit-redup); text-decoration: none; }
+  .desktop-breadcrumb a:hover { color: var(--tinta); }
+  .desktop-breadcrumb > span[aria-hidden="true"] { color: var(--kulit-batas); }
+  .desktop-breadcrumb > span:not([aria-hidden="true"]), .desktop-breadcrumb strong { color: var(--tinta); font-weight: 650; }
+  .desktop-back { display: inline-flex; align-items: center; gap: 6px; color: var(--kulit-redup); font-size: 13px; font-weight: 650; text-decoration: none; white-space: nowrap; }
+  .desktop-back:hover { color: var(--tinta); }
+  .desktop-back span { font-size: 18px; }
+  body.terik .desktop-chrome__top, body.terik .desktop-chrome__crumbrow { background: #fff; }
+  body:not(.terik) .desktop-chrome__top, body:not(.terik) .desktop-chrome__crumbrow { background: var(--kulit-kartu); }
+}
+@media (min-width: 900px) and (max-width: 1180px) {
+  .desktop-chrome__top { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .desktop-chrome__tools { align-self: flex-end; }
+  .desktop-chrome__company { max-width: 260px; }
+}
 
 /* Bilah mobile pada mode terang memakai permukaan putih; ikon dan merek
    harus memakai tinta gelap agar tidak hilang di atasnya. */
