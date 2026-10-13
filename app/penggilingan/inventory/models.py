@@ -133,6 +133,12 @@ class FinishedGoodsStock(Base, TimestampMixin):
     #: saringan stok dibaca di hampir tiap layar, dan yang paling sering
     #: ditanyakan tak boleh dijawab paling mahal — lewat join ke tabel lain.
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    #: Pemilik karung bisa berbeda dari pemilik beras. Khusus pembelian beras
+    #: yang diterima dari Timbangan: beras tetap milik pesanan jasa, tetapi
+    #: karung putihnya diambil dari stok pabrik.
+    kemasan_dari_pabrik: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
 
 class ByproductStock(Base, TimestampMixin):

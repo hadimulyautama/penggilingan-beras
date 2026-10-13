@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -196,6 +196,18 @@ async def hitung_stok_kemasan(
                   if isinstance(pelanggan_id, list) else Jasa.pelanggan_id == pelanggan_id)
         return col.in_(select(Jasa.id).where(kondisi))
 
+    # Pemilik karung tidak selalu sama dengan pemilik produknya. Flag khusus
+    # ini hanya dipakai ketika beras jasa dari tiket timbang menggunakan karung
+    # pabrik. Baris lama tetap mengikuti aturan jasa_id seperti sebelumnya.
+    pemakaian_kemasan = (
+        or_(FinishedGoodsStock.kemasan_dari_pabrik.is_(True),
+            and_(FinishedGoodsStock.kemasan_dari_pabrik.is_(False),
+                 FinishedGoodsStock.jasa_id.is_(None)))
+        if pelanggan_id is None
+        else and_(FinishedGoodsStock.kemasan_dari_pabrik.is_(False),
+                  _jasa_milik_pelanggan(FinishedGoodsStock.jasa_id))
+    )
+
     beli = (
         await db.execute(
             select(func.coalesce(func.sum(PackagingPurchase.jumlah_lembar), 0)).where(
@@ -224,7 +236,7 @@ async def hitung_stok_kemasan(
                 ProductSku.packaging_material_id == material_id,
                 ProductSku.package_size_id == size_id,
                 _brand(ProductSku.brand_id),
-                _jasa_milik_pelanggan(FinishedGoodsStock.jasa_id),
+                pemakaian_kemasan,
             )
         )
     ).scalar_one()
