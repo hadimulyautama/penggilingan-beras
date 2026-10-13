@@ -163,6 +163,19 @@
   </div>
 {%- endmacro %}
 
+{% macro tabel_antrean(b) -%}
+  <span class="antrian-tabel__sel" data-label="Nama">{{ b.judul or b.kode }}</span>
+  <span class="antrian-tabel__sel" data-label="Kode tiket timbang">{{ b.tiket_kode or "—" }}</span>
+  <span class="antrian-tabel__sel antrian-tabel__status{% if b.status_jasa is not none %} antrian-tabel__status--{{ 'jasa' if b.status_jasa else 'pabrik' }}{% endif %}" data-label="Status">
+    {% if b.status_jasa is not none %}{{ "Jasa" if b.status_jasa else "Bukan jasa" }}{% else %}—{% endif %}
+  </span>
+  <span class="antrian-tabel__sel" data-label="Komoditas">{{ b.komoditas or "—" }}</span>
+  <span class="antrian-tabel__sel" data-label="Nopol / Supir">{{ b.kendaraan or "—" }}</span>
+  <span class="antrian-tabel__sel antrian-tabel__berat" data-label="Berat">
+    {% if b.utama %}{{ b.utama[0] }}<small> {{ b.utama[1] }}</small>{% else %}—{% endif %}
+  </span>
+{%- endmacro %}
+
 {# ── Alamat borang, DENGAN saringan halaman (`?grup=`/`?kategori=`) ──
    Laporan pemilik 7 Oktober 2026: memilih sub-menu Antrian tunggu atau
    Menunggu keputusan (`?grup=bahan`, `?kategori=...`), lalu menekan kartu
@@ -202,7 +215,7 @@
    layar Menunggu keputusan membuka lembarnya SENDIRI — menekan "Verifikasi
    harga" lalu mendarat di layar lain berarti orang kehilangan tempatnya
    setiap kali ia menyelesaikan satu baris. #}
-{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False) -%}
+{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False, tabel=False) -%}
   {% if daftar %}
   {% set kelas = "padat" if rapat else "benda" %}
   {% set dasar = dasar_borang(alamat) %}
@@ -210,11 +223,16 @@
      Menyaring dengan membaca innerText berarti ikut membaca label, satuan,
      dan kepingan fase — lalu mengetik "kg" menampilkan semuanya. #}
   {% macro tanda(b) -%}
- data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi)|lower }}" data-sup="{{ b.judul or '' }}"
+ data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi ~ ' ' ~ (b.tiket_kode or '') ~ ' ' ~ (b.komoditas or '') ~ ' ' ~ (b.kendaraan or '') ~ ' ' ~ ('jasa' if b.status_jasa else 'bukan jasa' if b.status_jasa is not none else ''))|lower }}" data-sup="{{ b.judul or '' }}"
   {%- endmacro %}
-  <div data-blok{% if listview %} class="antrian-listview"{% endif %}>
+  <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel"{% elif listview %} class="antrian-listview"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
-    <div class="grup" style="gap:9px">
+    {% if tabel %}<div class="antrian-tabel-scroll">
+      <div class="antrian-tabel__kepala" role="row">
+        <span>Nama</span><span>Kode tiket timbang</span><span>Status</span>
+        <span>Komoditas</span><span>Nopol / Supir</span><span>Berat</span><span aria-hidden="true"></span>
+      </div>{% endif %}
+    <div class="grup" style="gap:9px"{% if tabel %} role="rowgroup"{% endif %}>
       {% for b in daftar %}
         {# ── Tujuan yang ditekan langsung ──
            Antrean adalah pekerjaan yang paling sering dilakukan. Membentangkan
@@ -223,7 +241,7 @@
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
         {% if b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
@@ -251,7 +269,7 @@
           </details>
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
@@ -274,7 +292,7 @@
           </details>
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
-            <summary>{{ padat(b) }}</summary>
+            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
@@ -299,7 +317,7 @@
              tak terkena: `.padat--diam` grid. #}
           {% if listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
-            <summary>{{ padat(b) }}</summary>
+            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
           </details>
           {% else %}
@@ -312,6 +330,7 @@
         {% endif %}
       {% endfor %}
     </div>
+    {% if tabel %}</div>{% endif %}
   </div>
   {% endif %}
 {%- endmacro %}

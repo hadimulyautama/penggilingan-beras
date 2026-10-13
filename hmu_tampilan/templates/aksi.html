@@ -132,9 +132,13 @@
                if KELOMPOK_TENGAH
                else semua|rejectattr("kelompok", "equalto", KELOMPOK_ATAS)|list) %}
 
-{{ benda.blok(judul_atas, atas, listview=True) }}
-{% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}
-{{ benda.blok(judul_bawah, lain, listview=True) }}
+{% if GRUP_KINI == "bahan" %}
+  {{ benda.blok("Bahan baku", menunggu, listview=True, tabel=True) }}
+{% else %}
+  {{ benda.blok(judul_atas, atas, listview=True) }}
+  {% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}
+  {{ benda.blok(judul_bawah, lain, listview=True) }}
+{% endif %}
 
 {# ── Ke mana antrean gudang pergi ──
    Bagi pemegang KEDUA gudang, keadaan fisik gudang adalah kabar, bukan

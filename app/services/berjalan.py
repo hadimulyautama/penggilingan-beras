@@ -186,6 +186,12 @@ class Baris:
     #: `aksi="catat_packing"`) — penyaringan yang `aksi`/`kelompok` sendirian
     #: tak bisa menjawab, sebab keduanya menyebut PEKERJAAN, bukan PEMILIK.
     jasa_id: int | None = None
+    #: Kolom antrean bahan baku. Metadata ini hanya untuk ringkasan tabel;
+    #: rincian kartu tetap memakai sumber dan susunan yang sudah ada.
+    tiket_kode: str | None = None
+    komoditas: str | None = None
+    kendaraan: str | None = None
+    status_jasa: bool | None = None
 
 
 @dataclass
@@ -1486,7 +1492,7 @@ async def _tujuan_gabah(db: AsyncSession, kondisi: str, *,
 
 async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
     from app.penggilingan.gudang1.services.timbang_link import (
-        nama_pihak, tiket_masuk_aktif)
+        adalah_jasa, nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
@@ -1549,8 +1555,31 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             tombol=await _tujuan_gabah(
                 db, kondisi, post="/api/actions/gabah-masuk",
                 data={"timbangan_transaksi_id": t["id"]}, tiket=t),
+            tiket_kode=t["kode"], komoditas=komoditas,
+            kendaraan=" · ".join(x for x in
+                                  (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
+            status_jasa=adalah_jasa(t),
         ))
     return baris
+
+
+async def _metadata_tiket(db: AsyncSession, ids) -> dict[int, dict]:
+    """Ambil ringkasan tiket yang sudah ditautkan, sekali per daftar."""
+    ids = sorted({int(x) for x in ids if x is not None})
+    if not ids:
+        return {}
+    from sqlalchemy import bindparam, text
+
+    hasil = await db.execute(
+        text("""
+            SELECT t.id, t.kode, t.nomor_polisi, t.nama_sopir, j.nama AS jenis_nama
+              FROM timbangan_transaksi t
+              LEFT JOIN timbangan_jenis j ON j.kode = t.jenis_kode
+             WHERE t.id IN :ids
+        """).bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    )
+    return {int(row.id): dict(row._mapping) for row in hasil}
 
 
 async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
@@ -1584,7 +1613,7 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
         daripada tak menawarkan apa pun.
     """
     from app.penggilingan.gudang1.services.timbang_link import (
-        nama_pihak, tiket_masuk_aktif)
+        adalah_jasa, nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import is_pk
 
     baris = []
@@ -1613,6 +1642,11 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
             pilihan=([("catat_pk_luar", "Catat PK luar datang",
                        "Jenis PK & kadar air — bobot dari tiket", str(t["id"]))]
                      if boleh_catat else []),
+            tiket_kode=t["kode"],
+            komoditas=t.get("jenis_nama") or t.get("jenis_kode") or "PK luar",
+            kendaraan=" · ".join(x for x in
+                                  (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
+            status_jasa=adalah_jasa(t),
         ))
     return baris
 
@@ -1646,7 +1680,7 @@ async def _tiket_jenis_tak_dikenal(
     maupun teruskan hanya menambah angka pada lencananya.
     """
     from app.penggilingan.gudang1.services.timbang_link import (
-        nama_pihak, tiket_masuk_aktif)
+        adalah_jasa, nama_pihak, tiket_masuk_aktif)
     from app.penggilingan.peta_jenis import intake_dari_jenis
 
     baris = []
@@ -1694,6 +1728,10 @@ async def _tiket_jenis_tak_dikenal(
                   + ([("Sumber berat", str(t.get("sumber_berat") or "-"))] if bobot else [])
                   + [("Masuk", _tgl(t.get("tanggal")))],
             kelompok="tiket",
+            tiket_kode=t["kode"], komoditas=jenis_nama,
+            kendaraan=" · ".join(x for x in
+                                  (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
+            status_jasa=adalah_jasa(t),
             **tindakan,
         ))
     return baris
@@ -1798,12 +1836,16 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
     # truk), lalu berstatus 'baru' dan tidak berada di dryer, silo, maupun
     # tumpukan. Tanpa baris ini, gabah itu berdiri di halaman tanpa ada satu
     # layar pun yang menyebutnya.
-    for b_, nama_pemasok in (await db.execute(
+    batch_baru = (await db.execute(
         select(PurchaseBatch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PurchaseBatch.supplier_id, isouter=True)
         .where(PurchaseBatch.status_batch == "baru")
         .order_by(PurchaseBatch.id.desc())
-    )).all():
+    )).all()
+    tiket_batch = await _metadata_tiket(
+        db, (b_.timbangan_transaksi_id for b_, _ in batch_baru))
+    for b_, nama_pemasok in batch_baru:
+        tiket = tiket_batch.get(b_.timbangan_transaksi_id or -1, {})
         # Pemiliknya menggantikan nama pemasok untuk barang titipan. Jatuh ke
         # kode batch adalah pilihan terakhir: kode tak memberi tahu apa pun
         # tentang siapa yang menunggu barangnya.
@@ -1822,13 +1864,23 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             tombol=await _tujuan_gabah(
                 db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
                 data={"kode_batch": b_.kode_batch}, jasa_id=b_.jasa_id),
+            tiket_kode=tiket.get("kode"),
+            komoditas=tiket.get("jenis_nama") or f"Gabah {b_.kondisi_gabah}",
+            kendaraan=" · ".join(x for x in
+                                  (b_.no_polisi_truk or tiket.get("nomor_polisi"),
+                                   tiket.get("nama_sopir")) if x),
+            status_jasa=b_.jasa_id is not None,
         ))
 
     # Tumpukan lebih dulu dari yang lain: isinya menandakan pembelian berlebih,
     # dan itu keadaan yang paling ingin diketahui — bukan yang paling dalam
     # daftar. Kosong berarti tak ada baris sama sekali, seperti seharusnya.
     from app.penggilingan.gudang1.services import tumpukan as tmp
-    for b_ in await tmp.isi(db):
+    tumpukan_baris = await tmp.isi(db)
+    tiket_tumpukan = await _metadata_tiket(
+        db, (b_.timbangan_transaksi_id for b_ in tumpukan_baris))
+    for b_ in tumpukan_baris:
+        tiket = tiket_tumpukan.get(b_.timbangan_transaksi_id or -1, {})
         wajib_dryer = b_.kondisi_gabah == "basah"
         pemilik_ = await nama_pemilik(db, b_.jasa_id)
         nama_pemasok = pemilik_ or (await db.execute(
@@ -1871,6 +1923,12 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             tombol=await _tujuan_gabah(
                 db, b_.kondisi_gabah, post="/api/actions/pindah-tumpukan",
                 data={"kode_batch": b_.kode_batch}, jasa_id=b_.jasa_id),
+            tiket_kode=tiket.get("kode"),
+            komoditas=tiket.get("jenis_nama") or f"Gabah {b_.kondisi_gabah}",
+            kendaraan=" · ".join(x for x in
+                                  (b_.no_polisi_truk or tiket.get("nomor_polisi"),
+                                   tiket.get("nama_sopir")) if x),
+            status_jasa=b_.jasa_id is not None,
         ))
 
     from app.penggilingan.gudang1.services.drying import _lot_batches
@@ -2370,12 +2428,16 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
 
     belum_masuk = ~exists().where(
         PkGudang2Intake.pk_purchase_batch_id == PkPurchaseBatch.id)
-    for pk, nama in (await db.execute(
+    pk_baru = (await db.execute(
         select(PkPurchaseBatch, Supplier.nama_supplier)
         .join(Supplier, Supplier.id == PkPurchaseBatch.supplier_id, isouter=True)
         .where(PkPurchaseBatch.status_batch == "diterima", belum_masuk)
         .order_by(PkPurchaseBatch.id.desc())
-    )).all():
+    )).all()
+    tiket_pk = await _metadata_tiket(
+        db, (pk.timbangan_transaksi_id for pk, _ in pk_baru))
+    for pk, nama in pk_baru:
+        tiket = tiket_pk.get(pk.timbangan_transaksi_id or -1, {})
         b.menunggu.append(Baris(
             kode=pk.kode_batch, isi=f"PK luar · {dari_batch(pk).teks()}",
             aksi="masukkan_pk", nilai=pk.kode_batch, fase="baru",
@@ -2386,6 +2448,13 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
             keadaan="belum masuk tumpukan",
             pilihan=[("masukkan_pk", "Masukkan ke gudang",
                       "Langsung ke tumpukan — pindah ke silo belakangan", pk.kode_batch)],
+            tiket_kode=tiket.get("kode"),
+            komoditas=(tiket.get("jenis_nama") or
+                       (f"PK luar · {pk.jenis_pk}" if pk.jenis_pk else "PK luar")),
+            kendaraan=" · ".join(x for
+                                  x in (pk.no_polisi_truk or tiket.get("nomor_polisi"),
+                                        tiket.get("nama_sopir")) if x),
+            status_jasa=pk.jasa_id is not None,
         ))
 
     # ── Penyosohan yang sedang berputar ──

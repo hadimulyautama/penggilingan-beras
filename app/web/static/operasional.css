@@ -24,3 +24,21 @@
 .antrian-listview .antrian-item__rincian>.btn{margin-top:10px}
 .antrian-listview .pilihan{padding:0 13px 12px;background:var(--panel-2)}
 @media(max-width:700px){.antrian-listview .grup{border-radius:8px}.antrian-listview .antrian-item>summary{padding:10px 34px 10px 11px}.antrian-listview .antrian-item>summary .padat__atas{gap:7px}.antrian-listview .padat__nama,.antrian-listview .padat__nilai{font-size:.88rem}.antrian-listview .padat__ket{font-size:.76rem}.antrian-listview .antrian-item__rincian{padding:9px 11px 11px}.antrian-listview .pilihan{padding:0 11px 11px}}
+
+/* Bahan baku: tabel ringkas yang bisa digeser di layar sempit. Isi baris
+   tetap <details>, jadi rincian dan tindakan lama tetap berada di tempatnya. */
+.antrian-listview--tabel .antrian-tabel-scroll{max-width:100%;overflow-x:auto;border:1px solid var(--garis);border-radius:10px;background:var(--panel);scrollbar-width:thin}
+.antrian-listview--tabel .grup{width:max-content;min-width:100%;overflow:visible;border:0;border-radius:0}
+.antrian-listview--tabel .antrian-tabel__kepala,.antrian-listview--tabel .antrian-item>summary{display:grid;grid-template-columns:minmax(150px,1.15fr) minmax(155px,1.15fr) minmax(105px,.72fr) minmax(135px,1fr) minmax(150px,1.1fr) minmax(105px,.72fr) 18px;align-items:center;column-gap:14px;min-width:960px}
+.antrian-listview--tabel .antrian-tabel__kepala{padding:9px 38px 9px 13px;border-bottom:1px solid var(--garis);background:var(--panel-2);color:var(--redup);font-size:.72rem;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
+.antrian-listview--tabel .antrian-item>summary{min-height:45px;padding:10px 38px 10px 13px}
+.antrian-listview--tabel .antrian-tabel__sel{min-width:0;overflow-wrap:anywhere;color:var(--tinta);font-size:.86rem;line-height:1.3}
+.antrian-listview--tabel .antrian-tabel__sel:first-child{font-weight:650}
+.antrian-listview--tabel .antrian-tabel__status{width:max-content;padding:3px 8px;border-radius:999px;background:#eef1f4;color:#596777;font-size:.76rem;font-weight:700}
+.antrian-listview--tabel .antrian-tabel__status--jasa{background:#e8f5ee;color:#39815a}
+.antrian-listview--tabel .antrian-tabel__status--pabrik{background:#fff3df;color:#9a6a22}
+.antrian-listview--tabel .antrian-tabel__berat{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.antrian-listview--tabel .antrian-tabel__berat small{font-size:.76em;font-weight:500}
+.antrian-listview--tabel .antrian-item>summary::after{right:13px}
+.antrian-listview--tabel .antrian-item__rincian,.antrian-listview--tabel .pilihan{min-width:960px}
+@media(max-width:700px){.antrian-listview--tabel .antrian-tabel__kepala,.antrian-listview--tabel .antrian-item>summary{column-gap:10px;min-width:880px}.antrian-listview--tabel .antrian-item>summary{padding:9px 34px 9px 11px}.antrian-listview--tabel .antrian-tabel__kepala{padding-left:11px}.antrian-listview--tabel .antrian-tabel__sel{font-size:.8rem}.antrian-listview--tabel .antrian-item__rincian,.antrian-listview--tabel .pilihan{min-width:880px}}
