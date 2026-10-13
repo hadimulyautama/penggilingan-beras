@@ -28,6 +28,40 @@
   <span class="beranda-sambut__tanda" aria-hidden="true">HM</span>
 </section>
 
+{# Jalan pintas ditambahkan di Beranda agar pekerjaan utama langsung terlihat.
+   Semua ringkasan, kartu proses, pekerjaan, dan rincian gudang di bawah tetap
+   dipertahankan. Tujuan diambil dari menu yang memang tersedia untuk peran
+   ini, supaya pintasan tidak menjadi tautan ke halaman yang tak dapat dibuka. #}
+{% set pintas_beranda = {
+  'aksi': ('Antrian tunggu', 'Pekerjaan baru yang menunggu ditangani', '≡'),
+  'berjalan': ('Sedang berjalan', 'Mesin dan proses aktif', '◷'),
+  'stok': ('Stok', 'Gabah dan PK di gudang', '▦'),
+  'barang_keluar': ('Barang keluar', 'Perintah muat dan verifikasi', '⇥')
+} %}
+{% set ns_pintas = namespace(ada=false) %}
+{% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
+  {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
+    {% set ns_pintas.ada = true %}
+  {% endif %}
+{% endfor %}
+{% if ns_pintas.ada %}
+<section class="beranda-akses" aria-label="Akses cepat">
+  <div class="beranda-akses__judul"><strong>Akses cepat</strong><span>Menuju pekerjaan utama</span></div>
+  <div class="beranda-akses__grid">
+    {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
+      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
+        {% set info_pintas = pintas_beranda[kunci] %}
+        <a class="beranda-akses__item beranda-akses__item--{{ kunci }}" href="{{ alamat }}">
+          <span class="beranda-akses__ikon" aria-hidden="true">{{ info_pintas[2] }}</span>
+          <span><strong>{{ info_pintas[0] }}</strong><small>{{ info_pintas[1] }}</small></span>
+          <span class="beranda-akses__panah" aria-hidden="true">↗</span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <section class="beranda-ringkasan" aria-label="Ringkasan operasional">
 {% for blok in petak %}{{ br.petak_blok(blok, loop.first) }}{% endfor %}
 
