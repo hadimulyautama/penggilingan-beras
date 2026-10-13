@@ -111,7 +111,9 @@
         <path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
   {% endif %}
-  <a class="bar__merek" href="/" aria-label="PT Hadi Mulya Utama">PT Hadi Mulya Utama</a>
+  <span class="bar__merek" aria-label="{{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}">
+    {{ 'PT Hadi Mulya Utama' if layar == 'beranda' else self.judul()|striptags|trim }}
+  </span>
   <a class="bar__kabar" href="/kabar" aria-label="Berita dan notifikasi{% if KABAR %}, {{ KABAR }} belum dibaca{% endif %}">
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
