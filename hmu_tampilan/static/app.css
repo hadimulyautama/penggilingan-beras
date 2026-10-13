@@ -1960,9 +1960,9 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #d7b36a; }
    urutan informasinya tetap ditentukan tiap halaman. */
 body.terik .isi {
   background-color: #f2f4f6;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23596777' stroke-opacity='.095' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 43c13-8 23-8 34 0M29 48c-1 11 4 19 13 24 9-5 14-13 13-24M42 52v24m-8-17 8 5 8-5M145 31h31v29h-31zM140 31l20-14 21 14M154 60V44h13v16M33 148c10-10 20-10 30 0l-4 24H37zM31 148h34M42 158h13m65-8a16 16 0 1 0 32 0 16 16 0 1 0-32 0m10-16v32m-16-16h32m-66-84 10 6-6 10 10 6-6 10m92 53 9-9 9 9-9 9zM25 104h18m-9-9v18m146 72c8-7 16-7 24 0m-18 5 8 8 8-8'/%3E%3Ccircle cx='99' cy='43' r='8'/%3E%3Ccircle cx='92' cy='108' r='3'/%3E%3Ccircle cx='108' cy='120' r='2'/%3E%3Ccircle cx='80' cy='181' r='5'/%3E%3C/svg%3E");
+  background-image: url('/static/doodle-terang.svg?v=3');
   background-repeat: repeat;
-  background-size: 165px 165px;
+  background-size: 180px 180px;
   gap: 20px;
 }
 body.terik .bar {
@@ -2021,9 +2021,9 @@ body.terik a:hover { color: #394957; }
 /* Mode gelap: doodle berada di latar halaman, di belakang kartu. */
 body:not(.terik) .isi {
   background-color: var(--dasar);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23809184' stroke-opacity='.15' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 43c13-8 23-8 34 0M29 48c-1 11 4 19 13 24 9-5 14-13 13-24M42 52v24m-8-17 8 5 8-5M145 31h31v29h-31zM140 31l20-14 21 14M154 60V44h13v16M33 148c10-10 20-10 30 0l-4 24H37zM31 148h34M42 158h13m65-8a16 16 0 1 0 32 0 16 16 0 1 0-32 0m10-16v32m-16-16h32m-66-84 10 6-6 10 10 6-6 10m92 53 9-9 9 9-9 9zM25 104h18m-9-9v18m146 72c8-7 16-7 24 0m-18 5 8 8 8-8'/%3E%3Ccircle cx='99' cy='43' r='8'/%3E%3Ccircle cx='92' cy='108' r='3'/%3E%3Ccircle cx='108' cy='120' r='2'/%3E%3Ccircle cx='80' cy='181' r='5'/%3E%3C/svg%3E");
+  background-image: url('/static/doodle-gelap.svg?v=3');
   background-repeat: repeat;
-  background-size: 165px 165px;
+  background-size: 180px 180px;
 }
 body:not(.terik) .beranda-sambut--gabung .beranda-akses {
   background: var(--panel);
@@ -2031,6 +2031,39 @@ body:not(.terik) .beranda-sambut--gabung .beranda-akses {
   box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
 }
 body:not(.terik) .beranda-ringkasan .petak__sel { border-color: var(--garis); }
+body:not(.terik) .laci__isi {
+  background: linear-gradient(150deg, #263c2e 0%, #17251c 58%, #304734 100%);
+  border-color: #3d5442;
+}
+body:not(.terik) .pintu--kini { background: linear-gradient(105deg, #344c39, #263b2d); }
+body:not(.terik) .beranda-sambut,
+body:not(.terik) .op-hero {
+  background: linear-gradient(118deg, #354e3a 0%, #1e3024 62%, #405943 100%);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, .26);
+}
+body:not(.terik) .kartu,
+body:not(.terik) .padat,
+body:not(.terik) .benda,
+body:not(.terik) .jalan,
+body:not(.terik) .petak__sel,
+body:not(.terik) .kartu-lebar,
+body:not(.terik) .tindakan,
+body:not(.terik) .op-stat,
+body:not(.terik) .op-steps {
+  color: var(--tinta);
+  background: linear-gradient(145deg, #26382c 0%, #1a281f 72%, #223329 100%);
+  border-color: #3b5040;
+}
+body:not(.terik) .op-stat span:not(.op-icon),
+body:not(.terik) .op-step { color: var(--redup); }
+body:not(.terik) .op-step b {
+  background: linear-gradient(145deg, #344a39, #26392c);
+  color: #e7ede7;
+}
+body:not(.terik) .op-step:first-child b {
+  background: linear-gradient(145deg, #709b74, #4e7855);
+  color: #fff;
+}
 
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
 
