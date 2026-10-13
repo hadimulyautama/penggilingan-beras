@@ -770,6 +770,24 @@ body.putus-jaringan .bar { margin-top: 34px; }
   flex-shrink: 0;
 }
 
+/* Identitas produk menjadi jangkar visual di atas daftar navigasi, seperti
+   contoh beranda yang disetujui. Identitas akun tetap tampil terpisah. */
+.identitas-aplikasi {
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 7px 18px; margin-bottom: 10px;
+  border-bottom: 1px solid var(--garis-2);
+  color: var(--tinta); text-decoration: none; flex: none;
+}
+.identitas-aplikasi__logo {
+  width: 42px; height: 42px; border-radius: 13px;
+  display: grid; place-items: center;
+  background: #d7b36a; color: #282114;
+  font-size: 15px; font-weight: 700; letter-spacing: .03em;
+}
+.identitas-aplikasi strong, .identitas-aplikasi small { display: block; }
+.identitas-aplikasi strong { font-size: 15px; line-height: 1.25; }
+.identitas-aplikasi small { color: var(--redup-2); font-size: 12px; }
+
 /* ── Daftar pintu: SATU-SATUNYA bagian laci yang menggulir ──
    Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
    dan "Kabar" terpotong di tepi bawah layar — berikut List audit, Pengaturan,
@@ -807,6 +825,61 @@ body.putus-jaringan .bar { margin-top: 34px; }
 }
 .laci__kaki { margin-top: auto; padding-top: 14px; flex-shrink: 0; }
 .laci__kaki .btn { width: 100%; }
+
+/* Navigasi cepat empat tujuan mengikuti mockup pada ponsel. Menu lengkap
+   tetap ada di sidebar/laci sehingga semua halaman tetap mudah ditemukan. */
+.nav-bawah { display: none; }
+
+/* Tata letak beranda: sambutan, ringkasan, aktivitas, pekerjaan, lalu gudang.
+   Sumber angka dan rincian tetap berasal dari makro/data layar yang sama. */
+.beranda-sambut {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 26px 30px; border-radius: 20px;
+  background: linear-gradient(115deg, #314a38, #24362a 68%, #596646);
+  color: #f7f4e9; box-shadow: 0 12px 28px rgba(39, 55, 42, .12);
+}
+.beranda-sambut__atas {
+  color: #e1c47e; font: 500 12px/1.5 var(--mono);
+  letter-spacing: .09em; text-transform: uppercase;
+}
+.beranda-sambut h1 { margin: 5px 0 6px; font-size: clamp(24px, 3vw, 34px); }
+.beranda-sambut p { margin: 0; color: #d7dfd3; }
+.beranda-sambut__tanda {
+  display: grid; place-items: center; flex: none; width: 64px; height: 64px;
+  border: 1px solid rgba(239, 222, 174, .45); border-radius: 19px;
+  color: #e1c47e; font-weight: 700; font-size: 20px; letter-spacing: .06em;
+}
+.beranda-ringkasan { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
+.beranda-kolom { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .85fr); gap: 24px; align-items: start; }
+.beranda-aktivitas, .beranda-tindaklanjut { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.beranda-gudang { min-width: 0; }
+body.terik .beranda-sambut { background: linear-gradient(115deg, #314a38, #24362a 68%, #596646); }
+body.terik .identitas-aplikasi { color: #f4f5ef; border-color: #405347; }
+body.terik .identitas-aplikasi small { color: #c4d1c5; }
+
+@media (max-width: 899px) {
+  .isi { padding-bottom: calc(22px + 72px + env(safe-area-inset-bottom)); }
+  .nav-bawah {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    flex: none; z-index: 7; min-height: 62px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--garis-2);
+    background: var(--panel);
+  }
+  .nav-bawah a, .nav-bawah button {
+    min-width: 0; display: grid; align-content: center; justify-items: center; gap: 1px;
+    border: 0; border-radius: 10px; background: transparent;
+    color: var(--redup-2); font: 500 11px/1.3 var(--teks); text-decoration: none;
+  }
+  .nav-bawah span { font: 22px/1.1 var(--teks); }
+  .nav-bawah [aria-current="page"] { color: #567b59; background: #e8eee4; }
+  body.terik .nav-bawah { background: #fff; border-color: #dce3d8; }
+  body.terik .nav-bawah a, body.terik .nav-bawah button { color: #687568; }
+  body.terik .nav-bawah [aria-current="page"] { background: #e8eee4; color: #355c40; }
+  .beranda-sambut { padding: 22px 20px; border-radius: 18px; }
+  .beranda-sambut__tanda { width: 48px; height: 48px; border-radius: 15px; font-size: 16px; }
+  .beranda-kolom { grid-template-columns: 1fr; gap: 18px; }
+}
 
 .pintu {
   display: grid; grid-template-columns: 26px 1fr auto;
@@ -1805,6 +1878,33 @@ body.terik .laci__ukur:hover::after,
 body.terik .laci__ukur:focus-visible::after,
 body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
 
+/* Permukaan baru dipakai lintas layar: panel terang berlapis tipis, sudut
+   lebih lapang, dan hijau hanya untuk tindakan/keadaan aktif. Isi kartu dan
+   urutan informasinya tetap ditentukan tiap halaman. */
+body.terik .isi { background: #f1f3ee; }
+body.terik .bar {
+  background: rgba(255, 255, 255, .96);
+  border-color: #dce3d8;
+  box-shadow: 0 2px 10px rgba(39, 55, 42, .035);
+}
+body.terik .kartu, body.terik .padat, body.terik .benda,
+body.terik .jalan, body.terik .petak__sel, body.terik .kartu-lebar {
+  background: #fff; border-color: #dce3d8; border-radius: 16px;
+}
+body.terik .kartu, body.terik .padat, body.terik .benda,
+body.terik .jalan, body.terik .petak__sel {
+  box-shadow: 0 3px 12px rgba(39, 55, 42, .055);
+}
+body.terik .tindakan {
+  background: #fff; border: 1px solid #dce3d8; border-radius: 14px;
+}
+body.terik .tindakan:hover { background: #f6f7f2; border-color: #c3d0c0; }
+body.terik .kartu--sorot { border-color: #8ca58a; }
+body.terik .lbl { color: #667365; }
+body.terik .fld { border-color: #d5ddd3; background: #fff; border-radius: 12px; }
+body.terik .btn--utama { background: #355c40; border-color: #355c40; color: #fff; }
+body.terik .btn--utama:hover { background: #294a33; border-color: #294a33; }
+
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
 
    Layar Riwayat sosoh (keputusan pemilik 2 Oktober 2026). Yang digambar BUKAN
@@ -1980,6 +2080,9 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
        tempat, bukan muncul. */
     animation: none;
   }
+  .identitas-aplikasi { padding: 10px 9px 22px; margin-bottom: 14px; }
+  .laci__kepala { border: 0; padding: 0 9px 15px; margin-bottom: 10px; }
+  .nav-bawah { display: none; }
 
   /* Pegangan resize berada di batas sidebar, bukan di alur navigasi. */
   .laci__ukur {
@@ -1999,8 +2102,8 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
      Padding yang lentur menjaga isi tetap nyaman dibaca di monitor besar,
      sementara kotak scroll tetap sampai ke tepi jendela. */
   .isi {
-    padding: 30px clamp(28px, 3.2vw, 64px) 52px;
-    gap: 22px;
+    padding: 28px clamp(28px, 3.2vw, 64px) 52px;
+    gap: 24px;
   }
   .isi > form, .isi > .panel, .isi > .kartu-lebar {
     width: 100%; max-width: 1480px; margin-left: auto; margin-right: auto;
@@ -2016,4 +2119,11 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
     display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
     align-items: start; gap: 18px;
   }
+  .beranda-sambut, .beranda-ringkasan, .beranda-kolom, .beranda-gudang {
+    width: 100%; max-width: 1480px; margin-left: auto; margin-right: auto;
+  }
+  .beranda-ringkasan { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .beranda-kolom { grid-template-columns: minmax(0, 1.45fr) minmax(340px, .8fr); gap: 26px; }
+  .beranda-aktivitas, .beranda-tindaklanjut { gap: 18px; }
+  .isi > .beranda-sambut { padding: 32px 38px; }
 }

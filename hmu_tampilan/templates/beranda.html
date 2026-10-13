@@ -19,6 +19,16 @@
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
+<section class="beranda-sambut" aria-labelledby="judul-beranda">
+  <div>
+    <span class="beranda-sambut__atas">PT Hadi Mulya Utama · Operasional pabrik</span>
+    <h1 id="judul-beranda">Selamat datang, {{ akun.nama.split()[0] }}</h1>
+    <p>Ringkasan proses dan pekerjaan yang perlu ditangani.</p>
+  </div>
+  <span class="beranda-sambut__tanda" aria-hidden="true">HM</span>
+</section>
+
+<section class="beranda-ringkasan" aria-label="Ringkasan operasional">
 {% for blok in petak %}{{ br.petak_blok(blok, loop.first) }}{% endfor %}
 
 {# Operator yang belum diberi gudang. Tanpa baris ini Beranda-nya tampil
@@ -34,6 +44,7 @@
   </div>
 </div>
 {% endif %}
+</section>
 
 {# ── YANG SEDANG BERJALAN, VERSI PADAT ──
    Dulu hanya pengeringan yang sampai ke sini, dan itu membuat Beranda
@@ -54,8 +65,8 @@
    ke-5 menjelang app meja dihapus). Bergerbang `blok_perhatian`, jadi Operasi
    Gudang 2 — yang tak punya `/keputusan` maupun `/gudang/<gid>` — tidak
    menggambarnya sama sekali. #}
-{% if blok_perhatian %}{{ br.blok_perhatian(perhatian) }}{% endif %}
-
+<div class="beranda-kolom">
+<section class="beranda-aktivitas" aria-label="Aktivitas">
 {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/") }}
 {{ benda.blok("Transit", transit, rapat=True, alamat="/") }}
 {% if not berjalan and not transit %}
@@ -64,12 +75,14 @@
     <div class="kosong-tipis">Tidak ada mesin yang menyala.</div>
   </div>
 {% endif %}
+</section>
 
 {# Laporan dan Pengaturan sudah ada di laci sejak bilah bawah diganti; dua
    pintu ke tempat yang sama adalah dua tempat di kepala orang. Yang tersisa
    satu, dan yang satu ini tinggal karena ia membawa jumlah — pintu laci tak
    memberi tahu berapa yang menunggu tanpa dibuka dulu. #}
-<div>
+<section class="beranda-tindaklanjut">
+  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian) }}{% endif %}
   <span class="lbl">Pekerjaan</span>
   {{ br.pintu_antrean(MENUNGGU) }}
   {# Kerja MEJA berdiri sejajar kerja gudang, dan hanya di app yang MEMPUNYAI
@@ -115,6 +128,7 @@
               (n_mutu ~ " belum dicatat") if MUTU else "semua sudah dinilai",
               br.ikon_centang(), MUTU, gaya="margin-top:8px") }}
   {% endif %}
+</section>
 </div>
 
 {# ── SATU BARIS PER GUDANG ──
@@ -122,7 +136,7 @@
    gudang itu sendiri; barisnya cuma pintu. Hanya untuk pemegang KEDUA gudang:
    operator sudah melihat gudangnya di petak teratas, dan baris kedua ke tempat
    yang sama adalah dua tempat di kepala orang. #}
-{{ br.blok_gudang(gudang) }}
+<section class="beranda-gudang">{{ br.blok_gudang(gudang) }}</section>
 
 {# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat
    di layar lain berarti orang kehilangan tempatnya — dan yang ia tekan tadi
