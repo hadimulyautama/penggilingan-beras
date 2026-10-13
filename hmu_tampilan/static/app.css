@@ -1006,6 +1006,40 @@ body.terik .pintu:hover { background: #f2f4f6; }
 body.terik .pintu--kini { background: #e9eef3; color: #202832; box-shadow: inset 3px 0 #566575; }
 body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
 
+/* Semua banner judul memakai permukaan putih yang sama pada mode terang.
+   Mode gelap tetap memakai banner hijau melalui token --kulit-banner. */
+body.terik .isi .beranda-sambut,
+body.terik .op-hero,
+body.terik .riwayat-hero,
+body.terik #retur-ui .rt-hero {
+  background: #fff;
+  border: 1px solid #dce2e8;
+  color: #202832;
+  box-shadow: 0 5px 18px rgba(36, 48, 60, .06);
+}
+body.terik .beranda-sambut::after,
+body.terik .op-hero::after,
+body.terik .riwayat-hero::after,
+body.terik #retur-ui .rt-hero::after { display: none; }
+body.terik .isi .beranda-sambut h1,
+body.terik .op-hero h1,
+body.terik .riwayat-hero h1,
+body.terik #retur-ui .rt-hero h1 { color: #202832; }
+body.terik .beranda-sambut__atas,
+body.terik .beranda-sambut p,
+body.terik .op-eyebrow,
+body.terik .op-hero p,
+body.terik .riwayat-eyebrow,
+body.terik .riwayat-hero p,
+body.terik #retur-ui .rt-hero p { color: #596777; }
+body.terik .op-eyebrow i,
+body.terik .riwayat-eyebrow i { background: #596777; box-shadow: 0 0 0 5px #59677718; }
+body.terik .beranda-sambut__tanda {
+  background: #f2f4f6;
+  border-color: #dce2e8;
+  color: #202832;
+}
+
 @media (max-width: 899px) {
   .beranda-sambut { padding: 24px 22px; border-radius: 22px; }
   .beranda-sambut--gabung { gap: 17px; }
