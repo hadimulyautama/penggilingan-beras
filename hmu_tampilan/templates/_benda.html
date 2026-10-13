@@ -241,7 +241,7 @@
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
         {% if b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
@@ -269,7 +269,7 @@
           </details>
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
@@ -292,7 +292,7 @@
           </details>
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
-            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
@@ -317,7 +317,7 @@
              tak terkena: `.padat--diam` grid. #}
           {% if listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
-            <summary>{% if tabel %}{{ tabel_antrean(b) }}{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{{ tabel_antrean(b) }}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
           </details>
           {% else %}
