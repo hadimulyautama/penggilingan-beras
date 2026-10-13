@@ -93,8 +93,9 @@
 {% endif %}
 {% endblock %}
 
+<main class="isi">
 {% if akun %}
-<header class="bar">
+<header class="bar" aria-label="Navigasi aplikasi">
   {# Tombol kembali menang atas menu: kalau halaman ini punya induk, yang
      dicari orang lebih dulu adalah jalan pulang, bukan daftar tujuan lain. #}
   {% if kembali %}
@@ -110,13 +111,23 @@
         <path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
   {% endif %}
+  <a class="bar__merek" href="/" aria-label="PadiFlow">
+    <img src="/static/ikon-192.png?v={{ VERSI }}" alt="">
+  </a>
+  <a class="bar__kabar" href="/kabar" aria-label="Berita dan notifikasi{% if KABAR %}, {{ KABAR }} belum dibaca{% endif %}">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
+      <path d="M10 21h4"/>
+    </svg>
+    {% if KABAR %}<span class="bar__kabar-jml{% if KABAR_MERAH %} bar__kabar-jml--merah{% endif %}">{{ KABAR if KABAR < 100 else '99+' }}</span>{% endif %}
+  </a>
 </header>
 {% endif %}
 
 {# Kaki DI DALAM `.isi`, bukan sesudahnya. `.isi` kini satu-satunya bagian
    yang menggulung; apa pun yang berada di luarnya menjadi pita tetap yang
    selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
-<main class="isi">
 {% block isi %}{% endblock %}
 {% block kaki %}{% endblock %}
 </main>

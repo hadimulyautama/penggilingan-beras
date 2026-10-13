@@ -922,6 +922,90 @@ body.terik .laci__kaki .btn--putih {
 }
 body.terik .laci__kaki .btn--putih:hover { background: rgba(255,255,255,.16); }
 
+/* Bilah ringkas PadiFlow berada di dalam area gulir: saat isi halaman
+   digulir, bilah ikut bergerak. Pada desktop navigasi sudah menetap di
+   sidebar, jadi bilah atas tidak ditampilkan. */
+.bar {
+  position: relative;
+  flex-shrink: 0;
+  min-height: calc(62px + env(safe-area-inset-top));
+  margin: -15px -16px 0;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  border: 0;
+  border-radius: 0 0 22px 22px;
+  color: #fff;
+  background: linear-gradient(115deg, #596777, #3f4b58 68%, #737f8c);
+  box-shadow: 0 8px 22px rgba(36, 48, 60, .16);
+}
+.bar__balik, .bar__menu, .bar__kabar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 13px;
+  color: #fff;
+  background: rgba(255,255,255,.12);
+  text-decoration: none;
+  cursor: pointer;
+}
+.bar__balik:hover, .bar__menu:hover, .bar__kabar:hover { background: rgba(255,255,255,.22); }
+.bar__merek {
+  position: absolute;
+  left: 50%;
+  top: calc(10px + env(safe-area-inset-top));
+  width: 42px;
+  height: 42px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.14);
+}
+.bar__merek img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bar__kabar { position: relative; margin-left: auto; }
+.bar__kabar-jml {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid #465361;
+  border-radius: 999px;
+  background: #f1c66d;
+  color: #382b14;
+  font: 700 10px/14px var(--teks);
+  text-align: center;
+}
+.bar__kabar-jml--merah { background: #e57b70; color: #fff; }
+body:not(.terik) .bar { background: var(--kulit-banner); }
+body:not(.terik) .bar__kabar-jml { border-color: #263c2e; }
+/* Tanpa pita di atas, bilah mengisi area aman perangkat. Jika pita ada,
+   pita itu sendiri yang sudah mengisi area tersebut. */
+.bingkai > .isi:first-child .bar { margin-top: calc(-15px - env(safe-area-inset-top)); }
+.pita-uji ~ .isi .bar, .pita-samar ~ .isi .bar {
+  min-height: 62px;
+  padding-top: 10px;
+}
+body.terik .laci__isi {
+  background: #fff;
+  border-color: #dce2e8;
+  color: #202832;
+}
+body.terik .laci__kepala { border-color: #e2e7ec; }
+body.terik .laci-seksi__judul { color: #687585; }
+body.terik .laci__isi .bar__nama { color: #202832; }
+body.terik .laci__isi .bar__sub { color: #657282; }
+body.terik .pintu { color: #34404c; }
+body.terik .pintu:hover { background: #f2f4f6; }
+body.terik .pintu--kini { background: #e9eef3; color: #202832; box-shadow: inset 3px 0 #566575; }
+body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
+
 @media (max-width: 899px) {
   .beranda-sambut { padding: 24px 22px; border-radius: 22px; }
   .beranda-sambut--gabung { gap: 17px; }
@@ -2233,6 +2317,8 @@ body:not(.terik) .op-step:first-child b {
    ruang mendatar untuk sidebar, dan navigasi harus terjangkau ibu jari. */
 @media (min-width: 900px) {
   :root { --sidebar: 280px; }
+
+  .bar { display: none; }
 
   /* Hanya digeser pada halaman yang SUNGGUH punya laci — `:has()` dipakai
      juga di `body:has(.pil-versi)` di atas, bukan teknik baru di berkas
