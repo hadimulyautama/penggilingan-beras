@@ -263,6 +263,7 @@
 {% block kaki %}
 {% if BOLEH_PERINTAH or BOLEH_MUAT %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
-          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"
+          data-tiket="{{ tiket }}"></script>
 {% endif %}
 {% endblock %}

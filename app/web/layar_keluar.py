@@ -179,6 +179,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
         # layar Stok sejak 26 September.
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
+        tiket=request.query_params.get("tiket") or "",
         # Dua syarat, bukan satu, sebab jangkauannya memang berbeda:
         #   · "Batalkan perintah" hanya untuk yang BELUM dimuat — yang truknya
         #     sudah berangkat tak bisa dibatalkan, barangnya sudah pergi;

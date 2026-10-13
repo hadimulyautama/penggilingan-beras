@@ -868,6 +868,18 @@
             return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
           }).join("");
         if (dipilih) { s.value = dipilih; }
+        /* Tiket dari tautan aplikasi Timbangan dibawa sampai ke lembar ini.
+           Pilihan tetap menunggu transaksi barang keluar dipilih lebih dulu;
+           setelah daftar tiket terfilter menurut pembeli, baru pilih id yang
+           dibawa URL bila tiket itu memang ada di daftar yang sah. */
+        var tagAksi = document.querySelector('script[data-tiket]');
+        var tiketDibawa = tagAksi && tagAksi.dataset.tiket;
+        if (f.name === "tiket" && tiketDibawa && !dipilih) {
+          var cocokTiket = Array.prototype.some.call(s.options, function (o) {
+            return o.value === tiketDibawa;
+          });
+          if (cocokTiket) { s.value = tiketDibawa; }
+        }
         /* Daftar bergantung yang isinya TEPAT SATU sudah menjawab dirinya
            sendiri: proses yang memakai satu silo tak menyisakan pilihan apa
            pun untuk dibuat. Menyuruh orang memilih satu-satunya kemungkinan
@@ -1271,9 +1283,11 @@
   function lupakanBuka() {
     if (!window.history || !history.replaceState) { return; }
     var u = new URL(location.href);
-    if (!u.searchParams.has("buka") && !u.searchParams.has("nilai")) { return; }
+    if (!u.searchParams.has("buka") && !u.searchParams.has("nilai") &&
+        !u.searchParams.has("tiket")) { return; }
     u.searchParams.delete("buka");
     u.searchParams.delete("nilai");
+    u.searchParams.delete("tiket");
     history.replaceState(history.state, "", u.pathname + u.search + u.hash);
   }
 
