@@ -304,6 +304,24 @@ class BerasKeSilo(Base, TimestampMixin):
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
 
 
+class HasilSampingKeSilo(Base, TimestampMixin):
+    """Pemindahan stok menir/reject hasil sosoh ke silo Gudang 2."""
+
+    __tablename__ = "hasil_samping_ke_silo"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    polishing_process_id: Mapped[int] = mapped_column(
+        ForeignKey("polishing_process.id"), nullable=False)
+    jenis: Mapped[str] = mapped_column(String(20), nullable=False)
+    silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)
+    berat_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    tanggal: Mapped[date] = mapped_column(Date, nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+
+
 class PolishingProcess(Base, TimestampMixin):
     """Proses penyosohan (PK silo → beras putih). Kode: POL-YYYYMMDD-NN.
 

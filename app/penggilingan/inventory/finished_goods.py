@@ -577,7 +577,18 @@ async def hitung_stok_byproduct_total(
         .where(OutgoingItem.item_type == "finished_goods",
                OutgoingItem.product_sku_id.in_(sku_ids), milik_keluar)
     )).scalar_one())
-    return curah + masuk_karung - keluar_karung
+    total = curah + masuk_karung - keluar_karung
+    if jenis in {"menir", "reject"}:
+        from app.penggilingan.gudang2.models import HasilSampingKeSilo
+        milik_pindah = (HasilSampingKeSilo.jasa_id.is_(None) if jasa_id is None
+                        else HasilSampingKeSilo.jasa_id == jasa_id)
+        pindah = float((await db.execute(
+            select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
+            .where(HasilSampingKeSilo.jenis == jenis,
+                   milik_pindah)
+        )).scalar_one())
+        total -= pindah
+    return total
 
 
 async def hitung_stok_finished_goods(

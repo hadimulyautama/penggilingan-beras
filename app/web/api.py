@@ -912,6 +912,30 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
                   "type": "number"},
              ]},
+            {"id": "masukkan_menir_silo", "label": "📤 Masukkan menir ke silo",
+             "post": "/api/actions/masukkan-menir-silo",
+             "hint": "Hanya stok menir yang tersedia; pemilik stok dibawa ke silo.",
+             "fields": [
+                 {"name": "pemilik", "label": "Pemilik stok menir", "type": "remote",
+                  "source": "/api/actions/hasil-samping-pemilik-tersedia?jenis=menir",
+                  "auto_satu": True, "kosong": "Belum ada stok menir yang tersedia."},
+                 {"name": "silo", "label": "Silo tujuan", "type": "remote",
+                  "source": "/api/actions/silo-hasil-samping-g2?jenis=menir",
+                  "auto_satu": True, "kosong": "Belum ada silo yang menerima menir."},
+                 {"name": "berat_kg", "label": "Berat yang masuk silo (kg)", "type": "number"},
+             ]},
+            {"id": "masukkan_reject_silo", "label": "📤 Masukkan reject ke silo",
+             "post": "/api/actions/masukkan-reject-silo",
+             "hint": "Hanya stok reject yang tersedia; pemilik stok dibawa ke silo.",
+             "fields": [
+                 {"name": "pemilik", "label": "Pemilik stok reject", "type": "remote",
+                  "source": "/api/actions/hasil-samping-pemilik-tersedia?jenis=reject",
+                  "auto_satu": True, "kosong": "Belum ada stok reject yang tersedia."},
+                 {"name": "silo", "label": "Silo tujuan", "type": "remote",
+                  "source": "/api/actions/silo-hasil-samping-g2?jenis=reject",
+                  "auto_satu": True, "kosong": "Belum ada silo yang menerima reject."},
+                 {"name": "berat_kg", "label": "Berat yang masuk silo (kg)", "type": "number"},
+             ]},
             # ── Beras jadi bahan silo — dua pintu (keputusan pemilik 8 Oktober 2026) ──
             #
             # "Silo Beras... bisa diisi beras premium, super, maupun medium...
@@ -1427,7 +1451,8 @@ for _a in (
     "tambah_silo_penyosohan", "catat_packing", "catat_broken",
     # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
     # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
-    "masukkan_broken_silo", "catat_beras_timbang_masuk",
+    "masukkan_broken_silo", "masukkan_menir_silo", "masukkan_reject_silo",
+    "catat_beras_timbang_masuk",
     "catat_broken_timbang_masuk",
     # Formulir kepemilikan dibuka dari kartu stok terkait; pengambilan jasa
     # dibuka dari halaman Barang Keluar.
@@ -1502,6 +1527,7 @@ _ACTION_WH = {
     # barang jadi memang berdiri di sana, dan dari sanalah ia berangkat.
     "catat_packing": "g2", "catat_bekatul": "g2", "catat_broken": "g2",
     "masukkan_broken_silo": "g2", "masukkan_beras_silo": "g2",
+    "masukkan_menir_silo": "g2", "masukkan_reject_silo": "g2",
     "pindah_kepemilikan_produk": "g2",
     "beli_kemasan": "g2", "pindah_kepemilikan_karung": "g2",
     # Rantai barang keluar berperintah. SELURUHNYA g2, termasuk yang dikerjakan
@@ -2234,7 +2260,7 @@ async def pk_transfer_list(user: User = Depends(pengguna_aksi)) -> list[dict]:
 async def polishing_active(user: User = Depends(pengguna_aksi)) -> list[dict]:
     _require(await _is_g2_operator(user))
     from sqlalchemy import select
-    from app.models import PolishingProcess
+    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
     async with SessionLocal() as db:
         procs = (
             await db.execute(
@@ -4509,6 +4535,107 @@ class MasukkanBrokenSiloReq(BaseModel):
     proses: str      # "<kode_pol>|<jasa_id atau kosong>", dari picker di atas
     silo: str        # nama silo broken, mis. "C"
     berat_kg: Positif
+
+
+class MasukkanHasilSampingSiloReq(BaseModel):
+    pemilik: str
+    silo: str
+    berat_kg: Positif
+
+
+@router.get("/actions/hasil-samping-pemilik-tersedia")
+async def hasil_samping_pemilik_tersedia(jenis: str = "menir",
+                                         user: User = Depends(pengguna_aksi)) -> list[dict]:
+    _require(await _is_g2_operator(user))
+    jenis = jenis.strip().lower()
+    if jenis not in {"menir", "reject"}:
+        raise HTTPException(400, "Jenis stok harus Menir atau Reject.")
+    from sqlalchemy import select
+    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
+    from app.services.jasa import nama_pemilik
+    from app.services.stok import stok_produk
+
+    async with SessionLocal() as db:
+        owners = set((await db.execute(select(PolishingProcess.jasa_id))).scalars().all())
+        owners.update((await db.execute(
+            select(FinishedGoodsStock.jasa_id).join(
+                ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+            .where(ProductSku.kategori == jenis)
+        )).scalars().all())
+        options = []
+        for owner in owners:
+            cards = await stok_produk(db, jasa_id=owner)
+            card = next((c for c in cards if c.jenis == jenis), None)
+            available = float(card.sisa_kg) if card else 0.0
+            if available <= 0.5:
+                continue
+            owner_name = await nama_pemilik(db, owner)
+            label = "Pabrik" if owner is None else owner_name or f"Pemilik #{owner}"
+            options.append({"value": f"pabrik" if owner is None else str(owner),
+                            "label": f"{label} · {_rp(available)} kg tersedia"})
+    return sorted(options, key=lambda x: (x["value"] != "pabrik", x["label"]))
+
+
+@router.get("/actions/silo-hasil-samping-g2")
+async def silo_hasil_samping_g2(jenis: str = "menir",
+                                user: User = Depends(pengguna_aksi)) -> list[dict]:
+    _require(await _is_g2_operator(user))
+    jenis = jenis.strip().lower()
+    if jenis not in {"menir", "reject"}:
+        raise HTTPException(400, "Jenis silo tidak valid.")
+    from sqlalchemy import select
+    from app.models import Silo
+    from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
+    from app.penggilingan.silo_policy import boleh_masuk
+
+    async with SessionLocal() as db:
+        wid = await _g2_warehouse_id(db)
+        silos = (await db.execute(
+            select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
+            .order_by(Silo.nama_silo))).scalars().all()
+        options = []
+        for silo in silos:
+            if not boleh_masuk(silo, jenis, "g2"):
+                continue
+            kg = await hitung_stok_silo(db, silo.id)
+            options.append({"value": silo.nama_silo.replace("Silo ", ""),
+                            "label": f"{silo.nama_silo} · {_rp(kg)} kg" if kg
+                                     else f"{silo.nama_silo} · kosong"})
+    return options
+
+
+async def _act_masukkan_hasil_samping(req: MasukkanHasilSampingSiloReq,
+                                      jenis: str, user: User) -> dict:
+    from hmu_identitas import peran as P
+    _require((await _is_g2_operator(user) and not can_see_financials(user))
+             or P.super_saja(user.role))
+    owner = (req.pemilik or "").strip()
+    if owner != "pabrik" and not owner.isdigit():
+        raise HTTPException(422, "Pilih pemilik stok yang valid.")
+    from app.penggilingan.gudang2.service import Gudang2Error, masukkan_hasil_samping_ke_silo
+    async with SessionLocal() as db:
+        u = await db.get(User, user.id)
+        try:
+            result = await masukkan_hasil_samping_ke_silo(
+                db, user=u, jenis=jenis,
+                jasa_id=None if owner == "pabrik" else int(owner),
+                nama_silo=req.silo.strip(), berat_kg=float(req.berat_kg))
+        except Gudang2Error as e:
+            raise _err(e, f"Gagal memasukkan {jenis} ke silo.")
+    return {"ok": True, "pesan": f"✓ {result['moved_kg']:,.2f} kg {jenis} masuk "
+            f"ke {result['nama_silo']}.".replace(",", ".")}
+
+
+@router.post("/actions/masukkan-menir-silo")
+async def act_masukkan_menir_silo(req: MasukkanHasilSampingSiloReq,
+                                 user: User = Depends(pengguna_aksi)) -> dict:
+    return await _act_masukkan_hasil_samping(req, "menir", user)
+
+
+@router.post("/actions/masukkan-reject-silo")
+async def act_masukkan_reject_silo(req: MasukkanHasilSampingSiloReq,
+                                   user: User = Depends(pengguna_aksi)) -> dict:
+    return await _act_masukkan_hasil_samping(req, "reject", user)
 
 
 @router.post("/actions/masukkan-broken-silo")

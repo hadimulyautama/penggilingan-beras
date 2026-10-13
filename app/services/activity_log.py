@@ -34,6 +34,7 @@ GUDANG_TABEL: dict[str, str] = {
     # Gudang 2 — penyosohan
     "pk_purchase_batches": G2, "pk_purchase_verifications": G2,
     "pk_gudang2_intakes": G2, "pk_tumpukan_to_silo": G2,
+    "hasil_samping_ke_silo": G2,
     "polishing_process": G2, "polishing_output_logs": G2, "polishing_silo_usage": G2,
     "packaging_purchases": G2, "finished_goods_stock": G2,
     "byproduct_stock": G2, "byproduct_prices": G2,

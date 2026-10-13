@@ -36,6 +36,7 @@ from app.penggilingan.gudang1.models import (
 from app.penggilingan.gudang2.models import (
     BerasKeSilo,
     BrokenKeSilo,
+    HasilSampingKeSilo,
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,

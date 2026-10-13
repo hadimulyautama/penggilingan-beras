@@ -449,6 +449,12 @@
            href="/stok-produk?buka=masukkan_broken_silo"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
+      {% if k.jenis in ("menir", "reject") and k.sisa_kg > 0.5 and boleh_catat %}
+        {% set aksi_silo = "masukkan_menir_silo" if k.jenis == "menir" else "masukkan_reject_silo" %}
+        <a class="btn btn--kecil"
+           href="/stok-produk?buka={{ aksi_silo }}"
+           style="margin-top:8px">📤 Masukkan ke silo</a>
+      {% endif %}
     </div>
 
     {# ── Dua keadaan yang BERLAWANAN ARAH, dua kalimat yang berbeda ──

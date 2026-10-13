@@ -1358,7 +1358,7 @@ async def stok_produk(db: AsyncSession, *,
     tetap pesanan BARU — lihat docstring `Jasa`), dan kartu stoknya wajib
     menyatu jadi SATU seksi, bukan pecah sebanyak jumlah pesanannya.
     """
-    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.gudang2.models import HasilSampingKeSilo, PolishingProcess
     from sqlalchemy import func
 
     from app.penggilingan.inventory.finished_goods import (
@@ -1559,6 +1559,16 @@ async def stok_produk(db: AsyncSession, *,
         if tipe == "byproduct_curah":
             keluar_curah[j] = keluar_curah.get(j, 0.0) + float(kg)
 
+    pindah_silo: dict[str, float] = {}
+    for jenis_silo, kg in (await db.execute(
+        select(HasilSampingKeSilo.jenis,
+               func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
+        .where(HasilSampingKeSilo.jenis.in_(("menir", "reject")),
+               milik_proc(HasilSampingKeSilo))
+        .group_by(HasilSampingKeSilo.jenis)
+    )).all():
+        pindah_silo[jenis_silo] = float(kg)
+
     # ── "Sudah dicatat", per PROSES — bukan per pemilik SEKARANG ──
     #
     # Laporan lapangan 7 Oktober 2026, langsung sesudah "Pindah kepemilikan"
@@ -1708,7 +1718,7 @@ async def stok_produk(db: AsyncSession, *,
             # beras/menir/reject) tak boleh membuatnya seolah belum pernah
             # dikemas sama sekali. Lihat catatan panjang di dekat deklarasinya.
             curah = h - dikemas_proc.get(jenis, 0.0) - keluar_curah.get(jenis, 0.0)
-        sisa = punya_rumah + curah
+        sisa = punya_rumah + curah - pindah_silo.get(jenis, 0.0)
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue
         ukuran_auto, jumlah_auto, dikemas_auto, curah_auto = _packing_otomatis(
@@ -1725,7 +1735,7 @@ async def stok_produk(db: AsyncSession, *,
         # daftar yang menyusut sendiri tak pernah jadi panjang. Beras yang
         # keluar lebih dulu adalah beras yang disosoh lebih dulu, jadi yang
         # MASIH di gudang datang dari penyosohan yang PALING BARU.
-        rinci = _fifo_sisa(baris_hasil, k)
+        rinci = _fifo_sisa(baris_hasil, k + pindah_silo.get(jenis, 0.0))
 
         kartu.append(KartuProduk(
             jenis=jenis, nama=nama_produk(jenis), hasil_kg=h,
