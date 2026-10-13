@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block judul %}Barang Retur{% endblock %}
-{% block kepala_ekstra %}
-<link rel="stylesheet" href="/static/retur.css?v={{ VERSI }}">
-{% endblock %}
 {% block isi %}
+{# Navigasi aplikasi mengganti isi .bingkai tanpa menyentuh <head>. Muat CSS
+   dari isi halaman agar desain tetap aktif saat dibuka melalui menu. #}
+<style>@import url('/static/retur.css?v={{ VERSI }}');</style>
 <div id="retur-ui">
   <section class="rt-hero">
     <div class="rt-eyebrow"><i></i> PENERIMAAN BARANG KEMBALI</div>
