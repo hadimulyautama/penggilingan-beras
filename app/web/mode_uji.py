@@ -107,6 +107,12 @@ DIPERTAHANKAN = frozenset({
 })
 
 KALIMAT = "HAPUS DATA UJI"
+# Pengosongan basis data produksi melepas kaitan tiket nyata; kalimat ini
+# sengaja tidak sama dengan konfirmasi untuk data uji biasa.
+KALIMAT_LEPAS = "LEPASKAN TIKET NYATA DAN HAPUS DATA"
+# Kalimat konfirmasi isi ulang berbeda dari penghapusan saja agar dua tombol
+# yang berdampingan tidak tertukar karena orang sudah hafal mengetiknya.
+KALIMAT_ULANG = "ULANGI DATA UJI"
 
 
 def _tabel_dihapus() -> list[str]:
@@ -158,11 +164,15 @@ async def _jumlah_baris() -> list[tuple[str, int]]:
 async def _konteks(akun, **tambahan):
     async with SessionLocal() as db:
         tautan = await tautan_masuk(db)
+        from app.services.data_uji import tiket_sungguhan_tertaut
+        tiket_tertaut = await tiket_sungguhan_tertaut(db, tautan)
     return dict(akun=akun, kembali="/pengaturan", baris=await _jumlah_baris(),
                 dipertahankan=sorted(DIPERTAHANKAN), kalimat=KALIMAT,
                 kalimat_ulang=KALIMAT_ULANG,
                 dilepas=[t for t in tautan if not t["wajib"]],
-                penghalang=[t for t in tautan if t["wajib"]], **tambahan)
+                penghalang=[t for t in tautan if t["wajib"]],
+                tiket_tertaut=tiket_tertaut,
+                kalimat_lepas=KALIMAT_LEPAS, **tambahan)
 
 
 @router.get("/pengaturan/mode-uji", response_class=HTMLResponse)
@@ -173,7 +183,7 @@ async def halaman(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     return render(request, "mode_uji.html", **await _konteks(akun))
 
 
-async def _kosongkan() -> str | None:
+async def _kosongkan(*, lepas_tiket_sungguhan: bool = False) -> str | None:
     """Hapus seluruh catatan pekerjaan. → kalimat galat, atau None bila beres.
 
     Dipisah dari rutenya karena DUA tombol memakainya: "Hapus data uji" dan
@@ -219,7 +229,7 @@ async def _kosongkan() -> str | None:
 
         tautan = await tautan_masuk(db)
         tertaut = await tiket_sungguhan_tertaut(db, tautan)
-        if tertaut:
+        if tertaut and not lepas_tiket_sungguhan:
             return (
                 f"Dibatalkan: ada {tertaut} tiket timbang sungguhan yang sudah "
                 "dibukukan di basis data ini. Menghapus di sini membuang "
@@ -330,20 +340,17 @@ async def hapus(request: Request, akun: ProduksiAkun = Depends(butuh_akun)):
     if not akun.is_super:
         raise HTTPException(403, "Hanya Admin ke atas.")
     form = await request.form()
-    if (form.get("kalimat") or "").strip() != KALIMAT:
+    kalimat = (form.get("kalimat") or "").strip()
+    lepas_tiket = kalimat == KALIMAT_LEPAS
+    if kalimat != KALIMAT and not lepas_tiket:
         return render(request, "mode_uji.html",
-                      **await _konteks(akun, galat=f"Ketik persis: {KALIMAT}"))
+                      **await _konteks(akun, galat=(
+                          f"Ketik persis: {KALIMAT} atau {KALIMAT_LEPAS}")))
 
-    tertahan = await _kosongkan()
+    tertahan = await _kosongkan(lepas_tiket_sungguhan=lepas_tiket)
     if tertahan:
         return render(request, "mode_uji.html", **await _konteks(akun, galat=tertahan))
     return RedirectResponse("/pengaturan?uji=bersih", status_code=303)
-
-
-#: Kalimat kedua, dan sengaja BERBEDA dari yang pertama. Dua tombol yang
-#: menuntut kalimat sama adalah dua tombol yang bisa tertukar justru saat
-#: orangnya sudah hafal mengetiknya.
-KALIMAT_ULANG = "ULANGI DATA UJI"
 
 
 @router.post("/pengaturan/mode-uji/ulangi")

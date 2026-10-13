@@ -119,6 +119,26 @@
     bukan saat menguji.
   </p>
 </div>
+{% if tiket_tertaut %}
+<div class="kartu" style="border-color:var(--bahaya)">
+  <p style="margin:0 0 6px;color:var(--bahaya)"><b>Pengosongan akan melepas {{ tiket_tertaut }} tautan tiket timbang sungguhan.</b></p>
+  <p class="bantu" style="margin:0">
+    Catatan Produksi di atas akan dihapus. Tiket dan hasil timbang tetap ada
+    di aplikasi Timbangan, tetapi terlihat belum dibukukan lagi dan bisa
+    diproses ulang. Gunakan hanya jika Anda memang ingin memulai ulang seluruh
+    catatan Produksi.
+  </p>
+</div>
+<form method="post" action="/pengaturan/mode-uji" class="grup">
+  <input type="hidden" name="_csrf" value="{{ CSRF }}">
+  <label class="lbl" for="kalimat-lepas">Ketik <b>{{ kalimat_lepas }}</b> untuk melepas tautan dan menghapus</label>
+  <input class="fld" id="kalimat-lepas" name="kalimat" autocomplete="off"
+         autocapitalize="characters" placeholder="{{ kalimat_lepas }}">
+  <button class="btn btn--utama" type="submit" style="background:var(--bahaya)">
+    Lepaskan tautan &amp; hapus semua catatan Produksi
+  </button>
+</form>
+{% else %}
 <form method="post" action="/pengaturan/mode-uji" class="grup">
   <input type="hidden" name="_csrf" value="{{ CSRF }}">
   <label class="lbl" for="kalimat">Ketik <b>{{ kalimat }}</b> untuk melanjutkan</label>
@@ -128,6 +148,7 @@
     Hapus data uji
   </button>
 </form>
+{% endif %}
 {% endif %}
 
 {% endblock %}
