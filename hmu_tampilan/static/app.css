@@ -1931,7 +1931,6 @@ body.terik .pintu--kini {
   box-shadow: inset 3px 0 #c4cdd6;
 }
 body.terik .pintu--kini .pintu__ikon { box-shadow: inset 0 0 0 1px #ffffff60, 0 2px 7px #11182728; }
-body.terik .pintu__ikon { color: var(--aksi); background: var(--panel-2); }
 .laci__isi .pintu__ikon--aksi,
 .laci__isi .pintu__ikon--berjalan,
 .laci__isi .pintu__ikon--stok_produk_jasa,
