@@ -781,7 +781,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .identitas-aplikasi__logo {
   width: 42px; height: 42px; border-radius: 13px;
   display: grid; place-items: center;
-  background: #d7b36a; color: #282114;
+  background: #4d83df; color: #fff;
   font-size: 15px; font-weight: 700; letter-spacing: .03em;
 }
 .identitas-aplikasi strong, .identitas-aplikasi small { display: block; }
@@ -831,11 +831,11 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .beranda-sambut {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
   padding: 26px 30px; border-radius: 20px;
-  background: linear-gradient(115deg, #314a38, #24362a 68%, #596646);
+  background: linear-gradient(115deg, #3474d4, #2458ad 68%, #497fdb);
   color: #f7f4e9; box-shadow: 0 12px 28px rgba(39, 55, 42, .12);
 }
 .beranda-sambut__atas {
-  color: #e1c47e; font: 500 12px/1.5 var(--mono);
+  color: #dce9ff; font: 500 12px/1.5 var(--mono);
   letter-spacing: .09em; text-transform: uppercase;
 }
 .beranda-sambut h1 { margin: 5px 0 6px; font-size: clamp(24px, 3vw, 34px); }
@@ -843,15 +843,15 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .beranda-sambut__tanda {
   display: grid; place-items: center; flex: none; width: 64px; height: 64px;
   border: 1px solid rgba(239, 222, 174, .45); border-radius: 19px;
-  color: #e1c47e; font-weight: 700; font-size: 20px; letter-spacing: .06em;
+  color: #e7f0ff; font-weight: 700; font-size: 20px; letter-spacing: .06em;
 }
 .beranda-ringkasan { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
 .beranda-kolom { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .85fr); gap: 24px; align-items: start; }
 .beranda-aktivitas, .beranda-tindaklanjut { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .beranda-gudang { min-width: 0; }
-body.terik .beranda-sambut { background: linear-gradient(115deg, #314a38, #24362a 68%, #596646); }
-body.terik .identitas-aplikasi { color: #f4f5ef; border-color: #405347; }
-body.terik .identitas-aplikasi small { color: #c4d1c5; }
+body.terik .beranda-sambut { background: linear-gradient(115deg, #3474d4, #2458ad 68%, #497fdb); }
+body.terik .identitas-aplikasi { color: #f4f7ff; border-color: #405b88; }
+body.terik .identitas-aplikasi small { color: #c8d8f2; }
 
 @media (max-width: 899px) {
   .beranda-sambut { padding: 22px 20px; border-radius: 18px; }
@@ -1799,89 +1799,90 @@ details.padat > .anak { margin: 0 12px 12px; }
    perlu tahu mode ini ada.
    ══════════════════════════════════════════════════════════════════════════ */
 body.terik {
-  --dasar:      #f5f5ef;
+  --dasar:      #f4f7fc;
   --panel:      #ffffff;
-  --panel-2:    #e9eee6;
-  --garis:      #cbd6ca;
-  --garis-2:    #dce5da;
+  --panel-2:    #eaf0f9;
+  --garis:      #cbd8ea;
+  --garis-2:    #dce5f1;
 
-  --tinta:      #202a23;
-  --tinta-2:    #3c4940;
-  --redup:      #4c5b50;
-  --redup-2:    #59675c;
+  --tinta:      #202a39;
+  --tinta-2:    #3c4a5c;
+  --redup:      #4c5d73;
+  --redup-2:    #596a80;
 
-  --aksi:       #355c40;
-  --aksi-gelap: #294a33;
+  --aksi:       #2f68c5;
+  --aksi-gelap: #2453a5;
   --aksi-tinta: #ffffff;
 
-  --aman:       #336e42;
-  --hati:       #805714;
-  --bahaya:     #a64b36;
+  --aman:       #27825b;
+  --hati:       #a56813;
+  --bahaya:     #b4473d;
 }
 
-/* Tema kerja baru: hijau hutan, sage, dan krem hangat. Palet diterapkan
-   lewat token agar seluruh layar berubah seragam tanpa menyentuh isi kartu. */
+/* Sidebar biru tua dan ruang kerja biru muda; warna status khusus tiap proses
+   tetap mengikuti makna operasionalnya. */
 body.terik .laci__isi {
-  background: #26372d;
-  border-color: #405347;
-  color: #f2f4ed;
+  background: #203f70;
+  border-color: #365a91;
+  color: #f2f6ff;
 }
-body.terik .laci__kepala { border-color: #405347; }
-body.terik .laci__isi .bar__nama { color: #f4f5ef; }
-body.terik .laci__isi .bar__sub { color: #c4d1c5; }
-body.terik .laci__isi .bar__avatar { background: #91b393; color: #17231a; }
-body.terik .pintu { color: #d5dfd5; }
-body.terik .pintu:hover { background: #34483a; }
+body.terik .laci__kepala { border-color: #365a91; }
+body.terik .laci__isi .bar__nama { color: #f4f7ff; }
+body.terik .laci__isi .bar__sub { color: #c8d8f2; }
+body.terik .laci__isi .bar__avatar { background: #8bb4f5; color: #102748; }
+body.terik .pintu { color: #d5e2f8; }
+body.terik .pintu:hover { background: #2b5189; }
 body.terik .pintu--kini {
-  background: #3b5141;
+  background: #315d9c;
   color: #fff;
-  box-shadow: inset 3px 0 #d8b56d;
+  box-shadow: inset 3px 0 #f2c96a;
 }
-body.terik .pintu--kini .pintu__ikon { color: #e1c47e; }
-body.terik .pintu__jml { background: #d7b36a; color: #282114; }
-body.terik .pintu__jml--kabar { background: #d99169; color: #29180f; }
-body.terik .pintu-sub { border-color: #53675a; }
-body.terik .pintu-sub__satu { color: #d0dbd1; }
-body.terik .pintu-sub__satu--kini { background: #3b5141; color: #fff; }
+body.terik .pintu--kini .pintu__ikon { color: #ffdc82; }
+body.terik .pintu__jml { background: #f2c96a; color: #33270d; }
+body.terik .pintu__jml--kabar { background: #ee9b70; color: #35170b; }
+body.terik .pintu-sub { border-color: #496b9d; }
+body.terik .pintu-sub__satu { color: #d0def4; }
+body.terik .pintu-sub__satu--kini { background: #315d9c; color: #fff; }
 body.terik .bar { background: #fff; }
-body.terik .bar__avatar { background: #355c40; color: #fff; }
-body.terik .btn--utama { box-shadow: 0 2px 0 #203d2a; }
+body.terik .bar__avatar { background: #2f68c5; color: #fff; }
+body.terik .btn--utama { box-shadow: 0 2px 0 #1f4e9f; }
 body.terik .kartu, body.terik .padat, body.terik .benda,
 body.terik .jalan, body.terik .petak__sel {
   box-shadow: 0 2px 8px rgba(40, 55, 43, .045);
 }
-body.terik .kartu--sorot { border-color: #718d70; }
+body.terik .kartu--sorot { border-color: #7799ce; }
 body.terik .pita-uji { background: #7f5b12; color: #fff5d7; }
 body.terik .laci__ukur:hover::after,
 body.terik .laci__ukur:focus-visible::after,
-body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
+body.terik.ubah-lebar-laci .laci__ukur::after { background: #f2c96a; }
 
 /* Permukaan baru dipakai lintas layar: panel terang berlapis tipis, sudut
-   lebih lapang, dan hijau hanya untuk tindakan/keadaan aktif. Isi kartu dan
+   lebih lapang, dan biru untuk tindakan/keadaan aktif. Isi kartu dan
    urutan informasinya tetap ditentukan tiap halaman. */
-body.terik .isi { background: #f1f3ee; }
+body.terik .isi { background: #f4f7fc; }
 body.terik .bar {
   background: rgba(255, 255, 255, .96);
-  border-color: #dce3d8;
-  box-shadow: 0 2px 10px rgba(39, 55, 42, .035);
+  border-color: #dce5f1;
+  box-shadow: 0 2px 10px rgba(39, 61, 95, .04);
 }
 body.terik .kartu, body.terik .padat, body.terik .benda,
 body.terik .jalan, body.terik .petak__sel, body.terik .kartu-lebar {
-  background: #fff; border-color: #dce3d8; border-radius: 16px;
+  background: #fff; border-color: #dce5f1; border-radius: 16px;
 }
 body.terik .kartu, body.terik .padat, body.terik .benda,
 body.terik .jalan, body.terik .petak__sel {
-  box-shadow: 0 3px 12px rgba(39, 55, 42, .055);
+  box-shadow: 0 3px 12px rgba(39, 61, 95, .055);
 }
 body.terik .tindakan {
-  background: #fff; border: 1px solid #dce3d8; border-radius: 14px;
+  background: #fff; border: 1px solid #dce5f1; border-radius: 14px;
 }
-body.terik .tindakan:hover { background: #f6f7f2; border-color: #c3d0c0; }
-body.terik .kartu--sorot { border-color: #8ca58a; }
-body.terik .lbl { color: #667365; }
-body.terik .fld { border-color: #d5ddd3; background: #fff; border-radius: 12px; }
-body.terik .btn--utama { background: #355c40; border-color: #355c40; color: #fff; }
-body.terik .btn--utama:hover { background: #294a33; border-color: #294a33; }
+body.terik .tindakan:hover { background: #f5f8fe; border-color: #c3d3eb; }
+body.terik .kartu--sorot { border-color: #8aa8d5; }
+body.terik .lbl { color: #66768c; }
+body.terik .fld { border-color: #d5dfed; background: #fff; border-radius: 12px; }
+body.terik .btn--utama { background: #2f68c5; border-color: #2f68c5; color: #fff; }
+body.terik .btn--utama:hover { background: #2453a5; border-color: #2453a5; }
+body.terik a:hover { color: #1f4e9f; }
 
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
 
