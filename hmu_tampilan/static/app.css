@@ -772,7 +772,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
 @media (prefers-reduced-motion: reduce) { .laci__isi { animation: none } }
 
 .laci__kepala {
-  display: flex; align-items: center; gap: 11px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 12px;
   padding: 4px 6px 14px;
   border-bottom: 1px solid var(--garis-2);
   margin-bottom: 10px;
@@ -782,6 +782,15 @@ body.putus-jaringan .bar { margin-top: 34px; }
      supaya ia bisa keluar tanpa menggulir. */
   flex-shrink: 0;
 }
+.laci__merek {
+  display: flex; align-items: center;
+  width: fit-content; max-width: 100%; min-height: 48px;
+  padding: 5px 9px;
+  border-radius: 12px;
+}
+.laci__logo { display: block; width: 166px; max-width: 100%; height: 48px; object-fit: contain; object-position: left center; }
+.laci__logo--gelap { display: none; }
+.laci__identitas { display: flex; align-items: center; gap: 11px; min-width: 0; }
 
 /* ── Daftar pintu: SATU-SATUNYA bagian laci yang menggulir ──
    Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
@@ -1923,6 +1932,7 @@ body.terik .laci-seksi__judul { color: #c7d0d9; }
 body.terik .laci__isi .bar__nama { color: #f4f5f6; }
 body.terik .laci__isi .bar__sub { color: #c7d0d9; }
 body.terik .laci__isi .bar__avatar { background: #aeb9c4; color: #202832; }
+body.terik .laci__merek { background: #f6f8f3; }
 body.terik .pintu { color: #d5dce3; }
 body.terik .pintu:hover { background: #3a444f; }
 body.terik .pintu--kini {
@@ -2058,6 +2068,8 @@ body:not(.terik) .laci__isi {
   background: var(--kulit-samping);
   border-color: var(--kulit-batas);
 }
+body:not(.terik) .laci__logo--terik { display: none; }
+body:not(.terik) .laci__logo--gelap { display: block; }
 body:not(.terik) .pintu--kini { background: var(--kulit-pilih); }
 body:not(.terik) .beranda-sambut,
 body:not(.terik) .op-hero,

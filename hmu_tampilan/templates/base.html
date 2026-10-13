@@ -159,11 +159,17 @@
 <div class="laci" id="laci" hidden>
   <nav class="laci__isi" aria-label="Navigasi utama">
     <div class="laci__kepala">
-      <div class="bar__avatar">{{ akun.nama[:2]|upper }}</div>
-      <div class="bar__isi">
-        <div class="bar__nama">{{ akun.nama }}</div>
-        <div class="bar__sub">
-          {{ NAMA_VIEW.get(VIEW, akun.peran) }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
+      <div class="laci__merek" aria-label="PadiFlow">
+        <img class="laci__logo laci__logo--terik" src="/static/padiflow-logo-terang.png?v={{ VERSI }}" alt="PadiFlow">
+        <img class="laci__logo laci__logo--gelap" src="/static/padiflow-logo-gelap.png?v={{ VERSI }}" alt="" aria-hidden="true">
+      </div>
+      <div class="laci__identitas">
+        <div class="bar__avatar">{{ akun.nama[:2]|upper }}</div>
+        <div class="bar__isi">
+          <div class="bar__nama">{{ akun.nama }}</div>
+          <div class="bar__sub">
+            {{ NAMA_VIEW.get(VIEW, akun.peran) }}{% if akun.sesi_pendek %} · perangkat gudang{% endif %}
+          </div>
         </div>
       </div>
     </div>
