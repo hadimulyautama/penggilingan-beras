@@ -1055,13 +1055,10 @@ async def _add_intake(
         except JasaError as e:
             raise Gudang2Error(f"❌ {e.args[0]}") from None
         ke_proses = await _catat_masuk_selama_proses(db, silo_id, berat_kg)
-        # PK jasa TIDAK boleh menyusup ke proses sosoh yang sedang berjalan:
-        # prosesnya tak bisa membawa pemilik (`polishing_process` belum punya
-        # `jasa_id`), jadi barangnya akan terbukukan sebagai hasil pabrik.
-        if ke_proses and jasa_id is not None:
-            raise Gudang2Error(
-                f"❌ Silo itu sedang disosoh ({ke_proses}) — PK jasa tak boleh "
-                "ditambahkan ke proses yang berjalan. Pilih tempat lain.")
+        # `pastikan_satu_pemilik` di atas sudah memastikan barang yang masuk
+        # sepemilik dengan isi silo/proses. PolishingProcess menyimpan jasa_id,
+        # jadi PK jasa yang sama pemiliknya aman ditambahkan dan tetap tercatat
+        # sebagai bahan proses jasa tersebut.
     now = input_time(tanggal, jam)
 
     if not kunci_kiriman:
@@ -1335,12 +1332,9 @@ async def _catat_pindah(
             return ada, None
     kode = await next_tumpukan_move_code(db)
     ke_proses = await _catat_masuk_selama_proses(db, silo.id, kirim)
-    # Sama seperti di `_add_intake`: PK jasa tak boleh menyusup ke proses sosoh
-    # yang sedang berjalan — prosesnya belum bisa membawa pemilik.
-    if ke_proses and intake.jasa_id is not None:
-        raise Gudang2Error(
-            f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — PK jasa tak "
-            "boleh ditambahkan ke proses yang berjalan.")
+    # Pemilik sumber sudah disamakan dengan isi silo di atas. Proses sosoh
+    # juga menyimpan pemiliknya, sehingga tambahan PK jasa sepemilik dapat
+    # ikut dihitung sebagai bahan proses berjalan.
     muatan = {
         "kode_pindah": kode, "intake_id": intake.id, "intake_peristiwa_id": intake.peristiwa_id,
         "silo_id": silo.id, "nama_silo": nama_silo, "berat_kg": kirim, "ke_proses": ke_proses,
@@ -1389,7 +1383,7 @@ async def pindah_tumpukan_ke_silo(
             "Operator Gudang 2 (atau admin)."
         )
     if not nama_silo:
-        raise Gudang2Error("Sebutkan silo tujuannya (A atau B).")
+        raise Gudang2Error("Pilih nama silo tujuan Gudang 2.")
     silo = await get_g2_silo(db, nama_silo)
     if silo is None:
         raise Gudang2Error(f"Silo {nama_silo} Gudang 2 tidak ditemukan.")

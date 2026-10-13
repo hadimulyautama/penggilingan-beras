@@ -1,0 +1,18 @@
+{% macro intro(label, title, description, stats, steps) %}
+<style>@import url('/static/operasional.css?v={{ VERSI }}');</style>
+<div class="op-intro">
+  <section class="op-hero">
+    <div class="op-eyebrow"><i></i>{{ label }}</div>
+    <h1>{{ title }}</h1>
+    <p>{{ description }}</p>
+  </section>
+  <section class="op-stats" aria-label="Ringkasan {{ title }}">
+    {% for icon, value, caption in stats %}
+    <article class="op-stat"><span class="op-icon op-icon--{{ loop.index }}">{{ icon }}</span><div><strong>{{ value }}</strong><span>{{ caption }}</span></div></article>
+    {% endfor %}
+  </section>
+  <nav class="op-steps" aria-label="Langkah {{ title }}">
+    {% for name in steps %}<div class="op-step"><b>{{ loop.index }}</b><span>{{ name }}</span></div>{% endfor %}
+  </nav>
+</div>
+{% endmacro %}

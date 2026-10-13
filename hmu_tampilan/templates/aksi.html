@@ -29,6 +29,7 @@
    buntu. Sempat terjadi 23 September 2026; yang menangkapnya potret HTML per
    peran, bukan ujinya. #}
 {% import "_kata_aksi.html" as kata with context %}
+{% import "_operasional.html" as op with context %}
 
 {# ── BENDANYA DULU, TINDAKANNYA MENYUSUL ──
    Dulu layar ini membuka daftar 11 aksi berjajar sama besar: "Gabah masuk"
@@ -41,6 +42,11 @@
    keadaan bendanya, dan yang keadaannya cuma punya satu tindakan langsung
    membuka tindakan itu. #}
 {% set semua = menunggu + berjalan %}
+
+{{ op.intro("PEKERJAAN OPERASIONAL", "Antrian tunggu",
+  "Pilih bahan atau pekerjaan yang siap ditangani. Buka kartunya untuk melihat rincian dan mencatat langkah berikutnya.",
+  [("↙", menunggu|length, "Menunggu ditangani"), ("✓", berjalan|length, "Sedang berjalan"), ("▦", semua|length, "Total pekerjaan terlihat")],
+  ["Pilih kartu", "Periksa bahan", "Catat proses", "Lanjutkan pekerjaan"]) }}
 
 {# ── PIL GRUP — "antrian tunggu bisa banyak sekali" ──
    Keputusan pemilik 2 Oktober 2026. Sub-menu di laci menuju alamat yang sama

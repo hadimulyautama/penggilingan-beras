@@ -872,11 +872,9 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 kg_tersedia = float(k.get("kg") or 0)
                 label = f"{k['nama']} curah · {kg(kg_tersedia)} tersedia"
                 if k.get("jenis") in ("bekatul", "broken", "menir", "reject"):
-                    # Saldo ByproductStock adalah berat mentah yang tercatat.
-                    # Kartu stok menerapkan aturan packing otomatis atas total
-                    # barang (termasuk karung yang bisa dibuka); gunakan
-                    # pembagian yang sama agar angka curah di picker tidak
-                    # menampilkan 60 kg ketika sisa curah otomatisnya 30 kg.
+                    # Satu saldo hasil samping bisa tampil sebagai karung
+                    # otomatis dan curah di kartu stok; pengeluaran memakai
+                    # jalur kg yang mengambil dari total saldo yang sama.
                     kartu = kartu_produk.get(k["jenis"])
                     if kartu is not None:
                         ukuran = kartu.ukuran_kemasan_otomatis
@@ -888,9 +886,7 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
                         kg_tersedia = float(kartu.sisa_kg or 0)
                 if kg_tersedia <= 0:
                     continue
-                out.append({
-                    "value": f"cr:{k['jenis']}",
-                    "label": label})
+                out.append({"value": f"cr:{k['jenis']}", "label": label})
                 continue
             if not k.get("karung"):
                 continue
@@ -1923,7 +1919,7 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     from app.penggilingan.inventory.models import (
         Brand, PackageSize, PackagingMaterial, RiceQualityStandard,
     )
-    from app.services.stok import jenis_produk, nama_produk
+    from app.services.stok import jenis_produk, nama_produk, stok_produk
 
     out: list[dict] = []
     # Barang jadi: dikelompokkan per SKU+mutu, persis seperti stok pabrik —
@@ -1977,15 +1973,24 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     # dibetulkan juga) sementara barangnya masih di gudang. `_satu_baris`
     # (dipanggil `_baris_dari_borang`) SUDAH mengenal awalan `cr:`; yang
     # kurang cuma picker ini menawarkannya.
-    from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_curah
+    from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
     from app.services.stok import nama_produk
+    kartu_byproduct = {k.jenis: k for k in await stok_produk(db, jasa_id=jid)}
 
     for jenis_curah in ("broken", "menir", "reject", "bekatul"):
-        sisa_curah = await hitung_stok_byproduct_curah(db, jenis_curah, jasa_id=jid)
-        if sisa_curah > 0.5:
+        sisa_total = await hitung_stok_byproduct_total(db, jenis_curah, jasa_id=jid)
+        if sisa_total > 0.5:
+            ukuran = {"bekatul": 40, "broken": 50, "menir": 50, "reject": 50}[jenis_curah]
+            kartu = kartu_byproduct.get(jenis_curah)
+            karung = (kartu.jumlah_karung_otomatis if kartu
+                      else int(sisa_total // ukuran))
+            curah = (kartu.curah_otomatis_kg if kartu
+                     else sisa_total - karung * ukuran)
             out.append({"value": f"cr:{jenis_curah}",
-                        "label": f"{nama_produk(jenis_curah)} (curah) · "
-                                 f"{kg(sisa_curah)} (isi dalam kg)"})
+                        "label": f"{nama_produk(jenis_curah)} · "
+                                 f"{kg(sisa_total)} tersedia; {karung} karung × "
+                                 f"{ukuran} kg otomatis + {kg(curah)} curah "
+                                 "(isi dalam kg, karung dibuka otomatis bila perlu)"})
     # PK di Gudang 2 hanya boleh menjadi bahan penyosohan. Hasil proses
     # (beras putih dan hasil samping) tersedia lewat picker stok produk.
     # ── Gabah kering ditimbang (pesan kerja 12/12A) — tumpukan Gudang 1 ──

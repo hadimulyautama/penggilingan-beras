@@ -3,6 +3,11 @@
 {% block isi %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
+{% import "_operasional.html" as op with context %}
+{{ op.intro("PENGIRIMAN BARANG", "Barang Keluar",
+  "Buat perintah untuk beberapa jenis barang dalam satu pengiriman, catat muatan yang benar-benar dibawa, lalu verifikasi sebelum menutup transaksi. Pengambilan barang jasa tersedia terpisah.",
+  [("＋", n_perintah, "Menunggu dimuat"), ("↗", n_dimuat, "Menunggu verifikasi"), ("▦", kartu|length, "Transaksi tercatat")],
+  ["Buat perintah", "Catat muatan", "Periksa selisih", "Verifikasi dan tutup"]) }}
 
 {# ── Barang Keluar — SATU TRUK SATU KARTU ──
    Permintaan pemilik 28 September 2026: "kita butuh satu halaman untuk

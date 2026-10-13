@@ -21,6 +21,11 @@
    Makro, bukan markup: pil ini lahir dua kali pada hari yang sama (layar Stok
    dan layar ini di Meja). Lihat `_saring.html`. #}
 {% import "_saring.html" as saring with context %}
+{% import "_operasional.html" as op with context %}
+{{ op.intro("PEKERJAAN AKTIF", "Sedang berjalan",
+  "Pantau mesin, proses yang masih aktif, dan bahan yang sudah ditempatkan menunggu giliran. Buka kartu untuk memperbarui atau menyelesaikan pekerjaan.",
+  [("⚙", berjalan|length, "Proses aktif"), ("↔", transit|length, "Bahan menunggu giliran"), ("▦", (berjalan|length) + (transit|length), "Total kartu pekerjaan")],
+  ["Pilih kartu", "Pantau proses", "Catat pembaruan", "Selesaikan pekerjaan"]) }}
 {{ saring.pil_gudang("/berjalan", SARING_GUDANG, gudang) }}
 
 {% if not berjalan and not transit %}

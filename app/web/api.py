@@ -862,7 +862,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # Tanpa "Tumpukan": PK ini memang sedang DIPINDAH dari
                  # tumpukan. Daftarnya tetap dari master.
                  {"name": "silo", "label": "Silo tujuan (wajib pilih)", "type": "remote",
-                  "source": "/api/actions/silo-g2",
+                  "source": "/api/actions/silo-g2", "induk": "tumpukan",
                   "kosong": "Belum ada silo Gudang 2. Tambahkan di Pengaturan → Alat."},
                  # ⭐ BOLEH DIKOSONGKAN = SELURUH SISANYA, dan itu yang
                  # menghapus seluruh kelas masalahnya, bukan menggesernya satu
@@ -4032,7 +4032,8 @@ async def sosoh_berjalan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/silo-g2")
-async def silo_g2_daftar(komoditas: str = "pk", user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
+                         user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Silo Gudang 2 campuran dari master, berisi atau tidak.
 
     Berbeda dari `silo-bahan-g2`, yang hanya menawarkan silo yang siap
@@ -4047,16 +4048,27 @@ async def silo_g2_daftar(komoditas: str = "pk", user: User = Depends(pengguna_ak
     from app.models import Silo
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
     from app.penggilingan.silo_policy import boleh_masuk
+    from app.penggilingan.gudang2.models import PkGudang2Intake
+    from app.services.jasa import pemilik_silo_g2
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
         wid = await _g2_warehouse_id(db)
+        intake = None
+        if induk.strip().isdigit():
+            intake = await db.get(PkGudang2Intake, int(induk.strip()))
+        if induk.strip() and (not induk.strip().isdigit() or intake is None):
+            return []
         for s in (await db.execute(
             select(Silo).where(Silo.warehouse_id == wid, Silo.aktif.is_(True))
             .order_by(Silo.nama_silo)
         )).scalars().all():
             if not boleh_masuk(s, komoditas, "g2"):
                 continue
+            if intake is not None:
+                pemilik = await pemilik_silo_g2(db, s.id)
+                if pemilik and pemilik != {intake.jasa_id}:
+                    continue
             kg = await hitung_stok_silo(db, s.id)
             huruf = s.nama_silo.replace("Silo ", "")
             # Isinya ikut disebut: menuang ke silo yang sudah berisi bercampur
@@ -4274,7 +4286,7 @@ async def sosoh_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 class PindahTumpukanSiloReq(BaseModel):
     tumpukan: str    # id intake tumpukan (dari /actions/tumpukan-sisa)
-    silo: str        # A / B
+    silo: str        # nama silo dari master Gudang 2
     #: Kosong = SELURUH sisa tumpukan. Bukan kelalaian: satu-satunya angka
     #: yang sulit diketik benar adalah sisa terakhir, dan yang tak perlu
     #: diketik tak bisa salah ketik.
@@ -4317,8 +4329,8 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
              or P.super_saja(user.role))
     if not str(req.tumpukan or "").strip().isdigit():
         raise HTTPException(400, "Pilih PK di tumpukan yang mau dipindah dulu.")
-    if (req.silo or "").upper() not in ("A", "B"):
-        raise HTTPException(400, "Pilih silo tujuan dulu: A atau B.")
+    if not (req.silo or "").strip():
+        raise HTTPException(400, "Pilih silo tujuan dulu.")
     # KOSONG dan NOL dua hal berbeda: kosong berarti "seluruh sisanya", nol
     # berarti salah ketik. Menyamakan keduanya membuat satu ketukan Enter di
     # kotak kosong memindahkan seluruh tumpukan tanpa diminta.
@@ -4331,7 +4343,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
         u = await db.get(User, user.id)
         try:
             r = await pindah_tumpukan_ke_silo(
-                db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.upper(),
+                db, user=u, intake_id=int(req.tumpukan), nama_silo=req.silo.strip(),
                 berat=(None if req.berat_kg is None else float(req.berat_kg)),
                 kunci_kiriman=(req.kunci_kiriman or "")[:120] or None)
         except Gudang2Error as e:
@@ -4340,7 +4352,7 @@ async def act_pindah_tumpukan_silo(req: PindahTumpukanSiloReq,
             if r.sisa_tumpukan_intake > 0 else "tumpukan itu habis")
     ekor = f" — ikut dihitung di {r.ke_proses}" if r.ke_proses else ""
     return {"ok": True,
-            "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke Silo {r.nama_silo} "
+            "pesan": f"✓ *{r.kode_pindah}* · {r.berat_kg:g} kg ke {r.nama_silo} "
                      f"({sisa}){ekor}."}
 
 

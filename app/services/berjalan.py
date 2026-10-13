@@ -2921,7 +2921,7 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
                    if sisa is not None else None),
             sub=f"{kode} · {sumber} · masuk {_tgl(it.tanggal_masuk)}",
             pilihan=[("pindah_tumpukan_silo", "Pindah ke silo",
-                      "Sebagian atau seluruhnya, ke Silo A / B", str(it.id))],
+                      "Sebagian atau seluruhnya, pilih silo tujuan", str(it.id))],
         ))
     return keluar
 

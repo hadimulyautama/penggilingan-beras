@@ -2,6 +2,11 @@
 {% block judul %}Mutu &amp; QC{% endblock %}
 {% block isi %}
 {% import "_benda.html" as benda with context %}
+{% import "_operasional.html" as op with context %}
+{{ op.intro("MUTU DAN KONTROL KUALITAS", "Mutu & QC",
+  "Catat hasil pemeriksaan mutu bahan dan hasil proses. Setiap kartu menunjukkan pemeriksaan yang masih perlu dilengkapi.",
+  [("⌛", meja|length if MUTU_AKTIF else 0, "Pemeriksaan menunggu"), ("✓", "QC", "Bahan dan hasil proses"), ("▤", "Riwayat", "Tercatat pada kartu proses")],
+  ["Pilih kartu QC", "Periksa sampel", "Catat hasil", "Simpan pencatatan"]) }}
 
 {# ── Pencatatan mutu dimatikan ──
    Halamannya tetap bisa dibuka lewat alamat walau pintunya tak ditawarkan

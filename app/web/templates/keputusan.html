@@ -2,6 +2,7 @@
 {% block judul %}Menunggu keputusan{% endblock %}
 {% block isi %}
 {% import "_benda.html" as benda with context %}
+{% import "_operasional.html" as op with context %}
 
 {# ── PIL KATEGORI — "buat sub menu juga sesuai kategori" ──
    Permintaan pemilik 2 Oktober 2026, bentuknya kembaran pil `/aksi`
@@ -12,6 +13,10 @@
 {% set GRUP_PIL = GRUP_PIL|default([], true) %}
 {% set GRUP_KINI = GRUP_KINI|default("", true) %}
 {% set GRUP_TOTAL = GRUP_TOTAL|default((meja|length) + (semua_meja|default([], true)|length), true) %}
+{{ op.intro("PEMERIKSAAN ADMIN", "Menunggu keputusan",
+  "Tinjau catatan yang memerlukan keputusan, seperti harga, bobot, dan pencocokan hasil. Pilih kategori atau buka kartu untuk memeriksa datanya.",
+  [("⌛", GRUP_TOTAL, "Menunggu keputusan"), ("▤", meja|length, "Pada daftar ini"), ("✓", "Manual", "Periksa sebelum menyimpan")],
+  ["Pilih kategori", "Buka kartu", "Periksa bukti", "Simpan keputusan"]) }}
 {% if GRUP_PIL|length > 1 %}
   <div class="saring">
     <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/keputusan">Semua
