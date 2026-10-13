@@ -19,14 +19,13 @@
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
-<section class="beranda-sambut" aria-labelledby="judul-beranda">
-  <div>
+<section class="beranda-sambut beranda-sambut--gabung" aria-labelledby="judul-beranda">
+  <div class="beranda-sambut__kepala">
     <span class="beranda-sambut__atas">PT Hadi Mulya Utama · Operasional pabrik</span>
     <h1 id="judul-beranda">Selamat datang, {{ akun.nama.split()[0] }}</h1>
     <p>Ringkasan proses dan pekerjaan yang perlu ditangani.</p>
   </div>
   <span class="beranda-sambut__tanda" aria-hidden="true">HM</span>
-</section>
 
 {# Jalan pintas ditambahkan di Beranda agar pekerjaan utama langsung terlihat.
    Semua ringkasan, kartu proses, pekerjaan, dan rincian gudang di bawah tetap
@@ -61,6 +60,7 @@
   </div>
 </section>
 {% endif %}
+</section>
 
 <section class="beranda-ringkasan" aria-label="Ringkasan operasional">
 {% for blok in petak %}{{ br.petak_blok(blok, loop.first) }}{% endfor %}
