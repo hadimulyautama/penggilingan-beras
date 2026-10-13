@@ -876,6 +876,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .beranda-aktivitas, .beranda-tindaklanjut { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .beranda-gudang { min-width: 0; }
 body.terik .beranda-sambut { background: linear-gradient(115deg, #596777, #3f4b58 68%, #737f8c); }
+body.terik .beranda-sambut h1 { color: #fff; }
 
 @media (max-width: 899px) {
   .beranda-sambut { padding: 24px 22px; border-radius: 22px; }
@@ -1945,6 +1946,10 @@ body.terik .tindakan {
 body.terik .tindakan:hover { background: #f2f4f6; border-color: #b8c2cc; }
 body.terik .tindakan__ikon,
 body.terik .beranda-akses__ikon { border-radius: 14px; background: linear-gradient(145deg,#edf3ff,#dce8ff); color: #3973cf; }
+body.terik .beranda-akses__item--aksi .beranda-akses__ikon { background: linear-gradient(145deg,#e8f8f1,#d2f1e3); color: #21835c; }
+body.terik .beranda-akses__item--berjalan .beranda-akses__ikon { background: linear-gradient(145deg,#f2ecff,#e4d9ff); color: #7957b8; }
+body.terik .beranda-akses__item--stok .beranda-akses__ikon { background: linear-gradient(145deg,#fff4df,#ffe8b6); color: #a96a17; }
+body.terik .beranda-akses__item--barang_keluar .beranda-akses__ikon { background: linear-gradient(145deg,#fff0eb,#ffdcd1); color: #c35c47; }
 body.terik .tindakan--ikon-biru .tindakan__ikon,
 body.terik .tindakan__ikon.tindakan--ikon-biru { background: linear-gradient(145deg,#edf3ff,#dce8ff); color: #3973cf; }
 body.terik .tindakan--ikon-hijau .tindakan__ikon,
