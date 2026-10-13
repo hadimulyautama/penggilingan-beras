@@ -188,7 +188,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     dibatasi ke PK jasa agar tidak muncul ganda di dua halaman.
     """
     from app.services.setelan import fitur_mutu
-    from app.web.layar import GUDANG, MEJA, gudang1, gudang2
+    from app.web.layar import GUDANG, MEJA, POLESAN, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
     saring = GUDANG if view in MEJA else ()
