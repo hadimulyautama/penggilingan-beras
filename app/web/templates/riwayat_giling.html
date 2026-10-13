@@ -1,9 +1,18 @@
 {% extends "base.html" %}
 {% block judul %}Riwayat Penggilingan{% endblock %}
 {% import "_stok.html" as st with context %}
+{% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg %}
 
 {% block isi %}
+{% set total = namespace(bahan=0, pk=0) %}
+{% for item in kartu %}
+  {% set total.bahan = total.bahan + (item.bahan_kg or 0) %}
+  {% set total.pk = total.pk + (item.hasil_kg or 0) %}
+{% endfor %}
+{{ rh.header("RIWAYAT GUDANG 1", "Riwayat Penggilingan",
+  "Telusuri giling yang sudah ditutup, hasil PK, rendemen, dan kondisi mutu. Buka kartu untuk melihat batch asal atau laporan PDF.",
+  [("▤", kartu|length, "Proses di halaman ini"), ("⚖", kg(total.bahan), "Bahan tercatat · kg"), ("↗", kg(total.pk), "PK tercatat · kg")]) }}
 
 {# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Padanan
    `/riwayat-sosoh` untuk Gudang 1: kartu TIAP giling yang SUDAH SELESAI,
@@ -13,7 +22,7 @@
    yang paling sering dicari — menyusuri riwayat sebuah giling lama. #}
 
 {% if not kartu %}
-  <div class="kosong">
+  <div class="kosong riwayat-empty">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -27,6 +36,7 @@
   </div>
 {% endif %}
 
+<div class="riwayat-list">
 {% for k in kartu %}
   {% set laci = k.bahan|length > 0 %}
   <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--giling">
@@ -127,6 +137,7 @@
   {% endif %}
   </{{ "details" if laci else "div" }}>
 {% endfor %}
+</div>
 
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">

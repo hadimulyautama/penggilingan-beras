@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 {% block judul %}{{ judul }}{% endblock %}
 {% block isi %}
-<section style="max-width:1000px;margin:0 auto">
-  <header style="margin:0 0 12px">
-    <h2 style="margin:0">{{ judul }}</h2>
-  </header>
+{% import "_riwayat.html" as rh with context %}
+{% set jumlah_putaran = namespace(n=0) %}
+{% for row in rows %}{% set jumlah_putaran.n = jumlah_putaran.n + row.rounds|length %}{% endfor %}
+{{ rh.header("CATATAN KONTROL MUTU", judul,
+  "Telusuri hasil pemeriksaan berdasarkan lot atau proses. Waktu, asal bahan, nomor polisi, dan setiap putaran QC ditampilkan sesuai catatan aslinya.",
+  [("▤", rows|length, "Lot atau proses"), ("✓", jumlah_putaran.n, "Pencatatan QC"), ("◷", "Terbaru", "Urut berdasarkan waktu")]) }}
+<section class="riwayat-page" style="max-width:1000px;margin:0 auto">
 
   {% if catatan_kosong %}
-    <div class="kosong"><div><h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong }}</p></div></div>
+    <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong }}</p></div></div>
   {% elif not rows %}
-    <div class="kosong"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
+    <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
   {% else %}
-    <div style="display:grid;gap:8px">
+    <div class="riwayat-list">
       {% for row in rows %}
         <article class="padat padat--diam" style="padding:10px 12px">
           <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap">

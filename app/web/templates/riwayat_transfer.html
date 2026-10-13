@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block judul %}Riwayat Transfer{% endblock %}
 {% import "_stok.html" as st with context %}
+{% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg %}
 
 {% block isi %}
+{% set total = namespace(berat=0) %}
+{% for item in kartu %}{% set total.berat = total.berat + (item.berat_kg or 0) %}{% endfor %}
+{{ rh.header("RIWAYAT PERPINDAHAN", "Riwayat Transfer",
+  "Lihat perpindahan PK dari Gudang 1 ke Gudang 2, termasuk transfer yang dibatalkan. Setiap catatan tetap tersimpan untuk ditelusuri.",
+  [("▤", kartu|length, "Transfer di halaman ini"), ("⚖", kg(total.berat), "Berat tercatat · kg"), ("×", kartu|selectattr("dibatalkan")|list|length, "Transfer dibatalkan")]) }}
 
 {# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Kartu TIAP
    transfer PK Gudang 1 → Gudang 2 — DIBATALKAN atau tidak.
@@ -15,7 +21,7 @@
    orang mengira jumlah PK yang berpindah lebih besar daripada sebenarnya. #}
 
 {% if not kartu %}
-  <div class="kosong">
+  <div class="kosong riwayat-empty">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -28,6 +34,7 @@
   </div>
 {% endif %}
 
+<div class="riwayat-list">
 {% for k in kartu %}
   <div class="padat padat--diam padat--pindah_pk">
     <div>
@@ -66,6 +73,7 @@
     </div>
   </div>
 {% endfor %}
+</div>
 
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">

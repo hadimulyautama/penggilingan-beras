@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block judul %}Riwayat sosoh{% endblock %}
 {% import "_stok.html" as st with context %}
+{% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg %}
 
 {# ── Persen bergaya Indonesia: koma, satu angka di belakang ──
@@ -12,6 +13,17 @@
 {%- endmacro %}
 
 {% block isi %}
+{% set total = namespace(bahan=0, rendemen=0, jumlah_rendemen=0) %}
+{% for item in kartu %}
+  {% set total.bahan = total.bahan + (item.neraca.bahan_kg or 0) %}
+  {% if item.rendemen is not none %}
+    {% set total.rendemen = total.rendemen + item.rendemen %}
+    {% set total.jumlah_rendemen = total.jumlah_rendemen + 1 %}
+  {% endif %}
+{% endfor %}
+{{ rh.header("RIWAYAT GUDANG 2", "Riwayat Penyosohan",
+  "Telusuri hasil sosoh dan rendemen setiap proses. Buka kartu untuk melihat neraca bahan, asal lot, waktu, mutu, dan laporan PDF.",
+  [("▤", kartu|length, "Proses di halaman ini"), ("⚖", kg(total.bahan), "Bahan tercatat · kg"), ("↗", psn(total.rendemen / total.jumlah_rendemen if total.jumlah_rendemen else none), "Rata-rata rendemen")]) }}
 
 {# ── HALAMAN INI MENJAWAB SATU PERTANYAAN YANG TAK PUNYA LAYAR LAIN ──
 
@@ -29,7 +41,7 @@
    langsung menggeser susutnya, dan di sanalah ia terbaca. #}
 
 {% if not kartu %}
-  <div class="kosong">
+  <div class="kosong riwayat-empty">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -45,6 +57,7 @@
   </div>
 {% endif %}
 
+<div class="riwayat-list">
 {% for k in kartu %}
   <details class="padat padat--sosoh">
     <summary>
@@ -240,6 +253,7 @@
     </div>
   </details>
 {% endfor %}
+</div>
 
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">

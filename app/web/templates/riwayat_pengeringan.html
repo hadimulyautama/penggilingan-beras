@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block judul %}Riwayat Pengeringan{% endblock %}
 {% import "_stok.html" as st with context %}
+{% import "_riwayat.html" as rh with context %}
 {% set kg = st.kg %}
 
 {% block isi %}
+{% set total_bahan = namespace(kg=0) %}
+{% for item in kartu %}{% set total_bahan.kg = total_bahan.kg + (item.bahan_kg or 0) %}{% endfor %}
+{{ rh.header("RIWAYAT GUDANG 1", "Riwayat Pengeringan",
+  "Telusuri lot yang sudah selesai dikeringkan dan didinginkan. Buka kartu untuk melihat batch asal, mode dryer, durasi, dan laporan lengkap.",
+  [("▤", kartu|length, "Lot di halaman ini"), ("⚖", kg(total_bahan.kg), "Bahan basah tercatat · kg"), ("✓", "Selesai", "Pengeringan dan pendinginan")]) }}
 
 {# Sub-menu "Riwayat Proses" (`nav.py`, kunci `riwayat_sosoh`). Kartu TIAP
    lot pengeringan yang SUDAH SELESAI (kering + dingin), terbaru dulu.
@@ -17,7 +23,7 @@
    terakhir, dan status silo. #}
 
 {% if not kartu %}
-  <div class="kosong">
+  <div class="kosong riwayat-empty">
     <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--aman)"
          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -31,6 +37,7 @@
   </div>
 {% endif %}
 
+<div class="riwayat-list">
 {% for k in kartu %}
   {# Laci terbuka untuk Mode dryer & Lama kering juga — bukan cuma bahan.
      Nyaris selalu ada batch asal, tapi kartu tak boleh kehilangan satu-
@@ -131,6 +138,7 @@
   {% endif %}
   </{{ "details" if laci else "div" }}>
 {% endfor %}
+</div>
 
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
