@@ -1851,7 +1851,7 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #f2c96a; }
 /* Permukaan baru dipakai lintas layar: panel terang berlapis tipis, sudut
    lebih lapang, dan biru untuk tindakan/keadaan aktif. Isi kartu dan
    urutan informasinya tetap ditentukan tiap halaman. */
-body.terik .isi { background: #f4f7fc; }
+body.terik .isi { background: #f4f7fc; gap: 20px; }
 body.terik .bar {
   background: rgba(255, 255, 255, .96);
   border-color: #dce5f1;
@@ -1859,21 +1859,35 @@ body.terik .bar {
 }
 body.terik .kartu, body.terik .padat, body.terik .benda,
 body.terik .jalan, body.terik .petak__sel, body.terik .kartu-lebar {
-  background: #fff; border-color: #dce5f1; border-radius: 16px;
+  background: #fff; border-color: #dce5f1; border-radius: 18px;
 }
 body.terik .kartu, body.terik .padat, body.terik .benda,
 body.terik .jalan, body.terik .petak__sel {
-  box-shadow: 0 3px 12px rgba(39, 61, 95, .055);
+  box-shadow: 0 5px 18px rgba(39, 61, 95, .06);
 }
+body.terik .isi h1 { color: #17253d; font-size: clamp(23px, 2.4vw, 30px); font-weight: 700; letter-spacing: -.025em; }
+body.terik .isi h2 { color: #1d2b43; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+body.terik .isi .lbl { color: #66768c; font-weight: 600; }
+body.terik .kartu { padding: 18px; }
+body.terik .petak__sel { padding: 15px 16px; }
 body.terik .tindakan {
-  background: #fff; border: 1px solid #dce5f1; border-radius: 14px;
+  background: #fff; border: 1px solid #dce5f1; border-radius: 17px;
+  box-shadow: 0 4px 14px rgba(39, 61, 95, .045);
 }
 body.terik .tindakan:hover { background: #f5f8fe; border-color: #c3d3eb; }
+body.terik .tindakan__ikon { width: 46px; height: 46px; border-radius: 14px; background: #edf3ff; }
 body.terik .kartu--sorot { border-color: #8aa8d5; }
 body.terik .lbl { color: #66768c; }
-body.terik .fld { border-color: #d5dfed; background: #fff; border-radius: 12px; }
-body.terik .btn--utama { background: #2f68c5; border-color: #2f68c5; color: #fff; }
-body.terik .btn--utama:hover { background: #2453a5; border-color: #2453a5; }
+body.terik .fld { border-color: #d5dfed; background: #fff; border-radius: 13px; box-shadow: 0 2px 5px rgba(39, 61, 95, .025); }
+body.terik .fld:focus { border-color: #6c99f0; box-shadow: 0 0 0 3px rgba(47, 104, 197, .12); }
+body.terik .btn { border-radius: 13px; transition: background .15s, border-color .15s, box-shadow .15s; }
+body.terik .btn--utama {
+  background: #2f68c5; border-color: #2f68c5; color: #fff;
+  box-shadow: 0 5px 13px rgba(47, 104, 197, .2);
+}
+body.terik .btn--utama:hover { background: #2453a5; border-color: #2453a5; box-shadow: 0 7px 17px rgba(47, 104, 197, .24); }
+body.terik .kosong { border: 1px dashed #cbd8ea; border-radius: 20px; background: rgba(255,255,255,.72); }
+body.terik .pesan { border-radius: 14px; box-shadow: 0 3px 10px rgba(39, 61, 95, .04); }
 body.terik a:hover { color: #1f4e9f; }
 
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
