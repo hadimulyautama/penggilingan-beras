@@ -136,19 +136,12 @@
 {% if GRUP_KINI == "bahan" %}
   {{ benda.blok("Bahan baku", menunggu, listview=True, tabel=True) }}
 {% elif not GRUP_KINI and MENUNGGU_PER_GRUP %}
-  <div class="antrian-semua-desktop">
+  <div class="antrian-semua-grup">
     {% for kunci, nama, daftar_grup in MENUNGGU_PER_GRUP %}
       {% if daftar_grup %}
         {{ benda.blok(nama, daftar_grup, listview=True, tabel=(kunci == "bahan")) }}
       {% endif %}
     {% endfor %}
-  </div>
-  {# Di mobile pertahankan susunan antrean sebelumnya; pemisahan listview ini
-     khusus desktop agar tabel bahan baku dan format kerja lain tidak tercampur. #}
-  <div class="antrian-semua-mobile">
-    {{ benda.blok(judul_atas, atas, listview=True) }}
-    {% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}
-    {{ benda.blok(judul_bawah, lain, listview=True) }}
   </div>
 {% else %}
   {{ benda.blok(judul_atas, atas, listview=True) }}
