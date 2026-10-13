@@ -1,7 +1,7 @@
 {% macro header(label, title, description, stats) %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
 <section class="riwayat-intro" aria-label="{{ title }}">
-  <p class="riwayat-description">{{ description }}</p>
+  <div class="riwayat-guide"><p class="riwayat-description">{{ description }}</p></div>
   <div class="riwayat-stats" aria-label="Ringkasan {{ title }}">
     {% for icon, value, caption in stats %}
     <article class="riwayat-stat">

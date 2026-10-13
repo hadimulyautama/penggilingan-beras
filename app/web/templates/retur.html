@@ -5,17 +5,18 @@
    dari isi halaman agar desain tetap aktif saat dibuka melalui menu. #}
 <style>@import url('/static/retur.css?v={{ VERSI }}');</style>
 <div id="retur-ui">
-  <p class="rt-description">Catat barang yang kembali dari pelanggan. Cocokkan tiket timbang, rincikan setiap jenis dan kemasan, lalu masukkan semuanya ke stok Gudang 2.</p>
-
   <section class="rt-stats" aria-label="Ringkasan retur">
     <article class="rt-stat"><div class="rt-icon">↙</div><div><strong>{{ tickets|length }}</strong><span>Tiket siap dicatat</span></div></article>
     <article class="rt-stat"><div class="rt-icon">✓</div><div><strong>{{ recent|length }}</strong><span>Retur terakhir</span></div></article>
     <article class="rt-stat"><div class="rt-icon">Δ</div><div><strong>2 tahap</strong><span>Timbang dan verifikasi bobot</span></div></article>
   </section>
 
-  <div class="rt-steps" aria-label="Langkah penerimaan retur">
-    <div class="rt-step active"><b>1</b><span>Pilih tiket</span></div><div class="rt-step active"><b>2</b><span>Rinci barang</span></div><div class="rt-step active"><b>3</b><span>Cek bobot</span></div><div class="rt-step"><b>4</b><span>Masuk stok</span></div>
-  </div>
+  <section class="rt-guide" aria-label="Panduan penerimaan retur">
+    <p class="rt-description">Catat barang yang kembali dari pelanggan. Cocokkan tiket timbang, rincikan setiap jenis dan kemasan, lalu masukkan semuanya ke stok Gudang 2.</p>
+    <div class="rt-steps" aria-label="Langkah penerimaan retur">
+      <div class="rt-step active"><b>1</b><span>Pilih tiket</span></div><div class="rt-step active"><b>2</b><span>Rinci barang</span></div><div class="rt-step active"><b>3</b><span>Cek bobot</span></div><div class="rt-step"><b>4</b><span>Masuk stok</span></div>
+    </div>
+  </section>
 
   {% if pesan %}<div class="rt-alert good" role="status">{{ pesan }}</div>{% endif %}
   {% if gagal %}<div class="rt-alert bad" role="alert">{{ gagal }}</div>{% endif %}
