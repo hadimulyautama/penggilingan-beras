@@ -1900,7 +1900,7 @@ body.terik {
    Di bawah 900px, laci tetap seperti semula: ponsel di gudang tak punya
    ruang mendatar untuk sidebar, dan navigasi harus terjangkau ibu jari. */
 @media (min-width: 900px) {
-  :root { --sidebar: 264px; }
+  :root { --sidebar: 280px; }
 
   /* Hanya digeser pada halaman yang SUNGGUH punya laci — `:has()` dipakai
      juga di `body:has(.pil-versi)` di atas, bukan teknik baru di berkas
@@ -1944,25 +1944,39 @@ body.terik {
     animation: none;
   }
 
-  /* Kontennya DIBATASI dan DIPUSATKAN di ruang sisa sesudah sidebar —
-     selebar bentuk ponselnya dulu (560px, angka yang sama dengan
-     `max-width` lama `.bingkai`), supaya kartu & borang tak melebar
-     janggal di monitor lebar.
+  /* Pegangan resize berada di batas sidebar, bukan di alur navigasi. */
+  .laci__ukur {
+    position: absolute; inset: 0 -5px 0 auto; z-index: 2;
+    width: 10px; padding: 0; border: 0; background: transparent;
+    cursor: col-resize; touch-action: none;
+  }
+  .laci__ukur::after {
+    content: ""; position: absolute; inset: 0 4px; background: transparent;
+    transition: background .15s ease;
+  }
+  .laci__ukur:hover::after, .laci__ukur:focus-visible::after,
+  body.ubah-lebar-laci .laci__ukur::after { background: var(--aksi); }
+  .laci__ukur:focus-visible { outline: 2px solid var(--aksi); outline-offset: -1px; }
 
-     ⚠ LEWAT PADDING, BUKAN `max-width` + `margin:auto` pada kotaknya
-     sendiri. Dicoba begitu dulu dan ketahuan rusak dari tangkapan layar
-     pemilik: `.isi` adalah kotak yang SCROLL (`overflow-y:auto` di
-     aturan dasarnya), jadi mengecilkan kotaknya memindahkan scrollbar-nya
-     ikut ke tepi kotak yang sudah menyempit — scrollbar mengambang di
-     tengah layar lebar, bukan menempel di tepi jendela sungguhan, persis
-     yang dilaporkan: "posisi scrollbar-nya aneh, seperti bukan versi
-     desktop". Padding membiarkan KOTAKNYA tetap selebar penuh (sehingga
-     scrollbar-nya tetap di tepi jendela yang benar) dan hanya mendorong
-     ISINYA ke tengah. `max(…)` menjaga jarak tak pernah lebih sempit
-     dari padding ponsel (16px) pada lebar yang pas 900px, saat ruang
-     sisa sesudah sidebar belum jauh lebih lebar dari 560px. */
+  /* Ruang kerja desktop memakai lebar layar, bukan kolom selebar ponsel.
+     Padding yang lentur menjaga isi tetap nyaman dibaca di monitor besar,
+     sementara kotak scroll tetap sampai ke tepi jendela. */
   .isi {
-    padding-left: max(16px, calc((100% - 560px) / 2));
-    padding-right: max(16px, calc((100% - 560px) / 2));
+    padding: 30px clamp(28px, 3.2vw, 64px) 52px;
+    gap: 22px;
+  }
+  .isi > form, .isi > .panel, .isi > .kartu-lebar {
+    width: 100%; max-width: 1480px; margin-left: auto; margin-right: auto;
+  }
+  .isi > h1, .isi > h2, .isi > h3, .isi > .pengantar {
+    width: 100%; max-width: 1480px; margin-left: auto; margin-right: auto;
+  }
+  .bar { padding-left: clamp(28px, 3.2vw, 64px); padding-right: clamp(28px, 3.2vw, 64px); }
+  .bar__isi { max-width: 1480px; }
+  .isi .tabel-bungkus { overflow-x: auto; }
+  .isi input, .isi select, .isi textarea { max-width: 100%; }
+  .isi .kartu-grid, .isi .petak, .isi .kumpulan-kartu {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    align-items: start; gap: 18px;
   }
 }

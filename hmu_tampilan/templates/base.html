@@ -371,6 +371,9 @@
     </form>
     {% endblock %}
   </nav>
+  <div class="laci__ukur" role="separator" tabindex="0"
+       aria-orientation="vertical" aria-label="Ubah lebar sidebar"
+       title="Tarik untuk mengubah lebar sidebar"></div>
 </div>
 {% endif %}
 
@@ -427,6 +430,51 @@
     : function (s, j, f) { s.addEventListener(j, f); };
   pasang(document, "keydown", function (e) {
     if (e.key === "Escape" && !laci.hidden) buka(false);
+  });
+})();
+</script>
+
+<script>
+/* Lebar sidebar per perangkat: pointer untuk mouse/sentuh dan tombol panah
+   untuk keyboard. Jalankan pada setiap halaman karena konten bingkai
+   diganti tanpa memuat ulang dokumen. */
+(function () {
+  var pegangan = document.querySelector(".laci__ukur");
+  if (!pegangan || !window.matchMedia("(min-width: 900px)").matches) return;
+  var kunci = "hmu.sidebar.lebar.produksi";
+  var batas = function (n) { return Math.max(220, Math.min(440, n)); };
+  var simpan = function (n, tetap) {
+    n = batas(n);
+    document.documentElement.style.setProperty("--sidebar", n + "px");
+    pegangan.setAttribute("aria-valuemin", "220");
+    pegangan.setAttribute("aria-valuemax", "440");
+    pegangan.setAttribute("aria-valuenow", String(n));
+    if (tetap) { try { localStorage.setItem(kunci, String(n)); } catch (_) {} }
+  };
+  try {
+    var awal = Number(localStorage.getItem(kunci));
+    if (awal) simpan(awal, false);
+  } catch (_) {}
+  var tarik = false;
+  pegangan.addEventListener("pointerdown", function (e) {
+    tarik = true; pegangan.setPointerCapture(e.pointerId);
+    document.body.classList.add("ubah-lebar-laci"); e.preventDefault();
+  });
+  pegangan.addEventListener("pointermove", function (e) {
+    if (tarik) simpan(e.clientX, false);
+  });
+  function selesai() {
+    if (!tarik) return;
+    tarik = false; document.body.classList.remove("ubah-lebar-laci");
+    simpan(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")), true);
+  }
+  pegangan.addEventListener("pointerup", selesai);
+  pegangan.addEventListener("pointercancel", selesai);
+  pegangan.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    var kini = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")) || 280;
+    simpan(kini + (e.key === "ArrowRight" ? 16 : -16), true);
   });
 })();
 </script>
