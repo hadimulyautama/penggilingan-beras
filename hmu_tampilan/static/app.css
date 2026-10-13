@@ -840,7 +840,9 @@ body.putus-jaringan .bar { margin-top: 34px; }
   border: 1px solid #ffffff40; border-radius: 19px; background: #ffffff18;
   color: #fff; font-weight: 700; font-size: 20px; letter-spacing: .06em;
 }
-.beranda-sambut--gabung { display: grid; gap: 22px; }
+.beranda-sambut--gabung {
+  display: grid; flex: 0 0 auto; min-height: max-content; gap: 22px;
+}
 .beranda-sambut--gabung .beranda-sambut__kepala {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
 }
