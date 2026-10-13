@@ -11,14 +11,14 @@
  */
 
 :root {
-  --dasar:      #0d1418;
-  --panel:      #16212a;
-  --panel-2:    #1e2c36;
-  --garis:      #2b3b45;
-  --garis-2:    #1e2c36;
+  --dasar:      #111914;
+  --panel:      #1b261f;
+  --panel-2:    #26352b;
+  --garis:      #3a4a3e;
+  --garis-2:    #2b3a30;
 
-  --tinta:      #dce7ec;
-  --tinta-2:    #b6c6ce;
+  --tinta:      #e7ede7;
+  --tinta-2:    #c5d0c6;
   /* ── Kontras teks kerja: minimal 7:1 ──
      Diukur terhadap --panel (#16212a). Sebelum 11 September 2026:
      --redup 6,00:1 dan --redup-2 hanya 4,33:1, yaitu DI BAWAH ambang WCAG AA
@@ -28,16 +28,16 @@
      Dinaikkan di TOKEN, bukan per elemen: warna yang dibetulkan satu-satu
      akan tertinggal di layar berikutnya, dan yang tertinggal justru layar
      yang paling jarang dibuka orang. */
-  --redup:      #b4c6cf;   /*  9,28:1 */
-  --redup-2:    #a8bcc6;   /*  8,31:1 */
+  --redup:      #c0cdc1;
+  --redup-2:    #aebcaf;
 
-  --aksi:       #4fb3d9;
-  --aksi-gelap: #3d94b6;
-  --aksi-tinta: #08131a;
+  --aksi:       #8ab68d;
+  --aksi-gelap: #709b74;
+  --aksi-tinta: #132016;
 
-  --aman:       #56b880;
-  --hati:       #d9a441;
-  --bahaya:     #d9695a;
+  --aman:       #82bd8c;
+  --hati:       #e0b45e;
+  --bahaya:     #df8976;
 
   --sentuh:     56px;
 
@@ -945,7 +945,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
      keduanya berhenti berarti apa-apa. */
   --fase-tumpuk: #c9986a;
   --fase-dryer:  #e07a4f;
-  --fase-silo:   #4fb3d9;
+  --fase-silo:   #b99a52;
   --fase-giling: #56b880;
   /* Hasil samping — menir, broken, bekatul, reject. BUKAN fase, melainkan
      KELAS BARANG; ia menumpang slot `--fase` sebab yang digambar sama, yaitu
@@ -965,7 +965,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
      mana pun. Biru kehijauan, sengaja berjarak dari `--fase-silo` (biru bahan)
      dan `--fase-giling` (hijau hasil): truk yang sudah berangkat tak boleh
      terbaca seperti mesin yang sedang menyala. */
-  --fase-keluar: #4fc4b0;
+  --fase-keluar: #bc715b;
 }
 
 .benda {
@@ -1748,25 +1748,62 @@ details.padat > .anak { margin: 0 12px 12px; }
    perlu tahu mode ini ada.
    ══════════════════════════════════════════════════════════════════════════ */
 body.terik {
-  --dasar:      #eef2f4;
+  --dasar:      #f5f5ef;
   --panel:      #ffffff;
-  --panel-2:    #e4eaee;
-  --garis:      #c2ced5;
-  --garis-2:    #d7dfe4;
+  --panel-2:    #e9eee6;
+  --garis:      #cbd6ca;
+  --garis-2:    #dce5da;
 
-  --tinta:      #0c1418;   /* 17,4:1 di atas --panel */
-  --tinta-2:    #1d2b33;   /* 13,6:1 */
-  --redup:      #35464f;   /*  9,4:1 */
-  --redup-2:    #3f5058;   /*  8,1:1 */
+  --tinta:      #202a23;
+  --tinta-2:    #3c4940;
+  --redup:      #4c5b50;
+  --redup-2:    #59675c;
 
-  --aksi:       #10627f;
-  --aksi-gelap: #0b4a61;
+  --aksi:       #355c40;
+  --aksi-gelap: #294a33;
   --aksi-tinta: #ffffff;
 
-  --aman:       #1c6b3c;
-  --hati:       #7a5305;
-  --bahaya:     #a12b1c;
+  --aman:       #336e42;
+  --hati:       #805714;
+  --bahaya:     #a64b36;
 }
+
+/* Tema kerja baru: hijau hutan, sage, dan krem hangat. Palet diterapkan
+   lewat token agar seluruh layar berubah seragam tanpa menyentuh isi kartu. */
+body.terik .laci__isi {
+  background: #26372d;
+  border-color: #405347;
+  color: #f2f4ed;
+}
+body.terik .laci__kepala { border-color: #405347; }
+body.terik .laci__isi .bar__nama { color: #f4f5ef; }
+body.terik .laci__isi .bar__sub { color: #c4d1c5; }
+body.terik .laci__isi .bar__avatar { background: #91b393; color: #17231a; }
+body.terik .pintu { color: #d5dfd5; }
+body.terik .pintu:hover { background: #34483a; }
+body.terik .pintu--kini {
+  background: #3b5141;
+  color: #fff;
+  box-shadow: inset 3px 0 #d8b56d;
+}
+body.terik .pintu--kini .pintu__ikon { color: #e1c47e; }
+body.terik .pintu__jml { background: #d7b36a; color: #282114; }
+body.terik .pintu__jml--kabar { background: #d99169; color: #29180f; }
+body.terik .pintu-sub { border-color: #53675a; }
+body.terik .pintu-sub__satu { color: #d0dbd1; }
+body.terik .pintu-sub__satu--kini { background: #3b5141; color: #fff; }
+body.terik .bar { background: #fff; }
+body.terik .bar__avatar { background: #355c40; color: #fff; }
+body.terik .btn--utama { box-shadow: 0 2px 0 #203d2a; }
+body.terik .kartu, body.terik .padat, body.terik .benda,
+body.terik .jalan, body.terik .petak__sel {
+  box-shadow: 0 2px 8px rgba(40, 55, 43, .045);
+}
+body.terik .kartu--sorot { border-color: #718d70; }
+body.terik .pita-uji { background: #7f5b12; color: #fff5d7; }
+body.terik .laci__ukur:hover::after,
+body.terik .laci__ukur:focus-visible::after,
+body.terik.ubah-lebar-laci .laci__ukur::after { background: #d8b56d; }
 
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
 
