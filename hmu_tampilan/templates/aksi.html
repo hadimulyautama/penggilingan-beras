@@ -66,6 +66,7 @@
 {% set GRUP_PIL = GRUP_PIL|default([], true) %}
 {% set GRUP_KINI = GRUP_KINI|default("", true) %}
 {% set GRUP_TOTAL = GRUP_TOTAL|default(semua|length, true) %}
+{% set MENUNGGU_PER_GRUP = MENUNGGU_PER_GRUP|default([], true) %}
 {% if GRUP_PIL|length > 1 %}
   <div class="saring saring--antrean">
     <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/aksi">Semua
@@ -134,6 +135,21 @@
 
 {% if GRUP_KINI == "bahan" %}
   {{ benda.blok("Bahan baku", menunggu, listview=True, tabel=True) }}
+{% elif not GRUP_KINI and MENUNGGU_PER_GRUP %}
+  <div class="antrian-semua-desktop">
+    {% for kunci, nama, daftar_grup in MENUNGGU_PER_GRUP %}
+      {% if daftar_grup %}
+        {{ benda.blok(nama, daftar_grup, listview=True, tabel=(kunci == "bahan")) }}
+      {% endif %}
+    {% endfor %}
+  </div>
+  {# Di mobile pertahankan susunan antrean sebelumnya; pemisahan listview ini
+     khusus desktop agar tabel bahan baku dan format kerja lain tidak tercampur. #}
+  <div class="antrian-semua-mobile">
+    {{ benda.blok(judul_atas, atas, listview=True) }}
+    {% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}
+    {{ benda.blok(judul_bawah, lain, listview=True) }}
+  </div>
 {% else %}
   {{ benda.blok(judul_atas, atas, listview=True) }}
   {% if KELOMPOK_TENGAH %}{{ benda.blok(judul_tengah, tengah, listview=True) }}{% endif %}

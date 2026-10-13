@@ -532,6 +532,11 @@ async def halaman_aksi(request: Request):
                             if n_grup[k] or k == grup],
                   GRUP_KINI=grup,
                   GRUP_TOTAL=sum(n_grup.values()),
+                  MENUNGGU_PER_GRUP=[
+                      (k, nama, [x for x in b.menunggu
+                                 if svc.grup_baris(x) == k])
+                      for k, nama in svc.GRUP_ANTREAN
+                  ],
                   # Hanya yang BELUM PUNYA TEMPAT. Yang sudah berada di
                   # mesin atau silo pindah ke layar Sedang berjalan berikut
                   # tindakannya — kartu yang sama muncul di dua tempat adalah
