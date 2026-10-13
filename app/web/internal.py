@@ -8,7 +8,8 @@ ber-token, Kantor memanggilnya lewat `klien_produksi`.
 Keamanan:
   - Aktif hanya bila env `INTERNAL_API_TOKEN` diisi (kosong → 404, seperti /dashboard).
   - Setiap permintaan wajib membawa header `X-Internal-Token` yang sama persis.
-  - READ-ONLY: agent memang tak punya kemampuan tulis; tak ada endpoint tulis.
+  - Agent hanya membaca. Endpoint operasi pengiriman yang terpisah hanya
+    menautkan/verifikasi tiket untuk pengguna bersama yang dikirim Timbangan.
   - Data uang (HPP/harga) hanya keluar bila pemanggil mengirim financial=true —
     keputusan hak akses tetap di sisi Kantor (RBAC-nya), sama seperti sebelum pisah.
 """
@@ -37,6 +38,66 @@ def _pastikan_token(token: str | None) -> None:
         raise HTTPException(status_code=403, detail="Token internal tidak valid.")
 
 
+def _kunci_teks(value: str | None) -> str:
+    return " ".join((value or "").strip().casefold().split())
+
+
+def _kunci_nopol(value: str | None) -> str:
+    return "".join(c for c in (value or "").upper() if c.isalnum())
+
+
+async def _cocokkan_pengiriman_tiket(db, tid: int):
+    """Cari satu pengiriman dimuat dari tiket keluar berdasarkan pelanggan+nopol.
+
+    Kedua nilai ini berasal dari tahap timbang pertama dan tahap muat. Bila
+    salah satunya kosong atau hasilnya ganda, integrasi sengaja tidak menebak.
+    """
+    from sqlalchemy import text
+    from app.penggilingan.inventory.models import OUT_DIMUAT, OUT_SELESAI
+    from app.services import barang_keluar as bk
+
+    tiket = (await db.execute(text("""
+        SELECT t.id, t.arah, t.status_transaksi, t.status_tiket,
+               t.nomor_polisi, t.pelanggan_id,
+               COALESCE(p.nama_pelanggan, t.pihak_nama) AS pihak
+          FROM timbangan_transaksi t
+          LEFT JOIN pelanggan p ON p.id = t.pelanggan_id
+         WHERE t.id = :tid
+    """), {"tid": int(tid)})).mappings().first()
+    if (not tiket or tiket["arah"] != "KELUAR"
+            or tiket["status_transaksi"] != "AKTIF"
+            or tiket["status_tiket"] not in ("TERBUKA", "SELESAI")):
+        raise HTTPException(status_code=409, detail="Tiket bukan timbang keluar aktif.")
+    nopol = _kunci_nopol(tiket["nomor_polisi"])
+    pihak = _kunci_teks(tiket["pihak"])
+    if not nopol or not pihak:
+        raise HTTPException(status_code=409, detail="Tiket belum memiliki pelanggan dan nomor polisi untuk pencocokan.")
+
+    candidates = await bk.daftar(db, status=(OUT_DIMUAT, OUT_SELESAI), batas=500)
+    cocok = []
+    for rec, items in candidates:
+        if _kunci_nopol(rec.no_polisi) != nopol:
+            continue
+        if tiket["pelanggan_id"] is not None and rec.pelanggan_id is not None:
+            identitas_pelanggan_sama = rec.pelanggan_id == tiket["pelanggan_id"]
+        else:
+            identitas_pelanggan_sama = _kunci_teks(rec.nama_pembeli) == pihak
+        if (identitas_pelanggan_sama
+                and rec.timbangan_transaksi_id in (None, int(tid))
+                and (rec.status == OUT_DIMUAT
+                     or rec.timbangan_transaksi_id == int(tid))):
+            cocok.append((rec, items))
+    # Tiket yang sudah lebih dulu ditaut hanya boleh kembali ke transaksi itu.
+    sudah = [(rec, items) for rec, items in cocok
+             if rec.timbangan_transaksi_id == int(tid)]
+    if sudah:
+        cocok = sudah
+    if len(cocok) != 1:
+        alasan = "belum ada perintah Produksi yang dimuat" if not cocok else "cocok dengan lebih dari satu perintah"
+        raise HTTPException(status_code=409, detail=f"Pencocokan ditahan: {alasan}; periksa pelanggan dan nomor polisi.")
+    return tiket, cocok[0][0], cocok[0][1]
+
+
 class TanyaIn(BaseModel):
     pertanyaan: str
     role: str = "admin"
@@ -50,6 +111,106 @@ class HppIn(BaseModel):
     langsung_silo: bool = False
     berat_bahan: float | None = None
     berat_hasil: float | None = None
+
+
+@router.get("/pengiriman/tiket/{tid}/muatan")
+async def pengiriman_muatan_tiket(
+    tid: int, x_internal_token: str | None = Header(default=None),
+) -> dict:
+    """Rincian barang yang benar-benar dicatat dimuat, untuk layar timbang 2."""
+    _pastikan_token(x_internal_token)
+    async with SessionLocal() as db:
+        _tiket, rec, items = await _cocokkan_pengiriman_tiket(db, tid)
+        muatan = []
+        for item in items:
+            if item.item_type == "byproduct_curah":
+                kode = (item.jenis_byproduct or "").upper()
+                label = (item.jenis_byproduct or "Hasil samping").title() + " (curah)"
+            elif item.item_type == "finished_goods":
+                from sqlalchemy import select
+                from app.penggilingan.inventory.models import ProductSku
+                from app.services.stok import jenis_produk
+                from hmu_core import (Brand, PackageSize, PackagingMaterial,
+                                      RiceQualityStandard)
+
+                detail = (await db.execute(
+                    select(ProductSku.kategori, RiceQualityStandard.kode,
+                           Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg)
+                    .join(RiceQualityStandard,
+                          RiceQualityStandard.id == item.rice_quality_standard_id,
+                          isouter=True)
+                    .join(Brand, Brand.id == ProductSku.brand_id, isouter=True)
+                    .join(PackagingMaterial,
+                          PackagingMaterial.id == ProductSku.packaging_material_id)
+                    .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
+                    .where(ProductSku.id == item.product_sku_id)
+                )).first()
+                if detail is None:
+                    raise HTTPException(status_code=409, detail="SKU muatan tidak ditemukan di Produksi.")
+                jenis = jenis_produk(detail[0], detail[1])
+                if jenis in ("broken", "menir", "bekatul", "reject"):
+                    kode, label = jenis.upper(), jenis.title()
+                else:
+                    kode = "BERAS"
+                    label = "Beras putih" + (f" · {jenis}" if jenis != "beras_putih" else "")
+                kemasan = " · ".join(str(x) for x in detail[2:4] if x)
+                if detail[4]:
+                    kemasan += (" · " if kemasan else "") + f"{detail[4]} kg"
+                if kemasan:
+                    label += f" · {kemasan}"
+            elif item.item_type in ("pk_langsung", "pk_g2"):
+                kode, label = "BERAS_PK", "Beras pecah kulit (PK)"
+            elif item.item_type == "gabah_langsung":
+                kode, label = "GABAH_KERING", "Gabah kering"
+            else:
+                raise HTTPException(status_code=409, detail=f"Jenis muatan {item.item_type} belum didukung integrasi timbang.")
+            muatan.append({
+                "jenis_kode": kode,
+                "nama": label,
+                "berat_kg": float(item.berat_kg or 0),
+                "jumlah_karung": int(item.jumlah_karung or 0),
+            })
+        return {"kode_perintah": rec.kode, "pelanggan": rec.nama_pembeli,
+                "nomor_polisi": rec.no_polisi, "muatan": muatan}
+
+
+@router.post("/pengiriman/tiket/{tid}/verifikasi")
+async def verifikasi_pengiriman_tiket(
+    tid: int,
+    x_operator_akun: int = Header(alias="X-Operator-Akun"),
+    x_internal_token: str | None = Header(default=None),
+) -> dict:
+    """Tautkan tiket dan verifikasi otomatis untuk muatan yang cocok."""
+    _pastikan_token(x_internal_token)
+    from hmu_identitas.model import Akun
+    from hmu_core import User
+    from app.services import barang_keluar as bk
+    from app.penggilingan.inventory.models import OUT_SELESAI
+
+    async with SessionLocal() as db:
+        _tiket, rec, _items = await _cocokkan_pengiriman_tiket(db, tid)
+        if rec.status == OUT_SELESAI and rec.timbangan_transaksi_id == int(tid):
+            return {"selesai": True, "kode_perintah": rec.kode,
+                    "catatan": "Sudah tertaut dan terverifikasi sebelumnya."}
+        akun = await db.get(Akun, int(x_operator_akun))
+        user = await db.get(User, akun.user_id) if akun else None
+        if user is None or user.status != "aktif":
+            raise HTTPException(status_code=403, detail="Akun operator Timbangan tidak terhubung ke pengguna aktif Produksi.")
+        if rec.timbangan_transaksi_id not in (None, int(tid)):
+            raise HTTPException(status_code=409, detail="Perintah ini sudah tertaut ke tiket timbang lain.")
+        try:
+            _rec, catatan = await bk.verifikasi(
+                db, user=user, rec_id=rec.id, timbangan_transaksi_id=int(tid),
+            )
+            return {"selesai": True, "kode_perintah": rec.kode, "catatan": catatan}
+        except bk.BarangKeluarError as exc:
+            pesan = str(exc)
+            # Jangan tautkan/menutup sebelum Admin memberi sebab selisih.
+            # Tiket tetap tersedia di daftar verifikasi manual.
+            if "melewati batas wajar" in pesan:
+                return {"selesai": False, "peringatan": pesan,
+                        "kode_perintah": rec.kode}
+            raise HTTPException(status_code=409, detail=pesan) from exc
 
 
 @router.post("/produksi/tanya")
