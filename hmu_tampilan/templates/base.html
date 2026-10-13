@@ -177,8 +177,32 @@
 
          Daftar KUNCI, bukan syarat per layar di dalam templat ini: app yang
          menambah layar bersyarat besok tak perlu menyunting berkas bersama. #}
-      {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-        {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
+      {% set kelompok_menu = {
+        'beranda': 'Menu Utama',
+        'aksi': 'Operasional', 'berjalan': 'Operasional',
+        'keputusan': 'Operasional', 'mutu': 'Operasional',
+        'stok': 'Operasional', 'stok_produk': 'Operasional',
+        'stok_produk_jasa': 'Operasional', 'stok_pk_jasa': 'Operasional',
+        'stok_karung': 'Operasional', 'stok_karung_jasa': 'Operasional',
+        'barang_keluar': 'Operasional', 'retur': 'Operasional', 'jasa': 'Operasional',
+        'riwayat_sosoh': 'Data & Pengaturan', 'riwayat_qc': 'Data & Pengaturan',
+        'riwayat_pengeringan': 'Data & Pengaturan', 'riwayat_giling': 'Data & Pengaturan',
+        'riwayat_transfer': 'Data & Pengaturan', 'laporan': 'Data & Pengaturan',
+        'kabar': 'Data & Pengaturan', 'audit': 'Data & Pengaturan',
+        'aksi_lain': 'Data & Pengaturan', 'pengaturan': 'Data & Pengaturan'
+      } %}
+      {% for grup_menu in ['Menu Utama', 'Operasional', 'Data & Pengaturan'] %}
+        {% set ns_seksi = namespace(ada=false) %}
+        {% for kunci, _alamat, _nama, _ket, peran_min, _ikon in TAB %}
+          {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kelompok_menu.get(kunci) == grup_menu %}
+            {% set ns_seksi.ada = true %}
+          {% endif %}
+        {% endfor %}
+        {% if ns_seksi.ada %}
+        <section class="laci-seksi" aria-label="{{ grup_menu }}">
+          <h2 class="laci-seksi__judul">{{ grup_menu }}</h2>
+          {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
+            {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kelompok_menu.get(kunci) == grup_menu %}
         {# ── SUB-MENU: pintu yang diklik MEMBUKA, bukan menuju ──
            Keputusan pemilik 2 Oktober 2026: "bisa tidak antrian tunggu jika di
            klik muncul dropdown sub menu?" Sebabnya kalimat sebelumnya:
@@ -348,6 +372,9 @@
           </div>
         </details>
         {% endif %}
+            {% endif %}
+          {% endfor %}
+        </section>
         {% endif %}
       {% endfor %}
     </div>
