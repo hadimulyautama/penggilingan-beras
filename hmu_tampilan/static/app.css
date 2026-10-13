@@ -818,6 +818,11 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .laci-seksi:first-child .laci-seksi__judul { margin-top: 4px; }
 .laci__kaki { margin-top: auto; padding-top: 14px; flex-shrink: 0; }
 .laci__kaki .btn { width: 100%; }
+.setelan-sesi { margin-top: 24px; }
+.setelan-sesi__isi { display: grid; gap: 12px; }
+.setelan-sesi__isi .btn { width: 100%; }
+.btn--putih-sesi { background: #465361; border-color: #465361; color: #fff; font-weight: 700; }
+.btn--putih-sesi:hover { background: #34404b; border-color: #34404b; }
 
 /* Tata letak beranda: sambutan, ringkasan, aktivitas, pekerjaan, lalu gudang.
    Sumber angka dan rincian tetap berasal dari makro/data layar yang sama. */

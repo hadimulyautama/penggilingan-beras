@@ -404,6 +404,24 @@
 </div>
 {% endif %}
 
+<div class="setelan-sesi">
+  <span class="lbl">Sesi perangkat</span>
+  <div class="kartu setelan-sesi__isi">
+    <p class="bantu">Keluar dari akun pada perangkat ini, atau akhiri sesi akun di semua perangkat.</p>
+    <form method="post" action="/keluar">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
+      <button class="btn btn--utama" type="submit">
+        {% if akun.sesi_pendek %}Ganti pengguna{% else %}Keluar{% endif %}
+      </button>
+    </form>
+    <form method="post" action="/keluar-semua"
+          onsubmit="return confirm('Keluarkan akun Anda dari SEMUA perangkat, termasuk yang tidak ada di tangan Anda? Anda perlu masuk lagi di sini.')">
+      <input type="hidden" name="_csrf" value="{{ CSRF }}">
+      <button class="btn btn--putih-sesi" type="submit">Keluar dari semua perangkat</button>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block kaki %}

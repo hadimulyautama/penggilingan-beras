@@ -379,23 +379,6 @@
       {% endfor %}
     </div>
     {% block laci_kaki %}
-    <form method="post" action="/keluar" class="laci__kaki">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <button class="btn" type="submit">
-        {% if akun.sesi_pendek %}Ganti pengguna{% else %}Keluar{% endif %}
-      </button>
-    </form>
-    {# Perangkat LAIN — inilah yang dicari orang saat HP-nya hilang, dan
-       sampai 11 September 2026 jalannya tidak ada sama sekali. Ditaruh di
-       bawah tombol biasa dan dibuat kecil: ia jarang dipakai, tetapi saat
-       dibutuhkan ia harus ada di tempat yang sudah dicari orangnya. #}
-    <form method="post" action="/keluar-semua" class="laci__kaki"
-          onsubmit="return confirm('Keluarkan akun Anda dari SEMUA perangkat, termasuk yang tidak ada di tangan Anda? Anda perlu masuk lagi di sini.')">
-      <input type="hidden" name="_csrf" value="{{ CSRF }}">
-      <button class="btn btn--kecil btn--putih" type="submit">
-        Keluar dari semua perangkat
-      </button>
-    </form>
     {% endblock %}
   </nav>
   <div class="laci__ukur" role="separator" tabindex="0"
