@@ -1,4 +1,5 @@
 #retur-ui{--rt-blue:var(--aksi);--rt-deep:var(--aksi-gelap);--rt-ink:var(--tinta);--rt-muted:var(--kulit-redup);--rt-line:var(--kulit-batas);--rt-surface:var(--kulit-kartu);--rt-wash:var(--panel-2);max-width:1320px;margin:0 auto;color:var(--rt-ink);font-family:var(--font-sans,"IBM Plex Sans",sans-serif)}
+.rt-description{margin:0 0 12px;color:var(--rt-muted);font-size:1rem;line-height:1.55}
 #retur-ui *{box-sizing:border-box}#retur-ui .rt-hero{position:relative;overflow:hidden;border-radius:28px;padding:clamp(22px,4vw,42px);color:#fff;background:var(--kulit-banner);box-shadow:0 18px 42px #3f4b5825}
 #retur-ui .rt-hero:after{content:"";position:absolute;width:390px;height:390px;border-radius:50%;right:-90px;top:-220px;background:#ffffff12;box-shadow:0 0 0 66px #ffffff0b,0 0 0 132px #ffffff08;pointer-events:none}
 #retur-ui .rt-eyebrow{display:flex;align-items:center;gap:9px;color:#dce2e8;font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase}#retur-ui .rt-eyebrow i{width:8px;height:8px;border-radius:50%;background:#dce2e8;box-shadow:0 0 0 5px #dce2e825}
