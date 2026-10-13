@@ -381,25 +381,6 @@
 </div>
 {% endif %}
 
-{# Navigasi ibu jari mengikuti mockup pada layar kecil. Menu lengkap tetap
-   berada di laci; tiga tujuan yang paling sering dipakai selalu terjangkau. #}
-{% if akun and not kembali and layar in TAB_KUNCI %}
-<nav class="nav-bawah" aria-label="Navigasi cepat">
-  <a href="/"{{ ' aria-current=page'|safe if layar == 'beranda' }}>
-    <span aria-hidden="true">⌂</span>Beranda
-  </a>
-  <a href="/aksi"{{ ' aria-current=page'|safe if layar == 'aksi' }}>
-    <span aria-hidden="true">≡</span>Antrian
-  </a>
-  <a href="/stok"{{ ' aria-current=page'|safe if layar in ('stok', 'stok_produk', 'stok_produk_jasa', 'stok_pk_jasa') }}>
-    <span aria-hidden="true">▦</span>Stok
-  </a>
-  <button type="button" aria-controls="laci" onclick="document.getElementById('buka-laci')?.click()">
-    <span aria-hidden="true">☰</span>Menu
-  </button>
-</nav>
-{% endif %}
-
 <script>
 /* ── Buka & tutup laci ──
    Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan
