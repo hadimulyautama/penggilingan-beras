@@ -275,7 +275,7 @@
               <span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>
             {% else %}
               <a class="btn btn--kecil"
-                 href="/stok?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>
+                 href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>
             {% endif %}
           </div>
         {% endif %}

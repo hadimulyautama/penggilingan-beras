@@ -61,7 +61,10 @@ async def get_standard(db: AsyncSession, kode: str) -> RiceQualityStandard | Non
 
 # Aturan kemasan per kategori (validasi kombinasi).
 KEMASAN_VALID = {
-    "beras_putih": {("biasa", None), ("laminasi", None)},  # ukuran: _BERAS_SIZES
+    # Beras yang dibeli dari luar masuk sebagai Beras Medium dengan karung
+    # putih polos 50 kg. Jalur penerimaan tiket memakai SKU yang sama dengan
+    # stok barang jadi; tanpa kombinasi ini SKU ditolak sebelum stok tersimpan.
+    "beras_putih": {("biasa", None), ("laminasi", None), ("putih", 50)},  # ukuran: _BERAS_SIZES
     "beras_b": {("biasa", None), ("laminasi", None)},
     "broken": {("putih", 50), ("polos", 25)},
     "menir": {("putih", 50)},

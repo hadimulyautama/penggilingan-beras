@@ -206,16 +206,14 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         lot=lot, tempat=tempat,
         SARING_GUDANG=saring, gudang=gudang,
         produk=[], samping=[], total=sum(l.tersedia for l in lot),
-        # ── TANPA tombol aksi — baca saja ──
-        #
-        # Beda dari `/stok`: halaman ini jalan KEDUA ke barang yang sudah
-        # punya rumahnya sendiri di sana, pola yang sama dengan "Produk
-        # Jasa" (tak ada tombol pindah kepemilikan untuk PK — belum diminta
-        # pemilik). Operator yang ingin mengoreksi atau memindahkan tetap ke
-        # `/stok`; di sini murni "PK siapa, di mana, berapa".
-        boleh_ubah=False, boleh_minta=False, boleh_pindah_tumpukan=False,
+        # Halaman ini tetap informatif untuk PK jasa, tetapi operator Gudang 2
+        # harus bisa meminta PK jasa yang masih menumpuk di Gudang 1. Aksi
+        # permintaan tidak memindahkan stok; persetujuan dan pengiriman tetap
+        # mengikuti alur empat langkah yang sama.
+        boleh_ubah=False, boleh_minta=view == POLESAN, boleh_pindah_tumpukan=False,
         mutu_aktif=mutu_aktif,
-        buka="", nilai="",
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
         # Kalimat kepala blok & keadaan kosong menyebut "PK Jasa", bukan
         # "PK" polos — tanpa ini orang yang sampai di sini lewat tautan
         # langsung (bukan lewat sub-menu "Stok") tak tahu ia sedang melihat
