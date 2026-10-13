@@ -487,12 +487,19 @@
          titik. enterkeyhint: "berikutnya" sepanjang rantai, "selesai" di
          kolom terakhir. */
       var terakhir = i === semua.length - 1;
-      return l + '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
+      var inputAngka = '<input class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
         '"' + (f.wajib ? ' data-wajib="1"' : "") +
         ' data-label="' + esc(f.label) + '"' +
         ' type="text" inputmode="' + (angka ? "decimal" : "text") + '"' +
         (angka ? ' data-angka="1" pattern="[0-9]*[.,]?[0-9]*"' : "") +
         ' enterkeyhint="' + (terakhir ? "done" : "next") + '" autocomplete="off">';
+      if (f.maksimal_karung) {
+        return l + '<div class="jumlah-berdampingan">' + inputAngka +
+          '<div class="maksimal-kemas" role="status" aria-live="polite">' +
+          '<span>Maksimal kemas</span><strong id="maks_' + esc(f.name) + '">Pilih proses &amp; ukuran</strong>' +
+          '</div></div>';
+      }
+      return l + inputAngka;
     }).join("");
 
     var judul = belah(a.label).teks;
@@ -520,6 +527,30 @@
       if (s) { return s.value; }
       var sembunyi = lembar.querySelector('[data-name="' + nama + '"]');
       return sembunyi ? sembunyi.value : "";
+    }
+
+    function perbaruiMaksimalKemas() {
+      var batas = $("maks_jumlah_karung");
+      if (!batas) { return; }
+      var sumber = $("f_sumber");
+      var opsiSumber = sumber && sumber.options && sumber.selectedIndex >= 0
+        ? sumber.options[sumber.selectedIndex] : null;
+      var terkunciSumber = $("t_sumber");
+      var berat = opsiSumber && opsiSumber.dataset.beratKg
+        ? Number(opsiSumber.dataset.beratKg)
+        : (terkunciSumber && terkunciSumber.dataset.beratKg
+          ? Number(terkunciSumber.dataset.beratKg) : NaN);
+      var kemasan = $("f_kemasan");
+      var bagian = kemasan && kemasan.value ? kemasan.value.split("|") : [];
+      var ukuran = bagian.length > 1 ? Number(bagian[bagian.length - 1]) : NaN;
+      if (!Number.isFinite(berat) || !Number.isFinite(ukuran) || ukuran <= 0) {
+        batas.textContent = "Pilih proses & ukuran";
+        batas.removeAttribute("data-jumlah");
+        return;
+      }
+      var maksimal = Math.floor(berat / ukuran);
+      batas.textContent = maksimal.toLocaleString("id-ID") + " karung";
+      batas.dataset.jumlah = String(maksimal);
     }
 
     /* Kotak TEKS yang menyaring daftar jarak jauh sambil diketik — lihat
@@ -844,13 +875,20 @@
           daftar.forEach(function (o) { if (o.value === terkunci) { cocok = o; } });
           var kotak = $("t_" + f.name);
           if (!kotak) { return; }
-          if (cocok) { kotak.textContent = cocok.label; return; }
+          if (cocok) {
+            kotak.textContent = cocok.label;
+            if (cocok.berat_kg != null) { kotak.dataset.beratKg = String(cocok.berat_kg); }
+            perbaruiMaksimalKemas();
+            return;
+          }
           kotak.outerHTML =
             '<span class="lbl">' + esc(f.label) + "</span>" +
             '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) +
             '" data-wajib="1" data-label="' + esc(f.label) + '">' +
             '<option value="">— pilih —</option>' + daftar.map(function (o) {
-              return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
+              return '<option value="' + esc(o.value) + '"' +
+                (o.berat_kg != null ? ' data-berat-kg="' + esc(o.berat_kg) + '"' : "") +
+                '>' + esc(o.label) + "</option>";
             }).join("") + "</select>";
           var sembunyi = lembar.querySelector('input[type="hidden"][data-name="' +
             f.name + '"]');
@@ -865,7 +903,9 @@
         var dipilih = s.value;
         s.innerHTML = '<option value="">' + (daftar.length ? "— pilih —" : "(belum ada)") +
           "</option>" + daftar.map(function (o) {
-            return '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>";
+            return '<option value="' + esc(o.value) + '"' +
+              (o.berat_kg != null ? ' data-berat-kg="' + esc(o.berat_kg) + '"' : "") +
+              '>' + esc(o.label) + "</option>";
           }).join("");
         if (dipilih) { s.value = dipilih; }
         /* Tiket dari tautan aplikasi Timbangan dibawa sampai ke lembar ini.
@@ -921,10 +961,16 @@
           var tbl2 = $("simpan");
           if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
         }
+        perbaruiMaksimalKemas();
       }).catch(function () {});
       });
     }
     muatPilihan(false);
+    ["sumber", "kemasan"].forEach(function (nama) {
+      var s = $("f_" + nama);
+      if (s) { s.addEventListener("change", perbaruiMaksimalKemas); }
+    });
+    perbaruiMaksimalKemas();
     /* Induk berubah → daftar anaknya ikut berubah. Tanpa ini medan bergantung
        cuma bekerja untuk proses yang dipilih PERTAMA, dan orang yang berubah
        pikiran memilih silo milik proses yang lain. */

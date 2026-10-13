@@ -1390,8 +1390,8 @@ _GRUP_AKSI = {
     # `kirim_bekatul`, `kirim_barang_jadi` dan `jual_pk` DIBUANG 28 September
     # 2026 (keputusan pemilik): barang keluar kini berperintah, dan pintu kedua
     # tanpa perintah membuat rantainya sukarela.
-    # Masukkan beras ke silo belum punya tombol di kartu stok, jadi tetap
-    # tersedia dari katalog umum. Keputusan pemilik 8 Oktober 2026.
+    # Masukkan beras ke silo tersedia dari kartu stok dan katalog umum.
+    # Keputusan pemilik 8 Oktober 2026.
     "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",

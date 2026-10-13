@@ -2485,6 +2485,12 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
     b.transit += await _kartu_silo_g2(db, asal_silo)
 
+    # Penyosohan selesai tetap terlihat di Transit bagi Admin dan Super Admin,
+    # sama seperti bagi operator G2. Sebelumnya kartu ini hanya ditambahkan di
+    # `untuk_operator_gudang2`, sehingga pemilik proses bisa melihatnya tetapi
+    # Admin yang mengesahkan hasil justru kehilangan kartunya.
+    b.transit += await _kartu_sosoh_selesai(db)
+
     # ── Beras yang sudah keluar mesin tetapi belum dipacking ──
     #
     # Admin ikut melihatnya: ia yang membaca angka stok Gudang 2, dan sampai 26

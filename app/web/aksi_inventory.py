@@ -187,6 +187,7 @@ async def beras_belum_dikemas(user: User = Depends(pengguna_aksi)) -> list[dict]
     async with SessionLocal() as db:
         curah = await beras_curah(db, termasuk_berjalan=False)
     return [{"value": f"{b.kode_proses}|{b.jenis}",
+             "berat_kg": float(b.sisa_kg),
              "label": (f"{b.kode_proses} · {nama_produk(b.jenis)} · "
                        f"{kg(b.sisa_kg)} belum dikemas")}
             for b in curah if b.sisa_kg > 0.5]
@@ -1516,7 +1517,8 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Tak ada kemasan yang sah untuk barang ini."},
                  {"name": "merk", "label": "Merk (beras saja)", "type": "remote",
                   "optional": True, "source": "/api/actions/merk"},
-                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number"},
+                 {"name": "jumlah_karung", "label": "Jumlah karung", "type": "number",
+                  "maksimal_karung": True},
              ]},
             {"id": "catat_bekatul", "label": "🌾 Catat bekatul (curah)",
              "post": "/api/actions/catat-bekatul",
