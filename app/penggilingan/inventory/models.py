@@ -140,6 +140,55 @@ class FinishedGoodsStock(Base, TimestampMixin):
     )
 
 
+class CustomerReturn(Base, TimestampMixin):
+    """Penerimaan barang retur pelanggan dari tiket timbang yang selesai."""
+
+    __tablename__ = "customer_returns"
+    __table_args__ = (
+        Index("uq_customer_returns_timbangan", "timbangan_transaksi_id", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(24), unique=True, nullable=False)
+    timbangan_transaksi_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kode_tiket: Mapped[str] = mapped_column(String(32), nullable=False)
+    pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
+    nama_pelanggan: Mapped[str | None] = mapped_column(String(150))
+    nomor_polisi: Mapped[str | None] = mapped_column(String(20))
+    timbang1_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    timbang2_kg: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    berat_tiket_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    berat_rincian_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    selisih_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    alasan_selisih: Mapped[str | None] = mapped_column(String(300))
+    catatan: Mapped[str | None] = mapped_column(String(500))
+    warehouse_id: Mapped[int | None] = mapped_column(ForeignKey("warehouses.id"))
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class CustomerReturnItem(Base, TimestampMixin):
+    """Rincian SKU, kemasan, dan pemilik untuk satu penerimaan retur."""
+
+    __tablename__ = "customer_return_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_return_id: Mapped[int] = mapped_column(
+        ForeignKey("customer_returns.id", ondelete="CASCADE"), nullable=False
+    )
+    product_sku_id: Mapped[int] = mapped_column(ForeignKey("product_skus.id"), nullable=False)
+    rice_quality_standard_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rice_quality_standards.id")
+    )
+    jumlah_karung: Mapped[int] = mapped_column(Integer, nullable=False)
+    berat_total_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
+    catatan: Mapped[str | None] = mapped_column(String(200))
+    finished_goods_stock_id: Mapped[int | None] = mapped_column(
+        ForeignKey("finished_goods_stock.id")
+    )
+
+
 class ByproductStock(Base, TimestampMixin):
     """Stok hasil samping CURAH (hanya bekatul). Dijual per kg."""
 

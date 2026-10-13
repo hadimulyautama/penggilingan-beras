@@ -38,6 +38,7 @@ from app.web.layar_keputusan import router as keputusan_router
 from app.web.layar_kabar import router as kabar_router
 from app.web.layar_jasa import router as jasa_router
 from app.web.layar_keluar import router as keluar_router
+from app.web.layar_retur import router as retur_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
 from app.web.layar_sosoh import router as sosoh_router
@@ -105,6 +106,7 @@ app.include_router(keputusan_router)
 app.include_router(gudang_router)
 app.include_router(produk_router)
 app.include_router(keluar_router)
+app.include_router(retur_router)
 app.include_router(jasa_router)
 app.include_router(sosoh_router)
 app.include_router(riwayat_router)

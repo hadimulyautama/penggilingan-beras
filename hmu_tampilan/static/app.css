@@ -770,24 +770,6 @@ body.putus-jaringan .bar { margin-top: 34px; }
   flex-shrink: 0;
 }
 
-/* Identitas produk menjadi jangkar visual di atas daftar navigasi, seperti
-   contoh beranda yang disetujui. Identitas akun tetap tampil terpisah. */
-.identitas-aplikasi {
-  display: flex; align-items: center; gap: 11px;
-  padding: 8px 7px 18px; margin-bottom: 10px;
-  border-bottom: 1px solid var(--garis-2);
-  color: var(--tinta); text-decoration: none; flex: none;
-}
-.identitas-aplikasi__logo {
-  width: 42px; height: 42px; border-radius: 13px;
-  display: grid; place-items: center;
-  background: #4d83df; color: #fff;
-  font-size: 15px; font-weight: 700; letter-spacing: .03em;
-}
-.identitas-aplikasi strong, .identitas-aplikasi small { display: block; }
-.identitas-aplikasi strong { font-size: 15px; line-height: 1.25; }
-.identitas-aplikasi small { color: var(--redup-2); font-size: 12px; }
-
 /* ── Daftar pintu: SATU-SATUNYA bagian laci yang menggulir ──
    Laporan pemilik 28 September 2026, dengan fotonya: laci tak bisa digulir,
    dan "Kabar" terpotong di tepi bawah layar — berikut List audit, Pengaturan,
@@ -850,8 +832,6 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .beranda-aktivitas, .beranda-tindaklanjut { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .beranda-gudang { min-width: 0; }
 body.terik .beranda-sambut { background: linear-gradient(115deg, #3474d4, #2458ad 68%, #497fdb); }
-body.terik .identitas-aplikasi { color: #f4f7ff; border-color: #405b88; }
-body.terik .identitas-aplikasi small { color: #c8d8f2; }
 
 @media (max-width: 899px) {
   .beranda-sambut { padding: 22px 20px; border-radius: 18px; }
@@ -2059,7 +2039,6 @@ body.terik a:hover { color: #1f4e9f; }
        tempat, bukan muncul. */
     animation: none;
   }
-  .identitas-aplikasi { padding: 10px 9px 22px; margin-bottom: 14px; }
   .laci__kepala { border: 0; padding: 0 9px 15px; margin-bottom: 10px; }
 
   /* Pegangan resize berada di batas sidebar, bukan di alur navigasi. */

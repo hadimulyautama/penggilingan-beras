@@ -210,6 +210,8 @@ TAB = (
     # Stok Produk: barang jadi berdiri di Gudang 2.
     ("barang_keluar", "/barang-keluar", "Barang Keluar",
      "Perintah muat, muatan, dan riwayatnya", None, "⇥"),
+    ("retur", "/retur", "Barang Retur",
+     "Penerimaan retur pelanggan dan pencatatan stok", MEJA, "↩"),
     # ── Jasa — keputusan pemilik 1 Oktober 2026 ──
     #
     # Pesanan jasa LAHIR di Pos Timbang (pelanggan + pesanannya) dan diterima
