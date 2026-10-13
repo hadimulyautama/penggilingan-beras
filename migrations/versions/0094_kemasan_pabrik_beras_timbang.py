@@ -11,6 +11,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Alembic membuat kolom ini VARCHAR(32) secara bawaan. Revisi ini lebih
+    # panjang, dan Alembic memperbarui version_num setelah upgrade() selesai;
+    # perbesar kolom di dalam migrasi agar pembaruan revisinya tidak gagal.
+    op.alter_column(
+        "alembic_version", "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=64),
+        existing_nullable=False,
+    )
     op.add_column(
         "finished_goods_stock",
         sa.Column("kemasan_mengurangi_stok", sa.Boolean(), nullable=False,
