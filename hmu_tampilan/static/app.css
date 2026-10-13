@@ -844,6 +844,7 @@ body.putus-jaringan .bar { margin-top: 34px; }
 .beranda-sambut--gabung .beranda-sambut__kepala {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
 }
+.beranda-sambut__teks { min-width: 0; }
 .beranda-akses {
   padding: 18px; border: 1px solid #dce2e8; border-radius: 22px;
   background: #fff; box-shadow: 0 8px 24px rgba(39, 55, 42, .06);
