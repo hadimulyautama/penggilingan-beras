@@ -1,20 +1,20 @@
 .op-intro{margin:0 0 22px}.op-hero{position:relative;overflow:hidden;border-radius:26px;padding:clamp(22px,3.5vw,38px);color:#fff;background:var(--kulit-banner);box-shadow:0 16px 36px #3f4b5820}.op-hero:after{content:"";position:absolute;width:330px;height:330px;border-radius:50%;right:-75px;top:-205px;background:#ffffff12;box-shadow:0 0 0 56px #ffffff0b,0 0 0 112px #ffffff08;pointer-events:none}.op-eyebrow{position:relative;display:flex;align-items:center;gap:9px;color:#e3e8ed;font-size:.78rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase}.op-eyebrow i{width:8px;height:8px;border-radius:50%;background:#e3e8ed;box-shadow:0 0 0 5px #ffffff20}.op-hero h1{position:relative;margin:13px 0 5px;color:#fff;font-size:clamp(1.8rem,4vw,2.55rem);line-height:1.12;letter-spacing:-.035em}.op-hero p{position:relative;max-width:780px;margin:9px 0 0;color:#e1e6ea;font-size:1rem;line-height:1.55}.op-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:15px 0}.op-stat{display:flex;align-items:center;gap:13px;min-height:82px;padding:13px 16px;border:1px solid var(--kulit-batas);border-radius:18px;background:var(--kulit-kartu);color:var(--tinta);box-shadow:0 5px 18px #20304008}.op-icon{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:14px;background:linear-gradient(145deg,#edf1f4,#dfe5e9);color:#596777;font-size:1.1rem;font-weight:750}.op-icon--2{background:linear-gradient(145deg,#e8f5ee,#d7ebdf);color:#39815a}.op-icon--3{background:linear-gradient(145deg,#fff3df,#f5e4c4);color:#9a6a22}.op-stat strong{display:block;font-size:1.18rem;line-height:1.2}.op-stat span:not(.op-icon){display:block;margin-top:3px;color:var(--kulit-redup);font-size:.85rem;line-height:1.3}.op-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;margin:0 0 22px;padding:6px;border:1px solid var(--kulit-batas);border-radius:16px;background:var(--kulit-kartu)}.op-step{display:flex;align-items:center;gap:9px;padding:8px 10px;color:var(--kulit-redup);font-size:.85rem;font-weight:650}.op-step b{display:grid;place-items:center;flex:0 0 27px;height:27px;border-radius:50%;background:var(--kulit-langkah);color:var(--kulit-langkah-teks);font-size:.78rem}.op-step:first-child b{background:var(--kulit-langkah-aktif);color:#fff}
 @media(max-width:700px){.op-intro{margin-bottom:17px}.op-hero{border-radius:21px;padding:21px 18px}.op-stats{gap:7px;margin:11px 0}.op-stat{display:block;min-height:91px;padding:10px;border-radius:15px}.op-icon{width:34px;height:34px;min-height:34px;border-radius:11px;margin-bottom:7px;font-size:.95rem}.op-stat strong{font-size:1rem}.op-stat span:not(.op-icon){font-size:.7rem;line-height:1.2}.op-steps{padding:4px;border-radius:14px;margin-bottom:17px}.op-step{display:grid;justify-items:center;gap:4px;padding:6px 2px;font-size:.66rem;text-align:center}.op-step b{width:25px;height:25px}}
 
-/* Antrian: satu baris ringkas per pekerjaan. Rincian dan tindakan tetap
-   berada pada item yang sama dan muncul saat baris dibuka. */
-.antrian-listview .grup{display:grid;gap:0!important;overflow:hidden;border:1px solid var(--garis);border-radius:16px;background:var(--panel)}
-.antrian-listview .antrian-item{display:block;min-width:0;margin:0;padding:0;border:0;border-bottom:1px solid var(--garis);border-left:3px solid var(--fase,var(--fase-baru));border-radius:0;background:transparent;box-shadow:none}
+/* Antrean mengikuti daftar Catatan Timbang: baris putih sederhana dengan
+   garis pemisah tipis. Rincian dan tombol tetap terbuka di baris yang sama. */
+.antrian-listview .grup{display:flex;flex-direction:column;gap:0!important;overflow:hidden;border:1px solid var(--garis);border-radius:10px;background:var(--panel)}
+.antrian-listview .antrian-item{display:block;min-width:0;margin:0;padding:0;border:0;border-bottom:1px solid var(--garis);border-radius:0;background:transparent;box-shadow:none}
 .antrian-listview .antrian-item:last-child{border-bottom:0}
-.antrian-listview .antrian-item>summary{display:block;min-height:0;padding:12px 42px 12px 14px}
+.antrian-listview .antrian-item>summary{display:block;min-height:0;padding:11px 38px 11px 13px}
 .antrian-listview .antrian-item>summary .padat__atas{gap:12px;align-items:center}
-.antrian-listview .padat__nama{min-width:0;overflow-wrap:anywhere}
-.antrian-listview .padat__nilai{font-size:.98rem}
-.antrian-listview .padat__ket{margin-top:3px;font-size:.82rem}
-.antrian-listview .antrian-item>summary::after{top:50%;right:17px;margin-top:-5px}
-.antrian-listview .antrian-item[open]{background:var(--panel-2)}
-.antrian-listview .antrian-item__rincian{padding:12px 14px 14px;border-top:1px solid var(--garis)}
-.antrian-listview .antrian-item__rincian>.benda__judul{margin-top:0}
-.antrian-listview .antrian-item__rincian>.btn{margin-top:12px}
-.antrian-listview .pilihan{padding:0 14px 14px}
-@media(max-width:700px){.antrian-listview .grup{border-radius:13px}.antrian-listview .antrian-item>summary{padding:12px 38px 12px 12px}.antrian-listview .antrian-item>summary .padat__atas{gap:7px}.antrian-listview .padat__nilai{font-size:.9rem}.antrian-listview .padat__ket{font-size:.78rem}.antrian-listview .antrian-item__rincian{padding:11px 12px 12px}}
+.antrian-listview .padat__nama{min-width:0;overflow-wrap:anywhere;font-size:.94rem}
+.antrian-listview .padat__nilai{font-size:.94rem}
+.antrian-listview .padat__ket{margin-top:2px;font-size:.8rem;line-height:1.35}
+.antrian-listview .antrian-item>summary::after{top:50%;right:15px;margin-top:-5px}
+.antrian-listview .antrian-item[open]{background:var(--panel)}
+.antrian-listview .antrian-item__rincian{padding:10px 13px 12px;border-top:1px solid var(--garis);background:var(--panel-2)}
+.antrian-listview .antrian-item__rincian>.benda__judul{display:none}
+.antrian-listview .antrian-item__rincian>.btn{margin-top:10px}
+.antrian-listview .pilihan{padding:0 13px 12px;background:var(--panel-2)}
+@media(max-width:700px){.antrian-listview .grup{border-radius:8px}.antrian-listview .antrian-item>summary{padding:10px 34px 10px 11px}.antrian-listview .antrian-item>summary .padat__atas{gap:7px}.antrian-listview .padat__nama,.antrian-listview .padat__nilai{font-size:.88rem}.antrian-listview .padat__ket{font-size:.76rem}.antrian-listview .antrian-item__rincian{padding:9px 11px 11px}.antrian-listview .pilihan{padding:0 11px 11px}}
