@@ -39,6 +39,19 @@
   --hati:       #e0b45e;
   --bahaya:     #df8976;
 
+  /* Satu palet permukaan dipakai semua halaman; kelas halaman hanya
+     menentukan tata letak, bukan warna kartu atau banner. */
+  --kulit-banner: linear-gradient(118deg, #354e3a 0%, #1e3024 62%, #405943 100%);
+  --kulit-samping: linear-gradient(150deg, #263c2e 0%, #17251c 58%, #304734 100%);
+  --kulit-pilih: linear-gradient(105deg, #344c39, #263b2d);
+  --kulit-kartu: linear-gradient(145deg, #26382c 0%, #1a281f 72%, #223329 100%);
+  --kulit-batas: #3b5040;
+  --kulit-redup: var(--redup);
+  --kulit-langkah: linear-gradient(145deg, #344a39, #26392c);
+  --kulit-langkah-teks: #e7ede7;
+  --kulit-langkah-aktif: linear-gradient(145deg, #709b74, #4e7855);
+  --kulit-pemisah: #405744;
+
   --sentuh:     56px;
 
   --mono:  'IBM Plex Mono', ui-monospace, Menlo, monospace;
@@ -1885,12 +1898,23 @@ body.terik {
   --aman:       #336e42;
   --hati:       #805714;
   --bahaya:     #a64b36;
+
+  --kulit-banner: linear-gradient(118deg, #596777 0%, #3f4b58 62%, #737f8c 100%);
+  --kulit-samping: linear-gradient(145deg, #596777 0%, #3f4b58 62%, #737f8c 100%);
+  --kulit-pilih: #46515d;
+  --kulit-kartu: #ffffff;
+  --kulit-batas: #dce2e8;
+  --kulit-redup: #596777;
+  --kulit-langkah: #e8edf1;
+  --kulit-langkah-teks: #465361;
+  --kulit-langkah-aktif: #566575;
+  --kulit-pemisah: #e4e9ed;
 }
 
 /* Sidebar hijau tua dan ruang kerja hangat; warna status tiap proses tetap
    mengikuti makna operasionalnya. */
 body.terik .laci__isi {
-  background: linear-gradient(145deg, #596777 0%, #3f4b58 62%, #737f8c 100%);
+  background: var(--kulit-samping);
   border-color: #495560;
   color: #f2f4f6;
 }
@@ -1907,29 +1931,29 @@ body.terik .pintu--kini {
   box-shadow: inset 3px 0 #c4cdd6;
 }
 body.terik .pintu--kini .pintu__ikon { box-shadow: inset 0 0 0 1px #ffffff60, 0 2px 7px #11182728; }
-body.terik .pintu__ikon { color: #3973cf; background: linear-gradient(145deg,#edf3ff,#dce8ff); }
-body.terik .pintu__ikon--aksi,
-body.terik .pintu__ikon--berjalan,
-body.terik .pintu__ikon--stok_produk_jasa,
-body.terik .pintu__ikon--stok_pk_jasa { color: #21835c; background: linear-gradient(145deg,#e8f8f1,#d2f1e3); }
-body.terik .pintu__ikon--keputusan,
-body.terik .pintu__ikon--riwayat_sosoh,
-body.terik .pintu__ikon--laporan { color: #7957b8; background: linear-gradient(145deg,#f2ecff,#e4d9ff); }
-body.terik .pintu__ikon--mutu,
-body.terik .pintu__ikon--retur { color: #c35c47; background: linear-gradient(145deg,#fff0eb,#ffdcd1); }
-body.terik .pintu__ikon--stok,
-body.terik .pintu__ikon--barang_keluar,
-body.terik .pintu__ikon--riwayat_pengeringan { color: #a96a17; background: linear-gradient(145deg,#fff4df,#ffe8b6); }
-body.terik .pintu__ikon--stok_produk,
-body.terik .pintu__ikon--stok_pk_jasa,
-body.terik .pintu__ikon--riwayat_transfer { color: #287d9b; background: linear-gradient(145deg,#e8f7fb,#ccecf3); }
-body.terik .pintu__ikon--stok_karung,
-body.terik .pintu__ikon--stok_karung_jasa,
-body.terik .pintu__ikon--jasa { color: #bd5b83; background: linear-gradient(145deg,#ffedf4,#f7d8e5); }
-body.terik .pintu__ikon--riwayat_qc,
-body.terik .pintu__ikon--riwayat_giling { color: #6a68b4; background: linear-gradient(145deg,#efefff,#dcddff); }
-body.terik .pintu__ikon--laporan,
-body.terik .pintu__ikon--kabar { color: #25855e; background: linear-gradient(145deg,#e8f8f1,#d2f1e3); }
+body.terik .pintu__ikon { color: var(--aksi); background: var(--panel-2); }
+.laci__isi .pintu__ikon--aksi,
+.laci__isi .pintu__ikon--berjalan,
+.laci__isi .pintu__ikon--stok_produk_jasa,
+.laci__isi .pintu__ikon--stok_pk_jasa { color: #21835c; background: linear-gradient(145deg,#e8f8f1,#d2f1e3); }
+.laci__isi .pintu__ikon--keputusan,
+.laci__isi .pintu__ikon--riwayat_sosoh,
+.laci__isi .pintu__ikon--laporan { color: #7957b8; background: linear-gradient(145deg,#f2ecff,#e4d9ff); }
+.laci__isi .pintu__ikon--mutu,
+.laci__isi .pintu__ikon--retur { color: #c35c47; background: linear-gradient(145deg,#fff0eb,#ffdcd1); }
+.laci__isi .pintu__ikon--stok,
+.laci__isi .pintu__ikon--barang_keluar,
+.laci__isi .pintu__ikon--riwayat_pengeringan { color: #a96a17; background: linear-gradient(145deg,#fff4df,#ffe8b6); }
+.laci__isi .pintu__ikon--stok_produk,
+.laci__isi .pintu__ikon--stok_pk_jasa,
+.laci__isi .pintu__ikon--riwayat_transfer { color: #287d9b; background: linear-gradient(145deg,#e8f7fb,#ccecf3); }
+.laci__isi .pintu__ikon--stok_karung,
+.laci__isi .pintu__ikon--stok_karung_jasa,
+.laci__isi .pintu__ikon--jasa { color: #bd5b83; background: linear-gradient(145deg,#ffedf4,#f7d8e5); }
+.laci__isi .pintu__ikon--riwayat_qc,
+.laci__isi .pintu__ikon--riwayat_giling { color: #6a68b4; background: linear-gradient(145deg,#efefff,#dcddff); }
+.laci__isi .pintu__ikon--laporan,
+.laci__isi .pintu__ikon--kabar { color: #25855e; background: linear-gradient(145deg,#e8f8f1,#d2f1e3); }
 body.terik .pintu__jml { background: #c4cdd6; color: #202832; }
 body.terik .pintu__jml--aksi { background: #dce9ff; color: #285ba8; }
 body.terik .pintu__jml--berjalan { background: #d7f1e4; color: #246b4a; }
@@ -2032,13 +2056,15 @@ body:not(.terik) .beranda-sambut--gabung .beranda-akses {
 }
 body:not(.terik) .beranda-ringkasan .petak__sel { border-color: var(--garis); }
 body:not(.terik) .laci__isi {
-  background: linear-gradient(150deg, #263c2e 0%, #17251c 58%, #304734 100%);
-  border-color: #3d5442;
+  background: var(--kulit-samping);
+  border-color: var(--kulit-batas);
 }
-body:not(.terik) .pintu--kini { background: linear-gradient(105deg, #344c39, #263b2d); }
+body:not(.terik) .pintu--kini { background: var(--kulit-pilih); }
 body:not(.terik) .beranda-sambut,
-body:not(.terik) .op-hero {
-  background: linear-gradient(118deg, #354e3a 0%, #1e3024 62%, #405943 100%);
+body:not(.terik) .op-hero,
+body:not(.terik) .riwayat-hero,
+body:not(.terik) #retur-ui .rt-hero {
+  background: var(--kulit-banner);
   box-shadow: 0 16px 36px rgba(0, 0, 0, .26);
 }
 body:not(.terik) .kartu,
@@ -2051,20 +2077,19 @@ body:not(.terik) .tindakan,
 body:not(.terik) .op-stat,
 body:not(.terik) .op-steps {
   color: var(--tinta);
-  background: linear-gradient(145deg, #26382c 0%, #1a281f 72%, #223329 100%);
-  border-color: #3b5040;
+  background: var(--kulit-kartu);
+  border-color: var(--kulit-batas);
 }
 body:not(.terik) .op-stat span:not(.op-icon),
-body:not(.terik) .op-step { color: var(--redup); }
+body:not(.terik) .op-step { color: var(--kulit-redup); }
 body:not(.terik) .op-step b {
-  background: linear-gradient(145deg, #344a39, #26392c);
+  background: var(--kulit-langkah);
   color: #e7ede7;
 }
 body:not(.terik) .op-step:first-child b {
-  background: linear-gradient(145deg, #709b74, #4e7855);
+  background: var(--kulit-langkah-aktif);
   color: #fff;
 }
-
 /* ═══════════════ NERACA SOSOH — 100% bahan baku, satu batang ═══════════════
 
    Layar Riwayat sosoh (keputusan pemilik 2 Oktober 2026). Yang digambar BUKAN

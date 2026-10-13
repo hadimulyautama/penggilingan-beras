@@ -6,8 +6,8 @@ berbicara tentang hal yang sama. Warnanya dari palet aplikasi itu sendiri.
 """
 from PIL import Image, ImageDraw
 
-DASAR = (22, 33, 42)      # --panel  #16212a
-AKSI = (79, 179, 217)     # --aksi   #4fb3d9
+DASAR = (23, 37, 28)      # Hijau gelap dari tema malam
+AKSI = (138, 182, 141)    # Sage terang agar simbol terbaca
 
 # Gambar pada kanvas besar lalu diperkecil: tepi miring jadi halus tanpa
 # perlu antialias garis, yang tidak dimiliki ImageDraw.
