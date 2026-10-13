@@ -2370,6 +2370,9 @@ body:not(.terik) .op-step:first-child b {
    Di bawah 900px, laci tetap seperti semula: ponsel di gudang tak punya
    ruang mendatar untuk sidebar, dan navigasi harus terjangkau ibu jari. */
 @media (min-width: 900px) {
+  .saring--antrean { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .saring--antrean > .pil { justify-content: center; }
+
   :root { --sidebar: 280px; }
 
   .bar { display: none; }

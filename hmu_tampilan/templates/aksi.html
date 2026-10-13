@@ -67,7 +67,7 @@
 {% set GRUP_KINI = GRUP_KINI|default("", true) %}
 {% set GRUP_TOTAL = GRUP_TOTAL|default(semua|length, true) %}
 {% if GRUP_PIL|length > 1 %}
-  <div class="saring">
+  <div class="saring saring--antrean">
     <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/aksi">Semua
       <span class="pil__jml">{{ GRUP_TOTAL }}</span></a>
     {% for kunci, nama, jml in GRUP_PIL %}
