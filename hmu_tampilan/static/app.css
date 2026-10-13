@@ -1011,6 +1011,21 @@ body.terik .pintu:hover { background: #f2f4f6; }
 body.terik .pintu--kini { background: #e9eef3; color: #202832; box-shadow: inset 3px 0 #566575; }
 body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
 
+/* Bilah mobile pada mode terang memakai permukaan putih; ikon dan merek
+   harus memakai tinta gelap agar tidak hilang di atasnya. */
+body.terik .bar { color: #202832; }
+body.terik .bar__balik,
+body.terik .bar__menu,
+body.terik .bar__kabar {
+  color: #34404c;
+  background: #f1f4f7;
+  border-color: #d5dde5;
+}
+body.terik .bar__balik:hover,
+body.terik .bar__menu:hover,
+body.terik .bar__kabar:hover { background: #e5ebf0; }
+body.terik .bar__merek { color: #202832; }
+
 /* Semua banner judul memakai permukaan putih yang sama pada mode terang.
    Mode gelap tetap memakai banner hijau melalui token --kulit-banner. */
 body.terik .isi .beranda-sambut,
