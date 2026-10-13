@@ -300,7 +300,7 @@
              bertuliskan "0" adalah kebisingan yang mengajari orang
              mengabaikan lencana. #}
           {% if kunci == 'aksi' and MENUNGGU %}
-            <span class="pintu__jml"
+            <span class="pintu__jml pintu__jml--aksi"
                   aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
           {# Yang MENAGIH dan yang sekadar MENGABARI dibedakan warnanya.
              "Antrian tunggu" dan "Menunggu keputusan" berarti ada yang harus
@@ -308,19 +308,19 @@
              jalan — ia bisa berisi seharian tanpa ada yang salah. Kalau
              keduanya tampil sama, yang menagih kehilangan artinya. #}
           {% elif kunci == 'berjalan' and BERJALAN %}
-            <span class="pintu__jml pintu__jml--kabar"
+            <span class="pintu__jml pintu__jml--kabar pintu__jml--berjalan"
                   aria-label="{{ BERJALAN }} sedang berjalan">{{ BERJALAN }}</span>
           {% elif kunci == 'keputusan' and KEPUTUSAN %}
-            <span class="pintu__jml"
+            <span class="pintu__jml pintu__jml--keputusan"
                   aria-label="{{ KEPUTUSAN }} menunggu keputusan Anda">{{ KEPUTUSAN }}</span>
           {% elif kunci == 'mutu' and MUTU %}
-            <span class="pintu__jml"
+            <span class="pintu__jml pintu__jml--mutu"
                   aria-label="{{ MUTU }} mutu belum dicatat">{{ MUTU }}</span>
           {# Beras yang sudah keluar mesin tetapi belum dipacking. MENAGIH,
              bukan mengabari: selama ia berdiri, angka stok barang jadi
              menyebut lebih sedikit daripada yang sungguh ada di gudang. #}
           {% elif kunci == 'stok_produk' and PRODUK %}
-            <span class="pintu__jml"
+            <span class="pintu__jml pintu__jml--stok_produk"
                   aria-label="{{ PRODUK }} beras belum dipacking">{{ PRODUK }}</span>
           {# Kabar biasanya MENGABARI, tidak menagih — warnanya netral, sama
              dengan "Sedang berjalan". Yang menagih pekerjaan tetap Antrian
@@ -334,7 +334,7 @@
              kalau ada yang merah, netral kalau tidak. Lencana yang SELALU merah
              membuat merah berhenti berarti apa pun. #}
           {% elif kunci == 'kabar' and KABAR %}
-            <span class="pintu__jml{{ '' if KABAR_MERAH else ' pintu__jml--kabar' }}"
+            <span class="pintu__jml pintu__jml--{{ 'kabar-merah' if KABAR_MERAH else 'kabar-menu' }}"
                   aria-label="{{ KABAR }} kabar belum dibaca
                               {{- ', ada yang mendesak' if KABAR_MERAH }}">{{ KABAR }}</span>
           {% endif %}

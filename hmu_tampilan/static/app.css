@@ -949,6 +949,13 @@ body.terik .laci__kaki .btn--putih:hover { background: rgba(255,255,255,.16); }
 .pintu__jml--kabar {
   background: var(--fase-dryer); color: #1a0f08; font-weight: 600;
 }
+.pintu__jml--aksi { background: #dce9ff; color: #285ba8; }
+.pintu__jml--berjalan { background: #d7f1e4; color: #246b4a; }
+.pintu__jml--keputusan { background: #eadfff; color: #67459a; }
+.pintu__jml--mutu { background: #ffe2d9; color: #a44836; }
+.pintu__jml--stok_produk { background: #ffedc8; color: #865511; }
+.pintu__jml--kabar-menu { background: #d7eafa; color: #285e8d; }
+.pintu__jml--kabar-merah { background: #ffe0df; color: #a83232; }
 
 /* ── Baris pekerjaan berjalan ── */
 .jalan {
@@ -1922,7 +1929,14 @@ body.terik .pintu__ikon--riwayat_giling { color: #6a68b4; background: linear-gra
 body.terik .pintu__ikon--laporan,
 body.terik .pintu__ikon--kabar { color: #25855e; background: linear-gradient(145deg,#e8f8f1,#d2f1e3); }
 body.terik .pintu__jml { background: #c4cdd6; color: #202832; }
-body.terik .pintu__jml--kabar { background: #aeb9c4; color: #202832; }
+body.terik .pintu__jml--aksi { background: #dce9ff; color: #285ba8; }
+body.terik .pintu__jml--berjalan { background: #d7f1e4; color: #246b4a; }
+body.terik .pintu__jml--keputusan { background: #eadfff; color: #67459a; }
+body.terik .pintu__jml--mutu { background: #ffe2d9; color: #a44836; }
+body.terik .pintu__jml--stok_produk { background: #ffedc8; color: #865511; }
+body.terik .pintu__jml--kabar-menu { background: #d7eafa; color: #285e8d; }
+body.terik .pintu__jml--kabar-merah { background: #ffe0df; color: #a83232; }
+body.terik .pintu__jml--kabar { font-weight: 700; }
 body.terik .pintu-sub { border-color: #596571; }
 body.terik .pintu-sub__satu { color: #d0d8e0; }
 body.terik .pintu-sub__satu--kini { background: #46515d; color: #fff; }
@@ -1942,7 +1956,13 @@ body.terik.ubah-lebar-laci .laci__ukur::after { background: #d7b36a; }
 /* Permukaan baru dipakai lintas layar: panel terang berlapis tipis, sudut
    lebih lapang, dan biru untuk tindakan/keadaan aktif. Isi kartu dan
    urutan informasinya tetap ditentukan tiap halaman. */
-body.terik .isi { background: #f2f4f6; gap: 20px; }
+body.terik .isi {
+  background-color: #f2f4f6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='%23596777' stroke-opacity='.095' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M24 43c13-8 23-8 34 0M29 48c-1 11 4 19 13 24 9-5 14-13 13-24M42 52v24m-8-17 8 5 8-5M145 31h31v29h-31zM140 31l20-14 21 14M154 60V44h13v16M33 148c10-10 20-10 30 0l-4 24H37zM31 148h34M42 158h13m65-8a16 16 0 1 0 32 0 16 16 0 1 0-32 0m10-16v32m-16-16h32m-66-84 10 6-6 10 10 6-6 10m92 53 9-9 9 9-9 9zM25 104h18m-9-9v18m146 72c8-7 16-7 24 0m-18 5 8 8 8-8'/%3E%3Ccircle cx='99' cy='43' r='8'/%3E%3Ccircle cx='92' cy='108' r='3'/%3E%3Ccircle cx='108' cy='120' r='2'/%3E%3Ccircle cx='80' cy='181' r='5'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 220px 220px;
+  gap: 20px;
+}
 body.terik .bar {
   background: rgba(255, 255, 255, .96);
   border-color: #dce2e8;
