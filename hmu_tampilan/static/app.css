@@ -2406,3 +2406,23 @@ body:not(.terik) .op-step:first-child b {
   .beranda-aktivitas, .beranda-tindaklanjut { gap: 18px; }
   .isi > .beranda-sambut { padding: 32px 38px; }
 }
+
+/* Warna sidebar mode terang harus menjadi aturan terakhir agar tidak
+   ditimpa aturan tema umum yang didefinisikan lebih awal di stylesheet. */
+body.terik .laci__isi {
+  background: #fff;
+  border-color: #dce2e8;
+  color: #202832;
+}
+body.terik .laci__kepala { border-color: #e2e7ec; }
+body.terik .laci-seksi__judul { color: #687585; }
+body.terik .laci__isi .bar__nama { color: #202832; }
+body.terik .laci__isi .bar__sub { color: #657282; }
+body.terik .pintu { color: #34404c; }
+body.terik .pintu:hover { background: #f2f4f6; }
+body.terik .pintu--kini {
+  background: #e9eef3;
+  color: #202832;
+  box-shadow: inset 3px 0 #566575;
+}
+body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
