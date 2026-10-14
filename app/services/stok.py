@@ -91,6 +91,10 @@ class LotPk:
     #: yang menggambar nilai terbaru membuat satu lot punya dua angka mutu yang
     #: berbeda di dua layar. Hitungannya `milling.qc_rata_banyak`.
     mutu: list[tuple[str, str]] = field(default_factory=list)
+    #: Rata-rata skor kadar air, broken, dan susut dari komponen yang tercatat.
+    nilai_kualitas: float | None = None
+    komponen_kualitas: int = 0
+    kelas_kualitas: str | None = None
 
     #: Sudah DIMINTA operator Gudang 2 (nama peminta), atau None.
     #:
@@ -410,6 +414,94 @@ def _mutu_dari(rata) -> list[tuple[str, str]]:
     return keluar
 
 
+def _nilai_kualitas(mutu: list[tuple[str, str]]) -> tuple[float | None, int]:
+    """Rata-rata skor QC PK; komponen yang belum pernah diukur tidak dihitung.
+
+    Angka sumbernya adalah rata-rata QC yang sama dengan yang tercetak di
+    kartu. Skor bukan rata-rata persen mentah: tiap komponen lebih dulu
+    dipetakan ke skala 0–100 menurut batas mutu, baru skor komponen yang
+    tersedia dirata-ratakan.
+    """
+    skor: list[float] = []
+    for label, nilai in mutu:
+        try:
+            angka = float(str(nilai).strip().replace("%", "").replace(",", "."))
+        except (TypeError, ValueError):
+            continue
+        nama = label.strip().lower()
+        if nama == "kadar air":
+            if angka < 11:
+                skor.append(0)
+            elif angka < 12:
+                skor.append(50)
+            elif angka < 13:
+                skor.append(90)
+            elif angka < 14:
+                skor.append(100)
+            elif angka < 14.5:
+                skor.append(90)
+            elif angka < 15:
+                skor.append(80)
+            elif angka < 15.5:
+                skor.append(70)
+            elif angka < 16:
+                skor.append(60)
+            elif angka <= 16.5:
+                skor.append(50)
+            else:
+                skor.append(10)
+        elif nama in ("butir patah", "broken"):
+            if angka < 20:
+                skor.append(100)
+            elif angka < 25:
+                skor.append(90)
+            elif angka < 30:
+                skor.append(80)
+            elif angka < 35:
+                skor.append(70)
+            elif angka <= 40:
+                skor.append(60)
+            elif angka <= 50:
+                skor.append(50)
+            else:
+                skor.append(10)
+        elif nama == "susut":
+            if angka <= 12:
+                skor.append(100)
+            elif angka <= 13:
+                skor.append(90)
+            elif angka <= 14:
+                skor.append(80)
+            elif angka <= 15:
+                skor.append(70)
+            elif angka <= 16:
+                skor.append(60)
+            elif angka <= 17:
+                skor.append(50)
+            else:
+                skor.append(10)
+    return (sum(skor) / len(skor), len(skor)) if skor else (None, 0)
+
+
+def _kelas_kualitas(nilai: float | None) -> str | None:
+    """Label kualitatif skor PK; rentang tengah C1/C2 mengikuti persetujuan."""
+    if nilai is None:
+        return None
+    if nilai >= 96:
+        return "A1"
+    if nilai >= 91:
+        return "A2"
+    if nilai >= 86:
+        return "B1"
+    if nilai >= 80:
+        return "B2"
+    if nilai >= 76:
+        return "C1"
+    if nilai >= 70:
+        return "C2"
+    return "F"
+
+
 async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
     """Rata-rata QC PER KOLOM. Lihat catatan pada `LotPk.mutu`."""
     return (await _mutu_banyak(db, [proc_id])).get(proc_id, [])
@@ -496,6 +588,7 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
         # sama dipakai HPP. Harga yang ikut dikembalikannya sengaja dibuang di
         # sini, bukan disaring di templat: layar ini dilihat operator juga.
         bahan, kondisi = peta_bahan[proc.id]
+        nilai_kualitas, komponen_kualitas = _nilai_kualitas(peta_mutu.get(proc.id, []))
         keluar.append(LotPk(
             kode=proc.kode_proses,
             tersedia=bd.tersedia,
@@ -517,6 +610,9 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
                       else hitung_rendemen(bd.produced, proc.berat_gabah_masuk_kg)),
             kelas=kelas_pk(kondisi),
             mutu=peta_mutu.get(proc.id, []),
+            nilai_kualitas=nilai_kualitas,
+            komponen_kualitas=komponen_kualitas,
+            kelas_kualitas=_kelas_kualitas(nilai_kualitas),
             bahan=bahan,
             tanggal=_tgl(proc.waktu_selesai or proc.waktu_mulai),
             lama=_hari(proc.waktu_selesai or proc.waktu_mulai),
@@ -595,6 +691,9 @@ class LotPkG2:
     #: belum pernah dinilai (PK dari giling sendiri yang belum dicatat
     #: mutunya oleh Gudang 1).
     mutu: list[tuple[str, str]] = field(default_factory=list)
+    nilai_kualitas: float | None = None
+    komponen_kualitas: int = 0
+    kelas_kualitas: str | None = None
     #: Id `PkGudang2Intake` — dipakai tombol "Masukkan ke silo" di kartu
     #: Stok, pre-isi lewat mekanisme `?buka=&nilai=` yang sama dengan
     #: "Minta lot ini" Gudang 1.
@@ -815,11 +914,15 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
         else:
             judul, mutu, kelas = "PK", [], None  # baris peninggalan tanpa penunjuk
 
+        nilai_kualitas, komponen_kualitas = _nilai_kualitas(mutu)
         keluar.append(LotPkG2(
             kode=judul, tersedia=sisa, bobot_final=bobot_final,
             tanggal=_tgl(i.tanggal_masuk), lama=_hari(i.waktu_masuk),
             pemilik=peta_pemilik.get(i.jasa_id) if i.jasa_id else None,
-            mutu=mutu, intake_id=i.id, berat_awal=berat_awal, kelas=kelas,
+            mutu=mutu, nilai_kualitas=nilai_kualitas,
+            komponen_kualitas=komponen_kualitas,
+            kelas_kualitas=_kelas_kualitas(nilai_kualitas),
+            intake_id=i.id, berat_awal=berat_awal, kelas=kelas,
         ))
     return keluar
 

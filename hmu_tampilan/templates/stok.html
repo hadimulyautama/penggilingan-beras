@@ -71,7 +71,7 @@
 
   <div class="stok-desktop" aria-label="Daftar stok PK Gudang 1">
     <table class="stok-tabel">
-      <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
+      <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
       <tbody>
       {% for l in lot %}
         {% set mutu = namespace(ka="—", broken="—", susut="—") %}
@@ -80,13 +80,14 @@
           {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
           {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
         {% endfor %}
-        <tr><td colspan="9" class="stok-tabel__sel">
+        <tr><td colspan="10" class="stok-tabel__sel">
           <details class="stok-baris">
             <summary class="stok-baris__ringkas">
               <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
               <span>{{ (l.pemilik.split(" ", 1)[1] if JASA_SAJA and l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
               <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
               <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
+              <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
               <span>{{ l.kelas or "—" }}</span>
               <strong class="stok-tabel__angka">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong>
               <span class="stok-baris__buka" aria-hidden="true">⌄</span>
@@ -214,6 +215,14 @@
               <dd>{{ l.kelas }}</dd>
             </div>
           {% endif %}
+          <div>
+            <dt>Nilai kualitas</dt>
+            {% if l.nilai_kualitas is not none %}
+              <dd class="stok-kualitas">{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ l.kelas_kualitas }}</b> <small>{{ l.komponen_kualitas }}/3 komponen</small></dd>
+            {% else %}
+              <dd class="padat__nilai--kosong">Belum ada data QC</dd>
+            {% endif %}
+          </div>
           {# Mutu ikut di kartu utama, tidak dilipat. Mutu bukan rincian
              tambahan: ia yang menentukan PK ini masuk kelas apa dan laku
              berapa. Yang harus dibuka dulu untuk terbaca akan dianggap tak
@@ -390,7 +399,7 @@
 
     <div class="stok-desktop" aria-label="Daftar stok PK Gudang 2">
       <table class="stok-tabel">
-        <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
+        <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
         <tbody>
         {% for t in tempat %}
           {% set mutu = namespace(ka="—", broken="—", susut="—") %}
@@ -400,13 +409,14 @@
             {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
           {% endfor %}
           {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
-          <tr><td colspan="9" class="stok-tabel__sel">
+          <tr><td colspan="10" class="stok-tabel__sel">
             <details class="stok-baris">
               <summary class="stok-baris__ringkas">
                 <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{{ "Giling sendiri" if giling_sendiri else "Bukan giling sendiri" }}{% if t.tanggal %} · {{ t.tanggal }}{% endif %}{% if t.lama %} · {{ t.lama }}{% endif %}</small></span>
                 <span>{{ (t.pemilik.split(" ", 1)[1] if JASA_SAJA and t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
                 <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>
                 <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
+                <span class="stok-kualitas-ringkas">{% if t.nilai_kualitas is not none %}<span>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} <b>{{ t.kelas_kualitas }}</b></span><small>{{ t.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
                 <span>{{ t.kelas or "—" }}</span>
                 <strong class="stok-tabel__angka">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong>
                 <span class="stok-baris__buka" aria-hidden="true">⌄</span>
@@ -416,6 +426,7 @@
                 <dl class="fakta">
                   {% if t.berat_awal and t.berat_awal > t.tersedia %}<div><dt>Sudah ke silo</dt><dd>{{ kg(t.berat_awal - t.tersedia) }} dari {{ kg(t.berat_awal) }} awal</dd></div>{% endif %}
                   {% if t.kelas %}<div><dt>Kondisi</dt><dd>{{ t.kelas }}</dd></div>{% endif %}
+                  <div><dt>Nilai kualitas</dt>{% if t.nilai_kualitas is not none %}<dd class="stok-kualitas">{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ t.kelas_kualitas }}</b> <small>{{ t.komponen_kualitas }}/3 komponen</small></dd>{% else %}<dd class="padat__nilai--kosong">Belum ada data QC</dd>{% endif %}</div>
                   {% if mutu_aktif %}{% for label, nilai in t.mutu %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}{% if not t.mutu %}<div><dt>Mutu</dt><dd class="padat__nilai--kosong">belum dinilai</dd></div>{% endif %}{% endif %}
                 </dl>
                 {% if not t.bobot_final %}<div class="nota nota--hati"><span aria-hidden="true">⏸</span><span>Truknya belum ditimbang kedua — bobot belum final</span></div>{% endif %}
@@ -481,6 +492,14 @@
                   <dd>{{ t.kelas }}</dd>
                 </div>
               {% endif %}
+              <div>
+                <dt>Nilai kualitas</dt>
+                {% if t.nilai_kualitas is not none %}
+                  <dd class="stok-kualitas">{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ t.kelas_kualitas }}</b> <small>{{ t.komponen_kualitas }}/3 komponen</small></dd>
+                {% else %}
+                  <dd class="padat__nilai--kosong">Belum ada data QC</dd>
+                {% endif %}
+              </div>
               {# Mutu langsung di kartu, tidak dilipat — sama alasannya dengan
                  kartu lot Gudang 1: yang harus dibuka dulu untuk terbaca akan
                  dianggap tak ada. #}
