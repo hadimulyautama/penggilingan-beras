@@ -171,6 +171,21 @@ async def create_internal_transfer(
     if proc is None:
         raise TransferError(f"Proses {kode_proses} tidak ditemukan.")
 
+    # Pastikan silo cocok SEBELUM mencatat peristiwa yang mengurangi saldo
+    # Gudang 1. Penjaga `_add_intake` tetap menjadi pagar terakhir, tetapi
+    # validasi awal ini membuat penolakan tujuan tidak memulai transaksi
+    # barang yang belum tentu bisa diterima Gudang 2.
+    if silo_tujuan_id is not None:
+        from app.services.jasa import cocok_pemilik, pemilik_silo_g2
+
+        pemilik_tujuan = await pemilik_silo_g2(db, silo_tujuan_id)
+        if pemilik_tujuan and not all(
+            [await cocok_pemilik(db, proc.jasa_id, p) for p in pemilik_tujuan]
+        ):
+            raise TransferError(
+                "Silo tujuan berisi PK dengan pemilik berbeda. Pilih silo kosong "
+                "atau silo milik pelanggan jasa yang sama.")
+
     tersedia = await pending_transfer_kg(db, proc.id)
     if tersedia <= 0:
         raise TransferError(
@@ -261,6 +276,10 @@ async def create_internal_transfer(
             jasa_id=proc.jasa_id,
         )
     except Gudang2Error as e_:  # mis. tumpukan G2 penuh → seluruh transaksi batal
+        # Jangan biarkan caller yang memulihkan status permintaan melakukan
+        # commit atas peristiwa/transfer parsial. Transfer dan intake adalah
+        # satu perpindahan fisik; jika intake gagal, keduanya harus batal.
+        await db.rollback()
         raise TransferError(e_.args[0] if e_.args else "Gagal memasukkan PK ke Gudang 2.")
     # ── Permintaan TIDAK lagi ditutup di sini ──
     #

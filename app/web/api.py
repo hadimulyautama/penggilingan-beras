@@ -4049,7 +4049,7 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
     from app.penggilingan.silo_policy import boleh_masuk
     from app.penggilingan.gudang2.models import PkGudang2Intake
-    from app.services.jasa import pemilik_silo_g2
+    from app.services.jasa import cocok_pemilik, pemilik_silo_g2
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
@@ -4067,7 +4067,9 @@ async def silo_g2_daftar(komoditas: str = "pk", induk: str = "",
                 continue
             if intake is not None:
                 pemilik = await pemilik_silo_g2(db, s.id)
-                if pemilik and pemilik != {intake.jasa_id}:
+                if pemilik and not all(
+                    [await cocok_pemilik(db, intake.jasa_id, p) for p in pemilik]
+                ):
                     continue
             kg = await hitung_stok_silo(db, s.id)
             huruf = s.nama_silo.replace("Silo ", "")
@@ -4119,7 +4121,7 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess, PolishingSiloUsage
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
-    from app.services.jasa import pemilik_silo_g2
+    from app.services.jasa import cocok_pemilik, pemilik_silo_g2
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
@@ -4147,8 +4149,12 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
             kg = await hitung_stok_silo(db, s.id)
             if not kg or kg <= 0:
                 continue
-            if induk.strip() and await pemilik_silo_g2(db, s.id) != {pemilik_target}:
-                continue
+            if induk.strip():
+                pemilik = await pemilik_silo_g2(db, s.id)
+                if pemilik and not all(
+                    [await cocok_pemilik(db, pemilik_target, p) for p in pemilik]
+                ):
+                    continue
             huruf = s.nama_silo.replace("Silo ", "")
             keluar.append({"value": huruf, "label": f"{s.nama_silo} · {_rp(kg)} kg"})
     return keluar

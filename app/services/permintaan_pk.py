@@ -362,6 +362,19 @@ async def setujui(db: AsyncSession, *, user, permintaan_id: int,
     except Gudang2Error as e:
         raise PermintaanError(e.args[0] if e.args else "Tujuan tidak dikenali.") from None
 
+    if silo_id is not None:
+        from app.models import MillingProcess
+        from app.services.jasa import cocok_pemilik, pemilik_silo_g2
+
+        proc = await db.get(MillingProcess, baris.milling_process_id)
+        pemilik_tujuan = await pemilik_silo_g2(db, silo_id)
+        if proc is not None and pemilik_tujuan and not all(
+            [await cocok_pemilik(db, proc.jasa_id, p) for p in pemilik_tujuan]
+        ):
+            raise PermintaanError(
+                "Silo tujuan sudah berisi PK dengan pemilik berbeda. Pilih silo "
+                "kosong atau silo milik pelanggan jasa yang sama.")
+
     kg = float(berat or 0)
     if kg <= 0:
         raise PermintaanError("Sebutkan berapa kg yang disetujui.")
@@ -471,6 +484,10 @@ async def kirim(db: AsyncSession, *, user, permintaan_id: int,
         # Dikembalikan ke keadaan semula, DAN itu bukan kerapian: permintaan
         # yang tertinggal di `dikirim` tanpa perpindahan akan berdiri di meja
         # Admin menunggu ditutup atas barang yang tak pernah berangkat.
+        # `create_internal_transfer` dapat gagal setelah mulai menulis; batalkan
+        # transaksinya dulu agar pemulihan status di bawah tak ikut menyimpan
+        # proyeksi transfer tanpa intake Gudang 2.
+        await db.rollback()
         await db.execute(
             update(PermintaanPk).where(PermintaanPk.id == permintaan_id)
             .values(status=DISETUJUI, berat_kirim_kg=None, dikirim_oleh=None,

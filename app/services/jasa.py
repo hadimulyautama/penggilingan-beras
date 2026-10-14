@@ -137,8 +137,8 @@ async def nama_pemilik_banyak(db: AsyncSession, jasa_ids) -> dict[int, str]:
 
 
 async def jasa_ids_per_pelanggan_dengan_hasil(db: AsyncSession) -> dict[int, list[int]]:
-    """{pelanggan_id: [jasa_id, ...]} — SELURUH pesanan yang pernah menghasilkan
-    sosoh, dikelompokkan per PELANGGAN, bukan per pesanan.
+    """{pelanggan_id: [jasa_id, ...]} — pesanan yang masih punya stok produk,
+    atau pernah menghasilkan sosoh, dikelompokkan per PELANGGAN.
 
     Satu sumber untuk `/stok-produk-jasa` (`layar_produk.
     halaman_stok_produk_jasa`) DAN picker katalog umum
@@ -152,18 +152,22 @@ async def jasa_ids_per_pelanggan_dengan_hasil(db: AsyncSession) -> dict[int, lis
     (lihat `isiDariBaris` di `aksi.js` — ia mencocokkan nilai APA ADANYA).
     """
     from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock
 
     # `ORDER BY` eksplisit — tanpanya urutan `jasa_id` dalam daftar tak
     # terjamin stabil antar permintaan (Postgres tak menjanjikan apa pun
     # tanpa pengurut), dan nilai tombol (`cr:broken|1,2` vs `|2,1`) yang
     # berubah-ubah pada data yang sama membuat uji yang membandingkan
     # STRING jadi flaky — walau maknanya tetap sama (keduanya himpunan id).
+    ada_hasil_sosoh = select(PolishingProcess.jasa_id.distinct()).where(
+        PolishingProcess.jasa_id.isnot(None))
+    ada_barang_jadi = select(FinishedGoodsStock.jasa_id.distinct()).where(
+        FinishedGoodsStock.jasa_id.isnot(None))
+    ada_hasil_samping = select(ByproductStock.jasa_id.distinct()).where(
+        ByproductStock.jasa_id.isnot(None))
     baris = (await db.execute(
         select(Jasa.pelanggan_id, Jasa.id)
-        .where(Jasa.id.in_(
-            select(PolishingProcess.jasa_id.distinct())
-            .where(PolishingProcess.jasa_id.isnot(None))
-        ))
+        .where(Jasa.id.in_(ada_hasil_sosoh.union(ada_barang_jadi, ada_hasil_samping)))
         .order_by(Jasa.id)
     )).all()
     out: dict[int, list[int]] = {}

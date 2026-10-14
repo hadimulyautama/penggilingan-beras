@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from sqlalchemy import func, select
+from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
@@ -1955,6 +1955,16 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
 
     nama_pemilik = await nama_pemilik_banyak(db, {fg.jasa_id for fg, *_ in baris})
 
+    tiket_ids = {fg.source_id for fg, *_ in baris
+                 if fg.source_type == "timbangan" and fg.source_id is not None}
+    tiket_masuk = {}
+    if tiket_ids:
+        tiket_masuk = dict((await db.execute(
+            text("SELECT id, kode FROM timbangan_transaksi WHERE id IN :ids")
+            .bindparams(bindparam("ids", expanding=True)),
+            {"ids": list(tiket_ids)},
+        )).all())
+
     kartu: dict[tuple, dict] = {}
     for fg, sku, merk, kemasan, ukuran, mutu_kode, mutu_nama, pol in baris:
         kunci = (sku.id, fg.rice_quality_standard_id, fg.jasa_id)
@@ -2015,12 +2025,22 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             a = k["_pol"].setdefault(pol, [0, 0.0])
             a[0] += int(fg.jumlah_karung)
             a[1] += float(fg.berat_total_kg)
+        elif fg.source_type == "timbangan" and fg.source_id is not None:
+            # Pembelian beras putih dari Pos Timbang masuk langsung sebagai
+            # FinishedGoodsStock, bukan sebagai hasil sosohan. Tanpa asal
+            # tiket di laci, stok agregat naik tetapi operator tak bisa
+            # menelusuri tiket dan berat yang baru diterima.
+            kode = tiket_masuk.get(fg.source_id) or f"ID {fg.source_id}"
+            k["asal"].append((f"Tiket {kode}",
+                              f"{float(fg.berat_total_kg):,.0f} kg".replace(",", "."),
+                              f"Masuk dari Timbangan · {fg.waktu:%d/%m}"))
     produk, samping = [], []
     for k in kartu.values():
         if k is None:
             continue
-        k["asal"] = [(pol, f"{kg:,.0f} kg".replace(",", "."), f"{n} karung")
-                     for pol, (n, kg) in k.pop("_pol").items()]
+        k["asal"].extend(
+            (pol, f"{berat:,.0f} kg".replace(",", "."), f"{n} karung")
+            for pol, (n, berat) in k.pop("_pol").items())
         (produk if k["jenis"] in GRADES_BERAS or k["jenis"] == "beras_putih"
          else samping).append(k)
 

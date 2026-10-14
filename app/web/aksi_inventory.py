@@ -865,6 +865,12 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # ditolak di akhir — lihat alasannya pada PK jasa di bawah.
             if k.get("jasa_id") is not None:
                 continue
+            # Hasil samping dikirim sebagai satu saldo per jenis, dalam kg.
+            # Kartu stok membagi saldo yang sama menjadi karung otomatis dan
+            # curah; menawarkan SKU karung sekaligus saldo gabungan akan
+            # memungkinkan dua baris perintah memesan kg yang sama dua kali.
+            if k.get("jenis") in {"broken", "menir", "reject", "bekatul"}:
+                continue
             # Yang membedakan curah dari berkarung `sku_id`, BUKAN jumlah
             # karungnya. Kartu berkarung yang kebetulan tinggal nol karung
             # masih punya SKU dan tak boleh berubah jadi baris curah —
@@ -894,6 +900,26 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             out.append({
                 "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
                 "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"})
+        from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
+        for jenis in ("broken", "menir", "reject", "bekatul"):
+            total = await hitung_stok_byproduct_total(db, jenis)
+            if total <= 0.5:
+                continue
+            kartu = kartu_produk.get(jenis)
+            if kartu:
+                ukuran = kartu.ukuran_kemasan_otomatis or 50
+                karung = kartu.jumlah_karung_otomatis
+                curah = kartu.curah_otomatis_kg
+            else:
+                ukuran = 40 if jenis == "bekatul" else 50
+                karung = int(total // ukuran)
+                curah = total - karung * ukuran
+            out.append({
+                "value": f"cr:{jenis}",
+                "label": (f"{kartu.nama if kartu else jenis.title()} · "
+                          f"{karung} karung × {ukuran} kg otomatis + "
+                          f"{kg(curah)} curah · total {kg(total)} "
+                          "(isi dalam kg; karung dibuka otomatis bila perlu)")})
         for l in await pk_gudang1(db):
             if l.tersedia <= 0:
                 continue
@@ -1941,6 +1967,11 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
         .where(FinishedGoodsStock.jasa_id == jid).distinct()
     )).all()
     for sku_id, std_id, kategori, mutu_kode, merk, jenis_karung, ukuran in combo:
+        # Hasil samping tersedia sebagai satu baris kg gabungan di bawahnya.
+        # Menampilkan SKU-nya juga akan menggandakan stok yang sama karena
+        # borang pengambilan jasa menerima beberapa baris sekaligus.
+        if kategori in {"broken", "menir", "reject", "bekatul"}:
+            continue
         stok = await hitung_stok_finished_goods(db, sku_id, std_id, jasa_id=jid)
         if float(stok["kg"]) <= 0.5:
             continue
