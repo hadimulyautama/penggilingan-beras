@@ -147,10 +147,11 @@
     <span>Lot / selesai</span>
     <span>Pemilik</span>
     <span>Dryer</span>
+    <span>Status jasa</span>
     <span>Target KA</span>
     <span>Kadar air terakhir</span>
     <span class="riwayat-desktop-number">Bahan basah</span>
-    <span>Status</span>
+    <span>Status silo</span>
     <span></span>
   </div>
   {% for k in kartu %}
@@ -161,8 +162,9 @@
           <strong>{{ k.kode_lot }}</strong>
           <small>{{ k.selesai_dingin|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") or "—" }}</small>
         </span>
-        <span class="riwayat-desktop-owner">{{ k.pemilik or "Pabrik" }}</span>
+        <span class="riwayat-desktop-owner">{{ k.pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
         <span>{{ k.dryer_nama or "—" }}</span>
+        <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
         <span>{% if k.target_kadar_air is not none %}{{ "%.1f"|format(k.target_kadar_air)|replace(".", ",") }}%{% else %}—{% endif %}</span>
         <span>{{ k.ka_terakhir or "—" }}</span>
         <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>

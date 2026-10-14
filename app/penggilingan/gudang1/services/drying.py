@@ -1397,6 +1397,9 @@ class KartuPengeringan:
 
     id: int
     kode_lot: str
+    #: True bila lot merupakan barang titipan jasa; tidak bergantung pada
+    #: nama pemilik yang mungkin belum tersedia.
+    jasa: bool
     #: "JAS-2610-001 Pak Budi" bila gabahnya titipan; None = milik pabrik.
     pemilik: str | None
     dryer_nama: str
@@ -1527,6 +1530,7 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
         sid, tgl_masuk = silo_per_lot.get(lot.id, (None, None))
         kartu.append(KartuPengeringan(
             id=lot.id, kode_lot=lot.kode_lot,
+            jasa=lot.jasa_id is not None,
             pemilik=pemilik.get(lot.jasa_id) if lot.jasa_id else None,
             dryer_nama=dryer_nama.get(lot.dryer_id) or "?",
             mode_dryer=lot.mode_dryer,
