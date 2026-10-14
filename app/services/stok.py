@@ -499,6 +499,8 @@ def _kelas_kualitas(nilai: float | None) -> str | None:
         return "C1"
     if nilai >= 70:
         return "C2"
+    if nilai >= 50:
+        return "D"
     return "F"
 
 
