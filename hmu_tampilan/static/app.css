@@ -1589,6 +1589,101 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-pk-detail__aksi { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .stok-pk-detail__aksi .btn { width: fit-content; }
 
+/* Halaman detail stok PK: ringkasan berhirarki, kualitas dan asal bahan
+   terpisah, dengan susunan desktop dua kolom dan mobile satu kolom. */
+.pk-detail { display: grid; gap: 16px; max-width: 1160px; margin: 10px auto 34px; color: var(--tinta); }
+.pk-detail__back { display: none; align-items: center; gap: 8px; width: fit-content; min-height: 34px; color: var(--redup); font-size: 13px; font-weight: 600; text-decoration: none; }
+.pk-detail__back span { font-size: 18px; }
+.pk-detail__hero { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 24px 28px; border: 1px solid var(--garis); border-radius: 20px; background: var(--panel); box-shadow: 0 8px 26px color-mix(in srgb, var(--tinta) 5%, transparent); }
+.pk-detail__heading { min-width: 0; }
+.pk-detail__eyebrow { display: flex; align-items: center; gap: 9px; color: var(--redup); font-size: 12px; font-weight: 650; }
+.pk-detail__chip { display: inline-flex; align-items: center; min-height: 25px; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+.pk-detail__chip--jasa { color: #26734d; background: color-mix(in srgb, var(--aman) 20%, var(--panel)); }
+.pk-detail__chip--pabrik { color: var(--redup); background: var(--panel-2); }
+.pk-detail__dot { opacity: .55; }
+.pk-detail__hero h1 { margin: 10px 0 4px; color: var(--tinta); font-size: clamp(23px, 2.6vw, 32px); line-height: 1.18; overflow-wrap: anywhere; }
+.pk-detail__hero p { margin: 0; color: var(--redup); font-size: 13px; }
+.pk-detail__weight { flex: 0 0 auto; min-width: 190px; padding: 13px 17px; border-left: 3px solid var(--aksen, #d99524); border-radius: 0 12px 12px 0; background: var(--panel-2); }
+.pk-detail__weight > span, .pk-detail__weight > small { display: block; color: var(--redup); font-size: 12px; }
+.pk-detail__weight strong { display: block; margin: 3px 0 0; color: var(--tinta); font-size: 29px; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
+.pk-detail__weight strong small { font-size: 14px; font-weight: 600; }
+.pk-detail__owner { display: grid; grid-template-columns: 38px minmax(0,1fr) auto; align-items: center; gap: 2px 12px; padding: 12px 16px; border: 1px solid var(--garis); border-radius: 15px; background: color-mix(in srgb, var(--aman) 7%, var(--panel)); }
+.pk-detail__owner-icon { display: grid; grid-row: span 2; width: 36px; height: 36px; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--aman) 18%, var(--panel)); color: var(--aman); font-size: 21px; }
+.pk-detail__owner > div { display: grid; gap: 1px; }
+.pk-detail__owner-label { color: var(--redup); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.pk-detail__owner > div strong { color: var(--tinta); font-size: 15px; }
+.pk-detail__owner-id { grid-column: 3; grid-row: 1; padding: 5px 9px; border: 1px solid var(--garis); border-radius: 8px; background: var(--panel); color: var(--redup); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pk-detail__owner p { grid-column: 2 / -1; grid-row: 2; margin: 0; color: var(--redup); font-size: 12px; }
+.pk-detail__grid { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(290px,.8fr); align-items: start; gap: 16px; }
+.pk-detail__panel { min-width: 0; padding: 19px 21px; border: 1px solid var(--garis); border-radius: 17px; background: var(--panel); box-shadow: 0 5px 18px color-mix(in srgb, var(--tinta) 4%, transparent); }
+.pk-detail__section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.pk-detail__overline { color: var(--redup); font-size: 10px; font-weight: 750; letter-spacing: .12em; }
+.pk-detail__section-head h2 { margin: 3px 0 0; color: var(--tinta); font-size: 17px; line-height: 1.25; }
+.pk-detail__section-head h2 span { margin-left: 5px; color: var(--redup); font-size: 12px; font-weight: 550; }
+.pk-detail__facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 22px; margin: 0; }
+.pk-detail__facts > div { min-width: 0; padding: 10px 0; border-top: 1px solid var(--garis-2); }
+.pk-detail__facts dt { margin-bottom: 4px; color: var(--redup); font-size: 10px; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
+.pk-detail__facts dd { margin: 0; color: var(--tinta); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pk-detail__facts dd small { display: block; margin-top: 2px; color: var(--redup); font-size: 11px; font-weight: 500; }
+.pk-detail__notice { margin-top: 12px; padding: 10px 12px; border-left: 3px solid #d99524; border-radius: 0 9px 9px 0; background: color-mix(in srgb, #d99524 10%, var(--panel)); color: var(--tinta); font-size: 12px; line-height: 1.45; }
+.pk-detail__quality { position: relative; overflow: hidden; }
+.pk-detail__score { display: flex; align-items: baseline; gap: 6px; padding: 3px 0 0; }
+.pk-detail__score > strong { color: var(--tinta); font-size: 42px; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1; }
+.pk-detail__score > span { color: var(--redup); font-size: 13px; }
+.pk-detail__score > b { margin-left: auto; padding: 6px 10px; border-radius: 9px; background: color-mix(in srgb, var(--aman) 17%, var(--panel)); color: var(--aman); font-size: 14px; }
+.pk-detail__quality > p { margin: 7px 0 15px; color: var(--redup); font-size: 12px; }
+.pk-detail__no-score { padding: 15px; border-radius: 11px; background: var(--panel-2); color: var(--redup); font-size: 13px; }
+.pk-detail__qc { padding-top: 13px; border-top: 1px solid var(--garis-2); }
+.pk-detail__qc h3 { margin: 0 0 7px; color: var(--redup); font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.pk-detail__qc dl { display: grid; gap: 0; margin: 0; }
+.pk-detail__qc dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--garis-2); }
+.pk-detail__qc dt { color: var(--redup); font-size: 12px; }
+.pk-detail__qc dd { margin: 0; color: var(--tinta); font-size: 13px; font-weight: 650; text-align: right; }
+.pk-detail__qc > p { margin: 0; color: var(--redup); font-size: 12px; }
+.pk-detail__batches { grid-column: 1 / -1; }
+.pk-detail__batch-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(230px,1fr)); gap: 9px; }
+.pk-detail__batch { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; align-items: center; gap: 3px 10px; padding: 11px 12px; border: 1px solid var(--garis-2); border-radius: 12px; background: var(--panel); }
+.pk-detail__batch-mark { grid-row: span 2; width: 8px; height: 8px; border-radius: 50%; background: var(--aksen, #d99524); }
+.pk-detail__batch strong { min-width: 0; color: var(--tinta); font-size: 12px; overflow-wrap: anywhere; }
+.pk-detail__batch b { color: var(--tinta); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pk-detail__batch small { grid-column: 2 / -1; color: var(--redup); font-size: 11px; }
+.pk-detail__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 12px 15px; border: 1px solid var(--garis); border-radius: 14px; background: var(--panel); }
+.pk-detail__actions .btn { width: fit-content; }
+.pk-detail__action-state { color: var(--redup); font-size: 13px; }
+.pk-detail__back:focus-visible { outline: 3px solid var(--fokus, #d88a24); outline-offset: 2px; }
+@media (max-width: 899px) {
+  .pk-detail { gap: 12px; margin: 4px 0 24px; }
+  .pk-detail__back { display: inline-flex; min-height: 32px; }
+  .pk-detail__hero { gap: 14px; padding: 17px; border-radius: 16px; }
+  .pk-detail__weight { min-width: 145px; padding: 11px 12px; }
+  .pk-detail__weight strong { font-size: 24px; }
+  .pk-detail__grid { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .pk-detail__panel { padding: 16px; border-radius: 15px; }
+  .pk-detail__batches { grid-column: auto; }
+}
+@media (max-width: 540px) {
+  .pk-detail__hero { align-items: flex-start; flex-direction: column; gap: 14px; padding: 16px; }
+  .pk-detail__heading { width: 100%; }
+  .pk-detail__eyebrow { flex-wrap: wrap; font-size: 11px; }
+  .pk-detail__hero h1 { margin-top: 8px; font-size: 21px; }
+  .pk-detail__weight { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; border-left-width: 3px; }
+  .pk-detail__weight strong { margin: 0; font-size: 23px; }
+  .pk-detail__weight > small { margin-left: auto; text-align: right; }
+  .pk-detail__owner { grid-template-columns: 34px minmax(0,1fr) auto; gap: 2px 9px; padding: 10px; }
+  .pk-detail__owner-icon { width: 32px; height: 32px; }
+  .pk-detail__owner > div strong { font-size: 13px; }
+  .pk-detail__owner-id { padding: 4px 6px; font-size: 10px; }
+  .pk-detail__owner p { font-size: 11px; }
+  .pk-detail__facts { gap: 0 12px; }
+  .pk-detail__facts > div { padding: 8px 0; }
+  .pk-detail__facts dt { font-size: 9px; }
+  .pk-detail__facts dd { font-size: 12px; }
+  .pk-detail__score > strong { font-size: 36px; }
+  .pk-detail__batch-list { grid-template-columns: minmax(0,1fr); }
+  .pk-detail__actions { position: sticky; bottom: 8px; z-index: 3; box-shadow: 0 8px 24px color-mix(in srgb, var(--tinta) 14%, transparent); }
+  .pk-detail__actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
 /* Stok Produk: listview expandable pada desktop, kartu yang sama tetap
    dipakai pada mobile. Detail di dalam baris memanggil kartu yang sudah ada
    agar riwayat kemasan, FIFO, dan tombol aksi tetap satu sumber. */
