@@ -1552,7 +1552,7 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-produk-tabel th:last-child { border-right: 1px solid var(--garis); border-radius: 0 12px 0 0; }
 .stok-produk-tabel th:nth-child(n+2):nth-child(-n+6) { text-align: right; }
 .stok-produk-tabel__angka { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stok-produk-tabel__sel { box-sizing: border-box; width: 100%; padding: 0; border: 0; }
+.stok-produk-tabel__sel { display: block; box-sizing: border-box; width: 100%; padding: 0; border: 0; }
 .stok-produk-baris { display: block; margin: 0; border: 1px solid var(--garis); border-top: 0; background: var(--panel); color: var(--tinta); }
 .stok-produk-baris, .stok-produk-baris__ringkas { box-sizing: border-box; width: 100%; }
 .stok-produk-baris:last-child { border-radius: 0 0 12px 12px; }
