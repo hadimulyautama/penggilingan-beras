@@ -171,8 +171,10 @@
    menggambar "0 kg" yang tak berarti. #}
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
              boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=(),
-             boleh_masukkan_silo=False, halaman_aksi="/stok-produk") -%}
+             boleh_masukkan_silo=False, halaman_aksi="/stok-produk",
+             desktop=False, preopened=False) -%}
 {% if daftar %}
+{% if desktop %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
   <div class="jumlah__angka">{{ kg(sisa) }}<small>kg</small></div>
@@ -180,10 +182,40 @@
     {{ daftar|length }} kategori{% if curah %} · {{ kg(curah) }} kg {{ ket }}{% endif %}
   </div>
 </div>
+<div class="stok-produk-desktop" aria-label="{{ judul }}">
+  <table class="stok-produk-tabel">
+    <thead><tr><th>Produk</th><th>Hasil sosoh</th><th>Keluar</th><th>Dikemas / tercatat</th><th>Curah / belum dikemas</th><th class="stok-produk-tabel__angka">Sisa di gudang</th><th></th></tr></thead>
+    <tbody>
+    {% for k in daftar %}
+      {% set otomatis = k.jenis in ("bekatul", "reject", "menir", "broken") %}
+      <tr><td colspan="7" class="stok-produk-tabel__sel">
+        <details class="stok-produk-baris">
+          <summary class="stok-produk-baris__ringkas">
+            <span class="stok-produk-baris__nama">{{ k.nama }}{% if titipan and titipan.get(k.jenis) %}<small>+ titipan {{ kg(titipan[k.jenis]) }} kg</small>{% endif %}</span>
+            <span>{{ kg(k.hasil_kg) }} kg</span>
+            <span>{{ kg(k.keluar_kg) }} kg</span>
+            <span>{{ kg(k.dikemas_otomatis_kg if otomatis else k.dikemas_kg) }} kg</span>
+            <span>{{ kg(k.curah_otomatis_kg if otomatis else k.curah_kg) }} kg</span>
+            <strong class="stok-produk-tabel__angka{{ ' padat__nilai--kosong' if k.sisa_kg < 0.5 }}">{{ kg(k.sisa_kg) }} kg</strong>
+            <span class="stok-produk-baris__buka" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="stok-produk-baris__detail">
+            {{ blok(judul, [k], sisa, curah, ket, warna, kemasan, boleh_catat,
+                    boleh_pindah, titipan, curah_titipan, jasa_ids,
+                    boleh_masukkan_silo, halaman_aksi, False, True) }}
+          </div>
+        </details>
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+<div class="stok-produk-kartu{{ ' stok-produk-kartu--terbuka' if preopened }}">
 <div class="grup" style="margin-bottom:26px">
 {% for k in daftar %}
-  <details class="padat padat--{{ warna }}">
-  <summary>
+  <details class="padat padat--{{ warna }}"{{ ' open' if preopened }}>
+  <summary class="{{ 'stok-produk-kartu__ringkas' if preopened else '' }}">
     <div class="padat__atas">
       <span class="padat__nama">{{ k.nama }}</span>
       <span class="padat__nilai{{ ' padat__nilai--kosong' if k.sisa_kg < 0.5 }}">
@@ -493,6 +525,7 @@
     {% endif %}
   </details>
 {% endfor %}
+</div>
 </div>
 {% endif %}
 {%- endmacro %}

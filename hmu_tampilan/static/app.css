@@ -1533,12 +1533,52 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-baris__detail .fakta { margin-top: 0; }
 .stok-baris__detail .nota { margin: 0; }
 .stok-baris__detail .ubah-hasil { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+/* Stok Produk: listview expandable pada desktop, kartu yang sama tetap
+   dipakai pada mobile. Detail di dalam baris memanggil kartu yang sudah ada
+   agar riwayat kemasan, FIFO, dan tombol aksi tetap satu sumber. */
+.stok-produk-desktop { display: none; margin: 10px 0 24px; }
+.stok-produk-tabel { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.stok-produk-tabel th {
+  padding: 11px 12px; background: var(--panel-2); color: var(--redup);
+  border-top: 1px solid var(--garis); border-bottom: 1px solid var(--garis);
+  font-size: 11px; font-weight: 700; letter-spacing: .045em;
+  text-align: left; text-transform: uppercase;
+}
+.stok-produk-tabel thead tr { display: grid; grid-template-columns: minmax(140px,1.5fr) repeat(4,minmax(80px,.9fr)) minmax(105px,1fr) 24px; }
+.stok-produk-tabel th:first-child { border-left: 1px solid var(--garis); border-radius: 12px 0 0 0; }
+.stok-produk-tabel th:last-child { border-right: 1px solid var(--garis); border-radius: 0 12px 0 0; }
+.stok-produk-tabel__angka { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stok-produk-tabel__sel { padding: 0; border: 0; }
+.stok-produk-baris { display: block; margin: 0; border: 1px solid var(--garis); border-top: 0; background: var(--panel); color: var(--tinta); }
+.stok-produk-baris:last-child { border-radius: 0 0 12px 12px; }
+.stok-produk-baris__ringkas {
+  display: grid; grid-template-columns: minmax(140px,1.5fr) repeat(4,minmax(80px,.9fr)) minmax(105px,1fr) 24px;
+  align-items: center; min-height: 54px; padding: 8px 0 8px 12px;
+  list-style: none; cursor: pointer; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.stok-produk-baris__ringkas::-webkit-details-marker { display: none; }
+.stok-produk-baris__ringkas > span, .stok-produk-baris__ringkas > strong { min-width: 0; padding-right: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stok-produk-baris__nama { display: flex; flex-direction: column; gap: 3px; font-weight: 700; }
+.stok-produk-baris__nama small { color: var(--redup); font-size: 11px; font-weight: 500; }
+.stok-produk-baris__buka { color: var(--redup); font-size: 17px; text-align: center; transition: transform .15s ease; }
+.stok-produk-baris[open] .stok-produk-baris__buka { transform: rotate(180deg); }
+.stok-produk-baris__detail { padding: 10px 14px 14px; border-top: 1px solid var(--garis-2); }
+.stok-produk-baris__detail .jumlah { display: none; }
+.stok-produk-kartu--terbuka { display: block !important; }
+.stok-produk-kartu--terbuka > .jumlah { display: none; }
+.stok-produk-kartu--terbuka .grup { display: block; margin: 0 !important; }
+.stok-produk-kartu--terbuka .padat > summary { display: none; }
+.stok-produk-kartu--terbuka .padat { padding: 0; border: 0; box-shadow: none; }
+.stok-produk-kartu--terbuka .anak { margin-top: 0; }
 @media (min-width: 900px) {
   .stok-desktop { display: block; }
   .stok-desktop--lama { display: none !important; }
   .stok-gabungan { display: block; margin-bottom: 18px; }
   .jumlah--stok-gudang { display: none; }
   .stok-mobile-cards { display: none; }
+  .stok-produk-desktop { display: block; }
+  .stok-produk-kartu:not(.stok-produk-kartu--terbuka) { display: none; }
 }
 
 /* ── Isi kartu yang bisa DIPINDAI, bukan dibaca ──
