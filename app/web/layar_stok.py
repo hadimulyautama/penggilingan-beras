@@ -19,7 +19,7 @@ sendiri — tak ada angka kedua yang bisa berselisih.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
 from app.services import stok as svc
@@ -224,4 +224,57 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         # langsung (bukan lewat sub-menu "Stok") tak tahu ia sedang melihat
         # irisan, bukan daftar utuh.
         JASA_SAJA=True,
+    )
+
+
+@router.get("/stok/pk/detail")
+async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
+    """Detail satu stok PK, memakai komponen yang sama untuk pabrik dan jasa."""
+    from app.services.setelan import fitur_mutu
+    from app.web.layar import POLESAN, SUPER, gudang1, gudang2
+
+    gudang = request.query_params.get("gudang", "")
+    jasa_saja = request.query_params.get("jasa") == "1"
+    if gudang not in {"g1", "g2"}:
+        raise HTTPException(404, "Lokasi stok PK tidak dikenal.")
+
+    view = getattr(request.state, "view", "tamu")
+    async with SessionLocal() as db:
+        if gudang == "g1" and (gudang1(view) or gudang2(view)):
+            daftar = await svc.pk_gudang1(db)
+            identitas = request.query_params.get("kode", "")
+            kartu = next((x for x in daftar
+                          if x.kode == identitas
+                          and bool(x.jasa_id) == jasa_saja), None)
+        elif gudang == "g2" and gudang2(view):
+            daftar = await svc.pk_gudang2(db)
+            try:
+                intake_id = int(request.query_params.get("id", ""))
+            except (TypeError, ValueError):
+                raise HTTPException(404, "Kode stok PK tidak dikenal.")
+            kartu = next((x for x in daftar
+                          if x.intake_id == intake_id
+                          and bool(x.jasa_id) == jasa_saja), None)
+        else:
+            raise HTTPException(404, "Stok PK tidak tersedia untuk gudang ini.")
+
+        if kartu is None:
+            raise HTTPException(404, "Stok PK tidak ditemukan atau sudah habis.")
+        mutu_aktif = await fitur_mutu(db)
+
+    kembali = "/stok-pk-jasa" if jasa_saja else "/stok"
+    if request.query_params.get("gudang_filter") in {"g1", "g2"}:
+        kembali += "?gudang=" + request.query_params["gudang_filter"]
+    return await render_laci(
+        request, "stok_pk_jasa.html" if jasa_saja else "stok.html",
+        layar="stok_pk_jasa" if jasa_saja else "stok",
+        detail=True, detail_gudang=gudang, detail_kartu=kartu,
+        SARING_GUDANG=(), gudang="", lot=[], tempat=[], produk=[], samping=[],
+        total=0, JASA_SAJA=jasa_saja, mutu_aktif=mutu_aktif,
+        boleh_ubah=akun.is_admin and view != POLESAN,
+        boleh_minta=view == POLESAN,
+        boleh_pindah_tumpukan=view in (POLESAN, SUPER),
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+        breadcrumb_detail="Detail PK", kembali=kembali,
     )

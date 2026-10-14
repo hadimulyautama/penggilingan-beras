@@ -3,582 +3,65 @@
 {% block isi %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
-
-{# ── Penyaring per gudang ──
-   Milik app yang memegang LEBIH DARI SATU gudang (Meja). Pos Produksi
-   memberi tiap orang satu gudang lewat view, jadi penyaringnya tak punya
-   pilihan kedua untuk ditawarkan. Daftar, bukan dua pil yang ditulis tangan:
-   menambah gudang berarti menambah baris di master, bukan di templat.
-
-   ⚠⚠ ALAMATNYA `request.url.path`, BUKAN `"/stok"` tertulis tangan —
-   laporan pemilik 7 Oktober 2026: tombol gudang di "Stok PK Jasa"
-   (`stok_pk_jasa.html`, `{% extends "stok.html" %}` tanpa blok ditimpa)
-   malah membawa orang ke `/stok` ("stok pk"), sebab alamat pil dulu
-   HARDCODE ke path templat aslinya, bukan path yang SUNGGUH sedang
-   dibuka. `request` null-safe (bawaan `/stok` kalau templat ini dirender
-   tanpa permintaan HTTP sungguhan, pola yang sama dengan `jalan_kini` di
-   `base.html`). #}
-{% import "_saring.html" as saring with context %}
-{{ saring.pil_gudang(request.url.path if request else "/stok", SARING_GUDANG, gudang) }}
-
-{% if not lot and not tempat %}
-  <div class="kosong">
-    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-         stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
-      <path d="M12 13v7"/></svg>
-    <div>
-      {% if JASA_SAJA %}
-      <h2>Tak ada PK titipan pelanggan</h2>
-      <p class="bantu">
-        Belum ada PK milik pesanan jasa yang berdiri di Gudang 1 maupun
-        Gudang 2 — atau semuanya sudah disosoh/terjual.
-      </p>
-      {% elif VIEW == V_POLESAN %}
-      <h2>Tak ada PK tersisa di Gudang 2</h2>
-      <p class="bantu">
-        Tumpukan kosong — semuanya sudah disosoh, atau belum ada PK yang
-        masuk. Silo tak dihitung di sini: isinya untuk proses, bukan stok
-        yang berdiri.
-      </p>
-      {% else %}
-      <h2>Tak ada PK tersisa di Gudang 1</h2>
-      <p class="bantu">
-        Semua hasil giling sudah dikirim ke Gudang 2 atau terjual — atau
-        belum ada giling yang menghasilkan.
-      </p>
-      {% endif %}
-    </div>
-  </div>
+{% if detail %}
+  {% include "_stok_pk_detail.html" %}
 {% else %}
-{% include "_stok_pk_gabungan.html" %}
-{% if lot %}
-  {# Jumlahnya di muka: yang membuka halaman ini paling sering ingin tahu
-     "cukup tidak untuk satu kiriman", dan itu satu angka. Rinciannya di
-     bawah, untuk yang bertanya "yang mana". #}
-  <div class="jumlah jumlah--stok-gudang">
-    <span class="lbl">{{ "PK Jasa di Gudang 1" if JASA_SAJA else "PK di Gudang 1" }}</span>
-    <div class="jumlah__angka">{{ kg(total) }}<small>kg</small></div>
-    {# Lot yang hasilnya tak dicatat TIDAK ikut dijumlahkan — tak ada angka
-       yang bisa dijumlahkan. Itu harus disebut di sebelah totalnya, kalau
-       tidak totalnya diam-diam lebih kecil daripada isi gudang. #}
-    {% set belum = lot|selectattr("belum_dicatat")|list|length %}
-    <div class="jumlah__ket">
-      {{ lot|length }} lot · dihitung saat dibuka, hasil giling dikurangi yang
-      sudah dikirim &amp; dijual
-      {%- if belum %} · <b>{{ belum }} lot belum dicatat, belum terhitung</b>{% endif -%}
-    </div>
-  </div>
+  {% import "_saring.html" as saring with context %}
+  {{ saring.pil_gudang(request.url.path if request else "/stok", SARING_GUDANG, gudang) }}
 
-  <div class="stok-desktop stok-desktop--lama" aria-label="Daftar stok PK Gudang 1">
-    <table class="stok-tabel">
-      <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
-      <tbody>
-      {% for l in lot %}
-        {% set mutu = namespace(ka="—", broken="—", susut="—") %}
-        {% for label, nilai in l.mutu %}
-          {% if label|lower == "kadar air" %}{% set mutu.ka = nilai %}
-          {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
-          {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
-        {% endfor %}
-        <tr><td colspan="10" class="stok-tabel__sel">
-          <details class="stok-baris">
-            <summary class="stok-baris__ringkas">
-              <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
-              <span>{{ (l.pemilik.split(" ", 1)[1] if JASA_SAJA and l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
-              <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
-              <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
-              <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
-              <span>{{ l.kelas or "—" }}</span>
-              <strong class="stok-tabel__angka">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong>
-              <span class="stok-baris__buka" aria-hidden="true">⌄</span>
-            </summary>
-            <div class="stok-baris__detail">
-              <dl class="fakta">
-                <div><dt>Hasil</dt><dd>{% if l.belum_dicatat %}—{% else %}{{ kg(l.dihasilkan) }} kg{% endif %}</dd></div>
-                {% if l.rendemen is not none %}<div><dt>Rendemen</dt><dd class="sorot">{{ "%.1f"|format(l.rendemen)|replace(".", ",") }}%</dd></div>{% endif %}
-                {% if l.bahan_kg %}<div><dt>Bahan</dt><dd>{{ kg(l.bahan_kg) }} kg{% if not l.bahan_final %} <small class="bantu">belum final — menunggu timbang</small>{% endif %}</dd></div>{% endif %}
-                {% if l.kelas %}<div><dt>Kondisi</dt><dd>{{ l.kelas }}</dd></div>{% endif %}
-                {% if mutu_aktif %}
-                  {% for label, nilai in l.mutu %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}
-                  {% if not l.mutu %}<div><dt>Mutu</dt><dd class="padat__nilai--kosong">belum dinilai</dd></div>{% endif %}
-                {% endif %}
-                {% if l.dikirim %}<div><dt>Sudah dikirim</dt><dd>{{ kg(l.dikirim) }} kg</dd></div>{% endif %}
-              </dl>
-              {% if l.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ (l.pemilik.split(" ", 1)[1] if JASA_SAJA and " " in l.pemilik else l.pemilik) }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
-              {% if l.berjalan %}<div class="nota nota--hati"><span aria-hidden="true">⏸</span><span>Mesin masih giling — hasil &amp; rendemen belum final</span></div>
-              {% elif l.belum_dicatat %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Hasil giling belum dicatat — PK-nya ada, tapi belum terhitung. Catat lewat <b>Perbarui hasil giling</b>, atau verifikasi output finalnya.</span></div>{% endif %}
-              {% if l.bahan %}
-                <div class="anak"><div class="anak__kepala">Batch asal · {{ l.bahan|length }}</div>
-                  {% for nama, berat, kapan in l.bahan %}<div class="anak__baris"><span class="anak__nama">{{ nama }}</span><span class="anak__kg">{{ berat }}</span><span class="anak__jam">{{ kapan }}</span></div>{% endfor %}
-                </div>
-              {% endif %}
-              {% if boleh_minta and not l.berjalan %}<div class="ubah-hasil">
-                {% if l.diminta_siap %}<span class="bantu">Disetujui Admin — Gudang 1 yang memuat dan mengirimnya</span>
-                {% elif l.diminta_oleh %}<span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>
-                {% else %}<a class="btn btn--kecil" href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>{% endif %}
-              </div>{% endif %}
-              {% if boleh_ubah and not l.berjalan %}<div class="ubah-hasil">
-                <a class="btn btn--kecil" href="/stok?buka=verify_output&amp;nilai={{ l.kode|urlencode }}">{{ "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" }}</a>
-                {% if mutu_aktif %}<a class="btn btn--kecil" href="/stok?buka=qc_giling&amp;nilai={{ l.kode|urlencode }}">{{ "Edit kualitas" if l.mutu else "Catat kualitas" }}</a>{% endif %}
-              </div>{% endif %}
-            </div>
-          </details>
-        </td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="grup stok-mobile-cards" style="gap:9px">
-    {% for l in lot %}
-      {# Kartu yang PUNYA rincian jadi laci; yang tidak, tetap kotak biasa.
-         Laci yang terbuka ke ruang kosong mengajari orang berhenti membukanya. #}
-      {% set laci = l.bahan|length > 0 %}
-      {# ── Warnanya BERUBAH saat permintaannya disetujui ──
-         Permintaan pemilik 26 September 2026: "jika disetujui, kartu stock di
-         gudang 1 berubah warnanya lalu operator gudang 2 bisa memilih kartu
-         tersebut dan mulai proses pindah."
-
-         Warna, bukan cuma kalimat: yang menyusuri layar Stok mencari lot yang
-         boleh ia ambil hari ini, dan satu baris teks di antara belasan kartu
-         menuntut ia membaca semuanya. #}
-      <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} {{ "padat--siap" if l.diminta_siap else "padat--giling" }}">
-      <{{ "summary" if laci else "div" }}{{ "" if laci else ' class="padat__ringkas"' }}>
-        {# Tanggalnya menempel pada kodenya, seukuran kodenya. Sebagai baris
-           sendiri ia memakan satu baris penuh untuk lima karakter, dan kartu
-           yang barisnya banyak berhenti bisa dipindai sekilas. #}
-        <div class="padat__atas">
-          <span class="padat__nama padat__nama--kode">
-            {{- l.kode }} · {{ l.tanggal }}
-            {%- if l.lama %} · <span class="padat__umur">{{ l.lama }}</span>{% endif -%}
-          </span>
-          {# Tak dicatat bukan nol. "0 kg" adalah pernyataan bahwa gudangnya
-             kosong; yang benar adalah kita tidak tahu berapa. #}
-          {% if l.belum_dicatat %}
-            <span class="padat__nilai padat__nilai--kosong">—</span>
-          {% else %}
-            <span class="padat__nilai">{{ kg(l.tersedia) }}<small>kg</small></span>
-          {% endif %}
-        </div>
-        {# ── MILIK SIAPA, di kepala kartu ──
-           Pemiliknya sempat hanya tertulis di dalam laci "Batch asal", dan laci
-           itu tertutup. Akibatnya (laporan lapangan 2 Oktober 2026) PK titipan
-           terbaca sebagai lot pabrik biasa oleh operator yang memutuskan apa
-           yang dikerjakan hari ini — dan keputusan atas barang orang lain
-           berbeda: ia disosoh lalu DIKEMBALIKAN, tidak dijual.
-
-           Barisnya hanya ada untuk barang titipan. Lot pabrik tak diberi
-           "milik: pabrik": keterangan yang muncul di setiap kartu berhenti
-           dibaca, dan yang perlu dibaca justru yang jarang. #}
-        {% if l.pemilik %}
-          <div class="nota nota--hati" style="margin:6px 0 0">
-            <span aria-hidden="true">◇</span>
-            <span>Titipan <b>{{ l.pemilik }}</b> — disosoh lalu dikembalikan,
-              bukan dijual</span>
-          </div>
-        {% endif %}
-        {# Hasil giling dan rendemen naik jadi angka, bukan keterangan.
-           Rendemen adalah satu-satunya angka di kartu ini yang menilai
-           PEKERJAANNYA, bukan sekadar melaporkan isinya — dan angka yang
-           menilai tak boleh digambar seredup angka yang melaporkan.
-
-           Berapa yang sudah pergi disebut juga: tanpa itu "800 kg" terbaca
-           sebagai hasil gilingnya, dan rendemen yang dihitung orang di
-           kepalanya jadi salah. #}
-        <dl class="fakta">
-          <div>
-            <dt>Hasil</dt>
-            {# Sama alasannya dengan angka besar di atas: nol adalah pernyataan,
-               dan yang benar di sini adalah belum ada pernyataan. #}
-            <dd>{% if l.belum_dicatat %}—{% else %}{{ kg(l.dihasilkan) }} kg{% endif %}</dd>
-          </div>
-          {% if l.rendemen is not none %}
-            <div>
-              <dt>Rendemen</dt>
-              <dd class="sorot">{{ "%.1f"|format(l.rendemen)|replace(".", ",") }}%</dd>
-            </div>
-          {% endif %}
-          {% if l.bahan_kg %}
-            <div>
-              <dt>Bahan</dt>
-              <dd>{{ kg(l.bahan_kg) }} kg{% if not l.bahan_final %} <small class="bantu">belum final — menunggu timbang</small>{% endif %}</dd>
-            </div>
-          {% endif %}
-          {# Kelas PK yang keluar dari lot ini, dan HANYA itu. Kondisi beli
-             gabahnya — basah atau kering — adalah keadaan kemarin; yang dijual
-             dan dibicarakan orang adalah KS dan KL. Menyebut keduanya di kartu
-             yang sama memaksa pembacanya menerjemahkan, dan yang menerjemahkan
-             sesekali salah menerjemahkan. MIX = lot ini berisi dua-duanya. #}
-          {% if l.kelas %}
-            <div>
-              <dt>Kondisi</dt>
-              <dd>{{ l.kelas }}</dd>
-            </div>
-          {% endif %}
-          <div>
-            <dt>Nilai kualitas</dt>
-            {% if l.nilai_kualitas is not none %}
-              <dd class="stok-kualitas">{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ l.kelas_kualitas }}</b> <small>{{ l.komponen_kualitas }}/3 komponen</small></dd>
-            {% else %}
-              <dd class="padat__nilai--kosong">Belum ada data QC</dd>
-            {% endif %}
-          </div>
-          {# Mutu ikut di kartu utama, tidak dilipat. Mutu bukan rincian
-             tambahan: ia yang menentukan PK ini masuk kelas apa dan laku
-             berapa. Yang harus dibuka dulu untuk terbaca akan dianggap tak
-             ada — dan layar yang diam soal mutu terbaca seolah mutunya baik,
-             jadi yang belum dinilai pun disebut. #}
-          {% if mutu_aktif %}
-          {% for label, nilai in l.mutu %}
-            <div>
-              <dt>{{ label }}</dt>
-              <dd>{{ nilai }}</dd>
-            </div>
-          {% endfor %}
-          {% if not l.mutu %}
-            <div>
-              <dt>Mutu</dt>
-              <dd class="padat__nilai--kosong">belum dinilai</dd>
-            </div>
-          {% endif %}
-          {% endif %}
-          {% if l.dikirim %}
-            <div>
-              <dt>Sudah dikirim</dt>
-              <dd>{{ kg(l.dikirim) }} kg</dd>
-            </div>
-          {% endif %}
-        </dl>
-        {# Peringatan TIDAK ikut dilipat. Yang harus dibuka dulu untuk terbaca
-           bukan peringatan, ia catatan kaki. #}
-        {% if l.berjalan %}
-          <div class="nota nota--hati">
-            <span aria-hidden="true">⏸</span>
-            <span>Mesin masih giling — hasil &amp; rendemen belum final</span>
-          </div>
-        {% elif l.belum_dicatat %}
-          <div class="nota nota--hati">
-            <span aria-hidden="true">⚠</span>
-            <span>Hasil giling belum dicatat — PK-nya ada, tapi belum terhitung.
-              Catat lewat <b>Perbarui hasil giling</b>, atau verifikasi output
-              finalnya.</span>
-          </div>
-        {% endif %}
-      </{{ "summary" if laci else "div" }}>
-        {# Bahannya satu per satu, berikut bobotnya — inilah yang menjawab
-           "dari siapa BERAPA", dan begitu ada keluhan mutu, pertanyaan itulah
-           yang menentukan tumpukan mana harus ditahan. Namanya disebut DI SINI
-           saja: sebelumnya ia juga diringkas di baris atas, dan nama yang sama
-           muncul dua kali membuat orang mengira keduanya berbeda maksud.
-           Bentuknya sama dengan rincian di kartu lain, jadi tak ada yang perlu
-           dipelajari ulang. #}
-        {% if l.bahan %}
-          <div class="anak">
-            {# Diberi kepala sendiri, dan kepalanya menyebut BATCH — bukan
-               "gabah". "Dari gabah" di atas adalah berat yang benar-benar
-               masuk mesin (penyebut rendemen); baris-baris ini adalah batch
-               pembeliannya, yang bisa terbelah ke lebih dari satu giling.
-               Dua angka yang beda arti harus beda nama, kalau tidak orang
-               akan menjumlahkan yang satu dan mencocokkannya ke yang lain. #}
-            <div class="anak__kepala">
-              Batch asal · {{ l.bahan|length }}
-            </div>
-            {% for nama, berat, kapan in l.bahan %}
-              <div class="anak__baris">
-                <span class="anak__nama">{{ nama }}</span>
-                <span class="anak__kg">{{ berat }}</span>
-                <span class="anak__jam">{{ kapan }}</span>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-        {# ── Koreksi, di dasar laci, hanya untuk Admin ke atas ──
-           Yang dikoreksi HASIL GILINGNYA, bukan angka stoknya. Stok = hasil −
-           dikirim − dijual; membolehkan orang mengetik stok berarti
-           membolehkan salah satu dari ketiganya dibengkokkan tanpa jejak.
-           Yang dibuka di sini aksi yang sudah ada dan sudah tercatat —
-           verifikasi output — jadi rendemen dan stok terhitung ulang sendiri
-           dari satu angka, dan koreksinya bisa dibatalkan lewat List audit.
-
-           Tak ditawarkan selama mesin masih giling: di sana angkanya belum
-           final, dan yang dipakai operator "Perbarui hasil giling". #}
-        {# ── Operator Gudang 2: MINTA lot ini ──
-           Keputusan pemilik 24 September 2026. Ia melihat PK Gudang 1 sebagai
-           BAHAN, dan satu-satunya hal yang boleh ia lakukan atasnya adalah
-           memberitahu Admin bahwa ia memerlukannya. Yang memindahkan tetap
-           Admin — ini permintaan, bukan izin.
-
-           Yang sudah diminta TIDAK menawarkan tombolnya lagi, ia menyebut
-           keadaannya: tombol yang ditekan dua kali karena layarnya tak berubah
-           adalah tombol yang mengajari orang menekan dua kali. Pagar
-           sungguhannya tetap di basis data.
-
-           Tak ditawarkan selama mesinnya masih giling: angkanya belum final,
-           dan yang dipindah nanti bukan yang terbaca sekarang. #}
-        {% if boleh_minta and not l.berjalan %}
-          <div class="ubah-hasil">
-            {# KEADAANNYA, bukan sekadar "sudah diminta". Yang meminta menekan
-               tombol lalu tak pernah diberi kabar lagi sampai barangnya muncul
-               — atau tidak muncul; itu bagian yang paling kurang dari alur ini
-               menurut pemilik (25 September 2026). Kalimatnya datang dari
-               `stok._keadaan_minta`, satu tempat. #}
-            {# Blok ini hanya tergambar untuk view POLESAN (`boleh_minta`),
-               yaitu operator Gudang 2 — yang MEMINTA.
-
-               Yang sudah disetujui TIDAK bertombol di sini. Ia sempat
-               bertombol sehari (26 September 2026), ketika tangan yang memuat
-               disangka Gudang 2; pemilik menjawabnya 27 September: "gudang 1
-               yang mengirim", "jika sudah disetujui". Jadi yang berdiri di
-               sini kalimat keadaan — ia memberi tahu bahwa permintaannya sudah
-               lolos dan barangnya sedang disiapkan, tanpa menawarkan tombol
-               yang pintunya justru akan menolaknya dengan 403.
-
-               Warnanya tetap berubah (`padat--siap`): "sudah disetujui" adalah
-               kabar yang dicari orang di layar ini, dan warna menjawabnya lebih
-               cepat daripada kalimat. #}
-            {% if l.diminta_siap %}
-              <span class="bantu">Disetujui Admin — Gudang 1 yang memuat dan
-                mengirimnya</span>
-            {% elif l.diminta_oleh %}
-              <span class="bantu">Sudah diminta {{ l.diminta_oleh }}{% if l.diminta_keadaan %} — {{ l.diminta_keadaan }}{% endif %}</span>
-            {% else %}
-              <a class="btn btn--kecil"
-                 href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=minta_pk_g1&amp;nilai={{ l.kode|urlencode }}">Minta lot ini</a>
-            {% endif %}
-          </div>
-        {% endif %}
-        {% if boleh_ubah and not l.berjalan %}
-          {# Kecil dan tak berwarna: ini koreksi, bukan pekerjaan harian. Tombol
-             utama selebar kartu memanggil dirinya sendiri untuk ditekan, dan
-             yang paling sering ditekan di layar Stok seharusnya tidak ada. #}
-          <div class="ubah-hasil">
-            <a class="btn btn--kecil"
-               href="/stok?buka=verify_output&amp;nilai={{ l.kode|urlencode }}">
-              {{- "Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling" -}}
-            </a>
-            {# Mutu punya tombolnya sendiri, bukan digabung ke satu borang:
-               berat hasil dan kadar air datang dari dua penimbangan yang
-               berbeda, sering pada waktu yang berbeda pula. Satu borang berisi
-               keduanya memaksa orang mengisi yang belum ia punya. #}
-            {% if mutu_aktif %}
-              <a class="btn btn--kecil"
-                 href="/stok?buka=qc_giling&amp;nilai={{ l.kode|urlencode }}">
-                {{- "Edit kualitas" if l.mutu else "Catat kualitas" -}}
-              </a>
-            {% endif %}
-          </div>
-        {% endif %}
-      </{{ "details" if laci else "div" }}>
-    {% endfor %}
-  </div>
-{% endif %}
-
-{# ── GUDANG 2 — TUMPUKAN PER KODE BAHAN, SILO TAK IKUT (sejak 5 Oktober 2026) ──
-   Sampai hari itu seluruh Tumpukan dibungkus jadi SATU kartu beranak, dan
-   lacinya ("Pernah masuk") tak menyebut mutu sama sekali. Keputusan pemilik:
-   *"pk di gudang 2 juga harus disajikan sama seperti di gudang 1. jangan
-   dibungkus dengan kartu tumpukan. bagaimana kami bisa tau kualitas per kode
-   bahan. tetap harus ditampilkan per kode bahan."* Jadi `tempat` di sini kini
-   SATU KARTU PER PEMASUKAN (`stok.LotPkG2`) — satuan yang sama dengan `lot`
-   Gudang 1 di atas — bukan lagi satu kartu per TEMPAT. Silo sendiri TETAP
-   tak didaftar (lihat `stok.pk_gudang2`): isinya cuma hasil hitungan
-   masuk-keluar, bukan ukuran fisik.
-
-   Kartu ini TAK BERLACI: tiap pemasukan sudah tahu asalnya sendiri (satu
-   PKB atau satu transfer G1), jadi tak ada "batch asal" yang perlu dilipat
-   seperti di Gudang 1 — mutunya langsung terlihat, tanpa satu ketukan pun. #}
-{% if tempat %}
-  <div{% if lot %} style="margin-top:18px"{% endif %}>
-    <div class="jumlah jumlah--stok-gudang">
-      <span class="lbl">{{ "PK Jasa di Gudang 2" if JASA_SAJA else "PK di Gudang 2" }}</span>
-      <div class="jumlah__angka">{{ kg(tempat|sum(attribute="tersedia")) }}<small>kg</small></div>
-      <div class="jumlah__ket">
-        {{ tempat|length }} kode · menumpuk, belum dipindah ke silo
+  {% if not lot and not tempat %}
+    <div class="kosong">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5M12 13v7"/></svg>
+      <div>
+        {% if JASA_SAJA %}<h2>Tak ada PK titipan pelanggan</h2><p class="bantu">Belum ada PK milik pesanan jasa yang tersisa di Gudang 1 maupun Gudang 2.</p>
+        {% elif VIEW == V_POLESAN %}<h2>Tak ada PK tersisa di Gudang 2</h2><p class="bantu">Belum ada PK yang menumpuk di Gudang 2.</p>
+        {% else %}<h2>Tak ada PK tersisa</h2><p class="bantu">Belum ada hasil giling atau pembelian PK yang tersisa.</p>{% endif %}
       </div>
     </div>
-
-    <div class="stok-desktop stok-desktop--lama" aria-label="Daftar stok PK Gudang 2">
-      <table class="stok-tabel">
-        <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
-        <tbody>
-        {% for t in tempat %}
-          {% set mutu = namespace(ka="—", broken="—", susut="—") %}
-          {% for label, nilai in t.mutu %}
-            {% if label|lower == "kadar air" %}{% set mutu.ka = nilai %}
-            {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
-            {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
+  {% else %}
+    {% include "_stok_pk_gabungan.html" %}
+    <div class="stok-mobile-list">
+      {% if lot %}
+        <section class="stok-mobile-list__bagian">
+          <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 1</h2><strong>{{ kg(total) }} kg</strong></header>
+          <p>{{ lot|length }} lot{% if lot|selectattr("belum_dicatat")|list|length %} · {{ lot|selectattr("belum_dicatat")|list|length }} hasil belum dicatat{% endif %}</p>
+          {% for l in lot %}
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}">
+              <span class="stok-mobile-list__ikon" aria-hidden="true">{% if l.jasa_id %}◇{% else %}▦{% endif %}</span>
+              <span class="stok-mobile-list__isi"><strong>{{ l.kode }}</strong><small>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }} · {{ "Jasa" if l.jasa_id else "Bukan jasa" }} · {{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small>
+                {% if l.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} · {{ l.kelas_kualitas }}{% else %}<small>Mutu belum dinilai{% endif %}</small></span>
+              <strong class="stok-mobile-list__berat">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
+            </a>
           {% endfor %}
-          {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
-          <tr><td colspan="10" class="stok-tabel__sel">
-            <details class="stok-baris">
-              <summary class="stok-baris__ringkas">
-                <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small></span>
-                <span>{{ (t.pemilik.split(" ", 1)[1] if JASA_SAJA and t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
-                <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>
-                <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
-                <span class="stok-kualitas-ringkas">{% if t.nilai_kualitas is not none %}<span>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} <b>{{ t.kelas_kualitas }}</b></span><small>{{ t.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
-                <span>{{ t.kelas or "—" }}</span>
-                <strong class="stok-tabel__angka">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong>
-                <span class="stok-baris__buka" aria-hidden="true">⌄</span>
-              </summary>
-              <div class="stok-baris__detail">
-                {% if t.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ (t.pemilik.split(" ", 1)[1] if JASA_SAJA and " " in t.pemilik else t.pemilik) }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
-                <dl class="fakta">
-                  <div><dt>Asal PK</dt><dd>{{ "Hasil giling gabah sendiri" if giling_sendiri else "Pembelian PK dari luar" }}</dd></div>
-                  {% if t.berat_awal and t.berat_awal > t.tersedia %}<div><dt>Sudah ke silo</dt><dd>{{ kg(t.berat_awal - t.tersedia) }} dari {{ kg(t.berat_awal) }} awal</dd></div>{% endif %}
-                  {% if t.kelas %}<div><dt>Kondisi</dt><dd>{{ t.kelas }}</dd></div>{% endif %}
-                  <div><dt>Nilai kualitas</dt>{% if t.nilai_kualitas is not none %}<dd class="stok-kualitas">{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ t.kelas_kualitas }}</b> <small>{{ t.komponen_kualitas }}/3 komponen</small></dd>{% else %}<dd class="padat__nilai--kosong">Belum ada data QC</dd>{% endif %}</div>
-                  {% if mutu_aktif %}{% for label, nilai in t.mutu %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}{% if not t.mutu %}<div><dt>Mutu</dt><dd class="padat__nilai--kosong">belum dinilai</dd></div>{% endif %}{% endif %}
-                </dl>
-                {% if not t.bobot_final %}<div class="nota nota--hati"><span aria-hidden="true">⏸</span><span>Truknya belum ditimbang kedua — bobot belum final</span></div>{% endif %}
-                {% if boleh_pindah_tumpukan and t.bobot_final %}<div class="ubah-hasil"><a class="btn btn--kecil" href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a></div>{% endif %}
-              </div>
-            </details>
-          </td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+        </section>
+      {% endif %}
+      {% if tempat %}
+        <section class="stok-mobile-list__bagian">
+          <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 2</h2><strong>{{ kg(tempat|sum(attribute="tersedia")) }} kg</strong></header>
+          <p>{{ tempat|length }} kode bahan · tumpukan</p>
+          {% for t in tempat %}{% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}">
+              <span class="stok-mobile-list__ikon" aria-hidden="true">{% if t.pemilik %}◇{% else %}▦{% endif %}</span>
+              <span class="stok-mobile-list__isi"><strong>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</strong><small>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }} · {{ "Jasa" if t.pemilik else "Bukan jasa" }} · {{ t.tanggal or "Tanggal tidak tersedia" }}</small>
+                {% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}{% else %}<small>Mutu belum dinilai{% endif %}</small></span>
+              <strong class="stok-mobile-list__berat">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
+            </a>
+          {% endfor %}
+        </section>
+      {% endif %}
     </div>
-
-    <div class="grup stok-mobile-cards" style="gap:9px">
-      {% for t in tempat %}
-        <div class="padat padat--diam padat--giling">
-          <div class="padat__ringkas">
-            <div class="padat__atas">
-              <span class="padat__nama padat__nama--kode">
-                {{- t.kode -}}
-                {%- if t.tanggal %} · {{ t.tanggal }}{% endif -%}
-                {%- if t.lama %} · <span class="padat__umur">{{ t.lama }}</span>{% endif -%}
-              </span>
-              {# Belum ditimbang kedua bukan nol — lihat `LotPkG2.bobot_final`,
-                 padanan "belum dicatat" kartu lot Gudang 1 di atas. #}
-              {% if t.bobot_final %}
-                <span class="padat__nilai">{{ kg(t.tersedia) }}<small>kg</small></span>
-              {% else %}
-                <span class="padat__nilai padat__nilai--kosong">—</span>
-              {% endif %}
-            </div>
-            {# Padanan persis kartu lot Gudang 1: pemiliknya di kepala kartu,
-               bukan di laci — lihat catatan panjang di sana. #}
-            {% if t.pemilik %}
-              <div class="nota nota--hati" style="margin:6px 0 0">
-                <span aria-hidden="true">◇</span>
-                <span>Titipan <b>{{ t.pemilik }}</b> — disosoh lalu dikembalikan,
-                  bukan dijual</span>
-              </div>
-            {% endif %}
-            {# Fakta dasar + mutu dalam SATU `dl`, persis struktur kartu lot
-               Gudang 1 di atas: "Kondisi" dan "Sudah ke silo" bukan mutu
-               (tak dimatikan lewat Pengaturan → Mutu), jadi keduanya
-               BERDIRI DI LUAR `{% if mutu_aktif %}`, sama seperti `l.kelas`
-               di kartu Gudang 1 — yang dilipat ke dalam gerbang itu hanya
-               baris mutu sungguhan. #}
-            <dl class="fakta">
-              {# "Berapa yang sudah masuk silo dari berat awal yang ada"
-                 (permintaan pemilik 5 Oktober 2026). Hanya muncul begitu
-                 ADA yang sudah pindah — pemasukan yang masih utuh di
-                 tumpukan tak punya apa pun untuk dilaporkan di sini. #}
-              {% if t.berat_awal and t.berat_awal > t.tersedia %}
-                <div>
-                  <dt>Sudah ke silo</dt>
-                  <dd>{{ kg(t.berat_awal - t.tersedia) }} dari {{ kg(t.berat_awal) }} awal</dd>
-                </div>
-              {% endif %}
-              {# Kelas PK — KS (gabah basah, kami keringkan sendiri) / KL
-                 (gabah sudah kering saat dibeli) / Campuran / Semi KS / MIX.
-                 Permintaan pemilik 5 Oktober 2026: "kondisi kl atau ks." #}
-              {% if t.kelas %}
-                <div>
-                  <dt>Kondisi</dt>
-                  <dd>{{ t.kelas }}</dd>
-                </div>
-              {% endif %}
-              <div>
-                <dt>Nilai kualitas</dt>
-                {% if t.nilai_kualitas is not none %}
-                  <dd class="stok-kualitas">{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ t.kelas_kualitas }}</b> <small>{{ t.komponen_kualitas }}/3 komponen</small></dd>
-                {% else %}
-                  <dd class="padat__nilai--kosong">Belum ada data QC</dd>
-                {% endif %}
-              </div>
-              {# Mutu langsung di kartu, tidak dilipat — sama alasannya dengan
-                 kartu lot Gudang 1: yang harus dibuka dulu untuk terbaca akan
-                 dianggap tak ada. #}
-              {% if mutu_aktif %}
-                {% for label, nilai in t.mutu %}
-                  <div>
-                    <dt>{{ label }}</dt>
-                    <dd>{{ nilai }}</dd>
-                  </div>
-                {% endfor %}
-                {% if not t.mutu %}
-                  <div>
-                    <dt>Mutu</dt>
-                    <dd class="padat__nilai--kosong">belum dinilai</dd>
-                  </div>
-                {% endif %}
-              {% endif %}
-            </dl>
-            {% if not t.bobot_final %}
-              <div class="nota nota--hati">
-                <span aria-hidden="true">⏸</span>
-                <span>Truknya belum ditimbang kedua — bobot belum final</span>
-              </div>
-            {% endif %}
-          </div>
-          {# ── "Masukkan ke silo" per kartu — operator Gudang 2 / Super Admin ──
-             Keputusan pemilik 5 Oktober 2026: dipilih dari SINI, bukan dari
-             Antrian tunggu lagi — kartu yang sudah menampilkan kodenya sendiri
-             adalah tempat yang paling wajar untuk memutuskan "yang ini masuk
-             silo mana". Memakai mekanisme `?buka=&nilai=` yang sama dengan
-             "Minta lot ini" Gudang 1: `nilai` dicocokkan ke opsi remote-picker
-             `tumpukan` begitu borangnya terbuka. Admin biasa TIDAK ditawari —
-             gerbangnya sendiri di `api.act_pindah_tumpukan_silo`. #}
-          {% if boleh_pindah_tumpukan and t.bobot_final %}
-            <div class="ubah-hasil">
-              <a class="btn btn--kecil"
-                 href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a>
-            </div>
-          {% endif %}
-        </div>
-      {% endfor %}
-    </div>
-  </div>
-{% endif %}
+  {% endif %}
 {% endif %}
 
-{# Barang jadi & hasil samping PINDAH ke layar "Stok Produk" 26 September
-   2026 (keputusan pemilik). Layar ini memuat BAHAN — gabah di silo Gudang 1,
-   PK di Gudang 2 — dan docstring-nya memang sudah berbunyi begitu sejak awal.
-   Dua layar bernama Stok yang isinya bercampur akan ditekan bergantian oleh
-   orang yang mencari satu angka.
-
-   Stok karung PINDAH ke layar sendiri "Stok Karung"/"Stok Karung Jasa" 7
-   Oktober 2026 (keputusan pemilik: karung butuh stok terpisah per pemilik,
-   dan itu tak muat sebagai satu blok tanpa pemilik di halaman ini) —
-   pola yang sama dengan kepindahan barang jadi di atas. #}
-
-{# Lembarnya dimuat untuk SIAPA PUN yang punya tombol di halaman ini, bukan
-   cuma Admin. Sampai 26 September 2026 syaratnya `boleh_ubah` saja — dan
-   akibatnya tombol "Minta lot ini" milik operator Gudang 2 tak pernah bisa
-   membuka borangnya: menekannya cuma memuat ulang /stok dengan ?buka=… dan
-   tak ada `aksi.js` yang menangkapnya. Tombol yang tak melakukan apa-apa lebih
-   buruk daripada tombol yang tak ada. #}
-{% if boleh_ubah or boleh_minta %}
+{% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
 {% endif %}
 {% endblock %}
 
 {% block kaki %}
-<div class="kaki">
-  {%- if VIEW == V_POLESAN %}Stok silo terhitung dari PK masuk dikurangi yang sudah disosoh
-  {%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya
-  {%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}
-</div>
-{% if boleh_ubah or boleh_minta %}
-  <script src="/static/aksi.js?v={{ VERSI }}" defer
-          data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+<div class="kaki">{%- if VIEW == V_POLESAN %}Stok silo terhitung dari PK masuk dikurangi yang sudah disosoh{%- elif boleh_ubah %}Stok terhitung dari hasil giling — yang dikoreksi angka hasilnya{%- else %}Stok berubah lewat pencatatan pekerjaan, bukan diketik di sini{% endif -%}</div>
+{% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}
 {% endblock %}

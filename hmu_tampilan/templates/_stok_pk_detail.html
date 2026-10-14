@@ -1,0 +1,91 @@
+{% set t = detail_kartu %}
+{% set g1 = detail_gudang == "g1" %}
+{% set kelas = t.kelas if g1 else t.kelas %}
+<main class="stok-pk-detail">
+  <a class="stok-pk-detail__kembali" href="{{ kembali }}">← Kembali ke stok</a>
+  <header class="stok-pk-detail__kepala">
+    <div>
+      <span class="lbl">{{ "PK · Gudang 1" if g1 else "PK · Gudang 2" }} · {{ "Jasa" if JASA_SAJA else "Pabrik" }}</span>
+      <h1>{{ t.kode if g1 else (t.kode.split(" · ", 1)[1] if t.kode.startswith("Giling sendiri") and " · " in t.kode else t.kode) }}</h1>
+      <p>{{ t.tanggal or "Tanggal tidak tersedia" }}{% if t.lama %} · {{ t.lama }}{% endif %}</p>
+    </div>
+    <div class="stok-pk-detail__berat">
+      {% if (g1 and not t.belum_dicatat) or (not g1 and t.bobot_final) %}
+        <strong>{{ kg(t.tersedia) }}</strong><span>kg tersedia</span>
+      {% else %}<strong>—</strong><span>berat belum final</span>{% endif %}
+    </div>
+  </header>
+
+  {% if t.pemilik %}
+    {% set pemilik_baris = t.pemilik.split(" ", 1) %}
+    <section class="stok-pk-detail__pemilik">
+      <span class="stok-status stok-status--jasa">Jasa</span>
+      <div><strong>{{ pemilik_baris[1] if pemilik_baris|length > 1 else pemilik_baris[0] }}</strong><small>ID jasa · {{ pemilik_baris[0] }}</small></div>
+      <p>PK titipan — disosoh lalu dikembalikan, bukan dijual.</p>
+    </section>
+  {% else %}
+    <section class="stok-pk-detail__pemilik"><span class="stok-status stok-status--pabrik">Pabrik</span><strong>Stok milik pabrik</strong></section>
+  {% endif %}
+
+  <section class="stok-pk-detail__bagian">
+    <h2>Ringkasan stok</h2>
+    <dl class="stok-pk-detail__fakta">
+      <div><dt>Letak</dt><dd>{{ "Gudang 1 · hasil penyosohan" if g1 else "Gudang 2 · tumpukan" }}</dd></div>
+      {% if g1 %}
+        <div><dt>Hasil giling</dt><dd>{% if t.belum_dicatat %}Belum dicatat{% else %}{{ kg(t.dihasilkan) }} kg{% endif %}</dd></div>
+        {% if t.rendemen is not none %}<div><dt>Rendemen</dt><dd>{{ "%.1f"|format(t.rendemen)|replace(".", ",") }}%</dd></div>{% endif %}
+        {% if t.bahan_kg %}<div><dt>Bahan masuk</dt><dd>{{ kg(t.bahan_kg) }} kg{% if not t.bahan_final %} · belum final{% endif %}</dd></div>{% endif %}
+        {% if t.dikirim %}<div><dt>Sudah dikirim</dt><dd>{{ kg(t.dikirim) }} kg</dd></div>{% endif %}
+        <div><dt>Status proses</dt><dd>{{ "Masih digiling" if t.berjalan else ("Hasil belum dicatat" if t.belum_dicatat else "Selesai") }}</dd></div>
+      {% else %}
+        {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
+        <div><dt>Asal PK</dt><dd>{{ "Hasil giling gabah sendiri" if giling_sendiri else "Pembelian PK dari luar" }}</dd></div>
+        <div><dt>Berat awal masuk</dt><dd>{% if t.bobot_final %}{{ kg(t.berat_awal) }} kg{% else %}Belum ditimbang kedua{% endif %}</dd></div>
+        {% if t.berat_awal and t.berat_awal > t.tersedia %}<div><dt>Sudah dipindah ke silo</dt><dd>{{ kg(t.berat_awal - t.tersedia) }} kg</dd></div>{% endif %}
+      {% endif %}
+      <div><dt>Kondisi PK</dt><dd>{{ kelas or "Belum ditentukan" }}</dd></div>
+      <div><dt>Nilai kualitas</dt>
+        {% if t.nilai_kualitas is not none %}<dd class="stok-kualitas">{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} / 100 <b>{{ t.kelas_kualitas or "—" }}</b><small>{{ t.komponen_kualitas }} komponen dinilai</small></dd>
+        {% else %}<dd class="padat__nilai--kosong">Belum ada data QC</dd>{% endif %}
+      </div>
+    </dl>
+    {% if g1 and t.berjalan %}<div class="nota nota--hati">Mesin masih giling — hasil dan rendemen belum final.</div>
+    {% elif g1 and t.belum_dicatat %}<div class="nota nota--hati">Hasil giling belum dicatat. Stok ini belum masuk hitungan berat tersedia.</div>
+    {% elif not g1 and not t.bobot_final %}<div class="nota nota--hati">Truk belum ditimbang kedua — berat belum final.</div>{% endif %}
+  </section>
+
+  {% if mutu_aktif %}
+    <section class="stok-pk-detail__bagian">
+      <h2>Rincian QC</h2>
+      {% if t.mutu %}<dl class="stok-pk-detail__fakta stok-pk-detail__fakta--qc">
+        {% for label, nilai in t.mutu %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}
+      </dl>{% else %}<p class="bantu">Belum ada komponen QC yang dicatat.</p>{% endif %}
+    </section>
+  {% endif %}
+
+  {% if g1 and t.bahan %}
+    <section class="stok-pk-detail__bagian">
+      <h2>Batch asal · {{ t.bahan|length }}</h2>
+      <div class="stok-pk-detail__batch">
+        {% for nama, berat, kapan in t.bahan %}<div><strong>{{ nama }}</strong><span>{{ berat }} kg</span><small>{{ kapan }}</small></div>{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if g1 and boleh_minta and not t.berjalan %}
+    <section class="stok-pk-detail__aksi">
+      {% if t.diminta_siap %}<span class="bantu">Disetujui Admin — Gudang 1 yang memuat dan mengirimnya</span>
+      {% elif t.diminta_oleh %}<span class="bantu">Sudah diminta {{ t.diminta_oleh }}{% if t.diminta_keadaan %} — {{ t.diminta_keadaan }}{% endif %}</span>
+      {% else %}<a class="btn" href="?buka=minta_pk_g1&amp;nilai={{ t.kode|urlencode }}">Minta lot ini</a>{% endif %}
+    </section>
+  {% endif %}
+  {% if g1 and boleh_ubah and not t.berjalan %}
+    <section class="stok-pk-detail__aksi">
+      <a class="btn btn--kecil" href="?buka=verify_output&amp;nilai={{ t.kode|urlencode }}">{{ "Catat hasil giling" if t.belum_dicatat else "Perbaiki hasil giling" }}</a>
+      {% if mutu_aktif %}<a class="btn btn--kecil" href="?buka=qc_giling&amp;nilai={{ t.kode|urlencode }}">{{ "Edit kualitas" if t.mutu else "Catat kualitas" }}</a>{% endif %}
+    </section>
+  {% endif %}
+  {% if not g1 and boleh_pindah_tumpukan and t.bobot_final %}
+    <section class="stok-pk-detail__aksi"><a class="btn" href="?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">Masukkan ke silo</a></section>
+  {% endif %}
+</main>

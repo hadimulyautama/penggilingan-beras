@@ -688,6 +688,9 @@ class LotPkG2:
     #: "JAS-2610-007 Pak Budi" bila pemasukan ini titipan — None untuk
     #: barang pabrik.
     pemilik: str | None = None
+    #: ID pesanan jasa bila stok ini titipan; dipakai untuk membedakan
+    #: pemilik jasa secara pasti pada halaman detail.
+    jasa_id: int | None = None
     #: (label, nilai) — Kadar air/Butir patah/Susut untuk kedua asal, plus
     #: Butir kuning/Gabah/Merang/Catatan lab khusus PK beli luar. Kosong =
     #: belum pernah dinilai (PK dari giling sendiri yang belum dicatat
@@ -921,6 +924,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             kode=judul, tersedia=sisa, bobot_final=bobot_final,
             tanggal=_tgl(i.tanggal_masuk), lama=_hari(i.waktu_masuk),
             pemilik=peta_pemilik.get(i.jasa_id) if i.jasa_id else None,
+            jasa_id=i.jasa_id,
             mutu=mutu, nilai_kualitas=nilai_kualitas,
             komponen_kualitas=komponen_kualitas,
             kelas_kualitas=_kelas_kualitas(nilai_kualitas),
