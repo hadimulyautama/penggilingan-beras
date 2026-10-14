@@ -1493,6 +1493,7 @@ details.padat .pilihan { padding: 0 12px 12px; }
   border-top: 1px solid var(--garis); border-bottom: 1px solid var(--garis);
   font-size: 12px; font-weight: 700; letter-spacing: .055em; text-align: left; text-transform: uppercase;
 }
+.stok-tabel thead th.stok-tabel__angka { text-align: right !important; padding-right: 14px; }
 .stok-tabel th:first-child { border-left: 1px solid var(--garis); border-radius: 12px 0 0 0; }
 .stok-tabel th:last-child { width: 24px; border-right: 1px solid var(--garis); border-radius: 0 12px 0 0; }
 .stok-tabel th:nth-child(1) { width: 18%; }

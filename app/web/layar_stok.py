@@ -188,7 +188,7 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
     dibatasi ke PK jasa agar tidak muncul ganda di dua halaman.
     """
     from app.services.setelan import fitur_mutu
-    from app.web.layar import GUDANG, MEJA, POLESAN, gudang1, gudang2
+    from app.web.layar import GUDANG, MEJA, POLESAN, SUPER, gudang1, gudang2
 
     view = getattr(request.state, "view", "tamu")
     saring = GUDANG if view in MEJA else ()
@@ -210,7 +210,12 @@ async def halaman_stok_pk_jasa(request: Request, akun=Depends(butuh_akun)):
         # harus bisa meminta PK jasa yang masih menumpuk di Gudang 1. Aksi
         # permintaan tidak memindahkan stok; persetujuan dan pengiriman tetap
         # mengikuti alur empat langkah yang sama.
-        boleh_ubah=False, boleh_minta=view == POLESAN, boleh_pindah_tumpukan=False,
+        boleh_ubah=False, boleh_minta=view == POLESAN,
+        # PK jasa yang berdiri sebagai tumpukan di Gudang 2 juga harus bisa
+        # dimasukkan ke silo melalui alur yang sama dengan PK pabrik. Aksi
+        # tetap dibatasi pada operator Gudang 2 dan Super Admin; Admin biasa
+        # tidak mendapat tombol, dan gerbang server tetap berlaku.
+        boleh_pindah_tumpukan=view in (POLESAN, SUPER),
         mutu_aktif=mutu_aktif,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",

@@ -431,7 +431,7 @@
                   {% if mutu_aktif %}{% for label, nilai in t.mutu %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}{% if not t.mutu %}<div><dt>Mutu</dt><dd class="padat__nilai--kosong">belum dinilai</dd></div>{% endif %}{% endif %}
                 </dl>
                 {% if not t.bobot_final %}<div class="nota nota--hati"><span aria-hidden="true">⏸</span><span>Truknya belum ditimbang kedua — bobot belum final</span></div>{% endif %}
-                {% if boleh_pindah_tumpukan and t.bobot_final %}<div class="ubah-hasil"><a class="btn btn--kecil" href="/stok?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a></div>{% endif %}
+                {% if boleh_pindah_tumpukan and t.bobot_final %}<div class="ubah-hasil"><a class="btn btn--kecil" href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a></div>{% endif %}
               </div>
             </details>
           </td></tr>
@@ -537,7 +537,7 @@
           {% if boleh_pindah_tumpukan and t.bobot_final %}
             <div class="ubah-hasil">
               <a class="btn btn--kecil"
-                 href="/stok?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a>
+                 href="{{ '/stok-pk-jasa' if JASA_SAJA else '/stok' }}?buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">📤 Masukkan ke silo</a>
             </div>
           {% endif %}
         </div>
