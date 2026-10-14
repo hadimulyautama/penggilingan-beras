@@ -38,7 +38,7 @@ async def ambil_data(process_id: int) -> dict:
             raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
 
         usages = (await db.execute(
-            select(PolishingSiloUsage, Silo.nama_silo)
+            select(PolishingSiloUsage, Silo.nama_silo, Silo.jenis_isi)
             .join(Silo, Silo.id == PolishingSiloUsage.silo_id)
             .where(PolishingSiloUsage.polishing_process_id == proc.id)
             .order_by(PolishingSiloUsage.id)
@@ -46,10 +46,9 @@ async def ambil_data(process_id: int) -> dict:
         if not usages:
             raise HTTPException(404, "Rincian bahan penyosohan tidak ditemukan.")
 
-        # Query memilih tepat dua kolom: objek pemakaian dan nama silo.
-        # Membongkar tiga nilai di sini melempar ValueError untuk setiap
-        # laporan penyosohan yang punya rincian pemakaian silo.
-        silo_ids = {usage.silo_id for usage, _ in usages}
+        # Jenis silo diperlukan untuk membedakan sumber PK dan broken pada
+        # rincian neraca. Ambil dari metadata silo, bukan menebak dari namanya.
+        silo_ids = {usage.silo_id for usage, _, _ in usages}
         # Semua pergerakan PK yang masuk langsung ke silo.
         intakes = (await db.execute(
             select(PkGudang2Intake)
@@ -172,7 +171,7 @@ async def ambil_data(process_id: int) -> dict:
                 withdrawals[usage.silo_id].append((at, -1, max(0, _angka(used)), None))
 
         per_silo_sources = []
-        for usage, silo_name in usages:
+        for usage, silo_name, silo_kind in usages:
             sid = usage.silo_id
             # Replay prior stock entries/withdrawals. Negative first for equal
             # timestamps, following _isian_silo_banyak's zero-boundary rule.
