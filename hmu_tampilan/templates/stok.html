@@ -51,11 +51,12 @@
     </div>
   </div>
 {% else %}
+{% include "_stok_pk_gabungan.html" %}
 {% if lot %}
   {# Jumlahnya di muka: yang membuka halaman ini paling sering ingin tahu
      "cukup tidak untuk satu kiriman", dan itu satu angka. Rinciannya di
      bawah, untuk yang bertanya "yang mana". #}
-  <div class="jumlah">
+  <div class="jumlah jumlah--stok-gudang">
     <span class="lbl">{{ "PK Jasa di Gudang 1" if JASA_SAJA else "PK di Gudang 1" }}</span>
     <div class="jumlah__angka">{{ kg(total) }}<small>kg</small></div>
     {# Lot yang hasilnya tak dicatat TIDAK ikut dijumlahkan — tak ada angka
@@ -69,7 +70,7 @@
     </div>
   </div>
 
-  <div class="stok-desktop" aria-label="Daftar stok PK Gudang 1">
+  <div class="stok-desktop stok-desktop--lama" aria-label="Daftar stok PK Gudang 1">
     <table class="stok-tabel">
       <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
       <tbody>
@@ -389,7 +390,7 @@
    seperti di Gudang 1 — mutunya langsung terlihat, tanpa satu ketukan pun. #}
 {% if tempat %}
   <div{% if lot %} style="margin-top:18px"{% endif %}>
-    <div class="jumlah">
+    <div class="jumlah jumlah--stok-gudang">
       <span class="lbl">{{ "PK Jasa di Gudang 2" if JASA_SAJA else "PK di Gudang 2" }}</span>
       <div class="jumlah__angka">{{ kg(tempat|sum(attribute="tersedia")) }}<small>kg</small></div>
       <div class="jumlah__ket">
@@ -397,7 +398,7 @@
       </div>
     </div>
 
-    <div class="stok-desktop" aria-label="Daftar stok PK Gudang 2">
+    <div class="stok-desktop stok-desktop--lama" aria-label="Daftar stok PK Gudang 2">
       <table class="stok-tabel">
         <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
         <tbody>

@@ -1485,28 +1485,30 @@ details.padat .pilihan { padding: 0 12px 12px; }
 
 /* Listview tabel untuk Stok PK. Markup kartu tetap dipakai pada layar kecil;
    desktop menampilkan satu baris ringkas yang membuka rincian dan aksinya. */
-.stok-desktop { display: none; margin-top: 10px; overflow-x: auto; }
-.stok-tabel { width: 100%; min-width: 1200px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.stok-desktop { display: none; margin-top: 10px; overflow: visible; }
+.stok-gabungan { display: none; }
+.stok-tabel { width: 100%; min-width: 0; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .stok-tabel th {
   padding: 11px 14px; background: var(--panel-2); color: var(--redup);
   border-top: 1px solid var(--garis); border-bottom: 1px solid var(--garis);
   font-size: 12px; font-weight: 700; letter-spacing: .055em; text-align: left; text-transform: uppercase;
 }
 .stok-tabel th:first-child { border-left: 1px solid var(--garis); border-radius: 12px 0 0 0; }
-.stok-tabel th:last-child { width: 44px; border-right: 1px solid var(--garis); border-radius: 0 12px 0 0; }
-.stok-tabel th:nth-child(1) { width: 19%; }
-.stok-tabel th:nth-child(2) { width: 11%; }
-.stok-tabel th:nth-child(3) { width: 7%; }
-.stok-tabel th:nth-child(4), .stok-tabel th:nth-child(5), .stok-tabel th:nth-child(6) { width: 8%; }
-.stok-tabel th:nth-child(7) { width: 12%; }
-.stok-tabel th:nth-child(8) { width: 8%; }
-.stok-tabel th:nth-child(9) { width: 13%; }
+.stok-tabel th:last-child { width: 24px; border-right: 1px solid var(--garis); border-radius: 0 12px 0 0; }
+.stok-tabel th:nth-child(1) { width: 18%; }
+.stok-tabel th:nth-child(2) { width: 10%; }
+.stok-tabel th:nth-child(3) { width: 8%; }
+.stok-tabel th:nth-child(4) { width: 6%; }
+.stok-tabel th:nth-child(5), .stok-tabel th:nth-child(6), .stok-tabel th:nth-child(7) { width: 7%; }
+.stok-tabel th:nth-child(8) { width: 10%; }
+.stok-tabel th:nth-child(9) { width: 6%; }
+.stok-tabel th:nth-child(10) { width: 12%; }
 .stok-tabel__angka { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stok-tabel__sel { padding: 0; border: 0; }
 .stok-baris { display: block; margin: 0; border: 1px solid var(--garis); border-top: 0; background: var(--panel); color: var(--tinta); }
 .stok-baris:last-child { border-radius: 0 0 12px 12px; }
 .stok-baris__ringkas {
-  position: relative; display: grid; grid-template-columns: minmax(180px, 1.8fr) minmax(105px, 1.05fr) minmax(65px, .65fr) repeat(3, minmax(70px, .7fr)) minmax(105px, 1fr) minmax(75px, .75fr) minmax(108px, 1fr) 44px;
+  position: relative; display: grid; grid-template-columns: minmax(120px, 1.45fr) minmax(75px, .8fr) minmax(58px, .64fr) 50px repeat(3, minmax(48px, .55fr)) minmax(80px, .85fr) minmax(50px, .5fr) minmax(90px, .9fr) 24px;
   align-items: center; min-height: 54px; padding: 8px 0 8px 14px; list-style: none;
   cursor: pointer; font-size: 13px;
 }
@@ -1532,6 +1534,9 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-baris__detail .ubah-hasil { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 @media (min-width: 900px) {
   .stok-desktop { display: block; }
+  .stok-desktop--lama { display: none !important; }
+  .stok-gabungan { display: block; margin-bottom: 18px; }
+  .jumlah--stok-gudang { display: none; }
   .stok-mobile-cards { display: none; }
 }
 
