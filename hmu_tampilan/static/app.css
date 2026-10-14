@@ -1506,6 +1506,15 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-tabel th:nth-child(10) { width: 12%; }
 .stok-tabel__angka { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stok-tabel__sel { padding: 0; border: 0; }
+.stok-desktop--gabungan { --stok-tabel-grid: minmax(210px,1.7fr) minmax(100px,.8fr) minmax(95px,.75fr) minmax(76px,.6fr) repeat(3,minmax(70px,.6fr)) minmax(112px,.95fr) minmax(86px,.7fr) minmax(126px,1fr) 26px; }
+.stok-desktop--gabungan .stok-tabel { display: block; width: 100%; }
+.stok-desktop--gabungan .stok-tabel thead,
+.stok-desktop--gabungan .stok-tabel tbody,
+.stok-desktop--gabungan .stok-tabel tr { display: block; width: 100%; }
+.stok-desktop--gabungan .stok-tabel thead tr { display: grid; grid-template-columns: var(--stok-tabel-grid); }
+.stok-desktop--gabungan .stok-tabel th:nth-child(n) { box-sizing: border-box; width: auto; min-width: 0; }
+.stok-desktop--gabungan .stok-tabel th:last-child { width: auto; }
+.stok-desktop--gabungan .stok-tabel__sel { display: block; box-sizing: border-box; width: 100%; }
 .stok-baris { display: block; margin: 0; border: 1px solid var(--garis); border-top: 0; background: var(--panel); color: var(--tinta); }
 .stok-baris:last-child { border-radius: 0 0 12px 12px; }
 .stok-baris__ringkas {
@@ -1513,6 +1522,7 @@ details.padat .pilihan { padding: 0 12px 12px; }
   align-items: center; min-height: 54px; padding: 8px 0 8px 14px; list-style: none;
   cursor: pointer; font-size: 13px;
 }
+.stok-desktop--gabungan .stok-baris__ringkas { box-sizing: border-box; width: 100%; grid-template-columns: var(--stok-tabel-grid); }
 .stok-baris__ringkas::-webkit-details-marker { display: none; }
 .stok-baris__ringkas > span, .stok-baris__ringkas > strong { min-width: 0; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stok-baris__kode { font-weight: 700; }
