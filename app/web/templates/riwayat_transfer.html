@@ -75,6 +75,55 @@
 {% endfor %}
 </div>
 
+{# Desktop: kolom ringkas sejajar, dan informasi jasa lengkap tetap di laci.
+   Tampilan mobile di atas sengaja dipertahankan. Transfer dibatalkan juga
+   selalu ada di daftar dengan status merah agar jejak barang tidak hilang. #}
+<div class="riwayat-desktop-list" aria-label="Daftar riwayat transfer">
+  <div class="riwayat-desktop-grid riwayat-desktop-grid--transfer riwayat-desktop-head" aria-hidden="true">
+    <span>Kode transfer / waktu</span>
+    <span>Nama pemilik</span>
+    <span>Status</span>
+    <span>Proses asal</span>
+    <span>Tujuan</span>
+    <span class="riwayat-desktop-number">Berat</span>
+    <span>Status transfer</span>
+    <span></span>
+  </div>
+  {% for k in kartu %}
+    <details class="riwayat-desktop-row">
+      <summary class="riwayat-desktop-grid riwayat-desktop-grid--transfer">
+        <span class="riwayat-desktop-lot">
+          <strong>{{ k.kode }}</strong>
+          <small>{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}</small>
+        </span>
+        <span class="riwayat-desktop-owner">{{ k.nama_pemilik or "Pabrik" }}</span>
+        <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
+        <span>{{ k.kode_proses or "—" }}</span>
+        <span>{{ k.tujuan or "—" }}</span>
+        <span class="riwayat-desktop-number">{{ kg(k.berat_kg) }} kg</span>
+        <span><span class="riwayat-status {{ 'riwayat-status--cancel' if k.dibatalkan else 'riwayat-status--done' }}">{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</span></span>
+        <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="riwayat-desktop-detail">
+        {% if k.jasa %}
+          <div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>
+        {% endif %}
+        <dl class="fakta">
+          <div><dt>Kode transfer</dt><dd>{{ k.kode }}</dd></div>
+          <div><dt>Waktu transfer</dt><dd>{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+          <div><dt>Proses asal</dt><dd>{{ k.kode_proses or "—" }}</dd></div>
+          <div><dt>Tujuan</dt><dd>{{ k.tujuan or "—" }}</dd></div>
+          <div><dt>Berat</dt><dd>{{ kg(k.berat_kg) }} kg</dd></div>
+          <div><dt>Status transfer</dt><dd>{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</dd></div>
+        </dl>
+        {% if k.dibatalkan %}
+          <div class="nota nota--buruk"><span aria-hidden="true">✕</span><span><b>Transfer dibatalkan.</b> PK ini tidak sampai ke Gudang 2.</span></div>
+        {% endif %}
+      </div>
+    </details>
+  {% endfor %}
+</div>
+
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
     {% if dari_awal %}

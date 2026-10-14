@@ -49,6 +49,7 @@
 .riwayat-desktop-grid{--riwayat-grid:minmax(185px,1.35fr) minmax(110px,.85fr) minmax(100px,.75fr) minmax(105px,.75fr) minmax(82px,.6fr) minmax(125px,.95fr) minmax(120px,.85fr) minmax(125px,.95fr) 26px;display:grid;grid-template-columns:var(--riwayat-grid);align-items:center;gap:0;width:100%;box-sizing:border-box}
 .riwayat-desktop-grid--giling{--riwayat-grid:minmax(185px,1.3fr) minmax(145px,1fr) minmax(105px,.75fr) minmax(90px,.7fr) minmax(100px,.8fr) minmax(85px,.65fr) minmax(82px,.6fr) minmax(135px,1fr) minmax(100px,.75fr) 26px;min-width:1220px}
 .riwayat-desktop-grid--sosoh{--riwayat-grid:minmax(180px,1.25fr) minmax(140px,1fr) minmax(105px,.75fr) minmax(95px,.75fr) minmax(95px,.75fr) minmax(105px,.85fr) minmax(80px,.6fr) minmax(88px,.65fr) minmax(110px,.85fr) 26px;min-width:1200px}
+.riwayat-desktop-grid--transfer{--riwayat-grid:minmax(170px,1.2fr) minmax(140px,1fr) minmax(95px,.7fr) minmax(140px,1fr) minmax(110px,.8fr) minmax(100px,.75fr) minmax(120px,.85fr) 26px;min-width:1120px}
 .riwayat-desktop-head{min-height:48px;padding:0 10px;border:1px solid var(--kulit-batas);border-radius:12px 12px 0 0;background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
 .riwayat-desktop-head>span,.riwayat-desktop-row summary>span{min-width:0;padding:9px 8px;overflow-wrap:anywhere}
 .riwayat-desktop-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -65,6 +66,7 @@
 .riwayat-status{display:inline-flex;align-items:center;max-width:100%;padding:5px 8px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
 .riwayat-status--done{background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu));color:var(--aman)}
 .riwayat-status--wait{background:color-mix(in srgb,var(--peringatan,#d29132) 18%,var(--kulit-kartu));color:var(--peringatan,#9b6b1d)}
+.riwayat-status--cancel{background:color-mix(in srgb,#c84545 16%,var(--kulit-kartu));color:#b42323}
 .riwayat-status--jasa{background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu));color:var(--aman)}
 .riwayat-status--pabrik{background:var(--panel-2);color:var(--kulit-redup)}
 .riwayat-desktop-toggle{color:var(--kulit-redup);font-size:1.15rem;text-align:center;transition:transform .15s ease}

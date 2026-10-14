@@ -435,6 +435,11 @@ class KartuTransfer:
     kode_proses: str
     #: "JAS-2610-001 Pak Budi" bila PK-nya titipan; None = milik pabrik.
     pemilik: str | None
+    #: Informasi jasa dipisah agar nama pemilik dapat ditampilkan bersih di
+    #: desktop, sementara ID jasa tetap berada di bagian expandable.
+    jasa: bool
+    kode_jasa: str | None
+    nama_pemilik: str | None
     berat_kg: float
     tujuan: str
     waktu: object
@@ -462,9 +467,8 @@ async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
     ke pola N+1 yang sudah diperbaiki di layar lain (`stok.py`,
     `polishing.riwayat_sosoh()`).
     """
-    from app.models import Silo
+    from app.models import Jasa, Pelanggan, Silo
     from app.penggilingan.gudang2.service import _KATA_LAMA, DITUMPUK
-    from app.services.jasa import nama_pemilik_banyak
 
     q = (select(InternalTransfer)
          .order_by(InternalTransfer.id.desc())
@@ -485,7 +489,13 @@ async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
         select(Silo.id, Silo.nama_silo)
         .where(Silo.id.in_({r.silo_id for r in rows if r.silo_id} or {0}))
     )).all()}
-    pemilik = await nama_pemilik_banyak(db, {r.jasa_id for r in rows})
+    jasa_ids = {r.jasa_id for r in rows if r.jasa_id is not None}
+    jasa_rows = (await db.execute(
+        select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
+        .outerjoin(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+        .where(Jasa.id.in_(jasa_ids or {0}))
+    )).all()
+    jasa = {jid: (kode, (nama or "").strip()) for jid, kode, nama in jasa_rows}
 
     def _tujuan(t: InternalTransfer) -> str:
         if t.silo_id is not None:
@@ -497,10 +507,17 @@ async def riwayat_transfer(db: AsyncSession, *, batas: int = 30,
     kartu = []
     for t in rows:
         p = proc.get(t.milling_process_id)
+        kode_jasa, nama_pemilik = jasa.get(t.jasa_id, (None, None))
+        pemilik = (
+            f"{kode_jasa} {nama_pemilik}".strip()
+            if kode_jasa or nama_pemilik
+            else (f"pesanan #{t.jasa_id}" if t.jasa_id else None)
+        )
         kartu.append(KartuTransfer(
             id=t.id, kode=t.kode_transfer,
             kode_proses=p.kode_proses if p else "?",
-            pemilik=pemilik.get(t.jasa_id) if t.jasa_id else None,
+            pemilik=pemilik, jasa=t.jasa_id is not None,
+            kode_jasa=kode_jasa, nama_pemilik=nama_pemilik,
             berat_kg=float(t.berat_kg), tujuan=_tujuan(t),
             waktu=t.waktu, status=t.status,
         ))
