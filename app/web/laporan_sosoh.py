@@ -46,7 +46,10 @@ async def ambil_data(process_id: int) -> dict:
         if not usages:
             raise HTTPException(404, "Rincian bahan penyosohan tidak ditemukan.")
 
-        silo_ids = {usage.silo_id for usage, _, _ in usages}
+        # Query memilih tepat dua kolom: objek pemakaian dan nama silo.
+        # Membongkar tiga nilai di sini melempar ValueError untuk setiap
+        # laporan penyosohan yang punya rincian pemakaian silo.
+        silo_ids = {usage.silo_id for usage, _ in usages}
         # Semua pergerakan PK yang masuk langsung ke silo.
         intakes = (await db.execute(
             select(PkGudang2Intake)
