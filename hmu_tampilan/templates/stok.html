@@ -71,14 +71,22 @@
 
   <div class="stok-desktop" aria-label="Daftar stok PK Gudang 1">
     <table class="stok-tabel">
-      <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
+      <thead><tr><th>Lot · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Kondisi</th><th class="stok-tabel__angka">Berat</th><th></th></tr></thead>
       <tbody>
       {% for l in lot %}
-        <tr><td colspan="5" class="stok-tabel__sel">
+        {% set mutu = namespace(ka="—", broken="—", susut="—") %}
+        {% for label, nilai in l.mutu %}
+          {% if label|lower == "kadar air" %}{% set mutu.ka = nilai %}
+          {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
+          {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
+        {% endfor %}
+        <tr><td colspan="9" class="stok-tabel__sel">
           <details class="stok-baris">
             <summary class="stok-baris__ringkas">
-              <span class="stok-baris__kode">{{ l.kode }} <small>· {{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
-              <span>{{ l.pemilik or "Pabrik" }}</span>
+              <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
+              <span>{{ (l.pemilik.split(" ", 1)[1] if JASA_SAJA and l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
+              <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
+              <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
               <span>{{ l.kelas or "—" }}</span>
               <strong class="stok-tabel__angka">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong>
               <span class="stok-baris__buka" aria-hidden="true">⌄</span>
@@ -95,7 +103,7 @@
                 {% endif %}
                 {% if l.dikirim %}<div><dt>Sudah dikirim</dt><dd>{{ kg(l.dikirim) }} kg</dd></div>{% endif %}
               </dl>
-              {% if l.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ l.pemilik }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
+              {% if l.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ (l.pemilik.split(" ", 1)[1] if JASA_SAJA and " " in l.pemilik else l.pemilik) }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
               {% if l.berjalan %}<div class="nota nota--hati"><span aria-hidden="true">⏸</span><span>Mesin masih giling — hasil &amp; rendemen belum final</span></div>
               {% elif l.belum_dicatat %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Hasil giling belum dicatat — PK-nya ada, tapi belum terhitung. Catat lewat <b>Perbarui hasil giling</b>, atau verifikasi output finalnya.</span></div>{% endif %}
               {% if l.bahan %}
@@ -382,19 +390,29 @@
 
     <div class="stok-desktop" aria-label="Daftar stok PK Gudang 2">
       <table class="stok-tabel">
-        <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
+        <thead><tr><th>Kode bahan · tanggal</th><th>Pemilik</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
         <tbody>
         {% for t in tempat %}
-          <tr><td colspan="5" class="stok-tabel__sel">
+          {% set mutu = namespace(ka="—", broken="—", susut="—") %}
+          {% for label, nilai in t.mutu %}
+            {% if label|lower == "kadar air" %}{% set mutu.ka = nilai %}
+            {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
+            {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
+          {% endfor %}
+          {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
+          <tr><td colspan="9" class="stok-tabel__sel">
             <details class="stok-baris">
               <summary class="stok-baris__ringkas">
-                <span class="stok-baris__kode">{{ t.kode }} <small>{% if t.tanggal %}· {{ t.tanggal }}{% endif %}{% if t.lama %} · {{ t.lama }}{% endif %}</small></span>
-                <span>{{ t.pemilik or "Pabrik" }}</span><span>{{ t.kelas or "—" }}</span>
+                <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{{ "Giling sendiri" if giling_sendiri else "Bukan giling sendiri" }}{% if t.tanggal %} · {{ t.tanggal }}{% endif %}{% if t.lama %} · {{ t.lama }}{% endif %}</small></span>
+                <span>{{ (t.pemilik.split(" ", 1)[1] if JASA_SAJA and t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
+                <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>
+                <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
+                <span>{{ t.kelas or "—" }}</span>
                 <strong class="stok-tabel__angka">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong>
                 <span class="stok-baris__buka" aria-hidden="true">⌄</span>
               </summary>
               <div class="stok-baris__detail">
-                {% if t.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ t.pemilik }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
+                {% if t.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ (t.pemilik.split(" ", 1)[1] if JASA_SAJA and " " in t.pemilik else t.pemilik) }}</b> — disosoh lalu dikembalikan, bukan dijual</span></div>{% endif %}
                 <dl class="fakta">
                   {% if t.berat_awal and t.berat_awal > t.tersedia %}<div><dt>Sudah ke silo</dt><dd>{{ kg(t.berat_awal - t.tersedia) }} dari {{ kg(t.berat_awal) }} awal</dd></div>{% endif %}
                   {% if t.kelas %}<div><dt>Kondisi</dt><dd>{{ t.kelas }}</dd></div>{% endif %}
