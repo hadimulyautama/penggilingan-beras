@@ -41,3 +41,39 @@
   .qc-history-round__head{align-items:flex-start;flex-direction:row;gap:8px}
   .qc-history-values{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Riwayat Pengeringan desktop: the header and every clickable row use the
+   same grid, preventing the column drift seen when independent widths were
+   used for table headings and card contents. Mobile keeps the original cards. */
+.riwayat-desktop-list{display:none}
+.riwayat-desktop-grid{--riwayat-grid:minmax(190px,1.45fr) minmax(115px,.9fr) minmax(110px,.85fr) minmax(88px,.65fr) minmax(135px,1fr) minmax(125px,.9fr) minmax(130px,1fr) 26px;display:grid;grid-template-columns:var(--riwayat-grid);align-items:center;gap:0;width:100%;box-sizing:border-box}
+.riwayat-desktop-head{min-height:48px;padding:0 10px;border:1px solid var(--kulit-batas);border-radius:12px 12px 0 0;background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
+.riwayat-desktop-head>span,.riwayat-desktop-row summary>span{min-width:0;padding:9px 8px;overflow-wrap:anywhere}
+.riwayat-desktop-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.riwayat-desktop-row{display:block;margin:0;border:1px solid var(--kulit-batas);border-top:0;background:var(--kulit-kartu);color:var(--tinta)}
+.riwayat-desktop-row:last-child{border-radius:0 0 12px 12px}
+.riwayat-desktop-row>summary{list-style:none;cursor:pointer;font-size:.82rem}
+.riwayat-desktop-row>summary::-webkit-details-marker{display:none}
+.riwayat-desktop-row>summary:hover{background:var(--panel-2)}
+.riwayat-desktop-lot{display:flex;flex-direction:column;gap:3px}
+.riwayat-desktop-lot strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.riwayat-desktop-lot small,.riwayat-desktop-row small{color:var(--kulit-redup);font-size:.73rem}
+.riwayat-desktop-owner{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.riwayat-desktop-status{padding-right:5px!important}
+.riwayat-status{display:inline-flex;align-items:center;max-width:100%;padding:5px 8px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.riwayat-status--done{background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu));color:var(--aman)}
+.riwayat-status--wait{background:color-mix(in srgb,var(--peringatan,#d29132) 18%,var(--kulit-kartu));color:var(--peringatan,#9b6b1d)}
+.riwayat-desktop-toggle{color:var(--kulit-redup);font-size:1.15rem;text-align:center;transition:transform .15s ease}
+.riwayat-desktop-row[open]>.riwayat-desktop-grid{background:var(--panel-2)}
+.riwayat-desktop-row[open] .riwayat-desktop-toggle{transform:rotate(180deg)}
+.riwayat-desktop-detail{display:grid;gap:10px;padding:13px 18px 16px;border-top:1px solid var(--kulit-pemisah)}
+.riwayat-desktop-detail .fakta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}
+.riwayat-desktop-detail .fakta>div{min-width:0}
+.riwayat-desktop-batches{display:grid;gap:0;border-top:1px solid var(--kulit-pemisah)}
+.riwayat-desktop-batch{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(90px,.6fr) minmax(140px,1fr);gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--kulit-pemisah);font-size:.82rem}
+.riwayat-desktop-batch strong{overflow-wrap:anywhere}
+.riwayat-desktop-batch>span{text-align:right;font-variant-numeric:tabular-nums}
+.riwayat-desktop-batch small{text-align:right}
+.riwayat-desktop-detail>.btn{justify-self:start}
+@media(min-width:900px){.riwayat-list{display:none}.riwayat-desktop-list{display:block;margin:0 0 18px;overflow-x:auto;border-radius:12px}.riwayat-desktop-grid{min-width:980px}}
+@media(min-width:900px) and (max-width:1200px){.riwayat-desktop-grid{--riwayat-grid:minmax(170px,1.3fr) minmax(100px,.8fr) minmax(95px,.75fr) minmax(78px,.6fr) minmax(115px,.9fr) minmax(115px,.85fr) minmax(120px,.95fr) 24px}}

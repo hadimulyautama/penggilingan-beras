@@ -140,6 +140,74 @@
 {% endfor %}
 </div>
 
+{# Desktop listview: header and expandable summaries share the exact same
+   grid definition in riwayat.css so columns stay aligned at every width. #}
+<div class="riwayat-desktop-list" aria-label="Daftar riwayat pengeringan">
+  <div class="riwayat-desktop-grid riwayat-desktop-head" aria-hidden="true">
+    <span>Lot / selesai</span>
+    <span>Pemilik</span>
+    <span>Dryer</span>
+    <span>Target KA</span>
+    <span>Kadar air terakhir</span>
+    <span class="riwayat-desktop-number">Bahan basah</span>
+    <span>Status</span>
+    <span></span>
+  </div>
+  {% for k in kartu %}
+    {% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
+    <details class="riwayat-desktop-row" {% if not laci %}data-no-details="true"{% endif %}>
+      <summary class="riwayat-desktop-grid">
+        <span class="riwayat-desktop-lot">
+          <strong>{{ k.kode_lot }}</strong>
+          <small>{{ k.selesai_dingin|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") or "—" }}</small>
+        </span>
+        <span class="riwayat-desktop-owner">{{ k.pemilik or "Pabrik" }}</span>
+        <span>{{ k.dryer_nama or "—" }}</span>
+        <span>{% if k.target_kadar_air is not none %}{{ "%.1f"|format(k.target_kadar_air)|replace(".", ",") }}%{% else %}—{% endif %}</span>
+        <span>{{ k.ka_terakhir or "—" }}</span>
+        <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>
+        <span class="riwayat-desktop-status">
+          {% if k.silo_tujuan %}<span class="riwayat-status riwayat-status--done">Di {{ k.silo_tujuan }}</span>
+          {% else %}<span class="riwayat-status riwayat-status--wait">Belum ke silo</span>{% endif %}
+        </span>
+        <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
+      </summary>
+      {% if laci %}
+        <div class="riwayat-desktop-detail">
+          {% if k.pemilik %}
+            <div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ k.pemilik }}</b></span></div>
+          {% endif %}
+          <dl class="fakta">
+            <div><dt>Mode dryer</dt><dd>{{ k.mode_dryer or "—" }}</dd></div>
+            <div><dt>Lama kering</dt><dd>{{ k.lama_kering or "—" }}</dd></div>
+            <div><dt>Durasi total</dt><dd>{{ k.lama_total or "—" }}</dd></div>
+            <div><dt>Bahan basah</dt><dd>{{ kg(k.bahan_kg) }} kg{% if not k.bahan_final %} <small class="bantu">belum final — menunggu timbang</small>{% endif %}</dd></div>
+          </dl>
+          {% if k.bahan %}
+            <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+            <div class="riwayat-desktop-batches">
+              {% for nama, berat, kapan in k.bahan %}
+                <div class="riwayat-desktop-batch"><strong>{{ nama }}</strong><span>{{ berat }}</span><small>{{ kapan }}</small></div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if k.silo_tujuan %}
+            <div class="nota"><span aria-hidden="true">▦</span><span>Sudah dipindah ke <b>{{ k.silo_tujuan }}</b>{% if k.waktu_masuk_silo %} pada {{ k.waktu_masuk_silo|jam("%d/%m") }}{% endif %}</span></div>
+          {% else %}
+            <div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Belum dipindah ke silo.</span></div>
+          {% endif %}
+          <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+        </div>
+      {% else %}
+        <div class="riwayat-desktop-detail riwayat-desktop-detail--empty">
+          <div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Rincian mode dryer dan batch asal tidak tercatat untuk lot ini.</span></div>
+          <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+        </div>
+      {% endif %}
+    </details>
+  {% endfor %}
+</div>
+
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
     {% if dari_awal %}
