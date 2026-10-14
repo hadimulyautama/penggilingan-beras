@@ -141,14 +141,15 @@
 
 <div class="riwayat-desktop-list" aria-label="Daftar riwayat penggilingan">
   <div class="riwayat-desktop-grid riwayat-desktop-grid--giling riwayat-desktop-head" aria-hidden="true">
-    <span>Lot / selesai</span><span>Pemilik</span><span>Bahan</span><span>Hasil PK</span>
+    <span>Lot / selesai</span><span>Nama pemilik</span><span>Status jasa</span><span>Bahan</span><span>Hasil PK</span>
     <span>Rendemen</span><span>Kondisi</span><span>Mutu</span><span>Tersedia</span><span></span>
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
       <summary class="riwayat-desktop-grid riwayat-desktop-grid--giling">
         <span class="riwayat-desktop-lot"><strong>{{ k.kode }}</strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
-        <span class="riwayat-desktop-owner">{{ k.pemilik or "Pabrik" }}</span>
+        <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
+        <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
         <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>
         <span class="riwayat-desktop-number">{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</span>
         <span>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</span>
@@ -158,7 +159,7 @@
         <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
       </summary>
       <div class="riwayat-desktop-detail">
-        {% if k.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ k.pemilik }}</b> — digiling lalu dikembalikan, bukan dijual</span></div>{% endif %}
+        {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %} — digiling lalu dikembalikan, bukan dijual</span></div>{% endif %}
         <dl class="fakta">
           <div><dt>Bahan</dt><dd>{{ kg(k.bahan_kg) }} kg</dd></div>
           <div><dt>Hasil PK</dt><dd>{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</dd></div>

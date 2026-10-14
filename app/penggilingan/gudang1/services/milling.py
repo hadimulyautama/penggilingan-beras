@@ -2037,6 +2037,9 @@ class KartuGiling:
     mulai: object
     selesai: object | None
     lama: str
+    jasa: bool
+    kode_jasa: str | None
+    nama_pemilik: str | None
     #: "JAS-2610-001 Pak Budi" bila bahannya titipan; None = milik pabrik.
     pemilik: str | None
     bahan_kg: float
@@ -2069,7 +2072,7 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
     proses itu sendiri, sama pola `riwayat_sosoh` (dijaga
     `tests/pg/test_riwayat_giling.py` sebagai PERBANDINGAN 1 vs 6 kartu).
     """
-    from app.services.jasa import nama_pemilik_banyak
+    from app.models import Jasa, Pelanggan
     from app.services.berjalan import lama_kata
     from app.services.stok import _bahan_banyak
 
@@ -2090,7 +2093,14 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
     mutu = await qc_rata_banyak(db, ids)
     kelas = await pk_jenis_banyak(db, proses)
     bahan_per = await _bahan_banyak(db, proses)
-    pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in proses})
+    jasa_ids = {p.jasa_id for p in proses if p.jasa_id is not None}
+    pemilik = {
+        jid: (kode, nama) for jid, kode, nama in (await db.execute(
+            select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
+            .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+            .where(Jasa.id.in_(jasa_ids or {0}))
+        )).all()
+    }
 
     kartu = []
     for p in proses:
@@ -2106,7 +2116,12 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
             selesai=p.waktu_selesai,
             lama=(lama_kata((p.waktu_selesai - p.waktu_mulai).total_seconds())
                   if p.waktu_selesai else ""),
-            pemilik=pemilik.get(p.jasa_id) if p.jasa_id else None,
+            jasa=p.jasa_id is not None,
+            kode_jasa=(pemilik[p.jasa_id][0] if p.jasa_id in pemilik else None),
+            nama_pemilik=(pemilik[p.jasa_id][1] if p.jasa_id in pemilik else None),
+            pemilik=(f"{pemilik[p.jasa_id][0]} {pemilik[p.jasa_id][1]}".strip()
+                     if p.jasa_id in pemilik else
+                     f"pesanan #{p.jasa_id}" if p.jasa_id is not None else None),
             bahan_kg=float(p.berat_gabah_masuk_kg or 0), bahan=bahan,
             rendemen=(None if belum
                       else hitung_rendemen(b.produced, p.berat_gabah_masuk_kg)),

@@ -960,6 +960,9 @@ class KartuSosoh:
     selesai: datetime | None
     lama: str
     oleh: str
+    jasa: bool
+    kode_jasa: str | None
+    nama_pemilik: str | None
     #: "JAS-2610-001 Pak Budi" bila bahannya barang titipan; None = milik pabrik.
     pemilik: str | None
     silo: tuple[PemakaianSilo, ...]
@@ -1013,8 +1016,7 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
     nomor halaman akan menggeser satu kartu tiap kali ada sosoh baru ditutup —
     kartu yang terlewat justru karena orang menekan "muat lagi".
     """
-    from app.models import User
-    from app.services.jasa import nama_pemilik_banyak
+    from app.models import Jasa, Pelanggan, User
     from app.services.berjalan import lama_kata
     from app.services.stok import nama_produk, output_sosoh_banyak
 
@@ -1060,7 +1062,14 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
     nama_orang = {i: n for i, n in (await db.execute(
         select(User.id, User.nama)
         .where(User.id.in_({p.created_by for p in procs} or {0})))).all()}
-    pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p in procs})
+    jasa_ids = {p.jasa_id for p in procs if p.jasa_id is not None}
+    pemilik = {
+        jid: (kode, nama) for jid, kode, nama in (await db.execute(
+            select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
+            .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+            .where(Jasa.id.in_(jasa_ids or {0}))
+        )).all()
+    }
 
     per_proses: dict[int, list] = {}
     for u in usages:
@@ -1117,7 +1126,12 @@ async def riwayat_sosoh(db: AsyncSession, *, batas: int = 30,
             lama=(lama_kata((p.waktu_selesai - p.waktu_mulai).total_seconds())
                   if p.waktu_selesai else ""),
             oleh=nama_orang.get(p.created_by) or "—",
-            pemilik=pemilik.get(p.jasa_id) if p.jasa_id else None,
+            jasa=p.jasa_id is not None,
+            kode_jasa=(pemilik[p.jasa_id][0] if p.jasa_id in pemilik else None),
+            nama_pemilik=(pemilik[p.jasa_id][1] if p.jasa_id in pemilik else None),
+            pemilik=(f"{pemilik[p.jasa_id][0]} {pemilik[p.jasa_id][1]}".strip()
+                     if p.jasa_id in pemilik else
+                     f"pesanan #{p.jasa_id}" if p.jasa_id is not None else None),
             silo=silo, neraca=neraca, beras=beras,
             spek=tuple(spek_per.get(p.id, [])),
         ))
