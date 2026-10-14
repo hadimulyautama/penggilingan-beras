@@ -196,6 +196,8 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
                                                     FinishedGoodsStock, ProductSku)
     from app.peran import can_see_financials
     from app.web.layar import SELEPAN
+    from hmu_identitas import peran as P
+    from app.web.api import _is_g2_operator
 
     view = getattr(request.state, "view", "tamu")
     # Gerbang yang SAMA dengan `/stok-produk`: barang jadi & titipannya
@@ -313,9 +315,17 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
                 "broken_curah_kg": broken_curah_kg,
             })
     daftar.sort(key=lambda p: p["pemilik"])
+    # Samakan visibilitas tombol silo dengan gerbang aksi di API: operator
+    # Gudang 2 tanpa akses finansial, atau Super Admin. Ini terpisah dari
+    # BOLEH_PINDAH yang hanya mengatur pemindahan kepemilikan produk.
+    boleh_masukkan_silo = (
+        (await _is_g2_operator(akun.user) and not can_see_financials(akun.user))
+        or P.super_saja(akun.user.role)
+    )
     return await render_laci(
         request, "stok_produk_jasa.html", layar="stok_produk_jasa",
         daftar=daftar, BOLEH_PINDAH=boleh_pindah,
+        BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )

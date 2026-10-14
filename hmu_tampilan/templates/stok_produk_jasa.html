@@ -39,10 +39,14 @@
       <span class="lbl">{{ p.pemilik }}</span>
     </div>
     {{ st.blok("Beras · sisa di gudang", p.beras, p.sisa_beras, p.curah_beras,
-              "belum dipacking", "giling", p.kemasan, boleh_pindah=BOLEH_PINDAH) }}
+              "belum dipacking", "giling", p.kemasan, boleh_pindah=BOLEH_PINDAH,
+              boleh_masukkan_silo=BOLEH_MASUKKAN_SILO,
+              halaman_aksi="/stok-produk-jasa") }}
     {{ st.blok("Hasil samping · sisa di gudang", p.samping, p.sisa_samping,
               p.curah_samping, "belum tercatat", "samping", p.kemasan,
               boleh_pindah=BOLEH_PINDAH,
+              boleh_masukkan_silo=BOLEH_MASUKKAN_SILO,
+              halaman_aksi="/stok-produk-jasa",
               curah_titipan={"broken": p.broken_curah_kg,
                              "bekatul": p.bekatul_curah_kg},
               jasa_ids=p.jasa_ids) }}
@@ -66,14 +70,14 @@
 {# Lembarnya terbuka DI HALAMAN INI, sama dengan `/stok-produk` — tanpa
    dialog + kabar + `aksi.js` di kaki, tombol di atas cuma memuat ulang
    halaman, tanpa satu pun galat yang mengatakannya. #}
-{% if BOLEH_PINDAH %}
+{% if BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
 {% endif %}
 {% endblock %}
 
 {% block kaki %}
-{% if BOLEH_PINDAH %}
+{% if BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
           data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
 {% endif %}

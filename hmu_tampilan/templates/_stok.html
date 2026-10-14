@@ -170,7 +170,8 @@
    membingungkan: titipan dari siapa? — tak menggambar apa pun, bukan
    menggambar "0 kg" yang tak berarti. #}
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
-             boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=()) -%}
+             boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=(),
+             boleh_masukkan_silo=False, halaman_aksi="/stok-produk") -%}
 {% if daftar %}
 <div class="jumlah">
   <span class="lbl">{{ judul }}</span>
@@ -444,20 +445,20 @@
          selama ADA yang bisa dipindah, apa pun bentuknya sekarang. HANYA
          broken: bekatul tak pernah disosoh ulang, tak punya silo untuk
          ini. #}
-      {% if k.jenis == "broken" and k.sisa_kg > 0.5 and boleh_catat %}
+      {% if k.jenis == "broken" and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
         <a class="btn btn--kecil"
-           href="/stok-produk?buka=masukkan_broken_silo"
+           href="{{ halaman_aksi }}?buka=masukkan_broken_silo"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
-      {% if k.jenis in ("menir", "reject") and k.sisa_kg > 0.5 and boleh_catat %}
+      {% if k.jenis in ("menir", "reject") and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
         {% set aksi_silo = "masukkan_menir_silo" if k.jenis == "menir" else "masukkan_reject_silo" %}
         <a class="btn btn--kecil"
-           href="/stok-produk?buka={{ aksi_silo }}"
+           href="{{ halaman_aksi }}?buka={{ aksi_silo }}"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
-      {% if k.jenis in ("premium", "medsuper", "medium", "sayur", "beras_b") and k.sisa_kg > 0.5 and boleh_catat %}
+      {% if k.jenis in ("premium", "medsuper", "medium", "sayur", "beras_b") and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
         <a class="btn btn--kecil"
-           href="/stok-produk?buka=masukkan_beras_silo"
+           href="{{ halaman_aksi }}?buka=masukkan_beras_silo"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
     </div>
