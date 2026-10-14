@@ -18,6 +18,8 @@ from app.models import (
     DryingLotBatch,
     DryingMoistureLog,
     Notification,
+    Jasa,
+    Pelanggan,
     PurchaseBatch,
     SiloStorage,
     Supplier,
@@ -1400,6 +1402,8 @@ class KartuPengeringan:
     #: True bila lot merupakan barang titipan jasa; tidak bergantung pada
     #: nama pemilik yang mungkin belum tersedia.
     jasa: bool
+    kode_jasa: str | None
+    nama_pemilik: str | None
     #: "JAS-2610-001 Pak Budi" bila gabahnya titipan; None = milik pabrik.
     pemilik: str | None
     dryer_nama: str
@@ -1511,7 +1515,14 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
         .where(Silo.id.in_({sid for sid, _ in silo_per_lot.values()} or {0}))
     )).all()}
 
-    pemilik = await nama_pemilik_banyak(db, {l.jasa_id for l in lots})
+    jasa_lot = {l.jasa_id for l in lots if l.jasa_id is not None}
+    pemilik_lot = {
+        jid: (kode, nama) for jid, kode, nama in (await db.execute(
+            select(Jasa.id, Jasa.kode, Pelanggan.nama_pelanggan)
+            .join(Pelanggan, Pelanggan.id == Jasa.pelanggan_id)
+            .where(Jasa.id.in_(jasa_lot or {0}))
+        )).all()
+    }
 
     kartu = []
     for lot in lots:
@@ -1531,7 +1542,13 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
         kartu.append(KartuPengeringan(
             id=lot.id, kode_lot=lot.kode_lot,
             jasa=lot.jasa_id is not None,
-            pemilik=pemilik.get(lot.jasa_id) if lot.jasa_id else None,
+            kode_jasa=(pemilik_lot[lot.jasa_id][0]
+                       if lot.jasa_id in pemilik_lot else None),
+            nama_pemilik=(pemilik_lot[lot.jasa_id][1]
+                          if lot.jasa_id in pemilik_lot else None),
+            pemilik=(f"{pemilik_lot[lot.jasa_id][0]} {pemilik_lot[lot.jasa_id][1]}".strip()
+                     if lot.jasa_id in pemilik_lot else
+                     f"pesanan #{lot.jasa_id}" if lot.jasa_id is not None else None),
             dryer_nama=dryer_nama.get(lot.dryer_id) or "?",
             mode_dryer=lot.mode_dryer,
             target_kadar_air=(float(lot.target_kadar_air)

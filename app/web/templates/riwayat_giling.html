@@ -139,6 +139,47 @@
 {% endfor %}
 </div>
 
+<div class="riwayat-desktop-list" aria-label="Daftar riwayat penggilingan">
+  <div class="riwayat-desktop-grid riwayat-desktop-grid--giling riwayat-desktop-head" aria-hidden="true">
+    <span>Lot / selesai</span><span>Pemilik</span><span>Bahan</span><span>Hasil PK</span>
+    <span>Rendemen</span><span>Kondisi</span><span>Mutu</span><span>Tersedia</span><span></span>
+  </div>
+  {% for k in kartu %}
+    <details class="riwayat-desktop-row">
+      <summary class="riwayat-desktop-grid riwayat-desktop-grid--giling">
+        <span class="riwayat-desktop-lot"><strong>{{ k.kode }}</strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
+        <span class="riwayat-desktop-owner">{{ k.pemilik or "Pabrik" }}</span>
+        <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>
+        <span class="riwayat-desktop-number">{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</span>
+        <span>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</span>
+        <span>{{ k.kelas or "—" }}</span>
+        <span>{{ k.mutu or "Belum dinilai" }}</span>
+        <span class="riwayat-desktop-number">{{ kg(k.tersedia_kg) }} kg</span>
+        <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="riwayat-desktop-detail">
+        {% if k.pemilik %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ k.pemilik }}</b> — digiling lalu dikembalikan, bukan dijual</span></div>{% endif %}
+        <dl class="fakta">
+          <div><dt>Bahan</dt><dd>{{ kg(k.bahan_kg) }} kg</dd></div>
+          <div><dt>Hasil PK</dt><dd>{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</dd></div>
+          <div><dt>Rendemen</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
+          <div><dt>Kondisi</dt><dd>{{ k.kelas or "—" }}</dd></div>
+          <div><dt>Mutu</dt><dd>{{ k.mutu or "Belum dinilai" }}</dd></div>
+          <div><dt>Sudah ditransfer</dt><dd>{{ kg(k.ditransfer_kg) }} kg</dd></div>
+          <div><dt>Masih tersedia</dt><dd>{{ kg(k.tersedia_kg) }} kg</dd></div>
+          <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
+        </dl>
+        {% if k.belum_dicatat %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Giling ditutup tanpa hasil tercatat — PK belum terhitung.</span></div>{% endif %}
+        {% if k.bahan %}
+          <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+          <div class="riwayat-desktop-batches">{% for nama, berat, kapan in k.bahan %}<div class="riwayat-desktop-batch"><strong>{{ nama }}</strong><span>{{ berat }}</span><small>{{ kapan }}</small></div>{% endfor %}</div>
+        {% endif %}
+        <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+      </div>
+    </details>
+  {% endfor %}
+</div>
+
 {% if lagi or dari_awal %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
     {% if dari_awal %}

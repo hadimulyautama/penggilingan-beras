@@ -162,7 +162,7 @@
           <strong>{{ k.kode_lot }}</strong>
           <small>{{ k.selesai_dingin|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") or "—" }}</small>
         </span>
-        <span class="riwayat-desktop-owner">{{ k.pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
+        <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
         <span>{{ k.dryer_nama or "—" }}</span>
         <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
         <span>{% if k.target_kadar_air is not none %}{{ "%.1f"|format(k.target_kadar_air)|replace(".", ",") }}%{% else %}—{% endif %}</span>
@@ -176,8 +176,8 @@
       </summary>
       {% if laci %}
         <div class="riwayat-desktop-detail">
-          {% if k.pemilik %}
-            <div class="nota nota--hati"><span aria-hidden="true">◇</span><span>Titipan <b>{{ k.pemilik }}</b></span></div>
+          {% if k.jasa %}
+            <div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>
           {% endif %}
           <dl class="fakta">
             <div><dt>Mode dryer</dt><dd>{{ k.mode_dryer or "—" }}</dd></div>
@@ -202,6 +202,7 @@
         </div>
       {% else %}
         <div class="riwayat-desktop-detail riwayat-desktop-detail--empty">
+          {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>{% endif %}
           <div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Rincian mode dryer dan batch asal tidak tercatat untuk lot ini.</span></div>
           <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
         </div>
