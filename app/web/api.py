@@ -4835,7 +4835,6 @@ async def beras_sumber_tersedia(induk: str | None = None,
                       PackagingMaterial.id == ProductSku.packaging_material_id)
                 .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
                 .where(ProductSku.kategori == "beras_putih",
-                       ProductSku.aktif.is_(True),
                        std_filter, milik)
                 .group_by(ProductSku.id, Brand.nama, PackagingMaterial.nama,
                           PackageSize.ukuran_kg)

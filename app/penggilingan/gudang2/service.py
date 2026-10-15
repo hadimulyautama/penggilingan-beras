@@ -2252,7 +2252,8 @@ async def masukkan_beras_ke_silo(
             raise Gudang2Error(
                 f"Berat dari kemasan {ukuran:g} kg harus kelipatan ukuran tersebut.")
         sumber = await sisa_karung_per_sumber(
-            db, sku_id, std.id if std else None, jasa_id=jasa_id, kunci=True)
+            db, sku_id, std.id if std else None, jasa_id=jasa_id,
+            source_type=None, kunci=True)
         tersedia = sum(jumlah for _, jumlah, _ in sumber)
         if jumlah_karung > tersedia:
             raise Gudang2Error(
