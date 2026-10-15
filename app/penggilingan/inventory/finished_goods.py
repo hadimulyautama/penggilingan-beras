@@ -210,9 +210,13 @@ async def _packed_kg(db: AsyncSession, proc_id: int, kategori: str, std_id: int 
     q = (
         select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
         .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-        .where(FinishedGoodsStock.source_id == proc_id, ProductSku.kategori == kategori)
+        .where(FinishedGoodsStock.source_type == "polishing",
+               FinishedGoodsStock.source_id == proc_id,
+               ProductSku.kategori == kategori)
     )
-    if std_id is not None:
+    if std_id is None:
+        q = q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
+    else:
         q = q.where(FinishedGoodsStock.rice_quality_standard_id == std_id)
     return float((await db.execute(q)).scalar_one())
 

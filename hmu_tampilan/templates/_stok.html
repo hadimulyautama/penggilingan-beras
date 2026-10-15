@@ -490,7 +490,7 @@
       {% endif %}
       {% if k.jenis in ("premium", "medsuper", "medium", "sayur", "beras_b") and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
         <a class="btn btn--kecil"
-           href="{{ halaman_aksi }}?buka=masukkan_beras_silo&amp;nilai={{ k.jenis|urlencode }}"
+           href="{{ halaman_aksi }}?buka=masukkan_beras_silo&amp;nilai={{ (k.jenis ~ ('|pabrik' if halaman_aksi == '/stok-produk' else '|jasa'))|urlencode }}"
            style="margin-top:8px">📤 Masukkan ke silo</a>
       {% endif %}
     </div>

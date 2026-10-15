@@ -947,33 +947,27 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # punya baris nyata). KEDUA tujuan menerima grade yang SAMA. SATU
             # satu aksi melayani kedua tujuan. Jenis beras menjadi pilihan
             # pertama dan dikunci otomatis bila aksi dibuka dari kartu stok;
-            # sumbernya kemudian dipilih antara curah dan ukuran kemasan.
+            # sumbernya kemudian dipilih berdasarkan merek dan kemasan.
             # Daftar silo tetap gabungan, lalu server menolak kombinasi
             # komoditas yang tidak sesuai.
             {"id": "masukkan_beras_silo", "label": "📤 Masukkan beras ke silo",
              "post": "/api/actions/masukkan-beras-silo",
-             "hint": "Jenis beras mengikuti kartu yang dipilih. Pilih proses, "
-                     "lalu pilih stok curah atau ukuran kemasannya. Jika memilih "
-                     "kemasan, berat harus kelipatan ukuran karung.",
+             "hint": "Jenis beras dan pemilik mengikuti kartu yang dipilih. "
+                     "Pilih merek dan kemasan stok yang ingin dipindahkan, lalu masukkan beratnya. "
+                     "Untuk kemasan, berat harus kelipatan ukuran karung.",
              "fields": [
-                 {"name": "jenis", "label": "Jenis beras", "type": "select",
-                  "options": [["premium", "Beras Premium"],
-                              ["medsuper", "Beras Medium Super"],
-                              ["medium", "Beras Medium"],
-                              ["sayur", "Beras Sayur"],
-                              ["beras_b", "Beras B (olah ulang)"]]},
-                 {"name": "proses", "label": "Asal proses", "type": "remote",
-                  "source": "/api/actions/beras-proses-tersedia", "induk": "jenis",
-                  "kosong": "Belum ada stok jenis beras ini yang bisa dimasukkan ke silo."},
-                 {"name": "sumber_stok", "label": "Bentuk stok", "type": "remote",
-                  "source": "/api/actions/beras-sumber-tersedia", "induk": "proses",
-                  "kosong": "Tidak ada stok curah atau kemasan yang tersedia."},
+                 {"name": "jenis", "label": "Jenis beras", "type": "remote",
+                  "source": "/api/actions/beras-jenis-silo",
+                  "kosong": "Belum ada jenis beras yang bisa dipindahkan."},
+                 {"name": "sumber_stok", "label": "Merek dan kemasan", "type": "remote",
+                  "source": "/api/actions/beras-sumber-tersedia", "induk": "jenis",
+                  "kosong": "Tidak ada stok dengan pemilik dan jenis beras ini."},
+                 {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
+                  "type": "number", "wajib": True},
                  {"name": "silo", "label": "Silo tujuan (Beras atau PK)", "type": "remote",
                   "source": "/api/actions/silo-beras-tujuan-g2",
                   "kosong": "Belum ada Silo Beras atau silo PK. Tambahkan di "
                            "Pengaturan → Alat."},
-                 {"name": "berat_kg", "label": "Berat yang masuk silo (kg)",
-                  "type": "number", "wajib": True},
              ]},
         ]
     if g2:
@@ -4740,170 +4734,134 @@ async def silo_beras_tujuan_g2(user: User = Depends(pengguna_aksi)) -> list[dict
     return keluar
 
 
-@router.get("/actions/beras-proses-tersedia")
-async def beras_proses_tersedia(induk: str | None = None,
-                                user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Proses penyosohan × jenis beras (berikut pemiliknya) yang masih bisa
-    dimasukkan ke silo — curah (dihitung) MAUPUN kemasan dijumlah jadi SATU
-    angka per baris, sebangun `broken-proses-tersedia`. `masukkan_beras_ke_
-    silo` sendiri yang memutuskan sumbernya, dan tujuan mana yang berlaku
-    (Silo Beras atau Silo A/B) tak mengubah daftar ini — KEDUANYA menerima
-    grade yang sama (lihat docstring `masukkan_beras_ke_silo`).
-
-    Nilai: `"<kode_pol>|<jenis>|<jasa_id atau kosong>"`.
-    """
+@router.get("/actions/beras-jenis-silo")
+async def beras_jenis_silo(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pilihan internal jenis+lingkup stok; tautan kartu mengunci pilihannya."""
     _require(await _is_g2_operator(user))
-    from sqlalchemy import func, select
-
-    from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
-    from app.penggilingan.gudang2.models import PolishingOutputLog
-    from app.penggilingan.inventory.finished_goods import (
-        _packed_kg, get_standard, sisa_karung_per_sumber)
-    from app.services.jasa import nama_pemilik
-    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh, nama_produk
-
-    keluar: list[dict] = []
-    async with SessionLocal() as db:
-        # ── Grade: setiap (proses, jenis) yang pernah dihasilkan mesin ──
-        baris_hasil = (await db.execute(
-            select(PolishingOutputLog.polishing_process_id, PolishingOutputLog.jenis)
-            .where(PolishingOutputLog.jenis.in_(BERAS_JENIS))
-            .distinct()
-        )).all()
-        for proc_id, jenis in baris_hasil:
-            if induk and jenis != induk:
-                continue
-            proc = await db.get(PolishingProcess, proc_id)
-            if proc is None:
-                continue
-            hasil_kg = (await output_sosoh(db, proc_id)).get(jenis, 0.0)
-            std = await get_standard(db, jenis)
-            dikemas_total = await _packed_kg(db, proc_id, "beras_putih",
-                                             std.id if std else None)
-            dipindah = (await _dipindah_silo_proc(db, [proc_id])).get(
-                (proc_id, jenis), 0.0)
-            curah = max(0.0, float(hasil_kg) - dikemas_total - dipindah)
-            # Pemilik kemasan BOLEH berbeda dari pemilik proses — "pindah
-            # kepemilikan produk" berlaku untuk SKU apa pun. Curah sendiri
-            # tak punya jalur itu, jadi curah selalu milik `proc.jasa_id`.
-            pemilik_kemasan = set((await db.execute(
-                select(FinishedGoodsStock.jasa_id)
-                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                .where(ProductSku.kategori == "beras_putih",
-                       FinishedGoodsStock.source_type == "polishing",
-                       FinishedGoodsStock.source_id == proc_id,
-                       FinishedGoodsStock.rice_quality_standard_id ==
-                       (std.id if std else None))
-            )).scalars().all())
-            owners = pemilik_kemasan | {proc.jasa_id}
-            for jasa_id in owners:
-                milik_q = (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                          else FinishedGoodsStock.jasa_id == jasa_id)
-                sku_ids = (await db.execute(
-                    select(FinishedGoodsStock.product_sku_id)
-                    .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                    .where(ProductSku.kategori == "beras_putih",
-                           FinishedGoodsStock.source_type == "polishing",
-                           FinishedGoodsStock.source_id == proc_id,
-                           FinishedGoodsStock.rice_quality_standard_id ==
-                           (std.id if std else None), milik_q).distinct()
-                )).scalars().all()
-                kemasan = 0.0
-                for sku_id in sku_ids:
-                    sisa = await sisa_karung_per_sumber(
-                        db, sku_id, std.id if std else None,
-                        jasa_id=jasa_id, proses_id=proc_id)
-                    kemasan += sum(kg_sisa for _, _, kg_sisa in sisa)
-                total = (curah if jasa_id == proc.jasa_id else 0.0) + kemasan
-                if total <= 0.5:
-                    continue
-                milik = await nama_pemilik(db, jasa_id)
-                label = (f"{proc.kode_proses} · {nama_produk(jenis)} · "
-                        f"{_rp(total)} kg")
-                if milik:
-                    label += f" · titipan {milik}"
-                keluar.append({"value": f"{proc.kode_proses}|{jenis}|{jasa_id or ''}",
-                               "label": label})
-    return keluar
+    from app.services.stok import BERAS_JENIS, nama_produk
+    return [
+        {"value": f"{jenis}|{scope}",
+         "label": f"{nama_produk(jenis)} · {'stok pabrik' if scope == 'pabrik' else 'stok jasa'}"}
+        for jenis in BERAS_JENIS for scope in ("pabrik", "jasa")
+    ]
 
 
 @router.get("/actions/beras-sumber-tersedia")
 async def beras_sumber_tersedia(induk: str | None = None,
                                 user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Bentuk stok yang sungguh tersedia untuk satu proses, grade, dan pemilik."""
+    """Daftar curah/kemasan untuk grade dan lingkup pemilik pada kartu."""
     _require(await _is_g2_operator(user))
-    if not induk:
-        return []
-    try:
-        kode, jenis, jasa_txt = induk.split("|", 2)
-    except ValueError:
-        return []
     from sqlalchemy import select
 
     from app.models import FinishedGoodsStock, PolishingProcess, ProductSku
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import (
         _packed_kg, get_standard, sisa_karung_per_sumber)
+    from app.services.jasa import nama_pemilik
     from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh
-    from hmu_core import PackageSize
+    from hmu_core import Brand, PackageSize, PackagingMaterial
 
-    if jenis not in BERAS_JENIS:
+    try:
+        jenis, scope = (induk or "").split("|", 1)
+    except ValueError:
         return []
-    jasa_id = int(jasa_txt) if jasa_txt.isdigit() else None
+    jenis, scope = jenis.strip().lower(), scope.strip().lower()
+    if jenis not in BERAS_JENIS or scope not in {"pabrik", "jasa"}:
+        return []
+
     keluar: list[dict] = []
     async with SessionLocal() as db:
-        proc = (await db.execute(
-            select(PolishingProcess).where(PolishingProcess.kode_proses == kode)
-        )).scalars().first()
-        if proc is None:
-            return []
         std = await get_standard(db, jenis)
-        if jasa_id == proc.jasa_id:
-            hasil_kg = (await output_sosoh(db, proc.id)).get(jenis, 0.0)
-            dikemas_total = await _packed_kg(
-                db, proc.id, "beras_putih", std.id if std else None)
-            dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
-                (proc.id, jenis), 0.0)
-            curah = max(0.0, float(hasil_kg) - dikemas_total - dipindah)
-            if curah > 0.5:
-                keluar.append({"value": "curah",
-                               "label": f"Curah · {_rp(curah)} kg tersedia"})
+        std_filter = (FinishedGoodsStock.rice_quality_standard_id.is_(None)
+                      if std is None else
+                      FinishedGoodsStock.rice_quality_standard_id == std.id)
+        if scope == "pabrik":
+            owners = [None]
+        else:
+            owners = set((await db.execute(
+                select(PolishingProcess.jasa_id)
+                .join(PolishingOutputLog,
+                      PolishingOutputLog.polishing_process_id == PolishingProcess.id)
+                .where(PolishingProcess.jasa_id.is_not(None),
+                       PolishingOutputLog.jenis == jenis)
+                .distinct()
+            )).scalars().all())
+            owners.update((await db.execute(
+                select(FinishedGoodsStock.jasa_id)
+                .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
+                .where(ProductSku.kategori == "beras_putih",
+                       FinishedGoodsStock.jasa_id.is_not(None),
+                       FinishedGoodsStock.source_type == "polishing", std_filter)
+                .distinct()
+            )).scalars().all())
+            owners = sorted(owners)
 
-        milik_q = (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                   else FinishedGoodsStock.jasa_id == jasa_id)
-        sku_ids = (await db.execute(
-            select(FinishedGoodsStock.product_sku_id)
-            .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-            .where(ProductSku.kategori == "beras_putih",
-                   FinishedGoodsStock.source_type == "polishing",
-                   FinishedGoodsStock.source_id == proc.id,
-                   (FinishedGoodsStock.rice_quality_standard_id.is_(None)
-                    if std is None else
-                    FinishedGoodsStock.rice_quality_standard_id == std.id),
-                   milik_q).distinct()
-        )).scalars().all()
-        for sku_id in sku_ids:
-            sisa = await sisa_karung_per_sumber(
-                db, sku_id, std.id if std else None,
-                jasa_id=jasa_id, proses_id=proc.id)
-            karung = sum(j for _, j, _ in sisa)
-            kg_sisa = sum(kg for _, _, kg in sisa)
-            if karung <= 0 or kg_sisa <= 0.5:
-                continue
-            sku = await db.get(ProductSku, sku_id)
-            size = await db.get(PackageSize, sku.package_size_id) if sku else None
-            ukuran = float(size.ukuran_kg) if size else 0.0
-            label_ukuran = f"{_rp(ukuran)} kg" if ukuran else "ukuran tak diketahui"
-            keluar.append({"value": f"sku:{sku_id}",
-                           "label": (f"Kemasan {label_ukuran} · "
-                                     f"{karung} karung · {_rp(kg_sisa)} kg tersedia"),
-                           "berat_kg": kg_sisa})
+        for owner in owners:
+            owner_token = "pabrik" if owner is None else str(owner)
+            owner_label = "" if owner is None else (await nama_pemilik(db, owner) or "Jasa")
+            owner_suffix = f" · {owner_label}" if owner_label else ""
+
+            proc_rows = (await db.execute(
+                select(PolishingProcess.id)
+                .join(PolishingOutputLog,
+                      PolishingOutputLog.polishing_process_id == PolishingProcess.id)
+                .where(PolishingOutputLog.jenis == jenis,
+                       PolishingProcess.jasa_id.is_(None) if owner is None
+                       else PolishingProcess.jasa_id == owner)
+                .distinct()
+            )).scalars().all()
+            curah_total = 0.0
+            for proc_id in proc_rows:
+                hasil = (await output_sosoh(db, proc_id)).get(jenis, 0.0)
+                dikemas = await _packed_kg(
+                    db, proc_id, "beras_putih", std.id if std else None)
+                dipindah = (await _dipindah_silo_proc(db, [proc_id])).get(
+                    (proc_id, jenis), 0.0)
+                curah_total += max(0.0, float(hasil) - dikemas - dipindah)
+            if curah_total > 0.5:
+                keluar.append({"value": f"curah|{owner_token}",
+                               "label": f"Curah{owner_suffix} · "
+                                        f"{_rp(curah_total)} kg tersedia"})
+
+            milik = (FinishedGoodsStock.jasa_id.is_(None) if owner is None
+                     else FinishedGoodsStock.jasa_id == owner)
+            skus = (await db.execute(
+                select(ProductSku.id, Brand.nama, PackagingMaterial.nama,
+                       PackageSize.ukuran_kg)
+                .join(FinishedGoodsStock,
+                      FinishedGoodsStock.product_sku_id == ProductSku.id)
+                .join(Brand, Brand.id == ProductSku.brand_id, isouter=True)
+                .join(PackagingMaterial,
+                      PackagingMaterial.id == ProductSku.packaging_material_id)
+                .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
+                .where(ProductSku.kategori == "beras_putih",
+                       ProductSku.aktif.is_(True),
+                       FinishedGoodsStock.source_type == "polishing",
+                       std_filter, milik)
+                .group_by(ProductSku.id, Brand.nama, PackagingMaterial.nama,
+                          PackageSize.ukuran_kg)
+                .order_by(Brand.nama, PackagingMaterial.nama,
+                          PackageSize.ukuran_kg)
+            )).all()
+            for sku_id, brand, material, ukuran in skus:
+                sisa = await sisa_karung_per_sumber(
+                    db, sku_id, std.id if std else None, jasa_id=owner)
+                karung = sum(jumlah for _, jumlah, _ in sisa)
+                if karung <= 0:
+                    continue
+                label = " · ".join(x for x in (brand or "Tanpa merek", material,
+                                                f"{ukuran} kg") if x)
+                keluar.append({
+                    "value": f"sku:{sku_id}|{owner_token}",
+                    "label": (f"{label}{owner_suffix} · {karung} karung · "
+                              f"{_rp(karung * float(ukuran))} kg tersedia"),
+                })
     return keluar
 
 
 class MasukkanBerasSiloReq(BaseModel):
-    proses: str      # "<kode_pol>|<jenis>|<jasa_id atau kosong>", dari picker di atas
-    sumber_stok: str # curah atau sku:<id> — harus sesuai pilihan yang ditampilkan
+    jenis: str       # grade|pabrik atau grade|jasa, otomatis dari kartu stok
+    sumber_stok: str # curah|pemilik atau sku:<id>|pemilik
     silo: str        # nama silo Beras atau PK, mis. "C"
     berat_kg: Positif
 
@@ -4919,24 +4877,34 @@ async def act_masukkan_beras_silo(req: MasukkanBerasSiloReq,
 
     _require((await _is_g2_operator(user) and not can_see_financials(user))
              or P.super_saja(user.role))
-    sisa, _, jasa_txt = (req.proses or "").partition("|")
-    kode_pol, _, jenis = sisa.partition("|")
-    kode_pol, jenis = kode_pol.strip(), jenis.strip()
-    if not kode_pol or not jenis:
-        raise HTTPException(400, "Pilih proses & jenis berasnya dulu.")
+    try:
+        jenis, scope = (req.jenis or "").strip().lower().split("|", 1)
+    except ValueError:
+        raise HTTPException(400, "Jenis beras dan lingkup pemilik tidak terbaca.") from None
+    if scope not in {"pabrik", "jasa"}:
+        raise HTTPException(400, "Lingkup stok beras tidak valid.")
+    if not jenis:
+        raise HTTPException(400, "Jenis beras dari kartu stok tidak terbaca.")
     if not (req.silo or "").strip():
         raise HTTPException(400, "Pilih silo tujuan dulu.")
     if not (req.sumber_stok or "").strip():
-        raise HTTPException(400, "Pilih stok curah atau kemasan yang akan dipindahkan.")
-    jasa_id = int(jasa_txt) if jasa_txt.strip().isdigit() else None
+        raise HTTPException(400, "Pilih bentuk stok yang akan dipindahkan.")
+    sumber, _, owner_token = req.sumber_stok.partition("|")
+    if not owner_token or ((scope == "pabrik") != (owner_token == "pabrik")):
+        raise HTTPException(400, "Pemilik stok tidak cocok dengan kartu yang dipilih.")
+    jasa_id = None
+    if owner_token != "pabrik":
+        if scope != "jasa" or not owner_token.isdigit():
+            raise HTTPException(400, "Pemilik stok jasa tidak valid.")
+        jasa_id = int(owner_token)
     from app.penggilingan.gudang2.service import Gudang2Error, masukkan_beras_ke_silo
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await masukkan_beras_ke_silo(
-                db, user=u, kode_pol=kode_pol, jenis=jenis, nama_silo=req.silo.strip(),
+                db, user=u, jenis=jenis, nama_silo=req.silo.strip(),
                 berat_kg=float(req.berat_kg), jasa_id=jasa_id,
-                sumber_stok=req.sumber_stok)
+                sumber_stok=sumber)
         except Gudang2Error as e:
             raise _err(e, "Gagal memasukkan beras ke silo.")
     ekor = (f" (termasuk {r.dibongkar_dari_karung_kg:,.0f} kg dibongkar dari karung)"
