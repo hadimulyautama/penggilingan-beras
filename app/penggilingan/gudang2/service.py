@@ -350,6 +350,133 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
                - float(terpakai) - float(keluar))
 
 
+async def komposisi_bahan_silo(
+    db: AsyncSession, silo_id: int, *, sampai=None,
+    kecuali_proses_id: int | None = None, target_kg: float | None = None,
+) -> dict[str, float]:
+    """Komposisi bahan yang tersedia di silo pada satu waktu.
+
+    `jenis_isi` pada master silo hanya metadata umum (silo baru bernilai
+    ``campuran``), jadi komposisi diturunkan dari arus masuk yang sebenarnya.
+    Karena silo adalah kolam campuran dan pemakaian sosoh lama hanya menyimpan
+    berat totalnya, pemakaian terdahulu dialokasikan FIFO ke bahan yang lebih
+    dulu masuk. Selisih dari berat snapshot yang tidak punya jejak jenis
+    disimpan sebagai `belum_dikenal`, bukan ditebak sebagai PK.
+    """
+    from datetime import datetime, timezone
+
+    from app.models import (BerasKeSilo, BrokenKeSilo, HasilSampingKeSilo,
+                            PolishingProcess, PolishingSiloUsage,
+                            PkGudang2Intake, PkTumpukanToSilo)
+    from app.penggilingan.inventory.models import OutgoingItem, OutgoingRecord
+
+    # (waktu, prioritas, jenis, berat). Pada waktu yang sama, konsumsi terjadi
+    # sebelum pemasukan baru, sama dengan aturan batas isi di _isian_silo.
+    gerak: list[tuple[datetime, int, str, float]] = []
+
+    def tambah(waktu, jenis: str, berat, *, masuk: bool = True) -> None:
+        if waktu is None:
+            return
+        saat = waktu if waktu.tzinfo else waktu.replace(tzinfo=timezone.utc)
+        batas = sampai
+        if batas is not None and batas.tzinfo is None:
+            batas = batas.replace(tzinfo=timezone.utc)
+        if batas is not None and saat > batas:
+            return
+        kg = float(berat or 0)
+        if kg > 0.001:
+            gerak.append((saat, 1 if masuk else 0, jenis, kg if masuk else -kg))
+
+    # PK bisa masuk langsung atau dari tumpukan. Baris intake dari tumpukan
+    # tidak punya silo_id, sehingga hanya gerak pindahnya yang dihitung.
+    for r in (await db.execute(select(PkGudang2Intake).where(
+        PkGudang2Intake.silo_id == silo_id,
+        PkGudang2Intake.dibatalkan_pada.is_(None),
+    ))).scalars().all():
+        tambah(r.waktu_masuk, "pk", r.berat_kg)
+    for r in (await db.execute(select(PkTumpukanToSilo).where(
+        PkTumpukanToSilo.silo_id == silo_id,
+    ))).scalars().all():
+        tambah(r.waktu, "pk", r.berat_kg)
+    for r in (await db.execute(select(BerasKeSilo).where(
+        BerasKeSilo.silo_id == silo_id,
+    ))).scalars().all():
+        tambah(r.waktu, "beras_putih", r.berat_kg)
+    for r in (await db.execute(select(BrokenKeSilo).where(
+        BrokenKeSilo.silo_id == silo_id,
+    ))).scalars().all():
+        tambah(r.waktu, "broken", r.berat_kg)
+    for r in (await db.execute(select(HasilSampingKeSilo).where(
+        HasilSampingKeSilo.silo_id == silo_id,
+    ))).scalars().all():
+        jenis = str(r.jenis or "").strip().lower()
+        tambah(r.waktu, jenis if jenis in {"menir", "reject"} else "belum_dikenal",
+               r.berat_kg)
+
+    # Pengambilan PK dari silo.
+    for r, out in (await db.execute(
+        select(OutgoingItem, OutgoingRecord)
+        .join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id)
+        .where(OutgoingItem.item_type == "pk_g2",
+               OutgoingItem.silo_id == silo_id)
+    )).all():
+        tambah(out.waktu, "pk", r.berat_kg, masuk=False)
+
+    # Pemakaian sosoh yang telah ditutup mengurangi bahan lama dengan FIFO.
+    for u, pr in (await db.execute(
+        select(PolishingSiloUsage, PolishingProcess)
+        .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+        .where(PolishingSiloUsage.silo_id == silo_id,
+               PolishingSiloUsage.berat_akhir_kg.is_not(None),
+               PolishingProcess.waktu_selesai.is_not(None),
+               *([PolishingProcess.id != kecuali_proses_id]
+                 if kecuali_proses_id is not None else []))
+    )).all():
+        tambah(pr.waktu_selesai, "*", u.berat_terpakai_kg, masuk=False)
+
+    urut = sorted(gerak, key=lambda x: (x[0], x[1]))
+    lot: list[list[float | str]] = []
+    for _, _, jenis, delta in urut:
+        if delta > 0:
+            lot.append([jenis, delta])
+            continue
+        sisa = -delta
+        for baris in lot:
+            if baris[1] <= 0 or (jenis != "*" and baris[0] != jenis):
+                continue
+            ambil = min(float(baris[1]), sisa)
+            baris[1] = float(baris[1]) - ambil
+            sisa -= ambil
+            if sisa <= 0.001:
+                break
+        if sisa > 0.001:
+            lot.insert(0, ["belum_dikenal", -sisa])
+
+    hasil = {k: 0.0 for k in ("pk", "beras_putih", "broken", "menir", "reject",
+                               "belum_dikenal")}
+    for jenis, kg in lot:
+        hasil[str(jenis)] = hasil.get(str(jenis), 0.0) + float(kg)
+    for jenis in hasil:
+        hasil[jenis] = max(0.0, hasil[jenis])
+    if target_kg is not None:
+        selisih = float(target_kg) - sum(hasil.values())
+        if selisih > 0.01:
+            hasil["belum_dikenal"] += selisih
+        elif selisih < -0.01:
+            # Data lama atau jejak pemakaian parsial dapat membuat jumlah
+            # jejak lebih besar dari snapshot. Potong dahulu bagian yang
+            # belum diketahui, lalu kurangi saldo lama FIFO agar total yang
+            # ditampilkan tetap sama dengan berat silo yang benar-benar dipakai.
+            lebih = -selisih
+            for jenis in ("belum_dikenal", "pk", "beras_putih", "broken", "menir", "reject"):
+                ambil = min(hasil[jenis], lebih)
+                hasil[jenis] -= ambil
+                lebih -= ambil
+                if lebih <= 0.01:
+                    break
+    return hasil
+
+
 async def hitung_stok_tumpukan(db: AsyncSession, *,
                                pemilik: str = "semua") -> float:
     """Stok tumpukan G2 = masuk sbg tumpukan − dipindah ke silo − diambil keluar.

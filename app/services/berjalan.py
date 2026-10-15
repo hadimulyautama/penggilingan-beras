@@ -2567,9 +2567,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
         # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
         asal_pr: list[tuple[str, str, str]] = []
-        rinci_bahan_pk: list[tuple[str, str, str, str]] = []
-        rinci_bahan_broken: list[tuple[str, str, str, str]] = []
-        broken_bahan_kg = 0.0
+        rinci_bahan: list[tuple[str, str, str, str]] = []
+        komposisi_total = {k: 0.0 for k in (
+            "pk", "beras_putih", "broken", "menir", "reject", "belum_dikenal")}
         # ── Baris yang tak ikut terbawa, bahkan sebelum digabung ──
         #
         # `asal_silo()` sendiri sudah membatasi `BATAS_ASAL` baris PER SILO
@@ -2582,10 +2582,6 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         asal_lebih = 0
         silo_nama: list[str] = []
         ditambah = 0.0
-        # Hanya suku PK — dipakai fakta "Ditambah" di kartu (lihat di bawah).
-        # `ditambah` (semua jenis, dipakai `bahan_kg`/neraca) tetap utuh.
-        ditambah_pk = 0.0
-        berat_awal_total = 0.0
         for u in (await db.execute(
             select(PolishingSiloUsage)
             .where(PolishingSiloUsage.polishing_process_id == pr.id)
@@ -2593,7 +2589,6 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             awal_u = float(u.berat_awal_kg or 0)
             masuk_u = float(u.berat_masuk_kg or 0)
             ditambah += masuk_u
-            berat_awal_total += awal_u
             s = await db.get(Silo, u.silo_id)
             if s:
                 silo_nama.append(s.nama_silo)
@@ -2606,115 +2601,72 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     else f"Dibebaskan · sisa {_kg(sisa_u)}" if dibebaskan
                     else ""
                 )
-                jenis_u = "Bahan campuran"
-                broken_u = False
-                # "Awal X kg" dicabut untuk PK (permintaan pemilik 11 Oktober
-                # 2026): bisa disimpulkan sendiri dari jumlah daftar asal lot
-                # di bawahnya. Broken TETAP menyebutnya — permintaan susulan
-                # pemilik hari yang sama: daftar asal broken (di bawah) cuma
-                # mencatat PENAMBAHANNYA, bukan isi mula-mula, jadi "awal"
-                # adalah satu-satunya tempat angka itu masih terbaca.
-                keterangan = status_u or (
-                    (f"awal {_kg(awal_u)}"
-                     + (f" · ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else ""))
-                    if broken_u else
-                    (f"ditambah {_kg(masuk_u)}" if masuk_u > 0.001 else "")
+                from app.penggilingan.gudang2.service import komposisi_bahan_silo
+                komposisi = await komposisi_bahan_silo(
+                    db, u.silo_id, sampai=now_local(),
+                    kecuali_proses_id=pr.id, target_kg=total_u,
                 )
-                baris_silo = (
-                    f"{s.nama_silo} · {jenis_u}", _kg(total_u), keterangan,
-                    ("dibebaskan" if dibebaskan else "broken" if broken_u else "silo"),
-                )
-                # Silo yang dibebaskan meredupkan baris judulnya sendiri
-                # (`.anak__baris--dibebaskan`) — daftar asal/tambahan di
-                # bawahnya ikut diredupkan dengan peran sendiri, supaya
-                # seluruh kelompok terbaca sebagai riwayat, bukan isi yang
-                # masih ada sekarang. Sama untuk PK maupun broken.
+                for jenis, kg in komposisi.items():
+                    komposisi_total[jenis] = komposisi_total.get(jenis, 0.0) + kg
+                label_bahan = {
+                    "pk": "Total PK", "beras_putih": "Total bahan beras putih",
+                    "broken": "Total bahan broken", "menir": "Total bahan menir",
+                    "reject": "Total bahan reject",
+                    "belum_dikenal": "Belum teridentifikasi",
+                }
+                rinci_bahan.append((s.nama_silo, _kg(total_u), status_u,
+                                    "dibebaskan" if dibebaskan else "silo"))
+                for jenis, judul in label_bahan.items():
+                    kg = komposisi.get(jenis, 0.0)
+                    if kg > 0.001:
+                        rinci_bahan.append((f"  {judul}", _kg(kg), "", "sosoh-bahan"))
+                # Sumber lot PK dan broken tetap ditampilkan sebagai jejak
+                # asal, tetapi jumlah kategori di atas berasal dari arus
+                # material nyata, bukan metadata jenis silo.
                 peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
-                if broken_u:
-                    broken_bahan_kg += total_u
-                    rinci_bahan_broken.append(baris_silo)
-                    # Daftar detil tiap kali broken DITAMBAHKAN ke silo ini
-                    # (`broken_ke_silo`) — permintaan pemilik 11 Oktober
-                    # 2026, sebangun daftar asal lot PK di atas, tapi
-                    # sumbernya tunggal (lihat `_isian_silo_broken`).
+                if komposisi.get("broken", 0) > 0.001:
                     isian_br = await _isian_silo_broken(
-                        db, u.silo_id, sampai=pr.waktu_mulai
+                        db, u.silo_id, sampai=now_local()
                     )
                     asal_lebih += isian_br.lebih
-                    rinci_bahan_broken.extend(
+                    rinci_bahan.extend(
                         (nama, kg, jam, peran_lot) for nama, kg, jam in isian_br.baris
                     )
                     if not isian_br.baris:
-                        rinci_bahan_broken.append((
+                        rinci_bahan.append((
                             "Riwayat penambahan tidak tercatat", "", "", peran_lot
                         ))
-                else:
-                    rinci_bahan_pk.append(baris_silo)
-                    # Asal lot adalah bagian dari snapshot bahan saat proses
-                    # mulai. Silo yang kemudian dikosongkan tidak menghapus
-                    # jejak bahan dari kartu proses.
+                if komposisi.get("pk", 0) > 0.001:
                     isian_u = await _isian_silo(
-                        db, u.silo_id, sampai=pr.waktu_mulai
+                        db, u.silo_id, sampai=now_local()
                     )
                     asal_lebih += isian_u.lebih
-                    rinci_bahan_pk.extend(
+                    rinci_bahan.extend(
                         (nama, kg, jam, peran_lot) for nama, kg, jam in isian_u.baris
                     )
-                    # Asal lot tetap ditampilkan meski silo sudah kosong atau
-                    # dibebaskan. Bila tautan lot memang tidak tercatat,
-                    # nyatakan dengan jelas agar bukan tampak seperti detail hilang.
                     if not isian_u.baris:
-                        rinci_bahan_pk.append((
+                        rinci_bahan.append((
                             "Asal lot tidak tercatat", "", "", peran_lot
                         ))
                     for a in isian_u.baris:
                         if a not in asal_pr:
                             asal_pr.append(a)
-                    # "Ditambah" di fakta kartu kini PK saja (lihat di bawah)
-                    # — total broken sudah berdiri sendiri sebagai "Broken",
-                    # dan menjumlahkannya ke sini akan mengulang angka yang
-                    # sama di dua baris fakta yang terbaca tak berhubungan.
-                    ditambah_pk += masuk_u
-        # Broken kini membawa rincian asal sendiri (lihat di atas) dan
-        # selalu ditempatkan setelah semua silo PK pada daftar bahan.
-        rinci_bahan = rinci_bahan_pk + rinci_bahan_broken
         pemasok_pr = _pemasok_ringkas(asal_pr)
         macet = await jeda_terbuka(db, "penyosohan", pr.id)
         tertahan = await tertahan_detik(db, "penyosohan", pr.id)
         fakta = [("Silo", " + ".join(silo_nama) or "—")]
-        # Total bahan — laporan lapangan 7 Oktober 2026: kartu berjalan tak
-        # menyebutnya, operator cuma melihat "Ditambah" (suku TAMBAHAN saja)
-        # dan harus menjumlah sendiri dengan bahan awal untuk tahu totalnya.
-        # `bahan_kg` di sini JUGA penyebut neraca di bawah (SELURUH bahan,
-        # PK + broken — rendemen tak boleh menghitung PK saja) — satu angka,
-        # dua pemakaian, supaya keduanya tak bisa berselisih.
-        bahan_kg = berat_awal_total + ditambah
-        # "Total bahan baku" -> "Total PK" (permintaan pemilik 11 Oktober
-        # 2026): labelnya kini menyebut cakupannya dengan jujur — angka ini
-        # TAK TERMASUK broken, broken punya fakta "Broken" sendiri di bawah.
-        # Dihitung dari dua angka yang sudah ada (`bahan_kg` - `broken_
-        # bahan_kg`), bukan akumulator baru — satu sumber, tak bisa berselisih
-        # dari jumlah PK + broken di "Bahan baku masuk per silo".
-        total_pk_kg = bahan_kg - broken_bahan_kg
-        fakta.append(("Total PK", _kg(total_pk_kg)))
-        # Satu fakta ringkas untuk broken — keluhan pemilik 11 Oktober 2026:
-        # "Broken sebagai bahan" (total) berdampingan dengan "Ditambah"
-        # (dulu gabungan PK+broken) terbaca seolah dua angka yang harus
-        # dibandingkan, padahal beda sumbu (jenis bahan vs fase waktu) dan
-        # kadang tumpang-tindih. "Broken" di sini SUDAH angka utuhnya
-        # (awal + ditambah, rincian ada di "Bahan baku masuk per silo");
-        # "Ditambah" di bawah sekarang PK saja, supaya keduanya tak lagi
-        # bisa disalahbaca sebagai satu angka yang mengandung angka lain.
-        #
-        # "Total PK" dan "Broken" dipertebal di template (lihat `_benda.html`,
-        # kelas `sorot-netral`) — permintaan pemilik: dua angka ini yang
-        # paling sering dicari sekilas saat membuka kartu.
-        if broken_bahan_kg > 0.001:
-            fakta.append(("Broken", _kg(broken_bahan_kg)))
-        if ditambah_pk > 0.001:
-            # PK yang dituang selama mesin jalan ikut jadi penyebut rendemen
-            # — angka yang ikut menilai pekerjaan tak boleh disembunyikan.
-            fakta.append(("Ditambah", _kg(ditambah_pk)))
+        bahan_kg = sum(komposisi_total.values())
+        for jenis, judul in (
+            ("pk", "Total PK"), ("beras_putih", "Total bahan beras putih"),
+            ("broken", "Total bahan broken"), ("menir", "Total bahan menir"),
+            ("reject", "Total bahan reject"),
+        ):
+            fakta.append((judul, _kg(komposisi_total.get(jenis, 0.0))))
+        if komposisi_total.get("belum_dikenal", 0.0) > 0.01:
+            fakta.append(("Bahan belum teridentifikasi",
+                          _kg(komposisi_total["belum_dikenal"])))
+        if ditambah > 0.001:
+            fakta.append(("Ditambah saat proses", _kg(ditambah)))
         if tertahan >= 60:
             fakta.append(("Tertahan", f"{tertahan / 3600:.1f} jam"))
 

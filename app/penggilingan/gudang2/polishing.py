@@ -36,28 +36,34 @@ from app.services.jasa import (
     pemilik_silo_g2,
 )
 from app.services.notification import create_notification
-from app.penggilingan.gudang2.service import Gudang2Error, get_g2_silo, hitung_stok_silo
+from app.penggilingan.gudang2.service import (
+    Gudang2Error, get_g2_silo, hitung_stok_silo, komposisi_bahan_silo,
+)
 
 # Jenis output yang dikenal.
 GRADES = ["sayur", "medium", "medsuper", "premium", "beras_b"]
 BYPRODUCTS = ["menir", "broken", "bekatul", "reject"]
 _ALL_JENIS = set(GRADES) | set(BYPRODUCTS)
-_KODE_KOMODITAS_SILO = {
-    "pk": "beras_pk", "beras": "beras_olah_ulang",
-    # Silo G2 baru memakai `campuran` sebagai metadata umum. Nilai itu tidak
-    # menyatakan komoditas fisik dan memang bukan kode komoditas `hmu_core`;
-    # saat dicatat sebagai bahan proses, pakai kategori beras olah ulang yang
-    # sama dengan alias historis `beras`.
-    "campuran": "beras_olah_ulang",
+_KODE_ARUS_BAHAN = {
+    "pk": "beras_pk", "beras_putih": "beras_olah_ulang",
     "broken": "broken", "menir": "menir", "reject": "reject",
-    "bekatul": "bekatul",
 }
 
 
-def _produk_bahan_silo(silo: Silo):
-    """Identitas proses untuk metadata jenis isi silo Gudang 2."""
-    kode = (silo.jenis_isi or "").strip().lower()
-    return buat_produk(_KODE_KOMODITAS_SILO.get(kode, kode))
+def _arus_dari_komposisi(silo: Silo, komposisi: dict[str, float]) -> list[ArusProses]:
+    """Satu arus proses untuk setiap bahan nyata, bukan jenis metadata silo."""
+    hasil = []
+    for jenis, kg in komposisi.items():
+        if kg <= 0.01:
+            continue
+        komoditas = _KODE_ARUS_BAHAN.get(jenis)
+        if not komoditas:
+            continue
+        hasil.append(ArusProses(
+            produk=buat_produk(komoditas), berat_kg=Decimal(str(kg)),
+            referensi=f"{silo.nama_silo} · {jenis}", lokasi_id=silo.id,
+        ))
+    return hasil
 
 
 # ─────────────────────────── Mulai ───────────────────────────
@@ -155,13 +161,14 @@ async def mulai_penyosohan(
         ))
     from app.services.proses_bersama import bentuk_proses, simpan_proses_bersama
     bahan_bersama_list = []
+    rincian_bahan: dict[str, dict[str, float]] = {}
     for silo in silos:
         berat_silo = await hitung_stok_silo(db, silo.id)
-        bahan_bersama_list.append(ArusProses(
-            produk=_produk_bahan_silo(silo),
-            berat_kg=Decimal(str(berat_silo)),
-            referensi=silo.nama_silo, lokasi_id=silo.id,
-        ))
+        komposisi = await komposisi_bahan_silo(
+            db, silo.id, sampai=now, target_kg=berat_silo,
+        )
+        rincian_bahan[silo.nama_silo] = komposisi
+        bahan_bersama_list.extend(_arus_dari_komposisi(silo, komposisi))
     bahan_bersama = tuple(bahan_bersama_list)
     await simpan_proses_bersama(
         db,
@@ -173,7 +180,8 @@ async def mulai_penyosohan(
             referensi_asal=tuple(a.referensi for a in bahan_bersama),
         ),
         tabel_sumber="polishing_process", id_sumber=proc.id,
-        metadata_domain={"silo_ids": [s.id for s in silos]},
+        metadata_domain={"silo_ids": [s.id for s in silos],
+                         "komposisi_bahan": rincian_bahan},
     )
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="INSERT",
@@ -323,18 +331,31 @@ async def tambah_silo_penyosohan(
         .order_by(PolishingSiloUsage.id)
     )).all()
     from app.services.proses_bersama import perbarui_bahan_proses_bersama
+    rincian_bahan = {}
+    arus_bahan = []
+    for usage, silo in semua_bahan:
+        total = float(usage.berat_awal_kg or 0) + float(usage.berat_masuk_kg or 0)
+        komposisi = await komposisi_bahan_silo(
+            db, silo.id, sampai=now, kecuali_proses_id=proc.id,
+            target_kg=total,
+        )
+        rincian_bahan[silo.nama_silo] = komposisi
+        arus_bahan.extend(_arus_dari_komposisi(silo, komposisi))
     await perbarui_bahan_proses_bersama(
         db, tabel_sumber="polishing_process", id_sumber=proc.id,
-        bahan=tuple(
-            ArusProses(
-                produk=_produk_bahan_silo(silo),
-                berat_kg=Decimal(str(float(usage.berat_awal_kg)
-                                     + float(usage.berat_masuk_kg or 0))),
-                referensi=silo.nama_silo, lokasi_id=silo.id,
-            )
-            for usage, silo in semua_bahan
-        ),
+        bahan=tuple(arus_bahan),
     )
+    from sqlalchemy import select
+    from hmu_core.proses_db import ProsesTerpadu
+    proyeksi = (await db.execute(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "produksi",
+        ProsesTerpadu.tabel_sumber == "polishing_process",
+        ProsesTerpadu.id_sumber == str(proc.id),
+    ).with_for_update())).scalar_one_or_none()
+    if proyeksi is not None:
+        proyeksi.metadata_domain = {
+            **(proyeksi.metadata_domain or {}), "komposisi_bahan": rincian_bahan,
+        }
     await log_activity(
         db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
         changed_by=user.id, field_name="silo",
