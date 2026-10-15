@@ -36,7 +36,7 @@
 
 <div class="riwayat-list">
 {% for k in kartu %}
-  <div class="padat padat--diam padat--pindah_pk">
+  <div class="padat padat--diam padat--pindah_pk" role="link" tabindex="0" onclick="location.href='/riwayat-transfer/{{ k.id }}'" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.href='/riwayat-transfer/{{ k.id }}'}">
     <div>
       <div class="padat__atas">
         <span class="padat__nama padat__nama--kode">
@@ -92,7 +92,7 @@
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
-      <summary class="riwayat-desktop-grid riwayat-desktop-grid--transfer">
+      <summary class="riwayat-desktop-grid riwayat-desktop-grid--transfer" onclick="event.preventDefault();location.href='/riwayat-transfer/{{ k.id }}'">
         <span class="riwayat-desktop-lot">
           <strong><a href="/riwayat-transfer/{{ k.id }}">{{ k.kode }}</a></strong>
           <small>{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}</small>
@@ -103,7 +103,7 @@
         <span>{{ k.tujuan or "—" }}</span>
         <span class="riwayat-desktop-number">{{ kg(k.berat_kg) }} kg</span>
         <span><span class="riwayat-status {{ 'riwayat-status--cancel' if k.dibatalkan else 'riwayat-status--done' }}">{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</span></span>
-        <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
+        <span class="riwayat-row-action">Detail →</span>
       </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}

@@ -42,9 +42,9 @@
   {# Laci terbuka untuk Mode dryer & Lama kering juga — bukan cuma bahan.
      Nyaris selalu ada batch asal, tapi kartu tak boleh kehilangan satu-
      satunya jalan melihat keduanya pada hari langka yang bahannya kosong. #}
-  {% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
-  <{{ "details" if laci else "div" }} class="padat{{ "" if laci else " padat--diam" }} padat--dryer">
-  <{{ "summary" if laci else "div" }}>
+{% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
+  <details class="padat padat--dryer">
+  <summary onclick="event.preventDefault();location.href='/riwayat-pengeringan/{{ k.id }}'">
     <div class="padat__atas">
       <span class="padat__nama padat__nama--kode">
         <a href="/riwayat-pengeringan/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode_lot }}</a> · {{ k.selesai_dingin|jam("%d/%m") or k.mulai|jam("%d/%m") }}
@@ -94,7 +94,7 @@
         <span>Belum dipindah ke silo.</span>
       </div>
     {% endif %}
-  </{{ "summary" if laci else "div" }}>
+  </summary>
 
   {% if laci %}
     <div class="anak">
@@ -136,7 +136,7 @@
       </div>
     </div>
   {% endif %}
-  </{{ "details" if laci else "div" }}>
+  </details>
 {% endfor %}
 </div>
 
@@ -157,7 +157,7 @@
   {% for k in kartu %}
     {% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
     <details class="riwayat-desktop-row" {% if not laci %}data-no-details="true"{% endif %}>
-      <summary class="riwayat-desktop-grid">
+      <summary class="riwayat-desktop-grid" onclick="event.preventDefault();location.href='/riwayat-pengeringan/{{ k.id }}'">
         <span class="riwayat-desktop-lot">
           <strong><a href="/riwayat-pengeringan/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode_lot }}</a></strong>
           <small>{{ k.selesai_dingin|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") or "—" }}</small>
@@ -172,7 +172,7 @@
           {% if k.silo_tujuan %}<span class="riwayat-status riwayat-status--done">Di {{ k.silo_tujuan }}</span>
           {% else %}<span class="riwayat-status riwayat-status--wait">Belum ke silo</span>{% endif %}
         </span>
-        <span class="riwayat-desktop-toggle" aria-hidden="true">⌄</span>
+        <span class="riwayat-row-action">Detail →</span>
       </summary>
       {% if laci %}
         <div class="riwayat-desktop-detail">
