@@ -136,6 +136,7 @@
         {% else %}
           <p class="riwayat-detail__empty">Gunakan bila ada angka hasil yang salah. Perubahan tercatat di riwayat aktivitas dan langsung memperbarui neraca serta data proses terkait.</p>
           <form method="post" action="/riwayat-sosoh/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
             {% if output_logs %}
               <h3>Catatan hasil yang sudah ada</h3>
               {% for row in output_logs %}
