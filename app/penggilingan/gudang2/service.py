@@ -2083,7 +2083,7 @@ class MasukkanBerasResult:
 async def masukkan_beras_ke_silo(
     db: AsyncSession, *, user: User, kode_pol: str | None, jenis: str | None,
     nama_silo: str | None, berat_kg: float | None, jasa_id: int | None = None,
-    tanggal=None, jam=None,
+    sumber_stok: str | None = None, tanggal=None, jam=None,
 ) -> MasukkanBerasResult:
     """Masukkan beras (grade) jadi bahan baku silo — dua pintu, keputusan
     pemilik 8 Oktober 2026 ("satu lagi... Silo Beras... bisa diisi beras
@@ -2105,11 +2105,11 @@ async def masukkan_beras_ke_silo(
     mesin yang sungguh tercatat), jadi menjadikannya syarat di sini akan
     membuat pintu Silo A/B tak pernah bisa dibuka sama sekali.
 
-    Sumbernya curah dulu (DIHITUNG, bukan FIFO atas baris — beras tak punya
-    tabel curah tersendiri, lihat `stok.beras_curah`), lalu BONGKAR KARUNG
-    bila kurang. Sebangun `masukkan_broken_ke_silo` (pola pagar & urutan
-    commit yang sama), tapi sumbernya BUKAN baris `byproduct_stock`: lihat
-    docstring `BerasKeSilo` untuk kenapa.
+    Operator memilih sumber yang dipindahkan: curah dihitung dari hasil
+    proses, atau satu ukuran SKU kemasan. Pemilihan ini mencegah aplikasi
+    mengambil bentuk stok lain diam-diam; kemasan hanya boleh dipindahkan
+    dalam kelipatan ukuran saknya. Tanpa pilihan eksplisit, pemanggil lama
+    tetap memakai urutan curah lalu kemasan.
 
     ⚠ `kode_pol` WAJIB — TIDAK ADA fallback "proses terbaru", alasan yang
     sama dengan `masukkan_broken_ke_silo`.
@@ -2119,7 +2119,8 @@ async def masukkan_beras_ke_silo(
     Oktober 2026 secara eksplisit sama: "karung bekasnya tidak dihitung,
     dianggap rusak."
     """
-    from app.penggilingan.inventory.finished_goods import _packed_kg, _proc_by_kode, get_standard
+    from app.penggilingan.inventory.finished_goods import (
+        _packed_kg, _proc_by_kode, get_standard, sisa_karung_per_sumber)
     from app.penggilingan.inventory.models import FinishedGoodsStock, PackageSize, ProductSku
     from app.services.stok import BERAS_JENIS, _dipindah_silo_proc, output_sosoh
 
@@ -2182,23 +2183,85 @@ async def masukkan_beras_ke_silo(
     now = input_time(tanggal, jam)
     std = await get_standard(db, jenis)
 
-    # ── Langkah 1 · curah, DIHITUNG (bukan FIFO atas baris) ──
+    # ── Sumber stok dipilih operator; jangan diam-diam mengambil jenis lain ──
     #
     # Curah HANYA milik `proc.jasa_id` sendiri — curah beras tak punya jalur
     # "pindah kepemilikan" seperti broken/bekatul (`jasa_id` di sini boleh
     # berbeda dari `proc.jasa_id` HANYA untuk belahan kemasan, yang memang
     # bisa berpindah tangan lewat `pindah_kepemilikan_barang_jadi`).
+    sumber_stok = (sumber_stok or "").strip()
     curah_tersedia = 0.0
-    if jasa_id == proc.jasa_id:
+    if jasa_id == proc.jasa_id and sumber_stok in ("", "curah"):
         hasil_kg = (await output_sosoh(db, proc.id)).get(jenis, 0.0)
         dikemas_total = await _packed_kg(db, proc.id, "beras_putih",
                                          std.id if std else None)
         sudah_pindah = (await _dipindah_silo_proc(db, [proc.id])).get(
             (proc.id, jenis), 0.0)
         curah_tersedia = max(0.0, float(hasil_kg) - dikemas_total - sudah_pindah)
-    ambil_curah = min(berat_kg, curah_tersedia)
-    kekurangan = berat_kg - ambil_curah
+    ambil_curah = 0.0
     dibongkar_kg = 0.0
+
+    if sumber_stok == "curah":
+        if berat_kg > curah_tersedia + 0.01:
+            raise Gudang2Error(
+                f"Stok curah {proc.kode_proses} tinggal {curah_tersedia:,.2f} kg; "
+                f"tak bisa memasukkan {berat_kg:,.2f} kg.".replace(",", "."))
+        ambil_curah = berat_kg
+    elif sumber_stok.startswith("sku:"):
+        try:
+            sku_id = int(sumber_stok.partition(":")[2])
+        except ValueError:
+            raise Gudang2Error("Pilih bentuk stok beras yang tersedia.") from None
+        sku = await db.get(ProductSku, sku_id)
+        if sku is None or sku.kategori != "beras_putih":
+            raise Gudang2Error("Ukuran kemasan beras yang dipilih tidak dikenal.")
+        ukuran = (await db.execute(
+            select(PackageSize.ukuran_kg)
+            .where(PackageSize.id == sku.package_size_id)
+        )).scalar_one_or_none()
+        if not ukuran or float(ukuran) <= 0:
+            raise Gudang2Error("Ukuran kemasan beras tidak valid.")
+        jumlah_karung = round(berat_kg / float(ukuran))
+        berat_kemasan = jumlah_karung * float(ukuran)
+        if jumlah_karung <= 0 or abs(berat_kemasan - berat_kg) > 0.01:
+            raise Gudang2Error(
+                f"Berat dari kemasan {float(ukuran):g} kg harus kelipatan ukuran tersebut.")
+        sumber = await sisa_karung_per_sumber(
+            db, sku_id, std.id if std else None, jasa_id=jasa_id,
+            proses_id=proc.id, kunci=True)
+        karung_tersedia = sum(j for _, j, _ in sumber)
+        if jumlah_karung > karung_tersedia:
+            raise Gudang2Error(
+                f"Kemasan {float(ukuran):g} kg di {proc.kode_proses} tinggal "
+                f"{karung_tersedia} karung; tak cukup untuk {jumlah_karung} karung.")
+        sisa_karung = jumlah_karung
+        for row, tersedia, _ in sumber:
+            ambil = min(sisa_karung, tersedia)
+            if ambil <= 0:
+                continue
+            kg_per_karung = float(ukuran)
+            row.jumlah_karung -= ambil
+            row.berat_total_kg = float(row.berat_total_kg) - kg_per_karung * ambil
+            if row.jumlah_karung <= 0:
+                await db.delete(row)
+            sisa_karung -= ambil
+            if sisa_karung <= 0:
+                break
+        dibongkar_kg = berat_kemasan
+        await log_activity(
+            db, table_name="finished_goods_stock", record_id=proc.id, action="UPDATE",
+            changed_by=user.id, aksi="beras_bongkar_karung",
+            new_value=(f"{proc.kode_proses} {jenis}: {dibongkar_kg:,.0f} kg "
+                       f"({jumlah_karung} karung {float(ukuran):g} kg) dipindah ke silo")
+                      .replace(",", "."),
+        )
+    elif sumber_stok:
+        raise Gudang2Error("Pilih bentuk stok beras yang tersedia.")
+
+    kekurangan = 0.0 if sumber_stok else berat_kg - ambil_curah
+    if not sumber_stok:
+        ambil_curah = min(berat_kg, curah_tersedia)
+        kekurangan = berat_kg - ambil_curah
 
     # ── Langkah 2 · kurang? bongkar karung FIFO, SEUKURAN karung penuh ──
     if kekurangan > 0.5:

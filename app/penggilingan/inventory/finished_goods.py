@@ -643,6 +643,60 @@ async def hitung_stok_finished_goods(
     return {"karung": int(mk) - int(ok), "kg": float(mkg) - float(okg)}
 
 
+async def sisa_karung_per_sumber(
+    db: AsyncSession, sku_id: int, standard_id: int | None, *,
+    jasa_id: int | None = None, proses_id: int | None = None,
+    kunci: bool = False,
+) -> list[tuple[FinishedGoodsStock, int, float]]:
+    """Sisa karung per baris sumber setelah barang keluar dialokasikan FIFO.
+
+    Stok barang jadi menyimpan baris masuk, sedangkan pengiriman dicatat di
+    tabel lain. Agar pemilihan ukuran kemasan tidak menawarkan karung yang
+    sudah dikirim, jumlah keluar untuk SKU/pemilik itu dialokasikan ke baris
+    masuk tertua, sama urutannya dengan FIFO yang dipakai saat mengosongkan
+    stok. `proses_id` hanya menyaring hasil setelah alokasi global tersebut.
+    """
+    def milik(kolom):
+        return kolom.is_(None) if jasa_id is None else kolom == jasa_id
+
+    q = select(FinishedGoodsStock).where(
+        FinishedGoodsStock.product_sku_id == sku_id,
+        FinishedGoodsStock.source_type == "polishing",
+        milik(FinishedGoodsStock.jasa_id),
+    )
+    if standard_id is None:
+        q = q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
+    else:
+        q = q.where(FinishedGoodsStock.rice_quality_standard_id == standard_id)
+    rows = (await db.execute(q.order_by(FinishedGoodsStock.waktu,
+                                       FinishedGoodsStock.id)
+                             .with_for_update() if kunci else
+                             q.order_by(FinishedGoodsStock.waktu,
+                                        FinishedGoodsStock.id))).scalars().all()
+    keluar_q = select(func.coalesce(func.sum(OutgoingItem.jumlah_karung), 0)).where(
+        OutgoingItem.item_type == "finished_goods",
+        OutgoingItem.product_sku_id == sku_id,
+        milik(OutgoingItem.jasa_id),
+    )
+    if standard_id is None:
+        keluar_q = keluar_q.where(OutgoingItem.rice_quality_standard_id.is_(None))
+    else:
+        keluar_q = keluar_q.where(OutgoingItem.rice_quality_standard_id == standard_id)
+    keluar = max(0, int((await db.execute(keluar_q)).scalar_one()))
+    hasil: list[tuple[FinishedGoodsStock, int, float]] = []
+    for row in rows:
+        terpakai = min(max(int(row.jumlah_karung), 0), keluar)
+        keluar -= terpakai
+        tersedia = max(int(row.jumlah_karung) - terpakai, 0)
+        if proses_id is not None and row.source_id != proses_id:
+            continue
+        if tersedia:
+            per_karung = (float(row.berat_total_kg) / row.jumlah_karung
+                          if row.jumlah_karung else 0.0)
+            hasil.append((row, tersedia, per_karung * tersedia))
+    return hasil
+
+
 # ─────────────── Pindah kepemilikan — titipan jadi milik pabrik ───────────────
 #
 # Keputusan pemilik 6 Oktober 2026, halaman "Produk Jasa": *"nanti bisa
