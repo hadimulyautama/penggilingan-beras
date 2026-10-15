@@ -42,6 +42,15 @@
   .qc-history-values{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
+/* Tabel QC memakai dua kolom yang sama pada seluruh jenis riwayat. */
+.qc-history-values{display:table;width:100%;border-collapse:collapse;table-layout:fixed;background:var(--kulit-kartu);color:var(--tinta)}
+.qc-history-values th,.qc-history-values td{padding:9px 11px;border-bottom:1px solid var(--kulit-pemisah);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.qc-history-values thead th{background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
+.qc-history-values tbody th{width:42%;font-weight:600}
+.qc-history-values tbody td{font-variant-numeric:tabular-nums}
+.qc-history-values tbody tr:last-child th,.qc-history-values tbody tr:last-child td{border-bottom:0}
+@media(max-width:700px){.qc-history-values th,.qc-history-values td{padding:8px 9px;font-size:.82rem}.qc-history-values thead th{font-size:.66rem}}
+
 /* Riwayat Pengeringan desktop: the header and every clickable row use the
    same grid, preventing the column drift seen when independent widths were
    used for table headings and card contents. Mobile keeps the original cards. */
