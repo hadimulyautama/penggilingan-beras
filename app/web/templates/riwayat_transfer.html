@@ -88,7 +88,6 @@
     <span>Tujuan</span>
     <span class="riwayat-desktop-number">Berat</span>
     <span>Status transfer</span>
-    <span></span>
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
@@ -103,7 +102,6 @@
         <span>{{ k.tujuan or "—" }}</span>
         <span class="riwayat-desktop-number">{{ kg(k.berat_kg) }} kg</span>
         <span><span class="riwayat-status {{ 'riwayat-status--cancel' if k.dibatalkan else 'riwayat-status--done' }}">{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</span></span>
-        <span class="riwayat-row-action">Detail →</span>
       </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}

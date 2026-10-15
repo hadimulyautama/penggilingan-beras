@@ -46,10 +46,10 @@
    same grid, preventing the column drift seen when independent widths were
    used for table headings and card contents. Mobile keeps the original cards. */
 .riwayat-desktop-list{display:none}
-.riwayat-desktop-grid{--riwayat-grid:minmax(185px,1.35fr) minmax(110px,.85fr) minmax(100px,.75fr) minmax(105px,.75fr) minmax(82px,.6fr) minmax(125px,.95fr) minmax(120px,.85fr) minmax(125px,.95fr) 26px;display:grid;grid-template-columns:var(--riwayat-grid);align-items:center;gap:0;width:100%;box-sizing:border-box}
-.riwayat-desktop-grid--giling{--riwayat-grid:minmax(185px,1.3fr) minmax(145px,1fr) minmax(105px,.75fr) minmax(90px,.7fr) minmax(100px,.8fr) minmax(85px,.65fr) minmax(82px,.6fr) minmax(135px,1fr) minmax(100px,.75fr) 26px;min-width:1220px}
-.riwayat-desktop-grid--sosoh{--riwayat-grid:minmax(180px,1.25fr) minmax(140px,1fr) minmax(105px,.75fr) minmax(95px,.75fr) minmax(95px,.75fr) minmax(105px,.85fr) minmax(80px,.6fr) minmax(88px,.65fr) minmax(110px,.85fr) 26px;min-width:1200px}
-.riwayat-desktop-grid--transfer{--riwayat-grid:minmax(170px,1.2fr) minmax(140px,1fr) minmax(95px,.7fr) minmax(140px,1fr) minmax(110px,.8fr) minmax(100px,.75fr) minmax(120px,.85fr) 26px;min-width:1120px}
+.riwayat-desktop-grid{--riwayat-grid:minmax(185px,1.35fr) minmax(110px,.85fr) minmax(100px,.75fr) minmax(105px,.75fr) minmax(82px,.6fr) minmax(125px,.95fr) minmax(120px,.85fr) minmax(125px,.95fr);display:grid;grid-template-columns:var(--riwayat-grid);align-items:center;gap:0;width:100%;box-sizing:border-box}
+.riwayat-desktop-grid--giling{--riwayat-grid:minmax(185px,1.3fr) minmax(140px,1fr) minmax(100px,.75fr) minmax(90px,.7fr) minmax(100px,.8fr) minmax(85px,.65fr) minmax(82px,.6fr) minmax(135px,1fr);min-width:1020px}
+.riwayat-desktop-grid--sosoh{--riwayat-grid:minmax(180px,1.25fr) minmax(140px,1fr) minmax(105px,.75fr) minmax(95px,.75fr) minmax(95px,.75fr) minmax(105px,.85fr) minmax(80px,.6fr) minmax(88px,.65fr) minmax(110px,.85fr);min-width:1120px}
+.riwayat-desktop-grid--transfer{--riwayat-grid:minmax(170px,1.2fr) minmax(140px,1fr) minmax(95px,.7fr) minmax(140px,1fr) minmax(110px,.8fr) minmax(100px,.75fr) minmax(120px,.85fr);min-width:980px}
 .riwayat-desktop-head{min-height:48px;padding:0 10px;border:1px solid var(--kulit-batas);border-radius:12px 12px 0 0;background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
 .riwayat-desktop-head>span,.riwayat-desktop-row summary>span{min-width:0;padding:9px 8px;overflow-wrap:anywhere}
 .riwayat-desktop-number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -82,8 +82,8 @@
 .riwayat-desktop-batch>span{text-align:right;font-variant-numeric:tabular-nums}
 .riwayat-desktop-batch small{text-align:right}
 .riwayat-desktop-detail>.btn{justify-self:start}
-@media(min-width:900px){.riwayat-list{display:none}.riwayat-desktop-list{display:block;margin:0 0 18px;overflow-x:auto;border-radius:12px}.riwayat-desktop-grid{min-width:1080px}}
-@media(min-width:900px) and (max-width:1200px){.riwayat-desktop-grid{--riwayat-grid:minmax(165px,1.2fr) minmax(95px,.7fr) minmax(88px,.65fr) minmax(98px,.7fr) minmax(76px,.55fr) minmax(110px,.85fr) minmax(108px,.8fr) minmax(116px,.9fr) 24px}}
+@media(min-width:900px){.riwayat-list{display:none}.riwayat-desktop-list{display:block;margin:0 0 18px;overflow-x:auto;border-radius:12px}.riwayat-desktop-grid{min-width:980px}}
+@media(min-width:900px) and (max-width:1200px){.riwayat-desktop-grid{--riwayat-grid:minmax(165px,1.2fr) minmax(95px,.7fr) minmax(88px,.65fr) minmax(98px,.7fr) minmax(76px,.55fr) minmax(110px,.85fr) minmax(108px,.8fr) minmax(116px,.9fr)}}
 
 /* Detail page shared by every completed process history. */
 .riwayat-detail{display:grid;gap:16px;max-width:1180px;margin:0 auto 24px;color:var(--tinta)}

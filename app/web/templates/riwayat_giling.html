@@ -142,7 +142,7 @@
 <div class="riwayat-desktop-list" aria-label="Daftar riwayat penggilingan">
   <div class="riwayat-desktop-grid riwayat-desktop-grid--giling riwayat-desktop-head" aria-hidden="true">
     <span>Lot / selesai</span><span>Nama pemilik</span><span>Status jasa</span><span>Bahan</span><span>Hasil PK</span>
-    <span>Rendemen</span><span>Kondisi</span><span>Mutu</span><span>Tersedia</span><span></span>
+    <span>Rendemen</span><span>Kondisi</span><span>Mutu</span>
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
@@ -155,8 +155,6 @@
         <span>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</span>
         <span>{{ k.kelas or "—" }}</span>
         <span>{{ k.mutu or "Belum dinilai" }}</span>
-        <span class="riwayat-desktop-number">{{ kg(k.tersedia_kg) }} kg</span>
-        <span class="riwayat-row-action">Detail →</span>
       </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %} — digiling lalu dikembalikan, bukan dijual</span></div>{% endif %}

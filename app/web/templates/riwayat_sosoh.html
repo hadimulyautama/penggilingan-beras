@@ -258,7 +258,7 @@
 <div class="riwayat-desktop-list" aria-label="Daftar riwayat penyosohan">
   <div class="riwayat-desktop-grid riwayat-desktop-grid--sosoh riwayat-desktop-head" aria-hidden="true">
     <span>Proses / selesai</span><span>Nama pemilik</span><span>Status jasa</span><span>Bahan PK</span><span>Beras</span>
-    <span>Hasil samping</span><span>Susut</span><span>Rendemen</span><span>Dijalankan</span><span></span>
+    <span>Hasil samping</span><span>Susut</span><span>Rendemen</span><span>Dijalankan</span>
   </div>
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
@@ -272,7 +272,6 @@
         <span class="riwayat-desktop-number">{{ kg(k.neraca.susut.kg) }} kg</span>
         <span>{{ psn(k.rendemen) }}</span>
         <span>{{ k.oleh }}</span>
-        <span class="riwayat-row-action">Detail →</span>
       </summary>
       <div class="riwayat-desktop-detail">
         {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>{% endif %}

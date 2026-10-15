@@ -152,7 +152,6 @@
     <span>Kadar air terakhir</span>
     <span class="riwayat-desktop-number">Bahan basah</span>
     <span>Status silo</span>
-    <span></span>
   </div>
   {% for k in kartu %}
     {% set laci = k.bahan|length > 0 or k.mode_dryer or k.lama_kering %}
@@ -172,7 +171,6 @@
           {% if k.silo_tujuan %}<span class="riwayat-status riwayat-status--done">Di {{ k.silo_tujuan }}</span>
           {% else %}<span class="riwayat-status riwayat-status--wait">Belum ke silo</span>{% endif %}
         </span>
-        <span class="riwayat-row-action">Detail →</span>
       </summary>
       {% if laci %}
         <div class="riwayat-desktop-detail">
