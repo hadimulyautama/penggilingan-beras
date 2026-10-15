@@ -670,9 +670,9 @@ class LotPkG2:
 
     Padanan `LotPk` untuk Gudang 2: satuannya KODE BAHAN (satu pemasukan =
     satu kartu), bukan lagi satu tempat penyimpanan beranak — lihat alasannya
-    di atas. Tiap kartu sudah tahu asalnya SENDIRI (satu PKB atau satu
-    transfer G1), jadi tak ada lagi "batch asal" yang perlu dilipat seperti
-    di Gudang 1: kartu ini tak berlaci.
+    di atas. Tiap kartu tahu asal pemasukan PK-nya (satu PKB atau satu
+    transfer G1). Untuk transfer dari giling sendiri, daftar batch gabah
+    proses asal tetap tersedia agar asal bahan bisa dibaca di halaman detail.
     """
 
     #: "Kelompok Tani Sumber Rejeki · PKB-20261004-03", atau
@@ -724,6 +724,9 @@ class LotPkG2:
     #: kondisi gabah sumbernya, sama seperti `LotPk.kelas` di Gudang 1, dan
     #: harus menjawab SAMA dengan yang digambar kartu lot asalnya di sana.
     kelas: str | None = None
+    #: Batch gabah sumber proses giling sendiri, untuk ditampilkan pada
+    #: halaman detail stok Gudang 2.
+    bahan: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
@@ -896,13 +899,13 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             judul = f"Giling sendiri · {kode}" if kode else "Giling sendiri"
             proc = proc_dari_transfer.get(i.internal_transfer_id)
             mutu = peta_mutu_giling.get(proc.id, []) if proc else []
-            _, kondisi = peta_bahan_giling.get(proc.id, ([], [])) if proc else ([], [])
+            bahan, kondisi = peta_bahan_giling.get(proc.id, ([], [])) if proc else ([], [])
             kelas = kelas_pk(kondisi)
         elif i.pk_purchase_batch_id:
             kode_batch, nama, kelas = batch_info.get(
                 i.pk_purchase_batch_id, ("?", None, None))
             judul = f"{nama or '?'} · {kode_batch}"
-            mutu = []
+            bahan, mutu = [], []
             v = verif_info.get(i.pk_purchase_batch_id)
             if v is not None:
                 for label, nilai in (("Kadar air", v.kadar_air),
@@ -917,7 +920,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
                 if v.catatan_lab:
                     mutu.append(("Catatan lab", v.catatan_lab))
         else:
-            judul, mutu, kelas = "PK", [], None  # baris peninggalan tanpa penunjuk
+            judul, bahan, mutu, kelas = "PK", [], [], None  # baris peninggalan tanpa penunjuk
 
         nilai_kualitas, komponen_kualitas = _nilai_kualitas(mutu)
         keluar.append(LotPkG2(
@@ -928,7 +931,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             mutu=mutu, nilai_kualitas=nilai_kualitas,
             komponen_kualitas=komponen_kualitas,
             kelas_kualitas=_kelas_kualitas(nilai_kualitas),
-            intake_id=i.id, berat_awal=berat_awal, kelas=kelas,
+            intake_id=i.id, berat_awal=berat_awal, kelas=kelas, bahan=bahan,
         ))
     return keluar
 

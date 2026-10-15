@@ -73,6 +73,24 @@ async def halaman_riwayat_giling(request: Request, akun=Depends(butuh_akun)):
     )
 
 
+@router.get("/riwayat-giling/{process_id}")
+async def detail_riwayat_giling(process_id: int, request: Request,
+                               akun=Depends(butuh_akun)):
+    from app.web.api import _is_g1_operator
+    if not await _is_g1_operator(akun.user):
+        raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
+    from app.penggilingan.gudang1.services.milling import riwayat_giling
+    async with SessionLocal() as db:
+        kartu, _ = await riwayat_giling(db, batas=1, process_id=process_id)
+    if not kartu:
+        raise HTTPException(404, "Riwayat penggilingan tidak ditemukan.")
+    return await render_laci(
+        request, "riwayat_detail.html", jenis="giling", k=kartu[0],
+        kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
+        layar="riwayat_giling",
+    )
+
+
 def _pdf_laporan_giling(data: dict) -> bytes:
     """Susun laporan lengkap satu proses penggilingan sebagai PDF."""
     from reportlab.lib import colors
@@ -532,6 +550,24 @@ async def halaman_riwayat_pengeringan(request: Request, akun=Depends(butuh_akun)
     )
 
 
+@router.get("/riwayat-pengeringan/{lot_id}")
+async def detail_riwayat_pengeringan(lot_id: int, request: Request,
+                                     akun=Depends(butuh_akun)):
+    from app.web.api import _is_g1_operator
+    if not await _is_g1_operator(akun.user):
+        raise HTTPException(403, "Riwayat Pengeringan milik Admin ke atas dan operator Gudang 1.")
+    from app.penggilingan.gudang1.services.drying import riwayat_pengeringan
+    async with SessionLocal() as db:
+        kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id)
+    if not kartu:
+        raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
+    return await render_laci(
+        request, "riwayat_detail.html", jenis="pengeringan", k=kartu[0],
+        kembali="/riwayat-pengeringan", breadcrumb_detail=kartu[0].kode_lot,
+        layar="riwayat_pengeringan",
+    )
+
+
 def _pdf_pengeringan(data: dict) -> bytes:
     """Susun laporan satu lot pengeringan sebagai PDF siap unduh."""
     from reportlab.lib import colors
@@ -842,6 +878,24 @@ async def halaman_riwayat_transfer(request: Request, akun=Depends(butuh_akun)):
         kartu=kartu, lagi=lagi, SEKALI=SEKALI,
         sesudah=(kartu[-1].id if kartu and lagi else None),
         dari_awal=bool(sebelum_id),
+    )
+
+
+@router.get("/riwayat-transfer/{transfer_id}")
+async def detail_riwayat_transfer(transfer_id: int, request: Request,
+                                  akun=Depends(butuh_akun)):
+    from app.web.api import _is_g1_operator
+    if not await _is_g1_operator(akun.user):
+        raise HTTPException(403, "Riwayat Transfer milik Admin ke atas dan operator Gudang 1.")
+    from app.services.transfer import riwayat_transfer
+    async with SessionLocal() as db:
+        kartu, _ = await riwayat_transfer(db, batas=1, transfer_id=transfer_id)
+    if not kartu:
+        raise HTTPException(404, "Riwayat transfer tidak ditemukan.")
+    return await render_laci(
+        request, "riwayat_detail.html", jenis="transfer", k=kartu[0],
+        kembali="/riwayat-transfer", breadcrumb_detail=kartu[0].kode,
+        layar="riwayat_transfer",
     )
 
 

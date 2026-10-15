@@ -2058,7 +2058,8 @@ class KartuGiling:
 
 
 async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
-                         sebelum: int | None = None
+                         sebelum: int | None = None,
+                         process_id: int | None = None
                          ) -> tuple[list[KartuGiling], bool]:
     """Kartu giling SELESAI, terbaru lebih dulu. → (kartu, ada lanjutannya)
 
@@ -2080,6 +2081,8 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
          .where(MillingProcess.status == "selesai")
          .order_by(MillingProcess.id.desc())
          .limit(batas + 1))
+    if process_id is not None:
+        q = q.where(MillingProcess.id == process_id)
     if sebelum:
         q = q.where(MillingProcess.id < sebelum)
     proses = (await db.execute(q)).scalars().all()

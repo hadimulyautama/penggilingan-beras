@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% block judul %}{{ {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Riwayat Proses") }}{% endblock %}
+
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
+{% set judul = {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Proses") %}
+<main class="riwayat-detail">
+  <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke Riwayat {{ judul }}</a>
+
+  <section class="riwayat-detail__hero">
+    <div class="riwayat-detail__eyebrow">RIWAYAT PROSES · {{ judul|upper }}</div>
+    <h1>
+      {% if jenis == "pengeringan" %}{{ k.kode_lot }}
+      {% elif jenis == "giling" or jenis == "sosoh" %}{{ k.kode }}
+      {% else %}{{ k.kode }}{% endif %}
+    </h1>
+    <p>
+      {% if jenis == "pengeringan" %}Selesai pendinginan {{ k.selesai_dingin|jam("%d/%m/%Y %H:%M") or "—" }}
+      {% elif jenis == "giling" %}Selesai {{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}
+      {% elif jenis == "sosoh" %}Selesai {{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}
+      {% else %}{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}{% endif %}
+    </p>
+    {% if jenis == "pengeringan" and k.jasa or jenis == "giling" and k.jasa or jenis == "sosoh" and k.jasa or jenis == "transfer" and k.jasa %}
+      <span class="riwayat-status riwayat-status--jasa">Jasa · {{ k.nama_pemilik or "pemilik belum tercatat" }}</span>
+    {% else %}<span class="riwayat-status riwayat-status--pabrik">Milik pabrik</span>{% endif %}
+  </section>
+
+  {% if jenis == "pengeringan" %}
+    <section class="riwayat-detail__card">
+      <h2>Ringkasan pengeringan</h2>
+      <dl class="riwayat-detail__facts">
+        <div><dt>Dryer</dt><dd>{{ k.dryer_nama or "—" }}</dd></div>
+        <div><dt>Mode dryer</dt><dd>{{ k.mode_dryer or "—" }}</dd></div>
+        <div><dt>Bahan basah</dt><dd>{{ kg(k.bahan_kg) }} kg{% if not k.bahan_final %} · belum final{% endif %}</dd></div>
+        <div><dt>Target kadar air</dt><dd>{{ "%.1f"|format(k.target_kadar_air)|replace(".", ",") ~ "%" if k.target_kadar_air is not none else "—" }}</dd></div>
+        <div><dt>Kadar air terakhir</dt><dd>{{ k.ka_terakhir or "—" }}</dd></div>
+        <div><dt>Durasi pengeringan</dt><dd>{{ k.lama_kering or "—" }}</dd></div>
+        <div><dt>Durasi total</dt><dd>{{ k.lama_total or "—" }}</dd></div>
+        <div><dt>Mulai</dt><dd>{{ k.mulai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Selesai kering</dt><dd>{{ k.selesai_kering|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Selesai pendinginan</dt><dd>{{ k.selesai_dingin|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Status silo</dt><dd>{% if k.silo_tujuan %}Dipindah ke {{ k.silo_tujuan }}{% if k.waktu_masuk_silo %} · {{ k.waktu_masuk_silo|jam("%d/%m/%Y %H:%M") }}{% endif %}{% else %}Belum dipindah ke silo{% endif %}</dd></div>
+        {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
+      </dl>
+    </section>
+    <section class="riwayat-detail__card">
+      <h2>Asal bahan · {{ k.bahan|length }} batch</h2>
+      {% if k.bahan %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Pemasok / pemilik</span><span>Kode dan berat</span><span>Keterangan</span></div>
+        {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
+      </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk lot ini.</p>{% endif %}
+    </section>
+    <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+
+  {% elif jenis == "giling" %}
+    <section class="riwayat-detail__card">
+      <h2>Hasil dan status stok</h2>
+      <dl class="riwayat-detail__facts">
+        <div><dt>Bahan digiling</dt><dd>{{ kg(k.bahan_kg) }} kg</dd></div>
+        <div><dt>Hasil PK</dt><dd>{% if k.belum_dicatat %}Belum dicatat{% else %}{{ kg(k.hasil_kg) }} kg{% endif %}</dd></div>
+        <div><dt>Rendemen</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
+        <div><dt>Kondisi</dt><dd>{{ k.kelas or "—" }}</dd></div>
+        <div><dt>Mutu</dt><dd>{{ k.mutu or "Belum dinilai" }}</dd></div>
+        <div><dt>Sudah ditransfer</dt><dd>{{ kg(k.ditransfer_kg) }} kg</dd></div>
+        <div><dt>Tersedia</dt><dd>{{ kg(k.tersedia_kg) }} kg</dd></div>
+        <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
+        <div><dt>Mulai</dt><dd>{{ k.mulai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Selesai</dt><dd>{{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
+      </dl>
+      {% if k.belum_dicatat %}<p class="riwayat-detail__warning">Giling ditutup tanpa hasil tercatat; jumlah PK belum diketahui.</p>{% endif %}
+    </section>
+    <section class="riwayat-detail__card">
+      <h2>Asal bahan · {{ k.bahan|length }} batch</h2>
+      {% if k.bahan %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Batch / pemilik</span><span>Berat</span><span>Keterangan</span></div>
+        {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
+      </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk proses ini.</p>{% endif %}
+    </section>
+    <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+
+  {% elif jenis == "sosoh" %}
+    <section class="riwayat-detail__card">
+      <h2>Informasi proses</h2>
+      <dl class="riwayat-detail__facts">
+        <div><dt>Mulai</dt><dd>{{ k.mulai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Selesai</dt><dd>{{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
+        <div><dt>Dijalankan oleh</dt><dd>{{ k.oleh or "—" }}</dd></div>
+        <div><dt>Bahan PK</dt><dd>{{ kg(k.neraca.bahan_kg) }} kg</dd></div>
+        <div><dt>Rendemen beras</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
+        {% if k.spek %}<div><dt>Spek</dt><dd>{{ k.spek|join(", ") }}</dd></div>{% endif %}
+        {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
+      </dl>
+    </section>
+    <section class="riwayat-detail__card">
+      <h2>Neraca hasil</h2>
+      {% if k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) }} kg). Periksa catatan hasil.</p>{% endif %}
+      {% if k.neraca.bisa_dihitung %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
+        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.beras.nama }}</strong><span>{{ kg(k.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.beras.persen)|replace(".", ",") }}%</span></div>
+        {% for b in k.beras %}<div class="riwayat-detail__table-row"><strong class="riwayat-detail__indent">{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
+        {% for b in k.neraca.samping %}<div class="riwayat-detail__table-row"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
+        <div class="riwayat-detail__table-row"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.susut.persen)|replace(".", ",") if k.neraca.susut.persen is not none else "—" }}%</span></div>
+        <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(k.neraca.bahan_kg) }} kg</span><span>100%</span></div>
+      </div>{% else %}<p class="riwayat-detail__empty">Bahan PK belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
+    </section>
+    <section class="riwayat-detail__card">
+      <h2>Asal bahan baku · {{ k.silo|length }} silo</h2>
+      {% for s in k.silo %}
+        <div class="riwayat-detail__silo"><h3>{{ s.nama }}</h3><p>Terpakai {{ kg(s.terpakai_kg) }} kg · Awal {{ kg(s.awal_kg) }} kg · Ditambah {{ kg(s.masuk_kg) }} kg · Sisa {{ kg(s.sisa_kg or 0) }} kg</p>
+          {% for asal, berat in s.asal %}<div class="riwayat-detail__origin"><span>{{ asal }}</span><strong>{{ berat }}</strong></div>{% endfor %}
+          {% if s.asal_lebih %}<p class="riwayat-detail__empty">{{ s.asal_lebih }} sumber lain tidak ditampilkan.</p>{% endif %}
+        </div>
+      {% else %}<p class="riwayat-detail__empty">Rincian silo tidak tercatat.</p>{% endfor %}
+    </section>
+    <a class="btn btn--kecil" href="/riwayat-sosoh/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
+
+  {% else %}
+    <section class="riwayat-detail__card">
+      <h2>Rincian transfer</h2>
+      <dl class="riwayat-detail__facts">
+        <div><dt>Kode transfer</dt><dd>{{ k.kode }}</dd></div>
+        <div><dt>Waktu</dt><dd>{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+        <div><dt>Proses penggilingan asal</dt><dd>{{ k.kode_proses or "—" }}</dd></div>
+        <div><dt>Tujuan</dt><dd>{{ k.tujuan or "—" }}</dd></div>
+        <div><dt>Berat</dt><dd>{{ kg(k.berat_kg) }} kg</dd></div>
+        <div><dt>Status</dt><dd>{{ "Dibatalkan" if k.dibatalkan else "Terkirim" }}</dd></div>
+        {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
+      </dl>
+      {% if k.dibatalkan %}<p class="riwayat-detail__warning">Transfer dibatalkan. PK ini tidak sampai ke Gudang 2.</p>{% endif %}
+    </section>
+  {% endif %}
+</main>
+{% endblock %}

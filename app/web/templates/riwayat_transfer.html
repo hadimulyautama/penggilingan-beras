@@ -40,7 +40,7 @@
     <div>
       <div class="padat__atas">
         <span class="padat__nama padat__nama--kode">
-          {{- k.kode }} · {{ k.waktu|jam("%d/%m") }}
+          <a href="/riwayat-transfer/{{ k.id }}">{{ k.kode }}</a> · {{ k.waktu|jam("%d/%m") }}
         </span>
         <span class="padat__nilai{% if k.dibatalkan %} padat__nilai--kosong{% endif %}">
           {{ kg(k.berat_kg) }}<small>kg</small></span>
@@ -70,6 +70,7 @@
           <span><b>Dibatalkan</b> — PK ini tidak sampai ke Gudang 2.</span>
         </div>
       {% endif %}
+      <a class="btn btn--kecil" href="/riwayat-transfer/{{ k.id }}" style="margin-top:10px">Lihat detail lengkap →</a>
     </div>
   </div>
 {% endfor %}
@@ -93,7 +94,7 @@
     <details class="riwayat-desktop-row">
       <summary class="riwayat-desktop-grid riwayat-desktop-grid--transfer">
         <span class="riwayat-desktop-lot">
-          <strong>{{ k.kode }}</strong>
+          <strong><a href="/riwayat-transfer/{{ k.id }}">{{ k.kode }}</a></strong>
           <small>{{ k.waktu|jam("%d/%m/%Y %H:%M") or "—" }}</small>
         </span>
         <span class="riwayat-desktop-owner">{{ k.nama_pemilik or "Pabrik" }}</span>

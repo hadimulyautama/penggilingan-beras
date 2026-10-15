@@ -1428,7 +1428,8 @@ class KartuPengeringan:
 
 
 async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
-                              sebelum: int | None = None
+                              sebelum: int | None = None,
+                              lot_id: int | None = None
                               ) -> tuple[list[KartuPengeringan], bool]:
     """Kartu lot pengeringan SELESAI (kering+dingin), terbaru dulu.
 
@@ -1450,6 +1451,8 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
          .where(DryingLot.waktu_selesai_pendinginan.isnot(None))
          .order_by(DryingLot.id.desc())
          .limit(batas + 1))
+    if lot_id is not None:
+        q = q.where(DryingLot.id == lot_id)
     if sebelum:
         q = q.where(DryingLot.id < sebelum)
     lots = (await db.execute(q)).scalars().all()

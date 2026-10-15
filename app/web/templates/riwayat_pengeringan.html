@@ -47,7 +47,7 @@
   <{{ "summary" if laci else "div" }}>
     <div class="padat__atas">
       <span class="padat__nama padat__nama--kode">
-        {{- k.kode_lot }} · {{ k.selesai_dingin|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+        <a href="/riwayat-pengeringan/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode_lot }}</a> · {{ k.selesai_dingin|jam("%d/%m") or k.mulai|jam("%d/%m") }}
         {%- if k.lama_total %} · <span class="padat__umur">{{ k.lama_total }}</span>{% endif -%}
       </span>
       <span class="padat__nilai">{{ kg(k.bahan_kg) }}<small>kg basah</small></span>
@@ -159,7 +159,7 @@
     <details class="riwayat-desktop-row" {% if not laci %}data-no-details="true"{% endif %}>
       <summary class="riwayat-desktop-grid">
         <span class="riwayat-desktop-lot">
-          <strong>{{ k.kode_lot }}</strong>
+          <strong><a href="/riwayat-pengeringan/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode_lot }}</a></strong>
           <small>{{ k.selesai_dingin|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") or "—" }}</small>
         </span>
         <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>

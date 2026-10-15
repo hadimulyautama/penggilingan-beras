@@ -88,6 +88,22 @@ async def _pastikan_akses_sosoh(user):
         raise HTTPException(403, "Laporan sosoh hanya untuk Admin ke atas dan operator Gudang 2.")
 
 
+@router.get("/riwayat-sosoh/{process_id}")
+async def detail_riwayat_sosoh(process_id: int, request: Request,
+                               akun=Depends(butuh_akun)):
+    await _pastikan_akses_sosoh(akun.user)
+    from app.penggilingan.gudang2.polishing import riwayat_sosoh
+    async with SessionLocal() as db:
+        kartu, _ = await riwayat_sosoh(db, batas=1, process_id=process_id)
+    if not kartu:
+        raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
+    return await render_laci(
+        request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
+        kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
+        layar="riwayat_sosoh",
+    )
+
+
 @router.get("/riwayat-sosoh/{process_id}/laporan.pdf")
 async def pdf_riwayat_sosoh(process_id: int, request: Request,
                             unduh: int = 0, akun=Depends(butuh_akun)):

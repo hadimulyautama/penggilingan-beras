@@ -43,7 +43,7 @@
   <{{ "summary" if laci else "div" }}>
     <div class="padat__atas">
       <span class="padat__nama padat__nama--kode">
-        {{- k.kode }} · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
+        <a href="/riwayat-giling/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a> · {{ k.selesai|jam("%d/%m") or k.mulai|jam("%d/%m") }}
         {%- if k.lama %} · <span class="padat__umur">{{ k.lama }}</span>{% endif -%}
       </span>
       {% if k.belum_dicatat %}
@@ -147,7 +147,7 @@
   {% for k in kartu %}
     <details class="riwayat-desktop-row">
       <summary class="riwayat-desktop-grid riwayat-desktop-grid--giling">
-        <span class="riwayat-desktop-lot"><strong>{{ k.kode }}</strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
+        <span class="riwayat-desktop-lot"><strong><a href="/riwayat-giling/{{ k.id }}" onclick="event.preventDefault();event.stopPropagation();location.href=this.href">{{ k.kode }}</a></strong><small>{{ k.selesai|jam("%d/%m %H:%M") or k.mulai|jam("%d/%m %H:%M") }}{% if k.lama %} · {{ k.lama }}{% endif %}</small></span>
         <span class="riwayat-desktop-owner">{{ k.nama_pemilik or ("Pemilik belum tercatat" if k.jasa else "Pabrik") }}</span>
         <span><span class="riwayat-status {{ 'riwayat-status--jasa' if k.jasa else 'riwayat-status--pabrik' }}">{{ "Jasa" if k.jasa else "Bukan jasa" }}</span></span>
         <span class="riwayat-desktop-number">{{ kg(k.bahan_kg) }} kg</span>

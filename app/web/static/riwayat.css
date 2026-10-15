@@ -84,3 +84,37 @@
 .riwayat-desktop-detail>.btn{justify-self:start}
 @media(min-width:900px){.riwayat-list{display:none}.riwayat-desktop-list{display:block;margin:0 0 18px;overflow-x:auto;border-radius:12px}.riwayat-desktop-grid{min-width:1080px}}
 @media(min-width:900px) and (max-width:1200px){.riwayat-desktop-grid{--riwayat-grid:minmax(165px,1.2fr) minmax(95px,.7fr) minmax(88px,.65fr) minmax(98px,.7fr) minmax(76px,.55fr) minmax(110px,.85fr) minmax(108px,.8fr) minmax(116px,.9fr) 24px}}
+
+/* Detail page shared by every completed process history. */
+.riwayat-detail{display:grid;gap:16px;max-width:1180px;margin:0 auto 24px;color:var(--tinta)}
+.riwayat-detail__back{display:inline-flex;align-items:center;gap:8px;width:max-content;color:var(--kulit-redup);font-weight:650;text-decoration:none}
+.riwayat-detail__back:hover,.riwayat-detail a:not(.btn):hover{text-decoration:underline}
+.riwayat-detail__hero{position:relative;overflow:hidden;padding:clamp(22px,3vw,34px);border-radius:22px;background:var(--kulit-banner);color:#fff;box-shadow:0 12px 28px #26344216}
+.riwayat-detail__eyebrow{color:#e2e8ed;font-size:.75rem;font-weight:750;letter-spacing:.14em}
+.riwayat-detail__hero h1{margin:12px 0 5px;color:#fff;font-size:clamp(1.55rem,3vw,2.25rem);line-height:1.2;overflow-wrap:anywhere}
+.riwayat-detail__hero p{margin:0 0 13px;color:#e2e8ed}
+.riwayat-detail__hero .riwayat-status--pabrik{background:#ffffff20;color:#fff}
+.riwayat-detail__card{padding:clamp(17px,2.4vw,25px);border:1px solid var(--kulit-batas);border-radius:18px;background:var(--kulit-kartu);box-shadow:0 5px 18px #20304008}
+.riwayat-detail__card h2{margin:0 0 17px;color:var(--tinta);font-size:1.12rem}
+.riwayat-detail__facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 22px;margin:0}
+.riwayat-detail__facts>div{min-width:0;padding:12px 0;border-top:1px solid var(--kulit-pemisah)}
+.riwayat-detail__facts dt{color:var(--kulit-redup);font-size:.72rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase}
+.riwayat-detail__facts dd{margin:5px 0 0;color:var(--tinta);font-weight:650;overflow-wrap:anywhere}
+.riwayat-detail__table{overflow:hidden;border:1px solid var(--kulit-batas);border-radius:12px}
+.riwayat-detail__table-head,.riwayat-detail__table-row{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(120px,.8fr) minmax(160px,1fr);align-items:center;gap:12px;padding:11px 14px}
+.riwayat-detail__table-head{background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
+.riwayat-detail__table-row{border-top:1px solid var(--kulit-pemisah);color:var(--tinta);font-size:.87rem;overflow-wrap:anywhere}
+.riwayat-detail__table-row span:nth-child(2),.riwayat-detail__table-row span:nth-child(3){font-variant-numeric:tabular-nums}
+.riwayat-detail__table-row--total{background:var(--panel-2);font-weight:750}
+.riwayat-detail__indent{padding-left:18px;color:var(--kulit-redup)}
+.riwayat-detail__silo{padding:14px 0;border-top:1px solid var(--kulit-pemisah)}
+.riwayat-detail__silo h3{margin:0;color:var(--tinta);font-size:.98rem}
+.riwayat-detail__silo p{margin:5px 0 10px;color:var(--kulit-redup);font-size:.84rem}
+.riwayat-detail__origin{display:flex;justify-content:space-between;gap:14px;padding:8px 10px;border-radius:9px;background:var(--panel-2);color:var(--tinta);font-size:.84rem}
+.riwayat-detail__origin+ .riwayat-detail__origin{margin-top:5px}
+.riwayat-detail__origin strong{text-align:right;white-space:nowrap}
+.riwayat-detail__empty{margin:0;color:var(--kulit-redup)}
+.riwayat-detail__warning{margin:13px 0 0;padding:11px 13px;border-left:4px solid #c74545;border-radius:8px;background:color-mix(in srgb,#c74545 10%,var(--kulit-kartu));color:var(--tinta)}
+.riwayat-desktop-lot a,.padat__nama a{color:inherit;text-decoration:none}
+.riwayat-desktop-lot a:hover,.padat__nama a:hover{color:var(--aman);text-decoration:underline}
+@media(max-width:700px){.riwayat-detail{gap:11px;margin-bottom:16px}.riwayat-detail__hero{padding:20px 17px;border-radius:18px}.riwayat-detail__card{padding:15px 13px;border-radius:15px}.riwayat-detail__facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.riwayat-detail__facts>div{padding:10px 0}.riwayat-detail__table-head{display:none}.riwayat-detail__table-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px}.riwayat-detail__table-row>*:last-child{grid-column:1/-1;color:var(--kulit-redup);font-size:.78rem}.riwayat-detail__table-row--total>*:last-child{grid-column:auto}.riwayat-detail__origin{font-size:.78rem}}
