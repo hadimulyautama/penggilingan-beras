@@ -2620,22 +2620,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                     kg = komposisi.get(jenis, 0.0)
                     if kg > 0.001:
                         rinci_bahan.append((judul, _kg(kg), "", "sosoh-bahan"))
-                # Sumber lot PK dan broken tetap ditampilkan sebagai jejak
-                # asal, tetapi jumlah kategori di atas berasal dari arus
-                # material nyata, bukan metadata jenis silo.
+                # Asal lot hanya ditelusuri untuk PK. Beras putih dan hasil
+                # samping tetap ditampilkan sebagai jumlah komposisi per silo.
                 peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
-                if komposisi.get("broken", 0) > 0.001:
-                    isian_br = await _isian_silo_broken(
-                        db, u.silo_id, sampai=now_local()
-                    )
-                    asal_lebih += isian_br.lebih
-                    rinci_bahan.extend(
-                        (nama, kg, jam, peran_lot) for nama, kg, jam in isian_br.baris
-                    )
-                    if not isian_br.baris:
-                        rinci_bahan.append((
-                            "Riwayat penambahan tidak tercatat", "", "", peran_lot
-                        ))
                 if komposisi.get("pk", 0) > 0.001:
                     isian_u = await _isian_silo(
                         db, u.silo_id, sampai=now_local()
