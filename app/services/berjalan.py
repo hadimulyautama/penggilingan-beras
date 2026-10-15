@@ -2756,6 +2756,11 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             fase="sosoh",
             sejak=pr.waktu_mulai,
             judul=("Penyosohan dijeda" if macet else "Penyosohan"),
+            # Angka utama adalah seluruh bahan yang sedang berada di silo
+            # proses ini, termasuk PK, beras putih, hasil samping, dan bahan
+            # yang belum teridentifikasi. Angka tunggal ini jadi ringkasan
+            # kartu; rincian per jenis tetap ada di halaman detail.
+            utama=(_kg(bahan_kg).removesuffix(" kg"), "kg"),
             sub=(f"{pr.kode_proses} · {pemasok_pr}" if pemasok_pr
                  else f"{pr.kode_proses} · mesin sosoh menyala"),
             fakta=fakta,
