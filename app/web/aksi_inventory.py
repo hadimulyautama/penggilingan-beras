@@ -900,12 +900,11 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
             out.append({
                 "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
                 "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"})
-        from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
         for jenis in ("broken", "menir", "reject", "bekatul"):
-            total = await hitung_stok_byproduct_total(db, jenis)
+            kartu = kartu_produk.get(jenis)
+            total = float(kartu.sisa_kg) if kartu else 0.0
             if total <= 0.5:
                 continue
-            kartu = kartu_produk.get(jenis)
             if kartu:
                 ukuran = kartu.ukuran_kemasan_otomatis or 50
                 karung = kartu.jumlah_karung_otomatis
@@ -2006,15 +2005,14 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
     # dibetulkan juga) sementara barangnya masih di gudang. `_satu_baris`
     # (dipanggil `_baris_dari_borang`) SUDAH mengenal awalan `cr:`; yang
     # kurang cuma picker ini menawarkannya.
-    from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_total
     from app.services.stok import nama_produk
     kartu_byproduct = {k.jenis: k for k in await stok_produk(db, jasa_id=jid)}
 
     for jenis_curah in ("broken", "menir", "reject", "bekatul"):
-        sisa_total = await hitung_stok_byproduct_total(db, jenis_curah, jasa_id=jid)
+        kartu = kartu_byproduct.get(jenis_curah)
+        sisa_total = float(kartu.sisa_kg) if kartu else 0.0
         if sisa_total > 0.5:
             ukuran = {"bekatul": 40, "broken": 50, "menir": 50, "reject": 50}[jenis_curah]
-            kartu = kartu_byproduct.get(jenis_curah)
             karung = (kartu.jumlah_karung_otomatis if kartu
                       else int(sisa_total // ukuran))
             curah = (kartu.curah_otomatis_kg if kartu

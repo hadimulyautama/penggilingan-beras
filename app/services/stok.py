@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import now_local
+from app.database import now_local, tanggal_lokal
 from hmu_core.komoditas import buat_produk
 from app.models import MillingProcess
 from app.penggilingan.gudang1.services.bobot import dari_batch
@@ -146,6 +146,10 @@ class LotPk:
 
 
 def _tgl(d) -> str:
+    # `timestamptz` dibaca asyncpg sebagai UTC. Tanggal WIB sebelum pukul 07
+    # akan tampak sebagai hari sebelumnya jika `.strftime` langsung dipakai.
+    if hasattr(d, "tzinfo"):
+        d = tanggal_lokal(d)
     return d.strftime("%d/%m") if d else "?"
 
 
@@ -1937,8 +1941,8 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
     from app.penggilingan.gudang2.models import PolishingProcess
     from app.penggilingan.inventory import finished_goods as bj
     from app.penggilingan.inventory.models import (
-        Brand, ByproductStock, FinishedGoodsStock, PackageSize, PackagingMaterial,
-        ProductSku, RiceQualityStandard)
+        Brand, ByproductStock, CustomerReturn, FinishedGoodsStock, PackageSize,
+        PackagingMaterial, ProductSku, RiceQualityStandard)
     from app.services.jasa import nama_pemilik_banyak
 
     baris = (await db.execute(
@@ -1971,6 +1975,17 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             .bindparams(bindparam("ids", expanding=True)),
             {"ids": list(tiket_ids)},
         )).all())
+
+    # Penerimaan retur menunjuk CustomerReturn, bukan proses sosoh/tiket.
+    # Tampilkan asalnya di rincian kartu agar tanggal masuk stok, tiket asal,
+    # pelanggan, dan kendaraan tidak tertukar.
+    retur_ids = {fg.source_id for fg, *_ in baris
+                 if fg.source_type == "retur" and fg.source_id is not None}
+    retur_asal = {}
+    if retur_ids:
+        retur_asal = {r.id: r for r in (await db.execute(
+            select(CustomerReturn).where(CustomerReturn.id.in_(retur_ids))
+        )).scalars().all()}
 
     kartu: dict[tuple, dict] = {}
     for fg, sku, merk, kemasan, ukuran, mutu_kode, mutu_nama, pol in baris:
@@ -2040,7 +2055,16 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
             kode = tiket_masuk.get(fg.source_id) or f"ID {fg.source_id}"
             k["asal"].append((f"Tiket {kode}",
                               f"{float(fg.berat_total_kg):,.0f} kg".replace(",", "."),
-                              f"Masuk dari Timbangan · {fg.waktu:%d/%m}"))
+                              f"Masuk dari Timbangan · {_tgl(fg.waktu)}"))
+        elif fg.source_type == "retur" and fg.source_id is not None:
+            retur = retur_asal.get(fg.source_id)
+            if retur:
+                pelanggan = retur.nama_pelanggan or "Pelanggan tidak tercatat"
+                armada = retur.nomor_polisi or "Plat tidak tercatat"
+                k["asal"].append((
+                    f"Retur {retur.kode} · {pelanggan} · {armada}",
+                    f"{float(fg.berat_total_kg):,.0f} kg".replace(",", "."),
+                    f"Masuk stok {_tgl(retur.waktu)} · tiket {retur.kode_tiket}"))
     produk, samping = [], []
     for k in kartu.values():
         if k is None:

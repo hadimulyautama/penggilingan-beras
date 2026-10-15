@@ -122,7 +122,10 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
         sisa_beras=sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
         sisa_samping=sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
         curah_beras=sum(k.curah_kg for k in beras if k.curah_kg > 0),
-        curah_samping=sum(k.curah_kg for k in samping if k.curah_kg > 0),
+        curah_samping=sum(
+            (k.curah_otomatis_kg if k.jenis in {"bekatul", "reject", "menir", "broken"}
+             else k.curah_kg)
+            for k in samping if k.sisa_kg > 0),
     )
 
 
@@ -309,7 +312,10 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
                 "sisa_beras": sum(k.sisa_kg for k in beras if k.sisa_kg > 0),
                 "sisa_samping": sum(k.sisa_kg for k in samping if k.sisa_kg > 0),
                 "curah_beras": sum(k.curah_kg for k in beras if k.curah_kg > 0),
-                "curah_samping": sum(k.curah_kg for k in samping if k.curah_kg > 0),
+                "curah_samping": sum(
+                    (k.curah_otomatis_kg if k.jenis in {"bekatul", "reject", "menir", "broken"}
+                     else k.curah_kg)
+                    for k in samping if k.sisa_kg > 0),
                 "bekatul_kg": bekatul_kg,
                 "bekatul_curah_kg": bekatul_curah_kg,
                 "broken_curah_kg": broken_curah_kg,

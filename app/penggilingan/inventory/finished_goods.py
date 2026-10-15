@@ -555,40 +555,24 @@ async def hitung_stok_byproduct_curah(
 async def hitung_stok_byproduct_total(
     db: AsyncSession, jenis: str, *, jasa_id: int | None = None,
 ) -> float:
-    """Total hasil samping yang dapat keluar: stok curah + stok berkarung.
+    """Saldo hasil samping yang bisa keluar, termasuk saldo otomatis kartu.
 
-    Packing otomatis di kartu stok adalah pembagian dari satu tumpukan, bukan
-    transaksi pengemasan fisik. Karena itu perintah barang keluar curah boleh
-    mengambil dari karung ketika saldo curah tidak cukup; saldo akhirnya
-    dihitung ulang dari total kg dan sisa karung terbuka tampil sebagai curah.
+    Kartu Stok Produk menganggap sisa output menir/reject/broken/bekatul
+    sebagai stok tersedia meski belum ada transaksi packing manual. Sebelumnya
+    pemilih barang keluar dan pengambilan jasa hanya menjumlah baris
+    `FinishedGoodsStock`/`ByproductStock`, sehingga stok terlihat di kartu
+    tetapi tak tersedia di picker.
+
+    `stok_produk` adalah sumber saldo yang sama dengan tampilan: ia sudah
+    mengurangi barang keluar, barang yang masuk silo, dan memisahkan pemilik.
+    Tidak ada siklus pemanggilan karena `stok_produk` tidak memanggil fungsi
+    total ini.
     """
-    curah = await hitung_stok_byproduct_curah(db, jenis, jasa_id=jasa_id)
-    sku_ids = select(ProductSku.id).where(ProductSku.kategori == jenis)
-    milik_masuk = (FinishedGoodsStock.jasa_id.is_(None) if jasa_id is None
-                   else FinishedGoodsStock.jasa_id == jasa_id)
-    milik_keluar = (OutgoingItem.jasa_id.is_(None) if jasa_id is None
-                    else OutgoingItem.jasa_id == jasa_id)
-    masuk_karung = float((await db.execute(
-        select(func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
-        .where(FinishedGoodsStock.product_sku_id.in_(sku_ids), milik_masuk)
-    )).scalar_one())
-    keluar_karung = float((await db.execute(
-        select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
-        .where(OutgoingItem.item_type == "finished_goods",
-               OutgoingItem.product_sku_id.in_(sku_ids), milik_keluar)
-    )).scalar_one())
-    total = curah + masuk_karung - keluar_karung
-    if jenis in {"menir", "reject"}:
-        from app.penggilingan.gudang2.models import HasilSampingKeSilo
-        milik_pindah = (HasilSampingKeSilo.jasa_id.is_(None) if jasa_id is None
-                        else HasilSampingKeSilo.jasa_id == jasa_id)
-        pindah = float((await db.execute(
-            select(func.coalesce(func.sum(HasilSampingKeSilo.berat_kg), 0))
-            .where(HasilSampingKeSilo.jenis == jenis,
-                   milik_pindah)
-        )).scalar_one())
-        total -= pindah
-    return total
+    from app.services.stok import stok_produk
+
+    kartu = next((k for k in await stok_produk(db, jasa_id=jasa_id)
+                  if k.jenis == jenis), None)
+    return max(float(kartu.sisa_kg), 0.0) if kartu else 0.0
 
 
 async def hitung_stok_finished_goods(
