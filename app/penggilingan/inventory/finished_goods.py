@@ -650,7 +650,7 @@ async def hitung_stok_finished_goods(
 async def sisa_karung_per_sumber(
     db: AsyncSession, sku_id: int, standard_id: int | None, *,
     jasa_id: int | None = None, proses_id: int | None = None,
-    kunci: bool = False,
+    source_type: str | None = "polishing", kunci: bool = False,
 ) -> list[tuple[FinishedGoodsStock, int, float]]:
     """Sisa karung per baris sumber setelah barang keluar dialokasikan FIFO.
 
@@ -665,9 +665,10 @@ async def sisa_karung_per_sumber(
 
     q = select(FinishedGoodsStock).where(
         FinishedGoodsStock.product_sku_id == sku_id,
-        FinishedGoodsStock.source_type == "polishing",
         milik(FinishedGoodsStock.jasa_id),
     )
+    if source_type is not None:
+        q = q.where(FinishedGoodsStock.source_type == source_type)
     if standard_id is None:
         q = q.where(FinishedGoodsStock.rice_quality_standard_id.is_(None))
     else:
@@ -692,7 +693,8 @@ async def sisa_karung_per_sumber(
         terpakai = min(max(int(row.jumlah_karung), 0), keluar)
         keluar -= terpakai
         tersedia = max(int(row.jumlah_karung) - terpakai, 0)
-        if proses_id is not None and row.source_id != proses_id:
+        if proses_id is not None and (
+                row.source_type != "polishing" or row.source_id != proses_id):
             continue
         if tersedia:
             per_karung = (float(row.berat_total_kg) / row.jumlah_karung

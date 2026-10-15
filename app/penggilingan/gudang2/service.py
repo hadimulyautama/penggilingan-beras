@@ -2091,8 +2091,9 @@ async def masukkan_beras_ke_silo(
 
     Sumber proses tidak dipilih pengguna. Curah dialokasikan FIFO ke proses
     pabrik/pesanan yang menghasilkan grade tersebut; kemasan dialokasikan FIFO
-    ke baris stok untuk kombinasi merek, bahan kemasan, ukuran, dan pemilik
-    yang dipilih. Setiap asal proses tetap dicatat terpisah di buku pemindahan.
+    ke baris stok untuk kombinasi merek (termasuk tanpa merek), bahan kemasan,
+    ukuran, dan pemilik yang dipilih. Curah maupun kemasan dapat dipilih.
+    Setiap sumber dicatat terpisah di buku pemindahan.
     """
     from app.penggilingan.gudang2.models import PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import (
@@ -2133,6 +2134,7 @@ async def masukkan_beras_ke_silo(
     std = await get_standard(db, jenis)
     alokasi: dict[int, float] = {}
     baris_karung: list[tuple[FinishedGoodsStock, int]] = []
+    rencana_pindah: list[tuple[int | None, str, int | None, int | None, float]] = []
     dibongkar_kg = 0.0
 
     if sumber_stok == "curah":
@@ -2160,6 +2162,7 @@ async def masukkan_beras_ke_silo(
             ambil = min(perlu, tersedia)
             if ambil > 0.01:
                 alokasi[proc.id] = ambil
+                rencana_pindah.append((proc.id, "polishing", proc.id, None, ambil))
                 perlu -= ambil
             if perlu <= 0.01:
                 break
@@ -2214,6 +2217,8 @@ async def masukkan_beras_ke_silo(
                 jumlah = min(ambil, row_sisa)
                 if jumlah:
                     baris_karung.append((row, jumlah))
+                    rencana_pindah.append((proc.id, "polishing", proc.id,
+                                           row.product_sku_id, jumlah * ukuran))
                     ambil -= jumlah
                     if not ambil:
                         break
@@ -2258,13 +2263,16 @@ async def masukkan_beras_ke_silo(
             ambil = min(perlu_karung, sisa)
             if ambil <= 0:
                 continue
-            proc_id = row.source_id
-            if proc_id is None:
+            proc_id = row.source_id if row.source_type == "polishing" else None
+            if row.source_type == "polishing" and proc_id is None:
                 raise Gudang2Error(
                     "Asal proses untuk stok kemasan ini tidak tercatat; "
                     "stok tidak dipindahkan agar riwayat tetap utuh.")
             baris_karung.append((row, ambil))
-            alokasi[proc_id] = alokasi.get(proc_id, 0.0) + ambil * ukuran
+            rencana_pindah.append((proc_id, row.source_type, row.source_id,
+                                   row.product_sku_id, ambil * ukuran))
+            if proc_id is not None:
+                alokasi[proc_id] = alokasi.get(proc_id, 0.0) + ambil * ukuran
             perlu_karung -= ambil
             if perlu_karung <= 0:
                 break
@@ -2274,7 +2282,8 @@ async def masukkan_beras_ke_silo(
     else:
         raise Gudang2Error("Pilih curah atau merek dan ukuran kemasan yang tersedia.")
 
-    if not alokasi or abs(sum(alokasi.values()) - berat_kg) > 0.01:
+    if (not rencana_pindah
+            or abs(sum(item[4] for item in rencana_pindah) - berat_kg) > 0.01):
         raise Gudang2Error("Alokasi sumber stok tidak cocok dengan berat yang diminta.")
 
     # Satu silo tidak boleh dipakai kembali sebagai sumber hasil proses yang
@@ -2308,8 +2317,8 @@ async def masukkan_beras_ke_silo(
             f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — beras jasa "
             "tak boleh ditambahkan ke proses yang berjalan.")
 
-    # Kurangi hanya karung yang dipilih. Sumber per proses tetap ditandai di
-    # BerasKeSilo, walau satu pilihan SKU tersusun dari beberapa penyosohan.
+    # Kurangi hanya karung yang dipilih. Asal tiap baris stok tetap ditandai
+    # di BerasKeSilo, termasuk stok timbang/retur yang bukan hasil penyosohan.
     for row, ambil in baris_karung:
         sku_row = await db.get(ProductSku, row.product_sku_id)
         size = (await db.execute(
@@ -2329,23 +2338,27 @@ async def masukkan_beras_ke_silo(
         )
 
     codes: list[str] = []
-    for proc_id, kg in sorted(alokasi.items()):
-        proc = await db.get(PolishingProcess, proc_id)
-        if proc is None:
+    for proc_id, source_type, source_id, sku_id, kg in rencana_pindah:
+        proc = await db.get(PolishingProcess, proc_id) if proc_id is not None else None
+        if proc_id is not None and proc is None:
             raise Gudang2Error("Asal proses stok tidak ditemukan; perpindahan dibatalkan.")
         kode = await next_beras_move_code(db)
         move = BerasKeSilo(
-            kode_pindah=kode, polishing_process_id=proc.id, jenis=jenis,
+            kode_pindah=kode, polishing_process_id=proc_id,
+            source_type=source_type, source_id=source_id,
+            product_sku_id=sku_id, jenis=jenis,
             silo_id=silo.id, berat_kg=kg, tanggal=now.date(), waktu=now,
             input_by=user.id, jasa_id=jasa_id,
         )
         db.add(move)
         codes.append(kode)
         await log_activity(
-            db, table_name="beras_ke_silo", record_id=proc.id, action="INSERT",
+            db, table_name="beras_ke_silo",
+            record_id=proc_id or source_id or 0, action="INSERT",
             changed_by=user.id,
-            new_value=(f"{proc.kode_proses} {jenis}: {kg:,.0f} kg → Silo {nama_silo}"
-                       + (" (dari stok kemasan)" if dibongkar_kg else " (curah)"))
+            new_value=(f"{proc.kode_proses if proc else source_type} {jenis}: "
+                       f"{kg:,.0f} kg → Silo {nama_silo}"
+                       + (" (dari stok kemasan)" if sku_id is not None else " (curah)"))
                       .replace(",", "."),
         )
 

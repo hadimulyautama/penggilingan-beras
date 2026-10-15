@@ -273,15 +273,11 @@ class BerasKeSilo(Base, TimestampMixin):
       · Silo A/B (`jenis_isi='pk'`, TAK berubah bentuknya) — `beras_putih`
         (mutu belum ditetapkan) ikut masuk sebagai bahan sosoh ulang.
 
-    BEDA dari `BrokenKeSilo`: tak ada baris `byproduct_stock` sumbernya —
-    curah beras murni aritmetika (`stok.beras_curah`: keluar mesin − dikemas),
-    bukan tabel. Baris ini karena itu menunjuk `polishing_process_id` +
-    `jenis` LANGSUNG, dan `jenis`-nya WAJIB disimpan (satu proses bisa
-    menghasilkan beberapa grade sekaligus — beda dari broken yang jenisnya
-    selalu tunggal). `stok.beras_curah()`/`stok_produk()` membaca tabel ini
-    untuk menyaring jumlah yang sudah pindah ke silo dari "belum dicatat" —
-    tanpanya beras yang sudah masuk silo akan terbaca DUA KALI begitu
-    silonya disosoh ulang: sekali di sini, sekali lagi sebagai hasil baru.
+    Asal dapat berupa proses penyosohan (curah atau kemasan hasil proses) atau
+    baris stok barang jadi (mis. beras kemasan dari tiket timbang/retur).
+    `polishing_process_id` nullable untuk sumber yang bukan proses; `source_type`,
+    `source_id`, dan `product_sku_id` menjaga jejak stok yang dipindahkan.
+    `jenis` WAJIB disimpan karena satu proses bisa menghasilkan beberapa grade.
 
     Kode: BRS-YYYYMMDD-NN.
     """
@@ -290,8 +286,16 @@ class BerasKeSilo(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     kode_pindah: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    polishing_process_id: Mapped[int] = mapped_column(
-        ForeignKey("polishing_process.id"), nullable=False)
+    polishing_process_id: Mapped[int | None] = mapped_column(
+        ForeignKey("polishing_process.id"))
+    #: Asal yang dikuras. Untuk beras curah hasil sosoh, isinya polishing/
+    #: proses; barang kemasan dari tiket timbang atau retur menyimpan sumber
+    #: stok aslinya di sini supaya riwayatnya tidak mengarang proses sosoh.
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False,
+                                              default="polishing")
+    source_id: Mapped[int | None] = mapped_column(Integer)
+    product_sku_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_skus.id"))
     #: Grade yang dipindah — salah satu `stok.BERAS_JENIS`, atau "beras_putih".
     jenis: Mapped[str] = mapped_column(String(20), nullable=False)
     silo_id: Mapped[int] = mapped_column(ForeignKey("silos.id"), nullable=False)

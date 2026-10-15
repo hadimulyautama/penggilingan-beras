@@ -4791,7 +4791,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
                 .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
                 .where(ProductSku.kategori == "beras_putih",
                        FinishedGoodsStock.jasa_id.is_not(None),
-                       FinishedGoodsStock.source_type == "polishing", std_filter)
+                       std_filter)
                 .distinct()
             )).scalars().all())
             owners = sorted(owners)
@@ -4836,7 +4836,6 @@ async def beras_sumber_tersedia(induk: str | None = None,
                 .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
                 .where(ProductSku.kategori == "beras_putih",
                        ProductSku.aktif.is_(True),
-                       FinishedGoodsStock.source_type == "polishing",
                        std_filter, milik)
                 .group_by(ProductSku.id, Brand.nama, PackagingMaterial.nama,
                           PackageSize.ukuran_kg)
@@ -4845,7 +4844,8 @@ async def beras_sumber_tersedia(induk: str | None = None,
             )).all()
             for sku_id, brand, material, ukuran in skus:
                 sisa = await sisa_karung_per_sumber(
-                    db, sku_id, std.id if std else None, jasa_id=owner)
+                    db, sku_id, std.id if std else None, jasa_id=owner,
+                    source_type=None)
                 karung = sum(jumlah for _, jumlah, _ in sisa)
                 if karung <= 0:
                     continue
