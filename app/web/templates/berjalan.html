@@ -45,7 +45,34 @@
   </div>
 {% endif %}
 
-{{ benda.blok("Sedang berjalan", berjalan, alamat="/berjalan") }}
+{# Proses sosoh punya halaman detail sendiri. Ringkasan tetap satu baris yang
+   membuka rincian penuh; <details> di kartu proses membuat aksi dan catatan
+   bercampur di daftar, padahal operator perlu satu tempat untuk memeriksa
+   bahan, hasil sementara, lalu memilih tindakan. #}
+{% set daftar_proses = namespace(sosoh=[], lainnya=[]) %}
+{% for b in berjalan %}
+  {% if b.fase == "sosoh" %}
+    {% set _ = daftar_proses.sosoh.append(b) %}
+  {% else %}
+    {% set _ = daftar_proses.lainnya.append(b) %}
+  {% endif %}
+{% endfor %}
+{{ benda.blok("Sedang berjalan", daftar_proses.lainnya, alamat="/berjalan") }}
+{% if daftar_proses.sosoh %}
+  <div data-blok>
+    <span class="lbl">Penyosohan aktif · <span data-jumlah>{{ daftar_proses.sosoh|length }}</span></span>
+    <div class="grup" style="gap:9px">
+      {% for b in daftar_proses.sosoh %}
+        <a class="benda benda--{{ b.fase }}" href="/proses-sosoh/{{ b.kode }}"
+           data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
+          <div>{{ benda.penuh(b) }}</div>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
+               stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
 {{ benda.blok("Transit", transit, alamat="/berjalan") }}
 
 {# Lembar aksinya dibuka DI SINI. Menekan "Perbarui kadar air" lalu mendarat

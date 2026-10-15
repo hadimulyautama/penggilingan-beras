@@ -24,7 +24,8 @@ akhir — lalu dipakai menilai mesin.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.web.security import butuh_akun
@@ -86,6 +87,43 @@ async def _pastikan_akses_sosoh(user):
     from app.web.api import _is_g2_operator
     if not await _is_g2_operator(user):
         raise HTTPException(403, "Laporan sosoh hanya untuk Admin ke atas dan operator Gudang 2.")
+
+
+@router.get("/proses-sosoh/{kode_proses}")
+async def detail_proses_sosoh(kode_proses: str, request: Request,
+                              akun=Depends(butuh_akun)):
+    """Rincian lengkap penyosohan aktif; tindakan tetap dari halaman ini."""
+    await _pastikan_akses_sosoh(akun.user)
+    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.services import berjalan as svc
+
+    async with SessionLocal() as db:
+        proses = (await db.execute(
+            select(PolishingProcess).where(
+                PolishingProcess.kode_proses == kode_proses)
+        )).scalar_one_or_none()
+        if proses is None:
+            raise HTTPException(404, "Proses penyosohan tidak ditemukan.")
+        if proses.status != "proses":
+            # Proses yang sudah ditutup memakai halaman riwayat agar sumber
+            # angka final dan PDF tetap sama dengan laporan sosoh.
+            if proses.status == "selesai":
+                return RedirectResponse(
+                    f"/riwayat-sosoh/{proses.id}", status_code=303)
+            raise HTTPException(404, "Proses penyosohan ini sudah tidak aktif.")
+
+        daftar = await svc.untuk_gudang2(db)
+        kartu = next((x for x in daftar.berjalan
+                      if x.fase == "sosoh" and x.kode == kode_proses), None)
+        if kartu is None:
+            raise HTTPException(404, "Rincian proses penyosohan tidak ditemukan.")
+
+    return await render_laci(
+        request, "proses_sosoh_detail.html", proses=kartu,
+        layar="berjalan", kembali="/berjalan",
+        buka=request.query_params.get("buka") or "",
+        nilai=request.query_params.get("nilai") or "",
+    )
 
 
 @router.get("/riwayat-sosoh/{process_id}")

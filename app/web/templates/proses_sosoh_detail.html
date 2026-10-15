@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% block judul %}Detail Penyosohan{% endblock %}
+
+{% block isi %}
+<style>
+  @import url('/static/riwayat.css?v={{ VERSI }}');
+  .sosoh-detail__aksi{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px}
+  .sosoh-detail__aksi .pilihan__satu{min-height:58px}
+  .sosoh-detail__neraca .riwayat-detail__table-row span:nth-child(2),
+  .sosoh-detail__neraca .riwayat-detail__table-row span:nth-child(3){text-align:right}
+  @media(max-width:700px){.sosoh-detail__aksi{grid-template-columns:1fr}}
+</style>
+<main class="riwayat-detail">
+  <a class="riwayat-detail__back" href="/berjalan">← Kembali ke Sedang berjalan</a>
+
+  <section class="riwayat-detail__hero">
+    <div class="riwayat-detail__eyebrow">PROSES AKTIF · PENYOSOHAN</div>
+    <h1>{{ proses.kode }}</h1>
+    <p>{{ proses.isi }} · dimulai {{ proses.sejak|jam("%d/%m/%Y %H:%M") or "waktu tidak tercatat" }}</p>
+    {% if proses.nota %}
+      <span class="riwayat-status riwayat-status--wait">{{ proses.nota }}</span>
+    {% else %}
+      <span class="riwayat-status riwayat-status--done">Mesin sosoh berjalan</span>
+    {% endif %}
+  </section>
+
+  <section class="riwayat-detail__card">
+    <h2>Ringkasan bahan</h2>
+    <dl class="riwayat-detail__facts">
+      {% for label, nilai in proses.fakta %}
+        <div><dt>{{ label }}</dt><dd>{{ nilai }}{% if "Total " in label %} kg{% endif %}</dd></div>
+      {% endfor %}
+      <div><dt>Mulai proses</dt><dd>{{ proses.sejak|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
+      <div><dt>Status</dt><dd>{{ proses.keadaan }}</dd></div>
+    </dl>
+  </section>
+
+  {% if proses.neraca %}
+  <section class="riwayat-detail__card sosoh-detail__neraca">
+    <h2>Neraca sosoh sementara</h2>
+    {% if proses.neraca.timpang %}
+      <p class="riwayat-detail__warning">Jumlah hasil sementara melebihi berat bahan. Periksa catatan hasil sebelum menutup proses.</p>
+    {% endif %}
+    <div class="riwayat-detail__table">
+      <div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Dari bahan</span></div>
+      <div class="riwayat-detail__table-row"><strong>{{ proses.neraca.beras.nama }}</strong><span>{{ kg(proses.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(proses.neraca.beras.persen)|replace(".", ",") if proses.neraca.beras.persen is not none else "—" }}%</span></div>
+      {% for bagian in proses.neraca.samping %}
+        <div class="riwayat-detail__table-row"><strong>{{ bagian.nama }}</strong><span>{{ kg(bagian.kg) }} kg</span><span>{{ "%.1f"|format(bagian.persen)|replace(".", ",") if bagian.persen is not none else "—" }}%</span></div>
+      {% endfor %}
+      <div class="riwayat-detail__table-row"><strong>{{ proses.neraca.susut.nama }} · sementara</strong><span>{{ kg(proses.neraca.susut.kg) }} kg</span><span>{{ "%.1f"|format(proses.neraca.susut.persen)|replace(".", ",") if proses.neraca.susut.persen is not none else "—" }}%</span></div>
+      <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(proses.neraca.bahan_kg) }} kg</span><span>100%</span></div>
+    </div>
+    <p class="riwayat-detail__empty">Angka ini sementara dan akan berubah saat hasil baru dicatat. Bagian yang belum keluar mesin belum berarti susut final.</p>
+  </section>
+  {% else %}
+  <section class="riwayat-detail__card">
+    <h2>Neraca sosoh sementara</h2>
+    <p class="riwayat-detail__empty">Bahan belum cukup tercatat untuk menghitung neraca proses.</p>
+  </section>
+  {% endif %}
+
+  {% for judul, baris_grup in proses.anak_grup %}
+  <section class="riwayat-detail__card">
+    <h2>{{ judul }}</h2>
+    {% if baris_grup %}
+      <div class="riwayat-detail__table">
+        <div class="riwayat-detail__table-head"><span>Bahan / hasil</span><span>Berat</span><span>Keterangan</span></div>
+        {% for baris in baris_grup %}
+          <div class="riwayat-detail__table-row">
+            <strong{% if baris|length > 3 and baris[3].startswith("  ") %} class="riwayat-detail__indent"{% endif %}>{{ baris[0] }}</strong>
+            <span>{{ baris[1] }}{% if baris[1] %} kg{% endif %}</span>
+            <span>{{ baris[2] or (baris[3] if baris|length > 3 else "") or "—" }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="riwayat-detail__empty">Belum ada catatan.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  <section class="riwayat-detail__card">
+    <h2>Tindakan proses</h2>
+    <div class="sosoh-detail__aksi pilihan">
+      {% for pilihan in proses.pilihan %}
+        {% set id = pilihan[0] %}
+        {% set nama = pilihan[1] %}
+        {% set ket = pilihan[2] %}
+        {% set nilai_aksi = pilihan[3] if pilihan|length > 3 else proses.nilai %}
+        <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
+           href="/proses-sosoh/{{ proses.kode }}?buka={{ id }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}">
+          <span class="pilihan__nama">{{ nama }}</span>
+          <span class="pilihan__ket">{{ ket }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+</main>
+{% endblock %}
+
+{% block kaki %}
+<script src="/static/aksi.js?v={{ VERSI }}" defer
+        data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>
+{% endblock %}
