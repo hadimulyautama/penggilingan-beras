@@ -79,16 +79,55 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     from app.web.api import _is_g1_operator
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Riwayat Penggilingan milik Admin ke atas dan operator Gudang 1.")
-    from app.penggilingan.gudang1.services.milling import riwayat_giling
+    from app.penggilingan.gudang1.services.milling import (
+        alasan_koreksi_hasil_giling, riwayat_giling,
+    )
     async with SessionLocal() as db:
         kartu, _ = await riwayat_giling(db, batas=1, process_id=process_id)
     if not kartu:
         raise HTTPException(404, "Riwayat penggilingan tidak ditemukan.")
+    async with SessionLocal() as db:
+        penghalang = (await alasan_koreksi_hasil_giling(db, process_id)
+                      if akun.is_admin else None)
     return await render_laci(
         request, "riwayat_detail.html", jenis="giling", k=kartu[0],
         kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
-        layar="riwayat_giling",
+        layar="riwayat_giling", boleh_koreksi=akun.is_admin,
+        hasil_awal=kartu[0].hasil_kg, penghalang_koreksi=penghalang,
+        hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
+        gagal_koreksi=request.query_params.get("koreksi_gagal"),
     )
+
+
+@router.post("/riwayat-giling/{process_id}/koreksi")
+async def koreksi_riwayat_giling(process_id: int, request: Request,
+                                 akun=Depends(butuh_akun)):
+    if not akun.is_admin:
+        raise HTTPException(403, "Koreksi hasil penggilingan hanya untuk Admin ke atas.")
+    from app.penggilingan.gudang1.services.milling import MillingError, koreksi_hasil_giling
+    form = await request.form()
+    try:
+        hasil = float(str(form.get("hasil_pk", "")).strip().replace(",", "."))
+        dasar = float(str(form.get("dasar_pk", "")).strip().replace(",", "."))
+    except (ValueError, TypeError):
+        pesan = "Periksa berat hasil PK yang dimasukkan."
+        return RedirectResponse(
+            f"/riwayat-giling/{process_id}?{urlencode({'koreksi_gagal': pesan})}",
+            status_code=303)
+    alasan = str(form.get("alasan", "")).strip()
+    async with SessionLocal() as db:
+        try:
+            await koreksi_hasil_giling(
+                db, user=akun.user, process_id=process_id,
+                hasil_kg=hasil, dasar_kg=dasar, alasan=alasan,
+            )
+        except MillingError as exc:
+            await db.rollback()
+            pesan = exc.args[0] if exc.args else "Koreksi hasil tidak dapat disimpan."
+            return RedirectResponse(
+                f"/riwayat-giling/{process_id}?{urlencode({'koreksi_gagal': pesan})}",
+                status_code=303)
+    return RedirectResponse(f"/riwayat-giling/{process_id}?koreksi=berhasil", status_code=303)
 
 
 def _pdf_laporan_giling(data: dict) -> bytes:
@@ -887,16 +926,60 @@ async def detail_riwayat_transfer(transfer_id: int, request: Request,
     from app.web.api import _is_g1_operator
     if not await _is_g1_operator(akun.user):
         raise HTTPException(403, "Riwayat Transfer milik Admin ke atas dan operator Gudang 1.")
-    from app.services.transfer import riwayat_transfer
+    from app.services.transfer import alasan_koreksi_transfer, riwayat_transfer
     async with SessionLocal() as db:
         kartu, _ = await riwayat_transfer(db, batas=1, transfer_id=transfer_id)
     if not kartu:
         raise HTTPException(404, "Riwayat transfer tidak ditemukan.")
+    async with SessionLocal() as db:
+        penghalang = (await alasan_koreksi_transfer(db, transfer_id)
+                      if akun.is_admin else None)
     return await render_laci(
         request, "riwayat_detail.html", jenis="transfer", k=kartu[0],
         kembali="/riwayat-transfer", breadcrumb_detail=kartu[0].kode,
-        layar="riwayat_transfer",
+        layar="riwayat_transfer", boleh_koreksi=akun.is_admin,
+        hasil_awal=kartu[0].berat_kg, penghalang_koreksi=penghalang,
+        hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
+        gagal_koreksi=request.query_params.get("koreksi_gagal"),
+        pengganti=request.query_params.get("pengganti"),
+        pengganti_id=request.query_params.get("pengganti_id"),
     )
+
+
+@router.post("/riwayat-transfer/{transfer_id}/koreksi")
+async def koreksi_riwayat_transfer(transfer_id: int, request: Request,
+                                   akun=Depends(butuh_akun)):
+    if not akun.is_admin:
+        raise HTTPException(403, "Koreksi hasil transfer hanya untuk Admin ke atas.")
+    from app.services.transfer import TransferError, koreksi_hasil_transfer
+    form = await request.form()
+    try:
+        berat = float(str(form.get("hasil_transfer", "")).strip().replace(",", "."))
+        dasar = float(str(form.get("dasar_transfer", "")).strip().replace(",", "."))
+    except (ValueError, TypeError):
+        pesan = "Periksa berat transfer yang dimasukkan."
+        return RedirectResponse(
+            f"/riwayat-transfer/{transfer_id}?{urlencode({'koreksi_gagal': pesan})}",
+            status_code=303)
+    alasan = str(form.get("alasan", "")).strip()
+    async with SessionLocal() as db:
+        try:
+            pengganti = await koreksi_hasil_transfer(
+                db, user=akun.user, transfer_id=transfer_id,
+                berat_kg=berat, dasar_kg=dasar, alasan=alasan,
+            )
+        except TransferError as exc:
+            await db.rollback()
+            pesan = exc.args[0] if exc.args else "Koreksi hasil tidak dapat disimpan."
+            return RedirectResponse(
+                f"/riwayat-transfer/{transfer_id}?{urlencode({'koreksi_gagal': pesan})}",
+                status_code=303)
+    params = {"koreksi": "berhasil"}
+    if pengganti is not None:
+        params["pengganti"] = pengganti.kode_transfer
+        params["pengganti_id"] = pengganti.id
+    return RedirectResponse(
+        f"/riwayat-transfer/{transfer_id}?{urlencode(params)}", status_code=303)
 
 
 QC_PAGES = {

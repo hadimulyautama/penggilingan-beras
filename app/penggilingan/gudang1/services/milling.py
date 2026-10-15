@@ -1260,6 +1260,104 @@ async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
     return PkBreakdown(produced, transferred, max(produced - transferred - sold, 0.0))
 
 
+async def alasan_koreksi_hasil_giling(db: AsyncSession, process_id: int) -> str | None:
+    """Tahan koreksi hasil giling bila PK sudah keluar ke proses hilir."""
+    from app.models import OutgoingItem
+
+    proc = await db.get(MillingProcess, process_id)
+    if proc is None or proc.status != "selesai":
+        return "Koreksi hanya tersedia untuk penggilingan yang sudah selesai."
+    if (await db.execute(select(InternalTransfer.id).where(
+            InternalTransfer.milling_process_id == process_id,
+            InternalTransfer.status == "terkirim").limit(1))).first():
+        return ("Koreksi ditahan: sebagian PK sudah ditransfer ke Gudang 2. "
+                "Sesuaikan atau batalkan transfer terkait terlebih dahulu.")
+    if (await db.execute(select(OutgoingItem.id).where(
+            OutgoingItem.item_type == "pk_langsung",
+            OutgoingItem.milling_process_id == process_id).limit(1))).first():
+        return "Koreksi ditahan: sebagian PK sudah dicatat sebagai barang keluar."
+    return None
+
+
+async def koreksi_hasil_giling(
+    db: AsyncSession, *, user, process_id: int, hasil_kg: float,
+    dasar_kg: float, alasan: str,
+) -> MillingProcessVerification:
+    """Koreksi hasil PK selesai dengan audit dan sinkronisasi stok lintas-app."""
+    import math
+
+    proc = (await db.execute(
+        select(MillingProcess).where(MillingProcess.id == process_id)
+        .with_for_update()
+    )).scalar_one_or_none()
+    if proc is None or proc.status != "selesai":
+        raise MillingError("Koreksi hanya tersedia untuk penggilingan yang sudah selesai.")
+    penghalang = await alasan_koreksi_hasil_giling(db, proc.id)
+    if penghalang:
+        raise MillingError(penghalang)
+    alasan = (alasan or "").strip()
+    if not alasan:
+        raise MillingError("Tuliskan alasan koreksi hasil.")
+    target = float(hasil_kg)
+    dasar = float(dasar_kg)
+    if not math.isfinite(target) or target < 0:
+        raise MillingError("Berat hasil harus berupa angka valid dan tidak negatif.")
+    if not math.isfinite(dasar) or dasar < 0:
+        raise MillingError("Data hasil pada halaman sudah tidak valid. Muat ulang halaman.")
+    masuk = float(proc.berat_gabah_masuk_kg or 0)
+    if proc.jasa_id is not None and masuk and target > masuk:
+        raise MillingError(
+            f"Hasil PK {target:,.2f} kg melebihi gabah jasa yang masuk "
+            f"({masuk:,.2f} kg).".replace(",", ".")
+        )
+
+    saat_ini = await _produced_pk(db, proc.id)
+    if abs(round(saat_ini, 2) - round(dasar, 2)) >= 0.005:
+        raise MillingError("Catatan hasil berubah sejak halaman dibuka. Muat ulang lalu coba lagi.")
+    target = round(target, 2)
+    if abs(target - saat_ini) < 0.005:
+        raise MillingError("Tidak ada perubahan hasil yang dimasukkan.")
+
+    verifikasi = (await db.execute(
+        select(MillingProcessVerification).where(
+            MillingProcessVerification.milling_process_id == proc.id
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if verifikasi is None:
+        verifikasi = MillingProcessVerification(milling_process_id=proc.id)
+        db.add(verifikasi)
+        await db.flush()
+    verifikasi.berat_output_final_kg = target
+    verifikasi.verified_by = user.id
+    verifikasi.waktu_verifikasi = now_local()
+    verifikasi.status_verifikasi = "terverifikasi"
+    await log_activity(
+        db, table_name="milling_process_verifications", record_id=verifikasi.id,
+        # Koreksi bukan pembatalan verifikasi; audit ini tidak boleh diartikan
+        # oleh fitur "undo" sebagai perintah menghapus hasil final.
+        action="UPDATE", changed_by=user.id, field_name="berat_output_final_kg",
+        old_value=f"{saat_ini:.2f}", new_value=f"{target:.2f}",
+        alasan=alasan, aksi="koreksi_hasil_giling",
+    )
+
+    from app.services.proses_bersama import tutup_proses_bersama
+    await tutup_proses_bersama(
+        db, tabel_sumber="milling_process", id_sumber=proc.id,
+        waktu_selesai=proc.waktu_selesai,
+        hasil=((ArusProses(
+            produk=buat_produk("beras_pk"), berat_kg=Decimal(str(target)),
+            referensi=proc.kode_proses,
+        ),) if target > 0 else ()),
+        metadata_tambahan={
+            "jenis_pk": await pk_jenis(db, proc),
+            "berat_gabah_masuk_kg": masuk,
+            "rendemen_pk_persen": hitung_rendemen(target, masuk),
+        },
+    )
+    await db.commit()
+    return verifikasi
+
+
 async def _milling_supplier_names(db: AsyncSession, proc: MillingProcess) -> list[str]:
     """Supplier asal bahan sebuah proses giling — dari SELURUH isinya.
 

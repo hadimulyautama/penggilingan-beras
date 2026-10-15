@@ -133,6 +133,7 @@ class TransferResult:
 async def create_internal_transfer(
     db: AsyncSession, *, user, kode_proses: str, lokasi_tujuan: str,
     berat: float | None = None, kunci_kiriman: str | None = None,
+    commit: bool = True, alasan: str | None = None, aksi: str | None = None,
 ) -> TransferResult:
     """Kirim PK dari sebuah milling ke Gudang 2. Mengurangi stok siap kirim.
 
@@ -258,6 +259,7 @@ async def create_internal_transfer(
         changed_by=user.id,
         new_value=f"{transfer.kode_transfer} | {kirim:.0f}kg -> "
                   f"{await label_tujuan(db, lokasi_tujuan, silo_tujuan_id)}",
+        alasan=alasan, aksi=aksi,
     )
     # PK LANGSUNG masuk stok Gudang 2 — staff/admin sudah menentukan tujuan saat
     # kirim, jadi tak perlu langkah 'terima' terpisah oleh operator G2.
@@ -298,13 +300,113 @@ async def create_internal_transfer(
     #
     # Transfer yang BUKAN dari permintaan tetap sah dan tetap lewat sini:
     # Admin masih boleh memindahkan atas inisiatifnya sendiri.
-    await db.commit()
-    await db.refresh(transfer)
+    if commit:
+        await db.commit()
+        await db.refresh(transfer)
     return TransferResult(
         transfer=transfer, kode_proses=kode_proses,
         lokasi_label=await label_tujuan(db, lokasi_tujuan, silo_tujuan_id),
         hpp_per_kg=hpp, jenis=jenis,
     )
+
+
+async def alasan_koreksi_transfer(db: AsyncSession, transfer_id: int) -> str | None:
+    """Periksa apakah transfer masih aman dibatalkan untuk koreksi."""
+    from app.penggilingan.gudang2.models import PkGudang2Intake
+    from app.penggilingan.gudang2.service import label_tujuan
+    from app.services.undo import UndoError, _tolak_bila_pk_sudah_dipakai
+
+    transfer = await db.get(InternalTransfer, transfer_id)
+    if transfer is None:
+        return "Transfer tidak ditemukan."
+    if transfer.status != "terkirim":
+        return "Koreksi hanya tersedia untuk transfer yang masih terkirim."
+    intake = (await db.execute(select(PkGudang2Intake).where(
+        PkGudang2Intake.internal_transfer_id == transfer.id,
+        PkGudang2Intake.dibatalkan_pada.is_(None),
+    ))).scalars().first()
+    if intake is not None:
+        try:
+            await _tolak_bila_pk_sudah_dipakai(
+                db, intake, await label_tujuan(db, intake.tujuan, intake.silo_id))
+        except UndoError as exc:
+            return exc.args[0] if exc.args else "PK sudah dipakai di proses lanjutan."
+    return None
+
+
+async def koreksi_hasil_transfer(
+    db: AsyncSession, *, user, transfer_id: int, berat_kg: float,
+    dasar_kg: float, alasan: str,
+) -> InternalTransfer | None:
+    """Koreksi berat transfer dengan membalik lalu mencatat perpindahan baru.
+
+    Transfer adalah perpindahan fisik dua gudang. Baris/peristiwa lama tetap
+    disimpan sebagai dibatalkan, dan berat koreksi dibuat sebagai transfer
+    baru agar kedua saldo dan buku peristiwa tetap konsisten.
+    """
+    import math
+    from app.penggilingan.gudang2.service import label_tujuan
+    from app.services.undo import UndoError, _undo_transfer
+
+    transfer = (await db.execute(
+        select(InternalTransfer).where(InternalTransfer.id == transfer_id)
+        .with_for_update()
+    )).scalar_one_or_none()
+    if transfer is None or transfer.status != "terkirim":
+        raise TransferError("Koreksi hanya tersedia untuk transfer yang masih terkirim.")
+    alasan = (alasan or "").strip()
+    if not alasan:
+        raise TransferError("Tuliskan alasan koreksi hasil.")
+    target = float(berat_kg)
+    dasar = float(dasar_kg)
+    if not math.isfinite(target) or target < 0:
+        raise TransferError("Berat transfer harus berupa angka valid dan tidak negatif.")
+    if not math.isfinite(dasar) or dasar < 0:
+        raise TransferError("Data transfer pada halaman sudah tidak valid. Muat ulang halaman.")
+    lama = float(transfer.berat_kg)
+    if abs(round(lama, 2) - round(dasar, 2)) >= 0.005:
+        raise TransferError("Catatan transfer berubah sejak halaman dibuka. Muat ulang lalu coba lagi.")
+    target = round(target, 2)
+    if abs(target - lama) < 0.005:
+        raise TransferError("Tidak ada perubahan hasil yang dimasukkan.")
+    penghalang = await alasan_koreksi_transfer(db, transfer.id)
+    if penghalang:
+        raise TransferError(penghalang)
+
+    proc = await db.get(MillingProcess, transfer.milling_process_id)
+    if proc is None:
+        raise TransferError("Proses penggilingan asal transfer tidak ditemukan.")
+    tujuan = (await label_tujuan(db, transfer.lokasi_tujuan, transfer.silo_id)
+              if transfer.silo_id is not None else "ditumpuk")
+    try:
+        await _undo_transfer(db, transfer.id, user_id=user.id, alasan=alasan)
+    except UndoError as exc:
+        raise TransferError(exc.args[0] if exc.args else "Transfer tidak bisa dibatalkan untuk koreksi.") from None
+
+    tersedia = await pending_transfer_kg(db, proc.id)
+    if target > tersedia + 0.005:
+        raise TransferError(
+            f"Berat koreksi {target:,.2f} kg melebihi PK yang tersedia ({tersedia:,.2f} kg)."
+            .replace(",", ".")
+        )
+    await log_activity(
+        db, table_name="internal_transfers", record_id=transfer.id,
+        action="UPDATE", changed_by=user.id, field_name="status",
+        old_value="terkirim",
+        new_value=("dibatalkan untuk koreksi; transfer pengganti dicatat"
+                   if target > 0 else "dibatalkan untuk koreksi; berat akhir 0 kg"),
+        alasan=alasan, aksi="koreksi_hasil_transfer",
+    )
+    pengganti = None
+    if target > 0:
+        hasil_baru = await create_internal_transfer(
+            db, user=user, kode_proses=proc.kode_proses,
+            lokasi_tujuan=tujuan, berat=target, commit=False,
+            alasan=alasan, aksi="koreksi_hasil_transfer",
+        )
+        pengganti = hasil_baru.transfer
+    await db.commit()
+    return pengganti
 
 
 # ─────────────────────────── Laporan ───────────────────────────

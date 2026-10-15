@@ -10,6 +10,7 @@
   .riwayat-koreksi>summary{cursor:pointer;list-style:none;padding:18px 20px;color:var(--tinta)}
   .riwayat-koreksi>summary::-webkit-details-marker{display:none}
   .riwayat-koreksi>summary h2{margin:0}
+  .riwayat-koreksi__info{margin:0;padding:0 20px 14px;color:var(--kulit-redup);font-size:.92rem;line-height:1.55}
   .riwayat-koreksi__form{display:grid;gap:6px;padding:0 20px 20px}
   .riwayat-koreksi__field{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 0;border-top:1px solid var(--kulit-pemisah);color:var(--tinta)}
   .riwayat-koreksi__input{display:flex;align-items:center;gap:7px;flex:0 0 150px}
@@ -17,6 +18,7 @@
   .riwayat-koreksi__input small{color:var(--kulit-redup)}
   .riwayat-koreksi__alasan{display:grid;gap:7px;font-weight:700;color:var(--tinta)}
   .riwayat-koreksi__alasan textarea{min-height:84px;resize:vertical}
+  .riwayat-status a{color:inherit;text-decoration:underline;text-underline-offset:2px}
   @media(max-width:700px){.riwayat-koreksi__input{flex-basis:122px}.riwayat-koreksi__field{font-size:.9rem}}
 </style>
 {% set judul = {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Proses") %}
@@ -91,6 +93,28 @@
         {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
       </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk proses ini.</p>{% endif %}
     </section>
+    {% if boleh_koreksi %}
+      {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
+      {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
+      {% if penghalang_koreksi %}
+        <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+      {% else %}
+        <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
+          <summary><h2>Catatan hasil</h2></summary>
+          <p class="riwayat-koreksi__info">Mengubah berat PK akan memperbarui hasil dan stok dari proses giling ini. Koreksi hanya dapat disimpan sebelum PK ditransfer ke Gudang 2 atau dicatat sebagai barang keluar.</p>
+          <form method="post" action="/riwayat-giling/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <label class="riwayat-koreksi__field">
+              <span>PK hasil giling</span>
+              <input type="hidden" name="dasar_pk" value="{{ '%.2f'|format(hasil_awal or 0) }}">
+              <span class="riwayat-koreksi__input"><input type="number" name="hasil_pk" min="0" step="0.01" value="{{ '%.2f'|format(hasil_awal or 0) }}" required><small>kg</small></span>
+            </label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi"></textarea></label>
+            <button class="btn btn--utama" type="submit">Simpan koreksi</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}
     <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
 
   {% elif jenis == "sosoh" %}
@@ -166,6 +190,28 @@
       </dl>
       {% if k.dibatalkan %}<p class="riwayat-detail__warning">Transfer dibatalkan. PK ini tidak sampai ke Gudang 2.</p>{% endif %}
     </section>
+    {% if boleh_koreksi %}
+      {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi transfer tersimpan.{% if pengganti %} Transfer pengganti tercatat sebagai <a href="/riwayat-transfer/{{ pengganti_id }}">{{ pengganti }}</a>.{% else %} Transfer lama dibatalkan; berat akhir transfer 0 kg.{% endif %}</p>{% endif %}
+      {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
+      {% if penghalang_koreksi %}
+        <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+      {% else %}
+        <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
+          <summary><h2>Catatan hasil</h2></summary>
+          <p class="riwayat-koreksi__info">Koreksi membatalkan transfer lama, lalu mencatat transfer pengganti dengan tujuan yang sama. Koreksi hanya bisa dilakukan sebelum PK dipakai untuk penyosohan atau dipindahkan dari tumpukan ke silo.</p>
+          <form method="post" action="/riwayat-transfer/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
+            <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            <label class="riwayat-koreksi__field">
+              <span>Berat transfer</span>
+              <input type="hidden" name="dasar_transfer" value="{{ '%.2f'|format(hasil_awal or 0) }}">
+              <span class="riwayat-koreksi__input"><input type="number" name="hasil_transfer" min="0" step="0.01" value="{{ '%.2f'|format(hasil_awal or 0) }}" required><small>kg</small></span>
+            </label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi"></textarea></label>
+            <button class="btn btn--utama" type="submit">Simpan koreksi</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}
   {% endif %}
 </main>
 {% endblock %}

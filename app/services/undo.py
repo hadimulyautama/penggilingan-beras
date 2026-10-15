@@ -669,7 +669,9 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     return f"✓ Dibatalkan: selesai giling {proc.kode_proses} (kembali 'proses', silo terisi lagi)."
 
 
-async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
+async def _undo_transfer(db: AsyncSession, transfer_id: int, *,
+                         user_id: int | None = None,
+                         alasan: str | None = None) -> str:
     """Batalkan transfer PK ke Gudang 2 — stok siap kirim kembali bertambah."""
     t = await db.get(InternalTransfer, transfer_id)
     if t is None:
@@ -696,8 +698,8 @@ async def _undo_transfer(db: AsyncSession, transfer_id: int) -> str:
         from app.services import peristiwa as buku
 
         await buku.batalkan(db, jenis_lawan=PK_DIPINDAH_G1G2_DIBATALKAN, peristiwa_id=t.peristiwa_id,
-                            pelaku_id=None, muatan={"kode_transfer": t.kode_transfer, "berat_kg": berat,
-                                                    "alasan": "Dibatalkan lewat Batalkan input terakhir"})
+                            pelaku_id=user_id, muatan={"kode_transfer": t.kode_transfer, "berat_kg": berat,
+                                                    "alasan": (alasan or "Dibatalkan lewat Batalkan input terakhir")})
     # Cermin TIDAK dihapus: `_transferred_pk` dan pembaca lain menyaring
     # status `terkirim`, jadi menandainya sudah mengembalikan saldo.
     t.status = "dibatalkan"
@@ -1102,6 +1104,12 @@ _PENANGAN_TAG = {
 
 
 async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
+    if (log.table_name == "milling_process_verifications"
+            and log.aksi == "koreksi_hasil_giling"):
+        raise UndoError(
+            "Koreksi hasil giling tidak dibatalkan lewat undo umum. "
+            "Gunakan Catatan hasil di detail riwayat penggilingan."
+        )
     # ── Tag lebih dulu, tebakan belakangan ──
     #
     # Tebakan dari nama tabel & kolom salah persis pada kasus yang paling
