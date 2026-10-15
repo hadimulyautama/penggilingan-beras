@@ -19,6 +19,8 @@ sendiri — tak ada angka kedua yang bisa berselisih.
 """
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.database import SessionLocal
@@ -263,8 +265,19 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         mutu_aktif = await fitur_mutu(db)
 
     kembali = "/stok-pk-jasa" if jasa_saja else "/stok"
-    if request.query_params.get("gudang_filter") in {"g1", "g2"}:
-        kembali += "?gudang=" + request.query_params["gudang_filter"]
+    params_detail = {
+        "gudang": gudang,
+        "jasa": "1" if jasa_saja else "0",
+    }
+    if gudang == "g1":
+        params_detail["kode"] = kartu.kode
+    else:
+        params_detail["id"] = str(kartu.intake_id)
+    gudang_filter = request.query_params.get("gudang_filter")
+    if gudang_filter in {"g1", "g2"}:
+        kembali += "?gudang=" + gudang_filter
+        params_detail["gudang_filter"] = gudang_filter
+    detail_href = "/stok/pk/detail?" + urlencode(params_detail)
     return await render_laci(
         request, "stok_pk_jasa.html" if jasa_saja else "stok.html",
         layar="stok_pk_jasa" if jasa_saja else "stok",
@@ -277,4 +290,5 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
         breadcrumb_detail="Detail PK", kembali=kembali,
+        detail_href=detail_href,
     )
