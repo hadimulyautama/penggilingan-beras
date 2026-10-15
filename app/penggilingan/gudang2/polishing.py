@@ -345,7 +345,6 @@ async def tambah_silo_penyosohan(
         db, tabel_sumber="polishing_process", id_sumber=proc.id,
         bahan=tuple(arus_bahan),
     )
-    from sqlalchemy import select
     from hmu_core.proses_db import ProsesTerpadu
     proyeksi = (await db.execute(select(ProsesTerpadu).where(
         ProsesTerpadu.aplikasi == "produksi",
