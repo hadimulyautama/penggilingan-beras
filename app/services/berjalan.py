@@ -2609,9 +2609,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 for jenis, kg in komposisi.items():
                     komposisi_total[jenis] = komposisi_total.get(jenis, 0.0) + kg
                 label_bahan = {
-                    "pk": "Total PK", "beras_putih": "Total bahan beras putih",
-                    "broken": "Total bahan broken", "menir": "Total bahan menir",
-                    "reject": "Total bahan reject",
+                    "pk": "PK", "beras_putih": "Beras putih",
+                    "broken": "Broken", "menir": "Menir",
+                    "reject": "Reject",
                     "belum_dikenal": "Belum teridentifikasi",
                 }
                 rinci_bahan.append((s.nama_silo, _kg(total_u), status_u,
@@ -2619,7 +2619,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 for jenis, judul in label_bahan.items():
                     kg = komposisi.get(jenis, 0.0)
                     if kg > 0.001:
-                        rinci_bahan.append((f"  {judul}", _kg(kg), "", "sosoh-bahan"))
+                        rinci_bahan.append((judul, _kg(kg), "", "sosoh-bahan"))
                 # Sumber lot PK dan broken tetap ditampilkan sebagai jejak
                 # asal, tetapi jumlah kategori di atas berasal dari arus
                 # material nyata, bukan metadata jenis silo.

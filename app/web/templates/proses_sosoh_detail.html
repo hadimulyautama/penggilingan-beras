@@ -10,6 +10,13 @@
   .sosoh-detail__aksi .pilihan__satu{min-height:58px}
   .sosoh-detail__neraca .riwayat-detail__table-row span:nth-child(2),
   .sosoh-detail__neraca .riwayat-detail__table-row span:nth-child(3){text-align:right}
+  .sosoh-detail__bahan-hint{margin:-7px 0 14px;color:var(--kulit-redup);font-size:.88rem}
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--silo{background:var(--panel-2);font-weight:750}
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--jenis strong,
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--asal strong{padding-left:20px}
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--asal strong{font-weight:600}
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--jenis span:last-child,
+  .sosoh-detail__bahan-list .sosoh-detail__bahan-row--asal span:last-child{color:var(--kulit-redup);font-size:.8rem}
   @media(max-width:700px){.sosoh-detail__aksi{grid-template-columns:1fr}}
 </style>
 <main class="riwayat-detail">
@@ -30,7 +37,7 @@
     <h2>Ringkasan bahan</h2>
     <dl class="riwayat-detail__facts">
       {% for label, nilai in proses.fakta %}
-        <div><dt>{{ label }}</dt><dd>{{ nilai }}{% if "Total " in label %} kg{% endif %}</dd></div>
+        <div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>
       {% endfor %}
       <div><dt>Mulai proses</dt><dd>{{ proses.sejak|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
       <div><dt>Status</dt><dd>{{ proses.keadaan }}</dd></div>
@@ -64,14 +71,20 @@
   {% for judul, baris_grup in proses.anak_grup %}
   <section class="riwayat-detail__card">
     <h2>{{ judul }}</h2>
+    {% if judul == "Bahan baku masuk per silo" %}
+      <p class="sosoh-detail__bahan-hint">Setiap bagian menunjukkan total isi silo. Rincian di bawahnya menunjukkan jenis bahan dan lot asalnya.</p>
+    {% endif %}
     {% if baris_grup %}
-      <div class="riwayat-detail__table">
-        <div class="riwayat-detail__table-head"><span>Bahan / hasil</span><span>Berat</span><span>Keterangan</span></div>
+      <div class="riwayat-detail__table{% if judul == 'Bahan baku masuk per silo' %} sosoh-detail__bahan-list{% endif %}">
+        <div class="riwayat-detail__table-head"><span>Rincian</span><span>Berat</span><span>Jenis rincian</span></div>
         {% for baris in baris_grup %}
-          <div class="riwayat-detail__table-row">
-            <strong{% if baris|length > 3 and baris[3].startswith("  ") %} class="riwayat-detail__indent"{% endif %}>{{ baris[0] }}</strong>
-            <span>{{ baris[1] }}{% if baris[1] %} kg{% endif %}</span>
-            <span>{{ baris[2] or (baris[3] if baris|length > 3 else "") or "—" }}</span>
+          {% set peran = baris[3] if baris|length > 3 else "" %}
+          {% set is_bahan = judul == "Bahan baku masuk per silo" %}
+          {% set is_silo = peran in ["silo", "dibebaskan"] %}
+          <div class="riwayat-detail__table-row{% if is_bahan and is_silo %} sosoh-detail__bahan-row--silo{% elif is_bahan and peran == 'sosoh-bahan' %} sosoh-detail__bahan-row--jenis{% elif is_bahan %} sosoh-detail__bahan-row--asal{% endif %}">
+            <strong{% if is_bahan and not is_silo %} class="riwayat-detail__indent"{% endif %}>{{ baris[0]|trim }}</strong>
+            <span>{{ baris[1] or "—" }}</span>
+            <span>{% if is_bahan and is_silo %}{{ baris[2] or "Total isi silo" }}{% elif is_bahan and peran == "sosoh-bahan" %}Jenis bahan{% elif is_bahan and peran.startswith("lot") %}Asal lot{% if peran == "lot-dibebaskan" %} · silo sudah dibebaskan{% endif %}{% if baris[2] %} · {{ baris[2] }}{% endif %}{% else %}{{ baris[2] or "—" }}{% endif %}</span>
           </div>
         {% endfor %}
       </div>
