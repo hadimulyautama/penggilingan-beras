@@ -508,7 +508,7 @@ async def alasan_koreksi_hasil(db: AsyncSession, process_id: int) -> str | None:
 
 async def koreksi_hasil_sosoh(
     db: AsyncSession, *, user, process_id: int,
-    perubahan: dict[int, float], tambahan: dict[str, float], alasan: str,
+    perubahan: dict[str, float], dasar: dict[str, float], alasan: str,
 ) -> PolishingProcess:
     """Ubah catatan hasil selesai dengan audit dan sinkronkan neraca lintas-app.
 
@@ -528,10 +528,10 @@ async def koreksi_hasil_sosoh(
     alasan = (alasan or "").strip()
     if not alasan:
         raise Gudang2Error("Tuliskan alasan koreksi hasil.")
-    nilai_berat = tuple(float(v) for v in (*perubahan.values(), *tambahan.values()))
+    nilai_berat = tuple(float(v) for v in perubahan.values())
     if any(not math.isfinite(v) or v < 0 for v in nilai_berat):
         raise Gudang2Error("Berat hasil harus berupa angka yang valid dan tidak negatif.")
-    if any(jenis not in _ALL_JENIS for jenis in tambahan):
+    if set(perubahan) != _ALL_JENIS or set(dasar) != _ALL_JENIS:
         raise Gudang2Error("Ada jenis hasil yang tidak dikenal.")
 
     baris = (await db.execute(
@@ -540,43 +540,69 @@ async def koreksi_hasil_sosoh(
         .order_by(PolishingOutputLog.id)
         .with_for_update()
     )).scalars().all()
-    ids = {row.id for row in baris}
-    if ids != set(perubahan):
-        raise Gudang2Error(
-            "Catatan hasil berubah sejak halaman dibuka. Muat ulang detail sosoh lalu coba lagi.")
-
     berubah = False
+    per_jenis: dict[str, list[PolishingOutputLog]] = {jenis: [] for jenis in _ALL_JENIS}
     for row in baris:
-        baru = round(float(perubahan[row.id]), 2)
-        lama = float(row.berat_kg)
-        if abs(baru - lama) < 0.005:
-            continue
-        row.berat_kg = baru
-        await log_activity(
-            db, table_name="polishing_output_logs", record_id=row.id,
-            action="UPDATE", changed_by=user.id, field_name="berat_kg",
-            old_value=f"{lama:.2f}", new_value=f"{baru:.2f}", alasan=alasan,
-            aksi="koreksi_hasil_sosoh",
-        )
-        berubah = True
+        if row.jenis in per_jenis:
+            per_jenis[row.jenis].append(row)
 
-    for jenis, nilai in tambahan.items():
-        baru = round(float(nilai), 2)
-        if baru <= 0:
+    if any(not math.isfinite(float(v)) or float(v) < 0 for v in dasar.values()):
+        raise Gudang2Error("Data hasil di halaman tidak valid. Muat ulang halaman.")
+    if any(abs(round(sum(float(row.berat_kg) for row in per_jenis[jenis]), 2)
+                   - round(float(dasar[jenis]), 2)) >= 0.005
+           for jenis in _ALL_JENIS):
+        raise Gudang2Error(
+            "Catatan hasil berubah sejak halaman dibuka. Muat ulang lalu coba lagi.")
+
+    for jenis, nilai in perubahan.items():
+        target = round(float(nilai), 2)
+        rows = per_jenis[jenis]
+        total = sum(float(row.berat_kg) for row in rows)
+        delta = round(target - total, 2)
+        if abs(delta) < 0.005:
             continue
-        tambahan_baris = PolishingOutputLog(
-            polishing_process_id=proc.id, jenis=jenis, berat_kg=baru,
-            waktu_update=proc.waktu_selesai, input_by=user.id,
-        )
-        db.add(tambahan_baris)
-        await db.flush()
-        await log_activity(
-            db, table_name="polishing_output_logs", record_id=tambahan_baris.id,
-            action="INSERT", changed_by=user.id,
-            new_value=f"{jenis} {baru:.2f} kg · koreksi: {alasan}",
-            alasan=alasan, aksi="koreksi_hasil_sosoh",
-        )
-        berubah = True
+        if not rows and target > 0:
+            row = PolishingOutputLog(
+                polishing_process_id=proc.id, jenis=jenis, berat_kg=target,
+                waktu_update=proc.waktu_selesai, input_by=user.id,
+            )
+            db.add(row)
+            await db.flush()
+            await log_activity(
+                db, table_name="polishing_output_logs", record_id=row.id,
+                action="INSERT", changed_by=user.id,
+                new_value=f"{jenis} {target:.2f} kg · koreksi: {alasan}",
+                alasan=alasan, aksi="koreksi_hasil_sosoh",
+            )
+            berubah = True
+            continue
+
+        # Pertahankan rincian prosesan yang sudah ada. Tambah selisih ke
+        # catatan pertama, atau kurangi dari catatan terakhir ke awal tanpa
+        # membuat nilai negatif.
+        sisa = abs(delta)
+        sasaran = rows if delta > 0 else list(reversed(rows))
+        for row in sasaran:
+            lama = float(row.berat_kg)
+            if delta > 0:
+                baru = round(lama + sisa, 2)
+                sisa = 0
+            else:
+                pengurangan = min(lama, sisa)
+                baru = round(lama - pengurangan, 2)
+                sisa = round(sisa - pengurangan, 2)
+            if abs(baru - lama) < 0.005:
+                continue
+            row.berat_kg = baru
+            await log_activity(
+                db, table_name="polishing_output_logs", record_id=row.id,
+                action="UPDATE", changed_by=user.id, field_name="berat_kg",
+                old_value=f"{lama:.2f}", new_value=f"{baru:.2f}", alasan=alasan,
+                aksi="koreksi_hasil_sosoh",
+            )
+            berubah = True
+            if sisa < 0.005:
+                break
     if not berubah:
         raise Gudang2Error("Tidak ada perubahan hasil yang dimasukkan.")
 

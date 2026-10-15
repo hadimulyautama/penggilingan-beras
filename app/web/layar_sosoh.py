@@ -144,6 +144,10 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
             .where(PolishingOutputLog.polishing_process_id == process_id)
             .order_by(PolishingOutputLog.id)
         )).scalars().all() if kartu and akun.is_admin else []
+        hasil_awal = {jenis: 0.0 for jenis in _ALL_JENIS}
+        for row in output_logs:
+            if row.jenis in hasil_awal:
+                hasil_awal[row.jenis] += float(row.berat_kg or 0)
         penghalang = (await alasan_koreksi_hasil(db, process_id)
                       if kartu and akun.is_admin else None)
     if not kartu:
@@ -152,7 +156,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_sosoh",
-        output_logs=output_logs,
+        hasil_awal=hasil_awal,
         jenis_hasil=sorted(_ALL_JENIS),
         nama_hasil=nama_produk,
         boleh_koreksi=akun.is_admin,
@@ -172,17 +176,19 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
         Gudang2Error, _ALL_JENIS, koreksi_hasil_sosoh,
     )
     form = await request.form()
-    perubahan: dict[int, float] = {}
-    tambahan: dict[str, float] = {}
+    perubahan: dict[str, float] = {}
+    dasar: dict[str, float] = {}
     try:
         for key, value in form.multi_items():
             raw = str(value or "").strip().replace(",", ".")
             if key.startswith("hasil_"):
-                perubahan[int(key.removeprefix("hasil_"))] = float(raw)
-            elif key.startswith("tambah_"):
-                jenis = key.removeprefix("tambah_")
-                if jenis in _ALL_JENIS and raw:
-                    tambahan[jenis] = float(raw)
+                jenis = key.removeprefix("hasil_")
+                if jenis in _ALL_JENIS:
+                    perubahan[jenis] = float(raw)
+            elif key.startswith("dasar_"):
+                jenis = key.removeprefix("dasar_")
+                if jenis in _ALL_JENIS:
+                    dasar[jenis] = float(raw)
     except (ValueError, TypeError):
         pesan_gagal = "Periksa berat hasil yang dimasukkan."
         return RedirectResponse(
@@ -193,7 +199,7 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
         try:
             await koreksi_hasil_sosoh(
                 db, user=akun.user, process_id=process_id,
-                perubahan=perubahan, tambahan=tambahan, alasan=alasan,
+                perubahan=perubahan, dasar=dasar, alasan=alasan,
             )
         except Gudang2Error as e:
             return RedirectResponse(
