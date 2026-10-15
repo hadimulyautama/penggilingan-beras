@@ -588,8 +588,8 @@ GRUP_ANTREAN = (
     # pun. Lihat `jasa_id` di `Baris` dan cabang khusus di `grup_baris()`.
     ("packing_jasa", "Packing jasa"),
     # Bukan nama yang bagus, dan sengaja tidak disamarkan: di sini berdiri
-    # perintah muat barang keluar dan penyosohan yang menunggu verifikasi
-    # Admin — dua hal yang pemilik belum beri nama grup. Nama yang terlalu
+    # perintah muat barang keluar dan pekerjaan lain yang belum punya grup.
+    # Nama yang terlalu
     # percaya diri ("Administrasi") akan membuat orang berhenti mencari di
     # sini, dan isinya justru hal yang tak boleh tertinggal.
     ("lain", "Lainnya"),
@@ -2485,12 +2485,6 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     # ── Silo Gudang 2 berisi PK, menunggu disosoh ──
     b.transit += await _kartu_silo_g2(db, asal_silo)
 
-    # Penyosohan selesai tetap terlihat di Transit bagi Admin dan Super Admin,
-    # sama seperti bagi operator G2. Sebelumnya kartu ini hanya ditambahkan di
-    # `untuk_operator_gudang2`, sehingga pemilik proses bisa melihatnya tetapi
-    # Admin yang mengesahkan hasil justru kehilangan kartunya.
-    b.transit += await _kartu_sosoh_selesai(db)
-
     # ── Beras yang sudah keluar mesin tetapi belum dipacking ──
     #
     # Admin ikut melihatnya: ia yang membaca angka stok Gudang 2, dan sampai 26
@@ -3138,66 +3132,6 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str,
     return keluar
 
 
-async def _kartu_sosoh_selesai(db: AsyncSession, *, jam: int = 24) -> list[Baris]:
-    """Penyosohan yang BARU SELESAI beserta rendemennya — tanpa tombol.
-
-    Laporan operator 30 September 2026: "hasil rendemen gudang 2 hanya muncul
-    pada KABAR admin saja." Benar, dan kabar itu memang untuk Admin — isinya
-    menagih verifikasi. Yang salah bukan tujuan kabarnya melainkan bahwa ORANG
-    YANG MENJALANKAN MESINNYA tak pernah tahu hasil kerjanya.
-
-    Kalimat penutupan memang menyebut rendemennya, tetapi ia lewat dalam satu
-    detik dan tak bisa dibuka lagi. Rendemen adalah angka yang MENILAI
-    pekerjaan operator; menyimpannya hanya di meja Admin membuat yang dinilai
-    tak pernah tahu nilainya.
-
-    TANPA TOMBOL: prosesnya sudah selesai, tak ada langkah miliknya lagi.
-    Kartu bertombol yang ditekan lalu ditolak mengajari orang bahwa layarnya
-    tak bisa dipercaya.
-
-    DIBATASI 24 JAM, dan itu yang membuatnya tak berubah jadi arsip: cukup
-    untuk dibaca besok pagi oleh shift yang menutupnya sore tadi, dan tak
-    cukup untuk menumpuk jadi dinding yang tak dibaca siapa pun.
-    """
-    from app.database import berzona, now_local
-    from app.penggilingan.gudang2.models import PolishingProcess
-    from app.penggilingan.gudang2.polishing import GRADES, rendemen_proses
-    from app.services.stok import output_sosoh
-
-    batas = now_local() - timedelta(hours=jam)
-    keluar: list[Baris] = []
-    for pr in (await db.execute(
-        select(PolishingProcess)
-        .where(PolishingProcess.status == "selesai",
-               PolishingProcess.waktu_selesai.is_not(None),
-               PolishingProcess.waktu_selesai >= batas)
-        .order_by(PolishingProcess.waktu_selesai.desc())
-    )).scalars().all():
-        rend = await rendemen_proses(db, pr.id)
-        outputs = await output_sosoh(db, pr.id)
-        beras = sum(v for k, v in outputs.items() if k in GRADES)
-        fakta = [("Beras", _kg(beras))]
-        samping = sum(v for k, v in outputs.items() if k not in GRADES)
-        if samping:
-            fakta.append(("Hasil samping", _kg(samping)))
-        keluar.append(Baris(
-            kode=pr.kode_proses, isi=f"Penyosohan {pr.kode_proses} selesai",
-            keadaan="selesai — menunggu verifikasi Admin",
-            fase="sosoh", judul=f"Penyosohan {pr.kode_proses}",
-            # Rendemen yang TAK TERHITUNG disebut, tidak didiamkan: diam atas
-            # angka yang hilang adalah cara paling halus membuat orang percaya
-            # pada yang tak pernah dihitung.
-            utama=((f"{rend:.1f}", "%") if rend is not None else None),
-            # `berzona` — `waktu_selesai` timestamptz, dan jam UTC di kartu
-            # operator adalah cacat yang sama dengan yang baru dibetulkan di
-            # Kabar. `_jam` di berkas ini menghitung LAMA, bukan mencetak jam.
-            sub=(f"selesai {berzona(pr.waktu_selesai).strftime('%d/%m %H:%M')}"
-                 + ("" if rend is not None
-                    else " · rendemen belum bisa dihitung — PK terpakai belum tercatat")),
-            fakta=fakta, kelompok="selesai"))
-    return keluar
-
-
 async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     """Layar OPERATOR Gudang 2, menurut pemilik 12 September 2026:
 
@@ -3366,11 +3300,6 @@ async def untuk_operator_gudang2(db: AsyncSession) -> Berjalan:
     # pukul sebelas, sebab tak ada satu kartu pun yang menyebutnya.
     b.menunggu += await _kartu_barang_keluar(db, gudang="g2")
     b.berjalan += await _kartu_penyosohan_g2(db, asal_silo)
-    # TRANSIT, bukan ANTREAN: tak ada pekerjaan yang dituntutnya, jadi ia
-    # tak boleh menambah lencana antrean. Lencana yang menghitung sesuatu
-    # yang tak bisa dikerjakan siapa pun takkan pernah kembali nol — dan
-    # lencana yang tak pernah nol mengajari orang mengabaikan lencana.
-    b.transit += await _kartu_sosoh_selesai(db)
     return _cap_gudang(b, "g2")
 
 

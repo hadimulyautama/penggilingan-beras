@@ -1,15 +1,12 @@
 """Layar Kabar — yang membacakan `notifications` kepada orangnya.
 
 LAHIR 26 September 2026, atas keputusan pemilik sesudah satu temuan yang tak
-enak dibaca: aplikasi ini sudah LIMA TEMPAT menulis notifikasi — harga gabah
-belum diverifikasi, pengeringan telat, penyosohan selesai & perlu verifikasi
-output, packing, dan rantai permintaan PK — dan TAK SATU PUN layar membacanya
-untuk ditampilkan. Tabel itu dibaca hanya untuk menutup barisnya sendiri.
+enak dibaca: aplikasi ini menulis notifikasi di banyak tempat, tetapi tidak
+ada layar yang membacakannya. Tabel itu dibaca hanya untuk menutup barisnya
+sendiri.
 
-Jadi selama berbulan-bulan kalimat-kalimat itu ditulis rapi lalu dimasukkan ke
-lemari yang tak pernah dibuka siapa pun. Notifikasi "Penyosohan POL-… selesai —
-perlu verifikasi output" yang dikeluhkan QA bukan hilang; ia memang tak pernah
-punya pembaca.
+Baris lama bertipe `verifikasi_penyosohan` sengaja tidak ditampilkan lagi:
+penyelesaian sosoh tidak membutuhkan persetujuan Admin.
 
 YANG DIPILIH DI SINI, dan sebabnya:
 
@@ -129,6 +126,7 @@ async def daftar(db: AsyncSession, user: User, *, hari: int = HARI) -> list[Kaba
     baris = (await db.execute(
         select(Notification)
         .where(Notification.created_at >= batas,
+               Notification.tipe != "verifikasi_penyosohan",
                # `target_role` kosong = belum dialamatkan siapa pun. Ikut
                # dibacakan: kabar tanpa alamat yang tak pernah tampil adalah
                # kabar yang ditulis untuk tak dibaca.
@@ -159,6 +157,7 @@ async def jumlah_baru(db: AsyncSession, user: User, *, hari: int = HARI) -> int:
         return int((await db.execute(
             select(func.count(Notification.id))
             .where(Notification.status == "baru",
+                   Notification.tipe != "verifikasi_penyosohan",
                    Notification.created_at >= batas,
                    (Notification.target_role == peran)
                    | (Notification.target_role.is_(None)))
@@ -168,6 +167,7 @@ async def jumlah_baru(db: AsyncSession, user: User, *, hari: int = HARI) -> int:
     return sum(n for tipe, n in (await db.execute(
         select(Notification.tipe, func.count(Notification.id))
         .where(Notification.status == "baru",
+               Notification.tipe != "verifikasi_penyosohan",
                Notification.created_at >= batas,
                (Notification.target_role == peran)
                | (Notification.target_role.is_(None)))
@@ -193,6 +193,7 @@ async def ada_merah(db: AsyncSession, user: User, *, hari: int = HARI) -> bool:
     tipe = [t for t, in (await db.execute(
         select(Notification.tipe)
         .where(Notification.status == "baru",
+               Notification.tipe != "verifikasi_penyosohan",
                Notification.prioritas == "merah",
                Notification.created_at >= batas,
                (Notification.target_role == peran)

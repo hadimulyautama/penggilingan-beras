@@ -23,6 +23,8 @@ akhir — lalu dipakai menilai mesin.
 """
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
@@ -130,16 +132,75 @@ async def detail_proses_sosoh(kode_proses: str, request: Request,
 async def detail_riwayat_sosoh(process_id: int, request: Request,
                                akun=Depends(butuh_akun)):
     await _pastikan_akses_sosoh(akun.user)
-    from app.penggilingan.gudang2.polishing import riwayat_sosoh
+    from app.penggilingan.gudang2.models import PolishingOutputLog
+    from app.penggilingan.gudang2.polishing import (
+        _ALL_JENIS, alasan_koreksi_hasil, riwayat_sosoh,
+    )
+    from app.services.stok import nama_produk
     async with SessionLocal() as db:
         kartu, _ = await riwayat_sosoh(db, batas=1, process_id=process_id)
+        output_logs = (await db.execute(
+            select(PolishingOutputLog)
+            .where(PolishingOutputLog.polishing_process_id == process_id)
+            .order_by(PolishingOutputLog.id)
+        )).scalars().all() if kartu and akun.is_admin else []
+        penghalang = (await alasan_koreksi_hasil(db, process_id)
+                      if kartu and akun.is_admin else None)
     if not kartu:
         raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
     return await render_laci(
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_sosoh",
+        output_logs=output_logs,
+        jenis_hasil=sorted(_ALL_JENIS),
+        nama_hasil=nama_produk,
+        boleh_koreksi=akun.is_admin,
+        penghalang_koreksi=penghalang,
+        hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
+        gagal_koreksi=request.query_params.get("koreksi_gagal"),
     )
+
+
+@router.post("/riwayat-sosoh/{process_id}/koreksi")
+async def koreksi_riwayat_sosoh(process_id: int, request: Request,
+                                akun=Depends(butuh_akun)):
+    """Koreksi hasil sosoh selesai dengan audit, tanpa tahap verifikasi."""
+    if not akun.is_admin:
+        raise HTTPException(403, "Koreksi hasil sosoh hanya untuk Admin ke atas.")
+    from app.penggilingan.gudang2.polishing import (
+        Gudang2Error, _ALL_JENIS, koreksi_hasil_sosoh,
+    )
+    form = await request.form()
+    perubahan: dict[int, float] = {}
+    tambahan: dict[str, float] = {}
+    try:
+        for key, value in form.multi_items():
+            raw = str(value or "").strip().replace(",", ".")
+            if key.startswith("hasil_"):
+                perubahan[int(key.removeprefix("hasil_"))] = float(raw)
+            elif key.startswith("tambah_"):
+                jenis = key.removeprefix("tambah_")
+                if jenis in _ALL_JENIS and raw:
+                    tambahan[jenis] = float(raw)
+    except (ValueError, TypeError):
+        pesan_gagal = "Periksa berat hasil yang dimasukkan."
+        return RedirectResponse(
+            f"/riwayat-sosoh/{process_id}?"
+            f"{urlencode({'koreksi_gagal': pesan_gagal})}", status_code=303)
+    alasan = str(form.get("alasan", "")).strip()
+    async with SessionLocal() as db:
+        try:
+            await koreksi_hasil_sosoh(
+                db, user=akun.user, process_id=process_id,
+                perubahan=perubahan, tambahan=tambahan, alasan=alasan,
+            )
+        except Gudang2Error as e:
+            return RedirectResponse(
+                f"/riwayat-sosoh/{process_id}?"
+                f"{urlencode({'koreksi_gagal': str(e)})}", status_code=303)
+    return RedirectResponse(
+        f"/riwayat-sosoh/{process_id}?koreksi=berhasil", status_code=303)
 
 
 @router.get("/riwayat-sosoh/{process_id}/laporan.pdf")

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from decimal import Decimal
+import math
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +36,6 @@ from app.services.jasa import (
     pastikan_satu_pemilik,
     pemilik_silo_g2,
 )
-from app.services.notification import create_notification
 from app.penggilingan.gudang2.service import (
     Gudang2Error, get_g2_silo, hitung_stok_silo, komposisi_bahan_silo,
 )
@@ -479,6 +479,142 @@ async def catat_output(
                         berat_kg=float(berat), spek=spek)
 
 
+async def alasan_koreksi_hasil(db: AsyncSession, process_id: int) -> str | None:
+    """Koreksi output hanya sebelum hasil dipakai proses berikutnya."""
+    from app.penggilingan.gudang2.models import BerasKeSilo, HasilSampingKeSilo
+    from app.penggilingan.inventory.models import ByproductStock, FinishedGoodsStock
+
+    pemeriksaan = (
+        (select(FinishedGoodsStock.id).where(
+            FinishedGoodsStock.source_type == "polishing",
+            FinishedGoodsStock.source_id == process_id),
+         "hasilnya sudah dikemas"),
+        (select(ByproductStock.id).where(
+            ByproductStock.source_type == "polishing",
+            ByproductStock.source_id == process_id),
+         "hasil sampingnya sudah dicatat sebagai stok"),
+        (select(BerasKeSilo.id).where(
+            BerasKeSilo.polishing_process_id == process_id),
+         "berasnya sudah dipindahkan ke silo lain"),
+        (select(HasilSampingKeSilo.id).where(
+            HasilSampingKeSilo.polishing_process_id == process_id),
+         "hasil sampingnya sudah dipindahkan ke silo"),
+    )
+    for q, pesan in pemeriksaan:
+        if (await db.execute(q.limit(1))).first():
+            return f"Koreksi ditahan: {pesan}. Batalkan atau sesuaikan catatan turunannya dulu."
+    return None
+
+
+async def koreksi_hasil_sosoh(
+    db: AsyncSession, *, user, process_id: int,
+    perubahan: dict[int, float], tambahan: dict[str, float], alasan: str,
+) -> PolishingProcess:
+    """Ubah catatan hasil selesai dengan audit dan sinkronkan neraca lintas-app.
+
+    Hasil yang sudah dikemas atau dipindah tidak boleh dikoreksi dari sini:
+    stok lanjutannya harus dibalik lebih dulu agar angka asal dan turunannya
+    tidak berpisah.
+    """
+    proc = (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.id == process_id)
+        .with_for_update()
+    )).scalar_one_or_none()
+    if proc is None or proc.status != "selesai":
+        raise Gudang2Error("Koreksi hanya tersedia untuk proses sosoh yang selesai.")
+    penghalang = await alasan_koreksi_hasil(db, proc.id)
+    if penghalang:
+        raise Gudang2Error(penghalang)
+    alasan = (alasan or "").strip()
+    if not alasan:
+        raise Gudang2Error("Tuliskan alasan koreksi hasil.")
+    nilai_berat = tuple(float(v) for v in (*perubahan.values(), *tambahan.values()))
+    if any(not math.isfinite(v) or v < 0 for v in nilai_berat):
+        raise Gudang2Error("Berat hasil harus berupa angka yang valid dan tidak negatif.")
+    if any(jenis not in _ALL_JENIS for jenis in tambahan):
+        raise Gudang2Error("Ada jenis hasil yang tidak dikenal.")
+
+    baris = (await db.execute(
+        select(PolishingOutputLog)
+        .where(PolishingOutputLog.polishing_process_id == proc.id)
+        .order_by(PolishingOutputLog.id)
+        .with_for_update()
+    )).scalars().all()
+    ids = {row.id for row in baris}
+    if ids != set(perubahan):
+        raise Gudang2Error(
+            "Catatan hasil berubah sejak halaman dibuka. Muat ulang detail sosoh lalu coba lagi.")
+
+    berubah = False
+    for row in baris:
+        baru = round(float(perubahan[row.id]), 2)
+        lama = float(row.berat_kg)
+        if abs(baru - lama) < 0.005:
+            continue
+        row.berat_kg = baru
+        await log_activity(
+            db, table_name="polishing_output_logs", record_id=row.id,
+            action="UPDATE", changed_by=user.id, field_name="berat_kg",
+            old_value=f"{lama:.2f}", new_value=f"{baru:.2f}", alasan=alasan,
+            aksi="koreksi_hasil_sosoh",
+        )
+        berubah = True
+
+    for jenis, nilai in tambahan.items():
+        baru = round(float(nilai), 2)
+        if baru <= 0:
+            continue
+        tambahan_baris = PolishingOutputLog(
+            polishing_process_id=proc.id, jenis=jenis, berat_kg=baru,
+            waktu_update=proc.waktu_selesai, input_by=user.id,
+        )
+        db.add(tambahan_baris)
+        await db.flush()
+        await log_activity(
+            db, table_name="polishing_output_logs", record_id=tambahan_baris.id,
+            action="INSERT", changed_by=user.id,
+            new_value=f"{jenis} {baru:.2f} kg · koreksi: {alasan}",
+            alasan=alasan, aksi="koreksi_hasil_sosoh",
+        )
+        berubah = True
+    if not berubah:
+        raise Gudang2Error("Tidak ada perubahan hasil yang dimasukkan.")
+
+    outputs = await _output_map(db, proc.id)
+    rendemen = await rendemen_proses(db, proc.id)
+    pk_terpakai = float((await db.execute(
+        select(func.coalesce(func.sum(PolishingSiloUsage.berat_terpakai_kg), 0))
+        .where(PolishingSiloUsage.polishing_process_id == proc.id)
+    )).scalar_one())
+    komoditas_hasil = {
+        "sayur": ("beras_putih", {"kualitas": "sayur"}),
+        "medium": ("beras_putih", {"kualitas": "medium"}),
+        "medsuper": ("beras_putih", {"kualitas": "medsuper"}),
+        "premium": ("beras_putih", {"kualitas": "premium"}),
+        "beras_b": ("beras_olah_ulang", {}),
+        "broken": ("broken", {}), "menir": ("menir", {}),
+        "bekatul": ("bekatul", {}), "reject": ("reject", {}),
+    }
+    arus_hasil = tuple(
+        ArusProses(
+            produk=buat_produk(komoditas_hasil[jenis][0],
+                               **komoditas_hasil[jenis][1]),
+            berat_kg=Decimal(str(berat)), referensi=proc.kode_proses,
+        )
+        for jenis, berat in outputs.items()
+        if berat > 0 and jenis in komoditas_hasil
+    )
+    from app.services.proses_bersama import tutup_proses_bersama
+    await tutup_proses_bersama(
+        db, tabel_sumber="polishing_process", id_sumber=proc.id,
+        waktu_selesai=proc.waktu_selesai, hasil=arus_hasil,
+        metadata_tambahan={"rendemen_beras_persen": rendemen,
+                           "berat_pk_terpakai_kg": pk_terpakai},
+    )
+    await db.commit()
+    return proc
+
+
 # ─────────────────────────── Selesai + rendemen ───────────────────────────
 async def _output_map(db: AsyncSession, proc_id: int) -> dict[str, float]:
     """Output terbaru per jenis (kumulatif) — lewat `stok.output_sosoh`.
@@ -682,7 +818,6 @@ async def selesai_penyosohan(
     semua_selesai = all(u.berat_akhir_kg is not None for u in usages)
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
     outputs = await _output_map(db, proc.id)
-    beras_total = sum(v for k, v in outputs.items() if k in GRADES)
     rendemen = None
 
     if semua_selesai:
@@ -728,19 +863,6 @@ async def selesai_penyosohan(
         await log_activity(
             db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
             changed_by=user.id, field_name="status", new_value="selesai",
-        )
-        await create_notification(
-            db, tipe="verifikasi_penyosohan",
-            pesan=(
-                f"🟡 Penyosohan {proc.kode_proses} selesai — perlu verifikasi output "
-                f"& konfirmasi byproduct. PK terpakai {pk_terpakai:.0f} kg, beras "
-                f"{beras_total:.0f} kg"
-                + (f" (rendemen {rendemen:.1f}%)" if rendemen is not None
-                   else " — rendemen belum bisa dihitung: PK terpakai belum "
-                        "tercatat")
-            ),
-            target_role="admin", prioritas="kuning",
-            table_name="polishing_process", record_id=proc.id,
         )
     # ── SATU baris bertanda, ditulis TERAKHIR — inilah yang dibatalkan ──
     #

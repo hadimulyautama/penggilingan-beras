@@ -53,13 +53,20 @@ _BERAS_KATEGORI = {"beras_putih", "beras_b"}
 async def _proc_by_kode(db: AsyncSession, kode: str | None) -> PolishingProcess:
     if not kode:
         rows = (
-            await db.execute(select(PolishingProcess).order_by(PolishingProcess.id.desc()).limit(1))
+            await db.execute(
+                select(PolishingProcess).order_by(PolishingProcess.id.desc())
+                .limit(1).with_for_update()
+            )
         ).scalars().all()
         if rows:
             return rows[0]
         raise InventoryError("Sebutkan kode proses penyosohan (POL-...).")
     p = (
-        await db.execute(select(PolishingProcess).where(PolishingProcess.kode_proses == kode))
+        await db.execute(
+            select(PolishingProcess)
+            .where(PolishingProcess.kode_proses == kode)
+            .with_for_update()
+        )
     ).scalars().first()
     if p is None:
         raise InventoryError(f"Proses {kode} tidak ditemukan.")
