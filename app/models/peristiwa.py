@@ -44,6 +44,8 @@ PK_DIPINDAH_G1G2 = "pk_dipindah_g1g2"
 PK_DIPINDAH_G1G2_DIBATALKAN = "pk_dipindah_g1g2_dibatalkan"
 PK_TUMPUKAN_KE_SILO = "pk_tumpukan_ke_silo"
 PK_TUMPUKAN_KE_SILO_DIBATALKAN = "pk_tumpukan_ke_silo_dibatalkan"
+PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT = "pk_tumpukan_ke_silo_koreksi_bobot"
+PK_MASUK_G2_KOREKSI_BOBOT = "pk_masuk_g2_koreksi_bobot"
 
 TERCATAT, DIBATALKAN = "tercatat", "dibatalkan"
 

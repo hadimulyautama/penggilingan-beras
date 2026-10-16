@@ -14,6 +14,7 @@ Acuan WAJIB: LOGIKA_SILO_GUDANG2.md.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, time
 
@@ -44,7 +45,10 @@ from app.models import (
     User,
     Warehouse,
 )
-from app.models.peristiwa import PK_LUAR_MASUK, PK_MASUK_G2, PK_TUMPUKAN_KE_SILO
+from app.models.peristiwa import (
+    PK_LUAR_MASUK, PK_MASUK_G2, PK_MASUK_G2_KOREKSI_BOBOT,
+    PK_TUMPUKAN_KE_SILO, PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT,
+)
 from app.services import peristiwa as buku
 from app.services.activity_log import log_activity
 from app.services.codegen import (
@@ -80,6 +84,7 @@ from app.penggilingan.peta_jenis import intake_dari_jenis
 #: JENIS tempat PK di Gudang 2. Yang disimpan ini, bukan nama silonya —
 #: silo MANA ada di kolom `silo_id`. Lihat migrasi 0057.
 SILO, DITUMPUK = "silo", "ditumpuk"
+log = logging.getLogger("gudang2.service")
 
 #: Kata LAMA yang masih berdiri di baris sebelum 24 September 2026, dan masih
 #: dikirim halaman yang belum dimuat ulang. Diterima saat MEMBACA masukan,
@@ -1384,33 +1389,199 @@ async def masukkan_pk_luar(
     return res
 
 
-_SQL_RESINKRON_INTAKE = text("""
-    UPDATE pk_gudang2_intakes i
-       SET berat_kg = b.berat_total_kg,
-           bobot_final = true
-      FROM pk_purchase_batches b
-     WHERE i.pk_purchase_batch_id = b.id
-       AND i.dibatalkan_pada IS NULL              -- cermin bertanda
-       AND i.bobot_final = false
-       AND b.dibatalkan_pada IS NULL
-       AND b.sumber_berat IN ('nota', 'timbangan', 'manual')
-       AND b.berat_total_kg IS NOT NULL
-       AND b.berat_total_kg > 0
-""")
-
-
 async def resinkron_intake_g2(db: AsyncSession) -> int:
     """Lengkapi berat PK yang masuk Gudang 2 SEBELUM bobotnya pasti (P6-02).
 
-    Intake menyalin bobot batch saat masuk. Bila saat itu bobotnya masih
-    perkiraan atau belum diketahui, salinannya ditandai belum final; begitu
-    batch-nya punya netto sungguhan (poller langkah 1), salinannya disamakan
-    di sini. Stok silo & tumpukan dihitung dari intake, jadi keduanya ikut
-    benar tanpa ada yang mencatat ulang. → jumlah intake yang dilengkapi.
+    Intake menyalin bobot batch saat masuk. Jika perkiraan sudah dipindahkan
+    dari tumpukan ke silo, timbang final juga harus mengoreksi pemindahan,
+    pemakaian silo aktif, dan bahan pada proses bersama dalam transaksi yang
+    sama. Koreksi pemindahan dicatat sebagai peristiwa tambahan; peristiwa
+    asal tidak diubah.
+
+    Bila satu intake tersebar ke beberapa silo dan koreksi diperlukan, sistem
+    tidak menebak silo mana yang menerima selisih: intake tetap belum final
+    dan kasusnya masuk log untuk rekonsiliasi manual.
     """
-    res = await db.execute(_SQL_RESINKRON_INTAKE)
+    rows = (await db.execute(
+        select(PkGudang2Intake, PkPurchaseBatch)
+        .join(PkPurchaseBatch, PkPurchaseBatch.id == PkGudang2Intake.pk_purchase_batch_id)
+        .where(PkGudang2Intake.dibatalkan_pada.is_(None),
+               PkGudang2Intake.bobot_final.is_(False),
+               PkPurchaseBatch.dibatalkan_pada.is_(None),
+               PkPurchaseBatch.sumber_berat.in_(("nota", "timbangan", "manual")),
+               PkPurchaseBatch.berat_total_kg.is_not(None),
+               PkPurchaseBatch.berat_total_kg > 0)
+        .with_for_update(of=PkGudang2Intake, skip_locked=True)
+    )).all()
+    selesai = 0
+    for intake, batch in rows:
+        final = float(batch.berat_total_kg)
+        awal = float(intake.berat_kg) if intake.berat_kg is not None else None
+        moves = (await db.execute(
+            select(PkTumpukanToSilo).where(
+                PkTumpukanToSilo.pk_gudang2_intake_id == intake.id,
+                PkTumpukanToSilo.dibatalkan_pada.is_(None),
+            ).order_by(PkTumpukanToSilo.waktu, PkTumpukanToSilo.id)
+            .with_for_update()
+        )).scalars().all()
+
+        delta = final - (awal or 0.0)
+        jumlah_dipindah = sum(float(m.berat_kg or 0) for m in moves)
+        # Bila sisa tumpukan masih dapat menutup bobot final, pertahankan semua
+        # pemindahan dan biarkan sisa dihitung sebagai final - jumlah dipindah.
+        # Jika seluruh perkiraan sudah dipindah, atau catatan silo melebihi
+        # bobot final, koreksi jumlah masuk silo. Pemilik silo harus tunggal
+        # agar selisihnya tidak dibagi dengan tebakan.
+        pindah_penuh = bool(moves) and awal is not None and jumlah_dipindah >= awal - 1.0
+        perlu_koreksi_silo = pindah_penuh or jumlah_dipindah > final + 0.005
+        delta_pemindahan = final - jumlah_dipindah if perlu_koreksi_silo else 0.0
+        koreksi_moves: list[tuple[PkTumpukanToSilo, float, float]] = []
+        if moves and abs(delta_pemindahan) > 0.005:
+            silo_ids = {m.silo_id for m in moves}
+            if len(silo_ids) != 1:
+                log.warning(
+                    "Bobot intake G2 %s (%s): %.2f → %.2f kg, sudah tersebar ke %s silo; "
+                    "ditahan untuk rekonsiliasi manual.",
+                    intake.id, batch.kode_batch, awal, final, len(silo_ids),
+                )
+                continue
+            sisa_koreksi = delta_pemindahan
+            for move in reversed(moves):
+                lama_move = float(move.berat_kg or 0)
+                baru_move = lama_move + sisa_koreksi
+                if baru_move >= 0:
+                    if abs(baru_move - lama_move) > 0.005:
+                        koreksi_moves.append((move, lama_move, baru_move))
+                    sisa_koreksi = 0.0
+                    break
+                koreksi_moves.append((move, lama_move, 0.0))
+                sisa_koreksi = baru_move
+            if sisa_koreksi < -0.005:
+                log.warning("Bobot final intake G2 %s lebih kecil dari seluruh catatan silo; ditahan.", intake.id)
+                continue
+        koreksi_move = koreksi_moves[-1][0] if koreksi_moves else None
+
+        # Terapkan koreksi pada proses pertama yang memakai silo setelah
+        # material masuk. Ini mengubah snapshot awal bila dituangkan sebelum
+        # proses, atau berat masuk bila dituangkan saat proses berjalan.
+        usage_koreksi = None
+        proc_koreksi = None
+        output_count = 0
+        silo_koreksi_id = (koreksi_move.silo_id if koreksi_move is not None else
+                           intake.silo_id if intake.tujuan == SILO else None)
+        waktu_masuk_silo = (koreksi_move.waktu if koreksi_move is not None else intake.waktu_masuk)
+        delta_silo = (delta_pemindahan if koreksi_move is not None else
+                      delta if intake.tujuan == SILO else 0.0)
+        if silo_koreksi_id is not None and abs(delta_silo) > 0.005:
+            from app.models import PolishingOutputLog
+            kandidat = (await db.execute(
+                select(PolishingSiloUsage, PolishingProcess)
+                .join(PolishingProcess,
+                      PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+                .where(PolishingSiloUsage.silo_id == silo_koreksi_id,
+                       (PolishingProcess.waktu_selesai.is_(None)
+                        | (PolishingProcess.waktu_selesai >= waktu_masuk_silo)))
+                .order_by(PolishingProcess.waktu_mulai, PolishingProcess.id)
+                .with_for_update(of=PolishingSiloUsage)
+            )).first()
+            if kandidat:
+                usage_koreksi, proc_koreksi = kandidat
+                output_count = int((await db.execute(
+                    select(func.count(PolishingOutputLog.id)).where(
+                        PolishingOutputLog.polishing_process_id == proc_koreksi.id)
+                )).scalar_one())
+                kolom = ("berat_awal_kg" if waktu_masuk_silo <= proc_koreksi.waktu_mulai
+                         else "berat_masuk_kg")
+                nilai_lama = float(getattr(usage_koreksi, kolom) or 0)
+                nilai_baru = nilai_lama + delta_silo
+                if nilai_baru < -0.005:
+                    log.warning("Koreksi intake G2 %s akan membuat input proses negatif; ditahan.", intake.id)
+                    continue
+                setattr(usage_koreksi, kolom, max(0.0, nilai_baru))
+
+        intake.berat_kg = final
+        intake.bobot_final = True
+        if intake.peristiwa_id is not None and awal is not None and abs(delta) > 0.005:
+            await buku.catat(
+                db, jenis=PK_MASUK_G2_KOREKSI_BOBOT, pelaku_id=None,
+                kunci_kiriman=f"{PK_MASUK_G2_KOREKSI_BOBOT}:intake:{intake.id}",
+                muatan={"intake_id": intake.id, "peristiwa_asal_id": intake.peristiwa_id,
+                        "berat_lama_kg": awal, "berat_baru_kg": final,
+                        "delta_kg": delta, "kode_batch": batch.kode_batch},
+            )
+        for move, lama_move, baru_move in koreksi_moves:
+            move.berat_kg = baru_move
+            if move.peristiwa_id is not None:
+                await buku.catat(
+                    db, jenis=PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT,
+                    pelaku_id=None,
+                    kunci_kiriman=(f"{PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT}:intake:{intake.id}"
+                                   f":move:{move.id}"),
+                    muatan={"intake_id": intake.id, "move_id": move.id,
+                            "peristiwa_asal_id": move.peristiwa_id,
+                            "berat_lama_kg": lama_move,
+                            "berat_baru_kg": baru_move,
+                            "delta_kg": baru_move - lama_move,
+                            "kode_batch": batch.kode_batch},
+                )
+            await log_activity(
+                db, table_name="pk_tumpukan_to_silo", record_id=move.id,
+                action="UPDATE", changed_by=None, field_name="berat_kg",
+                old_value=f"{lama_move:.2f} kg", new_value=f"{baru_move:.2f} kg",
+                alasan=f"Rekonsiliasi timbang final batch {batch.kode_batch}; bobot intake "
+                       f"{awal:.2f} → {final:.2f} kg",
+            )
+        await log_activity(
+            db, table_name="pk_gudang2_intakes", record_id=intake.id,
+            action="UPDATE", changed_by=None, field_name="berat_kg",
+            old_value=f"{awal:.2f} kg" if awal is not None else "belum diketahui",
+            new_value=f"{final:.2f} kg",
+            alasan=f"Bobot final dari tiket timbang batch {batch.kode_batch}",
+        )
+
+        if usage_koreksi is not None and proc_koreksi is not None:
+            from app.penggilingan.gudang2.polishing import _arus_dari_komposisi
+            from app.services.proses_bersama import perbarui_bahan_proses_bersama
+            from hmu_core.proses_db import ProsesTerpadu
+
+            total_proc = float(usage_koreksi.berat_awal_kg or 0) + float(usage_koreksi.berat_masuk_kg or 0)
+            komposisi = await komposisi_bahan_silo(
+                db, silo_koreksi_id,
+                sampai=proc_koreksi.waktu_selesai or input_time(None),
+                kecuali_proses_id=proc_koreksi.id, target_kg=total_proc,
+            )
+            silo = await db.get(Silo, silo_koreksi_id)
+            await perbarui_bahan_proses_bersama(
+                db, tabel_sumber="polishing_process", id_sumber=proc_koreksi.id,
+                bahan=tuple(_arus_dari_komposisi(silo, komposisi)),
+            )
+            proyeksi = (await db.execute(select(ProsesTerpadu).where(
+                ProsesTerpadu.aplikasi == "produksi",
+                ProsesTerpadu.tabel_sumber == "polishing_process",
+                ProsesTerpadu.id_sumber == str(proc_koreksi.id),
+            ).with_for_update())).scalar_one_or_none()
+            if proyeksi is not None:
+                metadata = dict(proyeksi.metadata_domain or {})
+                semua_komposisi = dict(metadata.get("komposisi_bahan") or {})
+                semua_komposisi[silo.nama_silo] = komposisi
+                metadata["komposisi_bahan"] = semua_komposisi
+                if output_count:
+                    metadata.setdefault("koreksi_bobot_setelah_hasil", []).append({
+                        "kode_batch": batch.kode_batch, "delta_kg": delta,
+                        "waktu_koreksi": input_time(None).isoformat(),
+                        "hasil_sudah_dicatat": output_count,
+                    })
+                proyeksi.metadata_domain = metadata
+            await log_activity(
+                db, table_name="polishing_process", record_id=proc_koreksi.id,
+                action="UPDATE", changed_by=None, field_name="bobot_bahan",
+                old_value=f"{total_proc - delta_silo:.2f} kg", new_value=f"{total_proc:.2f} kg",
+                alasan=(f"Rekonsiliasi timbang final batch {batch.kode_batch}; "
+                        f"{output_count} catatan hasil sudah ada"),
+            )
+        selesai += 1
     await db.commit()
-    return res.rowcount or 0
+    return selesai
 
 
 # ─────────────────────────── Pindah tumpukan → silo ───────────────────────────

@@ -29,7 +29,9 @@ from app.models import (Peristiwa, ProyeksiGabahMasuk, ProyeksiPindahTumpukanSil
 from app.models.peristiwa import (DIBATALKAN, GABAH_MASUK, GABAH_MASUK_DIBATALKAN, PK_DIPINDAH_G1G2,
                                   PK_DIPINDAH_G1G2_DIBATALKAN, PK_LUAR_MASUK,
                                   PK_LUAR_MASUK_DIBATALKAN, PK_MASUK_G2, PK_MASUK_G2_DIBATALKAN,
-                                  PK_TUMPUKAN_KE_SILO, PK_TUMPUKAN_KE_SILO_DIBATALKAN, TERCATAT)
+                                  PK_TUMPUKAN_KE_SILO, PK_TUMPUKAN_KE_SILO_DIBATALKAN,
+                                  PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT,
+                                  PK_MASUK_G2_KOREKSI_BOBOT, TERCATAT)
 
 log = logging.getLogger("peristiwa")
 
@@ -239,6 +241,34 @@ async def _pk_tumpukan_ke_silo_dibatalkan(db: AsyncSession, e: Peristiwa) -> Non
     await db.flush()
 
 
+async def _pk_tumpukan_ke_silo_koreksi_bobot(db: AsyncSession, e: Peristiwa) -> None:
+    """Terapkan koreksi bobot bertambah-tetap pada proyeksi pemindahan asal."""
+    m = e.muatan
+    p = (await db.execute(
+        select(ProyeksiPindahTumpukanSilo).where(
+            ProyeksiPindahTumpukanSilo.peristiwa_id == m["peristiwa_asal_id"]
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if p is None:
+        raise ValueError(f"pemindahan tumpukan #{m['move_id']} untuk koreksi tidak ditemukan")
+    p.berat_kg = m["berat_baru_kg"]
+    await db.flush()
+
+
+async def _pk_masuk_g2_koreksi_bobot(db: AsyncSession, e: Peristiwa) -> None:
+    """Samakan proyeksi intake dengan bobot final dari tiket timbang."""
+    m = e.muatan
+    p = (await db.execute(
+        select(ProyeksiPkMasukG2).where(
+            ProyeksiPkMasukG2.peristiwa_id == m["peristiwa_asal_id"]
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if p is None:
+        raise ValueError(f"intake Gudang 2 #{m['intake_id']} untuk koreksi tidak ditemukan")
+    p.berat_kg = m["berat_baru_kg"]
+    await db.flush()
+
+
 PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     GABAH_MASUK: _gabah_masuk,
     GABAH_MASUK_DIBATALKAN: _gabah_masuk_dibatalkan,
@@ -250,6 +280,8 @@ PENANGAN: dict[str, Callable[[AsyncSession, Peristiwa], Awaitable[None]]] = {
     PK_DIPINDAH_G1G2_DIBATALKAN: _pk_dipindah_g1g2_dibatalkan,
     PK_TUMPUKAN_KE_SILO: _pk_tumpukan_ke_silo,
     PK_TUMPUKAN_KE_SILO_DIBATALKAN: _pk_tumpukan_ke_silo_dibatalkan,
+    PK_TUMPUKAN_KE_SILO_KOREKSI_BOBOT: _pk_tumpukan_ke_silo_koreksi_bobot,
+    PK_MASUK_G2_KOREKSI_BOBOT: _pk_masuk_g2_koreksi_bobot,
 }
 
 #: Tabel proyeksi yang dikosongkan lalu diisi ulang saat membangun dari nol.
