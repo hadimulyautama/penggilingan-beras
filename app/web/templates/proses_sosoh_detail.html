@@ -51,6 +51,20 @@
     {% if proses.neraca.timpang %}
       <p class="riwayat-detail__warning">Jumlah hasil sementara melebihi berat bahan. Periksa catatan hasil sebelum menutup proses.</p>
     {% endif %}
+    {% if proses.neraca.bisa_dihitung and not proses.neraca.timpang %}
+      {% set p_samping = proses.neraca.samping|sum(attribute="persen") %}
+      <div class="neraca" role="img"
+           aria-label="sementara — beras {{ '%.1f'|format(proses.neraca.beras.persen)|replace('.', ',') }}%, hasil samping {{ '%.1f'|format(p_samping)|replace('.', ',') }}%, belum keluar atau susut {{ '%.1f'|format(proses.neraca.susut.persen)|replace('.', ',') }}%">
+        <span class="neraca__beras" style="width:{{ proses.neraca.beras.persen }}%"></span>
+        <span class="neraca__samping" style="width:{{ p_samping }}%"></span>
+        <span class="neraca__susut" style="width:{{ [proses.neraca.susut.persen, 0]|max }}%"></span>
+      </div>
+      <p class="riwayat-detail__empty" style="margin-top:4px">
+        Sementara · beras {{ '%.1f'|format(proses.neraca.beras.persen)|replace('.', ',') }}% ·
+        hasil samping {{ '%.1f'|format(p_samping)|replace('.', ',') }}% ·
+        belum keluar/susut {{ '%.1f'|format(proses.neraca.susut.persen)|replace('.', ',') }}%
+      </p>
+    {% endif %}
     <div class="riwayat-detail__table">
       <div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Dari bahan</span></div>
       <div class="riwayat-detail__table-row"><strong>{{ proses.neraca.beras.nama }}</strong><span>{{ kg(proses.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(proses.neraca.beras.persen)|replace(".", ",") if proses.neraca.beras.persen is not none else "—" }}%</span></div>
