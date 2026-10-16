@@ -1560,6 +1560,9 @@ details.padat .pilihan { padding: 0 12px 12px; }
 .stok-mobile-list__isi { display: grid; min-width: 0; gap: 3px; }
 .stok-mobile-list__isi strong { overflow: hidden; color: var(--tinta); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .stok-mobile-list__isi small { overflow: hidden; color: var(--redup); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.stok-mobile-list__mutu { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.stok-mobile-list__mutu > span { padding: 3px 6px; border-radius: 7px; background: var(--panel-2); color: var(--redup); font-size: 10px; line-height: 1.35; white-space: nowrap; }
+.stok-mobile-list__mutu b { color: var(--tinta); font-weight: 700; }
 .stok-mobile-list__berat { color: var(--tinta); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stok-mobile-list__panah { color: var(--redup); font-size: 19px; }
 .stok-pk-detail { display: grid; gap: 18px; max-width: 1120px; margin: 18px auto 32px; }
