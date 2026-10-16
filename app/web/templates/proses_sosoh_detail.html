@@ -17,6 +17,7 @@
   .sosoh-detail__bahan-list .sosoh-detail__bahan-row--asal strong{font-weight:600}
   .sosoh-detail__bahan-list .sosoh-detail__bahan-row--jenis span:last-child,
   .sosoh-detail__bahan-list .sosoh-detail__bahan-row--asal span:last-child{color:var(--kulit-redup);font-size:.8rem}
+  .sosoh-detail__bahan-status{justify-self:start}
   @media(max-width:700px){.sosoh-detail__aksi{grid-template-columns:1fr}}
 </style>
 <main class="riwayat-detail">
@@ -84,7 +85,7 @@
           <div class="riwayat-detail__table-row{% if is_bahan and is_silo %} sosoh-detail__bahan-row--silo{% elif is_bahan and peran == 'sosoh-bahan' %} sosoh-detail__bahan-row--jenis{% elif is_bahan %} sosoh-detail__bahan-row--asal{% endif %}">
             <strong{% if is_bahan and not is_silo %} class="riwayat-detail__indent"{% endif %}>{{ baris[0]|trim }}</strong>
             <span>{{ baris[1] or "—" }}</span>
-            <span>{% if is_bahan and is_silo %}{{ baris[2] or "Total isi silo" }}{% elif is_bahan and peran == "sosoh-bahan" %}Jenis bahan{% elif is_bahan and peran.startswith("lot") %}Asal lot{% if peran == "lot-dibebaskan" %} · silo sudah dibebaskan{% endif %}{% if baris[2] %} · {{ baris[2] }}{% endif %}{% else %}{{ baris[2] or "—" }}{% endif %}</span>
+            <span>{% if is_bahan and is_silo %}<span class="riwayat-status sosoh-detail__bahan-status {% if peran == 'dibebaskan' %}riwayat-status--done{% else %}riwayat-status--wait{% endif %}">{{ baris[2] or ("Dilepaskan" if peran == "dibebaskan" else "Aktif · masih dipakai proses") }}</span>{% elif is_bahan and peran == "sosoh-bahan" %}Jenis bahan{% elif is_bahan and peran.startswith("lot") %}Asal lot{% if peran == "lot-dibebaskan" %} · silo sudah dilepaskan{% endif %}{% if baris[2] %} · {{ baris[2] }}{% endif %}{% else %}{{ baris[2] or "—" }}{% endif %}</span>
           </div>
         {% endfor %}
       </div>

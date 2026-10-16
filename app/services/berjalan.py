@@ -2590,10 +2590,14 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 sisa_u = (float(u.berat_akhir_kg)
                           if u.berat_akhir_kg is not None else None)
                 dibebaskan = sisa_u is not None
+                # Status silo dibuat eksplisit di halaman detil: status proses
+                # keseluruhan bisa tetap berjalan meski salah satu silo sudah
+                # ditutup dan boleh dipakai kembali. Jangan biarkan baris aktif
+                # hanya menampilkan label generik "Total isi silo".
                 status_u = (
-                    "Sudah kosong · dibebaskan" if dibebaskan and sisa_u <= 0.01
-                    else f"Dibebaskan · sisa {_kg(sisa_u)}" if dibebaskan
-                    else ""
+                    "Dilepaskan · kosong, siap diisi" if dibebaskan and sisa_u <= 0.01
+                    else f"Dilepaskan · sisa {_kg(sisa_u)}" if dibebaskan
+                    else "Aktif · masih dipakai proses"
                 )
                 from app.penggilingan.gudang2.service import komposisi_bahan_silo
                 komposisi = await komposisi_bahan_silo(
