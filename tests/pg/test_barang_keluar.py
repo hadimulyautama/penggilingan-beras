@@ -2423,7 +2423,7 @@ async def test_perintah_sebelum_armada_tiket_dipilih_setelahnya(pg,gudang):
         await db.commit()
         assert rec.timbangan_transaksi_id is None
         pid=rec.pelanggan_id
-    tid=await _armada_uji(pg,'KLR-UJI-ARMADA',pid)
+    tid=await _armada_uji(pg,'KLR-UJI-ARMADA',None)
     stok_lama=await _stok(pg,gudang)
     async with pg() as db:
         u=await db.get(User,gudang['adm'])
@@ -2431,6 +2431,11 @@ async def test_perintah_sebelum_armada_tiket_dipilih_setelahnya(pg,gudang):
         assert str(tid) in [x['value'] for x in pilihan]
         rec=await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=tid)
         assert rec.no_polisi=='H 9313 IC' and rec.timbangan_transaksi_id==tid
+        identitas = (await db.execute(text(
+            "SELECT pelanggan_id,pihak_nama FROM timbangan_transaksi WHERE id=:id"
+        ), {"id": tid})).mappings().one()
+        assert identitas["pelanggan_id"] == pid
+        assert identitas["pihak_nama"] == rec.nama_pembeli
         assert 'pilih_tiket_armada' in [x[0] for x in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
         from fastapi import HTTPException
         from app.web.internal import _cocokkan_pengiriman_tiket
@@ -2456,7 +2461,7 @@ async def test_armada_datang_dulu_plat_otomatis_dari_tiket(pg,gudang):
     from app.models import User
     from app.services import barang_keluar as bk
     pid=await _pelanggan(pg,'Toko Armada')
-    tid=await _armada_uji(pg,'KLR-ARMADA-DULU',pid)
+    tid=await _armada_uji(pg,'KLR-ARMADA-DULU',None)
     async with pg() as db:
         u=await db.get(User,gudang['adm'])
         r=await bk.buat_perintah(db,user=u,pelanggan_id=pid,tiket_armada_id=tid,

@@ -812,8 +812,9 @@ async def baris_perintah(user: User = Depends(pengguna_aksi)) -> list[dict]:
                     minta = kg(float(it.berat_perintah_kg or 0))
                 sudah = (f" · sudah {kg(float(it.berat_kg))}"
                          if float(it.berat_kg or 0) > 0.5 else "")
+                satuan = "jumlah kemasan/karung" if it.item_type == "finished_goods" else "kg"
                 out.append({"value": str(it.id),
-                            "label": f"{r.kode} · {nama} · perintah {minta}{sudah}"})
+                            "label": f"{r.kode} · {nama} · perintah {minta}{sudah} · isi dalam {satuan}"})
     return out
 
 
@@ -1285,7 +1286,7 @@ async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> 
             WHERE t.arah='KELUAR' AND t.status_transaksi='AKTIF'
               AND t.status_tiket IN ('TERBUKA','SELESAI')
               AND t.nomor_polisi IS NOT NULL AND t.timbang1_kg IS NOT NULL
-              AND (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id=:pid)
+              AND (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id IS NULL OR t.pelanggan_id=:pid)
               AND NOT EXISTS (SELECT 1 FROM outgoing_records o
                 WHERE o.timbangan_transaksi_id=t.id AND o.status<>'batal'
                   AND (CAST(:rid AS INTEGER) IS NULL OR o.id<>:rid))
@@ -1572,13 +1573,18 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
             {"id": "muat_barang", "label": "\U0001F4E6 Catat muatan per barang",
              "post": "/api/actions/muat-barang",
-             "hint": "Untuk yang dimuat KURANG dari perintahnya. Sesudah semua "
+             "hint": "Untuk yang dimuat KURANG dari perintahnya. "
+                     "Barang jadi berkemasan: isi JUMLAH KEMASAN/KARUNG, bukan kg "
+                     "(contoh: 20 karung × 25 kg → isi 20). "
+                     "Barang curah, PK, dan gabah: isi berat dalam KG "
+                     "(contoh: 500 kg → isi 500). "
+                     "Satuan juga tertulis pada pilihan barang. Sesudah semua "
                      "tercatat, tekan 'Selesai muat'.",
              "fields": [
                  {"name": "baris", "label": "Barang yang dimuat", "type": "remote",
                   "source": "/api/actions/baris-perintah",
                   "kosong": "Tidak ada barang yang menunggu dimuat."},
-                 {"name": "jumlah", "label": "Yang benar-benar dimuat",
+                 {"name": "jumlah", "label": "Jumlah dimuat (kemasan/karung atau kg sesuai barang)",
                   "type": "number", "wajib": True},
              ]},
             {"id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",

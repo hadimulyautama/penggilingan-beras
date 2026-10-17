@@ -543,7 +543,7 @@ async def _armada_dari_tiket(db: AsyncSession, tid: int, pelanggan_id: int,
         raise BarangKeluarError("Pilih tiket timbang keluar yang masih aktif.")
     if not tiket["nomor_polisi"] or tiket["timbang1_kg"] is None:
         raise BarangKeluarError("Tiket armada belum memiliki plat dan timbang pertama.")
-    if tiket["pelanggan_id"] != pelanggan_id:
+    if tiket["pelanggan_id"] is not None and tiket["pelanggan_id"] != pelanggan_id:
         raise BarangKeluarError("Pelanggan pada tiket armada berbeda dari pengiriman ini.")
     q = select(OutgoingRecord.id).where(
         OutgoingRecord.timbangan_transaksi_id == tid, OutgoingRecord.status != OUT_BATAL)
@@ -551,6 +551,13 @@ async def _armada_dari_tiket(db: AsyncSession, tid: int, pelanggan_id: int,
         q = q.where(OutgoingRecord.id != rec_id)
     if (await db.execute(q.limit(1))).first():
         raise BarangKeluarError("Tiket armada sudah dipilih pengiriman lain.")
+    # Identitas pelanggan berasal dari perintah, setelah tiket dipastikan bebas.
+    await db.execute(text("""
+        UPDATE timbangan_transaksi
+        SET pelanggan_id=:pid, pihak_nama=(
+            SELECT nama_pelanggan FROM pelanggan WHERE id=:pid)
+        WHERE id=:tid
+    """), {"pid": pelanggan_id, "tid": tid})
     return tiket
 
 
