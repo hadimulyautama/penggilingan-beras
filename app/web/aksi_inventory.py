@@ -1009,6 +1009,13 @@ async def timbang_keluar_aktif(induk: str = "",
         rec_id = int(induk) if induk.strip().isdigit() else None
         nama_pembeli = None
         rec = await db.get(OutgoingRecord, rec_id) if rec_id is not None else None
+        if rec is not None and rec.timbangan_transaksi_id is not None:
+            from sqlalchemy import text
+            t = (await db.execute(text("SELECT id,kode,nomor_polisi,status_tiket,status_transaksi FROM timbangan_transaksi WHERE id=:id"),
+                                  {"id": rec.timbangan_transaksi_id})).mappings().first()
+            if t and t["status_tiket"] == "SELESAI" and t["status_transaksi"] == "AKTIF":
+                return [{"value": str(t["id"]), "label": f"{t['kode']} · {t['nomor_polisi']} · armada yang dipilih"}]
+            return []
         if rec is not None:
             nama_pembeli = " ".join((rec.nama_pembeli or "").split()).casefold()
             total = sum(float(i.berat_kg or 0) for i in (await db.execute(
@@ -1099,7 +1106,8 @@ class PerintahKeluarReq(BaseModel):
     #: yang sama.
     pelanggan: str | None = None
     metode: str | None = None
-    no_polisi: str | None = None
+    no_polisi: str | None = None  # kompatibilitas halaman lama
+    tiket_armada: str | None = None
     nama_ekspedisi: str | None = None
 
 
@@ -1194,6 +1202,7 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
                 db, user=u, baris=baris,
                 pelanggan_id=_pelanggan_id(req.pelanggan),
                 metode=req.metode, no_polisi=(req.no_polisi or None),
+                tiket_armada_id=_id(req.tiket_armada) if (req.tiket_armada or "").strip() else None,
                 nama_ekspedisi=(req.nama_ekspedisi or None))
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah barang keluar.")
@@ -1254,6 +1263,53 @@ def _id(nilai: str | None) -> int:
         return int((nilai or "").strip())
     except ValueError:
         raise HTTPException(400, "Perintah yang mana?") from None
+
+
+@router.get("/actions/tiket-armada")
+async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    from sqlalchemy import text
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        pid = None
+        rec_id = int(induk) if induk.strip().isdigit() else None
+        if rec_id is not None:
+            from app.models import OutgoingRecord
+            rec = await db.get(OutgoingRecord, rec_id)
+            if rec is None:
+                return []
+            pid = rec.pelanggan_id
+        rows = (await db.execute(text("""
+            SELECT t.id,t.kode,t.nomor_polisi,t.timbang1_kg,
+                   COALESCE(p.nama_pelanggan,t.pihak_nama,'') AS pelanggan
+            FROM timbangan_transaksi t LEFT JOIN pelanggan p ON p.id=t.pelanggan_id
+            WHERE t.arah='KELUAR' AND t.status_transaksi='AKTIF'
+              AND t.status_tiket IN ('TERBUKA','SELESAI')
+              AND t.nomor_polisi IS NOT NULL AND t.timbang1_kg IS NOT NULL
+              AND (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id=:pid)
+              AND NOT EXISTS (SELECT 1 FROM outgoing_records o
+                WHERE o.timbangan_transaksi_id=t.id AND o.status<>'batal'
+                  AND (CAST(:rid AS INTEGER) IS NULL OR o.id<>:rid))
+            ORDER BY t.id DESC LIMIT 100
+        """), {"pid": pid, "rid": rec_id})).mappings().all()
+    return [{"value": str(t["id"]), "label": f"{t['kode']} · {t['nomor_polisi']} · {t['pelanggan']}"} for t in rows]
+
+
+class PilihTiketArmadaReq(BaseModel):
+    perintah: str = ""
+    tiket_armada: str = ""
+
+
+@router.post("/actions/pilih-tiket-armada")
+async def act_pilih_tiket_armada(req: PilihTiketArmadaReq,
+                                 user: User = Depends(pengguna_aksi)) -> dict:
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        try:
+            rec = await bk.pilih_tiket_armada(db, user=user,
+                rec_id=_id(req.perintah), tiket_id=_id(req.tiket_armada))
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal memilih tiket armada.")
+    return {"ok": True, "pesan": f"✓ {rec.kode} memakai armada {rec.no_polisi} dari tiket timbang."}
 
 
 class KoreksiPlatReq(BaseModel):
@@ -1469,7 +1525,9 @@ def _bidang_kirim() -> list[dict]:
         {"name": "metode", "label": "Cara kirim", "type": "select", "optional": True,
          "options": [["", "— belum ditentukan —"], ["diantar", "Diantar"],
                      ["diambil", "Diambil sendiri"], ["ekspedisi", "Ekspedisi"]]},
-        {"name": "no_polisi", "label": "Plat truk (bila ada)", "type": "text"},
+        {"name": "tiket_armada", "label": "Tiket timbang armada (boleh menyusul)",
+         "type": "remote", "optional": True, "source": "/api/actions/tiket-armada",
+         "kosong": "Armada belum datang? Simpan perintah dahulu, pilih tiket setelah timbang pertama."},
         {"name": "nama_ekspedisi", "label": "Ekspedisi (bila ada)", "type": "text"},
         # ⚠ HARGA DICABUT 28 September 2026. Keputusan pemilik, dua kali:
         # "HARGA & HPP KELUAR DARI POS PRODUKSI", lalu — saat PK dikeluarkan
@@ -1806,6 +1864,16 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Tidak ada barang yang bisa dikeluarkan."},
              ]},
+            {"id": "pilih_tiket_armada", "label": "Pilih tiket armada",
+             "post": "/api/actions/pilih-tiket-armada",
+             "hint": "Perintah boleh dibuat sebelum armada datang. Setelah timbang pertama, pilih tiketnya; plat mengikuti Timbangan.",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah pengiriman", "type": "remote",
+                  "source": "/api/actions/perintah-bisa-ditambah"},
+                 {"name": "tiket_armada", "label": "Tiket timbang armada", "type": "remote",
+                  "induk": "perintah", "source": "/api/actions/tiket-armada",
+                  "kosong": "Belum ada tiket armada aktif untuk pelanggan ini."},
+             ]},
             {"id": "koreksi_plat_pengiriman", "label": "Koreksi plat pengiriman",
              "post": "/api/actions/koreksi-plat-pengiriman",
              "hint": "Perbaiki plat truk sebelum verifikasi. Muatan tetap sama dan alasan koreksi dicatat.",
@@ -2135,6 +2203,7 @@ class AmbilJasaReq(BaseModel):
     pelanggan: str = ""
     barang: list[BarisReq] | None = None
     no_polisi: str = ""
+    tiket_armada: str | None = None
     nama_ekspedisi: str = ""
     catatan: str = ""
 
@@ -2165,6 +2234,7 @@ async def act_ambil_jasa(req: AmbilJasaReq,
             r = await bk.buat_perintah(
                 db, user=u, baris=baris,
                 metode=None, no_polisi=(req.no_polisi or None),
+                tiket_armada_id=_id(req.tiket_armada) if (req.tiket_armada or "").strip() else None,
                 nama_ekspedisi=(req.nama_ekspedisi or None),
                 catatan=(req.catatan or None))
         except bk.BarangKeluarError as e:

@@ -73,6 +73,13 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
     if not nopol or not pihak:
         raise HTTPException(status_code=409, detail="Tiket belum memiliki pelanggan dan nomor polisi untuk pencocokan.")
 
+    from app.models import OutgoingRecord
+    dipilih = (await db.execute(select(OutgoingRecord).where(
+        OutgoingRecord.timbangan_transaksi_id == int(tid),
+        OutgoingRecord.status == "perintah").limit(1))).scalar_one_or_none()
+    if dipilih is not None:
+        raise HTTPException(status_code=409, detail=f"Armada sudah dipilih {dipilih.kode}, tetapi muatan belum dinyatakan selesai di Produksi.")
+
     candidates = await bk.daftar(db, status=(OUT_DIMUAT, OUT_SELESAI), batas=500)
     cocok = []
     for rec, items in candidates:

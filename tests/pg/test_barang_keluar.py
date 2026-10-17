@@ -2368,7 +2368,7 @@ async def test_koreksi_plat_sebelum_verifikasi_tidak_mengubah_stok(pg, gudang, d
                                   no_polisi=" h 9313 ic ", alasan="Salah ketik plat truk")
         assert rec.no_polisi == "H 9313 IC"
         assert await _stok(pg, gudang) == stok_lama
-        assert "koreksi_plat_pengiriman" in [t[0] for t in _tombol(rec, boleh_perintah=True, boleh_muat=False)]
+        assert "pilih_tiket_armada" in [t[0] for t in _tombol(rec, boleh_perintah=True, boleh_muat=False)]
         jejak = (await db.execute(select(ActivityLog).where(
             ActivityLog.aksi == "koreksi_plat_pengiriman"))).scalars().one()
         assert jejak.old_value == "B 1234 XY" and jejak.new_value == "H 9313 IC"
@@ -2399,3 +2399,81 @@ async def test_koreksi_plat_api_tidak_boleh_operator(pg, gudang):
             await act_koreksi_plat_pengiriman(KoreksiPlatReq(perintah="1", no_polisi="H 9313 IC", alasan="Koreksi"),
                                               user=await db.get(User, gudang["op"]))
         assert e.value.status_code == 403
+
+
+async def _armada_uji(pg, kode, pelanggan_id):
+    from sqlalchemy import text
+    tid=await _tiket(pg,kode)
+    async with pg() as db:
+        await db.execute(text("UPDATE timbangan_transaksi SET pelanggan_id=:pid,status_tiket='TERBUKA',nomor_polisi='H 9313 IC',berat_barang_kg=NULL WHERE id=:id"),{'id':tid,'pid':pelanggan_id})
+        await db.commit()
+    return tid
+
+
+async def test_perintah_sebelum_armada_tiket_dipilih_setelahnya(pg,gudang):
+    from app.models import User,OutgoingRecord
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import tiket_armada
+    from app.web.layar_keluar import _tombol
+    from sqlalchemy import text
+    r=await _perintah(pg,gudang)
+    async with pg() as db:
+        rec=await db.get(OutgoingRecord,r.rec.id)
+        rec.no_polisi=None
+        await db.commit()
+        assert rec.timbangan_transaksi_id is None
+        pid=rec.pelanggan_id
+    tid=await _armada_uji(pg,'KLR-UJI-ARMADA',pid)
+    stok_lama=await _stok(pg,gudang)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        pilihan=await tiket_armada(induk=str(r.rec.id),user=u)
+        assert str(tid) in [x['value'] for x in pilihan]
+        rec=await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=tid)
+        assert rec.no_polisi=='H 9313 IC' and rec.timbangan_transaksi_id==tid
+        assert 'pilih_tiket_armada' in [x[0] for x in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
+        from fastapi import HTTPException
+        from app.web.internal import _cocokkan_pengiriman_tiket
+        from app.web.aksi_inventory import timbang_keluar_aktif
+        with pytest.raises(HTTPException) as e:
+            await _cocokkan_pengiriman_tiket(db,tid)
+        assert 'belum dinyatakan selesai' in e.value.detail
+        await bk.muat_semua(db,user=await db.get(User,gudang['op']),rec_id=rec.id)
+        _,cocok,_=await _cocokkan_pengiriman_tiket(db,tid)
+        assert cocok.id==rec.id
+        with pytest.raises(bk.BarangKeluarError,match='timbang kedua'):
+            await bk.verifikasi(db,user=u,rec_id=rec.id)
+        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI',berat_barang_kg=2500,netto_timbangan_kg=2500 WHERE id=:id"),{'id':tid})
+        await db.commit()
+        pilihan_verifikasi=await timbang_keluar_aktif(induk=str(rec.id),user=u)
+        assert str(tid) in [x['value'] for x in pilihan_verifikasi]
+        rec,_=await bk.verifikasi(db,user=u,rec_id=rec.id)
+        assert rec.status=='selesai' and rec.timbangan_transaksi_id==tid
+    assert await _stok(pg,gudang)==stok_lama-2500
+
+
+async def test_armada_datang_dulu_plat_otomatis_dari_tiket(pg,gudang):
+    from app.models import User
+    from app.services import barang_keluar as bk
+    pid=await _pelanggan(pg,'Toko Armada')
+    tid=await _armada_uji(pg,'KLR-ARMADA-DULU',pid)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        r=await bk.buat_perintah(db,user=u,pelanggan_id=pid,tiket_armada_id=tid,
+            no_polisi='PLAT MANUAL DIABAIKAN',baris=[bk.BarisPerintah(
+                tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=10)])
+        assert r.rec.no_polisi=='H 9313 IC' and r.rec.timbangan_transaksi_id==tid
+        with pytest.raises(bk.BarangKeluarError,match='pengiriman lain'):
+            await bk.buat_perintah(db,user=u,pelanggan_id=pid,tiket_armada_id=tid,
+                baris=[bk.BarisPerintah(tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=10)])
+
+
+async def test_pilih_armada_menolak_pelanggan_lain(pg,gudang):
+    from app.models import User
+    from app.services import barang_keluar as bk
+    r=await _perintah(pg,gudang)
+    pid=await _pelanggan(pg,'Pelanggan Armada Berbeda')
+    tid=await _armada_uji(pg,'KLR-ARMADA-BEDA',pid)
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError,match='Pelanggan'):
+            await bk.pilih_tiket_armada(db,user=await db.get(User,gudang['adm']),rec_id=r.rec.id,tiket_id=tid)

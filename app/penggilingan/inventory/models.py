@@ -351,7 +351,8 @@ class OutgoingRecord(Base, TimestampMixin):
     waktu_muat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     diverifikasi_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     waktu_verifikasi: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    #: Tiket timbang KELUAR. NULL sampai verifikasi — lihat catatan kelas.
+    #: Tiket armada KELUAR, dipilih sesudah timbang pertama; boleh menyusul
+    #: perintah yang dibuat sebelum armada datang.
     timbangan_transaksi_id: Mapped[int | None] = mapped_column(Integer)
     catatan_perintah: Mapped[str | None] = mapped_column(String(300))
     sebab_batal: Mapped[str | None] = mapped_column(String(300))

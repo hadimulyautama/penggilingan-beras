@@ -528,10 +528,59 @@ async def koreksi_plat(db: AsyncSession, *, user, rec_id: int,
     return rec
 
 
+async def _armada_dari_tiket(db: AsyncSession, tid: int, pelanggan_id: int,
+                            *, rec_id: int | None = None):
+    """Kunci satu tiket armada agar tidak dipilih dua pengiriman sekaligus."""
+    from sqlalchemy import text
+    tiket = (await db.execute(text("""
+        SELECT id,kode,arah,status_transaksi,status_tiket,nomor_polisi,
+               pelanggan_id,pihak_nama,timbang1_kg
+        FROM timbangan_transaksi WHERE id=:id FOR UPDATE
+    """), {"id": tid})).mappings().first()
+    if (not tiket or tiket["arah"] != "KELUAR"
+            or tiket["status_transaksi"] != "AKTIF"
+            or tiket["status_tiket"] not in ("TERBUKA", "SELESAI")):
+        raise BarangKeluarError("Pilih tiket timbang keluar yang masih aktif.")
+    if not tiket["nomor_polisi"] or tiket["timbang1_kg"] is None:
+        raise BarangKeluarError("Tiket armada belum memiliki plat dan timbang pertama.")
+    if tiket["pelanggan_id"] != pelanggan_id:
+        raise BarangKeluarError("Pelanggan pada tiket armada berbeda dari pengiriman ini.")
+    q = select(OutgoingRecord.id).where(
+        OutgoingRecord.timbangan_transaksi_id == tid, OutgoingRecord.status != OUT_BATAL)
+    if rec_id is not None:
+        q = q.where(OutgoingRecord.id != rec_id)
+    if (await db.execute(q.limit(1))).first():
+        raise BarangKeluarError("Tiket armada sudah dipilih pengiriman lain.")
+    return tiket
+
+
+async def pilih_tiket_armada(db: AsyncSession, *, user, rec_id: int,
+                            tiket_id: int) -> OutgoingRecord:
+    """Perintah boleh dibuat dahulu; armada dipilih setelah datang ke timbang."""
+    import json
+    from sqlalchemy import text
+    rec = await _kunci_hidup(db, rec_id)
+    if rec.timbangan_transaksi_id not in (None, tiket_id):
+        lama = (await db.execute(text("SELECT status_tiket FROM timbangan_transaksi WHERE id=:id FOR UPDATE"),
+                                {"id": rec.timbangan_transaksi_id})).scalar_one_or_none()
+        if lama != "TERBUKA":
+            raise BarangKeluarError("Tiket lama sudah selesai; pasangan pengiriman tidak boleh diganti.")
+    tiket = await _armada_dari_tiket(db, tiket_id, rec.pelanggan_id, rec_id=rec.id)
+    sebelum = {"tiket_id": rec.timbangan_transaksi_id, "no_polisi": rec.no_polisi}
+    rec.timbangan_transaksi_id = tiket_id
+    rec.no_polisi = tiket["nomor_polisi"]
+    await log_activity(db, table_name="outgoing_records", record_id=rec.id,
+        action="UPDATE", changed_by=getattr(user, "id", None), aksi="pilih_tiket_armada",
+        old_value=json.dumps(sebelum),
+        new_value=f"{rec.kode} → {tiket['kode']} · {rec.no_polisi}")
+    await db.commit()
+    return rec
+
+
 async def buat_perintah(
     db: AsyncSession, *, user, baris: list[BarisPerintah],
     pelanggan_id: int | None = None,
-    jasa_id: int | None = None,
+    jasa_id: int | None = None, tiket_armada_id: int | None = None,
     metode: str | None = None,
     no_polisi: str | None = None, nama_ekspedisi: str | None = None,
     catatan: str | None = None, tanggal=None, jam=None,
@@ -631,6 +680,10 @@ async def buat_perintah(
         pelanggan_id = pelanggan_set.pop()
     nama_pembeli, pelanggan_id = await _pembeli(db, pelanggan_id)
 
+    if tiket_armada_id is not None:
+        tiket_armada = await _armada_dari_tiket(db, tiket_armada_id, pelanggan_id)
+        no_polisi = tiket_armada["nomor_polisi"]
+
     dihitung: list[tuple[BarisPerintah, float, int | None]] = []
     for b in baris:
         berat, karung = await _berat_baris(db, b)
@@ -655,6 +708,7 @@ async def buat_perintah(
         nama_pembeli=nama_pembeli, pelanggan_id=pelanggan_id,
         jasa_id=(jasa_id_terpakai.pop() if len(jasa_id_terpakai) == 1 else None),
         metode=metode, no_polisi=no_polisi,
+        timbangan_transaksi_id=tiket_armada_id,
         nama_ekspedisi=nama_ekspedisi, tanggal=now.date(), waktu=now,
         input_by=user.id, catatan_perintah=(catatan or "").strip()[:300] or None,
         status=OUT_PERINTAH, diperintah_oleh=user.id, waktu_perintah=now,
@@ -1099,11 +1153,9 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                      tanggal=None, jam=None) -> tuple[OutgoingRecord, str]:
     """Admin menutup, sambil menempelkan kode timbang keluarnya. → (rec, catatan)
 
-    ⚠ TIKETNYA DITEMPEL DI SINI, bukan lebih awal, dan urutan waktunya yang
-    menentukan: truk masuk KOSONG, dimuat, lalu ditimbang bermuatan saat keluar.
-    Tiketnya baru lengkap sesudah barangnya naik. Sisi MASUK justru dimulai dari
-    tiketnya — menirunya mentah-mentah di sini akan membuat perintah tak bisa
-    dibuat sebelum truknya datang.
+    Perintah dan kedatangan armada tidak saling menunggu. Tiket boleh dipilih
+    sejak timbang pertama, atau menyusul setelah perintah dibuat. Verifikasi
+    tetap menunggu timbang kedua selesai dan memakai tiket yang sudah dipilih.
 
     Beda bobot TIDAK menolak apa pun. Muatan sungguhan memang berselisih dari
     timbangan — karung tak persis 25,0 kg, dan truk membawa terpal. Yang
@@ -1130,6 +1182,10 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
         select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
         .where(OutgoingItem.outgoing_record_id == rec.id))).scalar_one())
 
+    if rec.timbangan_transaksi_id is not None:
+        if timbangan_transaksi_id not in (None, rec.timbangan_transaksi_id):
+            raise BarangKeluarError("Tiket berbeda dari armada yang sudah dipilih.")
+        timbangan_transaksi_id = rec.timbangan_transaksi_id
     catatan = ""
     sebab_selisih = (sebab_selisih or "").strip()
     if timbangan_transaksi_id is not None:
@@ -1270,6 +1326,11 @@ async def _tiket_keluar(db: AsyncSession, tid: int) -> tuple[float, str]:
 
     from app.penggilingan.gudang1.services.timbang_link import (SQL_REAL_TIKET,
                                                                 SYARAT_TIKET_SAH)
+
+    status = (await db.execute(text("SELECT status_tiket FROM timbangan_transaksi WHERE id=:id"),
+                               {"id": int(tid)})).scalar_one_or_none()
+    if status != "SELESAI":
+        raise BarangKeluarError("Armada belum selesai timbang kedua; pengiriman belum bisa diverifikasi.")
 
     # Rumus beratnya TIDAK ditulis ulang di sini. `berat_barang_kg` sudah
     # memotong tara karung; `netto_timbangan_kg` belum. Menyalin rumusnya ke

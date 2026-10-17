@@ -315,3 +315,10 @@ def test_medan_pelanggan_wajib_terisi():
     ke sesudah seluruh borang terisi."""
     medan = {f["name"]: f for f in _medan_perintah_keluar()}
     assert not medan["pelanggan"].get("optional"), medan["pelanggan"]
+
+
+def test_perintah_memilih_tiket_armada_opsional_tanpa_input_plat():
+    medan = {f['name']: f for f in _medan_perintah_keluar()}
+    assert 'no_polisi' not in medan
+    assert medan['tiket_armada']['optional'] is True
+    assert medan['tiket_armada']['source'] == '/api/actions/tiket-armada'
