@@ -112,7 +112,9 @@ body .tabel-standar--grid { background:transparent; }
 .tabel-standar__rincian { padding:13px 18px 16px; border-top:1px solid var(--tabel-garis); background:var(--panel-2); }
 /* Daftar data memakai permukaan, huruf, dan pemisah yang sama. Formulir dan
    navigasi tidak memakai kelas ini, sehingga tidak terseret menjadi baris data. */
-body .daftar-standar { gap:0!important; overflow:hidden; border:1px solid var(--tabel-garis); border-radius:var(--tabel-radius); background:var(--tabel-bg); box-shadow:none; }
+/* .isi adalah kolom flex yang digulir. Daftar harus mempertahankan tinggi
+   isinya; overflow:hidden tanpa ini membuat seluruh baris menyusut ke 0. */
+body .daftar-standar { flex-shrink:0; gap:0!important; overflow:hidden; border:1px solid var(--tabel-garis); border-radius:var(--tabel-radius); background:var(--tabel-bg); box-shadow:none; }
 body .daftar-standar>.lbl { display:block; margin:0; padding:16px 18px; background:var(--tabel-header-bg); color:var(--tabel-redup); font-size:var(--tabel-header-size); font-weight:var(--tabel-header-weight); }
 body .daftar-standar>.grup { gap:0!important; margin:0; border:0; border-radius:0; background:var(--tabel-bg); }
 body .daftar-standar__baris,
