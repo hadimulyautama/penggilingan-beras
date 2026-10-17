@@ -172,7 +172,7 @@
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
              boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=(),
              boleh_masukkan_silo=False, halaman_aksi="/stok-produk",
-             desktop=False, preopened=False, detail_pelanggan=None, detail_pemilik=None) -%}
+             desktop=False, preopened=False, detail_pelanggan=None, detail_pemilik=None, baris_kemasan=None) -%}
 {% if daftar %}
 {% if desktop %}
 <div class="jumlah">
@@ -248,20 +248,6 @@
   </summary>
 
     <div class="anak">
-      {% if curah_titipan and k.jenis in curah_titipan and curah_titipan[k.jenis] > 0.5 %}
-        <div class="anak__kepala">Stok curah milik pesanan jasa</div>
-        <div class="anak__baris">
-          <span class="anak__nama">Curah · sudah dicatat</span>
-          <span class="anak__kg">{{ kg(curah_titipan[k.jenis]) }}&nbsp;kg</span>
-        </div>
-        {% if boleh_pindah %}
-          <div class="ubah-hasil">
-            <a class="btn btn--kecil"
-               href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=cr:{{ k.jenis }}|{{ jasa_ids|join(',') }}"
-               >⇄ Pindah kepemilikan</a>
-          </div>
-        {% endif %}
-      {% endif %}
       {# ── PERKIRAAN, bukan catatan — dan kepalanya wajib mengatakannya ──
          Daftar ini menyusut bersama barangnya (FIFO): yang keluar lebih dulu
          dianggap yang disosoh lebih dulu, jadi yang tersisa datang dari
@@ -306,187 +292,7 @@
         </div>
       {% endif %}
 
-      {% if k.keluar %}
-        <div class="anak__kepala">Sudah keluar · {{ kg(k.keluar_kg) }} kg</div>
-        {% for r in k.keluar %}
-          <div class="anak__baris">
-            <span class="anak__nama">{{ r.kode }}
-              {%- if r.waktu %} · {{ r.waktu | jam('%d/%m') }}{% endif %}</span>
-            <span class="anak__kg">{{ kg(r.kg) }} kg</span>
-            {% if r.ket %}<span class="anak__jam">{{ r.ket }}</span>{% endif %}
-          </div>
-        {% endfor %}
-        {# Riwayat memang bertambah selamanya, jadi FIFO tak menolong daftar
-           ini — obatnya batas. Angka di KEPALA tetap seluruhnya: memotong
-           daftar tak boleh memotong persamaannya. #}
-        {% if k.keluar_lagi %}
-          <div class="anak__baris">
-            <span class="anak__nama">· {{ k.keluar_lagi }} pengiriman lainnya</span>
-            <span class="anak__kg">{{ kg(k.keluar_lagi_kg) }} kg</span>
-          </div>
-        {% endif %}
-      {% endif %}
-
-      {# ── Yang tinggal SATU kepala, bukan kepala plus barisnya ──
-         Permintaan pemilik 28 September 2026: "informasi sisa digudang sudah
-         ada di bagian atas kartu. tidak perlu lagi informasi tambahan."
-
-         Betul, dan angkanya diucapkan TIGA KALI di satu kartu: sisa di kepala
-         kartu, "Dikemas" & "Curah" di empat sukunya, lalu keduanya diulang
-         lagi di dalam laci. Yang diulang berhenti dibaca — dan yang berhenti
-         dibaca membuat empat suku di atas ikut dilewati.
-
-         Kepalanya kini MENAMAI DAFTAR DI BAWAHNYA, bukan mengumumkan sisa:
-         "Dikemas · 27.750 kg" berdiri tepat di atas rincian per merk yang
-         menjumlah persis angka itu. Kepala yang menyebut angka yang bukan
-         jumlah daftarnya adalah kepala yang menyesatkan. #}
-      <div class="anak__kepala">
-        {% if k.jenis in ("bekatul", "reject", "menir", "broken") -%}
-          Dikemas otomatis · {{ k.jumlah_karung_otomatis }} karung ×
-          {{ k.ukuran_kemasan_otomatis }} kg · {{ kg(k.dikemas_otomatis_kg) }} kg{% if k.jenis == "broken" %} · karung putih polos tanpa merek{% endif %}
-        {%- else -%}
-          {{- "Tercatat" if k.curah_saja else "Dikemas" }} · {{ kg(k.dikemas_kg) }} kg
-        {%- endif %}</div>
-      {# ── Yang disebut MERK dan KEMASANNYA, bukan kategorinya lagi ──
-         Permintaan pemilik 28 September 2026: "kita sudah tau kalau itu
-         premium. jadi informasi yang sudah dikemas tidak perlu lagi informasi
-         premium. dan kata 'karung' dihapus saja agar readability lebih baik.
-         lalu untuk nama merk ditulis agak tebal."
-
-         Barisnya berada DI DALAM kartu Premium; menyebut "Premium" sekali lagi
-         di tiap baris cuma menambah lebar tanpa menambah kabar — dan lebar itu
-         yang membuat barisnya patah dua di ponsel. Yang membedakan baris satu
-         dari baris lain adalah MERK-nya, jadi merk yang ditebalkan.
-
-         Merk kosong tetap digambar barisnya: beras tanpa merk bukan beras yang
-         tak ada, dan baris yang hilang membuat jumlahnya tak cocok dengan
-         "sudah dikemas" di atasnya. #}
-      {% if k.jenis in ("bekatul", "reject", "menir", "broken") %}
-        <div class="anak__baris">
-          <span class="anak__nama">{{ k.jumlah_karung_otomatis }} karung @ {{ k.ukuran_kemasan_otomatis }} kg{% if k.jenis == "broken" %} · putih polos tanpa merek{% endif %}</span>
-          <span class="anak__kg">{{ kg(k.dikemas_otomatis_kg) }}&nbsp;kg</span>
-        </div>
-        {% for p in kemasan.get(k.jenis, []) %}
-          {% if p.jasa_id and p.karung and boleh_pindah %}
-            <div class="anak__baris">
-              <span class="anak__nama">{{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</span>
-              <span class="anak__kg">{{ kg(p.kg) }}&nbsp;kg</span>
-            </div>
-            <div class="ubah-hasil">
-              <a class="btn btn--kecil"
-                 href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=bj:{{ p.sku_id }}|{{ p.std_id or '' }}|{{ p.jasa_id }}"
-                 >⇄ Pindah kepemilikan</a>
-            </div>
-          {% endif %}
-        {% endfor %}
-        <div class="anak__baris">
-          <span class="anak__nama">sisa curah</span>
-          <span class="anak__kg">{{ kg(k.curah_otomatis_kg) }}&nbsp;kg</span>
-        </div>
-      {% else %}
-      {% for p in kemasan.get(k.jenis, []) %}
-        <div class="anak__baris">
-          {# Spasi TAK-PUTUS antara angka dan satuannya. Merk panjang
-             ("Pulenesia") membuat barisnya melipat, dan tanpa ini yang turun
-             ke baris berikutnya cuma kata "kg" — satu suku kata menggantung
-             sendirian di bawah barisnya, persis rupa yang dikeluhkan. Yang
-             boleh putus titik sebelum ukurannya, bukan di tengah angkanya. #}
-          <span class="anak__nama">·
-            {%- if p.merk %} <b class="anak__merk">{{ p.merk }}</b> ·{% endif %}
-            {# `ukuran` 0 berarti BUKAN karung — bekatul curah, yang berumah
-               di `byproduct_stock` dan dijual per kg. "curah 0 kg" akan
-               terbaca sebagai stok nol, padahal angkanya ada di kolom
-               sebelahnya. #}
-            {{ p.bahan }}{% if p.ukuran %} {{ p.ukuran }}&nbsp;kg{% endif %}</span>
-          <span class="anak__kg">{{ kg(p.kg) }}&nbsp;kg
-            {%- if p.karung %} · {{ p.karung }}&nbsp;krg{% endif %}</span>
-        </div>
-        {# ── Pindah kepemilikan — per BARIS kemasan, bukan per kartu ──
-           Keputusan pemilik 6 Oktober 2026: barang titipan "bisa jadi
-           ... milik kita". Tombolnya di sini, bukan di kepala kartu,
-           sebab `sku_id`/`std_id` (penunjuk yang dibutuhkan borangnya)
-           cuma ada di tingkat baris — satu kartu "Premium" bisa memuat
-           beberapa merk/kemasan sekaligus, dan tombol di kepala kartu
-           tak bisa menunjuk salah satunya. Hanya tampil untuk baris
-           TITIPAN (`p.jasa_id` terisi) — baris pabrik di `/stok-produk`
-           lewat makro yang sama tak pernah mengirim `boleh_pindah`. #}
-        {% if boleh_pindah and p.jasa_id and p.karung %}
-          <div class="ubah-hasil">
-            <a class="btn btn--kecil"
-               href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai=bj:{{ p.sku_id }}|{{ p.std_id or '' }}|{{ p.jasa_id }}"
-               >⇄ Pindah kepemilikan</a>
-          </div>
-        {% endif %}
-      {% endfor %}
-      {% endif %}
-      {# Belahan "belum dikemas" tetap ada — ia sebab seluruh halaman ini
-         lahir — tetapi hanya ketika ADA. Nol yang dicetak di sini cuma
-         mengulang suku "Curah" di atas; yang bukan nol adalah beras yang
-         berdiri di lantai dan belum punya rumah, dan itu wajib terbaca tanpa
-         orang menghitung sendiri selisih dua angka. #}
-      {% if k.jenis not in ("bekatul", "reject", "menir", "broken") and (k.curah_kg > 0.5 or k.curah_kg < -0.5) %}
-        <div class="anak__baris">
-          <span class="anak__nama">
-            {{- "belum dicatat · curah" if k.jenis == "broken" else ("belum dicatat" if k.curah_saja else "belum dikemas (curah)") }}</span>
-          <span class="anak__kg">{{ kg(k.curah_kg) }}&nbsp;kg</span>
-        </div>
-        {# ── OBATNYA DI SEBELAH KELUHANNYA ──
-           Laporan operator 30 September 2026: "pilihan bekatul curah belum
-           ada, jika ada katul yg belum dikemas, pada stok produk tertulis
-           belum dicatat." Aksinya selalu ada, tetapi tinggal di Catat
-           pekerjaan lain — dua layar jauhnya dari tulisan yang menagihnya.
-
-           Hanya bila angkanya POSITIF: angka minus berarti yang dibukukan
-           melebihi yang keluar mesin, dan mencatat lagi di atasnya justru
-           memperbesar selisihnya. Notanya di bawah yang menjelaskan keadaan
-           itu.
-
-           ⚠ `curah_saja` BUKAN LAGI "bekatul saja" sejak perbaikan "Pindah
-           kepemilikan curah" (7 Oktober 2026, `stok.py`): broken sekarang
-           ikut lewat jalur yang sama (`catat_broken` → `byproduct_stock`,
-           sebangun `catat_bekatul`). Tombolnya dulu menulis "Catat bekatul
-           (curah)" + `?buka=catat_bekatul` TANPA SYARAT — benar untuk kartu
-           Bekatul, tapi ikut tergambar SALAH di kartu Broken begitu
-           `curah_saja`-nya ikut jadi `true`. Aksi & labelnya karena itu
-           WAJIB ikut `k.jenis` — `catat_broken` sudah ada & terpasang penuh
-           di katalog aksi (`aksi_inventory.py`), sebangun `catat_bekatul`. #}
-        {% if k.curah_saja and k.curah_kg > 0.5 and boleh_catat %}
-          {% set aksi_curah = "catat_bekatul" if k.jenis == "bekatul" else "catat_broken" %}
-          <a class="btn btn--kecil"
-             href="/stok-produk?buka={{ aksi_curah }}"
-             style="margin-top:8px">🌾 Catat {{ k.nama|lower }} (curah)</a>
-        {% endif %}
-      {% endif %}
-      {# ── Masukkan ke silo — laporan lapangan 10 Oktober 2026 ──
-         "Masukkan broken ke silo" (ada sejak 8 Oktober) sempat cuma
-         ditawarkan dari kartu "Tunggu packing" — dan menghilang persis
-         saat brokennya SUDAH SELURUHNYA tercatat (curah MAUPUN dikemas):
-         kartu "Tunggu packing" cuma digambar untuk hasil yang BELUM
-         dicatat, jadi begitu "belum dicatat" (`k.curah_kg`) nol, kartu itu
-         tak pernah ada dan tombolnya ikut lenyap. Di sini digerakkan
-         `k.dikemas_kg` ("TERCATAT" — curah ATAUPUN karung yang sedang
-         berdiri sekarang) — bukan `k.curah_kg` ("belum dicatat") — persis
-         angka yang sumbernya dipakai `masukkan_broken_ke_silo` sendiri
-         (curah dulu, karung dibongkar bila kurang), jadi tombolnya hidup
-         selama ADA yang bisa dipindah, apa pun bentuknya sekarang. HANYA
-         broken: bekatul tak pernah disosoh ulang, tak punya silo untuk
-         ini. #}
-      {% if k.jenis == "broken" and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
-        <a class="btn btn--kecil"
-           href="{{ halaman_aksi }}?buka=masukkan_broken_silo"
-           style="margin-top:8px">📤 Masukkan ke silo</a>
-      {% endif %}
-      {% if k.jenis in ("menir", "reject") and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
-        {% set aksi_silo = "masukkan_menir_silo" if k.jenis == "menir" else "masukkan_reject_silo" %}
-        <a class="btn btn--kecil"
-           href="{{ halaman_aksi }}?buka={{ aksi_silo }}"
-           style="margin-top:8px">📤 Masukkan ke silo</a>
-      {% endif %}
-      {% if k.jenis in ("premium", "medsuper", "medium", "sayur", "beras_b") and k.sisa_kg > 0.5 and (boleh_catat or boleh_masukkan_silo) %}
-        <a class="btn btn--kecil"
-           href="{{ halaman_aksi }}?buka=masukkan_beras_silo&amp;nilai={{ (k.jenis ~ ('|pabrik' if halaman_aksi == '/stok-produk' else '|jasa'))|urlencode }}"
-           style="margin-top:8px">📤 Masukkan ke silo</a>
-      {% endif %}
+      {% include "_produk_kemasan.html" %}
     </div>
 
     {# ── Dua keadaan yang BERLAWANAN ARAH, dua kalimat yang berbeda ──

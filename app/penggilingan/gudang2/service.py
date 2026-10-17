@@ -2439,6 +2439,7 @@ async def masukkan_beras_ke_silo(
     _pastikan_komoditas_silo(silo, "beras_putih")
 
     now = input_time(tanggal, jam)
+    kategori_sku = "beras_b" if jenis == "beras_b" else "beras_putih"
     std = await get_standard(db, jenis)
     alokasi: dict[int, float] = {}
     baris_karung: list[tuple[FinishedGoodsStock, int]] = []
@@ -2461,7 +2462,7 @@ async def masukkan_beras_ke_silo(
         perlu = berat_kg
         for proc in proses:
             hasil = (await output_sosoh(db, proc.id)).get(jenis, 0.0)
-            dikemas = await _packed_kg(db, proc.id, "beras_putih",
+            dikemas = await _packed_kg(db, proc.id, kategori_sku,
                                        std.id if std else None)
             dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
                 (proc.id, jenis), 0.0)
@@ -2486,7 +2487,7 @@ async def masukkan_beras_ke_silo(
             raise Gudang2Error("Proses penyosohan yang dipilih tidak ditemukan.")
         hasil = (await output_sosoh(db, proc.id)).get(jenis, 0.0)
         dikemas = await _packed_kg(
-            db, proc.id, "beras_putih", std.id if std else None)
+            db, proc.id, kategori_sku, std.id if std else None)
         dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
             (proc.id, jenis), 0.0)
         curah = (max(0.0, float(hasil) - dikemas - dipindah)
@@ -2500,7 +2501,7 @@ async def masukkan_beras_ke_silo(
             .join(FinishedGoodsStock,
                   FinishedGoodsStock.product_sku_id == ProductSku.id)
             .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
-            .where(ProductSku.kategori == "beras_putih",
+            .where(ProductSku.kategori == kategori_sku,
                    FinishedGoodsStock.source_type == "polishing",
                    FinishedGoodsStock.source_id == proc.id,
                    FinishedGoodsStock.rice_quality_standard_id ==
@@ -2546,7 +2547,7 @@ async def masukkan_beras_ke_silo(
         except ValueError:
             raise Gudang2Error("Pilih merek dan ukuran kemasan yang valid.") from None
         sku = await db.get(ProductSku, sku_id)
-        if sku is None or sku.kategori != "beras_putih":
+        if sku is None or sku.kategori != kategori_sku:
             raise Gudang2Error("Merek dan ukuran kemasan yang dipilih tidak dikenal.")
         ukuran = (await db.execute(
             select(PackageSize.ukuran_kg)

@@ -43,7 +43,7 @@ async def test_baris_produk_membuka_detail_dan_kemasan_tetap_terpisah_per_pemili
             assert 'stok-produk-baris__detail' not in daftar.text
             r=await c.get(url)
             assert r.status_code==200
-            for s in [pemilik,angka,kode,'Ringkasan stok','Perkiraan asal stok (FIFO)','Asal stok, barang keluar, dan kemasan']:
+            for s in [pemilik,angka,kode,'Ringkasan stok','Perkiraan asal stok (FIFO)','Asal stok dan produk kemasan']:
                 assert s in r.text
             assert ('20' if nama=='jasa' else '40') in r.text
             if nama=='jasa':

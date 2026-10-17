@@ -4789,6 +4789,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
 
     keluar: list[dict] = []
     async with SessionLocal() as db:
+        kategori_sku = "beras_b" if jenis == "beras_b" else "beras_putih"
         std = await get_standard(db, jenis)
         std_filter = (FinishedGoodsStock.rice_quality_standard_id.is_(None)
                       if std is None else
@@ -4807,7 +4808,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
             owners.update((await db.execute(
                 select(FinishedGoodsStock.jasa_id)
                 .join(ProductSku, ProductSku.id == FinishedGoodsStock.product_sku_id)
-                .where(ProductSku.kategori == "beras_putih",
+                .where(ProductSku.kategori == kategori_sku,
                        FinishedGoodsStock.jasa_id.is_not(None),
                        std_filter)
                 .distinct()
@@ -4832,7 +4833,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
             for proc_id in proc_rows:
                 hasil = (await output_sosoh(db, proc_id)).get(jenis, 0.0)
                 dikemas = await _packed_kg(
-                    db, proc_id, "beras_putih", std.id if std else None)
+                    db, proc_id, kategori_sku, std.id if std else None)
                 dipindah = (await _dipindah_silo_proc(db, [proc_id])).get(
                     (proc_id, jenis), 0.0)
                 curah_total += max(0.0, float(hasil) - dikemas - dipindah)
@@ -4852,7 +4853,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
                 .join(PackagingMaterial,
                       PackagingMaterial.id == ProductSku.packaging_material_id)
                 .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
-                .where(ProductSku.kategori == "beras_putih",
+                .where(ProductSku.kategori == kategori_sku,
                        std_filter, milik)
                 .group_by(ProductSku.id, Brand.nama, PackagingMaterial.nama,
                           PackageSize.ukuran_kg)

@@ -679,7 +679,7 @@ async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
     assert "Beras Medium" in h, "kartu kategorinya tak tergambar"
     # Kepala kartu = SISA, bukan hasil penyosohan.
     assert "9.000" in h and "6.500" in h and "2.500" in h, h[-3000:]
-    for kata in ("Hasil sosoh", "Dikemas", "Curah", "belum dikemas (curah)"):
+    for kata in ("Hasil sosoh", "Dikemas", "Curah", "Curah · belum dikemas"):
         assert kata in h, f"suku '{kata}' hilang dari halaman"
     # Rincian per penyosohan ikut, lengkap dengan kodenya.
     assert "POL-UJI-01" in h
@@ -1484,10 +1484,8 @@ async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
     # dropdown laci yang menyebut "Stok Karung" — kata "Karung" yang SAH
     # di tempat lain, bukan di rincian kemasan ini. Batasnya kepala
     # `anak__kepala` BERIKUTNYA ("Curah", bila ada).
-    mulai = h.index("Dikemas ·")
-    akhir = h.find("anak__kepala", mulai + 10)
-    if akhir == -1:
-        akhir = mulai + 2000
+    mulai = h.index('aria-label="Produk kemasan dan curah"')
+    akhir = h.index("</table>",mulai)
     laci = h[mulai:akhir].replace("&nbsp;", " ").replace("\u00a0", " ")
     assert "25 kg" in laci, "ukuran kemasan ikut hilang"
     assert "Karung" not in laci, "kata 'Karung' masih di rincian kemasan"
@@ -1564,12 +1562,12 @@ async def test_sisa_di_gudang_tak_diulang_di_dalam_laci(pg, sosoh):
     assert "sudah dikemas<" not in h and "sudah dikemas\n" not in h, \
         "baris ringkasan 'sudah dikemas' masih mengulang suku Dikemas"
     # Kepalanya tetap ada, menamai daftar di bawahnya.
-    assert "Dikemas ·" in h, "rincian per merk kehilangan kepalanya"
+    assert 'aria-label="Produk kemasan dan curah"' in h, "tabel kemasan hilang"
     # Dan empat suku di kepala kartu TIDAK ikut hilang.
     for suku in ("Hasil sosoh", "Keluar", "Dikemas", "Curah"):
         assert suku in h, f"suku '{suku}' hilang dari kepala kartu"
     # Sisanya curah, jadi barisnya memang membawa kabar — ia wajib ada.
-    assert "belum dikemas (curah)" in h, \
+    assert "Curah · belum dikemas" in h, \
         "beras curah yang ADA justru disembunyikan"
 
 

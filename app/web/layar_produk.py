@@ -367,11 +367,73 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
     if k is None:
         raise HTTPException(404, "Kategori stok produk ini tidak ditemukan.")
     halaman = "/stok-produk-jasa" if pelanggan_id is not None else "/stok-produk"
+    from urllib.parse import urlencode
+    detail_href = halaman + "/detail?" + urlencode({"jenis": jenis, **(
+        {"pelanggan_id": pelanggan_id} if pelanggan_id is not None else {})})
+    # Hak tampilan sama dengan endpoint silo; admin biasa tetap dapat membaca
+    # tabel, sementara perpindahan dikerjakan operator G2 atau Super Admin.
+    from hmu_identitas import peran as P
+    from app.peran import can_see_financials
+    from app.web.api import _is_g2_operator
+    user = request.state.akun.user
+    boleh_silo = ((await _is_g2_operator(user) and not can_see_financials(user))
+                  or P.super_saja(user.role))
+    rows = []
+    otomatis = jenis in svc._UKURAN_KEMASAN_OTOMATIS
+    owners = list(jasa_ids) if pelanggan_id is not None else [None]
+    cards = {owners[0]: k} if len(owners) == 1 else {}
+    if len(owners) > 1:
+        async with SessionLocal() as db:
+            for owner in owners:
+                cards[owner] = next((c for c in await svc.stok_produk(db,jasa_id=owner)
+                                     if c.jenis == jenis), None)
+
+    def baris(*, owner, bentuk, berat, jumlah=0, ukuran=0, merk="", bahan="", p=None):
+        token = "pabrik" if owner is None else str(owner)
+        aksi = ("masukkan_beras_silo" if jenis in svc.BERAS_JENIS else
+                {"broken":"masukkan_broken_silo","menir":"masukkan_menir_silo",
+                 "reject":"masukkan_reject_silo"}.get(jenis))
+        sumber = (f"sku:{p['sku_id']}|{token}" if p and ukuran else f"curah|{token}")
+        nilai = (f"{jenis}|{'pabrik' if owner is None else 'jasa'}" if jenis in svc.BERAS_JENIS else
+                 f"pemilik|{token}" if jenis == "broken" else token)
+        params = {"buka":aksi,"nilai":nilai}
+        if jenis in svc.BERAS_JENIS:
+            params["sumber_stok"] = sumber
+        href = detail_href + "&" + urlencode(params) if aksi and berat > 0.5 and boleh_silo else None
+        pindah = (f"bj:{p['sku_id']}|{p['std_id'] or ''}|{owner}"
+                  if p and owner is not None and jumlah and boleh_pindah else None)
+        rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
+                         bahan=bahan,href=href,pindah=pindah,
+                         sumber=sumber if jenis in svc.BERAS_JENIS else None))
+
+    if otomatis:
+        # Hasil samping mempertahankan pembagian kemasan otomatis yang sudah
+        # dipakai kartu stok; per pesanan agar pemilik tidak tercampur.
+        for owner in owners:
+            c = cards.get(owner)
+            if c is None:
+                continue
+            baris(owner=owner,bentuk="Kemasan otomatis",berat=c.dikemas_otomatis_kg,
+                  jumlah=c.jumlah_karung_otomatis,ukuran=c.ukuran_kemasan_otomatis,
+                  bahan="Putih polos" if jenis=="broken" else "Kemasan otomatis")
+            if c.curah_otomatis_kg > 0.5:
+                baris(owner=owner,bentuk="Curah",berat=c.curah_otomatis_kg)
+    else:
+        for p in kemasan.get(jenis, []):
+            baris(owner=p.get("jasa_id"),bentuk="Kemasan" if p["ukuran"] else "Curah",
+                  berat=p["kg"],jumlah=p["karung"],ukuran=p["ukuran"],
+                  merk=p["merk"],bahan=p["bahan"],p=p)
+        for owner in owners:
+            c = cards.get(owner)
+            if c is not None and (c.curah_kg > 0.5 or c.curah_kg < -0.5):
+                baris(owner=owner,bentuk="Curah · belum dikemas",berat=c.curah_kg)
     return await render_laci(request, "stok_produk_detail.html",
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
         breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",
         pelanggan_id=pelanggan_id, jasa_ids=jasa_ids, kemasan=kemasan,
         kembali=halaman, halaman_aksi=halaman, curah_titipan=curah_titipan,
+        baris_kemasan=rows, detail_href=detail_href,
+        sumber_stok=request.query_params.get("sumber_stok") or "",
         BOLEH_CATAT=boleh_catat, BOLEH_PINDAH=boleh_pindah,
         BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
         buka=request.query_params.get("buka") or "", nilai=request.query_params.get("nilai") or "")

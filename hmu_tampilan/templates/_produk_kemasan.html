@@ -1,0 +1,28 @@
+<h3 class="produk-kemasan__judul">Produk kemasan dan curah</h3>
+<div class="tabel-standar tabel-standar__scroll produk-kemasan">
+  <table class="tabel-standar" data-ponsel="rincian" role="table" aria-label="Produk kemasan dan curah">
+    <thead><tr role="row"><th scope="col">Bentuk stok / merek</th><th scope="col">Isi kemasan</th><th scope="col">Jumlah</th><th scope="col">Berat</th><th scope="col">Aksi</th></tr></thead>
+    <tbody>
+    {% for p in baris_kemasan or [] %}
+      <tr role="row" data-bentuk-stok="{{ p.bentuk }}">
+        <td role="cell"><strong>{{ p.merk or ('Tanpa merek' if p.ukuran else p.bentuk) }}</strong>{% if p.ukuran or p.bahan %}<span class="tabel-standar__sekunder">{{ p.bentuk }}{% if p.bahan %} · {{ p.bahan }}{% endif %}</span>{% endif %}</td>
+        <td role="cell" data-label="Isi kemasan">{{ (p.ukuran ~ ' kg') if p.ukuran else '—' }}</td>
+        <td role="cell" data-label="Jumlah">{{ (p.karung ~ ' karung') if p.ukuran else '—' }}</td>
+        <td role="cell" data-label="Berat"><strong>{{ kg(p.kg) }} kg</strong></td>
+        <td role="cell" class="produk-kemasan__aksi">
+          {% if p.href %}<a class="btn btn--kecil" href="{{ p.href }}" data-masuk-silo="{{ p.sumber or k.jenis }}">Masukkan ke silo</a>{% endif %}
+          {% if p.pindah %}<a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ p.pindah|urlencode }}">Pindah kepemilikan</a>{% endif %}
+          {% if not p.href and not p.pindah %}—{% endif %}
+        </td>
+      </tr>
+    {% else %}<tr role="row"><td role="cell" colspan="5">Tidak ada stok kemasan atau curah yang tersedia.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if k.jenis == 'bekatul' %}<p class="bantu">Bekatul tetap disimpan di stok.</p>{% endif %}
+{% if k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah %}
+  {% for p in kemasan.get(k.jenis, []) %}
+    {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}
+  {% endfor %}
+  {% if curah_titipan and curah_titipan.get(k.jenis,0) > 0.5 %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></p>{% endif %}
+{% endif %}

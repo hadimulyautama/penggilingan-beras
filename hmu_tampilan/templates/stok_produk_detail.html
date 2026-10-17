@@ -26,11 +26,12 @@
     {% if k.belum_final_kg %}<p class="bantu">{{ kg(k.belum_final_kg) }} kg berasal dari penyosohan yang masih berjalan. Hasilnya belum final.</p>{% endif %}
   </section>
   <section class="pk-detail__panel" aria-labelledby="rincian-produk">
-    <div class="pk-detail__section-head"><div><span class="pk-detail__overline">RINCIAN</span><h2 id="rincian-produk">Asal stok, barang keluar, dan kemasan</h2></div></div>
+    <div class="pk-detail__section-head"><div><span class="pk-detail__overline">RINCIAN</span><h2 id="rincian-produk">Asal stok dan produk kemasan</h2></div></div>
     {{ st.blok('', [k], k.sisa_kg, k.curah_kg, '', ('giling' if beras else 'samping'), kemasan,
                boleh_catat=BOLEH_CATAT, boleh_pindah=BOLEH_PINDAH,
                boleh_masukkan_silo=BOLEH_MASUKKAN_SILO, halaman_aksi=halaman_aksi,
-               curah_titipan=curah_titipan, jasa_ids=jasa_ids, preopened=True) }}
+               curah_titipan=curah_titipan, jasa_ids=jasa_ids, preopened=True,
+               baris_kemasan=baris_kemasan) }}
   </section>
 </main>
 {% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}
@@ -38,5 +39,5 @@
 {% endif %}
 {% endblock %}
 {% block kaki %}
-{% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endif %}
+{% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}" data-sumber-stok="{{ sumber_stok }}"></script>{% endif %}
 {% endblock %}

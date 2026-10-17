@@ -296,6 +296,16 @@
       }
     }
 
+    // Baris kemasan sudah menunjuk sumber selain jenis beras. Keduanya
+    // dibawa sebagai isian terkunci agar tidak memilih kemasan lain lagi.
+    var tagBaris = document.querySelector("script[data-sumber-stok]");
+    var sumberBaris = id === "masukkan_beras_silo" && tagBaris
+      ? (tagBaris.dataset.sumberStok || "") : "";
+    function kunciMedan(f) {
+      return f.name === namaKunci ? terkunci :
+        (f.name === "sumber_stok" ? sumberBaris : "");
+    }
+
     /* Tombol ke aksi LAIN — digambar di paling bawah, sesudah Simpan.
      *
      * Letaknya yang menyampaikan maksudnya. Di tengah borang ia terbaca
@@ -338,11 +348,12 @@
           (f.optional ? "" : ' data-wajib="1"') +
           ' data-label="' + esc(f.label) + '" value="">';
       }
-      if (f.name === namaKunci) {
-        var teks = terkunci;
+      if (kunciMedan(f)) {
+        var nilaiKunci = kunciMedan(f);
+        var teks = nilaiKunci;
         if (f.type === "select") {
           (f.options || []).forEach(function (o) {
-            if (o[0] === terkunci) { teks = o[1]; }
+            if (o[0] === nilaiKunci) { teks = o[1]; }
           });
         }
         /* Tanpa label: label adalah pertanyaan, dan pertanyaan ini sudah
@@ -351,7 +362,7 @@
            dari keputusan pertama yang memang belum diambil. */
         return '<p class="terkunci" id="t_' + esc(f.name) + '">' + esc(teks) + "</p>" +
           '<input type="hidden" data-name="' + esc(f.name) + '"' +
-          ' data-label="' + esc(f.label) + '" value="' + esc(terkunci) + '">';
+          ' data-label="' + esc(f.label) + '" value="' + esc(nilaiKunci) + '">';
       }
       var l = '<label class="lbl" for="f_' + esc(f.name) + '">' + esc(f.label) + "</label>";
       if (f.type === "select") {
@@ -865,20 +876,26 @@
       }
       ambil(sumber).then(function (daftar) {
         if (!daftar) return;
-        if (f.name === namaKunci) {
+        if (kunciMedan(f)) {
           if (segar) { return; }
           /* Nama bendanya baru diketahui sesudah daftarnya datang. Kalau
              ternyata tak ada yang cocok, barisnya sudah basi — kuncinya
              dilepas supaya orang bisa memilih sendiri, bukan mengirim nilai
              yang akan ditolak. */
           var cocok = null;
-          daftar.forEach(function (o) { if (o.value === terkunci) { cocok = o; } });
+          daftar.forEach(function (o) { if (o.value === kunciMedan(f)) { cocok = o; } });
           var kotak = $("t_" + f.name);
           if (!kotak) { return; }
           if (cocok) {
             kotak.textContent = cocok.label;
             if (cocok.berat_kg != null) { kotak.dataset.beratKg = String(cocok.berat_kg); }
             perbaruiMaksimalKemas();
+            return;
+          }
+          if (f.name === "sumber_stok" && sumberBaris) {
+            kotak.textContent = "Stok pada baris ini sudah tidak tersedia. Tutup dan muat ulang halaman.";
+            var tombolSimpan = $("simpan");
+            if (tombolSimpan) { tombolSimpan.disabled = true; }
             return;
           }
           kotak.outerHTML =
@@ -1330,10 +1347,11 @@
     if (!window.history || !history.replaceState) { return; }
     var u = new URL(location.href);
     if (!u.searchParams.has("buka") && !u.searchParams.has("nilai") &&
-        !u.searchParams.has("tiket")) { return; }
+        !u.searchParams.has("tiket") && !u.searchParams.has("sumber_stok")) { return; }
     u.searchParams.delete("buka");
     u.searchParams.delete("nilai");
     u.searchParams.delete("tiket");
+    u.searchParams.delete("sumber_stok");
     history.replaceState(history.state, "", u.pathname + u.search + u.hash);
   }
 

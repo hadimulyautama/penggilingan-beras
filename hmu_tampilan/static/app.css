@@ -2890,3 +2890,13 @@ body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
 }
 
 .produk-detail .pk-detail__back { display: inline-flex; min-height: 32px; align-items: center; }
+
+/* Rincian kemasan memakai tabel standar dan baris ponsel yang sama. */
+.produk-kemasan__judul { margin: 18px 0 12px; font-family: var(--teks); font-size: 1rem; }
+.produk-kemasan { font-family: var(--teks); }
+.produk-kemasan table { table-layout: fixed; }
+body .produk-kemasan :is(th,td) { white-space: normal; overflow-wrap: anywhere; }
+.produk-kemasan th:first-child { width: 25%; }
+.produk-kemasan th:last-child { width: 26%; }
+.produk-kemasan__aksi .btn { margin: 3px 0; white-space: normal; }
+@media(max-width:900px) { body .produk-kemasan table[data-ponsel] .produk-kemasan__aksi { grid-column: 1 / -1; } }
