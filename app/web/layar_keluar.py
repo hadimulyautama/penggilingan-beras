@@ -218,6 +218,8 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool) -> list[tuple]:
         t.append(("verifikasi_keluar", n, "Verifikasi & tutup", True))
     if rec.status in OUT_HIDUP and boleh_perintah:
         t.append(("tambah_barang_keluar", n, "Tambah barang", not t))
+        if getattr(rec, "timbangan_transaksi_id", None) is None:
+            t.append(("koreksi_plat_pengiriman", n, "Koreksi plat", False))
     if rec.status == OUT_PERINTAH and boleh_perintah:
         t.append(("batal_perintah_keluar", n, "Batalkan", False))
     return t

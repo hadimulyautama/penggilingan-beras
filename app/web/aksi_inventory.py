@@ -1256,6 +1256,25 @@ def _id(nilai: str | None) -> int:
         raise HTTPException(400, "Perintah yang mana?") from None
 
 
+class KoreksiPlatReq(BaseModel):
+    perintah: str = ""
+    no_polisi: str = ""
+    alasan: str = ""
+
+
+@router.post("/actions/koreksi-plat-pengiriman")
+async def act_koreksi_plat_pengiriman(req: KoreksiPlatReq,
+                                      user: User = Depends(pengguna_aksi)) -> dict:
+    wajib(can_see_financials(user))
+    async with SessionLocal() as db:
+        try:
+            rec = await bk.koreksi_plat(db, user=user, rec_id=_id(req.perintah),
+                                      no_polisi=req.no_polisi, alasan=req.alasan)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal mengoreksi plat.")
+    return {"ok": True, "pesan": f"✓ Plat {rec.kode} dikoreksi menjadi {rec.no_polisi}."}
+
+
 class BatalPerintahReq(BaseModel):
     perintah: str = ""
     sebab: str = ""
@@ -1786,6 +1805,15 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/barang-bisa-keluar",
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Tidak ada barang yang bisa dikeluarkan."},
+             ]},
+            {"id": "koreksi_plat_pengiriman", "label": "Koreksi plat pengiriman",
+             "post": "/api/actions/koreksi-plat-pengiriman",
+             "hint": "Perbaiki plat truk sebelum verifikasi. Muatan tetap sama dan alasan koreksi dicatat.",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah pengiriman", "type": "remote",
+                  "source": "/api/actions/perintah-bisa-ditambah"},
+                 {"name": "no_polisi", "label": "Nomor polisi yang benar", "type": "text", "wajib": True},
+                 {"name": "alasan", "label": "Alasan koreksi", "type": "text", "wajib": True},
              ]},
             {"id": "batal_perintah_keluar", "label": "\U0001F6AB Batalkan perintah keluar",
              "post": "/api/actions/batal-perintah-keluar",

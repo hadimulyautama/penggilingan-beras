@@ -498,6 +498,36 @@ async def _pembeli(db: AsyncSession, pelanggan_id: int | None) -> tuple[str, int
     return (p.nama_pelanggan or "").strip(), p.id
 
 
+async def koreksi_plat(db: AsyncSession, *, user, rec_id: int,
+                       no_polisi: str, alasan: str) -> OutgoingRecord:
+    """Koreksi identitas truk sebelum diverifikasi, tanpa mengubah muatan."""
+    from hmu_core import normalisasi_nomor_polisi
+
+    plat = normalisasi_nomor_polisi(no_polisi)
+    if not plat or len(plat) > 20:
+        raise BarangKeluarError("Isi nomor polisi, maksimal 20 karakter.")
+    sebab = (alasan or "").strip()
+    if not sebab or len(sebab) > 300:
+        raise BarangKeluarError("Isi alasan koreksi, maksimal 300 karakter.")
+    rec = (await db.execute(select(OutgoingRecord).where(
+        OutgoingRecord.id == rec_id).with_for_update())).scalar_one_or_none()
+    if rec is None:
+        raise BarangKeluarError("Perintah pengiriman tidak ditemukan.")
+    if rec.status not in (OUT_PERINTAH, OUT_DIMUAT):
+        raise BarangKeluarError("Plat hanya bisa dikoreksi sebelum pengiriman diverifikasi.")
+    if rec.timbangan_transaksi_id is not None:
+        raise BarangKeluarError("Pengiriman sudah tertaut tiket timbang; koreksi harus menjaga kesesuaian tiketnya.")
+    if rec.no_polisi == plat:
+        return rec
+    lama = rec.no_polisi
+    rec.no_polisi = plat
+    await log_activity(db, table_name="outgoing_records", record_id=rec.id,
+        action="UPDATE", changed_by=getattr(user, "id", None), field_name="no_polisi",
+        old_value=lama, new_value=plat, alasan=sebab, aksi="koreksi_plat_pengiriman")
+    await db.commit()
+    return rec
+
+
 async def buat_perintah(
     db: AsyncSession, *, user, baris: list[BarisPerintah],
     pelanggan_id: int | None = None,

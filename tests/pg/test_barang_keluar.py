@@ -2349,3 +2349,53 @@ async def test_rute_auto_taut_keluar_dipanggil_dari_aksi(pg, gudang):
     async with pg() as db:
         rec = await db.get(OutgoingRecord, rid)
         assert rec.timbangan_transaksi_id == tid
+
+
+@pytest.mark.parametrize("dimuat", [False, True])
+async def test_koreksi_plat_sebelum_verifikasi_tidak_mengubah_stok(pg, gudang, dimuat):
+    from sqlalchemy import select
+    from app.models import User, ActivityLog
+    from app.services import barang_keluar as bk
+    from app.web.layar_keluar import _tombol
+
+    r = await _perintah(pg, gudang)
+    async with pg() as db:
+        adm = await db.get(User, gudang["adm"])
+        if dimuat:
+            await bk.muat_semua(db, user=await db.get(User, gudang["op"]), rec_id=r.rec.id)
+        stok_lama = await _stok(pg, gudang)
+        rec = await bk.koreksi_plat(db, user=adm, rec_id=r.rec.id,
+                                  no_polisi=" h 9313 ic ", alasan="Salah ketik plat truk")
+        assert rec.no_polisi == "H 9313 IC"
+        assert await _stok(pg, gudang) == stok_lama
+        assert "koreksi_plat_pengiriman" in [t[0] for t in _tombol(rec, boleh_perintah=True, boleh_muat=False)]
+        jejak = (await db.execute(select(ActivityLog).where(
+            ActivityLog.aksi == "koreksi_plat_pengiriman"))).scalars().one()
+        assert jejak.old_value == "B 1234 XY" and jejak.new_value == "H 9313 IC"
+        assert jejak.alasan_perubahan == "Salah ketik plat truk"
+
+
+@pytest.mark.parametrize("status,tautan", [("selesai", None), ("batal", None), ("dimuat", 299)])
+async def test_koreksi_plat_menolak_pengiriman_final_atau_tertaut(pg, gudang, status, tautan):
+    from app.models import User, OutgoingRecord
+    from app.services import barang_keluar as bk
+    r = await _perintah(pg, gudang)
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, r.rec.id)
+        rec.status, rec.timbangan_transaksi_id = status, tautan
+        await db.commit()
+        with pytest.raises(bk.BarangKeluarError):
+            await bk.koreksi_plat(db, user=await db.get(User, gudang["adm"]), rec_id=rec.id,
+                                 no_polisi="H 9313 IC", alasan="Koreksi")
+        assert rec.no_polisi == "B 1234 XY"
+
+
+async def test_koreksi_plat_api_tidak_boleh_operator(pg, gudang):
+    from fastapi import HTTPException
+    from app.models import User
+    from app.web.aksi_inventory import act_koreksi_plat_pengiriman, KoreksiPlatReq
+    async with pg() as db:
+        with pytest.raises(HTTPException) as e:
+            await act_koreksi_plat_pengiriman(KoreksiPlatReq(perintah="1", no_polisi="H 9313 IC", alasan="Koreksi"),
+                                              user=await db.get(User, gudang["op"]))
+        assert e.value.status_code == 403

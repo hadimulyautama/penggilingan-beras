@@ -1490,7 +1490,7 @@ for _a in (
     # kartu dibangun dari spesifikasi yang sama. Yang berubah cuma katalognya
     # berhenti menggambarnya.
     "perintah_keluar", "tambah_barang_keluar", "batal_perintah_keluar",
-    "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
+    "koreksi_plat_pengiriman", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
@@ -1543,6 +1543,7 @@ _ACTION_WH = {
     # tetapi itu urusan keuangan"), jadi tak ada lagi yang bergudang g1.
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
     "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
+    "koreksi_plat_pengiriman": "g2",
     "auto_taut_keluar": "g2",
     "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",
     # ── Jasa: g2, dengan satu alasan yang sama seperti barang keluar ──
