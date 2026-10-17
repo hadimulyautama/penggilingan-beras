@@ -2772,8 +2772,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 ("lanjutkan_penyosohan", "Lanjutkan penyosohan",
                  "Mesin jalan lagi — bisa nanti, bisa besok",
                  f"penyosohan:{pr.kode_proses}"),
-                ("tambah_silo_penyosohan", "Tambah / gunakan kembali silo",
-                 "Silo yang dibebaskan bisa dipakai lagi pada proses ini", pr.kode_proses),
+                ("tambah_silo_penyosohan", "Tambah silo (mix bahan)",
+                 "Silo yang dibebaskan boleh ditambahkan kembali", pr.kode_proses),
                 ("selesai_penyosohan", "Selesai penyosohan",
                  "Tutup proses, per silo", pr.kode_proses),
             ] if macet else [
@@ -2781,8 +2781,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                  "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
                 # Mix bahan — laporan lapangan 7 Oktober 2026: silo lain
                 # dipakai di tengah proses, bukan cuma saat mulai.
-                ("tambah_silo_penyosohan", "Tambah / gunakan kembali silo",
-                 "Silo yang dibebaskan bisa dipakai lagi — harus sepemilik", pr.kode_proses),
+                ("tambah_silo_penyosohan", "Tambah silo (mix bahan)",
+                 "Silo yang dibebaskan boleh ditambahkan kembali — harus sepemilik", pr.kode_proses),
                 ("hentikan_penyosohan", "Hentikan sementara",
                  "Mesin rusak, listrik padam, jam kerja habis",
                  f"penyosohan:{pr.kode_proses}"),
@@ -2830,8 +2830,8 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         .where(PolishingProcess.status == "proses")
     )).all()
     dipakai = {sid for sid, akhir in baris_pakai if akhir is None}
-    #: Silo yang sudah dibebaskan tetap berkartu, termasuk saat kosong,
-    #: dengan pintu untuk memakainya kembali pada proses yang masih berjalan.
+    #: Sisanya sudah dicatat, mesinnya masih memakai silo lain — berkartu,
+    #: tanpa tombol, dan keterangannya menyebut keadaan itu apa adanya.
     sisa_dicatat = {sid for sid, akhir in baris_pakai if akhir is not None} - dipakai
     # Bendera global TETAP dipakai, dan di sini ia masih benar: mesinnya satu,
     # jadi silo LAIN memang belum bisa dimulai selama ada yang jalan.
@@ -2851,8 +2851,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         select(Silo).where(Silo.warehouse_id == wid2, Silo.aktif.is_(True)).order_by(Silo.nama_silo)
     )).scalars().all():
         kg = await hitung_stok_silo(db, silo.id)
-        gunakan_lagi = silo.id in sisa_dicatat and bool(kode_jalan)
-        if not kg and not gunakan_lagi:
+        if not kg:
             continue
         # Silo yang sedang DI DALAM mesin tak punya kartu antrean sama sekali.
         # Ia sudah punya wakilnya di Sedang berjalan — kartu Penyosohan, yang
@@ -2874,23 +2873,22 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
             # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
             # bahwa angka ini sisa isian yang baru saja ditutup, bukan muatan
             # yang belum tersentuh.
-            keadaan=("silo dibebaskan · bisa digunakan kembali"
-                     if gunakan_lagi
+            keadaan=("sisanya sudah dicatat · mesin masih memakai silo lain"
+                     if silo.id in sisa_dicatat
                      else (f"mesin sosoh sedang dipakai {kode_jalan}"
                            if kode_jalan else "mesin sosoh sedang dipakai")
                      if sedang
                      else "mulai penyosohan bila siap"),
-            aksi=("tambah_silo_penyosohan" if gunakan_lagi
-                  else None if sedang else "mulai_penyosohan"),
-            nilai=kode_jalan if gunakan_lagi else huruf, fase="silo_g2",
+            aksi=None if sedang else "mulai_penyosohan",
+            nilai=huruf, fase="silo_g2",
             judul=f"{silo.nama_silo} · Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
             # Kalimat bawahnya ikut menyebutnya: "menunggu disosoh" atas sisa
             # 500 kg yang baru ditutup terbaca seperti muatan penuh yang belum
             # tersentuh, dan operator yang membacanya akan mencari 500 kg yang
             # ia kira baru masuk.
-            sub=((("Siap digunakan kembali pada proses yang sama"
-                   if gunakan_lagi else "PK menunggu disosoh"))
+            sub=((("sisa isian yang sudah ditutup · menunggu giliran berikutnya"
+                   if silo.id in sisa_dicatat else "PK menunggu disosoh"))
                  + (f" · {pemasok}" if pemasok else "")),
             anak=asal,
             # ── Selisih dalam isian ini, dengan NAMA ──
@@ -2909,10 +2907,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                   else _nota_isian(isian)),
             ringkas=(f"Bahan dari {pemasok}"
                      if pemasok else "Bahan menunggu disosoh"),
-            pilihan=([
-                ("tambah_silo_penyosohan", "Gunakan kembali silo",
-                 "Tambahkan ke proses yang sama; bahan boleh diisi sesudahnya", kode_jalan)
-            ] if gunakan_lagi else [] if sedang else [
+            pilihan=([] if sedang else [
                 ("mulai_penyosohan", "Mulai penyosohan",
                  "Seluruh isi silo jadi satu proses", huruf)]),
         ))

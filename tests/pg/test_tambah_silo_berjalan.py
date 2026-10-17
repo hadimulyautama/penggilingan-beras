@@ -393,12 +393,6 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2, isi_d
             await db.commit()
             pilihan = await silo_bahan_g2(induk=kode, user=u)
             assert "C" not in [x["value"] for x in pilihan]
-            from app.services.berjalan import _kartu_silo_g2, IsianSilo
-            async def asal_silo(silo_id):
-                return IsianSilo()
-            kartu = await _kartu_silo_g2(db, asal_silo)
-            b = next(x for x in kartu if x.kode == "Silo B")
-            assert b.aksi == "tambah_silo_penyosohan" and b.nilai == kode
             assert "B" in [x["value"] for x in pilihan]
             assert "kosong" in next(x["label"] for x in pilihan if x["value"] == "B").lower()
             await tambah_silo_penyosohan(db, user=u, kode=kode, nama_silos=["B"])
