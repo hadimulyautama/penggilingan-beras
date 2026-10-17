@@ -12,10 +12,10 @@
       <span><small>Nomor polisi</small>{{ k.plat or 'Tidak tercatat' }}</span>
     </div>
     <dl class="riwayat-detail__facts">
-      <div><dt>Jumlah pencatatan</dt><dd>{{ k.rounds|length }}{% if jenis != 'pk-luar' %} putaran{% endif %}</dd></div>
+      <div><dt>Jumlah pencatatan</dt><dd>{{ k.rounds|length }} putaran</dd></div>
       <div><dt>Pemeriksaan terakhir</dt><dd>{{ k.rounds[-1].waktu|jam('%d/%m/%Y · %H:%M') if k.rounds[-1].waktu else 'Tidak tercatat' }}</dd></div>
     </dl>
-    {% if jenis == 'pk-luar' %}<p class="bantu">QC PK luar menyimpan hasil terbaru. Perubahan sebelumnya tidak disimpan sebagai putaran pemeriksaan terpisah.</p>{% endif %}
+    {% if jenis in ['pk-luar', 'pk-hasil-giling'] %}<p class="bantu">{{ ATURAN_RATA_QC_PK }} Catatan lab memakai isian terakhir yang terisi.</p>{% endif %}
   </header>
   <section class="riwayat-detail__card" aria-labelledby="semua-qc">
     <h2 id="semua-qc">Seluruh hasil pemeriksaan</h2>

@@ -92,10 +92,13 @@
   {% if g1 and boleh_ubah and not t.berjalan %}
     <section class="pk-detail__actions">
       <a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=verify_output&amp;nilai={{ t.kode|urlencode }}">{{ "Catat hasil giling" if t.belum_dicatat else "Perbaiki hasil giling" }}</a>
-      {% if mutu_aktif %}<a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_giling&amp;nilai={{ t.kode|urlencode }}">{{ "Edit kualitas" if t.mutu else "Catat kualitas" }}</a>{% endif %}
+      {% if mutu_aktif %}<a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_giling&amp;nilai={{ t.kode|urlencode }}">{{ "Catat QC berikutnya" if t.mutu else "Catat QC" }}</a>{% endif %}
     </section>
   {% endif %}
   {% if not g1 and boleh_pindah_tumpukan and t.bobot_final %}
     <section class="pk-detail__actions"><a class="btn" href="{{ detail_href }}&amp;buka=pindah_tumpukan_silo&amp;nilai={{ t.intake_id }}">Masukkan ke silo</a></section>
+  {% endif %}
+  {% if not g1 and boleh_ubah and mutu_aktif and t.qc_kode %}
+    <section class="pk-detail__actions"><a class="btn btn--kecil" href="{{ detail_href }}&amp;buka=qc_pk_luar&amp;nilai={{ t.qc_kode|urlencode }}">{{ "Catat QC berikutnya" if t.mutu else "Catat QC" }}</a></section>
   {% endif %}
 </main>

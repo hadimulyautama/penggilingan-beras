@@ -32,7 +32,7 @@ GUDANG_TABEL: dict[str, str] = {
     "milling_process_verifications": G1,
     "internal_transfers": G1,
     # Gudang 2 — penyosohan
-    "pk_purchase_batches": G2, "pk_purchase_verifications": G2,
+    "pk_purchase_batches": G2, "pk_purchase_verifications": G2, "pk_purchase_qc_logs": G2,
     "pk_gudang2_intakes": G2, "pk_tumpukan_to_silo": G2,
     "hasil_samping_ke_silo": G2, "beras_ke_silo": G2,
     "polishing_process": G2, "polishing_output_logs": G2, "polishing_silo_usage": G2,

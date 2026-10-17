@@ -20,6 +20,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
+from app.services.mutu_pk import LABEL_KUALITATIF, NILAI_KUALITATIF, ATURAN_RATA_QC_PK
+
 from app.services.angka import (Persen, PersenOpsional, Positif,
                                 PositifOpsional)
 
@@ -1118,8 +1120,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 # September 2026 — lihat komentar di sana. Gudang 2 yang
                 # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
             ]
-    BUTIR = [["", "— pilih penilaian —"], ["bersih", "Bersih"], ["sedikit", "Sedikit"],
-             ["sedang", "Sedang"], ["banyak", "Banyak"]]
+    BUTIR = [["", "— pilih penilaian —"]] + [
+        [k,f"{label} ({NILAI_KUALITATIF[k]})"] for k,label in LABEL_KUALITATIF.items()]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
                 ["campuran", "Campuran"], ["semi_ks", "Semi KS"]]
     if fin:
@@ -1164,8 +1166,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
              "post": "/api/actions/qc-giling",
              "hint": "Boleh dicatat berulang selama giling berjalan — contoh dari "
                      "beras yang baru keluar mesin. Angka dirata-rata; butir kuning, "
-                     "gabah, merang, dan catatan lab memakai penilaian terakhir yang terisi. "
-                     "Butir kuning, gabah, dan merang wajib dipilih.", "fields": [
+                     "gabah, dan merang juga dirata-rata. "
+                     "Butir kuning, gabah, dan merang wajib dipilih. " + ATURAN_RATA_QC_PK, "fields": [
                  {"name": "kode_proses",
                   "label": "Giling yang sedang berjalan atau sudah selesai",
                   "type": "remote",
@@ -1251,11 +1253,12 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "qc_pk_luar", "label": "🔬 Catat kualitas PK luar",
              "post": "/api/actions/qc-pk-luar",
              "hint": "PK yang masuk sudah pasti diterima — ini hanya mencatat "
-                     "kualitasnya sebagai properti batch. Butir kuning, gabah, dan merang wajib dipilih.",
+                     "kualitasnya. Setiap simpan menjadi putaran baru tanpa batas. "
+                     "Butir kuning, gabah, dan merang wajib dipilih. " + ATURAN_RATA_QC_PK,
              "fields": [
-                 {"name": "kode_batch", "label": "PK luar yang belum dinilai mutunya", "type": "remote",
+                 {"name": "kode_batch", "label": "PK luar yang diperiksa", "type": "remote",
                   "source": "/api/actions/pk-luar-qc",
-                  "kosong": "Tidak ada PK luar yang menunggu penilaian mutu."},
+                  "kosong": "Belum ada PK luar yang bisa diperiksa."},
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
@@ -2413,33 +2416,20 @@ async def milling_noqc(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/pk-luar-qc")
 async def pk_luar_qc(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """PK luar (sudah masuk) yang BELUM diinput kualitasnya."""
+    """PK luar boleh dicatat berulang; batch yang sudah punya QC tetap ditawarkan."""
     _require(can_see_financials(user))
     await _wajib_mutu()
-    from sqlalchemy import exists, or_, select
-    from app.models import PkPurchaseBatch, PkPurchaseVerification
+    from sqlalchemy import case, func, select
+    from app.models import PkPurchaseBatch, PkPurchaseQcLog
+    n = (select(func.count()).select_from(PkPurchaseQcLog)
+         .where(PkPurchaseQcLog.pk_purchase_batch_id == PkPurchaseBatch.id).scalar_subquery())
     async with SessionLocal() as db:
-        qc_ada = exists().where(
-            (PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
-            & or_(
-                PkPurchaseVerification.kadar_air.is_not(None),
-                PkPurchaseVerification.broken_persen.is_not(None),
-                PkPurchaseVerification.penyusutan_persen.is_not(None),
-                PkPurchaseVerification.butir_kuning.is_not(None),
-                PkPurchaseVerification.catatan_lab.is_not(None),
-            )
-        )
-        rows = (
-            await db.execute(
-                select(PkPurchaseBatch).where(
-                    PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk")),
-                    ~qc_ada,
-                ).order_by(PkPurchaseBatch.id.desc()).limit(30)
-            )
-        ).scalars().all()
+        rows = (await db.execute(select(PkPurchaseBatch, n.label("n"))
+            .where(PkPurchaseBatch.status_batch.in_(("diterima", "di_silo", "ditumpuk", "disosoh")))
+            .order_by(case((n == 0, 0), else_=1), PkPurchaseBatch.id.desc()))).all()
     return [{"value": b.kode_batch,
-             "label": f"{b.kode_batch} · {dari_batch(b).teks()}"}
-            for b in rows]
+             "label": f"{b.kode_batch} · {dari_batch(b).teks()}" + (f" · {jumlah} putaran QC" if jumlah else " · belum ada QC")}
+            for b,jumlah in rows]
 
 
 # ─────────────────────── Aksi cepat: eksekusi (POST) ───────────────────────
@@ -3602,7 +3592,7 @@ async def act_qc_pk_luar(req: QcPkLuarReq, user: User = Depends(pengguna_aksi)) 
         (("butir kuning", r.butir_kuning), ("gabah", r.gabah), ("merang", r.merang)) if v
     )
     bk = f" · {kual}" if kual else ""
-    pesan = f"✓ Kualitas PK *{req.kode_batch}* tercatat: {det or '—'}{bk}."
+    pesan = f"✓ QC *{req.kode_batch}* putaran {r.qc_count} tercatat: {det or '—'}{bk}."
     return {"ok": True, "pesan": pesan}
 
 

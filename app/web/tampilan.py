@@ -16,6 +16,8 @@ from app.config import settings
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+from app.services.mutu_pk import ATURAN_RATA_QC_PK
+templates.env.globals["ATURAN_RATA_QC_PK"] = ATURAN_RATA_QC_PK
 
 #: VERSI aset kini SATU nomor di paket `hmu_tampilan` (Tahap 1 rancang ulang,
 #: 13 September 2026), bukan tiga nomor di tiga repo. Naikkan di repo

@@ -40,6 +40,7 @@ from app.penggilingan.gudang2.models import (
     PkGudang2Intake,
     PkPurchaseBatch,
     PkPurchaseVerification,
+    PkPurchaseQcLog,
     PkRejection,
     PkTumpukanToSilo,
     PolishingOutputLog,
@@ -104,6 +105,7 @@ __all__ = [
         # gudang2
     "PkPurchaseBatch",
     "PkPurchaseVerification",
+    "PkPurchaseQcLog",
     "PkRejection",
     "PkGudang2Intake",
     "PkTumpukanToSilo",

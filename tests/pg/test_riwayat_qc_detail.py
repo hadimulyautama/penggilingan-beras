@@ -75,7 +75,7 @@ async def test_daftar_menaut_ke_detail_dan_semua_hasil_tersimpan(pg,qc):
                 assert 'Lamur' in detail.text and '2 sak' in detail.text and '16.00%' in detail.text
             if jenis=='gabah-kering': assert 'Lamur' not in detail.text
             if jenis=='pk-luar':
-                assert 'hasil terbaru' in detail.text
+                assert 'QC 1' in detail.text
                 assert '&lt;b&gt;tetap teks&lt;/b&gt;' in detail.text
             if jenis in ['gabah-basah','pk-luar']:
                 assert 'Karanganyar' in detail.text and ('AD 1234 UJ' if jenis=='gabah-basah' else 'AD 4321 UJ') in detail.text
@@ -102,6 +102,7 @@ async def test_detail_tidak_memotong_putaran_atau_lot_lama_di_luar_batas_daftar(
                                waktu=now_local()-timedelta(days=10,minutes=i),input_by=qc['user']))
         await db.commit()
     async with await _klien(pg,peran=SUPERADMIN) as c:
+        assert '204 putaran' in (await c.get('/riwayat-qc/pk-hasil-giling')).text
         r=await c.get('/riwayat-qc/pk-hasil-giling/LOT-QC-DETAIL')
         assert r.status_code==200
         assert r.text.count('class="qc-history-round"')==204

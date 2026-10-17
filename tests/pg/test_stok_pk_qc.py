@@ -53,7 +53,7 @@ async def test_transfer_membawa_semua_qc_dan_angka_kosong_bukan_nol(pg, dunia):
             Path('/tmp/hmu-stok-qc-'+nama+'.html').write_text(r.text)
 
 
-async def test_pk_luar_menampilkan_satu_hasil_terbaru_dan_catatan_aman(pg, dunia):
+async def test_pk_luar_menyimpan_semua_putaran_dan_catatan_aman(pg, dunia):
     async with pg() as db:
         await log_pk_qc(db, user=await db.get(User, dunia['user'].id),
                         kode='PKB-KODE-01', kadar_air=12.5, broken=0,
@@ -61,17 +61,17 @@ async def test_pk_luar_menampilkan_satu_hasil_terbaru_dan_catatan_aman(pg, dunia
                         gabah='bersih', merang='banyak',
                         catatan_lab='<b>Catatan panjang</b> '+('ABCDEFGHIJ'*16))
         hasil = await stok.riwayat_qc_pk(db, intake_id=dunia['beli_intake_id'])
-    assert hasil['hasil_terbaru_saja']
-    assert len(hasil['rows']) == 1
+    assert not hasil['hasil_terbaru_saja']
+    assert len(hasil['rows']) == 2
     assert hasil['rows'][0]['ka'] == '12,5%'
     assert dict(hasil['rows'][0]['kualitatif']) == {
         'Butir kuning': 'Sedikit', 'Gabah': 'Bersih', 'Merang': 'Banyak'}
     async with await _klien(pg, peran=SUPERADMIN) as c:
         r = await c.get(f'/stok/pk/detail?gudang=g2&id={dunia["beli_intake_id"]}')
         assert r.status_code == 200
-        assert 'Perubahan sebelumnya belum disimpan' in r.text
+        assert 'Rata-rata mengikuti kategori terdekat' in r.text
         assert '&lt;b&gt;Catatan panjang&lt;/b&gt;' in r.text
-        assert '13,8%' not in r.text
+        assert '13,8%' in r.text
         for label in ['Butir kuning', 'Gabah', 'Merang']:
             assert f'data-label="{label}"' in r.text
         Path('/tmp/hmu-stok-qc-luar.html').write_text(r.text)
@@ -154,13 +154,13 @@ async def test_qc_giling_lengkap_terbaca_di_stok_transfer_dan_riwayat(pg, dunia)
             assert rata.n == 3
             assert rata.kadar_air == pytest.approx((13.2+14+16)/3)
             assert rata.broken == 4 and rata.n_broken == 1
-            assert rata.butir_kuning == 'banyak' and rata.gabah == 'sedang'
+            assert rata.butir_kuning == 'sedikit' and rata.gabah == 'sedikit'
             for kartu in [(await stok.pk_gudang1(db))[0],
                           next(x for x in await stok.pk_gudang2(db)
                                if x.intake_id == dunia['giling_intake_id'])]:
-                assert dict(kartu.mutu)['Butir kuning'] == 'Banyak'
-                assert dict(kartu.mutu)['Gabah'] == 'Sedang'
-                assert dict(kartu.mutu)['Merang'] == 'Sedikit'
+                assert dict(kartu.mutu)['Butir kuning'] == 'Sedikit'
+                assert dict(kartu.mutu)['Gabah'] == 'Sedikit'
+                assert dict(kartu.mutu)['Merang'] == 'Bersih'
         for nama,path in [('g1','/stok/pk/detail?gudang=g1&kode=LOT-KODE-01'),
                           ('transfer',f'/stok/pk/detail?gudang=g2&id={dunia["giling_intake_id"]}')]:
             r = await c.get(path)

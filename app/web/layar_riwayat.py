@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.database import SessionLocal
 from app.web.security import butuh_akun
@@ -1054,39 +1054,45 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                              f"Supplier: {nama_supplier}" if nama_supplier else None),
                        plat=batch.no_polisi_truk)
         elif jenis == "pk-luar":
+            from app.models import PkPurchaseQcLog, User
+            batch_terbaru = (select(PkPurchaseQcLog.pk_purchase_batch_id)
+                .group_by(PkPurchaseQcLog.pk_purchase_batch_id)
+                .order_by(func.max(PkPurchaseQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
-                select(PkPurchaseBatch, PkPurchaseVerification,
-                       Supplier.nama_supplier)
-                .join(PkPurchaseVerification,
-                      PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
+                select(PkPurchaseBatch, PkPurchaseQcLog, Supplier.nama_supplier, User.nama)
+                .join(PkPurchaseQcLog, PkPurchaseQcLog.pk_purchase_batch_id == PkPurchaseBatch.id)
                 .outerjoin(Supplier, Supplier.id == PkPurchaseBatch.supplier_id)
-                .where(PkPurchaseBatch.dibatalkan_pada.is_(None),
-                       PkPurchaseBatch.kode_batch == referensi if referensi is not None else True)
-                .order_by(PkPurchaseVerification.updated_at.desc(),
-                          PkPurchaseVerification.id.desc()).limit(None if referensi is not None else 200)
+                .outerjoin(User, User.id == PkPurchaseQcLog.input_by)
+                .where(PkPurchaseBatch.kode_batch == referensi if referensi is not None else
+                       PkPurchaseQcLog.pk_purchase_batch_id.in_(batch_terbaru))
+                .order_by(PkPurchaseQcLog.waktu.desc(), PkPurchaseQcLog.id.desc())
             )).all()
             from app.services.jasa import nama_pemilik_banyak
-            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _ in hasil})
-            for batch, qc, nama_supplier in hasil:
-                values = [("Kadar air", qc.kadar_air, "%"),
-                          ("Broken", qc.broken_persen, "%"),
-                          ("Penyusutan", qc.penyusutan_persen, "%"),
-                          ("Catatan", qc.catatan_lab, "")]
-                fields = [(label, f"{value}{unit}") for label, value, unit in values
-                          if value is not None and value != ""]
+            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
+            putaran_per_batch = {}
+            for batch, qc, nama_supplier, pencatat in sorted(hasil, key=lambda x:(x[1].waktu,x[1].id)):
+                putaran_per_batch[batch.id] = putaran_per_batch.get(batch.id,0)+1
+                values = [("Kadar air",qc.kadar_air,"%"), ("Broken",qc.broken_persen,"%"),
+                          ("Penyusutan",qc.susut_persen,"%"), ("Catatan lab",qc.catatan_lab,"")]
+                fields = [(label,f"{value}{unit}") for label,value,unit in values if value is not None and value != ""]
                 fields.extend(rincian_kualitatif(qc, termasuk_kosong=True))
-                tambah(batch.kode_batch, qc.updated_at, None,
-                       fields or [("QC", "Belum ada hasil QC")],
-                       asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
-                             if batch.jasa_id in pemilik else
+                fields.append(("Pencatat",pencatat or "Tidak tercatat"))
+                if qc.asal_lama:
+                    fields.append(("Asal catatan","Hasil QC lama yang masih tersimpan"))
+                tambah(batch.kode_batch,qc.waktu,putaran_per_batch[batch.id],fields,
+                       asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}" if batch.jasa_id in pemilik else
                              f"Supplier: {nama_supplier}" if nama_supplier else None),
                        plat=batch.no_polisi_truk)
         elif jenis == "pk-hasil-giling":
+            proses_terbaru = (select(MillingQcLog.milling_process_id)
+                .group_by(MillingQcLog.milling_process_id)
+                .order_by(func.max(MillingQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
-                .where(MillingProcess.kode_proses == referensi if referensi is not None else True)
-                .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(None if referensi is not None else 200)
+                .where(MillingProcess.kode_proses == referensi if referensi is not None else
+                       MillingQcLog.milling_process_id.in_(proses_terbaru))
+                .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _ in hasil})

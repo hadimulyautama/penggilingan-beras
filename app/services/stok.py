@@ -83,8 +83,8 @@ class LotPk:
     lama: str = ""
     #: Masih menyala mesinnya. PK-nya sudah ada, tapi angkanya belum final.
     berjalan: bool = False
-    #: Mutu PK: (label, nilai). Angka dirata-rata; penilaian butir kuning,
-    #: gabah, merang dan catatan lab memakai isian terakhir per komponen.
+    #: Angka dan kategori QC dirata-rata per komponen. Catatan lab memakai
+    #: isian terakhir yang terisi.
     #:
     #: RATA-RATA per KOLOM, atas catatan yang mengisi kolom itu — bukan catatan
     #: terbaru. Mutu dicatat berulang selama giling berjalan (keputusan pemilik
@@ -671,10 +671,10 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
 
     Dipanggil sesudah akses ke stok diperiksa oleh layar. Tidak dibatasi 200
     baris: seluruh pengukuran lot ikut membentuk rata-rata di kartu kualitas.
-    PK luar hanya menyimpan satu hasil yang diperbarui, bukan log putaran.
+    PK luar dan hasil giling memakai log pemeriksaan tanpa batas putaran.
     """
     from app.models import InternalTransfer, MillingQcLog, User
-    from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseVerification
+    from app.penggilingan.gudang2.models import PkGudang2Intake
 
     proses_id = None
     batch_id = None
@@ -689,36 +689,25 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
         proses_id = await db.scalar(select(MillingProcess.id).where(
             MillingProcess.kode_proses == kode))
 
+    from app.models import PkPurchaseQcLog
+    model, kunci, identitas = ((MillingQcLog, MillingQcLog.milling_process_id, proses_id)
+                               if proses_id else
+                               (PkPurchaseQcLog, PkPurchaseQcLog.pk_purchase_batch_id, batch_id))
+    hasil = (await db.execute(select(model, User.nama)
+        .outerjoin(User, User.id == model.input_by).where(kunci == identitas)
+        .order_by(model.waktu, model.id))).all() if identitas else []
     rows = []
-    if proses_id:
-        hasil = (await db.execute(
-            select(MillingQcLog, User.nama)
-            .outerjoin(User, User.id == MillingQcLog.input_by)
-            .where(MillingQcLog.milling_process_id == proses_id)
-            .order_by(MillingQcLog.waktu, MillingQcLog.id)
-        )).all()
-        for nomor, (qc, nama) in enumerate(hasil, 1):
-            rows.append(dict(nomor=nomor, waktu=qc.waktu, pencatat=nama,
-                             ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
-                             broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
-                             susut=_persen(qc.susut_persen) if qc.susut_persen is not None else "—",
-                             kualitatif=rincian_kualitatif(qc, termasuk_kosong=True),
-                             catatan_lab=qc.catatan_lab,
-                             keterangan=qc.kondisi or "—"))
-    elif batch_id:
-        qc = await db.scalar(select(PkPurchaseVerification).where(
-            PkPurchaseVerification.pk_purchase_batch_id == batch_id))
-        # Baris verifikasi lama dapat hanya berisi harga; itu bukan hasil QC.
-        if qc and any(getattr(qc, key) is not None and getattr(qc, key) != ""
-                      for key in ("kadar_air", "broken_persen", "penyusutan_persen",
-                                  "butir_kuning", "gabah", "merang", "catatan_lab")):
-            rows.append(dict(nomor=None, waktu=qc.updated_at, pencatat=None,
-                             ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
-                             broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
-                             susut=_persen(qc.penyusutan_persen) if qc.penyusutan_persen is not None else "—",
-                             kualitatif=rincian_kualitatif(qc, termasuk_kosong=True),
-                             catatan_lab=qc.catatan_lab, keterangan="—"))
-    return {"rows": list(reversed(rows)), "hasil_terbaru_saja": bool(batch_id)}
+    for nomor, (qc, nama) in enumerate(hasil, 1):
+        rows.append(dict(nomor=nomor, waktu=qc.waktu, pencatat=nama,
+                         ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
+                         broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
+                         susut=_persen(qc.susut_persen) if qc.susut_persen is not None else "—",
+                         kualitatif=rincian_kualitatif(qc, termasuk_kosong=True),
+                         catatan_lab=qc.catatan_lab, asal_lama=getattr(qc,"asal_lama",False),
+                         keterangan=getattr(qc,"kondisi",None) or "—"))
+    return {"rows": list(reversed(rows)), "hasil_terbaru_saja": False,
+            "ada_data_lama": any(x["asal_lama"] for x in rows)}
+
 
 
 @dataclass
@@ -760,6 +749,7 @@ class LotPkG2:
     #: Stok, pre-isi lewat mekanisme `?buka=&nilai=` yang sama dengan
     #: "Minta lot ini" Gudang 1.
     intake_id: int = 0
+    qc_kode: str | None = None
     #: Berat SAAT MASUK tumpukan — bukan sisanya. 0.0 bila `bobot_final`
     #: False (belum punya angka sama sekali, lihat catatan di atas).
     #:
@@ -988,7 +978,8 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             mutu=mutu, nilai_kualitas=nilai_kualitas,
             komponen_kualitas=komponen_kualitas,
             kelas_kualitas=_kelas_kualitas(nilai_kualitas),
-            intake_id=i.id, berat_awal=berat_awal, kelas=kelas, bahan=bahan,
+            intake_id=i.id, qc_kode=kode_batch if i.pk_purchase_batch_id and not i.internal_transfer_id else None,
+            berat_awal=berat_awal, kelas=kelas, bahan=bahan,
         ))
     return keluar
 

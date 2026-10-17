@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import aggregate_order_by, array_agg
 from decimal import Decimal
 
 from hmu_core import ArusProses, JenisProses, StatusProses, buat_produk
@@ -1649,8 +1648,7 @@ class QcRata:
     n_susut: int = 0
     #: Berapa catatan QC seluruhnya — termasuk yang cuma mengisi satu kolom.
     n: int = 0
-    # Kategori tidak dirata-rata. Ambil penilaian TERAKHIR YANG TERISI per
-    # komponen; tusukan yang hanya menilai kadar air tak menghapus penilaian ini.
+    # Kategori memakai rata-rata skala 0–3, dibulatkan ke kategori terdekat.
     butir_kuning: str | None = None
     gabah: str | None = None
     merang: str | None = None
@@ -1673,7 +1671,7 @@ class QcRata:
         # rata-rata dari lima tusukan sama-sama berupa satu angka di layar, dan
         # yang membacanya berhak tahu bedanya.
         return (" · ".join(bagian) + f" (rata-rata {self.n} catatan)"
-                + (" · Penilaian terakhir: " + " · ".join(kualitatif) if kualitatif else ""))
+                + (" · Rata-rata kategori: " + " · ".join(kualitatif) if kualitatif else ""))
 
 
 async def qc_rata(db: AsyncSession, proc_id: int) -> QcRata:
@@ -1682,41 +1680,16 @@ async def qc_rata(db: AsyncSession, proc_id: int) -> QcRata:
 
 
 async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
-    """Rata-rata angka dan penilaian terakhir, dibaca borongan untuk semua lot.
+    """Rata-rata angka dan klasifikasi, dibaca borongan untuk semua lot.
 
     Kartu giling digambar untuk tiap proses yang menyala, dan kartu itu ikut
     disusun ulang tiap kali lencana laci dihitung, yaitu di tiap halaman. Satu
     kueri per proses di tempat seperti itu adalah pola yang sudah pernah
     membuat layar Stok mengeluarkan ribuan kueri (QA P-S-02).
     """
-    ids = [int(x) for x in proc_ids]
-    if not ids:
-        return {}
-    medan_mutu = ("butir_kuning", "gabah", "merang", "catatan_lab")
-    # Elemen pertama dari nilai terisi yang diurutkan terbaru. Digabung dalam
-    # agregasi yang sama agar membaca 100 lot tetap hanya satu kueri QC.
-    penilaian_terakhir = [array_agg(aggregate_order_by(
-        getattr(MillingQcLog, medan), MillingQcLog.waktu.desc(), MillingQcLog.id.desc()
-    )).filter(getattr(MillingQcLog, medan).is_not(None),
-              getattr(MillingQcLog, medan) != "")[1] for medan in medan_mutu]
-    baris = (await db.execute(
-        select(
-            MillingQcLog.milling_process_id,
-            func.avg(MillingQcLog.kadar_air), func.count(MillingQcLog.kadar_air),
-            func.avg(MillingQcLog.broken_persen), func.count(MillingQcLog.broken_persen),
-            func.avg(MillingQcLog.susut_persen), func.count(MillingQcLog.susut_persen),
-            func.count(),
-            *penilaian_terakhir,
-        ).where(MillingQcLog.milling_process_id.in_(ids))
-        .group_by(MillingQcLog.milling_process_id)
-    )).all()
-    return {r[0]: QcRata(
-        kadar_air=float(r[1]) if r[1] is not None else None,
-        broken=float(r[3]) if r[3] is not None else None,
-        susut=float(r[5]) if r[5] is not None else None,
-        n_kadar_air=int(r[2]), n_broken=int(r[4]), n_susut=int(r[6]), n=int(r[7]),
-        **dict(zip(medan_mutu, r[8:])),
-    ) for r in baris}
+    from app.services.mutu_pk import ringkasan_banyak
+    peta = await ringkasan_banyak(db, MillingQcLog, MillingQcLog.milling_process_id, proc_ids)
+    return {pid: QcRata(**nilai) for pid, nilai in peta.items()}
 
 
 async def log_qc_milling(

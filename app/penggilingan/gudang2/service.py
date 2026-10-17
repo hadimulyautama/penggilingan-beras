@@ -964,6 +964,7 @@ class PkQcResult:
     butir_kuning: str | None
     gabah: str | None
     merang: str | None
+    qc_count: int = 0
 
 
 class PkPriceResult:
@@ -987,6 +988,22 @@ async def _get_or_make_pk_verif(db: AsyncSession, batch_id: int) -> PkPurchaseVe
     return verif
 
 
+async def segarkan_qc_pk_luar(db: AsyncSession, batch_id: int):
+    """Snapshot dibaca stok lama; riwayat dan angka sumber tetap dari log QC."""
+    from app.models import PkPurchaseQcLog
+    from app.services.mutu_pk import ringkasan_banyak
+    await db.flush()
+    peta = await ringkasan_banyak(db, PkPurchaseQcLog,
+                                 PkPurchaseQcLog.pk_purchase_batch_id, [batch_id])
+    rata = peta.get(batch_id, {})
+    verif = await _get_or_make_pk_verif(db, batch_id)
+    for medan, sumber in (("kadar_air", "kadar_air"), ("broken_persen", "broken"),
+                           ("penyusutan_persen", "susut"), ("butir_kuning", "butir_kuning"),
+                           ("gabah", "gabah"), ("merang", "merang"), ("catatan_lab", "catatan_lab")):
+        setattr(verif, medan, rata.get(sumber))
+    return rata
+
+
 async def log_pk_qc(
     db: AsyncSession, *, user: User, kode: str,
     kadar_air: float | None = None, broken: float | None = None,
@@ -1008,7 +1025,7 @@ async def log_pk_qc(
     if user.role not in PERAN_ADMIN_KEATAS:
         raise Gudang2Error("🔒 Input kualitas PK luar hanya oleh Staff/Admin.")
     batch = (
-        await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode))
+        await db.execute(select(PkPurchaseBatch).where(PkPurchaseBatch.kode_batch == kode).with_for_update())
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
@@ -1019,17 +1036,21 @@ async def log_pk_qc(
         raise Gudang2Error(str(e)) from e
     butir_kuning, gabah, merang = (nilai[k] for k in ("butir_kuning", "gabah", "merang"))
 
+    catatan_lab = catatan_lab.strip() if catatan_lab else None
+    if catatan_lab and len(catatan_lab) > 255:
+        raise Gudang2Error("Catatan lab maksimal 255 karakter.")
+    from app.models import PkPurchaseQcLog
+    from app.database import now_local
+    log = PkPurchaseQcLog(pk_purchase_batch_id=batch.id, kadar_air=kadar_air,
+                          broken_persen=broken, susut_persen=penyusutan_persen,
+                          butir_kuning=butir_kuning, gabah=gabah, merang=merang,
+                          catatan_lab=catatan_lab, waktu=now_local(), input_by=user.id)
+    db.add(log)
+    rata = await segarkan_qc_pk_luar(db, batch.id)
     verif = await _get_or_make_pk_verif(db, batch.id)
-    verif.kadar_air = kadar_air
-    verif.broken_persen = broken
-    verif.penyusutan_persen = penyusutan_persen
-    verif.butir_kuning = butir_kuning
-    verif.gabah = gabah
-    verif.merang = merang
-    verif.catatan_lab = catatan_lab
     verif.keputusan = "terima"  # PK masuk selalu diterima
     await log_activity(
-        db, table_name="pk_purchase_verifications", record_id=batch.id, action="UPDATE",
+        db, table_name="pk_purchase_qc_logs", record_id=log.id, action="INSERT",
         changed_by=user.id, field_name="qc",
         new_value=(f"ka={kadar_air} broken={broken} susut={penyusutan_persen} "
                   f"bk={butir_kuning} gabah={gabah} merang={merang}"),
@@ -1038,7 +1059,7 @@ async def log_pk_qc(
     await db.refresh(batch)
     return PkQcResult(batch=batch, kadar_air=kadar_air, broken=broken,
                       penyusutan=penyusutan_persen, butir_kuning=butir_kuning,
-                      gabah=gabah, merang=merang)
+                      gabah=gabah, merang=merang, qc_count=rata.get("n", 0))
 
 
 # `verify_pk_price` DIBUANG 28 September 2026: harga keluar dari Pos Produksi

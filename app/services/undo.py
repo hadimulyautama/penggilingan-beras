@@ -43,7 +43,7 @@ _UNDOABLE = {
     "drying_lots", "drying_moisture_logs", "drying_cooling_logs", "purchase_batches",
     "silo_storage", "milling_process", "internal_transfers", "milling_qc_logs",
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
-    "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
+    "pk_purchase_batches", "pk_purchase_verifications", "pk_purchase_qc_logs", "pk_gudang2_intakes",
     "pk_tumpukan_to_silo", "beras_ke_silo",
     # Hasil penyosohan bisa dibatalkan SEJAK 28 September 2026, dan itu bukan
     # kenyamanan melainkan syarat: angkanya berubah dari kumulatif jadi
@@ -101,6 +101,7 @@ _TABLE_LABEL = {
     "silo_moving_logs": "pemindahan silo",
     "pk_purchase_batches": "PK luar masuk",
     "pk_purchase_verifications": "verifikasi harga PK luar",
+    "pk_purchase_qc_logs": "QC PK luar",
     # Bukan tabel yang bisa di-undo: penolakan PK luar tidak pernah jadi
     # stok, jadi tak ada apa pun untuk dibatalkan (`create_pk_rejection_dari_
     # timbang` tak lewat jalur peristiwa). Ia di sini karena pratinjau undo
@@ -953,6 +954,12 @@ async def _undo_pk_purchase(db: AsyncSession, batch_id: int) -> str:
 
 
 async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None) -> str:
+    if field_name != "harga":
+        from app.models import PkPurchaseQcLog
+        qc_id = await db.scalar(select(PkPurchaseQcLog.id).where(
+            PkPurchaseQcLog.pk_purchase_batch_id == batch_id).order_by(PkPurchaseQcLog.id.desc()).limit(1))
+        if qc_id:
+            return await _undo_pk_qc(db, qc_id)
     verif = (
         await db.execute(
             select(PkPurchaseVerification).where(
@@ -985,8 +992,23 @@ async def _undo_pk_verif(db: AsyncSession, batch_id: int, field_name: str | None
     verif.broken_persen = None
     verif.penyusutan_persen = None
     verif.butir_kuning = None
+    verif.gabah = None
+    verif.merang = None
     verif.catatan_lab = None
     return f"✓ Dibatalkan: input kualitas PK {b.kode_batch}."
+
+
+async def _undo_pk_qc(db: AsyncSession, qc_id: int) -> str:
+    from app.models import PkPurchaseQcLog
+    from app.penggilingan.gudang2.service import segarkan_qc_pk_luar
+    qc = await db.get(PkPurchaseQcLog, qc_id)
+    if qc is None:
+        raise UndoError("Catatan QC PK luar sudah tidak ada.")
+    batch_id = qc.pk_purchase_batch_id
+    await db.execute(select(PkPurchaseBatch.id).where(PkPurchaseBatch.id == batch_id).with_for_update())
+    await db.delete(qc)
+    await segarkan_qc_pk_luar(db, batch_id)
+    return "✓ Dibatalkan: satu putaran QC PK luar; rata-rata dihitung ulang."
 
 
 async def _undo_pk_intake(db: AsyncSession, intake_id: int, *, lewat_transfer: bool = False) -> str:
@@ -1255,6 +1277,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str
         return await _undo_pk_purchase(db, rid)
     if t == "pk_purchase_verifications":
         return await _undo_pk_verif(db, rid, log.field_name)
+    if t == "pk_purchase_qc_logs" and act == "INSERT":
+        return await _undo_pk_qc(db, rid)
     if t == "pk_gudang2_intakes" and act == "INSERT":
         return await _undo_pk_intake(db, rid)
     if t == "pk_tumpukan_to_silo" and act == "INSERT":

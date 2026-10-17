@@ -83,7 +83,7 @@ class PkPurchaseBatch(Base, TimestampMixin):
 
 
 class PkPurchaseVerification(Base, TimestampMixin):
-    """QC + harga PK luar (staff/admin). QC menentukan terima/tolak."""
+    """Snapshot rata-rata QC PK luar dan peninggalan verifikasi harga."""
 
     __tablename__ = "pk_purchase_verifications"
 
@@ -118,8 +118,8 @@ class PkPurchaseVerification(Base, TimestampMixin):
     # ── PENINGGALAN: harga pindah ke keuangan 28 September 2026 ──
     #
     # Kolom-kolom di bawah ini TIDAK lagi ditulis maupun dibaca Pos Produksi.
-    # Seluruh kolom QC di atas TETAP HIDUP: QC PK luar wajib, dan baris ini
-    # satu-satunya tempat mutunya tercatat.
+    # Kolom QC di atas adalah snapshot rata-rata dari pk_purchase_qc_logs.
+    # Setiap putaran disimpan sendiri; snapshot menjaga pembaca stok lama.
     # Dipertahankan untuk RIWAYAT: harga yang sudah tercatat adalah pembelian
     # sungguhan, dan hal pertama yang keuangan minta begitu mereka mengambil
     # alih adalah data lama. Kalau kolomnya sudah jatuh, tak ada yang bisa
@@ -137,6 +137,26 @@ class PkPurchaseVerification(Base, TimestampMixin):
     status_verifikasi: Mapped[str] = mapped_column(String(20), default="terverifikasi")
 
     batch: Mapped["PkPurchaseBatch"] = relationship(back_populates="verification")
+
+
+class PkPurchaseQcLog(Base):
+    """Setiap pemeriksaan PK luar tersimpan sendiri, termasuk hasil lama."""
+    __tablename__ = "pk_purchase_qc_logs"
+    __table_args__ = (Index("ix_pk_qc_batch", "pk_purchase_batch_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pk_purchase_batch_id: Mapped[int] = mapped_column(ForeignKey("pk_purchase_batches.id"), nullable=False)
+    kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    broken_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    susut_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    butir_kuning: Mapped[str | None] = mapped_column(String(10))
+    gabah: Mapped[str | None] = mapped_column(String(10))
+    merang: Mapped[str | None] = mapped_column(String(10))
+    catatan_lab: Mapped[str | None] = mapped_column(String(255))
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Penulis QC lama tidak tersimpan; verified_by adalah penetap harga.
+    input_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    asal_lama: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
 
 class PkGudang2Intake(Base, TimestampMixin):
