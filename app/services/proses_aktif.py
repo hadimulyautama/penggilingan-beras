@@ -89,14 +89,21 @@ async def rincian(db, *, jenis, model, kartu, params):
                     ("Total jeda pengeringan" if jenis == "pendinginan" else "Total jeda", svc.lama_kata(tertahan) if tertahan else "Tidak ada jeda")],
              statistik=[], bagian=[], penilaian=None, qc_kosong=None)
     if jenis in ("pengeringan", "pendinginan"):
-        from app.penggilingan.gudang1.services.drying import _lot_batches, _latest_log
+        from app.penggilingan.gudang1.services.drying import _lot_batches
         batches = await _lot_batches(db, model.id)
         bobot = dari_batches(batches)
         dryer = await db.get(Dryer, model.dryer_id) if model.dryer_id else None
-        log = await _latest_log(db, model.id)
+        # Catatan penutupan bisa hanya memuat indikator mesin. Angka alat tes
+        # terakhir tetap berasal dari pengukuran yang mengisinya, bukan NULL
+        # pada catatan sesudahnya.
+        log = await db.scalar(select(DryingMoistureLog).where(
+            DryingMoistureLog.drying_lot_id == model.id,
+            DryingMoistureLog.kadar_air_tes_manual.is_not(None)
+        ).order_by(DryingMoistureLog.waktu_update.desc(), DryingMoistureLog.id.desc()).limit(1))
         d["fakta"] += [("Mesin pengering", dryer.nama if dryer else "Belum tercatat"),
                        ("Mode dryer", model.mode_dryer or "Belum tercatat"),
                        ("Berat bahan", bobot.teks()),
+                       ("Waktu ukur terakhir · alat tes", _waktu(log.waktu_update) if log else "Belum diukur"),
                        ("Selesai pengeringan", _waktu(model.waktu_selesai_pengeringan))]
         d["statistik"] = [("Bahan dalam lot", bobot.teks()),
                           ("Kadar air terakhir · alat tes", _persen(log.kadar_air_tes_manual) if log else "Belum diukur"),

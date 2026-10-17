@@ -65,6 +65,20 @@ async def test_fase_berubah_lalu_tautan_masuk_riwayat(pg, pengeringan):
     assert final.status_code == 200 and final.url.path == f"/riwayat-pengeringan/{pengeringan['id']}"
 
 
+async def test_catatan_indikator_tidak_menghilangkan_ukur_alat_tes_terakhir(pg, pengeringan):
+    from app.models import User
+    from app.penggilingan.gudang1.services import drying as dr
+    async with pg() as db:
+        await dr.log_moisture(db, user=await db.get(User, pengeringan["user"]),
+                              kode_lot=pengeringan["kode"], indikator=17)
+    async with await _klien(pg, peran="operator", gudang="Gudang 1") as c:
+        h = await c.get(f"/proses-aktif/pengeringan/{pengeringan['kode']}")
+    assert h.status_code == 200
+    ringkasan_alat = h.text.split("Kadar air terakhir · alat tes", 1)[1].split("</article>", 1)[0]
+    assert "18,0%" in ringkasan_alat
+    assert "Waktu ukur terakhir · alat tes" in h.text
+
+
 async def test_giling_berulang_qc_lengkap_hasil_kumulatif_dan_paginasi(pg, giling):
     from app.database import now_local
     from app.models import MillingProgressLog
