@@ -297,3 +297,107 @@ async def test_dua_pemilik_berbeda_silo_ditolak(pg, sosoh):
             await masukkan_beras_ke_silo(
                 db, user=u, kode_pol=sosoh["kode_pol"], jenis="medium",
                 nama_silo="C", berat_kg=100, jasa_id=jasa_id)
+
+
+@pytest.mark.parametrize("kemasan", [False, True])
+async def test_batalkan_beras_silo_mengembalikan_sumber(pg, sosoh, kemasan):
+    from sqlalchemy import select
+    from app.models import User, ActivityLog, BerasKeSilo
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo, hitung_stok_silo
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.services.undo import undo_last
+    from app.services.stok import beras_curah
+
+    if kemasan:
+        await _kemas_grade(pg, sosoh, grade="medium", jumlah_karung=40)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await masukkan_beras_ke_silo(db, user=u, kode_pol=sosoh["kode_pol"],
+            jenis="medium", nama_silo="C", berat_kg=8000 if kemasan else 1000)
+        assert await hitung_stok_silo(db, sosoh["silo_beras"]) == (8000 if kemasan else 1000)
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo").order_by(ActivityLog.id.desc()))).scalars().first()
+        assert log.gudang == "g2"
+        await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+        assert await hitung_stok_silo(db, sosoh["silo_beras"]) == 0
+        assert not (await db.execute(select(BerasKeSilo))).scalars().all()
+        stok = (await db.execute(select(FinishedGoodsStock))).scalars().all()
+        assert sum(x.jumlah_karung for x in stok) == (40 if kemasan else 0)
+        kartu = await beras_curah(db)
+        k = next(x for x in kartu if x.kode_proses == sosoh["kode_pol"] and x.jenis == "medium")
+        assert k.sisa_kg == (7000 if kemasan else 8000)
+
+
+async def test_undo_beras_ditolak_setelah_silo_dipakai(pg, sosoh):
+    from sqlalchemy import select
+    from app.models import User, ActivityLog
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.services.undo import _undo_beras_masuk_silo, UndoError
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        await masukkan_beras_ke_silo(db, user=u, jenis="medium", sumber_stok="curah",
+                                    nama_silo="C", berat_kg=1000)
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo"))).scalars().one()
+        await mulai_penyosohan(db, user=u, nama_silos=["C"])
+        with pytest.raises(UndoError, match="sudah dipakai"):
+            await _undo_beras_masuk_silo(db, log)
+
+
+async def test_undo_input_beras_fifo_membatalkan_semua_sumber_sekaligus(pg, sosoh):
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.models import User, PolishingProcess, PolishingOutputLog, ActivityLog, BerasKeSilo
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo, hitung_stok_silo
+    from app.services.undo import undo_last, UndoError
+
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        p = PolishingProcess(kode_proses="POL-FIFO-2", status="selesai",
+            waktu_mulai=now_local(), waktu_selesai=now_local(), created_by=u.id)
+        db.add(p)
+        await db.flush()
+        db.add(PolishingOutputLog(polishing_process_id=p.id, jenis="medium",
+                                  berat_kg=1000, waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+        await masukkan_beras_ke_silo(db, user=u, jenis="medium", sumber_stok="curah",
+                                    nama_silo="C", berat_kg=9000)
+        assert len((await db.execute(select(BerasKeSilo))).scalars().all()) == 2
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo"))).scalars().one()
+        await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+        assert await hitung_stok_silo(db, sosoh["silo_beras"]) == 0
+        with pytest.raises(UndoError, match="sudah dibatalkan"):
+            await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+
+
+async def test_undo_beras_kemasan_parsial_mempertahankan_asal_dan_pemilik(pg, sosoh):
+    from sqlalchemy import select
+    from app.models import User, ActivityLog
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo, hitung_stok_silo
+    from app.services.undo import undo_last
+
+    await _kemas_grade(pg, sosoh, grade="medium", jumlah_karung=40)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        stok = (await db.execute(select(FinishedGoodsStock))).scalars().one()
+        asal = (stok.id, stok.source_type, stok.source_id, stok.product_sku_id,
+                stok.jasa_id, stok.rice_quality_standard_id, stok.kemasan_mengurangi_stok)
+        await masukkan_beras_ke_silo(db, user=u, jenis="medium",
+            sumber_stok=f"sku:{stok.product_sku_id}", nama_silo="C", berat_kg=300)
+        assert stok.jumlah_karung == 28
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo"))).scalars().one()
+        await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+        await db.refresh(stok)
+        assert stok.jumlah_karung == 40
+        assert stok.berat_total_kg == 1000
+        assert asal == (stok.id, stok.source_type, stok.source_id, stok.product_sku_id,
+                       stok.jasa_id, stok.rice_quality_standard_id, stok.kemasan_mengurangi_stok)
+        assert await hitung_stok_silo(db, sosoh["silo_beras"]) == 0
+        assert not (await db.execute(select(ActivityLog.id).where(
+            ActivityLog.aksi == "beras_bongkar_karung",
+            ActivityLog.dibatalkan_pada.is_(None)))).first()

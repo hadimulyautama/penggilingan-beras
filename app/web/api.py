@@ -4143,7 +4143,8 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
             select(PolishingSiloUsage.silo_id)
             .join(PolishingProcess,
                   PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
-            .where(PolishingProcess.status == "proses")
+            .where(PolishingProcess.status == "proses",
+                   PolishingSiloUsage.berat_akhir_kg.is_(None))
         )).scalars().all())
         wid = await _g2_warehouse_id(db)
         for s in (await db.execute(

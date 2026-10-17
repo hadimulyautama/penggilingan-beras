@@ -35,6 +35,7 @@ from app.services.jasa import (
     JasaError,
     pastikan_satu_pemilik,
     pemilik_silo_g2,
+    kunci_silo,
 )
 from app.penggilingan.gudang2.service import (
     Gudang2Error, get_g2_silo, hitung_stok_silo, komposisi_bahan_silo,
@@ -99,6 +100,7 @@ async def mulai_penyosohan(
                     "Pilih silo dari daftar — borangnya sudah berubah. "
                     "Muat ulang halamannya, lalu centang silo bahannya.")
             raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
+        await kunci_silo(db, silo.id)
         # V4: penyosohan hanya dari silo yang ADA isinya.
         if await hitung_stok_silo(db, silo.id) <= 0:
             raise Gudang2Error(
@@ -112,6 +114,7 @@ async def mulai_penyosohan(
                 .where(
                     PolishingSiloUsage.silo_id == silo.id,
                     PolishingProcess.status == "proses",
+                    PolishingSiloUsage.berat_akhir_kg.is_(None),
                 )
             )
         ).first()
@@ -224,6 +227,7 @@ async def tambah_silo_penyosohan(
     sana — itulah gunanya bahan dilacak PER BARIS, bukan per proses.
     """
     proc = await _get_proc(db, kode)
+    await db.refresh(proc, with_for_update=True)
     if proc.status != "proses":
         raise Gudang2Error(
             f"{proc.kode_proses} sudah {proc.status} — tak bisa menambah silo."
@@ -234,7 +238,8 @@ async def tambah_silo_penyosohan(
 
     sudah = set((await db.execute(
         select(PolishingSiloUsage.silo_id)
-        .where(PolishingSiloUsage.polishing_process_id == proc.id)
+        .where(PolishingSiloUsage.polishing_process_id == proc.id,
+               PolishingSiloUsage.berat_akhir_kg.is_(None))
     )).scalars().all())
 
     silos: list[Silo] = []
@@ -242,9 +247,10 @@ async def tambah_silo_penyosohan(
         silo = await get_g2_silo(db, letter)
         if silo is None:
             raise Gudang2Error(f"Silo {letter} Gudang 2 tidak ditemukan.")
+        await kunci_silo(db, silo.id)
         if silo.id in sudah:
             raise Gudang2Error(
-                f"Silo {letter} sudah jadi bahan {proc.kode_proses} sejak awal."
+                f"Silo {letter} masih menjadi bahan aktif {proc.kode_proses}."
             )
         if await hitung_stok_silo(db, silo.id) <= 0:
             raise Gudang2Error(f"Silo {letter} kosong — tidak ada yang bisa ditambahkan.")
@@ -253,7 +259,8 @@ async def tambah_silo_penyosohan(
             .join(PolishingProcess,
                   PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
             .where(PolishingSiloUsage.silo_id == silo.id,
-                   PolishingProcess.status == "proses")
+                   PolishingProcess.status == "proses",
+                   PolishingSiloUsage.berat_akhir_kg.is_(None))
         )).first()
         if aktif:
             raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
@@ -291,6 +298,15 @@ async def tambah_silo_penyosohan(
                 "sendiri — tak bisa dipakai lagi sebagai bahan sebelum "
                 "prosesnya ditutup."
             )
+        from app.models import BerasKeSilo, HasilSampingKeSilo
+        for model in (BerasKeSilo, HasilSampingKeSilo):
+            asal_sendiri = (await db.execute(select(model.id).where(
+                model.silo_id == silo.id,
+                model.polishing_process_id == proc.id).limit(1))).first()
+            if asal_sendiri:
+                raise Gudang2Error(
+                    f"Silo {letter} berisi hasil {proc.kode_proses} sendiri — "
+                    "tidak bisa menjadi bahan proses yang sama.")
         silos.append(silo)
 
     # ── Pemilik silo baru HARUS SAMA dengan pemilik proses ini ──
@@ -333,13 +349,25 @@ async def tambah_silo_penyosohan(
     from app.services.proses_bersama import perbarui_bahan_proses_bersama
     rincian_bahan = {}
     arus_bahan = []
+    # Satu silo dapat punya beberapa siklus. Hitung komposisinya sekali atas
+    # total semua siklus agar bahan baru tidak mengulang komposisi siklus lama.
+    total_silo = {}
     for usage, silo in semua_bahan:
-        total = float(usage.berat_awal_kg or 0) + float(usage.berat_masuk_kg or 0)
+        total_silo[silo.id] = total_silo.get(silo.id, 0) + float(
+            usage.berat_awal_kg or 0) + float(usage.berat_masuk_kg or 0)
+    dilihat = set()
+    for usage, silo in semua_bahan:
+        if silo.id in dilihat:
+            continue
+        dilihat.add(silo.id)
+        total = total_silo[silo.id]
         komposisi = await komposisi_bahan_silo(
             db, silo.id, sampai=now, kecuali_proses_id=proc.id,
             target_kg=total,
         )
-        rincian_bahan[silo.nama_silo] = komposisi
+        rincian_silo = rincian_bahan.setdefault(silo.nama_silo, {})
+        for jenis, kg in komposisi.items():
+            rincian_silo[jenis] = rincian_silo.get(jenis, 0) + kg
         arus_bahan.extend(_arus_dari_komposisi(silo, komposisi))
     await perbarui_bahan_proses_bersama(
         db, tabel_sumber="polishing_process", id_sumber=proc.id,
@@ -844,6 +872,7 @@ async def selesai_penyosohan(
     semua_selesai = all(u.berat_akhir_kg is not None for u in usages)
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
     outputs = await _output_map(db, proc.id)
+    beras_total = sum(outputs.get(j, 0.0) for j in GRADES)
     rendemen = None
 
     if semua_selesai:

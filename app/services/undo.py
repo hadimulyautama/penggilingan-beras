@@ -44,7 +44,7 @@ _UNDOABLE = {
     "silo_storage", "milling_process", "internal_transfers", "milling_qc_logs",
     "milling_process_verifications", "milling_progress_logs", "silo_moving_logs",
     "pk_purchase_batches", "pk_purchase_verifications", "pk_gudang2_intakes",
-    "pk_tumpukan_to_silo",
+    "pk_tumpukan_to_silo", "beras_ke_silo",
     # Hasil penyosohan bisa dibatalkan SEJAK 28 September 2026, dan itu bukan
     # kenyamanan melainkan syarat: angkanya berubah dari kumulatif jadi
     # per-prosesan (migrasi 0060). Kumulatif TAHAN salah ketik — ketik ulang,
@@ -161,6 +161,7 @@ _TABLE_LABEL = {
     # 8 Oktober 2026) — sama alasannya dengan `broken_ke_silo`: belum lewat
     # jalur peristiwa. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
     "beras_ke_silo": "beras dipindah ke silo",
+    "hasil_samping_ke_silo": "hasil samping dipindah ke silo",
 }
 
 
@@ -1103,7 +1104,76 @@ _PENANGAN_TAG = {
 }
 
 
-async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
+async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str:
+    """Kembalikan satu input FIFO beserta stok kemasannya, sebelum dipakai."""
+    import json
+    from app.models import BerasKeSilo, PolishingSiloUsage, PolishingOutputLog
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.penggilingan.gudang2.service import hitung_stok_silo, segarkan_status_silo
+    from app.services.jasa import kunci_silo
+
+    if log.aksi != "beras_masuk_silo" or not log.old_value:
+        raise UndoError("Input lama belum menyimpan rincian pembatalan. Mintakan koreksi ke Admin.")
+    data = json.loads(log.old_value)
+    moves = (await db.execute(select(BerasKeSilo).where(
+        BerasKeSilo.id.in_(data["moves"])).with_for_update())).scalars().all()
+    if len(moves) != len(data["moves"]):
+        raise UndoError("Rincian pemindahan sudah berubah; pembatalan ditolak.")
+    silo_id = moves[0].silo_id
+    await kunci_silo(db, silo_id)
+    usages = (await db.execute(select(PolishingSiloUsage).where(
+        PolishingSiloUsage.silo_id == silo_id).with_for_update())).scalars().all()
+    sekarang = sorted([[u.id, None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)]
+                       for u in usages])
+    if sekarang != sorted(data["usages"]):
+        raise UndoError("Bahan silo sudah dipakai atau pemakaian silo berubah. Batalkan langkah berikutnya dahulu.")
+    aktif = [u for u in usages if u.id in data["usage_aktif"]]
+    if aktif:
+        hasil = (await db.execute(select(PolishingOutputLog.id).where(
+            PolishingOutputLog.polishing_process_id.in_([u.polishing_process_id for u in aktif]),
+            PolishingOutputLog.waktu_update >= log.waktu_perubahan).limit(1))).first()
+        if hasil:
+            raise UndoError("Sudah ada hasil penyosohan setelah input ini. Batalkan hasilnya dahulu.")
+    from app.penggilingan.inventory.models import OutgoingItem
+    keluar = (await db.execute(select(OutgoingItem.id).where(
+        OutgoingItem.silo_id == silo_id,
+        OutgoingItem.berat_kg > 0,
+        OutgoingItem.updated_at >= log.waktu_perubahan).limit(1))).first()
+    if keluar:
+        raise UndoError("Sudah ada barang keluar dari silo setelah input ini. Batalkan pengeluarannya dahulu.")
+    kg = sum(float(m.berat_kg) for m in moves)
+    if await hitung_stok_silo(db, silo_id) + 0.01 < kg:
+        raise UndoError("Stok silo sudah berkurang; bahan ini tidak bisa dikembalikan otomatis.")
+    for u in aktif:
+        if float(u.berat_masuk_kg or 0) + 0.01 < kg:
+            raise UndoError("Tambahan bahan proses sudah berubah; mintakan koreksi ke Admin.")
+        u.berat_masuk_kg = float(u.berat_masuk_kg or 0) - kg
+    for item in data["stok"]:
+        item = dict(item)
+        rid = item.pop("id")
+        row = (await db.execute(select(FinishedGoodsStock).where(
+            FinishedGoodsStock.id == rid).with_for_update())).scalar_one_or_none()
+        if row is None:
+            item["waktu"] = datetime.fromisoformat(item["waktu"])
+            db.add(FinishedGoodsStock(id=rid, **item))
+        else:
+            row.jumlah_karung += item["jumlah_karung"]
+            row.berat_total_kg = float(row.berat_total_kg) + item["berat_total_kg"]
+    for move in moves:
+        await db.delete(move)
+    # Jejak bongkar kemasan bagian dari input yang sama, bukan input mandiri.
+    from app.database import now_local
+    for child in (await db.execute(select(ActivityLog).where(
+        ActivityLog.id.in_(data.get("logs_karung", []))).with_for_update())).scalars():
+        child.dibatalkan_pada = now_local()
+        child.dibatalkan_oleh = actor_id or log.changed_by
+    await db.flush()
+    await segarkan_status_silo(db, silo_id)
+    silo = await db.get(Silo, silo_id)
+    return f"Pemasukan {kg:g} kg ke {silo.nama_silo} dibatalkan; stok asal dikembalikan."
+
+
+async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str:
     if (log.table_name == "milling_process_verifications"
             and log.aksi == "koreksi_hasil_giling"):
         raise UndoError(
@@ -1134,6 +1204,9 @@ async def _undo_one(db: AsyncSession, log: ActivityLog) -> str:
         return await _undo_tutup_silo_sosoh(db, log.record_id)
     if tag and tag.startswith("barang_keluar_"):
         return await _undo_barang_keluar(db, log)
+
+    if log.table_name == "beras_ke_silo" and log.action == "INSERT":
+        return await _undo_beras_masuk_silo(db, log, actor_id=actor_id)
 
     t, rid, act = log.table_name, log.record_id, log.action
     if t == "drying_lots" and act == "INSERT":
@@ -1524,7 +1597,7 @@ async def undo_last(
             "belum bisa dibatalkan otomatis — koreksi lewat admin."
         )
 
-    msg = await _undo_one(db, log)
+    msg = await _undo_one(db, log, actor_id=actor.id)
     # ── Jejaknya DITANDAI, bukan dihapus ──
     #
     # Dulu `db.delete(log)`, dan itu melanggar ARSITEKTUR §6: jejak audit

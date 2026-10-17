@@ -2601,7 +2601,8 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 )
                 from app.penggilingan.gudang2.service import komposisi_bahan_silo
                 komposisi = await komposisi_bahan_silo(
-                    db, u.silo_id, sampai=now_local(),
+                    db, u.silo_id,
+                    sampai=(u.updated_at if dibebaskan else now_local()),
                     kecuali_proses_id=pr.id, target_kg=total_u,
                 )
                 for jenis, kg in komposisi.items():

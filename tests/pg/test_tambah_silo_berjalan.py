@@ -34,6 +34,7 @@ async def g1(pg, pemakai, pemasok):
             wh = Warehouse(nama_gudang="Gudang 1 - Selepan")
             db.add(wh)
             await db.flush()
+        wh.kode_fungsi = "g1"
         silo = {}
         for huruf in ("A", "B"):
             s = (await db.execute(select(Silo).where(
@@ -231,6 +232,7 @@ async def g2(pg, pemakai, pemasok):
             wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
             db.add(wh)
             await db.flush()
+        wh.kode_fungsi = "g2"
         silo = {}
         for huruf in ("A", "B"):
             s = (await db.execute(select(Silo).where(
@@ -364,3 +366,56 @@ async def test_tambah_silo_penyosohan_proses_selesai_ditolak(pg, g2):
             await tambah_silo_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                          nama_silos=["B"])
     assert "selesai" in str(e.value).lower()
+
+
+async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2):
+    from sqlalchemy import select
+    from app.models import User, PolishingSiloUsage
+    from app.penggilingan.gudang2.polishing import (
+        mulai_penyosohan, selesai_penyosohan, tambah_silo_penyosohan, catat_output)
+    from app.penggilingan.gudang2.service import hitung_stok_silo
+    from app.web.api import silo_bahan_g2
+
+    await _isi_silo_g2(pg, g2, huruf="A", kode="PK-ULANG-A", kg=5000)
+    await _isi_silo_g2(pg, g2, huruf="B", kode="PK-ULANG-B", kg=3000)
+    async with pg() as db:
+        u = await db.get(User, g2["user"])
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A", "B"])
+        kode = r.proc.kode_proses
+        await catat_output(db, user=u, kode=kode, jenis="medium", berat_kg=2000)
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
+    from app.database import now_local
+    from app.models import PolishingProcess, PolishingOutputLog
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo
+    async with pg() as db:
+        u = await db.get(User, g2["user"])
+        sumber = PolishingProcess(kode_proses="POL-SUMBER-ULANG", status="selesai",
+            waktu_mulai=now_local(), waktu_selesai=now_local(), created_by=u.id)
+        db.add(sumber)
+        await db.flush()
+        db.add(PolishingOutputLog(polishing_process_id=sumber.id, jenis="premium",
+            berat_kg=1000, waktu_update=now_local(), input_by=u.id))
+        await db.commit()
+        await masukkan_beras_ke_silo(db, user=u, jenis="premium", sumber_stok="curah",
+                                    nama_silo="B", berat_kg=1000)
+    async with pg() as db:
+        u = await db.get(User, g2["user"])
+        assert "B" in [x["value"] for x in await silo_bahan_g2(induk=kode, user=u)]
+        await tambah_silo_penyosohan(db, user=u, kode=kode, nama_silos=["B"])
+        rows = (await db.execute(select(PolishingSiloUsage).where(
+            PolishingSiloUsage.polishing_process_id == r.proc.id,
+            PolishingSiloUsage.silo_id == g2["silo"]["B"]))).scalars().all()
+        assert len(rows) == 2
+        assert sum(float(x.berat_terpakai_kg or 0) for x in rows) == 3000
+        assert await hitung_stok_silo(db, g2["silo"]["B"]) == 1000
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
+        assert await hitung_stok_silo(db, g2["silo"]["B"]) == 0
+        selesai = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
+        assert selesai.proc.status == "selesai"
+        from hmu_core.proses_db import ProsesTerpadu
+        bersama = (await db.execute(select(ProsesTerpadu).where(
+            ProsesTerpadu.tabel_sumber == "polishing_process",
+            ProsesTerpadu.id_sumber == str(r.proc.id)))).scalar_one()
+        komposisi = bersama.metadata_domain["komposisi_bahan"]["Silo B"]
+        assert komposisi["pk"] == 3000
+        assert komposisi["beras_putih"] == 1000

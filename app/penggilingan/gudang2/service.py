@@ -15,6 +15,7 @@ Acuan WAJIB: LOGIKA_SILO_GUDANG2.md.
 from __future__ import annotations
 
 import logging
+import json
 from dataclasses import dataclass
 from datetime import date, time
 
@@ -2440,12 +2441,11 @@ async def masukkan_beras_ke_silo(
         # dikurangi dahulu, lalu sisa curah dialokasikan FIFO lintas proses.
         proses = (await db.execute(
             select(PolishingProcess)
-            .join(PolishingOutputLog,
-                  PolishingOutputLog.polishing_process_id == PolishingProcess.id)
-            .where(PolishingOutputLog.jenis == jenis,
+            .where(PolishingProcess.id.in_(select(
+                PolishingOutputLog.polishing_process_id).where(
+                    PolishingOutputLog.jenis == jenis)),
                    PolishingProcess.jasa_id.is_(None) if jasa_id is None
                    else PolishingProcess.jasa_id == jasa_id)
-            .distinct()
             .order_by(PolishingProcess.waktu_mulai, PolishingProcess.id)
             .with_for_update()
         )).scalars().all()
@@ -2483,6 +2483,8 @@ async def masukkan_beras_ke_silo(
         curah = (max(0.0, float(hasil) - dikemas - dipindah)
                  if proc.jasa_id == jasa_id else 0.0)
         ambil_curah = min(berat_kg, curah)
+        if ambil_curah > 0:
+            rencana_pindah.append((proc.id, "polishing", proc.id, None, ambil_curah))
         perlu = berat_kg - ambil_curah
         ukuran_sku = (await db.execute(
             select(ProductSku.id, PackageSize.ukuran_kg)
@@ -2616,14 +2618,32 @@ async def masukkan_beras_ke_silo(
             f"❌ Silo {nama_silo} sedang disosoh ({ke_proses}) — beras jasa "
             "tak boleh ditambahkan ke proses yang berjalan.")
 
+    # Simpan identitas sumber dan penggunaan silo untuk pembatalan tepat satu input.
+    usages_sebelum = (await db.execute(select(PolishingSiloUsage).where(
+        PolishingSiloUsage.silo_id == silo.id))).scalars().all()
+    cuplikan = {"moves": [], "stok": [], "logs_karung": [], "usages": [
+        [u.id, None if u.berat_akhir_kg is None else float(u.berat_akhir_kg)]
+        for u in usages_sebelum], "usage_aktif": [
+        u.id for u in usages_sebelum if u.berat_akhir_kg is None]}
     # Kurangi hanya karung yang dipilih. Asal tiap baris stok tetap ditandai
     # di BerasKeSilo, termasuk stok timbang/retur yang bukan hasil penyosohan.
     for row, ambil in baris_karung:
+        cuplikan["stok"].append({
+            "id": row.id, "product_sku_id": row.product_sku_id,
+            "rice_quality_standard_id": row.rice_quality_standard_id,
+            "source_type": row.source_type, "source_id": row.source_id,
+            "jumlah_karung": ambil,
+            "hpp_per_kg": None if row.hpp_per_kg is None else float(row.hpp_per_kg),
+            "warehouse_id": row.warehouse_id, "waktu": row.waktu.isoformat(),
+            "input_by": row.input_by, "jasa_id": row.jasa_id,
+            "kemasan_mengurangi_stok": row.kemasan_mengurangi_stok,
+        })
         sku_row = await db.get(ProductSku, row.product_sku_id)
         size = (await db.execute(
             select(PackageSize.ukuran_kg)
             .where(PackageSize.id == sku_row.package_size_id)
         )).scalar_one()
+        cuplikan["stok"][-1]["berat_total_kg"] = float(size) * ambil
         row.jumlah_karung -= ambil
         row.berat_total_kg = max(
             0.0, float(row.berat_total_kg) - float(size) * ambil)
@@ -2635,6 +2655,14 @@ async def masukkan_beras_ke_silo(
             new_value=(f"{ambil} karung SKU {row.product_sku_id} · "
                        f"{float(size):g} kg dipindah ke silo").replace(",", "."),
         )
+
+        await db.flush()
+        from app.models import ActivityLog
+        child_id = (await db.execute(select(ActivityLog.id).where(
+            ActivityLog.aksi == "beras_bongkar_karung",
+            ActivityLog.record_id == row.id, ActivityLog.changed_by == user.id,
+        ).order_by(ActivityLog.id.desc()).limit(1))).scalar_one()
+        cuplikan["logs_karung"].append(child_id)
 
     codes: list[str] = []
     for proc_id, source_type, source_id, sku_id, kg in rencana_pindah:
@@ -2651,15 +2679,15 @@ async def masukkan_beras_ke_silo(
         )
         db.add(move)
         codes.append(kode)
-        await log_activity(
-            db, table_name="beras_ke_silo",
-            record_id=proc_id or source_id or 0, action="INSERT",
-            changed_by=user.id,
-            new_value=(f"{proc.kode_proses if proc else source_type} {jenis}: "
-                       f"{kg:,.0f} kg → Silo {nama_silo}"
-                       + (" (dari stok kemasan)" if sku_id is not None else " (curah)"))
-                      .replace(",", "."),
-        )
+        await db.flush()
+        cuplikan["moves"].append(move.id)
+
+    await log_activity(
+        db, table_name="beras_ke_silo", record_id=cuplikan["moves"][0],
+        action="INSERT", changed_by=user.id, aksi="beras_masuk_silo",
+        old_value=json.dumps(cuplikan),
+        new_value=f"{', '.join(codes)} {jenis}: {berat_kg:g} kg → Silo {nama_silo}",
+    )
 
     await segarkan_status_silo(db, silo.id)
     await db.commit()
