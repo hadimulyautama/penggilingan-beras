@@ -96,16 +96,16 @@
     <div class="rt-history-head"><div><h2>Retur yang sudah diterima</h2><span class="rt-subtle">Barang telah dibukukan ke stok Gudang 2.</span></div><span class="rt-subtle">{{ recent|length }} catatan terbaru</span></div>
     {% if recent %}
     <div class="tabel-standar__scroll">
-      <table class="tabel-standar">
+      <table class="tabel-standar" data-ponsel="ringkas" role="table">
         <thead><tr><th>Penerimaan / tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th>Tiket timbang</th><th class="tabel-standar__angka">Berat diterima</th><th class="tabel-standar__angka">Selisih</th></tr></thead>
         <tbody>{% for r in recent %}
-          <tr data-detail-retur="/retur/{{ r.id }}">
-            <td><a class="tabel-standar__kode" href="/retur/{{ r.id }}">{{ r.kode }}</a><small class="tabel-standar__sekunder">{{ r.waktu|jam }}</small></td>
-            <td>{{ r.nama_pelanggan or "Pelanggan tidak tercatat" }}</td>
-            <td>{{ r.nomor_polisi or "—" }}</td>
-            <td>{{ r.kode_tiket }}</td>
-            <td class="tabel-standar__angka">{{ kg(r.berat_rincian_kg) }} kg<small class="tabel-standar__sekunder">{{ r.jumlah_jenis }} jenis barang</small></td>
-            <td class="tabel-standar__angka">{{ kg(r.selisih_kg) }} kg</td>
+          <tr data-detail-retur="/retur/{{ r.id }}" role="row">
+            <td data-sel="utama" role="cell"><a class="tabel-standar__kode" href="/retur/{{ r.id }}">{{ r.kode }}</a><small class="tabel-standar__sekunder" data-hanya-desktop>{{ r.waktu|jam }}</small></td>
+            <td data-sel="subjek" role="cell">{{ r.nama_pelanggan or "Pelanggan tidak tercatat" }}</td>
+            <td data-sel="meta" role="cell">{{ r.nomor_polisi or "—" }}<span data-hanya-ponsel> · {{ r.waktu|jam('%d/%m/%Y') }}</span></td>
+            <td data-sel="tambahan" role="cell">{{ r.kode_tiket }}</td>
+            <td data-sel="angka" role="cell" class="tabel-standar__angka">{{ kg(r.berat_rincian_kg) }} kg<small class="tabel-standar__sekunder">{{ r.jumlah_jenis }} jenis barang</small></td>
+            <td data-sel="tambahan" role="cell" class="tabel-standar__angka">{{ kg(r.selisih_kg) }} kg</td>
           </tr>
         {% endfor %}</tbody>
       </table>

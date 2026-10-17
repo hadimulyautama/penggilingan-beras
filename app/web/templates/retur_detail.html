@@ -20,13 +20,13 @@
   <section class="riwayat-detail__card">
     <h2>Rincian barang yang diterima</h2>
     <div class="tabel-standar__scroll">
-      <table class="tabel-standar">
+      <table class="tabel-standar" data-ponsel="rincian" role="table">
         <thead><tr><th>Barang / merek</th><th>Mutu</th><th>Kemasan</th><th class="tabel-standar__angka">Jumlah kemasan</th><th class="tabel-standar__angka">Berat</th><th>Catatan</th><th>Catatan stok</th></tr></thead>
         <tbody>{% for i in items %}
-          <tr><td><strong>{{ i.nama or i.kategori.replace('_',' ').title() }}</strong>{% if not i.nama %}<small class="tabel-standar__sekunder">{{ i.merek or 'Tanpa merek' }}</small>{% endif %}</td>
-          <td>{{ i.mutu or '—' }}</td><td>{{ i.kemasan }} · {{ kg(i.ukuran_kg) }} kg</td>
-          <td class="tabel-standar__angka">{{ i.jumlah_karung }}</td><td class="tabel-standar__angka">{{ kg(i.berat_total_kg) }} kg</td>
-          <td>{{ i.catatan or '—' }}</td><td>{{ '#' ~ i.finished_goods_stock_id if i.finished_goods_stock_id else '—' }}</td></tr>
+          <tr role="row"><td data-label="Barang / merek" role="cell"><strong>{{ i.nama or i.kategori.replace('_',' ').title() }}</strong>{% if not i.nama %}<small class="tabel-standar__sekunder">{{ i.merek or 'Tanpa merek' }}</small>{% endif %}</td>
+          <td data-label="Mutu" role="cell">{{ i.mutu or '—' }}</td><td data-label="Kemasan" role="cell">{{ i.kemasan }} · {{ kg(i.ukuran_kg) }} kg</td>
+          <td data-label="Jumlah kemasan" role="cell" class="tabel-standar__angka">{{ i.jumlah_karung }}</td><td data-label="Berat" role="cell" class="tabel-standar__angka">{{ kg(i.berat_total_kg) }} kg</td>
+          <td data-label="Catatan" role="cell">{{ i.catatan or '—' }}</td><td data-label="Catatan stok" role="cell">{{ '#' ~ i.finished_goods_stock_id if i.finished_goods_stock_id else '—' }}</td></tr>
         {% endfor %}</tbody>
       </table>
     </div>
