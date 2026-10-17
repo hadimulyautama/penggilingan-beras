@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block judul %}Detail {{ k.nama }}{% endblock %}
+{% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% set otomatis = k.jenis in ('bekatul', 'reject', 'menir', 'broken') %}
+<main class="pk-detail produk-detail">
+  <a class="pk-detail__back" href="{{ kembali }}">← Kembali ke {{ 'Stok Produk Jasa' if pelanggan_id is not none else 'Stok Produk' }}</a>
+  <header class="pk-detail__hero">
+    <div class="pk-detail__heading">
+      <div class="pk-detail__eyebrow"><span class="pk-detail__chip {{ 'pk-detail__chip--jasa' if pelanggan_id is not none else 'pk-detail__chip--pabrik' }}">{{ 'Jasa' if pelanggan_id is not none else 'Pabrik' }}</span><span>Gudang 2 · {{ 'Beras' if beras else 'Hasil samping' }}</span></div>
+      <h1>{{ k.nama }}</h1><p>Pemilik: {{ pemilik }}</p>
+    </div>
+    <div class="pk-detail__weight"><span>Sisa di gudang</span><strong>{{ kg(k.sisa_kg) }} <small>kg</small></strong></div>
+  </header>
+  <section class="pk-detail__panel" aria-labelledby="ringkasan-produk">
+    <div class="pk-detail__section-head"><div><span class="pk-detail__overline">STOK PRODUK</span><h2 id="ringkasan-produk">Ringkasan stok</h2></div></div>
+    <dl class="pk-detail__facts">
+      <div><dt>Hasil sosoh · total</dt><dd>{{ kg(k.hasil_kg) }} kg</dd></div>
+      <div><dt>Sudah keluar</dt><dd>{{ kg(k.keluar_kg) }} kg</dd></div>
+      <div><dt>{{ 'Dikemas otomatis' if otomatis else ('Tercatat' if k.curah_saja else 'Dikemas') }}</dt><dd>{{ kg(k.dikemas_otomatis_kg if otomatis else k.dikemas_kg) }} kg</dd></div>
+      <div><dt>{{ 'Curah · sisa kemasan' if otomatis else ('Belum dicatat' if k.curah_saja else 'Belum dikemas · curah') }}</dt><dd>{{ kg(k.curah_otomatis_kg if otomatis else k.curah_kg) }} kg</dd></div>
+      {% if otomatis %}<div><dt>Kemasan otomatis</dt><dd>{{ k.jumlah_karung_otomatis }} karung × {{ k.ukuran_kemasan_otomatis }} kg</dd></div>{% endif %}
+      <div><dt>Pemilik</dt><dd>{{ pemilik }}</dd></div>
+    </dl>
+    {% if k.belum_final_kg %}<p class="bantu">{{ kg(k.belum_final_kg) }} kg berasal dari penyosohan yang masih berjalan. Hasilnya belum final.</p>{% endif %}
+  </section>
+  <section class="pk-detail__panel" aria-labelledby="rincian-produk">
+    <div class="pk-detail__section-head"><div><span class="pk-detail__overline">RINCIAN</span><h2 id="rincian-produk">Asal stok, barang keluar, dan kemasan</h2></div></div>
+    {{ st.blok('', [k], k.sisa_kg, k.curah_kg, '', ('giling' if beras else 'samping'), kemasan,
+               boleh_catat=BOLEH_CATAT, boleh_pindah=BOLEH_PINDAH,
+               boleh_masukkan_silo=BOLEH_MASUKKAN_SILO, halaman_aksi=halaman_aksi,
+               curah_titipan=curah_titipan, jasa_ids=jasa_ids, preopened=True) }}
+  </section>
+</main>
+{% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+{% block kaki %}
+{% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endif %}
+{% endblock %}

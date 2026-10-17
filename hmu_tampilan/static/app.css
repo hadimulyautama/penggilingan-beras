@@ -2878,3 +2878,15 @@ body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
 .penilaian-pk__putaran { padding: 10px; border-top: 1px solid var(--garis); }
 .penilaian-pk__putaran[open] > summary { margin-bottom: 12px; }
 @media (max-width:900px) { .penilaian-pk__aturan { grid-template-columns: minmax(0,1fr); } }
+
+/* Produk pabrik dan jasa memakai baris tautan yang sama, termasuk di ponsel. */
+.produk-list { --tabel-kolom: minmax(130px,1.4fr) repeat(4,minmax(110px,1fr)) minmax(110px,1fr) 22px; margin: 10px 0 24px; }
+.produk-list .produk-list__rincian { display: contents; }
+.produk-list__rincian > .tabel-standar__hasil { min-width: 0; margin: 0; padding: var(--tabel-padding-y) var(--tabel-padding-x); font-variant-numeric: tabular-nums; }
+.produk-list [data-sel="status"] { text-align: right; font-variant-numeric: tabular-nums; }
+@media(max-width:900px) {
+  .produk-list__rincian > .tabel-standar__hasil { padding: 0; }
+  .produk-list__rincian small { color: var(--tabel-redup); }
+}
+
+.produk-detail .pk-detail__back { display: inline-flex; min-height: 32px; align-items: center; }

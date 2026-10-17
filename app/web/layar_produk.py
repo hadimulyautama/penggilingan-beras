@@ -45,7 +45,8 @@ router = APIRouter(tags=["webapp"])
 
 
 @router.get("/stok-produk")
-async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
+@router.get("/stok-produk/detail")
+async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun), jenis: str | None = None):
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")
@@ -113,6 +114,9 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
     # eksplisit di endpoint. Pastikan tampilan kartu memakai gerbang yang sama.
     boleh_catat = (await _is_g2_operator(akun.user)
                    or P.super_saja(akun.user.role))
+    if request.url.path.endswith("/detail"):
+        return await _detail_produk(request, kartu, jenis, kemasan,
+                                    boleh_catat=boleh_catat)
     return await render_laci(
         request, "stok_produk.html", layar="stok_produk",
         BOLEH_CATAT=boleh_catat,
@@ -130,7 +134,9 @@ async def halaman_stok_produk(request: Request, akun=Depends(butuh_akun)):
 
 
 @router.get("/stok-produk-jasa")
-async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
+@router.get("/stok-produk-jasa/detail")
+async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun),
+                                  jenis: str | None = None, pelanggan_id: int | None = None):
     """Barang jadi & hasil samping MILIK PESANAN JASA — terpisah per PELANGGAN.
 
     Keputusan pemilik 6 Oktober 2026: *"buat saja halaman khusus stock
@@ -214,6 +220,11 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         # docstring `jasa_ids_per_pelanggan_dengan_hasil` untuk kenapa
         # keduanya wajib mengelompokkan dengan cara yang SAMA.
         jasa_per_pelanggan = await jasa.jasa_ids_per_pelanggan_dengan_hasil(db)
+        detail = request.url.path.endswith("/detail")
+        if detail:
+            if pelanggan_id not in jasa_per_pelanggan:
+                raise HTTPException(404, "Stok produk pelanggan ini tidak ditemukan.")
+            jasa_per_pelanggan = {pelanggan_id: jasa_per_pelanggan[pelanggan_id]}
         nama_pelanggan = {pid: n for pid, n in (await db.execute(
             select(Pelanggan.id, Pelanggan.nama_pelanggan)
             .where(Pelanggan.id.in_(jasa_per_pelanggan or {0}))
@@ -303,6 +314,7 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
             beras = [k for k in kartu if svc.adalah_beras(k.jenis)]
             samping = [k for k in kartu if not svc.adalah_beras(k.jenis)]
             daftar.append({
+                "pelanggan_id": pelanggan_id,
                 "pemilik": nama_pelanggan.get(pelanggan_id) or f"pelanggan #{pelanggan_id}",
                 # SELURUH pesanan pelanggan ini — dipakai tombol curah
                 # broken (`nilai=cr:broken|1,2,3`, lihat `_stok.html`) supaya
@@ -328,6 +340,16 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         (await _is_g2_operator(akun.user) and not can_see_financials(akun.user))
         or P.super_saja(akun.user.role)
     )
+    if detail:
+        if not daftar:
+            raise HTTPException(404, "Stok produk pelanggan ini tidak ditemukan.")
+        p = daftar[0]
+        return await _detail_produk(request, p["beras"] + p["samping"], jenis, p["kemasan"],
+                                    pemilik=p["pemilik"], pelanggan_id=pelanggan_id,
+                                    jasa_ids=p["jasa_ids"], boleh_pindah=boleh_pindah,
+                                    boleh_masukkan_silo=boleh_masukkan_silo,
+                                    curah_titipan={"broken":p["broken_curah_kg"],
+                                                   "bekatul":p["bekatul_curah_kg"]})
     return await render_laci(
         request, "stok_produk_jasa.html", layar="stok_produk_jasa",
         daftar=daftar, BOLEH_PINDAH=boleh_pindah,
@@ -335,6 +357,24 @@ async def halaman_stok_produk_jasa(request: Request, akun=Depends(butuh_akun)):
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",
     )
+
+
+async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
+                         pelanggan_id=None, jasa_ids=(), boleh_catat=False,
+                         boleh_pindah=False, boleh_masukkan_silo=False, curah_titipan=None):
+    """Detail membaca kartu dan saringan pemilik yang sama dengan daftar."""
+    k = next((k for k in kartu if k.jenis == jenis), None)
+    if k is None:
+        raise HTTPException(404, "Kategori stok produk ini tidak ditemukan.")
+    halaman = "/stok-produk-jasa" if pelanggan_id is not None else "/stok-produk"
+    return await render_laci(request, "stok_produk_detail.html",
+        layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
+        breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",
+        pelanggan_id=pelanggan_id, jasa_ids=jasa_ids, kemasan=kemasan,
+        kembali=halaman, halaman_aksi=halaman, curah_titipan=curah_titipan,
+        BOLEH_CATAT=boleh_catat, BOLEH_PINDAH=boleh_pindah,
+        BOLEH_MASUKKAN_SILO=boleh_masukkan_silo,
+        buka=request.query_params.get("buka") or "", nilai=request.query_params.get("nilai") or "")
 
 
 @router.get("/stok-karung")

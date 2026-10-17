@@ -172,7 +172,7 @@
 {% macro blok(judul, daftar, sisa, curah, ket, warna, kemasan, boleh_catat=False,
              boleh_pindah=False, titipan=None, curah_titipan=None, jasa_ids=(),
              boleh_masukkan_silo=False, halaman_aksi="/stok-produk",
-             desktop=False, preopened=False) -%}
+             desktop=False, preopened=False, detail_pelanggan=None, detail_pemilik=None) -%}
 {% if daftar %}
 {% if desktop %}
 <div class="jumlah">
@@ -182,35 +182,29 @@
     {{ daftar|length }} kategori{% if curah %} · {{ kg(curah) }} kg {{ ket }}{% endif %}
   </div>
 </div>
-<div class="stok-produk-desktop" aria-label="{{ judul }}">
-  <table class="stok-produk-tabel tabel-standar">
-    <thead><tr><th>Produk</th><th>Hasil sosoh</th><th>Keluar</th><th>Dikemas / tercatat</th><th>Curah / belum dikemas</th><th class="stok-produk-tabel__angka">Sisa di gudang</th><th></th></tr></thead>
-    <tbody>
+<div class="tabel-standar tabel-standar--grid produk-list" aria-label="{{ judul }}">
+  <div class="tabel-standar__scroll">
+    <div class="tabel-standar__kepala"><span>Produk</span><span>Hasil sosoh</span><span>Keluar</span><span>Dikemas / tercatat</span><span>Curah / belum dikemas</span><span>Sisa di gudang</span><span></span></div>
     {% for k in daftar %}
       {% set otomatis = k.jenis in ("bekatul", "reject", "menir", "broken") %}
-      <tr><td colspan="7" class="stok-produk-tabel__sel">
-        <details class="stok-produk-baris">
-          <summary class="stok-produk-baris__ringkas">
-            <span class="stok-produk-baris__nama">{{ k.nama }}{% if titipan and titipan.get(k.jenis) %}<small>+ titipan {{ kg(titipan[k.jenis]) }} kg</small>{% endif %}</span>
-            <span>{{ kg(k.hasil_kg) }} kg</span>
-            <span>{{ kg(k.keluar_kg) }} kg</span>
-            <span>{{ kg(k.dikemas_otomatis_kg if otomatis else k.dikemas_kg) }} kg</span>
-            <span>{{ kg(k.curah_otomatis_kg if otomatis else k.curah_kg) }} kg</span>
-            <strong class="stok-produk-tabel__angka{{ ' padat__nilai--kosong' if k.sisa_kg < 0.5 }}">{{ kg(k.sisa_kg) }} kg</strong>
-            <span class="stok-produk-baris__buka" aria-hidden="true">⌄</span>
-          </summary>
-          <div class="stok-produk-baris__detail">
-            {{ blok(judul, [k], sisa, curah, ket, warna, kemasan, boleh_catat,
-                    boleh_pindah, titipan, curah_titipan, jasa_ids,
-                    boleh_masukkan_silo, halaman_aksi, False, True) }}
-          </div>
-        </details>
-      </td></tr>
+      {% set detail_url = '/stok-produk-jasa/detail?pelanggan_id=' ~ detail_pelanggan ~ '&jenis=' if detail_pelanggan is not none else '/stok-produk/detail?jenis=' %}
+      <div class="tabel-standar__item">
+        <a class="tabel-standar__baris" href="{{ detail_url }}{{ k.jenis|urlencode }}" aria-label="Detail {{ k.nama }}{{ ' · ' ~ detail_pemilik if detail_pemilik else '' }}">
+          <span data-sel="utama"><strong class="tabel-standar__kode">{{ k.nama }}</strong>{% if titipan and titipan.get(k.jenis) %}<small class="tabel-standar__sekunder">+ titipan {{ kg(titipan[k.jenis]) }} kg</small>{% endif %}</span>
+          <span class="produk-list__rincian" data-sel="hasil">
+            <span class="tabel-standar__hasil"><small data-hanya-ponsel>Hasil: </small>{{ kg(k.hasil_kg) }} kg</span>
+            <span class="tabel-standar__hasil"><small data-hanya-ponsel>Keluar: </small>{{ kg(k.keluar_kg) }} kg</span>
+            <span class="tabel-standar__hasil"><small data-hanya-ponsel>Dikemas: </small>{{ kg(k.dikemas_otomatis_kg if otomatis else k.dikemas_kg) }} kg</span>
+            <span class="tabel-standar__hasil"><small data-hanya-ponsel>Curah: </small>{{ kg(k.curah_otomatis_kg if otomatis else k.curah_kg) }} kg</span>
+          </span>
+          <span data-sel="status"><strong>{{ kg(k.sisa_kg) }} kg</strong></span>
+          <span class="tabel-standar__panah" aria-hidden="true">›</span>
+        </a>
+      </div>
     {% endfor %}
-    </tbody>
-  </table>
+  </div>
 </div>
-{% endif %}
+{% else %}
 <div class="stok-produk-kartu{{ ' stok-produk-kartu--terbuka' if preopened }}">
 <div class="grup daftar-standar" style="margin-bottom:26px">
 {% for k in daftar %}
@@ -527,5 +521,6 @@
 {% endfor %}
 </div>
 </div>
+{% endif %}
 {% endif %}
 {%- endmacro %}

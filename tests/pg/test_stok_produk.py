@@ -20,6 +20,15 @@ import pytest_asyncio
 pytestmark = pytest.mark.asyncio
 
 
+async def _buka_detail_produk(c, jenis):
+    # Rincian dan tombol kerja sekarang tinggal di halaman detail; baris
+    # daftar harus tetap mengantarkan orang ke sana.
+    daftar = await c.get("/stok-produk")
+    href = f"/stok-produk/detail?jenis={jenis}"
+    assert f'href="{href}"' in daftar.text
+    return await c.get(href)
+
+
 async def _keluarkan(pg, uid_admin, uid_op, *, sku_id, std_id, karung,
                      pembeli="Toko Uji"):
     """Keluarkan barang lewat RANTAI BERPERINTAH — jalur satu-satunya sejak
@@ -664,7 +673,7 @@ async def test_halaman_menggambar_kartunya_beserta_empat_sukunya(pg, sosoh):
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "medium")
     assert r.status_code == 200, r.text[:400]
     h = r.text
     assert "Beras Medium" in h, "kartu kategorinya tak tergambar"
@@ -1406,17 +1415,11 @@ async def test_kartu_hasil_samping_berwarna_lain(pg, sosoh):
         r = await c.get("/stok-produk")
     h = r.text
     kepala, ekor = h.split("Hasil samping · sisa", 1)
-    assert "padat--giling" in kepala, "kartu beras kehilangan warnanya"
-    assert "padat--samping" not in kepala, "warna hasil samping bocor ke blok beras"
-    assert "padat--samping" in ekor, "kartu hasil samping tak berbeda warna"
-    assert "padat--giling" not in ekor, "kartu hasil samping masih berwarna beras"
-
-    # Dan warnanya benar-benar ADA di lembar gaya — kelas tanpa aturan tak
-    # menggambar apa pun, dan kartunya diam-diam kembali ke warna bawaan.
-    akar = pathlib.Path(__file__).resolve().parents[2]
-    css = (akar / "hmu_tampilan/static/app.css").read_text()
-    assert "--fase-samping:" in css, "warnanya tak pernah ditetapkan"
-    assert ".padat--samping" in css, "kelasnya tak punya aturan"
+    # Keputusan baru: kedua blok mengikuti tabel standar, tanpa kartu lipat.
+    assert 'tabel-standar--grid produk-list' in kepala
+    assert 'tabel-standar--grid produk-list' in ekor
+    assert 'jenis=medium' in kepala and 'jenis=bekatul' in ekor
+    assert '<details class="stok-produk-baris"' not in h
 
 
 async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
@@ -1466,7 +1469,7 @@ async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "medium")
     h = r.text
     # Rinciannya ada, dan ukurannya tetap disebut — yang dibuang kata
     # generiknya, bukan angkanya.
@@ -1489,8 +1492,8 @@ async def test_rincian_kemasan_tak_mengulang_kategorinya(pg, sosoh):
     assert "25 kg" in laci, "ukuran kemasan ikut hilang"
     assert "Karung" not in laci, "kata 'Karung' masih di rincian kemasan"
     # Kategori disebut SEKALI, di kepala kartunya — bukan di tiap baris.
-    assert h.count("Beras Medium") == 1, (
-        f"kategorinya diulang {h.count('Beras Medium')}× di satu kartu")
+    assert '<h1>Beras Medium</h1>' in h
+    assert "Beras Medium" not in laci, "kategori diulang pada rincian kemasan"
     # Tanggal penyosohan sebaris dengan kodenya, bukan di baris sendiri.
     import re
     assert re.search(r"POL-[\w-]+\s*·\s*\d\d/\d\d", h), \
@@ -1553,7 +1556,7 @@ async def test_sisa_di_gudang_tak_diulang_di_dalam_laci(pg, sosoh):
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "medium")
     h = r.text
 
     assert "Sisa di gudang ·" not in h, (
@@ -1620,7 +1623,7 @@ async def test_kartu_bekatul_membawa_tombol_pencatatan_curahnya(pg, sosoh):
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "bekatul")
     h = r.text
     assert "buka=catat_bekatul" in h, \
         "tombol pencatatan bekatul curah tak tergambar di kartunya"
@@ -1679,7 +1682,7 @@ async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh)
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "broken")
     h = r.text
     assert "buka=catat_broken" in h, \
         "tombol pencatatan broken curah tak tergambar di kartunya"
@@ -1778,7 +1781,7 @@ async def test_kartu_broken_tercatat_penuh_tetap_membawa_tombol_silo(pg, sosoh):
                                  base_url="http://uji") as c:
         c.cookies.set(security.NAMA_COOKIE, token)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
-        r = await c.get("/stok-produk")
+        r = await _buka_detail_produk(c, "broken")
     h = r.text
     assert "buka=masukkan_broken_silo" in h, \
         "tombol 'Masukkan ke silo' tak tergambar walau broken sudah tercatat penuh"

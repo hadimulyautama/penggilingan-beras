@@ -425,7 +425,8 @@ async def test_dua_pesanan_satu_pelanggan_digabung_satu_seksi(pg, sosoh_jasa):
     finally:
         await c.aclose()
     assert r.status_code == 200
-    assert r.text.count("Bu Sri") == 1, \
+    # Nama juga berada pada aria-label tautan detail untuk pembaca layar.
+    assert r.text.count('<span class="lbl">Bu Sri</span>') == 1, \
         "satu pelanggan dua pesanan harus satu seksi, bukan dua"
     assert "Broken" in r.text
 

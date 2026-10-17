@@ -41,13 +41,13 @@
     {{ st.blok("Beras · sisa di gudang", p.beras, p.sisa_beras, p.curah_beras,
               "belum dipacking", "giling", p.kemasan, boleh_pindah=BOLEH_PINDAH,
               boleh_masukkan_silo=BOLEH_MASUKKAN_SILO,
-              halaman_aksi="/stok-produk-jasa", desktop=True) }}
+              halaman_aksi="/stok-produk-jasa", desktop=True, detail_pelanggan=p.pelanggan_id, detail_pemilik=p.pemilik) }}
     {{ st.blok("Hasil samping · sisa di gudang", p.samping, p.sisa_samping,
               p.curah_samping, "sisa curah", "samping", p.kemasan,
               boleh_pindah=BOLEH_PINDAH,
               boleh_masukkan_silo=BOLEH_MASUKKAN_SILO,
               halaman_aksi="/stok-produk-jasa",
-              desktop=True,
+              desktop=True, detail_pelanggan=p.pelanggan_id, detail_pemilik=p.pemilik,
               curah_titipan={"broken": p.broken_curah_kg,
                              "bekatul": p.bekatul_curah_kg},
               jasa_ids=p.jasa_ids) }}
