@@ -1,7 +1,7 @@
 """Penerimaan barang retur: tiket timbang → rincian → stok Gudang 2."""
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,6 +10,8 @@ from sqlalchemy import select, text
 from app.database import SessionLocal, now_local
 from app.models import (Brand, CustomerReturn, CustomerReturnItem, FinishedGoodsStock,
                         PackageSize, PackagingMaterial, ProductSku, RiceQualityStandard)
+from app.penggilingan.inventory.models import ReturRincian, KemasanTara
+from app.services import retur as layanan_retur
 from app.web.security import butuh_akun
 from app.web.tampilan import redirect, render_laci
 
@@ -17,7 +19,7 @@ router = APIRouter(tags=["webapp"])
 
 
 def _pesan_url(jalur: str, nama: str, isi: str) -> str:
-    return f"{jalur}?{nama}={quote(isi, safe='')}"
+    return f"{jalur}{'&' if '?' in jalur else '?'}{nama}={quote(isi, safe='')}"
 
 
 def _boleh(akun) -> bool:
@@ -31,27 +33,36 @@ async def _siapkan(db):
         SELECT t.id, t.kode, t.tanggal, t.pelanggan_id,
                COALESCE(p.nama_pelanggan, t.pihak_nama, 'Pelanggan tidak tercatat') AS pelanggan,
                t.nomor_polisi, t.nama_sopir, t.timbang1_kg, t.timbang2_kg,
-               t.berat_barang_kg, t.jumlah_karung
+               t.berat_barang_kg, t.jumlah_karung, t.status_tiket
         FROM timbangan_transaksi t
         LEFT JOIN pelanggan p ON p.id = t.pelanggan_id
         LEFT JOIN customer_returns r ON r.timbangan_transaksi_id = t.id
-        WHERE t.arah = 'RETUR_MASUK' AND t.status_tiket = 'SELESAI'
+        WHERE t.arah = 'RETUR_MASUK' AND t.status_tiket IN ('TERBUKA', 'SELESAI')
           AND t.status_transaksi = 'AKTIF' AND r.id IS NULL
-          AND t.berat_barang_kg > 0
         ORDER BY t.tanggal DESC, t.id DESC LIMIT 60
     """))).mappings().all()
 
+    tickets = [dict(t) for t in tickets]
+    rincian = (await db.scalars(select(ReturRincian).where(
+        ReturRincian.timbangan_transaksi_id.in_([t['id'] for t in tickets])))).all()
+    per_tiket = {r.timbangan_transaksi_id: r.muatan for r in rincian}
+    for t in tickets:
+        t['rincian'] = per_tiket.get(t['id'], [])
     result = await db.execute(
-        select(ProductSku, Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg)
+        select(ProductSku, Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg, KemasanTara.tara_per_karung_kg)
         .join(Brand, Brand.id == ProductSku.brand_id, isouter=True)
         .join(PackagingMaterial, PackagingMaterial.id == ProductSku.packaging_material_id)
         .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
-        .where(ProductSku.aktif.is_(True))
+        .outerjoin(KemasanTara, (KemasanTara.packaging_material_id == ProductSku.packaging_material_id)
+                   & (KemasanTara.package_size_id == ProductSku.package_size_id))
+        .where(ProductSku.aktif.is_(True),
+               (PackagingMaterial.kode != 'laminasi') | (PackageSize.ukuran_kg <= 25))
         .order_by(ProductSku.kategori, PackageSize.ukuran_kg, Brand.nama)
     )
     skus = [{"id": sku.id, "kategori": sku.kategori,
+             "tara": str(tara) if tara is not None else "",
              "label": f"{sku.kategori.replace('_', ' ').title()} · {brand or 'Tanpa merk'} · {material} · {size} kg"}
-            for sku, brand, material, size in result.all()]
+            for sku, brand, material, size, tara in result.all()]
     mutu = (await db.scalars(select(RiceQualityStandard).where(
         RiceQualityStandard.aktif.is_(True)).order_by(RiceQualityStandard.urutan))).all()
     recent = (await db.execute(text("""
@@ -90,7 +101,11 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
         bag_counts = form.getlist("jumlah_karung")
         weights = form.getlist("berat_kg")
         notes = form.getlist("catatan_item")
-        if not (len(sku_ids) == len(quality_ids) == len(bag_counts) == len(weights) == len(notes)):
+        taras = form.getlist("tara_per_karung_kg")
+        aksi = form.get("aksi", "terima")
+        if aksi not in ("rincian", "terima"):
+            raise ValueError("Aksi retur tidak dikenal.")
+        if not (len(sku_ids) == len(quality_ids) == len(bag_counts) == len(weights) == len(notes) == len(taras)):
             raise ValueError("Rincian barang tidak lengkap. Muat ulang halaman dan isi kembali.")
         rows = []
         for idx, sku_raw in enumerate(sku_ids):
@@ -98,11 +113,14 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
                 continue
             sku_id = int(sku_raw)
             count = int(bag_counts[idx] or 0)
-            weight = Decimal((weights[idx] or "").replace(",", "."))
+            weight = layanan_retur.angka(weights[idx], 'Berat barang', 1_000_000, '.01')
+            if not taras[idx].strip():
+                raise ValueError('Isi tara per karung. Gunakan 0 hanya bila kemasan memang tanpa tara.')
+            tara = layanan_retur.angka(taras[idx], 'Tara per karung', 1_000, '.0001')
             quality_id = int(quality_ids[idx]) if quality_ids[idx] else None
             if count < 1 or weight <= 0:
                 raise ValueError("Setiap baris harus memiliki jumlah karung dan berat lebih dari nol.")
-            rows.append((sku_id, quality_id, count, weight, (notes[idx] or "").strip() or None))
+            rows.append((sku_id, quality_id, count, weight, (notes[idx] or "").strip() or None, tara))
         if not rows:
             raise ValueError("Tambahkan minimal satu jenis barang retur.")
         total = sum((row[3] for row in rows), Decimal("0"))
@@ -119,10 +137,10 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
                 SELECT t.id, t.kode, t.pelanggan_id,
                        COALESCE(p.nama_pelanggan, t.pihak_nama) AS pelanggan,
                        t.nomor_polisi, t.timbang1_kg, t.timbang2_kg,
-                       t.berat_barang_kg
+                       t.berat_barang_kg, t.status_tiket, t.jumlah_karung, t.total_tara_kg
                 FROM timbangan_transaksi t LEFT JOIN pelanggan p ON p.id=t.pelanggan_id
                 WHERE t.id=:id AND t.arah='RETUR_MASUK'
-                  AND t.status_tiket='SELESAI' AND t.status_transaksi='AKTIF'
+                  AND t.status_tiket IN ('TERBUKA', 'SELESAI') AND t.status_transaksi='AKTIF'
                 FOR UPDATE OF t
             """), {"id": ticket_id})).mappings().first()
             if not ticket:
@@ -132,18 +150,32 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             if already:
                 raise ValueError("Tiket ini sudah dicatat sebagai barang retur.")
 
-            sku_map = {}
-            for sku_id, quality_id, count, weight, item_note in rows:
-                sku = await db.get(ProductSku, sku_id)
-                if not sku or not sku.aktif:
-                    raise ValueError("SKU tidak tersedia. Pilih ulang jenis dan kemasannya.")
-                if sku.kategori == "beras_putih" and not quality_id:
-                    raise ValueError("Pilih mutu beras untuk setiap baris beras putih.")
-                if sku.kategori != "beras_putih" and quality_id:
-                    raise ValueError("Mutu hanya dipilih untuk beras putih.")
-                if quality_id and not await db.get(RiceQualityStandard, quality_id):
-                    raise ValueError("Mutu beras yang dipilih tidak tersedia.")
-                sku_map[sku_id] = sku
+            muatan = await layanan_retur.siapkan_muatan(db, rows)
+            rincian = await db.scalar(select(ReturRincian).where(
+                ReturRincian.timbangan_transaksi_id == ticket_id))
+            if aksi == 'rincian':
+                if ticket['status_tiket'] != 'TERBUKA':
+                    raise ValueError('Timbang sudah selesai. Rincian kemasan tidak dapat diubah lagi.')
+                if rincian is None:
+                    rincian = ReturRincian(timbangan_transaksi_id=ticket_id,
+                                           input_by=akun.user.id, muatan=muatan)
+                    db.add(rincian)
+                else:
+                    rincian.muatan = muatan
+                    rincian.input_by = akun.user.id
+                await db.commit()
+                return redirect(_pesan_url(f'/retur?tiket={ticket_id}', 'pesan',
+                    'Rincian tersimpan. Jumlah karung dan tara otomatis dipakai Pos Timbang. Lanjutkan timbang truk kosong.'))
+            if ticket['status_tiket'] != 'SELESAI':
+                raise ValueError('Simpan rincian terlebih dahulu, lalu selesaikan timbang truk kosong di Pos Timbang.')
+            if rincian and layanan_retur.identitas_muatan(rincian.muatan) != layanan_retur.identitas_muatan(muatan):
+                raise ValueError('Rincian kemasan sudah dipakai pada timbang kedua dan tidak boleh diubah saat menerima stok.')
+            # Tiket lama yang selesai sebelum integrasi tetap bisa diterima,
+            # asalkan rincian Produksi sama dengan kemasan pada bukti timbang.
+            karung = sum(m['jumlah_karung'] for m in muatan)
+            tara_total = sum((Decimal(m['tara_per_karung_kg']) * m['jumlah_karung'] for m in muatan), Decimal('0'))
+            if karung != ticket['jumlah_karung'] or tara_total.quantize(Decimal('.01'), rounding=ROUND_HALF_UP) != Decimal(str(ticket['total_tara_kg'] or 0)):
+                raise ValueError('Jumlah karung atau tara berbeda dari tiket timbang. Periksa rincian dan koreksi tiket sebelum menerima stok.')
 
             ticket_weight = Decimal(str(ticket["berat_barang_kg"]))
             difference = total - ticket_weight
@@ -170,7 +202,7 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             db.add(receipt)
             await db.flush()
             receipt.kode = f"RET-{now:%Y%m%d}-{receipt.id:04d}"
-            for sku_id, quality_id, count, weight, item_note in rows:
+            for sku_id, quality_id, count, weight, item_note, tara in rows:
                 item = CustomerReturnItem(
                     customer_return_id=receipt.id, product_sku_id=sku_id,
                     rice_quality_standard_id=quality_id, jumlah_karung=count,

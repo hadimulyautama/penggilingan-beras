@@ -3,7 +3,7 @@
 {% block isi %}
 {# Navigasi aplikasi mengganti isi .bingkai tanpa menyentuh <head>. Muat CSS
    dari isi halaman agar desain tetap aktif saat dibuka melalui menu. #}
-<style>@import url('/static/retur.css?v={{ VERSI }}');</style>
+<style>@import url('/static/retur.css?v={{ VERSI }}-2');</style>
 <div id="retur-ui">
   <section class="rt-stats" aria-label="Ringkasan retur">
     <article class="rt-stat"><div class="rt-icon">↙</div><div><strong>{{ tickets|length }}</strong><span>Tiket siap dicatat</span></div></article>
@@ -12,7 +12,7 @@
   </section>
 
   <section class="rt-guide" aria-label="Panduan penerimaan retur">
-    <p class="rt-description">Catat barang yang kembali dari pelanggan. Cocokkan tiket timbang, rincikan setiap jenis dan kemasan, lalu masukkan semuanya ke stok Gudang 2.</p>
+    <p class="rt-description">Catat barang yang kembali dari pelanggan. Setelah timbang pertama, catat barang dan kemasannya di sini. Pos Timbang memakai jumlah karung dan tara ini saat menimbang truk kosong. Setelah timbang kedua, verifikasi bobot untuk memasukkan barang ke stok Gudang 2.</p>
     <div class="rt-steps" aria-label="Langkah penerimaan retur">
       <div class="rt-step active"><b>1</b><span>Pilih tiket</span></div><div class="rt-step active"><b>2</b><span>Rinci barang</span></div><div class="rt-step active"><b>3</b><span>Cek bobot</span></div><div class="rt-step"><b>4</b><span>Masuk stok</span></div>
     </div>
@@ -25,32 +25,33 @@
     <input type="hidden" name="_csrf" value="{{ CSRF }}">
     <div class="rt-grid">
       <section class="rt-panel">
-        <header class="rt-panel-head"><h2>1. Pilih tiket timbang</h2><p>Hanya tiket retur yang sudah ditimbang bermuatan dan kosong ditampilkan.</p></header>
+        <header class="rt-panel-head"><h2>1. Pilih tiket timbang</h2><p>Pilih tiket retur setelah timbang pertama. Rincian bisa diisi sebelum truk kosong ditimbang.</p></header>
         {% if tickets %}
         <div class="rt-ticket-list" id="ticket-list">
           {% for t in tickets %}
           <label class="rt-ticket">
-            <input type="radio" name="timbangan_transaksi_id" value="{{ t.id }}" data-code="{{ t.kode }}" data-customer="{{ t.pelanggan }}" data-plate="{{ t.nomor_polisi or 'Plat belum dicatat' }}" data-driver="{{ t.nama_sopir or 'Sopir belum dicatat' }}" data-gross="{{ t.timbang1_kg or 0 }}" data-empty="{{ t.timbang2_kg or 0 }}" data-net="{{ t.berat_barang_kg or 0 }}" {% if tiket_terpilih|string == t.id|string or (not tiket_terpilih and loop.first) %}checked{% endif %}>
-            <div class="rt-ticket-top"><span class="rt-ticket-code">{{ t.kode }}</span><span class="rt-ticket-net">{{ "{:,.2f}".format(t.berat_barang_kg|float).replace(",", "X").replace(".", ",").replace("X", ".") }} kg</span></div>
+            <input type="radio" name="timbangan_transaksi_id" value="{{ t.id }}" data-state="{{ t.status_tiket }}" data-items='{{ t.rincian|tojson }}' data-code="{{ t.kode }}" data-customer="{{ t.pelanggan }}" data-plate="{{ t.nomor_polisi or 'Plat belum dicatat' }}" data-driver="{{ t.nama_sopir or 'Sopir belum dicatat' }}" data-gross="{{ t.timbang1_kg or 0 }}" data-empty="{{ t.timbang2_kg or 0 }}" data-net="{{ t.berat_barang_kg or 0 }}" {% if tiket_terpilih|string == t.id|string or (not tiket_terpilih and loop.first) %}checked{% endif %}>
+            <div class="rt-ticket-top"><span class="rt-ticket-code">{{ t.kode }}</span><span class="rt-ticket-net">{% if t.status_tiket == 'SELESAI' %}{{ "{:,.2f}".format(t.berat_barang_kg|float).replace(",", "X").replace(".", ",").replace("X", ".") }} kg{% else %}Menunggu timbang kedua{% endif %}</span></div>
             <div class="rt-ticket-meta"><span>Pelanggan: {{ t.pelanggan }}</span><span>Armada: {{ t.nomor_polisi or "Plat belum dicatat" }}</span><span>{{ t.tanggal }}</span></div>
           </label>
           {% endfor %}
         </div>
-        {% else %}<div class="rt-empty">Belum ada tiket retur selesai yang menunggu pencatatan. Timbang armada bermuatan dan kosong di Pos Timbang terlebih dahulu.</div>{% endif %}
+        {% else %}<div class="rt-empty">Belum ada tiket retur menunggu pencatatan. Timbang armada bermuatan di Pos Timbang terlebih dahulu.</div>{% endif %}
       </section>
 
       <section class="rt-panel">
-        <header class="rt-panel-head"><h2>2. Rincian barang yang kembali</h2><p>Isi sesuai barang fisik yang diterima. Kemasan yang sudah dibawa pelanggan tidak mengurangi stok karung pabrik.</p></header>
+        <header class="rt-panel-head"><h2>2. Rincian barang yang kembali</h2><p>Isi sesuai barang fisik setelah bongkar, termasuk tara tiap jenis kemasan. Simpan rincian sebelum timbang kedua. Kemasan dari pelanggan tidak mengurangi stok karung pabrik.</p></header>
         <div class="rt-form">
           <div class="rt-picked" id="picked-summary"><div><small>TIKET</small><strong id="picked-code">Pilih tiket di samping</strong></div><div><small>PELANGGAN</small><strong id="picked-customer">—</strong></div><div><small>ARMADA</small><strong id="picked-plate">—</strong></div><div><small>TIMBANG BERMUATAN</small><strong id="picked-gross">—</strong></div><div><small>TIMBANG KOSONG</small><strong id="picked-empty">—</strong></div><div><small>BOBOT BARANG DI TIKET</small><strong id="picked-net">0 kg</strong></div></div>
 
           <div class="rt-section-title"><h3>Daftar SKU retur</h3><span class="rt-subtle">Berat aktual dalam kg</span></div>
           <div class="rt-items" id="return-items">
             <div class="rt-item" data-category="">
-              <label class="rt-field sku-field">Produk, merk, dan kemasan<select name="sku_id" class="sku-select" required><option value="">Pilih SKU</option>{% for sku in skus %}<option value="{{ sku.id }}" data-category="{{ sku.kategori }}">{{ sku.label }}</option>{% endfor %}</select></label>
+              <label class="rt-field sku-field">Produk, merk, dan kemasan<select name="sku_id" class="sku-select" required><option value="">Pilih SKU</option>{% for sku in skus %}<option value="{{ sku.id }}" data-category="{{ sku.kategori }}" data-tara="{{ sku.tara }}">{{ sku.label }}</option>{% endfor %}</select></label>
               <label class="rt-field rt-quality">Mutu beras<select name="quality_id"><option value="">Pilih mutu</option>{% for q in mutu %}<option value="{{ q.id }}">{{ q.nama }}</option>{% endfor %}</select></label>
               <label class="rt-field">Jumlah karung<input type="number" name="jumlah_karung" min="1" step="1" inputmode="numeric" placeholder="mis. 20" required></label>
-              <label class="rt-field">Berat aktual (kg)<input type="number" name="berat_kg" min="0.01" step="0.01" inputmode="decimal" placeholder="mis. 980" required></label>
+              <label class="rt-field">Tara per karung (kg)<input type="number" name="tara_per_karung_kg" min="0" max="1000" step="0.0001" inputmode="decimal" placeholder="Tara karung" required></label>
+              <label class="rt-field">Berat barang tanpa kemasan (kg)<input type="number" name="berat_kg" min="0.01" step="0.01" inputmode="decimal" placeholder="mis. 980" required></label>
               <button type="button" class="rt-remove" aria-label="Hapus baris" title="Hapus baris">×</button>
               <input type="hidden" name="catatan_item" value="">
             </div>
@@ -64,7 +65,8 @@
             <label class="rt-field rt-reason" id="reason-field">Alasan selisih bobot<input name="alasan_selisih" maxlength="300" placeholder="Contoh: ada satu karung terbuka dan isi berkurang"></label>
             <label class="rt-field wide">Catatan penerimaan<input name="catatan" maxlength="500" placeholder="Kondisi barang atau keterangan lain (opsional)"></label>
           </div>
-          <button type="submit" class="rt-btn primary rt-submit" id="submit-return" {% if not tickets %}disabled{% endif %}>✓ Verifikasi dan masukkan ke stok</button>
+          <button type="submit" name="aksi" value="rincian" class="rt-btn rt-submit" id="save-details" {% if not tickets %}disabled{% endif %}>Simpan rincian untuk Pos Timbang</button>
+          <button type="submit" name="aksi" value="terima" class="rt-btn primary rt-submit" id="submit-return" {% if not tickets %}disabled{% endif %}>✓ Verifikasi dan masukkan ke stok</button>
         </div>
       </section>
     </div>
@@ -78,12 +80,13 @@
 
 <template id="item-template">
   <div class="rt-item" data-category="">
-    <label class="rt-field sku-field">Produk, merk, dan kemasan<select name="sku_id" class="sku-select" required><option value="">Pilih SKU</option>{% for sku in skus %}<option value="{{ sku.id }}" data-category="{{ sku.kategori }}">{{ sku.label }}</option>{% endfor %}</select></label>
+    <label class="rt-field sku-field">Produk, merk, dan kemasan<select name="sku_id" class="sku-select" required><option value="">Pilih SKU</option>{% for sku in skus %}<option value="{{ sku.id }}" data-category="{{ sku.kategori }}" data-tara="{{ sku.tara }}">{{ sku.label }}</option>{% endfor %}</select></label>
     <label class="rt-field rt-quality">Mutu beras<select name="quality_id"><option value="">Pilih mutu</option>{% for q in mutu %}<option value="{{ q.id }}">{{ q.nama }}</option>{% endfor %}</select></label>
     <label class="rt-field">Jumlah karung<input type="number" name="jumlah_karung" min="1" step="1" inputmode="numeric" placeholder="mis. 20" required></label>
-    <label class="rt-field">Berat aktual (kg)<input type="number" name="berat_kg" min="0.01" step="0.01" inputmode="decimal" placeholder="mis. 980" required></label>
+    <label class="rt-field">Tara per karung (kg)<input type="number" name="tara_per_karung_kg" min="0" max="1000" step="0.0001" inputmode="decimal" placeholder="Tara karung" required></label>
+              <label class="rt-field">Berat barang tanpa kemasan (kg)<input type="number" name="berat_kg" min="0.01" step="0.01" inputmode="decimal" placeholder="mis. 980" required></label>
     <button type="button" class="rt-remove" aria-label="Hapus baris" title="Hapus baris">×</button><input type="hidden" name="catatan_item" value="">
   </div>
 </template>
-<script src="/static/retur.js?v={{ VERSI }}" defer></script>
+<script src="/static/retur.js?v={{ VERSI }}-2" defer></script>
 {% endblock %}

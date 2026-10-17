@@ -6,6 +6,8 @@ Aman dijalankan berulang: hanya menambah yang belum ada.
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 import logging
 
 from sqlalchemy import select
@@ -194,6 +196,37 @@ async def seed_master() -> None:
             if not ada:
                 db.add(PackageSize(ukuran_kg=ukuran))
                 created.append(f"ukuran {ukuran}kg")
+
+        # Kesepakatan pemilik, 17 Oktober 2026. Hanya menyemai pasangan yang
+        # belum ada; setelan yang sudah diubah tidak ditimpa saat boot.
+        from app.models import KemasanTara
+        tara_awal = [
+            ('biasa', 5, '0.03'),
+            ('biasa', 10, '0.05'),
+            ('biasa', 20, '0.05'),
+            ('biasa', 25, '0.05'),
+            ('biasa', 40, '0.07'),
+            ('biasa', 48, '0.07'),
+            ('biasa', 50, '0.07'),
+            ('laminasi', 5, '0.03'),
+            ('laminasi', 10, '0.05'),
+            ('laminasi', 20, '0.07'),
+            ('laminasi', 25, '0.08'),
+            ('putih', 50, '0.07'),
+            ('polos', 25, '0.05'),
+            ('bekas', 20, '0.05'),
+            ('bekas', 40, '0.07'),
+            ('bekas', 50, '0.07'),
+            ('karung_pk', 50, '0.07'),
+        ]
+        for kode, ukuran, tara in tara_awal:
+            material = await db.scalar(select(PackagingMaterial).where(PackagingMaterial.kode == kode))
+            size = await db.scalar(select(PackageSize).where(PackageSize.ukuran_kg == ukuran))
+            if material and size and not await db.scalar(select(KemasanTara.id).where(
+                KemasanTara.packaging_material_id == material.id, KemasanTara.package_size_id == size.id)):
+                db.add(KemasanTara(packaging_material_id=material.id, package_size_id=size.id,
+                                   tara_per_karung_kg=Decimal(tara)))
+                created.append(f'tara {kode} {ukuran} kg')
 
         if created:
             await db.commit()

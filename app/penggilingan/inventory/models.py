@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric,
-                        String, text)
+from sqlalchemy import (Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric,
+                        String, UniqueConstraint, text)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
@@ -138,6 +138,26 @@ class FinishedGoodsStock(Base, TimestampMixin):
     kemasan_mengurangi_stok: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+
+
+class KemasanTara(Base, TimestampMixin):
+    """Tara baku per jenis dan ukuran; rincian retur menyimpan salinannya."""
+    __tablename__ = "kemasan_tara"
+    __table_args__ = (UniqueConstraint('packaging_material_id', 'package_size_id'),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    packaging_material_id: Mapped[int] = mapped_column(ForeignKey('packaging_materials.id'), nullable=False)
+    package_size_id: Mapped[int] = mapped_column(ForeignKey('package_sizes.id'), nullable=False)
+    tara_per_karung_kg: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False)
+
+
+class ReturRincian(Base, TimestampMixin):
+    """Fakta bongkar sebelum timbang kedua; belum merupakan penerimaan stok."""
+
+    __tablename__ = "retur_rincian"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timbangan_transaksi_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    muatan: Mapped[list] = mapped_column(JSON, nullable=False)
+    input_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
 
 class CustomerReturn(Base, TimestampMixin):

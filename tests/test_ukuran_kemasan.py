@@ -83,7 +83,7 @@ def test_dua_puluh_dan_empat_puluh_kilo_bisa_dipakai():
         assert u in _BERAS_SIZES, f"{u} kg hilang dari ukuran beras"
         assert u in _ukuran_tersemai(), f"{u} kg tak disemai ke master"
         # Dan aturan kemasannya menerimanya, untuk kedua jenis karung beras.
-        for bahan in ("biasa", "laminasi"):
+        for bahan in (("biasa", "laminasi") if u <= 25 else ("biasa",)):
             _validate_kemasan("beras_putih", bahan, u)
             _validate_kemasan("beras_b", bahan, u)
 
@@ -183,3 +183,14 @@ def test_packing_otomatis_hasil_samping_menyisakan_curah():
     assert _packing_otomatis("bekatul", 167) == (40, 4, 160, 7)
     for jenis in ("reject", "menir", "broken"):
         assert _packing_otomatis(jenis, 167) == (50, 3, 150, 17)
+
+
+def test_laminasi_maksimal_dua_puluh_lima_kilo():
+    import pytest
+    from app.penggilingan.inventory.packaging import _validate_kemasan, InventoryError
+    from app.web.aksi_inventory import kombinasi_kemasan
+    assert {u for _, m, u in kombinasi_kemasan() if m == 'laminasi'} == {5, 10, 20, 25}
+    for kategori in ('beras_putih', 'beras_b'):
+        for ukuran in (40, 48, 50):
+            with pytest.raises(InventoryError):
+                _validate_kemasan(kategori, 'laminasi', ukuran)

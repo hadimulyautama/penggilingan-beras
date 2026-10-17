@@ -64,8 +64,8 @@ KEMASAN_VALID = {
     # Beras yang dibeli dari luar masuk sebagai Beras Medium dengan karung
     # putih polos 50 kg. Jalur penerimaan tiket memakai SKU yang sama dengan
     # stok barang jadi; tanpa kombinasi ini SKU ditolak sebelum stok tersimpan.
-    "beras_putih": {("biasa", None), ("laminasi", None), ("putih", 50)},  # ukuran: _BERAS_SIZES
-    "beras_b": {("biasa", None), ("laminasi", None)},
+    "beras_putih": {("biasa", None), *{("laminasi", u) for u in (5, 10, 20, 25)}, ("putih", 50)},  # ukuran: _BERAS_SIZES
+    "beras_b": {("biasa", None), *{("laminasi", u) for u in (5, 10, 20, 25)}},
     "broken": {("putih", 50), ("polos", 25)},
     "menir": {("putih", 50)},
     # Bekatul boleh dikemas SEJAK 28 September 2026 (keterangan pemilik: karung

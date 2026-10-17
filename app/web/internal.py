@@ -122,12 +122,14 @@ async def pengiriman_muatan_tiket(
     async with SessionLocal() as db:
         _tiket, rec, items = await _cocokkan_pengiriman_tiket(db, tid)
         muatan = []
+        from app.models import KemasanTara, PackagingMaterial, PackageSize
         for item in items:
+            tara = 0
+            produk = {}
             if item.item_type == "byproduct_curah":
                 kode = (item.jenis_byproduct or "").upper()
                 label = (item.jenis_byproduct or "Hasil samping").title() + " (curah)"
             elif item.item_type == "finished_goods":
-                from sqlalchemy import select
                 from app.penggilingan.inventory.models import ProductSku
                 from app.services.stok import jenis_produk
                 from hmu_core import (Brand, PackageSize, PackagingMaterial,
@@ -135,7 +137,9 @@ async def pengiriman_muatan_tiket(
 
                 detail = (await db.execute(
                     select(ProductSku.kategori, RiceQualityStandard.kode,
-                           Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg)
+                           Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg,
+                           ProductSku.brand_id, ProductSku.packaging_material_id, ProductSku.package_size_id)
+                    .select_from(ProductSku)
                     .join(RiceQualityStandard,
                           RiceQualityStandard.id == item.rice_quality_standard_id,
                           isouter=True)
@@ -147,6 +151,13 @@ async def pengiriman_muatan_tiket(
                 )).first()
                 if detail is None:
                     raise HTTPException(status_code=409, detail="SKU muatan tidak ditemukan di Produksi.")
+                tara = await db.scalar(select(KemasanTara.tara_per_karung_kg).where(
+                    KemasanTara.packaging_material_id == detail[6],
+                    KemasanTara.package_size_id == detail[7]))
+                if tara is None:
+                    raise HTTPException(409, 'Tara kemasan belum ditetapkan. Isi di Pengaturan Pos Timbang.')
+                produk = dict(kualitas_id=item.rice_quality_standard_id,
+                    merek_produk_id=detail[5], packaging_material_id=detail[6], package_size_id=detail[7])
                 jenis = jenis_produk(detail[0], detail[1])
                 if jenis in ("broken", "menir", "bekatul", "reject"):
                     kode, label = jenis.upper(), jenis.title()
@@ -160,8 +171,24 @@ async def pengiriman_muatan_tiket(
                     label += f" · {kemasan}"
             elif item.item_type in ("pk_langsung", "pk_g2"):
                 kode, label = "BERAS_PK", "Beras pecah kulit (PK)"
+                tara = await db.scalar(select(KemasanTara.tara_per_karung_kg)
+                    .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
+                    .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
+                    .where(PackagingMaterial.kode == 'karung_pk', PackageSize.ukuran_kg == 50))
+                if tara is None:
+                    raise HTTPException(409, 'Tara karung PK 50 kg belum ditetapkan di Pengaturan Pos Timbang.')
             elif item.item_type == "gabah_langsung":
                 kode, label = "GABAH_KERING", "Gabah kering"
+                # Jalur gabah menyebut karung 50 kg tanpa jenis bahannya.
+                # Aman hanya selama seluruh tara 50 kg sepakat. Bila kelak
+                # dibedakan, jangan menebak jenis karung yang benar-benar dimuat.
+                taras = (await db.scalars(select(KemasanTara.tara_per_karung_kg)
+                    .join(PackageSize, PackageSize.id == KemasanTara.package_size_id)
+                    .join(PackagingMaterial, PackagingMaterial.id == KemasanTara.packaging_material_id)
+                    .where(PackageSize.ukuran_kg == 50, PackagingMaterial.aktif.is_(True)).distinct())).all()
+                if len(taras) != 1:
+                    raise HTTPException(409, 'Jenis karung gabah 50 kg perlu dirinci karena tara kemasannya berbeda.')
+                tara = taras[0]
             else:
                 raise HTTPException(status_code=409, detail=f"Jenis muatan {item.item_type} belum didukung integrasi timbang.")
             muatan.append({
@@ -169,6 +196,8 @@ async def pengiriman_muatan_tiket(
                 "nama": label,
                 "berat_kg": float(item.berat_kg or 0),
                 "jumlah_karung": int(item.jumlah_karung or 0),
+                "tara_per_karung_kg": str(tara),
+                **produk,
             })
         return {"kode_perintah": rec.kode, "pelanggan": rec.nama_pembeli,
                 "nomor_polisi": rec.no_polisi, "muatan": muatan}
@@ -299,3 +328,17 @@ async def produksi_proses(
                   for a in row.arus if a.arah == "hasil"],
         "metadata": row.metadata_domain or {},
     } for row in rows]}
+
+
+@router.get('/retur/tiket/{tid}/muatan')
+async def retur_muatan_tiket(
+    tid: int, x_internal_token: str | None = Header(default=None),
+) -> dict:
+    """Rincian bongkar resmi; tidak mengirim harga atau menambah stok."""
+    _pastikan_token(x_internal_token)
+    from app.services.retur import baca_muatan
+    async with SessionLocal() as db:
+        try:
+            return await baca_muatan(db, tid)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc

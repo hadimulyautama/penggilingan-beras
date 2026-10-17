@@ -27,3 +27,7 @@
 
 #retur-ui .rt-stats{margin:0 0 12px}
 @media(max-width:600px){#retur-ui .rt-stats{margin:0 0 10px}}
+
+#retur-ui .rt-item{grid-template-columns:repeat(2,minmax(0,1fr));padding-right:52px}
+#retur-ui .rt-item .sku-field{grid-column:1/-1}
+#retur-ui .rt-item .rt-remove{position:absolute;right:8px;top:8px}
