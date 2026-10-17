@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block judul %}Detail QC {{ k.ref }}{% endblock %}
 {% block isi %}
+{% from "_penilaian_pk.html" import penilaian_pk with context %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
 <div class="riwayat-detail">
   <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ judul }}</a>
@@ -17,6 +18,12 @@
     </dl>
     {% if jenis in ['pk-luar', 'pk-hasil-giling'] %}<p class="bantu">{{ ATURAN_RATA_QC_PK }} Catatan lab memakai isian terakhir yang terisi.</p>{% endif %}
   </header>
+  {% if penilaian %}
+  <section class="riwayat-detail__card" aria-labelledby="perhitungan-kualitas-pk">
+    <h2 id="perhitungan-kualitas-pk">Perhitungan nilai kualitas</h2>
+    {{ penilaian_pk(penilaian) }}
+  </section>
+  {% endif %}
   <section class="riwayat-detail__card" aria-labelledby="semua-qc">
     <h2 id="semua-qc">Seluruh hasil pemeriksaan</h2>
     <div class="qc-history-card__rounds tabel-standar">
@@ -36,6 +43,12 @@
             </tbody>
           </table>
         </div>
+        {% if putaran.penilaian %}
+        <details class="penilaian-pk__putaran">
+          <summary>Nilai kualitas putaran {{ putaran.nomor }} · {% if putaran.penilaian.nilai is not none %}{{ '%.2f'|format(putaran.penilaian.nilai)|replace('.', ',') }} / 100 · {{ putaran.penilaian.kelas }}{% else %}Belum dapat dinilai{% endif %}</summary>
+          {{ penilaian_pk(putaran.penilaian, tunggal=true) }}
+        </details>
+        {% endif %}
       </section>
     {% endfor %}
     </div>

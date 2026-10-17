@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import now_local, tanggal_lokal
 from hmu_core.komoditas import buat_produk
 from app.models import MillingProcess
-from app.services.mutu_pk import (LABEL_KUALITATIF as _LABEL_KUALITATIF,
-                                 KOMPONEN_KUALITATIF, rincian_kualitatif, skor_kualitatif)
+from app.services.mutu_pk import (rincian_kualitatif, nilai_kualitas, kelas_kualitas,
+                                 penilaian_dari_log, ringkasan_banyak)
 from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
 
@@ -424,99 +424,12 @@ def _mutu_dari(rata) -> list[tuple[str, str]]:
 
 
 def _nilai_kualitas(mutu: list[tuple[str, str]]) -> tuple[float | None, int]:
-    """Rata-rata skor QC PK; komponen yang belum pernah diukur tidak dihitung.
-
-    Angka sumbernya adalah rata-rata QC yang sama dengan yang tercetak di
-    kartu. Skor bukan rata-rata persen mentah: tiap komponen lebih dulu
-    dipetakan ke skala 0–100 menurut batas mutu, baru skor komponen yang
-    tersedia dirata-ratakan dengan bobot sama. Butir kuning, gabah, dan merang
-    memakai skor klasifikasi pemilik, sesudah rata-rata skala 0–4 dibulatkan.
-    """
-    skor: list[float] = []
-    for label, nilai in mutu:
-        nama = label.strip().lower()
-        if nama in {label_komponen.lower() for label_komponen, _ in KOMPONEN_KUALITATIF}:
-            angka_kualitas = skor_kualitatif(nilai)
-            if angka_kualitas is not None:
-                skor.append(angka_kualitas)
-            continue
-        try:
-            angka = float(str(nilai).strip().replace("%", "").replace(",", "."))
-        except (TypeError, ValueError):
-            continue
-        if nama == "kadar air":
-            if angka < 11:
-                skor.append(0)
-            elif angka < 12:
-                skor.append(50)
-            elif angka < 13:
-                skor.append(90)
-            elif angka < 14:
-                skor.append(100)
-            elif angka < 14.5:
-                skor.append(90)
-            elif angka < 15:
-                skor.append(80)
-            elif angka < 15.5:
-                skor.append(70)
-            elif angka < 16:
-                skor.append(60)
-            elif angka <= 16.5:
-                skor.append(50)
-            else:
-                skor.append(10)
-        elif nama in ("butir patah", "broken"):
-            if angka < 20:
-                skor.append(100)
-            elif angka < 25:
-                skor.append(90)
-            elif angka < 30:
-                skor.append(80)
-            elif angka < 35:
-                skor.append(70)
-            elif angka <= 40:
-                skor.append(60)
-            elif angka <= 50:
-                skor.append(50)
-            else:
-                skor.append(10)
-        elif nama == "susut":
-            if angka <= 12:
-                skor.append(100)
-            elif angka <= 13:
-                skor.append(90)
-            elif angka <= 14:
-                skor.append(80)
-            elif angka <= 15:
-                skor.append(70)
-            elif angka <= 16:
-                skor.append(60)
-            elif angka <= 17:
-                skor.append(50)
-            else:
-                skor.append(10)
-    return (sum(skor) / len(skor), len(skor)) if skor else (None, 0)
+    """Kartu dan rincian membaca aturan penilaian yang sama."""
+    return nilai_kualitas(mutu)
 
 
 def _kelas_kualitas(nilai: float | None) -> str | None:
-    """Label kualitatif skor PK; rentang tengah C1/C2 mengikuti persetujuan."""
-    if nilai is None:
-        return None
-    if nilai >= 96:
-        return "A1"
-    if nilai >= 91:
-        return "A2"
-    if nilai >= 86:
-        return "B1"
-    if nilai >= 80:
-        return "B2"
-    if nilai >= 76:
-        return "C1"
-    if nilai >= 70:
-        return "C2"
-    if nilai >= 50:
-        return "D"
-    return "F"
+    return kelas_kualitas(nilai)
 
 
 async def _mutu(db: AsyncSession, proc_id: int) -> list[tuple[str, str]]:
@@ -696,7 +609,7 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
         proses_id = await db.scalar(select(MillingProcess.id).where(
             MillingProcess.kode_proses == kode))
 
-    from app.models import PkPurchaseQcLog
+    from app.models import PkPurchaseQcLog, PkPurchaseBatch
     model, kunci, identitas = ((MillingQcLog, MillingQcLog.milling_process_id, proses_id)
                                if proses_id else
                                (PkPurchaseQcLog, PkPurchaseQcLog.pk_purchase_batch_id, batch_id))
@@ -713,7 +626,12 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
                          catatan_lab=qc.catatan_lab, asal_lama=getattr(qc,"asal_lama",False),
                          keterangan=getattr(qc,"kondisi",None) or "—"))
     return {"rows": list(reversed(rows)), "hasil_terbaru_saja": False,
-            "ada_data_lama": any(x["asal_lama"] for x in rows)}
+            "ada_data_lama": any(x["asal_lama"] for x in rows),
+            "penilaian": penilaian_dari_log(qc for qc, _ in hasil),
+            "detail_href": (f"/riwayat-qc/pk-hasil-giling/{(await db.get(MillingProcess, proses_id)).kode_proses}"
+                            if proses_id else
+                            f"/riwayat-qc/pk-luar/{(await db.get(PkPurchaseBatch, batch_id)).kode_batch}"
+                            if batch_id else None)}
 
 
 
@@ -798,7 +716,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     """
     from app.models import InternalTransfer, OutgoingItem, PkGudang2Intake, Supplier
     from app.penggilingan.gudang2.models import (PkPurchaseBatch,
-                                                 PkPurchaseVerification,
+                                                 PkPurchaseQcLog,
                                                  PkTumpukanToSilo)
     from app.penggilingan.gudang2.service import (_JENIS_PK_LABEL,
                                                    hitung_stok_tumpukan)
@@ -851,7 +769,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
     #: borang `catat_pk_luar`, supaya kartu Stok tak pernah menyebut kelas
     #: yang berbeda dari yang diketik orang yang menerimanya.
     batch_info: dict[int, tuple[str, str | None, str | None]] = {}
-    verif_info: dict[int, PkPurchaseVerification] = {}
+    mutu_luar = {}
     if batch_ids:
         for b, nama in (await db.execute(
             select(PkPurchaseBatch, Supplier.nama_supplier)
@@ -860,11 +778,12 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
         )).all():
             batch_info[b.id] = (b.kode_batch, nama,
                                 _JENIS_PK_LABEL.get((b.jenis_pk or "").lower()))
-        for v in (await db.execute(
-            select(PkPurchaseVerification)
-            .where(PkPurchaseVerification.pk_purchase_batch_id.in_(batch_ids))
-        )).scalars().all():
-            verif_info[v.pk_purchase_batch_id] = v
+        from app.penggilingan.gudang1.services.milling import QcRata
+        # Baca rata-rata asli, sama dengan rincian QC. Snapshot dua desimal
+        # dapat membulatkan dua kali dan mengubah skor di dekat batas mutu.
+        mutu_luar = {bid: _mutu_dari(QcRata(**nilai)) for bid, nilai in
+                     (await ringkasan_banyak(db, PkPurchaseQcLog,
+                         PkPurchaseQcLog.pk_purchase_batch_id, batch_ids)).items()}
 
     # ── Asal & mutu PK giling sendiri — lewat lot Gudang 1 yang mengirimnya ──
     transfer_ids = [i.internal_transfer_id for i in intakes if i.internal_transfer_id]
@@ -959,20 +878,7 @@ async def pk_gudang2(db: AsyncSession) -> list[LotPkG2]:  # noqa: C901
             kode_batch, nama, kelas = batch_info.get(
                 i.pk_purchase_batch_id, ("?", None, None))
             judul = f"{nama or '?'} · {kode_batch}"
-            bahan, mutu = [], []
-            v = verif_info.get(i.pk_purchase_batch_id)
-            if v is not None:
-                for label, nilai in (("Kadar air", v.kadar_air),
-                                     ("Butir patah", v.broken_persen),
-                                     ("Susut", v.penyusutan_persen)):
-                    if nilai is not None:
-                        mutu.append((label, _persen(nilai)))
-                for label, nilai in (("Butir kuning", v.butir_kuning),
-                                     ("Gabah", v.gabah), ("Merang", v.merang)):
-                    if nilai:
-                        mutu.append((label, _LABEL_KUALITATIF.get(nilai, nilai)))
-                if v.catatan_lab:
-                    mutu.append(("Catatan lab", v.catatan_lab))
+            bahan, mutu = [], mutu_luar.get(i.pk_purchase_batch_id, [])
         else:
             judul, bahan, mutu, kelas = "PK", [], [], None  # baris peninggalan tanpa penunjuk
 

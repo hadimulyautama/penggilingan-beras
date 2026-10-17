@@ -2861,3 +2861,20 @@ body.terik .pintu--kini {
   box-shadow: inset 3px 0 #566575;
 }
 body.terik .pintu--kini .pintu__ikon { box-shadow: 0 2px 7px #11182718; }
+
+/* Penilaian PK dipakai stok dan riwayat QC; tabel mengikuti Riwayat Proses. */
+.penilaian-pk { display: grid; gap: 14px; min-width: 0; overflow-wrap: anywhere; }
+.penilaian-pk__ringkasan { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; }
+.penilaian-pk__ringkasan p { margin: 0; color: var(--redup); font-size: .82rem; line-height: 1.6; }
+.penilaian-pk .pk-detail__score { margin: 0; }
+.penilaian-pk > .bantu { margin: 0; }
+.penilaian-pk__rumus { padding: 13px 15px; border-radius: 12px; background: var(--panel-2); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.penilaian-pk__rumus p { margin: 6px 0 0; }
+.penilaian-pk__pedoman { border-top: 1px solid var(--garis); padding-top: 12px; }
+.penilaian-pk__pedoman > summary, .penilaian-pk__putaran > summary { cursor: pointer; padding: 8px 0; font-size: .85rem; font-weight: 650; }
+.penilaian-pk__pedoman > summary:focus-visible, .penilaian-pk__putaran > summary:focus-visible { outline: 2px solid var(--aksi); outline-offset: 3px; }
+.penilaian-pk__pedoman h3 { margin: 16px 0 9px; font-size: .92rem; }
+.penilaian-pk__aturan { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+.penilaian-pk__putaran { padding: 10px; border-top: 1px solid var(--garis); }
+.penilaian-pk__putaran[open] > summary { margin-bottom: 12px; }
+@media (max-width:900px) { .penilaian-pk__aturan { grid-template-columns: minmax(0,1fr); } }

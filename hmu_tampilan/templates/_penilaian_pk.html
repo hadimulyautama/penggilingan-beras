@@ -1,0 +1,56 @@
+{# Satu rincian penilaian untuk stok PK, riwayat QC dan setiap putaran. #}
+{% macro penilaian_pk(p, tunggal=false) %}
+<div class="penilaian-pk" data-penilaian-pk="{{ 'putaran' if tunggal else 'gabungan' }}">
+  <div class="penilaian-pk__ringkasan">
+    <div class="pk-detail__score">
+      {% if p.nilai is not none %}<strong>{{ '%.2f'|format(p.nilai)|replace('.', ',') }}</strong><span>/ 100</span><b>{{ p.kelas }}</b>
+      {% else %}<strong>—</strong><span>Belum dapat dinilai</span>{% endif %}
+    </div>
+    <p><strong>{{ 'Penilaian lengkap' if p.lengkap else 'Penilaian belum lengkap' }}</strong><br>{{ p.n }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen dinilai{% if not tunggal %} · {{ p.putaran }} putaran QC{% endif %}</p>
+  </div>
+  {% if not tunggal %}<p class="bantu">Nilai kualitas dihitung dari rata-rata hasil QC tiap komponen, lalu dikonversi menjadi skor. Semua komponen memiliki bobot yang sama.</p>{% endif %}
+  <div class="tabel-standar tabel-standar__scroll">
+    <table class="tabel-standar" data-ponsel="rincian" role="table" aria-label="Rincian skor enam komponen QC PK">
+      <thead><tr role="row"><th scope="col">Komponen</th><th scope="col">{{ 'Hasil pemeriksaan' if tunggal else 'Hasil rata-rata QC' }}</th><th scope="col">Skor / 100</th></tr></thead>
+      <tbody>
+      {% for r in p.rows %}
+        <tr role="row" data-komponen="{{ r.label }}">
+          <td role="cell"><strong>{{ r.label }}</strong></td>
+          <td role="cell" data-label="Hasil QC">{{ r.hasil }}
+            {% if r.n %}<span class="tabel-standar__sekunder">{% if r.skala is not none %}{{ 'Skala' if tunggal else 'Rata-rata skala' }} {{ r.skala }} → {{ r.kategori }}{% if not tunggal %} · {% endif %}{% endif %}{% if not tunggal %}{{ r.n }} pengukuran{% endif %}</span>{% endif %}
+          </td>
+          <td role="cell" data-label="Skor / 100"><strong>{{ r.skor if r.skor is not none else '—' }}</strong><span class="tabel-standar__sekunder">{{ r.aturan or 'Tidak ikut perhitungan' }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="penilaian-pk__rumus">
+    <strong>Perhitungan nilai kualitas</strong>
+    {% if p.n %}<p>({{ p.rumus }}) ÷ {{ p.n }} = <b>{{ '%.2f'|format(p.nilai)|replace('.', ',') }}</b></p><p>Jumlah skor {{ p.total }} ÷ {{ p.n }} komponen dinilai · Kelas <b>{{ p.kelas }}</b></p>
+    {% else %}<p>Belum ada komponen yang dapat dihitung.</p>{% endif %}
+  </div>
+  {% if not p.lengkap %}<p class="bantu">Nilai sementara: komponen yang belum dinilai tidak dianggap nol atau Bersih dan tidak ikut pembagi.</p>{% endif %}
+  {% if not tunggal %}
+  <details class="penilaian-pk__pedoman">
+    <summary>Lihat aturan skor dan kelas kualitas</summary>
+    <p class="bantu">{{ ATURAN_RATA_QC_PK }} Skor kualitas memakai konversi berikut, sesudah kategorinya ditentukan.</p>
+    <div class="tabel-standar tabel-standar__scroll">
+      <table class="tabel-standar" aria-label="Konversi klasifikasi QC PK">
+        <thead><tr><th scope="col">Klasifikasi</th><th scope="col">Skala</th><th scope="col">Skor</th></tr></thead>
+        <tbody>{% for kode, label, skala, skor in p.klasifikasi %}<tr><td>{{ label }}</td><td>{{ skala }}</td><td><strong>{{ skor }}</strong></td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    <p class="bantu">Persentase ditampilkan dan dinilai dengan satu angka desimal.</p>
+    <div class="penilaian-pk__aturan">
+      {% for label, aturan in p.aturan_angka.items() %}
+      <div><h3>{{ label }}</h3><div class="tabel-standar tabel-standar__scroll"><table class="tabel-standar" aria-label="Aturan skor {{ label }}"><thead><tr><th scope="col">Hasil QC</th><th scope="col">Skor</th></tr></thead><tbody>{% for rentang, skor in aturan %}<tr><td>{{ rentang }}</td><td>{{ skor }}</td></tr>{% endfor %}</tbody></table></div></div>
+      {% endfor %}
+    </div>
+    <h3>Kelas kualitas</h3>
+    <div class="tabel-standar tabel-standar__scroll"><table class="tabel-standar" aria-label="Batas kelas kualitas PK"><thead><tr><th scope="col">Kelas</th><th scope="col">Nilai kualitas</th></tr></thead><tbody>{% for batas, kelas in p.kelas_aturan %}<tr><td><strong>{{ kelas }}</strong></td><td>{% if loop.first %}{{ batas }}–100{% else %}{{ batas }}–&lt;{{ p.kelas_aturan[loop.index0 - 1][0] }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="bantu">Kelas mengikuti nilai sebelum pembulatan tampilan. Asal PK (KL, KS, MIX) dan catatan lab tidak menambah atau mengurangi skor.</p>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}

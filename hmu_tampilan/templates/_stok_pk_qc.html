@@ -1,6 +1,7 @@
 <section class="pk-detail__panel" aria-labelledby="riwayat-qc-pk">
   <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PEMERIKSAAN</span><h2 id="riwayat-qc-pk">Riwayat QC <span>{{ riwayat_qc.rows|length }}</span></h2></div></div>
   <p class="bantu">Setiap baris adalah satu pemeriksaan. Angka dan klasifikasi QC dirata-rata. {{ ATURAN_RATA_QC_PK }}</p>
+  {% if riwayat_qc.rows and riwayat_qc.detail_href %}<p><a class="btn btn--kecil" href="{{ riwayat_qc.detail_href }}">Lihat detail dan nilai setiap putaran QC</a></p>{% endif %}
   {% if riwayat_qc.ada_data_lama %}<p class="bantu">Hasil QC lama yang masih tersimpan dipertahankan sebagai putaran pertama. Pencatat lama tidak tercatat.</p>{% endif %}
   {% if riwayat_qc.rows %}
   <div class="tabel-standar tabel-standar__scroll">

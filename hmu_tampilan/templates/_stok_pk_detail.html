@@ -80,7 +80,14 @@
     {% endif %}
   </div>
 
-  {% if mutu_aktif %}{% include "_stok_pk_qc.html" %}{% endif %}
+  {% if mutu_aktif %}
+    {% from "_penilaian_pk.html" import penilaian_pk with context %}
+    <section class="pk-detail__panel" aria-labelledby="perhitungan-kualitas-pk">
+      <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PENILAIAN LENGKAP</span><h2 id="perhitungan-kualitas-pk">Perhitungan nilai kualitas</h2></div></div>
+      {{ penilaian_pk(riwayat_qc.penilaian) }}
+    </section>
+    {% include "_stok_pk_qc.html" %}
+  {% endif %}
 
   {% if g1 and boleh_minta and not t.berjalan %}
     <section class="pk-detail__actions">

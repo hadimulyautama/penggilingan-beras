@@ -29,7 +29,7 @@ from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
                         SiloStorage, Silo, MillingProgressLog,
                         MillingProcessVerification)
 from app.config import settings
-from app.services.mutu_pk import rincian_kualitatif
+from app.services.mutu_pk import rincian_kualitatif, penilaian_dari_log
 
 router = APIRouter()
 
@@ -1011,9 +1011,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         raise HTTPException(403, "Riwayat QC ini tidak tersedia untuk peran Anda.")
 
     grouped: dict[str, dict] = {}
+    penilaian = None
 
     def tambah(ref: str, waktu, nomor: int | None, detail: list[tuple[str, str]],
-               *, asal: str | None = None, plat: str | None = None):
+               *, asal: str | None = None, plat: str | None = None, qc_pk=None):
         kartu = grouped.setdefault(ref, {"ref": ref, "rounds": [],
                                         "asal_set": set(), "plat_set": set()})
         if asal:
@@ -1021,7 +1022,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         if plat:
             kartu["plat_set"].add(plat)
         kartu["rounds"].append({"waktu": waktu, "nomor": nomor,
-                                "detail": detail})
+                                "detail": detail,
+                                "penilaian": penilaian_dari_log([qc_pk]) if referensi and qc_pk is not None else None})
 
     catatan_kosong = None
     async with SessionLocal() as db:
@@ -1067,6 +1069,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                        PkPurchaseQcLog.pk_purchase_batch_id.in_(batch_terbaru))
                 .order_by(PkPurchaseQcLog.waktu.desc(), PkPurchaseQcLog.id.desc())
             )).all()
+            if referensi:
+                penilaian = penilaian_dari_log(qc for _, qc, _, _ in hasil)
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
             putaran_per_batch = {}
@@ -1082,7 +1086,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 tambah(batch.kode_batch,qc.waktu,putaran_per_batch[batch.id],fields,
                        asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}" if batch.jasa_id in pemilik else
                              f"Supplier: {nama_supplier}" if nama_supplier else None),
-                       plat=batch.no_polisi_truk)
+                       plat=batch.no_polisi_truk, qc_pk=qc)
         elif jenis == "pk-hasil-giling":
             proses_terbaru = (select(MillingQcLog.milling_process_id)
                 .group_by(MillingQcLog.milling_process_id)
@@ -1094,6 +1098,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                        MillingQcLog.milling_process_id.in_(proses_terbaru))
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
             )).all()
+            if referensi:
+                penilaian = penilaian_dari_log(qc for _, qc in hasil)
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _ in hasil})
             proses_ids = {p.id for p, _ in hasil}
@@ -1122,7 +1128,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 if no_polisi:
                     plat_proses.setdefault(proc_id, set()).add(no_polisi)
             putaran_per_proses: dict[int, int] = {}
-            for process, qc in sorted(hasil, key=lambda pair: pair[1].waktu):
+            for process, qc in sorted(hasil, key=lambda pair: (pair[1].waktu, pair[1].id)):
                 putaran_per_proses[process.id] = putaran_per_proses.get(process.id, 0) + 1
                 fields = [(label, f"{value}{unit}") for label, value, unit in (
                     ("Kadar air", qc.kadar_air, "%"),
@@ -1139,7 +1145,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 tambah(process.kode_proses, qc.waktu,
                        putaran_per_proses[process.id], fields,
                        asal=" · ".join(sorted(asal)) or None,
-                       plat=" · ".join(sorted(plats)) or None)
+                       plat=" · ".join(sorted(plats)) or None, qc_pk=qc)
         else:
             # Belum ada model/log QC beras hasil sosoh. Jangan menampilkan
             # catatan output sebagai QC karena itu bukan pengukuran mutu.
@@ -1164,7 +1170,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         if not rows:
             raise HTTPException(404, "Catatan QC untuk batch atau proses ini tidak ditemukan.")
         return await render_laci(request, "riwayat_qc_detail.html", judul=judul,
-                                 k=rows[0], jenis=jenis,
+                                 k=rows[0], jenis=jenis, penilaian=penilaian,
                                  kembali=f"/riwayat-qc/{jenis}")
 
     return await render_laci(request, "riwayat_qc.html", judul=judul,
