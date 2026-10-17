@@ -59,8 +59,8 @@
       <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PENILAIAN</span><h2>Nilai kualitas</h2></div></div>
       {% if t.nilai_kualitas is not none %}
         <div class="pk-detail__score"><strong>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }}</strong><span>/ 100</span><b>{{ t.kelas_kualitas or "—" }}</b></div>
-        <p>Skor dari {{ t.komponen_kualitas }} komponen angka QC</p>
-      {% else %}<div class="pk-detail__no-score">{{ 'Belum ada angka untuk menghitung nilai kualitas' if t.mutu else 'Belum ada data QC' }}</div>{% endif %}
+        <p>Skor dari {{ t.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen QC</p>
+      {% else %}<div class="pk-detail__no-score">{{ 'Belum ada komponen yang dapat dinilai' if t.mutu else 'Belum ada data QC' }}</div>{% endif %}
       {% if mutu_aktif %}
         <div class="pk-detail__qc">
           <h3>Rincian QC</h3>

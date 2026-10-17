@@ -97,7 +97,7 @@ class PkPurchaseVerification(Base, TimestampMixin):
     # % bekatul hasil uji lab (penyusutan saat disosoh)
     penyusutan_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
     # butir kuning / gabah (belum terkupas) / merang (jerami, malai):
-    # bersih / sedikit / sedang / banyak — skala yang sama untuk ketiganya.
+    # bersih / sedikit / sedang / banyak / parah — skala yang sama untuk ketiganya.
     # gabah & merang ditambahkan 5 Oktober 2026 (keputusan pemilik).
     butir_kuning: Mapped[str | None] = mapped_column(String(10))
     gabah: Mapped[str | None] = mapped_column(String(10))

@@ -1,11 +1,27 @@
 """Komponen kualitatif QC PK, sama untuk hasil giling dan PK luar."""
-LABEL_KUALITATIF = {"bersih": "Bersih", "sedikit": "Sedikit",
-                    "sedang": "Sedang", "banyak": "Banyak"}
-NILAI_KUALITATIF = {"bersih": 0, "sedikit": 1, "sedang": 2, "banyak": 3}
+# Kode, label, skala untuk rata-rata, skor kualitas. Pilihan formulir dan
+# kedua perhitungan membaca daftar yang sama agar perubahan tetap selaras.
+KLASIFIKASI_QC_PK = (
+    ("bersih", "Bersih", 0, 100),
+    ("sedikit", "Sedikit", 1, 80),
+    ("sedang", "Sedang", 2, 70),
+    ("banyak", "Banyak", 3, 60),
+    ("parah", "Parah", 4, 10),
+)
+LABEL_KUALITATIF = {kode:label for kode,label,_,_ in KLASIFIKASI_QC_PK}
+NILAI_KUALITATIF = {kode:skala for kode,_,skala,_ in KLASIFIKASI_QC_PK}
+SKOR_KUALITATIF = {kode:skor for kode,_,_,skor in KLASIFIKASI_QC_PK}
 ATURAN_RATA_QC_PK = ("Skala: " + " · ".join(f"{LABEL_KUALITATIF[k]} {n}" for k,n in NILAI_KUALITATIF.items())
                      + ". Rata-rata mengikuti kategori terdekat; nilai tengah ke kategori lebih kotor.")
 KOMPONEN_KUALITATIF = (("Butir kuning", "butir_kuning"),
                        ("Gabah", "gabah"), ("Merang", "merang"))
+JUMLAH_KOMPONEN_QC_PK = 3 + len(KOMPONEN_KUALITATIF)
+
+
+def skor_kualitatif(nilai):
+    """Skala putaran 0–4 terpisah dari skor kualitas yang ditetapkan pemilik."""
+    kode = str(nilai or "").strip().lower()
+    return SKOR_KUALITATIF.get(kode)
 
 
 def rincian_kualitatif(qc, *, termasuk_kosong=False):
@@ -22,7 +38,7 @@ def wajib_kualitatif(*, butir_kuning, gabah, merang):
         if not nilai:
             raise ValueError(f"{label} wajib diisi saat QC PK.")
         if nilai not in LABEL_KUALITATIF:
-            raise ValueError(f"{label} harus: bersih, sedikit, sedang, atau banyak.")
+            raise ValueError(f"{label} harus: {', '.join(LABEL_KUALITATIF)}.")
         hasil[medan] = nilai
     return hasil
 

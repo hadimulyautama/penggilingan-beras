@@ -28,7 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import now_local, tanggal_lokal
 from hmu_core.komoditas import buat_produk
 from app.models import MillingProcess
-from app.services.mutu_pk import LABEL_KUALITATIF as _LABEL_KUALITATIF, rincian_kualitatif
+from app.services.mutu_pk import (LABEL_KUALITATIF as _LABEL_KUALITATIF,
+                                 KOMPONEN_KUALITATIF, rincian_kualitatif, skor_kualitatif)
 from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
 
@@ -92,7 +93,7 @@ class LotPk:
     #: yang menggambar nilai terbaru membuat satu lot punya dua angka mutu yang
     #: berbeda di dua layar. Hitungannya `milling.qc_rata_banyak`.
     mutu: list[tuple[str, str]] = field(default_factory=list)
-    #: Rata-rata skor kadar air, broken, dan susut dari komponen yang tercatat.
+    #: Rata-rata skor enam komponen QC yang tercatat, termasuk tiga penilaian fisik.
     nilai_kualitas: float | None = None
     komponen_kualitas: int = 0
     kelas_kualitas: str | None = None
@@ -428,15 +429,21 @@ def _nilai_kualitas(mutu: list[tuple[str, str]]) -> tuple[float | None, int]:
     Angka sumbernya adalah rata-rata QC yang sama dengan yang tercetak di
     kartu. Skor bukan rata-rata persen mentah: tiap komponen lebih dulu
     dipetakan ke skala 0–100 menurut batas mutu, baru skor komponen yang
-    tersedia dirata-ratakan.
+    tersedia dirata-ratakan dengan bobot sama. Butir kuning, gabah, dan merang
+    memakai skor klasifikasi pemilik, sesudah rata-rata skala 0–4 dibulatkan.
     """
     skor: list[float] = []
     for label, nilai in mutu:
+        nama = label.strip().lower()
+        if nama in {label_komponen.lower() for label_komponen, _ in KOMPONEN_KUALITATIF}:
+            angka_kualitas = skor_kualitatif(nilai)
+            if angka_kualitas is not None:
+                skor.append(angka_kualitas)
+            continue
         try:
             angka = float(str(nilai).strip().replace("%", "").replace(",", "."))
         except (TypeError, ValueError):
             continue
-        nama = label.strip().lower()
         if nama == "kadar air":
             if angka < 11:
                 skor.append(0)

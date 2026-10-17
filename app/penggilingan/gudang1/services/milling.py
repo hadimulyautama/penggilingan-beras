@@ -1648,7 +1648,7 @@ class QcRata:
     n_susut: int = 0
     #: Berapa catatan QC seluruhnya — termasuk yang cuma mengisi satu kolom.
     n: int = 0
-    # Kategori memakai rata-rata skala 0–3, dibulatkan ke kategori terdekat.
+    # Kategori memakai rata-rata skala 0–4, dibulatkan ke kategori terdekat.
     butir_kuning: str | None = None
     gabah: str | None = None
     merang: str | None = None

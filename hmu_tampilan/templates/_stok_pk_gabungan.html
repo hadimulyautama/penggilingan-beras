@@ -22,7 +22,7 @@
           <span>Gudang 1</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if l.jasa_id else 'stok-status--pabrik' }}">{{ "Jasa" if l.jasa_id else "Pabrik" }}</span></span>
           <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
-          <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
+          <span class="stok-kualitas-ringkas">{% if l.nilai_kualitas is not none %}<span>{{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} <b>{{ l.kelas_kualitas }}</b></span><small>{{ l.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
           <span>{{ l.kelas or "—" }}</span>
           <strong class="stok-tabel__angka">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong>
           <span class="stok-baris__buka" aria-hidden="true">›</span>
@@ -42,7 +42,7 @@
           <span>Gudang 2</span>
           <span><span class="stok-status {{ 'stok-status--jasa' if t.pemilik else 'stok-status--pabrik' }}">{{ "Jasa" if t.pemilik else "Pabrik" }}</span></span>
           <span>{{ mutu.ka }}</span><span>{{ mutu.broken }}</span><span>{{ mutu.susut }}</span>
-          <span class="stok-kualitas-ringkas">{% if t.nilai_kualitas is not none %}<span>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} <b>{{ t.kelas_kualitas }}</b></span><small>{{ t.komponen_kualitas }}/3 komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
+          <span class="stok-kualitas-ringkas">{% if t.nilai_kualitas is not none %}<span>{{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} <b>{{ t.kelas_kualitas }}</b></span><small>{{ t.komponen_kualitas }}/{{ JUMLAH_KOMPONEN_QC_PK }} komponen</small>{% else %}<span class="padat__nilai--kosong">Belum dinilai</span>{% endif %}</span>
           <span>{{ t.kelas or "—" }}</span>
           <strong class="stok-tabel__angka">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong>
           <span class="stok-baris__buka" aria-hidden="true">›</span>
