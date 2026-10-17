@@ -48,18 +48,7 @@ async def _siapkan(db):
     per_tiket = {r.timbangan_transaksi_id: r.muatan for r in rincian}
     for t in tickets:
         t['rincian'] = per_tiket.get(t['id'], [])
-    result = await db.execute(
-        select(ProductSku, Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg)
-        .join(Brand, Brand.id == ProductSku.brand_id, isouter=True)
-        .join(PackagingMaterial, PackagingMaterial.id == ProductSku.packaging_material_id)
-        .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
-        .where(ProductSku.aktif.is_(True),
-               (PackagingMaterial.kode != 'laminasi') | (PackageSize.ukuran_kg <= 25))
-        .order_by(ProductSku.kategori, PackageSize.ukuran_kg, Brand.nama)
-    )
-    skus = [{"id": sku.id, "kategori": sku.kategori,
-             "label": f"{sku.kategori.replace('_', ' ').title()} · {brand or 'Tanpa merk'} · {material} · {size} kg"}
-            for sku, brand, material, size in result.all()]
+    katalog = await layanan_retur.katalog(db)
     mutu = (await db.scalars(select(RiceQualityStandard).where(
         RiceQualityStandard.aktif.is_(True)).order_by(RiceQualityStandard.urutan))).all()
     recent = (await db.execute(text("""
@@ -70,7 +59,7 @@ async def _siapkan(db):
           ON i.customer_return_id = r.id
         GROUP BY r.id ORDER BY r.waktu DESC LIMIT 12
     """))).mappings().all()
-    return tickets, skus, mutu, recent
+    return tickets, katalog, mutu, recent
 
 
 @router.get("/retur")
@@ -78,9 +67,9 @@ async def halaman_retur(request: Request, akun=Depends(butuh_akun)):
     if not _boleh(akun):
         raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
     async with SessionLocal() as db:
-        tickets, skus, mutu, recent = await _siapkan(db)
+        tickets, katalog, mutu, recent = await _siapkan(db)
     return await render_laci(request, "retur.html", layar="retur",
-                              tickets=tickets, skus=skus, mutu=mutu,
+                              tickets=tickets, katalog=katalog, mutu=mutu,
                               recent=recent, pesan=request.query_params.get("pesan"),
                               gagal=request.query_params.get("gagal"),
                               tiket_terpilih=request.query_params.get("tiket", ""))
@@ -93,7 +82,15 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
     form = await request.form()
     try:
         ticket_id = int(form.get("timbangan_transaksi_id", ""))
-        sku_ids = form.getlist("sku_id")
+        sku_ids = form.getlist("sku_id")  # Halaman lama tetap diterima.
+        jenis = form.getlist('jenis_barang')
+        kemasan = form.getlist('kemasan')
+        brands = form.getlist('brand_id')
+        baru = bool(jenis)
+        if baru:
+            if not len(jenis) == len(kemasan) == len(brands):
+                raise ValueError('Pilihan jenis, kemasan, dan merek belum lengkap.')
+            sku_ids = list(zip(jenis, kemasan, brands))
         quality_ids = form.getlist("quality_id")
         bag_counts = form.getlist("jumlah_karung")
         weights = form.getlist("berat_kg")
@@ -107,7 +104,7 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
         for idx, sku_raw in enumerate(sku_ids):
             if not sku_raw:
                 continue
-            sku_id = int(sku_raw)
+            sku_id = sku_raw if baru else int(sku_raw)
             count = int(bag_counts[idx] or 0)
             weight = layanan_retur.angka(weights[idx], 'Berat barang', 1_000_000, '.01')
             tara = Decimal('0')  # Retur tidak dipotong tara, termasuk kiriman halaman lama.
@@ -144,6 +141,9 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             if already:
                 raise ValueError("Tiket ini sudah dicatat sebagai barang retur.")
 
+            if baru:
+                rows = [(await layanan_retur.pilih_sku(db, *spec), quality, count, weight, note, tara)
+                        for spec, quality, count, weight, note, tara in rows]
             muatan = await layanan_retur.siapkan_muatan(db, rows)
             rincian = await db.scalar(select(ReturRincian).where(
                 ReturRincian.timbangan_transaksi_id == ticket_id))

@@ -39,6 +39,8 @@ async def siapkan_muatan(db, rows):
         if not detail:
             raise ValueError('SKU tidak tersedia. Pilih ulang jenis dan kemasannya.')
         sku, brand, material, size, material_kode = detail
+        if sku.kategori not in JENIS_RETUR:
+            raise ValueError('Jenis retur harus Beras Putih, Broken, Menir, atau Reject.')
         if material_kode == 'laminasi' and size > 25:
             raise ValueError('Karung laminasi hanya tersedia hingga ukuran 25 kg.')
         if sku.kategori == 'beras_putih' and not quality_id:
@@ -74,3 +76,67 @@ async def baca_muatan(db, tid):
     if not rincian or not rincian.muatan:
         raise ValueError('Rincian retur belum diisi di Produksi. Isi rincian barang yang diterima di Produksi.')
     return {'kode_tiket': tiket['kode'], 'muatan': [dict(m, tara_per_karung_kg='0') for m in rincian.muatan]}
+
+
+JENIS_RETUR = {'beras_putih': 'Beras Putih', 'broken': 'Broken',
+               'menir': 'Menir', 'reject': 'Reject'}
+
+
+async def katalog(db):
+    """Pilihan berasal dari master, bukan hanya SKU yang pernah dipakai."""
+    from app.web.aksi_inventory import kombinasi_kemasan
+    materials = {m.kode: m for m in (await db.scalars(select(PackagingMaterial).where(
+        PackagingMaterial.aktif.is_(True)))).all()}
+    sizes = {s.ukuran_kg: s for s in (await db.scalars(select(PackageSize).where(
+        PackageSize.aktif.is_(True)))).all()}
+    brands = (await db.scalars(select(Brand).where(
+        Brand.aktif.is_(True), Brand.deleted_at.is_(None)).order_by(Brand.nama))).all()
+    kemasan = {k: [] for k in JENIS_RETUR}
+    for jenis, material, ukuran in kombinasi_kemasan():
+        if jenis in kemasan and material in materials and ukuran in sizes:
+            kemasan[jenis].append({'nilai': f'{material}:{ukuran}',
+                'nama': f'{materials[material].nama} · {ukuran} kg'})
+    existing = (await db.execute(select(ProductSku.id, ProductSku.kategori,
+        ProductSku.brand_id, PackagingMaterial.kode, PackageSize.ukuran_kg)
+        .select_from(ProductSku)
+        .join(PackagingMaterial, PackagingMaterial.id == ProductSku.packaging_material_id)
+        .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
+        .where(ProductSku.kategori.in_(JENIS_RETUR), ProductSku.aktif.is_(True)))).all()
+    return {'jenis': JENIS_RETUR, 'kemasan': kemasan,
+            'merek': [{'id': b.id, 'nama': b.nama} for b in brands],
+            'sku': {str(sid): {'jenis_barang': jenis, 'kemasan': f'{mat}:{size}',
+                              'brand_id': brand} for sid,jenis,brand,mat,size in existing}}
+
+
+async def pilih_sku(db, jenis, kemasan, brand_raw):
+    """Validasi pilihan bertahap; SKU internal dibuat hanya ketika disimpan."""
+    from app.penggilingan.inventory import packaging
+    if jenis not in JENIS_RETUR:
+        raise ValueError('Pilih jenis barang: Beras Putih, Broken, Menir, atau Reject.')
+    try:
+        material_kode, ukuran_raw = kemasan.split(':')
+        ukuran = int(ukuran_raw)
+    except (ValueError, AttributeError):
+        raise ValueError('Pilih kemasan barang retur.')
+    material = await packaging.get_material(db, material_kode)
+    size = await packaging.get_size(db, ukuran)
+    if not material or not material.aktif or not size or not size.aktif:
+        raise ValueError('Kemasan tidak tersedia. Pilih ulang jenis karung dan ukurannya.')
+    brand = None
+    if jenis == 'beras_putih':
+        if not brand_raw or not str(brand_raw).isdigit():
+            raise ValueError('Pilih merek untuk Beras Putih.')
+        brand = await db.get(Brand, int(brand_raw))
+        if not brand or not brand.aktif or brand.deleted_at is not None:
+            raise ValueError('Merek tidak tersedia. Pilih ulang mereknya.')
+    elif brand_raw:
+        raise ValueError('Merek hanya dipilih untuk Beras Putih.')
+    try:
+        sku = await packaging.find_or_create_sku(db, kategori=jenis,
+            material_kode=material_kode, ukuran=ukuran,
+            brand_nama=brand.nama if brand else None)
+    except packaging.InventoryError as exc:
+        raise ValueError(str(exc)) from exc
+    if not sku.aktif:
+        raise ValueError('Kombinasi produk ini sudah dinonaktifkan.')
+    return sku.id

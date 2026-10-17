@@ -240,3 +240,81 @@ async def test_terima_retur_setelah_timbang_tanpa_rincian_awal_atau_tara(pg,kont
         stock=await db.scalar(select(FinishedGoodsStock))
         assert stock.jumlah_karung==100
         assert stock.berat_total_kg==Decimal('3000')
+
+
+async def test_pilihan_retur_dari_master_meski_sku_belum_pernah_dibuat(pg,konteks):
+    from app.services.seed import seed_master
+    from app.models import Brand
+    from app.services.retur import katalog
+    await seed_master()
+    c,tid,sid=konteks
+    async with pg() as db:
+        sebelum=await db.scalar(select(func.count()).select_from(ProductSku))
+        pilihan=await katalog(db)
+        assert list(pilihan['jenis'])==['beras_putih','broken','menir','reject']
+        assert {k['nilai'] for k in pilihan['kemasan']['broken']}=={'putih:50','polos:25'}
+        assert {k['nilai'] for k in pilihan['kemasan']['menir']}=={'putih:50'}
+        assert {k['nilai'] for k in pilihan['kemasan']['reject']}=={'bekas:50'}
+        assert 'laminasi:25' in {k['nilai'] for k in pilihan['kemasan']['beras_putih']}
+        assert 'laminasi:50' not in {k['nilai'] for k in pilihan['kemasan']['beras_putih']}
+        assert pilihan['merek']
+    r=await c.get('/retur')
+    assert r.status_code==200
+    assert 'name="jenis_barang"' in r.text and 'name="kemasan"' in r.text
+    assert 'name="brand_id"' in r.text and 'Pilih SKU' not in r.text
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(ProductSku))==sebelum
+
+
+@pytest.mark.parametrize('jenis,kemasan',[
+    ('beras_putih','laminasi:25'),('broken','polos:25'),
+    ('menir','putih:50'),('reject','bekas:50'),
+])
+async def test_retur_jenis_kemasan_dan_merek_membuat_sku_saat_disimpan(pg,konteks,jenis,kemasan):
+    from app.services.seed import seed_master
+    from app.models import Brand,RiceQualityStandard
+    await seed_master()
+    c,tid,sid=konteks
+    async with pg() as db:
+        brand=await db.scalar(select(Brand).where(Brand.aktif.is_(True)))
+        quality=await db.scalar(select(RiceQualityStandard).where(RiceQualityStandard.aktif.is_(True)))
+        bid,qid=brand.id,quality.id
+        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI',timbang2_kg=6000,berat_barang_kg=3000 WHERE id=:id"),{'id':tid})
+        await db.commit()
+    r=await c.post('/retur/terima',data={
+        'timbangan_transaksi_id':str(tid),'aksi':'terima',
+        'jenis_barang':jenis,'kemasan':kemasan,
+        'brand_id':str(bid) if jenis=='beras_putih' else '',
+        'quality_id':str(qid) if jenis=='beras_putih' else '',
+        'jumlah_karung':'100','berat_kg':'3000','catatan_item':'',
+    })
+    assert 'pesan=' in r.headers['location'],unquote(r.headers['location'])
+    async with pg() as db:
+        stock=await db.scalar(select(FinishedGoodsStock))
+        sku=await db.get(ProductSku,stock.product_sku_id)
+        assert sku.id!=sid and sku.kategori==jenis
+        material=await db.get(PackagingMaterial,sku.packaging_material_id)
+        size=await db.get(PackageSize,sku.package_size_id)
+        assert f'{material.kode}:{size.ukuran_kg}'==kemasan
+        assert sku.brand_id==(bid if jenis=='beras_putih' else None)
+        assert stock.kemasan_mengurangi_stok is False
+
+
+@pytest.mark.parametrize('jenis,kemasan,brand',[
+    ('beras_putih','laminasi:25',''),('broken','polos:25','1'),
+    ('menir','polos:25',''),('beras_putih','laminasi:50','1'),
+    ('pk','karung_pk:50',''),('broken','polos:100',''),
+])
+async def test_retur_menolak_pilihan_jenis_kemasan_merek_tak_sah(pg,konteks,jenis,kemasan,brand):
+    from app.services.seed import seed_master
+    await seed_master()
+    c,tid,sid=konteks
+    r=await c.post('/retur/terima',data={
+        'timbangan_transaksi_id':str(tid),'aksi':'rincian',
+        'jenis_barang':jenis,'kemasan':kemasan,'brand_id':brand,
+        'quality_id':'','jumlah_karung':'100','berat_kg':'3000','catatan_item':'',
+    })
+    assert 'gagal=' in r.headers['location']
+    async with pg() as db:
+        assert await db.scalar(select(func.count()).select_from(ReturRincian))==0
+        assert await db.scalar(select(func.count()).select_from(ProductSku))==1

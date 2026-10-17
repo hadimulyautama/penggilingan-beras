@@ -1,6 +1,7 @@
 (() => {
   const root = document.getElementById('retur-ui');
   if (!root) return;
+  const katalog = JSON.parse(root.querySelector('#retur-katalog').textContent);
   const list = root.querySelector('#ticket-list');
   const rows = root.querySelector('#return-items');
   const tmpl = document.getElementById('item-template');
@@ -21,12 +22,19 @@
     reason.querySelector('input').required = melewati;
   };
   const bindRow = row => {
-    row.querySelector('.sku-select').addEventListener('change', e => {
-      const category = e.target.selectedOptions[0]?.dataset.category || '';
+    row.querySelector('.jenis-select').addEventListener('change', e => {
+      const category = e.target.value;
       row.dataset.category = category;
-      const quality = row.querySelector('[name="quality_id"]');
-      quality.required = category === 'beras_putih';
-      if (!quality.required) quality.value = '';
+      const kemasan = row.querySelector('[name="kemasan"]');
+      kemasan.replaceChildren(new Option('Pilih kemasan', ''));
+      (katalog.kemasan[category] || []).forEach(k => kemasan.add(new Option(k.nama, k.nilai)));
+      kemasan.disabled = !category;
+      const beras = category === 'beras_putih';
+      ['quality_id', 'brand_id'].forEach(name => {
+        const el = row.querySelector(`[name="${name}"]`);
+        el.required = beras;
+        el.value = '';
+      });
       check();
     });
     row.querySelectorAll('input,select').forEach(e => e.addEventListener('input', check));
@@ -54,9 +62,13 @@
       const row = tmpl.content.firstElementChild.cloneNode(true);
       rows.appendChild(row);
       bindRow(row);
-      row.querySelector('.sku-select').value = item.sku_id || '';
-      row.querySelector('.sku-select').dispatchEvent(new Event('change'));
-      ['sku_id', 'quality_id', 'jumlah_karung', 'berat_kg', 'catatan_item'].forEach(name => {
+      const pilihan = item.jenis_barang ? item : (katalog.sku[String(item.sku_id)] || {});
+      row.querySelector('.jenis-select').value = pilihan.jenis_barang || '';
+      row.querySelector('.jenis-select').dispatchEvent(new Event('change'));
+      ['kemasan', 'brand_id'].forEach(name => {
+        if (pilihan[name] !== undefined && pilihan[name] !== null) row.querySelector(`[name="${name}"]`).value = pilihan[name];
+      });
+      ['quality_id', 'jumlah_karung', 'berat_kg', 'catatan_item'].forEach(name => {
         if (item[name] !== undefined && item[name] !== null) row.querySelector(`[name="${name}"]`).value = item[name];
       });
     });
@@ -67,5 +79,6 @@
     const row = tmpl.content.firstElementChild.cloneNode(true);
     rows.appendChild(row); bindRow(row); row.querySelector('select').focus();
   });
+  rows.querySelectorAll('.rt-item').forEach(bindRow);
   updateTicket();
 })();
