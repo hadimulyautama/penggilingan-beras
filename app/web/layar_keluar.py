@@ -9,20 +9,9 @@ List audit (sebagai baris mentah). Tak satu pun menjawab pertanyaan yang
 sebenarnya ditanyakan orang — "truk yang tadi siang itu bawa apa saja?" — sebab
 keduanya menyusun menurut BARANG, bukan menurut TRUK.
 
-PEMBAGIANNYA dengan layar yang sudah ada, dan ini yang menentukan isinya:
-
-    Antrian tunggu     pekerjaan yang MENUNGGU tangan — kartu muat operator
-    Menunggu keputusan yang menunggu keputusan Admin — kartu verifikasi
-    Barang keluar      RIWAYAT & keadaan seluruh transaksi, termasuk yang sudah
-                       tutup. Ia daftar, bukan antrean.
-
-Karena itu halaman ini TIDAK berlencana: lencana menagih pekerjaan, dan
-pekerjaan barang keluar sudah ditagih dua layar di atas. Lencana ketiga atas
-pekerjaan yang sama membuat ketiganya berhenti dipercaya.
-
-Yang belum selesai tetap berdiri PALING ATAS — bukan diurut waktu murni: yang
-membuka halaman ini di tengah hari mencari muatan yang sedang berjalan, dan
-riwayat kemarin mendorongnya ke bawah layar.
+Barang Keluar memuat pekerjaan pengiriman dan riwayatnya. Verifikasi Admin
+berlangsung di sini; pengiriman tidak digandakan di Menunggu Keputusan.
+Transaksi selesai dan batal masuk tabel riwayat, dengan halaman detail sendiri.
 """
 from __future__ import annotations
 
@@ -54,7 +43,10 @@ KEADAAN = {
 
 
 @router.get("/barang-keluar")
-async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
+@router.get("/barang-keluar/{transaksi_id}")
+async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
+                                 transaksi_id: int | None = None,
+                                 sebelum: int | None = None):
     from app.peran import can_see_financials
     from app.web.layar import SELEPAN
 
@@ -88,7 +80,30 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
                        or await _is_g1_operator(akun.user)))
 
     async with SessionLocal() as db:
-        baris = await svc.daftar(db, batas=60)
+        if transaksi_id is not None:
+            baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1)
+            if not baris:
+                raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
+            sebelum_berikut = None
+        else:
+            aktif = await svc.daftar(db, status=OUT_HIDUP, batas=500)
+            riwayat = await svc.daftar(db, status=(OUT_SELESAI, OUT_BATAL),
+                                       batas=51, sebelum_id=sebelum)
+            sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None
+            baris = aktif + riwayat[:50]
+        # Data timbang ditampilkan bersama detail perintah, tanpa kueri per kartu.
+        from sqlalchemy import bindparam, text
+        ids = [r.timbangan_transaksi_id for r, _ in baris if r.timbangan_transaksi_id]
+        tiket_timbang = {}
+        if ids:
+            rows = (await db.execute(text("""
+                SELECT id,kode,nomor_polisi,nama_sopir,status_tiket,
+                       timbang1_kg,timbang2_kg,timbang1_waktu,timbang2_waktu,
+                       netto_timbangan_kg,total_tara_kg,berat_barang_kg
+                FROM timbangan_transaksi WHERE id IN :ids
+            """).bindparams(bindparam("ids", expanding=True)),
+                {"ids": ids})).mappings().all()
+            tiket_timbang = {t["id"]: dict(t) for t in rows}
         nama = await _nama_barang(db, baris)
         nama_orang = await _nama_orang(db, baris)
 
@@ -114,6 +129,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
         kartu.append({
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
+            "tiket_timbang": tiket_timbang.get(rec.timbangan_transaksi_id),
             # ── TOMBOL DI KARTUNYA SENDIRI ──
             #
             # Keluhan pemilik 29 September 2026: "dimana tombol verifikasi
@@ -160,7 +176,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun)):
     kartu.sort(key=lambda k: k["urut"])
 
     return await render_laci(
-        request, "barang_keluar.html", layar="barang_keluar", kartu=kartu,
+        request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
+        detail=transaksi_id is not None,
+        kartu_aktif=[k for k in kartu if k["rec"].status in OUT_HIDUP],
+        riwayat=sorted((k for k in kartu if k["rec"].status not in OUT_HIDUP),
+                       key=lambda k: -k["rec"].id),
+        sebelum_berikut=sebelum_berikut,
         # ── Tombol "Buat perintah" hanya untuk yang boleh memerintah ──
         #
         # Permintaan pemilik 29 September 2026: tombolnya untuk Admin & Super

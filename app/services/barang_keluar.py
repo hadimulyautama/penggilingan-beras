@@ -1633,11 +1633,16 @@ async def balik_batal(db: AsyncSession, *, rec_id: int) -> str:
 # ────────────────────────────── Pembacaan ──────────────────────────────
 
 async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
-                 batas: int = 50) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
+                 batas: int = 50, transaksi_id: int | None = None,
+                 sebelum_id: int | None = None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
     """Transaksi barang keluar beserta isinya — untuk halaman & kartunya."""
     q = select(OutgoingRecord).order_by(OutgoingRecord.id.desc()).limit(batas)
     if status:
         q = q.where(OutgoingRecord.status.in_(status))
+    if transaksi_id is not None:
+        q = q.where(OutgoingRecord.id == transaksi_id)
+    if sebelum_id is not None:
+        q = q.where(OutgoingRecord.id < sebelum_id)
     recs = list((await db.execute(q)).scalars().all())
     if not recs:
         return []

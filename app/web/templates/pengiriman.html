@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block judul %}{{ kartu[0].rec.kode if detail else "Barang Keluar" }}{% endblock %}
+{% block isi %}
+<style>
+.riwayat-keluar { width:100%; border-collapse:collapse; text-align:left; background:var(--panel); }
+.riwayat-keluar td:first-child { white-space:nowrap; }
+.riwayat-keluar th,.riwayat-keluar td { padding:12px; border-bottom:1px solid var(--garis); vertical-align:top; }
+.riwayat-keluar th { white-space:nowrap; }
+.riwayat-keluar tr[data-detail-keluar] { cursor:pointer; }
+.riwayat-keluar tr[data-detail-keluar]:hover { background:var(--aksi-muda,rgba(127,127,127,.08)); }
+.timbang-terkait { display:grid; grid-template-columns:minmax(120px,1fr) 2fr; gap:8px 16px; margin:12px 0; }
+.timbang-terkait dd { margin:0; overflow-wrap:anywhere; }
+</style>
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% import "_operasional.html" as op with context %}
+{% if detail %}
+<a class="btn btn--kecil" href="/barang-keluar">← Kembali ke Barang Keluar</a>
+<h1 style="margin-top:20px">Detail perintah {{ kartu[0].rec.kode }}</h1>
+{% else %}
+{{ op.intro("PENGIRIMAN BARANG", "Barang Keluar",
+  "Buat perintah untuk beberapa jenis barang dalam satu pengiriman, catat muatan yang benar-benar dibawa, lalu verifikasi sebelum menutup transaksi. Pengambilan barang jasa tersedia terpisah. Perintah yang selesai tersimpan di Riwayat Barang Keluar.",
+  [("＋", n_perintah, "Menunggu dimuat"), ("↗", n_dimuat, "Menunggu verifikasi"), ("▦", kartu|length, "Transaksi pada daftar")],
+  ["Buat perintah", "Catat muatan", "Periksa selisih", "Verifikasi dan tutup"]) }}
+
+{% endif %}
+{% if BOLEH_PERINTAH and not detail %}
+<div class="ubah-hasil" style="margin-bottom:18px">
+  <a class="btn" href="/barang-keluar?buka=perintah_keluar">Buat perintah barang keluar</a>
+
+  <a class="btn" href="/barang-keluar?buka=ambil_jasa">Pengambilan barang jasa</a>
+
+  {% if ada_hidup %}
+  <a class="btn btn--kecil" href="/barang-keluar?buka=tambah_barang_keluar">Tambah barang</a>
+  {% endif %}
+  {% if ada_perintah %}
+  <a class="btn btn--kecil" href="/barang-keluar?buka=batal_perintah_keluar">Batalkan perintah</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not detail %}
+<div class="jumlah">
+  <span class="lbl">Sedang berjalan</span>
+
+  <div class="jumlah__angka">{{ n_perintah + n_dimuat }}<small>transaksi</small></div>
+  <div class="jumlah__ket">
+    {{ n_perintah }} menunggu dimuat · {{ n_dimuat }} menunggu verifikasi
+  </div>
+</div>
+
+{% endif %}
+<div class="grup">
+{% for k in (kartu if detail else kartu_aktif) %}
+  <details class="padat padat--{{ k.warna }}"{{ ' open' if detail or loop.index <= 2 }}>
+  <summary>
+    <div class="padat__atas">
+      <span class="padat__nama">{{ k.rec.kode }}</span>
+      <span class="padat__nilai">
+        {{- kg(k.total_dimuat if k.total_dimuat else k.total_perintah) }}<small>kg</small></span>
+    </div>
+
+    <div class="padat__ket">
+
+      <span class="keping">{{ k.keadaan }}</span>
+      {{ k.rec.nama_pembeli or "—" }}
+      {%- if k.rec.no_polisi %} · {{ k.rec.no_polisi }}{% endif %}
+      {%- if k.rec.nama_ekspedisi %} · {{ k.rec.nama_ekspedisi }}{% endif %}
+      · {{ k.isi|length }} macam
+    </div>
+  </summary>
+
+    <div class="anak">
+      <div class="anak__kepala">Isi muatan</div>
+      {% for b in k.isi %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ b.nama }}</span>
+
+          <span class="anak__kg">
+            {%- if k.rec.status == 'perintah' -%}
+              {{ b.karung ~ ' karung' if b.berkarung else kg(b.perintah) ~ ' kg' }}
+            {%- else -%}
+              {{ kg(b.dimuat) }} kg
+            {%- endif -%}
+          </span>
+          {% if b.kurang %}
+            <span class="anak__jam">diperintah {{ kg(b.perintah) }} kg ·
+              kurang {{ kg(b.kurang) }} kg</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      {% if k.rec.catatan_perintah %}
+        <div class="anak__kepala">Catatan Admin</div>
+        <div class="anak__baris">
+          <span class="anak__nama">{{ k.rec.catatan_perintah }}</span>
+        </div>
+      {% endif %}
+
+      <div class="anak__kepala">Jejaknya</div>
+      {% for label, waktu, nama in k.jejak %}
+        <div class="anak__baris">
+          <span class="anak__nama">{{ label }}</span>
+          <span class="anak__kg">{{ waktu | jam }}</span>
+          <span class="anak__jam">{{ nama or "?" }}</span>
+        </div>
+      {% endfor %}
+
+      {% if k.tiket_timbang %}
+        {% set t = k.tiket_timbang %}
+        <div class="anak__kepala">Tiket timbang terkait · {{ t.kode }}</div>
+        <dl class="timbang-terkait">
+          <dt>Status tiket</dt><dd>{{ t.status_tiket }}</dd>
+          <dt>Nomor polisi</dt><dd>{{ t.nomor_polisi or '—' }}</dd>
+          <dt>Nama sopir</dt><dd>{{ t.nama_sopir or '—' }}</dd>
+          <dt>Berat truk kosong</dt><dd>{{ kg(t.timbang1_kg) ~ ' kg' if t.timbang1_kg is not none else '—' }}{% if t.timbang1_waktu %} · {{ t.timbang1_waktu | jam }}{% endif %}</dd>
+          <dt>Berat truk bermuatan</dt><dd>{{ kg(t.timbang2_kg) ~ ' kg' if t.timbang2_kg is not none else 'Belum ditimbang' }}{% if t.timbang2_waktu %} · {{ t.timbang2_waktu | jam }}{% endif %}</dd>
+          <dt>Netto timbang</dt><dd>{{ kg(t.netto_timbangan_kg) ~ ' kg' if t.netto_timbangan_kg is not none else '—' }}</dd>
+          <dt>Tara kemasan</dt><dd>{{ kg(t.total_tara_kg) ~ ' kg' if t.total_tara_kg is not none else '—' }}</dd>
+          <dt>Berat barang</dt><dd>{{ kg(t.berat_barang_kg) ~ ' kg' if t.berat_barang_kg is not none else '—' }}</dd>
+        </dl>
+      {% elif k.rec.timbangan_transaksi_id %}
+        <div class="nota">Tiket timbang #{{ k.rec.timbangan_transaksi_id }} tidak dapat ditemukan.</div>
+      {% elif k.rec.status == 'selesai' %}
+        <div class="nota">Ditutup tanpa tiket timbang terkait.</div>
+      {% endif %}
+
+      {% if k.rec.sebab_batal %}
+        <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
+      {% endif %}
+
+      {% if k.rec.sebab_selisih %}
+
+        <div class="nota nota--hati">
+          <span aria-hidden="true">⚠</span>
+          <span>Selisih timbang besar — {{ k.rec.sebab_selisih }}</span>
+        </div>
+      {% endif %}
+
+      {% if k.tombol %}
+        <div class="ubah-hasil" style="margin-top:12px">
+          {% for buka, nilai, label, utama in k.tombol %}
+          <a class="btn{{ '' if utama else ' btn--kecil' }}"
+             href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
+             >{{ label }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </details>
+{% endfor %}
+</div>
+{% if not detail %}
+{% if not kartu_aktif %}<p class="bantu">Tidak ada pengiriman yang sedang berjalan.</p>{% endif %}
+<section aria-labelledby="judul-riwayat-keluar" style="margin-top:28px">
+  <h2 id="judul-riwayat-keluar">Riwayat Barang Keluar</h2>
+  <p class="bantu">Perintah selesai dan dibatalkan. Pilih baris untuk melihat rincian dan tiket timbang terkait.</p>
+  {% if riwayat %}
+  <div style="overflow-x:auto;border:1px solid var(--garis);border-radius:11px;margin:16px 0">
+    <table class="riwayat-keluar">
+      <thead><tr><th>Perintah</th><th>Tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th>Muatan</th><th>Status</th><th>Tiket timbang</th></tr></thead>
+      <tbody>
+      {% for k in riwayat %}
+        {% set alamat = '/barang-keluar/' ~ k.rec.id %}
+        <tr data-detail-keluar="{{ alamat }}">
+          <td><a href="{{ alamat }}">{{ k.rec.kode }}</a></td>
+          <td>{{ (k.rec.waktu_perintah or k.rec.waktu) | jam('%d/%m/%Y') }}</td>
+          <td>{{ k.rec.nama_pembeli or '—' }}</td>
+          <td>{{ k.rec.no_polisi or '—' }}</td>
+          <td>{{ kg(k.total_dimuat) }} kg · {{ k.isi|length }} macam</td>
+          <td>{{ k.keadaan }}</td>
+          <td>{{ k.tiket_timbang.kode if k.tiket_timbang else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if sebelum_berikut %}<a class="btn btn--kecil" href="/barang-keluar?sebelum={{ sebelum_berikut }}#judul-riwayat-keluar">Riwayat sebelumnya</a>{% endif %}
+  {% else %}<p class="bantu">Belum ada riwayat barang keluar.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if BOLEH_PERINTAH or BOLEH_MUAT %}
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+{% endif %}
+{% endblock %}
+
+{% block kaki %}
+<script>
+document.querySelectorAll('[data-detail-keluar]').forEach(function (baris) {
+  baris.addEventListener('click', function (e) {
+    if (!e.target.closest('a,button') && !window.getSelection().toString()) {
+      window.location.href = baris.dataset.detailKeluar;
+    }
+  });
+});
+</script>
+{% if BOLEH_PERINTAH or BOLEH_MUAT %}
+  <script src="/static/aksi.js?v={{ VERSI }}" defer
+          data-buka="{{ buka }}" data-nilai="{{ nilai }}"
+          data-tiket="{{ tiket }}"></script>
+{% endif %}
+{% endblock %}

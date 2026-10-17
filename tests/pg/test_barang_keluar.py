@@ -1046,10 +1046,8 @@ async def test_kartu_muat_mendarat_di_gudang_yang_memegang_barangnya(pg, gudang)
     assert a.rec.kode in kode_g2, "perintah barang jadi tak sampai ke Gudang 2"
 
 
-async def test_admin_melihat_muatan_yang_menunggu_verifikasi_di_mejanya(pg, gudang):
-    """Ia di MEJA, bukan di antrean: barangnya sudah di atas truk dan tak ada
-    yang perlu diangkat lagi. Yang tertahan keputusan — apakah angkanya diakui
-    apa adanya, dan tiket timbang mana yang ditempelkan."""
+async def test_verifikasi_pengiriman_cukup_di_barang_keluar(pg, gudang):
+    """Verifikasi pengiriman tidak digandakan ke Menunggu Keputusan."""
     from app.models import User
     from app.services import barang_keluar as bk
     from app.services.berjalan import untuk_staff
@@ -1063,16 +1061,14 @@ async def test_admin_melihat_muatan_yang_menunggu_verifikasi_di_mejanya(pg, guda
                               rec_id=r.rec.id)
     async with pg() as db:
         b = await untuk_staff(db)
-    k = next((x for x in b.meja if x.kode == r.rec.kode), None)
-    assert k is not None, "muatan tak berkartu di Menunggu keputusan"
-    assert k.aksi == "verifikasi_keluar"
-    # Selisihnya di RINGKASAN: yang memilih dari meja inilah yang memutuskan
-    # mana yang perlu diperiksa lebih dulu.
-    assert "kurang" in (k.ringkas or ""), k.ringkas
-    assert "500" in (k.ringkas or ""), k.ringkas       # 2.500 − 2.000
-    # Dan ia TIDAK ikut ke antrean: pekerjaan yang sama ditagih dua layar
-    # membuat keduanya berhenti dipercaya.
-    assert r.rec.kode not in {x.kode for x in b.menunggu}
+    assert r.rec.kode not in {x.kode for x in b.meja}
+    assert "verifikasi_keluar" not in b.jumlah_grup_keputusan()
+    c = await _klien(pg, gudang["adm"], "uji_verifikasi_satu_pintu")
+    async with c:
+        h = (await c.get("/barang-keluar")).text
+    assert r.rec.kode in h
+    assert "buka=verifikasi_keluar" in h
+    assert "kurang 500" in h
 
 
 async def test_kartu_tiket_keluar_menganggur_tetap_benar_walau_ditahan(pg, gudang):
@@ -1404,8 +1400,11 @@ async def test_menambah_sesudah_dimuat_ikut_mengurangi_stok(pg, gudang):
     from app.services.berjalan import untuk_staff
     async with pg() as db:
         b = await untuk_staff(db)
-    k = next(x for x in b.meja if x.kode == r.rec.kode)
-    assert "kurang" not in (k.ringkas or ""), k.ringkas
+    assert r.rec.kode not in {x.kode for x in b.meja}
+    c = await _klien(pg, gudang["adm"], "uji_tambah_tanpa_selisih")
+    async with c:
+        h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
+    assert "kurang 500" not in h
 
 
 async def test_yang_sudah_diverifikasi_tak_bisa_ditambah_lagi(pg, gudang):
@@ -2482,3 +2481,66 @@ async def test_pilih_armada_menolak_pelanggan_lain(pg,gudang):
     async with pg() as db:
         with pytest.raises(bk.BarangKeluarError,match='Pelanggan'):
             await bk.pilih_tiket_armada(db,user=await db.get(User,gudang['adm']),rec_id=r.rec.id,tiket_id=tid)
+
+
+async def test_riwayat_barang_keluar_tabel_dan_detail_tiket(pg, gudang):
+    from app.models import User
+    from app.services import barang_keluar as bk
+    from pathlib import Path
+
+    aktif = await _perintah(pg, gudang, karung=10, pembeli="Pelanggan Aktif")
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, "KLR-RIWAYAT", barang=2500)
+    async with pg() as db:
+        rec, _ = await bk.verifikasi(db, user=await db.get(User, gudang["adm"]),
+                                     rec_id=rid, timbangan_transaksi_id=tid)
+        kode = rec.kode
+    c = await _klien(pg, gudang["adm"], "uji_riwayat_detail")
+    async with c:
+        daftar = await c.get("/barang-keluar")
+        detail = await c.get(f"/barang-keluar/{rid}")
+        hilang = await c.get("/barang-keluar/9999999")
+    assert daftar.status_code == detail.status_code == 200
+    assert hilang.status_code == 404
+    h = daftar.text
+    sebelum, riwayat = h.split('<h2 id="judul-riwayat-keluar">', 1)
+    assert aktif.rec.kode in sebelum
+    assert kode not in sebelum
+    assert '<table class="riwayat-keluar">' in riwayat
+    assert f'href="/barang-keluar/{rid}"' in riwayat
+    assert kode in riwayat and "KLR-RIWAYAT" in riwayat
+    assert "Tiket timbang terkait · KLR-RIWAYAT" in detail.text
+    assert "Berat truk kosong" in detail.text and "Berat barang" in detail.text
+    assert "buka=verifikasi_keluar" not in detail.text
+    assert aktif.rec.kode not in detail.text
+    Path("/tmp/hmu-keluar-daftar.html").write_text(h)
+    Path("/tmp/hmu-keluar-detail.html").write_text(detail.text)
+
+
+async def test_riwayat_paginasi_tidak_menghilangkan_perintah_aktif(pg, gudang):
+    from app.database import now_local
+    from app.models import OutgoingRecord
+
+    aktif = await _perintah(pg, gudang, karung=10)
+    async with pg() as db:
+        for i in range(52):
+            db.add(OutgoingRecord(kode=f"OUT-RIWAYAT-{i:03}", status="selesai",
+                                 tanggal=now_local().date(), waktu=now_local(),
+                                 waktu_perintah=now_local(), input_by=gudang["adm"]))
+        await db.commit()
+        from app.services import barang_keluar as bk
+        terbaru = [r.id for r, _ in await bk.daftar(db, status=("selesai",), batas=100)]
+    c = await _klien(pg, gudang["adm"], "uji_riwayat_paginasi")
+    async with c:
+        pertama = (await c.get("/barang-keluar")).text
+        import re
+        sebelum = re.search(r'/barang-keluar\?sebelum=(\d+)', pertama).group(1)
+        kedua = (await c.get(f"/barang-keluar?sebelum={sebelum}")).text
+        detail_lama = await c.get(f"/barang-keluar/{terbaru[-1]}")
+    assert aktif.rec.kode in pertama and aktif.rec.kode in kedua
+    assert pertama.count('data-detail-keluar=') == 50
+    assert kedua.count('data-detail-keluar=') == 2
+    assert "OUT-RIWAYAT-000" not in pertama
+    assert "OUT-RIWAYAT-000" in kedua
+    assert detail_lama.status_code == 200
+    assert "Ditutup tanpa tiket timbang terkait" in detail_lama.text

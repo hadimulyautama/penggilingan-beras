@@ -137,22 +137,9 @@ async def test_submenu_keputusan_di_laci_sesuai_isi_sungguhan(pg, pabrik):
 
 # ═══ CELAH LAPANGAN 2 Oktober 2026: "verifikasi_keluar" hilang dari K.JENIS ═══
 
-async def test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah(
+async def test_verifikasi_muatan_tidak_menambah_kategori_keputusan(
         pg, pabrik):
-    """⭐⭐ REPRODUKSI LANGSUNG laporan pemilik: "1. Verifikasi Muatan /
-    2. Pemindahan PK" — dan sub-menu yang tak muncul walau DUA blok tampil.
-
-    Sebelum `verifikasi_keluar` didaftarkan ke `services.keputusan.JENIS`,
-    kartu ini jatuh ke jaring "Keputusan lain" — dan ke keranjang "lain"
-    sub-menu. Kalau item lain yang menunggu kebetulan JUGA tak dikenal, dua
-    jenis pekerjaan berbeda bercampur jadi SATU kategori, dan sub-menu
-    (syaratnya ≥2 kategori) tak pernah menawarkan dropdown — persis gejala
-    yang dilaporkan, walau layarnya sendiri sudah menampilkan dua blok.
-
-    Di sini keduanya memang jenis yang SUDAH dikenal (`acc_permintaan_pk` dan
-    `verifikasi_keluar`), jadi uji ini membuktikan sisi yang sudah benar: dua
-    jenis BEDA yang sama-sama dikenal selalu jadi dua kategori terpisah.
-    """
+    """Pengiriman diverifikasi di Barang Keluar; kategori meja hanya pekerjaan lain."""
     from datetime import date
 
     from sqlalchemy import select
@@ -220,23 +207,23 @@ async def test_verifikasi_muatan_dan_permintaan_pk_dua_kategori_terpisah(
         u = await db.get(User, pabrik["op1"])
         await bk.muat_semua(db, user=u, rec_id=r.rec.id)
 
-    # ── Sekarang keduanya ada — dua KATEGORI berbeda, bukan satu ──
+    # Pengiriman tidak menambah kategori atau lencana Menunggu Keputusan.
     async with pg() as db:
         adm = await db.get(User, pabrik["adm"])
         b = await svc.untuk(db, adm)
     n = b.jumlah_grup_keputusan()
     assert n["acc_permintaan_pk"] == 1
-    assert n["verifikasi_keluar"] == 1
+    assert "verifikasi_keluar" not in n
     assert n["lain"] == 0, "salah satunya masih jatuh ke keranjang Lainnya"
-    assert "keputusan" in b.submenu(), \
-        "sub-menu tak muncul walau dua kategori berbeda sama-sama berisi"
+    assert r.rec.kode not in {x.kode for x in b.meja}
+    assert "keputusan" not in b.submenu()
 
     c = await _klien(pg, pabrik["adm"])
     try:
         r2 = await c.get("/keputusan")
     finally:
         await c.aclose()
-    assert "Muatan menunggu diverifikasi" in r2.text
+    assert "Muatan menunggu diverifikasi" not in r2.text
     assert "Permintaan lot PK dari Gudang 2" in r2.text
     assert "Keputusan lain" not in r2.text, \
         "salah satunya masih jatuh ke jaring, bukan bloknya sendiri"

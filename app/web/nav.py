@@ -201,7 +201,7 @@ TAB = (
     #
     # Tempatnya SESUDAH Stok Produk dan bukan di antara antrean: ia DAFTAR,
     # bukan antrean. Yang menagih pekerjaan tetap Antrian tunggu (kartu muat)
-    # dan Menunggu keputusan (kartu verifikasi); halaman ini menjawab
+    # sementara verifikasi dilakukan di Barang Keluar. Halaman ini menjawab
     # pertanyaan yang tak bisa dijawab keduanya — "truk yang tadi siang bawa
     # apa saja?" — sebab keduanya menyusun menurut pekerjaan, bukan menurut
     # truk.
