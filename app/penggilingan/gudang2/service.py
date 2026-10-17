@@ -2649,7 +2649,14 @@ async def masukkan_beras_ke_silo(
         row.berat_total_kg = max(
             0.0, float(row.berat_total_kg) - float(size) * ambil)
         if row.jumlah_karung <= 0:
-            await db.delete(row)
+            # Rincian retur menaut baris stok ini untuk jejak penerimaan.
+            # Menghapusnya saat karung terakhir habis melanggar FK dan
+            # membatalkan seluruh pemindahan. Pertahankan saldo nolnya.
+            from app.penggilingan.inventory.models import CustomerReturnItem
+            tertaut_retur = await db.scalar(select(CustomerReturnItem.id).where(
+                CustomerReturnItem.finished_goods_stock_id == row.id).limit(1))
+            if tertaut_retur is None:
+                await db.delete(row)
         await log_activity(
             db, table_name="finished_goods_stock", record_id=row.id,
             action="UPDATE", changed_by=user.id, aksi="beras_bongkar_karung",

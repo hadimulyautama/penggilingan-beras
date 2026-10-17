@@ -435,3 +435,49 @@ async def test_undo_stok_habis_id_dipakai_ulang_dan_berat_aktual(pg, sosoh):
             FinishedGoodsStock.source_id == sosoh["proc_id"]))).scalars().one()
         assert pulih.id != rid
         assert pulih.berat_total_kg == 275 and pulih.jumlah_karung == 6
+
+
+@pytest.mark.parametrize("bertahap", [True, False])
+async def test_karung_terakhir_retur_25kg_bisa_masuk_silo_dan_dibatalkan(pg, sosoh, bertahap):
+    from sqlalchemy import select, func
+    from app.database import now_local
+    from app.models import User, ActivityLog, BerasKeSilo
+    from app.penggilingan.inventory.models import (
+        FinishedGoodsStock, CustomerReturn, CustomerReturnItem)
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo, hitung_stok_silo
+    from app.services.undo import undo_last
+
+    await _kemas_grade(pg, sosoh, grade="medium", jumlah_karung=11, ukuran=25)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        stok = (await db.execute(select(FinishedGoodsStock))).scalars().one()
+        retur = CustomerReturn(kode="RET-UJI-TERAKHIR", timbangan_transaksi_id=12345,
+            kode_tiket="TKT-UJI-RETUR", berat_tiket_kg=275, berat_rincian_kg=275,
+            selisih_kg=0, input_by=u.id, waktu=now_local())
+        db.add(retur)
+        await db.flush()
+        stok.source_type, stok.source_id = "retur", retur.id
+        rinci = CustomerReturnItem(customer_return_id=retur.id,
+            product_sku_id=stok.product_sku_id,
+            rice_quality_standard_id=stok.rice_quality_standard_id,
+            jumlah_karung=11, berat_total_kg=275, finished_goods_stock_id=stok.id)
+        db.add(rinci)
+        await db.commit()
+        rid = stok.id
+        for kg in ([200, 25, 25, 25] if bertahap else [275]):
+            await masukkan_beras_ke_silo(db, user=u, jenis="medium",
+                sumber_stok=f"sku:{stok.product_sku_id}", nama_silo="C", berat_kg=kg)
+        await db.refresh(stok)
+        await db.refresh(rinci)
+        assert stok.jumlah_karung == 0 and stok.berat_total_kg == 0
+        assert rinci.finished_goods_stock_id == rid
+        assert rinci.jumlah_karung == 11 and rinci.berat_total_kg == 275
+        assert await hitung_stok_silo(db, sosoh["silo_beras"]) == 275
+        assert await db.scalar(select(func.sum(BerasKeSilo.berat_kg))) == 275
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo").order_by(ActivityLog.id.desc()))).scalars().first()
+        await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+        await db.refresh(stok)
+        assert stok.id == rid
+        assert stok.jumlah_karung == (1 if bertahap else 11)
+        assert stok.berat_total_kg == (25 if bertahap else 275)
