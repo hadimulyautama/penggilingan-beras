@@ -368,7 +368,8 @@ async def test_tambah_silo_penyosohan_proses_selesai_ditolak(pg, g2):
     assert "selesai" in str(e.value).lower()
 
 
-async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2):
+@pytest.mark.parametrize("isi_dulu", [True, False])
+async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2, isi_dulu):
     from sqlalchemy import select
     from app.models import User, PolishingSiloUsage
     from app.penggilingan.gudang2.polishing import (
@@ -384,6 +385,23 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2):
         kode = r.proc.kode_proses
         await catat_output(db, user=u, kode=kode, jenis="medium", berat_kg=2000)
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
+    if not isi_dulu:
+        async with pg() as db:
+            u = await db.get(User, g2["user"])
+            from app.models import Silo
+            db.add(Silo(nama_silo="Silo C", warehouse_id=g2["wh"], status="kosong"))
+            await db.commit()
+            pilihan = await silo_bahan_g2(induk=kode, user=u)
+            assert "C" not in [x["value"] for x in pilihan]
+            from app.services.berjalan import _kartu_silo_g2, IsianSilo
+            async def asal_silo(silo_id):
+                return IsianSilo()
+            kartu = await _kartu_silo_g2(db, asal_silo)
+            b = next(x for x in kartu if x.kode == "Silo B")
+            assert b.aksi == "tambah_silo_penyosohan" and b.nilai == kode
+            assert "B" in [x["value"] for x in pilihan]
+            assert "kosong" in next(x["label"] for x in pilihan if x["value"] == "B").lower()
+            await tambah_silo_penyosohan(db, user=u, kode=kode, nama_silos=["B"])
     from app.database import now_local
     from app.models import PolishingProcess, PolishingOutputLog
     from app.penggilingan.gudang2.service import masukkan_beras_ke_silo
@@ -400,8 +418,11 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2):
                                     nama_silo="B", berat_kg=1000)
     async with pg() as db:
         u = await db.get(User, g2["user"])
-        assert "B" in [x["value"] for x in await silo_bahan_g2(induk=kode, user=u)]
-        await tambah_silo_penyosohan(db, user=u, kode=kode, nama_silos=["B"])
+        if isi_dulu:
+            assert "B" in [x["value"] for x in await silo_bahan_g2(induk=kode, user=u)]
+            await tambah_silo_penyosohan(db, user=u, kode=kode, nama_silos=["B"])
+        else:
+            assert "B" not in [x["value"] for x in await silo_bahan_g2(induk=kode, user=u)]
         rows = (await db.execute(select(PolishingSiloUsage).where(
             PolishingSiloUsage.polishing_process_id == r.proc.id,
             PolishingSiloUsage.silo_id == g2["silo"]["B"]))).scalars().all()
@@ -417,5 +438,26 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2):
             ProsesTerpadu.tabel_sumber == "polishing_process",
             ProsesTerpadu.id_sumber == str(r.proc.id)))).scalar_one()
         komposisi = bersama.metadata_domain["komposisi_bahan"]["Silo B"]
-        assert komposisi["pk"] == 3000
-        assert komposisi["beras_putih"] == 1000
+        if isi_dulu:
+            assert komposisi["pk"] == 3000
+            assert komposisi["beras_putih"] == 1000
+        else:
+            assert sum(float(x.berat_masuk_kg or 0) for x in rows) == 1000
+
+
+async def test_opsi_gunakan_kembali_tetap_ada_saat_sosoh_dijeda(pg, g2):
+    from app.database import now_local
+    from app.models import User, JedaProses
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan
+    from app.services.berjalan import _kartu_penyosohan_g2
+
+    await _isi_silo_g2(pg, g2, huruf="A", kode="PK-JEDA-ULANG", kg=1000)
+    async with pg() as db:
+        u = await db.get(User, g2["user"])
+        r = await mulai_penyosohan(db, user=u, nama_silos=["A"])
+        db.add(JedaProses(jenis="penyosohan", polishing_process_id=r.proc.id,
+                         sebab="Istirahat", mulai=now_local(), dicatat_oleh=u.id))
+        await db.commit()
+        kartu = await _kartu_penyosohan_g2(db, None)
+        assert kartu[0].aksi == "lanjutkan_penyosohan"
+        assert "tambah_silo_penyosohan" in [p[0] for p in kartu[0].pilihan]

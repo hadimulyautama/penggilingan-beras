@@ -1018,7 +1018,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # lainnya." `mulai_penyosohan` menerima beberapa silo, tetapi
             # hanya saat MULAI.
             {"id": "tambah_silo_penyosohan", "label": "➕ Tambah silo (mix bahan)",
-             "hint": "Silo lain ikut jadi bahan proses ini — harus silo yang "
+             "hint": "Silo yang dibebaskan bisa dipakai lagi, termasuk saat kosong. "
+                     "Bahan boleh diisi setelah silo ditambahkan kembali. Pilih silo yang "
                      "belum dipakai proses lain, dan sepemilik dengan bahan "
                      "yang sudah berjalan.",
              "post": "/api/actions/tambah-silo-penyosohan", "fields": [
@@ -1028,7 +1029,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "silo", "label": "Silo yang ditambahkan (boleh lebih dari satu)",
                   "type": "remote_banyak", "induk": "kode",
                   "source": "/api/actions/silo-bahan-g2",
-                  "kosong": "Tidak ada silo lain yang bisa ditambahkan."},
+                  "kosong": "Tidak ada silo yang bisa ditambahkan atau digunakan kembali."},
              ]},
             {"id": "hentikan_penyosohan", "label": "⏸️ Hentikan sementara",
              "post": "/api/actions/hentikan-proses",
@@ -4098,7 +4099,7 @@ async def tujuan_pk_g2(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 @router.get("/actions/silo-bahan-g2")
 async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Silo Gudang 2 yang berisi STOK dan BELUM dipakai penyosohan berjalan.
+    """Silo berisi atau silo kosong yang dibebaskan oleh proses yang dipilih.
 
     Daftarnya dari MASTER, bukan tupel huruf yang diketik di kode: silo Gudang
     2 bisa bertambah lewat Pengaturan → Alat, dan silo ketiga yang baru dibeli
@@ -4131,6 +4132,7 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
     keluar: list[dict] = []
     async with SessionLocal() as db:
         pemilik_target = None
+        dibebaskan = set()
         if induk.strip():
             proc = (await db.execute(select(PolishingProcess).where(
                 PolishingProcess.kode_proses == induk.strip(),
@@ -4139,6 +4141,10 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
             if proc is None:
                 return []
             pemilik_target = proc.jasa_id
+            dibebaskan = set((await db.execute(select(PolishingSiloUsage.silo_id).where(
+                PolishingSiloUsage.polishing_process_id == proc.id,
+                PolishingSiloUsage.berat_akhir_kg.is_not(None)
+            ))).scalars().all())
         dipakai = set((await db.execute(
             select(PolishingSiloUsage.silo_id)
             .join(PolishingProcess,
@@ -4153,7 +4159,7 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
             if s.id in dipakai:
                 continue
             kg = await hitung_stok_silo(db, s.id)
-            if not kg or kg <= 0:
+            if kg <= 0 and s.id not in dibebaskan:
                 continue
             if induk.strip():
                 pemilik = await pemilik_silo_g2(db, s.id)
@@ -4162,7 +4168,9 @@ async def silo_bahan_g2(induk: str = "", user: User = Depends(pengguna_aksi)) ->
                 ):
                     continue
             huruf = s.nama_silo.replace("Silo ", "")
-            keluar.append({"value": huruf, "label": f"{s.nama_silo} · {_rp(kg)} kg"})
+            label = (f"{s.nama_silo} · kosong, gunakan kembali lalu isi bahan"
+                     if kg <= 0 else f"{s.nama_silo} · {_rp(kg)} kg")
+            keluar.append({"value": huruf, "label": label})
     return keluar
 
 

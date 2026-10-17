@@ -242,6 +242,11 @@ async def tambah_silo_penyosohan(
                PolishingSiloUsage.berat_akhir_kg.is_(None))
     )).scalars().all())
 
+    dibebaskan = set((await db.execute(
+        select(PolishingSiloUsage.silo_id).where(
+            PolishingSiloUsage.polishing_process_id == proc.id,
+            PolishingSiloUsage.berat_akhir_kg.is_not(None))
+    )).scalars().all())
     silos: list[Silo] = []
     for letter in dict.fromkeys(letters):
         silo = await get_g2_silo(db, letter)
@@ -252,7 +257,8 @@ async def tambah_silo_penyosohan(
             raise Gudang2Error(
                 f"Silo {letter} masih menjadi bahan aktif {proc.kode_proses}."
             )
-        if await hitung_stok_silo(db, silo.id) <= 0:
+        stok = await hitung_stok_silo(db, silo.id)
+        if stok <= 0 and silo.id not in dibebaskan:
             raise Gudang2Error(f"Silo {letter} kosong — tidak ada yang bisa ditambahkan.")
         aktif = (await db.execute(
             select(PolishingSiloUsage.id)
@@ -264,6 +270,12 @@ async def tambah_silo_penyosohan(
         )).first()
         if aktif:
             raise Gudang2Error(f"Silo {letter} sedang dipakai penyosohan lain.")
+
+        if stok <= 0:
+            # Silo yang sudah dibebaskan boleh disambungkan kembali sebelum
+            # diisi. Awalnya nol; input berikutnya masuk ke siklus BARU.
+            silos.append(silo)
+            continue
 
         # ── PAGAR: proses TAK BOLEH memakan broken yang ia hasilkan sendiri ──
         #
@@ -325,7 +337,8 @@ async def tambah_silo_penyosohan(
     pemilik_baru: list[int | None] = [proc.jasa_id]
     for s_ in silos:
         isi = await pemilik_silo_g2(db, s_.id)
-        pemilik_baru.extend(isi or [None])
+        if isi or await hitung_stok_silo(db, s_.id) > 0:
+            pemilik_baru.extend(isi or [None])
     try:
         owner = await pastikan_satu_pemilik(db, user=user, jasa_ids=pemilik_baru)
     except JasaError as e:
