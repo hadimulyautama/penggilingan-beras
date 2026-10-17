@@ -419,11 +419,11 @@ Satu nilai, dua grup. `aksi` tidak rancu — ia memang menyebut apa yang
 DITUNGGU. Kartu DIAM (tanpa `aksi`) jatuh ke `kelompok` sebagai kaki kedua.
 
 ⚠ **GRUP TERAKHIR ("Lainnya") KOMPLEMEN, bukan daftar.** Apa pun yang tak
-terpetakan jatuh ke sana — termasuk jenis kartu yang lahir besok. Hari ini
-isinya perintah muat barang keluar dan penyosohan yang menunggu verifikasi
-Admin: dua hal yang pemilik belum beri nama grup. Daftar yang harus lengkap
-adalah daftar yang suatu hari tidak, dan kartu yang tak masuk grup mana pun
-akan HILANG dari layar yang menagihnya. Invarian yang menjaganya:
+terpetakan jatuh ke sana — termasuk jenis kartu yang lahir besok. Perintah
+muat dan silo menunggu penyosohan sudah punya grup sendiri sejak 18 Oktober
+2026. Daftar yang harus lengkap adalah daftar yang suatu hari tidak, dan
+kartu yang tak masuk grup mana pun akan HILANG dari layar yang menagihnya.
+Invarian yang menjaganya:
 **Σ grup == panjang antrean** (`tests/test_grup_antrean.py`).
 
 ⚠ Nama `aksi` yang salah tulis jatuh DIAM-DIAM ke "Lainnya" — tiga sempat
@@ -435,26 +435,22 @@ seluruh laci, sebab laci yang berbeda antar-layar dibaca sebagai "pekerjaannya
 sudah habis". Di `base.html` ia DIGERAKKAN DATA (`SUBMENU.get(kunci)`), bukan
 `if kunci == 'aksi'`: berkas itu milik bersama beberapa aplikasi.
 
-⚠⚠ **GRUP YANG `aksi`-NYA SAMA TAPI PEMILIKNYA BEDA BUTUH SUMBU KETIGA.**
-Keluhan pemilik 6 Oktober 2026: *"di halaman tunggu packing tidak bisa
-dibedakan mana jasa mana yang tidak."* Kartu beras titipan pelanggan dan
-kartu beras pabrik yang sama-sama belum dikemas memakai `aksi="catat_packing"`
-IDENTIK — sheet yang dibukanya memang sama — jadi pernyataan di atas ("`aksi`
-tidak rancu") tetap benar untuk PEKERJAAN, tapi tak menjawab PEMILIK. Grup
-`"packing_jasa"` ("Packing jasa") ditambahkan dengan cabang KHUSUS di
-`grup_baris()`, DIPERIKSA SEBELUM `_GRUP_AKSI`: `aksi=="catat_packing" and
-b.jasa_id is not None → "packing_jasa"`. `Baris` dapat field baru `jasa_id`
-untuk ini — bukan menambah entri `_GRUP_AKSI` (yang kuncinya `aksi`, satu
-nilai per kartu, tak bisa membedakan dua kartu ber-`aksi` sama).
+Keputusan pemilik 18 Oktober 2026: **Packing pabrik dan jasa digabung menjadi
+satu submenu "Packing"** (`packing`). Pemilik titipan tetap disebut di kartu
+(`· TITIPAN <nama>`); `jasa_id` dan aturan kepemilikan tidak berubah. Tautan
+lama `?grup=packing_jasa` dibaca sebagai `packing`, supaya bookmark lama tetap
+membuka pekerjaan packing.
 
-Kartunya sendiri (`_kartu_beras_curah`, `app/services/berjalan.py`) juga
-menyebut pemiliknya di `sub` (`· TITIPAN <nama>`, pola yang sama dengan
-picker `/pk-g1-tersedia` dan `api.py`'s `pk_gudang1`) — grupnya memisahkan,
-tapi satu grup masih bisa berisi lebih dari satu pelanggan sekaligus, dan
-kartu yang tak menyebut pemiliknya sendiri membuat orang menebak lagi.
+**Muat Barang Keluar** (`muat`) menampung perintah pemuatan, baik barang pabrik
+maupun jasa. **Tunggu Penyosohan** (`penyosohan`) menampung silo Gudang 2 yang
+menunggu, termasuk silo siap mulai dan sisa isian yang sudah ditutup selagi
+mesin masih memakai silo lain. Kartu silo mendapat `kelompok="penyosohan"`
+karena saat mesin sibuk ia tidak punya `aksi`; grupnya tidak boleh berubah
+ketika tombol mulai hilang. Silo yang masih dipakai proses tetap hanya di
+Sedang berjalan. Lencana dan filter mengikuti `grup_baris()` yang sama.
 
-Uji: `tests/pg/test_grup_packing_jasa.py` (kartu jatuh ke grup yang benar,
-tiga grup pertama tak bergeser, filter `?grup=` lewat HTTP sungguhan).
+Uji: `tests/test_grup_antrean.py`, `tests/pg/test_grup_packing_jasa.py`,
+`tests/pg/test_gudang2_operator_pg.py`, `tests/pg/test_barang_keluar.py`.
 
 ## Sub-menu "Menunggu keputusan" — PER KATEGORI (sejak 2 Okt 2026)
 

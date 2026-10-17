@@ -88,25 +88,40 @@ def test_tumpukan_gudang_satu_dan_dua_masuk_grup_BERBEDA():
 def test_ketiga_grup_yang_pemilik_sebut_ada_dan_bernama_begitu():
     """Namanya yang dibaca orang, bukan kuncinya."""
     nama = dict(GRUP_ANTREAN)
-    assert nama["bahan"] == "Bahan baku"
+    assert nama["bahan"] == "Tiket Timbang"
     assert nama["pindah"] == "Tunggu dipindah"
     assert nama["packing"] == "Packing"
     # Urutannya urutan aliran barang, bukan abjad.
     assert [k for k, _ in GRUP_ANTREAN][:3] == ["bahan", "pindah", "packing"]
 
 
-def test_packing_titipan_dan_pabrik_masuk_grup_BERBEDA():
-    """⭐ `aksi` SAMA ("catat_packing"), pemiliknya BEDA — `aksi` sendirian tak
-    bisa menjawab ini (beda dari `kelompok="tumpukan"` di atas, yang
-    terjawab lewat `aksi` yang berbeda). Keluhan pemilik 6 Oktober 2026: "di
-    halaman tunggu packing tidak bisa dibedakan mana jasa mana yang tidak."
-    """
+def test_packing_titipan_dan_pabrik_satu_submenu():
+    """Keputusan pemilik 18 Oktober: packing digabung, pemilik tetap di kartu."""
     pabrik = _kartu(aksi="catat_packing", kelompok="produk")
     titipan = _kartu(aksi="catat_packing", kelompok="produk", jasa_id=7)
     assert grup_baris(pabrik) == "packing"
-    assert grup_baris(titipan) == "packing_jasa"
-    assert "packing_jasa" in KUNCI
-    assert dict(GRUP_ANTREAN)["packing_jasa"] == "Packing jasa"
+    assert grup_baris(titipan) == "packing"
+    assert "packing_jasa" not in KUNCI
+
+
+def test_submenu_muat_penyosohan_dan_packing_menghitung_seluruh_kartu():
+    b = Berjalan(menunggu=[
+        _kartu(aksi="catat_packing"),
+        _kartu(aksi="catat_packing", jasa_id=7),
+        _kartu(aksi="muat_semua", kelompok="keluar"),
+        _kartu(aksi="muat_semua", kelompok="keluar", jasa_id=7),
+        _kartu(aksi="mulai_penyosohan", kelompok="penyosohan"),
+        _kartu(kelompok="penyosohan"),  # mesin masih dipakai silo lain
+    ])
+    assert b.jumlah_grup() == {
+        "bahan": 0, "pindah": 0, "packing": 2, "muat": 2,
+        "penyosohan": 2, "lain": 0,
+    }
+    assert b.submenu()["aksi"] == [
+        ("/aksi?grup=packing", "Packing", 2),
+        ("/aksi?grup=muat", "Muat Barang Keluar", 2),
+        ("/aksi?grup=penyosohan", "Tunggu Penyosohan", 2),
+    ]
 
 
 def test_aksi_yang_dipetakan_memang_ada_di_kode():
@@ -153,24 +168,15 @@ def test_submenu_butuh_dua_grup_berisi():
     assert "aksi" not in Berjalan().submenu(), "antrean kosong tak punya sub-menu"
 
 
-def test_semua_selalu_baris_pertama_submenu():
-    """⚠ TANPA INI DAFTAR UTUHNYA TAK TERJANGKAU.
-
-    Pintunya berubah jadi `<summary>` saat ia bersub-menu, jadi mengkliknya tak
-    lagi menuju `/aksi`. Baris "Semua" satu-satunya jalan ke daftar penuh dari
-    dalam laci.
-    """
+def test_submenu_hanya_kategori_tanpa_baris_semua():
+    """Daftar penuh tersedia lewat Beranda dan pil; laci hanya kategori kerja."""
     b = Berjalan(menunggu=[_kartu(aksi="catat_packing"),
                            _kartu(aksi="gabah_masuk"),
                            _kartu(aksi="pindah_tumpukan_silo")])
     sub = b.submenu()["aksi"]
-    alamat, nama, jml = sub[0]
-    assert alamat == "/aksi", "baris pertama bukan jalan ke daftar utuh"
-    assert nama == "Semua"
-    assert jml == len(b.menunggu)
-    # Sisanya menuju alamat bergrup, dan angkanya sepadan dengan isinya.
-    assert all(a.startswith("/aksi?grup=") for a, _, _ in sub[1:])
-    assert sum(j for _, _, j in sub[1:]) == len(b.menunggu)
+    assert all(a.startswith("/aksi?grup=") for a, _, _ in sub)
+    assert all(nama != "Semua" for _, nama, _ in sub)
+    assert sum(j for _, _, j in sub) == len(b.menunggu)
 
 
 def test_grup_kosong_tak_pernah_ditawarkan_di_submenu():
@@ -402,7 +408,7 @@ def test_pil_grup_tergambar_dan_angkanya_ikut():
     dua = [_kartu(aksi="gabah_masuk"), _kartu(aksi="catat_packing"),
            _kartu(aksi="catat_packing")]
     h = _layar_aksi(dua)
-    assert "Bahan baku" in h and "Packing" in h
+    assert "Tiket Timbang" in h and "Packing" in h
     assert "pil--on" in h, "pil 'Semua' tak bertanda aktif"
     # Angkanya, dan kelasnya yang memang ada di app.css.
     assert 'class="pil__jml"' in h

@@ -165,6 +165,10 @@ async def test_antrean_operator_adalah_silo_tumpukan_pindah_lewat_stok(pg, gudan
     silo = [x for x in b.menunggu if x.fase == "silo_g2"]
     assert tumpuk == [], "tumpukan masih di Antrian tunggu — harusnya lewat kartu Stok"
     assert len(silo) == 1 and silo[0].kode == "Silo B" and silo[0].aksi == "mulai_penyosohan"
+    from app.services.berjalan import grup_baris
+    assert grup_baris(silo[0]) == "penyosohan"
+    assert b.jumlah_grup()["penyosohan"] == 1
+    assert b.jumlah_grup()["lain"] == 0
     assert b.transit == [] and b.meja == []
     assert b.jumlah_menunggu == 1
 
@@ -438,6 +442,9 @@ async def test_silo_yang_sedang_disosoh_tak_ada_di_antrean(pg, gudang2):
     # Silo yang menunggu tetap TANPA tombol — mesinnya satu.
     kartu_a = next(x for x in b.menunggu if x.kode == "Silo A")
     assert kartu_a.aksi is None and kartu_a.pilihan == []
+    from app.services.berjalan import grup_baris
+    assert grup_baris(kartu_a) == "penyosohan"
+    assert b.jumlah_grup()["penyosohan"] == 1
     assert "mesin sosoh sedang dipakai" in kartu_a.keadaan
 
 
@@ -614,6 +621,9 @@ async def test_silo_yang_sisanya_sudah_dicatat_tetap_berkartu(pg, gudang2):
     k = kartu[0]
     assert k.aksi is None, "mesinnya masih dipakai, tombolnya tak boleh ada"
     assert "sisanya sudah dicatat" in k.keadaan, k.keadaan
+    from app.services.berjalan import grup_baris
+    assert grup_baris(k) == "penyosohan"
+    assert b2.jumlah_grup()["penyosohan"] == 1
     # Silo B masih di dalam mesin — ia tetap tanpa kartu antrean.
     assert not any(x.kode == "Silo B" for x in b2.menunggu)
     # Lencana == kartu yang digambar. Dua tempat yang menghitungnya

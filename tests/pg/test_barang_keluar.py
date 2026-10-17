@@ -997,6 +997,9 @@ async def test_operator_gudang2_melihat_perintah_muat_sebagai_kartu(pg, gudang):
     # Fase SENDIRI, bukan pinjaman. Kartu berjudul "Muat barang keluar" yang
     # berkeping "PROSES SOSOH" sudah jadi cacat yang sama tiga kali sebelumnya.
     assert k.fase == "keluar", k.fase
+    from app.services.berjalan import grup_baris
+    assert grup_baris(k) == "muat"
+    assert b.jumlah_grup()["muat"] == 1
     # Tiga pilihan, dan "muat semua" paling atas — keadaan yang paling sering.
     aksi = [p[0] for p in (k.pilihan or [])]
     assert aksi[:1] == ["muat_semua"], aksi

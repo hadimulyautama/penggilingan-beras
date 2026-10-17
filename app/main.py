@@ -517,6 +517,9 @@ async def halaman_aksi(request: Request):
     # pekerjaannya habis.
     n_grup = b.jumlah_grup()
     grup = (request.query_params.get("grup") or "").strip()
+    # Tautan lama Packing jasa tetap membuka antrean packing yang kini digabung.
+    if grup == "packing_jasa":
+        grup = "packing"
     if grup not in dict(svc.GRUP_ANTREAN):
         grup = ""          # alamat ngawur = tampilkan semuanya, bukan 422
     menunggu = ([x for x in b.menunggu if svc.grup_baris(x) == grup]
@@ -567,7 +570,8 @@ async def halaman_aksi(request: Request):
                   # belum.
                   KELOMPOK_TENGAH="tiket",
                   judul_tengah="Tiket timbang belum dicatat",
-                  judul_bawah="Bisa dikerjakan sekarang",
+                  judul_bawah=dict(svc.GRUP_ANTREAN).get(
+                      grup, "Bisa dikerjakan sekarang"),
                   # Tombol kecil di bawah antrean — hanya untuk operator, dan
                   # hanya karena katalog "Catat pekerjaan lain" dicabut dari
                   # lacinya: tanpa ini, aksi yang tak berwujud benda di gudang

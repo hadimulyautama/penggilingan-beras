@@ -1,11 +1,6 @@
-"""Sub-menu "Packing jasa" — beras titipan dipisah dari beras pabrik
-(6 Oktober 2026).
+"""Packing pabrik dan jasa satu submenu; identitas titipan tetap jelas.
 
-Keluhan pemilik: "di halaman tunggu packing tidak bisa dibedakan mana jasa
-mana yang tidak." Kartu beras belum dikemas (`_kartu_beras_curah`) memakai
-`aksi="catat_packing"` yang SAMA untuk pabrik maupun titipan — sheet yang
-dibukanya memang sama — jadi `grup_baris()` butuh sumbu baru (`Baris.
-jasa_id`) untuk memisahkannya, bukan sekadar menambah entri `_GRUP_AKSI`.
+Keputusan pemilik 18 Oktober 2026 menggantikan pemisahan submenu 6 Oktober.
 """
 from __future__ import annotations
 
@@ -52,7 +47,7 @@ async def dua_lot(pg, pemakai):
                 "kode_jasa": p_jasa.kode_proses, "pemilik": "JAS-2610-001 Bu Sri"}
 
 
-async def test_kartu_titipan_jatuh_ke_grup_packing_jasa(pg, dua_lot):
+async def test_kartu_pabrik_dan_titipan_satu_grup_identitas_tetap_ada(pg, dua_lot):
     from app.services import berjalan as svc
 
     async with pg() as db:
@@ -66,15 +61,15 @@ async def test_kartu_titipan_jatuh_ke_grup_packing_jasa(pg, dua_lot):
     assert "TITIPAN" not in pabrik.sub
 
     assert jasa.jasa_id is not None
-    assert svc.grup_baris(jasa) == "packing_jasa"
+    assert svc.grup_baris(jasa) == "packing"
     assert f"TITIPAN {dua_lot['pemilik']}" in jasa.sub
 
 
-async def test_grup_packing_jasa_terdaftar_dan_tak_mengganggu_urutan(pg, dua_lot):
+async def test_packing_jasa_tak_lagi_submenu_terpisah(pg, dua_lot):
     from app.services import berjalan as svc
 
     kunci = [k for k, _ in svc.GRUP_ANTREAN]
-    assert "packing_jasa" in kunci
+    assert "packing_jasa" not in kunci
     # Tiga grup pertama yang pemilik sebut tak boleh bergeser — keputusan
     # pemilik 2 Oktober 2026, dijaga juga oleh test_grup_antrean.py.
     assert kunci[:3] == ["bahan", "pindah", "packing"]
@@ -152,11 +147,8 @@ async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
     return c
 
 
-async def test_filter_grup_via_http_memisah_pabrik_dan_titipan(pg, dua_lot):
-    """`/aksi?grup=packing_jasa` menunjukkan HANYA titipan; `?grup=packing`
-    menunjukkan HANYA pabrik — dibuktikan lewat HTTP sungguhan, sebab
-    penjaga yang cuma memanggil fungsinya bisa lulus pada hari templatnya
-    berhenti menggambar (pelajaran `TempatPk.pemilik`)."""
+async def test_filter_packing_dan_tautan_lama_memuat_kedua_pemilik(pg, dua_lot):
+    """Keduanya tampil bersama, termasuk bila membuka bookmark submenu lama."""
     c = await _klien(pg, peran="admin")
     try:
         r_jasa = await c.get("/aksi?grup=packing_jasa")
@@ -166,11 +158,12 @@ async def test_filter_grup_via_http_memisah_pabrik_dan_titipan(pg, dua_lot):
 
     assert r_jasa.status_code == 200 and r_pabrik.status_code == 200
     assert dua_lot["kode_jasa"] in r_jasa.text
-    assert dua_lot["kode_pabrik"] not in r_jasa.text
+    assert dua_lot["kode_pabrik"] in r_jasa.text
     assert "Bu Sri" in r_jasa.text
 
     assert dua_lot["kode_pabrik"] in r_pabrik.text
-    assert dua_lot["kode_jasa"] not in r_pabrik.text
+    assert dua_lot["kode_jasa"] in r_pabrik.text
+    assert 'href="/aksi?grup=packing_jasa"' not in r_pabrik.text
 
 
 async def test_tombol_kartu_membawa_saringan_grup_yang_aktif(pg, dua_lot):

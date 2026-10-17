@@ -180,11 +180,8 @@ class Baris:
     #: yang sama tak pernah berselisih walau markupnya digambar dua kali.
     neraca: object | None = None
 
-    #: Pemilik titipan — None = pabrik. Dipakai `grup_baris()` untuk
-    #: memisahkan kartu titipan dari kartu pabrik yang kebetulan memakai
-    #: `aksi` yang sama (mis. "Packing jasa" vs "Tunggu packing", keduanya
-    #: `aksi="catat_packing"`) — penyaringan yang `aksi`/`kelompok` sendirian
-    #: tak bisa menjawab, sebab keduanya menyebut PEKERJAAN, bukan PEMILIK.
+    #: Pemilik titipan — None = pabrik. Identitas tetap dibawa walaupun
+    #: packing pabrik dan jasa kini berada di submenu yang sama.
     jasa_id: int | None = None
     #: Kolom antrean bahan baku. Metadata ini hanya untuk ringkasan tabel;
     #: rincian kartu tetap memakai sumber dan susunan yang sudah ada.
@@ -581,17 +578,9 @@ GRUP_ANTREAN = (
     ("bahan", "Tiket Timbang"),
     ("pindah", "Tunggu dipindah"),
     ("packing", "Packing"),
-    # Keluhan pemilik 6 Oktober 2026: "di halaman tunggu packing tidak bisa
-    # dibedakan mana jasa mana yang tidak" — kartu beras titipan pelanggan
-    # dan kartu beras pabrik sama-sama `aksi="catat_packing"`, jadi tanpa
-    # grup sendiri keduanya bercampur di "Tunggu packing" tanpa tanda apa
-    # pun. Lihat `jasa_id` di `Baris` dan cabang khusus di `grup_baris()`.
-    ("packing_jasa", "Packing jasa"),
-    # Bukan nama yang bagus, dan sengaja tidak disamarkan: di sini berdiri
-    # perintah muat barang keluar dan pekerjaan lain yang belum punya grup.
-    # Nama yang terlalu
-    # percaya diri ("Administrasi") akan membuat orang berhenti mencari di
-    # sini, dan isinya justru hal yang tak boleh tertinggal.
+    ("muat", "Muat Barang Keluar"),
+    ("penyosohan", "Tunggu Penyosohan"),
+    # Jenis pekerjaan baru yang belum dipetakan tetap terlihat di sini.
     ("lain", "Lainnya"),
 )
 
@@ -602,7 +591,7 @@ _GRUP_AKSI = {
     "catat_pk_luar": "bahan",        # tiket timbang PK luar belum dicatat
     "pindah_tumpukan": "bahan",      # batch gabah → dryer / silo / lantai
     "masukkan_pk": "bahan",          # PK menunggu ditempatkan di Gudang 2
-    "mulai_penyosohan": "bahan",     # silo Gudang 2 berisi, siap disosoh
+    "mulai_penyosohan": "penyosohan",
     "mulai_pengeringan": "bahan",
     "mulai_giling": "bahan",
     # ── Tunggu dipindah ──
@@ -613,6 +602,7 @@ _GRUP_AKSI = {
     "tutup_permintaan_pk": "pindah",
     # ── Tunggu packing ──
     "catat_packing": "packing",
+    "muat_semua": "muat",
 }
 
 #: Kaki kedua: `kelompok`, untuk kartu DIAM yang tak punya `aksi` sama sekali
@@ -621,6 +611,8 @@ _GRUP_KELOMPOK = {
     "tiket": "bahan",
     "produk": "packing",
     "permintaan": "pindah",
+    "penyosohan": "penyosohan",
+    "keluar": "muat",
 }
 
 
@@ -631,14 +623,7 @@ def grup_baris(b: Baris) -> str:
     yang memutuskan sendiri akan menyebut 3 pada sub-menu yang begitu dibuka
     memperlihatkan 2 — dan sesudah sekali itu, angkanya tak dipercaya lagi.
     """
-    # ⚠ DIPERIKSA SEBELUM `_GRUP_AKSI`: kartu beras titipan pelanggan memakai
-    # `aksi="catat_packing"` yang SAMA dengan kartu pabrik (sheet yang
-    # dibukanya memang sama) — yang membedakan grupnya bukan `aksi`,
-    # melainkan `jasa_id`, sumbu yang sebelumnya tak pernah dibaca
-    # `grup_baris()`. Tanpa cabang ini "Packing jasa" di `GRUP_ANTREAN` tak
-    # akan pernah kemasukan satu kartu pun.
-    if b.aksi == "catat_packing" and b.jasa_id is not None:
-        return "packing_jasa"
+    # Packing pabrik dan jasa satu submenu; identitas titipan tetap di kartu.
     if b.aksi and b.aksi in _GRUP_AKSI:
         return _GRUP_AKSI[b.aksi]
     # ⚠ `kelompok="tumpukan"` TIDAK dipetakan di sini, dan itu bukan kelalaian:
@@ -2881,6 +2866,9 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                      else "mulai penyosohan bila siap"),
             aksi=None if sedang else "mulai_penyosohan",
             nilai=huruf, fase="silo_g2",
+            # Menunggu mesin dan siap mulai tetap satu antrean. Tanpa penanda
+            # ini kartu berpindah grup saat tombolnya hilang karena mesin sibuk.
+            kelompok="penyosohan",
             judul=f"{silo.nama_silo} · Gudang 2",
             utama=(_kg(kg).removesuffix(" kg"), "kg"),
             # Kalimat bawahnya ikut menyebutnya: "menunggu disosoh" atas sisa
@@ -2986,8 +2974,7 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     ⚠ Titipan pelanggan TAK DISEMBUNYIKAN, tapi KALIMATNYA BERBEDA — pola yang
     sama dengan kartu tumpukan gabah. Keluhan pemilik 6 Oktober 2026: di
     halaman "Tunggu packing" tak bisa dibedakan mana jasa mana yang bukan.
-    `grup_baris()` menjatuhkannya ke grup "Packing jasa" sendiri (lihat
-    `jasa_id` di `Baris`), dan `sub`-nya menyebut pemiliknya terang-terangan
+    Packing kini satu submenu; `sub`-nya menyebut pemiliknya terang-terangan
     (`· TITIPAN <nama>`, pola yang sama dengan picker `/pk-g1-tersedia`) —
     sebab satu grup bisa saja berisi lebih dari satu pelanggan sekaligus.
     """
