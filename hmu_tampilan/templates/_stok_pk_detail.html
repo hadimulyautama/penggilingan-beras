@@ -80,6 +80,8 @@
     {% endif %}
   </div>
 
+  {% if mutu_aktif %}{% include "_stok_pk_qc.html" %}{% endif %}
+
   {% if g1 and boleh_minta and not t.berjalan %}
     <section class="pk-detail__actions">
       {% if t.diminta_siap %}<span class="pk-detail__action-state">Disetujui Admin · Gudang 1 menyiapkan pengiriman</span>

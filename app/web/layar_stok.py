@@ -263,6 +263,10 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         if kartu is None:
             raise HTTPException(404, "Stok PK tidak ditemukan atau sudah habis.")
         mutu_aktif = await fitur_mutu(db)
+        riwayat_qc = (await svc.riwayat_qc_pk(
+            db, kode=kartu.kode if gudang == "g1" else None,
+            intake_id=kartu.intake_id if gudang == "g2" else None,
+        )) if mutu_aktif else {"rows": [], "hasil_terbaru_saja": False}
 
     kembali = "/stok-pk-jasa" if jasa_saja else "/stok"
     params_detail = {
@@ -282,6 +286,7 @@ async def halaman_detail_stok_pk(request: Request, akun=Depends(butuh_akun)):
         request, "stok_pk_jasa.html" if jasa_saja else "stok.html",
         layar="stok_pk_jasa" if jasa_saja else "stok",
         detail=True, detail_gudang=gudang, detail_kartu=kartu,
+        riwayat_qc=riwayat_qc,
         SARING_GUDANG=(), gudang="", lot=[], tempat=[], produk=[], samping=[],
         total=0, JASA_SAJA=jasa_saja, mutu_aktif=mutu_aktif,
         boleh_ubah=akun.is_admin and view != POLESAN,

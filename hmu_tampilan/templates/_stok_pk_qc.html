@@ -1,0 +1,23 @@
+<section class="pk-detail__panel" aria-labelledby="riwayat-qc-pk">
+  <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PEMERIKSAAN</span><h2 id="riwayat-qc-pk">Riwayat QC <span>{{ riwayat_qc.rows|length }}</span></h2></div></div>
+  {% if riwayat_qc.hasil_terbaru_saja %}<p class="bantu">PK luar menyimpan hasil QC terbaru. Perubahan sebelumnya belum disimpan sebagai riwayat terpisah.</p>
+  {% else %}<p class="bantu">Setiap baris adalah satu pemeriksaan. Nilai pada kartu kualitas berasal dari rata-rata komponen yang terisi.</p>{% endif %}
+  {% if riwayat_qc.rows %}
+  <div class="tabel-standar tabel-standar__scroll">
+    <table class="tabel-standar" data-ponsel="qc" role="table" aria-label="Riwayat QC stok PK">
+      <thead><tr role="row"><th scope="col">Pemeriksaan</th><th scope="col">Kadar air</th><th scope="col">Butir patah</th><th scope="col">Susut</th><th scope="col">Pencatat &amp; keterangan</th></tr></thead>
+      <tbody>
+      {% for qc in riwayat_qc.rows %}
+        <tr role="row">
+          <td role="cell"><strong class="tabel-standar__kode">{{ 'QC ' ~ qc.nomor if qc.nomor else 'Hasil terbaru' }}</strong><time class="tabel-standar__sekunder">{{ qc.waktu|jam('%d/%m/%Y · %H:%M') if qc.waktu else 'Waktu tidak tercatat' }}</time></td>
+          <td role="cell" data-label="Kadar air">{{ qc.ka }}</td>
+          <td role="cell" data-label="Butir patah">{{ qc.broken }}</td>
+          <td role="cell" data-label="Susut">{{ qc.susut }}</td>
+          <td role="cell">{% if qc.pencatat %}<strong>{{ qc.pencatat }}</strong><span class="tabel-standar__sekunder">{{ qc.keterangan }}</span>{% else %}{{ qc.keterangan }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="bantu">Belum ada pemeriksaan QC untuk stok PK ini.</p>{% endif %}
+</section>

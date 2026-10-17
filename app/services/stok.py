@@ -668,6 +668,64 @@ _LABEL_KUALITATIF = {"bersih": "Bersih", "sedikit": "Sedikit",
                      "sedang": "Sedang", "banyak": "Banyak"}
 
 
+async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
+                        intake_id: int | None = None) -> dict:
+    """QC stok mengikuti lot asal, termasuk setelah dipindah ke Gudang 2.
+
+    Dipanggil sesudah akses ke stok diperiksa oleh layar. Tidak dibatasi 200
+    baris: seluruh pengukuran lot ikut membentuk rata-rata di kartu kualitas.
+    PK luar hanya menyimpan satu hasil yang diperbarui, bukan log putaran.
+    """
+    from app.models import InternalTransfer, MillingQcLog, User
+    from app.penggilingan.gudang2.models import PkGudang2Intake, PkPurchaseVerification
+
+    proses_id = None
+    batch_id = None
+    if intake_id is not None:
+        intake = await db.get(PkGudang2Intake, intake_id)
+        if intake and intake.internal_transfer_id:
+            transfer = await db.get(InternalTransfer, intake.internal_transfer_id)
+            proses_id = transfer.milling_process_id if transfer else None
+        elif intake:
+            batch_id = intake.pk_purchase_batch_id
+    elif kode:
+        proses_id = await db.scalar(select(MillingProcess.id).where(
+            MillingProcess.kode_proses == kode))
+
+    rows = []
+    if proses_id:
+        hasil = (await db.execute(
+            select(MillingQcLog, User.nama)
+            .outerjoin(User, User.id == MillingQcLog.input_by)
+            .where(MillingQcLog.milling_process_id == proses_id)
+            .order_by(MillingQcLog.waktu, MillingQcLog.id)
+        )).all()
+        for nomor, (qc, nama) in enumerate(hasil, 1):
+            rows.append(dict(nomor=nomor, waktu=qc.waktu, pencatat=nama,
+                             ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
+                             broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
+                             susut=_persen(qc.susut_persen) if qc.susut_persen is not None else "—",
+                             keterangan=qc.kondisi or "—"))
+    elif batch_id:
+        qc = await db.scalar(select(PkPurchaseVerification).where(
+            PkPurchaseVerification.pk_purchase_batch_id == batch_id))
+        # Baris verifikasi lama dapat hanya berisi harga; itu bukan hasil QC.
+        if qc and any(getattr(qc, key) is not None and getattr(qc, key) != ""
+                      for key in ("kadar_air", "broken_persen", "penyusutan_persen",
+                                  "butir_kuning", "gabah", "merang", "catatan_lab")):
+            ket = [f"{label}: {_LABEL_KUALITATIF.get(nilai, nilai)}"
+                   for label, nilai in (("Butir kuning", qc.butir_kuning),
+                                        ("Gabah", qc.gabah), ("Merang", qc.merang)) if nilai]
+            if qc.catatan_lab:
+                ket.append(qc.catatan_lab)
+            rows.append(dict(nomor=None, waktu=qc.updated_at, pencatat=None,
+                             ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
+                             broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
+                             susut=_persen(qc.penyusutan_persen) if qc.penyusutan_persen is not None else "—",
+                             keterangan=" · ".join(ket) or "—"))
+    return {"rows": list(reversed(rows)), "hasil_terbaru_saja": bool(batch_id)}
+
+
 @dataclass
 class LotPkG2:
     """Satu pemasukan PK yang masih menumpuk di Gudang 2, beserta mutunya.
