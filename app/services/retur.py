@@ -1,7 +1,8 @@
 """Rincian retur milik Produksi; berat jembatan tetap milik Timbangan.
 
 Rincian boleh disimpan setelah bongkar atau setelah tiket selesai ditimbang. Belum ada
-stok pada tahap ini. Retur tidak dipotong tara kemasan; bobotnya langsung dari selisih jembatan.
+stok pada tahap ini. Retur tidak dipotong tara kemasan. Bobot tiket berasal dari jembatan;
+berat rincian berasal dari ukuran kemasan × jumlah karung.
 """
 from decimal import Decimal, InvalidOperation
 
@@ -27,8 +28,8 @@ def angka(nilai, nama, maksimum, digit):
 async def siapkan_muatan(db, rows):
     hasil = []
     for sku_id, quality_id, count, weight, note, tara in rows:
-        if count < 1 or count > 100_000 or weight <= 0:
-            raise ValueError('Jumlah karung dan berat barang harus lebih dari nol dan dalam batas wajar.')
+        if count < 1 or count > 100_000:
+            raise ValueError('Jumlah karung harus antara 1 dan 100.000 per baris.')
         detail = (await db.execute(
             select(ProductSku, Brand.nama, PackagingMaterial.nama, PackageSize.ukuran_kg, PackagingMaterial.kode)
             .outerjoin(Brand, Brand.id == ProductSku.brand_id)
@@ -39,6 +40,9 @@ async def siapkan_muatan(db, rows):
         if not detail:
             raise ValueError('SKU tidak tersedia. Pilih ulang jenis dan kemasannya.')
         sku, brand, material, size, material_kode = detail
+        weight = Decimal(str(size)) * count
+        if weight <= 0:
+            raise ValueError('Ukuran kemasan harus lebih dari nol.')
         if sku.kategori not in JENIS_RETUR:
             raise ValueError('Jenis retur harus Beras Putih, Broken, Menir, atau Reject.')
         if material_kode == 'laminasi' and size > 25:
@@ -95,7 +99,7 @@ async def katalog(db):
     for jenis, material, ukuran in kombinasi_kemasan():
         if jenis in kemasan and material in materials and ukuran in sizes:
             kemasan[jenis].append({'nilai': f'{material}:{ukuran}',
-                'nama': f'{materials[material].nama} · {ukuran} kg'})
+                'nama': f'{materials[material].nama} · {ukuran} kg', 'ukuran_kg': ukuran})
     existing = (await db.execute(select(ProductSku.id, ProductSku.kategori,
         ProductSku.brand_id, PackagingMaterial.kode, PackageSize.ukuran_kg)
         .select_from(ProductSku)

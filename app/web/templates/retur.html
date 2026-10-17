@@ -20,7 +20,7 @@
       <select name="quality_id"><option value="">Pilih mutu</option>{% for q in mutu %}<option value="{{ q.id }}">{{ q.nama }}</option>{% endfor %}</select>
     </label>
     <label class="rt-field">Jumlah karung<input type="number" name="jumlah_karung" min="1" step="1" inputmode="numeric" placeholder="mis. 20" required></label>
-    <label class="rt-field">Berat barang retur (kg)<input type="number" name="berat_kg" min="0.01" step="0.01" inputmode="decimal" placeholder="mis. 980" required></label>
+    <label class="rt-field">Berat otomatis (kg)<input type="number" name="berat_kg" step="0.01" placeholder="Ukuran × jumlah karung" readonly aria-readonly="true"></label>
     <button type="button" class="rt-remove" aria-label="Hapus baris" title="Hapus baris">×</button>
     <input type="hidden" name="catatan_item" value="">
   </div>
@@ -28,7 +28,7 @@
 {% block isi %}
 {# Navigasi aplikasi mengganti isi .bingkai tanpa menyentuh <head>. Muat CSS
    dari isi halaman agar desain tetap aktif saat dibuka melalui menu. #}
-<style>@import url('/static/retur.css?v={{ VERSI }}-4');</style>
+<style>@import url('/static/retur.css?v={{ VERSI }}-5');</style>
 <div id="retur-ui">
   <script type="application/json" id="retur-katalog">{{ katalog|tojson }}</script>
   <section class="rt-stats" aria-label="Ringkasan retur">
@@ -38,7 +38,7 @@
   </section>
 
   <section class="rt-guide" aria-label="Panduan penerimaan retur">
-    <p class="rt-description">Catat barang yang kembali dari pelanggan. Setelah timbang pertama, catat barang dan kemasannya di sini. Berat retur adalah selisih timbang truk bermuatan dan kosong, tanpa potongan tara. Setelah timbang kedua, verifikasi bobot untuk memasukkan barang ke stok Gudang 2.</p>
+    <p class="rt-description">Catat barang yang kembali dari pelanggan. Setelah timbang pertama, catat barang dan kemasannya di sini. Berat rincian otomatis dihitung dari ukuran kemasan × jumlah karung, lalu dibandingkan dengan bobot tiket timbang tanpa potongan tara. Setelah timbang kedua, verifikasi bobot untuk memasukkan barang ke stok Gudang 2.</p>
     <div class="rt-steps" aria-label="Langkah penerimaan retur">
       <div class="rt-step active"><b>1</b><span>Pilih tiket</span></div><div class="rt-step active"><b>2</b><span>Rinci barang</span></div><div class="rt-step active"><b>3</b><span>Cek bobot</span></div><div class="rt-step"><b>4</b><span>Masuk stok</span></div>
     </div>
@@ -70,13 +70,13 @@
         <div class="rt-form">
           <div class="rt-picked" id="picked-summary"><div><small>TIKET</small><strong id="picked-code">Pilih tiket di samping</strong></div><div><small>PELANGGAN</small><strong id="picked-customer">—</strong></div><div><small>ARMADA</small><strong id="picked-plate">—</strong></div><div><small>TIMBANG BERMUATAN</small><strong id="picked-gross">—</strong></div><div><small>TIMBANG KOSONG</small><strong id="picked-empty">—</strong></div><div><small>BOBOT BARANG DI TIKET</small><strong id="picked-net">0 kg</strong></div></div>
 
-          <div class="rt-section-title"><h3>Daftar barang retur</h3><span class="rt-subtle">Berat aktual dalam kg</span></div>
+          <div class="rt-section-title"><h3>Daftar barang retur</h3><span class="rt-subtle">Ukuran kemasan × jumlah karung</span></div>
           <div class="rt-items" id="return-items">
             {{ baris_retur() }}
           </div>
           <button class="rt-btn add" type="button" id="add-item">＋ Tambah jenis barang</button>
 
-          <div class="rt-weight-check" id="weight-check"><div><small>Total rincian dibanding bobot barang pada tiket</small><strong><span id="sum-weight">0,00</span> kg dari <span id="ticket-weight">0,00</span> kg</strong></div><div class="rt-diff" id="weight-difference">Selisih 0,00 kg</div></div>
+          <div class="rt-weight-check" id="weight-check"><div><small>Selisih = bobot tiket − total rincian</small><strong><span id="sum-weight">0,00</span> kg dari <span id="ticket-weight">0,00</span> kg</strong></div><div class="rt-diff" id="weight-difference">Selisih 0,00 kg</div></div>
           <p class="rt-subtle" style="margin:8px 2px 0">Jika selisih melewati batas timbang, tuliskan alasannya sebelum menerima barang.</p>
 
           <div class="rt-form-grid">
@@ -98,5 +98,5 @@
 
 <template id="item-template">{{ baris_retur() }}
 </template>
-<script src="/static/retur.js?v={{ VERSI }}-4" defer></script>
+<script src="/static/retur.js?v={{ VERSI }}-5" defer></script>
 {% endblock %}

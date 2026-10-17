@@ -53,7 +53,8 @@ async def _siapkan(db):
         RiceQualityStandard.aktif.is_(True)).order_by(RiceQualityStandard.urutan))).all()
     recent = (await db.execute(text("""
         SELECT r.id, r.kode, r.kode_tiket, r.nama_pelanggan, r.nomor_polisi,
-               r.berat_tiket_kg, r.berat_rincian_kg, r.selisih_kg, r.waktu,
+               r.berat_tiket_kg, r.berat_rincian_kg,
+               (r.berat_tiket_kg - r.berat_rincian_kg) AS selisih_kg, r.waktu,
                COUNT(i.id) AS jumlah_jenis
         FROM customer_returns r LEFT JOIN customer_return_items i
           ON i.customer_return_id = r.id
@@ -93,12 +94,11 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             sku_ids = list(zip(jenis, kemasan, brands))
         quality_ids = form.getlist("quality_id")
         bag_counts = form.getlist("jumlah_karung")
-        weights = form.getlist("berat_kg")
         notes = form.getlist("catatan_item")
         aksi = form.get("aksi", "terima")
         if aksi not in ("rincian", "terima"):
             raise ValueError("Aksi retur tidak dikenal.")
-        if not (len(sku_ids) == len(quality_ids) == len(bag_counts) == len(weights) == len(notes)):
+        if not (len(sku_ids) == len(quality_ids) == len(bag_counts) == len(notes)):
             raise ValueError("Rincian barang tidak lengkap. Muat ulang halaman dan isi kembali.")
         rows = []
         for idx, sku_raw in enumerate(sku_ids):
@@ -106,15 +106,14 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
                 continue
             sku_id = sku_raw if baru else int(sku_raw)
             count = int(bag_counts[idx] or 0)
-            weight = layanan_retur.angka(weights[idx], 'Berat barang', 1_000_000, '.01')
+            weight = Decimal('0')  # Dihitung dari ukuran SKU di server setelah validasi pilihan.
             tara = Decimal('0')  # Retur tidak dipotong tara, termasuk kiriman halaman lama.
             quality_id = int(quality_ids[idx]) if quality_ids[idx] else None
-            if count < 1 or weight <= 0:
-                raise ValueError("Setiap baris harus memiliki jumlah karung dan berat lebih dari nol.")
+            if count < 1:
+                raise ValueError("Setiap baris harus memiliki jumlah karung lebih dari nol.")
             rows.append((sku_id, quality_id, count, weight, (notes[idx] or "").strip() or None, tara))
         if not rows:
             raise ValueError("Tambahkan minimal satu jenis barang retur.")
-        total = sum((row[3] for row in rows), Decimal("0"))
         reason = (form.get("alasan_selisih") or "").strip() or None
         note = (form.get("catatan") or "").strip() or None
         if note and len(note) > 500:
@@ -145,6 +144,11 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
                 rows = [(await layanan_retur.pilih_sku(db, *spec), quality, count, weight, note, tara)
                         for spec, quality, count, weight, note, tara in rows]
             muatan = await layanan_retur.siapkan_muatan(db, rows)
+            # Nilai kiriman peramban tidak menjadi otoritas berat nominal.
+            # Stok, snapshot rincian, dan pembanding memakai hasil yang sama.
+            rows = [(m['sku_id'], m['quality_id'], m['jumlah_karung'],
+                     Decimal(m['berat_kg']), m['catatan_item'] or None, Decimal('0')) for m in muatan]
+            total = sum((row[3] for row in rows), Decimal('0'))
             rincian = await db.scalar(select(ReturRincian).where(
                 ReturRincian.timbangan_transaksi_id == ticket_id))
             if aksi == 'rincian':
@@ -163,7 +167,7 @@ async def terima_retur(request: Request, akun=Depends(butuh_akun)):
             if ticket['status_tiket'] != 'SELESAI':
                 raise ValueError('Selesaikan timbang truk kosong di Pos Timbang terlebih dahulu.')
             ticket_weight = Decimal(str(ticket["berat_barang_kg"]))
-            difference = total - ticket_weight
+            difference = ticket_weight - total
             threshold = max(Decimal("2"), ticket_weight * Decimal("0.002"))
             if abs(difference) > threshold and not reason:
                 raise ValueError(f"Selisih {difference:+.2f} kg melewati batas {threshold:.2f} kg. Isi alasan selisih.")
