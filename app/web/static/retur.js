@@ -24,7 +24,6 @@
     row.querySelector('.sku-select').addEventListener('change', e => {
       const category = e.target.selectedOptions[0]?.dataset.category || '';
       row.dataset.category = category;
-      row.querySelector('[name="tara_per_karung_kg"]').value = e.target.selectedOptions[0]?.dataset.tara || '';
       const quality = row.querySelector('[name="quality_id"]');
       quality.required = category === 'beras_putih';
       if (!quality.required) quality.value = '';
@@ -57,7 +56,7 @@
       bindRow(row);
       row.querySelector('.sku-select').value = item.sku_id || '';
       row.querySelector('.sku-select').dispatchEvent(new Event('change'));
-      ['sku_id', 'quality_id', 'jumlah_karung', 'tara_per_karung_kg', 'berat_kg', 'catatan_item'].forEach(name => {
+      ['sku_id', 'quality_id', 'jumlah_karung', 'berat_kg', 'catatan_item'].forEach(name => {
         if (item[name] !== undefined && item[name] !== null) row.querySelector(`[name="${name}"]`).value = item[name];
       });
     });

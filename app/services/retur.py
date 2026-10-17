@@ -1,8 +1,7 @@
 """Rincian retur milik Produksi; berat jembatan tetap milik Timbangan.
 
-Rincian disimpan setelah bongkar, sebelum truk kosong ditimbang. Belum ada
-stok pada tahap ini. Kedua penulis mengunci tiket yang sama agar rincian
-kemasan tidak berubah di tengah penyelesaian timbang kedua.
+Rincian boleh disimpan setelah bongkar atau setelah tiket selesai ditimbang. Belum ada
+stok pada tahap ini. Retur tidak dipotong tara kemasan; bobotnya langsung dari selisih jembatan.
 """
 from decimal import Decimal, InvalidOperation
 
@@ -53,19 +52,12 @@ async def siapkan_muatan(db, rows):
         hasil.append(dict(sku_id=sku_id, quality_id=quality_id,
                           merek_produk_id=sku.brand_id, packaging_material_id=sku.packaging_material_id,
                           package_size_id=sku.package_size_id, jumlah_karung=count,
-                          berat_kg=str(weight), tara_per_karung_kg=str(tara),
+                          berat_kg=str(weight), tara_per_karung_kg='0',
                           catatan_item=note or '',
                           nama=f"{sku.kategori.replace('_', ' ').title()} · {brand or 'Tanpa merk'} · {material} · {size} kg"))
     if sum(m['jumlah_karung'] for m in hasil) > 100_000:
         raise ValueError('Total jumlah karung melampaui batas satu tiket timbang.')
     return hasil
-
-
-def identitas_muatan(muatan):
-    """Abaikan label master yang bisa berganti; bandingkan fakta kemasannya."""
-    return [(m['sku_id'], m.get('quality_id'), int(m['jumlah_karung']),
-             Decimal(m['berat_kg']), Decimal(m['tara_per_karung_kg']),
-             m.get('catatan_item') or '') for m in muatan]
 
 
 async def baca_muatan(db, tid):
@@ -80,5 +72,5 @@ async def baca_muatan(db, tid):
     rincian = await db.scalar(select(ReturRincian).where(
         ReturRincian.timbangan_transaksi_id == tid))
     if not rincian or not rincian.muatan:
-        raise ValueError('Rincian retur belum diisi di Produksi. Isi jumlah karung dan tara setelah bongkar terlebih dahulu.')
-    return {'kode_tiket': tiket['kode'], 'muatan': rincian.muatan}
+        raise ValueError('Rincian retur belum diisi di Produksi. Isi rincian barang yang diterima di Produksi.')
+    return {'kode_tiket': tiket['kode'], 'muatan': [dict(m, tara_per_karung_kg='0') for m in rincian.muatan]}

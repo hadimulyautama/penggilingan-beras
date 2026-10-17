@@ -47,7 +47,7 @@ async def konteks(pg, monkeypatch):
 
 def form(tid, sid, aksi='rincian', **ubah):
     return dict(timbangan_transaksi_id=str(tid), sku_id=str(sid), quality_id='',
-                jumlah_karung='100', berat_kg='2975', tara_per_karung_kg='0.25',
+                jumlah_karung='100', berat_kg='3000', tara_per_karung_kg='0.25',
                 catatan_item='', aksi=aksi, **ubah)
 
 
@@ -62,13 +62,13 @@ async def test_rincian_sebelum_timbang_kedua_dan_stok_tepat_sekali(pg, konteks):
         assert tickets[0]['rincian'][0]['jumlah_karung'] == 100
     r = await c.get(f'/internal/retur/tiket/{tid}/muatan', headers={'X-Internal-Token': 'token-uji'})
     assert r.status_code == 200
-    assert r.json()['muatan'][0]['tara_per_karung_kg'] == '0.25'
+    assert r.json()['muatan'][0]['tara_per_karung_kg'] == '0'
     # Belum ditimbang kosong: penerimaan stok ditolak.
     r = await c.post('/retur/terima', data=form(tid, sid, 'terima'))
     assert 'gagal=' in r.headers['location']
     async with pg() as db:
         await db.execute(text('''UPDATE timbangan_transaksi SET status_tiket='SELESAI',
-            timbang2_kg=6000, berat_barang_kg=2975, jumlah_karung=100,total_tara_kg=25 WHERE id=:id'''), {'id':tid})
+            timbang2_kg=6000, berat_barang_kg=3000, jumlah_karung=100,total_tara_kg=0 WHERE id=:id'''), {'id':tid})
         await db.commit()
     r = await c.post('/retur/terima', data=form(tid, sid, 'terima'))
     assert 'pesan=' in r.headers['location'], r.headers['location']
@@ -78,7 +78,7 @@ async def test_rincian_sebelum_timbang_kedua_dan_stok_tepat_sekali(pg, konteks):
         stocks = (await db.scalars(select(FinishedGoodsStock))).all()
         assert len(stocks) == 1
         assert stocks[0].jumlah_karung == 100
-        assert stocks[0].berat_total_kg == Decimal('2975')
+        assert stocks[0].berat_total_kg == Decimal('3000')
         assert stocks[0].kemasan_mengurangi_stok is False
 
 
@@ -89,9 +89,9 @@ async def test_rincian_terkunci_setelah_timbang_dan_api_bertoken(pg, konteks):
     assert r.status_code == 409
     await c.post('/retur/terima', data=form(tid, sid))
     async with pg() as db:
-        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI', jumlah_karung=100,total_tara_kg=25,berat_barang_kg=2975 WHERE id=:id"), {'id':tid})
+        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI', jumlah_karung=100,total_tara_kg=0,berat_barang_kg=3000 WHERE id=:id"), {'id':tid})
         await db.commit()
-    data = form(tid,sid,'terima'); data['tara_per_karung_kg']='0.1'
+    data = form(tid,sid,'terima'); data['berat_kg']='-1'
     r = await c.post('/retur/terima', data=data)
     assert 'gagal=' in r.headers['location']
     r = await c.post('/retur/terima', data=form(tid,sid))
@@ -101,13 +101,15 @@ async def test_rincian_terkunci_setelah_timbang_dan_api_bertoken(pg, konteks):
 
 
 @pytest.mark.parametrize('nilai', ['NaN', 'Infinity', '-1', '1001'])
-async def test_tara_tak_sah_ditolak(pg,konteks,nilai):
+async def test_tara_dari_halaman_lama_diabaikan(pg,konteks,nilai):
     c,tid,sid=konteks
     data=form(tid,sid);data['tara_per_karung_kg']=nilai
     r=await c.post('/retur/terima',data=data)
-    assert 'gagal=' in r.headers['location']
+    assert 'pesan=' in r.headers['location']
     async with pg() as db:
-        assert await db.scalar(select(func.count()).select_from(ReturRincian)) == 0
+        rincian=await db.scalar(select(ReturRincian))
+        assert rincian.muatan[0]['tara_per_karung_kg']=='0'
+
 
 
 async def test_layar_retur_memuat_tiket_terbuka_dan_rincian(pg,konteks):
@@ -115,8 +117,8 @@ async def test_layar_retur_memuat_tiket_terbuka_dan_rincian(pg,konteks):
     await c.post('/retur/terima',data=form(tid,sid))
     r=await c.get('/retur')
     assert r.status_code == 200
-    assert 'Simpan rincian untuk Pos Timbang' in r.text
-    assert 'name="tara_per_karung_kg"' in r.text
+    assert 'Simpan rincian sementara' in r.text
+    assert 'name="tara_per_karung_kg"' not in r.text
     assert 'data-state="TERBUKA"' in r.text
     assert 'data-items=' in r.text
 
@@ -133,7 +135,7 @@ async def test_rincian_beberapa_kemasan_dan_revisi_sebelum_timbang(pg,konteks):
     assert 'pesan=' in r.headers['location']
     r=await c.get(f'/internal/retur/tiket/{tid}/muatan',headers={'X-Internal-Token':'token-uji'})
     items=r.json()['muatan']
-    assert sum(m['jumlah_karung']*Decimal(m['tara_per_karung_kg']) for m in items) == 12
+    assert sum(m['jumlah_karung']*Decimal(m['tara_per_karung_kg']) for m in items) == 0
     data['jumlah_karung']=['41','20']
     await c.post('/retur/terima',data=data)
     async with pg() as db:
@@ -223,3 +225,18 @@ async def test_pengiriman_karung_lima_puluh_dan_tara_berbeda(pg,konteks,monkeypa
             await db.commit()
         r=await c.get(f'/internal/pengiriman/tiket/{tid}/muatan',headers={'X-Internal-Token':'token-uji'})
         assert r.status_code==409
+
+
+async def test_terima_retur_setelah_timbang_tanpa_rincian_awal_atau_tara(pg,konteks):
+    c,tid,sid=konteks
+    async with pg() as db:
+        await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI',timbang2_kg=6000,berat_barang_kg=3000,jumlah_karung=0,total_tara_kg=0 WHERE id=:id"),{'id':tid})
+        await db.commit()
+    data=form(tid,sid,'terima')
+    data.pop('tara_per_karung_kg')
+    r=await c.post('/retur/terima',data=data)
+    assert 'pesan=' in r.headers['location']
+    async with pg() as db:
+        stock=await db.scalar(select(FinishedGoodsStock))
+        assert stock.jumlah_karung==100
+        assert stock.berat_total_kg==Decimal('3000')
