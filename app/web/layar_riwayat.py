@@ -992,9 +992,14 @@ QC_PAGES = {
 
 
 @router.get("/riwayat-qc/{jenis}")
+@router.get("/riwayat-qc/{jenis}/{referensi}")
 async def halaman_riwayat_qc(request: Request, jenis: str,
-                             akun=Depends(butuh_akun)):
-    """Riwayat pengukuran QC; baris mempertahankan isi pencatatan aslinya."""
+                             akun=Depends(butuh_akun), referensi: str | None = None):
+    """Ringkasan QC dan detail satu batch/proses dengan gerbang yang sama.
+
+    Detail disaring di basis data sebelum pembatas daftar diterapkan. Lot
+    lama atau putaran di luar 200 pencatatan terbaru tetap dapat dibuka.
+    """
     if jenis not in QC_PAGES:
         raise HTTPException(404, "Kategori riwayat QC tidak ditemukan.")
     judul, gudang = QC_PAGES[jenis]
@@ -1028,9 +1033,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
                 .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
                 .where(PurchaseBatch.kondisi_gabah == kondisi,
-                       PurchaseBatch.dibatalkan_pada.is_(None))
+                       PurchaseBatch.dibatalkan_pada.is_(None),
+                       PurchaseBatch.kode_batch == referensi if referensi is not None else True)
                 .order_by(PurchaseBatchQcSample.created_at.desc(),
-                          PurchaseBatchQcSample.id.desc()).limit(200)
+                          PurchaseBatchQcSample.id.desc()).limit(None if referensi is not None else 200)
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
@@ -1053,9 +1059,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .join(PkPurchaseVerification,
                       PkPurchaseVerification.pk_purchase_batch_id == PkPurchaseBatch.id)
                 .outerjoin(Supplier, Supplier.id == PkPurchaseBatch.supplier_id)
-                .where(PkPurchaseBatch.dibatalkan_pada.is_(None))
+                .where(PkPurchaseBatch.dibatalkan_pada.is_(None),
+                       PkPurchaseBatch.kode_batch == referensi if referensi is not None else True)
                 .order_by(PkPurchaseVerification.updated_at.desc(),
-                          PkPurchaseVerification.id.desc()).limit(200)
+                          PkPurchaseVerification.id.desc()).limit(None if referensi is not None else 200)
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _ in hasil})
@@ -1078,7 +1085,8 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             hasil = (await db.execute(
                 select(MillingProcess, MillingQcLog)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
-                .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(200)
+                .where(MillingProcess.kode_proses == referensi if referensi is not None else True)
+                .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc()).limit(None if referensi is not None else 200)
             )).all()
             from app.services.jasa import nama_pemilik_banyak
             pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _ in hasil})
@@ -1142,6 +1150,13 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
         (putaran["waktu"] for putaran in kartu["rounds"] if putaran["waktu"]),
         default=None
     ) or 0, reverse=True)
+
+    if referensi is not None:
+        if not rows:
+            raise HTTPException(404, "Catatan QC untuk batch atau proses ini tidak ditemukan.")
+        return await render_laci(request, "riwayat_qc_detail.html", judul=judul,
+                                 k=rows[0], jenis=jenis,
+                                 kembali=f"/riwayat-qc/{jenis}")
 
     return await render_laci(request, "riwayat_qc.html", judul=judul,
                              rows=rows, catatan_kosong=catatan_kosong,

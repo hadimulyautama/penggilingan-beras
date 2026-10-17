@@ -5,7 +5,7 @@
 {% set jumlah_putaran = namespace(n=0) %}
 {% for row in rows %}{% set jumlah_putaran.n = jumlah_putaran.n + row.rounds|length %}{% endfor %}
 {{ rh.header("CATATAN KONTROL MUTU", judul,
-  "Telusuri hasil pemeriksaan berdasarkan lot atau proses. Waktu, asal bahan, nomor polisi, dan setiap putaran QC ditampilkan sesuai catatan aslinya.",
+  "Pilih batch atau proses untuk melihat asal bahan, nomor polisi, dan seluruh hasil pemeriksaan QC di halaman detail.",
   [("▤", rows|length, "Lot atau proses"), ("✓", jumlah_putaran.n, "Pencatatan QC"), ("◷", "Terbaru", "Urut berdasarkan waktu")]) }}
 <section>
 
@@ -20,42 +20,16 @@
           <span>Batch / proses · waktu</span><span>Asal bahan</span><span>Nomor polisi</span><span>Hasil QC terakhir</span><span>Putaran QC</span><span aria-hidden="true"></span>
         </div>
       {% for row in rows %}
-        <details class="tabel-standar__item">
-          <summary class="tabel-standar__baris">
+        <div class="tabel-standar__item">
+          <a class="tabel-standar__baris" href="/riwayat-qc/{{ jenis }}/{{ row.ref|urlencode }}" aria-label="Detail QC {{ row.ref }}">
             <span data-sel="utama"><strong class="tabel-standar__kode">{{ row.ref }}</strong>{% if row.rounds and row.rounds[-1].waktu %}<small class="tabel-standar__sekunder">{{ row.rounds[-1].waktu|jam("%d/%m/%Y · %H:%M") }}</small>{% endif %}</span>
             <span data-sel="tambahan">{{ row.asal or '—' }}</span>
             <span data-sel="tambahan">{{ row.plat or '—' }}</span>
             <span data-sel="hasil">{% if row.rounds %}{% for label, value in row.rounds[-1].detail %}{% if loop.index <= 2 %}<span class="tabel-standar__hasil"><b>{{ label }}</b> {{ value }}</span>{% endif %}{% endfor %}{% else %}—{% endif %}</span>
             <span data-sel="status"><span class="tabel-standar__status">{{ row.rounds|length }} putaran</span></span>
-            <span class="tabel-standar__panah" aria-hidden="true">⌄</span>
-          </summary>
-          <div class="tabel-standar__rincian">
-            {% if row.asal or row.plat %}
-              <div class="qc-history-card__origin">
-                {% if row.asal %}<span><small>Asal</small>{{ row.asal }}</span>{% endif %}
-                {% if row.plat %}<span><small>No. polisi</small>{{ row.plat }}</span>{% endif %}
-              </div>
-            {% endif %}
-            <div class="qc-history-card__rounds">
-              {% for putaran in row.rounds %}
-                <section class="qc-history-round">
-                  <div class="qc-history-round__head">
-                    <strong>{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
-                    {% if putaran.waktu %}<time>{{ putaran.waktu|jam("%d/%m/%Y · %H:%M") }}</time>{% endif %}
-                  </div>
-                  <table class="qc-history-values tabel-standar">
-                    <thead><tr><th scope="col">Komponen QC</th><th scope="col">Hasil pemeriksaan</th></tr></thead>
-                    <tbody>
-                      {% for label, value in putaran.detail %}
-                        <tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </section>
-              {% endfor %}
-            </div>
-          </div>
-        </details>
+            <span class="tabel-standar__panah" aria-hidden="true">›</span>
+          </a>
+        </div>
       {% endfor %}
       </div>
     </div>

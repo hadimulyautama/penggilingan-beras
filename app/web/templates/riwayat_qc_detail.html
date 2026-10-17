@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block judul %}Detail QC {{ k.ref }}{% endblock %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
+<div class="riwayat-detail">
+  <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke {{ judul }}</a>
+  <header class="riwayat-detail__card">
+    <h1>{{ k.ref }}</h1>
+    <p>{{ judul }}</p>
+    <div class="qc-history-card__origin">
+      <span><small>Asal bahan / pemilik</small>{{ k.asal or 'Tidak tercatat' }}</span>
+      <span><small>Nomor polisi</small>{{ k.plat or 'Tidak tercatat' }}</span>
+    </div>
+    <dl class="riwayat-detail__facts">
+      <div><dt>Jumlah pencatatan</dt><dd>{{ k.rounds|length }}{% if jenis != 'pk-luar' %} putaran{% endif %}</dd></div>
+      <div><dt>Pemeriksaan terakhir</dt><dd>{{ k.rounds[-1].waktu|jam('%d/%m/%Y · %H:%M') if k.rounds[-1].waktu else 'Tidak tercatat' }}</dd></div>
+    </dl>
+    {% if jenis == 'pk-luar' %}<p class="bantu">QC PK luar menyimpan hasil terbaru. Perubahan sebelumnya tidak disimpan sebagai putaran pemeriksaan terpisah.</p>{% endif %}
+  </header>
+  <section class="riwayat-detail__card" aria-labelledby="semua-qc">
+    <h2 id="semua-qc">Seluruh hasil pemeriksaan</h2>
+    <div class="qc-history-card__rounds tabel-standar">
+    {% for putaran in k.rounds %}
+      <section class="qc-history-round">
+        <div class="qc-history-round__head">
+          <strong>{{ 'QC ' ~ putaran.nomor if putaran.nomor else 'Hasil QC terbaru' }}</strong>
+          {% if putaran.waktu %}<time>{{ putaran.waktu|jam('%d/%m/%Y · %H:%M') }}</time>{% endif %}
+        </div>
+        <div class="tabel-standar__rincian">
+          <table class="qc-history-values tabel-standar">
+            <thead><tr><th scope="col">Komponen QC</th><th scope="col">Hasil pemeriksaan</th></tr></thead>
+            <tbody>
+            {% for label, value in putaran.detail %}
+              <tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
