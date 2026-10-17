@@ -1,0 +1,59 @@
+/* Rincian proses memakai token dan tabel standar yang sama dengan riwayat. */
+.proses-detail__label,.proses-detail__judul{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+body .isi .proses-detail .riwayat-detail__hero h1{color:#fff}
+body .proses-detail .proses-detail__aksi .pilihan__satu--utama .pilihan__ket{color:#e2e8ed}
+.proses-detail__sementara{display:inline-block;margin-top:4px;color:#e2e8ed;font-size:.8rem}
+.proses-detail__statistik{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.proses-detail__statistik .riwayat-detail__card{padding:18px}
+.proses-detail__statistik span{display:block;color:var(--kulit-redup);font-size:.78rem}
+.proses-detail__statistik strong{display:block;margin-top:8px;color:var(--tinta);font-size:1.3rem;overflow-wrap:anywhere}
+.proses-detail__nav{display:flex;flex-wrap:wrap;gap:8px}
+.proses-detail__nav a{padding:9px 13px;border:1px solid var(--kulit-batas);border-radius:999px;background:var(--kulit-kartu);color:var(--tinta);font-size:.82rem;font-weight:650;text-decoration:none}
+.proses-detail__nav a:hover{background:var(--panel-2)}
+.proses-detail__layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;align-items:start;gap:16px}
+.proses-detail__isi,.proses-detail__catatan{display:grid;min-width:0;gap:16px}
+.proses-detail__samping{position:sticky;top:100px;min-width:0}
+.proses-detail__aksi{display:grid;gap:8px}
+.proses-detail__aksi .pilihan__satu{min-width:0;overflow-wrap:anywhere}
+.proses-detail__judul h2{margin:0}
+.proses-detail__judul{margin-bottom:14px}
+.proses-detail__judul>span{font-size:.75rem;color:var(--kulit-redup)}
+.proses-detail__tabel{min-width:0;overflow:hidden}
+.proses-detail__tabel table{width:100%;table-layout:fixed}
+.proses-detail__tabel th,.proses-detail__tabel td{overflow-wrap:anywhere;white-space:normal;font-variant-numeric:tabular-nums}
+.proses-detail__tabel tbody th{text-align:left;font-weight:650}
+.proses-detail__halaman{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:.78rem;color:var(--kulit-redup)}
+.proses-detail__kemajuan{display:grid;gap:8px;margin-top:14px;font-size:.82rem;color:var(--kulit-redup)}
+.proses-detail__kemajuan progress{width:100%;height:12px;accent-color:var(--aman)}
+.proses-detail [id]{scroll-margin-top:110px}
+.proses-aktif-list{display:grid;gap:0;overflow:hidden}
+.proses-aktif-list__head{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.4fr) minmax(0,1fr) 20px;gap:16px;padding:12px 16px;background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
+.proses-aktif-list__row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.4fr) minmax(0,1fr) 20px;align-items:center;gap:16px;padding:16px;color:var(--tinta);text-decoration:none;border-bottom:1px solid var(--kulit-pemisah)}
+.proses-aktif-list__row:last-child{border-bottom:0}
+.proses-aktif-list__row:hover{background:var(--panel-2);text-decoration:none}
+.proses-aktif-list__row:focus-visible,.proses-detail a:focus-visible{outline:3px solid var(--aman);outline-offset:-3px}
+.proses-aktif-list__row>*{min-width:0;overflow-wrap:anywhere}
+.proses-aktif-list__row strong{display:block;font-weight:750}
+.proses-aktif-list__row small{display:block;margin-top:5px;color:var(--kulit-redup);font-size:.78rem}
+.proses-aktif-list__row .riwayat-status{white-space:normal}
+@media(max-width:1000px){.proses-detail__layout{grid-template-columns:minmax(0,1fr)}.proses-detail__samping{position:static;grid-row:1}.proses-detail__aksi{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+ .proses-detail__statistik{gap:7px;grid-template-columns:minmax(0,1fr)}
+ .proses-detail__statistik .riwayat-detail__card{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px}
+ .proses-detail__statistik span{max-width:52%}
+ .proses-detail__statistik strong{margin:0;text-align:right;font-size:1.02rem}
+ .proses-detail__layout,.proses-detail__isi,.proses-detail__catatan{gap:11px}
+ .proses-detail__aksi{grid-template-columns:minmax(0,1fr)}
+ .proses-detail__nav{gap:6px}.proses-detail__nav a{font-size:.76rem;padding:8px 10px}
+ .proses-detail__tabel table,.proses-detail__tabel tbody{display:block}
+ .proses-detail__tabel thead{display:none}
+ .proses-detail__tabel tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 12px;padding:12px;border-bottom:1px solid var(--kulit-pemisah)}
+ .proses-detail__tabel tbody tr:last-child{border-bottom:0}
+ .proses-detail__tabel tbody th,.proses-detail__tabel tbody td{display:block!important;width:auto!important;min-width:0;border:0!important;padding:0!important;background:transparent!important;font-size:.83rem}
+ .proses-detail__tabel tbody th{grid-column:1/-1}
+ .proses-detail__tabel tbody td:before{content:attr(data-label);display:block;font-size:.68rem;color:var(--kulit-redup);font-weight:600;margin-bottom:3px}
+ .proses-aktif-list__row{grid-template-columns:minmax(0,1fr) 18px;gap:8px;padding:13px}
+ .proses-aktif-list__head{display:none}
+ .proses-aktif-list__row>span:not(:last-child){grid-column:1}
+ .proses-aktif-list__row>span:last-child{grid-column:2;grid-row:1/4}
+}

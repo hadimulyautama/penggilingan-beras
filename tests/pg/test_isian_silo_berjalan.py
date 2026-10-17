@@ -35,7 +35,7 @@ async def silo(pg, pemakai):
     from app.models import Silo, Warehouse
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         s = Silo(nama_silo="Silo A", warehouse_id=g2.id)
@@ -193,7 +193,7 @@ async def test_lot_giling_sama_masuk_dua_kali_tetap_dua_baris(pg, silo, pemakai)
 
     async with pg() as db:
         # Lot giling lahir di Gudang 1, jadi ia perlu silo G1 sebagai asalnya.
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
         db.add(g1)
         await db.flush()
         s1 = Silo(nama_silo="Silo G1", warehouse_id=g1.id)
@@ -321,7 +321,7 @@ async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, p
     from app.services.berjalan import BATAS_ASAL, untuk_gudang2
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         silo_a = Silo(nama_silo="Silo A", warehouse_id=g2.id)
@@ -367,7 +367,7 @@ async def test_kartu_sosoh_gabungan_menyebut_baris_yang_terpotong(pg, pemakai, p
     # Fakta "Ditambah" tetap benar — dijumlah dari SELURUH baris, bukan dari
     # daftar yang dipotong untuk tampilan.
     fakta = dict(baris.fakta)
-    assert fakta["Ditambah"] == "16.000 kg"
+    assert fakta["Ditambah saat proses"] == "16.000 kg"
 
     # Tiap silo adalah seksinya sendiri (`anak_grup`) — daftarnya dibatasi
     # PER SILO oleh `_isian_silo` (`BATAS_ASAL`), bukan lagi oleh potongan

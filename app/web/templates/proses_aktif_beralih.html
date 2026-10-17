@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block judul %}Proses sudah diperbarui{% endblock %}
+{% block isi %}
+<section class="kosong"><div><h1>Proses sudah diperbarui</h1><p class="bantu">Membuka tahap atau riwayat terbaru dari proses ini.</p><a class="btn btn--utama" href="{{ tujuan }}">Buka halaman terbaru</a></div></section>
+{% endblock %}
+{% block kaki %}<script>window.location.replace({{ tujuan|tojson }});</script>{% endblock %}

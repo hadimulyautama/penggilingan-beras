@@ -452,6 +452,33 @@ Sedang berjalan. Lencana dan filter mengikuti `grup_baris()` yang sama.
 Uji: `tests/test_grup_antrean.py`, `tests/pg/test_grup_packing_jasa.py`,
 `tests/pg/test_gudang2_operator_pg.py`, `tests/pg/test_barang_keluar.py`.
 
+## Detail proses aktif (18 Oktober 2026)
+
+Setiap proses di `/berjalan` menuju `/proses-aktif/{jenis}/{kode}`:
+`pengeringan`, `pendinginan`, `giling`, atau `sosoh`. Keempatnya memakai
+`proses_aktif_detail.html`, `static/proses_aktif.css`, dan penyusun rincian
+`services/proses_aktif.py`. Tabel memakai standar riwayat, dengan daftar
+ringkas mengikuti lebar layar ponsel. Tautan lama `/proses-sosoh/{kode}`
+tetap diterima melalui penyusun yang sama.
+
+Tindakan berasal dari kartu proses yang sudah ada, termasuk gerbang QC.
+Operator hanya dapat membuka gudang kerjanya; admin ke atas kedua gudang.
+Proses dijeda tetap aktif dan menampilkan sebab serta durasinya. Riwayat
+hasil, pengukuran, QC, dan jeda dipaginasi 20 catatan per bagian; total hasil
+dan rata-rata enam komponen QC tetap membaca seluruh catatan, bukan halaman
+yang sedang dibuka. Giling memakai hasil kumulatif terbaru, sosoh menjumlah
+setiap entri. Tidak ada perhitungan susut pengeringan tanpa berat kering.
+
+Detail sosoh membaca seluruh asal PK (`batas_baris=None`), sementara kartu
+ringkas tetap dibatasi `BATAS_ASAL`. Untuk silo yang sudah dilepas, asalnya
+dibatasi waktu pelepasan agar pengisian baru tidak masuk rincian proses lama.
+Proses yang selesai menuju riwayat; pengeringan yang menjadi pendinginan
+menuju fase baru. Penyegaran `X-Pindah` memakai halaman peralihan karena
+`PINDAH` mengabaikan respons fetch yang dialihkan; kunjungan biasa tetap 303.
+
+Uji: `tests/pg/test_proses_aktif_detail.py`, `test_saring_gudang_berjalan.py`,
+dan `test_isian_silo_berjalan.py`. Tidak ada perubahan skema atau data lama.
+
 ## Sub-menu "Menunggu keputusan" — PER KATEGORI (sejak 2 Okt 2026)
 
 Permintaan pemilik: *"lakukan yang sama ke menunggu keputusan"* — diperjelas

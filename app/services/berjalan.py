@@ -829,6 +829,7 @@ class IsianSilo:
 
 async def _isian_silo(
     db: AsyncSession, silo_id: int, *, sampai: datetime | None = None,
+    batas_baris: int | None = BATAS_ASAL,
 ) -> IsianSilo:
     """Asal-usul PK dalam isian silo Gudang 2 pada waktu yang diminta.
 
@@ -974,7 +975,8 @@ async def _isian_silo(
         # PKB-YYYYMMDD-NN) sudah memuat tanggalnya sendiri; menyebutnya lagi
         # di baris ini cuma mengulang (keputusan pemilik 11 Oktober 2026).
         keluar.append((judul, _kg(kg), ""))
-    return IsianSilo(baris=keluar[:BATAS_ASAL], lebih=max(0, len(keluar) - BATAS_ASAL),
+    return IsianSilo(baris=keluar[:batas_baris],
+                     lebih=max(0, len(keluar) - batas_baris) if batas_baris is not None else 0,
                      masuk_kg=masuk_kg, disosoh_kg=disosoh_kg)
 
 
@@ -2522,7 +2524,9 @@ async def untuk_gudang2(db: AsyncSession) -> Berjalan:
     return _cap_gudang(b, "g2")
 
 
-async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
+async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
+                              kode_proses: str | None = None,
+                              lengkap: bool = False) -> list[Baris]:
     """Kartu penyosohan yang sedang berputar — berikut keadaan BERHENTI-nya.
 
     Sejak 12 September 2026 penyosohan pun bisa dijeda (keputusan pemilik).
@@ -2538,10 +2542,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                                                  PolishingSiloUsage)
 
     keluar: list[Baris] = []
-    for pr in (await db.execute(
-        select(PolishingProcess).where(PolishingProcess.status == "proses")
-        .order_by(PolishingProcess.id.desc())
-    )).scalars().all():
+    q = select(PolishingProcess).where(PolishingProcess.status == "proses")
+    if kode_proses is not None:
+        q = q.where(PolishingProcess.kode_proses == kode_proses)
+    for pr in (await db.execute(q.order_by(PolishingProcess.id.desc()))).scalars().all():
         # Dari silo mana ia makan — dan lewat silo itu, dari lot giling mana.
         # Inilah satu-satunya tempat beras putih masih bisa disambungkan ke
         # gabahnya; sesudah proses ditutup, yang tersisa cuma angka hasil.
@@ -2609,7 +2613,9 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                 peran_lot = "lot-dibebaskan" if dibebaskan else "lot"
                 if komposisi.get("pk", 0) > 0.001:
                     isian_u = await _isian_silo(
-                        db, u.silo_id, sampai=now_local()
+                        db, u.silo_id,
+                        sampai=u.updated_at if dibebaskan else now_local(),
+                        batas_baris=None if lengkap else BATAS_ASAL,
                     )
                     asal_lebih += isian_u.lebih
                     rinci_bahan.extend(
@@ -2763,7 +2769,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo) -> list[Baris]:
                  "Tutup proses, per silo", pr.kode_proses),
             ] if macet else [
                 ("hasil_penyosohan", "Perbarui hasil penyosohan",
-                 "Beras putih, menir, bekatul — kumulatif", pr.kode_proses),
+                 "Catat berat hasil pada entri ini", pr.kode_proses),
                 # Mix bahan — laporan lapangan 7 Oktober 2026: silo lain
                 # dipakai di tengah proses, bukan cuma saat mulai.
                 ("tambah_silo_penyosohan", "Tambah silo (mix bahan)",

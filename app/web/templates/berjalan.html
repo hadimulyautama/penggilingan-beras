@@ -45,51 +45,23 @@
   </div>
 {% endif %}
 
-{# Proses sosoh punya halaman detail sendiri. Ringkasan tetap satu baris yang
-   membuka rincian penuh; <details> di kartu proses membuat aksi dan catatan
-   bercampur di daftar, padahal operator perlu satu tempat untuk memeriksa
-   bahan, hasil sementara, lalu memilih tindakan. #}
-{% set daftar_proses = namespace(sosoh=[], lainnya=[]) %}
-{% for b in berjalan %}
-  {% if b.fase == "sosoh" %}
-    {% set _ = daftar_proses.sosoh.append(b) %}
-  {% else %}
-    {% set _ = daftar_proses.lainnya.append(b) %}
-  {% endif %}
-{% endfor %}
-{{ benda.blok("Sedang berjalan", daftar_proses.lainnya, alamat="/berjalan") }}
-{% if daftar_proses.sosoh %}
-  <div data-blok>
-    <span class="lbl">Penyosohan aktif · <span data-jumlah>{{ daftar_proses.sosoh|length }}</span></span>
-    <div class="grup daftar-standar" style="gap:9px">
-      {% for b in daftar_proses.sosoh %}
-        <a class="benda benda--{{ b.fase }}" href="/proses-sosoh/{{ b.kode }}"
-           data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
-          <div class="benda__judul">
-            <span>{{ b.judul or "Penyosohan" }}</span>
-            <span class="benda__nilai">{{ b.utama[0] }}<small>kg</small></span>
-            <span class="benda__sub">{{ b.kode }} · total bahan baku di silo aktif</span>
-            {% if b.neraca and b.neraca.bisa_dihitung and not b.neraca.timpang %}
-              {% set p_samping = b.neraca.samping|sum(attribute="persen") %}
-              <div class="neraca" style="grid-column:1/-1" role="img"
-                   aria-label="sementara — beras {{ '%.1f'|format(b.neraca.beras.persen)|replace('.', ',') }}%, hasil samping {{ '%.1f'|format(p_samping)|replace('.', ',') }}%, belum keluar atau susut {{ '%.1f'|format(b.neraca.susut.persen)|replace('.', ',') }}%">
-                <span class="neraca__beras" style="width:{{ b.neraca.beras.persen }}%"></span>
-                <span class="neraca__samping" style="width:{{ p_samping }}%"></span>
-                <span class="neraca__susut" style="width:{{ [b.neraca.susut.persen, 0]|max }}%"></span>
-              </div>
-              <span class="bantu" style="grid-column:1/-1;margin:-6px 0 4px">
-                sementara · beras {{ '%.1f'|format(b.neraca.beras.persen)|replace('.', ',') }}% ·
-                hasil samping {{ '%.1f'|format(p_samping)|replace('.', ',') }}% ·
-                belum keluar/susut {{ '%.1f'|format(b.neraca.susut.persen)|replace('.', ',') }}%
-              </span>
-            {% endif %}
-          </div>
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
-               stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
-        </a>
-      {% endfor %}
-    </div>
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
+{% if berjalan %}
+<section data-blok aria-label="Proses aktif">
+  <span class="lbl">Proses aktif · <span data-jumlah>{{ berjalan|length }}</span></span>
+  <div class="proses-aktif-list tabel-standar daftar-standar">
+    <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
+  {% for b in berjalan %}
+    <a class="proses-aktif-list__row" href="{{ alamat_detail_proses(b) or '/berjalan' }}"
+       data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
+      <span><strong>{{ b.kode }}</strong><small>{{ b.judul }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
+      <span><span class="riwayat-status {{ 'riwayat-status--wait' if b.nota_jenis == 'hati' else 'riwayat-status--done' }}">{{ b.nota if b.nota_jenis == 'hati' else b.keadaan }}</span><small>Mulai {{ b.sejak|jam('%d/%m · %H:%M') or 'belum tercatat' }}</small></span>
+      <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small></span>
+      <span aria-hidden="true">›</span>
+    </a>
+  {% endfor %}
   </div>
+</section>
 {% endif %}
 {{ benda.blok("Transit", transit, alamat="/berjalan") }}
 

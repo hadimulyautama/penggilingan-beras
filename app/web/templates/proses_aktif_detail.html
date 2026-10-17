@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_penilaian_pk.html" import penilaian_pk with context %}
+{% import "_stok.html" as st with context %}
+{% block judul %}Detail {{ d.judul }}{% endblock %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
+<main class="riwayat-detail proses-detail">
+  <a class="riwayat-detail__back" href="/berjalan">← Kembali ke Sedang berjalan</a>
+  <header class="riwayat-detail__hero">
+    <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ d.judul|upper }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
+    <h1>{{ d.kode }}</h1>
+    <p>{{ d.pemilik }} · {{ 'Gudang 2' if d.jenis == 'sosoh' else 'Gudang 1' }}</p>
+    {% if proses.nota %}<p>{{ proses.nota }}</p>{% endif %}
+    <span class="proses-detail__sementara">Data berjalan · hasil dan durasi belum final</span>
+  </header>
+
+  <section class="proses-detail__statistik" aria-label="Ringkasan proses">
+    {% for label, nilai in d.statistik %}<article class="riwayat-detail__card"><span>{{ label }}</span><strong>{{ nilai }}</strong></article>{% endfor %}
+  </section>
+  <nav class="proses-detail__nav" aria-label="Bagian detail proses">
+    <a href="#ringkasan-proses">Ringkasan</a>
+    <a href="#catatan-proses">Bahan &amp; catatan</a>
+    {% if d.penilaian %}<a href="#kualitas-proses">Nilai kualitas QC</a>{% endif %}
+    {% if proses.pilihan %}<a href="#tindakan-proses">Tindakan</a>{% endif %}
+  </nav>
+
+  <div class="proses-detail__layout">
+    <div class="proses-detail__isi">
+      <section class="riwayat-detail__card" id="ringkasan-proses">
+        <h2>Ringkasan {{ d.judul|lower }}</h2>
+        <dl class="riwayat-detail__facts">
+          <div><dt>Pemilik bahan</dt><dd>{{ d.pemilik }}</dd></div>
+          {% for label, nilai in d.fakta %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}
+        </dl>
+        {% if proses.maju is not none %}<div class="proses-detail__kemajuan"><label for="kemajuan-pengeringan">Kemajuan menuju target kadar air · {{ '%.0f'|format(proses.maju * 100) }}%</label><progress id="kemajuan-pengeringan" max="1" value="{{ proses.maju }}">{{ '%.0f'|format(proses.maju * 100) }}%</progress></div>{% endif %}
+        {% if proses.catatan %}<p class="riwayat-detail__warning">{{ proses.catatan }}</p>{% endif %}
+      </section>
+
+      {% if d.jenis == 'sosoh' and proses.neraca %}
+      <section class="riwayat-detail__card">
+        <h2>Neraca sosoh sementara</h2>
+        <p class="bantu">Bagian yang belum keluar mesin belum berarti susut final.</p>
+        {% if proses.neraca.timpang %}<p class="riwayat-detail__warning">Jumlah hasil melebihi bahan yang tercatat. Periksa catatan sebelum menutup proses.</p>{% endif %}
+        <div class="tabel-standar proses-detail__tabel"><table class="tabel-standar" data-ponsel="rincian" aria-label="Neraca sosoh sementara">
+          <thead><tr><th scope="col">Bagian</th><th scope="col">Berat</th><th scope="col">Dari bahan</th></tr></thead>
+          <tbody>
+            {% for bagian in [proses.neraca.beras] + (proses.neraca.samping|list) + [proses.neraca.susut] %}<tr><th scope="row">{{ bagian.nama }}</th><td data-label="Berat">{{ st.kg(bagian.kg) }} kg</td><td data-label="Dari bahan">{{ '%.1f'|format(bagian.persen)|replace('.', ',') ~ '%' if bagian.persen is not none else 'Belum dapat dihitung' }}</td></tr>{% endfor %}
+          </tbody>
+        </table></div>
+      </section>
+      {% endif %}
+
+      {% if d.penilaian %}
+      <section class="riwayat-detail__card" id="kualitas-proses">
+        <h2>Nilai kualitas QC PK</h2>
+        <p class="bantu">Dihitung dari seluruh {{ d.penilaian.putaran }} putaran. Nilai akan mengikuti pencatatan QC berikutnya.</p>
+        {{ penilaian_pk(d.penilaian) }}
+      </section>
+      {% endif %}
+
+      <div class="proses-detail__catatan" id="catatan-proses">
+      {% for bagian in d.bagian %}
+        <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ loop.index }}">
+          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{{ bagian.jumlah }} catatan</span></div>
+          {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
+          {% if bagian.baris %}
+          <div class="tabel-standar proses-detail__tabel"><table class="tabel-standar" data-ponsel="rincian" aria-label="{{ bagian.judul }}">
+            <thead><tr>{% for label in bagian.kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for baris in bagian.baris %}<tr>{% for nilai in baris %}{% if loop.first %}<th scope="row">{{ nilai }}</th>{% else %}<td data-label="{{ bagian.kolom[loop.index0] }}">{{ nilai }}</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+          {% else %}<p class="riwayat-detail__empty">Belum ada {{ bagian.judul|lower }} yang tercatat.</p>{% endif %}
+          {% if bagian.halaman_total > 1 %}
+          <nav class="proses-detail__halaman" aria-label="Halaman {{ bagian.judul }}">
+            {% if bagian.halaman > 1 %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman - 1) }}#{{ bagian.parameter }}">← Lebih baru</a>{% endif %}
+            <span>Halaman {{ bagian.halaman }} / {{ bagian.halaman_total }}</span>
+            {% if bagian.halaman < bagian.halaman_total %}<a class="btn btn--kecil" href="{{ halaman_proses(bagian.parameter, bagian.halaman + 1) }}#{{ bagian.parameter }}">Lebih lama →</a>{% endif %}
+          </nav>
+          {% endif %}
+        </section>
+      {% endfor %}
+      </div>
+      {% if d.qc_kosong %}<section class="riwayat-detail__card"><h2>QC hasil penyosohan</h2><p class="bantu">{{ d.qc_kosong }}</p></section>{% endif %}
+    </div>
+
+    <aside class="proses-detail__samping" id="tindakan-proses" aria-label="Tindakan proses">
+      <section class="riwayat-detail__card">
+        <h2>Tindakan proses</h2>
+        <p class="bantu">{{ proses.keadaan|capitalize }}.</p>
+        <div class="proses-detail__aksi pilihan">
+          {% for p in proses.pilihan %}
+            {% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
+            <a class="pilihan__satu{{ ' pilihan__satu--utama' if loop.first }}" href="{{ alamat }}?buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}">
+              <span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span>
+            </a>
+          {% else %}<p class="bantu">Belum ada tindakan yang tersedia pada keadaan ini.</p>{% endfor %}
+        </div>
+      </section>
+      <p class="bantu">Sesudah proses ditutup, halaman ini akan membuka detail riwayat prosesnya.</p>
+    </aside>
+  </div>
+  <dialog class="lembar" id="lembar"></dialog>
+  <div class="kabar" id="kabar" role="status"></div>
+</main>
+{% endblock %}
+{% block kaki %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}
