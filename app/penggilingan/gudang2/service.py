@@ -2643,7 +2643,8 @@ async def masukkan_beras_ke_silo(
             select(PackageSize.ukuran_kg)
             .where(PackageSize.id == sku_row.package_size_id)
         )).scalar_one()
-        cuplikan["stok"][-1]["berat_total_kg"] = float(size) * ambil
+        cuplikan["stok"][-1]["berat_total_kg"] = min(
+            float(row.berat_total_kg), float(size) * ambil)
         row.jumlah_karung -= ambil
         row.berat_total_kg = max(
             0.0, float(row.berat_total_kg) - float(size) * ambil)

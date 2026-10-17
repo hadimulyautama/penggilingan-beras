@@ -157,9 +157,8 @@ _TABLE_LABEL = {
     # `broken_ke_silo`. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
     "gabah_kering_lots": "gabah kering dikemas",
     "gabah_kering_bongkar": "gabah kering dibongkar ke silo",
-    # Beras (grade/beras_putih) masuk Silo Beras/PK (keputusan pemilik
-    # 8 Oktober 2026) — sama alasannya dengan `broken_ke_silo`: belum lewat
-    # jalur peristiwa. Labelnya tetap ada karena jejaknya MUNCUL di List audit.
+    # Beras masuk silo bisa dibatalkan sejak 17 Oktober 2026. Input baru
+    # menyimpan sumber FIFO dan stok yang dikurangi untuk jalan kembalinya.
     "beras_ke_silo": "beras dipindah ke silo",
     "hasil_samping_ke_silo": "hasil samping dipindah ke silo",
 }
@@ -1153,9 +1152,16 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
         rid = item.pop("id")
         row = (await db.execute(select(FinishedGoodsStock).where(
             FinishedGoodsStock.id == rid).with_for_update())).scalar_one_or_none()
-        if row is None:
+        # ID stok lama dapat dipakai ulang setelah pembersihan data. Cocokkan
+        # ASAL dan pemiliknya, bukan nomor baris saja; stok lain tidak boleh naik.
+        identitas = ("source_type", "source_id", "product_sku_id",
+                     "rice_quality_standard_id", "jasa_id", "warehouse_id",
+                     "kemasan_mengurangi_stok")
+        cocok = row is not None and all(
+            getattr(row, k) == item[k] for k in identitas)
+        if not cocok:
             item["waktu"] = datetime.fromisoformat(item["waktu"])
-            db.add(FinishedGoodsStock(id=rid, **item))
+            db.add(FinishedGoodsStock(**item))
         else:
             row.jumlah_karung += item["jumlah_karung"]
             row.berat_total_kg = float(row.berat_total_kg) + item["berat_total_kg"]

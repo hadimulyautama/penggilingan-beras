@@ -401,3 +401,37 @@ async def test_undo_beras_kemasan_parsial_mempertahankan_asal_dan_pemilik(pg, so
         assert not (await db.execute(select(ActivityLog.id).where(
             ActivityLog.aksi == "beras_bongkar_karung",
             ActivityLog.dibatalkan_pada.is_(None)))).first()
+
+
+async def test_undo_stok_habis_id_dipakai_ulang_dan_berat_aktual(pg, sosoh):
+    from sqlalchemy import select
+    from app.models import User, ActivityLog
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.penggilingan.gudang2.service import masukkan_beras_ke_silo
+    from app.services.undo import undo_last
+    from app.database import now_local
+
+    await _kemas_grade(pg, sosoh, grade="medium", jumlah_karung=6, ukuran=50)
+    async with pg() as db:
+        u = await db.get(User, sosoh["user"])
+        stok = (await db.execute(select(FinishedGoodsStock))).scalars().one()
+        stok.berat_total_kg = 275  # 6 karung nominal 50 kg, bobot tiket aktual 275.
+        rid, sku = stok.id, stok.product_sku_id
+        await db.commit()
+        await masukkan_beras_ke_silo(db, user=u, jenis="medium",
+            sumber_stok=f"sku:{sku}", nama_silo="C", berat_kg=300)
+        lain = FinishedGoodsStock(id=rid, product_sku_id=sku,
+            source_type="timbangan", source_id=999, jumlah_karung=10,
+            berat_total_kg=500, waktu=now_local(), input_by=u.id)
+        db.add(lain)
+        await db.commit()
+        log = (await db.execute(select(ActivityLog).where(
+            ActivityLog.table_name == "beras_ke_silo"))).scalars().one()
+        await undo_last(db, actor=u, cakupan=None, log_id=log.id)
+        await db.refresh(lain)
+        assert lain.berat_total_kg == 500 and lain.jumlah_karung == 10
+        pulih = (await db.execute(select(FinishedGoodsStock).where(
+            FinishedGoodsStock.source_type == "polishing",
+            FinishedGoodsStock.source_id == sosoh["proc_id"]))).scalars().one()
+        assert pulih.id != rid
+        assert pulih.berat_total_kg == 275 and pulih.jumlah_karung == 6
