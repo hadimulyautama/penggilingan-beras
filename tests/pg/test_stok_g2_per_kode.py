@@ -82,7 +82,8 @@ async def dunia(pg, pemakai):
         await db.refresh(u)
 
         await log_qc_milling(db, user=u, kode_proses="LOT-KODE-01",
-                             kadar_air=13.2, broken=4.0, susut=1.5, kondisi=None)
+                             kadar_air=13.2, broken=4.0, susut=1.5, kondisi=None,
+                             butir_kuning="bersih", gabah="bersih", merang="bersih")
         giling = await create_internal_transfer(
             db, user=u, kode_proses="LOT-KODE-01", lokasi_tujuan="ditumpuk",
             berat=6_000)

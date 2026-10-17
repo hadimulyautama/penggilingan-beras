@@ -1,11 +1,11 @@
 <section class="pk-detail__panel" aria-labelledby="riwayat-qc-pk">
   <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PEMERIKSAAN</span><h2 id="riwayat-qc-pk">Riwayat QC <span>{{ riwayat_qc.rows|length }}</span></h2></div></div>
   {% if riwayat_qc.hasil_terbaru_saja %}<p class="bantu">PK luar menyimpan hasil QC terbaru. Perubahan sebelumnya belum disimpan sebagai riwayat terpisah.</p>
-  {% else %}<p class="bantu">Setiap baris adalah satu pemeriksaan. Nilai pada kartu kualitas berasal dari rata-rata komponen yang terisi.</p>{% endif %}
+  {% else %}<p class="bantu">Setiap baris adalah satu pemeriksaan. Pada kartu kualitas, angka dirata-rata; butir kuning, gabah, merang, dan catatan lab memakai penilaian terakhir yang terisi.</p>{% endif %}
   {% if riwayat_qc.rows %}
   <div class="tabel-standar tabel-standar__scroll">
     <table class="tabel-standar" data-ponsel="qc" role="table" aria-label="Riwayat QC stok PK">
-      <thead><tr role="row"><th scope="col">Pemeriksaan</th><th scope="col">Kadar air</th><th scope="col">Butir patah</th><th scope="col">Susut</th><th scope="col">Pencatat &amp; keterangan</th></tr></thead>
+      <thead><tr role="row"><th scope="col">Pemeriksaan</th><th scope="col">Kadar air</th><th scope="col">Butir patah</th><th scope="col">Susut</th><th scope="col">Butir kuning</th><th scope="col">Gabah</th><th scope="col">Merang</th><th scope="col">{{ 'Catatan lab' if riwayat_qc.hasil_terbaru_saja else 'Pencatat & catatan' }}</th></tr></thead>
       <tbody>
       {% for qc in riwayat_qc.rows %}
         <tr role="row">
@@ -13,7 +13,8 @@
           <td role="cell" data-label="Kadar air">{{ qc.ka }}</td>
           <td role="cell" data-label="Butir patah">{{ qc.broken }}</td>
           <td role="cell" data-label="Susut">{{ qc.susut }}</td>
-          <td role="cell">{% if qc.pencatat %}<strong>{{ qc.pencatat }}</strong><span class="tabel-standar__sekunder">{{ qc.keterangan }}</span>{% else %}{{ qc.keterangan }}{% endif %}</td>
+          {% for label, nilai in qc.kualitatif %}<td role="cell" data-label="{{ label }}">{{ nilai }}</td>{% endfor %}
+          <td role="cell">{% if qc.pencatat %}<strong>{{ qc.pencatat }}</strong><span class="tabel-standar__sekunder">{{ qc.keterangan }}</span>{% endif %}{% if qc.catatan_lab %}<span class="tabel-standar__sekunder">Catatan lab: {{ qc.catatan_lab }}</span>{% elif not qc.pencatat %}—{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

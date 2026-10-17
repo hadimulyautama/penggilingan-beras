@@ -25,7 +25,7 @@ async def gudang2(pg):
     from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
@@ -930,7 +930,8 @@ async def test_berat_intake_selalu_sama_dengan_berat_batch(pg, gudang2):
     # QC DULU, baru masuk.
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
-        await log_pk_qc(db, user=u, kode="PKB-QCA", kadar_air=15, broken=2)
+        await log_pk_qc(db, user=u, kode="PKB-QCA", kadar_air=15, broken=2,
+                        butir_kuning="bersih",gabah="bersih",merang="bersih")
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
         ra = await masukkan_pk_luar(db, user=u, kode="PKB-QCA", tujuan="ditumpuk")
@@ -942,7 +943,8 @@ async def test_berat_intake_selalu_sama_dengan_berat_batch(pg, gudang2):
         rb = await masukkan_pk_luar(db, user=u, kode="PKB-QCB", tujuan="ditumpuk")
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
-        await log_pk_qc(db, user=u, kode="PKB-QCB", kadar_air=16, broken=3)
+        await log_pk_qc(db, user=u, kode="PKB-QCB", kadar_air=16, broken=3,
+                        butir_kuning="sedikit",gabah="bersih",merang="bersih")
     async with pg() as db:
         intake_b = await db.get(PkGudang2Intake, rb.intake.id)
     assert float(intake_b.berat_kg) == 3_000, (

@@ -204,7 +204,9 @@ class Pengisi:
         kode = r['proc']['kode_proses']
         for i, hasil in enumerate([kg*.3, kg*.72]):
             await self.langkah(key + f':hasil:{i}', milling.log_progress, kode_proses=kode, berat_kumulatif=hasil, **waktu(hari,9-i))
-            await self.langkah(key + f':qc-giling:{i}', milling.log_qc_milling, kode_proses=kode, kadar_air=14-i*.2, broken=22-i, susut=1.5, kondisi='normal')
+            await self.langkah(key + f':qc-giling:{i}', milling.log_qc_milling, kode_proses=kode, kadar_air=14-i*.2, broken=22-i, susut=1.5, kondisi='normal',
+                              butir_kuning='sedikit' if i == 0 else 'bersih',
+                              gabah='sedikit', merang='bersih', catatan_lab=AWALAN + 'QC hasil giling ' + str(i+1))
         await self.langkah(key + ':giling-selesai', milling.finish_milling, kode_proses=kode, berat_akhir=kg*.72, **waktu(hari,7))
         if verif:
             await self.langkah(key + ':verifikasi', milling.verify_milling_output, kode_proses=kode, berat_output=kg*.72)

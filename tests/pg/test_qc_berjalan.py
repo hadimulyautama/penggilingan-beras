@@ -62,7 +62,8 @@ async def _catat(pg, giling, **nilai):
         u = await db.get(User, giling["user"])
         return await log_qc_milling(db, user=u, kode_proses=giling["kode"],
                                     kondisi=None, **{"kadar_air": None, "broken": None,
-                                                     "susut": None, **nilai})
+                                                     "susut": None, "butir_kuning": "bersih",
+                                                     "gabah": "bersih", "merang": "bersih", **nilai})
 
 
 async def test_proses_yang_masih_berjalan_boleh_dicatat_mutunya(pg, giling):

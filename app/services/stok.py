@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import now_local, tanggal_lokal
 from hmu_core.komoditas import buat_produk
 from app.models import MillingProcess
+from app.services.mutu_pk import LABEL_KUALITATIF as _LABEL_KUALITATIF, rincian_kualitatif
 from app.penggilingan.gudang1.services.bobot import dari_batch
 from app.penggilingan.gudang1.services.milling import KELAS_PK, kelas_pk
 
@@ -82,8 +83,8 @@ class LotPk:
     lama: str = ""
     #: Masih menyala mesinnya. PK-nya sudah ada, tapi angkanya belum final.
     berjalan: bool = False
-    #: Mutu PK: (label, nilai) — kadar air, butir patah, susut. Kosong berarti
-    #: belum pernah dinilai.
+    #: Mutu PK: (label, nilai). Angka dirata-rata; penilaian butir kuning,
+    #: gabah, merang dan catatan lab memakai isian terakhir per komponen.
     #:
     #: RATA-RATA per KOLOM, atas catatan yang mengisi kolom itu — bukan catatan
     #: terbaru. Mutu dicatat berulang selama giling berjalan (keputusan pemilik
@@ -415,6 +416,9 @@ def _mutu_dari(rata) -> list[tuple[str, str]]:
         v = getattr(rata, medan, None)
         if v is not None:
             keluar.append((label, _persen(v)))
+    keluar.extend(rincian_kualitatif(rata))
+    if getattr(rata, "catatan_lab", None):
+        keluar.append(("Catatan lab", rata.catatan_lab))
     return keluar
 
 
@@ -661,13 +665,6 @@ async def pk_gudang1(db: AsyncSession) -> list[LotPk]:
 # `berjalan.py`) — yang berubah cuma BENTUK kartu Tumpukan di sini.
 
 
-#: Skala kualitatif Butir kuning/Gabah/Merang → label yang dibaca orang.
-#: Sama persis dengan `_SKALA_KUALITATIF` di `gudang2.service` (divalidasi di
-#: sana saat disimpan) — di sini hanya penerjemah tampilannya.
-_LABEL_KUALITATIF = {"bersih": "Bersih", "sedikit": "Sedikit",
-                     "sedang": "Sedang", "banyak": "Banyak"}
-
-
 async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
                         intake_id: int | None = None) -> dict:
     """QC stok mengikuti lot asal, termasuk setelah dipindah ke Gudang 2.
@@ -705,6 +702,8 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
                              ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
                              broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
                              susut=_persen(qc.susut_persen) if qc.susut_persen is not None else "—",
+                             kualitatif=rincian_kualitatif(qc, termasuk_kosong=True),
+                             catatan_lab=qc.catatan_lab,
                              keterangan=qc.kondisi or "—"))
     elif batch_id:
         qc = await db.scalar(select(PkPurchaseVerification).where(
@@ -713,16 +712,12 @@ async def riwayat_qc_pk(db: AsyncSession, *, kode: str | None = None,
         if qc and any(getattr(qc, key) is not None and getattr(qc, key) != ""
                       for key in ("kadar_air", "broken_persen", "penyusutan_persen",
                                   "butir_kuning", "gabah", "merang", "catatan_lab")):
-            ket = [f"{label}: {_LABEL_KUALITATIF.get(nilai, nilai)}"
-                   for label, nilai in (("Butir kuning", qc.butir_kuning),
-                                        ("Gabah", qc.gabah), ("Merang", qc.merang)) if nilai]
-            if qc.catatan_lab:
-                ket.append(qc.catatan_lab)
             rows.append(dict(nomor=None, waktu=qc.updated_at, pencatat=None,
                              ka=_persen(qc.kadar_air) if qc.kadar_air is not None else "—",
                              broken=_persen(qc.broken_persen) if qc.broken_persen is not None else "—",
                              susut=_persen(qc.penyusutan_persen) if qc.penyusutan_persen is not None else "—",
-                             keterangan=" · ".join(ket) or "—"))
+                             kualitatif=rincian_kualitatif(qc, termasuk_kosong=True),
+                             catatan_lab=qc.catatan_lab, keterangan="—"))
     return {"rows": list(reversed(rows)), "hasil_terbaru_saja": bool(batch_id)}
 
 
@@ -753,8 +748,8 @@ class LotPkG2:
     #: ID pesanan jasa bila stok ini titipan; dipakai untuk membedakan
     #: pemilik jasa secara pasti pada halaman detail.
     jasa_id: int | None = None
-    #: (label, nilai) — Kadar air/Butir patah/Susut untuk kedua asal, plus
-    #: Butir kuning/Gabah/Merang/Catatan lab khusus PK beli luar. Kosong =
+    #: (label, nilai) — Kadar air/Butir patah/Susut serta Butir kuning/Gabah/
+    #: Merang/Catatan lab untuk kedua asal. Kosong =
     #: belum pernah dinilai (PK dari giling sendiri yang belum dicatat
     #: mutunya oleh Gudang 1).
     mutu: list[tuple[str, str]] = field(default_factory=list)

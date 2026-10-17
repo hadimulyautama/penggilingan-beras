@@ -973,13 +973,6 @@ class PkPriceResult:
     hpp_per_kg: float | None
 
 
-#: Skala kualitatif bersama — butir kuning, gabah, dan merang (jerami/malai)
-#: semuanya dinilai dengan kosakata yang sama: bersih/sedikit/sedang/banyak.
-#: "sedikit" ditambahkan 5 Oktober 2026 (keputusan pemilik) — dulu cuma tiga
-#: titik, melompat dari "bersih" langsung ke "sedang".
-_SKALA_KUALITATIF = {"bersih", "sedikit", "sedang", "banyak"}
-
-
 async def _get_or_make_pk_verif(db: AsyncSession, batch_id: int) -> PkPurchaseVerification:
     verif = (
         await db.execute(
@@ -1019,17 +1012,12 @@ async def log_pk_qc(
     ).scalars().first()
     if batch is None:
         raise Gudang2Error(f"PK luar {kode} tidak ditemukan.")
-    # Satu pagar untuk ketiganya — kosakatanya memang satu skala.
-    for label, nilai in (("Butir kuning", butir_kuning), ("Gabah", gabah), ("Merang", merang)):
-        if nilai and nilai.lower().strip() not in _SKALA_KUALITATIF:
-            raise Gudang2Error(f"{label} harus: bersih, sedikit, sedang, atau banyak.")
-    butir_kuning = butir_kuning.lower().strip() if butir_kuning else None
-    gabah = gabah.lower().strip() if gabah else None
-    merang = merang.lower().strip() if merang else None
-    if all(v is None for v in (kadar_air, broken, penyusutan_persen, butir_kuning,
-                               gabah, merang, catatan_lab)):
-        raise Gudang2Error("Sebutkan hasil ujinya (kadar air / broken / penyusutan / "
-                           "butir kuning / gabah / merang / catatan).")
+    from app.services.mutu_pk import wajib_kualitatif
+    try:
+        nilai = wajib_kualitatif(butir_kuning=butir_kuning, gabah=gabah, merang=merang)
+    except ValueError as e:
+        raise Gudang2Error(str(e)) from e
+    butir_kuning, gabah, merang = (nilai[k] for k in ("butir_kuning", "gabah", "merang"))
 
     verif = await _get_or_make_pk_verif(db, batch.id)
     verif.kadar_air = kadar_air

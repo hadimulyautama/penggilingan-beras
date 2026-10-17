@@ -1118,7 +1118,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 # September 2026 — lihat komentar di sana. Gudang 2 yang
                 # MEMINTA, Gudang 1 yang MENGIRIM sesudah Admin menyetujui.
             ]
-    BUTIR = [["", "— tidak dinilai —"], ["bersih", "Bersih"], ["sedikit", "Sedikit"],
+    BUTIR = [["", "— pilih penilaian —"], ["bersih", "Bersih"], ["sedikit", "Sedikit"],
              ["sedang", "Sedang"], ["banyak", "Banyak"]]
     JENIS_PK = [["", "— belum ditentukan —"], ["ks", "KS"], ["kl", "KL"],
                 ["campuran", "Campuran"], ["semi_ks", "Semi KS"]]
@@ -1163,8 +1163,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "qc_giling", "label": "🔬 QC hasil giling",
              "post": "/api/actions/qc-giling",
              "hint": "Boleh dicatat berulang selama giling berjalan — contoh dari "
-                     "beras yang baru keluar mesin. Hasilnya dirata-rata. Isi "
-                     "minimal salah satu: kadar air / broken / susut.", "fields": [
+                     "beras yang baru keluar mesin. Angka dirata-rata; butir kuning, "
+                     "gabah, merang, dan catatan lab memakai penilaian terakhir yang terisi. "
+                     "Butir kuning, gabah, dan merang wajib dipilih.", "fields": [
                  {"name": "kode_proses",
                   "label": "Giling yang sedang berjalan atau sudah selesai",
                   "type": "remote",
@@ -1173,6 +1174,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kadar_air", "label": "Kadar air (%)", "type": "number"},
                  {"name": "broken", "label": "Butir patah (%)", "type": "number"},
                  {"name": "susut", "label": "Susut (%)", "type": "number"},
+                 {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
+                  "options": BUTIR},
+                 {"name": "gabah", "label": "Gabah", "type": "select",
+                  "options": BUTIR},
+                 {"name": "merang", "label": "Merang", "type": "select",
+                  "options": BUTIR},
+                 {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
              ]},
             {"id": "catat_pk_luar", "label": "📦 Catat PK luar datang",
              "post": "/api/actions/catat-pk-luar",
@@ -1243,7 +1251,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "qc_pk_luar", "label": "🔬 Catat kualitas PK luar",
              "post": "/api/actions/qc-pk-luar",
              "hint": "PK yang masuk sudah pasti diterima — ini hanya mencatat "
-                     "kualitasnya sebagai properti batch. Isi minimal salah satu.",
+                     "kualitasnya sebagai properti batch. Butir kuning, gabah, dan merang wajib dipilih.",
              "fields": [
                  {"name": "kode_batch", "label": "PK luar yang belum dinilai mutunya", "type": "remote",
                   "source": "/api/actions/pk-luar-qc",
@@ -1252,11 +1260,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "broken", "label": "Broken (%)", "type": "number"},
                  {"name": "penyusutan", "label": "Penyusutan/bekatul lab (%)", "type": "number"},
                  {"name": "butir_kuning", "label": "Butir kuning", "type": "select",
-                  "options": BUTIR, "optional": True},
+                  "options": BUTIR},
                  {"name": "gabah", "label": "Gabah", "type": "select",
-                  "options": BUTIR, "optional": True},
+                  "options": BUTIR},
                  {"name": "merang", "label": "Merang", "type": "select",
-                  "options": BUTIR, "optional": True},
+                  "options": BUTIR},
                  {"name": "catatan_lab", "label": "Catatan lab", "type": "text"},
              ]},
             # Mencatat PK yang datang — ENTRY ADMIN (keputusan pemilik 12
@@ -3244,6 +3252,10 @@ class QcGilingReq(BaseModel):
     kadar_air: PersenOpsional = None
     broken: PersenOpsional = None
     susut: PersenOpsional = None
+    butir_kuning: str | None = None
+    gabah: str | None = None
+    merang: str | None = None
+    catatan_lab: str | None = None
 
 
 @router.post("/actions/qc-giling")
@@ -3252,15 +3264,18 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -
     await _wajib_mutu()
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
-    if all(v is None for v in (req.kadar_air, req.broken, req.susut)):
-        raise HTTPException(400, "Isi minimal salah satu: kadar air / broken / susut.")
+    if all(v is None for v in (req.kadar_air, req.broken, req.susut)) and not any(
+            (v or "").strip() for v in (req.butir_kuning, req.gabah, req.merang, req.catatan_lab)):
+        raise HTTPException(400, "Isi minimal salah satu komponen QC.")
     from app.penggilingan.gudang1.services.milling import log_qc_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await log_qc_milling(db, user=u, kode_proses=req.kode_proses,
                                      kadar_air=req.kadar_air, broken=req.broken,
-                                     susut=req.susut, kondisi=None)
+                                     susut=req.susut, kondisi=None,
+                                     butir_kuning=req.butir_kuning, gabah=req.gabah,
+                                     merang=req.merang, catatan_lab=req.catatan_lab)
         except MillingError as e:
             raise _err(e, "Gagal mencatat QC.")
     det = ", ".join(
@@ -3268,10 +3283,13 @@ async def act_qc_giling(req: QcGilingReq, user: User = Depends(pengguna_aksi)) -
         (("KA", r.kadar_air), ("broken", r.broken), ("susut", r.susut)) if v is not None
     )
     jns = f" [{r.kondisi}]" if r.kondisi else ""
+    kualitatif = ", ".join(f"{label} {nilai}" for label, nilai in r.kualitatif)
+    det = " · ".join(x for x in (det, kualitatif,
+                                  "Catatan lab tersimpan" if r.catatan_lab else "") if x)
     # Angka yang baru saja diketik sudah diketahui orangnya; yang belum ia tahu
     # adalah ke mana angka itu menggeser rata-ratanya. Disebut hanya bila sudah
     # ada lebih dari satu catatan — "rata-rata 1 catatan" cuma mengulang.
-    ekor = (f" Rata-rata kini: {r.rata.teks()}."
+    ekor = (f" Ringkasan QC kini: {r.rata.teks()}."
             if r.rata is not None and r.rata.n > 1 else "")
     pesan = f"✓ QC *{req.kode_proses}*{jns}: {det}.{ekor}"
     return {"ok": True, "pesan": pesan}

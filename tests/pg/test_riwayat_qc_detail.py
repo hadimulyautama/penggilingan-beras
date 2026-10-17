@@ -48,7 +48,8 @@ async def qc(pg):
     for i in range(3):
         async with pg() as db:
             await log_qc_milling(db,user=await db.get(User,uid),kode_proses='LOT-QC-DETAIL',
-                                 kadar_air=13+i,broken=20-i,susut=1,kondisi='KS')
+                                 kadar_air=13+i,broken=20-i,susut=1,kondisi='KS',
+                                 butir_kuning='sedikit',gabah='bersih',merang='bersih')
     async with pg() as db:
         await log_pk_qc(db,user=await db.get(User,uid),kode='PKB-QC-DETAIL',kadar_air=14,broken=20,
                         penyusutan_persen=2,butir_kuning='sedikit',gabah='bersih',merang='bersih',

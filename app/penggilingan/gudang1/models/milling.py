@@ -132,6 +132,10 @@ class MillingQcLog(Base):
     kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
     broken_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
     susut_persen: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    butir_kuning: Mapped[str | None] = mapped_column(String(10))
+    gabah: Mapped[str | None] = mapped_column(String(10))
+    merang: Mapped[str | None] = mapped_column(String(10))
+    catatan_lab: Mapped[str | None] = mapped_column(String(255))
     # KS / KL / MIX
     kondisi: Mapped[str | None] = mapped_column(String(10))
     waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

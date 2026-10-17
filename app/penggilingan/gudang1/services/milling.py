@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import aggregate_order_by, array_agg
 from decimal import Decimal
 
 from hmu_core import ArusProses, JenisProses, StatusProses, buat_produk
@@ -29,6 +30,7 @@ from app.models import (
     Supplier,
 )
 from app.services.activity_log import log_activity
+from app.services.mutu_pk import KOMPONEN_KUALITATIF, LABEL_KUALITATIF, wajib_kualitatif
 from app.services.codegen import next_drying_lot_code, next_milling_code
 from app.services.jasa import JasaError, kunci_silo, nama_pemilik, pastikan_satu_pemilik
 from app.penggilingan.gudang1.services.bobot import (
@@ -1619,6 +1621,8 @@ class QcResult:
     #: balasannya. Angka yang baru saja ia ketik sudah ia tahu; yang belum ia
     #: tahu adalah ke mana angka itu menggeser rata-ratanya.
     rata: "QcRata | None" = None
+    kualitatif: tuple[tuple[str, str], ...] = ()
+    catatan_lab: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1645,6 +1649,12 @@ class QcRata:
     n_susut: int = 0
     #: Berapa catatan QC seluruhnya — termasuk yang cuma mengisi satu kolom.
     n: int = 0
+    # Kategori tidak dirata-rata. Ambil penilaian TERAKHIR YANG TERISI per
+    # komponen; tusukan yang hanya menilai kadar air tak menghapus penilaian ini.
+    butir_kuning: str | None = None
+    gabah: str | None = None
+    merang: str | None = None
+    catatan_lab: str | None = None
 
     @property
     def ada(self) -> bool:
@@ -1655,12 +1665,15 @@ class QcRata:
         bagian = [f"{nama} {nilai:.1f}%".replace(".", ",")
                   for nama, nilai in (("KA", self.kadar_air), ("broken", self.broken),
                                       ("susut", self.susut)) if nilai is not None]
+        kualitatif = [f"{label} {LABEL_KUALITATIF.get(getattr(self, medan), getattr(self, medan))}"
+                      for label, medan in KOMPONEN_KUALITATIF if getattr(self, medan)]
         if not bagian:
-            return ""
+            return " · ".join(kualitatif) or ("Catatan lab tercatat" if self.catatan_lab else "")
         # Jumlah catatannya ikut disebut: rata-rata dari satu tusukan dan
         # rata-rata dari lima tusukan sama-sama berupa satu angka di layar, dan
         # yang membacanya berhak tahu bedanya.
-        return " · ".join(bagian) + f" (rata-rata {self.n} catatan)"
+        return (" · ".join(bagian) + f" (rata-rata {self.n} catatan)"
+                + (" · Penilaian terakhir: " + " · ".join(kualitatif) if kualitatif else ""))
 
 
 async def qc_rata(db: AsyncSession, proc_id: int) -> QcRata:
@@ -1669,7 +1682,7 @@ async def qc_rata(db: AsyncSession, proc_id: int) -> QcRata:
 
 
 async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
-    """Rata-rata QC beberapa proses sekaligus — SATU kueri.
+    """Rata-rata angka dan penilaian terakhir, dibaca borongan untuk semua lot.
 
     Kartu giling digambar untuk tiap proses yang menyala, dan kartu itu ikut
     disusun ulang tiap kali lencana laci dihitung, yaitu di tiap halaman. Satu
@@ -1679,6 +1692,13 @@ async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
     ids = [int(x) for x in proc_ids]
     if not ids:
         return {}
+    medan_mutu = ("butir_kuning", "gabah", "merang", "catatan_lab")
+    # Elemen pertama dari nilai terisi yang diurutkan terbaru. Digabung dalam
+    # agregasi yang sama agar membaca 100 lot tetap hanya satu kueri QC.
+    penilaian_terakhir = [array_agg(aggregate_order_by(
+        getattr(MillingQcLog, medan), MillingQcLog.waktu.desc(), MillingQcLog.id.desc()
+    )).filter(getattr(MillingQcLog, medan).is_not(None),
+              getattr(MillingQcLog, medan) != "")[1] for medan in medan_mutu]
     baris = (await db.execute(
         select(
             MillingQcLog.milling_process_id,
@@ -1686,6 +1706,7 @@ async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
             func.avg(MillingQcLog.broken_persen), func.count(MillingQcLog.broken_persen),
             func.avg(MillingQcLog.susut_persen), func.count(MillingQcLog.susut_persen),
             func.count(),
+            *penilaian_terakhir,
         ).where(MillingQcLog.milling_process_id.in_(ids))
         .group_by(MillingQcLog.milling_process_id)
     )).all()
@@ -1694,6 +1715,7 @@ async def qc_rata_banyak(db: AsyncSession, proc_ids) -> dict[int, QcRata]:
         broken=float(r[3]) if r[3] is not None else None,
         susut=float(r[5]) if r[5] is not None else None,
         n_kadar_air=int(r[2]), n_broken=int(r[4]), n_susut=int(r[6]), n=int(r[7]),
+        **dict(zip(medan_mutu, r[8:])),
     ) for r in baris}
 
 
@@ -1706,6 +1728,10 @@ async def log_qc_milling(
     broken: float | None,
     susut: float | None,
     kondisi: str | None,
+    butir_kuning: str | None = None,
+    gabah: str | None = None,
+    merang: str | None = None,
+    catatan_lab: str | None = None,
 ) -> QcResult:
     if not kode_proses:
         raise MillingError(
@@ -1714,8 +1740,13 @@ async def log_qc_milling(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
-    if all(v is None for v in (kadar_air, broken, susut)):
-        raise MillingError("Sebutkan hasil QC-nya (kadar air / broken / susut).")
+    try:
+        kualitatif = wajib_kualitatif(butir_kuning=butir_kuning, gabah=gabah, merang=merang)
+    except ValueError as e:
+        raise MillingError(str(e)) from e
+    catatan_lab = catatan_lab.strip() if catatan_lab else None
+    if catatan_lab and len(catatan_lab) > 255:
+        raise MillingError("Catatan lab maksimal 255 karakter.")
     # Proses yang MASIH BERJALAN boleh dicatat mutunya (pemilik 24 September
     # 2026) — dan memang di situlah contohnya diambil: dari beras yang baru
     # keluar mesin, bukan dari tumpukan yang sudah ditutup. Tak ada syarat
@@ -1731,6 +1762,8 @@ async def log_qc_milling(
             kadar_air=kadar_air,
             broken_persen=broken,
             susut_persen=susut,
+            **kualitatif,
+            catatan_lab=catatan_lab,
             kondisi=kondisi,
             waktu=now_local(),
             input_by=user.id,
@@ -1739,13 +1772,18 @@ async def log_qc_milling(
     await log_activity(
         db, table_name="milling_qc_logs", record_id=proc.id, action="INSERT",
         changed_by=user.id,
-        new_value=f"ka={kadar_air} broken={broken} susut={susut} kondisi={kondisi}",
+        new_value=(f"ka={kadar_air} broken={broken} susut={susut} kondisi={kondisi} "
+                   f"butir_kuning={kualitatif['butir_kuning']} gabah={kualitatif['gabah']} "
+                   f"merang={kualitatif['merang']} catatan_lab={catatan_lab}"),
     )
     await db.commit()
     rata = await qc_rata(db, proc.id)
     return QcResult(
         proc=proc, kadar_air=kadar_air, broken=broken, susut=susut,
         kondisi=kondisi, qc_count=rata.n, rata=rata,
+        kualitatif=tuple((label, LABEL_KUALITATIF[kualitatif[medan]])
+                        for label, medan in KOMPONEN_KUALITATIF if kualitatif[medan]),
+        catatan_lab=catatan_lab,
     )
 
 

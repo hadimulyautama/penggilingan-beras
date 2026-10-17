@@ -29,6 +29,7 @@ from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
                         SiloStorage, Silo, MillingProgressLog,
                         MillingProcessVerification)
 from app.config import settings
+from app.services.mutu_pk import rincian_kualitatif
 
 router = APIRouter()
 
@@ -1070,11 +1071,10 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 values = [("Kadar air", qc.kadar_air, "%"),
                           ("Broken", qc.broken_persen, "%"),
                           ("Penyusutan", qc.penyusutan_persen, "%"),
-                          ("Butir kuning", qc.butir_kuning, ""),
-                          ("Gabah", qc.gabah, ""), ("Merang", qc.merang, ""),
                           ("Catatan", qc.catatan_lab, "")]
                 fields = [(label, f"{value}{unit}") for label, value, unit in values
                           if value is not None and value != ""]
+                fields.extend(rincian_kualitatif(qc, termasuk_kosong=True))
                 tambah(batch.kode_batch, qc.updated_at, None,
                        fields or [("QC", "Belum ada hasil QC")],
                        asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
@@ -1123,6 +1123,9 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                     ("Broken", qc.broken_persen, "%"),
                     ("Susut", qc.susut_persen, "%"),
                     ("Kondisi", qc.kondisi, "")) if value is not None]
+                fields.extend(rincian_kualitatif(qc, termasuk_kosong=True))
+                if qc.catatan_lab:
+                    fields.append(("Catatan lab", qc.catatan_lab))
                 asal = ({f"Pemilik jasa: {pemilik[process.jasa_id]}"}
                         if process.jasa_id in pemilik else
                         asal_proses.get(process.id, set()))
