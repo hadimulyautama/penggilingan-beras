@@ -47,7 +47,7 @@
       {%- if tipis %} · <b>{{ tipis }} menipis</b>{% endif -%}
     </div>
   </div>
-  <div class="kartu">
+  <div class="kartu daftar-standar">
     <div class="lap">
       {% if per_gudang %}
         {% for g in ["Gudang 2", "Gudang 1"] %}
@@ -67,7 +67,7 @@
 {%- endmacro %}
 
 {% macro karung_baris(b, boleh_pindah=False) -%}
-<div class="lap__baris">
+<div class="lap__baris daftar-standar__baris">
   <span class="lap__nama">
     {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
   <span class="lap__nilai">
@@ -212,7 +212,7 @@
 </div>
 {% endif %}
 <div class="stok-produk-kartu{{ ' stok-produk-kartu--terbuka' if preopened }}">
-<div class="grup" style="margin-bottom:26px">
+<div class="grup daftar-standar" style="margin-bottom:26px">
 {% for k in daftar %}
   <details class="padat padat--{{ warna }}"{{ ' open' if preopened }}>
   <summary class="{{ 'stok-produk-kartu__ringkas' if preopened else '' }}">

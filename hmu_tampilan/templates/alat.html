@@ -7,9 +7,9 @@
 
 <div>
   <span class="lbl">Mesin pengering</span>
-  <div class="kartu">
+  <div class="kartu daftar-standar">
     {% for d in mesin %}
-      <div class="baris">
+      <div class="baris daftar-standar__baris">
         <div class="baris__isi">
           <div class="baris__nama">{{ d.nama }}</div>
           {# `kapasitas` dalam KG — satuannya dipakai di baris ini, bukan di
@@ -84,9 +84,9 @@
         <span class="lbl" style="margin:0">Sebab berhenti (berlaku untuk semua pengering)</span>
         <span class="lipat__jml">{{ sebab_pengeringan|length }}</span>
       </summary>
-      <div class="grup" style="gap:6px">
+      <div class="grup daftar-standar" style="gap:6px">
         {% for sebab in sebab_pengeringan %}
-          <div class="baris" style="padding:7px 0">
+          <div class="baris daftar-standar__baris" style="padding:7px 0">
             <span>{{ sebab }}</span>
             <form method="post" action="/pengaturan/sebab-jeda">
               <input type="hidden" name="_csrf" value="{{ CSRF }}">
@@ -109,13 +109,13 @@
 
 <div>
   <span class="lbl">Silo gabah kering</span>
-  <div class="kartu">
+  <div class="kartu daftar-standar">
     {# Satu nama per hal, bukan tuple yang dibongkar: produksi dulu mengirim
        `(silo, kg)` dan Meja mengirim dict, dan itulah satu-satunya sebab
        berkas ini hidup dua kali. Bentuk dict-lah yang menang — view produksi
        menyusunnya sekarang. #}
     {% for s in silo %}
-      <div class="baris">
+      <div class="baris daftar-standar__baris">
         <div class="baris__isi">
           <div class="baris__nama">{{ s.nama_tampil }}</div>
           <div class="baris__ket">
@@ -167,11 +167,11 @@
 
 <div>
   <span class="lbl">Silo Gudang 2</span>
-  <div class="kartu">
+  <div class="kartu daftar-standar">
     {# Silo Gudang 2 adalah satu kolam campuran; jenis historis pada master
        tidak menjadi batasan isi. #}
     {% for s in silo_g2 %}
-      <div class="baris">
+      <div class="baris daftar-standar__baris">
         <div class="baris__isi">
           <div class="baris__nama">{{ s.nama_tampil }}</div>
           <div class="baris__ket">

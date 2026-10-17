@@ -7,8 +7,9 @@
 <div class="kartu">
   <h2 style="margin-top:0">Daftar gudang</h2>
   <p class="bantu">Nama boleh diubah kapan saja. Gudang selepan dan penyosohan tetap terhubung ke alur produksinya meski namanya berubah.</p>
+  <div class="daftar-standar">
   {% for w in gudang %}
-    <section style="padding:14px 0;border-top:1px solid var(--garis, #d8e0e4);{% if not w.aktif %}opacity:.58{% endif %}">
+    <section class="daftar-standar__baris" style="{% if not w.aktif %}opacity:.58{% endif %}">
       <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
         <div>
           <strong>{{ w.nama }}</strong>
@@ -48,6 +49,7 @@
       {% endif %}
     </section>
   {% else %}<p class="bantu">Belum ada gudang.</p>{% endfor %}
+  </div>
 </div>
 
 <div class="kartu" style="margin-top:14px">

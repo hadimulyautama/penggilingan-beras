@@ -265,9 +265,9 @@
       <span class="lbl" style="margin:0">Sebab berhenti</span>
       <span class="lipat__jml">{{ sebab_jeda.get(jenis, [])|length }}</span>
     </summary>
-  <div class="grup" style="gap:6px">
+  <div class="grup daftar-standar" style="gap:6px">
     {% for s in sebab_jeda.get(jenis, []) %}
-      <div class="baris" style="padding:7px 0">
+      <div class="baris daftar-standar__baris">
         <span>{{ s }}</span>
         <form method="post" action="/pengaturan/sebab-jeda">
           <input type="hidden" name="_csrf" value="{{ CSRF }}">

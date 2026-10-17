@@ -61,7 +61,7 @@
 {% if daftar_proses.sosoh %}
   <div data-blok>
     <span class="lbl">Penyosohan aktif · <span data-jumlah>{{ daftar_proses.sosoh|length }}</span></span>
-    <div class="grup" style="gap:9px">
+    <div class="grup daftar-standar" style="gap:9px">
       {% for b in daftar_proses.sosoh %}
         <a class="benda benda--{{ b.fase }}" href="/proses-sosoh/{{ b.kode }}"
            data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">

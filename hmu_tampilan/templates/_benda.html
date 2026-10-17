@@ -240,7 +240,7 @@
   {% macro tanda(b) -%}
  data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi ~ ' ' ~ (b.tiket_kode or '') ~ ' ' ~ (b.komoditas or '') ~ ' ' ~ (b.kendaraan or '') ~ ' ' ~ ('jasa' if b.status_jasa else 'bukan jasa' if b.status_jasa is not none else ''))|lower }}" data-sup="{{ b.judul or '' }}"
   {%- endmacro %}
-  <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel tabel-standar{% if tabel == 'packing' %} antrian-listview--tabel-packing{% endif %}"{% elif listview %} class="antrian-listview"{% endif %}>
+  <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel tabel-standar{% if tabel == 'packing' %} antrian-listview--tabel-packing{% endif %}"{% elif listview %} class="antrian-listview daftar-standar"{% else %} class="daftar-standar"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>
     {% if tabel %}<div class="antrian-tabel-scroll">
       <div class="antrian-tabel__kepala" role="row">

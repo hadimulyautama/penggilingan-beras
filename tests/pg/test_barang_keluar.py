@@ -2506,7 +2506,7 @@ async def test_riwayat_barang_keluar_tabel_dan_detail_tiket(pg, gudang):
     sebelum, riwayat = h.split('<h2 id="judul-riwayat-keluar">', 1)
     assert aktif.rec.kode in sebelum
     assert kode not in sebelum
-    assert '<table class="tabel-standar riwayat-keluar">' in riwayat
+    assert '<table class="tabel-standar">' in riwayat
     assert f'href="/barang-keluar/{rid}"' in riwayat
     assert kode in riwayat and "KLR-RIWAYAT" in riwayat
     assert "Tiket timbang terkait · KLR-RIWAYAT" in detail.text

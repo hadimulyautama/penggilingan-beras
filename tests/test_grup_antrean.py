@@ -548,8 +548,19 @@ def test_tak_ada_kelas_css_karangan_di_templat_app_ini():
     import re
 
     akar = pathlib.Path(__file__).resolve().parents[1]
-    css = (akar / "hmu_tampilan/static/app.css").read_text()
-    ada = set(re.findall(r"\.([a-zA-Z][\w-]*)", css))
+    # Desain kini dibagi ke stylesheet bersama dan stylesheet halaman.
+    # Semua definisi tetap diperiksa, termasuk gaya lokal di blok <style>.
+    sumber_css = [p.read_text() for folder in (akar / "hmu_tampilan/static",
+                                               akar / "app/web/static")
+                  for p in folder.glob("*.css")]
+    for berkas in (akar / "app/web/templates").glob("*.html"):
+        sumber_css += re.findall(r"<style[^>]*>(.*?)</style>", berkas.read_text(), re.S)
+    ada = set(re.findall(r"\.([a-zA-Z][\w-]*)", "\n".join(sumber_css)))
+
+    # Kait interaksi bukan desain, tetapi harus benar-benar digunakan skrip.
+    for folder in (akar / "hmu_tampilan/static", akar / "app/web/static"):
+        for berkas in folder.glob("*.js"):
+            ada.update(re.findall(r"(?:querySelector(?:All)?|closest|matches)\(\s*['\"]\.([a-zA-Z][\w-]*)", berkas.read_text()))
 
     karangan: dict[str, set[str]] = {}
     for berkas in sorted((akar / "app/web/templates").glob("*.html")):
@@ -561,7 +572,7 @@ def test_tak_ada_kelas_css_karangan_di_templat_app_ini():
                 if kelas and kelas not in ada:
                     karangan.setdefault(kelas, set()).add(berkas.name)
 
-    assert not karangan, "kelas dipakai templat tapi tak ada di app.css: " + ", ".join(
+    assert not karangan, "kelas dipakai templat tapi tak ada di stylesheet: " + ", ".join(
         f"{k} ({', '.join(sorted(v))})" for k, v in sorted(karangan.items()))
 
 

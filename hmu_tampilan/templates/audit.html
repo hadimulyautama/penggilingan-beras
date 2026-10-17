@@ -71,9 +71,9 @@
   </div>
 {% endif %}
 
-<div class="grup" style="gap:7px">
+<div class="grup daftar-standar" style="gap:7px">
   {% for c in catatan %}
-    <div class="audit audit--{{ 'tua' if not c.muda else 'muda' }}">
+    <div class="audit daftar-standar__baris audit--{{ 'tua' if not c.muda else 'muda' }}">
       <div class="audit__atas">
         <span class="audit__jenis">{{ c.label }}</span>
         <span>#{{ c.id }} · {{ c.waktu | jam('%d %b %H.%M') }}</span>

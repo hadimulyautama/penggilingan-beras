@@ -98,9 +98,9 @@
 {% if perhatian %}
 <div>
   <span class="lbl">Perlu perhatian · {{ perhatian|length }}</span>
-  <div class="grup" style="gap:8px">
+  <div class="grup daftar-standar" style="gap:8px">
     {% for p in perhatian %}
-      <a class="tindakan tindakan--ikon-merah" href="{{ p.href }}">
+      <a class="tindakan daftar-standar__baris tindakan--ikon-merah" href="{{ p.href }}">
         <div class="tindakan__ikon tindakan__ikon--emoji" style="color:var(--bahaya)">⚠</div>
         <div class="tindakan__isi">
           <div class="tindakan__nama">{{ p.judul }}</div>

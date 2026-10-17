@@ -7,35 +7,29 @@
 {{ rh.header("CATATAN KONTROL MUTU", judul,
   "Telusuri hasil pemeriksaan berdasarkan lot atau proses. Waktu, asal bahan, nomor polisi, dan setiap putaran QC ditampilkan sesuai catatan aslinya.",
   [("▤", rows|length, "Lot atau proses"), ("✓", jumlah_putaran.n, "Pencatatan QC"), ("◷", "Terbaru", "Urut berdasarkan waktu")]) }}
-<section class="riwayat-page" style="max-width:1000px;margin:0 auto">
+<section>
 
   {% if catatan_kosong %}
     <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">{{ catatan_kosong }}</p></div></div>
   {% elif not rows %}
     <div class="kosong riwayat-empty"><div><h2>Belum ada catatan QC</h2><p class="bantu">Catatan QC yang disimpan akan muncul di halaman ini.</p></div></div>
   {% else %}
-    <div class="qc-history-list">
+    <div class="tabel-standar tabel-standar--grid" style="--tabel-kolom:minmax(180px,1.2fr) minmax(160px,1fr) minmax(115px,.8fr) minmax(220px,1.5fr) 100px 24px">
+      <div class="tabel-standar__scroll">
+        <div class="tabel-standar__kepala" role="row">
+          <span>Batch / proses · waktu</span><span>Asal bahan</span><span>Nomor polisi</span><span>Hasil QC terakhir</span><span>Putaran QC</span><span aria-hidden="true"></span>
+        </div>
       {% for row in rows %}
-        <details class="qc-history-card">
-          <summary class="qc-history-card__summary">
-            <div class="qc-history-card__head">
-              <div>
-                <span class="qc-history-card__eyebrow">Batch / proses</span>
-                <h2>{{ row.ref }}</h2>
-              </div>
-              <span class="qc-history-card__count">{{ row.rounds|length }} putaran QC</span>
-            </div>
-            {% if row.rounds and (row.rounds[-1].waktu or row.rounds[-1].detail) %}
-              <div class="qc-history-card__preview">
-                {% if row.rounds[-1].waktu %}<time>{{ row.rounds[-1].waktu|jam("%d/%m/%Y · %H:%M") }}</time>{% endif %}
-                {% for label, value in row.rounds[-1].detail %}
-                  {% if loop.index <= 2 %}<span><b>{{ label }}</b> {{ value }}</span>{% endif %}
-                {% endfor %}
-              </div>
-            {% endif %}
-            <span class="qc-history-card__toggle" aria-hidden="true">Lihat semua putaran⌄</span>
+        <details class="tabel-standar__item">
+          <summary class="tabel-standar__baris">
+            <span><strong class="tabel-standar__kode">{{ row.ref }}</strong>{% if row.rounds and row.rounds[-1].waktu %}<small class="tabel-standar__sekunder">{{ row.rounds[-1].waktu|jam("%d/%m/%Y · %H:%M") }}</small>{% endif %}</span>
+            <span>{{ row.asal or '—' }}</span>
+            <span>{{ row.plat or '—' }}</span>
+            <span>{% if row.rounds %}{% for label, value in row.rounds[-1].detail %}{% if loop.index <= 2 %}<span class="tabel-standar__hasil"><b>{{ label }}</b> {{ value }}</span>{% endif %}{% endfor %}{% else %}—{% endif %}</span>
+            <span><span class="tabel-standar__status">{{ row.rounds|length }} putaran</span></span>
+            <span class="tabel-standar__panah" aria-hidden="true">⌄</span>
           </summary>
-          <div class="qc-history-card__details">
+          <div class="tabel-standar__rincian">
             {% if row.asal or row.plat %}
               <div class="qc-history-card__origin">
                 {% if row.asal %}<span><small>Asal</small>{{ row.asal }}</span>{% endif %}
@@ -63,6 +57,7 @@
           </div>
         </details>
       {% endfor %}
+      </div>
     </div>
     {% if rows|length >= 200 %}<p class="bantu">Menampilkan 200 catatan terbaru.</p>{% endif %}
   {% endif %}

@@ -37,7 +37,7 @@
   </div>
 {% endif %}
 
-<div class="riwayat-list">
+<div class="riwayat-list daftar-standar">
 {% for k in kartu %}
   {# Laci terbuka untuk Mode dryer & Lama kering juga — bukan cuma bahan.
      Nyaris selalu ada batch asal, tapi kartu tak boleh kehilangan satu-
@@ -199,7 +199,7 @@
           <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
         </div>
       {% else %}
-        <div class="riwayat-desktop-detail riwayat-desktop-detail--empty">
+        <div class="riwayat-desktop-detail">
           {% if k.jasa %}<div class="nota nota--hati"><span aria-hidden="true">◇</span><span>ID jasa <b>{{ k.kode_jasa or "belum tercatat" }}</b>{% if k.nama_pemilik %} · Pemilik <b>{{ k.nama_pemilik }}</b>{% endif %}</span></div>{% endif %}
           <div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Rincian mode dryer dan batch asal tidak tercatat untuk lot ini.</span></div>
           <a class="btn btn--kecil" href="/riwayat-pengeringan/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>

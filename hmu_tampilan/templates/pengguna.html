@@ -111,8 +111,9 @@
   <h2>Akun yang ada</h2>
   {% if not akun_list %}<p class="bantu">Belum ada akun.</p>{% endif %}
 
+  <div class="daftar-standar">
   {% for a in akun_list %}
-    <div class="baris">
+    <div class="baris daftar-standar__baris">
       <div class="baris__isi">
         <div class="baris__nama">{{ a.nama }}</div>
         <div class="baris__ket">{{ a.username }} · {{ a.peran }}</div>
@@ -149,6 +150,7 @@
       </div>
     </div>
   {% endfor %}
+  </div>
 
   <p class="bantu" style="margin-top:14px">
     Akun tidak pernah dihapus, hanya dinonaktifkan — catatan lama menunjuk ke

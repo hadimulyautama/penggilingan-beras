@@ -9,7 +9,7 @@
       </select>
     </label>
     <label class="rt-field">Kemasan
-      <select name="kemasan" class="kemasan-select" required disabled><option value="">Pilih jenis barang dahulu</option></select>
+      <select name="kemasan" required disabled><option value="">Pilih jenis barang dahulu</option></select>
     </label>
     <label class="rt-field rt-brand">Merek beras
       <select name="brand_id"><option value="">Pilih merek</option>
@@ -55,7 +55,7 @@
       <section class="rt-panel">
         <header class="rt-panel-head"><h2>1. Pilih tiket timbang</h2><p>Pilih tiket retur setelah timbang pertama. Rincian bisa diisi sebelum truk kosong ditimbang.</p></header>
         {% if tickets %}
-        <div class="rt-ticket-list" id="ticket-list">
+        <div class="rt-ticket-list daftar-standar" id="ticket-list">
           {% for t in tickets %}
           <label class="rt-ticket">
             <input type="radio" name="timbangan_transaksi_id" value="{{ t.id }}" data-state="{{ t.status_tiket }}" data-items='{{ t.rincian|tojson }}' data-code="{{ t.kode }}" data-customer="{{ t.pelanggan }}" data-plate="{{ t.nomor_polisi or 'Plat belum dicatat' }}" data-driver="{{ t.nama_sopir or 'Sopir belum dicatat' }}" data-gross="{{ t.timbang1_kg or 0 }}" data-empty="{{ t.timbang2_kg or 0 }}" data-net="{{ t.berat_barang_kg or 0 }}" {% if tiket_terpilih|string == t.id|string or (not tiket_terpilih and loop.first) %}checked{% endif %}>

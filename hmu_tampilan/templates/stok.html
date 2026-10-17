@@ -31,7 +31,7 @@
     {% include "_stok_pk_gabungan.html" %}
     <div class="stok-mobile-list">
       {% if lot %}
-        <section class="stok-mobile-list__bagian">
+        <section class="stok-mobile-list__bagian daftar-standar">
           <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 1</h2><strong>{{ kg(total) }} kg</strong></header>
           <p>{{ lot|length }} lot{% if lot|selectattr("belum_dicatat")|list|length %} · {{ lot|selectattr("belum_dicatat")|list|length }} hasil belum dicatat{% endif %}</p>
           {% for l in lot %}
@@ -46,7 +46,7 @@
         </section>
       {% endif %}
       {% if tempat %}
-        <section class="stok-mobile-list__bagian">
+        <section class="stok-mobile-list__bagian daftar-standar">
           <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 2</h2><strong>{{ kg(tempat|sum(attribute="tersedia")) }} kg</strong></header>
           <p>{{ tempat|length }} kode bahan · tumpukan</p>
           {% for t in tempat %}{% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
