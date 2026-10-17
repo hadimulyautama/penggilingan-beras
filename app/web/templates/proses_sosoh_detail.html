@@ -65,7 +65,7 @@
         belum keluar/susut {{ '%.1f'|format(proses.neraca.susut.persen)|replace('.', ',') }}%
       </p>
     {% endif %}
-    <div class="riwayat-detail__table">
+    <div class="riwayat-detail__table tabel-standar">
       <div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Dari bahan</span></div>
       <div class="riwayat-detail__table-row"><strong>{{ proses.neraca.beras.nama }}</strong><span>{{ kg(proses.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(proses.neraca.beras.persen)|replace(".", ",") if proses.neraca.beras.persen is not none else "—" }}%</span></div>
       {% for bagian in proses.neraca.samping %}
@@ -90,7 +90,7 @@
       <p class="sosoh-detail__bahan-hint">Setiap bagian menunjukkan total isi silo. Rincian di bawahnya menunjukkan jenis bahan dan lot asalnya.</p>
     {% endif %}
     {% if baris_grup %}
-      <div class="riwayat-detail__table{% if judul == 'Bahan baku masuk per silo' %} sosoh-detail__bahan-list{% endif %}">
+      <div class="riwayat-detail__table tabel-standar{% if judul == 'Bahan baku masuk per silo' %} sosoh-detail__bahan-list{% endif %}">
         <div class="riwayat-detail__table-head"><span>Rincian</span><span>Berat</span><span>Jenis rincian</span></div>
         {% for baris in baris_grup %}
           {% set peran = baris[3] if baris|length > 3 else "" %}

@@ -63,7 +63,7 @@
     </section>
     <section class="riwayat-detail__card">
       <h2>Asal bahan · {{ k.bahan|length }} batch</h2>
-      {% if k.bahan %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Pemasok / pemilik</span><span>Kode dan berat</span><span>Keterangan</span></div>
+      {% if k.bahan %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Pemasok / pemilik</span><span>Kode dan berat</span><span>Keterangan</span></div>
         {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
       </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk lot ini.</p>{% endif %}
     </section>
@@ -89,7 +89,7 @@
     </section>
     <section class="riwayat-detail__card">
       <h2>Asal bahan · {{ k.bahan|length }} batch</h2>
-      {% if k.bahan %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Batch / pemilik</span><span>Berat</span><span>Keterangan</span></div>
+      {% if k.bahan %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Batch / pemilik</span><span>Berat</span><span>Keterangan</span></div>
         {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
       </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk proses ini.</p>{% endif %}
     </section>
@@ -134,7 +134,7 @@
     <section class="riwayat-detail__card">
       <h2>Neraca hasil</h2>
       {% if k.neraca.timpang %}<p class="riwayat-detail__warning">Hasil melebihi bahan baku ({{ kg(k.neraca.keluar_kg) }} kg keluar dari {{ kg(k.neraca.bahan_kg) }} kg). Periksa catatan hasil.</p>{% endif %}
-      {% if k.neraca.bisa_dihitung %}<div class="riwayat-detail__table"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
+      {% if k.neraca.bisa_dihitung %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Hasil</span><span>Berat</span><span>Persentase bahan</span></div>
         <div class="riwayat-detail__table-row"><strong>{{ k.neraca.beras.nama }}</strong><span>{{ kg(k.neraca.beras.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.beras.persen)|replace(".", ",") }}%</span></div>
         {% for b in k.beras %}<div class="riwayat-detail__table-row"><strong class="riwayat-detail__indent">{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
         {% for b in k.neraca.samping %}<div class="riwayat-detail__table-row"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}

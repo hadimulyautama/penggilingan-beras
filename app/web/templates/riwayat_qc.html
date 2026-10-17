@@ -49,7 +49,7 @@
                     <strong>{{ "QC " ~ putaran.nomor if putaran.nomor else "QC" }}</strong>
                     {% if putaran.waktu %}<time>{{ putaran.waktu|jam("%d/%m/%Y · %H:%M") }}</time>{% endif %}
                   </div>
-                  <table class="qc-history-values">
+                  <table class="qc-history-values tabel-standar">
                     <thead><tr><th scope="col">Komponen QC</th><th scope="col">Hasil pemeriksaan</th></tr></thead>
                     <tbody>
                       {% for label, value in putaran.detail %}

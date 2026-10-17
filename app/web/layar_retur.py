@@ -27,7 +27,7 @@ def _boleh(akun) -> bool:
     return can_see_financials(akun.user)
 
 
-async def _siapkan(db):
+async def _siapkan(db, sebelum: int | None = None):
     """Data layar: tiket retur belum dicatat, SKU valid, dan penerimaan terakhir."""
     tickets = (await db.execute(text("""
         SELECT t.id, t.kode, t.tanggal, t.pelanggan_id,
@@ -58,22 +58,68 @@ async def _siapkan(db):
                COUNT(i.id) AS jumlah_jenis
         FROM customer_returns r LEFT JOIN customer_return_items i
           ON i.customer_return_id = r.id
-        GROUP BY r.id ORDER BY r.waktu DESC LIMIT 12
-    """))).mappings().all()
+        WHERE (CAST(:sebelum AS INTEGER) IS NULL OR r.id < :sebelum)
+        GROUP BY r.id ORDER BY r.id DESC LIMIT 51
+    """), {"sebelum": sebelum})).mappings().all()
     return tickets, katalog, mutu, recent
 
 
 @router.get("/retur")
-async def halaman_retur(request: Request, akun=Depends(butuh_akun)):
+async def halaman_retur(request: Request, akun=Depends(butuh_akun),
+                         sebelum: int | None = None):
     if not _boleh(akun):
         raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
     async with SessionLocal() as db:
-        tickets, katalog, mutu, recent = await _siapkan(db)
+        tickets, katalog, mutu, recent = await _siapkan(db, sebelum)
     return await render_laci(request, "retur.html", layar="retur",
                               tickets=tickets, katalog=katalog, mutu=mutu,
-                              recent=recent, pesan=request.query_params.get("pesan"),
+                              recent=recent[:50],
+                              sebelum_berikut=recent[49]["id"] if len(recent) > 50 else None,
+                              pesan=request.query_params.get("pesan"),
                               gagal=request.query_params.get("gagal"),
                               tiket_terpilih=request.query_params.get("tiket", ""))
+
+
+@router.get("/retur/{retur_id}")
+async def detail_retur(retur_id: int, request: Request, akun=Depends(butuh_akun)):
+    if not _boleh(akun):
+        raise HTTPException(403, "Penerimaan retur hanya tersedia untuk Admin.")
+    from app.models import User, Warehouse
+
+    async with SessionLocal() as db:
+        retur = await db.get(CustomerReturn, retur_id)
+        if retur is None:
+            raise HTTPException(404, "Penerimaan retur tidak ditemukan.")
+        penerima = await db.get(User, retur.input_by)
+        gudang = await db.get(Warehouse, retur.warehouse_id) if retur.warehouse_id else None
+        items = (await db.execute(text("""
+            SELECT i.*, s.kategori, m.nama AS kemasan, z.ukuran_kg,
+                   b.nama AS merek, q.kode AS mutu
+            FROM customer_return_items i
+            JOIN product_skus s ON s.id=i.product_sku_id
+            JOIN packaging_materials m ON m.id=s.packaging_material_id
+            JOIN package_sizes z ON z.id=s.package_size_id
+            LEFT JOIN brands b ON b.id=s.brand_id
+            LEFT JOIN rice_quality_standards q ON q.id=i.rice_quality_standard_id
+            WHERE i.customer_return_id=:id ORDER BY i.id
+        """), {"id": retur.id})).mappings().all()
+        tiket = (await db.execute(text("""
+            SELECT kode,arah,status_tiket,status_transaksi,nomor_polisi,nama_sopir,
+                   timbang1_kg,timbang2_kg,timbang1_waktu,timbang2_waktu,
+                   netto_timbangan_kg,berat_barang_kg
+            FROM timbangan_transaksi WHERE id=:id
+        """), {"id": retur.timbangan_transaksi_id})).mappings().first()
+        # Nama saat barang diterima tetap dipakai jika master produk berganti.
+        rincian = await db.scalar(select(ReturRincian).where(
+            ReturRincian.timbangan_transaksi_id == retur.timbangan_transaksi_id))
+        nama_snapshot = {(m.get("sku_id"), m.get("quality_id")): m.get("nama")
+                         for m in ((rincian.muatan or []) if rincian else [])}
+        items = [dict(i, nama=nama_snapshot.get((i["product_sku_id"],
+                                               i["rice_quality_standard_id"]))) for i in items]
+    return await render_laci(request, "retur_detail.html", layar="retur",
+                             retur=retur, items=items, tiket=tiket,
+                             penerima=penerima.nama if penerima else "—",
+                             gudang=gudang.nama_gudang if gudang else "—")
 
 
 @router.post("/retur/terima")

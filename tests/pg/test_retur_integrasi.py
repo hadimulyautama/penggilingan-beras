@@ -359,3 +359,41 @@ async def test_berat_retur_otomatis_dan_selisih_tiket_dikurangi_rincian(pg,konte
         assert stock.berat_total_kg==3000
         assert stock.jumlah_karung==120
         assert stock.kemasan_mengurangi_stok is False
+
+
+async def test_retur_diterima_tabel_dan_detail_lengkap(pg, konteks):
+    from pathlib import Path
+    c, tid, sid = konteks
+    await c.post('/retur/terima', data=form(tid, sid))
+    async with pg() as db:
+        await db.execute(text("""UPDATE timbangan_transaksi SET status_tiket='SELESAI',
+            timbang2_kg=6010,berat_barang_kg=2990,netto_timbangan_kg=2990,
+            nama_sopir='Sopir Retur' WHERE id=:id"""), {'id': tid})
+        await db.commit()
+    data = form(tid, sid, 'terima')
+    data.update(alasan_selisih='Isi karung berkurang',catatan='Kemasan diperiksa',
+                catatan_item='Karung terbuka')
+    hasil = await c.post('/retur/terima', data=data)
+    assert 'pesan=' in hasil.headers['location']
+    async with pg() as db:
+        retur = await db.scalar(select(CustomerReturn))
+        rid, kode = retur.id, retur.kode
+    daftar = await c.get('/retur')
+    detail = await c.get(f'/retur/{rid}')
+    assert daftar.status_code == detail.status_code == 200
+    assert 'class="tabel-standar"' in daftar.text
+    assert f'href="/retur/{rid}"' in daftar.text
+    for isi in [kode,'RTP-UJI','Sopir Retur','Penerima retur','Karung retur',
+                'Karung terbuka','Isi karung berkurang','Kemasan diperiksa','120']:
+        assert isi in detail.text
+    assert 'id="return-form"' not in detail.text
+    assert (await c.get('/retur/9999999')).status_code == 404
+    Path('/tmp/hmu-retur-daftar.html').write_text(daftar.text)
+    Path('/tmp/hmu-retur-detail.html').write_text(detail.text)
+
+
+async def test_detail_retur_tetap_membutuhkan_admin(konteks):
+    c, _, _ = konteks
+    c._transport.app.dependency_overrides[butuh_akun] = lambda: SimpleNamespace(
+        user=SimpleNamespace(id=1, role='operator'))
+    assert (await c.get('/retur/1')).status_code == 403

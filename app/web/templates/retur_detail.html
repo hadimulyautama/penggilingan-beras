@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block judul %}Detail retur {{ retur.kode }}{% endblock %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
+{% block isi %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');</style>
+<div class="riwayat-detail">
+  <a class="riwayat-detail__back" href="/retur">← Kembali ke Barang Retur</a>
+  <header class="riwayat-detail__card">
+    <h1>{{ retur.kode }}</h1>
+    <span class="tabel-standar__status tabel-standar__status--selesai">Sudah diterima ke stok</span>
+    <dl class="riwayat-detail__facts">
+      <div><dt>Pelanggan</dt><dd>{{ retur.nama_pelanggan or 'Pelanggan tidak tercatat' }}</dd></div>
+      <div><dt>Nomor polisi</dt><dd>{{ retur.nomor_polisi or '—' }}</dd></div>
+      <div><dt>Diterima pada</dt><dd>{{ retur.waktu|jam }}</dd></div>
+      <div><dt>Diterima oleh</dt><dd>{{ penerima }}</dd></div>
+      <div><dt>Gudang tujuan</dt><dd>{{ gudang }}</dd></div>
+    </dl>
+  </header>
+  <section class="riwayat-detail__card">
+    <h2>Rincian barang yang diterima</h2>
+    <div class="tabel-standar__scroll">
+      <table class="tabel-standar">
+        <thead><tr><th>Barang / merek</th><th>Mutu</th><th>Kemasan</th><th class="tabel-standar__angka">Jumlah kemasan</th><th class="tabel-standar__angka">Berat</th><th>Catatan</th><th>Catatan stok</th></tr></thead>
+        <tbody>{% for i in items %}
+          <tr><td><strong>{{ i.nama or i.kategori.replace('_',' ').title() }}</strong>{% if not i.nama %}<small class="tabel-standar__sekunder">{{ i.merek or 'Tanpa merek' }}</small>{% endif %}</td>
+          <td>{{ i.mutu or '—' }}</td><td>{{ i.kemasan }} · {{ kg(i.ukuran_kg) }} kg</td>
+          <td class="tabel-standar__angka">{{ i.jumlah_karung }}</td><td class="tabel-standar__angka">{{ kg(i.berat_total_kg) }} kg</td>
+          <td>{{ i.catatan or '—' }}</td><td>{{ '#' ~ i.finished_goods_stock_id if i.finished_goods_stock_id else '—' }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  <section class="riwayat-detail__card">
+    <h2>Pencocokan berat penerimaan</h2>
+    <dl class="riwayat-detail__facts">
+      <div><dt>Berat menurut tiket saat diterima</dt><dd>{{ kg(retur.berat_tiket_kg) }} kg</dd></div>
+      <div><dt>Total rincian masuk stok</dt><dd>{{ kg(retur.berat_rincian_kg) }} kg</dd></div>
+      <div><dt>Selisih tiket − rincian</dt><dd>{{ kg(retur.selisih_kg) }} kg</dd></div>
+      <div><dt>Alasan selisih</dt><dd>{{ retur.alasan_selisih or '—' }}</dd></div>
+    </dl>
+    <h3>Catatan penerimaan</h3><p>{{ retur.catatan or 'Tidak ada catatan.' }}</p>
+  </section>
+  <section class="riwayat-detail__card">
+    <h2>Tiket timbang terkait · {{ retur.kode_tiket }}</h2>
+    <dl class="riwayat-detail__facts">
+      <div><dt>Berat truk bermuatan saat diterima</dt><dd>{{ kg(retur.timbang1_kg) ~ ' kg' if retur.timbang1_kg is not none else '—' }}</dd></div>
+      <div><dt>Berat truk kosong saat diterima</dt><dd>{{ kg(retur.timbang2_kg) ~ ' kg' if retur.timbang2_kg is not none else '—' }}</dd></div>
+      {% if tiket %}
+      <div><dt>Status tiket sekarang</dt><dd>{{ tiket.status_tiket }} · {{ tiket.status_transaksi }}</dd></div>
+      <div><dt>Nomor polisi di tiket</dt><dd>{{ tiket.nomor_polisi or '—' }}</dd></div>
+      <div><dt>Nama sopir</dt><dd>{{ tiket.nama_sopir or '—' }}</dd></div>
+      <div><dt>Timbang bermuatan</dt><dd>{{ kg(tiket.timbang1_kg) ~ ' kg' if tiket.timbang1_kg is not none else '—' }}{% if tiket.timbang1_waktu %} · {{ tiket.timbang1_waktu|jam }}{% endif %}</dd></div>
+      <div><dt>Timbang kosong</dt><dd>{{ kg(tiket.timbang2_kg) ~ ' kg' if tiket.timbang2_kg is not none else '—' }}{% if tiket.timbang2_waktu %} · {{ tiket.timbang2_waktu|jam }}{% endif %}</dd></div>
+      <div><dt>Netto timbang</dt><dd>{{ kg(tiket.netto_timbangan_kg) ~ ' kg' if tiket.netto_timbangan_kg is not none else '—' }}</dd></div>
+      <div><dt>Berat barang di tiket</dt><dd>{{ kg(tiket.berat_barang_kg) ~ ' kg' if tiket.berat_barang_kg is not none else '—' }}</dd></div>
+      {% endif %}
+    </dl>
+    {% if not tiket %}<p class="bantu">Tiket tidak dapat ditemukan. Data timbang saat penerimaan tetap tersimpan di atas.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

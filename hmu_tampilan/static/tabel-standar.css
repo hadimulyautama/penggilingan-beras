@@ -1,0 +1,95 @@
+/* Standar tabel Pos Produksi, mengikuti TABEL Riwayat Proses. Struktur kolom milik halaman; rupa milik kelas ini.
+   Nama lama dipertahankan sebagai alias selama migrasi templat bertahap. */
+:root {
+  --tabel-radius: 12px;
+  --tabel-padding-x: 8px;
+  --tabel-padding-y: 9px;
+  --tabel-header-size: .7rem;
+  --tabel-body-size: .82rem;
+  --tabel-header-weight: 750;
+  --tabel-kode-weight: 700;
+}
+body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel,.qc-history-values,.riwayat-detail__table,.riwayat-desktop-list) {
+  --tabel-bg: var(--panel);
+  --tabel-header-bg: var(--panel-2);
+  --tabel-garis: var(--kulit-batas,var(--garis));
+  --tabel-teks: var(--tinta);
+  --tabel-redup: var(--kulit-redup,var(--redup));
+  --tabel-hover: var(--panel-2);
+  color: var(--tabel-teks);
+}
+body :is(table.tabel-standar,.stok-tabel,.stok-produk-tabel,.qc-history-values) {
+  width: 100%; border-collapse: separate; border-spacing: 0; background: var(--tabel-bg);
+}
+body :is(.tabel-standar,.antrian-listview--tabel) :is(.tabel-standar__scroll,.antrian-tabel-scroll) {
+  border-radius: var(--tabel-radius); background:var(--tabel-bg);
+}
+body :is(.tabel-standar,.stok-tabel,.stok-produk-tabel,.qc-history-values) thead th,
+body :is(.tabel-standar,.antrian-listview--tabel) .antrian-tabel__kepala,
+body .riwayat-detail__table-head {
+  background: var(--tabel-header-bg); color: var(--tabel-redup);
+  font-size: var(--tabel-header-size); font-weight:var(--tabel-header-weight);
+  letter-spacing:.045em; text-transform:uppercase; text-align:left;
+  padding:9px var(--tabel-padding-x); border-color:var(--tabel-garis);
+}
+body :is(.tabel-standar,.stok-produk-tabel,.qc-history-values) tbody :is(td,th),
+body .riwayat-detail__table-row {
+  color:var(--tabel-teks); font-size:var(--tabel-body-size); line-height:1.3;
+  padding:var(--tabel-padding-y) var(--tabel-padding-x); border-color:var(--tabel-garis);
+}
+body :is(.tabel-standar,.antrian-listview--tabel) .antrian-tabel__sel {
+  color:var(--tabel-teks); font-size:var(--tabel-body-size); line-height:1.3;
+}
+body :is(.tabel-standar,.antrian-listview--tabel) .antrian-item>summary,
+body :is(.tabel-standar,.stok-tabel,.stok-produk-tabel) :is(.stok-baris__ringkas,.stok-produk-baris__ringkas) {
+  padding-top:var(--tabel-padding-y); padding-bottom:var(--tabel-padding-y);
+}
+body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel) a {
+  color:inherit; text-decoration:none;
+}
+body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel) a:hover {
+  text-decoration:none;
+}
+body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel) a:focus-visible {
+  outline:2px solid var(--aksi,var(--tinta)); outline-offset:-2px;
+}
+body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel) :is(.tabel-standar__kode,.padat__nama,.stok-baris__kode>span) {
+  font-weight:var(--tabel-kode-weight); text-decoration:none;
+}
+body :is(.tabel-standar,.stok-produk-tabel,.qc-history-values) tbody tr:hover,
+body :is(.tabel-standar,.antrian-listview--tabel) .antrian-item:hover {
+  background:var(--tabel-hover);
+}
+.tabel-standar__scroll { border-radius:var(--tabel-radius); background:var(--panel); min-width:0; max-width:100%; overflow-x:auto; border:1px solid var(--tabel-garis,var(--garis)); scrollbar-width:thin; }
+body table.tabel-standar { text-align:left; }
+body table.tabel-standar th,body table.tabel-standar td { border-bottom:1px solid var(--tabel-garis); vertical-align:middle; }
+body table.tabel-standar tbody tr:last-child td { border-bottom:0; }
+body table.tabel-standar th { white-space:nowrap; }
+body table.tabel-standar .tabel-standar__kode { white-space:nowrap; }
+body .tabel-standar .tabel-standar__angka { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.tabel-standar__sekunder { display:block; margin-top:3px; color:var(--tabel-redup); font-size:.73rem; font-weight:450; }
+.tabel-standar__status { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; background:var(--panel-2); color:var(--tabel-redup); font-size:.7rem; font-weight:700; white-space:nowrap; }
+.tabel-standar__status--selesai { background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu)); color:var(--aman); }
+.tabel-standar__status--batal { background:color-mix(in srgb,#c84545 16%,var(--kulit-kartu)); color:#b42323; }
+body table.tabel-standar tr[data-detail-keluar] { cursor:pointer; }
+
+/* Header dan sel Riwayat Proses memakai token yang sama dengan tabel lainnya.
+   Grid kolom dan pergantian kartu ponsel tetap milik halaman. */
+body table.tabel-standar thead tr { height:48px; }
+body .tabel-standar .riwayat-desktop-head { font-size:var(--tabel-header-size); font-weight:var(--tabel-header-weight); color:var(--tabel-redup); background:var(--tabel-header-bg); border-color:var(--tabel-garis); }
+body .tabel-standar .riwayat-desktop-row { background:var(--tabel-bg); border-color:var(--tabel-garis); }
+body .tabel-standar .riwayat-desktop-row>summary { font-size:var(--tabel-body-size); }
+body .tabel-standar :is(.riwayat-desktop-head>span,.riwayat-desktop-row summary>span) { padding:var(--tabel-padding-y) var(--tabel-padding-x); }
+body .tabel-standar .riwayat-desktop-row>summary:hover { background:var(--tabel-hover); }
+body .tabel-standar :is(.riwayat-desktop-lot strong,.riwayat-desktop-lot strong a) { font-weight:var(--tabel-kode-weight); text-decoration:none; }
+
+body table.tabel-standar :is(.stok-tabel__sel,.stok-produk-tabel__sel) { padding:0; border:0; }
+body table.tabel-standar tr[data-detail-retur] { cursor:pointer; }
+
+body .tabel-standar.riwayat-desktop-list { border-radius:var(--tabel-radius); }
+body .tabel-standar .riwayat-desktop-head { border-radius:var(--tabel-radius) var(--tabel-radius) 0 0; }
+body table.tabel-standar thead th:first-child { border-top-left-radius:var(--tabel-radius); }
+body table.tabel-standar thead th:last-child { border-top-right-radius:var(--tabel-radius); }
+body .tabel-standar :is(.tabel-standar__status,.riwayat-status,.antrian-tabel__status,.stok-status) { display:inline-flex; align-items:center; padding:5px 8px; border-radius:999px; font-size:.7rem; font-weight:700; white-space:nowrap; }
+body .tabel-standar :is(.tabel-standar__status--selesai,.riwayat-status--done,.riwayat-status--jasa,.antrian-tabel__status--jasa,.stok-status--jasa) { background:color-mix(in srgb,var(--aman) 17%,var(--kulit-kartu)); color:var(--aman); }
+body .tabel-standar :is(.tabel-standar__status--batal,.riwayat-status--cancel) { background:color-mix(in srgb,#c84545 16%,var(--kulit-kartu)); color:#b42323; }

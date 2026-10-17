@@ -6,7 +6,7 @@
     <div class="jumlah__ket">Gudang 1 · {{ lot|length }} lot &nbsp;·&nbsp; Gudang 2 · {{ tempat|length }} kode</div>
   </div>
   <div class="stok-desktop stok-desktop--gabungan">
-    <table class="stok-tabel">
+    <table class="stok-tabel tabel-standar">
       <thead><tr><th>Lot / kode · tanggal</th><th>Pemilik</th><th>Letak</th><th>Status</th><th>Kadar air</th><th>Broken</th><th>Susut</th><th>Nilai kualitas</th><th>Kondisi</th><th class="stok-tabel__angka">Berat tersedia</th><th></th></tr></thead>
       <tbody>
       {% for l in lot %}

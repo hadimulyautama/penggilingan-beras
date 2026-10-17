@@ -26,6 +26,8 @@
   </div>
 {% endmacro %}
 {% block isi %}
+{% import "_stok.html" as st with context %}
+{% set kg = st.kg %}
 {# Navigasi aplikasi mengganti isi .bingkai tanpa menyentuh <head>. Muat CSS
    dari isi halaman agar desain tetap aktif saat dibuka melalui menu. #}
 <style>@import url('/static/retur.css?v={{ VERSI }}-5');</style>
@@ -92,11 +94,37 @@
 
   <section class="rt-history">
     <div class="rt-history-head"><div><h2>Retur yang sudah diterima</h2><span class="rt-subtle">Barang telah dibukukan ke stok Gudang 2.</span></div><span class="rt-subtle">{{ recent|length }} catatan terbaru</span></div>
-    {% if recent %}<div class="rt-history-list">{% for r in recent %}<article class="rt-history-card"><div class="rt-history-top"><strong>{{ r.kode }} · {{ r.kode_tiket }}</strong><strong>{{ r.berat_rincian_kg }} kg</strong></div><p>{{ r.nama_pelanggan or "Pelanggan tidak tercatat" }} · {{ r.nomor_polisi or "Tanpa plat" }}<br>{{ r.jumlah_jenis }} jenis barang · bobot tiket {{ r.berat_tiket_kg }} kg · selisih {{ r.selisih_kg }} kg</p></article>{% endfor %}</div>{% else %}<div class="rt-panel rt-empty">Penerimaan retur akan muncul di sini setelah disimpan.</div>{% endif %}
+    {% if recent %}
+    <div class="tabel-standar__scroll">
+      <table class="tabel-standar">
+        <thead><tr><th>Penerimaan / tanggal</th><th>Pelanggan</th><th>Nomor polisi</th><th>Tiket timbang</th><th class="tabel-standar__angka">Berat diterima</th><th class="tabel-standar__angka">Selisih</th></tr></thead>
+        <tbody>{% for r in recent %}
+          <tr data-detail-retur="/retur/{{ r.id }}">
+            <td><a class="tabel-standar__kode" href="/retur/{{ r.id }}">{{ r.kode }}</a><small class="tabel-standar__sekunder">{{ r.waktu|jam }}</small></td>
+            <td>{{ r.nama_pelanggan or "Pelanggan tidak tercatat" }}</td>
+            <td>{{ r.nomor_polisi or "—" }}</td>
+            <td>{{ r.kode_tiket }}</td>
+            <td class="tabel-standar__angka">{{ kg(r.berat_rincian_kg) }} kg<small class="tabel-standar__sekunder">{{ r.jumlah_jenis }} jenis barang</small></td>
+            <td class="tabel-standar__angka">{{ kg(r.selisih_kg) }} kg</td>
+          </tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+    {% if sebelum_berikut %}<a class="btn btn--kecil" href="/retur?sebelum={{ sebelum_berikut }}">Retur sebelumnya</a>{% endif %}
+    {% else %}<div class="rt-panel rt-empty">Penerimaan retur akan muncul di sini setelah disimpan.</div>{% endif %}
   </section>
 </div>
 
 <template id="item-template">{{ baris_retur() }}
 </template>
+<script>
+document.querySelectorAll('[data-detail-retur]').forEach(function (baris) {
+  baris.addEventListener('click', function (e) {
+    if (!e.target.closest('a,button,input') && !window.getSelection().toString()) {
+      window.location.href = baris.dataset.detailRetur;
+    }
+  });
+});
+</script>
 <script src="/static/retur.js?v={{ VERSI }}-5" defer></script>
 {% endblock %}

@@ -47,7 +47,7 @@ from jinja2 import ChoiceLoader, FileSystemLoader
 #: Naikkan setiap kali CSS/JS/templat paket berubah. Nomor melanjutkan
 #: hitungan produksi (terakhir 123) supaya cap versi di ponsel operator tak
 #: pernah mundur.
-VERSI = "305"
+VERSI = "306"
 
 AKAR = Path(__file__).resolve().parent
 STATIC_DIR = AKAR / "static"
