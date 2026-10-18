@@ -135,6 +135,7 @@ async def proses_masuk(
         max_age=_SETAHUN, httponly=True, samesite="lax",
         secure=request.url.scheme == "https", path="/",
     )
+    _reset_perangkat(balasan, request)
     return balasan
 
 
@@ -147,6 +148,7 @@ async def proses_keluar(request: Request, akun: ProduksiAkun = Depends(butuh_aku
     """
     balasan = redirect(f"/masuk?u={akun.username}")
     balasan.delete_cookie(NAMA_COOKIE, path="/")
+    _reset_perangkat(balasan, request)
     return balasan
 
 
@@ -163,6 +165,7 @@ async def proses_keluar_semua(request: Request,
     await naikkan_versi_token(akun.id, sebab="keluar dari semua perangkat")
     balasan = redirect(f"/masuk?u={akun.username}&pesan=keluar-semua")
     balasan.delete_cookie(NAMA_COOKIE, path="/")
+    _reset_perangkat(balasan, request)
     return balasan
 
 
@@ -233,3 +236,26 @@ async def proses_ganti_sandi(
         secure=request.url.scheme == "https", path="/",
     )
     return balasan
+
+
+def _reset_perangkat(balasan, request):
+    # Nama pemakai boleh diingat, gudang kerja dan formulir sesi lama tidak.
+    from app.web import csrf
+    from app.web.lihat_sebagai import NAMA_KUKI
+    balasan.delete_cookie(NAMA_KUKI, path="/")
+    balasan.set_cookie(csrf.NAMA_COOKIE, csrf.terbitkan_baru(), path="/",
+        samesite="lax", secure=request.url.scheme == "https", httponly=False)
+
+
+@router.get("/api/sesi-formulir")
+async def sesi_formulir(request: Request):
+    request.state.jangan_perpanjang_sesi = True
+    from fastapi.responses import JSONResponse
+    from app.web import csrf
+    from app.web.security import baca_token
+    akun = await akun_opsional(request)
+    if akun is None:
+        return JSONResponse({"token": "", "aktif": False}, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"aktif": True, "token": csrf.untuk_sesi(
+        request.cookies.get(csrf.NAMA_COOKIE, ""), baca_token(request.cookies.get(NAMA_COOKIE)),
+        request.cookies.get("produksi_lihat", ""))}, headers={"Cache-Control": "no-store"})

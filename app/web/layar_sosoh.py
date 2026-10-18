@@ -126,8 +126,12 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
     from app.services.riwayat_jeda import riwayat_jeda
     async with SessionLocal() as db:
         jeda_riwayat = await riwayat_jeda(db, jenis="penyosohan", id_=process_id, params=request.query_params)
+    from app.services.penghalang_koreksi import daftar
+    async with SessionLocal() as db:
+        catatan_penghalang = await daftar(db, "sosoh", process_id) if akun.is_admin and penghalang else []
     return await render_laci(
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
+        catatan_penghalang=catatan_penghalang,
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
         layar="riwayat_sosoh",
         hasil_awal=hasil_awal,
@@ -136,7 +140,8 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         boleh_koreksi=akun.is_admin,
         penghalang_koreksi=penghalang,
         hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
-        gagal_koreksi=request.query_params.get("koreksi_gagal"),
+        gagal_koreksi=getattr(request.state, "koreksi_gagal", None) or request.query_params.get("koreksi_gagal"),
+        isian_koreksi=getattr(request.state, "koreksi_form", {}),
         jeda_riwayat=jeda_riwayat,
     )
 
@@ -151,6 +156,9 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
         Gudang2Error, _ALL_JENIS, koreksi_hasil_sosoh,
     )
     form = await request.form()
+    from app.web.layar_riwayat import _gagal_koreksi
+    if form.get("wajib_periksa") and form.get("periksa_ulang") != "ya":
+        return await _gagal_koreksi(request, akun, detail_riwayat_sosoh, process_id, form, "Periksa nilai terbaru terlebih dahulu.")
     perubahan: dict[str, float] = {}
     dasar: dict[str, float] = {}
     try:
@@ -166,9 +174,7 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
                     dasar[jenis] = float(raw)
     except (ValueError, TypeError):
         pesan_gagal = "Periksa berat hasil yang dimasukkan."
-        return RedirectResponse(
-            f"/riwayat-sosoh/{process_id}?"
-            f"{urlencode({'koreksi_gagal': pesan_gagal})}", status_code=303)
+        return await _gagal_koreksi(request, akun, detail_riwayat_sosoh, process_id, form, pesan_gagal)
     alasan = str(form.get("alasan", "")).strip()
     async with SessionLocal() as db:
         try:
@@ -177,9 +183,8 @@ async def koreksi_riwayat_sosoh(process_id: int, request: Request,
                 perubahan=perubahan, dasar=dasar, alasan=alasan,
             )
         except Gudang2Error as e:
-            return RedirectResponse(
-                f"/riwayat-sosoh/{process_id}?"
-                f"{urlencode({'koreksi_gagal': str(e)})}", status_code=303)
+            await db.rollback()
+            return await _gagal_koreksi(request, akun, detail_riwayat_sosoh, process_id, form, str(e))
     return RedirectResponse(
         f"/riwayat-sosoh/{process_id}?koreksi=berhasil", status_code=303)
 

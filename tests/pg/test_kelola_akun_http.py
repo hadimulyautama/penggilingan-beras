@@ -14,6 +14,7 @@ muncul saat barisnya benar-benar ditulis — keduanya tak terlihat dari
 pembacaan kode.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 import httpx
 import pytest
@@ -70,7 +71,7 @@ def _klien(token: str) -> httpx.AsyncClient:
     t = csrf.terbitkan_baru()
     c.cookies.set(security.NAMA_COOKIE, token)
     c.cookies.set(csrf.NAMA_COOKIE, t)
-    c._csrf = t  # dipakai tiap POST di bawah
+    c._csrf = cap_formulir(c)  # dipakai tiap POST di bawah
     return c
 
 

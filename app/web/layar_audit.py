@@ -57,7 +57,7 @@ async def batalkan_terakhir(
     rentang: str = Form("48j"),
     kelompok: str = Form("semua"),
     cari: str = Form(""),
-    log_id: int | None = Form(None),
+    log_id: int = Form(...),
     akun=Depends(butuh_admin),
 ):
     """Batalkan catatan YANG DITAMPILKAN — lewat layanan undo yang sudah ada.

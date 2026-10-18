@@ -11,6 +11,7 @@ pintu` yang masih mengatur produksi, timbangan, dan Kantor. Pintu timbangan
 diuji di repo timbangan dengan fungsi paket yang sama.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 import httpx
 import pytest
@@ -105,7 +106,7 @@ async def test_operator_gudang_1_boleh_bekerja_di_gudang_2(pg, monkeypatch):
         c.cookies.set(csrf.NAMA_COOKIE, t)
         # Layar pertamanya gudangnya sendiri.
         assert "Operator selepan" in (await c.get("/pengaturan")).text
-        r = await c.post("/lihat-sebagai", data={"peran": "operator:g2", "_csrf": t})
+        r = await c.post("/lihat-sebagai", data={"peran": "operator:g2", "_csrf": cap_formulir(c)})
         assert r.status_code in (302, 303)
         # Sesudah itu ia bekerja sebagai operator Gudang 2 — dan pitanya
         # menyebutkannya di atas setiap layar.
@@ -153,7 +154,7 @@ async def test_superadmin_terakhir_tak_bisa_dinonaktifkan_lewat_layar(pg, monkey
         t = csrf.terbitkan_baru()
         c.cookies.set("produksi_sesi", await _token(pg, bos))
         c.cookies.set(csrf.NAMA_COOKIE, t)
-        r = await c.post("/pengguna/status", data={"akun_id": bos, "_csrf": t})
+        r = await c.post("/pengguna/status", data={"akun_id": bos, "_csrf": cap_formulir(c)})
         assert r.status_code == 200 and "terakhir" in r.text
         c2 = await c.get("/pengaturan")
         assert c2.status_code == 200  # masih masuk: tak ada yang berubah

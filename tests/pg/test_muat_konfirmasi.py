@@ -1,3 +1,4 @@
+from tests.pg.formulir import cap_formulir
 """Konfirmasi memakai perintah terbaru; perubahan target tidak mengubah aktual."""
 import pytest
 from sqlalchemy import select
@@ -123,7 +124,7 @@ async def test_api_mewajibkan_pratinjau_dan_menolak_cuplikan_basi(pg, gudang):
     r = await _perintah(pg, gudang, karung=100)
     c = await _klien(pg, gudang['op'], 'uji_muat7_op', mode='operator')
     async with c:
-        headers = {'X-CSRF-Token': c.cookies.get(csrf.NAMA_COOKIE)}
+        headers = {'X-CSRF-Token': cap_formulir(c)}
         resp = await c.post('/api/actions/muat-semua', json={'perintah':str(r.rec.id)}, headers=headers)
         assert resp.status_code == 409, resp.text
         resp = await c.get('/api/actions/pratinjau-muat', params={'perintah':r.rec.id})

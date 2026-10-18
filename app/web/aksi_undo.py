@@ -82,7 +82,8 @@ async def undo_terakhir(user: User = Depends(pengguna_aksi)) -> list[dict]:
             else:
                 pilihan.append({
                     "value": f"x:{lingkup}",
-                    "label": f"{awalan}: {_kalimat(p)} — belum bisa dibatalkan",
+                    "label": f"{awalan}: {_kalimat(p)} — terkunci: {p.terkunci or 'belum bisa dibatalkan'}",
+                    "disabled": True, "sebab": p.terkunci,
                 })
     return pilihan
 
@@ -107,6 +108,7 @@ async def act_undo(req: UndoReq, user: User = Depends(pengguna_aksi)) -> dict:
     wajib(lingkup in _lingkup_untuk(user),
           "Anda hanya boleh membatalkan input Anda sendiri.")
 
+    wajib(log_id is not None, "Buka ulang pratinjau pembatalan dan pilih catatan yang diperiksa.")
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:

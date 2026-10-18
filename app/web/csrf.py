@@ -50,3 +50,17 @@ def perlu_periksa(metode: str, jalur: str) -> bool:
         return False
     return not any((jalur or "").startswith(p) for p in JALUR_BEBAS)
 
+
+
+def untuk_sesi(nilai: str, sesi: tuple[int, int] | None, gudang: str = "") -> str:
+    """Cap pembuka formulir: cookie CSRF saja tidak membuktikan siapa pembukanya.
+
+    Nonce diganti saat masuk/keluar. Identitas dan versi sesi ikut ditandai,
+    sehingga formulir A tidak dapat dipakai dengan cookie sesi B.
+    """
+    if sesi is None:
+        return nilai
+    import hashlib
+    from app.web.security import _kunci
+    pesan = f"{nilai}:{sesi[0]}:{sesi[1]}:{gudang}"
+    return hmac.new(_kunci(), pesan.encode(), hashlib.sha256).hexdigest()

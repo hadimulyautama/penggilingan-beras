@@ -1,0 +1,7 @@
+{% if catatan_penghalang %}
+<section aria-label="Catatan penghalang koreksi">
+  <h3>Periksa catatan hilir terlebih dahulu</h3>
+  <ul>{% for c in catatan_penghalang %}<li><a href="{{ c.url }}">{{ c.kode }}</a> · {{ c.jumlah }} kg · {{ c.status }}</li>{% endfor %}</ul>
+  <p>Periksa pemakaian paling akhir pada setiap catatan di atas. Sesuaikan atau batalkan melalui tindakan yang tersedia dan berwenang, dari hilir menuju asal, lalu buka kembali koreksi ini. Jika terkunci, mintakan koreksi berjejak kepada Admin. Tidak ada pekerjaan hilir yang dibatalkan otomatis.</p>
+</section>
+{% endif %}

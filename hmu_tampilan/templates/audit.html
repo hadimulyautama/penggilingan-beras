@@ -32,7 +32,7 @@
 
 <div class="hitungan">
   {{ catatan|length }} dari {{ semua }} catatan{% if rentang == '48j' %} ·
-  di dalam {{ JAM_BATAS }} jam, masih bisa dibatalkan{% endif %}
+  {{ JAM_BATAS }} jam terakhir; kelayakan pembatalan diperiksa terpisah{% endif %}
 </div>
 
 {# ── Membatalkan ──
@@ -64,8 +64,7 @@
           <button class="btn btn--bahaya" type="submit">Batalkan catatan ini</button>
         </form>
       {% else %}
-        <div class="nota">Jenis tindakan ini belum bisa dibatalkan otomatis.
-          Perbaiki dengan catatan baru.</div>
+        <div class="nota" role="status">Terkunci: {{ pratinjau.terkunci or 'Jenis tindakan ini belum mendukung pembatalan otomatis. Mintakan koreksi kepada Admin.' }}</div>
       {% endif %}
     </div>
   </div>
@@ -81,6 +80,7 @@
       <div class="audit__teks">{{ c.ringkas }}</div>
       <div class="audit__kaki">
         <span>{{ c.oleh }}</span>
+        {% if c.dibatalkan %}<span>Sudah dibatalkan · jejak dipertahankan</span>{% endif %}
         {% if not c.muda %}
           <span class="kunci-tua">🔒 lewat {{ JAM_BATAS }} jam — terkunci</span>
         {% endif %}

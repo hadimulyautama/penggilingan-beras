@@ -4,6 +4,7 @@ Pemilik dan saldo tetap diperiksa untuk penjualan serta pengambilan jasa.
 Riwayat pengeluaran silo lama tetap harus dapat dibaca dan dibatalkan.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 from datetime import date
 from sqlalchemy import select
@@ -637,7 +638,7 @@ async def test_api_pk_tumpukan_dari_picker_sampai_muat(pg, pabrik, pemasok, mili
                           pemasok.id if jid is None else None)
     c = await _klien(pg, pabrik['user'], 'uji_pk_http')
     async with c:
-        headers = {'X-CSRF-Token':c.cookies.get(csrf.NAMA_COOKIE)}
+        headers = {'X-CSRF-Token':cap_formulir(c)}
         if milik_jasa:
             opsi = (await c.get('/api/actions/barang-jasa', params={'induk':pabrik['pelanggan_a']})).json()
             nilai = f'g2:tumpukan@{jid}'

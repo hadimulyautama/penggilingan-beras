@@ -94,23 +94,32 @@
         {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
       </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk proses ini.</p>{% endif %}
     </section>
+    {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}
       {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
       {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
       {% if penghalang_koreksi %}
         <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% include '_penghalang_koreksi.html' %}
+        {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
       {% else %}
         <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
           <summary><h2>Catatan hasil</h2></summary>
           <p class="riwayat-koreksi__info">Mengubah berat PK akan memperbarui hasil dan stok dari proses giling ini. Koreksi hanya dapat disimpan sebelum PK ditransfer ke Gudang 2 atau dicatat sebagai barang keluar.</p>
           <form method="post" action="/riwayat-giling/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
             <label class="riwayat-koreksi__field">
               <span>PK hasil giling</span>
               <input type="hidden" name="dasar_pk" value="{{ '%.2f'|format(hasil_awal or 0) }}">
-              <span class="riwayat-koreksi__input"><input type="number" name="hasil_pk" min="0" step="0.01" value="{{ '%.2f'|format(hasil_awal or 0) }}" required><small>kg</small></span>
+              <span class="riwayat-koreksi__input"><input type="number" name="hasil_pk" min="0" step="0.01" value="{{ isian_koreksi.get('hasil_pk', '%.2f'|format(hasil_awal or 0)) }}" required><small>kg</small></span>
             </label>
-            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi"></textarea></label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi">{{ isian_koreksi.get('alasan', '') }}</textarea></label>
+            {% if gagal_koreksi %}
+            <p>Nilai terbaru: {% if jenis == 'sosoh' %}{% for j, v in hasil_awal.items() %}{{ nama_hasil(j) }} {{ v }} kg; {% endfor %}{% else %}{{ hasil_awal }} kg{% endif %}. Bandingkan dengan angka yang Anda ketik.</p>
+            <input type="hidden" name="wajib_periksa" value="1">
+            <label><input type="checkbox" name="periksa_ulang" value="ya" required> Saya sudah memeriksa nilai terbaru dan koreksi ini.</label>
+            {% endif %}
             <button class="btn btn--utama" type="submit">Simpan koreksi</button>
           </form>
         </details>
@@ -152,24 +161,33 @@
         </div>
       {% else %}<p class="riwayat-detail__empty">Rincian silo tidak tercatat.</p>{% endfor %}
     </section>
+    {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}
       {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
       {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
       {% if penghalang_koreksi %}
         <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% include '_penghalang_koreksi.html' %}
+        {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
       {% else %}
         <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
           <summary><h2>Catatan hasil</h2></summary>
           <form method="post" action="/riwayat-sosoh/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
             {% for jenis in jenis_hasil %}
               <label class="riwayat-koreksi__field">
                 <span>{{ nama_hasil(jenis) }}</span>
                 <input type="hidden" name="dasar_{{ jenis }}" value="{{ '%.2f'|format(hasil_awal.get(jenis, 0)) }}">
-                <span class="riwayat-koreksi__input"><input type="number" name="hasil_{{ jenis }}" min="0" step="0.01" value="{{ '%.2f'|format(hasil_awal.get(jenis, 0)) }}" required><small>kg</small></span>
+                <span class="riwayat-koreksi__input"><input type="number" name="hasil_{{ jenis }}" min="0" step="0.01" value="{{ isian_koreksi.get('hasil_' ~ jenis, '%.2f'|format(hasil_awal.get(jenis, 0))) }}" required><small>kg</small></span>
               </label>
             {% endfor %}
-            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi"></textarea></label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi">{{ isian_koreksi.get('alasan', '') }}</textarea></label>
+            {% if gagal_koreksi %}
+            <p>Nilai terbaru: {% if jenis == 'sosoh' %}{% for j, v in hasil_awal.items() %}{{ nama_hasil(j) }} {{ v }} kg; {% endfor %}{% else %}{{ hasil_awal }} kg{% endif %}. Bandingkan dengan angka yang Anda ketik.</p>
+            <input type="hidden" name="wajib_periksa" value="1">
+            <label><input type="checkbox" name="periksa_ulang" value="ya" required> Saya sudah memeriksa nilai terbaru dan koreksi ini.</label>
+            {% endif %}
             <button class="btn btn--utama" type="submit">Simpan koreksi</button>
           </form>
         </details>
@@ -191,23 +209,32 @@
       </dl>
       {% if k.dibatalkan %}<p class="riwayat-detail__warning">Transfer dibatalkan. PK ini tidak sampai ke Gudang 2.</p>{% endif %}
     </section>
+    {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}
       {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi transfer tersimpan.{% if pengganti %} Transfer pengganti tercatat sebagai <a href="/riwayat-transfer/{{ pengganti_id }}">{{ pengganti }}</a>.{% else %} Transfer lama dibatalkan; berat akhir transfer 0 kg.{% endif %}</p>{% endif %}
       {% if gagal_koreksi %}<p class="riwayat-detail__warning">{{ gagal_koreksi }}</p>{% endif %}
       {% if penghalang_koreksi %}
         <p class="riwayat-detail__warning">{{ penghalang_koreksi }}</p>
+        {% include '_penghalang_koreksi.html' %}
+        {% if isian_koreksi %}<details open><summary>Isian yang belum tersimpan</summary>{% for nama, nilai in isian_koreksi.items() %}<label>{{ 'Alasan koreksi' if nama == 'alasan' else (nama_hasil(nama.removeprefix('hasil_')) if jenis == 'sosoh' else ('PK hasil giling' if jenis == 'giling' else 'Berat transfer')) }}<textarea readonly>{{ nilai }}</textarea></label>{% endfor %}</details>{% endif %}
       {% else %}
         <details class="riwayat-detail__card riwayat-koreksi" {% if gagal_koreksi %}open{% endif %}>
           <summary><h2>Catatan hasil</h2></summary>
           <p class="riwayat-koreksi__info">Koreksi membatalkan transfer lama, lalu mencatat transfer pengganti dengan tujuan yang sama. Koreksi hanya bisa dilakukan sebelum PK dipakai untuk penyosohan atau dipindahkan dari tumpukan ke silo.</p>
           <form method="post" action="/riwayat-transfer/{{ k.id }}/koreksi" class="riwayat-koreksi__form">
             <input type="hidden" name="_csrf" value="{{ CSRF }}">
+            {% if gagal_koreksi %}<p role="alert">{{ gagal_koreksi }} Isian Anda dipertahankan.</p>{% endif %}
             <label class="riwayat-koreksi__field">
               <span>Berat transfer</span>
               <input type="hidden" name="dasar_transfer" value="{{ '%.2f'|format(hasil_awal or 0) }}">
-              <span class="riwayat-koreksi__input"><input type="number" name="hasil_transfer" min="0" step="0.01" value="{{ '%.2f'|format(hasil_awal or 0) }}" required><small>kg</small></span>
+              <span class="riwayat-koreksi__input"><input type="number" name="hasil_transfer" min="0" step="0.01" value="{{ isian_koreksi.get('hasil_transfer', '%.2f'|format(hasil_awal or 0)) }}" required><small>kg</small></span>
             </label>
-            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi"></textarea></label>
+            <label class="riwayat-koreksi__alasan">Alasan koreksi<textarea name="alasan" maxlength="500" required placeholder="Alasan koreksi">{{ isian_koreksi.get('alasan', '') }}</textarea></label>
+            {% if gagal_koreksi %}
+            <p>Nilai terbaru: {% if jenis == 'sosoh' %}{% for j, v in hasil_awal.items() %}{{ nama_hasil(j) }} {{ v }} kg; {% endfor %}{% else %}{{ hasil_awal }} kg{% endif %}. Bandingkan dengan angka yang Anda ketik.</p>
+            <input type="hidden" name="wajib_periksa" value="1">
+            <label><input type="checkbox" name="periksa_ulang" value="ya" required> Saya sudah memeriksa nilai terbaru dan koreksi ini.</label>
+            {% endif %}
             <button class="btn btn--utama" type="submit">Simpan koreksi</button>
           </form>
         </details>

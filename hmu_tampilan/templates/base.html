@@ -15,6 +15,7 @@
 <html lang="id" data-versi="{{ VERSI }}">
 <head>
 <meta charset="utf-8">
+<meta name="formulir-sesi" content="{{ CSRF }}">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block judul %}{{ APP_NAMA }}{% endblock %} · PT Hadi Mulya Utama</title>
 <meta name="theme-color" content="#203f70">
@@ -77,6 +78,7 @@
 <body class="{{ 'terik' if TERIK }}">
 <div class="bingkai">
 {% block pita %}
+{% if VIEW in ('selepan', 'polesan') %}<div class="pita-samar" role="status">GUDANG {{ '1 · SELEPAN' if VIEW == 'selepan' else '2 · PENYOSOHAN' }} · {{ akun.nama }}</div>{% endif %}
 {% if MODE_UJI %}<div class="pita-uji">MODE UJI · DATA BOLEH DIHAPUS</div>{% endif %}
 {% if MOCKUP %}<div class="pita-uji">MOCKUP · DATA CONTOH, BUKAN DATA PABRIK</div>{% endif %}
 {# Jalan pulangnya ikut di pita, bukan disembunyikan di Pengaturan:
@@ -432,6 +434,9 @@
 </div>
 {% endif %}
 
+<div id="formulir-sesi" hidden data-token="{{ CSRF }}" data-nonce="{{ CSRF_NONCE }}" data-aktif="{{ '1' if akun else '0' }}"></div>
+<script src="/static/sesi.js?v={{ VERSI }}"></script>
+<script src="/static/koreksi.js?v={{ VERSI }}"></script>
 <script>
 /* ── Buka & tutup laci ──
    Ditulis di sini, di dalam `.bingkai`, karena perpindahan halaman instan

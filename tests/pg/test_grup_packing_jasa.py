@@ -3,6 +3,7 @@
 Keputusan pemilik 18 Oktober 2026 menggantikan pemisahan submenu 6 Oktober.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 import pytest
 
@@ -143,7 +144,7 @@ async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
     t = csrf.terbitkan_baru()
     c.cookies.set(security.NAMA_COOKIE, tok)
     c.cookies.set(csrf.NAMA_COOKIE, t)
-    c.headers[csrf.NAMA_HEADER] = t
+    c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
     return c
 
 

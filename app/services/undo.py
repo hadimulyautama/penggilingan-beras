@@ -37,6 +37,7 @@ from app.models import (
     User,
 )
 from app.services.activity_log import log_activity
+from app.database import now_local
 
 # Tabel yang tindakannya bisa di-undo.
 _UNDOABLE = {
@@ -618,7 +619,7 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     if proc.status != "selesai":
         raise UndoError(f"{proc.kode_proses} tidak dalam status selesai.")
     trf = (
-        await db.execute(select(InternalTransfer.id).where(InternalTransfer.milling_process_id == proc_id))
+        await db.execute(select(InternalTransfer.id).where(InternalTransfer.milling_process_id == proc_id, InternalTransfer.status == "terkirim"))
     ).first()
     if trf:
         raise UndoError(f"{proc.kode_proses} sudah ada transfer PK — tidak bisa dibatalkan.")
@@ -1534,6 +1535,7 @@ class Pratinjau:
     oleh: str
     waktu: datetime
     didukung: bool
+    terkunci: str | None = None
 
 
 async def pratinjau_terakhir(
@@ -1553,6 +1555,7 @@ async def pratinjau_terakhir(
         select(User.nama).where(User.id == log.changed_by)
     )).scalars().first()
     ringkas = (log.new_value or "").strip() or f"#{log.record_id}"
+    sebab = await sebab_terkunci(db, log)
     return Pratinjau(
         log_id=log.id,
         tabel=log.table_name,
@@ -1560,7 +1563,8 @@ async def pratinjau_terakhir(
         ringkas=ringkas.split("|")[0].strip()[:60],
         oleh=nama or "?",
         waktu=log.waktu_perubahan,
-        didukung=log.table_name in _UNDOABLE or log.aksi == "akhiri_penyosohan",
+        didukung=sebab is None,
+        terkunci=sebab,
     )
 
 
@@ -1673,3 +1677,42 @@ async def undo_last(
     )
     await db.commit()
     return msg
+
+
+async def sebab_terkunci(db: AsyncSession, log: ActivityLog) -> str | None:
+    """Uji seluruh pagar penangan dalam transaksi yang SELALU dibatalkan.
+
+    Penangan undo memuat banyak pemeriksaan stok dan jejak lama. Menyalinnya
+    ke daftar pilihan akan tertinggal lagi. Transaksi luar dimiliki fungsi
+    ini; bahkan commit dari penangan hanya melepas SAVEPOINT, tidak pernah
+    mengesahkan transaksi luar. Tidak ada stok, audit, atau outbox yang
+    tersimpan. Nomor sequence dapat berlubang, seperti transaksi ditolak.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession as Sesi
+    if log.dibatalkan_pada is not None:
+        return "Tindakan ini sudah dibatalkan. Periksa riwayat koreksinya."
+    if now_local() - log.waktu_perubahan > BATAS_UNDO:
+        return "Lewat batas 48 jam. Mintakan catatan koreksi baru kepada Admin."
+    if log.table_name not in _UNDOABLE and log.aksi != "akhiri_penyosohan":
+        return "Jenis tindakan belum mendukung pembatalan otomatis. Mintakan koreksi kepada Admin."
+    # Koneksi terpisah memastikan simulasi tidak mengubah objek ORM pemanggil.
+    async with db.bind.connect() as koneksi:
+        transaksi = await koneksi.begin()
+        try:
+            async with Sesi(bind=koneksi, join_transaction_mode="create_savepoint") as simulasi:
+                from sqlalchemy import text
+                await simulasi.execute(text("SET LOCAL lock_timeout = '1500ms'"))
+                target = await simulasi.get(ActivityLog, log.id)
+                if target is None:
+                    return "Catatan sudah tidak tersedia. Buka ulang riwayat."
+                await _undo_one(simulasi, target, actor_id=log.changed_by)
+                await simulasi.flush()
+        except UndoError as e:
+            return str(e)
+        except Exception:
+            # Gagal memeriksa bukan izin untuk membatalkan. Eksekusi tetap
+            # memeriksa seluruh aturan sekali lagi di bawah kunci baris.
+            return "Kelayakan belum dapat diperiksa. Buka ulang daftar; jika tetap terkunci, hubungi Admin."
+        finally:
+            await transaksi.rollback()
+    return None

@@ -128,17 +128,19 @@
      MEMBACANYA — jadi ia tak bisa menyertakan nilai yang sama di header
      permintaannya. Itulah yang membuat pola ini bekerja. */
   function kukiCsrf() {
-    var bagian = ("; " + document.cookie).split("; produksi_csrf=");
-    return bagian.length === 2 ? bagian.pop().split(";").shift() : "";
+    var el = document.getElementById("formulir-sesi");
+    return el ? el.dataset.token : "";
   }
 
   async function kirim(url, isi) {
+    if (window.SESIFORM && !SESIFORM.periksa()) throw "Sesi berubah. Salin isian lalu buka formulir baru dengan akun yang benar.";
     var r = await fetch(url, {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-CSRF-Token": kukiCsrf() },
       body: JSON.stringify(isi),
     });
     var j = await r.json().catch(function () { return {}; });
+    if (window.SESIFORM && !SESIFORM.periksa()) throw "Sesi berubah ketika permintaan diproses. Periksa riwayat akun pembuka sebelum mengulang; permintaan yang sudah diterima mungkin selesai.";
     if (!r.ok) {
       /* ── Konflik: SEGARKAN daftarnya sekarang juga ──
          Dua orang membuka tiket yang sama; yang kedua ditolak, tetapi kartu
@@ -984,6 +986,7 @@
             '" data-wajib="1" data-label="' + esc(f.label) + '">' +
             '<option value="">— pilih —</option>' + daftar.map(function (o) {
               return '<option value="' + esc(o.value) + '"' +
+              (o.disabled ? ' disabled' : '') +
                 (o.berat_kg != null ? ' data-berat-kg="' + esc(o.berat_kg) + '"' : "") +
                 '>' + esc(o.label) + "</option>";
             }).join("") + "</select>";
@@ -1001,6 +1004,7 @@
         s.innerHTML = '<option value="">' + (daftar.length ? "— pilih —" : "(belum ada)") +
           "</option>" + daftar.map(function (o) {
             return '<option value="' + esc(o.value) + '"' +
+              (o.disabled ? ' disabled' : '') +
               (o.berat_kg != null ? ' data-berat-kg="' + esc(o.berat_kg) + '"' : "") +
               '>' + esc(o.label) + "</option>";
           }).join("");

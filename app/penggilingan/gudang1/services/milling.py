@@ -1216,7 +1216,7 @@ async def _pk_breakdown(db: AsyncSession, proc_id: int) -> PkBreakdown:
 
 async def alasan_koreksi_hasil_giling(db: AsyncSession, process_id: int) -> str | None:
     """Tahan koreksi hasil giling bila PK sudah keluar ke proses hilir."""
-    from app.models import OutgoingItem
+    from app.models import OutgoingItem, OutgoingRecord
 
     proc = await db.get(MillingProcess, process_id)
     if proc is None or proc.status != "selesai":
@@ -1226,7 +1226,8 @@ async def alasan_koreksi_hasil_giling(db: AsyncSession, process_id: int) -> str 
             InternalTransfer.status == "terkirim").limit(1))).first():
         return ("Koreksi ditahan: sebagian PK sudah ditransfer ke Gudang 2. "
                 "Sesuaikan atau batalkan transfer terkait terlebih dahulu.")
-    if (await db.execute(select(OutgoingItem.id).where(
+    if (await db.execute(select(OutgoingItem.id).join(OutgoingRecord, OutgoingRecord.id == OutgoingItem.outgoing_record_id).where(
+            OutgoingRecord.status != "batal",
             OutgoingItem.item_type == "pk_langsung",
             OutgoingItem.milling_process_id == process_id).limit(1))).first():
         return "Koreksi ditahan: sebagian PK sudah dicatat sebagai barang keluar."

@@ -1,3 +1,4 @@
+from tests.pg.formulir import cap_formulir
 """Riwayat QC stok mengikuti sumber fisiknya dan menjaga ringkasan kualitas."""
 from pathlib import Path
 
@@ -104,7 +105,7 @@ async def test_isian_fisik_wajib_di_formulir_dan_server_tanpa_menyimpan_sebagian
     from app.web import csrf
     from app.penggilingan.gudang2.models import PkPurchaseVerification
     async with await _klien(pg, peran=SUPERADMIN) as c:
-        c.headers[csrf.NAMA_HEADER] = c.cookies.get(csrf.NAMA_COOKIE)
+        c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
         katalog = (await c.get('/api/actions/menu')).json()
         # Kontrak katalog dipakai aksi.js untuk validasi sebelum tombol Simpan.
         aksi = katalog if isinstance(katalog, list) else katalog['actions']
@@ -138,7 +139,7 @@ async def test_qc_giling_lengkap_terbaca_di_stok_transfer_dan_riwayat(pg, dunia)
     from app.web import csrf
     from app.penggilingan.gudang1.services.milling import qc_rata
     async with await _klien(pg, peran=SUPERADMIN) as c:
-        c.headers[csrf.NAMA_HEADER] = c.cookies.get(csrf.NAMA_COOKIE)
+        c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
         for ka,kuning,gabah,merang in [(14,'bersih','sedikit','bersih'),
                                        (16,'banyak','sedang','sedikit')]:
             r = await c.post('/api/actions/qc-giling', json={

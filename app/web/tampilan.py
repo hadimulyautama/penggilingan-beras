@@ -179,7 +179,9 @@ def render(request: Request, nama: str, *, status_code: int = 200, **konteks):
             request.state.csrf = nilai
         except Exception:  # noqa: BLE001 — permintaan tiruan tanpa state
             pass
-    konteks.setdefault("CSRF", nilai)
+    from app.web.security import baca_token, NAMA_COOKIE
+    konteks.setdefault("CSRF_NONCE", nilai)
+    konteks.setdefault("CSRF", _csrf.untuk_sesi(nilai, baca_token(request.cookies.get(NAMA_COOKIE)), request.cookies.get("produksi_lihat", "")))
     # Mode terik: layar terang untuk kerja di bawah matahari. Per perangkat,
     # lewat kuki — lihat catatan di base.html. Temuan QA UI-04.
     # Mode terang adalah bawaan untuk perangkat baru. Cookie "0" berarti

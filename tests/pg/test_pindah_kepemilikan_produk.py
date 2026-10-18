@@ -15,6 +15,7 @@ gabungan, dengan picker katalog umum mengelompokkannya dengan cara yang
 SAMA supaya nilai tombol selalu cocok dengan satu pilihan picker.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 from datetime import date
 
@@ -303,7 +304,7 @@ async def _klien(pg, *, peran: str = "admin") -> "httpx.AsyncClient":
     t = csrf.terbitkan_baru()
     c.cookies.set(security.NAMA_COOKIE, tok)
     c.cookies.set(csrf.NAMA_COOKIE, t)
-    c.headers[csrf.NAMA_HEADER] = t
+    c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
     return c
 
 

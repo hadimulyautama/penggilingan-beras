@@ -189,6 +189,9 @@ async def perpanjang_sesi_pendek(request: Request, call_next):
     daftar alamat harus diingat setiap kali ada rute baru yang menyentuh
     cookie sesi, dan yang harus diingat pada akhirnya terlupakan.
     """
+    # Respons simpan A yang tiba sesudah login B tidak boleh menerbitkan
+    # ulang cookie A. Halaman GET sesudah simpan memperpanjang sesi yang
+    # benar-benar masih aktif di peramban; denyut pemeriksaan tidak dihitung.
     balasan = await call_next(request)
     akun = getattr(request.state, "akun", None)
     sudah_diurus = any(
@@ -196,6 +199,8 @@ async def perpanjang_sesi_pendek(request: Request, call_next):
         for b in balasan.headers.getlist("set-cookie")
     )
     if (akun is not None and akun.sesi_pendek
+            and request.method == "GET"
+            and not getattr(request.state, "jangan_perpanjang_sesi", False)
             and balasan.status_code < 400 and not sudah_diurus
             and not getattr(request.state, "lewat_meja", False)):
         balasan.set_cookie(
@@ -244,13 +249,17 @@ async def penjaga_csrf(request: Request, call_next):
             except Exception:  # noqa: BLE001 — badan JSON, bukan formulir
                 dikirim = None
             request._receive = _terima
-        if not _csrf.cocok(di_kuki, dikirim):
+        from app.web.security import baca_token, NAMA_COOKIE
+        sesi = baca_token(request.cookies.get(NAMA_COOKIE))
+        diharapkan = _csrf.untuk_sesi(di_kuki or "", sesi, request.cookies.get("produksi_lihat", "")) if di_kuki else None
+        if not _csrf.cocok(diharapkan, dikirim):
             log.warning("Token CSRF tak cocok pada %s %s",
                         request.method, request.url.path)
             return render(
                 request, "error.html",
-                pesan=("Halaman ini sudah kedaluwarsa. Muat ulang halamannya "
-                       "lalu coba lagi."),
+                pesan=("Sesi kedaluwarsa atau identitas pembuka formulir berubah. Isian belum disimpan. "
+                       "Kembali ke tab formulir untuk menyalin isian, lalu masuk dengan akun "
+                       "yang benar dan buka formulir baru."),
                 status_code=403,
             )
 

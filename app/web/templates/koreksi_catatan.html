@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block judul %}Catatan terkait koreksi{% endblock %}
+{% block isi %}
+<h1>{{ catatan.kode }}</h1>
+<p>{{ catatan.jumlah }} kg · {{ catatan.status }}</p>
+<p>Asal: {{ sumber }} · {{ waktu }} · dicatat oleh {{ pencatat }}</p>
+<p>Periksa riwayat pemakaian dan barang keluar sebelum mengoreksi asalnya. Jangan menghapus catatan hilir yang barangnya sudah dipakai; mintakan koreksi berjejak kepada Admin.</p>
+{% if keluar %}<ul>{% for x in keluar %}<li><a href="/barang-keluar/{{ x.id }}">{{ x.kode }}</a> · {{ x.status }}</li>{% endfor %}</ul>{% endif %}
+<a href="/audit">Periksa jejak audit</a>
+{% endblock %}

@@ -10,6 +10,7 @@ ditolak, sama dengan `/stok-produk`), gerbang `can_see_financials` pada aksi
 WAJIB cocok persis dengan `nilai=` yang akan dikirim tombol kartu.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 from datetime import date
 
@@ -55,7 +56,7 @@ async def _klien(pg, *, peran: str = "admin", g1: bool = False) -> "httpx.AsyncC
     t = csrf.terbitkan_baru()
     c.cookies.set(security.NAMA_COOKIE, tok)
     c.cookies.set(csrf.NAMA_COOKIE, t)
-    c.headers[csrf.NAMA_HEADER] = t
+    c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
     return c
 
 

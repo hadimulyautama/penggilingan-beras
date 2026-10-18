@@ -16,6 +16,7 @@ Yang dijaga di sini, lewat HTTP di Postgres:
 - akun yang dinonaktifkan terputus di sesi yang sedang terbuka.
 """
 from __future__ import annotations
+from tests.pg.formulir import cap_formulir
 
 from datetime import date
 
@@ -63,8 +64,8 @@ def _klien(token: str, *, gudang: str | None = None) -> httpx.AsyncClient:
     c.cookies.set(csrf.NAMA_COOKIE, t)
     if gudang:
         c.cookies.set(KUKI_GUDANG, f"operator:{gudang}")
-    c.headers[csrf.NAMA_HEADER] = t
-    c._csrf = t
+    c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
+    c._csrf = cap_formulir(c)
     return c
 
 
@@ -125,7 +126,10 @@ async def test_operator_bergantian_gudang_tanpa_admin(pg, pabrik):
         assert (await c.get(G2_SAJA)).status_code == 200
         assert (await c.get(G1_SAJA)).status_code == 403
 
-        r = await c.post("/lihat-sebagai/selesai", data={"_csrf": c._csrf})
+        # Halaman Gudang 2 membawa cap gudang yang baru.
+        from app.web import csrf
+        c.headers[csrf.NAMA_HEADER] = cap_formulir(c)
+        r = await c.post("/lihat-sebagai/selesai", data={"_csrf": cap_formulir(c)})
         assert r.status_code == 303
         assert (await c.get(G1_SAJA)).status_code == 200
         assert (await c.get(G2_SAJA)).status_code == 403

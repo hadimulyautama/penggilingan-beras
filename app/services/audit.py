@@ -69,6 +69,7 @@ class Catatan:
     muda: bool
     #: Jenis tindakannya memang didukung undo. Muda saja tak cukup.
     bisa_batal: bool
+    dibatalkan: bool = False
 
 
 async def daftar(
@@ -131,6 +132,7 @@ async def daftar(
             label=label_tabel(log.table_name), aksi=log.action,
             ringkas=ringkas.split("|")[0].strip()[:110],
             oleh=nama.get(log.changed_by or 0) or "—",
-            muda=muda, bisa_batal=muda and log.table_name in _UNDOABLE,
+            muda=muda, bisa_batal=muda and log.table_name in _UNDOABLE and log.dibatalkan_pada is None,
+            dibatalkan=log.dibatalkan_pada is not None,
         ))
     return keluar, semua
