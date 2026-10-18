@@ -108,7 +108,7 @@
 .riwayat-detail__facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 16px;margin:0}
 .riwayat-detail__facts>div{min-width:0;padding:8px 0;border-top:1px solid var(--kulit-pemisah)}
 .riwayat-detail__facts dt{color:var(--kulit-redup);font-size:.65rem;font-weight:650;line-height:1.35;letter-spacing:.04em;text-transform:uppercase}
-.riwayat-detail__facts dd{margin:3px 0 0;color:var(--tinta);font-size:.84rem;font-weight:550;line-height:1.4;overflow-wrap:anywhere}
+.riwayat-detail__facts dd{margin:3px 0 0;color:var(--redup);font-family:var(--teks);font-size:13px;font-weight:400;line-height:1.5;overflow-wrap:anywhere}
 .riwayat-detail__card:has(>.riwayat-detail__facts){padding:13px 16px}
 .riwayat-detail__card:has(>.riwayat-detail__facts)>h2{margin-bottom:10px;font-size:.98rem}
 .riwayat-detail__table{overflow:hidden;border:1px solid var(--kulit-batas);border-radius:12px}
