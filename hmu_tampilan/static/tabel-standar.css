@@ -44,6 +44,14 @@ body :is(.tabel-standar,.antrian-listview--tabel) .antrian-item>summary,
 body :is(.tabel-standar,.stok-tabel,.stok-produk-tabel) :is(.stok-baris__ringkas,.stok-produk-baris__ringkas) {
   padding-top:var(--tabel-padding-y); padding-bottom:var(--tabel-padding-y);
 }
+/* Kepala dan isi antrean harus menyisakan ruang panah yang sama.
+   Padding kepala umum di atas sebelumnya menggeser seluruh kolom. */
+@media(min-width:701px) {
+  body :is(.tabel-standar,.antrian-listview--tabel) :is(.antrian-tabel__kepala,.antrian-item>summary) {
+    padding-left:var(--tabel-padding-x);
+    padding-right:calc(var(--tabel-padding-x) + 25px);
+  }
+}
 body :is(.tabel-standar,.antrian-listview--tabel,.stok-tabel,.stok-produk-tabel) a {
   color:inherit; text-decoration:none;
 }

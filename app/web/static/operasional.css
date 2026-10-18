@@ -28,7 +28,7 @@
 /* Bahan baku: tabel ringkas yang bisa digeser di layar sempit. Isi baris
    tetap <details>, jadi rincian dan tindakan lama tetap berada di tempatnya. */
 .antrian-listview--tabel .antrian-tabel-scroll{max-width:100%;overflow-x:auto;border:1px solid var(--garis);border-radius:10px;background:var(--panel);scrollbar-width:thin}
-.antrian-listview--tabel .grup{width:max-content;min-width:100%;overflow:visible;border:0;border-radius:0}
+.antrian-listview--tabel .grup{width:100%;min-width:900px;overflow:visible;border:0;border-radius:0}
 .antrian-listview--tabel .antrian-tabel__kepala,.antrian-listview--tabel .antrian-item>summary{display:grid;grid-template-columns:minmax(200px,1.35fr) minmax(105px,.72fr) minmax(135px,1fr) minmax(150px,1.1fr) minmax(105px,.72fr) 18px;align-items:center;column-gap:14px;min-width:900px}
 .antrian-listview--tabel .antrian-tabel__kepala{padding:9px 38px 9px 13px;border-bottom:1px solid var(--garis);background:var(--panel-2);color:var(--redup);font-size:.72rem;font-weight:750;letter-spacing:.045em;text-transform:uppercase}
 .antrian-listview--tabel .antrian-item>summary{min-height:45px;padding:10px 38px 10px 13px}
@@ -45,7 +45,7 @@
 .antrian-listview--tabel .antrian-tabel__berat small{font-size:.76em;font-weight:500}
 .antrian-listview--tabel .antrian-item>summary::after{right:13px}
 .antrian-listview--tabel .antrian-item__rincian,.antrian-listview--tabel .pilihan{min-width:900px}
-@media(min-width:701px){.antrian-listview--tabel-packing .antrian-tabel__kepala,.antrian-listview--tabel-packing .antrian-item>summary{grid-template-columns:minmax(220px,1.4fr) minmax(170px,1fr) minmax(110px,.7fr) minmax(170px,.9fr) 18px;min-width:780px}.antrian-listview--tabel-packing .antrian-item__rincian,.antrian-listview--tabel-packing .pilihan{min-width:780px}}
+@media(min-width:701px){.antrian-listview--tabel-packing .grup{min-width:780px}.antrian-listview--tabel-packing .antrian-tabel__kepala,.antrian-listview--tabel-packing .antrian-item>summary{grid-template-columns:minmax(220px,1.4fr) minmax(170px,1fr) minmax(110px,.7fr) minmax(170px,.9fr) 18px;min-width:780px}.antrian-listview--tabel-packing .antrian-item__rincian,.antrian-listview--tabel-packing .pilihan{min-width:780px}}
 @media(max-width:700px){.antrian-listview--tabel .antrian-tabel-scroll{overflow:visible;border:0;border-radius:0;background:transparent}.antrian-listview--tabel .antrian-tabel__kepala{display:none}.antrian-listview--tabel .grup{width:100%;min-width:0;overflow:hidden;border:1px solid var(--garis);border-radius:8px}.antrian-listview--tabel .antrian-item>summary{display:block;min-width:0;min-height:0;padding:10px 34px 10px 11px}.antrian-listview--tabel .antrian-tabel__desktop{display:none}.antrian-listview--tabel .antrian-tabel__mobile{display:block}.antrian-listview--tabel .antrian-item>summary .padat__atas{gap:7px;align-items:center}.antrian-listview--tabel .antrian-item>summary .padat__nama,.antrian-listview--tabel .antrian-item>summary .padat__nilai{font-size:.88rem}.antrian-listview--tabel .antrian-item>summary .padat__ket{margin-top:2px;font-size:.76rem;line-height:1.35}.antrian-listview--tabel .antrian-item__rincian,.antrian-listview--tabel .pilihan{min-width:0}.antrian-listview--tabel .antrian-item__rincian{padding:9px 11px 11px}.antrian-listview--tabel .pilihan{padding:0 11px 11px}.antrian-listview--tabel .antrian-item>summary::after{right:13px}}
 
 /* Halaman Semua memisahkan setiap alur ke listview sendiri pada semua ukuran. */

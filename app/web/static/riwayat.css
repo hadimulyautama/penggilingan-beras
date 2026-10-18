@@ -105,10 +105,12 @@
 .riwayat-detail__hero .riwayat-status--pabrik{background:#ffffff20;color:#fff}
 .riwayat-detail__card{padding:clamp(17px,2.4vw,25px);border:1px solid var(--kulit-batas);border-radius:18px;background:var(--kulit-kartu);box-shadow:0 5px 18px #20304008}
 .riwayat-detail__card h2{margin:0 0 17px;color:var(--tinta);font-size:1.12rem}
-.riwayat-detail__facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 22px;margin:0}
-.riwayat-detail__facts>div{min-width:0;padding:12px 0;border-top:1px solid var(--kulit-pemisah)}
-.riwayat-detail__facts dt{color:var(--kulit-redup);font-size:.72rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase}
-.riwayat-detail__facts dd{margin:5px 0 0;color:var(--tinta);font-weight:650;overflow-wrap:anywhere}
+.riwayat-detail__facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 16px;margin:0}
+.riwayat-detail__facts>div{min-width:0;padding:8px 0;border-top:1px solid var(--kulit-pemisah)}
+.riwayat-detail__facts dt{color:var(--kulit-redup);font-size:.65rem;font-weight:650;line-height:1.35;letter-spacing:.04em;text-transform:uppercase}
+.riwayat-detail__facts dd{margin:3px 0 0;color:var(--tinta);font-size:.84rem;font-weight:550;line-height:1.4;overflow-wrap:anywhere}
+.riwayat-detail__card:has(>.riwayat-detail__facts){padding:13px 16px}
+.riwayat-detail__card:has(>.riwayat-detail__facts)>h2{margin-bottom:10px;font-size:.98rem}
 .riwayat-detail__table{overflow:hidden;border:1px solid var(--kulit-batas);border-radius:12px}
 .riwayat-detail__table-head,.riwayat-detail__table-row{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(120px,.8fr) minmax(160px,1fr);align-items:center;gap:12px;padding:11px 14px}
 .riwayat-detail__table-head{background:var(--panel-2);color:var(--kulit-redup);font-size:.7rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
@@ -130,7 +132,7 @@
 .riwayat-row-action{color:var(--aman);font-size:.78rem;font-weight:700;white-space:nowrap;text-align:right}
 .riwayat-desktop-lot a,.padat__nama a{color:inherit;text-decoration:none}
 .riwayat-desktop-lot a:hover,.padat__nama a:hover{color:var(--aman);text-decoration:underline}
-@media(max-width:700px){.riwayat-detail{gap:11px;margin-bottom:16px}.riwayat-detail__hero{padding:20px 17px;border-radius:18px}.riwayat-detail__card{padding:15px 13px;border-radius:15px}.riwayat-detail__facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.riwayat-detail__facts>div{padding:10px 0}.riwayat-detail__table-head{display:none}.riwayat-detail__table-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px}.riwayat-detail__table-row>*:last-child{grid-column:1/-1;color:var(--kulit-redup);font-size:.78rem}.riwayat-detail__table-row--total>*:last-child{grid-column:auto}.riwayat-detail__origin{font-size:.78rem}}
+@media(max-width:700px){.riwayat-detail{gap:11px;margin-bottom:16px}.riwayat-detail__hero{padding:20px 17px;border-radius:18px}.riwayat-detail__card{padding:15px 13px;border-radius:15px}.riwayat-detail__facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.riwayat-detail__facts>div{padding:7px 0}.riwayat-detail__table-head{display:none}.riwayat-detail__table-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px}.riwayat-detail__table-row>*:last-child{grid-column:1/-1;color:var(--kulit-redup);font-size:.78rem}.riwayat-detail__table-row--total>*:last-child{grid-column:auto}.riwayat-detail__origin{font-size:.78rem}}
 
 /* Tabel panjang bergulir di dalam kartu, bukan memperlebar halaman detail. */
 .riwayat-detail__card{min-width:0}
