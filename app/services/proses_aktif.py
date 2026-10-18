@@ -197,9 +197,9 @@ async def rincian(db, *, jenis, model, kartu, params):
         d["bagian"].append(await _log(
             db, PolishingOutputLog, PolishingOutputLog.polishing_process_id, model.id,
             PolishingOutputLog.waktu_update, PolishingOutputLog.input_by,
-            "Riwayat pencatatan hasil sosoh", ["Waktu", "Jenis hasil", "Spek", "Berat per entri", "Pencatat"],
+            "Riwayat pencatatan hasil sosoh", ["Waktu", "Jenis hasil", "Spek", "Pertambahan hasil", "Pencatat"],
             lambda r, nama: [_waktu(r.waktu_update), r.jenis.replace("_", " ").title(), r.spek or "Belum diisi", svc._kg(r.berat_kg), nama],
-            params, "halaman_hasil", "Berat setiap entri dijumlahkan untuk memperoleh total hasil. Semua angka masih sementara sampai proses ditutup."))
+            params, "halaman_hasil", "Formulir menggunakan total kumulatif per jenis hasil sejak awal proses. Riwayat ini menampilkan pertambahan hasil dari setiap pembaruan total: dari 300 kg menjadi 500 kg, pertambahannya 200 kg. Angka masih sementara sampai proses ditutup."))
         d["qc_kosong"] = "Pencatatan QC beras hasil sosoh belum tersedia. Catatan hasil di atas adalah hasil produksi, bukan pengukuran QC."
     from app.services.riwayat_jeda import riwayat_jeda
     d["jeda_riwayat"] = await riwayat_jeda(db, jenis=jeda_jenis, id_=model.id, params=params)

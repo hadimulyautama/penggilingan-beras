@@ -134,7 +134,7 @@ async def test_sosoh_rinci_per_entri_jeda_dan_tautan_lama(pg, gudang2):
         h = await c.get(f"/proses-aktif/sosoh/{r.proc.kode_proses}")
         lama = await c.get(f"/proses-sosoh/{r.proc.kode_proses}")
     assert h.status_code == lama.status_code == 200
-    for kata in ["250 kg", "Pemakaian silo", "UJI DETAIL", "Riwayat pencatatan hasil sosoh", "lanjutkan_penyosohan", "Listrik padam"]:
+    for kata in ["250 kg", "Pemakaian silo", "UJI DETAIL", "Riwayat pencatatan hasil sosoh", "Pertambahan hasil", "total kumulatif per jenis hasil", "150 kg", "lanjutkan_penyosohan", "Listrik padam"]:
         assert kata in h.text, kata
     # Isian 100 lalu 250 adalah angka kumulatif; bukan 350 kg tambahan.
     assert "350 kg" not in h.text
