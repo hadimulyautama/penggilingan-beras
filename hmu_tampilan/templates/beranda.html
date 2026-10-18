@@ -19,68 +19,9 @@
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
 
-<section class="beranda-sambut beranda-sambut--gabung" aria-labelledby="judul-beranda">
-  <div class="beranda-sambut__kepala">
-    <div class="beranda-sambut__teks">
-      <span class="beranda-sambut__atas">PT Hadi Mulya Utama · Operasional pabrik</span>
-      <h1 id="judul-beranda">Selamat datang, {{ akun.nama.split()[0] }}</h1>
-      <p>Ringkasan proses dan pekerjaan yang perlu ditangani.</p>
-    </div>
-    <span class="beranda-sambut__tanda" aria-hidden="true">HM</span>
-  </div>
-
-{# Jalan pintas ditambahkan di Beranda agar pekerjaan utama langsung terlihat.
-   Semua ringkasan, kartu proses, pekerjaan, dan rincian gudang di bawah tetap
-   dipertahankan. Tujuan diambil dari menu yang memang tersedia untuk peran
-   ini, supaya pintasan tidak menjadi tautan ke halaman yang tak dapat dibuka. #}
-{% set pintas_beranda = {
-  'aksi': ('Antrian tunggu', 'Pekerjaan baru yang menunggu ditangani', '≡'),
-  'berjalan': ('Sedang berjalan', 'Mesin dan proses aktif', '◷'),
-  'stok': ('Stok', 'Gabah dan PK di gudang', '▦'),
-  'barang_keluar': ('Barang keluar', 'Perintah muat dan verifikasi', '⇥')
-} %}
-{% set ns_pintas = namespace(ada=false) %}
-{% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-  {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
-    {% set ns_pintas.ada = true %}
-  {% endif %}
-{% endfor %}
-{% if ns_pintas.ada %}
-<section class="beranda-akses" aria-label="Akses cepat">
-  <div class="beranda-akses__judul"><strong>Akses cepat</strong><span>Menuju pekerjaan utama</span></div>
-  <div class="beranda-akses__grid">
-    {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
-        {% set info_pintas = pintas_beranda[kunci] %}
-        <a class="beranda-akses__item beranda-akses__item--{{ kunci }}" href="{{ alamat }}">
-          <span class="beranda-akses__ikon" aria-hidden="true">{{ info_pintas[2] }}</span>
-          <span><strong>{{ info_pintas[0] }}</strong><small>{{ info_pintas[1] }}</small></span>
-          <span class="beranda-akses__panah" aria-hidden="true">↗</span>
-        </a>
-      {% endif %}
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-</section>
-
-<section class="beranda-ringkasan" aria-label="Ringkasan operasional">
-{% for blok in petak %}{{ br.petak_blok(blok, loop.first) }}{% endfor %}
-
-{# Operator yang belum diberi gudang. Tanpa baris ini Beranda-nya tampil
-   sebagai halaman yang hampir kosong — dan halaman kosong terbaca sebagai
-   aplikasi yang rusak, bukan sebagai akun yang belum selesai didaftarkan.
-   Yang membacanya berdiri di gudang dan tak bisa menebak bedanya. #}
-{% if not petak %}
-<div>
-  <span class="lbl">Keadaan pabrik hari ini</span>
-  <div class="kosong-tipis">
-    Akun Anda belum ditetapkan gudangnya, jadi belum ada angka yang bisa
-    ditampilkan. Minta Super Admin menyetel gudang Anda.
-  </div>
-</div>
-{% endif %}
-</section>
+<header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda">
+  <div class="beranda-sambut__kepala"><h1 id="judul-beranda">Pekerjaan hari ini</h1></div>
+</header>
 
 {# ── YANG SEDANG BERJALAN, VERSI PADAT ──
    Dulu hanya pengeringan yang sampai ke sini, dan itu membuat Beranda
@@ -167,10 +108,60 @@
 </section>
 </div>
 
+{# Pintasan berada sesudah daftar pekerjaan. Label utuh dan sasaran sentuh
+   tetap cukup besar tanpa keterangan berulang. Tujuan mengikuti menu peran
+   ini, supaya pintasan tidak menjadi tautan ke halaman yang tak dapat dibuka. #}
+{% set pintas_beranda = {
+  'aksi': ('Antrian tunggu', 'Pekerjaan baru yang menunggu ditangani', '≡'),
+  'berjalan': ('Sedang berjalan', 'Mesin dan proses aktif', '◷'),
+  'stok': ('Stok', 'Gabah dan PK di gudang', '▦'),
+  'barang_keluar': ('Barang keluar', 'Perintah muat dan verifikasi', '⇥')
+} %}
+{% set ns_pintas = namespace(ada=false) %}
+{% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
+  {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
+    {% set ns_pintas.ada = true %}
+  {% endif %}
+{% endfor %}
+{% if ns_pintas.ada %}
+<nav class="beranda-akses beranda-akses--ringkas" aria-label="Halaman operasional">
+  <div class="beranda-akses__grid">
+    {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
+      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI %}
+        {% set info_pintas = pintas_beranda[kunci] %}
+        <a class="beranda-akses__item beranda-akses__item--{{ kunci }}" href="{{ alamat }}">
+          <strong>{{ info_pintas[0] }}</strong>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</nav>
+{% endif %}
+
+
+<section class="beranda-ringkasan" aria-label="Ringkasan operasional">
+{% for blok in petak %}{{ br.petak_blok(blok, loop.first) }}{% endfor %}
+
+{# Operator yang belum diberi gudang. Tanpa baris ini Beranda-nya tampil
+   sebagai halaman yang hampir kosong — dan halaman kosong terbaca sebagai
+   aplikasi yang rusak, bukan sebagai akun yang belum selesai didaftarkan.
+   Yang membacanya berdiri di gudang dan tak bisa menebak bedanya. #}
+{% if not petak %}
+<div>
+  <span class="lbl">Keadaan pabrik hari ini</span>
+  <div class="kosong-tipis">
+    Akun Anda belum ditetapkan gudangnya, jadi belum ada angka yang bisa
+    ditampilkan. Minta Super Admin menyetel gudang Anda.
+  </div>
+</div>
+{% endif %}
+</section>
+
+
 {# ── SATU BARIS PER GUDANG ──
    Dari DAFTAR, jadi sepuluh gudang = sepuluh baris. Rinciannya ada di halaman
    gudang itu sendiri; barisnya cuma pintu. Hanya untuk pemegang KEDUA gudang:
-   operator sudah melihat gudangnya di petak teratas, dan baris kedua ke tempat
+   operator sudah melihat ringkasan gudangnya, dan baris kedua ke tempat
    yang sama adalah dua tempat di kepala orang. #}
 <section class="beranda-gudang">{{ br.blok_gudang(gudang) }}</section>
 

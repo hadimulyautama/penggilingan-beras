@@ -2814,3 +2814,31 @@ body .isi .riwayat-detail > .riwayat-detail__hero :is(.riwayat-detail__eyebrow, 
 body .isi .riwayat-detail > .riwayat-detail__hero .riwayat-status--pabrik {
   background: var(--panel-2); color: var(--tinta);
 }
+
+
+/* Beranda dimulai dari pekerjaan. Identitas pabrik dan pemakai sudah ada di
+   bilah/laci; sapaan dekoratif tidak perlu menghabiskan layar operator. */
+body .isi > .beranda-sambut.beranda-sambut--ringkas {
+  display: block; flex: 0 0 auto; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none; color: var(--tinta); overflow: visible;
+}
+body .isi > .beranda-sambut.beranda-sambut--ringkas::after { display: none; }
+body .isi > .beranda-sambut.beranda-sambut--ringkas h1 {
+  margin: 0; font-size: 22px; line-height: 1.3; color: var(--tinta); letter-spacing: -.02em;
+}
+body .isi > .beranda-akses.beranda-akses--ringkas {
+  padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  width: 100%; max-width: 1480px; margin-inline: auto;
+}
+.beranda-akses--ringkas .beranda-akses__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.beranda-akses--ringkas .beranda-akses__item {
+  display: flex; justify-content: center; min-height: 48px; padding: 10px;
+  border-radius: 12px; text-align: center;
+}
+.beranda-akses--ringkas .beranda-akses__item strong {
+  font-size: 14px; line-height: 1.35; overflow: visible; text-overflow: clip;
+  white-space: normal; overflow-wrap: anywhere;
+}
+@media (min-width: 700px) {
+  .beranda-akses--ringkas .beranda-akses__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
