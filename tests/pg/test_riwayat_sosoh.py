@@ -354,8 +354,18 @@ async def test_hasil_melebihi_bahan_dikatakan_di_layarnya(pg, pemakai):
     Yang dipangkas jadi 0% tak pernah terbaca oleh siapa pun, dan yang tak
     terbaca tak pernah dibetulkan.
     """
-    await _sosoh_selesai(pg, pemakai.id, masuk=5_000,
-                         hasil=(("premium", 2_000),), sisa=4_000)
+    kode = await _sosoh_selesai(pg, pemakai.id, masuk=5_000,
+                         hasil=(("premium", 2_000),), sisa=0)
+    # Simulasikan CATATAN LAMA yang tidak konsisten. Jalur operator baru
+    # wajib menolaknya, tetapi pembaca riwayat tetap harus memperingatkannya.
+    from sqlalchemy import select
+    from app.models import PolishingProcess, PolishingSiloUsage
+    async with pg() as db:
+        proc = await db.scalar(select(PolishingProcess).where(PolishingProcess.kode_proses == kode))
+        usage = await db.scalar(select(PolishingSiloUsage).where(PolishingSiloUsage.polishing_process_id == proc.id))
+        usage.berat_akhir_kg = 4_000
+        usage.berat_terpakai_kg = 1_000
+        await db.commit()
     c = await _klien(pg, peran="admin")
     try:
         r = await c.get("/riwayat-sosoh")

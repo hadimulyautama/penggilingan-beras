@@ -24,6 +24,7 @@ Tiga hal yang dijaga, dan ketiganya pernah jadi lubang di rancangan:
      rajin akan menolak gabah pabrik yang selama ini sah.
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import datetime, timezone
 
@@ -256,6 +257,7 @@ async def test_pemilik_terbawa_sampai_pemasukan_gudang_2(pg, pemakai, pabrik):
 
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode_proses)
         await finish_milling(db, user=u, kode_proses=kode_proses, berat_akhir=7_000)
 
     async with pg() as db:
@@ -854,6 +856,7 @@ async def test_pk_jasa_tak_muncul_di_daftar_barang_yang_bisa_dijual(pg, pemakai,
         kode_proses, proc_id = proc.kode_proses, proc.id
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode_proses)
         await finish_milling(db, user=u, kode_proses=kode_proses, berat_akhir=7_000)
 
     async with pg() as db:
@@ -1448,6 +1451,7 @@ async def _pk_jasa_di_lantai_g1(pg, pemakai, *, kode_tiket="JLH1",
         kode_proses = (await start_milling(db, user=u, nama_silo="A")).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode_proses)
         await finish_milling(db, user=u, kode_proses=kode_proses,
                              berat_akhir=hasil)
     return jid, kode_proses

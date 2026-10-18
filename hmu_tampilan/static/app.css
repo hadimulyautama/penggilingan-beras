@@ -875,7 +875,7 @@ body.terik .laci__logo--gelap { display: none; }
 .beranda-sambut {
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
   position: relative; overflow: hidden; padding: 30px 34px; border-radius: 26px;
-  background: linear-gradient(118deg, #596777 0%, #3f4b58 60%, #737f8c 100%);
+  background: var(--kulit-banner);
   color: #fff; box-shadow: 0 18px 42px rgba(39, 55, 42, .12);
 }
 .beranda-sambut::after { content: ""; position: absolute; width: 360px; height: 360px; border-radius: 50%; right: -90px; top: -205px; background: #ffffff12; box-shadow: 0 0 0 55px #ffffff0b, 0 0 0 110px #ffffff08; pointer-events: none; }
@@ -2795,4 +2795,22 @@ body .produk-kemasan :is(th,td) { white-space: normal; overflow-wrap: anywhere; 
 @media (max-width: 600px) {
   .beranda-akses__grid { grid-template-columns: 1fr; }
   .beranda-akses__judul { flex-wrap: wrap; }
+}
+
+/* Detail proses mendahulukan isi kerja, bukan kartu judul dekoratif. */
+body .isi .riwayat-detail > .riwayat-detail__hero {
+  padding: 8px 0 12px; border-radius: 0; background: transparent;
+  color: var(--tinta); box-shadow: none; border-bottom: 1px solid var(--garis);
+}
+body .isi .riwayat-detail > .riwayat-detail__hero h1 {
+  margin: 4px 0; font-size: 22px; line-height: 1.25; color: var(--tinta);
+}
+body .isi .riwayat-detail > .riwayat-detail__hero p {
+  margin: 3px 0; color: var(--redup); font-size: 14px; line-height: 1.4;
+}
+body .isi .riwayat-detail > .riwayat-detail__hero :is(.riwayat-detail__eyebrow, .proses-detail__sementara) {
+  color: var(--redup); font-size: 12px; line-height: 1.4;
+}
+body .isi .riwayat-detail > .riwayat-detail__hero .riwayat-status--pabrik {
+  background: var(--panel-2); color: var(--tinta);
 }

@@ -469,7 +469,7 @@ def test_tiap_tindakan_membawa_penunjuknya_sendiri():
     # Dan yang BUKAN hentikan/lanjutkan tetap memakai kodenya polos.
     rapat = " ".join(sumber.split())
     assert '"Perbarui kadar air", "Catat hasil ukur terbaru", lot.kode_lot' in rapat
-    assert '"Tutup proses & kosongkan silo", p.kode_proses' in rapat
+    assert '"Periksa sisa setiap silo sebelum menutup proses", p.kode_proses' in rapat
 
     makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
     assert "{% set nl = p[3] if p|length > 3 else b.nilai %}" in makro

@@ -22,6 +22,7 @@ Tiap uji di sini GAGAL pada kode sebelum perbaikan (dibuktikan 21 September
 di QA/alat/p6/.
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import datetime, timedelta, timezone
 
@@ -453,6 +454,7 @@ async def test_giling_selesai_duluan_ikut_dibetulkan(pg, pemakai, pemasok, pabri
         kode = (await start_milling(db, user=u, nama_silo="A")).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode)
         await finish_milling(db, user=u, kode_proses=kode, berat_akhir=5700)
 
     async def baca():
@@ -498,6 +500,7 @@ async def test_verifikasi_output_menunggu_bobot_final(pg, pemakai, pemasok, pabr
         kp = (await start_milling(db, user=u, nama_silo="A")).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kp)
         await finish_milling(db, user=u, kode_proses=kp, berat_akhir=5000)
     async with pg() as db:
         u = await db.get(User, pemakai.id)

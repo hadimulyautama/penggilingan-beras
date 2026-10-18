@@ -12,6 +12,7 @@ dan terutama JEBAKAN TERBESARNYA: silo yang dibebaskan lalu diisi gabah baru
 TIDAK boleh diam-diam terdaftar sebagai bahan tambahan lot LAMA.
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
 
@@ -172,10 +173,11 @@ async def test_silo_dibebaskan_boleh_diisi_ulang_tanpa_masuk_lot_lama(pg, dunia)
                                  berat_akhir=16_000)
     async with pg() as db:
         u = await db.get(User, dunia["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=dunia['kode_proses'])
         hasil = await finish_milling(db, user=u, kode_proses=dunia["kode_proses"],
                                      berat_akhir=9_000)
     assert hasil.produced == 9_000
-    assert hasil.nama_silo == "B", "pesan penutupan tak boleh menyebut Silo A lagi"
+    assert hasil.nama_silo is None, "penyelesaian tidak membebaskan silo lagi"
 
     async with pg() as db:
         # Dan Silo A yang sudah terisi ulang TIDAK ikut dikosongkan oleh
@@ -318,8 +320,10 @@ async def test_picker_silo_terbuka_induk_dan_rute_terpasang(pg, dunia):
 
     async with pg() as db:
         u = await db.get(User, dunia["user"])
+        from app.services.penyelesaian_proses import ringkasan_bebaskan
+        ringkas = await ringkasan_bebaskan(db, jenis="giling", kode=dunia["kode_proses"], silo="A", sisa=0)
         hasil = await act_tutup_silo_giling(
-            TutupSiloGilingReq(kode_proses=dunia["kode_proses"], silo="A", sisa=0),
+            TutupSiloGilingReq(kode_proses=dunia["kode_proses"], silo="A", sisa=0, dasar=ringkas["dasar"]),
             user=u)
     assert hasil["ok"] is True and "A" in hasil["pesan"]
 

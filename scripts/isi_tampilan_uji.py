@@ -207,6 +207,7 @@ class Pengisi:
             await self.langkah(key + f':qc-giling:{i}', milling.log_qc_milling, kode_proses=kode, kadar_air=14-i*.2, broken=22-i, susut=1.5, kondisi='normal',
                               butir_kuning='sedikit' if i == 0 else 'bersih',
                               gabah='sedikit', merang='bersih', catatan_lab=AWALAN + 'QC hasil giling ' + str(i+1))
+        await self.langkah(key + ':silo-diperiksa-kosong', milling.tutup_silo_giling, kode_proses=kode, nama_silo='UJI-A', sisa_kg=0, **waktu(hari,7.1))
         await self.langkah(key + ':giling-selesai', milling.finish_milling, kode_proses=kode, berat_akhir=kg*.72, **waktu(hari,7))
         if verif:
             await self.langkah(key + ':verifikasi', milling.verify_milling_output, kode_proses=kode, berat_output=kg*.72)

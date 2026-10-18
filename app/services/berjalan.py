@@ -2283,9 +2283,9 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 # tombol ini TAK menutup prosesnya (beda dari "Selesai
                 # giling" di bawahnya) — lihat `milling.tutup_silo_giling`.
                 ("tutup_silo_giling", "Bebaskan silo",
-                 "Boleh diisi gabah baru — proses tetap berjalan",
+                 "Catat sisa; hanya 0 kg berarti kosong",
                  p.kode_proses),
-                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo",
+                ("selesai_giling", "Selesai giling", "Periksa sisa setiap silo sebelum menutup proses",
                  p.kode_proses),
             ] if macet else [
                 ("hasil_giling", "Perbarui hasil giling", "Catat PK kumulatif terbaru",
@@ -2302,9 +2302,9 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                  "Mesin rusak, limbah penuh, jam kerja habis",
                  f"giling:{p.kode_proses}"),
                 ("tutup_silo_giling", "Bebaskan silo",
-                 "Boleh diisi gabah baru — proses tetap berjalan",
+                 "Catat sisa; hanya 0 kg berarti kosong",
                  p.kode_proses),
-                ("selesai_giling", "Selesai giling", "Tutup proses & kosongkan silo",
+                ("selesai_giling", "Selesai giling", "Periksa sisa setiap silo sebelum menutup proses",
                  p.kode_proses),
             ]),
         ))

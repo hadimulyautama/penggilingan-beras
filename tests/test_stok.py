@@ -388,27 +388,13 @@ def test_rincian_menyebut_jumlah_batch_dan_bobot_masing_masing():
     assert "pk-detail__batch" in teks and "for nama, berat, kapan in t.bahan" in teks
 
 
-def test_selesai_giling_mengosongkan_SELURUH_sumber_silonya():
-    """Bug yang dilihat pemilik: "kenapa kembali menjadi transit di silo kering
-    setelah selesai giling?"
-
-    `start_milling` mengisi penunjuk tunggal `proc.silo_storage_id` dengan SALAH
-    SATU baris silo saja — "baris lot bila ada" — padahal satu giling boleh
-    memakan beberapa baris sejak silo boleh dicampur. `finish_milling` dulu
-    mengosongkan penunjuk itu saja, jadi baris lain tetap "terisi" dan silonya
-    muncul kembali sebagai "Transit di silo kering": gabah yang sama ditawarkan
-    untuk digiling dua kali.
-    """
+def test_selesai_giling_menunggu_sisa_dan_tidak_mengosongkan_silo():
     from app.penggilingan.gudang1.services import milling
-
     fn = kode_saja(milling.finish_milling)
-    assert "MillingProcessSource.milling_process_id == proc.id" in fn, "sumber tak dibaca"
-    # Penunjuk tunggal hanya boleh jadi CADANGAN untuk proses lama.
-    assert "if not ids and proc.silo_storage_id" in fn
-    # Dan sejak 5 Oktober 2026: sumber yang sudah dibebaskan sendiri lewat
-    # `tutup_silo_giling` tak boleh ikut dikosongkan ulang di sini — silonya
-    # bisa sudah berisi gabah baru.
-    assert "MillingProcessSource.berat_akhir_kg.is_(None)" in fn
+    assert "MillingProcessSource.milling_process_id == proc.id" in fn
+    assert "berat_akhir_kg is None" in fn
+    assert 'st.status = "kosong"' not in fn
+    assert 'silo.status = "kosong"' not in fn
 
 
 def test_output_terverifikasi_menang_atas_progres_operator():

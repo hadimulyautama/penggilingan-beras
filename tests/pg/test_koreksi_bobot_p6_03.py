@@ -16,6 +16,7 @@ GAGAL sebelum perbaikan (kunci `giling_tak_cocok` belum ada; laporan berkata
 "Bersih" di atas rendemen yang meleset).
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 import pytest
 from sqlalchemy import select, text
@@ -47,6 +48,7 @@ async def _korban(pg, pemakai, pemasok, *, kode_tiket: str, nopol: str) -> tuple
         kode = (await start_milling(db, user=u, nama_silo="A")).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode)
         await finish_milling(db, user=u, kode_proses=kode, berat_akhir=5700)
     async with pg() as db:
         await _timbang_kedua(db, t_joko, netto=2000, kosong=3200)
@@ -131,6 +133,7 @@ async def test_revisi_tiket_sengaja_disebut_tetapi_tak_diubah_sampai_admin_memil
         kode = (await start_milling(db, user=u, nama_silo="B")).proc.kode_proses
     async with pg() as db:
         u = await db.get(User, pemakai.id)
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode)
         await finish_milling(db, user=u, kode_proses=kode, berat_akhir=6000)
     # Revisi yang disengaja sesudah giling: bobot batch berubah, proses tidak.
     async with pg() as db:

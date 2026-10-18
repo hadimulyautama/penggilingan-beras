@@ -705,8 +705,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # tak disentuh sampai angkanya ada, jadi kartunya tetap di Sedang
             # berjalan sampai dilengkapi.
             {"id": "selesai_giling", "label": "🏁 Selesai giling",
-             "hint": "Hasil akhir PK wajib. Tanpa angkanya, gilingnya belum "
-                     "bisa ditutup dan kartunya tetap berjalan.",
+             "hint": "Catat sisa setiap silo melalui Bebaskan silo terlebih dahulu. "
+                     "Isi 0 hanya jika benar-benar kosong. Penyelesaian tidak mengosongkan silo.",
              "post": "/api/actions/selesai-giling", "pratinjau_proses": "giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/api/actions/milling-active",
@@ -726,9 +726,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo (boleh sebagian)",
              "hint": "Mesin lanjut dari silo lain — proses TIDAK ditutup. "
                      "Isi 0 jika silo sudah kosong. "
-                     "Silo yang dibebaskan boleh langsung diisi gabah baru; "
+                     "Hanya silo dengan sisa 0 kg yang kosong dan siap diisi ulang; "
                      "gabah itu tak akan tercampur ke lot yang sedang digiling.",
-             "post": "/api/actions/tutup-silo-giling", "fields": [
+             "post": "/api/actions/tutup-silo-giling", "pratinjau_silo": "giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/api/actions/milling-active",
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
@@ -1065,8 +1065,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada penyosohan yang sedang berhenti."},
              ]},
             {"id": "selesai_penyosohan", "label": "📤 Bebaskan silo penyosohan",
-             "post": "/api/actions/selesai-penyosohan",
-             "hint": "Bebaskan silo untuk diisi kembali. Penyosohan dan pencatatan hasil tetap berjalan, termasuk jika ini silo terakhir. Isi 0 jika silo sudah kosong.",
+             "post": "/api/actions/selesai-penyosohan", "pratinjau_silo": "sosoh",
+             "hint": "Lepas ikatan silo dari proses; sisanya tetap tercatat. Penyosohan dan pencatatan hasil tetap berjalan. Hanya silo dengan sisa 0 kg yang kosong dan siap diisi ulang.",
              "konfirmasi": {"judul": "Bebaskan silo?", "teks": "{kode_proses} · Silo {silo}: sisa {sisa} kg. Silo dibebaskan; penyosohan tetap berjalan. Gunakan Selesaikan penyosohan saat seluruh bahan di mesin benar-benar selesai.", "ya": "Bebaskan silo, lanjutkan sosoh"},
              "fields": [
                  {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
@@ -3262,6 +3262,7 @@ class TutupSiloGilingReq(BaseModel):
     #: sama dengan `SelesaiPenyosohanReq.silo` di Gudang 2.
     silo: str = ""
     sisa: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    dasar: str = ""
 
 
 @router.post("/actions/tutup-silo-giling")
@@ -3270,6 +3271,8 @@ async def act_tutup_silo_giling(req: TutupSiloGilingReq,
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
+    if not req.dasar:
+        raise HTTPException(409, "Periksa ringkasan sisa silo terlebih dahulu.")
     silo = (req.silo or "").strip().upper() or None
     from app.penggilingan.gudang1.services.milling import MillingError, tutup_silo_giling
     async with SessionLocal() as db:
@@ -3279,12 +3282,13 @@ async def act_tutup_silo_giling(req: TutupSiloGilingReq,
             # yang masih terbuka untuk proses ini adalah layanannya, bukan
             # borangnya — pola yang sama dengan `act_selesai_penyosohan`.
             r = await tutup_silo_giling(db, user=u, kode_proses=req.kode_proses,
-                                        nama_silo=silo, sisa_kg=req.sisa)
+                                        nama_silo=silo, sisa_kg=req.sisa, dasar=req.dasar)
         except MillingError as e:
             raise _err(e, "Gagal membebaskan silo.")
-    pesan = (f"✓ Silo {r.nama_silo} pada *{req.kode_proses}* dibebaskan — "
-             f"{r.terpakai_kg:g} kg terpakai, sisa {r.sisa_kg:g} kg. Boleh "
-             "langsung diisi gabah baru; gilingnya TETAP berjalan.")
+    terpakai = f"{r.terpakai_kg:g} kg terpakai" if r.terpakai_kg is not None else "berat terpakai menunggu timbang"
+    keadaan = "Silo dinyatakan kosong dan boleh diisi ulang." if r.sisa_kg == 0 else "Sisa tetap berada di silo; statusnya terisi."
+    pesan = (f"✓ Silo {r.nama_silo} pada *{req.kode_proses}* dibebaskan dari proses — "
+             f"{terpakai}, sisa {r.sisa_kg:g} kg. {keadaan} Giling TETAP berjalan.")
     return {"ok": True, "pesan": pesan}
 
 
@@ -4149,6 +4153,7 @@ class SelesaiPenyosohanReq(BaseModel):
     #: == 1`), jadi orang yang menyosoh satu silo tetap harus menyebut silo.
     silo: str = ""
     sisa: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    dasar: str = ""
 
 
 @router.post("/actions/selesai-penyosohan")
@@ -4156,6 +4161,8 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
     _require(await _is_g2_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses penyosohan dulu.")
+    if not req.dasar:
+        raise HTTPException(409, "Periksa ringkasan sisa silo terlebih dahulu.")
     silo = (req.silo or "").strip().upper() or None
     from app.penggilingan.gudang2.polishing import selesai_penyosohan, Gudang2Error
     async with SessionLocal() as db:
@@ -4164,10 +4171,22 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
             # Silo kosong DITERUSKAN, tidak dihadang: yang tahu berapa silo
             # yang dipakai proses ini adalah layanannya, bukan borangnya.
             r = await selesai_penyosohan(db, user=u, kode=req.kode_proses,
-                                         nama_silo=silo, sisa_kg=req.sisa)
+                                         nama_silo=silo, sisa_kg=req.sisa, dasar=req.dasar)
         except Gudang2Error as e:
             raise _err(e, "Gagal menandai selesai penyosohan.")
     return {"ok": True, "pesan": f"Silo {r.silo} dibebaskan (sisa {req.sisa:g} kg). Penyosohan tetap berjalan; hasil masih bisa dicatat."}
+
+
+@router.get("/actions/pratinjau-bebaskan-silo")
+async def pratinjau_bebaskan_silo(jenis: str, kode_proses: str, sisa: float,
+        silo: str = "", user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await (_is_g1_operator(user) if jenis == "giling" else _is_g2_operator(user)))
+    from app.services.penyelesaian_proses import ringkasan_bebaskan
+    async with SessionLocal() as db:
+        try:
+            return await ringkasan_bebaskan(db, jenis=jenis, kode=kode_proses, silo=silo, sisa=sisa)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
 
 
 class AkhiriPenyosohanReq(BaseModel):

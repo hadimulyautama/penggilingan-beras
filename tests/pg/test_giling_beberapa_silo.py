@@ -11,6 +11,7 @@ berakar pada satu kolom yang sama — `MillingProcess.silo_id` yang tunggal — 
 ketiganya melahirkan angka yang bohong dengan cara yang berbeda.
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
 
@@ -253,6 +254,7 @@ async def test_satu_rendemen_atas_bahan_seluruh_silo(pg, silos):
     r = await _mulai(pg, silos, ["A", "B"])
     async with pg() as db:
         u = await db.get(User, silos["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         s = await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=6_000)
     # Penyebutnya dibaca dari prosesnya sendiri — di situlah "satu lot, satu
@@ -272,6 +274,7 @@ async def test_batch_asal_memuat_isi_seluruh_silo(pg, silos):
     r = await _mulai(pg, silos, ["A", "B"])
     async with pg() as db:
         u = await db.get(User, silos["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=6_000)
     async with pg() as db:
@@ -282,7 +285,7 @@ async def test_batch_asal_memuat_isi_seluruh_silo(pg, silos):
     assert "GB-MS-A" in teks and "GB-MS-B" in teks, f"asalnya tak lengkap: {lot.bahan}"
 
 
-async def test_selesai_mengosongkan_seluruh_silo(pg, silos):
+async def test_selesai_setelah_operator_memastikan_seluruh_silo_kosong(pg, silos):
     """Silo kedua yang tetap "terisi" menunjukkan gabah yang tidak ada, dan orang
     mencari-carinya."""
     from sqlalchemy import select
@@ -293,6 +296,7 @@ async def test_selesai_mengosongkan_seluruh_silo(pg, silos):
     r = await _mulai(pg, silos, ["A", "B"])
     async with pg() as db:
         u = await db.get(User, silos["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=6_000)
 
@@ -317,7 +321,7 @@ async def test_selesai_mengosongkan_seluruh_silo(pg, silos):
 
 # ─────────────────── 7 · Undo ───────────────────
 
-async def test_undo_selesai_mengembalikan_seluruh_silo(pg, silos):
+async def test_undo_selesai_tidak_membatalkan_pemeriksaan_silo(pg, silos):
     """Pembatalan yang mengembalikan separuh keadaan lebih buruk daripada
     pembatalan yang menolak: tak ada satu pun layar yang menyebut separuh mana
     yang tertinggal."""
@@ -330,6 +334,7 @@ async def test_undo_selesai_mengembalikan_seluruh_silo(pg, silos):
     r = await _mulai(pg, silos, ["A", "B"])
     async with pg() as db:
         u = await db.get(User, silos["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=6_000)
     async with pg() as db:
@@ -342,17 +347,17 @@ async def test_undo_selesai_mengembalikan_seluruh_silo(pg, silos):
     async with pg() as db:
         for huruf in ("A", "B"):
             silo = await db.get(Silo, silos["silo"][huruf])
-            assert silo.status == "terisi", f"Silo {huruf} tak dikembalikan"
+            assert silo.status == "kosong", f"Silo {huruf} tidak boleh diisi ulang secara semu"
         baris = (await db.execute(select(SiloStorage).where(
             SiloStorage.id.in_([silos["isi"]["A"]["storage"],
                                 silos["isi"]["B"]["storage"]])))).scalars().all()
-        assert all(b.status == "terisi" for b in baris)
+        assert all(b.status == "kosong" for b in baris)
         # Prosesnya kembali 'proses', jadi klaimnya kembali terpasang — tanpa
         # itu silo yang sama bisa direbut proses kedua.
-        assert all(b.milling_process_id == r.proc.id for b in baris)
+        assert all(b.milling_process_id is None for b in baris)
         st = (await db.execute(select(PurchaseBatch.status_batch).where(
             PurchaseBatch.kode_batch.in_(("GB-MS-A", "GB-MS-B"))))).scalars().all()
-        assert set(st) == {"di_silo"}, f"status batch tak ikut kembali: {st}"
+        assert set(st) == {"digiling"}, f"status batch tak ikut kembali: {st}"
 
 
 async def test_undo_mulai_melepas_seluruh_klaim(pg, silos):
@@ -394,11 +399,12 @@ async def test_lot_satu_silo_tak_berubah_sama_sekali(pg, silos):
     assert r.nama_silo == "A" and float(r.berat_masuk) == 10_000
     async with pg() as db:
         u = await db.get(User, silos["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         s = await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=6_000)
     assert hitung_rendemen(s.produced, s.proc.berat_gabah_masuk_kg) == \
         pytest.approx(60.0, abs=0.05)
-    assert s.nama_silo == "A"
+    assert s.nama_silo is None
     async with pg() as db:
         assert (await db.get(Silo, silos["silo"]["A"])).status == "kosong"
         assert (await db.get(Silo, silos["silo"]["B"])).status == "terisi"

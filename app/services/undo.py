@@ -591,6 +591,11 @@ async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
             raise UndoError(
                 f"{proc.kode_proses} sudah ada progress/QC — batalkan itu dulu."
             )
+    from app.models import MillingProcessSource
+    if await db.scalar(select(MillingProcessSource.id).where(
+        MillingProcessSource.milling_process_id == proc_id,
+        MillingProcessSource.berat_akhir_kg.is_not(None)).limit(1)):
+        raise UndoError("Sisa silo proses ini sudah diperiksa. Minta Admin melakukan koreksi; mulai giling tidak boleh dihapus dan mengembalikan bahan terpakai menjadi stok.")
     kode = proc.kode_proses
     # ── Klaim silonya dilepas DI SINI, bukan diserahkan ke FK ──
     #
@@ -607,7 +612,7 @@ async def _undo_start_milling(db: AsyncSession, proc_id: int) -> str:
 
 
 async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
-    proc = await db.get(MillingProcess, proc_id)
+    proc = await db.get(MillingProcess, proc_id, with_for_update=True)
     if proc is None:
         raise UndoError("Proses giling sudah tidak ada.")
     if proc.status != "selesai":
@@ -617,6 +622,13 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     ).first()
     if trf:
         raise UndoError(f"{proc.kode_proses} sudah ada transfer PK — tidak bisa dibatalkan.")
+    selesai_log = await db.scalar(select(ActivityLog).where(
+        ActivityLog.table_name == "milling_process", ActivityLog.record_id == proc_id,
+        ActivityLog.field_name == "status", ActivityLog.new_value == "selesai",
+        ActivityLog.dibatalkan_pada.is_(None)).order_by(ActivityLog.id.desc()).limit(1))
+    dari_pemeriksaan = selesai_log is not None and selesai_log.aksi == "selesai_giling_terperiksa"
+    if not dari_pemeriksaan:
+        raise UndoError("Penyelesaian lama belum memisahkan pemeriksaan sisa silo. Minta Admin melakukan koreksi; isi dan klaim silo tidak diubah otomatis.")
     from app.models import JedaProses
     jeda = await db.scalar(select(JedaProses).where(
         JedaProses.milling_process_id == proc.id,
@@ -628,64 +640,17 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     proc.status = "proses"
     proc.waktu_selesai = None
 
-    # ── SELURUH silo sumber dikembalikan, bukan penunjuk tunggalnya ──
-    #
-    # Sejak satu lot boleh datang dari beberapa silo (keputusan pemilik 24
-    # September 2026), `proc.silo_storage_id` dan `proc.silo_id` menyebut SALAH
-    # SATU. Membatalkan lewat keduanya mengembalikan silo pertama dan
-    # meninggalkan silo kedua kosong — padahal gabahnya kembali dianggap belum
-    # tergiling. Pembatalan yang mengembalikan separuh keadaan lebih buruk
-    # daripada pembatalan yang menolak: tak ada satu pun layar yang menyebut
-    # separuh mana yang tertinggal.
-    #
-    # Klaimnya ikut DIPASANG KEMBALI: prosesnya kembali berstatus 'proses',
-    # jadi barisnya kembali "ada di dalam mesin" — tanpa itu, silo yang sama
-    # bisa diklaim proses kedua sementara yang pertama masih terbuka.
-    from app.models import MillingProcessSource
-    from app.penggilingan.gudang1.services.silo import silo_ids_proses
-
-    ids = [x for x in (await db.execute(
-        select(MillingProcessSource.silo_storage_id).where(
-            MillingProcessSource.milling_process_id == proc_id)
-    )).scalars().all() if x]
-    if not ids and proc.silo_storage_id:
-        ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
-    for sid in ids:
-        st = await db.get(SiloStorage, sid)
-        if st:
-            st.status = "terisi"
-            st.tanggal_keluar = None
-            st.milling_process_id = proc_id
-    for silo_id in await silo_ids_proses(db, proc):
-        silo = await db.get(Silo, silo_id)
-        if silo:
-            silo.status = "terisi"
-
-    # ── Status batch: SELURUH sumbernya juga ──
-    #
-    # `selesai_giling` menandai "digiling" setiap batch yang ikut, termasuk yang
-    # datang lewat lot pengeringan dan yang masuk saat giling berjalan (QA
-    # P-K-18). Yang dikembalikan di sini dulu hanya dua penunjuk tunggal, jadi
-    # batch lain tetap berstatus "digiling" sesudah pembatalan — gabah yang
-    # kembali ke silo tetapi tak bisa digiling lagi karena ia sudah "digiling".
-    lots = {proc.drying_lot_id} if proc.drying_lot_id else set()
-    batches = {proc.purchase_batch_id} if proc.purchase_batch_id else set()
-    for lot_id, batch_id in (await db.execute(
-        select(MillingProcessSource.drying_lot_id,
-               MillingProcessSource.purchase_batch_id)
-        .where(MillingProcessSource.milling_process_id == proc_id)
-    )).all():
-        if lot_id:
-            lots.add(lot_id)
-        if batch_id:
-            batches.add(batch_id)
-    for lot_id in {x for x in lots if x}:
-        await _revert_lot_batches(db, lot_id, "di_silo")
-    for batch_id in {x for x in batches if x}:
-        b = await db.get(PurchaseBatch, batch_id)
-        if b:
-            b.status_batch = "di_silo"
-    return f"✓ Dibatalkan: selesai giling {proc.kode_proses} (kembali 'proses', silo terisi lagi)."
+    # Pembatalan selesai mesin tidak membatalkan pemeriksaan sisa yang sudah
+    # dilakukan sebelumnya. Penyimpanan bisa sudah dipakai proses berikutnya.
+    # Catatan lama yang tidak membuktikan pemeriksaan sisa ditolak di atas.
+    from hmu_core.proses_db import ProsesTerpadu
+    bersama = await db.scalar(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "produksi", ProsesTerpadu.tabel_sumber == "milling_process",
+        ProsesTerpadu.id_sumber == str(proc.id)).with_for_update())
+    if bersama:
+        bersama.status = "berjalan"
+        bersama.waktu_selesai = None
+    return f"✓ Dibatalkan: selesai giling {proc.kode_proses} (kembali proses; pemeriksaan sisa silo tetap tercatat)."
 
 
 async def _undo_transfer(db: AsyncSession, transfer_id: int, *,

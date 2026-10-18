@@ -773,7 +773,7 @@ class SelesaiResult:
 
 async def selesai_penyosohan(
     db: AsyncSession, *, user, kode: str | None, nama_silo: str | None,
-    sisa_kg: float | None, tanggal=None, jam=None,
+    sisa_kg: float | None, tanggal=None, jam=None, dasar: str | None = None,
 ) -> SelesaiResult:
     """Bebaskan satu pemakaian silo; mesin dan pencatatan hasil tetap berjalan."""
     proc = await _get_proc(db, kode)
@@ -789,7 +789,7 @@ async def selesai_penyosohan(
         await db.execute(
             select(PolishingSiloUsage).where(
                 PolishingSiloUsage.polishing_process_id == proc.id
-            ).with_for_update()
+            ).with_for_update().execution_options(populate_existing=True)
         )
     ).scalars().all()
     # Pilih usage silo yang dimaksud.
@@ -855,6 +855,15 @@ async def selesai_penyosohan(
             f"({tersedia:.0f} kg = awal {float(target.berat_awal_kg):.0f}"
             + (f" + ditambah {masuk:.0f}" if masuk else "") + ")."
         )
+    if dasar is not None:
+        from app.services.penyelesaian_proses import ringkasan_bebaskan
+        try:
+            kini = await ringkasan_bebaskan(db, jenis="sosoh", kode=kode, silo=nama_silo or "", sisa=float(sisa_kg))
+        except ValueError as e:
+            raise Gudang2Error(str(e)) from e
+        if kini["dasar"] != dasar:
+            raise Gudang2Error("Isi atau pemakaian silo berubah sejak diperiksa. Periksa ulang sisanya.")
+
     target.berat_akhir_kg = sisa_kg
     target.berat_terpakai_kg = max(tersedia - float(sisa_kg), 0.0)
     silo_obj = await db.get(Silo, target.silo_id)
@@ -864,7 +873,7 @@ async def selesai_penyosohan(
     outputs = await _output_map(db, proc.id)
     await log_activity(
         db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
-        changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
+        changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:g}",
         aksi="tutup_silo_sosoh",
     )
     from app.penggilingan.gudang2.service import segarkan_status_silo
@@ -891,7 +900,7 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
     usages = (await db.scalars(select(PolishingSiloUsage).where(
         PolishingSiloUsage.polishing_process_id == proc.id).with_for_update()
         .execution_options(populate_existing=True))).all()
-    if any(u.berat_akhir_kg is None for u in usages):
+    if not usages or any(u.berat_akhir_kg is None for u in usages):
         raise Gudang2Error("Bebaskan setiap silo dan isi sisanya dulu. Proses tetap berjalan.")
     outputs = await _output_map(db, proc.id)
     if not outputs:
@@ -902,6 +911,8 @@ async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
         if dasar != kini["dasar"]:
             raise Gudang2Error("Data proses berubah sejak diperiksa. Periksa ulang sebelum menyelesaikan.")
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
+    if sum(outputs.values()) > pk_terpakai + 0.001:
+        raise Gudang2Error("Total hasil melebihi bahan yang benar-benar terpakai setelah sisa silo dikurangkan. Periksa hasil dan sisa yang dicatat.")
     selesai_pada = input_time(tanggal, jam)
     # Jeda yang masih terbuka ikut ditutup: prosesnya sudah tak ada, dan
     # jam tertahan yang terus berjalan akan dipakai menilai shift

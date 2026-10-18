@@ -110,14 +110,20 @@ async def test_giling_ringkasan_semua_silo_hasil_dan_perubahan(pg,silos):
     async with pg() as db:
         u=await db.get(User,silos['user'])
         await log_progress(db,user=u,kode_proses=p.kode_proses,berat_kumulatif=500)
-        awal=await ringkasan_selesai(db,jenis='giling',kode=p.kode_proses,berat_akhir=700)
-        assert 'Silo A' in awal['teks'] and 'Silo B' in awal['teks'] and '700 kg' in awal['teks']
+        with pytest.raises(ValueError,match='sisa'):
+            await ringkasan_selesai(db,jenis='giling',kode=p.kode_proses,berat_akhir=700)
         await tutup_silo_giling(db,user=u,kode_proses=p.kode_proses,nama_silo='A',sisa_kg=0)
+        with pytest.raises(ValueError,match='Silo B'):
+            await ringkasan_selesai(db,jenis='giling',kode=p.kode_proses,berat_akhir=700)
+        await tutup_silo_giling(db,user=u,kode_proses=p.kode_proses,nama_silo='B',sisa_kg=100)
+        awal=await ringkasan_selesai(db,jenis='giling',kode=p.kode_proses,berat_akhir=700)
+        assert 'Silo A: sisa 0 kg' in awal['teks'] and 'Silo B: sisa 100 kg' in awal['teks']
+        await log_progress(db,user=u,kode_proses=p.kode_proses,berat_kumulatif=600)
         with pytest.raises(MillingError,match='berubah'):
             await finish_milling(db,user=u,kode_proses=p.kode_proses,berat_akhir=700,dasar=awal['dasar'])
         baru=await ringkasan_selesai(db,jenis='giling',kode=p.kode_proses,berat_akhir=700)
-        assert 'Silo yang masih terikat: Silo B' in baru['teks']
         await finish_milling(db,user=u,kode_proses=p.kode_proses,berat_akhir=700,dasar=baru['dasar'])
+
 
 
 async def _jadikan_berjalan(pg,sosoh):

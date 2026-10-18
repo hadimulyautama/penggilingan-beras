@@ -1366,6 +1366,20 @@
         finally { tombolJeda.disabled = false; }
         return;
       }
+      if (a.pratinjau_silo) {
+        var tombolSilo = $("simpan"), borangSilo = lembar.querySelector(".lembar__isi");
+        tombolSilo.disabled = true;
+        try {
+          var ringkasSilo = await ambil("/api/actions/pratinjau-bebaskan-silo?jenis=" + encodeURIComponent(a.pratinjau_silo) +
+            "&kode_proses=" + encodeURIComponent(isi.kode_proses) + "&silo=" + encodeURIComponent(isi.silo || "") + "&sisa=" + encodeURIComponent(isi.sisa));
+          if (!ringkasSilo || !lembar.open || lembar.querySelector(".lembar__isi") !== borangSilo ||
+              nilaiMedan("kode_proses") !== isi.kode_proses) return;
+          isi.dasar = ringkasSilo.dasar;
+          tanyaYakin(isi, v, {judul: "Periksa sisa silo", teks: ringkasSilo.teks, ya: "Simpan sisa; bebaskan dari proses"});
+        } catch (e) { salahFormulir(lembar, String(e)); }
+        finally { tombolSilo.disabled = false; }
+        return;
+      }
       if (a.pratinjau_proses) {
         var tombolProses = $("simpan");
         var borangProses = lembar.querySelector(".lembar__isi");

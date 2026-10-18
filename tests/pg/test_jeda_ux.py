@@ -1,3 +1,4 @@
+from tests.pg.skenario_silo import pastikan_silo_kosong
 """Regresi jeda: kejadian aktual, kondisi, identitas, pengiriman ulang dan konkurensi."""
 from datetime import timedelta
 from unittest.mock import AsyncMock
@@ -193,6 +194,7 @@ async def test_selesai_giling_menutup_jeda_tanpa_mengaku_lanjut_dan_batal_memuli
         u=await db.get(User,silos['user'])
         await j.hentikan(db,user=u,jenis='giling',kode=kode,sebab='Listrik padam')
         awal=(await j.jeda_terbuka(db,'giling',pid)).mulai
+        await pastikan_silo_kosong(db, user=u, kode_proses=kode)
         await finish_milling(db,user=u,kode_proses=kode,berat_akhir=500)
         assert await j.jeda_terbuka(db,'giling',pid) is None
         riwayat=await riwayat_jeda(db,jenis='giling',id_=pid)

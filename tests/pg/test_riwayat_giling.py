@@ -5,6 +5,7 @@ dulu — termasuk yang PK-nya sudah habis terkirim/terjual (beda dari `/stok`,
 yang membuang lot habis karena ia hanya menjawab "apa yang MASIH ADA").
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
 
@@ -87,6 +88,7 @@ async def _giling_selesai(pg, pabrik: dict, *, masuk_kg: float = 10_000.0,
         r = await start_milling(db, user=u, nama_silo="A")
     async with pg() as db:
         u = await db.get(User, pabrik["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         s = await finish_milling(db, user=u, kode_proses=r.proc.kode_proses,
                                  berat_akhir=berat_akhir)
     return s.proc.kode_proses

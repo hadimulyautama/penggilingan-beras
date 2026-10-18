@@ -77,6 +77,8 @@ async def jalankan(terapkan=False):
                         kode_proses=kode, kadar_air=ka, broken=broken, susut=susut, kondisi=None,
                         butir_kuning=kuning, gabah=gabah, merang=merang,
                         catatan_lab=seed.AWALAN+f"PK jasa · pemeriksaan {i} dari 3")
+                await p.langkah("pk-jasa-detail:silo-diperiksa", milling.tutup_silo_giling,
+                                kode_proses=kode, nama_silo="UJI-PK-JASA", sisa_kg=0)
                 await p.langkah("pk-jasa-detail:selesai", milling.finish_milling,
                                 kode_proses=kode, berat_akhir=8640)
                 await p.langkah("pk-jasa-detail:verifikasi", milling.verify_milling_output,

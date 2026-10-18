@@ -10,6 +10,7 @@ membuka jalan mid-proses, menyalin penjaga yang sama (satu pemilik, silo tak
 boleh dipakai proses lain) dari fungsi "mulai"-nya.
 """
 from __future__ import annotations
+from tests.pg.skenario_silo import pastikan_silo_kosong
 
 from datetime import date
 
@@ -207,6 +208,7 @@ async def test_tambah_silo_giling_proses_selesai_ditolak(pg, g1):
         r = await start_milling(db, user=u, nama_silo="A")
     async with pg() as db:
         u = await db.get(User, g1["user"])
+        await pastikan_silo_kosong(db, user=u, kode_proses=r.proc.kode_proses)
         await finish_milling(db, user=u, kode_proses=r.proc.kode_proses, berat_akhir=2_500)
 
     async with pg() as db:

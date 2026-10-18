@@ -207,7 +207,7 @@ async def silo_ids_proses(db: AsyncSession, proc: MillingProcess) -> list[int]:
     return sorted(i for i in ids if i)
 
 
-async def _row_bobot(db: AsyncSession, row: SiloStorage) -> Bobot:
+async def _row_bobot(db: AsyncSession, row: SiloStorage, *, sebelum_sumber: int | None = None) -> Bobot:
     """Bobot baris silo SEKARANG — bobot sumbernya DIKURANGI yang sudah
     dikeluarkan untuk dikemas (`dikemas_kg`, pesan kerja 12, migrasi 0077).
 
@@ -237,8 +237,19 @@ async def _row_bobot(db: AsyncSession, row: SiloStorage) -> Bobot:
         b = Bobot(float(kg), PASTI) if kg is not None else NOL
     else:
         return NOL
-    dikemas = float(row.dikemas_kg or 0)
-    return kurang(b, dikemas) if dikemas else b
+    # Pengeluaran giling yang sudah diperiksa operator mengurangi isi fisik.
+    # Saat menyinkronkan snapshot bahan suatu proses, hanya pemakaian SEBELUM
+    # sumber itu yang dikurangkan; pemakaian proses berikutnya tidak boleh
+    # mengubah riwayat bahan proses sebelumnya.
+    from app.models import MillingProcessSource
+    q = select(func.coalesce(func.sum(MillingProcessSource.berat_terpakai_kg), 0)).where(
+        MillingProcessSource.silo_storage_id == row.id,
+        MillingProcessSource.berat_akhir_kg.isnot(None))
+    if sebelum_sumber is not None:
+        q = q.where(MillingProcessSource.id < sebelum_sumber)
+    digiling = float(await db.scalar(q) or 0)
+    keluar = float(row.dikemas_kg or 0) + digiling
+    return kurang(b, keluar) if keluar else b
 
 
 async def _row_kg(db: AsyncSession, row: SiloStorage) -> float:
