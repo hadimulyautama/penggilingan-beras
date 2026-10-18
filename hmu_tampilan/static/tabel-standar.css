@@ -218,3 +218,9 @@ body .tabel-standar [data-hanya-ponsel] { display:none; }
   body .tabel-standar--grid .qc-history-values { table-layout:fixed; }
   body .tabel-standar--grid .qc-history-values :is(th,td) { white-space:normal; overflow-wrap:anywhere; }
 }
+
+/* Rincian berkolom tetap harus membungkus judul dan identitas panjang. */
+body table.tabel-standar[data-ponsel="rincian"] :is(th, td) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
