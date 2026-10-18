@@ -66,6 +66,9 @@ async def _sosoh_selesai(pg, uid: int, *, huruf="A", masuk=10_000.0,
         u = await db.get(User, uid)
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo=huruf,
                                  sisa_kg=sisa)
+    async with pg() as db:
+        from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+        await akhiri_penyosohan(db, user=await db.get(User, uid), kode=kode)
     return kode
 
 
@@ -234,6 +237,8 @@ async def test_kartu_merinci_asal_lot_pk_dan_penambahan_broken(pg, pemakai, pema
             select(ByproductStock).where(ByproductStock.jenis_produk == "broken")
         )).scalars().one()
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=4_000)
+        from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+        await akhiri_penyosohan(db, user=u, kode=kode)
         await pindah_broken_ke_silo(db, user=u, byproduct_stock_id=row_broken.id,
                                     nama_silo="C", berat=1_000)
 
@@ -241,6 +246,7 @@ async def test_kartu_merinci_asal_lot_pk_dan_penambahan_broken(pg, pemakai, pema
         kode2 = (await mulai_penyosohan(db, user=u, nama_silos=["C"])).proc.kode_proses
         await catat_output(db, user=u, kode=kode2, jenis="menir", berat_kg=900)
         await selesai_penyosohan(db, user=u, kode=kode2, nama_silo="C", sisa_kg=0)
+        await akhiri_penyosohan(db, user=u, kode=kode2)
 
     c = await _klien(pg, peran="admin")
     try:

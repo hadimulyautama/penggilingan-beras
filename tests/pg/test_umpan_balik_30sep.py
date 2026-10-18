@@ -37,9 +37,9 @@ async def g2(pg):
 
     await seed_master()
     async with pg() as db:
-        gd = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
-        db.add(gd)
-        await db.flush()
+        from sqlalchemy import select
+        gd = await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi == "g2"))
+        assert gd is not None, "seed_master harus menyediakan Gudang 2"
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=gd.id),
                     Silo(nama_silo="Silo B", warehouse_id=gd.id)])
         op = User(nama="Op Polesan", role="operator", status="aktif",
@@ -194,7 +194,7 @@ async def test_operator_melihat_rendemen_penyosohan_yang_sudah_selesai(pg, g2):
     from app.penggilingan.gudang2.models import (PolishingOutputLog,
                                                  PolishingProcess,
                                                  PolishingSiloUsage)
-    from app.services.berjalan import _kartu_sosoh_selesai
+    from app.penggilingan.gudang2.polishing import riwayat_sosoh
 
     async with pg() as db:
         silo = (await db.execute(
@@ -213,14 +213,18 @@ async def test_operator_melihat_rendemen_penyosohan_yang_sudah_selesai(pg, g2):
         await db.commit()
 
     async with pg() as db:
-        kartu = await _kartu_sosoh_selesai(db)
-    assert kartu, "penyosohan yang selesai tak meninggalkan satu kartu pun"
-    k = kartu[0]
-    assert k.utama == ("88.4", "%"), k.utama
-    # TANPA TOMBOL: prosesnya selesai, tak ada langkah miliknya lagi. Kartu
-    # bertombol yang ditekan lalu ditolak mengajari orang bahwa layarnya tak
-    # bisa dipercaya.
-    assert k.aksi is None and not k.tombol, "kartu selesai menawarkan tombol"
+        kartu, _ = await riwayat_sosoh(db)
+    assert kartu, "penyosohan yang selesai tidak tercatat di riwayat"
+    assert kartu[0].rendemen == pytest.approx(88.4)
+    # Proses selesai sekarang berada di Riwayat Sosoh. Periksa bahwa
+    # operator G2 benar-benar dapat membuka hasilnya melalui pintu sekarang.
+    from tests.pg.test_layar_gudang_http import _klien
+    c = await _klien(pg, role="operator", gudang_nama="Gudang 2 - Penyosohan")
+    async with c:
+        r = await c.get(f"/riwayat-sosoh/{p.id}")
+    assert r.status_code == 200
+    assert "POL-RND-01" in r.text and "88,4%" in r.text
+    assert "buka=hasil_penyosohan" not in r.text
 
 
 async def test_rendemen_satu_rumus_untuk_kartu_dan_penutupan(pg, g2):
@@ -230,7 +234,7 @@ async def test_rendemen_satu_rumus_untuk_kartu_dan_penutupan(pg, g2):
 
     from app.penggilingan.gudang2 import polishing
 
-    sumber = inspect.getsource(polishing.selesai_penyosohan)
+    sumber = inspect.getsource(polishing.akhiri_penyosohan)
     assert "rendemen_proses(db" in sumber, \
         "penutupan menghitung rendemennya sendiri — dua rumus atas satu angka"
     assert "beras_total / pk_terpakai" not in sumber, sumber[-400:]

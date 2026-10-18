@@ -33,7 +33,7 @@ async def orang(pg, pemakai):
             w = (await db.execute(select(Warehouse).where(
                 Warehouse.nama_gudang.like(pola)))).scalars().first()
             if w is None:
-                w = Warehouse(nama_gudang=f"Gudang {nama[-1]} - Uji")
+                w = Warehouse(nama_gudang=f"Gudang {nama[-1]} - Uji", kode_fungsi=nama)
                 db.add(w)
                 await db.flush()
             wh[nama] = w.id
@@ -75,12 +75,12 @@ async def test_kabar_akhirnya_punya_pembaca(pg, orang):
     from app.models import User
     from app.services.kabar import daftar
 
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin",
-                 pesan="🟡 Penyosohan POL-01 selesai — perlu verifikasi output")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin",
+                 pesan="🟡 Permintaan PK REQ-01 — perlu persetujuan")
 
     async with pg() as db:
         k = await daftar(db, await db.get(User, orang["admin"]))
-    assert len(k) == 1 and "perlu verifikasi output" in k[0].pesan
+    assert len(k) == 1 and "perlu persetujuan" in k[0].pesan
     assert k[0].baru, "kabar baru tak bertanda baru"
 
 
@@ -91,7 +91,7 @@ async def test_lencana_menyebut_angka_yang_sama_dengan_daftarnya(pg, orang):
     from app.models import User
     from app.services.kabar import daftar, jumlah_baru
 
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="a")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="a")
     await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="b")
     await _tulis(pg, tipe="pengeringan_telat", untuk="operator", pesan="c")
 
@@ -170,8 +170,8 @@ async def test_yang_merah_didahulukan_meski_lebih_tua(pg, orang):
 
     await _tulis(pg, tipe="permintaan_pk", untuk="admin", prioritas="merah",
                  pesan="MERAH", umur_hari=2)
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="kuning 1")
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="kuning 2")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="kuning 1")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="kuning 2")
 
     async with pg() as db:
         k = await daftar(db, await db.get(User, orang["admin"]))
@@ -186,9 +186,9 @@ async def test_kabar_berumur_dan_berhenti_sendiri(pg, orang):
     from app.models import User
     from app.services.kabar import HARI, daftar, jumlah_baru
 
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="lama",
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="lama",
                  umur_hari=HARI + 1)
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="baru")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin", pesan="baru")
 
     async with pg() as db:
         u = await db.get(User, orang["admin"])
@@ -213,8 +213,8 @@ async def test_membuka_layarnya_menandai_terbaca_dan_lencananya_nol(pg, orang):
     from hmu_identitas import sandi as S
     from hmu_identitas.model import mode_bawaan
 
-    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin",
-                 pesan="🟡 Penyosohan POL-09 selesai — perlu verifikasi output")
+    await _tulis(pg, tipe="permintaan_pk", untuk="admin",
+                 pesan="🟡 Permintaan PK REQ-09 — perlu persetujuan")
     async with pg() as db:
         u = await db.get(User, orang["admin"])
         # Lencananya terlihat dari layar LAIN — di situlah gunanya.
@@ -232,7 +232,7 @@ async def test_membuka_layarnya_menandai_terbaca_dan_lencananya_nol(pg, orang):
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
         r = await c.get("/kabar")
     assert r.status_code == 200, r.text[:400]
-    assert "perlu verifikasi output" in r.text
+    assert "perlu persetujuan" in r.text
     # Kepala layar menyebut berapa yang baru. Bunyinya berubah 28 September
     # 2026: semula satu kalimat di dalam `.nota--hati` — yang ternyata grid dua
     # kolom, jadi kalimatnya patah satu kata per baris di kolom ikon selebar
@@ -304,3 +304,14 @@ async def test_pintu_kabar_padam_di_laci_untuk_semua_peran(pg, orang):
         for nama in ("admin", "op1", "op2"):
             b = await untuk(db, await db.get(User, orang[nama]))
             assert "kabar" in b.lencana()["PINTU_MATI"], nama
+
+
+async def test_kabar_verifikasi_sosoh_lama_tidak_menagih_admin(pg, orang):
+    """Sosoh selesai tidak memerlukan persetujuan Admin lagi."""
+    from app.models import User
+    from app.services.kabar import daftar, jumlah_baru
+    await _tulis(pg, tipe="verifikasi_penyosohan", untuk="admin", pesan="lama")
+    async with pg() as db:
+        u = await db.get(User, orang["admin"])
+        assert await daftar(db, u) == []
+        assert await jumlah_baru(db, u) == 0

@@ -1688,6 +1688,11 @@ async def _tiket_jenis_tak_dikenal(
     baris = []
     for t in await tiket_masuk_aktif(db):
         kode_jenis = t.get("jenis_kode") or "?"
+        # Pemanggil G2 hanya meminta dua jenis penerimaan produk. Jenis
+        # asing dibaca sekali oleh antrean Admin, bukan ikut dipancarkan
+        # G2 lalu digabung lagi menjadi dua kartu untuk tiket yang sama.
+        if jenis_diizinkan is not None and kode_jenis not in jenis_diizinkan:
+            continue
         produk_masuk = {
             "BERAS_MASUK": ("catat_beras_timbang_masuk", "Terima beras sebagai stok bertumpuk"),
             "BROKEN_MASUK": ("catat_broken_timbang_masuk", "Terima broken sebagai stok bertumpuk"),
@@ -1956,7 +1961,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             # dinyatakan dingin bisa ternyata masih panas setelah dicek.
             pilihan=[
                 ("pindah_silo", "Pindah ke silo", "Kosongkan mesin pengering"),
-                ("selesai_pendinginan", "Dinginkan lagi",
+                ("mulai_pendinginan_ulang", "Dinginkan lagi",
                  "Kalau setelah dicek ternyata masih panas"),
             ],
         ))
@@ -1967,7 +1972,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
             kode=lot.kode_lot, isi="pengeringan selesai, sedang didinginkan",
             keadaan="nyatakan bila sudah dingin", aksi="selesai_pendinginan",
             nilai=lot.kode_lot, fase="dryer",
-            sejak=lot.waktu_selesai_pengeringan,
+            sejak=lot.waktu_mulai_pendinginan,
             judul="Pendinginan",
             sub=f"{lot.kode_lot} · gabah tetap di mesin"
                 + (f" · {_pemasok_ringkas(asal)}" if asal else ""),
@@ -2085,6 +2090,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 ("lanjutkan_proses", "Lanjutkan pengeringan",
                  "Mesin jalan lagi — bisa nanti, bisa besok",
                  f"pengeringan:{lot.kode_lot}"),
+                ("ubah_kondisi_proses", "Perbarui kondisi jeda",
+                 "Penyebab berubah; mesin tetap dijeda", f"pengeringan:{lot.kode_lot}"),
                 ("kadar_air", "Perbarui kadar air", "Catat hasil ukur terbaru",
                  lot.kode_lot),
                 ("selesai_pengeringan", "Selesai pengeringan",
@@ -2267,6 +2274,10 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 ("lanjutkan_proses", "Lanjutkan giling",
                  "Mesin jalan lagi — bisa nanti, bisa besok",
                  f"giling:{p.kode_proses}"),
+                ("ubah_kondisi_proses", "Perbarui kondisi jeda",
+                 "Penyebab berubah; mesin tetap dijeda", f"giling:{p.kode_proses}"),
+                ("hasil_giling", "Catat hasil yang sudah keluar",
+                 "Hanya pencatatan hasil; mesin tetap dijeda", p.kode_proses),
                 # "Bebaskan silo" — keputusan pemilik 5 Oktober 2026: silo
                 # bisa habis duluan sementara gabahnya MASIH DI MESIN, jadi
                 # tombol ini TAK menutup prosesnya (beda dari "Selesai
@@ -2763,10 +2774,16 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                 ("lanjutkan_penyosohan", "Lanjutkan penyosohan",
                  "Mesin jalan lagi — bisa nanti, bisa besok",
                  f"penyosohan:{pr.kode_proses}"),
+                ("ubah_kondisi_penyosohan", "Perbarui kondisi jeda",
+                 "Penyebab berubah; mesin tetap dijeda", f"penyosohan:{pr.kode_proses}"),
+                ("hasil_penyosohan", "Catat hasil yang sudah keluar",
+                 "Hanya pencatatan hasil; mesin tetap dijeda", pr.kode_proses),
                 ("tambah_silo_penyosohan", "Tambah silo (mix bahan)",
                  "Silo yang dibebaskan boleh ditambahkan kembali", pr.kode_proses),
-                ("selesai_penyosohan", "Selesai penyosohan",
-                 "Tutup proses, per silo", pr.kode_proses),
+                ("selesai_penyosohan", "Bebaskan silo",
+                 "Isi sisa silo; penyosohan tetap berjalan", pr.kode_proses),
+                ("akhiri_penyosohan", "Selesaikan penyosohan",
+                 "Seluruh bahan di mesin benar-benar selesai", pr.kode_proses),
             ] if macet else [
                 ("hasil_penyosohan", "Perbarui hasil penyosohan",
                  "Catat berat hasil pada entri ini", pr.kode_proses),
@@ -2777,8 +2794,10 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                 ("hentikan_penyosohan", "Hentikan sementara",
                  "Mesin rusak, listrik padam, jam kerja habis",
                  f"penyosohan:{pr.kode_proses}"),
-                ("selesai_penyosohan", "Selesai penyosohan",
-                 "Tutup proses, per silo", pr.kode_proses),
+                ("selesai_penyosohan", "Bebaskan silo",
+                 "Isi sisa silo; penyosohan tetap berjalan", pr.kode_proses),
+                ("akhiri_penyosohan", "Selesaikan penyosohan",
+                 "Seluruh bahan di mesin benar-benar selesai", pr.kode_proses),
             ]),
         ))
     return keluar
@@ -2972,10 +2991,9 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     notifikasi penutupan penyosohan menjanjikan "perlu verifikasi output"
     tanpa ada satu tombol pun yang menawarkannya. Temuan QA 26 September 2026.
 
-    Yang MASIH BERJALAN tidak berkartu: angkanya belum final, dan kartu
-    antrean yang menagih pekerjaan atas angka yang masih akan berubah membuat
-    orang mengemas dua kali. Ia tetap terbaca di halaman Stok Produk, dengan
-    keterangan yang menyebut keadaannya.
+    Hasil proses berjalan boleh dipacking (keputusan pemilik 18 Oktober 2026).
+    Kartunya menagih saldo hasil yang sudah tercatat, dengan penanda mesin
+    masih berjalan. Pengemasan dan pemakaian lain mengurangi saldo yang sama.
 
     ⚠ Titipan pelanggan TAK DISEMBUNYIKAN, tapi KALIMATNYA BERBEDA — pola yang
     sama dengan kartu tumpukan gabah. Keluhan pemilik 6 Oktober 2026: di
@@ -2986,7 +3004,7 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
     """
     from app.services.stok import adalah_beras, beras_curah, nama_produk
 
-    daftar = [b for b in await beras_curah(db, termasuk_berjalan=False)
+    daftar = [b for b in await beras_curah(db, termasuk_berjalan=True)
               if b.sisa_kg > 0]            # minus = pertanyaan, bukan pekerjaan
     nama = await nama_pemilik_banyak(db, {b.jasa_id for b in daftar if b.jasa_id})
 
@@ -3004,7 +3022,7 @@ async def _kartu_beras_curah(db: AsyncSession) -> list[Baris]:
         keluar.append(Baris(
             kode=b.kode_proses,
             isi=f"{nm} · {_kg(b.sisa_kg)} belum dikemas",
-            keadaan="menunggu dipacking",
+            keadaan=("bisa dipacking · sosoh masih berjalan" if b.berjalan else "menunggu dipacking"),
             # Penunjuknya membawa LOT dan JENIS sekaligus (28 September
             # 2026). Dengan kode proses saja, jenisnya hilang di perjalanan dan
             # borang menanyakannya lagi — padahal kartu ini yang menyebutnya.
@@ -3084,7 +3102,7 @@ async def _kartu_barang_keluar(db: AsyncSession, *, gudang: str) -> list[Baris]:
                 ("muat_semua", "Muat semua sesuai perintah",
                  f"Seluruh {macam} macam, {_kg(perintah)}", str(rec.id)),
                 ("muat_barang", "Catat muatan per barang",
-                 "Untuk yang dimuat kurang dari perintahnya", None),
+                 "Catat total aktual pada truk ini", str(rec.id)),
                 ("selesai_muat", "Selesai muat — truk berangkat",
                  "Sisa yang tak dimuat hangus", str(rec.id)),
             ]))

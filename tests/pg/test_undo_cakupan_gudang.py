@@ -28,8 +28,8 @@ async def dua_gudang(pg):
     from app.models import Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.commit()
         return g1.id, g2.id
@@ -173,7 +173,19 @@ async def test_tiap_tabel_yang_bisa_dibatalkan_punya_gudang():
     barunya jatuh ke 'tak diketahui' dan cakupan gudang tak pernah melihatnya —
     kesalahan yang diam. Kecuali yang memang melintasi gudang."""
     from app.services import undo as svc
-    from app.services.activity_log import GUDANG_TABEL
+    from app.services.activity_log import GUDANG_TABEL, GUDANG_DINAMIS
 
     for tabel in svc._UNDOABLE:
-        assert tabel in GUDANG_TABEL, f"{tabel} belum punya gudang"
+        assert tabel in GUDANG_TABEL or tabel in GUDANG_DINAMIS, f"{tabel} belum punya gudang"
+
+
+async def test_audit_jeda_wajib_gudang_dari_proses(pg,operator):
+    from app.services.activity_log import log_activity
+    async with pg() as db:
+        with pytest.raises(ValueError,match="Gudang proses wajib"):
+            await log_activity(db,table_name="jeda_catatan",record_id=1,action="INSERT",changed_by=operator.id)
+        for g in ["g1","g2"]:
+            await log_activity(db,table_name="jeda_catatan",record_id=1,action="INSERT",changed_by=operator.id,gudang=g)
+        await db.commit()
+        from app.models import ActivityLog
+        assert (await db.scalars(select(ActivityLog.gudang).order_by(ActivityLog.id))).all()==["g1","g2"]

@@ -4,6 +4,7 @@
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
 {% macro mutu_mobile(mutu, kondisi) %}
+{% if mutu_aktif %}
   {% set nilai = namespace(ka="—", broken="—", susut="—") %}
   {% for label, angka in mutu %}
     {% if label == "Kadar air" %}{% set nilai.ka = angka %}
@@ -11,6 +12,7 @@
     {% elif label == "Susut" %}{% set nilai.susut = angka %}{% endif %}
   {% endfor %}
   <span class="stok-mobile-list__mutu"><span>KA <b>{{ nilai.ka }}</b></span><span>Broken <b>{{ nilai.broken }}</b></span><span>Susut <b>{{ nilai.susut }}</b></span><span>Kondisi <b>{{ kondisi or "—" }}</b></span></span>
+{% else %}<small>Kondisi {{ kondisi or "—" }}</small>{% endif %}
 {% endmacro %}
 {% if detail %}
   {% include "_stok_pk_detail.html" %}
@@ -38,7 +40,7 @@
             <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}">
               <span class="stok-mobile-list__ikon" aria-hidden="true">{% if l.jasa_id %}◇{% else %}▦{% endif %}</span>
               <span class="stok-mobile-list__isi"><strong>{{ l.kode }}</strong><small>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }} · {{ "Jasa" if l.jasa_id else "Bukan jasa" }} · {{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small>
-                {% if l.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} · {{ l.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}
+                {% if mutu_aktif %}{% if l.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} · {{ l.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
                 {{ mutu_mobile(l.mutu, l.kelas) }}</span>
               <strong class="stok-mobile-list__berat">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
             </a>
@@ -53,7 +55,7 @@
             <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}">
               <span class="stok-mobile-list__ikon" aria-hidden="true">{% if t.pemilik %}◇{% else %}▦{% endif %}</span>
               <span class="stok-mobile-list__isi"><strong>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</strong><small>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }} · {{ "Jasa" if t.pemilik else "Bukan jasa" }} · {{ t.tanggal or "Tanggal tidak tersedia" }}</small>
-                {% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}
+                {% if mutu_aktif %}{% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
                 {{ mutu_mobile(t.mutu, t.kelas) }}</span>
               <strong class="stok-mobile-list__berat">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
             </a>

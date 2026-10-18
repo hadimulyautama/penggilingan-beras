@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_penilaian_pk.html" import penilaian_pk with context %}
 {% import "_stok.html" as st with context %}
+{% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% block judul %}Detail {{ d.judul }}{% endblock %}
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
@@ -20,6 +21,7 @@
   <nav class="proses-detail__nav" aria-label="Bagian detail proses">
     <a href="#ringkasan-proses">Ringkasan</a>
     <a href="#catatan-proses">Bahan &amp; catatan</a>
+    {% if d.jeda_riwayat.jumlah %}<a href="#riwayat-jeda">Jeda</a>{% endif %}
     {% if d.penilaian %}<a href="#kualitas-proses">Nilai kualitas QC</a>{% endif %}
     {% if proses.pilihan %}<a href="#tindakan-proses">Tindakan</a>{% endif %}
   </nav>
@@ -100,6 +102,7 @@
   </div>
   <dialog class="lembar" id="lembar"></dialog>
   <div class="kabar" id="kabar" role="status"></div>
+  {{ riwayat_jeda_blok(d.jeda_riwayat) }}
 </main>
 {% endblock %}
 {% block kaki %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}"></script>{% endblock %}

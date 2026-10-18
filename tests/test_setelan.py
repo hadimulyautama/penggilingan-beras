@@ -89,10 +89,11 @@ def test_setelan_kerja_hanya_untuk_admin():
     # Satu blok per PROSES, bukan satu blok per setelan: yang dicari orang
     # adalah "setelan pengeringan", bukan "setelan target". Sebab berhenti
     # tinggal di dalam bloknya masing-masing.
-    for blok in ("Sebab berhenti", "Target kadar air",
-                 "Batas ubah catatan", "Listrik padam", "Mesin giling rusak"):
+    for blok in ("Sebab berhenti", "Batas ubah catatan", "Mesin giling rusak"):
         assert blok in penuh, blok
-    assert penuh.count("Sebab berhenti") == 2, "sebab berhenti bukan dua blok proses"
+    assert penuh.count("Sebab berhenti") == 1
+    assert "Target kadar air" not in penuh and "Listrik padam" not in penuh
+    # Target dan sebab pengeringan pindah ke Alat, diuji render di paket.
     assert "Sebab berhenti · " not in penuh, "judul lama yang berdiri sendiri kembali"
 
 
@@ -255,7 +256,7 @@ def test_setelan_dikelompokkan_per_proses():
     # Sejak Tahap 2 templatnya BERLINGKAR atas daftar proses, dan daftarnya
     # milik app — markupnya tak pernah menyebut nama proses, dan judulnya tetap
     # digambar `<span class="lbl">` yang sama.
-    assert "{% for jenis, judul in PROSES %}" in html
+    assert "{% for jenis, judul in PROSES if jenis != 'pengeringan' %}" in html
     assert '<span class="lbl">{{ judul }}</span>' in html
     assert html.count("{{ sebab_blok(jenis) }}") == 1
     from app.web import pengaturan

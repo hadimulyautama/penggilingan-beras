@@ -50,7 +50,7 @@ async def titipan(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo = (await db.execute(select(Silo).where(
@@ -337,6 +337,25 @@ async def test_rute_transfer_gerbang_admin_dan_nilai_gabungan_via_http(pg, titip
     assert gabungan == pytest.approx(50.0)
 
 
+def _isi_html(html):
+    """Baca teks dan tujuan aksi, termasuk nilai yang di-URL-encode."""
+    from html.parser import HTMLParser
+    from urllib.parse import unquote
+    class Isi(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.teks = []
+            self.href = []
+        def handle_data(self, data):
+            self.teks.append(data)
+        def handle_starttag(self, tag, attrs):
+            if tag == "a":
+                self.href.append(unquote(dict(attrs).get("href", "")))
+    isi = Isi()
+    isi.feed(html)
+    return " ".join(" ".join(isi.teks).split()), isi.href
+
+
 # ═══════════════ Halaman: pemindahan curah di kartu produknya ═══════════════
 
 async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
@@ -365,13 +384,14 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
         # daftar SKU dan menghilangkan tombolnya.
         for jenis in ("broken", "menir", "reject"):
             db.add(PolishingOutputLog(
-                polishing_process_id=1, jenis=jenis, berat_kg=100,
+                # Broken 500 kg sudah dicatat curah oleh fixture; packing perlu saldo tambahan.
+                polishing_process_id=1, jenis=jenis, berat_kg=600 if jenis == "broken" else 100,
                 waktu_update=kini, input_by=u.id))
         await db.commit()
         for jenis in ("broken", "menir", "reject"):
             await catat_packing(
                 db, user=u, kode_pol="POL-UJIT-01", kategori=jenis,
-                material_kode="bekas", ukuran=50, jumlah_karung=1)
+                material_kode="bekas" if jenis == "reject" else "putih", ukuran=50, jumlah_karung=1)
         stok_jadi = await barang_jadi_g2(db)
         expected_bj = {
             k["jenis"]: f"bj:{k['sku_id']}|{k['std_id'] or ''}|{titipan['jasa1']}"
@@ -379,40 +399,31 @@ async def test_halaman_jasa_menampilkan_tombol_curah_di_kartu_broken(
             and k["jenis"] in ("broken", "menir", "reject")
         }
 
-    c = await _klien(pg, peran="superadmin")
-    try:
+    # Daftar kini ringkas dan menuju detail kategori; kontrol transfer
+    # harus ditemukan pada tujuan tautannya dengan pemilik yang sama.
+    async with await _klien(pg, peran="superadmin") as c:
         r = await c.get("/stok-produk-jasa")
-    finally:
-        await c.aclose()
-    assert r.status_code == 200
-    assert "Bekatul dari hasil sosoh" in r.text
-    assert "sudah dipindahkan ke milik pabrik" in r.text
-    assert "Broken (curah), sudah dicatat" not in r.text
-    # Himpunan id, bukan string persis — urutannya tak dijamin (lihat
-    # catatan `jasa_ids_per_pelanggan_dengan_hasil`), maknanya yang harus
-    # sama: SELURUH jasa_ids pelanggan ini, bukan cuma salah satu.
-    cocok = re.search(r"cr:broken\|([\d,]+)", r.text)
-    assert cocok, "tombol pindah broken curah tak ditemukan di halaman"
-    assert {int(x) for x in cocok.group(1).split(",")} == {
-        titipan["jasa1"], titipan["jasa2"]}
-    # Kontrol pemindahan harus berada di dalam detail kartu Broken yang
-    # memuat saldo curahnya, bukan tampil sebagai kartu lepas di bawah daftar.
-    kartu_broken = re.search(
-        r'<details class="padat padat--samping">(?:(?!</details>).)*'
-        r'Broken(?:(?!</details>).)*cr:broken\|[\d,]+(?:(?!</details>).)*</details>',
-        r.text, re.S,
-    )
-    assert kartu_broken, "tombol broken curah harus berada di kartu Broken"
-    # Kontrol barang berkarung Reject, Menir, dan Broken juga harus ada.
-    for jenis in ("broken", "menir", "reject"):
-        assert jenis in expected_bj
-        nilai_bj = re.escape(expected_bj[jenis])
-        kartu = re.search(
-            r'<details class="padat padat--samping">(?:(?!</details>).)*'
-            + jenis + r"(?:(?!</details>).)*nilai=" + nilai_bj
-            + r"(?:(?!</details>).)*</details>", r.text, re.S | re.I,
-        )
-        assert kartu, f"tombol transfer barang berkarung {jenis} tak ada di kartunya"
+        assert r.status_code == 200
+        assert "Bekatul dari hasil sosoh" in r.text
+        assert "sudah dipindahkan ke milik pabrik" in r.text
+        _, tautan = _isi_html(r.text)
+        for jenis in ("broken", "menir", "reject"):
+            from urllib.parse import urlsplit, parse_qs
+            href = next(h for h in tautan if h.startswith("/stok-produk-jasa/detail?")
+                        and parse_qs(urlsplit(h).query).get("jenis") == [jenis])
+            detail = await c.get(href)
+            assert detail.status_code == 200
+            teks, aksi = _isi_html(detail.text)
+            assert "Bu Sri" in teks
+            assert jenis in expected_bj
+            assert any("buka=pindah_kepemilikan_produk" in h
+                       and f"nilai={expected_bj[jenis]}" in h for h in aksi), (
+                f"tombol transfer karung {jenis} tidak ada di detail pemiliknya")
+            if jenis == "broken":
+                cocok = next(h for h in aksi if "nilai=cr:broken|" in h)
+                ids = parse_qs(urlsplit(cocok).query)["nilai"][0].split("|")[-1]
+                assert {int(x) for x in ids.split(",")} == {
+                    titipan["jasa1"], titipan["jasa2"]}
 
 
 async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
@@ -441,25 +452,25 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
                             kategori="bekatul", material_kode="bekas",
                             ukuran=40, jumlah_karung=20)      # 800 kg
 
-    c = await _klien(pg, peran="superadmin")
-    try:
-        r = await c.get("/stok-produk-jasa")
-    finally:
-        await c.aclose()
+    async with await _klien(pg, peran="superadmin") as c:
+        daftar = await c.get("/stok-produk-jasa")
+        assert daftar.status_code == 200
+        teks, tautan = _isi_html(daftar.text)
+        assert "Bekatul dari hasil sosoh" not in teks
+        assert "Bekatul" in teks and "900 kg" in teks
+        from urllib.parse import urlsplit, parse_qs
+        href = next(h for h in tautan if h.startswith("/stok-produk-jasa/detail?")
+                    and parse_qs(urlsplit(h).query).get("jenis") == ["bekatul"])
+        r = await c.get(href)
     assert r.status_code == 200
-    # Kartu PENUH di "Hasil samping" — bukan baris informasi pabrik: judulnya
-    # "Bekatul" saja (pola `padat--samping`, sebangun broken/menir/reject),
-    # dan "Tercatat" (800, dikarungi) + "Belum dicatat" (100, belum singgah
-    # jalur mana pun) menjumlah persis hasil mesin (900).
-    assert "Bekatul dari hasil sosoh" not in r.text, \
-        "bekatul masih dibaca sebagai milik pabrik — hasil_ditahan tak terbaca"
-    assert ">Bekatul<" in r.text and ">900<" in r.text
-    assert "800&nbsp;kg · 20&nbsp;krg" in r.text, \
-        "bekatul yang dikarungi tak tersebut angkanya (800 kg, 20 karung)"
-    # Tombol pindah kepemilikan untuk karungnya — sama seperti kemasan lain,
-    # tak perlu pengkabelan baru (lihat docstring `pemilik_hasil`).
-    assert "buka=pindah_kepemilikan_produk&amp;nilai=bj:" in r.text, \
-        "tombol pindah kepemilikan bekatul (karung) tak muncul"
+    teks, tautan = _isi_html(r.text)
+    assert "Bekatul" in teks and "Bu Sri" in teks and "900 kg" in teks
+    # Ringkasan otomatis = 22 karung ×40 +20 kg curah; catatan packing
+    # manual 20 karung tetap mempunyai aksi pindah dengan SKU/pemilik asli.
+    assert "22 karung × 40 kg" in teks and "20 kg" in teks
+    assert "20 karung" in teks
+    assert any("buka=pindah_kepemilikan_produk" in h and "nilai=bj:" in h
+               and h.endswith(f"|{titipan['jasa1']}") for h in tautan)
 
 
 # ═══ Kartu Stok Produk — curah BENAR-BENAR berpindah, bukan cuma bergeser ═══
@@ -502,7 +513,7 @@ async def proses_jasa_curah(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo = (await db.execute(select(Silo).where(

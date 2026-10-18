@@ -23,6 +23,7 @@ tesnya sendiri dengan nama kolom yang sama.
 from __future__ import annotations
 
 import pathlib
+import ast
 import re
 
 AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
@@ -30,31 +31,32 @@ AKAR = pathlib.Path(__file__).resolve().parents[1] / "app"
 #: (berkas relatif terhadap app/, nomor baris) yang SENGAJA memakai
 #: `pelanggan_id` secara langsung — masing-masing dengan alasannya sendiri,
 #: BUKAN sebagai penentu "ini jasa atau bukan":
-_KECUALI: set[tuple[str, int]] = {
-    # `adalah_jasa()` SENDIRI — definisi kanoniknya. `pelanggan_id is not
-    # None` di sini bukan "pemanggil lain yang menyusun ulang tesnya", ia
-    # KAKI KEDUA yang disengaja: tiket LAMA (sebelum kolom `jasa` ada) tetap
-    # harus terbaca benar lewat migrasi 0066/0041 yang membackfill dari sini.
-    ("penggilingan/gudang1/services/timbang_link.py", 323),
-    # `pesanan_jasa_dari_tiket()` — dipanggil HANYA sesudah pemanggilnya
-    # sendiri sudah memastikan `adalah_jasa(tiket)` true (lihat gerbangnya di
-    # `purchase.create_purchase_batch_dari_timbang`). Baris ini meresolusi
-    # SIAPA pelanggannya (buat baris baru bila nama diketik bebas), bukan
-    # memutuskan jasa-atau-bukan — pertanyaan yang sudah terjawab sebelum
-    # fungsi ini dipanggil.
-    ("penggilingan/gudang1/services/purchase.py", 215),
-    # `packaging._pelanggan`/`_jasa_milik_pelanggan` — subsistem KARUNG,
-    # keputusan pemilik 7 Oktober 2026: karung bukan barang yang "dikembalikan"
-    # per pesanan seperti komoditas lain, jadi pemiliknya `pelanggan_id`
-    # LANGSUNG, tanpa `Jasa` sama sekali (lihat catatan panjang CLAUDE.md
-    # "Stok Karung & Karung Jasa"). Di sini `pelanggan_id` SENDIRI parameter
-    # fungsinya (bukan `t.get("pelanggan_id")` dari sebuah tiket) — ia data
-    # saringan, bukan penentu jasa.
-    ("penggilingan/inventory/packaging.py", 182),
-    ("penggilingan/inventory/packaging.py", 189),
-    # Baris lanjutan closure yang SAMA — `isinstance(pelanggan_id, list)`
-    # cuma memilih bentuk `IN` vs `==`, bukan jasa-atau-bukan.
-    ("penggilingan/inventory/packaging.py", 193),
+_KECUALI = {
+    # Definisi kanonik: kaki kompatibilitas tiket lama, bukan pemanggil.
+    ("penggilingan/gudang1/services/timbang_link.py", "adalah_jasa",
+     'return bool(t.get("jasa")) or t.get("pelanggan_id") is not None \\'),
+    # Resolusi identitas setelah tiket dipastikan jasa oleh pemanggilnya.
+    ("penggilingan/gudang1/services/purchase.py", "pesanan_jasa_dari_tiket", 'if pelanggan_id is None:'),
+    # Karung dimiliki pelanggan langsung, bukan memakai identitas tiket.
+    ("penggilingan/inventory/packaging.py", "_pelanggan", 'if pelanggan_id is None:'),
+    ("penggilingan/inventory/packaging.py", "_jasa_milik_pelanggan", 'if pelanggan_id is None:'),
+    ("penggilingan/inventory/packaging.py", "_jasa_milik_pelanggan",
+     'if isinstance(pelanggan_id, list) else Jasa.pelanggan_id == pelanggan_id)'),
+    # Pengiriman membandingkan pembeli tiket dengan pembeli transaksi.
+    ("services/barang_keluar.py", "_armada_dari_tiket",
+     'if tiket["pelanggan_id"] is not None and tiket["pelanggan_id"] != pelanggan_id:'),
+    ("web/internal.py", "_cocokkan_pengiriman_tiket",
+     'if tiket["pelanggan_id"] is not None and rec.pelanggan_id is not None:'),
+    # Detail menerima saringan pelanggan yang sudah disahkan rutenya;
+    # bukan menetapkan kepemilikan dari sebuah tiket yang belum lengkap.
+    ("web/layar_produk.py", "_detail_produk",
+     'halaman = "/stok-produk-jasa" if pelanggan_id is not None else "/stok-produk"'),
+    ("web/layar_produk.py", "_detail_produk",
+     '{"pelanggan_id": pelanggan_id} if pelanggan_id is not None else {})})'),
+    ("web/layar_produk.py", "_detail_produk",
+     'owners = list(jasa_ids) if pelanggan_id is not None else [None]'),
+    ("web/layar_produk.py", "_detail_produk",
+     'layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",'),
 }
 
 #: `pelanggan_id` dibandingkan ke `None` dengan operator Python `is`/`is not`
@@ -74,6 +76,8 @@ def _temuan() -> list[tuple[str, int, str]]:
         if "__pycache__" in berkas.parts:
             continue
         rel = str(berkas.relative_to(AKAR))
+        fungsi = [n for n in ast.walk(ast.parse(berkas.read_text()))
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         dalam_docstring = False
         for i, baris in enumerate(berkas.read_text().splitlines(), start=1):
             tanda = baris.count('"""') + baris.count("'''")
@@ -93,7 +97,9 @@ def _temuan() -> list[tuple[str, int, str]]:
                 continue
             if not (_POLA_IS_NONE.search(baris) or _POLA_TERNARY.search(baris)):
                 continue
-            if (rel, i) in _KECUALI:
+            pemilik = [f for f in fungsi if f.lineno <= i <= f.end_lineno]
+            nama_fungsi = max(pemilik, key=lambda f: f.lineno).name if pemilik else ""
+            if (rel, nama_fungsi, tanpa_spasi) in _KECUALI:
                 continue
             hasil.append((rel, i, tanpa_spasi))
     return hasil
@@ -128,3 +134,17 @@ def test_penjaga_menangkap_bentuk_lama_sebelum_dibetulkan():
     assert _POLA_IS_NONE.search(contoh_adalah_jasa_lama), (
         "pemindai tak menangkap bentuk `is not None` — polanya sendiri "
         "yang rusak")
+
+
+def test_pengecualian_tetap_tepat_setelah_nomor_baris_bergeser(monkeypatch, tmp_path):
+    f = tmp_path / "penggilingan/gudang1/services/purchase.py"
+    f.parent.mkdir(parents=True)
+    f.write_text("\n" * 30 + '''def pesanan_jasa_dari_tiket():
+    if pelanggan_id is None:
+        pass
+    jasa = tiket.get("jasa_id") if tiket.get("pelanggan_id") else None
+''')
+    monkeypatch.setattr(__import__(__name__, fromlist=["AKAR"]), "AKAR", tmp_path)
+    temuan = _temuan()
+    assert len(temuan) == 1
+    assert 'if tiket.get("pelanggan_id")' in temuan[0][2]

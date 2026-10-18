@@ -25,7 +25,7 @@
 {{ op.intro("PEKERJAAN AKTIF", "Sedang berjalan",
   "Pantau mesin, proses yang masih aktif, dan bahan yang sudah ditempatkan menunggu giliran. Buka kartu untuk memperbarui atau menyelesaikan pekerjaan.",
   [("⚙", berjalan|length, "Proses aktif"), ("↔", transit|length, "Bahan menunggu giliran"), ("▦", (berjalan|length) + (transit|length), "Total kartu pekerjaan")],
-  ["Pilih kartu", "Pantau proses", "Catat pembaruan", "Selesaikan pekerjaan"]) }}
+  ["Pilih kartu", "Pantau proses", "Catat pembaruan", "Selesaikan pekerjaan"], ringkas=true) }}
 {{ saring.pil_gudang("/berjalan", SARING_GUDANG, gudang) }}
 
 {% if not berjalan and not transit %}

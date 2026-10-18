@@ -289,11 +289,13 @@
   </details>
 {%- endmacro %}
 
-{% for jenis, judul in PROSES %}
+{# Target per mesin dan sebab berhenti pengeringan kini dikelola di Alat.
+   Jangan sisakan judul dan kartu kosong di sini setelah pemindahan itu. #}
+{% for jenis, judul in PROSES if jenis != 'pengeringan' %}
 <div>
   <span class="lbl">{{ judul }}</span>
   <div class="kartu">
-    {% if jenis != 'pengeringan' %}{{ sebab_blok(jenis) }}{% endif %}
+    {{ sebab_blok(jenis) }}
   </div>
 </div>
 {% endfor %}

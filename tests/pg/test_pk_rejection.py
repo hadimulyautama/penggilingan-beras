@@ -71,7 +71,7 @@ async def admin(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            db.add(Warehouse(nama_gudang="Gudang 2 - Penyosohan"))
+            db.add(Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2"))
         u = await db.get(User, pemakai.id)
         u.role = PERAN_ADMIN_KEATAS[-1]
         await db.commit()

@@ -39,7 +39,7 @@ async def sosoh_jasa(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo = (await db.execute(select(Silo).where(
@@ -449,6 +449,7 @@ async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh
 
     from app.database import now_local
     from app.models import User
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import hitung_stok_byproduct_curah
     from app.penggilingan.inventory.models import ByproductStock
     from app.services import barang_keluar as bk
@@ -460,8 +461,14 @@ async def test_hasil_samping_pelanggan_berkurang_sesudah_diangkut_jasa(pg, sosoh
         u = await db.get(User, sosoh_jasa["user"])
         u.role = "superadmin"      # `barang_jasa()` (picker) menuntut financials
         now = now_local()
+        proses = (await db.execute(select(PolishingProcess).where(
+            PolishingProcess.kode_proses == sosoh_jasa["kode_jasa"]))).scalars().one()
+        # Stok tercatat berasal dari hasil produksi nyata; pembukuan stok
+        # tidak boleh menciptakan 800 kg yang belum keluar dari mesin.
+        db.add(PolishingOutputLog(polishing_process_id=proses.id,
+            jenis="menir", berat_kg=800, waktu_update=now, input_by=u.id))
         db.add(ByproductStock(
-            jenis_produk="menir", source_type="polishing", source_id=None,
+            jenis_produk="menir", source_type="polishing", source_id=proses.id,
             berat_kg=800, tanggal=now.date(), waktu=now, status="tersedia",
             input_by=u.id, jasa_id=jid))
         await db.commit()

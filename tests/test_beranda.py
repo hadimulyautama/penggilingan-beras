@@ -218,14 +218,12 @@ def test_kartu_pk_menyebut_lot_gilingnya():
 
     g2_proses = inspect.getsource(svc._kartu_penyosohan_g2)
     g2_silo = inspect.getsource(svc._kartu_silo_g2)
-    # Kartu penyosohan sejak 11 Oktober 2026 mengambil snapshot pada SAAT
-    # proses mulai (`sampai=pr.waktu_mulai`) alih-alih isian silo saat ini —
-    # silo yang dikosongkan sesudahnya tak lagi menghapus jejak bahan dari
-    # kartu proses. Kartu silo tunggal (silo yang belum/sedang dipakai)
-    # tetap lewat memo `asal_silo`, sebab tak ada "saat proses mulai" untuk
-    # silo yang belum punya proses.
-    assert "_isian_silo(" in g2_proses and "sampai=pr.waktu_mulai" in g2_proses, \
-        "kartu penyosohan tak mengambil snapshot asal lot saat proses mulai"
+    # Silo boleh mendapat tambahan selama proses berjalan. Jejak bahan
+    # mengikuti isi sampai sekarang untuk silo aktif, dan berhenti pada saat
+    # pemakaian dibebaskan untuk silo yang sudah keluar dari proses.
+    # Mengunci semuanya pada waktu_mulai akan menghilangkan bahan tambahan.
+    assert "_isian_silo(" in g2_proses and "sampai=u.updated_at if dibebaskan else now_local()" in g2_proses, \
+        "kartu penyosohan tak membatasi asal lot pada masa pemakaian silonya"
     assert "await asal_silo(" in g2_silo, "kartu silo tunggal belum menyebut asalnya"
     assert "_pemasok_ringkas(" in g2_proses + g2_silo
     assert "asal_silo" in inspect.getsource(svc.untuk_gudang2)

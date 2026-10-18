@@ -26,8 +26,8 @@ async def pabrik(pg):
     from app.models import PurchaseBatch, Silo, Supplier, User, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
@@ -145,7 +145,7 @@ async def test_harga_yang_masih_baru_tak_masuk_perhatian(pg):
     from app.models import PurchaseBatch, Supplier, User, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
         db.add(g1)
         await db.flush()
         u = User(nama="Op", role="operator", status="aktif", default_warehouse_id=g1.id)

@@ -294,7 +294,7 @@ TAB = (
      "Tiap penyosohan selesai: hasil, persen, dan susutnya",
      None, "◭"),
     ("riwayat_qc", "/riwayat-qc/gabah-basah", "Riwayat QC",
-     "Catatan QC gabah, PK, dan beras hasil sosoh", None, "◎"),
+     "Catatan QC gabah, PK, dan beras hasil sosoh", None, "◈"),
     # ── Penggilingan, Pengeringan, Transfer — sub-menu "Riwayat Proses" ──
     #
     # SELALU di `PINTU_MATI` (`Berjalan.lencana()`) — sama seperti

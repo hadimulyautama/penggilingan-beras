@@ -29,7 +29,7 @@ async def _klien(pg, *, role: str, gudang_nama: str | None = None) -> httpx.Asyn
             w = (await db.execute(
                 select(Warehouse).where(Warehouse.nama_gudang == gudang_nama))).scalars().first()
             if w is None:
-                w = Warehouse(nama_gudang=gudang_nama)
+                w = Warehouse(nama_gudang=gudang_nama, kode_fungsi={"Gudang 1 - Selepan": "g1", "Gudang 2 - Penyosohan": "g2"}[gudang_nama])
                 db.add(w)
                 await db.flush()
             wid = w.id
@@ -54,8 +54,8 @@ async def dua_gudang(pg):
     from app.models import Silo, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),

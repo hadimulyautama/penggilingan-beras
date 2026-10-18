@@ -87,7 +87,7 @@ def test_aksi_js_tak_lagi_menyentuh_layar_yang_mungkin_tak_ada():
 def test_menutup_lembar_mereset_bendera_disentuh():
     """Tanpa ini, membatalkan sebuah lembar mematikan segar-otomatis sampai
     orangnya kebetulan berpindah halaman."""
-    tutup = AKSI_JS[AKSI_JS.index("function tutupLembar()"):]
+    tutup = AKSI_JS[AKSI_JS.index("function tutupLembar(paksa)"):]
     tutup = tutup[:tutup.index("\n  }") + 4]
     assert "lupakanSentuhan" in tutup or "disentuh" in tutup, tutup
 

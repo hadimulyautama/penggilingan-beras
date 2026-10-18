@@ -256,7 +256,8 @@ def test_tiap_layar_berlaci_membawa_ketiga_lencana():
 
     from app.web.nav import TAB
 
-    berlaci = {f"{kunci}.html" for kunci, *_ in TAB}
+    berlaci = {("pengiriman.html" if kunci == "barang_keluar" else f"{kunci}.html")
+               for kunci, *_ in TAB}
     akar = pathlib.Path(__file__).resolve().parents[1] / "app"
     terlihat, kurang = set(), []
     for berkas in akar.rglob("*.py"):
@@ -469,7 +470,8 @@ def test_tumpukan_punya_bloknya_sendiri_dan_berdiri_di_atas():
     rute = inspect.getsource(halaman_aksi)
     assert 'KELOMPOK_ATAS="tumpukan"' in rute
     assert 'judul_atas="Menumpuk di lantai"' in rute
-    assert 'judul_bawah="Bisa dikerjakan sekarang"' in rute
+    assert "judul_bawah=dict(svc.GRUP_ANTREAN).get(" in rute
+    assert '"Bisa dikerjakan sekarang"' in rute
 
 
 def test_tumpukan_tetap_dihitung_lencana_antrean():

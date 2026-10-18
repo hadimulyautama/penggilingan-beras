@@ -178,18 +178,21 @@ async def beras_belum_dikemas(user: User = Depends(pengguna_aksi)) -> list[dict]
 
     Nilainya `POL-…|jenis`, jadi satu pilihan membawa keduanya.
 
-    Yang MASIH BERJALAN tak ditawarkan: angkanya belum final, dan mengemas atas
-    angka yang masih bertambah membuat orang mengemas dua kali. Sama dengan
-    kartu antreannya — satu aturan, dan keduanya membaca `beras_curah`.
+    Termasuk hasil proses berjalan: batasnya saldo hasil yang sudah tercatat,
+    dikurangi packing dan pemakaian lain, diperiksa ulang saat simpan.
     """
     from app.services.stok import beras_curah, nama_produk
 
+    from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
-        curah = await beras_curah(db, termasuk_berjalan=False)
+        curah = await beras_curah(db, termasuk_berjalan=True)
+        pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
     return [{"value": f"{b.kode_proses}|{b.jenis}",
              "berat_kg": float(b.sisa_kg),
              "label": (f"{b.kode_proses} · {nama_produk(b.jenis)} · "
-                       f"{kg(b.sisa_kg)} belum dikemas")}
+                       f"{kg(b.sisa_kg)} tersedia"
+                       + (" · sosoh berjalan" if b.berjalan else "")
+                       + (f" · titipan {pemilik.get(b.jasa_id, '?')}" if b.jasa_id else " · pabrik"))}
             for b in curah if b.sisa_kg > 0.5]
 
 
@@ -758,7 +761,7 @@ async def perintah_bisa_ditambah(user: User = Depends(pengguna_aksi)) -> list[di
     for r, it in baris:
         label = _ringkas_perintah(r, it)
         if r.status == OUT_DIMUAT:
-            label += " · SUDAH DIMUAT, tambahan ikut keluar"
+            label += " · selesai muat; perubahan target harus diperiksa operator lagi"
         out.append({"value": str(r.id), "label": label})
     return out
 
@@ -787,35 +790,28 @@ async def keluar_dimuat(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/baris-perintah")
-async def baris_perintah(user: User = Depends(pengguna_aksi)) -> list[dict]:
-    """Tiap BARANG di tiap perintah yang belum berangkat.
-
-    Satuannya ikut tertulis di label — karung untuk yang berkarung, kg untuk
-    yang curah — sebab kotak isiannya satu dan operator yang menentukan
-    artinya. Label tanpa satuan mengundang 200 kg diketik sebagai 200 karung.
-    """
+async def baris_perintah(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Barang hanya dari perintah yang dipilih, dengan konteks truk dan aktual."""
     from app.penggilingan.inventory.models import OUT_PERINTAH
-
+    if not induk.strip().isdigit():
+        return []
     async with SessionLocal() as db:
-        baris = await bk.daftar(db, status=(OUT_PERINTAH,))
+        daftar = await bk.daftar(db, status=(OUT_PERINTAH,), transaksi_id=int(induk))
         out = []
-        for r, items in baris:
+        for r, items in daftar:
             for it in items:
-                b = bk.BarisPerintah(
-                    tipe=it.item_type, sku_id=it.product_sku_id,
-                    std_id=it.rice_quality_standard_id, jenis=it.jenis_byproduct,
-                    milling_process_id=it.milling_process_id)
-                _, nama = await bk.tersedia(db, b, abaikan_pesanan=True)
-                if it.item_type == "finished_goods":
-                    minta = f"{it.jumlah_karung_perintah or 0} karung"
-                else:
-                    minta = kg(float(it.berat_perintah_kg or 0))
-                sudah = (f" · sudah {kg(float(it.berat_kg))}"
-                         if float(it.berat_kg or 0) > 0.5 else "")
-                satuan = "jumlah kemasan/karung" if it.item_type == "finished_goods" else "kg"
+                if it.item_type == "pk_g2" and it.silo_id is not None:
+                    continue
+                _, nama = await bk.tersedia(db, bk.baris_dari_item(it), abaikan_pesanan=True)
+                karung = it.item_type == "finished_goods"
+                unit = "karung" if karung else "kg"
+                target = it.jumlah_karung_perintah if karung else it.berat_perintah_kg
+                aktual = it.jumlah_karung if karung else it.berat_kg
                 out.append({"value": str(it.id),
-                            "label": f"{r.kode} · {nama} · perintah {minta}{sudah} · isi dalam {satuan}"})
-    return out
+                    "label": f"{r.kode} · {r.nama_pembeli or '?'} · {r.no_polisi or 'tanpa plat'} · "
+                             f"{nama} · perintah {float(target or 0):g} {unit} · "
+                             f"total sebelumnya {float(aktual or 0):g} {unit}"})
+        return out
 
 
 @router.get("/actions/barang-bisa-keluar")
@@ -920,6 +916,11 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
                           f"{karung} karung × {ukuran} kg otomatis + "
                           f"{kg(curah)} curah · total {kg(total)} "
                           "(isi dalam kg; karung dibuka otomatis bila perlu)")})
+        from app.penggilingan.gudang2.service import hitung_stok_tumpukan
+        pk_g2 = await hitung_stok_tumpukan(db, jasa_id=None)
+        if pk_g2 > 0.5:
+            out.append({"value": "g2:tumpukan",
+                        "label": f"PK tumpukan Gudang 2 · {kg(pk_g2)} (isi dalam kg)"})
         for l in await pk_gudang1(db):
             if l.tersedia <= 0:
                 continue
@@ -1162,16 +1163,17 @@ async def _satu_baris(db, pilih: str, jumlah) -> "bk.BarisPerintah":
         b = bk.BarisPerintah(tipe="gabah_langsung", gabah_kering_lot_id=lot.id,
                              berat_kg=float(jumlah))
     elif pilih.startswith("g2:"):
-        raise HTTPException(
-            400,
-            "PK yang sudah masuk Gudang 2 tidak bisa dikirim langsung. "
-            "Gunakan PK sebagai bahan penyosohan, lalu kirim hasil prosesnya.")
+        if pilih != "g2:tumpukan":
+            raise HTTPException(400, "PK di silo adalah bahan proses, bukan stok yang bisa diambil.")
+        b = bk.BarisPerintah(tipe="pk_g2", silo_id=None, berat_kg=float(jumlah))
     else:
         nilai = pilih[3:] if pilih.startswith("bj:") else pilih
         bagian = nilai.split("|")
         if not bagian or not bagian[0].isdigit():
             raise HTTPException(400, "Pilih barangnya dulu.")
         std = int(bagian[1]) if len(bagian) > 1 and bagian[1].isdigit() else None
+        if not float(jumlah).is_integer():
+            raise HTTPException(400, "Jumlah karung wajib bilangan bulat.")
         b = bk.BarisPerintah(tipe="finished_goods", sku_id=int(bagian[0]),
                              std_id=std, jumlah_karung=int(jumlah))
     return replace(b, jasa_id=jasa_asal) if jasa_asal is not None else b
@@ -1354,6 +1356,38 @@ async def act_batal_perintah_keluar(req: BatalPerintahReq,
 
 class MuatReq(BaseModel):
     perintah: str = ""
+    dasar: str = ""
+    sebab: str = ""
+
+
+@router.get("/actions/pratinjau-muat")
+async def pratinjau_muat(perintah: str, user: User = Depends(pengguna_aksi)) -> dict:
+    from app.web.api import _is_g1_operator, _is_g2_operator
+    wajib(await _is_g1_operator(user) or await _is_g2_operator(user))
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+    async with SessionLocal() as db:
+        try:
+            rec = await bk._kunci(db, _id(perintah), keadaan=OUT_PERINTAH)
+            from app.penggilingan.inventory.models import OutgoingItem
+            silo = (await db.execute(select(OutgoingItem.id).where(
+                OutgoingItem.outgoing_record_id == rec.id,
+                OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.isnot(None)))).first()
+            if silo:
+                raise bk.BarangKeluarError("PK di silo adalah bahan proses, bukan stok yang bisa diambil.")
+            return await bk.ringkasan_muat(db, rec)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Tidak bisa memeriksa perintah muat.")
+
+
+def _galat_muatan(e: bk.BarangKeluarError, pesan: str) -> HTTPException:
+    if isinstance(e, bk.MuatanBerubah):
+        return HTTPException(409, str(e))
+    return galat(e, pesan)
+
+
+def _wajib_periksa_muat(dasar: str) -> None:
+    if not dasar:
+        raise HTTPException(409, "Periksa ringkasan muatan terbaru sebelum konfirmasi. Tutup dan buka kembali formulir.")
 
 
 @router.post("/actions/muat-semua")
@@ -1374,9 +1408,10 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await bk.muat_semua(db, user=u, rec_id=_id(req.perintah))
+            _wajib_periksa_muat(req.dasar)
+            r = await bk.muat_semua(db, user=u, rec_id=_id(req.perintah), dasar=req.dasar)
         except bk.BarangKeluarError as e:
-            raise galat(e, "Gagal mencatat muatan.")
+            raise _galat_muatan(e, "Gagal mencatat muatan.")
         kode = r.rec.kode
         total = sum(float(i.berat_kg or 0) for i in r.baris)
     return {"ok": True,
@@ -1385,8 +1420,10 @@ async def act_muat_semua(req: MuatReq, user: User = Depends(pengguna_aksi)) -> d
 
 
 class MuatBarisReq(BaseModel):
+    perintah: str = ""
     baris: str = ""
     jumlah: float | None = None
+    dasar: str = ""
 
 
 @router.post("/actions/muat-barang")
@@ -1405,8 +1442,11 @@ async def act_muat_barang(req: MuatBarisReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         it = await db.get(OutgoingItem, _id(req.baris))
-        if it is None:
-            raise HTTPException(400, "Barang itu tidak ada lagi di perintahnya.")
+        if it is None or it.outgoing_record_id != _id(req.perintah):
+            raise HTTPException(400, "Barang itu bukan bagian dari perintah yang dipilih.")
+        _wajib_periksa_muat(req.dasar)
+        if it.item_type == "finished_goods" and not float(req.jumlah).is_integer():
+            raise HTTPException(400, "Total yang sudah dimuat dalam karung wajib bilangan bulat.")
         # Yang berkarung diketik dalam KARUNG, yang curah dalam kg — sama dengan
         # satuan yang tertulis di kartunya. Menuntut operator mengubah karung
         # jadi kilogram sambil berdiri di truk adalah mengundang salah kali.
@@ -1414,9 +1454,10 @@ async def act_muat_barang(req: MuatBarisReq,
         berat = None if karung is not None else float(req.jumlah)
         try:
             rec, pesan = await bk.catat_muatan(db, user=u, item_id=it.id,
-                                               jumlah_karung=karung, berat_kg=berat)
+                                               jumlah_karung=karung, berat_kg=berat,
+                                               dasar=req.dasar, rec_id=_id(req.perintah))
         except bk.BarangKeluarError as e:
-            raise galat(e, "Gagal mencatat muatan.")
+            raise _galat_muatan(e, "Gagal mencatat muatan.")
     return {"ok": True, "pesan": pesan}
 
 
@@ -1432,9 +1473,11 @@ async def act_selesai_muat(req: MuatReq, user: User = Depends(pengguna_aksi)) ->
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await bk.selesai_muat(db, user=u, rec_id=_id(req.perintah))
+            _wajib_periksa_muat(req.dasar)
+            r = await bk.selesai_muat(db, user=u, rec_id=_id(req.perintah),
+                                      dasar=req.dasar, sebab=req.sebab)
         except bk.BarangKeluarError as e:
-            raise galat(e, "Gagal menutup muatan.")
+            raise _galat_muatan(e, "Gagal menutup muatan.")
         kode = r.rec.kode
         total = sum(float(i.berat_kg or 0) for i in r.baris)
     return {"ok": True,
@@ -1563,44 +1606,45 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
             # asal-asalan sambil berdiri di samping truk. Yang berselisih dicatat
             # per barang lewat aksi di bawahnya.
             {"id": "muat_semua", "label": "\U0001F69A Muat semua sesuai perintah",
-             "post": "/api/actions/muat-semua",
-             "hint": "Seluruh barang dimuat persis seperti diperintahkan. Kalau "
-                     "ada yang berselisih, catat per barang dulu.",
+             "post": "/api/actions/muat-semua", "pratinjau_muat": "semua",
+             "hint": "Lengkapi seluruh barang sampai jumlah perintah, termasuk "
+                     "yang baru dimuat sebagian, lalu selesaikan muatan. "
+                     "Jika muatan akhirnya kurang, gunakan 'Selesai muat'.",
              "fields": [
                  {"name": "perintah", "label": "Perintah muat", "type": "remote",
                   "source": "/api/actions/perintah-terbuka",
                   "kosong": "Tidak ada perintah muat yang menunggu."},
              ]},
-            {"id": "muat_barang", "label": "\U0001F4E6 Catat muatan per barang",
-             "post": "/api/actions/muat-barang",
-             "hint": "Untuk yang dimuat KURANG dari perintahnya. "
-                     "Barang jadi berkemasan: isi JUMLAH KEMASAN/KARUNG, bukan kg "
-                     "(contoh: 20 karung × 25 kg → isi 20). "
-                     "Barang curah, PK, dan gabah: isi berat dalam KG "
-                     "(contoh: 500 kg → isi 500). "
-                     "Satuan juga tertulis pada pilihan barang. Sesudah semua "
-                     "tercatat, tekan 'Selesai muat'.",
+            {"id": "muat_barang", "label": "📦 Catat muatan per barang",
+             "post": "/api/actions/muat-barang", "pratinjau_muat": "baris",
+             "hint": "Isi TOTAL yang sudah naik ke truk, bukan tambahannya. "
+                     "Sudah 20 karung lalu tambah 10: isi 30. "
+                     "Karung wajib bilangan bulat; barang curah dan PK memakai kg.",
              "fields": [
-                 {"name": "baris", "label": "Barang yang dimuat", "type": "remote",
-                  "source": "/api/actions/baris-perintah",
-                  "kosong": "Tidak ada barang yang menunggu dimuat."},
-                 {"name": "jumlah", "label": "Jumlah dimuat (kemasan/karung atau kg sesuai barang)",
+                 {"name": "perintah", "label": "Perintah · pembeli/pemilik · plat", "type": "remote",
+                  "source": "/api/actions/perintah-terbuka"},
+                 {"name": "baris", "label": "Barang pada perintah ini", "type": "remote",
+                  "induk": "perintah", "source": "/api/actions/baris-perintah",
+                  "kosong": "Tidak ada barang yang dapat dimuat pada perintah ini."},
+                 {"name": "jumlah", "label": "Total yang sudah dimuat (karung atau kg sesuai barang)",
                   "type": "number", "wajib": True},
              ]},
             {"id": "selesai_muat", "label": "\u2714\uFE0F Selesai muat — truk berangkat",
-             "post": "/api/actions/selesai-muat",
+             "post": "/api/actions/selesai-muat", "pratinjau_muat": "aktual",
              "hint": "Sisa perintah yang tak dimuat HANGUS, dan selisihnya "
                      "terbaca Admin saat verifikasi.",
              "fields": [
                  {"name": "perintah", "label": "Perintah yang sudah dimuat",
                   "type": "remote", "source": "/api/actions/perintah-terbuka",
                   "kosong": "Tidak ada perintah muat yang menunggu."},
+                 {"name": "sebab", "label": "Alasan barang tidak terkirim (jika muatan kurang)",
+                  "type": "text"},
              ]},
             {"id": "catat_packing", "label": "📦 Catat packing barang jadi",
              "post": "/api/actions/catat-packing",
              "hint": "Mengurangi stok karung dan menambah stok barang jadi. "
-                     "Pilih prosesnya dulu — packing boleh dicatat setelah "
-                     "penyosohan ditutup.",
+                     "Packing boleh selama sosoh berjalan, dari hasil yang sudah tercatat "
+                     "dan masih tersedia. Saldo diperiksa ulang saat simpan.",
              "fields": [
                  # ── SATU penunjuk yang membawa lot DAN jenisnya ──
                  #
@@ -1856,6 +1900,8 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
             {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
              "post": "/api/actions/tambah-barang-keluar",
+             "hint": "Mengubah perintah saja. Muatan aktual dan stok tidak berubah "
+                     "sampai operator mengonfirmasi barang yang benar-benar dimuat.",
              "fields": [
                  # Sampai SEBELUM diverifikasi, bukan cuma selagi belum
                  # dimuat (keputusan pemilik 29 September 2026): truk dimuat
@@ -2124,8 +2170,13 @@ async def _barang_jasa_rows(db: AsyncSession, jid: int) -> list[dict]:
                                  f"{kg(sisa_total)} tersedia; {karung} karung × "
                                  f"{ukuran} kg otomatis + {kg(curah)} curah "
                                  "(isi dalam kg, karung dibuka otomatis bila perlu)"})
-    # PK di Gudang 2 hanya boleh menjadi bahan penyosohan. Hasil proses
-    # (beras putih dan hasil samping) tersedia lewat picker stok produk.
+    # Stok PK yang masih di tumpukan boleh diambil. Setelah masuk silo,
+    # barang menjadi bahan proses dan tidak ditawarkan untuk pengambilan.
+    from app.penggilingan.gudang2.service import hitung_stok_tumpukan
+    tumpukan = await hitung_stok_tumpukan(db, jasa_id=jid)
+    if tumpukan > 0.5:
+        out.append({"value": "g2:tumpukan",
+                    "label": f"PK tumpukan Gudang 2 · {kg(tumpukan)} (isi dalam kg)"})
     # ── Gabah kering ditimbang (pesan kerja 12/12A) — tumpukan Gudang 1 ──
     from app.models import GabahKeringLot
     from app.penggilingan.gudang1.services.gabah_kering import (

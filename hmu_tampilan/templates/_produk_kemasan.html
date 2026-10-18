@@ -20,6 +20,12 @@
   </table>
 </div>
 {% if k.jenis == 'bekatul' %}<p class="bantu">Bekatul tetap disimpan di stok.</p>{% endif %}
+{# Ringkasan kemasan otomatis tidak menggantikan pencatatan curah per proses.
+   Tombol mengikuti kartu detail dan izin pemanggil, bukan konteks halaman
+   yang bisa berbeda antara stok pabrik dan titipan pelanggan. #}
+{% if k.jenis == 'bekatul' and k.curah_kg > 0.5 and boleh_catat %}
+  <p><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=catat_bekatul">Catat bekatul curah</a></p>
+{% endif %}
 {% if k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah %}
   {% for p in kemasan.get(k.jenis, []) %}
     {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}

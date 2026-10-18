@@ -216,6 +216,11 @@ async def _ensure_cooling_started(db, lot, now, user) -> bool:
     Dipanggil otomatis saat pengeringan selesai — operator tak perlu input
     'mulai pendinginan' terpisah. Tambah 1 log pendinginan otomatis bila belum
     ada log sama sekali."""
+    from app.penggilingan.gudang1.services.jeda import tutup_bersama_proses, JedaError
+    try:
+        await tutup_bersama_proses(db, jenis="pengeringan", obj=lot, saat=now, user=user)
+    except JedaError as e:
+        raise DryingError(str(e)) from e
     if lot.waktu_mulai_pendinginan is not None:
         return False
     lot.waktu_mulai_pendinginan = now
@@ -305,6 +310,49 @@ async def log_cooling(
     return lot, prev + 1, prev == 0
 
 
+async def mulai_pendinginan_ulang(db: AsyncSession, *, user, kode_lot: str,
+                                 tanggal=None, jam=None) -> DryingLot:
+    """Mulai putaran baru; pernyataan dingin sebelumnya tetap di log waktunya."""
+    from app.models import SiloStorage
+    from hmu_core.proses_db import ProsesTerpadu
+    lot = await get_lot_by_kode(db, kode_lot)
+    if lot is None:
+        raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    await db.refresh(lot, with_for_update=True)
+    if await db.scalar(select(SiloStorage.id).where(
+            SiloStorage.drying_lot_id == lot.id).limit(1)):
+        raise DryingError("Gabah sudah dipindah ke silo; pendinginan di dryer tidak bisa diulang.")
+    if lot.status != "selesai" or lot.waktu_selesai_pendinginan is None:
+        raise DryingError("Pendinginan belum selesai atau sudah dimulai ulang. Periksa status terbaru.")
+    now = input_time(tanggal, jam)
+    if now < lot.waktu_selesai_pendinginan:
+        raise DryingError("Mulai pendinginan ulang tidak boleh sebelum pernyataan dingin terakhir.")
+    sebelum = lot.waktu_selesai_pendinginan
+    mulai_lama = lot.waktu_mulai_pendinginan
+    lot.waktu_mulai_pendinginan = now
+    lot.waktu_selesai_pendinginan = None
+    row = await db.scalar(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "produksi", ProsesTerpadu.tabel_sumber == "drying_cooling",
+        ProsesTerpadu.id_sumber == str(lot.id)).with_for_update())
+    if row:
+        meta = dict(row.metadata_domain or {})
+        meta["putaran_sebelumnya"] = [*meta.get("putaran_sebelumnya", []), {
+            "mulai": mulai_lama.isoformat() if mulai_lama else None,
+            "selesai": sebelum.isoformat(), "ulang_dimulai": now.isoformat()}]
+        row.metadata_domain = meta
+        row.status = StatusProses.BERJALAN.value
+        row.waktu_mulai = now
+        row.waktu_selesai = None
+    db.add(DryingCoolingLog(drying_lot_id=lot.id, waktu=now, input_by=user.id,
+                           catatan="pendinginan ulang dimulai"))
+    await log_activity(db, table_name="drying_lots", record_id=lot.id,
+        action="UPDATE", changed_by=user.id, field_name="waktu_selesai_pendinginan",
+        old_value=sebelum.isoformat(), new_value="pendinginan ulang dimulai",
+        aksi="mulai_pendinginan_ulang")
+    await db.commit()
+    return lot
+
+
 async def finish_cooling(
     db: AsyncSession, *, user, kode_lot: str | None, tanggal=None, jam=None
 ) -> tuple[DryingLot, float]:
@@ -317,6 +365,11 @@ async def finish_cooling(
     lot = await get_lot_by_kode(db, kode_lot)
     if lot is None:
         raise DryingError(f"Lot {kode_lot} tidak ditemukan.")
+    await db.refresh(lot, with_for_update=True)
+    from app.models import SiloStorage
+    if await db.scalar(select(SiloStorage.id).where(
+            SiloStorage.drying_lot_id == lot.id).limit(1)):
+        raise DryingError("Gabah sudah dipindah ke silo; periksa pekerjaan yang dipilih.")
     if lot.status == "di_dryer":
         raise DryingError(
             f"Lot {kode_lot} belum mulai dikeringkan. Ketik `mulai pengeringan {kode_lot}` dulu."

@@ -31,7 +31,7 @@ async def g1(pg, pemakai, pemasok):
         wh = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
         if wh is None:
-            wh = Warehouse(nama_gudang="Gudang 1 - Selepan")
+            wh = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
             db.add(wh)
             await db.flush()
         wh.kode_fungsi = "g1"
@@ -229,7 +229,7 @@ async def g2(pg, pemakai, pemasok):
         wh = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if wh is None:
-            wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(wh)
             await db.flush()
         wh.kode_fungsi = "g2"
@@ -359,6 +359,8 @@ async def test_tambah_silo_penyosohan_proses_selesai_ditolak(pg, g2):
         u = await db.get(User, g2["user"])
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses, nama_silo="A",
                                  sisa_kg=0)
+        from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+        await akhiri_penyosohan(db, user=u, kode=r.proc.kode_proses)
 
     async with pg() as db:
         u = await db.get(User, g2["user"])
@@ -426,6 +428,9 @@ async def test_silo_bebas_diisi_ulang_bisa_ditambah_ke_proses_sama(pg, g2, isi_d
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
         assert await hitung_stok_silo(db, g2["silo"]["B"]) == 0
         selesai = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
+        assert selesai.proc.status == "proses"
+        from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+        await akhiri_penyosohan(db, user=u, kode=kode)
         assert selesai.proc.status == "selesai"
         from hmu_core.proses_db import ProsesTerpadu
         bersama = (await db.execute(select(ProsesTerpadu).where(

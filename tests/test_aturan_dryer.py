@@ -250,8 +250,8 @@ def test_hanya_titik_pertama_yang_wajib():
 
     js = (pathlib.Path(__file__).resolve().parents[1]
           / "hmu_tampilan/static/aksi.js").read_text()
-    tambah = js[js.index("[data-tambah]"):]
-    assert 'removeAttribute("data-wajib")' in tambah[:1200], (
+    tambah = js[js.index('var tambah = e.target.closest("[data-tambah]")'): ]
+    assert 'removeAttribute("data-wajib")' in tambah.split("var pindah =")[0], (
         "kotak yang ditambahkan ikut wajib — menekan tambah lalu ragu jadi "
         "tak bisa disimpan")
 
@@ -395,7 +395,7 @@ def test_wajib_opt_in_bukan_kebalikan_optional():
           / "hmu_tampilan" / "static" / "aksi.js").read_text()
     assert "f.wajib ?" in js                       # opt-in, bukan !f.optional
     assert '[data-wajib]' in js                    # input ikut diperiksa, bukan select saja
-    assert "Belum diisi:" in js
+    assert "salahFormulir(lembar," in js and 'setAttribute("aria-invalid", "true")' in js
 
 
 # ──────────────────── Campur basah–kering: ditutup, bukan ditolak ───────────
@@ -695,8 +695,10 @@ def test_kembali_tak_menghapus_isian():
     """Memeriksa ulang tidak boleh berarti mengetik ulang."""
     js = (pathlib.Path(__file__).resolve().parents[1]
           / "hmu_tampilan/static/aksi.js").read_text()
-    assert 'bukaAksi(id, v)' in js
-    assert "function bukaAksi(id, semula)" in js
+    # Konfirmasi kini menyembunyikan DOM asli, bukan membangun dari teks.
+    assert '$("kembali").onclick = kembaliKeBorang' in js
+    assert "borangAsli.hidden = true" in js and "borangAsli.hidden = false" in js
+    assert "function kembaliKeBorang()" in js and 'bukaAksi(id, v)' not in js
 
 
 def test_ubah_target_punya_lembarnya_sendiri_dan_konfirmasi():

@@ -157,13 +157,13 @@ async def ambil_data(process_id: int) -> dict:
             .join(PolishingProcess,
                   PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
             .where(PolishingSiloUsage.silo_id.in_(silo_ids),
-                   PolishingProcess.status == "selesai",
+                   PolishingSiloUsage.berat_akhir_kg.is_not(None),
                    PolishingProcess.id != proc.id,
                    PolishingProcess.waktu_mulai <= proc.waktu_mulai)
         )).all()
         withdrawals: dict[int, list[tuple]] = {sid: [] for sid in silo_ids}
         for usage, old_proc in previous:
-            at = old_proc.waktu_selesai or old_proc.waktu_mulai
+            at = usage.updated_at or old_proc.waktu_selesai or old_proc.waktu_mulai
             if at and at <= proc.waktu_mulai:
                 used = (usage.berat_terpakai_kg if usage.berat_terpakai_kg is not None
                         else _angka(usage.berat_awal_kg) + _angka(usage.berat_masuk_kg)

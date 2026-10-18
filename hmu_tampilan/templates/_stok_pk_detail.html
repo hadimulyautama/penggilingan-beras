@@ -55,6 +55,7 @@
       {% elif not g1 and not t.bobot_final %}<div class="pk-detail__notice">Truk belum ditimbang kedua. Berat belum final.</div>{% endif %}
     </section>
 
+    {% if mutu_aktif %}
     <section class="pk-detail__panel pk-detail__quality">
       <div class="pk-detail__section-head"><div><span class="pk-detail__overline">PENILAIAN</span><h2>Nilai kualitas</h2></div></div>
       {% if t.nilai_kualitas is not none %}
@@ -70,6 +71,7 @@
       {% endif %}
     </section>
 
+    {% endif %}
     {% if t.bahan %}
       <section class="pk-detail__panel pk-detail__batches">
         <div class="pk-detail__section-head"><div><span class="pk-detail__overline">ASAL BAHAN</span><h2>Batch gabah <span>{{ t.bahan|length }}</span></h2></div></div>

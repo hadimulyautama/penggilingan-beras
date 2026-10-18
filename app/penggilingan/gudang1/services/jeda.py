@@ -20,14 +20,16 @@ Dua hal yang dijaga di sini:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
+import hashlib
+import json
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import now_local
-from app.models import DryingLot, JedaProses, MillingProcess
+from app.models import DryingLot, JedaProses, JedaCatatan, MillingProcess
 from app.penggilingan.gudang2.models import PolishingProcess
 from app.services.activity_log import log_activity
 
@@ -157,90 +159,250 @@ def _saring(jenis: str):
     return JedaProses.jenis == jenis
 
 
+def _hidup():
+    return JedaProses.dibatalkan_pada.is_(None)
+
+
+async def _catatan(db, id_):
+    return (await db.scalars(select(JedaCatatan).where(
+        JedaCatatan.jeda_id == id_, JedaCatatan.dibatalkan_pada.is_(None))
+        .order_by(JedaCatatan.waktu_kejadian, JedaCatatan.id).execution_options(populate_existing=True))).all()
+
+
+def _zona(waktu):
+    from zoneinfo import ZoneInfo
+    from app.config import settings
+    zona = ZoneInfo(settings.app_timezone)
+    return waktu.replace(tzinfo=zona) if waktu.tzinfo is None else waktu.astimezone(zona)
+
+
+def _cap(w):
+    return w.timestamp() if w else None
+
+
+def _mulai(obj, jenis):
+    return obj.waktu_mulai_pengeringan if jenis == 'pengeringan' else obj.waktu_mulai
+
+
+async def ringkasan_jeda(db, *, jenis, kode):
+    if jenis not in SEBAB:
+        raise JedaError('Jenis proses tidak dikenal.')
+    obj = await _proses_berjalan(db, jenis, kode)
+    rows = (await db.scalars(select(JedaProses).where(_kolom(jenis) == obj.id)
+                            .order_by(JedaProses.id).execution_options(populate_existing=True))).all()
+    events = (await db.scalars(select(JedaCatatan).where(
+        JedaCatatan.jeda_id.in_([r.id for r in rows] or [-1])).order_by(JedaCatatan.id))).all()
+    basis = [jenis, kode, obj.status, _cap(_mulai(obj, jenis)),
+             [[r.id, _cap(r.mulai), _cap(r.selesai), r.sebab, _cap(r.dibatalkan_pada)] for r in rows],
+             [[e.id, _cap(e.dibatalkan_pada)] for e in events]]
+    aktif = next((r for r in rows if r.selesai is None and r.dibatalkan_pada is None), None)
+    teks = (f'{kode} · dijeda sejak {_zona(aktif.mulai):%d/%m/%Y %H:%M} · {aktif.sebab}'
+            if aktif else f'{kode} · mesin sedang berjalan')
+    return {'dasar': hashlib.sha256(json.dumps(basis).encode()).hexdigest(),
+            'teks': teks, 'dijeda': aktif is not None}
+
+
 async def jeda_terbuka(db: AsyncSession, jenis: str, id_: int) -> JedaProses | None:
-    """Jeda yang BELUM dilanjutkan untuk proses ini, bila ada."""
-    kolom = _kolom(jenis)
-    return (await db.execute(
-        select(JedaProses).where(kolom == id_, JedaProses.selesai.is_(None))
-    )).scalars().first()
+    return await db.scalar(select(JedaProses).where(
+        _kolom(jenis) == id_, JedaProses.selesai.is_(None), _hidup()).execution_options(populate_existing=True))
 
 
 async def tertahan_detik(db: AsyncSession, jenis: str, id_: int,
                          sampai: datetime | None = None) -> float:
-    """Total waktu tertahan proses ini — termasuk jeda yang masih berlangsung.
-
-    Yang masih berlangsung ikut dihitung sampai SEKARANG; kalau tidak, proses
-    yang sedang mati akan terlihat seolah jam tertahannya berhenti bertambah,
-    dan itu justru saat angkanya paling perlu terlihat naik.
-    """
-    kolom = _kolom(jenis)
     kini = sampai or now_local()
-    baris = (await db.execute(select(JedaProses).where(kolom == id_))).scalars().all()
-    return sum(_detik(j.mulai, j.selesai or kini) for j in baris)
+    rows = (await db.scalars(select(JedaProses).where(_kolom(jenis) == id_, _hidup()))).all()
+    return sum(max(0, _detik(j.mulai, min(j.selesai or kini, kini))) for j in rows)
+
+
+async def _sebab(db, jenis, sebab, sebab_lain):
+    from app.services.setelan import sebab_jeda
+    if sebab == SEBAB_LAIN:
+        nilai = (sebab_lain or '').strip()
+        if not nilai:
+            raise JedaError('Tulis sebabnya dulu bila memilih Lainnya.')
+    else:
+        if sebab not in (await sebab_jeda(db)).get(jenis, []):
+            raise JedaError('Pilih sebab yang sesuai jenis proses, atau pilih Lainnya.')
+        nilai = sebab
+    if len(nilai) > 120:
+        raise JedaError('Sebab maksimal 120 karakter; gunakan catatan kondisi untuk rinciannya.')
+    return nilai
+
+
+async def _ulang(db, kunci, sidik, user):
+    if not kunci:
+        return None
+    cat = await db.scalar(select(JedaCatatan).where(JedaCatatan.kunci_kiriman == kunci))
+    if cat is None:
+        return None
+    if cat.dicatat_oleh != user.id or cat.sidik_payload != sidik or cat.dibatalkan_pada:
+        raise JedaError('Kiriman ini sudah dipakai atau dibatalkan. Buka formulir baru.')
+    return JedaResult(**cat.hasil)
+
+
+async def _kejadian(db, *, user, jenis, kode, aksi, sebab='', sebab_lain=None,
+                    waktu_kejadian=None, alasan_terlambat='', catatan='',
+                    dasar=None, kunci_kiriman=None):
+    if jenis not in SEBAB:
+        raise JedaError('Sebutkan prosesnya: pengeringan, giling, atau penyosohan.')
+    sidik = hashlib.sha256(json.dumps([jenis, kode, aksi, sebab, sebab_lain,
+        waktu_kejadian.isoformat() if waktu_kejadian else None,
+        alasan_terlambat, catatan], sort_keys=True).encode()).hexdigest()
+    ulang = await _ulang(db, kunci_kiriman, sidik, user)
+    if ulang:
+        return ulang
+    obj = await _proses_berjalan(db, jenis, kode)
+    # Semua aksi, termasuk dua HP dan kiriman ulang, diserialkan pada proses
+    # yang sama. Mengunci jeda saja tidak menjaga aksi berhenti pertama.
+    await db.refresh(obj, with_for_update=True)
+    if obj.status != 'proses':
+        raise JedaError('Proses sudah selesai. Periksa catatan terbaru.')
+    ulang = await _ulang(db, kunci_kiriman, sidik, user)
+    if ulang:
+        return ulang
+    if dasar is not None and (await ringkasan_jeda(db, jenis=jenis, kode=kode))['dasar'] != dasar:
+        raise JedaError('Keadaan jeda berubah sejak diperiksa. Periksa ulang sebelum menyimpan.')
+    dicatat = now_local()
+    waktu = _zona(waktu_kejadian) if waktu_kejadian else dicatat
+    if waktu > dicatat:
+        raise JedaError('Waktu kejadian tidak boleh di masa depan.')
+    mulai = _mulai(obj, jenis)
+    if mulai is None or waktu < mulai:
+        raise JedaError('Waktu kejadian tidak boleh sebelum proses dimulai.')
+    selesai = getattr(obj, 'waktu_selesai', None)
+    if selesai and waktu > selesai:
+        raise JedaError('Waktu kejadian melewati penyelesaian proses.')
+    if waktu_kejadian and not (alasan_terlambat or '').strip():
+        raise JedaError('Isi alasan keterlambatan pencatatan waktu aktual.')
+    aktif = await jeda_terbuka(db, jenis, obj.id)
+    rows = (await db.scalars(select(JedaProses).where(_kolom(jenis) == obj.id, _hidup())
+                             .order_by(JedaProses.mulai).execution_options(populate_existing=True))).all()
+    if aksi == 'hentikan':
+        if aktif:
+            raise JedaError('Proses sudah dijeda. Gunakan Perbarui kondisi jeda tanpa melanjutkan mesin.')
+        if any(r.selesai and waktu < r.selesai for r in rows):
+            raise JedaError('Waktu berhenti bertumpang tindih dengan jeda sebelumnya.')
+        nilai = await _sebab(db, jenis, sebab, sebab_lain)
+        aktif = JedaProses(jenis=jenis, sebab=nilai, mulai=waktu, dicatat_oleh=user.id,
+            drying_lot_id=obj.id if jenis == 'pengeringan' else None,
+            milling_process_id=obj.id if jenis == 'giling' else None,
+            polishing_process_id=obj.id if jenis == 'penyosohan' else None)
+        db.add(aktif)
+        await db.flush()
+        kali = len(rows) + 1
+    else:
+        if aktif is None:
+            raise JedaError('Proses tidak sedang dijeda. Periksa keadaan terbaru.')
+        # Mulai interval tetap, meski alasan/keadaan berubah di tengah jeda.
+        events = await _catatan(db, aktif.id)
+        if not events:
+            # Baris lama yang dibuat sebelum log kejadian tersedia tetap punya
+            # penghenti yang diketahui; jangan hilangkan sebab awalnya.
+            awal = JedaCatatan(jeda_id=aktif.id, aksi='hentikan',
+                waktu_kejadian=aktif.mulai, dicatat_pada=aktif.created_at,
+                dicatat_oleh=aktif.dicatat_oleh, sebab=aktif.sebab, asal_lama=True)
+            db.add(awal)
+            await db.flush()
+            events = [awal]
+        batas = max([aktif.mulai] + [e.waktu_kejadian for e in events])
+        if waktu < batas:
+            raise JedaError('Waktu kejadian mendahului kejadian jeda terakhir; urutkan catatannya.')
+        nilai = aktif.sebab if aksi == 'lanjutkan' else await _sebab(db, jenis, sebab, sebab_lain)
+        if aksi == 'kondisi':
+            if nilai == aktif.sebab and not (catatan or '').strip():
+                raise JedaError('Tuliskan perubahan kondisi atau pilih penyebab yang berubah.')
+            aktif.sebab = nilai
+        elif aksi == 'lanjutkan':
+            aktif.selesai = waktu
+        kali = len(rows)
+    hasil = JedaResult(jenis=jenis, kode=kode, sebab=nilai, kali=kali,
+        tertahan_detik=_detik(aktif.mulai, waktu) if aksi == 'lanjutkan' else None)
+    event = JedaCatatan(jeda_id=aktif.id, aksi=aksi, waktu_kejadian=waktu,
+        dicatat_pada=dicatat, dicatat_oleh=user.id, sebab=nilai, catatan=catatan or None,
+        alasan_terlambat=(alasan_terlambat or '').strip() or None,
+        kunci_kiriman=kunci_kiriman, sidik_payload=sidik, hasil=asdict(hasil))
+    db.add(event)
+    await db.flush()
+    await log_activity(db, table_name='jeda_catatan', record_id=event.id,
+        action='INSERT', changed_by=user.id, aksi='jeda_' + aksi,
+        new_value=f'{kode} · {aksi} · {nilai} · kejadian {waktu.isoformat()}',
+        alasan=alasan_terlambat or catatan or None, gudang=_gudang(jenis))
+    await db.commit()
+    return hasil
 
 
 async def hentikan(db: AsyncSession, *, user, jenis: str, kode: str,
-                   sebab: str, sebab_lain: str | None = None) -> JedaResult:
-    """Hentikan sementara. Prosesnya TIDAK ditutup — bahan & catatannya tetap."""
-    jenis = (jenis or "").strip()
-    if jenis not in SEBAB:
-        raise JedaError("Sebutkan prosesnya: pengeringan, giling, atau penyosohan.")
-    sebab = (sebab or "").strip()
-    if sebab == SEBAB_LAIN:
-        sebab = (sebab_lain or "").strip()
-        if not sebab:
-            raise JedaError("Tulis sebabnya dulu — berhenti tanpa sebab tak bisa "
-                            "dipakai memperbaiki apa pun.")
-    if not sebab:
-        raise JedaError("Pilih sebab berhentinya.")
-
-    obj = await _proses_berjalan(db, jenis, kode)
-    id_ = obj.id
-
-    if await jeda_terbuka(db, jenis, id_) is not None:
-        raise JedaError(f"{kode} memang sedang berhenti. Lanjutkan dulu.")
-
-    now = now_local()
-    db.add(JedaProses(
-        jenis=jenis,
-        drying_lot_id=id_ if jenis == "pengeringan" else None,
-        milling_process_id=id_ if jenis == "giling" else None,
-        polishing_process_id=id_ if jenis == "penyosohan" else None,
-        sebab=sebab[:120], mulai=now, dicatat_oleh=user.id,
-    ))
-    await log_activity(
-        db, table_name="jeda_proses", record_id=id_, action="INSERT",
-        changed_by=user.id, new_value=f"{kode} berhenti — {sebab}",
-        gudang=_gudang(jenis),
-    )
-    await db.commit()
-    kali = len((await db.execute(select(JedaProses).where(
-        _kolom(jenis) == id_))).scalars().all())
-    return JedaResult(jenis=jenis, kode=kode, sebab=sebab, kali=kali)
+                   sebab: str, sebab_lain: str | None = None, **kw) -> JedaResult:
+    return await _kejadian(db, user=user, jenis=jenis, kode=kode, aksi='hentikan',
+                           sebab=sebab, sebab_lain=sebab_lain, **kw)
 
 
-async def lanjutkan(db: AsyncSession, *, user, jenis: str, kode: str) -> JedaResult:
-    """Jalan lagi. Bisa nanti, bisa besok — prosesnya tak pernah ditutup."""
-    if jenis not in SEBAB:
-        raise JedaError("Sebutkan prosesnya: pengeringan, giling, atau penyosohan.")
-    obj = await _proses_berjalan(db, jenis, kode)
+async def lanjutkan(db: AsyncSession, *, user, jenis: str, kode: str, **kw) -> JedaResult:
+    return await _kejadian(db, user=user, jenis=jenis, kode=kode, aksi='lanjutkan', **kw)
 
+
+async def perbarui_kondisi(db: AsyncSession, *, user, jenis: str, kode: str,
+                          sebab: str, sebab_lain=None, **kw) -> JedaResult:
+    return await _kejadian(db, user=user, jenis=jenis, kode=kode, aksi='kondisi',
+                           sebab=sebab, sebab_lain=sebab_lain, **kw)
+
+
+async def tutup_bersama_proses(db, *, jenis, obj, saat, user):
     jeda = await jeda_terbuka(db, jenis, obj.id)
     if jeda is None:
-        raise JedaError(f"{kode} tidak sedang berhenti.")
+        return
+    events = await _catatan(db, jeda.id)
+    if saat < max([jeda.mulai] + [e.waktu_kejadian for e in events]):
+        raise JedaError('Waktu selesai proses mendahului kejadian jeda terakhir.')
+    jeda.selesai = saat
+    db.add(JedaCatatan(jeda_id=jeda.id, aksi='akhir_proses', waktu_kejadian=saat,
+        dicatat_pada=now_local(), dicatat_oleh=user.id if user else None, sebab=jeda.sebab))
 
-    now = now_local()
-    jeda.selesai = now
-    lama = _detik(jeda.mulai, now)
-    await log_activity(
-        db, table_name="jeda_proses", record_id=obj.id, action="UPDATE",
-        changed_by=user.id, field_name="selesai",
-        new_value=f"{kode} lanjut — tertahan {lama / 3600:.1f} jam ({jeda.sebab})",
-        gudang=_gudang(jenis),
-    )
-    await db.commit()
-    return JedaResult(jenis=jenis, kode=kode, sebab=jeda.sebab,
-                      tertahan_detik=lama)
+
+async def batalkan_akhir_proses(db, jeda):
+    events = await _catatan(db, jeda.id)
+    if any(e.aksi == 'lanjutkan' and e.waktu_kejadian == jeda.selesai for e in events):
+        return
+    for e in events:
+        if e.aksi == 'akhir_proses' and e.waktu_kejadian == jeda.selesai:
+            e.dibatalkan_pada = now_local()
+    jeda.selesai = None
+
+
+async def batalkan_kejadian(db, *, event_id, user):
+    event = await db.get(JedaCatatan, event_id)
+    if not event or event.dibatalkan_pada or event.aksi not in ('hentikan','lanjutkan','kondisi'):
+        raise JedaError('Kejadian ini tidak bisa dibatalkan.')
+    jeda = await db.get(JedaProses, event.jeda_id)
+    fk = _kolom(jeda.jenis).key
+    obj = await _proses_berjalan(db, jeda.jenis, event.hasil['kode'])
+    await db.refresh(obj, with_for_update=True)
+    if obj.status != 'proses':
+        raise JedaError('Buka kembali proses yang selesai sebelum membatalkan kejadian jedanya.')
+    await db.refresh(event)
+    if event.dibatalkan_pada:
+        raise JedaError('Kejadian ini sudah dibatalkan.')
+    events = await _catatan(db, jeda.id)
+    if events[-1].id != event.id:
+        raise JedaError('Ada kejadian jeda sesudahnya. Batalkan langkah berikutnya dahulu.')
+    if event.aksi == 'hentikan':
+        jeda.dibatalkan_pada = now_local()
+    elif event.aksi == 'lanjutkan':
+        berikut = await db.scalar(select(JedaProses.id).where(
+            _kolom(jeda.jenis) == getattr(jeda, fk), JedaProses.id != jeda.id,
+            JedaProses.mulai >= event.waktu_kejadian, _hidup()).limit(1))
+        if berikut:
+            raise JedaError('Ada jeda berikutnya; pembatalan akan menimbulkan tumpang tindih.')
+        jeda.selesai = None
+    else:
+        sebelumnya = [e for e in events if e.id != event.id]
+        if not sebelumnya:
+            raise JedaError('Penyebab sebelumnya tidak dapat dipastikan.')
+        jeda.sebab = sebelumnya[-1].sebab
+    event.dibatalkan_pada = now_local()
+    event.dibatalkan_oleh = user.id
+    await db.flush()
+    return f'Dibatalkan: {event.aksi} pada {event.hasil["kode"]}. Riwayat tetap tersimpan.'
 
 
 @dataclass
@@ -252,18 +414,34 @@ class Berhenti:
 
 async def rekap_berhenti(db: AsyncSession, *, sejak: datetime,
                          sampai: datetime | None = None) -> list[Berhenti]:
-    """Jumlah waktu berhenti PER SEBAB, terbanyak lebih dulu.
-
-    Dijumlah per sebab, bukan didaftar per kejadian: daftar kejadian cuma bisa
-    dibaca, sedangkan yang dijumlah bisa dipakai memutuskan.
-    """
+    """Durasi tiap sebab mengikuti perubahan kondisi dalam interval yang sama."""
+    from sqlalchemy import or_
     kini = sampai or now_local()
-    baris = (await db.execute(
-        select(JedaProses).where(JedaProses.mulai >= sejak)
-    )).scalars().all()
-    per: dict[str, Berhenti] = {}
-    for j in baris:
-        b = per.setdefault(j.sebab, Berhenti(sebab=j.sebab, detik=0.0, kali=0))
-        b.detik += _detik(j.mulai, j.selesai or kini)
-        b.kali += 1
-    return sorted(per.values(), key=lambda b: b.detik, reverse=True)
+    rows = (await db.scalars(select(JedaProses).where(_hidup(),
+        JedaProses.mulai <= kini, or_(JedaProses.selesai.is_(None), JedaProses.selesai >= sejak)))).all()
+    events = (await db.scalars(select(JedaCatatan).where(
+        JedaCatatan.jeda_id.in_([j.id for j in rows] or [-1]),
+        JedaCatatan.dibatalkan_pada.is_(None)).order_by(JedaCatatan.waktu_kejadian,JedaCatatan.id))).all()
+    per = {}
+    for j in rows:
+        jejak = [e for e in events if e.jeda_id==j.id]
+        sebab = jejak[0].sebab if jejak else j.sebab
+        awal = j.mulai
+        akhir = min(j.selesai or kini, kini)
+        dilihat = set()
+        def tambah(sampai):
+            detik = max(0, (min(sampai,akhir)-max(awal,sejak)).total_seconds())
+            if detik <= 0:
+                return
+            b = per.setdefault(sebab,Berhenti(sebab=sebab,detik=0,kali=0))
+            b.detik += detik
+            if sebab not in dilihat:
+                b.kali += 1
+                dilihat.add(sebab)
+        for e in jejak:
+            if e.aksi!='kondisi' or e.waktu_kejadian>akhir:
+                continue
+            tambah(e.waktu_kejadian)
+            awal,sebab=e.waktu_kejadian,e.sebab
+        tambah(akhir)
+    return sorted(per.values(),key=lambda b:b.detik,reverse=True)

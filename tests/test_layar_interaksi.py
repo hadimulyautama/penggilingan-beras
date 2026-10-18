@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
 AKAR = pathlib.Path(__file__).resolve().parents[1]
 AKSI = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
 PINDAH = (AKAR / "hmu_tampilan/static/pindah.js").read_text()
@@ -28,7 +30,7 @@ def test_menutup_lembar_membersihkan_alamatnya():
     # Diiris sampai penutup fungsinya, bukan sampai "}" PERTAMA: badan
     # fungsinya kini memuat `if (...) { ... }` di dalamnya, dan irisan yang
     # berhenti di kurung dalam melewatkan justru baris yang dicari.
-    badan = AKSI.split("function tutupLembar()")[1].split("\n  }")[0]
+    badan = AKSI.split("function tutupLembar(paksa)")[1].split("\n  }")[0]
     assert "lupakanBuka()" in badan, "jalan keluar yang tak membersihkan alamat"
 
     fn = AKSI.split("function lupakanBuka()")[1].split("\n  }")[0]
@@ -130,87 +132,87 @@ def test_setiap_kartu_membentang_di_tempat():
         + "\n  ".join(telanjang))
 
 
-def test_kartu_yang_membentang_membawa_seluruh_tindakannya():
-    """Yang dibentangkan harus benar-benar bisa dikerjakan dari situ —
-    membentang lalu menyuruh orang mencari tombolnya di tempat lain lebih
-    buruk daripada tidak membentang sama sekali."""
-    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
-    blok = makro.split("{% elif b.pilihan %}")[1].split("{% elif")[0]
-    assert "<details" in blok and "<summary>" in blok
-    assert 'class="pilihan"' in blok
-    # `{{ dasar }}` — bukan lagi `{{ alamat }}?` telanjang sejak perbaikan
-    # 7 Oktober 2026: saringan halaman (`?grup=`/`?kategori=`) wajib ikut
-    # terbawa ke borang (`dasar_borang`), lihat catatan panjangnya di sana.
-    assert "{{ dasar }}buka={{ id }}" in blok
+def _atribut_tag(html, nama):
+    from html.parser import HTMLParser
+
+    class Pembaca(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.hasil = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == nama:
+                self.hasil.append(dict(attrs))
+
+    pembaca = Pembaca()
+    pembaca.feed(str(html))
+    return pembaca.hasil
 
 
-def test_antrean_dikerjakan_tanpa_lembar_melayang():
-    """Pemilik: kartu antrean tak perlu mengeluarkan layar melayang lagi —
-    langsung bentang dengan tombol opsinya.
+def _gambar_benda(baris, **opsi):
+    from types import SimpleNamespace
+    from jinja2 import Environment, FileSystemLoader
 
-    Ini pekerjaan yang paling sering dilakukan, tiap truk yang datang. Tiga
-    ketukan dan satu layar yang menutupi barisnya sendiri, untuk satu
-    keputusan yang cuma punya beberapa jawaban.
-    """
-    makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
-    blok = makro.split("{% if b.tombol %}")[1].split("{% elif")[0]
-    assert "<button" in blok and "data-post=" in blok
-    # Kutip TUNGGAL, wajib: `tojson` tak melolosikan kutip ganda untuk
-    # atribut, jadi di dalam kutip ganda atributnya putus di karakter pertama
-    # isi muatannya — dan halaman tetap tampil, cuma tombolnya tak berfungsi.
-    assert "data-kirim='{{ t.data|tojson }}'" in blok
-    assert "?buka=" not in blok, "tombol tujuan tak boleh menyeberang ke lembar"
-    # Yang tak boleh tetap tampil berikut alasannya.
-    assert "{{ t.mati or t.ket }}" in blok
-    assert "disabled" in blok
-
-    aksi = (AKAR / "hmu_tampilan/static/aksi.js").read_text()
-    assert 'PINDAH.pasang(document, "click"' in aksi, \
-        "didelegasikan lewat PINDAH supaya tak menumpuk tiap perpindahan"
-    kirim = aksi.split('[data-kirim]')[1].split("\n  });")[0]
-    assert "t.disabled = false" in kirim, \
-        "yang ditolak harus bisa dicoba lagi tanpa memuat ulang halaman"
-    assert "PINDAH.segarkan(" in kirim, \
-        "kartu yang selesai harus hilang seketika, bukan menunggu orang pergi"
+    env = Environment(loader=FileSystemLoader(str(AKAR / "hmu_tampilan/templates")),
+                      autoescape=True)
+    env.filters["jam"] = lambda nilai, fmt="": ""
+    env.globals.update(lama=lambda nilai: "", FASE={"baru": "Baru"},
+                       request=SimpleNamespace(url=SimpleNamespace(path="/aksi"),
+                           query_params={"grup": "gabah basah", "nilai": "nilai-lama"}))
+    return str(env.get_template("_benda.html").module.blok("Uji", [baris], **opsi))
 
 
-def test_alasan_tujuan_dimatikan_ikut_aturan_server():
-    """Kalau alasannya disusun ulang di layar, cepat atau lambat layar
-    melarang yang sebenarnya boleh — atau lebih buruk, mempersilakan yang
-    akan ditolak."""
-    import inspect
+@pytest.mark.parametrize("opsi", [{}, {"listview": True}, {"tabel": True},
+                                  {"tabel": "packing"}, {"rapat": True}])
+def test_kartu_yang_membentang_membawa_seluruh_tindakannya(opsi):
+    """Render cabang bersarang; memotong pada elif pertama hanya membaca
+    ringkasan tabel dan melewatkan seluruh tombol yang sebenarnya ada."""
+    from urllib.parse import urlsplit, parse_qs
+    from app.services.berjalan import Baris
 
-    from app.services.berjalan import _tujuan_gabah
-    from app.penggilingan.gudang1.services import drying
-
-    sumber = inspect.getsource(_tujuan_gabah)
-    # Ketiganya persis penolakan `masuk_dryer`.
-    for potongan in ('d.status != "aktif"', "lot is not None",
-                     'isi and isi[0] != kondisi'):
-        assert potongan in sumber, potongan
-    penolakan = inspect.getsource(drying.masuk_dryer)
-    assert "Tidak boleh mencampur gabah basah & kering" in penolakan
-    assert "kosongkan ke silo dulu" in penolakan
-    # Kapasitas sengaja diserahkan ke server — pesannya sudah menyebut sisanya
-    # dengan tepat, dan menebaknya di layar hanya menambah tempat yang salah.
-    kode = "\n".join(b for b in sumber.split('"""')[2:])
-    assert "kapasitas" not in kode.lower()
+    html = _gambar_benda(Baris("GB-UJI-01", "Gabah uji", "Menunggu", nilai="GB-UJI-01",
+        pilihan=[("selesai", "Selesai", "Tutup proses"),
+                 ("jeda", "Jeda", "Hentikan sementara", "pengeringan:GB-UJI-01")]), **opsi)
+    assert _atribut_tag(html, "details") and _atribut_tag(html, "summary")
+    assert any(a.get("class") == "pilihan" for a in _atribut_tag(html, "div"))
+    tautan = _atribut_tag(html, "a")
+    assert len(tautan) == 2
+    for a, aksi, nilai in zip(tautan, ("selesai", "jeda"),
+                             ("GB-UJI-01", "pengeringan:GB-UJI-01")):
+        assert "pilihan__satu" in a["class"].split()
+        u = urlsplit(a["href"])
+        assert u.path == "/aksi"
+        assert parse_qs(u.query) == {"grup": ["gabah basah"], "buka": [aksi], "nilai": [nilai]}
 
 
-def test_penunjuk_buka_tutup_sebaris_dengan_judulnya():
-    """Dulu diapungkan ke kanan, dan apungan mengikuti BARIS TERAKHIR isi
-    kartu — jadi pada kartu tinggi ia melorot ke bawah, jauh dari judul yang
-    sebenarnya ia jelaskan. Penanda yang meleset terbaca sebagai cacat meski
-    tak ada yang bisa menyebut apa yang salah."""
-    css = (AKAR / "hmu_tampilan/static/app.css").read_text()
-    for kelas in ("benda", "padat"):
-        blok = css.split(f"details.{kelas} > summary::after {{")[1].split("}")[0]
-        assert "position: absolute" in blok, kelas
-        assert "float" not in blok, f"{kelas}: apungan mengikuti baris terakhir"
-        assert "width: 7px" in blok, f"{kelas}: ukurannya harus sama di kedua kartu"
-    # Ruang kanannya disisakan supaya bobot yang panjang tak menabraknya.
-    ringkas = css.split("details.benda > summary {")[1].split("}")[0]
-    assert "padding: 13px 32px 13px 14px" in ringkas
+@pytest.mark.parametrize("opsi", [{}, {"listview": True}, {"tabel": True},
+                                  {"tabel": "packing"}, {"rapat": True}])
+def test_antrean_dikerjakan_tanpa_lembar_melayang(opsi):
+    """Tujuan langsung harus tetap lengkap pada semua bentuk kartu. JSON
+    dibaca dari atribut HTML agar kutip yang putus benar-benar terdeteksi."""
+    import json
+    from app.services.berjalan import Baris, Tombol
+
+    muatan = {"kode": "GB-UJI-01", "nama": "Bu Sri & O'Reilly \"uji\" <beras>"}
+    html = _gambar_benda(Baris("GB-UJI-01", "Gabah uji", "Menunggu", tombol=[
+        Tombol("Pengering 1", "Tersedia", "/api/actions/masuk", muatan, utama=True),
+        Tombol("Pengering 2", "", "/api/actions/masuk", {"kode": "GB-UJI-02"},
+               mati="Pengering penuh"),
+    ]), **opsi)
+    assert _atribut_tag(html, "details") and _atribut_tag(html, "summary")
+    tombol = _atribut_tag(html, "button")
+    assert len(tombol) == 2 and not _atribut_tag(html, "a")
+    assert tombol[0]["data-post"] == "/api/actions/masuk"
+    assert json.loads(tombol[0]["data-kirim"]) == muatan
+    assert "disabled" not in tombol[0]
+    assert "disabled" in tombol[1] and tombol[1]["aria-disabled"] == "true"
+    assert json.loads(tombol[1]["data-kirim"]) == {"kode": "GB-UJI-02"}
+    assert "Pengering penuh" in html
+
+    assert 'PINDAH.pasang(document, "click"' in AKSI
+    kirim = AKSI.split('[data-kirim]')[1].split("\n  });")[0]
+    assert "t.disabled = false" in kirim
+    assert "PINDAH.segarkan(" in kirim
 
 
 def test_sorotan_hanya_kalau_memang_ada_rekomendasi():
@@ -234,7 +236,7 @@ def test_yang_sudah_ditunjuk_kartunya_tak_ditanyakan_lagi():
     terbuang — kesempatan kedua itulah tempat ia salah pilih.
     """
     assert "function nilaiBaris()" in AKSI
-    blok = AKSI.split("if (f.name === namaKunci) {")[1].split("\n      }")[0]
+    blok = AKSI.split("if (kunciMedan(f)) {")[1].split("\n      }")[0]
     # Teks biasa, bukan kotak isian — dan TANPA label, karena label adalah
     # pertanyaan dan pertanyaannya sudah dijawab saat kartunya ditekan.
     assert '<p class="terkunci"' in blok
@@ -293,7 +295,7 @@ def test_penampung_sementara_pilihan_punya_value_kosong():
 def test_kunci_dilepas_kalau_barisnya_sudah_basi():
     """Kalau nilai dari barisnya tak ada lagi di daftar server, mengirimnya
     hanya akan ditolak. Kuncinya dilepas supaya orang bisa memilih sendiri."""
-    blok = AKSI.split("if (f.name === namaKunci) {", 2)[2].split("return;\n        }")[0]
+    blok = AKSI.split("if (kunciMedan(f)) {", 2)[2].split("return;\n        }")[0]
     assert "kotak.outerHTML" in blok and "<select" in blok
     assert "sembunyi.remove()" in blok, "kolom tersembunyi ikut dibuang"
 
@@ -718,10 +720,13 @@ def test_daftar_centang_mengirim_daftar_dan_tak_mengunci_kartu():
       menerjemahkan sendiri.
     """
     assert 'f.type === "remote_banyak"' in AKSI
-    i = AKSI.index('f.type === "remote_banyak"')
+    # Kunci kini juga dapat berasal dari baris kemasan (kunciMedan).
+    # Urutan yang berarti adalah cabang RENDER, bukan deklarasi helpernya.
+    render = AKSI.split("var isi = (a.fields || []).map")[1]
+    i = render.index('f.type === "remote_banyak"')
     # Cabangnya berdiri SEBELUM cabang terkunci — itulah yang membuat kartu
     # mencentang, bukan mengunci.
-    assert i < AKSI.index("f.name === namaKunci"), "medan banyak ikut terkunci kartu"
+    assert i < render.index("if (kunciMedan(f))"), "medan banyak ikut terkunci kartu"
     assert 'data-banyak="1"' in AKSI
     assert "String(v || \"\").split(\",\").filter(Boolean)" in AKSI, \
         "nilainya tak dikirim sebagai daftar"
@@ -1009,7 +1014,8 @@ def test_ikon_laci_bukan_emoji_dan_bukan_huruf_biasa():
     assert not salah, "; ".join(salah)
 
 
-def test_templat_bersama_tak_lagi_memilih_ikon_per_layar():
+@pytest.mark.parametrize("ikon_uji", ["◈", "⇥"])
+def test_templat_bersama_tak_lagi_memilih_ikon_per_layar(ikon_uji):
     """Tempatnya `nav.TAB`, bukan `base.html`.
 
     Berkas itu milik BERSAMA beberapa aplikasi, sedangkan "pintu apa saja yang
@@ -1018,60 +1024,98 @@ def test_templat_bersama_tak_lagi_memilih_ikon_per_layar():
     per-pintu yang tercecer di sana — dan menambah layar berarti menyunting
     berkas milik bersama demi satu huruf.
     """
-    base = (AKAR / "hmu_tampilan/templates/base.html").read_text()
-    i = base.index('class="pintu__ikon"')
-    blok = base[i - 400:i + 200]
-    assert "kunci == 'stok'" not in blok and "kunci == 'beranda'" not in blok, (
-        "rantai if/elif ikon masih berdiri di templat bersama")
-    assert "{{ ikon" in blok, "templat tak mencetak ikon dari TAB"
+    from types import SimpleNamespace
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader(str(AKAR / "hmu_tampilan/templates")),
+                      autoescape=True)
+    env.globals.update(VERSI="uji", APP_NAMA="Uji", PWA_NAMA="Uji",
+        MODE_UJI=False, MOCKUP=False, TAB_KUNCI=set(), JUDUL={}, NAMA_VIEW={},
+        SUBMENU={}, PINTU_MATI=(),
+        TAB=(("stok", "/uji", "Pintu uji", "Uji ikon", None, ikon_uji),))
+    html = env.get_template("base.html").render(
+        akun=SimpleNamespace(nama="Operator Uji"), layar="uji", VIEW="uji",
+        LIHAT_SEBAGAI=None, CSRF="uji", TERIK=True)
+    ikon = [s for s in _atribut_tag(html, "span")
+            if "pintu__ikon" in s.get("class", "").split()]
+    assert len(ikon) == 1 and ikon[0]["aria-hidden"] == "true"
+    assert ">" + ikon_uji + "</span>" in html
+    assert 'href="/uji"' in html
 
 
 # ─────── Bekatul curah: obatnya di sebelah keluhannya (30 Sep 2026) ───────
 
+def _kartu_produk_uji(jenis="bekatul", curah=80):
+    from app.services.stok import KartuProduk
+
+    return KartuProduk(jenis=jenis, nama=jenis.title(), hasil_kg=300, hasil=[],
+        belum_final_kg=0, dikemas_kg=300-curah, curah_kg=curah, keluar_kg=0,
+        keluar=[], sisa_kg=300, curah_saja=jenis == "bekatul",
+        ukuran_kemasan_otomatis=50, jumlah_karung_otomatis=6,
+        dikemas_otomatis_kg=300)
+
+
+def _env_stok_uji():
+    from jinja2 import Environment, ChoiceLoader, DictLoader, FileSystemLoader
+
+    env = Environment(loader=ChoiceLoader([
+        DictLoader({"base.html": "{% block isi %}{% endblock %}{% block kaki %}{% endblock %}"}),
+        FileSystemLoader(str(AKAR / "hmu_tampilan/templates")),
+    ]), autoescape=True)
+    env.filters["jam"] = lambda nilai, fmt="": ""
+    return env
+
+
+def _gambar_detail_produk(boleh_catat, jenis="bekatul", curah=80):
+    return _env_stok_uji().get_template("stok_produk_detail.html").render(
+        k=_kartu_produk_uji(jenis, curah), kembali="/stok-produk", pelanggan_id=None,
+        beras=False, pemilik="Pabrik", kemasan={}, BOLEH_CATAT=boleh_catat,
+        BOLEH_PINDAH=False, BOLEH_MASUKKAN_SILO=False, halaman_aksi="/stok-produk",
+        detail_href="/stok-produk/detail?jenis="+jenis, baris_kemasan=[],
+        curah_titipan=None, jasa_ids=(), VERSI="uji", buka="", nilai="", sumber_stok="")
+
+
 def test_bekatul_curah_punya_tombol_di_kartunya():
-    """Laporan operator 30 September 2026: "pilihan bekatul curah belum ada,
-    jika ada katul yg belum dikemas, pada stok produk tertulis belum dicatat."
+    """Daftar kini membuka detail; obat tetap di samping stok yang perlu
+    dicatat, dan dialog serta skrip wajib berada di detail yang sama."""
+    from urllib.parse import urlsplit, parse_qs
 
-    Aksinya SELALU ada — "Catat bekatul (curah)". Yang salah letaknya:
-    aplikasi menagih di Stok Produk dan menyediakan obatnya di Catat pekerjaan
-    lain, dua layar jauhnya. Tulisan "belum dicatat" itu sendiri benar; ia
-    keluhan app tentang pekerjaan yang belum dilakukan.
-
-    TIGA HAL dijaga bersamaan, dan yang ketiga paling mudah terlupa — tanpa
-    `aksi.js` tombolnya cuma memuat ulang halaman, tanpa satu galat pun:
-    tombolnya ada, halamannya jadi tuan rumah dialognya, dan skripnya dimuat.
-    """
-    # Kartunya sendiri (makro `blok`) pindah ke `_stok.html` 6 Oktober 2026 —
-    # dipakai `/stok-produk` MAUPUN `/stok-produk-jasa` sekarang, supaya
-    # keduanya menggambar kartu yang sama persis.
-    makro = (AKAR / "hmu_tampilan/templates/_stok.html").read_text()
-    assert "buka=catat_bekatul" in makro, \
-        "kartu bekatul tak menawarkan pencatatan curahnya"
-    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
-    assert '<dialog class="lembar" id="lembar">' in tpl, \
-        "halamannya bukan tuan rumah lembarnya — tombolnya akan memindah layar"
-    assert 'src="/static/aksi.js' in tpl, \
-        "aksi.js tak dimuat — tombolnya cuma memuat ulang halaman"
+    env = _env_stok_uji()
+    daftar = str(env.get_template("_stok.html").module.blok("Hasil samping",
+        [_kartu_produk_uji()], 300, 80, "curah", "samping", {}, desktop=True))
+    assert any(a["href"] == "/stok-produk/detail?jenis=bekatul"
+               for a in _atribut_tag(daftar, "a"))
+    html = _gambar_detail_produk(True)
+    tautan = [a for a in _atribut_tag(html, "a") if "buka=catat_bekatul" in a.get("href", "")]
+    assert len(tautan) == 1
+    alamat = urlsplit(tautan[0]["href"])
+    assert alamat.path == "/stok-produk/detail"
+    assert parse_qs(alamat.query) == {"jenis": ["bekatul"], "buka": ["catat_bekatul"]}
+    assert any(d.get("id") == "lembar" for d in _atribut_tag(html, "dialog"))
+    assert any(s.get("src", "").startswith("/static/aksi.js?")
+               for s in _atribut_tag(html, "script"))
+    # Rincian otomatis yang sudah ada tidak boleh hilang saat tombol kembali.
+    assert "Dikemas otomatis" in html and "6 karung × 50 kg" in html
 
 
-def test_tombol_bekatul_dioper_ke_makronya():
-    """Makro Jinja TIDAK melihat variabel konteks templat.
+@pytest.mark.parametrize("izin,jenis,curah,tampil", [
+    (True, "bekatul", 80, True), (False, "bekatul", 80, False),
+    (True, "bekatul", 0, False), (True, "broken", 80, False),
+])
+def test_tombol_bekatul_dioper_ke_makronya(izin, jenis, curah, tampil):
+    """Periksa HASIL render, termasuk izin palsu dan stok kosong. Sekadar
+    mencari ejaan parameter tak menangkap makro yang membaca konteks salah."""
+    html = _gambar_detail_produk(izin, jenis, curah)
+    assert ("buka=catat_bekatul" in html) == tampil
+    assert bool(_atribut_tag(html, "dialog")) == izin
+    if not izin:
+        assert not _atribut_tag(html, "script")
 
-    `BOLEH_CATAT` yang dibaca langsung di dalam `blok()` jadi Undefined —
-    falsy, tanpa satu galat pun — dan tombolnya tak pernah tergambar sementara
-    seluruh uji pembaca-sumber tetap hijau. Kelas kesalahan yang hanya
-    terlihat oleh orang yang membuka halamannya dengan mata sendiri.
-    """
-    # Makronya sendiri pindah ke `_stok.html` 6 Oktober 2026 — lihat catatan
-    # di uji sebelum ini.
-    makro = (AKAR / "hmu_tampilan/templates/_stok.html").read_text()
-    assert "boleh_catat=False," in makro and "boleh_pindah=False) -%}" in makro, \
-        "makro `blok` tak menerima izinnya sebagai parameter"
-    assert "and boleh_catat %}" in makro, \
-        "makronya membaca izin dari konteks — di dalam makro itu Undefined"
-    tpl = (AKAR / "hmu_tampilan/templates/stok_produk.html").read_text()
-    # `BOLEH_CATAT` BUKAN lagi argumen terakhir sejak `titipan=titipan`
-    # ditambahkan sesudahnya (pesan kerja 10 bagian 0, butir e) — yang
-    # dijaga tetap sama: izinnya ikut terkirim di KEDUA pemanggilan.
-    assert tpl.count("BOLEH_CATAT, titipan=titipan) }}") == 2, \
-        "izinnya tak dioper ke kedua pemanggilan makro (beras & hasil samping)"
+    # Makro yang dipanggil sendiri juga harus memakai parameter eksplisit,
+    # bukan BOLEH_CATAT dari konteks yang mungkin milik pelanggan lain.
+    env = _env_stok_uji()
+    env.globals["BOLEH_CATAT"] = not izin
+    st = env.get_template("_stok.html").module
+    blok = str(st.blok("Uji", [_kartu_produk_uji(jenis, curah)], 300, curah,
+                       "curah", "samping", {}, boleh_catat=izin))
+    assert ("buka=catat_bekatul" in blok) == tampil

@@ -169,3 +169,10 @@ def test_penempatan_gabah_bisa_dibatalkan():
     assert "sudah masuk lot pengeringan" in fn
     assert "sudah diproses" in fn
     assert "memang belum ditempatkan" in fn
+
+
+@pytest.mark.parametrize("tabel", ["milling_process_verifications", "drying_lots"])
+async def test_tag_koreksi_hasil_tidak_masuk_undo_umum(tabel):
+    log = SimpleNamespace(table_name=tabel, aksi="koreksi_hasil_giling")
+    with pytest.raises(svc.UndoError, match="Catatan hasil"):
+        await svc._undo_one(None, log)

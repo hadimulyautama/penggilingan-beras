@@ -55,8 +55,8 @@ async def pabrik(pg):
     from app.models import Silo, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
@@ -89,6 +89,20 @@ async def _klien(pg, *, role: str, gudang_id: int | None = None) -> httpx.AsyncC
     return c
 
 
+def _jumlah_kartu(html, kode):
+    # Kode dapat muncul pada sel, label, dan atribut pencarian satu kartu.
+    # Hitung wadah yang dapat dicari, bukan kemunculan kata di markup.
+    from html.parser import HTMLParser
+    class Kartu(HTMLParser):
+        jumlah = 0
+        def handle_starttag(self, tag, attrs):
+            if kode.lower() in dict(attrs).get("data-cari", "").split():
+                self.jumlah += 1
+    kartu = Kartu()
+    kartu.feed(html)
+    return kartu.jumlah
+
+
 async def test_tiket_pk_tampil_di_antrian_tunggu_admin(pg, pabrik):
     """Yang GAGAL di 67381eb: halaman ini tak menyebut tiket PK sama sekali."""
     async with pg() as db:
@@ -101,11 +115,11 @@ async def test_tiket_pk_tampil_di_antrian_tunggu_admin(pg, pabrik):
     assert r.status_code == 200, r.text[:300]
     assert "TRX-PK-ADM-01" in r.text, "tiket PK tak sampai ke Antrian tunggu Pos Produksi"
     # Bloknya sendiri, bukan tenggelam di "Bisa dikerjakan sekarang".
-    assert "Tiket timbang belum dicatat" in r.text
+    assert "Tiket Timbang" in r.text
     # Bertindakan untuk admin: aksinya sudah ada dan gerbangnya menerimanya.
     assert "buka=catat_pk_luar" in r.text
     # TIDAK dua kali — itu risiko terbesar pemindahan ini.
-    assert r.text.count("TRX-PK-ADM-01") == 1, "tiket terangkut dua kali"
+    assert _jumlah_kartu(r.text, "TRX-PK-ADM-01") == 1, "tiket terangkut dua kali"
 
 
 async def test_tiket_pk_tampil_diam_untuk_operator_gudang2(pg, pabrik):
@@ -121,7 +135,7 @@ async def test_tiket_pk_tampil_diam_untuk_operator_gudang2(pg, pabrik):
         r = await c.get("/aksi")
     assert r.status_code == 200, r.text[:300]
     assert "TRX-PK-OPS-01" in r.text, "operator G2 tak melihat PK di halamannya"
-    assert r.text.count("TRX-PK-OPS-01") == 1
+    assert _jumlah_kartu(r.text, "TRX-PK-OPS-01") == 1
     # Diam: tak ada tautan yang membuka borangnya.
     assert "buka=catat_pk_luar" not in r.text
     # Dan sebabnya tertulis, di tempat orang mencarinya.
@@ -164,20 +178,20 @@ async def test_tiket_gabah_tetap_hanya_di_jalur_gabah(pg, pabrik):
     c = await _klien(pg, role="superadmin")
     async with c:
         t = (await c.get("/aksi")).text
-    assert t.count("TRX-GB-01") == 1 and t.count("TRX-PK-02") == 1
+    assert _jumlah_kartu(t, "TRX-GB-01") == 1 and _jumlah_kartu(t, "TRX-PK-02") == 1
 
 
 async def test_jenis_tak_dikenal_kartu_diam_untuk_admin(pg, pabrik):
     """Admin ke atas saja: pemetaan jenis bukan wewenang operator, dan kartu
     yang tak bisa ia kerjakan maupun teruskan hanya menambah angka lencananya."""
     async with pg() as db:
-        await _tiket(db, "TRX-TDK-01", "BERAS_MASUK")
+        await _tiket(db, "TRX-TDK-01", "JENIS_UJI_ASING")
         await db.commit()
 
     c = await _klien(pg, role="superadmin")
     async with c:
         t = (await c.get("/aksi")).text
-    assert "TRX-TDK-01" in t and t.count("TRX-TDK-01") == 1
+    assert "TRX-TDK-01" in t and _jumlah_kartu(t, "TRX-TDK-01") == 1
     assert "belum dikenal produksi" in t
 
     op = await _klien(pg, role="operator", gudang_id=pabrik["g2"])

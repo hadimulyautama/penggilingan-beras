@@ -114,6 +114,10 @@ class BarangKeluarError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
 
 
+class MuatanBerubah(BarangKeluarError):
+    """Cuplikan yang dikonfirmasi sudah berbeda dari keadaan terkunci."""
+
+
 @dataclass(frozen=True)
 class BarisPerintah:
     """Satu macam barang di dalam satu perintah.
@@ -174,6 +178,17 @@ def _kg(n) -> str:
 _TAK_DIMINTA = object()
 
 
+async def _kunci_saldo_keluar(db: AsyncSession) -> None:
+    """Serialkan pemeriksaan dan perubahan saldo antar perintah berbeda.
+
+    Kunci baris perintah hanya melindungi satu truk. Kunci transaksi ini
+    mencegah dua perintah baru menjanjikan saldo yang sama; dilepas otomatis
+    pada commit/rollback. SQLite hanya dipakai uji tanpa konkurensi.
+    """
+    if db.get_bind().dialect.name == "postgresql":
+        await db.execute(select(func.pg_advisory_xact_lock(184732901)))
+
+
 async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
                          jenis=None, jasa_id=None, proc_id=None, silo_id=_TAK_DIMINTA,
                          gkr_id=None) -> float:
@@ -206,6 +221,8 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
         q = (q.where(OutgoingItem.rice_quality_standard_id.is_(None))
              if std_id is None
              else q.where(OutgoingItem.rice_quality_standard_id == std_id))
+        q = (q.where(OutgoingItem.jasa_id.is_(None)) if jasa_id is None
+             else q.where(OutgoingItem.jasa_id == jasa_id))
     elif jenis is not None:
         q = q.where(OutgoingItem.jenis_byproduct == jenis)
         q = (q.where(OutgoingItem.jasa_id.is_(None)) if jasa_id is None
@@ -219,7 +236,9 @@ async def _sudah_dipesan(db: AsyncSession, *, sku_id=None, std_id=None,
         # menjumlah perintah finished_goods/byproduct_curah/pk_langsung yang
         # sama sekali tak berhubungan.
         q = q.where(OutgoingItem.item_type == "pk_g2",
-                    OutgoingItem.silo_id == silo_id)
+                    OutgoingItem.silo_id == silo_id,
+                    OutgoingItem.jasa_id.is_(None) if jasa_id is None
+                    else OutgoingItem.jasa_id == jasa_id)
     elif gkr_id is not None:
         q = q.where(OutgoingItem.gabah_kering_lot_id == gkr_id)
     return float((await db.execute(q)).scalar_one())
@@ -273,7 +292,7 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
                                                 jasa_id=b.jasa_id)
         ada, nama = float(stok["kg"]), await _nama_sku(db, b.sku_id, b.std_id)
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
-            db, sku_id=b.sku_id, std_id=b.std_id)
+            db, sku_id=b.sku_id, std_id=b.std_id, jasa_id=b.jasa_id)
     elif b.tipe == "byproduct_curah":
         # ⚠ DULU SELALU `hitung_stok_bekatul(db)`, apa pun `b.jenis`-nya —
         # "tersedia('menir')" menjawab stok BEKATUL berlabel "Menir" (pesan
@@ -323,11 +342,11 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
 
         nama_tempat = await label_tujuan(db, None, b.silo_id)
         pemilik_ids = (await pemilik_silo_g2(db, b.silo_id) if b.silo_id is not None
-                       else await pemilik_tumpukan_g2(db))
+                       else set())
         # ⚠ Dua arah, sama bentuknya dengan `pk_langsung` di atas. Himpunan
         # HAMPA berarti tempatnya kosong — bukan "bertuan" — jadi tak ada yang
         # ditolak di sini; `ada` di bawah akan menjawab 0 kg dengan sendirinya.
-        if pemilik_ids and b.jasa_id not in pemilik_ids:
+        if b.silo_id is not None and pemilik_ids and b.jasa_id not in pemilik_ids:
             milik = await nama_pemilik(db, next(iter(pemilik_ids)))
             raise BarangKeluarError(
                 f"PK Gudang 2 ({nama_tempat}) "
@@ -339,10 +358,10 @@ async def tersedia(db: AsyncSession, b: BarisPerintah,
         pemilik_pagar = "pabrik" if b.jasa_id is None else "jasa"
         ada = float(await (hitung_stok_silo(db, b.silo_id, pemilik=pemilik_pagar)
                            if b.silo_id is not None
-                           else hitung_stok_tumpukan(db, pemilik=pemilik_pagar)))
+                           else hitung_stok_tumpukan(db, jasa_id=b.jasa_id)))
         nama = f"PK Gudang 2 ({nama_tempat})"
         dipesan = 0.0 if abaikan_pesanan else await _sudah_dipesan(
-            db, silo_id=b.silo_id)
+            db, silo_id=b.silo_id, jasa_id=b.jasa_id)
     elif b.tipe == "gabah_langsung":
         from app.models import GabahKeringLot
         from app.penggilingan.gudang1.services.gabah_kering import (
@@ -404,6 +423,8 @@ async def _berat_baris(db: AsyncSession, b: BarisPerintah) -> tuple[float, int |
     if b.tipe == "finished_goods":
         if not b.jumlah_karung:
             raise BarangKeluarError("Sebutkan jumlah karungnya.")
+        if not float(b.jumlah_karung).is_integer():
+            raise BarangKeluarError("Jumlah karung wajib bilangan bulat.")
         from app.penggilingan.inventory.models import PackageSize, ProductSku
 
         ukuran = (await db.execute(
@@ -443,7 +464,7 @@ async def _kabar(db: AsyncSession, rec: OutgoingRecord, *, pesan: str,
 
 async def _jejak(db: AsyncSession, rec: OutgoingRecord, *, langkah: str,
                  oleh, ringkas: str, medan: str | None = None,
-                 lama: str | None = None) -> None:
+                 lama: str | None = None, alasan: str | None = None) -> None:
     """Satu baris audit per langkah — penyegaran, audit, DAN jalan kembali.
 
     Penanda `/api/keadaan` yang menerbitkan pil "ada perubahan baru" adalah
@@ -462,7 +483,7 @@ async def _jejak(db: AsyncSession, rec: OutgoingRecord, *, langkah: str,
     await log_activity(
         db, table_name="outgoing_records", record_id=rec.id, action="UPDATE",
         aksi=f"barang_keluar_{langkah}", changed_by=getattr(oleh, "id", None),
-        field_name=medan, old_value=lama, new_value=ringkas[:200])
+        field_name=medan, old_value=lama, new_value=ringkas[:200], alasan=alasan)
 
 
 # ─────────────────────── LANGKAH 1 · Admin memerintah ───────────────────────
@@ -635,12 +656,13 @@ async def buat_perintah(
     satu nilai selalu. `outgoing_items.jasa_id` (migrasi 0080) membawa
     kepemilikan SEBENARNYA per baris — itulah yang dibaca `sisa_jasa()`.
     """
+    await _kunci_saldo_keluar(db)
     if not baris:
         raise BarangKeluarError(
             "Perintah tanpa satu pun barang tak bisa dikerjakan siapa pun.")
-    if any(b.tipe == "pk_g2" for b in baris):
+    if any(b.tipe == "pk_g2" and b.silo_id is not None for b in baris):
         raise BarangKeluarError(
-            "PK yang sudah masuk Gudang 2 tidak bisa dikirim langsung. "
+            "PK di silo adalah bahan proses, bukan stok yang bisa dikirim langsung. "
             "Gunakan PK itu sebagai bahan penyosohan, lalu kirim hasil "
             "prosesnya dari stok produk.")
     from app.models import Jasa
@@ -692,16 +714,26 @@ async def buat_perintah(
         no_polisi = tiket_armada["nomor_polisi"]
 
     dihitung: list[tuple[BarisPerintah, float, int | None]] = []
+    dicadangkan: dict[tuple, float] = {}
     for b in baris:
         berat, karung = await _berat_baris(db, b)
         if berat <= 0:
             raise BarangKeluarError("Jumlah barang harus lebih dari nol.")
         ada, nama = await tersedia(db, b)
+        # Baris berulang dalam satu formulir memakai saldo yang sama juga.
+        sumber = ((b.sku_id, b.std_id) if b.tipe == "finished_goods" else
+                  (b.jenis,) if b.tipe == "byproduct_curah" else
+                  (b.silo_id,) if b.tipe == "pk_g2" else
+                  (b.gabah_kering_lot_id,) if b.tipe == "gabah_langsung" else
+                  (b.milling_process_id,))
+        kunci = (b.tipe, b.jasa_id, *sumber)
+        ada -= dicadangkan.get(kunci, 0.0)
         if berat > ada + 0.5:
             raise BarangKeluarError(
                 f"{nama} tinggal {_kg(ada)} kg yang bisa keluar — tak bisa "
                 f"memerintahkan {_kg(berat)} kg. (Yang sudah diperintahkan "
                 "keluar tetapi belum dimuat ikut dikurangkan.)")
+        dicadangkan[kunci] = dicadangkan.get(kunci, 0.0) + berat
         dihitung.append((b, berat, karung))
 
     # `rec.jasa_id`: satu nilai kalau SELURUH baris kebetulan satu pesanan
@@ -792,38 +824,10 @@ def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
 async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
                        baris: BarisPerintah,
                        jasa_id: int | None = None) -> HasilPerintah:
-    """Satu macam barang lagi ke transaksi yang BELUM DIVERIFIKASI.
+    """Ubah perintah saja; muatan aktual tetap dicatat operator.
 
-    ⭐ INI YANG MEMBUAT "satu transaksi banyak barang" jadi nyata. Skemanya
-    memang sudah satu-ke-banyak sejak awal; yang tak pernah memakainya adalah
-    layarnya, dan akibatnya satu truk berisi beras + broken + menir melahirkan
-    tiga kode OUT- yang berbeda — tiga baris di kartu Stok Produk, dan tiga
-    pencocokan untuk satu tiket timbang.
-
-    ── SAMPAI SEBELUM DIVERIFIKASI, bukan cuma selagi `perintah` ──
-    Keputusan pemilik 29 September 2026: "selagi belum diverifikasi dan
-    dianggap selesai, kartu barang keluar masih bisa ditambahkan."
-
-    Dan itu keputusan yang benar dari lapangan: truk dimuat bertahap, dan
-    barang yang menyusul setengah jam kemudian bukan transaksi baru — ia truk
-    yang sama, surat jalan yang sama, satu tiket timbang yang sama. Memaksanya
-    jadi OUT- kedua mengembalikan persis keadaan yang seluruh rantai ini
-    dibangun untuk menghentikan.
-
-    Yang membedakan dua keadaan itu APA YANG BERTAMBAH:
-
-      · masih `perintah` — barangnya belum berangkat, jadi yang bertambah
-        PERINTAHNYA saja. Stok belum tersentuh.
-      · sudah `dimuat` — truknya sedang dimuat, jadi yang bertambah PERINTAH
-        DAN MUATANNYA sekaligus, dan stok berkurang sekarang juga. Menambah
-        perintahnya saja akan melahirkan "kurang sekian dari perintah" atas
-        barang yang justru baru saja naik.
-
-    ── DAN KALAU ITEMNYA SUDAH ADA, JUMLAHNYA DIJUMLAH ──
-    "jika item sudah ada berarti jumlah yang keluar ditambahkan, jika belum ada
-    berarti itemnya ditambahkan." Dua baris untuk barang yang sama membuat
-    kartunya menyebut "Beras Medium" dua kali dengan angka berbeda, dan yang
-    membacanya menjumlah sendiri — lalu salah sekali dari sepuluh.
+    Perubahan setelah selesai muat membuka kembali antrean agar tambahan
+    diperiksa operator sebelum Admin boleh memverifikasi truk yang sama.
 
     ⚠⚠ `baris.jasa_id` WAJIB diturunkan dari pemilik transaksi SEBENARNYA di
     SINI — tanpanya `tersedia()` selalu memeriksa `jasa_id=None` (pabrik) apa
@@ -842,13 +846,13 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     `jasa_id=` sendiri (pesanan mana, milik pelanggan transaksi yang sama)
     — DITOLAK kalau tidak, bukan diam-diam dianggap pabrik.
     """
-    if baris.tipe == "pk_g2":
+    if baris.tipe == "pk_g2" and baris.silo_id is not None:
         raise BarangKeluarError(
-            "PK yang sudah masuk Gudang 2 tidak bisa ditambahkan ke barang "
+            "PK di silo adalah bahan proses dan tidak bisa ditambahkan ke barang "
             "keluar. Gunakan PK itu sebagai bahan penyosohan, lalu kirim "
             "hasil prosesnya dari stok produk.")
     rec = await _kunci_hidup(db, rec_id)
-    tambah_muatan = rec.status == OUT_DIMUAT
+    sudah_selesai_muat = rec.status == OUT_DIMUAT
     if rec.jasa_id is not None:
         baris = replace(baris, jasa_id=rec.jasa_id)
     else:
@@ -879,18 +883,14 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
     if berat <= 0:
         raise BarangKeluarError("Jumlah barang harus lebih dari nol.")
 
-    # Batas atasnya berbeda menurut keadaannya, dan bedanya bukan halus:
-    # selagi `perintah`, yang sudah dipesan orang lain ikut dikurangkan sebab
-    # barangnya belum berangkat. Sesudah `dimuat`, yang dikurangkan sudah
-    # tercatat di stok — menghitungnya lagi akan menolak muatan yang ada.
-    ada, nama = await tersedia(db, baris, abaikan_pesanan=tambah_muatan)
+    # Yang ditambah hanya target. Pesanan lain tetap dicadangkan agar
+    # perubahan perintah tidak menjanjikan stok yang sama ke dua truk.
+    ada, nama = await tersedia(db, baris, abaikan_pesanan=False)
     if berat > ada + 0.5:
         raise BarangKeluarError(
             f"{nama} tinggal {_kg(ada)} kg yang bisa keluar — tak bisa "
-            f"menambahkan {_kg(berat)} kg."
-            + ("" if tambah_muatan else
-               " (Yang sudah diperintahkan keluar tetapi belum dimuat ikut "
-               "dikurangkan.)"))
+            f"menambahkan {_kg(berat)} kg. "
+            "Yang sudah diperintahkan keluar tetapi belum dimuat ikut dikurangkan.")
 
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
@@ -901,10 +901,6 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
         lama.berat_perintah_kg = float(lama.berat_perintah_kg or 0) + berat
         if karung is not None:
             lama.jumlah_karung_perintah = (lama.jumlah_karung_perintah or 0) + karung
-        if tambah_muatan:
-            lama.berat_kg = float(lama.berat_kg or 0) + berat
-            if karung is not None:
-                lama.jumlah_karung = (lama.jumlah_karung or 0) + karung
         jadi = float(lama.berat_perintah_kg)
     else:
         db.add(OutgoingItem(
@@ -915,20 +911,18 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
             gabah_kering_lot_id=baris.gabah_kering_lot_id,
             jasa_id=baris.jasa_id,
             berat_perintah_kg=berat, jumlah_karung_perintah=karung,
-            berat_kg=berat if tambah_muatan else 0,
-            jumlah_karung=karung if tambah_muatan else None))
+            berat_kg=0, jumlah_karung=None))
         jadi = berat
 
-    kabar = (f"{rec.kode} + {nama} {_kg(berat)} kg"
+    kabar = (f"{rec.kode} + {nama} {_kg(berat)} kg pada perintah"
              + (f" (jadi {_kg(jadi)} kg)" if lama is not None else "")
-             + (" · ikut dimuat" if tambah_muatan else ""))
-    if tambah_muatan:
-        # Admin sudah menunggu di mejanya untuk memverifikasi; angka yang
-        # berubah sesudah ia melihatnya harus mengabarkan dirinya.
-        await _kabar(db, rec, untuk="admin",
-                     pesan=f"🟡 {rec.kode} bertambah {nama} {_kg(berat)} kg "
-                           "sesudah dimuat — angkanya berubah sebelum "
-                           "diverifikasi.")
+             + " · muatan aktual tetap")
+    if sudah_selesai_muat:
+        rec.status = OUT_PERINTAH
+        rec.dimuat_oleh, rec.waktu_muat = None, None
+    await _kabar(db, rec, untuk="operator",
+                 pesan=f"🟡 Perintah {rec.kode} berubah: {nama} bertambah "
+                       f"{_kg(berat)} kg. Periksa sisa dan catat muatan aktual.")
     await _jejak(db, rec, langkah="tambah", oleh=user, ringkas=kabar)
     await db.commit()
     await db.refresh(rec)
@@ -951,8 +945,10 @@ async def _kunci_hidup(db: AsyncSession, rec_id: int) -> OutgoingRecord:
     """
     from app.penggilingan.inventory.models import OUT_HIDUP
 
+    await _kunci_saldo_keluar(db)
     rec = (await db.execute(
         select(OutgoingRecord).where(OutgoingRecord.id == rec_id).with_for_update()
+        .execution_options(populate_existing=True)
     )).scalars().first()
     if rec is None:
         raise BarangKeluarError("Transaksi itu sudah tidak ada.")
@@ -969,8 +965,10 @@ async def _kunci(db: AsyncSession, rec_id: int, *, keadaan: str) -> OutgoingReco
     yang menyebut siapa yang mendahuluinya. Memeriksa lebih dulu tanpa kunci
     membuat dua-duanya lolos: dua operator, dua HP, satu detik.
     """
+    await _kunci_saldo_keluar(db)
     rec = (await db.execute(
         select(OutgoingRecord).where(OutgoingRecord.id == rec_id).with_for_update()
+        .execution_options(populate_existing=True)
     )).scalars().first()
     if rec is None:
         raise BarangKeluarError("Perintah itu sudah tidak ada.")
@@ -1009,7 +1007,8 @@ async def _kalimat_keadaan(db: AsyncSession, rec: OutgoingRecord,
 
 async def catat_muatan(db: AsyncSession, *, user, item_id: int,
                        jumlah_karung: int | None = None,
-                       berat_kg: float | None = None) -> tuple[OutgoingRecord, str]:
+                       berat_kg: float | None = None, dasar: str | None = None,
+                       rec_id: int | None = None) -> tuple[OutgoingRecord, str]:
     """Operator mencatat SATU baris yang benar-benar naik ke truk.
 
     ⭐ DI SINILAH STOK BERKURANG, dan itu memang saat karungnya naik — bukan
@@ -1029,6 +1028,16 @@ async def catat_muatan(db: AsyncSession, *, user, item_id: int,
     if it is None:
         raise BarangKeluarError("Baris perintah itu sudah tidak ada.")
     rec = await _kunci(db, it.outgoing_record_id, keadaan=OUT_PERINTAH)
+    if rec_id is not None and rec.id != rec_id:
+        raise BarangKeluarError("Barang itu bukan bagian dari perintah yang dipilih.")
+    await _periksa_dasar_muat(db, rec, dasar)
+    # Item dapat dibaca sebelum menunggu kunci perintah. Baca ulang sesudah
+    # kunci diperoleh agar cuplikan undo tidak mengambil angka milik transaksi lama.
+    await db.refresh(it)
+    if jumlah_karung is not None and not float(jumlah_karung).is_integer():
+        raise BarangKeluarError("Total yang sudah dimuat dalam karung wajib bilangan bulat.")
+    if it.item_type == "pk_g2" and it.silo_id is not None:
+        raise BarangKeluarError("PK di silo adalah bahan proses, bukan stok yang bisa diambil.")
     b = baris_dari_item(it, jumlah_karung=jumlah_karung, berat_kg=berat_kg)
     berat, karung = await _berat_baris(db, b)
     perintah = float(it.berat_perintah_kg or 0)
@@ -1067,43 +1076,102 @@ async def catat_muatan(db: AsyncSession, *, user, item_id: int,
                     if kurang > 0.5 else "."))
 
 
+async def ringkasan_muat(db: AsyncSession, rec: OutgoingRecord) -> dict:
+    """Cuplikan yang dilihat operator dan dibandingkan lagi di dalam kunci.
+
+    Hash mencakup target, aktual, pemilik, armada, serta jejak perintah. Bahkan
+    perubahan yang kembali ke angka semula tetap meminta pemeriksaan ulang.
+    """
+    import hashlib
+    import json
+    items = list((await db.execute(select(OutgoingItem).where(
+        OutgoingItem.outgoing_record_id == rec.id).order_by(OutgoingItem.id)
+        .execution_options(populate_existing=True))).scalars().all())
+    from app.models import ActivityLog
+    jejak = (await db.execute(select(func.max(ActivityLog.id)).where(
+        ActivityLog.table_name == "outgoing_records", ActivityLog.record_id == rec.id)
+    )).scalar_one_or_none()
+    dasar = [rec.id, rec.status, rec.no_polisi, rec.nama_pembeli, jejak]
+    baris = []
+    for it in items:
+        _, nama = await tersedia(db, baris_dari_item(it), abaikan_pesanan=True)
+        karung = it.item_type == "finished_goods"
+        target = float(it.jumlah_karung_perintah or 0) if karung else float(it.berat_perintah_kg or 0)
+        aktual = float(it.jumlah_karung or 0) if karung else float(it.berat_kg or 0)
+        baris.append({"id": it.id, "nama": nama, "perintah": target,
+                      "dimuat": aktual, "sisa": max(target - aktual, 0),
+                      "satuan": "karung" if karung else "kg"})
+        dasar.append([it.id, it.item_type, it.jasa_id, str(it.berat_perintah_kg),
+                      it.jumlah_karung_perintah, str(it.berat_kg), it.jumlah_karung])
+    token = hashlib.sha256(json.dumps(dasar, ensure_ascii=False).encode()).hexdigest()
+    teks = f"{rec.kode} · {rec.nama_pembeli or '—'} · {rec.no_polisi or 'tanpa plat'}"
+    for b in baris:
+        teks += (f"\n{b['nama']}: perintah {b['perintah']:g} {b['satuan']} · "
+                 f"sudah dimuat {b['dimuat']:g} · sisa {b['sisa']:g} {b['satuan']}")
+    return {"dasar": token, "teks": teks, "baris": baris}
+
+
+async def _periksa_dasar_muat(db, rec, dasar):
+    if dasar is not None:
+        silo = (await db.execute(select(OutgoingItem.id).where(
+            OutgoingItem.outgoing_record_id == rec.id,
+            OutgoingItem.item_type == "pk_g2", OutgoingItem.silo_id.isnot(None))
+        )).first()
+        if silo:
+            raise BarangKeluarError("PK di silo adalah bahan proses, bukan stok yang bisa diambil.")
+    if dasar is not None and (await ringkasan_muat(db, rec))["dasar"] != dasar:
+        raise MuatanBerubah(
+            "Perintah atau muatan berubah sejak diperiksa. Kembali, periksa "
+            "ringkasan terbaru, lalu konfirmasi ulang. Tidak ada muatan yang diubah.")
+
+
 async def muat_semua(db: AsyncSession, *, user, rec_id: int,
-                     tanggal=None, jam=None) -> HasilPerintah:
+                     tanggal=None, jam=None, dasar: str | None = None) -> HasilPerintah:
     """Seluruh baris dimuat PERSIS seperti diperintahkan — satu ketukan.
 
     Ini keadaan yang paling sering, dan borang yang menuntut operator mengetik
-    ulang angka yang sudah tertulis di kartunya akan diketik asal-asalan. Yang
-    berselisih dicatat per baris lewat `catat_muatan` lebih dulu; sisanya ikut
-    ketukan ini.
+    ulang angka yang sudah tertulis di kartunya akan diketik asal-asalan.
+    Keputusan pemilik 18 Oktober 2026: yang baru dicatat 80 dari perintah 100
+    dilengkapi menjadi 100. Selisih stok hanya 20, bukan memotong 100 lagi.
     """
     rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    await _periksa_dasar_muat(db, rec, dasar)
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
     )).scalars().all())
-    # Baris mana yang diisi KETUKAN INI — dibawa ke jejaknya supaya
-    # pembatalannya menol-kan yang ini saja, dan tak menyentuh baris yang
-    # operator catat sendiri lebih dulu (ketukan lain, jalan kembali lain).
+    # Cuplikan angka sebelumnya memastikan pembatalan mengembalikan tambahan
+    # ketukan ini saja: 80 → 100 dibatalkan menjadi 80, bukan nol.
     diisi: list[int] = []
+    cuplikan: dict[int, tuple[float, int | None]] = {}
     for it in items:
-        if float(it.berat_kg or 0) > 0.5:
-            continue                       # sudah dicatat sendiri, jangan ditimpa
+        sudah = float(it.berat_kg or 0)
         b = baris_dari_item(it, jumlah_karung=it.jumlah_karung_perintah,
                             berat_kg=float(it.berat_perintah_kg or 0))
         berat, karung = await _berat_baris(db, b)
         ada, nama = await tersedia(db, b, abaikan_pesanan=True)
-        if berat > ada + 0.5:
+        tambahan = berat - sudah
+        if tambahan < -0.5:
+            raise BarangKeluarError(
+                f"{nama} sudah dimuat {_kg(sudah)} kg, melebihi perintah "
+                f"{_kg(berat)} kg. Periksa perubahan perintah dengan Admin; "
+                "muatan aktual tidak dikurangi otomatis.")
+        if tambahan > ada + 0.5:
             raise BarangKeluarError(
                 f"{nama} tinggal {_kg(ada)} kg sekarang — tak cukup untuk "
-                f"{_kg(berat)} kg. Catat yang benar-benar dimuat per barang, "
-                "lalu nyatakan selesai.")
-        it.berat_kg, it.jumlah_karung = berat, karung
-        diisi.append(it.id)
+                f"tambahan {_kg(tambahan)} kg. Catat yang benar-benar dimuat "
+                "per barang, lalu nyatakan selesai.")
+        if sudah != berat or it.jumlah_karung != karung:
+            cuplikan[it.id] = (sudah, it.jumlah_karung)
+            diisi.append(it.id)
+            it.berat_kg, it.jumlah_karung = berat, karung
     return await _tutup_muatan(db, user=user, rec=rec, items=items,
-                               tanggal=tanggal, jam=jam, diisi=diisi)
+                               tanggal=tanggal, jam=jam, diisi=diisi,
+                               cuplikan=cuplikan)
 
 
 async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
-                       tanggal=None, jam=None) -> HasilPerintah:
+                       tanggal=None, jam=None, dasar: str | None = None,
+                       sebab: str = "") -> HasilPerintah:
     """Operator menyatakan truknya berangkat. Sisa perintah yang tak dimuat HANGUS.
 
     Bukan menggantung, dan itu keputusan yang disengaja: perintah yang tersisa
@@ -1112,6 +1180,7 @@ async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
     kartu verifikasi Admin — di situlah ia jadi pertanyaan, bukan jadi tugas.
     """
     rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    await _periksa_dasar_muat(db, rec, dasar)
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
     )).scalars().all())
@@ -1120,16 +1189,22 @@ async def selesai_muat(db: AsyncSession, *, user, rec_id: int,
             f"{rec.kode} belum punya satu pun barang yang tercatat dimuat. "
             "Catat muatannya dulu — atau kalau tak jadi berangkat, mintakan "
             "Admin membatalkan perintahnya.")
+    kurang = sum(max(float(i.berat_perintah_kg or 0) - float(i.berat_kg or 0), 0)
+                 for i in items)
+    if kurang > 0.5 and not sebab.strip():
+        raise BarangKeluarError("Muatan kurang dari perintah. Tulis alasan barang tidak terkirim.")
     # `diisi` kosong dengan sengaja: ketukan ini tak mengisi satu angka pun —
     # angkanya sudah dicatat operator per baris lebih dulu. Yang dibatalkan
     # nanti cuma PENUTUPANNYA, dan angka per barisnya tetap berdiri.
     return await _tutup_muatan(db, user=user, rec=rec, items=items,
-                               tanggal=tanggal, jam=jam, diisi=[])
+                               tanggal=tanggal, jam=jam, diisi=[], sebab=sebab)
 
 
 async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
                         items: list[OutgoingItem], tanggal=None,
-                        jam=None, diisi: list[int] | None = None) -> HasilPerintah:
+                        jam=None, diisi: list[int] | None = None,
+                        cuplikan: dict[int, tuple[float, int | None]] | None = None,
+                        sebab: str = "") -> HasilPerintah:
     now = input_time(tanggal, jam)
     rec.status = OUT_DIMUAT
     rec.dimuat_oleh, rec.waktu_muat = user.id, now
@@ -1143,10 +1218,17 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
                           if kurang > 0.5 else "")
                        + ". Tinggal diverifikasi Admin (tempelkan kode timbang "
                          "keluarnya).")
+    # Jejak lama cukup menyebut id untuk baris yang sebelumnya nol. Ketika
+    # melengkapi muatan parsial, pembatalan harus kembali ke 80, bukan nol.
+    import json
+    parsial = cuplikan and any(berat > 0 for berat, _ in cuplikan.values())
     await _jejak(db, rec, langkah="muat", oleh=user,
-                 ringkas=f"{rec.kode} dimuat {_kg(total)} kg",
-                 medan="diisi",
-                 lama=",".join(str(i) for i in (diisi or [])))
+                 ringkas=f"{rec.kode} dimuat {_kg(total)} kg"
+                         + (f" — tidak terkirim: {sebab.strip()}" if sebab.strip() else ""),
+                 medan="muatan_lama" if parsial else "diisi",
+                 lama=(json.dumps(cuplikan) if parsial else
+                       ",".join(str(i) for i in (diisi or []))),
+                 alasan=sebab.strip() or None)
     await db.commit()
     await db.refresh(rec)
     return HasilPerintah(rec=rec, baris=items)
@@ -1387,6 +1469,10 @@ async def batalkan(db: AsyncSession, *, user, rec_id: int,
             "Tulis sebabnya — perintah yang hilang tanpa kabar akan ditanyakan "
             "operator sepanjang hari.")
     rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    dimuat = (await db.execute(select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
+        .where(OutgoingItem.outgoing_record_id == rec.id))).scalar_one()
+    if float(dimuat or 0) > 0.5:
+        raise BarangKeluarError("Sudah ada barang dimuat. Batalkan pencatatan muatan dulu sebelum membatalkan perintah.")
     rec.status = OUT_BATAL
     rec.sebab_batal = sebab[:300]
     await _kabar(db, rec, untuk="operator", prioritas="merah",
@@ -1443,8 +1529,10 @@ async def _kunci_untuk_balik(db: AsyncSession, rec_id: int, *, keadaan: str,
     saya harus apa" — jadi yang disebut adalah LANGKAH yang harus dibatalkan
     lebih dulu. Tanpa itu orang menekan tombol yang sama berkali-kali.
     """
+    await _kunci_saldo_keluar(db)
     rec = (await db.execute(
         select(OutgoingRecord).where(OutgoingRecord.id == rec_id).with_for_update()
+        .execution_options(populate_existing=True)
     )).scalars().first()
     if rec is None:
         raise BarangKeluarError("Transaksi barang keluar itu sudah tidak ada.")
@@ -1524,7 +1612,8 @@ async def balik_muat_baris(db: AsyncSession, *, rec_id: int, item_id: int,
             f"kembali ke {_kg(berat_lama)} kg, stoknya pulih.")
 
 
-async def balik_muat(db: AsyncSession, *, rec_id: int, diisi: list[int]) -> str:
+async def balik_muat(db: AsyncSession, *, rec_id: int, diisi: list[int],
+                     cuplikan: dict | None = None) -> str:
     """Buka kembali transaksi yang barusan dinyatakan DIMUAT.
 
     Dua hal dikembalikan, dan yang kedua paling mudah terlewat:
@@ -1550,13 +1639,14 @@ async def balik_muat(db: AsyncSession, *, rec_id: int, diisi: list[int]) -> str:
         it = await db.get(OutgoingItem, item_id)
         if it is None or it.outgoing_record_id != rec.id:
             continue
-        it.berat_kg, it.jumlah_karung = 0, None
+        berat, karung = (cuplikan or {}).get(str(item_id), (0, None))
+        it.berat_kg, it.jumlah_karung = berat, karung
         n += 1
     await _kabar(db, rec, untuk="admin",
                  pesan=f"🔁 {rec.kode} dibuka lagi — pencatatan muatnya "
                        "dibatalkan, dan kartunya kembali ke antrean operator.")
     return ("✓ Dibatalkan: pencatatan muat " + rec.kode
-            + (f" — {n} baris kembali nol, stoknya pulih."
+            + (f" — {n} baris kembali ke jumlah sebelumnya, stoknya pulih."
                if n else " — kembali ke antrean muat; angka per barisnya "
                          "tetap, sebab bukan ketukan ini yang mengisinya."))
 

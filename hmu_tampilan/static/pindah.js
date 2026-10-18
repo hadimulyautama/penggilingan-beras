@@ -598,6 +598,7 @@
   document.addEventListener("mouseover", dahului);
 
   window.addEventListener("popstate", function () {
+    if (window.PINDAH.tutupLembarRiwayat && window.PINDAH.tutupLembarRiwayat()) return;
     pindah(location.pathname + location.search, false);
   });
 

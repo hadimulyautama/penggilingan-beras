@@ -363,6 +363,7 @@ async def tambah_silo_giling(
     proc = await get_process_by_kode(db, kode_proses or "")
     if proc is None:
         raise MillingError(f"Giling {kode_proses} tidak ditemukan.")
+    await db.refresh(proc, with_for_update=True)
     if proc.status != "proses":
         raise MillingError(f"{proc.kode_proses} sudah {proc.status} — tak bisa menambah silo.")
 
@@ -592,6 +593,7 @@ async def log_progress(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
     if berat_kumulatif is None:
@@ -775,6 +777,7 @@ async def tutup_silo_giling(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise MillingError(f"Proses {proc.kode_proses} sudah selesai.")
 
@@ -917,28 +920,18 @@ class FinishResult:
     jenis: str | None = None  # KS / KL / MIX
 
 
-async def _tutup_jeda_terbuka(db: AsyncSession, proc, saat) -> None:
-    """Tutup jeda proses yang masih menganga saat prosesnya selesai.
-
-    Ditutup, bukan ditolak. Menolak menutup proses yang sedang dijeda memaksa
-    operator melanjutkan dulu baru menyelesaikan — dua ketukan untuk keadaan
-    yang sudah jelas: mesinnya berhenti, dan selesai berarti selesai.
-    """
-    from app.models import JedaProses
-
-    terbuka = (await db.execute(
-        select(JedaProses).where(
-            JedaProses.milling_process_id == proc.id,
-            JedaProses.selesai.is_(None),
-        )
-    )).scalars().all()
-    for j in terbuka:
-        j.selesai = saat
+async def _tutup_jeda_terbuka(db: AsyncSession, proc, saat, user=None) -> None:
+    """Selesai proses menutup jeda, tanpa mengarang kejadian mesin dilanjutkan."""
+    from app.penggilingan.gudang1.services.jeda import tutup_bersama_proses, JedaError
+    try:
+        await tutup_bersama_proses(db, jenis="giling", obj=proc, saat=saat, user=user)
+    except JedaError as e:
+        raise MillingError(str(e)) from e
 
 
 async def finish_milling(
     db: AsyncSession, *, user, kode_proses: str | None, berat_akhir: float | None = None,
-    tanggal=None, jam=None,
+    tanggal=None, jam=None, dasar: str | None = None,
 ) -> FinishResult:
     """Tutup giling. Hasil akhir PK WAJIB — tanpa itu prosesnya tidak ditutup.
 
@@ -962,8 +955,16 @@ async def finish_milling(
     proc = await get_process_by_kode(db, kode_proses)
     if proc is None:
         raise MillingError(f"Proses {kode_proses} tidak ditemukan.")
+    await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise MillingError(f"Proses {kode_proses} sudah selesai.")
+
+    if dasar is not None:
+        from app.services.penyelesaian_proses import ringkasan_selesai
+        kini = await ringkasan_selesai(db, jenis="giling", kode=kode_proses,
+                                     berat_akhir=berat_akhir)
+        if kini["dasar"] != dasar:
+            raise MillingError("Data proses berubah sejak diperiksa. Periksa ulang sebelum menyelesaikan.")
 
     # Diperiksa SEBELUM apa pun diubah. Kalau ditolak, prosesnya harus tetap
     # utuh berstatus "proses" — itulah yang membuat kartunya kembali sendiri.
@@ -1049,7 +1050,9 @@ async def finish_milling(
             MillingProcessSource.berat_akhir_kg.is_(None))
     )).scalars().all()
     ids = [s.silo_storage_id for s in sumber_terbuka if s.silo_storage_id]
-    if not ids and proc.silo_storage_id:
+    if not ids and proc.silo_storage_id and not (await db.scalar(
+        select(MillingProcessSource.id).where(
+            MillingProcessSource.milling_process_id == proc.id).limit(1))):
         ids = [proc.silo_storage_id]      # proses lama, sebelum ada tabel sumber
     silo_ids_tutup: set[int] = set()
     for s in sumber_terbuka:
@@ -1154,7 +1157,7 @@ async def finish_milling(
     # jeda tanpa waktu selesai, dan laporan waktu henti terus bertambah untuk
     # mesin yang sudah berhenti berhari-hari lalu. Angka itu dipakai menilai
     # kinerja shift, jadi yang rusak bukan cuma tampilannya.
-    await _tutup_jeda_terbuka(db, proc, now)
+    await _tutup_jeda_terbuka(db, proc, now, user=user)
 
     bd = await _pk_breakdown(db, proc.id)
     await log_activity(
@@ -1172,8 +1175,7 @@ async def finish_milling(
         ),),
         metadata_tambahan={"jenis_pk": jenis,
                            "berat_gabah_masuk_kg": masuk,
-                           "rendemen_pk_persen": (bd.produced / masuk * 100
-                                                   if masuk else None)},
+                           "rendemen_pk_persen": hitung_rendemen(masuk, bd.produced)},
     )
     await db.commit()
     return FinishResult(

@@ -64,3 +64,38 @@ def test_setiap_tabel_ber_jasa_id_terdaftar_di_gabung_jasa():
         f"TABEL_BER_JASA_ID menyebut kelas yang tak punya ForeignKey(\"jasa.id\") "
         f"sungguhan: {karangan}"
     )
+
+
+async def test_gabung_memindahkan_jejak_retur_dan_hasil_samping(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.models import CustomerReturnItem, HasilSampingKeSilo
+    from app.services import jasa, activity_log
+    from app.models.jasa import BERJALAN, DIGABUNG
+
+    dari = SimpleNamespace(id=20, kode="JAS-UJI-20", pelanggan_id=7, status=BERJALAN)
+    ke = SimpleNamespace(id=10, kode="JAS-UJI-10", pelanggan_id=7, status=BERJALAN)
+    jejak = {CustomerReturnItem: CustomerReturnItem(jasa_id=20),
+             HasilSampingKeSilo: HasilSampingKeSilo(jasa_id=20)}
+    dibaca = []
+
+    class Sesi:
+        async def get(self, model, id):
+            return {20: dari, 10: ke}[id]
+
+        async def execute(self, stmt):
+            model = stmt.column_descriptions[0]["entity"]
+            dibaca.append(model)
+            rows = [jejak[model]] if model in jejak else []
+            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+
+    kunci = AsyncMock()
+    audit = AsyncMock()
+    monkeypatch.setattr(jasa, "kunci_jasa", kunci)
+    monkeypatch.setattr(activity_log, "log_activity", audit)
+    await jasa.gabung_jasa(Sesi(), user=SimpleNamespace(id=1), dari_id=20, ke_id=10)
+    assert set(jejak) <= set(dibaca)
+    assert all(row.jasa_id == 10 for row in jejak.values())
+    assert [call.args[1] for call in kunci.await_args_list] == [10, 20]
+    assert dari.status == DIGABUNG and dari.digabung_ke_id == 10
+    audit.assert_awaited_once()

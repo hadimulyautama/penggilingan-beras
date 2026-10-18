@@ -328,9 +328,11 @@ def test_kartu_gudang2_mutu_langsung_terlihat_tanpa_laci():
     harus tergambar di kepala kartu — di dalam `{% if mutu_aktif %}`, sama
     seperti kartu lot Gudang 1 — bukan dilipat di laci."""
     teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
-    assert "for label, nilai in t.mutu" in teks
+    detail = (AKAR / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
+    assert "mutu_mobile(t.mutu, t.kelas)" in teks
+    assert "for label, nilai in t.mutu" in detail
     assert "boleh_pindah_tumpukan" in teks, "tombol Masukkan ke silo tak ada"
-    assert "pindah_tumpukan_silo" in teks
+    assert "pindah_tumpukan_silo" in detail
 
 
 def test_tempat_hanya_tumpukan_dan_disaring_kosong():

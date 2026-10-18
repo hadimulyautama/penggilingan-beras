@@ -42,6 +42,10 @@ GUDANG_TABEL: dict[str, str] = {
 }
 
 
+# Jeda ada di kedua gudang; pencatat wajib menyebut gudang prosesnya.
+GUDANG_DINAMIS = frozenset({"jeda_catatan"})
+
+
 async def log_activity(
     db: AsyncSession,
     *,
@@ -72,6 +76,8 @@ async def log_activity(
     pemanggil, dan satu SELECT tambahan di sini adalah perubahan perilaku
     pada semuanya.
     """
+    if table_name in GUDANG_DINAMIS and gudang not in (G1, G2):
+        raise ValueError("Gudang proses wajib disebut untuk catatan jeda.")
     db.add(
         ActivityLog(
             table_name=table_name,

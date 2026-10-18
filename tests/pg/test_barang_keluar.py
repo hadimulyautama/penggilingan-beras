@@ -38,7 +38,7 @@ async def gudang(pg):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo = Silo(nama_silo="Silo A", warehouse_id=g2.id)
@@ -178,12 +178,10 @@ async def test_tambah_baris_pesanan_jasa_tak_lagi_lolos_memakai_stok_pabrik(pg, 
     JASA-nya sendiri dulu LOLOS (memakai stok pabrik yang 400 karung), padahal
     seharusnya ditolak — barang itu bukan milik pesanan ini.
     """
-    from datetime import date
-
     from app.database import now_local
     from app.models import Jasa, Pelanggan, User
-    from app.penggilingan.gudang2.models import PkPurchaseBatch
-    from app.penggilingan.gudang2.service import masukkan_pk_luar
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingOutputLog
+    from app.penggilingan.inventory.finished_goods import catat_bekatul
     from app.services import barang_keluar as bk
 
     async with pg() as db:
@@ -193,22 +191,28 @@ async def test_tambah_baris_pesanan_jasa_tak_lagi_lolos_memakai_stok_pabrik(pg, 
         jasa_a = Jasa(kode="JAS-2610-020", pelanggan_id=bu_sri.id, status="berjalan")
         db.add(jasa_a)
         await db.flush()
-        db.add(PkPurchaseBatch(
-            kode_batch="PKB-TB-01", jasa_id=jasa_a.id, berat_total_kg=3_000,
-            tanggal_pembelian=date.today(), waktu_pembelian=now_local(),
-            input_by=gudang["op"], status_batch="diterima", flag_unverified=True,
-            sumber_berat="manual"))
+        proc = PolishingProcess(
+            kode_proses="POL-TB-01", jasa_id=jasa_a.id, status="selesai",
+            waktu_mulai=now_local(), waktu_selesai=now_local(),
+            created_by=gudang["op"])
+        db.add(proc)
+        await db.flush()
+        db.add(PolishingOutputLog(
+            polishing_process_id=proc.id, jenis="bekatul", berat_kg=3_000,
+            waktu_update=now_local(), input_by=gudang["op"]))
         await db.commit()
         jasa_id = jasa_a.id
-    async with pg() as db:
-        u = await db.get(User, gudang["op"])
-        await masukkan_pk_luar(db, user=u, kode="PKB-TB-01", tujuan="ditumpuk")
+        await catat_bekatul(db, user=await db.get(User, gudang["op"]),
+                            kode_pol=proc.kode_proses, berat_kg=3_000)
 
-    # Perintah PENGAMBILAN jasa_a — berisi PK-nya sendiri, bukan SKU pabrik.
+    # Pengambilan memakai hasil sosoh milik jasa sendiri. PK Gudang 2 kini
+    # dilarang dikirim langsung; pagar kepemilikan tetap harus diuji melalui
+    # barang yang memang boleh dipesan, bukan gagal sebelum mencapai pagar.
     async with pg() as db:
         r = await bk.buat_perintah(
             db, user=await db.get(User, gudang["adm"]), jasa_id=jasa_id,
-            baris=[bk.BarisPerintah(tipe="pk_g2", silo_id=None, berat_kg=500)])
+            baris=[bk.BarisPerintah(tipe="byproduct_curah", jenis="bekatul",
+                                    berat_kg=500)])
         rec_id = r.rec.id
 
     # SKU pabrik (400 karung tersedia) ditambahkan ke perintah jasa_a ini —
@@ -317,7 +321,7 @@ async def test_muat_kurang_diterima_dan_sisanya_hangus(pg, gudang):
         await bk.catat_muatan(db, user=await db.get(User, gudang["op"]),
                               item_id=baris.id, jumlah_karung=80)
         await bk.selesai_muat(db, user=await db.get(User, gudang["op"]),
-                              rec_id=r.rec.id)
+                              rec_id=r.rec.id, sebab="Truk penuh; sisa tidak terkirim")
     assert await _stok(pg, gudang) == 8_000                # 400−80 karung
     async with pg() as db:
         rec, items = (await bk.daftar(db))[0]
@@ -945,6 +949,15 @@ async def test_halaman_barang_keluar_menyusun_menurut_TRUK(pg, gudang):
     # dimuat siapa, dan diverifikasi siapa harus jelas"). `lama` lewat
     # ketiga langkah: `_perintah`/`verifikasi` oleh "Admin Uji", `muat_semua`
     # oleh "Op Polesan" — dan NAMANYA, bukan cuma labelnya, wajib tergambar.
+    # Riwayat diringkas menjadi tabel; jejak lengkap ada di halaman detail
+    # yang dituju tautannya. Tetap uji nama ketiga pelaku melalui HTTP.
+    assert f'href="/barang-keluar/{lama.rec.id}"' in h
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://uji") as c:
+        c.cookies.set(security.NAMA_COOKIE, token)
+        detail = await c.get(f"/barang-keluar/{lama.rec.id}")
+    assert detail.status_code == 200
+    h = detail.text
     assert "Diperintah" in h and "Dimuat" in h and "Diverifikasi" in h
     assert h.count("Admin Uji") >= 2, \
         "nama pemerintah & pemverifikasi tak tergambar di jejaknya"
@@ -1061,7 +1074,7 @@ async def test_verifikasi_pengiriman_cukup_di_barang_keluar(pg, gudang):
         await bk.catat_muatan(db, user=await db.get(User, gudang["op"]),
                               item_id=baris.id, jumlah_karung=80)
         await bk.selesai_muat(db, user=await db.get(User, gudang["op"]),
-                              rec_id=r.rec.id)
+                              rec_id=r.rec.id, sebab="Truk penuh; sisa tidak terkirim")
     async with pg() as db:
         b = await untuk_staff(db)
     assert r.rec.kode not in {x.kode for x in b.meja}
@@ -1368,19 +1381,8 @@ async def test_pk_dari_lot_berbeda_tak_pernah_digabung(pg, gudang):
     assert len(h.baris) == 2, "PK dua lot digabung — ketelusurannya hilang"
 
 
-async def test_menambah_sesudah_dimuat_ikut_mengurangi_stok(pg, gudang):
-    """Keputusan pemilik: "selagi belum diverifikasi dan dianggap selesai,
-    kartu barang keluar masih bisa ditambahkan."
-
-    Truk dimuat bertahap, dan barang yang menyusul setengah jam kemudian bukan
-    transaksi baru — ia truk yang sama, surat jalan yang sama, satu tiket
-    timbang yang sama.
-
-    ⚠ YANG BERTAMBAH DI SINI PERINTAH **DAN** MUATANNYA. Menambah perintahnya
-    saja akan melahirkan "kurang sekian dari perintah" atas barang yang justru
-    baru saja naik ke truk — dan Admin akan menelusuri selisih yang tak pernah
-    ada.
-    """
+async def test_menambah_sesudah_dimuat_mengubah_perintah_saja(pg, gudang):
+    """Tambahan perintah membuka tugas operator, aktual dan stok tetap."""
     from app.models import User
     from app.services import barang_keluar as bk
 
@@ -1397,8 +1399,9 @@ async def test_menambah_sesudah_dimuat_ikut_mengurangi_stok(pg, gudang):
                                    std_id=gudang["std"], jumlah_karung=20))
     it = h.baris[0]
     assert float(it.berat_perintah_kg) == 1_500, float(it.berat_perintah_kg)
-    assert float(it.berat_kg) == 1_500, float(it.berat_kg)
-    assert await _stok(pg, gudang) == 8_500, "tambahan sesudah dimuat tak memotong stok"
+    assert float(it.berat_kg) == 1_000, float(it.berat_kg)
+    assert await _stok(pg, gudang) == 9_000, "perintah mengubah muatan aktual"
+    assert h.rec.status == "perintah"
     # Dan tak melahirkan selisih palsu di kartu verifikasi Admin.
     from app.services.berjalan import untuk_staff
     async with pg() as db:
@@ -1667,7 +1670,7 @@ async def test_pembatalan_muat_tak_menyentuh_baris_yang_dicatat_operator_sendiri
         await bk.catat_muatan(db, user=await db.get(User, gudang["op"]),
                               item_id=it.id, jumlah_karung=80)
         await bk.selesai_muat(db, user=await db.get(User, gudang["op"]),
-                              rec_id=r.rec.id)
+                              rec_id=r.rec.id, sebab="Truk penuh; sisa tidak terkirim")
     assert await _stok(pg, gudang) == 8_000        # 80 × 25 kg keluar
 
     pesan = await _undo(pg, gudang["op"])
@@ -2091,7 +2094,7 @@ async def test_barang_keluar_curah_membuka_karung_otomatis(pg, gudang):
     """
     from app.database import now_local
     from app.models import User
-    from app.penggilingan.gudang2.models import PolishingProcess
+    from app.penggilingan.gudang2.models import PolishingProcess, PolishingOutputLog
     from app.penggilingan.inventory.finished_goods import (
         FinishedGoodsStock, find_or_create_sku, hitung_stok_byproduct_total,
     )
@@ -2103,6 +2106,11 @@ async def test_barang_keluar_curah_membuka_karung_otomatis(pg, gudang):
     await _bekatul_curah(pg, gudang, 8)
     async with pg() as db:
         proc = (await db.execute(select(PolishingProcess))).scalars().first()
+        # 8 kg sudah tercatat curah; 40 kg berikutnya keluar dari mesin lalu
+        # dikemas. Packing memindahkan rumah stok, bukan menciptakan hasil.
+        db.add(PolishingOutputLog(
+            polishing_process_id=proc.id, jenis="bekatul", berat_kg=40,
+            waktu_update=now_local(), input_by=gudang["op"]))
         sku = await find_or_create_sku(
             db, kategori="bekatul", material_kode="bekas", ukuran=40)
         db.add(FinishedGoodsStock(

@@ -43,7 +43,8 @@ def test_agen_tak_punya_kemampuan_tulis():
 
 def test_satu_satunya_pintu_agen_adalah_internal_read_only():
     """Kantor AI memanggil agen produksi lewat /internal. Tak ada pintu lain,
-    dan pintu itu memang tak punya endpoint tulis."""
+    dan kanal agen tetap hanya membaca. Verifikasi tiket Timbangan memiliki
+    endpoint tersendiri; ia tidak memberi agen hak tulis."""
     pemanggil = []
     for berkas in (AKAR / "app").rglob("*.py"):
         if berkas.name == "agent.py":
@@ -55,7 +56,13 @@ def test_satu_satunya_pintu_agen_adalah_internal_read_only():
     teks = (AKAR / "app/web/internal.py").read_text()
     assert "@router.post" in teks
     # Hanya tanya & hitung — tak ada yang menyentuh data.
-    assert "tak ada endpoint tulis" in teks
+    from app.web import internal
+    agen = inspect.getsource(internal.produksi_tanya)
+    assert "_pastikan_token(x_internal_token)" in agen
+    assert "run_agent(" in agen and "allow_write" not in agen
+    assert "commit(" not in agen and "execute(" not in agen
+    post = {r.path for r in internal.router.routes if "POST" in r.methods}
+    assert post == {"/internal/produksi/tanya", "/internal/pengiriman/tiket/{tid}/verifikasi"}
 
 
 def test_aksi_hanya_lewat_sesi_pos_produksi():

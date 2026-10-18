@@ -35,7 +35,7 @@ async def sosoh(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo_pk = (await db.execute(select(Silo).where(
@@ -263,7 +263,7 @@ async def test_picker_broken_proses_tersedia_curah_per_proses_bukan_global(pg, p
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo_pk = Silo(nama_silo="Silo A", warehouse_id=g2.id, jenis_isi="pk")
@@ -448,7 +448,7 @@ async def test_skenario_20_ton_pk_tambah_77kg_broken_ke_sosoh(pg, pemakai, pemas
         wh = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if wh is None:
-            wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            wh = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(wh)
             await db.flush()
         u = await db.get(User, pemakai.id)
@@ -619,7 +619,7 @@ async def test_picker_menampilkan_hasil_mesin_belum_tercatat(pg, pemakai):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo_pk = Silo(nama_silo="Silo A", warehouse_id=g2.id, jenis_isi="pk")

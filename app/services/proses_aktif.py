@@ -201,13 +201,8 @@ async def rincian(db, *, jenis, model, kartu, params):
             lambda r, nama: [_waktu(r.waktu_update), r.jenis.replace("_", " ").title(), r.spek or "Belum diisi", svc._kg(r.berat_kg), nama],
             params, "halaman_hasil", "Berat setiap entri dijumlahkan untuk memperoleh total hasil. Semua angka masih sementara sampai proses ditutup."))
         d["qc_kosong"] = "Pencatatan QC beras hasil sosoh belum tersedia. Catatan hasil di atas adalah hasil produksi, bukan pengukuran QC."
-    fk = {"pengeringan": JedaProses.drying_lot_id, "giling": JedaProses.milling_process_id,
-          "penyosohan": JedaProses.polishing_process_id}[jeda_jenis]
-    d["bagian"].append(await _log(
-        db, JedaProses, fk, model.id, JedaProses.mulai, JedaProses.dicatat_oleh,
-        "Riwayat jeda proses", ["Mulai", "Selesai", "Durasi", "Penyebab", "Pencatat"],
-        lambda r, nama: [_waktu(r.mulai), _waktu(r.selesai) if r.selesai else "Masih dijeda",
-                        svc.lama_kata(max(0, ((r.selesai or now_local()) - r.mulai).total_seconds())), r.sebab, nama], params, "halaman_jeda"))
+    from app.services.riwayat_jeda import riwayat_jeda
+    d["jeda_riwayat"] = await riwayat_jeda(db, jenis=jeda_jenis, id_=model.id, params=params)
     return d
 
 

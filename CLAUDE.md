@@ -94,6 +94,16 @@ Mengelola orang, akun, dan alat: **Super Admin saja**, dengan jaring pengaman
 tak pernah terkunci dari dalam. Setelan KERJA (target kadar air, sebab
 berhenti, sakelar mutu) tetap milik Direksi.
 
+## PK sebagai stok dan bahan proses (keputusan pemilik 18 Oktober 2026)
+
+PK yang masih di tumpukan adalah stok: boleh dijual bila milik pabrik,
+atau diambil pemiliknya bila jasa, baik di Gudang 1 maupun Gudang 2.
+Setelah masuk silo, statusnya bahan proses, bukan stok yang tersedia untuk
+pengeluaran langsung. Jangan melarang seluruh PK Gudang 2 berdasarkan
+lokasi gudangnya; batasi berdasarkan tumpukan versus silo dan kepemilikan.
+Perintah, muatan aktual, serta sisa harus tetap dibedakan. Perubahan perintah
+bukan bukti barang sudah dimuat.
+
 ## Peristiwa — tulang punggung baru (Tahap 3, sejak 13 September 2026)
 
 `peristiwa` = apa yang terjadi, TAMBAH-SAJA (trigger Postgres menolak UPDATE

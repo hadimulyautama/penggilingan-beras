@@ -29,7 +29,7 @@ async def g2(pg, pemasok):
     from hmu_identitas import peran as P
 
     async with pg() as db:
-        w = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        w = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(w)
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=w.id), Silo(nama_silo="Silo B", warehouse_id=w.id)])

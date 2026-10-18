@@ -132,8 +132,8 @@ async def pabrik(pg):
     from app.models import Dryer, Silo, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([
@@ -954,7 +954,7 @@ async def test_silo_g2_yang_sudah_dikosongkan_menerima_pemilik_lain(pg, pemakai,
         from app.penggilingan.gudang2.models import PolishingProcess
         silo = await get_g2_silo(db, "A")
         pr = PolishingProcess(kode_proses="POL-UJI-900", waktu_mulai=_sekarang(),
-                              waktu_selesai=_sekarang(), status="selesai",
+                              waktu_selesai=_sekarang(), status="selesai", jasa_id=jid,
                               created_by=pemakai.id)
         db.add(pr)
         await db.flush()
@@ -1720,7 +1720,7 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
     for peran, gudang in (("admin", None), ("operator", "Gudang 2")):
         c = await klien(peran, gudang)
         try:
-            r = await c.get("/stok")
+            r = await c.get("/stok-pk-jasa?gudang=semua")
         finally:
             await c.aclose()
         assert r.status_code == 200, (peran, r.status_code)
@@ -1728,6 +1728,27 @@ async def test_layar_stok_menggambar_pemiliknya_bukan_cuma_menghitungnya(
         # Nama pemiliknya, DUA kali: kartu lot Gudang 1 dan kartu Tumpukan Gudang 2.
         assert teks.count("Pak Budi") >= 2, \
             f"{peran}: pemilik tak tergambar di kedua kartu ({teks.count('Pak Budi')}×)"
+        from html.parser import HTMLParser
+        from html import unescape
+        class Tautan(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.href = []
+            def handle_starttag(self, tag, attrs):
+                href = dict(attrs).get("href", "")
+                if tag == "a" and href.startswith("/stok/pk/detail?"):
+                    self.href.append(unescape(href))
+        tautan = Tautan()
+        tautan.feed(teks)
+        assert len(set(tautan.href)) == 2, peran
+        c = await klien(peran, gudang)
+        try:
+            detail = [await c.get(href) for href in set(tautan.href)]
+        finally:
+            await c.aclose()
+        assert all(r.status_code == 200 for r in detail)
+        teks = "\n".join(r.text for r in detail)
+        assert teks.count("Pak Budi") >= 2, peran
         assert "JAS-" in teks, f"{peran}: kode pesanannya tak tergambar"
         # Dan sebutannya menerangkan AKIBATNYA, bukan cuma namanya: "Pak Budi"
         # di pojok kartu tak memberi tahu siapa pun bahwa barangnya tak boleh

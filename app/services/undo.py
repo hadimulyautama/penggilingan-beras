@@ -51,7 +51,7 @@ _UNDOABLE = {
     # nilai terakhir menang. Entri yang bertambah tidak: satu ketukan ganda
     # menambah dua kali tanpa terlihat, dan angka salah tak bisa dibetulkan
     # dengan mengetik ulang. Ia harus bisa dicabut.
-    "polishing_output_logs",
+    "polishing_output_logs", "jeda_catatan",
     # Penutupan silo penyosohan bisa dibatalkan SEJAK 28 September 2026, atas
     # laporan operator: satu ketukan tak sengaja pada "selesai penyosohan"
     # sampai hari itu tak punya jalan kembali sama sekali. Yang dibatalkan
@@ -123,6 +123,7 @@ _TABLE_LABEL = {
     # berhentinya melainkan MELANJUTKAN prosesnya, dan itu punya aksinya
     # sendiri. Berhenti yang dihapus membuat jam berjalan ikut berbohong.
     "jeda_proses": "proses berhenti sementara",
+    "jeda_catatan": "kejadian jeda proses",
     # Setelan tidak dibatalkan lewat undo: yang benar adalah mengubahnya
     # kembali di layar Pengaturan, dan itu meninggalkan jejaknya sendiri.
     "setelan_pabrik": "setelan pabrik",
@@ -138,6 +139,7 @@ _TABLE_LABEL = {
     "outgoing_records": "barang keluar",
     "byproduct_prices": "harga hasil samping",
     "purchase_batch_verifications": "verifikasi harga gabah",
+    "purchase_batch_qc": "penutupan QC gabah",
     "finished_goods_stock": "stok barang jadi",
     "byproduct_stock": "stok hasil samping",
     # Pembebasan silo per-silo (`tutup_silo_giling`, 5 Oktober 2026) belum
@@ -308,6 +310,14 @@ async def _undo_finish_drying(db: AsyncSession, lot_id: int) -> str:
     if lot.status != "selesai":
         raise UndoError(f"Lot {lot.kode_lot} tidak dalam status selesai.")
     await _guard_lot_belum_lanjut(db, lot_id, lot.kode_lot)
+    from app.models import JedaProses
+    jeda = await db.scalar(select(JedaProses).where(
+        JedaProses.drying_lot_id == lot.id,
+        JedaProses.selesai == lot.waktu_selesai_pengeringan,
+        JedaProses.dibatalkan_pada.is_(None))) if lot.waktu_selesai_pengeringan else None
+    if jeda:
+        from app.penggilingan.gudang1.services.jeda import batalkan_akhir_proses
+        await batalkan_akhir_proses(db, jeda)
     lot.status = "proses"
     lot.waktu_selesai_pengeringan = None
     return f"✓ Dibatalkan: penandaan selesai {lot.kode_lot} (kembali 'proses')."
@@ -607,6 +617,14 @@ async def _undo_finish_milling(db: AsyncSession, proc_id: int) -> str:
     ).first()
     if trf:
         raise UndoError(f"{proc.kode_proses} sudah ada transfer PK — tidak bisa dibatalkan.")
+    from app.models import JedaProses
+    jeda = await db.scalar(select(JedaProses).where(
+        JedaProses.milling_process_id == proc.id,
+        JedaProses.selesai == proc.waktu_selesai,
+        JedaProses.dibatalkan_pada.is_(None))) if proc.waktu_selesai else None
+    if jeda:
+        from app.penggilingan.gudang1.services.jeda import batalkan_akhir_proses
+        await batalkan_akhir_proses(db, jeda)
     proc.status = "proses"
     proc.waktu_selesai = None
 
@@ -766,6 +784,31 @@ async def _undo_output_sosoh(db: AsyncSession, log_id: int) -> str:
             + (f" di {proc.kode_proses}" if proc else "") + ".")
 
 
+async def _undo_akhiri_penyosohan(db: AsyncSession, proc_id: int) -> str:
+    """Buka kembali mesin, tanpa mengubah sisa atau pemakaian silo."""
+    from app.models import PolishingProcess, JedaProses
+    from hmu_core.proses_db import ProsesTerpadu
+    proc = await db.get(PolishingProcess, proc_id, with_for_update=True)
+    if proc is None or proc.status != "selesai":
+        raise UndoError("Penyosohan sudah berjalan atau tidak ditemukan.")
+    selesai = proc.waktu_selesai
+    proc.status = "proses"
+    proc.waktu_selesai = None
+    jeda = await db.scalar(select(JedaProses).where(
+        JedaProses.polishing_process_id == proc.id,
+        JedaProses.selesai == selesai)) if selesai else None
+    if jeda:
+        from app.penggilingan.gudang1.services.jeda import batalkan_akhir_proses
+        await batalkan_akhir_proses(db, jeda)
+    bersama = await db.scalar(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "produksi", ProsesTerpadu.tabel_sumber == "polishing_process",
+        ProsesTerpadu.id_sumber == str(proc.id)).with_for_update())
+    if bersama:
+        bersama.status = "berjalan"
+        bersama.waktu_selesai = None
+    return f"Dibatalkan: penyelesaian {proc.kode_proses}. Penyosohan kembali berjalan; silo tetap dibebaskan."
+
+
 async def _undo_tutup_silo_sosoh(db: AsyncSession, usage_id: int) -> str:
     """Buka kembali satu silo penyosohan yang barusan ditandai selesai — dan,
     bila penutupan itu yang menutup prosesnya, buka prosesnya juga.
@@ -876,7 +919,8 @@ async def _undo_tutup_silo_sosoh(db: AsyncSession, usage_id: int) -> str:
                     JedaProses.selesai == selesai_pada)
             )).scalars().first()
             if jeda is not None:
-                jeda.selesai = None
+                from app.penggilingan.gudang1.services.jeda import batalkan_akhir_proses
+                await batalkan_akhir_proses(db, jeda)
     from app.penggilingan.gudang2.service import segarkan_status_silo
 
     await segarkan_status_silo(db, u.silo_id)
@@ -1202,8 +1246,10 @@ async def _undo_beras_masuk_silo(db: AsyncSession, log: ActivityLog, *, actor_id
 
 
 async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str:
-    if (log.table_name == "milling_process_verifications"
-            and log.aksi == "koreksi_hasil_giling"):
+    tag = getattr(log, "aksi", None)
+    # Tag eksplisit juga menentukan penolakan. Jangan menebak nama tabel
+    # lebih dulu: koreksi ini memiliki alur pembatalan khusus di riwayat.
+    if tag == "koreksi_hasil_giling":
         raise UndoError(
             "Koreksi hasil giling tidak dibatalkan lewat undo umum. "
             "Gunakan Catatan hasil di detail riwayat penggilingan."
@@ -1219,7 +1265,13 @@ async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str
     # Tebakan lamanya DIPERTAHANKAN untuk baris yang dibuat sebelum tag ada —
     # mereka memang tak punya tag, dan menolak membatalkannya berarti
     # mematikan tombol untuk pekerjaan hari ini.
-    tag = getattr(log, "aksi", None)
+    if tag in ("jeda_hentikan", "jeda_lanjutkan", "jeda_kondisi"):
+        from app.penggilingan.gudang1.services.jeda import batalkan_kejadian, JedaError
+        try:
+            return await batalkan_kejadian(db, event_id=log.record_id,
+                                           user=await db.get(User, actor_id or log.changed_by))
+        except JedaError as e:
+            raise UndoError(str(e)) from e
     if tag == "ubah_target":
         return await _undo_ubah_target(db, log)
     if tag == "betulkan_bobot":
@@ -1228,6 +1280,8 @@ async def _undo_one(db: AsyncSession, log: ActivityLog, *, actor_id=None) -> str
         return await _undo_masuk_silo_baris(db, log.record_id)
     if tag == "silo_gabung":
         return await _undo_silo_merge_baris(db, log.record_id)
+    if tag == "akhiri_penyosohan":
+        return await _undo_akhiri_penyosohan(db, log.record_id)
     if tag == "tutup_silo_sosoh":
         return await _undo_tutup_silo_sosoh(db, log.record_id)
     if tag and tag.startswith("barang_keluar_"):
@@ -1357,6 +1411,12 @@ async def _undo_barang_keluar(db: AsyncSession, log: ActivityLog) -> str:
                     "Pencatatan muat itu tercatat sebelum jalan kembalinya "
                     "ada, jadi baris mana yang terisi tidak tersimpan — "
                     "koreksinya lewat Admin.")
+            if log.field_name == "muatan_lama":
+                import json
+                cuplikan = json.loads(log.old_value)
+                return await bk.balik_muat(db, rec_id=rid,
+                                          diisi=[int(i) for i in cuplikan],
+                                          cuplikan=cuplikan)
             ids = [int(x) for x in log.old_value.split(",") if x.strip().isdigit()]
             return await bk.balik_muat(db, rec_id=rid, diisi=ids)
         if langkah == "verifikasi":
@@ -1535,7 +1595,7 @@ async def pratinjau_terakhir(
         ringkas=ringkas.split("|")[0].strip()[:60],
         oleh=nama or "?",
         waktu=log.waktu_perubahan,
-        didukung=log.table_name in _UNDOABLE,
+        didukung=log.table_name in _UNDOABLE or log.aksi == "akhiri_penyosohan",
     )
 
 
@@ -1621,7 +1681,7 @@ async def undo_last(
             f"{BATAS_UNDO.total_seconds() / 3600:.0f} jam. "
             "Perbaiki dengan catatan baru, bukan dengan membatalkan yang lama."
         )
-    if log.table_name not in _UNDOABLE:
+    if log.table_name not in _UNDOABLE and log.aksi != "akhiri_penyosohan":
         raise UndoError(
             f"Tindakan terakhir ({label_tabel(log.table_name)}) "
             "belum bisa dibatalkan otomatis — koreksi lewat admin."

@@ -24,6 +24,17 @@ TPL_MAKRO = AKAR / "hmu_tampilan/templates/_stok.html"
 TPL_KARUNG = AKAR / "hmu_tampilan/templates/stok_karung.html"
 
 
+def _sumber_stok():
+    def baca(nama, terlihat):
+        if nama in terlihat:
+            return ""
+        terlihat.add(nama)
+        teks = (TPL.parent / nama).read_text()
+        anak = re.findall(r'{% include "([^"]+)"', teks)
+        return teks + "\n" + "\n".join(baca(n, terlihat) for n in anak)
+    return baca(TPL.name, set())
+
+
 def test_stok_tak_pernah_menerima_angka_stok_langsung():
     """Yang boleh dikoreksi HASIL GILINGNYA, bukan angka stoknya.
 
@@ -40,7 +51,7 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     sumber = inspect.getsource(layar_stok)
     assert "@router.post" not in sumber, "Stok tidak boleh menerima kiriman"
 
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     for larangan in ("<form", "data-post", "<input"):
         assert larangan not in teks, f"{larangan} muncul di layar Stok"
     # Jalan tulisnya hanya MEMBUKA aksi yang sudah ada — dan hanya tiga:
@@ -67,9 +78,9 @@ def test_stok_tak_pernah_menerima_angka_stok_langsung():
     # yang mengirim", "jika sudah disetujui". Blok ini hanya tergambar untuk
     # view POLESAN, jadi tombolnya akan berdiri di layar orang yang pintunya
     # menolak dia — dan itu dicabut, bukan disembunyikan dengan syarat baru.
-    dibuka = set(re.findall(r"\?buka=([a-z_0-9]+)", teks))
+    dibuka = set(re.findall(r"[?&](?:amp;)?buka=([a-z_0-9]+)", teks))
     assert dibuka == {"verify_output", "qc_giling", "minta_pk_g1",
-                      "pindah_tumpukan_silo"}, dibuka
+                      "pindah_tumpukan_silo", "qc_pk_luar"}, dibuka
     assert "kirim_permintaan_pk" not in teks, \
         "layar Stok menawarkan pengiriman kepada gudang yang tak mengirim"
 
@@ -83,7 +94,7 @@ def test_koreksi_stok_hanya_untuk_admin_keatas():
     sumber = inspect.getsource(layar_stok)
     assert "boleh_ubah=akun.is_admin" in sumber, "gerbang peran tak dipakai"
 
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     # Tombol KOREKSI-nya tetap di balik gerbang yang sama; yang berubah 26
     # September 2026 cuma lembar & skripnya, yang kini dimuat untuk siapa pun
     # yang punya tombol di halaman ini. Sebabnya cacat: sampai hari itu
@@ -95,10 +106,10 @@ def test_koreksi_stok_hanya_untuk_admin_keatas():
     # pernah termuat untuk yang tak punya tombol sama sekali (operator
     # selepan: `boleh_ubah` dan `boleh_minta` dua-duanya salah).
     assert teks.count("boleh_ubah") >= 3
-    assert "{% if boleh_ubah or boleh_minta %}" in teks
-    assert "{% if boleh_ubah and not l.berjalan %}" in teks
+    assert "{% if boleh_ubah or boleh_minta or boleh_pindah_tumpukan %}" in teks
+    assert "{% if g1 and boleh_ubah and not t.berjalan %}" in teks
     # Tak ditawarkan selama mesin masih giling: angkanya belum final di sana.
-    assert "boleh_ubah and not l.berjalan" in teks
+    assert "boleh_ubah and not t.berjalan" in teks
 
 
 def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():
@@ -121,9 +132,9 @@ def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():
     assert "sumber_batch" in bahan
     assert "waktu_selesai" in kode_saja(stok.pk_gudang1), "tanggal giling tak diambil"
 
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     assert "l.tanggal" in teks
-    assert "l.bahan" in teks and "anak__kg" in teks, "rincian bobot tak dirender"
+    assert "t.bahan" in teks and "pk-detail__batch" in teks, "rincian bobot tak dirender"
     # Nama pemasok muncul SEKALI, di rinciannya. Ringkasan di baris atas
     # dibuang begitu rinciannya ada: dua kali nama yang sama membuat orang
     # mengira keduanya menyebut hal berbeda.
@@ -140,7 +151,7 @@ def test_harga_tak_ikut_terbawa_ke_layar_stok():
     # Versi banyak-sekaligus tak pernah menyentuh tabel harga sama sekali.
     assert "harga" not in kode_saja(stok._bahan_banyak).lower()
     for uang in ("harga_per_kg", "hpp", "rupiah"):
-        assert uang not in TPL.read_text().lower(), f"{uang} bocor ke layar Stok"
+        assert uang not in _sumber_stok().lower(), f"{uang} bocor ke layar Stok"
 
 
 def test_angka_stok_dipinjam_bukan_dihitung_ulang():
@@ -189,8 +200,8 @@ def test_bahan_didaftar_satu_baris_per_batch():
     assert "DryingLotBatch" in fn, "bahan lewat pengeringan tak ditelusuri"
     assert "DryingLotBatch" in banyak
 
-    teks = TPL.read_text()
-    assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
+    teks = _sumber_stok()
+    assert "Batch gabah <span>{{ t.bahan|length }}" in teks, "jumlah batch tak disebut"
     assert "2 batch" not in teks, "baris gabungan kembali"
 
 
@@ -212,7 +223,7 @@ def test_layar_memakai_kelas_pk_bukan_kondisi_gabah():
     # Komentar templat dibuang dulu: ia MENJELASKAN mengapa kata-kata itu
     # tak dipakai, dan tes yang menghukum penjelasan yang baik akan membuat
     # orang menghapus penjelasannya, bukan memperbaiki layarnya.
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     assert "l.kelas" in teks
     tampil = re.sub(r"\{#.*?#\}", "", teks, flags=re.S).lower()
     for kata in ("basah", "kering", "campuran"):
@@ -233,8 +244,8 @@ def test_rendemen_memakai_penyebut_yang_sama_dengan_seluruh_aplikasi():
     # Tak ada lagi yang mengalikan 100 sendiri di luar helper itu.
     assert sumber.count("* 100") == 1, "rendemen masih dihitung sendiri di suatu tempat"
 
-    teks = TPL.read_text()
-    assert "l.rendemen" in teks and "sorot" in teks, "rendemen tak disorot"
+    teks = _sumber_stok()
+    assert "t.rendemen" in teks and "<dt>Rendemen</dt>" in teks, "rendemen tak disorot"
 
 
 def test_lot_yang_mesinnya_masih_menyala_ditandai():
@@ -243,7 +254,7 @@ def test_lot_yang_mesinnya_masih_menyala_ditandai():
     from app.services import stok
 
     assert 'proc.status == "proses"' in inspect.getsource(stok.pk_gudang1)
-    assert "nota--hati" in TPL.read_text()
+    assert "Mesin masih giling. Hasil dan rendemen belum final." in _sumber_stok()
 
 
 def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
@@ -261,18 +272,15 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
     pemasukan sudah tahu asalnya sendiri — tak ada lagi yang perlu dilipat
     di sana. Jadi yang berlipat tinggal SATU, lot Gudang 1.
     """
-    teks = TPL.read_text()
-    assert teks.count("details") >= 1 and "summary" in teks
-
-    # Yang dilipat: rincian batch. Yang tidak: peringatan mesin berjalan.
-    ring = teks.split('</{{ "summary"')[0]
-    assert "nota--hati" in ring, "peringatan ikut terlipat"
-    assert "anak__baris" not in ring, "rincian batch tidak terlipat"
-
-    # Buka dan tutup harus berpasangan — keduanya ditulis dengan ekspresi yang
-    # sama, jadi yang dijaga adalah jumlahnya.
-    assert teks.count('<{{ "details"') == teks.count('</{{ "details"') == 1
-    assert teks.count('<{{ "summary"') == teks.count('</{{ "summary"') == 1
+    # Daftar sekarang menuju detail; bahan tidak lagi disembunyikan di
+    # details bersarang. Batas halaman, bukan lipatan, menjaga daftar padat.
+    induk = TPL.read_text()
+    detail = (TPL.parent / "_stok_pk_detail.html").read_text()
+    assert "/stok/pk/detail?gudang=g1" in induk
+    batch = detail.split('class="pk-detail__panel pk-detail__batches"')[1].split("</section>")[0]
+    assert "t.bahan|length" in batch and "for nama, berat, kapan in t.bahan" in batch
+    assert "<details" not in batch and "<summary" not in batch
+    assert "Mesin masih giling. Hasil dan rendemen belum final." in detail
 
 
 def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():
@@ -305,8 +313,8 @@ def test_lama_dihitung_dalam_hari_sejak_giling_ditutup():
     # Umurnya menempel pada kode lot di baris judul, bukan berdiri sebagai
     # pasangan label–nilai sendiri: ia keterangan tentang bendanya, dan tiga
     # keping dalam satu baris masih terbaca sekilas.
-    teks = TPL.read_text()
-    assert "padat__umur" in teks and "l.lama" in teks
+    teks = _sumber_stok()
+    assert "t.lama" in teks and "t.tanggal" in teks
     assert "<dt>Lama</dt>" not in teks, "umur diulang dua kali di kartu"
 
 
@@ -345,7 +353,7 @@ def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
     """
     css = (AKAR / "hmu_tampilan/static/app.css").read_text()
     assert "anak--kecil" not in css, "rincian batch dikecilkan lagi"
-    assert "anak--kecil" not in TPL.read_text()
+    assert "anak--kecil" not in _sumber_stok()
     # Kepalanya tetap LEBIH KECIL daripada isinya — ia label, dan label yang
     # sebesar isinya membuat keduanya berebut mata.
     #
@@ -375,9 +383,9 @@ def test_rincian_batch_tak_dikecilkan_dari_ukuran_bawaan():
 def test_rincian_menyebut_jumlah_batch_dan_bobot_masing_masing():
     """Susunan yang diminta pemilik: berapa batch asalnya, dan tiap batch
     berapa bobotnya — bukan satu angka gabungan."""
-    teks = TPL.read_text()
-    assert "Batch asal · {{ l.bahan|length }}" in teks, "jumlah batch tak disebut"
-    assert "anak__kg" in teks and "for nama, berat, kapan in l.bahan" in teks
+    teks = _sumber_stok()
+    assert "Batch gabah <span>{{ t.bahan|length }}" in teks, "jumlah batch tak disebut"
+    assert "pk-detail__batch" in teks and "for nama, berat, kapan in t.bahan" in teks
 
 
 def test_selesai_giling_mengosongkan_SELURUH_sumber_silonya():
@@ -445,10 +453,10 @@ def test_giling_tanpa_hasil_tercatat_tidak_disembunyikan():
     # 0,0% dengan patuh, dan itu terbaca sebagai giling yang gagal total.
     assert "None if belum" in fn
 
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     assert "l.belum_dicatat" in teks
-    assert "padat__nilai--kosong" in teks, "angka tak diketahui digambar sebagai nol"
-    assert "belum dicatat, belum terhitung" in teks, "total tak mengaku ada yang tak terhitung"
+    assert "Belum ditimbang final" in teks and "<strong>—</strong>" in teks
+    assert "hasil belum dicatat" in teks and "Berat tersedia belum masuk hitungan stok" in teks
 
 
 def test_selesai_giling_menolak_tanpa_hasil_dan_tak_menyentuh_prosesnya():
@@ -555,7 +563,7 @@ def test_mutu_kartu_stok_memakai_rata_rata_yang_sama():
     # Mutu ada di KARTU UTAMA, bukan di dalam laci: ia yang menentukan PK ini
     # masuk kelas apa dan laku berapa, dan yang harus dibuka dulu untuk terbaca
     # akan dianggap tak ada.
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     ring = teks.split('</{{ "summary"')[0]
     assert "l.mutu" in ring, "mutu terlipat ke dalam laci"
     assert "belum dinilai" in ring, "layar diam soal mutu terbaca seolah mutunya baik"
@@ -585,11 +593,11 @@ def test_hasil_dan_mutu_punya_tombolnya_masing_masing():
     """Berat hasil dan kadar air datang dari dua penimbangan yang berbeda,
     sering pada waktu yang berbeda pula. Satu borang berisi keduanya memaksa
     orang mengisi yang belum ia punya."""
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     assert "buka=verify_output" in teks and "buka=qc_giling" in teks
     # Namanya ikut keadaan: mencatat pertama kali bukan mengoreksi.
-    assert '"Edit kualitas" if l.mutu else "Catat kualitas"' in teks
-    assert '"Catat hasil giling" if l.belum_dicatat else "Perbaiki hasil giling"' in teks
+    assert '"Catat QC berikutnya" if t.mutu else "Catat QC"' in teks
+    assert '"Catat hasil giling" if t.belum_dicatat else "Perbaiki hasil giling"' in teks
 
 
 def test_fitur_mutu_bisa_dimatikan_seluruhnya():
@@ -613,7 +621,8 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert 'a["id"] not in (*AKSI_MUTU, "qc_gabah_tutup")' in mini, "katalog tak disaring"
     # Disembunyikan SAJA tidak cukup: alamatnya bisa diketik, dan lembar yang
     # masih terbuka di layar orang lain masih bisa mengirim.
-    assert mini.count("await _wajib_mutu()") == 8, "ada rute mutu tanpa penjaga"
+    # Pratinjau penutupan QC juga membaca mutu, sehingga memakai pagar yang sama.
+    assert mini.count("await _wajib_mutu()") == 9, "ada rute mutu tanpa penjaga"
 
     jalan = (AKAR / "app/services/berjalan.py").read_text()
     assert "if mutu_aktif else 1" in jalan, "kartu QC giling tak ikut padam"
@@ -627,7 +636,7 @@ def test_fitur_mutu_bisa_dimatikan_seluruhnya():
     assert "if (boleh_qc and qc_aktif) else []" in jalan, \
         "tombol QC di kartu giling tak ikut padam / tak bergerbang peran"
 
-    teks = TPL.read_text()
+    teks = _sumber_stok()
     assert "{% if mutu_aktif %}" in teks, "baris mutu di kartu Stok tak ikut padam"
 
 
@@ -719,4 +728,4 @@ def test_stok_karung_satu_pemformat_bukan_dua():
     for berkas in (TPL, TPL_MAKRO):
         assert "macro ribuan(" not in berkas.read_text(), berkas.name
     # Dan layarnya meminjamnya, bukan menulis ulang.
-    assert "{% set kg = st.kg %}" in TPL.read_text()
+    assert "{% set kg = st.kg %}" in _sumber_stok()

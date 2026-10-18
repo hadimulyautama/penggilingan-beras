@@ -63,7 +63,7 @@ def test_tumpukan_gudang2_tanpa_batas_secara_bawaan():
 def test_jeda_penyosohan_ditutup_saat_prosesnya_selesai():
     """P-K-17 berlaku juga di penyosohan: jam tertahan tak boleh terus
     berjalan pada proses yang sudah tidak ada."""
-    assert "jeda_terbuka(db, 'penyosohan', proc.id)" in kode_saja(polishing.selesai_penyosohan)
+    assert "tutup_bersama_proses(" in kode_saja(polishing.akhiri_penyosohan)
 
 
 async def _menu_g2(monkeypatch):
@@ -115,13 +115,17 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     selesai, packing, bekatul, undo. BUKAN masukkan PK — itu entry Admin."""
     menu = await _menu_g2(monkeypatch)
     ids = [a["id"] for a in menu]
-    assert ids[:9] == ["pindah_tumpukan_silo", "masukkan_broken_silo",
-                       "masukkan_beras_silo",
+    assert ids[:11] == ["pindah_tumpukan_silo", "masukkan_broken_silo",
+                       "masukkan_menir_silo", "masukkan_reject_silo", "masukkan_beras_silo",
                        "mulai_penyosohan", "hasil_penyosohan",
                        "tambah_silo_penyosohan",
                        "hentikan_penyosohan", "lanjutkan_penyosohan", "selesai_penyosohan"]
     hasil_sosoh = next(a for a in menu if a["id"] == "hasil_penyosohan")
     assert "spek" not in {field["name"] for field in hasil_sosoh["fields"]}
+    berat = next(f for f in hasil_sosoh["fields"] if f["name"] == "berat_kumulatif")
+    assert berat["label"] == "Total hasil sampai sekarang (kg)"
+    assert berat["wajib"]
+    assert "berat_kg" not in {f["name"] for f in hasil_sosoh["fields"]}
     assert "masukkan_pk" not in ids and "undo" in ids
     # Keenam yang lama TETAP di menu — lembar kartunya dibangun dari
     # spesifikasi yang sama — tetapi sejak 28 September 2026 ditandai `kartu`,
@@ -151,8 +155,9 @@ async def test_katalog_operator_gudang2_dan_entry_admin(monkeypatch):
     beras_silo = next(a for a in menu if a["id"] == "masukkan_beras_silo")
     assert not beras_silo.get("kartu") and beras_silo["wh"] == "g2"
     sebab = next(a for a in menu if a["id"] == "hentikan_penyosohan")["fields"][1]
-    assert ["Mesin sosoh rusak", "Mesin sosoh rusak"] in sebab["options"]
-    assert [jeda.SEBAB_LAIN, "Lainnya — tulis sendiri"] in sebab["options"]
+    # Pilihan mengikuti proses terpilih dan setelan terbaru dari server.
+    assert sebab["source"] == "/api/actions/sebab-jeda"
+    assert sebab["induk"] == "proses"
 
 
 async def test_silo_selesai_dibaca_dari_prosesnya_bukan_daftar_mati(monkeypatch):
@@ -257,7 +262,7 @@ def test_layar_operator_gudang2_antrean_adalah_stok_pk():
     assert "kelompok='tumpukan'" in tumpuk and "'pindah_tumpukan_silo'" in tumpuk
     sosoh = kode_saja(berjalan._kartu_penyosohan_g2)
     assert "'Penyosohan dijeda'" in sosoh and "'lanjutkan_penyosohan'" in sosoh
-    assert "'Ditambah'" in sosoh
+    assert "'Ditambah saat proses'" in sosoh
     # `untuk()` mengarahkan operator G2 (yang bukan meja) ke layar ini.
     untuk = kode_saja(berjalan.untuk)
     assert "untuk_operator_gudang2(db)" in untuk

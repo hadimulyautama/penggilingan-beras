@@ -348,20 +348,20 @@ class Pengisi:
             await self.langkah(key+':dryer',drying.masuk_dryer,kode_batch_list=[b['kode_batch']],dryer_id=m['dryer'][letter])
             r=await self.langkah(key+':mulai',drying.start_drying,dryer_id=m['dryer'][letter],target_kadar_air=14,mode_dryer='15T')
             await self.langkah(key+':air',drying.log_moisture,kode_lot=r['lot']['kode_lot'],indikator=21,tes_manual=21.2)
-            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='pengeringan',kode=r['lot']['kode_lot'],sebab='(UJI) Perawatan burner')
+            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='pengeringan',kode=r['lot']['kode_lot'],sebab='Lainnya',sebab_lain='(UJI) Perawatan burner')
         for letter,pause in [('B',False),('C',True)]:
             key='giling-berjalan-'+letter
             b=await self.gabah(key)
             await self.langkah(key+':silo',silo.masuk_silo,nama_silo='UJI-'+letter,kode_lot=None,kode_batch=b['kode_batch'])
             r=await self.langkah(key+':mulai',milling.start_milling,nama_silo='UJI-'+letter)
             await self.langkah(key+':hasil',milling.log_progress,kode_proses=r['proc']['kode_proses'],berat_kumulatif=2800)
-            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='giling',kode=r['proc']['kode_proses'],sebab='(UJI) Pemeriksaan mesin')
+            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='giling',kode=r['proc']['kode_proses'],sebab='Lainnya',sebab_lain='(UJI) Pemeriksaan mesin')
         for letter,pause in [('B',False),('C',True)]:
             key='sosoh-berjalan-'+letter
             await self.pk_luar(key,tujuan='UJI-'+letter)
             r=await self.langkah(key+':mulai',polishing.mulai_penyosohan,nama_silos=['UJI-'+letter])
             await self.langkah(key+':hasil',polishing.catat_output,kode=r['proc']['kode_proses'],jenis='medium',berat_kg=3000,spek='(UJI) Medium')
-            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='penyosohan',kode=r['proc']['kode_proses'],sebab='(UJI) Penggantian ayakan')
+            if pause: await self.langkah(key+':jeda',jeda.hentikan,jenis='penyosohan',kode=r['proc']['kode_proses'],sebab='Lainnya',sebab_lain='(UJI) Penggantian ayakan')
         await self.pk_luar('pk-tumpukan',tujuan='ditumpuk')
         await self.pk_luar('pk-belum-bobot',tahap='terbuka')
         for jenis in ['kl','semi_ks','campuran']:

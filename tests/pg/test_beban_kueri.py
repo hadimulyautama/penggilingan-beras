@@ -62,7 +62,7 @@ async def _semai(pg) -> list[int]:
     async with pg() as db:
         orang = User(nama="Operator Uji", role="operator", status="aktif")
         pemasok = Supplier(nama_supplier="H. Uji")
-        gudang = Warehouse(nama_gudang="Gudang 1 Uji")
+        gudang = Warehouse(nama_gudang="Gudang 1 Uji", kode_fungsi="g1")
         db.add_all([orang, pemasok, gudang])
         await db.flush()
         silo = Silo(nama_silo="Silo Uji", warehouse_id=gudang.id,

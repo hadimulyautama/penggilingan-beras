@@ -30,7 +30,7 @@ async def _orang(pg, *, nama, role, username, gudang: str | None = None, sandi="
         if gudang:
             wid = (await db.execute(select(Warehouse.id).where(Warehouse.nama_gudang.like(gudang + "%")))).scalars().first()
             if wid is None:
-                w = Warehouse(nama_gudang=gudang + " — uji")
+                w = Warehouse(nama_gudang=gudang + " — uji", kode_fungsi={"Gudang 1": "g1", "Gudang 2": "g2"}[gudang])
                 db.add(w)
                 await db.flush()
                 wid = w.id

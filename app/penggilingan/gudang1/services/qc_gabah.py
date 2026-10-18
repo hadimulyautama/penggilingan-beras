@@ -101,8 +101,28 @@ async def catat_qc_gabah(
     return qc, rata, jumlah + 1
 
 
+async def ringkasan_tutup_qc(db: AsyncSession, *, kode_batch: str) -> dict:
+    batch = await db.scalar(select(PurchaseBatch).where(
+        PurchaseBatch.kode_batch == kode_batch,
+        PurchaseBatch.dibatalkan_pada.is_(None)))
+    qc = (await db.scalar(select(PurchaseBatchQc).where(
+        PurchaseBatchQc.purchase_batch_id == batch.id))) if batch else None
+    if qc is None or qc.ditutup_pada is not None:
+        raise QcGabahError("Proses QC tidak ditemukan atau sudah ditutup.")
+    jumlah = int(await db.scalar(select(func.count(PurchaseBatchQcSample.id)).where(
+        PurchaseBatchQcSample.purchase_batch_qc_id == qc.id)) or 0)
+    if not 1 <= jumlah < 5:
+        raise QcGabahError("QC hanya dapat ditutup lebih awal setelah 1–4 pemeriksaan.")
+    return {"dasar": f"{qc.id}:{jumlah}", "jumlah": jumlah,
+            "teks": f"{batch.kode_batch} · {batch.no_polisi_truk or 'tanpa plat'}\n"
+                    f"Sudah {jumlah} dari 5 pemeriksaan ({jumlah * 2} pembacaan kadar air).\n"
+                    "QC ditutup lebih awal. Rata-rata memakai pemeriksaan yang sudah ada; "
+                    "pemeriksaan berikutnya tidak dapat ditambahkan."}
+
+
 async def tutup_qc_gabah(
     db: AsyncSession, *, user: User, kode_batch: str,
+    alasan: str = "", dasar: str | None = None,
 ) -> tuple[PurchaseBatchQc, int]:
     """Tutup QC sebelum 5 catatan hanya setelah setidaknya satu tersimpan."""
     batch = (await db.execute(select(PurchaseBatch).where(
@@ -125,6 +145,15 @@ async def tutup_qc_gabah(
         raise QcGabahError("Catat QC minimal satu kali sebelum menutup proses.")
     if jumlah >= 5:
         raise QcGabahError("QC sudah lengkap (5 dari 5 pencatatan).")
+    if not alasan.strip():
+        raise QcGabahError("Tulis alasan menutup QC sebelum lima pemeriksaan.")
+    if dasar is not None and dasar != f"{qc.id}:{jumlah}":
+        raise QcGabahError("Jumlah pemeriksaan berubah sejak diperiksa. Periksa ringkasan QC terbaru dan konfirmasi ulang.")
+    from app.services.activity_log import log_activity
+    await log_activity(db, table_name="purchase_batch_qc", record_id=qc.id,
+        action="UPDATE", aksi="tutup_qc_gabah", field_name="ditutup_pada",
+        changed_by=user.id, new_value=f"Ditutup lebih awal: {jumlah}/5 pemeriksaan",
+        alasan=alasan.strip())
     from app.database import now_local
     qc.ditutup_pada = now_local()
     qc.ditutup_by = user.id

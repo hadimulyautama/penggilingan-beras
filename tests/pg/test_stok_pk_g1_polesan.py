@@ -46,10 +46,10 @@ async def pabrik(pg):
         g2 = (await db.execute(_select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g1 is None:
-            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
             db.add(g1)
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
         await db.flush()
         silo_g1 = Silo(nama_silo="Silo Selepan Rahasia", warehouse_id=g1.id)
@@ -114,9 +114,21 @@ async def _klien(pg, *, gudang_id: int | None = None, role: str = "operator") ->
 async def test_operator_polesan_melihat_pk_gudang1(pg, pabrik):
     c = await _klien(pg, gudang_id=pabrik["g2"])
     async with c:
-        t = (await c.get("/stok")).text
+        r = await c.get("/stok")
+        assert r.status_code == 200
+        t = r.text
+        assert "PK · Gudang 1" in t, "blok bahan tak digambar"
+        assert "LOT-BAHAN-01" in t
+        # Daftar ringkas menuju detail; asal gabah harus tetap dapat dibaca
+        # melalui tautan lot yang ditawarkan kepada operator.
+        import re
+        from html import unescape
+        href = next(unescape(h) for h in re.findall(r'href="([^"]+)"', t)
+                    if h.startswith("/stok/pk/detail?") and "LOT-BAHAN-01" in h)
+        detail = await c.get(href)
+        assert detail.status_code == 200
+        t = detail.text
 
-    assert "PK di Gudang 1" in t, "blok bahan tak digambar"
     assert "LOT-BAHAN-01" in t
     # Yang dibaca orang saat memutuskan apa yang disosoh hari ini: berapa,
     # kelasnya apa, dan dari gabah siapa.
@@ -198,9 +210,10 @@ async def test_totalnya_tidak_menyatu_dengan_stok_gudang_dua(pg, pabrik):
     async with c:
         t = (await c.get("/stok")).text
 
-    assert "PK di Gudang 1" in t and "PK di Gudang 2" in t
-    # Judulnya berdampingan, bukan satu angka gabungan.
-    assert t.count("PK di Gudang 1") == 1 and t.count("PK di Gudang 2") == 1
+    # Ringkasan gabungan di desktop tetap mempunyai blok per gudang pada
+    # ponsel: jangan menyatukan asal dan jumlah fisik di dua tempat.
+    assert t.count("PK · Gudang 1") == 1 and t.count("PK · Gudang 2") == 1
+    assert "6.500 kg" in t and "2.000 kg" in t
 
 
 async def test_operator_selepan_tak_berubah(pg, pabrik):
@@ -210,8 +223,8 @@ async def test_operator_selepan_tak_berubah(pg, pabrik):
     async with c:
         t = (await c.get("/stok")).text
 
-    assert "PK di Gudang 1" in t and "LOT-BAHAN-01" in t
-    assert "PK di Gudang 2" not in t, "operator selepan ikut melihat Gudang 2"
+    assert "PK · Gudang 1" in t and "LOT-BAHAN-01" in t
+    assert "PK · Gudang 2" not in t, "operator selepan ikut melihat Gudang 2"
     assert "Silo A" not in t
 
 

@@ -29,10 +29,10 @@ def test_sebab_wajib_dan_boleh_ditulis_sendiri():
     """Berhenti tanpa sebab tak bisa dipakai memperbaiki apa pun. Tetapi
     daftar sebab tak akan pernah lengkap, dan daftar yang tak lengkap memaksa
     orang memilih yang paling mirip — lalu angkanya berbohong dengan rapi."""
-    sumber = kode_saja(jeda.hentikan)
+    sumber = kode_saja(jeda._sebab)
     assert "SEBAB_LAIN" in sumber
-    assert "Tulis sebabnya dulu" in inspect.getsource(jeda.hentikan)
-    assert "Pilih sebab berhentinya" in inspect.getsource(jeda.hentikan)
+    assert "Tulis sebabnya dulu" in inspect.getsource(jeda._sebab)
+    assert "Pilih sebab yang sesuai jenis proses" in inspect.getsource(jeda._sebab)
 
 
 def test_dua_jenis_punya_daftar_sebabnya_sendiri():
@@ -58,11 +58,11 @@ def test_tertahan_menghitung_jeda_yang_masih_berlangsung():
 
 
 def test_tak_bisa_berhenti_dua_kali():
-    assert "memang sedang berhenti" in inspect.getsource(jeda.hentikan)
+    assert "Gunakan Perbarui kondisi jeda" in inspect.getsource(jeda._kejadian)
 
 
 def test_lanjutkan_menolak_yang_tak_sedang_berhenti():
-    assert "tidak sedang berhenti" in inspect.getsource(jeda.lanjutkan)
+    assert "tidak sedang dijeda" in inspect.getsource(jeda._kejadian)
 
 
 def test_proses_yang_sudah_selesai_tak_bisa_dihentikan():

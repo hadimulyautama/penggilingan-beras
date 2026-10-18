@@ -134,12 +134,16 @@ async def test_sosoh_rinci_per_entri_jeda_dan_tautan_lama(pg, gudang2):
         h = await c.get(f"/proses-aktif/sosoh/{r.proc.kode_proses}")
         lama = await c.get(f"/proses-sosoh/{r.proc.kode_proses}")
     assert h.status_code == lama.status_code == 200
-    for kata in ["350 kg", "Pemakaian silo", "UJI DETAIL", "Riwayat pencatatan hasil sosoh", "lanjutkan_penyosohan", "Listrik padam"]:
+    for kata in ["250 kg", "Pemakaian silo", "UJI DETAIL", "Riwayat pencatatan hasil sosoh", "lanjutkan_penyosohan", "Listrik padam"]:
         assert kata in h.text, kata
+    # Isian 100 lalu 250 adalah angka kumulatif; bukan 350 kg tambahan.
+    assert "350 kg" not in h.text
     _potret("sosoh", h)
-    from app.penggilingan.gudang2.polishing import selesai_penyosohan
+    from app.penggilingan.gudang2.polishing import selesai_penyosohan, akhiri_penyosohan
     async with pg() as db:
         await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses, nama_silo="B", sisa_kg=0)
+        assert r.proc.status == "proses"
+        await akhiri_penyosohan(db, user=u, kode=r.proc.kode_proses)
     async with await _klien(pg, peran="superadmin") as c:
         selesai = await c.get(f"/proses-aktif/sosoh/{r.proc.kode_proses}", follow_redirects=False)
     assert selesai.status_code == 303 and selesai.headers["location"] == f"/riwayat-sosoh/{r.proc.id}"

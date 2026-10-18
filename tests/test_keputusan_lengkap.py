@@ -310,7 +310,7 @@ def test_pencocokan_output_tak_lagi_ditagih_tetapi_koreksinya_tetap_ada():
     # Aksinya tetap hidup, dan tetap dipanggil dari kartu Stok.
     api = (akar / "app/web/api.py").read_text()
     assert '"id": "verify_output"' in api and "/api/actions/verify-output" in api
-    stok = (akar / "hmu_tampilan/templates/stok.html").read_text()
+    stok = (akar / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
     assert "buka=verify_output" in stok, "tombol Perbaiki hasil giling ikut hilang"
     # Namanya sama di kedua tempat: dua nama untuk satu pekerjaan membuat orang
     # mengira ada dua pekerjaan.
@@ -359,14 +359,14 @@ def test_tombol_minta_hanya_untuk_view_polesan():
 
     assert "boleh_minta=view == POLESAN" in inspect.getsource(layar_stok.halaman_stok)
     tpl = (pathlib.Path(__file__).resolve().parents[1]
-           / "hmu_tampilan/templates/stok.html").read_text()
-    assert "{% if boleh_minta and not l.berjalan %}" in tpl
+           / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
+    assert "{% if g1 and boleh_minta and not t.berjalan %}" in tpl
     # Yang sudah diminta menyebut KEADAANNYA, bukan menawarkan tombol kedua.
     # Urutannya penting, jadi diuji sebagai rantai: yang sudah disetujui punya
     # kalimatnya sendiri, sisanya yang sudah diminta, baru yang belum.
-    assert "{% if l.diminta_siap %}" in tpl
-    assert "{% elif l.diminta_oleh %}" in tpl
-    assert tpl.index("l.diminta_siap") < tpl.index("l.diminta_oleh")
+    assert "{% if t.diminta_siap %}" in tpl
+    assert "{% elif t.diminta_oleh %}" in tpl
+    assert tpl.index("t.diminta_siap") < tpl.index("t.diminta_oleh")
     assert "buka=minta_pk_g1" in tpl
     # Dan TIDAK menawarkan pengiriman. Pagar ini dulu menuntut yang sebaliknya
     # ("buka=kirim_permintaan_pk" in tpl), benar selama satu hari — 26

@@ -35,7 +35,7 @@ async def sosoh(pg):
     from app.penggilingan.gudang2.service import masukkan_pk_luar, pindah_tumpukan_ke_silo
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
@@ -134,7 +134,7 @@ async def test_pembatalan_membuka_silo_DAN_prosesnya_kembali(pg, sosoh):
 
     kode = await _tutup(pg, sosoh["user_id"], sisa=800)
     p, us = await _proc(pg, kode)
-    assert p.status == "selesai" and float(us[0].berat_terpakai_kg) == 9_000
+    assert p.status == "proses" and float(us[0].berat_terpakai_kg) == 9_000
 
     pesan = await _undo(pg, sosoh["user_id"])
     # Kalimatnya menyebut SILO MANA dan LOT MANA: yang membatalkan berdiri di
@@ -174,8 +174,11 @@ async def test_pembatalan_membuka_kembali_jeda_yang_ikut_ditutup(pg, sosoh):
         kode = r.proc.kode_proses
         await catat_output(db, user=u, kode=kode, jenis="medium", berat_kg=6_000)
         await hentikan(db, user=u, jenis="penyosohan", kode=kode,
-                       sebab="mesin_utama")
+                       sebab="Mesin sosoh rusak")
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=800)
+        assert await jeda_terbuka(db, "penyosohan", r.proc.id) is not None
+        from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+        await akhiri_penyosohan(db, user=u, kode=kode)
         assert await jeda_terbuka(db, "penyosohan", r.proc.id) is None
 
     await _undo(pg, uid)

@@ -25,7 +25,7 @@ async def dunia(pg):
                                                    pindah_tumpukan_ke_silo)
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         silo_pk = Silo(nama_silo="Silo A", warehouse_id=g2.id, jenis_isi="pk")
@@ -578,23 +578,19 @@ async def test_tambah_silo_penyosohan_terima_broken_sebagai_campuran(pg, dunia):
         # "Broken sebagai bahan" diringkas jadi "Broken" (11 Oktober 2026) —
         # satu fakta, tak lagi berdampingan membingungkan dengan "Ditambah"
         # (yang sekarang PK saja; di sini 0, jadi tak muncul sama sekali).
-        assert ("Broken", "1.000 kg") in kartu.fakta
+        assert ("Total bahan broken", "1.000 kg") in kartu.fakta
         assert not any(label == "Ditambah" for label, _ in kartu.fakta)
         assert kartu.anak_grup[0][0] == "Bahan baku masuk per silo"
         # Broken TETAP menyebut "awal X kg" (beda dari PK yang mencabutnya) —
         # daftar asalnya di bawah cuma mencatat PENAMBAHAN, bukan isi
         # mula-mula. Di sini masuk_u = 0 (belum ditambah lagi sejak jadi
         # bahan P2), jadi tanpa suku "ditambah".
-        assert ("Silo C · Broken", "1.000 kg", "awal 1.000 kg", "broken") \
+        assert ("Silo C", "1.000 kg", "Aktif · masih dipakai proses", "silo") \
             in kartu.anak_grup[0][1]
-        # ...dan daftar detil SATU kali penambahan (dari `pindah_broken_ke_silo`
-        # P1 di atas), berjudul "<pemilik> · <kode pindah>" sama seperti
-        # daftar asal lot PK.
-        baris_c = [b for b in kartu.anak_grup[0][1]
-                   if b[3] == "lot" and "BKS-" in b[0]]
-        assert len(baris_c) == 1
-        assert " · BKS-" in baris_c[0][0]
-        assert baris_c[0][1] == "1.000 kg"
+        assert ("Broken", "1.000 kg", "", "sosoh-bahan") in kartu.anak_grup[0][1]
+        # Silo campuran menampilkan komposisi tiap bahan; asal lot pada
+        # kartu proses ditelusuri khusus PK. Broken tetap terbaca sebagai
+        # bahan 1.000 kg dan masuk penyebut rendemen setelah silo ditutup.
         assert any(judul == "Hasil sosoh keluar" for judul, _ in kartu.anak_grup)
 
         await selesai_penyosohan(db, user=u, kode=r2.proc.kode_proses,

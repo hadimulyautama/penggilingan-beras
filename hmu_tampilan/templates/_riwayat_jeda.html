@@ -1,0 +1,30 @@
+{% macro riwayat_jeda_blok(riwayat) %}
+{% if riwayat and riwayat.jumlah %}
+<section class="jeda-riwayat" id="riwayat-jeda" aria-label="Riwayat jeda proses">
+  <h2>Riwayat jeda proses</h2>
+  <p class="bantu">Waktu kejadian berbeda dari waktu pencatatan. Perubahan kondisi tidak melanjutkan mesin.</p>
+  <ol class="jeda-riwayat__daftar">
+    {% for catatan in riwayat['items'] %}
+    <li class="jeda-riwayat__catatan">
+      <h3>{{ catatan.aksi }}{% if catatan.dibatalkan %} · Dibatalkan{% endif %}</h3>
+      <p><strong>{{ catatan.petugas }}</strong></p>
+      <dl>
+        <div><dt>Waktu kejadian</dt><dd>{{ catatan.waktu }}</dd></div>
+        <div><dt>Dicatat pada</dt><dd>{{ catatan.dicatat }}</dd></div>
+        <div><dt>Penyebab</dt><dd>{{ catatan.sebab }}</dd></div>
+        {% if catatan.catatan %}<div><dt>Catatan kondisi</dt><dd>{{ catatan.catatan }}</dd></div>{% endif %}
+        {% if catatan.alasan %}<div><dt>Alasan terlambat</dt><dd>{{ catatan.alasan }}</dd></div>{% endif %}
+      </dl>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if riwayat.halaman_total > 1 %}
+  <nav aria-label="Halaman riwayat jeda">
+    {% if riwayat.halaman > 1 %}<a class="btn btn--kecil" href="{{ request.url.include_query_params(halaman_jeda=riwayat.halaman-1) }}#riwayat-jeda">Lebih baru</a>{% endif %}
+    <span>Halaman {{ riwayat.halaman }} / {{ riwayat.halaman_total }}</span>
+    {% if riwayat.halaman < riwayat.halaman_total %}<a class="btn btn--kecil" href="{{ request.url.include_query_params(halaman_jeda=riwayat.halaman+1) }}#riwayat-jeda">Lebih lama</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endif %}
+{% endmacro %}

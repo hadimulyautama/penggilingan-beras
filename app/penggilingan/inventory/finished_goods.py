@@ -65,7 +65,7 @@ async def _proc_by_kode(db: AsyncSession, kode: str | None) -> PolishingProcess:
         await db.execute(
             select(PolishingProcess)
             .where(PolishingProcess.kode_proses == kode)
-            .with_for_update()
+            .with_for_update().execution_options(populate_existing=True)
         )
     ).scalars().first()
     if p is None:
@@ -127,6 +127,8 @@ async def catat_packing(
         db, kategori=kategori, material_kode=material_kode, ukuran=int(ukuran),
         brand_nama=brand_nama,
     )
+    if float(jumlah_karung) <= 0 or not float(jumlah_karung).is_integer():
+        raise InventoryError("Jumlah karung wajib bilangan bulat lebih dari nol.")
     berat = float(jumlah_karung) * int(ukuran)
 
     # ── PACKING ADALAH PERPINDAHAN, BUKAN PENCIPTAAN ──
@@ -163,13 +165,21 @@ async def catat_packing(
     # masih bisa dikarungi utuh, dan stok bekatul jadi dua kali lipat.
     if kategori == "bekatul":
         sudah = await _bekatul_dibukukan(db, proc.id)
-    tersedia = float(keluar) - sudah
-    if berat > tersedia + 0.5:
+    if kategori == "broken":
+        sudah = await _broken_dibukukan(db, proc.id)
+    # Beras yang menjadi bahan silo sudah keluar dari saldo curah. Kunci
+    # proses (_proc_by_kode) juga dipakai pemindahan FIFO dan catat hasil,
+    # sehingga dua operator tidak dapat memakai saldo yang sama.
+    from app.services.stok import BERAS_JENIS, _dipindah_silo_proc
+    dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
+        (proc.id, jenis_out), 0.0) if jenis_out in BERAS_JENIS else 0.0
+    tersedia = float(keluar) - sudah - dipindah
+    if berat > tersedia + 0.000001:
         raise InventoryError(
             f"{proc.kode_proses} tinggal {tersedia:,.0f} kg {jenis_out} yang "
             f"belum dikemas — tak bisa mengemas {berat:,.0f} kg. "
             f"(Keluar mesin {float(keluar):,.0f} kg, sudah dikemas "
-            f"{sudah:,.0f} kg.)".replace(",", "."))
+            f"{sudah:,.0f} kg, dipindah ke silo {dipindah:,.0f} kg.)".replace(",", "."))
 
     now = input_time(tanggal, jam)
     wid = await _g2_warehouse_id(db)

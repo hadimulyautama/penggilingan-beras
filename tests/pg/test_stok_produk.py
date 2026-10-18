@@ -91,7 +91,7 @@ async def sosoh(pg, pemakai, pemasok):
         g2 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 2%")))).scalars().first()
         if g2 is None:
-            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+            g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
             db.add(g2)
             await db.flush()
         silo = (await db.execute(select(Silo).where(
@@ -231,9 +231,9 @@ async def test_proses_yang_masih_berjalan_ditandai_belum_final(pg, sosoh):
         b = await untuk_operator_gudang2(db)
     assert len(baris) == 1 and baris[0].berjalan, "tak ditandai belum final"
     assert tanpa == [], "yang berjalan ikut ke daftar yang meminta yang final"
-    # Dan ia TIDAK berkartu antrean: menagih pekerjaan atas angka yang masih
-    # akan berubah membuat orang mengemas dua kali.
-    assert not [x for x in b.menunggu if x.kelompok == "produk"]
+    # Hasil yang sudah tercatat tersedia untuk packing selama mesin berjalan.
+    kartu = [x for x in b.menunggu if x.kelompok == "produk"]
+    assert len(kartu) == 1 and "sosoh masih berjalan" in kartu[0].keadaan
 
 
 async def test_kartu_antrean_dan_lencana_untuk_yang_sudah_selesai(pg, sosoh):
@@ -275,7 +275,7 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
         g1 = (await db.execute(select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
         if g1 is None:
-            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
             db.add(g1)
             await db.flush()
         op1 = User(nama="Operator Selepan", role="operator", status="aktif",
@@ -1631,21 +1631,11 @@ async def test_kartu_bekatul_membawa_tombol_pencatatan_curahnya(pg, sosoh):
     assert "aksi.js" in h, "aksi.js tak dimuat — tombolnya takkan berbuat apa-apa"
 
 
-async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh):
-    """⭐ Laporan lapangan 7 Oktober 2026: kartu Broken menampilkan tombol
-    "Catat bekatul (curah)" — salah jenis sama sekali.
+async def test_kartu_broken_memakai_stok_otomatis_tanpa_pencatatan_ganda(pg, sosoh):
+    """Hasil broken langsung menjadi stok; kemasan diturunkan otomatis.
 
-    Akarnya: `curah_saja` (`stok.py`) diperluas dari "bekatul saja" menjadi
-    "bekatul ATAU broken" saat memperbaiki bug "Pindah kepemilikan curah"
-    (7 Oktober 2026) — supaya kartu Broken ikut membedakan "tercatat" dari
-    "belum dicatat" seperti Bekatul. Tapi templat tombolnya (`_stok.html`)
-    masih menulis `catat_bekatul` + "Catat bekatul (curah)" TANPA SYARAT,
-    dengan asumsi lama "curah_saja berarti bekatul" — jadi begitu Broken
-    ikut lolos syarat `curah_saja`, tombolnya ikut tergambar, tapi salah isi.
-
-    `catat_broken` sudah lama ada & terpasang penuh di katalog aksi
-    (`aksi_inventory.py`) — sebangun persis `catat_bekatul` — jadi
-    perbaikannya murni soal templat memilih yang benar lewat `k.jenis`.
+    Pencatatan curah manual tidak lagi ditawarkan di kartu hasil samping.
+    Uji memeriksa stok nyata dan kemasannya, bukan tombol alur lama.
     """
     import httpx
 
@@ -1682,18 +1672,11 @@ async def test_kartu_broken_membawa_tombol_catat_broken_bukan_bekatul(pg, sosoh)
         c.cookies.set(csrf.NAMA_COOKIE, csrf.terbitkan_baru())
         r = await _buka_detail_produk(c, "broken")
     h = r.text
-    assert "buka=catat_broken" in h, \
-        "tombol pencatatan broken curah tak tergambar di kartunya"
-    assert "Catat broken (curah)" in h
-    # Dan BUKAN tombol bekatul — kartu ini tak punya bekatul sama sekali,
-    # jadi `buka=catat_bekatul` muncul di sini hanya kalau bug-nya kembali.
-    assert "buka=catat_bekatul" not in h, \
-        "kartu Broken salah menawarkan tombol Bekatul"
-    # Dan kartu ini BELUM menawarkan "Masukkan ke silo" — seluruh 800 kg-nya
-    # masih "belum dicatat" (curah_kg > 0, dikemas_kg masih nol), jadi belum
-    # ada apa pun yang bisa dipindah ke silo. Lihat uji di bawah untuk
-    # keadaan sebaliknya.
-    assert "buka=masukkan_broken_silo" not in h
+    assert r.status_code == 200
+    assert "Kemasan otomatis" in h
+    assert "16 karung × 50 kg" in h
+    assert "buka=catat_broken" not in h
+    assert "buka=catat_bekatul" not in h
 
 
 async def test_hasil_samping_dipisah_otomatis_karung_dan_curah(pg, sosoh):

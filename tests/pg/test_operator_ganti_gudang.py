@@ -87,8 +87,8 @@ async def pabrik(pg, pemasok):
     from hmu_identitas import peran as P
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id), Silo(nama_silo="Silo B", warehouse_id=g2.id)])

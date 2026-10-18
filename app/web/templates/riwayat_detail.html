@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
+{% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% block judul %}{{ {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Riwayat Proses") }}{% endblock %}
 
 {% block isi %}
@@ -213,5 +214,6 @@
       {% endif %}
     {% endif %}
   {% endif %}
+  {% if jeda_riwayat is defined %}{{ riwayat_jeda_blok(jeda_riwayat) }}{% endif %}
 </main>
 {% endblock %}

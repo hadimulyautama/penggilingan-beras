@@ -14,6 +14,7 @@ formulirnya.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from typing import Annotated
@@ -462,13 +463,9 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "timbangan_transaksi_id", "label": "Tiket timbang gabah yang masih aktif",
                   "type": "remote", "source": "/api/actions/timbang-masuk-aktif",
                   "kosong": "Tidak ada tiket timbang gabah yang aktif 7 hari terakhir. Gabah dicatat dari tiket timbang — bukan diketik manual."},
-                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "select",
-                  # Gabungan basah & kering: jenis gabahnya baru diketahui dari
-                  # tiket yang dipilih, jadi keduanya ditawarkan dan server
-                  # menolak yang tak sah untuk jenis itu — dengan menyebut
-                  # yang boleh, bukan sekadar bahwa ia ditolak.
-                  "options": TUJUAN_BASAH + [o for o in TUJUAN_KERING
-                                             if o not in TUJUAN_BASAH]},
+                 {"name": "tujuan", "label": "Tujuan (wajib pilih)", "type": "remote",
+                  "induk": "timbangan_transaksi_id", "source": "/api/actions/tujuan-gabah",
+                  "kosong": "Belum ada tujuan yang tersedia untuk tiket ini."},
              ]},
             *[
                 {
@@ -502,11 +499,13 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 for kondisi in ("basah", "kering")
             ],
             {"id": "qc_gabah_tutup", "label": "🔒 Tutup proses QC gabah",
-             "post": "/api/actions/tutup-qc-gabah",
+             "post": "/api/actions/tutup-qc-gabah", "pratinjau_qc": True,
              "hint": "Tutup setelah minimal satu catatan QC tersimpan. Setelah ditutup, data QC truk ini tidak bisa ditambah lagi.",
              "fields": [{"name": "kode_batch", "label": "Proses QC yang belum lengkap",
                          "type": "remote", "source": "/api/actions/gabah-qc-bisa-ditutup",
-                         "kosong": "Belum ada proses QC yang bisa ditutup."}]},
+                         "kosong": "Belum ada proses QC yang bisa ditutup."},
+                        {"name": "alasan", "label": "Alasan menutup sebelum lima pemeriksaan",
+                         "type": "text", "wajib": True}]},
             {"id": "pindah_tumpukan", "label": "📦 Tempatkan gabah",
              "post": "/api/actions/pindah-tumpukan",
              "hint": "Gabah yang belum ada di dryer maupun silo — yang sedang "
@@ -647,6 +646,14 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  {"name": "kadar_air", "label": "Kadar air di mesin (%)",
                   "type": "number", "wajib": True},
              ]},
+            {"id": "mulai_pendinginan_ulang", "label": "❄️ Dinginkan lagi",
+             "post": "/api/actions/mulai-pendinginan-ulang",
+             "hint": "Mulai pendinginan ulang. Gabah belum boleh dipindah ke silo sampai dinyatakan dingin lagi.",
+             "konfirmasi": {"judul": "Mulai pendinginan ulang?",
+                 "teks": "{kode_lot}: mulai pendinginan lagi. Status siap pindah ke silo dicabut sampai operator menyatakan gabah sudah dingin.",
+                 "ya": "Mulai pendinginan ulang"},
+             "fields": [{"name": "kode_lot", "label": "Lot yang sudah dinyatakan dingin",
+                 "type": "remote", "source": "/api/actions/drying-done"}]},
             {"id": "selesai_pendinginan", "label": "❄️ Pendinginan selesai",
              "post": "/api/actions/selesai-pendinginan",
              "hint": "Nyatakan gabah sudah dingin & mesin bebas dipakai lagi — gabah "
@@ -700,7 +707,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             {"id": "selesai_giling", "label": "🏁 Selesai giling",
              "hint": "Hasil akhir PK wajib. Tanpa angkanya, gilingnya belum "
                      "bisa ditutup dan kartunya tetap berjalan.",
-             "post": "/api/actions/selesai-giling", "fields": [
+             "post": "/api/actions/selesai-giling", "pratinjau_proses": "giling", "fields": [
                  {"name": "kode_proses", "label": "Proses giling", "type": "remote",
                   "source": "/api/actions/milling-active",
                   "kosong": "Tidak ada proses giling yang sedang berjalan."},
@@ -718,6 +725,7 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
             # rendemen berdiri. Sebangun "Selesai penyosohan" Gudang 2.
             {"id": "tutup_silo_giling", "label": "📤 Bebaskan silo (boleh sebagian)",
              "hint": "Mesin lanjut dari silo lain — proses TIDAK ditutup. "
+                     "Isi 0 jika silo sudah kosong. "
                      "Silo yang dibebaskan boleh langsung diisi gabah baru; "
                      "gabah itu tak akan tercampur ke lot yang sedang digiling.",
              "post": "/api/actions/tutup-silo-giling", "fields": [
@@ -996,21 +1004,20 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "kosong": "Tidak ada silo Gudang 2 berisi PK yang siap disosoh."},
              ]},
             {"id": "hasil_penyosohan", "label": "⚙️ Catat hasil penyosohan",
-             "post": "/api/actions/hasil-penyosohan", "fields": [
+             "post": "/api/actions/hasil-penyosohan",
+             "hint": "Isi total hasil jenis yang dipilih sejak awal proses, bukan tambahan. "
+                     "Contoh: sudah 300 kg, bertambah 200 kg → isi 500 kg.",
+             "fields": [
                  {"name": "kode_proses", "label": "Penyosohan yang sedang berjalan", "type": "remote",
                   "source": "/api/actions/polishing-active",
                   "kosong": "Tidak ada penyosohan yang sedang berjalan."},
                  {"name": "jenis", "label": "Jenis hasil (wajib pilih)", "type": "select",
                   "options": JENIS_HASIL},
-                 # ── PER PROSESAN, bukan kumulatif (28 September 2026) ──
-                 #
-                 # Permintaan operator: dalam satu penyosohan mereka berganti
-                 # spek, dan tiap spek punya hasilnya sendiri. Dengan kumulatif,
-                 # mencatat 200 kg yang baru menuntut mereka mengetik 500 —
-                 # angka yang dijumlah sendiri di kepala, sambil berdiri di
-                 # mesin. Penjumlahan itu pekerjaan gudang.
-                 {"name": "berat_kg", "label": "Berat hasil prosesan ini (kg)",
-                  "type": "number"},
+                 # Total aktual per jenis, sama dengan pencatatan hasil giling.
+                 # Selisih terhadap catatan sebelumnya dihitung layanan agar
+                 # input 500 sesudah 300 tidak menghasilkan 800 kg.
+                 {"name": "berat_kumulatif", "label": "Total hasil sampai sekarang (kg)",
+                  "type": "number", "wajib": True},
              ]},
             # ── Tambah silo ke penyosohan yang berjalan — mix bahan ──
             #
@@ -1057,8 +1064,11 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                   "type": "remote", "source": "/api/actions/sosoh-berhenti",
                   "kosong": "Tidak ada penyosohan yang sedang berhenti."},
              ]},
-            {"id": "selesai_penyosohan", "label": "🏁 Selesai penyosohan (per silo)",
-             "post": "/api/actions/selesai-penyosohan", "fields": [
+            {"id": "selesai_penyosohan", "label": "📤 Bebaskan silo penyosohan",
+             "post": "/api/actions/selesai-penyosohan",
+             "hint": "Bebaskan silo untuk diisi kembali. Penyosohan dan pencatatan hasil tetap berjalan, termasuk jika ini silo terakhir. Isi 0 jika silo sudah kosong.",
+             "konfirmasi": {"judul": "Bebaskan silo?", "teks": "{kode_proses} · Silo {silo}: sisa {sisa} kg. Silo dibebaskan; penyosohan tetap berjalan. Gunakan Selesaikan penyosohan saat seluruh bahan di mesin benar-benar selesai.", "ya": "Bebaskan silo, lanjutkan sosoh"},
+             "fields": [
                  {"name": "kode_proses", "label": "Proses penyosohan", "type": "remote",
                   "source": "/api/actions/polishing-active",
                   "kosong": "Tidak ada penyosohan yang sedang berjalan."},
@@ -1075,11 +1085,16 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
                  # Daftar sepanjang satu (prosesnya memakai satu silo) terisi
                  # sendiri di klien: tak ada pilihan yang bisa dibuat di sana,
                  # jadi tak ada pilihan yang bisa salah.
-                 {"name": "silo", "label": "Silo yang selesai", "type": "remote",
+                 {"name": "silo", "label": "Silo yang dibebaskan", "type": "remote",
                   "induk": "kode_proses", "source": "/api/actions/sosoh-silo",
                   "kosong": "Semua silo proses ini sudah ditandai selesai."},
-                 {"name": "sisa", "label": "Sisa di silo (kg)", "type": "number"},
+                 {"name": "sisa", "label": "Sisa di silo (kg) — isi 0 jika kosong", "type": "number", "wajib": True},
              ]},
+            {"id": "akhiri_penyosohan", "label": "🏁 Selesaikan penyosohan",
+             "post": "/api/actions/akhiri-penyosohan", "pratinjau_proses": "sosoh",
+             "hint": "Nyatakan seluruh bahan selesai melewati mesin dan semua hasil sudah dicatat. Bebaskan setiap silo dan catat sisanya terlebih dahulu.",
+             "fields": [{"name": "kode_proses", "label": "Proses penyosohan",
+                "type": "remote", "source": "/api/actions/polishing-active"}]},
         ]
         # "Minta lot ini" — permintaan, bukan izin (pemilik 24 September 2026).
         #
@@ -1349,6 +1364,8 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
     # sendiri — termasuk operator, yang justru paling sering salah ketik.
     actions += aksi_undo.spesifikasi(boleh=g1 or g2 or fin)
 
+    _lengkapi_formulir_jeda(actions)
+
     # Tandai gudang tiap aksi → dipakai layar Catat memisah tab G1/G2 (admin/staff).
     for a in actions:
         a["wh"] = _ACTION_WH.get(a["id"], "g1")
@@ -1387,6 +1404,43 @@ async def actions_menu(user: User = Depends(pengguna_aksi)) -> list[dict]:
         actions[0]["urut_grup"] = URUT_GRUP
     return actions
 
+
+
+def _lengkapi_formulir_jeda(actions):
+    """Empat pintu memakai waktu dan pemeriksaan yang sama, termasuk dari kartu."""
+    import copy
+    tambahan = []
+    for aksi in list(actions):
+        id_ = aksi['id']
+        if id_ not in ('hentikan_proses','hentikan_penyosohan','lanjutkan_proses','lanjutkan_penyosohan'):
+            continue
+        berhenti = id_.startswith('hentikan')
+        aksi['pratinjau_jeda'] = 'hentikan' if berhenti else 'lanjutkan'
+        if berhenti:
+            aksi['fields'] = [f if f['name'] != 'sebab' else {
+                'name':'sebab','label':'Sebab berhenti sesuai proses','type':'remote',
+                'induk':'proses','source':'/api/actions/sebab-jeda'} for f in aksi['fields']]
+            aksi['fields'].append({'name':'catatan','label':'Catatan kondisi (opsional)','type':'text','optional':True})
+        aksi['fields'] += [
+            {'name':'waktu_mode','label':'Waktu kejadian','type':'select','bawaan':'sekarang',
+             'options':[['sekarang','Sekarang'],['aktual','Waktu aktual — terlambat mencatat']]},
+            {'name':'waktu_kejadian','label':'Tanggal dan jam kejadian aktual (WIB)',
+             'type':'datetime-local','wajib':True,'waktu_aktual':True},
+            {'name':'alasan_terlambat','label':'Alasan terlambat mencatat',
+             'type':'text','wajib':True,'waktu_aktual':True},
+        ]
+        aksi['hint'] += ' Waktu sekarang menjadi bawaan. Jika terlambat, isi waktu kejadian aktual dan alasannya.'
+        if berhenti:
+            kondisi = copy.deepcopy(aksi)
+            kondisi['id'] = 'ubah_kondisi_penyosohan' if id_ == 'hentikan_penyosohan' else 'ubah_kondisi_proses'
+            kondisi['label'] = '⏸️ Perbarui kondisi jeda'
+            kondisi['post'] = '/api/actions/ubah-kondisi-jeda'
+            kondisi['pratinjau_jeda'] = 'kondisi'
+            kondisi['hint'] = 'Perbarui sebab atau kondisi tanpa melanjutkan mesin. Riwayat sebelumnya tetap tersimpan. Gunakan waktu aktual jika terlambat mencatat.'
+            kondisi['fields'][0]['source'] = '/api/actions/sosoh-berhenti' if id_ == 'hentikan_penyosohan' else '/api/actions/proses-berhenti'
+            kondisi['fields'][0]['label'] = 'Proses yang sedang dijeda'
+            tambahan.append(kondisi)
+    actions.extend(tambahan)
 
 #: Kelompok katalog. Daftar datar 30 kata kerja menuntut orang membacanya
 #: seluruhnya untuk menemukan satu — persis keadaan yang sudah dibuang dari
@@ -1453,10 +1507,10 @@ _GRUP_AKSI = {
 for _a in (
     # Gudang 1
     "gabah_masuk", "pindah_tumpukan", "mulai_pengeringan", "kadar_air",
-    "selesai_pengeringan", "selesai_pendinginan", "pindah_silo", "ubah_target",
+    "selesai_pengeringan", "selesai_pendinginan", "mulai_pendinginan_ulang", "pindah_silo", "ubah_target",
     "mulai_giling", "hasil_giling", "selesai_giling", "tutup_silo_giling",
     "tambah_silo_giling",
-    "hentikan_proses", "lanjutkan_proses", "verify_output", "qc_giling",
+    "hentikan_proses", "lanjutkan_proses", "ubah_kondisi_proses", "ubah_kondisi_penyosohan", "verify_output", "qc_giling",
     "qc_gabah_basah", "qc_gabah_kering", "qc_gabah_tutup",
     # Rantai permintaan PK
     "minta_pk_g1", "tolak_permintaan_pk", "acc_permintaan_pk",
@@ -1464,7 +1518,7 @@ for _a in (
     # Gudang 2 — menyusul 28 September 2026, pekerjaan yang sama bentuknya
     # dengan Gudang 1 dan selama ini beraturan berlawanan.
     "mulai_penyosohan", "hasil_penyosohan", "hentikan_penyosohan",
-    "lanjutkan_penyosohan", "selesai_penyosohan", "pindah_tumpukan_silo",
+    "lanjutkan_penyosohan", "selesai_penyosohan", "akhiri_penyosohan", "pindah_tumpukan_silo",
     "tambah_silo_penyosohan", "catat_packing", "catat_broken",
     # Catat broken curah dan masukkan broken ke silo sama-sama dibuka dari
     # kartu Stok Produk; jangan tampilkan pintu kedua di katalog.
@@ -1521,10 +1575,10 @@ _ACTION_WH = {
     "gabah_masuk": "g1", "pindah_tumpukan": "g1", "mulai_pengeringan": "g1", "kadar_air": "g1",
     "qc_gabah_basah": "g1", "qc_gabah_kering": "g1", "qc_gabah_tutup": "g1",
     "ubah_target": "g1",
-    "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "pindah_silo": "g1",
+    "selesai_pengeringan": "g1", "selesai_pendinginan": "g1", "mulai_pendinginan_ulang": "g1", "pindah_silo": "g1",
     "mulai_giling": "g1", "hasil_giling": "g1", "selesai_giling": "g1",
     "tutup_silo_giling": "g1", "tambah_silo_giling": "g1",
-    "hentikan_proses": "g1", "lanjutkan_proses": "g1",
+    "hentikan_proses": "g1", "lanjutkan_proses": "g1", "ubah_kondisi_proses": "g1", "ubah_kondisi_penyosohan": "g2",
     "verify_output": "g1", "qc_giling": "g1", "transfer_pk": "g1",
     # Barangnya di Gudang 1, peminatnya Gudang 2 — dicap g1, sama dengan
     # `transfer_pk`: yang dikerjakan orang atasnya adalah memindahkan dari G1.
@@ -1535,7 +1589,7 @@ _ACTION_WH = {
     "rekonsiliasi_timbang": "g1",
     # Gudang 2 (Penyosohan)
     "masukkan_pk": "g2", "mulai_penyosohan": "g2", "hasil_penyosohan": "g2",
-    "selesai_penyosohan": "g2", "pindah_tumpukan_silo": "g2",
+    "selesai_penyosohan": "g2", "akhiri_penyosohan": "g2", "pindah_tumpukan_silo": "g2",
     "tambah_silo_penyosohan": "g2",
     "hentikan_penyosohan": "g2", "lanjutkan_penyosohan": "g2",
     "catat_pk_luar": "g2", "tolak_pk_luar": "g2", "qc_pk_luar": "g2",
@@ -1642,6 +1696,9 @@ async def gabah_qc(kondisi: str, user: User = Depends(pengguna_aksi)) -> list[di
                 PurchaseBatch.kondisi_gabah == kondisi,
                 PurchaseBatch.dibatalkan_pada.is_(None),
                 jumlah_qc < 5,
+                ~select(PurchaseBatchQc.id).where(
+                    PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id,
+                    PurchaseBatchQc.ditutup_pada.isnot(None)).exists(),
             ).order_by(PurchaseBatch.id.desc()).limit(100)
         )).all()
     return [{"value": b.kode_batch,
@@ -1720,6 +1777,18 @@ async def act_qc_gabah(kondisi: str, payload: dict = Body(...),
                                   f"rata-rata kadar air {rata:.2f}%{ringkasan_lamur}"}
 
 
+@router.get("/actions/pratinjau-tutup-qc")
+async def pratinjau_tutup_qc(kode_batch: str, user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    await _wajib_mutu()
+    from app.penggilingan.gudang1.services.qc_gabah import ringkasan_tutup_qc
+    async with SessionLocal() as db:
+        try:
+            return await ringkasan_tutup_qc(db, kode_batch=kode_batch)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+
+
 @router.post("/actions/tutup-qc-gabah")
 async def act_tutup_qc_gabah(payload: dict = Body(...),
                              user: User = Depends(pengguna_aksi)) -> dict:
@@ -1732,7 +1801,12 @@ async def act_tutup_qc_gabah(payload: dict = Body(...),
         from app.penggilingan.gudang1.services.qc_gabah import tutup_qc_gabah
         async with SessionLocal() as db:
             u = await db.get(User, user.id)
-            _, jumlah = await tutup_qc_gabah(db, user=u, kode_batch=kode)
+            dasar = str(payload.get("dasar") or "")
+            if not dasar:
+                raise HTTPException(409, "Periksa ringkasan QC terbaru sebelum konfirmasi.")
+            _, jumlah = await tutup_qc_gabah(
+                db, user=u, kode_batch=kode,
+                alasan=str(payload.get("alasan") or ""), dasar=dasar)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"ok": True, "pesan": f"✓ Proses QC *{kode}* ditutup · {jumlah}/5 pencatatan"}
@@ -2018,7 +2092,9 @@ async def proses_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         kini = now_local()
         for j in (await db.execute(
-            select(JedaProses).where(JedaProses.selesai.is_(None))
+            select(JedaProses).where(JedaProses.selesai.is_(None),
+                JedaProses.dibatalkan_pada.is_(None),
+                JedaProses.jenis.in_(("pengeringan", "giling")))
             .order_by(JedaProses.mulai)
         )).scalars().all():
             if j.jenis == "pengeringan":
@@ -2027,6 +2103,8 @@ async def proses_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
             else:
                 o = await db.get(MillingProcess, j.milling_process_id)
                 kode = o.kode_proses if o else "?"
+            if o is None or o.status != "proses":
+                continue
             jam = (kini - j.mulai).total_seconds() / 3600
             keluar.append({"value": f"{j.jenis}:{kode}",
                            "label": f"{kode} · {j.sebab} · {jam:.1f} jam"})
@@ -2471,6 +2549,30 @@ async def timbang_masuk_aktif(user: User = Depends(pengguna_aksi)) -> list[dict]
     return out
 
 
+@router.get("/actions/tujuan-gabah")
+async def tujuan_gabah(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Pilihan mengikuti jenis tiket, sehingga gabah basah tidak ditawari silo."""
+    _require(await _is_g1_operator(user))
+    if not induk:
+        return []
+    from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
+    from app.penggilingan.peta_jenis import intake_dari_jenis
+
+    try:
+        tiket_id = int(induk)
+    except ValueError:
+        raise HTTPException(400, "Pilih tiket timbang gabah yang sah.")
+    async with SessionLocal() as db:
+        tiket = await ambil_tiket(db, tiket_id)
+    info = intake_dari_jenis(tiket.get("jenis_kode", "")) if tiket else None
+    if info is None or info.model != "gabah":
+        raise HTTPException(400, "Tiket ini bukan gabah masuk.")
+    tujuan_sah = {"dryer"} if info.kondisi == "basah" else {"dryer", "silo"}
+    return [{"value": nilai, "label": nama}
+            for nilai, nama in await _pilihan_tujuan_gabah(info.kondisi)
+            if _urai_tujuan(nilai)[0] in tujuan_sah]
+
+
 @router.post("/actions/gabah-masuk")
 async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
@@ -2825,6 +2927,18 @@ async def act_selesai_pengeringan(
     return {"ok": True, "pesan": pesan}
 
 
+@router.post("/actions/mulai-pendinginan-ulang")
+async def act_mulai_pendinginan_ulang(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g1_operator(user))
+    from app.penggilingan.gudang1.services.drying import mulai_pendinginan_ulang, DryingError
+    async with SessionLocal() as db:
+        try:
+            await mulai_pendinginan_ulang(db, user=await db.get(User, user.id), kode_lot=req.kode_lot)
+        except DryingError as e:
+            raise _err(e, "Gagal memulai pendinginan ulang.")
+    return {"ok": True, "pesan": "Pendinginan ulang dimulai. Nyatakan sudah dingin sebelum pindah ke silo."}
+
+
 @router.post("/actions/selesai-pendinginan")
 async def act_selesai_pendinginan(req: KodeLotReq, user: User = Depends(pengguna_aksi)) -> dict:
     _require(await _is_g1_operator(user))
@@ -3023,16 +3137,35 @@ async def act_gabah_kering_bongkar_silo(
     return {"ok": True, "pesan": pesan}
 
 
-class HentikanReq(BaseModel):
-    #: "pengeringan:PGR-…" atau "giling:LOT-…" — jenis dan kodenya sekaligus,
-    #: supaya operator tak perlu memilih jenis proses lebih dulu.
+class WaktuJedaReq(BaseModel):
     proses: str
+    waktu_mode: str = "sekarang"
+    waktu_kejadian: datetime | None = None
+    alasan_terlambat: str = ""
+    dasar: str = ""
+    kunci_kiriman: Annotated[str, Field(max_length=64)] = ""
+
+
+class HentikanReq(WaktuJedaReq):
     sebab: str
     sebab_lain: str | None = None
+    catatan: str = ""
 
 
-class LanjutkanReq(BaseModel):
-    proses: str
+class LanjutkanReq(WaktuJedaReq):
+    pass
+
+
+def _waktu_jeda(req):
+    if not req.dasar or not req.kunci_kiriman:
+        raise HTTPException(409, "Periksa keadaan jeda terbaru sebelum menyimpan.")
+    if req.waktu_mode not in ("sekarang", "aktual"):
+        raise HTTPException(400, "Pilih waktu sekarang atau waktu aktual.")
+    if req.waktu_mode == "aktual" and req.waktu_kejadian is None:
+        raise HTTPException(400, "Isi tanggal dan jam kejadian aktual.")
+    return dict(waktu_kejadian=req.waktu_kejadian if req.waktu_mode == "aktual" else None,
+                alasan_terlambat=req.alasan_terlambat if req.waktu_mode == "aktual" else "",
+                dasar=req.dasar, kunci_kiriman=req.kunci_kiriman)
 
 
 def _urai_proses(nilai: str) -> tuple[str, str]:
@@ -3053,9 +3186,10 @@ async def act_hentikan_proses(req: HentikanReq,
         u = await db.get(User, user.id)
         try:
             r = await hentikan(db, user=u, jenis=jenis, kode=kode,
-                               sebab=req.sebab, sebab_lain=req.sebab_lain)
+                               sebab=req.sebab, sebab_lain=req.sebab_lain,
+                               catatan=req.catatan, **_waktu_jeda(req))
         except JedaError as e:
-            raise _err(e, "Gagal menghentikan proses.")
+            raise HTTPException(409, str(e))
     pesan = (f"⏸ *{r.kode}* dihentikan sementara — {r.sebab}.\n"
              f"Prosesnya tidak ditutup; bahan & catatannya tetap. "
              f"Berhenti ke-{r.kali} untuk proses ini.")
@@ -3073,13 +3207,52 @@ async def act_lanjutkan_proses(req: LanjutkanReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
-            r = await lanjutkan(db, user=u, jenis=jenis, kode=kode)
+            r = await lanjutkan(db, user=u, jenis=jenis, kode=kode, **_waktu_jeda(req))
         except JedaError as e:
-            raise _err(e, "Gagal melanjutkan proses.")
+            raise HTTPException(409, str(e))
     jam = (r.tertahan_detik or 0) / 3600
     pesan = (f"▶️ *{r.kode}* dilanjutkan — tertahan {jam:.1f} jam "
              f"({r.sebab}).")
     return {"ok": True, "pesan": pesan}
+
+
+@router.get("/actions/acuan-jeda")
+async def acuan_jeda(proses: str, user: User = Depends(pengguna_aksi)):
+    from app.penggilingan.gudang1.services.jeda import ringkasan_jeda, JedaError
+    jenis,kode = _urai_proses(proses)
+    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    async with SessionLocal() as db:
+        try:
+            return await ringkasan_jeda(db, jenis=jenis, kode=kode)
+        except JedaError as e:
+            raise HTTPException(409,str(e))
+
+
+@router.get("/actions/sebab-jeda")
+async def pilihan_sebab_jeda(induk: str = "", user: User = Depends(pengguna_aksi)):
+    from app.services.setelan import sebab_jeda
+    from app.penggilingan.gudang1.services.jeda import SEBAB, SEBAB_LAIN
+    jenis,kode = _urai_proses(induk)
+    if not kode or jenis not in SEBAB:
+        return []
+    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    async with SessionLocal() as db:
+        daftar = (await sebab_jeda(db))[jenis]
+    return [{'value':v,'label':v} for v in daftar] + [{'value':SEBAB_LAIN,'label':'Lainnya — tulis sendiri'}]
+
+
+@router.post("/actions/ubah-kondisi-jeda")
+async def act_ubah_kondisi_jeda(req: HentikanReq, user: User = Depends(pengguna_aksi)):
+    from app.penggilingan.gudang1.services.jeda import perbarui_kondisi, JedaError
+    jenis,kode = _urai_proses(req.proses)
+    _require(await (_is_g2_operator if jenis == "penyosohan" else _is_g1_operator)(user))
+    async with SessionLocal() as db:
+        try:
+            await perbarui_kondisi(db, user=await db.get(User,user.id), jenis=jenis, kode=kode,
+                sebab=req.sebab, sebab_lain=req.sebab_lain, catatan=req.catatan, **_waktu_jeda(req))
+        except JedaError as e:
+            raise HTTPException(409,str(e))
+    return {'ok':True,'pesan':'Kondisi jeda diperbarui. Mesin tetap dijeda; riwayat penyebab sebelumnya tersimpan.'}
 
 
 class TutupSiloGilingReq(BaseModel):
@@ -3169,6 +3342,7 @@ class SelesaiGilingReq(BaseModel):
     #: mencatat hasilnya lewat "Perbarui hasil giling"; layanan yang memutuskan,
     #: bukan di sini — satu aturan, satu tempat.
     berat_akhir: PositifOpsional = None
+    dasar: str = ""
 
 
 @router.post("/actions/selesai-giling")
@@ -3176,12 +3350,14 @@ async def act_selesai_giling(req: SelesaiGilingReq, user: User = Depends(penggun
     _require(await _is_g1_operator(user))
     if not (req.kode_proses or "").strip():
         raise HTTPException(400, "Pilih proses giling dulu.")
+    if not req.dasar:
+        raise HTTPException(409, "Periksa ringkasan penyelesaian giling terlebih dahulu.")
     from app.penggilingan.gudang1.services.milling import finish_milling, MillingError
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         try:
             r = await finish_milling(db, user=u, kode_proses=req.kode_proses,
-                                     berat_akhir=req.berat_akhir)
+                                     berat_akhir=req.berat_akhir, dasar=req.dasar)
         except MillingError as e:
             raise _err(e, "Gagal menyelesaikan giling.")
     jns = (r.jenis + " ") if r.jenis else ""
@@ -3938,9 +4114,8 @@ async def act_tambah_silo_penyosohan(req: TambahSiloPenyosohanReq,
 class HasilPenyosohanReq(BaseModel):
     kode_proses: str
     jenis: str
-    #: Bentuk BARU: yang keluar pada prosesan ini. `berat_kumulatif` tetap
-    #: diterima — lembar yang sudah terbuka di layar orang saat versi baru
-    #: terbit akan mengirim nama lama.
+    #: Layar baru mengirim total aktual. `berat_kg` tetap berupa tambahan
+    #: untuk lembar lama yang masih terbuka; maknanya tidak diubah diam-diam.
     berat_kg: Positif | None = None
     berat_kumulatif: Positif | None = None
 
@@ -3961,11 +4136,8 @@ async def act_hasil_penyosohan(req: HasilPenyosohanReq, user: User = Depends(pen
                                    berat_kumulatif=req.berat_kumulatif)
         except Gudang2Error as e:
             raise _err(e, "Gagal catat hasil penyosohan.")
-    # Dua angka, dan keduanya perlu: yang BARU SAJA dicatat (supaya ia yakin
-    # angkanya masuk seperti yang ia ketik) dan TOTALNYA (supaya ia tak perlu
-    # menjumlah sendiri — justru penjumlahan itu yang dikeluhkan).
-    pesan = (f"✓ Hasil *{req.kode_proses}*: {r.jenis} {r.berat_kg:g} kg"
-             + f" — total {r.jenis} jadi {r.berat_kumulatif:g} kg.")
+    pesan = (f"✓ Hasil *{req.kode_proses}*: total {r.jenis} "
+             f"{r.berat_kumulatif:g} kg (tambahan {r.berat_kg:g} kg).")
     return {"ok": True, "pesan": pesan}
 
 
@@ -3995,25 +4167,39 @@ async def act_selesai_penyosohan(req: SelesaiPenyosohanReq, user: User = Depends
                                          nama_silo=silo, sisa_kg=req.sisa)
         except Gudang2Error as e:
             raise _err(e, "Gagal menandai selesai penyosohan.")
-    if r.selesai:
-        # Rendemen yang tak terhitung DISEBUTKAN, tidak didiamkan. Laporan
-        # operator 28 September 2026: "Proses D1 belum ada tulisan
-        # rendemennya" — dan yang ia baca cuma "proses SELESAI", yang terbaca
-        # seperti semuanya beres.
-        #
-        # Sesudah pagar `selesai_penyosohan` (proses tanpa catatan hasil
-        # ditolak), keadaan ini hampir mustahil. "Hampir" itulah sebabnya
-        # kalimatnya tetap perlu: diam atas angka yang hilang adalah cara
-        # paling halus membuat orang percaya pada yang tak pernah dihitung.
-        ekor = " — proses SELESAI" + (
-            f", rendemen {r.rendemen:.1f}%." if r.rendemen
-            else ". Rendemen belum bisa dihitung: PK terpakai belum tercatat.")
-    else:
-        ekor = " (menunggu silo lain)."
-    # `r.silo` — silo yang BENAR-BENAR ditandai, termasuk saat borangnya
-    # mengosongkan medannya dan layanan yang memilih.
-    pesan = f"✓ Silo {r.silo} selesai (sisa {req.sisa:g} kg){ekor}"
-    return {"ok": True, "pesan": pesan}
+    return {"ok": True, "pesan": f"Silo {r.silo} dibebaskan (sisa {req.sisa:g} kg). Penyosohan tetap berjalan; hasil masih bisa dicatat."}
+
+
+class AkhiriPenyosohanReq(BaseModel):
+    kode_proses: str
+    dasar: str
+
+
+@router.get("/actions/pratinjau-selesai-proses")
+async def pratinjau_selesai_proses(jenis: str, kode_proses: str,
+        berat_akhir: float | None = None, user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await (_is_g1_operator(user) if jenis == "giling" else _is_g2_operator(user)))
+    from app.services.penyelesaian_proses import ringkasan_selesai
+    async with SessionLocal() as db:
+        try:
+            return await ringkasan_selesai(db, jenis=jenis, kode=kode_proses, berat_akhir=berat_akhir)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+
+
+@router.post("/actions/akhiri-penyosohan")
+async def act_akhiri_penyosohan(req: AkhiriPenyosohanReq, user: User = Depends(pengguna_aksi)) -> dict:
+    _require(await _is_g2_operator(user))
+    if not req.dasar:
+        raise HTTPException(409, "Periksa ringkasan penyelesaian penyosohan terlebih dahulu.")
+    from app.penggilingan.gudang2.polishing import akhiri_penyosohan, Gudang2Error
+    async with SessionLocal() as db:
+        try:
+            r = await akhiri_penyosohan(db, user=await db.get(User,user.id),
+                                      kode=req.kode_proses, dasar=req.dasar)
+        except (Gudang2Error, ValueError) as e:
+            raise HTTPException(409, str(e))
+    return {"ok": True, "pesan": f"Penyosohan {req.kode_proses} selesai. Hasil tercatat {r.beras_total:g} kg beras."}
 
 
 @router.get("/actions/tumpukan-sisa")
@@ -4304,6 +4490,7 @@ async def sosoh_berhenti(user: User = Depends(pengguna_aksi)) -> list[dict]:
             select(JedaProses, PolishingProcess.kode_proses)
             .join(PolishingProcess, PolishingProcess.id == JedaProses.polishing_process_id)
             .where(JedaProses.jenis == "penyosohan", JedaProses.selesai.is_(None),
+                   JedaProses.dibatalkan_pada.is_(None),
                    PolishingProcess.status == "proses")
             .order_by(JedaProses.mulai)
         )).all():

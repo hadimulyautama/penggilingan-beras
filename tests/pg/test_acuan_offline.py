@@ -41,7 +41,7 @@ async def test_acuan_hanya_nama_daftar_mingguan(pg):
     from app.models import Dryer, Pelanggan, Silo, Supplier, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
         db.add(g1)
         await db.flush()
         db.add_all([

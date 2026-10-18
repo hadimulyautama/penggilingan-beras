@@ -34,6 +34,12 @@
      — orangnya hanya tahu bahwa ia harus mencoba lagi, tanpa tahu apa yang
      harus diubah. */
   function kabar(pesan, jenis) {
+    // Dialog berada di top layer: z-index kabar setinggi apa pun tetap di
+    // belakangnya. Semua kegagalan saat borang terbuka mengikuti borang.
+    if (jenis === "err" && lembarSedangTerbuka()) {
+      salahFormulir($("lembar"), String(pesan));
+      return;
+    }
     var t = $("kabar");
     var teks;
     if (jenis === "err") {
@@ -42,7 +48,7 @@
       teks = String(pesan == null ? "" : pesan)
         .split("\n")[0].replace(/^[⚠️!✗×]\s*/, "").trim() || "Gagal disimpan";
     } else {
-      teks = "Tersimpan";
+      teks = /dibatalkan/i.test(String(pesan)) ? "Dibatalkan" : "Tersimpan";
     }
     t.innerHTML = '<div class="kabar__utama">'
       + '<span class="kabar__ikon" aria-hidden="true">'
@@ -142,7 +148,7 @@
          benar hilang. Temuan QA UI-02. */
       if (r.status === 409 || /sudah dicatat|sudah ditautkan|sudah tercatat/i
           .test(String(j.detail || ""))) {
-        if (window.PINDAH) { PINDAH.lupakan(); PINDAH.segarkan(); }
+        if (window.PINDAH && !lembarSedangTerbuka()) { PINDAH.lupakan(); PINDAH.segarkan(); }
       }
       throw (j.detail || ("Gagal disimpan (HTTP " + r.status + ")"));
     }
@@ -270,6 +276,7 @@
   function bukaAksi(id, semula) {
     var a = MENU[id];
     if (!a) return;
+    if (lembarSedangTerbuka() && !bolehBuang($("lembar"))) return;
 
     /* Yang dikunci hanya isian PENUNJUK — yang pertama bertipe pilihan.
        Di seluruh spesifikasi, isian itulah yang menyebut benda yang sedang
@@ -365,13 +372,18 @@
           ' data-label="' + esc(f.label) + '" value="' + esc(nilaiKunci) + '">';
       }
       var l = '<label class="lbl" for="f_' + esc(f.name) + '">' + esc(f.label) + "</label>";
+      if (f.type === "datetime-local") {
+        return l + '<input class="fld" type="datetime-local" id="f_' + esc(f.name) +
+          '" data-name="' + esc(f.name) + '" data-label="' + esc(f.label) + '"' +
+          (f.wajib ? ' data-wajib="1"' : '') + '>';
+      }
       if (f.type === "select") {
         var opts = (f.options.length && f.options[0][0] === "")
           ? f.options : [["", "— pilih —"]].concat(f.options);
         return l + '<select class="fld" id="f_' + esc(f.name) + '" data-name="' + esc(f.name) + '"' +
           (f.optional ? "" : ' data-wajib="1"') + ' data-label="' + esc(f.label) + '">' +
           opts.map(function (o) {
-            return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + "</option>";
+            return '<option value="' + esc(o[0]) + '"' + (f.bawaan === o[0] ? ' selected' : '') + '>' + esc(o[1]) + "</option>";
           }).join("") + "</select>";
       }
       if (f.type === "remote") {
@@ -525,6 +537,9 @@
         '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +
         tombolLain +
       "</div>";
+    lembar._berubah = false;
+    lembar._menyimpan = false;
+    lembar.oninput = lembar.onchange = function () { lembar._berubah = true; };
     bukaLembar(lembar);
     document.body.style.overflow = "hidden";
 
@@ -533,6 +548,68 @@
        membuka lembar ini sudah menyebut bendanya). Medan yang bergantung
        padanya harus bekerja di kedua bentuk — kalau tidak, daftar silo kosong
        justru pada jalan yang paling sering dipakai: menekan kartunya. */
+    var acuanJeda = {};
+    var kunciJeda = a.pratinjau_jeda ? Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(16)), function (n) {
+      return n.toString(16).padStart(2, "0");
+    }).join("") : "";
+    function ambilAcuanJeda() {
+      if (!a.pratinjau_jeda) return;
+      var proses = nilaiMedan("proses");
+      if (!proses || acuanJeda[proses]) return;
+      var borangJeda = lembar.querySelector(".lembar__isi");
+      ambil("/api/actions/acuan-jeda?proses=" + encodeURIComponent(proses)).then(function (j) {
+        if (j && lembar.open && lembar.querySelector(".lembar__isi") === borangJeda && !acuanJeda[proses]) acuanJeda[proses] = j;
+      }).catch(function () { /* Simpan tetap memeriksa keadaan terbaru. */ });
+    }
+    function aturWaktuJeda() {
+      if (!a.pratinjau_jeda) return;
+      var aktual = nilaiMedan("waktu_mode") === "aktual";
+      (a.fields || []).forEach(function (f) {
+        if (!f.waktu_aktual && f.name !== "sebab_lain") return;
+        var el = $("f_" + f.name);
+        var tampil = f.waktu_aktual ? aktual : nilaiMedan("sebab") === "Lainnya";
+        if (!el) return;
+        el.hidden = !tampil; el.disabled = !tampil;
+        if (f.name === "sebab_lain") {
+          if (tampil) el.setAttribute("data-wajib", "1"); else el.removeAttribute("data-wajib");
+        }
+        var label = lembar.querySelector('label[for="f_' + f.name + '"]');
+        if (label) label.hidden = !tampil;
+      });
+    }
+    var acuanMuat = {};
+    function ambilAcuanMuat() {
+      if (!a.pratinjau_muat) return;
+      var perintah = nilaiMedan("perintah");
+      if (!perintah) return;
+      if (acuanMuat[perintah]) { perbaruiKonteksMuat(); return; }
+      var borangAcuan = lembar.querySelector(".lembar__isi");
+      ambil("/api/actions/pratinjau-muat?perintah=" + encodeURIComponent(perintah)).then(function (j) {
+        if (!lembar.open || lembar.querySelector(".lembar__isi") !== borangAcuan) return;
+        if (j && !acuanMuat[perintah]) acuanMuat[perintah] = j;
+        perbaruiKonteksMuat();
+      }).catch(function () { /* Simpan tetap mengambil cuplikan terbaru. */ });
+    }
+    function perbaruiKonteksMuat() {
+      if (a.pratinjau_muat !== "baris" || !$("f_jumlah")) return;
+      var acuan = acuanMuat[nilaiMedan("perintah")];
+      var item = acuan && acuan.baris.find(function (b) {
+        return String(b.id) === nilaiMedan("baris");
+      });
+      var nota = $("konteks_muat");
+      if (!nota) {
+        nota = document.createElement("p");
+        nota.className = "bantu";
+        nota.id = "konteks_muat";
+        $("f_jumlah").insertAdjacentElement("afterend", nota);
+      }
+      nota.textContent = item
+        ? "Total sebelumnya " + item.dimuat + " " + item.satuan +
+          ". Isi total terbaru, bukan tambahannya. " +
+          (item.satuan === "karung" ? "Contoh: 20 ditambah 10 → isi 30. Karung wajib bilangan bulat." : "Gunakan kg; pecahan diperbolehkan.")
+        : "Pilih barang pada perintah ini untuk melihat jumlah sebelumnya.";
+      $("f_jumlah").inputMode = item && item.satuan === "karung" ? "numeric" : "decimal";
+    }
     function nilaiMedan(nama) {
       var s = $("f_" + nama);
       if (s) { return s.value; }
@@ -874,8 +951,11 @@
         sumber += (sumber.indexOf("?") >= 0 ? "&" : "?") + "induk=" +
           encodeURIComponent(nilaiInduk);
       }
+      var indukDiminta = f.induk ? nilaiMedan(f.induk) : null;
+      var borangDiminta = lembar.querySelector(".lembar__isi");
       ambil(sumber).then(function (daftar) {
-        if (!daftar) return;
+        if (!daftar || lembar.querySelector(".lembar__isi") !== borangDiminta ||
+            (f.induk && nilaiMedan(f.induk) !== indukDiminta)) return;
         if (kunciMedan(f)) {
           if (segar) { return; }
           /* Nama bendanya baru diketahui sesudah daftarnya datang. Kalau
@@ -979,6 +1059,9 @@
           if (tbl2 && tbl2.disabled) { tbl2.disabled = false; tbl2.textContent = "Simpan"; }
         }
         perbaruiMaksimalKemas();
+        perbaruiKonteksMuat();
+        ambilAcuanJeda();
+        aturWaktuJeda();
       }).catch(function () {});
       });
     }
@@ -1141,15 +1224,34 @@
       return isi;
     }
 
+    // Konfirmasi menyembunyikan formulir asli, bukan membongkarnya. Semua
+    // baris tambahan, koma desimal, dan pilihan asinkron tetap milik operator.
+    var borangAsli = null;
+    function kembaliKeBorang() {
+      if (!borangAsli) return;
+      var konfirmasi = lembar.querySelector(".lembar__konfirmasi");
+      if (konfirmasi) konfirmasi.remove();
+      borangAsli.hidden = false;
+      borangAsli = null;
+      lembar.setAttribute("aria-label", judul);
+      $("simpan").focus();
+    }
+
     async function simpan(isi, v, tbl) {
+      lembar._menyimpan = true;
+      var grup = lembar.querySelector(".grup");
+      if (grup) grup.inert = true;
+      var kembali = $("kembali");
+      if (kembali) kembali.disabled = true;
       if (tbl) { tbl.disabled = true; tbl.textContent = "Menyimpan…"; }
       try {
         var hasil = await kirim(a.post, isi);
         // Tombolnya sendiri yang menjawab: memuat → tercentang, di tempat.
         if (tbl) { tbl.textContent = "✓ Tersimpan"; }
         await new Promise(function (r) { setTimeout(r, 260); });
-        tutupLembar();
-        var pesan = hasil.pesan || "Tersimpan ✓";
+        lembar._menyimpan = false;
+        tutupLembar(true);
+        var pesan = /\/undo(?:$|\?)/.test(a.post) ? "Dibatalkan" : (hasil.pesan || "Tersimpan ✓");
         muat();
         /* Kartu yang barusan diselesaikan harus HILANG sekarang juga. Ia
            digambar server, jadi `muat()` — yang cuma memuat ulang daftar
@@ -1161,40 +1263,190 @@
           kabar(pesan, "ok");
         }
       } catch (e) {
-        kabar(String(e), "err");
-        // Borangnya dibuka ulang berisi jawaban yang sama: yang gagal biasanya
-        // satu isian, dan mengetik semuanya lagi adalah hukuman untuk kesalahan
-        // yang belum tentu miliknya.
-        bukaAksi(id, v);
+        lembar._menyimpan = false;
+        if (grup) grup.inert = false;
+        if (kembali) kembali.disabled = false;
+        kembaliKeBorang();
+        if (tbl) { tbl.disabled = false; tbl.textContent = "Simpan"; }
+        salahFormulir(lembar, e instanceof TypeError
+          ? "Simpan belum terkonfirmasi. Periksa koneksi dan catatan terbaru sebelum mencoba lagi. Isian tetap utuh."
+          : "Belum tersimpan. " + String(e));
       }
     }
 
-    function tanyaYakin(isi, v) {
-      var k = a.konfirmasi;
-      lembar.querySelector(".lembar__isi").innerHTML =
+    function tanyaYakin(isi, v, khusus) {
+      var k = khusus || a.konfirmasi;
+      borangAsli = lembar.querySelector(".lembar__isi");
+      borangAsli.hidden = true;
+      var konfirmasi = document.createElement("div");
+      konfirmasi.className = "lembar__isi lembar__konfirmasi";
+      konfirmasi.innerHTML =
         '<div class="lembar__kepala"><h2>' + esc(k.judul || "Sudah benar?") + "</h2>" +
           '<button class="btn btn--kecil" id="kembali" type="button">Kembali</button></div>' +
-          '<p class="bantu" style="margin-bottom:18px">' + esc(isikan(k.teks || "", v)) + "</p>" +
+          '<p class="bantu" style="margin-bottom:18px">' + esc(isikan(k.teks || "", v)).replace(/\n/g, "<br>") + "</p>" +
           '<button class="btn btn--utama" id="ya" type="button">' +
             esc(k.ya || "Ya, lanjutkan") + "</button>";
-      // Kembali membuka ULANG borangnya — isian yang sudah diketik tidak
-      // boleh hilang hanya karena orang ingin memeriksanya sekali lagi.
-      $("kembali").onclick = function () { bukaAksi(id, v); };
+      // Kembali menampilkan elemen formulir yang sama, berikut seluruh pilihannya.
+      lembar.appendChild(konfirmasi);
+      lembar.setAttribute("aria-label", k.judul || "Sudah benar?");
+      $("kembali").onclick = kembaliKeBorang;
+      $("kembali").focus();
       $("ya").onclick = function () { simpan(isi, v, $("ya")); };
     }
 
-    $("simpan").onclick = function () {
+    $("simpan").onclick = async function () {
       // Semua pilihan WAJIB dipilih. Membiarkan pilihan pertama jadi default
       // berarti sebagian catatan akan diam-diam masuk ke tujuan yang salah.
+      bersihkanSalah(lembar);
       var kurang = [];
-      Array.prototype.forEach.call(lembar.querySelectorAll("[data-wajib]"), function (el) {
-        if (!String(el.value).trim()) kurang.push(el.dataset.label || el.dataset.name);
+      Array.prototype.forEach.call(lembar.querySelectorAll("[data-wajib], [data-p], [data-angka], [data-ulang]"), function (el) {
+        if (el.disabled) return;
+        var nilai = String(el.value).trim();
+        var pasangan = el.closest(".ulang__baris");
+        var terisi = pasangan && Array.prototype.some.call(pasangan.querySelectorAll("[data-p]"), function (p) { return p.value.trim(); });
+        var wajib = el.hasAttribute("data-wajib") || terisi;
+        var angka = el.hasAttribute("data-angka") || el.hasAttribute("data-ulang") || el.dataset.pJenis === "angka";
+        var pesan = !nilai && wajib ? "Isi " + (el.dataset.label || el.dataset.name || "isian ini") + "." : "";
+        if (nilai && angka && (!/^[+-]?\d+(?:[.,]\d+)?$/.test(nilai) || !Number.isFinite(Number(nilai.replace(",", "."))))) {
+          pesan = "Masukkan angka yang benar.";
+        }
+        if (nilai && el.dataset.pJenis === "angka" && Number(nilai.replace(",", ".")) <= 0) pesan = "Jumlah harus lebih dari nol.";
+        if (pesan) { kurang.push({el: el, pesan: pesan}); }
       });
-      if (kurang.length) { kabar("Belum diisi: " + kurang.join(", "), "err"); return; }
+      if (kurang.length) {
+        kurang.forEach(function (k, i) {
+          var tampak = k.el.type === "hidden" ? ($("x_" + k.el.dataset.name) || $("b_" + k.el.dataset.name) || k.el) : k.el;
+          var p = document.createElement("p");
+          p.className = "formulir-salah"; p.id = "salah-isian-" + i;
+          p.textContent = k.pesan;
+          tampak.setAttribute("aria-invalid", "true");
+          tampak.setAttribute("aria-describedby", p.id);
+          var baris = tampak.closest(".ulang__baris");
+          var sesudah = baris || tampak;
+          while (sesudah.nextElementSibling && sesudah.nextElementSibling.classList.contains("formulir-salah")) {
+            sesudah = sesudah.nextElementSibling;
+          }
+          sesudah.insertAdjacentElement("afterend", p);
+          k.tampak = tampak;
+        });
+        salahFormulir(lembar, "Periksa " + kurang.length + " isian yang ditandai.");
+        var awal = kurang[0].tampak;
+        if (awal.type === "hidden") awal = $("simpan");
+        if (!/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(awal.tagName)) awal.tabIndex = -1;
+        var pilihanAwal = awal.querySelector("input, select, button");
+        (pilihanAwal || awal).focus(); awal.scrollIntoView({block: "center"});
+        return;
+      }
 
       var isi = muatan(), v = terbaca();
       // Ditanyakan SESUDAH isian lengkap: konfirmasi yang muncul sebelum
       // angkanya ada tidak punya apa-apa untuk dibandingkan.
+      if (a.pratinjau_jeda) {
+        var tombolJeda = $("simpan");
+        var borangJeda = lembar.querySelector(".lembar__isi");
+        tombolJeda.disabled = true;
+        try {
+          var keadaanJeda = await ambil("/api/actions/acuan-jeda?proses=" + encodeURIComponent(isi.proses));
+          if (!keadaanJeda || !lembar.open || lembar.querySelector(".lembar__isi") !== borangJeda || nilaiMedan("proses") !== isi.proses) return;
+          var awalJeda = acuanJeda[isi.proses];
+          var berubahJeda = awalJeda && awalJeda.dasar !== keadaanJeda.dasar;
+          isi.dasar = keadaanJeda.dasar;
+          isi.kunci_kiriman = kunciJeda;
+          if (isi.waktu_mode !== "aktual") { isi.waktu_kejadian = null; isi.alasan_terlambat = ""; }
+          var waktuJeda = isi.waktu_mode === "aktual" ? String(isi.waktu_kejadian).replace("T", " ") + " WIB" : "sekarang, saat dikonfirmasi";
+          var akibatJeda = a.pratinjau_jeda === "hentikan" ? "Mesin dicatat berhenti; proses tetap terbuka." :
+            a.pratinjau_jeda === "kondisi" ? "Mesin tetap dijeda. Mulai jeda dan waktu berjalan tidak berubah; riwayat penyebab sebelumnya disimpan." : "Mesin dicatat berjalan kembali; interval jeda ditutup pada waktu kejadian.";
+          tanyaYakin(isi, v, {judul: berubahJeda ? "Keadaan jeda BERUBAH — periksa ulang" : "Periksa kejadian jeda",
+            teks: keadaanJeda.teks + "\n\nWaktu kejadian: " + waktuJeda +
+              (isi.sebab ? "\nSebab: " + (isi.sebab === "Lainnya" ? isi.sebab_lain : isi.sebab) : "") +
+              (isi.catatan ? "\nCatatan kondisi: " + isi.catatan : "") +
+              (isi.alasan_terlambat ? "\nAlasan terlambat: " + isi.alasan_terlambat : "") + "\n\n" + akibatJeda,
+            ya: a.pratinjau_jeda === "kondisi" ? "Simpan kondisi; tetap dijeda" : a.pratinjau_jeda === "hentikan" ? "Catat mesin berhenti" : "Catat mesin dilanjutkan"});
+        } catch (e) { salahFormulir(lembar, String(e)); }
+        finally { tombolJeda.disabled = false; }
+        return;
+      }
+      if (a.pratinjau_proses) {
+        var tombolProses = $("simpan");
+        var borangProses = lembar.querySelector(".lembar__isi");
+        tombolProses.disabled = true;
+        try {
+          var alamatProses = "/api/actions/pratinjau-selesai-proses?jenis=" +
+            encodeURIComponent(a.pratinjau_proses) + "&kode_proses=" + encodeURIComponent(isi.kode_proses);
+          if (isi.berat_akhir != null) alamatProses += "&berat_akhir=" + encodeURIComponent(isi.berat_akhir);
+          var ringkasProses = await ambil(alamatProses);
+          if (!ringkasProses || !lembar.open || lembar.querySelector(".lembar__isi") !== borangProses ||
+              nilaiMedan("kode_proses") !== isi.kode_proses) return;
+          isi.dasar = ringkasProses.dasar;
+          tanyaYakin(isi, v, {judul: "Seluruh proses benar-benar selesai?",
+            teks: ringkasProses.teks,
+            ya: a.pratinjau_proses === "giling" ? "Selesaikan giling" : "Selesaikan penyosohan"});
+        } catch (e) { salahFormulir(lembar, String(e)); }
+        finally { tombolProses.disabled = false; }
+        return;
+      }
+      if (a.pratinjau_qc) {
+        var tombolQc = $("simpan");
+        var borangQc = lembar.querySelector(".lembar__isi");
+        tombolQc.disabled = true;
+        try {
+          var qc = await ambil("/api/actions/pratinjau-tutup-qc?kode_batch=" + encodeURIComponent(isi.kode_batch));
+          if (!qc || !lembar.open || lembar.querySelector(".lembar__isi") !== borangQc ||
+              nilaiMedan("kode_batch") !== isi.kode_batch) return;
+          isi.dasar = qc.dasar;
+          tanyaYakin(isi, v, {judul: "Tutup QC sebelum lima pemeriksaan?",
+            teks: qc.teks + "\n\nAlasan: " + isi.alasan,
+            ya: "Tutup QC dengan " + qc.jumlah + " pemeriksaan"});
+        } catch (e) { salahFormulir(lembar, String(e)); }
+        finally { tombolQc.disabled = false; }
+        return;
+      }
+      if (a.pratinjau_muat) {
+        var tombol = $("simpan");
+        tombol.disabled = true;
+        var borangPratinjau = lembar.querySelector(".lembar__isi");
+        try {
+          var kini = await ambil("/api/actions/pratinjau-muat?perintah=" + encodeURIComponent(isi.perintah));
+          if (!kini || !lembar.isConnected || !lembar.open ||
+              lembar.querySelector(".lembar__isi") !== borangPratinjau ||
+              nilaiMedan("perintah") !== isi.perintah) return;
+          var awal = acuanMuat[isi.perintah];
+          var beda = awal && awal.dasar !== kini.dasar;
+          var teks = beda ? "PERINTAH ATAU MUATAN BERUBAH sejak formulir dibuka.\nSebelumnya:\n" + awal.teks + "\n\nTerbaru:\n" : "";
+          teks += kini.teks;
+          if (a.pratinjau_muat === "baris") {
+            var itemMuat = kini.baris.find(function (b) { return String(b.id) === isi.baris; });
+            if (!itemMuat) { salahFormulir(lembar, "Barang tidak lagi tersedia pada perintah ini. Pilih ulang barang."); return; }
+            if (!Number.isFinite(isi.jumlah) || isi.jumlah <= 0 ||
+                (itemMuat.satuan === "karung" && !Number.isInteger(isi.jumlah))) {
+              salahFormulir(lembar, "Total yang sudah dimuat " +
+                (itemMuat.satuan === "karung" ? "dalam karung wajib bilangan bulat lebih dari 0." : "wajib lebih dari 0 kg."));
+              $("f_jumlah").setAttribute("aria-invalid", "true");
+              $("f_jumlah").focus(); return;
+            }
+            teks += "\n\n" + itemMuat.nama + ": total sebelumnya " + itemMuat.dimuat + " " + itemMuat.satuan +
+              " → total yang sudah dimuat " + isi.jumlah + " " + itemMuat.satuan +
+              ". Angka ini mengganti total sebelumnya; bukan tambahan.";
+          } else if (a.pratinjau_muat === "semua") {
+            teks += "\n\nSetelah dikonfirmasi, setiap barang menjadi sejumlah perintah. Pastikan seluruh sisa di atas SUDAH BENAR-BENAR dimuat.";
+          } else {
+            var kurang = kini.baris.some(function (b) { return b.sisa > 0; });
+            if (kurang && !String(isi.sebab || "").trim()) {
+              salahFormulir(lembar, "Muatan kurang dari perintah. Tulis alasan barang tidak terkirim.");
+              $("f_sebab").focus(); return;
+            }
+            teks += "\n\nYang dikirim hanya jumlah sudah dimuat. Sisa tidak dikirim.";
+            if (isi.sebab) teks += "\nAlasan: " + isi.sebab;
+          }
+          isi.dasar = kini.dasar;
+          acuanMuat[isi.perintah] = kini;
+          tanyaYakin(isi, v, {judul: "Periksa muatan aktual", teks: teks,
+            ya: a.pratinjau_muat === "baris" ? "Catat total aktual ini" :
+                (a.pratinjau_muat === "semua" ? "Semua sudah dimuat, selesaikan" : "Selesaikan sesuai muatan aktual")});
+        } catch (e) { salahFormulir(lembar, String(e)); }
+        finally { tombol.disabled = false; }
+        return;
+      }
       if (a.konfirmasi) { tanyaYakin(isi, v); return; }
       simpan(isi, v, $("simpan"));
     };
@@ -1254,6 +1506,20 @@
       });
     }
 
+    if (a.pratinjau_jeda) {
+      aturWaktuJeda(); ambilAcuanJeda();
+      ["proses", "waktu_mode", "sebab"].forEach(function (nama) {
+        var el = $("f_" + nama);
+        if (el) el.addEventListener("change", function () { aturWaktuJeda(); ambilAcuanJeda(); });
+      });
+    }
+    if (a.pratinjau_muat) {
+      ambilAcuanMuat();
+      var pilihPerintah = $("f_perintah");
+      if (pilihPerintah) pilihPerintah.addEventListener("change", ambilAcuanMuat);
+      var pilihBaris = $("f_baris");
+      if (pilihBaris) pilihBaris.addEventListener("change", perbaruiKonteksMuat);
+    }
     var pertama = lembar.querySelector(".fld");
     if (pertama) pertama.focus();
   }
@@ -1266,6 +1532,28 @@
    * tanpa pustaka, tanpa mengangkat elemennya ke luar `.isi`. Peramban tanpa
    * <dialog> mendapat jalur lama: atribut open + display flex. */
   function bukaLembar(lembar) {
+    if (!lembarSedangTerbuka() && window.PINDAH) {
+      // Satu entri membuat Back menutup lembar lebih dulu. PINDAH memakai
+      // kait ini sebelum mengganti halaman agar formulir tidak tersapu.
+      history.pushState(history.state, "", location.href);
+      lembar._riwayat = true;
+      var alamatLembar = location.href;
+      PINDAH.tutupLembarRiwayat = function () {
+        if (lembar._abaikanBalik) {
+          lembar._abaikanBalik = false;
+          lupakanBuka();
+          return true;
+        }
+        if (!lembarSedangTerbuka() || !lembar._riwayat) return false;
+        lembar._riwayat = false;
+        tutupLembar();
+        if (lembarSedangTerbuka()) {
+          history.pushState(history.state, "", alamatLembar);
+          lembar._riwayat = true;
+        }
+        return true;
+      };
+    }
     if (typeof lembar.showModal === "function") {
       if (!lembar.open) { lembar.showModal(); }
     } else {
@@ -1279,8 +1567,40 @@
     return !!(l && (l.open || l.style.display === "flex"));
   }
 
-  function tutupLembar() {
+  function bersihkanSalah(l) {
+    l.querySelectorAll(".formulir-salah, .formulir-gagal").forEach(function (e) { e.remove(); });
+    l.querySelectorAll('[aria-invalid="true"]').forEach(function (e) {
+      e.removeAttribute("aria-invalid"); e.removeAttribute("aria-describedby");
+    });
+  }
+
+  function salahFormulir(l, pesan) {
+    var p = l.querySelector(".formulir-gagal");
+    if (!p) {
+      p = document.createElement("p"); p.className = "pesan pesan--err formulir-gagal";
+      p.setAttribute("role", "alert"); p.tabIndex = -1;
+      var kepala = l.querySelector(".lembar__isi:not([hidden]) .lembar__kepala");
+      kepala.insertAdjacentElement("afterend", p);
+    }
+    p.textContent = pesan;
+    p.focus(); p.scrollIntoView({block: "center"});
+  }
+
+  function bolehBuang(l) {
+    return !l._menyimpan && (!l._berubah || window.confirm(
+      "Buang perubahan yang belum disimpan? Pilih Batal untuk melanjutkan pengisian."));
+  }
+
+  function tutupLembar(paksa) {
     var l = $("lembar");
+    // onclick memberi Event sebagai argumen: hanya boolean true boleh melewati pagar.
+    if (paksa !== true && !bolehBuang(l)) return;
+    l._berubah = false;
+    if (l._riwayat) {
+      l._riwayat = false;
+      l._abaikanBalik = true;
+      history.back();
+    }
     if (typeof l.close === "function") {
       if (l.open) { l.close(); }
     } else {
@@ -1369,7 +1689,14 @@
      ulang tiap kali isinya ditukar, dan pendengar yang dipasang langsung
      akan menumpuk sekali tiap perpindahan. */
   PINDAH.pasang(document, "keydown", function (e) {
-    if (e.key === "Escape" && lembarSedangTerbuka()) tutupLembar();
+    if (e.key === "Escape" && lembarSedangTerbuka()) { e.preventDefault(); tutupLembar(); }
+  });
+
+  PINDAH.pasang(window, "beforeunload", function (e) {
+    var l = $("lembar");
+    if (lembarSedangTerbuka() && (l._berubah || l._menyimpan)) {
+      e.preventDefault(); e.returnValue = "";
+    }
   });
 
   /* ── Tombol tujuan di dalam kartu ──
@@ -1431,6 +1758,7 @@
     s.addEventListener(j, f);
   })(document, "click", function (e) {
     if (!e.target.closest) return;
+    if (e.target.closest("#lembar [data-buang], #lembar [data-tambah]")) $("lembar")._berubah = true;
 
     /* Baris yang salah dipilih DIBUANG, bukan dikosongkan satu per satu.
        Baris pertama tak pernah hilang — ia pembawa `data-wajib` dan cetakan
@@ -1470,6 +1798,7 @@
         var maksP = parseInt(wadah.dataset.maks, 10) || 10;
         if (barisAda.length >= maksP) return;
         var salin = barisAda[0].cloneNode(true);
+        bersihkanSalah(salin);
         Array.prototype.forEach.call(salin.querySelectorAll("[data-wajib]"),
           function (x) { x.removeAttribute("data-wajib"); });
         Array.prototype.forEach.call(salin.querySelectorAll("select, input"),

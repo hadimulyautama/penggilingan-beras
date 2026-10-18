@@ -27,9 +27,9 @@ async def g2(pg):
 
     await seed_master()
     async with pg() as db:
-        gd = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
-        db.add(gd)
-        await db.flush()
+        from sqlalchemy import select
+        gd = await db.scalar(select(Warehouse).where(Warehouse.kode_fungsi == "g2"))
+        assert gd is not None, "seed_master harus menyediakan Gudang 2"
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=gd.id),
                     Silo(nama_silo="Silo B", warehouse_id=gd.id)])
         await db.commit()

@@ -233,7 +233,7 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool) -> list[tuple]:
     t: list[tuple] = []
     if rec.status == OUT_PERINTAH and boleh_muat:
         t.append(("muat_semua", n, "Muat semua sesuai perintah", True))
-        t.append(("muat_barang", "", "Catat per barang", False))
+        t.append(("muat_barang", n, "Catat per barang", False))
         t.append(("selesai_muat", n, "Selesai muat", False))
     if rec.status == OUT_DIMUAT and boleh_perintah:
         t.append(("verifikasi_keluar", n, "Verifikasi & tutup", True))

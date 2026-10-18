@@ -29,7 +29,7 @@ async def g2(pg):
     from hmu_identitas import peran as P
 
     async with pg() as db:
-        w = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        w = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(w)
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=w.id), Silo(nama_silo="Silo B", warehouse_id=w.id)])
@@ -66,7 +66,7 @@ async def _transfer_g1_ke_silo(pg, user_id, suffix, kg, silo) -> str:
         g1 = (await db.execute(_select(Warehouse).where(
             Warehouse.nama_gudang.like("Gudang 1%")))).scalars().first()
         if g1 is None:
-            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
+            g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
             db.add(g1)
             await db.flush()
         u = await db.get(User, user_id)

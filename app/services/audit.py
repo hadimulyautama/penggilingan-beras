@@ -51,7 +51,7 @@ KELOMPOK = (
                                "silo_moving_logs")),
     ("giling", "Giling", ("milling_process", "milling_progress_logs",
                           "milling_qc_logs", "milling_process_verifications")),
-    ("berhenti", "Berhenti", ("jeda_proses",)),
+    ("berhenti", "Berhenti", ("jeda_proses", "jeda_catatan")),
 )
 _TABEL = {k: t for k, _, t in KELOMPOK}
 

@@ -123,6 +123,9 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
                       if kartu and akun.is_admin else None)
     if not kartu:
         raise HTTPException(404, "Riwayat penyosohan tidak ditemukan.")
+    from app.services.riwayat_jeda import riwayat_jeda
+    async with SessionLocal() as db:
+        jeda_riwayat = await riwayat_jeda(db, jenis="penyosohan", id_=process_id, params=request.query_params)
     return await render_laci(
         request, "riwayat_detail.html", jenis="sosoh", k=kartu[0],
         kembali="/riwayat-sosoh", breadcrumb_detail=kartu[0].kode,
@@ -134,6 +137,7 @@ async def detail_riwayat_sosoh(process_id: int, request: Request,
         penghalang_koreksi=penghalang,
         hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
         gagal_koreksi=request.query_params.get("koreksi_gagal"),
+        jeda_riwayat=jeda_riwayat,
     )
 
 

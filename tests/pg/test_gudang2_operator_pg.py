@@ -12,6 +12,8 @@ from datetime import date
 
 import pytest
 
+from app.penggilingan.gudang2.polishing import akhiri_penyosohan
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -91,8 +93,9 @@ async def test_pk_dituang_ke_silo_yang_dipoles_jadi_bahan_proses(pg, gudang2):
         assert "ditambah 1000" in str(e.value)
         s = await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                      nama_silo="B", sisa_kg=800)
-        assert s.selesai and s.terpakai_silo == 10_000
-        assert round(s.rendemen, 1) == 65.0
+        assert not s.selesai and s.terpakai_silo == 10_000
+        akhir = await akhiri_penyosohan(db, user=u, kode=r.proc.kode_proses)
+        assert round(akhir.rendemen, 1) == 65.0
         # Stok silo sesudahnya = sisa yang diketik: 9.800 + 1.000 − 10.000.
         silo_b = usage.silo_id
         assert await hitung_stok_silo(db, silo_b) == 800
@@ -142,6 +145,8 @@ async def test_penyosohan_berhenti_sementara_dan_jeda_tertutup_saat_selesai(pg, 
         # Berhenti lagi, lalu proses ditutup → jedanya ikut tertutup (P-K-17).
         await hentikan(db, user=u, jenis="penyosohan", kode=kode, sebab="Mesin sosoh rusak")
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
+        assert await jeda_terbuka(db, "penyosohan", r.proc.id) is not None
+        await akhiri_penyosohan(db, user=u, kode=kode)
         assert await jeda_terbuka(db, "penyosohan", r.proc.id) is None
 
 
@@ -227,7 +232,7 @@ async def test_satu_silo_tak_perlu_disebut(pg, gudang2):
                   berat_kumulatif=1)
         s = await selesai_penyosohan(db, user=u, kode=r.proc.kode_proses,
                                      nama_silo=None, sisa_kg=0)
-    assert s.silo == "B" and s.selesai
+    assert s.silo == "B" and not s.selesai
 
 
 async def test_silo_yang_tak_dipakai_proses_itu_ditolak_dengan_nama_silonya(pg, gudang2):
@@ -291,7 +296,7 @@ async def test_dua_silo_tetap_wajib_disebut_lalu_sisanya_tidak(pg, gudang2):
 
         await selesai_penyosohan(db, user=u, kode=kode, nama_silo="A", sisa_kg=0)
         s = await selesai_penyosohan(db, user=u, kode=kode, nama_silo=None, sisa_kg=0)
-    assert s.silo == "B" and s.selesai
+    assert s.silo == "B" and not s.selesai
 
 
 async def test_daftar_silo_hanya_milik_proses_itu_dan_yang_belum_selesai(pg, gudang2):
@@ -394,7 +399,9 @@ async def test_silo_g2_dibebaskan_boleh_diisi_ulang_tanpa_masuk_proses_lama(pg, 
     # Dan penyosohan tetap bisa ditutup dari Silo B.
     async with pg() as db:
         s = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
-    assert s.selesai is True
+    assert s.selesai is False
+    async with pg() as db:
+        await akhiri_penyosohan(db, user=u, kode=kode)
 
 
 # ── Silo yang SEDANG disosoh tak berdiri di Antrian tunggu ──
@@ -430,7 +437,7 @@ async def test_silo_yang_sedang_disosoh_tak_ada_di_antrean(pg, gudang2):
 
     async with pg() as db:
         b = await untuk_operator_gudang2(db)
-    antre = {x.kode for x in b.menunggu}
+    antre = {x.kode for x in b.menunggu if x.fase == "silo_g2"}
     assert "Silo B" not in antre, "silo yang sedang disosoh masih berdiri di antrean"
     assert "Silo A" in antre, "silo yang benar-benar menunggu ikut hilang"
 
@@ -498,6 +505,12 @@ async def test_silo_kembali_ke_antrean_sesudah_penyosohan_ditutup(pg, gudang2):
         b = await untuk_operator_gudang2(db)
     kartu = next((x for x in b.menunggu if x.kode == "Silo B"), None)
     assert kartu is not None, "sisa di silo tak kembali jadi pekerjaan"
+    # Mesin masih berjalan: sisa bebas boleh transit, bukan proses kedua.
+    assert kartu.aksi is None
+    async with pg() as db:
+        await akhiri_penyosohan(db, user=u, kode=r.proc.kode_proses)
+        b = await untuk_operator_gudang2(db)
+    kartu = next(x for x in b.menunggu if x.kode == "Silo B")
     assert kartu.aksi == "mulai_penyosohan" and kartu.pilihan
 
 
@@ -994,11 +1007,11 @@ async def test_penyosohan_tak_bisa_ditutup_tanpa_satu_pun_hasil(pg, gudang2):
 
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
+        await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B", sisa_kg=0)
         with pytest.raises(Gudang2Error) as e:
-            await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B",
-                                     sisa_kg=0)
+            await akhiri_penyosohan(db, user=u, kode=kode)
     pesan = str(e.value)
-    assert "belum punya satu pun catatan hasil" in pesan, pesan
+    assert "belum punya catatan hasil" in pesan, pesan
     assert kode in pesan, "pesannya tak menyebut prosesnya"
 
     # Dan penolakannya SEBELUM menulis: prosesnya masih berjalan, silonya
@@ -1015,8 +1028,7 @@ async def test_penyosohan_tak_bisa_ditutup_tanpa_satu_pun_hasil(pg, gudang2):
                            berat_kumulatif=8_000)
     async with pg() as db:
         u = await db.get(User, gudang2["user"].id)
-        hasil = await selesai_penyosohan(db, user=u, kode=kode, nama_silo="B",
-                                         sisa_kg=0)
+        hasil = await akhiri_penyosohan(db, user=u, kode=kode)
     assert hasil.selesai and hasil.rendemen is not None
 
 
@@ -1072,3 +1084,24 @@ async def test_super_admin_boleh_memindahkan_tumpukan_ke_silo(pg, gudang2):
                 tumpukan=str(gudang2["intake_tumpukan"]), silo="A", berat_kg=500),
             user=superadmin)
     assert hasil["ok"] is True
+
+
+async def test_total_hasil_sosoh_300_lalu_500_tidak_menjadi_800(pg, gudang2):
+    """Input adalah total aktual; log tetap tambahan untuk stok dan undo."""
+    from sqlalchemy import select
+    from app.models import PolishingOutputLog
+    from app.penggilingan.gudang2.polishing import catat_output, mulai_penyosohan
+
+    async with pg() as db:
+        user = gudang2["user"]
+        proses = await mulai_penyosohan(db, user=user, nama_silos=["B"])
+        for total in (300, 500, 500):
+            hasil = await catat_output(
+                db, user=user, kode=proses.proc.kode_proses,
+                jenis="premium", berat_kumulatif=total)
+            assert hasil.berat_kumulatif == total
+        logs = (await db.execute(select(PolishingOutputLog).where(
+            PolishingOutputLog.polishing_process_id == proses.proc.id,
+            PolishingOutputLog.jenis == "premium").order_by(PolishingOutputLog.id)
+        )).scalars().all()
+        assert [float(log.berat_kg) for log in logs] == [300, 200]

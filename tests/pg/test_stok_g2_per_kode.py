@@ -183,7 +183,7 @@ async def test_berat_belum_diketahui_tak_punya_berat_awal(pg, pemakai):
     from app.services import stok
 
     async with pg() as db:
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add(g2)
         await db.flush()
         db.add(Silo(nama_silo="Silo A", warehouse_id=g2.id))

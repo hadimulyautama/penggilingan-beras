@@ -22,7 +22,8 @@ from app.web import mode_uji
 
 def test_tak_satu_pun_tabel_timbangan_dalam_jangkauan():
     """Sasaran penghapusan hanya tabel yang didefinisikan produksi sendiri."""
-    assert not [t for t in Base.metadata.tables if t.startswith("timbangan")]
+    # Metadata sekarang mengenal master armada bersama. Yang harus tetap
+    # kosong ialah SASARAN hapus, termasuk saat model asing diimpor.
     assert not [t for t in mode_uji._tabel_dihapus() if t.startswith("timbangan")]
 
 
@@ -371,7 +372,16 @@ def test_penjaga_dipasang_di_kosongkan_bukan_di_tiap_rute():
 
     # Dan kedua rute memang lewat sana, bukan punya jalannya sendiri.
     for rute in (mode_uji.hapus, mode_uji.ulangi):
-        assert "await _kosongkan()" in inspect.getsource(rute), rute.__name__
+        import ast
+        pohon = ast.parse(inspect.getsource(rute))
+        panggilan = [n.value for n in ast.walk(pohon) if isinstance(n, ast.Await)
+                     and isinstance(n.value, ast.Call)
+                     and isinstance(n.value.func, ast.Name)
+                     and n.value.func.id == "_kosongkan"]
+        assert len(panggilan) == 1, rute.__name__
+        assert not panggilan[0].args
+        assert {k.arg for k in panggilan[0].keywords} == (
+            {"lepas_tiket_sungguhan"} if rute is mode_uji.hapus else set())
 
 
 def test_activity_logs_tak_pernah_ikut_terhapus():
@@ -558,3 +568,12 @@ def test_pemicu_dicari_lewat_katalog_bukan_disebut_namanya():
     assert "pg_trigger" in kode, "daftar pemicunya ditulis tangan"
     assert "peristiwa_tambah_saja" not in kode, "nama pemicu diketik di kode"
     assert "tgisinternal" in kode, "pemicu sistem (foreign key) ikut dipadamkan"
+
+
+def test_import_tabel_asing_baru_tidak_memperluas_hapus(monkeypatch):
+    from types import SimpleNamespace
+    nama = {"pekerjaan_uji", "timbangan_kendaraan", "timbangan_tabel_baru",
+            "kantor_tabel_baru", "alembic_version_baru", "users"}
+    monkeypatch.setattr(mode_uji, "Base", SimpleNamespace(
+        metadata=SimpleNamespace(tables=dict.fromkeys(nama))))
+    assert mode_uji._tabel_dihapus() == ["pekerjaan_uji"]

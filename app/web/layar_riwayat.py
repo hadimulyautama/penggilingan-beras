@@ -90,6 +90,9 @@ async def detail_riwayat_giling(process_id: int, request: Request,
     async with SessionLocal() as db:
         penghalang = (await alasan_koreksi_hasil_giling(db, process_id)
                       if akun.is_admin else None)
+    from app.services.riwayat_jeda import riwayat_jeda
+    async with SessionLocal() as db:
+        jeda_riwayat = await riwayat_jeda(db, jenis="giling", id_=process_id, params=request.query_params)
     return await render_laci(
         request, "riwayat_detail.html", jenis="giling", k=kartu[0],
         kembali="/riwayat-giling", breadcrumb_detail=kartu[0].kode,
@@ -97,6 +100,7 @@ async def detail_riwayat_giling(process_id: int, request: Request,
         hasil_awal=kartu[0].hasil_kg, penghalang_koreksi=penghalang,
         hasil_koreksi=request.query_params.get("koreksi") == "berhasil",
         gagal_koreksi=request.query_params.get("koreksi_gagal"),
+        jeda_riwayat=jeda_riwayat,
     )
 
 
@@ -601,10 +605,14 @@ async def detail_riwayat_pengeringan(lot_id: int, request: Request,
         kartu, _ = await riwayat_pengeringan(db, batas=1, lot_id=lot_id)
     if not kartu:
         raise HTTPException(404, "Riwayat pengeringan tidak ditemukan.")
+    from app.services.riwayat_jeda import riwayat_jeda
+    async with SessionLocal() as db:
+        jeda_riwayat = await riwayat_jeda(db, jenis="pengeringan", id_=lot_id, params=request.query_params)
     return await render_laci(
         request, "riwayat_detail.html", jenis="pengeringan", k=kartu[0],
         kembali="/riwayat-pengeringan", breadcrumb_detail=kartu[0].kode_lot,
         layar="riwayat_pengeringan",
+        jeda_riwayat=jeda_riwayat,
     )
 
 

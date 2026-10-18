@@ -158,7 +158,8 @@ async def test_proses_qc_bisa_ditutup_setelah_satu_catatan(pg, pemakai, pemasok)
                              **_isi(1, lamur=False, sak=0))
     async with pg() as db:
         user = await db.get(User, pemakai.id)
-        qc, jumlah = await tutup_qc_gabah(db, user=user, kode_batch=kode)
+        qc, jumlah = await tutup_qc_gabah(db, user=user, kode_batch=kode,
+                                            alasan="Truk harus segera diproses")
         assert jumlah == 1
         assert qc.ditutup_pada is not None
         assert qc.ditutup_by == pemakai.id

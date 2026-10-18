@@ -29,7 +29,7 @@
     <div class="pk-detail__section-head"><div><span class="pk-detail__overline">RINCIAN</span><h2 id="rincian-produk">Asal stok dan produk kemasan</h2></div></div>
     {{ st.blok('', [k], k.sisa_kg, k.curah_kg, '', ('giling' if beras else 'samping'), kemasan,
                boleh_catat=BOLEH_CATAT, boleh_pindah=BOLEH_PINDAH,
-               boleh_masukkan_silo=BOLEH_MASUKKAN_SILO, halaman_aksi=halaman_aksi,
+               boleh_masukkan_silo=BOLEH_MASUKKAN_SILO, halaman_aksi=detail_href,
                curah_titipan=curah_titipan, jasa_ids=jasa_ids, preopened=True,
                baris_kemasan=baris_kemasan) }}
   </section>

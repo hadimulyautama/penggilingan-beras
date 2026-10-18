@@ -116,7 +116,10 @@ KALIMAT_ULANG = "ULANGI DATA UJI"
 
 
 def _tabel_dihapus() -> list[str]:
-    return sorted(set(Base.metadata.tables) - DIPERTAHANKAN)
+    # Master armada bersama kini ikut terdaftar di metadata Produksi. Batas
+    # aplikasi harus eksplisit: import model baru tak boleh memperluas hapus.
+    return sorted(n for n in set(Base.metadata.tables) - DIPERTAHANKAN
+                  if not n.startswith(("timbangan_", "kantor_", "alembic_version")))
 
 
 _SQL_TAUTAN_MASUK = """

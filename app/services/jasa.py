@@ -49,6 +49,8 @@ from app.models import (
     BerasKeSilo,
     BrokenKeSilo,
     ByproductStock,
+    CustomerReturnItem,
+    HasilSampingKeSilo,
     Dryer,
     DryingLot,
     FinishedGoodsStock,
@@ -234,7 +236,7 @@ TABEL_BER_JASA_ID: tuple[type, ...] = (
     PurchaseBatch, DryingLot, SiloStorage, GabahKeringLot, MillingProcess,
     PkPurchaseBatch, PkGudang2Intake, BrokenKeSilo, BerasKeSilo, PolishingProcess,
     InternalTransfer, FinishedGoodsStock, ByproductStock, OutgoingRecord,
-    OutgoingItem,
+    OutgoingItem, CustomerReturnItem, HasilSampingKeSilo,
 )
 
 
@@ -844,7 +846,7 @@ async def _broken_terpakai_per_jasa_dari_silo(db: AsyncSession) -> dict[int, flo
         .join(PolishingProcess,
               PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
         .where(PolishingSiloUsage.silo_id.in_(silo_ids),
-               PolishingProcess.status == "selesai")
+               PolishingSiloUsage.berat_akhir_kg.is_not(None))
     )).all():
         berat = usage.berat_terpakai_kg
         if berat is None and usage.berat_akhir_kg is not None:
@@ -854,7 +856,7 @@ async def _broken_terpakai_per_jasa_dari_silo(db: AsyncSession) -> dict[int, flo
         if berat is None or float(berat) <= 0:
             continue
         events.setdefault(usage.silo_id, []).append((
-            process.waktu_selesai or process.waktu_mulai, -1,
+            usage.updated_at or process.waktu_selesai or process.waktu_mulai, -1,
             float(berat), "consumed", process.jasa_id))
 
     per_jasa: dict[int, float] = {}

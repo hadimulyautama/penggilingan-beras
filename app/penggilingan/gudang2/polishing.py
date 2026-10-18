@@ -463,44 +463,49 @@ async def catat_output(
     berat_kg: float | None = None, spek: str | None = None,
     berat_kumulatif: float | None = None, tanggal=None, jam=None,
 ) -> OutputResult:
-    """Catat hasil SATU PROSESAN — yang keluar sekarang, bukan total sejak awal.
+    """Catat total aktual per jenis tanpa mengubah log tambahan yang sudah ada.
 
-    ⚠ ARTINYA BERUBAH 28 September 2026 atas permintaan operator: dalam satu
-    penyosohan mereka berganti spek, dan tiap spek punya hasilnya sendiri.
-    Dengan kumulatif, mencatat 200 kg broken yang baru — sesudah 300 kg pada
-    spek sebelumnya — menuntut mereka mengetik 500, angka yang dijumlah sendiri
-    di kepala sambil berdiri di mesin.
-
-    `berat_kumulatif` MASIH DITERIMA dan diperlakukan sebagai entri biasa:
-    lembar yang sudah terbuka di layar orang saat versi baru terbit akan
-    mengirim nama lama, dan yang menekan Simpan tak punya cara tahu borangnya
-    basi. Yang berhenti cuma menawarkannya.
-
-    ⚠ YANG HILANG BERSAMA KUMULATIF, dan penggantinya wajib ada: kumulatif
-    TAHAN SALAH KETIK — salah ketik dibetulkan dengan mengetik ulang, nilai
-    terakhir menang. Begitu entri bertambah, satu ketukan ganda menambah dua
-    kali tanpa terlihat, dan angka salah tak bisa dibetulkan dengan mengetik
-    ulang. Karena itu tiap entri kini BISA DIBATALKAN sendiri-sendiri
-    (`undo._undo_output_sosoh`), dan `log_activity` menyimpan id BARISNYA —
-    bukan id prosesnya seperti dulu, yang membuat pembatalan per entri
-    mustahil.
+    Keputusan pemilik 18 Oktober 2026: input 500 sesudah 300 berarti total
+    500 kg. Simpan hanya selisih 200 agar stok, riwayat, dan pembatalan tetap
+    membaca log tambahan. `berat_kg` menjaga kompatibilitas lembar lama yang
+    masih mengirim tambahan; kedua bentuk tidak boleh dikirim bersamaan.
     """
     if not jenis or jenis.lower() not in _ALL_JENIS:
         raise Gudang2Error(
             "Jenis hasil harus salah satu: " + ", ".join(sorted(_ALL_JENIS)) + "."
         )
     jenis = jenis.lower()
+    if berat_kg is not None and berat_kumulatif is not None:
+        raise Gudang2Error("Kirim total hasil atau tambahan, jangan keduanya.")
     berat = berat_kg if berat_kg is not None else berat_kumulatif
     if berat is None:
         raise Gudang2Error(
-            "Sebutkan berat hasil prosesan ini, mis. `premium 2 ton`.")
+            "Isi total hasil sampai sekarang dalam kg.")
     if float(berat) <= 0:
         raise Gudang2Error(
             "Berat hasil harus lebih dari 0. Yang keliru dibatalkan lewat "
             "'Batalkan input terakhir', bukan dicatat sebagai angka minus.")
     proc = await _get_proc(db, kode)
+    # Serialkan pembacaan total dan penambahan selisih. Dua kiriman total
+    # 500 yang bersamaan harus tetap berakhir 500, bukan masing-masing
+    # menghitung tambahan 200 dari total lama 300.
+    proc = (await db.execute(
+        select(PolishingProcess).where(PolishingProcess.id == proc.id)
+        .with_for_update().execution_options(populate_existing=True)
+    )).scalars().one()
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
+    if berat_kumulatif is not None:
+        sebelumnya = await _total_output(db, proc.id, jenis)
+        berat = float(berat_kumulatif) - sebelumnya
+        if berat < -0.000001:
+            raise Gudang2Error(
+                f"Total {jenis} sudah {sebelumnya:g} kg. Total baru tidak boleh "
+                "lebih kecil; gunakan pembatalan atau koreksi hasil.")
+        if abs(berat) <= 0.000001:
+            await db.commit()
+            return OutputResult(proc=proc, jenis=jenis,
+                                berat_kumulatif=sebelumnya, berat_kg=0)
     spek = (spek or "").strip() or None
     baris = PolishingOutputLog(
         polishing_process_id=proc.id, jenis=jenis, berat_kg=berat, spek=spek,
@@ -770,45 +775,16 @@ async def selesai_penyosohan(
     db: AsyncSession, *, user, kode: str | None, nama_silo: str | None,
     sisa_kg: float | None, tanggal=None, jam=None,
 ) -> SelesaiResult:
-    """Tandai sisa 1 silo (berat akhir). Bila semua silo sudah, proses SELESAI +
-    hitung rendemen."""
+    """Bebaskan satu pemakaian silo; mesin dan pencatatan hasil tetap berjalan."""
     proc = await _get_proc(db, kode)
+    await db.refresh(proc, with_for_update=True)
     if proc.status == "selesai":
         raise Gudang2Error(f"Proses {proc.kode_proses} sudah selesai.")
 
-    # ── PAGAR: tak boleh ditutup tanpa satu pun catatan hasil ──
-    #
-    # Laporan operator Gudang 2, 28 September 2026: "jika operator tidak
-    # sengaja terpencet selesai penyosohan, tetapi belum memasukkan hasil beras
-    # dll, hasilnya akan hilang."
-    #
-    # Direproduksi QA, dan lebih buruk daripada "hilang": 6 ton PK tercatat
-    # habis terpakai, nol baris hasil. Berasnya berdiri di lantai tanpa satu
-    # baris pun di pembukuan — dan penutupan penyosohan BELUM BISA DIBATALKAN,
-    # jadi satu ketukan salah tak punya jalan kembali.
-    #
-    # ⚠ SENGAJA MENOLAK, bukan "peringatkan tapi terima" seperti rendemen
-    # mustahil di Gudang 1. Alasannya berlawanan, dan itu yang menentukan:
-    # di sana menolak akan menutup satu-satunya jalan perbaikan (angka
-    # kumulatif boleh diketik ulang). Di sini MENERIMA-lah yang menutup jalan
-    # perbaikannya.
-    if not await _output_map(db, proc.id):
-        raise Gudang2Error(
-            f"{proc.kode_proses} belum punya satu pun catatan hasil. Catat "
-            "hasil penyosohan dulu — beras, menir, broken — baru prosesnya "
-            "bisa ditutup.")
-    # ── Barisnya DIKUNCI sebelum dibaca ──
-    #
-    # Pemeriksaan "silo ini masih terbuka?" di bawah dilewati dua permintaan
-    # yang datang bersamaan: keduanya membaca "masih terbuka", keduanya
-    # menulis, dan yang kedua menimpa sisa yang sudah dicatat yang pertama.
-    # Dua operator Gudang 2 di dua HP adalah keadaan sehari-hari, jadi ini
-    # bukan kasus tepi.
-    #
-    # `FOR UPDATE` membuat yang kedua MENUNGGU sampai yang pertama commit,
-    # lalu membaca ulang barisnya — kini bersisa — dan ditolak dengan kalimat
-    # yang menyebut sisa itu. Pola yang sama dipakai `masukkan_pk_luar` dan
-    # `pindah_tumpukan_ke_silo` (P-K-04/05/06).
+    silo_ids = (await db.scalars(select(PolishingSiloUsage.silo_id).where(
+        PolishingSiloUsage.polishing_process_id == proc.id))).all()
+    for sid in sorted(set(silo_ids)):
+        await kunci_silo(db, sid)
     usages = (
         await db.execute(
             select(PolishingSiloUsage).where(
@@ -865,7 +841,9 @@ async def selesai_penyosohan(
                 "sebutkan mana yang selesai, berikut sisa beratnya.")
         raise Gudang2Error(f"Semua silo proses {proc.kode_proses} sudah ditandai selesai.")
     if sisa_kg is None:
-        raise Gudang2Error("Sebutkan sisa berat di silo, mis. `sisa 500 kg`.")
+        raise Gudang2Error("Isi sisa berat di silo. Isi 0 jika silo sudah kosong.")
+    if not math.isfinite(float(sisa_kg)) or float(sisa_kg) < 0:
+        raise Gudang2Error("Sisa harus angka nol atau lebih.")
     # Isi silo selama proses = awal + yang DITAMBAHKAN sesudah mulai. Silo
     # yang dipoles boleh diisi lagi (keputusan pemilik 12 September 2026),
     # dan yang ditambahkan itu ikut jadi bahan — bukan sisa.
@@ -882,94 +860,100 @@ async def selesai_penyosohan(
     silo_obj = await db.get(Silo, target.silo_id)
     silo_letter = silo_obj.nama_silo.replace("Silo ", "") if silo_obj else "-"
 
-    semua_selesai = all(u.berat_akhir_kg is not None for u in usages)
     pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
     outputs = await _output_map(db, proc.id)
-    beras_total = sum(outputs.get(j, 0.0) for j in GRADES)
-    rendemen = None
-
-    if semua_selesai:
-        proc.status = "selesai"
-        proc.waktu_selesai = input_time(tanggal, jam)
-        # Jeda yang masih terbuka ikut ditutup: prosesnya sudah tak ada, dan
-        # jam tertahan yang terus berjalan akan dipakai menilai shift
-        # (temuan QA P-K-17 pada giling; aturan yang sama di sini).
-        from app.penggilingan.gudang1.services.jeda import jeda_terbuka
-        jeda = await jeda_terbuka(db, "penyosohan", proc.id)
-        if jeda is not None:
-            jeda.selesai = proc.waktu_selesai
-        # Lewat `rendemen_proses`, bukan dihitung di sini: angka ini juga
-        # dibaca kartu "penyosohan selesai", dan dua rumus atas satu angka
-        # akan berselisih tanpa satu pun pesan galat.
-        rendemen = await rendemen_proses(db, proc.id)
-        from app.services.proses_bersama import tutup_proses_bersama
-        komoditas_hasil = {
-            "sayur": ("beras_putih", {"kualitas": "sayur"}),
-            "medium": ("beras_putih", {"kualitas": "medium"}),
-            "medsuper": ("beras_putih", {"kualitas": "medsuper"}),
-            "premium": ("beras_putih", {"kualitas": "premium"}),
-            "beras_b": ("beras_olah_ulang", {}),
-            "broken": ("broken", {}), "menir": ("menir", {}),
-            "bekatul": ("bekatul", {}), "reject": ("reject", {}),
-        }
-        arus_hasil = tuple(
-            ArusProses(
-                produk=buat_produk(komoditas_hasil[jenis_hasil][0],
-                                   **komoditas_hasil[jenis_hasil][1]),
-                berat_kg=Decimal(str(berat_hasil)),
-                referensi=proc.kode_proses,
-            )
-            for jenis_hasil, berat_hasil in outputs.items()
-            if berat_hasil > 0 and jenis_hasil in komoditas_hasil
-        )
-        await tutup_proses_bersama(
-            db, tabel_sumber="polishing_process", id_sumber=proc.id,
-            waktu_selesai=proc.waktu_selesai, hasil=arus_hasil,
-            metadata_tambahan={"rendemen_beras_persen": rendemen,
-                               "berat_pk_terpakai_kg": pk_terpakai},
-        )
-        await log_activity(
-            db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
-            changed_by=user.id, field_name="status", new_value="selesai",
-        )
-    # ── SATU baris bertanda, ditulis TERAKHIR — inilah yang dibatalkan ──
-    #
-    # Laporan operator Gudang 2, 28 September 2026: "jika operator tidak sengaja
-    # terpencet selesai penyosohan ... hasilnya akan hilang." Pagar di atas
-    # menolak penutupan yang belum punya hasil sama sekali; yang ini menjawab
-    # separuh keluhan yang lain — penutupan yang sudah berhasil, tetapi salah.
-    #
-    # Sampai hari ini penutupan mencatat DUA bentuk audit yang berbeda: baris
-    # `polishing_process` bila seluruh silo sudah bersisa, `polishing_silo_usage`
-    # bila belum. Bentuk pertama TAK BISA dibatalkan walau tabelnya didukung,
-    # dan sebabnya bukan kemauan: `record_id`-nya prosesnya, bukan silonya, jadi
-    # pembatalan tak punya cara mengetahui SILO MANA yang barusan ditutup. Pada
-    # proses dua silo ia akan membuka yang salah.
-    #
-    # Karena itu barisnya kini SELALU `polishing_silo_usage` dan selalu
-    # bertanda. Baris `polishing_process` di atas tetap ditulis — layar audit
-    # membacanya sebagai "prosesnya selesai", kejadian yang memang terjadi — dan
-    # sengaja ditulis LEBIH DULU: pratinjau undo memilih baris TERBARU, jadi
-    # urutan inilah yang menentukan tombol undo menawarkan yang benar.
     await log_activity(
         db, table_name="polishing_silo_usage", record_id=target.id, action="UPDATE",
         changed_by=user.id, field_name="berat_akhir_kg", new_value=f"{sisa_kg:.0f}",
         aksi="tutup_silo_sosoh",
     )
-    # Silo yang baru dibebaskan bisa SUDAH berisi PK baru — orang menuangnya
-    # selagi prosesnya berjalan. Statusnya diturunkan ulang dari isinya yang
-    # sebenarnya, bukan dicap "kosong" karena prosesnya selesai (temuan QA 28
-    # September 2026).
     from app.penggilingan.gudang2.service import segarkan_status_silo
     await segarkan_status_silo(db, target.silo_id)
     await db.commit()
-    await db.refresh(proc)
-    return SelesaiResult(
-        proc=proc, selesai=semua_selesai, silo=silo_letter,
+    return SelesaiResult(proc=proc, selesai=False, silo=silo_letter,
         terpakai_silo=float(target.berat_terpakai_kg or 0),
-        pk_terpakai_total=pk_terpakai, beras_total=beras_total,
-        rendemen=rendemen, outputs=outputs,
+        pk_terpakai_total=pk_terpakai,
+        beras_total=sum(outputs.get(j, 0) for j in GRADES),
+        rendemen=None, outputs=outputs)
+
+
+async def akhiri_penyosohan(db: AsyncSession, *, user, kode: str,
+                           dasar: str | None = None, tanggal=None, jam=None) -> SelesaiResult:
+    """Pernyataan eksplisit operator: seluruh proses di mesin benar-benar selesai.
+
+    Semua silo boleh sudah kosong jauh sebelum langkah ini. Bahan yang masih
+    berada di mesin bukan isi silo dan tidak boleh menutup hasil secara otomatis.
+    """
+    proc = await _get_proc(db, kode)
+    await db.refresh(proc, with_for_update=True)
+    if proc.status != "proses":
+        raise Gudang2Error(f"Proses {kode} sudah selesai.")
+    usages = (await db.scalars(select(PolishingSiloUsage).where(
+        PolishingSiloUsage.polishing_process_id == proc.id).with_for_update()
+        .execution_options(populate_existing=True))).all()
+    if any(u.berat_akhir_kg is None for u in usages):
+        raise Gudang2Error("Bebaskan setiap silo dan isi sisanya dulu. Proses tetap berjalan.")
+    outputs = await _output_map(db, proc.id)
+    if not outputs:
+        raise Gudang2Error(f"{kode} belum punya catatan hasil. Catat hasil penyosohan dulu.")
+    if dasar is not None:
+        from app.services.penyelesaian_proses import ringkasan_selesai
+        kini = await ringkasan_selesai(db, jenis="sosoh", kode=kode)
+        if dasar != kini["dasar"]:
+            raise Gudang2Error("Data proses berubah sejak diperiksa. Periksa ulang sebelum menyelesaikan.")
+    pk_terpakai = sum(float(u.berat_terpakai_kg or 0) for u in usages)
+    selesai_pada = input_time(tanggal, jam)
+    # Jeda yang masih terbuka ikut ditutup: prosesnya sudah tak ada, dan
+    # jam tertahan yang terus berjalan akan dipakai menilai shift
+    # (temuan QA P-K-17 pada giling; aturan yang sama di sini).
+    from app.penggilingan.gudang1.services.jeda import tutup_bersama_proses, JedaError
+    try:
+        await tutup_bersama_proses(db, jenis="penyosohan", obj=proc,
+                                  saat=selesai_pada, user=user)
+    except JedaError as e:
+        raise Gudang2Error(str(e)) from e
+    proc.status = "selesai"
+    proc.waktu_selesai = selesai_pada
+    # Lewat `rendemen_proses`, bukan dihitung di sini: angka ini juga
+    # dibaca kartu "penyosohan selesai", dan dua rumus atas satu angka
+    # akan berselisih tanpa satu pun pesan galat.
+    rendemen = await rendemen_proses(db, proc.id)
+    from app.services.proses_bersama import tutup_proses_bersama
+    komoditas_hasil = {
+        "sayur": ("beras_putih", {"kualitas": "sayur"}),
+        "medium": ("beras_putih", {"kualitas": "medium"}),
+        "medsuper": ("beras_putih", {"kualitas": "medsuper"}),
+        "premium": ("beras_putih", {"kualitas": "premium"}),
+        "beras_b": ("beras_olah_ulang", {}),
+        "broken": ("broken", {}), "menir": ("menir", {}),
+        "bekatul": ("bekatul", {}), "reject": ("reject", {}),
+    }
+    arus_hasil = tuple(
+        ArusProses(
+            produk=buat_produk(komoditas_hasil[jenis_hasil][0],
+                               **komoditas_hasil[jenis_hasil][1]),
+            berat_kg=Decimal(str(berat_hasil)),
+            referensi=proc.kode_proses,
+        )
+        for jenis_hasil, berat_hasil in outputs.items()
+        if berat_hasil > 0 and jenis_hasil in komoditas_hasil
     )
+    await tutup_proses_bersama(
+        db, tabel_sumber="polishing_process", id_sumber=proc.id,
+        waktu_selesai=proc.waktu_selesai, hasil=arus_hasil,
+        metadata_tambahan={"rendemen_beras_persen": rendemen,
+                           "berat_pk_terpakai_kg": pk_terpakai},
+    )
+    await log_activity(
+        db, table_name="polishing_process", record_id=proc.id, action="UPDATE",
+        changed_by=user.id, field_name="status", new_value="selesai",
+        aksi="akhiri_penyosohan",
+    )
+    await db.commit()
+    return SelesaiResult(proc=proc, selesai=True, silo="-", terpakai_silo=0,
+        pk_terpakai_total=pk_terpakai,
+        beras_total=sum(outputs.get(j, 0) for j in GRADES),
+        rendemen=rendemen, outputs=outputs)
 
 
 # ─────────────────────────── Laporan ───────────────────────────

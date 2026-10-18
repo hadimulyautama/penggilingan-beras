@@ -50,15 +50,19 @@ def _url() -> str | None:
 #: supaya pola nama `alembic_version%` hanya tertulis SEKALI — pola yang disalin
 #: adalah pola yang cepat atau lambat kehilangan salah satu dari empat rantai
 #: migrasi yang hidup di basis data ini.
+#: Seluruh tabel dikosongkan dalam SATU perintah: CASCADE per tabel akan
+#: mengosongkan tabel anak berulang kali dan mendominasi waktu 800+ uji.
 _KOSONGKAN = """
     DO $$
-    DECLARE t text;
+    DECLARE tabel text;
     BEGIN
-      FOR t IN SELECT tablename FROM pg_tables
+      SELECT string_agg(format('%I.%I', schemaname, tablename), ', ')
+        INTO tabel FROM pg_tables
                 WHERE schemaname = 'public'
-                  AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
-      LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t);
-      END LOOP;
+                  AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\';
+      IF tabel IS NOT NULL THEN
+        EXECUTE 'TRUNCATE TABLE ' || tabel || ' RESTART IDENTITY CASCADE';
+      END IF;
     END $$;
 """
 
@@ -111,6 +115,11 @@ def _skema_head():
 @pytest_asyncio.fixture
 async def pg(_skema_head):
     """Basis data kosong dengan skema dari MIGRASI, bukan dari metadata.
+
+    Fixture gudang harus mengisi `kode_fungsi="g1"/"g2"` secara eksplisit.
+    Nama gudang boleh diubah operator; layanan mengenalinya lewat kode stabil.
+    TRUNCATE menghapus master hasil migrasi juga, sehingga membuat nama saja
+    di fixture tidak lagi mewakili gudang operasional yang sah.
 
     Skemanya sendiri (lewat `alembic upgrade head`) dibangun SEKALI per sesi
     di `_skema_head` di atas — lihat docstring-nya untuk kenapa. Yang masih

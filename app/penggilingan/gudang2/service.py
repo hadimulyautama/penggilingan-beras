@@ -270,7 +270,6 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
     hitungan stok; semua arus masuk dihitung bersama dan pemakaian/keluar
     mengurangi saldo campuran yang sama.
     """
-    silo = await db.get(Silo, silo_id)
     if pemilik == "semua":
         # Toleransi timbang berlaku per pemilik. Jangan satukan defisit kecil
         # milik A dengan stok milik B di tumpukan fisik yang sama.
@@ -328,25 +327,19 @@ async def hitung_stok_silo(db: AsyncSession, silo_id: int, *,
         q_broken = q_broken.where(milik(BrokenKeSilo))
         q_beras = q_beras.where(milik(BerasKeSilo))
         q_hasil_samping = q_hasil_samping.where(milik(HasilSampingKeSilo))
-    masuk_langsung = (
-        await db.execute(
-            select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
-                # Disaring dengan `silo_id` SAJA (di luar saringan pemilik di
-                # atas). Menambahkan syarat atas kata tujuannya akan membuang
-                # baris silo ketiga tanpa satu pun galat — silonya berisi, tetapi
-                # stoknya terbaca 0, lalu ia hilang dari borang. Itu jenis
-                # kerusakan yang paling sulit dilihat: tak ada yang salah di
-                # layar mana pun.
-                *syarat_langsung,
-            )
-        )
-    ).scalar_one()
-    masuk_dari_tumpukan = (await db.execute(q_tumpukan)).scalar_one()
-    masuk_broken = (await db.execute(q_broken)).scalar_one()
-    terpakai = (await db.execute(q_terpakai)).scalar_one()
-    keluar = (await db.execute(q_keluar)).scalar_one()
-    masuk_beras_putih = (await db.execute(q_beras)).scalar_one()
-    masuk_hasil_samping = (await db.execute(q_hasil_samping)).scalar_one()
+    q_langsung = select(func.coalesce(func.sum(PkGudang2Intake.berat_kg), 0)).where(
+        *syarat_langsung)
+    # Tujuh arus adalah agregat independen. Kirim sebagai scalar subquery
+    # dalam satu SELECT agar satu pembacaan saldo tidak memerlukan tujuh
+    # perjalanan ke Postgres (dikalikan dua pemilik dan beberapa penjaga
+    # dalam satu penyimpanan). Saringan pemilik serta cermin batal tetap
+    # menempel pada setiap arus, tanpa cache yang bisa menyimpan saldo lama.
+    (masuk_langsung, masuk_dari_tumpukan, masuk_broken, terpakai,
+     keluar, masuk_beras_putih, masuk_hasil_samping) = (
+        await db.execute(select(*(q.scalar_subquery() for q in (
+            q_langsung, q_tumpukan, q_broken, q_terpakai, q_keluar,
+            q_beras, q_hasil_samping))))
+    ).one()
     # Toleransi timbang pada barang keluar dapat mengizinkan selisih kecil
     # (maks. 0,5 kg). Jangan biarkan selisih itu menjadi saldo negatif yang
     # mengurangi muatan pemilik berikutnya ketika silo sudah dikosongkan.
@@ -428,17 +421,17 @@ async def komposisi_bahan_silo(
     )).all():
         tambah(out.waktu, "pk", r.berat_kg, masuk=False)
 
-    # Pemakaian sosoh yang telah ditutup mengurangi bahan lama dengan FIFO.
+    # Pembebasan tiap siklus mengurangi bahan lama, meskipun mesin masih berjalan.
     for u, pr in (await db.execute(
         select(PolishingSiloUsage, PolishingProcess)
         .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
         .where(PolishingSiloUsage.silo_id == silo_id,
                PolishingSiloUsage.berat_akhir_kg.is_not(None),
-               PolishingProcess.waktu_selesai.is_not(None),
                *([PolishingProcess.id != kecuali_proses_id]
                  if kecuali_proses_id is not None else []))
     )).all():
-        tambah(pr.waktu_selesai, "*", u.berat_terpakai_kg, masuk=False)
+        tambah(u.updated_at or pr.waktu_selesai or pr.waktu_mulai, "*",
+               u.berat_terpakai_kg, masuk=False)
 
     urut = sorted(gerak, key=lambda x: (x[0], x[1]))
     lot: list[list[float | str]] = []
@@ -483,8 +476,12 @@ async def komposisi_bahan_silo(
     return hasil
 
 
+_SEMUA_PEMILIK_TUMPUKAN = object()
+
+
 async def hitung_stok_tumpukan(db: AsyncSession, *,
-                               pemilik: str = "semua") -> float:
+                               pemilik: str = "semua",
+                               jasa_id=_SEMUA_PEMILIK_TUMPUKAN) -> float:
     """Stok tumpukan G2 = masuk sbg tumpukan − dipindah ke silo − diambil keluar.
 
     `pemilik` bawaannya "semua" — isi FISIK lantainya, dan itu yang benar untuk
@@ -500,7 +497,7 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
     baris finished_goods/byproduct_curah/pk_langsung (yang `silo_id`-nya
     juga selalu NULL) akan ikut terjumlah ke sini.
     """
-    if pemilik == "semua":
+    if pemilik == "semua" and jasa_id is _SEMUA_PEMILIK_TUMPUKAN:
         # Sama seperti isi silo, pembulatan/toleransi pemilik A tak boleh
         # mengurangi stok fisik milik B yang berada di tumpukan yang sama.
         return (await hitung_stok_tumpukan(db, pemilik="pabrik")
@@ -512,7 +509,18 @@ async def hitung_stok_tumpukan(db: AsyncSession, *,
     q_keluar = (select(func.coalesce(func.sum(OutgoingItem.berat_kg), 0))
                 .where(OutgoingItem.item_type == "pk_g2",
                        OutgoingItem.silo_id.is_(None)))
-    if pemilik != "semua":
+    if jasa_id is not _SEMUA_PEMILIK_TUMPUKAN:
+        # Tumpukan beberapa pemilik boleh berada di gudang yang sama. Yang
+        # dapat diambil hanya saldo pesanan ini, bukan seluruh titipan.
+        syarat = (PkGudang2Intake.jasa_id.is_(None) if jasa_id is None
+                  else PkGudang2Intake.jasa_id == jasa_id)
+        syarat_keluar = (OutgoingItem.jasa_id.is_(None) if jasa_id is None
+                         else OutgoingItem.jasa_id == jasa_id)
+        q_masuk = q_masuk.where(syarat)
+        q_pindah = q_pindah.join(PkGudang2Intake,
+            PkGudang2Intake.id == PkTumpukanToSilo.pk_gudang2_intake_id).where(syarat)
+        q_keluar = q_keluar.where(syarat_keluar)
+    elif pemilik != "semua":
         syarat = (PkGudang2Intake.jasa_id.is_(None) if pemilik == "pabrik"
                   else PkGudang2Intake.jasa_id.isnot(None))
         # `OutgoingItem.jasa_id` LANGSUNG (migrasi 0080), bukan lewat

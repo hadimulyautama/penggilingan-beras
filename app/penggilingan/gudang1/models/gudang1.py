@@ -5,6 +5,8 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    JSON,
+    Text,
     Boolean,
     CheckConstraint,
     Index,
@@ -573,6 +575,7 @@ class JedaProses(Base):
     polishing_process_id: Mapped[int | None] = mapped_column(
         ForeignKey("polishing_process.id")
     )
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sebab: Mapped[str] = mapped_column(String(120), nullable=False)
     mulai: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     selesai: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -580,3 +583,24 @@ class JedaProses(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class JedaCatatan(Base):
+    """Kejadian dalam satu jeda: mengganti kondisi tidak menyalakan mesin."""
+    __tablename__ = "jeda_catatan"
+    __table_args__ = (Index("ix_jeda_catatan_jeda", "jeda_id", "id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    jeda_id: Mapped[int] = mapped_column(ForeignKey("jeda_proses.id"), nullable=False)
+    aksi: Mapped[str] = mapped_column(String(30), nullable=False)
+    waktu_kejadian: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dicatat_pada: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    dicatat_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    sebab: Mapped[str] = mapped_column(String(120), nullable=False)
+    catatan: Mapped[str | None] = mapped_column(Text)
+    alasan_terlambat: Mapped[str | None] = mapped_column(Text)
+    kunci_kiriman: Mapped[str | None] = mapped_column(String(64), unique=True)
+    sidik_payload: Mapped[str | None] = mapped_column(String(64))
+    hasil: Mapped[dict | None] = mapped_column(JSON)
+    asal_lama: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    dibatalkan_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dibatalkan_oleh: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

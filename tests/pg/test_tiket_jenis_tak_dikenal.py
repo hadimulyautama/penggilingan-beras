@@ -11,7 +11,7 @@ penyaring yang masing-masing benar tetapi bersama meninggalkan lubang:
 Jenis yang TIDAK dipetakan sama sekali tak diambil siapa pun. Hanya laporan
 Rekonsiliasi menyebutnya — dan laporan dibuka orang sesudah ia curiga.
 
-Dan lubangnya bukan sementara: `BERAS_MASUK` & `BROKEN_MASUK` memang belum
+Dan lubangnya bukan sementara: `JENIS_UJI_ASING` & `BROKEN_MASUK` memang belum
 dipetakan (keputusan pemiliknya sudah ada sejak 24 Sep 2026 — pembelian,
 tanpa antrean giling — tapi jalurnya belum dibangun), dan taksonomi jenis di Pos
 Timbang berbasis DATA, jadi jenis baru bisa lahir di sana tanpa produksi tahu.
@@ -62,8 +62,8 @@ async def pabrik(pg):
     from app.models import Silo, Warehouse
 
     async with pg() as db:
-        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan")
-        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan")
+        g1 = Warehouse(nama_gudang="Gudang 1 - Selepan", kode_fungsi="g1")
+        g2 = Warehouse(nama_gudang="Gudang 2 - Penyosohan", kode_fungsi="g2")
         db.add_all([g1, g2])
         await db.flush()
         db.add_all([Silo(nama_silo="Silo A", warehouse_id=g2.id),
@@ -95,7 +95,7 @@ async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
     from app.services import berjalan as svc
 
     async with pg() as db:
-        await _tiket(db, "TRX-UJI-TDK-01", "BERAS_MASUK")     # belum dipetakan
+        await _tiket(db, "TRX-UJI-TDK-01", "JENIS_UJI_ASING")     # belum dipetakan
         await _tiket(db, "TRX-UJI-PK-01", "BERAS_PK")         # dipetakan → jalur PK
         await _tiket(db, "TRX-UJI-GB-01", "GABAH_KERING")     # dipetakan → jalur gabah
         await db.commit()
@@ -117,8 +117,8 @@ async def test_jenis_tak_dipetakan_muncul_sebagai_kartu_diam(pg, admin):
     # menolak lebih buruk daripada kartu yang diam.
     assert not kartu.aksi and kartu.tombol == [] and kartu.pilihan == []
     # ── Tetapi ia MENJELASKAN dirinya ──
-    assert "BERAS_MASUK" in kartu.keadaan and "belum dikenal" in kartu.keadaan
-    assert ("Jenis timbang", "BERAS_MASUK") in kartu.fakta
+    assert "JENIS_UJI_ASING" in kartu.keadaan and "belum dikenal" in kartu.keadaan
+    assert ("Jenis timbang", "JENIS_UJI_ASING") in kartu.fakta
     # Bobot & pemasoknya terbaca — itu yang dipakai orang mengenali truk mana.
     assert kartu.judul == "UD Sumber Tani"
     assert kartu.utama and kartu.utama[1] == "kg"
@@ -157,7 +157,7 @@ async def test_tiket_yang_sudah_dicatat_keluar_dari_antrean(pg, admin):
     from app.services import berjalan as svc
 
     async with pg() as db:
-        tid = await _tiket(db, "TRX-UJI-TDK-03", "BERAS_MASUK")
+        tid = await _tiket(db, "TRX-UJI-TDK-03", "JENIS_UJI_ASING")
         await db.commit()
 
     async with pg() as db:
