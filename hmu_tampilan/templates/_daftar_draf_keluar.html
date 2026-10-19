@@ -13,5 +13,17 @@
   {% endfor %}
   </div>
   <p class="bantu" data-draf-kosong{{ ' hidden' if draf_saya }}>Belum ada draf tersimpan.</p>
+  <dialog class="draf-konfirmasi" data-dialog-hapus-draf aria-labelledby="judul-hapus-draf" aria-describedby="akibat-hapus-draf">
+    <h2 id="judul-hapus-draf">Hapus draf?</h2>
+    <dl class="draf-konfirmasi__rincian">
+      <dt>Pelanggan</dt><dd data-nama-hapus-draf></dd>
+      <dt>Jumlah item</dt><dd data-item-hapus-draf></dd>
+    </dl>
+    <p id="akibat-hapus-draf">Draf ini tidak dapat dilanjutkan setelah dihapus.</p>
+    <div class="draf-konfirmasi__tombol">
+      <button class="btn" type="button" data-batal-hapus-draf autofocus>Batal</button>
+      <button class="btn btn--bahaya" type="button" data-setuju-hapus-draf>Ya, hapus draf</button>
+    </div>
+  </dialog>
 </section>
 <script src="/static/daftar-draf.js?v={{ VERSI }}" defer></script>

@@ -3127,3 +3127,13 @@ a.kartu-keluar__tautan:focus-visible { outline:3px solid var(--tinta); outline-o
 .draf-daftar__baris .bantu { display:block; }
 .draf-daftar__baris .btn { min-height:48px; }
 @media(max-width:600px){.draf-daftar__baris { grid-template-columns:minmax(0,1fr) 100px; gap:8px; }}
+
+/* Dialog konfirmasi mengikuti token tema, dengan Batal sebagai fokus awal. */
+dialog.draf-konfirmasi { width:calc(100% - 32px); max-width:480px; max-height:calc(100dvh - 32px); margin:auto; padding:20px; overflow-y:auto; overscroll-behavior:contain; background:var(--panel); color:var(--tinta); border:1px solid var(--garis); border-radius:16px; font:inherit; box-shadow:0 16px 48px #0005; }
+dialog.draf-konfirmasi::backdrop { background:rgba(6,11,14,.7); }
+.draf-konfirmasi h2 { margin:0 0 16px; font-size:22px; color:var(--tinta); }
+.draf-konfirmasi__rincian { margin:0; }
+.draf-konfirmasi dt { font-size:14px; color:var(--redup); margin-top:12px; }
+.draf-konfirmasi dd { margin:3px 0 0; font-size:18px; font-weight:650; overflow-wrap:anywhere; }
+.draf-konfirmasi__tombol { display:flex; gap:10px; margin-top:20px; }
+.draf-konfirmasi__tombol .btn { flex:1; min-height:48px; }
