@@ -1,5 +1,8 @@
 {% import "_stok.html" as st %}
 {% macro bobot(n) -%}{{ ('{:,.3f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') }} kg{%- endmacro %}
+{% macro nilai_ringkas(label, nilai) -%}
+{{ 'Tanpa tambahan' if label == 'Tambahan' and nilai == '0 kg' else 'Kosong' if label == 'Sisa akhir' and nilai == '0 kg' else nilai }}
+{%- endmacro %}
 {% macro bahan_silo(kelompok) %}
 <p class="bantu">Satu baris per silo. Total masuk mencakup seluruh catatan; sisa dan status mengikuti catatan terakhir. Riwayat lengkap ada di Rincian.</p>
 <table class="bahan-silo" aria-label="Bahan dan pemakaian silo">
@@ -15,7 +18,7 @@
   <th scope="row"><span class="bahan-silo__nama">{{ nama }} <small>· {{ riwayat|length }} {{ 'catatan sumber' if akhir.unit|default('') == 'catatan sumber' else 'kali pemakaian' }}</small></span><span class="bahan-silo__jenis">{{ jenis.nama|join(' + ') }}</span></th>
   <td data-label="Total masuk"><strong>{{ bobot(total|sum(attribute='total_kg')) if total|length == riwayat|length else 'Belum diketahui' }}</strong></td>
   <td data-label="Tambahan">{% if tambahan|length == riwayat|length %}{% set kg = tambahan|sum(attribute='tambahan_kg') %}{{ '+' ~ bobot(kg) if kg else 'Tanpa tambahan' }}{% else %}Tidak dipisahkan{% endif %}</td>
-  <td data-label="Sisa akhir">{{ akhir.ringkasan_sisa|default(angka.get('Sisa akhir', 'Belum dicatat')) }}</td>
+  <td data-label="Sisa akhir">{{ nilai_ringkas('Sisa akhir', akhir.ringkasan_sisa|default(angka.get('Sisa akhir', 'Belum dicatat'))) }}</td>
   <td data-label="Status"><span>{{ akhir.ringkasan_status|default(akhir.status.split(' · ')[0]|replace(' pada pemakaian ini', '')) }}</span>
   </td>
 </tr>
@@ -31,7 +34,7 @@
       <dl class="bahan-silo__angka">
         {% if gabung %}<div><dt>Awal / terpakai</dt><dd>{{ rincian['Awal'] }}</dd></div>{% endif %}
         {% for label, nilai in g.angka|default([]) %}
-          {% if label not in ['Awal', 'Terpakai'] or (not gabung and not (nilai == g.berat and nilai.endswith(' kg'))) %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endif %}
+          {% if label not in ['Awal', 'Terpakai'] or (not gabung and not (nilai == g.berat and nilai.endswith(' kg'))) %}<div><dt>{{ label }}</dt><dd>{{ nilai_ringkas(label, nilai) }}</dd></div>{% endif %}
         {% endfor %}
       </dl>
       {% if g.bahan|length > 1 %}<p>Komposisi:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
@@ -55,11 +58,11 @@
   {% set asal = namespace(baris=[]) %}
   {% for nama, berat in s.asal %}{% set asal.baris = asal.baris + [dict(nama=nama, berat=berat, ket='')] %}{% endfor %}
   {% if s.asal_lebih %}{% set asal.baris = asal.baris + [dict(nama=s.asal_lebih ~ ' sumber lain tidak ditampilkan', berat='', ket='')] %}{% endif %}
-  {% set ns.kelompok = ns.kelompok + [dict(nama=s.nama, total_kg=s.awal_kg + s.masuk_kg, tambahan_kg=s.masuk_kg, berat=st.kg(s.awal_kg + s.masuk_kg) ~ ' kg',
+  {% set ns.kelompok = ns.kelompok + [dict(nama=s.nama, total_kg=s.awal_kg + s.masuk_kg, tambahan_kg=s.masuk_kg, berat=bobot(s.awal_kg + s.masuk_kg),
     status='Dilepaskan' if s.sisa_kg is not none else 'Pelepasan belum dicatat',
-    angka=[('Awal',st.kg(s.awal_kg) ~ ' kg'),('Tambahan',st.kg(s.masuk_kg) ~ ' kg'),
-      ('Sisa akhir',st.kg(s.sisa_kg) ~ ' kg' if s.sisa_kg is not none else 'Belum dicatat'),
-      ('Terpakai',st.kg(s.terpakai_kg) ~ ' kg' if s.sisa_kg is not none else 'Belum tercatat')],
+    angka=[('Awal',bobot(s.awal_kg)),('Tambahan',bobot(s.masuk_kg)),
+      ('Sisa akhir',bobot(s.sisa_kg) if s.sisa_kg is not none else 'Belum dicatat'),
+      ('Terpakai',bobot(s.terpakai_kg) if s.sisa_kg is not none else 'Belum tercatat')],
     bahan=[], sumber=asal.baris)] %}
 {% endfor %}
 {{ bahan_silo(ns.kelompok) }}

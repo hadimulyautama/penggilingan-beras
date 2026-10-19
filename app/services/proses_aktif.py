@@ -71,13 +71,15 @@ def kelompok_bahan_silo(rows, pemakaian=()):
         for g, (u, nama) in zip(hasil, pemakaian):
             if g["nama"] != nama:
                 raise ValueError("Urutan pemakaian silo tidak selaras")
+            from app.services.bahan_silo import kg_rinci
             g["total_kg"] = float(u.berat_awal_kg or 0) + float(u.berat_masuk_kg or 0)
+            g["berat"] = kg_rinci(g["total_kg"])
             g["tambahan_kg"] = float(u.berat_masuk_kg or 0)
             g["angka"] = [
-                ("Awal", svc._kg(u.berat_awal_kg)),
-                ("Tambahan", svc._kg(u.berat_masuk_kg)),
-                ("Sisa akhir", svc._kg(u.berat_akhir_kg) if u.berat_akhir_kg is not None else "Belum dicatat"),
-                ("Terpakai", svc._kg(u.berat_terpakai_kg) if u.berat_akhir_kg is not None else "Belum final"),
+                ("Awal", kg_rinci(u.berat_awal_kg)),
+                ("Tambahan", kg_rinci(u.berat_masuk_kg)),
+                ("Sisa akhir", kg_rinci(u.berat_akhir_kg) if u.berat_akhir_kg is not None else "Belum dicatat"),
+                ("Terpakai", kg_rinci(u.berat_terpakai_kg) if u.berat_akhir_kg is not None else "Belum final"),
             ]
     return hasil
 

@@ -1,7 +1,15 @@
 """Data tampilan sumber giling, dibaca borongan tanpa mengubah bahan atau stok."""
 from sqlalchemy import select, func
 from app.models import MillingProcessSource, SiloStorage, Silo, DryingLot, PurchaseBatch, ActivityLog
-from app.services.berjalan import _kg
+from decimal import Decimal
+
+
+def kg_rinci(n):
+    """Pertahankan pecahan agar sisa positif tidak tampak sebagai kosong."""
+    n = Decimal(str(n))
+    if n == 0:
+        n = Decimal(0)
+    return format(n, ",.3f").rstrip("0").rstrip(".").replace(",", "_").replace(".", ",").replace("_", ".") + " kg"
 
 
 async def sumber_giling_banyak(db, ids):
@@ -34,12 +42,12 @@ async def sumber_giling_banyak(db, ids):
     hasil = {}
     for s, nama, asal in rows:
         hasil.setdefault(s.milling_process_id, []).append(dict(
-            nama=nama, total_kg=float(s.berat_kg) if s.berat_kg is not None else None, tambahan_kg=None, unit='catatan sumber', berat=_kg(s.berat_kg) if s.berat_kg is not None else 'Belum diketahui',
+            nama=nama, total_kg=float(s.berat_kg) if s.berat_kg is not None else None, tambahan_kg=None, unit='catatan sumber', berat=kg_rinci(s.berat_kg) if s.berat_kg is not None else 'Belum diketahui',
             status='Dilepaskan' if s.berat_akhir_kg is not None else 'Pelepasan belum dicatat',
-            angka=[('Awal', _kg(s.berat_kg) if s.berat_kg is not None else 'Belum diketahui'),
+            angka=[('Awal', kg_rinci(s.berat_kg) if s.berat_kg is not None else 'Belum diketahui'),
                    ('Tambahan', 'Tidak dipisahkan'),
-                   ('Sisa akhir', _kg(s.berat_akhir_kg) if s.berat_akhir_kg is not None else 'Belum dicatat'),
-                   ('Terpakai', _kg(s.berat_terpakai_kg) if s.berat_terpakai_kg is not None else 'Belum tercatat')],
+                   ('Sisa akhir', kg_rinci(s.berat_akhir_kg) if s.berat_akhir_kg is not None else 'Belum dicatat'),
+                   ('Terpakai', kg_rinci(s.berat_terpakai_kg) if s.berat_terpakai_kg is not None else 'Belum tercatat')],
             bahan=[dict(nama='Gabah', berat='')],
             sumber=[dict(nama=asal or 'Asal belum tercatat', berat='', ket='')],
             catatan='Setiap catatan adalah sumber gabah yang terikat ke proses. Tambahan per pemakaian silo belum dipisahkan; sumber dengan silo yang sama tetap ditampilkan terpisah.'))
@@ -63,6 +71,6 @@ async def sumber_giling_banyak(db, ids):
                     pass
             if sisa is None and (len(semua) == 1 or all(float(s.berat_akhir_kg) == 0 for s in semua)):
                 sisa = sum(float(s.berat_akhir_kg) for s in semua)
-            akhir['ringkasan_sisa'] = _kg(sisa) if sisa is not None else 'Belum dapat dipastikan'
+            akhir['ringkasan_sisa'] = kg_rinci(sisa) if sisa is not None else 'Belum dapat dipastikan'
             akhir['ringkasan_status'] = 'Dilepaskan'
     return hasil

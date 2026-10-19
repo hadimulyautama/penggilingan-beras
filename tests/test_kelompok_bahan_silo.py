@@ -28,3 +28,11 @@ def test_angka_setiap_pemakaian_tidak_tertukar_saat_silo_dipakai_ulang():
     a, b = kelompok_bahan_silo(rows, usages)
     assert dict(a['angka']) == {'Awal': '7.500 kg', 'Tambahan': '0 kg', 'Sisa akhir': '0 kg', 'Terpakai': '7.500 kg'}
     assert dict(b['angka']) == {'Awal': '2.000 kg', 'Tambahan': '550 kg', 'Sisa akhir': 'Belum dicatat', 'Terpakai': 'Belum final'}
+
+
+def test_pecahan_sisa_tidak_dibulatkan_menjadi_kosong():
+    from app.services.bahan_silo import kg_rinci
+    assert kg_rinci(0) == '0 kg'
+    assert kg_rinci(0.001) == '0,001 kg'
+    assert kg_rinci(0.4) == '0,4 kg'
+    assert kg_rinci(10883.75) == '10.883,75 kg'
