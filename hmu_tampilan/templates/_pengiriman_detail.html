@@ -14,6 +14,16 @@
     </dl>
   </header>
 
+  {% if k.rec.status == 'dimuat' %}
+  <section class="keluar-periksa{{ ' keluar-periksa--selisih' if k.selisih_timbang is not none and k.selisih_timbang|abs > (k.batas_selisih|default(100)) }}" aria-label="Pemeriksaan sebelum verifikasi">
+    <strong>Periksa sebelum verifikasi</strong>
+    {% if k.tiket_timbang %}<p>{{ k.tiket_timbang.kode }} · {{ k.rec.no_polisi or 'Plat belum dicatat' }}</p>
+    <p>Aktual {{ angka(k.total_dimuat) }} kg · Timbang setelah tara {{ (angka(k.tiket_timbang.berat_barang_kg) ~ ' kg') if k.tiket_timbang.berat_barang_kg is not none else 'belum tersedia' }}.</p>
+    {% if k.selisih_timbang is not none %}<p><strong>Selisih {{ angka(k.selisih_timbang|abs) }} kg {{ 'lebih banyak' if k.selisih_timbang > 0 else 'lebih sedikit' }}.</strong> {% if k.selisih_timbang|abs > (k.batas_selisih|default(100)) %}Di luar batas. Periksa tiket dan muatan; alasan selisih wajib saat verifikasi.{% else %}Bandingkan tiket dan muatan aktual sebelum menutup.{% endif %}</p>{% else %}<p>Selesaikan timbang kedua sebelum verifikasi.</p>{% endif %}
+    {% else %}<p>Tiket armada belum dipilih. Periksa armada sebelum menutup pengiriman.</p>{% endif %}
+  </section>
+  {% endif %}
+
   {% if k.tombol %}<nav class="kirim-detail__aksi" aria-label="Tindakan perintah">
     {% for buka, nilai, label, utama in k.tombol if buka != 'tambah_barang_keluar' %}
     <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>

@@ -1223,7 +1223,7 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
         "tombol perintah tak ada di halamannya"
     # Pengelolaan kini di detail satu perintah; daftar hanya pintu pembuatannya.
     assert "Buka detail perintah" not in h
-    assert "kartu-keluar__tautan" in h
+    assert 'class="keluar-baris"' in h
     assert "/barang-keluar?buka=tambah_barang_keluar" not in h
     # Tombol "Pengambilan barang jasa" sejajar dengan "Buat perintah" —
     # keluhan pemilik 11 Oktober 2026: aksinya sudah ada lebih dulu lewat
@@ -2388,7 +2388,8 @@ async def test_perintah_sebelum_armada_tiket_dipilih_setelahnya(pg,gudang):
         ), {"id": tid})).mappings().one()
         assert identitas["pelanggan_id"] == pid
         assert identitas["pihak_nama"] == rec.nama_pembeli
-        assert 'pilih_tiket_armada' in [x[0] for x in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
+        assert 'pilih_tiket_armada' not in [x[0] for x in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
+        assert 'lepas_tiket_armada' in [x[0] for x in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
         from fastapi import HTTPException
         from app.web.internal import _cocokkan_pengiriman_tiket
         from app.web.aksi_inventory import timbang_keluar_aktif
@@ -2501,8 +2502,8 @@ async def test_riwayat_paginasi_tidak_menghilangkan_perintah_aktif(pg, gudang):
         kedua = (await c.get(f"/barang-keluar?sebelum={sebelum}")).text
         detail_lama = await c.get(f"/barang-keluar/{terbaru[-1]}")
     assert aktif.rec.kode in pertama and aktif.rec.kode in kedua
-    assert pertama.count('data-detail-keluar=') == 50
-    assert kedua.count('data-detail-keluar=') == 2
+    assert pertama.split('<section aria-labelledby="judul-riwayat-keluar"',1)[1].count('data-detail-keluar=') == 50
+    assert kedua.split('<section aria-labelledby="judul-riwayat-keluar"',1)[1].count('data-detail-keluar=') == 2
     assert "OUT-RIWAYAT-000" not in pertama
     assert "OUT-RIWAYAT-000" in kedua
     assert detail_lama.status_code == 200

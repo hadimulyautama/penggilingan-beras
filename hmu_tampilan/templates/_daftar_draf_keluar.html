@@ -1,6 +1,6 @@
 <section id="draf-saya" data-daftar-draf aria-labelledby="judul-draf-saya">
   <h2 id="judul-draf-saya">Draf saya · <span data-jumlah-draf>{{ draf_saya|length }}</span></h2>
-  <p class="bantu">Belum diterbitkan ke operator. Ketuk draf untuk melanjutkan.</p>
+  {% if draf_saya %}<p class="bantu">Ketuk draf untuk melanjutkan.</p>{% endif %}
   <p data-galat-draf class="nota nota--buruk" role="alert" hidden></p>
   <div class="grup">
   {% for d in draf_saya %}

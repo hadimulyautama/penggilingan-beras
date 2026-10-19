@@ -1,0 +1,11 @@
+<section class="keluar-daftar" aria-label="Pengiriman berjalan">
+<table class="keluar-tabel">
+<caption class="sr-only">Perintah pengiriman yang sedang berjalan</caption>
+<thead><tr><th scope="col">Pelanggan / perintah</th><th scope="col">Isi muatan</th><th scope="col">Target / aktual</th><th scope="col">Status</th></tr></thead>
+<tbody>{% for k in daftar_keluar %}
+<tr class="keluar-baris" data-detail-keluar="/barang-keluar/{{ k.rec.id }}">
+<td><a href="/barang-keluar/{{ k.rec.id }}"><strong>{{ k.rec.nama_pembeli or 'Belum dicatat' }}</strong><small>{{ k.rec.kode }} · {{ k.isi|length }} macam</small></a><span>{{ k.rec.no_polisi or 'Armada belum dipilih' }}</span></td>
+<td><ul>{% for b in k.isi %}<li>{{ b.nama }} <strong>{{ (b.karung_perintah ~ ' karung') if b.berkarung else (kg(b.perintah) ~ ' kg') }}</strong></li>{% endfor %}</ul></td>
+<td class="keluar-baris__angka"><span>Target <strong>{{ kg(k.total_perintah) }} kg</strong></span><span>Aktual <strong>{{ kg(k.total_dimuat) }} kg</strong></span></td>
+<td><strong>{{ k.keadaan }}</strong><span class="keluar-milik">{{ 'Jasa' if k.jasa else 'Milik pabrik' }}</span></td>
+</tr>{% endfor %}</tbody></table></section>

@@ -1,0 +1,9 @@
+<header class="keluar-kepala"><h1>Barang Keluar</h1>
+<p>{{ n_perintah }} menunggu dimuat · {{ n_dimuat }} menunggu verifikasi</p>
+<details><summary>Bantuan alur pengiriman</summary><p>Buat perintah → catat muatan aktual → periksa selisih → verifikasi dan tutup. Tiket armada boleh menyusul. Pengambilan jasa tersedia terpisah.</p></details></header>
+<details class="keluar-pencarian"{{ " open" if pencarian or status_filter or sejak_filter }}><summary>Cari dan filter pengiriman</summary>
+<form class="keluar-filter" method="get" action="/barang-keluar">
+<label>Cari perintah<input class="fld" name="q" value="{{ pencarian }}" placeholder="Kode, pelanggan, atau plat"></label>
+<label>Status<select class="fld" name="status">{% for nilai,label in [('', 'Semua status'),('perintah','Menunggu dimuat'),('dimuat','Menunggu verifikasi'),('selesai','Selesai'),('batal','Dibatalkan')] %}<option value="{{ nilai }}"{{ ' selected' if status_filter == nilai }}>{{ label }}</option>{% endfor %}</select></label>
+<label>Sejak tanggal<input class="fld" type="date" name="sejak" value="{{ sejak_filter }}"></label><button class="btn">Terapkan</button><a href="/barang-keluar">Reset</a>
+</form></details>

@@ -68,7 +68,8 @@
   document.getElementById('draf-tambah').onclick=function(){baris({});ubah();};
   coba.onclick=function(){simpan().catch(function(){});};
   var opsiAktif=-1;
-  function tutupSaran(){saranP.hidden=true;inputP.setAttribute('aria-expanded','false');inputP.removeAttribute('aria-activedescendant');opsiAktif=-1;}
+  function ukuranNama(){inputP.style.height='auto';inputP.style.height=Math.max(48,inputP.scrollHeight)+'px';}
+  function tutupSaran(){ukuranNama();saranP.hidden=true;inputP.setAttribute('aria-expanded','false');inputP.removeAttribute('aria-activedescendant');opsiAktif=-1;}
   function pilihPelanggan(p){selectP.value=String(p.value);inputP.value=p.label;tutupSaran();ubah();}
   function saringPelanggan(){
     var q=inputP.value.trim().toLocaleLowerCase('id');
@@ -79,7 +80,8 @@
     if(!cocok.length){var kosong=document.createElement('p');kosong.className='kombo__kosong';kosong.textContent='Pelanggan tidak ditemukan. Pilih pelanggan yang sudah terdaftar.';saranP.append(kosong);}
     saranP.hidden=false;inputP.setAttribute('aria-expanded','true');
   }
-  inputP.addEventListener('input',function(){selectP.value='';saringPelanggan();});
+  window.addEventListener('resize',ukuranNama);
+  inputP.addEventListener('input',function(){ukuranNama();selectP.value='';saringPelanggan();});
   inputP.addEventListener('focus',function(){if(siap)saringPelanggan();});
   inputP.addEventListener('blur',function(){setTimeout(tutupSaran,100);});
   inputP.addEventListener('keydown',function(e){
@@ -89,7 +91,7 @@
       opsiAktif=opsiAktif<0?(e.key==='ArrowDown'?0:opsi.length-1):(opsiAktif+(e.key==='ArrowDown'?1:-1)+opsi.length)%opsi.length;
       opsi.forEach(function(o,i){o.setAttribute('aria-selected',String(i===opsiAktif));});
       inputP.setAttribute('aria-activedescendant',opsi[opsiAktif].id);opsi[opsiAktif].scrollIntoView({block:'nearest'});
-    }else if(e.key==='Enter'&&!saranP.hidden){e.preventDefault();var aktif=saranP.querySelector('[aria-selected=true]');if(aktif)aktif.click();}
+    }else if(e.key==='Enter'){e.preventDefault();if(!saranP.hidden){var aktif=saranP.querySelector('[aria-selected=true]');if(aktif)aktif.click();}}
   });
   function selesaiKonflik(){revisi=konflik.revisi;tertunda=null;konflik=null;document.getElementById('draf-konflik').hidden=true;terbit.disabled=false;galat.hidden=true;}
   document.getElementById('draf-pakai-terbaru').onclick=function(){var data=konflik;if(data.tujuan){location.assign(data.tujuan);return;}pasang(data.isi);selesaiKonflik();tersimpan=JSON.stringify(isi());status.textContent='Draf terbaru dimuat';};

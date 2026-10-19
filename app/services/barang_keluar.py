@@ -1867,9 +1867,17 @@ async def balik_batal(db: AsyncSession, *, rec_id: int) -> str:
 
 async def daftar(db: AsyncSession, *, status: tuple[str, ...] | None = None,
                  batas: int = 50, transaksi_id: int | None = None,
-                 sebelum_id: int | None = None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
+                 sebelum_id: int | None = None, pencarian: str = "", sejak=None) -> list[tuple[OutgoingRecord, list[OutgoingItem]]]:
     """Transaksi barang keluar beserta isinya — untuk halaman & kartunya."""
     q = select(OutgoingRecord).order_by(OutgoingRecord.id.desc()).limit(batas)
+    if pencarian:
+        from sqlalchemy import or_
+        pola = "%" + pencarian.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        q = q.where(or_(*(kol.ilike(pola, escape="\\") for kol in
+                          (OutgoingRecord.kode, OutgoingRecord.nama_pembeli, OutgoingRecord.no_polisi))))
+    if sejak:
+        from datetime import datetime, time
+        q = q.where(OutgoingRecord.waktu_perintah >= datetime.combine(sejak, time.min))
     if status:
         q = q.where(OutgoingRecord.status.in_(status))
     if transaksi_id is not None:

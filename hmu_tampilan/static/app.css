@@ -3137,3 +3137,68 @@ dialog.draf-konfirmasi::backdrop { background:rgba(6,11,14,.7); }
 .draf-konfirmasi dd { margin:3px 0 0; font-size:18px; font-weight:650; overflow-wrap:anywhere; }
 .draf-konfirmasi__tombol { display:flex; gap:10px; margin-top:20px; }
 .draf-konfirmasi__tombol .btn { flex:1; min-height:48px; }
+
+/* Barang Keluar: pekerjaan lebih dahulu, target dan aktual tetap terpisah. */
+.keluar-kepala h1 { margin:0; font-size:1.65rem}
+.keluar-kepala p { margin:8px 0}
+.keluar-kepala summary { min-height:48px; display:flex; align-items:center; cursor:pointer}
+.keluar-filter { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:16px 0}
+.keluar-filter label { display:grid; gap:6px; flex:1; min-width:140px}
+.keluar-filter .fld,.keluar-filter .btn { min-height:48px}
+.keluar-tabel { width:100%; table-layout:fixed; border-collapse:collapse; text-align:left }
+.keluar-tabel th:nth-child(1) { width:26% }
+.keluar-tabel th:nth-child(2) { width:35% }
+.keluar-tabel th:nth-child(3) { width:19% }
+.keluar-tabel th:nth-child(4) { width:20% }
+.keluar-tabel th,.keluar-tabel td { padding:16px; vertical-align:top; overflow-wrap:anywhere }
+.keluar-baris { color:var(--tinta); border-top:1px solid var(--garis); background:var(--panel); cursor:pointer }
+.keluar-baris:hover { outline:2px solid currentColor; outline-offset:-2px }
+.keluar-baris a { color:inherit; text-decoration:none; display:block; min-height:48px }
+.keluar-baris td>span,.keluar-baris small { display:block; margin-top:6px }
+.keluar-baris ul { margin:0; padding-left:18px; font-size:14px }
+.keluar-baris li+li { margin-top:6px }
+.keluar-baris small { font-size:14px }
+.keluar-milik { font-size:14px; font-weight:700}
+.keluar-periksa { padding:16px; border:2px solid var(--garis); border-radius:12px; background:var(--panel); margin:12px 0}
+.keluar-periksa p { margin:8px 0}
+.draf-pelanggan textarea { resize:none; overflow:hidden; line-height:1.5; white-space:pre-wrap}
+.editor-perintah #draf-status { position:sticky; top:0; z-index:2; background:var(--panel); padding:10px; border-bottom:1px solid var(--garis)}
+#draf-saya:has([data-draf-kosong]:not([hidden])) { margin:8px 0}
+#draf-saya:has([data-draf-kosong]:not([hidden])) h2 { display:inline; font-size:1rem}
+#draf-saya:has([data-draf-kosong]:not([hidden])) [data-draf-kosong] { display:inline; margin-left:8px}
+.keluar-halaman .ubah-hasil>.btn { min-height:48px; display:inline-flex; align-items:center}
+
+@media(max-width:700px) {
+  .keluar-tabel,.keluar-tabel tbody { display:block }
+  .keluar-tabel thead { display:none }
+  .keluar-baris { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px; border:1px solid var(--garis); border-radius:12px; margin:10px 0 }
+  .keluar-tabel td { display:block; padding:0; min-width:0 }
+  .keluar-baris>td:first-child,.keluar-baris>td:nth-child(2) { grid-column:1/-1 }
+  .keluar-baris>td:last-child { text-align:right }
+  .keluar-filter { gap:8px }
+  .keluar-filter label:first-child { flex-basis:100% }
+}
+
+.keluar-pencarian>summary { min-height:48px; display:flex; align-items:center; cursor:pointer; font-weight:700}
+.keluar-pencarian { margin:4px 0 12px}
+.keluar-pencarian[open] { border-bottom:1px solid var(--garis)}
+
+
+.keluar-periksa--selisih { border-color:var(--hati)}
+
+
+.keluar-halaman { display:grid; gap:12px; min-width:0; flex-shrink:0}
+
+.keluar-halaman>.ubah-hasil { margin:0!important}
+
+.keluar-halaman #draf-saya:has([data-draf-kosong]:not([hidden])) { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin:0; padding:8px 0}
+
+.keluar-halaman #draf-saya:has([data-draf-kosong]:not([hidden])) :is(h2,[data-draf-kosong]) { margin:0; font-size:14px}
+
+.keluar-halaman #draf-saya:has([data-draf-kosong]:not([hidden]))>.grup { display:none}
+
+:is(.keluar-kepala,.keluar-pencarian)>summary::before,.keluar-kepala details>summary::before { content:'▸'; margin-right:8px}
+
+.keluar-pencarian[open]>summary::before,.keluar-kepala details[open]>summary::before { content:'▾'}
+
+.keluar-tabel caption { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }

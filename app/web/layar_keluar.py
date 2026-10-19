@@ -46,7 +46,15 @@ KEADAAN = {
 @router.get("/barang-keluar/{transaksi_id}")
 async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                                  transaksi_id: int | None = None,
-                                 sebelum: int | None = None):
+                                 sebelum: int | None = None, q: str = "", status: str = "", sejak: str = ""):
+    from datetime import date
+    from urllib.parse import urlencode
+    q = q.strip()[:200]
+    status = status if status in KEADAAN else ""
+    try:
+        tanggal = date.fromisoformat(sejak) if sejak else None
+    except ValueError:
+        raise HTTPException(422, "Tanggal pencarian tidak valid.")
     from app.peran import can_see_financials
     from fastapi.responses import RedirectResponse
     if request.query_params.get("buka") == "perintah_keluar":
@@ -93,9 +101,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 raise HTTPException(404, "Perintah barang keluar tidak ditemukan.")
             sebelum_berikut = None
         else:
-            aktif = await svc.daftar(db, status=OUT_HIDUP, batas=500)
-            riwayat = await svc.daftar(db, status=(OUT_SELESAI, OUT_BATAL),
-                                       batas=51, sebelum_id=sebelum)
+            aktif = (await svc.daftar(db, status=(status,) if status else OUT_HIDUP,
+                                      batas=500, pencarian=q, sejak=tanggal)
+                     if not status or status in OUT_HIDUP else [])
+            riwayat = (await svc.daftar(db, status=(status,) if status else (OUT_SELESAI, OUT_BATAL),
+                                        batas=51, sebelum_id=sebelum, pencarian=q, sejak=tanggal)
+                       if not status or status not in OUT_HIDUP else [])
             sebelum_berikut = riwayat[49][0].id if len(riwayat) > 50 else None
             baris = aktif + riwayat[:50]
         # Data timbang ditampilkan bersama detail perintah, tanpa kueri per kartu.
@@ -164,6 +175,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             "tombol": _tombol(rec, boleh_perintah=boleh_perintah,
                               boleh_muat=boleh_muat, dasar=dasar_perintah.get(rec.id, "")),
             "total_perintah": sum(x["perintah"] for x in isi),
+            "batas_selisih": svc.ambang_selisih(sum(x["dimuat"] for x in isi)),
             "total_dimuat": sum(x["dimuat"] for x in isi),
             "total_sisa": sum(x["sisa_perintah"] for x in isi),
             "jasa": rec.jasa_id is not None or any(it.jasa_id is not None for it in items),
@@ -200,6 +212,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     return await render_laci(
         request, "pengiriman.html", layar="barang_keluar", kartu=kartu,
         detail=transaksi_id is not None,
+        pencarian=q, status_filter=status, sejak_filter=sejak,
+        filter_query=urlencode({"q": q, "status": status, "sejak": sejak}),
         kartu_aktif=[k for k in kartu if k["rec"].status in OUT_HIDUP],
         riwayat=sorted((k for k in kartu if k["rec"].status not in OUT_HIDUP),
                        key=lambda k: -k["rec"].id),
@@ -262,7 +276,8 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "") -> 
         t.append(("verifikasi_keluar", n, "Verifikasi & tutup", True))
     if rec.status in OUT_HIDUP and boleh_perintah:
         t.append(("tambah_barang_keluar", n, "Tambah barang", not t))
-        t.append(("pilih_tiket_armada", n, "Pilih tiket armada", False))
+        if not rec.timbangan_transaksi_id:
+            t.append(("pilih_tiket_armada", n, "Pilih tiket armada", False))
         if rec.timbangan_transaksi_id:
             t.append(("lepas_tiket_armada", f"{n}|{rec.timbangan_transaksi_id}|{dasar}", "Lepas tiket armada", False))
     if rec.status == OUT_PERINTAH and boleh_perintah:
