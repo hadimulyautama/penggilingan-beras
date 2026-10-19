@@ -8,6 +8,7 @@
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
 {% import "_operasional.html" as op with context %}
+{% import "_rincian_pengiriman.html" as rp with context %}
 {% if detail %}
 {% set k = kartu[0] %}
 {% include "_pengiriman_detail.html" %}
@@ -92,15 +93,7 @@
         </div>
       {% endif %}
 
-      <div class="anak__kepala">Jejaknya</div>
-      {% for label, waktu, nama in k.jejak %}
-        <div class="anak__baris">
-          <span class="anak__nama">{{ label }}</span>
-          <span class="anak__kg">{{ waktu | jam }}</span>
-          <span class="anak__jam">{{ nama or "?" }}</span>
-        </div>
-      {% endfor %}
-
+      {% call rp.rincian_pengiriman(k.jejak) %}
       {% if k.tiket_timbang %}
         {% set t = k.tiket_timbang %}
         <div class="anak__kepala">Tiket timbang terkait · {{ t.kode }}</div>
@@ -120,6 +113,13 @@
         <div class="nota">Ditutup tanpa tiket timbang terkait.</div>
       {% endif %}
 
+        {% if k.tombol %}<div class="ubah-hasil">
+          {% for buka, nilai, label, utama in k.tombol if not utama %}
+          <a class="btn btn--kecil" href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
+          {% endfor %}
+        </div>{% endif %}
+      {% endcall %}
+
       {% if k.rec.sebab_batal %}
         <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
       {% endif %}
@@ -133,8 +133,8 @@
       {% endif %}
 
       {% if k.tombol %}
-        <div class="ubah-hasil" style="margin-top:12px">
-          {% for buka, nilai, label, utama in k.tombol %}
+        <div class="ubah-hasil kartu-keluar__utama">
+          {% for buka, nilai, label, utama in k.tombol if utama %}
           <a class="btn{{ '' if utama else ' btn--kecil' }}"
              href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
              >{{ label }}</a>

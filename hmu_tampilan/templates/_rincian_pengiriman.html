@@ -1,0 +1,15 @@
+{# Jejak dan data timbang tetap dapat dibaca, tanpa memanjangkan kartu kerja. #}
+{% macro rincian_pengiriman(jejak) %}
+<details class="kartu-keluar__rincian">
+  <summary>Rincian</summary>
+  <div class="kartu-keluar__isi-rincian">
+    <div class="anak__kepala">Jejak petugas</div>
+    <ol class="kartu-keluar__jejak">
+      {% for label, waktu, nama in jejak %}
+      <li><strong>{{ label }}</strong><span>{{ nama or 'Petugas tidak tercatat' }}</span><time>{{ waktu|jam('%d/%m/%Y %H:%M') }}</time></li>
+      {% else %}<li>Jejak petugas belum tercatat.</li>{% endfor %}
+    </ol>
+    {{ caller() }}
+  </div>
+</details>
+{% endmacro %}
