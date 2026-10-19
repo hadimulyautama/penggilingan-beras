@@ -2886,19 +2886,22 @@ body .isi .proses-aktif-list__row .riwayat-status {
 
 /* Kontrol tetap terbaca di bawah matahari; keadaan terkunci ditandai
    garis putus-putus dan alasan, bukan dengan memudarkan seluruh tulisan. */
-body.terik { --aksi:#254b32; --aksi-gelap:#183823; }
-body.terik .btn:not(.btn--utama):not(.btn--bahaya),
-body.terik .pilihan__satu:not(.pilihan__satu--utama) {
-  background:#fff; color:#18271c; border-color:#526858;
+body.terik { --aksi:#374151; --aksi-gelap:#26303e; }
+body .btn:not(.btn--utama):not(.btn--bahaya),
+body .pilihan__satu:not(.pilihan__satu--utama) {
+  background:#374151; color:#fff; border-color:#374151;
 }
-body.terik .pilihan__satu--utama {
-  background:#254b32; color:#fff; border-color:#254b32;
+body.terik .btn--utama, body.terik .pilihan__satu--utama {
+  background:#374151; color:#fff; border-color:#374151; box-shadow:none;
+}
+body.terik .btn--utama:hover, body.terik .pilihan__satu--utama:hover {
+  background:#26303e; border-color:#26303e; color:#fff;
 }
 .pilihan__satu--utama .pilihan__ket { color:inherit; }
 .pilihan__satu--mati, .pilihan__satu--jalan { opacity:1; }
-body.terik .pilihan__ket { color:#354a3b; }
+body .pilihan__satu:not(.pilihan__satu--utama) .pilihan__ket { color:#fff; }
 body.terik .pilihan__satu--utama .pilihan__ket { color:#fff; }
-body.terik .pilihan__satu--mati .pilihan__ket { color:#704b0b; }
+body .pilihan__satu--mati .pilihan__ket { color:#ffe2a3; }
 .btn:focus-visible, .pilihan__satu:focus-visible {
   outline:3px solid var(--aksi); outline-offset:3px;
 }

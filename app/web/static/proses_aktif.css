@@ -1,7 +1,7 @@
 /* Rincian proses memakai token dan tabel standar yang sama dengan riwayat. */
 .proses-detail__label,.proses-detail__judul{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 body .isi .proses-detail .riwayat-detail__hero h1{color:var(--tinta)}
-body .proses-detail .proses-detail__aksi .pilihan__satu--utama .pilihan__ket{color:#e2e8ed}
+body .proses-detail .proses-detail__aksi .pilihan__satu--utama .pilihan__ket{color:inherit}
 .proses-detail__sementara{display:inline-block;margin-top:4px;color:#e2e8ed;font-size:.8rem}
 .proses-detail__statistik{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .proses-detail__statistik .riwayat-detail__card{padding:11px 13px}
