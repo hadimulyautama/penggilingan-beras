@@ -33,3 +33,14 @@
 {%- set j = jenis(b) -%}
 {%- if j -%}<span class="proses-jenis" data-proses="{{ j }}">{{ ikon(j) }}<span>{{ nama(j) }}</span></span>{%- endif -%}
 {%- endmacro %}
+
+{% macro kemajuan(b) -%}
+{% set j = jenis(b) %}
+{% set rend = b.rendemen_sementara|default(none) %}
+{% set maju = b.maju|default(none) %}
+{% if j == 'pengeringan' and maju is not none %}
+<span class="proses-kemajuan"><small>Kemajuan kadar air · {{ (maju * 100)|round|int }}%</small><progress max="1" value="{{ maju }}" aria-label="Kemajuan menuju target kadar air">{{ (maju * 100)|round|int }}%</progress></span>
+{% elif j in ('giling', 'sosoh') %}
+<span class="proses-kemajuan"><small>Rendemen sementara · {% if rend is not none %}{{ '%.1f'|format(rend)|replace('.', ',') }}%{% else %}belum dapat dihitung{% endif %}</small>{% if rend is not none %}<progress max="100" value="{{ [[rend, 0]|max, 100]|min }}" aria-label="Rendemen sementara {{ 'PK' if j == 'giling' else 'beras' }} terhadap bahan">{{ '%.1f'|format(rend)|replace('.', ',') }}%</progress>{% if rend > 100 %}<small>Hasil melebihi bahan; periksa catatan.</small>{% endif %}{% endif %}</span>
+{% endif %}
+{%- endmacro %}

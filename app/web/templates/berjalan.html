@@ -63,7 +63,7 @@
       <span><strong>{{ b.kode }}</strong><small>{{ visual.judul(b) }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
       <span class="proses-aktif-list__kepemilikan">{{ milik.penanda(b) }}</span>
       <span><span class="riwayat-status {{ 'riwayat-status--wait' if b.nota_jenis == 'hati' else 'riwayat-status--done' }}">{{ b.nota if b.nota_jenis == 'hati' else b.keadaan }}</span><small>Mulai {{ b.sejak|jam('%d/%m · %H:%M') or 'belum tercatat' }}</small></span>
-      <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small></span>
+      <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small>{{ visual.kemajuan(b) }}</span>
       <span aria-hidden="true">›</span>
     </a>
   {% endfor %}

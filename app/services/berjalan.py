@@ -168,6 +168,8 @@ class Baris:
     #: Pengeringan punya; giling dan silo tidak, dan memberi mereka batang
     #: kemajuan palsu lebih buruk daripada tak memberi apa-apa.
     maju: float | None = None
+    #: Rasio hasil tercatat terhadap bahan (%), bukan persentase selesai.
+    rendemen_sementara: float | None = None
 
     #: Neraca bobot LIVE (belum final) — beras/samping/susut atas bahan
     #: baku SEJAUH INI. Hanya penyosohan: giling tak punya pecahan hasil
@@ -2251,8 +2253,8 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         if nama_silo_g:
             fakta_g.insert(0, ("Silo", " + ".join(nama_silo_g)))
         hasil_pk = await _produced_pk(db, p.id)
+        rend = hitung_rendemen(hasil_pk, p.berat_gabah_masuk_kg)
         if hasil_pk:
-            rend = hitung_rendemen(hasil_pk, p.berat_gabah_masuk_kg)
             fakta_g.append(("Hasil", _kg(hasil_pk)
                             + (f" · rendemen {rend:.1f}%" if rend is not None else "")))
 
@@ -2268,6 +2270,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 + (f" · {_pemasok_ringkas(asal_giling)}" if asal_giling else ""),
             anak=asal_giling,
             fakta=fakta_g,
+            rendemen_sementara=rend,
             nota=(f"Dijeda {lama_kata(tertahan)} — {macet.sebab}" if macet else None),
             nota_jenis="hati" if macet else None,
             ringkas=(f"⏸ {macet.sebab}"
@@ -2764,6 +2767,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
                  else f"{pr.kode_proses} · mesin sosoh menyala"),
             fakta=fakta,
             neraca=neraca,
+            rendemen_sementara=(neraca.beras.persen if neraca and neraca.bisa_dihitung else None),
             # Entri hasil MENDAHULUI asal PK-nya: yang dicari orang saat kartu
             # ini dibuka adalah "apa yang sudah saya catat", bukan "dari mana
             # PK-nya" — asalnya sudah disebut fakta Silo di atas.

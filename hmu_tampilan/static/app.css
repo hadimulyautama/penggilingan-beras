@@ -2086,6 +2086,10 @@ button.pilihan__satu {
 .maju__kode { font-family: var(--mono); font-size: 13.5px; font-weight: 500; }
 .maju__jam { font-family: var(--mono); font-size: 13px; color: var(--redup); }
 .maju__isi { color: var(--tinta-2); font-size: 13px; line-height: 1.45; }
+.proses-kemajuan { display: grid; gap: 5px; margin-top: 8px; }
+.proses-kemajuan progress { display: block; width: 100%; height: 10px; accent-color: var(--proses-aksen, var(--aman)); }
+.proses-kemajuan progress::-webkit-progress-bar { background: var(--garis-2); border-radius: 999px; }
+.proses-kemajuan progress::-webkit-progress-value { background: var(--proses-aksen, var(--aman)); border-radius: 999px; }
 .maju__bar {
   height: 7px; border-radius: 999px; background: var(--garis-2);
   overflow: hidden; margin-top: 1px;
