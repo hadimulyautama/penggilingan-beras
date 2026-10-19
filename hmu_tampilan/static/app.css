@@ -2942,6 +2942,5 @@ body .pilihan__satu--utama:active {
   .bahan-silo .bahan-silo__satu th,.bahan-silo .bahan-silo__satu td {display:block;width:auto;border:0;padding:0}
   .bahan-silo .bahan-silo__satu th {grid-column:1/-1}
   .bahan-silo td:before {content:attr(data-label);display:block;font-size:.8rem;margin-bottom:.15rem}
-  .bahan-silo td:last-child {grid-column:1/-1}
   .bahan-silo__angka {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
