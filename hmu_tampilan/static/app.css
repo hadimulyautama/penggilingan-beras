@@ -3080,3 +3080,11 @@ body .pilihan__satu--utama:active {
 .ulang__jumlah {display:flex;align-items:center;gap:10px;min-width:0;margin:0}
 .ulang__jumlah .fld {width:100%;min-width:0;flex:1}
 .ulang__satuan {flex:0 0 auto;font-size:15px;font-weight:600}
+
+/* Nama lengkap sekaligus sasaran sentuh untuk mengganti pilihan. Select
+   asli transparan di atasnya tetap menyediakan pemilih bawaan ponsel. */
+.ulang__pilihan {position:relative;grid-column:1 / -1;min-height:44px;display:flex;align-items:center}
+.ulang__pilihan > select {position:absolute;inset:0;width:100%;height:100%;opacity:0;z-index:1;cursor:pointer}
+.ulang__pilihan .ulang__nama-lengkap {padding-right:28px;min-width:0;width:100%}
+.ulang__pilihan::after {content:"⌄";position:absolute;right:3px;top:50%;transform:translateY(-50%);font-size:22px;color:var(--redup)}
+.ulang__pilihan:focus-within {outline:2px solid var(--redup);outline-offset:3px;border-radius:6px}

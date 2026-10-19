@@ -16,8 +16,8 @@
     var ang = baris.querySelector('[data-p-jenis="angka"]');
     var unit = /^(bj:|[0-9]+\|)/.test(sel.value) ? "karung" : "kg";
     if (nama) {
-      nama.textContent = sel.value && sel.selectedOptions.length ? sel.selectedOptions[0].textContent : "";
-      nama.hidden = !sel.value;
+      nama.textContent = sel.value && sel.selectedOptions.length ? sel.selectedOptions[0].textContent : "Pilih barang";
+      nama.hidden = false;
     }
     if (satuan) satuan.textContent = sel.value ? unit : "karung / kg";
     if (ang) {
@@ -874,10 +874,10 @@
   function barisBarang(f, pertama) {
     var w = pertama ? ' data-wajib="1"' : "";
     return '<div class="ulang__baris">' +
-      '<select class="fld" data-p="' + esc(f.name) + '" data-p-jenis="pilih"' +
+      '<div class="ulang__pilihan"><select class="fld" aria-label="' + esc(f.label) + '" data-p="' + esc(f.name) + '" data-p-jenis="pilih"' +
       w + ' data-label="' + esc(f.label) + '">' +
       '<option value="">memuat…</option></select>' +
-      '<p class="ulang__nama-lengkap" hidden></p>' +
+      '<p class="ulang__nama-lengkap" aria-hidden="true">Pilih barang</p></div>' +
       '<label class="ulang__jumlah"><input class="fld" data-p="' + esc(f.name) + '" data-p-jenis="angka"' +
       w + ' data-label="' + esc(f.label_angka || "Jumlah") + '"' +
       ' type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"' +

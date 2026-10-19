@@ -2763,3 +2763,29 @@ async def test_detail_tambahan_jasa_memisahkan_pesanan_dan_pemilik(pg,gudang):
             await bk.tambah_baris(db,user=await db.get(User,gudang['adm']),rec_id=rid,jasa_id=ids[2],
                 baris=bk.BarisPerintah(tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=1))
     assert await _stok(pg,gudang)==10000
+
+
+@pytest.mark.parametrize('status',['perintah','dimuat','selesai'])
+async def test_pilihan_armada_tidak_menawarkan_tiket_tertaut_termasuk_sendiri(pg,gudang,status):
+    from app.models import User,OutgoingRecord
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import tiket_armada
+    r=await _perintah(pg,gudang,pembeli='Pelanggan Armada')
+    lain=await _perintah(pg,gudang,pembeli='Pelanggan Armada')
+    tid=await _armada_uji(pg,'KLR-ARMADA-TERPAKAI',None)
+    bebas=await _armada_uji(pg,'KLR-ARMADA-BEBAS',None)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        perintah_lain=await db.get(OutgoingRecord,lain.rec.id)
+        perintah_asal=await db.get(OutgoingRecord,r.rec.id)
+        perintah_lain.pelanggan_id=perintah_asal.pelanggan_id
+        await db.commit()
+        await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=tid)
+        rec=await db.get(OutgoingRecord,r.rec.id);rec.status=status;await db.commit()
+        for induk in ['',str(r.rec.id),str(lain.rec.id)]:
+            pilihan=await tiket_armada(induk=induk,user=u)
+            assert str(tid) not in [x['value'] for x in pilihan]
+            assert str(bebas) in [x['value'] for x in pilihan]
+        with pytest.raises(bk.BarangKeluarError,match='sudah dipilih'):
+            await bk.pilih_tiket_armada(db,user=u,rec_id=lain.rec.id,tiket_id=tid)
+    assert await _stok(pg,gudang)==10000

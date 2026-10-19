@@ -1350,6 +1350,7 @@ def _id(nilai: str | None) -> int:
 
 @router.get("/actions/tiket-armada")
 async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    """Hanya tiket bebas. Tiket terpasang dibaca di detail, bukan dipilih ulang."""
     from sqlalchemy import text
     wajib(can_see_financials(user))
     async with SessionLocal() as db:
@@ -1370,10 +1371,9 @@ async def tiket_armada(induk: str = "", user: User = Depends(pengguna_aksi)) -> 
               AND t.nomor_polisi IS NOT NULL AND t.timbang1_kg IS NOT NULL
               AND (CAST(:pid AS INTEGER) IS NULL OR t.pelanggan_id IS NULL OR t.pelanggan_id=:pid)
               AND NOT EXISTS (SELECT 1 FROM outgoing_records o
-                WHERE o.timbangan_transaksi_id=t.id AND o.status<>'batal'
-                  AND (CAST(:rid AS INTEGER) IS NULL OR o.id<>:rid))
+                WHERE o.timbangan_transaksi_id=t.id AND o.status<>'batal')
             ORDER BY t.id DESC LIMIT 100
-        """), {"pid": pid, "rid": rec_id})).mappings().all()
+        """), {"pid": pid})).mappings().all()
     return [{"value": str(t["id"]), "label": f"{t['kode']} · {t['nomor_polisi']} · {t['pelanggan']}"} for t in rows]
 
 
@@ -2023,7 +2023,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "source": "/api/actions/perintah-bisa-ditambah"},
                  {"name": "tiket_armada", "label": "Tiket timbang armada", "type": "remote",
                   "induk": "perintah", "source": "/api/actions/tiket-armada",
-                  "kosong": "Belum ada tiket armada aktif untuk pelanggan ini."},
+                  "kosong": "Tidak ada tiket armada yang belum ditautkan untuk pelanggan ini."},
              ]},
             {"id": "koreksi_plat_pengiriman", "label": "Koreksi plat pengiriman",
              "post": "/api/actions/koreksi-plat-pengiriman",
