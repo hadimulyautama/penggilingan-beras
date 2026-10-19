@@ -2938,12 +2938,24 @@ body .pilihan__satu--utama:active {
 @media(max-width:699px) {
   .bahan-silo,.bahan-silo tbody {display:block}
   .bahan-silo thead {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-  .bahan-silo .bahan-silo__satu {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;padding:.75rem 0;border-bottom:1px solid var(--garis)}
-  .bahan-silo .bahan-silo__satu th,.bahan-silo .bahan-silo__satu td {display:block;width:auto;border:0;padding:0}
-  .bahan-silo .bahan-silo__satu th {grid-column:1/-1}
+  .bahan-silo .bahan-silo__ringkasan {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;padding:.75rem 0;border-bottom:1px solid var(--garis)}
+  .bahan-silo .bahan-silo__ringkasan th,.bahan-silo .bahan-silo__ringkasan td {display:block;width:auto;border:0;padding:0}
+  .bahan-silo .bahan-silo__ringkasan th {grid-column:1/-1}
   .bahan-silo td:before {content:attr(data-label);display:block;font-size:.8rem;margin-bottom:.15rem}
   .bahan-silo__angka {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
-.bahan-silo__pemakaian + .bahan-silo__pemakaian {border-top:1px solid var(--garis);margin-top:.75rem;padding-top:.75rem}
+.bahan-silo__panel {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;max-height:min(60vh,32rem);overflow:auto;padding:.5rem .25rem;overscroll-behavior:contain}
+.bahan-silo__panel:focus-visible {outline:2px solid var(--aksi);outline-offset:2px}
+.bahan-silo__pemakaian {min-width:0;border:1px solid var(--garis);border-radius:.5rem;padding:.75rem}
+.bahan-silo__pemakaian p {margin:.5rem 0}
+.bahan-silo__angka {grid-template-columns:repeat(2,minmax(0,1fr))}
+.bahan-silo__rincian-fila > td {padding-top:0}
+@media(min-width:1100px) {.bahan-silo__angka {grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:699px) {
+ .bahan-silo__panel {grid-template-columns:minmax(0,1fr)}
+ .bahan-silo .bahan-silo__ringkasan {border-bottom:0}
+ .bahan-silo__rincian-fila,.bahan-silo__rincian-fila > td {display:block;width:100%;padding:0}
+ .bahan-silo__rincian-fila > td:before {display:none}
+}
 .bahan-silo__pemakaian h4 {margin:.5rem 0}
