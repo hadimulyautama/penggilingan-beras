@@ -804,6 +804,7 @@ async def test_satu_borang_menerima_beberapa_item_sekaligus(pg, gudang):
     from app.services import barang_keluar as bk
     async with pg() as db:
         rec, items = (await bk.daftar(db))[0]
+    assert r["tujuan"] == f"/barang-keluar/{rec.id}"
     assert len(items) == 2, "kedua item tak masuk satu transaksi"
     jenis = {i.item_type for i in items}
     assert jenis == {"finished_goods", "pk_langsung"}, jenis

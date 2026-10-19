@@ -1289,6 +1289,14 @@
         if (tbl) { tbl.textContent = "✓ Tersimpan"; }
         await new Promise(function (r) { setTimeout(r, 260); });
         lembar._menyimpan = false;
+        // Perintah baru langsung dikelola di detailnya. Jangan memanggil
+        // history.back() dari penutupan modal bersamaan dengan navigasi ini.
+        if (a.id === "perintah_keluar" && /^\/barang-keluar\/[1-9]\d*$/.test(hasil.tujuan || "")) {
+          lembar._berubah = false;
+          lembar._riwayat = false;
+          location.replace(hasil.tujuan);
+          return;
+        }
         tutupLembar(true);
         var pesan = /\/undo(?:$|\?)/.test(a.post) ? "Dibatalkan" : (hasil.pesan || "Tersimpan ✓");
         muat();

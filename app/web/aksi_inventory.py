@@ -1227,8 +1227,8 @@ async def act_perintah_keluar(req: PerintahKeluarReq,
                 nama_ekspedisi=(req.nama_ekspedisi or None))
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal membuat perintah barang keluar.")
-        kode, pembeli = r.rec.kode, r.rec.nama_pembeli
-    return {"ok": True,
+        kode, pembeli, rec_id = r.rec.kode, r.rec.nama_pembeli, r.rec.id
+    return {"ok": True, "tujuan": f"/barang-keluar/{rec_id}",
             "pesan": f"✓ Perintah *{kode}* terbit untuk {pembeli}. "
                      "Tambahkan barang lain bila muatannya lebih dari satu macam — "
                      "operator melihatnya di Antrian tunggu."}
