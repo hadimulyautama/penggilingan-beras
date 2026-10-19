@@ -32,7 +32,7 @@ async def test_giling_sumber_ulang_aktif_dan_riwayat(pg, pabrik):
     async with await _klien(pg, peran='operator', gudang='Gudang 1') as c:
         r = await c.get('/proses-aktif/giling/' + pr.kode_proses)
         simpan('aktif-giling', r)
-        assert r.text.count('class="bahan-silo__satu"') == 2
+        assert r.text.count('class="bahan-silo__satu"') == 1
         assert 'Belum dicatat' in r.text and 'Tidak dipisahkan' in r.text
     async with pg() as db:
         u = await db.get(User, pabrik['user'])
@@ -57,7 +57,7 @@ async def test_sosoh_pemakaian_ulang_aktif_dan_riwayat(pg, gudang2):
     async with await _klien(pg, peran='admin') as c:
         r = await c.get('/proses-aktif/sosoh/' + pr.kode_proses)
         simpan('aktif-sosoh', r)
-        assert r.text.count('class="bahan-silo__satu"') == 2
+        assert r.text.count('class="bahan-silo__satu"') == 1
         assert 'Belum dicatat' in r.text
     async with pg() as db:
         await catat_output(db, user=u, kode=pr.kode_proses, jenis='medium', berat_kumulatif=1000)
@@ -67,5 +67,29 @@ async def test_sosoh_pemakaian_ulang_aktif_dan_riwayat(pg, gudang2):
         simpan('riwayat-sosoh', await c.get('/riwayat-sosoh'))
         r = await c.get(f'/riwayat-sosoh/{pr.id}')
         simpan('detail-sosoh',r)
-        assert r.text.count('class="bahan-silo__satu"') == 2
+        assert r.text.count('class="bahan-silo__satu"') == 1
         assert '100 kg' in r.text
+
+async def test_giling_campuran_memakai_sisa_seluruh_silo_dari_audit(pg, pabrik):
+    from app.models import User, ActivityLog
+    from sqlalchemy import select
+    from app.database import now_local
+    from app.services.bahan_silo import sumber_giling_banyak
+    from app.penggilingan.gudang1.services.milling import start_milling, tutup_silo_giling
+    await _isi_silo(pg, pabrik, 3000)
+    await _isi_silo(pg, pabrik, 2000)
+    async with pg() as db:
+        u = await db.get(User, pabrik['user'])
+        pr = (await start_milling(db, user=u, nama_silo='A')).proc
+        await tutup_silo_giling(db, user=u, kode_proses=pr.kode_proses, nama_silo='A', sisa_kg=4000)
+        rows = (await sumber_giling_banyak(db, [pr.id]))[pr.id]
+        assert len(rows) == 2
+        assert dict(rows[-1]['angka'])['Sisa akhir'] == '2.000 kg'
+        assert rows[-1]['ringkasan_sisa'] == '4.000 kg'
+        assert rows[-1]['ringkasan_status'] == 'Dilepaskan'
+        # Catatan lama tanpa audit utuh tidak boleh menebak sisa dari satu sumber.
+        log = await db.scalar(select(ActivityLog).where(ActivityLog.aksi == 'tutup_silo_giling'))
+        log.dibatalkan_pada = now_local()
+        await db.commit()
+        rows = (await sumber_giling_banyak(db, [pr.id]))[pr.id]
+        assert rows[-1]['ringkasan_sisa'] == 'Belum dapat dipastikan'

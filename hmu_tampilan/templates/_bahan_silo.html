@@ -1,26 +1,37 @@
 {% import "_stok.html" as st %}
-{# Satu baris adalah satu pemakaian; nama silo ulang tetap dipisahkan. #}
+{% macro bobot(n) -%}{{ ('{:,.3f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') }} kg{%- endmacro %}
 {% macro bahan_silo(kelompok) %}
-<p class="bantu">{% if kelompok and kelompok[0].unit|default('') == 'catatan sumber' %}Satu baris per catatan sumber. Pengisian ulang silo tetap terpisah.{% else %}Total masuk sudah termasuk tambahan. Setiap pemakaian ulang silo dicatat terpisah.{% endif %}</p>
+<p class="bantu">Satu baris per silo. Total masuk mencakup seluruh catatan; sisa dan status mengikuti catatan terakhir. Riwayat lengkap ada di Rincian.</p>
 <table class="bahan-silo" aria-label="Bahan dan pemakaian silo">
-<thead><tr><th scope="col">Silo / bahan</th><th scope="col">Total masuk</th><th scope="col">Tambahan</th><th scope="col">Sisa akhir</th><th scope="col">Status / rincian</th></tr></thead>
+<thead><tr><th scope="col">Silo / bahan</th><th scope="col">Total masuk</th><th scope="col">Tambahan</th><th scope="col">Sisa terakhir</th><th scope="col">Status / rincian</th></tr></thead>
 <tbody>
-{% for g in kelompok %}
-{% set angka = dict(g.angka|default([])) %}
+{% for nama, riwayat in kelompok|groupby('nama') %}
+{% set akhir = riwayat[-1] %}
+{% set angka = dict(akhir.angka|default([])) %}
+{% set total = riwayat|selectattr('total_kg', 'defined')|rejectattr('total_kg', 'none')|list %}
+{% set tambahan = riwayat|selectattr('tambahan_kg', 'defined')|rejectattr('tambahan_kg', 'none')|list %}
+{% set jenis = namespace(nama=[]) %}
+{% for g in riwayat %}{% for b in g.bahan %}{% if b.nama not in jenis.nama %}{% set jenis.nama = jenis.nama + [b.nama] %}{% endif %}{% endfor %}{% endfor %}
 <tr class="bahan-silo__satu">
-  <th scope="row"><span class="bahan-silo__nama">{{ g.nama }} <small>· {{ g.unit|default("pemakaian") }} {{ loop.index }}</small></span><span class="bahan-silo__jenis">{{ g.bahan|map(attribute='nama')|join(' + ') }}</span></th>
-  <td data-label="Total masuk"><strong>{{ g.berat }}</strong></td>
-  <td data-label="Tambahan">{{ 'Tanpa tambahan' if angka.get('Tambahan') == '0 kg' else '+' ~ angka['Tambahan'] if angka.get('Tambahan') and angka['Tambahan'].endswith(' kg') else angka['Tambahan'] if angka.get('Tambahan') else 'Belum tercatat' }}</td>
-  <td data-label="Sisa akhir">{{ angka.get('Sisa akhir', 'Belum dicatat') }}</td>
-  <td data-label="Status"><span>{{ g.status.split(' · ')[0]|replace(' pada pemakaian ini', '') }}</span>
-    <details><summary>Rincian</summary>
-      <dl class="bahan-silo__angka">{% for label in ['Awal', 'Terpakai'] %}{% if angka.get(label) %}<div><dt>{{ label }}</dt><dd>{{ angka[label] }}</dd></div>{% endif %}{% endfor %}</dl>
-      {% if g.bahan|length > 1 %}<p>Komposisi total masuk:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
+  <th scope="row"><span class="bahan-silo__nama">{{ nama }} <small>· {{ riwayat|length }} {{ 'catatan sumber' if akhir.unit|default('') == 'catatan sumber' else 'kali pemakaian' }}</small></span><span class="bahan-silo__jenis">{{ jenis.nama|join(' + ') }}</span></th>
+  <td data-label="Total masuk"><strong>{{ bobot(total|sum(attribute='total_kg')) if total|length == riwayat|length else 'Belum diketahui' }}</strong></td>
+  <td data-label="Tambahan">{% if tambahan|length == riwayat|length %}{% set kg = tambahan|sum(attribute='tambahan_kg') %}{{ '+' ~ bobot(kg) if kg else 'Tanpa tambahan' }}{% else %}Tidak dipisahkan{% endif %}</td>
+  <td data-label="Sisa akhir">{{ akhir.ringkasan_sisa|default(angka.get('Sisa akhir', 'Belum dicatat')) }}</td>
+  <td data-label="Status"><span>{{ akhir.ringkasan_status|default(akhir.status.split(' · ')[0]|replace(' pada pemakaian ini', '')) }}</span>
+    <details><summary>Rincian · {{ riwayat|length }} catatan</summary>
+    {% for g in riwayat %}
+      <section class="bahan-silo__pemakaian">
+      <h4>{{ 'Catatan sumber' if g.unit|default('') == 'catatan sumber' else 'Pemakaian' }} {{ loop.index }}</h4>
+      <p>{{ g.berat }} masuk · {{ g.status }}</p>
+      <dl class="bahan-silo__angka">{% for label, nilai in g.angka|default([]) %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>
+      {% if g.bahan|length > 1 %}<p>Komposisi:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
       {% if g.catatan %}<p class="bantu">{{ g.catatan }}</p>{% endif %}
       {% if g.sumber %}<p>Asal bahan · {{ g.sumber|length }} catatan</p>
         {% if g.sumber|selectattr('berat')|list|length %}<p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan total masuk; rincian pembagian per lot belum tersedia.</p>{% endif %}
         <ul>{% for s in g.sumber %}<li>{{ s.nama }}{% if s.berat %} · berat catatan asal {{ s.berat }}{% endif %}{% if s.ket %} · {{ s.ket }}{% endif %}</li>{% endfor %}</ul>
       {% endif %}
+      </section>
+    {% endfor %}
     </details>
   </td>
 </tr>
@@ -28,14 +39,13 @@
 </tbody></table>
 {% endmacro %}
 
-
 {% macro riwayat_bahan_sosoh(silos) %}
 {% set ns = namespace(kelompok=[]) %}
 {% for s in silos %}
   {% set asal = namespace(baris=[]) %}
   {% for nama, berat in s.asal %}{% set asal.baris = asal.baris + [dict(nama=nama, berat=berat, ket='')] %}{% endfor %}
   {% if s.asal_lebih %}{% set asal.baris = asal.baris + [dict(nama=s.asal_lebih ~ ' sumber lain tidak ditampilkan', berat='', ket='')] %}{% endif %}
-  {% set ns.kelompok = ns.kelompok + [dict(nama=s.nama, berat=st.kg(s.awal_kg + s.masuk_kg) ~ ' kg',
+  {% set ns.kelompok = ns.kelompok + [dict(nama=s.nama, total_kg=s.awal_kg + s.masuk_kg, tambahan_kg=s.masuk_kg, berat=st.kg(s.awal_kg + s.masuk_kg) ~ ' kg',
     status='Dilepaskan' if s.sisa_kg is not none else 'Pelepasan belum dicatat',
     angka=[('Awal',st.kg(s.awal_kg) ~ ' kg'),('Tambahan',st.kg(s.masuk_kg) ~ ' kg'),
       ('Sisa akhir',st.kg(s.sisa_kg) ~ ' kg' if s.sisa_kg is not none else 'Belum dicatat'),

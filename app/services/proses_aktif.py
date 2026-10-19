@@ -71,6 +71,8 @@ def kelompok_bahan_silo(rows, pemakaian=()):
         for g, (u, nama) in zip(hasil, pemakaian):
             if g["nama"] != nama:
                 raise ValueError("Urutan pemakaian silo tidak selaras")
+            g["total_kg"] = float(u.berat_awal_kg or 0) + float(u.berat_masuk_kg or 0)
+            g["tambahan_kg"] = float(u.berat_masuk_kg or 0)
             g["angka"] = [
                 ("Awal", svc._kg(u.berat_awal_kg)),
                 ("Tambahan", svc._kg(u.berat_masuk_kg)),

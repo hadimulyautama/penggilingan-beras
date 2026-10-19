@@ -67,7 +67,7 @@
       <div class="proses-detail__catatan" id="catatan-proses">
       {% for bagian in d.bagian %}
         <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ loop.index }}">
-          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{{ bagian.jumlah }} {{ bagian.satuan|default("pemakaian silo") if bagian.kelompok_silo is defined else "catatan" }}</span></div>
+          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{% if bagian.kelompok_silo is defined %}{{ bagian.kelompok_silo|map(attribute="nama")|unique|list|length }} silo · {{ bagian.jumlah }} catatan{% else %}{{ bagian.jumlah }} catatan{% endif %}</span></div>
           {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
           {% if bagian.kelompok_silo is defined %}
           {{ bahan_silo(bagian.kelompok_silo) }}

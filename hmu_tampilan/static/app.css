@@ -2944,3 +2944,6 @@ body .pilihan__satu--utama:active {
   .bahan-silo td:before {content:attr(data-label);display:block;font-size:.8rem;margin-bottom:.15rem}
   .bahan-silo__angka {grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+.bahan-silo__pemakaian + .bahan-silo__pemakaian {border-top:1px solid var(--garis);margin-top:.75rem;padding-top:.75rem}
+.bahan-silo__pemakaian h4 {margin:.5rem 0}
