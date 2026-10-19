@@ -1556,7 +1556,7 @@ for _a in (
     # kartu dibangun dari spesifikasi yang sama. Yang berubah cuma katalognya
     # berhenti menggambarnya.
     "perintah_keluar", "tambah_barang_keluar", "ubah_item_perintah", "hapus_item_perintah", "batal_perintah_keluar",
-    "koreksi_plat_pengiriman", "pilih_tiket_armada", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
+    "koreksi_plat_pengiriman", "pilih_tiket_armada", "lepas_tiket_armada", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
@@ -1610,7 +1610,7 @@ _ACTION_WH = {
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
     "ubah_item_perintah": "g2", "hapus_item_perintah": "g2",
     "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
-    "koreksi_plat_pengiriman": "g2", "pilih_tiket_armada": "g2",
+    "koreksi_plat_pengiriman": "g2", "pilih_tiket_armada": "g2", "lepas_tiket_armada": "g2",
     "auto_taut_keluar": "g2",
     "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",
     # ── Jasa: g2, dengan satu alasan yang sama seperti barang keluar ──

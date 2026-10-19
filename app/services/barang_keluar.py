@@ -605,6 +605,39 @@ async def pilih_tiket_armada(db: AsyncSession, *, user, rec_id: int,
     return rec
 
 
+async def lepas_tiket_armada(db: AsyncSession, *, user, rec_id: int,
+                             tiket_id: int, alasan: str, dasar: str | None = None) -> OutgoingRecord:
+    """Lepaskan hubungan dalam kunci; jangan mengubah hasil timbang atau muatan.
+
+    Tiket yang dilihat saat membuka formulir wajib masih sama. Jika petugas
+    lain sudah mengganti armada, formulir lama tidak boleh melepas tiket baru.
+    """
+    from sqlalchemy import text
+    if not alasan.strip():
+        raise BarangKeluarError("Isi alasan melepas tiket armada.")
+    rec = await _kunci_hidup(db, rec_id)
+    if dasar is not None and (await ringkasan_muat(db, rec))["dasar"] != dasar:
+        raise BarangKeluarError("Perintah atau armada berubah. Muat ulang detail dan periksa kembali.")
+    if rec.timbangan_transaksi_id != tiket_id:
+        raise BarangKeluarError("Tiket armada berubah atau sudah dilepas. Muat ulang detail dan periksa kembali.")
+    tiket = (await db.execute(text(
+        "SELECT id,kode FROM timbangan_transaksi WHERE id=:id FOR UPDATE"
+    ), {"id": tiket_id})).mappings().first()
+    if tiket is None:
+        raise BarangKeluarError("Tiket timbang tidak ditemukan. Muat ulang detail.")
+    import json
+    sebelum = json.dumps({"tiket_id": tiket_id, "no_polisi": rec.no_polisi})
+    rec.timbangan_transaksi_id = None
+    rec.no_polisi = None
+    await _jejak(db, rec, langkah="lepas_tiket_armada", oleh=user,
+                 ringkas=f"{rec.kode} melepas {tiket['kode']} · muatan aktual tetap",
+                 medan="timbangan_transaksi_id", lama=sebelum, alasan=alasan.strip())
+    await _kabar(db, rec, untuk="operator",
+                 pesan=f"Tiket armada {tiket['kode']} dilepas dari {rec.kode}. Periksa armada sebelum melanjutkan.")
+    await db.commit()
+    return rec
+
+
 async def buat_perintah(
     db: AsyncSession, *, user, baris: list[BarisPerintah],
     pelanggan_id: int | None = None,

@@ -155,7 +155,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             # ini lewat `nilai` — jadi yang menekannya dari sini tak perlu
             # memilih ulang transaksi yang barusan ia baca.
             "tombol": _tombol(rec, boleh_perintah=boleh_perintah,
-                              boleh_muat=boleh_muat),
+                              boleh_muat=boleh_muat, dasar=dasar_perintah.get(rec.id, "")),
             "total_perintah": sum(x["perintah"] for x in isi),
             "total_dimuat": sum(x["dimuat"] for x in isi),
             "total_sisa": sum(x["sisa_perintah"] for x in isi),
@@ -233,7 +233,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     )
 
 
-def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool) -> list[tuple]:
+def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "") -> list[tuple]:
     """(buka, nilai, label, utama) untuk satu kartu — sesuai keadaan & peran.
 
     `utama` menandai tombol yang paling mungkin ditekan: yang satu itu digambar
@@ -255,6 +255,8 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool) -> list[tuple]:
     if rec.status in OUT_HIDUP and boleh_perintah:
         t.append(("tambah_barang_keluar", n, "Tambah barang", not t))
         t.append(("pilih_tiket_armada", n, "Pilih tiket armada", False))
+        if rec.timbangan_transaksi_id:
+            t.append(("lepas_tiket_armada", f"{n}|{rec.timbangan_transaksi_id}|{dasar}", "Lepas tiket armada", False))
     if rec.status == OUT_PERINTAH and boleh_perintah:
         t.append(("batal_perintah_keluar", n, "Batalkan", False))
     return t

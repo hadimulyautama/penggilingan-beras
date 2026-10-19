@@ -2789,3 +2789,119 @@ async def test_pilihan_armada_tidak_menawarkan_tiket_tertaut_termasuk_sendiri(pg
         with pytest.raises(bk.BarangKeluarError,match='sudah dipilih'):
             await bk.pilih_tiket_armada(db,user=u,rec_id=lain.rec.id,tiket_id=tid)
     assert await _stok(pg,gudang)==10000
+
+
+@pytest.mark.parametrize('status',['perintah','dimuat'])
+async def test_lepas_armada_membebaskan_tiket_tanpa_mengubah_muatan(pg,gudang,status):
+    from sqlalchemy import text,select
+    from app.models import User,OutgoingRecord,ActivityLog
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import tiket_armada,perintah_armada_tertaut
+    from app.web.layar_keluar import _tombol
+    rid=(await _perintah(pg,gudang)).rec.id if status=='perintah' else await _sampai_dimuat(pg,gudang)
+    tid=await _armada_uji(pg,'KLR-LEPAS-UJI',None)
+    stok=await _stok(pg,gudang)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        rec=await bk.pilih_tiket_armada(db,user=u,rec_id=rid,tiket_id=tid)
+        assert 'lepas_tiket_armada' in [t[0] for t in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
+        opsi=await perintah_armada_tertaut(user=u)
+        assert any(o['value'].startswith(f'{rid}|{tid}|') for o in opsi)
+        sebelum=dict((await db.execute(text('SELECT * FROM timbangan_transaksi WHERE id=:id'),{'id':tid})).mappings().one())
+        _,items=(await bk.daftar(db,transaksi_id=rid))[0]
+        aktual=[(i.id,float(i.berat_kg or 0),i.jumlah_karung) for i in items]
+        await bk.lepas_tiket_armada(db,user=u,rec_id=rid,tiket_id=tid,alasan='Armada diganti')
+        rec,items=(await bk.daftar(db,transaksi_id=rid))[0]
+        assert rec.status==status and rec.timbangan_transaksi_id is None and rec.no_polisi is None
+        assert aktual==[(i.id,float(i.berat_kg or 0),i.jumlah_karung) for i in items]
+        sesudah=dict((await db.execute(text('SELECT * FROM timbangan_transaksi WHERE id=:id'),{'id':tid})).mappings().one())
+        assert sesudah==sebelum
+        assert str(tid) in [o['value'] for o in await tiket_armada(induk=str(rid),user=u)]
+        audit=(await db.execute(select(ActivityLog).where(ActivityLog.aksi=='barang_keluar_lepas_tiket_armada'))).scalars().one()
+        assert audit.changed_by==gudang['adm'] and audit.alasan_perubahan=='Armada diganti'
+        assert 'lepas_tiket_armada' not in [t[0] for t in _tombol(rec,boleh_perintah=True,boleh_muat=False)]
+        with pytest.raises(bk.BarangKeluarError,match='berubah|dilepas'):
+            await bk.lepas_tiket_armada(db,user=u,rec_id=rid,tiket_id=tid,alasan='Ulang')
+    assert await _stok(pg,gudang)==stok
+
+
+async def test_lepas_armada_formulir_basi_dan_pengiriman_selesai_ditolak(pg,gudang):
+    from app.models import User,OutgoingRecord
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import act_lepas_tiket_armada,LepasArmadaReq
+    from fastapi import HTTPException
+    r=await _perintah(pg,gudang)
+    lama=await _armada_uji(pg,'KLR-LEPAS-LAMA',None);baru=await _armada_uji(pg,'KLR-LEPAS-BARU',None)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=lama)
+        await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=baru)
+        with pytest.raises(bk.BarangKeluarError,match='berubah'):
+            await bk.lepas_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=lama,alasan='Formulir lama')
+        await db.rollback()
+        rec=await db.get(OutgoingRecord,r.rec.id);assert rec.timbangan_transaksi_id==baru
+        rec.status='selesai';await db.commit()
+        with pytest.raises(bk.BarangKeluarError):
+            await bk.lepas_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=baru,alasan='Sudah tutup')
+    async with pg() as db:
+        with pytest.raises(HTTPException) as e:
+            await act_lepas_tiket_armada(LepasArmadaReq(perintah=f'{r.rec.id}|{baru}',alasan='Operator'),user=await db.get(User,gudang['op']))
+        assert e.value.status_code==403
+
+
+async def test_tiket_setelah_dilepas_bisa_dipakai_perintah_lain_dan_dihapus(pg,gudang):
+    from app.models import User,OutgoingRecord
+    from app.services import barang_keluar as bk
+    from sqlalchemy import text
+    a=await _perintah(pg,gudang);b=await _perintah(pg,gudang)
+    tid=await _armada_uji(pg,'KLR-LEPAS-PINDAH',None)
+    async with pg() as db:
+        u=await db.get(User,gudang['adm'])
+        ra=await db.get(OutgoingRecord,a.rec.id);rb=await db.get(OutgoingRecord,b.rec.id)
+        rb.pelanggan_id=ra.pelanggan_id;await db.commit()
+        await bk.pilih_tiket_armada(db,user=u,rec_id=ra.id,tiket_id=tid)
+        await bk.lepas_tiket_armada(db,user=u,rec_id=ra.id,tiket_id=tid,alasan='Pindah pengiriman')
+        await bk.pilih_tiket_armada(db,user=u,rec_id=rb.id,tiket_id=tid)
+        assert rb.timbangan_transaksi_id==tid
+        await bk.lepas_tiket_armada(db,user=u,rec_id=rb.id,tiket_id=tid,alasan='Tiket salah')
+        # Tiket uji saja: buktikan tidak ada lagi FK produksi yang menahan
+        # penghapusan Pos Timbang setelah tautannya benar-benar dilepas.
+        await db.execute(text('DELETE FROM timbangan_transaksi WHERE id=:id'),{'id':tid})
+        await db.commit()
+        assert (await db.execute(text('SELECT id FROM timbangan_transaksi WHERE id=:id'),{'id':tid})).first() is None
+    assert await _stok(pg,gudang)==10000
+
+
+async def test_http_lepas_armada_cuplikan_lama_ditolak_dan_sukses_dicatat(pg,gudang):
+    import re
+    from app.models import User,OutgoingRecord
+    from app.services import barang_keluar as bk
+    from app.web import csrf
+    r=await _perintah(pg,gudang)
+    tid=await _armada_uji(pg,'KLR-HTTP-LEPAS',None)
+    async with pg() as db:
+        await bk.pilih_tiket_armada(db,user=await db.get(User,gudang['adm']),rec_id=r.rec.id,tiket_id=tid)
+    c=await _klien(pg,gudang['adm'],'uji_http_lepas_armada')
+    async with c:
+        h=await c.get(f'/barang-keluar/{r.rec.id}')
+        assert 'Lepas tiket armada' in h.text
+        token=re.search(r'name="formulir-sesi" content="([^"]+)"',h.text).group(1)
+        opsi=(await c.get('/api/actions/perintah-armada-tertaut')).json()
+        payload=dict(perintah=opsi[0]['value'],alasan='Ganti armada')
+        menu=(await c.get('/api/actions/menu')).json()
+        aksi=next(x for x in menu if x['id']=='lepas_tiket_armada')
+        assert aksi['kartu'] and aksi['konfirmasi']['ya']=='Ya, lepas tiket'
+        async with pg() as db:
+            u=await db.get(User,gudang['adm'])
+            await bk.lepas_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=tid,alasan='Petugas lain')
+            await bk.pilih_tiket_armada(db,user=u,rec_id=r.rec.id,tiket_id=tid)
+        basi=await c.post('/api/actions/lepas-tiket-armada',json=payload,headers={csrf.NAMA_HEADER:token})
+        assert basi.status_code==400 and 'berubah' in basi.text
+        opsi=(await c.get('/api/actions/perintah-armada-tertaut')).json()
+        payload['perintah']=opsi[0]['value']
+        sukses=await c.post('/api/actions/lepas-tiket-armada',json=payload,headers={csrf.NAMA_HEADER:token})
+        assert sukses.status_code==200,sukses.text
+        assert 'Lepas tiket armada' not in (await c.get(f'/barang-keluar/{r.rec.id}')).text
+    async with pg() as db:
+        assert (await db.get(OutgoingRecord,r.rec.id)).timbangan_transaksi_id is None
+    assert await _stok(pg,gudang)==10000
