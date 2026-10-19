@@ -25,8 +25,15 @@
     {% for g in riwayat %}
       <section class="bahan-silo__pemakaian">
       <h4>{{ 'Catatan sumber' if g.unit|default('') == 'catatan sumber' else 'Pemakaian' }} {{ loop.index }}</h4>
-      <p>{{ g.berat }} masuk · {{ g.status }}</p>
-      <dl class="bahan-silo__angka">{% for label, nilai in g.angka|default([]) %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>
+      <p>{{ g.berat }} masuk · {{ g.status.split(' · ')[0]|replace(' pada pemakaian ini', '') }}</p>
+      {% set rincian = dict(g.angka|default([])) %}
+      {% set gabung = rincian.get('Awal') and rincian.get('Awal') == rincian.get('Terpakai') and rincian.get('Awal') != g.berat and rincian.get('Awal').endswith(' kg') %}
+      <dl class="bahan-silo__angka">
+        {% if gabung %}<div><dt>Awal / terpakai</dt><dd>{{ rincian['Awal'] }}</dd></div>{% endif %}
+        {% for label, nilai in g.angka|default([]) %}
+          {% if label not in ['Awal', 'Terpakai'] or (not gabung and not (nilai == g.berat and nilai.endswith(' kg'))) %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endif %}
+        {% endfor %}
+      </dl>
       {% if g.bahan|length > 1 %}<p>Komposisi:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
       {% if g.catatan %}<p class="bantu">{{ g.catatan }}</p>{% endif %}
       {% if g.sumber %}<details class="bahan-silo__asal"><summary>Asal bahan · {{ g.sumber|length }} catatan</summary>
