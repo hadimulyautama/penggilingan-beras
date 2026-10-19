@@ -2,7 +2,7 @@
 {% block judul %}Riwayat Pengeringan{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
-{% set kg = st.kg %}
+{% set kg = st.kg_rinci %}
 
 {% block isi %}
 {% set total_bahan = namespace(kg=0) %}

@@ -1193,7 +1193,7 @@ def _fmt_ka(log: DryingMoistureLog | None) -> str:
         parts.append(f"indikator {log.kadar_air_indikator:g}%")
     if log.kadar_air_tes_manual is not None:
         parts.append(f"manual {log.kadar_air_tes_manual:g}%")
-    return " / ".join(parts) if parts else "-"
+    return (" / ".join(parts)).replace('.', ',') if parts else "-"
 
 
 async def _lot_suppliers(db: AsyncSession, lot_id: int) -> list[str]:
@@ -1585,7 +1585,7 @@ async def riwayat_pengeringan(db: AsyncSession, *, batas: int = 30,
         baris = batch_per_lot.get(lot.id, [])
         bobot = dari_batches(b for b, _ in baris)
         bahan = [_baris_bahan(
-            b, nama or (nama_pemilik_batch.get(b.jasa_id) if b.jasa_id else None))
+            b, nama or (nama_pemilik_batch.get(b.jasa_id) if b.jasa_id else None), presisi=True)
             for b, nama in baris]
         # `in` di kamus, bukan `.get(..., (None, None))`: lot yang tak punya
         # satu pun log kadar air harus berkata "belum ada log kadar air"

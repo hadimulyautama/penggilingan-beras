@@ -224,7 +224,7 @@ async def test_kartu_menggambar_bahan_dan_ka_tanpa_susut(pg, pabrik):
     t = r.text
     assert kode in t
     assert "Pemasok Uji" in t
-    assert "13.50%" in t  # kadar air terakhir — `_fmt_ka` memakai ":g", bukan koma
+    assert "13,50%" in t  # Format desimal Indonesia, sama dengan laporan PDF.
     assert "susut" not in t.lower(), "tak boleh ada klaim susut — datanya tak pernah ada"
 
 

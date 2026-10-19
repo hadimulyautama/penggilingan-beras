@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import SessionLocal
+from app.web.pdf_proses import angka, persen, teks_angka, laju_kadar_air, bagian_jeda, bagian_silo, durasi as durasi_teks
 
 
 def _angka(value) -> float:
@@ -144,112 +145,46 @@ async def ambil_data(process_id: int) -> dict:
         for move in broken_moves:
             movements[move.silo_id].append((
                 move.waktu, 1, _angka(move.berat_kg), {
-                    "kind": "broken", "code": "Stok broken", "material": "Broken",
+                    "kind": "broken", "code": move.kode_pindah, "material": "Broken",
                     "owner": owners.get(move.jasa_id) if move.jasa_id else "Pabrik",
                     "plate": "—", "weight": _angka(move.berat_kg),
                 }))
 
-        # Penarikan dari penyosohan terdahulu mengurangi sumber yang paling
-        # lama tercatat. Baris kosong dari proses warisan tetap dicerminkan
-        # sebagai saldo tanpa rincian sumber, bukan dibuat-buat sebagai batch.
-        previous = (await db.execute(
-            select(PolishingSiloUsage, PolishingProcess)
-            .join(PolishingProcess,
-                  PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
-            .where(PolishingSiloUsage.silo_id.in_(silo_ids),
-                   PolishingSiloUsage.berat_akhir_kg.is_not(None),
-                   PolishingProcess.id != proc.id,
-                   PolishingProcess.waktu_mulai <= proc.waktu_mulai)
-        )).all()
-        withdrawals: dict[int, list[tuple]] = {sid: [] for sid in silo_ids}
-        for usage, old_proc in previous:
-            at = usage.updated_at or old_proc.waktu_selesai or old_proc.waktu_mulai
-            if at and at <= proc.waktu_mulai:
-                used = (usage.berat_terpakai_kg if usage.berat_terpakai_kg is not None
-                        else _angka(usage.berat_awal_kg) + _angka(usage.berat_masuk_kg)
-                        - _angka(usage.berat_akhir_kg))
-                withdrawals[usage.silo_id].append((at, -1, max(0, _angka(used)), None))
-
+        # Putar ledger sekali per silo. Tiap pembebasan mengurangi pool asal;
+        # pemakaian ulang tidak boleh memulai lagi dari saldo awal proses.
+        from app.models import ActivityLog, BerasKeSilo, HasilSampingKeSilo
+        from app.services.asal_silo_pdf import alokasi_sumber
+        for model in (BerasKeSilo, HasilSampingKeSilo):
+            extra = (await db.scalars(select(model).where(model.silo_id.in_(silo_ids)))).all()
+            extra_owners = await nama_pemilik_banyak(db, {x.jasa_id for x in extra if x.jasa_id})
+            for move in extra:
+                movements[move.silo_id].append((move.waktu, 1, _angka(move.berat_kg), {
+                    "kind": "hasil_sosoh", "code": move.kode_pindah,
+                    "material": move.jenis.replace('_', ' ').capitalize(),
+                    "owner": extra_owners.get(move.jasa_id, "Tidak tercatat") if move.jasa_id else "Pabrik",
+                    "plate": "—", "weight": _angka(move.berat_kg)}))
+        histories = (await db.execute(select(PolishingSiloUsage, PolishingProcess)
+            .join(PolishingProcess, PolishingProcess.id == PolishingSiloUsage.polishing_process_id)
+            .where(PolishingSiloUsage.silo_id.in_(silo_ids), PolishingProcess.status != 'dibatalkan')
+            .order_by(PolishingSiloUsage.id))).all()
+        history_ids = [u.id for u, _ in histories]
+        closed_at = {}
+        for log in (await db.scalars(select(ActivityLog).where(
+            ActivityLog.table_name == 'polishing_silo_usage',
+            ActivityLog.aksi == 'tutup_silo_sosoh', ActivityLog.record_id.in_(history_ids),
+            ActivityLog.dibatalkan_pada.is_(None)).order_by(ActivityLog.id))).all():
+            closed_at[log.record_id] = log.waktu_perubahan
+        allocated = alokasi_sumber(movements, histories, closed_at)
         per_silo_sources = []
         for usage, silo_name, silo_kind in usages:
-            sid = usage.silo_id
-            # Replay prior stock entries/withdrawals. Negative first for equal
-            # timestamps, following _isian_silo_banyak's zero-boundary rule.
-            before = [e for e in movements[sid] if e[0] <= proc.waktu_mulai]
-            before += withdrawals[sid]
-            before.sort(key=lambda e: (e[0], e[1]))
-            pool: list[dict] = []
-            for _, sign, amount, source in before:
-                if sign > 0:
-                    item = dict(source)
-                    item["remaining"] = amount
-                    pool.append(item)
-                else:
-                    rest = amount
-                    for item in pool:
-                        take = min(item["remaining"], rest)
-                        item["remaining"] -= take
-                        rest -= take
-                        if rest <= .005:
-                            break
-                    pool = [x for x in pool if x["remaining"] > .005]
-
-            expected_start = _angka(usage.berat_awal_kg)
-            pool_total = sum(x["remaining"] for x in pool)
-            if pool_total < expected_start - .01:
-                pool.append({"kind": "legacy", "code": "Saldo silo tanpa rincian sumber",
-                             "material": "Bahan campuran",
-                             "owner": "Tidak tercatat", "plate": "—",
-                             "remaining": expected_start - pool_total})
-            elif pool_total > expected_start + .01:
-                rest = pool_total - expected_start
-                for item in pool:
-                    take = min(item["remaining"], rest)
-                    item["remaining"] -= take
-                    rest -= take
-                    if rest <= .005:
-                        break
-                pool = [x for x in pool if x["remaining"] > .005]
-
-            current_inputs = [e for e in movements[sid]
-                              if proc.waktu_mulai < e[0] <= (proc.waktu_selesai or proc.waktu_mulai)]
-            current_inputs.sort(key=lambda e: (e[0], e[1]))
-            candidates = list(pool)
-            for _, _, amount, source in current_inputs:
-                item = dict(source)
-                item["remaining"] = amount
-                candidates.append(item)
-            expected_add = _angka(usage.berat_masuk_kg)
-            add_total = sum(x["remaining"] for x in candidates[len(pool):])
-            if add_total < expected_add - .01:
-                candidates.append({"kind": "legacy", "code": "Penambahan tanpa rincian sumber",
-                                  "material": "PK" if silo_kind != "broken" else "Broken",
-                                  "owner": "Tidak tercatat", "plate": "—",
-                                  "remaining": expected_add - add_total})
-
-            used = (usage.berat_terpakai_kg if usage.berat_terpakai_kg is not None
-                    else expected_start + expected_add - _angka(usage.berat_akhir_kg))
-            rest = max(0.0, _angka(used))
-            consumed = []
-            for item in candidates:
-                take = min(item["remaining"], rest)
-                if take > .005:
-                    row = dict(item)
-                    row["weight"] = take
-                    consumed.append(row)
-                    item["remaining"] -= take
-                    rest -= take
-                if rest <= .005:
-                    break
-            if rest > .01:
-                consumed.append({"kind": "legacy", "code": "Bahan tanpa rincian sumber",
-                                 "material": "PK" if silo_kind != "broken" else "Broken",
-                                 "owner": "Tidak tercatat", "plate": "—", "weight": rest})
+            used = (float(usage.berat_terpakai_kg) if usage.berat_terpakai_kg is not None else
+                    float(usage.berat_awal_kg) + _angka(usage.berat_masuk_kg) - float(usage.berat_akhir_kg)
+                    if usage.berat_akhir_kg is not None else None)
             per_silo_sources.append({
-                "silo": silo_name, "kind": silo_kind,
-                "start": expected_start, "added": expected_add,
-                "remaining": _angka(usage.berat_akhir_kg),
-                "used": _angka(used), "sources": consumed,
+                "silo": silo_name, "kind": silo_kind, "usage_id": usage.id,
+                "start": float(usage.berat_awal_kg), "added": _angka(usage.berat_masuk_kg),
+                "remaining": float(usage.berat_akhir_kg) if usage.berat_akhir_kg is not None else None,
+                "used": used, "sources": allocated.get(usage.id, []),
             })
 
         source_rows = [src for silo in per_silo_sources for src in silo["sources"]]
@@ -362,12 +297,7 @@ async def ambil_data(process_id: int) -> dict:
                             if getattr(log, f"kadar_air_tes_{i}") is not None]
                 avg = (_angka(log.kadar_air_tes_manual) if log.kadar_air_tes_manual is not None
                        else sum(readings) / len(readings) if readings else None)
-                speed = None
                 previous = per_lot_first.get(lot_code)
-                if previous and avg is not None:
-                    hours = (log.waktu_update - previous[0]).total_seconds() / 3600
-                    if hours > 0:
-                        speed = (previous[1] - avg) / hours
                 if avg is not None and previous is None:
                     per_lot_first[lot_code] = (log.waktu_update, avg)
                 drying_moisture.append({
@@ -375,7 +305,7 @@ async def ambil_data(process_id: int) -> dict:
                     "samples": " · ".join(f"{x:g}%" for x in readings) if readings else "Tidak tersedia",
                     "average": f"{avg:.2f}%" if avg is not None else "—",
                     "machine": f"{_angka(log.kadar_air_indikator):g}%" if log.kadar_air_indikator is not None else "—",
-                    "speed": f"{speed:.2f}%/jam" if speed is not None else "—",
+                    "speed": laju_kadar_air(previous[1], avg, previous[0], log.waktu_update) if previous else 'Belum dapat dihitung',
                 })
 
         # QC giling dan rendemen PK untuk setiap lot proses yang menjadi bahan.
@@ -428,8 +358,10 @@ async def ambil_data(process_id: int) -> dict:
                 })
 
         outputs = (await output_sosoh_banyak(db, [proc.id])).get(proc.id, {})
-        total_input = sum(x["used"] for x in per_silo_sources)
+        total_input = sum(_angka(x["used"]) for x in per_silo_sources)
         neraca = neraca_sosoh(total_input, outputs)
+        from app.web.pdf_proses import jeda_laporan
+        jeda = await jeda_laporan(db, jenis='penyosohan', id_=proc.id, mulai=proc.waktu_mulai, selesai=proc.waktu_selesai)
         operator = await db.get(User, proc.created_by)
         return {
             "process": proc, "operator": operator.nama if operator else "Tidak tercatat",
@@ -439,7 +371,7 @@ async def ambil_data(process_id: int) -> dict:
             "drying_lots": drying_lots, "drying_moisture": drying_moisture,
             "milling_yields": milling_yields, "milling_qc": milling_qc,
             "external_qc": external_qc, "outputs": outputs,
-            "balance": neraca,
+            "balance": neraca, "jeda": jeda, "input_complete": all(x["used"] is not None for x in per_silo_sources),
         }
 
 
@@ -468,14 +400,14 @@ def buat_pdf(data: dict) -> bytes:
         fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=teal,
         spaceBefore=7, spaceAfter=4))
     styles.add(ParagraphStyle(name="SosohCell", parent=styles["BodyText"],
-        fontSize=7.1, leading=9, wordWrap="CJK"))
+        fontSize=7.1, leading=9, wordWrap=None))
     styles.add(ParagraphStyle(name="SosohHead", parent=styles["SosohCell"],
         fontName="Helvetica-Bold", textColor=colors.white))
     styles.add(ParagraphStyle(name="SosohNote", parent=styles["BodyText"],
         fontSize=7.7, leading=10, textColor=muted))
 
     def p(value, style="SosohCell"):
-        return Paragraph(escape(str(value if value not in (None, "") else "—")), styles[style])
+        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
 
     def grid(rows, widths, spans=()):
         table = Table([[p(cell, "SosohHead" if r == 0 else "SosohCell")
@@ -504,19 +436,13 @@ def buat_pdf(data: dict) -> bytes:
         return value.strftime("%d/%m/%Y %H:%M") + " WIB"
 
     def kg(value):
-        return f"{_angka(value):,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") + " kg"
+        return angka(value) + ' kg' if value is not None else 'Belum dicatat'
 
-    def pct(value, digits=2):
-        return "—" if value is None else f"{float(value):.{digits}f}%".replace(".", ",")
+    def pct(value, digits=1):
+        return persen(value, digits)
 
     def duration(start, end):
-        if start is None or end is None:
-            return "Belum tercatat"
-        mins = max(0, int((end - start).total_seconds()) // 60)
-        days, mins = divmod(mins, 1440)
-        hours, mins = divmod(mins, 60)
-        return " ".join(([f"{days} hari"] if days else []) +
-                        ([f"{hours} jam"] if hours or days else []) + [f"{mins} menit"])
+        return durasi_teks((end-start).total_seconds()) if start is not None and end is not None else 'Belum tercatat'
 
     proc = data["process"]
     balance = data["balance"]
@@ -524,7 +450,8 @@ def buat_pdf(data: dict) -> bytes:
                      "medsuper": "Beras Medium Super", "premium": "Beras Premium",
                      "beras_b": "Beras B", "menir": "Menir", "broken": "Broken",
                      "bekatul": "Bekatul", "reject": "Reject"}
-    yield_rate = (balance.beras.kg / balance.bahan_kg * 100) if balance.bahan_kg else None
+    complete = data.get('input_complete', True)
+    yield_rate = (balance.beras.kg / balance.bahan_kg * 100) if balance.bahan_kg and complete else None
     story = [p("Laporan Penyosohan", "SosohTitle"),
              p(f"{proc.kode_proses} · Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}", "SosohSub")]
     story.append(grid([
@@ -533,9 +460,9 @@ def buat_pdf(data: dict) -> bytes:
         ["Operator", data["operator"]],
         ["Mulai – selesai", f"{stamp(proc.waktu_mulai)} – {stamp(proc.waktu_selesai)}"],
         ["Durasi proses", duration(proc.waktu_mulai, proc.waktu_selesai)],
-        ["Total bahan baku", kg(balance.bahan_kg)],
+        ["Total bahan baku", kg(balance.bahan_kg) if data.get('input_complete', True) else 'Belum dapat dipastikan'],
         ["Hasil beras putih · rendemen", f"{kg(balance.beras.kg)} · {pct(yield_rate)}"],
-        ["Neraca massa", f"Keluar {kg(balance.keluar_kg)} · susut {kg(balance.susut.kg)} ({pct(balance.susut.persen)})"],
+        ["Neraca massa", f"Keluar {kg(balance.keluar_kg)} · susut {kg(balance.susut.kg)} ({pct(balance.susut.persen)})" if complete else "Belum dapat dipastikan"],
     ], [54 * mm, 106 * mm]))
 
     story += [Paragraph("Rekap hasil dan rendemen", styles["SosohSection"]), Spacer(1, 3)]
@@ -544,10 +471,22 @@ def buat_pdf(data: dict) -> bytes:
         amount = _angka(data["outputs"].get(kind))
         if amount > 0:
             label = output_labels.get(kind) or nama_produk(kind).capitalize()
-            rows.append([label, kg(amount), pct(amount / balance.bahan_kg * 100 if balance.bahan_kg else None)])
-    rows += [["Susut (selisih neraca)", kg(balance.susut.kg), pct(balance.susut.persen)],
-             ["Total bahan baku", kg(balance.bahan_kg), "100,00%"]]
+            rows.append([label, kg(amount), pct(amount / balance.bahan_kg * 100 if balance.bahan_kg and complete else None)])
+    rows += [["Susut (selisih neraca)", kg(balance.susut.kg) if complete else 'Belum dapat dipastikan', pct(balance.susut.persen) if complete else '—'],
+             ["Total bahan baku", kg(balance.bahan_kg) if complete else 'Belum dapat dipastikan', '100%' if complete else '—']]
     story.append(grid(rows, [66 * mm, 50 * mm, 44 * mm]))
+    if not data.get('input_complete', True):
+        story.append(p('Peringatan: sisa sebagian pemakaian silo belum dicatat. Neraca belum dapat dipastikan.', 'SosohNote'))
+
+    groups = []
+    for silo in data['silos']:
+        def bobot(n):
+            return kg(n) if n is not None else 'Belum dicatat'
+        groups.append(dict(nama=silo['silo'], total_kg=silo['start']+silo['added'], tambahan_kg=silo['added'],
+            status='Dilepaskan' if silo['remaining'] is not None else 'Pelepasan belum dicatat',
+            angka=[('Awal',bobot(silo['start'])),('Tambahan',bobot(silo['added'])),
+                   ('Sisa akhir',bobot(silo['remaining'])),('Terpakai',bobot(silo['used']))]))
+    bagian_silo(story, groups, p, grid, 'SosohSection')
 
     story += [Paragraph("Bahan baku dan jejak asal", styles["SosohSection"]),
               p("Daftar bahan yang benar-benar dipakai per silo. Pembagian sumber pada silo campuran mengikuti FIFO catatan masuk; barang tetap tercampur secara fisik.", "SosohNote"), Spacer(1, 3)]
@@ -663,7 +602,8 @@ def buat_pdf(data: dict) -> bytes:
                  for lot in data["drying_lots"]]
         story.append(grid(rows, [22*mm, 24*mm, 24*mm, 24*mm, 24*mm, 24*mm, 27*mm]))
         story += [Paragraph("Pemantauan kadar air saat pengeringan", styles["SosohSection"]), Spacer(1, 3)]
-        rows = [["Lot", "Waktu", "Pembacaan alat tes", "Rata-rata tes", "Indikator mesin", "Rata-rata turun/jam"]]
+        story.append(p('Perubahan memakai waktu antar-pengukuran (termasuk jeda). Laju per jam hanya setelah selang minimal 1 jam; satuannya poin persentase/jam.', 'SosohNote'))
+        rows = [["Lot", "Waktu", "Pembacaan alat tes", "Rata-rata tes", "Indikator mesin", "Perubahan sejak ukur pertama"]]
         rows += [[x["lot"], stamp(x["time"]), x["samples"], x["average"], x["machine"], x["speed"]]
                  for x in data["drying_moisture"]]
         if len(rows) == 1:
@@ -673,6 +613,7 @@ def buat_pdf(data: dict) -> bytes:
         story.append(p("Tidak ada batch bahan yang melalui pengeringan sebelum digiling.", "SosohNote"))
     story.append(p("QC proses sosoh belum memiliki catatan terpisah di sistem.", "SosohNote"))
 
+    bagian_jeda(story, data.get("jeda"), p, grid, "SosohSection")
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm,
         topMargin=15*mm, bottomMargin=19*mm, title=f"Laporan Penyosohan {proc.kode_proses}")

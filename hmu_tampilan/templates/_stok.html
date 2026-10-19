@@ -12,6 +12,7 @@
    sendiri tak menempelkan satuan apa pun, dan blok karung memakainya untuk
    LEMBAR. Satuannya ditulis di sebelah angkanya, di markup. #}
 {% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
+{% macro kg_rinci(n) -%}{{ ('{:,.3f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') if n is not none else 'Belum dicatat' }}{%- endmacro %}
 
 {# ── STOK KARUNG ──
    Keputusan pemilik 23 September 2026: stok karung punya bloknya sendiri di

@@ -10,7 +10,7 @@ def _jam(w):
     return berzona(w).strftime('%d/%m/%Y %H:%M:%S') if w else 'Tidak tercatat'
 
 
-async def riwayat_jeda(db, *, jenis, id_, params=None):
+async def riwayat_jeda(db, *, jenis, id_, params=None, semua=False):
     params = params or {}
     jumlah = await db.scalar(select(func.count()).select_from(JedaProses).where(_kolom(jenis) == id_))
     akhir = max(1, ceil(jumlah/20))
@@ -18,9 +18,10 @@ async def riwayat_jeda(db, *, jenis, id_, params=None):
         halaman = min(akhir, max(1,int(params.get('halaman_jeda','1'))))
     except (TypeError,ValueError):
         halaman = 1
-    jedas = (await db.scalars(select(JedaProses).where(_kolom(jenis)==id_)
-        .order_by(JedaProses.mulai.desc(),JedaProses.id.desc())
-        .offset((halaman-1)*20).limit(20))).all()
+    query = select(JedaProses).where(_kolom(jenis)==id_).order_by(JedaProses.mulai.desc(),JedaProses.id.desc())
+    if not semua:
+        query = query.offset((halaman-1)*20).limit(20)
+    jedas = (await db.scalars(query)).all()
     ids = [j.id for j in jedas]
     events = (await db.execute(select(JedaCatatan,User.nama)
         .outerjoin(User,User.id==JedaCatatan.dicatat_oleh)

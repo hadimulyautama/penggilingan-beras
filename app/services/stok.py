@@ -169,7 +169,7 @@ def _kg(n) -> str:
     return f"{float(n or 0):,.0f} kg".replace(",", ".")
 
 
-def _baris_bahan(b, nama_pemasok: str | None) -> tuple[str, str, str]:
+def _baris_bahan(b, nama_pemasok: str | None, *, presisi=False) -> tuple[str, str, str]:
     """Nama pemasok SENDIRIAN di baris atas; kode-kodenya turun ke bawah.
 
     Digabung ("Kelompok Tani Sumber Rejeki · GB-20260904-10") baris itu
@@ -189,7 +189,11 @@ def _baris_bahan(b, nama_pemasok: str | None) -> tuple[str, str, str]:
     ket = f"{b.kode_batch} · masuk {_tgl(b.tanggal_pembelian)}"
     if k in KELAS_PK:
         ket += f" · {KELAS_PK[k]}"
-    return (nama, dari_batch(b).teks(), ket)
+    bobot = dari_batch(b)
+    if presisi and bobot.pasti and bobot.kg is not None:
+        from app.services.bahan_silo import kg_rinci
+        return (nama, kg_rinci(bobot.kg), ket)
+    return (nama, bobot.teks(), ket)
 
 
 async def _bahan(db: AsyncSession, proc) -> tuple[list[tuple[str, str, str]], list[str]]:

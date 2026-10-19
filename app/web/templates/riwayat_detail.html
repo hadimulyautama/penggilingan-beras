@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_bahan_silo.html" import bahan_silo, riwayat_bahan_sosoh %}
 {% import "_stok.html" as st with context %}
-{% set kg = st.kg %}
+{% set kg = st.kg_rinci %}
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% block judul %}{{ {"pengeringan":"Pengeringan", "giling":"Penggilingan", "sosoh":"Penyosohan", "transfer":"Transfer"}.get(jenis, "Riwayat Proses") }}{% endblock %}
 
@@ -137,7 +137,7 @@
         <div><dt>Selesai</dt><dd>{{ k.selesai|jam("%d/%m/%Y %H:%M") or "—" }}</dd></div>
         <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
         <div><dt>Dijalankan oleh</dt><dd>{{ k.oleh or "—" }}</dd></div>
-        <div><dt>Bahan PK</dt><dd>{{ kg(k.neraca.bahan_kg) }} kg</dd></div>
+        <div><dt>Total bahan baku</dt><dd>{{ kg(k.neraca.bahan_kg) }} kg</dd></div>
         <div><dt>Rendemen beras</dt><dd>{{ "%.1f"|format(k.rendemen)|replace(".", ",") ~ "%" if k.rendemen is not none else "—" }}</dd></div>
         {% if k.spek %}<div><dt>Spek</dt><dd>{{ k.spek|join(", ") }}</dd></div>{% endif %}
         {% if k.jasa %}<div><dt>ID jasa</dt><dd>{{ k.kode_jasa or "belum tercatat" }}</dd></div>{% endif %}
@@ -152,7 +152,7 @@
         {% for b in k.neraca.samping %}<div class="riwayat-detail__table-row"><strong>{{ b.nama }}</strong><span>{{ kg(b.kg) }} kg</span><span>{{ "%.1f"|format(b.persen)|replace(".", ",") if b.persen is not none else "—" }}%</span></div>{% endfor %}
         <div class="riwayat-detail__table-row"><strong>{{ k.neraca.susut.nama }}</strong><span>{{ kg(k.neraca.susut.kg) }} kg</span><span>{{ "%.1f"|format(k.neraca.susut.persen)|replace(".", ",") if k.neraca.susut.persen is not none else "—" }}%</span></div>
         <div class="riwayat-detail__table-row riwayat-detail__table-row--total"><strong>Total bahan</strong><span>{{ kg(k.neraca.bahan_kg) }} kg</span><span>100%</span></div>
-      </div>{% else %}<p class="riwayat-detail__empty">Bahan PK belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
+      </div>{% else %}<p class="riwayat-detail__empty">Bahan baku belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
     </section>
     <section class="riwayat-detail__card">
       <h2>Bahan &amp; pemakaian silo</h2>

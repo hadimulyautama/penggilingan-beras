@@ -32,6 +32,8 @@ from app.models import (MillingProcess, MillingQcLog, PkPurchaseBatch,
 from app.config import settings
 from app.services.mutu_pk import rincian_kualitatif, penilaian_dari_log
 
+from app.web.pdf_proses import angka, persen as persen_pdf, teks_angka, laju_kadar_air, jeda_laporan, bagian_jeda, bagian_silo, durasi as durasi_teks
+
 router = APIRouter()
 
 #: Sekali muat — sama `layar_sosoh.SEKALI`, alasan yang sama: cukup besar
@@ -163,14 +165,14 @@ def _pdf_laporan_giling(data: dict) -> bytes:
                               fontName="Helvetica-Bold", fontSize=11, leading=14,
                               textColor=teal, spaceBefore=9, spaceAfter=5))
     styles.add(ParagraphStyle(name="GilingCell", parent=styles["BodyText"],
-                              fontSize=7.5, leading=9.5, wordWrap="CJK"))
+                              fontSize=7.5, leading=9.5, wordWrap=None))
     styles.add(ParagraphStyle(name="GilingHead", parent=styles["GilingCell"],
                               fontName="Helvetica-Bold", textColor=colors.white))
     styles.add(ParagraphStyle(name="GilingNote", parent=styles["BodyText"],
                               fontSize=8, leading=10, textColor=muted))
 
     def p(value, style="GilingCell"):
-        return Paragraph(escape(str(value if value not in (None, "") else "—")), styles[style])
+        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
 
     def grid(rows, widths):
         table = Table([[p(cell, "GilingHead" if i == 0 else "GilingCell")
@@ -196,20 +198,10 @@ def _pdf_laporan_giling(data: dict) -> bytes:
         return value.strftime("%d/%m/%Y %H:%M") + " WIB"
 
     def kg(value):
-        if value is None:
-            return "Belum tercatat"
-        return f"{float(value):,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") + " kg"
+        return angka(value) + ' kg' if value is not None else 'Belum dicatat'
 
     def duration(start, end):
-        if start is None or end is None:
-            return "Belum tercatat"
-        secs = max(0, int((end - start).total_seconds()))
-        days, secs = divmod(secs, 86400)
-        hours, secs = divmod(secs, 3600)
-        mins = secs // 60
-        return " ".join(([f"{days} hari"] if days else []) +
-                        ([f"{hours} jam"] if hours or days else []) +
-                        [f"{mins} menit"])
+        return durasi_teks((end-start).total_seconds()) if start is not None and end is not None else 'Belum tercatat'
 
     yield_text = (f"{data['yield']:.1f}%".replace(".", ",")
                   if data["yield"] is not None else "Belum dapat dihitung")
@@ -228,6 +220,7 @@ def _pdf_laporan_giling(data: dict) -> bytes:
         ["Sisa PK tersedia", kg(data["available_kg"])],
     ], [70 * mm, 100 * mm]))
 
+    bagian_silo(story, data.get('pemakaian_silo'), p, grid, 'GilingSection')
     story += [Paragraph("Bahan masuk per silo", styles["GilingSection"]),
               Paragraph("Berat saat proses dimulai, berat yang dipakai, dan sisa yang tercatat saat silo dibebaskan.", styles["GilingNote"]),
               Spacer(1, 4)]
@@ -315,6 +308,7 @@ def _pdf_laporan_giling(data: dict) -> bytes:
             f"Berat hasil PK diverifikasi {stamp(data['verified_at'])}: {escape(kg(data['verified_weight']))}.",
             styles["GilingNote"]))
 
+    bagian_jeda(story, data.get("jeda"), p, grid, "GilingSection")
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18 * mm,
                             rightMargin=18 * mm, topMargin=16 * mm,
@@ -521,7 +515,10 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
         def persen(nilai):
             return f"{nilai:.1f}%".replace(".", ",") if nilai is not None else "Belum ada catatan"
 
+        from app.services.bahan_silo import sumber_giling_banyak
+        pemakaian_silo = (await sumber_giling_banyak(db, [process.id])).get(process.id, [])
         return {
+            "pemakaian_silo": pemakaian_silo,
             "kode": process.kode_proses,
             "owner": owner_names.get(process.jasa_id, "Tidak tercatat") if process.jasa_id else "Pabrik",
             "class": (condition or "Tidak tercatat").upper(),
@@ -544,6 +541,7 @@ async def _ambil_data_laporan_giling(process_id: int) -> dict:
             "start": process.waktu_mulai, "end": process.waktu_selesai,
             "verified_at": verification.waktu_verifikasi if verification else None,
             "verified_weight": verification.berat_output_final_kg if verification else None,
+            "jeda": await jeda_laporan(db, jenis='giling', id_=process.id, mulai=process.waktu_mulai, selesai=process.waktu_selesai),
         }
 
 
@@ -645,14 +643,14 @@ def _pdf_pengeringan(data: dict) -> bytes:
                               fontName="Helvetica-Bold", fontSize=11, leading=14,
                               textColor=teal, spaceBefore=9, spaceAfter=5))
     styles.add(ParagraphStyle(name="ReportCell", parent=styles["BodyText"],
-                              fontSize=7.5, leading=9.5, wordWrap="CJK"))
+                              fontSize=7.5, leading=9.5, wordWrap=None))
     styles.add(ParagraphStyle(name="ReportHead", parent=styles["ReportCell"],
                               fontName="Helvetica-Bold", textColor=colors.white))
     styles.add(ParagraphStyle(name="ReportNote", parent=styles["BodyText"],
                               fontSize=8, leading=10, textColor=muted))
 
     def para(value, style="ReportCell"):
-        return Paragraph(escape(str(value if value not in (None, "") else "—")), styles[style])
+        return Paragraph(escape(teks_angka(value if value not in (None, "") else "—")), styles[style])
 
     def grid(rows, widths):
         table = Table([[para(cell, "ReportHead" if i == 0 else "ReportCell")
@@ -680,22 +678,10 @@ def _pdf_pengeringan(data: dict) -> bytes:
         return value.strftime("%d/%m/%Y %H:%M") + " WIB"
 
     def kg(value):
-        if value is None:
-            return "Belum final"
-        return f"{float(value):,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") + " kg"
+        return angka(value) + ' kg' if value is not None else 'Belum dicatat'
 
     def durasi(start, end):
-        if start is None or end is None:
-            return "Belum tercatat"
-        seconds = max(0, int((end - start).total_seconds()))
-        days, seconds = divmod(seconds, 86400)
-        hours, seconds = divmod(seconds, 3600)
-        minutes = seconds // 60
-        parts = ([f"{days} hari"] if days else [])
-        if hours or days:
-            parts.append(f"{hours} jam")
-        parts.append(f"{minutes} menit")
-        return " ".join(parts)
+        return durasi_teks((end-start).total_seconds()) if start is not None and end is not None else 'Belum tercatat'
 
     story = [Paragraph("Laporan Pengeringan Gabah", styles["ReportTitle"]),
              Paragraph(f"{escape(data['kode'])}  ·  Dicetak {stamp(datetime.now(ZoneInfo(settings.app_timezone)))}", styles["ReportSub"])]
@@ -704,7 +690,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
         ["Pemilik", data["owner"]],
         ["Mesin / mode", data["dryer"]],
         ["Total bahan basah", kg(data["weight"])],
-        ["Target kadar air", f"{data['target']}%" if data["target"] is not None else "Tidak ditetapkan"],
+        ["Target kadar air", persen_pdf(data["target"]) if data["target"] is not None else "Tidak ditetapkan"],
         ["Silo tujuan", data["silo"]],
     ], [70 * mm, 100 * mm]))
 
@@ -726,9 +712,9 @@ def _pdf_pengeringan(data: dict) -> bytes:
     story.append(grid(rows, [32 * mm, 26 * mm, 29 * mm, 24 * mm, 34 * mm, 23 * mm]))
 
     story += [Paragraph("Pemantauan kadar air selama proses", styles["ReportSection"]),
-              Paragraph("Semua pembacaan alat tes ditampilkan bersama rata-rata catatan dan indikator mesin.", styles["ReportNote"]),
+              Paragraph("Perubahan memakai waktu antar-pengukuran (termasuk jeda). Laju per jam hanya ditampilkan setelah selang minimal 1 jam; satuannya poin persentase/jam.", styles["ReportNote"]),
               Spacer(1, 4)]
-    rows = [["Waktu catat", "Pembacaan alat tes", "Rata-rata tes", "Indikator mesin", "Rata-rata turun/jam"]]
+    rows = [["Waktu catat", "Pembacaan alat tes", "Rata-rata tes", "Indikator mesin", "Perubahan sejak ukur pertama"]]
     rows += [[stamp(x["time"]), x["samples"], x["average"], x["machine"]]
              for x in data["moisture"]]
     for index, row in enumerate(rows[1:]):
@@ -747,6 +733,7 @@ def _pdf_pengeringan(data: dict) -> bytes:
         story.append(Paragraph("Catatan pendinginan", styles["ReportSection"]))
         story.extend(Paragraph(escape(note), styles["ReportNote"]) for note in data["cooling_notes"])
 
+    bagian_jeda(story, data.get("jeda"), para, grid, "ReportSection")
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=18 * mm,
                             rightMargin=18 * mm, topMargin=16 * mm,
@@ -841,17 +828,10 @@ async def unduh_laporan_pengeringan(lot_id: int, unduh: int = 0,
                 "average_value": average,
             })
 
-        # Kecepatan rata-rata adalah penurunan kadar air dari catatan pertama
-        # dibagi waktu yang berlalu. Satuannya poin persentase per jam.
-        first = next((x for x in moisture if x["average_value"] is not None), None)
+        first = next((x for x in moisture if x['average_value'] is not None), None)
         for row in moisture:
-            speed = None
-            if first and row is not first and row["average_value"] is not None:
-                elapsed = (row["time"] - first["time"]).total_seconds() / 3600
-                if elapsed > 0:
-                    speed = (first["average_value"] - row["average_value"]) / elapsed
-            row["speed"] = (f"{speed:.2f}%/jam".replace(".", ",")
-                            if speed is not None else "—")
+            row['speed'] = (laju_kadar_air(first['average_value'], row['average_value'], first['time'], row['time'])
+                            if first else 'Belum dapat dihitung')
 
         # Catatan pendinginan disajikan sebagai jejak kejadian tambahan.
         cool_logs = (await db.execute(
@@ -879,6 +859,7 @@ async def unduh_laporan_pengeringan(lot_id: int, unduh: int = 0,
             "silo": silo_row or "Belum tercatat",
             "batches": batches, "qc": qc_rows, "moisture": moisture,
             "cooling_notes": cooling_notes,
+            "jeda": await jeda_laporan(db, jenis='pengeringan', id_=lot.id, mulai=lot.waktu_mulai_pengeringan, selesai=lot.waktu_selesai_pengeringan),
             "dry_start": lot.waktu_mulai_pengeringan,
             "dry_end": lot.waktu_selesai_pengeringan,
             "cool_start": lot.waktu_mulai_pendinginan,
