@@ -64,15 +64,7 @@
 {% endblock %}
 
 {% block kaki %}
-<script>
-document.querySelectorAll('[data-detail-keluar]').forEach(function (baris) {
-  baris.addEventListener('click', function (e) {
-    if (!e.target.closest('a,button') && !window.getSelection().toString()) {
-      window.location.href = baris.dataset.detailKeluar;
-    }
-  });
-});
-</script>
+<script src="/static/daftar-keluar.js?v={{ VERSI }}" defer></script>
 {% if BOLEH_PERINTAH or BOLEH_MUAT %}
   <script src="/static/aksi.js?v={{ VERSI }}" defer
           data-buka="{{ buka }}" data-nilai="{{ nilai }}"
