@@ -1466,6 +1466,7 @@ _GRUP_AKSI = {
     "masukkan_beras_silo": "Hasil samping & barang jadi",
     "perintah_keluar": "Barang keluar",
     "tambah_barang_keluar": "Barang keluar",
+    "ubah_item_perintah": "Barang keluar", "hapus_item_perintah": "Barang keluar",
     "batal_perintah_keluar": "Barang keluar",
     # Tutup/batalkan pesanan jasa belum memiliki tombol kartu khusus.
     "tutup_jasa": "Jasa (titipan pelanggan)",
@@ -1554,7 +1555,7 @@ for _a in (
     # Aksinya TETAP dikirim di menu — lembar yang dibuka dari tombol maupun
     # kartu dibangun dari spesifikasi yang sama. Yang berubah cuma katalognya
     # berhenti menggambarnya.
-    "perintah_keluar", "tambah_barang_keluar", "batal_perintah_keluar",
+    "perintah_keluar", "tambah_barang_keluar", "ubah_item_perintah", "hapus_item_perintah", "batal_perintah_keluar",
     "koreksi_plat_pengiriman", "pilih_tiket_armada", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
@@ -1607,6 +1608,7 @@ _ACTION_WH = {
     # PK mentah tak lagi punya jalur di sini (keputusan pemilik: "pk dijual
     # tetapi itu urusan keuangan"), jadi tak ada lagi yang bergudang g1.
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
+    "ubah_item_perintah": "g2", "hapus_item_perintah": "g2",
     "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
     "koreksi_plat_pengiriman": "g2", "pilih_tiket_armada": "g2",
     "auto_taut_keluar": "g2",

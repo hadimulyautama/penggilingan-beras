@@ -308,6 +308,7 @@
     // Baris kemasan sudah menunjuk sumber selain jenis beras. Keduanya
     // dibawa sebagai isian terkunci agar tidak memilih kemasan lain lagi.
     var tagBaris = document.querySelector("script[data-sumber-stok]");
+    var tagPerintah = document.querySelector("script[data-perintah-detail]");
     var sumberBaris = id === "masukkan_beras_silo" && tagBaris
       ? (tagBaris.dataset.sumberStok || "") : "";
     function kunciMedan(f) {
@@ -765,6 +766,11 @@
        melewati pemuatan ulang. */
     function muatBanyak(f, segar) {
       var sumber = f.source;
+      // Detail perintah sudah menentukan barangnya; jangan memuat pilihan
+      // milik truk lain atau bergantung pada batas halaman daftar.
+      if (sumber === "/api/actions/item-perintah-ubah" && kunciMedan(f)) {
+        sumber += "?pilihan=" + encodeURIComponent(kunciMedan(f));
+      }
       if (f.induk) {
         var nilaiInduk = nilaiMedan(f.induk);
         if (!nilaiInduk) { return; }
@@ -967,6 +973,11 @@
          menawarkan SELURUH pilihan yang mungkin — persis kesalahan yang medan
          ini menggantikan. */
       var sumber = f.source;
+      // Detail perintah sudah menentukan barangnya; jangan memuat pilihan
+      // milik truk lain atau bergantung pada batas halaman daftar.
+      if (sumber === "/api/actions/item-perintah-ubah" && kunciMedan(f)) {
+        sumber += "?pilihan=" + encodeURIComponent(kunciMedan(f));
+      }
       if (f.induk) {
         var nilaiInduk = nilaiMedan(f.induk);
         if (!nilaiInduk) { return; }
@@ -994,8 +1005,12 @@
             perbaruiMaksimalKemas();
             return;
           }
-          if (f.name === "sumber_stok" && sumberBaris) {
-            kotak.textContent = "Stok pada baris ini sudah tidak tersedia. Tutup dan muat ulang halaman.";
+          if ((f.name === "sumber_stok" && sumberBaris) ||
+              (f.name === "baris" && (id === "ubah_item_perintah" || id === "hapus_item_perintah")) ||
+              (f.name === "perintah" && tagPerintah && tagPerintah.dataset.perintahDetail)) {
+            kotak.textContent = f.name !== "sumber_stok"
+              ? "Perintah atau muatan berubah. Tutup formulir, muat ulang detail, dan periksa kembali."
+              : "Stok pada baris ini sudah tidak tersedia. Tutup dan muat ulang halaman.";
             var tombolSimpan = $("simpan");
             if (tombolSimpan) { tombolSimpan.disabled = true; }
             return;

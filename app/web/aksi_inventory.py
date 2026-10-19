@@ -814,6 +814,24 @@ async def baris_perintah(induk: str = "", user: User = Depends(pengguna_aksi)) -
         return out
 
 
+@router.get("/actions/barang-tambahan-perintah")
+async def barang_tambahan_perintah(induk: str = "", user: User = Depends(pengguna_aksi)):
+    wajib(can_see_financials(user))
+    from app.penggilingan.inventory.models import OUT_HIDUP
+    if not induk.isdigit():
+        return []
+    async with SessionLocal() as db:
+        daftar = await bk.daftar(db, status=OUT_HIDUP, transaksi_id=int(induk))
+        if not daftar:
+            return []
+        rec, items = daftar[0]
+        jasa = rec.jasa_id is not None or any(i.jasa_id is not None for i in items)
+        pelanggan = rec.pelanggan_id
+    if jasa:
+        return await barang_jasa(induk=str(pelanggan), user=user)
+    return await barang_bisa_keluar(user=user)
+
+
 @router.get("/actions/barang-bisa-keluar")
 async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     """SATU daftar berisi seluruh yang bisa keluar pabrik — barang jadi DAN PK.
@@ -1234,14 +1252,72 @@ async def act_tambah_barang_keluar(req: TambahBarangKeluarReq,
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         baris = await _baris_dari_borang(db, req)
+        if not baris:
+            raise HTTPException(400, "Pilih barang yang ditambahkan.")
         try:
             for b in baris:
                 r = await bk.tambah_baris(db, user=u, rec_id=_id(req.perintah),
-                                          baris=b)
+                                          baris=b, jasa_id=b.jasa_id, simpan=False)
+            await db.commit()
         except bk.BarangKeluarError as e:
             raise galat(e, "Gagal menambah barang ke perintah.")
         kode, n = r.rec.kode, len(r.baris)
     return {"ok": True, "pesan": f"✓ Ditambahkan ke *{kode}* — kini {n} macam barang."}
+
+
+class UbahItemPerintahReq(BaseModel):
+    baris: str
+    jumlah: float | None = None
+    alasan: str = ""
+
+
+@router.get("/actions/item-perintah-ubah")
+async def item_perintah_ubah(pilihan: str = "", user: User = Depends(pengguna_aksi)) -> list[dict]:
+    wajib(can_see_financials(user))
+    from app.penggilingan.inventory.models import OUT_HIDUP
+    async with SessionLocal() as db:
+        out = []
+        bagian = pilihan.split("|")
+        if pilihan and (len(bagian) != 3 or not all(x.isdigit() for x in bagian[:2])):
+            return []
+        rec_id = int(bagian[0]) if pilihan else None
+        for rec, items in await bk.daftar(db, status=OUT_HIDUP, transaksi_id=rec_id, batas=500):
+            ringkas = await bk.ringkasan_muat(db, rec)
+            from app.web.layar_keluar import _nama_barang
+            nama = await _nama_barang(db, [(rec, items)])
+            for b in ringkas["baris"]:
+                if pilihan and b["id"] != int(bagian[1]):
+                    continue
+                out.append({"value": f"{rec.id}|{b['id']}|{ringkas['dasar']}",
+                    "label": f"{rec.kode} · {rec.nama_pembeli} · {rec.no_polisi or 'tanpa plat'} · "
+                             f"{nama.get(b['id'], b['nama'])} · target {b['perintah']:g} {b['satuan']} · "
+                             f"dimuat {b['dimuat']:g} {b['satuan']}"})
+        return out
+
+
+async def _ubah_item_perintah(req, user, *, hapus=False):
+    wajib(can_see_financials(user))
+    bagian = req.baris.split("|")
+    if len(bagian) != 3 or not all(x.isdigit() for x in bagian[:2]):
+        raise HTTPException(400, "Pilih item dari detail perintah.")
+    async with SessionLocal() as db:
+        try:
+            await bk.ubah_baris_perintah(db, user=await db.get(User, user.id),
+                rec_id=int(bagian[0]), item_id=int(bagian[1]), dasar=bagian[2],
+                jumlah=req.jumlah, alasan=req.alasan, hapus=hapus)
+        except bk.BarangKeluarError as e:
+            raise galat(e, "Gagal mengubah perintah.")
+    return {"ok": True, "pesan": "Item dihapus dari perintah." if hapus else "Total perintah diperbarui."}
+
+
+@router.post("/actions/ubah-item-perintah")
+async def act_ubah_item_perintah(req: UbahItemPerintahReq, user: User = Depends(pengguna_aksi)):
+    return await _ubah_item_perintah(req, user)
+
+
+@router.post("/actions/hapus-item-perintah")
+async def act_hapus_item_perintah(req: UbahItemPerintahReq, user: User = Depends(pengguna_aksi)):
+    return await _ubah_item_perintah(req, user, hapus=True)
 
 
 def _pelanggan_id(nilai: str | None) -> int | None:
@@ -1898,6 +1974,25 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  {"name": "sebab", "label": "Sebab membatalkan", "type": "text",
                   "wajib": True},
              ]},
+            {"id": "ubah_item_perintah", "label": "Ubah total perintah",
+             "post": "/api/actions/ubah-item-perintah",
+             "konfirmasi": {"judul": "Periksa perubahan perintah",
+                 "teks": "{baris}\nTotal perintah baru: {jumlah}.\nAlasan: {alasan}\nMuatan aktual dan stok tetap. Operator harus memeriksa kembali.", "ya": "Ya, ubah perintah"},
+             "hint": "Isi total terbaru, bukan tambahan. Muatan aktual dan stok tetap. Operator harus memeriksa kembali.",
+             "fields": [
+                 {"name": "baris", "label": "Barang pada perintah", "type": "remote", "source": "/api/actions/item-perintah-ubah"},
+                 {"name": "jumlah", "label": "Total perintah baru (karung untuk barang berkemasan; kg untuk curah/PK/gabah)", "type": "number", "wajib": True},
+                 {"name": "alasan", "label": "Alasan perubahan", "type": "text", "wajib": True},
+             ]},
+            {"id": "hapus_item_perintah", "label": "Hapus item dari perintah",
+             "post": "/api/actions/hapus-item-perintah",
+             "konfirmasi": {"judul": "Hapus item dari perintah?",
+                 "teks": "{baris}\nAlasan: {alasan}\nItem ini dihapus dari perintah. Muatan aktual dan stok tetap.", "ya": "Ya, hapus item"},
+             "hint": "Hanya barang yang belum dimuat boleh dihapus. Barang terakhir dibatalkan lewat Batalkan perintah.",
+             "fields": [
+                 {"name": "baris", "label": "Barang yang dihapus", "type": "remote", "source": "/api/actions/item-perintah-ubah"},
+                 {"name": "alasan", "label": "Alasan penghapusan", "type": "text", "wajib": True},
+             ]},
             {"id": "tambah_barang_keluar", "label": "\u2795 Tambah barang ke transaksi",
              "post": "/api/actions/tambah-barang-keluar",
              "hint": "Mengubah perintah saja. Muatan aktual dan stok tidak berubah "
@@ -1912,7 +2007,7 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                   "kosong": "Tidak ada transaksi yang masih bisa ditambah."},
                  {"name": "barang", "label": "Barang yang ditambahkan",
                   "type": "ulang_barang", "maks": 12,
-                  "source": "/api/actions/barang-bisa-keluar",
+                  "induk": "perintah", "source": "/api/actions/barang-tambahan-perintah",
                   "label_angka": "Jumlah", "tambah": "+ Tambah item",
                   "kosong": "Tidak ada barang yang bisa dikeluarkan."},
              ]},

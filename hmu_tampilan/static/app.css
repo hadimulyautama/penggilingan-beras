@@ -3065,3 +3065,6 @@ body .pilihan__satu--utama:active {
   .kartu-keluar__utama {margin-top:4px}
   .kartu-keluar__utama .btn {width:100%;min-height:44px}
 }
+
+.kirim-detail__item-aksi {display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.kirim-detail__item-aksi .btn {min-height:44px;width:auto}

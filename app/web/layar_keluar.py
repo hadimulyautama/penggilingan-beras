@@ -104,6 +104,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             """).bindparams(bindparam("ids", expanding=True)),
                 {"ids": ids})).mappings().all()
             tiket_timbang = {t["id"]: dict(t) for t in rows}
+        dasar_perintah = {r.id: (await svc.ringkasan_muat(db, r))["dasar"]
+                          for r, _ in baris if transaksi_id is not None and r.status in OUT_HIDUP}
         nama = await _nama_barang(db, baris)
         nama_orang = await _nama_orang(db, baris)
 
@@ -115,6 +117,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             dimuat = float(it.berat_kg or 0)
             isi.append({
                 "nama": nama.get(it.id, "?"),
+                "kunci": f"{rec.id}|{it.id}|{dasar_perintah.get(rec.id, '')}",
                 "perintah": perintah,
                 "dimuat": dimuat,
                 # Selisih DIHITUNG DI SINI, bukan di templat: Jinja yang
@@ -131,6 +134,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             })
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
         kartu.append({
+            "boleh_ubah": boleh_perintah and rec.status in OUT_HIDUP,
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
             "tiket_timbang": tiket_timbang.get(rec.timbangan_transaksi_id),
             # ── TOMBOL DI KARTUNYA SENDIRI ──

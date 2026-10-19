@@ -823,7 +823,7 @@ def _item_sama(it: OutgoingItem, b: BarisPerintah) -> bool:
 
 async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
                        baris: BarisPerintah,
-                       jasa_id: int | None = None) -> HasilPerintah:
+                       jasa_id: int | None = None, simpan: bool = True) -> HasilPerintah:
     """Ubah perintah saja; muatan aktual tetap dicatat operator.
 
     Perubahan setelah selesai muat membuka kembali antrean agar tambahan
@@ -853,31 +853,26 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
             "hasil prosesnya dari stok produk.")
     rec = await _kunci_hidup(db, rec_id)
     sudah_selesai_muat = rec.status == OUT_DIMUAT
-    if rec.jasa_id is not None:
-        baris = replace(baris, jasa_id=rec.jasa_id)
+    ada_baris_jasa = (await db.execute(
+        select(OutgoingItem.id).where(
+            OutgoingItem.outgoing_record_id == rec.id,
+            OutgoingItem.jasa_id.isnot(None)).limit(1))).first()
+    pesanan_id = jasa_id or baris.jasa_id or rec.jasa_id
+    if rec.jasa_id is not None or ada_baris_jasa:
+        from app.models import Jasa
+        from app.models.jasa import BERJALAN
+        if pesanan_id is None:
+            raise BarangKeluarError("Sebutkan pesanan jasa asal barang tambahan ini.")
+        pesanan = await db.get(Jasa, int(pesanan_id))
+        if pesanan is None or pesanan.status != BERJALAN:
+            raise BarangKeluarError("Pesanan jasa tidak ditemukan atau sudah tak berjalan.")
+        if pesanan.pelanggan_id != rec.pelanggan_id:
+            raise BarangKeluarError("Pesanan itu bukan milik pelanggan transaksi ini.")
+        baris = replace(baris, jasa_id=int(pesanan_id))
+    elif pesanan_id is not None:
+        raise BarangKeluarError("Barang jasa tidak boleh ditambahkan ke perintah milik pabrik.")
     else:
-        ada_baris_jasa = (await db.execute(
-            select(OutgoingItem.id).where(
-                OutgoingItem.outgoing_record_id == rec.id,
-                OutgoingItem.jasa_id.isnot(None)).limit(1))).first()
-        if ada_baris_jasa:
-            from app.models import Jasa
-            from app.models.jasa import BERJALAN
-
-            if jasa_id is None:
-                raise BarangKeluarError(
-                    "Transaksi ini menggabung beberapa pesanan jasa — "
-                    "sebutkan pesanan mana untuk barang tambahan ini.")
-            pesanan = await db.get(Jasa, int(jasa_id))
-            if pesanan is None or pesanan.status != BERJALAN:
-                raise BarangKeluarError(
-                    "Pesanan jasa tidak ditemukan atau sudah tak berjalan.")
-            if pesanan.pelanggan_id != rec.pelanggan_id:
-                raise BarangKeluarError(
-                    "Pesanan itu bukan milik pelanggan transaksi ini.")
-            baris = replace(baris, jasa_id=int(jasa_id))
-        else:
-            baris = replace(baris, jasa_id=None)
+        baris = replace(baris, jasa_id=None)
 
     berat, karung = await _berat_baris(db, baris)
     if berat <= 0:
@@ -914,22 +909,112 @@ async def tambah_baris(db: AsyncSession, *, user, rec_id: int,
             berat_kg=0, jumlah_karung=None))
         jadi = berat
 
+    pemilik = {i.jasa_id for i in items} | {baris.jasa_id}
+    rec.jasa_id = next(iter(pemilik)) if len(pemilik) == 1 else None
     kabar = (f"{rec.kode} + {nama} {_kg(berat)} kg pada perintah"
              + (f" (jadi {_kg(jadi)} kg)" if lama is not None else "")
              + " · muatan aktual tetap")
     if sudah_selesai_muat:
+        # Reservasi lama sudah dilepas saat selesai muat. Sisa seluruh barang
+        # perlu dicadangkan ulang, bukan hanya tambahan yang baru diminta.
+        await db.flush()
+        for i in list((await db.execute(select(OutgoingItem).where(
+                OutgoingItem.outgoing_record_id == rec.id))).scalars().all()):
+            sisa = max(float(i.berat_perintah_kg or 0) - float(i.berat_kg or 0), 0)
+            if sisa:
+                ada_sisa, nama_sisa = await tersedia(db, baris_dari_item(i))
+                if sisa > ada_sisa + 0.5:
+                    raise BarangKeluarError(f"{nama_sisa} tidak cukup untuk membuka kembali sisa perintah.")
         rec.status = OUT_PERINTAH
         rec.dimuat_oleh, rec.waktu_muat = None, None
     await _kabar(db, rec, untuk="operator",
                  pesan=f"🟡 Perintah {rec.kode} berubah: {nama} bertambah "
                        f"{_kg(berat)} kg. Periksa sisa dan catat muatan aktual.")
     await _jejak(db, rec, langkah="tambah", oleh=user, ringkas=kabar)
-    await db.commit()
-    await db.refresh(rec)
+    await db.flush()
+    if simpan:
+        await db.commit()
+        await db.refresh(rec)
     items = list((await db.execute(
         select(OutgoingItem).where(OutgoingItem.outgoing_record_id == rec.id)
     )).scalars().all())
     return HasilPerintah(rec=rec, baris=items)
+
+
+async def ubah_baris_perintah(db: AsyncSession, *, user, rec_id: int,
+                              item_id: int, dasar: str, jumlah: float | None,
+                              alasan: str, hapus: bool = False) -> OutgoingRecord:
+    """Mengubah target dalam kunci saldo; aktual tidak pernah ikut berubah.
+
+    Cuplikan seluruh perintah menahan formulir basi, termasuk bila operator
+    mencatat muatan ketika Admin sedang memperbaiki targetnya.
+    """
+    import math
+    if not alasan.strip():
+        raise BarangKeluarError("Isi alasan perubahan perintah.")
+    rec = await _kunci_hidup(db, rec_id)
+    ringkas = await ringkasan_muat(db, rec)
+    if not dasar or ringkas["dasar"] != dasar:
+        raise BarangKeluarError(
+            "Perintah atau muatan berubah. Tutup formulir, muat ulang detail, "
+            "dan periksa kembali. Tidak ada perubahan yang disimpan.")
+    items = list((await db.execute(select(OutgoingItem).where(
+        OutgoingItem.outgoing_record_id == rec.id))).scalars().all())
+    it = next((i for i in items if i.id == item_id), None)
+    if it is None:
+        raise BarangKeluarError("Barang ini tidak ada pada perintah tersebut.")
+    nama = await _nama_baris(db, it)
+    sebelumnya = float(it.berat_perintah_kg or 0)
+    if hapus:
+        if float(it.berat_kg or 0) > 0 or (it.jumlah_karung or 0) > 0:
+            raise BarangKeluarError(
+                "Barang sudah dimuat. Periksa dan koreksi muatan aktual dahulu; "
+                "menghapus item tidak boleh menghapus barang yang masih di truk.")
+        if len(items) == 1:
+            raise BarangKeluarError(
+                "Ini barang terakhir. Gunakan Batalkan perintah untuk membatalkan pengiriman.")
+        await db.delete(it)
+        pemilik = {i.jasa_id for i in items if i.id != item_id}
+        rec.jasa_id = next(iter(pemilik)) if len(pemilik) == 1 else None
+        pesan = f"{nama} dihapus dari perintah ({_kg(sebelumnya)} kg)"
+    else:
+        if jumlah is None or not math.isfinite(jumlah) or jumlah <= 0:
+            raise BarangKeluarError("Total perintah harus lebih dari nol.")
+        b = baris_dari_item(it, jumlah_karung=jumlah, berat_kg=jumlah)
+        if b.tipe == "pk_g2" and b.silo_id is not None:
+            raise BarangKeluarError("PK di silo adalah bahan proses, bukan stok yang bisa diambil.")
+        berat, karung = await _berat_baris(db, b)
+        # Saldo sudah dikurangi reservasi lama baris ini. Hanya kenaikan
+        # sisa target yang membutuhkan reservasi tambahan.
+        aktual = float(it.berat_kg or 0)
+        tambahan = max(berat - aktual, 0) - (
+            max(sebelumnya - aktual, 0) if rec.status == OUT_PERINTAH else 0)
+        if tambahan > 0:
+            ada, _ = await tersedia(db, b, abaikan_pesanan=False)
+            if tambahan > ada + 0.5:
+                raise BarangKeluarError(f"{nama} tinggal {_kg(ada)} kg yang belum dicadangkan.")
+        it.berat_perintah_kg, it.jumlah_karung_perintah = berat, karung
+        pesan = f"{nama}: target {_kg(sebelumnya)} → {_kg(berat)} kg"
+    if rec.status == OUT_DIMUAT:
+        # Sisa target baris lain sudah tidak dicadangkan setelah selesai
+        # muat. Membuka kembali pesanan harus mencadangkannya lagi juga.
+        for lain in items:
+            if lain.id == item_id:
+                continue
+            sisa = max(float(lain.berat_perintah_kg or 0) - float(lain.berat_kg or 0), 0)
+            if sisa:
+                ada, nama_lain = await tersedia(db, baris_dari_item(lain))
+                if sisa > ada + 0.5:
+                    raise BarangKeluarError(f"{nama_lain} tidak cukup untuk membuka kembali sisa perintah.")
+        rec.status = OUT_PERINTAH
+        rec.dimuat_oleh, rec.waktu_muat = None, None
+    await _jejak(db, rec, langkah="hapus_item_perintah" if hapus else "ubah_item_perintah",
+                 oleh=user, ringkas=f"{rec.kode} · {pesan} · aktual tetap",
+                 alasan=alasan.strip())
+    await _kabar(db, rec, untuk="operator",
+                 pesan=f"Perintah {rec.kode} berubah: {pesan}. Periksa muatan aktual kembali.")
+    await db.commit()
+    return rec
 
 
 # ─────────────────────── LANGKAH 2 · Operator memuat ───────────────────────

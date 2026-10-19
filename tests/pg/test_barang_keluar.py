@@ -1069,10 +1069,10 @@ async def test_verifikasi_pengiriman_cukup_di_barang_keluar(pg, gudang):
     assert "verifikasi_keluar" not in b.jumlah_grup_keputusan()
     c = await _klien(pg, gudang["adm"], "uji_verifikasi_satu_pintu")
     async with c:
-        h = (await c.get("/barang-keluar")).text
+        h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
     assert r.rec.kode in h
     assert "buka=verifikasi_keluar" in h
-    assert "kurang 500" in h
+    assert "500" in h and "Sisa perintah" in h
 
 
 async def test_kartu_tiket_keluar_menganggur_tetap_benar_walau_ditahan(pg, gudang):
@@ -1220,9 +1220,9 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
     # `test_tombolnya_membuka_lembar_di_halaman_ini`.
     assert "/barang-keluar?buka=perintah_keluar" in h, \
         "tombol perintah tak ada di halamannya"
-    # "Tambah barang" & "Batalkan" muncul karena ADA perintah yang belum dimuat.
-    assert "/barang-keluar?buka=tambah_barang_keluar" in h
-    assert "/barang-keluar?buka=batal_perintah_keluar" in h
+    # Pengelolaan kini di detail satu perintah; daftar hanya pintu pembuatannya.
+    assert "Buka detail perintah" in h
+    assert "/barang-keluar?buka=tambah_barang_keluar" not in h
     # Tombol "Pengambilan barang jasa" sejajar dengan "Buat perintah" —
     # keluhan pemilik 11 Oktober 2026: aksinya sudah ada lebih dulu lewat
     # laci, tapi tak punya pintu sendiri di halaman ini, jadi tak kelihatan
@@ -1442,64 +1442,31 @@ async def test_tombol_perintah_berdiri_di_puncak_halaman(pg, gudang):
 
 
 async def test_kartu_di_halaman_membawa_tombolnya_sendiri(pg, gudang):
-    """Keluhan pemilik 29 September 2026: "dimana tombol verifikasi untuk admin
-    dan tombol dimuat untuk operator? harusnya kan ada di kartu."
-
-    Kartu di Antrian tunggu & Menunggu keputusan memang SELURUHNYA tombol —
-    seluruh kartu tautan yang membuka lembar aksinya. Yang tidak: kartu di
-    HALAMAN Barang Keluar, yang semula cuma memajang keadaan. Dan halaman
-    inilah yang dibuka orang untuk melihat muatan mana yang belum beres.
-
-    Yang dijaga DUA ARAH: tombolnya ada untuk yang berhak, dan TIDAK ada untuk
-    yang akan ditolak rutenya. Tombol yang ditekan lalu ditolak mengajari orang
-    bahwa aplikasinya suka menolak.
-    """
+    """Daftar mengantar ke detail; tindakan tetap mengikuti status dan peran."""
     from app.models import User
     from app.services import barang_keluar as bk
-
-    belum = await _perintah(pg, gudang, karung=40, pembeli="Belum Dimuat")
-    sudah = await _perintah(pg, gudang, karung=20, pembeli="Sudah Dimuat")
+    belum=await _perintah(pg,gudang,karung=40,pembeli="Belum Dimuat")
+    sudah=await _perintah(pg,gudang,karung=20,pembeli="Sudah Dimuat")
     async with pg() as db:
-        await bk.muat_semua(db, user=await db.get(User, gudang["op"]),
-                            rec_id=sudah.rec.id)
-
-    # ── Admin ──
-    c = await _klien(pg, gudang["adm"], "uji_tombol_kartu_adm")
+        await bk.muat_semua(db,user=await db.get(User,gudang['op']),rec_id=sudah.rec.id)
+    c=await _klien(pg,gudang['adm'],'uji_tombol_detail_adm')
     async with c:
-        h = (await c.get("/barang-keluar")).text
-    # Diiris per kartu, dan batasnya kartu BERIKUTNYA — bukan "sampai akhir
-    # halaman". Yang belum dimuat berdiri lebih atas, jadi potongannya akan
-    # ikut memuat kartu di bawahnya dan pagar ini menuduh salah.
-    def potong(kode: str) -> str:
-        i = h.index(kode)
-        sisa = [h.index(k) for k in (belum.rec.kode, sudah.rec.kode)
-                if h.index(k) > i]
-        return h[i:min(sisa)] if sisa else h[i:]
-
-    kartu_belum = potong(belum.rec.kode)
-    kartu_sudah = potong(sudah.rec.kode)
-    assert "buka=verifikasi_keluar" in kartu_sudah, \
-        "Admin tak punya tombol verifikasi di kartu yang sudah dimuat"
-    assert "buka=batal_perintah_keluar" in kartu_belum
-    # ── Admin TIDAK ditawari tombol memuat, dan itu bukan soal wewenang ──
-    # Rutenya menerimanya ("Admin selalu boleh" — jalan darurat sore hari tanpa
-    # operator). Yang ditutup TAWARANNYA: Admin yang disodori "Muat semua"
-    # tepat di sebelah "Verifikasi" akan menekan keduanya, dan verifikasinya
-    # jadi verifikasi atas pekerjaannya sendiri — rantainya utuh di basis data,
-    # kosong artinya.
-    assert "buka=muat_semua" not in h, "Admin ditawari tombol memuat"
-    # Dan verifikasi tak ditawarkan pada yang belum dimuat.
-    assert "buka=verifikasi_keluar" not in kartu_belum, \
-        "verifikasi ditawarkan pada muatan yang belum berangkat"
-
-    # ── Operator ──
-    c = await _klien(pg, gudang["op"], "uji_tombol_kartu_op", mode="operator")
+        h=(await c.get('/barang-keluar')).text
+        assert f'href="/barang-keluar/{belum.rec.id}"' in h
+        assert f'href="/barang-keluar/{sudah.rec.id}"' in h
+        a=(await c.get(f'/barang-keluar/{belum.rec.id}')).text
+        b=(await c.get(f'/barang-keluar/{sudah.rec.id}')).text
+    assert 'buka=batal_perintah_keluar' in a
+    assert 'buka=verifikasi_keluar' not in a
+    assert 'buka=verifikasi_keluar' in b
+    assert 'buka=muat_semua' not in a+b
+    c=await _klien(pg,gudang['op'],'uji_tombol_detail_op',mode='operator')
     async with c:
-        h2 = (await c.get("/barang-keluar")).text
-    assert "buka=muat_semua" in h2, "operator tak punya tombol muat di kartunya"
-    assert "buka=selesai_muat" in h2
-    assert "buka=verifikasi_keluar" not in h2, "operator ditawari verifikasi"
-    assert "buka=batal_perintah_keluar" not in h2, "operator ditawari pembatalan"
+        h=(await c.get(f'/barang-keluar/{belum.rec.id}')).text
+    assert 'buka=muat_semua' in h and 'buka=selesai_muat' in h
+    assert 'buka=verifikasi_keluar' not in h
+    assert 'buka=batal_perintah_keluar' not in h
+    assert 'Ubah jumlah' not in h
 
 
 async def test_tombol_kartu_mengunci_transaksinya(pg, gudang):
@@ -1508,7 +1475,7 @@ async def test_tombol_kartu_mengunci_transaksinya(pg, gudang):
     r = await _perintah(pg, gudang, karung=40)
     c = await _klien(pg, gudang["adm"], "uji_tombol_kunci")
     async with c:
-        h = (await c.get("/barang-keluar")).text
+        h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
     assert f"buka=tambah_barang_keluar&nilai={r.rec.id}" in h, \
         "tombol kartu tak membawa transaksinya"
 
@@ -1548,11 +1515,11 @@ async def test_operator_pun_mendapat_lembarnya(pg, gudang):
     akibatnya tombol "Minta lot ini" milik operator tak pernah bisa membuka
     borangnya — persis kesalahan yang sama menunggu di sini.
     """
-    await _perintah(pg, gudang, karung=40)
+    r = await _perintah(pg, gudang, karung=40)
     c = await _klien(pg, gudang["op"], "uji_lembar_op", mode="operator")
     async with c:
-        h = (await c.get("/barang-keluar")).text
-    assert "/barang-keluar?buka=muat_semua" in h
+        h = (await c.get(f"/barang-keluar/{r.rec.id}")).text
+    assert f"/barang-keluar/{r.rec.id}?buka=muat_semua" in h
     assert '<dialog class="lembar" id="lembar">' in h, \
         "operator punya tombol tetapi tak punya lembarnya"
     assert "aksi.js" in h
@@ -2616,13 +2583,182 @@ async def test_tombol_verifikasi_mendahului_rincian_timbang(pg, gudang):
     stok_lama = await _stok(pg, gudang)
     c = await _klien(pg, gudang['adm'], 'uji_tombol_atas')
     async with c:
-        r = await c.get('/barang-keluar')
+        r = await c.get(f'/barang-keluar/{rid}')
     assert r.status_code == 200
     html = r.text
-    assert html.index('class="ubah-hasil kartu-keluar__utama"') < html.index('class="kartu-keluar__rincian"')
+    assert html.index('Verifikasi &amp; tutup') < html.index('Rincian penimbangan')
     assert f'buka=verifikasi_keluar&nilai={rid}' in html
     assert 'KLR-UJI-TOMBOL-ATAS' in html
     assert await _stok(pg, gudang) == stok_lama
     async with pg() as db:
         assert (await db.get(OutgoingRecord, rid)).status == 'dimuat'
     Path('/tmp/verifikasi-utama-atas.html').write_text(html)
+
+
+@pytest.mark.parametrize('jumlah', [80, 120])
+async def test_detail_ubah_total_tidak_mengubah_aktual(pg, gudang, jumlah):
+    from app.services import barang_keluar as bk
+    from app.models import User
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    stok = await _stok(pg, gudang)
+    async with pg() as db:
+        rec, items = (await bk.daftar(db, transaksi_id=rid))[0]
+        dasar = (await bk.ringkasan_muat(db, rec))['dasar']
+        await bk.ubah_baris_perintah(db, user=await db.get(User,gudang['adm']),
+            rec_id=rid,item_id=items[0].id,dasar=dasar,jumlah=jumlah,alasan='Perubahan pesanan')
+    async with pg() as db:
+        rec, items = (await bk.daftar(db, transaksi_id=rid))[0]
+        assert rec.status == 'perintah'
+        assert items[0].jumlah_karung_perintah == jumlah
+        assert items[0].jumlah_karung == 100
+        assert float(items[0].berat_kg) == 2500
+    assert await _stok(pg,gudang) == stok
+
+
+@pytest.mark.parametrize('kasus', ['pecahan','stok','basi','hapus_dimuat','terakhir'])
+async def test_detail_penjaga_ubah_item(pg,gudang,kasus):
+    from app.services import barang_keluar as bk
+    from app.models import User
+    if kasus == 'hapus_dimuat':
+        rid = await _sampai_dimuat(pg,gudang,karung=100)
+    else:
+        rid = (await _perintah(pg,gudang)).rec.id
+    stok = await _stok(pg,gudang)
+    async with pg() as db:
+        rec, items = (await bk.daftar(db,transaksi_id=rid))[0]
+        dasar = (await bk.ringkasan_muat(db,rec))['dasar']
+        jumlah = {'pecahan':1.5,'stok':500}.get(kasus,80)
+        if kasus == 'basi': dasar='lama'
+        with pytest.raises(bk.BarangKeluarError):
+            await bk.ubah_baris_perintah(db,user=await db.get(User,gudang['adm']),
+                rec_id=rid,item_id=items[0].id,dasar=dasar,jumlah=jumlah,
+                hapus=kasus in ('hapus_dimuat','terakhir'),alasan='Uji penjaga')
+        await db.rollback()
+    assert await _stok(pg,gudang) == stok
+
+
+async def test_detail_hapus_item_belum_dimuat_dan_formulir_basi(pg,gudang):
+    from app.services import barang_keluar as bk
+    from app.models import User,OutgoingItem
+    r=await _perintah(pg,gudang)
+    async with pg() as db:
+        rec,items=(await bk.daftar(db,transaksi_id=r.rec.id))[0]
+        # Item kedua curah tidak mengurangi stok sebab aktualnya masih nol.
+        it=OutgoingItem(outgoing_record_id=rec.id,item_type='byproduct_curah',
+                        jenis_byproduct='menir',berat_perintah_kg=10,berat_kg=0)
+        db.add(it);await db.commit()
+        dasar=(await bk.ringkasan_muat(db,rec))['dasar'];iid=it.id
+        await bk.ubah_baris_perintah(db,user=await db.get(User,gudang['adm']),
+            rec_id=rec.id,item_id=iid,dasar=dasar,jumlah=None,hapus=True,alasan='Tidak jadi dikirim')
+        assert await db.get(OutgoingItem,iid) is None
+        with pytest.raises(bk.BarangKeluarError,match='berubah'):
+            await bk.ubah_baris_perintah(db,user=await db.get(User,gudang['adm']),
+                rec_id=rec.id,item_id=items[0].id,dasar=dasar,jumlah=80,alasan='Tab lama')
+    c=await _klien(pg,gudang['adm'],'uji_detail_kelola')
+    async with c:
+        daftar=await c.get('/barang-keluar');detail=await c.get(f'/barang-keluar/{rec.id}')
+        assert f'href="/barang-keluar/{rec.id}"' in daftar.text
+        assert 'Ubah jumlah' not in daftar.text
+        assert 'Ubah jumlah' in detail.text
+        assert 'Hapus item' not in detail.text  # Barang terakhir memakai pembatalan perintah.
+        assert f'/barang-keluar/{rec.id}?buka=pilih_tiket_armada' in detail.text
+        from pathlib import Path
+        Path('/tmp/detail-kelola.html').write_text(detail.text)
+
+
+async def test_detail_ubah_dua_operator_hanya_satu_diterima(pg,gudang):
+    import asyncio
+    from app.models import User
+    from app.services import barang_keluar as bk
+    r=await _perintah(pg,gudang)
+    async with pg() as db:
+        rec,items=(await bk.daftar(db,transaksi_id=r.rec.id))[0]
+        dasar=(await bk.ringkasan_muat(db,rec))['dasar'];iid=items[0].id
+    async def ubah(n):
+        async with pg() as db:
+            try:
+                await bk.ubah_baris_perintah(db,user=await db.get(User,gudang['adm']),
+                    rec_id=r.rec.id,item_id=iid,dasar=dasar,jumlah=n,alasan='Dua tab')
+                return True
+            except bk.BarangKeluarError:
+                await db.rollback();return False
+    assert sorted(await asyncio.gather(ubah(80),ubah(120))) == [False,True]
+    assert await _stok(pg,gudang)==10000
+
+
+async def test_http_detail_ubah_tolak_pengiriman_ulang_dan_operator(pg,gudang):
+    import json,re
+    from pathlib import Path
+    from app.web import csrf
+    r=await _perintah(pg,gudang)
+    c=await _klien(pg,gudang['adm'],'uji_http_detail_keluar')
+    async with c:
+        detail=await c.get(f'/barang-keluar/{r.rec.id}')
+        token=re.search(r'name="formulir-sesi" content="([^"]+)"',detail.text).group(1)
+        pilihan=(await c.get('/api/actions/item-perintah-ubah')).json()
+        menu=(await c.get('/api/actions/menu')).json()
+        Path('/tmp/detail-kelola.html').write_text(detail.text)
+        Path('/tmp/detail-kelola-menu.json').write_text(json.dumps(menu))
+        Path('/tmp/detail-kelola-pilihan.json').write_text(json.dumps(pilihan))
+        payload=dict(baris=pilihan[0]['value'],jumlah=80,alasan='Pesanan berkurang')
+        hasil=await c.post('/api/actions/ubah-item-perintah',json=payload,headers={csrf.NAMA_HEADER:token})
+        assert hasil.status_code==200,hasil.text
+        ulang=await c.post('/api/actions/ubah-item-perintah',json=payload,headers={csrf.NAMA_HEADER:token})
+        assert ulang.status_code==400 and 'berubah' in ulang.text
+        # Semua tambahan satu formulir harus atomik: baris kedua gagal,
+        # baris pertama tidak boleh telanjur tersimpan.
+        stok=f"{gudang['sku']}|{gudang['std']}"
+        tambah=await c.post('/api/actions/tambah-barang-keluar',
+            json=dict(perintah=str(r.rec.id),barang=[dict(pilih=stok,jumlah=10),dict(pilih=stok,jumlah=1000)]),
+            headers={csrf.NAMA_HEADER:token})
+        assert tambah.status_code==400,tambah.text
+        from app.services import barang_keluar as bk
+        async with pg() as db:
+            _,items=(await bk.daftar(db,transaksi_id=r.rec.id))[0]
+            assert items[0].jumlah_karung_perintah==80
+    c=await _klien(pg,gudang['op'],'uji_http_detail_operator',mode='operator')
+    async with c:
+        h=await c.get(f'/barang-keluar/{r.rec.id}')
+        token=re.search(r'name="formulir-sesi" content="([^"]+)"',h.text).group(1)
+        gagal=await c.post('/api/actions/ubah-item-perintah',json=payload,headers={csrf.NAMA_HEADER:token})
+        assert gagal.status_code==403
+    assert await _stok(pg,gudang)==10000
+
+
+async def test_detail_tambahan_jasa_memisahkan_pesanan_dan_pemilik(pg,gudang):
+    from app.models import Jasa,Pelanggan,User
+    from app.penggilingan.inventory.models import FinishedGoodsStock
+    from app.database import now_local
+    from app.services import barang_keluar as bk
+    from app.web.aksi_inventory import barang_tambahan_perintah
+    async with pg() as db:
+        pa=Pelanggan(nama_pelanggan='Pemilik A');pb=Pelanggan(nama_pelanggan='Pemilik B')
+        db.add_all([pa,pb]);await db.flush()
+        pesanan=[Jasa(kode=f'JAS-UJI-DETAIL-{i}',pelanggan_id=p.id,status='berjalan')
+                 for i,p in enumerate([pa,pa,pb])]
+        db.add_all(pesanan);await db.flush()
+        ids=[j.id for j in pesanan];pid=pa.id
+        for j in pesanan:
+            db.add(FinishedGoodsStock(product_sku_id=gudang['sku'],rice_quality_standard_id=gudang['std'],
+                source_type='retur',jumlah_karung=20,berat_total_kg=500,jasa_id=j.id,
+                waktu=now_local(),input_by=gudang['op']))
+        await db.commit()
+        u=await db.get(User,gudang['adm'])
+        r=await bk.buat_perintah(db,user=u,jasa_id=ids[0],pelanggan_id=pid,
+            baris=[bk.BarisPerintah(tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=5)])
+        rid=r.rec.id
+        opsi=await barang_tambahan_perintah(induk=str(rid),user=u)
+        assert any(f'@{ids[1]}' in x['value'] for x in opsi)
+        assert all(f'@{ids[2]}' not in x['value'] for x in opsi)
+        hasil=await bk.tambah_baris(db,user=u,rec_id=rid,jasa_id=ids[1],
+            baris=bk.BarisPerintah(tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=6))
+        assert hasil.rec.jasa_id is None
+        assert {i.jasa_id for i in hasil.baris}==set(ids[:2])
+        rec,items=(await bk.daftar(db,transaksi_id=rid))[0]
+        dasar=(await bk.ringkasan_muat(db,rec))['dasar']
+        await bk.ubah_baris_perintah(db,user=u,rec_id=rid,item_id=items[1].id,dasar=dasar,jumlah=8,alasan='Tambah pesanan kedua')
+    async with pg() as db:
+        with pytest.raises(bk.BarangKeluarError,match='bukan milik'):
+            await bk.tambah_baris(db,user=await db.get(User,gudang['adm']),rec_id=rid,jasa_id=ids[2],
+                baris=bk.BarisPerintah(tipe='finished_goods',sku_id=gudang['sku'],std_id=gudang['std'],jumlah_karung=1))
+    assert await _stok(pg,gudang)==10000

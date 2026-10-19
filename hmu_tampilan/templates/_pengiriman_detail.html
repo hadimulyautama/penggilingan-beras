@@ -16,7 +16,7 @@
 
   {% if k.tombol %}<nav class="kirim-detail__aksi" aria-label="Tindakan perintah">
     {% for buka, nilai, label, utama in k.tombol %}
-    <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
+    <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
     {% endfor %}
   </nav>{% endif %}
 
@@ -33,7 +33,11 @@
         <caption class="sr-only">Perintah dan muatan aktual per barang</caption>
         <thead><tr><th scope="col">Barang</th><th scope="col">Perintah</th><th scope="col">Dimuat aktual</th><th scope="col">Sisa perintah</th></tr></thead>
         <tbody>{% for b in k.isi %}<tr>
-          <th scope="row"><span class="kirim-detail__nomor">{{ loop.index }}.</span> {{ b.nama }}</th>
+          <th scope="row"><span class="kirim-detail__nomor">{{ loop.index }}.</span> {{ b.nama }}
+            {% if k.boleh_ubah %}<div class="kirim-detail__item-aksi">
+              <a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=ubah_item_perintah&nilai={{ b.kunci|urlencode }}">Ubah jumlah</a>
+              {% if not b.dimuat and k.isi|length > 1 %}<a class="btn btn--kecil" href="/barang-keluar/{{ k.rec.id }}?buka=hapus_item_perintah&nilai={{ b.kunci|urlencode }}">Hapus item</a>{% endif %}
+            </div>{% endif %}</th>
           <td><span class="kirim-detail__label-ponsel">Perintah</span><strong>{{ angka(b.perintah) }} <small>kg</small></strong>{% if b.berkarung and b.karung_perintah is not none %}<small>{{ b.karung_perintah }} karung</small>{% endif %}</td>
           <td><span class="kirim-detail__label-ponsel">Dimuat aktual</span><strong>{{ angka(b.dimuat) }} <small>kg</small></strong>{% if b.berkarung and b.karung_dimuat is not none %}<small>{{ b.karung_dimuat }} karung</small>{% endif %}</td>
           <td><span class="kirim-detail__label-ponsel">Sisa</span><strong>{{ angka(b.sisa_perintah) }} <small>kg</small></strong></td>
@@ -42,7 +46,7 @@
     </div>
     {% if k.rec.catatan_perintah %}<p class="kirim-detail__catatan"><strong>Catatan perintah:</strong> {{ k.rec.catatan_perintah }}</p>{% endif %}
     {% if k.rec.sebab_batal %}<div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>{% endif %}
-    {% if k.rec.sebab_selisih %}<div class="nota nota--hati">Sebab selisih timbang — {{ k.rec.sebab_selisih }}</div>{% endif %}
+    {% if k.rec.sebab_selisih %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Sebab selisih timbang — {{ k.rec.sebab_selisih }}</span></div>{% endif %}
   </section>
 
   <div class="kirim-detail__grid">
