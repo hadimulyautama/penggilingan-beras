@@ -41,6 +41,16 @@
 {% if j == 'pengeringan' and maju is not none %}
 <span class="proses-kemajuan"><small>Kemajuan kadar air · {{ (maju * 100)|round|int }}%</small><progress max="1" value="{{ maju }}" aria-label="Kemajuan menuju target kadar air">{{ (maju * 100)|round|int }}%</progress></span>
 {% elif j in ('giling', 'sosoh') %}
-<span class="proses-kemajuan"><small>Rendemen sementara · {% if rend is not none %}{{ '%.1f'|format(rend)|replace('.', ',') }}%{% else %}belum dapat dihitung{% endif %}</small>{% if rend is not none %}<progress max="100" value="{{ [[rend, 0]|max, 100]|min }}" aria-label="Rendemen sementara {{ 'PK' if j == 'giling' else 'beras' }} terhadap bahan">{{ '%.1f'|format(rend)|replace('.', ',') }}%</progress>{% if rend > 100 %}<small>Hasil melebihi bahan; periksa catatan.</small>{% endif %}{% endif %}</span>
+{% set neraca = b.neraca|default(none) %}
+{% set utama = neraca.beras.persen if neraca and neraca.bisa_dihitung else rend %}
+{% set samping = neraca.samping|sum(attribute='persen') if neraca and neraca.bisa_dihitung else 0 %}
+{% set sisa = 100 - utama - samping if utama is not none else none %}
+<span class="proses-kemajuan"><small>Neraca sementara</small>
+{% if utama is not none and sisa >= -0.01 %}
+<span class="neraca" role="img" aria-label="Neraca sementara: {{ 'PK' if j == 'giling' else 'beras' }} {{ '%.1f'|format(utama)|replace('.', ',') }}%, hasil samping {{ '%.1f'|format(samping)|replace('.', ',') }}%, belum keluar/susut {{ '%.1f'|format(sisa)|replace('.', ',') }}%">
+<span class="neraca__beras" style="width:{{ utama }}%"></span><span class="neraca__samping" style="width:{{ samping }}%"></span><span class="neraca__susut" style="width:{{ [sisa, 0]|max }}%"></span>
+</span>
+<span class="proses-kemajuan__legenda"><small><i class="neraca__beras" aria-hidden="true"></i>{{ 'PK' if j == 'giling' else 'Beras' }} {{ '%.1f'|format(utama)|replace('.', ',') }}%</small><small><i class="neraca__samping" aria-hidden="true"></i>Hasil samping {{ ('%.1f'|format(samping)|replace('.', ',') ~ '%') if neraca else 'belum dicatat' }}</small><small><i class="neraca__susut" aria-hidden="true"></i>Belum keluar/susut {{ '%.1f'|format(sisa)|replace('.', ',') }}%</small></span>
+{% elif utama is none %}<small>Belum dapat dihitung</small>{% else %}<small>Hasil melebihi bahan; periksa catatan.</small>{% endif %}</span>
 {% endif %}
 {%- endmacro %}

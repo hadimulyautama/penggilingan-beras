@@ -2087,6 +2087,17 @@ button.pilihan__satu {
 .maju__jam { font-family: var(--mono); font-size: 13px; color: var(--redup); }
 .maju__isi { color: var(--tinta-2); font-size: 13px; line-height: 1.45; }
 .proses-kemajuan { display: grid; gap: 5px; margin-top: 8px; }
+.proses-aktif-list__indikator { grid-column: 1 / -1; min-width: 0; }
+.proses-aktif-list__indikator:has(.proses-kemajuan):not(:empty) { width: 100%; }
+.proses-aktif-list__indikator:not(:has(.proses-kemajuan)) { display: none; }
+.proses-kemajuan__legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.proses-kemajuan__legenda small { display: inline-flex; align-items: baseline; gap: 5px; }
+.proses-kemajuan__legenda i { display: inline-block; flex: 0 0 9px; width: 9px; height: 9px; border-radius: 2px; }
+.proses-kemajuan .neraca { margin: 0; }
+.proses-kemajuan .neraca > span { min-width: 0; }
+@media (max-width: 700px) {
+  .proses-aktif-list .proses-aktif-list__row > .proses-aktif-list__panah { grid-column: 2; grid-row: 1 / 5; }
+}
 .proses-kemajuan progress { display: block; width: 100%; height: 10px; accent-color: var(--proses-aksen, var(--aman)); }
 .proses-kemajuan progress::-webkit-progress-bar { background: var(--garis-2); border-radius: 999px; }
 .proses-kemajuan progress::-webkit-progress-value { background: var(--proses-aksen, var(--aman)); border-radius: 999px; }
