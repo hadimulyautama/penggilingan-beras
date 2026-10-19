@@ -9,7 +9,7 @@ def alokasi_sumber(movements, histories, closed_at):
         used = (float(u.berat_terpakai_kg) if u.berat_terpakai_kg is not None else
                 float(u.berat_awal_kg) + float(u.berat_masuk_kg or 0) - float(u.berat_akhir_kg))
         t = closed_at.get(u.id) or u.updated_at or proc.waktu_selesai or proc.waktu_mulai
-        events.setdefault(u.silo_id, []).append((t, 1, u.id, 'pakai', max(0, used), None))
+        events.setdefault(u.silo_id, []).append((t, 1, u.id, 'pakai', max(0, used), float(u.berat_akhir_kg)))
     result = {}
     for sid, rows in events.items():
         pool = []
@@ -31,4 +31,20 @@ def alokasi_sumber(movements, histories, closed_at):
                                      owner='Tidak tercatat', plate='—', weight=rest))
             result[id_] = consumed
             pool = [x for x in pool if x[0] > .0001]
+            # Sisa operator adalah batas saldo fisik setelah pembebasan.
+            # Selisih catatan lama tidak boleh hidup melewati pernyataan kosong.
+            sisa = max(0, source)
+            total = sum(x[0] for x in pool)
+            if total > sisa:
+                extra = total - sisa
+                for item in pool:
+                    take = min(item[0], extra)
+                    item[0] -= take
+                    extra -= take
+                    if extra <= .0001:
+                        break
+                pool = [x for x in pool if x[0] > .0001]
+            elif total < sisa:
+                pool.append([sisa-total, dict(kind='legacy', code='Sisa tanpa rincian sumber', material='Bahan',
+                                             owner='Tidak tercatat', plate='—')])
     return result

@@ -24,3 +24,12 @@ def test_fifo_semua_pemakaian_dan_pemilik_tidak_mengulang_saldo():
  r=alokasi_sumber(movements,histories,closed)
  assert [(x['code'],x['weight'],x['owner']) for x in r[1]]==[('A',100,'Pemilik A')]
  assert [(x['code'],x['weight'],x['owner']) for x in r[2]]==[('B',50,'Pemilik B')]
+
+def test_pernyataan_kosong_mengakhiri_saldo_asal_warisan():
+ t=datetime(2026,10,19,tzinfo=timezone.utc)
+ movements={1:[(t,1,112.5,dict(code='Lama')),(t+timedelta(hours=2),1,50,dict(code='Baru'))]}
+ proc=N(waktu_selesai=t+timedelta(hours=4),waktu_mulai=t)
+ a=N(id=1,silo_id=1,berat_awal_kg=100,berat_masuk_kg=0,berat_akhir_kg=0,berat_terpakai_kg=100)
+ b=N(id=2,silo_id=1,berat_awal_kg=50,berat_masuk_kg=0,berat_akhir_kg=0,berat_terpakai_kg=50)
+ r=alokasi_sumber(movements,[(a,proc),(b,proc)],{1:t+timedelta(hours=1),2:t+timedelta(hours=3)})
+ assert [(x['code'],x['weight']) for x in r[2]]==[('Baru',50)]
