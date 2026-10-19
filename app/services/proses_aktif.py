@@ -192,8 +192,15 @@ async def rincian(db, *, jenis, model, kartu, params):
             elif model.purchase_batch_id:
                 b = await db.get(PurchaseBatch, model.purchase_batch_id)
                 batches = [b] if b else []
-        d["bagian"].append(_bagian("Sumber bahan per silo", ["Silo", "Asal bahan", "Berat masuk", "Status sumber"], rows,
-                                 keterangan="Berat masuk adalah catatan sumber proses ini. Silo yang sudah dibebaskan tetap tercantum sebagai asal bahan."))
+        from app.services.bahan_silo import sumber_giling_banyak
+        kelompok = (await sumber_giling_banyak(db, [model.id])).get(model.id, [])
+        if kelompok:
+            bagian = _bagian("Bahan & pemakaian silo", [], [])
+            bagian.update(kelompok_silo=kelompok, jumlah=len(kelompok), satuan="catatan sumber")
+            d["bagian"].append(bagian)
+        else:
+            d["bagian"].append(_bagian("Sumber bahan per silo", ["Silo", "Asal bahan", "Berat masuk", "Status sumber"], rows,
+                                     keterangan="Data proses lama: rincian pemakaian silo belum tersedia."))
         d["bagian"].append(await _bahan_gabah(db, batches))
         d["bagian"].append(await _log(
             db, MillingProgressLog, MillingProgressLog.milling_process_id, model.id,

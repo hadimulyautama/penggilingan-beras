@@ -2120,6 +2120,7 @@ class KartuGiling:
     #: Giling SELESAI tetapi hasilnya tak pernah dicatat — bukan nol,
     #: melainkan tak diketahui. Lihat `LotPk.belum_dicatat`, alasan sama.
     belum_dicatat: bool = False
+    pemakaian_silo: tuple = ()
 
 
 async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
@@ -2157,6 +2158,8 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
         return [], False
     ids = [p.id for p in proses]
 
+    from app.services.bahan_silo import sumber_giling_banyak
+    pemakaian_per = await sumber_giling_banyak(db, ids)
     bd = await pk_breakdown_banyak(db, ids)
     mutu = await qc_rata_banyak(db, ids)
     kelas = await pk_jenis_banyak(db, proses)
@@ -2197,5 +2200,6 @@ async def riwayat_giling(db: AsyncSession, *, batas: int = 30,
             mutu=mutu.get(p.id, QcRata()).teks(),
             hasil_kg=b.produced, ditransfer_kg=b.transferred,
             tersedia_kg=b.tersedia, belum_dicatat=belum,
+            pemakaian_silo=tuple(pemakaian_per.get(p.id, [])),
         ))
     return kartu, lagi

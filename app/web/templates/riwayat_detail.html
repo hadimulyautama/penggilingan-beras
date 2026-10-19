@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bahan_silo.html" import bahan_silo, riwayat_bahan_sosoh %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
@@ -88,12 +89,13 @@
       </dl>
       {% if k.belum_dicatat %}<p class="riwayat-detail__warning">Giling ditutup tanpa hasil tercatat; jumlah PK belum diketahui.</p>{% endif %}
     </section>
-    <section class="riwayat-detail__card">
-      <h2>Asal bahan · {{ k.bahan|length }} batch</h2>
+    {% if k.pemakaian_silo %}<section class="riwayat-detail__card"><h2>Bahan &amp; pemakaian silo</h2>{{ bahan_silo(k.pemakaian_silo) }}</section>{% else %}<p class="bantu">Rincian pemakaian silo belum tersedia untuk proses lama ini.</p>{% endif %}
+    <details class="riwayat-detail__card">
+      <summary>Data batch asal · {{ k.bahan|length }}</summary>
       {% if k.bahan %}<div class="riwayat-detail__table tabel-standar"><div class="riwayat-detail__table-head"><span>Batch / pemilik</span><span>Berat</span><span>Keterangan</span></div>
         {% for nama, berat, kapan in k.bahan %}<div class="riwayat-detail__table-row"><strong>{{ nama }}</strong><span>{{ berat }}</span><span>{{ kapan }}</span></div>{% endfor %}
       </div>{% else %}<p class="riwayat-detail__empty">Asal batch tidak tercatat untuk proses ini.</p>{% endif %}
-    </section>
+    </details>
     {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}
       {% if hasil_koreksi %}<p class="riwayat-status riwayat-status--done">Koreksi hasil tersimpan.</p>{% endif %}
@@ -153,13 +155,8 @@
       </div>{% else %}<p class="riwayat-detail__empty">Bahan PK belum tercatat sehingga neraca belum dapat dihitung.</p>{% endif %}
     </section>
     <section class="riwayat-detail__card">
-      <h2>Asal bahan baku · {{ k.silo|length }} silo</h2>
-      {% for s in k.silo %}
-        <div class="riwayat-detail__silo"><h3>{{ s.nama }}</h3><p>Terpakai {{ kg(s.terpakai_kg) }} kg · Awal {{ kg(s.awal_kg) }} kg · Ditambah {{ kg(s.masuk_kg) }} kg · Sisa {{ kg(s.sisa_kg or 0) }} kg</p>
-          {% for asal, berat in s.asal %}<div class="riwayat-detail__origin"><span>{{ asal }}</span><strong>{{ berat }}</strong></div>{% endfor %}
-          {% if s.asal_lebih %}<p class="riwayat-detail__empty">{{ s.asal_lebih }} sumber lain tidak ditampilkan.</p>{% endif %}
-        </div>
-      {% else %}<p class="riwayat-detail__empty">Rincian silo tidak tercatat.</p>{% endfor %}
+      <h2>Bahan &amp; pemakaian silo</h2>
+      {{ riwayat_bahan_sosoh(k.silo) }}
     </section>
     {% set isian_koreksi = isian_koreksi|default({}) %}
     {% if boleh_koreksi %}

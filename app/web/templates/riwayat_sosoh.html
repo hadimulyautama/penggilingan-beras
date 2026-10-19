@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bahan_silo.html" import riwayat_bahan_sosoh %}
 {% block judul %}Riwayat sosoh{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
@@ -195,34 +196,8 @@
          merasa persennya aneh tak punya tempat memeriksa. Dan "ditambah" harus
          kelihatan — silo yang dipoles boleh diisi lagi, dan PK yang masuk di
          tengah proses ikut jadi bahan baku. #}
-      <div class="anak__kepala" style="margin-top:10px">
-        Bahan baku · {{ k.silo|length }} silo
-      </div>
-      {% for s in k.silo %}
-        <div class="anak__baris">
-          <span class="anak__nama">{{ s.nama }}</span>
-          <span class="anak__kg">{{ kg(s.terpakai_kg) }} kg</span>
-          <span class="anak__jam">
-            awal {{ kg(s.awal_kg) }}{% if s.masuk_kg %} + ditambah {{ kg(s.masuk_kg) }}{% endif %}
-            − sisa {{ kg(s.sisa_kg or 0) }}
-          </span>
-        </div>
-        {# Asal lot PK / penambahan broken — permintaan pemilik 11 Oktober
-           2026: riwayat dulu berhenti di tingkat silo, tak merinci dari
-           lot/pemasok mana angkanya datang, beda dari kartu "Sedang
-           berjalan". `.anak__baris--lot` sudah bergaya dari sana. #}
-        {% for judul, berat in s.asal %}
-          <div class="anak__baris anak__baris--lot">
-            <span class="anak__nama">{{ judul }}</span>
-            <span class="anak__kg">{{ berat }}</span>
-          </div>
-        {% endfor %}
-        {% if s.asal_lebih %}
-          <div class="anak__baris anak__baris--lot">
-            <span class="anak__nama">+{{ s.asal_lebih }} asal lagi tak ditampilkan</span>
-          </div>
-        {% endif %}
-      {% endfor %}
+      <h3>Bahan &amp; pemakaian silo</h3>
+      {{ riwayat_bahan_sosoh(k.silo) }}
 
       <dl class="fakta" style="padding:8px 12px 10px">
         <div>
@@ -289,12 +264,8 @@
             <div class="riwayat-desktop-batch"><strong>Jumlah</strong><span>{{ kg(k.neraca.bahan_kg) }} kg</span><small>{{ psn(k.neraca.beras.persen + k.neraca.samping|sum(attribute="persen") + k.neraca.susut.persen) }}</small></div>
           </div>
         {% else %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Bahan PK belum tercatat sehingga neraca belum dapat dihitung.</span></div>{% endif %}
-        <div class="anak__kepala">Bahan baku · {{ k.silo|length }} silo</div>
-        {% for s in k.silo %}
-          <div class="riwayat-desktop-batch"><strong>{{ s.nama }}</strong><span>{{ kg(s.terpakai_kg) }} kg terpakai</span><small>Awal {{ kg(s.awal_kg) }} · ditambah {{ kg(s.masuk_kg) }} · sisa {{ kg(s.sisa_kg or 0) }}</small></div>
-          {% for judul, berat in s.asal %}<div class="riwayat-desktop-batch riwayat-desktop-batch--indent"><strong>{{ judul }}</strong><span>{{ berat }}</span></div>{% endfor %}
-          {% if s.asal_lebih %}<div class="riwayat-desktop-batch riwayat-desktop-batch--indent"><strong>Asal lain</strong><span>{{ s.asal_lebih }} baris tidak ditampilkan</span></div>{% endif %}
-        {% endfor %}
+        <h3>Bahan &amp; pemakaian silo</h3>
+        {{ riwayat_bahan_sosoh(k.silo) }}
         <dl class="fakta">
           <div><dt>Mulai</dt><dd>{{ k.mulai|jam }}</dd></div>
           <div><dt>Selesai</dt><dd>{{ k.selesai|jam or "—" }}</dd></div>

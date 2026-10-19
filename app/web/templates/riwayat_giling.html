@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_bahan_silo.html" import bahan_silo %}
 {% block judul %}Riwayat Penggilingan{% endblock %}
 {% import "_stok.html" as st with context %}
 {% import "_riwayat.html" as rh with context %}
@@ -38,7 +39,7 @@
 
 <div class="riwayat-list daftar-standar">
 {% for k in kartu %}
-  {% set laci = k.bahan|length > 0 %}
+  {% set laci = k.bahan|length > 0 or k.pemakaian_silo|default([])|length > 0 %}
   <details class="padat padat--giling">
   <summary onclick="event.preventDefault();location.href='/riwayat-giling/{{ k.id }}'">
     <div class="padat__atas">
@@ -114,7 +115,8 @@
 
   {% if laci %}
     <div class="anak">
-      <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
+      {% if k.pemakaian_silo %}<h3>Bahan &amp; pemakaian silo</h3>{{ bahan_silo(k.pemakaian_silo) }}{% endif %}
+      <details><summary>Data batch asal · {{ k.bahan|length }}</summary>
       {% for nama, berat, kapan in k.bahan %}
         <div class="anak__baris">
           <span class="anak__nama">{{ nama }}</span>
@@ -122,6 +124,7 @@
           <span class="anak__jam">{{ kapan }}</span>
         </div>
       {% endfor %}
+      </details>
       <div style="margin-top:12px">
         <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">
           ↓ Lihat / bagikan laporan PDF
@@ -169,9 +172,10 @@
           <div><dt>Durasi</dt><dd>{{ k.lama or "—" }}</dd></div>
         </dl>
         {% if k.belum_dicatat %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Giling ditutup tanpa hasil tercatat — PK belum terhitung.</span></div>{% endif %}
+        {% if k.pemakaian_silo %}<h3>Bahan &amp; pemakaian silo</h3>{{ bahan_silo(k.pemakaian_silo) }}{% endif %}
         {% if k.bahan %}
-          <div class="anak__kepala">Batch asal · {{ k.bahan|length }}</div>
-          <div class="riwayat-desktop-batches">{% for nama, berat, kapan in k.bahan %}<div class="riwayat-desktop-batch"><strong>{{ nama }}</strong><span>{{ berat }}</span><small>{{ kapan }}</small></div>{% endfor %}</div>
+          <details><summary>Data batch asal · {{ k.bahan|length }}</summary>
+          <div class="riwayat-desktop-batches">{% for nama, berat, kapan in k.bahan %}<div class="riwayat-desktop-batch"><strong>{{ nama }}</strong><span>{{ berat }}</span><small>{{ kapan }}</small></div>{% endfor %}</div></details>
         {% endif %}
         <a class="btn btn--kecil" href="/riwayat-giling/{{ k.id }}/laporan">↓ Lihat / bagikan laporan PDF</a>
       </div>
