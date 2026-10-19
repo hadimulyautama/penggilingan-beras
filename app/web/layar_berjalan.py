@@ -110,6 +110,8 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
                        x.fase == "giling" if jenis == "giling" else x.fase == "dryer")), None)
         if kartu is None:
             raise HTTPException(404, "Proses ini sudah tidak aktif.")
+        from app.services.identitas_pekerjaan import lengkapi
+        await lengkapi(db, [kartu])
         detail = await proses_aktif.rincian(db, jenis=jenis, model=p, kartu=kartu,
                                            params=request.query_params)
     dasar = request.url.remove_query_params(["buka", "nilai"])

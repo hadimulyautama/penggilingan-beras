@@ -190,6 +190,10 @@ class Baris:
     kendaraan: str | None = None
     status_jasa: bool | None = None
     nama_tabel: str | None = None
+    # Identitas tampilan; None berarti belum dapat dipastikan, bukan pabrik.
+    pemilik_ids: tuple[int | None, ...] | None = None
+    pemilik_tampil: str | None = None
+    kepemilikan: str = "periksa"
 
 
 @dataclass
@@ -1547,6 +1551,8 @@ async def _tiket_belum_ditaut(db: AsyncSession) -> list[Baris]:
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            jasa_id=(t.get("jasa_id") if adalah_jasa(t) else None),
+            pemilik_tampil=(_nama_tabel_bahan(nama, jasa=True) if adalah_jasa(t) else None),
             nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
         ))
     return baris
@@ -1648,6 +1654,8 @@ async def _tiket_pk_luar(db: AsyncSession, *, boleh_catat: bool) -> list[Baris]:
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            jasa_id=(t.get("jasa_id") if adalah_jasa(t) else None),
+            pemilik_tampil=(_nama_tabel_bahan(nama, jasa=True) if adalah_jasa(t) else None),
             nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
         ))
     return baris
@@ -1739,6 +1747,8 @@ async def _tiket_jenis_tak_dikenal(
             kendaraan=" · ".join(x for x in
                                   (t.get("nomor_polisi"), t.get("nama_sopir")) if x),
             status_jasa=adalah_jasa(t),
+            jasa_id=(t.get("jasa_id") if adalah_jasa(t) else None),
+            pemilik_tampil=(_nama_tabel_bahan(nama, jasa=True) if adalah_jasa(t) else None),
             nama_tabel=_nama_tabel_bahan(nama, jasa=adalah_jasa(t)),
             **tindakan,
         ))
@@ -1808,7 +1818,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
         total = bt.angka()
         kondisi = {x.kondisi_gabah for x in isi_mesin}
         b.transit.append(Baris(
-            kode="",
+            kode="", pemilik_ids=tuple({x.jasa_id for x in isi_mesin}),
             isi=f"{len(isi_mesin)} batch di {mesin.nama} · {bt.teks()}",
             keadaan="nyalakan mesinnya",
             aksi="mulai_pengeringan", fase="dryer",
@@ -2154,7 +2164,7 @@ async def untuk_gudang1(db: AsyncSession, *, boleh_qc: bool = False) -> Berjalan
                 bid_silo += [x.id for x in await _lot_batches(db, r.drying_lot_id)]
         asal_silo = await _asal(db, set(bid_silo))
         b.transit.append(Baris(
-            kode=silo.nama_silo, isi=f"gabah kering · {bs.teks()}",
+            kode=silo.nama_silo, pemilik_ids=tuple({r.jasa_id for r in baris_silo}), isi=f"gabah kering · {bs.teks()}",
             keadaan="mulai giling bila siap", aksi="mulai_giling",
             nilai=huruf, fase="silo",
             judul=silo.nama_silo,
@@ -2807,6 +2817,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
     """Silo Gudang 2 yang berisi PK — menunggu disosoh."""
     from app.models import Silo
     from app.penggilingan.gudang2.models import PolishingProcess
+    from app.services.jasa import pemilik_silo_g2
     from app.penggilingan.gudang2.service import _g2_warehouse_id, hitung_stok_silo
 
     from app.penggilingan.gudang2.models import PolishingSiloUsage
@@ -2878,7 +2889,7 @@ async def _kartu_silo_g2(db: AsyncSession, asal_silo) -> list[Baris]:
         asal = isian.baris
         pemasok = _pemasok_ringkas(asal)
         keluar.append(Baris(
-            kode=silo.nama_silo, isi=f"Bahan campuran · {_kg(kg)}",
+            kode=silo.nama_silo, pemilik_ids=tuple(await pemilik_silo_g2(db, silo.id)), isi=f"Bahan campuran · {_kg(kg)}",
             # Tiga keadaan, tiga kalimat. Silo yang sisanya sudah dicatat
             # BUKAN silo yang sedang menunggu mesin: yang membacanya perlu tahu
             # bahwa angka ini sisa isian yang baru saja ditutup, bukan muatan
@@ -2968,7 +2979,7 @@ async def _kartu_tumpukan_g2(db: AsyncSession) -> list[Baris]:
         # batas, dan pembulatan ke atas membuat layar menawarkan satu kilogram
         # yang tak ada lalu menolaknya.
         keluar.append(Baris(
-            kode=kode,
+            kode=kode, pemilik_ids=(it.jasa_id,),
             isi=f"PK di tumpukan · {_kg_tepat(sisa) if sisa is not None else 'menunggu timbang'}",
             keadaan="menunggu dipindah ke silo — boleh sebagian",
             aksi="pindah_tumpukan_silo", nilai=str(it.id), fase="tumpuk",
@@ -3688,4 +3699,6 @@ async def untuk(db: AsyncSession, user: User) -> Berjalan:
         import logging
         logging.getLogger("berjalan").exception(
             "Lencana Kabar gagal dihitung (laci tetap tampil)")
+    from app.services.identitas_pekerjaan import lengkapi
+    await lengkapi(db, b.menunggu + b.berjalan + b.transit + b.meja)
     return b

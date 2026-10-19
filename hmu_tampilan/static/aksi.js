@@ -240,7 +240,7 @@
         return '<button class="tindakan" data-aksi="' + esc(a.id) + '">' +
           (b.ikon ? '<span class="tindakan__ikon tindakan__ikon--emoji">' + esc(b.ikon) + "</span>" : "") +
           '<span class="tindakan__isi"><span class="tindakan__nama">' + esc(b.teks) + "</span>" +
-          (a.hint ? '<span class="tindakan__ket">' + esc(a.hint) + "</span>" : "") +
+        (a.hint ? '<span class="tindakan__ket">' + esc(a.hint) + "</span>" : "") +
           "</span>" +
           '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" ' +
           'stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>';
@@ -527,6 +527,17 @@
       return l + inputAngka;
     }).join("");
 
+    // Identitas kartu tetap terlihat ketika formulir menutupi daftar.
+    // "Dibuka dari" adalah konteks asal, bukan pengganti validasi pilihan server.
+    var asalKartu = Array.prototype.find.call(document.querySelectorAll("[data-konteks]"), function (n) {
+      if (!terkunci) return false;
+      var liens = n.matches("a[href]") ? [n] : Array.prototype.slice.call(n.querySelectorAll("a[href]"));
+      return liens.some(function (l) {
+        var u = new URL(l.href, location.href);
+        return u.searchParams.get("buka") === id && u.searchParams.get("nilai") === String(terkunci);
+      });
+    });
+    var konteksKartu = asalKartu ? '<p class="identitas-formulir" role="note">Dibuka dari: ' + esc(asalKartu.dataset.konteks) + '</p>' : '';
     var judul = belah(a.label).teks;
     var lembar = $("lembar");
     lembar.setAttribute("aria-label", judul);
@@ -534,6 +545,7 @@
       '<div class="lembar__isi">' +
         '<div class="lembar__kepala"><h2>' + esc(judul) + "</h2>" +
           '<button class="btn btn--kecil" id="tutup" type="button">Batal</button></div>' +
+        konteksKartu +
         (a.hint ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
         '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +

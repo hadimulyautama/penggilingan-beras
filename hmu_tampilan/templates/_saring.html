@@ -17,9 +17,9 @@
 {% if daftar %}
 <div class="saring">
   <div class="pil-baris">
-    <a class="pil{{ ' pil--on' if not kini }}" href="{{ alamat }}">Semua</a>
+    <a class="pil{{ ' pil--on' if not kini }}" href="{{ alamat }}{{ '?kepemilikan=' ~ request.query_params.get('kepemilikan') if request and request.query_params.get('kepemilikan') in ('jasa', 'pabrik') else '' }}">Semua</a>
     {% for gid, nama, _ in daftar %}
-      <a class="pil{{ ' pil--on' if kini == gid }}" href="{{ alamat }}?gudang={{ gid }}">{{ nama }}</a>
+      <a class="pil{{ ' pil--on' if kini == gid }}" href="{{ alamat }}?gudang={{ gid }}{{ '&kepemilikan=' ~ request.query_params.get('kepemilikan') if request and request.query_params.get('kepemilikan') in ('jasa', 'pabrik') else '' }}">{{ nama }}</a>
     {% endfor %}
   </div>
 </div>

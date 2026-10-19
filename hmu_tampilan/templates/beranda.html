@@ -15,6 +15,10 @@
 {% block judul %}Beranda{% endblock %}
 {% block isi %}
 {% import "_benda.html" as benda with context %}
+{% import "_kepemilikan.html" as milik with context %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set berjalan = berjalan|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set transit = transit|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+
 {% import "_beranda.html" as br with context %}
 
 {% if pesan_ok %}<div class="pesan pesan--ok" role="status">{{ pesan_ok }}</div>{% endif %}
@@ -22,6 +26,7 @@
 <header class="beranda-sambut beranda-sambut--ringkas" aria-labelledby="judul-beranda">
   <div class="beranda-sambut__kepala"><h1 id="judul-beranda">Pekerjaan hari ini</h1></div>
 </header>
+
 
 {# ── YANG SEDANG BERJALAN, VERSI PADAT ──
    Dulu hanya pengeringan yang sampai ke sini, dan itu membuat Beranda
@@ -59,7 +64,7 @@
    satu, dan yang satu ini tinggal karena ia membawa jumlah — pintu laci tak
    memberi tahu berapa yang menunggu tanpa dibuka dulu. #}
 <section class="beranda-tindaklanjut">
-  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian) }}{% endif %}
+  {% if blok_perhatian %}{{ br.blok_perhatian(perhatian|rejectattr("duplikat_proses")|list) }}{% endif %}
   <span class="lbl">Pekerjaan</span>
   {{ br.pintu_antrean(MENUNGGU) }}
   {# Kerja MEJA berdiri sejajar kerja gudang, dan hanya di app yang MEMPUNYAI

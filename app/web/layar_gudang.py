@@ -59,6 +59,8 @@ async def halaman_gudang(request: Request, gid: str, akun=Depends(butuh_akun)):
         else:
             b = await svc.untuk_gudang2(db)
             petak = await _petak_g2(db)
+        from app.services.identitas_pekerjaan import lengkapi
+        await lengkapi(db, b.menunggu + b.berjalan + b.transit + b.meja)
         # Lencana bilah atas tetap milik ORANG yang membaca, bukan gudang yang
         # dibaca: "3 menunggu" yang berubah-ubah menurut halaman membuat angka
         # itu berhenti berarti.

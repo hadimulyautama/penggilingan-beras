@@ -2842,3 +2842,19 @@ body .isi > .beranda-akses.beranda-akses--ringkas {
 @media (min-width: 700px) {
   .beranda-akses--ringkas .beranda-akses__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* Identitas bahan selalu terbaca, termasuk kartu ringkas ponsel. */
+.identitas-barang { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; margin:0 0 7px; min-width:0; grid-column:1 / -1; font-size:13px; line-height:1.4; }
+.identitas-barang__label { display:inline-block; font-weight:700; border:1px solid currentColor; border-radius:6px; padding:2px 7px; color:var(--tinta); background:var(--panel-2); }
+.identitas-barang__label--jasa { color:var(--aman); }
+.identitas-barang__pemilik { color:var(--tinta); overflow-wrap:anywhere; white-space:normal; }
+.saring-kepemilikan { display:flex; flex:0 0 auto; gap:8px; flex-wrap:wrap; }
+.saring-kepemilikan .pil { min-height:44px; display:inline-flex; align-items:center; }
+
+.identitas-formulir { padding:10px 12px; border:1px solid var(--garis); border-radius:8px; background:var(--panel-2); color:var(--tinta); font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+
+@media (min-width:701px) {
+ body .isi .proses-aktif-list :is(.proses-aktif-list__head,.proses-aktif-list__row) { grid-template-columns:minmax(0,1.15fr) minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,1fr) 20px; }
+}
+.proses-aktif-list__kepemilikan .identitas-barang { margin:0; }
+.beranda-aktivitas .identitas-barang { margin-bottom:0; }

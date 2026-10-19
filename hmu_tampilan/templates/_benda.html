@@ -1,3 +1,4 @@
+{% import "_kepemilikan.html" as milik with context %}
 {# ── Satu bentuk kartu, dua kepadatan ──
    Beranda dan Sedang berjalan memuat benda yang SAMA. Kalau masing-masing
    punya salinan markup-nya sendiri, cepat atau lambat keduanya berbeda isi —
@@ -20,6 +21,7 @@
 {%- endmacro %}
 
 {% macro penuh(b) -%}
+  {{ milik.penanda(b) }}
   <div class="benda__judul">
     <span>{{ b.judul or b.kode }}</span>
     {% if b.utama %}
@@ -142,6 +144,7 @@
 {%- endmacro %}
 
 {% macro padat(b) -%}
+  {{ milik.penanda(b) }}
   <div class="padat__atas">
     <span class="padat__nama">{{ b.judul or b.kode }}</span>
     {% if b.utama %}
@@ -169,7 +172,7 @@
     <small class="antrian-tabel__kode">{{ b.tiket_kode or "—" }}</small>
   </span>
   <span class="antrian-tabel__sel antrian-tabel__status{% if b.status_jasa is not none %} antrian-tabel__status--{{ 'jasa' if b.status_jasa else 'pabrik' }}{% endif %}" data-label="Status">
-    {% if b.status_jasa is not none %}{{ "Jasa" if b.status_jasa else "Bukan jasa" }}{% else %}—{% endif %}
+    {{ milik.penanda(b) }}
   </span>
   <span class="antrian-tabel__sel" data-label="Komoditas">{{ b.komoditas or "—" }}</span>
   <span class="antrian-tabel__sel" data-label="Nopol / Supir">{{ b.kendaraan or "—" }}</span>
@@ -184,7 +187,7 @@
   </span>
   <span class="antrian-tabel__sel" data-label="Kode proses">{{ b.kode }}</span>
   <span class="antrian-tabel__sel antrian-tabel__status antrian-tabel__status--{{ 'jasa' if b.jasa_id is not none else 'pabrik' }}" data-label="Layanan">
-    {{ "Jasa" if b.jasa_id is not none else "Pabrik" }}
+    {{ milik.penanda(b) }}
   </span>
   <span class="antrian-tabel__sel antrian-tabel__berat" data-label="Berat siap packing">
     {% if b.utama %}{{ b.utama[0] }}<small> {{ b.utama[1] }}</small>{% else %}—{% endif %}
@@ -238,7 +241,7 @@
      Menyaring dengan membaca innerText berarti ikut membaca label, satuan,
      dan kepingan fase — lalu mengetik "kg" menampilkan semuanya. #}
   {% macro tanda(b) -%}
- data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi ~ ' ' ~ (b.tiket_kode or '') ~ ' ' ~ (b.komoditas or '') ~ ' ' ~ (b.kendaraan or '') ~ ' ' ~ ('jasa' if b.status_jasa else 'bukan jasa' if b.status_jasa is not none else ''))|lower }}" data-sup="{{ b.judul or '' }}"
+ data-konteks="{{ milik.konteks(b) }}" data-nilai="{{ b.nilai or b.kode }}" data-kepemilikan="{{ b.kepemilikan|default('periksa', true) }}" data-pemilik="{{ b.pemilik_tampil or '' }}" data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ b.isi ~ ' ' ~ (b.tiket_kode or '') ~ ' ' ~ (b.komoditas or '') ~ ' ' ~ (b.kendaraan or '') ~ ' ' ~ ('jasa' if b.status_jasa else 'bukan jasa' if b.status_jasa is not none else ''))|lower }}" data-sup="{{ b.judul or '' }}"
   {%- endmacro %}
   <div data-blok{% if tabel %} class="antrian-listview antrian-listview--tabel tabel-standar{% if tabel == 'packing' %} antrian-listview--tabel-packing{% endif %}"{% elif listview %} class="antrian-listview daftar-standar"{% else %} class="daftar-standar"{% endif %}>
     <span class="lbl">{{ judul }} · <span data-jumlah>{{ daftar|length }}</span></span>

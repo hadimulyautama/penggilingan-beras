@@ -22,6 +22,10 @@
 {% block judul %}Antrian tunggu{% endblock %}
 {% block isi %}
 {% import "_benda.html" as benda with context %}
+{% import "_kepemilikan.html" as milik with context %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set menunggu = menunggu|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set berjalan = berjalan|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+
 {# `with context` WAJIB: makro di berkas itu membaca `VIEW` untuk memutuskan
    apakah menyebut katalog "Catat pekerjaan lain". Tanpa itu `VIEW` jadi
    Undefined, `Undefined not in (…)` bernilai True, dan operator diajak ke
@@ -42,6 +46,7 @@
    keadaan bendanya, dan yang keadaannya cuma punya satu tindakan langsung
    membuka tindakan itu. #}
 {% set semua = menunggu + berjalan %}
+{{ milik.saring() }}
 
 {{ op.intro("PEKERJAAN OPERASIONAL", "Antrian tunggu",
   "Pilih bahan atau pekerjaan yang siap ditangani. Buka kartunya untuk melihat rincian dan mencatat langkah berikutnya.",
@@ -69,11 +74,11 @@
 {% set MENUNGGU_PER_GRUP = MENUNGGU_PER_GRUP|default([], true) %}
 {% if GRUP_PIL|length > 1 %}
   <div class="saring saring--antrean">
-    <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/aksi">Semua
+    <a class="pil{{ ' pil--on' if not GRUP_KINI }}" href="/aksi{{ '?kepemilikan=' ~ request.query_params.get('kepemilikan') if request and request.query_params.get('kepemilikan') in ('jasa', 'pabrik') else '' }}">Semua
       <span class="pil__jml">{{ GRUP_TOTAL }}</span></a>
     {% for kunci, nama, jml in GRUP_PIL %}
       <a class="pil{{ ' pil--on' if GRUP_KINI == kunci }}"
-         href="/aksi?grup={{ kunci }}">{{ nama }}
+         href="/aksi?grup={{ kunci }}{{ '&kepemilikan=' ~ request.query_params.get('kepemilikan') if request and request.query_params.get('kepemilikan') in ('jasa', 'pabrik') else '' }}">{{ nama }}
         <span class="pil__jml">{{ jml }}</span></a>
     {% endfor %}
   </div>
@@ -141,6 +146,7 @@
 {% elif not GRUP_KINI and MENUNGGU_PER_GRUP %}
   <div class="antrian-semua-grup">
     {% for kunci, nama, daftar_grup in MENUNGGU_PER_GRUP %}
+      {% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set daftar_grup = daftar_grup|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
       {% if daftar_grup %}
         {% set tipe_tabel = "packing" if kunci in ("packing", "packing_jasa") else ("bahan" if kunci == "bahan" else false) %}
         {{ benda.blok(nama, daftar_grup, listview=True, tabel=tipe_tabel) }}

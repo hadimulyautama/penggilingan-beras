@@ -1,0 +1,20 @@
+{% macro penanda(b) -%}
+{% set jenis = b.kepemilikan|default('periksa', true) %}
+<span class="identitas-barang" data-identitas="{{ jenis }}">
+  <span class="identitas-barang__label identitas-barang__label--{{ jenis }}">{{ {'jasa':'Jasa', 'pabrik':'Milik pabrik', 'campuran':'Jasa & milik pabrik'}.get(jenis, 'Kepemilikan perlu diperiksa') }}</span>
+  {% if b.pemilik_tampil %}<span class="identitas-barang__pemilik">{{ b.pemilik_tampil }}</span>{% elif jenis == 'jasa' %}<span class="identitas-barang__pemilik">Pemilik belum tercatat</span>{% endif %}
+</span>
+{%- endmacro %}
+
+{% macro saring() -%}
+{% if request %}
+<nav class="saring saring-kepemilikan" aria-label="Saring kepemilikan">
+{% set kini = request.query_params.get('kepemilikan', '') %}
+{% for nilai, label in [('', 'Semua'), ('jasa', 'Jasa'), ('pabrik', 'Milik pabrik')] %}
+<a class="pil{{ ' pil--on' if kini == nilai }}" {% if kini == nilai %}aria-current="true"{% endif %} href="{{ request.url.remove_query_params(['buka', 'nilai', 'kepemilikan']).include_query_params(kepemilikan=nilai) }}">{{ label }}</a>
+{% endfor %}
+</nav>
+{% endif %}
+{%- endmacro %}
+
+{% macro konteks(b) -%}{{ {'jasa':'Jasa', 'pabrik':'Milik pabrik', 'campuran':'Jasa & milik pabrik'}.get(b.kepemilikan|default('periksa', true), 'Kepemilikan perlu diperiksa') }}{% if b.pemilik_tampil %} · {{ b.pemilik_tampil }}{% endif %} · {{ b.kode or b.judul }}{%- endmacro %}

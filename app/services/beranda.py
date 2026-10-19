@@ -84,7 +84,8 @@ async def perhatian(db, berjalan: list[Baris]) -> list[dict]:
             judul = b.get("judul") if isinstance(b, dict) else b.judul
             kode = b.get("kode") if isinstance(b, dict) else b.kode
             keluar.append({"judul": f"{judul} — {kode}", "ket": nota,
-                           "href": f"/gudang/{gid}" if gid else "/berjalan", "gudang": gid})
+                           "href": f"/gudang/{gid}" if gid else "/berjalan", "gudang": gid,
+                           "duplikat_proses": True})
 
     tump = float(await hitung_stok_tumpukan(db))
     maks = float(settings.g2_tumpukan_maks_kg or 0)

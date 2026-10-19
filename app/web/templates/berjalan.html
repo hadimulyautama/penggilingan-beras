@@ -11,6 +11,10 @@
 {# `with context` wajib: `lama` datang dari rute, bukan global env — tanpa
    itu macro-nya melihatnya sebagai undefined dan waktu berjalan hilang diam-diam. #}
 {% import "_benda.html" as benda with context %}
+{% import "_kepemilikan.html" as milik with context %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set berjalan = berjalan|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+{% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set transit = transit|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
+
 
 {# ── Penyaring per gudang ──
    Hanya untuk view yang memegang LEBIH DARI SATU gudang: operator sudah
@@ -26,6 +30,7 @@
   "Pantau mesin, proses yang masih aktif, dan bahan yang sudah ditempatkan menunggu giliran. Buka kartu untuk memperbarui atau menyelesaikan pekerjaan.",
   [("⚙", berjalan|length, "Proses aktif"), ("↔", transit|length, "Bahan menunggu giliran"), ("▦", (berjalan|length) + (transit|length), "Total kartu pekerjaan")],
   ["Pilih kartu", "Pantau proses", "Catat pembaruan", "Selesaikan pekerjaan"], ringkas=true) }}
+{{ milik.saring() }}
 {{ saring.pil_gudang("/berjalan", SARING_GUDANG, gudang) }}
 
 {% if not berjalan and not transit %}
@@ -50,11 +55,12 @@
 <section data-blok aria-label="Proses aktif">
   <span class="lbl">Proses aktif · <span data-jumlah>{{ berjalan|length }}</span></span>
   <div class="proses-aktif-list tabel-standar daftar-standar">
-    <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
+    <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Kepemilikan</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
   {% for b in berjalan %}
     <a class="proses-aktif-list__row" href="{{ alamat_detail_proses(b) or '/berjalan' }}"
        data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
       <span><strong>{{ b.kode }}</strong><small>{{ b.judul }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
+      <span class="proses-aktif-list__kepemilikan">{{ milik.penanda(b) }}</span>
       <span><span class="riwayat-status {{ 'riwayat-status--wait' if b.nota_jenis == 'hati' else 'riwayat-status--done' }}">{{ b.nota if b.nota_jenis == 'hati' else b.keadaan }}</span><small>Mulai {{ b.sejak|jam('%d/%m · %H:%M') or 'belum tercatat' }}</small></span>
       <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small></span>
       <span aria-hidden="true">›</span>
