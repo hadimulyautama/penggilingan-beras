@@ -4,6 +4,7 @@
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% import "_kepemilikan.html" as milik with context %}
 {% import "_proses_visual.html" as visual with context %}
+{% from "_bahan_silo.html" import bahan_silo %}
 {% block judul %}Detail {{ d.judul }}{% endblock %}
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
@@ -66,9 +67,11 @@
       <div class="proses-detail__catatan" id="catatan-proses">
       {% for bagian in d.bagian %}
         <section class="riwayat-detail__card" id="{{ bagian.parameter or 'bagian-' ~ loop.index }}">
-          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{{ bagian.jumlah }} catatan</span></div>
+          <div class="proses-detail__judul"><h2>{{ bagian.judul }}</h2><span>{{ bagian.jumlah }} {{ "pemakaian silo" if bagian.kelompok_silo is defined else "catatan" }}</span></div>
           {% if bagian.keterangan %}<p class="bantu">{{ bagian.keterangan }}</p>{% endif %}
-          {% if bagian.baris %}
+          {% if bagian.kelompok_silo is defined %}
+          {{ bahan_silo(bagian.kelompok_silo) }}
+          {% elif bagian.baris %}
           <div class="tabel-standar proses-detail__tabel"><table class="tabel-standar" data-ponsel="rincian" aria-label="{{ bagian.judul }}">
             <thead><tr>{% for label in bagian.kolom %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
             <tbody>{% for baris in bagian.baris %}<tr>{% for nilai in baris %}{% if loop.first %}<th scope="row">{{ nilai }}</th>{% else %}<td data-label="{{ bagian.kolom[loop.index0] }}">{{ nilai }}</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>

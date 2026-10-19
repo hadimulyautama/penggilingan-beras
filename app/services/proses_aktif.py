@@ -48,6 +48,24 @@ def _bagian(judul, kolom, baris, *, keterangan=""):
                 jumlah=len(baris), halaman=1, halaman_total=1, parameter=None)
 
 
+def kelompok_bahan_silo(rows):
+    """Pertahankan satu kelompok per pemakaian; jangan gabung nama silo ulang."""
+    hasil = []
+    for r in rows:
+        nama, berat, ket = r[:3]
+        peran = r[3] if len(r) > 3 else ""
+        if peran in ("silo", "dibebaskan"):
+            status = ("Dilepaskan pada pemakaian ini · " + ket.split(" · ", 1)[-1]
+                      if peran == "dibebaskan" else "Masih terikat proses")
+            status = status.replace("kosong, siap diisi", "sisa 0 kg")
+            hasil.append(dict(nama=nama, berat=berat, status=status,
+                              bahan=[], sumber=[]))
+        elif hasil:
+            tujuan = "bahan" if peran == "sosoh-bahan" else "sumber"
+            hasil[-1][tujuan].append(dict(nama=nama.strip(), berat=berat, ket=ket))
+    return hasil
+
+
 async def _log(db, model, fk, pid, waktu, pembuat, judul, kolom, format_baris,
                params, parameter, keterangan=""):
     jumlah = await db.scalar(select(func.count()).select_from(model).where(fk == pid))
@@ -192,8 +210,14 @@ async def rincian(db, *, jenis, model, kartu, params):
               svc._kg(s.berat_akhir_kg) if s.berat_akhir_kg is not None else "Belum dicatat",
               f"{svc._kg(s.berat_terpakai_kg)} · dilepaskan" if s.berat_akhir_kg is not None else "Masih dipakai proses"] for s, nama in silos]))
         for judul, rows in kartu.anak_grup:
-            d["bagian"].append(_bagian(judul, ["Rincian", "Berat", "Keterangan"],
-                                      [[r[0].strip(), r[1] or "—", r[2] or "—"] for r in rows]))
+            if judul == "Bahan baku masuk per silo":
+                kelompok = kelompok_bahan_silo(rows)
+                bagian = _bagian(judul, [], [])
+                bagian.update(kelompok_silo=kelompok, jumlah=len(kelompok))
+                d["bagian"].append(bagian)
+            else:
+                d["bagian"].append(_bagian(judul, ["Rincian", "Berat", "Keterangan"],
+                                          [[r[0].strip(), r[1] or "—", r[2] or "—"] for r in rows]))
         d["bagian"].append(await _log(
             db, PolishingOutputLog, PolishingOutputLog.polishing_process_id, model.id,
             PolishingOutputLog.waktu_update, PolishingOutputLog.input_by,

@@ -1,0 +1,17 @@
+{# Satu kelompok adalah satu pemakaian silo, termasuk bila namanya berulang. #}
+{% macro bahan_silo(kelompok) %}
+<p class="bantu">Jumlah masuk dihitung sekali per pemakaian silo. Rincian jenis bahan sudah termasuk di dalamnya.</p>
+<div class="bahan-silo">
+{% for g in kelompok %}
+<article class="bahan-silo__satu" aria-label="{{ g.nama }} · pemakaian {{ loop.index }}">
+  <header><h3>{{ g.nama }} <small>· pemakaian {{ loop.index }}</small></h3><strong>{{ g.berat }} masuk</strong></header>
+  <p>{{ g.status }}</p>
+  <dl>{% for b in g.bahan %}<div><dt>{{ b.nama }}</dt><dd>{{ b.berat }}</dd></div>{% endfor %}</dl>
+  {% if g.sumber %}<details><summary>Lihat asal bahan · {{ g.sumber|length }} catatan</summary>
+    <p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan jumlah masuk di atas; rincian pembagian per lot belum tersedia.</p>
+    <ul>{% for s in g.sumber %}<li>{{ s.nama }}{% if s.berat %} · berat catatan asal {{ s.berat }}{% endif %}{% if s.ket %} · {{ s.ket }}{% endif %}</li>{% endfor %}</ul>
+  </details>{% endif %}
+</article>
+{% endfor %}
+</div>
+{% endmacro %}

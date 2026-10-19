@@ -2919,3 +2919,16 @@ body .btn:disabled { opacity:1; border-style:dashed; cursor:not-allowed; }
 body .pilihan__satu--utama:active {
   background:var(--aksi-gelap); border-color:var(--aksi-gelap); color:var(--aksi-tinta);
 }
+
+/* Bahan proses: satu kelompok per pemakaian, bukan baris berat berulang. */
+.bahan-silo {display:grid;gap:1rem}
+.bahan-silo__satu {border:1px solid var(--garis);border-radius:.75rem;padding:1rem;min-width:0}
+.bahan-silo__satu header {display:flex;justify-content:space-between;align-items:baseline;gap:.5rem 1rem;flex-wrap:wrap}
+.bahan-silo__satu h3 {margin:0;font-size:1rem;overflow-wrap:anywhere}
+.bahan-silo__satu h3 small {font-size:.85rem;font-weight:400}
+.bahan-silo__satu p {margin:.5rem 0}
+.bahan-silo__satu dl {margin:.5rem 0}
+.bahan-silo__satu dl div {display:flex;justify-content:space-between;gap:1rem}
+.bahan-silo__satu dd {margin:0;font-weight:600}
+.bahan-silo__satu summary {cursor:pointer;min-height:44px;display:list-item;align-content:center}
+.bahan-silo__satu li {overflow-wrap:anywhere;margin:.5rem 0}
