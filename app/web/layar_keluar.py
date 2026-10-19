@@ -267,7 +267,7 @@ async def _nama_barang(db, baris) -> dict[int, str]:
     from sqlalchemy import select
 
     from app.models import GabahKeringLot, MillingProcess, Silo
-    from app.penggilingan.inventory.models import (PackageSize, PackagingMaterial,
+    from app.penggilingan.inventory.models import (Brand, PackageSize, PackagingMaterial,
                                                    ProductSku, RiceQualityStandard)
     from app.services.stok import jenis_produk, nama_produk
 
@@ -285,16 +285,19 @@ async def _nama_barang(db, baris) -> dict[int, str]:
                if it.rice_quality_standard_id}
 
     sku: dict[int, tuple] = {}
+    # LEFT JOIN mempertahankan barang tanpa merek. Merek nonaktif tetap
+    # dibaca karena identitas barang pada perintah lama tidak boleh hilang.
     if sku_ids:
-        for sid, kategori, bahan, ukuran in (await db.execute(
+        for sid, kategori, bahan, ukuran, merek in (await db.execute(
             select(ProductSku.id, ProductSku.kategori, PackagingMaterial.nama,
-                   PackageSize.ukuran_kg)
+                   PackageSize.ukuran_kg, Brand.nama)
             .join(PackagingMaterial,
                   PackagingMaterial.id == ProductSku.packaging_material_id)
             .join(PackageSize, PackageSize.id == ProductSku.package_size_id)
+            .outerjoin(Brand, Brand.id == ProductSku.brand_id)
             .where(ProductSku.id.in_(sku_ids))
         )).all():
-            sku[sid] = (kategori, bahan, int(ukuran))
+            sku[sid] = (kategori, bahan, int(ukuran), merek)
 
     mutu: dict[int, str] = {}
     if std_ids:
@@ -339,14 +342,14 @@ async def _nama_barang(db, baris) -> dict[int, str]:
             if k is None:
                 keluar[it.id] = "Barang tidak dikenali (data produk tidak ditemukan)"
                 continue
-            kategori, bahan, ukuran = k
+            kategori, bahan, ukuran, merek = k
             j = jenis_produk(kategori, mutu.get(it.rice_quality_standard_id))
             # Spasi TAK-PUTUS antara angka dan satuannya: nama barang panjang
-            # ("Beras Medium · Karung biasa 50 kg") melipat di 375px, dan tanpa
+            # ("Beras Medium · Pulenesia · Karung biasa 50 kg") melipat di 375px, dan tanpa
             # ini yang turun ke baris berikutnya cuma kata "kg" — satu suku
             # kata menggantung sendirian, rupa yang sudah dikeluhkan pemilik di
             # kartu Stok Produk.
-            keluar[it.id] = f"{nama_produk(j)} · {bahan} {ukuran}\u00a0kg"
+            keluar[it.id] = f"{nama_produk(j)} · {merek or 'Tanpa merek'} · {bahan} {ukuran}\u00a0kg"
     return keluar
 
 

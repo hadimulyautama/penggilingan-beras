@@ -2561,3 +2561,44 @@ async def test_borang_verifikasi_memakai_tiket_armada_tanpa_kode_ulang(pg, gudan
     assert [x['name'] for x in aksi['fields']] == ['perintah', 'sebab_selisih']
     assert 'dipakai otomatis' in aksi['hint']
     assert 'Timbang kedua harus selesai' in aksi['hint']
+
+
+@pytest.mark.parametrize('merek,aktif', [('Pulenesia', True), ('Merek lama', False), (None, True)])
+async def test_merek_muatan_sama_di_daftar_dan_detail(pg, gudang, merek, aktif):
+    from sqlalchemy import select
+    from app.penggilingan.inventory.models import Brand, ProductSku
+    from app.web.layar_keluar import _nama_barang
+    from app.services import barang_keluar as bk
+    from pathlib import Path
+    async with pg() as db:
+        sku = await db.get(ProductSku, gudang['sku'])
+        if merek:
+            brand = await db.scalar(select(Brand).where(Brand.nama == merek))
+            if brand is None:
+                brand = Brand(nama=merek)
+                db.add(brand)
+            brand.aktif = aktif
+            await db.flush()
+            sku.brand_id = brand.id
+        else:
+            sku.brand_id = None
+        await db.commit()
+    r = await _perintah(pg, gudang, karung=10)
+    stok_lama = await _stok(pg, gudang)
+    async with pg() as db:
+        baris = await bk.daftar(db, transaksi_id=r.rec.id)
+        nama = await _nama_barang(db, baris)
+        assert len(nama) == 1
+        assert (merek or 'Tanpa merek') in next(iter(nama.values()))
+    c = await _klien(pg, gudang['adm'], 'uji_merek_muatan')
+    async with c:
+        daftar = await c.get('/barang-keluar')
+        detail = await c.get(f'/barang-keluar/{r.rec.id}')
+    harapan = f"Beras Medium · {merek or 'Tanpa merek'} · Karung biasa 25\u00a0kg"
+    assert harapan in daftar.text
+    assert harapan in detail.text
+    assert detail.text.count(harapan) == 1
+    assert await _stok(pg, gudang) == stok_lama
+    if merek == 'Pulenesia':
+        Path('/tmp/keluar-merek-daftar.html').write_text(daftar.text)
+        Path('/tmp/keluar-merek-detail.html').write_text(detail.text)
