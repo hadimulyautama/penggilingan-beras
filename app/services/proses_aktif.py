@@ -48,7 +48,7 @@ def _bagian(judul, kolom, baris, *, keterangan=""):
                 jumlah=len(baris), halaman=1, halaman_total=1, parameter=None)
 
 
-def kelompok_bahan_silo(rows):
+def kelompok_bahan_silo(rows, pemakaian=()):
     """Pertahankan satu kelompok per pemakaian; jangan gabung nama silo ulang."""
     hasil = []
     for r in rows:
@@ -63,6 +63,20 @@ def kelompok_bahan_silo(rows):
         elif hasil:
             tujuan = "bahan" if peran == "sosoh-bahan" else "sumber"
             hasil[-1][tujuan].append(dict(nama=nama.strip(), berat=berat, ket=ket))
+    if pemakaian:
+        # Urutan kedua sumber wajib mengikuti ID pemakaian, bukan nama silo.
+        # Nama yang sama dapat muncul lagi dengan isi serta sisa berbeda.
+        if len(hasil) != len(pemakaian):
+            raise ValueError("Rincian pemakaian silo tidak selaras")
+        for g, (u, nama) in zip(hasil, pemakaian):
+            if g["nama"] != nama:
+                raise ValueError("Urutan pemakaian silo tidak selaras")
+            g["angka"] = [
+                ("Awal", svc._kg(u.berat_awal_kg)),
+                ("Tambahan", svc._kg(u.berat_masuk_kg)),
+                ("Sisa akhir", svc._kg(u.berat_akhir_kg) if u.berat_akhir_kg is not None else "Belum dicatat"),
+                ("Terpakai", svc._kg(u.berat_terpakai_kg) if u.berat_akhir_kg is not None else "Belum final"),
+            ]
     return hasil
 
 
@@ -205,14 +219,10 @@ async def rincian(db, *, jenis, model, kartu, params):
         d["fakta"] += kartu.fakta
         silos = (await db.execute(select(PolishingSiloUsage, Silo.nama_silo).join(Silo, Silo.id == PolishingSiloUsage.silo_id)
                  .where(PolishingSiloUsage.polishing_process_id == model.id).order_by(PolishingSiloUsage.id))).all()
-        d["bagian"].append(_bagian("Pemakaian silo", ["Silo", "Awal", "Tambahan", "Sisa akhir", "Terpakai / status"],
-            [[nama, svc._kg(s.berat_awal_kg), svc._kg(s.berat_masuk_kg),
-              svc._kg(s.berat_akhir_kg) if s.berat_akhir_kg is not None else "Belum dicatat",
-              f"{svc._kg(s.berat_terpakai_kg)} · dilepaskan" if s.berat_akhir_kg is not None else "Masih dipakai proses"] for s, nama in silos]))
         for judul, rows in kartu.anak_grup:
             if judul == "Bahan baku masuk per silo":
-                kelompok = kelompok_bahan_silo(rows)
-                bagian = _bagian(judul, [], [])
+                kelompok = kelompok_bahan_silo(rows, silos)
+                bagian = _bagian("Bahan & pemakaian silo", [], [])
                 bagian.update(kelompok_silo=kelompok, jumlah=len(kelompok))
                 d["bagian"].append(bagian)
             else:

@@ -2932,3 +2932,9 @@ body .pilihan__satu--utama:active {
 .bahan-silo__satu dd {margin:0;font-weight:600}
 .bahan-silo__satu summary {cursor:pointer;min-height:44px;display:list-item;align-content:center}
 .bahan-silo__satu li {overflow-wrap:anywhere;margin:.5rem 0}
+
+.bahan-silo__angka {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;padding:.5rem 0;border-bottom:1px solid var(--garis)}
+.bahan-silo__satu .bahan-silo__angka div {display:block}
+.bahan-silo__angka dt {font-size:.85rem}
+.bahan-silo__angka dd {overflow-wrap:anywhere}
+@media(min-width:700px) {.bahan-silo__angka {grid-template-columns:repeat(4,minmax(0,1fr))}}

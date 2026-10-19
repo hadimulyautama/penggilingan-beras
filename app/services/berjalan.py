@@ -2589,6 +2589,7 @@ async def _kartu_penyosohan_g2(db: AsyncSession, asal_silo, *,
         for u in (await db.execute(
             select(PolishingSiloUsage)
             .where(PolishingSiloUsage.polishing_process_id == pr.id)
+            .order_by(PolishingSiloUsage.id)
         )).scalars().all():
             awal_u = float(u.berat_awal_kg or 0)
             masuk_u = float(u.berat_masuk_kg or 0)

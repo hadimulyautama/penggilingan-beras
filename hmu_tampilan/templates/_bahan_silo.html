@@ -6,6 +6,7 @@
 <article class="bahan-silo__satu" aria-label="{{ g.nama }} · pemakaian {{ loop.index }}">
   <header><h3>{{ g.nama }} <small>· pemakaian {{ loop.index }}</small></h3><strong>{{ g.berat }} masuk</strong></header>
   <p>{{ g.status }}</p>
+  {% if g.angka %}<dl class="bahan-silo__angka">{% for label, nilai in g.angka %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>{% endif %}
   <dl>{% for b in g.bahan %}<div><dt>{{ b.nama }}</dt><dd>{{ b.berat }}</dd></div>{% endfor %}</dl>
   {% if g.sumber %}<details><summary>Lihat asal bahan · {{ g.sumber|length }} catatan</summary>
     <p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan jumlah masuk di atas; rincian pembagian per lot belum tersedia.</p>
