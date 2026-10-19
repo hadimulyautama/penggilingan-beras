@@ -1497,7 +1497,7 @@ class VerifikasiKeluarReq(BaseModel):
 @router.post("/actions/verifikasi-keluar")
 async def act_verifikasi_keluar(req: VerifikasiKeluarReq,
                                 user: User = Depends(pengguna_aksi)) -> dict:
-    """LANGKAH 3 — Admin menutup sambil menempelkan kode timbang keluarnya."""
+    """LANGKAH 3 — Admin menutup memakai tiket armada yang sudah dipilih."""
     wajib(can_see_financials(user))
     tid = None
     if (req.tiket or "").strip():
@@ -1946,34 +1946,12 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
              ]},
             {"id": "verifikasi_keluar", "label": "\u2705 Verifikasi barang keluar",
              "post": "/api/actions/verifikasi-keluar",
-             "hint": "Tempelkan kode timbang keluarnya. Beda bobot tidak "
-                     "menolak apa pun — selisihnya disebutkan supaya ditelusuri. "
-                     "Kalau bedanya BESAR, sebabnya wajib ditulis di kotak "
-                     "paling bawah; kartunya lalu ditandai.",
+             "hint": "Tiket armada yang sudah dipilih dipakai otomatis; tidak perlu memasukkan kode timbang lagi. "
+                     "Timbang kedua harus selesai di Pos Timbang. Jika selisih bobot besar, tulis sebabnya.",
              "fields": [
                  {"name": "perintah", "label": "Muatan yang menunggu verifikasi",
                   "type": "remote", "source": "/api/actions/keluar-dimuat",
                   "kosong": "Tidak ada muatan yang menunggu diverifikasi."},
-                 # `induk` — keputusan pemilik 5 Oktober 2026: muatan di bawah
-                 # `barang_keluar.MUATAN_KECIL_TANPA_TIKET_KG` tak perlu tiket
-                 # timbang keluar, jadi medan ini TAK DITAWARKAN untuk muatan
-                 # sekecil itu (`/api/actions/timbang-keluar-aktif?induk=`
-                 # menjawab daftar kosong, dan kalimat `kosong` di bawah
-                 # berdiri sebagai keterangannya — BUKAN larangan, tiket tetap
-                 # bisa ditautkan kalau kebetulan ada).
-                 #
-                 # ⚠ Daftar ini baru termuat SESUDAH "perintah" dipilih — dan
-                 # kartu yang membuka borang ini lewat `?buka=&nilai=` mengisi
-                 # "perintah" tanpa memicu event `change` apa pun (lihat
-                 # perbaikan `isiDariBaris` di `aksi.js`). Tanpa perbaikan itu
-                 # medan ini akan diam kosong selamanya pada jalur BUKAAN
-                 # PALING UMUM — kartu "Verifikasi & tutup" per baris.
-                 {"name": "tiket", "label": "Kode timbang keluar", "type": "remote",
-                  "optional": True, "induk": "perintah",
-                  "source": "/api/actions/timbang-keluar-aktif",
-                  "kosong": "Tidak ada tiket timbang keluar untuk ditautkan — "
-                           "kalau muatan ini di bawah 200 kg, tiket timbang "
-                           "memang tidak diperlukan."},
                  # OPSIONAL di borang, WAJIB di layanan — dan hanya ketika
                  # selisihnya melewati ambang. `aksi.js` tak bisa mewajibkan
                  # satu medan menurut isi medan lain, dan memaksa medan ini

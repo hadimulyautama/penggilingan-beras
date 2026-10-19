@@ -71,7 +71,7 @@ async def _cocokkan_pengiriman_tiket(db, tid: int):
     nopol = _kunci_nopol(tiket["nomor_polisi"])
     pihak = _kunci_teks(tiket["pihak"])
     if not nopol or not pihak:
-        raise HTTPException(status_code=409, detail="Tiket belum memiliki pelanggan dan nomor polisi untuk pencocokan.")
+        raise HTTPException(status_code=409, detail="Pilih tiket armada pada perintah barang keluar di Produksi; pelanggan mengikuti perintah dan plat mengikuti tiket.")
 
     from app.models import OutgoingRecord
     dipilih = (await db.execute(select(OutgoingRecord).where(

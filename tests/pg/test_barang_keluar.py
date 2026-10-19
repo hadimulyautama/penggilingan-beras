@@ -634,28 +634,16 @@ async def test_tiket_tetap_bisa_ditautkan_ke_muatan_kecil_bukan_larangan(pg, gud
     assert rec.timbangan_transaksi_id == tid
 
 
-async def test_medan_tiket_bergantung_perintah_dan_js_memicu_perubahannya():
-    """⚠⚠ Prasyarat teknis untuk ketiga uji di atas: tanpa `induk` di
-    katalog, medan tiket selalu memuat SELURUH tiket tanpa peduli muatan
-    mana yang dipilih — ambang 200 kg tak akan pernah berarti apa pun di
-    borang sungguhan. Dan tanpa `dispatchEvent` di `isiDariBaris`, medan
-    `induk` APA PUN (termasuk yang sudah ada sebelum ini — "silo" pada
-    "Selesai penyosohan") diam kosong selamanya tepat pada jalur bukaan
-    paling umum: kartu per-baris yang mengisi induknya lewat `?buka=&nilai=`.
-    """
-    import inspect
+async def test_pilihan_armada_bergantung_perintah_dan_js_memicu_perubahannya():
+    """Armada dipilih sekali pada perintah; verifikasi tidak memilih ulang."""
     import pathlib
-
-    from app.web import aksi_inventory
-
-    src = inspect.getsource(aksi_inventory)
-    i = src.index('"name": "tiket"')
-    blok = src[i:i + 300]
-    assert '"induk": "perintah"' in blok
-
+    from app.web.aksi_inventory import spesifikasi
+    aksi = next(x for x in spesifikasi(g2=True, fin=True) if x['id'] == 'pilih_tiket_armada')
+    medan = next(x for x in aksi['fields'] if x['name'] == 'tiket_armada')
+    assert medan['induk'] == 'perintah'
     js = (pathlib.Path(__file__).resolve().parents[2]
-         / "hmu_tampilan/static/aksi.js").read_text()
-    j = js.index("function isiDariBaris")
+          / 'hmu_tampilan/static/aksi.js').read_text()
+    j = js.index('function isiDariBaris')
     assert 'dispatchEvent(new Event("change"' in js[j:j + 1200]
 
 
@@ -2456,6 +2444,12 @@ async def test_perintah_sebelum_armada_tiket_dipilih_setelahnya(pg,gudang):
         await bk.muat_semua(db,user=await db.get(User,gudang['op']),rec_id=rec.id)
         _,cocok,_=await _cocokkan_pengiriman_tiket(db,tid)
         assert cocok.id==rec.id
+        # Nama snapshot perintah boleh tertinggal setelah kontak diperbarui;
+        # identitas pelanggan tetap ditentukan ID, bukan mengharuskan ketik ulang.
+        await db.execute(text("UPDATE pelanggan SET nama_pelanggan='Nama kontak terbaru' WHERE id=:pid"), {'pid': pid})
+        await db.commit()
+        _, cocok, _ = await _cocokkan_pengiriman_tiket(db, tid)
+        assert cocok.id == rec.id
         with pytest.raises(bk.BarangKeluarError,match='timbang kedua'):
             await bk.verifikasi(db,user=u,rec_id=rec.id)
         await db.execute(text("UPDATE timbangan_transaksi SET status_tiket='SELESAI',berat_barang_kg=2500,netto_timbangan_kg=2500 WHERE id=:id"),{'id':tid})
@@ -2555,3 +2549,11 @@ async def test_riwayat_paginasi_tidak_menghilangkan_perintah_aktif(pg, gudang):
     assert "OUT-RIWAYAT-000" in kedua
     assert detail_lama.status_code == 200
     assert "Ditutup tanpa tiket timbang terkait" in detail_lama.text
+
+
+async def test_borang_verifikasi_memakai_tiket_armada_tanpa_kode_ulang(pg, gudang):
+    from app.web.aksi_inventory import spesifikasi
+    aksi = next(x for x in spesifikasi(g2=True, fin=True) if x['id'] == 'verifikasi_keluar')
+    assert [x['name'] for x in aksi['fields']] == ['perintah', 'sebab_selisih']
+    assert 'dipakai otomatis' in aksi['hint']
+    assert 'Timbang kedua harus selesai' in aksi['hint']

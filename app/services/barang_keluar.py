@@ -1240,7 +1240,7 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                      timbangan_transaksi_id: int | None = None,
                      sebab_selisih: str | None = None,
                      tanggal=None, jam=None) -> tuple[OutgoingRecord, str]:
-    """Admin menutup, sambil menempelkan kode timbang keluarnya. → (rec, catatan)
+    """Admin menutup memakai tiket armada yang sudah dipilih. → (rec, catatan)
 
     Perintah dan kedatangan armada tidak saling menunggu. Tiket boleh dipilih
     sejak timbang pertama, atau menyusul setelah perintah dibuat. Verifikasi
