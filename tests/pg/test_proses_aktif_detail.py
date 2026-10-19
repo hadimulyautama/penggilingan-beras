@@ -95,8 +95,8 @@ async def test_giling_berulang_qc_lengkap_hasil_kumulatif_dan_paginasi(pg, gilin
         r = await c.get(f"/proses-aktif/giling/{giling['kode']}")
         lebih = await c.get(f"/proses-aktif/giling/{giling['kode']}?halaman_qc=2")
     assert r.status_code == lebih.status_code == 200
-    assert 'Neraca sementara' in daftar.text
-    assert 'Neraca sementara: PK' in daftar.text
+    assert 'Rendemen sementara' in daftar.text
+    assert 'Rendemen sementara PK terhadap gabah' in daftar.text
     for kata in ["250 kg", "Nilai kualitas QC PK", "Butir kuning", "Gabah", "Merang", "21 putaran", "QC 21", "qc_giling", "halaman_qc=2", "86,67", "B1"]:
         assert kata in r.text, kata
     assert "350 kg" not in r.text

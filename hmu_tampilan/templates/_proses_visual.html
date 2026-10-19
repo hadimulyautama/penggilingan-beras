@@ -40,7 +40,9 @@
 {% set maju = b.maju|default(none) %}
 {% if j == 'pengeringan' and maju is not none %}
 <span class="proses-kemajuan"><small>Kemajuan kadar air · {{ (maju * 100)|round|int }}%</small><progress max="1" value="{{ maju }}" aria-label="Kemajuan menuju target kadar air">{{ (maju * 100)|round|int }}%</progress></span>
-{% elif j in ('giling', 'sosoh') %}
+{% elif j == 'giling' %}
+<span class="proses-kemajuan"><small>Rendemen sementara · {% if rend is not none %}{{ '%.1f'|format(rend)|replace('.', ',') }}%{% else %}belum dapat dihitung{% endif %}</small>{% if rend is not none and rend <= 100 %}<progress max="100" value="{{ [rend, 0]|max }}" aria-label="Rendemen sementara PK terhadap gabah">{{ '%.1f'|format(rend)|replace('.', ',') }}%</progress>{% elif rend is not none %}<small>Hasil melebihi bahan; periksa catatan.</small>{% endif %}</span>
+{% elif j == 'sosoh' %}
 {% set neraca = b.neraca|default(none) %}
 {% set utama = neraca.beras.persen if neraca and neraca.bisa_dihitung else rend %}
 {% set samping = neraca.samping|sum(attribute='persen') if neraca and neraca.bisa_dihitung else 0 %}
