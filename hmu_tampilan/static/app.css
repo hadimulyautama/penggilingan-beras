@@ -2883,3 +2883,22 @@ body .isi .proses-detail__label .proses-ikon { width:18px; height:18px; flex-bas
 body .isi .proses-aktif-list__row .riwayat-status {
   display:inline-block; max-width:100%; white-space:normal; overflow-wrap:anywhere;
 }
+
+/* Kontrol tetap terbaca di bawah matahari; keadaan terkunci ditandai
+   garis putus-putus dan alasan, bukan dengan memudarkan seluruh tulisan. */
+body.terik { --aksi:#254b32; --aksi-gelap:#183823; }
+body.terik .btn:not(.btn--utama):not(.btn--bahaya),
+body.terik .pilihan__satu:not(.pilihan__satu--utama) {
+  background:#fff; color:#18271c; border-color:#526858;
+}
+body.terik .pilihan__satu--utama {
+  background:#254b32; color:#fff; border-color:#254b32;
+}
+.pilihan__satu--utama .pilihan__ket { color:inherit; }
+.pilihan__satu--mati, .pilihan__satu--jalan { opacity:1; }
+body.terik .pilihan__ket { color:#354a3b; }
+body.terik .pilihan__satu--utama .pilihan__ket { color:#fff; }
+body.terik .pilihan__satu--mati .pilihan__ket { color:#704b0b; }
+.btn:focus-visible, .pilihan__satu:focus-visible {
+  outline:3px solid var(--aksi); outline-offset:3px;
+}

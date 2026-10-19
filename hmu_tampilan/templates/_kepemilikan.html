@@ -1,7 +1,9 @@
+{% macro label(b) -%}{{ {'jasa':'Jasa', 'pabrik':'Milik pabrik', 'campuran':'Jasa & milik pabrik'}.get(b.kepemilikan|default('periksa', true), 'Kepemilikan perlu diperiksa') }}{%- endmacro %}
+
 {% macro penanda(b) -%}
 {% set jenis = b.kepemilikan|default('periksa', true) %}
 <span class="identitas-barang" data-identitas="{{ jenis }}">
-  <span class="identitas-barang__label identitas-barang__label--{{ jenis }}">{{ {'jasa':'Jasa', 'pabrik':'Milik pabrik', 'campuran':'Jasa & milik pabrik'}.get(jenis, 'Kepemilikan perlu diperiksa') }}</span>
+  <span class="identitas-barang__label identitas-barang__label--{{ jenis }}">{{ label(b) }}</span>
   {% if b.pemilik_tampil %}<span class="identitas-barang__pemilik">{{ b.pemilik_tampil }}</span>{% elif jenis == 'jasa' %}<span class="identitas-barang__pemilik">Pemilik belum tercatat</span>{% endif %}
 </span>
 {%- endmacro %}

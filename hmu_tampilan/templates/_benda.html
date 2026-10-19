@@ -173,7 +173,7 @@
     <small class="antrian-tabel__kode">{{ b.tiket_kode or "—" }}</small>
   </span>
   <span class="antrian-tabel__sel antrian-tabel__status{% if b.status_jasa is not none %} antrian-tabel__status--{{ 'jasa' if b.status_jasa else 'pabrik' }}{% endif %}" data-label="Status">
-    {{ milik.penanda(b) }}
+    {{ milik.label(b) }}
   </span>
   <span class="antrian-tabel__sel" data-label="Komoditas">{{ b.komoditas or "—" }}</span>
   <span class="antrian-tabel__sel" data-label="Nopol / Supir">{{ b.kendaraan or "—" }}</span>
