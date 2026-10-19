@@ -8,6 +8,24 @@
 (function () {
   "use strict";
 
+  function perbaruiNamaBarang(sel) {
+    var baris = sel.closest(".ulang__baris");
+    if (!baris) return;
+    var nama = baris.querySelector(".ulang__nama-lengkap");
+    var satuan = baris.querySelector(".ulang__satuan");
+    var ang = baris.querySelector('[data-p-jenis="angka"]');
+    var unit = /^(bj:|[0-9]+\|)/.test(sel.value) ? "karung" : "kg";
+    if (nama) {
+      nama.textContent = sel.value && sel.selectedOptions.length ? sel.selectedOptions[0].textContent : "";
+      nama.hidden = !sel.value;
+    }
+    if (satuan) satuan.textContent = sel.value ? unit : "karung / kg";
+    if (ang) {
+      ang.setAttribute("aria-label", "Jumlah " + (sel.value ? unit : "barang"));
+      ang.inputMode = sel.value && unit === "karung" ? "numeric" : "decimal";
+    }
+  }
+
   var MENU = {};
   var DATA = null;
 
@@ -859,11 +877,12 @@
       '<select class="fld" data-p="' + esc(f.name) + '" data-p-jenis="pilih"' +
       w + ' data-label="' + esc(f.label) + '">' +
       '<option value="">memuat…</option></select>' +
-      '<input class="fld" data-p="' + esc(f.name) + '" data-p-jenis="angka"' +
+      '<p class="ulang__nama-lengkap" hidden></p>' +
+      '<label class="ulang__jumlah"><input class="fld" data-p="' + esc(f.name) + '" data-p-jenis="angka"' +
       w + ' data-label="' + esc(f.label_angka || "Jumlah") + '"' +
       ' type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*"' +
       ' autocomplete="off" enterkeyhint="next" placeholder="' +
-      esc(f.label_angka || "Jumlah") + '">' +
+      esc(f.label_angka || "Jumlah") + '"><span class="ulang__satuan">karung / kg</span></label>' +
       '<button type="button" class="ulang__buang" data-buang="1"' +
       ' aria-label="Buang baris ini" title="Buang baris ini">×</button>' +
       "</div>";
@@ -946,6 +965,8 @@
               var dipilih = sel.value;
               sel.innerHTML = opsi;
               if (dipilih) { sel.value = dipilih; }
+              perbaruiNamaBarang(sel);
+              sel.onchange = function () { perbaruiNamaBarang(sel); };
             });
           var lamaNota = $("kosong_" + f.name);
           if (!daftar.length) {
@@ -1866,7 +1887,7 @@
           function (x) { x.value = ""; });
         wadah.appendChild(salin);
         var pilihBaru = salin.querySelector("select");
-        if (pilihBaru) { pilihBaru.focus(); }
+        if (pilihBaru) { perbaruiNamaBarang(pilihBaru); pilihBaru.onchange = function () { perbaruiNamaBarang(pilihBaru); }; pilihBaru.focus(); }
         if (barisAda.length + 1 >= maksP) tambah.hidden = true;
         return;
       }

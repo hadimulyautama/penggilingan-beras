@@ -3071,3 +3071,12 @@ body .pilihan__satu--utama:active {
 
 .kirim-detail__tambah {display:flex;justify-content:center;margin-top:12px}
 .kirim-detail__tambah .btn {min-height:44px;width:auto;padding-inline:24px}
+
+/* Identitas pilihan tidak dipotong oleh lebar select ponsel. */
+.ulang--pasangan .ulang__baris {grid-template-columns:minmax(0,1fr) var(--sentuh);padding:12px;border:1px solid var(--garis);border-radius:12px;gap:8px}
+.ulang--pasangan .ulang__baris > select {grid-column:1 / -1;width:100%}
+.ulang__nama-lengkap {grid-column:1 / -1;margin:0;overflow-wrap:anywhere;font-size:15px;line-height:1.5;font-weight:600}
+.ulang__nama-lengkap[hidden] {display:none}
+.ulang__jumlah {display:flex;align-items:center;gap:10px;min-width:0;margin:0}
+.ulang__jumlah .fld {width:100%;min-width:0;flex:1}
+.ulang__satuan {flex:0 0 auto;font-size:15px;font-weight:600}

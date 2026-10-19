@@ -866,7 +866,7 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
     cuma pintunya. Laporan operator, 30 September 2026.
     """
     wajib(can_see_financials(user))
-    from app.services.stok import barang_jadi_g2, pk_gudang1, stok_produk
+    from app.services.stok import barang_jadi_g2, pk_gudang1, stok_produk, nama_produk
 
     out: list[dict] = []
     async with SessionLocal() as db:
@@ -912,9 +912,13 @@ async def barang_bisa_keluar(user: User = Depends(pengguna_aksi)) -> list[dict]:
                 continue
             if not k.get("karung"):
                 continue
+            nama = nama_produk(k["jenis"])
+            _, pemisah, merek = k["nama"].partition(" · ")
+            if pemisah:
+                nama += f" · {merek}"
             out.append({
                 "value": f"bj:{k['sku_id']}|{k['std_id'] or ''}",
-                "label": f"{k['nama']} · {k['kemasan']} · {k['karung']} karung"})
+                "label": f"{nama} · {k['kemasan']} · {k['karung']} karung"})
         for jenis in ("broken", "menir", "reject", "bekatul"):
             kartu = kartu_produk.get(jenis)
             total = float(kartu.sisa_kg) if kartu else 0.0
