@@ -2974,3 +2974,76 @@ body .pilihan__satu--utama:active {
  .bahan-silo__rincian-fila > td:before {display:none}
 }
 .bahan-silo__pemakaian h4 {margin:.5rem 0}
+
+/* Detail perintah: angka perintah, muatan aktual, dan timbang punya label
+   sendiri. Kartu antrean berhuruf mono kecil tidak dipakai untuk membaca detail. */
+.kirim-detail {font-family:var(--teks);color:var(--tinta);min-width:0}
+.kirim-detail__kembali {display:inline-flex;align-items:center;min-height:44px;color:var(--tinta);text-decoration:underline;text-underline-offset:4px;font-size:14px}
+.kirim-detail__kepala {padding:0 0 18px;border-bottom:1px solid var(--garis)}
+.kirim-detail__judul {display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.kirim-detail__judul h1 {margin:4px 0;font-size:24px;line-height:1.25;overflow-wrap:anywhere}
+.kirim-detail__label {margin:0;font-size:14px;color:var(--redup)}
+.kirim-detail__penanda {display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
+.kirim-detail__status {font-weight:700;border:1px solid var(--garis);border-radius:6px;padding:5px 9px;background:var(--panel-2)}
+.kirim-detail__identitas {display:flex;flex-wrap:wrap;gap:12px 40px;margin:16px 0 0}
+.kirim-detail dt {color:var(--redup);font-size:14px;line-height:1.5}
+.kirim-detail dd {margin:3px 0 0;overflow-wrap:anywhere}
+.kirim-detail__identitas dd {font-weight:600}
+.kirim-detail__aksi {display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.kirim-detail__aksi .btn {width:auto;flex:0 1 auto}
+.kirim-detail__total {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:16px 0;margin:0}
+.kirim-detail__total dd {font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.kirim-detail small {font-size:13px;font-weight:400;color:var(--redup)}
+.kirim-detail__bagian {min-width:0;padding:20px;background:var(--panel);border:1px solid var(--garis);border-radius:12px}
+.kirim-detail__bagian h2 {font-family:var(--teks);font-size:18px;line-height:1.4;margin:0 0 14px}
+.kirim-detail__baris-judul {display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.kirim-detail__baris-judul > span {color:var(--redup);font-size:14px}
+.kirim-detail__tabel {border-collapse:collapse;width:100%;font-family:var(--teks);font-size:15px;line-height:1.5}
+.kirim-detail__tabel th,.kirim-detail__tabel td {padding:12px 10px;border-bottom:1px solid var(--garis);vertical-align:top}
+.kirim-detail__tabel thead th {font-size:13px;color:var(--redup);text-align:right;background:var(--panel-2);font-weight:600}
+.kirim-detail__tabel thead th:first-child {text-align:left}
+.kirim-detail__tabel tbody th {font-weight:600;text-align:left;overflow-wrap:anywhere;width:45%}
+.kirim-detail__tabel td {text-align:right;font-variant-numeric:tabular-nums}
+.kirim-detail__tabel td strong {display:block;white-space:nowrap;font-weight:600}
+.kirim-detail__tabel td > small {display:block;margin-top:3px}
+.kirim-detail__nomor {font-weight:400;color:var(--redup);margin-right:5px}
+.kirim-detail__label-ponsel {display:none}
+.kirim-detail__grid {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;align-items:start}
+.kirim-detail__catatan {margin:12px 0 0;font-size:14px;line-height:1.6;color:var(--tinta-2);overflow-wrap:anywhere}
+.kirim-detail__tiket {font-size:14px;margin:0 0 12px;overflow-wrap:anywhere;font-weight:600}
+.kirim-detail__tiket span {font-weight:400;color:var(--redup)}
+.kirim-detail__fakta {margin:0;display:grid;gap:0}
+.kirim-detail__fakta > div {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--garis-2)}
+.kirim-detail__fakta dd {text-align:right;font-size:15px;font-weight:600;line-height:1.5;margin:0}
+.kirim-detail__fakta small {display:block;margin-top:3px}
+.kirim-detail__rincian summary {display:flex;align-items:center;cursor:pointer;min-height:44px;font-size:14px;gap:8px;color:var(--tinta);font-weight:600;margin-top:6px;list-style:none}
+.kirim-detail__rincian summary::before {content:'▸'}
+.kirim-detail__rincian[open] summary::before {content:'▾'}
+.kirim-detail__jejak {list-style:none;margin:0;padding:0}
+.kirim-detail__jejak li {display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:10px 0;border-bottom:1px solid var(--garis-2);font-size:14px}
+.kirim-detail__jejak strong {grid-column:1;font-size:14px}
+.kirim-detail__jejak span {grid-column:1;color:var(--tinta-2);overflow-wrap:anywhere}
+.kirim-detail__jejak time {grid-column:2;grid-row:1 / span 2;align-self:center;color:var(--redup);white-space:nowrap;font-size:13px}
+@media(max-width:700px) {
+  .kirim-detail__kepala {padding-bottom:12px}
+  .kirim-detail__judul {gap:8px}
+  .kirim-detail__judul h1 {font-size:22px}
+  .kirim-detail__identitas {gap:10px 24px;margin-top:12px}
+  .kirim-detail__penanda {font-size:13px}
+  .kirim-detail__total {gap:8px;padding:14px 0}
+  .kirim-detail__total dt {font-size:12px}
+  .kirim-detail__total dd {font-size:20px}
+  .kirim-detail__bagian {padding:14px}
+  .kirim-detail__bagian h2 {font-size:17px;margin-bottom:10px}
+  .kirim-detail__grid {grid-template-columns:1fr;gap:12px;margin-top:12px}
+  .kirim-detail__tabel,.kirim-detail__tabel tbody {display:block}
+  .kirim-detail__tabel thead {display:none}
+  .kirim-detail__tabel tbody tr {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--garis);padding:12px 0;gap:8px}
+  .kirim-detail__tabel tbody th {grid-column:1 / -1;width:auto;padding:0;border:0;font-size:15px}
+  .kirim-detail__tabel td {text-align:left;padding:0;border:0;font-size:14px}
+  .kirim-detail__tabel td strong {white-space:normal}
+  .kirim-detail__tabel td small {font-size:12px}
+  .kirim-detail__label-ponsel {display:block;color:var(--redup);font-size:12px;margin-bottom:3px}
+  .kirim-detail__aksi .btn {flex:1 1 auto}
+}
+.kirim-detail__tabel caption {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}

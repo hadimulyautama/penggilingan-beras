@@ -124,6 +124,9 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                            if rec.status in (OUT_DIMUAT, OUT_SELESAI)
                            and perintah - dimuat > 0.5 else 0.0),
                 "karung": it.jumlah_karung or it.jumlah_karung_perintah,
+                "karung_perintah": it.jumlah_karung_perintah,
+                "karung_dimuat": it.jumlah_karung,
+                "sisa_perintah": max(perintah - dimuat, 0),
                 "berkarung": it.item_type == "finished_goods",
             })
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
@@ -151,6 +154,14 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                               boleh_muat=boleh_muat),
             "total_perintah": sum(x["perintah"] for x in isi),
             "total_dimuat": sum(x["dimuat"] for x in isi),
+            "total_sisa": sum(x["sisa_perintah"] for x in isi),
+            "jasa": rec.jasa_id is not None or any(it.jasa_id is not None for it in items),
+            "selisih_timbang": (
+                float(tiket_timbang[rec.timbangan_transaksi_id]["berat_barang_kg"])
+                - sum(x["dimuat"] for x in isi)
+                if rec.timbangan_transaksi_id in tiket_timbang
+                and tiket_timbang[rec.timbangan_transaksi_id]["berat_barang_kg"] is not None
+                else None),
             # ── Jejak tiga langkahnya: SIAPA, bukan cuma kapan ──
             #
             # Keluhan pemilik 7 Oktober 2026: "diperintah siapa, dimuat

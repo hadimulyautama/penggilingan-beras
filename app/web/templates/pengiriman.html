@@ -9,8 +9,8 @@
 {% set kg = st.kg %}
 {% import "_operasional.html" as op with context %}
 {% if detail %}
-<a class="btn btn--kecil" href="/barang-keluar">← Kembali ke Barang Keluar</a>
-<h1 style="margin-top:20px">Detail perintah {{ kartu[0].rec.kode }}</h1>
+{% set k = kartu[0] %}
+{% include "_pengiriman_detail.html" %}
 {% else %}
 {{ op.intro("PENGIRIMAN BARANG", "Barang Keluar",
   "Buat perintah untuk beberapa jenis barang dalam satu pengiriman, catat muatan yang benar-benar dibawa, lalu verifikasi sebelum menutup transaksi. Pengambilan barang jasa tersedia terpisah. Perintah yang selesai tersimpan di Riwayat Barang Keluar.",
@@ -44,6 +44,7 @@
 </div>
 
 {% endif %}
+{% if not detail %}
 <div class="grup daftar-standar">
 {% for k in (kartu if detail else kartu_aktif) %}
   <details class="padat padat--{{ k.warna }}"{{ ' open' if detail or loop.index <= 2 }}>
@@ -144,6 +145,7 @@
   </details>
 {% endfor %}
 </div>
+{% endif %}
 {% if not detail %}
 {% if not kartu_aktif %}<p class="bantu">Tidak ada pengiriman yang sedang berjalan.</p>{% endif %}
 <section aria-labelledby="judul-riwayat-keluar" style="margin-top:28px">

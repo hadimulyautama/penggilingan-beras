@@ -2514,7 +2514,11 @@ async def test_riwayat_barang_keluar_tabel_dan_detail_tiket(pg, gudang):
     assert '<table class="tabel-standar"' in riwayat
     assert f'href="/barang-keluar/{rid}"' in riwayat
     assert kode in riwayat and "KLR-RIWAYAT" in riwayat
-    assert "Tiket timbang terkait · KLR-RIWAYAT" in detail.text
+    assert "KLR-RIWAYAT" in detail.text
+    assert 'class="kirim-detail__tabel"' in detail.text
+    assert "Dimuat aktual" in detail.text and "Sisa perintah" in detail.text
+    assert "Riwayat petugas" in detail.text
+    assert 'class="padat padat--' not in detail.text
     assert "Berat truk kosong" in detail.text and "Berat barang" in detail.text
     assert "buka=verifikasi_keluar" not in detail.text
     assert aktif.rec.kode not in detail.text
