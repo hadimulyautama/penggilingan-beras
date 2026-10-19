@@ -3102,15 +3102,20 @@ a.kartu-keluar__tautan:focus-visible { outline:3px solid var(--tinta); outline-o
 .editor-perintah input,.editor-perintah select { width:100%; min-height:48px; }
 .editor-perintah [hidden] { display:none !important; }
 .editor-perintah #draf-terbitkan { margin:18px 0; min-height:48px; }
-.draf-item { display:grid; grid-template-columns:minmax(0,1fr) 120px auto; align-items:end; gap:12px; border-bottom:1px solid var(--garis); padding:12px 0; }
+.draf-item { display:grid; grid-template-columns:minmax(0,1fr) 180px auto; align-items:end; gap:12px; border-bottom:1px solid var(--garis); padding:12px 0; }
 .draf-item label { min-width:0; }
 .draf-item .ulang__pilihan { margin-top:4px; }
 .draf-item .ulang__nama { display:block; padding-right:24px; overflow-wrap:anywhere; }
-.draf-satuan { color:var(--tinta); font-weight:650; }
+.draf-jumlah { display:flex; align-items:center; gap:8px; }
+.draf-jumlah input { flex:1; min-width:0; }
+.draf-satuan { flex:none; white-space:nowrap; color:var(--tinta); font-weight:650; }
+.draf-pelanggan [role=option][aria-selected=true] { background:var(--panel-2); outline:2px solid var(--aksi); outline-offset:-2px; }
+.draf-pelanggan .kombo__saran { max-height:240px; overflow-y:auto; }
+.draf-pelanggan .kombo__opsi { width:100%; min-height:48px; border:0; border-bottom:1px solid var(--garis-2); border-radius:0; text-align:left; color:var(--tinta); background:var(--panel); }
 #draf-konflik { border:2px solid var(--garis); padding:12px; margin:12px 0; }
 @media(max-width:600px) {
   .draf-item { grid-template-columns:minmax(0,1fr) 110px; gap:8px; }
   .draf-item > label:first-child { grid-column:1/-1; }
-  .draf-item > button { align-self:center; }
+  .draf-item > button { align-self:end; }
   .editor-perintah #draf-terbitkan { width:100%; }
 }

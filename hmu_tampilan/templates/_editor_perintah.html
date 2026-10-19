@@ -13,8 +13,11 @@
   </section>
   <form id="draf-form" novalidate>
     <label for="draf-pelanggan">Pelanggan</label>
-    <input class="fld" type="search" id="draf-cari-pelanggan" placeholder="Cari pelanggan" aria-label="Cari pelanggan">
-    <select class="fld" id="draf-pelanggan" name="pelanggan"><option value="">Pilih pelanggan</option></select>
+    <div class="kombo draf-pelanggan">
+      <input class="fld" type="text" id="draf-pelanggan" placeholder="Ketik untuk mencari pelanggan" role="combobox" aria-autocomplete="list" aria-controls="draf-pelanggan-saran" aria-expanded="false" autocomplete="off">
+      <input type="hidden" id="draf-pelanggan-id" name="pelanggan">
+      <div class="kombo__saran" id="draf-pelanggan-saran" role="listbox" aria-label="Pelanggan yang cocok" hidden></div>
+    </div>
     <h2>Isi muatan</h2>
     <div id="draf-barang"></div>
     <button type="button" id="draf-tambah" class="btn">+ Tambah item</button>
