@@ -3,13 +3,14 @@
 {% import "_stok.html" as st with context %}
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% import "_kepemilikan.html" as milik with context %}
+{% import "_proses_visual.html" as visual with context %}
 {% block judul %}Detail {{ d.judul }}{% endblock %}
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
 <main class="riwayat-detail proses-detail" data-konteks="{{ milik.konteks(proses) }}" data-nilai="{{ proses.nilai or proses.kode }}">
   <a class="riwayat-detail__back" href="/berjalan">← Kembali ke Sedang berjalan</a>
   <header class="riwayat-detail__hero">
-    <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ d.judul|upper }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
+    <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ visual.penanda(proses) }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
     <h1>{{ d.kode }}</h1>
     {{ milik.penanda(proses) }}
     <p>{{ 'Gudang 2' if d.jenis == 'sosoh' else 'Gudang 1' }}</p>

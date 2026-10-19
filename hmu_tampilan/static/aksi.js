@@ -551,6 +551,14 @@
         '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +
         tombolLain +
       "</div>";
+    if (asalKartu) {
+      var jenisKartu = asalKartu.querySelector(".proses-jenis");
+      if (jenisKartu) {
+        var jenisFormulir = jenisKartu.cloneNode(true);
+        jenisFormulir.classList.add("proses-formulir");
+        lembar.querySelector(".lembar__kepala").insertAdjacentElement("afterend", jenisFormulir);
+      }
+    }
     lembar._berubah = false;
     lembar._menyimpan = false;
     lembar.oninput = lembar.onchange = function () { lembar._berubah = true; };

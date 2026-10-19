@@ -10,6 +10,7 @@
    mesin yang menyala. Itu keterangan, bukan kekurangan. #}
 {# `with context` wajib: `lama` datang dari rute, bukan global env — tanpa
    itu macro-nya melihatnya sebagai undefined dan waktu berjalan hilang diam-diam. #}
+{% import "_proses_visual.html" as visual with context %}
 {% import "_benda.html" as benda with context %}
 {% import "_kepemilikan.html" as milik with context %}
 {% if request and request.query_params.get("kepemilikan") in ("jasa", "pabrik") %}{% set berjalan = berjalan|selectattr("kepemilikan", "in", [request.query_params.get("kepemilikan"), "campuran"])|list %}{% endif %}
@@ -57,9 +58,9 @@
   <div class="proses-aktif-list tabel-standar daftar-standar">
     <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Kepemilikan</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
   {% for b in berjalan %}
-    <a class="proses-aktif-list__row" href="{{ alamat_detail_proses(b) or '/berjalan' }}"
+    <a class="proses-aktif-list__row" data-proses="{{ visual.jenis(b) }}" href="{{ alamat_detail_proses(b) or '/berjalan' }}"
        data-cari="{{ (b.kode ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
-      <span><strong>{{ b.kode }}</strong><small>{{ b.judul }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
+      <span><strong>{{ b.kode }}</strong><small>{{ visual.judul(b) }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
       <span class="proses-aktif-list__kepemilikan">{{ milik.penanda(b) }}</span>
       <span><span class="riwayat-status {{ 'riwayat-status--wait' if b.nota_jenis == 'hati' else 'riwayat-status--done' }}">{{ b.nota if b.nota_jenis == 'hati' else b.keadaan }}</span><small>Mulai {{ b.sejak|jam('%d/%m · %H:%M') or 'belum tercatat' }}</small></span>
       <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small></span>
