@@ -2920,21 +2920,28 @@ body .pilihan__satu--utama:active {
   background:var(--aksi-gelap); border-color:var(--aksi-gelap); color:var(--aksi-tinta);
 }
 
-/* Bahan proses: satu kelompok per pemakaian, bukan baris berat berulang. */
-.bahan-silo {display:grid;gap:1rem}
-.bahan-silo__satu {border:1px solid var(--garis);border-radius:.75rem;padding:1rem;min-width:0}
-.bahan-silo__satu header {display:flex;justify-content:space-between;align-items:baseline;gap:.5rem 1rem;flex-wrap:wrap}
-.bahan-silo__satu h3 {margin:0;font-size:1rem;overflow-wrap:anywhere}
-.bahan-silo__satu h3 small {font-size:.85rem;font-weight:400}
-.bahan-silo__satu p {margin:.5rem 0}
-.bahan-silo__satu dl {margin:.5rem 0}
-.bahan-silo__satu dl div {display:flex;justify-content:space-between;gap:1rem}
-.bahan-silo__satu dd {margin:0;font-weight:600}
-.bahan-silo__satu summary {cursor:pointer;min-height:44px;display:list-item;align-content:center}
-.bahan-silo__satu li {overflow-wrap:anywhere;margin:.5rem 0}
-
-.bahan-silo__angka {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;padding:.5rem 0;border-bottom:1px solid var(--garis)}
-.bahan-silo__satu .bahan-silo__angka div {display:block}
-.bahan-silo__angka dt {font-size:.85rem}
-.bahan-silo__angka dd {overflow-wrap:anywhere}
-@media(min-width:700px) {.bahan-silo__angka {grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* Satu baris per pemakaian, menjadi daftar ringkas di ponsel. */
+.bahan-silo {width:100%;border-collapse:collapse;table-layout:fixed;font-size:.9rem}
+.bahan-silo th,.bahan-silo td {padding:.75rem .5rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--garis);overflow-wrap:anywhere}
+.bahan-silo thead th {font-size:.8rem}
+.bahan-silo th:first-child {width:28%}
+.bahan-silo th:last-child {width:25%}
+.bahan-silo__nama {display:block}
+.bahan-silo__nama small {font-weight:400;font-size:.8rem}
+.bahan-silo__jenis {display:block;font-weight:400;margin-top:.25rem}
+.bahan-silo summary {cursor:pointer;min-height:44px;align-content:center}
+.bahan-silo__angka {display:grid;gap:.5rem;margin:.5rem 0}
+.bahan-silo__angka dt {font-size:.8rem}
+.bahan-silo__angka dd {margin:0;font-weight:600}
+.bahan-silo li {margin:.5rem 0;overflow-wrap:anywhere}
+.bahan-silo ul {padding-left:1rem}
+@media(max-width:699px) {
+  .bahan-silo,.bahan-silo tbody {display:block}
+  .bahan-silo thead {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .bahan-silo .bahan-silo__satu {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem 1rem;padding:.75rem 0;border-bottom:1px solid var(--garis)}
+  .bahan-silo .bahan-silo__satu th,.bahan-silo .bahan-silo__satu td {display:block;width:auto;border:0;padding:0}
+  .bahan-silo .bahan-silo__satu th {grid-column:1/-1}
+  .bahan-silo td:before {content:attr(data-label);display:block;font-size:.8rem;margin-bottom:.15rem}
+  .bahan-silo td:last-child {grid-column:1/-1}
+  .bahan-silo__angka {grid-template-columns:repeat(2,minmax(0,1fr))}
+}

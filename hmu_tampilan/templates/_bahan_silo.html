@@ -1,18 +1,27 @@
-{# Satu kelompok adalah satu pemakaian silo, termasuk bila namanya berulang. #}
+{# Satu baris adalah satu pemakaian; nama silo ulang tetap dipisahkan. #}
 {% macro bahan_silo(kelompok) %}
-<p class="bantu">Jumlah masuk dihitung sekali per pemakaian silo. Rincian jenis bahan sudah termasuk di dalamnya.</p>
-<div class="bahan-silo">
+<p class="bantu">Total masuk sudah termasuk tambahan. Setiap pemakaian ulang silo dicatat terpisah.</p>
+<table class="bahan-silo" aria-label="Bahan dan pemakaian silo">
+<thead><tr><th scope="col">Silo / bahan</th><th scope="col">Total masuk</th><th scope="col">Tambahan</th><th scope="col">Sisa akhir</th><th scope="col">Status / rincian</th></tr></thead>
+<tbody>
 {% for g in kelompok %}
-<article class="bahan-silo__satu" aria-label="{{ g.nama }} · pemakaian {{ loop.index }}">
-  <header><h3>{{ g.nama }} <small>· pemakaian {{ loop.index }}</small></h3><strong>{{ g.berat }} masuk</strong></header>
-  <p>{{ g.status }}</p>
-  {% if g.angka %}<dl class="bahan-silo__angka">{% for label, nilai in g.angka %}<div><dt>{{ label }}</dt><dd>{{ nilai }}</dd></div>{% endfor %}</dl>{% endif %}
-  <dl>{% for b in g.bahan %}<div><dt>{{ b.nama }}</dt><dd>{{ b.berat }}</dd></div>{% endfor %}</dl>
-  {% if g.sumber %}<details><summary>Lihat asal bahan · {{ g.sumber|length }} catatan</summary>
-    <p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan jumlah masuk di atas; rincian pembagian per lot belum tersedia.</p>
-    <ul>{% for s in g.sumber %}<li>{{ s.nama }}{% if s.berat %} · berat catatan asal {{ s.berat }}{% endif %}{% if s.ket %} · {{ s.ket }}{% endif %}</li>{% endfor %}</ul>
-  </details>{% endif %}
-</article>
+{% set angka = dict(g.angka|default([])) %}
+<tr class="bahan-silo__satu">
+  <th scope="row"><span class="bahan-silo__nama">{{ g.nama }} <small>· pemakaian {{ loop.index }}</small></span><span class="bahan-silo__jenis">{{ g.bahan|map(attribute='nama')|join(' + ') }}</span></th>
+  <td data-label="Total masuk"><strong>{{ g.berat }}</strong></td>
+  <td data-label="Tambahan">{{ 'Tanpa tambahan' if angka.get('Tambahan') == '0 kg' else '+' ~ angka['Tambahan'] if angka.get('Tambahan') else 'Belum tercatat' }}</td>
+  <td data-label="Sisa akhir">{{ angka.get('Sisa akhir', 'Belum dicatat') }}</td>
+  <td data-label="Status"><span>{{ g.status.split(' · ')[0]|replace(' pada pemakaian ini', '') }}</span>
+    <details><summary>Rincian</summary>
+      <dl class="bahan-silo__angka">{% for label in ['Awal', 'Terpakai'] %}{% if angka.get(label) %}<div><dt>{{ label }}</dt><dd>{{ angka[label] }}</dd></div>{% endif %}{% endfor %}</dl>
+      {% if g.bahan|length > 1 %}<p>Komposisi total masuk:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
+      {% if g.sumber %}<p>Asal bahan · {{ g.sumber|length }} catatan</p>
+        <p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan total masuk; rincian pembagian per lot belum tersedia.</p>
+        <ul>{% for s in g.sumber %}<li>{{ s.nama }}{% if s.berat %} · berat catatan asal {{ s.berat }}{% endif %}{% if s.ket %} · {{ s.ket }}{% endif %}</li>{% endfor %}</ul>
+      {% endif %}
+    </details>
+  </td>
+</tr>
 {% endfor %}
-</div>
+</tbody></table>
 {% endmacro %}
