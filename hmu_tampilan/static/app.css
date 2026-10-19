@@ -3119,3 +3119,11 @@ a.kartu-keluar__tautan:focus-visible { outline:3px solid var(--tinta); outline-o
   .draf-item > button { align-self:end; }
   .editor-perintah #draf-terbitkan { width:100%; }
 }
+
+#draf-saya { margin:16px 0 24px; }
+#draf-saya [hidden] { display:none !important; }
+.draf-daftar__baris { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; }
+.draf-daftar__baris .padat { min-width:0; min-height:56px; overflow-wrap:anywhere; }
+.draf-daftar__baris .bantu { display:block; }
+.draf-daftar__baris .btn { min-height:48px; }
+@media(max-width:600px){.draf-daftar__baris { grid-template-columns:minmax(0,1fr) 100px; gap:8px; }}

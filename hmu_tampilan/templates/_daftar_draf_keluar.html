@@ -1,0 +1,17 @@
+<section id="draf-saya" data-daftar-draf aria-labelledby="judul-draf-saya">
+  <h2 id="judul-draf-saya">Draf saya · <span data-jumlah-draf>{{ draf_saya|length }}</span></h2>
+  <p class="bantu">Belum diterbitkan ke operator. Ketuk draf untuk melanjutkan.</p>
+  <p data-galat-draf class="nota nota--buruk" role="alert" hidden></p>
+  <div class="grup">
+  {% for d in draf_saya %}
+    <div class="draf-daftar__baris" data-baris-draf>
+      <a class="padat padat--baru" href="/barang-keluar/draf/{{ d.id }}" data-utuh>
+        <div><strong>{{ d.pelanggan }}</strong><span class="bantu">{{ d.jumlah }} item · {{ d.waktu | jam('%d/%m %H:%M') }}</span></div>
+      </a>
+      <button class="btn" type="button" data-hapus-draf="{{ d.id }}" data-revisi="{{ d.revisi }}" data-nama="{{ d.pelanggan }}" data-item="{{ d.jumlah }}">Hapus draf</button>
+    </div>
+  {% endfor %}
+  </div>
+  <p class="bantu" data-draf-kosong{{ ' hidden' if draf_saya }}>Belum ada draf tersimpan.</p>
+</section>
+<script src="/static/daftar-draf.js?v={{ VERSI }}" defer></script>

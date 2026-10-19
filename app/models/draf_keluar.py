@@ -14,3 +14,5 @@ class DrafKeluar(Base):
     sidik: Mapped[str | None] = mapped_column(String(64))
     perintah_id: Mapped[int | None] = mapped_column(ForeignKey('outgoing_records.id'), unique=True)
     diperbarui: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    dihapus_pada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

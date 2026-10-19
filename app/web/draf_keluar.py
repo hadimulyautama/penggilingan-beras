@@ -33,10 +33,12 @@ async def _kunci(db, identitas):
         await db.execute(text('SELECT pg_advisory_xact_lock(:k)'),
                          {'k': int.from_bytes(hashlib.sha256(str(identitas).encode()).digest()[:8], 'big', signed=True)})
 
-async def _ambil(db, identitas, user):
+async def _ambil(db, identitas, user, *, termasuk_dihapus=False):
     d = await db.scalar(select(DrafKeluar).where(DrafKeluar.id == str(identitas)).with_for_update())
     if d and d.pemilik_id != user.id:
         raise HTTPException(404, 'Draf tidak ditemukan untuk akun ini.')
+    if d and d.dihapus_pada and not termasuk_dihapus:
+        raise HTTPException(404, 'Draf sudah dihapus. Isian di tab lama tidak akan disimpan kembali.')
     return d
 
 def _hasil(d):
@@ -55,9 +57,7 @@ async def halaman(request: Request, identitas: UUID | None = None, akun=Depends(
             if d.perintah_id:
                 return RedirectResponse(f'/barang-keluar/{d.perintah_id}',303)
             awal = _hasil(d)
-    async with SessionLocal() as db:
-        lainnya = list((await db.scalars(select(DrafKeluar).where(DrafKeluar.pemilik_id == akun.user.id, DrafKeluar.perintah_id.is_(None)).order_by(DrafKeluar.diperbarui.desc()).limit(20))).all())
-    return await render_laci(request, 'perintah_baru.html', draf_id=str(identitas or uuid4()), awal=awal, draf_lain=lainnya)
+    return await render_laci(request, 'perintah_baru.html', draf_id=str(identitas or uuid4()), awal=awal)
 
 @router.put('/api/actions/draf-perintah/{identitas}')
 async def simpan(identitas: UUID, req: SimpanDraf, user: User = Depends(pengguna_aksi)):
@@ -116,3 +116,43 @@ async def terbitkan(identitas: UUID, req: TerbitDraf, user: User = Depends(pengg
         d.perintah_id = hasil.rec.id
         await db.commit()
         return _hasil(d)
+
+
+async def daftar_draf(db, user):
+    """Draf pribadi yang belum terbit, dibaca tanpa mengubah status atau stok."""
+    from app.models import Pelanggan
+    ds=list((await db.scalars(select(DrafKeluar).where(
+        DrafKeluar.pemilik_id==user.id,DrafKeluar.perintah_id.is_(None),
+        DrafKeluar.dihapus_pada.is_(None)).order_by(DrafKeluar.diperbarui.desc(),DrafKeluar.id))).all())
+    ids={int(str(d.isi.get('pelanggan'))) for d in ds if str(d.isi.get('pelanggan','')).isdigit()}
+    nama=dict((await db.execute(select(Pelanggan.id,Pelanggan.nama_pelanggan).where(Pelanggan.id.in_(ids)))).all()) if ids else {}
+    hasil=[]
+    for d in ds:
+        pid=str(d.isi.get('pelanggan',''))
+        pembeli=nama.get(int(pid)) if pid.isdigit() else None
+        teks=d.isi.get('pelanggan_teks')
+        pembeli=pembeli or (str(teks)+' (belum dipilih)' if teks else 'Pelanggan belum dipilih')
+        barang=d.isi.get('barang')
+        jumlah=sum(1 for b in barang if isinstance(b,dict) and (b.get('pilih') or b.get('jumlah'))) if isinstance(barang,list) else 0
+        hasil.append(dict(id=d.id,revisi=d.revisi,pelanggan=pembeli,jumlah=jumlah,waktu=d.diperbarui))
+    return hasil
+
+
+@router.post('/api/actions/draf-perintah/{identitas}/hapus')
+async def hapus(identitas: UUID, req: TerbitDraf, user: User = Depends(pengguna_aksi)):
+    wajib(can_see_financials(user))
+    from app.database import now_local
+    async with SessionLocal() as db:
+        await _kunci(db,identitas)
+        d=await _ambil(db,identitas,user,termasuk_dihapus=True)
+        if not d:
+            raise HTTPException(404,'Draf tidak ditemukan.')
+        if d.perintah_id:
+            raise HTTPException(409,'Draf sudah diterbitkan. Periksa detail perintah; hapus draf tidak membatalkan perintah.')
+        if d.dihapus_pada:
+            return {'ok':True}
+        if d.revisi!=req.revisi:
+            raise HTTPException(409,'Draf berubah di tab lain. Muat ulang daftar dan periksa sebelum menghapus.')
+        d.dihapus_pada=now_local()
+        await db.commit()
+        return {'ok':True}

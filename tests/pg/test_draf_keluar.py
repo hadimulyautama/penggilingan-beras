@@ -72,7 +72,9 @@ async def test_halaman_baru_tanpa_modal_dan_identitas_draf_dipagari(pg,gudang):
         page=await c.get('/barang-keluar/baru');assert page.status_code==200
         assert 'data-editor-perintah' in page.text;assert 'id="draf-terbitkan"' in page.text
         assert 'id="lembar"' not in page.text
-        assert str(ident) in page.text
+        daftar=await c.get('/barang-keluar')
+        assert str(ident) in daftar.text
+        assert 'Hapus draf' in daftar.text
         page=await c.get(f'/barang-keluar/draf/{ident}');assert page.status_code==200
         r=await c.put(f'/api/actions/draf-perintah/{ident}',json={'isi':{},'revisi':1,'kiriman':str(uuid4())})
         assert r.status_code==403
@@ -106,3 +108,59 @@ async def test_http_sesi_lama_ditolak_dan_penerbitan_memakai_pembuka(pg,gudang):
         assert r.status_code==200,r.text
         async with pg() as db:
             rec=await db.get(OutgoingRecord,int(r.json()['tujuan'].split('/')[-1]));assert rec.diperintah_oleh==gudang['adm']
+
+async def test_hapus_draf_pribadi_tanpa_stok_dan_tidak_bisa_hidup_kembali(pg,gudang):
+    from app.web.draf_keluar import hapus, daftar_draf
+    ident=uuid4();u=await _user(pg,gudang);isi=await _isi(pg,gudang);stok=await _stok(pg,gudang)
+    await simpan(ident,SimpanDraf(revisi=0,kiriman=uuid4(),isi=isi),u)
+    async with pg() as db:
+        daftar=await daftar_draf(db,u);assert daftar[0]['pelanggan']=='Pembeli draf';assert daftar[0]['jumlah']==1
+    with pytest.raises(HTTPException) as e:await hapus(ident,TerbitDraf(revisi=0),u)
+    assert e.value.status_code==409
+    assert (await hapus(ident,TerbitDraf(revisi=1),u))['ok']
+    assert (await hapus(ident,TerbitDraf(revisi=1),u))['ok']
+    with pytest.raises(HTTPException):await simpan(ident,SimpanDraf(revisi=1,kiriman=uuid4(),isi=isi),u)
+    with pytest.raises(HTTPException):await terbitkan(ident,TerbitDraf(revisi=1),u)
+    async with pg() as db:
+        assert await daftar_draf(db,u)==[]
+        assert (await db.get(DrafKeluar,str(ident))).isi==isi
+        assert await db.scalar(select(func.count()).select_from(OutgoingRecord))==0
+    assert await _stok(pg,gudang)==stok
+
+async def test_draf_orang_lain_dan_perintah_terbit_tidak_boleh_dihapus(pg,gudang):
+    from app.web.draf_keluar import hapus, daftar_draf
+    ident=uuid4();u=await _user(pg,gudang);isi=await _isi(pg,gudang)
+    await simpan(ident,SimpanDraf(revisi=0,kiriman=uuid4(),isi=isi),u)
+    async with pg() as db:
+        b=User(nama='Admin draf lain',role=u.role,status='aktif');db.add(b);await db.commit()
+        assert await daftar_draf(db,b)==[]
+    with pytest.raises(HTTPException) as e:await hapus(ident,TerbitDraf(revisi=1),b)
+    assert e.value.status_code==404
+    terbit=await terbitkan(ident,TerbitDraf(revisi=1),u)
+    with pytest.raises(HTTPException) as e:await hapus(ident,TerbitDraf(revisi=1),u)
+    assert e.value.status_code==409
+    async with pg() as db:
+        assert await daftar_draf(db,u)==[]
+        assert (await db.get(OutgoingRecord,int(terbit['tujuan'].split('/')[-1]))).status=='perintah'
+
+async def test_hapus_berlomba_dengan_tab_menyimpan(pg,gudang):
+    from app.web.draf_keluar import hapus
+    ident=uuid4();u=await _user(pg,gudang)
+    await simpan(ident,SimpanDraf(revisi=0,kiriman=uuid4(),isi={'pelanggan':'1'}),u)
+    hasil=await asyncio.gather(hapus(ident,TerbitDraf(revisi=1),u),simpan(ident,SimpanDraf(revisi=1,kiriman=uuid4(),isi={'pelanggan':'2'}),u),return_exceptions=True)
+    assert sum(isinstance(x,HTTPException) for x in hasil)==1
+    async with pg() as db:
+        d=await db.get(DrafKeluar,str(ident))
+        assert (d.dihapus_pada is not None and d.revisi==1) or (d.dihapus_pada is None and d.revisi==2)
+
+async def test_hapus_berlomba_dengan_penerbitan_tidak_menghapus_perintah(pg,gudang):
+    from app.web.draf_keluar import hapus
+    ident=uuid4();u=await _user(pg,gudang);isi=await _isi(pg,gudang)
+    await simpan(ident,SimpanDraf(revisi=0,kiriman=uuid4(),isi=isi),u)
+    hasil=await asyncio.gather(hapus(ident,TerbitDraf(revisi=1),u),terbitkan(ident,TerbitDraf(revisi=1),u),return_exceptions=True)
+    assert sum(isinstance(x,HTTPException) for x in hasil)==1
+    async with pg() as db:
+        d=await db.get(DrafKeluar,str(ident))
+        assert bool(d.dihapus_pada) != bool(d.perintah_id)
+        if d.perintah_id:assert (await db.get(OutgoingRecord,d.perintah_id)).status=='perintah'
+    assert await _stok(pg,gudang)==10000

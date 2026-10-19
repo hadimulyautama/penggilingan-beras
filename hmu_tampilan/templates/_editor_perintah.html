@@ -29,9 +29,7 @@
     <p class="bantu">Draf belum mengubah stok atau muncul di antrean operator.</p>
     <button type="submit" class="btn" id="draf-terbitkan">Terbitkan perintah</button>
   </form>
-  {% if draf_lain %}<section id="draf-saya"><h2>Draf saya</h2><ul>
-    {% for d in draf_lain %}<li><a href="/barang-keluar/draf/{{ d.id }}">Draf {{ d.diperbarui | jam('%d/%m %H:%M') }} · {{ (d.isi.get('barang') or [])|length }} item</a></li>{% endfor %}
-  </ul></section>{% endif %}
+
 </section>
 <script type="application/json" id="draf-awal">{{ awal | tojson }}</script>
 <script src="/static/editor-perintah.js?v={{ VERSI }}" defer></script>

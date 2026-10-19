@@ -82,7 +82,11 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                   and (await _is_g2_operator(akun.user)
                        or await _is_g1_operator(akun.user)))
 
+    draf_saya = []
     async with SessionLocal() as db:
+        if boleh_perintah and transaksi_id is None:
+            from app.web.draf_keluar import daftar_draf
+            draf_saya = await daftar_draf(db, akun.user)
         if transaksi_id is not None:
             baris = await svc.daftar(db, transaksi_id=transaksi_id, batas=1)
             if not baris:
@@ -210,6 +214,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
         # Ini cuma menghindari menawarkan pintu yang akan ditolak; yang menjaga
         # sungguhan `wajib(can_see_financials(...))` di tiap rutenya.
         BOLEH_PERINTAH=boleh_perintah,
+        draf_saya=draf_saya,
         BOLEH_MUAT=boleh_muat,
         # ── Lembarnya dibuka DI HALAMAN INI ──
         # Sampai 29 September tombolnya menunjuk `/aksi?buka=…`, jadi menekan
