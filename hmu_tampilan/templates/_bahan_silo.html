@@ -40,7 +40,7 @@
       {% if g.bahan|length > 1 %}<p>Komposisi:</p><ul>{% for b in g.bahan %}<li>{{ b.nama }} · {{ b.berat }}</li>{% endfor %}</ul>{% endif %}
       {% if g.catatan %}<p class="bantu">{{ g.catatan }}</p>{% endif %}
       {% if g.sumber %}<details class="bahan-silo__asal"><summary>Asal bahan · {{ g.sumber|length }} catatan</summary>
-        {% if g.sumber|selectattr('berat')|list|length %}<p class="bantu">Berat berikut adalah catatan asal silo, bukan tambahan bahan proses ini. Jangan dijumlahkan dengan total masuk; rincian pembagian per lot belum tersedia.</p>{% endif %}
+        {% if g.sumber|selectattr('berat')|list|length %}<p class="bantu">Berat asal bukan tambahan. Jangan jumlahkan ke total masuk.</p>{% endif %}
         <ul>{% for s in g.sumber %}<li>{{ s.nama }}{% if s.berat %} · berat catatan asal {{ s.berat }}{% endif %}{% if s.ket %} · {{ s.ket }}{% endif %}</li>{% endfor %}</ul>
       </details>{% endif %}
       </section>
