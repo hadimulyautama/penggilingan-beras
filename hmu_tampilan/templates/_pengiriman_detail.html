@@ -15,7 +15,7 @@
   </header>
 
   {% if k.tombol %}<nav class="kirim-detail__aksi" aria-label="Tindakan perintah">
-    {% for buka, nilai, label, utama in k.tombol %}
+    {% for buka, nilai, label, utama in k.tombol if buka != 'tambah_barang_keluar' %}
     <a class="btn{{ '' if utama else ' btn--kecil' }}" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}">{{ label }}</a>
     {% endfor %}
   </nav>{% endif %}
@@ -44,6 +44,9 @@
         </tr>{% endfor %}</tbody>
       </table>
     </div>
+    {% for buka, nilai, label, utama in k.tombol if buka == 'tambah_barang_keluar' %}
+    <div class="kirim-detail__tambah"><a class="btn" href="/barang-keluar/{{ k.rec.id }}?buka={{ buka }}&nilai={{ nilai|urlencode }}">+ Tambah item</a></div>
+    {% endfor %}
     {% if k.rec.catatan_perintah %}<p class="kirim-detail__catatan"><strong>Catatan perintah:</strong> {{ k.rec.catatan_perintah }}</p>{% endif %}
     {% if k.rec.sebab_batal %}<div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>{% endif %}
     {% if k.rec.sebab_selisih %}<div class="nota nota--hati"><span aria-hidden="true">⚠</span><span>Sebab selisih timbang — {{ k.rec.sebab_selisih }}</span></div>{% endif %}

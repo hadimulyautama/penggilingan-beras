@@ -3068,3 +3068,6 @@ body .pilihan__satu--utama:active {
 
 .kirim-detail__item-aksi {display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .kirim-detail__item-aksi .btn {min-height:44px;width:auto}
+
+.kirim-detail__tambah {display:flex;justify-content:center;margin-top:12px}
+.kirim-detail__tambah .btn {min-height:44px;width:auto;padding-inline:24px}
