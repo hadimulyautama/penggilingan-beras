@@ -93,6 +93,28 @@
         </div>
       {% endif %}
 
+      {% if k.rec.sebab_batal %}
+        <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
+      {% endif %}
+
+      {% if k.rec.sebab_selisih %}
+
+        <div class="nota nota--hati">
+          <span aria-hidden="true">⚠</span>
+          <span>Selisih timbang besar — {{ k.rec.sebab_selisih }}</span>
+        </div>
+      {% endif %}
+
+      {% if k.tombol %}
+        <div class="ubah-hasil kartu-keluar__utama">
+          {% for buka, nilai, label, utama in k.tombol if utama %}
+          <a class="btn{{ '' if utama else ' btn--kecil' }}"
+             href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
+             >{{ label }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+
       {% call rp.rincian_pengiriman(k.jejak) %}
       {% if k.tiket_timbang %}
         {% set t = k.tiket_timbang %}
@@ -120,27 +142,6 @@
         </div>{% endif %}
       {% endcall %}
 
-      {% if k.rec.sebab_batal %}
-        <div class="nota nota--buruk">Dibatalkan — {{ k.rec.sebab_batal }}</div>
-      {% endif %}
-
-      {% if k.rec.sebab_selisih %}
-
-        <div class="nota nota--hati">
-          <span aria-hidden="true">⚠</span>
-          <span>Selisih timbang besar — {{ k.rec.sebab_selisih }}</span>
-        </div>
-      {% endif %}
-
-      {% if k.tombol %}
-        <div class="ubah-hasil kartu-keluar__utama">
-          {% for buka, nilai, label, utama in k.tombol if utama %}
-          <a class="btn{{ '' if utama else ' btn--kecil' }}"
-             href="/barang-keluar?buka={{ buka }}{% if nilai %}&nilai={{ nilai|urlencode }}{% endif %}"
-             >{{ label }}</a>
-          {% endfor %}
-        </div>
-      {% endif %}
     </div>
   </details>
 {% endfor %}

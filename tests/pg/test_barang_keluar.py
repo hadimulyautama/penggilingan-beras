@@ -2602,3 +2602,27 @@ async def test_merek_muatan_sama_di_daftar_dan_detail(pg, gudang, merek, aktif):
     if merek == 'Pulenesia':
         Path('/tmp/keluar-merek-daftar.html').write_text(daftar.text)
         Path('/tmp/keluar-merek-detail.html').write_text(detail.text)
+
+
+async def test_tombol_verifikasi_mendahului_rincian_timbang(pg, gudang):
+    from pathlib import Path
+    from app.models import OutgoingRecord
+    rid = await _sampai_dimuat(pg, gudang, karung=100)
+    tid = await _tiket(pg, 'KLR-UJI-TOMBOL-ATAS', barang=2500)
+    async with pg() as db:
+        rec = await db.get(OutgoingRecord, rid)
+        rec.timbangan_transaksi_id = tid
+        await db.commit()
+    stok_lama = await _stok(pg, gudang)
+    c = await _klien(pg, gudang['adm'], 'uji_tombol_atas')
+    async with c:
+        r = await c.get('/barang-keluar')
+    assert r.status_code == 200
+    html = r.text
+    assert html.index('class="ubah-hasil kartu-keluar__utama"') < html.index('class="kartu-keluar__rincian"')
+    assert f'buka=verifikasi_keluar&nilai={rid}' in html
+    assert 'KLR-UJI-TOMBOL-ATAS' in html
+    assert await _stok(pg, gudang) == stok_lama
+    async with pg() as db:
+        assert (await db.get(OutgoingRecord, rid)).status == 'dimuat'
+    Path('/tmp/verifikasi-utama-atas.html').write_text(html)
