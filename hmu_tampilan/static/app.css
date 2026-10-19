@@ -52,6 +52,10 @@
   --kulit-langkah-aktif: linear-gradient(145deg, #709b74, #4e7855);
   --kulit-pemisah: #405744;
 
+  --tombol-sekunder-bg: #374151;
+  --tombol-sekunder-teks: #fff;
+  --tombol-sekunder-garis: #374151;
+
   --sentuh:     56px;
 
   --mono:  'IBM Plex Mono', ui-monospace, Menlo, monospace;
@@ -657,7 +661,7 @@ body:has(.pil-versi) .pil-perubahan { top: calc(64px + env(safe-area-inset-top))
   font-size: 14px; font-weight: 600;
 }
 body.putus-jaringan .bar { margin-top: 34px; }
-[data-putus] { opacity: .45; pointer-events: none; }
+[data-putus] { opacity: 1; pointer-events: none; border-style: dashed; }
 .acuan { margin-top: 14px; }
 .acuan h3 { margin: 14px 0 4px; font-size: 14px; color: var(--redup); }
 .acuan ul { margin: 0; padding-left: 18px; line-height: 1.6; }
@@ -2889,7 +2893,7 @@ body .isi .proses-aktif-list__row .riwayat-status {
 body.terik { --aksi:#374151; --aksi-gelap:#26303e; }
 body .btn:not(.btn--utama):not(.btn--bahaya),
 body .pilihan__satu:not(.pilihan__satu--utama) {
-  background:#374151; color:#fff; border-color:#374151;
+  background:var(--tombol-sekunder-bg); color:var(--tombol-sekunder-teks); border-color:var(--tombol-sekunder-garis);
 }
 body.terik .btn--utama, body.terik .pilihan__satu--utama {
   background:#374151; color:#fff; border-color:#374151; box-shadow:none;
@@ -2904,4 +2908,14 @@ body.terik .pilihan__satu--utama .pilihan__ket { color:#fff; }
 body .pilihan__satu--mati .pilihan__ket { color:#ffe2a3; }
 .btn:focus-visible, .pilihan__satu:focus-visible {
   outline:3px solid var(--aksi); outline-offset:3px;
+}
+
+/* Tombol memiliki warna sendiri, juga ketika dipakai sebagai tautan tabel. */
+body .btn--utama, body .pilihan__satu--utama,
+body .btn--utama:hover, body .pilihan__satu--utama:hover {
+  color:var(--aksi-tinta);
+}
+body .btn:disabled { opacity:1; border-style:dashed; cursor:not-allowed; }
+body .pilihan__satu--utama:active {
+  background:var(--aksi-gelap); border-color:var(--aksi-gelap); color:var(--aksi-tinta);
 }

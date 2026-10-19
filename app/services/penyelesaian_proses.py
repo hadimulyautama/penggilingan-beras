@@ -92,11 +92,18 @@ async def ringkasan_bebaskan(db, *, jenis: str, kode: str, silo: str = '', sisa:
         raise ValueError('Jenis proses tidak dikenal.')
     if proc is None or proc.status != 'proses':
         raise ValueError('Proses sudah selesai atau tidak ditemukan.')
-    nama = silo.upper().replace('SILO ', '').strip()
-    pilihan = {n.replace('Silo ', '') for _,n,_ in rincian}
+    # Nama alat bukan hanya huruf A/B: Tong Broken dan Tong Beras Campuran
+    # juga sah. Pratinjau menerima nama asli dari formulir, sedangkan jalur
+    # simpan lama mengirim huruf besar. Keduanya harus menunjuk siklus yang
+    # sama; nama tampilan tetap diambil dari sumber tersimpan.
+    def kunci_nama(nilai):
+        return (nilai or '').strip().casefold().removeprefix('silo ').strip()
+
+    nama = kunci_nama(silo)
+    pilihan = {kunci_nama(n) for _,n,_ in rincian}
     if not nama and len(pilihan) == 1:
         nama = next(iter(pilihan))
-    sumber = [r for r in rincian if r[1].replace('Silo ', '') == nama]
+    sumber = [r for r in rincian if kunci_nama(r[1]) == nama]
     if not sumber:
         raise ValueError('Silo tidak lagi terbuka untuk proses ini. Muat ulang dan periksa kembali.')
     tahu = all(kg is not None for _,_,kg in sumber)
@@ -107,4 +114,4 @@ async def ringkasan_bebaskan(db, *, jenis: str, kode: str, silo: str = '', sisa:
     dasar = hashlib.sha256(json.dumps(keadaan,sort_keys=True).encode()).hexdigest()
     jumlah = f'{masuk:g} kg' if tahu else 'belum diketahui; menunggu timbang'
     akibat = 'Silo dinyatakan kosong dan dapat diisi ulang.' if sisa == 0 else 'Sisa tetap berada di silo. Status silo tetap terisi.'
-    return {'dasar':dasar, 'teks':f'{kode} · Silo {nama}\nBahan masuk: {jumlah}.\nSisa yang diperiksa: {sisa:g} kg.\n{akibat}\nHanya ikatan silo yang dilepas; proses di mesin tetap berjalan.'}
+    return {'dasar':dasar, 'teks':f'{kode} · {sumber[0][1]}\nBahan masuk: {jumlah}.\nSisa yang diperiksa: {sisa:g} kg.\n{akibat}\nHanya ikatan silo yang dilepas; proses di mesin tetap berjalan.'}

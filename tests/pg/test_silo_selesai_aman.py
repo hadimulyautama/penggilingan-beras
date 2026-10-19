@@ -195,3 +195,44 @@ async def test_undo_mulai_setelah_silo_diperiksa_tidak_menggandakan_stok(pg,duni
             await _undo_start_milling(db,proc.id)
         assert (await _silo_content_bobot(db,dunia['silo']['A'])).kg==500
         assert await db.get(MillingProcess,proc.id) is not None
+
+@pytest.mark.parametrize('nama',['Tong Broken','Tong Beras Campuran','Silo Campuran','silo eceran'])
+async def test_nama_silo_khusus_sosoh_dari_pilihan_hingga_simpan(pg,gudang2,nama):
+    from app.web import api
+    from app.services.penyelesaian_proses import ringkasan_bebaskan
+    from app.penggilingan.gudang2.polishing import mulai_penyosohan,catat_output,akhiri_penyosohan
+    from app.penggilingan.gudang2.service import get_g2_silo,hitung_stok_silo
+    from app.models import PolishingProcess
+    u=gudang2['user']
+    async with pg() as db:
+        proc=(await mulai_penyosohan(db,user=u,nama_silos=['B'])).proc
+        silo=await get_g2_silo(db,'B');sid=silo.id;silo.nama_silo=nama
+        await db.commit();kode=proc.kode_proses
+        awal=await ringkasan_bebaskan(db,jenis='sosoh',kode=kode,silo=nama,sisa=500)
+        besar=await ringkasan_bebaskan(db,jenis='sosoh',kode=kode,silo=nama.upper(),sisa=500)
+        assert awal['dasar']==besar['dasar'] and nama in awal['teks']
+    pilihan=await api.sosoh_silo(induk=kode,user=u)
+    assert len(pilihan)==1
+    ringkas=await api.pratinjau_bebaskan_silo(jenis='sosoh',kode_proses=kode,sisa=500,silo=pilihan[0]['value'],user=u)
+    hasil=await api.act_selesai_penyosohan(api.SelesaiPenyosohanReq(kode_proses=kode,silo=pilihan[0]['value'],sisa=500,dasar=ringkas['dasar']),user=u)
+    assert hasil['ok'] and await api.sosoh_silo(induk=kode,user=u)==[]
+    async with pg() as db:
+        assert await hitung_stok_silo(db,sid)==500
+        assert (await db.get(PolishingProcess,proc.id)).status=='proses'
+        await catat_output(db,user=u,kode=kode,jenis='medium',berat_kumulatif=1000)
+        await akhiri_penyosohan(db,user=u,kode=kode)
+        assert await hitung_stok_silo(db,sid)==500
+
+async def test_nama_tong_giling_pratinjau_dan_simpan_memakai_siklus_sama(pg,dunia):
+    from app.services.penyelesaian_proses import ringkasan_bebaskan
+    async with pg() as db:
+        sid=dunia['silo']['A'];silo=await db.get(Silo,sid);silo.nama_silo='Tong Gabah Campuran';await db.commit()
+        kode=dunia['kode_proses'];u=await db.get(User,dunia['user'])
+        awal=await ringkasan_bebaskan(db,jenis='giling',kode=kode,silo='Tong Gabah Campuran',sisa=500)
+        assert awal['dasar']==(await ringkasan_bebaskan(db,jenis='giling',kode=kode,silo='TONG GABAH CAMPURAN',sisa=500))['dasar']
+        await m.tutup_silo_giling(db,user=u,kode_proses=kode,nama_silo='TONG GABAH CAMPURAN',sisa_kg=500,dasar=awal['dasar'])
+        assert (await _silo_content_bobot(db,sid)).kg==500
+        with pytest.raises(ValueError,match='tidak lagi terbuka'):
+            await ringkasan_bebaskan(db,jenis='giling',kode=kode,silo='Tong Gabah Campuran',sisa=0)
+        with pytest.raises(ValueError,match='tidak lagi terbuka'):
+            await ringkasan_bebaskan(db,jenis='giling',kode=kode,silo='Tong Bukan Milik Proses',sisa=0)
