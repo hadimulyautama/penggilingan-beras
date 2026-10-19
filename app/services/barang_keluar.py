@@ -114,6 +114,10 @@ class BarangKeluarError(Exception):
     """Kesalahan dengan pesan siap-tampil (args[0])."""
 
 
+class VerifikasiOtomatisDitahan(BarangKeluarError):
+    """Tiket perlu pemeriksaan manual; tidak ada stok atau muatan yang diubah."""
+
+
 class MuatanBerubah(BarangKeluarError):
     """Cuplikan yang dikonfirmasi sudah berbeda dari keadaan terkunci."""
 
@@ -644,7 +648,7 @@ async def buat_perintah(
     jasa_id: int | None = None, tiket_armada_id: int | None = None,
     metode: str | None = None,
     no_polisi: str | None = None, nama_ekspedisi: str | None = None,
-    catatan: str | None = None, tanggal=None, jam=None,
+    catatan: str | None = None, tanggal=None, jam=None, simpan: bool = True,
 ) -> HasilPerintah:
     """Admin menerbitkan satu perintah muat. STOK BELUM BERKURANG.
 
@@ -815,8 +819,9 @@ async def buat_perintah(
                        + ". Kartunya di Antrian tunggu.")
     await _jejak(db, rec, langkah="perintah", oleh=user,
                  ringkas=f"{rec.kode} · {macam} macam · {rec.nama_pembeli}")
-    await db.commit()
-    await db.refresh(rec)
+    if simpan:
+        await db.commit()
+        await db.refresh(rec)
     return HasilPerintah(rec=rec, baris=items)
 
 
@@ -1357,7 +1362,7 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
 async def verifikasi(db: AsyncSession, *, user, rec_id: int,
                      timbangan_transaksi_id: int | None = None,
                      sebab_selisih: str | None = None,
-                     tanggal=None, jam=None) -> tuple[OutgoingRecord, str]:
+                     tanggal=None, jam=None, otomatis: bool = False) -> tuple[OutgoingRecord, str]:
     """Admin menutup memakai tiket armada yang sudah dipilih. → (rec, catatan)
 
     Perintah dan kedatangan armada tidak saling menunggu. Tiket boleh dipilih
@@ -1393,10 +1398,28 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
         if timbangan_transaksi_id not in (None, rec.timbangan_transaksi_id):
             raise BarangKeluarError("Tiket berbeda dari armada yang sudah dipilih.")
         timbangan_transaksi_id = rec.timbangan_transaksi_id
+    if otomatis and (timbangan_transaksi_id is None or total <= 0):
+        raise VerifikasiOtomatisDitahan("Verifikasi otomatis memerlukan tiket armada dan muatan aktual lebih dari nol.")
     catatan = ""
     sebab_selisih = (sebab_selisih or "").strip()
     if timbangan_transaksi_id is not None:
         berat_tiket, kode_tiket = await _tiket_keluar(db, timbangan_transaksi_id)
+        if otomatis:
+            from sqlalchemy import text
+            from decimal import Decimal
+            tiket = (await db.execute(text("SELECT berat_barang_kg,timbang2_kg,total_tara_kg FROM timbangan_transaksi WHERE id=:id FOR UPDATE"),
+                                      {"id": timbangan_transaksi_id})).mappings().one()
+            if any(tiket[k] is None for k in ("berat_barang_kg", "timbang2_kg", "total_tara_kg")):
+                raise VerifikasiOtomatisDitahan("Berat timbang kedua setelah tara belum lengkap; periksa manual.")
+            nyata = Decimal(str(tiket["berat_barang_kg"]))
+            target = Decimal(str(total))
+            batas = target * Decimal("0.002")
+            if not nyata.is_finite() or not target.is_finite() or nyata <= 0 or Decimal(str(tiket["timbang2_kg"])) <= 0 or Decimal(str(tiket["total_tara_kg"])) < 0:
+                raise VerifikasiOtomatisDitahan("Berat timbang atau tara tidak sah; periksa manual.")
+            if abs(nyata - target) > batas:
+                raise VerifikasiOtomatisDitahan(
+                    f"Selisih {abs(nyata-target):g} kg melewati batas verifikasi otomatis {batas:g} kg (±0,2% dari muatan aktual). Periksa manual.")
+            berat_tiket = float(nyata)
         rec.timbangan_transaksi_id = int(timbangan_transaksi_id)
         beda = berat_tiket - total
         catatan = (f"Timbangan {_kg(berat_tiket)} kg · dimuat menurut catatan "
@@ -1431,7 +1454,9 @@ async def verifikasi(db: AsyncSession, *, user, rec_id: int,
     rec.diverifikasi_oleh, rec.waktu_verifikasi = user.id, now
     await _jejak(db, rec, langkah="verifikasi", oleh=user,
                  ringkas=f"{rec.kode} ditutup {_kg(total)} kg"
-                         + (" + tiket timbang" if timbangan_transaksi_id else ""))
+                         + (" + tiket timbang" if timbangan_transaksi_id else "")
+                         + (" · otomatis ±0,2% setelah tara" if otomatis else ""),
+                 alasan="Verifikasi otomatis: selisih setelah tara dalam ±0,2% muatan aktual." if otomatis else None)
     try:
         await db.commit()
     except Exception:
@@ -1469,8 +1494,8 @@ async def auto_tautkan(db: AsyncSession, *, user) -> HasilAutoTaut:
     penghitung yang sama sekali tak berhubungan; mencocokkan nomornya akan
     menautkan pasangan yang kebetulan sama angkanya, bukan yang benar
     berpasangan. Dasarnya PEMBELI + TANGGAL + BERAT, dan ambang beratnya
-    `ambang_selisih` yang SAMA dipakai verifikasi manual — bukan toleransi
-    baru yang ditentukan sendiri di sini.
+    maksimal ±0,2% muatan aktual setelah tara (20 kg per 10 ton).
+    Ambang verifikasi manual tetap terpisah.
 
     TAK PERNAH menebak: satu tiket yang cocok dengan lebih dari satu pesanan
     (atau sebaliknya) DILEWATI, bukan ditautkan ke salah satunya — falsafah
@@ -1501,7 +1526,7 @@ async def auto_tautkan(db: AsyncSession, *, user) -> HasilAutoTaut:
             if rec.tanggal != tanggal_tiket:
                 continue
             dimuat = sum(float(i.berat_kg or 0) for i in items)
-            if abs(berat_tiket - dimuat) > ambang_selisih(dimuat):
+            if abs(berat_tiket - dimuat) > dimuat * 0.002:
                 continue
             cocok.append(rec)
 
@@ -1514,7 +1539,7 @@ async def auto_tautkan(db: AsyncSession, *, user) -> HasilAutoTaut:
 
         try:
             rec2, _catatan = await verifikasi(
-                db, user=user, rec_id=cocok[0].id, timbangan_transaksi_id=t["id"])
+                db, user=user, rec_id=cocok[0].id, timbangan_transaksi_id=t["id"], otomatis=True)
             hasil.tertaut.append(f"{t['kode']} -> {rec2.kode}")
         except BarangKeluarError as e:
             hasil.dilewati.append(f"{t['kode']}: {e}")
@@ -1534,7 +1559,7 @@ async def _tiket_keluar(db: AsyncSession, tid: int) -> tuple[float, str]:
     from app.penggilingan.gudang1.services.timbang_link import (SQL_REAL_TIKET,
                                                                 SYARAT_TIKET_SAH)
 
-    status = (await db.execute(text("SELECT status_tiket FROM timbangan_transaksi WHERE id=:id"),
+    status = (await db.execute(text("SELECT status_tiket FROM timbangan_transaksi WHERE id=:id FOR UPDATE"),
                                {"id": int(tid)})).scalar_one_or_none()
     if status != "SELESAI":
         raise BarangKeluarError("Armada belum selesai timbang kedua; pengiriman belum bisa diverifikasi.")

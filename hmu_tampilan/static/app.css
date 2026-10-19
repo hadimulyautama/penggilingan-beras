@@ -3088,3 +3088,29 @@ body .pilihan__satu--utama:active {
 .ulang__pilihan .ulang__nama-lengkap {padding-right:28px;min-width:0;width:100%}
 .ulang__pilihan::after {content:"⌄";position:absolute;right:3px;top:50%;transform:translateY(-50%);font-size:22px;color:var(--redup)}
 .ulang__pilihan:focus-within {outline:2px solid var(--redup);outline-offset:3px;border-radius:6px}
+
+/* Seluruh kartu pengiriman merupakan satu tujuan, termasuk ringkasan muatan. */
+a.kartu-keluar__tautan { display:block; padding:0; cursor:pointer; }
+a.kartu-keluar__tautan > .kartu-keluar__ringkas { display:grid; gap:5px; padding:12px; }
+a.kartu-keluar__tautan > .anak { margin:0 12px 12px; }
+a.kartu-keluar__tautan:focus-visible { outline:3px solid var(--tinta); outline-offset:3px; }
+
+.editor-perintah { width:100%; max-width:900px; margin:auto; flex-shrink:0; }
+.editor-perintah h1 { font-size:1.5rem; margin:12px 0; }
+.editor-perintah h2 { font-size:1.15rem; margin:18px 0 10px; }
+.editor-perintah form > label { display:block; font-weight:650; margin-top:18px; }
+.editor-perintah input,.editor-perintah select { width:100%; min-height:48px; }
+.editor-perintah [hidden] { display:none !important; }
+.editor-perintah #draf-terbitkan { margin:18px 0; min-height:48px; }
+.draf-item { display:grid; grid-template-columns:minmax(0,1fr) 120px auto; align-items:end; gap:12px; border-bottom:1px solid var(--garis); padding:12px 0; }
+.draf-item label { min-width:0; }
+.draf-item .ulang__pilihan { margin-top:4px; }
+.draf-item .ulang__nama { display:block; padding-right:24px; overflow-wrap:anywhere; }
+.draf-satuan { color:var(--tinta); font-weight:650; }
+#draf-konflik { border:2px solid var(--garis); padding:12px; margin:12px 0; }
+@media(max-width:600px) {
+  .draf-item { grid-template-columns:minmax(0,1fr) 110px; gap:8px; }
+  .draf-item > label:first-child { grid-column:1/-1; }
+  .draf-item > button { align-self:center; }
+  .editor-perintah #draf-terbitkan { width:100%; }
+}

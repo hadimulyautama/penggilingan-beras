@@ -38,6 +38,7 @@ from app.web.layar_keputusan import router as keputusan_router
 from app.web.layar_kabar import router as kabar_router
 from app.web.layar_jasa import router as jasa_router
 from app.web.layar_keluar import router as keluar_router
+from app.web.draf_keluar import router as draf_keluar_router
 from app.web.layar_retur import router as retur_router
 from app.web.layar_produk import router as produk_router
 from app.web.layar_riwayat import router as riwayat_router
@@ -105,6 +106,7 @@ app.include_router(mode_uji_router)
 app.include_router(keputusan_router)
 app.include_router(gudang_router)
 app.include_router(produk_router)
+app.include_router(draf_keluar_router)
 app.include_router(keluar_router)
 app.include_router(retur_router)
 app.include_router(jasa_router)
@@ -500,6 +502,8 @@ async def halaman_aksi(request: Request):
     from app.web.security import butuh_akun
 
     akun = await butuh_akun(request)
+    if request.query_params.get("buka") == "perintah_keluar":
+        return RedirectResponse("/barang-keluar/baru", 303)
     # `buka` datang dari layar Berjalan ATAU dari benda di layar ini sendiri:
     # menekan satu baris harus membuka formulir yang menutupnya, bukan
     # menurunkan orang di daftar aksi lalu menyuruhnya mencari sendiri.

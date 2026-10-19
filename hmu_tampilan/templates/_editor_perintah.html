@@ -1,0 +1,34 @@
+<section class="editor-perintah" data-editor-perintah="{{ draf_id }}">
+  <a href="/barang-keluar">‹ Barang keluar</a>
+  <h1>Perintah barang keluar baru</h1>
+  <p class="bantu">Tersimpan otomatis sebagai draf. Terbitkan saat siap dimuat. Tiket armada boleh menyusul.</p>
+  <p id="draf-status" role="status">Belum ada perubahan</p>
+  <div id="draf-galat" class="nota nota--buruk" role="alert" hidden></div>
+  <button type="button" id="draf-coba" class="btn" hidden>Coba simpan lagi</button>
+  <section id="draf-konflik" hidden>
+    <h2>Draf terbaru di server</h2><div id="draf-pembanding"></div>
+    <p class="bantu">Isian Anda tetap di formulir. Periksa perbedaannya sebelum memilih.</p>
+    <button type="button" class="btn" id="draf-pakai-terbaru">Gunakan draf terbaru</button>
+    <button type="button" class="btn" id="draf-pakai-isian">Simpan isian saya setelah diperiksa</button>
+  </section>
+  <form id="draf-form" novalidate>
+    <label for="draf-pelanggan">Pelanggan</label>
+    <input class="fld" type="search" id="draf-cari-pelanggan" placeholder="Cari pelanggan" aria-label="Cari pelanggan">
+    <select class="fld" id="draf-pelanggan" name="pelanggan"><option value="">Pilih pelanggan</option></select>
+    <h2>Isi muatan</h2>
+    <div id="draf-barang"></div>
+    <button type="button" id="draf-tambah" class="btn">+ Tambah item</button>
+    <label for="draf-armada">Tiket armada <small>— boleh menyusul</small></label>
+    <select class="fld" id="draf-armada" name="tiket_armada"><option value="">Belum ada armada</option></select>
+    <p class="bantu">Tiket ditautkan saat perintah diterbitkan. Tiket yang sudah dipakai perintah lain tidak ditawarkan.</p>
+    <label for="draf-ekspedisi">Ekspedisi <small>— opsional</small></label>
+    <input class="fld" id="draf-ekspedisi" name="nama_ekspedisi" maxlength="200">
+    <p class="bantu">Draf belum mengubah stok atau muncul di antrean operator.</p>
+    <button type="submit" class="btn" id="draf-terbitkan">Terbitkan perintah</button>
+  </form>
+  {% if draf_lain %}<section id="draf-saya"><h2>Draf saya</h2><ul>
+    {% for d in draf_lain %}<li><a href="/barang-keluar/draf/{{ d.id }}">Draf {{ d.diperbarui | jam('%d/%m %H:%M') }} · {{ (d.isi.get('barang') or [])|length }} item</a></li>{% endfor %}
+  </ul></section>{% endif %}
+</section>
+<script type="application/json" id="draf-awal">{{ awal | tojson }}</script>
+<script src="/static/editor-perintah.js?v={{ VERSI }}" defer></script>

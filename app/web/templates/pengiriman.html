@@ -17,7 +17,8 @@
 {% endif %}
 {% if BOLEH_PERINTAH and not detail %}
 <div class="ubah-hasil" style="margin-bottom:18px">
-  <a class="btn" href="/barang-keluar?buka=perintah_keluar">Buat perintah barang keluar</a>
+  <a class="btn" href="/barang-keluar/baru" data-utuh>Buat perintah barang keluar</a>
+  <a href="/barang-keluar/baru#draf-saya" data-utuh>Draf saya</a>
 
   <a class="btn" href="/barang-keluar?buka=ambil_jasa">Pengambilan barang jasa</a>
 
@@ -38,8 +39,8 @@
 {% if not detail %}
 <div class="grup daftar-standar">
 {% for k in (kartu if detail else kartu_aktif) %}
-  <details class="padat padat--{{ k.warna }}"{{ ' open' if detail or loop.index <= 2 }}>
-  <summary>
+  <a class="padat padat--{{ k.warna }} kartu-keluar__tautan" href="/barang-keluar/{{ k.rec.id }}">
+  <div class="kartu-keluar__ringkas">
     <div class="padat__atas">
       <span class="padat__nama">{{ k.rec.kode }}</span>
       <span class="padat__nilai">
@@ -54,7 +55,7 @@
       {%- if k.rec.nama_ekspedisi %} · {{ k.rec.nama_ekspedisi }}{% endif %}
       · {{ k.isi|length }} macam
     </div>
-  </summary>
+  </div>
 
     <div class="anak">
       <div class="anak__kepala">Isi muatan</div>
@@ -95,13 +96,10 @@
         </div>
       {% endif %}
 
-      <div class="ubah-hasil kartu-keluar__utama">
-        <a class="btn" href="/barang-keluar/{{ k.rec.id }}">Buka detail perintah</a>
-      </div>
 
 
     </div>
-  </details>
+  </a>
 {% endfor %}
 </div>
 {% endif %}

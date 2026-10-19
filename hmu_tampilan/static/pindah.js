@@ -128,6 +128,8 @@
   if (!window.fetch || !window.history || !history.pushState) { return; }
 
   function bolehDitangani(a) {
+    // Editor memakai navigasi utuh agar beforeunload menjaga draf gagal simpan.
+    if (document.querySelector("[data-editor-perintah]")) { return false; }
     if (!a || !a.getAttribute) { return false; }
     var h = a.getAttribute("href");
     if (!h || h.charAt(0) === "#") { return false; }
@@ -319,6 +321,7 @@
   }
 
   function muatPerubahan() {
+    if (document.querySelector("[data-editor-perintah]")) { return; }
     var alamat = location.pathname + location.search;
     if (!bingkai) { return; }
     delete simpan[alamat];

@@ -139,6 +139,7 @@ __all__ = [
     "PermintaanPk",
     # system
     "ActivityLog",
+    "DrafKeluar",
     "KodeUrut",
     "SetelanPabrik",
     "Notification",
@@ -151,3 +152,5 @@ __all__ = [
     "ProyeksiTransferPk",
     "ProyeksiPindahTumpukanSilo",
 ]
+
+from app.models.draf_keluar import DrafKeluar

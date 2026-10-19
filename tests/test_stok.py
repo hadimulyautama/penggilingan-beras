@@ -126,7 +126,7 @@ def test_tiap_lot_menyebut_pemasok_bobot_dan_tanggalnya():
     assert "kode_batch" in bahan and "nama_supplier" in bahan
     # Bobotnya lewat `dari_batch(...).teks()`: tiga keadaan (pasti /
     # perkiraan / menunggu timbang), bukan angka mentah (QA P6).
-    assert "dari_batch(b).teks()" in bahan, "bobot bahan tak disebut"
+    assert "dari_batch(b)" in bahan and "bobot.teks()" in bahan, "bobot bahan tak disebut"
     # Proses lama tanpa baris sumber tetap dijawab, lewat sumber yang sama
     # dengan HPP — dua jawaban untuk "apa isi proses ini" akan berselisih.
     assert "sumber_batch" in bahan
@@ -189,7 +189,7 @@ def test_bahan_didaftar_satu_baris_per_batch():
 
     fn = kode_saja(stok._bahan) + kode_saja(stok._baris_bahan)
     banyak = kode_saja(stok._bahan_banyak)
-    assert "dari_batch(b).teks()" in fn, "bobot per batch tak disebut"
+    assert "dari_batch(b)" in fn and "bobot.teks()" in fn, "bobot per batch tak disebut"
     assert "berat_kg" not in fn.replace("berat_total_kg", ""), \
         "berat muatan silo dipakai lagi sebagai berat batch"
     # Satu batch tak boleh terdaftar dua kali walau muncul di dua sumber —

@@ -416,10 +416,10 @@ _SQL_TIKET_KELUAR = _text("""
     INSERT INTO timbangan_transaksi
         (kode, tanggal, arah, jenis_kode, cara_timbang, pihak_nama,
          nomor_polisi, timbang1_kg, timbang1_waktu, netto_timbangan_kg,
-         berat_barang_kg, berat_acuan_kg, status_tiket, status_transaksi)
+         berat_barang_kg, berat_acuan_kg, status_tiket, status_transaksi, timbang2_kg, timbang2_waktu, total_tara_kg)
     VALUES
         (:kode, :tanggal, :arah, 'BERAS', 'DUA_KALI', :pembeli,
-         'B 1234 XY', 5000, :waktu, :netto, :barang, 0, 'SELESAI', :st)
+         'B 1234 XY', 5000, :waktu, :netto, :barang, 0, 'SELESAI', :st, 5000 + CAST(:netto AS NUMERIC), :waktu, 20)
     RETURNING id
 """)
 
@@ -1219,10 +1219,11 @@ async def test_tombol_perintah_ada_di_halaman_barang_keluar(pg, gudang):
     # `/aksi?buka=…` dan memindahkan orang ke Antrian tunggu. Sekarang ia
     # membuka lembarnya DI HALAMAN INI — lihat
     # `test_tombolnya_membuka_lembar_di_halaman_ini`.
-    assert "/barang-keluar?buka=perintah_keluar" in h, \
+    assert "/barang-keluar/baru" in h, \
         "tombol perintah tak ada di halamannya"
     # Pengelolaan kini di detail satu perintah; daftar hanya pintu pembuatannya.
-    assert "Buka detail perintah" in h
+    assert "Buka detail perintah" not in h
+    assert "kartu-keluar__tautan" in h
     assert "/barang-keluar?buka=tambah_barang_keluar" not in h
     # Tombol "Pengambilan barang jasa" sejajar dengan "Buat perintah" —
     # keluhan pemilik 11 Oktober 2026: aksinya sudah ada lebih dulu lewat
@@ -1436,9 +1437,9 @@ async def test_tombol_perintah_berdiri_di_puncak_halaman(pg, gudang):
     async with c:
         r = await c.get("/barang-keluar")
     h = r.text
-    assert "buka=perintah_keluar" in h
+    assert "/barang-keluar/baru" in h
     # Tombolnya mendahului kartu pertama.
-    assert h.index("buka=perintah_keluar") < h.index("OUT-"), \
+    assert h.index("/barang-keluar/baru") < h.index("OUT-"), \
         "tombol perintah masih di bawah daftar kartunya"
 
 
@@ -1481,30 +1482,15 @@ async def test_tombol_kartu_mengunci_transaksinya(pg, gudang):
         "tombol kartu tak membawa transaksinya"
 
 
-async def test_tombolnya_membuka_lembar_di_halaman_ini(pg, gudang):
-    """Keluhan pemilik 29 September 2026: "mengapa kalau verifikasi barang
-    keluar halamannya pindah ke antrian tunggu? begitu juga jika input perintah
-    barang keluar."
-
-    Sebabnya tombolnya menunjuk `/aksi?buka=…` — pola PINTASAN, yang lahir
-    untuk kaki halaman Antrian tunggu, tempat "pindah halaman" tak terasa sebab
-    halamannya itu-itu juga. Dari sini ia jadi perjalanan: orang yang sedang
-    membaca kartu OUT- tiba-tiba berdiri di daftar pekerjaan gudang, dan
-    sesudah menyimpan ia harus mencari jalan kembali.
-
-    Tiga hal yang harus benar bersamaan, dan yang ketiga paling mudah terlupa —
-    tanpa `aksi.js`, menekan tombolnya cuma memuat ulang halaman dengan
-    `?buka=` dan tak ada yang menangkapnya. Tombol yang tak melakukan apa-apa
-    lebih buruk daripada tombol yang tak ada (pelajaran layar Stok, 26
-    September).
-    """
+async def test_pembuatan_memakai_halaman_sendiri(pg, gudang):
+    """Pembuatan menuju editor; dialog daftar tetap tersedia untuk pengambilan jasa."""
     await _perintah(pg, gudang, karung=40)
     c = await _klien(pg, gudang["adm"], "uji_lembar_di_tempat")
     async with c:
         h = (await c.get("/barang-keluar")).text
 
     assert "/aksi?buka=" not in h, "tombolnya masih melemparkan orang ke /aksi"
-    assert "/barang-keluar?buka=perintah_keluar" in h
+    assert "/barang-keluar/baru" in h
     assert '<dialog class="lembar" id="lembar">' in h, "halaman ini bukan tuan rumah lembarnya"
     assert "aksi.js" in h, "aksi.js tak dimuat — tombolnya takkan menangkap apa pun"
 
@@ -2191,7 +2177,7 @@ async def test_auto_taut_menautkan_pasangan_yang_jelas(pg, gudang):
     from app.services import barang_keluar as bk
 
     rid = await _sampai_dimuat(pg, gudang, karung=100)        # 2.500 kg, Toko Makmur
-    tid = await _tiket(pg, "TK-AUTO-01", barang=2_480)        # beda 20 kg — wajar
+    tid = await _tiket(pg, "TK-AUTO-01", barang=2_495)        # batas otomatis 5 kg untuk 2,5 ton
     async with pg() as db:
         hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
     assert hasil.tertaut == ["TK-AUTO-01 -> " + (await _kode(pg, rid))]
@@ -2272,7 +2258,7 @@ async def test_auto_taut_melewati_yang_ambigu(pg, gudang):
 
     a = await _sampai_dimuat(pg, gudang, karung=100)           # 2.500 kg
     b = await _sampai_dimuat(pg, gudang, karung=100, pembeli="Toko Makmur")
-    tid = await _tiket(pg, "TK-AUTO-05", barang=2_480)         # cocok untuk keduanya
+    tid = await _tiket(pg, "TK-AUTO-05", barang=2_500)         # cocok untuk keduanya
     async with pg() as db:
         hasil = await bk.auto_tautkan(db, user=await db.get(User, gudang["adm"]))
     assert hasil.tertaut == []
@@ -2306,7 +2292,7 @@ async def test_rute_auto_taut_keluar_dipanggil_dari_aksi(pg, gudang):
     from app.web import aksi_inventory as inv
 
     rid = await _sampai_dimuat(pg, gudang, karung=100)
-    tid = await _tiket(pg, "TK-AUTO-07", barang=2_480)
+    tid = await _tiket(pg, "TK-AUTO-07", barang=2_500)
     async with pg() as db:
         r = await inv.act_auto_taut_keluar(user=await db.get(User, gudang["adm"]))
     assert r["ok"] and "1 tertaut" in r["pesan"], r

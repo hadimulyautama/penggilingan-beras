@@ -48,6 +48,9 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                                  transaksi_id: int | None = None,
                                  sebelum: int | None = None):
     from app.peran import can_see_financials
+    from fastapi.responses import RedirectResponse
+    if request.query_params.get("buka") == "perintah_keluar":
+        return RedirectResponse("/barang-keluar/baru", 303)
     from app.web.layar import SELEPAN
 
     view = getattr(request.state, "view", "tamu")

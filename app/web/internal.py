@@ -234,18 +234,27 @@ async def verifikasi_pengiriman_tiket(
             raise HTTPException(status_code=403, detail="Akun operator Timbangan tidak terhubung ke pengguna aktif Produksi.")
         if rec.timbangan_transaksi_id not in (None, int(tid)):
             raise HTTPException(status_code=409, detail="Perintah ini sudah tertaut ke tiket timbang lain.")
+        rec_id, kode_perintah = rec.id, rec.kode
         try:
             _rec, catatan = await bk.verifikasi(
-                db, user=user, rec_id=rec.id, timbangan_transaksi_id=int(tid),
+                db, user=user, rec_id=rec.id, timbangan_transaksi_id=int(tid), otomatis=True,
             )
             return {"selesai": True, "kode_perintah": rec.kode, "catatan": catatan}
         except bk.BarangKeluarError as exc:
+            # Callback kedua bisa menunggu callback pertama pada kunci perintah.
+            # Sesudah kunci didapat, baca ulang hasilnya sebelum menolak ulangan.
+            await db.rollback()
+            from app.models import OutgoingRecord
+            terbaru = await db.get(OutgoingRecord, rec_id)
+            if terbaru and terbaru.status == OUT_SELESAI and terbaru.timbangan_transaksi_id == int(tid):
+                return {"selesai": True, "kode_perintah": terbaru.kode,
+                        "catatan": "Sudah tertaut dan terverifikasi sebelumnya."}
             pesan = str(exc)
             # Jangan tautkan/menutup sebelum Admin memberi sebab selisih.
             # Tiket tetap tersedia di daftar verifikasi manual.
-            if "melewati batas wajar" in pesan:
+            if isinstance(exc, bk.VerifikasiOtomatisDitahan) or "melewati batas wajar" in pesan:
                 return {"selesai": False, "peringatan": pesan,
-                        "kode_perintah": rec.kode}
+                        "kode_perintah": kode_perintah}
             raise HTTPException(status_code=409, detail=pesan) from exc
 
 
