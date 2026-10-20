@@ -18,7 +18,7 @@
       if(typeof d.tersedia!=='number')throw Error('Stok kemasan belum dapat diperiksa.');saldo=d;tampilSaldo();
     }catch(x){if(n===urutan&&infoSaldo)infoSaldo.textContent='Stok kemasan belum dapat diperiksa. Server akan memeriksa kembali saat dicatat.';}
   }
-  function gagal(pesan,isian){galat.textContent='Belum tersimpan. '+pesan;galat.hidden=false;galat.tabIndex=-1;galat.focus();galat.scrollIntoView({block:'center'});if(isian)isian.setAttribute('aria-invalid','true');}
+  function gagal(pesan,isian,belumPasti){galat.textContent=(belumPasti?'Status simpan belum dapat dipastikan. ':'Belum tersimpan. ')+pesan;galat.hidden=false;galat.tabIndex=-1;galat.focus();galat.scrollIntoView({block:'center'});if(isian)isian.setAttribute('aria-invalid','true');}
 
   function el(n){return form.elements.namedItem(n);}
   function angka(n){return new Intl.NumberFormat('id-ID',{maximumFractionDigits:2}).format(n);}
@@ -60,7 +60,7 @@
       var d;try{d=await r.json();}catch(_){throw Error(r.status===403||r.status===401?'Sesi berakhir atau berubah. Salin isian, masuk kembali, lalu buka formulir baru.':'Jawaban server tidak lengkap. Periksa riwayat sebelum mencoba kembali; isian tetap tersedia.');}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:'Kemas ulang ditolak. Periksa kembali isian.');
       kotor=false;if(window.PINDAH&&PINDAH.lupakan)PINDAH.lupakan();hasil.textContent='Kemas ulang #'+d.id+' tercatat: '+angka(d.berat_baru_kg)+' kg, sisa curah '+angka(d.sisa_kg)+' kg. Buka stok untuk melanjutkan dari saldo terbaru.';
       Array.from(form.elements).forEach(function(x){x.disabled=true;});kirim.textContent='Tercatat';var selesai=root.querySelector('[data-selesai]');if(selesai)selesai.hidden=false;hasil.tabIndex=-1;hasil.focus();hasil.scrollIntoView({block:'center'});
-    }catch(x){gagal(x instanceof TypeError?'Jaringan gagal. Isian tetap tersedia; coba lagi dengan isian yang sama.':(x.message||'Kemas ulang gagal. Isian tetap tersedia.'));kontrol.forEach(function(x){x.el.disabled=x.disabled;});kirim.disabled=false;kirim.textContent='Coba catat lagi';}
+    }catch(x){gagal(x instanceof TypeError?'Jaringan gagal. Isian tetap tersedia; periksa riwayat sebelum mengulang dengan isian yang sama.':(x.message||'Kemas ulang gagal. Isian tetap tersedia.'),null,!(r&&r.status>=400&&r.status<500));kontrol.forEach(function(x){x.el.disabled=x.disabled;});kirim.disabled=false;kirim.textContent='Coba catat lagi';}
     finally{sibuk=false;}
   });hitung();
 })();
