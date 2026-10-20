@@ -296,7 +296,9 @@
   function bukaAksi(id, semula) {
     var a = MENU[id];
     if (!a) return;
-    if (lembarSedangTerbuka() && !bolehBuang($("lembar"))) return;
+    if (lembarSedangTerbuka() && !bolehBuang($("lembar"), function () {
+      bukaAksi(id, semula);
+    })) return;
 
     /* Yang dikunci hanya isian PENUNJUK — yang pertama bertipe pilihan.
        Di seluruh spesifikasi, isian itulah yang menyebut benda yang sedang
@@ -1703,7 +1705,8 @@
         }
         if (!lembarSedangTerbuka() || !lembar._riwayat) return false;
         lembar._riwayat = false;
-        tutupLembar();
+        if (lembar._konfirmasiBuang) lembar._konfirmasiBuang._selesai(false);
+        else tutupLembar();
         if (lembarSedangTerbuka()) {
           history.pushState(history.state, "", alamatLembar);
           lembar._riwayat = true;
@@ -1743,15 +1746,50 @@
     p.focus(); p.scrollIntoView({block: "center"});
   }
 
-  function bolehBuang(l) {
-    return !l._menyimpan && (!l._berubah || window.confirm(
-      "Buang perubahan yang belum disimpan? Pilih Batal untuk melanjutkan pengisian."));
+  function bolehBuang(l, lanjut) {
+    if (l._menyimpan) return false;
+    if (!l._berubah) return true;
+    if (l._konfirmasiBuang) return false;
+    // Dialog terpisah mempertahankan DOM formulir, termasuk pilihan berulang.
+    // Menolak/menekan Escape hanya menutup pertanyaan, tidak membuang isian.
+    var d = document.createElement("dialog");
+    d.className = "konfirmasi-isian";
+    d.setAttribute("aria-labelledby", "judul-buang-isian");
+    d.setAttribute("aria-describedby", "pesan-buang-isian");
+    d.innerHTML = '<p class="konfirmasi-isian__asal"></p>' +
+      '<h2 id="judul-buang-isian">Tutup tanpa menyimpan?</h2>' +
+      '<p id="pesan-buang-isian">Perubahan Anda belum disimpan. Jika ditutup, isian yang baru diubah akan dibuang.</p>' +
+      '<div class="konfirmasi-isian__tombol">' +
+      '<button type="button" class="btn btn--utama" data-lanjut-isi autofocus>Lanjut isi</button>' +
+      '<button type="button" class="btn" data-buang-isian>Buang &amp; tutup</button></div>';
+    var judul = l.querySelector(".lembar__isi:not([hidden]) h2");
+    d.querySelector(".konfirmasi-isian__asal").textContent = judul ? judul.textContent : "Formulir";
+    l._konfirmasiBuang = d;
+    document.body.appendChild(d);
+    function selesai(buang) {
+      if (l._konfirmasiBuang !== d) return;
+      l._konfirmasiBuang = null;
+      d.close();
+      d.remove();
+      if (buang && !l._menyimpan && lembarSedangTerbuka()) {
+        l._berubah = false;
+        lanjut();
+      }
+    }
+    d._selesai = selesai;
+    d.querySelector("[data-lanjut-isi]").onclick = function () { selesai(false); };
+    d.querySelector("[data-buang-isian]").onclick = function () { selesai(true); };
+    d.addEventListener("click", function (e) { if (e.target === d) selesai(false); });
+    d.addEventListener("cancel", function (e) { e.preventDefault(); selesai(false); });
+    d.addEventListener("close", function () { selesai(false); }, {once: true});
+    d.showModal();
+    return false;
   }
 
   function tutupLembar(paksa) {
     var l = $("lembar");
     // onclick memberi Event sebagai argumen: hanya boolean true boleh melewati pagar.
-    if (paksa !== true && !bolehBuang(l)) return;
+    if (paksa !== true && !bolehBuang(l, function () { tutupLembar(true); })) return;
     l._berubah = false;
     if (l._riwayat) {
       l._riwayat = false;
@@ -1846,6 +1884,7 @@
      ulang tiap kali isinya ditukar, dan pendengar yang dipasang langsung
      akan menumpuk sekali tiap perpindahan. */
   PINDAH.pasang(document, "keydown", function (e) {
+    if ($("lembar")._konfirmasiBuang) return;
     if (e.key === "Escape" && lembarSedangTerbuka()) { e.preventDefault(); tutupLembar(); }
   });
 
