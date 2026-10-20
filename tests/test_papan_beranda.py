@@ -138,5 +138,5 @@ def test_rincian_pintu_selalu_berjumlah_sama_dengan_lencananya():
         "rincian pintu keputusan tak lagi menyesuaikan diri dengan ada/tidaknya layar mutu"
     # Dan pintu mutunya sendiri memang bergerbang sendiri — bukan menumpang
     # `blok_keputusan`, yang akan menggambar tautan mati di app Meja.
-    assert "{% if blok_mutu %}" in tpl
-    assert '"/mutu"' in tpl.split("{% if blok_mutu %}")[1][:400]
+    assert "{% if blok_mutu and MUTU %}" in tpl
+    assert '"/mutu"' in tpl.split("{% if blok_mutu and MUTU %}")[1][:400]

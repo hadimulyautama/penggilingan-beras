@@ -109,7 +109,7 @@ def test_batang_kemajuan_hanya_untuk_yang_punya_ukurannya():
                 aksi="kadar_air", nilai="PGR-01", fase="dryer", maju=0.42,
                 ringkas="alat tes 18,0% → target 14%")
     html = _beranda(berjalan=[pgr])
-    assert "maju__bar" in html and "42.0%" in html
+    assert 'aria-label="Kemajuan menuju target kadar air"' in html and 'value="0.42"' in html
 
 
 def test_beranda_tak_mengulang_pintu_yang_sudah_ada_di_laci():
@@ -241,6 +241,6 @@ def test_beranda_tidak_ikut_berubah():
     `judul`, `utama`, dan `ringkas`.
     """
     makro = (AKAR / "hmu_tampilan/templates/_benda.html").read_text()
-    padat = makro.split("{% macro padat(b) -%}")[1].split("{%- endmacro %}")[0]
+    padat = makro.split("{% macro padat(b, progres=False) -%}")[1].split("{%- endmacro %}")[0]
     assert "b.anak" not in padat and "b.fakta" not in padat
     assert "b.ringkas or b.sub or b.isi" in padat

@@ -144,7 +144,7 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro padat(b) -%}
+{% macro padat(b, progres=False) -%}
   {{ milik.penanda(b) }}
   <div class="padat__atas">
     <span class="padat__nama">{{ visual.judul(b) }}</span>
@@ -155,7 +155,7 @@
   {# Batang kemajuan hanya untuk yang punya ukurannya. Memberi batang palsu
      pada giling — yang tak punya garis selesai — lebih buruk daripada tak
      memberi apa-apa: ia menjawab pertanyaan yang tak bisa dijawab. #}
-  {% if b.maju is not none %}
+  {% if not progres and b.maju is not none %}
     <div class="maju__bar" role="img"
          aria-label="Kemajuan {{ (b.maju * 100)|round|int }} persen">
       <span style="width: {{ (b.maju * 100)|round(1) }}%"></span>
@@ -165,6 +165,10 @@
     {{- b.ringkas or b.sub or b.isi -}}
     {% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
   </div>
+  {% if progres %}
+    {% if b.nota %}<div class="beranda-proses-status">{{ b.nota }}</div>{% elif b.keadaan %}<div class="beranda-proses-status">{{ b.keadaan }}</div>{% endif %}
+    {{ visual.kemajuan(b) }}
+  {% endif %}
 {%- endmacro %}
 
 {% macro tabel_antrean(b) -%}
@@ -234,7 +238,7 @@
    layar Menunggu keputusan membuka lembarnya SENDIRI — menekan "Verifikasi
    harga" lalu mendarat di layar lain berarti orang kehilangan tempatnya
    setiap kali ia menyelesaikan satu baris. #}
-{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False, tabel=False) -%}
+{% macro blok(judul, daftar, rapat=False, alamat="/aksi", listview=False, tabel=False, progres=False) -%}
   {% if daftar %}
   {% set kelas = "padat" if rapat else "benda" %}
   {% set dasar = dasar_borang(alamat) %}
@@ -265,7 +269,7 @@
            yang sedang dikerjakan — untuk satu keputusan: gabah ini mau ke mana. #}
         {% if b.tombol %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
@@ -293,7 +297,7 @@
           </details>
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% elif rapat or listview %}{{ padat(b) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
             {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
@@ -316,7 +320,7 @@
           </details>
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
@@ -326,7 +330,7 @@
              href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
             {# Tautan langsung tak punya mekanisme expand — bahan TETAP
                selalu tampil, sama seperti sebelum pemisahan `penuh_anak`. #}
-            <div>{% if rapat %}{{ padat(b) }}{% else %}{{ penuh(b) }}{{ penuh_anak(b) }}{% endif %}</div>
+            <div>{% if rapat %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{{ penuh_anak(b) }}{% endif %}</div>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)"
                  stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>
           </a>
@@ -341,14 +345,14 @@
              tak terkena: `.padat--diam` grid. #}
           {% if listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
-            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b) }}</span>{% else %}{{ padat(b) }}{% endif %}</summary>
+            <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
           </details>
           {% else %}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
             {# Kartu diam tak punya mekanisme expand — bahan TETAP selalu
                tampil, sama seperti sebelum pemisahan `penuh_anak`. #}
-            {% if rapat %}{{ padat(b) }}{% else %}<div>{{ penuh(b) }}{{ penuh_anak(b) }}</div>{% endif %}
+            {% if rapat %}{{ padat(b, progres) }}{% else %}<div>{{ penuh(b) }}{{ penuh_anak(b) }}</div>{% endif %}
           </div>
           {% endif %}
         {% endif %}
