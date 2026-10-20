@@ -10,10 +10,15 @@
         <td role="cell" data-label="Jumlah">{{ (p.karung ~ ' karung') if p.ukuran else '—' }}</td>
         <td role="cell" data-label="Berat"><strong>{{ (('%.2f'|format(p.kg))|replace('.', ',')) if p.bentuk == 'Sisa kemas ulang (curah)' else kg(p.kg) }} kg</strong></td>
         <td role="cell" class="produk-kemasan__aksi">
+          {% if p.href or p.kemas_baru or p.kemas or p.pindah %}
+          <details class="produk-aksi"><summary class="btn btn--kecil">Aksi <span aria-hidden="true">▾</span></summary><div class="produk-aksi__pilihan">
           {% if p.href %}<a class="btn btn--kecil" href="{{ p.href }}" data-masuk-silo="{{ p.sumber or k.jenis }}">Masukkan ke silo</a>{% endif %}
-          {% if p.kemas %}<a class="btn btn--kecil" href="{{ p.kemas }}" data-utuh>Kemas ulang</a>{% endif %}
+          {% if p.kemas_baru %}<a class="btn btn--kecil" href="{{ p.kemas_baru }}" data-kemas-curah>Kemas</a>{% endif %}
+          {% if p.kemas %}<a class="btn btn--kecil" href="{{ p.kemas }}" data-utuh>{{ 'Kemas ulang' if p.ukuran else 'Kemas' }}</a>{% endif %}
           {% if p.pindah %}<a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ p.pindah|urlencode }}">Pindah kepemilikan</a>{% endif %}
-          {% if not p.href and not p.pindah and not p.kemas %}—{% endif %}
+          </div></details>
+          {% endif %}
+          {% if not p.href and not p.pindah and not p.kemas and not p.kemas_baru %}—{% endif %}
         </td>
       </tr>
     {% else %}<tr role="row"><td role="cell" colspan="5">Tidak ada stok kemasan atau curah yang tersedia.</td></tr>{% endfor %}
@@ -25,11 +30,5 @@
    Tombol mengikuti kartu detail dan izin pemanggil, bukan konteks halaman
    yang bisa berbeda antara stok pabrik dan titipan pelanggan. #}
 {% if k.jenis == 'bekatul' and k.curah_kg > 0.5 and boleh_catat %}
-  <p><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=catat_bekatul">Catat bekatul curah</a></p>
-{% endif %}
-{% if k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah %}
-  {% for p in kemasan.get(k.jenis, []) %}
-    {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}
-  {% endfor %}
-  {% if curah_titipan and curah_titipan.get(k.jenis,0) > 0.5 %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></p>{% endif %}
+  <details class="produk-aksi"><summary class="btn btn--kecil">Aksi curah ▾</summary><div class="produk-aksi__pilihan"><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=catat_bekatul">Catat bekatul curah</a></div></details>
 {% endif %}

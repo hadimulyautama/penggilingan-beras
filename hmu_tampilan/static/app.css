@@ -3252,3 +3252,11 @@ body:not(.terik) .beranda-pekerjaan .tindakan { border:1px solid var(--redup-2);
 .beranda-pekerjaan .tindakan__ket { display:none; }
 .beranda-aktivitas .proses-kemajuan, .beranda-proses-status { grid-column:1 / -1; width:100%; min-width:0; }
 .beranda-proses-status { color:var(--tinta); font-size:13px; line-height:1.4; }
+
+/* Aksi stok per baris: dibuka dalam alur agar menu tidak terpotong tabel. */
+.produk-aksi { margin:0; min-width:120px; }
+.produk-aksi > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:48px; list-style:none; cursor:pointer; }
+.produk-aksi > summary::-webkit-details-marker { display:none; }
+.produk-aksi__pilihan { display:grid; gap:6px; padding-top:8px; min-width:150px; }
+.produk-aksi__pilihan .btn { width:100%; min-height:48px; margin:0; text-align:left; justify-content:flex-start; }
+@media(max-width:900px) { .produk-aksi { width:100%; } }

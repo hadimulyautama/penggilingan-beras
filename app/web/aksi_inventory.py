@@ -162,7 +162,7 @@ async def produk_kemasan(user: User = Depends(pengguna_aksi)) -> list[dict]:
 
 
 @router.get("/actions/beras-belum-dikemas")
-async def beras_belum_dikemas(user: User = Depends(pengguna_aksi)) -> list[dict]:
+async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = None, user: User = Depends(pengguna_aksi)) -> list[dict]:
     """Beras yang sudah keluar mesin dan BELUM dikemas — per lot × jenis.
 
     Ia penunjuk borang packing, dan bentuknya menjawab keluhan pemilik 28
@@ -186,14 +186,16 @@ async def beras_belum_dikemas(user: User = Depends(pengguna_aksi)) -> list[dict]
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
         curah = await beras_curah(db, termasuk_berjalan=True)
-        pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
+        nama_pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
     return [{"value": f"{b.kode_proses}|{b.jenis}",
              "berat_kg": float(b.sisa_kg),
              "label": (f"{b.kode_proses} · {nama_produk(b.jenis)} · "
                        f"{kg(b.sisa_kg)} tersedia"
                        + (" · sosoh berjalan" if b.berjalan else "")
-                       + (f" · titipan {pemilik.get(b.jasa_id, '?')}" if b.jasa_id else " · pabrik"))}
-            for b in curah if b.sisa_kg > 0.5]
+                       + (f" · titipan {nama_pemilik.get(b.jasa_id, '?')}" if b.jasa_id else " · pabrik"))}
+            for b in curah if b.sisa_kg > 0.5
+            and (jenis is None or b.jenis == jenis)
+            and (pemilik is None or ("pabrik" if b.jasa_id is None else str(b.jasa_id)) == pemilik)]
 
 
 @router.get("/actions/stok-barang-jadi")

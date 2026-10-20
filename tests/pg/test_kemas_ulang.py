@@ -269,3 +269,13 @@ async def test_pilihan_hanya_saldo_positif_dan_merek_pemilik(pg,sosoh_jasa,jasa)
         await db.commit()
         assert await svc.kemasan_tersedia(db,'beras_putih',sosoh_jasa['jasa_id'] if jasa else None)==[]
         assert await db.scalar(select(func.count()).select_from(KemasUlang))==before
+
+async def test_pilihan_kemas_curah_terpisah_jenis_dan_pemilik(pg,sosoh_jasa):
+    from tests.pg.test_barang_keluar import _klien
+    c=await _klien(pg,sosoh_jasa['user'],'kemas-curah375')
+    async with c:
+        for owner,kode in [('pabrik',sosoh_jasa['kode_pabrik']),(str(sosoh_jasa['jasa_id']),sosoh_jasa['kode_jasa'])]:
+            r=await c.get('/api/actions/beras-belum-dikemas',params={'jenis':'medium','pemilik':owner})
+            assert r.status_code==200
+            assert [o['value'] for o in r.json()]==[kode+'|medium']
+        assert (await c.get('/api/actions/beras-belum-dikemas',params={'jenis':'tidak-ada','pemilik':'pabrik'})).json()==[]

@@ -413,9 +413,11 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
             params["sumber_stok"] = sumber
         href = detail_href + "&" + urlencode(params) if aksi and berat > 0.5 and boleh_silo else None
         pindah = (f"bj:{p['sku_id']}|{p['std_id'] or ''}|{owner}"
-                  if p and owner is not None and jumlah and boleh_pindah else None)
+                  if p and owner is not None and jumlah and boleh_pindah else
+                  f"cr:{jenis}|{owner}" if not p and not jumlah and berat>0.5 and owner is not None and jenis in ("broken","menir","reject","bekatul") and boleh_pindah else None)
         rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
                          bahan=bahan,href=href,pindah=pindah,
+                         kemas_baru=(detail_href+"&"+urlencode({"buka":"catat_packing","nilai":f"curah@{jenis}@{token}"})) if not p and not jumlah and berat>0.5 and boleh_kemas else None,
                          kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and jumlah and boleh_kemas else None,
                          sumber=sumber if jenis in svc.BERAS_JENIS else None))
 
@@ -440,8 +442,11 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                   merk=p["merk"],bahan=p["bahan"],p=p)
         for owner in owners:
             c = cards.get(owner)
-            if c is not None and (c.curah_kg > 0.5 or c.curah_kg < -0.5):
-                baris(owner=owner,bentuk="Curah · belum dikemas",berat=c.curah_kg)
+            if c is not None:
+                residu=sum(float(r[0].berat_total_kg) for r in sisa_rows if r[0].jasa_id==owner)
+                curah_belum=c.curah_kg-residu
+                if abs(curah_belum)>0.5:
+                    baris(owner=owner,bentuk="Curah · belum dikemas",berat=curah_belum)
     for fg,_,_ in sisa_rows:
         rows.append(dict(bentuk='Sisa kemas ulang (curah)',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
             kemas=kemas_href(fg.product_sku_id,fg.rice_quality_standard_id,fg.jasa_id) if boleh_kemas else None))

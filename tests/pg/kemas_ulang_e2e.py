@@ -71,6 +71,25 @@ async def test_browser_halaman_utuh_simpan_dan_kembali(pg,sosoh_jasa,jasa,terang
             page.reload()
             expect(page.locator('#kabar')).not_to_be_visible()
             assert dialog==['beforeunload'], 'simpan berhasil tidak boleh memunculkan peringatan kehilangan isian'
+            baris=page.locator('tr').filter(has=page.locator('[data-kemas-curah]')).first
+            expect(baris).to_contain_text('4.800 kg' if jasa else '8.800 kg')
+            baris.locator('summary').click()
+            assert baris.locator('summary').bounding_box()['height']>=48
+            page.screenshot(path=tmp_path/f'aksi-stok-{jasa}-{terang}.png')
+            page.locator('[data-kemas-curah]').first.click()
+            expect(page.locator('#lembar')).to_be_visible()
+            expect(page.locator('#f_sumber option')).not_to_have_count(1)
+            pilihan=page.locator('#f_sumber option').all_text_contents()
+            kode=sosoh_jasa['kode_jasa'] if jasa else sosoh_jasa['kode_pabrik']
+            nilai=page.locator('#f_sumber option').evaluate_all('(xs)=>xs.map(x=>x.value).filter(Boolean)')
+            assert nilai==[kode+'|medium'], (nilai,pilihan)
+            assert len(pilihan)==2, pilihan
+            assert len(posts)==1, 'membuka formulir kemas tidak boleh menyimpan stok'
+            page.screenshot(path=tmp_path/f'kemas-curah-{jasa}-{terang}.png')
+            page.set_viewport_size({'width':1440,'height':1000})
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            page.screenshot(path=tmp_path/f'kemas-curah-desktop-{jasa}-{terang}.png')
+
             b.close()
     async with c:
         await asyncio.to_thread(browser)

@@ -302,6 +302,8 @@
        Di seluruh spesifikasi, isian itulah yang menyebut benda yang sedang
        dikerjakan; sisanya keputusan yang memang belum diambil. */
     var terkunci = nilaiBaris();
+    var lingkupKemas = id === "catat_packing" && terkunci.indexOf("curah@") === 0 ? terkunci.split("@") : null;
+    if (lingkupKemas) terkunci = "";
     var namaKunci = "";
     if (terkunci) {
       for (var i = 0; i < (a.fields || []).length; i++) {
@@ -994,6 +996,9 @@
          menawarkan SELURUH pilihan yang mungkin — persis kesalahan yang medan
          ini menggantikan. */
       var sumber = f.source;
+      if (lingkupKemas && f.name === "sumber") {
+        sumber += "?jenis=" + encodeURIComponent(lingkupKemas[1]) + "&pemilik=" + encodeURIComponent(lingkupKemas[2]);
+      }
       // Detail perintah sudah menentukan barangnya; jangan memuat pilihan
       // milik truk lain atau bergantung pada batas halaman daftar.
       if (sumber === "/api/actions/item-perintah-ubah" && kunciMedan(f)) {
