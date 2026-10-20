@@ -112,14 +112,14 @@ async def test_admin_melihat_tiga_blok_papan(pg, pabrik):
         n = _re.search(r"lencana[^>]*>\s*(\d+)\s*<", m.group(1))
         return isi, (int(n.group(1)) if n else 0)
 
-    isi_k, n_k = _pintu("/keputusan")
+    # Data ini tidak memiliki keputusan tertunda: status satu baris mengganti
+    # kartu kosong. Sidebar boleh tetap memiliki tujuan /keputusan.
+    kerja = _re.search(r'<div class="beranda-pekerjaan">(.*?)</div>\s*<div class="beranda-status-kosong">', t, _re.S)
+    assert kerja
+    assert 'href="/keputusan"' not in kerja.group(1)
+    assert "Tidak ada keputusan tertunda" in t
     isi_m, n_m = _pintu("/mutu")
-    assert "mutu" not in isi_k, f"pintu keputusan masih mengaku memuat mutu: {isi_k}"
-    rinci = _re.findall(r"(\d+)\s+(?:permintaan|output)", isi_k)
-    if rinci:
-        assert sum(int(x) for x in rinci) == n_k, isi_k
-    else:
-        assert n_k == 0, f"lencana {n_k} tanpa rincian apa pun: {isi_k}"
+    assert n_m > 0, "pemeriksaan mutu yang masih tertunda harus tetap ditawarkan"
     # Satu baris per gudang, masing-masing menaut ke halamannya.
     assert 'href="/gudang/g1"' in t and 'href="/gudang/g2"' in t
     assert "Gudang 1 — Selepan" in t and "Gudang 2 — Penyosohan" in t
@@ -134,7 +134,9 @@ async def test_operator_tak_melihat_papan(pg, pabrik):
     assert 'href="/gudang/g2"' not in t, "operator ditawari gudang sebelah"
     # Yang tetap ada: petaknya sendiri. Halaman yang kosong terbaca sebagai
     # aplikasi rusak, bukan sebagai peran yang lebih sempit.
-    assert "petak__sel" in t
+    assert 'class="beranda-gudang-padat"' in t
+    assert "Gudang 1 — Selepan" in t
+    assert "Gabah masuk" in t
 
 
 async def test_harga_yang_masih_baru_tak_masuk_perhatian(pg):

@@ -244,3 +244,14 @@ def test_beranda_tidak_ikut_berubah():
     padat = makro.split("{% macro padat(b, progres=False) -%}")[1].split("{%- endmacro %}")[0]
     assert "b.anak" not in padat and "b.fakta" not in padat
     assert "b.ringkas or b.sub or b.isi" in padat
+
+
+def test_keputusan_berisi_tetap_memuat_jumlah_dan_rincian():
+    html = _beranda(blok_keputusan=True, KEPUTUSAN=3, rinci_keputusan=True,
+                    n_permintaan=2, n_output=1, n_mutu=0, blok_mutu=True, MUTU=0)
+    import re
+    kartu = re.search(r'<a [^>]*href="/keputusan"[^>]*>(.*?)</a>', html, re.S)
+    assert kartu
+    assert "2 permintaan · 1 output" in kartu.group(1)
+    assert re.search(r'lencana[^>]*>3</span>', kartu.group(1))
+    assert "Tidak ada keputusan tertunda" not in html
