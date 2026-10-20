@@ -76,53 +76,17 @@ async def _klien(pg, *, role: str, gudang_id: int | None = None) -> httpx.AsyncC
 
 
 async def test_admin_melihat_tiga_blok_papan(pg, pabrik):
-    c = await _klien(pg, role="superadmin")
-    async with c:
-        t = (await c.get("/")).text
-    # Blok "Perlu perhatian" hanya digambar BILA ADA isinya — blok yang selalu
-    # berisi mengajari orang mengabaikannya. Sampai 28 September 2026 fixture
-    # ini mengisinya dengan "harga menggantung"; butir itu dibuang bersama
-    # seluruh harga, dan tak ada penggantinya di data uji ini.
-    #
-    # Yang dijaga tetap TIGA blok papannya — rincian keputusan, pintu mutu, dan
-    # baris per gudang — yaitu yang diuji di bawah.
-    assert "GB-MENGGANTUNG-01" not in t, (
-        "gabah yang belum berharga masih ditagih di Beranda")
-    # Rincian keputusan, bukan cuma jumlahnya — dan sejak 24 September 2026
-    # bagian mutunya berdiri sebagai PINTU KEDUA (permintaan pemilik), bukan
-    # sebagai kata ketiga di pintu pertama.
-    # Golongan "harga" DIBUANG 28 September 2026 bersama seluruh harga, dan
-    # fixture ini tak punya keputusan lain — jadi rinciannya memang tak
-    # digambar. Yang dijaga bukan KEHADIRAN rinciannya melainkan
-    # KEBENARANNYA, di bawah: bila ia digambar, angkanya harus berjumlah ke
-    # lencananya. Rincian yang berbohong lebih buruk daripada rincian yang
-    # tak ada.
-    assert 'href="/mutu"' in t, "pintu Mutu & QC tak digambar untuk admin"
-    # Yang dijaga di sini bukan kata-katanya melainkan JUMLAHNYA: rincian tiap
-    # pintu harus berjumlah sama dengan lencananya, kalau tidak orang berhenti
-    # mempercayai keduanya. (Galat kelas ini sedang hidup di app Meja: lencana
-    # 8, layar 7.)
-    import html as _html
-    import re as _re
-
-    def _pintu(alamat):
-        m = _re.search(r'<a [^>]*href="' + _re.escape(alamat) + r'"[^>]*>(.*?)</a>', t, _re.S)
-        assert m, f"pintu {alamat} tak ada"
-        isi = _html.unescape(" ".join(_re.sub(r"<[^>]+>", " ", m.group(1)).split()))
-        n = _re.search(r"lencana[^>]*>\s*(\d+)\s*<", m.group(1))
-        return isi, (int(n.group(1)) if n else 0)
-
-    # Data ini tidak memiliki keputusan tertunda: status satu baris mengganti
-    # kartu kosong. Sidebar boleh tetap memiliki tujuan /keputusan.
-    kerja = _re.search(r'<div class="beranda-pekerjaan">(.*?)</div>\s*<div class="beranda-status-kosong">', t, _re.S)
-    assert kerja
-    assert 'href="/keputusan"' not in kerja.group(1)
-    assert "Tidak ada keputusan tertunda" in t
-    isi_m, n_m = _pintu("/mutu")
-    assert n_m > 0, "pemeriksaan mutu yang masih tertunda harus tetap ditawarkan"
-    # Satu baris per gudang, masing-masing menaut ke halamannya.
+    """QC dan keputusan tertagih sekali melalui pintu Pekerjaan."""
+    import re
+    async with await _klien(pg,role='superadmin') as c:
+        t=(await c.get('/')).text
+        daftar=(await c.get('/pekerjaan?jenis=qc')).text
+    assert 'GB-MENGGANTUNG-01' not in t
+    kartu=re.search(r'<a class="tindakan [^>]*href="/pekerjaan"[^>]*>(.*?)</a>',t,re.S)
+    assert kartu and re.search(r'lencana[^>]*>\s*[1-9][0-9]*\s*<',kartu.group(1))
+    assert 'href="/mutu"' not in t and 'href="/keputusan"' not in t
+    assert 'buka=qc_' in daftar
     assert 'href="/gudang/g1"' in t and 'href="/gudang/g2"' in t
-    assert "Gudang 1 — Selepan" in t and "Gudang 2 — Penyosohan" in t
 
 
 async def test_operator_tak_melihat_papan(pg, pabrik):

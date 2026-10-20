@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block judul %}Barang Masuk{% endblock %}
+{% block isi %}
+<style>@import url('/static/operasional.css?v={{ VERSI }}&antrean-bahan=7');</style>
+{% import '_benda.html' as benda with context %}
+{% import '_stok.html' as st %}
+{% import '_kepemilikan.html' as milik with context %}
+{% import '_kerja_navigasi.html' as nav with context %}
+<header class="kerja-kepala"><h1>Barang Masuk</h1>
+<nav class="saring kerja-tab" aria-label="Status penerimaan">
+<a class="pil{{ ' pil--on' if status=='belum' }}" href="{{ href(status='belum') }}"{% if status=='belum' %} aria-current="page"{% endif %}>Belum diterima <span class="pil__jml">{{ total_belum }}</span></a>
+<a class="pil{{ ' pil--on' if status=='diterima' }}" href="{{ href(status='diterima') }}"{% if status=='diterima' %} aria-current="page"{% endif %}>Diterima <span class="pil__jml">{{ total_diterima }}</span></a>
+</nav>
+<details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ jenis or 'Semua jenis' }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(request.query_params.get('kepemilikan'),'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
+{{ milik.saring() }}
+{% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
+<form method="get" action="/barang-masuk" class="saring">
+<input type="hidden" name="status" value="{{ status }}">
+{% for key in ['kepemilikan','gudang','cari','pemasok'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
+<label class="kerja-filter">Jenis barang<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n in jenis_barang %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }}</option>{% endfor %}</select></label>
+<button class="btn btn--kecil" type="submit">Tampilkan</button>
+</form>
+</details>
+{% include '_kerja_cari.html' %}
+</header>
+{% if status=='belum' %}
+<p class="bantu">Bahan yang sudah diterima dan menunggu penempatan ada di <a href="/pekerjaan?jenis=penempatan">Pekerjaan</a>.</p>
+{{ benda.blok('Tiket timbang masuk',menunggu,alamat=request.url.path,listview=true,tabel='bahan') }}
+{% if not menunggu %}<div class="kosong"><div><h2>Tidak ada tiket belum diterima</h2><p class="bantu">Tiket yang sudah dicatat ada di Diterima. Penempatan bahan yang sudah diterima ada di <a href="/pekerjaan">Pekerjaan</a>.</p></div></div>{% endif %}
+{% else %}
+<section class="masuk-daftar" aria-label="Penerimaan tercatat">
+{% for t in riwayat %}
+<a class="masuk-baris" data-cari="{{ (t.kode ~ ' ' ~ t.nama ~ ' ' ~ (t.nomor_polisi or ''))|lower }}" data-sup="{{ t.nama }}" href="{{ detail_tiket(t.id) }}">
+<span><strong>{{ t.kode }}</strong><small>{{ t.jenis_nama or t.jenis_kode }} · {{ t.nama }}</small><small>{{ t.nomor_polisi or 'Plat belum tercatat' }}</small></span>
+<span class="identitas-barang__label identitas-barang__label--{{ t.kepemilikan }}">{{ {'jasa':'Jasa','pabrik':'Milik pabrik','campuran':'Jasa & milik pabrik'}[t.kepemilikan] }}</span>
+<span>{{ t.catatan|length }} catatan<small>{{ t.catatan[0].waktu|jam('%d/%m/%Y · %H:%M') }}</small><small>{{ 'Ditolak' if t.catatan[0].status=='ditolak' else 'Diterima' }} · {{ t.status_tiket }}</small></span><span aria-hidden="true">›</span>
+</a>
+{% else %}<div class="kosong"><div><h2>Belum ada penerimaan tercatat</h2><p class="bantu">Pilihan jenis dan kepemilikan tetap dapat diubah.</p></div></div>{% endfor %}
+</section>
+{% if halaman_akhir>1 %}<nav class="saring" aria-label="Halaman penerimaan">{% if halaman>1 %}<a class="btn btn--kecil" href="{{ href(status='diterima') }}&amp;halaman={{ halaman-1 }}">Sebelumnya</a>{% endif %}<span>{{ halaman }} / {{ halaman_akhir }}</span>{% if halaman<halaman_akhir %}<a class="btn btn--kecil" href="{{ href(status='diterima') }}&amp;halaman={{ halaman+1 }}">Berikutnya</a>{% endif %}</nav>{% endif %}
+{% endif %}
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}{% endblock %}

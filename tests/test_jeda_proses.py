@@ -157,18 +157,12 @@ def test_antrean_hanya_yang_belum_punya_tempat():
 
 
 def test_kartu_yang_sama_tak_muncul_di_dua_layar():
-    """Kartu yang sama di dua tempat adalah dua tempat di kepala orang, dan
-    cepat atau lambat keduanya berbeda isi."""
-    from app import main
-    from app.web import layar_berjalan
-
-    aksi = kode_saja(main.halaman_aksi)
-    assert "berjalan=[]" in aksi, "layar antrean tak boleh ikut memuat yang berjalan"
-    jalan = kode_saja(layar_berjalan.halaman_berjalan)
-    # `transit` tetap dimuat — lewat penyaring gudang sejak 24 September 2026,
-    # jadi yang diperiksa SUMBERNYA (`b.transit`), bukan bentuk pemanggilannya.
-    assert "transit=pilih(b.transit)" in jalan
-    assert "menunggu=" not in jalan, "layar ini tak boleh ikut memuat antrean"
+    """Mesin aktif/dijeda tetap satu kali di Berjalan, bukan ditagih dua kali."""
+    from app.services.berjalan import Baris,Berjalan
+    from app.services.kelompok_kerja import bagi
+    p=Baris('LOT-1','Giling dijeda','menunggu dilanjutkan',aksi='lanjutkan_proses',fase='giling')
+    k=bagi(Berjalan(berjalan=[p]))
+    assert k.berjalan==[p] and k.tindakan==[] and k.masuk==[]
 
 
 def test_kartu_punya_bentuk_yang_bisa_dipindai():

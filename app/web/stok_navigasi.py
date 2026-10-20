@@ -42,28 +42,39 @@ def pelanggan_diminta(request):
     raise HTTPException(422, 'Pelanggan tidak dikenal. Pilih pelanggan dari daftar.')
 
 
+def kembali_aman(nilai):
+    """Konteks tampilan saja; tidak dapat mengubah izin atau tujuan transaksi."""
+    try:
+        bagian = urlsplit(nilai or '')
+    except ValueError:
+        return ''
+    if bagian.path != '/stok' or bagian.netloc or bagian.scheme:
+        return ''
+    q = parse_qs(bagian.query)
+    tab, pemilik = q.get('tab', ['bahan'])[0], q.get('pemilik', ['pabrik'])[0]
+    pid, gudang = q.get('pelanggan_id', [''])[0], q.get('gudang', [''])[0]
+    if tab not in {'bahan', 'produk', 'karung'} or pemilik not in {'pabrik', 'jasa'}:
+        return ''
+    if gudang not in {'', 'g1', 'g2'} or pid and (not pid.isascii() or not pid.isdigit() or int(pid) <= 0):
+        return ''
+    return alamat(tab, pemilik, pelanggan_id=pid, gudang=gudang)
+
+
 async def siapkan(request, nama, konteks):
     if konteks.get('detail') or nama == 'stok_produk_detail.html':
-        balik = request.query_params.get('kembali_stok', '')
-        potongan = urlsplit(balik)
-        if potongan.path == '/stok' and not potongan.netloc and not potongan.scheme:
-            q = parse_qs(potongan.query)
-            tab, pemilik = q.get('tab', ['bahan'])[0], q.get('pemilik', ['pabrik'])[0]
-            if tab in {'bahan', 'produk', 'karung'} and pemilik in {'pabrik', 'jasa'}:
-                balik = alamat(tab, pemilik, pelanggan_id=q.get('pelanggan_id', [''])[0],
-                               gudang=q.get('gudang', [''])[0])
-                konteks['kembali'] = balik
-                tambahan = urlencode({'kembali_stok': balik})
-                if konteks.get('detail_href'):
-                    konteks['detail_href'] += '&' + tambahan
-                # Tautan aksi dalam baris kemasan dibuat sebelum render.
-                # Bawa filter juga ketika formulir dibuka lewat baris tersebut.
-                for baris in konteks.get('baris_kemasan', []):
-                    for kunci in ('href', 'kemas_baru', 'kemas'):
-                        if baris.get(kunci):
-                            baris[kunci] += ('&' if '?' in baris[kunci] else '?') + tambahan
-                if konteks.get('halaman_aksi'):
-                    konteks['halaman_aksi'] += ('&' if '?' in konteks['halaman_aksi'] else '?') + tambahan
+        balik = kembali_aman(request.query_params.get('kembali_stok', ''))
+        if balik:
+            konteks['kembali'] = balik
+            tambahan = urlencode({'kembali_stok': balik})
+            if konteks.get('detail_href'):
+                konteks['detail_href'] += '&' + tambahan
+            # Tautan aksi dalam baris kemasan dibuat sebelum render.
+            for baris in konteks.get('baris_kemasan', []):
+                for kunci in ('href', 'kemas_baru', 'kemas'):
+                    if baris.get(kunci):
+                        baris[kunci] += ('&' if '?' in baris[kunci] else '?') + tambahan
+            if konteks.get('halaman_aksi'):
+                konteks['halaman_aksi'] += ('&' if '?' in konteks['halaman_aksi'] else '?') + tambahan
         return
     if nama not in HALAMAN:
         return

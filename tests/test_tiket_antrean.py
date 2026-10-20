@@ -154,17 +154,11 @@ def test_kartu_jenis_tak_dikenal_tanpa_tindakan_apa_pun():
 
 
 def test_blok_tiket_punya_judulnya_sendiri_di_pos_produksi():
-    """Kartu diam tak boleh berdiri di bawah judul "Bisa dikerjakan sekarang".
-
-    Judul yang menjanjikan sesuatu yang tak terjadi membuat orang menekan
-    berulang lalu menyimpulkan aplikasinya rusak — dan kesimpulan itu menempel
-    pada seluruh layar, bukan pada satu kartu.
-    """
-    utama = (AKAR / "app/main.py").read_text()
-    assert 'KELOMPOK_TENGAH="tiket"' in utama
-    assert 'judul_tengah="Tiket timbang belum dicatat"' in utama
-    tpl = (AKAR / "hmu_tampilan/templates/aksi.html").read_text()
-    assert "{% if KELOMPOK_TENGAH %}" in tpl
-    # Bawaannya kosong DI TEMPLAT: app yang tak punya blok tengah tak perlu
-    # tahu bahwa blok itu ada, dan keluarannya harus sama seperti sebelumnya.
-    assert 'KELOMPOK_TENGAH|default("", true)' in tpl
+    """Penerimaan memiliki halaman sendiri, bukan memindahkan grup bahan utuh."""
+    from app.services.kelompok_kerja import penerimaan
+    from app.services.berjalan import Baris
+    assert penerimaan(Baris('t','tiket','',aksi='gabah_masuk'))
+    assert not penerimaan(Baris('b','batch','',aksi='pindah_tumpukan',tiket_kode='t'))
+    from pathlib import Path
+    p=Path(__file__).resolve().parents[1]/'hmu_tampilan/templates/barang_masuk.html'
+    assert "benda.blok('Tiket timbang masuk'" in p.read_text()

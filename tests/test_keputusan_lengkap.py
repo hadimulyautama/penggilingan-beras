@@ -245,7 +245,7 @@ def test_pintu_mutu_padam_saat_pencatatan_mutu_dimatikan():
     # "stok_produk" SELALU padam sejak 5 Oktober 2026 (diserap sub-menu
     # "Stok") — tak ada hubungannya dengan setelan mutu, jadi diperiksa
     # terpisah dari "mutu" di sini, bukan lewat kesamaan tuple penuh.
-    assert "mutu" not in Berjalan().lencana()["PINTU_MATI"]
+    assert "mutu" in Berjalan().lencana()["PINTU_MATI"]  # Pintunya digabung ke Pekerjaan.
     assert "mutu" in Berjalan(mutu_aktif=False).lencana()["PINTU_MATI"]
 
     import pathlib
@@ -257,25 +257,13 @@ def test_pintu_mutu_padam_saat_pencatatan_mutu_dimatikan():
 
 
 def test_laci_menawarkan_mutu_hanya_ke_view_meja():
-    """Operator tidak melihat halaman ini sama sekali (pemilik, 24 September
-    2026): yang ia lihat adalah mutu BARANGNYA, di kartu Stok dan kartu proses.
-    Menilai mutu dan menagih penilaiannya dua pekerjaan berbeda."""
-    from app.web.layar import MEJA
-    from app.web.nav import JUDUL, TAB
-
-    baris = [t for t in TAB if t[0] == "mutu"]
-    assert len(baris) == 1, "pintu Mutu & QC tak ada di laci"
-    # Diindeks, bukan dibongkar berposisi: medan keenam (ikon) lahir 29
-    # September 2026, dan pembongkaran berposisi mematahkan sepuluh uji
-    # sekaligus demi satu medan yang tak satu pun di antaranya pedulikan.
-    kunci, alamat, nama, ket, view = baris[0][:5]
-    assert alamat == "/mutu" and view is MEJA
-    assert nama == "Mutu & QC"
-    # Keterangan menyebut PEKERJAANNYA, bukan mengulang judulnya.
-    assert ket and ket != nama and nama.lower() not in ket.lower()
-    # Judul bilah atas diturunkan dari daftar yang sama — nama layar tak pernah
-    # berbeda antara pintu dan judulnya.
-    assert JUDUL["mutu"] == nama
+    """QC memakai pintu gabungan; rute lama tetap hanya untuk admin."""
+    from app.web.nav import TAB,JUDUL
+    from app.web import layar_keputusan
+    import inspect
+    assert not any(t[0]=='mutu' for t in TAB)
+    assert JUDUL['pekerjaan']=='Pekerjaan'
+    assert 'Depends(butuh_admin)' in inspect.getsource(layar_keputusan.halaman_mutu)
 
 
 def test_gerbang_halaman_mutu_sama_dengan_keputusan():

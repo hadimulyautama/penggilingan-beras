@@ -33,6 +33,17 @@
 <section class="beranda-tindaklanjut" aria-label="Pekerjaan yang perlu ditindak">
   {% if blok_perhatian %}{{ br.blok_perhatian(perhatian|rejectattr("duplikat_proses")|list) }}{% endif %}
   <h2 class="lbl">Perlu ditindak</h2>
+  {% if BARANG_MASUK is defined and PEKERJAAN is defined %}
+  <div class="beranda-pekerjaan">
+    {% if BARANG_MASUK %}{{ br.pintu("/barang-masuk", "Barang Masuk", "Tiket belum diterima", br.ikon_antrean(), BARANG_MASUK, warna_ikon="hijau") }}{% endif %}
+    {% if PEKERJAAN %}{{ br.pintu("/pekerjaan", "Pekerjaan", "Perlu tindakan, QC dan keputusan", br.ikon_centang(), PEKERJAAN, warna_ikon="biru") }}{% endif %}
+  </div>
+  <div class="beranda-status-kosong">
+    {% if not BARANG_MASUK %}<span>Tidak ada penerimaan perlu tindakan</span>{% endif %}
+    {% if not PEKERJAAN %}<span>Tidak ada pekerjaan perlu tindakan</span>{% endif %}
+
+  </div>
+  {% else %}
   <div class="beranda-pekerjaan">
     {% if MENUNGGU %}{{ br.pintu("/aksi", "Antrian tunggu", "Buka daftar pekerjaan", br.ikon_antrean(), MENUNGGU, warna_ikon="hijau") }}{% endif %}
     {% if blok_keputusan and KEPUTUSAN %}
@@ -47,6 +58,7 @@
     {% if blok_keputusan and not KEPUTUSAN %}<span>Tidak ada keputusan tertunda</span>{% endif %}
     {% if blok_mutu and not MUTU %}<span>QC sudah tercatat</span>{% endif %}
   </div>
+  {% endif %}
 </section>
 <section class="beranda-aktivitas" aria-label="Aktivitas">
   {{ benda.blok("Sedang berjalan", berjalan, rapat=True, alamat="/", progres=True) }}
@@ -57,11 +69,11 @@
 
 {# Ponsel hanya menawarkan tujuan yang belum menjadi kartu; desktop sudah
    punya sidebar dan bilah cepat. Gerbang peran tetap mengikuti TAB. #}
-{% set pintas_beranda = {'aksi': 'Antrian tunggu', 'berjalan': 'Sedang berjalan', 'stok': 'Stok', 'barang_keluar': 'Barang keluar'} %}
+{% set pintas_beranda = {'barang_masuk': 'Barang Masuk', 'pekerjaan': 'Pekerjaan', 'aksi': 'Antrian tunggu', 'berjalan': 'Sedang berjalan', 'stok': 'Stok', 'barang_keluar': 'Barang keluar'} %}
 <nav class="beranda-akses beranda-akses--ringkas beranda-akses--ponsel" aria-label="Halaman operasional">
   <div class="beranda-akses__grid">
     {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and not (kunci == 'aksi' and MENUNGGU) %}
+      {% if kunci in pintas_beranda and (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and not (kunci == 'aksi' and MENUNGGU) and not (kunci == 'barang_masuk' and BARANG_MASUK) and not (kunci == 'pekerjaan' and PEKERJAAN) %}
         <a class="beranda-akses__item" href="{{ alamat }}"><strong>{{ pintas_beranda[kunci] }}</strong></a>
       {% endif %}
     {% endfor %}

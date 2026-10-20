@@ -90,20 +90,13 @@ def test_lingkup_gudang_per_view():
 # ─────────────────────────── Laci: pintu per view ───────────────────────────
 
 def test_pintu_meja_tertutup_bagi_operator():
-    """Keputusan & List audit bukan milik operator — keduanya, bukan salah
-    satu. Yang menjaga sungguhan tetap rutenya; ini soal tak menawarkan
-    pintu yang akan ditolak."""
+    """Pintu gabungan tersedia; pekerjaan meja tetap dibatasi di layanan/rute."""
     from app.web.nav import TAB
-
-    view = {t[0]: t[4] for t in TAB}
-    for kunci in ("keputusan", "audit"):
-        assert set(view[kunci]) == set(MEJA), kunci
-
-    # Pintu yang dimiliki KEEMPAT view ditulis None, bukan daftar berisi
-    # empat nama: daftar yang harus ditambah tiap kali ada view baru adalah
-    # daftar yang suatu hari lupa ditambah.
-    for kunci in ("beranda", "aksi", "berjalan", "stok", "laporan", "pengaturan"):
-        assert view[kunci] is None, kunci
+    view={t[0]:t[4] for t in TAB}
+    assert set(view['audit'])==set(MEJA)
+    assert 'keputusan' not in view and 'mutu' not in view
+    for k in ('beranda','barang_masuk','pekerjaan','stok','laporan','pengaturan'):
+        assert view[k] is None
 
 
 def test_laci_memakai_isi_kolomnya_bukan_sekadar_terisi_atau_tidak():
@@ -261,23 +254,17 @@ def test_stok_mengikuti_view_pembacanya():
 
 
 def test_penyaring_gudang_sama_di_stok_dan_di_berjalan():
-    """Satu app, satu nama kontrak, SATU jawaban.
-
-    Layar Stok dulu memasok `SARING_GUDANG=()` dengan alasan tertulis "Pos
-    Produksi memberi tiap orang SATU gudang lewat view". Itu benar untuk
-    operator dan SALAH untuk Admin & Super Admin — dan justru dua view itulah
-    yang mendapat pilnya di /berjalan. Templatnya sudah lama siap
-    (`stok.html` memanggil makro yang sama). QA 24 September 2026 (c) butir 7.
-    """
-    from app.web import layar_berjalan, layar_stok
-
-    for modul, fungsi in ((layar_berjalan, layar_berjalan.halaman_berjalan),
-                          (layar_stok, layar_stok.halaman_stok)):
-        kode = inspect.getsource(fungsi)
-        assert "GUDANG if view in MEJA else ()" in kode, fungsi.__name__
-        # Nilai karangan dari URL diabaikan, bukan diteruskan ke kueri.
-        assert "if gudang not in {g for g, _, _ in saring}" in kode, fungsi.__name__
-        assert "SARING_GUDANG=saring" in kode and "gudang=gudang" in kode, fungsi.__name__
+    """Pilihan gudang mempertahankan aturan tampilan dan nilai URL sah."""
+    from app.web import layar_stok,layar_pekerjaan
+    from pathlib import Path
+    kode=inspect.getsource(layar_stok.halaman_stok)
+    assert 'GUDANG if view in MEJA else ()' in kode
+    src=inspect.getsource(layar_pekerjaan.halaman_pekerjaan)
+    assert "pilihan(request, 'gudang', {'g1','g2'})" in src
+    assert 'x.gudang == gudang' in src
+    for nama in ('pekerjaan.html','barang_masuk.html'):
+        t=(Path(__file__).resolve().parents[1]/'hmu_tampilan/templates'/nama).read_text()
+        assert 'if VIEW in V_MEJA' in t and 'filter_gudang' in t
 
 
 def test_saringan_stok_ikut_ke_seluruh_blok_halamannya():
@@ -710,7 +697,7 @@ def test_kalimat_pengalih_hanya_untuk_pemegang_kedua_gudang():
     from app import main
 
     rute = inspect.getsource(main.halaman_aksi)
-    assert "blok_pengalih=can_see_financials(akun.user)" in rute
+    assert "halaman_pekerjaan(request,akun)" in rute
     pindah = inspect.getsource(__import__(
         "app.services.berjalan", fromlist=["untuk"]).untuk)
     assert "can_see_financials(user)" in pindah

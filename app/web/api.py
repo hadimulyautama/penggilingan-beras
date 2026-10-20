@@ -35,7 +35,7 @@ from app.web.aksi_umum import galat as _err
 
 log = logging.getLogger("web.api")
 from app.penggilingan.gudang1.services.bobot import dari_batch, dari_batches
-from app.web.aksi_umum import rp as _rp
+from app.web.aksi_umum import rp as _rp, kg as _kg
 from app.web.aksi_umum import wajib as _require
 from app.web.deps import pengguna_aksi
 
@@ -1966,7 +1966,7 @@ async def pk_g1_tersedia(user: User = Depends(pengguna_aksi)) -> list[dict]:
     async with SessionLocal() as db:
         lot = await pk_gudang1(db)
     return [{"value": l.kode,
-             "label": (f"{l.kode} · {_rp(l.tersedia)} kg"
+             "label": (f"{l.kode} · {_kg(l.tersedia)}"
                        + (f" · {l.kelas}" if l.kelas else "")
                        + (f" · {l.lama}" if l.lama else "")
                        + (f" · TITIPAN {l.pemilik}" if l.jasa_id else ""))}
@@ -2583,7 +2583,7 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
     from app.penggilingan.gudang1.services.purchase import create_purchase_batch_dari_timbang
     from app.penggilingan.gudang1.services.timbang_link import ambil_tiket
     from app.penggilingan.gudang1.services.drying import masuk_dryer, DryingError
-    from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError
+    from app.penggilingan.gudang1.services.silo import masuk_silo, SiloError, silo_g1_by_id
     async with SessionLocal() as db:
         u = await db.get(User, user.id)
         tiket = await ambil_tiket(db, req.timbangan_transaksi_id)
@@ -2645,6 +2645,14 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                     + f" — gabah {kondisi} tidak boleh dicampur ke dalamnya. "
                     "Kosongkan mesinnya ke silo dulu, atau pilih tujuan lain.",
                 )
+        # Pemeriksaan tujuan yang sama harus mendahului commit penerimaan.
+        # Silo yang hilang/nonaktif tidak boleh menghasilkan HTTP gagal dengan
+        # batch yang sudah tercatat. Kegagalan penempatan sesudah penerimaan
+        # tetap mengikuti penanganan peringatan lama.
+        if tujuan == "silo":
+            si = await silo_g1_by_id(db, mesin_id) if mesin_id else None
+            if si is None:
+                raise HTTPException(400, "Pilih silo tujuannya dulu.")
         try:
             r = await create_purchase_batch_dari_timbang(
                 db, user=u, timbangan_transaksi_id=req.timbangan_transaksi_id,
@@ -2676,10 +2684,6 @@ async def act_gabah_masuk(req: GabahMasukReq, user: User = Depends(pengguna_aksi
                 tempat = (f"🔥 masuk {nama_mesin} (menunggu — tekan "
                           "`Mulai pengeringan` saat dipanaskan)")
             else:  # silo (kering langsung)
-                from app.penggilingan.gudang1.services.silo import silo_g1_by_id
-                si = await silo_g1_by_id(db, mesin_id) if mesin_id else None
-                if si is None:
-                    raise HTTPException(400, "Pilih silo tujuannya dulu.")
                 r_silo = await masuk_silo(
                     db, user=u, nama_silo=si.nama_silo.replace("Silo ", ""),
                     kode_lot=None, kode_batch=kode)
@@ -4761,9 +4765,9 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
                 continue
             kode = proc.kode_proses
             milik = await nama_pemilik(db, jasa_id)
-            label = f"{kode} · {_rp(total)} kg (curah {_rp(curah)} + kemasan {_rp(karung)}"
+            label = f"{kode} · {_kg(total)} (curah {_kg(curah)} + kemasan {_kg(karung)}"
             if belum_dicatat > 0.5:
-                label += f" + hasil otomatis {_rp(belum_dicatat)}"
+                label += f" + hasil otomatis {_kg(belum_dicatat)}"
             label += ")"
             if milik:
                 label += f" · titipan {milik}"
@@ -4775,7 +4779,7 @@ async def broken_proses_tersedia(user: User = Depends(pengguna_aksi)) -> list[di
         keluar = []
         for owner, total in sorted(grouped.items(), key=lambda x: (x[0] is not None, x[0] or 0)):
             owner_name = await nama_pemilik(db, owner)
-            label = f"{'Pabrik' if owner is None else owner_name} · {_rp(total)} kg tersedia"
+            label = f"{'Pabrik' if owner is None else owner_name} · {_kg(total)} tersedia"
             keluar.append({"value": f"pemilik|{'pabrik' if owner is None else owner}",
                            "label": label})
     return keluar
@@ -4822,7 +4826,7 @@ async def hasil_samping_pemilik_tersedia(jenis: str = "menir",
             owner_name = await nama_pemilik(db, owner)
             label = "Pabrik" if owner is None else owner_name or f"Pemilik #{owner}"
             options.append({"value": f"pabrik" if owner is None else str(owner),
-                            "label": f"{label} · {_rp(available)} kg tersedia"})
+                            "label": f"{label} · {_kg(available)} tersedia"})
     return sorted(options, key=lambda x: (x["value"] != "pabrik", x["label"]))
 
 
@@ -5048,7 +5052,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
             if curah_total > 0.5:
                 keluar.append({"value": f"curah|{owner_token}",
                                "label": f"Curah{owner_suffix} · "
-                                        f"{_rp(curah_total)} kg tersedia"})
+                                        f"{_kg(curah_total)} tersedia"})
 
             milik = (FinishedGoodsStock.jasa_id.is_(None) if owner is None
                      else FinishedGoodsStock.jasa_id == owner)
@@ -5080,7 +5084,7 @@ async def beras_sumber_tersedia(induk: str | None = None,
                 keluar.append({
                     "value": f"sku:{sku_id}|{owner_token}",
                     "label": (f"{label}{owner_suffix} · {karung} karung · "
-                              f"{_rp(karung * float(ukuran))} kg tersedia"),
+                              f"{_kg(karung * float(ukuran))} tersedia"),
                 })
     return keluar
 

@@ -67,7 +67,8 @@ def test_hanya_admin_yang_melihat_pintunya():
     assert set(view["audit"]) == {SUPER, ADMIN}
     assert SELEPAN not in view["audit"] and POLESAN not in view["audit"]
     # Antrean tak punya kolom view sama sekali — keempatnya melihatnya.
-    assert view["aksi"] is None
+    assert view["pekerjaan"] is None
+    assert view["barang_masuk"] is None
 
 
 def test_penjagaan_sungguhannya_di_rute():

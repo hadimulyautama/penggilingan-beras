@@ -221,24 +221,14 @@ def test_tak_ada_dua_kalimat_bermakna_sama():
 
 
 def test_layar_keputusan_hanya_admin():
-    """Sejak awal pekerjaan admin. Yang menjaga sungguhan adalah rutenya,
-    bukan pintu yang disembunyikan dari laci — alamatnya tetap bisa diketik."""
-    import inspect
-
+    """Rute lama masih bergelang admin; pintu gabungan tidak memberi izin baru."""
     from app.web import layar_keputusan
     from app.web.nav import TAB
-
-    assert "Depends(butuh_admin)" in inspect.getsource(
-        layar_keputusan.halaman_keputusan)
-    from app.web.layar import ADMIN, POLESAN, SELEPAN, SUPER
-
-    kunci = {t[0]: t[4] for t in TAB}
-    # Kolomnya kini menyebut VIEW mana yang ditawari pintunya, bukan satu
-    # nama peran yang templatnya abaikan. Kedua view meja masuk; kedua view
-    # operator tidak.
-    assert set(kunci["keputusan"]) == {SUPER, ADMIN}
-    assert SELEPAN not in kunci["keputusan"]
-    assert POLESAN not in kunci["keputusan"]
+    assert 'Depends(butuh_admin)' in inspect.getsource(layar_keputusan.halaman_keputusan)
+    assert 'Depends(butuh_admin)' in inspect.getsource(layar_keputusan.halaman_mutu)
+    keys={t[0] for t in TAB}
+    assert {'barang_masuk','pekerjaan'}<=keys
+    assert not {'aksi','berjalan','keputusan','mutu'} & keys
 
 
 def test_tiap_layar_berlaci_membawa_ketiga_lencana():
@@ -440,38 +430,14 @@ def test_katalog_dikelompokkan_dan_undo_dikeluarkan():
 
 
 def test_tumpukan_punya_bloknya_sendiri_dan_berdiri_di_atas():
-    """Tumpukan bukan sekadar salah satu antrean: isinya menandakan gabah yang
-    turun dari truk tanpa mesin atau silo yang siap menerimanya — pembelian
-    yang mendahului kapasitas. Dicampur ke satu daftar bersama pekerjaan biasa,
-    keadaan itu terbaca seperti pekerjaan biasa dan tenggelam di tengah daftar.
-    """
-    import inspect
-
-    from app.services import berjalan as svc
-
-    # Penandanya dipasang pada baris tumpukan, bukan ditebak dari kata-katanya.
-    g1 = inspect.getsource(svc.untuk_gudang1)
-    assert 'kelompok="tumpukan"' in g1, "baris tumpukan tak ditandai"
-    assert g1.count('kelompok="tumpukan"') == 1
-
-    # Templatnya bersama sejak Tahap 2: kelompok yang naik ke ATAS dan judulnya
-    # datang dari rute, karena di Meja yang di atas adalah tiket timbang.
-    # Jadi yang diperiksa: paket memakai `KELOMPOK_ATAS` (bukan nama kelompok
-    # satu app), dan RUTE Pos Produksi menyebut tumpukan.
-    teks = (PAKET / "aksi.html").read_text()
-    assert 'selectattr("kelompok", "equalto", KELOMPOK_ATAS)' in teks
-    assert 'rejectattr("kelompok", "equalto", KELOMPOK_ATAS)' in teks
-    assert '"tumpukan"' not in teks, "nama kelompok satu app terpateri di paket"
-    # Urutannya bagian dari maksudnya: blok ATAS digambar lebih dulu.
-    assert teks.index("benda.blok(judul_atas") < teks.index("benda.blok(judul_bawah")
-
-    from app.main import halaman_aksi
-
-    rute = inspect.getsource(halaman_aksi)
-    assert 'KELOMPOK_ATAS="tumpukan"' in rute
-    assert 'judul_atas="Menumpuk di lantai"' in rute
-    assert "judul_bawah=dict(svc.GRUP_ANTREAN).get(" in rute
-    assert '"Bisa dikerjakan sekarang"' in rute
+    """Penempatan tumpukan bukan penerimaan tiket meskipun grup lamanya bahan."""
+    from app.services.berjalan import Baris,Berjalan
+    from app.services.kelompok_kerja import bagi,jenis_kerja
+    satu=Baris('GB-1','Gabah sudah diterima','',aksi='pindah_tumpukan',kelompok='tumpukan')
+    dua=Baris('PK-1','PK di tumpukan','',aksi='pindah_tumpukan_silo',kelompok='tumpukan')
+    k=bagi(Berjalan(menunggu=[satu,dua]))
+    assert not k.masuk and k.tindakan==[satu,dua]
+    assert all(jenis_kerja(x)=='penempatan' for x in k.tindakan)
 
 
 def test_tumpukan_tetap_dihitung_lencana_antrean():

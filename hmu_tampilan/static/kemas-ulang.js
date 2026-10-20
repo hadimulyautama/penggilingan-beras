@@ -72,7 +72,7 @@
     if(saldo&&Number(el('jumlah_baru').value)>saldo.tersedia){gagal('Kemasan baru tidak cukup: tersedia '+angka(saldo.tersedia)+' lembar, diperlukan '+angka(Number(el('jumlah_baru').value))+' lembar. Pilih kemasan yang tersedia atau periksa stok bersama admin.',el('kemasan'));return;}
     if(window.SESIFORM&&!SESIFORM.periksa())return;
     var k=el('kemasan').value.split('|'),meta=document.getElementById('formulir-sesi');
-    var data={sumber_id:Number(el('sumber_id').value),kunci:cek.o.dataset.kunci,jumlah_asal:Number(el('jumlah_asal').value),material:k[0],ukuran:Number(k[1]),merk:namaMerek(),jumlah_baru:Number(el('jumlah_baru').value),setuju:el('setuju').checked};
+    var data={sumber_id:Number(el('sumber_id').value),kunci:cek.o.dataset.kunci,jumlah_asal:Number(el('jumlah_asal').value),material:k[0],ukuran:Number(k[1]),merk:namaMerek(),jumlah_baru:Number(el('jumlah_baru').value),setuju:el('setuju').checked,kembali_stok:root.dataset.kembaliStok||''};
     var kontrol=Array.from(form.elements).map(function(x){return {el:x,disabled:x.disabled};});
     sibuk=true;kontrol.forEach(function(x){x.el.disabled=true;});kirim.textContent='Menyimpan…';
     try{

@@ -129,8 +129,13 @@
 <div class="desktop-chrome" aria-label="Navigasi cepat">
   <div class="desktop-chrome__top">
     <nav class="desktop-chrome__shortcuts" aria-label="Akses cepat">
+      {% if 'barang_masuk' in TAB_KUNCI %}
+      <a href="/barang-masuk"><span aria-hidden="true">↙</span>Barang Masuk</a>
+      <a href="/pekerjaan"><span aria-hidden="true">≡</span>Pekerjaan</a>
+      {% else %}
       <a href="/aksi"><span aria-hidden="true">≡</span>Antrian</a>
       <a href="/berjalan"><span aria-hidden="true">◷</span>Proses</a>
+      {% endif %}
       <a href="/stok"><span aria-hidden="true">▦</span>Stok</a>
       <a href="/barang-keluar"><span aria-hidden="true">⇥</span>Barang keluar</a>
     </nav>
@@ -229,6 +234,7 @@
          menambah layar bersyarat besok tak perlu menyunting berkas bersama. #}
       {% set kelompok_menu = {
         'beranda': 'Menu Utama',
+        'barang_masuk': 'Operasional', 'pekerjaan': 'Operasional',
         'aksi': 'Operasional', 'berjalan': 'Operasional',
         'keputusan': 'Operasional', 'mutu': 'Operasional',
         'stok': 'Operasional', 'stok_produk': 'Operasional',
@@ -349,7 +355,11 @@
           {# Lencana muncul HANYA bila angkanya di atas nol. Lencana
              bertuliskan "0" adalah kebisingan yang mengajari orang
              mengabaikan lencana. #}
-          {% if kunci == 'aksi' and MENUNGGU %}
+          {% if kunci == 'barang_masuk' and BARANG_MASUK %}
+            <span class="pintu__jml" aria-label="{{ BARANG_MASUK }} penerimaan perlu tindakan">{{ BARANG_MASUK }}</span>
+          {% elif kunci == 'pekerjaan' and PEKERJAAN %}
+            <span class="pintu__jml" aria-label="{{ PEKERJAAN }} pekerjaan perlu tindakan">{{ PEKERJAAN }}</span>
+          {% elif kunci == 'aksi' and MENUNGGU %}
             <span class="pintu__jml pintu__jml--aksi"
                   aria-label="{{ MENUNGGU }} menunggu tindakan Anda">{{ MENUNGGU }}</span>
           {# Yang MENAGIH dan yang sekadar MENGABARI dibedakan warnanya.

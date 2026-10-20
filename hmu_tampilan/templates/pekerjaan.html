@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block judul %}Pekerjaan{% endblock %}
+{% block isi %}
+<style>@import url('/static/operasional.css?v={{ VERSI }}&antrean-bahan=7');</style>
+{% import '_benda.html' as benda with context %}
+{% import '_kepemilikan.html' as milik with context %}
+{% import '_kerja_navigasi.html' as nav with context %}
+<header class="kerja-kepala"><h1>Pekerjaan</h1>
+<nav class="saring kerja-tab" aria-label="Tab pekerjaan">
+<a class="pil{{ ' pil--on' if tab=='tindakan' }}" href="{{ href(tab='tindakan',asal='',kategori='',grup='') }}"{% if tab=='tindakan' %} aria-current="page"{% endif %}>Perlu tindakan <span class="pil__jml">{{ total_tindakan }}</span></a>
+<a class="pil{{ ' pil--on' if tab=='berjalan' }}" href="{{ href(tab='berjalan',asal='',kategori='',grup='') }}"{% if tab=='berjalan' %} aria-current="page"{% endif %}>Berjalan <span class="pil__jml">{{ total_jalan }}</span></a>
+</nav>
+<details class="kerja-saringan"><summary class="btn btn--kecil">Filter · {{ jenis or 'Semua jenis' }} · {{ {'jasa':'Jasa','pabrik':'Pabrik'}.get(request.query_params.get('kepemilikan'),'Semua pemilik') }} · {{ {'g1':'G1','g2':'G2'}.get(gudang,'Semua gudang') }}</summary>
+{{ milik.saring() }}
+{% if VIEW in V_MEJA %}{{ nav.filter_gudang(href,gudang) }}{% endif %}
+<form method="get" action="/pekerjaan" class="saring">
+<input type="hidden" name="tab" value="{{ tab }}">
+{% for key in ['kepemilikan','gudang','cari','pemasok'] %}{% if request.query_params.get(key) %}<input type="hidden" name="{{ key }}" value="{{ request.query_params.get(key) }}">{% endif %}{% endfor %}
+<label class="kerja-filter">Jenis pekerjaan<select class="fld" name="jenis"><option value="">Semua jenis</option>{% for k,n,j in per_jenis %}<option value="{{ k }}"{{ ' selected' if jenis==k }}>{{ n }} · {{ j }}</option>{% endfor %}</select></label>
+<button class="btn btn--kecil" type="submit">Tampilkan</button>
+</form>
+</details>
+{% include '_kerja_cari.html' %}
+</header>
+{% if request.query_params.get('grup') or request.query_params.get('asal') or request.query_params.get('kategori') %}<p class="bantu">Saringan dari tautan lama aktif. <a href="{{ href(grup='',asal='',kategori='',jenis='') }}">Lihat semua pekerjaan</a>.</p>{% endif %}
+{% if tab=='tindakan' %}
+<p class="bantu">{{ daftar|length }} pekerjaan perlu tindakan. Penerimaan tiket ada di <a href="/barang-masuk">Barang Masuk</a>.</p>
+{% for key,nama,baris in kelompok %}
+{{ benda.blok(nama,baris,alamat=request.url.path,listview=true,tabel='packing' if key=='packing' else false) }}
+{% endfor %}
+{% if not daftar %}<div class="kosong"><div><h2>Tidak ada pekerjaan perlu tindakan</h2><p class="bantu">Coba jenis atau gudang lain. Proses yang menunggu waktu ada di tab Berjalan.</p></div></div>{% endif %}
+{% else %}
+{% include '_pekerjaan_berjalan.html' %}
+{{ benda.blok('Status & informasi',informasi,alamat=request.url.path,listview=true) }}
+{% if not daftar %}<div class="kosong"><div><h2>Tidak ada proses berjalan</h2><p class="bantu">Pekerjaan yang siap dimulai ada di Perlu tindakan.</p></div></div>{% endif %}
+{% endif %}
+{% if not MUTU_AKTIF and VIEW in V_MEJA %}<p class="bantu">Pencatatan mutu dimatikan di Pengaturan. Tugas QC tidak ditagih.</p>{% endif %}
+{% if PINTASAN %}<div class="saring">{% set dasar=benda.dasar_borang(request.url.path) %}{% for id,nama in PINTASAN %}<a class="btn btn--kecil" href="{{ dasar }}buka={{ id }}">{{ nama }}</a>{% endfor %}</div>{% endif %}
+{% if VIEW in V_MEJA %}<a class="btn btn--kecil" href="/aksi-lain">Catat pekerjaan lain</a>{% endif %}
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}{% endblock %}

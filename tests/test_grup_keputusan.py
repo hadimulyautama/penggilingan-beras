@@ -226,12 +226,9 @@ def test_pintu_keputusan_jadi_summary_saat_bersub_menu():
         request=None, akun=_akun_kep(), layar="beranda", MENUNGGU=0,
         MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None, TAB=TAB,
         SUBMENU=sub, VIEW="admin", CSRF="x")
-    assert "pintu-lipat" in h
-    for _, nama, _ in sub["keputusan"]:
-        assert nama in h
-    assert 'href="/keputusan"' in h
-    assert 'href="/keputusan?kategori=acc_permintaan_pk"' in h
-    assert 'href="/keputusan?kategori=tutup_permintaan_pk"' in h
+    assert 'href="/pekerjaan"' in h
+    assert 'href="/keputusan?kategori=acc_permintaan_pk"' not in h
+    assert 'pintu-lipat' not in h
 
 
 def test_kedua_pintu_bisa_bersub_menu_bersamaan():
@@ -252,6 +249,7 @@ def test_kedua_pintu_bisa_bersub_menu_bersamaan():
         request=None, akun=_akun_kep(), layar="beranda", MENUNGGU=3,
         KEPUTUSAN=2, MODE_UJI=False, LIHAT_SEBAGAI=None, kembali=None,
         TAB=TAB, SUBMENU=sub, VIEW="admin", CSRF="x")
-    assert h.count("pintu-lipat") == 2
-    assert 'href="/aksi?grup=bahan"' in h
-    assert 'href="/keputusan?kategori=acc_permintaan_pk"' in h
+    assert h.count("pintu-lipat") == 0
+    assert 'href="/barang-masuk"' in h
+    assert 'href="/pekerjaan"' in h
+    assert 'href="/keputusan?kategori=acc_permintaan_pk"' not in h

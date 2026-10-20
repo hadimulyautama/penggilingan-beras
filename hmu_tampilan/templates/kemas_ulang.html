@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block judul %}Kemas ulang{% endblock %}
 {% block isi %}
-<section class="kemas-ulang" data-kemas-ulang>
-<a href="/stok-produk-jasa" data-utuh{{ '' if pemilik != 'Milik pabrik' else ' hidden' }}>← Produk jasa</a>
-<a href="/stok-produk" data-utuh{{ ' hidden' if pemilik != 'Milik pabrik' else '' }}>← Stok produk</a>
+{% set tujuan_stok = kembali_stok or ("/stok-produk-jasa" if pemilik != "Milik pabrik" else "/stok-produk") %}
+<section class="kemas-ulang" data-kemas-ulang data-kembali-stok="{{ kembali_stok|default('') }}">
+<a href="{{ tujuan_stok }}" data-utuh>← {{ 'Produk jasa' if pemilik != 'Milik pabrik' else 'Stok produk' }}</a>
 <h1>Kemas ulang</h1><p><strong>{{ nama_produk }}</strong><br>{{ pemilik }}</p>
 <p class="bantu">Kemasan lama tetap habis. Hanya kemasan baru yang dipakai mengurangi stok kemasan. Jenis produk, mutu, dan pemilik tetap sama.</p>
 <form data-form-kemas>
@@ -21,7 +21,7 @@
 <button class="btn" type="submit"{% if not kemasan %} disabled{% endif %}>Catat kemas ulang</button>
 </form>
 <p class="bantu" data-hasil role="status"></p>
-<a class="btn" data-selesai data-utuh href="{{ "/stok-produk-jasa" if pemilik != "Milik pabrik" else "/stok-produk" }}" hidden>Kembali ke stok · sudah tercatat</a>
+<a class="btn" data-selesai data-utuh href="{{ tujuan_stok }}" hidden>Kembali ke stok · sudah tercatat</a>
 {% if not opsi %}<p>Tidak ada stok bebas yang dapat dikemas ulang. Periksa reservasi pengiriman.</p>{% endif %}
 <details><summary>Riwayat kemas ulang · 20 catatan terbaru</summary><ul>{% for r,petugas,bahan,ukuran,merk in riwayat %}<li>#{{ r.id }} · {{ r.berat_asal_kg }} kg → {{ r.karung_baru }} karung · {{ bahan }} {{ ukuran }} kg · {{ merk or "Tanpa merek" }} · {{ r.berat_baru_kg }} kg · sisa {{ r.sisa_kg }} kg · {{ petugas }} · {{ r.waktu|jam }}</li>{% else %}<li>Belum ada kemas ulang.</li>{% endfor %}</ul></details>
 </section><script src="/static/kemas-ulang.js?v={{ VERSI }}" defer></script>

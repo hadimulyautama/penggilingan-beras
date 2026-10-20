@@ -247,11 +247,10 @@ def test_beranda_tidak_ikut_berubah():
 
 
 def test_keputusan_berisi_tetap_memuat_jumlah_dan_rincian():
-    html = _beranda(blok_keputusan=True, KEPUTUSAN=3, rinci_keputusan=True,
-                    n_permintaan=2, n_output=1, n_mutu=0, blok_mutu=True, MUTU=0)
+    """Satu pintu Pekerjaan memuat keputusan dan QC tanpa lencana ganda."""
+    html=_beranda(PEKERJAAN=5,BARANG_MASUK=0,KEPUTUSAN=3,MUTU=2)
     import re
-    kartu = re.search(r'<a [^>]*href="/keputusan"[^>]*>(.*?)</a>', html, re.S)
-    assert kartu
-    assert "2 permintaan · 1 output" in kartu.group(1)
-    assert re.search(r'lencana[^>]*>3</span>', kartu.group(1))
-    assert "Tidak ada keputusan tertunda" not in html
+    kartu=re.search(r'<a class="tindakan [^>]*href="/pekerjaan"[^>]*>(.*?)</a>',html,re.S)
+    assert kartu and 'QC dan keputusan' in kartu.group(1)
+    assert re.search(r'lencana[^>]*>5</span>',kartu.group(1))
+    assert 'href="/keputusan"' not in html and 'href="/mutu"' not in html

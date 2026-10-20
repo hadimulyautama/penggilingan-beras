@@ -239,6 +239,10 @@
    `buka`/`nilai` sendiri DIBUANG dari yang dibawa: pemanggil yang
    menuliskannya sendiri, dan `buka=` dobel akan membingungkan borang
    mana yang dimaksud. #}
+{% macro tautan_penerimaan(b) -%}
+{% if detail_penerimaan and detail_penerimaan.get(b.kode) %}<a class="btn btn--kecil" href="{{ detail_penerimaan[b.kode] }}">Detail tiket &amp; penerimaan</a>{% endif %}
+{%- endmacro %}
+
 {% macro dasar_borang(alamat) -%}
   {%- set query_sisa = [] -%}
   {%- if request and request.url.path == alamat -%}
@@ -314,7 +318,7 @@
                 </button>
               {% endfor %}
             </div>
-          </details>
+          {{ tautan_penerimaan(b) }}</details>
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
@@ -337,14 +341,14 @@
                 </a>
               {% endfor %}
             </div>
-          </details>
+          {{ tautan_penerimaan(b) }}</details>
         {% elif b.aksi and listview %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}
               <a class="btn btn--kecil" href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&amp;nilai={{ b.nilai|urlencode }}{% endif %}">Buka pekerjaan</a>
             </div>
-          </details>
+          {{ tautan_penerimaan(b) }}</details>
         {% elif b.aksi %}
           <a class="{{ kelas }} {{ kelas }}--{{ b.fase }}"{{ tanda(b) }}
              href="{{ dasar }}buka={{ b.aksi }}{% if b.nilai %}&nilai={{ b.nilai|urlencode }}{% endif %}">
@@ -367,7 +371,7 @@
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }} antrian-item antrian-item--diam"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% else %}{{ padat(b, progres) }}{% endif %}</summary>
             <div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
-          </details>
+          {{ tautan_penerimaan(b) }}</details>
           {% else %}
           <div class="{{ kelas }} {{ kelas }}--{{ b.fase }} {{ kelas }}--diam"{{ tanda(b) }}>
             {# Kartu diam tak punya mekanisme expand — bahan TETAP selalu

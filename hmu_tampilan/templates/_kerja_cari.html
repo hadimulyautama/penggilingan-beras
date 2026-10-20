@@ -1,0 +1,6 @@
+<div class="saring kerja-cari" data-saring-kerja>
+<input class="cari" type="search" name="cari" aria-label="Cari nama, kode atau plat" placeholder="Cari nama, kode atau plat…" value="{{ request.query_params.get('cari','') }}">
+<select class="fld fld--kecil" name="pemasok"{{ ' hidden' if nama_saring|length<2 }} aria-label="Saring per nama"><option value="">Semua nama</option>{% for nama in nama_saring %}<option value="{{ nama }}"{{ ' selected' if request.query_params.get('pemasok')==nama }}>{{ nama }}</option>{% endfor %}</select>
+<span class="bantu" data-hasil-cari role="status"></span>
+</div>
+<script src="/static/saring-kerja.js?v={{ VERSI }}" defer></script>

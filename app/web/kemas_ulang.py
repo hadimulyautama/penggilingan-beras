@@ -12,6 +12,7 @@ from app.web.tampilan import render_laci
 from app.peran import can_see_financials
 from app.services import kemas_ulang as svc
 from app.penggilingan.inventory.packaging import InventoryError
+from app.web.stok_navigasi import kembali_aman
 router=APIRouter()
 
 async def izin(user):
@@ -46,7 +47,9 @@ async def halaman(request:Request,sku_id:int,std_id:int|None=None,jasa_id:int|No
             .order_by(KemasUlang.id.desc()).limit(20))).all()
     nama=f'{std.nama if std else sku.kategori.replace("_"," ").title()} · {brand.nama if brand else "Tanpa merek"} · {mat.nama} {size.ukuran_kg} kg'
     return await render_laci(request,'kemas_ulang.html',layar='stok_produk_jasa' if jasa_id else 'stok_produk',nama_produk=nama,pemilik=pemilik,
-        opsi=opsi,kemasan=kemasan,riwayat=hist)
+        opsi=opsi,kemasan=kemasan,riwayat=hist,
+        kembali=kembali_aman(request.query_params.get('kembali_stok', '')) or ('/stok-produk-jasa' if jasa_id else '/stok-produk'),
+        kembali_stok=kembali_aman(request.query_params.get('kembali_stok', '')))
 
 class KemasReq(BaseModel):
     model_config=ConfigDict(extra="forbid")
@@ -58,6 +61,7 @@ class KemasReq(BaseModel):
     merk:str=Field(default='',max_length=200)
     jumlah_baru:StrictInt
     setuju:bool=False
+    kembali_stok:str=Field(default='',max_length=2000)
 
 @router.post('/api/kemas-ulang')
 async def simpan(req:KemasReq,user=Depends(pengguna_aksi)):
@@ -65,7 +69,7 @@ async def simpan(req:KemasReq,user=Depends(pengguna_aksi)):
     if not req.setuju:raise HTTPException(400,'Periksa berat asal, hasil, dan sisa sebelum konfirmasi.')
     async with SessionLocal() as db:
         try:
-            r=await svc.simpan(db,user=await db.get(User,user.id),**req.model_dump(exclude={'setuju'}))
+            r=await svc.simpan(db,user=await db.get(User,user.id),**req.model_dump(exclude={'setuju','kembali_stok'}))
         except InventoryError as e:
             raise HTTPException(409,str(e))
         sumber=await db.get(FinishedGoodsStock,r.sumber_id)
@@ -78,6 +82,9 @@ async def simpan(req:KemasReq,user=Depends(pengguna_aksi)):
             jasa=await db.get(Jasa,sumber.jasa_id)
             params['pelanggan_id']=jasa.pelanggan_id
             tujuan='/stok-produk-jasa/detail'
+        konteks=kembali_aman(req.kembali_stok)
+        if konteks:
+            params['kembali_stok']=konteks
         kembali=tujuan+'?'+urlencode(params)
     return dict(ok=True,kembali=kembali,id=r.id,berat_asal_kg=float(r.berat_asal_kg),berat_baru_kg=float(r.berat_baru_kg),sisa_kg=float(r.sisa_kg))
 

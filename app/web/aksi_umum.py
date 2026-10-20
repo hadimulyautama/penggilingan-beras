@@ -27,7 +27,8 @@ def rp(n: float) -> str:
 
 
 def kg(n: float) -> str:
-    return f"{n:,.0f}".replace(",", ".") + " kg"
+    nilai = f"{n:,.3f}".rstrip("0").rstrip(".")
+    return nilai.replace(",", "_").replace(".", ",").replace("_", ".") + " kg"
 
 
 def galat(e: Exception, default: str) -> HTTPException:

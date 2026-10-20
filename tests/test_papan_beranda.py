@@ -118,25 +118,8 @@ def test_baris_gudang_dari_daftar_bukan_dua_baris_tetap():
 
 
 def test_rincian_pintu_selalu_berjumlah_sama_dengan_lencananya():
-    """App yang TAK punya layar mutu tetap menyebut bagian mutunya.
-
-    Pemisahan layar 24 September 2026 sempat membuat Beranda Meja berbunyi
-    "4 harga · 0 output" di bawah lencana 8: bagian mutunya hilang dari
-    rinciannya sementara pintunya masih memuat mutu. Angka yang tak berjumlah
-    membuat orang berhenti mempercayai keduanya — kelas galat yang sama yang
-    sudah hidup di layar Menunggu keputusan app Meja (lencana 8, layar 7).
-
-    Rinciannya menyebut isi PINTU ITU: dengan `blok_mutu` (Pos Produksi) bagian
-    mutu pindah ke pintu kedua; tanpanya (Meja) ia tetap di tempatnya.
-    """
-    import pathlib
-
-    tpl = (pathlib.Path(__file__).resolve().parents[1]
-           / "hmu_tampilan/templates/beranda.html").read_text()
-    blok = tpl.split('br.pintu("/keputusan"')[1].split("{% endif %}")[0]
-    assert '"" if blok_mutu else " · " ~ n_mutu ~ " mutu"' in blok, \
-        "rincian pintu keputusan tak lagi menyesuaikan diri dengan ada/tidaknya layar mutu"
-    # Dan pintu mutunya sendiri memang bergerbang sendiri — bukan menumpang
-    # `blok_keputusan`, yang akan menggambar tautan mati di app Meja.
-    assert "{% if blok_mutu and MUTU %}" in tpl
-    assert '"/mutu"' in tpl.split("{% if blok_mutu and MUTU %}")[1][:400]
+    """Pintu gabungan menjumlah tindakan fisik, QC dan keputusan satu kali."""
+    from app.services.berjalan import Berjalan,Baris
+    b=Berjalan(menunggu=[Baris('m','Muat','',aksi='muat_semua')],meja=[Baris('q','QC','',aksi='qc_giling'),Baris('a','ACC','',aksi='acc_permintaan_pk')],berjalan=[Baris('p','Mesin','',aksi='hasil_giling')])
+    assert b.lencana()['PEKERJAAN']==3
+    assert b.lencana()['BARANG_MASUK']==0

@@ -22,6 +22,11 @@ router = APIRouter(tags=["webapp"])
 
 
 async def _alih_proses(request, tujuan):
+    from app.web.layar_pekerjaan import konteks_aman
+    from starlette.datastructures import URL
+    kembali = konteks_aman(request.query_params.get("kembali_kerja"))
+    if kembali:
+        tujuan = str(URL(tujuan).include_query_params(kembali_kerja=kembali))
     # Penyegaran sesudah simpan memakai fetch. PINDAH sengaja mengabaikan
     # respons yang dialihkan, jadi 303 saja meninggalkan tindakan proses lama
     # di layar. Respons HTML ini dipasang seperti halaman biasa lalu membuka
@@ -34,45 +39,15 @@ async def _alih_proses(request, tujuan):
 
 @router.get("/berjalan")
 async def halaman_berjalan(request: Request, akun=Depends(butuh_akun)):
-    async with SessionLocal() as db:
-        b = await svc.untuk(db, akun.user)
-
-    # ── Penyaring gudang (celah ke-4 menjelang app meja dihapus) ──
-    #
-    # Hanya untuk view yang memegang KEDUA gudang. Operator sudah diberi satu
-    # gudang lewat view-nya, jadi daftarnya kosong dan templat tak menggambar
-    # apa pun — pil tunggal bernama "Semua" tak membedakan apa pun.
-    #
-    # Daftarnya dari master gudang (`layar.GUDANG`), bukan dua pil tetap:
-    # menambah gudang berarti menambah baris di master. Dan penyaringnya
-    # membaca `b.gudang` yang dicap penyusunnya sendiri — bukan menebak dari
-    # kode kartunya.
-    view = getattr(request.state, "view", "tamu")
-    saring = GUDANG if view in MEJA else ()
-    gudang = request.query_params.get("gudang") or ""
-    if gudang not in {g for g, _, _ in saring}:
-        gudang = ""                       # nilai karangan dari URL diabaikan
-    pilih = (lambda xs: [x for x in xs if not gudang or x.gudang == gudang])
-
-    return render(
-        request, "berjalan.html",
-        SARING_GUDANG=saring, gudang=gudang,
-        # Mesin yang menyala, dan gabah yang sudah punya tempat tetapi tak
-        # sedang diapa-apakan. Antrean tak ikut ke sini — ia punya layarnya
-        # sendiri.
-        berjalan=pilih(b.berjalan), transit=pilih(b.transit),
-        alamat_detail_proses=proses_aktif.alamat_detail,
-        buka=request.query_params.get("buka") or "",
-        nilai=request.query_params.get("nilai") or "",
-        **b.lencana(),
-        lama=svc._lama,
-    )
+    from app.web.layar_pekerjaan import halaman_pekerjaan
+    return await halaman_pekerjaan(request, akun, awal='berjalan')
 
 
 @router.get("/proses-aktif/{jenis}/{kode}")
 async def detail_proses_aktif(jenis: str, kode: str, request: Request,
                              akun=Depends(butuh_akun)):
     from app.models import DryingLot, MillingProcess
+    from app.web.layar_pekerjaan import konteks_aman
     from app.penggilingan.gudang2.models import PolishingProcess
     from app.web.api import _is_g1_operator, _is_g2_operator
 
@@ -119,7 +94,8 @@ async def detail_proses_aktif(jenis: str, kode: str, request: Request,
         return str(dasar.include_query_params(**{parameter: nomor}))
     return await render_laci(
         request, "proses_aktif_detail.html", d=detail, proses=kartu,
-        layar="berjalan", breadcrumb_detail=kode, kembali="/berjalan",
+        layar="pekerjaan", breadcrumb_detail=kode,
+        kembali=konteks_aman(request.query_params.get("kembali_kerja")) or "/pekerjaan?tab=berjalan",
         alamat=request.url.path, halaman_proses=halaman,
         buka=request.query_params.get("buka") or "",
         nilai=request.query_params.get("nilai") or "",

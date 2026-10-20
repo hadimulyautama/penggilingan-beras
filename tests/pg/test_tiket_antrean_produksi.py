@@ -111,11 +111,11 @@ async def test_tiket_pk_tampil_di_antrian_tunggu_admin(pg, pabrik):
 
     c = await _klien(pg, role="superadmin")
     async with c:
-        r = await c.get("/aksi")
+        r = await c.get("/barang-masuk")
     assert r.status_code == 200, r.text[:300]
     assert "TRX-PK-ADM-01" in r.text, "tiket PK tak sampai ke Antrian tunggu Pos Produksi"
     # Bloknya sendiri, bukan tenggelam di "Bisa dikerjakan sekarang".
-    assert "Tiket Timbang" in r.text
+    assert "Tiket timbang masuk" in r.text
     # Bertindakan untuk admin: aksinya sudah ada dan gerbangnya menerimanya.
     assert "buka=catat_pk_luar" in r.text
     # TIDAK dua kali — itu risiko terbesar pemindahan ini.
@@ -132,7 +132,7 @@ async def test_tiket_pk_tampil_diam_untuk_operator_gudang2(pg, pabrik):
 
     c = await _klien(pg, role="operator", gudang_id=pabrik["g2"])
     async with c:
-        r = await c.get("/aksi")
+        r = await c.get("/barang-masuk")
     assert r.status_code == 200, r.text[:300]
     assert "TRX-PK-OPS-01" in r.text, "operator G2 tak melihat PK di halamannya"
     assert _jumlah_kartu(r.text, "TRX-PK-OPS-01") == 1
@@ -152,7 +152,7 @@ async def test_operator_selepan_tak_kebagian_tiket_pk(pg, pabrik):
 
     c = await _klien(pg, role="operator", gudang_id=pabrik["g1"])
     async with c:
-        r = await c.get("/aksi")
+        r = await c.get("/barang-masuk")
     assert r.status_code == 200
     assert "TRX-PK-SLP-01" not in r.text
 
@@ -177,7 +177,7 @@ async def test_tiket_gabah_tetap_hanya_di_jalur_gabah(pg, pabrik):
     # Dan di layar: satu kartu masing-masing, bukan dua.
     c = await _klien(pg, role="superadmin")
     async with c:
-        t = (await c.get("/aksi")).text
+        t = (await c.get("/barang-masuk")).text
     assert _jumlah_kartu(t, "TRX-GB-01") == 1 and _jumlah_kartu(t, "TRX-PK-02") == 1
 
 
@@ -190,13 +190,13 @@ async def test_jenis_tak_dikenal_kartu_diam_untuk_admin(pg, pabrik):
 
     c = await _klien(pg, role="superadmin")
     async with c:
-        t = (await c.get("/aksi")).text
+        t = (await c.get("/barang-masuk")).text
     assert "TRX-TDK-01" in t and _jumlah_kartu(t, "TRX-TDK-01") == 1
     assert "belum dikenal produksi" in t
 
     op = await _klien(pg, role="operator", gudang_id=pabrik["g2"])
     async with op:
-        assert "TRX-TDK-01" not in (await op.get("/aksi")).text
+        assert "TRX-TDK-01" not in (await op.get("/barang-masuk")).text
 
 
 async def test_tiket_yang_sudah_dicatat_keluar_dari_antrean(pg, pabrik):

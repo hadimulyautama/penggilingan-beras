@@ -1778,7 +1778,7 @@ async def verify_milling_output(
         action="UPDATE" if re_verified else "INSERT",
         changed_by=user.id,
         field_name="berat_output_final_kg",
-        new_value=f"{berat_output:.0f}",
+        new_value=f"{berat_output:.3f}".rstrip("0").rstrip("."),
     )
     await db.commit()
     rendemen = hitung_rendemen(berat_output, proc.berat_gabah_masuk_kg)

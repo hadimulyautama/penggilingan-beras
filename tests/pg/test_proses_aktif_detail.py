@@ -267,3 +267,20 @@ async def test_silo_dilepas_diisi_ulang_tidak_mengganti_asal_proses(pg, gudang2)
     assert "PKB-20260912-01" in h.text and "PKB-20260912-02" in h.text
     assert "PKB-ISIAN-BARU" not in h.text
     assert "Dilepaskan" in h.text
+
+
+async def test_tindakan_detail_mempertahankan_konteks_pekerjaan(pg, giling):
+    import re, html
+    from urllib.parse import urlencode, urlsplit, parse_qs
+    konteks='/pekerjaan?tab=berjalan&jenis=giling&gudang=g1&kepemilikan=pabrik'
+    async with await _klien(pg, peran="admin") as c:
+        r=await c.get(f"/proses-aktif/giling/{giling['kode']}?"+urlencode({'kembali_kerja':konteks}))
+        assert r.status_code==200
+        links=[html.unescape(x) for x in re.findall(r'href="([^"]+)"',r.text)]
+        assert konteks in links
+        tindakan=[x for x in links if 'buka=' in x]
+        assert tindakan
+        for url in tindakan:
+            assert parse_qs(urlsplit(url).query)['kembali_kerja']==[konteks],url
+            opened=await c.get(url)
+            assert opened.status_code==200 and konteks.replace('&','&amp;') in opened.text

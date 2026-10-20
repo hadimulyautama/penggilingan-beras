@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block judul %}Detail penerimaan{% endblock %}
+{% block isi %}
+<style>@import url('/static/operasional.css?v={{ VERSI }}&antrean-bahan=7');</style>
+{% import '_benda.html' as benda with context %}{% import '_stok.html' as st %}
+<h1>{{ tiket.kode }}</h1>
+<p><strong>{{ tiket.jenis_nama or tiket.jenis_kode }}</strong> · {{ tiket.nomor_polisi or 'Plat belum tercatat' }}</p>
+{% if pemilik_penerimaan %}<p>{{ "Titipan jasa · " if kepemilikan_penerimaan == "jasa" else "Campuran kepemilikan · " if kepemilikan_penerimaan == "campuran" else "" }}{{ pemilik_penerimaan }}</p>{% else %}<p>{{ 'Titipan jasa' if tiket.jasa else 'Milik pabrik' }} · {{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or 'Pihak belum tercatat' }}</p>{% endif %}
+{% if tiket.status_tiket=='TERBUKA' %}<p class="bantu">Berat belum final · mengikuti pembaruan Timbangan.</p>{% endif %}
+<dl class="masuk-fakta"><div><dt>Pihak pada tiket</dt><dd>{{ tiket.nama_pelanggan or tiket.nama_supplier or tiket.pihak_nama or "Belum tercatat" }}</dd></div><div><dt>Tiket timbang asal</dt><dd>{{ tiket.kode }} · {{ tiket.status_tiket }}</dd></div><div><dt>Berat tiket saat ini</dt><dd>{{ st.kg_rinci(tiket.berat_hpp_kg) }}{% if tiket.berat_hpp_kg is not none %} kg · {{ tiket.sumber_berat }}{% endif %}</dd></div><div><dt>Timbang pertama</dt><dd>{{ tiket.timbang1_waktu|jam('%d/%m/%Y · %H:%M') or 'Belum tercatat' }}</dd></div><div><dt>Sopir</dt><dd>{{ tiket.nama_sopir or 'Belum tercatat' }}</dd></div></dl>
+{{ benda.blok('Belum diterima',menunggu,alamat=request.url.path,listview=true,tabel='bahan') }}
+{% if catatan %}<h2>Catatan penerimaan</h2><p class="bantu">Berat catatan mengikuti sumber penerimaan, bukan saldo tersedia saat ini.</p>
+<section class="masuk-daftar">{% for c in catatan %}<article class="masuk-catatan"><strong>{{ c.kode }}</strong><span>{{ st.kg_rinci(c.berat) }}{% if c.berat is not none %} kg{% endif %} · {{ c.sumber_berat }}</span><span>{{ c.status }} · {{ c.pemilik }}</span><small>{{ c.waktu|jam('%d/%m/%Y · %H:%M') }} · {{ petugas.get(c.petugas_id,'Pencatat belum diketahui') }}</small></article>{% endfor %}</section>
+<h2>Lokasi &amp; proses terkait</h2><ul>{% for l in lokasi %}<li>{{ l }}</li>{% else %}<li>Belum ada lokasi lanjutan tercatat.</li>{% endfor %}{% for kode,url in proses %}<li><a href="{{ url }}">{{ kode }}</a></li>{% endfor %}</ul>
+<a class="btn btn--kecil" href="/pekerjaan">Buka Pekerjaan</a>
+{% elif not menunggu %}<p class="bantu">Tiket ini tidak sedang ditawarkan untuk penerimaan. Periksa status tiket dan catatan terkait.</p>{% endif %}
+<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+{% endblock %}
+{% block kaki %}{% import '_kerja_navigasi.html' as nav with context %}{{ nav.kaki(buka,nilai) }}{% endblock %}

@@ -100,6 +100,8 @@ app.include_router(hmu_tampilan.router_pwa(render))
 app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
 app.include_router(laporan_router)
+from app.web.layar_pekerjaan import router as pekerjaan_router
+app.include_router(pekerjaan_router)
 app.include_router(berjalan_router)
 app.include_router(audit_router)
 app.include_router(pengaturan_router)
@@ -499,106 +501,19 @@ def _pintasan_aksi(view: str) -> tuple[tuple[str, str], ...]:
 
 @app.get("/aksi", response_class=HTMLResponse)
 async def halaman_aksi(request: Request):
-    """Layar pencatatan. Daftar aksi & bentuk formulirnya datang dari server
-    (`/api/actions/menu`), jadi menambah aksi tak perlu layar baru."""
     from app.web.security import butuh_akun
-
+    from app.web.layar_pekerjaan import halaman_pekerjaan, halaman_barang_masuk
+    from app.services.kelompok_kerja import PENERIMAAN
     akun = await butuh_akun(request)
-    if request.query_params.get("buka") == "perintah_keluar":
-        return RedirectResponse("/barang-keluar/baru", 303)
-    # `buka` datang dari layar Berjalan ATAU dari benda di layar ini sendiri:
-    # menekan satu baris harus membuka formulir yang menutupnya, bukan
-    # menurunkan orang di daftar aksi lalu menyuruhnya mencari sendiri.
-    #
-    # Bendanya diambil dari sumber yang SAMA dengan layar Berjalan. Dua daftar
-    # yang disusun terpisah akan berselisih cepat atau lambat, dan yang salah
-    # adalah yang lebih jarang dibuka orang.
-    from app.peran import can_see_financials
-    from app.services import berjalan as svc
-    from app.web.layar import view_untuk
-
-    async with SessionLocal() as db:
-        b = await svc.untuk(db, akun.user)
-
-    # ── SARINGAN GRUP, keputusan pemilik 2 Oktober 2026 ──
-    #
-    # *"antrian tunggu bisa banyak sekali"* — dan obat yang ia minta sub-menu
-    # yang muncul saat pintunya diklik. Alamatnya `?grup=`, bukan jangkar
-    # `#bahan`: yang dibutuhkan MENGURANGI apa yang terlihat sekaligus, bukan
-    # menggulirkan ke tengah daftar yang tetap panjang.
-    #
-    # Angkanya dihitung SEBELUM disaring — sub-menu yang menyebut "0" untuk
-    # grup yang sedang tidak dipilih akan membuat orang menyimpulkan
-    # pekerjaannya habis.
-    n_grup = b.jumlah_grup()
-    grup = (request.query_params.get("grup") or "").strip()
-    # Tautan lama Packing jasa tetap membuka antrean packing yang kini digabung.
-    if grup == "packing_jasa":
-        grup = "packing"
-    if grup not in dict(svc.GRUP_ANTREAN):
-        grup = ""          # alamat ngawur = tampilkan semuanya, bukan 422
-    menunggu = ([x for x in b.menunggu if svc.grup_baris(x) == grup]
-                if grup else b.menunggu)
-
-    return render(request, "aksi.html",
-                  buka=request.query_params.get("buka") or "",
-                  nilai=request.query_params.get("nilai") or "",
-                  # Pil saringan: hanya grup yang BERISI ditawarkan, ditambah
-                  # yang sedang dipilih (supaya pilnya tak lenyap di bawah
-                  # tangan orang saat kartu terakhirnya selesai dikerjakan).
-                  GRUP_PIL=[(k, nama, n_grup[k]) for k, nama in svc.GRUP_ANTREAN
-                            if n_grup[k] or k == grup],
-                  GRUP_KINI=grup,
-                  GRUP_TOTAL=sum(n_grup.values()),
-                  MENUNGGU_PER_GRUP=[
-                      (k, nama, [x for x in b.menunggu
-                                 if svc.grup_baris(x) == k])
-                      for k, nama in svc.GRUP_ANTREAN
-                  ],
-                  # Hanya yang BELUM PUNYA TEMPAT. Yang sudah berada di
-                  # mesin atau silo pindah ke layar Sedang berjalan berikut
-                  # tindakannya — kartu yang sama muncul di dua tempat adalah
-                  # dua tempat di kepala orang, dan cepat atau lambat keduanya
-                  # berbeda isi.
-                  menunggu=menunggu, berjalan=[], lama=svc._lama,
-                  # ── Bentuk antrean (Tahap 2, aksi.html naik ke paket) ──
-                  #
-                  # Yang mendapat blok sendiri di ATAS adalah TUMPUKAN: isinya
-                  # menandakan gabah yang turun dari truk tanpa mesin atau silo
-                  # yang siap menerimanya. Di Meja yang di atas adalah tiket
-                  # timbang; kerangkanya sama, kelompoknya berbeda.
-                  KELOMPOK_ATAS="tumpukan",
-                  judul_atas="Menumpuk di lantai",
-                  # ── Blok TIKET, 24 September 2026 ──
-                  #
-                  # Tiket timbang yang belum dicatat mendapat bloknya sendiri,
-                  # dan bukan demi kerapian: judul blok sisanya berbunyi "Bisa
-                  # dikerjakan sekarang", sedangkan tiket PK yang dilihat
-                  # operator Gudang 2 adalah kartu DIAM — dicatat Admin, bukan
-                  # dia. Kartu yang tak bisa ditekan di bawah judul yang
-                  # menjanjikan ia bisa membuat orang menekannya berulang lalu
-                  # menyimpulkan aplikasinya rusak.
-                  #
-                  # Judulnya menyebut KEADAANNYA, bukan tindakannya: yang benar
-                  # untuk admin (ia bisa mencatat) dan untuk operator (ia tak
-                  # bisa) adalah hal yang sama — barangnya ada, catatannya
-                  # belum.
-                  KELOMPOK_TENGAH="tiket",
-                  judul_tengah="Tiket timbang belum dicatat",
-                  judul_bawah=dict(svc.GRUP_ANTREAN).get(
-                      grup, "Bisa dikerjakan sekarang"),
-                  # Tombol kecil di bawah antrean — hanya untuk operator, dan
-                  # hanya karena katalog "Catat pekerjaan lain" dicabut dari
-                  # lacinya: tanpa ini, aksi yang tak berwujud benda di gudang
-                  # hilang sama sekali dari layarnya.
-                  PINTASAN=_pintasan_aksi(await view_untuk(akun.user)),
-                  # Kartu silo & mesin pindah ke `transit` untuk pemegang kedua
-                  # gudang (`berjalan.untuk`), dan layar ini hanya merender
-                  # `menunggu`. Syaratnya dibaca dari sumber yang SAMA yang
-                  # memindahkannya — `can_see_financials` — supaya kalimatnya
-                  # tak pernah muncul di layar yang kartunya tidak pindah.
-                  blok_pengalih=can_see_financials(akun.user),
-                  **b.lencana())
+    buka = request.query_params.get('buka','')
+    if buka == 'perintah_keluar':
+        return RedirectResponse('/barang-keluar/baru',303)
+    # Grup lama bahan memuat penerimaan dan penempatan. Deep-link tindakan
+    # menentukan tujuan; bookmark grup tanpa tindakan membuka tiket masuk,
+    # dengan pintu ke penempatan pada Pekerjaan tetap terlihat di sana.
+    if buka in PENERIMAAN or (request.query_params.get('grup')=='bahan' and not buka):
+        return await halaman_barang_masuk(request,akun)
+    return await halaman_pekerjaan(request,akun)
 
 
 @app.get("/aksi-lain", response_class=HTMLResponse)

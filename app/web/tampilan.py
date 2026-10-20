@@ -206,6 +206,10 @@ async def render_laci(request: Request, nama: str, **konteks):
 
     from app.web.stok_navigasi import siapkan
     await siapkan(request, nama, konteks)
+    from app.web.layar_pekerjaan import konteks_aman
+    kembali_kerja = konteks_aman(request.query_params.get("kembali_kerja"))
+    if kembali_kerja:
+        konteks["kembali"] = kembali_kerja
 
     akun = getattr(request.state, "akun", None)
     return render(request, nama,

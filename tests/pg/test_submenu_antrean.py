@@ -16,9 +16,9 @@ async def test_muat_hanya_memuat_perintah_keluar(pg, gudang):
         sosoh = await c.get("/aksi?grup=penyosohan")
     assert muat.status_code == sosoh.status_code == 200
     assert r.rec.kode in muat.text
-    assert "Muat Barang Keluar" in muat.text
+    assert "Muat" in muat.text
     assert r.rec.kode not in sosoh.text
-    assert "Grup ini kosong" in sosoh.text
+    assert "Tidak ada pekerjaan perlu tindakan" in sosoh.text
 
 
 async def test_silo_tetap_di_tunggu_penyosohan_saat_mesin_sibuk(pg, gudang2):
@@ -38,9 +38,9 @@ async def test_silo_tetap_di_tunggu_penyosohan_saat_mesin_sibuk(pg, gudang2):
         sibuk = await c.get("/aksi?grup=penyosohan")
         muat = await c.get("/aksi?grup=muat")
     assert sibuk.status_code == muat.status_code == 200
-    assert "Tunggu Penyosohan" in sibuk.text
+    assert "Status &amp; informasi" in sibuk.text
     assert "Silo A" in sibuk.text
     assert "mesin sosoh sedang dipakai" in sibuk.text
     assert "Silo B" not in sibuk.text
     assert "Silo A" not in muat.text
-    assert "Grup ini kosong" in muat.text
+    assert "Tidak ada pekerjaan perlu tindakan" in muat.text

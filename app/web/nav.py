@@ -89,24 +89,10 @@ log = logging.getLogger("web.nav")
 #: dipakai bersama.
 TAB = (
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
-    ("aksi",       "/aksi",       "Antrian tunggu", "Yang menunggu Anda", None, "≡"),
-    ("berjalan",   "/berjalan",   "Sedang berjalan", "Mesin yang menyala", None, "◷"),
-    # Kerja MEJA, bukan kerja gudang — dan karena itu bukan antrean. Gabah
-    # di baris-barisnya sudah lama punya tempat; yang belum selesai adalah
-    # keputusannya. Sejak awal pekerjaan admin.
-    ("keputusan",  "/keputusan",  "Menunggu keputusan",
-     "Harga gabah & PK luar, pencocokan output", MEJA, "✓"),
-    # Pecah dari "Menunggu keputusan" atas permintaan pemilik 24 September
-    # 2026. Gerbangnya sama — MEJA — karena ini kerja meja, bukan kerja
-    # gudang: OPERATOR TIDAK MELIHAT HALAMAN INI SAMA SEKALI. Yang ia lihat
-    # adalah mutu barangnya, di kartu Stok dan kartu proses yang berjalan;
-    # menilai mutu dan MENAGIH penilaiannya dua pekerjaan berbeda.
-    #
-    # Pintunya ikut padam saat pencatatan mutu dimatikan di Pengaturan —
-    # lewat `PINTU_MATI`, bukan lewat daftar ini: TAB dibaca sekali saat app
-    # dimuat, sedangkan setelan itu bisa berubah kapan saja.
-    ("mutu",       "/mutu",       "Mutu & QC",
-     "Mutu giling & PK luar yang belum dicatat", MEJA, "◎"),
+    ("barang_masuk", "/barang-masuk", "Barang Masuk", "Tiket dan penerimaan", None, "↙"),
+    ("pekerjaan", "/pekerjaan", "Pekerjaan", "Perlu tindakan dan berjalan", None, "≡"),
+    # /aksi, /berjalan, /keputusan dan /mutu tetap rute kompatibel.
+    # Pintu utamanya kini Barang Masuk dan Pekerjaan; hak tindakan lama tetap.
     # Stok berdiri SEBELUM Laporan: ia keadaan sekarang, sedangkan laporan
     # bercerita tentang yang sudah lewat. Operator ikut melihatnya — berapa
     # yang ada di gudang bukan angka uang, dan yang mengangkatnya tiap hari
@@ -466,7 +452,7 @@ def _KOSONG() -> dict:
     pintu. Pintu yang hilang terbaca sebagai "layarnya sudah tak ada", dan itu
     lebih membingungkan daripada pintu yang dibuka lalu ternyata kosong.
     """
-    return {"MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
+    return {"BARANG_MASUK": 0, "PEKERJAAN": 0, "MENUNGGU": 0, "BERJALAN": 0, "KEPUTUSAN": 0, "MUTU": 0,
             "PRODUK": 0, "KABAR": 0, "KABAR_MERAH": False,
             "MUTU_AKTIF": True, "PINTU_MATI": (),
             # Sub-menu KOSONG saat kuerinya gagal, sama alasannya dengan

@@ -408,35 +408,20 @@ def test_antrean_benar_benar_kosong_tetap_memakai_kalimat_lamanya():
     assert "Grup ini kosong" not in h
 
 
-def test_pintu_antrean_jadi_summary_saat_bersub_menu():
-    """⭐ Pintunya BERUBAH: `<a href>` → `<summary>`.
-
-    Itu yang membuat kliknya membuka sub-menu alih-alih menuju halamannya —
-    dan itu pula sebabnya baris "Semua" wajib ada di dalamnya.
-    """
-    sub = {"aksi": [("/aksi", "Semua", 7), ("/aksi?grup=bahan", "Bahan baku", 1),
-                    ("/aksi?grup=packing", "Packing", 6)]}
+def test_pintu_lama_tidak_menggandakan_navigasi_baru():
+    sub = {"aksi": [("/aksi?grup=bahan", "Bahan baku", 1),
+                     ("/aksi?grup=packing", "Packing", 6)]}
     h = _laci(sub)
-    assert "pintu-lipat" in h
-    assert "<summary" in h
-    assert 'class="pintu-sub"' in h
-    for nama in ("Semua", "Bahan baku", "Packing"):
-        assert nama in h
-    # Jalan ke daftar utuh tetap ada.
-    assert 'href="/aksi"' in h
-    assert 'href="/aksi?grup=bahan"' in h
+    assert 'href="/barang-masuk"' in h and 'href="/pekerjaan"' in h
+    assert 'href="/aksi?grup=bahan"' not in h
+    assert 'class="pintu-sub"' not in h
 
 
-def test_pintu_tetap_tautan_biasa_tanpa_sub_menu():
-    """Dan pintu LAIN tak pernah ikut berubah — sub-menunya per kunci."""
+def test_pintu_baru_tetap_tautan_biasa_tanpa_sub_menu():
     h = _laci({})
-    assert "pintu-lipat" not in h
-    assert 'href="/aksi"' in h
-    # Pintu lain tetap tautan walau antrean bersub-menu.
-    h2 = _laci({"aksi": [("/aksi", "Semua", 2),
-                         ("/aksi?grup=bahan", "Bahan baku", 1),
-                         ("/aksi?grup=packing", "Packing", 1)]})
-    assert 'href="/stok"' in h2 and 'href="/berjalan"' in h2
+    assert 'pintu-lipat' not in h
+    for alamat in ('/barang-masuk', '/pekerjaan', '/stok'):
+        assert f'href="{alamat}"' in h
 
 
 def test_pintu_stok_jadi_summary_tanpa_semua_dan_tanpa_lencana_nol():
@@ -461,13 +446,12 @@ def test_pintu_stok_jadi_summary_tanpa_semua_dan_tanpa_lencana_nol():
     assert ">3<" in h.replace(" ", "").replace("\n", "")
 
 
-def test_sub_menu_terbuka_sendiri_di_halamannya_sendiri():
-    """Yang sudah berada di antrean hampir pasti ingin berpindah grup, dan satu
-    ketukan tambahan untuk itu adalah ketukan yang diulang sepanjang hari."""
-    sub = {"aksi": [("/aksi", "Semua", 2), ("/aksi?grup=bahan", "Bahan baku", 1),
-                    ("/aksi?grup=packing", "Packing", 1)]}
-    assert "<details class=\"pintu-lipat\" open>" in _laci(sub, layar="aksi")
-    assert " open>" not in _laci(sub, layar="beranda")
+def test_layar_baru_tidak_membuka_dropdown_menu_lama():
+    sub = {"aksi": [("/aksi?grup=bahan", "Bahan baku", 1)]}
+    for layar in ('barang_masuk', 'pekerjaan'):
+        h = _laci(sub, layar=layar)
+        assert '<details class="pintu-lipat" open>' not in h
+        assert 'href="/pekerjaan"' in h
 
 
 def test_kelas_css_sub_menu_memang_ada():

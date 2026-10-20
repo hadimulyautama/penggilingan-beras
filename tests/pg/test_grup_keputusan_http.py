@@ -73,7 +73,7 @@ async def test_permintaan_tergambar_dan_kategori_lain_kosong(pg, pabrik):
     assert '<div class="saring">' not in semua.text
 
     assert lain.status_code == 200
-    assert "Kategori ini kosong" in lain.text
+    assert "Tidak ada pekerjaan perlu tindakan" in lain.text
     assert pabrik["lot"] not in lain.text
 
     # Alamat kategori yang tak dikenal diperlakukan seperti "semua" — bukan
@@ -224,6 +224,6 @@ async def test_verifikasi_muatan_tidak_menambah_kategori_keputusan(
     finally:
         await c.aclose()
     assert "Muatan menunggu diverifikasi" not in r2.text
-    assert "Permintaan lot PK dari Gudang 2" in r2.text
+    assert "buka=acc_permintaan_pk" in r2.text
     assert "Keputusan lain" not in r2.text, \
         "salah satunya masih jatuh ke jaring, bukan bloknya sendiri"

@@ -1,0 +1,22 @@
+{% import "_proses_visual.html" as visual with context %}
+{% import "_kepemilikan.html" as milik with context %}
+<style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
+{% if proses %}
+<section data-blok aria-label="Proses aktif">
+  <span class="lbl">Proses aktif · <span data-jumlah>{{ proses|length }}</span></span>
+  <div class="proses-aktif-list tabel-standar daftar-standar">
+    <div class="proses-aktif-list__head" aria-hidden="true"><span>Kode &amp; proses</span><span>Kepemilikan</span><span>Status / mulai</span><span>Ringkasan</span><span></span></div>
+  {% for b in proses %}
+    <a class="proses-aktif-list__row" data-proses="{{ visual.jenis(b) }}" href="{{ alamat_detail_proses(b) or '/berjalan' }}"
+       data-sup="{{ b.judul or '' }}" data-cari="{{ ((b.judul or '') ~ ' ' ~ b.kode ~ ' ' ~ (b.pemilik_tampil or '') ~ ' ' ~ (b.sub or '') ~ ' ' ~ (b.isi or ''))|lower }}">
+      <span><strong>{{ b.kode }}</strong><small>{{ visual.judul(b) }} · {{ 'Gudang 2' if b.gudang == 'g2' else 'Gudang 1' }}</small></span>
+      <span class="proses-aktif-list__kepemilikan">{{ milik.penanda(b) }}</span>
+      <span><span class="riwayat-status {{ 'riwayat-status--wait' if b.nota_jenis == 'hati' else 'riwayat-status--done' }}">{{ b.nota if b.nota_jenis == 'hati' else b.keadaan }}</span><small>Mulai {{ b.sejak|jam('%d/%m · %H:%M') or 'belum tercatat' }}</small></span>
+      <span>{% if b.utama %}<strong>{{ b.utama[0] }} {{ b.utama[1] }}</strong>{% endif %}<small>{{ b.ringkas or b.isi }}</small></span>
+      <span class="proses-aktif-list__panah" aria-hidden="true">›</span>
+      <div class="proses-aktif-list__indikator">{{ visual.kemajuan(b) }}</div>
+    </a>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}

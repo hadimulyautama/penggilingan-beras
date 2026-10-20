@@ -393,12 +393,23 @@ class Berjalan:
             # untuk alasan yang sama akan berbeda jawabannya pada perubahan
             # berikutnya.
             mati.append("barang_keluar")
+        from app.services.kelompok_kerja import bagi, dapat_ditindak
+        kerja = bagi(self)
+        # Kunci lama tetap tersedia untuk pemakai layanan lama. Lencana menu
+        # baru selalu menghitung daftar baru, bukan menjumlah angka lama yang
+        # mencampur tiket, tindakan, dan informasi.
+        mati.extend(("aksi", "berjalan", "keputusan", "mutu"))
+        submenu = self.submenu()
+        submenu.pop("aksi", None)
+        submenu.pop("keputusan", None)
         return {"MENUNGGU": self.jumlah_menunggu, "BERJALAN": self.jumlah_berjalan,
+                "BARANG_MASUK": sum(dapat_ditindak(x) for x in kerja.masuk),
+                "PEKERJAAN": len(kerja.tindakan),
                 "KEPUTUSAN": self.jumlah_keputusan, "MUTU": self.jumlah_mutu,
                 "PRODUK": self.jumlah_produk, "KABAR": self.jumlah_kabar,
                 "KABAR_MERAH": self.kabar_merah,
                 "MUTU_AKTIF": self.mutu_aktif, "PINTU_MATI": tuple(mati),
-                "SUBMENU": self.submenu()}
+                "SUBMENU": submenu}
 
     def submenu(self) -> dict[str, list[tuple[str, str, int]]]:
         """Sub-menu laci per pintu: {kunci: [(alamat, nama, jumlah)]}.

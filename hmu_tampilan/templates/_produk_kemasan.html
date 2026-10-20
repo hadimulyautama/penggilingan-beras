@@ -15,7 +15,7 @@
           {% if p.href %}<a class="btn btn--kecil" href="{{ p.href }}" data-masuk-silo="{{ p.sumber or k.jenis }}">Masukkan ke silo</a>{% endif %}
           {% if p.kemas_baru %}<a class="btn btn--kecil" href="{{ p.kemas_baru }}" data-kemas-curah>Kemas</a>{% endif %}
           {% if p.kemas %}<a class="btn btn--kecil" href="{{ p.kemas }}" data-utuh>{{ 'Kemas ulang' if p.ukuran else 'Kemas' }}</a>{% endif %}
-          {% if p.pindah %}<a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ p.pindah|urlencode }}">Pindah kepemilikan</a>{% endif %}
+          {% if p.pindah %}<a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=pindah_kepemilikan_produk&amp;nilai={{ p.pindah|urlencode }}">Pindah kepemilikan</a>{% endif %}
           </div></details>
           {% endif %}
           {% if not p.href and not p.pindah and not p.kemas and not p.kemas_baru %}—{% endif %}
@@ -36,13 +36,13 @@
 {% if not baris_kemasan %}
 {% if k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah %}
   {% for p in kemasan.get(k.jenis, []) %}
-    {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}
+    {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}
   {% endfor %}
-  {% if curah_titipan and curah_titipan.get(k.jenis,0) > 0.5 %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></p>{% endif %}
+  {% if curah_titipan and curah_titipan.get(k.jenis,0) > 0.5 %}<p><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></p>{% endif %}
 {% endif %}
 
 {% endif %}
 
 {% if baris_kemasan and k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah and curah_titipan and curah_titipan.get(k.jenis,0)>0.5 %}
-<details class="produk-aksi"><summary class="btn btn--kecil">Aksi stok curah ▾</summary><div class="produk-aksi__pilihan"><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></div></details>
+<details class="produk-aksi"><summary class="btn btn--kecil">Aksi stok curah ▾</summary><div class="produk-aksi__pilihan"><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></div></details>
 {% endif %}

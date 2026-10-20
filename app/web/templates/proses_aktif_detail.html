@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_penilaian_pk.html" import penilaian_pk with context %}
 {% import "_stok.html" as st with context %}
+{% import "_benda.html" as benda with context %}
 {% from "_riwayat_jeda.html" import riwayat_jeda_blok with context %}
 {% import "_kepemilikan.html" as milik with context %}
 {% import "_proses_visual.html" as visual with context %}
@@ -9,7 +10,7 @@
 {% block isi %}
 <style>@import url('/static/riwayat.css?v={{ VERSI }}');@import url('/static/proses_aktif.css?v={{ VERSI }}');</style>
 <main class="riwayat-detail proses-detail" data-konteks="{{ milik.konteks(proses) }}" data-nilai="{{ proses.nilai or proses.kode }}">
-  <a class="riwayat-detail__back" href="/berjalan">← Kembali ke Sedang berjalan</a>
+  <a class="riwayat-detail__back" href="{{ kembali }}">← Kembali ke Pekerjaan</a>
   <header class="riwayat-detail__hero">
     <div class="proses-detail__label"><span class="riwayat-detail__eyebrow">PROSES AKTIF · {{ visual.penanda(proses) }}</span><span class="riwayat-status {{ 'riwayat-status--wait' if d.status == 'Dijeda' else 'riwayat-status--done' }}">{{ d.status }}</span></div>
     <h1>{{ d.kode }}</h1>
@@ -97,7 +98,7 @@
         <div class="proses-detail__aksi pilihan">
           {% for p in proses.pilihan %}
             {% set nilai_aksi = p[3] if p|length > 3 else proses.nilai %}
-            <a class="pilihan__satu{{ ' pilihan__satu--utama' if loop.first }}" href="{{ alamat }}?buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}">
+            <a class="pilihan__satu{{ ' pilihan__satu--utama' if loop.first }}" href="{{ benda.dasar_borang(alamat) }}buka={{ p[0] }}{% if nilai_aksi %}&amp;nilai={{ nilai_aksi|urlencode }}{% endif %}">
               <span class="pilihan__nama">{{ p[1] }}</span><span class="pilihan__ket">{{ p[2] }}</span>
             </a>
           {% else %}<p class="bantu">Belum ada tindakan yang tersedia pada keadaan ini.</p>{% endfor %}

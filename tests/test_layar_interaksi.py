@@ -326,45 +326,20 @@ def test_halaman_tidak_boleh_disimpan_peramban():
 
 
 def test_lembar_terbuka_di_layar_tempat_tombolnya_ditekan():
-    """Pemilik: aksi dari Beranda tak perlu memindahkan orang ke Sedang
-    berjalan — lembarnya muncul di Beranda saja.
-
-    Menekan tombol lalu mendarat di layar lain berarti orang kehilangan
-    tempatnya, dan yang baru saja ia lihat ada di layar yang ia tinggalkan.
-    """
-    tpl = AKAR / "app/web/templates"
-    #: `aksi.html` naik ke paket pada Tahap 2; yang dijaga uji ini tak berubah.
-    paket = AKAR / "hmu_tampilan/templates"
-    for berkas, alamat in (("beranda.html", '"/"'),
-                           ("berjalan.html", '"/berjalan"'),
-                           ("keputusan.html", '"/keputusan"'),
-                           ("aksi.html", None)):
-        induk = paket if (paket / berkas).exists() else tpl
-        teks = (induk / berkas).read_text()
-        if alamat:
-            assert f"alamat={alamat}" in teks, berkas
-            # Kerangka lembarnya harus ada, kalau tidak tautannya menganga.
-            assert 'id="lembar"' in teks and 'id="kabar"' in teks, berkas
-            assert "aksi.js" in teks and "data-buka=" in teks, berkas
-        # Tak satu pun LAYAR LAIN melempar orang ke antrean. Antrean sendiri
-        # boleh menyebut alamatnya sendiri: itu pola yang sama dengan
-        # `/stok?buka=…` — halaman digambar ulang lalu lembarnya terbuka DI
-        # SITU, bukan orangnya yang dipindahkan ke layar lain.
-        if berkas != "aksi.html":
-            assert '"/aksi?buka=' not in teks, berkas
-
-    # Dan rutenya benar-benar meneruskan `buka`/`nilai`; tanpa itu lembarnya
-    # tak pernah terbuka meski tautannya benar.
+    """Formulir membuka dan kembali pada konteks daftar baru yang sama."""
+    from pathlib import Path
+    from app.web import layar_pekerjaan
     import inspect
-
-    from app import main
-    from app.web import layar_berjalan, layar_keputusan
-
-    for fn in (main.beranda, main.halaman_aksi,
-               layar_berjalan.halaman_berjalan, layar_keputusan.halaman_keputusan):
-        sumber = inspect.getsource(fn)
-        assert 'query_params.get("buka")' in sumber, fn.__name__
-        assert 'query_params.get("nilai")' in sumber, fn.__name__
+    paket=Path(__file__).resolve().parents[1]/'hmu_tampilan/templates'
+    for nama in ('barang_masuk.html','pekerjaan.html','barang_masuk_detail.html'):
+        t=(paket/nama).read_text()
+        assert 'alamat=request.url.path' in t and 'id="lembar"' in t and 'id="kabar"' in t
+        assert 'nav.kaki(buka,nilai)' in t
+    helper=(paket/'_kerja_navigasi.html').read_text()
+    assert 'aksi.js' in helper and 'data-buka=' in helper and 'data-nilai=' in helper
+    for fn in (layar_pekerjaan.halaman_pekerjaan,layar_pekerjaan.halaman_barang_masuk):
+        src=inspect.getsource(fn)
+        assert "query_params.get('buka'" in src and "query_params.get('nilai'" in src
 
 
 def test_kabar_cukup_berhasil_atau_gagal():

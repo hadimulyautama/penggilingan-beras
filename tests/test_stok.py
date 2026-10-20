@@ -707,7 +707,12 @@ def test_stok_karung_satu_pemformat_bukan_dua():
     """Berkas ini pernah membawa dua makro berisi persis sama (`kg` dan
     `ribuan`) — penggandaan kecil di layar yang justru sedang disatukan."""
     # Sejak Tahap 2 pemformatnya SATU untuk ketiga app, di `_stok.html`.
-    assert TPL_MAKRO.read_text().count('.format(n)|replace(",", ".")') == 1
+    assert TPL_MAKRO.read_text().count('macro kg(n)') == 1
+    from app.web.tampilan import templates
+    tampil = templates.env.from_string("{% import '_stok.html' as st %}{{ st.kg(n) }}")
+    assert tampil.render(n=125.25).strip() == '125,25'
+    assert tampil.render(n=6500).strip() == '6.500'
+    assert tampil.render(n=0).strip() == '0'
     # Yang dilarang MAKRO keduanya, bukan katanya: komentar yang menjelaskan
     # "pemisah ribuan" tak bersalah, dan uji yang menghitung kata di dalam
     # komentar melarang orang menjelaskan keputusannya.

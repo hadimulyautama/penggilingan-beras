@@ -106,22 +106,20 @@ async def _klien(pg, *, role: str, gudang_id: int | None = None) -> httpx.AsyncC
 
 
 async def test_pil_tergambar_dan_menyaring_untuk_super(pg, pabrik):
-    kode = pabrik["kode_sosoh"]
-    c = await _klien(pg, role="superadmin")
-    async with c:
-        lot = pabrik["kode_lot"]
-        semua = (await c.get("/berjalan")).text
-        assert "Gudang 1" in semua and "Gudang 2" in semua      # pilnya ada
-        assert kode in semua and lot in semua                  # kedua gudang
-
-        hanya_g2 = (await c.get("/berjalan?gudang=g2")).text
-        assert kode in hanya_g2 and lot not in hanya_g2
-        hanya_g1 = (await c.get("/berjalan?gudang=g1")).text
-        assert lot in hanya_g1, "penyaring mengosongkan layar, bukan menyaring"
-        assert kode not in hanya_g1, "penyaring tergambar tapi tak menyaring"
-        # Pil yang sedang menyala menyebut dirinya — tanpa itu orang tak tahu
-        # daftarnya sedang disaring, lalu menyimpulkan gudangnya kosong.
-        assert "pil--on" in hanya_g1
+    """Proses aktif dan bahan siap pindah kini berada pada tab berbeda."""
+    async with await _klien(pg, role='superadmin') as c:
+        kode,lot=pabrik['kode_sosoh'],pabrik['kode_lot']
+        aktif=(await c.get('/berjalan')).text
+        siap=(await c.get('/pekerjaan?tab=tindakan')).text
+        assert kode in aktif and lot not in aktif
+        assert lot in siap and kode not in siap
+        assert 'Gudang 1' in aktif and 'Gudang 2' in aktif
+        assert kode in (await c.get('/berjalan?gudang=g2')).text
+        assert kode not in (await c.get('/berjalan?gudang=g1')).text
+        g1=(await c.get('/pekerjaan?gudang=g1')).text
+        g2=(await c.get('/pekerjaan?gudang=g2')).text
+        assert lot in g1 and lot not in g2
+        assert 'pil--on' in g1
 
 
 async def test_operator_tak_ditawari_penyaring(pg, pabrik):

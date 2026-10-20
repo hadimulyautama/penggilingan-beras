@@ -11,7 +11,9 @@
 {#: Pemisah ribuan. Namanya menyebut "kg" karena di situlah ia lahir; ia
    sendiri tak menempelkan satuan apa pun, dan blok karung memakainya untuk
    LEMBAR. Satuannya ditulis di sebelah angkanya, di markup. #}
-{% macro kg(n) -%}{{ "{:,.0f}".format(n)|replace(",", ".") }}{%- endmacro %}
+{# Berat pecahan jangan hilang ketika berpindah dari daftar ke detail.
+   Bilangan bulat (termasuk lembar karung) tetap singkat tanpa nol desimal. #}
+{% macro kg(n) -%}{{ ('{:,.3f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') }}{%- endmacro %}
 {% macro kg_rinci(n) -%}{{ ('{:,.3f}'.format(n).rstrip('0').rstrip('.')).replace(',', '_').replace('.', ',').replace('_', '.') if n is not none else 'Belum dicatat' }}{%- endmacro %}
 
 {# ── STOK KARUNG ──
