@@ -67,14 +67,15 @@
 <div class="karung-scroll tabel-standar" tabindex="0" role="region" aria-label="Tabel stok karung {{ judul }}">
 <table class="tabel-standar karung-tabel">
 <thead><tr><th scope="col">No.</th><th scope="col">Merek</th><th scope="col">Jenis karung</th><th scope="col">Ukuran</th><th scope="col">Jumlah</th><th scope="col">Status</th></tr></thead>
-<tbody>{% for b in baris %}{{ karung_baris(b, boleh_pindah, loop.index) }}{% endfor %}</tbody>
+{% set baris_urut = (baris|selectattr("merk")|list) + (baris|rejectattr("merk")|list) %}
+<tbody>{% for b in baris_urut %}{{ karung_baris(b, boleh_pindah, loop.index) }}{% endfor %}</tbody>
 </table></div></section>
 {%- endmacro %}
 
 {% macro karung_baris(b, boleh_pindah=False, nomor=1) -%}
 <tr>
 <td>{{ nomor }}</td><td><strong>{{ b.merk or 'Tanpa merek' }}</strong></td>
-<td>{{ b.nama }}</td><td>{{ b.ukuran }} kg</td><td class="karung-tabel__jumlah"><strong>{{ kg(b.lembar) }}</strong> lembar</td>
+<td>{{ b.nama }}<span class="karung-ukuran-ponsel"> · {{ b.ukuran }} kg</span></td><td>{{ b.ukuran }} kg</td><td class="karung-tabel__jumlah"><strong>{{ kg(b.lembar) }}</strong> lembar</td>
 <td><div class="karung-tabel__status">
 {% if b.menipis %}<span class="karung-menipis">Menipis</span>{% else %}<span aria-label="Stok cukup">—</span>{% endif %}
 {% if boleh_pindah and b.lembar > 0 %}
