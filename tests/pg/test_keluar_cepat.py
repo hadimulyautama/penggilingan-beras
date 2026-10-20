@@ -28,6 +28,9 @@ async def test_batas_total_perintah(pg,gudang,berat,lolos):
     async with pg() as db:
         r=await bk.buat_perintah(db,user=await db.get(User,gudang['adm']),pelanggan_id=pid,
             baris=[bk.BarisPerintah(tipe='byproduct_curah',jenis='bekatul',berat_kg=berat)])
+    from app.web.aksi_inventory import _ringkas_perintah
+    if berat==199.99:
+        assert "199,99 kg" in _ringkas_perintah(r.rec,r.baris)
     data=await payload(pg,r)
     if lolos:
         hasil=await kirim(pg,gudang,data)

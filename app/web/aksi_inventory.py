@@ -714,7 +714,9 @@ def _ringkas_perintah(rec, items) -> str:
     macam = len(items)
     total = sum(float(i.berat_perintah_kg or 0) for i in items)
     sudah = sum(float(i.berat_kg or 0) for i in items)
-    label = f"{rec.kode} · {rec.nama_pembeli or '?'} · {macam} macam · {kg(total)}"
+    # Jangan bulatkan 199,99 menjadi 200 pada pilihan alur cepat.
+    angka = f"{total:,.2f}".rstrip("0").rstrip(".").replace(",", "_").replace(".", ",").replace("_", ".")
+    label = f"{rec.kode} · {rec.nama_pembeli or '?'} · {macam} macam · {angka} kg"
     if sudah > 0.5:
         label += f" · sudah dimuat {kg(sudah)}"
     if rec.no_polisi:
