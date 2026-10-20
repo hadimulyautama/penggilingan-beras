@@ -149,7 +149,7 @@
       </a>
       <form class="desktop-theme" method="post" action="/pengaturan/terik">
         <input type="hidden" name="_csrf" value="{{ CSRF }}">
-        <input type="hidden" name="balik" value="{{ request.url.path if request else '/' }}">
+        <input type="hidden" name="balik" value="{{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request else '/' }}">
         <button type="submit" aria-label="Ganti ke mode {{ 'gelap' if TERIK else 'terang' }}" title="Ganti tema">
           <span aria-hidden="true">{{ '☾' if TERIK else '☀' }}</span>
           <i aria-hidden="true"></i>
