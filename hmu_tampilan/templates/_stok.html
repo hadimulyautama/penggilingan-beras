@@ -48,58 +48,40 @@
       {%- if tipis %} · <b>{{ tipis }} menipis</b>{% endif -%}
     </div>
   </div>
-  <div class="kartu daftar-standar">
-    <div class="lap">
-      {% if per_gudang %}
-        {% for g in ["Gudang 2", "Gudang 1"] %}
-          {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
-          {% if baris %}
-            <div class="lap__bab">{{ g }}</div>
-            {% for b in baris %}{{ karung_baris(b, boleh_pindah=boleh_pindah) }}{% endfor %}
-          {% endif %}
-        {% endfor %}
-      {% else %}
-        {% for b in karung %}{{ karung_baris(b, boleh_pindah=boleh_pindah) }}{% endfor %}
-      {% endif %}
-    </div>
-  </div>
+  {% if per_gudang %}
+    {% for g in ["Gudang 2", "Gudang 1"] %}
+      {% set baris = karung|selectattr("gudang", "equalto", g)|list %}
+      {% if baris %}{{ karung_tabel(baris, g, boleh_pindah) }}{% endif %}
+    {% endfor %}
+  {% else %}
+    {{ karung_tabel(karung, judul, boleh_pindah) }}
+  {% endif %}
 </div>
 {% endif %}
 {%- endmacro %}
 
-{% macro karung_baris(b, boleh_pindah=False) -%}
-<div class="lap__baris daftar-standar__baris">
-  <span class="lap__nama">
-    {%- if b.merk %}{{ b.merk }} {% endif %}{{ b.nama }} {{ b.ukuran }} kg</span>
-  <span class="lap__nilai">
-    {{- kg(b.lembar) }} lembar
-    {%- if b.menipis %} · menipis{% endif -%}
-  </span>
-</div>
-{# ── Pindah kepemilikan karung — pabrik → KONTAK pelanggan (7 Oktober
-     2026, koreksi susulan hari yang sama) ──
-   ARAH KEBALIKAN dari tombol produk/broken di atas: di sana titipan
-   bergerak balik ke pabrik; karung tak punya tiket timbang untuk mulai
-   milik pelanggan, jadi satu-satunya arah yang berarti adalah pabrik
-   melepas sebagian ke satu KONTAK — langsung, tanpa indirection lewat
-   `Jasa` (borangnya memilih pelanggan lewat picker `pelanggan-kledo`,
-   bukan `jasa-berjalan`; lihat catatan panjang di `packaging.
-   pindah_kepemilikan_karung`). `boleh_pindah` dikirim `True` HANYA dari
-   `/stok-karung` (pabrik) — halaman `/stok-karung-jasa` memanggil makro
-   yang sama dengan `boleh_pindah=False`: arahnya cuma satu jalan, jadi
-   sisi pelanggan tak pernah menawarkan tombol ini. #}
+{% macro karung_tabel(baris, judul, boleh_pindah=False) -%}
+<section class="karung-bagian" aria-label="{{ judul }}">
+<h2 class="karung-bagian__judul">{{ judul }}</h2>
+<p class="karung-geser bantu">Geser tabel untuk melihat seluruh kolom.</p>
+<div class="karung-scroll tabel-standar" tabindex="0" role="region" aria-label="Tabel stok karung {{ judul }}">
+<table class="tabel-standar karung-tabel">
+<thead><tr><th scope="col">No.</th><th scope="col">Merek</th><th scope="col">Jenis karung</th><th scope="col">Ukuran</th><th scope="col">Jumlah</th><th scope="col">Status</th></tr></thead>
+<tbody>{% for b in baris %}{{ karung_baris(b, boleh_pindah, loop.index) }}{% endfor %}</tbody>
+</table></div></section>
+{%- endmacro %}
+
+{% macro karung_baris(b, boleh_pindah=False, nomor=1) -%}
+<tr>
+<td>{{ nomor }}</td><td><strong>{{ b.merk or 'Tanpa merek' }}</strong></td>
+<td>{{ b.nama }}</td><td>{{ b.ukuran }} kg</td><td class="karung-tabel__jumlah"><strong>{{ kg(b.lembar) }}</strong> lembar</td>
+<td><div class="karung-tabel__status">
+{% if b.menipis %}<span class="karung-menipis">Menipis</span>{% else %}<span aria-label="Stok cukup">—</span>{% endif %}
 {% if boleh_pindah and b.lembar > 0 %}
-  <div class="ubah-hasil">
-    {# `|urlencode` pada merk — bukan dua suku lain (`kode` slug tanpa
-       spasi, `ukuran` angka): merk BOLEH berspasi ("Cap Padi Emas"), dan
-       nilai mentah di query string akan memutus pasangan "|" yang dibaca
-       balik oleh `karung-pabrik-tersedia`/`act_pindah_kepemilikan_karung`.
-       Pola sama `dasar_borang()` (`_benda.html`) menyandikan nilai kueri. #}
-    <a class="btn btn--kecil"
-       href="/stok-karung?buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}"
-       >⇄ Pindah kepemilikan</a>
-  </div>
+<details class="karung-aksi"><summary class="btn btn--kecil" aria-label="Aksi {{ b.merk or 'tanpa merek' }} {{ b.nama }} {{ b.ukuran }} kg">⋯</summary>
+<div><a class="btn btn--kecil" href="/stok-karung?buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}">Pindah kepemilikan</a></div></details>
 {% endif %}
+</div></td></tr>
 {%- endmacro %}
 
 
