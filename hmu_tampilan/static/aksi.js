@@ -1779,6 +1779,18 @@
     d._selesai = selesai;
     d.querySelector("[data-lanjut-isi]").onclick = function () { selesai(false); };
     d.querySelector("[data-buang-isian]").onclick = function () { selesai(true); };
+    d.addEventListener("keydown", function (e) {
+      if (e.key !== "Tab") return;
+      // Dialog native dapat melepas fokus ke bilah browser di ujung urutan.
+      // Putar kedua tombol secara eksplisit; Escape tetap memakai cancel.
+      var tombol = d.querySelectorAll("button:not(:disabled)");
+      var posisi = Array.prototype.indexOf.call(tombol, document.activeElement);
+      var tujuan = e.shiftKey
+        ? (posisi <= 0 ? tombol.length - 1 : posisi - 1)
+        : (posisi + 1) % tombol.length;
+      e.preventDefault();
+      tombol[tujuan].focus();
+    });
     d.addEventListener("click", function (e) { if (e.target === d) selesai(false); });
     d.addEventListener("cancel", function (e) { e.preventDefault(); selesai(false); });
     d.addEventListener("close", function () { selesai(false); }, {once: true});
