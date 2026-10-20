@@ -32,3 +32,17 @@
 {% if k.jenis == 'bekatul' and k.curah_kg > 0.5 and boleh_catat %}
   <details class="produk-aksi"><summary class="btn btn--kecil">Aksi curah ▾</summary><div class="produk-aksi__pilihan"><a class="btn btn--kecil" href="{{ halaman_aksi }}{{ '&' if '?' in halaman_aksi else '?' }}buka=catat_bekatul">Catat bekatul curah</a></div></details>
 {% endif %}
+
+{% if not baris_kemasan %}
+{% if k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah %}
+  {% for p in kemasan.get(k.jenis, []) %}
+    {% if p.jasa_id and p.karung %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('bj:' ~ p.sku_id ~ '|' ~ (p.std_id or '') ~ '|' ~ p.jasa_id)|urlencode }}">Pindah kepemilikan · {{ p.bahan }} {{ p.ukuran }} kg · {{ p.karung }} karung</a></p>{% endif %}
+  {% endfor %}
+  {% if curah_titipan and curah_titipan.get(k.jenis,0) > 0.5 %}<p><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></p>{% endif %}
+{% endif %}
+
+{% endif %}
+
+{% if baris_kemasan and k.jenis in ('broken','menir','reject','bekatul') and boleh_pindah and curah_titipan and curah_titipan.get(k.jenis,0)>0.5 %}
+<details class="produk-aksi"><summary class="btn btn--kecil">Aksi stok curah ▾</summary><div class="produk-aksi__pilihan"><a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ ('cr:' ~ k.jenis ~ '|' ~ jasa_ids|join(','))|urlencode }}">Pindah kepemilikan · stok curah</a></div></details>
+{% endif %}
