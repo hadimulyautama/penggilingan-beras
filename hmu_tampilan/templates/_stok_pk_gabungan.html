@@ -1,7 +1,7 @@
 {# Tabel ringkas desktop. Setiap baris membuka halaman detail PK. #}
 <section class="stok-gabungan" aria-label="Stok PK seluruh gudang">
   <div class="jumlah">
-    <span class="lbl">{% if gudang == "g1" %}Stok PK · Gudang 1{% elif gudang == "g2" %}Stok PK · Gudang 2{% else %}Stok PK · seluruh gudang{% endif %}</span>
+    <span class="lbl">{% if gudang == "g1" %}Stok PK · Gudang 1{% elif gudang == "g2" %}Stok PK · Gudang 2{% else %}Stok PK · seluruh gudang{% endif %}{% if STOK_NAV %} · {{ STOK_NAV.nama_pemilik }}{% endif %}</span>
     <div class="jumlah__angka">{{ kg(total + (tempat|sum(attribute="tersedia") if tempat else 0)) }}<small>kg</small></div>
     <div class="jumlah__ket">Gudang 1 · {{ lot|length }} lot &nbsp;·&nbsp; Gudang 2 · {{ tempat|length }} kode</div>
   </div>
@@ -16,7 +16,7 @@
           {% elif label|lower in ("butir patah", "broken") %}{% set mutu.broken = nilai %}
           {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
         {% endfor %}
-        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}">
+        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ l.kode }}</span><small>{{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small></span>
           <span>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }}</span>
           <span>Gudang 1</span>
@@ -36,7 +36,7 @@
           {% elif label|lower == "susut" %}{% set mutu.susut = nilai %}{% endif %}
         {% endfor %}
         {% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
-        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}">
+        <tr><td colspan="{{ 11 if mutu_aktif else 7 }}" class="stok-tabel__sel"><a class="stok-baris__ringkas stok-baris__tautan" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
           <span class="stok-baris__kode"><span>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</span><small>{% if t.tanggal %}{{ t.tanggal }}{% endif %}{% if t.lama %}{% if t.tanggal %} · {% endif %}{{ t.lama }}{% endif %}</small></span>
           <span>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }}</span>
           <span>Gudang 2</span>

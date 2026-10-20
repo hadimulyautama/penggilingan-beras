@@ -537,6 +537,7 @@ async def halaman_stok_karung_jasa(request: Request, akun=Depends(butuh_akun)):
                 continue
             daftar.append({
                 "pemilik": nama_pelanggan.get(pelanggan_id) or f"pelanggan #{pelanggan_id}",
+                "pelanggan_id": pelanggan_id,
                 "karung": karung,
             })
     daftar.sort(key=lambda p: p["pemilik"])

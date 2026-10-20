@@ -314,7 +314,8 @@ def test_kartu_gudang2_menyebut_asal_barangnya():
     "Pernah masuk" sendiri cuma pernah berdiri di laci lama itu, jadi
     lenyapnya dari seluruh berkas inilah buktinya.
     """
-    teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
+    teks = ((AKAR / "hmu_tampilan/templates/stok.html").read_text()
+            + (AKAR / "hmu_tampilan/templates/_stok_pk_daftar.html").read_text())
     assert "{{- t.kode" in teks or "{{ t.kode" in teks, "kepala kartu G2 tak menyebut asalnya"
     # Markup-nya persis, bukan sekadar frasanya — catatan di atas blok ini
     # SENGAJA menyebut nama laci lama sebagai sejarah; yang diperiksa di sini
@@ -327,7 +328,8 @@ def test_kartu_gudang2_mutu_langsung_terlihat_tanpa_laci():
     per kode bahan. tetap harus ditampilkan per kode bahan."* Mutu (`t.mutu`)
     harus tergambar di kepala kartu — di dalam `{% if mutu_aktif %}`, sama
     seperti kartu lot Gudang 1 — bukan dilipat di laci."""
-    teks = (AKAR / "hmu_tampilan/templates/stok.html").read_text()
+    teks = ((AKAR / "hmu_tampilan/templates/stok.html").read_text()
+            + (AKAR / "hmu_tampilan/templates/_stok_pk_daftar.html").read_text())
     detail = (AKAR / "hmu_tampilan/templates/_stok_pk_detail.html").read_text()
     assert "mutu_mobile(t.mutu, t.kelas)" in teks
     assert "for label, nilai in t.mutu" in detail

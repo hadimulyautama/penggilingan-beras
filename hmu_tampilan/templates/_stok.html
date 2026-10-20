@@ -41,7 +41,7 @@
 {% if karung %}
 <div style="margin-top:18px">
   <div class="jumlah">
-    <span class="lbl">{{ judul }}</span>
+    <span class="lbl">{{ judul }}{% if STOK_NAV %} · {{ STOK_NAV.nama_pemilik }}{% endif %}</span>
     <div class="jumlah__angka">{{ kg(karung|sum(attribute="lembar")) }}<small>lembar</small></div>
     {% set tipis = karung|selectattr("menipis")|list|length %}
     <div class="jumlah__ket">
@@ -105,7 +105,7 @@
 {% if b.menipis %}<span class="karung-menipis">Menipis</span>{% else %}<span aria-label="Stok cukup">—</span>{% endif %}
 {% if boleh_pindah and b.lembar > 0 %}
 <details class="karung-aksi"><summary class="btn btn--kecil" aria-label="Aksi {{ b.merk or 'tanpa merek' }} {{ b.nama }} {{ b.ukuran }} kg">⋯</summary>
-<div><a class="btn btn--kecil" href="/stok-karung?buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}">Pindah kepemilikan</a></div></details>
+<div><a class="btn btn--kecil" href="{{ STOK_NAV.url ~ '&' if STOK_NAV else '/stok-karung?' }}buka=pindah_kepemilikan_karung&amp;nilai={{ b.kode }}|{{ b.ukuran }}|{{ (b.merk or '')|urlencode }}">Pindah kepemilikan</a></div></details>
 {% endif %}
 </div></td></tr>
 {%- endmacro %}
@@ -185,7 +185,7 @@
 {% if daftar %}
 {% if desktop %}
 <div class="jumlah">
-  <span class="lbl">{{ judul }}</span>
+  <span class="lbl">{{ judul }}{% if STOK_NAV %} · {{ STOK_NAV.nama_pemilik }}{% endif %}</span>
   <div class="jumlah__angka">{{ kg(sisa) }}<small>kg</small></div>
   <div class="jumlah__ket">
     {{ daftar|length }} kategori{% if curah %} · {{ kg(curah) }} kg {{ ket }}{% endif %}
@@ -198,8 +198,8 @@
       {% set otomatis = k.jenis in ("bekatul", "reject", "menir", "broken") %}
       {% set detail_url = '/stok-produk-jasa/detail?pelanggan_id=' ~ detail_pelanggan ~ '&jenis=' if detail_pelanggan is not none else '/stok-produk/detail?jenis=' %}
       <div class="tabel-standar__item">
-        <a class="tabel-standar__baris" href="{{ detail_url }}{{ k.jenis|urlencode }}" aria-label="Detail {{ k.nama }}{{ ' · ' ~ detail_pemilik if detail_pemilik else '' }}">
-          <span data-sel="utama"><strong class="tabel-standar__kode">{{ k.nama }}</strong>{% if titipan and titipan.get(k.jenis) %}<small class="tabel-standar__sekunder">+ titipan {{ kg(titipan[k.jenis]) }} kg</small>{% endif %}</span>
+        <a class="tabel-standar__baris" href="{{ detail_url }}{{ k.jenis|urlencode }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}" aria-label="Detail {{ k.nama }}{{ ' · ' ~ detail_pemilik if detail_pemilik else '' }}">
+          <span data-sel="utama"><strong class="tabel-standar__kode">{{ k.nama }}</strong>{% if STOK_NAV %}<small class="tabel-standar__sekunder">{{ STOK_NAV.nama_pemilik }}</small>{% endif %}{% if titipan and titipan.get(k.jenis) %}<small class="tabel-standar__sekunder">+ titipan {{ kg(titipan[k.jenis]) }} kg</small>{% endif %}</span>
           <span class="produk-list__rincian" data-sel="hasil">
             <span class="tabel-standar__hasil"><small data-hanya-ponsel>Hasil: </small>{{ kg(k.hasil_kg) }} kg</span>
             <span class="tabel-standar__hasil"><small data-hanya-ponsel>Keluar: </small>{{ kg(k.keluar_kg) }} kg</span>

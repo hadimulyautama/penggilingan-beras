@@ -204,6 +204,9 @@ async def render_laci(request: Request, nama: str, **konteks):
     """
     from app.web.nav import lencana
 
+    from app.web.stok_navigasi import siapkan
+    await siapkan(request, nama, konteks)
+
     akun = getattr(request.state, "akun", None)
     return render(request, nama,
                   **{**await lencana(akun.user if akun else None), **konteks})

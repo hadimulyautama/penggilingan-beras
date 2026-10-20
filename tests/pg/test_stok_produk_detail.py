@@ -38,8 +38,8 @@ async def test_baris_produk_membuka_detail_dan_kemasan_tetap_terpisah_per_pemili
         ]:
             daftar=await c.get(path)
             assert daftar.status_code==200
-            url=re.search(r'href="([^"]+/detail\?[^"]*jenis=medium)"',daftar.text)[1].replace('&amp;','&')
-            assert daftar.text.count('jenis=medium"')==1
+            url=re.search(r'href="([^"]+/detail\?[^"]*jenis=medium[^"]*)"',daftar.text)[1].replace('&amp;','&')
+            assert len(re.findall(r'href="[^"]+/detail\?[^"]*jenis=medium(?:&amp;[^"]*)?"', daftar.text)) == 1
             assert 'stok-produk-baris__detail' not in daftar.text
             r=await c.get(url)
             assert r.status_code==200

@@ -454,48 +454,8 @@ class Berjalan:
             out["keputusan"] = [("/keputusan", "Semua", self.jumlah_keputusan),
                                 *isik]
 
-        # "Stok" — permintaan pemilik 5 Oktober 2026: "ringkas menu. buat
-        # stock menjadi main menu memiliki sub menu. yaitu stock PK dan
-        # stock produk." BEDA bentuknya dari dua sub-menu di atas: dua
-        # tujuannya BUKAN filter atas satu halaman yang sama, melainkan DUA
-        # HALAMAN yang masing-masing sudah lengkap sendiri — jadi tak ada
-        # baris "Semua" di sini, sebab tak ada daftar utuh yang lebih besar
-        # dari keduanya untuk dituju.
-        #
-        # Angka di tiap baris sengaja 0 — TERMASUK "Stok Produk" (permintaan
-        # pemilik 7 Oktober 2026: "tidak perlu ada angkanya"). Sampai hari
-        # itu "Stok Produk" sendirian memakai `jumlah_produk` (beras yang
-        # belum dipacking) sebagai lencananya; sekarang pintu "Stok" tak
-        # pernah punya lencana sama sekali, konsisten di keempat tujuannya.
-        # `{% if sub_jml %}` di templat membuang badge "0" itu, bukan
-        # menggambarnya sebagai kebisingan. `jumlah_produk` sendiri TETAP
-        # dihitung (`b.jumlah_produk`) — cuma tak lagi disebut di sini;
-        # layar `/stok-produk` sendiri yang menyebutnya di dalam halaman.
-        isi_stok: list[tuple[str, str, int]] = [
-            ("/stok", "Stok PK", 0),
-            # "Stok PK Jasa" — padanan "Produk Jasa" tapi untuk BAHAN,
-            # permintaan pemilik 6 Oktober 2026. TIDAK digerbangi
-            # `pintu_produk`: PK jasa berdiri di Gudang 1 MAUPUN Gudang 2
-            # (tak seperti Stok Produk, yang G2-saja), jadi operator selepan
-            # yang sudah melihat PK titipan di "Stok PK" tetap berhak
-            # melihatnya di sini juga.
-            ("/stok-pk-jasa", "Stok PK Jasa", 0),
-        ]
-        if self.pintu_produk:
-            isi_stok.append(("/stok-produk", "Stok Produk", 0))
-            # "Produk Jasa" — ketiga, keputusan pemilik 6 Oktober 2026 (nama
-            # "Titipan pelanggan" semula, diganti atas permintaan pemilik).
-            # Angkanya 0 dengan alasan yang sama dengan "Stok PK": halaman
-            # murni informasi, tak menagih pekerjaan apa pun.
-            isi_stok.append(("/stok-produk-jasa", "Produk Jasa", 0))
-            # "Stok Karung"/"Karung Jasa" — keputusan pemilik 7 Oktober 2026.
-            # Gerbang SAMA dengan Stok Produk (`pintu_produk`): karung
-            # dipakai mengemas beras jadi, pekerjaan Gudang 2 — peran yang
-            # sama yang melihat Stok Produk berhak melihat karungnya.
-            isi_stok.append(("/stok-karung", "Stok Karung", 0))
-            isi_stok.append(("/stok-karung-jasa", "Karung Jasa", 0))
-        if len(isi_stok) >= 2:
-            out["stok"] = isi_stok
+        # Stok kini satu pintu; jenis barang dan kepemilikan dipilih di halaman.
+        # Kunci layar lama tetap ada agar tautan detail dan izin tidak berubah.
 
         # "Riwayat Proses" — permintaan pemilik 7 Oktober 2026: satu menu,
         # sub-menu "Penyosohan"/"Penggilingan"/"Pengeringan"/"Transfer".

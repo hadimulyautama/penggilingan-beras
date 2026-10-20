@@ -1,0 +1,29 @@
+{# Selalu hadir, termasuk ketika filter tidak mempunyai saldo. #}
+<section class="stok-nav" aria-label="Pilihan stok">
+  <h1>Stok</h1>
+  <nav class="stok-nav__jenis" aria-label="Jenis barang">
+    {% for t in STOK_NAV.tab %}
+    {% if t.boleh %}<a href="{{ t.href }}" class="stok-nav__tab"{% if t.kunci == STOK_NAV.jenis %} aria-current="page"{% endif %}>{{ t.nama }}</a>
+    {% else %}<span class="stok-nav__tab" aria-disabled="true" title="Tersedia untuk Gudang 2">{{ t.nama }}<small>Gudang 2</small></span>{% endif %}
+    {% endfor %}
+  </nav>
+  <nav class="stok-nav__pemilik" aria-label="Kepemilikan stok">
+    {% for p in STOK_NAV.milik %}<a class="btn" href="{{ p.href }}"{% if p.kunci == STOK_NAV.pemilik %} aria-current="page"{% endif %}>{{ p.nama }}</a>{% endfor %}
+  </nav>
+  {% if STOK_NAV.pemilik == 'jasa' %}
+  <form class="stok-nav__filter" action="/stok" method="get">
+    <input type="hidden" name="tab" value="{{ STOK_NAV.jenis }}">
+    <input type="hidden" name="pemilik" value="jasa">
+    {% if STOK_NAV.gudang %}<input type="hidden" name="gudang" value="{{ STOK_NAV.gudang }}">{% endif %}
+    <label for="stok-pelanggan">Pelanggan</label>
+    <div><select name="pelanggan_id" id="stok-pelanggan">
+      <option value="">Semua pelanggan</option>
+      {% for id, nama in STOK_NAV.pelanggan %}<option value="{{ id }}"{{ ' selected' if id == STOK_NAV.pelanggan_id }}>{{ nama }}</option>{% endfor %}
+    </select><button class="btn" type="submit">Tampilkan</button></div>
+  </form>
+  {% endif %}
+  {% if STOK_NAV.lokasi_pil %}<nav class="stok-nav__gudang" aria-label="Gudang stok">
+    {% for g in STOK_NAV.lokasi_pil %}<a href="{{ g.href }}"{% if g.kunci == STOK_NAV.gudang %} aria-current="page"{% endif %}>{{ g.nama }}</a>{% endfor %}
+  </nav>{% endif %}
+  <p class="stok-nav__cakupan"><strong>{{ STOK_NAV.cakupan }}</strong> · {{ STOK_NAV.lokasi }}</p>
+</section>

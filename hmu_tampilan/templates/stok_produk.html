@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block judul %}Stok Produk{% endblock %}
+{% block judul %}{{ "Stok" if STOK_NAV else "Stok Produk" }}{% endblock %}
 {% block isi %}
 {% import "_stok.html" as st with context %}
 {% set kg = st.kg %}
@@ -31,12 +31,16 @@
       <path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5"/>
       <path d="M12 13v7"/></svg>
     <div>
+      {% if STOK_NAV %}<h2>Belum ada stok untuk pilihan ini</h2>
+      <p class="bantu">{{ STOK_NAV.cakupan }} · {{ STOK_NAV.lokasi }}. Pilih tab, kepemilikan atau filter lain untuk melihat stok lainnya.</p>
+      {% else %}
       <h2>Belum ada produk jadi</h2>
       <p class="bantu">
         Belum ada penyosohan yang menghasilkan beras, dan belum ada yang
         dikemas. Begitu mesin sosoh mengeluarkan hasilnya, ia muncul di sini —
         sebelum dipacking sekalipun.
       </p>
+      {% endif %}
     </div>
   </div>
 {% else %}

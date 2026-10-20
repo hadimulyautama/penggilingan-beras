@@ -3351,3 +3351,44 @@ body .karung-tabel th:first-child { width:42px; }
 .aktual-cepat__jumlah .fld { flex: 1; min-width: 0; margin: 0; }
 .aktual-cepat__jumlah span { font-weight: 700; color: var(--teks); }
 #aktual_cepat .lbl { overflow-wrap: anywhere; }
+
+/* Navigasi Stok: satu pintu, tanpa mencampur jenis barang dan pemilik. */
+.stok-nav { margin: 0 0 24px; }
+.stok-nav h1 { font-size: 1.5rem; margin: 0 0 12px; }
+.stok-nav__jenis { display: flex; border-bottom: 2px solid var(--garis); gap: 8px; }
+.stok-nav__tab { min-height: 56px; padding: 12px 20px; display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--tinta); text-decoration: none; border-radius: 12px 12px 0 0; }
+.stok-nav__tab[aria-current] { background: var(--panel-2); box-shadow: inset 0 -3px var(--tinta); font-weight: 800; }
+.stok-nav__tab[aria-disabled] { color: var(--redup); flex-direction: column; font-size: .9rem; }
+.stok-nav__tab small { font-size: .7rem; }
+.stok-nav__pemilik { display: flex; gap: 8px; margin-top: 12px; }
+.stok-nav__pemilik .btn { min-height: 56px; padding: 10px 22px; }
+.stok-nav__pemilik [aria-current] { outline: 2px solid var(--tinta); outline-offset: -3px; font-weight: 800; }
+.stok-nav__filter { margin-top: 12px; max-width: 540px; }
+.stok-nav__filter label { display: block; margin-bottom: 6px; font-weight: 700; }
+.stok-nav__filter > div { display: flex; gap: 8px; }
+.stok-nav__filter select { flex: 1; min-width: 0; min-height: 56px; margin: 0; border: 1px solid var(--garis); border-radius: 12px; background: var(--panel); color: var(--tinta); padding: 10px 12px; font: inherit; }
+.stok-nav__filter .btn { width: auto; min-height: 56px; padding: 10px 16px; }
+.stok-nav__gudang { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.stok-nav__gudang a { display: inline-flex; align-items: center; min-height: 48px; padding: 8px 14px; color: var(--tinta); border-radius: 10px; text-decoration: none; }
+.stok-nav__gudang [aria-current] { background: var(--panel-2); font-weight: 800; box-shadow: inset 0 0 0 1px var(--garis); }
+.stok-nav__cakupan { color: var(--tinta-2); font-size: .9rem; margin: 12px 0 0; overflow-wrap: anywhere; }
+.stok-pelanggan { margin: 24px 0; }
+.stok-pelanggan__judul { font-size: 1.15rem; margin: 0 0 8px; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .stok-nav__jenis { gap: 3px; }
+  .stok-nav__tab { flex: 1; padding: 10px 5px; font-size: .95rem; white-space: nowrap; }
+  .stok-nav__pemilik .btn { flex: 1; padding: 10px; }
+  .stok-nav__gudang { gap: 2px; }
+  .stok-nav__gudang a { padding: 8px 10px; font-size: .9rem; }
+}
+
+/* Cakupan sudah disebut di kepala; beri ruang pada isi stok pertama. */
+.stok-isi .jumlah { margin-top: 16px; margin-bottom: 16px; }
+.stok-isi .karung-bagian { margin-top: 16px; }
+.stok-isi .stok-mobile-list { margin-top: 0; }
+@media (min-width: 701px) {
+  .stok-nav__pemilik .btn { width: auto; min-width: 180px; }
+}
+@media (max-width: 700px) {
+  .stok-nav h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}

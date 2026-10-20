@@ -33,6 +33,22 @@ router = APIRouter(tags=["webapp"])
 
 @router.get("/stok")
 async def halaman_stok(request: Request, akun=Depends(butuh_akun)):
+    # Satu pintu navigasi, tetapi tetap memakai pembaca dan gerbang lama.
+    tab = request.query_params.get("tab", "bahan")
+    pemilik = request.query_params.get("pemilik", "pabrik")
+    if tab not in {"bahan", "produk", "karung"} or pemilik not in {"pabrik", "jasa"}:
+        raise HTTPException(422, "Pilihan stok tidak dikenal.")
+    if tab != "bahan":
+        from app.web import layar_produk
+        tujuan = {
+            ("produk", "pabrik"): layar_produk.halaman_stok_produk,
+            ("produk", "jasa"): layar_produk.halaman_stok_produk_jasa,
+            ("karung", "pabrik"): layar_produk.halaman_stok_karung,
+            ("karung", "jasa"): layar_produk.halaman_stok_karung_jasa,
+        }[tab, pemilik]
+        return await tujuan(request, akun=akun)
+    if pemilik == "jasa":
+        return await halaman_stok_pk_jasa(request, akun=akun)
     from app.services.setelan import fitur_mutu
 
     from app.web.layar import GUDANG, MEJA, NAMA_GUDANG, POLESAN, SUPER, gudang1, gudang2

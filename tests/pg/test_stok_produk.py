@@ -24,8 +24,12 @@ async def _buka_detail_produk(c, jenis):
     # Rincian dan tombol kerja sekarang tinggal di halaman detail; baris
     # daftar harus tetap mengantarkan orang ke sana.
     daftar = await c.get("/stok-produk")
-    href = f"/stok-produk/detail?jenis={jenis}"
-    assert f'href="{href}"' in daftar.text
+    from html import unescape
+    from urllib.parse import urlsplit, parse_qs
+    import re
+    href = next(unescape(h) for h in re.findall(r'href="([^"]+)"', daftar.text)
+                if urlsplit(unescape(h)).path == "/stok-produk/detail"
+                and parse_qs(urlsplit(unescape(h)).query).get("jenis") == [jenis])
     return await c.get(href)
 
 
@@ -293,23 +297,10 @@ async def test_stok_produk_terjangkau_lewat_sub_menu_kecuali_operator_gudang1(
     for b, siapa in ((b1, "op1"), (b2, "admin"), (b3, "op2")):
         assert "stok_produk" in b.lencana()["PINTU_MATI"], \
             f"{siapa}: pintu Stok Produk sendiri harus selalu padam"
-    # Operator G1 TETAP bersub-menu "Stok" sejak "Stok PK Jasa" ada (6
-    # Oktober 2026) — PK titipan berdiri di Gudang 1 juga, jadi "Stok PK
-    # Jasa" TIDAK digerbangi `pintu_produk` (lihat `Berjalan.submenu()`).
-    # Yang dulu membedakannya ("stok" sama sekali tak ditawarkan") kini
-    # dibedakan lewat ISI-nya: dua tujuan untuk G1 (bukan empat).
-    assert [nama for _, nama, _ in b1.submenu()["stok"]] == \
-        ["Stok PK", "Stok PK Jasa"], \
-        "operator G1 ikut ditawari Stok Produk/Produk Jasa"
-    # "Produk Jasa" (6 Oktober 2026, semula "Titipan pelanggan") dan "Stok
-    # PK Jasa" (padanannya untuk BAHAN) ikut sub-menu "Stok" — lihat
-    # `CLAUDE.md` § "Stok Produk — barang jasa".
-    assert [nama for _, nama, _ in b2.submenu()["stok"]] == \
-        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa",
-         "Stok Karung", "Karung Jasa"]
-    assert [nama for _, nama, _ in b3.submenu()["stok"]] == \
-        ["Stok PK", "Stok PK Jasa", "Stok Produk", "Produk Jasa",
-         "Stok Karung", "Karung Jasa"]
+    # Kini jenis barang tersedia di halaman Stok; akses G1/G2 tetap diuji
+    # lewat HTTP pada test_konsolidasi_stok, bukan lewat menu yang dihapus.
+    for b in (b1, b2, b3):
+        assert "stok" not in b.submenu()
     # Lencananya ikut sampai ke Admin, bukan cuma ke yang mengerjakannya.
     assert b2.lencana()["PRODUK"] == 1
 

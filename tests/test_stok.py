@@ -274,7 +274,7 @@ def test_batch_asal_dilipat_dan_kartunya_tertutup_rapi():
     """
     # Daftar sekarang menuju detail; bahan tidak lagi disembunyikan di
     # details bersarang. Batas halaman, bukan lipatan, menjaga daftar padat.
-    induk = TPL.read_text()
+    induk = (TPL.parent / "_stok_pk_daftar.html").read_text()
     detail = (TPL.parent / "_stok_pk_detail.html").read_text()
     assert "/stok/pk/detail?gudang=g1" in induk
     batch = detail.split('class="pk-detail__panel pk-detail__batches"')[1].split("</section>")[0]

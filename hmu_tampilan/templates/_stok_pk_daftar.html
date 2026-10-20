@@ -1,0 +1,45 @@
+  {% if not lot and not tempat %}
+    <div class="kosong">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--redup-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5z"/><path d="M3 8.5L12 13l9-4.5M12 13v7"/></svg>
+      <div>
+        {% if STOK_NAV %}<h2>Belum ada stok PK untuk pilihan ini</h2><p class="bantu">{{ STOK_NAV.cakupan }} · {{ STOK_NAV.lokasi }}. Pilih filter lain untuk melihat stok lainnya.</p>
+        {% elif JASA_SAJA %}<h2>Tak ada PK titipan pelanggan</h2><p class="bantu">Belum ada PK milik pesanan jasa yang tersisa di Gudang 1 maupun Gudang 2.</p>
+        {% elif VIEW == V_POLESAN %}<h2>Tak ada PK tersisa di Gudang 2</h2><p class="bantu">Belum ada PK yang menumpuk di Gudang 2.</p>
+        {% else %}<h2>Tak ada PK tersisa</h2><p class="bantu">Belum ada hasil giling atau pembelian PK yang tersisa.</p>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    {% include "_stok_pk_gabungan.html" %}
+    <div class="stok-mobile-list">
+      {% if lot %}
+        <section class="stok-mobile-list__bagian daftar-standar">
+          <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 1</h2><strong>{{ kg(total) }} kg</strong></header>
+          <p>{{ lot|length }} lot{% if lot|selectattr("belum_dicatat")|list|length %} · {{ lot|selectattr("belum_dicatat")|list|length }} hasil belum dicatat{% endif %}</p>
+          {% for l in lot %}
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g1&amp;kode={{ l.kode|urlencode }}&amp;jasa={{ '1' if l.jasa_id else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+              <span class="stok-mobile-list__ikon" aria-hidden="true">{% if l.jasa_id %}◇{% else %}▦{% endif %}</span>
+              <span class="stok-mobile-list__isi"><strong>{{ l.kode }}</strong><small>{{ (l.pemilik.split(" ", 1)[1] if l.pemilik and " " in l.pemilik else l.pemilik) or "Pabrik" }} · {{ "Jasa" if l.jasa_id else "Bukan jasa" }} · {{ l.tanggal }}{% if l.lama %} · {{ l.lama }}{% endif %}</small>
+                {% if mutu_aktif %}{% if l.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(l.nilai_kualitas)|replace(".", ",") }} · {{ l.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
+                {{ mutu_mobile(l.mutu, l.kelas) }}</span>
+              <strong class="stok-mobile-list__berat">{% if l.belum_dicatat %}—{% else %}{{ kg(l.tersedia) }} kg{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
+            </a>
+          {% endfor %}
+        </section>
+      {% endif %}
+      {% if tempat %}
+        <section class="stok-mobile-list__bagian daftar-standar">
+          <header><h2>{{ "PK Jasa" if JASA_SAJA else "PK" }} · Gudang 2</h2><strong>{{ kg(tempat|sum(attribute="tersedia")) }} kg</strong></header>
+          <p>{{ tempat|length }} kode bahan · tumpukan</p>
+          {% for t in tempat %}{% set giling_sendiri = t.kode.startswith("Giling sendiri") %}
+            <a class="stok-mobile-list__baris" href="/stok/pk/detail?gudang=g2&amp;id={{ t.intake_id }}&amp;jasa={{ '1' if t.pemilik else '0' }}&amp;gudang_filter={{ gudang }}{% if STOK_NAV %}&amp;kembali_stok={{ STOK_NAV.url|urlencode }}{% endif %}">
+              <span class="stok-mobile-list__ikon" aria-hidden="true">{% if t.pemilik %}◇{% else %}▦{% endif %}</span>
+              <span class="stok-mobile-list__isi"><strong>{{ t.kode.split(" · ", 1)[1] if giling_sendiri and " · " in t.kode else t.kode }}</strong><small>{{ (t.pemilik.split(" ", 1)[1] if t.pemilik and " " in t.pemilik else t.pemilik) or "Pabrik" }} · {{ "Jasa" if t.pemilik else "Bukan jasa" }} · {{ t.tanggal or "Tanggal tidak tersedia" }}</small>
+                {% if mutu_aktif %}{% if t.nilai_kualitas is not none %}<small>Mutu {{ "%.1f"|format(t.nilai_kualitas)|replace(".", ",") }} · {{ t.kelas_kualitas }}</small>{% else %}<small>Mutu belum dinilai</small>{% endif %}{% endif %}
+                {{ mutu_mobile(t.mutu, t.kelas) }}</span>
+              <strong class="stok-mobile-list__berat">{% if t.bobot_final %}{{ kg(t.tersedia) }} kg{% else %}—{% endif %}</strong><span class="stok-mobile-list__panah" aria-hidden="true">›</span>
+            </a>
+          {% endfor %}
+        </section>
+      {% endif %}
+    </div>
+  {% endif %}

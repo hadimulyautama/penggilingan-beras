@@ -208,51 +208,12 @@ def test_angka_submenu_datang_dari_daftar_yang_akan_digambar():
         assert len(saring) == n[kunci], kunci
 
 
-# ══════════════ Sub-menu "Stok" — gabung PK & Produk, bukan filter ══════════════
-#
-# Keputusan pemilik 5 Oktober 2026: *"ringkas menu. buat stock menjadi main
-# menu memiliki sub menu. yaitu stock PK dan stock produk."* BEDA bentuknya
-# dari "aksi"/"keputusan" di atas: dua tujuannya sudah lengkap sendiri-sendiri
-# (dua HALAMAN berbeda, bukan dua filter atas satu halaman yang sama), jadi
-# tak ada baris "Semua" — tak ada daftar utuh yang lebih besar dari keduanya
-# untuk dituju.
-
-def test_stok_bersub_menu_saat_stok_produk_ditawarkan():
-    b = Berjalan(pintu_produk=True)
-    assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
-                                   ("/stok-pk-jasa", "Stok PK Jasa", 0),
-                                   ("/stok-produk", "Stok Produk", 0),
-                                   ("/stok-produk-jasa", "Produk Jasa", 0),
-                                   ("/stok-karung", "Stok Karung", 0),
-                                   ("/stok-karung-jasa", "Karung Jasa", 0)]
-
-
-def test_stok_sub_menu_tak_ada_satu_pun_angka_walau_jumlah_produk_terisi():
-    """Stok PK (dan Stok PK Jasa) tak pernah punya lencana — tak seperti
-    Antrian tunggu/Keputusan, "Stok" tak menagih pekerjaan. "Stok Produk"
-    pun sejak 7 Oktober 2026 (permintaan pemilik: "tidak perlu ada
-    angkanya") — sebelumnya satu-satunya baris yang memakai `jumlah_produk`
-    sebagai lencananya, sekarang sama seperti baris lain: murni informasi,
-    tanpa badge, berapa pun `jumlah_produk`-nya."""
-    b = Berjalan(pintu_produk=True, jumlah_produk=3)
-    assert b.submenu()["stok"] == [("/stok", "Stok PK", 0),
-                                   ("/stok-pk-jasa", "Stok PK Jasa", 0),
-                                   ("/stok-produk", "Stok Produk", 0),
-                                   ("/stok-produk-jasa", "Produk Jasa", 0),
-                                   ("/stok-karung", "Stok Karung", 0),
-                                   ("/stok-karung-jasa", "Karung Jasa", 0)]
-
-
-def test_stok_tetap_bersub_menu_bila_stok_produk_padam():
-    """Operator selepan: 'Stok Produk' & 'Produk Jasa' tak ditawarkan sama
-    sekali (lihat `Berjalan.lencana`) — tapi 'Stok' TETAP dropdown berisi
-    DUA tujuan ('Stok PK', 'Stok PK Jasa'), bukan pintu biasa: beda dari
-    sebelum "Stok PK Jasa" ada (dulu 'Stok' sendirian berarti SATU tujuan).
-    PK titipan berdiri di Gudang 1 juga, jadi operator selepan tetap berhak
-    melihatnya — "Stok PK Jasa" TIDAK digerbangi `pintu_produk` (lihat
-    `submenu()`)."""
-    assert Berjalan(pintu_produk=False).submenu()["stok"] == [
-        ("/stok", "Stok PK", 0), ("/stok-pk-jasa", "Stok PK Jasa", 0)]
+# Konsolidasi 20 Oktober: pilihan jenis/kepemilikan pindah ke halaman Stok.
+@pytest.mark.parametrize("pintu_produk", [True, False])
+def test_stok_satu_pintu_tanpa_submenu(pintu_produk):
+    b = Berjalan(pintu_produk=pintu_produk, jumlah_produk=3)
+    assert "stok" not in b.submenu()
+    assert "stok" not in b.lencana()["PINTU_MATI"]
 
 
 def test_pintu_stok_produk_sendiri_selalu_padam_di_laci():

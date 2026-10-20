@@ -171,7 +171,10 @@
 {# Kaki DI DALAM `.isi`, bukan sesudahnya. `.isi` kini satu-satunya bagian
    yang menggulung; apa pun yang berada di luarnya menjadi pita tetap yang
    selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
+{% if STOK_NAV %}{% include "_stok_navigasi.html" %}{% endif %}
+{% if STOK_NAV %}<div class="stok-isi">{% endif %}
 {% block isi %}{% endblock %}
+{% if STOK_NAV %}</div>{% endif %}
 {% block kaki %}{% endblock %}
 </main>
 
@@ -305,7 +308,7 @@
            perilakunya sama sekali di sana. #}
         {% set jalan_kini = (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request else "" %}
         {% set sub = SUBMENU.get(kunci) %}
-        {% set ns = namespace(grup_aktif=(layar == kunci)) %}
+        {% set ns = namespace(grup_aktif=(layar == kunci or (kunci == 'stok' and layar.startswith('stok')))) %}
         {% if sub %}
           {% for sub_alamat, _sn, _sj in sub %}
             {% if not ns.grup_aktif and jalan_kini == sub_alamat %}
@@ -317,7 +320,7 @@
         <{{ "summary" if sub else "a" }}
            class="pintu{{ ' pintu--kini' if ns.grup_aktif }}"
            {% if not sub %}href="{{ alamat }}"{% endif %}
-           {{ ' aria-current=page'|safe if layar == kunci }}>
+           {{ ' aria-current=page'|safe if layar == kunci or (kunci == 'stok' and layar.startswith('stok')) }}>
           {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.
              Rantai `if/elif` yang dulu berdiri di tempat ini berakhir dengan
              `{% else %}⚙`, dan akibatnya LIMA pintu memakai gerigi yang sama:
