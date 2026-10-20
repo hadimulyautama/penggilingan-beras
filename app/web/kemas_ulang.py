@@ -77,3 +77,12 @@ async def periksa(sumber_id:int,user=Depends(pengguna_aksi)):
         row=await db.get(FinishedGoodsStock,sumber_id)
         if not row:raise HTTPException(404,'Batch asal tidak ditemukan.')
         return await svc.pilihan(db,row.product_sku_id,row.rice_quality_standard_id,row.jasa_id,user.id)
+
+@router.get('/api/kemas-ulang/kemasan')
+async def saldo(sumber_id:int,material:str,ukuran:int,merk:str='',user=Depends(pengguna_aksi)):
+    await izin(user)
+    async with SessionLocal() as db:
+        try:
+            return await svc.saldo_kemasan(db,sumber_id,material,ukuran,merk)
+        except InventoryError as e:
+            raise HTTPException(400,str(e))

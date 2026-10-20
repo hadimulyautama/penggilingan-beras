@@ -89,3 +89,29 @@ async def simpan(db, *, user, sumber_id, kunci, jumlah_asal, material, ukuran, m
         new_value=f'Batch #{row.id}: {total} kg → {jumlah_baru} karung / {berat_baru} kg; sisa curah {sisa} kg; jasa_id={row.jasa_id}',gudang='g2')
     await db.commit()
     return cat
+
+async def saldo_kemasan(db, sumber_id, material, ukuran, merk):
+    """Pratinjau baca-saja; pemilik selalu diturunkan dari batch asal."""
+    from app.models import Brand
+    from app.penggilingan.inventory.packaging import _validate_kemasan, get_material, get_size
+    row = await db.get(FinishedGoodsStock, sumber_id)
+    if row is None:
+        raise InventoryError('Batch asal tidak ditemukan.')
+    sku = await db.get(ProductSku, row.product_sku_id)
+    _validate_kemasan(sku.kategori, material, ukuran)
+    mat, size = await get_material(db, material), await get_size(db, ukuran)
+    if mat is None or size is None:
+        raise InventoryError('Jenis atau ukuran kemasan tidak terdaftar.')
+    brand_id = None
+    if merk:
+        brand_id = await db.scalar(select(Brand.id).where(Brand.nama == merk, Brand.aktif.is_(True), Brand.deleted_at.is_(None)))
+        if brand_id is None:
+            raise InventoryError('Merek baru tidak aktif atau tidak ditemukan.')
+    pelanggan_id = None
+    if row.jasa_id:
+        jasa = await db.get(Jasa, row.jasa_id)
+        if jasa is None:
+            raise InventoryError('Pemilik batch asal tidak ditemukan.')
+        pelanggan_id = jasa.pelanggan_id
+    jumlah = await hitung_stok_kemasan(db, mat.id, size.id, brand_id, pelanggan_id=pelanggan_id)
+    return dict(tersedia=max(0, jumlah), pemilik='pelanggan jasa' if row.jasa_id else 'pabrik')

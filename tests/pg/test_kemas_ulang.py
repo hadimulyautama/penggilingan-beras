@@ -217,3 +217,29 @@ async def test_pindah_kepemilikan_karung_tidak_ikut_memindahkan_sisa_curah(pg,so
         assert kg==250
         sisa=await db.scalar(select(FinishedGoodsStock).where(FinishedGoodsStock.curah_kemas_ulang.is_(True)))
         assert sisa.jasa_id==sosoh_jasa['jasa_id'] and float(sisa.berat_total_kg)==25
+
+@pytest.mark.parametrize('jasa',[False,True])
+async def test_preview_kemasan_tidak_membuat_sku_atau_mengubah_stok(pg,sosoh_jasa,jasa):
+    req,sku,std=await awal(pg,sosoh_jasa,jasa)
+    async with pg() as db:
+        n=await db.scalar(select(func.count()).select_from(ProductSku))
+        saldo=await svc.saldo_kemasan(db,req['sumber_id'],'biasa',40,'')
+        assert saldo=={'tersedia':100,'pemilik':'pelanggan jasa' if jasa else 'pabrik'}
+        kosong=await svc.saldo_kemasan(db,req['sumber_id'],'laminasi',25,'')
+        assert kosong['tersedia']==0
+        assert await db.scalar(select(func.count()).select_from(ProductSku))==n
+        assert await db.scalar(select(func.count()).select_from(KemasUlang))==0
+        assert (await fg.hitung_stok_finished_goods(db,sku,std,jasa_id=sosoh_jasa['jasa_id'] if jasa else None))['kg']==200
+
+async def test_preview_http_izin_dan_saldo_pemilik(pg,sosoh_jasa):
+    from tests.pg.test_barang_keluar import _klien
+    from hmu_identitas.peran import SUPERADMIN
+    req,sku,std=await awal(pg,sosoh_jasa,True)
+    async with pg() as db:
+        u=await db.get(User,sosoh_jasa['user']);u.role=SUPERADMIN;await db.commit()
+    c=await _klien(pg,sosoh_jasa['user'],'preview372')
+    async with c:
+        r=await c.get('/api/kemas-ulang/kemasan',params={'sumber_id':req['sumber_id'],'material':'biasa','ukuran':40})
+        assert r.status_code==200 and r.json()['tersedia']==100
+        bad=await c.get('/api/kemas-ulang/kemasan',params={'sumber_id':req['sumber_id'],'material':'laminasi','ukuran':25,'merk':'Merek tidak ada'})
+        assert bad.status_code==400
