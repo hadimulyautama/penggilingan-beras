@@ -378,6 +378,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
     user = request.state.akun.user
     boleh_silo = ((await _is_g2_operator(user) and not can_see_financials(user))
                   or P.super_saja(user.role))
+    boleh_kemas = await _is_g2_operator(user) or can_see_financials(user)
     rows = []
     otomatis = jenis in svc._UKURAN_KEMASAN_OTOMATIS
     owners = list(jasa_ids) if pelanggan_id is not None else [None]
@@ -388,6 +389,17 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                 cards[owner] = next((c for c in await svc.stok_produk(db,jasa_id=owner)
                                      if c.jenis == jenis), None)
 
+    from app.models import FinishedGoodsStock, ProductSku, RiceQualityStandard
+    from sqlalchemy import select
+    async with SessionLocal() as db:
+        sisa_rows=(await db.execute(select(FinishedGoodsStock,ProductSku.kategori,RiceQualityStandard.kode)
+            .join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id)
+            .outerjoin(RiceQualityStandard,RiceQualityStandard.id==FinishedGoodsStock.rice_quality_standard_id)
+            .where(FinishedGoodsStock.curah_kemas_ulang.is_(True),FinishedGoodsStock.berat_total_kg>0,
+                FinishedGoodsStock.jasa_id.is_(None) if owners == [None] else FinishedGoodsStock.jasa_id.in_(owners)))).all()
+        sisa_rows=[r for r in sisa_rows if svc.jenis_produk(r[1],r[2])==jenis]
+    def kemas_href(sku_id,std_id,owner):
+        return '/stok-produk/kemas-ulang?'+urlencode(dict(sku_id=sku_id,**({'std_id':std_id} if std_id else {}),**({'jasa_id':owner} if owner else {})))
     def baris(*, owner, bentuk, berat, jumlah=0, ukuran=0, merk="", bahan="", p=None):
         token = "pabrik" if owner is None else str(owner)
         aksi = ("masukkan_beras_silo" if jenis in svc.BERAS_JENIS else
@@ -404,6 +416,7 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
                   if p and owner is not None and jumlah and boleh_pindah else None)
         rows.append(dict(bentuk=bentuk,kg=berat,karung=jumlah,ukuran=ukuran,merk=merk,
                          bahan=bahan,href=href,pindah=pindah,
+                         kemas=kemas_href(p["sku_id"],p["std_id"],owner) if p and jumlah and boleh_kemas else None,
                          sumber=sumber if jenis in svc.BERAS_JENIS else None))
 
     if otomatis:
@@ -413,11 +426,13 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
             c = cards.get(owner)
             if c is None:
                 continue
-            baris(owner=owner,bentuk="Kemasan otomatis",berat=c.dikemas_otomatis_kg,
-                  jumlah=c.jumlah_karung_otomatis,ukuran=c.ukuran_kemasan_otomatis,
-                  bahan="Putih polos" if jenis=="broken" else "Kemasan otomatis")
-            if c.curah_otomatis_kg > 0.5:
-                baris(owner=owner,bentuk="Curah",berat=c.curah_otomatis_kg)
+            nyata=[p for p in kemasan.get(jenis,[]) if p.get('jasa_id')==owner]
+            residu=sum(float(r[0].berat_total_kg) for r in sisa_rows if r[0].jasa_id==owner)
+            ukuran_auto,jumlah_auto,kg_auto,curah_auto=svc._packing_otomatis(jenis,max(0,c.sisa_kg-sum(p['kg'] for p in nyata)-residu))
+            if kg_auto:baris(owner=owner,bentuk="Kemasan otomatis",berat=kg_auto,jumlah=jumlah_auto,ukuran=ukuran_auto,bahan="Kemasan otomatis")
+            for p in nyata:
+                baris(owner=owner,bentuk="Kemasan",berat=p['kg'],jumlah=p['karung'],ukuran=p['ukuran'],merk=p['merk'],bahan=p['bahan'],p=p)
+            if curah_auto:baris(owner=owner,bentuk="Curah",berat=curah_auto)
     else:
         for p in kemasan.get(jenis, []):
             baris(owner=p.get("jasa_id"),bentuk="Kemasan" if p["ukuran"] else "Curah",
@@ -427,6 +442,9 @@ async def _detail_produk(request, kartu, jenis, kemasan, *, pemilik=None,
             c = cards.get(owner)
             if c is not None and (c.curah_kg > 0.5 or c.curah_kg < -0.5):
                 baris(owner=owner,bentuk="Curah · belum dikemas",berat=c.curah_kg)
+    for fg,_,_ in sisa_rows:
+        rows.append(dict(bentuk='Sisa kemas ulang (curah)',kg=float(fg.berat_total_kg),karung=0,ukuran=0,merk='',bahan='',href=None,pindah=None,sumber=None,
+            kemas=kemas_href(fg.product_sku_id,fg.rice_quality_standard_id,fg.jasa_id) if boleh_kemas else None))
     return await render_laci(request, "stok_produk_detail.html",
         layar="stok_produk_jasa" if pelanggan_id is not None else "stok_produk",
         breadcrumb_detail=k.nama, k=k, beras=svc.adalah_beras(k.jenis), pemilik=pemilik or "Pabrik",

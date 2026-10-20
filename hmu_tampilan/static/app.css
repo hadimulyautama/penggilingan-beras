@@ -3202,3 +3202,20 @@ dialog.draf-konfirmasi::backdrop { background:rgba(6,11,14,.7); }
 .keluar-pencarian[open]>summary::before,.keluar-kepala details[open]>summary::before { content:'▾'}
 
 .keluar-tabel caption { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+
+.kemas-ulang { max-width:760px; width:100%; min-width:0; flex-shrink:0 }
+.kemas-ulang h1 { margin:12px 0; font-size:1.6rem }
+.kemas-ulang label { display:grid; gap:8px; margin:16px 0 }
+.kemas-ulang .fld { width:100%; min-height:48px }
+.kemas-ulang__jumlah { display:flex; align-items:center; gap:10px }
+.kemas-ulang__jumlah input { min-width:0 }
+.kemas-ulang output { display:block; padding:14px; border:2px solid var(--garis); border-radius:12px; overflow-wrap:anywhere }
+.kemas-ulang .kemas-ulang__setuju { display:flex; align-items:center; min-height:48px }
+.kemas-ulang__setuju input { min-width:28px; min-height:28px }
+.kemas-ulang .btn,.kemas-ulang summary { min-height:48px }
+.kemas-ulang summary { padding:12px 0; cursor:pointer }
+.kemas-ulang [hidden] { display:none!important }
+
+.kemas-ulang form button+button { margin-top:10px }
+
+.produk-kemasan__aksi a[href*="kemas-ulang"] { min-height:48px }

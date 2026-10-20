@@ -1727,6 +1727,15 @@ async def stok_produk(db: AsyncSession, *,
         )).scalar_one())
         masuk_curah_proc["bekatul"] = masuk_curah_proc.get("bekatul", 0.0) + extra_byp
 
+    sisa_kemas = {}
+    for kat, mutu, berat in (await db.execute(
+        select(ProductSku.kategori,RiceQualityStandard.kode,func.sum(FinishedGoodsStock.berat_total_kg))
+        .join(ProductSku,ProductSku.id==FinishedGoodsStock.product_sku_id)
+        .outerjoin(RiceQualityStandard,RiceQualityStandard.id==FinishedGoodsStock.rice_quality_standard_id)
+        .where(FinishedGoodsStock.curah_kemas_ulang.is_(True),milik_proc(FinishedGoodsStock))
+        .group_by(ProductSku.kategori,RiceQualityStandard.kode))).all():
+        sisa_kemas[jenis_produk(kat,mutu)] = float(berat)
+
     kartu: list[KartuProduk] = []
     for jenis in sorted(set(hasil) | set(dikemas) | set(keluar) | set(masuk_curah_now),
                         key=lambda j: (_URUT_BARANG.get(j, 99), j)):
@@ -1798,6 +1807,13 @@ async def stok_produk(db: AsyncSession, *,
         sisa = punya_rumah + curah - pindah_silo.get(jenis, 0.0)
         if (abs(sisa) < 0.5 and abs(h) < 0.5 and abs(k) < 0.5):
             continue
+        sisa_curah = sisa_kemas.get(jenis,0)
+        kemasan_stok -= sisa_curah
+        if curah_saja:
+            curah_stok += sisa_curah
+        else:
+            punya_rumah -= sisa_curah
+            curah += sisa_curah
         ukuran_auto, jumlah_auto, dikemas_auto, curah_auto = _packing_otomatis(
             jenis, sisa
         )
@@ -1922,6 +1938,7 @@ async def barang_jadi_g2(db: AsyncSession) -> BarangJadiG2:
               & (FinishedGoodsStock.source_type == "polishing"), isouter=True)
         # PABRIK *dan* TITIPAN — lihat catatan ⚠⚠ di atas. Penyaringan untuk
         # borang penjualan terjadi DI PEMAKAINYA, bukan di sini.
+        .where(FinishedGoodsStock.curah_kemas_ulang.is_(False))
         .order_by(FinishedGoodsStock.waktu.desc())
     )).all()
 

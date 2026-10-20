@@ -135,6 +135,8 @@ class FinishedGoodsStock(Base, TimestampMixin):
     jasa_id: Mapped[int | None] = mapped_column(ForeignKey("jasa.id"))
     #: False bila barang sudah datang dalam kemasan sendiri (misalnya beras
     #: dari tiket Timbangan); kemasan itu bukan pemakaian stok karung gudang.
+    curah_kemas_ulang: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+
     kemasan_mengurangi_stok: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )

@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block judul %}Kemas ulang{% endblock %}
+{% block isi %}
+<section class="kemas-ulang" data-kemas-ulang>
+<a href="/stok-produk-jasa" data-utuh{{ '' if pemilik != 'Milik pabrik' else ' hidden' }}>← Produk jasa</a>
+<a href="/stok-produk" data-utuh{{ ' hidden' if pemilik != 'Milik pabrik' else '' }}>← Stok produk</a>
+<h1>Kemas ulang</h1><p><strong>{{ nama_produk }}</strong><br>{{ pemilik }}</p>
+<p class="bantu">Kemasan lama tetap habis. Hanya kemasan baru yang dipakai mengurangi stok kemasan. Jenis produk, mutu, dan pemilik tetap sama.</p>
+<div class="nota nota--buruk" role="alert" data-galat hidden></div>
+<form data-form-kemas>
+<label>Batch asal<select class="fld" name="sumber_id" required><option value="">Pilih batch asal</option>{% for o in opsi %}<option value="{{ o.id }}" data-kunci="{{ o.kunci }}" data-unit="{{ o.unit }}" data-jumlah="{{ o.jumlah }}" data-curah="{{ '1' if o.curah else '0' }}">{{ o.label }}</option>{% endfor %}</select></label>
+<label>Jumlah asal<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_asal" type="number" min="0.01" step="0.01" required><span data-satuan>karung</span></span></label>
+<label>Kemasan baru<select class="fld" name="kemasan" required><option value="">Pilih kemasan baru</option>{% for o in kemasan %}<option value="{{ o.value }}" data-ukuran="{{ o.ukuran }}">{{ o.label }}</option>{% endfor %}</select></label>
+<label>Merek baru<select class="fld" name="merk"><option value="">Tanpa merek</option>{% for m in merek %}<option value="{{ m.nama }}">{{ m.nama }}</option>{% endfor %}</select></label>
+<label>Jumlah kemasan baru<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_baru" type="number" min="1" step="1" required><span>karung</span></span></label>
+<output data-preview aria-live="polite">Pilih asal dan kemasan baru untuk memeriksa berat.</output>
+<label class="kemas-ulang__setuju"><input name="setuju" type="checkbox" required> Saya sudah memeriksa hasil kemasan baru dan sisa curah.</label>
+<button class="btn" type="button" data-periksa-stok>Periksa stok terbaru</button>
+<button class="btn" type="submit">Catat kemas ulang</button>
+</form>
+<p class="bantu" data-hasil role="status"></p>
+{% if not opsi %}<p>Tidak ada stok bebas yang dapat dikemas ulang. Periksa reservasi pengiriman.</p>{% endif %}
+<details><summary>Riwayat kemas ulang · 20 catatan terbaru</summary><ul>{% for r,petugas,bahan,ukuran,merk in riwayat %}<li>#{{ r.id }} · {{ r.berat_asal_kg }} kg → {{ r.karung_baru }} karung · {{ bahan }} {{ ukuran }} kg · {{ merk or "Tanpa merek" }} · {{ r.berat_baru_kg }} kg · sisa {{ r.sisa_kg }} kg · {{ petugas }} · {{ r.waktu|jam }}</li>{% else %}<li>Belum ada kemas ulang.</li>{% endfor %}</ul></details>
+</section><script src="/static/kemas-ulang.js?v={{ VERSI }}" defer></script>
+{% endblock %}

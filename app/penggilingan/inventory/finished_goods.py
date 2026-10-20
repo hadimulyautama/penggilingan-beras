@@ -111,6 +111,8 @@ async def catat_packing(
             "Sebutkan jenis karung, ukuran, dan jumlah karung. Contoh: "
             "`packing premium merk Imbiss laminasi 25kg 80 karung`"
         )
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     proc = await _proc_by_kode(db, kode_pol)
     std_id = None
     if kategori == "beras_putih":
@@ -622,6 +624,7 @@ async def hitung_stok_finished_goods(
             select(func.coalesce(func.sum(FinishedGoodsStock.jumlah_karung), 0),
                    func.coalesce(func.sum(FinishedGoodsStock.berat_total_kg), 0))
             .where(FinishedGoodsStock.product_sku_id == sku_id,
+                   FinishedGoodsStock.curah_kemas_ulang.is_(False),
                    # ⚠⚠ INI SARINGAN YANG PALING BERBAHAYA KALAU TERLEWAT.
                    #
                    # Tanpa saringan pemilik, beras pelanggan terhitung sebagai
@@ -759,6 +762,8 @@ async def pindah_kepemilikan_barang_jadi(
     """
     from app.models import FinishedGoodsStock
 
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     if not jasa_id:
         raise InventoryError("Barang pabrik tak punya pemilik untuk dipindah.")
     if not karung or karung <= 0:
@@ -779,6 +784,7 @@ async def pindah_kepemilikan_barang_jadi(
     rows = (await db.execute(_std(
         select(FinishedGoodsStock)
         .where(FinishedGoodsStock.product_sku_id == sku_id,
+               FinishedGoodsStock.curah_kemas_ulang.is_(False),
                FinishedGoodsStock.jasa_id == jasa_id)
         .order_by(FinishedGoodsStock.waktu.asc(), FinishedGoodsStock.id.asc())
         .with_for_update()

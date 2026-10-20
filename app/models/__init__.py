@@ -140,6 +140,7 @@ __all__ = [
     # system
     "ActivityLog",
     "DrafKeluar",
+    "KemasUlang",
     "KodeUrut",
     "SetelanPabrik",
     "Notification",
@@ -154,3 +155,6 @@ __all__ = [
 ]
 
 from app.models.draf_keluar import DrafKeluar
+from app.models.kemas_ulang import KemasUlang
+from app.models.skema_produksi import pasang as _pasang_skema_produksi
+_pasang_skema_produksi(Base.metadata)

@@ -229,7 +229,13 @@ async def hitung_stok_kemasan(
             )
         )
     ).scalar_one()
-    return int(beli) - int(hilang) - int(terpakai)
+    # Saat stok asal berkurang karena kemas ulang, karung lamanya tetap habis.
+    from app.models import KemasUlang
+    lama = await db.scalar(select(func.coalesce(func.sum(KemasUlang.karung_lama_dihitung),0))
+        .join(ProductSku,ProductSku.id==KemasUlang.sku_asal_id).where(
+            ProductSku.packaging_material_id==material_id,ProductSku.package_size_id==size_id,
+            _brand(ProductSku.brand_id),_jasa_milik_pelanggan(KemasUlang.jasa_id)))
+    return int(beli) - int(hilang) - int(terpakai) - int(lama)
 
 
 # `hpp_kemasan_wavg` DIBUANG 28 September 2026. Satu-satunya pembacanya
@@ -345,6 +351,8 @@ async def pindah_kepemilikan_karung(
     Mengembalikan jumlah lembar yang berpindah (selalu `jumlah_lembar`
     persis — dipecah dari baris pembelian pabrik, FIFO, tertua dulu).
     """
+    from app.services.barang_keluar import _kunci_saldo_keluar
+    await _kunci_saldo_keluar(db)
     if not pelanggan_id:
         raise InventoryError("Sebutkan pelanggan tujuan.")
     if not jumlah_lembar or jumlah_lembar <= 0:

@@ -8,11 +8,12 @@
         <td role="cell"><strong>{{ p.merk or ('Tanpa merek' if p.ukuran else p.bentuk) }}</strong>{% if p.ukuran or p.bahan %}<span class="tabel-standar__sekunder">{{ p.bentuk }}{% if p.bahan %} · {{ p.bahan }}{% endif %}</span>{% endif %}</td>
         <td role="cell" data-label="Isi kemasan">{{ (p.ukuran ~ ' kg') if p.ukuran else '—' }}</td>
         <td role="cell" data-label="Jumlah">{{ (p.karung ~ ' karung') if p.ukuran else '—' }}</td>
-        <td role="cell" data-label="Berat"><strong>{{ kg(p.kg) }} kg</strong></td>
+        <td role="cell" data-label="Berat"><strong>{{ (('%.2f'|format(p.kg))|replace('.', ',')) if p.bentuk == 'Sisa kemas ulang (curah)' else kg(p.kg) }} kg</strong></td>
         <td role="cell" class="produk-kemasan__aksi">
           {% if p.href %}<a class="btn btn--kecil" href="{{ p.href }}" data-masuk-silo="{{ p.sumber or k.jenis }}">Masukkan ke silo</a>{% endif %}
+          {% if p.kemas %}<a class="btn btn--kecil" href="{{ p.kemas }}" data-utuh>Kemas ulang</a>{% endif %}
           {% if p.pindah %}<a class="btn btn--kecil" href="/stok-produk-jasa?buka=pindah_kepemilikan_produk&amp;nilai={{ p.pindah|urlencode }}">Pindah kepemilikan</a>{% endif %}
-          {% if not p.href and not p.pindah %}—{% endif %}
+          {% if not p.href and not p.pindah and not p.kemas %}—{% endif %}
         </td>
       </tr>
     {% else %}<tr role="row"><td role="cell" colspan="5">Tidak ada stok kemasan atau curah yang tersedia.</td></tr>{% endfor %}
