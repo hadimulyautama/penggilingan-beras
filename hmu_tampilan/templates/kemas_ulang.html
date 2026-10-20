@@ -9,15 +9,16 @@
 <form data-form-kemas>
 <label>Batch asal<select class="fld" name="sumber_id" required><option value="">Pilih batch asal</option>{% for o in opsi %}<option value="{{ o.id }}" data-kunci="{{ o.kunci }}" data-unit="{{ o.unit }}" data-jumlah="{{ o.jumlah }}" data-curah="{{ '1' if o.curah else '0' }}">{{ o.label }}</option>{% endfor %}</select></label>
 <label>Jumlah asal<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_asal" type="number" min="0.01" step="0.01" required><span data-satuan>karung</span></span></label>
-<label>Kemasan baru<select class="fld" name="kemasan" required><option value="">Pilih kemasan baru</option>{% for o in kemasan %}<option value="{{ o.value }}" data-ukuran="{{ o.ukuran }}">{{ o.label }}</option>{% endfor %}</select></label>
-<label>Merek baru<select class="fld" name="merk"><option value="">Tanpa merek</option>{% for m in merek %}<option value="{{ m.nama }}">{{ m.nama }}</option>{% endfor %}</select></label>
+<label>Kemasan baru<select class="fld" name="kemasan" required><option value="">Pilih kemasan baru</option>{% for o in kemasan %}<option value="{{ o.value }}" data-ukuran="{{ o.ukuran }}" data-merek="{{ o.merek|default([])|tojson|forceescape }}">{{ o.label }}</option>{% endfor %}</select></label>
+<label>Merek baru<select class="fld" name="merk" required disabled><option value="">Pilih kemasan dahulu</option></select></label>
+{% if not kemasan %}<p role="status" data-kemasan-kosong>Belum ada kemasan baru yang tersedia untuk pemilik produk ini. Minta admin memeriksa stok kemasan dan kepemilikannya.</p>{% else %}<p role="status" data-kemasan-kosong hidden>Belum ada kemasan baru yang tersedia untuk pemilik produk ini. Minta admin memeriksa stok kemasan dan kepemilikannya.</p>{% endif %}
 <p class="bantu" data-saldo-kemasan role="status">Pilih batch, kemasan, dan merek untuk melihat stok kemasan baru.</p>
 <label>Jumlah kemasan baru<span class="kemas-ulang__jumlah"><input class="fld" name="jumlah_baru" type="number" min="1" step="1" required><span>karung</span></span></label>
 <output data-preview aria-live="polite">Pilih asal dan kemasan baru untuk memeriksa berat.</output>
 <label class="kemas-ulang__setuju"><input name="setuju" type="checkbox" required> Saya sudah memeriksa hasil kemasan baru dan sisa curah.</label>
 <div class="nota nota--buruk" role="alert" data-galat hidden></div>
 <button class="btn" type="button" data-periksa-stok>Periksa stok terbaru</button>
-<button class="btn" type="submit">Catat kemas ulang</button>
+<button class="btn" type="submit"{% if not kemasan %} disabled{% endif %}>Catat kemas ulang</button>
 </form>
 <p class="bantu" data-hasil role="status"></p>
 <a class="btn" data-selesai data-utuh href="{{ "/stok-produk-jasa" if pemilik != "Milik pabrik" else "/stok-produk" }}" hidden>Kembali ke stok · sudah tercatat</a>

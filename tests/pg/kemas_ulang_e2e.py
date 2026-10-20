@@ -46,14 +46,13 @@ async def test_browser_halaman_utuh_simpan_dan_kembali(pg,sosoh_jasa,jasa,terang
             page.goto(url)
             page.locator('[name=sumber_id]').select_option(str(req['sumber_id']))
             page.locator('[name=jumlah_asal]').fill('4')
-            page.locator('[name=kemasan]').select_option('laminasi|25')
-            page.locator('[name=jumlah_baru]').fill('4')
-            expect(page.locator('[data-saldo-kemasan]')).to_contain_text('0 lembar')
-            page.locator('[name=setuju]').check();page.get_by_role('button',name='Catat kemas ulang',exact=True).click()
-            expect(page.locator('[data-galat]')).to_contain_text('Belum tersimpan. Kemasan baru tidak cukup')
-            assert page.locator('[data-galat]').evaluate('(e)=>{let r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}')
+            assert page.locator('[name=kemasan] option[value="laminasi|25"]').count()==0
+            page.locator('[name=kemasan]').select_option('biasa|40')
+            page.locator('[name=jumlah_baru]').fill('2')
+            expect(page.locator('[data-saldo-kemasan]')).to_contain_text('100 lembar')
+            assert page.locator('[name=merk] option').all_text_contents()==['Pilih merek','Tanpa merek · 100 lembar']
             assert posts==[]
-            page.screenshot(path=tmp_path/f'galat-kemasan-{jasa}-{terang}.png')
+            page.screenshot(path=tmp_path/f'pilihan-tersedia-{jasa}-{terang}.png')
             page.locator('[data-kemas-ulang] > a:visible').click()
             assert dialog==['beforeunload']
             assert page.locator('[name=jumlah_asal]').input_value()=='4'

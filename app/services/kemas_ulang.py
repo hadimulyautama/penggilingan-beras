@@ -115,3 +115,29 @@ async def saldo_kemasan(db, sumber_id, material, ukuran, merk):
         pelanggan_id = jasa.pelanggan_id
     jumlah = await hitung_stok_kemasan(db, mat.id, size.id, brand_id, pelanggan_id=pelanggan_id)
     return dict(tersedia=max(0, jumlah), pemilik='pelanggan jasa' if row.jasa_id else 'pabrik')
+
+async def kemasan_tersedia(db, kategori, jasa_id):
+    """Pilihan jenis/ukuran/merek dari saldo positif milik pemilik produk."""
+    from app.models import Brand
+    from app.penggilingan.inventory.packaging import stok_kemasan_rinci, _validate_kemasan
+    pelanggan_id = None
+    if jasa_id is not None:
+        jasa = await db.get(Jasa, jasa_id)
+        if jasa is None:
+            raise InventoryError('Pemilik produk tidak ditemukan.')
+        pelanggan_id = jasa.pelanggan_id
+    aktif = set((await db.execute(select(Brand.nama).where(Brand.aktif.is_(True), Brand.deleted_at.is_(None)))).scalars())
+    pilihan = {}
+    for b in await stok_kemasan_rinci(db, pelanggan_id=pelanggan_id):
+        if b['lembar'] <= 0 or (b['merk'] and b['merk'] not in aktif):
+            continue
+        if b['merk'] and kategori not in ('beras_putih', 'beras_b'):
+            continue  # SKU hasil samping tidak memakai merek.
+        try:
+            _validate_kemasan(kategori, b['kode'], b['ukuran'])
+        except InventoryError:
+            continue
+        key = f"{b['kode']}|{b['ukuran']}"
+        p = pilihan.setdefault(key, dict(value=key, label=f"{b['nama']} · {b['ukuran']} kg", ukuran=b['ukuran'], merek=[]))
+        p['merek'].append(dict(value=b['merk'] or '', label=b['merk'] or 'Tanpa merek', tersedia=b['lembar']))
+    return list(pilihan.values())

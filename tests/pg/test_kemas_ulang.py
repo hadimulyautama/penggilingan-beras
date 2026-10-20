@@ -243,3 +243,29 @@ async def test_preview_http_izin_dan_saldo_pemilik(pg,sosoh_jasa):
         assert r.status_code==200 and r.json()['tersedia']==100
         bad=await c.get('/api/kemas-ulang/kemasan',params={'sumber_id':req['sumber_id'],'material':'laminasi','ukuran':25,'merk':'Merek tidak ada'})
         assert bad.status_code==400
+
+@pytest.mark.parametrize('jasa',[False,True])
+async def test_pilihan_hanya_saldo_positif_dan_merek_pemilik(pg,sosoh_jasa,jasa):
+    from app.models import Brand
+    req,sku,std=await awal(pg,sosoh_jasa,jasa)
+    async with pg() as db:
+        b=Brand(nama='Merek tersedia',aktif=True);mati=Brand(nama='Merek nonaktif',aktif=False)
+        db.add_all([b,mati]);await db.flush()
+        for brand,owner,qty in [(b.id,sosoh_jasa['pelanggan_id'] if jasa else None,7),
+                                (mati.id,sosoh_jasa['pelanggan_id'] if jasa else None,20),
+                                (None,None if jasa else sosoh_jasa['pelanggan_id'],30)]:
+            target=await find_or_create_sku(db,kategori='beras_putih',material_kode='laminasi',ukuran=25)
+            db.add(PackagingPurchase(kode=f'PIL-{brand}-{owner}',packaging_material_id=target.packaging_material_id,
+                package_size_id=target.package_size_id,brand_id=brand,pelanggan_id=owner,jumlah_lembar=qty,
+                tanggal=now_local().date(),waktu=now_local(),input_by=sosoh_jasa['user']))
+        await db.commit()
+        data=await svc.kemasan_tersedia(db,'beras_putih',sosoh_jasa['jasa_id'] if jasa else None)
+        p=next(x for x in data if x['value']=='laminasi|25')
+        assert p['merek']==[{'value':'Merek tersedia','label':'Merek tersedia','tersedia':7}]
+        assert all(m['tersedia']>0 for x in data for m in x['merek'])
+        assert 'laminasi|5' not in [x['value'] for x in data]
+        before=await db.scalar(select(func.count()).select_from(KemasUlang))
+        await db.execute(__import__('sqlalchemy').update(PackagingPurchase).values(jumlah_lembar=0))
+        await db.commit()
+        assert await svc.kemasan_tersedia(db,'beras_putih',sosoh_jasa['jasa_id'] if jasa else None)==[]
+        assert await db.scalar(select(func.count()).select_from(KemasUlang))==before

@@ -20,7 +20,6 @@ async def izin(user):
 @router.get('/stok-produk/kemas-ulang')
 async def halaman(request:Request,sku_id:int,std_id:int|None=None,jasa_id:int|None=None,akun=Depends(butuh_akun)):
     await izin(akun.user)
-    from app.web.aksi_inventory import kombinasi_kemasan
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
         sku=await db.get(ProductSku,sku_id)
@@ -30,9 +29,10 @@ async def halaman(request:Request,sku_id:int,std_id:int|None=None,jasa_id:int|No
         std=await db.get(RiceQualityStandard,std_id) if std_id else None
         pemilik=(await nama_pemilik_banyak(db,[jasa_id])).get(jasa_id) if jasa_id else 'Milik pabrik'
         opsi=await svc.pilihan(db,sku_id,std_id,jasa_id,akun.user.id)
-        materials={m.kode:m.nama for m in (await db.execute(select(PackagingMaterial))).scalars()}
-        kemasan=[dict(value=f'{m}|{u}',label=f'{materials.get(m,m)} · {u} kg',ukuran=u) for _,m,u in kombinasi_kemasan(sku.kategori)]
-        merek=list((await db.execute(select(Brand).where(Brand.aktif.is_(True),Brand.deleted_at.is_(None)))).scalars()) if sku.kategori in ('beras_putih','beras_b') else []
+        try:
+            kemasan=await svc.kemasan_tersedia(db,sku.kategori,jasa_id)
+        except InventoryError as e:
+            raise HTTPException(400,str(e))
         hist=(await db.execute(select(KemasUlang,User.nama,PackagingMaterial.nama,PackageSize.ukuran_kg,Brand.nama).join(User,User.id==KemasUlang.petugas_id)
             .join(FinishedGoodsStock,FinishedGoodsStock.id==KemasUlang.sumber_id)
             .join(ProductSku,ProductSku.id==KemasUlang.sku_baru_id)
@@ -45,7 +45,7 @@ async def halaman(request:Request,sku_id:int,std_id:int|None=None,jasa_id:int|No
             .order_by(KemasUlang.id.desc()).limit(20))).all()
     nama=f'{std.nama if std else sku.kategori.replace("_"," ").title()} · {brand.nama if brand else "Tanpa merek"} · {mat.nama} {size.ukuran_kg} kg'
     return await render_laci(request,'kemas_ulang.html',layar='stok_produk_jasa' if jasa_id else 'stok_produk',nama_produk=nama,pemilik=pemilik,
-        opsi=opsi,kemasan=kemasan,merek=merek,riwayat=hist)
+        opsi=opsi,kemasan=kemasan,riwayat=hist)
 
 class KemasReq(BaseModel):
     model_config=ConfigDict(extra="forbid")
@@ -86,3 +86,12 @@ async def saldo(sumber_id:int,material:str,ukuran:int,merk:str='',user=Depends(p
             return await svc.saldo_kemasan(db,sumber_id,material,ukuran,merk)
         except InventoryError as e:
             raise HTTPException(400,str(e))
+
+@router.get('/api/kemas-ulang/kemasan-tersedia')
+async def daftar_kemasan(sumber_id:int,user=Depends(pengguna_aksi)):
+    await izin(user)
+    async with SessionLocal() as db:
+        row=await db.get(FinishedGoodsStock,sumber_id)
+        if row is None:raise HTTPException(404,'Batch asal tidak ditemukan.')
+        sku=await db.get(ProductSku,row.product_sku_id)
+        return await svc.kemasan_tersedia(db,sku.kategori,row.jasa_id)
