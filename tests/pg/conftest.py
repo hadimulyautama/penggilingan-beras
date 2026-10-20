@@ -100,11 +100,12 @@ def _skema_head():
         pytest.skip("UJI_PG_URL kosong — uji Postgres dilewati")
 
     import subprocess
+    import sys
 
     akar = pathlib.Path(__file__).resolve().parents[2]
     lingk = {**os.environ, "DATABASE_URL": url}
     hasil = subprocess.run(
-        [str(akar / ".venv/bin/python"), "-m", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=akar, env=lingk, capture_output=True, text=True, timeout=300,
     )
     if hasil.returncode != 0:
