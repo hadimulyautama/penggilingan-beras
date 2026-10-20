@@ -1,9 +1,10 @@
 """Halaman kemas ulang; seluruh perubahan hanya melalui POST terjaga sesi."""
+from urllib.parse import urlencode
 from fastapi import APIRouter,Depends,Request,HTTPException
 from pydantic import BaseModel,Field,StrictInt,ConfigDict
 from sqlalchemy import select
 from app.database import SessionLocal
-from app.models import FinishedGoodsStock,User,ProductSku,PackageSize,PackagingMaterial,Brand,RiceQualityStandard,KemasUlang
+from app.models import FinishedGoodsStock,User,ProductSku,PackageSize,PackagingMaterial,Brand,RiceQualityStandard,KemasUlang,Jasa
 from app.web.security import butuh_akun
 from app.web.api import _is_g2_operator
 from app.web.deps import pengguna_aksi
@@ -67,7 +68,18 @@ async def simpan(req:KemasReq,user=Depends(pengguna_aksi)):
             r=await svc.simpan(db,user=await db.get(User,user.id),**req.model_dump(exclude={'setuju'}))
         except InventoryError as e:
             raise HTTPException(409,str(e))
-    return dict(ok=True,id=r.id,berat_asal_kg=float(r.berat_asal_kg),berat_baru_kg=float(r.berat_baru_kg),sisa_kg=float(r.sisa_kg))
+        sumber=await db.get(FinishedGoodsStock,r.sumber_id)
+        sku=await db.get(ProductSku,sumber.product_sku_id)
+        std=await db.get(RiceQualityStandard,sumber.rice_quality_standard_id) if sumber.rice_quality_standard_id else None
+        from app.services.stok import jenis_produk
+        params={'jenis':jenis_produk(sku.kategori,std.kode if std else None)}
+        tujuan='/stok-produk/detail'
+        if sumber.jasa_id:
+            jasa=await db.get(Jasa,sumber.jasa_id)
+            params['pelanggan_id']=jasa.pelanggan_id
+            tujuan='/stok-produk-jasa/detail'
+        kembali=tujuan+'?'+urlencode(params)
+    return dict(ok=True,kembali=kembali,id=r.id,berat_asal_kg=float(r.berat_asal_kg),berat_baru_kg=float(r.berat_baru_kg),sisa_kg=float(r.sisa_kg))
 
 @router.get('/api/kemas-ulang/pilihan')
 async def periksa(sumber_id:int,user=Depends(pengguna_aksi)):

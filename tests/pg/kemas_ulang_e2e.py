@@ -60,11 +60,16 @@ async def test_browser_halaman_utuh_simpan_dan_kembali(pg,sosoh_jasa,jasa,terang
             page.locator('[name=jumlah_baru]').fill('2')
             expect(page.locator('[data-saldo-kemasan]')).to_contain_text('100 lembar')
             page.locator('[name=setuju]').check();page.get_by_role('button',name='Catat kemas ulang',exact=True).click()
-            expect(page.locator('[data-hasil]')).to_contain_text('tercatat: 80 kg, sisa curah 20 kg')
+            page.wait_for_url(re.compile(r'/stok-produk(?:-jasa)?/detail\?'))
+            assert ('/stok-produk-jasa/detail' in page.url)==jasa
+            assert 'jenis=' in page.url
+            if jasa:assert 'pelanggan_id=' in page.url
+            expect(page.locator('#kabar')).to_contain_text('Kemas ulang berhasil. Stok sudah diperbarui.')
+            expect(page.locator('#kabar')).to_be_visible()
             assert len(posts)==1
             page.screenshot(path=tmp_path/f'hasil-{jasa}-{terang}.png')
-            page.get_by_role('link',name='Kembali ke stok · sudah tercatat',exact=True).click()
-            page.wait_for_url(re.compile(r'/stok-produk(?:-jasa)?$'))
+            page.reload()
+            expect(page.locator('#kabar')).not_to_be_visible()
             assert dialog==['beforeunload'], 'simpan berhasil tidak boleh memunculkan peringatan kehilangan isian'
             b.close()
     async with c:

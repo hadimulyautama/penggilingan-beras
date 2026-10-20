@@ -35,9 +35,11 @@
   </section>
 </main>
 {% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}
-<dialog class="lembar" id="lembar"></dialog><div class="kabar" id="kabar" role="status"></div>
+<dialog class="lembar" id="lembar"></dialog>
 {% endif %}
+<div class="kabar" id="kabar" role="status" aria-live="polite"></div>
 {% endblock %}
 {% block kaki %}
+{% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}<script src="/static/kemas-kabar.js?v={{ VERSI }}" defer></script>{% endif %}
 {% if BOLEH_CATAT or BOLEH_PINDAH or BOLEH_MASUKKAN_SILO %}<script src="/static/aksi.js?v={{ VERSI }}" defer data-buka="{{ buka }}" data-nilai="{{ nilai }}" data-sumber-stok="{{ sumber_stok }}"></script>{% endif %}
 {% endblock %}
