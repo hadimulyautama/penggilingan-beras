@@ -698,7 +698,8 @@
       var bagian = kemasan && kemasan.value ? kemasan.value.split("|") : [];
       var ukuran = bagian.length > 1 ? Number(bagian[bagian.length - 1]) : NaN;
       if (!Number.isFinite(berat) || !Number.isFinite(ukuran) || ukuran <= 0) {
-        batas.textContent = "Pilih proses & ukuran";
+        batas.textContent = nilaiMedan("sumber")
+          ? "Pilih ukuran karung" : "Pilih proses & ukuran";
         batas.removeAttribute("data-jumlah");
         return;
       }
