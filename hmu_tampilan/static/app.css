@@ -3335,3 +3335,6 @@ body .karung-tabel th:first-child { width:42px; }
   .karung-aksi > div { grid-column:1 / -1; grid-row:3; min-width:0; padding-top:6px; }
   .karung-aksi > div .btn { width:100%; }
 }
+
+.karung-jenis { margin-block:18px 24px; min-width:0; }
+.karung-jenis__judul { margin:0 0 8px; font-size:.95rem; font-weight:700; }

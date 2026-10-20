@@ -463,6 +463,14 @@ async def test_bekatul_dikarungi_dari_proses_jasa_tetap_tersebut(pg, titipan):
         href = next(h for h in tautan if h.startswith("/stok-produk-jasa/detail?")
                     and parse_qs(urlsplit(h).query).get("jenis") == ["bekatul"])
         r = await c.get(href)
+        # Disembunyikan hanya dari halaman stok karung, bukan dari packing.
+        stok_karung = await c.get("/stok-karung")
+        stok_jasa = await c.get("/stok-karung-jasa")
+        assert "karung bekas" not in stok_karung.text.lower()
+        assert "karung bekas" not in stok_jasa.text.lower()
+        pilihan = await c.get("/api/actions/kemasan-untuk", params={"induk":"POL-UJIT-01|bekatul"})
+        assert pilihan.status_code == 200
+        assert "bekas|40" in {o["value"] for o in pilihan.json()}
     assert r.status_code == 200
     teks, tautan = _isi_html(r.text)
     assert "Bekatul" in teks and "Bu Sri" in teks and "900 kg" in teks
