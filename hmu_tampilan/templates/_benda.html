@@ -21,7 +21,8 @@
   {%- if v is none -%}—{%- else -%}{{ "%.1f"|format(v)|replace(".", ",") }}%{%- endif -%}
 {%- endmacro %}
 
-{% macro penuh(b) -%}
+{% macro penuh(b, ringkas=False) -%}
+  {% if not ringkas %}
   {{ milik.penanda(b) }}
   <div class="benda__judul">
     <span>{{ visual.judul(b) }}</span>
@@ -30,6 +31,7 @@
     {% endif %}
     {% if b.sub %}<span class="benda__sub">{{ b.sub }}</span>{% endif %}
   </div>
+  {% endif %}
   {% if b.fakta %}
     <dl class="fakta">
       {% for label, nilai in b.fakta %}
@@ -88,7 +90,7 @@
   {% for c in b.catatan %}
     <div class="catatan"><span aria-hidden="true">⚠</span><span>{{ c }}</span></div>
   {% endfor %}
-  <div class="benda__kaki">
+  {% if not ringkas %}<div class="benda__kaki">
     <span class="keping">{{ FASE[b.fase] }}</span>
     {% if b.keadaan or lama(b.sejak) %}
       <span class="benda__status">
@@ -98,6 +100,11 @@
       </span>
     {% endif %}
   </div>
+  {% elif b.keadaan and b.keadaan|lower != "menunggu dipacking" %}
+    {# Proses sosoh bisa masih berjalan; informasi ini tidak ada di judul
+       packing dan bukan pengulangan status menunggu. #}
+    <div class="benda__status">{{ b.keadaan }}</div>
+  {% endif %}
 {%- endmacro %}
 
 {# ── Bahan — hanya saat kartu di-EXPAND (pesan kerja 7 Oktober 2026) ──
@@ -142,6 +149,13 @@
       {% endfor %}
     </div>
   {% endif %}
+{%- endmacro %}
+
+{% macro rincian_antrean(b, packing=False) -%}
+  {# Packing sudah menyebut pemilik dan status di ringkasan. Rincian hanya
+     menambah informasi baru; nota/peringatan dan asal bahan tetap dibawa. #}
+  {% set isi %}{{ penuh(b, ringkas=packing) }}{{ penuh_anak(b) }}{% endset %}
+  {% if isi|trim %}<div class="antrian-item__rincian">{{ isi }}</div>{% endif %}
 {%- endmacro %}
 
 {% macro padat(b, progres=False) -%}
@@ -273,7 +287,7 @@
             {# Bahan HANYA saat di-expand — `<details>` native yang mengurus
                sembunyi/tampilnya. Tak berlaku di `rapat` (Beranda): kartu
                padat tak pernah menggambar `.anak` sama sekali. #}
-            {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+            {% if listview %}{{ rincian_antrean(b, tabel == "packing") }}
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {% for t in b.tombol %}
@@ -298,7 +312,7 @@
         {% elif b.pilihan %}
           <details class="{{ kelas }} {{ kelas }}--{{ b.fase }}{% if listview %} antrian-item{% endif %}"{{ tanda(b) }}>
             <summary>{% if tabel %}<span class="antrian-tabel__desktop">{% if tabel == "packing" %}{{ tabel_packing(b) }}{% else %}{{ tabel_antrean(b) }}{% endif %}</span><span class="antrian-tabel__mobile">{{ padat(b, progres) }}</span>{% elif rapat or listview %}{{ padat(b, progres) }}{% else %}{{ penuh(b) }}{% endif %}</summary>
-            {% if listview %}<div class="antrian-item__rincian">{{ penuh(b) }}{{ penuh_anak(b) }}</div>
+            {% if listview %}{{ rincian_antrean(b, tabel == "packing") }}
             {% elif not rapat %}{{ penuh_anak(b) }}{% endif %}
             <div class="pilihan">
               {# Nilai penunjuk boleh berbeda PER TINDAKAN. Satu kartu memang
@@ -312,8 +326,8 @@
                 {% set nl = p[3] if p|length > 3 else b.nilai %}
                 <a class="pilihan__satu{% if loop.first %} pilihan__satu--utama{% endif %}"
                    href="{{ dasar }}buka={{ id }}{% if nl %}&nilai={{ nl|urlencode }}{% endif %}">
-                  <span class="pilihan__nama">{{ nama }}</span>
-                  <span class="pilihan__ket">{{ ket }}</span>
+                  <span class="pilihan__nama">{{ "Kemas" if tabel == "packing" and id == "catat_packing" else nama }}</span>
+                  {% if not (tabel == "packing" and id == "catat_packing") %}<span class="pilihan__ket">{{ ket }}</span>{% endif %}
                 </a>
               {% endfor %}
             </div>

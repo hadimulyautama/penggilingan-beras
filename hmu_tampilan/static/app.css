@@ -2896,6 +2896,8 @@ body .proses-jenis { display:inline-flex; align-items:center; gap:6px; max-width
 .proses-ikon { display:inline-block; width:20px; height:20px; flex:0 0 20px; }
 /* Ikon dan judul sudah membedakan proses; garis kiri hanya menyempitkan kartu. */
 body .isi :is(.padat,.benda,.proses-aktif-list__row)[data-proses]:not([data-proses=""]) { border-left:0; }
+/* Panah tetap melekat pada ringkasan saat tombol packing dibuka. */
+.antrian-listview--tabel-packing .antrian-item > summary { position:relative; }
 body .isi .proses-aktif-list__row .proses-jenis { font-size:13px; }
 body .isi .proses-aktif-list__row .proses-jenis .proses-ikon,
 body .isi .proses-detail__label .proses-ikon { width:18px; height:18px; flex-basis:18px; }
