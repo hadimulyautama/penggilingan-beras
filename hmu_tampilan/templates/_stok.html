@@ -67,7 +67,15 @@
 <div class="karung-scroll tabel-standar" tabindex="0" role="region" aria-label="Tabel stok karung {{ judul }}">
 <table class="tabel-standar karung-tabel">
 <thead><tr><th scope="col">No.</th><th scope="col">Merek</th><th scope="col">Jenis karung</th><th scope="col">Ukuran</th><th scope="col">Jumlah</th><th scope="col">Status</th></tr></thead>
-{% set baris_urut = (baris|selectattr("merk")|list) + (baris|rejectattr("merk")|list) %}
+{% set urutan = namespace(bermerek=[], tanpa_merek=[]) %}
+{% for b in baris %}
+  {% if b.merk and (b.merk|trim|lower) not in ('polos', 'tanpa merek') %}
+    {% set urutan.bermerek = urutan.bermerek + [b] %}
+  {% else %}
+    {% set urutan.tanpa_merek = urutan.tanpa_merek + [b] %}
+  {% endif %}
+{% endfor %}
+{% set baris_urut = urutan.bermerek + urutan.tanpa_merek %}
 <tbody>{% for b in baris_urut %}{{ karung_baris(b, boleh_pindah, loop.index) }}{% endfor %}</tbody>
 </table></div></section>
 {%- endmacro %}
