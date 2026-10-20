@@ -3260,3 +3260,37 @@ body:not(.terik) .beranda-pekerjaan .tindakan { border:1px solid var(--redup-2);
 .produk-aksi__pilihan { display:grid; gap:6px; padding-top:8px; min-width:150px; }
 .produk-aksi__pilihan .btn { width:100%; min-height:48px; margin:0; text-align:left; justify-content:flex-start; }
 @media(max-width:900px) { .produk-aksi { width:100%; } }
+
+/* Detail produk sudah punya panel luar; isi tidak diberi bingkai bertingkat. */
+body .produk-detail .stok-produk-kartu--terbuka > .grup {
+  border:0; border-radius:0; box-shadow:none; background:transparent;
+}
+body .produk-detail .stok-produk-kartu--terbuka details.padat > .anak {
+  margin:0; padding:0; border:0;
+}
+body .produk-detail .produk-kemasan,
+body .produk-detail .produk-kemasan > table {
+  border:0; border-radius:0; box-shadow:none;
+}
+
+/* Tombol mengikuti kepala tabel pada tiap tema, dengan teks kontras. */
+body { --tombol-pucat:var(--panel-2); --tombol-pucat-teks:#fff; --tombol-hover:#304335; --tombol-tekan:#395440; --tombol-batas:var(--garis); --tombol-fokus:#a5d4a7; }
+body.terik { --tombol-pucat-teks:#111; --tombol-hover:#dce5d7; --tombol-tekan:#cfdcc8; --tombol-batas:#99a590; --tombol-fokus:#3c704c; }
+body :is(.btn,button,input[type="submit"],input[type="button"],input[type="reset"],[role="button"],.pilihan__satu) {
+  background:var(--tombol-pucat) !important; color:var(--tombol-pucat-teks) !important;
+  border-color:var(--tombol-batas) !important; box-shadow:none; text-shadow:none;
+}
+body :is(.btn,button,[role="button"],.pilihan__satu) :is(span,strong,small,b,em) {
+  color:inherit !important;
+}
+body :is(.btn,button,input[type="submit"],input[type="button"],input[type="reset"],[role="button"],.pilihan__satu):hover {
+  background:var(--tombol-hover) !important;
+}
+body :is(.btn,button,[role="button"],.pilihan__satu):active { background:var(--tombol-tekan) !important; }
+body :is(.btn,button,input[type="submit"],input[type="button"],input[type="reset"],[role="button"],.pilihan__satu):focus-visible {
+  outline:3px solid var(--tombol-fokus); outline-offset:3px;
+}
+body :is(.btn,button,input[type="submit"],input[type="button"],input[type="reset"],[role="button"],.pilihan__satu):is(:disabled,[aria-disabled="true"]) {
+  opacity:1; border-style:dashed; cursor:not-allowed;
+}
+body :is(.btn--bahaya,.btn--danger,button[data-hapus-draf]) { border-inline-start:4px solid #b42318 !important; }
