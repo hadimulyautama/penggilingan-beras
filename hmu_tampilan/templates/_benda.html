@@ -176,7 +176,13 @@
     </div>
   {% endif %}
   <div class="padat__ket">
-    {{- b.ringkas or b.sub or b.isi -}}
+    {%- set keterangan = b.ringkas or b.sub or b.isi -%}
+    {# Pemilik packing sudah tampil di penanda Jasa. Buang hanya akhiran
+       pemilik yang sama; kode proses, asal berat, dan durasi tetap dibawa. #}
+    {%- if b.aksi == "catat_packing" and b.kepemilikan == "jasa" and b.pemilik_tampil -%}
+      {%- set keterangan = keterangan.removesuffix(" · TITIPAN " ~ b.pemilik_tampil) -%}
+    {%- endif -%}
+    {{- keterangan -}}
     {% if lama(b.sejak) %} · {{ lama(b.sejak) }}{% endif %}
   </div>
   {% if progres %}
