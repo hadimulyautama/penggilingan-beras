@@ -461,6 +461,15 @@ async def _kabar(db: AsyncSession, rec: OutgoingRecord, *, pesan: str,
     """
     from app.services.notification import create_notification
 
+    if untuk == "operator" and rec.status == OUT_PERINTAH and prioritas == "kuning":
+        items = list((await db.execute(select(OutgoingItem).where(
+            OutgoingItem.outgoing_record_id == rec.id))).scalars().all())
+        if boleh_keluar_cepat(items):
+            untuk = "admin"
+            pesan = (pesan.replace("Perintah muat", "Perintah")
+                     .replace("Kartunya di Antrian tunggu.", "Buka detail Barang Keluar.")
+                     .replace("catat muatan aktual", "periksa jumlah aktual"))
+            pesan += " Alur cepat di bawah 200 kg: konfirmasi jumlah aktual dan penyerahan, tanpa wajib tiket timbang."
     await create_notification(
         db, tipe=TIPE_KABAR, pesan=pesan, target_role=untuk,
         prioritas=prioritas, table_name="outgoing_records", record_id=rec.id)
@@ -1214,7 +1223,8 @@ async def ringkasan_muat(db: AsyncSession, rec: OutgoingRecord) -> dict:
     jejak = (await db.execute(select(func.max(ActivityLog.id)).where(
         ActivityLog.table_name == "outgoing_records", ActivityLog.record_id == rec.id)
     )).scalar_one_or_none()
-    dasar = [rec.id, rec.status, rec.no_polisi, rec.nama_pembeli, jejak]
+    dasar = [rec.id, rec.status, rec.no_polisi, rec.nama_pembeli,
+             rec.pelanggan_id, rec.jasa_id, rec.timbangan_transaksi_id, jejak]
     baris = []
     for it in items:
         _, nama = await tersedia(db, baris_dari_item(it), abaikan_pesanan=True)
@@ -1231,7 +1241,102 @@ async def ringkasan_muat(db: AsyncSession, rec: OutgoingRecord) -> dict:
     for b in baris:
         teks += (f"\n{b['nama']}: perintah {b['perintah']:g} {b['satuan']} · "
                  f"sudah dimuat {b['dimuat']:g} · sisa {b['sisa']:g} {b['satuan']}")
-    return {"dasar": token, "teks": teks, "baris": baris}
+    return {"dasar": token, "teks": teks, "baris": baris,
+            "cepat": boleh_keluar_cepat(items)}
+
+
+def boleh_keluar_cepat(items) -> bool:
+    """Batas berlaku untuk total perintah, bukan tiap barang atau aktualnya."""
+    from decimal import Decimal
+    total = sum((Decimal(str(i.berat_perintah_kg or 0)) for i in items), Decimal(0))
+    return total.is_finite() and 0 < total < Decimal(str(MUATAN_KECIL_TANPA_TIKET_KG))
+
+
+async def konfirmasi_keluar_cepat(db: AsyncSession, *, user, rec_id: int,
+                                  baris: list[dict], dasar: str,
+                                  diserahkan: bool, sebab: str = "") -> HasilPerintah:
+    """Satu transaksi: aktual + penyerahan + penutupan, tanpa tiket timbang.
+
+    Seluruh identitas barang/pemilik diambil dari perintah terkunci. Tak ada
+    commit antara baris; penolakan satu barang menggagalkan seluruh penyerahan.
+    Jejak muat dan verifikasi tetap dapat dibalik melalui mekanisme yang sama.
+    """
+    from decimal import Decimal, InvalidOperation
+    from app.peran import can_see_financials
+    if not can_see_financials(user):
+        raise BarangKeluarError("Konfirmasi barang keluar dilakukan oleh Admin.")
+    if diserahkan is not True:
+        raise BarangKeluarError("Konfirmasi bahwa jumlah aktual benar dan barang sudah diserahkan.")
+    if not dasar:
+        raise MuatanBerubah("Periksa perintah dan jumlah aktual sebelum konfirmasi penyerahan.")
+    rec = await _kunci(db, rec_id, keadaan=OUT_PERINTAH)
+    await _periksa_dasar_muat(db, rec, dasar)
+    items = list((await db.execute(select(OutgoingItem).where(
+        OutgoingItem.outgoing_record_id == rec.id).order_by(OutgoingItem.id)
+        .execution_options(populate_existing=True))).scalars().all())
+    if not boleh_keluar_cepat(items):
+        raise BarangKeluarError("Alur cepat hanya untuk total perintah di bawah 200 kg. Gunakan alur muat biasa.")
+    ids = [b.get("id") for b in baris]
+    if len(ids) != len(set(ids)) or set(ids) != {i.id for i in items}:
+        raise BarangKeluarError("Periksa jumlah aktual seluruh barang pada perintah ini; daftar barang tidak sesuai.")
+    from app.models import Jasa
+    from app.models.jasa import BERJALAN
+    pemilik = {i.jasa_id for i in items if i.jasa_id is not None}
+    if pemilik:
+        pesanan = list((await db.execute(select(Jasa).where(Jasa.id.in_(pemilik))
+            .execution_options(populate_existing=True))).scalars().all())
+        if len(pesanan) != len(pemilik) or any(
+                j.pelanggan_id != rec.pelanggan_id or j.status != BERJALAN for j in pesanan):
+            raise BarangKeluarError("Pesanan jasa tidak lagi aktif atau bukan milik pelanggan perintah ini. Periksa kepemilikan sebelum penyerahan.")
+    jumlah = {b["id"]: b.get("jumlah") for b in baris}
+    rencana = []
+    for it in items:
+        try:
+            n = Decimal(str(jumlah[it.id]))
+        except InvalidOperation:
+            raise BarangKeluarError("Isi jumlah aktual setiap barang; isi 0 jika tidak diserahkan.") from None
+        if not n.is_finite() or n < 0:
+            raise BarangKeluarError("Jumlah aktual wajib berupa angka nol atau lebih.")
+        karung = it.item_type == "finished_goods"
+        if karung and n != n.to_integral_value():
+            raise BarangKeluarError("Jumlah aktual dalam karung wajib bilangan bulat.")
+        b = baris_dari_item(it, jumlah_karung=int(n) if karung else None,
+                            berat_kg=None if karung else float(n))
+        berat, sak = await _berat_baris(db, b) if n else (0.0, 0 if karung else None)
+        if Decimal(str(berat)) > Decimal(str(it.berat_perintah_kg or 0)):
+            raise BarangKeluarError("Jumlah aktual melebihi perintah. Perbaiki perintah dan periksa ulang.")
+        rencana.append((it, b, berat, sak))
+    total = sum(Decimal(str(r[2])) for r in rencana)
+    if not 0 < total < Decimal(str(MUATAN_KECIL_TANPA_TIKET_KG)):
+        raise BarangKeluarError("Total aktual alur cepat harus lebih dari 0 dan di bawah 200 kg.")
+    if any(Decimal(str(berat)) < Decimal(str(it.berat_perintah_kg or 0))
+           for it, _, berat, _ in rencana) and not sebab.strip():
+        raise BarangKeluarError("Jumlah kurang dari perintah. Tulis alasan barang tidak diserahkan.")
+    cuplikan = {}
+    try:
+        for it, b, berat, sak in rencana:
+            sudah = float(it.berat_kg or 0)
+            ada, nama = await tersedia(db, b, abaikan_pesanan=True)
+            if Decimal(str(berat)) - Decimal(str(sudah)) > Decimal(str(ada)):
+                raise BarangKeluarError(f"{nama} tinggal {_kg(ada)} kg. Stok tidak cukup; periksa jumlah aktual.")
+            if berat != sudah or sak != it.jumlah_karung:
+                cuplikan[it.id] = (sudah, it.jumlah_karung)
+                it.berat_kg, it.jumlah_karung = berat, sak
+                # Baris SKU yang sama berikutnya membaca saldo setelah baris ini.
+                await db.flush()
+        hasil = await _tutup_muatan(db, user=user, rec=rec, items=items,
+            diisi=list(cuplikan), cuplikan=cuplikan, sebab=sebab, langsung=True)
+        rec.status = OUT_SELESAI
+        rec.diverifikasi_oleh, rec.waktu_verifikasi = user.id, rec.waktu_muat
+        await _jejak(db, rec, langkah="verifikasi", oleh=user,
+            ringkas=f"{rec.kode} diserahkan langsung {_kg(float(total))} kg · alur cepat",
+            alasan="Jumlah aktual diperiksa dan penyerahan dikonfirmasi Admin; alur di bawah 200 kg tanpa wajib tiket timbang.")
+        await db.commit()
+        await db.refresh(rec)
+        return hasil
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def _periksa_dasar_muat(db, rec, dasar):
@@ -1327,20 +1432,21 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
                         items: list[OutgoingItem], tanggal=None,
                         jam=None, diisi: list[int] | None = None,
                         cuplikan: dict[int, tuple[float, int | None]] | None = None,
-                        sebab: str = "") -> HasilPerintah:
+                        sebab: str = "", langsung: bool = False) -> HasilPerintah:
     now = input_time(tanggal, jam)
     rec.status = OUT_DIMUAT
     rec.dimuat_oleh, rec.waktu_muat = user.id, now
     total = sum(float(i.berat_kg or 0) for i in items)
     kurang = sum(max(float(i.berat_perintah_kg or 0) - float(i.berat_kg or 0), 0)
                  for i in items)
-    await _kabar(db, rec, untuk="admin",
-                 pesan=f"🟡 {rec.kode} sudah dimuat {_kg(total)} kg untuk "
-                       f"{rec.nama_pembeli}"
-                       + (f" — kurang {_kg(kurang)} kg dari perintah"
-                          if kurang > 0.5 else "")
-                       + ". Tinggal diverifikasi Admin (tempelkan kode timbang "
-                         "keluarnya).")
+    if not langsung:
+        await _kabar(db, rec, untuk="admin",
+                     pesan=f"🟡 {rec.kode} sudah dimuat {_kg(total)} kg untuk "
+                           f"{rec.nama_pembeli}"
+                           + (f" — kurang {_kg(kurang)} kg dari perintah"
+                              if kurang > 0.5 else "")
+                           + ". Tinggal diverifikasi Admin (tempelkan kode timbang "
+                             "keluarnya).")
     # Jejak lama cukup menyebut id untuk baris yang sebelumnya nol. Ketika
     # melengkapi muatan parsial, pembatalan harus kembali ke 80, bukan nol.
     import json
@@ -1352,8 +1458,11 @@ async def _tutup_muatan(db: AsyncSession, *, user, rec: OutgoingRecord,
                  lama=(json.dumps(cuplikan) if parsial else
                        ",".join(str(i) for i in (diisi or []))),
                  alasan=sebab.strip() or None)
-    await db.commit()
-    await db.refresh(rec)
+    if not langsung:
+        await db.commit()
+        await db.refresh(rec)
+    else:
+        await db.flush()
     return HasilPerintah(rec=rec, baris=items)
 
 

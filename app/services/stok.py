@@ -1122,6 +1122,56 @@ async def beras_curah(db: AsyncSession, *, termasuk_berjalan: bool = True
     return keluar
 
 
+async def hasil_samping_bisa_dikemas(db: AsyncSession) -> list[BerasCurah]:
+    """Pilihan packing manual; antrean tetap memakai aturan otomatis.
+
+    Batasi hasil yang belum dibukukan dengan stok pemilik yang masih tersedia.
+    Pengeluaran tanpa lot dialokasikan FIFO, seperti perkiraan asal stok.
+    """
+    from app.models import PolishingProcess
+    from app.services.jasa import pemilik_hasil_proses
+    from app.penggilingan.inventory.finished_goods import (
+        _packed_kg, _bekatul_dibukukan, _broken_dibukukan,
+    )
+
+    proses = list((await db.execute(select(PolishingProcess).order_by(
+        PolishingProcess.waktu_mulai, PolishingProcess.id))).scalars())
+    hasil = await output_sosoh_banyak(db, [p.id for p in proses])
+    kelompok: dict[tuple[int | None, str], list[BerasCurah]] = {}
+    for p in proses:
+        for jenis, berat in hasil.get(p.id, {}).items():
+            if jenis not in _UKURAN_KEMASAN_OTOMATIS:
+                continue
+            pemilik = await pemilik_hasil_proses(db, p.jasa_id, jenis)
+            dicatat = (await _bekatul_dibukukan(db, p.id) if jenis == "bekatul"
+                       else await _broken_dibukukan(db, p.id) if jenis == "broken"
+                       else await _packed_kg(db, p.id, jenis, None))
+            sisa = max(float(berat) - dicatat, 0.0)
+            if sisa <= 0.000001:
+                continue
+            kelompok.setdefault((pemilik, jenis), []).append(BerasCurah(
+                kode_proses=p.kode_proses, jenis=jenis, keluar_kg=float(berat),
+                dikemas_kg=dicatat, sisa_kg=sisa, jasa_id=pemilik,
+                selesai=p.waktu_selesai if p.status == "selesai" else None))
+
+    stok = {pemilik: {k.jenis: k for k in await stok_produk(db, jasa_id=pemilik)}
+            for pemilik in {k[0] for k in kelompok}}
+    pilihan = []
+    for (pemilik, jenis), baris in kelompok.items():
+        kartu = stok[pemilik].get(jenis)
+        # Stok yang sudah punya catatan karung/curah bukan sumber packing baru.
+        batas = max(kartu.sisa_kg - max(kartu.kemasan_stok_kg, 0)
+                    - max(kartu.curah_stok_kg, 0), 0) if kartu else 0
+        terpakai = max(sum(b.sisa_kg for b in baris) - batas, 0)
+        for b in baris:
+            kurang = min(terpakai, b.sisa_kg)
+            b.sisa_kg -= kurang
+            terpakai -= kurang
+            if b.sisa_kg > 0.000001:
+                pilihan.append(b)
+    return pilihan
+
+
 def jenis_produk(kategori: str | None, mutu_kode: str | None) -> str:
     """Satu nama untuk satu barang, dipakai SEMUA pembaca produk jadi.
 

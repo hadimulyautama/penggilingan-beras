@@ -181,11 +181,12 @@ async def beras_belum_dikemas(jenis: str | None = None, pemilik: str | None = No
     Termasuk hasil proses berjalan: batasnya saldo hasil yang sudah tercatat,
     dikurangi packing dan pemakaian lain, diperiksa ulang saat simpan.
     """
-    from app.services.stok import beras_curah, nama_produk
+    from app.services.stok import beras_curah, hasil_samping_bisa_dikemas, nama_produk
 
     from app.services.jasa import nama_pemilik_banyak
     async with SessionLocal() as db:
         curah = await beras_curah(db, termasuk_berjalan=True)
+        curah += await hasil_samping_bisa_dikemas(db)
         nama_pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b in curah if b.jasa_id})
     return [{"value": f"{b.kode_proses}|{b.jenis}",
              "berat_kg": float(b.sisa_kg),
@@ -735,6 +736,16 @@ async def perintah_terbuka(user: User = Depends(pengguna_aksi)) -> list[dict]:
         baris = await bk.daftar(db, status=(OUT_PERINTAH,))
     return [{"value": str(r.id), "label": _ringkas_perintah(r, it)}
             for r, it in baris]
+
+
+@router.get("/actions/perintah-kecil")
+async def perintah_kecil(user: User = Depends(pengguna_aksi)) -> list[dict]:
+    wajib(can_see_financials(user))
+    from app.penggilingan.inventory.models import OUT_PERINTAH
+    async with SessionLocal() as db:
+        baris = await bk.daftar(db, status=(OUT_PERINTAH,))
+    return [{"value": str(r.id), "label": _ringkas_perintah(r, it)}
+            for r, it in baris if bk.boleh_keluar_cepat(it)]
 
 
 @router.get("/actions/perintah-bisa-ditambah")
@@ -1488,7 +1499,7 @@ class MuatReq(BaseModel):
 @router.get("/actions/pratinjau-muat")
 async def pratinjau_muat(perintah: str, user: User = Depends(pengguna_aksi)) -> dict:
     from app.web.api import _is_g1_operator, _is_g2_operator
-    wajib(await _is_g1_operator(user) or await _is_g2_operator(user))
+    wajib(can_see_financials(user) or await _is_g1_operator(user) or await _is_g2_operator(user))
     from app.penggilingan.inventory.models import OUT_PERINTAH
     async with SessionLocal() as db:
         try:
@@ -1513,6 +1524,33 @@ def _galat_muatan(e: bk.BarangKeluarError, pesan: str) -> HTTPException:
 def _wajib_periksa_muat(dasar: str) -> None:
     if not dasar:
         raise HTTPException(409, "Periksa ringkasan muatan terbaru sebelum konfirmasi. Tutup dan buka kembali formulir.")
+
+
+class AktualCepatReq(BaseModel):
+    id: int
+    jumlah: float | None = None
+
+
+class KeluarCepatReq(MuatReq):
+    baris: list[AktualCepatReq]
+    diserahkan: bool = False
+
+
+@router.post("/actions/konfirmasi-keluar-cepat")
+async def act_keluar_cepat(req: KeluarCepatReq,
+                          user: User = Depends(pengguna_aksi)) -> dict:
+    wajib(can_see_financials(user))
+    _wajib_periksa_muat(req.dasar)
+    async with SessionLocal() as db:
+        try:
+            hasil = await bk.konfirmasi_keluar_cepat(db,
+                user=await db.get(User, user.id), rec_id=_id(req.perintah),
+                baris=[b.model_dump() for b in req.baris], dasar=req.dasar,
+                diserahkan=req.diserahkan, sebab=req.sebab)
+            kode = hasil.rec.kode
+        except bk.BarangKeluarError as e:
+            raise _galat_muatan(e, "Gagal mengonfirmasi penyerahan.")
+    return {"ok": True, "pesan": f"✓ {kode}: penyerahan dicatat, stok diperbarui, perintah selesai."}
 
 
 @router.post("/actions/muat-semua")
@@ -1785,10 +1823,10 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
                  # Sekarang penunjuknya satu dan membawa keduanya (`POL-…|jenis`),
                  # jadi dari kartu ia terkunci dan tak ada yang perlu dipilih
                  # lagi selain kemasan dan jumlahnya.
-                 {"name": "sumber", "label": "Beras yang dikemas", "type": "remote",
+                 {"name": "sumber", "label": "Produk yang dikemas", "type": "remote",
                   "source": "/api/actions/beras-belum-dikemas",
-                  "kosong": "Tidak ada beras yang menunggu dipacking. Catat "
-                            "hasil penyosohannya dulu."},
+                  "kosong": "Tidak ada hasil yang tersedia untuk dikemas. "
+                            "Periksa hasil proses dan pemilik produk."},
                  {"name": "kemasan", "label": "Karung & ukurannya", "type": "remote",
                   "induk": "sumber", "source": "/api/actions/kemasan-untuk",
                   "kosong": "Tak ada kemasan yang sah untuk barang ini."},
@@ -1840,6 +1878,14 @@ def spesifikasi(*, g2: bool, fin: bool) -> list[dict]:
 
     if fin:
         aksi += [
+            {"id": "keluar_cepat", "label": "Konfirmasi barang keluar",
+             "post": "/api/actions/konfirmasi-keluar-cepat", "pratinjau_muat": "cepat",
+             "hint": "Total perintah di bawah 200 kg: tanpa langkah muat operator dan tanpa wajib tiket timbang. Isi jumlah aktual tiap barang, lalu konfirmasi penyerahan.",
+             "fields": [
+                 {"name": "perintah", "label": "Perintah", "type": "remote",
+                  "source": "/api/actions/perintah-kecil"},
+                 {"name": "sebab", "label": "Alasan jika kurang", "type": "text", "optional": True},
+             ]},
             # ── Pindah kepemilikan — titipan jadi milik pabrik ──
             #
             # Keputusan pemilik 6 Oktober 2026: "nanti bisa berpindah

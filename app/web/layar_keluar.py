@@ -151,9 +151,12 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
                 "berkarung": it.item_type == "finished_goods",
             })
         kata, warna = KEADAAN.get(rec.status, (rec.status, "baru"))
+        if rec.status == OUT_PERINTAH and svc.boleh_keluar_cepat(items):
+            kata = "Menunggu penyerahan · <200 kg"
         kartu.append({
             "boleh_ubah": boleh_perintah and rec.status in OUT_HIDUP,
             "rec": rec, "isi": isi, "keadaan": kata, "warna": warna,
+            "cepat": svc.boleh_keluar_cepat(items),
             "tiket_timbang": tiket_timbang.get(rec.timbangan_transaksi_id),
             # ── TOMBOL DI KARTUNYA SENDIRI ──
             #
@@ -173,7 +176,8 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
             # ini lewat `nilai` — jadi yang menekannya dari sini tak perlu
             # memilih ulang transaksi yang barusan ia baca.
             "tombol": _tombol(rec, boleh_perintah=boleh_perintah,
-                              boleh_muat=boleh_muat, dasar=dasar_perintah.get(rec.id, "")),
+                              boleh_muat=boleh_muat, dasar=dasar_perintah.get(rec.id, ""),
+                              cepat=svc.boleh_keluar_cepat(items)),
             "total_perintah": sum(x["perintah"] for x in isi),
             "batas_selisih": svc.ambang_selisih(sum(x["dimuat"] for x in isi)),
             "total_dimuat": sum(x["dimuat"] for x in isi),
@@ -255,7 +259,7 @@ async def halaman_barang_keluar(request: Request, akun=Depends(butuh_akun),
     )
 
 
-def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "") -> list[tuple]:
+def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "", cepat: bool = False) -> list[tuple]:
     """(buka, nilai, label, utama) untuk satu kartu — sesuai keadaan & peran.
 
     `utama` menandai tombol yang paling mungkin ditekan: yang satu itu digambar
@@ -268,7 +272,9 @@ def _tombol(rec, *, boleh_perintah: bool, boleh_muat: bool, dasar: str = "") -> 
     """
     n = str(rec.id)
     t: list[tuple] = []
-    if rec.status == OUT_PERINTAH and boleh_muat:
+    if rec.status == OUT_PERINTAH and cepat and boleh_perintah:
+        t.append(("keluar_cepat", n, "Konfirmasi barang keluar", True))
+    elif rec.status == OUT_PERINTAH and boleh_muat:
         t.append(("muat_semua", n, "Muat semua sesuai perintah", True))
         t.append(("muat_barang", n, "Catat per barang", False))
         t.append(("selesai_muat", n, "Selesai muat", False))

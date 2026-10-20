@@ -176,6 +176,11 @@ async def catat_packing(
     dipindah = (await _dipindah_silo_proc(db, [proc.id])).get(
         (proc.id, jenis_out), 0.0) if jenis_out in BERAS_JENIS else 0.0
     tersedia = float(keluar) - sudah - dipindah
+    from app.services.stok import _UKURAN_KEMASAN_OTOMATIS, hasil_samping_bisa_dikemas
+    if jenis_out in _UKURAN_KEMASAN_OTOMATIS:
+        sumber = next((b for b in await hasil_samping_bisa_dikemas(db)
+                       if b.kode_proses == proc.kode_proses and b.jenis == jenis_out), None)
+        tersedia = min(tersedia, sumber.sisa_kg if sumber else 0.0)
     if berat > tersedia + 0.000001:
         raise InventoryError(
             f"{proc.kode_proses} tinggal {tersedia:,.0f} kg {jenis_out} yang "

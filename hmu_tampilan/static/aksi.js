@@ -569,7 +569,7 @@
         konteksKartu +
         (a.hint ? '<p class="bantu" style="margin-bottom:14px">' + esc(a.hint) + "</p>" : "") +
         '<div class="grup">' + isi + "</div>" +
-        '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">Simpan</button>' +
+        '<button class="btn btn--utama" id="simpan" type="button" style="margin-top:18px">' + (a.pratinjau_muat === "cepat" ? "Periksa penyerahan" : "Simpan") + '</button>' +
         tombolLain +
       "</div>";
     if (asalKartu) {
@@ -634,6 +634,29 @@
       }).catch(function () { /* Simpan tetap mengambil cuplikan terbaru. */ });
     }
     function perbaruiKonteksMuat() {
+      if (a.pratinjau_muat === "cepat") {
+        var cepat = acuanMuat[nilaiMedan("perintah")];
+        if (!cepat) return;
+        var daftar = $("aktual_cepat");
+        if (!daftar) {
+          daftar = document.createElement("div"); daftar.id = "aktual_cepat";
+          $("f_sebab").previousElementSibling.insertAdjacentElement("beforebegin", daftar);
+        }
+        var lama = {};
+        daftar.querySelectorAll("input").forEach(function (el) { lama[el.dataset.name] = el.value; });
+        daftar.innerHTML = cepat.baris.map(function (b) {
+          var nama = "aktual_" + b.id;
+          return '<label class="lbl" for="f_' + nama + '">' + esc(b.nama) + '</label>' +
+            '<p class="bantu">Perintah ' + b.perintah + ' ' + esc(b.satuan) +
+            ' · tercatat ' + b.dimuat + ' ' + esc(b.satuan) + '</p>' +
+            '<div class="aktual-cepat__jumlah"><input class="fld" id="f_' + nama + '" data-name="' + nama +
+            '" data-wajib="1" data-angka="1" data-label="Jumlah aktual ' + esc(b.nama) +
+            '" inputmode="' + (b.satuan === "karung" ? "numeric" : "decimal") +
+            '" placeholder="Jumlah aktual" value="' + esc(lama[nama] || "") + '">' +
+            '<span class="jumlah-berdampingan__satuan">' + esc(b.satuan) + '</span></div>';
+        }).join("");
+        return;
+      }
       if (a.pratinjau_muat !== "baris" || !$("f_jumlah")) return;
       var acuan = acuanMuat[nilaiMedan("perintah")];
       var item = acuan && acuan.baris.find(function (b) {
@@ -1501,6 +1524,44 @@
           var beda = awal && awal.dasar !== kini.dasar;
           var teks = beda ? "PERINTAH ATAU MUATAN BERUBAH sejak formulir dibuka.\nSebelumnya:\n" + awal.teks + "\n\nTerbaru:\n" : "";
           teks += kini.teks;
+          if (a.pratinjau_muat === "cepat") {
+            acuanMuat[isi.perintah] = kini;
+            if (!kini.cepat) {
+              salahFormulir(lembar, "Total perintah tidak lagi di bawah 200 kg. Gunakan alur muat biasa."); return;
+            }
+            if (!awal || beda) {
+              perbaruiKonteksMuat();
+              salahFormulir(lembar, "Perintah atau muatan berubah. Isian tetap disimpan; periksa target terbaru dan jumlah aktual, lalu konfirmasi ulang."); return;
+            }
+            isi.baris = [];
+            var kurangCepat = false;
+            teks = kini.teks.split("\n")[0] + "\n\n";
+            for (var b of kini.baris) {
+              var jumlah = isi["aktual_" + b.id];
+              if (!Number.isFinite(jumlah) || jumlah < 0 || jumlah > b.perintah ||
+                  (b.satuan === "karung" && !Number.isInteger(jumlah))) {
+                salahFormulir(lembar, "Periksa jumlah aktual " + b.nama + ". Isi 0 jika tidak diserahkan; karung wajib bulat dan tidak melebihi perintah.");
+                $("f_aktual_" + b.id).focus(); return;
+              }
+              isi.baris.push({id: b.id, jumlah: jumlah});
+              kurangCepat = kurangCepat || jumlah < b.perintah;
+              teks += b.nama + "\nPerintah " + b.perintah + " → diserahkan " + jumlah + " " + b.satuan + "\n";
+            }
+            if (!isi.baris.some(function (b) { return b.jumlah > 0; })) {
+              salahFormulir(lembar, "Isi jumlah aktual lebih dari 0 pada barang yang diserahkan."); return;
+            }
+            if (kurangCepat && !String(isi.sebab || "").trim()) {
+              salahFormulir(lembar, "Jumlah kurang dari perintah. Tulis alasan barang tidak diserahkan.");
+              $("f_sebab").focus(); return;
+            }
+            if (isi.sebab) teks += "\nAlasan: " + isi.sebab;
+            teks += "\n\nPastikan barang sudah diserahkan. Stok berkurang sesuai jumlah aktual ini dan perintah selesai. Tiket timbang tidak wajib.";
+            isi.dasar = kini.dasar;
+            isi.diserahkan = true;
+            tanyaYakin(isi, v, {judul: "Konfirmasi penyerahan", teks: teks,
+              ya: "Jumlah benar, barang sudah diserahkan"});
+            return;
+          }
           if (a.pratinjau_muat === "baris") {
             var itemMuat = kini.baris.find(function (b) { return String(b.id) === isi.baris; });
             if (!itemMuat) { salahFormulir(lembar, "Barang tidak lagi tersedia pada perintah ini. Pilih ulang barang."); return; }

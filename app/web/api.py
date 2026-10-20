@@ -1471,7 +1471,7 @@ _GRUP_AKSI = {
     # Tutup/batalkan pesanan jasa belum memiliki tombol kartu khusus.
     "tutup_jasa": "Jasa (titipan pelanggan)",
     "batalkan_jasa": "Jasa (titipan pelanggan)",
-    "verifikasi_keluar": "Barang keluar",
+    "verifikasi_keluar": "Barang keluar", "keluar_cepat": "Barang keluar",
     "muat_semua": "Barang keluar",
     "muat_barang": "Barang keluar",
     "selesai_muat": "Barang keluar",
@@ -1556,7 +1556,7 @@ for _a in (
     # kartu dibangun dari spesifikasi yang sama. Yang berubah cuma katalognya
     # berhenti menggambarnya.
     "perintah_keluar", "tambah_barang_keluar", "ubah_item_perintah", "hapus_item_perintah", "batal_perintah_keluar",
-    "koreksi_plat_pengiriman", "pilih_tiket_armada", "lepas_tiket_armada", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar",
+    "koreksi_plat_pengiriman", "pilih_tiket_armada", "lepas_tiket_armada", "muat_semua", "muat_barang", "selesai_muat", "verifikasi_keluar", "keluar_cepat",
 ):
     _GRUP_AKSI[_a] = GRUP_KARTU
 
@@ -1609,7 +1609,7 @@ _ACTION_WH = {
     # tetapi itu urusan keuangan"), jadi tak ada lagi yang bergudang g1.
     "perintah_keluar": "g2", "tambah_barang_keluar": "g2",
     "ubah_item_perintah": "g2", "hapus_item_perintah": "g2",
-    "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2",
+    "batal_perintah_keluar": "g2", "verifikasi_keluar": "g2", "keluar_cepat": "g2",
     "koreksi_plat_pengiriman": "g2", "pilih_tiket_armada": "g2", "lepas_tiket_armada": "g2",
     "auto_taut_keluar": "g2",
     "muat_semua": "g2", "muat_barang": "g2", "selesai_muat": "g2",

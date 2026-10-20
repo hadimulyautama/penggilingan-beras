@@ -1141,3 +1141,14 @@ yang tak tertaut git.
 `docs/ingatan/` menyimpan catatan proyek yang tak muat di sini: riwayat
 keputusan, jebakan yang pernah memakan waktu, dan keadaan tiap bagian.
 Mulailah dari `docs/ingatan/MEMORY.md`.
+
+## Penyerahan kecil (<200 kg), 20 Oktober 2026
+
+Total seluruh perintah di bawah 200 kg dapat diselesaikan Admin melalui
+“Konfirmasi barang keluar”, tanpa langkah muat operator dan tanpa wajib tiket
+armada. Setiap jumlah aktual wajib diperiksa (karung bulat, curah kg), dan
+penyerahan fisik wajib dikonfirmasi. Kekurangan wajib beralasan. Tepat 200 kg
+menggunakan alur biasa. Perubahan target tidak memotong stok; aktual dan
+penutupan disimpan atomik setelah pemeriksaan ulang cuplikan, saldo, serta
+pemilik per item/pesanan jasa. Audit muat dan verifikasi mempertahankan jalur
+pembatalan yang mengembalikan angka sebelum konfirmasi.
