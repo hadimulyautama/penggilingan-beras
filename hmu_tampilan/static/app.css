@@ -2894,7 +2894,8 @@ body.terik [data-proses="transfer"], body.terik [data-proses="transit"] { --pros
 body .proses-jenis { display:inline-flex; align-items:center; gap:6px; max-width:100%; min-width:0; color:var(--proses-aksen, var(--tinta)); font-weight:650; vertical-align:middle; line-height:1.4; }
 .proses-jenis > span { min-width:0; overflow-wrap:anywhere; }
 .proses-ikon { display:inline-block; width:20px; height:20px; flex:0 0 20px; }
-body .isi :is(.padat,.benda,.proses-aktif-list__row)[data-proses]:not([data-proses=""]) { border-left:3px solid var(--proses-aksen); }
+/* Ikon dan judul sudah membedakan proses; garis kiri hanya menyempitkan kartu. */
+body .isi :is(.padat,.benda,.proses-aktif-list__row)[data-proses]:not([data-proses=""]) { border-left:0; }
 body .isi .proses-aktif-list__row .proses-jenis { font-size:13px; }
 body .isi .proses-aktif-list__row .proses-jenis .proses-ikon,
 body .isi .proses-detail__label .proses-ikon { width:18px; height:18px; flex-basis:18px; }
