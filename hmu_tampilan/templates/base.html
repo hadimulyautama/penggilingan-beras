@@ -178,8 +178,10 @@
    selalu terlihat — dan kaki ini catatan kaki, bukan pengumuman. #}
 {% if STOK_NAV %}{% include "_stok_navigasi.html" %}{% endif %}
 {% if STOK_NAV %}<div class="stok-isi">{% endif %}
+{% if LAPORAN_NAV %}<div class="laporan-riwayat"><link rel="stylesheet" href="/static/laporan-riwayat.css?v={{ VERSI }}">{% include "_laporan_navigasi.html" %}<div class="laporan-isi">{% endif %}
 {% if JASA_KEMBALI %}<a class="btn btn--kecil" href="{{ JASA_KEMBALI }}" data-kembali-jasa="{{ JASA_KEMBALI }}">Kembali ke pelanggan jasa</a>{% endif %}
 {% block isi %}{% endblock %}
+{% if LAPORAN_NAV %}</div></div>{% endif %}
 {% if STOK_NAV %}</div>{% endif %}
 {% block kaki %}{% endblock %}
 {% if JASA_KEMBALI %}<script src="/static/konteks-jasa.js?v={{ VERSI }}" defer></script>{% endif %}
@@ -243,6 +245,7 @@
         'stok_produk_jasa': 'Operasional', 'stok_pk_jasa': 'Operasional',
         'stok_karung': 'Operasional', 'stok_karung_jasa': 'Operasional',
         'barang_keluar': 'Operasional', 'retur': 'Operasional', 'jasa': 'Operasional',
+        'laporan_riwayat': 'Data & Pengaturan',
         'riwayat_sosoh': 'Data & Pengaturan', 'riwayat_qc': 'Data & Pengaturan',
         'riwayat_pengeringan': 'Data & Pengaturan', 'riwayat_giling': 'Data & Pengaturan',
         'riwayat_transfer': 'Data & Pengaturan', 'laporan': 'Data & Pengaturan',
@@ -252,7 +255,7 @@
       {% for grup_menu in ['Menu Utama', 'Operasional', 'Data & Pengaturan'] %}
         {% set ns_seksi = namespace(ada=false) %}
         {% for kunci, _alamat, _nama, _ket, peran_min, _ikon in TAB %}
-          {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kelompok_menu.get(kunci) == grup_menu %}
+          {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
             {% set ns_seksi.ada = true %}
           {% endif %}
         {% endfor %}
@@ -260,7 +263,7 @@
         <section class="laci-seksi" aria-label="{{ grup_menu }}">
           <h2 class="laci-seksi__judul">{{ grup_menu }}</h2>
           {% for kunci, alamat, nama, ket, peran_min, ikon in TAB %}
-            {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kelompok_menu.get(kunci) == grup_menu %}
+            {% if (not peran_min or VIEW in peran_min) and kunci not in PINTU_MATI and kunci not in MENU_TERSEMBUNYI|default(()) and kelompok_menu.get(kunci) == grup_menu %}
         {# ── SUB-MENU: pintu yang diklik MEMBUKA, bukan menuju ──
            Keputusan pemilik 2 Oktober 2026: "bisa tidak antrian tunggu jika di
            klik muncul dropdown sub menu?" Sebabnya kalimat sebelumnya:
@@ -316,7 +319,7 @@
            perilakunya sama sekali di sana. #}
         {% set jalan_kini = (request.url.path ~ ('?' ~ request.url.query if request.url.query else '')) if request else "" %}
         {% set sub = SUBMENU.get(kunci) %}
-        {% set ns = namespace(grup_aktif=(layar == kunci or (kunci == 'stok' and layar.startswith('stok')))) %}
+        {% set ns = namespace(grup_aktif=(layar == kunci or MENU_AKTIF == kunci or (kunci == 'stok' and layar.startswith('stok')))) %}
         {% if sub %}
           {% for sub_alamat, _sn, _sj in sub %}
             {% if not ns.grup_aktif and jalan_kini == sub_alamat %}
@@ -328,7 +331,7 @@
         <{{ "summary" if sub else "a" }}
            class="pintu{{ ' pintu--kini' if ns.grup_aktif }}"
            {% if not sub %}href="{{ alamat }}"{% endif %}
-           {{ ' aria-current=page'|safe if layar == kunci or (kunci == 'stok' and layar.startswith('stok')) }}>
+           {{ ' aria-current=page'|safe if ns.grup_aktif }}>
           {# Ikon DIBACA dari `TAB`, tidak dipilih di sini — 29 September 2026.
              Rantai `if/elif` yang dulu berdiri di tempat ini berakhir dengan
              `{% else %}⚙`, dan akibatnya LIMA pintu memakai gerigi yang sama:
@@ -340,7 +343,7 @@
              masing-masing. Prinsip yang sama sudah tertulis beberapa baris di
              atas untuk `peran_min`; ikon satu-satunya fakta per-pintu yang
              masih tercecer di sini. #}
-          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{{ ikon or "⚙" }}</span>
+          <span class="pintu__ikon pintu__ikon--{{ kunci }}" aria-hidden="true">{% if ikon == 'chart-no-axes-combined' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M8 3v3M8 10v3M8 17v3M2 21h20M14 3v3M14 10v3M14 17v3M20 3v3M20 10v3M20 17v3"/><path d="m2 17 6-7 6 3 8-10"/></svg>{% else %}{{ ikon or "⚙" }}{% endif %}</span>
           {# Keterangan satu baris tiap pintu DICABUT 28 September 2026, atas
              permintaan pemilik: "sidebar cukup nama halamannya saja",
              "deskripsi tambahan tidak perlu".

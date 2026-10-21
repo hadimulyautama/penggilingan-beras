@@ -3,12 +3,12 @@
 {% block isi %}
 
 <div>
-  <span class="lbl">Laporan</span>
+  {% if not LAPORAN_NAV %}<span class="lbl">Laporan</span>{% endif %}
   <p class="bantu" style="margin:0 0 12px">
     Dibuat saat dibuka — angkanya keadaan sekarang, bukan salinan semalam.
   </p>
 
-  <div class="grup" style="gap:8px">
+  <div class="grup laporan-catalogue" style="gap:8px">
     {% for l in daftar %}
       <button class="tindakan" type="button"
               data-laporan="{{ l.kode }}"{% if l.berperiode %} data-berperiode="1"{% endif %}>
@@ -32,11 +32,11 @@
 {# Satu lembar untuk semua laporan — isinya diganti, bukan halamannya. Laporan
    dibaca sambil membandingkan dengan yang lain, dan berpindah halaman bolak-balik
    membuat orang kehilangan tempatnya. #}
-<dialog class="lembar" id="lembar" aria-labelledby="lap-judul">
+<dialog class="lembar{{ ' lembar--laporan' if LAPORAN_NAV }}" id="lembar" aria-labelledby="lap-judul">
   <div class="lembar__isi">
     <div class="lembar__kepala">
       <h2 id="lap-judul">Laporan</h2>
-      <button class="btn btn--kecil" type="button" id="tutup">Tutup</button>
+      <button class="btn btn--kecil" type="button" id="tutup" data-boleh-offline>Tutup</button>
     </div>
     <div class="grup" id="periode-grup" style="display:none;margin-bottom:12px">
       <label class="lbl" for="periode">Periode</label>
@@ -46,7 +46,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="lap" id="lap-isi">Memuat…</div>
+    <div class="lap" id="lap-isi" role="status" aria-live="polite">Memuat…</div>
   </div>
 </dialog>
 
@@ -168,7 +168,12 @@
         return r.json();
       })
       .then(function (d) { judul.textContent = d.nama; isi.innerHTML = gambar(d.isi, d.nama); })
-      .catch(function (e) { isi.textContent = String(e.message || e); });
+      .catch(function (e) {
+        var pesan = String(e.message || e);
+        isi.textContent = "Laporan belum berhasil dimuat. " +
+          (/^(Laporan ini|Gagal memuat)/.test(pesan) ? pesan :
+           "Periksa koneksi, lalu pilih periode atau buka laporan lagi.");
+      });
   }
 
   /* Lewat PINDAH, bukan langsung ke `document`: skrip halaman dijalankan

@@ -29,6 +29,7 @@ from app.web.internal_kledo import router as internal_kledo_router
 from app.web.aksi_inventory import router as aksi_inventory_router
 from app.web.aksi_undo import router as aksi_undo_router
 from app.web.laporan import router as laporan_router
+from app.web.laporan_navigasi import router as laporan_navigasi_router
 from app.web.layar_audit import router as audit_router
 from app.web.layar_berjalan import router as berjalan_router
 from app.web.pengaturan import router as pengaturan_router
@@ -100,6 +101,7 @@ app.include_router(hmu_tampilan.router_pwa(render))
 app.include_router(aksi_inventory_router)
 app.include_router(aksi_undo_router)
 app.include_router(laporan_router)
+app.include_router(laporan_navigasi_router)
 from app.web.layar_pekerjaan import router as pekerjaan_router
 app.include_router(pekerjaan_router)
 app.include_router(berjalan_router)

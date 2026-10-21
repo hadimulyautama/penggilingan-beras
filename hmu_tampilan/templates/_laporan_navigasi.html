@@ -1,0 +1,12 @@
+{# Setiap tab menuju reader lama; tidak ada hitungan lintas tahap. #}
+<section class="laporan-nav" aria-label="Laporan dan Riwayat">
+  <nav class="laporan-nav__tabs" aria-label="Bagian Laporan dan Riwayat">
+    {% for t in LAPORAN_NAV.tab %}<a data-utuh href="{{ t.href }}"{% if t.kunci == LAPORAN_NAV.aktif %} aria-current="page"{% endif %}>{{ t.nama }}</a>{% endfor %}
+  </nav>
+  {% if not LAPORAN_NAV.detail %}<h1>{{ LAPORAN_NAV.judul }}</h1>{% endif %}
+  {% if LAPORAN_NAV.pilihan %}
+  <nav class="laporan-nav__jenis" aria-label="{{ 'Jenis proses' if LAPORAN_NAV.aktif == 'proses' else 'Jenis pemeriksaan QC' }}">
+    {% for kunci, nama, alamat, gudang in LAPORAN_NAV.pilihan %}<a data-utuh href="{{ alamat }}"{% if kunci == LAPORAN_NAV.jenis %} aria-current="page"{% endif %}>{{ nama }}</a>{% endfor %}
+  </nav>
+  {% endif %}
+</section>

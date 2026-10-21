@@ -26,7 +26,7 @@
   </div>
   <input type="hidden" name="rentang" value="{{ rentang }}">
   <input type="hidden" name="kelompok" value="{{ kelompok }}">
-  <input class="fld" type="search" name="cari" value="{{ cari }}"
+  <input class="fld" type="search" name="cari" value="{{ cari }}" autocomplete="off" aria-label="Cari catatan audit"
          placeholder="Cari kode, pemasok, atau isi catatan…">
 </form>
 
@@ -70,7 +70,15 @@
   </div>
 {% endif %}
 
-<div class="grup daftar-standar" style="gap:7px">
+{% if LAPORAN_NAV and catatan %}<div class="audit-table-wrap"><table class="audit-table">
+  <thead><tr><th scope="col">Waktu / nomor</th><th scope="col">Aktivitas</th><th scope="col">Rincian</th><th scope="col">Pelaksana / status</th></tr></thead>
+  <tbody>{% for c in catatan %}<tr>
+    <td>{{ c.waktu|jam('%d %b %H.%M') }}<small>#{{ c.id }}</small></td>
+    <td>{{ c.label }}</td><td>{{ c.ringkas }}</td>
+    <td>{{ c.oleh }}{% if c.dibatalkan %}<small>Sudah dibatalkan · jejak dipertahankan</small>{% endif %}{% if not c.muda %}<small>Lewat {{ JAM_BATAS }} jam — terkunci</small>{% endif %}</td>
+  </tr>{% endfor %}</tbody>
+</table></div>{% endif %}
+<div class="grup daftar-standar{{ ' audit-mobile' if LAPORAN_NAV and catatan }}" style="gap:7px">
   {% for c in catatan %}
     <div class="audit daftar-standar__baris audit--{{ 'tua' if not c.muda else 'muda' }}">
       <div class="audit__atas">

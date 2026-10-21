@@ -37,7 +37,7 @@
     })
     .catch(() => {
       shareButton.disabled = false;
-      status.textContent = "Jika berbagi file tidak tersedia, tombol Bagikan akan menyalin tautan laporan.";
+      status.textContent = "PDF belum berhasil dimuat. Coba muat ulang halaman. Tombol Bagikan tetap dapat menyalin tautan laporan.";
     });
 
   shareButton.addEventListener("click", async () => {

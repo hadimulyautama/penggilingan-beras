@@ -997,6 +997,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
     Detail disaring di basis data sebelum pembatas daftar diterapkan. Lot
     lama atau putaran di luar 200 pencatatan terbaru tetap dapat dibuka.
     """
+    from app.models import User
     if jenis not in QC_PAGES:
         raise HTTPException(404, "Kategori riwayat QC tidak ditemukan.")
     judul, gudang = QC_PAGES[jenis]
@@ -1027,10 +1028,11 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
             kondisi = "basah" if jenis == "gabah-basah" else "kering"
             hasil = (await db.execute(
                 select(PurchaseBatch, PurchaseBatchQc, PurchaseBatchQcSample,
-                       Supplier.nama_supplier)
+                       Supplier.nama_supplier, User.nama)
                 .join(PurchaseBatchQc, PurchaseBatchQc.purchase_batch_id == PurchaseBatch.id)
                 .join(PurchaseBatchQcSample, PurchaseBatchQcSample.purchase_batch_qc_id == PurchaseBatchQc.id)
                 .outerjoin(Supplier, Supplier.id == PurchaseBatch.supplier_id)
+                .outerjoin(User, User.id == PurchaseBatchQcSample.input_by)
                 .where(PurchaseBatch.kondisi_gabah == kondisi,
                        PurchaseBatch.dibatalkan_pada.is_(None),
                        PurchaseBatch.kode_batch == referensi if referensi is not None else True)
@@ -1038,13 +1040,14 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                           PurchaseBatchQcSample.id.desc()).limit(None if referensi is not None else 200)
             )).all()
             from app.services.jasa import nama_pemilik_banyak
-            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _ in hasil})
-            for batch, _qc, sample, nama_supplier in hasil:
+            pemilik = await nama_pemilik_banyak(db, {b.jasa_id for b, _, _, _, _ in hasil})
+            for batch, _qc, sample, nama_supplier, pencatat in hasil:
                 fields = [("Kadar air", f"{sample.kadar_air_1}% dan {sample.kadar_air_2}%"),
                           ("Biji hijau", sample.biji_hijau.replace("_", " ")),
                           ("Densiti", sample.densiti)]
                 if kondisi == "basah":
                     fields.insert(1, ("Lamur", f"{'Ya' if sample.lamur else 'Tidak'} · {sample.jumlah_sak_lamur or 0} sak"))
+                fields.append(("Pencatat", pencatat or "Tidak tercatat"))
                 tambah(batch.kode_batch, sample.created_at,
                        sample.nomor_sampel, fields,
                        asal=(f"Pemilik jasa: {pemilik[batch.jasa_id]}"
@@ -1088,17 +1091,18 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 .group_by(MillingQcLog.milling_process_id)
                 .order_by(func.max(MillingQcLog.waktu).desc()).limit(200))
             hasil = (await db.execute(
-                select(MillingProcess, MillingQcLog)
+                select(MillingProcess, MillingQcLog, User.nama)
                 .join(MillingQcLog, MillingQcLog.milling_process_id == MillingProcess.id)
+                .outerjoin(User, User.id == MillingQcLog.input_by)
                 .where(MillingProcess.kode_proses == referensi if referensi is not None else
                        MillingQcLog.milling_process_id.in_(proses_terbaru))
                 .order_by(MillingQcLog.waktu.desc(), MillingQcLog.id.desc())
             )).all()
             if referensi:
-                penilaian = penilaian_dari_log(qc for _, qc in hasil)
+                penilaian = penilaian_dari_log(qc for _, qc, _ in hasil)
             from app.services.jasa import nama_pemilik_banyak
-            pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _ in hasil})
-            proses_ids = {p.id for p, _ in hasil}
+            pemilik = await nama_pemilik_banyak(db, {p.jasa_id for p, _, _ in hasil})
+            proses_ids = {p.id for p, _, _ in hasil}
             asal_proses: dict[int, set[str]] = {}
             plat_proses: dict[int, set[str]] = {}
             sumber_langsung = (await db.execute(
@@ -1124,7 +1128,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 if no_polisi:
                     plat_proses.setdefault(proc_id, set()).add(no_polisi)
             putaran_per_proses: dict[int, int] = {}
-            for process, qc in sorted(hasil, key=lambda pair: (pair[1].waktu, pair[1].id)):
+            for process, qc, pencatat in sorted(hasil, key=lambda pair: (pair[1].waktu, pair[1].id)):
                 putaran_per_proses[process.id] = putaran_per_proses.get(process.id, 0) + 1
                 fields = [(label, f"{value}{unit}") for label, value, unit in (
                     ("Kadar air", qc.kadar_air, "%"),
@@ -1134,6 +1138,7 @@ async def halaman_riwayat_qc(request: Request, jenis: str,
                 fields.extend(rincian_kualitatif(qc, termasuk_kosong=True))
                 if qc.catatan_lab:
                     fields.append(("Catatan lab", qc.catatan_lab))
+                fields.append(("Pencatat", pencatat or "Tidak tercatat"))
                 asal = ({f"Pemilik jasa: {pemilik[process.jasa_id]}"}
                         if process.jasa_id in pemilik else
                         asal_proses.get(process.id, set()))

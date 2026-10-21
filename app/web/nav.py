@@ -88,6 +88,8 @@ log = logging.getLogger("web.nav")
 #: ganti — jangan biarkan, sebab kotak kosong lebih buruk daripada gerigi yang
 #: dipakai bersama.
 TAB = (
+    ("laporan_riwayat", "/laporan-riwayat", "Laporan & Riwayat",
+     "Laporan, proses, QC dan audit sesuai hak akses", None, "chart-no-axes-combined"),
     ("beranda",    "/",           "Beranda",        "Seberapa jauh hari ini", None, "⌂"),
     ("barang_masuk", "/barang-masuk", "Barang Masuk", "Tiket dan penerimaan", None, "↙"),
     ("pekerjaan", "/pekerjaan", "Pekerjaan", "Perlu tindakan dan berjalan", None, "≡"),
@@ -374,6 +376,11 @@ TAB = (
 #: Judul yang naik ke bilah atas. Diambil dari daftar yang sama supaya nama
 #: layar tak pernah berbeda antara menu dan judulnya.
 JUDUL = {k: nama for k, _, nama, _, _, _ in TAB}
+
+# Kunci lama dipertahankan untuk judul dan pemakai lama. Hanya pintu sidebar
+# yang disatukan; rute dan gerbangnya tetap milik modul asal.
+MENU_TERSEMBUNYI = ("laporan", "riwayat_sosoh", "riwayat_giling",
+                    "riwayat_pengeringan", "riwayat_transfer", "riwayat_qc", "audit")
 
 
 async def jumlah_menunggu(user: User | None) -> int:

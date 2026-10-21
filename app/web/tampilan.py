@@ -58,9 +58,10 @@ hmu_tampilan.pasang_jinja(templates, app_nama="Pos Produksi", pwa_nama="Pos Prod
                           mode_uji=settings.mode_uji, zona=settings.app_timezone)
 
 from app.web.layar import MEJA, NAMA_VIEW, POLESAN, SELEPAN, SUPER  # noqa: E402
-from app.web.nav import JUDUL, TAB   # noqa: E402  (butuh `templates` di atas)
+from app.web.nav import JUDUL, TAB, MENU_TERSEMBUNYI   # noqa: E402
 
 templates.env.globals["TAB"] = TAB
+templates.env.globals["MENU_TERSEMBUNYI"] = MENU_TERSEMBUNYI
 templates.env.globals["TAB_KUNCI"] = {k for k, _, _, _, _, _ in TAB}
 # Nama view dipakai kepala laci: orang yang sedang memakai "Lihat sebagai"
 # harus bisa membaca layar SIAPA yang sedang ia lihat, dan "operator" saja
@@ -208,6 +209,8 @@ async def render_laci(request: Request, nama: str, **konteks):
 
     from app.web.stok_navigasi import siapkan
     await siapkan(request, nama, konteks)
+    from app.web.laporan_navigasi import siapkan as siapkan_laporan
+    await siapkan_laporan(request, konteks)
     from app.web.layar_pekerjaan import konteks_aman
     kembali_kerja = konteks_aman(request.query_params.get("kembali_kerja"))
     if kembali_kerja:

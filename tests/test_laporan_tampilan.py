@@ -16,7 +16,7 @@ CSS = AKAR / "hmu_tampilan/static/app.css"
 def test_laporan_tidak_lagi_ditumpahkan_ke_pre():
     teks = TPL.read_text()
     assert "<pre" not in teks, "isi laporan kembali jadi blok monospasi"
-    assert '<div class="lap" id="lap-isi">' in teks
+    assert '<div class="lap" id="lap-isi" role="status" aria-live="polite">' in teks
     assert "function gambar(" in teks, "tak ada penggambar"
 
 

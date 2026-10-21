@@ -405,7 +405,8 @@
       bar.textContent = "Data pukul " + (pukulSegar || "?") + " · sedang offline";
       var sasaran = document.querySelectorAll(".bingkai button, .bingkai .btn, .bingkai input[type=submit]");
       Array.prototype.forEach.call(sasaran, function (b) {
-        if (b.disabled || b.hasAttribute("data-putus")) { return; }
+        // Kontrol baca-saja seperti Tutup laporan tetap bisa dipakai offline.
+        if (b.disabled || b.hasAttribute("data-putus") || b.hasAttribute("data-boleh-offline")) { return; }
         b.setAttribute("data-putus", "1");
         b.disabled = true;
       });
