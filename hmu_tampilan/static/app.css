@@ -3401,11 +3401,33 @@ body .karung-tabel th:first-child { width:42px; }
 .masuk-baris small,.masuk-catatan small{display:block;color:var(--redup);margin-top:4px;overflow-wrap:anywhere}
 .masuk-baris strong{overflow-wrap:anywhere}
 .masuk-baris:focus-visible{outline:3px solid var(--tinta);outline-offset:-3px}
+/* Satu tautan per penerimaan: tabel desktop dan daftar ponsel membaca baris
+   yang sama, sehingga pencarian dan hitungan tidak menggandakan tiket. */
+.masuk-daftar.tabel-standar{border-color:var(--tabel-garis);border-radius:var(--tabel-radius)}
+.masuk-daftar .masuk-kepala,.masuk-daftar .masuk-baris{display:grid;grid-template-columns:minmax(160px,1.35fr) 115px minmax(100px,.8fr) minmax(100px,.8fr) minmax(175px,1fr) 20px;gap:0;align-items:center;padding:0}
+.masuk-kepala{background:var(--tabel-header-bg);color:var(--tabel-redup);font-size:var(--tabel-header-size);font-weight:var(--tabel-header-weight);text-transform:uppercase;letter-spacing:.045em;min-height:48px}
+.masuk-kepala>span,.masuk-daftar .masuk-baris>span{min-width:0;padding:var(--tabel-padding-y) var(--tabel-padding-x);overflow-wrap:anywhere}
+.masuk-daftar .masuk-baris{background:var(--tabel-bg);font-size:var(--tabel-body-size);line-height:1.4;min-height:64px}
+.masuk-daftar .masuk-baris:hover{background:var(--tabel-hover)}
+.masuk-daftar .masuk-baris small{color:var(--tabel-redup);font-size:.73rem}
+.masuk-pemilik .identitas-barang__label{max-width:100%;white-space:normal}
+.masuk-panah{text-align:right}
+@media(max-width:1100px){
+ .masuk-daftar .masuk-kepala{display:none}
+ .masuk-daftar .masuk-baris{grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px;font-size:.85rem}
+ .masuk-daftar .masuk-baris>span{padding:0;grid-column:auto;grid-row:auto}
+ .masuk-daftar .masuk-identitas{grid-column:1;grid-row:1}
+ .masuk-daftar .masuk-pemilik{grid-column:2;grid-row:1;align-self:start;justify-self:end;max-width:120px}
+ .masuk-daftar .masuk-jenis{grid-column:1;grid-row:2;color:var(--tabel-redup)}
+ .masuk-daftar .masuk-armada{grid-column:2;grid-row:2;text-align:right;color:var(--tabel-redup);max-width:130px}
+ .masuk-daftar .masuk-penerimaan{grid-column:1;grid-row:3;font-size:.76rem}
+ .masuk-daftar .masuk-panah{grid-column:2;grid-row:3}
+}
 .masuk-catatan{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;padding:16px}
 .masuk-catatan small{grid-column:1/-1}
 .masuk-fakta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .masuk-fakta dt{color:var(--redup)}.masuk-fakta dd{margin:4px 0;overflow-wrap:anywhere}
-@media(max-width:650px){.masuk-baris{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:14px}.masuk-baris>span:nth-child(3){grid-column:1}.masuk-baris>span:last-child{grid-column:2;grid-row:2}.masuk-catatan{grid-template-columns:1fr auto}.masuk-catatan>span:nth-child(3){grid-column:1/-1}.kerja-filter{min-width:0}}
+@media(max-width:650px){.masuk-catatan{grid-template-columns:1fr auto}.masuk-catatan>span:nth-child(3){grid-column:1/-1}.kerja-filter{min-width:0}}
 
 .kerja-tab{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .kerja-tab .pil{min-height:56px;display:flex;align-items:center;justify-content:center;white-space:normal}
